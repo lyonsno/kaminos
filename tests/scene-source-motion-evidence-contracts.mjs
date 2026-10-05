@@ -4,6 +4,9 @@ assert.equal(typeof evidence.assertSourceMotionView,'function','motion compariso
 const good={volume:{error:null},lighting:{previewStale:false,geometryBuilds:1,frame:{frame:1,directions:12,angularPattern:'source',integration:'exact-cell',generation:1,sourceSoftness:0,surfaceReconstruction:{passes:0},surfaceReceivers:1}},source:{frame:1,generation:1,dimensions:[1,1,1],values:[1,2,3,4]},dimensions:{surface:[1,1,1],back:[1,1,1]},surface:[1,2,3,1],back:[0,0,0,1]};
 const check=s=>evidence.assertSourceMotionView(s,{count:12,pattern:'source',heldSource:good.source.values});
 check(good);
+for(const key of ['frame','generation'])for(const sides of [['source'],['lighting'],['source','lighting']])for(const invalid of [undefined,null,'1',NaN,Infinity,-1,1.5]){
+ const bad=structuredClone(good);for(const side of sides){const o=side==='source'?bad.source:bad.lighting.frame;if(invalid===undefined)delete o[key];else o[key]=invalid;}assert.throws(()=>check(bad),`reject invalid ${key} identity on ${sides}`);
+}
 assert.throws(()=>evidence.assertSourceMotionView({...good,environment:{intensity:1,exposure:1,rim:false}},{count:12,pattern:'source',heldSource:good.source.values,lightOnly:true}),'light-only comparison must reject environment fill');
 for(const mutate of [
  s=>s.lighting.frame.angularPattern='fixed',

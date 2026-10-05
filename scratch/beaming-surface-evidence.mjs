@@ -7,6 +7,7 @@ export function assertSourceMotionView(signal,{count,pattern,heldSource,lightOnl
   if(lightOnly){assert.equal(signal.environment.intensity,0);assert.equal(signal.environment.exposure,1);assert.equal(signal.environment.rim,false);}
   assert.equal(signal.volume.error,null);assert.equal(signal.lighting.previewStale,false);
   const frame=signal.lighting.frame;
+  for(const snapshot of [frame,signal.source])for(const key of ['frame','generation'])assert.ok(Number.isSafeInteger(snapshot[key])&&snapshot[key]>=0,`valid ${key} snapshot identity required`);
   assert.equal(frame.directions,count);assert.equal(frame.angularPattern,pattern);
   assert.equal(frame.integration,pattern==='source'?'exact-cell':'midpoint');
   assert.equal(frame.sourceSoftness,0);assert.equal(frame.surfaceReconstruction.passes,0);
