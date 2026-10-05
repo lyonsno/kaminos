@@ -36,6 +36,10 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   document.body.prepend(header);
   document.body.append(hierarchy, inspector);
   byId('viewport').prepend(toolbar);
+  const viewportSettings=byId('authoring-viewport-settings');
+  document.addEventListener('pointerdown',event=>{
+    if(!viewportSettings.contains(event.target))viewportSettings.open=false;
+  },true);
   for(const [id,key] of [['viewport-show-gizmos','gizmos'],['viewport-show-hints','hints']])byId(id).addEventListener('change',event=>document.defaultView.kaminosViewportSettings.set({[key]:event.target.checked}));
   const entries = [];
   const move = (node, destination) => entries.push({ node, destination: byId(destination) });
