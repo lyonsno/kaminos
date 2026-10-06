@@ -5220,6 +5220,7 @@ function captureAuthoredSceneStateForPreview() {
     sceneGroups: sceneGroups.map(group => ({ ...group, objectIds: [...group.objectIds] })),
     activeSceneObjectId,
     activeSceneGroupId,
+    activeSceneFieldId,
     currentMesh,
     currentSceneFile,
     sceneSaveBlockedByFailedRestore,
@@ -5230,9 +5231,18 @@ function captureAuthoredSceneStateForPreview() {
   };
 }
 
+function setSceneObjectMounted(entry, mounted) {
+  const binding = entry.type === 'light' ? sceneSpotLights.get(entry.id) : null;
+  const pieces = binding ? [binding.marker, binding.light, binding.light.target] : [entry.object];
+  for (const object of pieces) {
+    if (mounted) scene.add(object);
+    else scene.remove(object);
+  }
+}
+
 function detachAuthoredSceneForPreview(authored) {
   sceneMutationToken++;
-  for (const entry of authored.sceneObjects) scene.remove(entry.object);
+  for (const entry of authored.sceneObjects) setSceneObjectMounted(entry, false);
   sceneObjects = [];
   if(rimLight){document.getElementById('rim-enabled').checked=false;updateRimLight();}
   sceneGroups = [];
@@ -5995,7 +6005,14 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
   updateGreenroomPreviewControls();
   sceneObjects = [...authored.sceneObjects];
   sceneGroups = authored.sceneGroups.map(group => ({ ...group, objectIds: [...group.objectIds] }));
-  for (const entry of sceneObjects) scene.add(entry.object);
+  for (const entry of sceneObjects) {
+    setSceneObjectMounted(entry, true);
+    if (entry.id === RIM_LIGHT_ID) {
+      const record = serializeSceneObject(entry);
+      setRimLight(sceneLightRuntimeRecipe(record));
+      mountSceneSpotLight(record);
+    }
+  }
   activeSceneObjectId = authored.activeSceneObjectId;
   activeSceneGroupId = authored.activeSceneGroupId;
   currentSceneFile = authored.currentSceneFile;
@@ -6004,7 +6021,8 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
   modelSourceType = authored.modelSourceType;
   glbFileName = authored.glbFileName;
   setVolumePrimitivesState(authored.volumePrimitives);
-  if (activeSceneGroupId) setActiveSceneGroup(activeSceneGroupId);
+  if (authored.activeSceneFieldId) window.selectSceneField(authored.activeSceneFieldId);
+  else if (activeSceneGroupId) setActiveSceneGroup(activeSceneGroupId);
   else setActiveSceneObject(activeSceneObjectId);
   if (!sceneObjects.length) {
     renderSceneObjectList();
