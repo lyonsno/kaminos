@@ -1,4 +1,5 @@
 import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
+import { createSamRangePhaseRuntime } from './sam-range-phase-program.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -21,12 +22,16 @@ import {
   createWebGpuRouteSchedulerProfile,
 } from './scheduler-backpressure.js';
 import {
-  SAM_VIT_ONLINE_ATTENTION_WGSL,
+  SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL,
+  partitionSamAttentionPhase,
   onlineAttentionDispatch,
 } from './sam-online-attention-wgsl.js';
 import {
   SAM_VECTOR_LINEAR_GELU_WGSL,
+  SAM_VECTOR_LINEAR_GELU_RANGE_WGSL,
+  SAM_VECTOR_LINEAR_RANGE_WGSL,
   SAM_VECTOR_LINEAR_WGSL,
+  partitionSamLinearPhase,
   vectorLinearDispatch,
 } from './sam-vector-linear-wgsl.js';
 
@@ -1111,21 +1116,7 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
         mlpFc2: 'mlpOut',
         residualMlp: outputTensorName,
       };
-      const instrumentedPhases = input.validateFinitePhaseLayerIndex === layerShape.layerIndex
-        ? phases.flatMap(phase => [
-            phase,
-            {
-              name: `validate-vit-block-stack-layer-${layerShape.layerIndex}-${phase.kernel}-finite`,
-              readback: { name: phase.kernel, tensor: `tensor:${phaseTensorNames[phase.kernel]}` },
-              metadata: { layerIndex: layerShape.layerIndex, kernel: phase.kernel, diagnostic: 'finite-phase-checkpoint' },
-            },
-          ])
-        : phases;
-      return runtime.defineProgram({
-      name: `sam3.image-vit-block-stack-layer-${layerShape.layerIndex}-phase-program`,
-      tensors: programTensors,
-      uniforms: { blockDims: tensors.blockDims, lnDims: tensors.lnDims, windowLinearDims: tensors.windowLinearDims, fc1Dims: tensors.fc1Dims, fc2Dims: tensors.fc2Dims },
-      kernels: {
+      const kernels = {
         layerNorm1: { code: LAYERNORM_WGSL, bindings: [bindTensor(`tensor:${inputTensorName}`), bindTensor('tensor:layerNorm1Weight'), bindTensor('tensor:layerNorm1Bias'), bindTensor('tensor:layerNorm1', 'storage'), bindUniform('uniform:lnDims')] },
         windowPartition: { code: WINDOW_PARTITION_WGSL, bindings: [bindTensor('tensor:layerNorm1'), bindTensor('tensor:windows', 'storage'), bindUniform('uniform:blockDims')] },
         qProjection: { code: SAM_VECTOR_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:qProjWeight'), bindTensor('tensor:qProjBias'), bindTensor('tensor:q', 'storage'), bindUniform('uniform:windowLinearDims')] },
@@ -1133,17 +1124,49 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
         vProjection: { code: SAM_VECTOR_LINEAR_WGSL, bindings: [bindTensor('tensor:windows'), bindTensor('tensor:vProjWeight'), bindTensor('tensor:vProjBias'), bindTensor('tensor:v', 'storage'), bindUniform('uniform:windowLinearDims')] },
         qRope: { code: ROPE_WGSL, bindings: [bindTensor('tensor:q'), bindTensor('tensor:qRope', 'storage'), bindUniform('uniform:blockDims')] },
         kRope: { code: ROPE_WGSL, bindings: [bindTensor('tensor:k'), bindTensor('tensor:kRope', 'storage'), bindUniform('uniform:blockDims')] },
-        attention: { code: SAM_VIT_ONLINE_ATTENTION_WGSL, bindings: [bindTensor('tensor:qRope'), bindTensor('tensor:kRope'), bindTensor('tensor:v'), bindTensor('tensor:attention', 'storage'), bindUniform('uniform:blockDims')] },
+        attention: { code: SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL, bindings: [bindTensor('tensor:qRope'), bindTensor('tensor:kRope'), bindTensor('tensor:v'), bindTensor('tensor:attention', 'storage'), bindUniform('uniform:blockDims')] },
         outputProjection: { code: SAM_VECTOR_LINEAR_WGSL, bindings: [bindTensor('tensor:attention'), bindTensor('tensor:oProjWeight'), bindTensor('tensor:oProjBias'), bindTensor('tensor:projected', 'storage'), bindUniform('uniform:windowLinearDims')] },
         windowUnpartition: { code: WINDOW_UNPARTITION_WGSL, bindings: [bindTensor('tensor:projected'), bindTensor(`tensor:${inputTensorName}`), bindTensor('tensor:attentionResidual', 'storage'), bindUniform('uniform:blockDims')] },
         layerNorm2: { code: LAYERNORM_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:layerNorm2Weight'), bindTensor('tensor:layerNorm2Bias'), bindTensor('tensor:layerNorm2', 'storage'), bindUniform('uniform:lnDims')] },
         mlpFc1: { code: SAM_VECTOR_LINEAR_GELU_WGSL, bindings: [bindTensor('tensor:layerNorm2'), bindTensor('tensor:mlpFc1Weight'), bindTensor('tensor:mlpFc1Bias'), bindTensor('tensor:mlpHidden', 'storage'), bindUniform('uniform:fc1Dims')] },
         mlpFc2: { code: SAM_VECTOR_LINEAR_WGSL, bindings: [bindTensor('tensor:mlpHidden'), bindTensor('tensor:mlpFc2Weight'), bindTensor('tensor:mlpFc2Bias'), bindTensor('tensor:mlpOut', 'storage'), bindUniform('uniform:fc2Dims')] },
         residualMlp: { code: RESIDUAL_ADD_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:mlpOut'), bindTensor(`tensor:${outputTensorName}`, 'storage'), bindUniform('uniform:blockDims')] },
-      },
-      phases: instrumentedPhases,
-      metadata: { routeId: SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', referenceBoundary: shape.fullBackbone ? 'SAM3 image ViT contiguous full backbone' : 'SAM3 image ViT contiguous block stack through first global attention' },
-    });
+      };
+      const partitionPhase = phase => {
+        // Native global attention: 517 ms / 5184 queries, about 13 ms per range.
+        if (phase.kernel === 'attention') return partitionSamAttentionPhase(phase, kernels, runtime, 128);
+        if (['qProjection', 'kProjection', 'vProjection', 'outputProjection', 'mlpFc1', 'mlpFc2'].includes(phase.kernel)) {
+          const mlp = phase.kernel === 'mlpFc1' || phase.kernel === 'mlpFc2';
+          const inputChannels = phase.kernel === 'mlpFc2' ? shape.intermediateSize : shape.hiddenSize;
+          const outputChannels = phase.kernel === 'mlpFc1' ? shape.intermediateSize : shape.hiddenSize;
+          // Native MLP: 210-233 ms for 25 billion products; about 10 ms per range.
+          const maxOutputsPerPhase = Math.max(64, Math.floor(2 ** 30 / inputChannels / 64) * 64);
+          return partitionSamLinearPhase({ ...phase, yieldAfter: true }, {
+            tokens: mlp ? shape.tokenCount : layerShape.paddedTotalValues / shape.hiddenSize,
+            inputChannels, outputChannels, maxOutputsPerPhase,
+          }, runtime, kernels);
+        }
+        return [phase];
+      };
+      const instrumentedPhases = phases.flatMap(phase => {
+        const expanded = partitionPhase(phase);
+        if (input.validateFinitePhaseLayerIndex === layerShape.layerIndex) {
+          expanded.push({
+            name: `validate-vit-block-stack-layer-${layerShape.layerIndex}-${phase.kernel}-finite`,
+            readback: { name: phase.kernel, tensor: `tensor:${phaseTensorNames[phase.kernel]}` },
+            metadata: { layerIndex: layerShape.layerIndex, kernel: phase.kernel, diagnostic: 'finite-phase-checkpoint' },
+          });
+        }
+        return expanded;
+      });
+      return createSamRangePhaseRuntime(runtime, [SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL, SAM_VECTOR_LINEAR_RANGE_WGSL, SAM_VECTOR_LINEAR_GELU_RANGE_WGSL]).defineProgram({
+        name: `sam3.image-vit-block-stack-layer-${layerShape.layerIndex}-phase-program`,
+        tensors: programTensors,
+        uniforms: { blockDims: tensors.blockDims, lnDims: tensors.lnDims, windowLinearDims: tensors.windowLinearDims, fc1Dims: tensors.fc1Dims, fc2Dims: tensors.fc2Dims },
+        kernels,
+        phases: instrumentedPhases,
+        metadata: { routeId: SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', referenceBoundary: shape.fullBackbone ? 'SAM3 image ViT contiguous full backbone' : 'SAM3 image ViT contiguous block stack through first global attention' },
+      });
     };
 
     await runtime.runStage('vit-block-stack-layer-range', async stage => {

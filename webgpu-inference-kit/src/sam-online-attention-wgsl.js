@@ -1,3 +1,5 @@
+import { WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
+
 const STANDARD_DIMS = `
 struct AttentionDims {
   batch: u32,
@@ -65,6 +67,23 @@ struct BlockDims {
   _pad0: u32,
 };`;
 
+function createStaticQkReductionWgsl() {
+  const lines = [];
+  for (let component = 0; component < 64; component += 1) {
+    lines.push(`var product_${component} = 0.0;`);
+    lines.push(`if (${component}u < dims.head_dim) {`);
+    lines.push(`  product_${component} = q_values[q_base + ${component}u] * k_values[k_base + ${component}u];`);
+    lines.push('}');
+  }
+  // Preserve the original in-place 64-element tree, including padded zeros.
+  for (let stride = 32; stride >= 1; stride /= 2) {
+    for (let index = 0; index < stride; index += 1) {
+      lines.push(`product_${index} = product_${index} + product_${index + stride};`);
+    }
+  }
+  return lines.join('\n      ');
+}
+
 function createOnlineAttentionWgsl({
   dimsStruct,
   dimsType,
@@ -79,6 +98,7 @@ function createOnlineAttentionWgsl({
   kBase,
   vIndex,
   scoreAdjustment = '',
+  queryOffset = '',
 }) {
   return `${dimsStruct}
 
@@ -89,15 +109,17 @@ ${extraBinding}
 @group(0) @binding(${outputBinding}) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(${uniformBinding}) var<uniform> dims: ${dimsType};
 
-var<workgroup> products: array<f32, 64>;
-var<workgroup> state: array<f32, 4>;
+var<workgroup> scores: array<f32, 64>;
+var<workgroup> old_scales: array<f32, 64>;
+var<workgroup> token_scales: array<f32, 64>;
+var<workgroup> state: array<f32, 2>;
 
 @compute @workgroup_size(64)
 fn main(
   @builtin(local_invocation_index) dimension: u32,
   @builtin(workgroup_id) workgroup: vec3<u32>,
 ) {
-  let query = workgroup.x;
+  let query = workgroup.x${queryOffset};
   let head = workgroup.y;
   let batch = workgroup.z;
   if (
@@ -115,43 +137,39 @@ fn main(
   if (dimension == 0u) {
     state[0] = -3.402823e38;
     state[1] = 0.0;
-    state[2] = 0.0;
-    state[3] = 0.0;
   }
   workgroupBarrier();
 
-  for (var token = 0u; token < ${keyTokens}; token = token + 1u) {
-    let k_base = ${kBase};
-    var product = 0.0;
-    if (dimension < dims.head_dim) {
-      product = q_values[q_base + dimension] * k_values[k_base + dimension];
+  // Each lane scores one key. Keep the original reduction tree and token-order
+  // recurrence, but synchronize once per tile instead of per key/dimension.
+  for (var tile_start = 0u; tile_start < ${keyTokens}; tile_start = tile_start + 64u) {
+    let tile_count = min(64u, ${keyTokens} - tile_start);
+    let token = tile_start + dimension;
+    if (dimension < tile_count) {
+      let k_base = ${kBase};
+      ${createStaticQkReductionWgsl()}
+      var score = product_0 * scale;
+      ${scoreAdjustment}
+      scores[dimension] = score;
     }
-    products[dimension] = product;
     workgroupBarrier();
-
-    var reduction_stride = 32u;
-    loop {
-      if (dimension < reduction_stride) {
-        products[dimension] = products[dimension] + products[dimension + reduction_stride];
-      }
-      workgroupBarrier();
-      if (reduction_stride == 1u) { break; }
-      reduction_stride = reduction_stride / 2u;
-    }
 
     if (dimension == 0u) {
-      var score = products[0] * scale;
-      ${scoreAdjustment}
-      let next_max = max(state[0], score);
-      state[2] = exp(state[0] - next_max);
-      state[3] = exp(score - next_max);
-      state[0] = next_max;
-      state[1] = state[1] * state[2] + state[3];
+      for (var offset = 0u; offset < tile_count; offset = offset + 1u) {
+        let next_max = max(state[0], scores[offset]);
+        old_scales[offset] = exp(state[0] - next_max);
+        token_scales[offset] = exp(scores[offset] - next_max);
+        state[0] = next_max;
+        state[1] = state[1] * old_scales[offset] + token_scales[offset];
+      }
     }
     workgroupBarrier();
 
     if (dimension < dims.head_dim) {
-      accumulator = accumulator * state[2] + state[3] * v_values[${vIndex}];
+      for (var offset = 0u; offset < tile_count; offset = offset + 1u) {
+        let token = tile_start + offset;
+        accumulator = accumulator * old_scales[offset] + token_scales[offset] * v_values[${vIndex}];
+      }
     }
     workgroupBarrier();
   }
@@ -174,6 +192,41 @@ const standard = {
 };
 
 export const SAM_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl(standard);
+
+export const SAM_QUERY_RANGE_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl({
+  ...standard,
+  extraBinding: '\nstruct QueryRange { query_offset: u32, };\n@group(0) @binding(5) var<uniform> query_range: QueryRange;',
+  queryOffset: ' + query_range.query_offset',
+});
+
+// 123 ms / 5184 queries projects to about 6.1 ms per 256-query phase.
+// This partitions execution, never the full query/key tensor dimensions.
+export function partitionSamAttentionPhase(phase, kernels, runtime, queriesPerPhase = 256) {
+  const [queries, heads, batches] = phase.dispatch;
+  onlineAttentionDispatch(queries, heads, batches, 64);
+  positiveDispatchDimension(queriesPerPhase, 'queriesPerPhase');
+  const chunks = [];
+  const template = kernels[phase.kernel];
+  for (let offset = 0; offset < queries; offset += queriesPerPhase) {
+    const kernel = `${phase.kernel}Query${offset}`;
+    const range = runtime.createUniformBuffer({
+      label: `${kernel}.query-range`,
+      schema: [{ name: 'query_offset', type: 'u32' }],
+      values: { query_offset: offset },
+    });
+    kernels[kernel] = {
+      ...template,
+      bindings: [...template.bindings, { name: 'queryRange', resource: range, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }],
+    };
+    chunks.push({
+      ...phase,
+      name: offset === 0 ? phase.name : `${phase.name}-query-${offset}`,
+      kernel,
+      dispatch: [Math.min(queriesPerPhase, queries - offset), heads, batches],
+    });
+  }
+  return chunks;
+}
 
 export const SAM_MASKED_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl({
   ...standard,
@@ -239,7 +292,7 @@ export const SAM_PROMPT_FPN_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl({
       }`,
 });
 
-export const SAM_VIT_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl({
+const vit = {
   dimsStruct: VIT_DIMS,
   dimsType: 'BlockDims',
   queryTokens: 'dims.window_tokens',
@@ -249,6 +302,13 @@ export const SAM_VIT_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl({
   qBase: '(batch * dims.window_tokens + query) * dims.channels + head_offset',
   kBase: '(batch * dims.window_tokens + token) * dims.channels + head_offset',
   vIndex: '(batch * dims.window_tokens + token) * dims.channels + head_offset + dimension',
+};
+
+export const SAM_VIT_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl(vit);
+export const SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL = createOnlineAttentionWgsl({
+  ...vit,
+  extraBinding: '\nstruct QueryRange { query_offset: u32, };\n@group(0) @binding(5) var<uniform> query_range: QueryRange;',
+  queryOffset: ' + query_range.query_offset',
 });
 
 function positiveDispatchDimension(value, name) {

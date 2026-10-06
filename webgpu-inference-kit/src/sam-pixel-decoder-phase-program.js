@@ -1,4 +1,5 @@
 import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
+import { createSamRangePhaseRuntime } from './sam-range-phase-program.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -71,6 +72,8 @@ struct PixelStageDims {
   target_width: u32,
   total: u32,
   groups: u32,
+  output_start: u32,
+  output_count: u32,
 };
 
 @group(0) @binding(0) var<storage, read> input_values: array<f32>;
@@ -81,7 +84,9 @@ struct PixelStageDims {
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
-  let index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
+  let local_index = gid.x + gid.y * dispatch_grid.x * 64u + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
+  if (local_index >= dims.output_count) { return; }
+  let index = dims.output_start + local_index;
   if (index >= dims.total) { return; }
   let out_channel = index % dims.channels;
   let x = (index / dims.channels) % dims.target_width;
@@ -123,9 +128,11 @@ struct PixelStageDims {
 @group(0) @binding(1) var<storage, read_write> stats: array<f32>;
 @group(0) @binding(2) var<uniform> dims: PixelStageDims;
 
-@compute @workgroup_size(1)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+var<workgroup> partial: array<f32, 256>;
+
+@compute @workgroup_size(256)
+fn main(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_index) lane: u32, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let index = wid.x + wid.y * dispatch_grid.x + wid.z * dispatch_grid.x * dispatch_grid.y;
   let group_total = dims.batch * dims.groups;
   if (index >= group_total) { return; }
   let group = index % dims.groups;
@@ -133,19 +140,38 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let per_batch_total = dims.target_height * dims.target_width * dims.channels;
   let count = per_batch_total / dims.groups;
   let batch_base = batch * per_batch_total;
-  var mean = 0.0;
-  for (var i = 0u; i < count; i = i + 1u) {
-    mean = mean + input_values[batch_base + i * dims.groups + group];
+  var sum = 0.0;
+  for (var i = lane; i < count; i = i + 256u) {
+    sum = sum + input_values[batch_base + i * dims.groups + group];
   }
-  mean = mean / f32(count);
+  partial[lane] = sum;
+  workgroupBarrier();
+  for (var stride = 128u; stride > 0u; stride = stride / 2u) {
+    if (lane < stride) {
+      partial[lane] = partial[lane] + partial[lane + stride];
+    }
+    workgroupBarrier();
+  }
+  let mean = partial[0] / f32(count);
+  // Every lane must capture the mean before the variance pass reuses scratch.
+  workgroupBarrier();
   var variance = 0.0;
-  for (var i = 0u; i < count; i = i + 1u) {
+  for (var i = lane; i < count; i = i + 256u) {
     let delta = input_values[batch_base + i * dims.groups + group] - mean;
     variance = variance + delta * delta;
   }
-  variance = variance / f32(count);
-  stats[index * 2u] = mean;
-  stats[index * 2u + 1u] = variance;
+  partial[lane] = variance;
+  workgroupBarrier();
+  for (var stride = 128u; stride > 0u; stride = stride / 2u) {
+    if (lane < stride) {
+      partial[lane] = partial[lane] + partial[lane + stride];
+    }
+    workgroupBarrier();
+  }
+  if (lane == 0u) {
+    stats[index * 2u] = mean;
+    stats[index * 2u + 1u] = partial[0] / f32(count);
+  }
 }
 `;
 
@@ -428,6 +454,22 @@ function workgroups(total, device) {
   });
 }
 
+export function createSamPixelConvolutionChunks(shape, level) {
+  for (const value of [shape.batch, shape.channels, level.height, level.width]) {
+    if (!Number.isSafeInteger(value) || value <= 0) throw new Error('pixel convolution dimensions must be positive safe integers');
+  }
+  const total = levelElementCount(shape, level);
+  if (!Number.isSafeInteger(total) || total > 0xffffffff) throw new Error('pixel convolution output exceeds u32 indexing');
+  // Native 288x288x256 took 243ms as one dispatch. Eight rows target ~7ms;
+  // scale the output range by input-channel work while retaining every value.
+  const chunkSize = Math.max(64, Math.floor((8 * 288 * 256 * 256) / shape.channels / 64) * 64);
+  const chunks = [];
+  for (let offset = 0; offset < total; offset += chunkSize) {
+    chunks.push({ offset, count: Math.min(chunkSize, total - offset) });
+  }
+  return chunks;
+}
+
 export async function runSam3PixelDecoderPhaseProgramRoute(input = {}) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   const projection = validatePixelDecoderInputs(input.tensors || {});
@@ -536,12 +578,36 @@ export async function runSam3PixelDecoderPhaseProgramRoute(input = {}) {
       phases.push(
         { name: `pixel-upsample-add-${index}`, kernel: `upsampleAdd${index}`, dispatch: workgroups(total, input.device), yieldAfter: true },
         { name: `pixel-conv3x3-${index}`, kernel: `conv3x3_${index}`, dispatch: workgroups(total, input.device), yieldAfter: true },
-        { name: `pixel-groupnorm-stats-${index}`, kernel: `groupnormStats${index}`, dispatch: [shape.batch * shape.groups], yieldAfter: true },
+        { name: `pixel-groupnorm-stats-${index}`, kernel: `groupnormStats${index}`, dispatch: createLinearDispatch(shape.batch * shape.groups, {
+          workgroupSize: 1,
+          maxWorkgroupsPerDimension: input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
+        }), yieldAfter: true },
         { name: `pixel-groupnorm-relu-${index}`, kernel: `groupnormRelu${index}`, dispatch: workgroups(total, input.device), yieldAfter: true },
       );
+      const convolutionPhaseIndex = phases.length - 3;
+      const convolutionPhase = phases[convolutionPhaseIndex];
+      const convolutionKernel = kernels[convolutionPhase.kernel];
+      const sourceLevel = shape.levels[shape.levels.length - 1 - index];
+      const chunks = createSamPixelConvolutionChunks(shape, targetLevel);
+      phases.splice(convolutionPhaseIndex, 1, ...chunks.map((chunk, chunkIndex) => {
+        const name = chunkIndex === 0 ? convolutionPhase.name : `${convolutionPhase.name}-chunk-${chunkIndex}`;
+        const kernel = chunkIndex === 0 ? convolutionPhase.kernel : `${convolutionPhase.kernel}Chunk${chunkIndex}`;
+        const uniform = `convDims${index}Chunk${chunkIndex}`;
+        uniforms[uniform] = runtime.createUniformBuffer({
+          label: `sam3.pixel-decoder.${index}.conv-chunk-${chunkIndex}`,
+          schema: ['batch', 'channels', 'source_height', 'source_width', 'target_height', 'target_width', 'total', 'groups', 'output_start', 'output_count'].map(name => ({ name, type: 'u32' })),
+          values: { batch: shape.batch, channels: shape.channels, source_height: sourceLevel.height, source_width: sourceLevel.width, target_height: targetLevel.height, target_width: targetLevel.width, total, groups: shape.groups, output_start: chunk.offset, output_count: chunk.count },
+        });
+        kernels[kernel] = {
+          ...convolutionKernel,
+          bindings: convolutionKernel.bindings.map(binding => binding.name === 'dims' ? { ...binding, resource: `uniform:${uniform}` } : binding),
+        };
+        return { ...convolutionPhase, name, kernel, dispatch: workgroups(chunk.count, input.device),
+          metadata: { outputStart: chunk.offset, outputCount: chunk.count, totalOutput: total } };
+      }));
     }
     phases.push({ name: 'readback-pixel-embed', readbacks: [{ name: 'pixelEmbed', tensor: `normalized${stageCount - 1}` }] });
-    const program = runtime.defineProgram({
+    const program = createSamRangePhaseRuntime(runtime, [CONV3X3_WGSL]).defineProgram({
       name: 'sam3.pixel-decoder-phase-program',
       tensors: programTensors,
       uniforms,

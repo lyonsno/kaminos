@@ -1,5 +1,5 @@
 import { createWebGpuLinearShader } from './linear-kernel.js';
-import { createLinearDispatch } from './runtime-primitives.js';
+import { createLinearDispatch, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
 
 const GELU_HELPERS = `
 fn mlx_expm1f(x: f32) -> f32 {
@@ -65,15 +65,17 @@ fn gelu_exact_approx(x: f32) -> f32 {
 }
 `;
 
-function shader({ activation, helpers = '' }) {
+function shader({ activation, helpers = '', variant = 'sequential4' }) {
   return createWebGpuLinearShader({
-    variant: 'sequential4', activationExpression: activation, activationHelpers: helpers,
+    variant, activationExpression: activation, activationHelpers: helpers,
   });
 }
 
 export const SAM_VECTOR_LINEAR_WGSL = shader({ activation: 'value' });
 export const SAM_VECTOR_LINEAR_RELU_WGSL = shader({ activation: 'max(value, 0.0)' });
 export const SAM_VECTOR_LINEAR_GELU_WGSL = shader({ activation: 'gelu_exact_approx(value)', helpers: GELU_HELPERS });
+export const SAM_VECTOR_LINEAR_RANGE_WGSL = shader({ activation: 'value', variant: 'sequential4-range' });
+export const SAM_VECTOR_LINEAR_GELU_RANGE_WGSL = shader({ activation: 'gelu_exact_approx(value)', helpers: GELU_HELPERS, variant: 'sequential4-range' });
 
 function positiveInteger(value, name) {
   if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${name} must be a positive integer`);
@@ -102,3 +104,50 @@ export function vectorLinearDispatchForDevice(tokenCount, inputChannels, outputC
 }
 
 export const SAM_VECTOR_LINEAR_WIDTH = 4;
+
+export function partitionSamLinearPhase(phase, { tokens, inputChannels, outputChannels, maxOutputsPerPhase }, runtime, kernels) {
+  for (const [name, value] of Object.entries({ tokens, inputChannels, outputChannels, maxOutputsPerPhase })) {
+    positiveInteger(value, name);
+    if (value > 0xffff_ffff) throw new Error(`${name} must fit u32`);
+  }
+  if (inputChannels % 4 !== 0) throw new Error('inputChannels must be divisible by 4');
+  const totalOutput = tokens * outputChannels;
+  for (const count of [totalOutput, tokens * inputChannels, outputChannels * inputChannels]) {
+    if (!Number.isSafeInteger(count) || count > 0xffff_ffff) throw new Error('linear tensor domain must fit u32');
+  }
+  const template = kernels[phase.kernel];
+  const code = template?.code === SAM_VECTOR_LINEAR_WGSL ? SAM_VECTOR_LINEAR_RANGE_WGSL
+    : template?.code === SAM_VECTOR_LINEAR_GELU_WGSL ? SAM_VECTOR_LINEAR_GELU_RANGE_WGSL
+      : template?.code;
+  if (![SAM_VECTOR_LINEAR_RANGE_WGSL, SAM_VECTOR_LINEAR_GELU_RANGE_WGSL].includes(code)) {
+    throw new Error('linear range partition requires a SAM identity or GELU shader');
+  }
+  const options = {
+    workgroupSize: 64,
+    maxWorkgroupsPerDimension: runtime.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535,
+  };
+  // Validate the largest range against the effective device before allocating.
+  createLinearDispatch(Math.min(maxOutputsPerPhase, totalOutput), options);
+  const phases = [];
+  for (let start = 0; start < totalOutput; start += maxOutputsPerPhase) {
+    const count = Math.min(maxOutputsPerPhase, totalOutput - start);
+    const kernel = `${phase.kernel}Range${start}`;
+    const range = runtime.createUniformBuffer({
+      label: `${kernel}.output-range`,
+      schema: [{ name: 'output_start', type: 'u32' }, { name: 'output_count', type: 'u32' }],
+      values: { output_start: start, output_count: count },
+    });
+    kernels[kernel] = {
+      ...template,
+      code,
+      bindings: [...template.bindings, { name: 'outputRange', resource: range, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }],
+    };
+    phases.push({
+      ...phase,
+      name: start === 0 ? phase.name : `${phase.name}-range-${start}`,
+      kernel,
+      dispatch: createLinearDispatch(count, options),
+    });
+  }
+  return phases;
+}

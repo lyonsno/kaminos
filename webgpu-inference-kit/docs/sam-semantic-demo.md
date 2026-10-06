@@ -2,6 +2,8 @@
 
 The demo accepts a sample image and text prompt, then displays the source, mask overlay, and raw mask. All retained instances are shown by default; the mask selector isolates an individual instance without rerunning inference. It executes the detector backbone, neck, prompt encoder, DETR encoder/decoder, scoring, selection, and mask tail in browser WebGPU. No MLX process participates in interactive requests.
 
+This image-plus-text demo runs the SAM 3 image detector, using `mlx-community/sam3-bf16`. The package also exports SAM 3.1 tracking primitives, but this page and its native image witnesses do not exercise a video-tracking product. Image-detector evidence does not certify a tracking workflow.
+
 ## Prepare And Serve
 
 Prepare a model package once using `tools/sam-detr-stack-mlx-packet.py` from an environment with the compatible MLX-VLM SAM implementation, MLX, NumPy, and Pillow. The default model is `mlx-community/sam3-bf16`. Model access and download are the caller's responsibility.
