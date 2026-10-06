@@ -15,7 +15,8 @@ export async function measureSceneGpu(renderer,{samples=20,getSignature=()=>'',d
   let previousRender=-1,previousCompute=-1;
   try{
     for(let i=0;i<samples;i++){
-      if(drawFrame){drawFrame();await renderer.backend.device.queue.onSubmittedWorkDone();}else await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      if(drawFrame){drawFrame();await renderer.backend.device.queue.onSubmittedWorkDone();}
       const renderMs=await renderer.resolveTimestampsAsync('render'),renderFrames=renderer.backend.timestampQueryPool.render?.frames||[];
       const render=assertSceneTimingSample({ms:renderMs,frame:renderFrames.at(-1)},previousRender);previousRender=render.frame;
       let compute={status:'no-observed-compute-pool'};
