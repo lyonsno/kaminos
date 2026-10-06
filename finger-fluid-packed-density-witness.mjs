@@ -97,7 +97,7 @@ export async function capturePairedDensityWitness({device,shader,layout,buffers,
     const querySet=device.createQuerySet({type:'timestamp',count:4});owned.push(querySet);
     const resolve=buffer('paired-query-resolve',32,U.QUERY_RESOLVE|U.COPY_SRC), map=buffer('paired-query-map',32,U.COPY_DST|U.MAP_READ);
     const result={schema:'kaminos.paired-density-frozen.v1',route:'same-device-frozen-production-density-pairs',stepCount,count,cells,packedLayout,comparison,pairs,repetitions,
-      snapshotMode:frozenBindings?'retained-replay':'live-copied',frozenBindings:[],series:[],armModes:{A:arms.A.mode,B:arms.B.mode},claimLimit:'One frozen density iteration; close pairing reduces slow drift but does not establish live solver cadence or immunity to contention.'};
+      armSubmission:'separate-command-buffers-with-completion-fence',snapshotMode:frozenBindings?'retained-replay':'live-copied',frozenBindings:[],series:[],armModes:{A:arms.A.mode,B:arms.B.mode},claimLimit:'One frozen density iteration; close pairing reduces slow drift but does not establish live solver cadence or immunity to contention.'};
     onProgress(result);
     // Caller receives all bindings for replay; serialization/readback is outside timing.
     for(let i=0;i<snapshot.length;i++)result.frozenBindings.push({binding:i,size:snapshot[i].size,bytes:encode(await read(snapshot[i]))});
@@ -107,15 +107,15 @@ export async function capturePairedDensityWitness({device,shader,layout,buffers,
       device.queue.submit([init.finish()]);await device.queue.onSubmittedWorkDone();
       const series={kind,samples:[],validation:[],warmupPairs:2};result.series.push(series);
       for(let index=-2;index<pairs;index++){
-        const order=(index%2===0)?['A','B']:['B','A'];const e=device.createCommandEncoder();
+        const order=(index%2===0)?['A','B']:['B','A'];
         for(let slot=0;slot<2;slot++){
-          const arm=arms[order[slot]];e.copyBufferToBuffer(snapshot[0],0,arm.particles,0,count*64);
+          const e=device.createCommandEncoder();const arm=arms[order[slot]];e.copyBufferToBuffer(snapshot[0],0,arm.particles,0,count*64);
           const p=e.beginComputePass(index<0?{}:{timestampWrites:{querySet,beginningOfPassWriteIndex:slot*2,endOfPassWriteIndex:slot*2+1}});
           for(let repeat=0;repeat<repetitions;repeat++){if(kind==='construction-inclusive')build(p,arm);consume(p,arm);}p.end();
+          device.queue.submit([e.finish()]);await device.queue.onSubmittedWorkDone();
         }
-        if(index>=0){e.resolveQuerySet(querySet,0,4,resolve,0);e.copyBufferToBuffer(resolve,0,map,0,32);}
-        device.queue.submit([e.finish()]);
-        if(index<0){await device.queue.onSubmittedWorkDone();continue;}
+        if(index<0)continue;
+        const e=device.createCommandEncoder();e.resolveQuerySet(querySet,0,4,resolve,0);e.copyBufferToBuffer(resolve,0,map,0,32);device.queue.submit([e.finish()]);
         await map.mapAsync(GPUMapMode.READ);const values=Array.from(new BigUint64Array(map.getMappedRange().slice(0)),String);map.unmap();
         series.samples.push({index,order,timestamps:values});onProgress(result);
       }
