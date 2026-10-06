@@ -57,7 +57,7 @@ test('a provider write failure restores every selected root',()=>{
 });
 
 const {readFileSync}=await import('node:fs');const vm=await import('node:vm');
-const {checkedPose}=await import('../scene-edit-session.mjs');const {checkedGroupPose}=await import('../scene-group.mjs');
+const {checkedPose,transformPose}=await import('../scene-edit-session.mjs');const {checkedGroupPose}=await import('../scene-group.mjs');
 const {createLocalLiquidEmitterSceneRecord}=await import('../local-liquid-scene-object.mjs');
 const {normalizeLocalLiquidEmitter,LOCAL_LIQUID_EMITTER_TYPE}=await import('../local-liquid-setup.mjs');
 test('actual water provider rejects a nonuniform batch before its mesh sibling moves',()=>{
@@ -66,4 +66,10 @@ test('actual water provider rejects a nonuniform batch before its mesh sibling m
  const context=vm.createContext({sceneObjects:[{id:'mesh',type:'glb'},record],sceneGroups:[],checkedGroupPose,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE:'flame-emitter',normalizeLocalLiquidEmitter});vm.runInContext(html.slice(a,b),context);
  const edits=createSceneEdits({read:()=>null,write(){}}),target=createSelectionTransformTarget({edits,selection:()=>({ids:['mesh','water'],activeId:'water'}),groups:()=>[],preferences:()=>({pivot:'median',orientation:'world'}),read:id=>structuredClone(states[id]),write:(id,value)=>{writes.push(id);states[id]=value;},check:context.checkSelectionRoot});
  assert.throws(()=>target.apply({scale:[2,1,1]}),/positive uniform scale/);assert.deepEqual(states.mesh.position,[0,0,0]);assert.deepEqual(states.water.scale,[1,1,1]);assert.equal(edits.state().active,null);assert.equal(edits.state().undoCount,0);
+});
+
+test('World-axis scale follows world axes for an orthogonally rotated object',()=>{
+ const base=pose([0,0,0],[0,0,Math.PI/2]);
+ const next=transformPose(base,{operation:'scale',axis:'x',frame:'world',amount:2});
+ assert.ok(Math.abs(next.scale[0]-1)<1e-8);assert.ok(Math.abs(next.scale[1]-2)<1e-8);
 });

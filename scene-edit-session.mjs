@@ -1,4 +1,4 @@
-import { Vector3, Quaternion, Euler } from './lib/three.core.js';
+import { Vector3, Quaternion, Euler, Matrix4 } from './lib/three.core.js';
 
 const clone = value => structuredClone(value);
 
@@ -251,7 +251,14 @@ export function transformPose(base, {
     pose.rotation = [euler.x, euler.y, euler.z];
   } else if (operation === 'scale') {
     const index = { x: 0, y: 1, z: 2 }[axis];
-    pose.scale = base.scale.map((value, i) => !axis || (plane ? i !== index : i === index) ? value * amount : value);
+    const factors=[0,1,2].map(i=>!axis||(plane?i!==index:i===index)?amount:1);
+    if(axis&&frame==='world'){
+      const target=new Matrix4().makeScale(...factors).multiply(new Matrix4().compose(new Vector3(),new Quaternion().setFromEuler(new Euler(...base.rotation)),new Vector3(...base.scale)));
+      const position=new Vector3(),rotation=new Quaternion(),scale=new Vector3();target.decompose(position,rotation,scale);
+      const reconstructed=new Matrix4().compose(position,rotation,scale),extent=Math.max(1,...target.elements.map(Math.abs));
+      if(![...rotation.toArray(),...scale.toArray()].every(Number.isFinite)||target.elements.some((v,i)=>Math.abs(v-reconstructed.elements[i])>1e-7*extent))throw Error('This World-axis scale introduces shear; use Local axes or uniform scale');
+      const euler=new Euler().setFromQuaternion(rotation);pose.rotation=[euler.x,euler.y,euler.z];pose.scale=scale.toArray();
+    }else pose.scale=base.scale.map((value,i)=>value*factors[i]);
   } else {
     throw new Error(`Unknown transform operation: ${operation}`);
   }
