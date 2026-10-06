@@ -21357,7 +21357,7 @@ function readVolumeControls() {
     emitterEdgeEntrainment: parseFloat(document.getElementById('volume-emitter-edge-entrainment').value),
     emitterFuelFraction: parseFloat(document.getElementById('volume-emitter-fuel-fraction').value),
     emitterInletTemperature: parseFloat(document.getElementById('volume-emitter-inlet-temperature').value),
-    emitterAperturePattern: document.getElementById('volume-emitter-aperture-pattern').value,
+    emitterAperturePattern: document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest || document.getElementById('volume-emitter-aperture-pattern').value,
     emitterApertureCount: parseFloat(document.getElementById('volume-emitter-aperture-count').value),
     emitterApertureRatio: parseFloat(document.getElementById('volume-emitter-aperture-ratio').value),
     emitterApertureSeed: parseFloat(document.getElementById('volume-emitter-aperture-seed').value),
@@ -21673,7 +21673,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-edge-entrainment-val').textContent = c.emitterEdgeEntrainment.toFixed(2);
   document.getElementById('volume-emitter-fuel-fraction-val').textContent = c.emitterFuelFraction.toFixed(2);
   document.getElementById('volume-emitter-inlet-temperature-val').textContent = c.emitterInletTemperature.toFixed(2);
-  document.getElementById('volume-emitter-aperture-pattern-val').textContent = c.emitterAperturePattern;
+  document.getElementById('volume-emitter-aperture-pattern-val').textContent = document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest ? `shape (${c.emitterAperturePattern} retired)` : c.emitterAperturePattern;
   document.getElementById('volume-emitter-aperture-count-val').textContent = String(Math.round(c.emitterApertureCount));
   document.getElementById('volume-emitter-aperture-ratio-val').textContent = c.emitterApertureRatio.toFixed(2);
   document.getElementById('volume-emitter-aperture-seed-val').textContent = String(Math.round(c.emitterApertureSeed));
@@ -22343,10 +22343,24 @@ async function initKaminosVolumeRoute() {
   // period) and the wind model controls had no route read here, so a cold load
   // of a saved basin fell back to the page defaults for all of them (witnessed
   // at e05f6323). Each takes its route value through the shared setter.
+  // A retired aperture pattern (spiral, concentric) has no option in the select:
+  // assigning it would clear the selection and lose the saved request. The
+  // select shows the family shape the map falls back to, and the request is
+  // kept beside it so the controls snapshot still sends it to the resolver and
+  // the receipt names the fallback. Authoring a new pattern clears it.
+  const VOLUME_RETIRED_APERTURE_PATTERNS = ['concentric', 'spiral'];
   const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
-    if (param && params.has(param)) setVolumeControlValue(id, params.get(param));
+    if (!param || !params.has(param)) continue;
+    const value = params.get(param);
+    const patternSelect = document.getElementById('volume-emitter-aperture-pattern');
+    if (id === 'volume-emitter-aperture-pattern' && VOLUME_RETIRED_APERTURE_PATTERNS.includes(value)) {
+      patternSelect.value = 'shape';
+      patternSelect.dataset.volumeRetiredPatternRequest = value;
+      continue;
+    }
+    setVolumeControlValue(id, value);
   }
   const routeFireRenderMode = (params.get('volume_fire_render_mode') || '').toLowerCase().replace(/-/g, '_');
   if (['shell', 'inspect', 'off', 'stock'].includes(routeFireRenderMode)) {
@@ -23160,6 +23174,8 @@ async function initKaminosVolumeRoute() {
     setVolumeRenderScaleControlValue(nextValue);
     syncControls({ target: document.getElementById('volume-render-scale-full') });
   });
+  // Authoring a pattern clears a retired request kept from a saved route.
+  document.getElementById('volume-emitter-aperture-pattern').addEventListener('change', () => { delete document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest; });
   for (const id of [
     'volume-emitter-source-law',
     'volume-emitter-source-depth',

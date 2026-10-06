@@ -69,3 +69,18 @@ test('the older emitter dynamics and the boundary gradient / softness / cut hide
   assert.match(index, /applyVolumeInflowLawRowVisibility\(document\.getElementById\('volume-emitter-source-law'\)\?\.value\);/, 'applied on every receipt update, so a basin load re-evaluates it');
   assert.match(index, /\.slider-row\[data-volume-inflow-hidden="true"\] \{ display: none; \}/);
 });
+
+// A basin saved with a retired pattern (spiral, concentric) must load as the
+// family shape AND keep the saved request so the receipt can say so. Assigning
+// the retired value to the select clears it (no such option), so the route
+// loader sets the select to shape and keeps the request beside it; the
+// controls snapshot sends the kept request to the resolver; authoring a new
+// pattern clears it.
+test('a retired pattern in a saved route loads as the family shape with its request kept for the receipt, until a new pattern is authored', () => {
+  assert.match(index, /const VOLUME_RETIRED_APERTURE_PATTERNS = \['concentric', 'spiral'\];/);
+  const init = index.slice(index.indexOf('async function initKaminosVolumeRoute()'), index.indexOf('\n}\n', index.indexOf('async function initKaminosVolumeRoute()')));
+  assert.match(init, /if \(id === 'volume-emitter-aperture-pattern' && VOLUME_RETIRED_APERTURE_PATTERNS\.includes\(value\)\) \{\s*\n\s*patternSelect\.value = 'shape';\s*\n\s*patternSelect\.dataset\.volumeRetiredPatternRequest = value;/, 'the loader keeps the retired request beside a valid selection');
+  assert.match(index, /emitterAperturePattern: document\.getElementById\('volume-emitter-aperture-pattern'\)\.dataset\.volumeRetiredPatternRequest \|\| document\.getElementById\('volume-emitter-aperture-pattern'\)\.value/, 'the snapshot sends the kept request so the resolver names the fallback');
+  assert.match(index, /delete document\.getElementById\('volume-emitter-aperture-pattern'\)\.dataset\.volumeRetiredPatternRequest/, 'authoring a pattern clears the kept request');
+  assert.match(index, /volume-emitter-aperture-pattern-val'\)\.textContent = [^;]*retired/, 'the label says a retired request is standing in');
+});
