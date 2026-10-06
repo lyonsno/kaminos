@@ -56,6 +56,12 @@ test('inlet dynamics resolve from the controls: puff factor, turbulence intensit
   assert.equal(inlet.inletDynamicsTauSteps({ ...controls, speed: 1 }, 3), 180);
   assert.equal(inlet.inletDynamicsTauSteps(controls, 3), 360);
   assert.equal(inlet.INLET_TURBULENCE_CORRELATION_SECONDS, 0.5, 'turbulence decorrelates on a fixed half-second (its scale is spatial)');
+  // Sub-second periods survive the conversion: the floor of one applies to steps, not seconds.
+  assert.equal(inlet.inletDynamicsTauSteps({}, 0.5), 30, 'half a second is thirty steps at the reference rate');
+  assert.equal(inlet.inletDynamicsTauSteps({}, inlet.INLET_TURBULENCE_CORRELATION_SECONDS), 30, 'the turbulence correlation is thirty steps, not sixty');
+  assert.equal(inlet.inletDynamicsTauSteps({ ...controls, speed: 1 }, 0.5), 30);
+  assert.equal(inlet.inletDynamicsTauSteps({ ...controls, speed: 0.1 }, 0.5), 300, 'and ten times that at Speed 0.1 under the uniform step');
+  assert.equal(inlet.inletDynamicsTauSteps({}, 0.001), 1, 'never below one step');
 });
 
 test('the shader derives every inflow quantity from one inlet speed that carries the puff and the turbulence', () => {

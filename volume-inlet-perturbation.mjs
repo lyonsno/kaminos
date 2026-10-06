@@ -104,9 +104,14 @@ export class InletPerturbationField {
 }
 
 // Simulated seconds → steps at the current time step (legacy: 60 per second).
+// The floor of one applies to steps, not seconds: half a second is thirty
+// steps at the reference rate (review of a565244d: the old floor on seconds
+// made 0.5 s and 1 s the same law).
 export function inletDynamicsTauSteps(controls = {}, seconds) {
   const dtScale = resolveTimeStepConfig(controls).effective.dtScale;
-  return Math.max(1, Number(seconds) || 1) * INLET_DYNAMICS_STEPS_PER_SECOND / Math.max(1e-3, Number.isFinite(dtScale) ? dtScale : 1);
+  const s = Number(seconds);
+  const steps = (Number.isFinite(s) && s > 0 ? s : 1) * INLET_DYNAMICS_STEPS_PER_SECOND / Math.max(1e-3, Number.isFinite(dtScale) ? dtScale : 1);
+  return Math.max(1, steps);
 }
 
 // `signals` carries the current samples: { puff: Float32Array|number[], turbulence: { rms } | null }.

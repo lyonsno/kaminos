@@ -1935,38 +1935,38 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-label">Line weight (inflow)</span>
       <input type="range" id="volume-emitter-line-weight" data-volume-settings-param="volume_emitter_line_weight" min="0.25" max="3" step="any" value="1">
       <span class="slider-val" id="volume-emitter-line-weight-val">1.00</span>
-      <span class="slider-help">Scales the band every pattern draws with: the ring's tube, each jet's radius, the slot's width. The family geometry (ring radius, slot length) is untouched. Thinner bands carry less flux, so the plume is thinner too.</span>
     </div>
+    <span class="slider-help">Scales the band every pattern draws with: the ring's tube, each jet's radius, the slot's width. The family geometry (ring radius, slot length) is untouched. Thinner bands carry less flux, so the plume is thinner too.</span>
     <div class="slider-row" data-volume-visual-cost-knob="source-profile">
       <span class="slider-label">Jet size jitter</span>
       <input type="range" id="volume-emitter-jet-jitter" data-volume-settings-param="volume_emitter_jet_jitter" min="0" max="1" step="any" value="0">
       <span class="slider-val" id="volume-emitter-jet-jitter-val">0.00</span>
-      <span class="slider-help">For the ring of jets: each jet's radius varies by up to ±60 % of this, in a fixed pattern set by the aperture seed. Zero makes every jet the same size.</span>
     </div>
+    <span class="slider-help">For the ring of jets: each jet's radius varies by up to ±60 % of this, in a fixed pattern set by the aperture seed. Zero makes every jet the same size.</span>
     <div class="slider-row" data-volume-visual-cost-knob="source-profile">
       <span class="slider-label">Inlet turbulence</span>
       <input type="range" id="volume-emitter-inlet-turbulence" data-volume-settings-param="volume_emitter_inlet_turbulence" min="0" max="1" step="any" value="0">
       <span class="slider-val" id="volume-emitter-inlet-turbulence-val">0.00</span>
-      <span class="slider-help">A slow stochastic field of inlet-speed perturbations across the floor opening: each patch of the aperture breathes faster or slower by up to this fraction, drifting on a half-second correlation. It roughens the base of the flame the way a real bed or burner does; mass still enters only through the floor. Seeded and step-locked, so a replay repeats.</span>
     </div>
+    <span class="slider-help">A slow stochastic field of inlet-speed perturbations across the floor opening: each patch of the aperture breathes faster or slower by up to this fraction, drifting on a half-second correlation. It roughens the base of the flame the way a real bed or burner does; mass still enters only through the floor. Seeded and step-locked, so a replay repeats.</span>
     <div class="slider-row" data-volume-visual-cost-knob="source-profile">
       <span class="slider-label">Turbulence scale</span>
       <input type="range" id="volume-emitter-inlet-turbulence-scale" data-volume-settings-param="volume_emitter_inlet_turbulence_scale" min="1" max="32" step="1" value="6">
       <span class="slider-val" id="volume-emitter-inlet-turbulence-scale-val">6</span>
-      <span class="slider-help">Size of the turbulence patches in floor cells. Small patches give fine ripples at the base; large patches make whole sectors of the opening surge together.</span>
     </div>
+    <span class="slider-help">Size of the turbulence patches in floor cells. Small patches give fine ripples at the base; large patches make whole sectors of the opening surge together.</span>
     <div class="slider-row" data-volume-visual-cost-knob="source-profile">
       <span class="slider-label">Puffing</span>
       <input type="range" id="volume-emitter-puff" data-volume-settings-param="volume_emitter_puff" min="0" max="1" step="any" value="0">
       <span class="slider-val" id="volume-emitter-puff-val">0.00</span>
-      <span class="slider-help">A slow stochastic modulation of the whole inlet's speed, by up to this fraction either way (1 can close the inlet momentarily, never reverse it). The receipt shows the puff factor in force.</span>
     </div>
+    <span class="slider-help">A slow stochastic modulation of the whole inlet's speed, by up to this fraction either way (1 can close the inlet momentarily, never reverse it). The receipt shows the puff factor in force.</span>
     <div class="slider-row" data-volume-visual-cost-knob="source-profile">
       <span class="slider-label">Puff period (s)</span>
       <input type="range" id="volume-emitter-puff-period" data-volume-settings-param="volume_emitter_puff_period" min="0.5" max="30" step="any" value="3">
       <span class="slider-val" id="volume-emitter-puff-period-val">3.0</span>
-      <span class="slider-help">Correlation time of the puffing in simulated seconds (so it follows Speed under the uniform time step). Short periods flutter; long ones heave.</span>
     </div>
+    <span class="slider-help">Correlation time of the puffing in simulated seconds (so it follows Speed under the uniform time step). Short periods flutter; long ones heave.</span>
     <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
       <span class="slider-label">Fixed Source Dephase</span>
       <input type="checkbox" id="volume-fixed-source-dephase" data-volume-settings-param="volume_fixed_source_dephase" checked>

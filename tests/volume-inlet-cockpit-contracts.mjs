@@ -14,12 +14,28 @@ test('the six slice-3 inlet controls exist, are read, displayed, listened to, he
     assert.match(index, new RegExp(`${SNAPSHOT[id]}: parseFloat\\(document\\.getElementById\\('${id}'\\)\\.value\\)`), `${id} in the controls snapshot`);
     assert.match(index, new RegExp(`getElementById\\('${id}-val'\\)\\.textContent = `), `${id} value display`);
     assert.ok(listenerList.includes(`'${id}',`), `${id} has a change listener`);
-    const row = index.slice(index.indexOf(`id="${id}"`), index.indexOf('</div>', index.indexOf(`id="${id}"`)));
-    assert.match(row, /<span class="slider-help">/, `${id} has help text`);
+    // The help span follows its row as a sibling: that is what the hover-help
+    // installer (previousElementSibling must be the row) and the layout
+    // engine's row clustering expect; a span nested inside the row is unreachable.
+    const rowEnd = index.indexOf('</div>', index.indexOf(`id="${id}"`));
+    const afterRow = index.slice(rowEnd, rowEnd + 400);
+    assert.match(afterRow, /^<\/div>\s*<span class="slider-help">/, `${id} help text follows the row as a sibling`);
+    const inside = index.slice(index.indexOf(`id="${id}"`), rowEnd);
+    assert.doesNotMatch(inside, /slider-help/, `${id} has no help span nested inside the row`);
   }
   assert.equal(schema.controlCount, 233);
   assert.deepEqual(NEW.map(id => schema.controls.find(c => c.key === id)?.additiveSinceControlCount), [228, 229, 230, 231, 232, 233]);
   assert.deepEqual(NEW.map(id => schema.controls.find(c => c.key === id)?.additiveDefault), [1, 0, 0, 6, 0, 3]);
+});
+
+test('the six slice-3 controls are applied from a saved route like every other inflow control', () => {
+  // Whatever loop applies volume_emitter_swirl from the URL must apply these too.
+  const swirlApplications = [...index.matchAll(/volume_emitter_swirl/g)].length;
+  for (const id of NEW) {
+    const param = id.replace(/-/g, '_');
+    const applications = [...index.matchAll(new RegExp(param, 'g'))].length;
+    assert.ok(applications >= swirlApplications, `${param} appears in the page at least as often as volume_emitter_swirl (${applications} vs ${swirlApplications}): it is applied from routes wherever swirl is`);
+  }
 });
 
 test('spiral and concentric are gone from the pattern select; retired-from-the-interface rows stay in the DOM but hidden', () => {

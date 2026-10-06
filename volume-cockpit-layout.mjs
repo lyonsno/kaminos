@@ -301,7 +301,9 @@ export function collectVolumeCockpitControlElements(documentRef) {
 }
 
 function isAuthorableControl(control) {
-  return control.type !== 'hidden' && !control.closest('[data-volume-retired-control-state]');
+  // Rows retired from the interface (data-volume-ui-retired) stay in the DOM
+  // for saved basins but are not placeable in a layout.
+  return control.type !== 'hidden' && !control.closest('[data-volume-retired-control-state]') && !control.closest('[data-volume-ui-retired]');
 }
 
 function controlCluster(control) {
