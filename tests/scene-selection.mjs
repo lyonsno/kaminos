@@ -55,3 +55,15 @@ test('provider preflight refuses a mixed transform before any root changes',()=>
 test('a provider write failure restores every selected root',()=>{
  const f=batchFixture({failWrite:true});assert.throws(()=>f.target.apply({position:[2,0,0]}),/provider write rejected/);assert.equal(f.states.a.position[0],0);assert.equal(f.states.b.position[0],2);assert.equal(f.edits.state().active,null);
 });
+
+const {readFileSync}=await import('node:fs');const vm=await import('node:vm');
+const {checkedPose}=await import('../scene-edit-session.mjs');const {checkedGroupPose}=await import('../scene-group.mjs');
+const {createLocalLiquidEmitterSceneRecord}=await import('../local-liquid-scene-object.mjs');
+const {normalizeLocalLiquidEmitter,LOCAL_LIQUID_EMITTER_TYPE}=await import('../local-liquid-setup.mjs');
+test('actual water provider rejects a nonuniform batch before its mesh sibling moves',()=>{
+ const record=createLocalLiquidEmitterSceneRecord({id:'water',transform:pose([2,0,0]),createdAt:'2026-10-06T00:00:00Z'}),states={mesh:pose([0,0,0]),water:record.transform},writes=[];
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');const a=html.indexOf('function checkSelectionRoot('),b=html.indexOf('function selectionTransformProxy(',a);
+ const context=vm.createContext({sceneObjects:[{id:'mesh',type:'glb'},record],sceneGroups:[],checkedGroupPose,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE:'flame-emitter',normalizeLocalLiquidEmitter});vm.runInContext(html.slice(a,b),context);
+ const edits=createSceneEdits({read:()=>null,write(){}}),target=createSelectionTransformTarget({edits,selection:()=>({ids:['mesh','water'],activeId:'water'}),groups:()=>[],preferences:()=>({pivot:'median',orientation:'world'}),read:id=>structuredClone(states[id]),write:(id,value)=>{writes.push(id);states[id]=value;},check:context.checkSelectionRoot});
+ assert.throws(()=>target.apply({scale:[2,1,1]}),/positive uniform scale/);assert.deepEqual(states.mesh.position,[0,0,0]);assert.deepEqual(states.water.scale,[1,1,1]);assert.equal(edits.state().active,null);assert.equal(edits.state().undoCount,0);
+});
