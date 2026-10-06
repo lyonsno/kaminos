@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {basename} from 'node:path';
 import {admitSceneGIComparison,admitSceneGILinearAddition} from './scene-gi-evidence.mjs';
 const [url,out,root,operation] = process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
@@ -66,6 +67,9 @@ try {
     const scene=await(await fetch(new URL('/api/read?root=scenes&path=cheap-kiln-shared-source.kaminos.json',url))).json();
     scene.environment.ground={...scene.environment.ground,color:'#606060',roughness:.9};
     scene.postprocessing.sceneGI={mode:'combined',gain:3};
+    scene._filename='handy-floor-restore-'+basename(out)+'.kaminos.json';
+    scene.composition.label='Handy floor restore check';
+    report.restoreFixture=scene._filename;await save();
     await page.setInputFiles('#scene-file-input',{name:'floor-roundtrip.kaminos.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(scene))});
     await page.waitForFunction(()=>window.kaminosGroundDebugState?.().color==='#606060'&&window.kaminosSceneGIDebugState?.().gain===3,null,{timeout:0});
     report.restoredUrl=page.url();
