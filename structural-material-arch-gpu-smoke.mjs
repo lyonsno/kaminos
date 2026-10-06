@@ -9,7 +9,7 @@ import { Vector3, Quaternion } from 'three';
 import { inspectGpuConformance, inspectGpuArchLoad, inspectGpuArchRendererLifetime, inspectArchPerformanceTrial } from './structural-material-arch-gpu-evidence.mjs';
 import { inspectStoneVisual, stoneAssetsForDetail } from './structural-material-arch-stones.js';
 
-const [outputInput, executableInput, page = 'structural-material-arch-gpu-conformance.html', exercise = 'load', appearance = 'boxes', stoneDetail = '5k'] = process.argv.slice(2);
+const [outputInput, executableInput, page = 'structural-material-arch-gpu-conformance.html', exercise = 'load', appearance = 'boxes', stoneDetail = '500-normal'] = process.argv.slice(2);
 if (!outputInput || !executableInput) throw new Error('usage: node structural-material-arch-gpu-smoke.mjs OUTPUT.json INDEPENDENT_CHROME [PAGE]');
 const output=path.resolve(outputInput), root=path.dirname(fileURLToPath(import.meta.url));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');

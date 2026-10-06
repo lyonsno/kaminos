@@ -12,6 +12,7 @@ const STONE_DETAILS = {
   original: STONE_ASSETS,
   '5k': [{ id: '03-bedded-stone-5k', sha256: 'e39f199f7ad2dacfccf7f2085c00e3fbef3ac856e156f5b5c9d7c2be4d506992', url: './assets/arch-stones/03-bedded-stone-5k.glb', triangles: 4943 }],
   '10k': [{ id: '03-bedded-stone-10k', sha256: '8d69eb64ce35dcad125813870393f3ae645631e5de37a24c8b85db79f86b2495', url: './assets/arch-stones/03-bedded-stone-10k.glb', triangles: 9773 }],
+  '500-normal': [{ id: '03-bedded-stone-500-normal', sha256: '33eb6f774a3b2bd52751c052029b529359957a71ec3eeee2e93c51bee46d8011', url: './assets/arch-stones/03-bedded-stone-500-normal.glb', triangles: 500, normalMapped: true, normalTextureSize: 1024 }],
 };
 
 export function stoneAssetsForDetail(detail) {
@@ -30,6 +31,7 @@ export function inspectStoneVisual(witness, expectedDetail = witness?.visual?.de
     const actual = visual.assets.find(asset => asset.id === expected.id);
     if (actual?.sha256 !== expected.sha256 || !(actual?.bytes > 0) || !(actual?.triangles > 0)) errors.push(`Unverified stone ${expected.id}`);
     if (expected.triangles !== undefined && actual?.triangles !== expected.triangles) errors.push(`Unexpected triangle count for ${expected.id}`);
+    if (expected.normalMapped && (actual?.normalMapped !== true || actual?.normalTextureWidth !== expected.normalTextureSize || actual?.normalTextureHeight !== expected.normalTextureSize)) errors.push(`Unbound or incorrect normal texture for ${expected.id}`);
   }
   if (visual.assets.length !== expectedAssets.length) errors.push('Stone inventory changed');
   if (visual.bodies.length !== witness.state.bodies.length || new Set(visual.bodies.map(body => body.index)).size !== visual.bodies.length) errors.push('Incomplete visual bodies');
@@ -39,6 +41,7 @@ export function inspectStoneVisual(witness, expectedDetail = witness?.visual?.de
     const asset = visual.assets.find(item => item.id === displayed?.asset);
     if (!asset) errors.push(`Body ${body.index} has no stone`);
     else triangles += asset.triangles;
+    if (expectedAssets.find(item => item.id === displayed?.asset)?.normalMapped && displayed.normalMapped !== true) errors.push(`Body ${body.index} lost its normal material`);
   }
   if (!(triangles > 0) || visual.triangles !== triangles) errors.push('Rendered triangle inventory disagrees');
   return errors;
@@ -69,7 +72,7 @@ export function structuralFaceAt(point, half) {
   return normal;
 }
 
-export async function loadStoneAssets(detail = '5k') {
+export async function loadStoneAssets(detail = '500-normal') {
   const loader = new GLTFLoader(), assets = [];
   try {
     for (const entry of stoneAssetsForDetail(detail)) {
