@@ -28,14 +28,21 @@ test('the six slice-3 inlet controls exist, are read, displayed, listened to, he
   assert.deepEqual(NEW.map(id => schema.controls.find(c => c.key === id)?.additiveDefault), [1, 0, 0, 6, 0, 3]);
 });
 
-test('the six slice-3 controls are applied from a saved route like every other inflow control', () => {
-  // Whatever loop applies volume_emitter_swirl from the URL must apply these too.
-  const swirlApplications = [...index.matchAll(/volume_emitter_swirl/g)].length;
-  for (const id of NEW) {
-    const param = id.replace(/-/g, '_');
-    const applications = [...index.matchAll(new RegExp(param, 'g'))].length;
-    assert.ok(applications >= swirlApplications, `${param} appears in the page at least as often as volume_emitter_swirl (${applications} vs ${swirlApplications}): it is applied from routes wherever swirl is`);
-  }
+// A saved basin is its route: the preset page re-enters the cockpit with the
+// basin's parameters in the URL, and initKaminosVolumeRoute applies them. The
+// slice-1 fuel/temperature, the slice-2 pattern/swirl/wind and the slice-3
+// inlet controls were never applied there (only the older emitter dynamics
+// had explicit reads), so a cold load of a saved basin fell back to the page
+// defaults for all seventeen (witnessed: route-restore-e05f6323). The route
+// initialiser applies every one of them by its settings param.
+const ROUTE_RESTORED = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer', ...NEW];
+test('every inflow and wind control is restored from a saved route by the route initialiser', () => {
+  const init = index.slice(index.indexOf('async function initKaminosVolumeRoute()'), index.indexOf('\n}\n', index.indexOf('async function initKaminosVolumeRoute()')));
+  const listMatch = init.match(/const VOLUME_ROUTE_RESTORED_CONTROL_IDS = \[([^\]]*)\];/);
+  assert.ok(listMatch, 'the initialiser names the controls it restores from the route');
+  const listed = [...listMatch[1].matchAll(/'([a-z0-9-]+)'/g)].map(m => m[1]);
+  for (const id of ROUTE_RESTORED) assert.ok(listed.includes(id), `${id} is restored from the route`);
+  assert.match(init, /for \(const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS\) \{\s*\n\s*const param = document\.getElementById\(id\)\?\.dataset\.volumeSettingsParam;\s*\n\s*if \(param && params\.has\(param\)\) setVolumeControlValue\(id, params\.get\(param\)\);/, 'each listed control takes its route value through the shared setter');
 });
 
 test('spiral and concentric are gone from the pattern select; retired-from-the-interface rows stay in the DOM but hidden', () => {

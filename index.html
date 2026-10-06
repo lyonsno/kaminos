@@ -22337,6 +22337,17 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_fixed_source_dephase')) {
     setVolumeControlValue('volume-fixed-source-dephase', params.get('volume_fixed_source_dephase'));
   }
+  // A saved basin is its route. The inflow-boundary emitter controls (fuel
+  // fraction, inlet temperature, aperture pattern / count / ratio / seed,
+  // swirl, line weight, jet jitter, inlet turbulence and scale, puffing and
+  // period) and the wind model controls had no route read here, so a cold load
+  // of a saved basin fell back to the page defaults for all of them (witnessed
+  // at e05f6323). Each takes its route value through the shared setter.
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
+    const param = document.getElementById(id)?.dataset.volumeSettingsParam;
+    if (param && params.has(param)) setVolumeControlValue(id, params.get(param));
+  }
   const routeFireRenderMode = (params.get('volume_fire_render_mode') || '').toLowerCase().replace(/-/g, '_');
   if (['shell', 'inspect', 'off', 'stock'].includes(routeFireRenderMode)) {
     document.getElementById('volume-fire-render-mode').value = routeFireRenderMode;
