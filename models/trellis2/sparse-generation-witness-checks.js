@@ -100,6 +100,23 @@ export function generationPhases(m){return generationPipelineType(m)==='512'
   ?GENERATION_PHASES.filter(phase=>!['learned-cascade-support','high-resolution-shape-sampling'].includes(phase)):GENERATION_PHASES;}
 export function generationFields(m){return generationPipelineType(m)==='512'
   ?GENERATION_FIELDS.filter(field=>field!=='noise.highResolutionShape'):GENERATION_FIELDS;}
+export function admitRetainedGenerationCompletion(n,m,{expectedNativeCommit,inputMode='completed-command'}={}){
+  if(!['completed-command','completed-model-fields'].includes(inputMode))throw Error('explicit supported retained input mode required');
+  if(!['succeeded','failed'].includes(n.status)||!Number.isFinite(Date.parse(n.finishedAt))||
+    (inputMode==='completed-command'&&n.status!=='succeeded')||n.result?.status!=='succeeded'||
+    n.commit!==expectedNativeCommit||n.expectedCommit!==expectedNativeCommit||n.dirty!==''||
+    n.result.backend?.isFallbackAdapter!==false||n.result.backend.vendor!=='apple'||n.result.backend.architecture!=='metal-3'||
+    n.result.jobCompletion?.status!=='succeeded'||n.result.jobCompletion.outputPresent!==true)
+    throw Error('completed exact-source native Apple WebGPU model fields required; command failure is not model completion');
+  validateGenerationResult(n.result,m);
+  for(const name of generationFields(m)){
+    const row=n.rawOutputs?.[name],observed=n.result.outputs[name];
+    if(!row||row.sha256!==observed.sha256||row.byteLength!==observed.byteLength||row.dtype!==observed.dtype)
+      throw Error('conflicting retained field receipt: '+name);
+  }
+  return Object.freeze({inputMode,commandStatus:n.status,modelStatus:n.result.status,
+    ...(n.status==='failed'?{commandFailure:{phase:n.phase,error:n.error}}:{})});
+}
 export function generationModelCallCounts(m){
   const count=p=>p.steps.reduce((n,s)=>n+(s.guided?2:1),0),c=m.models;
   return{[GENERATION_PHASES[0]]:count(buildSparseSamplerPlan(c.sparseFlow.config)),

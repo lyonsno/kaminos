@@ -13,7 +13,7 @@ import { validateDecoderFixture, decoderObservationShapes } from './sparse-decod
 import { validateOccupancyCoordinateFixture } from './occupancy-coordinate-witness-checks.js';
 import { validateSLatDecoderFixture, slatDecoderObservationShapes, validateSLatProjectionFixture, validateSLatProjectionResult, validateSLatConvolutionFixture, validateSLatConvolutionResult } from './slat-decoder-witness-checks.js';
 import {validateGenerationInputs} from './generation-inputs.js';
-import {GENERATION_FIELDS,validateGenerationResult,persistGenerationPhase,persistGenerationAsset} from './sparse-generation-witness-checks.js';
+import {generationFields,validateGenerationResult,persistGenerationPhase,persistGenerationAsset} from './sparse-generation-witness-checks.js';
 
 const { values } = parseArgs({ options: { ...Object.fromEntries(
   ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture', 'sampler-fixture', 'trajectory-fixture'].map(name => [name, { type: 'string' }])),
@@ -280,7 +280,7 @@ try {
   if (value.url !== report.requestedUrl) throw new Error('effective browser URL differs from requested route');
   if (value.result.status !== 'succeeded') throw new Error(value.result.error?.message || 'browser witness failed');
   if (report.serverErrors?.length) throw new Error(report.serverErrors.join('\n'));
-  const requiredOutputs = generationManifest ? [...GENERATION_FIELDS] : convolutionPlan ? ['neighbors','convolution'] : projectionPlan ? ['f32','f16'] : slatDecoderPlan ? Object.keys(slatDecoderObservationShapes(slatDecoderManifest)) : coordinatePlan ? ['coordinates'] : isSampler ? [...SAMPLER_OBSERVATIONS] : decoderPlan ? Object.keys(decoderObservationShapes(decoderPlan)) : ['projected', 'modulation'];
+  const requiredOutputs = generationManifest ? [...generationFields(generationManifest)] : convolutionPlan ? ['neighbors','convolution'] : projectionPlan ? ['f32','f16'] : slatDecoderPlan ? Object.keys(slatDecoderObservationShapes(slatDecoderManifest)) : coordinatePlan ? ['coordinates'] : isSampler ? [...SAMPLER_OBSERVATIONS] : decoderPlan ? Object.keys(decoderObservationShapes(decoderPlan)) : ['projected', 'modulation'];
   const observedOutputs={...value.result.outputs};
   if(generationManifest){
     validateGenerationResult(value.result,generationManifest);

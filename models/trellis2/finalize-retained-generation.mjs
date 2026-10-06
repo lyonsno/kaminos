@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {extractTrellisDualGridMesh} from './trellis-mesh.js';
 import {finishTrellisMesh,encodeTrellisTexturePNG} from './trellis-material.js';
 import {NodeTrellisUVWorker} from './node-uv-worker.mjs';
-import {persistGenerationAsset,validateGenerationResult,GENERATION_ROUTE} from './sparse-generation-witness-checks.js';
+import {persistGenerationAsset,admitRetainedGenerationCompletion,generationFields,GENERATION_ROUTE} from './sparse-generation-witness-checks.js';
 
 const args=new Map();
 for(let i=2;i<process.argv.length;i+=2)args.set(process.argv[i],process.argv[i+1]);
@@ -44,15 +44,30 @@ try{
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw Error('positive caller-selected face target required');
   await enter('native-field-admission');
   const rawReport=await fs.readFile(path.join(native,'report.json')),n=JSON.parse(rawReport);
-  if(n.status!=='succeeded'||n.result?.status!=='succeeded'||n.commit!==args.get('--expected-native-commit')||n.dirty!==''||
-    n.result.effectiveRoute!=='trellis2.image-generation.webgpu.v0'||n.result.backend?.isFallbackAdapter!==false||
-    n.result.backend.vendor!=='apple'||n.result.backend.architecture!=='metal-3')
-    throw Error('completed exact-source native Apple WebGPU generation required');
   const fixture=await fs.readFile(path.join(n.fixtureRoot,'manifest.json'));
   if(hash(fixture)!==n.fixtureSha256)throw Error('unchanged complete native input manifest required');
-  validateGenerationResult(n.result,JSON.parse(fixture));
+  const manifest=JSON.parse(fixture),admission=admitRetainedGenerationCompletion(n,manifest,
+    {expectedNativeCommit:args.get('--expected-native-commit'),inputMode:args.get('--input-mode')??'completed-command'});
+  report.retainedAdmission=admission;
+  if(admission.inputMode==='completed-model-fields'){
+    // Failed export does not waive the actual served-source or complete-byte boundary.
+    for(const name of ['models/trellis2/dinov3-serving.js','models/trellis2/trellis-generation.js','models/trellis2/generation-inputs.js',
+      'models/trellis2/sparse-generation-witness.js','models/trellis2/sparse-flow.js','models/trellis2/slat-flow.js',
+      'models/trellis2/slat-decoder.js','models/trellis2/slat-decoder-ops.js','webgpu-inference-kit/src/inference-runtime.js']){
+      const committed=execFileSync('git',['show',n.commit+':'+name],{cwd:root});
+      if(n.servedSources?.[name]!==hash(committed))throw Error('exact committed served-source required '+name);
+    }
+    report.checkedRetainedFields=[];
+    for(const name of generationFields(manifest)){
+      const row=n.rawOutputs[name],file=path.join(native,'raw',name+'.'+row.dtype);
+      if(path.resolve(row.path)!==file)throw Error('effective retained field path mismatch: '+name);
+      const bytes=await fs.readFile(file);
+      if(bytes.length!==row.byteLength||hash(bytes)!==row.sha256)throw Error('complete unchanged retained field bytes required '+name);
+      report.checkedRetainedFields.push({name,path:file,sha256:row.sha256,byteLength:row.byteLength});
+    }
+  }
   report.nativeSessionId=n.nativeSessionId;report.fixtureSha256=n.fixtureSha256;
-  report.native={reportSha256:hash(rawReport),commit:n.commit,sessionId:n.nativeSessionId,
+  report.native={...admission,reportSha256:hash(rawReport),commit:n.commit,sessionId:n.nativeSessionId,
     inputManifestSha256:n.fixtureSha256,backend:n.result.backend,comparison:n.result.comparison};
   const fields={};
   for(const [key,Type,dtype]of [['geometry.features',Float32Array,'f32'],['geometry.coordinates',Int32Array,'i32'],
