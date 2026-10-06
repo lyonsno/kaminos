@@ -18,6 +18,9 @@ for(const value of [{mode:'unknown'}, {view:'unknown'}, {gain:NaN}, {radius:0}, 
 }
 assert.equal(sceneGIReceives({isMeshStandardNodeMaterial:true}),true);
 assert.equal(sceneGIReceives({isMeshPhysicalNodeMaterial:true}),true);
+assert.equal(sceneGIReceives({isMeshStandardMaterial:true}),true);
+assert.equal(sceneGIReceives({isMeshPhysicalMaterial:true}),true);
+assert.equal(resolveSceneGISettings({view:'incoming'}).view,'incoming');
 assert.equal(sceneGIReceives({isMeshStandardNodeMaterial:true,transparent:true}),false);
 assert.equal(sceneGIReceives({isMeshBasicNodeMaterial:true}),false);
 console.log('scene GI settings and receiver contracts passed');

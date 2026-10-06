@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const [origin,out,expectedRoot,option]=process.argv.slice(2);
-assert.ok(option===undefined||option==='--antialias');
-const antialias=option==='--antialias';
+assert.ok(option===undefined||option==='--antialias'||option==='--received-only');
+const antialias=option==='--antialias'||option==='--received-only';
 await fs.mkdir(out,{recursive:true});
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 const report={status:'running',phase:'launch',origin,expectedRoot,executable,antialias,errors:[]};
@@ -25,6 +25,18 @@ try {
   assert.equal(report.sampling.receivingSamples,report.sampling.rendererSamples,'beauty retains renderer MSAA');
   report.adapter=await page.evaluate(async()=>{const a=await navigator.gpu.requestAdapter();return {vendor:a.info.vendor,architecture:a.info.architecture};});
   assert.equal(report.adapter.vendor,'apple');
+  report.phase='received-composition';
+  report.received=await page.evaluate(()=>window.giAssay.receivedComparison());
+  await fs.writeFile(out+'/received.json',JSON.stringify(report.received,null,2));
+  for(const row of report.received) {
+    assert.ok(row.differenceSum>0,'ordinary and node physical materials must receive bounce');
+    assert.ok(row.maxError<.002,'received diagnostic must equal the linear beauty difference');
+    assert.equal(row.aoError,0,'AO strength must not change the received bounce');
+  }
+  assert.ok(Math.abs(report.received[1].differenceSum/report.received[0].differenceSum-report.received[1].linearColor[0])<.0001,'dark floor response must follow its linear material color');
+  assert.ok(Math.abs(report.received[2].differenceSum/report.received[0].differenceSum-1)<.001,'ordinary and node receivers must agree');
+  if(option==='--received-only') {report.status='passed';report.phase='complete';}
+  else {
   report.phase='material';
   report.material=await page.evaluate(()=>window.giAssay.material());
   await fs.writeFile(out+'/material.json',JSON.stringify(report.material,null,2));
@@ -45,5 +57,7 @@ try {
   await page.screenshot({path:out+'/mobile.png'});
   assert.deepEqual(report.errors,[]);
   report.status='passed';report.phase='complete';
+  }
+  assert.deepEqual(report.errors,[]);
 } catch(error) {report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
 finally {await fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));await browser?.close();}

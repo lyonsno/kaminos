@@ -1038,21 +1038,23 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <section id="authoring-source-render">
     <h2>Post Processing</h2>
     <div id="scene-gi-general-slot"></div>
+    <div id="scene-ao-panel">
     <div class="slider-row">
       <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
         <input type="checkbox" id="ao-toggle" checked> Ambient occlusion
       </label>
     </div>
     <div id="ao-controls">
+      <div class="slider-row" id="ao-strength-row">
+        <span class="slider-label">AO strength</span>
+        <input type="range" id="ao-intensity" min="0.0" max="3" step="0.05" value="1.0">
+        <span class="slider-val" id="ao-intensity-val">1.0</span>
+      </div>
+      <div id="gtao-shape-controls">
       <div class="slider-row">
         <span class="slider-label">Radius</span>
         <input type="range" id="ao-radius" min="0.5" max="10" step="0.1" value="4.0">
         <span class="slider-val" id="ao-radius-val">4.00</span>
-      </div>
-      <div class="slider-row">
-        <span class="slider-label">Intensity</span>
-        <input type="range" id="ao-intensity" min="0.0" max="3" step="0.05" value="1.0">
-        <span class="slider-val" id="ao-intensity-val">1.0</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Scale</span>
@@ -1069,6 +1071,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <input type="range" id="ao-falloff" min="0" max="1" step="0.01" value="0.74">
         <span class="slider-val" id="ao-falloff-val">0.74</span>
       </div>
+      </div>
+    </div>
     </div>
 
     <h2>Backdrop & DoF</h2>
@@ -3309,7 +3313,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="scene-gi-panel">
       <div class="field"><label for="scene-gi-mode">Surface illumination</label><select id="scene-gi-mode"><option value="gtao">GTAO baseline</option><option value="combined">Combined AO + GI</option></select></div>
       <div id="scene-gi-controls" hidden>
-        <div class="field"><label for="scene-gi-view">View</label><select id="scene-gi-view"><option value="scene">Scene</option><option value="ao">AO visibility</option><option value="gi">Indirect light</option></select></div>
+        <div class="field"><label for="scene-gi-view">View</label><select id="scene-gi-view"><option value="scene">Scene</option><option value="ao">AO visibility</option><option value="gi">Received bounce</option><option value="incoming">Incoming GI</option></select></div>
         <div class="field"><label for="scene-gi-gain" title="Artistic multiplier on estimated surface bounce; not camera exposure">Bounce gain</label><input id="scene-gi-gain" type="number" min="0" step="0.1" value="1"></div>
         <div class="field"><label for="scene-gi-radius">Radius</label><input id="scene-gi-radius" type="number" min="0.01" step="0.1" value="4"></div>
         <div class="field"><label for="scene-gi-thickness">Thickness</label><input id="scene-gi-thickness" type="number" min="0.01" step="0.01" value="0.3"></div>
@@ -11218,7 +11222,7 @@ async function initScene() {
   sceneGI.setSettings(sceneGISettings);
   rebuildSceneGIOutput();
   window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),sceneFrames:sceneFrameCount,effectiveMode:sceneGISettings.mode,view:sceneGISettings.mode==='gtao'?'scene':sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
-  window.kaminosSceneGIReadback = () => sceneGI.readback(renderer);
+  window.kaminosSceneGIReadback = kind => sceneGI.readback(renderer,kind);
   window.kaminosSceneEmissiveCameraDebugState=()=>sceneEmissiveCamera?.debugState()??{requested:false,effective:false,reason:'distributed-route-not-mounted'};
   let sceneCameraStatusText='';
   window.kaminosFireLightFieldDebugState = () => (fireLightFieldPass
@@ -24759,10 +24763,12 @@ function updateBackground() {
 
 // --- AO Controls ---
 if (!isFireLightFieldRoute()) document.getElementById('scene-gi-general-slot').append(document.getElementById('scene-gi-panel'));
+document.getElementById('scene-gi-panel').append(document.getElementById('scene-ao-panel'));
 function setSceneGIControls(value) {
   const settings = resolveSceneGISettings(value);
   for (const key of Object.keys(settings)) document.getElementById(`scene-gi-${key}`).value = String(settings[key]);
   document.getElementById('scene-gi-controls').hidden = settings.mode !== 'combined';
+  document.getElementById('gtao-shape-controls').hidden = settings.mode === 'combined';
   document.getElementById('scene-gi-denoise-value').textContent = String(settings.denoise);
   if (updateSceneGI) updateSceneGI(settings);
   else sceneGISettings = settings;

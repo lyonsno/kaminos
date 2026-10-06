@@ -1,5 +1,5 @@
 import { DataUtils } from 'three/webgpu';
-import { pass, mrt, output, normalView, positionViewDirection, diffuseColor, metalness, context, builtinAOContext, texture, screenUV, vec4, float, mix, uniform, convertToTexture } from 'three/tsl';
+import { pass, mrt, output, normalView, positionViewDirection, diffuseColor, metalness, context, builtinAOContext, texture, screenUV, vec3, vec4, float, mix, uniform, convertToTexture } from 'three/tsl';
 import { ssgi } from './lib/addons/tsl/display/SSGINode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { resolveSceneGISettings, sceneGIReceives } from './scene-gi-settings.mjs';
@@ -35,7 +35,8 @@ export function createSceneGI(scene, camera, aoIntensity) {
     getOutput(node,{material}) {
       // Match Three's diffuseContribution, including mapped/node metalness.
       const diffuseReceiver = diffuseColor.rgb.mul(metalness.oneMinus());
-      return sceneGIReceives(material) ? vec4(node.rgb.add(irradianceOverPi.mul(diffuseReceiver)),node.a) : node;
+      const received = sceneGIReceives(material) ? irradianceOverPi.mul(diffuseReceiver) : vec3(0);
+      return mix(vec4(node.rgb.add(received),node.a),vec4(received,1),float(viewMode.equal(2)));
     },
   });
   const setup = beauty.setup;
@@ -46,8 +47,10 @@ export function createSceneGI(scene, camera, aoIntensity) {
   // The receiving pass owns producer scheduling. Diagnostics read its resolved
   // textures without pulling the producer graph into isolated conditional scopes.
   const aoView = vec4(visibility,visibility,visibility,1);
-  const giView = vec4(irradianceOverPi.mul(texture(depth.value,screenUV).r.lessThan(1)),1);
-  const combinedOutput = mix(mix(beauty,aoView,float(viewMode.equal(1))),giView,float(viewMode.equal(2)));
+  const surface = texture(depth.value,screenUV).r.lessThan(1);
+  const receivedView = vec4(beauty.rgb.mul(surface),1);
+  const incomingView = vec4(irradianceOverPi.mul(surface),1);
+  const combinedOutput = mix(mix(mix(beauty,aoView,float(viewMode.equal(1))),receivedView,float(viewMode.equal(2))),incomingView,float(viewMode.equal(3)));
   let settings = resolveSceneGISettings();
   let frames = 0;
   const update = effect.updateBefore;
@@ -60,23 +63,25 @@ export function createSceneGI(scene, camera, aoIntensity) {
       effect.radius.value = settings.radius; effect.thickness.value = settings.thickness;
       effect.sliceCount.value = settings.slices; effect.stepCount.value = settings.steps;
       gain.value = settings.gain; filtered.value = settings.denoise > 0;
-      viewMode.value = ['scene','ao','gi'].indexOf(settings.view);
+      viewMode.value = ['scene','ao','gi','incoming'].indexOf(settings.view);
       aoFilter.radius.value = giFilter.radius.value = settings.denoise;
     },
-    async readback(renderer) {
-      const target=effect._ssgiRenderTarget;
-      const data=await renderer.readRenderTargetPixelsAsync(target,0,0,target.width,target.height,1);
+    async readback(renderer,kind='incoming') {
+      if (!['incoming','receiving'].includes(kind)) throw new Error('Invalid GI readback kind');
+      const target=kind==='receiving'?beauty.renderTarget:effect._ssgiRenderTarget;
+      const data=await renderer.readRenderTargetPixelsAsync(target,0,0,target.width,target.height,kind==='receiving'?0:1);
       let sum=0,max=0,nonzero=0,finite=true;
       for(let i=0;i<data.length;i++)if(i%4<3){const v=DataUtils.fromHalfFloat(data[i]);finite&&=Number.isFinite(v);sum+=v;max=Math.max(max,v);if(v>0)nonzero++;}
       const bytes=new Uint8Array(data.buffer,data.byteOffset,data.byteLength),chunks=[];
       // Chunk only the JS call arguments, not the evidence. Preserve every byte.
       for(let i=0;i<bytes.length;i+=16384)chunks.push(String.fromCharCode(...bytes.subarray(i,i+16384)));
-      return {width:target.width,height:target.height,format:'rgba16f-little-endian',base64:btoa(chunks.join('')),stats:{sum,max,nonzero,finite}};
+      return {kind,view:settings.view,width:target.width,height:target.height,format:'rgba16f-little-endian',base64:btoa(chunks.join('')),stats:{sum,max,nonzero,finite}};
     },
     debugState:()=>({identity:'three-ssilvb-scene-gi-v1',...settings,frames,
       temporal:false,source:'opaque-linear-lit-surfaces',receiver:'opaque-physical-material-diffuse',
       resolution:[effect._ssgiRenderTarget.width,effect._ssgiRenderTarget.height],
       sourcePasses:1,receivingPasses:1,sourceSamples:source.renderTarget.samples,receivingSamples:beauty.renderTarget.samples,
-      standaloneGTAO:false,format:'rgba16float',gainSemantics:'artistic-relative-estimator-gain'}),
+      standaloneGTAO:false,format:'rgba16float',gainSemantics:'artistic-relative-estimator-gain',
+      viewSemantics:settings.view==='gi'?'material-weighted-added-diffuse-radiance':settings.view==='incoming'?'incoming-irradiance-over-pi':settings.view}),
   };
 }
