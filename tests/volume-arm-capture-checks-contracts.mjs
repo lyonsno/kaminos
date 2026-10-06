@@ -30,6 +30,7 @@ test('heat release gain is checked against the receipt: absent, refused or diffe
   assert.deepEqual(effectiveMismatches(off, { heatRelease: { effective: { admitted: false, expansion: 0, reason: 'heat-release-expansion-is-zero' } } }, null), [], 'off with a refused-zero receipt passes');
   assert.equal(effectiveMismatches(off, { heatRelease: { effective: { admitted: true, expansion: 1, reason: null } } }, null).length, 1, 'requested off must reject an active gain-1 receipt');
   assert.equal(effectiveMismatches(off, { heatRelease: { effective: { admitted: false, expansion: 0.4, reason: null } } }, null).length, 1, 'requested off must reject a nonzero effective gain even when not admitted');
+  assert.equal(effectiveMismatches({ set: [['volume-heat-release-expansion', 'abc']] }, { heatRelease: { effective: { admitted: false, expansion: 0, reason: 'heat-release-expansion-is-zero' } } }, null).length, 1, 'a non-numeric request is a mismatch on its own, not a pass');
 });
 
 test('slice-3 inlet controls are checked against the receipt and fail when absent', () => {

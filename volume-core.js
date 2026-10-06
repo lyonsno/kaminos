@@ -15540,6 +15540,9 @@ export function createKaminosVolumePrototype({
   }
 
   let pressureResidualCopySolver = null;
+  // The heat-release context the probed numbers came from, taken at copy time:
+  // controls may change before the asynchronous readback completes.
+  let pressureResidualCopyMeasurement = null;
 
   function retirePressureResidualMap(reason) {
     // A map that never settled retires its buffer so the diagnostic stops
@@ -15626,6 +15629,7 @@ export function createKaminosVolumePrototype({
     pressureResidualCopyFrame = state.frameCount;
     pressureResidualCopyFluidCells = gridCellCount(gridSize) - (state.sceneCollision?.effective === 'mesh-voxel-solid' ? state.sceneCollision.solidCellCount : 0);
     pressureResidualCopySolver = state.pressureSolver?.effective ? { ...state.pressureSolver.effective } : null;
+    pressureResidualCopyMeasurement = pressureResidualMeasurement(state.heatRelease);
   }
 
   async function resolvePressureResidualProbe() {
@@ -15640,6 +15644,7 @@ export function createKaminosVolumePrototype({
     const grid = gridSize;
     const fluidCells = pressureResidualCopyFluidCells;
     const solver = pressureResidualCopySolver;
+    const measurement = pressureResidualCopyMeasurement;
     let timeoutTimer = null;
     try {
       const mapPromise = buffer.mapAsync(GPUMapMode.READ);
@@ -15718,7 +15723,7 @@ export function createKaminosVolumePrototype({
         // legacy 2h central divergence. Both are measured on the same fields.
         compact: reduceOperator(0),
         wide: reduceOperator(4),
-        measurement: pressureResidualMeasurement(state.heatRelease),
+        measurement,
         blockedFaceFlux: { sumAbs: blockedFaceAbsSum, maxAbs: blockedFaceMaxAbs },
         vorticity: {
           identity: 'enstrophy-before-projection-v0',

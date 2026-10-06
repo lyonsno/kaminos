@@ -92,7 +92,8 @@ test('the residual probe names what it measures once expansion is active (review
   assert.deepEqual(core.pressureResidualMeasurement(null).heatRelease, { admitted: false, expansion: 0 }, 'a missing receipt reads as off');
   // The readback carries the measurement alongside the numbers, and the capture passes it through.
   const residualBlock = source.slice(source.indexOf("identity: 'pressure-divergence-residual-probe-v1'"), source.indexOf('measuredAtMs:', source.indexOf("identity: 'pressure-divergence-residual-probe-v1'")));
-  assert.match(residualBlock, /measurement: pressureResidualMeasurement\(state\.heatRelease\)/);
+  assert.match(residualBlock, /\n\s+measurement,\n/, 'the readback publishes the copy-time snapshot');
+  assert.match(source, /pressureResidualCopyMeasurement = pressureResidualMeasurement\(state\.heatRelease\);/, 'snapshot taken where the copy is encoded');
   const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
   assert.match(capture, /residualMeasurement: s\.pressureSolver\.residual\.measurement \?\? null/, 'the capture probe carries the measurement');
   assert.match(capture, /residualMeasurement: end\.residual\?\.residualMeasurement \?\? null/, 'the arm report records it');
@@ -103,4 +104,43 @@ test('the residual probe names what it measures once expansion is active (review
   const heatHelp = index.slice(index.indexOf('Expansion where fuel burns:'), index.indexOf('</span>', index.indexOf('Expansion where fuel burns:')));
   assert.match(heatHelp, /residual readout then measures divergence minus that target/);
   assert.match(heatHelp, /Heat and smoke are carried undiluted through the expansion, so their field totals grow with the gain and are not conservation evidence/);
+});
+
+test('the residual measurement is the heat-release context at probe-copy time, not at readback (confirmation 1, HR-02)', async () => {
+  // Runs the actual probe functions with a deferred mapAsync: the heat-release
+  // configuration changes between the copy and the readback, and the published
+  // measurement must describe the configuration the probed numbers came from.
+  const vm = await import('node:vm');
+  const start = source.indexOf('  function finishPressureResidualProbe(');
+  const end = source.indexOf('  function encodePressureProjection(', start);
+  assert.ok(start > 0 && end > start, 'probe functions located');
+  const run = async (atCopy, atReadback) => {
+    let release;
+    const mapped = new Promise(resolve => { release = resolve; });
+    const state = { frameCount: 50, simStepCount: 48, heatRelease: atCopy, pressureSolver: { effective: { solver: 'converged', openTop: true } } };
+    const context = {
+      state, gridSize: 4, gridHeight: 4,
+      pressureResidualCopyPending: false, pressureResidualMapPending: false, pressureResidualMapStartedFrame: 0, pressureResidualMapGeneration: 0,
+      pressureResidualWorkgroupCount: 1, pressureResidualCopyStep: 0, pressureResidualCopyFrame: 0, pressureResidualCopyFluidCells: 0, pressureResidualCopySolver: null, pressureResidualCopyMeasurement: null,
+      pressureResidualAfterPipeline: {}, pressureResidualBindGroup: {}, pressureResidualPartialsBuffer: {}, fluidBindGroup: () => ({}),
+      pressureResidualReadbackBuffer: { mapAsync: () => mapped, getMappedRange: () => new Float32Array(16).buffer, unmap() {} },
+      GPUMapMode: { READ: 1 }, setTimeout, clearTimeout, Float32Array, performance, Math, Number, Promise, Error,
+      PRESSURE_RESIDUAL_MAP_TIMEOUT_MS: 10000, PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR: 'synthetic-timeout', PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP: 16,
+      gridCellCount: grid => grid ** 3, gridHeightForSize: grid => grid, pressureResidualMeasurement: core.pressureResidualMeasurement,
+    };
+    const encoder = { beginComputePass: () => ({ setPipeline() {}, setBindGroup() {}, dispatchWorkgroups() {}, end() {} }), copyBufferToBuffer() {} };
+    context.encoder = encoder;
+    const pending = vm.runInNewContext(source.slice(start, end) + '\nfinishPressureResidualProbe(encoder);\nresolvePressureResidualProbe();', context);
+    state.heatRelease = atReadback;
+    release();
+    await pending;
+    if (!state.pressureSolver.residual) throw new Error(`probe did not publish: ${JSON.stringify(state.pressureSolver)}`);
+    return state.pressureSolver.residual.measurement;
+  };
+  const on1 = { effective: { admitted: true, expansion: 1, reason: null } };
+  const on2 = { effective: { admitted: true, expansion: 2, reason: null } };
+  const off = { effective: { admitted: false, expansion: 0, reason: 'heat-release-expansion-is-zero' } };
+  assert.deepEqual(await run(on1, off), core.pressureResidualMeasurement(on1), 'on at copy, off at readback: keeps on');
+  assert.deepEqual(await run(off, on1), core.pressureResidualMeasurement(off), 'off at copy, on at readback: keeps off');
+  assert.deepEqual(await run(on1, on2), core.pressureResidualMeasurement(on1), 'gain 1 at copy, gain 2 at readback: keeps gain 1');
 });

@@ -24,7 +24,8 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
     if (cid === 'volume-wind-model' && end.wind?.effective?.model !== value) mismatches.push(`wind model requested ${value}, effective ${end.wind?.effective?.model}`);
     if (cid === 'volume-heat-release-expansion') {
       const requestedGain = Number(value); const effective = end.heatRelease?.effective;
-      if (!Number.isFinite(effective?.expansion)) mismatches.push(`heat release requested ${value}, no receipt`);
+      if (!Number.isFinite(requestedGain)) mismatches.push(`heat release requested ${JSON.stringify(value)} is not a number`);
+      else if (!Number.isFinite(effective?.expansion)) mismatches.push(`heat release requested ${value}, no receipt`);
       else if (requestedGain > 0 && (effective.admitted !== true || Math.abs(effective.expansion - requestedGain) > 1e-6)) mismatches.push(`heat release requested ${value} but ${effective.admitted ? `effective ${effective.expansion}` : `not admitted (${effective.reason})`}`);
       // Requested off is the control arm: any active or nonzero effective gain fails it.
       else if (requestedGain <= 0 && (effective.admitted === true || Math.abs(effective.expansion) > 1e-6)) mismatches.push(`heat release requested off but ${effective.admitted ? 'admitted' : 'effective'} gain ${effective.expansion}`);
