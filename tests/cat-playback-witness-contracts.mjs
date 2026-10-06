@@ -4,7 +4,7 @@ const source = readFileSync(new URL('../scene-object-witness.mjs', import.meta.u
 const body = source.slice(source.indexOf('async function runCatRetainedPlaybackScenario'), source.indexOf('async function runCatMotionRetargetScenario'));
 const clip = { sha256: 'abc', authority: 'retained-motion-playback', frameCount: 180, fps: 30 };
 const rest = { meshes: [{ boneQuaternions: { hip: [0, 0, 0, 1] } }] };
-async function exercise({ reason = 'clip-complete', advancing = true, captureFailure = false, groundTravel = false, stationaryRoot = false, floating = false, badSupport = false } = {}) {
+async function exercise({ reason = 'clip-complete', advancing = true, captureFailure = false, groundTravel = false, contactTransfer = false, badContact = false, stationaryRoot = false, floating = false, badSupport = false } = {}) {
 const evidence = { meshAssetLink: { state: { registeredObjectId: 'cat' } } };
 let clock = 0;
 let samples = 0;
@@ -16,11 +16,11 @@ const run = Function('assert', 'lastEvidence', 'url', 'runMeshAssetLinkScenario'
     if (expression.includes('__kaminosMotionRigPreview')) return { active: false, stopReason: reason };
     if (expression.includes('kaminosSceneObjectDebugState')) return { position: [samples > 0 && samples <= 2 && !stationaryRoot ? samples * .1 : 0, 0, 0] };
     if (expression.includes('kaminosMotionGroundContactDebugState')) return { minimumPaintedPawClearance: badSupport ? -.1 : 0 };
-    if (expression.includes('kaminosMotionRigPreviewDebugState')) return ++samples <= 2 ? { active: true, frame: advancing ? samples * 30 : 0, groundTravel: { distance: samples * .1, minimumPawClearance: floating ? .2 : 0 } } : { active: false };
+    if (expression.includes('kaminosMotionRigPreviewDebugState')) return ++samples <= 2 ? { active: true, frame: advancing ? samples * 30 : 0, groundTravel: { distance: samples * .1, minimumPawClearance: floating ? .2 : 0 }, contactTransfer:contactTransfer?{diagnostics:{contactError:badContact?.1:0,reachError:0,minimumPawClearance:0}}:null } : { active: false };
     return { x: 1, y: 1 };
   }, async ms => { clock += ms; }, async (_ws, path) => { clock += 2000; if (captureFailure && path === '-retained-0') throw new Error('capture failed'); return { path }; }, suffix => suffix,
   async () => {}, { now: () => clock });
-try { await run({}, { groundTravel }); } catch (error) { error.evidence = evidence; throw error; }
+try { await run({}, { groundTravel, contactTransfer }); } catch (error) { error.evidence = evidence; throw error; }
 return evidence;
 }
 const evidence = await exercise();
@@ -39,3 +39,4 @@ await assert.rejects(exercise({ groundTravel: true, reason: 'clip-complete-held'
 await assert.rejects(exercise({ groundTravel: true, reason: 'clip-complete-held', floating: true }), /paw must meet/);
 await assert.rejects(exercise({ groundTravel: true, reason: 'clip-complete-held', badSupport: true }), /all painted paw vertices/);
 console.log('cat ground witness false-closure controls passed');
+await assert.rejects(exercise({groundTravel:true,contactTransfer:true,reason:'clip-complete-held',badContact:true}),/contact.*residual/,'contact smoke must reject a solved counter whose actual contact residual is wrong');

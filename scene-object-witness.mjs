@@ -334,7 +334,8 @@ async function runMeshSkinnedPoseScenario(ws) {
 }
 
 // Exercises the retained route and ordinary buttons. No generation response is mocked.
-async function runCatRetainedPlaybackScenario(ws, { groundTravel = false } = {}) {
+async function runCatRetainedPlaybackScenario(ws, { groundTravel = false, contactTransfer = false } = {}) {
+  groundTravel = groundTravel || contactTransfer;
   await runMeshAssetLinkScenario(ws);
   phase = 'scenario-cat-retained-playback';
   const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
@@ -358,7 +359,7 @@ async function runCatRetainedPlaybackScenario(ws, { groundTravel = false } = {})
   const beforeShot = await capturePngScreenshot(ws, siblingPngPath('-retained-before'));
   const frames = [];
   const evidence = lastEvidence.catRetainedPlayback = { clip, rest, beforeShot, frames, presentation: 'two existing Rot X toolbar clicks on the registered object; source asset unchanged', sourceRoute: 'real retained JSON URL; ordinary visible controls' };
-  const playButton = groundTravel ? 'motion-panel-run-ground' : 'motion-panel-play-retained';
+  const playButton = contactTransfer ? 'motion-panel-run-contact' : groundTravel ? 'motion-panel-run-ground' : 'motion-panel-play-retained';
   await click(playButton);
   const startedAt = performance.now();
   for (let index = 0; ; index++) {
@@ -379,8 +380,16 @@ async function runCatRetainedPlaybackScenario(ws, { groundTravel = false } = {})
   if (groundTravel) {
     assert.ok(frames.at(-1).state.groundTravel?.distance > 0.05, 'hind strokes must produce actual ground distance');
     assert.notDeepEqual(frames.at(-1).root.position, frames[0].root.position, 'registered object must travel, not only report projected travel');
-    for (const frame of frames) assert.ok(Math.abs(frame.state.groundTravel.minimumPawClearance) < 1e-4, 'a painted rear paw must meet the ground');
-    for (const frame of frames) assert.ok(Math.abs(frame.contactAudit?.minimumPaintedPawClearance) < 0.005, 'all painted paw vertices must conform to compiled support within 0.005 scene units');
+    if (contactTransfer) {
+      for (const frame of frames) {
+        assert.ok(frame.state.contactTransfer?.diagnostics?.contactError < .001, 'actual painted contact residual must agree with the solved goal');
+        assert.ok(frame.state.contactTransfer.diagnostics.reachError < 1e-5, 'target legs must reach the solved contact');
+        assert.ok(frame.contactAudit?.minimumPaintedPawClearance > -.005, 'painted paw cannot penetrate the floor; source flight may clear it');
+      }
+    } else {
+      for (const frame of frames) assert.ok(Math.abs(frame.state.groundTravel.minimumPawClearance) < 1e-4, 'a painted rear paw must meet the ground');
+      for (const frame of frames) assert.ok(Math.abs(frame.contactAudit?.minimumPaintedPawClearance) < 0.005, 'all painted paw vertices must conform to compiled support within 0.005 scene units');
+    }
   }
   await click(playButton);
   await delay(250);
@@ -5497,6 +5506,8 @@ try {
     await runCatRetainedPlaybackScenario(ws);
   } else if (scenario === 'cat-retained-ground') {
     await runCatRetainedPlaybackScenario(ws, { groundTravel: true });
+  } else if (scenario === 'cat-retained-contact') {
+    await runCatRetainedPlaybackScenario(ws, { contactTransfer: true });
   } else if (scenario === 'mesh-skinned-pose-controls') {
     await runSceneBoneGizmoScenario(ws);
   } else if (scenario === 'scene-bone-gizmo') {

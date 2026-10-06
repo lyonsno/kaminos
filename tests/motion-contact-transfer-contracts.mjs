@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+const core = await import('../motion-contact-transfer.mjs').catch(() => ({}));
+assert.equal(typeof core.solveTwoSegmentLimb, 'function', 'transfer must solve reachable contacts with the target segment lengths');
+const {solveTwoSegmentLimb, buildContactMotion, sampleContactMotion} = core;
+const distance=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
+for(const target of [[0,-1.5,0],[.8,-.8,.4],[0,-2,0]]){
+  const s=solveTwoSegmentLimb([0,0,0],target,1,1,[0,0,1]);
+  assert.ok(Math.abs(distance([0,0,0],s.knee)-1)<1e-10);
+  assert.ok(Math.abs(distance(s.knee,s.end)-1)<1e-10);
+  assert.ok(distance(s.end,target)<1e-10);
+  assert.equal(s.reachError,0);
+}
+assert.ok(solveTwoSegmentLimb([0,0,0],[0,-3,0],1,1,[0,0,1]).reachError>.9, 'incompatible step must expose reach error');
+assert.throws(()=>solveTwoSegmentLimb([0,0,0],[NaN,0,0],1,1,[0,0,1]),/finite/);
+assert.equal(typeof core.projectBodyToLegReach,'function','body path must be made compatible with both feet rather than clipping each foot independently');
+const fit=core.projectBodyToLegReach([0,3,0],[{center:[-.2,0,0],radius:1},{center:[.2,0,0],radius:1}]);
+assert.ok(fit.position[1]<1&&fit.correction>2);
+assert.ok(fit.residual<1e-7);
+assert.throws(()=>core.projectBodyToLegReach([0,0,0],[{center:[0,0,0],radius:1},{center:[3,0,0],radius:1}]),/incompatible/);
+assert.equal(typeof core.sourceBodyPose,'function','body orientation must remain available to the contact solve');
+const bodyJoints=Array.from({length:30},()=>[0,0,0]);bodyJoints[22]=[1,0,0];bodyJoints[26]=[-1,0,0];bodyJoints[3]=[0,1,1];
+assert.ok(Math.abs(core.sourceBodyPose(bodyJoints).lean-Math.PI/4)<1e-10);
+const turned=bodyJoints.map(([x,y,z])=>[-z,y,x]);
+assert.ok(Math.abs(core.sourceBodyPose(turned).lean-Math.PI/4)<1e-10,'a turn cannot alter the torso lean');
+assert.throws(()=>buildContactMotion({joints:[],motion:[]}),/SOMA30/);
+// Explicit observed contact schema: 365..368 = L heel/toe, R heel/toe,
+// raw normalized predictions unnormalized with pinned FK metadata.
+const mean=[.7292068129054087,.8033996942090557,.7291124812363573,.8036345263586678];
+const std=[.44436948243297786,.3974275098100907,.44441812625242866,.39724812699742096];
+const feature=contact=>{const f=Array(369).fill(0);contact.forEach((v,i)=>f[365+i]=(v-mean[i])/std[i]);return f};
+const joints=Array.from({length:4},(_,i)=>{
+  const f=Array.from({length:30},()=>[0,1,i*.1]);
+  f[22]=[.1,.9,i*.1];f[26]=[-.1,.9,i*.1];
+  f[23]=[.1,.5,i*.1];f[27]=[-.1,.5,i*.1];
+  f[24]=[.1,.1,0];f[28]=[-.1,.1,i*.1];
+  f[25]=[.1,0,i*.01];f[29]=[-.1,.2,i*.1+.1];return f;
+});
+const result={numJoints:30,numFrames:4,fps:30,joints,parents:[-1,0,1,2,3,4,5,6,6,6,3,10,11,12,13,13,3,16,17,18,19,19,0,22,23,24,0,26,27,28],motion:[feature([0,1,0,0]),feature([0,1,0,0]),feature([0,1,0,0]),feature([0,0,0,1])]};
+const t=buildContactMotion(result);
+assert.deepEqual(t.frames.slice(0,3).map(f=>f.left.contact),[true,true,true]);
+assert.deepEqual(t.frames[0].left.foot,t.frames[2].left.foot,'support interval holds the source contact anchor despite donor jitter');
+assert.ok(t.frames[2].root[2]>t.frames[0].root[2],'source body still progresses over its held contact');
+assert.ok(sampleContactMotion(t,1.5).root[2]>t.frames[1].root[2]);
+assert.equal(sampleContactMotion(t,2).left.contact,true,'exact final support frame retains its source contact');
+assert.throws(()=>buildContactMotion({...result,motion:result.motion.slice(1)}),/feature/,'partial feature stream cannot masquerade as contact evidence');
+assert.throws(()=>buildContactMotion({...result,parents:result.parents.map((p,i)=>i===25?0:p)}),/hierarchy/,'a changed toe parent cannot carry SOMA30 contact authority');
+console.log('motion contact transfer contracts passed');
