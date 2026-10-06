@@ -1,0 +1,21 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const root = new URL('..', import.meta.url).pathname;
+const source=fs.readFileSync(`${root}/index.html`,'utf8');
+const start=source.indexOf('function viewportEventHitsInteractiveOverlay(');
+const end=source.indexOf('function handleViewportDoubleClick(',start);
+assert.ok(start>=0 && end>start);
+const context={renderer:{domElement:{getBoundingClientRect:()=>({left:0,top:42,right:800,bottom:700})}},viewportPointerDown:null,viewportSuppressedClick:null,greenroomPreviewIsActive:()=>false,transformGizmoDragging:false,transformControls:{dragging:false},performance:{now:()=>0},pickSceneObjectFromViewportPointer:()=>null,clearActiveSceneObjectSelection:()=>context.clears++,setInfo:()=>{},window:{_kaminosDirty:()=>{}},clears:0};
+vm.createContext(context);vm.runInContext(source.slice(start,end),context);
+const target={closest:selector=>selector.includes('#authoring-viewport-tools')?{}:null};
+const event={button:0,clientX:360,clientY:58,pointerId:1,target,type:'pointerup'};
+context.handleViewportPointerDown(event);context.handleViewportSelectionClick(event);
+console.log(JSON.stringify({repoRoot:root,toolbarTarget:true,excludedAsInteractive:context.viewportEventHitsInteractiveOverlay(event),selectionClearsBeforeClick:context.clears}));
+assert.equal(context.clears,0,'Pointerup on authoring toolbar must preserve scene selection');
+
+context.clears = 0;
+const canvasEvent = { ...event, target: { closest: () => null } };
+context.handleViewportPointerDown(canvasEvent);
+context.handleViewportSelectionClick(canvasEvent);
+assert.equal(context.clears, 1, 'Empty canvas clicks still clear scene selection');

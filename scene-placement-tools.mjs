@@ -1,4 +1,6 @@
 import { Vector2, Vector3, Raycaster, Plane } from './lib/three.core.js';
+import { beginContinuousPointer } from './continuous-pointer.mjs';
+import { installRelativeNumberDrag } from './scene-control-history.mjs';
 import { createSceneEdits, transformPose, axisVector } from './scene-edit-session.mjs';
 
 export function getPivotViewState(camera, point, width, height) {
@@ -19,9 +21,9 @@ export function getPivotViewState(camera, point, width, height) {
 }
 
 export function installScenePlacementTools({
-  viewport, camera, controls, gizmo, selected, read, write, object, refresh,
+  viewport, historyScope = null, camera, controls, gizmo, selected, read, write, object, refresh,
   allowed = () => true, busy = () => false, frameSelected = () => {},
-  settled = () => {}, captureContext = () => null,
+  settled = () => {}, captureContext = () => null, historyScopes = [],
 }) {
   const hud = document.createElement('div');
   hud.id = 'scene-edit-hud';
@@ -32,9 +34,12 @@ export function installScenePlacementTools({
   viewport.append(overlay, hud);
 
   let modal = null;
+  let continuous = null;
   let field = null;
+  const fieldScrubbers = new WeakMap();
   let lastPointer = { x: 0, y: 0 };
   let hover = false;
+  let historyScopeArmed = false;
   let suppressClick = false;
   let gizmoEditing = false;
   let gizmoPrior = null;
@@ -57,6 +62,8 @@ export function installScenePlacementTools({
     modal: modal ? { operation: modal.operation, axis: modal.axis, frame: modal.frame, plane: modal.plane, numeric: modal.numeric, snapping: modal.snap } : null,
   });
   const isText = target => !!target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
+  const inHistoryScope = target => historyScopes.some(scope => scope === target || scope?.contains?.(target));
+  const isSceneControl = target => target?.tagName === 'INPUT' && ['range', 'checkbox', 'color'].includes(target.type);
   const steal = event => { event.preventDefault(); event.stopImmediatePropagation(); };
   const pose = () => read(selected());
   const viewAxis = () => camera.getWorldDirection(new Vector3()).negate();
@@ -77,15 +84,19 @@ export function installScenePlacementTools({
   }
   function finish(commit = true) {
     if (!edits.state().active && !gizmoEditing) return false;
+    const completed=modal?.completed;
     const prior = modal?.prior || gizmoPrior;
     const capture = field?.capture || (gizmoEditing ? pointerOrigin : null);
-    modal = null; field = null; gizmoEditing = false; gizmoPrior = null;
+    const fieldInput = field?.input;
+    modal = null; continuous?.stop(); continuous=null; field = null; gizmoEditing = false; gizmoPrior = null;
+    if (fieldInput) fieldScrubbers.get(fieldInput)?.stop();
     if (gizmo.dragging) { gizmo.pointerUp({ button: 0 }); gizmo.dragging = false; gizmo.axis = null; }
     if (capture?.target?.hasPointerCapture?.(capture.pointerId)) capture.target.releasePointerCapture(capture.pointerId);
     let error;
     try { commit ? edits.commit() : edits.cancel(); }
     catch (caught) { error = caught; edits.cancel(); }
     restoreControls(prior);
+    try{completed?.({commit:commit&&!error});}catch(caught){error=caught;}
     draw();
     if (error) hud.textContent = error.message;
     return !error;
@@ -94,12 +105,12 @@ export function installScenePlacementTools({
     try { edits.begin(id, label); return true; }
     catch (error) { hud.textContent = error.message; return false; }
   }
-  function start(operation) {
+  function start(operation,completed=null) {
     if (!allowed() || busy() || !selected()) return false;
     if (field) finish(true);
     if (!modal) {
       if (!begin(selected(), 'Transform')) return false;
-      modal = { axis: null, plane: false, frame: 'world', frameRotation: [...pose().rotation], numeric: '', snap: false, precise: false, prior: priorControls() };
+      modal = { completed, axis: null, plane: false, frame: 'world', frameRotation: [...pose().rotation], numeric: '', snap: false, precise: false, prior: priorControls() };
     }
     // Operation changes are alternatives within one gesture. Always restart
     // from the accepted pose captured by begin(), then preview only this mode.
@@ -114,8 +125,16 @@ export function installScenePlacementTools({
     controls.enabled = false;
     gizmo.enabled = false;
     gizmo.getHelper().visible = false;
+    if(!continuous && !modal.awaitViewportEntry) lockModalPointer();
     draw();
     return true;
+  }
+  function lockModalPointer() {
+    continuous=beginContinuousPointer(viewport,lastPointer,{move:({x,y,event})=>{
+      if(!modal)return;lastPointer={x,y};modal.snap=event.ctrlKey;modal.precise=event.shiftKey;
+      try{preview();}catch(error){finish(false);hud.textContent=error.message;}
+    },lost:()=>finish(false),unavailable:()=>{hud.textContent+=' · Continuous pointer unavailable';}});
+    continuous.request(lastPointer);
   }
   function preview() {
     if (!modal) return;
@@ -173,7 +192,8 @@ export function installScenePlacementTools({
         : '';
     hud.dataset.alert = String(!!pivotHint);
     hud.dataset.active = String(!!edits.state().active);
-    if (current) {
+    if (edits.state().replaying) hud.textContent = 'Restoring scene object…';
+    else if (current) {
       const value = current.numeric || (current.operation === 'rotate' ? `${((current.amount || 0) * 180 / Math.PI).toFixed(1)}°` : (current.amount ?? (current.operation === 'scale' ? 1 : 0)).toFixed(3));
       hud.textContent = `${{ translate: 'Move', rotate: 'Rotate', scale: 'Scale' }[current.operation]} ${current.axis ? (current.plane ? 'plane ⟂ ' : '') + current.axis.toUpperCase() : ''} · ${current.axis ? current.frame : 'view'} · ${value} · ${current.snap ? 'Snap ' + (current.operation === 'rotate' ? '5°' : '0.1') + ' · ' : ''}Enter / LMB confirm · Esc / RMB cancel`;
     } else if (field) hud.textContent = 'Edit value · drag axis label to adjust · Enter confirm · Esc cancel';
@@ -210,7 +230,17 @@ export function installScenePlacementTools({
   new ResizeObserver(draw).observe(viewport);
   viewport.addEventListener('pointerenter', () => { hover = true; });
   viewport.addEventListener('pointerleave', () => { hover = false; });
+  historyScope?.addEventListener('pointerdown', () => { historyScopeArmed = true; }, true);
+  document.addEventListener('pointerdown', event => {
+    if (!historyScope?.contains(event.target)) historyScopeArmed = false;
+  }, true);
   document.addEventListener('pointermove', event => {
+    if (historyScopeArmed && !historyScope?.contains(event.target) && !viewport.contains(event.target)) {
+      historyScopeArmed = false;
+    }
+  }, true);
+  document.addEventListener('pointermove', event => {
+    if(continuous?.locked)return;
     lastPointer = { x: event.clientX, y: event.clientY };
     if (modal) {
       modal.snap = event.ctrlKey;
@@ -219,6 +249,7 @@ export function installScenePlacementTools({
         if (pointerInViewport(lastPointer)) {
           modal.anchor = { ...lastPointer };
           modal.awaitViewportEntry = false;
+          lockModalPointer();
         }
       } else {
         try { preview(); } catch (error) { finish(false); hud.textContent = error.message; }
@@ -230,6 +261,7 @@ export function installScenePlacementTools({
       fieldInput(field.input);
     }
   }, true);
+  document.addEventListener('mousedown',event=>{if(modal && continuous?.locked){steal(event);suppressClick=true;finish(event.button!==2);}},true);
   document.addEventListener('pointerdown', event => { if (modal && !viewport.contains(event.target)) finish(false); }, true);
   viewport.addEventListener('pointerdown', event => {
     pointerOrigin = { target: event.target, pointerId: event.pointerId, prior: priorControls() };
@@ -243,8 +275,15 @@ export function installScenePlacementTools({
     if (gizmoEditing && event.key === 'Escape') { steal(event); finish(false); return; }
     if (field && event.key === 'Escape') { steal(event); const input = field.input; finish(false); input.blur(); refresh(); return; }
     if (field && event.key === 'Enter') { steal(event); const input = field.input; finish(true); input.blur(); return; }
-    if (isText(event.target)) return;
     const key = event.key.toLowerCase();
+    if ((event.ctrlKey || event.metaKey) && key === 'z' && inHistoryScope(event.target) && isSceneControl(event.target)) {
+      if (!allowed() || busy()) return;
+      steal(event);
+      try { event.shiftKey ? edits.redo() : edits.undo(); }
+      catch (error) { hud.textContent = error.message; }
+      return;
+    }
+    if (isText(event.target)) return;
     if (modal) {
       steal(event);
       if (event.key === 'Escape') { finish(false); return; }
@@ -263,8 +302,17 @@ export function installScenePlacementTools({
     // body. Its transform keys should work without a second viewport hover;
     // focused sidebar controls still retain their own keyboard input.
     const neutralPageFocus = document.activeElement === document.body;
-    if (!(hover || viewport.contains(document.activeElement) || neutralPageFocus) || !allowed() || busy()) return;
-    if ((event.ctrlKey || event.metaKey) && key === 'z') { steal(event); try { event.shiftKey ? edits.redo() : edits.undo(); } catch (error) { hud.textContent = error.message; } return; }
+    const viewportScoped = hover || viewport.contains(document.activeElement);
+    const historyScopedUndo = historyScopeArmed && (event.ctrlKey || event.metaKey) && key === 'z';
+    if (!(viewportScoped || neutralPageFocus || historyScopedUndo) || !allowed() || busy()) return;
+    if ((event.ctrlKey || event.metaKey) && key === 'z') {
+      steal(event);
+      try {
+        const replay = event.shiftKey ? edits.redo() : edits.undo();
+        if (replay && typeof replay.then === 'function') replay.catch(error => { hud.textContent = error.message; });
+      } catch (error) { hud.textContent = error.message; }
+      return;
+    }
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (key === 'f' || event.code === 'NumpadDecimal') { steal(event); frameSelected(); draw(); return; }
     if (['g', 'r', 's'].includes(key)) { steal(event); start({ g: 'translate', r: 'rotate', s: 'scale' }[key]); }
@@ -286,21 +334,10 @@ export function installScenePlacementTools({
     input.addEventListener('input', () => fieldInput(input));
     input.addEventListener('blur', () => { if (field?.input === input && !field.drag) finish(true); });
     input.addEventListener('change', () => { if (field?.input === input && !field.drag) finish(true); });
-    const grip = input.parentElement.querySelector('.transform-axis');
-    if (!grip) continue;
-    grip.title = 'Drag to adjust; edit the number to type'; grip.style.cursor = 'ew-resize'; grip.style.touchAction = 'none';
-    grip.addEventListener('pointerdown', event => {
-      if (event.button !== 0 || !selected()) return;
-      event.preventDefault(); if (edits.state().active) finish(true);
-      const [group, axis] = input.dataset.transformField.split('.');
-      const startValue = pose()[group][{ x: 0, y: 1, z: 2 }[axis]] * (group === 'rotation' ? 180 / Math.PI : 1);
-      if (!begin(selected(), `Adjust ${input.dataset.transformField}`)) return;
-      field = { input, drag: true, startX: event.clientX, startValue, step: group === 'rotation' ? .2 : .01, capture: { target: grip, pointerId: event.pointerId } };
-      grip.setPointerCapture(event.pointerId); draw();
-    });
-    grip.addEventListener('pointerup', () => { if (field?.drag) finish(true); });
-    grip.addEventListener('pointercancel', () => { if (field?.drag) finish(false); });
-    grip.addEventListener('lostpointercapture', () => { if (field?.drag) finish(false); });
+    input.addEventListener('pointercancel', () => { if (field?.input === input) finish(false); });
+    const grip=input.closest('.transform-axis-field')?.querySelector('.transform-axis') || input;
+    fieldScrubbers.set(input,installRelativeNumberDrag({grip,input,step:input.dataset.transformField.startsWith('rotation.')?.2:.01,
+      onStart:()=>{if(edits.state().active)finish(true);}}));
   }
   gizmo.addEventListener('mouseDown', () => {
     if (!allowed()) return;
@@ -316,6 +353,7 @@ export function installScenePlacementTools({
   }
   return {
     edits, state, start, finish, selectionChanged, draw,
+    addHistoryScope: scope => historyScopes.push(scope),
     clear() { finish(false); edits.clear(); draw(); },
   };
 }

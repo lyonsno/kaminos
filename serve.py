@@ -984,7 +984,9 @@ def _volume_settings_alias_for_label(store, label):
     return disambiguated
 
 
-def write_volume_settings_preset(store_path, label, payload, source, schema=None):
+def write_volume_settings_preset(store_path, label, payload, source, schema=None, *, publish_alias=True):
+    if not isinstance(publish_alias, bool):
+        raise ValueError("publishAlias must be a boolean")
     schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
     for axis, count_field in (("domControls", "controlCount"), ("rendererControls", "rendererControlCount"), ("presentationControls", "presentationControlCount")):
         if axis == "domControls" or axis in payload or schema.get(axis):
@@ -1014,9 +1016,9 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
         "preset": normalized_payload,
     }
     with _volume_settings_store_lock(store):
-        alias = _volume_settings_alias_for_label(store, effective_label)
+        alias = _volume_settings_alias_for_label(store, effective_label) if publish_alias else None
         preset_path = store / "presets" / f"{preset_id}.json"
-        alias_path = store / "aliases" / f"{alias}.json"
+        alias_path = store / "aliases" / f"{alias}.json" if publish_alias else None
         created = _atomic_create_json(preset_path, document)
         idempotent = not created
         if idempotent:
@@ -1034,7 +1036,8 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             "updatedAt": written_at,
             "source": dict(source or {}),
         }
-        _atomic_write_json(alias_path, alias_document)
+        if publish_alias:
+            _atomic_write_json(alias_path, alias_document)
     preset_url = f"/volume-settings-preset.html?preset={preset_id}"
     return {
         "ok": True,
@@ -1047,6 +1050,7 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
         },
         "effective": {
             "alias": alias,
+            "publishAlias": publish_alias,
             "label": effective_label,
             "presetId": preset_id,
             "contentHash": document["contentHash"],
@@ -2472,8 +2476,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         except json.JSONDecodeError:
             self.send_json({"error": "Invalid JSON"}, 400)
             return
-        if not isinstance(request, dict) or set(request) != {"label", "preset"}:
-            self.send_json({"error": "settings preset write requires exactly label and preset inputs"}, 400)
+        if not isinstance(request, dict) or not {"label", "preset"}.issubset(request) or set(request) - {"label", "preset", "publishAlias"}:
+            self.send_json({"error": "settings preset write requires label, preset and optional publishAlias"}, 400)
             return
         if not isinstance(request.get("label"), str) or not request["label"].strip():
             self.send_json({"error": "settings preset label is required"}, 400)
@@ -2487,6 +2491,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 request["label"],
                 request["preset"],
                 volume_settings_server_source(),
+                publish_alias=request.get("publishAlias", True),
             )
         except (OSError, ValueError, json.JSONDecodeError) as error:
             self.send_json({

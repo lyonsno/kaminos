@@ -106,6 +106,11 @@ export const KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_PROVIDER_SCHEMA =
 export const KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_OWNER = 'lerms_hill_of_hills';
 export const KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_SAMPLE_STRIDE_FLOATS = 8;
 export const KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE = 'analytic_playground';
+// Bounded host path for the retained analytical basin. This does not admit
+// arbitrary scene meshes as solver collision support.
+export const KAMINOS_FINGER_FLUID_LOCAL_PRESENTATION_MODE = 'local_analytic_consumer';
+export const KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_SCHEMA = 'kaminos.finger-fluid.local-analytic-host-frame.v0';
+export const KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_ROUTE = 'kaminos/finger-fluid/local-analytic-host-frame-v0';
 export const KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE = 'moving_hill_consumer';
 export const KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_ROUTE =
   'kaminos/finger-fluid/moving-hill-consumer-presentation-v0';
@@ -2866,6 +2871,9 @@ const MIN_TRUTH_OCCUPIED_CELL_COUNT = 2;
 const MIN_TRUTH_OCCUPIED_VOLUME = MIN_TRUTH_OCCUPIED_CELL_COUNT * TRUTH_OCCUPIED_CELL_VOLUME;
 const OBSTACLE_CENTER = [0.85, -0.43, 0.02];
 const OBSTACLE_RADIUS = 0.52;
+export function fingerFluidAnalyticalSupportGeometry() {
+  return {boundsMin:[...BOUNDS_MIN],boundsMax:[...BOUNDS_MAX],obstacle:{center:[...OBSTACLE_CENTER],radius:OBSTACLE_RADIUS}};
+}
 const VORTICITY_UPDATE_INTERVAL = 3;
 const PLAYGROUND_TILE_COLUMNS = 22;
 const PLAYGROUND_TILE_ROWS = 22;
@@ -10632,6 +10640,7 @@ export function resolveFingerFluidPresentationMode(value) {
   const mode = String(value || KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE);
   if (
     mode !== KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE
+    && mode !== KAMINOS_FINGER_FLUID_LOCAL_PRESENTATION_MODE
     && mode !== KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
   ) {
     throw new Error(`Finger fluid presentation mode ${mode} is unsupported`);
@@ -10748,10 +10757,11 @@ function fingerFluidMovingHillHostFrameFailure(
     details = {},
   } = {},
 ) {
-  const error = new Error(`Finger fluid moving-Hill host frame ${message}`);
+  const local = hostFrame?.schema === KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_SCHEMA;
+  const error = new Error(`Finger fluid ${local ? 'local analytical' : 'moving-Hill'} host frame ${message}`);
   error.report = Object.freeze({
-    schema: KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_FAILURE_SCHEMA,
-    requestedRoute: KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ROUTE,
+    schema: local ? 'kaminos.finger-fluid.local-analytic-host-frame-failure.v0' : KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_FAILURE_SCHEMA,
+    requestedRoute: local ? KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_ROUTE : KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ROUTE,
     effectiveRoute: null,
     hostFrameId: hostFrame?.frameId ?? null,
     failurePhase: phase,
@@ -10892,6 +10902,8 @@ export function validateFingerFluidMovingHillHostFrame(
     camera,
     expectedPipelineIdentity,
     expectedRemapGeneration,
+    expectedHostFrameSchema = KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_SCHEMA,
+    expectedHostFrameRoute = KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ROUTE,
   } = {},
 ) {
   const fail = (message, phase = 'validate-host-frame', details = {}) => (
@@ -10901,8 +10913,8 @@ export function validateFingerFluidMovingHillHostFrame(
       details,
     })
   );
-  if (hostFrame?.schema !== KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_SCHEMA) {
-    fail(`schema must be ${KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_SCHEMA}`);
+  if (hostFrame?.schema !== expectedHostFrameSchema) {
+    fail(`schema must be ${expectedHostFrameSchema}`);
   }
   if (typeof hostFrame.frameId !== 'string' || hostFrame.frameId.trim().length === 0) {
     fail('frame identity is missing');
@@ -10931,8 +10943,8 @@ export function validateFingerFluidMovingHillHostFrame(
     });
   }
   if (
-    hostFrame?.route?.requested !== KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ROUTE
-    || hostFrame?.route?.effective !== KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ROUTE
+    hostFrame?.route?.requested !== expectedHostFrameRoute
+    || hostFrame?.route?.effective !== expectedHostFrameRoute
     || hostFrame?.route?.requested !== hostFrame?.route?.effective
     || hostFrame?.route?.fallback !== null
   ) {
@@ -11053,7 +11065,7 @@ export function validateFingerFluidMovingHillHostFrame(
     );
   }
   return Object.freeze({
-    schema: KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_SCHEMA,
+    schema: expectedHostFrameSchema,
     route: Object.freeze({
       requested: hostFrame.route.requested,
       effective: hostFrame.route.effective,
@@ -11073,6 +11085,22 @@ export function validateFingerFluidMovingHillHostFrame(
     environment,
     target,
   });
+}
+
+export function validateFingerFluidLocalHostFrame(hostFrame, options = {}) {
+  if (hostFrame?.supportIdentity !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE) {
+    fingerFluidMovingHillHostFrameFailure('requires the retained analytical support', {
+      hostFrame,
+      phase: 'validate-local-support',
+    });
+  }
+  const validated = validateFingerFluidMovingHillHostFrame(hostFrame, {
+    ...options,
+    expectedRemapGeneration: 0,
+    expectedHostFrameSchema: KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_SCHEMA,
+    expectedHostFrameRoute: KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_ROUTE,
+  });
+  return Object.freeze({...validated,supportIdentity:KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE});
 }
 
 export function createFingerFluidPerspectiveOrbitCamera({
@@ -13024,6 +13052,7 @@ export async function createWebGPUFingerFluidSolver({
   const effectiveEnergyDiagnosticsMode = resolveFingerFluidEnergyDiagnosticsMode(energyDiagnosticsMode);
   const energyDiagnosticsEnabled = effectiveEnergyDiagnosticsMode === 'every_step';
   const safePresentationMode = resolveFingerFluidPresentationMode(presentationMode);
+  const localAnalyticHostComposition = safePresentationMode === KAMINOS_FINGER_FLUID_LOCAL_PRESENTATION_MODE;
   const safeHostFrameComposition = Boolean(hostFrameComposition);
   const safeHostFramePipelineIdentity = (
     typeof hostFramePipelineIdentity === 'string'
@@ -13037,6 +13066,7 @@ export async function createWebGPUFingerFluidSolver({
   if (
     safeHostFrameComposition
     && safePresentationMode !== KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+    && !localAnalyticHostComposition
   ) {
     movingHillSupportFailure('host-frame composition requires moving_hill_consumer presentation');
   }
@@ -13045,6 +13075,12 @@ export async function createWebGPUFingerFluidSolver({
   }
   if (safeHostFrameComposition && !safeHostFramePipelineIdentity) {
     movingHillSupportFailure('host-frame composition requires a host pipeline identity');
+  }
+  if (localAnalyticHostComposition && (
+    !safeHostFrameComposition
+    || supportContactRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE
+  )) {
+    movingHillSupportFailure('local analytical presentation requires host-frame composition and retained analytical support');
   }
   if (!webgpuDevice && !globalThis.navigator?.gpu) {
     return createUnavailableSolver('navigator.gpu unavailable');
@@ -14760,8 +14796,11 @@ export async function createWebGPUFingerFluidSolver({
     const externalCameraSnapshot = requestedExternalCamera
       ? validateFingerFluidExternalCamera(requestedExternalCamera, expectedExtent)
       : null;
+    const validateHostFrame = localAnalyticHostComposition
+      ? validateFingerFluidLocalHostFrame
+      : validateFingerFluidMovingHillHostFrame;
     const validatedHostFrame = hostFrame
-      ? validateFingerFluidMovingHillHostFrame(hostFrame, {
+      ? validateHostFrame(hostFrame, {
         device,
         extent: expectedExtent,
         camera: externalCameraSnapshot,
@@ -14827,10 +14866,10 @@ export async function createWebGPUFingerFluidSolver({
       reflectionMeshPhase = animatedPhase;
     }
     if (
-      safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+      (safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE || localAnalyticHostComposition)
       && !externalCameraSnapshot
     ) {
-      fingerFluidCameraFailure('is required for moving_hill_consumer presentation');
+      fingerFluidCameraFailure(`is required for ${localAnalyticHostComposition ? 'local_analytic_consumer' : 'moving_hill_consumer'} presentation`);
     }
     let cameraSnapshot = externalCameraSnapshot;
     if (!cameraSnapshot) {
@@ -14886,7 +14925,7 @@ export async function createWebGPUFingerFluidSolver({
       KAMINOS_FINGER_FLUID_TRANSMISSION_FOOTPRINT_MODES.indexOf(resolvedTransmissionFootprintMode),
       KAMINOS_FINGER_FLUID_BODY_TRANSPORT_MODES.indexOf(resolvedBodyTransportMode),
       KAMINOS_FINGER_FLUID_INTERFACE_FREQUENCY_MODES.indexOf(resolvedInterfaceFrequencyMode),
-      safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE ? 1 : 0,
+      (safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE || localAnalyticHostComposition) ? 1 : 0,
     ], 52);
     renderData.set(
       analyticCarrierGpuPayload?.particleSuppressionControls ?? [0, -1, 0, 0],
@@ -15193,7 +15232,9 @@ export async function createWebGPUFingerFluidSolver({
     }
     if (validatedHostFrame) {
       lastHostFrameCompositionEvidence = Object.freeze({
-        schema: KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ENCODE_EVIDENCE_SCHEMA,
+        schema: localAnalyticHostComposition
+          ? 'kaminos.finger-fluid.local-analytic-host-frame-encode-evidence.v0'
+          : KAMINOS_FINGER_FLUID_MOVING_HILL_HOST_FRAME_ENCODE_EVIDENCE_SCHEMA,
         requestedRoute: validatedHostFrame.route.requested,
         effectiveRoute: validatedHostFrame.route.effective,
         fallback: null,
@@ -15203,6 +15244,9 @@ export async function createWebGPUFingerFluidSolver({
         cameraGeneration: validatedHostFrame.camera.generation,
         pipelineIdentity: validatedHostFrame.pipelineIdentity,
         remapGeneration: validatedHostFrame.remapGeneration,
+        supportIdentity: localAnalyticHostComposition
+          ? KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE
+          : KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE,
         sceneColorAttachmentId: validatedHostFrame.sceneColor.attachmentId,
         sceneDepthAttachmentId: validatedHostFrame.sceneDepth.attachmentId,
         environmentAttachmentId: validatedHostFrame.environment.attachmentId,
@@ -16209,7 +16253,9 @@ export async function createWebGPUFingerFluidSolver({
       presentationEvidence: {
         requestedMode: safePresentationMode,
         effectiveMode: safePresentationMode,
-        route: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+        route: localAnalyticHostComposition
+          ? KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_ROUTE
+          : safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
           ? KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_ROUTE
           : KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
         fallbackReason: null,

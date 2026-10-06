@@ -1,9 +1,14 @@
+import {RIM_LIGHT_ID,checkedRimRecipe,rimRecipePose,checkedSceneLightRecord} from './scene-rim-light.mjs';
+import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh} from './scene-geometry.mjs';
+import {GROUP_TYPE,identityGroupPose,checkedGroupPose} from './scene-group.mjs';
+import {BURNER_BED_TYPE,BURNER_BED_SOURCE,BURNER_ASSEMBLY_TYPE,checkedBurnerBed,checkedAssemblyPose} from './burner-assembly.mjs';
 import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFlameEmitterPose,
   flameDomainTranslationForPose, normalizeFlameDomainTranslation, flamePoseInDomain } from './scene-flame-emitter.mjs';
+import { LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 5;
+export const SCENE_VERSION = 7;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -12,12 +17,16 @@ function cloneJson(value) {
 
 function normalizeSceneObjectRecord(record) {
   if (!record || typeof record !== 'object') throw new Error('Scene object record must be an object');
+  if(record.type==='light')record=checkedSceneLightRecord(record);
   const id = String(record.id || record.fileName || record.source || 'object');
   if (record.type === FLAME_EMITTER_TYPE && (id !== FLAME_EMITTER_ID || record.source !== FLAME_EMITTER_SOURCE)) {
     throw new Error('Unsupported flame source identity');
   }
+  if (record.type === BURNER_BED_TYPE || record.type==='burner-bed' || record.type===PROCEDURAL_MESH_TYPE) record=checkedProceduralMesh(record);
   return {
     id,
+    ...(record.type==='light'?{light:cloneJson(record.light)}:{}),
+    ...(record.type === PROCEDURAL_MESH_TYPE ? {geometry:cloneJson(record.geometry),surface:cloneJson(record.surface)} : {}),
     source: record.source ?? null,
     type: record.type ?? 'glb',
     fileName: record.fileName ?? 'object.glb',
@@ -35,6 +44,8 @@ function normalizeSceneObjectRecord(record) {
     renderRoute: record.renderRoute ?? null,
     renderCapabilities: cloneJson(record.renderCapabilities ?? null),
     renderHandoffSchema: record.renderHandoffSchema ?? null,
+    ...(record.type === LOCAL_LIQUID_EMITTER_TYPE && record.source === LOCAL_LIQUID_EMITTER_SOURCE
+      ? { localLiquidEmitter: cloneJson(record.localLiquidEmitter) } : {}),
   };
 }
 
@@ -48,6 +59,7 @@ function normalizeSceneGroupRecord(record) {
     id,
     label: record.label ?? id,
     objectIds,
+    type:GROUP_TYPE,transform:checkedGroupPose(record.transform || identityGroupPose()),
     source: record.source ?? null,
     createdAt: record.createdAt ?? null,
   };
@@ -76,13 +88,13 @@ export function sceneObjectToLegacyModel(data) {
 }
 
 export function getSceneObjectRecords(data) {
-  if (Array.isArray(data?.objects)) {
-    return data.objects.map(normalizeSceneObjectRecord);
+  const records=Array.isArray(data?.objects)?data.objects.map(normalizeSceneObjectRecord)
+    :data?.model?.source?[normalizeSceneObjectRecord(sceneObjectToLegacyModel(data))]:[];
+  if(data?.version<7 && data.environment?.rimLight?.enabled && !records.some(r=>r.id===RIM_LIGHT_ID)){
+    const light={...checkedRimRecipe(data.environment.rimLight),kind:'spot',role:'rim'};
+    records.push(normalizeSceneObjectRecord({id:RIM_LIGHT_ID,type:'light',source:'kaminos:scene-spot-light',label:'Rim light',fileName:'Spot light',light,transform:rimRecipePose(light)}));
   }
-  if (data?.model?.source) {
-    return [normalizeSceneObjectRecord(sceneObjectToLegacyModel(data))];
-  }
-  return [];
+  return records;
 }
 
 export function getSceneGroupRecords(data, objectRecords = getSceneObjectRecords(data)) {
@@ -103,13 +115,19 @@ export function hasVolumePrimitives(data) {
 
 export function sceneDocumentIsLoadable(data) {
   if (!data?.version) return false;
-  return getSceneObjectRecords(data).length > 0 || hasVolumePrimitives(data) || !!normalizeComposition(data.composition);
+  return getSceneObjectRecords(data).length > 0 || hasVolumePrimitives(data) || !!normalizeComposition(data.composition)
+    || !!normalizeLocalLiquidSetup(data.localLiquid);
 }
 
 export function isReloadableSceneObjectRecord(record) {
+  if(record?.type==='light' && record.source==='kaminos:scene-spot-light'){try{if(record.light?.kind!=='spot')return false;checkedSceneLightRecord(record);return true;}catch{return false;}}
+  if(record?.type===PROCEDURAL_MESH_TYPE && record.source===PROCEDURAL_MESH_SOURCE){try{checkedProceduralMesh(record);return true;}catch{return false;}}
+
   const type = record?.type || 'glb';
   const source = record?.source;
+  if (type === BURNER_BED_TYPE) return source === BURNER_BED_SOURCE;
   if (type === FLAME_EMITTER_TYPE) return record.id === FLAME_EMITTER_ID && source === FLAME_EMITTER_SOURCE;
+  if (type === LOCAL_LIQUID_EMITTER_TYPE) return source === LOCAL_LIQUID_EMITTER_SOURCE;
   if (!['glb', 'pbr', 'splat', 'image'].includes(type) || typeof source !== 'string') return false;
   if (type === 'pbr') return source.startsWith('demos/');
   if (type === 'splat') return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://');
@@ -131,6 +149,10 @@ export function planSceneRestore(data) {
   if (flameSources.length && !flamePoseInDomain(flameSources[0].transform, flameDomainTranslation)) {
     throw new Error('Saved flame source lies outside its authored simulation domain');
   }
+  const localLiquid = normalizeLocalLiquidSetup(data.localLiquid);
+  if (objects.some(record => record.type === LOCAL_LIQUID_EMITTER_TYPE) && !localLiquid) {
+    throw new Error('Authored water emitters require a saved local liquid domain');
+  }
   const groups = getSceneGroupRecords(data, objects);
   const loadedIds = new Set(objects.map(record => record.id));
   const requestedActiveId = data.activeObjectId && loadedIds.has(data.activeObjectId) ? data.activeObjectId : null;
@@ -147,6 +169,8 @@ export function planSceneRestore(data) {
     hasVolumePrimitiveScene: hasVolumePrimitives(data),
     composition: normalizeComposition(data.composition),
     flameDomainTranslation,
+    flameSourcePresent: flameSources.length > 0 || (data.version < 6 && !!data.composition),
+    localLiquid,
   };
 }
 
@@ -156,10 +180,12 @@ export function buildSceneDocument({
   groups = [],
   activeObjectId = null,
   activeGroupId = null,
+  activeFieldId = null,
   volumePrimitives = { schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] },
   provenance = null,
   composition = null,
   flameDomainTranslation = undefined,
+  localLiquid = null,
   capture = null,
   camera = null,
   environment = null,
@@ -168,6 +194,10 @@ export function buildSceneDocument({
   backdropBrightness = undefined,
 } = {}) {
   const sceneObjects = objects.map(normalizeSceneObjectRecord);
+  const liquidSetup = normalizeLocalLiquidSetup(localLiquid);
+  if (sceneObjects.some(record => record.type === LOCAL_LIQUID_EMITTER_TYPE) && !liquidSetup) {
+    throw new Error('Authored water emitters require a saved local liquid domain');
+  }
   const sceneGroups = getSceneGroupRecords({ groups }, sceneObjects);
   const activeObject = sceneObjects.find(obj => obj.id === activeObjectId) || sceneObjects[0] || null;
   const activeGroup = sceneGroups.find(group => group.id === activeGroupId) || null;
@@ -188,6 +218,7 @@ export function buildSceneDocument({
     groups: sceneGroups,
     activeObjectId: activeObject?.id || activeObjectId || null,
     activeGroupId: activeGroup?.id || null,
+    activeFieldId: ['flame-field','water-field'].includes(activeFieldId)?activeFieldId:null,
     model: activeObject ? {
       source: activeObject.source,
       type: activeObject.type,
@@ -196,6 +227,7 @@ export function buildSceneDocument({
     provenance: cloneJson(provenance),
     composition: normalizeComposition(composition),
     ...(flameSource ? { flameDomainTranslation: authoredFlameDomain } : {}),
+    localLiquid: liquidSetup,
     capture: normalizeSceneCapture(capture),
     transform: cloneJson(activeObject?.transform ?? null),
     camera: cloneJson(camera),
