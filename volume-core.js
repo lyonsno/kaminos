@@ -4001,15 +4001,6 @@ fn curlMagnitudeAtCell(c: vec3<i32>) -> f32 {
   return length(curlAtCell(c));
 }
 
-// Heat-release expansion target at a cell: gain x the stored burn rate. Zero
-// gain (refused or off) reads nothing, so the legacy solve is untouched.
-fn heatReleaseExpansion(c: vec3<i32>) -> f32 {
-  return max(0.0, textureLoad(burnRate, c).x);
-}
-
-// The compact divergence the converged solve drives to zero, minus the
-// expansion target: after a converged solve the corrected field has velocity
-// divergence equal to the expansion where fuel burns and zero elsewhere.
 fn divergenceAtCell(c: vec3<i32>) -> f32 {
   let vx0 = readSlot(c + vec3<i32>(-1, 0, 0), 0u).x;
   let vx1 = readSlot(c + vec3<i32>( 1, 0, 0), 0u).x;
@@ -4017,7 +4008,7 @@ fn divergenceAtCell(c: vec3<i32>) -> f32 {
   let vy1 = readSlot(c + vec3<i32>(0,  1, 0), 0u).y;
   let vz0 = readSlot(c + vec3<i32>(0, 0, -1), 0u).z;
   let vz1 = readSlot(c + vec3<i32>(0, 0,  1), 0u).z;
-  return ((vx1 - vx0) + (vy1 - vy0) + (vz1 - vz0)) * 0.5 - heatReleaseExpansion(c);
+  return ((vx1 - vx0) + (vy1 - vy0) + (vz1 - vz0)) * 0.5;
 }
 
 fn gridExtent(axis: u32) -> i32 {
@@ -4060,11 +4051,24 @@ fn compactFaceVelocity(c: vec3<i32>, axis: u32) -> f32 {
   return readSlot(c, 0u)[axis];
 }
 
+// Heat-release expansion target at a cell (gain x the fuel burn rate, stored by
+// the main kernel; zero when the gain is zero or refused). Only the converged
+// solve's compact divergence carries it; the legacy wide stencil is untouched.
+fn heatReleaseExpansion(c: vec3<i32>) -> f32 {
+  return max(0.0, textureLoad(burnRate, c).x);
+}
+
+// The compact divergence the converged solve drives to zero, minus the
+// expansion target: after a converged solve the corrected field has velocity
+// divergence equal to the expansion where fuel burns and zero elsewhere. The
+// residual probe measures the same quantity, so its divergence-after reads
+// near zero when the solve converged to the target.
 fn divergenceCompactAtCell(c: vec3<i32>) -> f32 {
   if (sceneSolidAt(c)) { return 0.0; }
   return (compactFaceVelocity(c, 0u) - compactFaceVelocity(c - vec3<i32>(1, 0, 0), 0u))
     + (compactFaceVelocity(c, 1u) - compactFaceVelocity(c - vec3<i32>(0, 1, 0), 1u))
-    + (compactFaceVelocity(c, 2u) - compactFaceVelocity(c - vec3<i32>(0, 0, 1), 2u));
+    + (compactFaceVelocity(c, 2u) - compactFaceVelocity(c - vec3<i32>(0, 0, 1), 2u))
+    - heatReleaseExpansion(c);
 }
 
 fn blockedSceneFaceFluxAtCell(c: vec3<i32>) -> vec2<f32> {

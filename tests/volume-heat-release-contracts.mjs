@@ -48,8 +48,14 @@ test('the main kernel stores the burn rate per cell and the converged solve targ
   const frontLayout = source.slice(source.indexOf("label: 'kaminos fluid-front read bind group layout'"), source.indexOf('});', source.indexOf("label: 'kaminos fluid-front read bind group layout'")));
   assert.match(frontLayout, /\{ binding: 19, visibility: GPUShaderStage\.COMPUTE, storageTexture: \{ access: 'read-write', format: 'r32float', viewDimension: '3d' \} \}/, 'the fluid-front read layout carries the target (first look at 86801d5d failed validation without it)');
   assert.equal((source.match(/\{ ?binding: 19, resource: burnRateTexture\.createView\(\{ dimension: '3d' \}\) ?\}/g) || []).length, 5, 'bound in the fluid bind group and in every fluid-front read bind group');
-  const divergence = wgslFunction('divergenceAtCell');
-  assert.match(divergence, /return \(\(vx1 - vx0\) \+ \(vy1 - vy0\) \+ \(vz1 - vz0\)\) \* 0\.5 - heatReleaseExpansion\(c\);/, 'the solve drives the velocity divergence toward the expansion, so after a converged solve the corrected field expands where fuel burns');
+  // The converged solver's right-hand side and the residual probe use the
+  // compact divergence; the legacy wide stencil (divergenceAtCell) is the
+  // legacy Jacobi's and the activity cue's and must not carry the source (the
+  // first look put it there: gain 1 left the simulation bit-identical).
+  const compact = wgslFunction('divergenceCompactAtCell');
+  assert.match(compact, /\+ \(compactFaceVelocity\(c, 2u\) - compactFaceVelocity\(c - vec3<i32>\(0, 0, 1\), 2u\)\)\s*\n\s*- heatReleaseExpansion\(c\);/, 'the compact divergence the converged solve drives to zero carries the expansion target');
+  assert.doesNotMatch(wgslFunction('divergenceAtCell'), /heatReleaseExpansion/, 'the legacy stencil does not');
+  assert.match(source, /pressureDst\[idx\] = vec4<f32>\(divergenceCompactAtCell\(vec3<i32>\(gid\)\), pressureDst\[idx\]\.y, 0\.0, 0\.0\);/, 'the warm right-hand side is that divergence');
   // Bindings and lifecycle.
   assert.match(source, /\{ binding: 19, visibility: GPUShaderStage\.FRAGMENT \| GPUShaderStage\.COMPUTE, storageTexture: \{ access: 'read-write', format: 'r32float', viewDimension: '3d' \} \}/, 'layout entry, fragment-visible: the raymarch entry point reaches divergenceAtCell through the shared module (first live look failed pipeline validation on compute-only visibility)');
   assert.match(source, /\{ binding: 19, resource: burnRateTexture\.createView\(\{ dimension: '3d' \}\) \}/, 'bound with the fluid state');
