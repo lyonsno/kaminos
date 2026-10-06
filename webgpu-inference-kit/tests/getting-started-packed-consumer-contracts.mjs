@@ -35,6 +35,9 @@ try {
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/minimal-model-port-runner.mjs'));
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/render-plus-inference.mjs'));
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/render-plus-inference.html'));
+  for (const file of ['examples/sam-image.html', 'examples/sam-image.mjs', 'docs/sam-image-example.md']) {
+    assert.ok(packOutput[0].files.some(row => row.path === file), `SAM consumer package missing ${file}`);
+  }
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/assets/brightness-still-life.jpg'));
 
   const tarball = join(temporaryRoot, packOutput[0].filename);
@@ -51,9 +54,11 @@ try {
   await writeFile(join(temporaryRoot, 'consumer.mjs'), `
 import { runMinimalModelPort } from '@kaminos/webgpu-inference-kit/examples/minimal-model-port';
 import { createRenderPlusInferenceExample } from '@kaminos/webgpu-inference-kit/examples/render-plus-inference';
+import { createSamImageExample, createSamImagePixels } from '@kaminos/webgpu-inference-kit/examples/sam-image';
 import { createMinimalWebGpuTestSurface } from './fake-device.mjs';
 
 if (typeof createRenderPlusInferenceExample !== 'function') throw new Error('render-plus-inference export unavailable');
+if (typeof createSamImageExample !== 'function' || typeof createSamImagePixels !== 'function') throw new Error('SAM image example exports unavailable');
 
 const surface = createMinimalWebGpuTestSurface();
 const report = await runMinimalModelPort({

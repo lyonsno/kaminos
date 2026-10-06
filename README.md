@@ -75,9 +75,9 @@ shapes:
 | [SHARP](https://github.com/lyonsno/sharp-webgpu) | A Gaussian-splat scene from one image | Adaptive cooperative scheduling and shared-device foreground rendering |
 | [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | A textured, UV-unwrapped GLB from one image | Cooperative GPU work, reusable scratch memory, and worker offload |
 | [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Skeletal motion from a text prompt | Browser diffusion and motion decoding with rendering opportunities between transformer passes |
-| [SAM 3.1](webgpu-inference-kit/docs/sam-semantic-demo.md) | Visible instance masks from an image and text prompt | Complete browser WebGPU route, 3.32 GB persistent model package, cached image features, queued prompts, and same-device foreground submissions |
+| [SAM 3](webgpu-inference-kit/docs/sam-semantic-demo.md) | Visible instance masks from an image and text prompt | Complete browser WebGPU route, 3.32 GB persistent model package, cached image features, queued prompts, and same-device foreground submissions |
 
-SAM is the largest complete in-tree consumer of the shared runtime. Its browser
+The SAM 3 image detector is the largest complete in-tree consumer of the shared runtime. Its browser
 route executes the image backbone, prompt encoder, DETR encoder and decoder,
 scoring, selection, and mask decoder without an MLX process. On the exact
 merged native-1008 route, cold and warm mask outputs were bit-exact against the
@@ -85,6 +85,19 @@ accepted source-equivalent baseline, a nonsense-prompt control returned exactly
 empty, and input-driven source-viewport work continued through the same WebGPU
 device at the model's existing phase boundaries. This is a direct shared-runtime
 composition result, not a frame-pacing claim.
+
+The source-checkout [SAM image example](webgpu-inference-kit/docs/sam-image-example.md)
+accepts uploaded images and text, exposes all retained instances, and exports
+source-sized masks, transparent cutouts, and provenance through the public kit
+entrypoints. Native browser runs exercise cold and cached prompts, multiple
+instances, an empty negative control, and source-sized PNG exports. Recent
+Apple Metal source-checkout runs returned cached prompts in **about 2.3 seconds**
+and a new image with the model resident in **17.2 seconds**. Complete-output
+scheduling changes preserved all 1,327,104 selected logits and their masks
+exactly across the recorded five-case corpus. It shares
+its session with a moving source-image renderer, but observed foreground stalls
+remain: shared-device execution is not a smooth-frame-pacing claim. See the
+example guide for the current numerical and performance boundaries.
 
 The package includes a complete minimal port, an executable render-plus-inference
 walkthrough, focused integration documentation, and runtime contracts for

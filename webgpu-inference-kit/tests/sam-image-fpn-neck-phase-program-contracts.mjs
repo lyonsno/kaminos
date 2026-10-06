@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './sam-fpn-convolution-ranges-contracts.mjs';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 
