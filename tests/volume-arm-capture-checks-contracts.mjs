@@ -153,3 +153,12 @@ test('capture: @savePreset saves through the cockpit and records the write recei
   assert.match(capture, /@savePreset \$\{value\} did not produce a saved preset id/, 'a missing id fails the arm');
   assert.match(capture, /PRESET SAVE FAILED/, 'a cockpit-reported failure fails the arm');
 });
+
+// The devtools discovery must wait for a page target, not just for /json to
+// answer: a browser that has not opened its first page yet lists no page and
+// the capture died on an undefined webSocketDebuggerUrl (retired-save-a664da19).
+test('capture: devtools discovery waits for a page target and names its absence', () => {
+  assert.match(capture, /page = pages\?\.find\(p => p\.type === 'page'\);\s*\n\s*if \(!page\) await sleep\(100\);/, 'the page target is looked up inside the discovery loop and polled until present');
+  assert.match(capture, /if \(!page\) fail\('browser-launch', `devtools endpoint on port \$\{port\} \(pid \$\{chrome\.pid\}\) never listed a page target/, 'absence of a page target is a named browser-launch failure');
+  assert.doesNotMatch(capture, /const page = pages\.find\(p => p\.type === 'page'\); ws = new WebSocket/, 'the socket is never opened from an unchecked page lookup');
+});

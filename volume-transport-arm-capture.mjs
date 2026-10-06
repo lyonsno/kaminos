@@ -138,9 +138,16 @@ try {
   let port = null;
   for (let i = 0; i < 200 && port === null; i++) { if (launchError) fail('browser-launch', `${headlessBrowser.executable} failed to launch: ${String(launchError?.message || launchError)}`); try { const line = readFileSync(`${profile}/DevToolsActivePort`, 'utf8').split('\n')[0].trim(); if (/^\d+$/.test(line)) port = Number(line); } catch { /* not written yet */ } if (port === null) await sleep(100); }
   if (port === null) fail('browser-launch', `the spawned browser (pid ${chrome.pid}) never published DevToolsActivePort in ${profile}`);
-  let pages = null; for (let i = 0; i < 100 && !pages; i++) { try { pages = await (await fetch(`http://127.0.0.1:${port}/json`, { signal: AbortSignal.timeout(callTimeoutMs) })).json(); } catch { await sleep(100); } }
+  // Discovery waits for a page target, not just for /json to answer: a browser
+  // that has not opened its first page lists none yet.
+  let pages = null; let page = null;
+  for (let i = 0; i < 100 && !page; i++) {
+    try { pages = await (await fetch(`http://127.0.0.1:${port}/json`, { signal: AbortSignal.timeout(callTimeoutMs) })).json(); } catch { pages = null; }
+    page = pages?.find(p => p.type === 'page');
+    if (!page) await sleep(100);
+  }
   if (!pages) fail('browser-launch', `devtools endpoint on port ${port} (pid ${chrome.pid}) never answered`);
-  const page = pages.find(p => p.type === 'page');
+  if (!page) fail('browser-launch', `devtools endpoint on port ${port} (pid ${chrome.pid}) never listed a page target (${pages.length} targets: ${pages.map(p => p.type).join(',') || 'none'})`);
   // The version is read before the socket is opened: an await between
   // constructing the socket and attaching the open listener can miss the open
   // event and wait forever (which is what happened at 5ec49992).
