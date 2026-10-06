@@ -56,7 +56,7 @@ try {
   }
   async function advance(count,present=true){if(!Number.isInteger(count)||count<0)throw new Error('Advance count must be a nonnegative integer');for(let i=0;i<count;i++){const start=performance.now();if(grab&&mode==='bind')model.bind(grab.index);await model.step();latestStepCost=performance.now()-start;}if(present)synchronize();}
   function ray(event){camera.updateMatrixWorld(true);const rect=canvas.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);return raycaster.ray;}
-  canvas.addEventListener('pointerdown',act('Grab',event=>{if(event.button!==0)return;ray(event);const hit=raycaster.intersectObjects(meshes,false)[0];lastPick=hit?{index:hit.object.userData.index,point:hit.point.toArray(),screen:{x:event.clientX,y:event.clientY}}:{hit:false,screen:{x:event.clientX,y:event.clientY}};if(!hit)return;
+  canvas.addEventListener('pointerdown',act('Grab',event=>{if(event.button!==0)return;const pickStart=performance.now();ray(event);const hit=raycaster.intersectObjects(meshes,false)[0],raycastMilliseconds=performance.now()-pickStart;lastPick=hit?{index:hit.object.userData.index,point:hit.point.toArray(),screen:{x:event.clientX,y:event.clientY},raycastMilliseconds}:{hit:false,screen:{x:event.clientX,y:event.clientY},raycastMilliseconds};if(!hit)return;
     const cell=model.cells[hit.object.userData.index],local=model.worldToLocalPoint(cell.index,hit.point),faceNormal=useStones?structuralFaceAt(local,cell.half):hit.face.normal;lastPick.eligibility=cell.pinned?'anchored':model.isExposedFace(cell.index,faceNormal)?'surface':'connected-interior';lastPick.asset=hit.object.userData.asset;lastPick.local={x:local.x,y:local.y,z:local.z};lastPick.structuralNormal=faceNormal.toArray();
     event.stopImmediatePropagation();event.preventDefault();controls.enabled=false;canvas.setPointerCapture(event.pointerId);contactPointer=event.pointerId;
     if(lastPick.eligibility!=='surface'){synchronize();return;}
@@ -97,11 +97,11 @@ try {
       try{
         await device.queue.onSubmittedWorkDone();
         for(let i=-warmup;i<samples;i++){
-          const started=performance.now();let stepMilliseconds=0,renderSubmitMilliseconds=0;
+          const started=performance.now(),computeBefore=renderer.info.compute.calls;let stepMilliseconds=0,renderSubmitMilliseconds=0;
           if(mode!=='render'){const stepStart=performance.now();await model.step();stepMilliseconds=performance.now()-stepStart;}
           if(mode!=='solver'){const renderStart=performance.now();for(let pass=0;pass<renderPasses;pass++)synchronize();renderSubmitMilliseconds=performance.now()-renderStart;}
           const fenceStart=performance.now();await device.queue.onSubmittedWorkDone();
-          if(i>=0)observed.push({index:i,milliseconds:performance.now()-started,stepMilliseconds,renderSubmitMilliseconds,fenceMilliseconds:performance.now()-fenceStart});
+          if(i>=0)observed.push({index:i,milliseconds:performance.now()-started,stepMilliseconds,renderSubmitMilliseconds,fenceMilliseconds:performance.now()-fenceStart,computeCalls:renderer.info.compute.calls-computeBefore});
         }
         const after=model.snapshot();
         return{mode,samples,warmup,renderPasses,observed,identity,route:ARCH_GPU_ROUTE,effectiveUrl:location.href,visualRoute:useStones?'handy-weathered-stone-v1':'box-baseline',viewport:{width:innerWidth,height:innerHeight,pixelRatio:devicePixelRatio},config:after.config,bodies:after.bodies.length,bonds:after.bonds.length,stepBefore:before.step,stepAfter:after.step,brokenBefore:before.broken,brokenAfter:after.broken,triangles:meshes.reduce((sum,mesh)=>sum+(mesh.geometry.index?.count??mesh.geometry.attributes.position.count)/3,0),camera:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray()},rendererInfo:{calls:renderer.info.render.calls,triangles:renderer.info.render.triangles}};

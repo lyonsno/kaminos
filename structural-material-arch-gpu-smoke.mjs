@@ -149,7 +149,15 @@ try {
   }
   if(report.evidenceErrors.length||report.errors.length)throw new Error(JSON.stringify({evidence:report.evidenceErrors,page:report.errors}));
   if(exercise==='performance'){
-    report.phase='performance';report.performanceTrials=[];save();
+    report.phase='performance';report.performanceTrials=[];report.performancePicks=[];save();
+    const visible=report.result.pickTargets.filter(target=>target.visible);
+    for(const pick of [visible[0],visible[Math.floor(visible.length/2)],visible.at(-1)]){
+      check('timing pick has a visible material target',Boolean(pick),pick);
+      await input({type:'mousePressed',x:pick.screen.x,y:pick.screen.y,button:'left',buttons:1,clickCount:1});
+      const selected=await witness();report.performancePicks.push({requested:pick,observed:selected.lastPick});save();
+      check('timing pick measured actual current triangle contact',selected.lastPick?.index===pick.index&&selected.lastPick.eligibility==='surface'&&Number.isFinite(selected.lastPick.raycastMilliseconds)&&selected.lastPick.raycastMilliseconds>=0,selected.lastPick);
+      await input({type:'mouseReleased',x:pick.screen.x,y:pick.screen.y,button:'left',buttons:0,clickCount:1});
+    }
     for(const settings of [{mode:'solver',renderPasses:1},{mode:'render',renderPasses:1},{mode:'coupled',renderPasses:1},{mode:'coupled',renderPasses:2}]){
       await evaluate('window.__archCollapse.reset()');
       const trial=await evaluate(`window.__archCollapse.performanceTrial(${JSON.stringify({...settings,samples:60,warmup:20})})`);
