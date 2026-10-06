@@ -33,6 +33,7 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
     structuredClone,
     FLAME_EMITTER_ID: '@flame-emitter',
     PROCEDURAL_MESH_TYPE:'procedural-mesh',compoundRetentionTargets:new Map(),RIM_LIGHT_ID: '@rim-light',
+    BURNER_BED_TYPE: 'burner-bed',
     LOCAL_LIQUID_EMITTER_TYPE: 'local-liquid-emitter',
     sceneObjects,
     sceneGroups,

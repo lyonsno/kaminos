@@ -3687,6 +3687,8 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createFlameAuthoring, createFlameInspector } from './flame-authoring.mjs';
 import { normalizeKilnCues, defaultKilnCues } from './kiln-cinematic-cues.mjs';
+import {tuneForCue, checkCueDomain, CUE_CONTINUOUS_FIELDS, cueTuneValuesEqual, KILN_FLOW_RANGE, captureCueControlRanges, restoreCueControlRanges} from './kiln-cue-tunes.mjs';
+import {createCueTuneEditor} from './kiln-cue-editor.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
@@ -4092,6 +4094,7 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let activeSceneComposition = null;
 let kilnCues = null, kilnPerformanceSnapshot = null, applyKilnPerformanceEmitter = null;
+let kilnCueEditor = null;
 let cinematicSceneLoadId = null;
 let authoringBusy = false;
 let volumePrototype = null;
@@ -11783,6 +11786,7 @@ async function initScene() {
     object: id => id?.startsWith('@group:') ? groupProxy(sceneGroups.find(group=>`@group:${group.id}`===id)) : sceneObjects.find(item => item.id === id)?.object,
     refresh: () => { updateTransformInspector(); markDirty(); },
     allowed: () => !greenroomPreviewIsActive() && !splatCorrectionMode,
+    busy: () => !!kilnCueEditor?.active(),
     frameSelected: window.kaminosFrameSelected,
     captureContext: id => id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
     settled: event => {
@@ -11936,25 +11940,34 @@ async function initScene() {
   compositionHost = {
     device: renderer.backend.device,
     cinematic: {
-      available: () => cinematicSceneLoadId === null && !authoringBusy && !sceneSaveBlockedByFailedRestore && !!applyKilnPerformanceEmitter && sceneObjects.some(row => row.id === 'kiln'),
+      available: () => cinematicSceneLoadId === null && !authoringBusy && !sceneSaveBlockedByFailedRestore && !!applyKilnPerformanceEmitter && authoredFlamePresent && sceneObjects.some(row => row.id === 'kiln'),
       contains: id => sceneObjects.some(row => row.id === id),
       findOutput(sha256) {
         const row = sceneObjects.find(row => row.source?.endsWith(`${sha256}.glb`));
         return row ? {status:'registered',objectId:row.id,source:row.source,sha256,runId:'retained-scene-output'} : null;
       },
-      read: () => structuredClone(kilnCues || defaultKilnCues(readVolumeControls())),
+      read: () => readKilnCueRecipe(),
       write(recipe) {
-        if (kilnPerformanceSnapshot) throw new Error('Return to authoring before editing cues');
-        kilnCues = normalizeKilnCues(recipe);
-        window._kaminosDirty?.();
+        if (kilnPerformanceSnapshot || kilnCueEditor?.active()) throw new Error('Accept or cancel the current performance or tune first');
+        scenePlacementTools.edits.apply('@kiln-cues',normalizeKilnCues(recipe),'Edit kiln cues');
         return structuredClone(kilnCues);
       },
+      tuneEditor: () => kilnCueEditor,
+      readTune: () => window.kaminosFlameAuthoring.read(),
+      listBasins: async () => {await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
+      workspace: () => authoringWorkspace,
+      historyScope: node => scenePlacementTools.addHistoryScope(node),
       begin() {
-        if (kilnPerformanceSnapshot || cinematicSceneLoadId !== null || authoringBusy || sceneSaveBlockedByFailedRestore) throw new Error('Scene is busy or has not loaded');
+        if (kilnPerformanceSnapshot || kilnCueEditor?.active() || cinematicSceneLoadId !== null || authoringBusy || sceneSaveBlockedByFailedRestore) throw new Error('Scene is busy or has not loaded');
         if (!applyKilnPerformanceEmitter || document.getElementById('emitter-assay-family').value === 'cluster') throw new Error('Cinematic kiln requires an analytic flame source');
+        if(!authoredFlamePresent)throw Error('Add the flame source before playing kiln cues');
         if (scenePlacementTools?.edits.state().active || scenePlacementTools?.edits.state().replaying) throw new Error('Finish the current scene edit first');
         kilnCues ||= defaultKilnCues(readVolumeControls());
+        const tune=window.kaminosFlameAuthoring?.read();
+        if(tune)for(const phase of ['ignition','work'])for(const key of readKilnCueRecipe()[phase])checkFlameSettingsState(checkCueDomain(key.tune,tune),{cue:true});
         kilnPerformanceSnapshot = { controls: readVolumeControls(), position: camera.position.toArray(),
+          tune,
+          ranges:captureCueControlRanges(document),
           target: controls.target.toArray(), intensity: scene.environmentIntensity, orbit: controls.enabled,
           sourceEnabled: !flameEmitterInjectionSuspended, visibility: new Map(), transforms: new Map() };
         controls.enabled = false;
@@ -11970,7 +11983,8 @@ async function initScene() {
           if (!baseline.visibility.has(helper)) baseline.visibility.set(helper, helper.visible);
           helper.visible = false;
         }
-        applyKilnPerformanceEmitter({ ...baseline.controls, inputRadius: sample.radius, flowRate: sample.flow }, sample.sourceEnabled);
+        if(sample.tune)writeFlameSettingsState(sample.tune,{refresh:false,cue:true,sourceEnabled:sample.sourceEnabled});
+        applyKilnPerformanceEmitter({ ...(sample.tune?readVolumeControls():baseline.controls), inputRadius: sample.radius, flowRate: sample.flow }, sample.sourceEnabled);
         scene.environmentIntensity = baseline.intensity * sample.light;
         const target = new THREE.Vector3().fromArray(baseline.target);
         camera.position.fromArray(baseline.position).sub(target).multiplyScalar((1 - sample.push) * Math.max(1, 1 / camera.aspect)).add(target);
@@ -12022,8 +12036,12 @@ async function initScene() {
       end() {
         const baseline = kilnPerformanceSnapshot;
         if (!baseline) return;
-        try { applyKilnPerformanceEmitter(baseline.controls, baseline.sourceEnabled); }
+        try {
+          if(baseline.tune)writeFlameSettingsState(baseline.tune,{sourceEnabled:baseline.sourceEnabled});
+          applyKilnPerformanceEmitter(baseline.controls, baseline.sourceEnabled);
+        }
         finally {
+          if(baseline.ranges){restoreCueControlRanges(document,baseline.ranges);flameInspector?.sync(true);}
           kilnPerformanceSnapshot = null;
           scene.environmentIntensity = baseline.intensity;
           camera.position.fromArray(baseline.position);
@@ -25593,7 +25611,7 @@ function flameSettingsState(preset=buildVolumeSettingsPreset(),source=activeVolu
 // Every reason the flame settings edit would be refused, in the order the
 // check meets them. The edit session refuses a press on any flame control
 // while one exists, so the loaded page lists them all (recordFlameSettingsProblems).
-function flameSettingsStateProblems(state) {
+function flameSettingsStateProblems(state,{cue=false}={}) {
   const problems=[];
   const current=flameSettingsState();
   for(const axis of ['domControls','rendererControls','presentationControls']) {
@@ -25612,45 +25630,77 @@ function flameSettingsStateProblems(state) {
       else if(['range','number'].includes(source.type)) {
         if(!Number.isFinite(Number(value))){problem(`Nonfinite ${id}`);continue;}
         // The render-scale control has an explicit Full/legacy value contract.
-        if(id!=='volume-render-scale'&&((source.min!==''&&Number(value)<Number(source.min))||(source.max!==''&&Number(value)>Number(source.max))))problem(`Out of range ${id}`);
+        const min=cue&&id==='volume-flow-rate'?KILN_FLOW_RANGE.min:source.min;
+        const max=cue&&id==='volume-flow-rate'?KILN_FLOW_RANGE.max:source.max;
+        if(id!=='volume-render-scale'&&((min!==''&&Number(value)<Number(min))||(max!==''&&Number(value)>Number(max))))problem(`Out of range ${id}`);
       } else if(source.type==='color'&&!/^#[0-9a-f]{6}$/i.test(value))problem(`Invalid color ${id}`);
     }
   }
   return problems;
 }
-function checkFlameSettingsState(state) {
-  const problems=flameSettingsStateProblems(state);
+function checkFlameSettingsState(state,options) {
+  const problems=flameSettingsStateProblems(state,options);
   if(problems.length)throw Error(problems[0].message);
   return state;
 }
-function writeFlameSettingsState(state) {
-  for(const axis of ['domControls','rendererControls'])for(const [id,descriptor] of Object.entries(state[axis]))setVolumeControlValue(id,descriptor.rawValue??descriptor.value);
+function writeFlameSettingsState(state,{refresh=true,cue=false,sourceEnabled=!flameEmitterInjectionSuspended}={}) {
+  let changed=false;
+  for(const axis of ['domControls','rendererControls'])for(const [id,descriptor] of Object.entries(state[axis])) {
+    const control=document.getElementById(id),value=descriptor.rawValue??descriptor.value;
+    if(cue && id==='volume-flow-rate'){control.min=KILN_FLOW_RANGE.min;control.max=KILN_FLOW_RANGE.max;}
+    if(cue && control.type==='range' && CUE_CONTINUOUS_FIELDS.has(id))control.step='any';
+    if(control.type==='checkbox' && control.checked===(value===true||['1','true','yes','on'].includes(String(value).toLowerCase())))continue;
+    if(control.type!=='checkbox' && String(control.value)===String(value))continue;
+    setVolumeControlValue(id,value);changed=true;
+  }
   activeCanonicalVolumeMacroPreset='';activeVolumeRayBudgetPreset='';routedVolumeRayBudgetPreset='';
-  updateVolumeControlLabels();
+  if(changed && refresh)updateVolumeControlLabels();
   // One complete source update, preserving its authored world pose and domain.
-  applyFlameEmitterPose(flameEmitterPose);
+  applyFlameEmitterPose(flameEmitterPose,{sourceEnabled});
   const smoke=state.presentationControls['raymarch-smoke-presentation'].value;
-  const receipt=volumePrototype.setRaymarchSmokePresentationMode(smoke);
+  const previous=window.__kaminosRaymarchSmokePresentationReceipt;
+  const receipt=previous?.effectiveMode===smoke ? previous : volumePrototype.setRaymarchSmokePresentationMode(smoke);
   if(receipt?.fallbackReason || receipt?.effectiveMode!==smoke)throw Error('Smoke presentation did not apply');
   window.__kaminosRaymarchSmokePresentationReceipt=receipt;syncRaymarchSmokePresentationControls(receipt);
-  if(!volumeSettingsPresetControlValuesEqual(buildVolumeSettingsPreset(),state))throw Error('Flame settings were substituted during application');
+  if(refresh && !(cue ? cueTuneValuesEqual(buildVolumeSettingsPreset(),state) : volumeSettingsPresetControlValuesEqual(buildVolumeSettingsPreset(),state))) {
+    const effective=buildVolumeSettingsPreset();
+    const changes=['domControls','rendererControls','presentationControls'].flatMap(axis=>Object.entries(state[axis]).filter(([id,value])=>!volumeSettingsPresetControlValuesEqual({[axis]:{[id]:value}},{[axis]:{[id]:effective[axis][id]}})).map(([id,value])=>`${id}: ${value.rawValue??value.value} -> ${effective[axis][id]?.rawValue??effective[axis][id]?.value}`));
+    throw Error(`Flame settings were substituted during application: ${changes.join(', ')}`);
+  }
   activeVolumeSettingsPresetReceipt=state.source;
   window.__kaminosVolumeSettingsPresetReceipt=state.source;
-  syncBurnerControls();refreshVolumeReadout();flameInspector?.sync(true);
+  if(refresh){syncBurnerControls();refreshVolumeReadout();flameInspector?.sync(true);}
+}
+function readKilnCueRecipe() {
+  const recipe=structuredClone(kilnCues || defaultKilnCues(readVolumeControls()));
+  const baseline=kilnPerformanceSnapshot?.tune || flameSettingsState();
+  for(const phase of ['ignition','work'])for(const key of recipe[phase])key.tune=tuneForCue(key,baseline);
+  return recipe;
+}
+async function loadFlameSettingsBasin(id) {
+  const [artifactResponse,schemaResponse]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'})]);
+  const [artifact,schema]=await Promise.all([artifactResponse.json(),schemaResponse.json()]);
+  if(!artifactResponse.ok||!schemaResponse.ok)throw Error(artifact.error||'Basin lookup failed');
+  const receipt=validateVolumeSettingsPresetDocument(artifact,id,schema);
+  if(receipt.preset.domControls['emitter-assay-family'].value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
+  return flameSettingsState(receipt.preset,receipt);
 }
 function installFlameAuthoring() {
   window.kaminosFlameAuthoring=createFlameAuthoring({edits:scenePlacementTools.edits,
     read:()=>flameSettingsState(),write:writeFlameSettingsState,check:checkFlameSettingsState,
     canApply:()=>{if(!volumePrototype?.debugState?.().active || !applyFlameEmitterPose)throw Error('Flame runtime is not active');},
     changed:()=>flameInspector?.sync(),
-    load:async id=>{
-      const [artifactResponse,schemaResponse]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'})]);
-      const [artifact,schema]=await Promise.all([artifactResponse.json(),schemaResponse.json()]);
-      if(!artifactResponse.ok||!schemaResponse.ok)throw Error(artifact.error||'Basin lookup failed');
-      const receipt=validateVolumeSettingsPresetDocument(artifact,id,schema);
-      if(receipt.preset.domControls['emitter-assay-family'].value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
-      return flameSettingsState(receipt.preset,receipt);
-    }});
+    load:loadFlameSettingsBasin});
+  scenePlacementTools.edits.register('@kiln-cues',{
+    read:()=>readKilnCueRecipe(),check:normalizeKilnCues,
+    write:recipe=>{kilnCues=normalizeKilnCues(recipe);window._kaminosDirty?.();},
+  });
+  kilnCueEditor=createCueTuneEditor({readCues:readKilnCueRecipe,
+    capturePresentation:()=>captureCueControlRanges(document),
+    restorePresentation:ranges=>{restoreCueControlRanges(document,ranges);flameInspector?.sync(true);},
+    canBegin:()=>{if(kilnPerformanceSnapshot || cinematicSceneLoadId!==null || authoringBusy || !authoredFlamePresent || scenePlacementTools.edits.state().active || scenePlacementTools.edits.state().replaying)throw Error('Finish the scene edit and retain a flame source before tuning a key');},
+    writeCues:recipe=>scenePlacementTools.edits.apply('@kiln-cues',recipe,'Tune kiln keyframe'),
+    readTune:flameSettingsState,applyTune:state=>writeFlameSettingsState(state,{cue:true}),validateTune:state=>checkFlameSettingsState(state,{cue:true}),loadTune:loadFlameSettingsBasin});
 }
 
 function installAuthoringParameterEditing() {
@@ -28784,8 +28834,8 @@ async function collectSceneComposition() {
 }
 
 async function withAuthoringAction(action, { result = false } = {}) {
-  if (kilnPerformanceSnapshot) {
-    const error = 'Return to authoring before saving or capturing the scene';
+  if (kilnPerformanceSnapshot || kilnCueEditor?.active()) {
+    const error = kilnPerformanceSnapshot ? 'Return to authoring before saving or capturing the scene' : 'Accept or cancel the keyframe tune before saving or capturing the scene';
     setInfo(error);
     return result ? { ok: false, error } : false;
   }
@@ -29691,7 +29741,7 @@ function claimLoadedSceneFile(file) {
 }
 
 async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
-  if (kilnPerformanceSnapshot) { setInfo('Return to authoring before loading a scene'); return; }
+  if (kilnPerformanceSnapshot || kilnCueEditor?.active()) { setInfo('Accept or cancel the current tune before loading a scene'); return; }
   if (authoringBusy) {
     setInfo('Wait for the current capture or save');
     return;
