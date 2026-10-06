@@ -5,11 +5,16 @@ import {createHash} from 'node:crypto';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 const [dawnPath,output,sourceRef]=process.argv.slice(2);assert.ok(dawnPath&&output);mkdirSync(output,{recursive:true});
-const source=sourceRef?execFileSync('git',['show',`${sourceRef}:volume-outer-smoke.mjs`],{cwd:new URL('..',import.meta.url),maxBuffer:Infinity}).toString():readFileSync(new URL('../volume-outer-smoke.mjs',import.meta.url),'utf8');
-const {createOuterSmoke,outerSmokeConfig}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
-const report={purpose:'translated resolved smoke pulse retains bulk amplitude and displacement on actual outer kernel',phase:'adapter',passed:false};let device;
+const report={purpose:'translated resolved smoke pulse retains bulk amplitude and displacement on actual outer kernel',phase:'source-resolution',passed:false,
+ requestedSource:sourceRef||'working-tree',startedAt:new Date().toISOString(),command:process.argv};let device;
+writeFileSync(resolve(output,'report.json'),JSON.stringify(report,null,2));
 try{
- report.source={revision:sourceRef||execFileSync('git',['rev-parse','HEAD'],{cwd:new URL('..',import.meta.url),encoding:'utf8'}).trim(),shaderHash:createHash('sha256').update(source).digest('hex')};
+ const revision=execFileSync('git',['rev-parse',sourceRef?`${sourceRef}^{commit}`:'HEAD'],{cwd:new URL('..',import.meta.url),encoding:'utf8'}).trim();
+ const source=sourceRef?execFileSync('git',['show',`${revision}:volume-outer-smoke.mjs`],{cwd:new URL('..',import.meta.url),maxBuffer:Infinity}).toString():readFileSync(new URL('../volume-outer-smoke.mjs',import.meta.url),'utf8');
+ report.source={revision,shaderHash:createHash('sha256').update(source).digest('hex')};
+ report.phase='source-import';
+ const {createOuterSmoke,outerSmokeConfig}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+ report.phase='adapter';
  writeFileSync(resolve(output,'report.json'),JSON.stringify(report,null,2));
  const {create,globals}=await import(pathToFileURL(resolve(dawnPath)));Object.assign(globalThis,globals);const gpu=create(['backend=metal']);globalThis.__nativeGPU=gpu;const adapter=await gpu.requestAdapter();assert.ok(adapter);
  device=await adapter.requestDevice();report.route={backend:'metal',vendor:adapter.info.vendor,device:adapter.info.device};
