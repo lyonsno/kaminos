@@ -16354,6 +16354,10 @@ function volumeDomControlParamFromElement(el) {
 function readVolumeDomControlValue(el) {
   if (!el) return null;
   if (el.id === 'volume-render-scale') return readVolumeRenderScaleControlValue();
+  // A retired aperture pattern kept from a saved route is the basin's request
+  // until the operator authors a pattern: saving (and the capture route) keeps
+  // it rather than migrating the basin to the shape it falls back to.
+  if (el.id === 'volume-emitter-aperture-pattern' && el.dataset.volumeRetiredPatternRequest) return el.dataset.volumeRetiredPatternRequest;
   if (el.type === 'checkbox') return Boolean(el.checked);
   if (['color', 'text', 'url', 'search', 'password'].includes(el.type) || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return el.value;
   const numericValue = Number(el.value);

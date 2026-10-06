@@ -84,3 +84,11 @@ test('a retired pattern in a saved route loads as the family shape with its requ
   assert.match(index, /delete document\.getElementById\('volume-emitter-aperture-pattern'\)\.dataset\.volumeRetiredPatternRequest/, 'authoring a pattern clears the kept request');
   assert.match(index, /volume-emitter-aperture-pattern-val'\)\.textContent = [^;]*retired/, 'the label says a retired request is standing in');
 });
+
+// Saving must not migrate a retired request: the canonical DOM-control reader
+// (the save path and the capture route) returns the kept request, as the
+// simulation snapshot does, until the operator authors a pattern.
+test('saving an untouched retired-pattern basin keeps its request (the DOM-control reader returns the kept request)', () => {
+  const reader = index.slice(index.indexOf('function readVolumeDomControlValue(el)'), index.indexOf('\n}\n', index.indexOf('function readVolumeDomControlValue(el)')));
+  assert.match(reader, /if \(el\.id === 'volume-emitter-aperture-pattern' && el\.dataset\.volumeRetiredPatternRequest\) return el\.dataset\.volumeRetiredPatternRequest;/, 'the reader returns the kept retired request for the pattern select');
+});
