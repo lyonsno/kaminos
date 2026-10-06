@@ -12036,7 +12036,7 @@ export function createKaminosVolumePrototype({
       sourceFrameId: liquidFireContactDescriptor?.sourceFrameId || null,
       receiverTransformId: LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID,
       receiverScale: [0.5, 0.5, 0.5],
-      receiverOffset: [0.5, 0.5, 0.5],
+      receiverOffset: productTransform.translate.map(value => 0.5 - value * 0.5),
       dispatchCount: state.liquidFireContactDispatchCount,
       transferEnabled: liquidFireContactTransferEnabled,
       transferGateReason: state.liquidFireContactTransferGateReason,
@@ -25231,6 +25231,15 @@ export function createKaminosVolumePrototype({
           scale: [...primitive.transform.scale],
         },
       };
+    },
+    clearLiquidFireContactDescriptor() {
+      liquidFireContactDescriptor = null;
+      destroyLiquidFireContactConsumer();
+      state.liquidFireContactStatus = 'unbound';
+      state.liquidFireContactSourceGeneration = null;
+      state.liquidFireContactSourceEpoch = null;
+      state.liquidFireContactSourceFrameHash = null;
+      return {status:'unbound'};
     },
     setLiquidFireContactDescriptor(descriptor) {
       if (!descriptor?.device) throw new Error('Liquid fire contact descriptor has no GPUDevice');

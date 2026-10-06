@@ -3463,6 +3463,7 @@ import { createFlameAuthoring, createFlameInspector } from './flame-authoring.mj
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
+import { createAuthoredLiquidFireContactBridge } from './authored-liquid-fire-contact.mjs';
 import { createSceneLoadRequests } from './scene-load-generation.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-inlet-1006';
@@ -4167,6 +4168,8 @@ const sceneMembershipEditTargets = new Set();
 const sceneMembershipRetainedObjects = new Map();
 let localLiquidSetup = null;
 let localLiquidHost = null;
+const authoredLiquidFireContact = createAuthoredLiquidFireContactBridge();
+window.kaminosAuthoredLiquidFireContactState = () => authoredLiquidFireContact.state();
 let localLiquidFailure = null;
 let localLiquidPaused = false;
 let localLiquidGeneration = 0;
@@ -4175,11 +4178,12 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
   getGeneration: () => localLiquidGeneration,
   getHost: () => localLiquidHost,
   setHost: host => { localLiquidHost = host; },
-  createHost: async ({ setup, emitters, isCurrent }) => {
+  createHost: async ({ setup, emitters, isCurrent, generation }) => {
     const { createLocalLiquidHost } = await import('./local-liquid-host.mjs');
     return createLocalLiquidHost({
       renderer, scene, camera, pipeline: renderPipeline, device: sharedGpu?.device,
-      setup, emitters, isCurrent,
+      setup, emitters, isCurrent, sceneGeneration: generation,
+      onContactRetired: host => authoredLiquidFireContact.retire(host),
     });
   },
   onFailure: error => {
@@ -11472,7 +11476,7 @@ async function initScene() {
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
     if (localLiquidHost) {
-      try { localLiquidHost.render(); }
+      try { localLiquidHost.render(); authoredLiquidFireContact.sync(localLiquidHost, volumePrototype); }
       catch (error) {
         console.error('Local water frame failed', error);
         localLiquidFailure = String(error?.message || error);
@@ -11482,7 +11486,7 @@ async function initScene() {
         renderPipeline.render();
         setInfo(`Local water stopped; scene renderer resumed: ${localLiquidFailure}`);
       }
-    } else renderPipeline.render();
+    } else { authoredLiquidFireContact.sync(null, volumePrototype); renderPipeline.render(); }
     sceneFrameCount++;
     const frameMs = performance.now() - t0;
     fpsFrames++;
