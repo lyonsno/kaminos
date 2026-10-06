@@ -86,7 +86,7 @@ empty, and input-driven source-viewport work continued through the same WebGPU
 device at the model's existing phase boundaries. This is a direct shared-runtime
 composition result, not a frame-pacing claim.
 
-The source-checkout [SAM image example](webgpu-inference-kit/docs/sam-image-example.md)
+The [SAM image example](webgpu-inference-kit/docs/sam-image-example.md), included in kit 0.1.55,
 accepts uploaded images and text, exposes all retained instances, and exports
 source-sized masks, transparent cutouts, and provenance through the public kit
 entrypoints. Native browser runs exercise cold and cached prompts, multiple

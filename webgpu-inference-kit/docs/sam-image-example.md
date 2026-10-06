@@ -30,7 +30,7 @@ Unload Model is disabled during active work. It releases SAM's model/route resou
 
 ## Verification Boundary
 
-This example uses the source checkout or the caller's installed kit. It does not establish that a particular npm release contains the example. Model execution, mask accuracy, and renderer coexistence must be verified on the effective device and model package. The foreground counters are queue submissions, not presented frames; they do not certify frame pacing.
+Kit 0.1.55 includes this example and its public `./examples/sam-image` entrypoint. It can also run from the source checkout. Model execution, mask accuracy, and renderer coexistence must be verified on the effective device and model package. The foreground counters are queue submissions, not presented frames; they do not certify frame pacing.
 
 Run the focused local contracts with `npm run test:sam-image-example` from the kit directory. Those deterministic fixtures cover source-sized exports, output provenance, single-flight operation, shared-session ownership, and cleanup. They are not a native model or browser-presentation witness.
 
