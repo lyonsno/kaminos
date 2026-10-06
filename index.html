@@ -235,8 +235,13 @@ canvas { display: block; }
 .volume-layout-editing .volume-layout-group-body:not([hidden]) { min-height: 24px; }
 .slider-label { font-size: 10px; color: #666; min-width: 60px; user-select: none; -webkit-user-select: none; }
 .slider-val { font-size: 10px; color: #888; font-family: 'SF Mono', monospace; min-width: 30px; user-select: none; -webkit-user-select: none; }
-.slider-help { display: none; position: fixed; z-index: 60; max-width: 300px; padding: 7px 9px; border: 1px solid #3a4a52; border-radius: 6px; background: rgba(16,21,23,0.97); color: #9fb1b8; font-size: 10px; line-height: 1.35; box-shadow: 0 6px 18px rgba(0,0,0,0.45); user-select: none; -webkit-user-select: none; }
-.slider-help[data-open="true"] { display: block; }
+.slider-help { display: none; }
+/* The help popover lives on body: the sidebar is a transformed ancestor, so a
+   fixed-position box inside it is positioned against the sidebar and lands
+   offscreen (seen live 2026-10-06). The row's help span stays in place and
+   hidden; its text is shown here. */
+#volume-help-popover { display: none; position: fixed; z-index: 60; max-width: 300px; padding: 7px 9px; border: 1px solid #3a4a52; border-radius: 6px; background: rgba(16,21,23,0.97); color: #9fb1b8; font-size: 10px; line-height: 1.35; box-shadow: 0 6px 18px rgba(0,0,0,0.45); user-select: none; -webkit-user-select: none; pointer-events: none; }
+#volume-help-popover[data-open="true"] { display: block; }
 /* Controls retired from the interface but kept in the DOM so saved basins still
    load and route their values (tiered pressure bounds, the concentric ratio). */
 .slider-row[data-volume-ui-retired] { display: none; }
@@ -1983,31 +1988,31 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="checkbox" id="volume-phased-sway" checked>
       <span class="slider-val" id="volume-phased-sway-val">on</span>
     </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation">
+    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-procedural-detail-forces">
       <span class="slider-label">Master</span>
       <input type="checkbox" id="volume-procedural-detail-forces" checked>
       <span class="force-contribution-gloss">Gates all active force contributions; transported material fields and prior velocity remain.</span>
       <span class="slider-val" id="volume-procedural-detail-forces-val">on</span>
     </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation">
+    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-force-micro-carrier">
       <span class="slider-label">Micro-carrier</span>
       <input type="checkbox" id="volume-force-micro-carrier" data-volume-settings-param="volume_force_micro_carrier" checked>
       <span class="force-contribution-gloss">Returns transported microstructure to velocity; feeds articulated lateral motion.</span>
       <span class="slider-val" id="volume-force-micro-carrier-val">on</span>
     </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation">
+    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-force-interface-shred">
       <span class="slider-label">Interface shred</span>
       <input type="checkbox" id="volume-force-interface-shred" data-volume-settings-param="volume_force_interface_shred" checked>
       <span class="force-contribution-gloss">Returns material boundaries and local curl to velocity; feeds interface opening and roughness.</span>
       <span class="slider-val" id="volume-force-interface-shred-val">on</span>
     </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation">
+    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-force-fine-breakup">
       <span class="slider-label">Fine breakup</span>
       <input type="checkbox" id="volume-force-fine-breakup" data-volume-settings-param="volume_force_fine_breakup" checked>
       <span class="force-contribution-gloss">Returns heat, smoke, source and curl to velocity; can disturb coupled reaction regimes.</span>
       <span class="slider-val" id="volume-force-fine-breakup-val">on</span>
     </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation">
+    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-fine-breakup-localization">
       <span class="slider-label">Fine breakup localization</span>
       <input type="range" id="volume-fine-breakup-localization" data-volume-settings-param="volume_fine_breakup_localization" min="0" max="1" step="0.01" value="0">
       <span class="force-contribution-gloss">0 keeps legacy broad support; 1 confines Fine breakup to reaction-front, material-interface, and curl-shear support.</span>
@@ -28870,17 +28875,21 @@ window.applyVolumeInflowLawRowVisibility = function applyVolumeInflowLawRowVisib
   }
 };
 (function installVolumeHelpMarks() {
-  let open = null;
-  const close = () => { if (open) { open.removeAttribute('data-open'); open.style.top = ''; open.style.left = ''; open = null; } };
+  // One popover on body shows the hovered row's help text at the viewport
+  // position of the row; the sidebar is transformed, so a fixed box inside it
+  // would be positioned against the sidebar, not the viewport.
+  const popover = document.createElement('div');
+  popover.id = 'volume-help-popover'; popover.setAttribute('role', 'tooltip');
+  document.body.appendChild(popover);
+  const close = () => { popover.removeAttribute('data-open'); popover.textContent = ''; };
   const show = (help, row) => {
-    close();
     const r = row.getBoundingClientRect();
-    help.setAttribute('data-open', 'true');
-    help.style.left = `${Math.max(8, Math.min(r.left + 8, window.innerWidth - 316))}px`;
-    help.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 16)}px`;
-    const h = help.getBoundingClientRect().height;
-    if (r.bottom + 4 + h > window.innerHeight) help.style.top = `${Math.max(8, r.top - h - 4)}px`;
-    open = help;
+    popover.textContent = help.textContent;
+    popover.setAttribute('data-open', 'true');
+    popover.style.left = `${Math.max(8, Math.min(r.left + 8, window.innerWidth - 316))}px`;
+    popover.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 16)}px`;
+    const h = popover.getBoundingClientRect().height;
+    if (r.bottom + 4 + h > window.innerHeight) popover.style.top = `${Math.max(8, r.top - h - 4)}px`;
   };
   const install = help => {
     if (help.dataset.helpMark === 'installed') return;
@@ -28893,6 +28902,7 @@ window.applyVolumeInflowLawRowVisibility = function applyVolumeInflowLawRowVisib
     mark.setAttribute('aria-label', 'help'); mark.title = '';
     mark.addEventListener('mouseenter', () => show(help, row));
     mark.addEventListener('focus', () => show(help, row));
+    mark.addEventListener('click', event => { event.preventDefault(); if (popover.dataset.open === 'true' && popover.textContent === help.textContent) close(); else show(help, row); });
     mark.addEventListener('mouseleave', close);
     mark.addEventListener('blur', close);
     label.appendChild(mark);

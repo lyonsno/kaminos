@@ -92,3 +92,26 @@ test('saving an untouched retired-pattern basin keeps its request (the DOM-contr
   const reader = index.slice(index.indexOf('function readVolumeDomControlValue(el)'), index.indexOf('\n}\n', index.indexOf('function readVolumeDomControlValue(el)')));
   assert.match(reader, /if \(el\.id === 'volume-emitter-aperture-pattern' && el\.dataset\.volumeRetiredPatternRequest\) return el\.dataset\.volumeRetiredPatternRequest;/, 'the reader returns the kept retired request for the pattern select');
 });
+
+// The hover help renders through one popover on body: the sidebar is a
+// transformed ancestor, so a fixed box inside it is positioned against the
+// sidebar and landed 3000 px offscreen (probe on 18462, 2026-10-06). The row's
+// help span stays in place (layout clustering, contracts) and hidden.
+test('help marks show their text through a body-level popover, on hover, focus and click', () => {
+  const installer = index.slice(index.indexOf('(function installVolumeHelpMarks()'), index.indexOf('})();', index.indexOf('(function installVolumeHelpMarks()')));
+  assert.match(installer, /popover\.id = 'volume-help-popover'/);
+  assert.match(installer, /document\.body\.appendChild\(popover\)/, 'the popover is a child of body, outside the transformed sidebar');
+  assert.match(installer, /popover\.textContent = help\.textContent;/, 'it shows the row\'s help text');
+  assert.match(installer, /mark\.addEventListener\('click'/, 'click toggles it (trackpads without hover)');
+  assert.doesNotMatch(installer, /help\.setAttribute\('data-open'/, 'the in-place span is never opened');
+  assert.match(index, /#volume-help-popover \{ display: none; position: fixed;/);
+  assert.match(index, /\.slider-help \{ display: none; \}/);
+});
+
+test('the force-contribution rows leave the interface (master and interface shred stay on by default)', () => {
+  for (const id of ['volume-procedural-detail-forces', 'volume-force-micro-carrier', 'volume-force-interface-shred', 'volume-force-fine-breakup', 'volume-fine-breakup-localization']) {
+    assert.match(index, new RegExp(`<div class="slider-row[^"]*"[^>]*data-volume-ui-retired="${id}"`), `${id} is retired from the interface`);
+  }
+  assert.match(index, /<input type="checkbox" id="volume-procedural-detail-forces" checked>/, 'master stays on by default');
+  assert.match(index, /<input type="checkbox" id="volume-force-interface-shred" data-volume-settings-param="volume_force_interface_shred" checked>/, 'interface shred stays on by default');
+});
