@@ -14,7 +14,7 @@ for (const initiallyPaused of [false, true]) {
       setCustomValidity() {}, setAttribute(key, value) { this.attributes[key] = value; }, removeAttribute(key) { delete this.attributes[key]; }, replaceChildren() {}, append() {} });
     return nodes.get(id);
   };
-  const renderer = { setPixelRatio() {}, setSize() {}, render() { test.renders++; this.info.render.calls++; }, info: { compute: { calls: 0 }, render: { calls: 0, triangles: 12 } }, backend: {} };
+  const renderer = { setPixelRatio() {}, setSize() {}, render() { test.renders++; this.info.render.calls += 2; }, info: { compute: { calls: 0 }, render: { calls: 0, triangles: 12 } }, backend: {} };
   const device = { addEventListener() {}, lost: new Promise(() => {}), queue: { async onSubmittedWorkDone() { test.interference?.(); } } };
   const createModel = async () => {
     const model = { disposed: 0, cells: [{ index: 0, pinned: false, half: { x: .5, y: .5, z: .5 } }],
@@ -49,6 +49,8 @@ for (const initiallyPaused of [false, true]) {
       assert.equal(test.renders - before, 1, 'controls cannot add drawing to solver-only trial; final presentation is restored');
       assert.equal(api.witness().paused, true, 'trial controls cannot resume the clock');
       test.interference = null;
+      const drawn = await api.performanceTrial({ mode: 'render', samples: 2, warmup: 1 });
+      assert.ok(drawn.observed.every(sample => sample.renderCalls === 1), 'one scene submission excludes the renderer internal presentation pass');
       const queued = api.performanceTrial({ mode: 'solver', samples: 2, warmup: 1 });
       node('#pause').onclick();
       await assert.rejects(queued, /paused ungripped arch/, 'admission is checked after entering the serialized queue');

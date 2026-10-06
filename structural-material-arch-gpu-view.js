@@ -8,7 +8,7 @@ import { loadStoneAssets, fitStoneGeometry, structuralFaceAt } from './structura
 const profilePath='./artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json';
 const params=new URLSearchParams(location.search),status=document.querySelector('#status'),receipt=document.querySelector('#receipt'),errorNode=document.querySelector('#error');
 let phase='loading',failure=null,model,paused=params.get('smoke')==='1',failurePaused=null,mode='shear',grab=null,contactPointer=null,lastPick=null,latestStepCost=0,identity=null;
-let operations=Promise.resolve(),busy=false,profiling=false,lastTime=performance.now(),simulationRate=1;
+let operations=Promise.resolve(),busy=false,profiling=false,lastTime=performance.now(),simulationRate=1,sceneSubmissions=0;
 const failures=[];
 function fail(operation,error){if(failurePaused===null)failurePaused=paused;paused=true;phase='failed';failure={operation,message:error.message??String(error),stack:error.stack,step:model?.snapshot().step??null,at:new Date().toISOString()};failures.push(failure);status.textContent=`${operation} failed`;errorNode.textContent=failure.message;console.error(error);}
 const act=(operation,callback)=>(...args)=>{if(phase!=='interactive'||profiling)return;try{const result=callback(...args);result?.catch?.(error=>fail(operation,error));return result;}catch(error){fail(operation,error);}};
@@ -40,7 +40,7 @@ try {
     scene.updateMatrixWorld(true);grip.visible=tether.visible=Boolean(grab);if(grab){const world=meshes[grab.index].localToWorld(grab.local.clone());grip.position.copy(world);const positions=tether.geometry.attributes.position;positions.setXYZ(0,world.x,world.y,world.z);positions.setXYZ(1,grab.target.x,grab.target.y,grab.target.z);positions.needsUpdate=true;}
     const bound=state.events.filter(event=>event.kind==='bind').length;status.textContent=`${state.broken} broken · ${bound} bound`;
     receipt.textContent=`${state.bodies.length} blocks · ${grab?`${grab.indices.length}-block grip`:'surface contact'} · ${paused?'paused':`live ${simulationRate.toFixed(2)}x`} · ${latestStepCost.toFixed(1)} ms/step+copy`;
-    scene.updateMatrixWorld(true);renderer.render(scene,camera);
+    scene.updateMatrixWorld(true);sceneSubmissions++;renderer.render(scene,camera);
   }
   async function rebuild(){const value=strength();if(value===null)return false;const solverOptions=Object.fromEntries(['solverIterations','stiffness','initialJointPenalty','gravityRampSeconds','substeps'].filter(key=>params.has(key)).map(key=>[key,Number(params.get(key))]));if(params.has('preventPenetratingNormalDropout')){const requested=params.get('preventPenetratingNormalDropout');if(!['true','false'].includes(requested))throw new Error('preventPenetratingNormalDropout must be true or false');solverOptions.preventPenetratingNormalDropout=requested==='true';}
     let next,nextGeometry,nextEdges,nextMeshes,nextStoneGeometries=[];
@@ -98,11 +98,11 @@ try {
       try{
         await device.queue.onSubmittedWorkDone();
         for(let i=-warmup;i<samples;i++){
-          const started=performance.now(),computeBefore=renderer.info.compute.calls,renderBefore=renderer.info.render.calls;let stepMilliseconds=0,renderSubmitMilliseconds=0;
+          const started=performance.now(),computeBefore=renderer.info.compute.calls,renderBefore=sceneSubmissions,rendererRenderBefore=renderer.info.render.calls;let stepMilliseconds=0,renderSubmitMilliseconds=0;
           if(mode!=='render'){const stepStart=performance.now();await model.step();stepMilliseconds=performance.now()-stepStart;}
           if(mode!=='solver'){const renderStart=performance.now();for(let pass=0;pass<renderPasses;pass++)synchronize();renderSubmitMilliseconds=performance.now()-renderStart;}
           const fenceStart=performance.now();await device.queue.onSubmittedWorkDone();
-          if(i>=0)observed.push({index:i,milliseconds:performance.now()-started,stepMilliseconds,renderSubmitMilliseconds,fenceMilliseconds:performance.now()-fenceStart,computeCalls:renderer.info.compute.calls-computeBefore,renderCalls:renderer.info.render.calls-renderBefore});
+          if(i>=0)observed.push({index:i,milliseconds:performance.now()-started,stepMilliseconds,renderSubmitMilliseconds,fenceMilliseconds:performance.now()-fenceStart,computeCalls:renderer.info.compute.calls-computeBefore,renderCalls:sceneSubmissions-renderBefore,rendererRenderCalls:renderer.info.render.calls-rendererRenderBefore});
         }
         const after=model.snapshot();
         return{mode,samples,warmup,renderPasses,observed,identity,route:ARCH_GPU_ROUTE,effectiveUrl:location.href,visualRoute:useStones?'handy-weathered-stone-v1':'box-baseline',viewport:{width:innerWidth,height:innerHeight,pixelRatio:devicePixelRatio},config:after.config,bodies:after.bodies.length,bonds:after.bonds.length,stepBefore:before.step,stepAfter:after.step,brokenBefore:before.broken,brokenAfter:after.broken,triangles:meshes.reduce((sum,mesh)=>sum+(mesh.geometry.index?.count??mesh.geometry.attributes.position.count)/3,0),camera:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray()},rendererInfo:{calls:renderer.info.render.calls,triangles:renderer.info.render.triangles}};
