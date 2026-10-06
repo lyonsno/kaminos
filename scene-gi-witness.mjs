@@ -67,7 +67,8 @@ try {
     scene.environment.ground={...scene.environment.ground,color:'#606060',roughness:.9};
     scene.postprocessing.sceneGI={mode:'combined',gain:3};
     await page.setInputFiles('#scene-file-input',{name:'floor-roundtrip.kaminos.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(scene))});
-    await page.waitForFunction(()=>window.kaminosGroundDebugState().color==='#606060'&&window.kaminosSceneGIDebugState().gain===3,null,{timeout:0});
+    await page.waitForFunction(()=>window.kaminosGroundDebugState?.().color==='#606060'&&window.kaminosSceneGIDebugState?.().gain===3,null,{timeout:0});
+    report.restoredUrl=page.url();
     report.restored={ground:await page.evaluate(()=>window.kaminosGroundDebugState()),gi:await page.evaluate(()=>window.kaminosSceneGIDebugState())};
     assert.equal(report.restored.ground.roughness,.9);assert.equal(report.restored.gi.gain,3,'authored gain survives default change');
   } else {
