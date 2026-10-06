@@ -22,7 +22,7 @@ function wgslFunction(name) {
 const ring = { kind: 'annulus', center: [0, 0], ringRadius: 0.7, bandHalfWidth: 0.14 };
 
 test('the coverage map is deterministic, bounded, and reproduces the family shape as its default', () => {
-  assert.deepEqual([...aperture.INFLOW_APERTURE_PATTERNS], ['shape', 'jets', 'concentric', 'slot', 'spiral', 'bed']);
+  assert.deepEqual([...aperture.INFLOW_APERTURE_PATTERNS], ['shape', 'jets', 'slot', 'bed'], 'spiral and concentric are retired: at a visible density the flame hides them (Noah 2026-10-06)');
   const a = aperture.buildInflowCoverageMap({ grid: 64, spec: { ...ring, pattern: 'shape' } });
   const b = aperture.buildInflowCoverageMap({ grid: 64, spec: { ...ring, pattern: 'shape' } });
   assert.deepEqual([...a.cells], [...b.cells], 'same inputs, same map');
@@ -39,7 +39,7 @@ test('the coverage map is deterministic, bounded, and reproduces the family shap
   assert.ok([...a.cells].some(w => w > 0.1 && w < 0.9), 'edge cells are fractional, not a staircase');
 });
 
-test('jets, concentric rings, slot, spiral and bed are distinct deterministic patterns with the expected structure', () => {
+test('jets, slot and bed are distinct deterministic patterns with the expected structure; retired patterns fall back to the family shape with a reason', () => {
   const build = (pattern, extra = {}) => aperture.buildInflowCoverageMap({ grid: 64, spec: { ...ring, pattern, ...extra } });
   const jets = build('jets', { count: 12 });
   const shape = build('shape');
@@ -53,19 +53,15 @@ test('jets, concentric rings, slot, spiral and bed are distinct deterministic pa
   }
   const transitions = onRing.filter((w, i) => i > 0 && (w > 0.5) !== (onRing[i - 1] > 0.5)).length;
   assert.ok(transitions >= 20 && transitions <= 26, `twelve jets give about 24 on/off transitions around the ring (got ${transitions})`);
-  const twoRings = build('concentric', { count: 2, ratio: 0.5 });
-  const spec2 = aperture.normalizeInflowApertureSpec({ ...ring, pattern: 'concentric', count: 2, ratio: 0.5, antialias: 2 / 64 });
-  assert.ok(Math.abs(aperture.inflowPatternCoverage(spec2, 0.7, 0) - 1) < 1e-6, 'the outer ring carries the full flux');
-  assert.ok(Math.abs(aperture.inflowPatternCoverage(spec2, 0.7 * 0.45, 0) - 0.5) < 1e-6, 'the inner ring carries the ratio');
-  assert.equal(twoRings.peak, 1);
+  const retired = aperture.normalizeInflowApertureSpec({ ...ring, pattern: 'concentric', antialias: 2 / 64 });
+  assert.equal(retired.pattern, 'shape', 'a basin saved with a retired pattern loads as the family shape');
+  assert.equal(retired.patternFallback, 'concentric retired; family shape used');
+  assert.equal(aperture.normalizeInflowApertureSpec({ ...ring, pattern: 'spiral' }).patternFallback, 'spiral retired; family shape used');
+  assert.equal(aperture.normalizeInflowApertureSpec({ ...ring, pattern: 'jets' }).patternFallback, null);
   const slot = build('slot');
   const specSlot = aperture.normalizeInflowApertureSpec({ ...ring, pattern: 'slot', antialias: 2 / 64 });
   assert.equal(aperture.inflowPatternCoverage(specSlot, 0.5, 0), 1, 'the slot runs along the side axis through the centre');
   assert.equal(aperture.inflowPatternCoverage(specSlot, 0, 0.5), 0, 'and not across it');
-  const spiral = build('spiral', { count: 2 });
-  assert.ok(spiral.coveredCells > 0 && spiral.totalCoverage < shape.totalCoverage, 'the spiral is a thin curve');
-  const specSpiral = aperture.normalizeInflowApertureSpec({ ...ring, pattern: 'spiral', count: 2, antialias: 2 / 64 });
-  assert.equal(aperture.inflowPatternCoverage(specSpiral, 0.35, 0), 1, 'one turn of two passes r = reach/2 on the positive x axis');
   const bed1 = build('bed', { seed: 1 });
   const bed2 = build('bed', { seed: 2 });
   const bed1b = build('bed', { seed: 1 });
@@ -76,13 +72,39 @@ test('jets, concentric rings, slot, spiral and bed are distinct deterministic pa
   assert.throws(() => aperture.normalizeInflowApertureSpec({ ...ring, pattern: 'hexagon' }), /unsupported inflow aperture pattern/);
 });
 
+test('line weight scales every pattern\'s band; jet size jitter varies the jets\' radii deterministically', () => {
+  const build = (pattern, extra = {}) => aperture.buildInflowCoverageMap({ grid: 64, spec: { ...ring, pattern, ...extra } });
+  const thin = build('shape', { lineWeight: 0.5 }); const base = build('shape'); const thick = build('shape', { lineWeight: 2 });
+  assert.ok(thin.totalCoverage < base.totalCoverage * 0.6 && thick.totalCoverage > base.totalCoverage * 1.7, `line weight scales the annulus band (${thin.totalCoverage.toFixed(0)} < ${base.totalCoverage.toFixed(0)} < ${thick.totalCoverage.toFixed(0)})`);
+  const slotThin = build('slot', { lineWeight: 0.5 }); const slotBase = build('slot');
+  assert.ok(slotThin.totalCoverage < slotBase.totalCoverage * 0.6, 'the slot gets its width from the same knob');
+  assert.equal(aperture.normalizeInflowApertureSpec({ ...ring }).lineWeight, 1, 'default line weight is one');
+  assert.equal(aperture.normalizeInflowApertureSpec({ ...ring, lineWeight: 9 }).lineWeight, 3, 'clamped to [0.25, 3]');
+  // Jitter: with the same seed, jets of unequal radii; without it, equal. Total coverage stays within a third.
+  const spec = extra => aperture.normalizeInflowApertureSpec({ ...ring, pattern: 'jets', count: 8, antialias: 2 / 64, ...extra });
+  const radii = s => aperture.inflowJetRadii(s);
+  const even = radii(spec({ jetJitter: 0 })); const jittered = radii(spec({ jetJitter: 1, seed: 3 })); const again = radii(spec({ jetJitter: 1, seed: 3 }));
+  assert.equal(even.length, 8);
+  assert.ok(even.every(r => Math.abs(r - even[0]) < 1e-12), 'no jitter: equal jets');
+  assert.ok(Math.max(...jittered) / Math.min(...jittered) > 1.5, `jitter 1 spreads the radii (${Math.min(...jittered).toFixed(3)} … ${Math.max(...jittered).toFixed(3)})`);
+  assert.deepEqual(jittered, again, 'deterministic in the seed');
+  assert.notDeepEqual(jittered, radii(spec({ jetJitter: 1, seed: 4 })), 'another seed, other radii');
+  const jj = build('jets', { count: 8, jetJitter: 1, seed: 3 }); const j0 = build('jets', { count: 8, jetJitter: 0 });
+  assert.ok(Math.abs(jj.totalCoverage - j0.totalCoverage) / j0.totalCoverage < 0.34, 'jitter redistributes area more than it adds');
+});
+
 test('the core carries the pattern and swirl through the resolver, packs them, and reads the coverage from a buffer', async () => {
   const basis = await import('../volume-emitter-basis.mjs');
   const compiled = basis.compileVolumeEmitterFamily({ family: 'ring', origin: [0, -0.76, 0], direction: [0, 1, 0], supportAxis: [1, 0, 0], radius: 0.14, ringRadius: 0.7, strength: 2.5, sourceLaw: 'inflow-boundary', inletVelocity: 0.1 });
   const controls = { pressureSolver: 'converged-open-top', projection: 1, emitterAperturePattern: 'jets', emitterApertureCount: 8, emitterApertureRatio: 0.4, emitterApertureSeed: 3, emitterSwirl: 0.5 };
   const config = core.resolveInflowBoundaryConfig(controls, compiled.descriptor, { grid: 64 });
   assert.equal(config.effective.admitted, true);
-  assert.deepEqual(config.effective.pattern, { kind: 'jets', count: 8, ratio: 0.4, seed: 3 });
+  assert.deepEqual(config.effective.pattern, { kind: 'jets', count: 8, ratio: 0.4, seed: 3, lineWeight: 1, jetJitter: 0 });
+  const styled = core.resolveInflowBoundaryConfig({ ...controls, emitterLineWeight: 1.5, emitterJetJitter: 0.7, emitterAperturePattern: 'spiral' }, compiled.descriptor, { grid: 64 });
+  assert.deepEqual(styled.effective.pattern, { kind: 'spiral', count: 8, ratio: 0.4, seed: 3, lineWeight: 1.5, jetJitter: 0.7 }, 'line weight and jitter ride with the pattern; a retired kind is kept so the map can name the fallback');
+  const styledMap = core.inflowCoverageMapForConfig(styled);
+  assert.equal(styledMap.pattern, 'shape'); assert.equal(styledMap.patternFallback, 'spiral retired; family shape used'); assert.equal(styledMap.lineWeight, 1.5);
+  assert.notEqual(core.inflowCoverageSignatureFor(styled), core.inflowCoverageSignatureFor(config), 'line weight and jitter are in the coverage signature');
   assert.equal(config.effective.swirl, 0.5);
   const packed = core.inflowBoundaryUniformValues(config);
   assert.equal(packed[8], 0.5, 'swirl rides in the third vec4');
@@ -107,7 +129,7 @@ test('the core carries the pattern and swirl through the resolver, packs them, a
   // Swirl: the ghost velocity gains a tangential component around the aperture centre.
   const ghost = wgslFunction('inflowGhostVelocity');
   assert.match(ghost, /let tangent = vec2<f32>\(-q\.y, q\.x\) \/ max\(length\(q\), 1e-4\);/, 'tangent from the aperture centre');
-  assert.match(ghost, /u\.inflow_state\.y \* vec3<f32>\(tangent\.x \* swirl, 1\.0, tangent\.y \* swirl\)/, 'the entering gas carries v_in up and swirl x v_in around');
+  assert.match(ghost, /inflowInletSpeed\(floorCell\) \* vec3<f32>\(tangent\.x \* swirl, 1\.0, tangent\.y \* swirl\)/, 'the entering gas carries the inlet speed (puff and turbulence included) up and swirl x that around');
   const ghostState = wgslFunction('inflowGhostState');
   assert.match(ghostState, /inflowGhostVelocity\(cellCenter\)/, 'the ghost state uses it for slot 0');
   const model = core.inflowGhostVelocityModel({ position: [0.7, 0], center: [0, 0], inletVelocity: 0.1, swirl: 0.5 });
@@ -198,7 +220,7 @@ test('cockpit and schema carry the new controls', () => {
   assert.match(checks, /aperture pattern requested \$\{value\}, effective/, 'the arm capture refuses an arm whose pattern did not take effect');
   assert.match(checks, /wind model requested \$\{value\}, effective/, 'and one whose wind model did not');
   assert.match(readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8'), /const mismatches = effectiveMismatches\(arm, end, expectedMode, fault\);/, 'and the capture applies those checks to every arm');
-  assert.equal(schema.controlCount, 227);
+  assert.equal(schema.controlCount, 233);
   const additive = schema.controls.filter(control => control.additiveSinceControlCount >= 219).map(control => control.additiveSinceControlCount);
-  assert.deepEqual(additive, [219, 220, 221, 222, 223, 224, 225, 226, 227]);
+  assert.deepEqual(additive, [219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233]);
 });

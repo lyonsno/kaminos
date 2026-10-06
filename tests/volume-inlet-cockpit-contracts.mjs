@@ -1,0 +1,41 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url), 'utf8'));
+const NEW = ['volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period'];
+const SNAPSHOT = { 'volume-emitter-line-weight': 'emitterLineWeight', 'volume-emitter-jet-jitter': 'emitterJetJitter', 'volume-emitter-inlet-turbulence': 'emitterInletTurbulence', 'volume-emitter-inlet-turbulence-scale': 'emitterInletTurbulenceScale', 'volume-emitter-puff': 'emitterPuff', 'volume-emitter-puff-period': 'emitterPuffPeriod' };
+
+test('the six slice-3 inlet controls exist, are read, displayed, listened to, helped, and are additive 228–233 in the schema', () => {
+  const listenerList = index.slice(index.indexOf("'volume-emitter-source-law',"), index.indexOf("'volume-wind-gust-veer',") + 400);
+  for (const id of NEW) {
+    assert.match(index, new RegExp(`<input type="range" id="${id}" data-volume-settings-param="${id.replace(/-/g, '_')}"`), `${id} row`);
+    assert.match(index, new RegExp(`${SNAPSHOT[id]}: parseFloat\\(document\\.getElementById\\('${id}'\\)\\.value\\)`), `${id} in the controls snapshot`);
+    assert.match(index, new RegExp(`getElementById\\('${id}-val'\\)\\.textContent = `), `${id} value display`);
+    assert.ok(listenerList.includes(`'${id}',`), `${id} has a change listener`);
+    const row = index.slice(index.indexOf(`id="${id}"`), index.indexOf('</div>', index.indexOf(`id="${id}"`)));
+    assert.match(row, /<span class="slider-help">/, `${id} has help text`);
+  }
+  assert.equal(schema.controlCount, 233);
+  assert.deepEqual(NEW.map(id => schema.controls.find(c => c.key === id)?.additiveSinceControlCount), [228, 229, 230, 231, 232, 233]);
+  assert.deepEqual(NEW.map(id => schema.controls.find(c => c.key === id)?.additiveDefault), [1, 0, 0, 6, 0, 3]);
+});
+
+test('spiral and concentric are gone from the pattern select; retired-from-the-interface rows stay in the DOM but hidden', () => {
+  const select = index.slice(index.indexOf('id="volume-emitter-aperture-pattern"'), index.indexOf('</select>', index.indexOf('id="volume-emitter-aperture-pattern"')));
+  assert.doesNotMatch(select, /spiral|concentric/);
+  assert.match(select, /value="shape"[\s\S]*value="jets"[\s\S]*value="slot"[\s\S]*value="bed"/);
+  for (const id of ['volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-emitter-aperture-ratio']) {
+    assert.match(index, new RegExp(`<div class="slider-row"[^>]*data-volume-ui-retired="${id}"[^>]*>\\s*<span class="slider-label">[^<]*</span>\\s*<(?:input|select)[^>]*id="${id}"`), `${id} row is marked retired from the interface`);
+    assert.match(index, new RegExp(`getElementById\\('${id}'\\)`), `${id} is still read, so saved basins route their value`);
+  }
+  assert.match(index, /\.slider-row\[data-volume-ui-retired\] \{ display: none; \}/);
+});
+
+test('the older emitter dynamics and the boundary gradient / softness / cut hide while the inflow law is selected', () => {
+  assert.match(index, /const VOLUME_INFLOW_HIDDEN_CONTROL_IDS = \['volume-emitter-source-depth', 'volume-emitter-inlet-profile', 'volume-emitter-momentum-linked', 'volume-emitter-shear-width', 'volume-emitter-edge-entrainment', 'volume-reaction-boundary-gradient', 'volume-reaction-boundary-softness', 'volume-reaction-boundary-cut'\];/);
+  assert.match(index, /const hide = sourceLaw === 'inflow-boundary';/);
+  assert.match(index, /applyVolumeInflowLawRowVisibility\(document\.getElementById\('volume-emitter-source-law'\)\?\.value\);/, 'applied on every receipt update, so a basin load re-evaluates it');
+  assert.match(index, /\.slider-row\[data-volume-inflow-hidden="true"\] \{ display: none; \}/);
+});

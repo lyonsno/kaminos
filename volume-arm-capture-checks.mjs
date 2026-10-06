@@ -22,6 +22,12 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
       if (!Number.isFinite(effective) || Math.abs(effective - Number(value)) > 1e-6) mismatches.push(`swirl requested ${value}, effective ${effective}`);
     }
     if (cid === 'volume-wind-model' && end.wind?.effective?.model !== value) mismatches.push(`wind model requested ${value}, effective ${end.wind?.effective?.model}`);
+    // Slice-3 inlet controls: the receipt must carry the requested value as a finite number.
+    const inletField = { 'volume-emitter-line-weight': ['pattern', 'lineWeight'], 'volume-emitter-jet-jitter': ['pattern', 'jetJitter'], 'volume-emitter-inlet-turbulence': ['inletDynamics', 'turbulence'], 'volume-emitter-inlet-turbulence-scale': ['inletDynamics', 'turbulenceScaleCells'], 'volume-emitter-puff': ['inletDynamics', 'puff'], 'volume-emitter-puff-period': ['inletDynamics', 'puffPeriod'] }[cid];
+    if (inletField) {
+      const effective = end.inflowBoundary?.effective?.[inletField[0]]?.[inletField[1]];
+      if (!Number.isFinite(effective) || Math.abs(effective - Number(value)) > 1e-6) mismatches.push(`${cid} requested ${value}, effective ${effective}`);
+    }
     if (cid === 'volume-emitter-source-law') {
       if (end.emitterSourceLaw !== value) mismatches.push(`emitter source law requested ${value}, effective ${end.emitterSourceLaw}`);
       if (value === 'inflow-boundary' && end.inflowBoundary?.effective?.admitted !== true) mismatches.push(`inflow-boundary requested but not admitted${end.inflowBoundary?.effective?.reason ? ` (${end.inflowBoundary.effective.reason})` : ''}`);

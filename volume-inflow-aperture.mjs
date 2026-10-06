@@ -16,11 +16,13 @@ export const INFLOW_APERTURE_MAP_IDENTITY = 'kaminos.volume.inflow-aperture-map.
 export const INFLOW_APERTURE_PATTERNS = Object.freeze([
   'shape',       // the family's own aperture: annulus (ring), disc (wick, nozzle), rectangle (ribbon)
   'jets',        // `count` discs of the band radius placed on the ring radius (a ring of jet nozzles)
-  'concentric',  // `count` nested rings; the inner rings carry `ratio` of the outer flux
   'slot',        // one long rectangle through the centre along the side axis (a flame curtain)
-  'spiral',      // an Archimedean spiral of `count` turns out to the ring radius
   'bed',         // a lumpy porous disc out to the ring radius (campfire / coal bed), seeded
 ]);
+// Retired 2026-10-06 (Noah): at any density that reads as a flame, the body
+// hides a spiral or nested rings on the floor; a basin saved with one loads as
+// the family shape and the receipt says so.
+export const INFLOW_APERTURE_RETIRED_PATTERNS = Object.freeze(['concentric', 'spiral']);
 
 const TAU = Math.PI * 2;
 
@@ -59,17 +61,25 @@ function seededPhases(seed, count) {
 export function normalizeInflowApertureSpec(spec = {}) {
   const kind = String(spec.kind ?? 'annulus');
   if (!['disc', 'annulus', 'rectangle'].includes(kind)) throw new Error(`unsupported inflow aperture kind: ${kind}`);
-  const pattern = String(spec.pattern ?? 'shape');
+  const requestedPattern = String(spec.pattern ?? 'shape');
+  const retired = INFLOW_APERTURE_RETIRED_PATTERNS.includes(requestedPattern);
+  const pattern = retired ? 'shape' : requestedPattern;
   if (!INFLOW_APERTURE_PATTERNS.includes(pattern)) throw new Error(`unsupported inflow aperture pattern: ${pattern}`);
   const center = Array.isArray(spec.center) && spec.center.length === 2 ? spec.center.map(component => finite(component, 0)) : [0, 0];
   const sideRaw = Array.isArray(spec.sideAxis) && spec.sideAxis.length === 2 ? spec.sideAxis.map(component => finite(component, 0)) : [1, 0];
   const sideLength = Math.hypot(sideRaw[0], sideRaw[1]);
+  // Line weight scales the band every pattern draws with (the ring's tube, the
+  // jets' radius, the slot's width); the family geometry itself is untouched.
+  const lineWeight = clamp(finite(spec.lineWeight, 1), 0.25, 3);
   return {
     kind,
     pattern,
+    patternFallback: retired ? `${requestedPattern} retired; family shape used` : null,
     center,
     ringRadius: clamp(finite(spec.ringRadius, 0), 0, 0.95),
-    bandHalfWidth: clamp(finite(spec.bandHalfWidth, 0.04), 0.006, 0.5),
+    lineWeight,
+    jetJitter: clamp(finite(spec.jetJitter, 0), 0, 1),
+    bandHalfWidth: clamp(finite(spec.bandHalfWidth, 0.04) * lineWeight, 0.006, 0.5),
     halfLength: clamp(finite(spec.halfLength, 0), 0, 0.95),
     sideAxis: sideLength > 1e-9 ? [sideRaw[0] / sideLength, sideRaw[1] / sideLength] : [1, 0],
     count: clamp(Math.round(finite(spec.count, 12)), 1, 64),
@@ -98,50 +108,18 @@ export function inflowPatternCoverage(spec, x, z) {
       // circle at twice the band radius so the jets do not overlap at the centre).
       const circle = s.kind === 'disc' ? s.bandHalfWidth * 2.2 : Math.max(reach, s.bandHalfWidth * 1.5);
       const [phase] = seededPhases(s.seed, 1);
+      const radii = inflowJetRadii(s);
       let best = Number.POSITIVE_INFINITY;
       for (let i = 0; i < s.count; i += 1) {
         const angle = phase + (i / s.count) * TAU;
         const c = [Math.cos(angle) * circle, Math.sin(angle) * circle];
-        best = Math.min(best, discDistance([q[0] - c[0], q[1] - c[1]], s.bandHalfWidth * 0.8));
+        best = Math.min(best, discDistance([q[0] - c[0], q[1] - c[1]], radii[i]));
       }
       return edge(best, aa);
-    }
-    case 'concentric': {
-      // `count` rings from 45 % of the reach to the reach; the outermost carries
-      // the full flux, the inner ones `ratio` of it.
-      const rings = Math.max(1, s.count);
-      const outer = Math.max(reach, s.bandHalfWidth * 3);
-      const inner = outer * 0.45;
-      const band = s.bandHalfWidth * (rings > 2 ? 0.55 : 0.7);
-      let weight = 0;
-      for (let i = 0; i < rings; i += 1) {
-        const radius = rings === 1 ? outer : inner + (outer - inner) * (i / (rings - 1));
-        const cover = edge(annulusDistance(q, radius, band), aa);
-        const flux = i === rings - 1 ? 1 : s.ratio;
-        weight = Math.max(weight, cover * flux);
-      }
-      return weight;
     }
     case 'slot': {
       const halfLength = Math.max(reach, s.bandHalfWidth * 2);
       return edge(rectangleDistance(q, s.sideAxis, halfLength, s.bandHalfWidth), aa);
-    }
-    case 'spiral': {
-      // Archimedean spiral r = reach * theta / (turns * 2pi); distance taken as
-      // the nearest of the spiral's crossings along this point's ray.
-      const turns = Math.max(1, s.count);
-      const outer = Math.max(reach, s.bandHalfWidth * 3);
-      const band = s.bandHalfWidth * 0.6;
-      const r = Math.hypot(q[0], q[1]);
-      const theta = Math.atan2(q[1], q[0]);
-      const pitch = outer / turns;
-      let best = Number.POSITIVE_INFINITY;
-      for (let k = -1; k <= turns; k += 1) {
-        const spiralR = pitch * ((theta + TAU * k) / TAU);
-        if (spiralR < 0 || spiralR > outer) continue;
-        best = Math.min(best, Math.abs(r - spiralR));
-      }
-      return edge(best - band, aa);
     }
     case 'bed': {
       // A lumpy porous disc: a low-frequency authored field thresholded inside
@@ -162,6 +140,14 @@ export function inflowPatternCoverage(spec, x, z) {
     default:
       return 0;
   }
+}
+
+// The jets' radii: the band radius times 0.8, each jet scaled by the seeded
+// jitter in [1 - 0.6 j, 1 + 0.6 j] (an authored size variation, not noise).
+export function inflowJetRadii(spec) {
+  const base = spec.bandHalfWidth * 0.8;
+  const phases = seededPhases(spec.seed * 31 + 7, spec.count);
+  return phases.map(phase => base * (1 + spec.jetJitter * 0.6 * ((phase / TAU) * 2 - 1)));
 }
 
 // One floor cell's weight: the coverage averaged over a 4 x 4 stratified set of
@@ -205,6 +191,9 @@ export function buildInflowCoverageMap({ grid, spec, supersample = 4 } = {}) {
     count: normalized.count,
     ratio: normalized.ratio,
     seed: normalized.seed,
+    lineWeight: normalized.lineWeight,
+    jetJitter: normalized.jetJitter,
+    patternFallback: normalized.patternFallback,
     supersample,
     cells,
     coveredCells,

@@ -1,12 +1,46 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 227,
+  "controlCount": 233,
   "controls": [
-    { "key": "volume-physical-material-law", "param": "volume_physical_material_law", "tagName": "SELECT", "type": "select-one", "additiveDefault": "0", "allowedValues": ["0", "1"] },
-    { "key": "volume-physical-white", "param": "volume_physical_white", "tagName": "INPUT", "type": "range", "additiveDefault": "4000" },
-    { "key": "volume-physical-smoke-extinction", "param": "volume_physical_smoke_extinction", "tagName": "INPUT", "type": "range", "additiveDefault": "2" },
-    { "key": "volume-physical-smoke-albedo", "param": "volume_physical_smoke_albedo", "tagName": "INPUT", "type": "range", "additiveDefault": "0.35" },
-    { "key": "volume-physical-ambient", "param": "volume_physical_ambient", "tagName": "INPUT", "type": "range", "additiveDefault": "0.02" },
+    {
+      "key": "volume-physical-material-law",
+      "param": "volume_physical_material_law",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "0",
+      "allowedValues": [
+        "0",
+        "1"
+      ]
+    },
+    {
+      "key": "volume-physical-white",
+      "param": "volume_physical_white",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "4000"
+    },
+    {
+      "key": "volume-physical-smoke-extinction",
+      "param": "volume_physical_smoke_extinction",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "2"
+    },
+    {
+      "key": "volume-physical-smoke-albedo",
+      "param": "volume_physical_smoke_albedo",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.35"
+    },
+    {
+      "key": "volume-physical-ambient",
+      "param": "volume_physical_ambient",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": "0.02"
+    },
     {
       "key": "volume-physical-mode",
       "param": "volume_physical_mode",
@@ -335,6 +369,54 @@
       "type": "range",
       "additiveDefault": 25,
       "additiveSinceControlCount": 227
+    },
+    {
+      "key": "volume-emitter-line-weight",
+      "param": "volume_emitter_line_weight",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 1,
+      "additiveSinceControlCount": 228
+    },
+    {
+      "key": "volume-emitter-jet-jitter",
+      "param": "volume_emitter_jet_jitter",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0,
+      "additiveSinceControlCount": 229
+    },
+    {
+      "key": "volume-emitter-inlet-turbulence",
+      "param": "volume_emitter_inlet_turbulence",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0,
+      "additiveSinceControlCount": 230
+    },
+    {
+      "key": "volume-emitter-inlet-turbulence-scale",
+      "param": "volume_emitter_inlet_turbulence_scale",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 6,
+      "additiveSinceControlCount": 231
+    },
+    {
+      "key": "volume-emitter-puff",
+      "param": "volume_emitter_puff",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0,
+      "additiveSinceControlCount": 232
+    },
+    {
+      "key": "volume-emitter-puff-period",
+      "param": "volume_emitter_puff_period",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 3,
+      "additiveSinceControlCount": 233
     },
     {
       "key": "volume-pyro-compare",

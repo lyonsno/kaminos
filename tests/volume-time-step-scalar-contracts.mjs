@@ -146,7 +146,7 @@ test('review of 57b45f72: relaxation blends and the wall velocity sponge follow 
   // unit time by construction: inflowFraction = v_in x coverage x
   // dynamicsBacktraceScale(), and dynamicsBacktraceScale() carries the step.
   assert.doesNotMatch(main, new RegExp(`^\\s*(${relaxable}) = mix\\(\\1, [^,]+, (?!stepBlend\\(|inflowFraction\\))`, 'm'), 'no bare relaxation blend remains');
-  assert.match(main, /let inflowFraction = clamp\(u\.inflow_state\.y \* inflowApertureWeight\(cellI\) \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);/, 'the inflow fraction carries the step through dynamicsBacktraceScale');
+  assert.match(main, /let inflowFraction = clamp\(inflowInletSpeed\(cellI\) \* inflowApertureWeight\(cellI\) \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);/, 'the inflow fraction carries the step through dynamicsBacktraceScale');
   // The wall sponge on velocity is written after the increment law's line, so
   // it takes the rate law directly.
   assert.match(main, /vel = vel \* stepRate\(mix\(0\.55, 1\.0, wallFade\)\);/, 'the wall velocity sponge is a per-step survival');

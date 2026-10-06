@@ -1,5 +1,6 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
-import { buildInflowCoverageMap, INFLOW_APERTURE_PATTERNS } from './volume-inflow-aperture.mjs';
+import { buildInflowCoverageMap, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
+import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
 import {
   detailForceContributionMask,
   detailForceContributionReceipt,
@@ -2024,12 +2025,17 @@ export const VOLUME_UNIFORM_FLOATS = INFLOW_UNIFORM_OFFSET + INFLOW_UNIFORM_FLOA
 // from, its count / ratio / seed, and the swirl (tangential fraction of the
 // inflow velocity). Defaults reproduce the family's own shape with no swirl.
 export function resolveInflowAperturePattern(controls = {}) {
-  const kind = String(controls.emitterAperturePattern ?? 'shape');
+  const requested = String(controls.emitterAperturePattern ?? 'shape');
+  // A retired pattern (concentric, spiral) is kept as the requested kind so the
+  // coverage map can name the fallback; anything unknown is the family shape.
+  const kind = INFLOW_APERTURE_PATTERNS.includes(requested) || INFLOW_APERTURE_RETIRED_PATTERNS.includes(requested) ? requested : 'shape';
   return {
-    kind: INFLOW_APERTURE_PATTERNS.includes(kind) ? kind : 'shape',
+    kind,
     count: Math.round(clampFinite(controls.emitterApertureCount, 1, 64, 12)),
     ratio: clampFinite(controls.emitterApertureRatio, 0, 1, 0.6),
     seed: Math.round(clampFinite(controls.emitterApertureSeed, 0, 9999, 1)),
+    lineWeight: clampFinite(controls.emitterLineWeight, 0.25, 3, 1),
+    jetJitter: clampFinite(controls.emitterJetJitter, 0, 1, 0),
   };
 }
 
@@ -2039,14 +2045,18 @@ export function resolveInflowBoundaryConfig(controls = {}, descriptor = null, op
   const sourceLaw = descriptor ? String(descriptor.sourceLaw ?? 'legacy-volume') : null;
   const pattern = resolveInflowAperturePattern(controls);
   const swirl = clampFinite(controls.emitterSwirl, -1, 1, 0);
-  const requested = { sourceLaw, family: descriptor?.family ?? null, pressureSolver: pressure.solver, openTop: pressure.openTop, pattern, swirl };
+  // Puffing and inlet turbulence: properties of the prescribed inflow, resolved
+  // from the controls and the step-locked signals the caller sampled.
+  const inletDynamics = resolveInletDynamicsConfig(controls, options.inletSignals ?? {}).effective;
+  const requested = { sourceLaw, family: descriptor?.family ?? null, pressureSolver: pressure.solver, openTop: pressure.openTop, pattern, swirl, inletDynamics: { turbulence: inletDynamics.turbulence, turbulenceScaleCells: inletDynamics.turbulenceScaleCells, puff: inletDynamics.puff, puffPeriod: inletDynamics.puffPeriod } };
   const off = reason => ({
     identity: INFLOW_BOUNDARY_IDENTITY,
     requested,
     effective: {
       admitted: false, mode: 'off', grid, apertureKind: 'off', center: [0, 0], ringRadius: 0, bandHalfWidth: 0, halfLength: 0, sideAxis: [1, 0],
       inletVelocity: 0, fuelFraction: 0, inletTemperature: 0, antialiasWidth: 2 / grid, projection: null,
-      pattern: { kind: 'shape', count: 12, ratio: 0.6, seed: 1 }, swirl: 0, reason,
+      pattern: { kind: 'shape', count: 12, ratio: 0.6, seed: 1, lineWeight: 1, jetJitter: 0 }, swirl: 0,
+      inletDynamics: { turbulence: 0, turbulenceScaleCells: inletDynamics.turbulenceScaleCells, turbulenceRms: 0, puff: 0, puffPeriod: inletDynamics.puffPeriod, puffSignal: 0, puffFactor: 1, active: false }, reason,
     },
   });
   if (!descriptor) return off('no-analytic-emitter');
@@ -2079,6 +2089,7 @@ export function resolveInflowBoundaryConfig(controls = {}, descriptor = null, op
       projection: pressure.projection,
       pattern,
       swirl,
+      inletDynamics,
       reason: null,
     },
   };
@@ -2096,6 +2107,8 @@ export function inflowCoverageMapForConfig(config, options = {}) {
     spec: {
       kind: e.apertureKind,
       pattern: e.pattern.kind,
+      lineWeight: e.pattern.lineWeight,
+      jetJitter: e.pattern.jetJitter,
       center: e.center,
       ringRadius: e.ringRadius,
       bandHalfWidth: e.bandHalfWidth,
@@ -2260,10 +2273,12 @@ export function inflowBoundaryUniformValues(config) {
   if (!e || !e.admitted) return new Array(INFLOW_UNIFORM_FLOATS).fill(0);
   // The third vec4 carries the swirl (tangential fraction of the inflow
   // velocity) and the antialias width; the shape itself lives in the coverage map.
+  // inflow_state.x is the puff factor (1 when steady); inflow_shape.y the inlet
+  // turbulence intensity (0 when off; the field itself is a floor texture).
   return [
     INFLOW_APERTURE_KIND_MODE[e.apertureKind] ?? 0, e.center[0], e.center[1], e.ringRadius,
-    e.bandHalfWidth, e.inletVelocity, e.fuelFraction, e.inletTemperature,
-    e.swirl, 0, 0, e.antialiasWidth,
+    e.inletDynamics.puffFactor, e.inletVelocity, e.fuelFraction, e.inletTemperature,
+    e.swirl, e.inletDynamics.turbulence, 0, e.antialiasWidth,
   ];
 }
 
@@ -3113,6 +3128,9 @@ struct NonRidgeOpticalCaptureRow {
 // Inflow aperture coverage map: one weight per floor cell (texel x, z), built on the CPU.
 // A texture rather than a storage buffer: the compute stage's storage-buffer budget (10) is spent.
 @group(0) @binding(17) var inflowCoverage: texture_2d<f32>;
+// Inlet turbulence: one perturbation per floor cell in [-1, 1], a slow stochastic
+// field rewritten each step while the intensity is above zero.
+@group(0) @binding(18) var inflowPerturbation: texture_2d<f32>;
 @group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
 @group(0) @binding(12) var<storage, read_write> nonRidgeOpticalCaptureRows: array<f32>;
 // MacCormack predictor: the forward semi-Lagrangian estimate of every slot,
@@ -3259,8 +3277,26 @@ fn inflowApertureWeight(cell: vec3<i32>) -> f32 {
   return textureLoad(inflowCoverage, vec2<i32>(clamp(cell.x, 0, i32(GRID) - 1), clamp(cell.z, 0, i32(GRID) - 1)), 0).x;
 }
 
+// The inlet speed through a floor cell: the inlet velocity times the puff
+// factor, times one plus the turbulence intensity times the cell's
+// perturbation, never negative (a full negative puff closes the inlet). Every
+// inflow quantity, the face flux, the floor source, the ghost's reach and the
+// momentum it carries, derives from this one number so the converged solve,
+// the material entry and the velocity entry agree.
+fn inflowInletSpeed(cell: vec3<i32>) -> f32 {
+  var perturbation = 0.0;
+  if (u.inflow_shape.y > 0.0) {
+    perturbation = textureLoad(inflowPerturbation, vec2<i32>(clamp(cell.x, 0, i32(GRID) - 1), clamp(cell.z, 0, i32(GRID) - 1)), 0).x;
+  }
+  return u.inflow_state.y * u.inflow_state.x * max(0.0, 1.0 + u.inflow_shape.y * perturbation);
+}
+
 fn inflowFaceVelocity(cell: vec3<i32>) -> f32 {
-  return u.inflow_state.y * inflowApertureWeight(cell);
+  return inflowInletSpeed(cell) * inflowApertureWeight(cell);
+}
+
+fn inflowFloorCellOf(cellCenter: vec3<f32>) -> vec3<i32> {
+  return vec3<i32>(i32(floor(clamp(cellCenter.x, 0.0, f32(GRID) - 1.0))), 0, i32(floor(clamp(cellCenter.z, 0.0, f32(GRID) - 1.0))));
 }
 
 // The state a ghost cell below the floor holds inside the aperture: the inflow
@@ -3276,7 +3312,8 @@ fn inflowGhostVelocity(cellCenter: vec3<f32>) -> vec3<f32> {
   let q = p - u.inflow_aperture.yz;
   let tangent = vec2<f32>(-q.y, q.x) / max(length(q), 1e-4);
   let swirl = u.inflow_shape.x;
-  return u.inflow_state.y * vec3<f32>(tangent.x * swirl, 1.0, tangent.y * swirl);
+  let floorCell = inflowFloorCellOf(cellCenter);
+  return inflowInletSpeed(floorCell) * vec3<f32>(tangent.x * swirl, 1.0, tangent.y * swirl);
 }
 
 fn inflowGhostState(slot: u32, sample: vec4<f32>, cellCenter: vec3<f32>) -> vec4<f32> {
@@ -3304,9 +3341,9 @@ fn inflowGhostBlend(cellCenter: vec3<f32>) -> f32 {
   // The flux through a partly covered floor cell is v_in x coverage; the fluid
   // that crossed is pure inflow. So the covered flux sets how deep the ghost
   // reaches and the ghost state is not scaled by coverage again.
-  let column = vec3<i32>(i32(floor(clamp(cellCenter.x, 0.0, f32(GRID) - 1.0))), 0, i32(floor(clamp(cellCenter.z, 0.0, f32(GRID) - 1.0))));
-  let coverage = inflowApertureWeight(column);
-  let penetration = min(below, u.inflow_state.y * coverage * dynamicsBacktraceScale());
+  let floorCell = inflowFloorCellOf(cellCenter);
+  let coverage = inflowApertureWeight(floorCell);
+  let penetration = min(below, inflowInletSpeed(floorCell) * coverage * dynamicsBacktraceScale());
   return clamp(penetration, 0.0, 1.0);
 }
 
@@ -5517,7 +5554,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // accounting of an inflow face, not a backtrace. The projection carries the
   // momentum; the ghost below the floor carries only the inflow velocity.
   if (cellI.y == 0 && u.inflow_aperture.x > 0.5) {
-    let inflowFraction = clamp(u.inflow_state.y * inflowApertureWeight(cellI) * dynamicsBacktraceScale(), 0.0, 1.0);
+    let inflowFraction = clamp(inflowInletSpeed(cellI) * inflowApertureWeight(cellI) * dynamicsBacktraceScale(), 0.0, 1.0);
     smoke = mix(smoke, 0.0, inflowFraction);
     heat = mix(heat, u.inflow_state.w, inflowFraction);
     fuel = mix(fuel, u.inflow_state.z, inflowFraction);
@@ -10638,6 +10675,11 @@ export function createKaminosVolumePrototype({
   // Inflow aperture coverage map (one f32 per floor cell), rebuilt with the grid
   // and rewritten when the admitted aperture or pattern changes.
   let inflowCoverageTexture = null;
+  // Inlet turbulence field (one f32 per floor cell) and the puff signal: seeded,
+  // step-locked processes; the field is rebuilt with the grid.
+  let inflowPerturbationTexture = null;
+  let inletPerturbationField = null;
+  const inletPuffProcess = new StochasticSignalSet(2, 1);
   const windGustProcess = new WindGustProcess(1);
   let inflowCoverageSignature = '';
   let inflowCoverageMap = null;
@@ -11217,6 +11259,9 @@ export function createKaminosVolumePrototype({
     inflowCoverageTexture = null;
     inflowCoverageSignature = '';
     inflowCoverageMap = null;
+    inflowPerturbationTexture?.destroy();
+    inflowPerturbationTexture = null;
+    inletPerturbationField = null;
     for (const buffer of pressureBuffers) buffer.destroy();
     pressureResidualPartialsBuffer?.destroy();
     pressureResidualReadbackBuffer?.destroy();
@@ -11347,6 +11392,7 @@ export function createKaminosVolumePrototype({
         { binding: 15, resource: { buffer: emissiveLightField.incident } },
         { binding: 16, resource: sceneSolidTextureView },
         { binding: 17, resource: inflowCoverageTexture.createView() },
+        { binding: 18, resource: inflowPerturbationTexture.createView() },
       ],
     });
   }
@@ -12379,6 +12425,14 @@ export function createKaminosVolumePrototype({
     device.queue.writeTexture({ texture: inflowCoverageTexture }, new Float32Array(gridSize * gridSize), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
     inflowCoverageSignature = '';
     inflowCoverageMap = null;
+    inflowPerturbationTexture = device.createTexture({
+      label: `kaminos inflow inlet perturbation ${gridSize}x${gridSize}`,
+      size: [gridSize, gridSize, 1],
+      format: 'r32float',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    device.queue.writeTexture({ texture: inflowPerturbationTexture }, new Float32Array(gridSize * gridSize), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
+    inletPerturbationField = new InletPerturbationField({ grid: gridSize, seed: 1 });
     quenchBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
         label: `kaminos recoverable liquid quench and source state ${gridSize}x${gridHeight}x${gridSize} ${i}`,
@@ -13242,6 +13296,7 @@ export function createKaminosVolumePrototype({
         // The raymarch fragment stage samples the fluid through sampleFluidSlot,
         // which reads the coverage map below the floor, so both stages see it.
         { binding: 17, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
+        { binding: 18, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -14666,7 +14721,20 @@ export function createKaminosVolumePrototype({
     const timeStepConfig = resolveTimeStepConfig(controlsSnapshot);
     uniforms[354] = timeStepModeUniformValue(timeStepConfig.effective.mode);
     uniforms[355] = timeStepConfig.effective.referenceSpeed;
-    const inflowBoundaryConfig = resolveInflowBoundaryConfig(controlsSnapshot, analyticEmitterDescriptor, { grid: gridSize });
+    // Inlet dynamics signals for this step: the puff (one slow signal) and the
+    // turbulence field (a patchwork of signals on the floor), both step-locked;
+    // sampled before the resolver so the receipt and the uniforms agree.
+    const inletStep = state.simStepCount ?? 0;
+    const inletDynamicsRequested = resolveInletDynamicsConfig(controlsSnapshot).requested;
+    const inletSignals = {
+      puff: inletDynamicsRequested.puff > 0 ? inletPuffProcess.sampleAt(inletStep, inletDynamicsTauSteps(controlsSnapshot, inletDynamicsRequested.puffPeriod)) : [0],
+      turbulence: null,
+    };
+    if (inletDynamicsRequested.turbulence > 0 && inletPerturbationField && inflowPerturbationTexture) {
+      device.queue.writeTexture({ texture: inflowPerturbationTexture }, inletPerturbationField.sampleAt({ step: inletStep, tauSteps: inletDynamicsTauSteps(controlsSnapshot, INLET_TURBULENCE_CORRELATION_SECONDS), scaleCells: inletDynamicsRequested.turbulenceScaleCells }), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
+      inletSignals.turbulence = { rms: inletPerturbationField.rms };
+    }
+    const inflowBoundaryConfig = resolveInflowBoundaryConfig(controlsSnapshot, analyticEmitterDescriptor, { grid: gridSize, inletSignals });
     uniforms.set(inflowBoundaryUniformValues(inflowBoundaryConfig), INFLOW_UNIFORM_OFFSET);
     state.inflowBoundary = inflowBoundaryConfig;
     if (inflowBoundaryConfig.effective.admitted && inflowCoverageTexture) {
@@ -14676,7 +14744,7 @@ export function createKaminosVolumePrototype({
         device.queue.writeTexture({ texture: inflowCoverageTexture }, inflowCoverageMap.cells, { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
         inflowCoverageSignature = coverageSignature;
       }
-      state.inflowBoundary.effective.coverage = { pattern: inflowCoverageMap.pattern, coveredCells: inflowCoverageMap.coveredCells, totalCoverage: inflowCoverageMap.totalCoverage, peak: inflowCoverageMap.peak };
+      state.inflowBoundary.effective.coverage = { pattern: inflowCoverageMap.pattern, patternFallback: inflowCoverageMap.patternFallback, coveredCells: inflowCoverageMap.coveredCells, totalCoverage: inflowCoverageMap.totalCoverage, peak: inflowCoverageMap.peak };
     }
     writeAnalyticEmitterInjectionUniform(
       analyticEmitterInjectionUniformFloats,

@@ -19,6 +19,14 @@ test('swirl check: a missing or nonfinite effective swirl is a mismatch, not a p
   assert.match(at(undefined)[0], /swirl requested 0\.6, effective undefined/);
 });
 
+test('slice-3 inlet controls are checked against the receipt and fail when absent', () => {
+  const arm = { set: [['volume-emitter-inlet-turbulence', '0.4'], ['volume-emitter-puff-period', '3'], ['volume-emitter-line-weight', '1.5']] };
+  const good = { inflowBoundary: { effective: { pattern: { lineWeight: 1.5 }, inletDynamics: { turbulence: 0.4, puffPeriod: 3 } } } };
+  assert.deepEqual(effectiveMismatches(arm, good, null), []);
+  assert.equal(effectiveMismatches(arm, { inflowBoundary: { effective: { pattern: {}, inletDynamics: { turbulence: 0.4 } } } }, null).length, 2, 'missing line weight and puff period fail');
+  assert.equal(effectiveMismatches(arm, { inflowBoundary: { effective: { pattern: { lineWeight: 1.5 }, inletDynamics: { turbulence: 0, puffPeriod: 3 } } } }, null).length, 1, 'a turbulence that did not take effect fails');
+});
+
 test('confinement epsilon faults reach the checks through the fault argument, not a module variable', () => {
   const arm = { set: [['@confinementEpsilon', '0.3']] };
   const end = { confinement: { mode: 'calibrated', confinementAmount: 0.3 }, confinementUniform: { mode: 1, confinementAmount: Math.fround(0.3) } };

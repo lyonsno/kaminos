@@ -148,12 +148,18 @@ test('the inflow resolver admits only a converged open-top solve and packs the a
   assert.equal(notInflow.effective.reason, 'source-law-is-not-inflow-boundary');
   const noDescriptor = core.resolveInflowBoundaryConfig({ pressureSolver: 'converged-open-top' }, null, { grid: 64 });
   assert.equal(noDescriptor.effective.reason, 'no-analytic-emitter');
-  // Packed uniform: three vec4 — aperture (mode, cx, cz, ring radius), state (band, inlet velocity, fuel, temperature), shape (side x, side z, half length, antialias).
+  // Packed uniform: three vec4 — aperture (mode, cx, cz, ring radius), state (puff factor, inlet velocity, fuel, temperature), shape (swirl, turbulence intensity, unused, antialias).
   const packed = core.inflowBoundaryUniformValues(admitted);
   assert.equal(packed.length, 12);
   assert.deepEqual([...packed.slice(0, 4)], [core.INFLOW_APERTURE_KIND_MODE.annulus, 0.1, -0.05, 0.7]);
-  assert.deepEqual([...packed.slice(4, 8)], [0.14, 0.3, 0.6, 1.1]);
-  assert.deepEqual([...packed.slice(8, 11)], [0, 0, 0], 'slice 2: the third vec4 carries swirl (0 here); the shape lives in the coverage map');
+  assert.deepEqual([...packed.slice(4, 8)], [1, 0.3, 0.6, 1.1], 'a steady inlet packs puff factor 1; the band half-width left the shader with the coverage map');
+  assert.deepEqual([...packed.slice(8, 11)], [0, 0, 0], 'the third vec4 carries swirl and turbulence intensity (0 here); the shape lives in the coverage map');
+  assert.deepEqual(admitted.effective.inletDynamics, { turbulence: 0, turbulenceScaleCells: 6, turbulenceRms: 0, puff: 0, puffPeriod: 3, puffSignal: 0, puffFactor: 1, active: false }, 'inlet dynamics default to a steady inlet');
+  const puffing = core.resolveInflowBoundaryConfig({ pressureSolver: 'converged-open-top', emitterPuff: 0.5, emitterInletTurbulence: 0.3 }, compiled.descriptor, { grid: 64, inletSignals: { puff: [-0.5], turbulence: { rms: 0.4 } } });
+  assert.ok(Math.abs(puffing.effective.inletDynamics.puffFactor - 0.75) < 1e-12, 'puff factor = 1 + depth × signal');
+  assert.equal(puffing.effective.inletDynamics.turbulenceRms, 0.4);
+  const puffPacked = core.inflowBoundaryUniformValues(puffing);
+  assert.ok(Math.abs(puffPacked[4] - 0.75) < 1e-12 && Math.abs(puffPacked[9] - 0.3) < 1e-12, 'puff factor in inflow_state.x, intensity in inflow_shape.y');
   assert.ok(Math.abs(packed[11] - 2 / 64) < 1e-12);
   assert.deepEqual([...core.inflowBoundaryUniformValues(closedTop)], new Array(12).fill(0), 'a refused inflow packs mode 0');
   // Fresh review of 51b856f5, finding 1: the solver name is not the solve. When
@@ -185,7 +191,7 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
   assert.match(weight, /u\.inflow_aperture\.x < 0\.5/, 'reads the aperture mode');
   assert.match(weight, /return textureLoad\(inflowCoverage, /, 'the cell weight is read from the coverage map texture');
   assert.doesNotMatch(source, /fn inflowApertureCoverageAt\(/, 'no shape evaluation in WGSL');
-  assert.match(wgslFunction('inflowFaceVelocity'), /u\.inflow_state\.y \* inflowApertureWeight\(cell\)/);
+  assert.match(wgslFunction('inflowFaceVelocity'), /inflowInletSpeed\(cell\) \* inflowApertureWeight\(cell\)/, 'the face flux is the inlet speed (puff and turbulence included) times coverage');
   const ghost = wgslFunction('inflowGhostState');
   assert.match(ghost, /vec4<f32>\(inflowGhostVelocity\(cellCenter\), sample\.w\)/, 'ghost velocity is the inflow (up, plus swirl around the centre); density carried');
   // Confirmation 2 of 27ed6465: material must not depend on the cell's own
@@ -194,7 +200,7 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
   assert.match(ghost, /if \(slot == 0u\) \{\s*return vec4<f32>\(inflowGhostVelocity\(cellCenter\), sample\.w\);\s*\}\s*return sample;/, 'the ghost carries momentum only; every other slot samples the domain');
   assert.doesNotMatch(ghost, /u\.inflow_state\.w, u\.inflow_state\.z/, 'no ghost material');
   const main0 = mainKernel();
-  assert.match(main0, /if \(cellI\.y == 0 && u\.inflow_aperture\.x > 0\.5\) \{[\s\S]{0,600}let inflowFraction = clamp\(u\.inflow_state\.y \* inflowApertureWeight\(cellI\) \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);[\s\S]{0,300}heat = mix\(heat, u\.inflow_state\.w, inflowFraction\);\s*\n\s*fuel = mix\(fuel, u\.inflow_state\.z, inflowFraction\);/, 'the floor cells receive the inflow as the face flux: a fraction v_in x coverage x backtraceScale x dt of the cell volume becomes pure inflow each step, independent of the cell velocity');
+  assert.match(main0, /if \(cellI\.y == 0 && u\.inflow_aperture\.x > 0\.5\) \{[\s\S]{0,600}let inflowFraction = clamp\(inflowInletSpeed\(cellI\) \* inflowApertureWeight\(cellI\) \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);[\s\S]{0,300}heat = mix\(heat, u\.inflow_state\.w, inflowFraction\);\s*\n\s*fuel = mix\(fuel, u\.inflow_state\.z, inflowFraction\);/, 'the floor cells receive the inflow as the face flux: a fraction v_in x coverage x backtraceScale x dt of the cell volume becomes pure inflow each step, independent of the cell velocity');
   assert.match(main0, /smoke = mix\(smoke, 0\.0, inflowFraction\);/, 'the inflow carries no smoke');
   assert.match(main0, /flame = mix\(flame, 0\.0, inflowFraction\);[\s\S]{0,900}emberFleck = mix\(emberFleck, 0\.0, inflowFraction\);[\s\S]{0,300}combustionFrontTopology = mix\(combustionFrontTopology, 0\.0, inflowFraction\);/, 'nor any fire or detail channel');
   const blend = wgslFunction('inflowGhostBlend');
@@ -207,8 +213,8 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
   // blend must not multiply by coverage again — at a half-covered cell whose
   // velocity equals its face velocity the old rule applied coverage twice and
   // fed half of what the prescribed flux carries.
-  assert.match(blend, /let coverage = inflowApertureWeight\(column\);/, 'coverage is read once');
-  assert.match(blend, /let penetration = min\(below, u\.inflow_state\.y \* coverage \* dynamicsBacktraceScale\(\)\);/, 'penetration is capped by the covered flux displacement per step');
+  assert.match(blend, /let coverage = inflowApertureWeight\(floorCell\);/, 'coverage is read once');
+  assert.match(blend, /let penetration = min\(below, inflowInletSpeed\(floorCell\) \* coverage \* dynamicsBacktraceScale\(\)\);/, 'penetration is capped by the covered flux displacement per step (the inlet speed carries puff and turbulence)');
   assert.match(blend, /return clamp\(penetration, 0\.0, 1\.0\);/, 'the ghost state is the pure inflow; the covered flux alone sets how much of it enters');
   assert.doesNotMatch(blend, /clamp\(penetration, 0\.0, 1\.0\) \* inflowApertureWeight/, 'coverage is not applied twice');
   const model = core.inflowGhostBlendModel;
@@ -289,7 +295,7 @@ test('cockpit: the law is selectable, the two inflow controls exist and recompil
   assert.ok(keys.includes('volume-emitter-inlet-temperature'));
   assert.equal(schema.controls.find(control => control.key === 'volume-emitter-fuel-fraction').additiveDefault, 0.56);
   assert.equal(schema.controls.find(control => control.key === 'volume-emitter-inlet-temperature').additiveDefault, 1.2);
-  assert.equal(schema.controlCount, 227);
+  assert.equal(schema.controlCount, 233);
   assert.match(source, /state\.inflowBoundary = inflowBoundaryConfig;/, 'the receipt carries the resolved inflow');
   assert.match(index, /id="volume-inflow-boundary-state"/, 'the cockpit shows the inflow admission');
   assert.match(index, /NOT admitted: \$\{inflow\.effective\.reason\}/, 'a requested but refused inflow looks refused');
