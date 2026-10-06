@@ -3582,6 +3582,7 @@ import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
 import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, checkedSceneLightRecord, sceneLightRuntimeRecipe } from './scene-rim-light.mjs';
 
+import {checkedPose} from './scene-edit-session.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,createSelectionTransformTarget} from './scene-selection.mjs';
 
 let authoringWorkspace = null;
@@ -5247,7 +5248,7 @@ function setSceneObjectMounted(entry, mounted) {
 function detachAuthoredSceneForPreview(authored) {
   sceneMutationToken++;
   for (const entry of authored.sceneObjects) setSceneObjectMounted(entry, false);
-  sceneObjects = [];
+  sceneObjects = [];sceneSelection={ids:[],activeId:null};
   if(rimLight){document.getElementById('rim-enabled').checked=false;updateRimLight();}
   sceneGroups = [];
   activeSceneObjectId = null;
@@ -5324,6 +5325,7 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
     scene.remove(entry.object);
     disposeObjectTree(entry.object);
     sceneObjects = sceneObjects.filter(record => record.id !== FLAME_EMITTER_ID);
+    pruneSceneGroups();pruneSceneSelection();
     renderSceneObjectList();
     return null;
   }
@@ -5747,7 +5749,6 @@ function toggleSplatCorrectionAxisFlip(axis) {
   }
   buildRenderHandoffV0(entry);
   updateSplatCorrectionPanel(entry);
-  syncEditorHelperVisibility();syncSelectionInspector();
   updateTransformInspector();
   window._kaminosDirty?.();
   setInfo(`Splat correction Flip ${String(axis).toUpperCase()} ${correction.axisFlips[axisIndex] < 0 ? 'enabled' : 'disabled'}`);
@@ -6363,6 +6364,7 @@ function updateTransformInspector() {
   fields.hidden = !entry;
   setTransformInspectorFieldsDisabled(!entry);
   updateSplatCorrectionPanel(entry);
+  syncEditorHelperVisibility();syncSelectionInspector();
   if (!entry && activeSceneGroupId) {
     empty.textContent = `Group selected: ${sceneGroupDisplayLabel(selectedSceneGroupEntry())}`;
   } else if (!entry) {
@@ -6999,7 +7001,7 @@ function registerSceneObject(object, metadata = {}) {
 
 window.selectSceneField=function(id) {
   if(!['flame-field','water-field'].includes(id)||!(id==='flame-field'?activeSceneComposition:localLiquidSetup))throw Error('This simulation field is not present');
-  scenePlacementTools?.selectionChanged();sceneSelection={ids:[],activeId:null};updateSelectionFeedback();activeSceneFieldId=id;activeSceneObjectId=null;activeSceneGroupId=null;currentMesh=null;
+  if(!burnerGraphWriting)scenePlacementTools?.selectionChanged();sceneSelection={ids:[],activeId:null};updateSelectionFeedback();activeSceneFieldId=id;activeSceneObjectId=null;activeSceneGroupId=null;currentMesh=null;
   transformControls?.detach();document.getElementById('transform-bar').classList.remove('visible');renderSceneObjectList();updateTransformInspector();
 };
 
@@ -10182,6 +10184,14 @@ async function recordSceneObjectInsertion(id) {
 
 window.kaminosRecordSceneObjectInsertion = recordSceneObjectInsertion;
 
+function pruneSceneSelection() {
+  const valid=new Set([...sceneObjects.map(o=>o.id),...sceneGroups.map(g=>'@group:'+g.id)]);
+  const ids=sceneSelection.ids.filter(id=>valid.has(id));
+  sceneSelection={ids,activeId:ids.includes(sceneSelection.activeId)?sceneSelection.activeId:ids.at(-1)??null};
+  activeSceneGroupId=sceneSelection.activeId?.startsWith('@group:')?sceneSelection.activeId.slice(7):null;
+  activeSceneObjectId=activeSceneGroupId?null:sceneSelection.activeId;
+}
+
 function removeSceneObjectInternal(id, { recordHistory = true, preserveForMembershipHistory = false } = {}) {
   if (id === FLAME_EMITTER_ID) return window.kaminosBurnerAuthoring.remove(id);
   if (recordHistory && scenePlacementTools?.edits.state().replaying) {
@@ -10198,7 +10208,11 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
     catch (error) { setInfo(error.message); return false; }
   }
   if (recordHistory && !editId) scenePlacementTools?.edits.discard(entry => entry.id === id);
+  const previousActiveGroupId = activeSceneGroupId;
+  const wasActive = activeSceneObjectId === id;
   const [entry] = sceneObjects.splice(index, 1);
+  for (const group of sceneGroups) group.objectIds = group.objectIds.filter(objectId => objectId !== id);
+  pruneSceneGroups();pruneSceneSelection();
   if(entry.type==='light'){setSceneObjectMounted(entry,false);if(id===RIM_LIGHT_ID)bindingRimHideForRemoval();}
   if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) syncLocalLiquidHostEmitters();
   if (hybridSplatOverlayState.objectId === entry.id) {
@@ -10207,10 +10221,6 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
   if (splatCorrectionMode?.objectId === entry.id) {
     exitSplatCorrectionMode({ revert: false, silent: true });
   }
-  const previousActiveGroupId = activeSceneGroupId;
-  for (const group of sceneGroups) group.objectIds = group.objectIds.filter(objectId => objectId !== id);
-  pruneSceneGroups();
-  const wasActive = activeSceneObjectId === entry.id;
   const activeGroupSurvives = !wasActive
     && previousActiveGroupId
     && sceneGroups.some(group => group.id === previousActiveGroupId);
@@ -10227,7 +10237,8 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
   if (retainForMembershipHistory) sceneMembershipRetainedObjects.set(id, entry);
   else {if(entry.type===PROCEDURAL_MESH_TYPE){proceduralMeshes.get(id)?.dispose();proceduralMeshes.delete(id);}else if(entry.type==='light')disposeSceneSpotLight(id);else disposeObjectTree(entry.object);}
   const fallback = wasActive ? (sceneObjects[index] || sceneObjects[index - 1] || null) : sceneObjects.find(obj => obj.id === activeSceneObjectId);
-  if (activeGroupSurvives) {
+  if(sceneSelection.ids.length){setSceneSelection(sceneSelection.ids,sceneSelection.activeId);}
+  else if (activeGroupSurvives) {
     setActiveSceneGroup(previousActiveGroupId);
   } else if (wasActive || !fallback) {
     setActiveSceneObject(fallback?.id || null);
@@ -11603,7 +11614,7 @@ function clearScene({loadRequestId = null} = {}) {
     scene.remove(currentMesh);
     disposeObjectTree(currentMesh);
   }
-  sceneObjects = [];
+  sceneObjects = [];sceneSelection={ids:[],activeId:null};
   if(rimLight){document.getElementById('rim-enabled').checked=false;updateRimLight();}
   sceneGroups = [];
   activeSceneObjectId = null;
@@ -24252,7 +24263,7 @@ function updateAuthoringPropertySelection() {
   syncBurnerInspector();
   syncSceneDataInspector();
   document.querySelectorAll('#transform-bar button[onclick]').forEach(button=>{
-    if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround/.test(button.getAttribute('onclick'))) button.hidden=activeSceneObjectId===RIM_LIGHT_ID;
+    if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround/.test(button.getAttribute('onclick'))) button.hidden=sceneSelection.ids.length>1||!!activeSceneGroupId||selectedSceneObjectEntry()?.type==='light';
   });
 }
 let flameInspector = null;
@@ -27526,12 +27537,16 @@ function checkedSceneGroups(groups) {
   });
 }
 function writeSceneGroups(groups) {
-  const beforeObject=activeSceneObjectId,beforeGroup=activeSceneGroupId;
-  setSceneGroupsFromRecords(checkedSceneGroups(groups),beforeGroup);
-  for(const [id,proxy] of groupProxies)if(!sceneGroups.some(g=>g.id===id)){proxy.removeFromParent();groupProxies.delete(id);}
-  if(sceneGroups.some(g=>g.id===beforeGroup))setActiveSceneGroup(beforeGroup);
-  else if(sceneObjects.some(o=>o.id===beforeObject))setActiveSceneObject(beforeObject);
-  else clearActiveSceneObjectSelection();
+  const previous=structuredClone(sceneSelection),expanded=sceneSelectionMembers(),field=activeSceneFieldId,wasWriting=burnerGraphWriting;
+  burnerGraphWriting=true;
+  try {
+    sceneSelection={ids:[],activeId:null};activeSceneObjectId=null;activeSceneGroupId=null;
+    setSceneGroupsFromRecords(checkedSceneGroups(groups));
+    for(const [id,proxy] of groupProxies)if(!sceneGroups.some(g=>g.id===id)){proxy.removeFromParent();groupProxies.delete(id);}
+    const valid=new Set([...sceneObjects.map(o=>o.id),...sceneGroups.map(g=>'@group:'+g.id)]);
+    const ids=previous.ids.every(id=>valid.has(id))?previous.ids:expanded.filter(id=>valid.has(id));
+    if(field)window.selectSceneField(field);else setSceneSelection(ids,ids.includes(previous.activeId)?previous.activeId:ids.at(-1)??null);
+  }finally{burnerGraphWriting=wasWriting;}
 }
 function editSceneGroups(change,label) {
   assertSceneConstructionAvailable();const next=serializeSceneGroups();const result=change(next);
