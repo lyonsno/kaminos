@@ -4,7 +4,7 @@ import * as Three from 'three';
 
 const exercise = process.argv[2] ?? 'recovery';
 for (const initiallyPaused of [false, true]) {
-  const test = { models: [], geometries: [], failGeometry: false, failStep: false };
+  const test = { models: [], geometries: [], failGeometry: false, failStep: false, renders: 0, steps: 0, frame: null };
   class BoxGeometry extends Three.BoxGeometry {
     constructor(...args) { if (test.failGeometry) throw new Error('injected geometry rejection'); super(...args); test.geometries.push(this); }
   }
@@ -14,12 +14,12 @@ for (const initiallyPaused of [false, true]) {
       setCustomValidity() {}, setAttribute(key, value) { this.attributes[key] = value; }, removeAttribute(key) { delete this.attributes[key]; }, replaceChildren() {}, append() {} });
     return nodes.get(id);
   };
-  const renderer = { setPixelRatio() {}, setSize() {}, render() {}, backend: {} };
+  const renderer = { setPixelRatio() {}, setSize() {}, render() { test.renders++; }, backend: {} };
   const device = { addEventListener() {}, lost: new Promise(() => {}) };
   const createModel = async () => {
     const model = { disposed: 0, cells: [{ index: 0, pinned: false, half: { x: .5, y: .5, z: .5 } }],
       snapshot: () => ({ step: 1, floorY: -1, dimensions: { dx: 1, dy: 1, dz: 1 }, config: { strength: 80, timeStep: 1 / 60 }, hand: null, broken: 0, events: [], bonds: [], bodies: [{ index: 0, pinned: false, position: { x: 0, y: 0, z: 0 }, quaternion: { x: 0, y: 0, z: 0, w: 1 } }] }),
-      async step() { if (test.failStep) throw new Error('injected simulation rejection'); },
+      async step() { if (test.failStep) throw new Error('injected simulation rejection'); test.steps++; },
       isExposedFace: () => true, release() {}, dispose() { this.disposed++; } };
     test.models.push(model); return model;
   };
@@ -27,7 +27,7 @@ for (const initiallyPaused of [false, true]) {
   Object.assign(globalThis, { innerWidth: 1280, innerHeight: 900, devicePixelRatio: 1,
     document: { querySelector: node, hidden: false, createElement: () => ({ addEventListener() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 900 }) }) },
     window: {}, location: { search: initiallyPaused ? '?smoke=1' : '', href: 'synthetic-view-contract' },
-    addEventListener() {}, requestAnimationFrame() {}, fetch: async () => ({ ok: true, json: async () => ({ constructionSource: {}, source: {} }) }) });
+    addEventListener() {}, requestAnimationFrame(callback) { test.frame = callback; }, fetch: async () => ({ ok: true, json: async () => ({ constructionSource: {}, source: {} }) }) });
   const source = fs.readFileSync(new URL('../structural-material-arch-gpu-view.js', import.meta.url), 'utf8')
     .replace("'./structural-material-arch-stones.js'", JSON.stringify(new URL('../structural-material-arch-stones.js', import.meta.url).href))
     .replace("import * as THREE from 'three/webgpu';", 'const THREE = globalThis.__archViewTest.three;')
@@ -41,7 +41,12 @@ for (const initiallyPaused of [false, true]) {
     const api = window.__archCollapse;
     assert.equal(api.witness().phase, 'interactive');
     const accepted = test.models[0];
-    if (exercise === 'replacement') {
+    if (exercise === 'frame') {
+      const before = test.renders;
+      await test.frame(performance.now() + 17);
+      assert.equal(test.steps, initiallyPaused ? 0 : 1, 'live frame advances exactly one physical step');
+      assert.equal(test.renders - before, 1, 'one animation frame submits one scene, including live simulation');
+    } else if (exercise === 'replacement') {
       test.failGeometry = true;
       await assert.rejects(api.reset(), /injected geometry rejection/);
       assert.equal(accepted.disposed, 0, 'failed replacement must preserve the displayed model');

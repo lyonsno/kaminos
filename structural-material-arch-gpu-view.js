@@ -8,7 +8,7 @@ import { loadStoneAssets, fitStoneGeometry, structuralFaceAt } from './structura
 const profilePath='./artifacts/structural-material-3d/stone-arch-source-pair-2026-09-24/arch-proxy-witness/intact-profile.json';
 const params=new URLSearchParams(location.search),status=document.querySelector('#status'),receipt=document.querySelector('#receipt'),errorNode=document.querySelector('#error');
 let phase='loading',failure=null,model,paused=params.get('smoke')==='1',failurePaused=null,mode='shear',grab=null,contactPointer=null,lastPick=null,latestStepCost=0,identity=null;
-let operations=Promise.resolve(),busy=false,lastTime=performance.now(),simulationRate=1;
+let operations=Promise.resolve(),busy=false,profiling=false,lastTime=performance.now(),simulationRate=1;
 const failures=[];
 function fail(operation,error){if(failurePaused===null)failurePaused=paused;paused=true;phase='failed';failure={operation,message:error.message??String(error),stack:error.stack,step:model?.snapshot().step??null,at:new Date().toISOString()};failures.push(failure);status.textContent=`${operation} failed`;errorNode.textContent=failure.message;console.error(error);}
 const act=(operation,callback)=>(...args)=>{if(phase!=='interactive')return;try{const result=callback(...args);result?.catch?.(error=>fail(operation,error));return result;}catch(error){fail(operation,error);}};
@@ -54,7 +54,7 @@ try {
     if(!floor){floor=new THREE.Mesh(new THREE.PlaneGeometry(22,18),new THREE.MeshStandardMaterial({color:0x33393b,roughness:1}));floor.rotation.x=-Math.PI/2;floor.position.y=model.snapshot().floorY-.003;scene.add(floor);}
     grab=null;contactPointer=null;controls.enabled=true;lastTime=performance.now();if(failurePaused!==null)paused=failurePaused;phase='interactive';failure=null;failurePaused=null;errorNode.textContent='';pauseIcon();synchronize();return true;
   }
-  async function advance(count){if(!Number.isInteger(count)||count<0)throw new Error('Advance count must be a nonnegative integer');for(let i=0;i<count;i++){const start=performance.now();if(grab&&mode==='bind')model.bind(grab.index);await model.step();latestStepCost=performance.now()-start;}synchronize();}
+  async function advance(count,present=true){if(!Number.isInteger(count)||count<0)throw new Error('Advance count must be a nonnegative integer');for(let i=0;i<count;i++){const start=performance.now();if(grab&&mode==='bind')model.bind(grab.index);await model.step();latestStepCost=performance.now()-start;}if(present)synchronize();}
   function ray(event){camera.updateMatrixWorld(true);const rect=canvas.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);return raycaster.ray;}
   canvas.addEventListener('pointerdown',act('Grab',event=>{if(event.button!==0)return;ray(event);const hit=raycaster.intersectObjects(meshes,false)[0];lastPick=hit?{index:hit.object.userData.index,point:hit.point.toArray(),screen:{x:event.clientX,y:event.clientY}}:{hit:false,screen:{x:event.clientX,y:event.clientY}};if(!hit)return;
     const cell=model.cells[hit.object.userData.index],local=model.worldToLocalPoint(cell.index,hit.point),faceNormal=useStones?structuralFaceAt(local,cell.half):hit.face.normal;lastPick.eligibility=cell.pinned?'anchored':model.isExposedFace(cell.index,faceNormal)?'surface':'connected-interior';lastPick.asset=hit.object.userData.asset;lastPick.local={x:local.x,y:local.y,z:local.z};lastPick.structuralNormal=faceNormal.toArray();
@@ -74,7 +74,7 @@ try {
   function zoom(factor){camera.position.sub(controls.target).multiplyScalar(factor).add(controls.target);controls.update();synchronize();}
   document.querySelector('#zoom-in').onclick=act('Zoom',()=>zoom(1/1.2));document.querySelector('#zoom-out').onclick=act('Zoom',()=>zoom(1.2));
   addEventListener('resize',act('Resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);synchronize();}));
-  async function frame(now){try{const elapsed=(now-lastTime)/1000;lastTime=now;if(phase==='interactive'){if(!paused&&!document.hidden&&!busy){simulationRate=elapsed>0?model.snapshot().config.timeStep/elapsed:1;await serialize('Simulation',()=>advance(1));}controls.update();synchronize();}}catch{}finally{requestAnimationFrame(frame);}}
+  async function frame(now){try{const elapsed=(now-lastTime)/1000;lastTime=now;if(phase==='interactive'&&!profiling){if(!paused&&!document.hidden&&!busy){simulationRate=elapsed>0?model.snapshot().config.timeStep/elapsed:1;await serialize('Simulation',()=>advance(1,false));}controls.update();synchronize();}}catch{}finally{requestAnimationFrame(frame);}}
   const response=await fetch(profilePath);if(!response.ok)throw new Error(`Profile HTTP ${response.status}`);source=await response.json();profile=coarsenGpuArchProfile(source);
   if(params.has('strength'))document.querySelector('#strength').value=params.get('strength');if(!await rebuild())throw new Error('Initial cohesion is invalid');
   const project=point=>{const p=toThree(point).project(camera);return{x:(p.x+1)*innerWidth/2,y:(1-p.y)*innerHeight/2};};
@@ -88,7 +88,27 @@ try {
       return{bright,total:width*height,fraction:bright/(width*height),source:'actual-webgpu-presentation-texture',format:texture.format};
     }finally{buffer.destroy();}
   }
-  window.__archCollapse={rendererLifetime:()=>({source:'three-0.183.0-renderer-compute-cache',computePipelines:[...renderer._pipelines.caches.values()].filter(pipeline=>pipeline.isComputePipeline).length,computePrograms:renderer._pipelines.programs.compute.size}),advance:count=>serialize('Advance',()=>advance(count)),reset:()=>serialize('Reset',rebuild),release:()=>{release();model.release();synchronize();},projectWorld:project,bind:index=>model.bind(index),
+  async function performanceTrial({mode,samples,warmup,renderPasses=1}){
+    if(!paused||grab)throw new Error('Performance trial requires a paused ungripped arch');
+    if(!['solver','render','coupled'].includes(mode)||![samples,warmup,renderPasses].every(Number.isInteger)||samples<=0||warmup<0||renderPasses<=0)throw new Error('Invalid performance trial settings');
+    return serialize('Performance trial',async()=>{
+      profiling=true;
+      const before=model.snapshot(),observed=[];
+      try{
+        await device.queue.onSubmittedWorkDone();
+        for(let i=-warmup;i<samples;i++){
+          const started=performance.now();let stepMilliseconds=0,renderSubmitMilliseconds=0;
+          if(mode!=='render'){const stepStart=performance.now();await model.step();stepMilliseconds=performance.now()-stepStart;}
+          if(mode!=='solver'){const renderStart=performance.now();for(let pass=0;pass<renderPasses;pass++)synchronize();renderSubmitMilliseconds=performance.now()-renderStart;}
+          const fenceStart=performance.now();await device.queue.onSubmittedWorkDone();
+          if(i>=0)observed.push({index:i,milliseconds:performance.now()-started,stepMilliseconds,renderSubmitMilliseconds,fenceMilliseconds:performance.now()-fenceStart});
+        }
+        const after=model.snapshot();
+        return{mode,samples,warmup,renderPasses,observed,identity,route:ARCH_GPU_ROUTE,effectiveUrl:location.href,visualRoute:useStones?'handy-weathered-stone-v1':'box-baseline',viewport:{width:innerWidth,height:innerHeight,pixelRatio:devicePixelRatio},config:after.config,bodies:after.bodies.length,bonds:after.bonds.length,stepBefore:before.step,stepAfter:after.step,brokenBefore:before.broken,brokenAfter:after.broken,triangles:meshes.reduce((sum,mesh)=>sum+(mesh.geometry.index?.count??mesh.geometry.attributes.position.count)/3,0),camera:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray()},rendererInfo:{calls:renderer.info.render.calls,triangles:renderer.info.render.triangles}};
+      }finally{profiling=false;synchronize();}
+    });
+  }
+  window.__archCollapse={performanceTrial,rendererLifetime:()=>({source:'three-0.183.0-renderer-compute-cache',computePipelines:[...renderer._pipelines.caches.values()].filter(pipeline=>pipeline.isComputePipeline).length,computePrograms:renderer._pipelines.programs.compute.size}),advance:count=>serialize('Advance',()=>advance(count)),reset:()=>serialize('Reset',rebuild),release:()=>{release();model.release();synchronize();},projectWorld:project,bind:index=>model.bind(index),
     witness:()=>{const surfaces=targets();return{phase,failure,failures:[...failures],identity,route:ARCH_GPU_ROUTE,effectiveUrl:location.href,profilePath,constructionSource:profile.constructionSource,source:source.source,visual:{route:useStones?'handy-weathered-stone-v1':'box-baseline',assets:stoneAssets.map(({id,sha256,bytes,triangles})=>({id,sha256,bytes,triangles})),bodies:meshes.map(mesh=>({index:mesh.userData.index,asset:mesh.userData.asset})),triangles:meshes.reduce((sum,mesh)=>sum+(mesh.geometry.index?.count??mesh.geometry.attributes.position.count)/3,0)},viewport:{width:innerWidth,height:innerHeight},paused,mode,lastPick,contactPointer,camera:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray()},state:model.snapshot(),rendererPoses:meshes.map(mesh=>({index:mesh.userData.index,position:mesh.position.toArray(),quaternion:mesh.quaternion.toArray()})),surfaceTargets:surfaces,pickTargets:surfaces.filter(item=>item.layer===2&&item.normal[2]===1)};},pixels};
   requestAnimationFrame(frame);
 }catch(error){fail('Startup',error);window.__archCollapse={witness:()=>({phase,failure,failures:[...failures],route:ARCH_GPU_ROUTE,effectiveUrl:location.href,identity,state:model?.snapshot()??null})};}

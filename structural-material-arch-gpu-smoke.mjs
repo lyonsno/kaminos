@@ -6,7 +6,7 @@ import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Vector3, Quaternion } from 'three';
-import { inspectGpuConformance, inspectGpuArchLoad, inspectGpuArchRendererLifetime } from './structural-material-arch-gpu-evidence.mjs';
+import { inspectGpuConformance, inspectGpuArchLoad, inspectGpuArchRendererLifetime, inspectArchPerformanceTrial } from './structural-material-arch-gpu-evidence.mjs';
 import { inspectStoneVisual, STONE_ASSETS } from './structural-material-arch-stones.js';
 
 const [outputInput, executableInput, page = 'structural-material-arch-gpu-conformance.html', exercise = 'load', appearance = 'boxes'] = process.argv.slice(2);
@@ -102,7 +102,7 @@ try {
   report.browser.executable=executable;report.browser.version=execFileSync(executable,['--version'],{encoding:'utf8'}).trim();
   const isArch=page==='structural-material-arch-gpu.html';
   if(!['boxes','stones'].includes(appearance)||appearance==='stones'&&!isArch)throw new Error('Unsupported visual appearance');
-  if(!['load','collapse','bind','controls','standing-diagnostics','penalty-diagnostics','stiffness-diagnostics','construction-diagnostics','contact-diagnostics'].includes(exercise)||exercise!=='load'&&!isArch)throw new Error('Unsupported exercise');
+  if(!['load','collapse','bind','controls','performance','standing-diagnostics','penalty-diagnostics','stiffness-diagnostics','construction-diagnostics','contact-diagnostics'].includes(exercise)||exercise!=='load'&&!isArch)throw new Error('Unsupported exercise');
   if(!isArch&&page!=='structural-material-arch-gpu-conformance.html')throw new Error('Unsupported GPU smoke page');
   for(const source of [page,...(isArch?['structural-material-arch-gpu-view.js','structural-material-arch-gpu.js','structural-material-arch-gpu-kernels.js','structural-material-arch-gpu-fixture.js']:['structural-material-arch-gpu-conformance.js']),'dist/structural-material-arch-gpu-engine.js','vendor/webphysics/provenance.json','package-lock.json','node_modules/three/build/three.module.js','node_modules/three/build/three.webgpu.js','node_modules/three/build/three.tsl.js'])report.sources[source]=hash(fs.readFileSync(path.join(root,source)));
   if(appearance==='stones')for(const source of ['structural-material-arch-stones.js',...STONE_ASSETS.map(asset=>asset.url)])report.sources[source]=hash(fs.readFileSync(path.join(root,source)));
@@ -148,6 +148,18 @@ try {
     if(!report.result.state?.bodies?.length)report.evidenceErrors.push('No physical body readback');
   }
   if(report.evidenceErrors.length||report.errors.length)throw new Error(JSON.stringify({evidence:report.evidenceErrors,page:report.errors}));
+  if(exercise==='performance'){
+    report.phase='performance';report.performanceTrials=[];save();
+    for(const settings of [{mode:'solver',renderPasses:1},{mode:'render',renderPasses:1},{mode:'coupled',renderPasses:1},{mode:'coupled',renderPasses:2}]){
+      await evaluate('window.__archCollapse.reset()');
+      const trial=await evaluate(`window.__archCollapse.performanceTrial(${JSON.stringify({...settings,samples:60,warmup:20})})`);
+      report.performanceTrials.push(trial);save();
+      const errors=inspectArchPerformanceTrial(trial,{...settings,samples:60,warmup:20,appearance,bodies:report.result.state.bodies.length,config:report.result.state.config,triangles:report.result.visual.triangles});
+      check(`${settings.mode}/${settings.renderPasses}: native requested configuration and complete timing samples`,!errors.length,errors);
+      report.lastTrustworthyEvidence=`${settings.mode}/${settings.renderPasses} complete timing samples`;save();
+    }
+    await capture('performance-final');
+  }
   if(isArch&&exercise==='standing-diagnostics'){
     report.phase='standing-convergence-comparison';report.diagnostics={};save();
     for(const iterations of [20,80]){

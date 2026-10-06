@@ -2,6 +2,25 @@ export const conformanceChecks = ['falling body responds to gravity', 'box rests
   'hanging joint carries weight', 'finite joint reaction has force units', 'fixed joint retains captured relative rotation',
   'all body state is finite', 'native GPU produced no validation error', 'collision dispatch did not truncate'];
 
+export function inspectArchPerformanceTrial(trial, expected) {
+  const errors = [], identity = trial?.identity;
+  if (trial?.route !== 'kaminos.structural-material.arch-gravity-collapse.webgpu-avbd.v0' || identity?.backend !== 'webgpu' || identity?.adapterFallback !== false || /swiftshader|llvmpipe|software/i.test(JSON.stringify(identity))) errors.push('Native arch timing route unverified');
+  let url;
+  try { url = new URL(trial.effectiveUrl); } catch { errors.push('Effective timing URL missing'); }
+  if (url && (url.pathname !== '/structural-material-arch-gpu.html' || url.searchParams.get('smoke') !== '1' || (url.searchParams.get('stones') === '1') !== (expected.appearance === 'stones'))) errors.push('Timing URL differs from requested appearance');
+  if (trial?.visualRoute !== (expected.appearance === 'stones' ? 'handy-weathered-stone-v1' : 'box-baseline')) errors.push('Timing visual route substituted');
+  for (const key of ['mode', 'samples', 'warmup', 'renderPasses', 'bodies', 'triangles']) if (trial?.[key] !== expected[key]) errors.push(`Timing ${key} differs from requested workload`);
+  for (const [key, value] of Object.entries(expected.config)) if (!Object.is(trial?.config?.[key], value)) errors.push(`Timing solver configuration differs at ${key}`);
+  if (trial?.viewport?.width !== 1280 || trial?.viewport?.height !== 900 || trial?.viewport?.pixelRatio !== 1) errors.push('Timing viewport differs from requested workload');
+  const count = expected.mode === 'render' ? 0 : expected.samples + expected.warmup;
+  if (!Number.isInteger(trial?.stepBefore) || trial?.stepAfter - trial.stepBefore !== count) errors.push('Timing physical progress is incomplete');
+  if (!Array.isArray(trial?.observed) || trial.observed.length !== expected.samples) errors.push('Timing samples incomplete');
+  else for (const [index, sample] of trial.observed.entries()) {
+    if (sample.index !== index || !['milliseconds', 'stepMilliseconds', 'renderSubmitMilliseconds', 'fenceMilliseconds'].every(key => Number.isFinite(sample[key]) && sample[key] >= 0) || !(sample.milliseconds > 0)) errors.push(`Invalid timing sample ${index}`);
+  }
+  return errors;
+}
+
 export function inspectGpuConformance(report) {
   const errors = [];
   if (report?.status !== 'passed' || report?.phase !== 'complete') errors.push('Conformance did not complete successfully');
