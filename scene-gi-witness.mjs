@@ -22,8 +22,9 @@ try {
   report.adapter=await page.evaluate(async()=>{const a=await navigator.gpu.requestAdapter();return {vendor:a.info.vendor,architecture:a.info.architecture,device:a.info.device,isFallbackAdapter:a.isFallbackAdapter};});
   assert.ok(!report.adapter.isFallbackAdapter&&!/swiftshader/i.test(JSON.stringify(report.adapter)));
   await page.goto(url);
-  await page.waitForFunction(()=>window.__kaminosSceneRadianceSetup?.status==='failed'||window.__kaminosVolumePrototype?.debugState().error||(window.kaminosSceneObjectDebugState?.().length>0&&window.__kaminosSceneRadiance?.canRender()&&window.__kaminosVolumePrototype.debugState().frameCount>=120),null,{timeout:0});
-  await page.evaluate(()=>{window.setGizmoMode?.(null);window.__kaminosVolumePrototype.setSimulationPaused(true);window.__kaminosSetSceneCameraFrame([3,2,9],[0,.7,0]);window.__kaminosSetActiveTab('assets');document.getElementById('right-tab-rendering').click();});
+  await page.waitForFunction(()=>window.__kaminosSceneRadianceSetup?.status==='failed'||window.__kaminosVolumePrototype?.debugState().error||(window.kaminosSceneObjectDebugState?.().some(o=>o.id==='kiln')&&window.__kaminosSceneRadiance?.canRender()&&window.__kaminosVolumePrototype.debugState().frameCount>=12),null,{timeout:0});
+  report.phase='loaded';await save();
+  await page.evaluate(()=>{window.setGizmoMode?.(null);window.__kaminosVolumePrototype.setSimulationPaused(true);window.__kaminosSetSceneCameraFrame([3,2,9],[0,.7,0]);window.__kaminosSetActiveTab('assets');window.kaminosWorkspace?.setMode('workbench');document.getElementById('right-tab-rendering').click();});
   if(operation==='--composition') {
     await page.selectOption('#rendering-light-mode','shared');
     await page.selectOption('#rendering-angular-samples','12');
@@ -118,6 +119,9 @@ try {
     }
     await page.check('#ao-toggle');
     await page.selectOption('#scene-gi-view','scene');
+    await page.evaluate(()=>{window.kaminosWorkspace?.setMode('authoring');document.querySelector('[data-inspector-context="scene"]').click();document.getElementById('authoring-render-slot').open=true;});
+    assert.equal(await page.locator('#authoring-render-slot #scene-gi-mode').count(),1);
+    assert.equal(await page.locator('#scene-gi-mode').isVisible(),true);
     await page.screenshot({path:`${out}/unified-scene.png`});
   }
   if(operation==='--benchmark') {
@@ -140,6 +144,8 @@ try {
   }
   report.runtimeAfter=await(await fetch(new URL('/api/runtime-config',url))).json();
   assert.deepEqual(report.runtimeAfter.source,report.runtime.source,'source revision changed during witness');
+  assert.deepEqual(report.errors,[]);
+  assert.deepEqual(report.httpErrors,[]);
   report.status='captured';report.phase='complete';
 } catch(e) {report.status='failed';report.error=String(e.stack||e);process.exitCode=1;await page?.screenshot({path:`${out}/failure.png`}).catch(()=>{});}
 finally {await save();await browser?.close();}

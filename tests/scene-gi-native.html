@@ -46,6 +46,26 @@ window.giAssay={
       let aoError=0;for(let i=0;i<received.length;i++)if(i%4<3)aoError=Math.max(aoError,Math.abs(received[i]-withAO[i]));
       results.push({ordinary,color,linearColor:floor.material.color.toArray(),differenceSum,receivedSum,errorSum,maxError,aoError});
     }
+    floor.material.color.set(0xffffff);
+    const pane=new THREE.Mesh(new THREE.PlaneGeometry(8,8),new THREE.MeshBasicNodeMaterial({color:0,transparent:true,opacity:.5,depthWrite:false,side:THREE.DoubleSide}));
+    pane.rotation.x=-Math.PI/2;pane.position.y=.1;scene.add(pane);
+    aoStrength.value=0;
+    gi.setSettings({mode:'combined',view:'scene',gain:0});await frames();const paneZero=await read();
+    gi.setSettings({mode:'combined',view:'scene',gain:1});await frames();const paneLit=await read();
+    gi.setSettings({mode:'combined',view:'gi',gain:1});await frames();const paneReceived=await read();
+    let paneMaxError=0,paneDifferenceSum=0;
+    for(let i=0;i<paneLit.length;i++)if(i%4<3) {
+      const difference=paneLit[i]-paneZero[i];
+      paneDifferenceSum+=difference;paneMaxError=Math.max(paneMaxError,Math.abs(difference-paneReceived[i]));
+    }
+    results.push({transparentPane:true,differenceSum:paneDifferenceSum,maxError:paneMaxError,aoError:0});
+    scene.remove(pane);pane.geometry.dispose();pane.material.dispose();
+    const custom=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.NodeMaterial());
+    custom.material.fragmentNode=THREE.TSL.vec4(1,0,0,1);scene.add(custom);
+    let customRejected=false;
+    try{gi.setSettings({mode:'combined',view:'gi'});}catch(error){customRejected=/custom fragment/.test(error.message);}
+    scene.remove(custom);custom.geometry.dispose();custom.material.dispose();
+    if(!customRejected)throw new Error('Unsupported fragment diagnostic must fail visibly');
     aoStrength.value=1;floor.material.dispose();
     floor.material=new THREE.MeshStandardNodeMaterial({color:0xffffff,roughness:1,metalness:0});
     gi.setSettings({mode:'combined',view:'scene',gain:1});await frames();

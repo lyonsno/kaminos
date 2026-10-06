@@ -36,7 +36,7 @@ export function createSceneGI(scene, camera, aoIntensity) {
       // Match Three's diffuseContribution, including mapped/node metalness.
       const diffuseReceiver = diffuseColor.rgb.mul(metalness.oneMinus());
       const received = sceneGIReceives(material) ? irradianceOverPi.mul(diffuseReceiver) : vec3(0);
-      return mix(vec4(node.rgb.add(received),node.a),vec4(received,1),float(viewMode.equal(2)));
+      return mix(vec4(node.rgb.add(received),node.a),vec4(received,node.a),float(viewMode.equal(2)));
     },
   });
   const setup = beauty.setup;
@@ -59,7 +59,13 @@ export function createSceneGI(scene, camera, aoIntensity) {
     depth, source, beauty,
     output() { return combinedOutput; },
     setSettings(value) {
-      settings = resolveSceneGISettings(value);
+      const next = resolveSceneGISettings(value);
+      if(next.view==='gi')scene.traverseVisible(object=>{
+        for(const material of [].concat(object.material||[]))if(material.fragmentNode!=null) {
+          throw new Error('Received bounce is unavailable for custom fragment materials');
+        }
+      });
+      settings = next;
       effect.radius.value = settings.radius; effect.thickness.value = settings.thickness;
       effect.sliceCount.value = settings.slices; effect.stepCount.value = settings.steps;
       gain.value = settings.gain; filtered.value = settings.denoise > 0;

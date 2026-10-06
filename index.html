@@ -11212,8 +11212,8 @@ async function initScene() {
   updateSceneGI = value => {
     const next = resolveSceneGISettings(value);
     const rebuild = next.mode !== sceneGISettings.mode;
-    sceneGISettings = next;
     sceneGI.setSettings(next);
+    sceneGISettings = next;
     if (rebuild) rebuildSceneGIOutput();
     document.body.dataset.sceneGiDiagnostic = String(next.mode === 'combined' && next.view !== 'scene');
     refreshRenderingControls();
@@ -24766,12 +24766,12 @@ if (!isFireLightFieldRoute()) document.getElementById('scene-gi-general-slot').a
 document.getElementById('scene-gi-panel').append(document.getElementById('scene-ao-panel'));
 function setSceneGIControls(value) {
   const settings = resolveSceneGISettings(value);
+  if (updateSceneGI) updateSceneGI(settings);
+  else sceneGISettings = settings;
   for (const key of Object.keys(settings)) document.getElementById(`scene-gi-${key}`).value = String(settings[key]);
   document.getElementById('scene-gi-controls').hidden = settings.mode !== 'combined';
   document.getElementById('gtao-shape-controls').hidden = settings.mode === 'combined';
   document.getElementById('scene-gi-denoise-value').textContent = String(settings.denoise);
-  if (updateSceneGI) updateSceneGI(settings);
-  else sceneGISettings = settings;
 }
 for (const key of Object.keys(sceneGISettings)) {
   document.getElementById(`scene-gi-${key}`).addEventListener(key === 'denoise' ? 'input' : 'change',event => {
@@ -24780,6 +24780,7 @@ for (const key of Object.keys(sceneGISettings)) {
       setSceneGIControls({...sceneGISettings,[key]:value});
       document.getElementById('scene-gi-status').textContent = '';
     } catch (error) {
+      event.target.value = String(sceneGISettings[key]);
       document.getElementById('scene-gi-status').textContent = error.message;
     }
   });
