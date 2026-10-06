@@ -102,7 +102,8 @@ ${needle}`);
   assert.ok(report.observed.objects.length>0);
   assert.equal(report.observed.volume.error,null);
   await page.evaluate(()=>{window.setGizmoMode?.(null);window.__kaminosVolumePrototype.setSimulationPaused(true);
-    window.__kaminosSetSceneCameraFrame([3,2,9],[0,.7,0]);window.__kaminosSetActiveTab('assets');});
+    window.__kaminosSetSceneCameraFrame([3,2,9],[0,.7,0]);window.__kaminosSetActiveTab('assets');window.kaminosWorkspace?.setMode('workbench');});
+  if(await page.locator('#right-tab-rendering').isVisible())await page.click('#right-tab-rendering');
   report.phase='held-camera-comparison';await save();
   report.receiverStats=await page.evaluate(async()=>{
     const fields=await window.__kaminosSceneRadiance.readback();
@@ -463,6 +464,17 @@ ${needle}`);
       }
     }
     report.scatteringAdmission='matched-source-albedo-response-and-independent-surface-trim';await save();
+    if(await page.evaluate(()=>!!window.kaminosWorkspace)){
+      await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
+      await page.locator('#rendering-surface-gain').scrollIntoViewIfNeeded();assert.ok(await page.locator('#rendering-surface-gain').isVisible(),'authoring Scene Rendering must expose the same live trim');
+      const before=await page.evaluate(()=>window.__kaminosSceneRadiance.debugState().surfaceGain);
+      await page.evaluate(()=>{const e=document.getElementById('rendering-surface-gain');e.value='1';e.dispatchEvent(new Event('input',{bubbles:true}));});
+      assert.equal(await page.evaluate(()=>window.__kaminosSceneRadiance.debugState().surfaceGain),2);
+      await page.screenshot({path:`${out}/authoring-render-controls.png`});
+      await page.evaluate(()=>window.kaminosWorkspace.setMode('workbench'));
+      assert.equal(await page.evaluate(()=>document.querySelectorAll('#rendering-surface-gain').length),1,'workspace roundtrip cannot duplicate control identity');
+      report.authoringControls={status:'exercised',surfaceGainBefore:before,surfaceGainAfter:2,singleControl:true};await save();
+    }
   }
   if(process.argv.includes('--source-aware-motion-check')) {
     report.phase='matched-moving-source';await save();

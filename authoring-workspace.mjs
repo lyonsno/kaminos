@@ -53,6 +53,9 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('authoring-source-environment'), 'authoring-world-slot');
   move(byId('authoring-source-render'), 'authoring-render-slot');
   move(byId('authoring-source-fire-light'), 'authoring-render-slot');
+  const renderingPanel=byId('rendering-panel-content');
+  if(renderingPanel)move(renderingPanel,'authoring-render-slot');
+  let workbenchRenderingHidden=renderingPanel?.hidden;
   move(byId('authoring-source-burner'), 'authoring-burner-slot');
   move(byId('local-liquid-performance'), 'authoring-water-slot');
   move(byId('composition-label').closest('.authoring-controls'), 'authoring-composition-slot');
@@ -80,7 +83,12 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     if (beforeSwitch(next) === false) return false;
     // Blurring commits a normal field edit through its existing handler.
     document.activeElement?.blur?.();
-    if (next === 'authoring') slots.showAuthoring(); else slots.showWorkbench();
+    if (next === 'authoring') {
+      if(renderingPanel)workbenchRenderingHidden=renderingPanel.hidden;
+      slots.showAuthoring();if(renderingPanel)renderingPanel.hidden=false;
+    } else {
+      slots.showWorkbench();if(renderingPanel)renderingPanel.hidden=workbenchRenderingHidden;
+    }
     mode = next;
     document.body.dataset.workspace = mode;
     header.querySelectorAll('[data-workspace-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.workspaceMode === mode)));
