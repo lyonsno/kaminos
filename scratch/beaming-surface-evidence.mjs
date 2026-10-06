@@ -8,7 +8,7 @@ export function assertScatteringView(signal,{count,albedo,enabled,trim,master}){
  const f=signal.lighting.frame;
  assert.equal(f.directions,count);assert.equal(f.angularPattern,'source');assert.equal(f.sourceSoftness,0);assert.equal(f.surfaceReconstruction.passes,0);
  assert.equal(f.gain,2**master);assert.equal(signal.lighting.surfaceGain,2**trim);
- assert.equal(signal.volume.physicalColor.material.scatteringAlbedo,albedo);
+ assert.equal(signal.volume.physicalColor.material.scatteringAlbedo,Math.fround(albedo));
  assert.equal(signal.lighting.surfaceScattering,enabled);assert.equal(f.surfaceScattering.enabled,enabled);
  for(const snapshot of [f,signal.source,signal.scattering])for(const key of ['frame','generation']){
   assert.ok(Number.isSafeInteger(snapshot[key])&&snapshot[key]>=0);assert.equal(snapshot[key],f[key]);
