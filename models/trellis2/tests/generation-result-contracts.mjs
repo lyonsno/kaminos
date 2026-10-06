@@ -21,6 +21,7 @@ assert.equal(validateGenerationResult(result,m),true,'This is a synthetic report
 const preview=structuredClone(m),previewResult=structuredClone(result);
 preview.pipelineType='512';preview.meshResolution=512;preview.samplingSteps=8;delete preview.models.highResolutionShape;
 for(const role of ['sparseFlow','lowResolutionShape','textureFlow'])preview.models[role].config.steps=8;
+for(const role of ['shapeDecoder','textureDecoder'])preview.models[role].config.resolution=32;
 const pc=previewResult.composition;pc.pipelineType='512';pc.highResolutionRows=pc.lowResolutionRows;
 pc.phases=[...generationPhases(preview)];pc.geometryResolution=512;pc.materialResolution=512;pc.stageCounts={};
 pc.geometryLevels[0].rows=3;for(const level of pc.geometryLevels)level.resolution/=2;

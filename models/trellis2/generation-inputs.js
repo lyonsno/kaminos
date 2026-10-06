@@ -40,7 +40,7 @@ export function validateGenerationInputs(m){
   // Pin the source architecture before deriving coverage from caller-controlled configs.
   for(const role of ['shapeDecoder','textureDecoder','occupancyDecoder']){
     const expected=role==='occupancyDecoder'?{resolution:16,latentChannels:8,outChannels:1,channels:[512,128,32],numResBlocks:2,numResBlocksMiddle:2}:
-      {resolution:type==='512'?32:64,latentChannels:32,channels:[1024,512,256,128,64],numBlocks:[4,16,8,4,0]};
+      {...(type==='512'?{resolution:32}:{}),latentChannels:32,channels:[1024,512,256,128,64],numBlocks:[4,16,8,4,0]};
     for(const [key,value]of Object.entries(expected))if(JSON.stringify(m.models?.[role]?.config?.[key])!==JSON.stringify(value))
       throw TypeError('canonical decoder architecture required '+role+'.'+key);
   }
