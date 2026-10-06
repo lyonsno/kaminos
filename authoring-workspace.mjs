@@ -105,22 +105,36 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('composition-capture'), 'authoring-document-actions');
   move(byId('transform-bar'), 'authoring-object-tools');
   const slots = createControlSlots(document, entries);
-  let mode = null, inspectorContext='object';
+  let mode = null;
+  const contexts=new Map([
+    ['object',{node:byId('authoring-object-properties')}],['scene',{node:byId('authoring-scene-properties')}],
+  ]);
+  let currentContext='object';
   function setContext(context) {
-    if(context==='camera')context='scene'; // Existing camera-panel callers open scene-owned shot settings.
-    if(!['object','scene','camera'].includes(context))throw Error('Unknown properties context');
-    inspectorContext=context;
-    const object = context === 'object';
-    byId('authoring-object-properties').hidden = !object;
-    byId('authoring-scene-properties').hidden = context!=='scene';
-    byId('authoring-camera-properties').hidden = context!=='scene';
+    if(context==='camera')context='scene';
+    if(!contexts.has(context))throw Error('Unknown properties context');
+    if(context!==currentContext)contexts.get(currentContext)?.leave?.();
+    for(const [id,item] of contexts)item.node.hidden=id!==context;
+    currentContext=context;
+    document.body.dataset.propertiesContext=context;
+    byId('authoring-camera-properties').hidden=context!=='scene';
+    contexts.get(context)?.enter?.();
     inspector.querySelectorAll('[data-inspector-context]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.inspectorContext === context)));
     document.dispatchEvent(new document.defaultView.CustomEvent('kaminos-inspector-context-change',{detail:{context}}));
+  }
+  function addContext({id,label,node,leave,enter}) {
+    if(contexts.has(id))throw Error('Duplicate properties context');
+    const button=document.createElement('button');button.type='button';button.dataset.inspectorContext=id;
+    button.textContent=label;button.setAttribute('aria-pressed','false');
+    inspector.querySelector('.inspector-switch').append(button);
+    node.classList.add('authoring-inspector-body');node.hidden=true;inspector.append(node);
+    contexts.set(id,{node,leave,enter});button.onclick=()=>setContext(id);
   }
   function setMode(next) {
     if (!['authoring', 'workbench'].includes(next)) throw new Error('Unknown workspace');
     if (mode === next) return true;
     if (beforeSwitch(next) === false) return false;
+    if(next==='workbench')contexts.get(currentContext)?.leave?.();
     // Blurring commits a normal field edit through its existing handler.
     document.activeElement?.blur?.();
     if (next === 'authoring') {
@@ -132,6 +146,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     mode = next;
     document.body.dataset.workspace = mode;
     document.dispatchEvent(new document.defaultView.CustomEvent('kaminos-workspace-change',{detail:{mode}}));
+    if(next==='authoring')contexts.get(currentContext)?.enter?.();
     header.querySelectorAll('[data-workspace-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.workspaceMode === mode)));
     return true;
   }
@@ -186,5 +201,5 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   }
   document.body.classList.add('has-authoring-workspace');
   setMode(initialMode);
-  return { setMode, setContext, state: () => ({ mode, context: inspectorContext }) };
+  return { setMode, setContext, addContext, state: () => ({ mode, context:currentContext }) };
 }

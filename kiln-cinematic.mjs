@@ -1,5 +1,5 @@
 import { createKilnPerformance } from './kiln-cinematic-cues.mjs';
-import { installRelativeNumberDrag } from './scene-control-history.mjs';
+import {installKilnCueWorkspace} from './kiln-cue-workspace.mjs';
 export { sharedGpuBufferRequirements } from './sf3d-host-device.mjs';
 
 const PREVIEW_SHA = 'e1f70de3407df24d571bf68f70fac2b59373bdd948075a2387f1834e4faff8b7';
@@ -56,6 +56,8 @@ export async function mountComposition(context) {
   let performanceRun = null, producer = null, previewOutput = null, busy = false, live = false, armed = false, previewCompleted = false;
   let disposed = false, frame = null, lastPhase = null, initialArm = true;
   let invocation = null;
+  let cueWorkspace = null;
+  let performanceRecipe = null;
   const state = { mode: null, phase: 'idle', failure: null, presentation: null, effective: null };
   const outputIds = new Set();
   const controlsDisabled = value => {
@@ -74,7 +76,8 @@ export async function mountComposition(context) {
   }
   function arm() {
     if (!armed) { host.cinematic.begin(); armed = true; }
-    performanceRun = createKilnPerformance(host.cinematic.read());
+    performanceRecipe = host.cinematic.read();
+    performanceRun = createKilnPerformance(performanceRecipe);
     lastPhase = null;
   }
   function fail(error) {
@@ -144,7 +147,7 @@ export async function mountComposition(context) {
       if (initialArm && host.cinematic.available()) {arm();initialArm=false;controlsDisabled(false);}
       if (performanceRun) {
         let sample = performanceRun.sample();
-        if (sample.mode === 'preview' && !previewCompleted && sample.elapsed >= host.cinematic.read().ignition.at(-1).time + host.cinematic.read().previewWorkSeconds) {
+        if (sample.mode === 'preview' && !previewCompleted && sample.elapsed >= performanceRecipe.ignition.at(-1).time + performanceRecipe.previewWorkSeconds) {
           performanceRun.complete(previewOutput); previewCompleted = true; state.presentation = previewOutput; sample = performanceRun.sample();
         }
         host.cinematic.sample(sample);
@@ -164,42 +167,10 @@ export async function mountComposition(context) {
   }
   function edit() {
     end();
-    const panel = byId('kiln-cue-editor'); panel.hidden = false; panel.replaceChildren();
-    const recipe = host.cinematic.read();
-    function field(parent, value, min, max, step, change) {
-      const input = document.createElement('input'); input.type = 'number'; input.value = Number(value.toFixed(4)); input.min = min; if (max !== null) input.max = max; input.step = step;
-      parent.append(input);
-      let before = value;
-      installRelativeNumberDrag({input,step,onStart:()=>{before=Number(input.value);}});
-      input.addEventListener('pointercancel',()=>{input.value=before;change(before);});
-      input.addEventListener('change',()=>{
-        try { change(Number(input.value)); host.cinematic.write(recipe); before=Number(input.value); status('Cues changed'); }
-        catch(error) {change(before);input.value=before;status(error.message);}
-      });
-      return input;
-    }
-    for (const name of ['ignition','work']) {
-      const heading = document.createElement('h2'); heading.textContent = name === 'ignition' ? 'Ignition' : 'Work cycle'; panel.append(heading);
-      const table = document.createElement('table'); table.innerHTML='<thead><tr><th>Seconds</th><th>Radius</th><th>Flow</th></tr></thead>';
-      const body = document.createElement('tbody'); table.append(body); panel.append(table);
-      recipe[name].forEach((key,index)=>{
-        const row = document.createElement('tr'); body.append(row);
-        for (const [prop,min,max,step] of [['time',0,null,0.02],['radius',0.08,0.7,0.002],['flow',0,4,0.01]]) {
-          const cell = document.createElement('td'); row.append(cell);
-          const input = field(cell,key[prop],min,max,step,value=>{key[prop]=value;});
-          input.setAttribute('aria-label',`${name} ${index + 1} ${prop}`);
-          if (prop === 'time' && index === 0) input.disabled = true;
-        }
-      });
-    }
-    for (const [key,label,min,max,step] of [
-      ['extinguishSeconds','Smoke clearance',0.001,null,0.05],['revealSeconds','Reveal light fade',0.001,null,0.05],
-      ['previewWorkSeconds','Preview work',0.001,null,0.05],['workLight','Work light',0,null,0.01],['cameraPush','Camera push',0,0.9,0.002],
-    ]) { const row=document.createElement('label'); row.textContent=label; panel.append(row); field(row,recipe[key],min,max,step,value=>{recipe[key]=value;}); }
-    const actions=document.createElement('div'); actions.className='actions'; panel.append(actions);
-    for (const [label,action] of [['Save scene',async()=>{const result=await window.saveScene({result:true});if(!result?.ok)throw new Error(result?.error||'Scene was not saved');status(`Saved ${result.filename}`);}],['Close',()=>{panel.hidden=true;}]]) {
-      const button=document.createElement('button');button.textContent=label;button.onclick=()=>Promise.resolve().then(action).catch(fail);actions.append(button);
-    }
+    document.body.classList.remove('kiln-cinema');
+    byId('kiln-authoring').textContent='Cinema';
+    if(!cueWorkspace)throw Error('Cue workspace is not mounted');
+    cueWorkspace.open();
     status('Authoring cues');
   }
   byId('kiln-preview').onclick = () => start('preview');
@@ -215,7 +186,12 @@ export async function mountComposition(context) {
       status(cinema ? 'Kiln' : 'Authoring');
     } catch(error){fail(error);}
   };
-  window.kaminosCinematic = { state: () => structuredClone({...state,armed}), preview:()=>start('preview'), fire:()=>start('live'), stop:end, read:host.cinematic.read, write:host.cinematic.write };
+  window.kaminosCinematic = { state: () => structuredClone({...state,armed}), preview:()=>start('preview'), fire:()=>start('live'), stop:end, read:host.cinematic.read, write:host.cinematic.write, openCues:edit };
+  if(host.cinematic.workspace)cueWorkspace=installKilnCueWorkspace({host,
+    preview:()=>{document.body.classList.add('kiln-cinema');byId('kiln-authoring').textContent='Authoring';return start('preview');},
+    openCinema:()=>{document.body.classList.add('kiln-cinema');byId('kiln-authoring').textContent='Authoring';},
+    onError:error=>status(error.message)});
+  if(host.cinematic.tuneEditor)window.kaminosCinematic.cueEditor=host.cinematic.tuneEditor();
   window.addEventListener('keydown',event=>{
     if (!document.body.classList.contains('kiln-cinema') || /INPUT|TEXTAREA/.test(event.target?.tagName)) return;
     if (['g','r','s','x','y','z','f','Home','Delete','Backspace','Escape'].includes(event.key)) {

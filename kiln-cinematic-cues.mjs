@@ -1,3 +1,4 @@
+import {normalizeCueTune, blendCueTunes, tuneForCue} from './kiln-cue-tunes.mjs';
 export const KILN_CUE_SCHEMA = 'kaminos.kiln-cues.v1';
 
 function number(value, name, min, max = Infinity) {
@@ -18,7 +19,8 @@ export function normalizeKilnCues(recipe) {
       const time = number(key.time, 'time', 0);
       if (time <= previous || (index === 0 && time !== 0)) throw new Error('Invalid kiln cue time order');
       previous = time;
-      return { time, radius: number(key.radius, 'radius', 0.08, 0.7), flow: number(key.flow, 'flow', 0, 4) };
+      return { time, radius: number(key.radius, 'radius', 0.08, 0.7), flow: number(key.flow, 'flow', 0, 4),
+        ...(key.tune ? {tune:normalizeCueTune(key.tune)} : {}) };
     });
   }
   for (const key of ['extinguishSeconds', 'revealSeconds', 'previewWorkSeconds']) result[key] = number(recipe[key], key, 0.001);
@@ -42,7 +44,8 @@ export function sampleKilnKeys(keys, seconds) {
     const b = keys[i], a = keys[i - 1];
     if (seconds <= b.time) {
       const t = (seconds - a.time) / (b.time - a.time);
-      return { time: seconds, radius: a.radius + (b.radius - a.radius) * t, flow: a.flow + (b.flow - a.flow) * t };
+      return { time: seconds, radius: a.radius + (b.radius - a.radius) * t, flow: a.flow + (b.flow - a.flow) * t,
+        ...(a.tune && b.tune ? {tune:blendCueTunes(tuneForCue(a,a.tune),tuneForCue(b,b.tune),t)} : {}) };
     }
   }
   return { ...keys.at(-1) };
@@ -86,6 +89,7 @@ export function createKilnPerformance(recipe, { now = () => performance.now() / 
       }
       const sourceEnabled = ['ignition', 'work'].includes(phase) && key.flow > 0;
       return { mode, phase, elapsed, radius: key.radius, flow: sourceEnabled ? key.flow : 0,
+        ...(key.tune ? {tune:tuneForCue({...key,flow:sourceEnabled?key.flow:0},key.tune)} : {}),
         sourceEnabled, light, push, outputVisible: !!result && ['reveal', 'complete'].includes(phase), result, failure };
     },
   };
