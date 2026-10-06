@@ -26,6 +26,8 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
       const requestedGain = Number(value); const effective = end.heatRelease?.effective;
       if (!Number.isFinite(effective?.expansion)) mismatches.push(`heat release requested ${value}, no receipt`);
       else if (requestedGain > 0 && (effective.admitted !== true || Math.abs(effective.expansion - requestedGain) > 1e-6)) mismatches.push(`heat release requested ${value} but ${effective.admitted ? `effective ${effective.expansion}` : `not admitted (${effective.reason})`}`);
+      // Requested off is the control arm: any active or nonzero effective gain fails it.
+      else if (requestedGain <= 0 && (effective.admitted === true || Math.abs(effective.expansion) > 1e-6)) mismatches.push(`heat release requested off but ${effective.admitted ? 'admitted' : 'effective'} gain ${effective.expansion}`);
     }
     // Slice-3 inlet controls: the receipt must carry the requested value as a finite number.
     const inletField = { 'volume-emitter-line-weight': ['pattern', 'lineWeight'], 'volume-emitter-jet-jitter': ['pattern', 'jetJitter'], 'volume-emitter-inlet-turbulence': ['inletDynamics', 'turbulence'], 'volume-emitter-inlet-turbulence-scale': ['inletDynamics', 'turbulenceScaleCells'], 'volume-emitter-puff': ['inletDynamics', 'puff'], 'volume-emitter-puff-period': ['inletDynamics', 'puffPeriod'] }[cid];

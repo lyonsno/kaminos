@@ -80,3 +80,27 @@ test('cockpit: the expansion gain is a control with help, restored from routes, 
   assert.deepEqual(control, { key: 'volume-heat-release-expansion', param: 'volume_heat_release_expansion', tagName: 'INPUT', type: 'range', additiveDefault: 0, additiveSinceControlCount: 234 });
   assert.equal(schema.controlCount, 234);
 });
+
+test('the residual probe names what it measures once expansion is active (review HR-02)', () => {
+  const offMeasure = core.pressureResidualMeasurement({ effective: { admitted: false, expansion: 0, reason: 'heat-release-expansion-is-zero' } });
+  assert.deepEqual(offMeasure, { compact: 'divergence', wide: 'legacy-central-divergence', heatRelease: { admitted: false, expansion: 0 }, statement: 'compact = |D(v)| on the compact operator; heat-release expansion off' });
+  const onMeasure = core.pressureResidualMeasurement({ effective: { admitted: true, expansion: 1.5, reason: null } });
+  assert.equal(onMeasure.compact, 'divergence-minus-expansion-target');
+  assert.deepEqual(onMeasure.heatRelease, { admitted: true, expansion: 1.5 });
+  assert.match(onMeasure.statement, /D\(v\) − S/);
+  assert.match(onMeasure.statement, /gain 1\.5/);
+  assert.deepEqual(core.pressureResidualMeasurement(null).heatRelease, { admitted: false, expansion: 0 }, 'a missing receipt reads as off');
+  // The readback carries the measurement alongside the numbers, and the capture passes it through.
+  const residualBlock = source.slice(source.indexOf("identity: 'pressure-divergence-residual-probe-v1'"), source.indexOf('measuredAtMs:', source.indexOf("identity: 'pressure-divergence-residual-probe-v1'")));
+  assert.match(residualBlock, /measurement: pressureResidualMeasurement\(state\.heatRelease\)/);
+  const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
+  assert.match(capture, /residualMeasurement: s\.pressureSolver\.residual\.measurement \?\? null/, 'the capture probe carries the measurement');
+  assert.match(capture, /residualMeasurement: end\.residual\?\.residualMeasurement \?\? null/, 'the arm report records it');
+  // The cockpit says so too: the receipt and both help texts.
+  assert.match(index, /admitted · gain \$\{heatRelease\.effective\.expansion\.toFixed\(2\)\} · residual measures D\(v\) − S/, 'receipt names the residual meaning');
+  const solverHelp = index.slice(index.indexOf('Legacy keeps the damped 1-3 pass Jacobi'), index.indexOf('</span>', index.indexOf('Legacy keeps the damped 1-3 pass Jacobi')));
+  assert.match(solverHelp, /When Heat release is above 0 the converged solve targets that expansion instead of zero: at gain 1\.0 the divergence converges to the target S, and a partial projection leaves \(1 − gain\) × D\(v_before\) \+ gain × S/);
+  const heatHelp = index.slice(index.indexOf('Expansion where fuel burns:'), index.indexOf('</span>', index.indexOf('Expansion where fuel burns:')));
+  assert.match(heatHelp, /residual readout then measures divergence minus that target/);
+  assert.match(heatHelp, /Heat and smoke are carried undiluted through the expansion, so their field totals grow with the gain and are not conservation evidence/);
+});

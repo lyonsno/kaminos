@@ -2310,6 +2310,23 @@ export function heatReleaseUniformValues(config) {
   const e = config?.effective;
   return [e?.admitted ? e.expansion : 0, 0, 0, 0];
 }
+// What the pressure residual probe measures: once expansion is admitted the
+// converged solve targets S = gain × burn rate, so the compact operator's
+// residual is D(v) − S, not D(v). Carried on every readback so a reader never
+// has to infer it from the controls at the time.
+export function pressureResidualMeasurement(heatRelease) {
+  const e = heatRelease?.effective;
+  const admitted = e?.admitted === true;
+  const expansion = admitted && Number.isFinite(e.expansion) ? e.expansion : 0;
+  return {
+    compact: admitted ? 'divergence-minus-expansion-target' : 'divergence',
+    wide: 'legacy-central-divergence',
+    heatRelease: { admitted, expansion },
+    statement: admitted
+      ? `compact = |D(v) − S| on the compact operator, S = heat-release expansion target at gain ${expansion}; a converged solve drives D(v) to S, a partial projection to (1 − gain) × D(v_before) + gain × S`
+      : 'compact = |D(v)| on the compact operator; heat-release expansion off',
+  };
+}
 
 function normalizePyroDynamicDetailEnabled(value) {
   return clampFinite(value, 0, 1, 0) >= 0.5;
@@ -15701,6 +15718,7 @@ export function createKaminosVolumePrototype({
         // legacy 2h central divergence. Both are measured on the same fields.
         compact: reduceOperator(0),
         wide: reduceOperator(4),
+        measurement: pressureResidualMeasurement(state.heatRelease),
         blockedFaceFlux: { sumAbs: blockedFaceAbsSum, maxAbs: blockedFaceMaxAbs },
         vorticity: {
           identity: 'enstrophy-before-projection-v0',
