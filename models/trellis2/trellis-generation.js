@@ -148,7 +148,8 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
         const lrCoordinates=await coordinates.coordinates(),lrResolution=coordinates.plan.outputResolution;
         await retire(occupancy,sparseSampler,sparse);
         const lrFlow=await shapeFlow('lowResolutionShape',lrCoordinates),lr=await sampleShape('lowResolutionShape',lrFlow,'lowResolutionShape',invocation);
-        let finalCoordinates=lrCoordinates,finalResolution=meshResolution,finalSample=lr.sample,sampledAdapters;
+        // The decoder expands the latent coordinate grid, not the final mesh grid.
+        let finalCoordinates=lrCoordinates,finalResolution=lrResolution,finalSample=lr.sample,sampledAdapters;
         if(cascade){
           const support=await consume('shapeDecoder','learned-cascade-support',model=>own(createTrellisSLatCascadeSupportAdapter({route,
             config:{...model.config,tokenRows:lrCoordinates.shape[0],resolution:lrResolution},

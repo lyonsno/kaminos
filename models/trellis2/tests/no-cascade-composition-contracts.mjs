@@ -4,6 +4,7 @@ import {createTrellisGenerationFromConditioningAdapter} from '../trellis-generat
 import {WEBGPU_BUFFER_USAGE as U} from '../../../webgpu-inference-kit/src/core.js';
 import {buildSparseDecoderPlan} from '../sparse-decoder.js';
 import {buildSLatDecoderPlan} from '../slat-decoder.js';
+import {buildOccupancyCoordinatesPlan} from '../occupancy-coordinates.js';
 const allocated=[],loaded=[],phases=[],stages=[];
 const runtime={device:{limits:{maxStorageBufferBindingSize:134217728},queue:{async onSubmittedWorkDone(){}}},
   createTensor(spec){const t={...spec,byteLength:spec.shape.reduce((n,x)=>n*x,4),buffer:spec.buffer??{destroy(){t.destroyed=true;}}};allocated.push(t);return t;},
@@ -18,7 +19,7 @@ const adapter=createTrellisGenerationFromConditioningAdapter({route:{runtime,rou
 const result=await adapter.run({id:'one-preview'});
 assert.equal(result.pipelineType,'512');assert.equal(result.meshResolution,512);
 assert.equal(result.lowResolutionRows,3);assert.equal(result.highResolutionRows,3);
-const latentGrid=buildSparseDecoderPlan(active.occupancyDecoder.config).outputResolution,
+const latentGrid=buildOccupancyCoordinatesPlan({resolution:buildSparseDecoderPlan(active.occupancyDecoder.config).outputResolution}).outputResolution,
   expectedDecodedGrid=latentGrid*2**(active.shapeDecoder.config.channels.length-1);
 assert.equal(result.geometry.resolution,expectedDecodedGrid,
   'no-cascade decoder input grid is the LR coordinate grid, not the requested final mesh resolution');

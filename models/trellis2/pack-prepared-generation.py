@@ -67,7 +67,9 @@ try:
         raise ValueError('complete unchanged prepared image required')
     m=copy.deepcopy(original);m['pipelineType']=a.pipeline_type;m['meshResolution']=512 if a.pipeline_type=='512' else 1024;m['samplingSteps']=a.steps
     m['producer']=report['producer'];m['basePackage']={'path':str(base/'manifest.json'),'sha256':sha(base_bytes),'producer':original['producer']}
-    if a.pipeline_type=='512':del m['models']['highResolutionShape']
+    if a.pipeline_type=='512':
+        del m['models']['highResolutionShape']
+        for role in ['shapeDecoder','textureDecoder']:m['models'][role]['config']['resolution']=32
     for role in ['sparseFlow','lowResolutionShape','highResolutionShape','textureFlow']:
         if role in m['models']:m['models'][role]['config']['steps']=a.steps
     needed={original['image']['pixelTensor']}
