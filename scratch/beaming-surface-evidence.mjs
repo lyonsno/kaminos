@@ -7,9 +7,17 @@ export function assertRequiredModuleResponse({url,status},origin){
  const parsed=new URL(url);
  if(parsed.origin===origin&&/\.m?js$/.test(parsed.pathname)&&status>=400)throw Error(`required-module-load-failed:${status}:${url}`);
 }
-export function assertScatteringView(signal,{count,albedo,enabled,trim,master}){
+export function assertScatteringView(signal,{count,albedo,enabled,trim,master,spacing}){
  assert.equal(signal.volume.error,null);assert.equal(signal.lighting.previewStale,false);
  const f=signal.lighting.frame;
+ if(spacing!==undefined){
+  const r=f.receiverSampling;assert.ok(r,'receiver sampling metadata required');
+  assert.equal(r.spacing,spacing,'receiver sampling effective spacing must match request');
+  assert.equal(signal.lighting.receiverSpacingRequested,spacing,'receiver sampling live request must match');
+  assert.equal(r.receivers,f.surfaceReceivers);assert.ok(Number.isSafeInteger(r.renderVertices)&&r.renderVertices>=r.receivers);
+  assert.equal(r.identity,spacing?'connected-cell-normal-band-v1':'vertex-reference-v1');
+  if(!spacing)assert.equal(r.receivers,r.renderVertices);
+ }
  assert.equal(f.directions,count);assert.equal(f.angularPattern,'source');assert.equal(f.sourceSoftness,0);assert.equal(f.surfaceReconstruction.passes,0);
  assert.equal(f.gain,2**master);assert.equal(signal.lighting.surfaceGain,2**trim);
  assert.equal(signal.volume.physicalColor.material.scatteringAlbedo,Math.fround(albedo));

@@ -13,7 +13,9 @@ await save();let browser,page;
 try {
   const {chromium}=await import('/private/tmp/beaming-smoke-deps-1001/node_modules/playwright/index.mjs');
   report.runtime=await(await fetch(new URL('/api/runtime-config',url))).json();
-  const scene=await fetch(new URL('/api/read?root=scenes&path=cheap-kiln-shared-source.kaminos.json',url));
+  const sceneName=process.argv.includes('--receiver-spacing-check')?new URLSearchParams(new URL(url).hash.slice(1)).get('scene'):'cheap-kiln-shared-source.kaminos.json';
+  assert(sceneName,'receiver quality witness requires explicit saved scene identity');
+  const scene=await fetch(new URL('/api/read?root=scenes&path='+encodeURIComponent(sceneName),url));
   assert.ok(scene.ok,'authored kiln scene is not mounted');
   report.scene=await scene.json();
   assert.ok((await fetch(new URL(report.scene.model.source,url))).ok,'authored kiln mesh is not mounted');
@@ -22,7 +24,7 @@ try {
   page=await browser.newPage({viewport:{width:1600,height:1000}});
   if(process.argv.includes('--required-module-negative'))await page.route('**/scene-distributed-radiance.mjs',route=>route.fulfill({status:404,body:'deliberate owned witness missing module'}));
   let rejectModuleLoad;const moduleFailure=new Promise((_,reject)=>{rejectModuleLoad=reject;});moduleFailure.catch(()=>{});
-  if(process.argv.includes('--scattering-check')){
+  if(process.argv.includes('--scattering-check')||process.argv.includes('--receiver-spacing-check')){
     if(process.argv.includes('--disconnect-surface-trim'))await page.route('**/scene-distributed-radiance.mjs',async route=>{
       const response=await route.fetch(),original=await response.text(),needle='received.mul(surfaceGain)';assert.equal(original.split(needle).length,2);
       const body=original.replace(needle,'received');report.disconnectedTrimInstrumentation={original,body,reportedControlRetained:true};await save();await route.fulfill({response,body});
@@ -606,6 +608,39 @@ ${needle}`);
     assert.equal(final.lighting.geometryBuilds,original.lighting.geometryBuilds+1);assert.equal(final.lighting.previewStale,false);assert.equal(final.badge,'');
     assert.deepEqual(final.lighting.frame.angularCache.counts,[12]);assert.equal(final.volume.error,null);
     report.views.push({name:'committed-edit',...final});await page.screenshot({path:`${out}/committed-edit.png`});await save();
+  }
+  if(process.argv.includes('--receiver-spacing-check')){
+    report.phase='receiver-spacing-quality-budget';await save();
+    await page.selectOption('#rendering-light-mode','shared');await page.selectOption('#rendering-angular-pattern','source');await page.check('#rendering-match-flame-camera');await page.check('#rendering-surface-scattering');
+    await page.evaluate(()=>{for(const id of ['rendering-source-softness','rendering-surface-reconstruction','rendering-surface-gain','rendering-shared-gain']){const e=document.getElementById(id);e.value='0';e.dispatchEvent(new Event('input',{bubbles:true}));}});
+    const albedo=await page.$eval('#volume-physical-smoke-albedo',e=>Number(e.value));
+    const settle=async(spacing,count)=>{await page.waitForFunction(({spacing,count})=>{const d=window.__kaminosSceneRadiance.debugState(),v=window.__kaminosVolumePrototype.debugState();return v.error||d.error||(!d.previewStale&&d.frame?.receiverSampling?.spacing===spacing&&d.frame?.directions===count&&window.__kaminosSceneRadiance.canRender());},{spacing,count},{timeout:0});assert.equal(await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().error),null);};
+    const capture=()=>page.evaluate(async()=>{const [fields,source,scattering]=await Promise.all([window.__kaminosSceneRadiance.readback(),window.__kaminosVolumePrototype.sampleSceneVolumeSource(),window.__kaminosVolumePrototype.sampleSceneVolumeScattering()]);return {lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),source,scattering,dimensions:{surface:fields.surface.dimensions,back:fields.surfaceBack.dimensions,smoke:fields.smoke.dimensions},surface:Array.from(fields.surface.data),back:Array.from(fields.surfaceBack.data),smoke:Array.from(fields.smoke.data)};});
+    let baseline=null;
+    for(const [spacing,count]of [[0,12],[.04,12],[.08,12],[.16,12],[.08,10],[.08,8],[0,12]]){
+      await page.selectOption('#rendering-receiver-spacing',String(spacing));await page.selectOption('#rendering-angular-samples',String(count));await settle(spacing,count);
+      // Hold the source and its exact generation for raw field comparison.
+      await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(true));
+      const signal=await capture();assertScatteringView(signal,{spacing,count,albedo,enabled:true,trim:0,master:0});
+      const hash=v=>createHash('sha256').update(floatEvidenceBytes(v)).digest('hex');
+      const name=`receivers-${report.views.length}-${spacing}-${count}`,hashes={source:hash(signal.source.values),smoke:hash(signal.smoke),surface:hash(signal.surface)};
+      if(!baseline)baseline={hashes,receivers:signal.lighting.surfaceReceivers,visibilityBuilds:signal.lighting.visibilityBuilds,triangles:signal.lighting.staticTriangles};
+      assert.equal(hashes.source,baseline.hashes.source,'receiver spacing/count must preserve the held primary source');
+      assert.equal(signal.lighting.staticTriangles,baseline.triangles,'full caster geometry is retained');
+      assert.equal(signal.lighting.visibilityBuilds,baseline.visibilityBuilds,'receiver spacing does not rebuild packed caster geometry');
+      if(count===12)assert.equal(hashes.smoke,baseline.hashes.smoke,'surface layout must not alter smoke incident values');
+      if(spacing)assert(signal.lighting.surfaceReceivers<baseline.receivers,'actual kiln receiver count must decrease');
+      for(const [key,values]of [['source',signal.source.values],['front',signal.surface],['back',signal.back],['smoke',signal.smoke]])await fs.writeFile(`${out}/${name}-${key}.f32`,floatEvidenceBytes(values));
+      await page.screenshot({path:`${out}/${name}.png`});
+      const view={name,spacing,count,hashes,lighting:signal.lighting,volume:signal.volume,dimensions:signal.dimensions};report.views.push(view);await save();
+      await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(false));
+      if(await page.evaluate(()=>window.__beamingGatherDevice?.features.has('timestamp-query'))){
+        await page.evaluate(()=>{window.__beamingGatherProfile={remaining:20,records:[],errors:[]};});
+        await page.waitForFunction(()=>window.__beamingGatherProfile.errors.length||window.__beamingGatherProfile.records.length===20,null,{timeout:0});
+        view.profile=await page.evaluate(()=>window.__beamingGatherProfile);assert.deepEqual(view.profile.errors,[]);await save();
+      }else view.profile={status:'unsupported'};
+    }
+    report.receiverQualityAdmission='held-source-layout-comparison';await save();
   }
   const faviconOnly=report.httpFailures.length>0&&report.httpFailures.every(r=>new URL(r.url).pathname==='/favicon.ico');
   const materialErrors=report.errors.filter(e=>!(faviconOnly&&e.includes('Failed to load resource: the server responded with a status of 404')));
