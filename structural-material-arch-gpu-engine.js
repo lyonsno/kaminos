@@ -2,6 +2,7 @@ import { PhysicsEngine } from './vendor/webphysics/src/physics/PhysicsEngine.ts'
 
 export const ENGINE_REVISION = '96b043c88dc2a4af5367820caf1e1e9f458d5560';
 export const ENGINE_PATCH = 'kaminos-fixed-joint-rest-relative-v1';
+export const ENGINE_SCHEDULING_PATCH = 'kaminos-colored-solve-commit-batch-v1';
 
 // This adapter deliberately binds to the recorded upstream revision's buffer ABI.
 export class ArchGpuEngine extends PhysicsEngine {
@@ -89,5 +90,5 @@ export async function createNativeGpuRenderer(canvas) {
   const renderer = new WebGPURenderer({ canvas, device, antialias: true });
   await renderer.init();
   if (!renderer.backend.isWebGPUBackend) throw new Error('WebGL fallback rejected');
-  return { renderer, device, identity: { ...identity, engineRevision: ENGINE_REVISION, enginePatch: ENGINE_PATCH, backend: 'webgpu', adapterFallback: false } };
+  return { renderer, device, identity: { ...identity, engineRevision: ENGINE_REVISION, enginePatch: ENGINE_PATCH, schedulingPatch: ENGINE_SCHEDULING_PATCH, backend: 'webgpu', adapterFallback: false } };
 }

@@ -11,7 +11,7 @@ let phase='loading',failure=null,model,paused=params.get('smoke')==='1',failureP
 let operations=Promise.resolve(),busy=false,profiling=false,lastTime=performance.now(),simulationRate=1;
 const failures=[];
 function fail(operation,error){if(failurePaused===null)failurePaused=paused;paused=true;phase='failed';failure={operation,message:error.message??String(error),stack:error.stack,step:model?.snapshot().step??null,at:new Date().toISOString()};failures.push(failure);status.textContent=`${operation} failed`;errorNode.textContent=failure.message;console.error(error);}
-const act=(operation,callback)=>(...args)=>{if(phase!=='interactive')return;try{const result=callback(...args);result?.catch?.(error=>fail(operation,error));return result;}catch(error){fail(operation,error);}};
+const act=(operation,callback)=>(...args)=>{if(phase!=='interactive'||profiling)return;try{const result=callback(...args);result?.catch?.(error=>fail(operation,error));return result;}catch(error){fail(operation,error);}};
 function serialize(operation,callback){const work=operations.then(async()=>{busy=true;try{return await callback();}catch(error){fail(operation,error);throw error;}finally{busy=false;}});operations=work.catch(()=>{});return work;}
 try {
   const canvas=document.createElement('canvas');document.querySelector('#viewport').append(canvas);
@@ -92,16 +92,17 @@ try {
     if(!paused||grab)throw new Error('Performance trial requires a paused ungripped arch');
     if(!['solver','render','coupled'].includes(mode)||![samples,warmup,renderPasses].every(Number.isInteger)||samples<=0||warmup<0||renderPasses<=0)throw new Error('Invalid performance trial settings');
     return serialize('Performance trial',async()=>{
+      if(!paused||grab)throw new Error('Performance trial requires a paused ungripped arch');
       profiling=true;
       const before=model.snapshot(),observed=[];
       try{
         await device.queue.onSubmittedWorkDone();
         for(let i=-warmup;i<samples;i++){
-          const started=performance.now(),computeBefore=renderer.info.compute.calls;let stepMilliseconds=0,renderSubmitMilliseconds=0;
+          const started=performance.now(),computeBefore=renderer.info.compute.calls,renderBefore=renderer.info.render.calls;let stepMilliseconds=0,renderSubmitMilliseconds=0;
           if(mode!=='render'){const stepStart=performance.now();await model.step();stepMilliseconds=performance.now()-stepStart;}
           if(mode!=='solver'){const renderStart=performance.now();for(let pass=0;pass<renderPasses;pass++)synchronize();renderSubmitMilliseconds=performance.now()-renderStart;}
           const fenceStart=performance.now();await device.queue.onSubmittedWorkDone();
-          if(i>=0)observed.push({index:i,milliseconds:performance.now()-started,stepMilliseconds,renderSubmitMilliseconds,fenceMilliseconds:performance.now()-fenceStart,computeCalls:renderer.info.compute.calls-computeBefore});
+          if(i>=0)observed.push({index:i,milliseconds:performance.now()-started,stepMilliseconds,renderSubmitMilliseconds,fenceMilliseconds:performance.now()-fenceStart,computeCalls:renderer.info.compute.calls-computeBefore,renderCalls:renderer.info.render.calls-renderBefore});
         }
         const after=model.snapshot();
         return{mode,samples,warmup,renderPasses,observed,identity,route:ARCH_GPU_ROUTE,effectiveUrl:location.href,visualRoute:useStones?'handy-weathered-stone-v1':'box-baseline',viewport:{width:innerWidth,height:innerHeight,pixelRatio:devicePixelRatio},config:after.config,bodies:after.bodies.length,bonds:after.bonds.length,stepBefore:before.step,stepAfter:after.step,brokenBefore:before.broken,brokenAfter:after.broken,triangles:meshes.reduce((sum,mesh)=>sum+(mesh.geometry.index?.count??mesh.geometry.attributes.position.count)/3,0),camera:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray()},rendererInfo:{calls:renderer.info.render.calls,triangles:renderer.info.render.triangles}};

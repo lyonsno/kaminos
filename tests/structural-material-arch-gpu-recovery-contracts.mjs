@@ -14,12 +14,12 @@ for (const initiallyPaused of [false, true]) {
       setCustomValidity() {}, setAttribute(key, value) { this.attributes[key] = value; }, removeAttribute(key) { delete this.attributes[key]; }, replaceChildren() {}, append() {} });
     return nodes.get(id);
   };
-  const renderer = { setPixelRatio() {}, setSize() {}, render() { test.renders++; }, backend: {} };
-  const device = { addEventListener() {}, lost: new Promise(() => {}) };
+  const renderer = { setPixelRatio() {}, setSize() {}, render() { test.renders++; this.info.render.calls++; }, info: { compute: { calls: 0 }, render: { calls: 0, triangles: 12 } }, backend: {} };
+  const device = { addEventListener() {}, lost: new Promise(() => {}), queue: { async onSubmittedWorkDone() { test.interference?.(); } } };
   const createModel = async () => {
     const model = { disposed: 0, cells: [{ index: 0, pinned: false, half: { x: .5, y: .5, z: .5 } }],
-      snapshot: () => ({ step: 1, floorY: -1, dimensions: { dx: 1, dy: 1, dz: 1 }, config: { strength: 80, timeStep: 1 / 60 }, hand: null, broken: 0, events: [], bonds: [], bodies: [{ index: 0, pinned: false, position: { x: 0, y: 0, z: 0 }, quaternion: { x: 0, y: 0, z: 0, w: 1 } }] }),
-      async step() { if (test.failStep) throw new Error('injected simulation rejection'); test.steps++; },
+      snapshot: () => ({ step: 1 + test.steps, floorY: -1, dimensions: { dx: 1, dy: 1, dz: 1 }, config: { strength: 80, timeStep: 1 / 60 }, hand: null, broken: 0, events: [], bonds: [], bodies: [{ index: 0, pinned: false, position: { x: 0, y: 0, z: 0 }, quaternion: { x: 0, y: 0, z: 0, w: 1 } }] }),
+      async step() { if (test.failStep) throw new Error('injected simulation rejection'); test.steps++; renderer.info.compute.calls++; },
       isExposedFace: () => true, release() {}, dispose() { this.disposed++; } };
     test.models.push(model); return model;
   };
@@ -41,7 +41,19 @@ for (const initiallyPaused of [false, true]) {
     const api = window.__archCollapse;
     assert.equal(api.witness().phase, 'interactive');
     const accepted = test.models[0];
-    if (exercise === 'frame') {
+    if (exercise === 'performance') {
+      if (!initiallyPaused) node('#pause').onclick();
+      const before = test.renders;
+      test.interference = () => { node('#zoom-in').onclick(); node('#pause').onclick(); };
+      const measured = await api.performanceTrial({ mode: 'solver', samples: 2, warmup: 1 });
+      assert.equal(test.renders - before, 1, 'controls cannot add drawing to solver-only trial; final presentation is restored');
+      assert.equal(api.witness().paused, true, 'trial controls cannot resume the clock');
+      test.interference = null;
+      const queued = api.performanceTrial({ mode: 'solver', samples: 2, warmup: 1 });
+      node('#pause').onclick();
+      await assert.rejects(queued, /paused ungripped arch/, 'admission is checked after entering the serialized queue');
+      assert.equal(measured.observed.length, 2);
+    } else if (exercise === 'frame') {
       const before = test.renders;
       await test.frame(performance.now() + 17);
       assert.equal(test.steps, initiallyPaused ? 0 : 1, 'live frame advances exactly one physical step');

@@ -6176,8 +6176,7 @@ ${inertiaSetup}
       for (let color = clampedColorStart; color < colorEnd; color++) {
         solveParams.currentColor.value = color;
         commitParams.currentColor.value = color;
-        renderer.compute(this.primalBodySolveKernel, [bodyWorkgroups, 1, 1]);
-        renderer.compute(this.commitBodySolveKernel, [bodyWorkgroups, 1, 1]);
+        renderer.compute([this.primalBodySolveKernel, this.commitBodySolveKernel], [bodyWorkgroups, 1, 1]);
       }
     }
   }
@@ -13315,6 +13314,7 @@ var PhysicsEngine = class {
 // structural-material-arch-gpu-engine.js
 var ENGINE_REVISION = "96b043c88dc2a4af5367820caf1e1e9f458d5560";
 var ENGINE_PATCH = "kaminos-fixed-joint-rest-relative-v1";
+var ENGINE_SCHEDULING_PATCH = "kaminos-colored-solve-commit-batch-v1";
 var ArchGpuEngine = class extends PhysicsEngine {
   constructor(device, config) {
     if (config.enableBvhBuild === true) throw new Error("Arch GPU ownership supports the all-pairs route, not asynchronous BVH construction");
@@ -13409,12 +13409,13 @@ async function createNativeGpuRenderer(canvas) {
   const renderer = new WebGPURenderer({ canvas, device, antialias: true });
   await renderer.init();
   if (!renderer.backend.isWebGPUBackend) throw new Error("WebGL fallback rejected");
-  return { renderer, device, identity: { ...identity, engineRevision: ENGINE_REVISION, enginePatch: ENGINE_PATCH, backend: "webgpu", adapterFallback: false } };
+  return { renderer, device, identity: { ...identity, engineRevision: ENGINE_REVISION, enginePatch: ENGINE_PATCH, schedulingPatch: ENGINE_SCHEDULING_PATCH, backend: "webgpu", adapterFallback: false } };
 }
 export {
   ArchGpuEngine,
   ENGINE_PATCH,
   ENGINE_REVISION,
+  ENGINE_SCHEDULING_PATCH,
   createNativeGpuRenderer
 };
 //# sourceMappingURL=structural-material-arch-gpu-engine.js.map

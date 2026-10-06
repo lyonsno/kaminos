@@ -1,5 +1,12 @@
 export const WEBPHYSICS_PATCH = 'kaminos-fixed-joint-rest-relative-v1';
 export const WEBPHYSICS_OWNERSHIP_PATCH = 'kaminos-disabled-bvh-no-acquisition-v1';
+export const WEBPHYSICS_COMPUTE_BATCH_PATCH = 'kaminos-colored-solve-commit-batch-v1';
+
+export function applyWebphysicsComputeBatchPatch(source) {
+  const before = '        renderer.compute(this.primalBodySolveKernel, [bodyWorkgroups, 1, 1]);\n        renderer.compute(this.commitBodySolveKernel, [bodyWorkgroups, 1, 1]);';
+  if (source.split(before).length !== 2) throw new Error(`Webphysics revision drift in ${WEBPHYSICS_COMPUTE_BATCH_PATCH}`);
+  return source.replace(before, '        renderer.compute([this.primalBodySolveKernel, this.commitBodySolveKernel], [bodyWorkgroups, 1, 1]);');
+}
 
 export function applyWebphysicsOwnershipPatch(source) {
   const replacements = [

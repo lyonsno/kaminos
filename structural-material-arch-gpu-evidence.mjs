@@ -17,6 +17,8 @@ export function inspectArchPerformanceTrial(trial, expected) {
   if (!Array.isArray(trial?.observed) || trial.observed.length !== expected.samples) errors.push('Timing samples incomplete');
   else for (const [index, sample] of trial.observed.entries()) {
     if (sample.index !== index || !['milliseconds', 'stepMilliseconds', 'renderSubmitMilliseconds', 'fenceMilliseconds'].every(key => Number.isFinite(sample[key]) && sample[key] >= 0) || !(sample.milliseconds > 0)) errors.push(`Invalid timing sample ${index}`);
+    if (!Number.isInteger(sample.computeCalls) || sample.computeCalls < 0 || (expected.mode === 'render' ? sample.computeCalls !== 0 : sample.computeCalls === 0)) errors.push(`Missing or conflicting compute work at sample ${index}`);
+    if (sample.renderCalls !== (expected.mode === 'solver' ? 0 : expected.renderPasses)) errors.push(`Missing or extra scene submission at sample ${index}`);
   }
   return errors;
 }
