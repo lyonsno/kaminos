@@ -29,6 +29,7 @@ for (const initiallyPaused of [false, true]) {
     window: {}, location: { search: initiallyPaused ? '?smoke=1' : '', href: 'synthetic-view-contract' },
     addEventListener() {}, requestAnimationFrame() {}, fetch: async () => ({ ok: true, json: async () => ({ constructionSource: {}, source: {} }) }) });
   const source = fs.readFileSync(new URL('../structural-material-arch-gpu-view.js', import.meta.url), 'utf8')
+    .replace("'./structural-material-arch-stones.js'", JSON.stringify(new URL('../structural-material-arch-stones.js', import.meta.url).href))
     .replace("import * as THREE from 'three/webgpu';", 'const THREE = globalThis.__archViewTest.three;')
     .replace("import { OrbitControls } from 'three/addons/controls/OrbitControls.js';", 'class OrbitControls { constructor(camera) { this.camera = camera; this.target = new THREE.Vector3(); } update() { this.camera.lookAt(this.target); } }')
     .replace("import { createElement, Pause, Play, RotateCcw, ZoomIn, ZoomOut } from 'lucide';", 'const createElement = () => ({}), Pause = {}, Play = {}, RotateCcw = {}, ZoomIn = {}, ZoomOut = {};')

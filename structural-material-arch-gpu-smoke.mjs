@@ -7,8 +7,9 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Vector3, Quaternion } from 'three';
 import { inspectGpuConformance, inspectGpuArchLoad, inspectGpuArchRendererLifetime } from './structural-material-arch-gpu-evidence.mjs';
+import { inspectStoneVisual, STONE_ASSETS } from './structural-material-arch-stones.js';
 
-const [outputInput, executableInput, page = 'structural-material-arch-gpu-conformance.html', exercise = 'load'] = process.argv.slice(2);
+const [outputInput, executableInput, page = 'structural-material-arch-gpu-conformance.html', exercise = 'load', appearance = 'boxes'] = process.argv.slice(2);
 if (!outputInput || !executableInput) throw new Error('usage: node structural-material-arch-gpu-smoke.mjs OUTPUT.json INDEPENDENT_CHROME [PAGE]');
 const output=path.resolve(outputInput), root=path.dirname(fileURLToPath(import.meta.url));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -26,6 +27,7 @@ const input=async params=>{report.inputs.push({method:'Input.dispatchMouseEvent'
 const witness=()=>evaluate('window.__archCollapse.witness()');
 async function capture(name,expected,expectedFailures){
   const state=await witness(),errors=inspectGpuArchLoad(state,expected,expectedFailures),pixels=await evaluate('window.__archCollapse.pixels()');
+  if(appearance==='stones')errors.push(...inspectStoneVisual(state));
   report.states??={};report.states[name]=state;save();
   check(`${name}: native route, requested configuration, live physical and displayed poses`,!errors.length,errors);
   check(`${name}: canvas contains geometry`,pixels.fraction>.001,pixels);
@@ -39,6 +41,7 @@ async function injury(pick,delta={x:-1.5,y:0,z:.5},frames=60,requireFrontPatch=t
   check('a visible material contact is available',Boolean(pick?.visible),pick);
   await input({type:'mousePressed',x:pick.screen.x,y:pick.screen.y,button:'left',buttons:1,clickCount:1});
   const selected=await witness();
+  if(appearance==='stones')check('grab is attached to a visible stone triangle',STONE_ASSETS.some(asset=>asset.id===selected.lastPick?.asset)&&selected.lastPick?.eligibility==='surface'&&selected.lastPick.point.every((value,index)=>Math.abs(value-[pick.world.x,pick.world.y,pick.world.z][index])<1e-5),selected.lastPick);
   check('pointer selects the advertised current material patch',selected.state.hand?.index===pick.index&&selected.state.hand.indices.includes(pick.index)&&(!requireFrontPatch||selected.state.hand.indices.length>1&&selected.state.hand.layers.join(',')==='2'),selected.state.hand);
   let screen=pick.screen;
   for(let i=0;i<frames;i++){
@@ -98,9 +101,11 @@ try {
   if(executable.includes('/Google Chrome.app/')||!/chrome-headless-shell$|\/Chromium$|Google Chrome for Testing$/.test(executable))throw new Error('Independent native testing browser required');
   report.browser.executable=executable;report.browser.version=execFileSync(executable,['--version'],{encoding:'utf8'}).trim();
   const isArch=page==='structural-material-arch-gpu.html';
+  if(!['boxes','stones'].includes(appearance)||appearance==='stones'&&!isArch)throw new Error('Unsupported visual appearance');
   if(!['load','collapse','bind','controls','standing-diagnostics','penalty-diagnostics','stiffness-diagnostics','construction-diagnostics','contact-diagnostics'].includes(exercise)||exercise!=='load'&&!isArch)throw new Error('Unsupported exercise');
   if(!isArch&&page!=='structural-material-arch-gpu-conformance.html')throw new Error('Unsupported GPU smoke page');
   for(const source of [page,...(isArch?['structural-material-arch-gpu-view.js','structural-material-arch-gpu.js','structural-material-arch-gpu-kernels.js','structural-material-arch-gpu-fixture.js']:['structural-material-arch-gpu-conformance.js']),'dist/structural-material-arch-gpu-engine.js','vendor/webphysics/provenance.json','package-lock.json','node_modules/three/build/three.module.js','node_modules/three/build/three.webgpu.js','node_modules/three/build/three.tsl.js'])report.sources[source]=hash(fs.readFileSync(path.join(root,source)));
+  if(appearance==='stones')for(const source of ['structural-material-arch-stones.js',...STONE_ASSETS.map(asset=>asset.url)])report.sources[source]=hash(fs.readFileSync(path.join(root,source)));
   report.phase='http';save();
   server=createServer((req,res)=>{
     const filename=path.resolve(root,`.${decodeURIComponent(new URL(req.url,'http://localhost').pathname)}`);
@@ -108,7 +113,7 @@ try {
     try{const bytes=fs.readFileSync(filename);res.setHeader('content-type',({'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.json':'application/json','.wgsl':'text/plain'})[path.extname(filename)]??'application/octet-stream');res.setHeader('cache-control','no-store');res.end(bytes);}catch{res.writeHead(404).end();}
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-  report.requestedUrl=`http://127.0.0.1:${server.address().port}/${page}${isArch?'?smoke=1':''}`;
+  report.requestedUrl=`http://127.0.0.1:${server.address().port}/${page}${isArch?`?smoke=1${appearance==='stones'?'&stones=1':''}`:''}`;
   report.phase='launch';report.browser.profile=fs.mkdtempSync(path.join(os.tmpdir(),'kaminos-arch-gpu-'));save();
   child=spawn(executable,['--headless=new','--enable-automation','--no-first-run','--no-default-browser-check','--enable-unsafe-webgpu','--use-gl=angle','--use-angle=metal','--remote-debugging-port=0',`--user-data-dir=${report.browser.profile}`,'about:blank'],{stdio:['ignore','pipe','pipe']});
   child.stderr.setEncoding('utf8').on('data',value=>{stderr+=value;});
@@ -136,6 +141,7 @@ try {
   const capturePath=`${output.slice(0,-path.extname(output).length)}.png`;fs.writeFileSync(capturePath,bytes);report.captures.desktop={path:capturePath,sha256:hash(bytes),width:bytes.readUInt32BE(16),height:bytes.readUInt32BE(20)};
   report.lastTrustworthyEvidence=`${isArch?'paused arch':'native conformance'} report from ${report.effectiveUrl}`;
   report.evidenceErrors=isArch?inspectGpuArchLoad(report.result):inspectGpuConformance(report.result);
+  if(appearance==='stones')report.evidenceErrors.push(...inspectStoneVisual(report.result));
   if(isArch){
     if(report.result.phase!=='interactive'||report.result.state?.backend!=='webgpu-avbd'||report.result.identity?.backend!=='webgpu')report.evidenceErrors.push('GPU arch failed to initialize');
     if(!(report.pixels?.fraction>.001))report.evidenceErrors.push('Arch canvas is blank');
