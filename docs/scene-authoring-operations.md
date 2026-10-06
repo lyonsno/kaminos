@@ -48,6 +48,14 @@ The scene tree's Group loose objects action preserves existing groups and assemb
 
 Scene version 6 stores each bed's recipe on its object record and the assembly frame on its group. Opening an older composition migrates its legacy burner recipe into these records in memory; Save writes the migrated document. Explicit source absence in version 6 survives reopen. Older scene compositions retain their legacy implicit source behavior. Geometry assets remain external, as with other scene saves.
 
+## Kiln cue authoring
+
+The cinematic composition module adds Cues beside Object and Scene in the same Properties inspector. Edit cues returns from cinema to that workspace. Ignition and Work contain selectable, timed keys; add, duplicate and remove use the shared scene history. Selecting a key auditions its saved tune. Selecting another key accepts the current draft; switching Properties context cancels it. Accept tune stores the complete look in that key, Cancel restores the scene's working settings, and Preview plays the accepted sequence. The Cues Save scene command accepts its draft before saving; document commands otherwise require accepting or cancelling the draft first.
+
+`window.kaminosCinematic.read()` and `write(recipe)` expose the same scene-persisted cue recipe. Keys may contain a complete `tune` snapshot from `kaminosFlameAuthoring.read()`, including hidden settings and basin provenance; legacy radius/flow-only keys inherit the scene tune. `window.kaminosCinematic.cueEditor` exposes `begin('ignition' | 'work', index)`, `state()`, `set(controlId, value)`, `useBasin(presetId)`, `accept()` and `cancel()`. These are the live editor operations used by the panel. A pending basin cannot overwrite a cancelled or subsequently retuned draft. Accepted tune replacement is one `@kiln-cues` history edit. Undo changes accepted cues, not the evolved fluid.
+
+Playback interpolates the supported numeric Appearance/Emission/Motion fields and preserves other saved coefficients with key-boundary changes. Resolution and solver configuration stay scene-level; incompatible simulation changes refuse before altering a draft. Cue runtime application does not create per-frame history entries. Temporary native range bounds and steps restore with the baseline after audition or playback; legacy cues retain their flow range through 4 without changing ordinary authoring admission. Source absence prevents playback. Cues preview uses a visibly identified retained SF3D chair; Fire SF3D retains the actual producer/presentation path.
+
 ## Viewport interaction
 
 Scene hierarchy rows select on one click. Double-click a name (or use F2 on a focused row) to rename; Enter or blur accepts, Escape cancels. The rim helper remains named by its light role. The existing × removal and Add actions continue to use their scene operations. Add → Asset browser opens the full Workbench import surface; it does not introduce a new append/file-retention contract.

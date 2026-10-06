@@ -9,7 +9,7 @@ const section = (start, end) => html.slice(html.indexOf(start), html.indexOf(end
 function mounted() {
   let status = '';
   const context = vm.createContext({
-    window: {}, authoringBusy: false, kilnPerformanceSnapshot: null, currentSceneFile: 'input.kaminos.json',
+    window: {}, authoringBusy: false, kilnPerformanceSnapshot: null, kilnCueEditor: null, currentSceneFile: 'input.kaminos.json',
     document: { getElementById: () => ({ value: 'Comparison', disabled: false }) },
     compositionStatus: text => { status = text; }, setInfo: text => { status = text; },
     grBrowseScenes() {}, compositionRestoreUrl, location: { origin: 'http://localhost:9000' },
