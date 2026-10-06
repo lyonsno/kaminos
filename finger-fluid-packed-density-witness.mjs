@@ -51,7 +51,7 @@ export async function capturePackedDensityWitness({device,shader,layout,buffers,
 // Paired microbenchmark of one frozen density iteration. No apply-position stage.
 // All compute bindings are copied once; every timed arm writes owned scratch only.
 export async function capturePairedDensityWitness({device,shader,layout,buffers,count,cells,packedLayout,stepCount,
-  pairs = 64, repetitions = 4, comparison = 'linked-vs-packed', onProgress = () => {}}) {
+  pairs = 64, repetitions = 4, comparison = 'linked-vs-packed', frozenBindings = null, onProgress = () => {}}) {
   if(!Number.isSafeInteger(pairs)||pairs<1||!Number.isSafeInteger(repetitions)||repetitions<1)
     throw new RangeError('paired density pairs/repetitions must be positive safe integers');
   if(!['linked-vs-packed','packed-vs-packed'].includes(comparison))throw new Error('paired density comparison unsupported');
@@ -69,9 +69,15 @@ export async function capturePairedDensityWitness({device,shader,layout,buffers,
   try{
     const snapshot=buffers.map(e=>buffer('paired-frozen-binding-'+e.binding,e.resource.buffer.size,
       (e.resource.buffer.usage&U.UNIFORM?U.UNIFORM:U.STORAGE)|U.COPY_SRC|U.COPY_DST));
-    const freeze=device.createCommandEncoder();
-    buffers.forEach((e,i)=>freeze.copyBufferToBuffer(e.resource.buffer,0,snapshot[i],0,snapshot[i].size));
-    device.queue.submit([freeze.finish()]);await device.queue.onSubmittedWorkDone();
+    if(frozenBindings!==null){
+      if(!Array.isArray(frozenBindings)||frozenBindings.length!==12)throw Error('paired density replay requires twelve bindings');
+      for(let i=0;i<12;i++){const f=frozenBindings[i];if(f.binding!==i||f.size!==snapshot[i].size||typeof f.bytes!=='string')throw Error('paired density replay binding mismatch');const bytes=Uint8Array.from(atob(f.bytes),c=>c.charCodeAt(0));if(bytes.length!==f.size)throw Error('paired density replay partial bytes');device.queue.writeBuffer(snapshot[i],0,bytes);}
+    }else{
+      const freeze=device.createCommandEncoder();
+      buffers.forEach((e,i)=>freeze.copyBufferToBuffer(e.resource.buffer,0,snapshot[i],0,snapshot[i].size));
+      device.queue.submit([freeze.finish()]);
+    }
+    await device.queue.onSubmittedWorkDone();
     const module=packed=>device.createShaderModule({code:shader.replace(/const packedDensityEnabled: bool = (true|false);/,`const packedDensityEnabled: bool = ${packed};`)});
     const modules={linked:module(false),packed:module(true)};
     const pl=device.createPipelineLayout({bindGroupLayouts:[layout]});
@@ -91,7 +97,7 @@ export async function capturePairedDensityWitness({device,shader,layout,buffers,
     const querySet=device.createQuerySet({type:'timestamp',count:4});owned.push(querySet);
     const resolve=buffer('paired-query-resolve',32,U.QUERY_RESOLVE|U.COPY_SRC), map=buffer('paired-query-map',32,U.COPY_DST|U.MAP_READ);
     const result={schema:'kaminos.paired-density-frozen.v1',route:'same-device-frozen-production-density-pairs',stepCount,count,cells,packedLayout,comparison,pairs,repetitions,
-      frozenBindings:[],series:[],armModes:{A:arms.A.mode,B:arms.B.mode},claimLimit:'One frozen density iteration; close pairing reduces slow drift but does not establish live solver cadence or immunity to contention.'};
+      snapshotMode:frozenBindings?'retained-replay':'live-copied',frozenBindings:[],series:[],armModes:{A:arms.A.mode,B:arms.B.mode},claimLimit:'One frozen density iteration; close pairing reduces slow drift but does not establish live solver cadence or immunity to contention.'};
     onProgress(result);
     // Caller receives all bindings for replay; serialization/readback is outside timing.
     for(let i=0;i<snapshot.length;i++)result.frozenBindings.push({binding:i,size:snapshot[i].size,bytes:encode(await read(snapshot[i]))});

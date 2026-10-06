@@ -16675,7 +16675,7 @@ export async function createWebGPUFingerFluidSolver({
     body_transport_mode: safeBodyTransportMode,
     interface_frequency_mode: safeInterfaceFrequencyMode,
     step,
-    capturePairedDensityForWitness: options => capturePairedDensityWitness({device,shader:computeShader,layout:computeLayout,buffers:computeBindingEntries,count:safeParticleCount,cells:GRID_CELL_COUNT,packedLayout:packedDensityLayout,stepCount,pairs:options?.pairs,repetitions:options?.repetitions,comparison:options?.comparison,onProgress:options?.onProgress}),
+    capturePairedDensityForWitness: options => capturePairedDensityWitness({device,shader:computeShader,layout:computeLayout,buffers:computeBindingEntries,count:safeParticleCount,cells:GRID_CELL_COUNT,packedLayout:packedDensityLayout,stepCount,pairs:options?.pairs,repetitions:options?.repetitions,comparison:options?.comparison,frozenBindings:options?.frozenBindings,onProgress:options?.onProgress}),
     capturePackedDensityForWitness: () => capturePackedDensityWitness({device,shader:computeShader,layout:computeLayout,buffers:computeBindingEntries,count:safeParticleCount,cells:GRID_CELL_COUNT,packedLayout:packedDensityLayout,stepCount}),
     armSolverGpuTimestampCaptureForWitness,
     finishSolverGpuTimestampCaptureForWitness,

@@ -10,7 +10,7 @@ const passes=[],groups=[],original=[];let clock=1n;
 const makeBuffer=d=>({...d,data:new Uint8Array(d.size),destroy(){},async mapAsync(){},unmap(){},getMappedRange(){return this.data.buffer}});
 for(let i=0;i<12;i++)original.push({binding:i,resource:{buffer:makeBuffer({label:'live-'+i,size:i===0?128:16,usage:2|(i===3||i===11?8:1)})}});
 original[3].resource.buffer.data[0]=73;
-const device={features:new Set(['timestamp-query']),pushErrorScope(){},async popErrorScope(){return null},createBuffer:makeBuffer,createQuerySet:d=>({...d,values:[],destroy(){}}),createPipelineLayout:x=>x,createShaderModule:x=>x,async createComputePipelineAsync(x){return x.compute},createBindGroup:x=>{groups.push(x);return x},queue:{submit(){},async onSubmittedWorkDone(){}},createCommandEncoder(){return {
+const device={features:new Set(['timestamp-query']),pushErrorScope(){},async popErrorScope(){return null},createBuffer:makeBuffer,createQuerySet:d=>({...d,values:[],destroy(){}}),createPipelineLayout:x=>x,createShaderModule:x=>x,async createComputePipelineAsync(x){return x.compute},createBindGroup:x=>{groups.push(x);return x},queue:{submit(){},writeBuffer(b,offset,data){b.data.set(data,offset)},async onSubmittedWorkDone(){}},createCommandEncoder(){return {
  copyBufferToBuffer(a,offset,b,to,size){b.data.set(a.data.subarray(offset,offset+size),to)},
  beginComputePass(d={}){const p={...d,ops:[],setBindGroup(_,g){this.group=g},setPipeline(x){this.pipeline=x},dispatchWorkgroups(){this.ops.push(this.pipeline.entryPoint)},end(){if(d.timestampWrites){const t=d.timestampWrites;t.querySet.values[t.beginningOfPassWriteIndex]=clock;clock+=100n;t.querySet.values[t.endOfPassWriteIndex]=clock;clock+=10n}}};passes.push(p);return p},
  resolveQuerySet(q,start,count,b){new BigUint64Array(b.data.buffer).set(q.values.slice(start,start+count))},finish(){return {}}};}};
@@ -25,3 +25,8 @@ for(const p of timed.slice(4))assert.ok(p.ops.includes('clear_grid')&&p.ops.incl
 assert.ok(timed.slice(4).some(p=>p.ops.includes('pack_density_cell_records')));
 const bad=original.map(e=>({...e,resource:{buffer:{...e.resource.buffer,usage:0}}}));await assert.rejects(witness.capturePairedDensityWitness({...args,buffers:bad}),/cannot be frozen/);
 console.log('actual paired scheduler freezes dependencies and preserves both orders/routes');
+const retained=structuredClone(r.frozenBindings);const bytes=Buffer.from(retained[3].bytes,'base64');bytes[0]=99;retained[3].bytes=bytes.toString('base64');
+const replay=await witness.capturePairedDensityWitness({...args,frozenBindings:retained});assert.equal(Buffer.from(replay.frozenBindings[3].bytes,'base64')[0],99,'retained inputs must replace live inputs on replay');
+
+await assert.rejects(witness.capturePairedDensityWitness({...args,frozenBindings:retained.slice(1)}),/twelve/);
+const partial=structuredClone(retained);partial[3].bytes='AA==';await assert.rejects(witness.capturePairedDensityWitness({...args,frozenBindings:partial}),/partial/);
