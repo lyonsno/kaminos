@@ -7,6 +7,7 @@ import {validateSourceSoftness} from './scene-source-softening.mjs';
 import {validateSurfaceReconstruction} from './scene-surface-reconstruction.mjs';
 import {validateSceneSourceTransform,sceneSourceLocalPoint} from './scene-volume-source.mjs';
 import {surfaceReceiverLayout,validateReceiverSpacing} from './scene-surface-receivers.mjs';
+import {inspectSourceRays,validateInspectionSnapshot} from './scene-light-inspection.mjs';
 
 export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,onStatus=()=>{}}) {
   let gain=1,smokeMode='distributed',sourceSoftness=0,handle=null,revision=null,frame=null,external=null,externalBack=null,disposed=false;
@@ -22,7 +23,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   const attributeId=a=>{if(!a)return null;if(!attributeIds.has(a))attributeIds.set(a,++nextAttributeId);return attributeIds.get(a);};
   const status={identity:'distributed-volume-direct-radiance-v0',status:'awaiting-source',directions,volumeGrid,
     source:'actual-material-emission-extinction',coordinates:'volume-local-length-with-source-world-translation-and-uniform-scale',
-    previewStale:false,geometryBuilds:0,visibilityBuilds:0,lastGeometryBuildMs:null,
+    previewStale:false,receiverSpacingRequested:0,geometryBuilds:0,visibilityBuilds:0,lastGeometryBuildMs:null,
     limitations:['vertex-surface-receivers','prepared-smoke-zero-at-solid-cells','static-geometry-rebuild-on-committed-edit','no-surface-bounce','independent-consumer-display']};
   function retire() {
     prototype.setSceneDistributedLightFrame(null);
@@ -203,13 +204,45 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setSmokeMode(value){if(!['distributed','legacy'].includes(value))throw new Error('unknown smoke illumination mode');smokeMode=value;},
     setSourceSoftness(value){sourceSoftness=validateSourceSoftness(value);},
     setSurfaceReconstruction(value){surfaceReconstruction=validateSurfaceReconstruction(value);},
-    setReceiverSpacing(value){value=validateReceiverSpacing(value);if(value!==receiverSpacing){receiverSpacing=value;editCommitted=true;rebuildAnnounced=false;}},
+    setReceiverSpacing(value){value=validateReceiverSpacing(value);if(value!==receiverSpacing){receiverSpacing=value;status.receiverSpacingRequested=value;editCommitted=true;rebuildAnnounced=false;}},
     setDirections(value){lightingCount(value);directions=value;status.directions=value;},
     setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','source'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');angularPattern=pattern;angularRotation=rotation;},
     setRetainComparisons(value){retainComparisons=!!value;handle?.setRetainComparisons(retainComparisons);},
     setEditing(key,active){if(active){editing.add(key);rebuildAnnounced=false;}else if(editing.delete(key)&&!editing.size)editCommitted=true;},
     debugState(){return {...status,gain,receiverSpacingRequested:receiverSpacing,sourceTransform:validateSceneSourceTransform(sourceTransform),surfaceGain:surfaceGain.value,surfaceScattering,smokeMode,sourceSoftness,surfaceReconstruction,frame,display:'mesh and flame retain separate camera transforms'};},
     readback(){if(!handle)throw new Error('distributed receivers not built');return handle.readback();},
+    inspectionMeshes(){return [...originals.keys()];},
+    async inspectSurface({mesh,face,point,cameraPosition}){
+      const result={status:'capturing',phase:'selection',identity:'kaminos-lighting-inspection-v1',capturedAt:new Date().toISOString()};
+      const before=prototype.debugState();let paused=false;
+      try{
+        if(disposed||status.error||status.previewStale||!handle||!frame||frame.generation!==prototype.sceneVolumeSourceField().generation)throw new Error('no current verified lighting frame to inspect');
+        const row=originals.get(mesh);if(!row||!face)throw new Error('selected surface is not a current lighting receiver');
+        const vertexIds=[face.a,face.b,face.c];
+        if(vertexIds.some(i=>!Number.isInteger(i)||i<0||i>=row.clone.attributes.position.count))throw new Error('selected triangle indices invalid');
+        prototype.setSelectiveHeadLiveCapturePaused(true);paused=true;
+        const generation=frame.generation,build=status.geometryBuilds;
+        result.metadata={generation,frame:frame.frame,directions:frame.directions,angularPattern:frame.angularPattern,samplingLaw:frame.samplingLaw,surfaceGainFactor:frame.surfaceScattering.enabled?1:frame.gain,surfaceReconstruction:{passes:frame.surfaceReconstruction.passes},receiverSampling:{...frame.receiverSampling},geometryBuilds:build,geometryTriangles:frame.geometryTriangles};
+        result.worldTransform=validateSceneSourceTransform(sourceTransform);result.selection={meshId:mesh.uuid,meshName:mesh.name,materialSide:(Array.isArray(row.material)?row.material[face.materialIndex]:row.material).side,point:point?.toArray?.()||point,cameraPosition:cameraPosition?.toArray?.()||cameraPosition,vertices:[]};
+        const allIds=new Set(),worldPoint=new THREE.Vector3(),worldNormal=new THREE.Vector3(),nm=new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
+        for(const vertex of vertexIds){
+          const indices=[],weights=[];
+          for(let j=0;j<4;j++){const weight=row.layout.weights[vertex*4+j];if(weight){const id=row.receiverOffset+row.layout.indices[vertex*4+j];indices.push(id);weights.push(weight);allIds.add(id);}}
+          worldPoint.fromBufferAttribute(row.clone.attributes.position,vertex).applyMatrix4(mesh.matrixWorld);
+          worldNormal.fromBufferAttribute(row.clone.attributes.normal,vertex).applyMatrix3(nm).normalize();
+          result.selection.vertices.push({vertex,position:worldPoint.toArray(),normal:worldNormal.toArray(),indices,weights});
+        }
+        result.phase='actual-gpu-input-readback';
+        const [inputs,fields]=await Promise.all([handle.inspectRayInputs([...allIds]),handle.readback({includeSource:true,sourceOnly:true})]);
+        result.inputs=inputs;result.fields=Object.fromEntries(Object.entries(fields).map(([name,v])=>[name,{dimensions:v.dimensions,data:Array.from(v.data)}]));
+        result.sourceGeneration=prototype.sceneVolumeSourceField().generation;
+        if(generation!==result.sourceGeneration||status.geometryBuilds!==build||receiverRevision()!==revision)throw new Error('source/geometry changed during inspection');
+        result.status='captured';result.phase='CPU-replay';validateInspectionSnapshot(result);
+        result.replay=inspectSourceRays({inputs,field:result.fields.gatherSource,metadata:result.metadata});result.phase='complete';
+      }catch(error){result.status='failed';result.error=String(error.message||error);}
+      finally{if(paused)prototype.setSelectiveHeadLiveCapturePaused(!!before.selectiveHeadLiveCapturePaused);}
+      return result;
+    },
     canRender(){return !disposed&&!status.error&&handle&&frame?.generation===prototype.sceneVolumeSourceField().generation;},
     dispose(){disposed=true;prototype.setSceneSourceFrameConsumer(null);retire();},
   };

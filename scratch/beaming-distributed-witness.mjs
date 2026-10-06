@@ -634,6 +634,19 @@ ${needle}`);
       await page.screenshot({path:`${out}/${name}.png`});
       const view={name,spacing,count,hashes,lighting:signal.lighting,volume:signal.volume,dimensions:signal.dimensions};report.views.push(view);await save();
       await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(false));
+      if(await page.evaluate(()=>!!window.__kaminosLightingDebug)){
+        view.sceneProfile=await page.evaluate(()=>window.__kaminosLightingDebug.measure(20));await save();
+        assert.notEqual(view.sceneProfile.status,'failed','scene GPU timing failed rather than returning fresh evidence');
+        if(count===12&&(spacing===0||spacing===.08)){
+          const inspection=await page.evaluate(()=>window.__kaminosLightingDebug.captureAt(698,624));
+          await fs.writeFile(`${out}/${name}-inspection.json`,JSON.stringify(inspection));
+          view.inspection={status:inspection.status,phase:inspection.phase,error:inspection.error,replayStatus:inspection.replay?.status,metadata:inspection.metadata};await save();
+          assert.equal(inspection.status,'captured','actual surface inspector must produce coherent GPU data');
+          assert.equal(inspection.replay.status,'matched','selected ray replay must match GPU receiver outputs');
+          await page.evaluate(()=>{document.getElementById('rendering-light-debug').open=true;document.getElementById('rendering-light-debug').scrollIntoView();});
+          await page.screenshot({path:`${out}/${name}-debug.png`});
+        }
+      }
       if(await page.evaluate(()=>window.__beamingGatherDevice?.features.has('timestamp-query'))){
         await page.evaluate(()=>{window.__beamingGatherProfile={remaining:20,records:[],errors:[]};});
         await page.waitForFunction(()=>window.__beamingGatherProfile.errors.length||window.__beamingGatherProfile.records.length===20,null,{timeout:0});

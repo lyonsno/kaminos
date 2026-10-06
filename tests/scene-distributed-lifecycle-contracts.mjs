@@ -6,11 +6,11 @@ import {mountDistributedSceneRadiance} from '../scene-distributed-radiance.mjs';
 globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,UNIFORM:4,COPY_SRC:8};
 globalThis.GPUTextureUsage={STORAGE_BINDING:1,TEXTURE_BINDING:2,COPY_SRC:4};
 function fixture(castShadow=true) {
-  const uploads=[],passes=[],copies=[];
+  const uploads=[],passes=[],copies=[],buffers=[];
   const pipeline={getBindGroupLayout(){return {};}};
   const device={limits:{maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024,maxTextureDimension3D:256,maxComputeWorkgroupsPerDimension:65535},
     queue:{writeBuffer(buffer,offset,data){if(buffer.label==='surface and smoke receivers')uploads.push(new Float32Array(data));},submit(){}},
-    createBuffer({label}){return {label,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
+    createBuffer({label,usage}){const b={label,usage,destroy(){}};buffers.push(b);return b;},createTexture(){return {createView(){return {};},destroy(){}};},
     createShaderModule(){return {};},createComputePipeline(){return pipeline;},createBindGroup(){return {};},
     createCommandEncoder(){return {copyBufferToBuffer(...args){copies.push(args);},beginComputePass({label}){passes.push(label);return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
   let consume;
@@ -25,9 +25,15 @@ function fixture(castShadow=true) {
   const statuses=[];
   const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,onStatus:s=>statuses.push(s)});
   const field={source:{status:'encoded',texture:{createView(){return {}; }},localMax:[1,3,1],dimensions:[32,64,32],generation:1,frame:1}};
-  return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,field,prepare(){consume(field);}};
+  return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,buffers,field,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='ray-inspection'){
+ const f=fixture();f.prepare();
+ for(const label of ['surface and smoke receivers','distributed incident directions'])assert(f.buffers.find(b=>b.label===label).usage&GPUBufferUsage.COPY_SRC,'inspection must read actual GPU inputs without invalid copy commands');
+ assert.equal(typeof f.mount.inspectSurface,'function','actual surface selection must reach reusable inspection');
+ f.mount.dispose();
+}
 if(!selected||selected==='receiver-spacing'){
   const f=fixture();f.prepare();
   assert.equal(typeof f.mount.setReceiverSpacing,'function','receiver spacing must be a real live-mount control');

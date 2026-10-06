@@ -3449,6 +3449,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="rendering-distributed-controls" hidden><label for="rendering-angular-samples">Distributed flame directions</label><select id="rendering-angular-samples"><option>8</option><option>10</option><option>12</option><option>16</option><option selected>24</option><option>48</option><option>96</option></select>
         <label for="rendering-receiver-spacing">Surface receiver spacing (experimental)</label><select id="rendering-receiver-spacing"><option value="0" selected>Per vertex · reference</option><option value="0.04">0.04 source units · fine</option><option value="0.08">0.08 source units · medium</option><option value="0.16">0.16 source units · coarse</option></select>
         <p class="rendering-description" id="rendering-receiver-status">Reference mesh receivers; full render and shadow geometry retained.</p>
+        <details id="rendering-light-debug" hidden><summary>Receiver / ray debug</summary>
+          <button type="button" id="rendering-light-debug-pick">Select receiving surface</button><button type="button" id="rendering-light-debug-time">Measure 20 scene GPU frames</button><button type="button" id="rendering-light-debug-save">Save inspection JSON</button>
+          <p class="rendering-description" id="rendering-light-debug-status">Source-aware ray replay; other modes retain raw values and report unsupported replay. Snapshots are held data, not live contributions.</p>
+          <select id="rendering-light-debug-sample" aria-label="Captured lighting receiver"></select>
+          <div id="rendering-light-debug-plot"></div><div id="rendering-light-debug-rays" style="font-size:11px;overflow:auto"></div>
+        </details>
         <label class="import-mode"><input type="checkbox" id="rendering-surface-scattering" checked><span>Smoke scattered light on surfaces</span></label>
         <p class="rendering-description">Includes one scattering event in smoke before light reaches the kiln. Smoke albedo changes this contribution. Uncheck to compare direct flame illumination.</p>
         <div class="slider-row"><label class="slider-label" for="rendering-surface-gain">Surface illumination trim (stops)</label><input type="range" id="rendering-surface-gain" min="-8" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-surface-gain-value">+0.00</span></div>
@@ -23154,6 +23160,7 @@ async function initKaminosVolumeRoute() {
         }})
         : module.mountSceneRadiance({renderer,scene,prototype:volumePrototype});
       if(distributed)bindSceneLightEditInteraction({document,window,getLighting:()=>window.__kaminosSceneRadiance});
+      if(distributed)import('./scene-light-debug-view.mjs').then(debug=>debug.mountLightingDebugView({document,renderer,camera,getLighting:()=>window.__kaminosSceneRadiance})).catch(error=>{document.getElementById('rendering-light-debug-status').textContent=`Inspection unavailable: ${error.message}`;console.error(error);});
       window.__kaminosSceneRadianceSetup.status='mounted';
       refreshRenderingControls();
     }).catch(error=>{
