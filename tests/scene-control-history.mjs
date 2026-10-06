@@ -207,3 +207,11 @@ test('Escape from typed parameter cancels before blur can commit it',async()=>{
   assert.deepEqual(f.value,before);assert.equal(f.edits.state().undoCount,0);assert.equal(f.edits.state().active,null);
  }finally{delete globalThis.document;delete globalThis.window;}
 });
+
+test('one data control can select per-object targets without merging their histories',()=>{
+ const input=new Control();let current='a',active=null,values={a:1,b:2},past=[];
+ const edits={state:()=>({active}),begin(id){active={id,before:values[id]};},commit(){past.push({...active,after:values[active.id]});active=null;},cancel(){values[active.id]=active.before;active=null;}};
+ installSceneControlHistory({controls:[input],edits,id:()=>current});
+ input.fire('focusin');values.a=3;input.fire('change');current='b';input.fire('focusin');values.b=4;input.fire('pointercancel');
+ assert.deepEqual(values,{a:3,b:2});assert.deepEqual(past,[{id:'a',before:1,after:3}]);assert.equal(active,null);
+});

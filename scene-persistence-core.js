@@ -1,3 +1,6 @@
+import {RIM_LIGHT_ID,checkedRimRecipe,rimRecipePose,checkedSceneLightRecord} from './scene-rim-light.mjs';
+import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh} from './scene-geometry.mjs';
+import {GROUP_TYPE,identityGroupPose,checkedGroupPose} from './scene-group.mjs';
 import {BURNER_BED_TYPE,BURNER_BED_SOURCE,BURNER_ASSEMBLY_TYPE,checkedBurnerBed,checkedAssemblyPose} from './burner-assembly.mjs';
 import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFlameEmitterPose,
@@ -5,7 +8,7 @@ import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFl
 import { LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 6;
+export const SCENE_VERSION = 7;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -14,14 +17,16 @@ function cloneJson(value) {
 
 function normalizeSceneObjectRecord(record) {
   if (!record || typeof record !== 'object') throw new Error('Scene object record must be an object');
+  if(record.type==='light')record=checkedSceneLightRecord(record);
   const id = String(record.id || record.fileName || record.source || 'object');
   if (record.type === FLAME_EMITTER_TYPE && (id !== FLAME_EMITTER_ID || record.source !== FLAME_EMITTER_SOURCE)) {
     throw new Error('Unsupported flame source identity');
   }
-  if (record.type === BURNER_BED_TYPE) record = checkedBurnerBed(record);
+  if (record.type === BURNER_BED_TYPE || record.type==='burner-bed' || record.type===PROCEDURAL_MESH_TYPE) record=checkedProceduralMesh(record);
   return {
     id,
-    ...(record.type === BURNER_BED_TYPE ? {burner:cloneJson(record.burner)} : {}),
+    ...(record.type==='light'?{light:cloneJson(record.light)}:{}),
+    ...(record.type === PROCEDURAL_MESH_TYPE ? {geometry:cloneJson(record.geometry),surface:cloneJson(record.surface)} : {}),
     source: record.source ?? null,
     type: record.type ?? 'glb',
     fileName: record.fileName ?? 'object.glb',
@@ -54,7 +59,7 @@ function normalizeSceneGroupRecord(record) {
     id,
     label: record.label ?? id,
     objectIds,
-    ...(record.type === BURNER_ASSEMBLY_TYPE ? {type:BURNER_ASSEMBLY_TYPE,transform:checkedAssemblyPose(record.transform)} : {}),
+    type:GROUP_TYPE,transform:checkedGroupPose(record.transform || identityGroupPose()),
     source: record.source ?? null,
     createdAt: record.createdAt ?? null,
   };
@@ -83,13 +88,13 @@ export function sceneObjectToLegacyModel(data) {
 }
 
 export function getSceneObjectRecords(data) {
-  if (Array.isArray(data?.objects)) {
-    return data.objects.map(normalizeSceneObjectRecord);
+  const records=Array.isArray(data?.objects)?data.objects.map(normalizeSceneObjectRecord)
+    :data?.model?.source?[normalizeSceneObjectRecord(sceneObjectToLegacyModel(data))]:[];
+  if(data?.version<7 && data.environment?.rimLight?.enabled && !records.some(r=>r.id===RIM_LIGHT_ID)){
+    const light={...checkedRimRecipe(data.environment.rimLight),kind:'spot',role:'rim'};
+    records.push(normalizeSceneObjectRecord({id:RIM_LIGHT_ID,type:'light',source:'kaminos:scene-spot-light',label:'Rim light',fileName:'Spot light',light,transform:rimRecipePose(light)}));
   }
-  if (data?.model?.source) {
-    return [normalizeSceneObjectRecord(sceneObjectToLegacyModel(data))];
-  }
-  return [];
+  return records;
 }
 
 export function getSceneGroupRecords(data, objectRecords = getSceneObjectRecords(data)) {
@@ -115,6 +120,9 @@ export function sceneDocumentIsLoadable(data) {
 }
 
 export function isReloadableSceneObjectRecord(record) {
+  if(record?.type==='light' && record.source==='kaminos:scene-spot-light'){try{if(record.light?.kind!=='spot')return false;checkedSceneLightRecord(record);return true;}catch{return false;}}
+  if(record?.type===PROCEDURAL_MESH_TYPE && record.source===PROCEDURAL_MESH_SOURCE){try{checkedProceduralMesh(record);return true;}catch{return false;}}
+
   const type = record?.type || 'glb';
   const source = record?.source;
   if (type === BURNER_BED_TYPE) return source === BURNER_BED_SOURCE;
@@ -172,6 +180,7 @@ export function buildSceneDocument({
   groups = [],
   activeObjectId = null,
   activeGroupId = null,
+  activeFieldId = null,
   volumePrimitives = { schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] },
   provenance = null,
   composition = null,
@@ -209,6 +218,7 @@ export function buildSceneDocument({
     groups: sceneGroups,
     activeObjectId: activeObject?.id || activeObjectId || null,
     activeGroupId: activeGroup?.id || null,
+    activeFieldId: ['flame-field','water-field'].includes(activeFieldId)?activeFieldId:null,
     model: activeObject ? {
       source: activeObject.source,
       type: activeObject.type,

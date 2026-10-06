@@ -28,19 +28,23 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   hierarchy.innerHTML = `<div class="authoring-panel-heading"><h2>Scene</h2><span id="authoring-object-count"></span></div><div id="authoring-tree"></div><div class="authoring-hierarchy-bottom"><p>Click to select · Double-click name to rename · × removes (Undo restores)</p></div>`;
   const inspector = document.createElement('aside');
   inspector.id = 'authoring-inspector'; inspector.setAttribute('aria-label', 'Properties');
-  inspector.innerHTML = `<nav class="inspector-switch" aria-label="Properties context"><button type="button" data-inspector-context="object" aria-pressed="true">Object</button><button type="button" data-inspector-context="scene" aria-pressed="false">Scene</button></nav>
+  inspector.innerHTML = `<nav class="inspector-switch" aria-label="Properties context"><button type="button" data-inspector-context="object" aria-pressed="true">Selection</button><button type="button" data-inspector-context="scene" aria-pressed="false">Scene</button></nav>
     <div id="authoring-object-properties" class="authoring-inspector-body"><div id="authoring-transform-slot"></div><div id="authoring-type-slot"></div><details id="authoring-object-tools"><summary>Object tools</summary></details></div>
-    <div id="authoring-scene-properties" class="authoring-inspector-body" hidden><h2>Composition</h2><div id="authoring-composition-slot"></div><details open id="authoring-world-slot"><summary>Environment</summary></details><details id="authoring-burner-slot"><summary>Burner</summary></details><div id="authoring-water-slot"></div><details id="authoring-render-slot"><summary>Rendering</summary></details></div>`;
+    <div id="authoring-scene-properties" class="authoring-inspector-body" hidden><h2>Composition</h2><div class="scene-data-choices"><button type="button" id="scene-fire-data">Fire & smoke data</button><button type="button" id="scene-water-data">Water simulation data</button></div><div id="authoring-composition-slot"></div><details open id="authoring-world-slot"><summary>Environment</summary></details><details id="authoring-burner-slot"><summary>Burner</summary></details><div id="authoring-water-slot"></div><details id="authoring-render-slot"><summary>Rendering</summary></details></div>`;
   const toolbar = document.createElement('div'); toolbar.id = 'authoring-viewport-tools';
-  toolbar.innerHTML = `<div id="authoring-add-slot"></div><div id="authoring-gizmo-slot" aria-label="Transform gizmo"></div><details id="authoring-viewport-settings"><summary>Viewport</summary><div><label><input id="viewport-show-gizmos" type="checkbox" checked> Transform gizmos</label><label><input id="viewport-show-hints" type="checkbox" checked> Navigation hints</label></div></details><div class="authoring-header-spacer"></div><button type="button" id="authoring-frame" title="Frame selected (F)">Frame</button><button type="button" id="authoring-undo" title="Undo (Cmd/Ctrl Z)">Undo</button><button type="button" id="authoring-redo" title="Redo (Cmd/Ctrl Shift Z)">Redo</button><div id="authoring-navigation-slot"></div>`;
+  toolbar.innerHTML = `<div id="authoring-add-slot"></div><details id="authoring-presets"><summary>Presets</summary><div><button type="button" id="apply-burner-preset">Burner setup</button><p>Apply to the current fire field</p></div></details><div id="authoring-gizmo-slot" aria-label="Transform gizmo"></div><details id="authoring-viewport-settings"><summary>Viewport</summary><div><label><input id="viewport-show-gizmos" type="checkbox" checked> Transform gizmos</label><label><input id="viewport-show-hints" type="checkbox" checked> Navigation hints</label></div></details><div class="authoring-header-spacer"></div><button type="button" id="authoring-frame" title="Frame selected (F)">Frame</button><button type="button" id="authoring-undo" title="Undo (Cmd/Ctrl Z)">Undo</button><button type="button" id="authoring-redo" title="Redo (Cmd/Ctrl Shift Z)">Redo</button><div id="authoring-navigation-slot"></div>`;
   document.body.prepend(header);
   document.body.append(hierarchy, inspector);
   byId('viewport').prepend(toolbar);
   const viewportSettings=byId('authoring-viewport-settings');
   document.addEventListener('pointerdown',event=>{
     if(!viewportSettings.contains(event.target))viewportSettings.open=false;
+    if(!byId('authoring-presets').contains(event.target))byId('authoring-presets').open=false;
   },true);
   for(const [id,key] of [['viewport-show-gizmos','gizmos'],['viewport-show-hints','hints']])byId(id).addEventListener('change',event=>document.defaultView.kaminosViewportSettings.set({[key]:event.target.checked}));
+  byId('apply-burner-preset').onclick=()=>{try{document.defaultView.kaminosApplyBurnerPreset();byId('authoring-presets').open=false;}catch(error){byId('info-bar').textContent=error.message;}};
+  byId('scene-fire-data').onclick=()=>document.defaultView.selectSceneField('flame-field');
+  byId('scene-water-data').onclick=()=>document.defaultView.selectSceneField('water-field');
   const entries = [];
   const move = (node, destination) => entries.push({ node, destination: byId(destination) });
   move(byId('scene-object-list').closest('.panel'), 'authoring-tree');
@@ -48,13 +52,17 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('selected-light-properties'), 'authoring-type-slot');
   move(byId('selected-flame-properties'), 'authoring-type-slot');
   move(byId('selected-bed-properties'), 'authoring-type-slot');
-  move(byId('shared-flame-domain-properties'), 'authoring-water-slot');
+  move(byId('shared-flame-domain-properties'), 'authoring-type-slot');
+  move(byId('selected-mesh-properties'), 'authoring-type-slot');
+  move(byId('selected-spot-properties'), 'authoring-type-slot');
+  move(byId('selected-object-relations'), 'authoring-type-slot');
+  move(byId('selected-group-properties'), 'authoring-type-slot');
   move(byId('selected-assembly-properties'), 'authoring-type-slot');
   move(byId('authoring-source-environment'), 'authoring-world-slot');
   move(byId('authoring-source-render'), 'authoring-render-slot');
   move(byId('authoring-source-fire-light'), 'authoring-render-slot');
   move(byId('authoring-source-burner'), 'authoring-burner-slot');
-  move(byId('local-liquid-performance'), 'authoring-water-slot');
+  move(byId('local-liquid-performance'), 'authoring-type-slot');
   move(byId('composition-label').closest('.authoring-controls'), 'authoring-composition-slot');
   move(byId('scene-add-menu').closest('nav'), 'authoring-add-slot');
   move(byId('navigation-input-mode').closest('label'), 'authoring-navigation-slot');
@@ -106,13 +114,14 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   let selectionKey;
   const observer = new Observer(() => {
     const source = byId('transform-inspector');
-    const key = `${source.dataset.selectedObjectId}/${source.dataset.selectedGroupId}`;
+    const key = `${source.dataset.selectedObjectId}/${source.dataset.selectedGroupId}/${source.dataset.selectedFieldId}`;
     if (key === selectionKey) return;
     selectionKey = key;
+    byId('authoring-object-tools').hidden=!!source.dataset.selectedFieldId;
     setContext('object');
 
   });
-  observer.observe(byId('transform-inspector'), { attributes: true, attributeFilter: ['data-selected-object-id', 'data-selected-group-id'] });
+  observer.observe(byId('transform-inspector'), { attributes: true, attributeFilter: ['data-selected-object-id', 'data-selected-group-id','data-selected-field-id'] });
   const updateCount = () => {
     const count = byId('scene-object-list').querySelectorAll('[data-scene-object-id]').length;
     byId('authoring-object-count').textContent = `${count} ${count === 1 ? 'object' : 'objects'}`;

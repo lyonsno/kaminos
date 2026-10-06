@@ -26,3 +26,20 @@ export function checkedRimRecipe(settings) {
    || settings.angle < 1 || settings.angle > 89 || settings.penumbra < 0 || settings.penumbra > 1) throw new Error('Invalid rim light range');
  return structuredClone(settings);
 }
+
+// A light's object pose owns placement. The old spherical recipe is only a
+// runtime/legacy adapter; it is not a second saved placement authority.
+export function checkedSceneLightRecord(raw) {
+ if(raw.type!=='light'||raw.source!=='kaminos:scene-spot-light'||raw.light?.kind!=='spot')throw Error('Unsupported light data');
+ const transform=checkedPose(raw.transform);if(transform.scale[2]===0)throw Error('A spot light requires a nonzero forward scale');
+ const value=raw.light,aimDistance=value.aimDistance??value.distance;
+ if(typeof value.enabled!=='boolean'||!/^#[a-f0-9]{6}$/i.test(value.color)||!Number.isFinite(value.intensity)||value.intensity<0
+   ||!Number.isFinite(value.angle)||value.angle<=0||value.angle>=90||!Number.isFinite(value.penumbra)||value.penumbra<0||value.penumbra>1||!Number.isFinite(aimDistance)||aimDistance<=0)throw Error('Invalid spot light data');
+ const light={kind:'spot',enabled:value.enabled,color:value.color,intensity:value.intensity,angle:value.angle,penumbra:value.penumbra,aimDistance};
+ if(value.role!==undefined)light.role=value.role;
+ return {...raw,transform,light};
+}
+export function sceneLightRuntimeRecipe(raw) {
+ const record=checkedSceneLightRecord(raw),value=record.light;
+ return rimRecipeFromPose({...value,distance:value.aimDistance,target:[0,0,0],azimuth:0,elevation:0},{...record.transform,scale:[1,1,1]});
+}

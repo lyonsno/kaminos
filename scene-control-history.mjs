@@ -3,9 +3,9 @@ const valueKeys = new Set(['ArrowDown','ArrowLeft','ArrowRight','ArrowUp','End',
 
 /** Existing control handlers own live updates; the shared session owns their gesture. */
 export function installSceneControlHistory({controls, edits, id, label='Edit control', onError=()=>{}}) {
-  let owner=null;
+  let owner=null,ownedId=null;
   const listeners=[];
-  const active=()=>owner && edits.state().active?.id===id;
+  const active=()=>owner && edits.state().active?.id===ownedId;
   const add=(control,type,listener,options)=>{
     control.addEventListener(type,listener,options);
     listeners.push(()=>control.removeEventListener(type,listener,options));
@@ -23,7 +23,7 @@ export function installSceneControlHistory({controls, edits, id, label='Edit con
   function capture(event) {
     if(active() && owner!==event.currentTarget) commit();
     if(active()) return true;
-    try {edits.begin(id,label);owner=event.currentTarget;return true;}
+    try {ownedId=typeof id==='function'?id():id;edits.begin(ownedId,label);owner=event.currentTarget;return true;}
     catch(error){event.preventDefault?.();onError(error);return false;}
   }
   for(const control of controls) {
@@ -40,7 +40,7 @@ export function installSceneControlHistory({controls, edits, id, label='Edit con
     add(control,'pointercancel',event=>{if(owner===event.currentTarget)cancel();});
     add(control,'keyup',event=>{if(owner===event.currentTarget&&valueKeys.has(event.key)&&control.type==='range')commit();});
   }
-  return {commit,cancel,state:()=>({pending:!!active(),id:active()?id:null}),dispose(){cancel();listeners.splice(0).forEach(remove=>remove());}};
+  return {commit,cancel,state:()=>({pending:!!active(),id:active()?ownedId:null}),dispose(){cancel();listeners.splice(0).forEach(remove=>remove());}};
 }
 
 export function formatAuthoringNumber(value) {

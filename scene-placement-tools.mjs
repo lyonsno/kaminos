@@ -84,6 +84,7 @@ export function installScenePlacementTools({
   }
   function finish(commit = true) {
     if (!edits.state().active && !gizmoEditing) return false;
+    const completed=modal?.completed;
     const prior = modal?.prior || gizmoPrior;
     const capture = field?.capture || (gizmoEditing ? pointerOrigin : null);
     const fieldInput = field?.input;
@@ -95,6 +96,7 @@ export function installScenePlacementTools({
     try { commit ? edits.commit() : edits.cancel(); }
     catch (caught) { error = caught; edits.cancel(); }
     restoreControls(prior);
+    try{completed?.({commit:commit&&!error});}catch(caught){error=caught;}
     draw();
     if (error) hud.textContent = error.message;
     return !error;
@@ -103,12 +105,12 @@ export function installScenePlacementTools({
     try { edits.begin(id, label); return true; }
     catch (error) { hud.textContent = error.message; return false; }
   }
-  function start(operation) {
+  function start(operation,completed=null) {
     if (!allowed() || busy() || !selected()) return false;
     if (field) finish(true);
     if (!modal) {
       if (!begin(selected(), 'Transform')) return false;
-      modal = { axis: null, plane: false, frame: 'world', frameRotation: [...pose().rotation], numeric: '', snap: false, precise: false, prior: priorControls() };
+      modal = { completed, axis: null, plane: false, frame: 'world', frameRotation: [...pose().rotation], numeric: '', snap: false, precise: false, prior: priorControls() };
     }
     // Operation changes are alternatives within one gesture. Always restart
     // from the accepted pose captured by begin(), then preview only this mode.

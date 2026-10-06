@@ -8,16 +8,16 @@ const group={id:'assembly-one',label:'Left burner',type:'burner-assembly',transf
 test('procedural bed recipe and assembly frame survive the normal scene document',()=>{
  const doc=buildSceneDocument({objects:[bed],groups:[group],activeGroupId:group.id});
  const restored=planSceneRestore(doc);
- assert.deepEqual(restored.objects[0].burner,bed.burner,'bed recipe is authored state');
+ assert.equal(restored.objects[0].geometry.parameters.outerRadius,bed.burner.outerRadius,'shape recipe is authored state');assert.equal(restored.objects[0].surface.bedColor,bed.burner.bedColor);
  assert.deepEqual(restored.groups[0].transform,pose,'assembly frame survives reopen');
- assert.equal(restored.groups[0].type,'burner-assembly');
+ assert.equal(restored.groups[0].type,'group');
  assert.equal(isReloadableSceneObjectRecord(restored.objects[0]),true);
 });
 test('invalid authored bed recipe cannot silently save or reopen',()=>{
  assert.throws(()=>buildSceneDocument({objects:[{...bed,burner:{...bed.burner,outerRadius:0}}]}),/radius/i);
 });
-test('nonuniform assembly scaling is rejected before child frames could shear',()=>{
- assert.throws(()=>buildSceneDocument({objects:[bed],groups:[{...group,transform:{...pose,scale:[1,2,1]}}]}),/uniform/i);
+test('a saved group frame is generic; runtime checks shear against its actual members',()=>{
+ const doc=buildSceneDocument({objects:[bed],groups:[{...group,transform:{...pose,scale:[1,2,1]}}]});assert.deepEqual(doc.groups[0].transform.scale,[1,2,1]);
 });
 import {createAnnularBurner} from '../annular-burner.mjs';
 import * as THREE from '../lib/three.core.js';

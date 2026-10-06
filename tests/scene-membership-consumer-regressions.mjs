@@ -32,7 +32,7 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
   const context = vm.createContext({
     structuredClone,
     FLAME_EMITTER_ID: '@flame-emitter',
-    RIM_LIGHT_ID: '@rim-light',
+    PROCEDURAL_MESH_TYPE:'procedural-mesh',compoundRetentionTargets:new Map(),RIM_LIGHT_ID: '@rim-light',
     LOCAL_LIQUID_EMITTER_TYPE: 'local-liquid-emitter',
     sceneObjects,
     sceneGroups,

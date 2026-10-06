@@ -6,7 +6,7 @@ For scripted comparisons and editable human handoff, use [repeatable visual work
 
 `window.kaminosSceneObjectDebugState()` lists IDs, types, sources and poses. `window.selectSceneObject(id)` selects an object. `window.kaminosSetSceneObjectTransform(id, patch)` applies an accepted pose edit; position and scale are triples, rotation is an XYZ Euler triple in radians. `window.kaminosSceneEdits` exposes `begin(id, label)`, `preview(patch)`, `commit()`, `cancel()`, `undo()`, `redo()` and `state()`. Await undo/redo when membership replay can load assets. Complete or cancel an active gesture before another operation or saving.
 
-The existing rim light appears under `@rim-light`. Enable/select it through Add → Rim Light or the Assets scene-list button. Moving translates its target with the light; rotating aims the beam from its existing position. Use Cone Angle for spread: object scaling is rejected. It remains one light backed by `environment.rimLight`. The editor handle is excluded from saved object records and composition captures, recreated from the recipe, and excluded from grouping and renaming.
+Spot lights are ordinary scene objects: Add → Light → Spot creates a new object, and selected light properties own enabled state, color, power, cone angle and blend. Object transforms own placement. `window.kaminosSceneAuthoring.addLight()` returns its ID; `setLight(id, patch)` applies one accepted data edit. Lights participate in grouping, duplication, removal and save/reopen. Their data lives on the object, with no duplicate placement recipe in `environment`. The legacy `@rim-settings` and `@rim-light` interfaces remain adapters for an older scene's migrated rim light; new lights have their own IDs. The current spot adapter changes spread through cone angle rather than object scale.
 
 `window.kaminosAuthoringParameters.list()` returns bound target IDs and values. `read(id)` returns a copy; `set(id, patch)` applies one accepted history edit. Discover targets rather than assuming every DOM control is adapted.
 
@@ -22,7 +22,9 @@ await window.saveSceneAs();
 
 `@rim-settings` accepts the existing light recipe fields or a partial patch. Invalid recipe values are rejected before acquiring a transaction. `@burner-controls` pairs the burner recipe, source radius and flow across Assets and Volume. Bound Volume range/number/checkbox/color inputs and selects use `@parameter:<control-id>` with `{value}`. Text fields and arbitrary buttons are not implicitly history adapters. Volume parameter writes capture the complete flame settings, so undo also restores coupled coefficients changed by the original control handler. The experimental Cluster route is rejected by the authored Shape control and parameter API; it remains in Workbench. Environment and fire-light targets are also discoverable through `list()`.
 
-Selected Flame presents Appearance, Emission and Legacy appearance. Scene properties hold the shared Motion and Simulation controls. Scope labels distinguish the selected source from the shared simulation domain. The focused inspector omits experimental material-model and detail-force controls; their loaded values remain intact and accessible in Workbench. The Basin browser searches and applies saved recipes in place, preserving the authored source pose and scene objects. Drag numeric field bodies or labels relatively; an idle field click enters ordinary text editing. Shift makes subsequent drag movement finer without a value jump, and Escape cancels. Transform numbers use the same field-body gesture. One completed drag is one history entry. Numbers retain direct typing. Undo restores authored coefficients and recipes, not earlier fluid simulation fields.
+Selecting a flame emitter presents its Emission controls. Selecting **Fire & smoke** in the scene hierarchy presents the field's preset, Appearance, Motion, Simulation and Legacy appearance controls. The runtime retains its existing singleton analytic source and whole-settings preset backing; selecting an emitter does not imply that it owns field-wide appearance. Selecting Water simulation opens the existing local-liquid field controls. Field selection does not pretend to be a mesh transform and survives save/reopen. Workbench retains the original controls on the same working state.
+
+Drag numeric field bodies or labels relatively, or click to type an exact value. Shift makes subsequent movement finer, and Escape cancels. Transform and data controls use the same field gesture and chronological ledger. Undo restores authored settings, not earlier fluid fields.
 
 `window.kaminosFlameAuthoring.read()` returns a copy of the complete working settings and source recipe receipt. `apply(snapshot, label)` applies a complete validated snapshot as one history entry. `await applyBasin(presetId)` loads an existing immutable recipe and applies it through the same operation as the inspector. It rejects an overlapping load or an intervening scene edit; retry explicitly after resolving that edit. Finish or cancel an active gesture first.
 
@@ -36,21 +38,35 @@ Scene saves persist modified settings as an immutable preset with `publishAlias:
 
 Save/Save As collect accepted Volume controls into the composition's immutable basin reference and preserve the light recipe. Reopen uses `compositionRestoreUrl()` and the registered scene/asset/basin stores described in [basin presets](basin-presets-for-inference-smokes.md). Scene JSON does not bundle external GLBs. Add Water Emitter consumes the existing typed local-liquid adapter; the menu does not establish mixed kiln/water physical support or a new solver contract.
 
-## Burner assemblies
+## Geometry, groups and presets
 
-An authored burner assembly groups a procedural bed and the domain's flame source. Select the assembly row to move, rotate or uniformly scale both members; select a child to change its offset. The bed's selected properties own its dimensions and material. Emission belongs to the source, while motion and simulation coefficients remain shared scene settings. The existing analytic domain supports one flame source. Add Flame Source selects that source if it already exists; Add Burner Assembly selects its existing assembly. Additional beds can be added or duplicated independently.
+Add → Mesh creates Cube, Plane, Sphere, Cylinder or Annular plate geometry. A procedural mesh stores `geometry: {kind, parameters}` and separate `surface` material data. Annular material can explicitly bind its response to `flame-field`; newly added annular geometry has no implicit simulation binding. A legacy bed's shape, colors, glow and response binding are preserved during migration.
 
-Bed geometry remains visible without a source. Removing a source stops injection; it does not rewind the already evolved simulation field. Undo restores authored membership/settings. A flame composition must be mounted before adding its source or bed.
+Groups have an ordinary placement frame and member IDs. Select a group to move its members together, or select a member to edit its own pose/data. Parenting preserves world placement. The current hierarchy supports one group per object; nested groups are not implemented. World TRS remains the pose contract, so a transform that would introduce shear is refused before mutation. Emitter-specific pose constraints remain enforced by their data adapter. Ungroup removes the relationship while leaving the objects in place.
 
-`window.kaminosBurnerAuthoring` exposes `read()`, `add('burner-assembly' | 'burner-bed' | 'flame-source')`, `setBed(id, recipePatch)`, `duplicate(bedId)`, `attach(bedId, assemblyIdOrNull)`, `rename(id, label)` and `remove(id)`. Each accepted call uses the shared history ledger. Removing an assembly removes its members in one reversible edit. Attaching/detaching retains world placement. Assembly placement uses the edit target `@assembly:<group-id>`; pass that target to the scene pose setter or begin/preview/commit lifecycle. Bed and assembly scaling must be positive and uniform.
+Duplicate / Shift+D copies a mesh, spot light, or a group of those objects and starts modal placement. Confirmation records one insertion with its accepted pose; cancellation removes the tentative copy. Headless `duplicate(id)` records the same insertion without starting an interactive gesture. A group containing the singleton flame emitter cannot be duplicated as another independent source. Retained source bytes and metadata survive undo/redo; redo does not rerun inference.
 
-The scene tree's Group loose objects action preserves existing groups and assemblies, excludes the rim helper, and records one reversible organization change. Existing group IDs are available from the saved scene document and burner service snapshot.
+Import GLB uploads through the existing `/api/ingest-mesh` endpoint, checks the observed digest/source receipt and appends through the existing loader. It preserves native asset units and the current scene. A scene replacement or overlapping active gesture can reject the delayed publication. GLB is the admitted file format for this entrance; the full Workbench retains its older import surfaces. Each imported GLB is one asset instance, rather than exposing every glTF node as an independently authored object.
 
-Scene version 6 stores each bed's recipe on its object record and the assembly frame on its group. Opening an older composition migrates its legacy burner recipe into these records in memory; Save writes the migrated document. Explicit source absence in version 6 survives reopen. Older scene compositions retain their legacy implicit source behavior. Geometry assets remain external, as with other scene saves.
+`window.kaminosSceneAuthoring` exposes `read()`, `addMesh(kind, parameters)`, `addLight()`, `importMesh(file)`, `duplicate(id, {interactive})`, `group(ids, label)`, `attach(id, groupIdOrNull)`, `ungroup(id)`, `setGeometry(id, patch)`, `setMaterial(id, patch)` and `setLight(id, patch)`. Geometry parameter patches preserve other dimensions; material/light patches preserve other data. Group pose targets use `@group:<id>`; `@assembly:<id>` remains a compatibility alias. All accepted actions use the existing scene ledger and save route.
+
+```js
+const edit = window.kaminosSceneAuthoring;
+const cube = edit.addMesh('box', {width: 1, height: 2, depth: 1});
+edit.setMaterial(cube, {color: '#647cc0', roughness: 0.4});
+const copy = edit.duplicate(cube);
+const group = edit.group([cube, copy], 'Mesh pair');
+window.kaminosSetSceneObjectTransform('@group:' + group, {position: [1, 0, 0]});
+await window.kaminosSceneEdits.undo();
+```
+
+Presets is a separate operation: Burner setup applies an annular mesh plus the current field's emitter arranged in an ordinary group. It is a useful setup, not an object type. The old `kaminosBurnerAuthoring` API remains compatibility glue for earlier callers.
+
+Scene version 7 stores procedural shape/material data, common group frames and light data on ordinary records. Version 6 bed/assembly records and older composition recipes migrate on read; Save writes the current document. Legacy environment rim light settings migrate into light records. Explicit flame-source absence from version 6 onward survives reopening. Scene files reference external GLBs as before; dynamics restart from authored settings.
 
 ## Viewport interaction
 
-Scene hierarchy rows select on one click. Double-click a name (or use F2 on a focused row) to rename; Enter or blur accepts, Escape cancels. The rim helper remains named by its light role. The existing × removal and Add actions continue to use their scene operations. Add → Asset browser opens the full Workbench import surface; it does not introduce a new append/file-retention contract.
+Scene hierarchy rows select on one click. Double-click a name (or use F2 on a focused row) to rename; Enter or blur accepts, Escape cancels. The existing × removal and Add actions continue to use their scene operations. Add is for creation/import; the header Assets button opens the full Workbench browser.
 
 Viewport → Transform gizmos is a view preference across selections, independent of saved object poses. Navigation hints are another viewport preference. Move/Rotate/Scale toolbar buttons explicitly enable their gizmo. These preferences are session-local, not authored scene history. Grid and global wireframe controls are not implemented by this menu.
 

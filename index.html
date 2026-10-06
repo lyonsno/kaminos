@@ -2992,15 +2992,21 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div id="scene-add-menu">
       <button type="button" id="scene-add-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="scene-add-menu-popup" title="Add scene object (Shift+A)">Add</button>
       <div id="scene-add-menu-popup" role="menu" aria-label="Add to scene" hidden>
-        <button type="button" role="menuitem" data-scene-add="import-mesh">Asset browser… <small>Workbench</small></button>
-        <button type="button" role="menuitem" data-scene-add="burner-assembly">Burner assembly <small>bed + source</small></button>
-        <button type="button" role="menuitem" data-scene-add="burner-bed">Burner bed <small>geometry</small></button>
-        <button type="button" role="menuitem" data-scene-add="flame-source">Flame source <small>one per domain</small></button>
-        <button type="button" role="menuitem" data-scene-add="rim-light">Rim Light <small>existing light</small></button>
-        <button type="button" role="menuitem" data-scene-add="water-emitter">Water Emitter <small>source</small></button>
+        <button type="button" role="menuitem" data-scene-add="import-mesh">Import GLB…</button>
+        <div class="scene-menu-heading">Mesh</div>
+        <button type="button" role="menuitem" data-scene-add="box">Cube</button>
+        <button type="button" role="menuitem" data-scene-add="plane">Plane</button>
+        <button type="button" role="menuitem" data-scene-add="sphere">Sphere</button>
+        <button type="button" role="menuitem" data-scene-add="cylinder">Cylinder</button>
+        <button type="button" role="menuitem" data-scene-add="annular">Annular plate</button>
+        <div class="scene-menu-heading">Light</div>
+        <button type="button" role="menuitem" data-scene-add="spot-light">Spot</button>
+        <div class="scene-menu-heading">Emitter</div>
+        <button type="button" role="menuitem" data-scene-add="water-emitter">Water</button>
       </div>
     </div>
   </nav>
+  <input type="file" id="scene-mesh-file" accept=".glb" hidden>
   <div id="navigation-hint" aria-live="polite">Two-finger orbit · Shift pan · Cmd/Ctrl zoom · F frame selected · Home frame all</div>
   <div id="sam-image-viewport" hidden>
     <div class="sam-image-viewbar">
@@ -3347,7 +3353,7 @@ import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
 let flameEmitterPose = defaultFlameEmitterPose(), applyFlameEmitterPose = null;
 let flameEmitterInjectionSuspended = false;
 let authoredFlamePresent = true;
-const authoredBurnerBeds = new Map(), assemblyProxies = new Map(), assemblyEditTargets = new Set();
+const proceduralMeshes = new Map(), groupProxies = new Map(), groupEditTargets = new Set();
 let flameDomainGuide = null;
 let flameDomainTranslation = [0, 0, 0];
 import {
@@ -3458,7 +3464,8 @@ import {
   planSceneRestore,
 } from './scene-persistence-core.js';
 import { COMPOSITION_SCHEMA, compositionRestoreUrl, captureComposedCanvases } from './scene-authoring.mjs';
-import { BURNER_BED_TYPE, BURNER_BED_SOURCE, BURNER_ASSEMBLY_TYPE, checkedBurnerBed, checkedAssemblyPose, checkedAssemblyEdit, moveAssemblyMembers, identityAssemblyPose } from './burner-assembly.mjs';
+import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,checkedGeometry,createProceduralMesh,GEOMETRY_DEFAULTS} from './scene-geometry.mjs';
+import {GROUP_TYPE,checkedGroupPose,checkedGroupEdit,moveGroupMembers,identityGroupPose} from './scene-group.mjs';
 import { BURNER_DEFAULTS, normalizeBurner, burnerSource, createAnnularBurner } from './annular-burner.mjs';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
@@ -3563,6 +3570,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import {clone as cloneSceneObjectHierarchy} from 'three/addons/utils/SkeletonUtils.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
@@ -3572,9 +3580,10 @@ import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './sce
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
-import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe } from './scene-rim-light.mjs';
+import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, checkedSceneLightRecord, sceneLightRuntimeRecipe } from './scene-rim-light.mjs';
 
 let authoringWorkspace = null;
+let restoringSceneLight=false;
 const initialViewerParams = new URLSearchParams(window.location.search);
 
 const publishVolumeCockpitLayoutPhase = phase => {
@@ -4065,6 +4074,7 @@ let sceneImportStatus = null;
 let sceneGroups = [];
 let activeSceneObjectId = null;
 let activeSceneGroupId = null;
+let activeSceneFieldId=null;
 let sceneSaveBlockedByFailedRestore = false;
 let greenroomPreviewState = null;
 let greenroomPreviewGeneration = 0;
@@ -5224,9 +5234,11 @@ function detachAuthoredSceneForPreview(authored) {
   sceneMutationToken++;
   for (const entry of authored.sceneObjects) scene.remove(entry.object);
   sceneObjects = [];
+  if(rimLight){document.getElementById('rim-enabled').checked=false;updateRimLight();}
   sceneGroups = [];
   activeSceneObjectId = null;
   activeSceneGroupId = null;
+  activeSceneFieldId=null;
   currentMesh = null;
   setVolumePrimitivesState({ schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] });
   if (transformControls) {
@@ -5328,7 +5340,7 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
   if (flameDomainGuide) flameDomainGuide.box.set(
     new THREE.Vector3(-1, -1, -1).add(new THREE.Vector3(...flameDomainTranslation)),
     new THREE.Vector3(1, 3, 1).add(new THREE.Vector3(...flameDomainTranslation)));
-  if (flameDomainGuide) flameDomainGuide.visible = activeSceneObjectId === FLAME_EMITTER_ID;
+  if (flameDomainGuide) flameDomainGuide.visible = activeSceneObjectId === FLAME_EMITTER_ID || activeSceneFieldId==='flame-field';
   if (entry) updateFlameEmitterSupportOutline(THREE, entry.object,
     window.__kaminosVolumeEmitterReceipt?.requested);
   if (entry) applySceneObjectTransformState(entry.object, flameEmitterPose);
@@ -6056,7 +6068,7 @@ function serializeSceneGroups() {
     id: group.id,
     label: sceneGroupDisplayLabel(group),
     objectIds: [...group.objectIds],
-    ...(group.type === BURNER_ASSEMBLY_TYPE ? {type:group.type,transform:structuredClone(group.transform)} : {}),
+    ...(group.type === GROUP_TYPE ? {type:group.type,transform:structuredClone(group.transform)} : {}),
     source: group.source ?? null,
     createdAt: group.createdAt ?? null,
   }));
@@ -6064,7 +6076,7 @@ function serializeSceneGroups() {
 
 function createSceneGroupForObjects(objectIds, label = null, metadata = {}) {
   const ids = [...new Set((objectIds || []).map(String))]
-    .filter(id => id !== RIM_LIGHT_ID && sceneObjects.some(record => record.id === id));
+    .filter(id => sceneObjects.some(record => record.id === id));
   if (!ids.length) return null;
   const id = String(metadata.id || makeSceneObjectId('group'));
   for (const group of sceneGroups) {
@@ -6085,7 +6097,7 @@ function createSceneGroupForObjects(objectIds, label = null, metadata = {}) {
   group.source = metadata.source ?? group.source ?? null;
   group.createdAt = metadata.createdAt ?? group.createdAt ?? new Date().toISOString();
   group.objectIds = [...new Set([...group.objectIds, ...ids])];
-  if (metadata.type === BURNER_ASSEMBLY_TYPE) { group.type=metadata.type; group.transform=checkedAssemblyPose(metadata.transform); ensureAssemblyTarget(group); }
+  group.type=GROUP_TYPE;group.transform=checkedGroupPose(metadata.transform || group.transform || groupPivotPose(group.objectIds));ensureGroupTarget(group);
   for (const record of sceneObjects) {
     if (ids.includes(record.id)) setSceneObjectGroupId(record, group.id);
   }
@@ -6114,8 +6126,7 @@ function setSceneGroupsFromRecords(groups = [], activeGroupId = null) {
 }
 
 function renameSceneObject(id, label) {
-  if ([BURNER_BED_TYPE,FLAME_EMITTER_TYPE].includes(sceneObjects.find(entry=>entry.id===id)?.type)) {try {window.kaminosBurnerAuthoring.rename(id,label);return true;} catch(error){setInfo(error.message);return false;}}
-  if (id === RIM_LIGHT_ID) return false;
+
   const entry = sceneObjects.find(record => record.id === id);
   if (!entry) return false;
   const clean = String(label || '').trim();
@@ -6134,7 +6145,7 @@ function renameSceneObject(id, label) {
 }
 
 function renameSceneGroup(id, label) {
-  if (sceneGroups.find(group=>group.id===id)?.type===BURNER_ASSEMBLY_TYPE) {try {window.kaminosBurnerAuthoring.rename(id,label);return true;} catch(error){setInfo(error.message);return false;}}
+  if (sceneGroups.some(group=>group.id===id)) {try {editSceneGroups(groups=>{groups.find(g=>g.id===id).label=String(label||'').trim()||groups.find(g=>g.id===id).label;},'Rename group');return true;}catch(error){setInfo(error.message);return false;}}
   const group = sceneGroups.find(entry => entry.id === id);
   if (!group) return false;
   const clean = String(label || '').trim();
@@ -6313,7 +6324,7 @@ async function resetSelectedSplatCorrection() {
 }
 
 function updateTransformInspector() {
-  if (flameDomainGuide) flameDomainGuide.visible = activeSceneObjectId === FLAME_EMITTER_ID;
+  if (flameDomainGuide) flameDomainGuide.visible = activeSceneObjectId === FLAME_EMITTER_ID || activeSceneFieldId==='flame-field';
   const inspector = document.getElementById('transform-inspector');
   const empty = document.getElementById('transform-inspector-empty');
   const fields = document.getElementById('transform-inspector-fields');
@@ -6321,6 +6332,8 @@ function updateTransformInspector() {
   const entry = selectedPlacementEntry();
   inspector.dataset.selectedObjectId = entry?.id || '';
   inspector.dataset.selectedGroupId = activeSceneGroupId || '';
+  inspector.dataset.selectedFieldId=activeSceneFieldId||'';
+  inspector.hidden=!!activeSceneFieldId;
   empty.hidden = !!entry;
   fields.hidden = !entry;
   setTransformInspectorFieldsDisabled(!entry);
@@ -6535,6 +6548,7 @@ function renderSceneObjectList() {
   empty.style.display = sceneObjects.length ? 'none' : '';
   const groupedIds = new Set(sceneGroups.flatMap(group => group.objectIds));
   const rows = [];
+  for(const [id,label,present] of [['flame-field','Fire & smoke',!!activeSceneComposition],['water-field','Water simulation',!!localLiquidSetup]])if(present)rows.push(`<div class="scene-object-row scene-field-row ${activeSceneFieldId===id?'active':''}" data-scene-field-id="${id}" role="button" tabindex="0" aria-pressed="${activeSceneFieldId===id}"><span>${label}</span><small>Simulation</small></div>`);
   for (const group of sceneGroups) {
     rows.push(renderSceneGroupRow(group));
     for (const objectId of group.objectIds) {
@@ -6546,6 +6560,7 @@ function renderSceneObjectList() {
     if (!groupedIds.has(record.id)) rows.push(renderSceneObjectRow(record));
   }
   list.innerHTML = rows.join('');
+  list.querySelectorAll('[data-scene-field-id]').forEach(row=>{row.onclick=()=>window.selectSceneField(row.dataset.sceneFieldId);row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();window.selectSceneField(row.dataset.sceneFieldId);}};});
   bindSceneHierarchyRows(list,{selectObject:window.selectSceneObject,selectGroup:window.selectSceneGroup,renameObject:renameSceneObject,renameGroup:renameSceneGroup});
   list.querySelectorAll('[data-scene-object-remove-id]').forEach(button => {
     button.addEventListener('click', event => {
@@ -6560,6 +6575,7 @@ function clearActiveSceneObjectSelection() {
   if (splatCorrectionMode) exitSplatCorrectionMode({ revert: false, silent: true });
   activeSceneObjectId = null;
   activeSceneGroupId = null;
+  activeSceneFieldId=null;
   currentMesh = null;
   renderSceneObjectList();
   updateTransformInspector();
@@ -6581,6 +6597,7 @@ function setActiveSceneObject(id) {
     exitSplatCorrectionMode({ revert: false, silent: true });
   }
   activeSceneObjectId = entry.id;
+  activeSceneFieldId=null;
   activeSceneGroupId = null;
   currentMesh = entry.object;
   renderSceneObjectList();
@@ -6605,6 +6622,7 @@ function setActiveSceneGroup(id) {
     return;
   }
   activeSceneGroupId = group.id;
+  activeSceneFieldId=null;
   activeSceneObjectId = null;
   currentMesh = null;
   renderSceneObjectList();
@@ -6615,7 +6633,7 @@ function setActiveSceneGroup(id) {
     transformControls.visible = false;
   }
   document.getElementById('transform-bar').classList.remove('visible');
-  if (group.type === BURNER_ASSEMBLY_TYPE) { const proxy=assemblyProxy(group); currentMesh=proxy; if(transformControls)attachViewportGizmo(proxy); if(transformControls)transformControls.visible=true; document.getElementById('transform-bar').classList.add('visible'); }
+  if (group.type === GROUP_TYPE) { const proxy=groupProxy(group); currentMesh=proxy; if(transformControls)attachViewportGizmo(proxy); if(transformControls)transformControls.visible=true; document.getElementById('transform-bar').classList.add('visible'); }
 }
 
 function sceneObjectRecordForDescendant(object) {
@@ -6798,7 +6816,7 @@ async function applyLocalLiquidPerformance(values) {
 function refreshLocalLiquidPerformance() {
   const panel = document.getElementById('local-liquid-performance');
   if (!panel) return;
-  panel.hidden = !localLiquidSetup;
+  panel.hidden = !localLiquidSetup || (document.body.dataset.workspace==='authoring' && activeSceneFieldId!=='water-field');
   if (!localLiquidSetup) { delete panel.dataset.setup; return; }
   const signature = JSON.stringify(localLiquidSetup);
   if (panel.dataset.setup !== signature) {
@@ -6898,6 +6916,7 @@ const sceneAddMenuTrigger = document.getElementById('scene-add-menu-trigger');
 const sceneAddMenuPopup = document.getElementById('scene-add-menu-popup');
 function setSceneAddMenuOpen(open, { focus = false } = {}) {
   sceneAddMenuPopup.hidden = !open;
+
   sceneAddMenuTrigger.setAttribute('aria-expanded', String(open));
   if (focus) (open ? sceneAddMenuPopup.querySelector('[role="menuitem"]') : sceneAddMenuTrigger)?.focus();
 }
@@ -6906,16 +6925,21 @@ sceneAddMenuPopup.addEventListener('click', event => {
   const action = event.target.closest('[data-scene-add]');
   if (!action) return;
   setSceneAddMenuOpen(false);
-  if (['burner-assembly','burner-bed','flame-source'].includes(action.dataset.sceneAdd)) {
-    try { window.kaminosBurnerAuthoring.add(action.dataset.sceneAdd); document.activeElement?.blur?.(); } catch(error){setInfo(error.message);}
+  if ([...Object.keys(GEOMETRY_DEFAULTS),'annular'].includes(action.dataset.sceneAdd)) {
+    try{addProceduralMesh(action.dataset.sceneAdd);document.activeElement?.blur?.();}catch(error){setInfo(error.message);}
   }
-  if (action.dataset.sceneAdd === 'import-mesh') document.querySelector('[data-workbench-tab=assets]')?.click();
-  if (action.dataset.sceneAdd === 'rim-light') selectAuthoredRimLight();
+  if(action.dataset.sceneAdd==='spot-light'){try{addSceneSpotLight();}catch(error){setInfo(error.message);}}
+  if(action.dataset.sceneAdd==='import-mesh')document.getElementById('scene-mesh-file').click();
   if (action.dataset.sceneAdd === 'water-emitter') {
     setActiveTab('assets');
     addLocalLiquidEmitter().catch(error => setInfo(`Could not add Water Emitter: ${error.message}`));
   }
 });
+document.getElementById('scene-mesh-file').onchange=async event=>{
+  const file=event.target.files[0];event.target.value='';if(!file)return;
+  try{setInfo(`Importing ${file.name}…`);await importSceneMesh(file);}catch(error){setInfo(`Import failed: ${error.message}`);}
+};
+
 document.addEventListener('pointerdown', event => {
   if (!sceneAddMenu.contains(event.target)) setSceneAddMenuOpen(false);
 });
@@ -6987,6 +7011,12 @@ function registerSceneObject(object, metadata = {}) {
   return record;
 }
 
+window.selectSceneField=function(id) {
+  if(!['flame-field','water-field'].includes(id)||!(id==='flame-field'?activeSceneComposition:localLiquidSetup))throw Error('This simulation field is not present');
+  scenePlacementTools?.selectionChanged();activeSceneFieldId=id;activeSceneObjectId=null;activeSceneGroupId=null;currentMesh=null;
+  transformControls?.detach();document.getElementById('transform-bar').classList.remove('visible');renderSceneObjectList();updateTransformInspector();
+};
+
 window.selectSceneObject = function(id) {
   setActiveSceneObject(id);
   if (currentMesh) {
@@ -7008,10 +7038,10 @@ window.selectSceneGroup = function(id) {
 window.createSceneGroupFromAllObjects = function(label = null) {
   // Existing assemblies are placement units, so grouping loose objects must not dismantle them.
   const grouped=new Set(sceneGroups.flatMap(group=>group.objectIds));
-  const ids=sceneObjects.filter(record=>record.id!==RIM_LIGHT_ID&&!grouped.has(record.id)).map(record=>record.id);
+  const ids=sceneObjects.filter(record=>!grouped.has(record.id)).map(record=>record.id);
   if(!ids.length){setInfo('No loose objects to group');return null;}
-  const group={id:makeSceneObjectId('group'),label:label||`Group ${sceneGroups.length+1}`,objectIds:ids,source:null,createdAt:new Date().toISOString()};
-  try {burnerEdit(next=>next.groups.push(group),'Group loose objects');setActiveSceneGroup(group.id);setInfo(`Grouped: ${sceneGroupDisplayLabel(group)}`);return group;}
+  const group={id:makeSceneObjectId('group'),label:label||`Group ${sceneGroups.length+1}`,objectIds:ids,type:GROUP_TYPE,transform:groupPivotPose(ids),source:null,createdAt:new Date().toISOString()};
+  try {editSceneGroups(next=>next.push(group),'Group loose objects');setActiveSceneGroup(group.id);setInfo(`Grouped: ${sceneGroupDisplayLabel(group)}`);return group;}
   catch(error){setInfo(error.message);return null;}
 };
 
@@ -7021,6 +7051,8 @@ window.kaminosSceneObjectDebugState = function() {
     label: record.label || record.fileName || record.id,
     source: record.source || null,
     type: record.type || null,
+    geometry:record.geometry?structuredClone(record.geometry):null,
+    surface:record.surface?structuredClone(record.surface):null,
     groupId: record.groupId || null,
     active: record.id === activeSceneObjectId,
     transform: sceneObjectTransformState(record.object),
@@ -7179,7 +7211,7 @@ window.kaminosSceneGroupDebugState = function() {
     id: group.id,
     label: sceneGroupDisplayLabel(group),
     objectIds: [...group.objectIds],
-    ...(group.type === BURNER_ASSEMBLY_TYPE ? {type:group.type,transform:structuredClone(group.transform)} : {}),
+    ...(group.type === GROUP_TYPE ? {type:group.type,transform:structuredClone(group.transform)} : {}),
     source: group.source || null,
     active: group.id === activeSceneGroupId,
   }));
@@ -7194,18 +7226,20 @@ document.querySelector('[data-scene-group-create]')?.addEventListener('click', (
 });
 
 function applyAuthoredScenePose(id, transform = {}) {
-  if (id.startsWith('@assembly:')) return writeAssemblyPose(id.slice(10), transform);
+  if(id.startsWith('@assembly:'))id='@group:'+id.slice(10);
+  if (id.startsWith('@group:')) return writeGroupPose(id.slice(7), transform);
   const entry = sceneObjects.find(obj => obj.id === id);
   if (!entry) throw new Error(`Scene object "${id}" was not found`);
-  if (id === RIM_LIGHT_ID) {
-    writeAuthoredRimPose(transform);
+  if (entry.type==='light') {
+    if(id===RIM_LIGHT_ID){restoringSceneLight=true;try{setRimLight(sceneLightRuntimeRecipe({...serializeSceneObject(entry),transform}));}finally{restoringSceneLight=false;}}
+    mountSceneSpotLight({...serializeSceneObject(entry),transform});
   } else if (entry.type === FLAME_EMITTER_TYPE) {
     writeAuthoredFlameEmitterPose(transform);
   } else if (entry.type === 'splat') {
     setSceneObjectSceneTransform(entry, transform);
     applySplatCorrectionToRecord(entry);
   } else {
-    if (entry.type === BURNER_BED_TYPE) transform=checkedAssemblyPose(transform);
+
     if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) normalizeLocalLiquidEmitter(entry.localLiquidEmitter, transform);
     applySceneObjectTransformState(entry.object, transform);
   }
@@ -7232,6 +7266,7 @@ function validateLiveLocalLiquidEmitterPose(entry) {
 }
 
 window.kaminosSetSceneObjectTransform = function(id, transform = {}) {
+  if(id.startsWith('@assembly:'))id='@group:'+id.slice(10);
   const entry = sceneObjects.find(item => item.id === id);
   if (entry?.type === LOCAL_LIQUID_EMITTER_TYPE) {
     mergeAndValidateLocalLiquidEmitterPose(entry.localLiquidEmitter, sceneObjectTransformState(entry.object), transform);
@@ -7245,7 +7280,7 @@ window.kaminosSetSceneObjectTransform = function(id, transform = {}) {
     }
   }
   else applyAuthoredScenePose(id, transform);
-  return id.startsWith('@assembly:') ? window.kaminosSceneGroupDebugState().find(group=>`@assembly:${group.id}`===id)
+  return id.startsWith('@group:') ? window.kaminosSceneGroupDebugState().find(group=>`@group:${group.id}`===id)
     : window.kaminosSceneObjectDebugState().find(record => record.id === id);
 };
 
@@ -10038,7 +10073,7 @@ function membershipEditTargetId(id) {
 function releaseUnreferencedSceneMembershipObjects() {
   for (const [id, entry] of sceneMembershipRetainedObjects) {
     const editId = membershipEditTargetId(id);
-    if (scenePlacementTools?.edits?.hasHistoryEntry(editId)) continue;
+    if (scenePlacementTools?.edits?.hasHistoryEntry(editId)||scenePlacementTools?.edits?.hasHistoryEntry(compoundRetentionTargets.get(id))) continue;
     sceneMembershipRetainedObjects.delete(id);
     if (!sceneObjects.some(record => record.id === id && record.object === entry.object)) {
       disposeObjectTree(entry.object);
@@ -10159,11 +10194,7 @@ async function recordSceneObjectInsertion(id) {
 window.kaminosRecordSceneObjectInsertion = recordSceneObjectInsertion;
 
 function removeSceneObjectInternal(id, { recordHistory = true, preserveForMembershipHistory = false } = {}) {
-  if (id === RIM_LIGHT_ID) {
-    scenePlacementTools.edits.apply('@rim-settings', {enabled:false}, 'Disable rim light');
-    return true;
-  }
-  if (id === FLAME_EMITTER_ID || sceneObjects.find(entry=>entry.id===id)?.type===BURNER_BED_TYPE) return window.kaminosBurnerAuthoring.remove(id);
+  if (id === FLAME_EMITTER_ID) return window.kaminosBurnerAuthoring.remove(id);
   if (recordHistory && scenePlacementTools?.edits.state().replaying) {
     setInfo('Wait for the current scene history action to finish');
     return false;
@@ -10179,6 +10210,7 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
   }
   if (recordHistory && !editId) scenePlacementTools?.edits.discard(entry => entry.id === id);
   const [entry] = sceneObjects.splice(index, 1);
+  if(entry.type==='light'){disposeSceneSpotLight(id);if(id===RIM_LIGHT_ID)setRimLight({...readRimLightSettings(),enabled:false});}
   if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) syncLocalLiquidHostEmitters();
   if (hybridSplatOverlayState.objectId === entry.id) {
     stopHybridSplatOverlay({ silent: true });
@@ -10198,13 +10230,13 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
     transformControls.visible = false;
   }
   scene.remove(entry.object);
-  const retainForMembershipHistory = entry.type === 'glb' && (Boolean(editId) || (
+  const retainForMembershipHistory = ['glb',PROCEDURAL_MESH_TYPE].includes(entry.type) && (Boolean(editId) || (
     !recordHistory
-    && scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(id))
+    && (scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(id))||scenePlacementTools?.edits.hasHistoryEntry(compoundRetentionTargets.get(id)))
     && (preserveForMembershipHistory || scenePlacementTools.edits.state().replaying)
   ));
   if (retainForMembershipHistory) sceneMembershipRetainedObjects.set(id, entry);
-  else disposeObjectTree(entry.object);
+  else {if(entry.type===PROCEDURAL_MESH_TYPE){proceduralMeshes.get(id)?.dispose();proceduralMeshes.delete(id);}else if(entry.type!=='light')disposeObjectTree(entry.object);}
   const fallback = wasActive ? (sceneObjects[index] || sceneObjects[index - 1] || null) : sceneObjects.find(obj => obj.id === activeSceneObjectId);
   if (activeGroupSurvives) {
     setActiveSceneGroup(previousActiveGroupId);
@@ -11121,12 +11153,12 @@ async function initScene() {
       syncSplatCorrectionDraftFromActiveTarget();
     } else {
       const assembly=selectedSceneGroupEntry();
-      if (assembly?.type===BURNER_ASSEMBLY_TYPE && transformControls.dragging) {
-        try {writeAssemblyPose(assembly.id,sceneObjectTransformState(assemblyProxies.get(assembly.id)));}
+      if (assembly?.type===GROUP_TYPE && transformControls.dragging) {
+        try {writeGroupPose(assembly.id,sceneObjectTransformState(groupProxies.get(assembly.id)));}
         catch(error){scenePlacementTools?.finish(false);setInfo(error.message);}
       }
       const entry = selectedSceneObjectEntry();
-      if (entry?.type === BURNER_BED_TYPE && transformControls.dragging) {try {checkedAssemblyPose(sceneObjectTransformState(entry.object));} catch(error) {scenePlacementTools?.finish(false);setInfo(error.message);}}
+
       if (entry?.type === 'splat') syncSplatSceneTransformFromVisual(entry);
       if (entry?.type === FLAME_EMITTER_TYPE) {
         const pose = sceneObjectTransformState(entry.object);
@@ -11139,6 +11171,7 @@ async function initScene() {
           }
         }
       }
+      if(entry?.type==='light'&&entry.id!==RIM_LIGHT_ID&&transformControls.dragging){try{mountSceneSpotLight({...serializeSceneObject(entry),transform:sceneObjectTransformState(entry.object)});}catch(error){scenePlacementTools?.finish(false);setInfo(error.message);}}
       if (entry?.id === RIM_LIGHT_ID && transformControls.dragging) {
         try { writeAuthoredRimPose(sceneObjectTransformState(entry.object)); }
         catch(error) { scenePlacementTools?.finish(false); setInfo(error.message); }
@@ -11179,7 +11212,7 @@ async function initScene() {
     camera,
     controls,
     gizmo: transformControls,
-    roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat' && entry.id !== RIM_LIGHT_ID).map(entry => entry.object),
+    roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat' && entry.type!=='light').map(entry => entry.object),
       ...(currentMesh && !sceneObjects.some(entry => entry.object === currentMesh) ? [currentMesh] : [])],
     occluders: () => groundPlane ? [groundPlane] : [],
     frameAll: () => { const framed = frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); if (framed) markDirty(); return framed; },
@@ -11208,18 +11241,18 @@ async function initScene() {
     gizmo: transformControls,
     selected: () => selectedPlacementEntry()?.id || null,
     read: id => {
-      if (id?.startsWith('@assembly:')) return structuredClone(sceneGroups.find(group=>`@assembly:${group.id}`===id)?.transform || null);
+      if (id?.startsWith('@group:')) return structuredClone(sceneGroups.find(group=>`@group:${group.id}`===id)?.transform || null);
       const entry = sceneObjects.find(item => item.id === id);
       return !entry ? null : entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(entry.object);
     },
     write: applyAuthoredScenePose,
-    object: id => id?.startsWith('@assembly:') ? assemblyProxy(sceneGroups.find(group=>`@assembly:${group.id}`===id)) : sceneObjects.find(item => item.id === id)?.object,
+    object: id => id?.startsWith('@group:') ? groupProxy(sceneGroups.find(group=>`@group:${group.id}`===id)) : sceneObjects.find(item => item.id === id)?.object,
     refresh: () => { updateTransformInspector(); markDirty(); },
     allowed: () => !greenroomPreviewIsActive() && !splatCorrectionMode,
     frameSelected: window.kaminosFrameSelected,
-    captureContext: id => id === FLAME_EMITTER_ID || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
+    captureContext: id => id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
     settled: event => {
-      if (event.id?.startsWith('@assembly:') && sceneGroups.find(group=>`@assembly:${group.id}`===event.id)?.objectIds.includes(FLAME_EMITTER_ID)) settleFlameDomainForPose(flameEmitterPose,event.operation==='commit'?null:event.afterContext);
+      if (sceneGroups.find(group=>[`@group:${group.id}`,`@assembly:${group.id}`].includes(event.id))?.objectIds.includes(FLAME_EMITTER_ID)) settleFlameDomainForPose(flameEmitterPose,event.operation==='commit'?null:event.afterContext);
       if (event.id === FLAME_EMITTER_ID) settleFlameDomainForPose(event.after,
         event.operation === 'commit' ? null : event.afterContext);
     },
@@ -11547,16 +11580,18 @@ function clearScene({loadRequestId = null} = {}) {
   authoringControlSessions.forEach(session => session.cancel());
   sceneControlHistory?.cancel();
   scenePlacementTools?.clear();
-  for(const proxy of assemblyProxies.values())proxy.removeFromParent();
-  assemblyProxies.clear();
-  for(const id of assemblyEditTargets)scenePlacementTools?.edits.unregister(id);
-  assemblyEditTargets.clear();
-  authoredBurnerBeds.clear();
+  for(const proxy of groupProxies.values())proxy.removeFromParent();
+  groupProxies.clear();
+  for(const id of meshDataTargets)scenePlacementTools?.edits.unregister(id);meshDataTargets.clear();
+  for(const id of groupEditTargets)scenePlacementTools?.edits.unregister(id);
+  groupEditTargets.clear();
+  proceduralMeshes.clear();
   if (flameDomainGuide) {
     scene.remove(flameDomainGuide);
     disposeObjectTree(flameDomainGuide);
     flameDomainGuide = null;
   }
+  for(const target of compoundInsertionTargets)scenePlacementTools.edits.unregister(target);compoundInsertionTargets.clear();compoundRetentionTargets.clear();
   for (const editId of sceneMembershipEditTargets) scenePlacementTools.edits.unregister(editId);
   sceneMembershipEditTargets.clear();
   sceneMutationToken++;
@@ -11566,6 +11601,7 @@ function clearScene({loadRequestId = null} = {}) {
   localLiquidSetup = null;
   localLiquidFailure = null;
   localLiquidPaused = false;
+  for(const id of [...sceneSpotLights.keys()])disposeSceneSpotLight(id);
   const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
   for (const entry of sceneObjects) {
     scene.remove(entry.object);
@@ -11581,9 +11617,11 @@ function clearScene({loadRequestId = null} = {}) {
     disposeObjectTree(currentMesh);
   }
   sceneObjects = [];
+  if(rimLight){document.getElementById('rim-enabled').checked=false;updateRimLight();}
   sceneGroups = [];
   activeSceneObjectId = null;
   activeSceneGroupId = null;
+  activeSceneFieldId=null;
   currentMesh = null;
   glbSourceScene = null;
   if (transformControls) {
@@ -11752,7 +11790,7 @@ async function showGLB(file, options = {}) {
       const stalePreviewLoad = options.register === false
         && options.previewGeneration !== undefined
         && greenroomPreviewState?.previewGeneration !== options.previewGeneration;
-      if (loadToken !== sceneMutationToken || stalePreviewLoad || (greenroomPreviewIsActive() && options.register !== false)) {
+      if (loadToken !== sceneMutationToken || stalePreviewLoad || options.isCurrent?.()===false || (greenroomPreviewIsActive() && options.register !== false)) {
         disposeObjectTree(model);
         reject(new Error('stale async GLB load ignored'));
         return;
@@ -24195,33 +24233,12 @@ document.getElementById('rim-aim').onclick = () => {
 
 // Editor representation of the existing environment light. Its recipe remains the save authority.
 function syncRimAuthoringHandle() {
-  if (!scene || !rimLight || !scenePlacementTools) return;
-  const recipe=readRimLightSettings();
-  let entry=sceneObjects.find(row=>row.id===RIM_LIGHT_ID);
-  if (!entry && !recipe.enabled) return;
-  if (!entry) {
-    const points=[];
-    const add=(a,b)=>points.push(new THREE.Vector3(...a),new THREE.Vector3(...b));
-    for(let i=0;i<4;i++) {
-      const a=i*Math.PI/2,b=(i+1)*Math.PI/2;
-      const start=[.14*Math.cos(a),.14*Math.sin(a),-.3],end=[.14*Math.cos(b),.14*Math.sin(b),-.3];
-      add([0,0,0],start);add(start,end);
-    }
-    add([0,0,0],[0,0,-.65]);
-    const object=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:0xffc66d}));
-    object.name='Rim light';object.userData.kaminosEditorOnly=true;
-    scene.add(object);
-    // Register without stealing current selection while loading or replaying a setting.
-    const previous=activeSceneObjectId;
-    entry={id:RIM_LIGHT_ID,object,type:'authored-rim-light',label:'Rim light',fileName:'Rim light',source:null,groupId:null};
-    object.userData.kaminosSceneObject={id:entry.id,type:entry.type,label:entry.label,fileName:entry.fileName};
-    sceneObjects.push(entry);
-    activeSceneObjectId=previous;
-  }
-  applySceneObjectTransformState(entry.object,rimRecipePose(recipe));
-  entry.object.visible=recipe.enabled;
-  renderSceneObjectList();
-  updateTransformInspector();
+  if(!scene||!rimLight||!scenePlacementTools)return;
+  const recipe=readRimLightSettings(),previous=sceneObjects.find(o=>o.id===RIM_LIGHT_ID);
+  if(!previous&&!recipe.enabled&&!restoringSceneLight)return;
+  mountSceneSpotLight({id:RIM_LIGHT_ID,type:'light',source:'kaminos:scene-spot-light',label:previous?.label||'Rim light',fileName:'Spot light',groupId:previous?.groupId||null,createdAt:previous?.createdAt||new Date().toISOString(),
+    light:{...recipe,kind:'spot',role:previous?.light?.role??'rim'},transform:{...rimRecipePose(recipe),scale:previous?sceneObjectTransformState(previous.object).scale:[1,1,1]}});
+  renderSceneObjectList();updateTransformInspector();
 }
 function writeAuthoredRimPose(pose) {
   setRimLight(rimRecipeFromPose(readRimLightSettings(),pose));
@@ -24235,19 +24252,26 @@ function selectAuthoredRimLight() {
     document.activeElement?.blur?.();
   } catch(error){setInfo(error.message);}
 }
+window.kaminosApplyBurnerPreset=()=>window.kaminosBurnerAuthoring.add('burner-assembly');
+window.kaminosSelectSceneRimLight=selectAuthoredRimLight;
 document.getElementById('scene-select-rim').onclick=selectAuthoredRimLight;
 function updateAuthoringPropertySelection() {
   const light=document.getElementById('selected-light-properties'),flame=document.getElementById('selected-flame-properties');
-  if(light)light.hidden=activeSceneObjectId!==RIM_LIGHT_ID;
+  if(light)light.hidden=true;
   if(flame)flame.hidden=activeSceneObjectId!==FLAME_EMITTER_ID;
+  const sourceAction=document.getElementById('field-source-action');if(sourceAction)sourceAction.textContent=authoredFlamePresent?'Select emitter':'Restore emitter';
+  const field=document.getElementById('shared-flame-domain-properties');if(field)field.hidden=activeSceneFieldId!=='flame-field';
+  const water=document.getElementById('local-liquid-performance');if(water)water.hidden=activeSceneFieldId!=='water-field';
   syncBurnerInspector();
+  syncSceneDataInspector();
   document.querySelectorAll('#transform-bar button[onclick]').forEach(button=>{
     if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround/.test(button.getAttribute('onclick'))) button.hidden=activeSceneObjectId===RIM_LIGHT_ID;
   });
 }
 let flameInspector = null;
 function createFlameQuickFields() {
-  const shared=document.createElement('section');shared.id='shared-flame-domain-properties';shared.innerHTML='<h3>Flame simulation</h3><p class="flame-scope">Shared by the scene. Source placement and emission belong to the selected flame.</p>';document.getElementById('selected-flame-properties').after(shared);scenePlacementTools.addHistoryScope(shared);
+  const shared=document.createElement('section');shared.id='shared-flame-domain-properties';shared.innerHTML='<h3>Fire & smoke</h3><p class="flame-scope">Appearance and simulation data for this field.</p><button type="button" class="btn" id="field-source-action">Select emitter</button>';document.getElementById('selected-flame-properties').after(shared);scenePlacementTools.addHistoryScope(shared);
+  document.getElementById('field-source-action').onclick=()=>{try{if(authoredFlamePresent)setActiveSceneObject(FLAME_EMITTER_ID);else window.kaminosBurnerAuthoring.add('flame-source');}catch(error){setInfo(error.message);}};
   flameInspector=createFlameInspector({document,host:document.getElementById('selected-flame-fields'),sharedHost:shared,
     listBasins:async()=>{await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
     applyBasin:id=>window.kaminosFlameAuthoring.applyBasin(id),
@@ -27084,7 +27108,8 @@ function serializeSceneObject(entry) {
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
     localLiquidEmitter: metadata.localLiquidEmitter ?? entry.localLiquidEmitter ?? null,
-    ...(entry.type===BURNER_BED_TYPE ? {burner:structuredClone(entry.burner)} : {}),
+    ...(entry.type==='light'?{light:structuredClone(entry.light)}:{}),
+    ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface)} : {}),
   };
 }
 
@@ -27096,7 +27121,8 @@ function readNumberControl(id, fallback = 0) {
 
 async function addSceneObjectFromSource(record, loadRequestId = null) {
   if (!record?.source) throw new Error('Scene object missing source');
-  if (record.type === BURNER_BED_TYPE) return mountAuthoredBed(record).object;
+  if(record.type==='light'){if(record.id===RIM_LIGHT_ID){restoringSceneLight=true;try{setRimLight(sceneLightRuntimeRecipe(record));}finally{restoringSceneLight=false;}}return mountSceneSpotLight(record).object;}
+  if (record.type === PROCEDURAL_MESH_TYPE) return mountProceduralMesh(record).object;
   if (record.type === FLAME_EMITTER_TYPE) {
     authoredFlamePresent=true;
     const object = ensureAuthoredFlameEmitter(record);
@@ -27200,7 +27226,7 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
 
 function buildSceneData(capture = null) {
   rememberEnvironmentRecipe();
-  const objects = sceneObjects.filter(entry => entry.id !== RIM_LIGHT_ID).map(serializeSceneObject);
+  const objects = sceneObjects.map(serializeSceneObject);
   const activeObject = objects.find(obj => obj.id === activeSceneObjectId) || objects[0] || null;
   const provenance = provenanceForSource(activeObject?.source || modelSourceUrl);
 
@@ -27210,6 +27236,7 @@ function buildSceneData(capture = null) {
     groups: serializeSceneGroups(),
     activeObjectId: activeSceneObjectId,
     activeGroupId: activeSceneGroupId,
+    activeFieldId:activeSceneFieldId,
     provenance,
     composition: activeSceneComposition,
     localLiquid: localLiquidSetup,
@@ -27232,7 +27259,7 @@ function buildSceneData(capture = null) {
       backgroundBrightness: Number(document.getElementById('env-bg-brightness').value),
       backgroundContrast: Number(document.getElementById('env-bg-contrast').value),
       recipes: environmentRecipes,
-      rimLight: readRimLightSettings(),
+
       ground: { visible: groundPlane.visible, height: groundPlane.position.y },
     },
     volumePrimitives: getVolumePrimitiveState(),
@@ -27454,12 +27481,258 @@ for (const [key, label, type, step, min, max] of burnerFields) {
   document.getElementById('burner-fields').append(row);
 }
 
+const sceneSpotLights=new Map();
+window.kaminosSceneLightState=()=>Array.from(sceneSpotLights,([id,{light,marker}])=>({id,parentIsScene:light.parent===scene,markerIsScene:marker.parent===scene,visible:light.visible,power:light.intensity,position:light.position.toArray(),target:light.target.position.toArray()}));
+function mountSceneSpotLight(raw) {
+  const record=checkedSceneLightRecord(raw);let entry=sceneObjects.find(o=>o.id===record.id),binding=sceneSpotLights.get(record.id);
+  if(!binding){
+    const light=record.id===RIM_LIGHT_ID?rimLight:new THREE.SpotLight();
+    light.castShadow=true;light.shadow.mapSize.set(1024,1024);light.shadow.bias=-.0001;light.shadow.normalBias=.02;
+    const points=[0,0,0,0,0,-.5,-.12,0,-.3,.12,0,-.3,0,-.12,-.3,0,.12,-.3];
+    const marker=new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(points,3)),new THREE.LineBasicMaterial({color:0xffc66d}));
+    marker.userData.kaminosEditorOnly=true;binding={light,marker};sceneSpotLights.set(record.id,binding);scene.add(light,light.target,marker);
+  }
+  const {light,marker}=binding;
+  applySceneObjectTransformState(marker,record.transform);marker.visible=record.light.enabled;
+  light.visible=record.light.enabled;light.color.set(record.light.color);light.intensity=record.light.intensity;light.angle=THREE.MathUtils.degToRad(record.light.angle);light.penumbra=record.light.penumbra;
+  light.position.fromArray(record.transform.position);
+  const direction=new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(...record.transform.rotation));light.target.position.copy(light.position).addScaledVector(direction,record.light.aimDistance*record.transform.scale[2]);
+  light.shadow.camera.updateProjectionMatrix();
+  if(!entry){entry={...record,object:marker};sceneObjects.push(entry);}else Object.assign(entry,{...record,object:marker});
+  marker.userData.kaminosSceneObject={...record};window._kaminosDirty?.();return entry;
+}
+function disposeSceneSpotLight(id) {
+  const binding=sceneSpotLights.get(id);if(!binding)return;
+  binding.marker.removeFromParent();binding.marker.geometry.dispose();binding.marker.material.dispose();
+  if(id===RIM_LIGHT_ID)binding.light.visible=false;else {binding.light.removeFromParent();binding.light.target.removeFromParent();binding.light.dispose?.();}
+  sceneSpotLights.delete(id);
+}
+
+function groupPivotPose(ids) {
+  const point=new THREE.Vector3();let count=0;
+  for(const id of ids){const entry=sceneObjects.find(o=>o.id===id);if(entry){point.add(new THREE.Vector3(...sceneObjectTransformState(entry.object).position));count++;}}
+  if(count)point.divideScalar(count);
+  return {...identityGroupPose(),position:point.toArray()};
+}
+function checkedSceneGroups(groups) {
+  if(!Array.isArray(groups))throw Error('Groups must be an array');
+  const ids=new Set(sceneObjects.map(o=>o.id)),assigned=new Set(),names=new Set();
+  return groups.map(raw=>{
+    if(!raw.id||names.has(raw.id)||!Array.isArray(raw.objectIds)||!raw.objectIds.length)throw Error('Invalid group');names.add(raw.id);
+    for(const id of raw.objectIds){if(!ids.has(id)||assigned.has(id))throw Error('Invalid group member');assigned.add(id);}
+    return {...structuredClone(raw),type:GROUP_TYPE,transform:checkedGroupPose(raw.transform||groupPivotPose(raw.objectIds))};
+  });
+}
+function writeSceneGroups(groups) {
+  const beforeObject=activeSceneObjectId,beforeGroup=activeSceneGroupId;
+  setSceneGroupsFromRecords(checkedSceneGroups(groups),beforeGroup);
+  for(const [id,proxy] of groupProxies)if(!sceneGroups.some(g=>g.id===id)){proxy.removeFromParent();groupProxies.delete(id);}
+  if(sceneGroups.some(g=>g.id===beforeGroup))setActiveSceneGroup(beforeGroup);
+  else if(sceneObjects.some(o=>o.id===beforeObject))setActiveSceneObject(beforeObject);
+  else clearActiveSceneObjectSelection();
+}
+function editSceneGroups(change,label) {
+  assertSceneConstructionAvailable();const next=serializeSceneGroups();const result=change(next);
+  scenePlacementTools.edits.apply('@scene-groups',{groups:checkedSceneGroups(next)},label);return result;
+}
+function groupSceneObjects(ids,label='Group') {
+  const members=[...new Set(ids)];if(!members.length)throw Error('Choose objects to group');
+  const id=makeSceneObjectId('group');
+  editSceneGroups(groups=>{for(const g of groups)g.objectIds=g.objectIds.filter(member=>!members.includes(member));groups.splice(0,groups.length,...groups.filter(g=>g.objectIds.length));groups.push({id,label,type:GROUP_TYPE,transform:groupPivotPose(members),objectIds:members,createdAt:new Date().toISOString()});},'Group objects');
+  setActiveSceneGroup(id);return id;
+}
+function attachSceneObject(id,groupId) {
+  editSceneGroups(groups=>{
+    if(!sceneObjects.some(o=>o.id===id))throw Error('Choose a scene object');
+    const target=groups.find(g=>g.id===groupId);if(groupId&&!target)throw Error('Group is absent');
+    for(const g of groups)g.objectIds=g.objectIds.filter(member=>member!==id);
+    if(target)target.objectIds.push(id);groups.splice(0,groups.length,...groups.filter(g=>g.objectIds.length));
+  },groupId?'Parent object':'Unparent object');
+}
+function assertSceneConstructionAvailable() {
+  if(authoringBusy||sceneSaveBlockedByFailedRestore)throw Error('Wait for the document to finish loading');
+  const state=scenePlacementTools?.edits.state();if(!state||state.active||state.replaying)throw Error('Finish the current edit first');
+}
+function checkedObjectData(raw){if(raw.type===PROCEDURAL_MESH_TYPE)return checkedProceduralMesh(raw);if(raw.type==='light')return checkedSceneLightRecord(raw);throw Error('This data provider is read only');}
+function ensureMeshDataTarget(id) {
+  const target=`@mesh-data:${id}`;
+  if(!meshDataTargets.has(target)){
+    scenePlacementTools.edits.register(target,{read:()=>serializeSceneObject(sceneObjects.find(o=>o.id===id)),check:checkedObjectData,write:record=>{if(record.type==='light'){if(record.id===RIM_LIGHT_ID){restoringSceneLight=true;try{setRimLight(sceneLightRuntimeRecipe(record));}finally{restoringSceneLight=false;}}mountSceneSpotLight(record);}else mountProceduralMesh(record);renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();}});meshDataTargets.add(target);
+  }
+  return target;
+}
+function addProceduralMesh(kind,parameters={}) {
+  assertSceneConstructionAvailable();
+  const id=makeSceneObjectId('mesh'),record=checkedProceduralMesh({id,type:PROCEDURAL_MESH_TYPE,source:PROCEDURAL_MESH_SOURCE,
+    label:kind==='annular'?'Annular plate':kind==='box'?'Cube':kind[0].toUpperCase()+kind.slice(1),fileName:kind,createdAt:new Date().toISOString(),
+    geometry:{kind,parameters:kind==='annular'?{...BURNER_DEFAULTS,...parameters}:parameters},transform:{...identityGroupPose(),position:controls.target.toArray()}});
+  const target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
+  mountProceduralMesh(record);setActiveSceneObject(id);
+  try{recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
+  renderSceneObjectList();return id;
+}
+function cloneSceneMaterial(material){const copy=material.clone();for(const key of Object.keys(copy))if(copy[key]?.isTexture)copy[key]=copy[key].clone();return copy;}
+function addSceneSpotLight() {
+  assertSceneConstructionAvailable();const id=makeSceneObjectId('light');
+  const target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
+  mountSceneSpotLight({id,type:'light',source:'kaminos:scene-spot-light',label:'Spot light',fileName:'Spot light',createdAt:new Date().toISOString(),
+    transform:{position:controls.target.clone().add(new THREE.Vector3(2,2,2)).toArray(),rotation:[-.6,.7,0],scale:[1,1,1]},
+    light:{kind:'spot',enabled:true,color:'#ffffff',intensity:30,angle:30,penumbra:.3,aimDistance:3}});
+  recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;
+}
+function canDuplicateObject(entry){return !!entry&&['glb','light',PROCEDURAL_MESH_TYPE].includes(entry.type);}
+function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
+  assertSceneConstructionAvailable();const entry=sceneObjects.find(o=>o.id===id);
+  if(!canDuplicateObject(entry))throw Error('Duplicate currently supports mesh objects; simulation sources retain their own creation rules');
+  const copyId=makeSceneObjectId('mesh'),record={...serializeSceneObject(entry),id:copyId,label:`${sceneObjectDisplayLabel(entry)} copy`,groupId:null,createdAt:new Date().toISOString()};
+  const target=ensureSceneObjectMembershipTarget(copyId);scenePlacementTools.edits.assertCanRecordApplied(target);
+  if(entry.type===PROCEDURAL_MESH_TYPE)mountProceduralMesh(record);
+  else if(entry.type==='light')mountSceneSpotLight(record);
+  else {
+    const copy=cloneSceneObjectHierarchy(entry.object);copy.traverse(child=>{if(child.geometry)child.geometry=child.geometry.clone();if(child.material)child.material=Array.isArray(child.material)?child.material.map(cloneSceneMaterial):cloneSceneMaterial(child.material);});
+    scene.add(copy);registerSceneObject(copy,record);
+  }
+  if(entry.groupId){const group=sceneGroups.find(g=>g.id===entry.groupId);group?.objectIds.push(copyId);setSceneObjectGroupId(sceneObjects.find(o=>o.id===copyId),entry.groupId);}
+  setActiveSceneObject(copyId);renderSceneObjectList();
+  const complete=({commit})=>{
+    scenePlacementTools.edits.discard(change=>change.id===copyId);
+    if(commit)recordSceneObjectInsertion(copyId);
+    else {removeSceneObjectInternal(copyId,{recordHistory:false});setActiveSceneObject(id);}
+  };
+  if(interactive){if(!scenePlacementTools.start('translate',complete)){complete({commit:false});throw Error('Could not start duplicate placement');}}
+  else if(!deferRecord)recordSceneObjectInsertion(copyId);
+  return copyId;
+}
+const compoundInsertionTargets=new Set(),compoundRetentionTargets=new Map();
+function duplicateSceneGroup(id,{interactive=false}={}) {
+  assertSceneConstructionAvailable();const original=sceneGroups.find(g=>g.id===id);
+  if(!original)throw Error('Choose a group');
+  const members=original.objectIds.map(member=>sceneObjects.find(o=>o.id===member));
+  if(members.some(entry=>!canDuplicateObject(entry)))throw Error('This group contains an emitter whose duplication is not supported; duplicate its mesh members instead');
+  const groupId=makeSceneObjectId('group'),copies=[];
+  try{
+    for(const entry of members)copies.push(duplicateSceneObject(entry.id,{deferRecord:true}));
+    createSceneGroupForObjects(copies,`${original.label} copy`,{id:groupId,transform:structuredClone(original.transform)});
+  }catch(error){for(const copy of copies)removeSceneObjectInternal(copy,{recordHistory:false});throw error;}
+  const target=`@group-insertion:${groupId}`;
+  function snapshot(){
+    const group=sceneGroups.find(g=>g.id===groupId),present=copies.filter(copy=>sceneObjects.some(o=>o.id===copy));
+    if(!group&&!present.length)return null;
+    if(!group||present.length!==copies.length)throw Error('Incomplete group insertion');
+    return {objects:copies.map(copy=>serializeSceneObject(sceneObjects.find(o=>o.id===copy))),group:structuredClone(group)};
+  }
+  scenePlacementTools.edits.register(target,{allowMissing:true,read:snapshot,
+    check:value=>{if(value===null)return null;if(!Array.isArray(value.objects)||value.objects.length!==copies.length||value.objects.some(r=>!copies.includes(r.id)||!isReloadableSceneObjectRecord(r))||value.group?.id!==groupId)throw Error('Invalid group insertion');return structuredClone(value);},
+    write:async value=>{
+      if(value===null){for(const copy of copies)removeSceneObjectInternal(copy,{recordHistory:false,preserveForMembershipHistory:true});setActiveSceneGroup(id);return;}
+      for(const record of value.objects){
+        const retained=sceneMembershipRetainedObjects.get(record.id);
+        if(retained){scene.add(retained.object);sceneObjects.push(retained);}else await addSceneObjectFromSource(record);
+        const entry=sceneObjects.find(o=>o.id===record.id);applySceneObjectTransformState(entry.object,record.transform);applyMaterialStateToObject(entry.object,record.materials);
+      }
+      createSceneGroupForObjects(copies,value.group.label,{...value.group,id:groupId});
+    }});
+  compoundInsertionTargets.add(target);for(const copy of copies)compoundRetentionTargets.set(copy,target);
+  const complete=({commit})=>{
+    scenePlacementTools.edits.discard(change=>change.id===`@group:${groupId}`||change.id===`@assembly:${groupId}`);
+    if(commit)scenePlacementTools.edits.recordApplied(target,null,snapshot(),'Duplicate group');
+    else {for(const copy of copies)removeSceneObjectInternal(copy,{recordHistory:false});setActiveSceneGroup(id);}
+  };
+  if(interactive){if(!scenePlacementTools.start('translate',complete)){complete({commit:false});throw Error('Could not start group placement');}}
+  else scenePlacementTools.edits.recordApplied(target,null,snapshot(),'Duplicate group');
+  return groupId;
+}
+function duplicateSceneSelection(id,options={}){return sceneGroups.some(g=>g.id===id)?duplicateSceneGroup(id,{interactive:options.interactive===true}):duplicateSceneObject(id,{interactive:options.interactive===true});}
+
+async function importSceneMesh(file) {
+  assertSceneConstructionAvailable();if(!file?.name?.toLowerCase().endsWith('.glb'))throw Error('Choose a binary GLB mesh');
+  const generation=sceneMutationToken,bytes=await file.arrayBuffer();
+  const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+  const response=await fetch('/api/ingest-mesh',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:bytes});
+  const receipt=await response.json();if(!response.ok)throw Error(receipt.error||'Mesh storage failed');
+  if(receipt.schema!=='kaminos.generated-mesh.v0'||receipt.sha256!==digest||receipt.bytes!==bytes.byteLength||receipt.source!==`/api/read?root=generated-meshes&path=${digest}.glb`)throw Error('Mesh storage returned a different source');
+  if(generation!==sceneMutationToken)throw Error('Scene changed while importing');assertSceneConstructionAvailable();
+  const id=makeSceneObjectId('mesh'),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
+  await showGLB(receipt.source,{clear:false,normalize:false,isCurrent:()=>generation===sceneMutationToken&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:file.name.replace(/\.glb$/i,'')}});
+  try{await recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
+  setInfo(`Imported ${file.name}`);return id;
+}
+const meshDataTargets=new Set();
+function syncSceneDataInspector() {
+  const entry=selectedSceneObjectEntry(),group=selectedSceneGroupEntry();
+  const primitive=document.getElementById('selected-mesh-properties');if(!primitive)return;
+  const lightPanel=document.getElementById('selected-spot-properties');lightPanel.hidden=entry?.type!=='light';if(!lightPanel.hidden)for(const input of lightPanel.querySelectorAll('[data-light-param]')){const value=entry.light[input.dataset.lightParam];if(input.type==='checkbox')input.checked=value;else if(document.activeElement!==input||!scenePlacementTools.edits.state().active)input.value=value;}
+  primitive.hidden=entry?.type!==PROCEDURAL_MESH_TYPE||entry.geometry?.kind==='annular';
+  const relations=document.getElementById('selected-object-relations');relations.hidden=!entry;
+  const duplicate=document.getElementById('object-duplicate');duplicate.disabled=!canDuplicateObject(entry);
+  const choice=document.getElementById('object-parent');choice.replaceChildren(...[['','None'],...sceneGroups.map(g=>[g.id,g.label])].map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option;}));choice.value=entry?.groupId||'';
+  if(!primitive.hidden){
+    document.getElementById('geometry-kind').textContent=entry.geometry.kind;
+    for(const input of primitive.querySelectorAll('[data-geometry-param]')){const key=input.dataset.geometryParam;input.closest('label').hidden=!(key in GEOMETRY_DEFAULTS[entry.geometry.kind]);if(document.activeElement!==input || !scenePlacementTools.edits.state().active)input.value=entry.geometry.parameters[key]??'';}
+    for(const input of primitive.querySelectorAll('[data-surface-param]'))if(document.activeElement!==input || !scenePlacementTools.edits.state().active)input.value=entry.surface[input.dataset.surfaceParam];
+  }
+  document.getElementById('selected-group-properties').hidden=!group;
+  const groupDuplicate=document.getElementById('group-duplicate');if(groupDuplicate)groupDuplicate.disabled=!group||group.objectIds.some(id=>!canDuplicateObject(sceneObjects.find(o=>o.id===id)));
+}
+function installSceneConstruction() {
+  const edits=scenePlacementTools.edits;
+  edits.register('@scene-groups',{read:()=>({groups:serializeSceneGroups()}),check:value=>({groups:checkedSceneGroups(value.groups)}),write:value=>writeSceneGroups(value.groups)});
+  const host=document.getElementById('authoring-type-anchor')||document.getElementById('selected-flame-properties');
+  const panel=document.createElement('section');panel.id='selected-mesh-properties';panel.hidden=true;
+  panel.innerHTML='<h3>Geometry · <span id="geometry-kind"></span></h3><div id="mesh-shape-fields"></div><h3>Material</h3><div id="mesh-surface-fields"></div>';
+  host.after(panel);
+  function field(parent,key,label,type,step,geometry) {
+    const row=document.createElement('label');row.className='slider-row';row.innerHTML=`<span class="slider-label">${label}</span><input type="${type}" class="transform-input" ${type==='number'?'step="any"':''}>`;
+    const input=row.querySelector('input');input.dataset[geometry?'geometryParam':'surfaceParam']=key;parent.append(row);
+    input.addEventListener('input',()=>{
+      const entry=selectedSceneObjectEntry();if(entry?.type!==PROCEDURAL_MESH_TYPE||!input.validity.valid||input.value==='')return;
+      if(edits.state().active?.id!==`@mesh-data:${entry.id}`)return;
+      const record=serializeSceneObject(entry);const owner=geometry?record.geometry.parameters:record.surface;owner[key]=type==='number'?Number(input.value):input.value;
+      try{edits.preview(checkedProceduralMesh(record));}catch(error){setInfo(error.message);}
+    });
+    authoringControlSessions.push(installSceneControlHistory({controls:[input],edits,id:()=>ensureMeshDataTarget(activeSceneObjectId),label:`Edit ${label}`,onError:error=>setInfo(error.message)}));
+    if(type==='number'){const scrub=installRelativeNumberDrag({grip:row.querySelector('span'),input,step});edits.subscribe(state=>{if(!state.active)scrub.stop();});}
+  }
+  for(const key of ['width','height','depth','radius'])field(panel.querySelector('#mesh-shape-fields'),key,key[0].toUpperCase()+key.slice(1),'number',.01,true);
+  field(panel.querySelector('#mesh-surface-fields'),'color','Color','color',0,false);
+  field(panel.querySelector('#mesh-surface-fields'),'roughness','Roughness','number',.01,false);
+  field(panel.querySelector('#mesh-surface-fields'),'metalness','Metallic','number',.01,false);
+  const lightPanel=document.createElement('section');lightPanel.id='selected-spot-properties';lightPanel.hidden=true;lightPanel.innerHTML='<h3>Light · Spot</h3>';panel.after(lightPanel);
+  for(const [key,label,type,step] of [['enabled','Enabled','checkbox',0],['color','Color','color',0],['intensity','Power','number',1],['angle','Cone angle','number',.2],['penumbra','Blend','number',.01]]){
+    const row=document.createElement('label');row.className='slider-row';row.innerHTML=`<span class="slider-label">${label}</span><input type="${type}" class="transform-input" ${type==='number'?'step="any"':''}>`;lightPanel.append(row);const input=row.querySelector('input');input.dataset.lightParam=key;
+    input.addEventListener(type==='checkbox'?'change':'input',()=>{const entry=selectedSceneObjectEntry();if(entry?.type!=='light'||edits.state().active?.id!==`@mesh-data:${entry.id}`||input.value==='')return;const record=serializeSceneObject(entry);record.light[key]=type==='checkbox'?input.checked:type==='number'?Number(input.value):input.value;try{edits.preview(checkedSceneLightRecord(record));}catch(error){setInfo(error.message);}});
+    authoringControlSessions.push(installSceneControlHistory({controls:[input],edits,id:()=>ensureMeshDataTarget(activeSceneObjectId),label:`Edit light ${label}`,onError:error=>setInfo(error.message)}));
+    if(type==='number'){const scrub=installRelativeNumberDrag({grip:row.querySelector('span'),input,step});edits.subscribe(state=>{if(!state.active)scrub.stop();});}
+  }
+  const relations=document.createElement('section');relations.id='selected-object-relations';relations.hidden=true;
+  relations.innerHTML='<h3>Relations</h3><label>Parent group<select id="object-parent"></select></label><button type="button" class="btn" id="object-duplicate">Duplicate · Shift D</button>';
+  panel.after(relations);
+  const groupPanel=document.createElement('section');groupPanel.id='selected-group-properties';groupPanel.hidden=true;
+  groupPanel.innerHTML='<h3>Group</h3><p>Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
+  relations.after(groupPanel);
+  window.kaminosSceneAuthoring={addLight:addSceneSpotLight,read:()=>({objects:sceneObjects.map(serializeSceneObject),groups:serializeSceneGroups(),activeFieldId:activeSceneFieldId}),addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+    ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),
+    setGeometry:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.geometry=checkedGeometry({kind:patch.kind||record.geometry.kind,parameters:{...(patch.kind&&patch.kind!==record.geometry.kind?{}:record.geometry.parameters),...patch.parameters}});edits.apply(ensureMeshDataTarget(id),record,'Edit geometry');return record;},
+    setLight:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.light={...record.light,...patch};edits.apply(ensureMeshDataTarget(id),checkedSceneLightRecord(record),'Edit light');return record;},
+    setMaterial:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.surface={...record.surface,...patch};edits.apply(ensureMeshDataTarget(id),checkedProceduralMesh(record),'Edit material');return record;}};
+  document.getElementById('object-parent').onchange=e=>{try{attachSceneObject(activeSceneObjectId,e.target.value||null);}catch(error){setInfo(error.message);}};
+  document.getElementById('object-duplicate').onclick=()=>{try{duplicateSceneObject(activeSceneObjectId,{interactive:true});document.activeElement?.blur?.();}catch(error){setInfo(error.message);}};
+  document.getElementById('group-duplicate').onclick=()=>{try{duplicateSceneGroup(activeSceneGroupId,{interactive:true});document.activeElement?.blur?.();}catch(error){setInfo(error.message);}};
+  document.getElementById('object-ungroup').onclick=()=>{try{window.kaminosSceneAuthoring.ungroup(activeSceneGroupId);}catch(error){setInfo(error.message);}};
+  edits.subscribe(syncSceneDataInspector);
+  document.addEventListener('keydown',event=>{
+    if(event.shiftKey&&event.key.toLowerCase()==='d'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.target.closest?.('input,textarea,select,[contenteditable=true]')){
+      event.preventDefault();try{duplicateSceneSelection(activeSceneObjectId||activeSceneGroupId,{interactive:true});}catch(error){setInfo(error.message);}
+    }
+  },true);
+}
+
 // Authored bed/source relationships use existing scene records and the same edit ledger.
 let burnerGraphWriting=false;
-function assemblyProxy(group) {
+function groupProxy(group) {
   if(!group)return null;
-  let proxy=assemblyProxies.get(group.id);
-  if(!proxy){proxy=new THREE.Group();proxy.userData.kaminosEditorHelper=true;scene.add(proxy);assemblyProxies.set(group.id,proxy);}
+  let proxy=groupProxies.get(group.id);
+  if(!proxy){proxy=new THREE.Group();proxy.userData.kaminosEditorHelper=true;scene.add(proxy);groupProxies.set(group.id,proxy);}
   if(!transformControls?.dragging)applySceneObjectTransformState(proxy,group.transform);
   proxy.userData.kaminosSceneObject={label:group.label};
   proxy.updateMatrixWorld(true);
@@ -27467,62 +27740,62 @@ function assemblyProxy(group) {
 }
 function selectedPlacementEntry() {
   const group=selectedSceneGroupEntry();
-  return group?.type===BURNER_ASSEMBLY_TYPE
-    ? {id:`@assembly:${group.id}`,type:BURNER_ASSEMBLY_TYPE,label:group.label,object:assemblyProxy(group)}
+  return group?.type===GROUP_TYPE
+    ? {id:`@group:${group.id}`,type:GROUP_TYPE,label:group.label,object:groupProxy(group)}
     : selectedSceneObjectEntry();
 }
 function frameAuthoredSelection() {
+  if(activeSceneFieldId==='flame-field'&&flameDomainGuide)return frameObjects([flameDomainGuide],camera,controls);
   const group=selectedSceneGroupEntry();
   return group ? frameObjects(sceneObjects.filter(entry=>group.objectIds.includes(entry.id)).map(entry=>entry.object),camera,controls)
     : frameSceneObjectRecord(selectedSceneObjectEntry(),camera,controls);
 }
-function assemblyEditState(group) {
+function groupEditState(group) {
   return {...structuredClone(group.transform),frame:structuredClone(group.transform),members:Object.fromEntries(group.objectIds.map(id=>{
-    const entry=sceneObjects.find(entry=>entry.id===id);if(!entry)throw Error(`Missing assembly member ${id}`);
+    const entry=sceneObjects.find(entry=>entry.id===id);if(!entry)throw Error(`Missing group member ${id}`);
     return [id,sceneObjectTransformState(entry.object)];
   }))};
 }
-function ensureAssemblyTarget(group) {
-  const id=`@assembly:${group.id}`;
-  if(!scenePlacementTools || assemblyEditTargets.has(id))return;
-  scenePlacementTools.edits.register(id,{
-    read:()=>{const current=sceneGroups.find(item=>item.id===group.id);if(!current)throw Error('Assembly is absent');return assemblyEditState(current);},
-    check:checkedAssemblyEdit,
-    write:value=>writeAssemblyPose(group.id,value),
-  });
-  assemblyEditTargets.add(id);
+function ensureGroupTarget(group) {
+  if(!scenePlacementTools)return;
+  for(const id of [`@group:${group.id}`,`@assembly:${group.id}`]){
+    if(groupEditTargets.has(id))continue;
+    scenePlacementTools.edits.register(id,{read:()=>{const current=sceneGroups.find(item=>item.id===group.id);if(!current)throw Error('Group is absent');return groupEditState(current);},check:checkedGroupEdit,write:value=>writeGroupPose(group.id,value)});
+    groupEditTargets.add(id);
+  }
 }
-function writeAssemblyPose(id,value) {
-  const group=sceneGroups.find(group=>group.id===id);if(!group)throw Error('Assembly is absent');
-  const before=assemblyEditState(group),next=checkedAssemblyPose(value);
-  const members=moveAssemblyMembers(value.frame||before.frame,next,value.members||before.members);
-  if(Object.keys(members).sort().join()!==[...group.objectIds].sort().join())throw Error('Assembly membership changed during placement');
+function writeGroupPose(id,value) {
+  const group=sceneGroups.find(group=>group.id===id);if(!group)throw Error('Group is absent');
+  const before=groupEditState(group),next=checkedGroupPose(value);
+  const members=moveGroupMembers(value.frame||before.frame,next,value.members||before.members);
+  if(Object.keys(members).sort().join()!==[...group.objectIds].sort().join())throw Error('Group membership changed during placement');
   for(const [id,pose] of Object.entries(members)) {
     const entry=sceneObjects.find(entry=>entry.id===id);
+    if(entry.type==='light')checkedSceneLightRecord({...serializeSceneObject(entry),transform:pose});
     if(entry.type===FLAME_EMITTER_TYPE)normalizeFlameEmitterPose(pose);
-    if(entry.type===BURNER_BED_TYPE)checkedAssemblyPose(pose);
+
   }
   try {for(const [id,pose] of Object.entries(members))applyAuthoredScenePose(id,pose);}
   catch(error){for(const [id,pose] of Object.entries(before.members))applyAuthoredScenePose(id,pose);throw error;}
   group.transform=next;
-  applySceneObjectTransformState(assemblyProxy(group),next);
+  applySceneObjectTransformState(groupProxy(group),next);
   updateTransformInspector();window._kaminosDirty?.();return next;
 }
-function mountAuthoredBed(raw) {
-  const record=checkedBurnerBed(raw),previous=sceneObjects.find(entry=>entry.id===record.id);
-  const bed=createAnnularBurner(THREE,mergeGeometries,record.burner);
+function mountProceduralMesh(raw) {
+  const record=checkedProceduralMesh(raw),previous=sceneObjects.find(entry=>entry.id===record.id);
+  const bed=createProceduralMesh(THREE,mergeGeometries,record.geometry,record.surface);
   applySceneObjectTransformState(bed.group,record.transform);
-  authoredBurnerBeds.get(record.id)?.dispose();
-  authoredBurnerBeds.set(record.id,bed);
+  proceduralMeshes.get(record.id)?.dispose();
+  proceduralMeshes.set(record.id,bed);
   const entry={...record,object:bed.group};
   bed.group.userData.kaminosSceneObject={...record};
   if(previous)sceneObjects.splice(sceneObjects.indexOf(previous),1,entry);else sceneObjects.push(entry);
   scene.add(bed.group);sceneNavigation?.prepare(bed.group);
-  if(activeSceneObjectId===record.id){currentMesh=bed.group;transformControls?.attach(bed.group);}
+  if(activeSceneObjectId===record.id){currentMesh=bed.group;if(transformControls)attachViewportGizmo(bed.group);}
   return entry;
 }
 function readBurnerGraph() {
-  return {objects:sceneObjects.filter(entry=>[BURNER_BED_TYPE,FLAME_EMITTER_TYPE].includes(entry.type)).map(serializeSceneObject),
+  return {objects:sceneObjects.filter(entry=>[PROCEDURAL_MESH_TYPE,FLAME_EMITTER_TYPE].includes(entry.type)).map(serializeSceneObject),
     groups:serializeSceneGroups(),
     domain:[...flameDomainTranslation]};
 }
@@ -27532,31 +27805,31 @@ function checkBurnerGraph(value) {
   if(!Array.isArray(result.objects)||!Array.isArray(result.groups))throw Error('Burner scene records are required');
   for(const record of result.objects){
     if(ids.has(record.id))throw Error('Duplicate burner object');ids.add(record.id);
-    if(record.type===BURNER_BED_TYPE)Object.assign(record,checkedBurnerBed(record));
+    if(record.type===PROCEDURAL_MESH_TYPE)Object.assign(record,checkedProceduralMesh(record));
     else if(record.type===FLAME_EMITTER_TYPE && record.id===FLAME_EMITTER_ID && record.source===FLAME_EMITTER_SOURCE)record.transform=normalizeFlameEmitterPose(record.transform);
     else throw Error('Unsupported burner object');
   }
-  const sceneIds=new Set([...ids,...sceneObjects.filter(entry=>![BURNER_BED_TYPE,FLAME_EMITTER_TYPE].includes(entry.type)).map(entry=>entry.id)]);
+  const sceneIds=new Set([...ids,...sceneObjects.filter(entry=>![PROCEDURAL_MESH_TYPE,FLAME_EMITTER_TYPE].includes(entry.type)).map(entry=>entry.id)]);
   const assigned=new Set(),groupIds=new Set();
   for(const group of result.groups){
     if(!group.id||groupIds.has(group.id)||!Array.isArray(group.objectIds)||!group.objectIds.length)throw Error('Invalid scene group');groupIds.add(group.id);
-    if(group.type===BURNER_ASSEMBLY_TYPE)group.transform=checkedAssemblyPose(group.transform);
-    for(const id of group.objectIds){if(!sceneIds.has(id)||assigned.has(id)||(group.type===BURNER_ASSEMBLY_TYPE&&!ids.has(id)))throw Error('Invalid assembly membership');assigned.add(id);}
+    if(group.type===GROUP_TYPE)group.transform=checkedGroupPose(group.transform);
+    for(const id of group.objectIds){if(!sceneIds.has(id)||assigned.has(id))throw Error('Invalid group membership');assigned.add(id);}
   }
   return result;
 }
 function writeBurnerGraphUnchecked(next) {
   const selected=activeSceneObjectId,selectedGroup=activeSceneGroupId;
   const ids=new Set(next.objects.map(record=>record.id));
-  for(const entry of [...sceneObjects])if(entry.type===BURNER_BED_TYPE&&!ids.has(entry.id)){
-    authoredBurnerBeds.get(entry.id)?.dispose();authoredBurnerBeds.delete(entry.id);sceneObjects=sceneObjects.filter(item=>item!==entry);
+  for(const entry of [...sceneObjects])if(entry.type===PROCEDURAL_MESH_TYPE&&!ids.has(entry.id)){
+    proceduralMeshes.get(entry.id)?.dispose();proceduralMeshes.delete(entry.id);sceneObjects=sceneObjects.filter(item=>item!==entry);
   }
   authoredFlamePresent=ids.has(FLAME_EMITTER_ID);
   if(applyFlameEmitterPose)applyFlameEmitterPose(flameEmitterPose,{sourceEnabled:authoredFlamePresent&&!flameEmitterInjectionSuspended});
   for(const record of next.objects){
-    if(record.type===BURNER_BED_TYPE){
+    if(record.type===PROCEDURAL_MESH_TYPE){
       const entry=sceneObjects.find(entry=>entry.id===record.id);
-      if(!entry||JSON.stringify(entry.burner)!==JSON.stringify(record.burner))mountAuthoredBed(record);
+      if(!entry||JSON.stringify([entry.geometry,entry.surface])!==JSON.stringify([record.geometry,record.surface]))mountProceduralMesh(record);
       else applySceneObjectTransformState(entry.object,record.transform);
     }else{
       ensureAuthoredFlameEmitter(record);writeAuthoredFlameEmitterPose(record.transform);
@@ -27569,8 +27842,8 @@ function writeBurnerGraphUnchecked(next) {
   if(authoredFlamePresent)writeAuthoredFlameEmitterPose(flameEmitterPose);
   sceneGroups=structuredClone(next.groups);
   for(const entry of sceneObjects)setSceneObjectGroupId(entry,next.groups.find(group=>group.objectIds.includes(entry.id))?.id||null);
-  pruneSceneGroups();for(const group of next.groups)if(group.type===BURNER_ASSEMBLY_TYPE)ensureAssemblyTarget(group);
-  for(const [id,proxy] of assemblyProxies)if(!sceneGroups.some(group=>group.id===id)){proxy.removeFromParent();assemblyProxies.delete(id);}
+  pruneSceneGroups();for(const group of next.groups)if(group.type===GROUP_TYPE)ensureGroupTarget(group);
+  for(const [id,proxy] of groupProxies)if(!sceneGroups.some(group=>group.id===id)){proxy.removeFromParent();groupProxies.delete(id);}
   if(sceneGroups.some(group=>group.id===selectedGroup))setActiveSceneGroup(selectedGroup);
   else if(sceneObjects.some(entry=>entry.id===selected))setActiveSceneObject(selected);
   else clearActiveSceneObjectSelection();
@@ -27590,8 +27863,8 @@ function burnerEdit(change,label) {
   return result;
 }
 function newBedRecord(recipe,pose) {
-  return {id:makeSceneObjectId('burner-bed'),type:BURNER_BED_TYPE,source:BURNER_BED_SOURCE,fileName:'Annular bed',label:'Burner bed',
-    createdAt:new Date().toISOString(),transform:checkedAssemblyPose(pose),burner:normalizeBurner(recipe)};
+  return checkedProceduralMesh({id:makeSceneObjectId('mesh'),type:PROCEDURAL_MESH_TYPE,source:PROCEDURAL_MESH_SOURCE,fileName:'Annular bed',label:'Annular mesh',
+    createdAt:new Date().toISOString(),transform:checkedGroupPose(pose),geometry:{kind:'annular',parameters:normalizeBurner(recipe)},surface:{fieldBinding:'flame-field'}});
 }
 function bedPoseBelowSource() {
   const pose=structuredClone(flameEmitterPose),source=burnerSource(window.__kaminosVolumeEmitterReceipt);
@@ -27604,7 +27877,7 @@ function addBurnerObject(kind) {
   if(kind!=='burner-bed'&&window.__kaminosVolumeEmitterReceipt?.effective?.family==='cluster')throw Error('Choose an analytic flame emitter before adding its source or assembly');
   if(!isFireLightFieldRoute()||!applyFlameEmitterPose)throw Error('Open a flame composition before adding its source or assembly');
   if(kind==='flame-source' && authoredFlamePresent){setActiveSceneObject(FLAME_EMITTER_ID);setInfo('This domain already has its flame source');return FLAME_EMITTER_ID;}
-  const existingAssembly=sceneGroups.find(group=>group.type===BURNER_ASSEMBLY_TYPE&&group.objectIds.includes(FLAME_EMITTER_ID));
+  const existingAssembly=sceneGroups.find(group=>group.objectIds.includes(FLAME_EMITTER_ID)&&group.objectIds.some(id=>sceneObjects.find(o=>o.id===id)?.geometry?.kind==='annular'));
   if(kind==='burner-assembly'&&existingAssembly){setActiveSceneGroup(existingAssembly.id);setInfo('Selected existing burner assembly; Add Burner bed creates additional geometry');return existingAssembly.id;}
   let selectedId;
   burnerEdit(next=>{
@@ -27613,7 +27886,7 @@ function addBurnerObject(kind) {
     const bed=newBedRecord(BURNER_DEFAULTS,bedPoseBelowSource());next.objects.push(bed);selectedId=bed.id;
     if(kind==='burner-assembly'){
       next.groups=next.groups.map(group=>({...group,objectIds:group.objectIds.filter(id=>id!==FLAME_EMITTER_ID)})).filter(group=>group.objectIds.length);
-      const group={id:makeSceneObjectId('burner'),label:'Burner assembly',type:BURNER_ASSEMBLY_TYPE,transform:structuredClone(flameEmitterPose),objectIds:[bed.id,FLAME_EMITTER_ID],createdAt:new Date().toISOString()};
+      const group={id:makeSceneObjectId('burner'),label:'Burner setup',type:GROUP_TYPE,transform:structuredClone(flameEmitterPose),objectIds:[bed.id,FLAME_EMITTER_ID],createdAt:new Date().toISOString()};
       next.groups.push(group);selectedId=group.id;
     }
   },kind==='burner-assembly'?'Add burner assembly':kind==='burner-bed'?'Add burner bed':'Add flame source');
@@ -27621,60 +27894,64 @@ function addBurnerObject(kind) {
   return selectedId;
 }
 function migrateLegacyBurner(recipe) {
-  const bed=newBedRecord(recipe,bedPoseBelowSource());mountAuthoredBed(bed);
+  const bed=newBedRecord(recipe,bedPoseBelowSource());mountProceduralMesh(bed);
   const ids=[bed.id,...(authoredFlamePresent?[FLAME_EMITTER_ID]:[])];
-  createSceneGroupForObjects(ids,'Burner assembly',{id:makeSceneObjectId('burner'),type:BURNER_ASSEMBLY_TYPE,transform:structuredClone(flameEmitterPose),select:false});
+  createSceneGroupForObjects(ids,'Burner setup',{id:makeSceneObjectId('burner'),type:GROUP_TYPE,transform:structuredClone(flameEmitterPose),select:false});
   burnerRecipe=null;if(activeSceneComposition)delete activeSceneComposition.burner;
   renderSceneObjectList();
 }
 function syncBurnerInspector() {
   const panel=document.getElementById('selected-bed-properties');if(!panel)return;
   const entry=selectedSceneObjectEntry(),group=selectedSceneGroupEntry();
-  panel.hidden=entry?.type!==BURNER_BED_TYPE;
-  const assembly=document.getElementById('selected-assembly-properties');assembly.hidden=group?.type!==BURNER_ASSEMBLY_TYPE;
-  if(!assembly.hidden)document.getElementById('assembly-members').textContent=`${group.objectIds.length} members · Move the assembly to carry them together. Select a child to adjust its offset.`;
+  panel.hidden=entry?.type!==PROCEDURAL_MESH_TYPE || entry.geometry?.kind!=='annular';
+  const assembly=document.getElementById('selected-assembly-properties');assembly.hidden=true;
+  if(!assembly.hidden)document.getElementById('assembly-members').textContent=`${group.objectIds.length} members · Transform the group to carry them together. Select a child to adjust its offset.`;
   if(panel.hidden)return;
+  const binding=document.getElementById('annular-response-field');if(binding)binding.value=entry.surface.fieldBinding||'';
   const choice=document.getElementById('bed-assembly-choice');
-  const options=[['','Independent'],...sceneGroups.filter(group=>group.type===BURNER_ASSEMBLY_TYPE).map(group=>[group.id,group.label])];
+  const options=[['','Independent'],...sceneGroups.filter(group=>group.type===GROUP_TYPE).map(group=>[group.id,group.label])];
   choice.replaceChildren(...options.map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option;}));choice.value=entry.groupId||'';
-  for(const input of panel.querySelectorAll('[data-bed-field]'))if(document.activeElement!==input || !scenePlacementTools.edits.state().active)input.value=entry.burner[input.dataset.bedField];
-  document.getElementById('bed-attachment').textContent=entry.groupId?'Attached through its burner assembly':'Independent bed';
+  for(const input of panel.querySelectorAll('[data-bed-field]'))if(document.activeElement!==input || !scenePlacementTools.edits.state().active)input.value=entry.geometry.parameters[input.dataset.bedField]??entry.surface[input.dataset.bedField];
+  document.getElementById('bed-attachment').textContent=entry.groupId?'Member of a group':'Ungrouped mesh';
 }
 function installBurnerAuthoring() {
   const edits=scenePlacementTools.edits;
+  installSceneConstruction();
   edits.register('@burner-graph',{read:readBurnerGraph,write:writeBurnerGraph,check:checkBurnerGraph});
   const host=document.getElementById('selected-flame-properties');
   const panel=document.createElement('section');panel.id='selected-bed-properties';panel.hidden=true;
-  panel.innerHTML='<h3>Burner bed</h3><p id="bed-attachment" class="flame-scope"></p><div id="bed-property-fields"></div><button type="button" class="btn" id="bed-duplicate">Duplicate bed</button><label class="flame-scope" for="bed-assembly-choice">Assembly</label><select id="bed-assembly-choice"></select>';
+  panel.innerHTML='<h3>Geometry · Annular</h3><p hidden id="bed-attachment" class="flame-scope"></p><div id="bed-property-fields"></div><button type="button" class="btn" id="bed-duplicate" hidden>Duplicate</button><label hidden>Assembly<select id="bed-assembly-choice"></select></label>';
   host.after(panel);
   scenePlacementTools.addHistoryScope(panel);
   for(const [key,label,type,step,min] of burnerFields){
-    const row=document.createElement('div');row.className='slider-row';const grip=document.createElement('label');grip.className='slider-label';grip.textContent=label;
+    if(key==='glow'){const title=document.createElement('h3');title.textContent='Material';document.getElementById('bed-property-fields').append(title);}
+    const row=document.createElement('div');row.className='slider-row';const grip=document.createElement('label');grip.className='slider-label';grip.textContent=({bedColor:'Base color',rimColor:'Edge color',glowColor:'Channel color'})[key]||label;
     const input=document.createElement('input');input.type=type;input.dataset.bedField=key;input.id=`selected-bed-${key}`;input.className='transform-input';grip.htmlFor=input.id;
     if(type==='number'){input.step='any';input.min=String(min);}
     input.addEventListener('input',()=>{
-      const entry=selectedSceneObjectEntry();if(entry?.type!==BURNER_BED_TYPE || !input.validity.valid || input.value==='' || edits.state().active?.id!=='@burner-graph')return;
-      try {const record={...serializeSceneObject(entry),burner:{...entry.burner,[key]:type==='number'?Number(input.value):input.value}};mountAuthoredBed(record);window._kaminosDirty?.();}
+      const entry=selectedSceneObjectEntry();if(entry?.type!==PROCEDURAL_MESH_TYPE || entry.geometry?.kind!=='annular' || !input.validity.valid || input.value==='' || edits.state().active?.id!==`@mesh-data:${entry.id}`)return;
+      try {const record={...serializeSceneObject(entry),geometry:{kind:'annular',parameters:{...entry.geometry.parameters}},surface:{...entry.surface}};if(key in record.surface)record.surface[key]=type==='number'?Number(input.value):input.value;else record.geometry.parameters[key]=Number(input.value);edits.preview(checkedProceduralMesh(record));window._kaminosDirty?.();}
       catch(error){setInfo(error.message);}
     });
     row.append(grip,input);document.getElementById('bed-property-fields').append(row);
-    const session=installSceneControlHistory({controls:[input],edits,id:'@burner-graph',label:`Edit bed ${label}`,onError:error=>setInfo(error.message)});authoringControlSessions.push(session);
+    const session=installSceneControlHistory({controls:[input],edits,id:()=>ensureMeshDataTarget(activeSceneObjectId),label:`Edit ${label}`,onError:error=>setInfo(error.message)});authoringControlSessions.push(session);
     if(type==='number'){
       const scrub=installRelativeNumberDrag({grip,input,step,onStart:()=>authoringControlSessions.forEach(session=>session.commit())});
       edits.subscribe(state=>{if(!state.active)scrub.stop();});
     }
   }
+  const binding=document.createElement('label');binding.className='slider-row';binding.innerHTML='<span class="slider-label">Response field</span><select id="annular-response-field"><option value="">None</option><option value="flame-field">Fire & smoke</option></select>';panel.append(binding);
+  binding.querySelector('select').onchange=e=>{try{window.kaminosSceneAuthoring.setMaterial(activeSceneObjectId,{fieldBinding:e.target.value||null});}catch(error){setInfo(error.message);}};
   const assembly=document.createElement('section');assembly.id='selected-assembly-properties';assembly.hidden=true;
-  assembly.innerHTML='<h3>Burner assembly</h3><p id="assembly-members" class="flame-scope"></p><button type="button" class="btn" id="assembly-remove">Remove assembly</button><p class="flame-scope">One active flame source per simulation domain. Additional beds are independent geometry.</p>';
+  assembly.innerHTML='<h3 hidden>Group</h3><p hidden id="assembly-members" class="flame-scope"></p><button type="button" class="btn" id="assembly-remove" hidden>Remove group</button><p class="flame-scope">Transform this group to place its members together.</p>';
   panel.after(assembly);
   scenePlacementTools.addHistoryScope(assembly);
   window.kaminosBurnerAuthoring={
     read:()=>structuredClone(readBurnerGraph()),add:addBurnerObject,
-    setBed:(id,patch)=>burnerEdit(next=>{const bed=next.objects.find(record=>record.id===id&&record.type===BURNER_BED_TYPE);if(!bed)throw Error('Bed is absent');bed.burner=normalizeBurner({...bed.burner,...patch});},'Edit burner bed'),
+    setBed:(id,patch)=>{assertSceneConstructionAvailable();const bed=serializeSceneObject(sceneObjects.find(o=>o.id===id));if(bed.geometry?.kind!=='annular')throw Error('Choose annular geometry');const next=checkedProceduralMesh({...bed,geometry:{kind:'annular',parameters:{...bed.geometry.parameters,...patch}},surface:{...bed.surface,...Object.fromEntries(Object.entries(patch).filter(([key])=>key in bed.surface))}});return scenePlacementTools.edits.apply(ensureMeshDataTarget(id),next,'Edit geometry');},
     remove:id=>burnerEdit(next=>{const group=next.groups.find(group=>group.id===id);const ids=group?group.objectIds:[id];if(!next.objects.some(record=>ids.includes(record.id)))throw Error('Burner object is absent');next.objects=next.objects.filter(record=>!ids.includes(record.id));next.groups=next.groups.map(group=>({...group,objectIds:group.objectIds.filter(id=>!ids.includes(id))})).filter(group=>group.objectIds.length);},'Remove burner object'),
-    duplicate:id=>{let copyId;burnerEdit(next=>{const bed=next.objects.find(record=>record.id===id);if(bed?.type!==BURNER_BED_TYPE)throw Error('This domain supports one flame source; duplicate its bed instead');const copy=newBedRecord(bed.burner,bed.transform);copy.label=`${bed.label} copy`;copy.transform.position[0]+=.2;next.objects.push(copy);copyId=copy.id;},'Duplicate burner bed');setActiveSceneObject(copyId);return copyId;},
-    attach:(id,groupId)=>burnerEdit(next=>{const bed=next.objects.find(record=>record.id===id);if(bed?.type!==BURNER_BED_TYPE)throw Error('Choose a burner bed');const group=next.groups.find(group=>group.id===groupId);if(groupId&&group?.type!==BURNER_ASSEMBLY_TYPE)throw Error('Assembly is absent');for(const group of next.groups)group.objectIds=group.objectIds.filter(member=>member!==id);if(group)group.objectIds.push(id);next.groups=next.groups.filter(group=>group.objectIds.length);},groupId?'Attach bed':'Detach bed'),
-    rename:(id,label)=>burnerEdit(next=>{const target=next.objects.find(record=>record.id===id)||next.groups.find(group=>group.id===id);if(!target||!String(label).trim())throw Error('Object and nonempty name required');target.label=String(label).trim();},'Rename burner object'),
+    duplicate:duplicateSceneObject,
+    attach:attachSceneObject,
   };
   document.getElementById('bed-duplicate').onclick=()=>{try{window.kaminosBurnerAuthoring.duplicate(activeSceneObjectId);}catch(error){setInfo(error.message);}};
   document.getElementById('bed-assembly-choice').onchange=event=>{try{window.kaminosBurnerAuthoring.attach(activeSceneObjectId,event.target.value||null);}catch(error){setInfo(error.message);}};
@@ -27682,11 +27959,11 @@ function installBurnerAuthoring() {
   edits.subscribe(()=>{syncBurnerInspector();syncBurnerControls();});
 }
 
-function selectedBedEntry() { return sceneObjects.find(entry=>entry.id===activeSceneObjectId&&entry.type===BURNER_BED_TYPE)||sceneObjects.find(entry=>entry.type===BURNER_BED_TYPE); }
-function selectedBedRecipe() { return selectedBedEntry()?.burner || burnerRecipe; }
+function selectedBedEntry() { return sceneObjects.find(entry=>entry.id===activeSceneObjectId&&entry.geometry?.kind==='annular')||sceneObjects.find(entry=>entry.geometry?.kind==='annular'); }
+function selectedBedRecipe() { const entry=selectedBedEntry();return entry?{...entry.geometry.parameters,...entry.surface}:burnerRecipe; }
 function writeSelectedBedRecipe(recipe,id=selectedBedEntry()?.id) {
   const entry=sceneObjects.find(entry=>entry.id===id);if(!entry)throw Error('Select an authored burner bed');
-  mountAuthoredBed({...serializeSceneObject(entry),burner:normalizeBurner(recipe)});syncBurnerControls();syncBurnerInspector();window._kaminosDirty?.();
+  const next=normalizeBurner(recipe);if(!next)throw Error('Geometry data is required');mountProceduralMesh({...serializeSceneObject(entry),geometry:{kind:'annular',parameters:next},surface:{...entry.surface,...Object.fromEntries(['bedColor','rimColor','glowColor','glow','coolingSeconds'].map(key=>[key,next[key]]))}});syncBurnerControls();syncBurnerInspector();window._kaminosDirty?.();
 }
 function syncBurnerControls() {
   const working=selectedBedRecipe();
@@ -27764,7 +28041,7 @@ function restoreBurnerControlHistoryState(value) {
 }
 
 function updateAnnularBurnerFrame(now) {
-  for(const bed of authoredBurnerBeds.values())bed.update(authoredFlamePresent?window.__kaminosVolumeEmitterReceipt:null,authoredFlamePresent&&!flameEmitterInjectionSuspended&&!!volumePrototype?.debugState?.().active,now,flameDomainTranslation,{authored:true});
+  for(const [id,mesh] of proceduralMeshes){const entry=sceneObjects.find(o=>o.id===id);if(!entry)continue;const bound=entry.surface?.fieldBinding==='flame-field';mesh.update(bound&&authoredFlamePresent?window.__kaminosVolumeEmitterReceipt:null,bound&&authoredFlamePresent&&!flameEmitterInjectionSuspended&&!!volumePrototype?.debugState?.().active,now,flameDomainTranslation,{authored:true});}
   if (!annularBurner) return;
   const state = annularBurner.update(window.__kaminosVolumeEmitterReceipt,
     !!volumePrototype?.debugState?.().active, now, flameDomainTranslation);
@@ -28070,8 +28347,9 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     ensureAuthoredFlameEmitter();
   }
 
-  if (legacyBurner?.enabled !== false && legacyBurner && !objectRecords.some(record=>record.type===BURNER_BED_TYPE)) migrateLegacyBurner(legacyBurner);
+  if (legacyBurner?.enabled !== false && legacyBurner && !objectRecords.some(record=>record.type===PROCEDURAL_MESH_TYPE)) migrateLegacyBurner(legacyBurner);
   if (!authoredFlamePresent) applyFlameEmitterPose?.(flameEmitterPose,{sourceEnabled:false});
+  if(data.activeFieldId && (data.activeFieldId==='flame-field'?activeSceneComposition:localLiquidSetup))window.selectSceneField(data.activeFieldId);
 
   // The pinned basin is already mounted. Reapplying identical primitives would
   // rebuild its GPU field and invalidate textures held by the lighting pass.

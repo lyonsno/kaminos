@@ -127,3 +127,30 @@ body[data-workspace="authoring"] #authoring-burner-slot { display:none; }
 #authoring-viewport-settings label { display:block; margin:6px 0; white-space:nowrap; }
 
 body[data-workspace=authoring] #tb-gizmo-off { display:none; }
+
+.scene-menu-heading { padding:10px 10px 4px; font-size:10px; color:#92969c; border-top:1px solid #383a40; }
+.scene-field-row small { font-size:9px; font-weight:400; color:#92969c; }
+#selected-object-relations, #selected-mesh-properties, #selected-group-properties { padding:12px 0; }
+#selected-object-relations h3, #selected-mesh-properties h3, #selected-group-properties h3 { font-size:12px; margin:12px 0; }
+#selected-object-relations label { display:flex; flex-direction:column; gap:7px; font-size:11px; }
+#object-parent { background:#25262a; border:1px solid #37383d; color:#d6d7db; padding:7px; }
+#selected-object-relations .btn, #selected-group-properties .btn { margin-top:10px; font-size:11px; }
+#selected-mesh-properties label[hidden] { display:none; }
+#authoring-presets { position:relative; font-size:10px; }
+#authoring-presets summary { padding:5px 8px; cursor:pointer; list-style:none; }
+#authoring-presets > div { position:absolute; top:100%; left:0; min-width:190px; padding:12px; background:#25262a; border:1px solid #48494d; border-radius:5px; box-shadow:0 8px 24px #0008; }
+#authoring-presets p, #selected-group-properties p { font-size:10px; color:#94969c; margin:8px 0; line-height:1.5; }
+.scene-data-choices { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:12px; }
+
+#transform-inspector[hidden], #authoring-object-tools[hidden] { display:none !important; }
+#selected-bed-properties select { background:#25262a; color:#d6d7db; border:1px solid #37383d; padding:6px; }
+
+#authoring-inspector #rim-controls .slider-row:has(#rim-azimuth),
+#authoring-inspector #rim-controls .slider-row:has(#rim-elevation),
+#authoring-inspector #rim-controls .slider-row:has(#rim-distance),
+#authoring-inspector #rim-controls .slider-row:has(#rim-target-x),
+#authoring-inspector #rim-controls .slider-row:has(#rim-target-y),
+#authoring-inspector #rim-controls .slider-row:has(#rim-target-z) { display:none; }
+
+#selected-spot-properties { padding:12px 0; }
+#selected-spot-properties h3 { font-size:12px; }

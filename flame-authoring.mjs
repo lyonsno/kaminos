@@ -74,7 +74,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-confinement','Confinement'], ['volume-time-step','Time stepping'],
     ['volume-common-gas-transport','Common gas transport'],
   ] },
-  { name:'Legacy appearance', scope:'For basins using the earlier material model', fields:[
+  { name:'Legacy appearance', scope:'For presets using the earlier material model', fields:[
     ['volume-exposure','Exposure'], ['volume-density','Density'], ['volume-fire','Fire'],
     ['volume-radiance','Radiance'], ['volume-absorption','Absorption'], ['volume-glow','Glow'],
     ['volume-smoke','Smoke'], ['volume-fire-scale','Fire scale'], ['volume-detail-scale','Detail scale'],
@@ -87,8 +87,8 @@ export function authoredFlameShapeOptions(options) {
 
 export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, openWorkbench, onError }) {
   const basin = document.createElement('details'); basin.id='flame-basin-browser'; basin.open=true;
-  basin.innerHTML='<summary>Basin</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a basin…" aria-label="Find a basin"><select id="flame-basin-select" aria-label="Flame basin"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
-  host.append(basin);
+  basin.innerHTML='<summary>Preset</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a preset…" aria-label="Find a preset"><select id="flame-basin-select" aria-label="Fire preset"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
+  sharedHost.append(basin);
   const byId=id=>document.getElementById(id);
   let entries=[];
   function renderOptions() {
@@ -102,7 +102,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   }
   const status=message=>byId('flame-basin-status').textContent=message;
   async function refresh() {
-    try {const index=await listBasins();entries=index.entries;renderOptions();status(`${entries.length} basins${index.unavailableEntries?.length?` · ${index.unavailableEntries.length} unavailable`:''}`);}
+    try {const index=await listBasins();entries=index.entries;renderOptions();status(`${entries.length} presets${index.unavailableEntries?.length?` · ${index.unavailableEntries.length} unavailable`:''}`);}
     catch(error){status(error.message);onError(error);}
   }
   byId('flame-basin-search').addEventListener('input',renderOptions);
@@ -144,9 +144,9 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       source.addEventListener('input',syncField);source.addEventListener('change',syncField);
       aliases.push(syncField);syncField();row.append(grip,field);section.append(row);
     }
-    (group.name==='Simulation'||group.name==='Motion'?sharedHost:host).append(section);
+    (group.name==='Emission'?host:sharedHost).append(section);
   }
-  const more=document.createElement('button');more.type='button';more.className='btn';more.textContent='All controls in Workbench';more.onclick=openWorkbench;host.append(more);
+  const more=document.createElement('button');more.type='button';more.className='btn';more.textContent='All controls in Workbench';more.onclick=openWorkbench;sharedHost.append(more);
   function sync(force=false) {
     aliases.forEach(sync=>sync(force));
     const source=readSource();byId('flame-basin-current').textContent=source?`${source.label || 'Loaded basin'}${source.modified?' · Modified':''}`:'Scene working settings';
