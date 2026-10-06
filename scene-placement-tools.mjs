@@ -291,7 +291,11 @@ export function installScenePlacementTools({
       if (['g', 'r', 's'].includes(key)) { start({ g: 'translate', r: 'rotate', s: 'scale' }[key]); return; }
       if (['x', 'y', 'z'].includes(key)) {
         if (modal.axis === key && modal.plane === event.shiftKey) {
-          if (modal.frame === 'world' && modal.operation !== 'scale') modal.frame = 'local';
+          if(transformSettings().explicit){
+            const first=transformSettings().orientation;
+            if(modal.frame===first)modal.frame=first==='world'?'local':'world';
+            else {modal.axis=null;modal.plane=false;modal.frame=first;}
+          }else if (modal.frame === 'world' && modal.operation !== 'scale') modal.frame = 'local';
           else { modal.axis = null; modal.plane = false; modal.frame = 'world'; }
         } else { modal.axis = key; modal.plane = event.shiftKey; modal.frame = transformSettings().explicit?transformSettings().orientation:modal.operation === 'scale' ? 'local' : 'world'; }
       } else if (event.key === 'Backspace') modal.numeric = modal.numeric.slice(0, -1);

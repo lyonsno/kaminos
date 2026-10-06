@@ -3878,6 +3878,7 @@ function escapeHtml(s) {
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let viewportGizmosVisible=true;
 function attachViewportGizmo(target) {
+  if(selectionTransforms&&sceneSelection.ids.length&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat')target=selectionTransformProxy();
   transformControls.attach(target);
   transformControls.getHelper().visible=viewportGizmosVisible;
   transformControls.enabled=viewportGizmosVisible;
@@ -7290,6 +7291,8 @@ window.kaminosSceneObjectDebugState = function() {
     surface:record.surface?structuredClone(record.surface):null,
     groupId: record.groupId || null,
     active: record.id === activeSceneObjectId,
+    selected:sceneSelectionMembers().includes(record.id),
+    objectVisible:record.object.visible,
     transform: sceneObjectTransformState(record.object),
     sceneTransform: record.sceneTransform ? cloneTransformState(record.sceneTransform) : null,
     splat: record.splat || null,
@@ -11394,7 +11397,7 @@ async function initScene() {
     if (splatCorrectionTransformTarget()) {
       syncSplatCorrectionDraftFromActiveTarget();
     } else {
-      if(sceneSelection.ids.length>1&&transformControls.dragging){try{selectionTransforms.write({...selectionTransforms.read(),...sceneObjectTransformState(selectionProxy)});}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}updateTransformInspector();return;}
+      if(transformControls.object===selectionProxy&&transformControls.dragging){try{selectionTransforms.write({...selectionTransforms.read(),...sceneObjectTransformState(selectionProxy)});}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}updateTransformInspector();return;}
       const assembly=selectedSceneGroupEntry();
       if (assembly?.type===GROUP_TYPE && transformControls.dragging) {
         try {writeGroupPose(assembly.id,sceneObjectTransformState(groupProxies.get(assembly.id)));}
@@ -11483,7 +11486,7 @@ async function initScene() {
     controls,
     gizmo: transformControls,
     selected: () => selectedPlacementEntry()?.id || null,
-    prepare:()=>{if(sceneSelection.ids.length>1)selectionTransforms.prepare();},
+    prepare:()=>{if(sceneSelection.ids.length)selectionTransforms?.prepare();},
     transformSettings:()=>transformPreferences,
     read: id => {
       if(id==='@selection-transform')return selectionTransforms.pose();
