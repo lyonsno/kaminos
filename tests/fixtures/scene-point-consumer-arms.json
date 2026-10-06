@@ -1,0 +1,8 @@
+[
+  {"id":"point-off","mode":2,"temperature":2200,"ev":0,"camera":{"position":[3,2,9],"target":[0,0.7,-0.4]},"sharedSource":{"intensity":[0,0,0]}},
+  {"id":"point-red","mode":2,"temperature":2200,"ev":0,"camera":{"position":[3,2,9],"target":[0,0.7,-0.4]},"sharedSource":{"intensity":[3,0,0]}},
+  {"id":"point-blue","mode":2,"temperature":2200,"ev":0,"camera":{"position":[3,2,9],"target":[0,0.7,-0.4]},"sharedSource":{"intensity":[0,0,3]}},
+  {"id":"exposed-off","mode":2,"temperature":2200,"ev":0,"camera":{"position":[3,2,9],"target":[0,0.7,-0.4]},"sharedSource":{"position":[2.6,1.4,1],"intensity":[0,0,0]}},
+  {"id":"exposed-red","mode":2,"temperature":2200,"ev":0,"camera":{"position":[3,2,9],"target":[0,0.7,-0.4]},"sharedSource":{"position":[2.6,1.4,1],"intensity":[3,0,0]}},
+  {"id":"exposed-blue","mode":2,"temperature":2200,"ev":0,"camera":{"position":[3,2,9],"target":[0,0.7,-0.4]},"sharedSource":{"position":[2.6,1.4,1],"intensity":[0,0,3]}}
+]

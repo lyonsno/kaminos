@@ -3,8 +3,8 @@ import { CIE_1931_2DEG } from './cie-1931-observer.mjs';
 
 const referenceY = blackbodyXYZ(1900)[1];
 // Independent sensor-channel saturation; no exposure-dependent white is added.
-export function displayEmissiveRGB(rgb, ev = 0, knee = .6) {
-  return rgb.map(v => {
+export function displayEmissiveRGB(rgb, ev = 0, knee = .6, white = [[1,0,0],[0,1,0],[0,0,1]]) {
+  return white.map(row => row.reduce((sum,v,i)=>sum+v*rgb[i],0)).map(v => {
     let x = Math.max(0, v * 2 ** ev);
     if (x > knee) x = 1 - (1-knee)**2 / (x+1-2*knee);
     return x <= .0031308 ? x*12.92 : 1.055*x**(1/2.4)-.055;
@@ -137,6 +137,13 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
   let gas = vec3<f32>(${REACTION_RGB.join(',')}) * clean * u.physical_display.x;
   let emission = hotSoot*thermalRadiance(kelvin) + gas;
   return EmissiveMaterial(emission, absorption, scattering);
+}
+fn sceneEmissiveMaterialAt(p: vec3<f32>) -> EmissiveMaterial {
+  let r = sampleWorldFlowReconstructionRaw(p);
+  let coverage = liveBoundarySupportAt(p, max(u.topology_shell_carriers,vec4<f32>(0.0)));
+  // Shared scene transport sees authored material, independent of whether the
+  // raymarch presentation chooses to show smoke. Suppression is consumer-local.
+  return emissiveMaterial(r,coverage,1.0);
 }
 fn emissiveCamera(rgb: vec3<f32>) -> vec3<f32> {
   let balanced = vec3<f32>(dot(u.emissive_white_r.xyz,rgb),dot(u.emissive_white_g.xyz,rgb),dot(u.emissive_white_b.xyz,rgb));

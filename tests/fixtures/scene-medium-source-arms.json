@@ -1,0 +1,4 @@
+[
+  {"id":"medium-cell-step","mode":2,"temperature":2200,"ev":0,"sourceProbe":true,"mediumSource":{"position":[0.123,-0.789,0.234],"stepLength":0.0625}},
+  {"id":"medium-half-step","mode":2,"temperature":2200,"ev":0,"sourceProbe":true,"sourceEquals":"medium-cell-step","equalTo":"medium-cell-step","mediumSource":{"position":[0.123,-0.789,0.234],"stepLength":0.03125}}
+]

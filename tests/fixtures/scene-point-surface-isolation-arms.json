@@ -1,0 +1,5 @@
+[
+  {"id":"dim-off","mode":2,"temperature":2200,"ev":0,"controls":{"fire-light-gain-stops":-6,"exposure-slider":0.2,"env-intensity-slider":0.1},"camera":{"position":[3,2,9],"target":[0,0.7,-0.4]},"sharedSource":{"position":[2.6,1.4,1],"intensity":[0,0,0]}},
+  {"id":"dim-red","mode":2,"temperature":2200,"ev":0,"controls":{"fire-light-gain-stops":-6,"exposure-slider":0.2,"env-intensity-slider":0.1},"camera":{"position":[3,2,9],"target":[0,0.7,-0.4]},"sharedSource":{"position":[2.6,1.4,1],"intensity":[3,0,0]}},
+  {"id":"dim-blue","mode":2,"temperature":2200,"ev":0,"controls":{"fire-light-gain-stops":-6,"exposure-slider":0.2,"env-intensity-slider":0.1},"camera":{"position":[3,2,9],"target":[0,0.7,-0.4]},"sharedSource":{"position":[2.6,1.4,1],"intensity":[0,0,3]}}
+]

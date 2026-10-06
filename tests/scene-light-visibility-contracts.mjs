@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import { buildTriangleVisibility } from '../scene-light-visibility.mjs';
+
+const tri = (z, identity, materialIndex = 0) => ({
+  a: [-1, -1, z], b: [1, -1, z], c: [0, 1, z], materialIndex, identity,
+});
+const scene = buildTriangleVisibility([tri(3, 'far'), tri(1, 'near', 7)]);
+assert.equal(scene.triangleCount, 2);
+const hit = scene.trace([0, 0, 0], [0, 0, 8], { maxDistance: 4 });
+assert.equal(hit.identity, 'near', 'returns the nearest hit independent of input order');
+assert.equal(hit.triangleIndex, 1);
+assert.equal(hit.distance, 1);
+assert.deepEqual(hit.position, [0, 0, 1]);
+assert.deepEqual(hit.normal, [0, 0, 1]);
+assert.deepEqual(hit.barycentric, [0.25, 0.25, 0.5]);
+assert.equal(hit.materialIndex, 7);
+assert.equal(scene.trace([0, 0, 0], [0, 0, 1], { maxDistance: 0.5 }), null, 'open segment');
+assert.equal(scene.trace([0, 0, 1], [0, 0, 1], { minDistance: 0.1 }).identity, 'far', 'minimum distance excludes the origin hit');
+assert.equal(scene.trace([0, 0, 0], [0, 0, 1], { maxDistance: 1 }), null, 'maximum distance is exclusive');
+assert.equal(scene.trace([0, 0, 0], [0, 0, 1], { minDistance: 1 }).identity, 'near', 'minimum distance is inclusive');
+assert.equal(scene.trace([0, 0, 0], [1, 0, 0]), null, 'parallel ray misses');
+const edgeHit = buildTriangleVisibility([tri(1, 'edge')]).trace([-1, -1, 0], [0, 0, 1]);
+assert.equal(edgeHit.identity, 'edge', 'edge and corner intersections count');
+assert.deepEqual(edgeHit.barycentric.map((value) => Math.abs(value)), [1, 0, 0]);
+assert.equal(buildTriangleVisibility([]).nodeCount, 0, 'empty input has no nodes');
+assert.equal(buildTriangleVisibility([]).trace([0, 0, 0], [0, 0, 1]), null);
+const reversed = buildTriangleVisibility([{ ...tri(1, 'backface'), a: [0, 1, 1], b: [1, -1, 1], c: [-1, -1, 1] }]);
+assert.equal(reversed.trace([0, 0, 0], [0, 0, 1]).identity, 'backface', 'blockers are two-sided');
+const transformed = buildTriangleVisibility([{ a: [10, 20, 4], b: [12, 20, 4], c: [11, 22, 4], identity: 42, materialIndex: 2 }]);
+assert.equal(transformed.trace([11, 21, 0], [0, 0, 1]).identity, 42, 'accepts transformed world-space numeric geometry');
+const mutableTriangle = tri(2, 'snapshot');
+const snapshot = buildTriangleVisibility([mutableTriangle]);
+mutableTriangle.a[2] = mutableTriangle.b[2] = mutableTriangle.c[2] = 20;
+assert.equal(snapshot.trace([0, 0, 0], [0, 0, 1]).distance, 2, 'geometry is snapshotted at construction');
+const tiny = buildTriangleVisibility([{ a: [0, 0, 1e-7], b: [1e-7, 0, 1e-7], c: [0, 1e-7, 1e-7], identity: 'tiny' }]);
+assert.equal(tiny.trace([2e-8, 2e-8, 0], [0, 0, 1]).identity, 'tiny', 'small valid triangles remain intersectable');
+const many = Array.from({ length: 5000 }, (_, i) => tri(i + 1, i));
+const large = buildTriangleVisibility(many);
+assert.equal(large.triangleCount, 5000, 'does not truncate triangle input');
+assert.equal(large.trace([0, 0, 0], [0, 0, 1]).identity, 0);
+assert.throws(() => buildTriangleVisibility([tri(NaN, 'bad')]), /finite/i);
+assert.throws(() => buildTriangleVisibility([{ ...tri(1, 'degenerate'), c: [0, -1, 1] }]), /degenerate/i);
+assert.throws(() => scene.trace([0, 0, 0], [0, 0, 1], { maxDistance: NaN }), /distance/i);
+assert.equal(scene.trace([0, 0, 0], [0, 0, 1], { maxDistance: Infinity }).identity, 'near', 'infinite maximum distance is allowed');
+console.log('scene light visibility contracts passed');

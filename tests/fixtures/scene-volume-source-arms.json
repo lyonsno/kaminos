@@ -1,0 +1,5 @@
+[
+  {"id":"raw-source","mode":2,"temperature":2200,"ev":0,"sourceProbe":true},
+  {"id":"raw-source-exposure","mode":2,"temperature":2200,"ev":1,"sourceProbe":true,"sourceEquals":"raw-source"},
+  {"id":"raw-source-hidden-smoke","mode":2,"temperature":2200,"ev":0,"sourceProbe":true,"smokePresentation":"off","sourceEquals":"raw-source"}
+]
