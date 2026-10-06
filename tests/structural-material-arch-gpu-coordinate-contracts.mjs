@@ -17,5 +17,13 @@ for (const invalid of [{}, { x: 1 }, { x: 0, y: 0 }, { x: 0, y: 0, z: NaN }, { x
 }
 model.moveHand({ ...target, diagnostic: 'additive metadata' });
 assert.deepEqual(model.snapshot().hand.target, { ...target, diagnostic: 'additive metadata' });
+const embedded = { ...point, z: point.z * .94 };
+assert.throws(() => model.setSurfaceHand(cell.index, target, embedded, normal), /selected face/);
+model.setSurfaceHand(cell.index, target, embedded, normal, 'embedded-visual');
+assert.equal(model.snapshot().hand.contactSurface, 'embedded-visual');
+assert.deepEqual(model.snapshot().hand.localPoint, embedded);
+assert.throws(() => model.setSurfaceHand(cell.index, target, { ...point, z: point.z * 1.1 }, normal, 'embedded-visual'), /envelope/);
+assert.throws(() => model.setSurfaceHand(cell.index, target, embedded, normal, 'unknown'), /contact surface/);
+assert.deepEqual(model.snapshot().hand.localPoint, embedded, 'invalid replacement retains embedded grip');
 model.dispose();
 console.log('Hand and point contracts require x/y/z and retain accepted contact on rejection');

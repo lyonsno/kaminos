@@ -61,7 +61,7 @@ try {
     event.stopImmediatePropagation();event.preventDefault();controls.enabled=false;canvas.setPointerCapture(event.pointerId);contactPointer=event.pointerId;
     if(lastPick.eligibility!=='surface'){synchronize();return;}
     const normal=new THREE.Vector3();camera.getWorldDirection(normal);
-    model.setSurfaceHand(cell.index,hit.point,local,faceNormal);grab={index:cell.index,local,target:hit.point.clone(),plane:new THREE.Plane().setFromNormalAndCoplanarPoint(normal,hit.point),pointerId:event.pointerId,indices:model.snapshot().hand.indices};synchronize();
+    model.setSurfaceHand(cell.index,hit.point,local,faceNormal,useStones?'embedded-visual':'box-face');grab={index:cell.index,local,target:hit.point.clone(),plane:new THREE.Plane().setFromNormalAndCoplanarPoint(normal,hit.point),pointerId:event.pointerId,indices:model.snapshot().hand.indices};synchronize();
   }),true);
   canvas.addEventListener('pointermove',act('Drag',event=>{if(!grab||event.pointerId!==grab.pointerId)return;const target=ray(event).intersectPlane(grab.plane,new THREE.Vector3());if(!target)return;grab.target.copy(target);model.moveHand(target);event.stopImmediatePropagation();event.preventDefault();synchronize();}),true);
   function release(event){if(contactPointer===null||event&&event.pointerId!==contactPointer)return;if(grab)model.release();grab=null;contactPointer=null;controls.enabled=true;synchronize();}
