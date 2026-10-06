@@ -1377,6 +1377,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="field"><span class="field-key">Emitter source</span><span class="field-val" id="volume-emitter-carrier">off / 0</span></div>
       <div class="field"><span class="field-key">Emitter fallback</span><span class="field-val" id="volume-emitter-fallback">no</span></div>
       <div class="field"><span class="field-key">Inflow boundary</span><span class="field-val" id="volume-inflow-boundary-state">off</span></div>
+      <div class="field"><span class="field-key">Heat release</span><span class="field-val" id="volume-heat-release-state">off</span></div>
       <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state" role="status" aria-live="polite">connecting...</span></div>
       <div class="field"><span class="field-key">Promotion</span><span class="field-val" id="volume-basin-promotion-state" role="status" aria-live="polite">idle</span></div>
       <div class="volume-presentation-switch" role="group" aria-label="Volume presentation">
@@ -2801,6 +2802,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-pressure-solver-val">legacy</span>
     </div>
     <span class="slider-help">Legacy keeps the damped 1-3 pass Jacobi with material-weighted partial projection. Converged runs red-black SOR on a consistent compact operator and applies a 0-1 gain on the correction; the gain is Projection, and in the Bonfire scene the gain is Projection × its projection ablation. At effective gain 1.0 the carried velocity is divergence-free up to the solver residual and the velocity bound; below 1.0 it is a partial projection that leaves (1 − gain) of the divergence. Pressure iterations 0 (route override or the GPU-pressure impostor tier) or gain 0 turns pressure work off in either mode. Open top vents pressure through the upper face so buoyant gas can leave. The residual readout measures the velocity actually carried forward.</span>
+    <div class="slider-row">
+      <span class="slider-label">Heat release</span>
+      <input type="range" id="volume-heat-release-expansion" data-volume-settings-param="volume_heat_release_expansion" min="0" max="3" step="any" value="0">
+      <span class="slider-val" id="volume-heat-release-expansion-val">0.00</span>
+    </div>
+    <span class="slider-help">Expansion where fuel burns: the converged solve is given a positive divergence target, this gain times the fuel consumption rate, so the surrounding gas moves outward to make room for the hot products and the plume billows instead of only rising. 0 is off. Needs the converged open-top solver (the open top absorbs the net volume); otherwise the receipt says NOT ADMITTED. Saved basins are unchanged at 0.</span>
     <div class="slider-row">
       <span class="slider-label">Solver Sweeps</span>
       <input type="range" id="volume-pressure-solver-iterations" min="4" max="240" step="4" value="60" data-volume-settings-param="volume_pressure_solver_iterations">
@@ -21789,6 +21796,7 @@ function readVolumeControls() {
     pressureMode: pressureConfig.pressureMode,
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureSolver: document.getElementById('volume-pressure-solver').value,
+    heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
     pressureSolverIterations: parseFloat(document.getElementById('volume-pressure-solver-iterations').value),
     advectionScheme: document.getElementById('volume-advection-scheme').value,
     confinement: document.getElementById('volume-confinement').value,
@@ -21896,6 +21904,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-aperture-ratio-val').textContent = c.emitterApertureRatio.toFixed(2);
   document.getElementById('volume-emitter-aperture-seed-val').textContent = String(Math.round(c.emitterApertureSeed));
   document.getElementById('volume-emitter-swirl-val').textContent = c.emitterSwirl.toFixed(2);
+  document.getElementById('volume-heat-release-expansion-val').textContent = c.heatReleaseExpansion.toFixed(2);
   document.getElementById('volume-emitter-line-weight-val').textContent = c.emitterLineWeight.toFixed(2);
   document.getElementById('volume-emitter-jet-jitter-val').textContent = c.emitterJetJitter.toFixed(2);
   document.getElementById('volume-emitter-inlet-turbulence-val').textContent = c.emitterInletTurbulence.toFixed(2);
@@ -22230,6 +22239,12 @@ function refreshVolumeReadout() {
       ? 'inflow-boundary · admitted'
       : `inflow-boundary — NOT ADMITTED (${inflow.effective.reason}); set Pressure solver to converged open top and Projection above 0`;
   }
+  const heatRelease = s.heatRelease;
+  document.getElementById('volume-heat-release-state').textContent = !heatRelease || heatRelease.requested.expansion <= 0
+    ? 'off'
+    : (heatRelease.effective.admitted
+      ? `admitted · gain ${heatRelease.effective.expansion.toFixed(2)}`
+      : `heat-release — NOT ADMITTED (${heatRelease.effective.reason}); set Pressure solver to converged open top and Projection above 0`);
   document.getElementById('volume-inflow-boundary-state').textContent = !inflow
     ? 'off'
     : (inflow.effective.admitted
@@ -22567,7 +22582,7 @@ async function initKaminosVolumeRoute() {
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
   const VOLUME_RETIRED_APERTURE_PATTERNS = ['concentric', 'spiral'];
-  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
     if (!param || !params.has(param)) continue;
@@ -23442,6 +23457,7 @@ async function initKaminosVolumeRoute() {
     'volume-emitter-inlet-turbulence-scale',
     'volume-emitter-puff',
     'volume-emitter-puff-period',
+    'volume-heat-release-expansion',
     'volume-wind-model',
     'volume-wind-gust',
     'volume-wind-gust-period',

@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 233,
+  "controlCount": 234,
   "controls": [
     {
       "key": "volume-physical-material-law",
@@ -417,6 +417,14 @@
       "type": "range",
       "additiveDefault": 3,
       "additiveSinceControlCount": 233
+    },
+    {
+      "key": "volume-heat-release-expansion",
+      "param": "volume_heat_release_expansion",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0,
+      "additiveSinceControlCount": 234
     },
     {
       "key": "volume-pyro-compare",

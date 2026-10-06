@@ -220,7 +220,7 @@ test('cockpit and schema carry the new controls', () => {
   assert.match(checks, /aperture pattern requested \$\{value\}, effective/, 'the arm capture refuses an arm whose pattern did not take effect');
   assert.match(checks, /wind model requested \$\{value\}, effective/, 'and one whose wind model did not');
   assert.match(readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8'), /const mismatches = effectiveMismatches\(arm, end, expectedMode, fault\);/, 'and the capture applies those checks to every arm');
-  assert.equal(schema.controlCount, 233);
+  assert.equal(schema.controlCount, 234);
   const additive = schema.controls.filter(control => control.additiveSinceControlCount >= 219).map(control => control.additiveSinceControlCount);
-  assert.deepEqual(additive, [219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233]);
+  assert.deepEqual(additive, [219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234]);
 });

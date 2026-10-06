@@ -33,6 +33,7 @@ const resources = {
   // The inflow aperture coverage map (binding 17) is a texture in the same closure.
   inflowCoverageTexture: { createView: () => ({ label: 'inflow coverage view' }) },
   inflowPerturbationTexture: { createView: () => ({ label: 'inflow perturbation view' }) },
+  burnRateTexture: { createView: () => ({ label: 'burn rate view' }) },
 };
 const makeGroup = new Function(...Object.keys(resources), `${helper}; return createFluidRenderBindGroup;`)(...Object.values(resources));
 for (let q = 0; q < 2; q++) {

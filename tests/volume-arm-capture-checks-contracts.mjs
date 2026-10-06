@@ -19,6 +19,14 @@ test('swirl check: a missing or nonfinite effective swirl is a mismatch, not a p
   assert.match(at(undefined)[0], /swirl requested 0\.6, effective undefined/);
 });
 
+test('heat release gain is checked against the receipt: absent, refused or different fails', () => {
+  const arm = { set: [['volume-heat-release-expansion', '1.5']] };
+  assert.deepEqual(effectiveMismatches(arm, { heatRelease: { effective: { admitted: true, expansion: 1.5, reason: null } } }, null), []);
+  assert.equal(effectiveMismatches(arm, {}, null).length, 1, 'no receipt fails');
+  assert.match(effectiveMismatches(arm, { heatRelease: { effective: { admitted: false, expansion: 0, reason: 'heat-release-requires-converged-open-top-pressure-solver' } } }, null)[0], /not admitted/);
+  assert.equal(effectiveMismatches(arm, { heatRelease: { effective: { admitted: true, expansion: 1, reason: null } } }, null).length, 1, 'a different gain fails');
+});
+
 test('slice-3 inlet controls are checked against the receipt and fail when absent', () => {
   const arm = { set: [['volume-emitter-inlet-turbulence', '0.4'], ['volume-emitter-puff-period', '3'], ['volume-emitter-line-weight', '1.5']] };
   const good = { inflowBoundary: { effective: { pattern: { lineWeight: 1.5 }, inletDynamics: { turbulence: 0.4, puffPeriod: 3 } } } };

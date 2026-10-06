@@ -22,6 +22,11 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
       if (!Number.isFinite(effective) || Math.abs(effective - Number(value)) > 1e-6) mismatches.push(`swirl requested ${value}, effective ${effective}`);
     }
     if (cid === 'volume-wind-model' && end.wind?.effective?.model !== value) mismatches.push(`wind model requested ${value}, effective ${end.wind?.effective?.model}`);
+    if (cid === 'volume-heat-release-expansion') {
+      const requestedGain = Number(value); const effective = end.heatRelease?.effective;
+      if (!Number.isFinite(effective?.expansion)) mismatches.push(`heat release requested ${value}, no receipt`);
+      else if (requestedGain > 0 && (effective.admitted !== true || Math.abs(effective.expansion - requestedGain) > 1e-6)) mismatches.push(`heat release requested ${value} but ${effective.admitted ? `effective ${effective.expansion}` : `not admitted (${effective.reason})`}`);
+    }
     // Slice-3 inlet controls: the receipt must carry the requested value as a finite number.
     const inletField = { 'volume-emitter-line-weight': ['pattern', 'lineWeight'], 'volume-emitter-jet-jitter': ['pattern', 'jetJitter'], 'volume-emitter-inlet-turbulence': ['inletDynamics', 'turbulence'], 'volume-emitter-inlet-turbulence-scale': ['inletDynamics', 'turbulenceScaleCells'], 'volume-emitter-puff': ['inletDynamics', 'puff'], 'volume-emitter-puff-period': ['inletDynamics', 'puffPeriod'] }[cid];
     if (inletField) {

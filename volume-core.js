@@ -2023,7 +2023,11 @@ export const INFLOW_BOUNDARY_IDENTITY = 'kaminos.volume.inflow-boundary.v1';
 export const INFLOW_APERTURE_KIND_MODE = Object.freeze({ off: 0, disc: 1, annulus: 2, rectangle: 3 });
 export const INFLOW_UNIFORM_OFFSET = PHYSICAL_COLOR_UNIFORM_FLOATS;
 export const INFLOW_UNIFORM_FLOATS = 12;
-export const VOLUME_UNIFORM_FLOATS = INFLOW_UNIFORM_OFFSET + INFLOW_UNIFORM_FLOATS;
+// Heat-release expansion: one vec4 after the inflow block; .x the expansion
+// gain when admitted (0 refuses, so the legacy solve never sees a source).
+export const HEAT_RELEASE_UNIFORM_OFFSET = INFLOW_UNIFORM_OFFSET + INFLOW_UNIFORM_FLOATS;
+export const HEAT_RELEASE_UNIFORM_FLOATS = 4;
+export const VOLUME_UNIFORM_FLOATS = HEAT_RELEASE_UNIFORM_OFFSET + HEAT_RELEASE_UNIFORM_FLOATS;
 
 // The aperture pattern (slice 2): which coverage pattern the floor map is built
 // from, its count / ratio / seed, and the swirl (tangential fraction of the
@@ -2284,6 +2288,27 @@ export function inflowBoundaryUniformValues(config) {
     e.inletDynamics.puffFactor, e.inletVelocity, e.fuelFraction, e.inletTemperature,
     e.swirl, e.inletDynamics.turbulence, 0, e.antialiasWidth,
   ];
+}
+
+// Heat-release expansion (slice 4 of the emitter rewrite): where fuel burns,
+// the converged solve is given a positive divergence target, gain x the fuel
+// consumption rate the reaction used, so the surrounding gas moves outward to
+// make room for the hot products. The open top absorbs the net volume, which
+// is why a closed top or a disabled dispatch refuses it. Opt-in: gain 0 is off.
+export const HEAT_RELEASE_IDENTITY = 'kaminos.volume.heat-release-expansion.v1';
+export function resolveHeatReleaseConfig(controls = {}) {
+  const expansion = clampFinite(controls.heatReleaseExpansion, 0, 3, 0);
+  const pressure = resolvePressureSolverConfig(controls).effective;
+  const requested = { expansion, pressureSolver: pressure.solver, openTop: pressure.openTop };
+  const off = reason => ({ identity: HEAT_RELEASE_IDENTITY, requested, effective: { admitted: false, expansion: 0, reason } });
+  if (!(expansion > 0)) return off('heat-release-expansion-is-zero');
+  if (pressure.solver !== PRESSURE_SOLVER_CONVERGED || !pressure.openTop) return off('heat-release-requires-converged-open-top-pressure-solver');
+  if (pressure.dispatch !== PRESSURE_SOLVER_CONVERGED) return off(`heat-release-requires-pressure-projection-dispatch:${pressure.disabledReason || 'disabled'}`);
+  return { identity: HEAT_RELEASE_IDENTITY, requested, effective: { admitted: true, expansion, reason: null } };
+}
+export function heatReleaseUniformValues(config) {
+  const e = config?.effective;
+  return [e?.admitted ? e.expansion : 0, 0, 0, 0];
 }
 
 function normalizePyroDynamicDetailEnabled(value) {
@@ -3082,6 +3107,8 @@ struct Uniforms {
   inflow_state: vec4<f32>,
   // .x swirl (tangential fraction of the inflow velocity); .y, .z reserved; .w antialias width (one cell, volume units).
   inflow_shape: vec4<f32>,
+  // Heat-release expansion: .x gain (0 off).
+  heat_release: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -3135,6 +3162,10 @@ struct NonRidgeOpticalCaptureRow {
 // Inlet turbulence: one perturbation per floor cell in [-1, 1], a slow stochastic
 // field rewritten each step while the intensity is above zero.
 @group(0) @binding(18) var inflowPerturbation: texture_2d<f32>;
+// Fuel burn rate per cell this step (the reaction's own fuel consumption rate),
+// written by the main kernel and read by the pressure kernels as the heat
+// release expansion target. One read-write storage texture, no usage conflict.
+@group(0) @binding(19) var burnRate: texture_storage_3d<r32float, read_write>;
 @group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
 @group(0) @binding(12) var<storage, read_write> nonRidgeOpticalCaptureRows: array<f32>;
 // MacCormack predictor: the forward semi-Lagrangian estimate of every slot,
@@ -3968,6 +3999,18 @@ fn curlMagnitudeAtCell(c: vec3<i32>) -> f32 {
   return length(curlAtCell(c));
 }
 
+// Heat-release expansion target at a cell: gain x the stored burn rate. Zero
+// gain (refused or off) reads nothing, so the legacy solve is untouched.
+fn heatReleaseExpansion(c: vec3<i32>) -> f32 {
+  if (u.heat_release.x <= 0.0) {
+    return 0.0;
+  }
+  return u.heat_release.x * max(0.0, textureLoad(burnRate, c).x);
+}
+
+// The compact divergence the converged solve drives to zero, minus the
+// expansion target: after a converged solve the corrected field has velocity
+// divergence equal to the expansion where fuel burns and zero elsewhere.
 fn divergenceAtCell(c: vec3<i32>) -> f32 {
   let vx0 = readSlot(c + vec3<i32>(-1, 0, 0), 0u).x;
   let vx1 = readSlot(c + vec3<i32>( 1, 0, 0), 0u).x;
@@ -3975,7 +4018,7 @@ fn divergenceAtCell(c: vec3<i32>) -> f32 {
   let vy1 = readSlot(c + vec3<i32>(0,  1, 0), 0u).y;
   let vz0 = readSlot(c + vec3<i32>(0, 0, -1), 0u).z;
   let vz1 = readSlot(c + vec3<i32>(0, 0,  1), 0u).z;
-  return ((vx1 - vx0) + (vy1 - vy0) + (vz1 - vz0)) * 0.5;
+  return ((vx1 - vx0) + (vy1 - vy0) + (vz1 - vz0)) * 0.5 - heatReleaseExpansion(c);
 }
 
 fn gridExtent(axis: u32) -> i32 {
@@ -6344,7 +6387,12 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Reaction increments are rates: they carry the time step (1.0 under legacy).
   smoke = smoke + tallPlumeReactionSmokeBirth * timeStep;
   heat = heat + (tallPlumeFuelHeatReaction * mix(0.0, 0.16, tallPlumeScene) + tallPlumePilotReaction * 0.030) * timeStep;
-  fuel = max(fuel - (heat * 0.018 + fuelConsumption) * timeStep, 0.0);
+  // The fuel consumption rate is also the heat-release expansion source the
+  // pressure solve targets this step (gain in u.heat_release.x; stored for
+  // every cell, burning or not, so a cell that stops burning stops expanding).
+  let fuelBurnRate = heat * 0.018 + fuelConsumption;
+  fuel = max(fuel - fuelBurnRate * timeStep, 0.0);
+  textureStore(burnRate, cellI, vec4<f32>(fuelBurnRate, 0.0, 0.0, 0.0));
   let bonfireDetailBirthCarrier = bonfireAdvectedSmokeBirth * 0.48 + bonfireSootBirth * 0.30 + bonfireBroadSupportSmokeSource * 0.046 * bonfireLayeredSmokeBreakup + smokeFromHeat * bonfireInterfaceSmokeBand * 0.13 + bonfireInterfaceBirth * 0.18 + bonfireCombustion.z * 0.036 + smoke * 0.070;
   let bonfireSmokeDetailCurlFold = clamp(
     0.50
@@ -10698,6 +10746,8 @@ export function createKaminosVolumePrototype({
   // step-locked processes; the field is rebuilt with the grid.
   let inflowPerturbationTexture = null;
   let inletPerturbationField = null;
+  // Fuel burn rate per cell (heat-release expansion source), rebuilt with the grid.
+  let burnRateTexture = null;
   const inletPuffProcess = new StochasticSignalSet(2, 1);
   const windGustProcess = new WindGustProcess(1);
   let inflowCoverageSignature = '';
@@ -11283,6 +11333,8 @@ export function createKaminosVolumePrototype({
     inflowPerturbationTexture?.destroy();
     inflowPerturbationTexture = null;
     inletPerturbationField = null;
+    burnRateTexture?.destroy();
+    burnRateTexture = null;
     for (const buffer of pressureBuffers) buffer.destroy();
     pressureResidualPartialsBuffer?.destroy();
     pressureResidualReadbackBuffer?.destroy();
@@ -11414,6 +11466,7 @@ export function createKaminosVolumePrototype({
         { binding: 16, resource: sceneSolidTextureView },
         { binding: 17, resource: inflowCoverageTexture.createView() },
         { binding: 18, resource: inflowPerturbationTexture.createView() },
+        { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
       ],
     });
   }
@@ -12454,6 +12507,14 @@ export function createKaminosVolumePrototype({
     });
     device.queue.writeTexture({ texture: inflowPerturbationTexture }, new Float32Array(gridSize * gridSize), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
     inletPerturbationField = new InletPerturbationField({ grid: gridSize, seed: 1 });
+    burnRateTexture = device.createTexture({
+      label: `kaminos fuel burn rate ${gridSize}x${gridHeight}x${gridSize}`,
+      size: [gridSize, gridHeight, gridSize],
+      dimension: '3d',
+      format: 'r32float',
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    device.queue.writeTexture({ texture: burnRateTexture }, new Float32Array(gridSize * gridHeight * gridSize), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize]);
     quenchBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
         label: `kaminos recoverable liquid quench and source state ${gridSize}x${gridHeight}x${gridSize} ${i}`,
@@ -13319,6 +13380,7 @@ export function createKaminosVolumePrototype({
         // which reads the coverage map below the floor, so both stages see it.
         { binding: 17, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
         { binding: 18, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
+        { binding: 19, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -14765,6 +14827,9 @@ export function createKaminosVolumePrototype({
     const inflowBoundaryConfig = resolveInflowBoundaryConfig(controlsSnapshot, analyticEmitterDescriptor, { grid: gridSize, inletSignals });
     uniforms.set(inflowBoundaryUniformValues(inflowBoundaryConfig), INFLOW_UNIFORM_OFFSET);
     state.inflowBoundary = inflowBoundaryConfig;
+    const heatReleaseConfig = resolveHeatReleaseConfig(controlsSnapshot);
+    uniforms.set(heatReleaseUniformValues(heatReleaseConfig), HEAT_RELEASE_UNIFORM_OFFSET);
+    state.heatRelease = heatReleaseConfig;
     if (inflowBoundaryConfig.effective.admitted && inflowCoverageTexture) {
       const coverageSignature = inflowCoverageSignatureFor(inflowBoundaryConfig);
       if (coverageSignature !== inflowCoverageSignature) {
