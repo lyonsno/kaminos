@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {assertSofteningView} from './beaming-softening-evidence.mjs';
-import {assertCameraPixels} from './beaming-camera-pixels.mjs';
+import {assertCameraPixels,assertSurfaceTrimPixels} from './beaming-camera-pixels.mjs';
 import {assertSurfaceView,floatEvidenceBytes,assertSourceMotionView,assertLitSourceMotionResponse,assertScatteringView} from './beaming-surface-evidence.mjs';
 const [url,out]=process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
@@ -21,6 +21,10 @@ try {
   browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   page=await browser.newPage({viewport:{width:1600,height:1000}});
   if(process.argv.includes('--scattering-check')){
+    if(process.argv.includes('--disconnect-surface-trim'))await page.route('**/scene-distributed-radiance.mjs',async route=>{
+      const response=await route.fetch(),original=await response.text(),needle='received.mul(surfaceGain)';assert.equal(original.split(needle).length,2);
+      const body=original.replace(needle,'received');report.disconnectedTrimInstrumentation={original,body,reportedControlRetained:true};await save();await route.fulfill({response,body});
+    });
     await page.route('**/scene-volume-gather.mjs',async route=>{
       const response=await route.fetch(),original=await response.text(),needle='  const resources=[];';assert.equal(original.split(needle).length,2);
       const body="import {installGatherProfiler} from './scratch/beaming-gather-profiler.mjs';\n"+original.replace(needle,needle+' installGatherProfiler(device);');
@@ -409,6 +413,7 @@ ${needle}`);
   }
   if(process.argv.includes('--scattering-check')){
     report.phase='smoke-scattering-and-surface-trim';await save();
+    const {PNG}=await import('/private/tmp/beaming-smoke-deps-1001/node_modules/playwright-core/lib/utilsBundle.js');
     await page.selectOption('#rendering-light-mode','shared');await page.selectOption('#rendering-angular-pattern','source');
     await page.check('#rendering-retain-comparisons');await page.check('#rendering-match-flame-camera');
     await page.evaluate(()=>window.__kaminosSetSceneCameraFrame([2,1.5,6],[0,.7,0]));
@@ -420,8 +425,8 @@ ${needle}`);
     });
     const near=(a,b,label)=>{assert.equal(a.length,b.length);let error=0;for(let i=0;i<a.length;i++){assert.ok(Number.isFinite(a[i])&&Number.isFinite(b[i]));error=Math.max(error,Math.abs(a[i]-b[i])/Math.max(1,Math.abs(a[i]),Math.abs(b[i])));}assert.ok(error<.00002,`${label}: ${error}`);return error;};
     for(const count of [12,16]){
-      await page.selectOption('#rendering-angular-samples',String(count));let zero,high;
-      for(const [name,albedo,enabled,trim,master]of [['direct-zero',0,false,0,0],['scatter-zero',0,true,0,0],['scatter-high',.8,true,0,0],['surface-trim',.8,true,2,0],['master-double',.8,true,0,1],['direct-high',.8,false,0,0],['master-low',.8,true,0,-4]]){
+      await page.selectOption('#rendering-angular-samples',String(count));let zero,high,highPixels,trimPixels;
+      for(const [name,albedo,enabled,trim,master]of [['direct-zero',0,false,0,0],['scatter-zero',0,true,0,0],['scatter-high',.8,true,0,0],['surface-trim',.8,true,2,0],['surface-restore',.8,true,0,0],['master-double',.8,true,0,1],['direct-high',.8,false,0,0],['master-low',.8,true,0,-4]]){
         await page.evaluate(({albedo,enabled,trim,master})=>{
           for(const [id,value]of [['volume-physical-smoke-albedo',albedo],['rendering-surface-gain',trim],['rendering-shared-gain',master],['rendering-source-softness',0],['rendering-surface-reconstruction',0]]){const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));}
           const e=document.getElementById('rendering-surface-scattering');e.checked=enabled;e.dispatchEvent(new Event('change',{bubbles:true}));
@@ -438,7 +443,9 @@ ${needle}`);
         if(name==='master-double'){checks.surface=near(signal.surface,high.surface.map((x,i)=>i%4<3?2*x:x),'master doubles surface once');checks.smoke=near(signal.smoke,high.smoke.map((x,i)=>i%4<3?2*x:x),'master doubles smoke once');}
         if(name==='direct-high')checks.surface=near(signal.surface,zero.surface,'direct wall response remains independent of albedo');
         const stem=`scatter-${count}-${name}`;for(const [key,values]of [['source',signal.source.values],['scattering',signal.scattering.values],['front',signal.surface],['back',signal.back],['smoke',signal.smoke]])await fs.writeFile(`${out}/${stem}-${key}.f32`,floatEvidenceBytes(values));
-        await page.screenshot({path:`${out}/${stem}.png`});
+        const pixels=PNG.sync.read(await page.screenshot({path:`${out}/${stem}.png`}));
+        if(name==='scatter-high')highPixels=pixels;if(name==='surface-trim')trimPixels=pixels;
+        if(name==='surface-restore')checks.trimPixels=assertSurfaceTrimPixels(highPixels,trimPixels,pixels);
         const digest=v=>createHash('sha256').update(floatEvidenceBytes(v)).digest('hex');
         report.views.push({name:stem,count,albedo,enabled,trim,master,checks,dimensions:signal.dimensions,lighting:signal.lighting,volume:signal.volume,sourceMetadata:{...signal.source,values:undefined},scatteringMetadata:{...signal.scattering,values:undefined},hashes:{source:digest(signal.source.values),front:digest(signal.surface),smoke:digest(signal.smoke)}});await save();
       }

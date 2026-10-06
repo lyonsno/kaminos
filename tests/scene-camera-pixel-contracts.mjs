@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {assertCameraPixels} from '../scratch/beaming-camera-pixels.mjs';
+import * as evidence from '../scratch/beaming-camera-pixels.mjs';
+const {assertCameraPixels,assertSurfaceTrimPixels}=evidence;
 const image=value=>({width:1600,height:1000,data:new Uint8Array(1600*1000*4).map((_,i)=>value+(i%17===0?2:0))});
 const reference=image(50),views={host:reference,restored:reference,matched:image(100),ev:image(150),white:image(80),knee:image(70)};
 assertCameraPixels(reference,views);
@@ -9,3 +10,7 @@ assert.throws(()=>assertCameraPixels(reference,{...views,white:undefined}),/evid
 const blank={...reference,data:new Uint8Array(reference.data.length)};
 assert.throws(()=>assertCameraPixels(blank,views),/visible scene structure/);
 console.log('camera pixels reject black native arms, disconnected controls and missing evidence');
+assert.equal(typeof assertSurfaceTrimPixels,'function','surface trim requires independent material pixel consumption admission');
+assertSurfaceTrimPixels(reference,image(100),reference);
+assert.throws(()=>assertSurfaceTrimPixels(reference,reference,reference),/surface trim must brighten/,'reported gain with disconnected material and unchanged pixels must fail');
+assert.throws(()=>assertSurfaceTrimPixels(reference,image(100),image(80)),/restoration/);
