@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import * as Three from 'three';
+import { OrbitControls as NativeOrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const exercise = process.argv[2] ?? 'recovery';
 for (const initiallyPaused of [false, true]) {
-  const test = { models: [], geometries: [], failGeometry: false, failStep: false, renders: 0, steps: 0, frame: null };
+  const test = { models: [], geometries: [], failGeometry: false, failStep: false, renders: 0, steps: 0, frame: null, canvasListeners: new Map() };
   class BoxGeometry extends Three.BoxGeometry {
     constructor(...args) { if (test.failGeometry) throw new Error('injected geometry rejection'); super(...args); test.geometries.push(this); }
   }
@@ -23,15 +24,18 @@ for (const initiallyPaused of [false, true]) {
       isExposedFace: () => true, release() {}, dispose() { this.disposed++; } };
     test.models.push(model); return model;
   };
-  globalThis.__archViewTest = { three: { ...Three, BoxGeometry }, createModel, renderer, device };
+  globalThis.__archViewTest = { three: { ...Three, BoxGeometry }, createModel, renderer, device, NativeOrbitControls, test };
   Object.assign(globalThis, { innerWidth: 1280, innerHeight: 900, devicePixelRatio: 1,
-    document: { querySelector: node, hidden: false, createElement: () => ({ addEventListener() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 900 }) }) },
+    document: { querySelector: node, hidden: false, createElement: () => ({ style: {}, clientWidth: 1280, clientHeight: 900,
+      addEventListener(name, handler) { if (name === 'wheel') test.canvasListeners.set(name, handler); }, removeEventListener() {},
+      ownerDocument: { addEventListener() {}, removeEventListener() {} }, getRootNode() { return this.ownerDocument; },
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 900 }) }) },
     window: {}, location: { search: initiallyPaused ? '?smoke=1' : '', href: 'synthetic-view-contract' },
     addEventListener() {}, requestAnimationFrame(callback) { test.frame = callback; }, fetch: async () => ({ ok: true, json: async () => ({ constructionSource: {}, source: {} }) }) });
   const source = fs.readFileSync(new URL('../structural-material-arch-gpu-view.js', import.meta.url), 'utf8')
     .replace("'./structural-material-arch-stones.js'", JSON.stringify(new URL('../structural-material-arch-stones.js', import.meta.url).href))
     .replace("import * as THREE from 'three/webgpu';", 'const THREE = globalThis.__archViewTest.three;')
-    .replace("import { OrbitControls } from 'three/addons/controls/OrbitControls.js';", 'class OrbitControls { constructor(camera) { this.camera = camera; this.target = new THREE.Vector3(); } update() { this.camera.lookAt(this.target); } }')
+    .replace("import { OrbitControls } from 'three/addons/controls/OrbitControls.js';", exercise === 'orbit' ? 'class OrbitControls extends globalThis.__archViewTest.NativeOrbitControls { constructor(camera, canvas) { super(camera, canvas); globalThis.__archViewTest.test.controls = this; } }' : 'class OrbitControls { constructor(camera) { this.camera = camera; this.target = new THREE.Vector3(); } update() { this.camera.lookAt(this.target); } }')
     .replace("import { createElement, Pause, Play, RotateCcw, ZoomIn, ZoomOut } from 'lucide';", 'const createElement = () => ({}), Pause = {}, Play = {}, RotateCcw = {}, ZoomIn = {}, ZoomOut = {};')
     .replace("import { createNativeGpuRenderer } from './dist/structural-material-arch-gpu-engine.js';", 'const createNativeGpuRenderer = async () => ({ renderer: globalThis.__archViewTest.renderer, device: globalThis.__archViewTest.device, identity: {} });')
     .replace("import { createGpuArchCollapse, coarsenGpuArchProfile, ARCH_GPU_ROUTE } from './structural-material-arch-gpu.js';", 'const createGpuArchCollapse = globalThis.__archViewTest.createModel, coarsenGpuArchProfile = x => x, ARCH_GPU_ROUTE = "synthetic-view-contract";');
@@ -41,7 +45,20 @@ for (const initiallyPaused of [false, true]) {
     const api = window.__archCollapse;
     assert.equal(api.witness().phase, 'interactive');
     const accepted = test.models[0];
-    if (exercise === 'performance') {
+    if (exercise === 'orbit') {
+      if (!initiallyPaused) node('#pause').onclick();
+      const camera = api.witness().camera;
+      test.interference = () => test.canvasListeners.get('wheel')({ deltaY: 100, deltaMode: 0, ctrlKey: false, clientX: 640, clientY: 450, preventDefault() {}, stopPropagation() {} });
+      await api.performanceTrial({ mode: 'coupled', samples: 2, warmup: 1 });
+      assert.deepEqual(api.witness().camera, camera, 'native wheel handler cannot change the measured camera');
+      assert.equal(test.controls.enabled, true, 'trial restores previously enabled camera controls');
+      test.controls.enabled = false;
+      await api.performanceTrial({ mode: 'solver', samples: 2, warmup: 1 });
+      assert.equal(test.controls.enabled, false, 'trial preserves an existing camera-control hold');
+      test.controls.enabled = true; test.failStep = true;
+      await assert.rejects(api.performanceTrial({ mode: 'solver', samples: 2, warmup: 1 }), /injected simulation rejection/);
+      assert.equal(test.controls.enabled, true, 'failed trial restores camera controls');
+    } else if (exercise === 'performance') {
       if (!initiallyPaused) node('#pause').onclick();
       const before = test.renders;
       test.interference = () => { node('#zoom-in').onclick(); node('#pause').onclick(); };

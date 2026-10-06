@@ -93,9 +93,10 @@ try {
     if(!['solver','render','coupled'].includes(mode)||![samples,warmup,renderPasses].every(Number.isInteger)||samples<=0||warmup<0||renderPasses<=0)throw new Error('Invalid performance trial settings');
     return serialize('Performance trial',async()=>{
       if(!paused||grab)throw new Error('Performance trial requires a paused ungripped arch');
+      const controlsEnabled=controls.enabled,observed=[];controls.enabled=false;
       profiling=true;
-      const before=model.snapshot(),observed=[];
       try{
+        const before=model.snapshot();
         await device.queue.onSubmittedWorkDone();
         for(let i=-warmup;i<samples;i++){
           const started=performance.now(),computeBefore=renderer.info.compute.calls,renderBefore=sceneSubmissions,rendererRenderBefore=renderer.info.render.calls;let stepMilliseconds=0,renderSubmitMilliseconds=0;
@@ -106,7 +107,7 @@ try {
         }
         const after=model.snapshot();
         return{mode,samples,warmup,renderPasses,observed,identity,route:ARCH_GPU_ROUTE,effectiveUrl:location.href,visualRoute:useStones?'handy-weathered-stone-v1':'box-baseline',viewport:{width:innerWidth,height:innerHeight,pixelRatio:devicePixelRatio},config:after.config,bodies:after.bodies.length,bonds:after.bonds.length,stepBefore:before.step,stepAfter:after.step,brokenBefore:before.broken,brokenAfter:after.broken,triangles:meshes.reduce((sum,mesh)=>sum+(mesh.geometry.index?.count??mesh.geometry.attributes.position.count)/3,0),camera:{position:camera.position.toArray(),quaternion:camera.quaternion.toArray()},rendererInfo:{calls:renderer.info.render.calls,triangles:renderer.info.render.triangles}};
-      }finally{profiling=false;synchronize();}
+      }finally{controls.enabled=controlsEnabled;profiling=false;synchronize();}
     });
   }
   window.__archCollapse={performanceTrial,rendererLifetime:()=>({source:'three-0.183.0-renderer-compute-cache',computePipelines:[...renderer._pipelines.caches.values()].filter(pipeline=>pipeline.isComputePipeline).length,computePrograms:renderer._pipelines.programs.compute.size}),advance:count=>serialize('Advance',()=>advance(count)),reset:()=>serialize('Reset',rebuild),release:()=>{release();model.release();synchronize();},projectWorld:project,bind:index=>model.bind(index),
