@@ -7,3 +7,7 @@ const fractional=structuredClone(good);fractional.volume.physicalColor.material.
 e.assertScatteringView(fractional,{count:12,albedo:.8,enabled:true,trim:0,master:0});
 for(const change of [s=>s.scattering.generation=0,s=>s.scattering.values=[],s=>s.surface=[1],s=>s.lighting.surfaceScattering=false,s=>s.lighting.frame.surfaceScattering.enabled=false,s=>s.lighting.frame.directions=24,s=>s.lighting.frame.gain=2,s=>s.lighting.surfaceGain=2,s=>s.surface[0]=NaN,s=>s.volume.physicalColor.material.scatteringAlbedo=0]){const bad=structuredClone(good);change(bad);assert.throws(()=>check(bad));}
 console.log('scatter witness rejects partial, stale, wrong-route and wrong-control evidence');
+assert.equal(typeof e.assertRequiredModuleResponse,'function','missing required module must terminate load with a durable failure');
+assert.throws(()=>e.assertRequiredModuleResponse({url:'http://localhost:18536/node_modules/three-mesh-bvh/build/index.module.js',status:404},'http://localhost:18536'),/required-module-load-failed/);
+e.assertRequiredModuleResponse({url:'http://localhost:18536/favicon.ico',status:404},'http://localhost:18536');
+e.assertRequiredModuleResponse({url:'http://localhost:18536/scene-distributed-radiance.mjs',status:200},'http://localhost:18536');

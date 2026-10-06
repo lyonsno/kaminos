@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {assertSofteningView} from './beaming-softening-evidence.mjs';
 import {assertCameraPixels,assertSurfaceTrimPixels} from './beaming-camera-pixels.mjs';
-import {assertSurfaceView,floatEvidenceBytes,assertSourceMotionView,assertLitSourceMotionResponse,assertScatteringView} from './beaming-surface-evidence.mjs';
+import {assertSurfaceView,floatEvidenceBytes,assertSourceMotionView,assertLitSourceMotionResponse,assertScatteringView,assertRequiredModuleResponse} from './beaming-surface-evidence.mjs';
 const [url,out]=process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 await fs.mkdir(out,{recursive:true});
@@ -20,6 +20,8 @@ try {
   await fs.access(executable);
   browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   page=await browser.newPage({viewport:{width:1600,height:1000}});
+  if(process.argv.includes('--required-module-negative'))await page.route('**/scene-distributed-radiance.mjs',route=>route.fulfill({status:404,body:'deliberate owned witness missing module'}));
+  let rejectModuleLoad;const moduleFailure=new Promise((_,reject)=>{rejectModuleLoad=reject;});moduleFailure.catch(()=>{});
   if(process.argv.includes('--scattering-check')){
     if(process.argv.includes('--disconnect-surface-trim'))await page.route('**/scene-distributed-radiance.mjs',async route=>{
       const response=await route.fetch(),original=await response.text(),needle='received.mul(surfaceGain)';assert.equal(original.split(needle).length,2);
@@ -80,7 +82,8 @@ ${needle}`);
       await route.fulfill({response,body});
     });
   }
-  page.on('response',r=>{if(r.status()>=400){report.httpFailures.push({url:r.url(),status:r.status()});void save();}});
+  page.on('response',r=>{if(r.status()>=400){const response={url:r.url(),status:r.status()};report.httpFailures.push(response);
+    try{assertRequiredModuleResponse(response,new URL(url).origin);}catch(error){report.phase='required-module-load-failed';rejectModuleLoad(error);}void save();}});
   page.on('pageerror',e=>{report.errors.push(String(e));void save();});
   page.on('console',m=>{if(m.type()==='error'&&!m.location().url.endsWith('/favicon.ico')){report.errors.push(`${m.location().url}: ${m.text()}`);void save();}});
   await page.goto(new URL('/api/runtime-config',url).href);
@@ -88,9 +91,9 @@ ${needle}`);
   assert.ok(!report.adapter.isFallbackAdapter&&!/swiftshader/i.test(JSON.stringify(report.adapter)),'software fallback cannot establish native performance');
   await save();
   await page.goto(url);
-  await page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().error
+  await Promise.race([page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().error
     ||window.__kaminosSceneRadianceSetup?.status==='failed'
-    ||(window.kaminosSceneObjectDebugState?.().length>0&&window.__kaminosSceneRadiance?.canRender()&&window.__kaminosVolumePrototype.debugState().frameCount>=120),null,{timeout:0});
+    ||(window.kaminosSceneObjectDebugState?.().length>0&&window.__kaminosSceneRadiance?.canRender()&&window.__kaminosVolumePrototype.debugState().frameCount>=120),null,{timeout:0}),moduleFailure]);
   report.observed=await page.evaluate(()=>({effectiveUrl:location.href,setup:window.__kaminosSceneRadianceSetup,
     lighting:window.__kaminosSceneRadiance?.debugState(),volume:window.__kaminosVolumePrototype?.debugState(),objects:window.kaminosSceneObjectDebugState?.()}));
   assert.equal(report.observed.setup.status,'mounted');
