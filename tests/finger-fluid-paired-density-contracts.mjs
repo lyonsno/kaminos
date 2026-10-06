@@ -12,9 +12,9 @@ for(let i=0;i<12;i++)original.push({binding:i,resource:{buffer:makeBuffer({label
 original[3].resource.buffer.data[0]=73;
 const device={features:new Set(['timestamp-query']),pushErrorScope(){},async popErrorScope(){return null},createBuffer:makeBuffer,createQuerySet:d=>({...d,values:[],destroy(){}}),createPipelineLayout:x=>x,createShaderModule:x=>x,async createComputePipelineAsync(x){return x.compute},createBindGroup:x=>{groups.push(x);return x},queue:{submit(items){submissions.push(...items)},writeBuffer(b,offset,data){b.data.set(data,offset)},async onSubmittedWorkDone(){if(submissions.length)submissions.at(-1).completed=true}},createCommandEncoder(){let timedPasses=0,copies=0;return {
  copyBufferToBuffer(a,offset,b,to,size){copies++;b.data.set(a.data.subarray(offset,offset+size),to)},
- beginComputePass(d={}){if(d.timestampWrites)timedPasses++;const p={...d,ops:[],setBindGroup(_,g){this.group=g},setPipeline(x){this.pipeline=x},dispatchWorkgroups(){this.ops.push(this.pipeline.entryPoint)},end(){if(d.timestampWrites){const t=d.timestampWrites;t.querySet.values[t.beginningOfPassWriteIndex]=clock;clock+=100n;t.querySet.values[t.endOfPassWriteIndex]=clock;clock+=10n}}};passes.push(p);return p},
+ beginComputePass(d={}){if(d.timestampWrites)timedPasses++;const p={...d,ops:[],setBindGroup(_,g){this.group=g},setPipeline(x){this.pipeline=x},dispatchWorkgroups(){this.ops.push(this.pipeline.entryPoint);if(this.pipeline.entryPoint==='solve_position_delta')this.group.entries.find(e=>e.binding===0).resource.buffer.data[0]=this.pipeline.module.code.includes('var densityCellAdmissionMask =')?77:11},end(){if(d.timestampWrites){const t=d.timestampWrites;t.querySet.values[t.beginningOfPassWriteIndex]=clock;clock+=100n;t.querySet.values[t.endOfPassWriteIndex]=clock;clock+=10n}}};passes.push(p);return p},
  resolveQuerySet(q,start,count,b){new BigUint64Array(b.data.buffer).set(q.values.slice(start,start+count))},finish(){return {timedPasses,copies}}};}};
-const args={device,shader:'const packedDensityEnabled: bool = false;',layout:{},buffers:original,count:2,cells:2,packedLayout:{headWords:10,particleWords:10},stepCount:180,pairs:2,repetitions:2};
+const args={device,shader:'const packedDensityEnabled: bool = false;\n'+(await import('node:fs')).readFileSync(new URL('../finger-fluid-webgpu-core.js',import.meta.url),'utf8'),layout:{},buffers:original,count:2,cells:2,packedLayout:{headWords:10,particleWords:10},stepCount:180,pairs:2,repetitions:2};
 const r=await witness.capturePairedDensityWitness(args);
 assert.equal(r.frozenBindings.length,12);assert.equal(Buffer.from(r.frozenBindings[3].bytes,'base64')[0],73);
 assert.ok(groups.every(g=>g.entries.every(e=>!original.some(o=>o.resource.buffer===e.resource.buffer))),'all compute bindings are detached from live state');
@@ -36,3 +36,8 @@ assert.ok(submissions.every(s=>s.timedPasses<=1),'each timed arm must occupy its
 assert.ok(submissions.filter(s=>s.timedPasses).every(s=>s.completed),'every timed submission is completion-fenced');
 
 assert.ok(submissions.filter(s=>s.timedPasses).every(s=>s.copies===0),'measured submissions contain no input restoration copies');
+
+await assert.doesNotReject(()=>witness.capturePairedDensityWitness({...args,comparison:'packed-vs-cell-reuse'}),'paired route must exercise the within-iteration cell reuse candidate');
+
+const cached=await witness.capturePairedDensityWitness({...args,comparison:'packed-vs-cell-reuse'});assert.deepEqual(cached.armModes,{A:'packed',B:'cell-reuse'});
+for(const s of cached.series){const proof=s.validation.find(x=>x.arm==='B').witness;assert.equal(Buffer.from(proof.buffers.packedResult,'base64')[0],77,'candidate output retained in candidate role');assert.equal(Buffer.from(proof.buffers.linkedResult,'base64')[0],11,'independent reference output retained separately');}

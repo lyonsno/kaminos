@@ -1,3 +1,4 @@
+import {createDensityCellReuseShader} from './finger-fluid-density-cell-reuse.mjs';
 // Explicit frozen-state diagnostic only. Never called by the serving step loop.
 export async function capturePackedDensityWitness({device,shader,layout,buffers,count,cells,packedLayout,stepCount}) {
   const owned=[];
@@ -54,7 +55,7 @@ export async function capturePairedDensityWitness({device,shader,layout,buffers,
   pairs = 64, repetitions = 4, comparison = 'linked-vs-packed', frozenBindings = null, onProgress = () => {}}) {
   if(!Number.isSafeInteger(pairs)||pairs<1||!Number.isSafeInteger(repetitions)||repetitions<1)
     throw new RangeError('paired density pairs/repetitions must be positive safe integers');
-  if(!['linked-vs-packed','packed-vs-packed'].includes(comparison))throw new Error('paired density comparison unsupported');
+  if(!['linked-vs-packed','packed-vs-packed','packed-vs-cell-reuse'].includes(comparison))throw new Error('paired density comparison unsupported');
   if(!device?.features?.has('timestamp-query'))throw new Error('paired density requires timestamp-query');
   if(!Array.isArray(buffers)||buffers.length!==12||buffers.some((e,i)=>e.binding!==i||!e.resource?.buffer))
     throw new Error('paired density currently requires the twelve buffer-only synthetic-scene bindings');
@@ -78,21 +79,21 @@ export async function capturePairedDensityWitness({device,shader,layout,buffers,
       device.queue.submit([freeze.finish()]);
     }
     await device.queue.onSubmittedWorkDone();
-    const module=packed=>device.createShaderModule({code:shader.replace(/const packedDensityEnabled: bool = (true|false);/,`const packedDensityEnabled: bool = ${packed};`)});
-    const modules={linked:module(false),packed:module(true)};
+    const module=mode=>{const source=shader.replace(/const packedDensityEnabled: bool = (true|false);/,`const packedDensityEnabled: bool = ${mode!=='linked'};`);return device.createShaderModule({code:mode==='cell-reuse'?createDensityCellReuseShader(source):source});};
+    const modules={linked:module('linked'),packed:module('packed'),...(comparison==='packed-vs-cell-reuse'?{'cell-reuse':module('cell-reuse')}:{})};
     const pl=device.createPipelineLayout({bindGroupLayouts:[layout]});
     const pipelines={};
-    for(const mode of ['linked','packed'])for(const [name,entry] of [['clear','clear_grid'],['build','build_linked_cell_grid'],['lambda','compute_density_lambda'],['delta','solve_position_delta'],...(mode==='packed'?[['scan','scan_packed_cell_blocks'],['totals','scan_packed_block_totals'],['pack','pack_density_cell_records']]:[])])
+    for(const mode of Object.keys(modules))for(const [name,entry] of [['clear','clear_grid'],['build','build_linked_cell_grid'],['lambda','compute_density_lambda'],['delta','solve_position_delta'],...(mode!=='linked'?[['scan','scan_packed_cell_blocks'],['totals','scan_packed_block_totals'],['pack','pack_density_cell_records']]:[])])
       pipelines[mode+':'+name]=await device.createComputePipelineAsync({layout:pl,compute:{module:modules[mode],entryPoint:entry}});
     const group=(particle,heads,links)=>device.createBindGroup({layout,entries:snapshot.map((b,i)=>({binding:i,resource:{buffer:i===0?particle:i===1?heads:i===2?links:b}}))});
     const arms={};
     for(const name of ['A','B']){
-      const mode=comparison==='packed-vs-packed'||name==='B'?'packed':'linked';
+      const mode=comparison==='packed-vs-cell-reuse'?(name==='A'?'packed':'cell-reuse'):(comparison==='packed-vs-packed'||name==='B'?'packed':'linked');
       const particles=buffer(name+'-particles',count*64,storage), heads=buffer(name+'-heads',packedLayout.headWords*4,storage), links=buffer(name+'-links',packedLayout.particleWords*4,storage);
       arms[name]={mode,particles,heads,links,group:group(particles,heads,links)};
     }
     const dispatch=(pass,arm,name)=>{pass.setBindGroup(0,arm.group);pass.setPipeline(pipelines[(name==='scan'||name==='totals'||name==='pack'?'packed':arm.mode)+':'+name]);pass.dispatchWorkgroups(name==='totals'?1:Math.ceil((['clear','scan','pack'].includes(name)?cells:count)/64));};
-    const build=(pass,arm)=>{dispatch(pass,arm,'clear');dispatch(pass,arm,'build');if(arm.mode==='packed'){dispatch(pass,arm,'scan');dispatch(pass,arm,'totals');dispatch(pass,arm,'pack');}};
+    const build=(pass,arm)=>{dispatch(pass,arm,'clear');dispatch(pass,arm,'build');if(arm.mode!=='linked'){dispatch(pass,arm,'scan');dispatch(pass,arm,'totals');dispatch(pass,arm,'pack');}};
     const consume=(pass,arm)=>{dispatch(pass,arm,'lambda');dispatch(pass,arm,'delta');};
     const querySet=device.createQuerySet({type:'timestamp',count:4});owned.push(querySet);
     const resolve=buffer('paired-query-resolve',32,U.QUERY_RESOLVE|U.COPY_SRC), map=buffer('paired-query-map',32,U.COPY_DST|U.MAP_READ);
@@ -130,7 +131,7 @@ export async function capturePairedDensityWitness({device,shader,layout,buffers,
         consume(p,refArm);p.end();device.queue.submit([e.finish()]);await device.queue.onSubmittedWorkDone();
         const actual=await read(arm.particles), reference=await read(ref);
         series.validation.push({arm:name,witness:{schema:'kaminos.packed-density-frozen-witness.v1',route:'same-native-grid-linked-vs-packed-lambda-delta-scratch-buffers',stepCount,count,cells,packedLayout,
-          buffers:{source:result.frozenBindings[0].bytes,linkedResult:encode(arm.mode==='linked'?actual:reference),packedResult:encode(arm.mode==='packed'?actual:reference),heads:encode(await read(arm.heads)),records:encode(await read(arm.links))}}});
+          buffers:{source:result.frozenBindings[0].bytes,linkedResult:encode(arm.mode==='linked'?actual:reference),packedResult:encode(arm.mode!=='linked'?actual:reference),heads:encode(await read(arm.heads)),records:encode(await read(arm.links))}}});
       }
     }
     const error=await device.popErrorScope();scope=false;if(error)throw Error('paired density GPU validation: '+error.message);
