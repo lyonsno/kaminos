@@ -939,6 +939,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <button class="btn" id="motion-panel-play-retained" disabled>Play Retained Clip</button>
         <button class="btn" id="motion-panel-run-ground" disabled>Run on Ground</button>
         <button class="btn" id="motion-panel-run-contact" disabled>Run Contact Clip</button>
+        <button class="btn" id="motion-panel-run-quad" disabled>Quadruped Rear Preview</button>
         <button class="btn" id="motion-panel-focus-rig">Focus Chosen Cast</button>
         <button class="btn" id="motion-panel-show-pair">Restore Pair View</button>
       </div>
@@ -947,6 +948,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <select id="motion-panel-contact-view" class="select-input"><option value="creature">Creature</option><option value="rig">Target rig</option><option value="source">Donor motion</option></select>
       </div>
       <div id="motion-panel-retained-status" role="status" style="font-size:11px;color:#aaa;margin:6px 0">No retained clip loaded.</div>
+      <div class="slider-row"><label for="motion-panel-fore-reach">Front proxy scale / hind (on replay)</label><input id="motion-panel-fore-reach" type="number" step="any" value="1" aria-label="Assumed front reach and shoulder model scale relative to measured hind reach, applied on replay"></div>
+      <canvas id="motion-panel-contact-timeline" width="300" height="90" style="width:100%;display:none" aria-label="Rear model contacts and inferred front proxy contacts"></canvas>
       <div class="slider-row">
         <span class="slider-label">Export</span>
         <select id="motion-panel-export-resolution" class="select-input">
@@ -8605,6 +8608,7 @@ async function loadMotionPanelRetainedClip(source, expectedSha256 = '') {
   document.getElementById('motion-panel-play-retained').disabled = true;
   document.getElementById('motion-panel-run-ground').disabled = true;
   document.getElementById('motion-panel-run-contact').disabled = true;
+  document.getElementById('motion-panel-run-quad').disabled = true;
   retainedMotionStatus('Loading retained generated clip…');
   try {
     const clip = typeof source === 'string'
@@ -8616,7 +8620,8 @@ async function loadMotionPanelRetainedClip(source, expectedSha256 = '') {
     document.getElementById('motion-panel-play-retained').disabled = false;
     document.getElementById('motion-panel-run-ground').disabled = false;
     document.getElementById('motion-panel-run-contact').disabled = false;
-    retainedMotionStatus(`Retained generated clip · ${clip.frameCount} frames · ${clip.fps} fps · ${clip.sha256.slice(0, 12)} · no fresh inference`);
+    document.getElementById('motion-panel-run-quad').disabled = false;
+    retainedMotionStatus(`Retained: ${clip.result.prompt || 'unnamed generated motion'} · ${clip.frameCount} frames · ${clip.fps} fps · ${clip.sha256.slice(0, 12)} · no fresh inference`);
     return clip;
   } catch (error) {
     if (generation === retainedMotionLoadGeneration) {
@@ -8660,7 +8665,7 @@ function focusRetainedMotionRig(target = selectRetainedMotionRig()) {
   window._kaminosDirty?.();
 }
 
-function playRetainedMotionRig({ groundTravel = false, contactTransfer = false } = {}) {
+function playRetainedMotionRig({ groundTravel = false, contactTransfer = false, quadruped = false } = {}) {
   try {
     if (!retainedMotionClip) throw new Error('Load a retained generated clip first');
     stopMotionRigPreview('retained-replay');
@@ -8670,7 +8675,7 @@ function playRetainedMotionRig({ groundTravel = false, contactTransfer = false }
       target, prompt: retainedMotionClip.result.prompt || '',
       sourceRoute: `retained-kimodo-clip:sha256:${retainedMotionClip.sha256}`,
       groundTravel,
-      contactTransfer,
+      contactTransfer: contactTransfer || quadruped, quadruped,
     });
   } catch (error) {
     retainedMotionStatus(`Cannot play retained clip: ${error.message}`);
@@ -8699,9 +8704,9 @@ function motionRigPreviewStatus() {
     pelvisRotationApplied: state.pelvisRotationApplied === true,
     currentPelvisPitchRadians: state.currentPelvisPitchRadians || 0,
     groundTravel: state.ground ? {
-      mode: state.contact ? 'source-toe-contact-limb-solve' : 'painted-hind-paw-backstroke', distance: state.ground.distance,
+      mode: state.contact?.track.quadruped ? 'quadruped-rear-with-fore-proxies' : state.contact ? 'source-toe-contact-limb-solve' : 'painted-hind-paw-backstroke', distance: state.ground.distance,
       minimumPawClearance: state.ground.minimumPawClearance,
-      forward: state.ground.forward.toArray(), rearUpDegrees: 55,
+      forward: state.ground.forward.toArray(), rearUpDegrees: state.ground.rearUpDegrees,
       supportSampling: 'all-source-frame-extremal-union',
       paintedVertexCounts: state.ground.fullVertexCounts,
       supportVertexCounts: Object.fromEntries(Object.entries(state.ground.vertices).map(([side, list]) => [side, list.length])),
@@ -8709,6 +8714,9 @@ function motionRigPreviewStatus() {
     } : null,
     contactTransfer: state.contact ? {
       authority: state.contact.track.contactAuthority, scale: state.contact.scale,
+      quadruped: state.contact.track.quadruped,
+      orientationAuthority: state.contact.track.orientationAuthority,
+      frontProxy: state.contact.frontProxy ? {authority:state.contact.track.frontContactAuthority,reachRatio:state.contact.frontProxy.ratio,reach:state.contact.frontProxy.reach,geometryAuthority:'neutral-dominant fore-foot minima; source-scaled virtual shoulder offsets; not authored front rig'} : null,
       intervals: state.contact.track.intervals, diagnostics: state.contact.diagnostics,
       view: document.getElementById('motion-panel-contact-view')?.value || 'creature',
     } : null,
@@ -8735,6 +8743,7 @@ function restoreMotionRigPreview(reason = 'operator-stop') {
     scene.remove(state.contact.visual.group);
     for (const item of state.contact.visual.disposable) item.dispose();
   }
+  document.getElementById('motion-panel-contact-timeline').style.display='none';
   scene.updateMatrixWorld(true);
   state.mesh.skeleton.update();
   motionRigPreviewState = null;
@@ -8804,7 +8813,7 @@ function motionRigHipAxisInParentSpace(pelvis, leftHip, rightHip) {
   return axis.normalize().applyQuaternion(pelvis.getWorldQuaternion(new THREE.Quaternion()).invert()).normalize();
 }
 
-function startMotionRigPreview(result, { prompt = '', sourceRoute = 'kimodo.motion-result', target = selectedSceneBoneTarget, requestToken = null, groundTravel = false, contactTransfer = false } = {}) {
+function startMotionRigPreview(result, { prompt = '', sourceRoute = 'kimodo.motion-result', target = selectedSceneBoneTarget, requestToken = null, groundTravel = false, contactTransfer = false, quadruped = false } = {}) {
   if (requestToken && !motionRigPreviewRequestGate.isCurrent(requestToken, motionRigTargetKey(target))) return null;
   const record = target && sceneObjects.find(entry => entry.id === target.objectId);
   if (!record || target.mesh?.isSkinnedMesh !== true || !target.mesh.skeleton
@@ -8875,7 +8884,7 @@ function startMotionRigPreview(result, { prompt = '', sourceRoute = 'kimodo.moti
   };
   if (groundTravel || contactTransfer) {
     try {
-      if (contactTransfer) prepareMotionContactTransfer(motionRigPreviewState, record.object, result);
+      if (contactTransfer) prepareMotionContactTransfer(motionRigPreviewState, record.object, result, {quadruped});
       else prepareMotionGroundTravel(motionRigPreviewState, record.object);
     }
     catch (error) { restoreMotionRigPreview('ground-setup-failed'); throw error; }
@@ -8885,6 +8894,7 @@ function startMotionRigPreview(result, { prompt = '', sourceRoute = 'kimodo.moti
   setMotionPanelTemporalStatus(`Playing ${track.frameCount} Kimodo frames on selected cat pelvis and hindquarters; inspect the unweighted front/transition`, '#66bb6a');
   if (groundTravel) setMotionPanelTemporalStatus('Rear-paw ground run · retained Kimodo articulation + kinematic paw support · Stop restores placement', '#66bb6a');
   if (contactTransfer) setMotionPanelTemporalStatus('Generated contact motion · source timing and body travel · Stop restores placement', '#66bb6a');
+  if (quadruped) setMotionPanelTemporalStatus('Quadruped rear preview · cyan front legs are assumed proxies · front mesh remains unpainted · Stop restores', '#66bb6a');
   window._kaminosDirty?.();
   return window.__kaminosMotionRigPreview;
 }
@@ -8937,7 +8947,7 @@ function motionGroundOpenKnee(hip, knee, hock) {
   knee.updateWorldMatrix(false, true);
 }
 
-function prepareMotionGroundTravel(state, root, { compileTravel = true } = {}) {
+function prepareMotionGroundTravel(state, root, { compileTravel = true, rearUpDegrees = 55 } = {}) {
   const mesh = state.mesh;
   const indices = mesh.geometry.getAttribute('skinIndex');
   const weights = mesh.geometry.getAttribute('skinWeight');
@@ -8968,9 +8978,9 @@ function prepareMotionGroundTravel(state, root, { compileTravel = true } = {}) {
   forward.normalize();
   const grid = new THREE.GridHelper(10, 40, 0x777777, 0x444444);
   grid.position.y = groundPlane.position.y + 0.001;
-  state.ground = { root, originalPosition: root.position.clone(), originalQuaternion: root.quaternion.clone(), vertices, forward, grid, distance: 0, minimumPawClearance: null };
+  state.ground = { root, originalPosition: root.position.clone(), originalQuaternion: root.quaternion.clone(), vertices, forward, grid, rearUpDegrees, distance: 0, minimumPawClearance: null };
   const parentRotation = root.parent.getWorldQuaternion(new THREE.Quaternion());
-  const rearUp = new THREE.Quaternion().setFromAxisAngle(forward.clone().cross(new THREE.Vector3(0, 1, 0)).normalize(), 55 * Math.PI / 180);
+  const rearUp = new THREE.Quaternion().setFromAxisAngle(forward.clone().cross(new THREE.Vector3(0, 1, 0)).normalize(), rearUpDegrees * Math.PI / 180);
   root.quaternion.copy(parentRotation.clone().invert().multiply(rearUp).multiply(parentRotation).multiply(root.quaternion));
   scene.updateMatrixWorld(true);
   // Runtime-only rear-legged stance. Open the tucked knees before aligning
@@ -9045,7 +9055,7 @@ function updateMotionGroundTravel(state, frame) {
   ground.minimumPawClearance = Math.min(supported.left.soleY, supported.right.soleY) - groundPlane.position.y;
 }
 
-function motionContactVisual() {
+function motionContactVisual(quadruped = false) {
   const group = new THREE.Group();
   const sourceGeometry = new THREE.BufferGeometry();
   sourceGeometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(29 * 6), 3));
@@ -9060,13 +9070,17 @@ function motionContactVisual() {
   const sphere = new THREE.SphereGeometry(.012, 8, 6);
   const materials = ['left','right'].map(() => new THREE.MeshBasicMaterial({ color: 0x59ff84 }));
   const markers = Object.fromEntries(['left','right'].map((side,i) => { const m = new THREE.Mesh(sphere, materials[i]); group.add(m); return [side,m]; }));
+  const foreGeometry=new THREE.BufferGeometry();foreGeometry.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(4*6),3));
+  const foreMaterial=new THREE.LineBasicMaterial({color:0x5cddff,transparent:true,opacity:.8});
+  const fore=new THREE.LineSegments(foreGeometry,foreMaterial);fore.frustumCulled=false;fore.visible=quadruped;group.add(fore);
+  for(const side of ['frontLeft','frontRight']){const material=new THREE.MeshBasicMaterial({color:0x5cddff});materials.push(material);const marker=new THREE.Mesh(sphere,material);marker.visible=quadruped;group.add(marker);markers[side]=marker;}
   scene.add(group);
-  return { group, source, rig, markers, disposable: [sourceGeometry,rigGeometry,sourceMaterial,rigMaterial,sphere,...materials] };
+  return { group, source, rig, fore, markers, disposable: [sourceGeometry,rigGeometry,foreGeometry,sourceMaterial,rigMaterial,foreMaterial,sphere,...materials] };
 }
 
-function prepareMotionContactTransfer(state, root, result) {
-  const track = buildContactMotion(result);
-  prepareMotionGroundTravel(state, root, { compileTravel: false });
+function prepareMotionContactTransfer(state, root, result, {quadruped=false}={}) {
+  const track = buildContactMotion(result,{quadruped});
+  prepareMotionGroundTravel(state, root, { compileTravel: false, rearUpDegrees:quadruped?0:55 });
   const ground = state.ground, mesh = state.mesh;
   const rootStart = root.getWorldPosition(new THREE.Vector3());
   const lateral = new THREE.Vector3(0,1,0).cross(ground.forward).normalize();
@@ -9095,9 +9109,10 @@ function prepareMotionContactTransfer(state, root, result) {
     lengths[side] = { upper:hip.getWorldPosition(new THREE.Vector3()).distanceTo(knee.getWorldPosition(new THREE.Vector3())), lower:knee.getWorldPosition(new THREE.Vector3()).distanceTo(hock.getWorldPosition(new THREE.Vector3())) };
   }
   const scale = ['left','right'].reduce((sum,side)=>sum+lengths[side].upper+lengths[side].lower+footOffsets[side].length(),0) / (2 * track.legLength);
-  const visual = motionContactVisual();
+  const visual = motionContactVisual(quadruped);
   state.contact = { track,rootStart,rootRotation:root.getWorldQuaternion(new THREE.Quaternion()),lateral,feet,footOffsets,hockRotations,lengths,anchors,scale,visual,originalMeshVisible:mesh.visible,
     stance:new Map([...state.bones].map(([key,entry])=>[key,entry.bone.quaternion.clone()])),diagnostics:null,stats:{ maximumReachError:0,maximumContactError:0,maximumBodyCorrection:0 } };
+  if(quadruped)prepareMotionForeProxies(state);
   const paws = [];
   for(let f=0;f<track.frames.length;f++) { applyMotionContactFrame(state,f); paws.push(motionGroundPaws(state)); }
   ground.vertices = Object.fromEntries(['left','right'].map(side=>[side,[...new Set(paws.map(p=>p[side].soleIndex))]]));
@@ -9109,11 +9124,44 @@ function prepareMotionContactTransfer(state, root, result) {
   camera.position.addScaledVector(end,.5);
   camera.position.sub(controls.target).multiplyScalar(2.2).add(controls.target);
   controls.update();
+  document.getElementById('motion-panel-contact-timeline').style.display=quadruped?'block':'none';
 }
 
 function contactMotionVector(state, vector) {
   const c = state.contact;
   return c.lateral.clone().multiplyScalar(vector.x*c.scale).add(new THREE.Vector3(0,vector.y*c.scale,0)).addScaledVector(state.ground.forward,vector.z*c.scale);
+}
+
+function prepareMotionForeProxies(state) {
+  const c=state.contact,g=state.ground,mesh=state.mesh;
+  const ratio=Number(document.getElementById('motion-panel-fore-reach').value);
+  if(!(ratio>0)||!Number.isFinite(ratio))throw new Error('Assumed front reach ratio must be finite and positive');
+  const reach=c.track.legLength*c.scale*ratio;
+  const neutral=mesh.skeleton.bones.findIndex(b=>b.name.startsWith('neutral_bone'));
+  if(neutral<0)throw new Error('Fore proxy placement needs the delivered neutral forebody');
+  const indices=mesh.geometry.attributes.skinIndex,weights=mesh.geometry.attributes.skinWeight;
+  const pelvis=state.pelvis.getWorldPosition(new THREE.Vector3());
+  const feet={},shoulderLocal={};
+  for(const [side,sign,shoulder,hand] of [['frontLeft',1,11,13],['frontRight',-1,17,19]]) {
+    let point=null;const vertex=new THREE.Vector3();
+    for(let i=0;i<indices.count;i++){
+      let neutralWeight=0;for(let k=0;k<4;k++)if(indices.getComponent(i,k)===neutral)neutralWeight+=weights.getComponent(i,k);
+      if(neutralWeight<=.5)continue;
+      mesh.getVertexPosition(i,vertex).applyMatrix4(mesh.matrixWorld);
+      const relative=vertex.clone().sub(pelvis);
+      if(relative.dot(g.forward)<=0||relative.dot(c.lateral)*sign<=0)continue;
+      if(!point||vertex.y<point.y)point=vertex.clone();
+    }
+    if(!point)throw new Error(`Cannot locate provisional ${side} foot geometry`);
+    point.y=groundPlane.position.y;feet[side]=point;
+    const pose=c.track.frames[0].joints;
+    const armLength=new THREE.Vector3().fromArray(pose[shoulder]).distanceTo(new THREE.Vector3().fromArray(pose[shoulder+1]))+new THREE.Vector3().fromArray(pose[shoulder+1]).distanceTo(new THREE.Vector3().fromArray(pose[hand]));
+    if(!(armLength>1e-8))throw new Error('Fore proxy has degenerate source arm geometry');
+    const sourceOffset=new THREE.Vector3().fromArray(pose[shoulder]).sub(new THREE.Vector3().fromArray(pose[hand]));
+    const offset=contactMotionVector(state,sourceOffset).multiplyScalar(reach/(armLength*c.scale));
+    shoulderLocal[side]=g.root.worldToLocal(point.clone().add(offset));
+  }
+  c.frontProxy={ratio,reach,feet,shoulderLocal};
 }
 
 function setContactBoneWorldQuaternion(bone, quaternion) {
@@ -9142,7 +9190,15 @@ function applyMotionContactFrame(state, frame) {
     ankles[side]=goals[side].clone().sub(c.footOffsets[side]);
     hipOffsets[side]=state.bones.get(`${side}Hip`).bone.getWorldPosition(new THREE.Vector3()).sub(preferred);
   }
-  const body=projectBodyToLegReach(preferred.toArray(),['left','right'].map(side=>({center:ankles[side].clone().sub(hipOffsets[side]).toArray(),radius:c.lengths[side].upper+c.lengths[side].lower})));
+  const balls=['left','right'].map(side=>({center:ankles[side].clone().sub(hipOffsets[side]).toArray(),radius:c.lengths[side].upper+c.lengths[side].lower}));
+  if(c.frontProxy)for(const side of ['frontLeft','frontRight']) {
+    const first=c.track.frames[0][side].foot;
+    goals[side]=c.frontProxy.feet[side].clone().add(contactMotionVector(state,new THREE.Vector3(s[side].foot[0]-first[0],s[side].foot[1],s[side].foot[2]-first[2])));
+    goals[side].y=groundPlane.position.y+s[side].foot[1]*c.scale;
+    hipOffsets[side]=g.root.localToWorld(c.frontProxy.shoulderLocal[side].clone()).sub(preferred);
+    balls.push({center:goals[side].clone().sub(hipOffsets[side]).toArray(),radius:c.frontProxy.reach});
+  }
+  const body=projectBodyToLegReach(preferred.toArray(),balls);
   g.root.position.copy(g.root.parent.worldToLocal(new THREE.Vector3().fromArray(body.position)));
   scene.updateMatrixWorld(true); mesh.skeleton.update();
   let reachError=0, contactError=0;
@@ -9169,12 +9225,19 @@ function applyMotionContactFrame(state, frame) {
     if(s[side].contact)contactError=Math.max(contactError,actual[side].distanceTo(goals[side]));
   }
   const paws=motionGroundPaws(state);
+  const frontShoulders={},foreContacts={};let foreReachError=0;
+  if(c.frontProxy)for(const side of ['frontLeft','frontRight']){
+    frontShoulders[side]=g.root.localToWorld(c.frontProxy.shoulderLocal[side].clone());
+    foreReachError=Math.max(foreReachError,Math.max(0,frontShoulders[side].distanceTo(goals[side])-c.frontProxy.reach));
+    foreContacts[side]=s[side].contact;
+  }
   g.minimumPawClearance=Math.min(paws.left.soleY,paws.right.soleY)-groundPlane.position.y;
   g.distance=new THREE.Vector3().fromArray(body.position).sub(c.rootStart).dot(g.forward);
-  c.diagnostics={frame,bodyYawRadians:yaw,bodyLeanRadians:lean,contacts:{left:s.left.contact,right:s.right.contact},goals:Object.fromEntries(Object.entries(goals).map(([side,v])=>[side,v.toArray()])),actual:Object.fromEntries(Object.entries(actual).map(([side,v])=>[side,v.toArray()])),reachError,contactError,bodyCorrection:body.correction,bodyProjectionResidual:body.residual,minimumPawClearance:g.minimumPawClearance};
+  c.diagnostics={frame,bodyYawRadians:yaw,bodyLeanRadians:lean,contacts:{left:s.left.contact,right:s.right.contact,...foreContacts},frontShoulders:Object.fromEntries(Object.entries(frontShoulders).map(([side,v])=>[side,v.toArray()])),foreReachError,goals:Object.fromEntries(Object.entries(goals).map(([side,v])=>[side,v.toArray()])),actual:Object.fromEntries(Object.entries(actual).map(([side,v])=>[side,v.toArray()])),reachError,contactError,bodyCorrection:body.correction,bodyProjectionResidual:body.residual,minimumPawClearance:g.minimumPawClearance};
   c.stats.maximumReachError=Math.max(c.stats.maximumReachError,reachError);
   c.stats.maximumContactError=Math.max(c.stats.maximumContactError,contactError);
   c.stats.maximumBodyCorrection=Math.max(c.stats.maximumBodyCorrection,body.correction);
+  if(c.frontProxy)c.stats.maximumForeReachError=Math.max(c.stats.maximumForeReachError??0,foreReachError);
   c.diagnostics.wholeClip={...c.stats};
   updateMotionContactVisual(state,s,goals);
 }
@@ -9192,6 +9255,20 @@ function updateMotionContactVisual(state,s,goals) {
   const root=state.pelvis.getWorldPosition(new THREE.Vector3()),edges=[];
   for(const side of ['left','right']){const hip=state.bones.get(`${side}Hip`).bone.getWorldPosition(new THREE.Vector3()),knee=state.bones.get(`${side}Stifle`).bone.getWorldPosition(new THREE.Vector3()),hock=state.bones.get(`${side}Hock`).bone.getWorldPosition(new THREE.Vector3());edges.push([root,hip],[hip,knee],[knee,hock],[hock,new THREE.Vector3().fromArray(c.diagnostics.actual[side])]);v.markers[side].visible=view!=='creature';v.markers[side].position.copy(view==='source'?sourcePoints[side==='left'?25:29]:goals[side]);v.markers[side].material.color.set(s[side].contact?0x59ff84:0xffc45c);}
   put(v.rig.geometry,edges);
+  v.fore.visible=!!c.frontProxy&&view!=='source';
+  for(const [side,j] of [['frontLeft',13],['frontRight',19]]){
+    v.markers[side].visible=!!c.frontProxy;
+    if(c.frontProxy){v.markers[side].position.copy(view==='source'?sourcePoints[j]:goals[side]);v.markers[side].material.color.set(s[side].contact?0x5cddff:0xffc45c);}
+  }
+  if(c.frontProxy){const foreEdges=[];for(const side of ['frontLeft','frontRight']){const shoulder=new THREE.Vector3().fromArray(c.diagnostics.frontShoulders[side]);foreEdges.push([root,shoulder],[shoulder,goals[side]]);}put(v.fore.geometry,foreEdges);updateMotionContactTimeline(c,s.frame);}
+}
+
+function updateMotionContactTimeline(c,frame) {
+  const canvas=document.getElementById('motion-panel-contact-timeline'),ctx=canvas.getContext('2d');
+  const sides=['left','right','frontLeft','frontRight'],labels=['Rear L','Rear R','Front L*','Front R*'];
+  ctx.clearRect(0,0,canvas.width,canvas.height);ctx.font='10px sans-serif';
+  sides.forEach((side,row)=>{ctx.fillStyle='#bbb';ctx.fillText(labels[row],2,14+row*19);ctx.fillStyle=row<2?'#59ff84':'#5cddff';for(let i=0;i<c.track.frames.length;i++)if(c.track.frames[i][side].contact)ctx.fillRect(58+i*240/c.track.frames.length,4+row*19,Math.max(1,240/c.track.frames.length),12);});
+  ctx.fillStyle='#fff';ctx.fillRect(58+frame*240/c.track.frames.length,0,1,78);ctx.fillStyle='#bbb';ctx.fillText('* inferred front proxies',58,89);
 }
 
 function updateMotionRigPreviewFrame(nowSeconds) {
@@ -9587,6 +9664,7 @@ function initKaminosMotionAgencyRoute() {
   document.getElementById('motion-panel-play-retained')?.addEventListener('click', playRetainedMotionRig);
   document.getElementById('motion-panel-run-ground')?.addEventListener('click', () => playRetainedMotionRig({ groundTravel: true }));
   document.getElementById('motion-panel-run-contact')?.addEventListener('click', () => playRetainedMotionRig({ contactTransfer: true }));
+  document.getElementById('motion-panel-run-quad')?.addEventListener('click', () => playRetainedMotionRig({ quadruped: true }));
   document.getElementById('motion-panel-contact-view')?.addEventListener('change', () => {
     const state=motionRigPreviewState;
     if(state?.contact) { applyMotionContactFrame(state,state.currentFrame); window._kaminosDirty?.(); }

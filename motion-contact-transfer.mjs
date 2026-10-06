@@ -47,7 +47,7 @@ export function projectBodyToLegReach(preferred,balls) {
   return {position,correction:norm(sub(position,preferred)),residual,iterations};
 }
 
-export function buildContactMotion(result) {
+export function buildContactMotion(result, {quadruped=false}={}) {
   const joints=result?.joints,features=result?.motion;
   if(result?.numJoints!==30||!Array.isArray(joints)||joints.length<2||joints.some(f=>f.length!==30||f.some(p=>!finite(p)))) throw Error('Contact transfer requires complete SOMA30 joints');
   const parents=[-1,0,1,2,3,4,5,6,6,6,3,10,11,12,13,13,3,16,17,18,19,19,0,22,23,24,0,26,27,28];
@@ -55,7 +55,7 @@ export function buildContactMotion(result) {
   if(!Array.isArray(features)||features.length!==joints.length||features.some(f=>f.length!==369||f.some(x=>!Number.isFinite(x)))) throw Error('Contact transfer requires complete normalized feature frames');
   if(!(result.fps>0)||!Number.isFinite(result.fps)) throw Error('Contact transfer requires positive FPS');
   const first=joints[0],origin=first[0];
-  const toeDirection=add(sub(first[25],first[24]),sub(first[29],first[28]));toeDirection[1]=0;
+  const toeDirection=quadruped?sub(first[3],first[0]):add(sub(first[25],first[24]),sub(first[29],first[28]));toeDirection[1]=0;
   if(norm(toeDirection)<1e-8) throw Error('Cannot establish donor foot facing');
   const forward=unit(toeDirection),lateral=[forward[2],0,-forward[0]];
   const local=p=>{const d=sub(p,origin);return [dot(d,lateral),p[1],dot(d,forward)];};
@@ -68,8 +68,14 @@ export function buildContactMotion(result) {
   const frames=joints.map((f,i)=>({root:local(f[0]),joints:f.map(local),
     left:{contact:contacts[i][1],foot:local(f[25]),rawFoot:local(f[25]),ankle:local(f[24])},
     right:{contact:contacts[i][3],foot:local(f[29]),rawFoot:local(f[29]),ankle:local(f[28])}}));
+  if(quadruped)for(const [side,joint] of [['frontLeft',13],['frontRight',19]])frames.forEach((f,i)=>{
+    const next=Math.min(i+1,joints.length-1),previous=i===next?Math.max(0,i-1):i;
+    const speed=norm(sub(joints[next][joint],joints[previous][joint]))*result.fps;
+    f[side]={contact:joints[i][joint][1]<.10&&speed<.15,foot:local(joints[i][joint]),rawFoot:local(joints[i][joint])};
+  });
+  if(quadruped&&['frontLeft','frontRight'].some(side=>!frames.some(f=>f[side].contact)))throw Error('Quadruped donor needs both inferred wrist support intervals');
   const intervals=[];
-  for(const side of ['left','right']){
+  for(const side of quadruped?['left','right','frontLeft','frontRight']:['left','right']){
     let anchor=null,start=-1;
     for(let i=0;i<frames.length;i++){
       const paw=frames[i][side];
@@ -84,7 +90,7 @@ export function buildContactMotion(result) {
     if(anchor)intervals.push({side,start,end:frames.length-1,anchor:[...anchor]});
   }
   const legLength=[22,26].map(h=>norm(sub(first[h+1],first[h]))+norm(sub(first[h+2],first[h+1]))+norm(sub(first[h+3],first[h+2]))).reduce((a,b)=>a+b)/2;
-  return {schema:'kaminos.soma30-contact-motion.v0',fps:result.fps,parents,frames,intervals,legLength,floor,forward,lateral,contactAuthority:'model-predicted-toe-contact; decoded schema; fixed interval anchors'};
+  return {schema:'kaminos.soma30-contact-motion.v0',fps:result.fps,parents,frames,intervals,legLength,floor,forward,lateral,quadruped,orientationAuthority:quadruped?'pelvis-to-chest horizontal body facing':'average ankle-to-toe horizontal facing',frontContactAuthority:quadruped?'inferred wrist height <0.10m and speed <0.15m/s; proxy, not model labels':null,contactAuthority:'model-predicted-toe-contact; decoded schema; fixed interval anchors'};
 }
 
 export function sampleContactMotion(track,frame) {
@@ -93,6 +99,6 @@ export function sampleContactMotion(track,frame) {
   const a=track.frames[i],b=track.frames[j];
   // Exact samples preserve model flags. Fractional contact/swing boundaries
   // are transition, rather than claiming a planted foot while interpolating.
-  const paw=side=>({contact:mix===0?a[side].contact:a[side].contact&&b[side].contact,foot:lerp(a[side].foot,b[side].foot),rawFoot:lerp(a[side].rawFoot,b[side].rawFoot),ankle:lerp(a[side].ankle,b[side].ankle)});
-  return {frame:f,root:lerp(a.root,b.root),joints:a.joints.map((p,k)=>lerp(p,b.joints[k])),left:paw('left'),right:paw('right')};
+  const paw=side=>({contact:mix===0?a[side].contact:a[side].contact&&b[side].contact,foot:lerp(a[side].foot,b[side].foot),rawFoot:lerp(a[side].rawFoot,b[side].rawFoot),...(a[side].ankle?{ankle:lerp(a[side].ankle,b[side].ankle)}:{})});
+  return {frame:f,root:lerp(a.root,b.root),joints:a.joints.map((p,k)=>lerp(p,b.joints[k])),left:paw('left'),right:paw('right'),...(track.quadruped?{frontLeft:paw('frontLeft'),frontRight:paw('frontRight')}:{})};
 }

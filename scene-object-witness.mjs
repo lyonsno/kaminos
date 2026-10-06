@@ -341,7 +341,8 @@ function assertMotionContactCompletion(completed) {
   assert.ok(totals.maximumReachError < 1e-5, 'accumulated reach residual must agree across completed playback');
 }
 
-async function runCatRetainedPlaybackScenario(ws, { groundTravel = false, contactTransfer = false } = {}) {
+async function runCatRetainedPlaybackScenario(ws, { groundTravel = false, contactTransfer = false, quadruped = false } = {}) {
+  contactTransfer = contactTransfer || quadruped;
   groundTravel = groundTravel || contactTransfer;
   await runMeshAssetLinkScenario(ws);
   phase = 'scenario-cat-retained-playback';
@@ -366,7 +367,7 @@ async function runCatRetainedPlaybackScenario(ws, { groundTravel = false, contac
   const beforeShot = await capturePngScreenshot(ws, siblingPngPath('-retained-before'));
   const frames = [];
   const evidence = lastEvidence.catRetainedPlayback = { clip, rest, beforeShot, frames, presentation: 'two existing Rot X toolbar clicks on the registered object; source asset unchanged', sourceRoute: 'real retained JSON URL; ordinary visible controls' };
-  const playButton = contactTransfer ? 'motion-panel-run-contact' : groundTravel ? 'motion-panel-run-ground' : 'motion-panel-play-retained';
+  const playButton = quadruped ? 'motion-panel-run-quad' : contactTransfer ? 'motion-panel-run-contact' : groundTravel ? 'motion-panel-run-ground' : 'motion-panel-play-retained';
   await click(playButton);
   const startedAt = performance.now();
   for (let index = 0; ; index++) {
@@ -389,6 +390,16 @@ async function runCatRetainedPlaybackScenario(ws, { groundTravel = false, contac
     assert.notDeepEqual(frames.at(-1).root.position, frames[0].root.position, 'registered object must travel, not only report projected travel');
     if (contactTransfer) {
       assertMotionContactCompletion(evidence.completed);
+      if (quadruped) {
+        const completed=evidence.completed;
+        assert.equal(completed.contactTransfer.quadruped,true,'quad request must use quad mode');
+        assert.equal(completed.groundTravel.rearUpDegrees,0,'quad body must not fall back to biped rear-up');
+        assert.match(completed.contactTransfer.frontProxy?.authority||'',/inferred/,'front support must expose proxy authority');
+        assert.ok(Number.isFinite(completed.contactTransfer.frontProxy.reachRatio)&&completed.contactTransfer.frontProxy.reachRatio>0,'fore reach assumption must be explicit');
+        const fore=completed.contactTransfer.diagnostics.wholeClip.maximumForeReachError;
+        assert.ok(Number.isFinite(fore)&&fore>=0&&fore<1e-5,'accumulated fore proxy reach must be feasible');
+        for(const side of ['frontLeft','frontRight'])assert.ok(completed.contactTransfer.intervals.some(i=>i.side===side),'quad donor needs both inferred front support traces');
+      }
       for (const frame of frames) {
         assert.ok(frame.state.contactTransfer?.diagnostics?.contactError < .001, 'actual painted contact residual must agree with the solved goal');
         assert.ok(frame.state.contactTransfer.diagnostics.reachError < 1e-5, 'target legs must reach the solved contact');
@@ -5516,6 +5527,8 @@ try {
     await runCatRetainedPlaybackScenario(ws, { groundTravel: true });
   } else if (scenario === 'cat-retained-contact') {
     await runCatRetainedPlaybackScenario(ws, { contactTransfer: true });
+  } else if (scenario === 'cat-retained-quad') {
+    await runCatRetainedPlaybackScenario(ws, { quadruped: true });
   } else if (scenario === 'mesh-skinned-pose-controls') {
     await runSceneBoneGizmoScenario(ws);
   } else if (scenario === 'scene-bone-gizmo') {
