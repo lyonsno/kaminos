@@ -25725,15 +25725,27 @@ async function greenroomViewMesh(url, fileName, display) {
   setInfo(`Greenroom view: ${display?.title || fileName}`);
 }
 
+async function recordImportedSceneObject(object) {
+  const entry = sceneObjectRecordForDescendant(object);
+  if (!entry) throw new Error('Imported mesh has no registered scene object');
+  try {
+    if (!await recordSceneObjectInsertion(entry.id)) throw new Error('Imported mesh has no scene membership history target');
+  } catch (error) {
+    removeSceneObjectInternal(entry.id, { recordHistory: false });
+    throw error;
+  }
+}
+
 async function greenroomImportMesh(url, fileName, display) {
   if (greenroomPreviewIsActive()) {
     await restoreAuthoredSceneFromPreview({ silent: true });
   }
   glbFileName = fileName;
-  await showGLB(url, {
+  const imported = await showGLB(url, {
     clear: false,
     metadata: greenroomMeshMetadata(display, fileName, url),
   });
+  await recordImportedSceneObject(imported);
   setInfo(`Greenroom import: ${display?.title || fileName}`);
 }
 
@@ -26327,6 +26339,7 @@ async function importGreenroomPreviewToScene() {
     metadata: preview.metadata,
   });
   applyPreviewTransformState(imported, transformState);
+  await recordImportedSceneObject(imported);
   setInfo(`Greenroom import: ${preview.display?.title || preview.fileName}`);
   return true;
 }

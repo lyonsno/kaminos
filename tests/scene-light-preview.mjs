@@ -36,12 +36,16 @@ function context() {
   state.setActiveSceneObject = id => { state.activeSceneObjectId = id; state.activeSceneFieldId = null; };
   state.setActiveSceneGroup = id => { state.activeSceneGroupId = id; state.activeSceneFieldId = null; };
   state.window.selectSceneField = id => { state.activeSceneFieldId = id; };
+  state.recordedInsertions = [];
+  state.recordSceneObjectInsertion = async id => { state.recordedInsertions.push(id); return true; };
+  state.sceneObjectRecordForDescendant = object => state.sceneObjects.find(entry => entry.object === object);
   state.showGLB = async (url, options) => {
     const object = new THREE.Group(); object.name = url; scene.add(object);
     if (options.register !== false) state.sceneObjects.push({ id: url, type: 'glb', object });
     return object;
   };
   vm.runInContext(source('const sceneSpotLights=new Map();', 'function groupPivotPose('), state);
+  vm.runInContext(source('function greenroomPreviewIsActive()', 'function greenroomPreviewDebugState('), state);
   vm.runInContext(source('function nextGreenroomPreviewGeneration(', 'function updateGreenroomPreviewControls('), state);
   vm.runInContext(source('function removeGreenroomPreviewObject(', 'function sceneObjectTransformState('), state);
   vm.runInContext(source('async function restoreAuthoredSceneFromPreview(', 'function sceneObjectReloadabilityLabel('), state);
@@ -87,6 +91,13 @@ test('View-to-Import restores original bindings once before appending the previe
   assert.equal(await state.importGreenroomPreviewToScene(), true);
   assertRestored(state, original);
   assert.equal(state.sceneObjects.filter(entry => entry.id === '/preview.glb').length, 1);
+  assert.deepEqual(state.recordedInsertions, ['/preview.glb'], 'accepted preview import joins ordinary insertion history');
+});
+
+test('direct asset Import records its registered instance in ordinary scene history', async () => {
+  const state = context();
+  await state.greenroomImportMesh('/direct.glb', 'direct.glb', {});
+  assert.deepEqual(state.recordedInsertions, ['/direct.glb']);
 });
 
 test('failed View and a late completion after Back preserve original light identity', async () => {
