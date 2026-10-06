@@ -180,7 +180,7 @@ export function buildSceneDocument({
   groups = [],
   activeObjectId = null,
   activeGroupId = null,
-  activeFieldId = null,
+  activeFieldId = null, selectionIds = [],
   volumePrimitives = { schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] },
   provenance = null,
   composition = null,
@@ -219,6 +219,7 @@ export function buildSceneDocument({
     activeObjectId: activeObject?.id || activeObjectId || null,
     activeGroupId: activeGroup?.id || null,
     activeFieldId: ['flame-field','water-field'].includes(activeFieldId)?activeFieldId:null,
+    selectionIds:[...selectionIds],
     model: activeObject ? {
       source: activeObject.source,
       type: activeObject.type,

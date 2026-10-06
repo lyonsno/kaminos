@@ -37,6 +37,7 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
     sceneObjects,
     sceneGroups,
     scene,
+    setSceneObjectMounted(entry,mounted){if(mounted)scene.add(entry.object);else scene.remove(entry.object);},
     window: { _kaminosDirty() {} },
     scenePlacementTools: { finish() {}, edits: null },
     sceneMembershipEditTargets: new Set(),
