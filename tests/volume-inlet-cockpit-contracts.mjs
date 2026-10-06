@@ -52,7 +52,8 @@ test('spiral and concentric are gone from the pattern select; retired-from-the-i
   // author (a 3d73ef32 exclusion made every saved layout fail to load).
   const layoutEngine = readFileSync(new URL('../volume-cockpit-layout.mjs', import.meta.url), 'utf8');
   const authorable = layoutEngine.slice(layoutEngine.indexOf('function isAuthorableControl'), layoutEngine.indexOf('\n}\n', layoutEngine.indexOf('function isAuthorableControl')));
-  assert.doesNotMatch(authorable, /data-volume-ui-retired/, 'retired-from-the-interface rows stay layout-authorable');
+  const authorableCode = authorable.split('\n').filter(line => !line.trim().startsWith('//')).join('\n');
+  assert.doesNotMatch(authorableCode, /data-volume-ui-retired/, 'retired-from-the-interface rows stay layout-authorable (the exclusion is absent from the code; the comment may name it)');
 });
 
 test('the older emitter dynamics and the boundary gradient / softness / cut hide while the inflow law is selected', () => {
