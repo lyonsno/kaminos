@@ -71,3 +71,24 @@ Scene hierarchy rows select on one click. Double-click a name (or use F2 on a fo
 Viewport → Transform gizmos is a view preference across selections, independent of saved object poses. Navigation hints are another viewport preference. Move/Rotate/Scale toolbar buttons explicitly enable their gizmo. These preferences are session-local, not authored scene history. Grid and global wireframe controls are not implemented by this menu.
 
 Numeric scrub fields display three significant figures while idle; the input retains its precise value and shows it for text editing. Relative numeric drags (including transform axis labels) and G/R/S request browser Pointer Lock, use unbounded logical movement and draw a wrapping software cursor. The browser restores its system cursor to the entry point on release. Escape or unexpected lock loss cancels the edit. When Pointer Lock is unavailable, ordinary bounded dragging remains usable. This does not change native Three.js gizmo-handle dragging or trackpad camera navigation.
+
+
+### Authored local water and flame contact
+
+The local analytic water host publishes a submitted-frame contact envelope to the
+placed flame on the same GPU device. `kaminosAuthoredLiquidFireContactState()`
+reports the host frame, producer tick, scene/source generations and authored
+water source IDs. The envelope preserves the solver GPU header identity;
+it does not label individual contact particles with authored emitter IDs.
+Retiring or pausing the host releases the receiver binding. Resume/reopen binds
+the new admitted frame/allocation. Undo restores authored poses, not emitted
+water or the evolved wet/flame field.
+
+The current producer admits supported water contacts, not arbitrary free-flight
+stream intersection or mesh collision. Local cell exchange removes heat/fuel/
+flame and adds vapor. Source wetting follows the admitted ring torus and its
+shallow depth intersection; other analytic families and inflow-boundary sources
+explicitly report unavailable source-wetting geometry while retaining local
+cell exchange. The existing manual-reignition policy remains in force. This
+path does not heat the liquid, create independent flame domains, or checkpoint
+particle state.
