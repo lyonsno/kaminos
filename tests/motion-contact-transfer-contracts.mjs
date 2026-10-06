@@ -53,4 +53,10 @@ assert.deepEqual(four.frames[0].frontRight.foot,four.frames[3].frontRight.foot,'
 assert.equal(sampleContactMotion(four,1.5).frontRight.contact,true);
 assert.match(four.frontContactAuthority,/inferred/);
 assert.ok(four.frames[2].root[2]>four.frames[0].root[2],'a crawling donor faces with its torso even when toes point backward');
+const lowWristResult={...fourResult,joints:fourResult.joints.map((f,i)=>{const a=f.map(p=>[...p]);a[25][1]=a[29][1]=.05;a[13][1]=i<2?.01:.04;a[19][1]=.015;return a;})};
+const lowWrist=buildContactMotion(lowWristResult,{quadruped:true});
+assert.equal(lowWrist.frames[2].frontLeft.contact,false);
+assert.ok(Math.abs(lowWrist.frames[2].frontLeft.foot[1]-.03)<1e-12,'generated wrist lift must survive when supporting wrists sit below supporting toes');
+assert.equal(lowWrist.supportHeights.frontLeft,.01,'inferred wrist support height must be inspectable separately from rear toes');
+assert.equal(lowWrist.frames[2].frontLeft.rawFoot[1],.04,'raw wrist height survives normalization');
 console.log('motion contact transfer contracts passed');

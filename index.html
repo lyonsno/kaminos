@@ -8716,7 +8716,7 @@ function motionRigPreviewStatus() {
       authority: state.contact.track.contactAuthority, scale: state.contact.scale,
       quadruped: state.contact.track.quadruped,
       orientationAuthority: state.contact.track.orientationAuthority,
-      frontProxy: state.contact.frontProxy ? {authority:state.contact.track.frontContactAuthority,reachRatio:state.contact.frontProxy.ratio,reach:state.contact.frontProxy.reach,geometryAuthority:'neutral-dominant fore-foot minima; source-scaled virtual shoulder offsets; not authored front rig'} : null,
+      frontProxy: state.contact.frontProxy ? {authority:state.contact.track.frontContactAuthority,heightAuthority:state.contact.track.frontHeightAuthority,supportHeights:state.contact.track.supportHeights,reachRatio:state.contact.frontProxy.ratio,reach:state.contact.frontProxy.reach,geometryAuthority:'neutral-dominant fore-foot minima; source-scaled virtual shoulder offsets; not authored front rig'} : null,
       intervals: state.contact.track.intervals, diagnostics: state.contact.diagnostics,
       view: document.getElementById('motion-panel-contact-view')?.value || 'creature',
     } : null,

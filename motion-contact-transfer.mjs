@@ -74,6 +74,11 @@ export function buildContactMotion(result, {quadruped=false}={}) {
     f[side]={contact:joints[i][joint][1]<.10&&speed<.15,foot:local(joints[i][joint]),rawFoot:local(joints[i][joint])};
   });
   if(quadruped&&['frontLeft','frontRight'].some(side=>!frames.some(f=>f[side].contact)))throw Error('Quadruped donor needs both inferred wrist support intervals');
+  const supportHeights={left:floor,right:floor};
+  if(quadruped)for(const side of ['frontLeft','frontRight']){
+    const heights=frames.filter(f=>f[side].contact).map(f=>f[side].rawFoot[1]).sort((a,b)=>a-b);
+    supportHeights[side]=heights[Math.floor(heights.length/2)];
+  }
   const intervals=[];
   for(const side of quadruped?['left','right','frontLeft','frontRight']:['left','right']){
     let anchor=null,start=-1;
@@ -84,13 +89,13 @@ export function buildContactMotion(result, {quadruped=false}={}) {
         paw.foot=[...anchor];
       }else{
         if(anchor){intervals.push({side,start,end:i-1,anchor:[...anchor]});anchor=null;}
-        paw.foot[1]=Math.max(0,paw.foot[1]-floor);
+        paw.foot[1]=Math.max(0,paw.foot[1]-supportHeights[side]);
       }
     }
     if(anchor)intervals.push({side,start,end:frames.length-1,anchor:[...anchor]});
   }
   const legLength=[22,26].map(h=>norm(sub(first[h+1],first[h]))+norm(sub(first[h+2],first[h+1]))+norm(sub(first[h+3],first[h+2]))).reduce((a,b)=>a+b)/2;
-  return {schema:'kaminos.soma30-contact-motion.v0',fps:result.fps,parents,frames,intervals,legLength,floor,forward,lateral,quadruped,orientationAuthority:quadruped?'pelvis-to-chest horizontal body facing':'average ankle-to-toe horizontal facing',frontContactAuthority:quadruped?'inferred wrist height <0.10m and speed <0.15m/s; proxy, not model labels':null,contactAuthority:'model-predicted-toe-contact; decoded schema; fixed interval anchors'};
+  return {schema:'kaminos.soma30-contact-motion.v0',fps:result.fps,parents,frames,intervals,legLength,floor,supportHeights,forward,lateral,quadruped,orientationAuthority:quadruped?'pelvis-to-chest horizontal body facing':'average ankle-to-toe horizontal facing',frontHeightAuthority:quadruped?'each wrist median raw height across its inferred support samples; swing lift relative to that height, clamped only below support plane':null,frontContactAuthority:quadruped?'inferred wrist height <0.10m and speed <0.15m/s; proxy, not model labels':null,contactAuthority:'model-predicted-toe-contact; decoded schema; fixed interval anchors'};
 }
 
 export function sampleContactMotion(track,frame) {
