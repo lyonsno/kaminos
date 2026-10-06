@@ -24,7 +24,8 @@ export function createSceneGI(scene, camera, aoIntensity) {
   aoFilter.depthPhi.value = giFilter.depthPhi.value = .1;
   const aoTexture = convertToTexture(aoFilter), giTexture = convertToTexture(giFilter);
   const rawAO = effect.getAONode(), rawGI = effect.getGINode();
-  const gain = uniform(1), filtered = uniform(true,'bool'), viewMode = uniform(0,'int');
+  let settings = resolveSceneGISettings();
+  const gain = uniform(settings.gain), filtered = uniform(true,'bool'), viewMode = uniform(0,'int');
   const visibility = filtered.select(texture(aoTexture.value,screenUV).r,texture(rawAO.value,screenUV).r).clamp(0,1);
   const irradianceOverPi = filtered.select(texture(giTexture.value,screenUV).rgb,texture(rawGI.value,screenUV).rgb).mul(gain);
   const ao = mix(float(1),visibility,aoIntensity.min(1)).div(float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(visibility))));
@@ -51,7 +52,6 @@ export function createSceneGI(scene, camera, aoIntensity) {
   const receivedView = vec4(beauty.rgb.mul(surface),1);
   const incomingView = vec4(irradianceOverPi.mul(surface),1);
   const combinedOutput = mix(mix(mix(beauty,aoView,float(viewMode.equal(1))),receivedView,float(viewMode.equal(2))),incomingView,float(viewMode.equal(3)));
-  let settings = resolveSceneGISettings();
   let frames = 0;
   const update = effect.updateBefore;
   effect.updateBefore = function(frame) { update.call(this,frame); frames++; };

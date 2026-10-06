@@ -5,7 +5,8 @@ assert.ok(html.includes('id="scene-gi-mode"'), 'operator must be able to select 
 const { resolveSceneGISettings, sceneGIReceives } = await import('../scene-gi-settings.mjs');
 const defaults = resolveSceneGISettings();
 assert.equal(defaults.mode, 'gtao');
-assert.equal(defaults.gain, 1);
+assert.equal(defaults.gain, 10);
+assert.equal(resolveSceneGISettings({gain:1}).gain,1,'authored gain remains authoritative');
 assert.equal(defaults.view, 'scene');
 assert.deepEqual(resolveSceneGISettings({futureQuality:'x'}),defaults,'additive scene fields must not become DOM control IDs');
 const shader = readFileSync(new URL('../scene-gi.mjs', import.meta.url), 'utf8');

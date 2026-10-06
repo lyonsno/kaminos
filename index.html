@@ -784,6 +784,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <label><input id="composition-ground-visible" type="checkbox" checked> Ground</label>
       <label for="composition-ground-height">Ground height</label>
       <input id="composition-ground-height" type="number" step="0.05" value="-0.85" class="transform-input">
+      <div class="field"><label for="composition-ground-color">Ground color</label><input id="composition-ground-color" type="color" value="#808080"></div>
+      <div class="slider-row"><label class="slider-label" for="composition-ground-roughness">Roughness</label><input id="composition-ground-roughness" type="range" min="0" max="1" step="0.05" value="0.65"><output id="composition-ground-roughness-value">0.65</output></div>
     </div>
 
     <section id="authoring-source-burner">
@@ -3314,7 +3316,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="field"><label for="scene-gi-mode">Surface illumination</label><select id="scene-gi-mode"><option value="gtao">GTAO baseline</option><option value="combined">Combined AO + GI</option></select></div>
       <div id="scene-gi-controls" hidden>
         <div class="field"><label for="scene-gi-view">View</label><select id="scene-gi-view"><option value="scene">Scene</option><option value="ao">AO visibility</option><option value="gi">Received bounce</option><option value="incoming">Incoming GI</option></select></div>
-        <div class="field"><label for="scene-gi-gain" title="Artistic multiplier on estimated surface bounce; not camera exposure">Bounce gain</label><input id="scene-gi-gain" type="number" min="0" step="0.1" value="1"></div>
+        <div class="field"><label for="scene-gi-gain" title="Artistic multiplier on estimated surface bounce; not camera exposure">Bounce gain</label><input id="scene-gi-gain" type="number" min="0" step="0.1" value="10"></div>
         <div class="field"><label for="scene-gi-radius">Radius</label><input id="scene-gi-radius" type="number" min="0.01" step="0.1" value="4"></div>
         <div class="field"><label for="scene-gi-thickness">Thickness</label><input id="scene-gi-thickness" type="number" min="0.01" step="0.01" value="0.3"></div>
         <div class="field"><label for="scene-gi-slices">Slices</label><input id="scene-gi-slices" type="number" min="1" step="1" value="3"></div>
@@ -11024,8 +11026,8 @@ async function initScene() {
   const groundGeo = fireLightFieldRouteParams().get('volume_light_field_distributed') === '1'
     ? new THREE.RingGeometry(0, 5, 128, 40) : new THREE.CircleGeometry(5, 64);
   const groundMat = new THREE.MeshStandardMaterial({
-    color: 0x111111,
-    roughness: 0.5,
+    color: 0x808080,
+    roughness: 0.65,
     metalness: 0.0,
   });
   groundPlane = new THREE.Mesh(groundGeo, groundMat);
@@ -11223,6 +11225,10 @@ async function initScene() {
   rebuildSceneGIOutput();
   window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),sceneFrames:sceneFrameCount,effectiveMode:sceneGISettings.mode,view:sceneGISettings.mode==='gtao'?'scene':sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
   window.kaminosSceneGIReadback = kind => sceneGI.readback(renderer,kind);
+  window.kaminosGroundDebugState = () => ({visible:groundPlane.visible,height:groundPlane.position.y,
+    color:'#'+groundPlane.material.color.getHexString(),linearColor:groundPlane.material.color.toArray(),
+    roughness:groundPlane.material.roughness,metalness:groundPlane.material.metalness,
+    fields:{color:document.getElementById('composition-ground-color').value,roughness:Number(document.getElementById('composition-ground-roughness').value)}});
   window.kaminosSceneGIReceiverAt = (u,v) => {
     const ray=new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2(u*2-1,1-v*2),camera);
@@ -27564,7 +27570,8 @@ function buildSceneData(capture = null) {
       backgroundContrast: Number(document.getElementById('env-bg-contrast').value),
       recipes: environmentRecipes,
       rimLight: readRimLightSettings(),
-      ground: { visible: groundPlane.visible, height: groundPlane.position.y },
+      ground: { visible: groundPlane.visible, height: groundPlane.position.y,
+        color:'#'+groundPlane.material.color.getHexString(),roughness:groundPlane.material.roughness },
     },
     volumePrimitives: getVolumePrimitiveState(),
     flameDomainTranslation: [...flameDomainTranslation],
@@ -27730,6 +27737,16 @@ document.getElementById('composition-ground-visible').onchange = event => {
 document.getElementById('composition-ground-height').onchange = event => {
   const height = event.target.valueAsNumber;
   if (groundPlane && Number.isFinite(height)) groundPlane.position.y = height;
+  window._kaminosDirty?.();
+};
+document.getElementById('composition-ground-color').oninput = event => {
+  if(groundPlane)groundPlane.material.color.set(event.target.value);
+  window._kaminosDirty?.();
+};
+document.getElementById('composition-ground-roughness').oninput = event => {
+  const roughness=event.target.valueAsNumber;
+  if(groundPlane&&Number.isFinite(roughness))groundPlane.material.roughness=roughness;
+  document.getElementById('composition-ground-roughness-value').value=String(roughness);
   window._kaminosDirty?.();
 };
 document.getElementById('composition-basins').onclick = () => {
@@ -28351,6 +28368,11 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     groundPlane.position.y = Number.isFinite(env.ground?.height) ? env.ground.height : -0.85;
     document.getElementById('composition-ground-visible').checked = groundPlane.visible;
     document.getElementById('composition-ground-height').value = groundPlane.position.y;
+    groundPlane.material.color.set(env.ground?.color ?? '#808080');
+    groundPlane.material.roughness = Number.isFinite(env.ground?.roughness) ? env.ground.roughness : .65;
+    document.getElementById('composition-ground-color').value = '#'+groundPlane.material.color.getHexString();
+    document.getElementById('composition-ground-roughness').value = groundPlane.material.roughness;
+    document.getElementById('composition-ground-roughness-value').value = String(groundPlane.material.roughness);
 
     const rotation = env.rotation ?? 0;
     document.getElementById('env-rotation-slider').value = rotation;

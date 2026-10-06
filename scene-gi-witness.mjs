@@ -32,6 +32,45 @@ try {
     await page.check('#rendering-surface-scattering');
     await page.waitForTimeout(1000);
   }
+  if(operation==='--floor-preview') {
+    report.phase='floor-controls';await save();
+    const initial=await page.evaluate(()=>window.kaminosGroundDebugState());
+    report.initialGround=initial;
+    assert.equal(await page.getAttribute('#scene-gi-gain','value'),'10','new UI gain default');
+    const setInput=async(id,value)=>page.$eval('#'+id,(e,v)=>{e.value=String(v);e.dispatchEvent(new Event('input',{bubbles:true}));},value);
+    await setInput('composition-ground-color','#606060');
+    await setInput('composition-ground-roughness',.9);
+    const edited=await page.evaluate(()=>window.kaminosGroundDebugState());
+    assert.equal(edited.color,'#606060');assert.equal(edited.roughness,.9);
+    await setInput('composition-ground-color','#808080');
+    await setInput('composition-ground-roughness',.65);
+    report.ground=await page.evaluate(()=>window.kaminosGroundDebugState());
+    assert.equal(report.ground.color,'#808080');assert.equal(report.ground.roughness,.65);assert.equal(report.ground.metalness,0);
+    await page.selectOption('#rendering-light-mode','shared');
+    await page.selectOption('#scene-gi-mode','combined');
+    await page.selectOption('#scene-gi-view','scene');
+    await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(false));
+    await page.waitForTimeout(3000);
+    await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
+    for(const gain of [0,10]) {
+      await page.$eval('#scene-gi-gain',(e,v)=>{e.value=String(v);e.dispatchEvent(new Event('change',{bubbles:true}));},gain);
+      await page.waitForTimeout(750);
+      const state=await page.evaluate(()=>({gi:window.kaminosSceneGIDebugState(),ground:window.kaminosGroundDebugState(),lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState()}));
+      assert.equal(state.gi.gain,gain);assert.equal(state.volume.error,null);
+      report.views.push({name:'gray-floor-gain'+gain,...state});
+      await page.screenshot({path:`${out}/gray-floor-gain${gain}.png`});await save();
+    }
+    await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');document.querySelector('[data-inspector-context="scene"]').click();});
+    await page.locator('#composition-ground-color').scrollIntoViewIfNeeded();
+    await page.screenshot({path:`${out}/floor-controls.png`});
+    const scene=await(await fetch(new URL('/api/read?root=scenes&path=cheap-kiln-shared-source.kaminos.json',url))).json();
+    scene.environment.ground={...scene.environment.ground,color:'#606060',roughness:.9};
+    scene.postprocessing.sceneGI={mode:'combined',gain:3};
+    await page.setInputFiles('#scene-file-input',{name:'floor-roundtrip.kaminos.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(scene))});
+    await page.waitForFunction(()=>window.kaminosGroundDebugState().color==='#606060'&&window.kaminosSceneGIDebugState().gain===3,null,{timeout:0});
+    report.restored={ground:await page.evaluate(()=>window.kaminosGroundDebugState()),gi:await page.evaluate(()=>window.kaminosSceneGIDebugState())};
+    assert.equal(report.restored.ground.roughness,.9);assert.equal(report.restored.gi.gain,3,'authored gain survives default change');
+  } else {
   const signal=await page.evaluate(async()=>({source:await window.__kaminosVolumePrototype.sampleSceneVolumeSource(),lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState()}));
   await fs.writeFile(`${out}/held-source.json`,JSON.stringify(signal));
   assert.equal(signal.volume.error,null);assert.ok(signal.lighting.frame.surfaceReceivers>0);
@@ -137,6 +176,7 @@ try {
       });
       report.performance.push({mode,...sample,scope:'whole-app-render-invocation-throughput-not-GPU-only-or-presentation'});await save();
     }
+  }
   }
   report.runtimeAfter=await(await fetch(new URL('/api/runtime-config',url))).json();
   assert.deepEqual(report.runtimeAfter.source,report.runtime.source,'source revision changed during witness');
