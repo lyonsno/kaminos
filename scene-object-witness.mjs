@@ -355,18 +355,18 @@ async function runCatRetainedPlaybackScenario(ws, { groundTravel = false, contac
     const point = await evaluate(ws, `(() => { const e = document.getElementById(${JSON.stringify(id)}); e?.scrollIntoView({block:'center'}); const r = e?.getBoundingClientRect(); if (!e || e.disabled || !r?.width || !r?.height) throw new Error('control unavailable: ' + ${JSON.stringify(id)}); const point = {x:r.x+r.width/2,y:r.y+r.height/2}; if (!e.contains(document.elementFromPoint(point.x,point.y))) throw new Error('control occluded: ' + ${JSON.stringify(id)}); return point; })()`);
     await dispatchMouseClick(ws, point);
   };
-  // This imported pair faces down. Exercise the existing scene-object toolbar;
-  // leave source bytes, bind pose and correspondence unchanged.
+  // Quad normalization must work from delivered orientation without a hidden
+  // toolbar correction. Optional half-turn exercises the same registered body.
   const rotatePoint = await evaluate(ws, `(() => { const e = document.querySelector('[title="Rotate 90 around X"]'); const r = e?.getBoundingClientRect(); if (!r?.width || !r?.height) throw new Error('object orientation control unavailable'); return {x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
-  await dispatchMouseClick(ws, rotatePoint);
-  await dispatchMouseClick(ws, rotatePoint);
+  const rotateCount=quadruped?(new URL(url).searchParams.get('motion_test_rot_x')==='2'?2:0):2;
+  for(let i=0;i<rotateCount;i++)await dispatchMouseClick(ws, rotatePoint);
   await click('motion-panel-focus-rig');
   await delay(300);
   const rest = await evaluate(ws, `window.kaminosSkinnedRigDebugState(${JSON.stringify(objectId)})`);
   const rootBefore = await evaluate(ws, `window.kaminosSceneObjectDebugState().find(x => x.id === ${JSON.stringify(objectId)}).transform`);
   const beforeShot = await capturePngScreenshot(ws, siblingPngPath('-retained-before'));
   const frames = [];
-  const evidence = lastEvidence.catRetainedPlayback = { clip, rest, beforeShot, frames, presentation: 'two existing Rot X toolbar clicks on the registered object; source asset unchanged', sourceRoute: 'real retained JSON URL; ordinary visible controls' };
+  const evidence = lastEvidence.catRetainedPlayback = { clip, rest, beforeShot, frames, presentation: `${rotateCount} Rot X toolbar clicks; source asset unchanged; quad normalizes delivered anatomy`, sourceRoute: 'real retained JSON URL; ordinary visible controls' };
   const playButton = quadruped ? 'motion-panel-run-quad' : contactTransfer ? 'motion-panel-run-contact' : groundTravel ? 'motion-panel-run-ground' : 'motion-panel-play-retained';
   await click(playButton);
   const startedAt = performance.now();
@@ -401,6 +401,12 @@ async function runCatRetainedPlaybackScenario(ws, { groundTravel = false, contac
         for(const side of ['frontLeft','frontRight'])assert.ok(completed.contactTransfer.intervals.some(i=>i.side===side),'quad donor needs both inferred front support traces');
       }
       for (const frame of frames) {
+        if(quadruped){
+          const anatomy=frame.state.groundTravel?.anatomicalFrame;
+          assert.ok(Number.isFinite(anatomy?.dorsalUpDot)&&anatomy.dorsalUpDot>0,'quad creature must remain anatomical dorsal-up');
+          assert.ok(Number.isFinite(anatomy?.headFacingDot)&&anatomy.headFacingDot>0,'quad travel must remain head-facing');
+          assert.ok(Number.isFinite(anatomy?.elevationRadians)&&Math.abs(anatomy.elevationRadians-frame.state.contactTransfer.diagnostics.sourceElevationRadians)<1e-6,'quad body must retain absolute source torso posture');
+        }
         assert.ok(frame.state.contactTransfer?.diagnostics?.contactError < .001, 'actual painted contact residual must agree with the solved goal');
         assert.ok(frame.state.contactTransfer.diagnostics.reachError < 1e-5, 'target legs must reach the solved contact');
         assert.ok(frame.contactAudit?.minimumPaintedPawClearance > -.005, 'painted paw cannot penetrate the floor; source flight may clear it');

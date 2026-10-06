@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import * as core from '../motion-contact-transfer.mjs';
+assert.equal(typeof core.anatomicalBodyFrame,'function','quadruped body frame must not inherit an inverted starting orientation');
+const landmarks={pelvis:[0,1,0],leftHip:[.2,1,0],rightHip:[-.2,1,0],leftHock:[.2,0,0],rightHock:[-.2,0,0],foreCenter:[0,1,2]};
+const frame=core.anatomicalBodyFrame(landmarks);
+const near=(a,b)=>a.every((v,i)=>Math.abs(v-b[i])<1e-12);
+assert.ok(near(frame.forward,[0,0,1]));
+assert.ok(near(frame.up,[0,1,0]));
+const inverted=Object.fromEntries(Object.entries(landmarks).map(([k,[x,y,z]])=>[k,[x,-y,-z]]));
+const flipped=core.anatomicalBodyFrame(inverted);
+assert.ok(near(flipped.forward,[0,0,-1]));
+assert.ok(near(flipped.up,[0,-1,0]),'dorsal direction follows delivered anatomy rather than assuming world up');
+assert.throws(()=>core.anatomicalBodyFrame({...landmarks,foreCenter:landmarks.pelvis}),/degenerate/);
+assert.equal(typeof core.sourceBodyElevation,'function');
+const joints=Array.from({length:30},()=>[0,0,0]);joints[3]=[0,.2,1];
+assert.ok(Math.abs(core.sourceBodyElevation(joints)-Math.atan2(.2,1))<1e-12,'absolute crawl posture must remain available, not only its change from frame zero');
+console.log('cat anatomical frame contracts passed');

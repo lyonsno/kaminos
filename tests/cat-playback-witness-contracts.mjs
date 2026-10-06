@@ -4,10 +4,11 @@ const source = readFileSync(new URL('../scene-object-witness.mjs', import.meta.u
 const body = source.slice(source.indexOf('function assertMotionContactCompletion'), source.indexOf('async function runCatMotionRetargetScenario'));
 const clip = { sha256: 'abc', authority: 'retained-motion-playback', frameCount: 180, fps: 30 };
 const rest = { meshes: [{ boneQuaternions: { hip: [0, 0, 0, 1] } }] };
-async function exercise({ reason = 'clip-complete', advancing = true, captureFailure = false, groundTravel = false, contactTransfer = false, quadruped = false, badFore = false, badContact = false, badTotalContact = false, badTotalReach = false, missingTotals = false, stationaryRoot = false, floating = false, badSupport = false } = {}) {
+async function exercise({ reason = 'clip-complete', advancing = true, captureFailure = false, groundTravel = false, contactTransfer = false, quadruped = false, badUp = false, badFacing = false, badElevation = false, badFore = false, badContact = false, badTotalContact = false, badTotalReach = false, missingTotals = false, stationaryRoot = false, floating = false, badSupport = false } = {}) {
 const evidence = { meshAssetLink: { state: { registeredObjectId: 'cat' } } };
 let clock = 0;
 let samples = 0;
+const anatomy={dorsalUpDot:badUp?-1:1,headFacingDot:badFacing?-1:1,elevationRadians:badElevation?1:.2};
 const run = Function('assert', 'lastEvidence', 'url', 'runMeshAssetLinkScenario', 'evaluate', 'delay', 'capturePngScreenshot', 'siblingPngPath', 'dispatchMouseClick', 'performance', `let phase; ${body}; return runCatRetainedPlaybackScenario;`)(
   assert, evidence, 'http://localhost/?motion_clip_sha256=abc', async () => {},
   async (_ws, expression) => {
@@ -16,7 +17,7 @@ const run = Function('assert', 'lastEvidence', 'url', 'runMeshAssetLinkScenario'
     if (expression.includes('__kaminosMotionRigPreview')) return { active: false, stopReason: reason,groundTravel:{rearUpDegrees:quadruped?0:55}, contactTransfer:contactTransfer?{quadruped,frontProxy:quadruped?{authority:'inferred wrist proxy',reachRatio:1}:null,intervals:quadruped?[{side:'frontLeft'},{side:'frontRight'}]:[],diagnostics:{wholeClip:missingTotals?null:{maximumContactError:badTotalContact?.1:0,maximumReachError:badTotalReach?.1:0,maximumForeReachError:badFore?.1:0}}}:null };
     if (expression.includes('kaminosSceneObjectDebugState')) return { position: [samples > 0 && samples <= 2 && !stationaryRoot ? samples * .1 : 0, 0, 0] };
     if (expression.includes('kaminosMotionGroundContactDebugState')) return { minimumPaintedPawClearance: badSupport ? -.1 : 0 };
-    if (expression.includes('kaminosMotionRigPreviewDebugState')) return ++samples <= 2 ? { active: true, frame: advancing ? samples * 30 : 0, groundTravel: { distance: samples * .1, minimumPawClearance: floating ? .2 : 0 }, contactTransfer:contactTransfer?{diagnostics:{contactError:badContact?.1:0,reachError:0,minimumPawClearance:0}}:null } : { active: false };
+    if (expression.includes('kaminosMotionRigPreviewDebugState')) return ++samples <= 2 ? { active: true, frame: advancing ? samples * 30 : 0, groundTravel: { distance: samples * .1, minimumPawClearance: floating ? .2 : 0, anatomicalFrame:quadruped?anatomy:null }, contactTransfer:contactTransfer?{diagnostics:{contactError:badContact?.1:0,reachError:0,minimumPawClearance:0,sourceElevationRadians:.2}}:null } : { active: false };
     return { x: 1, y: 1 };
   }, async ms => { clock += ms; }, async (_ws, path) => { clock += 2000; if (captureFailure && path === '-retained-0') throw new Error('capture failed'); return { path }; }, suffix => suffix,
   async () => {}, { now: () => clock });
@@ -44,3 +45,6 @@ await assert.rejects(exercise({groundTravel:true,contactTransfer:true,reason:'cl
 await assert.rejects(exercise({groundTravel:true,contactTransfer:true,reason:'clip-complete-held',badTotalReach:true}),/accumulated reach/);
 await assert.rejects(exercise({groundTravel:true,contactTransfer:true,reason:'clip-complete-held',missingTotals:true}),/finite accumulated/);
 await assert.rejects(exercise({groundTravel:true,contactTransfer:true,quadruped:true,reason:'clip-complete-held',badFore:true}),/fore.*reach/,'quad evidence must reject infeasible front proxies even when rear contacts pass');
+await assert.rejects(exercise({contactTransfer:true,quadruped:true,reason:'clip-complete-held',badUp:true}),/dorsal-up/,'reachable hind paws cannot conceal an inverted forebody');
+await assert.rejects(exercise({contactTransfer:true,quadruped:true,reason:'clip-complete-held',badFacing:true}),/head-facing/,'positive internal distance cannot establish head-facing travel');
+await assert.rejects(exercise({contactTransfer:true,quadruped:true,reason:'clip-complete-held',badElevation:true}),/source.*posture/,'a quad request must preserve absolute donor torso elevation');

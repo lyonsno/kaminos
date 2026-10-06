@@ -12,6 +12,28 @@ const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
 const norm=a=>Math.hypot(...a);
 const unit=a=>mul(a,1/norm(a));
 const finite=a=>Array.isArray(a)&&a.length===3&&a.every(Number.isFinite);
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+
+export function anatomicalBodyFrame(landmarks) {
+  if(['pelvis','leftHip','rightHip','leftHock','rightHock','foreCenter'].some(k=>!finite(landmarks[k])))throw Error('Anatomical frame needs finite bind landmarks');
+  const lateral=sub(landmarks.leftHip,landmarks.rightHip);
+  if(norm(lateral)<1e-8)throw Error('Anatomical frame has degenerate hip axis');
+  const x=unit(lateral),fore=sub(landmarks.foreCenter,landmarks.pelvis);
+  const sagittal=sub(fore,mul(x,dot(fore,x)));
+  if(norm(sagittal)<1e-8)throw Error('Anatomical frame has degenerate forebody direction');
+  const forward=unit(sagittal);
+  const dorsalHint=sub(mul(add(landmarks.leftHip,landmarks.rightHip),.5),mul(add(landmarks.leftHock,landmarks.rightHock),.5));
+  let up=unit(cross(x,forward));
+  if(Math.abs(dot(up,dorsalHint))<1e-8)throw Error('Anatomical frame has degenerate dorsal sign');
+  if(dot(up,dorsalHint)<0)up=mul(up,-1);
+  return {forward,up};
+}
+
+export function sourceBodyElevation(joints) {
+  const torso=sub(joints[3],joints[0]);
+  if(norm(torso)<1e-8)throw Error('Body elevation needs non-degenerate torso');
+  return Math.atan2(torso[1],Math.hypot(torso[0],torso[2]));
+}
 
 export function sourceBodyPose(joints) {
   const lateral=sub(joints[22],joints[26]);lateral[1]=0;
