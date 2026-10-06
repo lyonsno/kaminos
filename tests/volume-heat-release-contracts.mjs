@@ -41,10 +41,13 @@ test('the main kernel stores the burn rate per cell and the converged solve targ
   // The stored rate is the fuel consumption rate the reaction itself used (the
   // per-time quantity that multiplies timeStep in the fuel decrement).
   assert.match(source, /let fuelBurnRate = heat \* 0\.018 \+ fuelConsumption;\s*\n\s*fuel = max\(fuel - fuelBurnRate \* timeStep, 0\.0\);/, 'the fuel decrement and the stored rate are one quantity');
-  assert.match(source, /textureStore\(burnRate, cellI, vec4<f32>\(fuelBurnRate, 0\.0, 0\.0, 0\.0\)\);/, 'stored for this step, burning or not');
+  assert.match(source, /textureStore\(burnRate, cellI, vec4<f32>\(u\.heat_release\.x \* fuelBurnRate, 0\.0, 0\.0, 0\.0\)\);/, 'stored as the expansion target (gain x rate) for this step, burning or not; zero gain stores zero');
   const expansion = wgslFunction('heatReleaseExpansion');
-  assert.match(expansion, /if \(u\.heat_release\.x <= 0\.0\) \{\s*\n\s*return 0\.0;/, 'zero gain reads nothing');
-  assert.match(expansion, /return u\.heat_release\.x \* max\(0\.0, textureLoad\(burnRate, c\)\.x\);/, 'gain times the stored rate, never negative');
+  assert.match(expansion, /return max\(0\.0, textureLoad\(burnRate, c\)\.x\);/, 'the pressure kernels read the target directly (their layout binds no uniform), never negative');
+  // The pressure kernels bind the fluid-front read layout, not the full fluid layout: the target must be there too.
+  const frontLayout = source.slice(source.indexOf("label: 'kaminos fluid-front read bind group layout'"), source.indexOf('});', source.indexOf("label: 'kaminos fluid-front read bind group layout'")));
+  assert.match(frontLayout, /\{ binding: 19, visibility: GPUShaderStage\.COMPUTE, storageTexture: \{ access: 'read-write', format: 'r32float', viewDimension: '3d' \} \}/, 'the fluid-front read layout carries the target (first look at 86801d5d failed validation without it)');
+  assert.equal((source.match(/\{ ?binding: 19, resource: burnRateTexture\.createView\(\{ dimension: '3d' \}\) ?\}/g) || []).length, 5, 'bound in the fluid bind group and in every fluid-front read bind group');
   const divergence = wgslFunction('divergenceAtCell');
   assert.match(divergence, /return \(\(vx1 - vx0\) \+ \(vy1 - vy0\) \+ \(vz1 - vz0\)\) \* 0\.5 - heatReleaseExpansion\(c\);/, 'the solve drives the velocity divergence toward the expansion, so after a converged solve the corrected field expands where fuel burns');
   // Bindings and lifecycle.

@@ -3166,6 +3166,8 @@ struct NonRidgeOpticalCaptureRow {
 // written by the main kernel and read by the pressure kernels as the heat
 // release expansion target. One read-write storage texture, no usage conflict.
 @group(0) @binding(19) var burnRate: texture_storage_3d<r32float, read_write>;
+// (It holds gain x rate, the expansion target; the pressure kernels bind the
+// fluid-front read layout, which carries no uniform.)
 @group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
 @group(0) @binding(12) var<storage, read_write> nonRidgeOpticalCaptureRows: array<f32>;
 // MacCormack predictor: the forward semi-Lagrangian estimate of every slot,
@@ -4002,10 +4004,7 @@ fn curlMagnitudeAtCell(c: vec3<i32>) -> f32 {
 // Heat-release expansion target at a cell: gain x the stored burn rate. Zero
 // gain (refused or off) reads nothing, so the legacy solve is untouched.
 fn heatReleaseExpansion(c: vec3<i32>) -> f32 {
-  if (u.heat_release.x <= 0.0) {
-    return 0.0;
-  }
-  return u.heat_release.x * max(0.0, textureLoad(burnRate, c).x);
+  return max(0.0, textureLoad(burnRate, c).x);
 }
 
 // The compact divergence the converged solve drives to zero, minus the
@@ -6392,7 +6391,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // every cell, burning or not, so a cell that stops burning stops expanding).
   let fuelBurnRate = heat * 0.018 + fuelConsumption;
   fuel = max(fuel - fuelBurnRate * timeStep, 0.0);
-  textureStore(burnRate, cellI, vec4<f32>(fuelBurnRate, 0.0, 0.0, 0.0));
+  // Stored as the expansion target itself (gain x rate; zero when the gain is
+  // zero or refused), so the pressure kernels, which bind no uniform, read it directly.
+  textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * fuelBurnRate, 0.0, 0.0, 0.0));
   let bonfireDetailBirthCarrier = bonfireAdvectedSmokeBirth * 0.48 + bonfireSootBirth * 0.30 + bonfireBroadSupportSmokeSource * 0.046 * bonfireLayeredSmokeBreakup + smokeFromHeat * bonfireInterfaceSmokeBand * 0.13 + bonfireInterfaceBirth * 0.18 + bonfireCombustion.z * 0.036 + smoke * 0.070;
   let bonfireSmokeDetailCurlFold = clamp(
     0.50
@@ -11557,6 +11558,7 @@ export function createKaminosVolumePrototype({
         {binding: 1, resource: {buffer}},
         {binding: 7, resource: {buffer: frontBuffers[index]}},
         {binding: 16, resource: sceneSolidTextureView},
+        {binding: 19, resource: burnRateTexture.createView({ dimension: '3d' })},
       ],
     }));
     boundarySidecarReadBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
@@ -11683,6 +11685,7 @@ export function createKaminosVolumePrototype({
       || !boundarySplatFeatureBuffer
       || quenchBuffers.length !== 2
       || !flowKernelDescriptorBuffer
+      || !burnRateTexture
     ) {
       selectiveHeadLiveBindGroups = null;
       return;
@@ -11716,6 +11719,7 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluid } },
           { binding: 7, resource: { buffer: front } },
           { binding: 16, resource: sceneSolidTextureView },
+          { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
       sidecar: device.createBindGroup({
@@ -12989,6 +12993,7 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluidBuffers[0] } },
           { binding: 7, resource: { buffer: frontBuffers[0] } },
           { binding: 16, resource: sceneSolidTextureView },
+          { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
       device.createBindGroup({
@@ -12998,6 +13003,7 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
           { binding: 7, resource: { buffer: frontBuffers[1] } },
           { binding: 16, resource: sceneSolidTextureView },
+          { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
     ];
@@ -13452,6 +13458,8 @@ export function createKaminosVolumePrototype({
           buffer: { type: 'read-only-storage' },
         },
         { binding: 16, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
+        // The pressure kernels read the heat-release expansion target here.
+        { binding: 19, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
       ],
     });
     boundarySidecarWriteBindGroupLayout = device.createBindGroupLayout({
