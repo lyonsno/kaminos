@@ -25,7 +25,7 @@ try {
     ['pack', packageRoot, '--pack-destination', temporaryRoot, '--json'],
     temporaryRoot,
   ));
-  assert.equal(packOutput[0].version, '0.1.54');
+  assert.equal(packOutput[0].version, '0.1.55');
   assert.ok(
     packOutput[0].files.every(row => !/(?:^|\/)(__pycache__\/|[^/]+\.pyc$)/.test(row.path)),
     'generated Python bytecode must stay out of the published package',
