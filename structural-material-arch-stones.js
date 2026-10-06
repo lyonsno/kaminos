@@ -29,9 +29,9 @@ export function inspectStoneVisual(witness) {
   return errors;
 }
 
-export function fitStoneGeometry(source, dimensions) {
-  const target = new THREE.Vector3(dimensions.dx, dimensions.dy, dimensions.dz);
-  if (!target.toArray().every(value => Number.isFinite(value) && value > 0)) throw new Error('Stone dimensions must be positive and finite');
+export function fitStoneGeometry(source, body) {
+  if (!Array.isArray(body.halfExtents) || body.halfExtents.length !== 3 || !body.halfExtents.every(value => Number.isFinite(value) && value > 0)) throw new Error('Stone body extents must be positive and finite');
+  const target = new THREE.Vector3(...body.halfExtents).multiplyScalar(2);
   const geometry = source.clone();
   geometry.computeBoundingBox();
   const size = geometry.boundingBox.getSize(new THREE.Vector3());

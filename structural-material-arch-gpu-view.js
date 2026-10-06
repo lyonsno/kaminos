@@ -47,7 +47,7 @@ try {
     try {
       next=await createGpuArchCollapse(profile,renderer,{strength:value,...solverOptions});
       const {dx,dy,dz}=next.snapshot().dimensions;nextGeometry=new THREE.BoxGeometry(dx*.98,dy*.98,dz*.98);nextEdges=new THREE.EdgesGeometry(nextGeometry);
-      for(const asset of stoneAssets)nextStoneGeometries.push(fitStoneGeometry(asset.geometry,{dx,dy,dz}));
+      for(const asset of stoneAssets)nextStoneGeometries.push(fitStoneGeometry(asset.geometry,next.cells[0]));
       nextMeshes=next.cells.map(cell=>{const variant=cell.index%stoneAssets.length;const mesh=useStones?new THREE.Mesh(nextStoneGeometries[variant],stoneAssets[variant].material):new THREE.Mesh(nextGeometry,cell.pinned?Array(6).fill(pinnedMaterial):[...materials]);mesh.userData.index=cell.index;mesh.userData.asset=useStones?stoneAssets[variant].id:null;const outline=new THREE.LineSegments(nextEdges,outlineMaterial);outline.visible=false;mesh.add(outline);mesh.userData.outline=outline;return mesh;});
     }catch(error){next?.dispose();nextGeometry?.dispose();nextEdges?.dispose();for(const item of nextStoneGeometries)item.dispose();throw error;}
     model?.dispose();for(const mesh of meshes)scene.remove(mesh);geometry?.dispose();edges?.dispose();for(const item of stoneGeometries)item.dispose();stoneGeometries=nextStoneGeometries;model=next;geometry=nextGeometry;edges=nextEdges;meshes=nextMeshes;scene.add(...meshes);
