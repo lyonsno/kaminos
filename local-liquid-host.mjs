@@ -38,7 +38,7 @@ function cameraFrame(camera, width, height, generation) {
     near:camera.near, far:camera.far, viewport:{width,height}};
 }
 
-export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], isCurrent = () => true}) {
+export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], isCurrent = () => true, sceneGeneration = 0, onContactRetired = () => {}}) {
   if (!device || renderer.backend.device !== device) throw Error('Local liquid requires the host WebGPU device');
   let authored = normalizeLocalLiquidSetup(setup), authoredEmitters = structuredClone(emitters), sourceGeneration = 1;
   const initialPacket=localLiquidInletPacket(authored,authoredEmitters,sourceGeneration);
@@ -150,7 +150,15 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     }
   }
 
-  return {group,render,
+  const host = {group,render,
+    contactFrame() {
+      if(disposed || failure || paused || !lastFrame)return null;
+      const descriptor=solver.getLiquidFireContactDescriptor();
+      if(descriptor.writeTick<1)return null;
+      return {schema:'kaminos.authored-liquid-contact-frame.v1',hostFrameId:lastFrame.frameId,
+        sceneGeneration,sourceGeneration,sourceIds:authoredEmitters.map(record=>record.id),
+        producerTick:descriptor.writeTick,descriptor};
+    },
     setEmitters(records) {
       const packet=localLiquidInletPacket(authored,records,sourceGeneration+1);
       const key=JSON.stringify(packet.emitters);
@@ -175,6 +183,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     state:()=>({requestedRoute:ROUTE,effectiveRoute:frameCount && !failure ? ROUTE : null,registered:true,mounted:true,
       frameCount,paused,failure,setup:structuredClone(authored),lastFrame,solver:solver.getDebugState()}),
     dispose() {
+      onContactRetired(host);
       disposed=true;device.removeEventListener('uncapturederror',onGpuError); solver.destroy(); scene.remove(group);
       const materials=new Set(); group.traverse(child=>{child.geometry?.dispose();if(child.material)materials.add(child.material);});
       for(const material of materials)material.dispose();
@@ -182,4 +191,5 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       depthMaterial.dispose(); environmentQuad?.material.dispose(); presentation.dispose();
       pipeline.outputColorTransform=originalOutputTransform; pipeline.needsUpdate=true;
     }};
+  return host;
 }
