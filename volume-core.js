@@ -60,6 +60,7 @@ import {
 } from './volume-scene-ontology.mjs';
 import { VOLUME_EMITTER_FIELD_COMMIT_WGSL } from './volume-emitter-basis.mjs';
 import { resolveVolumeCoreEmitterSource } from './volume-emitter-runtime.mjs';
+import { authoredFlameContactGeometry } from './authored-flame-contact.mjs';
 import {
   auditLayerCoefficientLiveUnionPopulation,
   createLayerCoefficientLiveUnionGpuResources,
@@ -11861,7 +11862,7 @@ export function createKaminosVolumePrototype({
     });
     liquidFireContactParamsBuffer = device.createBuffer({
       label: 'kaminos liquid-fire contact consumer params',
-      size: 80,
+      size: 112,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     device.queue.writeBuffer(liquidFireContactAccumulationBuffer, 0, new Uint32Array(cellCount * 4));
@@ -11937,16 +11938,22 @@ export function createKaminosVolumePrototype({
   function writeLiquidFireContactParams() {
     if (!device || !liquidFireContactDescriptor || !liquidFireContactParamsBuffer) return false;
     const sourcePrimitive = getPrimitiveSource();
-    const sourceContactRadius = Math.max(0.12, sourcePrimitive.radius * 1.5);
+    const analytic = state.coreEmitterSourceMode === 'analytic-only';
+    const geometry = analytic ? authoredFlameContactGeometry(analyticEmitterDescriptor) : null;
+    const sourceContactRadius = analytic ? geometry.radius * 0.5 : Math.max(0.12, sourcePrimitive.radius * 1.5);
     device.queue.writeBuffer(liquidFireContactParamsBuffer, 0, liquidFireContactConsumerParams({
       allocationGeneration: liquidFireContactDescriptor.allocationGeneration,
       epoch: liquidFireContactDescriptor.epoch,
       sourceFrameHash: liquidFireContactDescriptor.sourceFrameHash,
-      sourceQuenchCenter: sourcePrimitive.position.map(value => value * 0.5 + 0.5),
+      sourceQuenchCenter: (analytic ? geometry.center : sourcePrimitive.position).map(value => value * 0.5 + 0.5),
+      sourceAxis: geometry?.axis, sourceContactMode: geometry?.mode ?? 0,
+      sourceRingRadius: (geometry?.extent ?? 0) * 0.5,
+      sourceHalfDepth: (geometry?.halfDepth ?? 0) * 0.5, sourceShallow: geometry?.shallow ?? false,
       sourceQuenchRadius: sourceContactRadius,
       receiverOffset: productTransform.translate.map(value => 0.5 - value * 0.5),
     }));
     state.liquidFireSourceContactRadius = sourceContactRadius;
+    state.liquidFireSourceContactAuthority = geometry?.authority ?? "legacy-source-sphere-v0";
     return true;
   }
 
@@ -12030,6 +12037,7 @@ export function createKaminosVolumePrototype({
         : words[19] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
       sourceLastContactTick: words[20],
       sourceContactRadius: state.liquidFireSourceContactRadius,
+      sourceContactAuthority: state.liquidFireSourceContactAuthority,
       sourceStateModel: LIQUID_FIRE_SOURCE_STATE_MODEL,
       sourceReignitionPolicy: LIQUID_FIRE_SOURCE_REIGNITION_POLICY,
       sourcePilotEnabled,
@@ -25190,6 +25198,7 @@ export function createKaminosVolumePrototype({
       analyticEmitterDescriptor = normalized;
       analyticEmitterDescriptorSignature = signature;
       updateAnalyticEmitterDebug();
+      writeLiquidFireContactParams();
       if (device
         && state.coreEmitterSourceMode === 'analytic-only'
         && previousFamily

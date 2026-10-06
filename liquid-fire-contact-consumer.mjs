@@ -250,6 +250,8 @@ struct ConsumerParams {
   receiverOffset: vec4<f32>,
   transfer: vec4<f32>,
   sourceQuench: vec4<f32>,
+  sourceAxisMode: vec4<f32>,
+  sourceRingGeometry: vec4<f32>,
 };
 
 @group(0) @binding(0) var<storage, read_write> sourceHeader: LiquidFireContactHeader;
@@ -337,7 +339,22 @@ fn scatter_liquid_fire_contacts(@builtin(global_invocation_id) gid: vec3<u32>) {
   let wetness = clamp(record.wetnessMaterialTracerVolume.x, 0.0, 2.0);
   let sourceContactDistance = distance(receiverUnit, consumerParams.sourceQuench.xyz);
   atomicMin(&consumerStats.sourceNearestContactDistance, fixedPoint(sourceContactDistance));
-  if (sourceContactDistance <= consumerParams.sourceQuench.w) {
+  var touchesSource = sourceContactDistance <= consumerParams.sourceQuench.w;
+  if (consumerParams.sourceAxisMode.w == 1.0) {
+    let delta = receiverUnit - consumerParams.sourceQuench.xyz;
+    let axial = dot(delta, consumerParams.sourceAxisMode.xyz);
+    let radial = sqrt(max(0.0, dot(delta, delta) - axial * axial));
+    let waterRadius = max(0.0, record.normalThickness.w) * consumerParams.receiverScale.x * 0.5;
+    let ringDistance = abs(radial - consumerParams.sourceRingGeometry.x);
+    touchesSource = select(
+      length(vec2<f32>(ringDistance, axial)) <= consumerParams.sourceQuench.w + waterRadius,
+      ringDistance <= consumerParams.sourceQuench.w + waterRadius && abs(axial) <= consumerParams.sourceRingGeometry.y + waterRadius,
+      consumerParams.sourceRingGeometry.z == 1.0
+    );
+  } else if (consumerParams.sourceAxisMode.w == 2.0) {
+    touchesSource = false;
+  }
+  if (touchesSource) {
     let sourceContactWetness = fixedPoint(min(1.0, wetness));
     atomicMax(&quenchField[SOURCE_WETNESS_INDEX], sourceContactWetness);
     atomicMax(&quenchField[SOURCE_LAST_CONTACT_TICK_INDEX], writeTick);
@@ -450,8 +467,9 @@ export function liquidFireContactConsumerParams({
   fuelRemoval = 0.3,
   flameRemoval = 0.75,
   vaporYield = 1,
+  sourceAxis = [0,1,0], sourceContactMode = 0, sourceRingRadius = 0, sourceHalfDepth = 0, sourceShallow = false,
 } = {}) {
-  const buffer = new ArrayBuffer(80);
+  const buffer = new ArrayBuffer(112);
   const words = new Uint32Array(buffer);
   const floats = new Float32Array(buffer);
   words.set([
@@ -464,5 +482,7 @@ export function liquidFireContactConsumerParams({
   floats.set([...receiverOffset, 0], 8);
   floats.set([heatRemoval, fuelRemoval, flameRemoval, vaporYield], 12);
   floats.set([...sourceQuenchCenter, sourceQuenchRadius], 16);
+  floats.set([...sourceAxis, sourceContactMode], 20);
+  floats.set([sourceRingRadius, sourceHalfDepth, sourceShallow ? 1 : 0, 0], 24);
   return buffer;
 }
