@@ -67,7 +67,7 @@ test('exterior-only geometry stays installed without a fake near collision',()=>
   ];
   let installedOuter=null,installedNear=null;
   const context=vm.createContext({device:{},getSceneCollision:()=>({requested:true,id:'exterior-ceiling',object:{}}),
-    controlsSnapshot:{},PRESSURE_SOLVER_CONVERGED:'converged',
+    controlsSnapshot:{},outerRequested:true,PRESSURE_SOLVER_CONVERGED:'converged',
     resolvePressureSolverConfig:()=>({effective:{solver:'converged',dispatch:'full',projection:'full'}}),
     resolveTransportConfig:()=>({effective:{commonCharacteristic:true,scheme:'maccormack'}}),
     sceneSolidRevision:()=> 'ceiling-revision',productTransform:{},sceneSolidRevisionKey:null,

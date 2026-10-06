@@ -378,7 +378,7 @@ test('the receipt reports disabled dispatch and the dispatch gate uses the same 
   assert.equal(convergedOn.effective.projection, 'full');
   const encode = source.slice(source.indexOf('  function encodePressureProjection(encoder'), source.indexOf('  function boundarySplatExecutionPlan('));
   assert.ok(encode.length > 0, 'encodePressureProjection must exist');
-  assert.match(encode, /const solverConfig = resolvePressureSolverConfig\(controlsSnapshot\);[^]*?if \(solverConfig\.effective\.dispatch === 'disabled'\)/, 'the dispatch gate is the resolver decision');
+  assert.match(encode, /const solverConfig = resolvePressureSolverConfig\(controlsSnapshot(?:, \{surroundingSmoke:outerRequested\})?\);[^]*?if \(solverConfig\.effective\.dispatch === 'disabled'\)/, 'the dispatch gate is the resolver decision');
   assert.doesNotMatch(encode, /projection <= 0\.001 \|\| pressureIterationCount <= 0/, 'no second hand-rolled gate that can drift from the receipt');
   assert.match(index, /solverConfig\.effective\.dispatch === 'disabled'/, 'cockpit label renders the disabled regime');
 });

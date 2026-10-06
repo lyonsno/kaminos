@@ -2126,7 +2126,7 @@ function normalizePressureSolverSweeps(value) {
   return Math.max(1, Math.min(PRESSURE_SOLVER_MAX_SWEEPS, requested));
 }
 
-export function resolvePressureSolverConfig(controls = {}) {
+export function resolvePressureSolverConfig(controls = {}, {surroundingSmoke = false} = {}) {
   const requestedSolver = controls.pressureSolver === undefined || controls.pressureSolver === null
     ? PRESSURE_SOLVER_LEGACY
     : String(controls.pressureSolver).toLowerCase();
@@ -2164,7 +2164,8 @@ export function resolvePressureSolverConfig(controls = {}) {
       solver: converged ? PRESSURE_SOLVER_CONVERGED : PRESSURE_SOLVER_LEGACY,
       dispatch: dispatchEnabled ? (converged ? PRESSURE_SOLVER_CONVERGED : PRESSURE_SOLVER_LEGACY) : 'disabled',
       disabledReason,
-      openTop: requestedSolver === PRESSURE_SOLVER_CONVERGED_OPEN_TOP,
+      openTop: requestedSolver === PRESSURE_SOLVER_CONVERGED_OPEN_TOP || (surroundingSmoke && converged),
+      boundarySource: surroundingSmoke && converged ? 'surrounding-smoke-outflow' : 'authored-pressure-solver',
       iterations: converged ? (dispatchEnabled ? sweeps : 0) : null,
       omega: converged ? PRESSURE_SOLVER_SOR_OMEGA : null,
       projectionGain,
@@ -6148,14 +6149,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // expanded domain ceiling. The old symmetric abs(y) wall would suppress
   // every added cell above y=1 and silently recreate the old clip.
   let expandedTopY = -1.0 + 2.0 * f32(GRID_Y) / f32(GRID);
-  let verticalWall = max(-p.y, p.y - expandedTopY + 1.0);
+  let verticalWall = select(max(-p.y, p.y - expandedTopY + 1.0), -p.y, OUTER_SMOKE);
   let wall = max(max(abs(p.x), verticalWall), abs(p.z));
   let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
-  let smokeTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.66, 0.84, plumeHeight01)), expandedTopY - 0.005, p.y);
+  let smokeTopFade = select(1.0 - smoothstep(expandedTopY - (1.0 - mix(0.66, 0.84, plumeHeight01)), expandedTopY - 0.005, p.y), 1.0, OUTER_SMOKE);
   let legacyHeatTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.42, 0.62, plumeHeight01)), expandedTopY - 0.040, p.y);
   let tallPlumeHeatTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.62, 0.84, plumeHeight01)), expandedTopY - 0.010, p.y);
   let tallPlumeFireTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.72, 0.90, plumeHeight01)), expandedTopY - 0.005, p.y);
-  let heatTopFade = mix(legacyHeatTopFade, tallPlumeHeatTopFade, tallPlumeScene);
+  let heatTopFade = select(mix(legacyHeatTopFade, tallPlumeHeatTopFade, tallPlumeScene), 1.0, OUTER_SMOKE);
   let fireTopFade = mix(legacyHeatTopFade, tallPlumeFireTopFade, tallPlumeScene);
   smoke = smoke * stepRate(mix(0.42, 1.0, wallFade) * mix(0.72, 1.0, smokeTopFade));
   heat = heat * stepRate(mix(0.30, 1.0, wallFade) * mix(0.16, 1.0, heatTopFade));
@@ -9809,7 +9810,7 @@ export function createKaminosVolumePrototype({
     simCostLedger: null,
     pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
     pressureSolver: {
-      ...resolvePressureSolverConfig(controlsSnapshot),
+      ...resolvePressureSolverConfig(controlsSnapshot, {surroundingSmoke:outerRequested}),
       uniform: null,
       residualProbe: {
         intervalSteps: PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS,
@@ -11141,7 +11142,7 @@ export function createKaminosVolumePrototype({
     const source = getSceneCollision();
     const requested = source?.requested === true;
     const sourceId = requested ? String(source.id || '') : null;
-    const solver = resolvePressureSolverConfig(controlsSnapshot).effective;
+    const solver = resolvePressureSolverConfig(controlsSnapshot, {surroundingSmoke:outerRequested}).effective;
     const transport = resolveTransportConfig(controlsSnapshot).effective;
     const reason = !requested ? null
       : !sourceId || !source?.object ? 'missing-authored-scene-object'
@@ -14343,7 +14344,7 @@ export function createKaminosVolumePrototype({
     uniforms.set(detailForceContributionMask(controlsSnapshot.detailForceContributions), 348);
     uniforms[352] = normalizeFineBreakupLocalization(controlsSnapshot.fineBreakupLocalization);
     uniforms[353] = controlsSnapshot.commonGasTransport === true ? 1 : 0;
-    const pressureSolverConfig = resolvePressureSolverConfig(controlsSnapshot);
+    const pressureSolverConfig = resolvePressureSolverConfig(controlsSnapshot, {surroundingSmoke:outerRequested});
     uniforms[356] = pressureSolverConfig.effective.solver === PRESSURE_SOLVER_CONVERGED ? 1 : 0;
     uniforms[357] = pressureSolverConfig.effective.openTop ? 1 : 0;
     uniforms[358] = pressureSolverConfig.effective.omega ?? 0;
@@ -14515,7 +14516,7 @@ export function createKaminosVolumePrototype({
         : null,
     };
     state.pressureSolver = {
-      ...resolvePressureSolverConfig(controlsSnapshot),
+      ...resolvePressureSolverConfig(controlsSnapshot, {surroundingSmoke:outerRequested}),
       uniform: { converged: uniforms[356], openTop: uniforms[357], omega: uniforms[358], projectionGain: uniforms[359] },
       residualProbe: {
         intervalSteps: PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS,
@@ -14717,7 +14718,7 @@ export function createKaminosVolumePrototype({
     const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, scene, pressureTierControls, gridHeight);
     const pressureEnabled = state.pressureProjectionEnabled && pressureIterationRequested > 0;
     const pressureIterations = pressureEnabled ? state.pressureProjectionIterations : 0;
-    const convergedSolver = resolvePressureSolverConfig(controlsSnapshot).effective.solver === PRESSURE_SOLVER_CONVERGED;
+    const convergedSolver = resolvePressureSolverConfig(controlsSnapshot, {surroundingSmoke:outerRequested}).effective.solver === PRESSURE_SOLVER_CONVERGED;
     const spatialPressureEnabled = pressureEnabled && !convergedSolver && tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY;
     const tallPlumePressureStrategy = spatialPressureEnabled
       ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
@@ -14982,7 +14983,7 @@ export function createKaminosVolumePrototype({
   }
 
   function assertOuterRoute() {
-    const outerPressure = outerRequested ? resolvePressureSolverConfig(controlsSnapshot).effective : null;
+    const outerPressure = outerRequested ? resolvePressureSolverConfig(controlsSnapshot, {surroundingSmoke:outerRequested}).effective : null;
     if(outerRequested && (productFrameOwner !== 'prototype' || uniforms[368] !== 2
       || outerPressure.solver !== PRESSURE_SOLVER_CONVERGED || outerPressure.dispatch === 'disabled'
       || outerPressure.projection !== 'full' || ![gridSize,2*gridSize].includes(gridHeight)
@@ -15035,7 +15036,7 @@ export function createKaminosVolumePrototype({
       }
       outerSmoke.encode(encoder,currentFluid,resolveTimeStepConfig(controlsSnapshot).effective);
       state.outerSmoke={...outerSmoke.receipt(),nearBoundary:'existing-pressure-regime-one-way-overlap',
-        lighting:'near-incident-boundary-continuation-with-local-extinction-v0',resetPolicy:'reset-with-near-domain',transform:{...productTransform}};
+        lighting:'near-incident-boundary-continuation-with-local-extinction-v0',nearTop:'ambient-pressure-outflow-no-smoke-heat-sponge',resetPolicy:'reset-with-near-domain',transform:{...productTransform}};
     }
     state.simStepCount += 1;
     updateSimCostLedger();
@@ -15257,7 +15258,7 @@ export function createKaminosVolumePrototype({
 
   function encodePressureProjection(encoder, options = {}) {
     advancePressureResidualFreshness();
-    const solverConfig = resolvePressureSolverConfig(controlsSnapshot);
+    const solverConfig = resolvePressureSolverConfig(controlsSnapshot, {surroundingSmoke:outerRequested});
     const pressureIterationCount = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
     const tierPlan = pressureTierDispatchPlan(gridSize, pressureStrategy, controlsSnapshot.volumeScene, normalizePressureTierControls(controlsSnapshot), gridHeight);
