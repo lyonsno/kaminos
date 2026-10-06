@@ -475,6 +475,20 @@ ${needle}`);
       assert.equal(await page.evaluate(()=>document.querySelectorAll('#rendering-surface-gain').length),1,'workspace roundtrip cannot duplicate control identity');
       report.authoringControls={status:'exercised',surfaceGainBefore:before,surfaceGainAfter:2,singleControl:true};await save();
     }
+    if(process.argv.includes('--domain-check')){
+      report.phase='current-main-source-domain-relocation';await save();
+      const baseline=await capture();assert.equal(await page.evaluate(()=>typeof window.__kaminosVolumePrototype.relocateOrdinaryDomain),'function');
+      for(const translate of [[.25,0,0],[0,0,0]]){
+        const first=await page.evaluate(translate=>{const p=window.__kaminosVolumePrototype;
+          p.setSimulationPaused(false);p.relocateOrdinaryDomain(translate);return p.debugState().frameCount;},translate);
+        await page.waitForFunction(f=>window.__kaminosVolumePrototype.debugState().error||window.__kaminosVolumePrototype.debugState().frameCount>=f+24,first,{timeout:0});
+        await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));await settle();
+        const shifted=await capture();assert.deepEqual(shifted.source.worldTransform.translate,translate);assert.deepEqual(shifted.lighting.sourceTransform.translate,translate);
+        assert.ok(shifted.lighting.geometryBuilds>baseline.lighting.geometryBuilds);assert.equal(shifted.volume.error,null);
+        const name=translate[0]?'domain-shifted':'domain-restored';await page.screenshot({path:`${out}/${name}.png`});
+        report.views.push({name,sourceMetadata:{...shifted.source,values:undefined},lighting:shifted.lighting,volume:shifted.volume,scope:'live ordinary-domain API, evolving source after reset'});await save();
+      }
+    }
   }
   if(process.argv.includes('--source-aware-motion-check')) {
     report.phase='matched-moving-source';await save();
