@@ -1,4 +1,4 @@
-function sequential4({ weightType, loadWeight, weightHelper, activationExpression, activationHelpers }) {
+function sequential4({ weightType, loadWeight, weightHelper, activationExpression, activationHelpers }, range = false) {
   return `
 struct LinearDims {
   input_channels: u32,
@@ -11,7 +11,12 @@ struct LinearDims {
 @group(0) @binding(1) var<storage, read> weight: array<${weightType}>;
 @group(0) @binding(2) var<storage, read> bias: array<f32>;
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(4) var<uniform> dims: LinearDims;
+@group(0) @binding(4) var<uniform> dims: LinearDims;${range ? `
+struct LinearRange {
+  output_start: u32,
+  output_count: u32,
+};
+@group(0) @binding(5) var<uniform> output_range: LinearRange;` : ''}
 
 ${weightHelper}${activationHelpers}
 
@@ -24,7 +29,9 @@ fn main(
   @builtin(global_invocation_id) gid: vec3<u32>,
   @builtin(num_workgroups) dispatch_grid: vec3<u32>,
 ) {
-  let index = gid.x + gid.y * dispatch_grid.x * 64u;
+  ${range ? `let local_index = gid.x + gid.y * dispatch_grid.x * 64u;
+  if (local_index >= output_range.output_count) { return; }
+  let index = output_range.output_start + local_index;` : 'let index = gid.x + gid.y * dispatch_grid.x * 64u;'}
   if (index >= dims.total_output) { return; }
   let output_channel = index % dims.output_channels;
   let token = index / dims.output_channels;
@@ -203,6 +210,7 @@ fn load_weight(index: u32) -> f32 {
 /**
  * Emit a proven scalar linear variant; the caller owns buffers, dispatch and scheduling.
  * sequential4: input/weight/bias/output/uniform bindings 0..4; input channels divisible by four.
+ * sequential4-range: same arithmetic and bindings, plus output offset/count uniform at binding 5.
  * split4(-range): uniform/input/weight/bias/output bindings 0..4; native or transposed weights.
  * Packed storage contains existing binary16 bits, not newly quantized f32 values.
  * Activation expressions/helpers are trusted caller WGSL, with the result named value.
@@ -213,7 +221,7 @@ export function createWebGpuLinearShader({
   activationExpression = 'value',
   activationHelpers = '',
 } = {}) {
-  const generators = { sequential4, split4, 'split4-range': split4Range };
+  const generators = { sequential4, 'sequential4-range': options => sequential4(options, true), split4, 'split4-range': split4Range };
   if (!Object.hasOwn(generators, variant)) throw new RangeError('unsupported linear variant');
   if (!['f32', 'f16-packed-u32'].includes(weightStorage)) {
     throw new RangeError('unsupported weightStorage');

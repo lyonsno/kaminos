@@ -29,6 +29,7 @@ const resources = {
   oracleActivityCueBuffer: buffer('oracle'), boundarySidecarBuffer: buffer('sidecar'),
   nonRidgeOpticalCaptureHeaderBuffer: buffer('capture header'),
   emissiveLightField: { incident: buffer('incident') }, quenchBuffers,
+  sceneSolidTextureView: { label: 'scene solid view' },
   // The inflow aperture coverage map (binding 17) is a texture in the same closure.
   inflowCoverageTexture: { createView: () => ({ label: 'inflow coverage view' }) },
   inflowPerturbationTexture: { createView: () => ({ label: 'inflow perturbation view' }) },
@@ -44,6 +45,7 @@ for (let q = 0; q < 2; q++) {
   assert.equal(entry('quenchDst'), quenchBuffers[1 - q]);
   assert.equal(entry('nonRidgeOpticalCaptureRows'), captureRows);
   assert.equal(entry('nonRidgeOpticalCaptureHeader'), resources.nonRidgeOpticalCaptureHeaderBuffer);
+  assert.equal(group.entries.find(e => e.binding === 16)?.resource, resources.sceneSolidTextureView);
 }
 assert.match(core, /function fluidBindGroup\([\s\S]*?return bindGroups\[fluidIndex \* 2 \+ quenchIndex\]/,
   'simulation consumes both independent ping-pong indices');
