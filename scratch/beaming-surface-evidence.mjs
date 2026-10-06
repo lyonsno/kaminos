@@ -3,6 +3,24 @@ export function floatEvidenceBytes(values) {
   assert.ok(values.length>0&&values.every(v=>typeof v==='number'&&Number.isFinite(v)),'float evidence must be nonempty finite numbers');
   return Buffer.from(new Float32Array(values).buffer);
 }
+export function assertScatteringView(signal,{count,albedo,enabled,trim,master}){
+ assert.equal(signal.volume.error,null);assert.equal(signal.lighting.previewStale,false);
+ const f=signal.lighting.frame;
+ assert.equal(f.directions,count);assert.equal(f.angularPattern,'source');assert.equal(f.sourceSoftness,0);assert.equal(f.surfaceReconstruction.passes,0);
+ assert.equal(f.gain,2**master);assert.equal(signal.lighting.surfaceGain,2**trim);
+ assert.equal(signal.volume.physicalColor.material.scatteringAlbedo,albedo);
+ assert.equal(signal.lighting.surfaceScattering,enabled);assert.equal(f.surfaceScattering.enabled,enabled);
+ for(const snapshot of [f,signal.source,signal.scattering])for(const key of ['frame','generation']){
+  assert.ok(Number.isSafeInteger(snapshot[key])&&snapshot[key]>=0);assert.equal(snapshot[key],f[key]);
+ }
+ if(enabled)assert.equal(f.surfaceScattering.sourceGeneration,f.generation);
+ assert.deepEqual(signal.scattering.dimensions,signal.source.dimensions);
+ const shape=(v,d,channels)=>{floatEvidenceBytes(v);assert.equal(d.length,3);assert.ok(d.every(n=>Number.isSafeInteger(n)&&n>0));assert.equal(v.length,channels*d.reduce((a,b)=>a*b,1));};
+ shape(signal.source.values,signal.source.dimensions,4);shape(signal.scattering.values,signal.scattering.dimensions,1);
+ for(const key of ['surface','back','smoke'])shape(signal[key],signal.dimensions[key],4);
+ assert.ok(f.surfaceReceivers>0);assert.deepEqual(signal.dimensions.surface,signal.dimensions.back);
+ const capacity=signal.surface.length/4;assert.ok(capacity>=f.surfaceReceivers&&capacity-f.surfaceReceivers<signal.dimensions.surface[0]);
+}
 export function assertSourceMotionView(signal,{count,pattern,heldSource,lightOnly=false}) {
   if(lightOnly){assert.equal(signal.environment.intensity,0);assert.equal(signal.environment.exposure,1);assert.equal(signal.environment.rim,false);}
   assert.equal(signal.volume.error,null);assert.equal(signal.lighting.previewStale,false);

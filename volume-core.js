@@ -24863,6 +24863,10 @@ export function createKaminosVolumePrototype({
       if (!sceneVolumeSourceRequested || !sceneVolumeSource) throw new Error('scene source not enabled/encoded');
       return sceneVolumeSource.readback();
     },
+    async sampleSceneVolumeScattering() {
+      if (!sceneVolumeSourceRequested || !sceneVolumeSource) throw new Error('scene source not enabled/encoded');
+      return sceneVolumeSource.readback('scattering');
+    },
     sampleFireLightFieldGpuProfile,
     sampleFrame,
     sampleLiquidFireContactConsumer,

@@ -19,6 +19,18 @@ The consumer is the operator's Cheap Blast Furnace kiln, including changes acros
 
 ## Proposed architecture
 
+### October 6: one smoke scattering event reaches surfaces
+
+Operator accepts the shown source-aware lighting from96 down to12 directions with surface reconstruction0 and matched camera. He authorizes both the missing flame→smoke→surface contribution and an independent artistic surface trim. Smoke albedo shifts scattering versus absorption at fixed total extinction; equal direct transmission does not imply equal total surface illumination.
+
+Seed the actual smoke scattering coefficient alongside primary RGB emission and total extinction, in the same source dispatch and generation. This coefficient is not albedo times total extinction: the material includes separate hot-soot absorption. Gather primary incident radiance on the existing smoke receivers first, including transported-light gain. Reconstruct it with the existing static geometry-aware smoke stencils. At each source cell form `jCombined = gain*jPrimary + sigmaS*JDirectGained`, retaining the original extinction. Gather that combined source onto surfaces with unit gain. Thus the master is applied once to both terms. The smoke camera still consumes the first incident field; combined emission is never recursively gathered into it. This represents one volume scattering event before reaching a surface, not repeated volume scattering or a surface-to-surface bounce.
+
+The source preparation/reconstruction is current-frame work and reuses the existing solid distances; it adds a source lattice transform and separates volume gathering from the existing surface gather instead of doing two surface gathers. Scattered emission samples the geometry-prepared incident field at the source-cell center; this is a declared spatial approximation. The default-enabled checkbox allows direct-only comparison. Low-level gather callers default to direct-only unless they request scattering with a same-generation coefficient texture. Legacy camera smoke can be selected independently, but enabled surface scattering still computes the distributed incident field it needs.
+
+Surface illumination trim multiplies the flame irradiance entering mesh materials, after transport. Zero stops is unity. It leaves source coefficients, smoke lighting, extinction, static visibility and camera emission unchanged. The existing master is labeled Transported-light gain on the distributed route because it does not change direct visible flame emission. Both controls are artistic adjustments. Temperature, density, extinction and albedo retain their material roles. Camera matching remains an independent presentation control.
+
+Acceptance: actual source export and native GPU arithmetic; zero-albedo direct restoration, positive first-scatter wall response, correct single master scaling, current-source/off restoration, independent trim in composed pixels, and measured current-frame gather cost at12/16 in the authored kiln. Preserve raw source/scattering/front/back/smoke data, requested/effective controls and failure phase. The operator owns final visual and main-landing decisions. Current-main integration is a separate remaining composition gate.
+
 ### October 4: moving-light sampling redesign (implementation experiment)
 
 Operator amendment: preserve coherent, immediate flame-driven articulation at12/16/24 directions. The October3 spatial jitter plus graph diffusion reduces still-frame mottling but fails Noah's moving-light judgment. No temporal history or artificial flicker. Original fixed24 remains the aesthetic comparison; a high-sample reference is a diagnostic, not visual acceptance. Surface receiver decoupling from imported vertices and first bounce remain subsequent architecture steps.

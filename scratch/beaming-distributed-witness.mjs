@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {assertSofteningView} from './beaming-softening-evidence.mjs';
 import {assertCameraPixels} from './beaming-camera-pixels.mjs';
-import {assertSurfaceView,floatEvidenceBytes,assertSourceMotionView,assertLitSourceMotionResponse} from './beaming-surface-evidence.mjs';
+import {assertSurfaceView,floatEvidenceBytes,assertSourceMotionView,assertLitSourceMotionResponse,assertScatteringView} from './beaming-surface-evidence.mjs';
 const [url,out]=process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 await fs.mkdir(out,{recursive:true});
@@ -20,6 +20,13 @@ try {
   await fs.access(executable);
   browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   page=await browser.newPage({viewport:{width:1600,height:1000}});
+  if(process.argv.includes('--scattering-check')){
+    await page.route('**/scene-volume-gather.mjs',async route=>{
+      const response=await route.fetch(),original=await response.text(),needle='  const resources=[];';assert.equal(original.split(needle).length,2);
+      const body="import {installGatherProfiler} from './scratch/beaming-gather-profiler.mjs';\n"+original.replace(needle,needle+' installGatherProfiler(device);');
+      report.gatherInstrumentation={original,body};await save();await route.fulfill({response,body});
+    });
+  }
   if(process.argv.includes('--source-aware-light-only')) {
     await page.route(u=>u.pathname==='/'||u.pathname==='/index.html',async route=>{
       const response=await route.fetch(),original=await response.text();
@@ -399,6 +406,53 @@ ${needle}`);
       report.phase='surface-GPU-cost';await save();
       report.surfaceCost=await page.evaluate(async()=>{const m=await import('/scratch/beaming-surface-gpu-check.mjs');const f=window.__beamingSurfaceFixture;if(f.graph.count!==window.__kaminosSceneRadiance.debugState().frame.surfaceReceivers)throw new Error('timing fixture is not the authored receiver graph');return m.measureSurfaceGPU(f);});await save();
     }
+  }
+  if(process.argv.includes('--scattering-check')){
+    report.phase='smoke-scattering-and-surface-trim';await save();
+    await page.selectOption('#rendering-light-mode','shared');await page.selectOption('#rendering-angular-pattern','source');
+    await page.check('#rendering-retain-comparisons');await page.check('#rendering-match-flame-camera');
+    await page.evaluate(()=>window.__kaminosSetSceneCameraFrame([2,1.5,6],[0,.7,0]));
+    const settle=async()=>{const f=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);await page.waitForFunction(f=>window.__kaminosVolumePrototype.debugState().error||window.__kaminosVolumePrototype.debugState().frameCount>=f+3,f,{timeout:0});};
+    const capture=()=>page.evaluate(async()=>{
+      const lighting=window.__kaminosSceneRadiance.debugState(),volume=window.__kaminosVolumePrototype.debugState();
+      const [fields,source,scattering]=await Promise.all([window.__kaminosSceneRadiance.readback(),window.__kaminosVolumePrototype.sampleSceneVolumeSource(),window.__kaminosVolumePrototype.sampleSceneVolumeScattering()]);
+      return {lighting,volume,source,scattering,dimensions:{surface:fields.surface.dimensions,back:fields.surfaceBack.dimensions,smoke:fields.smoke.dimensions},surface:Array.from(fields.surface.data),back:Array.from(fields.surfaceBack.data),smoke:Array.from(fields.smoke.data)};
+    });
+    const near=(a,b,label)=>{assert.equal(a.length,b.length);let error=0;for(let i=0;i<a.length;i++){assert.ok(Number.isFinite(a[i])&&Number.isFinite(b[i]));error=Math.max(error,Math.abs(a[i]-b[i])/Math.max(1,Math.abs(a[i]),Math.abs(b[i])));}assert.ok(error<.00002,`${label}: ${error}`);return error;};
+    for(const count of [12,16]){
+      await page.selectOption('#rendering-angular-samples',String(count));let zero,high;
+      for(const [name,albedo,enabled,trim,master]of [['direct-zero',0,false,0,0],['scatter-zero',0,true,0,0],['scatter-high',.8,true,0,0],['surface-trim',.8,true,2,0],['master-double',.8,true,0,1],['direct-high',.8,false,0,0],['master-low',.8,true,0,-4]]){
+        await page.evaluate(({albedo,enabled,trim,master})=>{
+          for(const [id,value]of [['volume-physical-smoke-albedo',albedo],['rendering-surface-gain',trim],['rendering-shared-gain',master],['rendering-source-softness',0],['rendering-surface-reconstruction',0]]){const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));}
+          const e=document.getElementById('rendering-surface-scattering');e.checked=enabled;e.dispatchEvent(new Event('change',{bubbles:true}));
+        },{albedo,enabled,trim,master});await settle();
+        const signal=await capture();assertScatteringView(signal,{count,albedo,enabled,trim,master});
+        const checks={};if(name==='direct-zero')zero=signal;
+        if(name==='scatter-zero'){checks.zero=near(signal.surface,zero.surface,'zero-albedo baseline');checks.source=near(signal.source.values,zero.source.values,'primary coefficients');}
+        if(name==='scatter-high'){
+          high=signal;checks.source=near(signal.source.values,zero.source.values,'albedo leaves primary emission/extinction');checks.smoke=near(signal.smoke,zero.smoke,'incident light independent of albedo');
+          assert.ok(signal.scattering.values.some(x=>x>0),'lit kiln has no scattering coefficient');
+          assert.ok(signal.surface.some((x,i)=>i%4<3&&x>zero.surface[i]+.0001),'scatter path did not light kiln surfaces');
+        }
+        if(name==='surface-trim'){checks.surface=near(signal.surface,high.surface,'trim leaves raw surface transport');checks.smoke=near(signal.smoke,high.smoke,'trim leaves smoke');checks.source=near(signal.source.values,high.source.values,'trim leaves source');}
+        if(name==='master-double'){checks.surface=near(signal.surface,high.surface.map((x,i)=>i%4<3?2*x:x),'master doubles surface once');checks.smoke=near(signal.smoke,high.smoke.map((x,i)=>i%4<3?2*x:x),'master doubles smoke once');}
+        if(name==='direct-high')checks.surface=near(signal.surface,zero.surface,'direct wall response remains independent of albedo');
+        const stem=`scatter-${count}-${name}`;for(const [key,values]of [['source',signal.source.values],['scattering',signal.scattering.values],['front',signal.surface],['back',signal.back],['smoke',signal.smoke]])await fs.writeFile(`${out}/${stem}-${key}.f32`,floatEvidenceBytes(values));
+        await page.screenshot({path:`${out}/${stem}.png`});
+        const digest=v=>createHash('sha256').update(floatEvidenceBytes(v)).digest('hex');
+        report.views.push({name:stem,count,albedo,enabled,trim,master,checks,dimensions:signal.dimensions,lighting:signal.lighting,volume:signal.volume,sourceMetadata:{...signal.source,values:undefined},scatteringMetadata:{...signal.scattering,values:undefined},hashes:{source:digest(signal.source.values),front:digest(signal.surface),smoke:digest(signal.smoke)}});await save();
+      }
+      for(const enabled of [false,true]){
+        await page.setChecked('#rendering-surface-scattering',enabled);await settle();
+        const supported=await page.evaluate(()=>window.__beamingGatherDevice?.features.has('timestamp-query'));
+        if(!supported){report.profiles??=[];report.profiles.push({count,enabled,status:'unsupported'});continue;}
+        await page.evaluate(()=>{window.__beamingGatherProfile={remaining:20,records:[],errors:[]};});
+        await page.waitForFunction(()=>window.__beamingGatherProfile.errors.length||window.__beamingGatherProfile.records.length===20,null,{timeout:0});
+        const profile=await page.evaluate(()=>window.__beamingGatherProfile);assert.deepEqual(profile.errors,[]);assert.equal(profile.records.length,20);
+        report.profiles??=[];report.profiles.push({count,enabled,status:'measured',...profile});await save();
+      }
+    }
+    report.scatteringAdmission='matched-source-albedo-response-and-independent-surface-trim';await save();
   }
   if(process.argv.includes('--source-aware-motion-check')) {
     report.phase='matched-moving-source';await save();

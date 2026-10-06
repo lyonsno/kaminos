@@ -12,6 +12,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   const editing=new Set();let editCommitted=false,rebuildAnnounced=false,retainComparisons=false;
   let angularPattern='fixed',angularRotation=0;
   let surfaceReconstruction=0;
+  let surfaceScattering=false;
+  const surfaceGain=THREE.TSL.uniform(1);
   const attributeIds=new WeakMap();let nextAttributeId=0;
   const attributeId=a=>{if(!a)return null;if(!attributeIds.has(a))attributeIds.set(a,++nextAttributeId);return attributeIds.get(a);};
   const status={identity:'distributed-volume-direct-radiance-v0',status:'awaiting-source',directions,volumeGrid,
@@ -105,7 +107,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         const material=cloneSceneRadianceMaterial(renderer.library,original);
         const setup=material.setupMaterialLightings;
         const received=original.side===THREE.DoubleSide?visibleIrradiance:original.side===THREE.BackSide?backIrradiance:irradiance;
-        material.setupMaterialLightings=function(builder){return [...setup.call(this,builder),new THREE.IrradianceNode(received)];};
+        material.setupMaterialLightings=function(builder){return [...setup.call(this,builder),new THREE.IrradianceNode(received.mul(surfaceGain))];};
         return material;
       };
       row.converted=Array.isArray(row.material)?row.material.map(convert):convert(row.material);
@@ -147,7 +149,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     try {
       handle.setDirections(directions);
       handle.setAngularPattern(angularPattern,angularRotation);
-      frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness,surfaceReconstruction});
+      frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness,surfaceReconstruction,surfaceScattering});
     } catch(error) {
       status.status='preparation-failed';status.error=String(error.message);
       onStatus({...status});throw error;
@@ -162,6 +164,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   prototype.setSceneSourceFrameConsumer(prepare);
   return {
     setGain(value){if(!Number.isFinite(value)||value<0)throw new Error('nonnegative light gain required');gain=value;},
+    setSurfaceGain(value){if(!Number.isFinite(value)||value<0)throw new Error('nonnegative surface gain required');surfaceGain.value=value;},
+    setSurfaceScattering(value){surfaceScattering=!!value;},
     setSmokeMode(value){if(!['distributed','legacy'].includes(value))throw new Error('unknown smoke illumination mode');smokeMode=value;},
     setSourceSoftness(value){sourceSoftness=validateSourceSoftness(value);},
     setSurfaceReconstruction(value){surfaceReconstruction=validateSurfaceReconstruction(value);},
@@ -169,7 +173,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','source'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');angularPattern=pattern;angularRotation=rotation;},
     setRetainComparisons(value){retainComparisons=!!value;handle?.setRetainComparisons(retainComparisons);},
     setEditing(key,active){if(active){editing.add(key);rebuildAnnounced=false;}else if(editing.delete(key)&&!editing.size)editCommitted=true;},
-    debugState(){return {...status,gain,smokeMode,sourceSoftness,surfaceReconstruction,frame,display:'mesh and flame retain separate camera transforms'};},
+    debugState(){return {...status,gain,surfaceGain:surfaceGain.value,surfaceScattering,smokeMode,sourceSoftness,surfaceReconstruction,frame,display:'mesh and flame retain separate camera transforms'};},
     readback(){if(!handle)throw new Error('distributed receivers not built');return handle.readback();},
     canRender(){return !disposed&&!status.error&&handle&&frame?.generation===prototype.sceneVolumeSourceField().generation;},
     dispose(){disposed=true;prototype.setSceneSourceFrameConsumer(null);retire();},

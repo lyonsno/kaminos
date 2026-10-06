@@ -3238,7 +3238,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <div id="rendering-light-status" class="rendering-channel-status" data-status="unavailable" role="status">Inspecting renderer route…</div>
       <h2 id="rendering-source-title">Shared point source</h2>
-      <p class="rendering-description">This study source lights both mesh and smoke. Its gain changes source energy on both paths.</p>
+      <p class="rendering-description" id="rendering-source-description">This study source lights both mesh and smoke. Its gain changes source energy on both paths.</p>
       <div class="rendering-position-row" aria-label="Shared point source position">
         <label for="rendering-source-x">X<input type="number" id="rendering-source-x" step="0.1" value="0"></label>
         <label for="rendering-source-y">Y<input type="number" id="rendering-source-y" step="0.1" value="1.4"></label>
@@ -3246,6 +3246,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <div class="slider-row"><label class="slider-label" for="rendering-shared-gain">Source gain (stops)</label><input type="range" id="rendering-shared-gain" min="-4" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-shared-gain-value">+0.00</span></div>
       <div id="rendering-distributed-controls" hidden><label for="rendering-angular-samples">Distributed flame directions</label><select id="rendering-angular-samples"><option>12</option><option>16</option><option selected>24</option><option>48</option><option>96</option></select>
+        <label class="import-mode"><input type="checkbox" id="rendering-surface-scattering" checked><span>Smoke scattered light on surfaces</span></label>
+        <p class="rendering-description">Includes one scattering event in smoke before light reaches the kiln. Smoke albedo changes this contribution. Uncheck to compare direct flame illumination.</p>
+        <div class="slider-row"><label class="slider-label" for="rendering-surface-gain">Surface illumination trim (stops)</label><input type="range" id="rendering-surface-gain" min="-8" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-surface-gain-value">+0.00</span></div>
+        <p class="rendering-description">Artistic adjustment to flame-lit surfaces only. Zero keeps the calculated illumination. Does not change smoke scattering, extinction, or flame emission.</p>
         <label class="import-mode"><input type="checkbox" id="rendering-retain-comparisons"><span>Keep visited direction sets for A/B</span></label>
         <button type="button" id="rendering-angular-swap" disabled>Swap previous direction count</button>
         <label for="rendering-angular-pattern">Angular pattern</label><select id="rendering-angular-pattern"><option value="fixed">Fixed constellation (baseline)</option><option value="spatial">Stable spatial jitter (experimental)</option><option value="source">Source-aware progressive (experimental)</option></select>
@@ -3257,7 +3261,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <label for="rendering-smoke-solver">Smoke illumination</label><select id="rendering-smoke-solver"><option value="distributed">Distributed · geometry-visible, full height</option><option value="legacy">Legacy comparison · lower cube, no solid visibility</option></select>
         <div class="slider-row"><label class="slider-label" for="rendering-surface-reconstruction">Surface reconstruction</label><input type="range" id="rendering-surface-reconstruction" min="0" max="32" step="2" value="0"><span class="slider-val" id="rendering-surface-reconstruction-value">0</span></div>
         <p class="rendering-description">Experimental same-frame mesh smoothing passes. Follows triangle connectivity and stops across sharp normal changes; split vertices remain split. No temporal history. Does not alter smoke or the visible flame. Zero bypasses reconstruction.</p>
-        <p class="rendering-description">The smoke solvers are exclusive. Source gain affects distributed receiving, not direct visible flame emission or legacy smoke illumination. Legacy comparison stops live distributed smoke gathering; distributed mode stops the old smoke solve. Surface bounce is not implemented.</p></div>
+        <p class="rendering-description">Transported-light gain adjusts surface and distributed smoke illumination together; direct flame emission is unchanged. Surface scattering uses the distributed incident field even during legacy smoke comparison. Surface-to-surface bounce and repeated smoke scattering are not included.</p></div>
       <h2>Flame field</h2>
       <p class="rendering-description">The flame-derived field lights scene surfaces. This gain adjusts its receiving pass; it does not change the visible flame or shared point source.</p>
       <label class="import-mode"><input type="checkbox" id="fire-light-test-scene-toggle"><span>Test geometry</span></label>
@@ -3380,7 +3384,11 @@ function refreshRenderingControls() {
   document.querySelector('.rendering-position-row').hidden=distributed;
   document.querySelector('.rendering-position-row').style.display=distributed ? 'none' : '';
   document.getElementById('rendering-source-title').textContent=distributed ? 'Distributed flame source' : 'Shared point source';
+  document.querySelector('label[for="rendering-shared-gain"]').textContent=distributed?'Transported-light gain (stops)':'Source gain (stops)';
+  document.getElementById('rendering-source-description').textContent=distributed?'Artistic illumination master for surfaces and distributed smoke. Direct visible flame emission stays unchanged.':'This study source lights both mesh and smoke. Its gain changes source energy on both paths.';
   if(distributed)source.setGain(selected.shared ? 2**renderingGainStops : 0);
+  if(distributed)source.setSurfaceGain(2**Number(document.getElementById('rendering-surface-gain').value));
+  if(distributed)source.setSurfaceScattering(document.getElementById('rendering-surface-scattering').checked);
   if(distributed)source.setSmokeMode(document.getElementById('rendering-smoke-solver').value);
   if(distributed)source.setSourceSoftness(Number(document.getElementById('rendering-source-softness').value));
   if(distributed)source.setSurfaceReconstruction(Number(document.getElementById('rendering-surface-reconstruction').value));
@@ -11403,6 +11411,10 @@ document.getElementById('rendering-angular-swap').addEventListener('click',()=>{
 document.getElementById('rendering-retain-comparisons').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-angular-pattern').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-smoke-solver').addEventListener('change',refreshRenderingControls);
+document.getElementById('rendering-surface-scattering').addEventListener('change',refreshRenderingControls);
+document.getElementById('rendering-surface-gain').addEventListener('input',event=>{
+  const value=Number(event.target.value);document.getElementById('rendering-surface-gain-value').textContent=`${value>=0?'+':''}${value.toFixed(2)}`;refreshRenderingControls();
+});
 document.getElementById('rendering-surface-reconstruction').addEventListener('input',event=>{
   document.getElementById('rendering-surface-reconstruction-value').textContent=event.target.value;
   refreshRenderingControls();
@@ -11422,6 +11434,11 @@ for (const axis of ['x', 'y', 'z']) {
   });
 }
 document.getElementById('rendering-shared-gain').value = String(renderingGainStops);
+const surfaceStops=Number(renderingUrlState.get('rendering_surface_gain'));
+if(renderingUrlState.has('rendering_surface_gain')&&Number.isFinite(surfaceStops)){
+  const input=document.getElementById('rendering-surface-gain');input.value=String(surfaceStops);input.dispatchEvent(new Event('input'));
+}
+if(renderingUrlState.has('rendering_surface_scattering'))document.getElementById('rendering-surface-scattering').checked=renderingUrlState.get('rendering_surface_scattering')==='1';
 document.getElementById('rendering-shared-gain-value').textContent = `${renderingGainStops >= 0 ? '+' : ''}${renderingGainStops.toFixed(2)}`;
 setRightPanelTab(isFireLightFieldRoute() ? 'rendering' : 'mix');
 // Tab switching also stops inactive benches; initialize their state first.

@@ -195,4 +195,13 @@ if(!selected||selected==='normals') {
   assert.equal(receiver.uploads.length,2,'noncasting receiver movement invalidates receiver snapshot');
   assert.equal(receiver.uploads.at(-1)[0],2);receiver.mount.dispose();
 }
+if(!selected||selected==='surface-gain'){
+  const f=fixture();f.prepare();const before=f.mount.debugState();
+  f.mount.setSurfaceGain(4);const after=f.mount.debugState();
+  assert.equal(after.surfaceGain,4);assert.equal(after.gain,before.gain,'trim leaves transport master unchanged');
+  assert.equal(after.frame,before.frame,'trim cannot rebuild or replace smoke/source transport');
+  assert.equal(f.uploads.length,1,'trim preserves static visibility');
+  f.mount.setSurfaceGain(0);assert.equal(f.mount.debugState().surfaceGain,0);
+  assert.throws(()=>f.mount.setSurfaceGain(NaN));f.mount.dispose();
+}
 console.log('distributed authored-edit and receiver lifecycle contracts passed');
