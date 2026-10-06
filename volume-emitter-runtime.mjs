@@ -2,6 +2,7 @@ import {
   VOLUME_EMITTER_FAMILIES,
   compileVolumeEmitterFamily,
 } from './volume-emitter-basis.mjs';
+import { flameEmitterFrame } from './scene-flame-emitter.mjs';
 
 export const VOLUME_EMITTER_RUNTIME_SCHEMA = 'kaminos.volume-emitter-runtime.v1';
 
@@ -146,7 +147,10 @@ export function applyVolumeEmitterFamilyRuntime({
   timestampMs = 0,
   frameId = 'emitter-runtime-frame',
   externalRequest: requestedExternalRequest = null,
+  emitterPose,
+  sourceEnabled = true,
 } = {}) {
+  if (typeof sourceEnabled !== 'boolean') throw new Error('sourceEnabled must be a boolean');
   requiredMethod(prototype, 'setControls');
   requiredMethod(prototype, 'setCoreEmitterSourceMode');
   requiredMethod(prototype, 'setAnalyticEmitterDescriptor');
@@ -180,14 +184,17 @@ export function applyVolumeEmitterFamilyRuntime({
     throw new Error(`controls.flowRate ${requestedCoreFlowRate} must be within [0, 4]`);
   }
 
-  prototype.setControls(controls);
+  const placement = flameEmitterFrame(emitterPose);
   let compilerReceipt = null;
   let sourceReceipt;
   let carrierReceipt = null;
   let coreSourceMode;
   if (requestedFamily === 'cluster') {
+    if (!sourceEnabled) throw new Error('sourceEnabled applies only to an analytic emitter family');
+    if (emitterPose !== undefined) throw new Error('Flame placement requires an analytic emitter family');
     requiredMethod(prototype, 'setExternalEmitters');
     coreSourceMode = 'cluster';
+    prototype.setControls(controls);
     sourceReceipt = prototype.setAnalyticEmitterDescriptor(null);
     const externalRequest = requestedExternalRequest || {
       mode: 'off',
@@ -203,12 +210,12 @@ export function applyVolumeEmitterFamilyRuntime({
     if (requestedExternalRequest !== null) {
       throw new Error(`externalRequest cannot compose with emitter family ${requestedFamily}`);
     }
-    compilerReceipt = compileVolumeEmitterFamily({
+    if (sourceEnabled) compilerReceipt = compileVolumeEmitterFamily({
       family: requestedFamily,
-      origin: [0, -0.76, 0],
-      direction: [0, 1, 0],
-      supportAxis: [1, 0, 0],
-      ...assayGeometry(requestedFamily, inputRadius),
+      origin: placement.origin,
+      direction: placement.direction,
+      supportAxis: placement.supportAxis,
+      ...assayGeometry(requestedFamily, inputRadius * placement.scale),
       strength: requestedCoreFlowRate,
       velocitySpeed: 0.22,
       transportSpeed,
@@ -226,8 +233,14 @@ export function applyVolumeEmitterFamilyRuntime({
       frameId,
     });
     coreSourceMode = 'analytic-only';
-    sourceReceipt = prototype.setAnalyticEmitterDescriptor(compilerReceipt.descriptor);
-    verifyAnalyticReceipt(compilerReceipt.descriptor, sourceReceipt);
+    // Validate geometry before touching the live simulator. An invalid gesture
+    // must leave its previous source and the evolving field intact.
+    prototype.setControls(controls);
+    sourceReceipt = prototype.setAnalyticEmitterDescriptor(compilerReceipt?.descriptor ?? null);
+    if (sourceEnabled) verifyAnalyticReceipt(compilerReceipt.descriptor, sourceReceipt);
+    else if (sourceReceipt?.mode !== 'off' || sourceReceipt?.count !== 0 || sourceReceipt?.coordinateSpace !== 'none') {
+      throw new Error('disabled analytic emitter must report off, zero sources and no coordinate space');
+    }
   }
 
   const coreSourceReceipt = prototype.setCoreEmitterSourceMode(coreSourceMode);
@@ -249,6 +262,7 @@ export function applyVolumeEmitterFamilyRuntime({
       inputRadius,
       sourceLaw,
       sourceDepth,
+      sourceEnabled,
       inletProfile,
       momentumLinked,
       inletVelocity,
@@ -256,6 +270,7 @@ export function applyVolumeEmitterFamilyRuntime({
       edgeEntrainment,
       frameId,
       timestampMs,
+      emitterPose: placement.pose,
     },
     effective: {
       family: requestedFamily,
@@ -272,7 +287,8 @@ export function applyVolumeEmitterFamilyRuntime({
       shearWidthCells: compilerReceipt?.effective.shearWidthCells ?? null,
       edgeEntrainment: compilerReceipt?.effective.edgeEntrainment ?? null,
       coordinateSpace: sourceReceipt.coordinateSpace,
-      externalStrength: fixedAnalytic ? compilerReceipt.effective.strength : 0,
+      emitterPose: fixedAnalytic ? placement.pose : null,
+      externalStrength: compilerReceipt?.effective.strength ?? 0,
       externalEmitterCount: sourceReceipt.count,
       externalEmitterMode: sourceReceipt.mode,
     },

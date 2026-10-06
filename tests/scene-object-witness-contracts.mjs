@@ -13,8 +13,13 @@ const witness = readFileSync(witnessPath, 'utf8');
 const indexHtml = readFileSync(indexPath, 'utf8');
 
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
+assert.match(witness, /local-liquid-live-host/, 'browser witness supports a current-host local-liquid smoke route');
+assert.match(witness, /effectiveRoute !== requestedRoute/, 'local-liquid smoke rejects requested-route-only success');
+assert.match(witness, /submittedByHost !== true[\s\S]*presentedByHost !== true/, 'local-liquid smoke requires a submitted and presented current host frame');
 assert.match(witness, /startup-empty/, 'witness supports an empty-startup scenario');
 assert.match(witness, /mesh-asset-link/, 'witness supports a direct GLB asset smoke-link scenario');
+assert.match(witness, /navigation camera did not move/, 'navigation witness rejects stationary depth-only samples');
+assert.match(witness, /moving navigation lost mesh-surface depth/, 'navigation witness rejects a camera path that loses authored surface depth');
 assert.match(witness, /modal-pivot-visibility/, 'witness supports a registered-mesh front/behind-camera pivot visibility scenario');
 assert.match(witness, /behind-camera object still rendered a pivot cue/, 'pivot witness fails if an occluded pivot remains visible');
 assert.match(witness, /behind-camera state did not explain the hidden pivot and recovery/, 'pivot witness requires a specific diagnosis and frame-selected recovery');

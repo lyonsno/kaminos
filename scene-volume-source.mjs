@@ -17,6 +17,12 @@ export function prepareSceneSourceFrame({encoder, encode, submit, consume, rende
   if (!renderHost()) throw new Error('shared-scene-source-host-depth-unavailable');
   return createEncoder();
 }
+export function validateSceneSourceTransform(value={translate:[0,0,0],scale:1}){
+  if(!Array.isArray(value.translate)||value.translate.length!==3||!value.translate.every(Number.isFinite)||!Number.isFinite(value.scale)||value.scale<=0)
+    throw new Error('scene source requires finite translation and positive uniform scale');
+  return {translate:value.translate.slice(),scale:value.scale};
+}
+export function sceneSourceLocalPoint(point,transform){return point.map((x,a)=>(x-transform.translate[a])/transform.scale);}
 
 // Offline reference only: never called by the interactive renderer.
 export function integrateSceneMediumSegment(field, source, receiver, stepLength) {
@@ -52,19 +58,23 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
   const texture = device.createTexture({label: 'raw live volume emission and extinction',
     dimension: '3d', size: [grid, gridY, grid], format: 'rgba32float',
     usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC});
+  const scatteringTexture=device.createTexture({label:'raw live smoke scattering coefficient',dimension:'3d',size:[grid,gridY,grid],format:'r32float',
+    usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
   const pipeline = device.createComputePipeline({label: 'raw scene volume source seed', layout: 'auto',
     compute: {module, entryPoint: 'seedSceneVolumeSource', constants: {
       GRID: fluidGrid, GRID_Y: fluidGridY, SCENE_SOURCE_GRID: grid, SCENE_SOURCE_GRID_Y: gridY}}});
   const inputs = fluidBuffers.map((buffer, i) => device.createBindGroup({layout: pipeline.getBindGroupLayout(0),
     entries: [[0, uniformBuffer], [1, buffer], [7, frontBuffers[i]]].map(([binding, buffer]) => ({binding, resource: {buffer}}))}));
-  const output = device.createBindGroup({layout: pipeline.getBindGroupLayout(3), entries: [{binding: 4, resource: texture.createView()}]});
+  const output = device.createBindGroup({layout: pipeline.getBindGroupLayout(3), entries: [{binding: 4, resource: texture.createView()},{binding:5,resource:scatteringTexture.createView()}]});
   let status = 'unbuilt', reason = 'not-encoded', frame = null, sourceIndex = null, generation = 0;
+  let worldTransform=validateSceneSourceTransform();
   let optical = null;
   const invalidateOptical = () => {if (optical) optical.generation = null;};
   return {
-    encode(encoder, index, currentFrame) {
+    encode(encoder, index, currentFrame,transform) {
       if (status === 'destroyed') throw new Error('scene source destroyed');
       if (!Number.isInteger(index) || !inputs[index]) throw new Error('invalid scene source index');
+      worldTransform=validateSceneSourceTransform(transform);
       status = 'unbuilt'; reason = 'encoding';
       invalidateOptical();
       const pass = encoder.beginComputePass({label: 'raw live volume source'});
@@ -108,17 +118,17 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
     },
     async readback(kind = 'coefficients') {
       if (status !== 'encoded') throw new Error('scene source is not encoded');
-      if (!['coefficients','optical-depth'].includes(kind)) throw new Error('unknown scene source readback');
+      if (!['coefficients','scattering','optical-depth'].includes(kind)) throw new Error('unknown scene source readback');
       if (kind === 'optical-depth' && optical?.generation !== generation) throw new Error('optical depth is not current');
       const channels = kind === 'coefficients' ? 4 : 1;
-      const snapshot = {frame, sourceIndex, generation, kind, channels,
+      const snapshot = {frame, sourceIndex, generation, kind, channels,worldTransform:validateSceneSourceTransform(worldTransform),
         ...(kind === 'optical-depth' ? {sourcePosition: optical.position.slice(), stepLength: optical.stepLength} : {})};
       const rowBytes = grid * channels * 4, bytesPerRow = Math.ceil(rowBytes/256)*256;
       const buffer = device.createBuffer({label: 'scene source witness readback', size: bytesPerRow*gridY*grid,
         usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ});
       try {
         const encoder = device.createCommandEncoder();
-        encoder.copyTextureToBuffer({texture: kind === 'coefficients' ? texture : optical.depth}, {buffer, bytesPerRow, rowsPerImage: gridY}, [grid,gridY,grid]);
+        encoder.copyTextureToBuffer({texture: kind === 'coefficients' ? texture : kind==='scattering'?scatteringTexture:optical.depth}, {buffer, bytesPerRow, rowsPerImage: gridY}, [grid,gridY,grid]);
         device.queue.submit([encoder.finish()]);
         await buffer.mapAsync(GPUMapMode.READ);
         const mapped = new Float32Array(buffer.getMappedRange());
@@ -134,8 +144,9 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       dimensions: [grid, gridY, grid], localMin: [-1,-1,-1], localMax: [1, -1+2*gridY/grid, 1],
       channels: ['emission-r','emission-g','emission-b','extinction'], displayTransform: 'none',
       coefficientLengthSpace: 'volume-local', sampleCountPerCell: 8, completionAuthority: false,
-      texture: status === 'encoded' ? texture : null};},
-    destroy() {texture.destroy(); optical?.depth.destroy(); optical?.params.destroy(); status = 'destroyed'; reason = 'destroyed';},
+      worldTransform:validateSceneSourceTransform(worldTransform),texture: status === 'encoded' ? texture : null,scatteringTexture:status==='encoded'?scatteringTexture:null,
+      scatteringChannels:['smoke-scattering-coefficient'],scatteringGeneration:status==='encoded'?generation:null};},
+    destroy() {texture.destroy();scatteringTexture.destroy(); optical?.depth.destroy(); optical?.params.destroy(); status = 'destroyed'; reason = 'destroyed';},
   };
 }
 
@@ -143,17 +154,21 @@ export const SCENE_VOLUME_SOURCE_WGSL = /* wgsl */`
 override SCENE_SOURCE_GRID: u32 = 32u;
 override SCENE_SOURCE_GRID_Y: u32 = 64u;
 @group(3) @binding(4) var sceneSourceOut: texture_storage_3d<rgba32float, write>;
+@group(3) @binding(5) var sceneScatteringOut: texture_storage_3d<r32float, write>;
 @compute @workgroup_size(4,4,4)
 fn seedSceneVolumeSource(@builtin(global_invocation_id) c: vec3<u32>) {
   if (any(c >= vec3<u32>(SCENE_SOURCE_GRID, SCENE_SOURCE_GRID_Y, SCENE_SOURCE_GRID))) { return; }
   var coefficients = vec4<f32>(0.0);
+  var scattering=0.0;
   for (var k=0u; k<8u; k++) {
     let offset = (vec3<f32>(f32(k&1u),f32((k>>1u)&1u),f32((k>>2u)&1u))+vec3<f32>(0.5))*0.5;
     let p = (vec3<f32>(c)+offset)*(2.0/f32(SCENE_SOURCE_GRID))-vec3<f32>(1.0);
     let medium = sceneEmissiveMaterialAt(p);
     coefficients += vec4<f32>(medium.emission, medium.absorption + medium.scattering)*0.125;
+    scattering+=medium.scattering*0.125;
   }
   textureStore(sceneSourceOut, vec3<i32>(c), coefficients);
+  textureStore(sceneScatteringOut,vec3<i32>(c),vec4<f32>(scattering,0,0,0));
 }
 `;
 

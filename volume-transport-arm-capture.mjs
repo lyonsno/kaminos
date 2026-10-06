@@ -6,7 +6,8 @@
 // pressure solver, divergence residual, pass ledger, browser errors) and captures
 // one frame per arm. Usage:
 //   node volume-transport-arm-capture.mjs <url> <outDir> "<arm>;<arm>;..." [settleMs] \
-//     --expected-repo-root <checkout> --expected-commit <sha> [--fault arm-error]
+//     --expected-repo-root <checkout> --expected-commit <sha> [--fault arm-error] \
+//     [--settle-steps N] [--call-timeout-ms N]
 // where an arm is name[,controlId=value,...]. A control id starting with `@` is
 // a debug-API request instead of a DOM control: `@confinementEpsilon=<value|null>`
 // calls setConfinementEpsilonOverride so a calibration sweep can vary the
@@ -29,8 +30,9 @@
 // observe `off` so the expected-mode check must fail.
 
 import { spawn } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 const CAPTURE_IDENTITY = 'kaminos.volume.transport-arm-capture.v1';
 const positional = [];
@@ -41,6 +43,14 @@ for (let index = 0; index < argv.length; index += 1) {
 }
 const [url, outDir, armsArg, settleArg] = positional;
 const settleMs = Number(settleArg || flags.get('--settle-ms') || 12000);
+// --settle-steps N settles each arm until the simulation has advanced N steps
+// (equal simulated time across time-step modes when N is chosen as T / dt),
+// with settleMs then acting as a wall-clock cap that fails the arm if reached.
+const settleSteps = flags.has('--settle-steps') ? Number(flags.get('--settle-steps')) : null;
+// --call-timeout-ms N bounds each devtools call (default 60 s). The report records
+// the value in force, so a slow page is failed by a named caller input, never a
+// hidden cap.
+const callTimeoutMs = Number(flags.get('--call-timeout-ms') || 60000);
 const expectedRepoRoot = flags.has('--expected-repo-root') ? resolve(String(flags.get('--expected-repo-root'))) : null;
 const expectedCommit = flags.has('--expected-commit') ? String(flags.get('--expected-commit')) : null;
 const fault = String(flags.get('--fault') || '');
@@ -51,8 +61,12 @@ const report = {
   status: 'running',
   failurePhase: 'argument-validation',
   failure: null,
-  requested: { url, outDir, arms: armsArg, settleMs, expectedRepoRoot, expectedCommit, fault: fault || null },
+  requested: { url, outDir, arms: armsArg, settleMs, settleSteps, callTimeoutMs, expectedRepoRoot, expectedCommit, fault: fault || null },
   effective: { source: null, sourceVerified: false },
+  // The browser this run spawned and drove; a capture must never attach to
+  // another instance (2026-09-26: a fixed port let it attach to an orphan).
+  browser: { pid: null, port: null, profile: null, devtoolsUrl: null },
+  cleanupWarning: null,
   admitted: null,
   arms: [],
   browserErrors: [],
@@ -71,9 +85,20 @@ const arms = armsArg.split(';').map(a => { const [name, ...pairs] = a.split(',')
 mkdirSync(outDir, { recursive: true });
 writeReport();
 
-const port = 45141; const profile = `/tmp/kaminos-scheme-capture-${port}`;
+const profile = mkdtempSync(join(tmpdir(), 'kaminos-scheme-capture-'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let chrome = null; let ws = null;
+// A killed capture takes its browser with it and leaves a report naming the
+// interruption, so no orphan keeps the GPU or a devtools port.
+const shutdown = signal => {
+  try { chrome?.kill('SIGKILL'); } catch { /* already gone */ }
+  if (report.status !== 'complete') { report.status = 'failed'; report.failure = report.failure || `interrupted by ${signal} during ${report.failurePhase}`; report.finishedAt = new Date().toISOString(); }
+  writeReport();
+  try { rmSync(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); } catch { /* best effort on the way out */ }
+  process.exit(130);
+};
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 const errors = report.browserErrors;
 
 // Requested control value -> the effective receipt it must produce. Controls
@@ -137,18 +162,26 @@ try {
   writeReport();
 
   report.failurePhase = 'browser-launch';
-  chrome = spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', ['--headless=new','--enable-unsafe-webgpu','--no-first-run','--no-default-browser-check',`--remote-debugging-port=${port}`,`--user-data-dir=${profile}`,'--window-size=1400,900','about:blank'], { stdio: ['ignore','pipe','pipe'] });
+  chrome = spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', ['--headless=new','--enable-unsafe-webgpu','--no-first-run','--no-default-browser-check','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--window-size=1400,900','about:blank'], { stdio: ['ignore','pipe','pipe'] });
   chrome.stdout.on('data', () => {}); chrome.stderr.on('data', () => {});
+  // Chrome publishes the port it actually bound in DevToolsActivePort inside this
+  // run's own profile directory, so the capture can only attach to the browser it spawned.
+  let port = null;
+  for (let i = 0; i < 200 && port === null; i++) { try { const line = readFileSync(`${profile}/DevToolsActivePort`, 'utf8').split('\n')[0].trim(); if (/^\d+$/.test(line)) port = Number(line); } catch { /* not written yet */ } if (port === null) await sleep(100); }
+  if (port === null) fail('browser-launch', `the spawned browser (pid ${chrome.pid}) never published DevToolsActivePort in ${profile}`);
   let pages = null; for (let i = 0; i < 100 && !pages; i++) { try { pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json(); } catch { await sleep(100); } }
-  if (!pages) fail('browser-launch', 'devtools endpoint never answered');
+  if (!pages) fail('browser-launch', `devtools endpoint on port ${port} (pid ${chrome.pid}) never answered`);
   const page = pages.find(p => p.type === 'page'); ws = new WebSocket(page.webSocketDebuggerUrl);
+  report.browser = { pid: chrome.pid, port, profile, devtoolsUrl: page.webSocketDebuggerUrl };
+  writeReport();
   await new Promise(res => ws.addEventListener('open', res, { once: true }));
   let id = 0; const pending = new Map();
+  const callTimeout = (ms, label) => new Error(`${label} after ${ms} ms (--call-timeout-ms)`);
   ws.addEventListener('message', ev => { const m = JSON.parse(ev.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); return; } if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map(a => a.value ?? a.description ?? '').join(' ').slice(0, 300)); if (m.method === 'Runtime.exceptionThrown') errors.push('exception: ' + (m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text).slice(0, 300)); });
-  const call = (method, params = {}) => new Promise((res, rej) => { const myId = ++id; pending.set(myId, res); setTimeout(() => { pending.delete(myId); rej(new Error('timeout ' + method)); }, 60000); ws.send(JSON.stringify({ id: myId, method, params })); });
+  const call = (method, params = {}) => new Promise((res, rej) => { const myId = ++id; pending.set(myId, res); setTimeout(() => { pending.delete(myId); rej(callTimeout(callTimeoutMs, 'timeout ' + method)); }, callTimeoutMs); ws.send(JSON.stringify({ id: myId, method, params })); });
   const evaluate = async expr => { const r = await call('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description || 'evaluate failed'); return r.result?.result?.value; };
   const op = body => `(() => { const f = document.querySelector('#basin'); const w = f?.contentWindow || window; const d = w.document; return (${body}); })()`;
-  const stateExpr = op(`(() => { const s = w.__kaminosVolumePrototype?.debugState?.(); if (!s) return null; return { backend: s.backend, error: s.error, simStepCount: s.simStepCount, frameCount: s.frameCount, transport: s.transport?.effective ?? null, transportUniform: s.transport?.uniform ?? null, predictorPasses: s.transportPredictorPasses, predictorBufferBytes: s.transport?.predictorBufferBytes ?? null, predictorAllocated: s.transport?.predictorAllocated ?? null, confinement: s.confinement?.effective ?? null, confinementUniform: s.confinement?.uniform ?? null, timeStep: s.timeStep?.effective ?? null, timeStepEmitter: s.timeStep?.emitterPacked ?? null, confinementOverride: s.confinement?.confinementEpsilonOverride ?? null, vorticity: s.pressureSolver?.residual?.vorticity ?? null, breakdownTotal: s.fullGridPassBreakdown?.total, residual: s.pressureSolver?.residual ? { step: s.pressureSolver.residual.step, compactBefore: s.pressureSolver.residual.compact.before, compactAfter: s.pressureSolver.residual.compact.after } : null, solver: s.pressureSolver?.effective ?? null, forces: { fine: d.getElementById('volume-force-fine-breakup')?.checked, shred: d.getElementById('volume-force-interface-shred')?.checked, micro: d.getElementById('volume-force-micro-carrier')?.checked }, schemeDom: d.getElementById('volume-advection-scheme')?.value, schemeLabel: d.getElementById('volume-advection-scheme-val')?.textContent, commonLabel: d.getElementById('volume-common-gas-transport-val')?.textContent, projection: d.getElementById('volume-projection')?.value }; })()`);
+  const stateExpr = op(`(() => { const s = w.__kaminosVolumePrototype?.debugState?.(); if (!s) return null; return { backend: s.backend, error: s.error, simStepCount: s.simStepCount, frameCount: s.frameCount, transport: s.transport?.effective ?? null, transportUniform: s.transport?.uniform ?? null, predictorPasses: s.transportPredictorPasses, predictorBufferBytes: s.transport?.predictorBufferBytes ?? null, predictorAllocated: s.transport?.predictorAllocated ?? null, confinement: s.confinement?.effective ?? null, confinementUniform: s.confinement?.uniform ?? null, timeStep: s.timeStep?.effective ?? null, timeStepEmitter: s.timeStep?.emitterPacked ?? null, confinementOverride: s.confinement?.confinementEpsilonOverride ?? null, vorticity: s.pressureSolver?.residual?.vorticity ?? null, heightProfile: s.pressureSolver?.residual?.profile ?? null, breakdownTotal: s.fullGridPassBreakdown?.total, residual: s.pressureSolver?.residual ? { step: s.pressureSolver.residual.step, compactBefore: s.pressureSolver.residual.compact.before, compactAfter: s.pressureSolver.residual.compact.after } : null, solver: s.pressureSolver?.effective ?? null, forces: { fine: d.getElementById('volume-force-fine-breakup')?.checked, shred: d.getElementById('volume-force-interface-shred')?.checked, micro: d.getElementById('volume-force-micro-carrier')?.checked }, schemeDom: d.getElementById('volume-advection-scheme')?.value, schemeLabel: d.getElementById('volume-advection-scheme-val')?.textContent, commonLabel: d.getElementById('volume-common-gas-transport-val')?.textContent, projection: d.getElementById('volume-projection')?.value }; })()`);
   const setControl = (cid, value) => evaluate(op(`(() => { const e = d.getElementById(${JSON.stringify(cid)}); if (!e) throw new Error('missing ' + ${JSON.stringify(cid)}); if (e.type === 'checkbox') { e.checked = ${JSON.stringify(value)} === 'true'; } else { e.value = ${JSON.stringify(value)}; } e.dispatchEvent(new w.Event('input', { bubbles: true })); e.dispatchEvent(new w.Event('change', { bubbles: true })); return e.type === 'checkbox' ? String(e.checked) : e.value; })()`));
   await call('Page.enable'); await call('Runtime.enable'); await call('Log.enable'); await call('Page.navigate', { url });
 
@@ -186,16 +219,19 @@ try {
     report.failurePhase = `arm-${arm.name}-settle`;
     const t0 = Date.now(); const s0 = after.simStepCount;
     const samples = [];
+    let settledBySteps = false;
     while (Date.now() - t0 < settleMs) {
       await sleep(Math.min(2000, Math.max(50, settleMs - (Date.now() - t0))));
       const probe = await evaluate(stateExpr);
       if (!probe) break;
       samples.push({ tMs: Date.now() - t0, simStepCount: probe.simStepCount, residualStep: probe.residual?.step ?? null, enstrophyMean: probe.vorticity?.enstrophyMean ?? null, vorticityMax: probe.vorticity?.maxAbs ?? null, compactAfterMeanAbs: probe.residual?.compactAfter?.meanAbs ?? null, error: probe.error ?? null });
+      if (settleSteps !== null && probe.simStepCount - s0 >= settleSteps) { settledBySteps = true; break; }
     }
+    if (settleSteps !== null && !settledBySteps) fail(report.failurePhase, `arm ${arm.name} did not reach ${settleSteps} settle steps within the ${settleMs} ms wall cap`);
     let end = await evaluate(stateExpr);
     if (!end) fail(report.failurePhase, 'renderer state unavailable after settle');
     if (fault === 'arm-error' && report.arms.length === 0) end = { ...end, error: 'synthetic-fault:arm-error' };
-    const entry = { arm: arm.name, set: arm.set, applied, afterSwitch: after, samples, end, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
+    const entry = { arm: arm.name, set: arm.set, applied, afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
     report.arms.push(entry);
     report.lastTrustworthyEvidence.lastArm = arm.name;
     writeReport();
@@ -231,6 +267,7 @@ try {
   try { ws?.close(); } catch { /* closing */ }
   chrome?.kill('SIGKILL');
   await sleep(500);
-  rmSync(profile, { recursive: true, force: true });
+  try { rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); }
+  catch (error) { report.cleanupWarning = `profile removal failed: ${String(error?.message || error)}`; writeReport(); console.error(report.cleanupWarning); }
 }
 process.exit(process.exitCode ?? 0);

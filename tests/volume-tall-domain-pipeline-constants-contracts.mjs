@@ -39,6 +39,6 @@ for (const [expression, meaning] of [
 
 // The fire light field publishes the coverage it actually has inside the tall box.
 const lightField = source.slice(source.indexOf('function fireIrradianceLightField()'));
-assert.match(lightField, /worldMax: \[1, -1 \+ 2 \* gridHeight \/ gridSize, 1\],\s*worldBoundsAuthority: 'full-volume-domain-equal-cell-pitch-v1'/,
+assert.match(lightField, /worldMax: \[productTransform\.translate\[0\] \+ 1,\s*productTransform\.translate\[1\] - 1 \+ 2 \* gridHeight \/ gridSize,\s*productTransform\.translate\[2\] \+ 1\],\s*worldBoundsAuthority: 'full-volume-domain-equal-cell-pitch-v1'/,
   'light-field bounds cover the full tall volume');
 console.log('volume tall-domain pipeline constants contracts passed');

@@ -2,8 +2,8 @@ import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {assertSofteningView} from './beaming-softening-evidence.mjs';
-import {assertCameraPixels} from './beaming-camera-pixels.mjs';
-import {assertSurfaceView,floatEvidenceBytes} from './beaming-surface-evidence.mjs';
+import {assertCameraPixels,assertSurfaceTrimPixels} from './beaming-camera-pixels.mjs';
+import {assertSurfaceView,floatEvidenceBytes,assertSourceMotionView,assertLitSourceMotionResponse,assertScatteringView,assertRequiredModuleResponse} from './beaming-surface-evidence.mjs';
 const [url,out]=process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 await fs.mkdir(out,{recursive:true});
@@ -20,6 +20,28 @@ try {
   await fs.access(executable);
   browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   page=await browser.newPage({viewport:{width:1600,height:1000}});
+  if(process.argv.includes('--required-module-negative'))await page.route('**/scene-distributed-radiance.mjs',route=>route.fulfill({status:404,body:'deliberate owned witness missing module'}));
+  let rejectModuleLoad;const moduleFailure=new Promise((_,reject)=>{rejectModuleLoad=reject;});moduleFailure.catch(()=>{});
+  if(process.argv.includes('--scattering-check')){
+    if(process.argv.includes('--disconnect-surface-trim'))await page.route('**/scene-distributed-radiance.mjs',async route=>{
+      const response=await route.fetch(),original=await response.text(),needle='received.mul(surfaceGain)';assert.equal(original.split(needle).length,2);
+      const body=original.replace(needle,'received');report.disconnectedTrimInstrumentation={original,body,reportedControlRetained:true};await save();await route.fulfill({response,body});
+    });
+    await page.route('**/scene-volume-gather.mjs',async route=>{
+      const response=await route.fetch(),original=await response.text(),needle='  const resources=[];';assert.equal(original.split(needle).length,2);
+      const body="import {installGatherProfiler} from './scratch/beaming-gather-profiler.mjs';\n"+original.replace(needle,needle+' installGatherProfiler(device);');
+      report.gatherInstrumentation={original,body};await save();await route.fulfill({response,body});
+    });
+  }
+  if(process.argv.includes('--source-aware-light-only')) {
+    await page.route(u=>u.pathname==='/'||u.pathname==='/index.html',async route=>{
+      const response=await route.fetch(),original=await response.text();
+      const needle='  function renderSceneFrame() {';assert.equal(original.split(needle).length,2);
+      const body=original.replace(needle,"  window.__beamingEnvironment=()=>({intensity:scene.environmentIntensity,exposure:renderer.toneMappingExposure,rim:document.getElementById('rim-enabled').checked});\n"+needle);
+      report.environmentInstrumentation={url:route.request().url(),original,body};await save();
+      await route.fulfill({response,body});
+    });
+  }
   if(process.argv.includes('--surface-cost-check')) {
     await page.route('**/scene-surface-reconstruction.mjs',async route=>{
       const response=await route.fetch(),original=await response.text();
@@ -60,7 +82,8 @@ ${needle}`);
       await route.fulfill({response,body});
     });
   }
-  page.on('response',r=>{if(r.status()>=400){report.httpFailures.push({url:r.url(),status:r.status()});void save();}});
+  page.on('response',r=>{if(r.status()>=400){const response={url:r.url(),status:r.status()};report.httpFailures.push(response);
+    try{assertRequiredModuleResponse(response,new URL(url).origin);}catch(error){report.phase='required-module-load-failed';rejectModuleLoad(error);}void save();}});
   page.on('pageerror',e=>{report.errors.push(String(e));void save();});
   page.on('console',m=>{if(m.type()==='error'&&!m.location().url.endsWith('/favicon.ico')){report.errors.push(`${m.location().url}: ${m.text()}`);void save();}});
   await page.goto(new URL('/api/runtime-config',url).href);
@@ -68,9 +91,9 @@ ${needle}`);
   assert.ok(!report.adapter.isFallbackAdapter&&!/swiftshader/i.test(JSON.stringify(report.adapter)),'software fallback cannot establish native performance');
   await save();
   await page.goto(url);
-  await page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().error
+  await Promise.race([page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().error
     ||window.__kaminosSceneRadianceSetup?.status==='failed'
-    ||(window.kaminosSceneObjectDebugState?.().length>0&&window.__kaminosSceneRadiance?.canRender()&&window.__kaminosVolumePrototype.debugState().frameCount>=120),null,{timeout:0});
+    ||(window.kaminosSceneObjectDebugState?.().length>0&&window.__kaminosSceneRadiance?.canRender()&&window.__kaminosVolumePrototype.debugState().frameCount>=120),null,{timeout:0}),moduleFailure]);
   report.observed=await page.evaluate(()=>({effectiveUrl:location.href,setup:window.__kaminosSceneRadianceSetup,
     lighting:window.__kaminosSceneRadiance?.debugState(),volume:window.__kaminosVolumePrototype?.debugState(),objects:window.kaminosSceneObjectDebugState?.()}));
   assert.equal(report.observed.setup.status,'mounted');
@@ -79,7 +102,8 @@ ${needle}`);
   assert.ok(report.observed.objects.length>0);
   assert.equal(report.observed.volume.error,null);
   await page.evaluate(()=>{window.setGizmoMode?.(null);window.__kaminosVolumePrototype.setSimulationPaused(true);
-    window.__kaminosSetSceneCameraFrame([3,2,9],[0,.7,0]);window.__kaminosSetActiveTab('assets');});
+    window.__kaminosSetSceneCameraFrame([3,2,9],[0,.7,0]);window.__kaminosSetActiveTab('assets');window.kaminosWorkspace?.setMode('workbench');});
+  if(await page.locator('#right-tab-rendering').isVisible())await page.click('#right-tab-rendering');
   report.phase='held-camera-comparison';await save();
   report.receiverStats=await page.evaluate(async()=>{
     const fields=await window.__kaminosSceneRadiance.readback();
@@ -390,6 +414,148 @@ ${needle}`);
       report.phase='surface-GPU-cost';await save();
       report.surfaceCost=await page.evaluate(async()=>{const m=await import('/scratch/beaming-surface-gpu-check.mjs');const f=window.__beamingSurfaceFixture;if(f.graph.count!==window.__kaminosSceneRadiance.debugState().frame.surfaceReceivers)throw new Error('timing fixture is not the authored receiver graph');return m.measureSurfaceGPU(f);});await save();
     }
+  }
+  if(process.argv.includes('--scattering-check')){
+    report.phase='smoke-scattering-and-surface-trim';await save();
+    const {PNG}=await import('/private/tmp/beaming-smoke-deps-1001/node_modules/playwright-core/lib/utilsBundle.js');
+    await page.selectOption('#rendering-light-mode','shared');await page.selectOption('#rendering-angular-pattern','source');
+    await page.check('#rendering-retain-comparisons');await page.check('#rendering-match-flame-camera');
+    await page.evaluate(()=>window.__kaminosSetSceneCameraFrame([2,1.5,6],[0,.7,0]));
+    const settle=async()=>{const f=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);await page.waitForFunction(f=>window.__kaminosVolumePrototype.debugState().error||window.__kaminosVolumePrototype.debugState().frameCount>=f+3,f,{timeout:0});};
+    const capture=()=>page.evaluate(async()=>{
+      const lighting=window.__kaminosSceneRadiance.debugState(),volume=window.__kaminosVolumePrototype.debugState();
+      const [fields,source,scattering]=await Promise.all([window.__kaminosSceneRadiance.readback(),window.__kaminosVolumePrototype.sampleSceneVolumeSource(),window.__kaminosVolumePrototype.sampleSceneVolumeScattering()]);
+      return {lighting,volume,source,scattering,dimensions:{surface:fields.surface.dimensions,back:fields.surfaceBack.dimensions,smoke:fields.smoke.dimensions},surface:Array.from(fields.surface.data),back:Array.from(fields.surfaceBack.data),smoke:Array.from(fields.smoke.data)};
+    });
+    const near=(a,b,label)=>{assert.equal(a.length,b.length);let error=0;for(let i=0;i<a.length;i++){assert.ok(Number.isFinite(a[i])&&Number.isFinite(b[i]));error=Math.max(error,Math.abs(a[i]-b[i])/Math.max(1,Math.abs(a[i]),Math.abs(b[i])));}assert.ok(error<.00002,`${label}: ${error}`);return error;};
+    for(const count of [12,16]){
+      await page.selectOption('#rendering-angular-samples',String(count));let zero,high,highPixels,trimPixels;
+      for(const [name,albedo,enabled,trim,master]of [['direct-zero',0,false,0,0],['scatter-zero',0,true,0,0],['scatter-high',.8,true,0,0],['surface-trim',.8,true,2,0],['surface-restore',.8,true,0,0],['master-double',.8,true,0,1],['direct-high',.8,false,0,0],['master-low',.8,true,0,-4]]){
+        await page.evaluate(({albedo,enabled,trim,master})=>{
+          for(const [id,value]of [['volume-physical-smoke-albedo',albedo],['rendering-surface-gain',trim],['rendering-shared-gain',master],['rendering-source-softness',0],['rendering-surface-reconstruction',0]]){const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));}
+          const e=document.getElementById('rendering-surface-scattering');e.checked=enabled;e.dispatchEvent(new Event('change',{bubbles:true}));
+        },{albedo,enabled,trim,master});await settle();
+        const signal=await capture();assertScatteringView(signal,{count,albedo,enabled,trim,master});
+        const checks={};if(name==='direct-zero')zero=signal;
+        if(name==='scatter-zero'){checks.zero=near(signal.surface,zero.surface,'zero-albedo baseline');checks.source=near(signal.source.values,zero.source.values,'primary coefficients');}
+        if(name==='scatter-high'){
+          high=signal;checks.source=near(signal.source.values,zero.source.values,'albedo leaves primary emission/extinction');checks.smoke=near(signal.smoke,zero.smoke,'incident light independent of albedo');
+          assert.ok(signal.scattering.values.some(x=>x>0),'lit kiln has no scattering coefficient');
+          assert.ok(signal.surface.some((x,i)=>i%4<3&&x>zero.surface[i]+.0001),'scatter path did not light kiln surfaces');
+        }
+        if(name==='surface-trim'){checks.surface=near(signal.surface,high.surface,'trim leaves raw surface transport');checks.smoke=near(signal.smoke,high.smoke,'trim leaves smoke');checks.source=near(signal.source.values,high.source.values,'trim leaves source');}
+        if(name==='master-double'){checks.surface=near(signal.surface,high.surface.map((x,i)=>i%4<3?2*x:x),'master doubles surface once');checks.smoke=near(signal.smoke,high.smoke.map((x,i)=>i%4<3?2*x:x),'master doubles smoke once');}
+        if(name==='direct-high')checks.surface=near(signal.surface,zero.surface,'direct wall response remains independent of albedo');
+        const stem=`scatter-${count}-${name}`;for(const [key,values]of [['source',signal.source.values],['scattering',signal.scattering.values],['front',signal.surface],['back',signal.back],['smoke',signal.smoke]])await fs.writeFile(`${out}/${stem}-${key}.f32`,floatEvidenceBytes(values));
+        const pixels=PNG.sync.read(await page.screenshot({path:`${out}/${stem}.png`}));
+        if(name==='scatter-high')highPixels=pixels;if(name==='surface-trim')trimPixels=pixels;
+        if(name==='surface-restore')checks.trimPixels=assertSurfaceTrimPixels(highPixels,trimPixels,pixels);
+        const digest=v=>createHash('sha256').update(floatEvidenceBytes(v)).digest('hex');
+        report.views.push({name:stem,count,albedo,enabled,trim,master,checks,dimensions:signal.dimensions,lighting:signal.lighting,volume:signal.volume,sourceMetadata:{...signal.source,values:undefined},scatteringMetadata:{...signal.scattering,values:undefined},hashes:{source:digest(signal.source.values),front:digest(signal.surface),smoke:digest(signal.smoke)}});await save();
+      }
+      for(const enabled of [false,true]){
+        await page.setChecked('#rendering-surface-scattering',enabled);await settle();
+        const supported=await page.evaluate(()=>window.__beamingGatherDevice?.features.has('timestamp-query'));
+        if(!supported){report.profiles??=[];report.profiles.push({count,enabled,status:'unsupported'});continue;}
+        await page.evaluate(()=>{window.__beamingGatherProfile={remaining:20,records:[],errors:[]};});
+        await page.waitForFunction(()=>window.__beamingGatherProfile.errors.length||window.__beamingGatherProfile.records.length===20,null,{timeout:0});
+        const profile=await page.evaluate(()=>window.__beamingGatherProfile);assert.deepEqual(profile.errors,[]);assert.equal(profile.records.length,20);
+        report.profiles??=[];report.profiles.push({count,enabled,status:'measured',...profile});await save();
+      }
+    }
+    report.scatteringAdmission='matched-source-albedo-response-and-independent-surface-trim';await save();
+    if(await page.evaluate(()=>!!window.kaminosWorkspace)){
+      await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
+      await page.locator('#rendering-surface-gain').scrollIntoViewIfNeeded();assert.ok(await page.locator('#rendering-surface-gain').isVisible(),'authoring Scene Rendering must expose the same live trim');
+      const before=await page.evaluate(()=>window.__kaminosSceneRadiance.debugState().surfaceGain);
+      await page.evaluate(()=>{const e=document.getElementById('rendering-surface-gain');e.value='1';e.dispatchEvent(new Event('input',{bubbles:true}));});
+      assert.equal(await page.evaluate(()=>window.__kaminosSceneRadiance.debugState().surfaceGain),2);
+      await page.screenshot({path:`${out}/authoring-render-controls.png`});
+      await page.evaluate(()=>window.kaminosWorkspace.setMode('workbench'));
+      assert.equal(await page.evaluate(()=>document.querySelectorAll('#rendering-surface-gain').length),1,'workspace roundtrip cannot duplicate control identity');
+      report.authoringControls={status:'exercised',surfaceGainBefore:before,surfaceGainAfter:2,singleControl:true};await save();
+    }
+    if(process.argv.includes('--domain-check')){
+      report.phase='current-main-source-domain-relocation';await save();
+      const baseline=await capture();assert.equal(await page.evaluate(()=>typeof window.__kaminosVolumePrototype.relocateOrdinaryDomain),'function');
+      for(const translate of [[.25,0,0],[0,0,0]]){
+        const first=await page.evaluate(translate=>{const p=window.__kaminosVolumePrototype;
+          p.setSimulationPaused(false);p.relocateOrdinaryDomain(translate);return p.debugState().frameCount;},translate);
+        await page.waitForFunction(f=>window.__kaminosVolumePrototype.debugState().error||window.__kaminosVolumePrototype.debugState().frameCount>=f+24,first,{timeout:0});
+        await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));await settle();
+        const shifted=await capture();assert.deepEqual(shifted.source.worldTransform.translate,translate);assert.deepEqual(shifted.lighting.sourceTransform.translate,translate);
+        assert.ok(shifted.lighting.geometryBuilds>baseline.lighting.geometryBuilds);assert.equal(shifted.volume.error,null);
+        const name=translate[0]?'domain-shifted':'domain-restored';
+        for(const [key,values]of [['source',shifted.source.values],['scattering',shifted.scattering.values],['front',shifted.surface],['back',shifted.back],['smoke',shifted.smoke]])await fs.writeFile(`${out}/${name}-${key}.f32`,floatEvidenceBytes(values));
+        await page.screenshot({path:`${out}/${name}.png`});
+        report.views.push({name,sourceMetadata:{...shifted.source,values:undefined},lighting:shifted.lighting,volume:shifted.volume,scope:'live ordinary-domain API, evolving source after reset'});await save();
+      }
+    }
+  }
+  if(process.argv.includes('--source-aware-motion-check')) {
+    report.phase='matched-moving-source';await save();
+    const lightOnly=process.argv.includes('--source-aware-light-only');
+    if(lightOnly) {
+      await page.evaluate(()=>{
+        // The ordinary environment slider has minimum .1. This explicitly
+        // declared diagnostic permits zero in the owned browser only.
+        for(const [id,value] of [['env-intensity-slider',0],['exposure-slider',1]]){const e=document.getElementById(id);if(id==='env-intensity-slider')e.min='0';e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));}
+      });
+      await page.uncheck('#rim-enabled');
+    }
+    await page.selectOption('#rendering-light-mode','shared');
+    await page.check('#rendering-retain-comparisons');
+    await page.evaluate(()=>{
+      window.__kaminosSetSceneCameraFrame([2,1.5,6],[0,.7,0]);
+      for(const [id,value] of [['rendering-shared-gain',4],['rendering-source-softness',0],['rendering-surface-reconstruction',0]]) {
+        const e=document.getElementById(id);e.value=String(value);e.dispatchEvent(new Event('input',{bubbles:true}));
+      }
+    });
+    const modes=[['fixed',24],['source',12],['source',16],['source',24]];
+    const digest=v=>createHash('sha256').update(floatEvidenceBytes(v)).digest('hex');
+    const settle=async()=>{
+      const f=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);
+      await page.waitForFunction(f=>window.__kaminosVolumePrototype.debugState().error||window.__kaminosSceneRadianceSetup?.status==='failed'||window.__kaminosVolumePrototype.debugState().frameCount>=f+2,f,{timeout:0});
+    };
+    let priorSourceHash;
+    for(let state=0;state<8;state++) {
+      if(state){
+        const f=await page.evaluate(()=>{window.__kaminosVolumePrototype.setSimulationPaused(false);return window.__kaminosVolumePrototype.debugState().frameCount;});
+        await page.waitForFunction(f=>window.__kaminosVolumePrototype.debugState().error||window.__kaminosVolumePrototype.debugState().frameCount>=f+6,f,{timeout:0});
+        await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
+      }
+      await settle();
+      const held=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSceneVolumeSource());
+      const sourceHash=digest(held.values);
+      if(priorSourceHash)assert.notEqual(sourceHash,priorSourceHash,'sequence must contain changing live flame coefficients');
+      priorSourceHash=sourceHash;
+      await fs.writeFile(`${out}/motion-${state}-source.f32`,floatEvidenceBytes(held.values));
+      for(const [pattern,count] of modes) {
+        await page.selectOption('#rendering-angular-samples',String(count));
+        await page.selectOption('#rendering-angular-pattern',pattern);
+        await settle();
+        const signal=await page.evaluate(async()=>{
+          const fields=await window.__kaminosSceneRadiance.readback();
+          return {dimensions:{surface:fields.surface.dimensions,back:fields.surfaceBack.dimensions},environment:window.__beamingEnvironment?.(),lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),
+            source:await window.__kaminosVolumePrototype.sampleSceneVolumeSource(),surface:Array.from(fields.surface.data),back:Array.from(fields.surfaceBack.data)};
+        });
+        assertSourceMotionView(signal,{count,pattern,heldSource:held.values,lightOnly});
+        const name=`motion-${state}-${pattern}${count}`;
+        for(const [field,values] of [['front',signal.surface],['back',signal.back]])await fs.writeFile(`${out}/${name}-${field}.f32`,floatEvidenceBytes(values));
+        await page.screenshot({path:`${out}/${name}.png`});
+        const mean=v=>v.reduce((s,x,i)=>s+(i%4<3?x:0),0)/(v.length/4);
+        report.views.push({name,state,pattern,count,lightOnly,dimensions:signal.dimensions,environment:signal.environment,sourceHash,surfaceHash:digest(signal.surface),frontMean:mean(signal.surface),lighting:signal.lighting,volume:signal.volume,sourceMetadata:{...signal.source,values:undefined},heldSourceMetadata:{...held,values:undefined}});
+        await save();
+      }
+    }
+    report.motionResponse={status:'unverified',scope:'observed-lit-kiln'};await save();
+    const floats=async path=>{const b=await fs.readFile(path);return Array.from(new Float32Array(b.buffer,b.byteOffset,b.length/4));};
+    for(const [pattern,count] of modes){
+      const sequence=[];
+      for(const view of report.views.filter(v=>v.pattern===pattern&&v.count===count))sequence.push({source:{values:await floats(`${out}/motion-${view.state}-source.f32`)},surface:await floats(`${out}/${view.name}-front.f32`),back:await floats(`${out}/${view.name}-back.f32`)});
+      assertLitSourceMotionResponse(sequence);
+    }
+    report.motionResponse.status='admitted-changing-lit-receivers';await save();
   }
   if(process.argv.includes('--edit-budget-check')) {
     report.phase='edit-budget-consumer';await save();

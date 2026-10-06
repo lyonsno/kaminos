@@ -31,3 +31,12 @@ export function assertCameraPixels(reference,views) {
   assert.ok(mean(result.views.knee)<mean(result.views.matched),'lower shoulder must compress the bright mesh patch');
   return result;
 }
+export function assertSurfaceTrimPixels(reference,changed,restored){
+  // Fixed [2,1.5,6]→[0,.7,0] kiln camera: left interior brick, clear of
+  // UI and direct flame core. Exposure/white balance are held, not compensated.
+  const region=[510,590,550,650],base=stats(reference,reference,region),trim=stats(changed,reference,region),restore=stats(restored,reference,region);
+  const mean=s=>s.rgb.reduce((a,b)=>a+b)/3;
+  assert.ok(mean(trim)>mean(base)&&trim.meanDelta>.25,'surface trim must brighten illuminated wall pixels');
+  assert.ok(restore.meanDelta<=1,'zero-stop surface trim restoration must recover held wall pixels');
+  return {region,base,trim,restore};
+}

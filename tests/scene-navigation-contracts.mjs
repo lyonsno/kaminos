@@ -15,7 +15,7 @@ test('viewport reserves LMB for selection and leaves navigation buttons to the m
   assert.equal(controls.maxDistance,Infinity,'authored geometry framing must not hit the old ten-unit wall');
 });
 
-const {navigationPivot,adoptNavigationDepth,orbitCamera,panCamera,zoomCamera,installSceneNavigation} = await import('../scene-navigation.mjs');
+const {navigationPivot,prepareNavigationGeometry,invalidateNavigationGeometry,adoptNavigationDepth,orbitCamera,panCamera,zoomCamera,installSceneNavigation} = await import('../scene-navigation.mjs');
 const {frameObjects,frameObject,frameSceneObjectRecord,sceneObjectsForFraming}=await import('../scene-frame-selected.mjs');
 const near=(a,b,message='vectors agree')=>assert.ok(a.distanceTo(b)<1e-8,`${message}: ${a.toArray()} vs ${b.toArray()}`);
 function cameraAt(z=10){const c=new THREE.PerspectiveCamera(40,4/3,.01,100);c.position.set(0,0,z);c.lookAt(0,0,0);c.updateMatrixWorld(true);return c;}
@@ -36,7 +36,7 @@ test('orbit preserves the sampled off-center surface on screen through a whole d
  assert.ok(Math.abs(c.position.distanceTo(pivot)-distance)<1e-8);
  assert.ok(Math.abs(c.position.distanceTo(target)-4)<1e-8);
 });
-test('depth samples unselected transformed visible triangles; empty space retains working depth',()=>{
+test('depth samples unselected transformed visible triangles; empty space retains the exact working pivot',()=>{
  const c=cameraAt(),target=new THREE.Vector3(),group=new THREE.Group();
  group.position.z=5;
  const surface=new THREE.Mesh(new THREE.PlaneGeometry(3,3),new THREE.MeshBasicMaterial());surface.name='unselected kiln';group.add(surface);
@@ -45,8 +45,82 @@ test('depth samples unselected transformed visible triangles; empty space retain
  adoptNavigationDepth(c,target,hit.point);
  group.visible=false;
  const miss=navigationPivot(c,target,new THREE.Vector2(.8,.2),[surface]);
- assert.equal(miss.source,'retained-depth');assert.equal(miss.point.z,5);assert.notEqual(miss.point.x,0);
+ assert.equal(miss.source,'retained-depth');near(miss.point,target);
  adoptNavigationDepth(c,target,miss.point);near(target,new THREE.Vector3(0,0,5));
+});
+test('ground is visible but cannot set authored-mesh navigation depth',()=>{
+ const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const roots=source.slice(source.indexOf('    roots: () => [...sceneObjects.filter('),source.indexOf('    occluders:',source.indexOf('    roots: () => [...sceneObjects.filter(')));
+ assert.ok(roots.includes('sceneObjects.filter(entry => entry.type !== \'splat\' && entry.id !== RIM_LIGHT_ID)'));
+ assert.ok(!roots.includes('groundPlane'),'ground belongs in the rendered scene, not the navigation depth candidates');
+ assert.ok(source.includes('occluders: () => groundPlane ? [groundPlane] : []'));
+});
+test('visible ground occludes authored geometry below it without setting depth',()=>{
+ const c=new THREE.PerspectiveCamera(40,1,.01,100);c.position.set(0,3,5);c.lookAt(0,-1,0);c.updateMatrixWorld(true);
+ const ground=new THREE.Mesh(new THREE.CircleGeometry(5,64),new THREE.MeshBasicMaterial());
+ ground.rotation.x=-Math.PI/2;ground.position.y=-.85;
+ const buried=new THREE.Mesh(new THREE.BoxGeometry(1,.5,1),new THREE.MeshBasicMaterial());buried.position.y=-1.5;
+ const target=new THREE.Vector3(0,0,0);
+ const pivot=navigationPivot(c,target,new THREE.Vector2(0,-.35),[buried],{occluders:[ground]});
+ assert.equal(pivot.source,'retained-depth');near(pivot.point,target);
+ ground.visible=false;
+ assert.equal(navigationPivot(c,target,new THREE.Vector2(0,-.35),[buried],{occluders:[ground]}).source,'mesh-surface');
+});
+test('prepared dense geometry keeps exact surface depth without changing the rendered index',async()=>{
+ const c=cameraAt(),target=new THREE.Vector3(),root=new THREE.Group();
+ const geometry=new THREE.PlaneGeometry(4,4,200,200);
+ const index=Array.from(geometry.index.array);
+ const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());mesh.position.z=4;root.add(mesh);
+ const expected=navigationPivot(c,target,new THREE.Vector2(),[root]);
+ await prepareNavigationGeometry(root);
+ assert.ok(geometry.boundsTree,'dense mesh has a reusable triangle index');
+ assert.deepEqual(Array.from(geometry.index.array),index,'preparation cannot reorder render triangles');
+ const actual=navigationPivot(c,target,new THREE.Vector2(),[root]);
+ near(actual.point,expected.point);
+ assert.equal(actual.source,'mesh-surface');
+});
+test('a winding edit invalidates the old surface index before rebuilding',async()=>{
+ const c=cameraAt(),target=new THREE.Vector3(),mesh=new THREE.Mesh(new THREE.PlaneGeometry(2,2),new THREE.MeshBasicMaterial());
+ await prepareNavigationGeometry(mesh);
+ assert.equal(navigationPivot(c,target,new THREE.Vector2(),[mesh]).source,'mesh-surface');
+ const index=mesh.geometry.index;
+ for(let i=0;i<index.count;i+=3){const a=index.array[i+1];index.array[i+1]=index.array[i+2];index.array[i+2]=a;}
+ index.needsUpdate=true;
+ await invalidateNavigationGeometry(mesh);
+ assert.equal(navigationPivot(c,target,new THREE.Vector2(),[mesh]).source,'retained-depth');
+});
+test('a topology change during indexing cannot attach a stale tree',async()=>{
+ const geometry=new THREE.PlaneGeometry(2,2,12,12).toNonIndexed();
+ const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
+ const build=prepareNavigationGeometry(mesh);
+ geometry.setIndex(Array.from({length:geometry.getAttribute('position').count},(_,i)=>i).reverse());
+ await build;
+ assert.equal(!!geometry.boundsTree,false,'the old triangle layout must not be attached');
+});
+test('a building mesh does not hide a different visible surface',async()=>{
+ const c=cameraAt(),target=new THREE.Vector3(),root=new THREE.Group();
+ const slow=new THREE.Mesh(new THREE.PlaneGeometry(4,4,12,12),new THREE.MeshBasicMaterial());
+ slow.position.z=5;
+ const surface=new THREE.Mesh(new THREE.PlaneGeometry(4,4),new THREE.MeshBasicMaterial());
+ surface.position.z=4;root.add(slow,surface);
+ const build=prepareNavigationGeometry(slow);
+ const hit=navigationPivot(c,target,new THREE.Vector2(),[root]);
+ assert.equal(hit.source,'mesh-surface');
+ near(hit.point,new THREE.Vector3(0,0,4));
+ await build;
+});
+test('a failed index does not reinstate dense raw raycasts and preparation can retry',async()=>{
+ const c=cameraAt(),target=new THREE.Vector3();
+ const geometry=new THREE.PlaneGeometry(2,2,12,12);
+ const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
+ const build=prepareNavigationGeometry(mesh);
+ geometry.getAttribute('position').needsUpdate=true;
+ await build;
+ assert.equal(geometry.boundsTree ?? null,null);
+ assert.equal(navigationPivot(c,target,new THREE.Vector2(),[mesh]).source,'index-failed-depth');
+ await prepareNavigationGeometry(mesh);
+ assert.ok(geometry.boundsTree,'a later explicit preparation retries the failed index');
+ assert.equal(navigationPivot(c,target,new THREE.Vector2(),[mesh]).source,'mesh-surface');
 });
 test('pan follows pointer displacement at working depth and large framing has no old distance wall',()=>{
  const c=cameraAt(),target=new THREE.Vector3(),point=new THREE.Vector3(0,0,6);
@@ -146,16 +220,53 @@ const trackpadPackets=[
  {deltaX:0,deltaY:-1,deltaMode:0,shiftKey:true},
  {deltaX:0,deltaY:-1,deltaMode:0,metaKey:true},
 ];
-test('click-free trackpad orbit retains the inspected point and distance, including horizontal motion',()=>{
+test('empty-space trackpad orbit retains the current pivot and distance, including horizontal motion',()=>{
  for(const packet of [trackpadPackets[0],{deltaX:-49,deltaY:0,deltaMode:0}]){
-  const f=fixture({inputMode:()=> 'trackpad'}),pivot=new THREE.Vector3(1,.5,0);
-  const screen=pivot.clone().project(f.c),q=f.c.quaternion.clone(),radius=f.c.position.distanceTo(pivot);
+  const f=fixture({inputMode:()=> 'trackpad'}),pivot=f.controls.target.clone();
+  const q=f.c.quaternion.clone(),radius=f.c.position.distanceTo(pivot);
+  const screen=new THREE.Vector3(1,.5,0).project(f.c);
   const e=emit(f.canvas,'wheel',{...packet,clientX:(screen.x+1)*400,clientY:(1-screen.y)*300});
   assert.ok(f.c.quaternion.angleTo(q)>.01,'plain glide must orbit, including horizontal-only glide');
-  near(pivot.clone().project(f.c),screen,'the inspected point must stay under the pointer');
+  near(f.controls.target,pivot,'a miss cannot move the working orbit center toward the pointer');
   assert.ok(Math.abs(f.c.position.distanceTo(pivot)-radius)<1e-8,'orbit must not become wheel zoom');
   assert.equal(e.defaultPrevented,true);assert.equal(f.nav.state().gesture,null);assert.equal(f.canvas.captures.size,0);
  }
+});
+test('an off-center mesh hit remains the orbit pivot after the next empty-space packet',()=>{
+ const surface=new THREE.Mesh(new THREE.PlaneGeometry(4,4),new THREE.MeshBasicMaterial());surface.position.z=5;
+ const f=fixture({inputMode:()=> 'trackpad',roots:()=>[surface]});
+ const point=new THREE.Vector3(.8,.2,5),screen=point.clone().project(f.c);
+ emit(f.canvas,'wheel',{deltaX:0,deltaY:0,deltaMode:0,clientX:(screen.x+1)*400,clientY:(1-screen.y)*300});
+ assert.equal(f.nav.state().depth.source,'mesh-surface');
+ const retained=new THREE.Vector3(...f.nav.state().depth.point);
+ surface.visible=false;
+ const before=retained.clone().project(f.c);
+ emit(f.canvas,'wheel',{deltaX:20,deltaY:0,deltaMode:0,clientX:40,clientY:40});
+ assert.equal(f.nav.state().depth.source,'retained-depth');
+ near(new THREE.Vector3(...f.nav.state().depth.point),retained);
+ near(retained.clone().project(f.c),before,'miss must keep orbiting around last real surface point');
+});
+test('stationary pointer hit followed by an empty-space gesture retains its off-center pivot',()=>{
+ const surface=new THREE.Mesh(new THREE.PlaneGeometry(4,4),new THREE.MeshBasicMaterial());surface.position.z=5;
+ const f=fixture({roots:()=>[surface]}),point=new THREE.Vector3(.8,.2,5),screen=point.clone().project(f.c);
+ emit(f.canvas,'pointerdown',{button:1,pointerId:1,clientX:(screen.x+1)*400,clientY:(1-screen.y)*300});
+ emit(f.canvas,'pointerup',{button:1,pointerId:1});
+ const retained=new THREE.Vector3(...f.nav.state().depth.point);
+ surface.visible=false;
+ emit(f.canvas,'pointerdown',{button:1,pointerId:2,clientX:40,clientY:40});
+ near(new THREE.Vector3(...f.nav.state().depth.point),retained);
+ emit(f.canvas,'pointerup',{button:1,pointerId:2});
+});
+test('no-op F does not discard a previously sampled surface pivot',()=>{
+ const surface=new THREE.Mesh(new THREE.PlaneGeometry(4,4),new THREE.MeshBasicMaterial());surface.position.z=5;
+ const f=fixture({inputMode:()=> 'trackpad',roots:()=>[surface],frameSelected:()=>false});
+ const point=new THREE.Vector3(.8,.2,5),screen=point.clone().project(f.c);
+ emit(f.canvas,'wheel',{deltaX:0,deltaY:0,deltaMode:0,clientX:(screen.x+1)*400,clientY:(1-screen.y)*300});
+ const retained=new THREE.Vector3(...f.nav.state().depth.point);
+ emit(f.doc,'keydown',{key:'f',code:'KeyF'});
+ surface.visible=false;
+ emit(f.canvas,'wheel',{deltaX:0,deltaY:0,deltaMode:0,clientX:40,clientY:40});
+ near(new THREE.Vector3(...f.nav.state().depth.point),retained);
 });
 test('Shift glide pans with content motion, while Cmd/Ctrl glide zooms along the view axis',()=>{
  const f=fixture({inputMode:()=> 'trackpad'}),q=f.c.quaternion.clone(),point=new THREE.Vector3();
