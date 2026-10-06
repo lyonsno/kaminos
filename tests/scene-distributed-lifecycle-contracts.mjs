@@ -28,6 +28,25 @@ function fixture(castShadow=true) {
   return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,field,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='receiver-spacing'){
+  const f=fixture();f.prepare();
+  assert.equal(typeof f.mount.setReceiverSpacing,'function','receiver spacing must be a real live-mount control');
+  const originalIndex=f.mesh.geometry.getAttribute('sceneReceiverIndex');
+  f.mount.setReceiverSpacing(2);f.prepare();f.prepare();
+  let state=f.mount.debugState();
+  assert.equal(state.receiverSampling.spacing,2);
+  assert(state.surfaceReceivers<3,'coarse layout must reduce actual GPU ray receiver rows');
+  assert.equal(state.renderVertices,3,'render mesh remains intact');
+  assert.equal(state.visibilityBuilds,1,'changing spacing reuses packed caster geometry');
+  assert.equal(f.mesh.geometry.getAttribute('sceneReceiverIndex').itemSize,4);
+  assert.equal(f.mesh.geometry.getAttribute('sceneReceiverWeight').itemSize,4);
+  f.mount.setReceiverSpacing(0);f.prepare();f.prepare();
+  state=f.mount.debugState();assert.equal(state.surfaceReceivers,3);assert.equal(state.visibilityBuilds,1);
+  assert.equal(f.mesh.geometry.getAttribute('sceneReceiverIndex').itemSize,originalIndex.itemSize);
+  assert.equal(f.mesh.geometry.hasAttribute('sceneReceiverWeight'),false);
+  f.mesh.position.x=.1;f.prepare();assert.equal(f.mount.debugState().visibilityBuilds,2,'actual geometry movement invalidates cached packed triangles');
+  f.mount.dispose();assert.equal(f.mesh.geometry.hasAttribute('sceneReceiverIndex'),false);assert.equal(f.mesh.geometry.hasAttribute('sceneReceiverWeight'),false);
+}
 if(!selected||selected==='source') {
   const f=fixture();f.mount.setDirections(12);
   assert.doesNotThrow(()=>f.mount.setAngularPattern('source'),'source-aware mode must reach the live mount');

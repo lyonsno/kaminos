@@ -20,6 +20,8 @@ assert.equal(new URLSearchParams(lightingHash.hash.slice(1)).get('rendering_sour
 const surfaceHash=new URL(forwardCompositionHash('http://localhost:8106/','#rendering_surface_gain=2&rendering_surface_scattering=0'));
 assert.equal(new URLSearchParams(surfaceHash.hash.slice(1)).get('rendering_surface_gain'),'2');
 assert.equal(new URLSearchParams(surfaceHash.hash.slice(1)).get('rendering_surface_scattering'),'0');
+const receiverHash=new URL(forwardCompositionHash('http://localhost:8106/','#rendering_receiver_spacing=0.08'));
+assert.equal(new URLSearchParams(receiverHash.hash.slice(1)).get('rendering_receiver_spacing'),'0.08','receiver quality request survives saved-basin launch forwarding');
 assert.throws(() => compositionRestoreUrl(state, '../wrong.json', target.origin));
 const calls = [];
 const host = { width: 800, height: 600, getBoundingClientRect: () => ({ left: 50, top: 20, width: 400, height: 300 }) };
