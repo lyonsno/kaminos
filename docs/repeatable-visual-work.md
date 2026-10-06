@@ -2,6 +2,8 @@
 
 Use an authored `.kaminos.json` scene as the shared editable input. A JavaScript example opens it in Kaminos, applies edits through the normal editor operations, and retains a picture with its saved scene. The resulting URL opens that exact version for a person to continue editing. Feed their saved filename into the next run to continue from their work.
 
+To construct that scene, inspect CPU layout views and investigate held water at completed simulation times, start with the [experiment workbench](experiment-workbench.md).
+
 ## First run
 
 Start `serve.py` from your feature worktree with your scene, generated-mesh and basin stores mounted. The scene refers to those mounted assets. Install Playwright in your tooling environment and supply its module path plus an independent Chromium or Chrome for Testing executable.
@@ -24,6 +26,8 @@ The pose example moves the selected object +0.25 along X, checks the other objec
 ## Your feature
 
 An example is an ordinary module exporting an async function. It receives `page` (Playwright), the input `document`, `inputs`, output path `out`, and two convenience functions:
+
+An optional `configureUrl(URL)` export customizes startup before every fresh open; the water experiment uses it to request a held runtime from its first frame. Origin, scene and mounted-object checks still apply.
 
 ```js
 export default async function ({ page, retain, open }) {

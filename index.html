@@ -4047,7 +4047,8 @@ const sceneMembershipRetainedObjects = new Map();
 let localLiquidSetup = null;
 let localLiquidHost = null;
 let localLiquidFailure = null;
-let localLiquidPaused = false;
+const initialWaterPaused = () => (new URLSearchParams(location.hash.slice(1)).get('water_paused') || new URLSearchParams(location.search).get('water_paused')) === '1';
+let localLiquidPaused = initialWaterPaused();
 let localLiquidGeneration = 0;
 const sceneLoadRequests = createSceneLoadRequests();
 const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
@@ -6487,14 +6488,25 @@ window.kaminosCameraDebugState = function() {
   return {
     position: camera ? camera.position.toArray() : null,
     target: controls ? controls.target.toArray() : null,
+    up: camera ? camera.up.toArray() : null,
+    fov: camera?.fov ?? null,
+    aspect: camera?.aspect ?? null,
+    near: camera?.near ?? null,
+    far: camera?.far ?? null,
     projectionMatrix: camera ? Array.from(camera.projectionMatrix.elements) : null,
     matrixWorldInverse: camera ? Array.from(camera.matrixWorldInverse.elements) : null,
   };
 };
 window.kaminosSetCameraDebugPose = function(pose = {}) {
   if (!camera || !controls) throw new Error('Kaminos camera debug pose unavailable before viewport initialization');
+  for(const key of ['position','target','up']) if(pose[key]!==undefined &&
+    (!Array.isArray(pose[key]) || pose[key].length!==3 || !pose[key].every(Number.isFinite)))throw Error(`Invalid camera ${key}`);
+  const near=pose.near??camera.near,far=pose.far??camera.far,fov=pose.fov??camera.fov;
+  if(!(Number.isFinite(near)&&near>0&&Number.isFinite(far)&&far>near&&Number.isFinite(fov)&&fov>0&&fov<180))throw Error('Invalid camera lens');
   if (Array.isArray(pose.position) && pose.position.length === 3) camera.position.fromArray(pose.position);
   if (Array.isArray(pose.target) && pose.target.length === 3) controls.target.fromArray(pose.target);
+  if (pose.up) camera.up.fromArray(pose.up);
+  camera.near=near;camera.far=far;camera.fov=fov;camera.updateProjectionMatrix();
   controls.update();
   camera.updateMatrixWorld?.();
   updateHybridSplatOverlayFrame();
@@ -6858,11 +6870,30 @@ function refreshLocalLiquidPerformance() {
 
 window.kaminosSetLocalLiquidPerformance = applyLocalLiquidPerformance;
 window.kaminosPauseLocalLiquid = paused => {
+  localLiquidHost?.setPaused(Boolean(paused));
   localLiquidPaused = Boolean(paused);
-  localLiquidHost?.setPaused(localLiquidPaused);
   refreshLocalLiquidPerformance();
   window._kaminosDirty?.();
   return localLiquidPaused;
+};
+window.kaminosLocalLiquidClock = {
+  async hold() {
+    const host=localLiquidHost;
+    if(!host)throw Error('Water host is not mounted');
+    window.kaminosPauseLocalLiquid(true);
+    const result=await host.hold();
+    if(host!==localLiquidHost)throw Error('Water runtime changed while holding');
+    return result;
+  },
+  async advanceTo(seconds) {
+    const host=localLiquidHost;
+    if(!host)throw Error('Water host is not mounted');
+    const result=await host.advanceTo(seconds);
+    if(host!==localLiquidHost)throw Error('Water runtime changed while advancing');
+    window._kaminosDirty?.();
+    return result;
+  },
+  read:()=>localLiquidHost?.state().clock || null,
 };
 document.querySelectorAll('[data-water-budget]').forEach(button => button.addEventListener('click', () => {
   const [particles, passes] = button.dataset.waterBudget.split(',');
@@ -6888,6 +6919,8 @@ window.kaminosLocalLiquidState = () => {
   loading: localLiquidHostMount.isLoading(),
   paused: localLiquidPaused,
   frameCount: hostState?.frameCount ?? 0,
+  clock: hostState?.clock || null,
+  sourceGeneration: hostState?.sourceGeneration ?? null,
   failure: localLiquidFailure,
   setup: localLiquidSetup ? structuredClone(localLiquidSetup) : null,
   emitters: localLiquidEmitterRecords(),
@@ -11618,7 +11651,7 @@ function clearScene({loadRequestId = null} = {}) {
   localLiquidHost = null;
   localLiquidSetup = null;
   localLiquidFailure = null;
-  localLiquidPaused = false;
+  localLiquidPaused = initialWaterPaused();
   for(const id of [...sceneSpotLights.keys()])disposeSceneSpotLight(id);
   const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
   for (const entry of sceneObjects) {

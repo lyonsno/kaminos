@@ -7,6 +7,7 @@ import {
   KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_SCHEMA as FRAME_SCHEMA,
 } from './finger-fluid-webgpu-core.js';
 import { normalizeLocalLiquidSetup, localLiquidInletPacket } from './local-liquid-setup.mjs';
+import { createLiquidClock } from './local-liquid-clock.mjs';
 
 const PIPELINE = 'kaminos/local-liquid-authoring-v0';
 
@@ -69,6 +70,14 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   const environmentRotation=uniform(new THREE.Matrix3()), environmentIntensity=uniform(1);
   let environmentTarget=null, environmentQuad=null, environmentSource=null, environmentKey=null, environmentGeneration=0;
   let frameCount=0, paused=false, failure=null, lastFrame=null, disposed=false;
+  const clock=createLiquidClock({runId:crypto.randomUUID(), step:dt=>{
+      const before=solver.getDebugState();solver.step(dt);const after=solver.getDebugState();
+      if(after.stepCount-before.stepCount!==before.substeps)throw Error('Water solver did not advance the requested substeps');
+    },
+    drain:()=>device.queue.onSubmittedWorkDone(), assertCurrent:()=>{
+      if(disposed || !isCurrent())throw Error('Water runtime was replaced or disposed');
+      if(failure)throw Error(failure);
+    }});
   const onGpuError=event=>{failure=event.error?.message || 'Host WebGPU error';};
   device.addEventListener('uncapturederror',onGpuError);
   device.lost.then(info=>{if(!disposed)failure=info.message || 'Host WebGPU device lost';});
@@ -106,7 +115,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       const size=renderer.getDrawingBufferSize(new THREE.Vector2()), width=size.x, height=size.y;
       for (const target of [colorTarget,depthTarget,outputTarget]) target.setSize(width,height);
       renderer.initRenderTarget(outputTarget);
-      if (advance && !paused) solver.step(1/60);
+      if (advance) clock.tick();
       renderEnvironment();
       renderer.setRenderTarget(colorTarget); pipeline.render();
       // The retained liquid pass overlays/discards; every destination pixel
@@ -141,7 +150,8 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       lastFrame={frameId,cameraIdentity:cameraSnapshot.identity,cameraGeneration:generation,width,height,
         environmentSource:environmentSource.uuid,environmentGeneration,
         route:ROUTE,submittedByHost:true,presentedByHost:true,displayTransform:'host-render-pipeline',
-        simulationTimePolicy:'one-fixed-1/60-step-per-rendered-frame',simulationRewind:false};
+        simulationTimePolicy:'fixed-1/60-step-with-held-explicit-advance',simulationRewind:false,
+        submittedSteps:clock.read().submittedSteps};
     } catch(error) { failure=error.message || String(error); throw error; }
     finally {
       scene.overrideMaterial=previousOverride; scene.background=previousBackground;
@@ -170,10 +180,17 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       sourceGeneration++;
       authored=next;
     },
-    setPaused(value){paused=Boolean(value);return paused;},
+    setPaused(value){paused=clock.setPaused(value);return paused;},
+    async hold(){paused=true;return clock.hold();},
+    async advanceTo(seconds){
+      const generation=sourceGeneration;
+      const result=await clock.advanceTo(seconds);
+      if(generation!==sourceGeneration)throw Error('Water sources changed during advancement');
+      return result;
+    },
     get paused(){return paused;},
     state:()=>({requestedRoute:ROUTE,effectiveRoute:frameCount && !failure ? ROUTE : null,registered:true,mounted:true,
-      frameCount,paused,failure,setup:structuredClone(authored),lastFrame,solver:solver.getDebugState()}),
+      frameCount,paused,failure,sourceGeneration,clock:clock.read(),setup:structuredClone(authored),lastFrame,solver:solver.getDebugState()}),
     dispose() {
       disposed=true;device.removeEventListener('uncapturederror',onGpuError); solver.destroy(); scene.remove(group);
       const materials=new Set(); group.traverse(child=>{child.geometry?.dispose();if(child.material)materials.add(child.material);});

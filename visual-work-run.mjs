@@ -23,7 +23,7 @@ try {
   launch.executable = await fs.realpath(values.browser);
   if (/Google Chrome\.app\//.test(launch.executable)) throw Error('Use independent Chrome for Testing or Chromium, preserving the operator browser');
   const { chromium } = await import(pathToFileURL(path.resolve(values.playwright)));
-  const { default: exercise } = await import(pathToFileURL(path.resolve(values.example)));
+  const { default: exercise, configureUrl } = await import(pathToFileURL(path.resolve(values.example)));
   const inputs = values.inputs ? JSON.parse(await fs.readFile(values.inputs, 'utf8')) : {};
   launch.phase = 'browser'; await write();
   browser = await chromium.launch({ executablePath: launch.executable, headless: true,
@@ -32,7 +32,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
   launch.phase = 'exercise'; await write();
   const result = await visualWork({ page, origin: values.origin, repoRoot: values.repo,
-    sceneStore: values.scenes, basinStore: values.basins, sceneFile: values.scene, out,
+    sceneStore: values.scenes, basinStore: values.basins, sceneFile: values.scene, out, configureUrl,
     exercise: context => exercise({ ...context, inputs, out }) });
   launch.status = result.status;
 } catch (error) {

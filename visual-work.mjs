@@ -41,7 +41,7 @@ export function assertMountedScene(document, actual) {
 
 // The caller supplies a Playwright page and feature operations. All edits and
 // persistence still run through the mounted editor's normal public operations.
-export async function visualWork({ page, origin, repoRoot, sceneStore, basinStore, sceneFile, out, exercise }) {
+export async function visualWork({ page, origin, repoRoot, sceneStore, basinStore, sceneFile, out, exercise, configureUrl = url => url }) {
   await fs.mkdir(out, { recursive: true });
   const report = { status: 'running', phase: 'identity', startedAt: new Date().toISOString(),
     requested: { origin, repoRoot, sceneStore, basinStore, sceneFile }, observations: [], errors: [] };
@@ -62,7 +62,7 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
     const open = async filename => {
       report.phase = 'open'; await write();
       const document = await readScene(filename);
-      const url = compositionRestoreUrl(document.composition, filename, origin);
+      const url = String(await configureUrl(new URL(compositionRestoreUrl(document.composition, filename, origin))));
       // Leaving the document explicitly also exercises fresh restoration when
       // only the scene hash would otherwise change.
       await page.goto('about:blank');
