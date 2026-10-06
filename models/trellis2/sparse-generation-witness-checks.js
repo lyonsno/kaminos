@@ -1,4 +1,4 @@
-import {validateGenerationInputs} from './generation-inputs.js';
+import {validateGenerationInputs,generationPipelineType} from './generation-inputs.js';
 import {buildSparseSamplerPlan} from './sparse-sampler.js';
 import {buildSLatSamplerPlan} from './slat-sampler.js';
 import {validateNativePrefixBackend} from './sparse-prefix-witness-checks.js';
@@ -96,26 +96,33 @@ export const GENERATION_PHASES=Object.freeze(['sparse-structure-sampling','occup
 export const GENERATION_FIELDS=Object.freeze(['conditioning','geometry.features','geometry.coordinates','material.features',
   'material.coordinates','shapeCodes','textureCodes','noise.sparse','noise.lowResolutionShape','noise.highResolutionShape','noise.texture',
   'geometry.subdivision0','geometry.subdivision1','geometry.subdivision2','geometry.subdivision3']);
+export function generationPhases(m){return generationPipelineType(m)==='512'
+  ?GENERATION_PHASES.filter(phase=>!['learned-cascade-support','high-resolution-shape-sampling'].includes(phase)):GENERATION_PHASES;}
+export function generationFields(m){return generationPipelineType(m)==='512'
+  ?GENERATION_FIELDS.filter(field=>field!=='noise.highResolutionShape'):GENERATION_FIELDS;}
 export function generationModelCallCounts(m){
   const count=p=>p.steps.reduce((n,s)=>n+(s.guided?2:1),0),c=m.models;
   return{[GENERATION_PHASES[0]]:count(buildSparseSamplerPlan(c.sparseFlow.config)),
     [GENERATION_PHASES[2]]:count(buildSLatSamplerPlan({...c.lowResolutionShape.config,tokenRows:1,mode:'shape'})),
-    [GENERATION_PHASES[4]]:count(buildSLatSamplerPlan({...c.highResolutionShape.config,tokenRows:1,mode:'shape'})),
+    ...(generationPipelineType(m)==='1024_cascade'?{[GENERATION_PHASES[4]]:count(buildSLatSamplerPlan({...c.highResolutionShape.config,tokenRows:1,mode:'shape'}))}:{}),
     [GENERATION_PHASES[6]]:count(buildSLatSamplerPlan({...c.textureFlow.config,tokenRows:1,mode:'texture'}))};
 }
 export function validateGenerationResult(result,m){
   validateGenerationInputs(m);validateNativePrefixBackend(result.backend);
-  const c=result.composition;
+  const c=result.composition,type=generationPipelineType(m);
   if(result.status!=='succeeded'||result.effectiveRoute!==GENERATION_ROUTE||result.requestedRoute!==GENERATION_ROUTE||
     result.backend.isFallbackAdapter!==false||result.profileStatus!=='passed'||result.profile?.evidence?.mode!=='live'||
     result.profile?.routeId!==GENERATION_ROUTE||result.numericalStatus!=='not-compared')throw Error('complete native generation route/profile required; not matched-reference fidelity');
   if(c?.dinoBlocksExecuted!==24||c.featureBytesToCPUDuringServing!==0||c.coordinateBytesToCPUDuringServing!==0||
-    c.sameInvocation!==true||JSON.stringify(c.phases)!==JSON.stringify(GENERATION_PHASES)||!(c.lowResolutionRows>0)||!(c.highResolutionRows>0))
+    c.sameInvocation!==true||JSON.stringify(c.phases)!==JSON.stringify(generationPhases(m))||
+    (c.pipelineType??'1024_cascade')!==type||!(c.lowResolutionRows>0)||!(c.highResolutionRows>0))
     throw Error('complete resident image-to-learned-fields composition required');
   for(const [phase,calls]of Object.entries(generationModelCallCounts(m)))
     if(c.stageCounts?.[phase]?.['terminal-output-projection']!==calls||c.stageCounts?.[phase]?.['block-modulation']!==calls*30)
       throw Error('complete actual30block/source schedule execution required '+phase);
-  for(const name of GENERATION_FIELDS){
+  if(type==='512'&&(c.highResolutionRows!==c.lowResolutionRows||c.stageCounts?.['high-resolution-shape-sampling']||c.stageCounts?.['learned-cascade-support']))
+    throw Error('actual no-cascade source route required; no hidden HR pass');
+  for(const name of generationFields(m)){
     const row=result.outputs?.[name];if(!row||!Array.isArray(row.shape)||!row.shape.every(n=>Number.isSafeInteger(n)&&n>0)||
       !['f32','i32'].includes(row.dtype)||row.byteLength!==row.shape.reduce((n,x)=>n*x,4)||row.finite!==true||!/^[a-f0-9]{64}$/.test(row.sha256??''))
       throw Error('complete finite retained generation field required '+name);
@@ -123,7 +130,7 @@ export function validateGenerationResult(result,m){
   const out=result.outputs;
   for(const [name,shape]of Object.entries({conditioning:[1,1029,1024],shapeCodes:[c.highResolutionRows,32],textureCodes:[c.highResolutionRows,32],
     'noise.sparse':[1,8,16,16,16],'noise.lowResolutionShape':[c.lowResolutionRows,32],
-    'noise.highResolutionShape':[c.highResolutionRows,32],'noise.texture':[c.highResolutionRows,32]}))
+    ...(type==='1024_cascade'?{'noise.highResolutionShape':[c.highResolutionRows,32]}:{}),'noise.texture':[c.highResolutionRows,32]}))
     if(JSON.stringify(out[name].shape)!==JSON.stringify(shape)||out[name].dtype!=='f32')throw Error('complete source field/noise shape required '+name);
   for(const [prefix,channels]of [['geometry',7],['material',6]]){
     const fields=out[prefix+'.features'],coords=out[prefix+'.coordinates'];

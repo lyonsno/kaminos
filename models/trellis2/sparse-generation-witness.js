@@ -1,6 +1,6 @@
 import {createWebGpuInferenceSession} from '../../webgpu-inference-kit/src/core.js';
 import {createTrellisImageGenerationAdapter} from './trellis-generation.js';
-import {loadGenerationInputs,validateGenerationInputs} from './generation-inputs.js';
+import {loadGenerationInputs,validateGenerationInputs,generationPipelineType} from './generation-inputs.js';
 import {GENERATION_ROUTE,GENERATION_FIELDS,validateGenerationResult} from './sparse-generation-witness-checks.js';
 import {validateNativePrefixBackend,prefixAdapterName} from './sparse-prefix-witness-checks.js';
 import {createTrellisAssetAdapter} from './trellis-material.js';
@@ -25,7 +25,8 @@ export async function runGenerationWitness(expectedSha){
     const bytes=await fetched.arrayBuffer();if(await hash(bytes)!==expectedSha)throw Error('changed generation manifest');
     const m=JSON.parse(new TextDecoder().decode(bytes));validateGenerationInputs(m);
     report.input={manifestSha256:expectedSha,producer:m.producer,references:m.references,image:m.image,modelIdentities:
-      Object.fromEntries(Object.entries(m.models).map(([k,v])=>[k,v.identity])),dinoIdentity:m.dino.identity,seed:m.seed,meshResolution:m.meshResolution};
+      Object.fromEntries(Object.entries(m.models).map(([k,v])=>[k,v.identity])),dinoIdentity:m.dino.identity,seed:m.seed,
+      meshResolution:m.meshResolution,pipelineType:generationPipelineType(m),samplingSteps:m.samplingSteps??12};
     report.verifiedTensorCount=0;report.verifiedInputBytes=0;
     report.verifiedInputMeaning='cumulative successful fetches/bytes, including repeated stage use; not resident memory';
     const fetchTensor=async name=>{
@@ -90,7 +91,7 @@ export async function runGenerationWitness(expectedSha){
     report.composition={dinoBlocksExecuted:out.dino.blocksExecuted,lowResolutionRows:out.lowResolutionRows,highResolutionRows:out.highResolutionRows,
       phases:out.phases.map(p=>p.phase),sameInvocation:true,featureBytesToCPUDuringServing:out.featureBytesToCPUDuringServing,
       coordinateBytesToCPUDuringServing:out.coordinateBytesToCPUDuringServing,stageCounts,sessionId:session.snapshot().sessionId,
-      geometryResolution:out.geometry.resolution,materialResolution:out.material.resolution,
+      geometryResolution:out.geometry.resolution,materialResolution:out.material.resolution,pipelineType:out.pipelineType,
       geometryLevels:out.geometry.levels,materialLevels:out.material.levels};
     report.phase='post-model-observation-retention';
     const fields={conditioning:out.conditioning,'geometry.features':out.geometry.features,'geometry.coordinates':out.geometry.coordinates,

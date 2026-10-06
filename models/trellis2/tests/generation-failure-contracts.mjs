@@ -25,8 +25,8 @@ source=source.replace(/import \{createWebGpuInferenceSession\}[^;]+;/,
   'const {createSession:createWebGpuInferenceSession}=globalThis.generationFailurePorts;')
   .replace(/import \{createTrellisImageGenerationAdapter\}[^;]+;/,
     'const {createAdapter:createTrellisImageGenerationAdapter}=globalThis.generationFailurePorts;')
-  .replace(/import \{loadGenerationInputs,validateGenerationInputs\}[^;]+;/,
-    `import {validateGenerationInputs} from '${new URL('../generation-inputs.js',import.meta.url)}';const {loadInputs:loadGenerationInputs}=globalThis.generationFailurePorts;`)
+  .replace(/import \{loadGenerationInputs,validateGenerationInputs(?:,generationPipelineType)?\}[^;]+;/,
+    `import {validateGenerationInputs,generationPipelineType} from '${new URL('../generation-inputs.js',import.meta.url)}';const {loadInputs:loadGenerationInputs}=globalThis.generationFailurePorts;`)
   .replaceAll("from './",`from '${new URL('../',import.meta.url)}`);
 const {runGenerationWitness}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 const report=await runGenerationWitness(sha);
