@@ -286,7 +286,37 @@ export async function unwrapTrellisMesh(mesh,{WorkerClass=globalThis.Worker}={})
   }finally{worker.terminate();}
 }
 
-export function createTrellisAssetAdapter({runtime,geometry,material,textureSize=1024,WorkerClass,provenance={},onPhase=()=>{}}){
+// Shared by the live decoder consumer and retained-field finishing. A finishing
+// provider owns copied CPU mesh arrays; a failed provider never becomes a raw
+// geometry fallback. Its receipt stays attached to the emitted GLB geometry.
+export async function finishTrellisMesh(mesh,{postprocessMesh,materialFields,textureSize=1024,
+  WorkerClass,provenance={},onPhase=()=>{}}={}){
+  validateSurface(mesh,false);
+  if(postprocessMesh!==undefined&&typeof postprocessMesh!=='function')throw TypeError('mesh postprocess provider must be a function');
+  if(postprocessMesh){
+    await onPhase({phase:'post-model-mesh-postprocess'});
+    const inputVertices=mesh.vertices.length/3,inputFaces=mesh.triangles.length/3;
+    const processed=await postprocessMesh({...mesh,vertices:mesh.vertices.slice(),triangles:mesh.triangles.slice()});
+    validateSurface(processed,false);
+    const receipt=processed.metadata?.postprocess;
+    if(receipt?.schema!=='trellis2.mesh-postprocess.v0'||receipt.status!=='succeeded'||!receipt.effectiveRoute||
+      receipt.inputVertices!==inputVertices||receipt.inputFaces!==inputFaces||
+      receipt.outputVertices!==processed.vertices.length/3||receipt.outputFaces!==processed.triangles.length/3)
+      throw Error('complete matching mesh postprocess receipt required');
+    mesh=processed;
+  }
+  await onPhase({phase:'post-model-uv-unwrap'});
+  const unwrapped=await unwrapTrellisMesh(mesh,{WorkerClass});
+  await onPhase({phase:'post-model-texture-bake'});
+  const textures=bakeTrellisMaterialTextures({...unwrapped,...materialFields,textureSize});
+  await onPhase({phase:'post-model-pbr-glb'});
+  const glb=await encodeTrellisPbrGLB(unwrapped,{textures,provenance});
+  return {glb,mesh:unwrapped,textures};
+}
+
+export function createTrellisAssetAdapter({runtime,geometry,material,textureSize=1024,WorkerClass,
+  postprocessMesh,provenance={},onPhase=()=>{}}){
+  if(postprocessMesh!==undefined&&typeof postprocessMesh!=='function')throw TypeError('mesh postprocess provider must be a function');
   const a=material?.features,b=material?.coordinates,n=a?.shape?.[0];
   if(!runtime?.readTensor||!a?.buffer||!b?.buffer||a.dtype!=='f32'||b.dtype!=='i32'||!(a.usage&U.storage)||!(b.usage&U.storage)||
     !Number.isSafeInteger(n)||n<1||JSON.stringify(a.shape)!==JSON.stringify([n,6])||JSON.stringify(b.shape)!==JSON.stringify([n,3])||
@@ -302,11 +332,10 @@ export function createTrellisAssetAdapter({runtime,geometry,material,textureSize
         if(mesh.status!=='surface')throw Error('learned geometry has no surface; no asset');
         await enter('post-model-material-readback');const raw=await runtime.readTensor(a),coords=await runtime.readTensor(b);
         if(!(raw instanceof ArrayBuffer)||!(coords instanceof ArrayBuffer)||raw.byteLength!==a.byteLength||coords.byteLength!==b.byteLength)throw Error('complete material readback required');
-        await enter('post-model-uv-unwrap');const unwrapped=await unwrapTrellisMesh(mesh,{WorkerClass});
-        await enter('post-model-texture-bake');const textures=bakeTrellisMaterialTextures({...unwrapped,features:new Float32Array(raw),coordinates:new Int32Array(coords),
-          resolution:material.resolution,textureSize});
-        await enter('post-model-pbr-glb');const glb=await encodeTrellisPbrGLB(unwrapped,{textures,provenance});
-        output={glb,mesh:unwrapped,textures,handoff:{phase:'post-model-asset-consumer',input:'exact borrowed learned decoder tensors; no NPZ or fixture replacement',
+        const finished=await finishTrellisMesh(mesh,{postprocessMesh,WorkerClass,textureSize,provenance,
+          materialFields:{features:new Float32Array(raw),coordinates:new Int32Array(coords),resolution:material.resolution},
+          onPhase:e=>enter(e.phase)});
+        output={...finished,handoff:{phase:'post-model-asset-consumer',input:'exact borrowed learned decoder tensors; no NPZ or fixture replacement',
           featureBytesToCPU:geometry.features.byteLength+a.byteLength,coordinateBytesToCPU:geometry.coordinates.byteLength+b.byteLength,
           inference:'WebGPU producer complete before CPU mesh/UV/texture postprocessing',placement:'GLB produced; Kaminos authoring exercise remains separate'}};
         status='completed';phase='completed';return output;
