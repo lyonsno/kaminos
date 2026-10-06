@@ -1,4 +1,4 @@
-import {capturePackedDensityWitness} from './finger-fluid-packed-density-witness.mjs';
+import {capturePackedDensityWitness, capturePairedDensityWitness} from './finger-fluid-packed-density-witness.mjs';
 import {createPackedDensityLayout, PACKED_DENSITY_WGSL} from './finger-fluid-packed-density.mjs';
 export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';
@@ -13275,12 +13275,12 @@ export async function createWebGPUFingerFluidSolver({
   const paramsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-params',
     size: 224,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
   });
   const liveInletBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-live-inlets',
     size: LIVE_HAND_INLET_CAPACITY * LIVE_HAND_INLET_FLOATS * 4,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
   });
   const diagnosticsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-diagnostics-readback',
@@ -16675,6 +16675,7 @@ export async function createWebGPUFingerFluidSolver({
     body_transport_mode: safeBodyTransportMode,
     interface_frequency_mode: safeInterfaceFrequencyMode,
     step,
+    capturePairedDensityForWitness: options => capturePairedDensityWitness({device,shader:computeShader,layout:computeLayout,buffers:computeBindingEntries,count:safeParticleCount,cells:GRID_CELL_COUNT,packedLayout:packedDensityLayout,stepCount,pairs:options?.pairs,repetitions:options?.repetitions,comparison:options?.comparison,onProgress:options?.onProgress}),
     capturePackedDensityForWitness: () => capturePackedDensityWitness({device,shader:computeShader,layout:computeLayout,buffers:computeBindingEntries,count:safeParticleCount,cells:GRID_CELL_COUNT,packedLayout:packedDensityLayout,stepCount}),
     armSolverGpuTimestampCaptureForWitness,
     finishSolverGpuTimestampCaptureForWitness,

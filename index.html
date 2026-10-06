@@ -13197,6 +13197,10 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.__kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.kaminosFingerFluidBenchRequestDiagnostics = requestFingerFluidBenchDiagnostics;
+  window.kaminosFingerFluidBenchCapturePairedDensityForWitness = options => {
+    if (!fingerFluidBenchSolver?.available || !fingerFluidBenchSimulationPaused) throw new Error('paired density requires a paused available solver');
+    return fingerFluidBenchSolver.capturePairedDensityForWitness({...options,onProgress: result => { window.kaminosFingerFluidPairedPartialResult = result; }});
+  };
   window.kaminosFingerFluidBenchCapturePackedDensityForWitness = () => {
     if (!fingerFluidBenchSimulationPaused) throw new Error('Pause the fluid bench before frozen packed-density capture');
     if (!fingerFluidBenchSolver?.available) throw new Error('Fluid solver unavailable');
