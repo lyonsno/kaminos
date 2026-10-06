@@ -14,6 +14,7 @@ try{
   shaderHash:createHash('sha256').update(readFileSync(new URL('../volume-outer-smoke.mjs',import.meta.url))).digest('hex')};
  const {create,globals}=await import(pathToFileURL(resolve(dawnPath)));Object.assign(globalThis,globals);
  const gpu=create(['backend=metal']);
+ globalThis.__outerFaceGPU=gpu;
  const adapter=await gpu.requestAdapter();assert.ok(adapter);report.route={backend:'metal',vendor:adapter.info.vendor,device:adapter.info.device};device=await adapter.requestDevice();
  const errors=[];device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
  const n=64,c=outerSmokeConfig({grid:32,extent:4,nearHeightRatio:1}),h=2/n;
