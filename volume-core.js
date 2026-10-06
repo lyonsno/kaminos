@@ -6357,7 +6357,7 @@ fn raymarchOuterSmokeInspection(ro:vec3<f32>,rd:vec3<f32>,endLimit:f32,mode:f32)
     if(inside){let r=sampleWorldFlowReconstructionRaw(p);fine=max(0.0,r.material.x+r.microLayer.x*.5+r.material.w*.08);}
     if(OUTER_SMOKE){coarse=max(0.0,sampleOuterSmoke(p).x);}
     var density=fine;
-    if(OUTER_SMOKE){density=mix(fine,coarse,select(1.0,outerSmokeBlend(p,outerWidth),inside));}
+    if(OUTER_SMOKE){density=mix(fine,coarse,select(1.0,outerSmokeBlend(p,min(1.0,max(.25,2.0*outerWidth))),inside));}
     if(mode>3.5 && mode<4.5){density=fine;}
     if(mode>4.5){density=coarse;}
     var ds=outerWidth*.5;if(inside){ds=1.0/f32(GRID);}
@@ -6641,7 +6641,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       reconstructed = sampleWorldFlowReconstructionRaw(p);
     }
     if(OUTER_SMOKE){
-      let w=outerSmokeBlend(p,outerWidth);
+      let w=outerSmokeBlend(p,min(1.0,max(.25,2.0*outerWidth)));
       reconstructed.material.x=mix(reconstructed.material.x,sampleOuterSmoke(p).x,w);
       reconstructed.material.w*=1.0-w;reconstructed.microLayer.x*=1.0-w;
     }

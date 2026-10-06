@@ -65,6 +65,9 @@ export function outerBlend(p,width,nearHeightRatio=2) {
   const t=Math.max(0,Math.min(1,d/width));
   return 1-t*t*(3-2*t);
 }
+// Blend through a complete pair of coarse interpolation cells. A one-cell
+// transition exposes the receiving grid's averaged shape as a narrow shelf.
+export const outerSmokeOverlapWidth=c=>Math.min(1,Math.max(.25,2*c.cellWidth));
 
 export function outerSmokeShader(c,nearGrid) {
   const donor=outerDonorBounds(c);
