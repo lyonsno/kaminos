@@ -41,7 +41,7 @@ test('paused diagnostic draw refreshes replacement masks before claiming install
   let installed=false;
   const state={sceneCollision:{effective:'mesh-voxel-solid',outerGrid:32}};
   const context=vm.createContext({uniforms:new Float32Array(600),controlsSnapshot:{collisionVoxelView:'outer'},state,
-    gridSize:64,gridHeight:128,outerSmoke:{config:{shape:[64,128,64]}},
+    gridSize:64,gridHeight:128,outerSmoke:{config:{shape:[64,128,64]}},outerSmokeInspection:'off',
     refreshSceneCollision(){installed=true;state.sceneCollision.outerGrid=64;}});
   vm.runInContext(core.slice(start,end),context);
   assert.equal(installed,true,'new mask installed without advancing simulation');

@@ -10,6 +10,19 @@ export function outerSmokeConfig({grid=32, extent=4, pressureIterations=24, near
 }
 export const outerCellCenter=(c,xyz)=>xyz.map((v,a)=>c.min[a]+(v+.5)*c.cellWidth);
 export const nearVelocityToLocal=(v,grid)=>v.map(x=>x*2/grid);
+// Consumer approximation beyond the existing incident lattice: continue the
+// boundary radiance smoothly toward authored ambient. Extinction uses local
+// smoke as a segment estimate; this is not an exterior lighting solve.
+export function continueOuterSmokeRadiance(incident,ambient,distance,extinction) {
+  const d=Math.max(0,distance),w=Math.exp(-Math.max(0,extinction)*d)/(1+d*d);
+  return incident.map((v,i)=>ambient[i]+(v-ambient[i])*w);
+}
+export const OUTER_SMOKE_OPTICS_WGSL=/* wgsl */`
+fn continueOuterSmokeRadiance(incident:vec3<f32>,ambient:vec3<f32>,distance:f32,extinction:f32)->vec3<f32>{
+  let d=max(0.0,distance);let w=exp(-max(0.0,extinction)*d)/(1.0+d*d);
+  return mix(ambient,incident,w);
+}
+`;
 // The outer domain evolves through the fine grid's sacrificial edge band.
 // Do not continuously overwrite it with the fine solver's wall-damped state.
 export function outerDonorBounds(c) {
@@ -100,9 +113,25 @@ fn nearSample(p:vec3<f32>,slot:u32)->vec4<f32>{
   }}}return v;
 }
 fn prescribedFace(c:vec3<i32>,a:i32)->f32{
-  // Near velocities store UPPER faces; interpolate that component on its own lattice.
-  let p=facePoint(c,a)-vec3<f32>(unit(a))/f32(NEAR);
-  return nearSample(p,0u)[a]*2.0/f32(NEAR);
+  // Restrict flux over the whole face. A point sample can miss a fine jet even
+  // while the volume-averaged smoke enters this cell. Fine velocities store
+  // upper faces: interpolate only along the face normal, area-average the two
+  // transverse cell footprints, then convert fine-cell velocity to local units.
+  let p=facePoint(c,a);let h=2.0/f32(NEAR);
+  let lo=p-vec3<f32>(H*.5);let hi=p+vec3<f32>(H*.5);
+  let first=max(vec3<i32>(0),vec3<i32>(floor((lo+1.0)/h)));
+  let last=min(vec3<i32>(NEAR,NEAR_HEIGHT,NEAR),vec3<i32>(ceil((hi+1.0)/h)));
+  let b=(a+1)%3;let d=(a+2)%3;
+  let normal=(p[a]+1.0)/h-1.0;let n=i32(floor(normal));let f=fract(normal);
+  var sum=0.0;var area=0.0;
+  for(var j=first[d];j<last[d];j++){for(var i=first[b];i<last[b];i++){
+    var q=vec3<i32>(0);q[b]=i;q[d]=j;q[a]=n;
+    let cellLo=vec3<f32>(q)*h-1.0;
+    let overlap=max(vec3<f32>(0.0),min(hi,cellLo+h)-max(lo,cellLo));
+    let w=overlap[b]*overlap[d];
+    let value=mix(near[nearIndex(q)].xyz[a],near[nearIndex(q+unit(a))].xyz[a],f);
+    sum+=value*w;area+=w;
+  }}return sum/max(area,1e-20)*h;
 }
 fn nearMaterial(c:vec3<i32>)->vec4<f32>{
   let lo=point(c)-.5*H;let hi=lo+H;

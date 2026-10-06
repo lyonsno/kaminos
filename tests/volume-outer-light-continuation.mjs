@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import * as outer from '../volume-outer-smoke.mjs';
+assert.equal(typeof outer.continueOuterSmokeRadiance,'function','near/far smoke changes lighting at a rectangular boundary');
+const {continueOuterSmokeRadiance:f}=outer;
+const incident=[.02,.3,2],ambient=[.1,.1,.1];
+assert.ok(f(incident,ambient,0,4).every((v,i)=>Math.abs(v-incident[i])<1e-12),'boundary radiance must be continuous');
+const almost=f(incident,ambient,1e-6,4);
+assert.ok(almost.every((v,i)=>Math.abs(v-incident[i])<1e-5));
+const far=f(incident,ambient,100,4);assert.deepEqual(far,ambient);
+assert.ok(f(incident,ambient,1,4).every((v,i)=>Math.abs(v-ambient[i])<Math.abs(f(incident,ambient,1,0)[i]-ambient[i])),'extinction must attenuate the boundary contribution');
+console.log('continuous boundary radiance and attenuation passed');

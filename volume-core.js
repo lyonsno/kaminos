@@ -6,7 +6,7 @@ import {
   normalizeFineBreakupLocalization,
 } from './volume-detail-force-isolation.mjs';
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
-import { outerSmokeConfig, createOuterSmoke, validateOuterSmokeDevice } from './volume-outer-smoke.mjs';
+import { outerSmokeConfig, createOuterSmoke, validateOuterSmokeDevice, OUTER_SMOKE_OPTICS_WGSL } from './volume-outer-smoke.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid } from './volume-scene-solid.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
@@ -6324,6 +6324,41 @@ fn sampleOuterSmoke(p:vec3<f32>)->vec4<f32>{
   }}}return result;
 }
 fn outerSmokeAmbient()->vec3<f32>{return vec3<f32>(u.emissive_material.z);}
+${OUTER_SMOKE_OPTICS_WGSL}
+fn joinedSmokeIncidentAt(p:vec3<f32>,extinction:f32)->vec3<f32>{
+  if(!OUTER_SMOKE){return incidentAt(p);}
+  // The consumed incident lattice currently covers [-1,1]^3. Sample its
+  // boundary and decay the continuation outside, rather than repeating a
+  // clamped edge column or switching to unattenuated ambient at the fine box.
+  let inset=1.0/f32(LIGHT_GRID);
+  let q=clamp(p,vec3<f32>(-1.0+inset),vec3<f32>(1.0-inset));
+  return continueOuterSmokeRadiance(incidentAt(q),outerSmokeAmbient(),length(p-q),extinction);
+}
+
+// Same density scale and lighting for both representations. Modes 3/4/5 are
+// joined/fine/outer inspection; actual field values, without incident radiance.
+fn raymarchOuterSmokeInspection(ro:vec3<f32>,rd:vec3<f32>,endLimit:f32,mode:f32)->vec4<f32>{
+  let halfHeight=f32(GRID_Y)/f32(GRID);
+  let near=boxHit(ro-vec3<f32>(0.0,halfHeight-1.0,0.0),rd,vec3<f32>(1.0,halfHeight,1.0));
+  var hit=near;
+  if(OUTER_SMOKE){hit=boxHit(ro-vec3<f32>(0.0,OUTER_EXTENT,0.0),rd,vec3<f32>(OUTER_EXTENT,2.0*OUTER_EXTENT,OUTER_EXTENT));}
+  var t=max(0.0,hit.x);let end=min(hit.y,endLimit);var trans=1.0;
+  let outerWidth=2.0*OUTER_EXTENT/f32(textureDimensions(outerSmokeOptical).x);
+  loop{
+    if(t>=end||trans<.001){break;}
+    let p=ro+rd*t;let inside=outerInsideNear(p);
+    var fine=0.0;var coarse=0.0;
+    if(inside){let r=sampleWorldFlowReconstructionRaw(p);fine=max(0.0,r.material.x+r.microLayer.x*.5+r.material.w*.08);}
+    if(OUTER_SMOKE){coarse=max(0.0,sampleOuterSmoke(p).x);}
+    var density=fine;
+    if(OUTER_SMOKE){density=mix(fine,coarse,select(1.0,outerSmokeBlend(p,outerWidth),inside));}
+    if(mode>3.5 && mode<4.5){density=fine;}
+    if(mode>4.5){density=coarse;}
+    var ds=outerWidth*.5;if(inside){ds=1.0/f32(GRID);}
+    ds=min(ds,end-t);trans*=exp(-density*max(0.0,u.viewport_steps_density.w)*ds);t+=ds;
+  }
+  return vec4<f32>(vec3<f32>(.75)*(1.0-trans),1.0-trans);
+}
 
 // Exact cell traversal of the solver's installed collision texture. Diagnostic
 // x-ray: bypass optical density and mesh depth; never substitute source triangles.
@@ -6375,6 +6410,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let farWorld = farWorldRaw.xyz / farWorldRaw.w;
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
+  if(u.volume_presentation_controls.y>2.5){
+    let inspected=raymarchOuterSmokeInspection(ro,rd,sceneDepthEndT,u.volume_presentation_controls.y);
+    return makeRaymarchResult(inspected,1.0-inspected.a,vec4<f32>(0.0),vec4<f32>(0.0),vec4<f32>(0.0),vec4<f32>(0.0));
+  }
   if(u.volume_presentation_controls.y>0.5){
     let voxel=raymarchCollisionVoxels(ro, rd, u.volume_presentation_controls.y>1.5);
     return makeRaymarchResult(voxel,1.0-voxel.a,vec4<f32>(0.0),vec4<f32>(0.0),vec4<f32>(0.0),vec4<f32>(0.0));
@@ -6573,9 +6612,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       var r:FlowReconstructionSample;r.material=sampleOuterSmoke(p);
       let medium=emissiveMaterial(r,0.0,1.0-effectiveRaymarchSmokeSuppressed);
       let sigma=medium.absorption+medium.scattering;
-      // Ambient only outside the near lighting lattice. Never repeat a clamped
-      // near-cell light sample across the entire atmosphere.
-      color+=trans*medium.scattering*outerSmokeAmbient()*emissionIntegral(sigma,ds);
+      color+=trans*medium.scattering*joinedSmokeIncidentAt(p,sigma)*emissionIntegral(sigma,ds);
       trans*=exp(-sigma*ds);t+=ds;continue;
     }
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
@@ -7498,7 +7535,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       let coverage = boundaryMaterialSupport * selectiveRaymarchFireAuthority;
       let medium = emissiveMaterial(reconstructed, coverage, visibleSmokeAuthority);
       let sigma = medium.absorption + medium.scattering;
-      let emission = medium.emission + medium.scattering * incidentAt(p);
+      let emission = medium.emission + medium.scattering * joinedSmokeIncidentAt(p,sigma);
       standardRadianceContribution = emission * emissionIntegral(sigma, localDt);
       standardExtinctionStep = sigma * localDt;
     } else if (u.physical_fire.x > 0.5) {
@@ -10283,6 +10320,7 @@ export function createKaminosVolumePrototype({
   let boundarySplatTelemetryCopyGeneration = 0;
   let fluidBuffers = [];
   let outerSmoke = null;
+  let outerSmokeInspection = 'off';
   let outerSmokeFallback = null;
   let fluidPredictBuffer = null;
   let fluidPredictBufferBytes = 0;
@@ -14274,6 +14312,7 @@ export function createKaminosVolumePrototype({
       effective:uniforms[333] === 0 ? 'off' : state.sceneCollision?.effective !== 'mesh-voxel-solid' ? 'unavailable-no-collision-mask' : uniforms[333] === 2 && !outerSmoke ? 'unavailable-no-outer-grid' : controlsSnapshot.collisionVoxelView,
       authority:'installed-solver-solid-texture', presentation:'x-ray-replaces-volume',
       fineShape:[gridSize,gridHeight,gridSize],outerShape:outerSmoke?.config.shape || null};
+    if(outerSmokeInspection !== 'off') uniforms[333] = {joined:3,fine:4,outer:5}[outerSmokeInspection];
     uniforms[334] = 0;
     uniforms[335] = 0;
     writeBoundaryFirePaletteUniform(
@@ -14991,7 +15030,7 @@ export function createKaminosVolumePrototype({
       }
       outerSmoke.encode(encoder,currentFluid,resolveTimeStepConfig(controlsSnapshot).effective);
       state.outerSmoke={...outerSmoke.receipt(),nearBoundary:'existing-pressure-regime-one-way-overlap',
-        lighting:'authored-ambient-only-outside-near-field',resetPolicy:'reset-with-near-domain',transform:{...productTransform}};
+        lighting:'near-incident-boundary-continuation-with-local-extinction-v0',resetPolicy:'reset-with-near-domain',transform:{...productTransform}};
     }
     state.simStepCount += 1;
     updateSimCostLedger();
@@ -24552,6 +24591,12 @@ export function createKaminosVolumePrototype({
 
   return {
     sampleSharedTransmittanceContributions,
+    setOuterSmokeInspection(mode = 'off') {
+      if(!['off','joined','fine','outer'].includes(mode)) throw new Error('Invalid outer smoke inspection');
+      if(mode !== 'off' && !outerSmoke) throw new Error('Outer smoke inspection requires the outer grid');
+      outerSmokeInspection = mode;
+      return {mode,authority:'native-density-same-scale-no-incident-light'};
+    },
     async readOuterSmokeState(){if(!outerSmoke)throw new Error('outer smoke inactive');return {receipt:outerSmoke.receipt(),values:await outerSmoke.readState()};},
     relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives) {
       if (productFrameOwner !== 'prototype') throw new Error('Only the ordinary prototype owns its domain translation');
@@ -25162,6 +25207,7 @@ export function createKaminosVolumePrototype({
     debugState() {
       return {
         ...state,
+        outerSmokeInspection: outerSmokeInspection,
         ordinaryDomainTranslation: [...productTransform.translate],
         coreEmitterSourceReceipt: state.coreEmitterSourceReceipt ? { ...state.coreEmitterSourceReceipt } : null,
         cameraSignature: cameraSignature(),
