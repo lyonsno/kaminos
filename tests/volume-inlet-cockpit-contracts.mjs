@@ -42,7 +42,7 @@ test('every inflow and wind control is restored from a saved route by the route 
   assert.ok(listMatch, 'the initialiser names the controls it restores from the route');
   const listed = [...listMatch[1].matchAll(/'([a-z0-9-]+)'/g)].map(m => m[1]);
   for (const id of ROUTE_RESTORED) assert.ok(listed.includes(id), `${id} is restored from the route`);
-  assert.match(init, /for \(const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS\) \{\s*\n\s*const param = document\.getElementById\(id\)\?\.dataset\.volumeSettingsParam;\s*\n\s*if \(param && params\.has\(param\)\) setVolumeControlValue\(id, params\.get\(param\)\);/, 'each listed control takes its route value through the shared setter');
+  assert.match(init, /for \(const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS\) \{\s*\n\s*const param = document\.getElementById\(id\)\?\.dataset\.volumeSettingsParam;\s*\n\s*if \(!param \|\| !params\.has\(param\)\) continue;\s*\n\s*const value = params\.get\(param\);[\s\S]{0,600}?setVolumeControlValue\(id, value\);\s*\n\s*\}/, 'each listed control takes its route value through the shared setter (the retired pattern aside)');
 });
 
 test('spiral and concentric are gone from the pattern select; retired-from-the-interface rows stay in the DOM but hidden', () => {
