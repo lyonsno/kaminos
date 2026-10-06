@@ -334,6 +334,13 @@ async function runMeshSkinnedPoseScenario(ws) {
 }
 
 // Exercises the retained route and ordinary buttons. No generation response is mocked.
+function assertMotionContactCompletion(completed) {
+  const totals = completed?.contactTransfer?.diagnostics?.wholeClip;
+  assert.ok(totals && ['maximumContactError','maximumReachError'].every(key => Number.isFinite(totals[key]) && totals[key] >= 0), 'completed contact playback needs finite accumulated residuals');
+  assert.ok(totals.maximumContactError < .001, 'accumulated contact residual must agree with the solved goals across completed playback');
+  assert.ok(totals.maximumReachError < 1e-5, 'accumulated reach residual must agree across completed playback');
+}
+
 async function runCatRetainedPlaybackScenario(ws, { groundTravel = false, contactTransfer = false } = {}) {
   groundTravel = groundTravel || contactTransfer;
   await runMeshAssetLinkScenario(ws);
@@ -381,6 +388,7 @@ async function runCatRetainedPlaybackScenario(ws, { groundTravel = false, contac
     assert.ok(frames.at(-1).state.groundTravel?.distance > 0.05, 'hind strokes must produce actual ground distance');
     assert.notDeepEqual(frames.at(-1).root.position, frames[0].root.position, 'registered object must travel, not only report projected travel');
     if (contactTransfer) {
+      assertMotionContactCompletion(evidence.completed);
       for (const frame of frames) {
         assert.ok(frame.state.contactTransfer?.diagnostics?.contactError < .001, 'actual painted contact residual must agree with the solved goal');
         assert.ok(frame.state.contactTransfer.diagnostics.reachError < 1e-5, 'target legs must reach the solved contact');
