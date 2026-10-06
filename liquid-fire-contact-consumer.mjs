@@ -348,7 +348,7 @@ fn scatter_liquid_fire_contacts(@builtin(global_invocation_id) gid: vec3<u32>) {
     let ringDistance = abs(radial - consumerParams.sourceRingGeometry.x);
     touchesSource = select(
       length(vec2<f32>(ringDistance, axial)) <= consumerParams.sourceQuench.w + waterRadius,
-      ringDistance <= consumerParams.sourceQuench.w + waterRadius && abs(axial) <= consumerParams.sourceRingGeometry.y + waterRadius,
+      length(vec2<f32>(ringDistance, axial)) <= consumerParams.sourceQuench.w + waterRadius && abs(axial) <= consumerParams.sourceRingGeometry.y + waterRadius,
       consumerParams.sourceRingGeometry.z == 1.0
     );
   } else if (consumerParams.sourceAxisMode.w == 2.0) {

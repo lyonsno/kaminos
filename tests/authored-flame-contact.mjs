@@ -13,3 +13,9 @@ test('unsupported or disabled analytic sources do not borrow legacy sphere',()=>
 
 import {liquidFireContactConsumerParams,createLiquidFireContactConsumerShaderWGSL} from '../liquid-fire-contact-consumer.mjs';
 test('actual contact uniforms retain ring units, orientation and mode',()=>{const b=liquidFireContactConsumerParams({allocationGeneration:1,epoch:1,sourceFrameHash:7,sourceQuenchCenter:[.65,.12,.5],sourceQuenchRadius:.02,sourceAxis:[1,0,0],sourceContactMode:1,sourceRingRadius:.35,sourceHalfDepth:.0015,sourceShallow:true});const f=new Float32Array(b);assert.equal(b.byteLength,112);assert.deepEqual([...f.slice(20,24)],[1,0,0,1]);assert.ok(Math.abs(f[24]-.35)<1e-6);assert.equal(f[26],1);assert.match(createLiquidFireContactConsumerShaderWGSL(16),/if \(touchesSource\)/);});
+test('deep shallow ring requires torus and inlet-depth intersection',()=>{
+ const g=authoredFlameContactGeometry({...ring,sourceDepth:.36});assert.equal(pointTouchesAuthoredFlame([1,-.66,0],g),false);assert.equal(pointTouchesAuthoredFlame([1,-.74,0],g),true);
+});
+test('inflow boundary ring has no authored-volume ring contact claim',()=>{
+ assert.equal(pointTouchesAuthoredFlame([1,-.76,0],authoredFlameContactGeometry({...ring,sourceLaw:'inflow-boundary'})),false);
+});
