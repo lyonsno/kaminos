@@ -11421,7 +11421,7 @@ async function initScene() {
     needsRender = true;
     return { position: camera.position.toArray(), target: controls.target.toArray() };
   };
-  window.__kaminosRenderSceneForInspection=()=>renderSceneFrame();
+  window.__kaminosRenderSceneForInspection=()=>{const before=sceneFrameCount;const result=renderSceneFrame();if(result===false||sceneFrameCount===before)throw new Error('inspection scene draw skipped');return {frame:renderer.info.frame,sceneFrameCount,drawn:true};};
   const IDLE_THRESHOLD = 3;
 
   const markDirty = () => { needsRender = true; idleFrames = 0; };

@@ -9,6 +9,8 @@ const result=inspectSourceRays({inputs:input,field,metadata});assert.equal(resul
 assert.throws(()=>inspectSourceRays({inputs:input,field,metadata:{...metadata,surfaceGainFactor:undefined}}),/finite.*gain/);
 assert.equal(inspectSourceRays({inputs:input,field,metadata:{...metadata,surfaceReconstruction:{passes:4}}}).status,'reconstructed','filtered receiver output is not direct-ray parity evidence');
 const snapshot={status:'captured',metadata,sourceGeneration:3,inputs:input};validateInspectionSnapshot(snapshot);
+for(const generation of [undefined,null,'unverified',-1,1.5]){const s=structuredClone(snapshot);s.metadata.generation=generation;s.sourceGeneration=generation;s.inputs.generation=generation;assert.throws(()=>validateInspectionSnapshot(s),/generation|identity/,'equal invalid identities cannot establish a coherent source capture');}
+for(const field of ['metadata','inputs']){const s=structuredClone(snapshot);delete s[field].generation;assert.throws(()=>validateInspectionSnapshot(s));}
 for(const mutate of [s=>s.sourceGeneration=2,s=>s.inputs.generation=1,s=>s.status='failed',s=>s.inputs.rows[0].front[0]=NaN]){const s=structuredClone(snapshot);mutate(s);assert.throws(()=>validateInspectionSnapshot(s));}
 const invalid=structuredClone(input);invalid.rows[0].firstHits[0]=0;assert.throws(()=>inspectSourceRays({inputs:invalid,field,metadata}),/unwritten/);
 assert.equal(inspectSourceRays({inputs:input,field,metadata:{...metadata,angularPattern:'fixed'}}).status,'unsupported','unsupported replay cannot impersonate source-aware math');

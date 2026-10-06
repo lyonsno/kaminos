@@ -16,13 +16,15 @@ export async function measureSceneGpu(renderer,{samples=20,getSignature=()=>'',d
   try{
     for(let i=0;i<samples;i++){
       await new Promise(requestAnimationFrame);
-      if(drawFrame){drawFrame();await renderer.backend.device.queue.onSubmittedWorkDone();}
+      let requestedDraw=null;
+      if(drawFrame){requestedDraw=drawFrame();if(!requestedDraw?.drawn||!Number.isSafeInteger(requestedDraw.frame))throw new Error('requested scene draw was skipped or has no frame identity');await renderer.backend.device.queue.onSubmittedWorkDone();}
       const renderMs=await renderer.resolveTimestampsAsync('render'),renderFrames=renderer.backend.timestampQueryPool.render?.frames||[];
       const render=assertSceneTimingSample({ms:renderMs,frame:renderFrames.at(-1)},previousRender);previousRender=render.frame;
+      if(requestedDraw&&render.frame!==requestedDraw.frame)throw new Error('scene timestamp attribution mismatch: requested draw '+requestedDraw.frame+', observed '+render.frame);
       let compute={status:'no-observed-compute-pool'};
       if(renderer.backend.timestampQueryPool.compute){const ms=await renderer.resolveTimestampsAsync('compute'),frames=renderer.backend.timestampQueryPool.compute.frames||[];compute=assertSceneTimingSample({ms,frame:frames.at(-1)},previousCompute);previousCompute=compute.frame;}
       if(getSignature()!==signature)throw new Error('lighting/geometry configuration changed during timing');
-      records.push({render,compute,signature});
+      records.push({render,compute,requestedDraw,signature});
     }
     return {status:'measured',scope:'Three scene render/compute GPU; excludes volume, source seeding and lighting gather',samples,records};
   }catch(error){return {status:'failed',phase:'scene-timestamps',error:String(error.message||error),samples,records};}

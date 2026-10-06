@@ -159,7 +159,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(!materials.every(m=>m?.isMeshStandardMaterial||m?.isMeshStandardNodeMaterial||m?.isMeshPhysicalMaterial||m?.isMeshPhysicalNodeMaterial))return;
       const g=mesh.geometry,p=g.attributes.position,n=g.attributes.normal;
       rows.push([mesh.uuid,mesh.matrixWorld.elements,g.uuid,attributeId(p),p?.version,p?.count,attributeId(n),n?.version,n?.count,
-        attributeId(g.index),g.index?.version,materials.map(m=>[m.uuid,m.version,m.side])]);
+        attributeId(g.index),g.index?.version,g.groups.map(group=>[group.start,group.count,group.materialIndex]),materials.map(m=>[m.uuid,m.version,m.side])]);
     });
     return JSON.stringify([sourceTransform,solid,rows]);
   }

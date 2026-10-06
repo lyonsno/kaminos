@@ -28,6 +28,7 @@ export function inspectSourceRays({inputs,field,metadata}){
 }
 
 export function validateInspectionSnapshot(snapshot){
+  for(const generation of [snapshot.metadata?.generation,snapshot.sourceGeneration,snapshot.inputs?.generation])if(!Number.isSafeInteger(generation)||generation<0)throw new Error('present nonnegative integer inspection generation required');
   if(snapshot.status!=='captured'||snapshot.metadata.generation!==snapshot.sourceGeneration||snapshot.metadata.generation!==snapshot.inputs.generation)throw new Error('inspection snapshot is partial or mixed-generation');
   if(!snapshot.inputs.rows.length||snapshot.inputs.rows.some(r=>!r.front.every(Number.isFinite)||!r.back.every(Number.isFinite)))throw new Error('actual receiver output required');
   return snapshot;

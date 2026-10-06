@@ -28,6 +28,15 @@ function fixture(castShadow=true) {
   return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,buffers,field,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='receiver-material-groups'){
+ const f=fixture(false);f.geometry.setAttribute('position',new THREE.Float32BufferAttribute([0,0,0,1,0,0,0,1,0,1,0,0,1,1,0,0,1,0],3));f.geometry.setIndex(null);f.geometry.computeVertexNormals();
+ f.geometry.clearGroups();f.geometry.addGroup(0,3,0);f.geometry.addGroup(3,3,0);f.mesh.material=[f.material,new THREE.MeshStandardMaterial()];
+ f.mount.setReceiverSpacing(2);f.prepare();f.prepare();assert.equal(f.mount.debugState().surfaceReceivers,1);
+ f.mesh.geometry.groups[1].materialIndex=1;f.prepare();f.prepare();assert.equal(f.mount.debugState().surfaceReceivers,2,'noncasting material split must invalidate the coarsened receiver layout');
+ const splitBuilds=f.mount.debugState().geometryBuilds;f.prepare();assert.equal(f.mount.debugState().geometryBuilds,splitBuilds,'unchanged material groups reuse layout');
+ f.mesh.geometry.groups[1].materialIndex=0;f.prepare();f.prepare();assert.equal(f.mount.debugState().surfaceReceivers,1,'merging material groups also invalidates layout');
+ f.mount.dispose();
+}
 if(!selected||selected==='ray-inspection'){
  const f=fixture();f.prepare();
  for(const label of ['surface and smoke receivers','distributed incident directions'])assert(f.buffers.find(b=>b.label===label).usage&GPUBufferUsage.COPY_SRC,'inspection must read actual GPU inputs without invalid copy commands');
