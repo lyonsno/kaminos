@@ -47,6 +47,12 @@ test('spiral and concentric are gone from the pattern select; retired-from-the-i
     assert.match(index, new RegExp(`getElementById\\('${id}'\\)`), `${id} is still read, so saved basins route their value`);
   }
   assert.match(index, /\.slider-row\[data-volume-ui-retired\] \{ display: none; \}/);
+  // The layout engine must keep these controls authorable: saved layouts name
+  // them and the validator rejects a layout naming a control the page does not
+  // author (a 3d73ef32 exclusion made every saved layout fail to load).
+  const layoutEngine = readFileSync(new URL('../volume-cockpit-layout.mjs', import.meta.url), 'utf8');
+  const authorable = layoutEngine.slice(layoutEngine.indexOf('function isAuthorableControl'), layoutEngine.indexOf('\n}\n', layoutEngine.indexOf('function isAuthorableControl')));
+  assert.doesNotMatch(authorable, /data-volume-ui-retired/, 'retired-from-the-interface rows stay layout-authorable');
 });
 
 test('the older emitter dynamics and the boundary gradient / softness / cut hide while the inflow law is selected', () => {
