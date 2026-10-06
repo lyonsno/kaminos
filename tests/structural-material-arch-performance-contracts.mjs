@@ -8,6 +8,11 @@ const trial = { ...expected, visualRoute: 'handy-weathered-stone-v1', identity: 
   viewport: { width: 1280, height: 900, pixelRatio: 1 }, stepBefore: 120, stepAfter: 123,
   observed: Array.from({ length: 2 }, (_, index) => ({ index, milliseconds: 12, stepMilliseconds: 8, renderSubmitMilliseconds: 2, fenceMilliseconds: 2, computeCalls: 719, renderCalls: 1 })) };
 assert.deepEqual(evidence.inspectArchPerformanceTrial(trial, expected), []);
+const requestedDetail = { ...expected, stoneDetail: '5k' };
+const actualDetail = { ...structuredClone(trial), stoneDetail: '5k', effectiveUrl: `${trial.effectiveUrl}&stoneDetail=5k` };
+assert.deepEqual(evidence.inspectArchPerformanceTrial(actualDetail, requestedDetail), []);
+assert.ok(evidence.inspectArchPerformanceTrial({ ...actualDetail, stoneDetail: 'original' }, requestedDetail).length);
+assert.ok(evidence.inspectArchPerformanceTrial({ ...actualDetail, effectiveUrl: trial.effectiveUrl }, requestedDetail).length);
 for (const mutate of [
   x => x.identity.adapterFallback = true, x => x.identity.backend = 'webgl', x => x.visualRoute = 'box-baseline',
   x => x.effectiveUrl = 'http://localhost/structural-material-arch-gpu.html?smoke=1', x => x.config.substeps = 1,

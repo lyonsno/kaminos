@@ -7,9 +7,9 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { Vector3, Quaternion } from 'three';
 import { inspectGpuConformance, inspectGpuArchLoad, inspectGpuArchRendererLifetime, inspectArchPerformanceTrial } from './structural-material-arch-gpu-evidence.mjs';
-import { inspectStoneVisual, STONE_ASSETS } from './structural-material-arch-stones.js';
+import { inspectStoneVisual, stoneAssetsForDetail } from './structural-material-arch-stones.js';
 
-const [outputInput, executableInput, page = 'structural-material-arch-gpu-conformance.html', exercise = 'load', appearance = 'boxes'] = process.argv.slice(2);
+const [outputInput, executableInput, page = 'structural-material-arch-gpu-conformance.html', exercise = 'load', appearance = 'boxes', stoneDetail = '5k'] = process.argv.slice(2);
 if (!outputInput || !executableInput) throw new Error('usage: node structural-material-arch-gpu-smoke.mjs OUTPUT.json INDEPENDENT_CHROME [PAGE]');
 const output=path.resolve(outputInput), root=path.dirname(fileURLToPath(import.meta.url));
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -18,7 +18,7 @@ const report={status:'running',phase:'preflight',root,argv:process.argv,sourceRe
 report.harnessSha256=hash(fs.readFileSync(fileURLToPath(import.meta.url)));
 fs.mkdirSync(path.dirname(output),{recursive:true});
 const save=()=>fs.writeFileSync(output,JSON.stringify(report,null,2));
-let server,child,socket,stderr='',nextId=0;
+let server,child,socket,stderr='',nextId=0,expectedStoneAssets=[];
 const pending=new Map(), sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++nextId;pending.set(id,{resolve,reject});socket.send(JSON.stringify({id,method,params}));});
 const evaluate=async expression=>{report.inputs.push({expression,at:new Date().toISOString()});save();const result=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(result.exceptionDetails)throw new Error(JSON.stringify(result.exceptionDetails));return result.result.value;};
@@ -27,7 +27,7 @@ const input=async params=>{report.inputs.push({method:'Input.dispatchMouseEvent'
 const witness=()=>evaluate('window.__archCollapse.witness()');
 async function capture(name,expected,expectedFailures){
   const state=await witness(),errors=inspectGpuArchLoad(state,expected,expectedFailures),pixels=await evaluate('window.__archCollapse.pixels()');
-  if(appearance==='stones')errors.push(...inspectStoneVisual(state));
+  if(appearance==='stones')errors.push(...inspectStoneVisual(state,stoneDetail));
   report.states??={};report.states[name]=state;save();
   check(`${name}: native route, requested configuration, live physical and displayed poses`,!errors.length,errors);
   check(`${name}: canvas contains geometry`,pixels.fraction>.001,pixels);
@@ -41,7 +41,7 @@ async function injury(pick,delta={x:-1.5,y:0,z:.5},frames=60,requireFrontPatch=t
   check('a visible material contact is available',Boolean(pick?.visible),pick);
   await input({type:'mousePressed',x:pick.screen.x,y:pick.screen.y,button:'left',buttons:1,clickCount:1});
   const selected=await witness();
-  if(appearance==='stones')check('grab is attached to a visible stone triangle',STONE_ASSETS.some(asset=>asset.id===selected.lastPick?.asset)&&selected.lastPick?.eligibility==='surface'&&selected.lastPick.point.every((value,index)=>Math.abs(value-[pick.world.x,pick.world.y,pick.world.z][index])<1e-5),selected.lastPick);
+  if(appearance==='stones')check('grab is attached to a visible stone triangle',expectedStoneAssets.some(asset=>asset.id===selected.lastPick?.asset)&&selected.lastPick?.eligibility==='surface'&&selected.lastPick.point.every((value,index)=>Math.abs(value-[pick.world.x,pick.world.y,pick.world.z][index])<1e-5),selected.lastPick);
   check('pointer selects the advertised current material patch',selected.state.hand?.index===pick.index&&selected.state.hand.indices.includes(pick.index)&&(!requireFrontPatch||selected.state.hand.indices.length>1&&selected.state.hand.layers.join(',')==='2'),selected.state.hand);
   let screen=pick.screen;
   for(let i=0;i<frames;i++){
@@ -102,10 +102,11 @@ try {
   report.browser.executable=executable;report.browser.version=execFileSync(executable,['--version'],{encoding:'utf8'}).trim();
   const isArch=page==='structural-material-arch-gpu.html';
   if(!['boxes','stones'].includes(appearance)||appearance==='stones'&&!isArch)throw new Error('Unsupported visual appearance');
-  if(!['load','collapse','bind','controls','performance','standing-diagnostics','penalty-diagnostics','stiffness-diagnostics','construction-diagnostics','contact-diagnostics'].includes(exercise)||exercise!=='load'&&!isArch)throw new Error('Unsupported exercise');
+  if(appearance==='stones')expectedStoneAssets=stoneAssetsForDetail(stoneDetail);
+  if(!['load','collapse','fracture','bind','controls','performance','standing-diagnostics','penalty-diagnostics','stiffness-diagnostics','construction-diagnostics','contact-diagnostics'].includes(exercise)||exercise!=='load'&&!isArch)throw new Error('Unsupported exercise');
   if(!isArch&&page!=='structural-material-arch-gpu-conformance.html')throw new Error('Unsupported GPU smoke page');
   for(const source of [page,...(isArch?['structural-material-arch-gpu-view.js','structural-material-arch-gpu.js','structural-material-arch-gpu-kernels.js','structural-material-arch-gpu-fixture.js']:['structural-material-arch-gpu-conformance.js']),'dist/structural-material-arch-gpu-engine.js','vendor/webphysics/provenance.json','package-lock.json','node_modules/three/build/three.module.js','node_modules/three/build/three.webgpu.js','node_modules/three/build/three.tsl.js'])report.sources[source]=hash(fs.readFileSync(path.join(root,source)));
-  if(appearance==='stones')for(const source of ['structural-material-arch-stones.js',...STONE_ASSETS.map(asset=>asset.url)])report.sources[source]=hash(fs.readFileSync(path.join(root,source)));
+  if(appearance==='stones')for(const source of ['structural-material-arch-stones.js',...expectedStoneAssets.map(asset=>asset.url)])report.sources[source]=hash(fs.readFileSync(path.join(root,source)));
   report.phase='http';save();
   server=createServer((req,res)=>{
     const filename=path.resolve(root,`.${decodeURIComponent(new URL(req.url,'http://localhost').pathname)}`);
@@ -113,7 +114,7 @@ try {
     try{const bytes=fs.readFileSync(filename);res.setHeader('content-type',({'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.json':'application/json','.wgsl':'text/plain'})[path.extname(filename)]??'application/octet-stream');res.setHeader('cache-control','no-store');res.end(bytes);}catch{res.writeHead(404).end();}
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-  report.requestedUrl=`http://127.0.0.1:${server.address().port}/${page}${isArch?`?smoke=1${appearance==='stones'?'&stones=1':''}`:''}`;
+  report.requestedUrl=`http://127.0.0.1:${server.address().port}/${page}${isArch?`?smoke=1${appearance==='stones'?`&stones=1&stoneDetail=${encodeURIComponent(stoneDetail)}`:''}`:''}`;
   report.phase='launch';report.browser.profile=fs.mkdtempSync(path.join(os.tmpdir(),'kaminos-arch-gpu-'));save();
   child=spawn(executable,['--headless=new','--enable-automation','--no-first-run','--no-default-browser-check','--enable-unsafe-webgpu','--use-gl=angle','--use-angle=metal','--remote-debugging-port=0',`--user-data-dir=${report.browser.profile}`,'about:blank'],{stdio:['ignore','pipe','pipe']});
   child.stderr.setEncoding('utf8').on('data',value=>{stderr+=value;});
@@ -141,7 +142,7 @@ try {
   const capturePath=`${output.slice(0,-path.extname(output).length)}.png`;fs.writeFileSync(capturePath,bytes);report.captures.desktop={path:capturePath,sha256:hash(bytes),width:bytes.readUInt32BE(16),height:bytes.readUInt32BE(20)};
   report.lastTrustworthyEvidence=`${isArch?'paused arch':'native conformance'} report from ${report.effectiveUrl}`;
   report.evidenceErrors=isArch?inspectGpuArchLoad(report.result):inspectGpuConformance(report.result);
-  if(appearance==='stones')report.evidenceErrors.push(...inspectStoneVisual(report.result));
+  if(appearance==='stones')report.evidenceErrors.push(...inspectStoneVisual(report.result,stoneDetail));
   if(isArch){
     if(report.result.phase!=='interactive'||report.result.state?.backend!=='webgpu-avbd'||report.result.identity?.backend!=='webgpu')report.evidenceErrors.push('GPU arch failed to initialize');
     if(!(report.pixels?.fraction>.001))report.evidenceErrors.push('Arch canvas is blank');
@@ -162,7 +163,7 @@ try {
       await evaluate('window.__archCollapse.reset()');
       const trial=await evaluate(`window.__archCollapse.performanceTrial(${JSON.stringify({...settings,samples:60,warmup:20})})`);
       report.performanceTrials.push(trial);save();
-      const errors=inspectArchPerformanceTrial(trial,{...settings,samples:60,warmup:20,appearance,bodies:report.result.state.bodies.length,config:report.result.state.config,triangles:report.result.visual.triangles});
+      const errors=inspectArchPerformanceTrial(trial,{...settings,samples:60,warmup:20,appearance,...(appearance==='stones'?{stoneDetail}:{}),bodies:report.result.state.bodies.length,config:report.result.state.config,triangles:report.result.visual.triangles});
       check(`${settings.mode}/${settings.renderPasses}: native requested configuration and complete timing samples`,!errors.length,errors);
       report.lastTrustworthyEvidence=`${settings.mode}/${settings.renderPasses} complete timing samples`;save();
     }
@@ -226,7 +227,7 @@ try {
     report.phase='local-bind-exercise';save();await evaluate('window.__archCollapse.advance(120)');const standing=await capture('standing');
     await injury(standing.pickTargets.find(item=>item.row===1&&item.visible));const injured=await capture('released-injury');await repairClick(injured);
   }
-  if(isArch&&exercise==='collapse'){
+  if(isArch&&['collapse','fracture'].includes(exercise)){
     report.phase='standing-under-weight';save();await evaluate('window.__archCollapse.advance(120)');const standing=await capture('standing');
     check('the arch stands intact under its own weight',standing.state.broken===0&&standing.state.bodies.every(body=>Math.abs(body.position.y-body.rest.y)<.05),{broken:standing.state.broken,maximumSag:Math.max(...standing.state.bodies.map(body=>Math.abs(body.position.y-body.rest.y)))});
     report.phase='front-patch-injury';save();const held=await injury(standing.pickTargets.find(item=>item.row===1&&item.visible),{x:-.35,y:0,z:.12},12);const injured=await capture('released-injury');
@@ -238,11 +239,14 @@ try {
     const second=wounded.pickTargets.find(item=>item.visible&&item.row>2&&wounded.state.components[wounded.state.bodies[item.index].component].count>6);
     await injury(second,{x:1.4,y:.5,z:.6},60,false);const repeated=await capture('repeated-injury');
     check('second injury adds damage without healing prior damage',repeated.state.broken>wounded.state.broken&&oldDead.every(id=>!repeated.state.bonds.find(bond=>bond.id===id).alive),{before:wounded.state.broken,after:repeated.state.broken});
-    const binding=await repairClick(repeated);
-    const repairedIds=binding.state.events.filter(event=>event.kind==='bind'&&event.step>repeated.state.step&&binding.state.bonds.find(bond=>bond.id===event.id).alive).map(event=>event.id);
-    const repairedPick=binding.pickTargets.find(item=>item.visible&&binding.state.bonds.some(bond=>repairedIds.includes(bond.id)&&(bond.a===item.index||bond.b===item.index)));
-    await evaluate('document.querySelector("#shear").click()');await injury(repairedPick,{x:-1.2,y:.3,z:.4},60,false);const reinjured=await capture('repaired-material-injury');
-    check('repaired connectivity can fracture under a later actual grab',reinjured.state.events.some(event=>event.kind==='crack'&&event.handActive&&event.step>binding.state.step&&repairedIds.includes(event.id)),repairedIds);
+    let binding=repeated;
+    if(exercise==='collapse'){
+      binding=await repairClick(repeated);
+      const repairedIds=binding.state.events.filter(event=>event.kind==='bind'&&event.step>repeated.state.step&&binding.state.bonds.find(bond=>bond.id===event.id).alive).map(event=>event.id);
+      const repairedPick=binding.pickTargets.find(item=>item.visible&&binding.state.bonds.some(bond=>repairedIds.includes(bond.id)&&(bond.a===item.index||bond.b===item.index)));
+      await evaluate('document.querySelector("#shear").click()');await injury(repairedPick,{x:-1.2,y:.3,z:.4},60,false);const reinjured=await capture('repaired-material-injury');
+      check('repaired connectivity can fracture under a later actual grab',reinjured.state.events.some(event=>event.kind==='crack'&&event.handActive&&event.step>binding.state.step&&repairedIds.includes(event.id)),repairedIds);
+    }
     await evaluate('window.__archCollapse.advance(60)');await capture('fall-1s');
     await evaluate('window.__archCollapse.advance(120)');await capture('fall-3s');
     await evaluate('window.__archCollapse.advance(300)');const rest=await capture('rest-8s');

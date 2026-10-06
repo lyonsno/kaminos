@@ -8,15 +8,30 @@ export const STONE_ASSETS = [
   ['05-quarry-split', '88c494b997c4ff9d41690c9c0935f38c646162037faf77b83c1f29893a47db28'],
 ].map(([id, sha256]) => ({ id, sha256, url: `./assets/arch-stones/${id}.glb` }));
 
-export function inspectStoneVisual(witness) {
+const STONE_DETAILS = {
+  original: STONE_ASSETS,
+  '5k': [{ id: '03-bedded-stone-5k', sha256: 'e39f199f7ad2dacfccf7f2085c00e3fbef3ac856e156f5b5c9d7c2be4d506992', url: './assets/arch-stones/03-bedded-stone-5k.glb', triangles: 4943 }],
+  '10k': [{ id: '03-bedded-stone-10k', sha256: '8d69eb64ce35dcad125813870393f3ae645631e5de37a24c8b85db79f86b2495', url: './assets/arch-stones/03-bedded-stone-10k.glb', triangles: 9773 }],
+};
+
+export function stoneAssetsForDetail(detail) {
+  if (!Object.hasOwn(STONE_DETAILS, detail)) throw new Error(`Unknown stone detail: ${detail}`);
+  return STONE_DETAILS[detail];
+}
+
+export function inspectStoneVisual(witness, expectedDetail = witness?.visual?.detail ?? 'original') {
   const visual = witness?.visual, errors = [];
   if (visual?.route !== 'handy-weathered-stone-v1') return ['Weathered stone route absent or substituted'];
+  let expectedAssets;
+  try { expectedAssets = stoneAssetsForDetail(expectedDetail); } catch (error) { return [error.message]; }
+  if ((visual.detail ?? 'original') !== expectedDetail) errors.push('Requested stone detail substituted');
   if (!Array.isArray(visual.assets) || !Array.isArray(visual.bodies) || !witness.state?.bodies?.length) return ['Stone/body inventory missing'];
-  for (const expected of STONE_ASSETS) {
+  for (const expected of expectedAssets) {
     const actual = visual.assets.find(asset => asset.id === expected.id);
     if (actual?.sha256 !== expected.sha256 || !(actual?.bytes > 0) || !(actual?.triangles > 0)) errors.push(`Unverified stone ${expected.id}`);
+    if (expected.triangles !== undefined && actual?.triangles !== expected.triangles) errors.push(`Unexpected triangle count for ${expected.id}`);
   }
-  if (visual.assets.length !== STONE_ASSETS.length) errors.push('Stone inventory changed');
+  if (visual.assets.length !== expectedAssets.length) errors.push('Stone inventory changed');
   if (visual.bodies.length !== witness.state.bodies.length || new Set(visual.bodies.map(body => body.index)).size !== visual.bodies.length) errors.push('Incomplete visual bodies');
   let triangles = 0;
   for (const body of witness.state.bodies) {
@@ -54,10 +69,10 @@ export function structuralFaceAt(point, half) {
   return normal;
 }
 
-export async function loadStoneAssets() {
+export async function loadStoneAssets(detail = '5k') {
   const loader = new GLTFLoader(), assets = [];
   try {
-    for (const entry of STONE_ASSETS) {
+    for (const entry of stoneAssetsForDetail(detail)) {
       const response = await fetch(entry.url);
       if (!response.ok) throw new Error(`Stone ${entry.id}: HTTP ${response.status}`);
       const bytes = await response.arrayBuffer();

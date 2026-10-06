@@ -9,6 +9,7 @@ export function inspectArchPerformanceTrial(trial, expected) {
   try { url = new URL(trial.effectiveUrl); } catch { errors.push('Effective timing URL missing'); }
   if (url && (url.pathname !== '/structural-material-arch-gpu.html' || url.searchParams.get('smoke') !== '1' || (url.searchParams.get('stones') === '1') !== (expected.appearance === 'stones'))) errors.push('Timing URL differs from requested appearance');
   if (trial?.visualRoute !== (expected.appearance === 'stones' ? 'handy-weathered-stone-v1' : 'box-baseline')) errors.push('Timing visual route substituted');
+  if (expected.stoneDetail !== undefined && (trial?.stoneDetail !== expected.stoneDetail || url?.searchParams.get('stoneDetail') !== expected.stoneDetail)) errors.push('Timing stone detail differs from requested workload');
   for (const key of ['mode', 'samples', 'warmup', 'renderPasses', 'bodies', 'triangles']) if (trial?.[key] !== expected[key]) errors.push(`Timing ${key} differs from requested workload`);
   for (const [key, value] of Object.entries(expected.config)) if (!Object.is(trial?.config?.[key], value)) errors.push(`Timing solver configuration differs at ${key}`);
   if (trial?.viewport?.width !== 1280 || trial?.viewport?.height !== 900 || trial?.viewport?.pixelRatio !== 1) errors.push('Timing viewport differs from requested workload');
