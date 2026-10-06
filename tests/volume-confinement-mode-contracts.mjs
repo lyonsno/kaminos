@@ -99,7 +99,7 @@ test('the residual probe also reduces enstrophy so confinement can be calibrated
   const reduce = source.slice(source.indexOf('fn pressureResidualReduce('), source.indexOf('fn csPressureResidualBefore('));
   assert.match(reduce, /let omega = curlAtCell\(vec3<i32>\(gid\)\);/, 'vorticity sampled at the cell');
   assert.match(reduce, /dot\(omega, omega\)/, 'enstrophy accumulates |omega|^2');
-  assert.match(reduce, /let partialIndex = [34]u \* \(/, 'partial stride counts the vorticity vec4');
+  assert.match(reduce, /let partialIndex = [3-5]u \* \(/, 'partial stride counts the vorticity vec4');
   assert.match(reduce, /pressureResidualPartials\[partialIndex \+ 2u\] = vec4<f32>\(enstrophySum, vorticityPeak, 0\.0, 0\.0\);/, 'vorticity partial written by the before pass');
   assert.match(source, /vorticity: \{\s*identity: 'enstrophy-before-projection-v0',/, 'CPU reduction exports the vorticity readout');
   assert.match(source, /enstrophyMean: enstrophySum \/ cells/, 'enstrophy is reported per cell');

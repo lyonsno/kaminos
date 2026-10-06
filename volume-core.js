@@ -1550,7 +1550,46 @@ export const PRESSURE_RESIDUAL_PROBE_FRESHNESS_FRAMES = 120;
 export const PRESSURE_RESIDUAL_MAP_TIMEOUT_MS = 5000;
 const PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR = 'pressure-residual-map-timeout';
 // Four vec4 partials per workgroup: compact divergence, wide divergence, vorticity (enstrophy sum, max |omega|), height profile (sum vertical velocity, heat, smoke).
-export const PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP = 16;
+export const PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP = 20;
+
+// Pure fold of the probe's per-workgroup partials into the height profile.
+// Workgroups are 4x4x4 cells, so each slab is four cell rows across the whole
+// x-z plane; the fifth partial carries the lateral first moments of heat and
+// smoke, which give a per-slab centroid in cells relative to the grid centre.
+// A slab without material reports null, never zero: zero would read as centred.
+export function residualProfileFromPartials(partials, { grid, workgroupsX, workgroupsY, workgroupCount }) {
+  const slabCells = grid * grid * 4;
+  const centre = (grid - 1) / 2;
+  const zero = () => new Array(workgroupsY).fill(0);
+  const vertical = zero(), heat = zero(), smoke = zero(), hot = zero(), heatX = zero(), heatZ = zero(), smokeX = zero(), smokeZ = zero();
+  for (let i = 0; i < workgroupCount; i += 1) {
+    const at = i * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP;
+    const slab = Math.floor(i / workgroupsX) % workgroupsY;
+    vertical[slab] += partials[at + 12];
+    heat[slab] += partials[at + 13];
+    smoke[slab] += partials[at + 14];
+    hot[slab] += partials[at + 15];
+    heatX[slab] += partials[at + 16];
+    heatZ[slab] += partials[at + 17];
+    smokeX[slab] += partials[at + 18];
+    smokeZ[slab] += partials[at + 19];
+  }
+  const centroid = (mass, mx, mz) => mass.map((m, slab) => (m > 1e-9 ? [mx[slab] / m - centre, mz[slab] / m - centre] : null));
+  return {
+    identity: 'height-profile-before-projection-v1',
+    slabRows: 4,
+    slabs: workgroupsY,
+    verticalVelocityMean: vertical.map(sum => sum / slabCells),
+    heatMean: heat.map(sum => sum / slabCells),
+    smokeMean: smoke.map(sum => sum / slabCells),
+    // Heat-weighted mean vertical velocity per slab: the hot gas's own rise speed.
+    hotVerticalVelocityMean: hot.map((sum, slab) => (heat[slab] > 1e-9 ? sum / heat[slab] : 0)),
+    // Where the hot gas and the smoke sit in the x-z plane, per slab, in cells
+    // from the grid centre: a plume that leans shows a centroid that walks with height.
+    heatCentroidCells: centroid(heat, heatX, heatZ),
+    smokeCentroidCells: centroid(smoke, smokeX, smokeZ),
+  };
+}
 const PRESSURE_SOLVER_VALUES = Object.freeze([PRESSURE_SOLVER_LEGACY, PRESSURE_SOLVER_CONVERGED, PRESSURE_SOLVER_CONVERGED_OPEN_TOP]);
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
@@ -3210,6 +3249,10 @@ var<workgroup> pressureResidualVerticalVelocitySum: array<f32, 64>;
 var<workgroup> pressureResidualHeatSum: array<f32, 64>;
 var<workgroup> pressureResidualSmokeSum: array<f32, 64>;
 var<workgroup> pressureResidualHotVelocitySum: array<f32, 64>;
+var<workgroup> pressureResidualHeatXSum: array<f32, 64>;
+var<workgroup> pressureResidualHeatZSum: array<f32, 64>;
+var<workgroup> pressureResidualSmokeXSum: array<f32, 64>;
+var<workgroup> pressureResidualSmokeZSum: array<f32, 64>;
 @group(1) @binding(1) var<storage, read_write> irradianceDst: array<vec4<f32>>;
 @group(1) @binding(2) var<storage, read> irradianceSrc: array<vec4<f32>>;
 @group(1) @binding(3) var irradianceAtlasOut: texture_storage_2d<rgba16float, write>;
@@ -4497,6 +4540,10 @@ fn pressureResidualReduce(
   var heatValue = 0.0;
   var smokeValue = 0.0;
   var hotVelocity = 0.0;
+  var heatX = 0.0;
+  var heatZ = 0.0;
+  var smokeX = 0.0;
+  var smokeZ = 0.0;
   if (all(gid < vec3<u32>(GRID, GRID_Y, GRID))) {
     if (!afterProjection) {
       if (!sceneSolidAt(vec3<i32>(gid))) {
@@ -4517,6 +4564,12 @@ fn pressureResidualReduce(
       // Heat-weighted vertical velocity: the speed of the hot gas itself, which a
       // slab mean over mostly quiescent air cannot show.
       hotVelocity = verticalVelocity * heatValue;
+      // Lateral first moments in grid cells: the CPU fold divides by the slab's
+      // mass for a centroid, the instrument for a plume that leans without wind.
+      heatX = heatValue * f32(gid.x);
+      heatZ = heatValue * f32(gid.z);
+      smokeX = smokeValue * f32(gid.x);
+      smokeZ = smokeValue * f32(gid.z);
       }
     } else {
       if (!sceneSolidAt(vec3<i32>(gid))) {
@@ -4538,6 +4591,10 @@ fn pressureResidualReduce(
   pressureResidualHeatSum[localIndex] = heatValue;
   pressureResidualSmokeSum[localIndex] = smokeValue;
   pressureResidualHotVelocitySum[localIndex] = hotVelocity;
+  pressureResidualHeatXSum[localIndex] = heatX;
+  pressureResidualHeatZSum[localIndex] = heatZ;
+  pressureResidualSmokeXSum[localIndex] = smokeX;
+  pressureResidualSmokeZSum[localIndex] = smokeZ;
   workgroupBarrier();
   if (localIndex != 0u) {
     return;
@@ -4552,6 +4609,10 @@ fn pressureResidualReduce(
   var heatSum = 0.0;
   var smokeSum = 0.0;
   var hotVelocitySum = 0.0;
+  var heatXSum = 0.0;
+  var heatZSum = 0.0;
+  var smokeXSum = 0.0;
+  var smokeZSum = 0.0;
   for (var i = 0u; i < 64u; i = i + 1u) {
     sum = sum + pressureResidualSum[i];
     peak = max(peak, pressureResidualMax[i]);
@@ -4563,8 +4624,12 @@ fn pressureResidualReduce(
     heatSum = heatSum + pressureResidualHeatSum[i];
     smokeSum = smokeSum + pressureResidualSmokeSum[i];
     hotVelocitySum = hotVelocitySum + pressureResidualHotVelocitySum[i];
+    heatXSum = heatXSum + pressureResidualHeatXSum[i];
+    heatZSum = heatZSum + pressureResidualHeatZSum[i];
+    smokeXSum = smokeXSum + pressureResidualSmokeXSum[i];
+    smokeZSum = smokeZSum + pressureResidualSmokeZSum[i];
   }
-  let partialIndex = 4u * (workgroupId.x + workgroupId.y * workgroupCount.x + workgroupId.z * workgroupCount.x * workgroupCount.y);
+  let partialIndex = 5u * (workgroupId.x + workgroupId.y * workgroupCount.x + workgroupId.z * workgroupCount.x * workgroupCount.y);
   let previousCompact = pressureResidualPartials[partialIndex];
   let previousWide = pressureResidualPartials[partialIndex + 1u];
   if (afterProjection) {
@@ -4577,6 +4642,7 @@ fn pressureResidualReduce(
     pressureResidualPartials[partialIndex + 1u] = vec4<f32>(wideSum, widePeak, 0.0, 0.0);
     pressureResidualPartials[partialIndex + 2u] = vec4<f32>(enstrophySum, vorticityPeak, 0.0, 0.0);
     pressureResidualPartials[partialIndex + 3u] = vec4<f32>(verticalVelocitySum, heatSum, smokeSum, hotVelocitySum);
+    pressureResidualPartials[partialIndex + 4u] = vec4<f32>(heatXSum, heatZSum, smokeXSum, smokeZSum);
   }
 }
 
@@ -15686,26 +15752,16 @@ export function createKaminosVolumePrototype({
       };
       let enstrophySum = 0;
       let vorticityPeak = 0;
-      // Height profile: fold the per-workgroup sums by the workgroup's y index
-      // into per-slab means (each slab is four cell rows across the whole x-z plane).
+      // Height profile and lateral centroids: the pure fold below; here only
+      // the vorticity and blocked-face reductions stay inline.
       const workgroupsX = Math.ceil(grid / 4);
       const workgroupsY = Math.ceil(gridHeightForSize(grid) / 4);
-      const slabCells = grid * grid * 4;
-      const profileVerticalVelocity = new Array(workgroupsY).fill(0);
-      const profileHeat = new Array(workgroupsY).fill(0);
-      const profileSmoke = new Array(workgroupsY).fill(0);
-      const profileHotVelocity = new Array(workgroupsY).fill(0);
       let blockedFaceAbsSum = 0;
       let blockedFaceMaxAbs = 0;
       for (let i = 0; i < workgroupCount; i += 1) {
         const at = i * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP + 8;
         enstrophySum += partials[at];
         vorticityPeak = Math.max(vorticityPeak, partials[at + 1]);
-        const slab = Math.floor(i / workgroupsX) % workgroupsY;
-        profileVerticalVelocity[slab] += partials[at + 4];
-        profileHeat[slab] += partials[at + 5];
-        profileSmoke[slab] += partials[at + 6];
-        profileHotVelocity[slab] += partials[at + 7];
         blockedFaceAbsSum += partials[at + 2];
         blockedFaceMaxAbs = Math.max(blockedFaceMaxAbs, partials[at + 3]);
       }
@@ -15731,16 +15787,7 @@ export function createKaminosVolumePrototype({
           enstrophySum,
           maxAbs: vorticityPeak,
         },
-        profile: {
-          identity: 'height-profile-before-projection-v0',
-          slabRows: 4,
-          slabs: workgroupsY,
-          verticalVelocityMean: profileVerticalVelocity.map(sum => sum / slabCells),
-          heatMean: profileHeat.map(sum => sum / slabCells),
-          smokeMean: profileSmoke.map(sum => sum / slabCells),
-          // Heat-weighted mean vertical velocity per slab: the hot gas's own rise speed.
-          hotVerticalVelocityMean: profileHotVelocity.map((sum, slab) => (profileHeat[slab] > 1e-9 ? sum / profileHeat[slab] : 0)),
-        },
+        profile: residualProfileFromPartials(partials, { grid, workgroupsX, workgroupsY, workgroupCount }),
         measuredAtMs: Number(performance.now().toFixed(3)),
       };
       const residualHistory = [...(state.pressureSolver?.residualHistory ?? []).slice(-15), residual];

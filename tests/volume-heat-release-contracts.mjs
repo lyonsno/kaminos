@@ -126,7 +126,7 @@ test('the residual measurement is the heat-release context at probe-copy time, n
       pressureResidualReadbackBuffer: { mapAsync: () => mapped, getMappedRange: () => new Float32Array(16).buffer, unmap() {} },
       GPUMapMode: { READ: 1 }, setTimeout, clearTimeout, Float32Array, performance, Math, Number, Promise, Error,
       PRESSURE_RESIDUAL_MAP_TIMEOUT_MS: 10000, PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR: 'synthetic-timeout', PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP: 16,
-      gridCellCount: grid => grid ** 3, gridHeightForSize: grid => grid, pressureResidualMeasurement: core.pressureResidualMeasurement,
+      gridCellCount: grid => grid ** 3, gridHeightForSize: grid => grid, pressureResidualMeasurement: core.pressureResidualMeasurement, residualProfileFromPartials: core.residualProfileFromPartials,
     };
     const encoder = { beginComputePass: () => ({ setPipeline() {}, setBindGroup() {}, dispatchWorkgroups() {}, end() {} }), copyBufferToBuffer() {} };
     context.encoder = encoder;

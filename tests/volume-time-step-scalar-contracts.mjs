@@ -171,15 +171,15 @@ test('the resolver, receipt and help say the scalar rates follow the step', () =
 });
 
 test('the residual probe carries a vertical profile of mean vertical velocity, heat and smoke per height slab', () => {
-  assert.equal(core.PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP, 16, 'four vec4 partials per workgroup: compact, wide, vorticity, profile');
+  assert.equal(core.PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP, 20, 'five vec4 partials per workgroup: compact, wide, vorticity, profile, lateral moments');
   const reduce = source.slice(source.indexOf('fn pressureResidualReduce('), source.indexOf('fn csPressureResidualBefore('));
-  assert.match(reduce, /let partialIndex = 4u \* \(/, 'partial stride is four vec4');
+  assert.match(reduce, /let partialIndex = 5u \* \(/, 'partial stride is five vec4');
   assert.match(reduce, /pressureResidualPartials\[partialIndex \+ 3u\] = vec4<f32>\(verticalVelocitySum, heatSum, smokeSum, hotVelocitySum\);/, 'profile partial written by the before pass, with the heat-weighted vertical velocity');
   assert.match(reduce, /hotVelocity = verticalVelocity \* heatValue;/, 'heat-weighted vertical velocity is accumulated per cell');
-  assert.match(source, /hotVerticalVelocityMean: profileHotVelocity\.map\(/, 'the hot gas rise speed is exported per slab');
+  assert.match(source, /hotVerticalVelocityMean: hot\.map\(/, 'the hot gas rise speed is exported per slab');
   assert.match(reduce, /verticalVelocity = readSlot\(vec3<i32>\(gid\), 0u\)\.y;/, 'vertical velocity sampled from the carried field');
-  assert.match(source, /profile: \{\s*identity: 'height-profile-before-projection-v0',/, 'CPU reduction exports the profile');
-  assert.match(source, /verticalVelocityMean: profileVerticalVelocity\.map\(/, 'per-slab means are exported');
+  assert.match(source, /identity: 'height-profile-before-projection-v1',/, 'CPU reduction exports the profile');
+  assert.match(source, /verticalVelocityMean: vertical\.map\(/, 'per-slab means are exported');
   const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
   assert.match(capture, /heightProfile: s\.pressureSolver\?\.residual\?\.profile \?\? null/, 'the arm capture records the profile');
   assert.match(capture, /--settle-steps/, 'the capture can settle by simulation steps so arms at different dt reach equal simulated time');
