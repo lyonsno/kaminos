@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {basename} from 'node:path';
-import {admitSceneGIComparison,admitSceneGILinearAddition} from './scene-gi-evidence.mjs';
+import {admitSceneGIComparison,admitSceneGILinearAddition,sceneGIRestoreIdentity} from './scene-gi-evidence.mjs';
 const [url,out,root,operation] = process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 await fs.mkdir(out,{recursive:true});
@@ -69,10 +69,10 @@ try {
     scene.postprocessing.sceneGI={mode:'combined',gain:3};
     scene._filename='handy-floor-restore-'+basename(out)+'.kaminos.json';
     scene.composition.label='Handy floor restore check';
-    report.restoreFixture=scene._filename;await save();
+    report.requestedRestoreFilename=scene._filename;await save();
     await page.setInputFiles('#scene-file-input',{name:'floor-roundtrip.kaminos.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(scene))});
     await page.waitForFunction(()=>window.kaminosGroundDebugState?.().color==='#606060'&&window.kaminosSceneGIDebugState?.().gain===3,null,{timeout:0});
-    report.restoredUrl=page.url();
+    Object.assign(report,sceneGIRestoreIdentity(scene._filename,page.url()));
     report.restored={ground:await page.evaluate(()=>window.kaminosGroundDebugState()),gi:await page.evaluate(()=>window.kaminosSceneGIDebugState())};
     assert.equal(report.restored.ground.roughness,.9);assert.equal(report.restored.gi.gain,3,'authored gain survives default change');
   } else {

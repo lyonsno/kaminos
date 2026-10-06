@@ -1,4 +1,12 @@
 import assert from 'node:assert/strict';
+import {sceneGIRestoreIdentity} from '../scene-gi-evidence.mjs';
+const observedRestoredFile='refractory-kiln_2026-09-25_07-10-26_7efc73826a384890b532aa1634cb4136.kaminos.json';
+const requestedRestoreFilename='handy-floor-restore-gray-floor002-1006.kaminos.json';
+const restore=sceneGIRestoreIdentity(requestedRestoreFilename,'http://127.0.0.1:18537/#scene='+observedRestoredFile);
+assert.equal(restore.restoreFixture,observedRestoredFile,'minted filename must come from effective restored route');
+assert.equal(restore.requestedRestoreFilename,requestedRestoreFilename);
+assert.equal(sceneGIRestoreIdentity('ignored','http://local/?scene=authored.kaminos.json').restoreFixture,'authored.kaminos.json');
+assert.throws(()=>sceneGIRestoreIdentity('missing','http://local/'),'missing effective artifact must fail');
 import {existsSync} from 'node:fs';
 const path=new URL('../scene-gi-evidence.mjs',import.meta.url);
 // Before this validator, the witness accepted a run without pixel admission.

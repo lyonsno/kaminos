@@ -1,4 +1,10 @@
 import assert from 'node:assert/strict';
+export function sceneGIRestoreIdentity(requestedRestoreFilename,restoredUrl) {
+  const url=new URL(restoredUrl);
+  const restoreFixture=new URLSearchParams(url.hash.slice(1)).get('scene')||url.searchParams.get('scene');
+  assert.ok(restoreFixture?.endsWith('.kaminos.json')&&!/[\\/]/.test(restoreFixture),'restored route must identify a scene file');
+  return {requestedRestoreFilename,restoredUrl,restoreFixture};
+}
 export function admitSceneGILinearAddition({zero,lit,received,width,height,region}) {
   assert.ok(width>0&&height>0&&zero.length===width*height*4&&lit.length===zero.length&&received.length===zero.length);
   const {x0=0,x1=width,y0=0,y1=height}=region||{};
