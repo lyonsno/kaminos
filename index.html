@@ -23160,7 +23160,7 @@ async function initKaminosVolumeRoute() {
         }})
         : module.mountSceneRadiance({renderer,scene,prototype:volumePrototype});
       if(distributed)bindSceneLightEditInteraction({document,window,getLighting:()=>window.__kaminosSceneRadiance});
-      if(distributed)import('./scene-light-debug-view.mjs').then(debug=>debug.mountLightingDebugView({document,renderer,camera,getLighting:()=>window.__kaminosSceneRadiance})).catch(error=>{document.getElementById('rendering-light-debug-status').textContent=`Inspection unavailable: ${error.message}`;console.error(error);});
+      if(distributed)import('./scene-light-debug-view.mjs').then(debug=>debug.mountLightingDebugView({document,renderer,camera,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,drawFrame:()=>renderSceneFrame()})).catch(error=>{document.getElementById('rendering-light-debug-status').textContent=`Inspection unavailable: ${error.message}`;console.error(error);});
       window.__kaminosSceneRadianceSetup.status='mounted';
       refreshRenderingControls();
     }).catch(error=>{

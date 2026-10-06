@@ -5,7 +5,7 @@ export function assertSceneTimingSample(sample,previousFrame=-1){
 }
 const activeRenderers=new WeakSet();
 
-export async function measureSceneGpu(renderer,{samples=20,getSignature=()=>''}={}){
+export async function measureSceneGpu(renderer,{samples=20,getSignature=()=>'',drawFrame=null}={}){
   if(!Number.isSafeInteger(samples)||samples<1)throw new Error('positive explicit scene timing sample count required');
   if(!renderer.backend.device.features.has('timestamp-query'))return {status:'unsupported',scope:'Three scene render/compute GPU',reason:'timestamp-query unavailable',records:[]};
   if(activeRenderers.has(renderer))return {status:'failed',phase:'admission',error:'scene GPU timing already active',records:[]};
@@ -15,7 +15,7 @@ export async function measureSceneGpu(renderer,{samples=20,getSignature=()=>''}=
   let previousRender=-1,previousCompute=-1;
   try{
     for(let i=0;i<samples;i++){
-      await new Promise(requestAnimationFrame);
+      if(drawFrame){drawFrame();await renderer.backend.device.queue.onSubmittedWorkDone();}else await new Promise(requestAnimationFrame);
       const renderMs=await renderer.resolveTimestampsAsync('render'),renderFrames=renderer.backend.timestampQueryPool.render?.frames||[];
       const render=assertSceneTimingSample({ms:renderMs,frame:renderFrames.at(-1)},previousRender);previousRender=render.frame;
       let compute={status:'no-observed-compute-pool'};
