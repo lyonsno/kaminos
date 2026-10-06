@@ -14,6 +14,12 @@ const collisionTarget = new URL(forwardCompositionHash('http://localhost:8106/?s
   '#scene=test.kaminos.json&volume_collision=kiln'));
 assert.equal(new URLSearchParams(collisionTarget.hash.slice(1)).get('volume_collision'), 'kiln',
   'the saved-preset launcher must retain the opt-in authored-kiln collision route');
+const lightingHash = new URL(forwardCompositionHash('http://localhost:8106/', '#scene=test.kaminos.json&rendering_source_xyz=0%2C0%2C0&rendering_source_gain=5'));
+assert.equal(new URLSearchParams(lightingHash.hash.slice(1)).get('rendering_source_xyz'), '0,0,0');
+assert.equal(new URLSearchParams(lightingHash.hash.slice(1)).get('rendering_source_gain'), '5');
+const surfaceHash=new URL(forwardCompositionHash('http://localhost:8106/','#rendering_surface_gain=2&rendering_surface_scattering=0'));
+assert.equal(new URLSearchParams(surfaceHash.hash.slice(1)).get('rendering_surface_gain'),'2');
+assert.equal(new URLSearchParams(surfaceHash.hash.slice(1)).get('rendering_surface_scattering'),'0');
 assert.throws(() => compositionRestoreUrl(state, '../wrong.json', target.origin));
 const calls = [];
 const host = { width: 800, height: 600, getBoundingClientRect: () => ({ left: 50, top: 20, width: 400, height: 300 }) };
