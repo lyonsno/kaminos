@@ -61,7 +61,7 @@ test('reaction, conversion and consumption increments carry dt; max() births sta
   assert.match(main, /let bonfireSmokeTransport = min\(1\.65, smoke \+ bonfireAdvectedSmokeBirth \* timeStep\);/, 'the Bonfire smoke birth is a rate');
   assert.match(main, /smoke = smoke \+ tallPlumeReactionSmokeBirth \* timeStep;/, 'reaction smoke is a rate');
   assert.match(main, /heat = heat \+ \(tallPlumeFuelHeatReaction \* mix\(0\.0, 0\.16, tallPlumeScene\) \+ tallPlumePilotReaction \* 0\.030\) \* timeStep;/, 'reaction heat release is a rate');
-  assert.match(main, /fuel = max\(fuel - \(heat \* 0\.018 \+ fuelConsumption\) \* timeStep, 0\.0\);/, 'fuel consumption is a rate');
+  assert.match(main, /let fuelBurned = min\(fuel, fuelBurnRate \* timeStep\);\s*\n\s*fuel = fuel - fuelBurned;/, 'fuel consumption is a rate (the burned amount is rate x dt, capped by the fuel present; slice 4 stores it as the expansion source)');
   assert.match(main, /heat = max\(heat, mix\(mix\(mix\(columnHeatBirth, tallPlumeHeatBirth, tallPlumeScene\), canonicalHeatBirth, canonicalPlumeScene\), bonfireHeatBirth, bonfireScene\)\);/, 'heat birth remains a floor');
   assert.match(main, /fuel = max\(fuel, mix\(tallPlumeFuelInjection, bonfireInjectedFuel, bonfireScene\)\);/, 'fuel injection remains a floor');
 });

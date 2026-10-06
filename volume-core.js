@@ -6394,10 +6394,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // pressure solve targets this step (gain in u.heat_release.x; stored for
   // every cell, burning or not, so a cell that stops burning stops expanding).
   let fuelBurnRate = heat * 0.018 + fuelConsumption;
-  fuel = max(fuel - fuelBurnRate * timeStep, 0.0);
-  // Stored as the expansion target itself (gain x rate; zero when the gain is
-  // zero or refused), so the pressure kernels, which bind no uniform, read it directly.
-  textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * fuelBurnRate, 0.0, 0.0, 0.0));
+  // The fuel actually consumed this step, per unit time: the decrement is
+  // capped by the fuel present, so a hot cell with no fuel burns nothing and
+  // expands nothing (the first look stored the uncapped rate and the whole hot
+  // plume expanded: heat mass x3.6 at gain 1).
+  let fuelBurned = min(fuel, fuelBurnRate * timeStep);
+  fuel = fuel - fuelBurned;
+  // Stored as the expansion target itself (gain x the burned fuel per unit
+  // time; zero when the gain is zero or refused), so the pressure kernels,
+  // which bind no uniform, read it directly.
+  textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * fuelBurned / max(timeStep, 1e-6), 0.0, 0.0, 0.0));
   let bonfireDetailBirthCarrier = bonfireAdvectedSmokeBirth * 0.48 + bonfireSootBirth * 0.30 + bonfireBroadSupportSmokeSource * 0.046 * bonfireLayeredSmokeBreakup + smokeFromHeat * bonfireInterfaceSmokeBand * 0.13 + bonfireInterfaceBirth * 0.18 + bonfireCombustion.z * 0.036 + smoke * 0.070;
   let bonfireSmokeDetailCurlFold = clamp(
     0.50

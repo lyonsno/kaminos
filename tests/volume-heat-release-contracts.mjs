@@ -40,8 +40,9 @@ test('the main kernel stores the burn rate per cell and the converged solve targ
   assert.match(source, /@group\(0\) @binding\(19\) var burnRate: texture_storage_3d<r32float, read_write>;/, 'one read-write storage texture: the main kernel writes, the pressure kernels read');
   // The stored rate is the fuel consumption rate the reaction itself used (the
   // per-time quantity that multiplies timeStep in the fuel decrement).
-  assert.match(source, /let fuelBurnRate = heat \* 0\.018 \+ fuelConsumption;\s*\n\s*fuel = max\(fuel - fuelBurnRate \* timeStep, 0\.0\);/, 'the fuel decrement and the stored rate are one quantity');
-  assert.match(source, /textureStore\(burnRate, cellI, vec4<f32>\(u\.heat_release\.x \* fuelBurnRate, 0\.0, 0\.0, 0\.0\)\);/, 'stored as the expansion target (gain x rate) for this step, burning or not; zero gain stores zero');
+  assert.match(source, /let fuelBurnRate = heat \* 0\.018 \+ fuelConsumption;[\s\S]{0,500}?let fuelBurned = min\(fuel, fuelBurnRate \* timeStep\);\s*\n\s*fuel = fuel - fuelBurned;/, 'the fuel decrement is the fuel actually burned: capped by the fuel present, so a hot cell without fuel burns nothing');
+  assert.match(source, /textureStore\(burnRate, cellI, vec4<f32>\(u\.heat_release\.x \* fuelBurned \/ max\(timeStep, 1e-6\), 0\.0, 0\.0, 0\.0\)\);/, 'stored as the expansion target: gain x burned fuel per unit time; zero gain stores zero');
+  assert.doesNotMatch(source, /fuel = max\(fuel - \(heat \* 0\.018 \+ fuelConsumption\) \* timeStep, 0\.0\);/, 'the old uncapped decrement form is gone (it was equivalent, but the stored rate must be the capped one)');
   const expansion = wgslFunction('heatReleaseExpansion');
   assert.match(expansion, /return max\(0\.0, textureLoad\(burnRate, c\)\.x\);/, 'the pressure kernels read the target directly (their layout binds no uniform), never negative');
   // The pressure kernels bind the fluid-front read layout, not the full fluid layout: the target must be there too.
