@@ -485,7 +485,9 @@ ${needle}`);
         await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));await settle();
         const shifted=await capture();assert.deepEqual(shifted.source.worldTransform.translate,translate);assert.deepEqual(shifted.lighting.sourceTransform.translate,translate);
         assert.ok(shifted.lighting.geometryBuilds>baseline.lighting.geometryBuilds);assert.equal(shifted.volume.error,null);
-        const name=translate[0]?'domain-shifted':'domain-restored';await page.screenshot({path:`${out}/${name}.png`});
+        const name=translate[0]?'domain-shifted':'domain-restored';
+        for(const [key,values]of [['source',shifted.source.values],['scattering',shifted.scattering.values],['front',shifted.surface],['back',shifted.back],['smoke',shifted.smoke]])await fs.writeFile(`${out}/${name}-${key}.f32`,floatEvidenceBytes(values));
+        await page.screenshot({path:`${out}/${name}.png`});
         report.views.push({name,sourceMetadata:{...shifted.source,values:undefined},lighting:shifted.lighting,volume:shifted.volume,scope:'live ordinary-domain API, evolving source after reset'});await save();
       }
     }
