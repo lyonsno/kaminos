@@ -149,7 +149,7 @@ fn nearMaterial(c:vec3<i32>)->vec4<f32>{
     sum+=vec4<f32>(m.x+micro.x*.5+m.w*.08,m.y,0.0,0.0)*w;weight+=w;
   }}}return sum/max(weight,1e-20);
 }
-fn sampleChannel(p:vec3<f32>,channel:i32)->f32{
+fn sampleLinearChannel(p:vec3<f32>,channel:i32)->f32{
   var q=(p-LO)/H-.5;
   if(channel<3){q[channel]+=.5;}
   let b=vec3<i32>(floor(q));let f=fract(q);var value=0.0;var weight=0.0;
@@ -165,7 +165,34 @@ fn sampleChannel(p:vec3<f32>,channel:i32)->f32{
     }
   }}}return value/max(weight,1e-12);
 }
-fn velocity(p:vec3<f32>)->vec3<f32>{return vec3<f32>(sampleChannel(p,0),sampleChannel(p,1),sampleChannel(p,2));}
+fn cubicChannel(a:f32,b:f32,c:f32,d:f32,t:f32)->f32{
+  let value=-a*t*(t-1.0)*(t-2.0)/6.0+b*(t+1.0)*(t-1.0)*(t-2.0)/2.0
+    -c*(t+1.0)*t*(t-2.0)/2.0+d*(t+1.0)*t*(t-1.0)/6.0;
+  return clamp(value,min(b,c),max(b,c));
+}
+fn sampleChannel(p:vec3<f32>,channel:i32)->f32{
+  var q=(p-LO)/H-.5;if(channel<3){q[channel]+=.5;}
+  let base=vec3<i32>(floor(q));let f=fract(q);var rows:array<f32,16>;
+  // A cubic stencil reaches farther than trilinear. Use the original masked
+  // interpolation near any solid or domain boundary, so wider reconstruction
+  // cannot reach through a thin wall or import undefined ghost state.
+  for(var z=0;z<4;z++){for(var y=0;y<4;y++){var row:array<f32,4>;
+    for(var x=0;x<4;x++){
+      let c=base+vec3<i32>(x-1,y-1,z-1);
+      if(channel<3){
+        if(!validFace(c,channel)||blocked(c,channel)){return sampleLinearChannel(p,channel);}
+        row[u32(x)]=src[index(c)].velocity[channel];
+      }else{
+        if(!inside(c)||solid(c)){return sampleLinearChannel(p,channel);}
+        row[u32(x)]=src[index(c)].material[channel-3];
+      }
+    }rows[u32(z*4+y)]=cubicChannel(row[0],row[1],row[2],row[3],f.x);
+  }}
+  var planes:array<f32,4>;
+  for(var z=0;z<4;z++){let i=u32(z*4);planes[u32(z)]=cubicChannel(rows[i],rows[i+1],rows[i+2],rows[i+3],f.y);}
+  return cubicChannel(planes[0],planes[1],planes[2],planes[3],f.z);
+}
+fn velocity(p:vec3<f32>)->vec3<f32>{return vec3<f32>(sampleLinearChannel(p,0),sampleLinearChannel(p,1),sampleLinearChannel(p,2));}
 fn clipCharacteristic(start:vec3<f32>,end:vec3<f32>)->vec3<f32>{
   // Exact grid traversal, including arbitrarily long characteristics (no step cap).
   let a=(start-LO)/H;let b=(end-LO)/H;let d=b-a;var c=vec3<i32>(floor(a));
@@ -283,7 +310,7 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers) {
       dispatch('publish',current,p);steps++;
     },
     receipt(){return {requested:true,effective:'one-way-coarse-pressure-smoke-v0',shape:c.shape,bounds:{min:c.min,max:c.max},cellWidth:c.cellWidth,
-      pressureIterations:c.pressureIterations,steps,solidRevision,stateAndPressureBytes:count*80,donorBounds:outerDonorBounds(c),innerFeedback:false,scalarTransfer:'interior-overlap-volume-average-dirichlet-not-conservative-flux',outerBoundary:'ambient-zero-pressure'};},
+      pressureIterations:c.pressureIterations,steps,solidRevision,stateAndPressureBytes:count*80,advection:'bounded-cubic-velocity-smoke-heat-v0',wallInterpolation:'masked-trilinear-near-solids-and-exterior',donorBounds:outerDonorBounds(c),innerFeedback:false,scalarTransfer:'interior-overlap-volume-average-dirichlet-not-conservative-flux',outerBoundary:'ambient-zero-pressure'};},
     async readState(){const b=device.createBuffer({size:count*32,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
       try{const e=device.createCommandEncoder();e.copyBufferToBuffer(states[current],0,b,0,count*32);device.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);return new Float32Array(b.getMappedRange().slice(0));}finally{b.destroy();}},
     destroy(){for(const x of owned)x.destroy();},
