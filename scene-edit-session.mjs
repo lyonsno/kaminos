@@ -44,8 +44,9 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   const assertAvailable = () => {
     if (replaying) throw new Error('Wait for the current scene history action to finish');
   };
-  const get = id => {
-    const pose = targets.has(id) ? targets.get(id).read() : read(id);
+  const get = (id, replayValue = null) => {
+    const target=targets.get(id);
+    const pose = target ? replayValue!==null&&target.readForReplay ? target.readForReplay(clone(replayValue)) : target.read() : read(id);
     if (pose == null && !targets.get(id)?.allowMissing) throw new Error(`Scene object "${id}" was not found`);
     return check(id, pose);
   };
@@ -119,7 +120,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     if (active) throw new Error('Finish the active scene edit first');
     const entry = from.at(-1);
     if (!entry) return false;
-    const previous = get(entry.id);
+    const previous = get(entry.id,entry[key]);
     const result = put(entry.id, clone(entry[key]));
     const finish = () => {
       try {

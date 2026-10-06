@@ -84,7 +84,13 @@ export function createSelectionTransformTarget({edits,selection,groups,preferenc
     catch(error){for(const [id,state] of Object.entries(before))write(id,state);throw error;}
     context={ids:Object.keys(next),pose:checkedPose(value),preferences:value.preferences};changed(context.pose);
   }
-  edits.register(id,{read:snapshot,check:checked,write:put});
+  edits.register(id,{read:snapshot,check:checked,write:put,
+    readForReplay:value=>{
+      const saved=checked(value),pose=checkedPose(saved);
+      // A neutral frame makes this an exact rollback snapshot of the captured
+      // roots. The current UI selection and its remembered preview are irrelevant.
+      return {...pose,frame:structuredClone(pose),roots:Object.fromEntries(Object.keys(saved.roots).map(id=>[id,read(id)])),preferences:saved.preferences};
+    }});
   return {id,prepare,read:snapshot,write:put,frame,pose:()=>edits.state().active?.id===id?structuredClone(context.pose):frame(),
     apply(patch,label='Transform selection'){prepare();try{return edits.apply(id,patch,label);}catch(error){if(edits.state().active?.id===id)edits.cancel();throw error;}}};
 }

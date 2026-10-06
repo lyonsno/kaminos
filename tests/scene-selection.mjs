@@ -73,3 +73,25 @@ test('World-axis scale follows world axes for an orthogonally rotated object',()
  const next=transformPose(base,{operation:'scale',axis:'x',frame:'world',amount:2});
  assert.ok(Math.abs(next.scale[0]-1)<1e-8);assert.ok(Math.abs(next.scale[1]-2)<1e-8);
 });
+
+test('earlier selection undo survives cancelled copy roots and an unrelated current selection',()=>{
+ const f=batchFixture();f.target.apply({position:[2,0,0]});
+ f.states.c=pose([1,0,0]);f.states.d=pose([3,0,0]);f.select({ids:['c','d'],activeId:'d'});f.target.prepare();
+ delete f.states.c;delete f.states.d;f.states.e=pose([8,0,0]);f.states.f=pose([10,0,0]);f.select({ids:['e','f'],activeId:'f'});
+ assert.doesNotThrow(()=>f.edits.undo());assert.equal(f.states.a.position[0],0);assert.equal(f.states.b.position[0],2);assert.equal(f.states.e.position[0],8);assert.equal(f.edits.state().redoCount,1);
+ f.edits.redo();assert.equal(f.states.a.position[0],1);assert.equal(f.states.b.position[0],3);assert.equal(f.states.f.position[0],10);
+});
+test('accepted copy insertion can be undone before its preceding selection transform and both redone',async()=>{
+ const f=batchFixture();f.target.apply({position:[2,0,0]});
+ f.states.c=pose([1,0,0]);f.states.d=pose([3,0,0]);f.select({ids:['c','d'],activeId:'d'});f.target.prepare();
+ f.edits.register('@test-insertion',{allowMissing:true,read:()=>f.states.c?{present:true}:null,check:v=>v,write:v=>{if(v){f.states.c=pose([1,0,0]);f.states.d=pose([3,0,0]);}else{delete f.states.c;delete f.states.d;}}});
+ f.edits.recordApplied('@test-insertion',null,{present:true});await f.edits.undo();assert.doesNotThrow(()=>f.edits.undo());assert.equal(f.states.a.position[0],0);f.edits.redo();await f.edits.redo();assert.equal(f.states.a.position[0],1);assert.equal(f.states.c.position[0],1);
+});
+
+test('a rejected replay settles back to captured roots rather than the unrelated current selection',()=>{
+ const states={a:pose([0,0,0]),b:pose([2,0,0])};let selected={ids:['a','b'],activeId:'b'},rejectUndo=false;
+ const edits=createSceneEdits({read:()=>null,write(){},settled:event=>{if(rejectUndo&&event.operation==='undo')throw Error('settlement rejected');}});
+ const target=createSelectionTransformTarget({edits,selection:()=>selected,groups:()=>[],preferences:()=>({pivot:'median',orientation:'world'}),read:id=>structuredClone(states[id]),write:(id,value)=>states[id]=structuredClone(value),check(){}});
+ target.apply({position:[2,0,0]});states.c=pose([5,0,0]);states.d=pose([7,0,0]);selected={ids:['c','d'],activeId:'d'};target.prepare();rejectUndo=true;
+ assert.throws(()=>edits.undo(),/settlement rejected/);assert.equal(states.a.position[0],1);assert.equal(states.b.position[0],3);assert.equal(states.c.position[0],5);assert.equal(edits.state().undoCount,1);assert.equal(edits.state().redoCount,0);
+});
