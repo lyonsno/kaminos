@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {admitSceneGIComparison} from './scene-gi-evidence.mjs';
+import {admitSceneGIComparison,admitSceneGILinearAddition} from './scene-gi-evidence.mjs';
 const [url,out,root,operation] = process.argv.slice(2);
 const executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 await fs.mkdir(out,{recursive:true});
@@ -103,19 +103,15 @@ try {
     const decode=raw=>{const b=Buffer.from(raw.base64,'base64');return Array.from({length:b.length/2},(_,i)=>DataUtils.fromHalfFloat(b.readUInt16LE(i*2)));};
     const zero=decode(fields.zero),lit=decode(fields.lit),received=decode(fields.received);
     assert.equal(zero.length,lit.length);assert.equal(lit.length,received.length);
-    const regions=[{name:'full',start:0,end:lit.length},{name:'bottom-central-floor-strip',start:Math.floor(fields.lit.height*.8)*fields.lit.width*4,end:lit.length}];
+    const groundProbe=await page.evaluate(()=>window.kaminosSceneGIReceiverAt(.95,.94));
+    assert.equal(groundProbe?.isGround,true,'ground assay pixel must intersect the actual scene ground');
+    const px=Math.floor(fields.lit.width*.95),py=Math.floor(fields.lit.height*.94);
+    const regions=[{name:'full'},{name:'identified-ground',x0:px-2,x1:px+3,y0:py-2,y1:py+3}];
     report.linearComposition={aoEnabled:false,width:fields.lit.width,height:fields.lit.height,regions:[]};
+    report.linearComposition.groundProbe={u:.95,v:.94,...groundProbe};
     for(const region of regions) {
-      let added=0,expected=0,error=0,maxError=0;
-      for(let i=region.start;i<region.end;i++)if(i%4<3) {
-        if(region.name!=='full') {const x=Math.floor(i/4)%fields.lit.width;if(x<fields.lit.width*.25||x>=fields.lit.width*.75)continue;}
-        const difference=lit[i]-zero[i],e=Math.abs(difference-received[i]);
-        added+=difference;expected+=received[i];error+=e;maxError=Math.max(maxError,e);
-      }
-      report.linearComposition.regions.push({...region,added,expected,error,maxError,relativeError:error/expected});
+      report.linearComposition.regions.push({...region,...admitSceneGILinearAddition({zero,lit,received,width:fields.lit.width,height:fields.lit.height,region:region.name==='full'?null:region})});
       await save();
-      assert.ok(expected>0,'received bounce must reach the measured region');
-      assert.ok(error/expected<.05,'received field must agree with linear scene addition');
     }
     await page.check('#ao-toggle');
     await page.selectOption('#scene-gi-view','scene');

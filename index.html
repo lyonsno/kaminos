@@ -11223,6 +11223,12 @@ async function initScene() {
   rebuildSceneGIOutput();
   window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),sceneFrames:sceneFrameCount,effectiveMode:sceneGISettings.mode,view:sceneGISettings.mode==='gtao'?'scene':sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
   window.kaminosSceneGIReadback = kind => sceneGI.readback(renderer,kind);
+  window.kaminosSceneGIReceiverAt = (u,v) => {
+    const ray=new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(u*2-1,1-v*2),camera);
+    const hit=ray.intersectObjects(scene.children,true).find(hit=>hit.object.isMesh&&!hit.object.material?.transparent);
+    return hit?{isGround:hit.object===groundPlane,uuid:hit.object.uuid,point:hit.point.toArray(),linearColor:hit.object.material?.color?.toArray()}:null;
+  };
   window.kaminosSceneEmissiveCameraDebugState=()=>sceneEmissiveCamera?.debugState()??{requested:false,effective:false,reason:'distributed-route-not-mounted'};
   let sceneCameraStatusText='';
   window.kaminosFireLightFieldDebugState = () => (fireLightFieldPass
