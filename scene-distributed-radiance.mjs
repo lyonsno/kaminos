@@ -5,6 +5,7 @@ import {buildTriangleVisibility} from './scene-light-visibility.mjs';
 import {createVolumeGather} from './scene-volume-gather.mjs';
 import {validateSourceSoftness} from './scene-source-softening.mjs';
 import {validateSurfaceReconstruction} from './scene-surface-reconstruction.mjs';
+import {validateSceneSourceTransform,sceneSourceLocalPoint} from './scene-volume-source.mjs';
 
 export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,onStatus=()=>{}}) {
   let gain=1,smokeMode='distributed',sourceSoftness=0,handle=null,revision=null,frame=null,external=null,externalBack=null,disposed=false;
@@ -14,10 +15,11 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   let surfaceReconstruction=0;
   let surfaceScattering=false;
   const surfaceGain=THREE.TSL.uniform(1);
+  let sourceTransform=validateSceneSourceTransform();
   const attributeIds=new WeakMap();let nextAttributeId=0;
   const attributeId=a=>{if(!a)return null;if(!attributeIds.has(a))attributeIds.set(a,++nextAttributeId);return attributeIds.get(a);};
   const status={identity:'distributed-volume-direct-radiance-v0',status:'awaiting-source',directions,volumeGrid,
-    source:'actual-material-emission-extinction',coordinates:'identity-world-and-volume-local',
+    source:'actual-material-emission-extinction',coordinates:'volume-local-length-with-source-world-translation-and-uniform-scale',
     previewStale:false,geometryBuilds:0,lastGeometryBuildMs:null,
     limitations:['vertex-surface-receivers','prepared-smoke-zero-at-solid-cells','static-geometry-rebuild-on-committed-edit','no-surface-bounce','independent-consumer-display']};
   function retire() {
@@ -60,6 +62,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     const started=performance.now();
     retire();status.status='building-static-visibility';
     const geometry=collectStaticSceneGeometry(scene);
+    for(const triangle of geometry.triangles)for(const key of ['a','b','c'])triangle[key]=sceneSourceLocalPoint(triangle[key],sourceTransform);
     const packed=buildTriangleVisibility(geometry.triangles).packGpu();
     const receivers=[],surfaceTriangles=[];
     const position=new THREE.Vector3(),normal=new THREE.Vector3(),normalMatrix=new THREE.Matrix3();
@@ -76,7 +79,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       for(let i=0;i<vertices.count;i++) {
         position.fromBufferAttribute(vertices,i).applyMatrix4(mesh.matrixWorld);
         normal.fromBufferAttribute(normals,i).applyMatrix3(normalMatrix).normalize();
-        ids[i]=receivers.length;receivers.push({position:position.toArray(),normal:normal.toArray(),twoSided:materialList.some(m=>m.side!==THREE.FrontSide)});
+        ids[i]=receivers.length;receivers.push({position:sceneSourceLocalPoint(position.toArray(),sourceTransform),normal:normal.toArray(),twoSided:materialList.some(m=>m.side!==THREE.FrontSide)});
       }
       const index=geometry.index;
       for(let i=0;i<(index?index.count:vertices.count)-2;i+=3)for(let c=0;c<3;c++)surfaceTriangles.push(offset+(index?index.getX(i+c):i+c));
@@ -129,10 +132,11 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       rows.push([mesh.uuid,mesh.matrixWorld.elements,g.uuid,attributeId(p),p?.version,p?.count,attributeId(n),n?.version,n?.count,
         attributeId(g.index),g.index?.version,materials.map(m=>[m.uuid,m.version,m.side])]);
     });
-    return JSON.stringify([solid,rows]);
+    return JSON.stringify([sourceTransform,solid,rows]);
   }
   function prepare(field) {
     if(disposed)throw new Error('distributed lighting disposed');
+    sourceTransform=validateSceneSourceTransform(field.source.worldTransform);
     const changed=!handle||receiverRevision()!==revision;
     status.previewStale=changed;
     if(changed&&editing.size) {
@@ -173,7 +177,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','source'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');angularPattern=pattern;angularRotation=rotation;},
     setRetainComparisons(value){retainComparisons=!!value;handle?.setRetainComparisons(retainComparisons);},
     setEditing(key,active){if(active){editing.add(key);rebuildAnnounced=false;}else if(editing.delete(key)&&!editing.size)editCommitted=true;},
-    debugState(){return {...status,gain,surfaceGain:surfaceGain.value,surfaceScattering,smokeMode,sourceSoftness,surfaceReconstruction,frame,display:'mesh and flame retain separate camera transforms'};},
+    debugState(){return {...status,gain,sourceTransform:validateSceneSourceTransform(sourceTransform),surfaceGain:surfaceGain.value,surfaceScattering,smokeMode,sourceSoftness,surfaceReconstruction,frame,display:'mesh and flame retain separate camera transforms'};},
     readback(){if(!handle)throw new Error('distributed receivers not built');return handle.readback();},
     canRender(){return !disposed&&!status.error&&handle&&frame?.generation===prototype.sceneVolumeSourceField().generation;},
     dispose(){disposed=true;prototype.setSceneSourceFrameConsumer(null);retire();},

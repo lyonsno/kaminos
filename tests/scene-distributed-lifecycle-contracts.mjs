@@ -25,7 +25,7 @@ function fixture(castShadow=true) {
   const statuses=[];
   const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,onStatus:s=>statuses.push(s)});
   const field={source:{status:'encoded',texture:{createView(){return {}; }},localMax:[1,3,1],dimensions:[32,64,32],generation:1,frame:1}};
-  return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,prepare(){consume(field);}};
+  return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,field,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
 if(!selected||selected==='source') {
@@ -203,5 +203,12 @@ if(!selected||selected==='surface-gain'){
   assert.equal(f.uploads.length,1,'trim preserves static visibility');
   f.mount.setSurfaceGain(0);assert.equal(f.mount.debugState().surfaceGain,0);
   assert.throws(()=>f.mount.setSurfaceGain(NaN));f.mount.dispose();
+}
+if(!selected||selected==='source-transform'){
+  const f=fixture();f.prepare();f.field.source.worldTransform={translate:[2,-1,4],scale:2};f.prepare();
+  assert.equal(f.uploads.length,2,'source relocation invalidates relative solid visibility');
+  assert.deepEqual(Array.from(f.uploads.at(-1).slice(0,3)),[-1,.5,-2],'world surface positions enter volume-local lighting coordinates');
+  f.mesh.position.set(2,-1,4);f.prepare();assert.deepEqual(Array.from(f.uploads.at(-1).slice(0,3)),[0,0,0]);
+  f.mount.dispose();assert.equal(f.geometry.attributes.position.getX(0),0,'lighting coordinate conversion cannot mutate authored geometry');
 }
 console.log('distributed authored-edit and receiver lifecycle contracts passed');

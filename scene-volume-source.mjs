@@ -17,6 +17,12 @@ export function prepareSceneSourceFrame({encoder, encode, submit, consume, rende
   if (!renderHost()) throw new Error('shared-scene-source-host-depth-unavailable');
   return createEncoder();
 }
+export function validateSceneSourceTransform(value={translate:[0,0,0],scale:1}){
+  if(!Array.isArray(value.translate)||value.translate.length!==3||!value.translate.every(Number.isFinite)||!Number.isFinite(value.scale)||value.scale<=0)
+    throw new Error('scene source requires finite translation and positive uniform scale');
+  return {translate:value.translate.slice(),scale:value.scale};
+}
+export function sceneSourceLocalPoint(point,transform){return point.map((x,a)=>(x-transform.translate[a])/transform.scale);}
 
 // Offline reference only: never called by the interactive renderer.
 export function integrateSceneMediumSegment(field, source, receiver, stepLength) {
@@ -61,12 +67,14 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
     entries: [[0, uniformBuffer], [1, buffer], [7, frontBuffers[i]]].map(([binding, buffer]) => ({binding, resource: {buffer}}))}));
   const output = device.createBindGroup({layout: pipeline.getBindGroupLayout(3), entries: [{binding: 4, resource: texture.createView()},{binding:5,resource:scatteringTexture.createView()}]});
   let status = 'unbuilt', reason = 'not-encoded', frame = null, sourceIndex = null, generation = 0;
+  let worldTransform=validateSceneSourceTransform();
   let optical = null;
   const invalidateOptical = () => {if (optical) optical.generation = null;};
   return {
-    encode(encoder, index, currentFrame) {
+    encode(encoder, index, currentFrame,transform) {
       if (status === 'destroyed') throw new Error('scene source destroyed');
       if (!Number.isInteger(index) || !inputs[index]) throw new Error('invalid scene source index');
+      worldTransform=validateSceneSourceTransform(transform);
       status = 'unbuilt'; reason = 'encoding';
       invalidateOptical();
       const pass = encoder.beginComputePass({label: 'raw live volume source'});
@@ -113,7 +121,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       if (!['coefficients','scattering','optical-depth'].includes(kind)) throw new Error('unknown scene source readback');
       if (kind === 'optical-depth' && optical?.generation !== generation) throw new Error('optical depth is not current');
       const channels = kind === 'coefficients' ? 4 : 1;
-      const snapshot = {frame, sourceIndex, generation, kind, channels,
+      const snapshot = {frame, sourceIndex, generation, kind, channels,worldTransform:validateSceneSourceTransform(worldTransform),
         ...(kind === 'optical-depth' ? {sourcePosition: optical.position.slice(), stepLength: optical.stepLength} : {})};
       const rowBytes = grid * channels * 4, bytesPerRow = Math.ceil(rowBytes/256)*256;
       const buffer = device.createBuffer({label: 'scene source witness readback', size: bytesPerRow*gridY*grid,
@@ -136,7 +144,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       dimensions: [grid, gridY, grid], localMin: [-1,-1,-1], localMax: [1, -1+2*gridY/grid, 1],
       channels: ['emission-r','emission-g','emission-b','extinction'], displayTransform: 'none',
       coefficientLengthSpace: 'volume-local', sampleCountPerCell: 8, completionAuthority: false,
-      texture: status === 'encoded' ? texture : null,scatteringTexture:status==='encoded'?scatteringTexture:null,
+      worldTransform:validateSceneSourceTransform(worldTransform),texture: status === 'encoded' ? texture : null,scatteringTexture:status==='encoded'?scatteringTexture:null,
       scatteringChannels:['smoke-scattering-coefficient'],scatteringGeneration:status==='encoded'?generation:null};},
     destroy() {texture.destroy();scatteringTexture.destroy(); optical?.depth.destroy(); optical?.params.destroy(); status = 'destroyed'; reason = 'destroyed';},
   };

@@ -5,6 +5,9 @@ const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8')
 assert.match(core, /sceneVolumeSourceField/, 'volume runtime must expose raw same-state source coefficients');
 const {createSceneVolumeSource, SCENE_VOLUME_SOURCE_WGSL, integrateSceneMediumSegment} = await import('../scene-volume-source.mjs');
 const sourceContract = await import('../scene-volume-source.mjs');
+assert.deepEqual(sourceContract.validateSceneSourceTransform(),{translate:[0,0,0],scale:1});
+assert.deepEqual(sourceContract.sceneSourceLocalPoint([2,-1,4],{translate:[2,-1,4],scale:2}),[0,0,0]);
+for(const pose of [{translate:[1,2],scale:1},{translate:[0,NaN,0],scale:1},{translate:[0,0,0],scale:0}])assert.throws(()=>sourceContract.validateSceneSourceTransform(pose));
 assert.equal(typeof sourceContract.validateScenePointSource, 'function', 'shared consumer input must validate point-source units and values');
 assert.deepEqual(sourceContract.validateScenePointSource({position:[0,1,0], intensity:[2,3,4], stepLength:.03125}),
   {position:[0,1,0], intensity:[2,3,4], stepLength:.03125});
@@ -59,6 +62,10 @@ field.invalidate('inactive-material');
 assert.equal(field.describe().texture, null, 'inactive material must not expose stale coefficients');
 assert.equal(field.opticalDepthField().texture, null, 'inactive source must not expose stale optical depth');
 field.encode(encoder, 0, 19);
+field.encode(encoder,0,20,{translate:[2,-1,4],scale:2});
+assert.deepEqual(field.describe().worldTransform,{translate:[2,-1,4],scale:2});
+const copied=field.describe();copied.worldTransform.translate[0]=99;
+assert.equal(field.describe().worldTransform.translate[0],2,'source pose metadata cannot be mutated by a reader');
 assert.equal(field.opticalDepthField().texture, null, 'new raw generation invalidates old medium path');
 field.destroy();
 assert.equal(field.describe().status, 'destroyed');
