@@ -47,3 +47,16 @@ test('retained stage artifact rejects wrong route, partial, stale, reordered and
 test('blank final material cannot be presented as a completed native stream trace',()=>{
  const a=artifact();a.records.at(-1).buffers[0].bytes=Buffer.alloc(128).toString('base64');assert.throws(()=>validateThinStreamStageTrace(a,180,2,1),/blank final material/);
 });
+import {validateOwnedCdpEndpoint} from './thin-stream-stage-tap.mjs';
+function withCadence(step,confinement){const a=artifact();for(const r of a.records){r.step=step;const b=Buffer.from(r.buffers[2].bytes,'base64');b.writeUInt32LE(step-1,8);r.buffers[2].bytes=b.toString('base64')}
+ if(confinement){const r=structuredClone(a.records[5]);r.entry='apply_vorticity_confinement';a.records.splice(6,0,r)}a.records.forEach((r,i)=>r.ordinal=i);return a}
+test('required confinement cannot be omitted on frame180',()=>{assert.throws(()=>validateThinStreamStageTrace(withCadence(181,false),181,2,1),/missing.*stages/)});
+test('skipped confinement cannot appear on frame179',()=>{assert.throws(()=>validateThinStreamStageTrace(withCadence(180,true),180,2,1),/missing.*stages/)});
+test('owned profile endpoint must reject a foreign browser before page mutation',()=>{
+ assert.throws(()=>validateOwnedCdpEndpoint('4242\n/devtools/browser/owned\n',{webSocketDebuggerUrl:'ws://127.0.0.1:4242/devtools/browser/foreign'}),/owned profile.*mismatch/);
+});
+test('both correct confinement sequences and matched owned endpoint pass',()=>{
+ assert.equal(validateThinStreamStageTrace(withCadence(181,true),181,2,1).complete,true);assert.equal(validateThinStreamStageTrace(withCadence(180,false),180,2,1).complete,true);
+ assert.deepEqual(validateOwnedCdpEndpoint('4242\n/devtools/browser/owned\n',{webSocketDebuggerUrl:'ws://127.0.0.1:4242/devtools/browser/owned'}),{port:4242,browserPath:'/devtools/browser/owned'});
+ assert.throws(()=>validateOwnedCdpEndpoint('4242\n/devtools/browser/owned\n',{webSocketDebuggerUrl:'ws://127.0.0.1:9222/devtools/browser/owned'}),/mismatch/);
+});

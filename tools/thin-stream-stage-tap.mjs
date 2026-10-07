@@ -64,7 +64,7 @@ export function validateThinStreamStageTrace(value,step,count,densityIterations)
   const entries=['predict_positions',...Array.from({length:densityIterations},()=>['compute_density_lambda','solve_position_delta','apply_position_delta']).flat(),'classify_free_surface','compute_velocity_viscosity'];
   // Vorticity is dispatched every third frame. The actual native order is preserved.
   const names=value.records?.map(r=>r.entry);
-  if(names?.[entries.length]==='apply_vorticity_confinement')entries.push('apply_vorticity_confinement');
+  if((step-1)%3===0)entries.push('apply_vorticity_confinement');
   entries.push('apply_surface_cohesion','apply_velocity_position');
   if(JSON.stringify(names)!==JSON.stringify(entries))throw Error('missing, duplicate or reordered native stages');
   for(const [i,r] of value.records.entries()){
@@ -83,4 +83,12 @@ export function validateThinStreamStageTrace(value,step,count,densityIterations)
   for(let i=0;i<count;i++)if(final.readFloatLE(i*64+60)>0)densityPresent=true;
   if(!densityPresent)throw Error('blank final material');
   return {step,stages:names,particleCount:count,complete:true};
+}
+// Chrome writes the chosen port and browser path into its fresh profile.
+export function validateOwnedCdpEndpoint(activePortText,version){
+  const lines=activePortText.trim().split('\n'),port=Number(lines[0]),browserPath=lines[1];
+  if(lines.length!==2||!Number.isInteger(port)||port<1||port>65535||!browserPath?.startsWith('/devtools/browser/'))throw Error('malformed owned profile DevToolsActivePort');
+  const u=new URL(version.webSocketDebuggerUrl);
+  if(u.protocol!=='ws:'||!['127.0.0.1','localhost','[::1]'].includes(u.hostname)||Number(u.port)!==port||u.pathname!==browserPath)throw Error('owned profile CDP endpoint mismatch');
+  return {port,browserPath};
 }
