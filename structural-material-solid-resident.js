@@ -1,7 +1,7 @@
 export const SOLID_RESIDENT_ROUTE='kaminos.deformable-material.colored-vbd.webgpu.v0';
 export const solidResidentWgsl=`
 struct Point{rest:vec4f,position:vec4f,velocity:vec4f,predicted:vec4f};
-struct Settings{counts:vec4u,time:vec4f,grip:vec4f,target:vec4f,plane:vec4f};
+struct Settings{counts:vec4u,time:vec4f,grip:vec4f,destination:vec4f,plane:vec4f};
 struct Local{gradient:vec3f,energy:f32,hessian:mat3x3f,invalid:u32};
 @group(0) @binding(0) var<storage,read_write> points:array<Point>;
 @group(0) @binding(1) var<storage,read> elements:array<vec4u>;
@@ -49,7 +49,7 @@ fn evaluate(node:u32,trial:vec3f)->Local{
   if(settings.counts.z==0u){term=graph(element,local,node,trial);}else{term=pmb(element,local,node,trial);}
   result.gradient+=term.gradient;result.energy+=term.energy;result.hessian+=term.hessian;result.invalid|=term.invalid;
  }
- if(settings.grip.x>=0.0&&u32(settings.grip.x)==node){let d=trial-settings.target.xyz;let k=settings.grip.y;result.gradient+=k*d;result.energy+=0.5*k*dot(d,d);result.hessian+=eye()*k;}
+ if(settings.grip.x>=0.0&&u32(settings.grip.x)==node){let d=trial-settings.destination.xyz;let k=settings.grip.y;result.gradient+=k*d;result.energy+=0.5*k*dot(d,d);result.hessian+=eye()*k;}
  return result;
 }
 @compute @workgroup_size(64) fn predict(@builtin(global_invocation_id) id:vec3u){
