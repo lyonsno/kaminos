@@ -13522,6 +13522,7 @@ export async function createWebGPUFingerFluidSolver({
     code: descriptor.code.replaceAll('const riverPlaygroundEnabled: bool = false;', `const riverPlaygroundEnabled: bool = ${safeTruthScene === 'river_playground'};`),
   });
   computeShader = computeShader.replaceAll('__ARTIFICIAL_PRESSURE_COEFFICIENT__', safeArtificialPressureMode === 'off' ? '0.0' : '-0.0012');
+  computeShader = computeShader.replaceAll('const riverPlaygroundEnabled: bool = false;', `const riverPlaygroundEnabled: bool = ${safeTruthScene === 'river_playground'};`);
   const computeModule = createSceneShaderModule({ label: KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: computeShader });
   const movingHillComputeLayoutEntries = movingHillSupportProvider
     ? [
