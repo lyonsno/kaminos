@@ -3248,9 +3248,21 @@ struct NonRidgeOpticalCaptureRow {
 // written by the main kernel and read by the pressure kernels as the heat
 // release expansion target. One read-write storage texture, no usage conflict.
 @group(0) @binding(19) var burnRate: texture_storage_3d<r32float, read_write>;
-// The step's force increment per cell (vec3 + pad), written by the main kernel
-// under the staggered reading and averaged onto the faces by csFaceForces.
-@group(0) @binding(20) var<storage, read_write> forceDelta: array<vec4<f32>>;
+// The step's force increment per cell, written by the main kernel under the
+// staggered reading and averaged onto the faces by csFaceForces. One r32float
+// 3-D storage texture with the three components stacked along depth
+// (z + component x GRID): compute is at its storage-buffer limit.
+@group(0) @binding(20) var forceDelta: texture_storage_3d<r32float, read_write>;
+
+fn forceDeltaStore(c: vec3<i32>, f: vec3<f32>) {
+  textureStore(forceDelta, c, vec4<f32>(f.x, 0.0, 0.0, 0.0));
+  textureStore(forceDelta, c + vec3<i32>(0, 0, i32(GRID)), vec4<f32>(f.y, 0.0, 0.0, 0.0));
+  textureStore(forceDelta, c + vec3<i32>(0, 0, 2 * i32(GRID)), vec4<f32>(f.z, 0.0, 0.0, 0.0));
+}
+
+fn forceDeltaLoad(c: vec3<i32>, component: i32) -> f32 {
+  return textureLoad(forceDelta, c + vec3<i32>(0, 0, component * i32(GRID))).x;
+}
 // (It holds gain x rate, the expansion target; the pressure kernels bind the
 // fluid-front read layout, which carries no uniform.)
 @group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
@@ -4180,10 +4192,11 @@ fn csFaceForces(@builtin(global_invocation_id) gid: vec3<u32>) {
   let idx = index3(gid);
   let base = idx * SLOTS_PER_CELL;
   if (sceneSolidAt(vec3<i32>(gid))) { return; }
-  let here = forceDelta[idx].xyz;
-  let upX = select(here.x, forceDelta[index3(vec3<u32>(gid.x + 1u, gid.y, gid.z))].x, gid.x + 1u < GRID);
-  let upY = select(here.y, forceDelta[index3(vec3<u32>(gid.x, gid.y + 1u, gid.z))].y, gid.y + 1u < GRID_Y);
-  let upZ = select(here.z, forceDelta[index3(vec3<u32>(gid.x, gid.y, gid.z + 1u))].z, gid.z + 1u < GRID);
+  let c = vec3<i32>(gid);
+  let here = vec3<f32>(forceDeltaLoad(c, 0), forceDeltaLoad(c, 1), forceDeltaLoad(c, 2));
+  let upX = select(here.x, forceDeltaLoad(c + vec3<i32>(1, 0, 0), 0), gid.x + 1u < GRID);
+  let upY = select(here.y, forceDeltaLoad(c + vec3<i32>(0, 1, 0), 1), gid.y + 1u < GRID_Y);
+  let upZ = select(here.z, forceDeltaLoad(c + vec3<i32>(0, 0, 1), 2), gid.z + 1u < GRID);
   let faceForce = 0.5 * (here + vec3<f32>(upX, upY, upZ));
   let stored = fluidDst[base];
   fluidDst[base] = vec4<f32>(boundVelocity(stored.xyz + faceForce), stored.w);
@@ -6467,7 +6480,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // (1.0 under the legacy mode).
   let forceIncrement = (vel - velTransported) * timeStep;
   if (faceForcesOn()) {
-    forceDelta[idx] = vec4<f32>(forceIncrement, 0.0);
+    forceDeltaStore(cellI, forceIncrement);
     vel = velTransported;
   } else {
     vel = velTransported + forceIncrement;
@@ -10931,7 +10944,7 @@ export function createKaminosVolumePrototype({
   let inletPerturbationField = null;
   // Fuel burn rate per cell (heat-release expansion source), rebuilt with the grid.
   let burnRateTexture = null;
-  let forceDeltaBuffer = null;
+  let forceDeltaTexture = null;
   const inletPuffProcess = new StochasticSignalSet(2, 1);
   const windGustProcess = new WindGustProcess(1);
   let inflowCoverageSignature = '';
@@ -11519,8 +11532,8 @@ export function createKaminosVolumePrototype({
     inletPerturbationField = null;
     burnRateTexture?.destroy();
     burnRateTexture = null;
-    forceDeltaBuffer?.destroy();
-    forceDeltaBuffer = null;
+    forceDeltaTexture?.destroy();
+    forceDeltaTexture = null;
     for (const buffer of pressureBuffers) buffer.destroy();
     pressureResidualPartialsBuffer?.destroy();
     pressureResidualReadbackBuffer?.destroy();
@@ -11653,7 +11666,7 @@ export function createKaminosVolumePrototype({
         { binding: 17, resource: inflowCoverageTexture.createView() },
         { binding: 18, resource: inflowPerturbationTexture.createView() },
         { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
-        { binding: 20, resource: { buffer: forceDeltaBuffer } },
+        { binding: 20, resource: forceDeltaTexture.createView({ dimension: '3d' }) },
       ],
     });
   }
@@ -11872,7 +11885,7 @@ export function createKaminosVolumePrototype({
       || quenchBuffers.length !== 2
       || !flowKernelDescriptorBuffer
       || !burnRateTexture
-      || !forceDeltaBuffer
+      || !forceDeltaTexture
     ) {
       selectiveHeadLiveBindGroups = null;
       return;
@@ -12706,12 +12719,14 @@ export function createKaminosVolumePrototype({
       usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST,
     });
     device.queue.writeTexture({ texture: burnRateTexture }, new Float32Array(gridSize * gridHeight * gridSize), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize]);
-    forceDeltaBuffer = device.createBuffer({
-      label: `kaminos force increment ${gridSize}x${gridHeight}x${gridSize}`,
-      size: gridSize * gridHeight * gridSize * 4 * Float32Array.BYTES_PER_ELEMENT,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    forceDeltaTexture = device.createTexture({
+      label: `kaminos force increment ${gridSize}x${gridHeight}x${gridSize}x3`,
+      size: [gridSize, gridHeight, gridSize * 3],
+      dimension: '3d',
+      format: 'r32float',
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST,
     });
-    device.queue.writeBuffer(forceDeltaBuffer, 0, new Float32Array(gridSize * gridHeight * gridSize * 4));
+    device.queue.writeTexture({ texture: forceDeltaTexture }, new Float32Array(gridSize * gridHeight * gridSize * 3), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize * 3]);
     quenchBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
         label: `kaminos recoverable liquid quench and source state ${gridSize}x${gridHeight}x${gridSize} ${i}`,
@@ -13586,7 +13601,7 @@ export function createKaminosVolumePrototype({
         { binding: 18, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
         // The raymarch fragment entry point reaches divergenceAtCell through the shared module, so the binding must be fragment-visible too (slice-2 lesson at 1e8996ab).
         { binding: 19, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
-        { binding: 20, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 20, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';

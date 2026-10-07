@@ -105,16 +105,17 @@ test('staggered: the main kernel separates the force increment and the face-forc
   assert.deepEqual(core.velocityStaggeringUniformValues(on), [1, 1, 0, 0], 'y flags the face-force pass');
   assert.deepEqual(core.velocityStaggeringUniformValues(core.resolveVelocityStaggeringConfig({})), [0, 0, 0, 0]);
   assert.equal(on.effective.faceForces, true);
-  assert.match(source, /@group\(0\) @binding\(20\) var<storage, read_write> forceDelta: array<vec4<f32>>;/);
-  assert.match(source, /\{ binding: 20, visibility: GPUShaderStage\.FRAGMENT \| GPUShaderStage\.COMPUTE, buffer: \{ type: 'storage' \} \}/, 'fluid layout carries the force buffer');
+  assert.match(source, /@group\(0\) @binding\(20\) var forceDelta: texture_storage_3d<r32float, read_write>;/, 'one r32float storage texture, components stacked along depth (compute is at its storage-buffer limit)');
+  assert.match(source, /\{ binding: 20, visibility: GPUShaderStage\.FRAGMENT \| GPUShaderStage\.COMPUTE, storageTexture: \{ access: 'read-write', format: 'r32float', viewDimension: '3d' \} \}/, 'fluid layout carries the force texture');
+  assert.match(source, /size: \[gridSize, gridHeight, gridSize \* 3\],/, 'three components along depth');
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
   assert.match(main, /let forceIncrement = \(vel - velTransported\) \* timeStep;/);
-  assert.match(main, /if \(faceForcesOn\(\)\) \{\s*forceDelta\[idx\] = vec4<f32>\(forceIncrement, 0\.0\);\s*vel = velTransported;\s*\} else \{\s*vel = velTransported \+ forceIncrement;\s*\}/);
+  assert.match(main, /if \(faceForcesOn\(\)\) \{\s*forceDeltaStore\(cellI, forceIncrement\);\s*vel = velTransported;\s*\} else \{\s*vel = velTransported \+ forceIncrement;\s*\}/);
   const pass = source.slice(source.indexOf('fn csFaceForces('), source.indexOf('\n}\n', source.indexOf('fn csFaceForces(')));
-  assert.match(pass, /let here = forceDelta\[idx\]\.xyz;/);
-  assert.match(pass, /forceDelta\[index3\(vec3<u32>\(gid\.x \+ 1u, gid\.y, gid\.z\)\)\]\.x/);
-  assert.match(pass, /forceDelta\[index3\(vec3<u32>\(gid\.x, gid\.y \+ 1u, gid\.z\)\)\]\.y/);
-  assert.match(pass, /forceDelta\[index3\(vec3<u32>\(gid\.x, gid\.y, gid\.z \+ 1u\)\)\]\.z/);
+  assert.match(pass, /let here = vec3<f32>\(forceDeltaLoad\(c, 0\), forceDeltaLoad\(c, 1\), forceDeltaLoad\(c, 2\)\);/);
+  assert.match(pass, /forceDeltaLoad\(c \+ vec3<i32>\(1, 0, 0\), 0\), gid\.x \+ 1u < GRID\)/);
+  assert.match(pass, /forceDeltaLoad\(c \+ vec3<i32>\(0, 1, 0\), 1\), gid\.y \+ 1u < GRID_Y\)/);
+  assert.match(pass, /forceDeltaLoad\(c \+ vec3<i32>\(0, 0, 1\), 2\), gid\.z \+ 1u < GRID\)/);
   assert.match(pass, /fluidDst\[base\] = vec4<f32>\(boundVelocity\(stored\.xyz \+ faceForce\), stored\.w\);/, 'the bound applies after the face force');
   // The pass runs after the sim pass, before the buffers flip, only when admitted.
   const step = source.slice(source.indexOf("label: 'kaminos fluid sim pass'"), source.indexOf('encodeAnalyticEmitterInjection(encoder);', source.indexOf("label: 'kaminos fluid sim pass'")));
