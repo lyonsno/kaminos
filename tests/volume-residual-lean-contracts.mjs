@@ -46,5 +46,5 @@ test('the probe shader writes the lateral moments as the fifth partial and the c
   assert.match(reduce, /pressureResidualPartials\[partialIndex \+ 4u\] = vec4<f32>\(heatXSum, heatZSum, smokeXSum, smokeZSum\);/);
   assert.match(source, /profile: residualProfileFromPartials\(partials, \{ grid, workgroupsX, workgroupsY, workgroupCount \}\),/, 'the readback uses the pure fold');
   assert.match(capture, /heatCentroidCells: s\.pressureSolver\.residual\.profile\?\.heatCentroidCells \?\? null/, 'probe carries the centroids');
-  assert.match(capture, /heatCentroidCells: probe\.residual\?\.heatCentroidCells \?\? null/, 'samples carry the centroids');
+  assert.match(capture, /heatCentroidCells: probe\.residual\?\.heatCentroidCells \?\? null, heatMean: probe\.residual\?\.heatMean \?\? null/, 'samples carry the centroids and the slab heat that weights them');
 });
