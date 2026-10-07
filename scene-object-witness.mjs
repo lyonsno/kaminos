@@ -228,6 +228,95 @@ async function runMeshAssetLinkScenario(ws) {
   `, { timeoutMs: 45000 });
 }
 
+// Arrival contract for a fresh viewer link: the asset rests on the live ground
+// plane and the camera frames all of it at a readable size.
+async function runMeshAssetArrivalScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-mesh-asset-arrival';
+  const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
+  const measured = await evaluate(ws, `
+    (async () => {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const object = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === ${JSON.stringify(objectId)});
+      const camera = window.kaminosCameraDebugState?.();
+      if (!object?.worldBounds || object.worldBounds.error) return { object, camera, error: 'world bounds unavailable' };
+      const { min, max } = object.worldBounds;
+      const mul = (m, v) => [0, 1, 2, 3].map(r => m[r] * v[0] + m[4 + r] * v[1] + m[8 + r] * v[2] + m[12 + r] * v[3]);
+      const corners = [];
+      for (const x of [min[0], max[0]]) for (const y of [min[1], max[1]]) for (const z of [min[2], max[2]]) {
+        const clip = mul(camera.projectionMatrix, mul(camera.matrixWorldInverse, [x, y, z, 1]));
+        corners.push({ w: clip[3], ndc: [clip[0] / clip[3], clip[1] / clip[3]] });
+      }
+      const canvas = [...document.querySelectorAll('canvas')].filter(c => c.offsetParent !== null).sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
+      const canvasRect = canvas?.getBoundingClientRect();
+      const bar = document.getElementById('transform-bar');
+      const barRect = bar?.classList.contains('visible') ? bar.getBoundingClientRect() : null;
+      const overlayTopNdc = canvasRect && barRect ? 1 - 2 * Math.max(0, barRect.bottom - canvasRect.top) / canvasRect.height : 1;
+      return { object, camera, corners, overlayTopNdc };
+    })()
+  `, { timeoutMs: 15000 });
+  const { object, camera, corners, overlayTopNdc } = measured;
+  if (!corners) throw new Error('mesh asset arrival could not measure bounds: ' + JSON.stringify(measured));
+  const { min, max } = object.worldBounds;
+  const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
+  const groundGap = min[1] - camera.groundY;
+  const xs = corners.map(corner => corner.ndc[0]), ys = corners.map(corner => corner.ndc[1]);
+  const screenExtent = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / 2;
+  lastEvidence.meshAssetArrival = { arrival: object.arrival, overlayTopNdc, worldBounds: object.worldBounds, groundY: camera.groundY, groundGap, diagonal, camera: { position: camera.position, target: camera.target }, ndcCorners: corners, screenExtent };
+  if (!Number.isFinite(camera.groundY)) throw new Error('mesh asset arrival has no ground plane height: ' + JSON.stringify(lastEvidence.meshAssetArrival));
+  if (Math.abs(groundGap) > Math.max(1e-4, diagonal * 2e-3)) throw new Error('mesh asset did not arrive resting on the ground plane: ' + JSON.stringify({ groundGap, groundY: camera.groundY, worldBounds: object.worldBounds }));
+  if (corners.some(corner => !(corner.w > 0) || Math.abs(corner.ndc[0]) > 1 || Math.abs(corner.ndc[1]) > 1)) throw new Error('mesh asset arrival is not fully inside the camera frame: ' + JSON.stringify(corners));
+  if (object.arrival?.mode !== 'fresh') throw new Error('mesh asset link did not record a fresh arrival: ' + JSON.stringify(object.arrival));
+  if (corners.some(corner => corner.ndc[1] > overlayTopNdc)) throw new Error('mesh asset arrival is hidden under the transform toolbar: ' + JSON.stringify({ overlayTopNdc, corners }));
+  if (screenExtent < 0.4) throw new Error('mesh asset arrival is framed too small: ' + JSON.stringify({ screenExtent, camera: lastEvidence.meshAssetArrival.camera }));
+}
+
+// Arrival contract for adding into an existing scene through Add > Import
+// mesh: the new asset lands on the ground under the orbit pivot at the shared
+// size, and the camera and the existing object stay where they were.
+async function runMeshAssetAppendArrivalScenario(ws, appendUrl) {
+  await runMeshAssetArrivalScenario(ws);
+  phase = 'scenario-mesh-asset-append-arrival';
+  if (!appendUrl) throw new Error('mesh-asset-append-arrival requires --append-url');
+  lastEvidence.meshAssetAppendArrival = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const pivot = [0.9, -0.2, -0.6];
+      const cameraBefore = window.kaminosSetCameraDebugPose({ position: [3.2, 1.4, 3.6], target: pivot });
+      const before = window.kaminosSceneObjectDebugState();
+      const response = await fetch(${JSON.stringify('__APPEND_URL__')});
+      if (!response.ok) throw new Error('append asset fetch failed: ' + response.status);
+      const file = new File([await response.blob()], 'appended-asset.glb', { type: 'model/gltf-binary' });
+      const input = document.getElementById('scene-mesh-file');
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      let after = before;
+      for (let i = 0; i < 160 && after.length === before.length; i++) { await wait(125); after = window.kaminosSceneObjectDebugState(); }
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      after = window.kaminosSceneObjectDebugState();
+      return { pivot, cameraBefore, cameraAfter: window.kaminosCameraDebugState(), before, after, info: document.getElementById('info-bar')?.textContent?.trim() };
+    })()
+  `.replace('__APPEND_URL__', appendUrl), { timeoutMs: 45000 });
+  const { pivot, cameraBefore, cameraAfter, before, after, info } = lastEvidence.meshAssetAppendArrival;
+  const added = after.find(record => !before.some(prior => prior.id === record.id));
+  if (!added) throw new Error('append import registered no new scene object: ' + JSON.stringify({ info, count: after.length }));
+  const near = (a, b, tolerance = 1e-6) => a.length === b.length && a.every((value, index) => Math.abs(value - b[index]) <= tolerance);
+  if (!near(cameraAfter.position, cameraBefore.position) || !near(cameraAfter.target, cameraBefore.target)) throw new Error('append import moved the camera: ' + JSON.stringify({ cameraBefore, cameraAfter }));
+  for (const prior of before) {
+    const now = after.find(record => record.id === prior.id);
+    if (!now || JSON.stringify(now.transform) !== JSON.stringify(prior.transform)) throw new Error('append import changed an existing object: ' + JSON.stringify({ prior, now }));
+  }
+  const { min, max } = added.worldBounds;
+  const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
+  if (Math.abs(min[1] - cameraAfter.groundY) > 2e-3 * diagonal) throw new Error('appended asset is not resting on the ground: ' + JSON.stringify({ worldBounds: added.worldBounds, groundY: cameraAfter.groundY }));
+  if (Math.abs((min[0] + max[0]) / 2 - pivot[0]) > 1e-3 || Math.abs((min[2] + max[2]) / 2 - pivot[2]) > 1e-3) throw new Error('appended asset did not land under the orbit pivot: ' + JSON.stringify({ worldBounds: added.worldBounds, pivot }));
+  if (Math.abs(diagonal - 2) > 1e-3) throw new Error('appended asset did not take the shared arrival size: ' + diagonal);
+  if (added.arrival?.mode !== 'append') throw new Error('append import did not record an append arrival: ' + JSON.stringify(added));
+  lastEvidence.meshAssetAppendArrival = { addedId: added.id, arrival: added.arrival, worldBounds: added.worldBounds, pivot, camera: cameraAfter.position, info };
+}
+
 async function runNavigationDepthIndexScenario(ws) {
   await runMeshAssetLinkScenario(ws);
   phase = 'scenario-navigation-depth-index';
@@ -5542,6 +5631,10 @@ try {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
+  } else if (scenario === 'mesh-asset-arrival') {
+    await runMeshAssetArrivalScenario(ws);
+  } else if (scenario === 'mesh-asset-append-arrival') {
+    await runMeshAssetAppendArrivalScenario(ws, args.get('--append-url'));
   } else if (scenario === 'navigation-depth-index') {
     await runNavigationDepthIndexScenario(ws);
   } else if (scenario === 'modal-pivot-visibility') {
