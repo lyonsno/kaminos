@@ -12,7 +12,7 @@ export function generationProgress(value) {
 
 export function createAuthoringGeneration({initialize,loadInput,persist,changed=()=>{}}) {
   let producer=null,active=false,abort=null;
-  let state={status:'idle',progress:'Weights load when you generate.',stage:null,percent:null,canStop:false,error:null,results:[],pending:null};
+  let state={status:'idle',progress:'Weights load when you generate.',stage:null,percent:null,canStop:false,error:null,terminal:null,results:[],pending:null};
   const publish=()=>changed(structuredClone(state));
   const progress=value=>{
     if(abort?.signal.aborted)return;
@@ -43,7 +43,7 @@ export function createAuthoringGeneration({initialize,loadInput,persist,changed=
       if(active)throw Error('Generation is already running');
       if(state.pending)throw Error('Save the retained generated output before another run');
       if(!input?.source)throw Error('Choose a source image');
-      active=true;abort=new AbortController();state.error=null;state.pending=null;state.status='input';state.canStop=true;state.percent=null;state.stage=null;state.progress='Opening source image…';let phase='input';publish();
+      active=true;abort=new AbortController();state.error=null;state.terminal=null;state.pending=null;state.status='input';state.canStop=true;state.percent=null;state.stage=null;state.progress='Opening source image…';let phase='input';publish();
       try {
         const source=await loadInput(input,{signal:abort.signal});checkStop();
         phase='weights';state.status='loading';state.stage=null;state.percent=null;state.progress='Loading Stable Fast 3D…';publish();
@@ -64,6 +64,7 @@ export function createAuthoringGeneration({initialize,loadInput,persist,changed=
         state.pending={glb:result.glb,generation,label:input.label || input.name || 'Generated'};phase='persistence';
         return await storePending();
       }catch(error){
+        state.terminal={phase,run:error.sf3dRun || null,cooperative:error.cooperativeExecutionReport || null,error:{name:error.name,message:error.message}};
         if(phase!=='persistence'&&abort.signal.aborted&&error.name==='AbortError'){state.status='stopped';state.error=null;state.percent=null;state.stage=null;state.progress='Generation stopped. Your scene is unchanged.';return null;}
         state.status='failed';state.error=`${phase}: ${error.message}`;throw error;
       }finally{active=false;state.canStop=false;abort=null;publish();}
