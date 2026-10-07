@@ -3405,7 +3405,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <button class="tb-btn" id="tb-backface" onclick="toggleBackface()" title="Show only backfaces (diagnose inside-out)">Backface</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" id="tb-opaque" onclick="forceOpaque()" title="Force all materials opaque (fix transparent textures)">Opaque</button>
-    <button class="tb-btn" onclick="snapToGround()" title="Snap lowest vertex to ground plane">Snap Ground</button>
+    <button class="tb-btn" onclick="snapToGround()" title="Level onto its base if it is clearly a few degrees off, then rest on the ground plane">Snap Ground</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" id="tb-gizmo-translate" onclick="setGizmoMode('translate')" title="Translate gizmo (W)">Move</button>
     <button class="tb-btn" id="tb-gizmo-rotate" onclick="setGizmoMode('rotate')" title="Rotate gizmo (E)">Rotate</button>
@@ -3846,6 +3846,7 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { assetArrivalFramingWindow, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
+import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
@@ -12126,21 +12127,32 @@ function applyAssetArrival(object, mode) {
   return placement;
 }
 
-function sceneObjectWorldPoints(object) {
+function sceneObjectWorldGeometry(object, { triangles: withTriangles = false } = {}) {
   object.updateWorldMatrix(true, true);
-  let total = 0;
-  object.traverse(child => { if (child.isMesh && child.geometry?.getAttribute('position')) total += child.geometry.getAttribute('position').count; });
+  const meshes = [];
+  object.traverse(child => { if (child.isMesh && child.geometry?.getAttribute('position')) meshes.push(child); });
+  const total = meshes.reduce((sum, mesh) => sum + mesh.geometry.getAttribute('position').count, 0);
   const points = new Float32Array(total * 3), v = new THREE.Vector3();
-  let offset = 0;
-  object.traverse(child => {
-    const position = child.isMesh ? child.geometry?.getAttribute('position') : null;
-    if (!position) return;
-    for (let i = 0; i < position.count; i++, offset += 3) {
-      v.fromBufferAttribute(position, i).applyMatrix4(child.matrixWorld);
-      points[offset] = v.x; points[offset + 1] = v.y; points[offset + 2] = v.z;
+  const triangles = [];
+  let base = 0;
+  for (const mesh of meshes) {
+    const position = mesh.geometry.getAttribute('position');
+    for (let i = 0; i < position.count; i++) {
+      v.fromBufferAttribute(position, i).applyMatrix4(mesh.matrixWorld);
+      points[3 * (base + i)] = v.x; points[3 * (base + i) + 1] = v.y; points[3 * (base + i) + 2] = v.z;
     }
-  });
-  return points;
+    if (withTriangles) {
+      const index = mesh.geometry.index;
+      const count = index ? index.count : position.count;
+      for (let i = 0; i < count; i++) triangles.push(base + (index ? index.getX(i) : i));
+    }
+    base += position.count;
+  }
+  return { points, triangles: withTriangles ? triangles : null };
+}
+
+function sceneObjectWorldPoints(object) {
+  return sceneObjectWorldGeometry(object).points;
 }
 
 function viewportOverlayTopNdc() {
@@ -25874,27 +25886,47 @@ window.addEventListener('keydown', e => {
   }
 });
 
+// Snap Ground: when the object is not standing on a level base but clearly
+// could (a stable flat face within a few degrees of straight down, such as a
+// chair's leg tips), turn it onto that base first; then rest it on the ground.
+// Goes through scene history, so it undoes like any other pose edit.
+function sceneObjectRestingAnalysis(object) {
+  const { points, triangles } = sceneObjectWorldGeometry(object, { triangles: true });
+  const analysis = findRestingPlanes(points, triangles);
+  return { analysis, choice: chooseLevelingPlane(analysis) };
+}
+
+window.kaminosRestingPlaneDebugState = function(id) {
+  const entry = sceneObjects.find(item => item.id === id);
+  if (!entry?.object) return null;
+  const { choice } = sceneObjectRestingAnalysis(entry.object);
+  return { reason: choice.reason, tiltDeg: choice.plane?.tiltDeg ?? null, relArea: choice.plane?.relArea ?? null, stableMargin: choice.plane?.stableMargin ?? null };
+};
+
 window.snapToGround = function() {
   if (!currentMesh) return;
-  // Find the lowest Y vertex in world space
-  let minY = Infinity;
-  currentMesh.traverse(child => {
-    if (!child.isMesh || !child.geometry) return;
-    const pos = child.geometry.getAttribute('position');
-    if (!pos) return;
-    const worldMatrix = child.matrixWorld;
-    const v = new THREE.Vector3();
-    for (let i = 0; i < pos.count; i++) {
-      v.fromBufferAttribute(pos, i);
-      v.applyMatrix4(worldMatrix);
-      if (v.y < minY) minY = v.y;
-    }
-  });
-  if (minY === Infinity) return;
-  // Shift model so lowest vertex sits on the ground plane
-  const groundY = groundPlane.position.y;
-  currentMesh.position.y += groundY - minY;
-  setInfo(`Snapped to ground (shifted ${(groundY - minY).toFixed(3)})`);
+  const { analysis, choice } = sceneObjectRestingAnalysis(currentMesh);
+  if (!analysis) return;
+  const delta = levelingWorldDelta({ plane: choice.reason === 'level' ? choice.plane : null, hullPoints: analysis.hullPoints, groundY: groundPlane.position.y });
+  currentMesh.updateWorldMatrix(true, false);
+  const local = currentMesh.matrixWorld.clone().premultiply(delta);
+  if (currentMesh.parent) local.premultiply(currentMesh.parent.matrixWorld.clone().invert());
+  const position = new THREE.Vector3(), quaternion = new THREE.Quaternion(), scale = new THREE.Vector3();
+  local.decompose(position, quaternion, scale);
+  const rotation = new THREE.Euler().setFromQuaternion(quaternion, currentMesh.rotation.order);
+  const transform = { position: position.toArray(), rotation: [rotation.x, rotation.y, rotation.z], scale: scale.toArray() };
+  const entry = sceneObjects.find(item => item.object === currentMesh);
+  try {
+    if (entry) window.kaminosSetSceneObjectTransform(entry.id, transform);
+    else applySceneObjectTransformState(currentMesh, transform);
+  } catch (error) {
+    setInfo(`Snap Ground failed: ${error.message}`);
+    return;
+  }
+  window._kaminosDirty?.();
+  if (choice.reason === 'level') setInfo(`Leveled ${choice.plane.tiltDeg.toFixed(1)}° onto its base and snapped to ground`);
+  else if (choice.reason === 'already-level') setInfo('Snapped to ground (already standing level)');
+  else setInfo('Snapped to ground (no clear base to level onto)');
 };
 
 window.exportGLB = function() {

@@ -302,6 +302,48 @@ async function runMeshAssetAppendArrivalScenario(ws, appendUrl) {
   lastEvidence.meshAssetAppendArrival = { addedId: added.id, arrival: added.arrival, worldBounds: added.worldBounds, pivot, camera: cameraAfter.position, info };
 }
 
+// Snap Ground on an asset that arrives a few degrees off its base: the button
+// stands it level on that base and on the ground, and one undo restores the
+// arrival pose.
+async function runSnapGroundLevelScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-snap-ground-level';
+  const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
+  const result = await evaluate(ws, `
+    (async () => {
+      const id = ${JSON.stringify(objectId)};
+      const frames = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const record = () => window.kaminosSceneObjectDebugState().find(item => item.id === id);
+      await frames();
+      const before = { pose: record().transform, resting: window.kaminosRestingPlaneDebugState(id) };
+      const button = [...document.querySelectorAll('#transform-bar button')].find(item => item.textContent.trim() === 'Snap Ground');
+      if (!button) throw new Error('Snap Ground button missing');
+      button.click();
+      await frames();
+      const after = { pose: record().transform, bounds: record().worldBounds, resting: window.kaminosRestingPlaneDebugState(id), info: document.getElementById('info-bar')?.textContent?.trim(), groundY: window.kaminosCameraDebugState().groundY };
+      return { before, after };
+    })()
+  `, { timeoutMs: 30000 });
+  lastEvidence.snapGroundLevel = result;
+  await capturePngScreenshot(ws, out.replace(/\.png$/i, '-leveled.png'));
+  const undone = await evaluate(ws, `
+    (async () => {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', metaKey: true, bubbles: true }));
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return window.kaminosSceneObjectDebugState().find(item => item.id === ${JSON.stringify(objectId)}).transform;
+    })()
+  `, { timeoutMs: 15000 });
+  lastEvidence.snapGroundLevel.undone = undone;
+  const { before, after } = result;
+  if (before.resting?.reason !== 'level') throw new Error('asset did not arrive measurably off its base: ' + JSON.stringify(before.resting));
+  const { min, max } = after.bounds;
+  const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
+  if (after.resting?.reason !== 'already-level') throw new Error('Snap Ground left the asset off its base: ' + JSON.stringify({ before: before.resting, after: after.resting, info: after.info }));
+  if (Math.abs(min[1] - after.groundY) > 2e-3 * diagonal) throw new Error('Snap Ground did not rest the asset on the ground: ' + JSON.stringify({ bounds: after.bounds, groundY: after.groundY }));
+  const near = (a, b) => a.every((value, index) => Math.abs(value - b[index]) < 1e-6);
+  if (!['position', 'rotation', 'scale'].every(key => near(undone[key], before.pose[key]))) throw new Error('undo did not restore the arrival pose: ' + JSON.stringify({ before: before.pose, undone }));
+}
+
 async function runNavigationDepthIndexScenario(ws) {
   await runMeshAssetLinkScenario(ws);
   phase = 'scenario-navigation-depth-index';
@@ -5618,6 +5660,8 @@ try {
     await runMeshAssetLinkScenario(ws);
   } else if (scenario === 'mesh-asset-arrival') {
     await runMeshAssetArrivalScenario(ws);
+  } else if (scenario === 'snap-ground-level') {
+    await runSnapGroundLevelScenario(ws);
   } else if (scenario === 'mesh-asset-append-arrival') {
     await runMeshAssetAppendArrivalScenario(ws, args.get('--append-url'));
   } else if (scenario === 'navigation-depth-index') {
