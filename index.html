@@ -26,6 +26,8 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 #scene-gi-controls input[type="number"], #scene-gi-controls select, #scene-gi-mode { min-width:0; width:148px; max-width:55%; box-sizing:border-box; border:1px solid #405157; border-radius:4px; padding:6px; background:#151a1c; color:#ddd; }
 #scene-gi-controls .authoring-number-wrap { width:148px; max-width:55%; min-width:0; }
 #scene-gi-controls .authoring-number-wrap input { width:100%; max-width:none; }
+body[data-workspace="authoring"] #scene-edit-hud { max-width:calc(100% - 24px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+body[data-workspace="authoring"] #navigation-hint { max-width:calc(100% - 185px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !important; }
 .field-val { color: #999; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field-val.present { color: #66bb6a; }
@@ -1013,7 +1015,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="env-grid" id="env-buttons"></div>
 
     <div class="slider-row" style="margin-top: 10px;">
-      <span class="slider-label">Exposure</span>
+      <span class="slider-label" title="Host camera exposure; matching the emissive camera uses its EV instead">Surface exposure</span>
       <input type="range" id="exposure-slider" min="0.2" max="4" step="0.1" value="1.5">
       <span class="slider-val" id="exposure-val">1.5</span>
     </div>
