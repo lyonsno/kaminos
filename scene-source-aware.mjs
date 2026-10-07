@@ -59,13 +59,13 @@ export function integrateCellRay(sample,dimensions,p,d,limit=Infinity) {
   return out;
 }
 
-export const SOURCE_AWARE_WGSL=`
+export const SOURCE_AWARE_BODY_WGSL=`
 fn sourceDirection(p:vec3<f32>,a:u32)->vec3<f32> {
   let v=directions[a].xyz-p;
   if(dot(v,v)==0.0){return vec3<f32>(0.0,1.0,0.0);}
   return normalize(v);
 }
-fn sourcePdf(p:vec3<f32>,d:vec3<f32>)->f32 {
+fn uniformSourcePdf(p:vec3<f32>,d:vec3<f32>)->f32 {
   let span=interval(p,d,vec3<f32>(-1.0),vec3<f32>(1.0,3.0,1.0),1e30);
   if(span.y<=span.x){return 0.0;}
   return (span.y-span.x)*(span.y*span.y+span.y*span.x+span.x*span.x)/48.0;
@@ -100,4 +100,7 @@ fn integrateCells(p:vec3<f32>,d:vec3<f32>,limit:f32)->vec3<f32> {
   }
   return radiance;
 }
+`;
+export const SOURCE_AWARE_WGSL=SOURCE_AWARE_BODY_WGSL+`
+fn sourcePdf(p:vec3<f32>,d:vec3<f32>)->f32 {return uniformSourcePdf(p,d);}
 `;

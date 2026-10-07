@@ -134,7 +134,7 @@ export function createFlameInspector({ document, host, sharedHost = host, camera
       else {field.type=source.type==='range'?'number':source.type;field.step='any';}
       field.className='transform-input';field.dataset.authoringAlias=id;field.id=`selected-${id}`;grip.htmlFor=field.id;
       field.setAttribute('aria-label',`${group.name==='Camera'?'Camera':'Flame'} ${label}`);
-      field.dataset.authoringDragStep=source.step==='any'?'.01':source.step||'.01';
+      field.dataset.authoringDragStep=source.dataset.authoringDragStep||(source.step==='any'?'.01':source.step||'.01');
       function syncField(force=false) {
         if(force!==true&&document.activeElement===field)return;
         for(const key of ['min','max'])if(source[key])field[key]=source[key];

@@ -24,11 +24,11 @@ export function resolveVolumeAppearanceTrims(value={}) {
 export function productTransportSettings(value) {
   const next={...value};
   const key='rendering-angular-pattern';
-  if(!['fixed','spatial','source'].includes(next[key]))throw Error('Unknown lighting angular pattern');
+  if(!['fixed','spatial','source','guided'].includes(next[key]))throw Error('Unknown lighting angular pattern');
   if(!['legacy','distributed'].includes(next['rendering-smoke-solver']))throw Error('Unknown smoke illumination solver');
   if(!['all','shared','flame-field','neither'].includes(next['rendering-light-mode']))throw Error('Unknown flame lighting mode');
   if(typeof next['rendering-surface-scattering']!=='boolean')throw Error('Invalid surface scattering setting');
-  next[key]='source';next['rendering-smoke-solver']='distributed';next['rendering-surface-scattering']=true;
+  next[key]=next[key]==='guided'?'guided':'source';next['rendering-smoke-solver']='distributed';next['rendering-surface-scattering']=true;
   next['rendering-light-mode']='shared';
   return next;
 }

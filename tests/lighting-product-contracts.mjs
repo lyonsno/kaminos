@@ -31,6 +31,11 @@ test('appearance trims are independent finite radiance multipliers with neutral 
   assert.throws(()=>resolveVolumeAppearanceTrims({flameStops:128}));
 });
 
+test('product restore preserves the newly accepted emitter-informed sampler',()=>{
+  const settings={'rendering-angular-pattern':'guided','rendering-smoke-solver':'distributed','rendering-surface-scattering':true,'rendering-light-mode':'shared'};
+  assert.equal(productTransportSettings(settings)['rendering-angular-pattern'],'guided');
+});
+
 test('actual product GI setter rejects unknown supplied modes before effective state changes',()=>{
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const start=html.indexOf('function setSceneGIControls('),end=html.indexOf('for (const key of Object.keys(sceneGISettings))',start);
