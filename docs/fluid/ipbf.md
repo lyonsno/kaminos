@@ -107,3 +107,11 @@ collision-only IPBF pressure, and PBF-only optimizations report bypass under
 IPBF. A dedicated velocity stage applies paper damping before the retained
 viscosity stage, allowing the IPBF state binding to stay out of the incumbent
 full binding layout.
+
+The bench consumer copies the effective solver identity into its root state.
+The existing trajectory validator defaults to the incumbent boundary contract;
+IPBF callers explicitly select `boundaryPressureContract` matching collision-only
+pressure. Unknown contracts and mixed-contract checkpoints fail. Numerical and
+scene-behavior thresholds remain unchanged. An accepted trajectory receipt
+records its selected boundary and establishes those existing checks only,
+not equality with PBF or production-quality water.
