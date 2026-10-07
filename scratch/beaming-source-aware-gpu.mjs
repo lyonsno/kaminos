@@ -1,8 +1,8 @@
-import {createVolumeGather,sourceRaySample,integrateCellRay} from '../scene-volume-gather.mjs';
+import {createVolumeGather,sourceRaySample,sourceGuideRaySample,deriveSourceGuide,integrateCellRay} from '../scene-volume-gather.mjs';
 import {buildTriangleVisibility} from '../scene-light-visibility.mjs';
-export async function checkSourceAwareGPU(){
+export async function checkSourceAwareGPU({guided=false}={}){
   const adapter=await navigator.gpu.requestAdapter();
-  if(!adapter||adapter.isFallbackAdapter||/swiftshader/i.test(JSON.stringify(adapter.info)))throw new Error('native WebGPU required');
+  if(!adapter||adapter.info.isFallbackAdapter!==false||/swiftshader/i.test(JSON.stringify(adapter.info)))throw new Error('verified native WebGPU required');
   const device=await adapter.requestDevice(),errors=[],outputs=[];
   device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
   const receivers=[
@@ -13,7 +13,9 @@ export async function checkSourceAwareGPU(){
   ];
   const triangles=[{a:[-1,-1,.4],b:[1,-1,.4],c:[0,3,.4]}];
   const bvh=buildTriangleVisibility(triangles);
-  const gather=createVolumeGather(device,{geometry:bvh.packGpu(),receivers,volumeGrid:2,directions:12,angularPattern:'source'});
+  const guide=deriveSourceGuide({position:[0,-.76,0],radius:.19,height:2.2,depth:.24});
+  const gather=createVolumeGather(device,{geometry:bvh.packGpu(),receivers,volumeGrid:2,directions:12,angularPattern:guided?'guided':'source'});
+  if(guided)gather.setSourceGuide(guide);
   const dimensions=[4,8,4],source=new Float32Array(4*8*4*4);
   const texture=device.createTexture({size:dimensions,dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.COPY_DST|GPUTextureUsage.TEXTURE_BINDING});
   try{
@@ -30,7 +32,7 @@ export async function checkSourceAwareGPU(){
       for(const r of receivers){
         const front=[0,0,0],back=[0,0,0];
         for(let a=0;a<count;a++){
-          const s=sourceRaySample(r.position,a);
+          const s=guided?sourceGuideRaySample(r.position,a,guide,count):sourceRaySample(r.position,a);
           const cosine=s.direction.reduce((v,d,i)=>v+d*r.normal[i],0);
           if(!r.twoSided&&cosine<=0)continue;
           const hit=bvh.trace(r.position,s.direction);
@@ -51,7 +53,7 @@ export async function checkSourceAwareGPU(){
     }
     await device.queue.onSubmittedWorkDone();
     if(errors.length)throw new Error(errors.join('\n'));
-    return {adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture},outputs,errors,status:'passed'};
+    return {adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:adapter.info.isFallbackAdapter},outputs,errors,status:'passed'};
   }catch(e){return {status:'failed',error:String(e),outputs,errors};}
   finally{gather.destroy();texture.destroy();device.destroy();}
 }
