@@ -7192,6 +7192,8 @@ document.getElementById('local-liquid-pause').addEventListener('click', () => wi
 
 // Witness access to the exact live GPU descriptor; no per-frame readback.
 window.kaminosLocalLiquidContactFrameForWitness = () => localLiquidHost?.contactFrame() ?? null;
+window.kaminosSetLocalLiquidSupportVisibleForWitness = value => localLiquidHost?.setSupportVisibleForWitness(value);
+window.kaminosReadLocalLiquidBackgroundDepthForWitness = () => localLiquidHost?.readBackgroundDepthForWitness();
 window.kaminosLocalLiquidState = () => {
   const hostState = localLiquidHost?.state() || null;
   return ({

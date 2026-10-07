@@ -151,6 +151,11 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   }
 
   const host = {group,render,
+    setSupportVisibleForWitness(value) {group.visible=Boolean(value);},
+    async readBackgroundDepthForWitness() {
+      const values=await renderer.readRenderTargetPixelsAsync(depthTarget,0,0,1,1);
+      return {frameId:lastFrame?.frameId,cameraFar:camera.far,pixel:Array.from(values),supportVisible:group.visible};
+    },
     contactFrame() {
       if(disposed || failure || paused || !lastFrame)return null;
       const descriptor=solver.getLiquidFireContactDescriptor();
