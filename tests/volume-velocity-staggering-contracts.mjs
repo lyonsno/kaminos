@@ -13,8 +13,8 @@ const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema
 // (compact backward divergence, forward gradient) while the transport read it
 // as the cell centre: a half-cell shift along +x and +z that leaned every
 // plume toward -x -z (report section 25). Staggered transport, opt-in, reads it
-// as faces everywhere: the characteristic uses the two-face mean, and each
-// carried component is sampled half a cell back along its own axis.
+// as faces: the characteristic uses the two-face mean per component, and the
+// carried velocity is sampled at the plain foot (its destination is a face too).
 test('velocity staggering resolves from the control and is admitted only under the converged solver', () => {
   const off = core.resolveVelocityStaggeringConfig({});
   assert.equal(off.identity, 'kaminos.volume.velocity-staggering.v1');
@@ -38,28 +38,24 @@ test('the staggering uniform follows the heat-release block and packs 1 only whe
   assert.match(source, /uniforms\.set\(velocityStaggeringUniformValues\(velocityStaggeringConfig\), VELOCITY_STAGGERING_UNIFORM_OFFSET\);\s*state\.velocityStaggering = velocityStaggeringConfig;/);
 });
 
-test('the shader reads the carried velocity as faces when staggered: two-face mean for the characteristic, per-axis half-cell sample', () => {
+test('the shader builds the characteristic from the two-face mean when staggered and samples the carried velocity at the plain foot', () => {
   const centre = source.slice(source.indexOf('fn centreVelocityAt('), source.indexOf('\n}\n', source.indexOf('fn centreVelocityAt(')));
   assert.match(centre, /if \(!velocityStaggered\(\)\) \{ return stored; \}/);
   assert.match(centre, /compactFaceVelocity\(c, 0u\) \+ compactFaceVelocity\(c - vec3<i32>\(1, 0, 0\), 0u\)/);
   assert.match(centre, /compactFaceVelocity\(c, 1u\) \+ compactFaceVelocity\(c - vec3<i32>\(0, 1, 0\), 1u\)/);
   assert.match(centre, /compactFaceVelocity\(c, 2u\) \+ compactFaceVelocity\(c - vec3<i32>\(0, 0, 1\), 2u\)/);
-  const sample = source.slice(source.indexOf('fn sampleCarriedVelocity('), source.indexOf('\n}\n', source.indexOf('fn sampleCarriedVelocity(')));
-  assert.match(sample, /sampleFluidSlotInflow\(p - vec3<f32>\(0\.5, 0\.0, 0\.0\), 0u\)\.x/);
-  assert.match(sample, /sampleFluidSlotInflow\(p - vec3<f32>\(0\.0, 0\.5, 0\.0\), 0u\)\.y/);
-  assert.match(sample, /sampleFluidSlotInflow\(p - vec3<f32>\(0\.0, 0\.0, 0\.5\), 0u\)\.z/);
-  const predictSample = source.slice(source.indexOf('fn samplePredictVelocity('), source.indexOf('\n}\n', source.indexOf('fn samplePredictVelocity(')));
-  assert.match(predictSample, /samplePredictSlot\(p - vec3<f32>\(0\.5, 0\.0, 0\.0\), 0u\)\.x/);
-  // Both kernels build the characteristic from the centre velocity, and the
-  // velocity slot is sampled staggered on every path (predictor, plain, MacCormack reverse).
+  // Both kernels build the characteristic from the centre velocity.
   const predictor = source.slice(source.indexOf('fn csTransportPredict('), source.indexOf('\n}\n', source.indexOf('fn csTransportPredict(')));
   assert.match(predictor, /let centreVelocity = centreVelocityAt\(vec3<i32>\(gid\)\);/);
-  assert.match(predictor, /if \(slot == 0u\) \{ sample = sampleCarriedVelocity\(backCell\); \}/);
+  assert.match(predictor, /let advectVelocity = vec3<f32>\(centreVelocity\.x \* bonfireAdvectionLateralDamping, centreVelocity\.y, centreVelocity\.z \* bonfireAdvectionLateralDamping\);/);
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('let macCormack = u.transport_controls.x > 1.5;'));
   assert.match(main, /let centreVelocity = centreVelocityAt\(cellI\);/);
-  assert.match(source, /advected = sampleCarriedVelocity\(backCell\);/, 'plain semi-Lagrangian velocity sample');
-  const mac = source.slice(source.indexOf('fn macCormackSlot('), source.indexOf('\n}\n', source.indexOf('fn macCormackSlot(')));
-  assert.match(mac, /if \(slot == 0u\) \{ reversed = samplePredictVelocity\(forwardCell\); \}/);
+  assert.match(main, /let advectVelocity = vec3<f32>\(centreVelocity\.x \* bonfireAdvectionLateralDamping, centreVelocity\.y, centreVelocity\.z \* bonfireAdvectionLateralDamping\);/);
+  // The carried velocity is sampled at the plain foot: destination face and
+  // sampler offset cancel (a −½ per-component sample offset flipped the lean to +x).
+  assert.doesNotMatch(source, /sampleCarriedVelocity|samplePredictVelocity/, 'no per-component sample offset');
+  assert.match(source, /advected = sampleFluidSlotInflow\(backCell, 0u\);/);
+  assert.match(predictor, /fluidPredict\[base \+ slot\] = sampleFluidSlotInflow\(backCell, slot\);/);
 });
 
 test('cockpit: the staggering select with help, snapshot, listener, route restore, receipt; schema additive 235', () => {

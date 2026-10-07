@@ -3745,8 +3745,7 @@ fn macCormackSlot(c: vec3<i32>, idx: u32, backCell: vec3<f32>, forwardCell: vec3
   if (inflowGhostBlend(backCell) > 0.0) {
     return predicted;
   }
-  var reversed = samplePredictSlot(forwardCell, slot);
-  if (slot == 0u) { reversed = samplePredictVelocity(forwardCell); }
+  let reversed = samplePredictSlot(forwardCell, slot);
   let current = fluidSrc[idx * SLOTS_PER_CELL + slot];
   let corrected = predicted + (current - reversed) * 0.5;
   let extrema = slotExtrema(backCell, slot);
@@ -4173,28 +4172,13 @@ fn centreVelocityAt(c: vec3<i32>) -> vec3<f32> {
     compactFaceVelocity(c, 2u) + compactFaceVelocity(c - vec3<i32>(0, 0, 1), 2u));
 }
 
-// The carried velocity sampled at a characteristic foot. Staggered: each stored
-// component lives on the upper face of its axis, half a cell beyond where the
-// sampler assumes it, so it is sampled half a cell back along its own axis.
-fn sampleCarriedVelocity(p: vec3<f32>) -> vec4<f32> {
-  let plain = sampleFluidSlotInflow(p, 0u);
-  if (!velocityStaggered()) { return plain; }
-  return vec4<f32>(
-    sampleFluidSlotInflow(p - vec3<f32>(0.5, 0.0, 0.0), 0u).x,
-    sampleFluidSlotInflow(p - vec3<f32>(0.0, 0.5, 0.0), 0u).y,
-    sampleFluidSlotInflow(p - vec3<f32>(0.0, 0.0, 0.5), 0u).z,
-    plain.w);
-}
-
-fn samplePredictVelocity(p: vec3<f32>) -> vec4<f32> {
-  let plain = samplePredictSlot(p, 0u);
-  if (!velocityStaggered()) { return plain; }
-  return vec4<f32>(
-    samplePredictSlot(p - vec3<f32>(0.5, 0.0, 0.0), 0u).x,
-    samplePredictSlot(p - vec3<f32>(0.0, 0.5, 0.0), 0u).y,
-    samplePredictSlot(p - vec3<f32>(0.0, 0.0, 0.5), 0u).z,
-    plain.w);
-}
+// The carried velocity itself is sampled at the plain foot even when
+// staggered: the destination u(c) is the upper face at centre + ½, the value
+// it needs is the physical velocity at (centre + ½) − U·dt, and the sampler
+// reads stored values half a cell below their physical position, so the two
+// half-cell offsets cancel and the query is centre − U·dt, the same foot the
+// scalars use. (A per-component −½ sample offset was tried first and moved the
+// velocity pattern +½ cell per step: the lean flipped to +x instead of going.)
 
 fn blockedSceneFaceFluxAtCell(c: vec3<i32>) -> vec2<f32> {
   if (!sceneSolidEnabled()) { return vec2<f32>(0.0); }
@@ -5546,9 +5530,7 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let advectVelocity = vec3<f32>(centreVelocity.x * bonfireAdvectionLateralDamping, centreVelocity.y, centreVelocity.z * bonfireAdvectionLateralDamping);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
   for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) {
-    var sample = sampleFluidSlotInflow(backCell, slot);
-    if (slot == 0u) { sample = sampleCarriedVelocity(backCell); }
-    fluidPredict[base + slot] = sample;
+    fluidPredict[base + slot] = sampleFluidSlotInflow(backCell, slot);
   }
 }
 
@@ -5671,7 +5653,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       microLayer = sampleFluidSlotMasked(backCell, 3u);
     }
   } else {
-    advected = sampleCarriedVelocity(backCell);
+    advected = sampleFluidSlotInflow(backCell, 0u);
     if (commonGasTransport) {
       material = sampleFluidSlotMasked(backCell, 1u);
       fireLayer = sampleFluidSlotMasked(backCell, 2u);

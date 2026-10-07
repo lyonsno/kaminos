@@ -2833,7 +2833,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-velocity-staggering-val">collocated</span>
     </div>
-    <span class="slider-help">How the transport reads the stored velocity. The converged solve treats each stored component as the upper face of its axis, but Collocated transport reads the same value as the cell centre: half a cell of disagreement along +x and +z, which pushes every plume toward −x −z as it rises (the diagonal lean). Staggered reads faces everywhere: the characteristic uses the mean of the two faces and each carried component is sampled half a cell back along its own axis. Needs the converged pressure solver; otherwise the receipt says NOT ADMITTED. Saved basins are unchanged at Collocated.</span>
+    <span class="slider-help">How the transport reads the stored velocity. The converged solve treats each stored component as the upper face of its axis, but Collocated transport reads the same value as the cell centre: half a cell of disagreement along +x and +z, which pushes every plume toward −x −z as it rises (the diagonal lean). Staggered reads faces: the characteristic that carries everything uses the mean of the two faces, so the rising column feels its own entrainment where it actually is. Needs the converged pressure solver; otherwise the receipt says NOT ADMITTED. Saved basins are unchanged at Collocated.</span>
     <div class="slider-row">
       <span class="slider-label">Confinement</span>
       <select id="volume-confinement" class="select-input" data-volume-settings-param="volume_confinement">
@@ -22261,7 +22261,7 @@ function refreshVolumeReadout() {
   document.getElementById('volume-velocity-staggering-state').textContent = !staggering || staggering.requested.mode !== 'staggered'
     ? 'collocated'
     : (staggering.effective.admitted
-      ? 'staggered · faces averaged to the centre, components sampled at their faces'
+      ? 'staggered · characteristic from the two-face mean'
       : `staggered — NOT ADMITTED (${staggering.effective.reason}); set Pressure solver to converged`);
   document.getElementById('volume-inflow-boundary-state').textContent = !inflow
     ? 'off'
