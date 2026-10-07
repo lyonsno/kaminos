@@ -46,7 +46,7 @@ const ringRequest = {
 };
 
 test('the compiler knows the inflow-boundary law: floor aperture, no interior injection, link ignored, inflow state carried', () => {
-  assert.deepEqual([...basis.VOLUME_EMITTER_SOURCE_LAWS], ['legacy-volume', 'shallow-primary', 'inflow-boundary']);
+  assert.deepEqual([...basis.VOLUME_EMITTER_SOURCE_LAWS], ['legacy-volume', 'shallow-primary', 'inflow-boundary', 'immersed-source']);
   assert.deepEqual([...basis.VOLUME_EMITTER_WRITABLE_FLUID_COMPONENT_INDICES['inflow-boundary']], [], 'the interior kernel writes nothing under the inflow law');
   const compiled = basis.compileVolumeEmitterFamily(ringRequest);
   const d = compiled.descriptor;

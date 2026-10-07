@@ -16,6 +16,10 @@ export const VOLUME_EMITTER_SOURCE_LAWS = Object.freeze([
   // prescribed inflow: a boundary condition of the pressure solve and a ghost
   // state for the backtrace, with no interior injection at all.
   'inflow-boundary',
+  // The emitter is an immersed source anywhere in the volume (report section
+  // 31): the authored pose is compiled by the volume core into a divergence
+  // target, momentum and scalar entry; the analytic injector commits nothing.
+  'immersed-source',
 ]);
 
 export const VOLUME_EMITTER_INLET_PROFILES = Object.freeze([
@@ -28,6 +32,7 @@ export const VOLUME_EMITTER_WRITABLE_FLUID_COMPONENT_INDICES = Object.freeze({
   'legacy-volume': Object.freeze([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
   'shallow-primary': Object.freeze([0, 1, 2, 4, 5, 6]),
   'inflow-boundary': Object.freeze([]),
+  'immersed-source': Object.freeze([]),
 });
 
 const FLUID_COMPONENT_SLOTS = Object.freeze([
@@ -318,6 +323,9 @@ export function compileVolumeEmitterFamily(request = {}) {
   const sourceLaw = String(request.sourceLaw ?? 'legacy-volume');
   assertEmitterSourceLaw(sourceLaw);
   const inflowLaw = sourceLaw === 'inflow-boundary';
+  // The immersed law injects nothing through the analytic emitter either; its
+  // pose lives in the core's immersed-source controls, not in this descriptor.
+  const inertLaw = inflowLaw || sourceLaw === 'immersed-source';
   // Under the inflow law the footprint is an aperture on the floor face: the
   // pose height is not a source height, and the aperture needs a vertical axis.
   if (inflowLaw && !(axis[1] > 0.999)) {
@@ -474,14 +482,14 @@ export function compileVolumeEmitterFamily(request = {}) {
     chemistry,
     temporal: effectiveTemporal,
     support,
-    injectedFields: inflowLaw
+    injectedFields: inertLaw
       ? []
       : (sourceLaw === 'shallow-primary'
         ? ['velocity', 'smoke', 'heat', 'fuel']
         : ['velocity', 'density-carrier', 'smoke', 'heat', 'fuel', 'detail', 'flame', 'fire-detail', 'microstructure']),
     writableFluidComponentIndices: [...VOLUME_EMITTER_WRITABLE_FLUID_COMPONENT_INDICES[sourceLaw]],
     compactSupport: {
-      interior: inflowLaw ? 'floor-aperture' : (sourceLaw === 'shallow-primary' ? 'shallow-inlet' : 'full'),
+      interior: inflowLaw ? 'floor-aperture' : (sourceLaw === 'immersed-source' ? 'immersed-source' : (sourceLaw === 'shallow-primary' ? 'shallow-inlet' : 'full')),
       transition: 'one-grid-cell-smoothstep',
       exterior: 'zero',
     },

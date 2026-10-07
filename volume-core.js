@@ -1775,6 +1775,7 @@ const ANALYTIC_EMITTER_SOURCE_LAW_MODE = Object.freeze({
   'legacy-volume': 0,
   'shallow-primary': 1,
   'inflow-boundary': 2,
+  'immersed-source': 3,
 });
 
 const ANALYTIC_EMITTER_INFLOW_APERTURE_KINDS = Object.freeze(['disc', 'annulus', 'rectangle']);
