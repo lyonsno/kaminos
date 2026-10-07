@@ -7401,7 +7401,7 @@ fn solve_position_delta(@builtin(global_invocation_id) gid: vec3<u32>) {
           if (neighborIndex != index) {
             let offset = position - density_neighbor_position(current, neighborIndex);
             let weight = density_pair_kernel_weight(index, neighborIndex, length(offset));
-            let tensile = -0.0012 * pow(weight / referenceWeight, 4.0);
+            let tensile = 0.0; // Diagnostic probe: artificial anti-clumping correction disabled.
             correction = correction + (lambda + particles[neighborIndex].predicted.w + tensile) * density_pair_kernel_gradient(index, neighborIndex, offset);
           }
           current = density_cell_next(current, neighborIndex, neighborCell);
