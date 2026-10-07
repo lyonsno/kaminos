@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const url = new URL('../sparse-prefix-witness-checks.js', import.meta.url);
+const api = fs.existsSync(url) ? await import(url) : {};
+assert.equal(typeof api.comparePrefixTensor, 'function', 'the witness must reject false numerical closure');
+assert.throws(() => api.comparePrefixTensor(new Float32Array(), new Float32Array()), /empty/);
+assert.throws(() => api.comparePrefixTensor(new Float32Array([1]), new Float32Array([1, 2])), /length/);
+assert.throws(() => api.comparePrefixTensor(new Float32Array([NaN]), new Float32Array([1])), /finite/);
+assert.throws(() => api.comparePrefixTensor(new Float32Array([1]), new Float32Array([NaN])), /finite/);
+assert.equal(api.comparePrefixTensor(new Float32Array([0]), new Float32Array([1])).passed, false);
+assert.equal(api.comparePrefixTensor(new Float32Array([1.0078125]), new Float32Array([1])).passed, true);
+assert.equal(api.comparePrefixTensor(new Float32Array([1.015625]), new Float32Array([1])).passed, false);
+assert.equal(api.comparePrefixTensor(new Float32Array([1]), new Float32Array([1])).exactCount, 1);
+assert.throws(() => api.validatePrefixFixture({ status: 'failed' }), /complete/);
+assert.throws(() => api.validateNativePrefixBackend({ vendor: 'google', description: 'SwiftShader' }), /native Apple/);
+assert.throws(() => api.validateNativePrefixBackend({ vendor: 'apple', isFallbackAdapter: true }), /native Apple/);
+assert.throws(() => api.validatePrefixRoute('other.webgpu.v0', 'trellis2.sparse-flow-prefix.webgpu.v0'), /route/);
+assert.equal(api.prefixAdapterName({ vendor: 'apple', architecture: 'metal-3', description: '', device: '' }), 'apple metal-3');
+console.log('Sparse prefix witness rejects missing, partial, nonfinite, blank, wrong-route, and fallback closure');

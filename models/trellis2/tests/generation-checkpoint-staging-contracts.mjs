@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import {loadGenerationInputs} from '../generation-inputs.js';
+import {m} from './generation-input-fixture.js';
+const fetched=[],inputs=await loadGenerationInputs(m,async key=>{fetched.push(key);return{key};});
+assert.equal(typeof inputs.loadModel,'function',
+  'Native generation must fetch the checkpoint role being consumed, not accumulate seven complete models before the first downstream kernel.');
+assert.ok(inputs.modelInputs && Object.values(inputs.modelInputs).every(v=>v.config&&v.identity&&!v.weights));
+assert.equal(inputs.loadModels,undefined,'The production input package must not select the eager all-model path.');
+assert.ok(fetched.every(k=>k.startsWith('dino.')||k==='image.pixels'));
+fetched.length=0;
+const occupancy=await inputs.loadModel('occupancyDecoder');
+const first=Object.keys(m.models.occupancyDecoder.tensors)[0];
+assert.deepEqual(Object.keys(occupancy.weights).sort(),Object.keys(m.models.occupancyDecoder.tensors).sort());
+assert.equal(occupancy.weights[first].key,m.models.occupancyDecoder.tensors[first]);
+assert.ok(fetched.every(k=>k.startsWith('occupancyDecoder.')),'An occupancy input load may not fetch unrelated flow/decoder weights.');
+fetched.length=0;
+const sparse=await inputs.loadModel('sparseFlow'),low=await inputs.loadModel('lowResolutionShape');
+assert.strictEqual(sparse.weights.blocks[0].gelu,low.weights.blocks[0].gelu);
+assert.equal(fetched.filter(k=>k===m.models.sparseFlow.tensors.gelu).length,1,'Identified shared activation table is fetched once.');
+assert.ok(fetched.every(k=>k.startsWith('sparseFlow.')||k.startsWith('sparse.')||k.startsWith('lowResolutionShape.')));
+fetched.length=0;
+await inputs.loadModel('shapeDecoder');const firstShapeFetch=fetched.length;await inputs.loadModel('shapeDecoder');
+assert.equal(fetched.filter(k=>k===m.models.shapeDecoder.siluTable).length,1);
+assert.equal(fetched.length,firstShapeFetch*2-1,'Full shape weights are re-fetched, not held between cascade and geometry use.');
+const before=fetched.length;await assert.rejects(inputs.loadModel('invented'),/model role/);assert.equal(fetched.length,before);
+console.log('Per-role input loading uses complete admitted descriptors and shared identified activation inputs. Token-valued fetch ports test loading order only, not weight bytes or native capacity.');
