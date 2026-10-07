@@ -11,10 +11,14 @@ export async function startProcessMemory({python,script,rootPid=process.pid,rawP
   });
   const summary={schema:'trellis2.process-memory.v0',status:'running',runId,rootPid,periodMs,sampleCount:0,
     sampledPeakAggregatePhysicalFootprintBytes:null,processes:{},rawPath,
+    unavailableProcessObservations:[],coverage:'sampled-owned-process-tree',
     meaning:'sampled simultaneous owned-process footprint including observer; per-process kernel peaks are not summed; not machine-capacity certification'};
   await fs.writeFile(rawPath,'');let pending,stopped=false,timer,failed;
   const sample=async()=>{
     const row=await collect();
+    for(const missing of row.unavailableProcesses??[])if(!missing.expectedProbeExit){
+      summary.unavailableProcessObservations.push({atUnixMs:row.atUnixMs,...missing});summary.coverage='partial-process-coverage';
+    }
     if(row.runId!==runId||row.rootPid!==rootPid||row.status!=='observed'||!Array.isArray(row.processes)||
       !row.processes.some(p=>p.pid===rootPid)||!Number.isSafeInteger(row.sampledAggregatePhysicalFootprintBytes)||row.sampledAggregatePhysicalFootprintBytes<1)
       throw Error('observed current-owner process-memory sample required; stale/missing output is not zero memory');

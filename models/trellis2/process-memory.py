@@ -29,7 +29,8 @@ def sample_owned_processes(root_pid,run_id):
         for pid in sorted(owned):
             info=RUsageInfoV4();error=library.proc_pid_rusage(pid,4,ctypes.byref(info))
             if error:
-                report.setdefault('unavailableProcesses',[]).append({'pid':pid,'errno':ctypes.get_errno()});continue
+                report.setdefault('unavailableProcesses',[]).append({**rows[pid],'errno':ctypes.get_errno(),
+                    'expectedProbeExit':rows[pid]['parentPid']==os.getpid() and rows[pid]['executable']=='/bin/ps'});continue
             report['processes'].append({**rows[pid],'physicalFootprintBytes':info.phys_footprint,
                 'residentBytes':info.resident_size,'kernelLifetimePeakPhysicalFootprintBytes':info.lifetime_max_phys_footprint,
                 'processStartAbstime':info.proc_start_abstime,'observerProcess':pid==os.getpid()})
