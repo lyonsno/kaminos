@@ -88,6 +88,7 @@ struct Params { stepScale:f32, transportScale:f32, buoyancy:f32, cooling:f32 }
 @group(0) @binding(5) var<storage,read_write> pressureOut:array<vec2<f32>>;
 @group(0) @binding(6) var solids:texture_3d<u32>;
 @group(0) @binding(7) var optical:texture_storage_3d<rgba16float,write>;
+@group(0) @binding(8) var<storage,read_write> pressureStats:array<atomic<u32>>;
 fn index(c:vec3<i32>)->u32{return u32(c.x+STORAGE.x*(c.y+STORAGE.y*c.z));}
 fn inside(c:vec3<i32>)->bool{return all(c>=vec3<i32>(0)) && all(c<N);}
 fn solid(c:vec3<i32>)->bool{
@@ -229,8 +230,9 @@ fn face(c:vec3<i32>,a:i32)->f32{
 @compute @workgroup_size(4,4,4)
 fn divergence(@builtin(global_invocation_id) id:vec3<u32>){
   let c=vec3<i32>(id);if(!inside(c)){return;}var div=0.0;
+  if(all(id==vec3<u32>(0))){atomicStore(&pressureStats[0],0u);atomicStore(&pressureStats[1],1u);atomicStore(&pressureStats[2],0u);}
   if(!solid(c)){for(var a=0;a<3;a++){div+=(face(c+unit(a),a)-face(c,a))/H;}}
-  pressureOut[index(c)]=vec2<f32>(0.0,div);
+  pressureOut[index(c)]=vec2<f32>(pressureIn[index(c)].x,div);
 }
 fn pressure(c:vec3<i32>)->f32{if(!inside(c)){return 0.0;}return pressureIn[index(c)].x;}
 @compute @workgroup_size(4,4,4)
@@ -245,6 +247,48 @@ fn jacobi(@builtin(global_invocation_id) id:vec3<u32>){
     }}
   }
   pressureOut[index(c)]=vec2<f32>(select(0.0,(sum-rhs*H*H)/max(degree,1.0),degree>0.0),rhs);
+}
+fn inPlacePressure(c:vec3<i32>)->f32{if(!inside(c)){return 0.0;}return pressureOut[index(c)].x;}
+fn pressureSweep(id:vec3<u32>,parity:u32){
+  let c=vec3<i32>(id);if(!inside(c)||atomicLoad(&pressureStats[1])==0u){return;}
+  if(((id.x+id.y+id.z)&1u)!=parity){return;}
+  if(all(id==vec3<u32>(0))){atomicAdd(&pressureStats[2],1u);}
+  var sum=0.0;var degree=0.0;let cell=pressureOut[index(c)];
+  if(!solid(c)){
+    for(var a=0;a<3;a++){for(var side=0;side<2;side++){
+      let faceCell=c+unit(a)*side;let neighbor=c+unit(a)*(side*2-1);
+      if(blocked(faceCell,a)||nearFace(faceCell,a)){continue;}
+      sum+=inPlacePressure(neighbor);degree+=1.0;
+    }}
+  }
+  let solution=(sum-cell.y*H*H)/max(degree,1.0);
+  pressureOut[index(c)]=vec2<f32>(select(0.0,cell.x+(solution-cell.x)*1.9,degree>0.0),cell.y);
+}
+@compute @workgroup_size(4,4,4)
+fn pressureEven(@builtin(global_invocation_id) id:vec3<u32>){pressureSweep(id,0u);}
+@compute @workgroup_size(4,4,4)
+fn pressureOdd(@builtin(global_invocation_id) id:vec3<u32>){pressureSweep(id,1u);}
+fn projectedFace(c:vec3<i32>,a:i32)->f32{
+  if(!validFace(c,a)||blocked(c,a)){return 0.0;}
+  var v=face(c,a);if(!nearFace(c,a)){v-=(pressure(c)-pressure(c-unit(a)))/H;}return v;
+}
+@compute @workgroup_size(1)
+fn pressureErrorReset(){if(atomicLoad(&pressureStats[1])!=0u){atomicStore(&pressureStats[0],0u);}}
+@compute @workgroup_size(4,4,4)
+fn pressureError(@builtin(global_invocation_id) id:vec3<u32>){
+  let c=vec3<i32>(id);if(!inside(c)||solid(c)||atomicLoad(&pressureStats[1])==0u){return;}
+  var error=0.0;var freeFaces=0u;
+  for(var a=0;a<3;a++){
+    error+=(projectedFace(c+unit(a),a)-projectedFace(c,a))/H;
+    for(var side=0;side<2;side++){let f=c+unit(a)*side;if(!blocked(f,a)&&!nearFace(f,a)){freeFaces+=1u;}}
+  }
+  // Fully prescribed fine donors can contain combustion expansion. Only the
+  // free exterior equations target zero; no fine expansion is projected away.
+  if(freeFaces>0u){atomicMax(&pressureStats[0],select(0x7f800000u,bitcast<u32>(abs(error)),abs(error)<=1e30));}
+}
+@compute @workgroup_size(1)
+fn pressureErrorFinish(){
+  if(atomicLoad(&pressureStats[1])!=0u && bitcast<f32>(atomicLoad(&pressureStats[0]))<=0.001){atomicStore(&pressureStats[1],0u);}
 }
 @compute @workgroup_size(4,4,4)
 fn project(@builtin(global_invocation_id) id:vec3<u32>){
@@ -269,6 +313,8 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers) {
   const buffer=(label,size)=>{const b=device.createBuffer({label,size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});owned.push(b);return b;};
   const states=[buffer('outer smoke state A',count*32),buffer('outer smoke state B',count*32)];
   const pressures=[buffer('outer pressure A',count*8),buffer('outer pressure B',count*8)];
+  const pressureStats=buffer('outer pressure completion',16);
+  const pressureBudget=Math.ceil(c.pressureIterations*4*(c.grid/32)**2);
   const params=device.createBuffer({label:'outer smoke step',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});owned.push(params);
   const optical=device.createTexture({label:'outer smoke optical material',size:c.shape,dimension:'3d',format:'rgba16float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING});owned.push(optical);
   const solids=device.createTexture({label:'outer authored solid',size:c.shape,dimension:'3d',format:'r8uint',usage:GPUTextureUsage.COPY_DST|GPUTextureUsage.TEXTURE_BINDING});owned.push(solids);
@@ -276,21 +322,22 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers) {
     {binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},
     ...[1,2,4].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}})),
     ...[3,5].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}})),
+    {binding:8,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}},
     {binding:6,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'uint',viewDimension:'3d'}},
     {binding:7,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:'write-only',format:'rgba16float',viewDimension:'3d'}},
   ]});
   const shader=device.createShaderModule({label:'coarse surrounding smoke',code:outerSmokeShader(c,nearGrid)});
   const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
-  const pipelines=Object.fromEntries(['advect','divergence','jacobi','project','publish'].map(entryPoint=>[entryPoint,
+  const pipelines=Object.fromEntries(['advect','divergence','jacobi','pressureEven','pressureOdd','pressureErrorReset','pressureError','pressureErrorFinish','project','publish'].map(entryPoint=>[entryPoint,
     device.createComputePipeline({label:`outer ${entryPoint}`,layout:pipelineLayout,compute:{module:shader,entryPoint}})]));
   const groups=new Map();
   const group=(nearIndex,s,p)=>{
     const key=`${nearIndex}/${s}/${p}`;if(groups.has(key))return groups.get(key);
     const bindings=[params,nearBuffers[nearIndex],states[s],states[1-s],pressures[p],pressures[1-p]];
     const g=device.createBindGroup({layout,entries:[...bindings.map((b,binding)=>({binding,resource:{buffer:b}})),
-      {binding:6,resource:solids.createView()},{binding:7,resource:optical.createView()}]});groups.set(key,g);return g;
+      {binding:6,resource:solids.createView()},{binding:7,resource:optical.createView()},{binding:8,resource:{buffer:pressureStats}}]});groups.set(key,g);return g;
   };
-  let current=0,steps=0,solidRevision=null;
+  let current=0,pressureCurrent=0,steps=0,solidRevision=null,pressureCompletion=null;
   const clearSolids=()=>{
     const bytesPerRow=Math.ceil(c.grid/256)*256;
     device.queue.writeTexture({texture:solids},new Uint8Array(bytesPerRow*2*c.grid*c.grid),
@@ -302,17 +349,26 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers) {
     encode(encoder,nearIndex,{dtScale,backtraceScale},buoyancy=.002){
       device.queue.writeBuffer(params,0,new Float32Array([dtScale,backtraceScale,buoyancy,.998]));
       const dispatch=(name,s,p)=>{const pass=encoder.beginComputePass({label:`outer smoke ${name}`});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group(nearIndex,s,p));
-        pass.dispatchWorkgroups(Math.ceil((c.grid+1)/4),Math.ceil((2*c.grid+1)/4),Math.ceil((c.grid+1)/4));pass.end();};
+        if(name==='pressureErrorReset'||name==='pressureErrorFinish'){pass.dispatchWorkgroups(1);}
+        else{pass.dispatchWorkgroups(Math.ceil((c.grid+1)/4),Math.ceil((2*c.grid+1)/4),Math.ceil((c.grid+1)/4));}pass.end();};
       dispatch('advect',current,0);current=1-current;
-      dispatch('divergence',current,0);let p=1;
-      for(let i=0;i<c.pressureIterations;i++){dispatch('jacobi',current,p);p=1-p;}
+      dispatch('divergence',current,pressureCurrent);let p=1-pressureCurrent;
+      for(let i=0;i<pressureBudget;i++){
+        dispatch('pressureEven',current,1-p);dispatch('pressureOdd',current,1-p);
+        if((i+1)%8===0 || i+1===pressureBudget){dispatch('pressureErrorReset',current,p);dispatch('pressureError',current,p);dispatch('pressureErrorFinish',current,p);}
+      }
+      pressureCurrent=p;
       dispatch('project',current,p);current=1-current;
       dispatch('publish',current,p);steps++;
     },
     receipt(){return {requested:true,effective:'one-way-coarse-pressure-smoke-v0',shape:c.shape,bounds:{min:c.min,max:c.max},cellWidth:c.cellWidth,
-      pressureIterations:c.pressureIterations,steps,solidRevision,stateAndPressureBytes:count*80,advection:'bounded-cubic-velocity-smoke-heat-v0',wallInterpolation:'masked-trilinear-near-solids-and-exterior',donorBounds:outerDonorBounds(c),innerFeedback:false,scalarTransfer:'interior-overlap-volume-average-dirichlet-not-conservative-flux',outerBoundary:'ambient-zero-pressure'};},
-    async readState(){const b=device.createBuffer({size:count*32,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
-      try{const e=device.createCommandEncoder();e.copyBufferToBuffer(states[current],0,b,0,count*32);device.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);return new Float32Array(b.getMappedRange().slice(0));}finally{b.destroy();}},
+      pressureIterations:c.pressureIterations,pressureBudget,pressureWarmStart:true,pressureScheme:'red-black-sor',pressureTarget:.001,pressureCompletion,steps,solidRevision,stateAndPressureBytes:count*80+16,advection:'bounded-cubic-velocity-smoke-heat-v0',wallInterpolation:'masked-trilinear-near-solids-and-exterior',donorBounds:outerDonorBounds(c),innerFeedback:false,scalarTransfer:'interior-overlap-volume-average-dirichlet-not-conservative-flux',outerBoundary:'ambient-zero-pressure'};},
+    async readState(){const measuredStep=steps,b=device.createBuffer({size:count*32+16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+      try{const e=device.createCommandEncoder();e.copyBufferToBuffer(states[current],0,b,0,count*32);e.copyBufferToBuffer(pressureStats,0,b,count*32,16);device.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);
+        const raw=b.getMappedRange(),words=new Uint32Array(raw,count*32,4),peak=new Float32Array(raw,count*32,1)[0];
+        if(measuredStep>0 && words[2]===0)throw new Error('outer-pressure-execution-unverified:no-completed-sweeps');
+        pressureCompletion={measuredStep,target:.001,maxError:peak,satisfied:words[1]===0,sweeps:words[2],budgetExhausted:words[1]!==0,criterion:'max-free-exterior-divergence'};
+        return new Float32Array(raw.slice(0,count*32));}finally{b.destroy();}},
     destroy(){for(const x of owned)x.destroy();},
   };
 }

@@ -2018,6 +2018,7 @@ export function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, 
   // transported velocity every step, then clamps: both are per-step momentum
   // increments, so the uniform time step scales them (1 under legacy).
   const incrementScale = Number.isFinite(options.incrementScale) && options.incrementScale > 0 ? options.incrementScale : 1;
+  const cellScale = options.cellScale ?? 1;
   floats.fill(0);
   if (!descriptor || !dispatch.active) return;
   const familyMode = ANALYTIC_EMITTER_FAMILY_MODE[descriptor.family] || 0;
@@ -2047,7 +2048,7 @@ export function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, 
   floats[23] = descriptor.edgeEntrainment * incrementScale;
   floats[24] = ANALYTIC_EMITTER_INLET_PROFILE_MODE[descriptor.inletProfile] || 0;
   floats[25] = descriptor.momentumLinked ? 0 : 1;
-  floats[26] = descriptor.effectiveInletVelocity * incrementScale;
+  floats[26] = descriptor.effectiveInletVelocity * incrementScale * cellScale;
   floats[27] = descriptor.shearWidthCells;
   words.set([...dispatch.cellMin, dispatch.grid], 28);
   words.set([...dispatch.cellExtent, 0], 32);
@@ -2091,7 +2092,7 @@ export function resolveInflowAperturePattern(controls = {}) {
 
 export function resolveInflowBoundaryConfig(controls = {}, descriptor = null, options = {}) {
   const grid = normalizeGridSize(options.grid ?? 64);
-  const pressure = resolvePressureSolverConfig(controls).effective;
+  const pressure = resolvePressureSolverConfig(controls, options).effective;
   const sourceLaw = descriptor ? String(descriptor.sourceLaw ?? 'legacy-volume') : null;
   const pattern = resolveInflowAperturePattern(controls);
   const swirl = clampFinite(controls.emitterSwirl, -1, 1, 0);
@@ -2338,9 +2339,9 @@ export function inflowBoundaryUniformValues(config) {
 // make room for the hot products. The open top absorbs the net volume, which
 // is why a closed top or a disabled dispatch refuses it. Opt-in: gain 0 is off.
 export const HEAT_RELEASE_IDENTITY = 'kaminos.volume.heat-release-expansion.v1';
-export function resolveHeatReleaseConfig(controls = {}) {
+export function resolveHeatReleaseConfig(controls = {}, options = {}) {
   const expansion = clampFinite(controls.heatReleaseExpansion, 0, 3, 0);
-  const pressure = resolvePressureSolverConfig(controls).effective;
+  const pressure = resolvePressureSolverConfig(controls, options).effective;
   const requested = { expansion, pressureSolver: pressure.solver, openTop: pressure.openTop };
   const off = reason => ({ identity: HEAT_RELEASE_IDENTITY, requested, effective: { admitted: false, expansion: 0, reason } });
   if (!(expansion > 0)) return off('heat-release-expansion-is-zero');
@@ -2637,6 +2638,19 @@ export const TRANSPORT_SCHEME_MACCORMACK = 'maccormack';
 export const TRANSPORT_SCHEME_IDENTITY = 'low-dissipation-transport-v0';
 export const TRANSPORT_LEGACY_VELOCITY_DAMPING = 0.982;
 export const TRANSPORT_MAX_BACKTRACE_CELLS = 8;
+// Joined driving velocities retain their core32 local-distance meaning. The
+// field itself still stores cell velocities; donor conversion remains 2/GRID.
+export function joinedVelocityUnits(grid, surroundingSmoke = false) {
+  return {referenceGrid:32, cellScale:surroundingSmoke ? grid / 32 : 1,
+    field:'cells-per-reference-transport-tick', driving:'core32-cell-units',
+    normalized:['inlet-speed','buoyancy','authored-lift','wind','velocity-bound'],
+    remaining:'grid-scale-detail-force-and-source-footprint-discretization'};
+}
+export function joinedPressurePolicy(grid, referenceSweeps) {
+  return {criterion:'max-post-bound-divergence-minus-target', target:0.001,
+    minSweeps:Math.min(8,referenceSweeps), maxSweeps:Math.ceil(referenceSweeps * 4 * (grid/32)**2),
+    checkEvery:8, budgetMeaning:'finite-work-budget-not-convergence', units:'per-reference-transport-tick'};
+}
 // The predictor buffer is a full fluid state only while a MacCormack scheme is
 // selected; otherwise a one-element placeholder keeps the binding legal.
 export const TRANSPORT_PREDICTOR_PLACEHOLDER_BYTES = 16;
@@ -3101,6 +3115,7 @@ override IRRADIANCE_GRID: u32 = 32u;
 override LEAN_STOCK_RAYMARCH: bool = false;
 const OUTER_SMOKE: bool = false;
 const OUTER_EXTENT: f32 = 4.0;
+fn joinedVelocityScale() -> f32 { return select(1.0, f32(GRID) / 32.0, OUTER_SMOKE); }
 @group(0) @binding(20) var outerSmokeOptical: texture_3d<f32>;
 @group(0) @binding(21) var outerSceneSolidCells: texture_3d<u32>;
 const SLOTS_PER_CELL: u32 = 4u;
@@ -3414,7 +3429,7 @@ fn inflowInletSpeed(cell: vec3<i32>) -> f32 {
   if (u.inflow_shape.y > 0.0) {
     perturbation = textureLoad(inflowPerturbation, vec2<i32>(clamp(cell.x, 0, i32(GRID) - 1), clamp(cell.z, 0, i32(GRID) - 1)), 0).x;
   }
-  return u.inflow_state.y * u.inflow_state.x * max(0.0, 1.0 + u.inflow_shape.y * perturbation);
+  return u.inflow_state.y * u.inflow_state.x * max(0.0, 1.0 + u.inflow_shape.y * perturbation) * joinedVelocityScale();
 }
 
 fn inflowFaceVelocity(cell: vec3<i32>) -> f32 {
@@ -3719,13 +3734,13 @@ fn transportVelocityDamping() -> f32 {
 
 fn boundVelocity(v: vec3<f32>) -> vec3<f32> {
   if (u.transport_controls.x < 0.5) {
-    return clamp(v, vec3<f32>(-0.34), vec3<f32>(0.52));
+    return clamp(v, vec3<f32>(-0.34) * joinedVelocityScale(), vec3<f32>(0.52) * joinedVelocityScale());
   }
   // Non-legacy schemes bound the per-step backtrace to a fixed number of
   // cells, symmetric in every direction. Semi-Lagrangian transport is stable
   // at any step; this keeps the trilinear footprint local and catches blow-ups.
   let safe = clamp(v, vec3<f32>(-64.0), vec3<f32>(64.0));
-  let maxSpeed = max(0.05, u.transport_controls.z) / dynamicsBacktraceScale();
+  let maxSpeed = max(0.05, u.transport_controls.z) / dynamicsBacktraceScale() * joinedVelocityScale();
   let magnitude = length(safe);
   if (magnitude > maxSpeed) {
     return safe * (maxSpeed / magnitude);
@@ -4471,6 +4486,7 @@ fn pressureRedBlackSweep(gid: vec3<u32>, parity: u32) {
   if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
+  if (OUTER_SMOKE && pressureDst[GRID * GRID_Y * GRID].z < 0.5) { return; }
   // Cells of one parity read only cells of the other parity, so one dispatch
   // per color updates the shared buffer without a race.
   if (((gid.x + gid.y + gid.z) & 1u) != parity) {
@@ -4479,6 +4495,9 @@ fn pressureRedBlackSweep(gid: vec3<u32>, parity: u32) {
   let c = vec3<i32>(gid);
   let idx = index3(gid);
   let cell = pressureDst[idx];
+  if (OUTER_SMOKE && idx == 0u && parity == 0u) {
+    pressureDst[GRID * GRID_Y * GRID].w += 1.0;
+  }
   if (sceneSolidAt(c)) {
     pressureDst[idx] = vec4<f32>(0.0);
     return;
@@ -4506,7 +4525,7 @@ fn pressureRedBlackSweep(gid: vec3<u32>, parity: u32) {
     pressureRedBlackUpdate(cell.y, stencil.x, cell.x, omega),
     pressureRedBlackUpdateMasked(cell.y, stencil.x, cell.x, stencil.y, omega),
     sceneSolidEnabled());
-  pressureDst[idx] = vec4<f32>(cell.x, nextPressure, 0.0, 0.0);
+  pressureDst[idx] = vec4<f32>(cell.x, nextPressure, cell.zw);
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -4515,6 +4534,9 @@ fn csDivergencePressureWarm(@builtin(global_invocation_id) gid: vec3<u32>) {
     return;
   }
   let idx = index3(gid);
+  if (OUTER_SMOKE && idx == 0u) {
+    pressureDst[GRID * GRID_Y * GRID] = vec4<f32>(0.001, 0.0, 1.0, 0.0);
+  }
   if (sceneSolidAt(vec3<i32>(gid))) {
     pressureDst[idx] = vec4<f32>(0.0);
     return;
@@ -4531,6 +4553,62 @@ fn csPressureRedBlackEven(@builtin(global_invocation_id) gid: vec3<u32>) {
 @compute @workgroup_size(4, 4, 4)
 fn csPressureRedBlackOdd(@builtin(global_invocation_id) gid: vec3<u32>) {
   pressureRedBlackSweep(gid, 1u);
+}
+
+// Predict the exact projected and bounded face, including prescribed inlet and
+// wall faces. This checks the velocity that will actually be used, not only the
+// unbounded Poisson residual. The stored RHS already includes the burn target.
+fn joinedProjectedFace(c:vec3<i32>, a:u32) -> f32 {
+  if (!insideGrid(c)) { return compactFaceVelocity(c,a); }
+  if (sceneSolidAt(c) || !sceneFaceOpen(c,a)) { return 0.0; }
+  if (c[a] >= gridExtent(a)-1 && (a != 1u || !pressureSolverOpenTop())) { return 0.0; }
+  let here=pressureNeighborInPlace(c);
+  let gradient=vec3<f32>(
+    pressureNeighborInPlace(c+vec3<i32>(1,0,0))-here,
+    pressureNeighborInPlace(c+vec3<i32>(0,1,0))-here,
+    pressureNeighborInPlace(c+vec3<i32>(0,0,1))-here);
+  var corrected=readSlot(c,0u).xyz-gradient*clamp(u.pressure_solver_controls.w,0.0,1.0);
+  for(var axis=0u;axis<3u;axis+=1u) {
+    if (!sceneFaceOpen(c,axis) || (c[axis]>=gridExtent(axis)-1 && (axis!=1u || !pressureSolverOpenTop()))) { corrected[axis]=0.0; }
+  }
+  return boundVelocity(corrected)[a];
+}
+@compute @workgroup_size(4,4,4)
+fn csJoinedPressureError(@builtin(global_invocation_id) gid:vec3<u32>) {
+  if (any(gid>=vec3<u32>(GRID,GRID_Y,GRID))) { return; }
+  if (pressureDst[GRID*GRID_Y*GRID].z < 0.5) { return; }
+  let c=vec3<i32>(gid);var error=0.0;
+  if (!sceneSolidAt(c)) {
+    error=joinedProjectedFace(c,0u)-joinedProjectedFace(c-vec3<i32>(1,0,0),0u)
+      +joinedProjectedFace(c,1u)-joinedProjectedFace(c-vec3<i32>(0,1,0),1u)
+      +joinedProjectedFace(c,2u)-joinedProjectedFace(c-vec3<i32>(0,0,1),2u)-heatReleaseExpansion(c);
+  }
+  pressureDst[index3(gid)].z=select(bitcast<f32>(0x7f800000u),abs(error),abs(error)<=1e30);
+}
+var<workgroup> joinedErrors:array<f32,64>;
+@compute @workgroup_size(64)
+fn csJoinedPressureReduce(@builtin(global_invocation_id) gid:vec3<u32>,
+  @builtin(local_invocation_index) li:u32,@builtin(workgroup_id) wi:vec3<u32>) {
+  let count=GRID*GRID_Y*GRID;
+  let rowGroups=(GRID*GRID+63u)/64u;
+  let linear=gid.x+gid.y*rowGroups*64u;
+  var value=0.0;if (linear<count) { value=pressureDst[linear].z; }
+  joinedErrors[li]=value;workgroupBarrier();
+  for (var stride=32u;stride>0u;stride/=2u) {
+    if (li<stride) { joinedErrors[li]=max(joinedErrors[li],joinedErrors[li+stride]); }
+    workgroupBarrier();
+  }
+  let group=wi.x+wi.y*rowGroups;
+  if (li==0u && group<(count+63u)/64u) { pressureDst[group].w=joinedErrors[0]; }
+}
+@compute @workgroup_size(1)
+fn csJoinedPressureFinish() {
+  let count=GRID*GRID_Y*GRID;var gate=pressureDst[count];
+  if (gate.z < 0.5) { return; }
+  var peak=0.0;
+  for (var i=0u;i<(count+63u)/64u;i+=1u) { peak=max(peak,pressureDst[i].w); }
+  gate.y=peak;gate.z=select(1.0,0.0,peak<=gate.x);
+  pressureDst[count]=gate;
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -5108,7 +5186,7 @@ fn thermalBuoyancyForce(heat: f32, smoke: f32, fuel: f32, speed: f32) -> vec3<f3
   let hotLift = smoothstep(0.04, 1.25, heat) * (0.034 + speed * 0.018);
   let smokeDrag = smoke * 0.014;
   let fuelKick = fuel * heat * 0.014;
-  return vec3<f32>(0.0, hotLift + fuelKick - smokeDrag, 0.0);
+  return vec3<f32>(0.0, hotLift + fuelKick - smokeDrag, 0.0) * joinedVelocityScale();
 }
 
 fn heatGradientAtCell(c: vec3<i32>) -> vec3<f32> {
@@ -6361,7 +6439,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
   vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireThermalRiseDirection * mix(1.0, canonicalBuoyancyLift, canonicalPlumeScene);
   let canonicalLiftGate = canonicalPlumeScene * (1.0 - smoothstep(0.52, 0.94, p.y));
-  vel.y = vel.y + canonicalLiftGate * (source * (0.070 + speed * 0.012) * canonicalSourceInjection + smoke * (0.010 + speed * 0.002) * canonicalBuoyancyLift);
+  vel.y = vel.y + canonicalLiftGate * (source * (0.070 + speed * 0.012) * canonicalSourceInjection + smoke * (0.010 + speed * 0.002) * canonicalBuoyancyLift) * joinedVelocityScale();
   let canonicalRadial = max(length(p.xz), 0.025);
   let canonicalEntrainmentBand = canonicalPlumeScene
     * smoothstep(-0.64, -0.28, p.y)
@@ -6397,7 +6475,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfireLiftedReactionFront * 0.22
   ) * bonfireFrontLiftGate * plumeRiseScale * (0.011 + speed * 0.0026 + curl * 0.0012);
   let columnLiftImpulse = (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale;
-  vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfireTopologyLiftImpulse + bonfireBroadSupportLiftImpulse + bonfireLiftedSootBuoyancy, bonfireScene) * bonfireThermalRiseDirection;
+  vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfireTopologyLiftImpulse + bonfireBroadSupportLiftImpulse + bonfireLiftedSootBuoyancy, bonfireScene) * bonfireThermalRiseDirection * joinedVelocityScale();
   if (transportedLateralExcitationEnabled > 0.5) {
     let transportedLateralDelta = prev.xz - advected.xz;
     let transportedLateralGain = clamp((smoke + heat) * 0.16 + curl * 0.022, 0.0, 0.24);
@@ -6436,7 +6514,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + bonfireNonWindCenteringForce;
   let windMaterialCoupling = clamp(smoke * 0.54 + heat * 0.30 + source * 0.34 + flame * 0.18, 0.0, 1.6);
   let bonfireWindResponseGain = mix(1.0, 4.0, bonfireScene);
-  vel = vel + windDirection * windStrength * windHeightRamp * windMaterialCoupling * bonfireWindResponseGain * (0.020 + speed * 0.004);
+  vel = vel + windDirection * windStrength * windHeightRamp * windMaterialCoupling * bonfireWindResponseGain * (0.020 + speed * 0.004) * joinedVelocityScale();
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
   // Uniform time step: every per-step velocity increment above scales with dt
   // (1.0 under the legacy mode).
@@ -8471,6 +8549,8 @@ const ANALYTIC_EMITTER_INJECTION_WGSL = /* wgsl */`
 override GRID: u32 = 64u;
 override GRID_Y: u32 = 128u;
 const SLOTS_PER_CELL: u32 = 4u;
+const JOINED_EMITTER: bool = false;
+fn joinedVelocityScale() -> f32 { return select(1.0,f32(GRID)/32.0,JOINED_EMITTER); }
 
 struct AnalyticEmitterInjectionUniforms {
   origin_mode: vec4<f32>,
@@ -8643,8 +8723,8 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   }
   let injectedVelocity = clamp(
     previousVelocityDensity.xyz + axialVelocity + entrainmentVelocity,
-    vec3<f32>(-0.34),
-    vec3<f32>(0.52)
+    vec3<f32>(-0.34) * joinedVelocityScale(),
+    vec3<f32>(0.52) * joinedVelocityScale()
   );
   material.x = max(material.x, chemistry.x * chemistryWeight * 0.76);
   material.y = max(material.y, chemistry.y * chemistryWeight * 0.92);
@@ -10827,6 +10907,7 @@ export function createKaminosVolumePrototype({
   let pressureDivergenceWarmPipeline = null;
   let pressureRedBlackEvenPipeline = null;
   let pressureRedBlackOddPipeline = null;
+  let pressureCheckPipelines = [];
   let pressureProjectConvergedPipeline = null;
   let pressureResidualBeforePipeline = null;
   let pressureResidualAfterPipeline = null;
@@ -12773,7 +12854,7 @@ export function createKaminosVolumePrototype({
     const nextBufferBytes = fluidBufferBytes(gridSize);
     const nextFrontBufferBytes = frontFieldBufferBytes(gridSize);
     const nextBoundarySidecarBufferBytes = boundarySidecarBufferBytes(gridSize);
-    const nextPressureBufferBytes = pressureBufferBytes(gridSize);
+    const nextPressureBufferBytes = pressureBufferBytes(gridSize) + (outerRequested ? 16 : 0);
     const initialFluid = makeInitialFluid(gridSize);
     fluidBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
@@ -12851,7 +12932,7 @@ export function createKaminosVolumePrototype({
     device.queue.writeBuffer(pressureResidualPartialsBuffer, 0, new Float32Array(pressureResidualWorkgroupCount * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP));
     pressureResidualReadbackBuffer = device.createBuffer({
       label: `kaminos pressure residual readback ${gridSize}x${gridHeight}x${gridSize}`,
-      size: pressureResidualBytes,
+      size: pressureResidualBytes + (outerRequested ? 16 : 0),
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
     pressureResidualCopyPending = false;
@@ -13024,6 +13105,11 @@ export function createKaminosVolumePrototype({
       layout: pressureRedBlackPipelineLayout,
       compute: { module: shader, entryPoint: 'csPressureRedBlackOdd', constants: computePipelineConstants },
     });
+    pressureCheckPipelines = outerRequested ? [
+      device.createComputePipeline({label:'joined pressure post-bound error',layout:pressureRedBlackPipelineLayout,compute:{module:shader,entryPoint: 'csJoinedPressureError',constants:computePipelineConstants}}),
+      device.createComputePipeline({label:'joined pressure error reduction',layout:pressureRedBlackPipelineLayout,compute:{module:shader,entryPoint:'csJoinedPressureReduce',constants:computePipelineConstants}}),
+      device.createComputePipeline({label:'joined pressure completion',layout:pressureRedBlackPipelineLayout,compute:{module:shader,entryPoint:'csJoinedPressureFinish',constants:computePipelineConstants}}),
+    ] : [];
     pressureProjectConvergedPipeline = device.createComputePipeline({
       label: `kaminos ${PRESSURE_SOLVER_IDENTITY} projection compute pipeline ${gridShapeLabel(gridSize)}`,
       layout: pressureProjectPipelineLayout,
@@ -13538,7 +13624,7 @@ export function createKaminosVolumePrototype({
     state.gpuInitStage = 'fluid-shader-compiled';
     analyticEmitterInjectionShader = device.createShaderModule({
       label: 'kaminos bounded analytic emitter injection wgsl',
-      code: ANALYTIC_EMITTER_INJECTION_WGSL,
+      code: ANALYTIC_EMITTER_INJECTION_WGSL.replace('const JOINED_EMITTER: bool = false;',`const JOINED_EMITTER: bool = ${outerRequested};`),
     });
     const analyticEmitterInjectionCompilationInfo = await analyticEmitterInjectionShader.getCompilationInfo();
     const analyticEmitterInjectionCompilationErrors = analyticEmitterInjectionCompilationInfo.messages.filter(message => message.type === 'error');
@@ -15144,10 +15230,12 @@ export function createKaminosVolumePrototype({
       device.queue.writeTexture({ texture: inflowPerturbationTexture }, inletPerturbationField.sampleAt({ step: inletStep, tauSteps: inletDynamicsTauSteps(controlsSnapshot, INLET_TURBULENCE_CORRELATION_SECONDS), scaleCells: inletDynamicsRequested.turbulenceScaleCells }), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
       inletSignals.turbulence = { rms: inletPerturbationField.rms };
     }
-    const inflowBoundaryConfig = resolveInflowBoundaryConfig(controlsSnapshot, analyticEmitterDescriptor, { grid: gridSize, inletSignals });
+    const inflowBoundaryConfig = resolveInflowBoundaryConfig(controlsSnapshot, analyticEmitterDescriptor, { grid: gridSize, inletSignals, surroundingSmoke:outerRequested });
     uniforms.set(inflowBoundaryUniformValues(inflowBoundaryConfig), INFLOW_UNIFORM_OFFSET);
     state.inflowBoundary = inflowBoundaryConfig;
-    const heatReleaseConfig = resolveHeatReleaseConfig(controlsSnapshot);
+    state.joinedVelocityUnits = joinedVelocityUnits(gridSize,outerRequested);
+    state.inflowBoundary.effective.velocityUnits = state.joinedVelocityUnits;
+    const heatReleaseConfig = resolveHeatReleaseConfig(controlsSnapshot, {surroundingSmoke:outerRequested});
     uniforms.set(heatReleaseUniformValues(heatReleaseConfig), HEAT_RELEASE_UNIFORM_OFFSET);
     state.heatRelease = heatReleaseConfig;
     const velocityStaggeringConfig = resolveVelocityStaggeringConfig(controlsSnapshot);
@@ -15168,7 +15256,7 @@ export function createKaminosVolumePrototype({
       analyticEmitterDescriptor,
       analyticEmitterDispatch,
       renderPhaseTimeMs * 0.001,
-      { incrementScale: timeStepConfig.effective.incrementScale },
+      { incrementScale: timeStepConfig.effective.incrementScale, cellScale:joinedVelocityUnits(gridSize,outerRequested).cellScale },
     );
     device.queue.writeBuffer(
       analyticEmitterInjectionUniformBuffer,
@@ -15333,10 +15421,12 @@ export function createKaminosVolumePrototype({
       residualHistory: state.pressureSolver?.residualHistory ?? [],
       residualError: state.pressureSolver?.residualError ?? null,
       residualResetCount: state.pressureSolver?.residualResetCount ?? 0,
+      accuracyPolicy: state.pressureSolver?.accuracyPolicy ?? null,
     };
     state.transport = {
       ...transportConfig,
-      uniform: { commonCharacteristic: uniforms[353], scheme: uniforms[360], velocityDamping: uniforms[361], maxBacktraceCells: uniforms[362], correctionWeight: uniforms[363] },
+      uniform: { commonCharacteristic: uniforms[353], scheme: uniforms[360], velocityDamping: uniforms[361], maxBacktraceCells: uniforms[362]*joinedVelocityUnits(gridSize,outerRequested).cellScale, packedReferenceBacktraceCells:uniforms[362], correctionWeight: uniforms[363] },
+      velocityUnits: joinedVelocityUnits(gridSize,outerRequested),
       predictorBufferBytes: fluidPredictBufferBytes,
       predictorAllocated: fluidPredictBufferBytes === fluidBufferBytes(gridSize),
     };
@@ -15862,7 +15952,7 @@ export function createKaminosVolumePrototype({
       pressureResidualReadbackBuffer.destroy();
       pressureResidualReadbackBuffer = device.createBuffer({
         label: `kaminos pressure residual readback ${gridShapeLabel(gridSize)} (reset ${pressureResidualMapGeneration})`,
-        size: pressureResidualWorkgroupCount * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP * Float32Array.BYTES_PER_ELEMENT,
+        size: pressureResidualWorkgroupCount * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP * Float32Array.BYTES_PER_ELEMENT + (outerRequested ? 16 : 0),
         usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
       });
     }
@@ -15930,6 +16020,8 @@ export function createKaminosVolumePrototype({
     pass.dispatchWorkgroups(workgroups, workgroupsY, workgroups);
     pass.end();
     encoder.copyBufferToBuffer(pressureResidualPartialsBuffer, 0, pressureResidualReadbackBuffer, 0, pressureResidualWorkgroupCount * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP * Float32Array.BYTES_PER_ELEMENT);
+    if (outerRequested) encoder.copyBufferToBuffer(pressureBuffers[0],gridCellCount(gridSize)*16,
+      pressureResidualReadbackBuffer,pressureResidualWorkgroupCount*PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP*4,16);
     pressureResidualCopyPending = true;
     pressureResidualCopyStep = state.simStepCount;
     pressureResidualCopyFrame = state.frameCount;
@@ -16020,6 +16112,12 @@ export function createKaminosVolumePrototype({
         compact: reduceOperator(0),
         wide: reduceOperator(4),
         measurement,
+        completion: outerRequested && solver.solver === PRESSURE_SOLVER_CONVERGED ? (()=>{
+          const at=workgroupCount*PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP;
+          return {target:partials[at],maxError:partials[at+1],satisfied:partials[at+3]>0 && Number.isFinite(partials[at+1]) && partials[at+2]<0.5,
+            sweeps:partials[at+3],criterion:'max-post-bound-divergence-minus-target',
+            budgetExhausted:partials[at+2]>=0.5};
+        })() : null,
         blockedFaceFlux: { sumAbs: blockedFaceAbsSum, maxAbs: blockedFaceMaxAbs },
         vorticity: {
           identity: 'enstrophy-before-projection-v0',
@@ -16088,7 +16186,11 @@ export function createKaminosVolumePrototype({
         updateSimCostLedger();
         return false;
       }
-      const sweeps = solverConfig.effective.iterations;
+      const policy = outerRequested ? joinedPressurePolicy(gridSize,solverConfig.effective.iterations) : null;
+      if (policy && solverConfig.effective.projectionGain < 1) {
+        policy.maxSweeps=policy.minSweeps;policy.nonConvergenceReason='authored-partial-projection';
+      }
+      const sweeps = policy?.maxSweeps ?? solverConfig.effective.iterations;
       const encodeSolverPass = (pipeline, label, readBindGroup, pressureBindGroup, passOptions = {}) => {
         const pass = encoder.beginComputePass({ label, ...passOptions });
         pass.setPipeline(pipeline);
@@ -16103,6 +16205,15 @@ export function createKaminosVolumePrototype({
       for (let sweep = 0; sweep < sweeps; sweep += 1) {
         encodeSolverPass(pressureRedBlackEvenPipeline, `kaminos pressure red sweep ${sweep + 1}`, fluidBindGroup(), pressureWriteBindGroup);
         encodeSolverPass(pressureRedBlackOddPipeline, `kaminos pressure black sweep ${sweep + 1}`, fluidBindGroup(), pressureWriteBindGroup);
+        if (policy && sweep+1 >= policy.minSweeps && ((sweep+1)%policy.checkEvery===0 || sweep+1===sweeps)) {
+          encodeSolverPass(pressureCheckPipelines[0],'joined projected velocity error',fluidBindGroup(),pressureWriteBindGroup);
+          for (let phase=1;phase<3;phase++) {
+            const check=encoder.beginComputePass({label:`joined pressure reduction ${phase}`});
+            check.setPipeline(pressureCheckPipelines[phase]);check.setBindGroup(0,fluidBindGroup());check.setBindGroup(2,pressureWriteBindGroup);
+            const rowGroups=Math.ceil(gridSize*gridSize/64);
+            check.dispatchWorkgroups(phase===1?rowGroups:1,phase===1?Math.ceil(gridCellCount(gridSize)/64/rowGroups):1);check.end();
+          }
+        }
       }
       const probe = beginPressureResidualProbe(encoder);
       encodeSolverPass(
@@ -16117,6 +16228,7 @@ export function createKaminosVolumePrototype({
       if (probe) finishPressureResidualProbe(encoder);
       state.pressureProjectionEnabled = true;
       state.pressureProjectionIterations = sweeps;
+      state.pressureSolver.accuracyPolicy = policy;
       state.frontFieldReadIndex = currentFront;
       state.frontFieldWriteIndex = 1 - currentFront;
       state.frontFieldProjectionPassthrough = true;
@@ -23625,6 +23737,7 @@ export function createKaminosVolumePrototype({
         detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
         detailForceIsolation: state.detailForceIsolation,
         pressureSolver: state.pressureSolver,
+        joinedVelocityUnits: state.joinedVelocityUnits,
         transport: state.transport,
         confinement: state.confinement,
         timeStep: state.timeStep,
@@ -24007,6 +24120,7 @@ export function createKaminosVolumePrototype({
       detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
       detailForceIsolation: state.detailForceIsolation,
       pressureSolver: state.pressureSolver,
+      joinedVelocityUnits: state.joinedVelocityUnits,
       transport: state.transport,
       confinement: state.confinement,
       timeStep: state.timeStep,
