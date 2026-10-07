@@ -174,6 +174,7 @@ try {
     report.phase='live-preview';await save();
     await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;window.__kaminosVolumePrototype.setSimulationPaused(false);});
     await page.waitForTimeout(4000);
+    for(const id of ['rendering-light-debug','rendering-source-guide-status','rendering-angular-pattern','rendering-smoke-solver','rendering-surface-scattering'])assert.equal(await page.locator('#'+id).isVisible(),false,`${id} remains visible after live refresh`);
     report.preview=await page.evaluate(()=>({gi:window.kaminosSceneGIDebugState(),volume:window.__kaminosVolumePrototype.debugState(),lighting:window.kaminosAuthoringParameters.read('@scene-transport')}));
     assert.equal(report.preview.gi.gain,10);assert.equal(report.preview.gi.effectiveMode,'combined');assert.equal(report.preview.lighting['rendering-surface-gain'],0);assert.ok(report.preview.volume.frameCount>12);assert.equal(report.preview.volume.error,null);
     await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();await page.screenshot({path:`${out}/live-authoring.png`});

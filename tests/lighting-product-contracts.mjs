@@ -70,3 +70,9 @@ test('flame trim canonical field admits arbitrary decimal input like its visible
   const field=html.match(/<input[^>]*id="flame-appearance-trim"[^>]*>/)?.[0];
   assert.ok(field);assert.match(field,/step="any"/,'hidden source must admit the same decimals as the inspector');
 });
+
+test('guided sampler research status remains diagnostic-only through runtime refresh',()=>{
+  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const tag=html.match(/<p[^>]*id="rendering-source-guide-status"[^>]*>/)?.[0];
+  assert.ok(tag?.includes('data-lighting-diagnostic'),'runtime hidden=false must not expose research status in normal authoring');
+});
