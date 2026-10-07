@@ -29,6 +29,9 @@ try:
     source = json.loads(source_bytes)
     if source.get("status") != "passed" or source.get("route") != "imported-whole-solid-manifold-3.5.4":
         raise ValueError("Positive admitted imported solid required")
+    source_volume = source.get("volume")
+    if isinstance(source_volume, bool) or not isinstance(source_volume, (int, float)) or not np.isfinite(source_volume) or source_volume <= 0:
+        raise ValueError("Finite positive admitted source volume required before meshing")
     vertices = np.asarray(source["vertices"], dtype=np.float64)
     faces = np.asarray(source["triangles"], dtype=np.int32)
     if vertices.ndim != 2 or vertices.shape[1] != 3 or not np.isfinite(vertices).all():
@@ -74,8 +77,10 @@ try:
     if not np.isfinite(volumes).all() or (volumes <= 0).any():
         raise ValueError("Degenerate material tetrahedra")
     total = float(volumes.sum())
-    relative_error = abs(total - source["volume"]) / source["volume"]
-    report.update(volume=total, admittedSourceVolume=source["volume"], relativeVolumeError=relative_error, minimumTetVolume=float(volumes.min()),
+    relative_error = abs(total - source_volume) / source_volume
+    if not np.isfinite(total) or total <= 0 or not np.isfinite(relative_error):
+        raise ValueError("Finite positive meshed volume and finite volume discrepancy required")
+    report.update(volume=total, admittedSourceVolume=source_volume, relativeVolumeError=relative_error, minimumTetVolume=float(volumes.min()),
                   positions=positions.tolist(), tetrahedra=tetrahedra.tolist(), tetVolumes=volumes.tolist())
     if relative_error > 0.01:
         raise ValueError("Mesher volume differs from admitted solid by over one percent; do not substitute this interior")
