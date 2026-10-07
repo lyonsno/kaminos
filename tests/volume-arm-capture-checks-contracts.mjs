@@ -190,3 +190,22 @@ test('arm parsing refuses a name that hides controls', async () => {
   assert.throws(() => parseArms('x,volume-wind-strength'), /control "volume-wind-strength" in arm "x" has no '='/);
   assert.throws(() => parseArms('x;;y'), /empty arm/);
 });
+
+// Review LS-02: an inflow-dependent arm (aperture pattern, swirl, the inlet
+// controls) is evidence only while the inflow is admitted. The refused state
+// still carries the default pattern and zero values, so a matching name or a
+// matching zero must not pass.
+test('inflow-dependent arms require an admitted inflow, not just a matching field', () => {
+  const admitted = { inflowBoundary: { effective: { admitted: true, reason: null, pattern: { kind: 'shape', lineWeight: 1, jetJitter: 0 }, swirl: 0, inletDynamics: { turbulence: 0 } } } };
+  const refused = { inflowBoundary: { effective: { admitted: false, reason: 'inflow-boundary-requires-converged-open-top-pressure-solver', mode: 'off', pattern: { kind: 'shape', lineWeight: 1, jetJitter: 0 }, swirl: 0, inletDynamics: { turbulence: 0 } } } };
+  const pattern = { set: [['volume-emitter-aperture-pattern', 'shape']] };
+  assert.deepEqual(effectiveMismatches(pattern, admitted, null), []);
+  assert.match(effectiveMismatches(pattern, refused, null).join(';'), /aperture pattern requested shape but the inflow is not admitted \(inflow-boundary-requires-converged-open-top-pressure-solver\)/);
+  assert.equal(effectiveMismatches(pattern, {}, null).length, 1, 'no receipt fails');
+  const swirl = { set: [['volume-emitter-swirl', '0']] };
+  assert.deepEqual(effectiveMismatches(swirl, admitted, null), []);
+  assert.equal(effectiveMismatches(swirl, refused, null).length, 1, 'a matching zero swirl on a refused inflow is not evidence');
+  const turbulence = { set: [['volume-emitter-inlet-turbulence', '0']] };
+  assert.deepEqual(effectiveMismatches(turbulence, admitted, null), []);
+  assert.equal(effectiveMismatches(turbulence, refused, null).length, 1, 'a matching zero turbulence on a refused inflow is not evidence');
+});
