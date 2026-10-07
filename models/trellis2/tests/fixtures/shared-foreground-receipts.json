@@ -1,0 +1,122 @@
+{
+  "source": {
+    "report": "/Users/noahlyons/.local/state/kaminos/trellis-generation/1007/shared-host-prefix-a0c9d603-r4/report.json",
+    "sha256": "7de3a6d9427d67b03d4b6f554c34ad40fd261de899acedc06d8cff49f1356b95",
+    "commit": "a0c9d6032ce29b562278d67367ae1212ce2efde0",
+    "kit": "0.1.55",
+    "scope": "actual prefix ordinary foreground receipts, not full model"
+  },
+  "receipts": [
+    {
+      "schema": "kaminos.webgpu-foreground-opportunity-receipt.v0",
+      "routeId": "trellis2.image-generation.webgpu.v0",
+      "runId": "trellis-shared-prefix-37a3e5ae-15bb-4af6-ba6e-64c2d950bc57",
+      "requestId": "ordinary-flame-frame-1",
+      "requestSequence": 1,
+      "status": "completed",
+      "requestedAtMs": 5125.700000047684,
+      "startedAtMs": 5126.100000023842,
+      "settledAtMs": 5130.300000071526,
+      "elapsedMs": 4.200000047683716,
+      "boundary": {
+        "invocationId": "prefix-2",
+        "boundaryId": "prefix-2:foreground-boundary:18",
+        "dutyId": "browser-webgpu-runtime:command-duty:18",
+        "phase": "time-silu-0",
+        "position": "before-encode",
+        "metadata": {
+          "runtimeLabel": "browser-webgpu-runtime",
+          "schedulerRevision": null
+        }
+      },
+      "metadata": {
+        "renderer": "ordinary-volume",
+        "frameCountBefore": 2,
+        "simStepCountBefore": 2
+      },
+      "result": {
+        "status": "submitted",
+        "renderer": "ordinary-volume",
+        "frameCount": 3,
+        "simStepCount": 3,
+        "atMs": 5126.300000071526,
+        "authority": "queue-submit-returned-not-gpu-completion-or-presentation",
+        "sceneFrameCount": 3,
+        "sceneAuthority": "three-render-returned-inside-service-not-presentation"
+      },
+      "submissionCount": 1,
+      "submissions": [
+        {
+          "submissionId": "ordinary-flame-frame-1:submission:1",
+          "submissionSequence": 1,
+          "commandBufferCount": 1,
+          "submittedAtMs": 5130,
+          "returnedAtMs": 5130,
+          "submissionStatus": "queue-submit-returned",
+          "metadata": {
+            "renderer": "ordinary-volume",
+            "simStepCount": 3
+          },
+          "authority": "queue-submit-call-returned-no-gpu-completion-or-presentation-claim"
+        }
+      ],
+      "cancellation": null,
+      "failure": null,
+      "authority": "foreground-callback-and-queue-submission-observed-no-gpu-completion-or-presentation-claim"
+    },
+    {
+      "schema": "kaminos.webgpu-foreground-opportunity-receipt.v0",
+      "routeId": "trellis2.image-generation.webgpu.v0",
+      "runId": "trellis-shared-prefix-37a3e5ae-15bb-4af6-ba6e-64c2d950bc57",
+      "requestId": "ordinary-flame-frame-2",
+      "requestSequence": 2,
+      "status": "completed",
+      "requestedAtMs": 6160,
+      "startedAtMs": 6180.600000023842,
+      "settledAtMs": 6184.800000071526,
+      "elapsedMs": 4.200000047683716,
+      "boundary": {
+        "invocationId": "trellis-shared-prefix-37a3e5ae-15bb-4af6-ba6e-64c2d950bc57",
+        "boundaryId": "trellis2.image-generation.webgpu.v0:foreground-service:1",
+        "dutyId": "trellis2.image-generation.webgpu.v0:foreground-service:1",
+        "phase": "foreground-run-finish",
+        "position": "before-encode",
+        "metadata": {}
+      },
+      "metadata": {
+        "renderer": "ordinary-volume",
+        "frameCountBefore": 3,
+        "simStepCountBefore": 3
+      },
+      "result": {
+        "status": "submitted",
+        "renderer": "ordinary-volume",
+        "frameCount": 4,
+        "simStepCount": 4,
+        "atMs": 6180.600000023842,
+        "authority": "queue-submit-returned-not-gpu-completion-or-presentation",
+        "sceneFrameCount": 4,
+        "sceneAuthority": "three-render-returned-inside-service-not-presentation"
+      },
+      "submissionCount": 1,
+      "submissions": [
+        {
+          "submissionId": "ordinary-flame-frame-2:submission:1",
+          "submissionSequence": 1,
+          "commandBufferCount": 1,
+          "submittedAtMs": 6184.600000023842,
+          "returnedAtMs": 6184.600000023842,
+          "submissionStatus": "queue-submit-returned",
+          "metadata": {
+            "renderer": "ordinary-volume",
+            "simStepCount": 4
+          },
+          "authority": "queue-submit-call-returned-no-gpu-completion-or-presentation-claim"
+        }
+      ],
+      "cancellation": null,
+      "failure": null,
+      "authority": "foreground-callback-and-queue-submission-observed-no-gpu-completion-or-presentation-claim"
+    }
+  ]
+}
