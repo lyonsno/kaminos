@@ -9,6 +9,7 @@ import { loadStoneAssets } from './structural-material-arch-stones.js';
 export const STONE_ROUTE='kaminos.structural-material.imported-stone-thickness.webgpu.v0';
 const params=new URLSearchParams(location.search),errorNode=document.querySelector('#error');
 let phase='loading',failure=null,identity=null,prepared=null,preparedSha256=null,models=[],meshes=[[],[]],grab=null,contactPointer=null,paired=false,pairBaselines=[],lastPick=null,busy=false,mode='shear',paused=params.get('smoke')==='1',operations=Promise.resolve(),sceneSubmissions=0,resetReceipt=null,resetGeneration=0;
+let runId=null,constructionSteps=0,submittedSteps=0,completedSteps=0,presentedSteps=null,drainedSubmission=0;
 const failures=[],offsets=[new THREE.Vector3(-1.6,0,0),new THREE.Vector3(1.6,0,0)],vec=p=>new THREE.Vector3(p.x,p.y,p.z);
 function fail(operation,error){failure={operation,message:error.message??String(error),stack:error.stack};failures.push(failure);paused=true;phase='failed';errorNode.textContent=failure.message;console.error(error);}
 const serial=(name,fn)=>{const work=operations.then(async()=>{busy=true;try{return await fn();}catch(error){fail(name,error);throw error;}finally{busy=false;}});operations=work.catch(()=>{});return work;};
@@ -62,16 +63,19 @@ try {
     }
     marker.visible=Boolean(grab);if(grab){const mesh=meshes[grab.specimen][grab.index];marker.position.copy(mesh.localToWorld(grab.local.clone()));}
     scene.updateMatrixWorld(true);renderer.render(scene,camera);sceneSubmissions++;
+    presentedSteps=snapshots.every(s=>s.step===completedSteps)?completedSteps:null;
   }
   function release(){for(const model of models)model.release();grab=null;contactPointer=null;paired=false;controls.enabled=true;document.querySelector('#pull').value='0';draw();}
   const cohesion=()=>{const v=Number(document.querySelector('#strength').value);if(!(v>0)||!Number.isFinite(v))throw new Error('Cohesion must be positive and finite');return v;};
   controls.addEventListener('change',()=>{try{draw();}catch(error){fail('Camera presentation',error);}});
   async function reset(){const next=[],constructionStrength=cohesion();let publishedStrength;
     try{for(const s of prepared.specimens)next.push(await createGpuStructuralFixture(buildGpuStoneFixture(s,{strength:constructionStrength}),renderer));
+      if(!next.every(m=>m.snapshot().step===next[0].snapshot().step))throw new Error('Stone construction clocks differ');
       publishedStrength=cohesion();for(const m of next)m.setStrength(publishedStrength);
     }catch(error){for(const m of next)m.dispose();throw error;}
     for(const model of models)model.dispose();for(const group of meshes)for(const mesh of group)scene.remove(mesh);models=next;
     meshes=prepared.specimens.map((s,specimen)=>s.cells.map((c,index)=>{const mesh=new THREE.Mesh(skinGeometries[specimen][index],[assets[0].material,capMaterial]);mesh.userData={specimen,index,epoch:null};scene.add(mesh);return mesh;}));
+    runId=crypto.randomUUID();constructionSteps=next[0].snapshot().step;submittedSteps=completedSteps=constructionSteps;presentedSteps=null;
     grab=null;contactPointer=null;paired=false;document.querySelector('#pull').value='0';controls.enabled=true;failure=null;errorNode.textContent='';phase='interactive';resetReceipt={generation:++resetGeneration,constructionStrength,publishedStrength};draw();
   }
   function pairedPull(travel){if(!Number.isFinite(travel)||travel<0)throw new Error('Pull must be nonnegative and finite');
@@ -80,7 +84,7 @@ try {
       const point=local.clone().applyQuaternion(new THREE.Quaternion(body.quaternion.x,body.quaternion.y,body.quaternion.z,body.quaternion.w)).add(vec(body.position));m.setSurfaceHand(contact.index,point,local,{x:1,y:0,z:0},'embedded-visual');return point;});paired=true;}
     models.forEach((m,i)=>{const target=pairBaselines[i].clone();target.y-=travel;m.moveHand(target);});const slider=document.querySelector('#pull');if(travel>Number(slider.max))slider.max=String(travel);slider.value=String(travel);
   }
-  async function advance(count){if(!Number.isInteger(count)||count<0)throw new Error('Advance requires a nonnegative integer');for(let i=0;i<count;i++)for(let n=0;n<models.length;n++){if(grab?.specimen===n&&mode==='bind')models[n].bind(grab.index);await models[n].step();}draw();}
+  async function advance(count){if(!Number.isInteger(count)||count<0)throw new Error('Advance requires a nonnegative integer');for(let i=0;i<count;i++){submittedSteps++;for(let n=0;n<models.length;n++){if(grab?.specimen===n&&mode==='bind')models[n].bind(grab.index);await models[n].step();}completedSteps++;}draw();}
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();
   function ray(event){camera.updateMatrixWorld(true);const rect=canvas.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);return raycaster.ray;}
   canvas.addEventListener('pointerdown',event=>{if(event.button!==0||phase!=='interactive')return;try{ray(event);const hit=raycaster.intersectObjects(meshes.flat(),false)[0];if(!hit)return;event.stopImmediatePropagation();event.preventDefault();release();contactPointer=event.pointerId;controls.enabled=false;canvas.setPointerCapture(event.pointerId);
@@ -101,18 +105,31 @@ try {
   addEventListener('resize',()=>{projection();renderer.setSize(innerWidth,innerHeight);draw();});
   await reset();
   let last=performance.now(),carry=0;async function frame(now){requestAnimationFrame(frame);const elapsed=(now-last)/1000;last=now;if(phase!=='interactive'||paused||busy){carry=0;return;}carry+=elapsed;const dt=models[0].snapshot().config.timeStep;if(carry>=dt){carry-=dt;await serial('Live step',()=>advance(1)).catch(()=>{});}else draw();}requestAnimationFrame(frame);
-  const cameraState=()=>({position:camera.position.toArray(),quaternion:camera.quaternion.toArray()});
+  const cameraState=()=>({position:camera.position.toArray(),quaternion:camera.quaternion.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),fov:camera.fov,aspect:camera.aspect,near:camera.near,far:camera.far});
+  const clockState=()=>({runId,constructionSteps,submittedSteps,completedSteps,presentedSteps,stepSeconds:models[0]?.snapshot().config.timeStep,
+    completedSeconds:completedSteps*(models[0]?.snapshot().config.timeStep??0),experimentSeconds:(completedSteps-constructionSteps)*(models[0]?.snapshot().config.timeStep??0),paused,busy,presentationDrained:drainedSubmission===sceneSubmissions,failure});
+  async function drain(){if(phase!=='interactive'||failure)throw new Error('Stone runtime cannot settle after failure');draw();await device.queue.onSubmittedWorkDone();drainedSubmission=sceneSubmissions;}
+  async function hold(){paused=true;pauseIcon();await serial('Hold',drain);return window.__stoneThickness.witness();}
+  async function inspectCamera(view){
+    const finite3=p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite);
+    if(!finite3(view?.position)||!finite3(view?.target)||!finite3(view?.up)||!view.up.some(v=>v!==0)||view.position.every((v,i)=>v===view.target[i])
+      ||(view.fov!==undefined&&!(Number.isFinite(view.fov)&&view.fov>0&&view.fov<180))
+      ||(view.near!==undefined&&!(Number.isFinite(view.near)&&view.near>0))
+      ||(view.far!==undefined&&!(Number.isFinite(view.far)&&view.far>(view.near??camera.near))))throw new Error('Camera requires finite position, target, up and valid lens');
+    await serial('Camera inspection',async()=>{camera.position.fromArray(view.position);camera.up.fromArray(view.up);controls.target.fromArray(view.target);
+      for(const name of ['fov','near','far'])if(view[name]!==undefined)camera[name]=view[name];camera.updateProjectionMatrix();controls.update();await drain();});return cameraState();
+  }
   async function pixels(){draw();const texture=renderer.backend.context.getCurrentTexture(),width=canvas.width,height=canvas.height,bytesPerRow=Math.ceil(width*4/256)*256;
     const buffer=device.createBuffer({label:'Actual stone pixels',size:bytesPerRow*height,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
     try{const encoder=device.createCommandEncoder();encoder.copyTextureToBuffer({texture},{buffer,bytesPerRow,rowsPerImage:height},{width,height});device.queue.submit([encoder.finish()]);await buffer.mapAsync(GPUMapMode.READ);
       const data=new Uint8Array(buffer.getMappedRange());let bright=0;for(let y=0;y<height;y++)for(let x=0;x<width;x++){const i=y*bytesPerRow+x*4;if((data[i]+data[i+1]+data[i+2])/3>110)bright++;}return{source:'actual-webgpu-presentation-texture',width,height,bright,total:width*height,fraction:bright/(width*height)};
     }finally{buffer.destroy();}}
-  window.__stoneThickness={advance:n=>serial('Advance',()=>advance(n)),reset:()=>serial('Reset',reset),pull:pairedPull,release,
+  window.__stoneThickness={advance:n=>serial('Advance',()=>advance(n)),reset:()=>serial('Reset',reset),pull:pairedPull,release,hold,camera:inspectCamera,
     setStrength:value=>{document.querySelector('#strength').value=String(value);const strength=cohesion();for(const m of models)m.setStrength(strength);},
-    witness:()=>({route:STONE_ROUTE,phase,failure,failures:[...failures],identity,preparedSha256,sourceSha256:prepared.sourceSha256,camera:cameraState(),viewport:{width:innerWidth,height:innerHeight},presentation:{sceneSubmissions},resetReceipt,paused,mode,paired,lastPick,
+    witness:()=>({route:STONE_ROUTE,phase,failure,failures:[...failures],identity,preparedSha256,sourceSha256:prepared.sourceSha256,camera:cameraState(),clock:clockState(),viewport:{width:innerWidth,height:innerHeight},presentation:{sceneSubmissions},resetReceipt,paused,mode,paired,lastPick,
       specimens:models.map((m,i)=>({preparation:Object.fromEntries(['schema','sourceSha256','size','spacing','grid','volume','totalVolume'].map(key=>[key,prepared.specimens[i][key]])),state:m.snapshot(),rendererPoses:meshes[i].map(mesh=>({index:mesh.userData.index,position:mesh.position.toArray(),quaternion:mesh.quaternion.toArray()})),offset:offsets[i].toArray(),normalMapped:meshes[i].every(mesh=>mesh.material[0].normalMap?.isTexture),visibleCaps:meshes[i].reduce((n,mesh)=>n+mesh.geometry.groups.filter(g=>g.materialIndex===1).reduce((sum,g)=>sum+g.count/3,0),0)}))}),
     contacts:()=>models.map((m,i)=>{const contact=tipContacts[i],mesh=meshes[i][contact.index],local=contact.point.clone().sub(new THREE.Vector3(...prepared.specimens[i].cells[contact.index].position)),world=mesh.localToWorld(local),screen=world.clone().project(camera);return{index:contact.index,world:world.toArray(),screen:{x:(screen.x+1)*innerWidth/2,y:(1-screen.y)*innerHeight/2}};}),
-    pixels,capture:async()=>{await operations;draw();await device.queue.onSubmittedWorkDone();return await new Promise(resolve=>canvas.toBlob(async blob=>resolve(Array.from(new Uint8Array(await blob.arrayBuffer()))),'image/png'));}
+    pixels,capture:async()=>{await operations;await drain();return await new Promise((resolve,reject)=>canvas.toBlob(async blob=>{if(!blob){reject(new Error('Stone capture returned no PNG'));return;}try{resolve(Array.from(new Uint8Array(await blob.arrayBuffer())));}catch(error){reject(error);}},'image/png'));}
   };
   addEventListener('beforeunload',()=>{for(const m of models)m.dispose();renderer.dispose();device.destroy();});
 }catch(error){fail('Startup',error);window.__stoneThickness={witness:()=>({route:STONE_ROUTE,phase,failure,failures:[...failures],identity})};}

@@ -17,7 +17,7 @@ export async function stoneConsumerFixture() {
     return{cells:fixture.cells,snapshot:()=>state,dispose(){},release(){state.hand=null;},setStrength(v){state.config.strength=v;},
       setSurfaceHand(index,target){state.hand={index,target:{...target},force:{x:0,y:0,z:0}};},moveHand(p){state.hand.target={...p};},async step(){steps++;state.step++;}};
   };
-  globalThis.__stoneConsumerTest={renderer:{setPixelRatio(){},setSize(){},render(){renders++;}},device:{addEventListener(){},lost:new Promise(()=>{})},identity:{architecture:'synthetic-consumer-only'},createModel,
+  globalThis.__stoneConsumerTest={renderer:{setPixelRatio(){},setSize(){},render(){renders++;}},device:{addEventListener(){},lost:new Promise(()=>{}),queue:{async onSubmittedWorkDone(){}}},identity:{architecture:'synthetic-consumer-only'},createModel,
     assets:[{sha256:prepared.sourceSha256,material:new Three.MeshStandardMaterial()}],buildGpuStoneFixture,preparedContactNormal,OrbitControls:NativeOrbitControls};
   Object.assign(globalThis,{innerWidth:1280,innerHeight:900,devicePixelRatio:1,location:{search:'?smoke=1'},window:{},document:{querySelector:node,createElement:()=>canvas},
     addEventListener(){},requestAnimationFrame:fn=>frame=fn,fetch:async()=>({ok:true,arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)})});

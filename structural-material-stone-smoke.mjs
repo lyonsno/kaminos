@@ -4,15 +4,18 @@ import os from 'node:os';
 import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { inspectStoneThickness } from './structural-material-stone-evidence.mjs';
+import { createStoneObservationRuntime } from './structural-material-stone-experiment.mjs';
+import * as THREE from 'three';
 
-const [outputInput,executableInput,exercise='paired']=process.argv.slice(2);
+const [outputInput,executableInput,exercise='paired',sharedRootInput,sharedRevision]=process.argv.slice(2);
 if(!outputInput||!executableInput)throw new Error('usage: node structural-material-stone-smoke.mjs OUTPUT.json INDEPENDENT_BROWSER');
 const root=path.dirname(fileURLToPath(import.meta.url)),output=path.resolve(outputInput),hash=b=>createHash('sha256').update(b).digest('hex');
 const report={status:'running',phase:'preflight',exercise,root,argv:process.argv,sourceRevision:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),sources:{},inputs:[],checks:[],states:{},captures:{},errors:[],lastTrustworthyEvidence:'invocation'};
 fs.mkdirSync(path.dirname(output),{recursive:true});const save=()=>fs.writeFileSync(output,JSON.stringify(report,null,2));save();
 let server,child,socket,stderr='',nextId=0,expectedStrength=200;const pending=new Map(),sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let shared;
 const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++nextId;pending.set(id,{resolve,reject});socket.send(JSON.stringify({id,method,params}));});
 const evaluate=async expression=>{report.inputs.push({expression,at:new Date().toISOString()});save();const result=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(result.exceptionDetails)throw new Error(JSON.stringify(result.exceptionDetails));return result.result.value;};
 const input=async params=>{report.inputs.push({method:'Input.dispatchMouseEvent',params,at:new Date().toISOString()});save();return send('Input.dispatchMouseEvent',params);};
@@ -28,10 +31,19 @@ async function capture(name){const state=await witness();report.states[name]=sta
   const frame=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false}),bytes=Buffer.from(frame.data,'base64'),target=`${output.slice(0,-path.extname(output).length)}-${name}.png`;fs.writeFileSync(target,bytes);report.captures[name]={path:target,sha256:hash(bytes),width:bytes.readUInt32BE(16),height:bytes.readUInt32BE(20),pixels};report.lastTrustworthyEvidence=`${name} at steps ${state.specimens.map(s=>s.state.step)}`;save();return state;
 }
 try {
-  if(!['paired','hold'].includes(exercise))throw new Error('Unknown stone exercise');
+  if(!['paired','hold','workbench'].includes(exercise))throw new Error('Unknown stone exercise');
+  if(exercise==='workbench'){
+    if(!sharedRootInput||!sharedRevision)throw new Error('Workbench requires explicit shared repo root and revision');
+    const sharedRoot=fs.realpathSync(sharedRootInput),effectiveRevision=execFileSync('git',['rev-parse','HEAD'],{cwd:sharedRoot,encoding:'utf8'}).trim();
+    if(effectiveRevision!==sharedRevision)throw new Error(`Shared workbench revision differs: ${effectiveRevision}`);
+    execFileSync('git',['diff','--exit-code',sharedRevision,'--'],{cwd:sharedRoot,stdio:'pipe'});
+    const sharedFiles=['experiment-work.mjs','experiment-scene.mjs','observation-session.mjs','visual-work.mjs','screenshot-png-rgb.mjs'];
+    report.shared={root:sharedRoot,requestedRevision:sharedRevision,effectiveRevision,sources:Object.fromEntries(sharedFiles.map(name=>[name,hash(fs.readFileSync(path.join(sharedRoot,name)))]))};save();
+    shared={...await import(pathToFileURL(path.join(sharedRoot,'experiment-work.mjs'))),...await import(pathToFileURL(path.join(sharedRoot,'observation-session.mjs'))),...await import(pathToFileURL(path.join(sharedRoot,'experiment-scene.mjs')))};
+  }
   const executable=fs.realpathSync(executableInput);if(executable.includes('/Google Chrome.app/')||!/chrome-headless-shell$|\/Chromium$|Google Chrome for Testing$/.test(executable))throw new Error('Independent browser required');
   report.browser={executable,version:execFileSync(executable,['--version'],{encoding:'utf8'}).trim()};
-  for(const filename of ['structural-material-stone.html','structural-material-stone-view.js','structural-material-stone-fixture.js','structural-material-stone-prepare.mjs','structural-material-stone-smoke.mjs','structural-material-arch-gpu.js','structural-material-arch-gpu-kernels.js','structural-material-arch-stones.js','dist/structural-material-arch-gpu-engine.js','package-lock.json','artifacts/imported-stone-thickness/prepared.json','assets/arch-stones/03-bedded-stone-500-normal.glb'])report.sources[filename]=hash(fs.readFileSync(path.join(root,filename)));
+  for(const filename of ['structural-material-stone.html','structural-material-stone-view.js','structural-material-stone-fixture.js','structural-material-stone-prepare.mjs','structural-material-stone-smoke.mjs','structural-material-stone-experiment.mjs','structural-material-arch-gpu.js','structural-material-arch-gpu-kernels.js','structural-material-arch-stones.js','dist/structural-material-arch-gpu-engine.js','package-lock.json','artifacts/imported-stone-thickness/prepared.json','assets/arch-stones/03-bedded-stone-500-normal.glb'])report.sources[filename]=hash(fs.readFileSync(path.join(root,filename)));
   server=createServer((req,res)=>{const filename=path.resolve(root,`.${decodeURIComponent(new URL(req.url,'http://localhost').pathname)}`);if(!filename.startsWith(root+path.sep)){res.writeHead(403).end();return;}try{res.setHeader('content-type',({'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.json':'application/json'})[path.extname(filename)]??'application/octet-stream');res.setHeader('cache-control','no-store');res.end(fs.readFileSync(filename));}catch{res.writeHead(404).end();}});
   await new Promise(r=>server.listen(0,'127.0.0.1',r));report.requestedUrl=`http://127.0.0.1:${server.address().port}/structural-material-stone.html?smoke=1`;
   report.phase='browser-launch';report.browser.profile=fs.mkdtempSync(path.join(os.tmpdir(),'kaminos-stone-'));save();
@@ -45,6 +57,41 @@ try {
   while(!await evaluate('Boolean(window.__stoneThickness)')){if(report.errors.length)throw new Error(JSON.stringify(report.errors));await sleep(100);}await sleep(350);report.effectiveUrl=await evaluate('location.href');check('effective page equals requested route',report.effectiveUrl===report.requestedUrl,report.effectiveUrl);
   const initial=await capture('initial');check('same material, solver and external fixture',JSON.stringify(initial.specimens[0].state.config)===JSON.stringify(initial.specimens[1].state.config),initial.specimens.map(s=>s.state.config));
   check('both imported interiors stand intact before hand load',initial.specimens.every(s=>s.state.broken===0),initial.specimens.map(s=>s.state.broken));
+  if(exercise==='workbench'){
+    report.phase='shared-workbench';save();
+    const expected={preparedSha256:report.sources['artifacts/imported-stone-thickness/prepared.json'],sourceSha256:initial.sourceSha256,strength:200};
+    const runtime=createStoneObservationRuntime({evaluate,expected});
+    const preparation=JSON.parse(fs.readFileSync(path.join(root,'artifacts/imported-stone-thickness/prepared.json'),'utf8'));
+    const currentBounds=state=>state.specimens.flatMap((s,i)=>s.state.bodies.map((body,index)=>{
+      const g=preparation.specimens[i].cells[index].geometry,rest=preparation.specimens[i].cells[index].position,box=new THREE.Box3();
+      const rotation=new THREE.Quaternion(body.quaternion.x,body.quaternion.y,body.quaternion.z,body.quaternion.w);
+      for(let k=0;k<g.properties.length;k+=g.numProp)box.expandByPoint(new THREE.Vector3(...g.properties.slice(k,k+3)).sub(new THREE.Vector3(...rest)).applyQuaternion(rotation).add(new THREE.Vector3(body.position.x+s.offset[0],body.position.y+s.offset[1],body.position.z+s.offset[2])));
+      return{id:`stone-${i}-region-${index}`,representation:'current-prepared-geometry-bounds',min:box.min.toArray(),max:box.max.toArray()};
+    }));
+    const observationOut=path.join(path.dirname(output),`${path.basename(output,path.extname(output))}-observations`);
+    report.shared.observationOut=observationOut;save();
+    const result=await shared.observationSession({out:observationOut,source:{consumerRoot:root,consumerRevision:report.sourceRevision,consumerSources:report.sources,shared:report.shared,requestedUrl:report.requestedUrl,effectiveUrl:report.effectiveUrl,browser:report.browser},
+      capture:async()=>Buffer.from((await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false})).data,'base64'),
+      exercise:async({retain})=>{
+        const work=shared.experiment({runtime,retain});
+        const before=await work.observe('intact');
+        await evaluate('window.__stoneThickness.pull(.24)');await evaluate('window.__stoneThickness.advance(30)');
+        const injured=await work.observe('injured');
+        check('shared observation retains actual hand-driven damage',injured.observed.specimens.some(s=>s.state.broken>0&&s.visibleCaps>0),injured.observed.specimens.map(s=>s.state.broken));
+        const bounds=currentBounds(injured.observed),views=shared.viewsAround(bounds,{aspect:1280/900,fov:38});
+        report.shared.bounds=bounds;report.shared.views=views;save();
+        await work.camera(views.find(v=>v.name==='back'));const opposing=await work.observe('opposing-injury');
+        check('shared opposing view keeps the identical held injury',opposing.observed.clock.runId===injured.observed.clock.runId&&opposing.observed.clock.completedSteps===injured.observed.clock.completedSteps&&JSON.stringify(opposing.observed.specimens.map(s=>s.state))===JSON.stringify(injured.observed.specimens.map(s=>s.state)),null);
+        await evaluate('window.__stoneThickness.release()');const released=await work.observe('released');
+        check('shared hold/unload preserves injury connectivity',released.observed.specimens.every((s,i)=>s.state.broken===injured.observed.specimens[i].state.broken),null);
+        await evaluate('window.__stoneThickness.reset()');const reset=await work.observe('reset');
+        check('shared observation sees reset as a new run with physical startup time',reset.observed.clock.runId!==before.observed.clock.runId&&reset.observed.clock.experimentSeconds===0&&reset.observed.clock.completedSeconds>0,null);
+        return{sameMomentSteps:injured.observed.clock.completedSteps,physicalSeconds:injured.observed.clock.completedSeconds,constructionSteps:injured.observed.clock.constructionSteps,viewsUsed:['current','back'],claim:'Existing rigid-region stone runtime and shared observation composition, not shard solver evidence'};
+      }});
+    report.shared.result={status:result.status,observations:result.observations.map(o=>({name:o.name,status:o.status,image:o.image,sha256:o.sha256})),report:path.join(observationOut,'report.json')};
+    for(const [filename,expectedHash] of Object.entries(report.shared.sources))check(`shared source unchanged: ${filename}`,hash(fs.readFileSync(path.join(report.shared.root,filename)))===expectedHash,null);
+    check('shared observation session passed',result.status==='passed',result.result);
+  }
   if(exercise==='hold'){
     report.phase='gravity-only-control';report.hold=[];save();
     for(let i=0;i<8;i++){await evaluate('window.__stoneThickness.advance(30)');const state=await witness();report.hold.push(state);save();}
