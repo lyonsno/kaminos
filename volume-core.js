@@ -2370,13 +2370,16 @@ export function resolveVelocityStaggeringConfig(controls = {}) {
 // a centred additive force (velocity-derived forces, velocity deltas, damping
 // effects); `centredIncrement` is the centred additive forces × dt;
 // `upperCentredIncrement[axis]` is the +1 neighbour's increment along that axis;
-// `upperFaceOpen[axis]` is false at a wall, a solid neighbour or the open top's
-// closed sides. A solid cell stores and writes zero.
+// `upperFaceOpen[axis]` is false at an outer wall or a solid neighbour (a closed
+// face carries no force); the open top is open with this cell's own value as the
+// neighbour. A solid cell stores and writes zero.
 export function faceForceFoldModel({ solid = false, transported, localIncrement, centredIncrement, upperCentredIncrement, upperFaceOpen = [true, true, true], bound }) {
   if (solid) return { stored: [0, 0, 0], written: [0, 0, 0], completed: [0, 0, 0] };
   const stored = transported.map((v, i) => v + localIncrement[i]);
   const written = centredIncrement.slice();
-  const faceForce = written.map((f, axis) => 0.5 * (f + (upperFaceOpen[axis] ? upperCentredIncrement[axis][axis] : f)));
+  // A closed face carries no force; an open face averages with the upper
+  // neighbour (the open top passes this cell's own value as that neighbour).
+  const faceForce = written.map((f, axis) => (upperFaceOpen[axis] ? 0.5 * (f + upperCentredIncrement[axis][axis]) : 0));
   return { stored, written, completed: bound(stored.map((v, i) => v + faceForce[i])) };
 }
 export function velocityStaggeringUniformValues(config) {
@@ -4208,13 +4211,24 @@ fn csFaceForces(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (sceneSolidAt(vec3<i32>(gid))) { return; }
   let c = vec3<i32>(gid);
   let here = vec3<f32>(forceDeltaLoad(c, 0), forceDeltaLoad(c, 1), forceDeltaLoad(c, 2));
-  // A closed face (wall, solid neighbour) takes this cell's own value: the
-  // neighbour's increment, possibly stale behind a new solid, must not reach
-  // the bound through the tangential components.
-  let upX = select(here.x, forceDeltaLoad(c + vec3<i32>(1, 0, 0), 0), sceneFaceOpen(c, 0u) && gid.x + 1u < GRID);
-  let upY = select(here.y, forceDeltaLoad(c + vec3<i32>(0, 1, 0), 1), sceneFaceOpen(c, 1u) && gid.y + 1u < GRID_Y);
-  let upZ = select(here.z, forceDeltaLoad(c + vec3<i32>(0, 0, 1), 2), sceneFaceOpen(c, 2u) && gid.z + 1u < GRID);
-  let faceForce = 0.5 * (here + vec3<f32>(upX, upY, upZ));
+  // A closed face (outer wall, solid neighbour) carries no force at all: a
+  // normal increment there would enter the coupled magnitude bound and shave
+  // the tangential components before the projection zeroes it. The open top is
+  // the exception, as in compactFaceVelocity: the last row's upper y face is
+  // open and takes this cell's own value.
+  let topRowX = gid.x + 1u >= GRID;
+  let topRowZ = gid.z + 1u >= GRID;
+  let topRow = gid.y + 1u >= GRID_Y;
+  let openX = sceneFaceOpen(c, 0u) && gid.x + 1u < GRID;
+  let openZ = sceneFaceOpen(c, 2u) && gid.z + 1u < GRID;
+  let openY = select(sceneFaceOpen(c, 1u), pressureSolverOpenTop(), topRow);
+  let upX = select(0.0, forceDeltaLoad(c + vec3<i32>(1, 0, 0), 0), openX && !topRowX);
+  let upY = select(here.y, forceDeltaLoad(c + vec3<i32>(0, 1, 0), 1), openY && !topRow);
+  let upZ = select(0.0, forceDeltaLoad(c + vec3<i32>(0, 0, 1), 2), openZ && !topRowZ);
+  let faceForce = vec3<f32>(
+    select(0.0, 0.5 * (here.x + upX), openX),
+    select(0.0, 0.5 * (here.y + upY), openY),
+    select(0.0, 0.5 * (here.z + upZ), openZ));
   let stored = fluidDst[base];
   fluidDst[base] = vec4<f32>(boundVelocity(stored.xyz + faceForce), stored.w);
 }
