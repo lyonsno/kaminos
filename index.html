@@ -3845,7 +3845,7 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
-import { computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
+import { assetArrivalFramingWindow, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
@@ -7345,6 +7345,20 @@ function sceneObjectWorldBoundsState(object) {
     return { error: error?.message || String(error) };
   }
 }
+
+window.kaminosSceneObjectScreenExtentDebugState = function(id) {
+  const entry = sceneObjects.find(item => item.id === id);
+  if (!entry?.object || !camera) return null;
+  camera.updateMatrixWorld();
+  const points = sceneObjectWorldPoints(entry.object), v = new THREE.Vector3();
+  let left = Infinity, right = -Infinity, bottom = Infinity, top = -Infinity, behind = 0;
+  for (let i = 0; i < points.length; i += 3) {
+    v.set(points[i], points[i + 1], points[i + 2]).project(camera);
+    if (!(v.z > -1 && v.z < 1)) behind++;
+    left = Math.min(left, v.x); right = Math.max(right, v.x); bottom = Math.min(bottom, v.y); top = Math.max(top, v.y);
+  }
+  return { vertexCount: points.length / 3, left, right, bottom, top, outsideDepth: behind, overlayTopNdc: viewportOverlayTopNdc() };
+};
 
 window.kaminosSceneObjectDebugState = function() {
   return sceneObjects.map(record => ({
@@ -12112,14 +12126,39 @@ function applyAssetArrival(object, mode) {
   return placement;
 }
 
-function frameAssetArrival(placement) {
-  if (!placement || !camera || !controls) return false;
+function sceneObjectWorldPoints(object) {
+  object.updateWorldMatrix(true, true);
+  let total = 0;
+  object.traverse(child => { if (child.isMesh && child.geometry?.getAttribute('position')) total += child.geometry.getAttribute('position').count; });
+  const points = new Float32Array(total * 3), v = new THREE.Vector3();
+  let offset = 0;
+  object.traverse(child => {
+    const position = child.isMesh ? child.geometry?.getAttribute('position') : null;
+    if (!position) return;
+    for (let i = 0; i < position.count; i++, offset += 3) {
+      v.fromBufferAttribute(position, i).applyMatrix4(child.matrixWorld);
+      points[offset] = v.x; points[offset + 1] = v.y; points[offset + 2] = v.z;
+    }
+  });
+  return points;
+}
+
+function viewportOverlayTopNdc() {
   const canvasRect = renderer.domElement.getBoundingClientRect();
   const bar = document.getElementById('transform-bar');
   const barRect = bar?.classList.contains('visible') ? bar.getBoundingClientRect() : null;
-  const topInset = barRect && canvasRect.height > 0 ? Math.max(0, barRect.bottom - canvasRect.top) / canvasRect.height : 0;
-  const fill = Math.max(0.4, 0.86 * (1 - 2 * Math.min(topInset, 0.3)));
-  const framing = computeAssetArrivalFraming({ bounds: placement.bounds, fovDeg: camera.fov, aspect: camera.aspect, fill });
+  if (!barRect || !(canvasRect.height > 0)) return 1;
+  return 1 - 2 * Math.max(0, barRect.bottom - canvasRect.top) / canvasRect.height;
+}
+
+function frameAssetArrival(object) {
+  if (!object || !camera || !controls) return false;
+  const framing = computeAssetArrivalFraming({
+    points: sceneObjectWorldPoints(object),
+    fovDeg: camera.fov,
+    aspect: camera.aspect,
+    window: assetArrivalFramingWindow({ overlayTopNdc: viewportOverlayTopNdc() }),
+  });
   if (!framing) return false;
   camera.position.fromArray(framing.position);
   controls.target.fromArray(framing.target);
@@ -12189,7 +12228,7 @@ async function showGLB(file, options = {}) {
         });
       }
       document.getElementById('transform-bar').classList.add('visible');
-      if (arrival === 'fresh') frameAssetArrival(arrivalPlacement);
+      if (arrival === 'fresh' && arrivalPlacement) frameAssetArrival(model);
       setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
       resolve(model);
     }, undefined, (err) => {
@@ -12259,7 +12298,7 @@ async function showOBJ(objFile, mtlFile, options = {}) {
         fileName: options.metadata?.fileName ?? glbFileName,
       });
       document.getElementById('transform-bar').classList.add('visible');
-      if (arrival === 'fresh') frameAssetArrival(arrivalPlacement);
+      if (arrival === 'fresh' && arrivalPlacement) frameAssetArrival(obj);
       setInfo('OBJ Inspector — orbit to inspect | use toolbar to fix orientation');
       resolve(obj);
     }, undefined, (err) => {

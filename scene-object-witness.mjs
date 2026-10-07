@@ -238,37 +238,22 @@ async function runMeshAssetArrivalScenario(ws) {
     (async () => {
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const object = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === ${JSON.stringify(objectId)});
-      const camera = window.kaminosCameraDebugState?.();
-      if (!object?.worldBounds || object.worldBounds.error) return { object, camera, error: 'world bounds unavailable' };
-      const { min, max } = object.worldBounds;
-      const mul = (m, v) => [0, 1, 2, 3].map(r => m[r] * v[0] + m[4 + r] * v[1] + m[8 + r] * v[2] + m[12 + r] * v[3]);
-      const corners = [];
-      for (const x of [min[0], max[0]]) for (const y of [min[1], max[1]]) for (const z of [min[2], max[2]]) {
-        const clip = mul(camera.projectionMatrix, mul(camera.matrixWorldInverse, [x, y, z, 1]));
-        corners.push({ w: clip[3], ndc: [clip[0] / clip[3], clip[1] / clip[3]] });
-      }
-      const canvas = [...document.querySelectorAll('canvas')].filter(c => c.offsetParent !== null).sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
-      const canvasRect = canvas?.getBoundingClientRect();
-      const bar = document.getElementById('transform-bar');
-      const barRect = bar?.classList.contains('visible') ? bar.getBoundingClientRect() : null;
-      const overlayTopNdc = canvasRect && barRect ? 1 - 2 * Math.max(0, barRect.bottom - canvasRect.top) / canvasRect.height : 1;
-      return { object, camera, corners, overlayTopNdc };
+      return { object, camera: window.kaminosCameraDebugState?.(), screen: window.kaminosSceneObjectScreenExtentDebugState?.(${JSON.stringify(objectId)}) };
     })()
   `, { timeoutMs: 15000 });
-  const { object, camera, corners, overlayTopNdc } = measured;
-  if (!corners) throw new Error('mesh asset arrival could not measure bounds: ' + JSON.stringify(measured));
+  const { object, camera, screen } = measured;
+  if (!object?.worldBounds || object.worldBounds.error || !screen) throw new Error('mesh asset arrival could not measure bounds or silhouette: ' + JSON.stringify(measured));
   const { min, max } = object.worldBounds;
   const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
   const groundGap = min[1] - camera.groundY;
-  const xs = corners.map(corner => corner.ndc[0]), ys = corners.map(corner => corner.ndc[1]);
-  const screenExtent = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / 2;
-  lastEvidence.meshAssetArrival = { arrival: object.arrival, overlayTopNdc, worldBounds: object.worldBounds, groundY: camera.groundY, groundGap, diagonal, camera: { position: camera.position, target: camera.target }, ndcCorners: corners, screenExtent };
+  const span = Math.max(screen.right - screen.left, screen.top - screen.bottom);
+  lastEvidence.meshAssetArrival = { arrival: object.arrival, worldBounds: object.worldBounds, groundY: camera.groundY, groundGap, diagonal, camera: { position: camera.position, target: camera.target }, screen, span };
   if (!Number.isFinite(camera.groundY)) throw new Error('mesh asset arrival has no ground plane height: ' + JSON.stringify(lastEvidence.meshAssetArrival));
   if (Math.abs(groundGap) > Math.max(1e-4, diagonal * 2e-3)) throw new Error('mesh asset did not arrive resting on the ground plane: ' + JSON.stringify({ groundGap, groundY: camera.groundY, worldBounds: object.worldBounds }));
-  if (corners.some(corner => !(corner.w > 0) || Math.abs(corner.ndc[0]) > 1 || Math.abs(corner.ndc[1]) > 1)) throw new Error('mesh asset arrival is not fully inside the camera frame: ' + JSON.stringify(corners));
+  if (screen.outsideDepth || screen.left < -1 || screen.right > 1 || screen.bottom < -1 || screen.top > 1) throw new Error('mesh asset arrival is not fully inside the camera frame: ' + JSON.stringify(screen));
   if (object.arrival?.mode !== 'fresh') throw new Error('mesh asset link did not record a fresh arrival: ' + JSON.stringify(object.arrival));
-  if (corners.some(corner => corner.ndc[1] > overlayTopNdc)) throw new Error('mesh asset arrival is hidden under the transform toolbar: ' + JSON.stringify({ overlayTopNdc, corners }));
-  if (screenExtent < 0.4) throw new Error('mesh asset arrival is framed too small: ' + JSON.stringify({ screenExtent, camera: lastEvidence.meshAssetArrival.camera }));
+  if (screen.top > screen.overlayTopNdc) throw new Error('mesh asset arrival is hidden under the transform toolbar: ' + JSON.stringify(screen));
+  if (span < 1.2) throw new Error('mesh asset arrival is framed too small: ' + JSON.stringify({ span, screen }));
 }
 
 // Arrival contract for adding into an existing scene through Add > Import

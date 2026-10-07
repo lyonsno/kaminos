@@ -4,6 +4,7 @@ import * as THREE from '../lib/three.core.js';
 import {
   ASSET_ARRIVAL_TARGET_DIAGONAL,
   assetArrivalViewDirection,
+  assetArrivalFramingWindow,
   computeAssetArrivalFraming,
   computeAssetArrivalPlacement,
   resolveAssetArrivalMode,
@@ -73,22 +74,35 @@ test('arrival view looks down at the asset from the front-right', () => {
   assert.ok(x > 0 && y > 0 && z > x, 'front-biased elevated three-quarter view');
 });
 
-test('arrival framing fits every corner inside the requested screen window and fills it', () => {
-  const bounds = { min: [-0.42, -0.85, -0.45], max: [0.42, 0.74, 0.42] };
+test('arrival framing fits the asset points tightly inside an off-centre window', () => {
+  // An L-shaped cloud: its box is much larger than its silhouette.
+  const points = [];
+  for (let i = 0; i <= 20; i++) { points.push(-0.4 + 0.04 * i, -0.85, 0.4); points.push(-0.4, -0.85 + 0.08 * i, -0.4); points.push(0.4, -0.85, -0.4 + 0.04 * i); }
   for (const aspect of [0.6, 1.4, 2.2]) {
-    const fill = 0.75;
-    const framing = computeAssetArrivalFraming({ bounds, fovDeg: 40, aspect, fill });
+    const window = assetArrivalFramingWindow({ overlayTopNdc: 0.73 });
+    const framing = computeAssetArrivalFraming({ points, fovDeg: 40, aspect, window });
     const camera = new THREE.PerspectiveCamera(40, aspect, framing.near, framing.far);
     camera.position.fromArray(framing.position);
     camera.lookAt(new THREE.Vector3().fromArray(framing.target));
     camera.updateMatrixWorld();
-    let extent = 0;
-    for (const x of [bounds.min[0], bounds.max[0]]) for (const y of [bounds.min[1], bounds.max[1]]) for (const z of [bounds.min[2], bounds.max[2]]) {
-      const ndc = new THREE.Vector3(x, y, z).project(camera);
-      assert.ok(Math.abs(ndc.x) <= fill + 1e-9 && Math.abs(ndc.y) <= fill + 1e-9, `corner outside window at aspect ${aspect}: ${ndc.toArray()}`);
-      assert.ok(ndc.z > -1 && ndc.z < 1, 'corner inside clip depth');
-      extent = Math.max(extent, Math.abs(ndc.x), Math.abs(ndc.y));
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < points.length; i += 3) {
+      const ndc = new THREE.Vector3(points[i], points[i + 1], points[i + 2]).project(camera);
+      assert.ok(ndc.z > -1 && ndc.z < 1, 'point inside clip depth');
+      x0 = Math.min(x0, ndc.x); x1 = Math.max(x1, ndc.x); y0 = Math.min(y0, ndc.y); y1 = Math.max(y1, ndc.y);
     }
-    close(extent, fill, `tight fit at aspect ${aspect}`);
+    const eps = 1e-9;
+    assert.ok(x0 >= window.left - eps && x1 <= window.right + eps && y0 >= window.bottom - eps && y1 <= window.top + eps, `outside window at aspect ${aspect}: ${[x0, x1, y0, y1]}`);
+    const xTight = Math.abs(x0 - window.left) < 1e-6 && Math.abs(x1 - window.right) < 1e-6;
+    const yTight = Math.abs(y0 - window.bottom) < 1e-6 && Math.abs(y1 - window.top) < 1e-6;
+    assert.ok(xTight || yTight, `fit is not tight at aspect ${aspect}: ${[x0, x1, y0, y1]}`);
+    // The slack axis is centred in the linear fit, which perspective skews slightly.
+    assert.ok(Math.abs((x0 + x1) / 2 - (window.left + window.right) / 2) < 0.02, `horizontally centred at aspect ${aspect}`);
+    assert.ok(Math.abs((y0 + y1) / 2 - (window.bottom + window.top) / 2) < 0.02, `vertically centred at aspect ${aspect}`);
   }
+});
+
+test('arrival window clears an overlay at the top of the viewport', () => {
+  assert.deepEqual(assetArrivalFramingWindow({ overlayTopNdc: 1 }), { left: -0.62, right: 0.62, bottom: -0.62, top: 0.62 });
+  assert.equal(assetArrivalFramingWindow({ overlayTopNdc: 0.5 }).top, 0.45);
 });
