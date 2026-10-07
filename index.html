@@ -7190,6 +7190,8 @@ document.getElementById('local-liquid-apply').addEventListener('click', () => {
 });
 document.getElementById('local-liquid-pause').addEventListener('click', () => window.kaminosPauseLocalLiquid(!localLiquidPaused));
 
+// Witness access to the exact live GPU descriptor; no per-frame readback.
+window.kaminosLocalLiquidContactFrameForWitness = () => localLiquidHost?.contactFrame() ?? null;
 window.kaminosLocalLiquidState = () => {
   const hostState = localLiquidHost?.state() || null;
   return ({
@@ -7222,7 +7224,7 @@ async function addLocalLiquidEmitter() {
   const record = createLocalLiquidEmitterSceneRecord({
     id,
     transform: { position: [-0.35, 0.4, -1.65], rotation: [Math.atan2(0.25, 1), 0, 0], scale: [1, 1, 1] },
-    settings: { schema: LOCAL_LIQUID_EMITTER_SCHEMA, baseRadius: 0.08, strength: 1.15, rate: 1200 },
+    settings: { schema: LOCAL_LIQUID_EMITTER_SCHEMA, baseRadius: 0.08, strength: 1.15, rate: 1200, inletProfile: 'plug' },
   });
   const { object } = createLocalLiquidEmitterObject(THREE, record);
   scene.add(object);

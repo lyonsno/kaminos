@@ -3333,7 +3333,7 @@ function isFingerFluidLaminarSourceScene(scene) {
 }
 
 const LIVE_HAND_INLET_CAPACITY = 5;
-const LIVE_HAND_INLET_FLOATS = 16;
+const LIVE_HAND_INLET_FLOATS = 20; // Four geometry/economics vectors plus explicit profile.
 const LIVE_HAND_DEFAULT_RESIDENCE_SECONDS = 1.65;
 const LIVE_HAND_DEFAULT_RESIDENCE_DISTANCE_WORLD = 2.4;
 const MAX_FINITE_F32 = 3.402823466e38;
@@ -3374,6 +3374,8 @@ export function normalizeFingerFluidLiveInletPacket(packet) {
         finiteFingerFluidVector(emitter.aim_world, [0, 0.15, -1]),
         `live inlet ${emitter.id || index} axis`,
       );
+      const profile = emitter.inlet_profile ?? 'round_poiseuille';
+      if (!['round_poiseuille', 'plug'].includes(profile)) throw new Error(`Unsupported live inlet profile: ${profile}`);
       const requestedActive = emitter.active === true && emitter.emission_state === 'jet';
       const active = simulationSafe && requestedActive;
       return Object.freeze({
@@ -3384,6 +3386,7 @@ export function normalizeFingerFluidLiveInletPacket(packet) {
         radius: Math.max(0.035, Math.min(0.18, finite(emitter.radius, 0.07) * 1.45)),
         maximumSpeed: Math.max(0.25, Math.min(2.6, finite(emitter.strength, 1.15) * 1.35)),
         reservoirLength: 0.26,
+        profile,
         requestedActive,
         active,
         activationAuthority: requestedActive
@@ -3400,6 +3403,7 @@ export function normalizeFingerFluidLiveInletPacket(packet) {
       radius: 0.07,
       maximumSpeed: 0,
       reservoirLength: 0.26,
+      profile: 'round_poiseuille',
       requestedActive: false,
       active: false,
       activationAuthority: 'inactive_padding',
@@ -3442,6 +3446,7 @@ function requireFiniteF32(value, label) {
 }
 
 export function measureFingerFluidLiveInletSchedulerCapacity({
+  profile = 'round_poiseuille',
   radius,
   maximumSpeed,
   releasePoolBudget,
@@ -3482,7 +3487,7 @@ export function measureFingerFluidLiveInletSchedulerCapacity({
   const laneWeights = Array.from({ length: laneCount }, (_, laneIndex) => {
     const radial = safeRadius * 0.82 * Math.sqrt((laneIndex + 0.5) / laneCount);
     const normalizedRadius = radial / safeRadius;
-    return Math.max(0, 1 - normalizedRadius * normalizedRadius);
+    return profile === 'plug' ? 1 : Math.max(0, 1 - normalizedRadius * normalizedRadius);
   });
   const laneWeightSum = laneWeights.reduce((sum, weight) => sum + weight, 0);
   const distanceResidenceSeconds = safeResidenceDistanceWorld / safeMaximumSpeed;
@@ -3611,7 +3616,7 @@ export function planFingerFluidLiveInletEconomics(
       sharedBudgetRemainder = Math.max(0, sharedBudgetRemainder - 1);
     }
     const geometryDerivedParticleReleaseRate = inlet.requestedActive
-      ? Math.PI * inlet.radius * inlet.radius * inlet.maximumSpeed * 0.5 / LAMINAR_SOURCE_PARTICLE_VOLUME
+      ? Math.PI * inlet.radius * inlet.radius * inlet.maximumSpeed * (inlet.profile === 'plug' ? 1 : 0.5) / LAMINAR_SOURCE_PARTICLE_VOLUME
       : 0;
     const requestedParticleReleaseRate = inlet.requestedActive
       ? (values.particleReleaseRate.provided
@@ -3628,6 +3633,7 @@ export function planFingerFluidLiveInletEconomics(
         : LIVE_HAND_DEFAULT_RESIDENCE_DISTANCE_WORLD, `${inlet.id} residence distance`);
     const schedulerCapacity = inlet.active && releasePoolBudget > 0
       ? measureFingerFluidLiveInletSchedulerCapacity({
+        profile: inlet.profile,
         radius: inlet.radius,
         maximumSpeed: inlet.maximumSpeed,
         releasePoolBudget,
@@ -3809,6 +3815,7 @@ function comparableFingerFluidLiveInletEconomics(economics) {
       axis: Array.from(inlet.axis || []),
       radius: inlet.radius,
       maximumSpeed: inlet.maximumSpeed,
+      profile: inlet.profile ?? 'round_poiseuille',
       requestedActive: inlet.requestedActive,
       active: inlet.active,
       activationAuthority: inlet.activationAuthority,
@@ -4194,6 +4201,7 @@ function packFingerFluidLiveInletPacket(
       inlet.effective.residenceSeconds,
       inlet.effective.residenceDistanceWorld,
     ], offset + 12);
+    data.set([inlet.profile === 'plug' ? 1 : 0, 0, 0, 0], offset + 16);
   });
   return { normalized, economics, data };
 }
@@ -5875,7 +5883,12 @@ export function validateLiquidFireContactDescriptorHeader(header, {
   if (header.sourceFrameId !== sourceFrameId) throw new Error('Liquid fire contact descriptor source frame identity mismatch');
   const counts = ['sourceCount', 'packedCount', 'contactCount', 'rejectedCount', 'capacity', 'overflowCount', 'malformedCount'];
   if (!counts.every(field => Number.isSafeInteger(header[field]) && header[field] >= 0)) throw new Error('Liquid fire contact descriptor accounting contains invalid counts');
-  if (header.sourceCount !== header.packedCount + header.rejectedCount || header.contactCount < header.packedCount || header.contactCount > header.sourceCount) {
+  const coverage = header.flags ?? 1;
+  if (coverage !== 1 && coverage !== 2) throw new Error('Liquid fire contact descriptor coverage is unsupported');
+  if (header.sourceCount !== header.packedCount + header.rejectedCount
+    || (coverage === 1 && header.contactCount < header.packedCount)
+    || (coverage === 2 && header.contactCount > header.packedCount)
+    || header.contactCount > header.sourceCount) {
     throw new Error('Liquid fire contact descriptor accounting does not reconcile');
   }
   if (header.malformedCount !== 0) throw new Error('Liquid fire contact descriptor contains malformed source records');
@@ -6185,6 +6198,7 @@ struct LiveInletDescriptor {
   axisSpeed: vec4<f32>,
   tangentActive: vec4<f32>,
   economics: vec4<f32>,
+  profile: vec4<f32>,
 }
 
 struct LiveInletPacket {
@@ -6616,6 +6630,7 @@ fn live_inlet_lane_coordinates(descriptor: LiveInletDescriptor, laneIndex: u32, 
 }
 
 fn live_inlet_profile_weight(descriptor: LiveInletDescriptor, localCoordinates: vec2<f32>) -> f32 {
+  if (descriptor.profile.x > 0.5) { return 1.0; }
   let radius = max(0.02, descriptor.originRadius.w);
   let normalizedRadius = length(localCoordinates) / radius;
   return max(0.0, 1.0 - normalizedRadius * normalizedRadius);
@@ -6699,7 +6714,7 @@ fn apply_live_inlet_boundary(index: u32, position: vec3<f32>, phase: f32, veloci
   let normalizedRadius = length(vec2<f32>(localU, localV)) / radius;
   let insideCore = normalizedRadius <= 1.0 && axialPosition >= -0.28 && axialPosition <= 0.02;
   let inletCoreWeight = select(0.0, 1.0, insideCore);
-  let profileWeight = max(0.0, 1.0 - normalizedRadius * normalizedRadius);
+  let profileWeight = live_inlet_profile_weight(descriptor, vec2<f32>(localU, localV));
   let targetVelocity = axis * descriptor.axisSpeed.w * profileWeight;
   return vec4<f32>(mix(velocity, targetVelocity, inletCoreWeight), inletCoreWeight);
 }
@@ -8349,7 +8364,7 @@ fn clear_liquid_fire_contact_descriptor(@builtin(global_invocation_id) gid: vec3
   atomicStore(&liquidFireContactHeader.overflowCount, 0u);
   atomicStore(&liquidFireContactHeader.malformedCount, 0u);
   atomicStore(&liquidFireContactHeader.recordWords, ${LIQUID_FIRE_CONTACT_RECORD_FLOATS}u);
-  atomicStore(&liquidFireContactHeader.flags, 1u);
+  atomicStore(&liquidFireContactHeader.flags, params.contactIdentity.w);
   atomicStore(&liquidFireContactHeader.reserved0, 0u);
   atomicStore(&liquidFireContactHeader.reserved1, 0u);
   atomicStore(&liquidFireContactHeader.reserved2, 0u);
@@ -8418,6 +8433,50 @@ fn compact_liquid_fire_contacts(@builtin(global_invocation_id) gid: vec3<u32>) {
   liquidFireContactRecords[slot].wetnessMaterialTracerVolume = vec4<f32>(source.thicknessContactWetnessMaterial.z, source.thicknessContactWetnessMaterial.w, tracer, volumeProxy);
   liquidFireContactRecords[slot].sourceGenerationEpochTick = vec4<f32>(f32(params.contactIdentity.x), f32(params.contactIdentity.y), f32(params.frameIndex), f32(sourceIndex));
   liquidFireContactRecords[slot].supportSourceFlags = vec4<f32>(source.stabilityAgeSource.w, source.stabilityAgeSource.x, source.stabilityAgeSource.y, 1.0);
+}
+
+// Liquid/gas overlap consumes actual live particle volume, including freeflight
+// and interior liquid. This is separate from supported-interface wetting.
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn compact_liquid_volume_particles(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= params.particleCount) { return; }
+  let particle = particles[index];
+  let volumeScale = adaptive_volume_scale(index);
+  if (particle.velocity.w < 0.0 || volumeScale <= 0.0) { return; }
+  atomicAdd(&liquidFireContactHeader.sourceCount, 1u);
+  let position = particle.position.xyz;
+  let velocity = particle.velocity.xyz;
+  if (!finite3(position) || !finite3(velocity) || !finite1(volumeScale)) {
+    atomicAdd(&liquidFireContactHeader.malformedCount, 1u);
+    atomicAdd(&liquidFireContactHeader.rejectedCount, 1u);
+    return;
+  }
+  if (any(position < params.boundsMin.xyz) || any(position > params.boundsMax.xyz)) {
+    atomicAdd(&liquidFireContactHeader.rejectedCount, 1u);
+    return;
+  }
+  let support = supportContactFrame(position);
+  if (support.w >= 0.5) { atomicAdd(&liquidFireContactHeader.contactCount, 1u); }
+  let slot = atomicAdd(&liquidFireContactHeader.packedCount, 1u);
+  if (slot >= params.particleCount) {
+    atomicAdd(&liquidFireContactHeader.overflowCount, 1u);
+    return;
+  }
+  let normal = support.xyz;
+  let normalSpeed = dot(velocity, normal);
+  let tangentVelocity = velocity - normal * normalSpeed;
+  let radius = params.fluid.x * 0.22 * pow(volumeScale, 1.0 / 3.0);
+  let volume = ${LAMINAR_SOURCE_PARTICLE_VOLUME} * volumeScale;
+  let tracer = materialTracers[index].concentrationDeltaRecipeSource.x;
+  liquidFireContactRecords[slot].worldPositionId = vec4<f32>(position, f32(index));
+  liquidFireContactRecords[slot].sourcePositionConfidence = vec4<f32>(position, 1.0);
+  liquidFireContactRecords[slot].normalThickness = vec4<f32>(normal, radius * 2.0);
+  liquidFireContactRecords[slot].velocityNormalSpeed = vec4<f32>(velocity, normalSpeed);
+  liquidFireContactRecords[slot].tangentVelocitySpeed = vec4<f32>(tangentVelocity, length(tangentVelocity));
+  liquidFireContactRecords[slot].wetnessMaterialTracerVolume = vec4<f32>(1.0, particle.velocity.w, tracer, volume);
+  liquidFireContactRecords[slot].sourceGenerationEpochTick = vec4<f32>(f32(params.contactIdentity.x), f32(params.contactIdentity.y), f32(params.frameIndex), f32(index));
+  liquidFireContactRecords[slot].supportSourceFlags = vec4<f32>(support.w, 1.0, f32(params.frameIndex), 2.0);
 }
 
 @compute @workgroup_size(1)
@@ -12444,7 +12503,7 @@ export function createFingerFluidLiveInletParticles(particleCount, packet = null
       + bitangent[component] * v
       + inlet.axis[component] * axialPosition
     ));
-    const profileWeight = Math.max(0, 1 - (radial / Math.max(inlet.radius, 1e-6)) ** 2);
+    const profileWeight = inlet.profile === 'plug' ? 1 : Math.max(0, 1 - (radial / Math.max(inlet.radius, 1e-6)) ** 2);
     const sourceIndex = normalized.inlets.indexOf(inlet);
     const phase = (sourceIndex + 0.5) / LIVE_HAND_INLET_CAPACITY;
     const offset = index * PARTICLE_FLOATS;
@@ -13004,6 +13063,13 @@ export function createFingerFluidWebGPURuntimeLifecycle({
   });
 }
 
+export function resolveFingerFluidLiquidFireContactCoverage(value = 'supported-interface') {
+  if (!['supported-interface','active-liquid-particles'].includes(value)) {
+    throw new Error(`Unsupported liquid fire contact coverage: ${value}`);
+  }
+  return value;
+}
+
 export async function createWebGPUFingerFluidSolver({
   canvas,
   hostFrameComposition = false,
@@ -13038,6 +13104,7 @@ export async function createWebGPUFingerFluidSolver({
   fixedVolumeReferenceParticleCount = null,
   transparentBackground = false,
   liveInletPacket = null,
+  liquidFireContactCoverage = 'supported-interface',
   supportContactRoute = KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE,
   presentationMode = KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE,
   movingHillSupportContactProviderFactory = null,
@@ -13049,6 +13116,7 @@ export async function createWebGPUFingerFluidSolver({
   if (typeof uniformVolumeDensityKernel !== 'boolean') {
     throw new TypeError(`Finger Fluid uniform volume density kernel must be a boolean: ${String(uniformVolumeDensityKernel)}`);
   }
+  const effectiveLiquidFireContactCoverage = resolveFingerFluidLiquidFireContactCoverage(liquidFireContactCoverage);
   const effectiveEnergyDiagnosticsMode = resolveFingerFluidEnergyDiagnosticsMode(energyDiagnosticsMode);
   const energyDiagnosticsEnabled = effectiveEnergyDiagnosticsMode === 'every_step';
   const safePresentationMode = resolveFingerFluidPresentationMode(presentationMode);
@@ -13525,7 +13593,8 @@ export async function createWebGPUFingerFluidSolver({
       computeChemistry: await pipelineFor('compute_material_tracer_diffusion'),
       applyChemistry: await pipelineFor('apply_material_tracer_diffusion'),
       clearLiquidFireContacts: await pipelineFor('clear_liquid_fire_contact_descriptor'),
-      compactLiquidFireContacts: await pipelineFor('compact_liquid_fire_contacts'),
+      compactLiquidFireContacts: await pipelineFor(effectiveLiquidFireContactCoverage === 'active-liquid-particles'
+        ? 'compact_liquid_volume_particles' : 'compact_liquid_fire_contacts'),
       finalizeLiquidFireContacts: await pipelineFor('finalize_liquid_fire_contact_descriptor'),
     };
   } catch (error) {
@@ -14430,7 +14499,7 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(144, liquidFireContactAllocationGeneration, true);
     view.setUint32(148, liquidFireContactEpoch, true);
     view.setUint32(152, LIQUID_FIRE_CONTACT_SOURCE_FRAME_HASH, true);
-    view.setUint32(156, 1, true);
+    view.setUint32(156, effectiveLiquidFireContactCoverage === 'active-liquid-particles' ? 2 : 1, true);
     view.setUint32(160, safeInletCutoffStep ?? 0xffffffff, true);
     view.setUint32(164, safeInletCutoffStep === null ? 0 : 1, true);
     view.setUint32(168, waterfallOracleConfig?.laneColumns ?? 0, true);
@@ -15809,6 +15878,8 @@ export async function createWebGPUFingerFluidSolver({
       sourceFrame: LIQUID_FIRE_CONTACT_SOURCE_FRAME_ID,
       sourceFrameId: LIQUID_FIRE_CONTACT_SOURCE_FRAME_ID,
       sourceFrameHash: LIQUID_FIRE_CONTACT_SOURCE_FRAME_HASH,
+      coverage: effectiveLiquidFireContactCoverage,
+      volumeMeaning: effectiveLiquidFireContactCoverage === 'active-liquid-particles' ? 'world-volume-per-particle' : 'interface-thickness-proxy',
       transformStage: 'consumer-owned',
       completionMode: 'gpu_ordered_clear_compact_finalize_same_compute_pass_v0',
       validitySource: 'gpu_header_only_fail_closed_v0',
@@ -15853,6 +15924,7 @@ export async function createWebGPUFingerFluidSolver({
   function getDebugState() {
     return {
       available: true,
+      liquidFireContactCoverage: effectiveLiquidFireContactCoverage,
       solver_backend: 'webgpu_compute',
       render_backend: 'webgpu_direct_render',
       solverRoute: KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE,
@@ -16081,7 +16153,9 @@ export async function createWebGPUFingerFluidSolver({
         sourceFrame: LIQUID_FIRE_CONTACT_SOURCE_FRAME_ID,
         sourceFrameId: LIQUID_FIRE_CONTACT_SOURCE_FRAME_ID,
         sourceFrameHash: LIQUID_FIRE_CONTACT_SOURCE_FRAME_HASH,
-        transformStage: 'consumer-owned',
+        coverage: effectiveLiquidFireContactCoverage,
+      volumeMeaning: effectiveLiquidFireContactCoverage === 'active-liquid-particles' ? 'world-volume-per-particle' : 'interface-thickness-proxy',
+      transformStage: 'consumer-owned',
         allocationGeneration: liquidFireContactAllocationGeneration,
         epoch: liquidFireContactEpoch,
         writeTick: Math.max(0, frameIndex - 1),

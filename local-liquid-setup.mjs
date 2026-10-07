@@ -47,7 +47,10 @@ export function normalizeLocalLiquidEmitter(value, pose = null) {
     const radius=value.baseRadius*checked.scale[0];
     if (radius < .035 || radius > .18) throw Error('Water emitter aperture must stay between 0.035 and 0.18');
   }
-  return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius,strength:value.strength,rate:value.rate};
+  const profile=value.inletProfile;
+  if (profile !== undefined && !['plug','round_poiseuille'].includes(profile)) throw Error('Unsupported water inlet profile');
+  return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius,strength:value.strength,rate:value.rate,
+    ...(profile === undefined ? {} : {inletProfile:profile})};
 }
 
 function normalizeLegacySetup(value) {
@@ -109,7 +112,8 @@ export function localLiquidInletPacket(setup, sceneEmitters = [], generation = 1
       // `particleCount` is the scene-wide solver pool. Leaving per-inlet
       // budgets unspecified lets the retained solver share that pool across
       // active emitters instead of reserving the whole pool once per object.
-      source_flux_particles_per_second:settings.rate,residence_seconds:20};
+      source_flux_particles_per_second:settings.rate,residence_seconds:20,
+      ...(settings.inletProfile === undefined ? {} : {inlet_profile:settings.inletProfile})};
   });
   return {packet_id:`kaminos-authored-liquid-${generation}`,route_identity:'kaminos-authored-liquid-source-v1',
     simulation_authority:'live_simulation',authority:{simulation_safe:true,stale:false},emitters};

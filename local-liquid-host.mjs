@@ -47,7 +47,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     hostFramePipelineIdentity:PIPELINE, presentationMode:'local_analytic_consumer', truthScene:'live_hand_inlets',
     particleCount:authored.particleCount, densityIterations:authored.densityIterations,
     rendererMode:'screen_space_refraction', bodyTransportMode:'robust_dense_body', interfaceFrequencyMode:'macro_micro_separated',
-    liveInletPacket:initialPacket});
+    liveInletPacket:initialPacket, liquidFireContactCoverage:'active-liquid-particles'});
   if (!isCurrent()) {
     solver.destroy?.();
     return null;
