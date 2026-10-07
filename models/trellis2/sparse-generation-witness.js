@@ -68,9 +68,9 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false}={})
         await actual.runtime.runKernel(k,o);const counts=stageCounts[currentPhase]??={};counts[o.stage]=(counts[o.stage]??0)+1;
         report.lastKernel={stage:o.stage,dispatch:o.dispatch,point:'native-kernel-returned'};
         await savePhase({kernel:report.lastKernel});},
-      async readTensor(t){if(serving&&(t.dtype!=='u32'||t.byteLength!==4))throw Error('learned-feature/coordinate CPU read during serving forbidden');
+      async readTensor(t,options){if(serving&&(t.dtype!=='u32'||t.byteLength!==4))throw Error('learned-feature/coordinate CPU read during serving forbidden');
         if(serving)report.servingMetadataReadbackBytes=(report.servingMetadataReadbackBytes??0)+4;
-        return actual.runtime.readTensor(t);}};
+        return actual.runtime.readTensor(t,options);}};
     setPhase('cached-checkpoint-input-loading');
     const inputs=await loadGenerationInputs(m,fetchTensor);
     report.checkpointLoading='per-role uncached complete weights; shared identity-checked activation tables';

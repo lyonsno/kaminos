@@ -74,8 +74,16 @@ export async function createTrellisSharedHost({sharedGpu,host,prototype,session:
       let frameRun,route;
       try{
         frameRun=await foreground.beginRun(runId);
+        const opportunities=frameRun.foregroundOpportunities;
         route=await session.registerRoute({routeId:GENERATION_ROUTE,runtimeOptions:{
-          kernel:{profile:'trellis2-shared-host-v0'},foregroundOpportunities:frameRun.foregroundOpportunities}});
+          kernel:{profile:'trellis2-shared-host-v0'},foregroundOpportunities:{...opportunities,
+            async serviceAtBoundary(boundary){
+              const report=await opportunities.serviceAtBoundary(boundary);
+              // Applies to staging copies as well as kernels, before the
+              // runtime can encode following the awaited ordinary frame.
+              throwIfStopped(signal);return report;
+            },
+          }}});
       }catch(error){
         state.status='held';state.error=error.message;
         if(frameRun){
@@ -85,13 +93,14 @@ export async function createTrellisSharedHost({sharedGpu,host,prototype,session:
         }else if(!foreground.snapshot().activeRun)active=null;
         throw error;
       }
-      let currentInvocation=null,readSequence=0;
+      const activeInvocations=new Set(),pendingReads=new Set();let readSequence=0;
       const enqueue=input=>{
+        if(state.status!=='active')throw Error('TRELLIS run is not active: '+state.status);
         if(typeof input?.execute!=='function')return route.enqueue(input);
         const execute=input.execute;
         return route.enqueue({...input,execute:async invocation=>{
-          currentInvocation=invocation;
-          try{return await execute(invocation);}finally{currentInvocation=null;}
+          activeInvocations.add(invocation);
+          try{return await execute(invocation);}finally{activeInvocations.delete(invocation);}
         }});
       };
       const runtime=Object.freeze({...route.runtime,
@@ -104,11 +113,14 @@ export async function createTrellisSharedHost({sharedGpu,host,prototype,session:
             throwIfStopped(signal);return typeof dispatch==='function'?dispatch(boundary):dispatch;
           }});
         },
-        async readTensor(tensor,options={}){
+        readTensor(tensor,options={}){
+          const reading=(async()=>{
           throwIfStopped(signal);
-          if(options.schedulerInvocation&&options.schedulerInvocation!==currentInvocation)
-            throw Error('TRELLIS readback requires the current actual scheduler invocation');
-          if(currentInvocation)return route.runtime.readTensor(tensor,{...options,schedulerInvocation:currentInvocation});
+          if(options.schedulerInvocation){
+            if(!activeInvocations.has(options.schedulerInvocation))
+              throw Error('TRELLIS readback requires the current actual scheduler invocation');
+            return route.runtime.readTensor(tensor,options);
+          }
           // A post-model consumer still submits a staging copy. Admit that
           // copy as an actual queued job rather than inventing an invocation id
           // or bypassing pending foreground work.
@@ -121,6 +133,9 @@ export async function createTrellisSharedHost({sharedGpu,host,prototype,session:
             const error=Error(failure?.message??'TRELLIS readback '+terminal.status);error.name=failure?.name??'Error';throw error;
           }
           return terminal.output;
+          })();
+          pendingReads.add(reading);
+          return reading.finally(()=>pendingReads.delete(reading));
         },
       });
       state.status='active';let finishing;
@@ -131,9 +146,11 @@ export async function createTrellisSharedHost({sharedGpu,host,prototype,session:
         },
         finish(){
           if(finishing)return finishing;
+          state.status='settling';
           finishing=(async()=>{
             try{
               await route.drain();
+              await Promise.allSettled([...pendingReads]);
               const report=await frameRun.finish();
               await queue.onSubmittedWorkDone();
               session.unregisterRoute(GENERATION_ROUTE);

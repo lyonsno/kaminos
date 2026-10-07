@@ -85,12 +85,12 @@ export function createTrellisOccupancyCoordinatesAdapter({ route, resolution = 6
       //Call after the coordinate job completes. Only the4-byte count metadata
       //crosses to CPU to specialize the next model's geometry. Latent/logits/
       //coordinate bytes remain resident. Views are overwritten by the next run.
-      async coordinates() {
+      async coordinates(invocation) {
         available(); if (!completed) throw Error('occupancy coordinate job not completed');
         if (coordinateView) return coordinateView;
         running = true;
         try {
-          const raw = await runtime.readTensor(count), values = raw instanceof ArrayBuffer ? new Uint32Array(raw) : raw;
+          const raw = await runtime.readTensor(count,{schedulerInvocation:invocation}), values = raw instanceof ArrayBuffer ? new Uint32Array(raw) : raw;
           if (!(values instanceof Uint32Array) || values.length !== 1) throw Error('complete occupancy count metadata required');
           const rows = values[0]; if (rows > plan.candidateRows) throw Error('occupancy count exceeds coordinate capacity');
           if (rows === 0) throw Error('no occupied coordinates; no replacement support');
