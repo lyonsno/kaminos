@@ -43,12 +43,17 @@ try{
   await evaluate('window.kaminosFingerFluidBenchRenderCurrentStateForWitness("screen_space_surface");true');
   for(const target of [30,90,150,240,480]){
    report.phase=mode+'-step-'+target;save();if(target>30)await evaluate('window.kaminosFingerFluidBenchAdvanceToStepForWitness('+target+');true');
-   const raw=await evaluateJsonTransfer(client,'window.kaminosFingerFluidBenchCapturePackedDensityForWitness()');assert.equal(raw.count,36864);assert.equal(raw.stepCount,target);assert.equal(Buffer.from(raw.buffers.source,'base64').length,36864*64);
-   const file=join(out,mode+'-step-'+target+'.json');writeFileSync(file,JSON.stringify(raw));s=await state();check(s,mode);assert.equal(s.runtime.stepCount,target);
-   await evaluate('window.kaminosFingerFluidBenchRenderCurrentStateForWitness("screen_space_surface");true');const image=await client.call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});const imagePath=join(out,mode+'-step-'+target+'.png');writeFileSync(imagePath,Buffer.from(image.data,'base64'));errors();row.frames.push({step:target,effectiveState:s,rawPath:file,sha256:sha(readFileSync(file)),imagePath});report.primaryOutputWritten=true;save();
+   const raw=await evaluateJsonTransfer(client,'window.kaminosFingerFluidBenchCapturePackedDensityForWitness()');
+   const file=join(out,mode+'-step-'+target+'.json');writeFileSync(file,JSON.stringify(raw));
+   const attempt={step:target,rawPath:file,sha256:sha(readFileSync(file)),validation:'unverified'};row.frames.push(attempt);report.primaryOutputWritten=true;save();
+   try {
+    assert.equal(raw.count,36864);assert.equal(raw.stepCount,target);assert.equal(Buffer.from(raw.buffers.source,'base64').length,36864*64);
+    s=await state();check(s,mode);assert.equal(s.runtime.stepCount,target);attempt.effectiveState=s;attempt.validation='accepted';save();
+   } catch(error) {attempt.validation='rejected';attempt.rejection=String(error);save();throw error;}
+   await evaluate('window.kaminosFingerFluidBenchRenderCurrentStateForWitness("screen_space_surface");true');const image=await client.call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});const imagePath=join(out,mode+'-step-'+target+'.png');writeFileSync(imagePath,Buffer.from(image.data,'base64'));errors();attempt.imagePath=imagePath;save();
   }
   row.complete=true;save();
  }
  errors();assert.equal(git(root,'rev-parse','HEAD'),revision);assert.equal(git(root,'status','--porcelain'),'');report.status='done';report.phase=null;
-}catch(e){report.status='failed';report.error=e.stack||String(e);report.lastTrustworthyEvidence={source:report.source?.revision,frames:report.observations.map(r=>({mode:r.mode,steps:r.frames.map(f=>f.step)}))};process.exitCode=1}
+}catch(e){report.status='failed';report.error=e.stack||String(e);report.lastTrustworthyEvidence={source:report.source?.revision,frames:report.observations.map(r=>({mode:r.mode,steps:r.frames.filter(f=>f.validation==='accepted').map(f=>f.step)}))};process.exitCode=1}
 finally{client?.ws.close();if(child){report.browser.cleanup={pid:child.pid,signal:'SIGTERM'};if(child.exitCode===null&&!child.signalCode)await new Promise(yes=>{child.once('close',yes);child.kill('SIGTERM')});report.browser.cleanup.exitCode=child.exitCode;report.browser.cleanup.signalCode=child.signalCode}report.completedAt=new Date().toISOString();save()}

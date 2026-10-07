@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {createFingerFluidTruthScenePopulation,measureFingerFluidTruthSnapshot} from '../finger-fluid-webgpu-core.js';
+const p=createFingerFluidTruthScenePopulation(1024,'pressure_playground',{referenceParticleCount:36864}).particleData;
+const s=measureFingerFluidTruthSnapshot(p,1024,{scene:'pressure_playground',stepCount:0});
+assert.equal(s.maximumBoundaryPenetration,0,'valid vessel inventory must not penetrate old phantom terrain/sphere');
+const point=new Float32Array([0,-.3,-.85,1,0,-.3,-.85,0,0,0,0,.52,0,0,0,24.3]);
+const closed=measureFingerFluidTruthSnapshot(point,1,{scene:'pressure_playground',stepCount:90});
+const open=measureFingerFluidTruthSnapshot(point,1,{scene:'pressure_playground',stepCount:91});
+assert.ok(Math.abs(closed.maximumBoundaryPenetration-.1007)<.00001,'closed gate summary uses actual vessel solid');assert.equal(open.maximumBoundaryPenetration,0);
+assert.throws(()=>measureFingerFluidTruthSnapshot(point,1,{scene:'pressure_playground'}),/step/i,'unknown gate epoch cannot become a boundary conclusion');
+console.log('Pressure boundary summaries use actual solids and require the captured gate epoch');

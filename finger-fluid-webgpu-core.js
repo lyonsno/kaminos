@@ -1,4 +1,4 @@
-import {PRESSURE_COLLISION_WGSL, PRESSURE_RENDER_WGSL, PRESSURE_SOLID_VERTEX_COUNT, PRESSURE_STATIONS, PRESSURE_GATE_STEP, createPressureParticles} from './finger-fluid-pressure-vessels.mjs';
+import {PRESSURE_COLLISION_WGSL, PRESSURE_RENDER_WGSL, PRESSURE_SOLID_VERTEX_COUNT, PRESSURE_STATIONS, PRESSURE_GATE_STEP, PRESSURE_BOXES, pressureSolidFrame, createPressureParticles} from './finger-fluid-pressure-vessels.mjs';
 import {RIVER_WGSL, riverSample, sampleRiverTerrain} from './finger-fluid-river-playground.mjs';
 import {capturePackedDensityWitness, capturePairedDensityWitness} from './finger-fluid-packed-density-witness.mjs';
 import {createPackedDensityLayout, PACKED_DENSITY_WGSL} from './finger-fluid-packed-density.mjs';
@@ -12640,8 +12640,12 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
   restDensity = 24.3,
   kernelRadius = 0.185,
   sourceRecirculationCount = 0,
+  stepCount = null,
 } = {}) {
   const effectiveScene = resolveFingerFluidTruthScene(scene);
+  if (effectiveScene === 'pressure_playground' && (!Number.isSafeInteger(stepCount) || stepCount < 0)) {
+    throw new RangeError('Pressure boundary summary requires the captured step count for gate state');
+  }
   const count = Math.max(0, Math.min(Math.floor(finite(particleCount, 0)), Math.floor((particleData?.length || 0) / PARTICLE_FLOATS)));
   const occupancies = new Uint32Array(GRID_CELL_COUNT);
   const densityErrors = [];
@@ -12678,7 +12682,11 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
     maxDensity = Math.max(maxDensity, density);
     const relativeDensityError = Math.abs(density - restDensity) / Math.max(0.001, restDensity);
     densityErrors.push(relativeDensityError);
-    const boundary = measureAnalyticBoundaryDistance(position, kernelRadius);
+    const pressureDistance = effectiveScene === 'pressure_playground'
+      ? pressureSolidFrame(position, stepCount <= PRESSURE_GATE_STEP).distance - kernelRadius * 0.22
+      : null;
+    const boundary = pressureDistance === null ? measureAnalyticBoundaryDistance(position, kernelRadius)
+      : {distance: Math.max(0, pressureDistance), penetration: Math.max(0, -pressureDistance)};
     maximumBoundaryPenetration = Math.max(maximumBoundaryPenetration, boundary.penetration);
     (boundary.distance < kernelRadius ? boundaryDensityErrors : bulkDensityErrors).push(relativeDensityError);
     const inBounds = position.every((value, axis) => value >= BOUNDS_MIN[axis] && value <= BOUNDS_MAX[axis]);
@@ -15677,6 +15685,7 @@ export async function createWebGPUFingerFluidSolver({
         sampleRecords.push(readInterfaceRecord(sampleIndex));
       }
       const fluidTruthSnapshot = measureFingerFluidTruthSnapshot(values, safeParticleCount, {
+        stepCount: diagnosticsStepCount,
         scene: safeTruthScene,
         restDensity: safeRestDensity,
         kernelRadius: safeKernelRadius,
@@ -16144,25 +16153,25 @@ export async function createWebGPUFingerFluidSolver({
         ? 'cohesion_stage_includes_unsupported_sheet_support_then_surface_cohesion'
         : 'nominal_projection_viscosity_vorticity_cohesion_stages',
       obstacleContract: KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT,
-      obstacle: { center: [...OBSTACLE_CENTER], radius: OBSTACLE_RADIUS, rendered: directRenderFrameCount > 0 },
+      obstacle: safeTruthScene === 'pressure_playground' ? {kind: 'oriented_solid_boxes', count: PRESSURE_BOXES.length, rendered: directRenderFrameCount > 0} : { center: [...OBSTACLE_CENTER], radius: OBSTACLE_RADIUS, rendered: directRenderFrameCount > 0 },
       playgroundContract: KAMINOS_FINGER_FLUID_PLAYGROUND_CONTRACT,
       playground: {
         zones: [...KAMINOS_FINGER_FLUID_PLAYGROUND_ZONES],
-        supportGeometryMode: 'shared_analytic_heightfield_mesh_plus_analytic_obstacle_v0',
+        supportGeometryMode: safeTruthScene === 'pressure_playground' ? 'shared_oriented_boxes_flat_ground_v1' : 'shared_analytic_heightfield_mesh_plus_analytic_obstacle_v0',
         supportPresentationRoute: KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_PRESENTATION_ROUTE,
         supportGeometryCount: analyticSupportVertexCount,
         supportGeometryCountUnit: 'vertices',
         terrainVertexCount: ANALYTIC_SUPPORT_TERRAIN_VERTEX_COUNT,
-        obstacleVertexCount: ANALYTIC_SUPPORT_SPHERE_VERTEX_COUNT,
+        obstacleVertexCount: safeTruthScene === 'pressure_playground' ? PRESSURE_SOLID_VERTEX_COUNT : ANALYTIC_SUPPORT_SPHERE_VERTEX_COUNT,
         inletFixtureContract: KAMINOS_FINGER_FLUID_LAMINAR_FIXTURE_CONTRACT,
-        inletFixtureCollisionMode: 'implicit_prescribed_inlet_core_no_separate_mesh_collision_v0',
+        inletFixtureCollisionMode: safeTruthScene === 'pressure_playground' ? 'shared_oriented_solid_outlet_boxes_v1' : 'implicit_prescribed_inlet_core_no_separate_mesh_collision_v0',
         inletFixtureVertexCount: safeTruthScene !== 'live_hand_inlets' && isFingerFluidLaminarSourceScene(safeTruthScene) ? ANALYTIC_SUPPORT_INLET_FIXTURE_VERTEX_COUNT : 0,
         inletFixtures: safeTruthScene !== 'live_hand_inlets' && isFingerFluidLaminarSourceScene(safeTruthScene) ? [
           { id: 'round-spout', presentation: 'open_round_tube', vertexCount: ANALYTIC_SUPPORT_ROUND_INLET_VERTEX_COUNT },
           { id: 'slot-spout', presentation: 'open_rectangular_duct', vertexCount: ANALYTIC_SUPPORT_SLOT_INLET_VERTEX_COUNT },
           { id: 'porous-patch', presentation: 'homogenized_visual_boundary_not_resolved_pore_geometry', vertexCount: ANALYTIC_SUPPORT_POROUS_INLET_VERTEX_COUNT },
         ] : [],
-        obstacleCount: PLAYGROUND_OBSTACLE_COUNT,
+        obstacleCount: safeTruthScene === 'pressure_playground' ? PRESSURE_BOXES.length : PLAYGROUND_OBSTACLE_COUNT,
         particleSupportDrawCount,
         rendered: directRenderFrameCount > 0,
       },
@@ -16546,7 +16555,7 @@ export async function createWebGPUFingerFluidSolver({
           : safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
             ? 'consumer_scene_color_depth_not_bound_v0'
             : 'same_pass_same_analytic_geometry_v0',
-        geometrySource: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+        geometrySource: safeTruthScene === 'pressure_playground' ? 'pressure_oriented_boxes_flat_ground_and_gate_v1' : safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
           ? null
           : 'toyFloorHeight_toyFloorNormal_plus_analytic_obstacle_v0',
         calibrationLandmarks: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
