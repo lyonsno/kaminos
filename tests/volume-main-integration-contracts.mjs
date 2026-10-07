@@ -35,6 +35,7 @@ const resources = {
   inflowCoverageTexture: { createView: () => ({ label: 'inflow coverage view' }) },
   inflowPerturbationTexture: { createView: () => ({ label: 'inflow perturbation view' }) },
   burnRateTexture: { createView: () => ({ label: 'burn rate view' }) },
+  forceDeltaTexture: { createView: () => ({ label: 'force increment view' }) },
 };
 const makeGroup = new Function(...Object.keys(resources), `${helper}; return createFluidRenderBindGroup;`)(...Object.values(resources));
 for (let q = 0; q < 2; q++) {

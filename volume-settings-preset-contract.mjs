@@ -176,8 +176,135 @@ export function validateVolumeSettingsPresetSourceIdentity(requestedSource, effe
   return true;
 }
 
+function volumeSettingsPresetServerProjection(document) {
+  const projection = document?.schemaProjection || {};
+  const list = value => (Array.isArray(value) ? value : []);
+  return Object.freeze({
+    defaultsApplied: Object.freeze(list(projection.defaultsApplied).map(String)),
+    retiredControlIds: Object.freeze(list(projection.retiredControlsStripped).map(entry => String(entry?.id))),
+    carriedControls: Object.freeze(list(projection.carriedControls).map(entry => Object.freeze({ ...entry }))),
+    unsupportedValuesDefaulted: Object.freeze(list(projection.unsupportedValuesDefaulted).map(entry => Object.freeze({ ...entry }))),
+  });
+}
+
+// One status line for what the server's schema projection changed to make a
+// basin load here. Carried controls and replaced values are warnings. This
+// sees only the server projection: page-side clamping and route fallbacks
+// when values are applied to controls are not reported here, so no warning
+// does not mean the controls hold exactly the saved values.
+export function describeVolumeSettingsPresetProjection(projection) {
+  const parts = [];
+  const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+  const carried = projection?.carriedControls || [];
+  const replaced = projection?.unsupportedValuesDefaulted || [];
+  if (carried.length) {
+    parts.push(`carries ${plural(carried.length, 'control')} from another branch: ${carried.map(entry => entry.id).join(', ')}`);
+  }
+  if (replaced.length) {
+    parts.push(`${plural(replaced.length, 'value')} not offered here: ${replaced.map(entry => `${entry.id} ${entry.value} -> ${entry.effective}`).join(', ')}`);
+  }
+  const defaults = projection?.defaultsApplied || [];
+  if (defaults.length) parts.push(`${plural(defaults.length, 'newer control')} at defaults`);
+  const retired = projection?.retiredControlIds || [];
+  if (retired.length) parts.push(`${plural(retired.length, 'retired control')} dropped`);
+  return { text: parts.join(' | '), warning: Boolean(carried.length || replaced.length) };
+}
+
+// A basin loaded across branches with carried or replaced values cannot be
+// saved back under its own label: this branch cannot hold what it carried,
+// so the save would replace the basin for every branch under that name.
+export function volumeSettingsPresetLabelReuseBlock(receipt, label, appliedDifferences = []) {
+  const projection = receipt?.serverProjection;
+  const projected = Boolean(projection?.carriedControls?.length || projection?.unsupportedValuesDefaulted?.length);
+  const changed = Boolean(appliedDifferences?.length);
+  if (!receipt || (!projected && !changed)) return null;
+  const requested = String(label || '').trim();
+  const sameLabel = requested === receipt.label || (receipt.alias && requested.toLowerCase() === receipt.alias);
+  if (!sameLabel) return null;
+  const reasons = [
+    projected ? `was loaded from another branch (${describeVolumeSettingsPresetProjection(projection).text})` : null,
+    changed ? `had ${describeVolumeSettingsPresetAppliedDifferences(appliedDifferences).text}` : null,
+  ].filter(Boolean);
+  return `"${requested}" ${reasons.join(' and ')}; `
+    + 'saving it under the same label would replace it for every branch. Save under a new label.';
+}
+
+// What the page holds after loading a basin, compared with what was saved:
+// clamped sliders, options the page does not offer, and route fallbacks show
+// up here even when the server projection is exact.
+export function volumeSettingsPresetAppliedDifferences(saved, applied) {
+  const differences = [];
+  for (const [axis, field] of [['basin', 'domControls'], ['renderer', 'rendererControls'], ['presentation', 'presentationControls']]) {
+    const savedValues = presetControlValues(saved?.[field]);
+    const appliedValues = presetControlValues(applied?.[field]);
+    for (const [id, value] of Object.entries(savedValues)) {
+      const present = Object.hasOwn(appliedValues, id);
+      if (present && sameAppliedControlValue(value, appliedValues[id])) continue;
+      differences.push(Object.freeze({ axis, id, saved: value, applied: present ? appliedValues[id] : null }));
+    }
+  }
+  return Object.freeze(differences);
+}
+
+export function describeVolumeSettingsPresetAppliedDifferences(differences) {
+  if (!differences?.length) return { text: '', warning: false };
+  const listed = differences.map(entry => `${entry.id} ${String(entry.saved)} -> ${entry.applied === null ? '(no control)' : String(entry.applied)}`);
+  return {
+    text: `${differences.length} value${differences.length === 1 ? '' : 's'} changed when loaded here: ${listed.join(', ')}`,
+    warning: true,
+  };
+}
+
+// Whether a save reached the shared basin library, for the save status line.
+export function describeVolumeSettingsLibraryPublication(publication) {
+  if (!publication) return { text: '', warning: false };
+  if (!publication.published) {
+    return publication.error
+      ? { text: `NOT in library ${publication.storePath || ''}: ${publication.error}`.replace('library : ', 'library: '), warning: true }
+      : { text: 'library off', warning: false };
+  }
+  const held = publication.aliasHeld;
+  if (held) {
+    return {
+      text: `in library ${publication.storePath} as a version; ${describeVolumeSettingsLabelHold(held, publication.label)}`,
+      warning: true,
+    };
+  }
+  return { text: `in library ${publication.storePath}`, warning: false };
+}
+
+function describeVolumeSettingsLabelHold(held, label) {
+  const why = held.reason === 'would-replace-values'
+    ? `does not offer the saved value of ${(held.controls || []).join(', ')}`
+    : `lacks ${(held.controls || []).join(', ')}`;
+  return `label "${label}" kept on ${String(held.currentPresetId).slice(0, 16)} because this branch ${why}; `
+    + 'save under a new label to name this version';
+}
+
+// A save whose library publish succeeded but whose local write failed.
+export function describeVolumeSettingsPartialSave(result) {
+  const publication = result?.sharedPublication || {};
+  const named = publication.aliasMoved ? ` under "${publication.label}"` : '';
+  return `in library ${publication.storePath} as ${String(publication.presetId).slice(0, 16)}${named}; NOT saved locally: ${result?.localError}`;
+}
+
+// The whole outcome of a save or promotion for its status line: where the
+// basin went, and whether a label stayed on a basin this branch cannot hold.
+export function describeVolumeSettingsSaveOutcome(result) {
+  const library = describeVolumeSettingsLibraryPublication(result?.sharedPublication);
+  const localHold = result?.effective?.aliasHeld;
+  if (!localHold || result?.sharedPublication?.aliasHeld) return library;
+  const hold = localHold.scope === 'local-store'
+    ? `this server's store kept "${result.effective.label}" on ${String(localHold.currentPresetId).slice(0, 16)} because this branch `
+      + `${localHold.reason === 'would-replace-values' ? 'does not offer the saved value of' : 'lacks'} ${(localHold.controls || []).join(', ')}; `
+      + 'the library label follows this save'
+    : describeVolumeSettingsLabelHold(localHold, result.effective.label);
+  return { text: library.text ? `${library.text} | ${hold}` : hold, warning: true };
+}
+
 export function validateVolumeSettingsPresetDocument(document, requestedPresetRef = null, rawSchema = null) {
   const schema = validatePresetSchema(rawSchema);
+  const serverProjection = volumeSettingsPresetServerProjection(document);
   const retirementMigration = migrateRetiredVolumeSettingsPresetDocument(document, schema);
   document = retirementMigration.document;
   if (!document || document.identity !== 'kaminos-volume-settings-preset-artifact-v2') {
@@ -333,6 +460,7 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
     presentationControlCount: presentationEntries.length,
     routeEntries: Object.freeze([...presetRoute.searchParams].map(entry => Object.freeze([...entry]))),
     routeVolumeEntries: Object.freeze(routeVolumeEntries.map(entry => Object.freeze([...entry]))),
+    serverProjection,
     retirementMigration: Object.freeze({
       identity: 'kaminos.volume.retired-control-migration.v1',
       applied: retirementMigration.applied,

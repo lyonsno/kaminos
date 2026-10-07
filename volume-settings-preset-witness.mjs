@@ -791,6 +791,7 @@ try {
     presentationControlCount: presetDocument.preset.presentationControlCount,
     smokePresentation: requestedSmokePresentation,
     storePath: commandResult.effective.storePath,
+    sharedPublication: commandResult.sharedPublication ?? null,
     continuousFrameDelta,
     continuousSimStepDelta,
     steerabilityReceipt,

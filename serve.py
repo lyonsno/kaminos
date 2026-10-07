@@ -29,6 +29,36 @@ VOLUME_SETTINGS_STORE_DEFAULT = Path(os.environ.get(
     os.path.expanduser("~/.local/share/kaminos/volume-settings-presets"),
 )).expanduser().resolve()
 VOLUME_SETTINGS_STORE = VOLUME_SETTINGS_STORE_DEFAULT
+
+
+def shared_basin_store_from_environment(environment=None):
+    """The shared basin library every branch's server publishes to and reads from."""
+    environment = os.environ if environment is None else environment
+    configured = environment.get("KAMINOS_SHARED_BASIN_STORE")
+    if configured is None:
+        configured = "~/.local/share/kaminos/basins"
+    if configured.strip().lower() in SHARED_BASIN_STORE_OFF_VALUES:
+        return None
+    return _shared_basin_store_path(configured)
+
+
+SHARED_BASIN_STORE_OFF_VALUES = {"", "off", "none", "0", "false", "no", "disabled"}
+
+
+def _shared_basin_store_path(configured):
+    path = Path(configured).expanduser()
+    if not path.is_absolute():
+        raise ValueError(f"shared basin store must be an absolute path: {configured}")
+    return path.resolve()
+
+
+try:
+    SHARED_BASIN_STORE_DEFAULT = shared_basin_store_from_environment()
+    SHARED_BASIN_STORE_ERROR = None
+except ValueError as _shared_basin_store_error:
+    SHARED_BASIN_STORE_DEFAULT = None
+    SHARED_BASIN_STORE_ERROR = str(_shared_basin_store_error)
+SHARED_BASIN_STORE = SHARED_BASIN_STORE_DEFAULT
 VOLUME_BASIN_SESSION_STORE_DEFAULT = Path(os.environ.get(
     "KAMINOS_VOLUME_BASIN_SESSION_STORE",
     os.path.expanduser("~/.local/share/kaminos/volume-basin-drive-sessions"),
@@ -348,11 +378,20 @@ class UnsupportedVolumeSettingsControls(ValueError):
     """Saved controls require a different renderer/schema version."""
 
 
-def normalize_volume_settings_preset_payload(payload, schema=None):
-    """Project a compatible older payload through schema-owned additive defaults."""
+def normalize_volume_settings_preset_payload(payload, schema=None, tolerate_foreign_controls=False):
+    """Project a compatible older payload through schema-owned additive defaults.
+
+    With tolerate_foreign_controls (reads only), a basin saved by a branch with
+    a different control inventory still projects: controls this schema lacks are
+    carried out of the applied route and reported, and option values this schema
+    does not offer fall back to the control's additive default with a receipt.
+    """
     schema = _validate_settings_preset_schema(
         schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
     )
+    # On reads, a basin whose inventory differs from this schema is schema
+    # skew (saved by another branch), not a damaged artifact.
+    skew = UnsupportedVolumeSettingsControls if tolerate_foreign_controls else ValueError
     if not isinstance(payload, dict):
         raise ValueError("settings preset additive projection source is invalid")
     if payload.get("identity") != VOLUME_SETTINGS_PRESET_IDENTITY or payload.get("kind") != "settings-preset":
@@ -362,14 +401,18 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
     allowed_fields = set(schema.get("allowedNativePresetFields") or [])
     unexpected_fields = sorted(set(payload) - allowed_fields)
     if unexpected_fields:
-        raise ValueError(f"settings preset contains fields outside its canonical schema: {','.join(unexpected_fields)}")
+        raise skew(f"settings preset contains fields outside its canonical schema: {','.join(unexpected_fields)}")
 
     normalized = copy.deepcopy(payload)
     defaults_applied = []
     retired_controls_stripped = []
+    carried_controls = []
+    unsupported_values_defaulted = []
     routed_source_values = {}
     routed_default_values = {}
     routed_retired_values = {}
+    routed_carried_values = {}
+    routed_replaced_values = {}
     retired_by_axis = {
         "domControls": {},
         "rendererControls": {},
@@ -377,6 +420,11 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
     }
     for descriptor in schema.get("retiredControls") or []:
         retired_by_axis[descriptor["axis"]][descriptor["key"]] = descriptor
+    schema_params = {
+        descriptor["param"]
+        for axis in ("controls", "rendererControls", "presentationControls", "retiredControls")
+        for descriptor in schema.get(axis) or []
+    }
     axis_specs = (
         ("domControls", "controlCount", schema.get("controls") or [], True, "basin"),
         ("rendererControls", "rendererControlCount", schema.get("rendererControls") or [], False, "renderer"),
@@ -395,8 +443,25 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
         expected_by_key = {descriptor["key"]: descriptor for descriptor in expected_descriptors}
         retired_by_key = retired_by_axis[field]
         unknown = sorted(set(source_controls) - set(expected_by_key) - set(retired_by_key))
-        if unknown:
+        if unknown and not tolerate_foreign_controls:
             raise UnsupportedVolumeSettingsControls(f"settings preset {field} contain unknown controls: {','.join(unknown)}")
+        for key in unknown:
+            descriptor = source_controls.pop(key)
+            if (
+                not isinstance(descriptor, dict)
+                or descriptor.get("id") != key
+                or not isinstance(descriptor.get("param"), str)
+                or not descriptor["param"]
+                or len([value_field for value_field in ("value", "rawValue") if value_field in descriptor]) != 1
+            ):
+                raise ValueError(f"settings preset control descriptor is invalid: {key}")
+            if descriptor["param"] in schema_params or descriptor["param"] in routed_carried_values:
+                raise UnsupportedVolumeSettingsControls(
+                    f"settings preset {field} control {key} reuses parameter {descriptor['param']}"
+                )
+            value = _settings_preset_descriptor_value(descriptor)
+            routed_carried_values[descriptor["param"]] = _settings_preset_route_value(value)
+            carried_controls.append({"axis": axis_name, "id": key, "param": descriptor["param"], "value": value})
         for key in sorted(set(source_controls) & set(retired_by_key)):
             descriptor = source_controls.pop(key)
             expected = retired_by_key[key]
@@ -409,12 +474,39 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
                 "param": expected["param"],
                 "value": value,
             })
-        for key, descriptor in source_controls.items():
+        for key, descriptor in list(source_controls.items()):
             expected = expected_by_key[key]
+            allowed_values = expected.get("allowedValues")
+            value = _settings_preset_descriptor_value(descriptor) if isinstance(descriptor, dict) else None
+            if tolerate_foreign_controls and isinstance(descriptor, dict) and (
+                descriptor.get("param") != expected.get("param")
+                or str(descriptor.get("tagName") or "").upper() != str(expected.get("tagName") or "").upper()
+                or str(descriptor.get("type") or "").lower() != str(expected.get("type") or "").lower()
+            ):
+                raise skew(f"settings preset control inventory mismatch for {key}")
+            if tolerate_foreign_controls and allowed_values is not None and value not in allowed_values:
+                _validate_settings_preset_descriptor(
+                    key, descriptor, {name: entry for name, entry in expected.items() if name != "allowedValues"}
+                )
+                if "additiveDefault" not in expected:
+                    raise UnsupportedVolumeSettingsControls(
+                        f"settings preset {field} value {value!r} for {key} is not offered by this schema"
+                    )
+                source_controls[key] = _settings_preset_descriptor_for_default(expected)
+                routed_replaced_values[expected["param"]] = (
+                    _settings_preset_route_value(value),
+                    _settings_preset_route_value(expected["additiveDefault"]),
+                )
+                unsupported_values_defaulted.append({
+                    "axis": axis_name,
+                    "id": key,
+                    "param": expected["param"],
+                    "value": value,
+                    "effective": expected["additiveDefault"],
+                })
+                continue
             _validate_settings_preset_descriptor(key, descriptor, expected)
-            routed_source_values[expected["param"]] = _settings_preset_route_value(
-                _settings_preset_descriptor_value(descriptor)
-            )
+            routed_source_values[expected["param"]] = _settings_preset_route_value(value)
 
         missing = [descriptor for descriptor in expected_descriptors if descriptor["key"] not in source_controls]
         missing_axis_is_fully_additive = bool(missing) and all(
@@ -424,13 +516,13 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
             missing_nonadditive = next(
                 descriptor for descriptor in missing if "additiveDefault" not in descriptor
             )
-            raise ValueError(
+            raise skew(
                 f"settings preset is missing non-additive control: {missing_nonadditive['key']}"
             )
         if missing and (axis_authored or default_missing_axis or missing_axis_is_fully_additive):
             for descriptor in missing:
                 if "additiveDefault" not in descriptor:
-                    raise ValueError(f"settings preset is missing non-additive control: {descriptor['key']}")
+                    raise skew(f"settings preset is missing non-additive control: {descriptor['key']}")
                 default_descriptor = _settings_preset_descriptor_for_default(descriptor)
                 source_controls[descriptor["key"]] = default_descriptor
                 routed_default_values[descriptor["param"]] = _settings_preset_route_value(
@@ -469,10 +561,21 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
     for key, expected_value in routed_retired_values.items():
         if route_values.pop(key, None) != expected_value:
             raise ValueError(f"settings preset retired route/control mismatch for {key}")
-    if routed_retired_values:
+    for key, expected_value in routed_carried_values.items():
+        if route_values.pop(key, None) != expected_value:
+            raise ValueError(f"settings preset carried route/control mismatch for {key}")
+    for key, (source_value, _effective_value) in routed_replaced_values.items():
+        if route_values.pop(key, None) != source_value:
+            raise ValueError(f"settings preset route/control mismatch for {key}")
+    if routed_retired_values or routed_carried_values:
         route_entries = [
             (key, value) for key, value in route_entries
-            if key not in routed_retired_values
+            if key not in routed_retired_values and key not in routed_carried_values
+        ]
+    if routed_replaced_values:
+        route_entries = [
+            (key, routed_replaced_values[key][1] if key in routed_replaced_values else value)
+            for key, value in route_entries
         ]
     for key, default_value in routed_default_values.items():
         if key in route_values:
@@ -480,10 +583,10 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
         route_entries.append((key, default_value))
     for key in schema.get("routeExtraParams") or []:
         if key not in route_values:
-            raise ValueError(f"settings preset route omitted metadata parameter {key}")
+            raise skew(f"settings preset route omitted metadata parameter {key}")
         route_values.pop(key)
     if route_values:
-        raise ValueError(f"settings preset route contains unexpected parameters: {','.join(sorted(route_values))}")
+        raise skew(f"settings preset route contains unexpected parameters: {','.join(sorted(route_values))}")
     normalized["route"] = parsed._replace(query=urlencode(route_entries)).geturl()
     return normalized, {
         "identity": "kaminos-volume-settings-schema-projection-v1",
@@ -495,6 +598,8 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
         "effectivePresentationControlCount": normalized.get("presentationControlCount", 0),
         "defaultsApplied": defaults_applied,
         "retiredControlsStripped": retired_controls_stripped,
+        "carriedControls": carried_controls,
+        "unsupportedValuesDefaulted": unsupported_values_defaulted,
     }
 
 
@@ -984,10 +1089,11 @@ def _volume_settings_alias_for_label(store, label):
     return disambiguated
 
 
-def write_volume_settings_preset(store_path, label, payload, source, schema=None, *, publish_alias=True):
-    if not isinstance(publish_alias, bool):
-        raise ValueError("publishAlias must be a boolean")
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+_NO_LIBRARY_DECISION = object()
+
+
+def _prepare_volume_settings_preset_write(payload, schema):
+    """Validate a payload for writing; return its normalized form, projection, and content hash."""
     for axis, count_field in (("domControls", "controlCount"), ("rendererControls", "rendererControlCount"), ("presentationControls", "presentationControlCount")):
         if axis == "domControls" or axis in payload or schema.get(axis):
             if payload.get(count_field) is None:
@@ -999,9 +1105,26 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             + ",".join(schema_projection["defaultsApplied"])
         )
     validate_volume_settings_preset_payload(normalized_payload, schema)
+    return normalized_payload, schema_projection, _volume_settings_content_hash(normalized_payload, schema)
+
+
+def write_volume_settings_preset(store_path, label, payload, source, schema=None, library_hold=_NO_LIBRARY_DECISION, *, publish_alias=True):
+    """Write a basin into one store.
+
+    Without a library the store decides alone whether its label follows the new
+    basin. With one, the caller passes the library's decision: the label holds
+    if the library held, and also if this store's own label points at a basin
+    the writer cannot hold (a local-only hold, reported with scope
+    "local-store"), so branches still reading this store directly keep it.
+    With publish_alias False (a scene snapshot) the basin is stored by id only
+    and no label moves.
+    """
+    if not isinstance(publish_alias, bool):
+        raise ValueError("publishAlias must be a boolean")
+    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    normalized_payload, schema_projection, content_hash = _prepare_volume_settings_preset_write(payload, schema)
     store = _volume_settings_store_path(store_path)
     effective_label = str(label or "").strip() or "Unnamed preset"
-    content_hash = _volume_settings_content_hash(normalized_payload, schema)
     preset_id = f"vsp-{content_hash}"
     written_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     document = {
@@ -1036,8 +1159,23 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             "updatedAt": written_at,
             "source": dict(source or {}),
         }
+        alias_held = None
         if publish_alias:
-            _atomic_write_json(alias_path, alias_document)
+            own_hold = _volume_settings_label_hold(
+                store, _volume_settings_alias_document(store, alias), preset_id, normalized_payload, schema
+            )
+            if library_hold is _NO_LIBRARY_DECISION:
+                alias_held = own_hold
+            elif library_hold:
+                alias_held = library_hold
+            else:
+                alias_held = {**own_hold, "scope": "local-store"} if own_hold else None
+            history_row = _volume_settings_label_history_row(alias_document, written_at, source)
+            if alias_held:
+                history_row["held"] = alias_held
+            _append_volume_settings_alias_history(store, alias, history_row)
+            if alias_held is None:
+                _atomic_write_json(alias_path, alias_document)
     preset_url = f"/volume-settings-preset.html?preset={preset_id}"
     return {
         "ok": True,
@@ -1060,6 +1198,7 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             "rendererControlCount": len(normalized_payload.get("rendererControls") or {}),
             "presentationControlCount": len(normalized_payload.get("presentationControls") or {}),
             "idempotent": idempotent,
+            "aliasHeld": alias_held,
         },
         "schemaProjection": schema_projection,
         "presetUrl": preset_url,
@@ -1118,7 +1257,9 @@ def read_volume_settings_preset(store_path, preset_ref, schema=None):
         raise ValueError("volume settings preset artifact content hash mismatch")
     if alias_document and alias_document.get("contentHash") != document.get("contentHash"):
         raise ValueError("volume settings preset alias content hash mismatch")
-    normalized_payload, schema_projection = normalize_volume_settings_preset_payload(raw_payload, schema)
+    normalized_payload, schema_projection = normalize_volume_settings_preset_payload(
+        raw_payload, schema, tolerate_foreign_controls=True
+    )
     validate_volume_settings_preset_payload(normalized_payload, schema)
     return {
         **document,
@@ -1142,23 +1283,38 @@ def list_volume_settings_presets(store_path, schema=None):
     aliases_dir.mkdir(parents=True, exist_ok=True)
     entries = []
     unavailable_entries = []
-    for alias_path in aliases_dir.glob("*.json"):
+    invalid_aliases = []
+    for alias_path in sorted(aliases_dir.glob("*.json")):
+        # A malformed alias is reported on its own; it must not fail the index.
         try:
             alias_document = _read_json_object(alias_path, "alias")
-        except ValueError as error:
-            raise ValueError(f"volume settings preset alias index is corrupt at {alias_path.name}: {error}") from error
-        alias = alias_document.get("alias")
-        if alias_path.stem != alias:
-            raise ValueError(f"volume settings preset alias filename mismatch: {alias_path.name}")
+            alias = alias_document.get("alias")
+            if alias_path.stem != alias:
+                raise ValueError(f"volume settings preset alias filename mismatch: {alias_path.name}")
+            if alias_document.get("identity") != "kaminos-volume-settings-preset-alias-v1":
+                raise ValueError("volume settings preset alias identity mismatch")
+            if not isinstance(alias_document.get("label"), str) or not alias_document["label"].strip():
+                raise ValueError("volume settings preset alias label is invalid")
+            if not isinstance(alias_document.get("presetId"), str) or not re.fullmatch(r"vsp-[0-9a-f]{64}", alias_document["presetId"]):
+                raise ValueError("volume settings preset alias target is invalid")
+        except (OSError, ValueError) as error:
+            invalid_aliases.append({"alias": alias_path.stem, "path": str(alias_path), "error": str(error)})
+            continue
         try:
             document = read_volume_settings_preset(store, alias, schema)
-        except UnsupportedVolumeSettingsControls as error:
+        except (OSError, ValueError) as error:
+            # One unreadable basin is reported on its own entry; it must not
+            # take down the picker for every other basin in the store.
             unavailable_entries.append({
                 "alias": alias,
                 "label": alias_document["label"],
                 "presetId": alias_document["presetId"],
                 "updatedAt": alias_document.get("updatedAt"),
                 "source": alias_document.get("source") or {},
+                "reason": (
+                    "schema-skew" if isinstance(error, UnsupportedVolumeSettingsControls)
+                    else "invalid-artifact"
+                ),
                 "error": str(error),
             })
             continue
@@ -1173,11 +1329,56 @@ def list_volume_settings_presets(store_path, schema=None):
             "presentationControlCount": len((document.get("preset") or {}).get("presentationControls") or {}),
             "defaultsApplied": (document.get("schemaProjection") or {}).get("defaultsApplied") or [],
             "retiredControlsStripped": (document.get("schemaProjection") or {}).get("retiredControlsStripped") or [],
+            "carriedControls": (document.get("schemaProjection") or {}).get("carriedControls") or [],
+            "unsupportedValuesDefaulted": (document.get("schemaProjection") or {}).get("unsupportedValuesDefaulted") or [],
             "updatedAt": alias_document.get("updatedAt"),
             "source": alias_document.get("source") or {},
         })
-    entries.sort(key=lambda entry: (entry.get("updatedAt") or "", entry["alias"]), reverse=True)
-    unavailable_entries.sort(key=lambda entry: (entry.get("updatedAt") or "", entry["alias"]), reverse=True)
+    current_by_alias = {entry["alias"]: entry["presetId"] for entry in entries}
+    current_by_alias.update({entry["alias"]: entry["presetId"] for entry in unavailable_entries})
+    earlier_versions = []
+    invalid_history_rows = []
+    history_dir = store / "alias-history"
+    for history_path in sorted(history_dir.glob("*.jsonl")) if history_dir.exists() else []:
+        alias = history_path.stem
+        latest_rows = {}
+        rows, invalid_rows = _scan_volume_settings_alias_history(store, alias)
+        invalid_history_rows.extend(invalid_rows)
+        for row in rows:
+            latest_rows[row["presetId"]] = row
+        for preset_id, row in latest_rows.items():
+            if preset_id == current_by_alias.get(alias):
+                continue
+            try:
+                document = read_volume_settings_preset(store, preset_id, schema)
+            except (OSError, ValueError) as error:
+                unavailable_entries.append({
+                    "alias": alias,
+                    "label": row.get("label") or alias,
+                    "presetId": preset_id,
+                    "updatedAt": row.get("publishedAt"),
+                    "source": row.get("source") or {},
+                    "reason": "schema-skew" if isinstance(error, UnsupportedVolumeSettingsControls) else "invalid-artifact",
+                    "version": "earlier",
+                    "error": str(error),
+                })
+                continue
+            projection = document.get("schemaProjection") or {}
+            earlier_versions.append({
+                "alias": alias,
+                "label": row.get("label") or alias,
+                "presetId": preset_id,
+                "contentHash": document["contentHash"],
+                "publishedAt": row.get("publishedAt"),
+                "source": row.get("source") or {},
+                # A held save is a version the label did not follow.
+                "reason": "held-label" if row.get("held") else "superseded-label",
+                "carriedControls": projection.get("carriedControls") or [],
+                "unsupportedValuesDefaulted": projection.get("unsupportedValuesDefaulted") or [],
+            })
+    entries.sort(key=lambda entry: (_volume_settings_timestamp(entry.get("updatedAt")), entry["alias"]), reverse=True)
+    earlier_versions.sort(key=lambda entry: (_volume_settings_timestamp(entry.get("publishedAt")), entry["alias"]), reverse=True)
+    unavailable_entries.sort(key=lambda entry: (_volume_settings_timestamp(entry.get("updatedAt")), entry["alias"]), reverse=True)
     return {
         "identity": "kaminos-volume-settings-preset-index-v1",
         "storePath": str(store),
@@ -1186,8 +1387,580 @@ def list_volume_settings_presets(store_path, schema=None):
         "rendererControlCount": len(schema.get("rendererControls") or []),
         "presentationControlCount": len(schema.get("presentationControls") or []),
         "entries": entries,
+        "earlierVersions": earlier_versions,
         "unavailableEntries": unavailable_entries,
+        "invalidAliases": invalid_aliases,
+        "invalidHistoryRows": invalid_history_rows,
     }
+
+
+def volume_settings_store_layers(local_store, shared_store):
+    """Read order for basins: this server's own store, then the shared library."""
+    local = _volume_settings_store_path(local_store)
+    layers = [("local", local)]
+    if shared_store is not None:
+        shared = _volume_settings_store_path(shared_store)
+        if shared != local:
+            layers.append(("shared", shared))
+    return layers
+
+
+def _verify_volume_settings_artifact(document, schema):
+    if not isinstance(document, dict) or document.get("identity") != VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY:
+        raise ValueError("volume settings preset artifact identity mismatch")
+    preset_id = document.get("presetId")
+    if not isinstance(preset_id, str) or not re.fullmatch(r"vsp-[0-9a-f]{64}", preset_id):
+        raise ValueError("volume settings preset content id is invalid")
+    raw_payload = document.get("preset")
+    if not isinstance(raw_payload, dict) or document.get("schemaIdentity") != schema.get("identity"):
+        raise ValueError("volume settings preset artifact schema mismatch")
+    content_hash = _volume_settings_content_hash(raw_payload, schema)
+    if document.get("contentHash") != f"sha256:{content_hash}" or preset_id != f"vsp-{content_hash}":
+        raise ValueError("volume settings preset artifact content hash mismatch")
+    return preset_id
+
+
+def _volume_settings_alias_document(store, alias):
+    path = store / "aliases" / f"{alias}.json"
+    if not path.exists():
+        return None
+    document = _read_json_object(path, "alias")
+    if document.get("identity") != "kaminos-volume-settings-preset-alias-v1" or document.get("alias") != alias:
+        raise ValueError(f"volume settings preset alias identity mismatch: {alias}")
+    return document
+
+
+def _volume_settings_timestamp(value):
+    """A stored timestamp for ordering; anything but an ISO string sorts as unknown."""
+    return value if isinstance(value, str) else ""
+
+
+def _volume_settings_newer_alias(current, candidate):
+    """A label follows its latest publication; the same basin in two stores keeps the first."""
+    if current is None:
+        return True
+    return (
+        candidate.get("presetId") != current.get("presetId")
+        and _volume_settings_timestamp(candidate.get("updatedAt")) > _volume_settings_timestamp(current.get("updatedAt"))
+    )
+
+
+def _volume_settings_label_history_row(alias_document, published_at=None, source=None):
+    return {
+        "identity": "kaminos-volume-settings-preset-alias-history-v1",
+        "alias": alias_document["alias"],
+        "label": alias_document["label"],
+        "presetId": alias_document["presetId"],
+        "contentHash": alias_document.get("contentHash"),
+        "publishedAt": published_at if published_at is not None else (alias_document.get("updatedAt") or ""),
+        "source": dict(source if source is not None else (alias_document.get("source") or {})),
+    }
+
+
+def _scan_volume_settings_alias_history(store, alias):
+    """Label-history rows plus the rows that cannot be used (reported, never fatal)."""
+    path = store / "alias-history" / f"{alias}.jsonl"
+    rows = []
+    invalid = []
+    if not path.exists():
+        return rows, invalid
+    for number, line in enumerate(path.read_text().splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as error:
+            invalid.append({"alias": alias, "path": str(path), "line": number, "error": str(error)})
+            continue
+        if (
+            not isinstance(row, dict)
+            or not isinstance(row.get("presetId"), str)
+            or not re.fullmatch(r"vsp-[0-9a-f]{64}", row["presetId"])
+            or ("label" in row and (not isinstance(row["label"], str) or not row["label"].strip()))
+            or ("source" in row and not isinstance(row["source"], dict))
+        ):
+            invalid.append({"alias": alias, "path": str(path), "line": number, "error": "label history row is not a basin version"})
+            continue
+        rows.append(row)
+    return rows, invalid
+
+
+def _read_volume_settings_alias_history(store, alias):
+    return _scan_volume_settings_alias_history(store, alias)[0]
+
+
+def _append_volume_settings_alias_history(store, alias, row):
+    """Append-only label log: re-pointing a label never erases where it pointed."""
+    path = store / "alias-history" / f"{alias}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing_rows = _read_volume_settings_alias_history(store, alias)
+    # Keep the pointer being replaced whenever the log lacks it: stores that
+    # predate label history, and re-points by writers that do not keep it.
+    current = _volume_settings_alias_document(store, alias)
+    if (
+        current is not None
+        and isinstance(current.get("presetId"), str)
+        and re.fullmatch(r"vsp-[0-9a-f]{64}", current["presetId"])
+        and isinstance(current.get("label"), str)
+        and current.get("presetId") != row["presetId"]
+        and not any(existing.get("presetId") == current.get("presetId") for existing in existing_rows)
+    ):
+        with path.open("a") as handle:
+            handle.write(json.dumps(_volume_settings_label_history_row(current), sort_keys=True) + "\n")
+    if any(existing.get("presetId") == row["presetId"] and existing.get("publishedAt") == row["publishedAt"] for existing in existing_rows):
+        return False
+    with path.open("a") as handle:
+        handle.write(json.dumps(row, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    return True
+
+
+def _volume_settings_raw_control_keys(payload):
+    keys = set()
+    for field in ("domControls", "rendererControls", "presentationControls"):
+        controls = payload.get(field)
+        if isinstance(controls, dict):
+            keys.update(controls)
+    return keys
+
+
+def _volume_settings_label_hold(store, current_alias, new_preset_id, new_payload, schema):
+    """Why a label must stay on its current basin rather than move to a new one, or None.
+
+    The writer's schema must represent the current basin exactly: a label never
+    moves onto a copy made by a branch that carried some of the current basin's
+    controls out, or replaced option values it does not offer.
+    """
+    current_id = (current_alias or {}).get("presetId")
+    if not isinstance(current_id, str) or not re.fullmatch(r"vsp-[0-9a-f]{64}", current_id) or current_id == new_preset_id:
+        return None
+    current_path = store / "presets" / f"{current_id}.json"
+    try:
+        current_payload = _read_json_object(current_path, "artifact").get("preset") or {}
+    except (OSError, ValueError):
+        # A missing or unreadable current basin has nothing left to protect.
+        return None
+    if not isinstance(current_payload, dict):
+        return None
+    try:
+        _normalized, projection = normalize_volume_settings_preset_payload(
+            current_payload, schema, tolerate_foreign_controls=True
+        )
+    except ValueError:
+        projection = None
+    if projection is not None:
+        carried = [entry["id"] for entry in projection.get("carriedControls") or []]
+        replaced = [entry["id"] for entry in projection.get("unsupportedValuesDefaulted") or []]
+        if not carried and not replaced:
+            return None
+        return {
+            "reason": "would-drop-controls" if carried else "would-replace-values",
+            "controls": sorted(carried or replaced),
+            "currentPresetId": current_alias["presetId"],
+        }
+    # The current basin does not load on this schema at all; hold only if the
+    # new basin lacks controls the current one has.
+    return _volume_settings_dropped_controls_hold(current_alias, current_payload, new_payload, schema)
+
+
+def _volume_settings_dropped_controls_hold(current_alias, current_payload, new_payload, schema):
+    retired = {descriptor["key"] for descriptor in schema.get("retiredControls") or []}
+    dropped = (
+        _volume_settings_raw_control_keys(current_payload) - _volume_settings_raw_control_keys(new_payload) - retired
+    )
+    if not dropped:
+        return None
+    return {"reason": "would-drop-controls", "controls": sorted(dropped), "currentPresetId": current_alias["presetId"]}
+
+
+def _publish_volume_settings_artifact_locked(store, document, label, published_at, source, schema, move_alias_only_forward=False,
+                                             fallback_hold=None, publish_alias=True):
+    preset_id = _verify_volume_settings_artifact(document, schema)
+    preset_path = store / "presets" / f"{preset_id}.json"
+    created = _atomic_create_json(preset_path, document)
+    if not created:
+        existing = _read_json_object(preset_path, "artifact")
+        if existing.get("contentHash") != document["contentHash"]:
+            raise ValueError("volume settings preset content identity collision")
+    if not publish_alias:
+        # A scene snapshot is shared by id only; no label moves or records it.
+        return {"presetId": preset_id, "alias": None, "created": created, "aliasMoved": False,
+                "aliasHeld": None, "aliasKeptLive": False, "historyAppended": False}
+    alias = _volume_settings_alias_for_label(store, label)
+    alias_document = {
+        "identity": "kaminos-volume-settings-preset-alias-v1",
+        "alias": alias,
+        "label": label,
+        "presetId": preset_id,
+        "contentHash": document["contentHash"],
+        "schemaIdentity": schema["identity"],
+        "updatedAt": published_at,
+        "source": dict(source or {}),
+    }
+    current_alias = _volume_settings_alias_document(store, alias)
+    alias_held = None
+    alias_kept_live = False
+    if not move_alias_only_forward:
+        # A live save: the label follows it unless this branch cannot
+        # represent the basin the label points at now.
+        # Decided here, under the library lock, against the pointer as it is
+        # now. Where the library has no label yet, the caller's hold against
+        # the label readers resolved elsewhere applies.
+        alias_held = (
+            _volume_settings_label_hold(store, current_alias, preset_id, document.get("preset") or {}, schema)
+            if current_alias is not None else fallback_hold
+        )
+        move = alias_held is None and (current_alias or {}).get("presetId") != preset_id
+    elif current_alias and current_alias.get("presetId") != preset_id and "importedFrom" not in (current_alias.get("source") or {}):
+        # An import never moves a label a live save set; the version is kept.
+        alias_kept_live = True
+        move = False
+    else:
+        move = _volume_settings_newer_alias(current_alias, alias_document)
+        if move and current_alias:
+            # Between imported pointers the importer's schema cannot judge the
+            # writers' option values, so only dropped controls hold a label.
+            current_path = store / "presets" / f"{current_alias.get('presetId')}.json"
+            if isinstance(current_alias.get("presetId"), str) and current_path.exists():
+                alias_held = _volume_settings_dropped_controls_hold(
+                    current_alias, _read_json_object(current_path, "artifact").get("preset") or {},
+                    document.get("preset") or {}, schema,
+                )
+            move = alias_held is None
+    history_row = {
+        "identity": "kaminos-volume-settings-preset-alias-history-v1",
+        "alias": alias,
+        "label": label,
+        "presetId": preset_id,
+        "contentHash": document["contentHash"],
+        "publishedAt": published_at,
+        "source": dict(source or {}),
+    }
+    if alias_held:
+        history_row["held"] = alias_held
+    elif alias_kept_live:
+        history_row["held"] = {"reason": "live-label-kept", "currentPresetId": current_alias.get("presetId")}
+    history_appended = _append_volume_settings_alias_history(store, alias, history_row)
+    if move:
+        _atomic_write_json(store / "aliases" / f"{alias}.json", alias_document)
+    return {
+        "presetId": preset_id,
+        "alias": alias,
+        "created": created,
+        "aliasMoved": move,
+        "aliasHeld": alias_held,
+        "aliasKeptLive": alias_kept_live,
+        "historyAppended": history_appended,
+    }
+
+
+def publish_volume_settings_preset(shared_store_path, document, label, source, schema=None, fallback_hold=None, publish_alias=True):
+    """Publish one hash-verified basin artifact into the shared library."""
+    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    _verify_volume_settings_artifact(document, schema)
+    store = _volume_settings_store_path(shared_store_path)
+    effective_label = str(label or document.get("initialLabel") or "").strip() or "Unnamed preset"
+    published_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    with _volume_settings_store_lock(store):
+        result = _publish_volume_settings_artifact_locked(
+            store, document, effective_label, published_at, source, schema, fallback_hold=fallback_hold,
+            publish_alias=publish_alias,
+        )
+    return {
+        "published": True,
+        "storePath": str(store),
+        "label": effective_label,
+        "publishedAt": published_at,
+        **result,
+    }
+
+
+class VolumeSettingsPartialSave(ValueError):
+    """The basin reached the shared library but this server's store could not be written."""
+
+    def __init__(self, message, shared_publication, local_error):
+        super().__init__(message)
+        self.shared_publication = shared_publication
+        self.local_error = local_error
+
+
+def write_volume_settings_preset_to_library(local_store_path, shared_store_path, label, payload, source, schema=None, *,
+                                            publish_alias=True):
+    """Publish a basin to the shared library, then save it into this server's store.
+
+    With the library on, it is the label authority: the library decides under
+    its own lock whether its label follows the new basin (against the local
+    store's label where the library has none yet), and the local store follows
+    that decision, holding also where its own label points at a basin this
+    branch cannot hold. If the library cannot be written, the local store
+    decides alone and the receipt says the basin did not reach the library.
+    """
+    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    if not isinstance(publish_alias, bool):
+        raise ValueError("publishAlias must be a boolean")
+    if shared_store_path is None:
+        receipt = write_volume_settings_preset(local_store_path, label, payload, source, schema, publish_alias=publish_alias)
+        receipt["sharedPublication"] = {"published": False, "reason": "shared basin library disabled"}
+        return receipt
+    normalized_payload, _projection, content_hash = _prepare_volume_settings_preset_write(payload, schema)
+    preset_id = f"vsp-{content_hash}"
+    effective_label = str(label or "").strip() or "Unnamed preset"
+    local = _volume_settings_store_path(local_store_path)
+    shared = _volume_settings_store_path(shared_store_path)
+    # The local label is a precondition of the local write: a damaged one fails
+    # the save here, before anything reaches the library.
+    local_current = (
+        _volume_settings_alias_document(local, _volume_settings_alias_for_label(local, effective_label))
+        if publish_alias else None
+    )
+    document = {
+        "identity": VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY,
+        "presetId": preset_id,
+        "contentHash": f"sha256:{content_hash}",
+        "schemaIdentity": schema["identity"],
+        "controlCount": schema["controlCount"],
+        "initialLabel": effective_label,
+        "writtenAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "source": dict(source or {}),
+        "preset": normalized_payload,
+    }
+    try:
+        publication = publish_volume_settings_preset(
+            shared, document, effective_label, source, schema,
+            fallback_hold=_volume_settings_label_hold(local, local_current, preset_id, normalized_payload, schema),
+            publish_alias=publish_alias,
+        )
+        library_hold = publication.get("aliasHeld")
+    except (OSError, ValueError) as error:
+        # The local save stands; the receipt says the basin did not reach the library.
+        publication = {"published": False, "storePath": str(shared), "error": str(error)}
+        library_hold = _NO_LIBRARY_DECISION
+    try:
+        receipt = write_volume_settings_preset(
+            local, label, payload, source, schema, library_hold=library_hold, publish_alias=publish_alias
+        )
+    except (OSError, ValueError) as error:
+        if not publication.get("published"):
+            raise
+        named = f' under "{publication["label"]}"' if publication.get("aliasMoved") else ""
+        raise VolumeSettingsPartialSave(
+            f"basin {preset_id} is in the shared library at {publication['storePath']}{named}; "
+            f"not saved locally: {error}",
+            publication, str(error),
+        ) from error
+    receipt["sharedPublication"] = publication
+    return receipt
+
+
+def volume_settings_store_layer_receipt():
+    """The stores this server reads basins from, for error bodies."""
+    return [
+        {"role": role, "storePath": str(path)}
+        for role, path in volume_settings_store_layers(VOLUME_SETTINGS_STORE, SHARED_BASIN_STORE)
+    ]
+
+
+def _volume_settings_authority_order(layers):
+    """Layers in label-authority order: the shared library first, then the rest as given."""
+    return sorted(layers, key=lambda layer: 0 if layer[0] == "shared" else 1)
+
+
+def read_volume_settings_preset_layered(layers, preset_ref, schema=None):
+    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    requested = str(preset_ref or "").strip()
+    order = list(layers)
+    if requested and not requested.startswith("vsp-"):
+        alias = _volume_settings_alias_slug(requested)
+        if alias != requested:
+            raise ValueError("volume settings preset alias is invalid")
+        # The library is the label authority; a local label counts only where
+        # the library has none.
+        order = [
+            next(((role, store) for role, store in _volume_settings_authority_order(layers)
+                  if _volume_settings_alias_document(store, alias) is not None), None)
+        ]
+        order = [layer for layer in order if layer is not None]
+    for role, store in order:
+        try:
+            document = read_volume_settings_preset(store, requested, schema)
+        except FileNotFoundError:
+            continue
+        return {**document, "storeRole": role}
+    raise FileNotFoundError(f"volume settings preset not found in any basin store: {requested}")
+
+
+def list_volume_settings_presets_layered(layers, schema=None):
+    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    listings = [(role, list_volume_settings_presets(store, schema)) for role, store in layers]
+    # A label's current version is its pointer in the authority store (the
+    # library, else the local store) whether or not it loads here: an
+    # unreadable current version is reported, never replaced by another
+    # store's readable one presented as current.
+    current = {}
+    displaced = []
+    for role, listing in sorted(listings, key=lambda item: 0 if item[0] == "shared" else 1):
+        located = {"storeRole": role, "storePath": listing["storePath"]}
+        pointers = [{**entry, **located, "available": True} for entry in listing["entries"]]
+        pointers += [{**entry, **located, "available": False} for entry in listing["unavailableEntries"]
+                     if entry.get("version") != "earlier"]
+        for entry in pointers:
+            existing = current.get(entry["alias"])
+            if existing is None:
+                current[entry["alias"]] = entry
+            elif existing["presetId"] != entry["presetId"]:
+                displaced.append(entry)
+    current_keys = {(alias, entry["presetId"]) for alias, entry in current.items()}
+    earlier = {}
+    unavailable = {}
+    for entry in current.values():
+        if not entry["available"]:
+            unavailable[(entry["alias"], entry["presetId"])] = entry
+    for entry in displaced:
+        key = (entry["alias"], entry["presetId"])
+        if key in current_keys:
+            continue
+        if entry["available"]:
+            earlier.setdefault(key, {
+                "alias": entry["alias"], "label": entry["label"], "presetId": entry["presetId"],
+                "contentHash": entry["contentHash"], "publishedAt": entry.get("updatedAt"), "source": entry.get("source") or {},
+                "reason": "other-store-label", "storeRole": entry["storeRole"], "storePath": entry["storePath"],
+                "carriedControls": entry.get("carriedControls") or [],
+                "unsupportedValuesDefaulted": entry.get("unsupportedValuesDefaulted") or [],
+            })
+        else:
+            unavailable.setdefault(key, {**entry, "version": "other-store"})
+    for role, listing in listings:
+        for entry in listing.get("earlierVersions") or []:
+            key = (entry["alias"], entry["presetId"])
+            if key not in current_keys:
+                earlier.setdefault(key, {**entry, "storeRole": role, "storePath": listing["storePath"]})
+        for entry in listing["unavailableEntries"]:
+            key = (entry["alias"], entry["presetId"])
+            if entry.get("version") == "earlier" and key not in current_keys and key not in earlier:
+                unavailable.setdefault(key, {**entry, "storeRole": role, "storePath": listing["storePath"]})
+    ordering = lambda entry: (
+        _volume_settings_timestamp(entry.get("updatedAt")) or _volume_settings_timestamp(entry.get("publishedAt")), entry["alias"]
+    )
+    strip = lambda entry: {key: value for key, value in entry.items() if key != "available"}
+    return {
+        **listings[0][1],
+        "stores": [{"role": role, "storePath": listing["storePath"]} for role, listing in listings],
+        "entries": sorted((strip(entry) for entry in current.values() if entry["available"]), key=ordering, reverse=True),
+        "earlierVersions": sorted(earlier.values(), key=ordering, reverse=True),
+        "unavailableEntries": sorted((strip(entry) for entry in unavailable.values()), key=ordering, reverse=True),
+        "invalidAliases": [
+            {**entry, "storeRole": role} for role, listing in listings for entry in listing.get("invalidAliases") or []
+        ],
+        "invalidHistoryRows": [
+            {**entry, "storeRole": role} for role, listing in listings for entry in listing.get("invalidHistoryRows") or []
+        ],
+    }
+
+
+def import_volume_settings_stores(shared_store_path, store_paths, schema=None):
+    """Additively import existing basin stores into the shared library.
+
+    Every artifact's content hash is verified before it is accepted; labels are
+    merged through the append-only history, and a label only moves forward.
+    """
+    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    shared = _volume_settings_store_path(shared_store_path)
+    report = {
+        "identity": "kaminos-volume-settings-store-import-receipt-v1",
+        "sharedStorePath": str(shared),
+        "sourceStores": [],
+        "presetsImported": 0,
+        "presetsAlreadyPresent": 0,
+        "aliasesMoved": 0,
+        "aliasesHeld": 0,
+        "aliasesKeptLive": 0,
+        "aliasHistoryRowsAppended": 0,
+        "skipped": [],
+    }
+    with _volume_settings_store_lock(shared):
+        for store_path in store_paths:
+            source_store = _volume_settings_store_path(store_path)
+            report["sourceStores"].append(str(source_store))
+            if source_store == shared:
+                continue
+            for preset_path in sorted((source_store / "presets").glob("vsp-*.json")):
+                try:
+                    document = _read_json_object(preset_path, "artifact")
+                    if document.get("presetId") != preset_path.stem:
+                        raise ValueError("volume settings preset artifact identity mismatch")
+                    preset_id = _verify_volume_settings_artifact(document, schema)
+                except (OSError, ValueError) as error:
+                    reason = "content-hash-mismatch" if "content hash" in str(error) else "invalid-artifact"
+                    report["skipped"].append({"path": str(preset_path), "reason": reason, "error": str(error)})
+                    continue
+                target = shared / "presets" / preset_path.name
+                if _atomic_create_json(target, document):
+                    report["presetsImported"] += 1
+                elif _read_json_object(target, "artifact").get("contentHash") == document["contentHash"]:
+                    report["presetsAlreadyPresent"] += 1
+                else:
+                    report["skipped"].append({"path": str(preset_path), "reason": "content-identity-collision"})
+            for alias_path in sorted((source_store / "aliases").glob("*.json")):
+                try:
+                    alias_document = _volume_settings_alias_document(source_store, alias_path.stem)
+                    label = alias_document.get("label")
+                    preset_id = alias_document.get("presetId")
+                    if not isinstance(label, str) or not label.strip() or not isinstance(preset_id, str):
+                        raise ValueError("volume settings preset alias is invalid")
+                    target = shared / "presets" / f"{preset_id}.json"
+                    if not target.exists():
+                        raise ValueError(f"volume settings preset alias target was not imported: {preset_id}")
+                    result = _publish_volume_settings_artifact_locked(
+                        shared,
+                        _read_json_object(target, "artifact"),
+                        label,
+                        alias_document.get("updatedAt") or "",
+                        {**(alias_document.get("source") or {}), "importedFrom": str(source_store)},
+                        schema,
+                        move_alias_only_forward=True,
+                    )
+                except (OSError, ValueError) as error:
+                    report["skipped"].append({"path": str(alias_path), "reason": "invalid-alias", "error": str(error)})
+                    continue
+                report["aliasesMoved"] += int(result["aliasMoved"])
+                report["aliasesHeld"] += int(result["aliasHeld"] is not None)
+                report["aliasesKeptLive"] += int(result["aliasKeptLive"])
+                report["aliasHistoryRowsAppended"] += int(result["historyAppended"])
+            history_dir = source_store / "alias-history"
+            for history_path in sorted(history_dir.glob("*.jsonl")) if history_dir.exists() else []:
+                rows, invalid_rows = _scan_volume_settings_alias_history(source_store, history_path.stem)
+                report["skipped"].extend(
+                    {"path": row["path"], "reason": "invalid-history-row", "line": row["line"], "error": row["error"]}
+                    for row in invalid_rows
+                )
+                for row in rows:
+                    label = row.get("label")
+                    preset_id = row.get("presetId")
+                    if not isinstance(label, str) or not label.strip() or not isinstance(preset_id, str):
+                        continue
+                    if not (shared / "presets" / f"{preset_id}.json").exists():
+                        report["skipped"].append({"path": str(history_path), "reason": "history-target-not-imported", "presetId": preset_id})
+                        continue
+                    alias = _volume_settings_alias_for_label(shared, label)
+                    appended = _append_volume_settings_alias_history(shared, alias, {
+                        **row,
+                        "alias": alias,
+                        "source": {**(row.get("source") or {}), "importedFrom": str(source_store)},
+                    })
+                    report["aliasHistoryRowsAppended"] += int(appended)
+        current = set()
+        for alias_path in (shared / "aliases").glob("*.json"):
+            current.add(_read_json_object(alias_path, "alias").get("presetId"))
+        in_history = set()
+        history_dir = shared / "alias-history"
+        for history_path in history_dir.glob("*.jsonl") if history_dir.exists() else []:
+            in_history.update(row.get("presetId") for row in _read_volume_settings_alias_history(shared, history_path.stem))
+        all_presets = {path.stem for path in (shared / "presets").glob("vsp-*.json")}
+        report["presetsWithCurrentLabel"] = len(all_presets & current)
+        report["presetsOnlyInLabelHistory"] = len((all_presets & in_history) - current)
+        report["presetsWithoutLabel"] = len(all_presets - current - in_history)
+    return report
 
 
 def volume_settings_server_source():
@@ -1242,7 +2015,7 @@ def write_volume_basin_promotion_package(request):
         **volume_settings_server_source(),
         "promotionRoot": str(Path(promotion_root).expanduser()),
     }
-    preset_receipt = write_volume_settings_preset(VOLUME_SETTINGS_STORE, label, preset, source)
+    preset_receipt = write_volume_settings_preset_to_library(VOLUME_SETTINGS_STORE, SHARED_BASIN_STORE, label, preset, source)
     preset_path = VOLUME_SETTINGS_STORE / "presets" / f"{preset_receipt['effective']['presetId']}.json"
     if not preset_path.exists():
         raise FileNotFoundError(f"settings preset artifact was not written: {preset_path}")
@@ -1279,8 +2052,27 @@ def write_volume_basin_promotion_package(request):
         "ok": True,
         "identity": "kaminos.volume.basin-promotion-write-receipt.v1",
         "settingsPreset": preset_receipt["effective"],
+        "sharedPublication": preset_receipt["sharedPublication"],
         "promotion": promotion_receipt,
     }
+
+
+def split_shared_basin_store_arguments(argv, default):
+    """Take the shared-library flags out of argv; the rest goes to parse_server_arguments."""
+    remaining = []
+    shared = default
+    arguments = list(argv)
+    while arguments:
+        argument = arguments.pop(0)
+        if argument == "--no-shared-basin-store":
+            shared = None
+        elif argument == "--shared-basin-store":
+            if not arguments:
+                raise ValueError("--shared-basin-store requires a path")
+            shared = _shared_basin_store_path(arguments.pop(0))
+        else:
+            remaining.append(argument)
+    return remaining, shared
 
 
 def parse_server_arguments(argv):
@@ -1432,6 +2224,8 @@ def runtime_config():
         } if SAM3_PACKET_ROOT else None,
         "volumeBasinSessionStore": str(VOLUME_BASIN_SESSION_STORE),
         "volumeCockpitLayoutStore": str(VOLUME_COCKPIT_LAYOUT_STORE),
+        "volumeSettingsStore": str(VOLUME_SETTINGS_STORE),
+        "sharedBasinStore": str(SHARED_BASIN_STORE) if SHARED_BASIN_STORE else None,
         "source": volume_settings_server_source(),
     }
 
@@ -2435,23 +3229,29 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_volume_settings_presets_get(self):
         try:
-            self.send_json(list_volume_settings_presets(VOLUME_SETTINGS_STORE))
+            self.send_json(list_volume_settings_presets_layered(
+                volume_settings_store_layers(VOLUME_SETTINGS_STORE, SHARED_BASIN_STORE)
+            ))
         except (OSError, ValueError, json.JSONDecodeError) as error:
             self.send_json({
                 "error": str(error),
                 "storePath": str(VOLUME_SETTINGS_STORE),
+                "stores": volume_settings_store_layer_receipt(),
                 "failurePhase": "shared-preset-index",
             }, 500)
 
     def handle_volume_settings_preset_get(self, query):
         preset_ref = (query.get("id") or query.get("preset") or [""])[0]
         try:
-            document = read_volume_settings_preset(VOLUME_SETTINGS_STORE, preset_ref)
+            document = read_volume_settings_preset_layered(
+                volume_settings_store_layers(VOLUME_SETTINGS_STORE, SHARED_BASIN_STORE), preset_ref
+            )
         except FileNotFoundError as error:
             self.send_json({
                 "error": str(error),
                 "requestedPresetRef": preset_ref,
                 "storePath": str(VOLUME_SETTINGS_STORE),
+                "stores": volume_settings_store_layer_receipt(),
                 "failurePhase": "shared-preset-read",
             }, 404)
             return
@@ -2460,6 +3260,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 "error": str(error),
                 "requestedPresetRef": preset_ref,
                 "storePath": str(VOLUME_SETTINGS_STORE),
+                "stores": volume_settings_store_layer_receipt(),
                 "failurePhase": "shared-preset-read",
             }, 400)
             return
@@ -2486,18 +3287,33 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "settings preset payload must be a JSON object"}, 400)
             return
         try:
-            receipt = write_volume_settings_preset(
+            receipt = write_volume_settings_preset_to_library(
                 VOLUME_SETTINGS_STORE,
+                SHARED_BASIN_STORE,
                 request["label"],
                 request["preset"],
                 volume_settings_server_source(),
                 publish_alias=request.get("publishAlias", True),
             )
+        except VolumeSettingsPartialSave as error:
+            # The library has the basin; this server's store does not. Say both.
+            self.send_json({
+                "error": str(error),
+                "partial": True,
+                "localError": error.local_error,
+                "sharedPublication": error.shared_publication,
+                "requestedLabel": request.get("label"),
+                "storePath": str(VOLUME_SETTINGS_STORE),
+                "stores": volume_settings_store_layer_receipt(),
+                "failurePhase": "local-preset-write",
+            }, 500)
+            return
         except (OSError, ValueError, json.JSONDecodeError) as error:
             self.send_json({
                 "error": str(error),
                 "requestedLabel": request.get("label"),
                 "storePath": str(VOLUME_SETTINGS_STORE),
+                "stores": volume_settings_store_layer_receipt(),
                 "failurePhase": "shared-preset-write",
             }, 400)
             return
@@ -3373,7 +4189,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     try:
-        PORT, VOLUME_SETTINGS_STORE, VOLUME_BASIN_SESSION_STORE, VOLUME_COCKPIT_LAYOUT_STORE = parse_server_arguments(sys.argv[1:])
+        if SHARED_BASIN_STORE_ERROR and "--no-shared-basin-store" not in sys.argv and "--shared-basin-store" not in sys.argv:
+            raise ValueError(SHARED_BASIN_STORE_ERROR)
+        server_arguments, SHARED_BASIN_STORE = split_shared_basin_store_arguments(sys.argv[1:], SHARED_BASIN_STORE_DEFAULT)
+        PORT, VOLUME_SETTINGS_STORE, VOLUME_BASIN_SESSION_STORE, VOLUME_COCKPIT_LAYOUT_STORE = parse_server_arguments(server_arguments)
     except ValueError as error:
         print(f"serve.py: {error}", file=sys.stderr)
         raise SystemExit(2)
@@ -3386,6 +4205,7 @@ if __name__ == "__main__":
     print(f"  Splat inbox: {BROWSE_ROOTS['splat-inbox']}")
     print(f"  Production splats: {BROWSE_ROOTS['splat-production']}")
     print(f"  Volume settings store: {VOLUME_SETTINGS_STORE}")
+    print(f"  Shared basin library: {SHARED_BASIN_STORE or 'disabled'}")
     print(f"  Volume basin session store: {VOLUME_BASIN_SESSION_STORE}")
     print(f"  Volume cockpit layout store: {VOLUME_COCKPIT_LAYOUT_STORE}")
     server = http.server.ThreadingHTTPServer(("", PORT), KaminosHandler)

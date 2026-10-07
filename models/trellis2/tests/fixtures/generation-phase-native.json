@@ -1,0 +1,11 @@
+{
+  "schema": "trellis2.generation-kernel-observation.v1",
+  "sourceCommit": "740f1ed89cd40ab84917932af75f87b48b915e84",
+  "browserResultSha256": "f1daffc2b2990dfdc7ef9e749c3822c67b75de6bd1a5bed3e45f9416cc0ed12c",
+  "backend": {"vendor": "apple", "architecture": "metal-3", "isFallbackAdapter": false},
+  "sessionId": "image-generation-602b40d5-f6dd-4513-a1b7-a2f5895b914f",
+  "phase": "dinov3-serving-patch-prefix-assembly",
+  "effectiveRoute": "trellis2.image-generation.webgpu.v0",
+  "kernel": {"stage": "dinov3-serving-patch-embedding", "dispatch": [16384], "point": "before-native-kernel"},
+  "claim": "Observed attempted kernel arguments before journal rejection; native kernel did not execute."
+}

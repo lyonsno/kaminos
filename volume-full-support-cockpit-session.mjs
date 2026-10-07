@@ -123,6 +123,11 @@ writeFileSync(receiptPath, `${JSON.stringify(routeReceipt, null, 2)}\n`);
 const serverArgs = [join(repoRoot, 'serve.py'), String(port)];
 const settingsStore = args.get('--volume-settings-store');
 if (settingsStore) serverArgs.push('--volume-settings-store', resolve(String(settingsStore)));
+// A harness given its own settings store stays out of the operator's shared
+// basin library unless it names one.
+const sharedBasinStore = args.get('--shared-basin-store');
+if (sharedBasinStore) serverArgs.push('--shared-basin-store', resolve(String(sharedBasinStore)));
+else if (settingsStore) serverArgs.push('--no-shared-basin-store');
 const server = spawn('python3', serverArgs, { cwd: repoRoot, stdio: 'inherit' });
 server.once('exit', code => {
   if (code !== 0) process.exitCode = code ?? 1;

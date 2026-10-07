@@ -2360,13 +2360,33 @@ export function resolveVelocityStaggeringConfig(controls = {}) {
   const requestedMode = String(controls.velocityStaggering ?? 'collocated');
   const pressure = resolvePressureSolverConfig(controls).effective;
   const requested = { mode: requestedMode, pressureSolver: pressure.solver };
-  const off = reason => ({ identity: VELOCITY_STAGGERING_IDENTITY, requested, effective: { mode: 'collocated', admitted: false, reason } });
+  const off = reason => ({ identity: VELOCITY_STAGGERING_IDENTITY, requested, effective: { mode: 'collocated', admitted: false, reason, faceForces: false } });
   if (requestedMode !== 'staggered') return off('velocity-staggering-not-requested');
   if (pressure.solver !== PRESSURE_SOLVER_CONVERGED) return off('velocity-staggering-requires-converged-pressure-solver');
-  return { identity: VELOCITY_STAGGERING_IDENTITY, requested, effective: { mode: 'staggered', admitted: true, reason: null } };
+  // faceForces: the step's force increment is averaged onto the faces by a
+  // pass after the main kernel (report section 29), part of the staggered reading.
+  return { identity: VELOCITY_STAGGERING_IDENTITY, requested, effective: { mode: 'staggered', admitted: true, reason: null, faceForces: true } };
+}
+// CPU model of the staggered fold and the face pass (the two kernels' arithmetic,
+// for the contracts; not the shader). `localIncrement` is everything that is not
+// a centred additive force (velocity-derived forces, velocity deltas, damping
+// effects); `centredIncrement` is the centred additive forces × dt;
+// `upperCentredIncrement[axis]` is the +1 neighbour's increment along that axis;
+// `upperFaceOpen[axis]` is false at an outer wall or a solid neighbour (a closed
+// face carries no force); the open top is open with this cell's own value as the
+// neighbour. A solid cell stores and writes zero.
+export function faceForceFoldModel({ solid = false, transported, localIncrement, centredIncrement, upperCentredIncrement, upperFaceOpen = [true, true, true], bound }) {
+  if (solid) return { stored: [0, 0, 0], written: [0, 0, 0], completed: [0, 0, 0] };
+  const stored = transported.map((v, i) => v + localIncrement[i]);
+  const written = centredIncrement.slice();
+  // A closed face carries no force; an open face averages with the upper
+  // neighbour (the open top passes this cell's own value as that neighbour).
+  const faceForce = written.map((f, axis) => (upperFaceOpen[axis] ? 0.5 * (f + upperCentredIncrement[axis][axis]) : 0));
+  return { stored, written, completed: bound(stored.map((v, i) => v + faceForce[i])) };
 }
 export function velocityStaggeringUniformValues(config) {
-  return [config?.effective?.admitted ? 1 : 0, 0, 0, 0];
+  const admitted = config?.effective?.admitted ? 1 : 0;
+  return [admitted, config?.effective?.faceForces ? admitted : 0, 0, 0];
 }
 export function heatReleaseUniformValues(config) {
   const e = config?.effective;
@@ -3269,6 +3289,22 @@ struct NonRidgeOpticalCaptureRow {
 // written by the main kernel and read by the pressure kernels as the heat
 // release expansion target. One read-write storage texture, no usage conflict.
 @group(0) @binding(19) var burnRate: texture_storage_3d<r32float, read_write>;
+// The step's force increment per cell, written by the main kernel under the
+// staggered reading and averaged onto the faces by csFaceForces. One r32float
+// 3-D storage texture with the three components stacked along depth
+// (z + component x GRID): compute is at its storage-buffer limit.
+// Binding 22: 20/21 are reserved for the joined outer grid's optical and solid textures (Sexy Fireman).
+@group(0) @binding(22) var forceDelta: texture_storage_3d<r32float, read_write>;
+
+fn forceDeltaStore(c: vec3<i32>, f: vec3<f32>) {
+  textureStore(forceDelta, c, vec4<f32>(f.x, 0.0, 0.0, 0.0));
+  textureStore(forceDelta, c + vec3<i32>(0, 0, i32(GRID)), vec4<f32>(f.y, 0.0, 0.0, 0.0));
+  textureStore(forceDelta, c + vec3<i32>(0, 0, 2 * i32(GRID)), vec4<f32>(f.z, 0.0, 0.0, 0.0));
+}
+
+fn forceDeltaLoad(c: vec3<i32>, component: i32) -> f32 {
+  return textureLoad(forceDelta, c + vec3<i32>(0, 0, component * i32(GRID))).x;
+}
 // (It holds gain x rate, the expansion target; the pressure kernels bind the
 // fluid-front read layout, which carries no uniform.)
 @group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
@@ -4180,6 +4216,46 @@ fn divergenceCompactAtCell(c: vec3<i32>) -> f32 {
 
 fn velocityStaggered() -> bool {
   return u.velocity_staggering.x > 0.5;
+}
+
+fn faceForcesOn() -> bool {
+  return u.velocity_staggering.y > 0.5;
+}
+
+// Face-force pass: forces are evaluated at cell centres, but the stored
+// component is the upper face of its axis, so each component takes the mean of
+// this cell's and the upper neighbour's increment (the last cell keeps its own:
+// its upper face is a wall or the open top). The velocity bound applies after.
+@compute @workgroup_size(4, 4, 4)
+fn csFaceForces(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
+    return;
+  }
+  let idx = index3(gid);
+  let base = idx * SLOTS_PER_CELL;
+  if (sceneSolidAt(vec3<i32>(gid))) { return; }
+  let c = vec3<i32>(gid);
+  let here = vec3<f32>(forceDeltaLoad(c, 0), forceDeltaLoad(c, 1), forceDeltaLoad(c, 2));
+  // A closed face (outer wall, solid neighbour) carries no force at all: a
+  // normal increment there would enter the coupled magnitude bound and shave
+  // the tangential components before the projection zeroes it. The open top is
+  // the exception, as in compactFaceVelocity: the last row's upper y face is
+  // open and takes this cell's own value.
+  let topRowX = gid.x + 1u >= GRID;
+  let topRowZ = gid.z + 1u >= GRID;
+  let topRow = gid.y + 1u >= GRID_Y;
+  let openX = sceneFaceOpen(c, 0u) && gid.x + 1u < GRID;
+  let openZ = sceneFaceOpen(c, 2u) && gid.z + 1u < GRID;
+  let openY = select(sceneFaceOpen(c, 1u), pressureSolverOpenTop(), topRow);
+  let upX = select(0.0, forceDeltaLoad(c + vec3<i32>(1, 0, 0), 0), openX && !topRowX);
+  let upY = select(here.y, forceDeltaLoad(c + vec3<i32>(0, 1, 0), 1), openY && !topRow);
+  let upZ = select(0.0, forceDeltaLoad(c + vec3<i32>(0, 0, 1), 2), openZ && !topRowZ);
+  let faceForce = vec3<f32>(
+    select(0.0, 0.5 * (here.x + upX), openX),
+    select(0.0, 0.5 * (here.y + upY), openY),
+    select(0.0, 0.5 * (here.z + upZ), openZ));
+  let stored = fluidDst[base];
+  fluidDst[base] = vec4<f32>(boundVelocity(stored.xyz + faceForce), stored.w);
 }
 
 // The velocity at a cell centre for the characteristic. Collocated: the stored
@@ -5641,6 +5717,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let cell = vec3<f32>(gid) + vec3<f32>(0.5);
   let cellI = vec3<i32>(gid);
   if (sceneSolidAt(cellI)) {
+    forceDeltaStore(cellI, vec3<f32>(0.0));
     quenchDst[idx] = 0u;
     frontDst[idx] = 0.0;
     for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) { fluidDst[base + slot] = vec4<f32>(0.0); }
@@ -5806,6 +5883,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   let velTransported = advected.xyz * transportVelocityDamping();
   var vel = velTransported;
+  // Centred additive forces (functions of scalars, position and controls):
+  // under the staggered reading these are averaged onto the faces by
+  // csFaceForces; everything else — velocity-derived forces, velocity deltas,
+  // the authored damping — stays on the stored value (report section 29).
+  var centredForce = vec3<f32>(0.0);
   var smoke = material.x * stepRate(0.990);
   var heat = material.y * stepRate(0.982);
   var fuel = material.z * stepRate(0.990);
@@ -6430,6 +6512,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let projectionCorrection = vec3<f32>(0.0);
   let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
   vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain * artisticSwirl;
+  centredForce = centredForce + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain * artisticSwirl;
   vel = vel + confinement;
   vel = vel + oracleActivityCurl;
   vel = vel + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
@@ -6439,10 +6522,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + shredForce;
   vel = vel + fineBreakup;
   vel = vel + heatExpansion;
+  centredForce = centredForce + heatExpansion;
   vel = vel + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
+  centredForce = centredForce + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
   vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireThermalRiseDirection * mix(1.0, canonicalBuoyancyLift, canonicalPlumeScene);
+  centredForce = centredForce + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireThermalRiseDirection * mix(1.0, canonicalBuoyancyLift, canonicalPlumeScene);
   let canonicalLiftGate = canonicalPlumeScene * (1.0 - smoothstep(0.52, 0.94, p.y));
   vel.y = vel.y + canonicalLiftGate * (source * (0.070 + speed * 0.012) * canonicalSourceInjection + smoke * (0.010 + speed * 0.002) * canonicalBuoyancyLift) * joinedVelocityScale();
+  centredForce.y = centredForce.y + canonicalLiftGate * (source * (0.070 + speed * 0.012) * canonicalSourceInjection + smoke * (0.010 + speed * 0.002) * canonicalBuoyancyLift) * joinedVelocityScale();
   let canonicalRadial = max(length(p.xz), 0.025);
   let canonicalEntrainmentBand = canonicalPlumeScene
     * smoothstep(-0.64, -0.28, p.y)
@@ -6469,6 +6556,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * canonicalRadialSpreadBand
     * (0.018 + speed * 0.004);
   vel = vel + canonicalRadialSpread;
+  centredForce = centredForce + canonicalRadialSpread;
   let bonfireLiftImpulse = bonfireEntrainedLift(smoke, heat, flame, source, bonfireCombustion, plumeRiseScale, speed);
   let bonfireTopologyLiftImpulse = bonfireCombustion.w * plumeRiseScale * (0.014 + speed * 0.0048 + fireLickAmount * 0.0012);
   let bonfireBroadSupportLiftImpulse = bonfireBroadSupportSmokeSource * plumeRiseScale * (0.012 + speed * 0.0028);
@@ -6479,6 +6567,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   ) * bonfireFrontLiftGate * plumeRiseScale * (0.011 + speed * 0.0026 + curl * 0.0012);
   let columnLiftImpulse = (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale;
   vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfireTopologyLiftImpulse + bonfireBroadSupportLiftImpulse + bonfireLiftedSootBuoyancy, bonfireScene) * bonfireThermalRiseDirection * joinedVelocityScale();
+  centredForce.y = centredForce.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfireTopologyLiftImpulse + bonfireBroadSupportLiftImpulse + bonfireLiftedSootBuoyancy, bonfireScene) * bonfireThermalRiseDirection * joinedVelocityScale();
   if (transportedLateralExcitationEnabled > 0.5) {
     let transportedLateralDelta = prev.xz - advected.xz;
     let transportedLateralGain = clamp((smoke + heat) * 0.16 + curl * 0.022, 0.0, 0.24);
@@ -6514,14 +6603,27 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * (0.076 + speed * 0.0120);
   vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireInstabilityProbe * 1.6;
   vel = vel + bonfireUpperDepinchOutflow * bonfireDepinchAblation;
+  centredForce = centredForce + bonfireUpperDepinchOutflow * bonfireDepinchAblation;
   vel = vel + bonfireNonWindCenteringForce;
+  centredForce = centredForce + bonfireNonWindCenteringForce;
   let windMaterialCoupling = clamp(smoke * 0.54 + heat * 0.30 + source * 0.34 + flame * 0.18, 0.0, 1.6);
   let bonfireWindResponseGain = mix(1.0, 4.0, bonfireScene);
   vel = vel + windDirection * windStrength * windHeightRamp * windMaterialCoupling * bonfireWindResponseGain * (0.020 + speed * 0.004) * joinedVelocityScale();
+  centredForce = centredForce + windDirection * windStrength * windHeightRamp * windMaterialCoupling * bonfireWindResponseGain * (0.020 + speed * 0.004) * joinedVelocityScale();
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
   // Uniform time step: every per-step velocity increment above scales with dt
   // (1.0 under the legacy mode).
-  vel = velTransported + (vel - velTransported) * timeStep;
+  let forceIncrement = (vel - velTransported) * timeStep;
+  if (faceForcesOn()) {
+    // The centred additive forces go to the face-force pass; everything else
+    // (velocity-derived forces, velocity deltas, the damping) stays here. The
+    // stored value is left unbounded: the pass bounds once after its increment.
+    let centredIncrement = centredForce * timeStep;
+    forceDeltaStore(cellI, centredIncrement);
+    vel = velTransported + forceIncrement - centredIncrement;
+  } else {
+    vel = velTransported + forceIncrement;
+  }
   let smokeFromHeat = heatToSmokeConversion(heat, fuel, p.y);
   let columnSmokeBirth = source * 0.46 + emberRing * 0.13;
   let tallPlumeDirectSmokeBirthGain = mix(1.0, 0.18, tallPlumeScene);
@@ -7003,7 +7105,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // increment law's line, so it takes the rate law directly.
   vel = vel * stepRate(mix(0.55, 1.0, wallFade));
   vel.y = mix(max(vel.y, -0.015), vel.y, bonfireScene);
-  fluidDst[base] = vec4<f32>(boundVelocity(vel), density);
+  fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), density);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
   fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
   fluidDst[base + 3u] = vec4<f32>(clamp(microSmoke, 0.0, 1.8), clamp(interfaceShred, 0.0, 1.8), clamp(fireLick, 0.0, 1.8), clamp(emberFleck, 0.0, 1.4));
@@ -7377,10 +7479,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     if (OUTER_SMOKE && !outerInsideNear(p)) {
       var ds = min(outerWidth*.5,max(0.0001,endT-t));
       if(t<nearHit.x && t+ds>nearHit.x){ds=nearHit.x-t+0.00001;}
-      var r:FlowReconstructionSample;r.material=sampleOuterSmoke(p);
-      let medium=emissiveMaterial(r,0.0,1.0-effectiveRaymarchSmokeSuppressed);
+      let medium=passiveEmissiveMaterial(sampleOuterSmoke(p),1.0-effectiveRaymarchSmokeSuppressed,selectiveRaymarchFireAuthority);
       let sigma=medium.absorption+medium.scattering;
-      color+=trans*medium.scattering*joinedSmokeIncidentAt(p,sigma)*emissionIntegral(sigma,ds);
+      color+=trans*(medium.emission+medium.scattering*joinedSmokeIncidentAt(p,sigma))*emissionIntegral(sigma,ds);
       trans*=exp(-sigma*ds);t+=ds;continue;
     }
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
@@ -7402,7 +7503,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     } else {
       reconstructed = sampleWorldFlowReconstructionRaw(p);
     }
-    if(OUTER_SMOKE){
+    if(OUTER_SMOKE && !(u.physical_fire.x > 1.5 && u.emissive_material.w > 0.5)){
       let w=outerSmokeBlend(p,min(1.0,max(.25,2.0*outerWidth)));
       reconstructed.material.x=mix(reconstructed.material.x,sampleOuterSmoke(p).x,w);
       reconstructed.material.w*=1.0-w;reconstructed.microLayer.x*=1.0-w;
@@ -8301,7 +8402,14 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       // Boundary Fire has its own material support; shellAmount belongs to
       // the separate topology-shell renderer (many valid basins set it to 0).
       let coverage = boundaryMaterialSupport * selectiveRaymarchFireAuthority;
-      let medium = emissiveMaterial(reconstructed, coverage, visibleSmokeAuthority);
+      var medium = emissiveMaterial(reconstructed, coverage, visibleSmokeAuthority);
+      if (OUTER_SMOKE && u.emissive_material.w > 0.5) {
+        // Blend complete per-length coefficients, not smoke alone. The inner
+        // endpoint is the unchanged authored fine material; the boundary
+        // endpoint is exactly the passive material sampled by the far branch.
+        let w = outerSmokeBlend(p,min(1.0,max(.25,2.0*outerWidth)));
+        medium = blendEmissiveMaterial(medium, passiveEmissiveMaterial(sampleOuterSmoke(p),visibleSmokeAuthority,selectiveRaymarchFireAuthority), w);
+      }
       let sigma = medium.absorption + medium.scattering;
       let emission = medium.emission + medium.scattering * joinedSmokeIncidentAt(p,sigma);
       standardRadianceContribution = emission * emissionIntegral(sigma, localDt);
@@ -10866,6 +10974,7 @@ export function createKaminosVolumePrototype({
   let browserResidualModelUrl = '';
   let browserResidualLoadPromise = null;
   let computePipeline = null;
+  let faceForcesPipeline = null;
   let transportPredictPipeline = null;
   let transportPredictBindGroupLayout = null;
   let sceneSolidTexture = null;
@@ -11117,6 +11226,7 @@ export function createKaminosVolumePrototype({
   let inletPerturbationField = null;
   // Fuel burn rate per cell (heat-release expansion source), rebuilt with the grid.
   let burnRateTexture = null;
+  let forceDeltaTexture = null;
   const inletPuffProcess = new StochasticSignalSet(2, 1);
   const windGustProcess = new WindGustProcess(1);
   let inflowCoverageSignature = '';
@@ -11706,6 +11816,8 @@ export function createKaminosVolumePrototype({
     inletPerturbationField = null;
     burnRateTexture?.destroy();
     burnRateTexture = null;
+    forceDeltaTexture?.destroy();
+    forceDeltaTexture = null;
     for (const buffer of pressureBuffers) buffer.destroy();
     pressureResidualPartialsBuffer?.destroy();
     pressureResidualReadbackBuffer?.destroy();
@@ -11840,6 +11952,7 @@ export function createKaminosVolumePrototype({
         { binding: 17, resource: inflowCoverageTexture.createView() },
         { binding: 18, resource: inflowPerturbationTexture.createView() },
         { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
+        { binding: 22, resource: forceDeltaTexture.createView({ dimension: '3d' }) },
       ],
     });
   }
@@ -12069,6 +12182,7 @@ export function createKaminosVolumePrototype({
       || quenchBuffers.length !== 2
       || !flowKernelDescriptorBuffer
       || !burnRateTexture
+      || !forceDeltaTexture
     ) {
       selectiveHeadLiveBindGroups = null;
       return;
@@ -12902,6 +13016,14 @@ export function createKaminosVolumePrototype({
       usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST,
     });
     device.queue.writeTexture({ texture: burnRateTexture }, new Float32Array(gridSize * gridHeight * gridSize), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize]);
+    forceDeltaTexture = device.createTexture({
+      label: `kaminos force increment ${gridSize}x${gridHeight}x${gridSize}x3`,
+      size: [gridSize, gridHeight, gridSize * 3],
+      dimension: '3d',
+      format: 'r32float',
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    device.queue.writeTexture({ texture: forceDeltaTexture }, new Float32Array(gridSize * gridHeight * gridSize * 3), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize * 3]);
     quenchBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
         label: `kaminos recoverable liquid quench and source state ${gridSize}x${gridHeight}x${gridSize} ${i}`,
@@ -13048,6 +13170,11 @@ export function createKaminosVolumePrototype({
       label: `kaminos first fluid sim compute pipeline ${gridShapeLabel(gridSize)}`,
       layout: transportPipelineLayout,
       compute: { module: shader, entryPoint: 'cs', constants: computePipelineConstants },
+    });
+    faceForcesPipeline = device.createComputePipeline({
+      label: `kaminos face force compute pipeline ${gridShapeLabel(gridSize)}`,
+      layout: transportPipelineLayout,
+      compute: { module: shader, entryPoint: 'csFaceForces', constants: computePipelineConstants },
     });
     transportPredictPipeline = device.createComputePipeline({
       label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor compute pipeline ${gridShapeLabel(gridSize)}`,
@@ -13780,6 +13907,7 @@ export function createKaminosVolumePrototype({
         { binding: 18, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
         // The raymarch fragment entry point reaches divergenceAtCell through the shared module, so the binding must be fragment-visible too (slice-2 lesson at 1e8996ab).
         { binding: 19, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
+        { binding: 22, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -15921,6 +16049,16 @@ export function createKaminosVolumePrototype({
     const workgroupsY = Math.ceil(gridHeight / 4);
     pass.dispatchWorkgroups(workgroups, workgroupsY, workgroups);
     pass.end();
+    if (state.velocityStaggering?.effective?.faceForces && faceForcesPipeline) {
+      // Same bind group as the sim pass: fluidDst was just written, the buffers
+      // have not flipped yet; each cell rewrites only its own velocity.
+      const facePass = encoder.beginComputePass({ label: 'kaminos face force pass' });
+      facePass.setPipeline(faceForcesPipeline);
+      facePass.setBindGroup(0, fluidBindGroup());
+      facePass.setBindGroup(3, transportPredictBindGroup);
+      facePass.dispatchWorkgroups(workgroups, workgroupsY, workgroups);
+      facePass.end();
+    }
     currentFluid = 1 - currentFluid;
     currentFront = 1 - currentFront;
     currentQuench = 1 - currentQuench;
