@@ -91,3 +91,37 @@ test('invalid numerical input fails explicitly',()=>{
  assert.throws(()=>api.evaluateIPBF({...fixture(),positions:[[NaN,0,0]]}),/finite|position/i);
  assert.throws(()=>api.stepIPBF({...fixture(),velocities:[[0,0,0]],iterations:0}),/iteration/i);
 });
+
+test('local Newton update satisfies the assembled linear system',()=>{
+ for(const compliance of [0,.001,.03]){
+  const r=api.evaluateIPBF({...fixture(),compliance});
+  for(let i=0;i<r.updates.length;i++)for(let a=0;a<3;a++){
+   const Hdx=r.hessians[i][a].reduce((sum,h,b)=>sum+h*r.updates[i][b],0);
+   close(Hdx,r.forces[i][a],1e-9);
+  }
+ }
+});
+
+test('Hessian independently matches finite-difference derivatives of every density constraint',()=>{
+ const s=fixture(),r=api.evaluateIPBF(s),epsilon=2e-5;
+ const constraint=(positions,j)=>Math.max(s.masses.reduce((rho,m,k)=>{
+  const offset=positions[j].map((x,a)=>x-positions[k][a]);
+  return rho+m*api.cubicSplineKernel(offset,s.supportRadius).value;
+ },0)/s.restDensity-1,0);
+ const shifted=(i,a,d,b=a,e=0)=>{
+  const x=structuredClone(s.positions);x[i][a]+=d;x[i][b]+=e;return x;
+ };
+ for(let i=0;i<s.positions.length;i++){
+  const H=Array.from({length:3},(_,a)=>Array.from({length:3},(_,b)=>a===b?s.compliance*s.masses[i]/s.dt**2:0));
+  for(let j=0;j<s.positions.length;j++){
+   const C=constraint(s.positions,j);if(C===0)continue;
+   const g=Array.from({length:3},(_,a)=>(constraint(shifted(i,a,epsilon),j)-constraint(shifted(i,a,-epsilon),j))/(2*epsilon));
+   const D=Array.from({length:3},(_,a)=>Array.from({length:3},(_,b)=>
+    a===b?(constraint(shifted(i,a,epsilon),j)-2*C+constraint(shifted(i,a,-epsilon),j))/epsilon**2:
+     (constraint(shifted(i,a,epsilon,b,epsilon),j)-constraint(shifted(i,a,epsilon,b,-epsilon),j)-constraint(shifted(i,a,-epsilon,b,epsilon),j)+constraint(shifted(i,a,-epsilon,b,-epsilon),j))/(4*epsilon**2)
+   ));
+   for(let a=0;a<3;a++)for(let b=0;b<3;b++)H[a][b]+=g[a]*g[b]+(a===b?Math.hypot(...D.map(row=>C*row[a])):0);
+  }
+  for(let a=0;a<3;a++)for(let b=0;b<3;b++)close(r.hessians[i][a][b],H[a][b],4e-5);
+ }
+});
