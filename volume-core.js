@@ -1979,6 +1979,12 @@ export function analyticEmitterInjectionDispatch(descriptor, gridSize, gridHeigh
     // ghost state for the backtrace; nothing is injected in the interior.
     return { ...inactive, family: normalized.family, reason: 'inflow-boundary-has-no-interior-injection' };
   }
+  if (normalized.sourceLaw === IMMERSED_SOURCE_LAW) {
+    // The immersed source enters through the volume core's divergence target,
+    // momentum and scalar entry (report section 31); the analytic injector has
+    // no part in it and must not run: its commit writes the shared components.
+    return { ...inactive, family: normalized.family, reason: 'immersed-source-has-no-interior-injection' };
+  }
   const cellWidth = 2 / grid;
   const edgeMargin = normalized.inletProfile === 'edge-entrained'
     ? normalized.shearWidthCells * cellWidth

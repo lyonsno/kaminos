@@ -74,12 +74,18 @@ export function applyVolumeEmitterFieldWritePolicy({ sourceLaw, previousComponen
 function buildVolumeEmitterFieldCommitWgsl() {
   const legacyWritable = emitterWritableComponentSet('legacy-volume');
   const shallowWritable = emitterWritableComponentSet('shallow-primary');
-  const lines = ['let legacyVolumeSourceLaw = sourceLaw < 0.5;'];
+  // Only the two interior laws (legacy 0, shallow 1) commit anything: the
+  // inflow (2) and immersed (3) laws must leave every component untouched even
+  // if their dispatch ever runs. Shared components used to be written
+  // unconditionally, which let a law with an empty writable set inject.
+  const lines = ['let legacyVolumeSourceLaw = sourceLaw < 0.5;', 'let interiorSourceLaw = sourceLaw < 1.5;'];
   for (let slotIndex = 0; slotIndex < FLUID_COMPONENT_SLOTS.length; slotIndex += 1) {
     const slot = FLUID_COMPONENT_SLOTS[slotIndex];
     const components = FLUID_COMPONENT_NAMES.map((component, componentIndex) => {
       const index = slotIndex * 4 + componentIndex;
-      if (legacyWritable.has(index) && shallowWritable.has(index)) return `${slot.candidate}.${component}`;
+      if (legacyWritable.has(index) && shallowWritable.has(index)) {
+        return `select(${slot.previous}.${component}, ${slot.candidate}.${component}, interiorSourceLaw)`;
+      }
       if (legacyWritable.has(index)) {
         return `select(${slot.previous}.${component}, ${slot.candidate}.${component}, legacyVolumeSourceLaw)`;
       }
