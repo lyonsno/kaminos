@@ -3830,6 +3830,7 @@ import {
   resolveFingerFluidInletCutoffStep,
   resolveFingerFluidParticleCount,
   resolveFingerFluidPressureSolver,
+  resolveFingerFluidPressureOptimizations,
   measureFingerFluidParticleAllocationCapacity,
   evaluateFingerFluidParticleAllocationRequest,
   resolveFingerFluidWaterfallOraclePreset,
@@ -4196,6 +4197,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   if (!['0','1'].includes(ipbfDampingValue)) throw new RangeError('IPBF damping must be 0 or 1');
   const ipbfDamping = ipbfDampingValue === '1';
   const ipbfDampingBeta = Number(params.get('finger_fluid_ipbf_beta') ?? 60);
+  const pressureOptimizations=resolveFingerFluidPressureOptimizations({pressureSolver:effectivePressureSolver,adaptiveDensity:requestedAdaptiveDensity,densityCellRejection:requestedDensityCellRejection,uniformVolumeDensityKernel:requestedUniformVolumeDensityKernel});
   const requestedEnergyDiagnosticsMode = params.get('finger_fluid_energy_diagnostics') ?? 'every_step';
   const requestedWitnessTargetStepValue = params.get('finger_fluid_witness_target_step');
   const requestedWitnessTargetStep = requestedWitnessTargetStepValue === null
@@ -4282,15 +4284,11 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     requestedAdaptiveDensity,
     effectiveAdaptiveDensity: requestedAdaptiveDensity,
     requestedDensityCellRejection,
-    effectiveDensityCellRejection: requestedDensityCellRejection && !requestedAdaptiveDensity,
-    densityCellRejectionBypassReason: requestedDensityCellRejection && requestedAdaptiveDensity
-      ? 'adaptive_density_neighbor_radius'
-      : null,
+    effectiveDensityCellRejection: pressureOptimizations.densityCellRejection,
+    densityCellRejectionBypassReason: pressureOptimizations.densityCellRejectionBypassReason,
     requestedUniformVolumeDensityKernel,
-    effectiveUniformVolumeDensityKernel: requestedUniformVolumeDensityKernel && !requestedAdaptiveDensity,
-    uniformVolumeDensityKernelBypassReason: requestedUniformVolumeDensityKernel && requestedAdaptiveDensity
-      ? 'adaptive_density_has_variable_particle_volumes'
-      : null,
+    effectiveUniformVolumeDensityKernel: pressureOptimizations.uniformVolumeDensityKernel,
+    uniformVolumeDensityKernelBypassReason: pressureOptimizations.uniformVolumeDensityKernelBypassReason,
     requestedParticleCount,
     effectiveParticleCount: resolveFingerFluidParticleCount(requestedParticleCount),
     requestedFixedVolumeReferenceParticleCount,

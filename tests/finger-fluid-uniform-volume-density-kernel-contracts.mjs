@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createWebGPUFingerFluidSolver } from '../finger-fluid-webgpu-core.js';
+import { createWebGPUFingerFluidSolver, resolveFingerFluidPressureOptimizations } from '../finger-fluid-webgpu-core.js';
 
 const shaderSource = readFileSync(new URL('../finger-fluid-webgpu-core.js', import.meta.url), 'utf8');
 const browserSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -28,7 +28,7 @@ function assertDensityProjectionScope(source) {
 
 assert.match(shaderSource, /uniformVolumeDensityKernel = false/, 'direct API keeps specialization separately opt-in');
 assert.match(shaderSource, /uniformVolumeDensityKernel !== 'boolean'/, 'direct API rejects truthy nonboolean requests');
-assert.match(shaderSource, /const safeUniformVolumeDensityKernel = uniformVolumeDensityKernel === true && !safeAdaptiveDensity;/, 'adaptive particles bypass a uniform-volume specialization');
+assert.equal(resolveFingerFluidPressureOptimizations({pressureSolver:'pbf',adaptiveDensity:true,uniformVolumeDensityKernel:true}).uniformVolumeDensityKernel,false,'adaptive particles bypass a uniform-volume specialization');
 assert.match(shaderSource, /densityControl: vec4<f32>/, 'uniform density constants have an explicit GPU parameter block');
 assert.match(shaderSource, /const buffer = new ArrayBuffer\(224\)/, 'CPU upload matches the extended WGSL parameter layout');
 assert.match(shaderSource, /view\.setFloat32\(208, safeUniformParticleVolumeScale, true\)/, 'the active uniform volume scale reaches the shader');
@@ -50,7 +50,7 @@ assert.throws(
 );
 assert.ok(browserSource.includes("params.get('finger_fluid_uniform_volume_density_kernel')"), 'the browser URL has an independent comparison switch');
 assert.ok(browserSource.includes('uniformVolumeDensityKernel: fingerFluidBenchConfig.effectiveUniformVolumeDensityKernel'), 'the browser forwards the effective switch');
-assert.ok(browserSource.includes('effectiveUniformVolumeDensityKernel: requestedUniformVolumeDensityKernel && !requestedAdaptiveDensity'), 'the browser reports adaptive bypass truthfully');
+assert.ok(browserSource.includes('effectiveUniformVolumeDensityKernel: pressureOptimizations.uniformVolumeDensityKernel'), 'the browser reports the pressure-specific effective specialization');
 
 await assert.rejects(
   createWebGPUFingerFluidSolver({ uniformVolumeDensityKernel: 1 }),

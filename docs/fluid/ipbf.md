@@ -74,8 +74,9 @@ rejected. Production grid/boundary/cadence claims require the exercised route.
 Select with `finger_fluid_pressure_solver=ipbf`; `pbf` remains default. Queries
 expose compliance, alternate compliance, damping (0/1), and beta. Runtime
 metadata exposes method, kernel, particle volume, damping and boundary model.
-The state buffer is96 bytes/particle; combined layout requires11 storage
-bindings. Adaptive refinement is unsupported by this first integration.
+The state buffer is96 bytes/particle; incumbent stages retain their10 storage-binding layout. IPBF stages use a
+separate smaller layout, including their extra state, within the same device
+limit. Adaptive refinement is unsupported by this first integration.
 
 Cubic support radius scales with the fixed-volume particle radius. Volume is
 calibrated from the incumbent poly6 volume integral: V=(64*pi/315)*h^3/24.3,
@@ -98,3 +99,11 @@ remain host operations. No equal-quality claim follows from conformance.
 Optional-Pyro-clock repair is ported from4733c149. Its focused test reproduced
 the null-debugState exception before repair and passes afterward. The broader
 liquid-fire suite stops earlier at an existing flame-quench source regex.
+
+The alternate damping candidate now receives exactly the same inlet attenuation,
+collision and reservoir confinement as the main candidate through a shared host
+position operation. Runtime and truth-snapshot boundary identity both declare
+collision-only IPBF pressure, and PBF-only optimizations report bypass under
+IPBF. A dedicated velocity stage applies paper damping before the retained
+viscosity stage, allowing the IPBF state binding to stay out of the incumbent
+full binding layout.
