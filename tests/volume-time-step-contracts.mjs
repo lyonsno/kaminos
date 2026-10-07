@@ -98,7 +98,8 @@ test('the shader reads coefficients at the dynamics speed and scales transport, 
   assert.match(main, /let requestedSpeed = u\.fire_smoke_curl_speed\.w;\s*\n\s*let speed = dynamicsSpeed\(\);\s*\n\s*let timeStep = timeStepScale\(\);/, 'main kernel derives speed and dt from the helpers');
   assert.match(main, /let backtraceScale = transportBacktraceScale\(speed\) \* timeStep;/, 'main kernel backtrace scales with dt');
   assert.match(main, /let velTransported = advected\.xyz \* transportVelocityDamping\(\);\s*\n\s*var vel = velTransported;/, 'the transported velocity is kept apart from the increments');
-  assert.match(main, /vel = velTransported \+ \(vel - velTransported\) \* timeStep;/, 'every per-step increment scales with dt in one place');
+  assert.match(main, /let forceIncrement = \(vel - velTransported\) \* timeStep;/, 'every per-step increment scales with dt in one place');
+  assert.match(main, /vel = velTransported \+ forceIncrement;/, 'and is folded back once (or handed to the face-force pass under the staggered reading)');
   assert.ok(main.indexOf('vel = velTransported + (vel - velTransported) * timeStep;') > main.indexOf('vel = vel - projectionCorrection'), 'the scaling follows the last additive increment');
   assert.ok(main.indexOf('vel = velTransported + (vel - velTransported) * timeStep;') < main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));'), 'the scaling precedes the wall damping');
   const bound = wgslFunction('boundVelocity');

@@ -18,12 +18,12 @@ const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema
 test('velocity staggering resolves from the control and is admitted only under the converged solver', () => {
   const off = core.resolveVelocityStaggeringConfig({});
   assert.equal(off.identity, 'kaminos.volume.velocity-staggering.v1');
-  assert.deepEqual(off.effective, { mode: 'collocated', admitted: false, reason: 'velocity-staggering-not-requested' });
+  assert.deepEqual(off.effective, { mode: 'collocated', admitted: false, reason: 'velocity-staggering-not-requested', faceForces: false });
   const legacy = core.resolveVelocityStaggeringConfig({ velocityStaggering: 'staggered', pressureSolver: 'legacy' });
-  assert.deepEqual(legacy.effective, { mode: 'collocated', admitted: false, reason: 'velocity-staggering-requires-converged-pressure-solver' });
+  assert.deepEqual(legacy.effective, { mode: 'collocated', admitted: false, reason: 'velocity-staggering-requires-converged-pressure-solver', faceForces: false });
   assert.deepEqual(legacy.requested, { mode: 'staggered', pressureSolver: 'legacy' });
   const on = core.resolveVelocityStaggeringConfig({ velocityStaggering: 'staggered', pressureSolver: 'converged-open-top' });
-  assert.deepEqual(on.effective, { mode: 'staggered', admitted: true, reason: null });
+  assert.deepEqual(on.effective, { mode: 'staggered', admitted: true, reason: null, faceForces: true });
   const onClosed = core.resolveVelocityStaggeringConfig({ velocityStaggering: 'staggered', pressureSolver: 'converged' });
   assert.equal(onClosed.effective.admitted, true, 'the closed-top converged solve uses the same compact pair');
   assert.deepEqual(core.resolveVelocityStaggeringConfig({ velocityStaggering: 'nonsense', pressureSolver: 'converged-open-top' }).effective.mode, 'collocated');
@@ -32,7 +32,7 @@ test('velocity staggering resolves from the control and is admitted only under t
 test('the staggering uniform follows the heat-release block and packs 1 only when admitted', () => {
   assert.equal(core.VELOCITY_STAGGERING_UNIFORM_OFFSET, core.HEAT_RELEASE_UNIFORM_OFFSET + 4);
   assert.equal(core.VOLUME_UNIFORM_FLOATS, core.VELOCITY_STAGGERING_UNIFORM_OFFSET + 4);
-  assert.deepEqual(core.velocityStaggeringUniformValues(core.resolveVelocityStaggeringConfig({ velocityStaggering: 'staggered', pressureSolver: 'converged-open-top' })), [1, 0, 0, 0]);
+  assert.deepEqual(core.velocityStaggeringUniformValues(core.resolveVelocityStaggeringConfig({ velocityStaggering: 'staggered', pressureSolver: 'converged-open-top' })), [1, 1, 0, 0]);
   assert.deepEqual(core.velocityStaggeringUniformValues(core.resolveVelocityStaggeringConfig({ velocityStaggering: 'staggered', pressureSolver: 'legacy' })), [0, 0, 0, 0]);
   assert.match(source, /heat_release: vec4<f32>,\n(?:\s*\/\/[^\n]*\n)*\s*velocity_staggering: vec4<f32>,/, 'uniform struct field after heat_release');
   assert.match(source, /uniforms\.set\(velocityStaggeringUniformValues\(velocityStaggeringConfig\), VELOCITY_STAGGERING_UNIFORM_OFFSET\);\s*state\.velocityStaggering = velocityStaggeringConfig;/);
@@ -92,4 +92,32 @@ test('the capture carries the staggering receipt and its check cannot be satisfi
   assert.equal(effectiveMismatches(on, { velocityStaggering: { effective: { admitted: true } } }, null).length, 1, 'a receipt without a mode fails a staggered arm');
   assert.equal(effectiveMismatches(off, { velocityStaggering: { effective: { mode: 'collocated', admitted: true } } }, null).length, 1, 'active admission fails a collocated arm');
   assert.equal(effectiveMismatches(off, { velocityStaggering: { effective: { admitted: false } } }, null).length, 1, 'a receipt without a mode fails a collocated arm');
+});
+
+// Force side of the same half-cell shift (report section 29): forces are
+// evaluated at the cell centre and were added straight to the face-stored
+// velocity. Under the staggered reading the main kernel now stores the
+// transported velocity and writes the step's force increment to a per-cell
+// buffer; a face-force pass adds, per component, the mean of this cell's and
+// the upper neighbour's increment, then applies the velocity bound.
+test('staggered: the main kernel separates the force increment and the face-force pass averages it onto the faces', () => {
+  const on = core.resolveVelocityStaggeringConfig({ velocityStaggering: 'staggered', pressureSolver: 'converged-open-top' });
+  assert.deepEqual(core.velocityStaggeringUniformValues(on), [1, 1, 0, 0], 'y flags the face-force pass');
+  assert.deepEqual(core.velocityStaggeringUniformValues(core.resolveVelocityStaggeringConfig({})), [0, 0, 0, 0]);
+  assert.equal(on.effective.faceForces, true);
+  assert.match(source, /@group\(0\) @binding\(20\) var<storage, read_write> forceDelta: array<vec4<f32>>;/);
+  assert.match(source, /\{ binding: 20, visibility: GPUShaderStage\.FRAGMENT \| GPUShaderStage\.COMPUTE, buffer: \{ type: 'storage' \} \}/, 'fluid layout carries the force buffer');
+  const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
+  assert.match(main, /let forceIncrement = \(vel - velTransported\) \* timeStep;/);
+  assert.match(main, /if \(faceForcesOn\(\)\) \{\s*forceDelta\[idx\] = vec4<f32>\(forceIncrement, 0\.0\);\s*vel = velTransported;\s*\} else \{\s*vel = velTransported \+ forceIncrement;\s*\}/);
+  const pass = source.slice(source.indexOf('fn csFaceForces('), source.indexOf('\n}\n', source.indexOf('fn csFaceForces(')));
+  assert.match(pass, /let here = forceDelta\[idx\]\.xyz;/);
+  assert.match(pass, /forceDelta\[index3\(vec3<u32>\(gid\.x \+ 1u, gid\.y, gid\.z\)\)\]\.x/);
+  assert.match(pass, /forceDelta\[index3\(vec3<u32>\(gid\.x, gid\.y \+ 1u, gid\.z\)\)\]\.y/);
+  assert.match(pass, /forceDelta\[index3\(vec3<u32>\(gid\.x, gid\.y, gid\.z \+ 1u\)\)\]\.z/);
+  assert.match(pass, /fluidDst\[base\] = vec4<f32>\(boundVelocity\(stored\.xyz \+ faceForce\), stored\.w\);/, 'the bound applies after the face force');
+  // The pass runs after the sim pass, before the buffers flip, only when admitted.
+  const step = source.slice(source.indexOf("label: 'kaminos fluid sim pass'"), source.indexOf('encodeAnalyticEmitterInjection(encoder);', source.indexOf("label: 'kaminos fluid sim pass'")));
+  assert.match(step, /if \(state\.velocityStaggering\?\.effective\?\.faceForces && faceForcesPipeline\) \{[\s\S]*label: 'kaminos face force pass'[\s\S]*\}\s*currentFluid = 1 - currentFluid;/);
+  assert.match(capture, /velocityStaggering: s\.velocityStaggering \?\? null/);
 });
