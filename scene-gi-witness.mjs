@@ -17,7 +17,7 @@ try {
   browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   page=await browser.newPage({viewport:{width:1600,height:1000}});
   page.setDefaultTimeout(0);
-  page.on('pageerror',e=>{report.errors.push(String(e));void save();});
+  page.on('pageerror',e=>{report.errors.push(String(e.stack||e));void save();});
   page.on('console',m=>{if(m.type()==='error'&&!m.text().startsWith('Failed to load resource:')){report.errors.push(m.text());void save();}});
   page.on('response',r=>{if(r.status()>=400&&new URL(r.url()).pathname!=='/favicon.ico'){report.httpErrors.push({url:r.url(),status:r.status()});void save();}});
   await page.goto(new URL('/api/runtime-config',url).href);

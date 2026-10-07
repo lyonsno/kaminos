@@ -24,6 +24,8 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 .field-key { color: #666; }
 #scene-gi-controls .field { align-items:center; gap:12px; }
 #scene-gi-controls input[type="number"], #scene-gi-controls select, #scene-gi-mode { min-width:0; width:148px; max-width:55%; box-sizing:border-box; border:1px solid #405157; border-radius:4px; padding:6px; background:#151a1c; color:#ddd; }
+#scene-gi-controls .authoring-number-wrap { width:148px; max-width:55%; min-width:0; }
+#scene-gi-controls .authoring-number-wrap input { width:100%; max-width:none; }
 body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !important; }
 .field-val { color: #999; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field-val.present { color: #66bb6a; }
@@ -1052,7 +1054,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
     </section>
     <section id="authoring-source-render">
-    <section id="scene-camera-controls"><h2>Scene Camera</h2><div id="scene-camera-fields"></div><div id="scene-camera-host-exposure"></div></section>
+    <section id="scene-camera-controls"><div id="scene-camera-fields"></div><div id="scene-camera-host-exposure"></div></section>
     <h2>Post Processing</h2>
     <div id="scene-gi-general-slot"></div>
     <div id="scene-ao-panel">
@@ -3456,7 +3458,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div id="rendering-panel-content" role="tabpanel" aria-labelledby="right-tab-rendering" hidden>
       <div class="volume-authored-mix-kicker">Scene light</div>
-      <h2 class="volume-authored-mix-title">Rendering</h2>
+      <h2 class="volume-authored-mix-title">Surface Illumination</h2>
       <div id="scene-gi-panel">
       <div class="field"><label for="scene-gi-mode">Surface illumination</label><select id="scene-gi-mode"><option value="gtao">GTAO baseline</option><option value="combined">Combined AO + GI</option></select></div>
       <div id="scene-gi-controls" hidden>
@@ -3505,10 +3507,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <label for="rendering-smoke-solver">Smoke illumination</label><select id="rendering-smoke-solver"><option value="distributed">Distributed · geometry-visible, full height</option><option value="legacy">Legacy comparison · lower cube, no solid visibility</option></select>
         <div class="slider-row"><label class="slider-label" for="rendering-surface-reconstruction">Surface reconstruction</label><input type="range" id="rendering-surface-reconstruction" min="0" max="32" step="2" value="0"><span class="slider-val" id="rendering-surface-reconstruction-value">0</span></div>
         <p class="rendering-description">Experimental same-frame mesh smoothing passes. Follows triangle connectivity and stops across sharp normal changes; split vertices remain split. No temporal history. Does not alter smoke or the visible flame. Zero bypasses reconstruction.</p>
-        <p class="rendering-description">Transported-light gain adjusts surface and distributed smoke illumination together; direct flame emission is unchanged. Surface scattering uses the distributed incident field even during legacy smoke comparison. Surface-to-surface bounce and repeated smoke scattering are not included.</p></div>
+        <p class="rendering-description">Transported-light gain adjusts surface and distributed smoke illumination together; direct flame emission is unchanged. Surface scattering uses the distributed incident field even during legacy smoke comparison. Repeated smoke scattering is not included; combined AO/GI adds the surface-to-surface bounce.</p></div>
+      <details id="scene-lighting-comparison"><summary>Legacy Field Comparisons</summary>
       <h2>Flame field</h2>
       <p class="rendering-description">The flame-derived field lights scene surfaces. This gain adjusts its receiving pass; it does not change the visible flame or shared point source.</p>
       <p class="rendering-description">Flame field gain and test geometry remain in the authoring light inspector.</p>
+      </details>
     </div>
     <div id="authored-mix-panel-content" role="tabpanel" aria-labelledby="right-tab-mix">
     <div class="volume-authored-mix-kicker">Volume</div>
@@ -25190,6 +25194,10 @@ function updateBackground() {
 }
 
 // --- AO Controls ---
+for(const description of document.querySelectorAll('#rendering-panel-content .rendering-description')) {
+  description.hidden=true;
+  if(description.previousElementSibling)description.previousElementSibling.title=description.textContent;
+}
 if (!isFireLightFieldRoute()) document.getElementById('scene-gi-general-slot').append(document.getElementById('scene-gi-panel'));
 document.getElementById('scene-gi-panel').append(document.getElementById('scene-ao-panel'));
 function setSceneGIControls(value) {

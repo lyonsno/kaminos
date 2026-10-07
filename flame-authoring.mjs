@@ -122,6 +122,7 @@ export function createFlameInspector({ document, host, sharedHost = host, camera
     const section=document.createElement('details');section.open=!!group.open;
     const title=document.createElement('summary');title.textContent=group.name;section.append(title);
     const scope=document.createElement('p');scope.className='flame-scope';scope.textContent=group.scope;section.append(scope);
+    if(group.name==='Camera'){scope.hidden=true;title.title=group.scope;}
     for(const [id,label] of group.fields) {
       const source=byId(id);if(!source)throw Error(`Missing flame control ${id}`);
       const row=document.createElement('div');row.className='slider-row';

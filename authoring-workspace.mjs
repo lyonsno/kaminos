@@ -62,7 +62,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('scene-camera-match-row'), 'scene-camera-controls');
   move(byId('authoring-source-environment'), 'authoring-world-slot');
   move(byId('authoring-source-render'), 'authoring-render-slot');
-  move(byId('authoring-source-fire-light'), 'authoring-render-slot');
+  move(byId('authoring-source-fire-light'), 'scene-lighting-comparison');
   const renderingPanel=byId('rendering-panel-content');
   if(renderingPanel)move(renderingPanel,'authoring-render-slot');
   let workbenchRenderingHidden=renderingPanel?.hidden;
