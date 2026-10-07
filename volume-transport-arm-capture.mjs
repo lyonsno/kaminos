@@ -35,7 +35,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { effectiveMismatches, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
+import { effectiveMismatches, parseArms, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
 
 const CAPTURE_IDENTITY = 'kaminos.volume.transport-arm-capture.v1';
 const positional = [];
@@ -84,7 +84,8 @@ if (!url || !outDir || !armsArg) fail('argument-validation', 'usage: <url> <outD
 if (!expectedRepoRoot || !expectedCommit) { report.failure = 'expected repo root and commit are required so the capture cannot pass on an unintended server'; writeReport(); console.error(report.failure); process.exit(1); }
 const FAULTS = ['arm-error', 'packed-epsilon', 'stale-residual', 'null-mode-drift'];
 if (fault && !FAULTS.includes(fault)) { report.failure = `unknown fault ${fault}; known: ${FAULTS.join(', ')}`; writeReport(); console.error(report.failure); process.exit(1); }
-const arms = armsArg.split(';').map(a => { const [name, ...pairs] = a.split(','); return { name, set: pairs.map(p => p.split('=')) }; });
+let arms;
+try { arms = parseArms(armsArg); } catch (error) { report.failure = String(error.message); writeReport(); console.error(report.failure); process.exit(1); }
 mkdirSync(outDir, { recursive: true });
 writeReport();
 

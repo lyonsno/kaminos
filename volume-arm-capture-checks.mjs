@@ -112,3 +112,20 @@ export function resolveHeadlessBrowser({ env = process.env, playwrightRoot = joi
   if (candidates.length === 0) throw new Error(`no independent headless browser: set KAMINOS_HEADLESS_BROWSER or install Playwright Chromium (looked under ${playwrightRoot})`);
   return admitExecutable(candidates[0], 'playwright-chromium');
 }
+
+// Arm grammar: `name[,controlId=value,...]` joined by `;`. Fails loud on a name
+// that carries controls (a ':' or '=' in the name) or a control without '=', so
+// a mistyped arm cannot run the saved basin under a misleading label.
+export function parseArms(armsArg) {
+  return String(armsArg ?? '').split(';').map(a => {
+    const [name, ...pairs] = a.split(',');
+    if (!name) throw new Error(`empty arm in "${armsArg}"`);
+    if (/[:=]/.test(name)) throw new Error(`arm name "${name}" contains ':' or '='; arms are name[,controlId=value,...]`);
+    const set = pairs.map(p => {
+      const eq = p.indexOf('=');
+      if (eq < 1) throw new Error(`control "${p}" in arm "${name}" has no '='`);
+      return [p.slice(0, eq), p.slice(eq + 1)];
+    });
+    return { name, set };
+  });
+}

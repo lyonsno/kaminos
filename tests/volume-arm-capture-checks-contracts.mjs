@@ -176,3 +176,17 @@ test('capture: devtools discovery waits for a page target and names its absence'
   assert.match(capture, /if \(!page\) fail\('browser-launch', `devtools endpoint on port \$\{port\} \(pid \$\{chrome\.pid\}\) never listed a page target/, 'absence of a page target is a named browser-launch failure');
   assert.doesNotMatch(capture, /const page = pages\.find\(p => p\.type === 'page'\); ws = new WebSocket/, 'the socket is never opened from an unchecked page lookup');
 });
+
+// An arm is name[,control=value,...]. A name carrying '=' or ':' is a control list
+// that the comma grammar would swallow silently (the run then reports the saved
+// basin under the arm's label), so the parser refuses it.
+test('arm parsing refuses a name that hides controls', async () => {
+  const { parseArms } = await import('../volume-arm-capture-checks.mjs');
+  assert.deepEqual(parseArms('saved;legacy,volume-pressure-solver=legacy'), [
+    { name: 'saved', set: [] },
+    { name: 'legacy', set: [['volume-pressure-solver', 'legacy']] },
+  ]);
+  assert.throws(() => parseArms('legacy-solver:volume-pressure-solver=legacy'), /arm name "legacy-solver:volume-pressure-solver=legacy" contains ':' or '='/);
+  assert.throws(() => parseArms('x,volume-wind-strength'), /control "volume-wind-strength" in arm "x" has no '='/);
+  assert.throws(() => parseArms('x;;y'), /empty arm/);
+});
