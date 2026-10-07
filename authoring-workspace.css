@@ -185,3 +185,6 @@ body[data-workspace=authoring].has-assets-panel #authoring-hierarchy,body[data-w
 
 #asset-resize{position:absolute;top:0;left:0;right:0;height:7px;cursor:row-resize;touch-action:none;z-index:2;}#asset-resize::after{content:'';display:block;width:30px;height:2px;margin:2px auto;background:#555a5e;border-radius:2px;}#asset-resize:hover,#asset-resize:focus-visible{background:#6d5b3f;outline:none;}
 .asset-entry small{font-size:10px;color:#929da2;}
+
+.asset-entry[data-preview-state=loading]::before{content:'Loading preview…';font-size:10px;color:#929da2;}
+.asset-entry[data-preview-state=unavailable]::before{content:'Preview unavailable';font-size:10px;color:#929da2;}

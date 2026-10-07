@@ -43,12 +43,14 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
             if not directory.is_dir() or not receipt_path.is_file():continue
             try:
                 receipt=json.loads(receipt_path.read_text())
+                if not isinstance(receipt,dict):raise ValueError('Generator receipt must be a JSON object')
                 if receipt.get('status')!='done' or receipt.get('exit_code')!=0 or not generator_receipt(receipt):continue
                 if receipt.get('job_id')!=directory.name:raise ValueError('Receipt identity differs from its job directory')
                 if not receipt.get('output_dir') or not Path(receipt['output_dir']).is_dir():unavailable+=1;continue
                 output=output_resolver(receipt.get('output_dir'))
                 if output is None:raise ValueError('Recorded outputs are outside serving roots')
                 metadata_path=output/'metadata.json';metadata=json.loads(metadata_path.read_text()) if metadata_path.is_file() else {}
+                if not isinstance(metadata,dict):raise ValueError('Generator output metadata must be a JSON object')
                 if metadata.get('job_id') not in (None,directory.name):
                     # A later run owns these same paths; do not misattribute its bytes.
                     continue
@@ -66,7 +68,7 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
                     source='/api/job-output?'+urlencode({'job_id':directory.name,'file':filename})
                     producer=str(receipt.get('job_type') or '') if receipt.get('job_type')!='command' else str(receipt.get('requested_route') or '')
                     family=next((value for prefix,value in [('trellis','Trellis'),('pixal','Pixal'),('sf3d','SF3D'),('mflux','Flux'),('flux','Flux'),('ideogram','Ideogram')] if producer.lower().startswith(prefix)), 'Generated')
-                    name=label(title) if title else f'{family} {asset_kind(filename)}'
+                    name=label(title) if title else (label(filename) if Path(filename).stem.lower() not in ('asset','output','mesh') else f'{family} · {label(output.name)}')
                     append(path,source,title=f'{name} · {label(filename)}' if title and Path(filename).stem not in ('output','asset') else name,job=receipt)
             except (OSError,ValueError,TypeError,KeyError) as error:warn(directory.name,error)
     else:
