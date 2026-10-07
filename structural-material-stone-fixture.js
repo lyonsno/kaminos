@@ -4,7 +4,7 @@ export function buildGpuStoneFixture(prepared, options = {}) {
   const actualVolume = prepared.cells.reduce((sum, cell) => sum + cell.volume, 0);
   if (!(prepared.volume > 0) || !Number.isFinite(actualVolume) || Math.abs(actualVolume - prepared.volume) > prepared.volume * 1e-5) throw new Error('Prepared region volume ledger disagrees');
   const config = { layers: prepared.grid[2], depth: prepared.size[2], scale: 1, density: 1, gravity: 9.81, timeStep: 1/60,
-    solverIterations: 20, stiffness: 10000, strength: 80, friction: .65, gripStiffness: 250, gripRadius: .7,
+    solverIterations: 20, stiffness: 10000, strength: 200, friction: .65, gripStiffness: 250, gripRadius: .7,
     initialJointPenalty: 10000, gravityRampSeconds: .5, substeps: 1, preventPenetratingNormalDropout: true, ...options };
   for (const name of ['density', 'timeStep', 'stiffness', 'strength', 'gripStiffness']) if (!(config[name] > 0) || !Number.isFinite(config[name])) throw new Error(`Invalid ${name}`);
   for (const name of ['gravity', 'friction', 'gripRadius', 'gravityRampSeconds']) if (config[name] < 0 || !Number.isFinite(config[name])) throw new Error(`Invalid ${name}`);
