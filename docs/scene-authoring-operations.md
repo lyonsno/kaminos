@@ -83,3 +83,22 @@ Selection transform fields edit the shared frame; geometry/material/emission/lig
 `window.kaminosSelection.read()` returns `ids`, `activeId`, expanded `memberIds` and transform preferences. Groups use `@group:<groupId>` keys. `set(ids, activeId)`, `all()`, `clear()`, `settings({orientation, pivot})`, `transform(patch)`, `duplicate({interactive})`, `remove()`, `group(label)`, and `ungroup()` use the same objects and ledger as the UI. Await membership undo/redo. `transform(patch)` edits the frame returned by the current selection; its scale starts at one, so a frame scale is a selection multiplier. Bulk insertion/removal retains actual GLB/procedural/light instances for reversal; simulation source restoration recreates its editor handle through the existing source adapter and preserves settings. Undo does not rewind fluid particles.
 
 Scene version7 adds `selectionIds` beside the existing active object/group fields. Save/reopen preserves the chosen set and active item; older documents keep their single-item behavior. Temporary asset inspection restores the original selection. Glyph visibility can be observed as `objectVisible` in `kaminosSceneObjectDebugState()`; actual light binding visibility remains in `kaminosSceneLightState()`.
+
+## Assets and image-to-mesh generation
+
+In Authoring, **Assets** and **Generate** open an in-context drawer. Browse the existing mounted locations, enter folders, filter the current folder, and choose a GLB or source image. **Open file…** accepts GLB, PNG, JPEG or WebP. A mesh is copied into the existing content-addressed store and appended through the ordinary scene membership operation; the current composition remains intact. Undo removes that instance and redo restores it without re-reading its original external folder. Source images use the existing image inbox and preserve their display name and content identity.
+
+The first generation route is Stable Fast 3D image-to-textured-mesh, using the existing shared-device producer and ordinary flame foreground host. Choose a source image, then explicitly **Generate mesh**. Weights load on the first run. An unsupported host/device or a scene already owned by another composition module is shown as unavailable. Generation does not insert automatically: the retained result gets an **Add** action. Its source image, digest, route, run ID, producer identity/receipt and GLB digest travel with the scene instance through undo/redo and save/reopen. A failed storage step retains the computed bytes and offers **Retry saving result**, rather than rerunning inference. This route needs the deployed SF3D weights/tet assets; generation failure is reported in its actual phase. Browsing existing Trellis outputs does not establish a callable Trellis generation route.
+
+`window.kaminosAssets` exposes `read()`, `refresh()`, `browse(root, path)`, `select(entry)`, `upload(file)`, `add(entry)`, `generate()`, `recover()`, `generation()`, `open(mode)` and `close()`. The UI uses this same controller. For example:
+
+```js
+const assets = window.kaminosAssets;
+await assets.browse('image-inbox', 'a-source-folder');
+assets.select(assets.read().entries.find(entry => entry.kind === 'image'));
+const output = await assets.generate();
+const objectId = await assets.add({...output, kind: 'mesh'});
+window.kaminosSetSceneObjectTransform(objectId, {position: [1, 0, 0]});
+```
+
+Ordinary static meshes now have selected/active silhouette feedback. **Viewport → Object bounds** enables bounding boxes separately. Source/light editor symbols retain the existing helper control. Skinned, instanced and Splat outlines are not provided by this static mask; clean scene capture suspends selection contours and bounds. The mask has its own scene/materials and does not alter authored materials, geometry, lighting inputs or saved records.
