@@ -2,6 +2,7 @@ import argparse
 import hashlib
 import importlib.metadata
 import json
+import os
 import pathlib
 import time
 
@@ -11,7 +12,8 @@ parser.add_argument("output")
 parser.add_argument("--edge-length", type=float, default=0.12)
 parser.add_argument("--envelope", type=float, default=0.0001)
 args = parser.parse_args()
-output = pathlib.Path(args.output)
+output = pathlib.Path(args.output).resolve()
+source_path = pathlib.Path(args.source).resolve()
 output.parent.mkdir(parents=True, exist_ok=True)
 report = {"status": "running", "phase": "input", "source": str(pathlib.Path(args.source).resolve()), "output": str(output.resolve()), "requested": vars(args)}
 
@@ -23,7 +25,7 @@ try:
     import numpy as np
     import wildmeshing as wm
 
-    source_bytes = pathlib.Path(args.source).read_bytes()
+    source_bytes = source_path.read_bytes()
     source = json.loads(source_bytes)
     if source.get("status") != "passed" or source.get("route") != "imported-whole-solid-manifold-3.5.4":
         raise ValueError("Positive admitted imported solid required")
@@ -42,14 +44,25 @@ try:
     report.update(sourceSha256=source["sourceSha256"], inputSha256=hashlib.sha256(source_bytes).hexdigest(), route="ftetwild-cpu-wildmeshing-0.4.1", version=version,
                   effective={"epsilon_relative": args.envelope, "edge_length_relative": args.edge_length / diagonal, "stop_quality": 10, "max_its": 80, "max_threads": 0, "coarsen": True, "use_input_for_wn": True}, phase="meshing")
     save()
+    binding_work = output.parent / "binding-work"
+    binding_work.mkdir(exist_ok=True)
+    os.chdir(binding_work)
+    report["bindingWorkingDirectory"] = str(binding_work)
+    save()
     start = time.perf_counter()
     mesher = wm.Tetrahedralizer(epsilon=args.envelope, edge_length_r=args.edge_length / diagonal)
     mesher.set_mesh(vertices, faces)
     mesher.tetrahedralize()
-    positions, tetrahedra = mesher.get_tet_mesh(use_input_for_wn=True)
+    result = mesher.get_tet_mesh(use_input_for_wn=True)
+    report["meshingSeconds"] = time.perf_counter() - start
+    report["phase"] = "return-admission"
+    report["bindingReturn"] = [{"shape": list(np.asarray(a).shape), "dtype": str(np.asarray(a).dtype), "values": np.asarray(a).tolist()} for a in result]
+    save()
+    if not isinstance(result, tuple) or len(result) != 3:
+        raise ValueError("wildmeshing0.4.1 must return positions, tetrahedra and flags; raw return retained")
+    positions, tetrahedra, flags = result
     positions = np.asarray(positions, dtype=np.float64)
     tetrahedra = np.asarray(tetrahedra, dtype=np.int64)
-    report["meshingSeconds"] = time.perf_counter() - start
     report["phase"] = "admission"
     if positions.ndim != 2 or positions.shape[1] != 3 or not np.isfinite(positions).all() or tetrahedra.ndim != 2 or tetrahedra.shape[1] != 4 or not len(tetrahedra):
         raise ValueError("Incomplete mesher output")
