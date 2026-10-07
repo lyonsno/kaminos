@@ -12694,6 +12694,17 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
   };
 }
 
+export function validateFingerFluidTruthPressureState(requestedPressureSolver,runtime) {
+  const requested=resolveFingerFluidPressureSolver(requestedPressureSolver);
+  if(runtime?.solver_backend!=='webgpu_compute') throw new Error('Truth pressure backend must be webgpu_compute');
+  if(runtime.pressureSolver!==requested) throw new Error(`Truth pressure solver mismatch: requested ${requested}, effective ${runtime.pressureSolver}`);
+  const expectedRoute=requested==='ipbf'?'webgpu-ipbf-cubic-spline-grid-v0':KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE;
+  if(runtime.solverRoute!==expectedRoute) throw new Error(`Truth pressure solver route mismatch: ${runtime.solverRoute}`);
+  const boundaryPressureContract=requested==='ipbf'?'ipbf-collision-projection-only-v0':KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT;
+  if(runtime.boundaryPressureContract!==boundaryPressureContract) throw new Error(`Truth pressure boundary mismatch: ${runtime.boundaryPressureContract}`);
+  return {requestedPressureSolver:requested,effectivePressureSolver:runtime.pressureSolver,boundaryPressureContract};
+}
+
 export function evaluateFingerFluidTruthTrajectory(scene, trajectory, {boundaryPressureContract=KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT}={}) {
   if (![KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,'ipbf-collision-projection-only-v0'].includes(boundaryPressureContract)) {
     throw new Error(`Unsupported boundary pressure contract: ${boundaryPressureContract}`);

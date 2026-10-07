@@ -16,3 +16,13 @@ test('truth trajectory admits an explicitly selected IPBF boundary and preserves
  assert.throws(()=>evaluateFingerFluidTruthTrajectory('multi_regime_playground',mixed,{boundaryPressureContract:'ipbf-collision-projection-only-v0'}),/boundary pressure contract/);
  assert.throws(()=>evaluateFingerFluidTruthTrajectory('multi_regime_playground',trajectory(),{boundaryPressureContract:'unknown'}),/boundary pressure contract/);
 });
+
+test('truth witness pressure admission rejects fallback or changed boundary',async()=>{
+ const core=await import('../finger-fluid-webgpu-core.js');assert.equal(typeof core.validateFingerFluidTruthPressureState,'function');
+ const state={pressureSolver:'ipbf',solverRoute:'webgpu-ipbf-cubic-spline-grid-v0',solver_backend:'webgpu_compute',boundaryPressureContract:'ipbf-collision-projection-only-v0'};
+ assert.equal(core.validateFingerFluidTruthPressureState('ipbf',state).boundaryPressureContract,state.boundaryPressureContract);
+ assert.throws(()=>core.validateFingerFluidTruthPressureState('ipbf',{...state,pressureSolver:'pbf'}),/pressure solver/);
+ assert.throws(()=>core.validateFingerFluidTruthPressureState('ipbf',{...state,solverRoute:'webgpu-pbf-linked-cell-fluid-v0'}),/route/);
+ assert.throws(()=>core.validateFingerFluidTruthPressureState('ipbf',{...state,solver_backend:'cpu_fallback'}),/backend/);
+ assert.throws(()=>core.validateFingerFluidTruthPressureState('ipbf',{...state,boundaryPressureContract:'wgsl-analytic-boundary-density-support-v0'}),/boundary/);
+});
