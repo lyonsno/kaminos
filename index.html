@@ -16186,24 +16186,24 @@ function setVolumeColorControlValue(id, value, fallback) {
   setVolumeControlValue(id, normalizeVolumeHexColor(value, fallback));
 }
 
-// Set a saved value on a range input exactly. A value outside the slider's
-// range widens min or max, and an off-grid value switches the step to any,
-// instead of clamping or snapping; each widening is recorded.
-function applyVolumeRangeValueExactly(el, value) {
+// Set a saved value on a range input. The renderer clamps each control to its
+// slider's range, so a value outside it loads at the limit and the readback
+// reports the difference; an in-range value off the step grid switches the
+// step to any rather than snapping, and is recorded.
+function applyVolumeRangeSavedValue(el, value) {
   if (!el || !Number.isFinite(value)) return;
-  const before = { min: el.min, max: el.max, step: el.step };
-  const widened = [];
-  if (el.min !== '' && value < Number(el.min)) { el.min = String(value); widened.push('min'); }
-  if (el.max !== '' && value > Number(el.max)) { el.max = String(value); widened.push('max'); }
+  const min = el.min === '' ? -Infinity : Number(el.min);
+  const max = el.max === '' ? Infinity : Number(el.max);
+  const held = Math.min(max, Math.max(min, value));
   const step = Number(el.step);
   if (el.step !== 'any' && Number.isFinite(step) && step > 0) {
-    const steps = (value - Number(el.min || 0)) / step;
-    if (Math.abs(steps - Math.round(steps)) > 1e-9) { el.step = 'any'; widened.push('step'); }
+    const steps = (held - (Number.isFinite(min) ? min : 0)) / step;
+    if (Math.abs(steps - Math.round(steps)) > 1e-9) {
+      window.__kaminosVolumeControlStepsMadeContinuous?.push({ id: el.id, value: held, step: el.step });
+      el.step = 'any';
+    }
   }
-  el.value = String(value);
-  if (widened.length) {
-    window.__kaminosVolumeControlRangeWidenings?.push({ id: el.id, value, ...before, widened });
-  }
+  el.value = String(held);
 }
 
 // Whether a select offers a value, so route selects accept every option the
@@ -16871,9 +16871,9 @@ function activeVolumeSettingsPresetStatus() {
   if (!receipt) return { text: '', warning: false };
   const projection = describeVolumeSettingsPresetProjection(receipt.serverProjection);
   const applied = describeVolumeSettingsPresetAppliedDifferences(activeVolumeSettingsPresetApplied);
-  const widenings = window.__kaminosVolumeControlRangeWidenings || [];
+  const continuous = window.__kaminosVolumeControlStepsMadeContinuous || [];
   return {
-    text: `${receipt.label || receipt.presetId} | requested ${receipt.requestedPresetRef} | effective ${receipt.presetId} | ${receipt.schemaIdentity} | ${receipt.storePath}${projection.text ? ` | ${projection.text}` : ''}${applied.text ? ` | ${applied.text}` : ''}${widenings.length ? ` | ${widenings.length} slider${widenings.length === 1 ? '' : 's'} widened to hold saved values: ${widenings.map(entry => entry.id).join(', ')}` : ''}`,
+    text: `${receipt.label || receipt.presetId} | requested ${receipt.requestedPresetRef} | effective ${receipt.presetId} | ${receipt.schemaIdentity} | ${receipt.storePath}${projection.text ? ` | ${projection.text}` : ''}${applied.text ? ` | ${applied.text}` : ''}${continuous.length ? ` | ${continuous.length} slider${continuous.length === 1 ? '' : 's'} made continuous to hold saved precision: ${continuous.map(entry => entry.id).join(', ')}` : ''}`,
     warning: projection.warning || applied.warning,
   };
 }
@@ -22682,7 +22682,7 @@ function reportKaminosVolumeRouteInitFailure(error) {
 
 async function initKaminosVolumeRoute() {
   if (compositionSetupError) throw compositionSetupError;
-  window.__kaminosVolumeControlRangeWidenings = [];
+  window.__kaminosVolumeControlStepsMadeContinuous = [];
   const params = new URLSearchParams(window.location.search);
   // Bare smoke routes boot into the committed default basin. Settings-preset
   // routes carry their own complete basin and must not inherit this one.
@@ -22847,8 +22847,10 @@ async function initKaminosVolumeRoute() {
     document.getElementById('volume-fire-render-mode').value = routeFireRenderMode;
   }
   const routeShellInspectMode = (params.get('volume_shell_inspect_mode') ?? params.get('volume_shell_inspect') ?? '').toLowerCase().replace(/-/g, '_');
+  // An empty saved mode is what the renderer draws as shell (mode 0); the
+  // select offers no empty option, so load it as shell.
   if (params.has('volume_shell_inspect_mode') && routeShellInspectMode === '') {
-    document.getElementById('volume-shell-inspect-mode').value = '';
+    document.getElementById('volume-shell-inspect-mode').value = 'shell';
   } else if (volumeSelectOffers(document.getElementById('volume-shell-inspect-mode'), routeShellInspectMode)) {
     document.getElementById('volume-shell-inspect-mode').value = routeShellInspectMode;
   }
@@ -22871,7 +22873,7 @@ async function initKaminosVolumeRoute() {
   ]) {
     const routed = Number(params.get(param));
     if (params.has(param) && Number.isFinite(routed)) {
-      applyVolumeRangeValueExactly(document.getElementById(id), routed);
+      applyVolumeRangeSavedValue(document.getElementById(id), routed);
     }
   }
   const routeDensity = Number(params.get('volume_density'));
@@ -23297,7 +23299,9 @@ async function initKaminosVolumeRoute() {
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const routeValue = Number(params.get(field.param));
     if (!params.has(field.param) || !Number.isFinite(routeValue)) continue;
-    applyVolumeRangeValueExactly(document.getElementById(field.id), routeValue);
+    const el = document.getElementById(field.id);
+    if (el?.type === 'range') applyVolumeRangeSavedValue(el, routeValue);
+    else if (el) el.value = clampVolumeControlValue(routeValue, field).toFixed(field.decimals);
   }
   const routePyroCompare = params.get('volume_pyro_compare');
   if (['live', 'base'].includes(routePyroCompare)) {

@@ -58,7 +58,7 @@ assert.match(core, /volumePresentationControls\[0\] = volumeExposure[\s\S]*write
 
 assert.match(index, /volumeExposure: 'volume-exposure'/, 'snapshot hydration maps volumeExposure to the authored top-level control');
 assert.match(index, /if \(key === 'volumeExposure' \|\| field\?\.continuous\) return String\(value\);/, 'continuous snapshot values, including top-level exposure, bypass display-only decimal formatting');
-assert.match(index, /applyVolumeRangeValueExactly\(document\.getElementById\(field\.id\), routeValue\)/, 'URL-route hydration applies saved values exactly, without clamping or decimal quantization (tests/volume-exact-load-contracts.mjs)');
+assert.match(index, /applyVolumeRangeSavedValue\(el, routeValue\)/, 'URL-route hydration applies saved values at full precision within the drawable range, without decimal quantization (tests/volume-exact-load-contracts.mjs)');
 assert.match(core, /const resolveEntries = \[[\s\S]*if \(options\.includePresentationControls === true\)[\s\S]*resolveEntries\.push\([\s\S]*binding: 1/, 'optical resolves add presentation binding 1 only for pipelines that declare it');
 assert.match(core, /includePresentationControls: options\.opticalDepthOrderDiagnostic !== true/, 'matched optical presentation binds exposure while the depth-order diagnostic keeps its one-binding layout');
 
