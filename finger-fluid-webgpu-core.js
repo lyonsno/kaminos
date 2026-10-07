@@ -16036,6 +16036,7 @@ export async function createWebGPUFingerFluidSolver({
           axis: [...inlet.axis],
           radius: inlet.radius,
           maximumSpeed: inlet.maximumSpeed,
+          profile: inlet.profile,
           requestedActive: inlet.requestedActive,
           active: inlet.active,
           activationAuthority: inlet.activationAuthority,

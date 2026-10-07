@@ -47,10 +47,37 @@ test('airborne header preserves support count as a subset and fails inconsistent
 test('volume capture rejects stale ticks, a missing airborne population and a wrong effective profile',async()=>{
  const evidence=await import('../local-liquid-stream-evidence.mjs').catch(()=>({}));
  assert.equal(typeof evidence.assertLiquidVolumeCapture,'function','the capture needs a falsifiable raw-record validator');
- const valid={coverage:'active-liquid-particles',volumeMeaning:'world-volume-per-particle',profile:'plug',expectedProfile:'plug',producerTick:3,allocationGeneration:1,epoch:2,header:[0x4b4c4643,1,1,2,3,1,1,123,1,1,0,0,1,0,0,32,2,0,0,0],records:[0,1,0,0,0,1,0,1,0,1,0,.08,0,-1,0,-1,0,0,0,0,1,.1,0,.0001,1,2,3,0,0,1,3,2]};
+ const valid={profile:'plug',coverage:'active-liquid-particles',volumeMeaning:'world-volume-per-particle',requestedProfile:'plug',effectiveProfile:'plug',expectedProfile:'plug',sourceFrameId:'kaminos/finger-fluid-bench:gpu-simulation-frame',sourceFrameHash:0x6c2673d1,producerTick:3,allocationGeneration:1,epoch:2,header:[0x4b4c4643,1,1,2,3,1,1,0x6c2673d1,1,1,0,0,1,0,0,32,2,0,0,0],records:[0,1,0,0,0,1,0,1,0,1,0,.08,0,-1,0,-1,0,0,0,0,1,.1,0,.0001,1,2,3,0,0,1,3,2]};
  assert.equal(evidence.assertLiquidVolumeCapture(valid).airborneCount,1);
- assert.throws(()=>evidence.assertLiquidVolumeCapture({...valid,profile:'round_poiseuille'}),/profile/);
+ assert.throws(()=>evidence.assertLiquidVolumeCapture({...valid,effectiveProfile:'round_poiseuille'}),/profile/);
  assert.throws(()=>evidence.assertLiquidVolumeCapture({...valid,producerTick:4}),/tick/);
+ assert.throws(()=>evidence.assertLiquidVolumeCapture({...valid,effectiveProfile:undefined}),/profile/);
+ assert.throws(()=>evidence.assertLiquidVolumeCapture({...valid,sourceFrameHash:0}),/source frame/);
+ assert.throws(()=>evidence.assertLiquidVolumeCapture({...valid,sourceFrameId:'foreign'}),/source frame/);
+ assert.throws(()=>evidence.assertLiquidVolumeCapture({...valid,header:valid.header.map((v,i)=>i===7?999:v)}),/source frame/);
  assert.throws(()=>evidence.assertLiquidVolumeCapture({...valid,records:[]}),/partial/);
  assert.throws(()=>evidence.assertLiquidVolumeCapture({...valid,header:valid.header.map((v,i)=>i===16?1:v)}),/coverage/);
+});
+
+test('new streams derive supply from aperture and speed without silently clipping explicit saved rates',async()=>{
+ const core=await import('../finger-fluid-webgpu-core.js');
+ const record=createLocalLiquidEmitterSceneRecord({id:'auto-water',transform:{position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]}});
+ assert.equal(record.localLiquidEmitter.rate,null);
+ const source=localLiquidInletPacket(defaultLocalLiquidSetup(),[record]);
+ assert.equal(source.emitters[0].active,true);
+ assert.equal(Object.hasOwn(source.emitters[0],'source_flux_particles_per_second'),false);
+ const economics=core.planFingerFluidLiveInletEconomics(source,49152).inlets[0];
+ assert.ok(Math.abs(economics.effective.particleReleaseRate-Math.PI*.08**2*1.15/(.055**3))<1e-10);
+ assert.equal(economics.effective.releaseAuthority,'derived_from_aperture_and_speed');
+ const manual={...record,localLiquidEmitter:{...record.localLiquidEmitter,rate:1200}};
+ assert.equal(localLiquidInletPacket(defaultLocalLiquidSetup(),[manual]).emitters[0].source_flux_particles_per_second,1200);
+ assert.equal(localLiquidInletPacket(defaultLocalLiquidSetup(),[{...manual,localLiquidEmitter:{...manual.localLiquidEmitter,rate:0}}]).emitters[0].active,false);
+ assert.throws(()=>normalizeLocalLiquidEmitter({...manual.localLiquidEmitter,rate:undefined}),/rate/);
+});
+
+test('capture independently rejects a contradictory GPU source-frame hash',async()=>{
+ const evidence=await import('../local-liquid-stream-evidence.mjs');
+ const valid={profile:'plug',coverage:'active-liquid-particles',volumeMeaning:'world-volume-per-particle',requestedProfile:'plug',effectiveProfile:'plug',expectedProfile:'plug',sourceFrameId:'kaminos/finger-fluid-bench:gpu-simulation-frame',sourceFrameHash:0x6c2673d1,producerTick:3,allocationGeneration:1,epoch:2,header:[0x4b4c4643,1,1,2,3,1,1,0x6c2673d1,1,1,0,0,1,0,0,32,2,0,0,0],records:[0,1,0,0,0,1,0,1,0,1,0,.08,0,-1,0,-1,0,0,0,0,1,.1,0,.0001,1,2,3,0,0,1,3,2]};
+ assert.equal(evidence.assertLiquidVolumeCapture(valid).airborneCount,1);
+ assert.throws(()=>evidence.assertLiquidVolumeCapture({...valid,header:valid.header.map((v,i)=>i===7?999:v)}),/source frame/);
 });

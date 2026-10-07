@@ -1400,7 +1400,7 @@ async function runUnifiedWaterScenario(ws) {
       const header=Array.from(new Uint32Array(buffers[0].getMappedRange()));
       const records=Array.from(new Float32Array(buffers[1].getMappedRange(),0,Math.min(header[9],d.capacity)*32));
       const state=window.kaminosLocalLiquidState();
-      return {coverage:d.coverage,volumeMeaning:d.volumeMeaning,profile:state.emitters[0].localLiquidEmitter.inletProfile,expectedProfile:'plug',hostFrameId:frame.hostFrameId,sourceIds:frame.sourceIds,producerTick:frame.producerTick,allocationGeneration:d.allocationGeneration,epoch:d.epoch,sourceFrameId:d.sourceFrameId,sourceFrameHash:d.sourceFrameHash,header,records,liveState:state};
+      return {coverage:d.coverage,volumeMeaning:d.volumeMeaning,requestedProfile:state.emitters[0].localLiquidEmitter.inletProfile,effectiveProfile:state.solver.liveInlets?.inlets?.find(inlet=>inlet.id===state.emitters[0].id)?.profile,expectedProfile:'plug',hostFrameId:frame.hostFrameId,sourceIds:frame.sourceIds,producerTick:frame.producerTick,allocationGeneration:d.allocationGeneration,epoch:d.epoch,sourceFrameId:d.sourceFrameId,sourceFrameHash:d.sourceFrameHash,header,records,liveState:state};
     }finally{for(const b of buffers){if(b.mapState==='mapped')b.unmap();b.destroy();}}
   })()`, {timeoutMs:90000});
   lastEvidence.unifiedWater.summary=assertLiquidVolumeCapture(lastEvidence.unifiedWater);

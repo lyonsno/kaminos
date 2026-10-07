@@ -20,7 +20,7 @@ export function mergeAndValidateLocalLiquidEmitterPose(settings, currentPose, pa
 export function createLocalLiquidEmitterSceneRecord({
   id,
   transform,
-  settings = { schema: LOCAL_LIQUID_EMITTER_SCHEMA, baseRadius: 0.08, strength: 1.15, rate: 1200, inletProfile: 'plug' },
+  settings = { schema: LOCAL_LIQUID_EMITTER_SCHEMA, baseRadius: 0.08, strength: 1.15, rate: null, inletProfile: 'plug' },
   label = 'Water emitter',
   fileName = label,
   groupId = null,

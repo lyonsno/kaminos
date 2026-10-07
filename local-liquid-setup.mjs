@@ -37,6 +37,7 @@ export function normalizeLocalLiquidEmitterPose(value) {
 export function normalizeLocalLiquidEmitter(value, pose = null) {
   if (!value || value.schema !== LOCAL_LIQUID_EMITTER_SCHEMA) throw Error('Unsupported local liquid emitter settings');
   for (const key of ['baseRadius','strength','rate']) {
+    if (key === 'rate' && value.rate === null) continue; // Explicit aperture-derived supply.
     if (!Number.isFinite(value[key])) throw Error(`Invalid local liquid emitter ${key}`);
   }
   if (value.baseRadius < .035 || value.baseRadius > .18) throw Error('Local liquid emitter baseRadius must be between 0.035 and 0.18');
@@ -107,12 +108,13 @@ export function localLiquidInletPacket(setup, sceneEmitters = [], generation = 1
     const settings=normalizeLocalLiquidEmitter(record.localLiquidEmitter,pose);
     const radius=settings.baseRadius*pose.scale[0];
     const aim=new Vector3(0,0,1).applyEuler(new Euler(...pose.rotation)).normalize().toArray();
-    return {id:record.id,active:settings.rate>0,emission_state:settings.rate>0?'jet':'off',
+    const active=settings.rate===null || settings.rate>0;
+    return {id:record.id,active,emission_state:active?'jet':'off',
       origin_world:pose.position,aim_world:aim,radius:radius/1.45,strength:settings.strength/1.35,
       // `particleCount` is the scene-wide solver pool. Leaving per-inlet
       // budgets unspecified lets the retained solver share that pool across
       // active emitters instead of reserving the whole pool once per object.
-      source_flux_particles_per_second:settings.rate,residence_seconds:20,
+      ...(settings.rate===null ? {} : {source_flux_particles_per_second:settings.rate}),residence_seconds:20,
       ...(settings.inletProfile === undefined ? {} : {inlet_profile:settings.inletProfile})};
   });
   return {packet_id:`kaminos-authored-liquid-${generation}`,route_identity:'kaminos-authored-liquid-source-v1',

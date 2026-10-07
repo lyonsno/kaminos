@@ -1,7 +1,10 @@
 // Validates a complete readback of the live liquid-volume contact descriptor.
 export function assertLiquidVolumeCapture(capture) {
   const h=capture?.header, records=capture?.records;
-  if(capture?.profile!==capture?.expectedProfile) throw Error('Effective water profile differs from the requested profile');
+  if(!['plug','round_poiseuille'].includes(capture?.expectedProfile)
+    || capture.requestedProfile!==capture.expectedProfile || capture.effectiveProfile!==capture.expectedProfile) throw Error('Effective water profile differs from the requested profile');
+  if(capture.sourceFrameId!=='kaminos/finger-fluid-bench:gpu-simulation-frame'
+    || capture.sourceFrameHash!==0x6c2673d1 || h?.[7]!==capture.sourceFrameHash) throw Error('Liquid volume capture source frame identity differs from its producer');
   if(capture.coverage!=='active-liquid-particles' || capture.volumeMeaning!=='world-volume-per-particle'
     || !Array.isArray(h) || h.length!==20 || h[16]!==2) throw Error('Liquid volume capture coverage is unsupported');
   if(h[0]!==0x4b4c4643 || h[1]!==1 || h[5]!==1 || h[6]!==1 || h[15]!==32 || h[13]!==0 || h[14]!==0) throw Error('Liquid volume capture header is invalid');
