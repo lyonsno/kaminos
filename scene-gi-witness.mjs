@@ -63,10 +63,14 @@ try {
     report.appearanceSource=await sourceHash();assert.equal(report.appearanceSource,report.sourceBefore,'presentation trims changed emitted source');
     const opacityAfter=await page.evaluate(now=>window.__kaminosVolumePrototype.sampleFrame({advanceSim:false,includeRgba:true,now}),sampleNow);
     await fs.writeFile(`${out}/appearance-after-frame.json`,JSON.stringify(opacityAfter));assert.ok(opacityAfter.ok);
-    assert.equal(opacityAfter.rgba.length,opacityBefore.rgba.length);
-    let alphaChanged=0,rgbChanged=0;
-    for(let i=0;i<opacityBefore.rgba.length;i++)if(opacityBefore.rgba[i]!==opacityAfter.rgba[i]){if(i%4===3)alphaChanged++;else rgbChanged++;}
-    report.appearancePixels={alphaChanged,rgbChanged,width:opacityBefore.width,height:opacityBefore.height};assert.equal(alphaChanged,0,'appearance trims changed visible opacity');assert.ok(rgbChanged>0,'appearance trims did not change visible radiance');
+    assert.equal(opacityBefore.image.rgba.length,opacityBefore.image.width*opacityBefore.image.height*4);
+    assert.equal(opacityAfter.image.rgba.length,opacityBefore.image.rgba.length);
+    let alphaChanged=0,rgbChanged=0,partialAlphaPixels=0;
+    for(let i=0;i<opacityBefore.image.rgba.length;i++) {
+      if(i%4===3&&opacityBefore.image.rgba[i]>0&&opacityBefore.image.rgba[i]<255)partialAlphaPixels++;
+      if(opacityBefore.image.rgba[i]!==opacityAfter.image.rgba[i]){if(i%4===3)alphaChanged++;else rgbChanged++;}
+    }
+    report.appearancePixels={alphaChanged,rgbChanged,partialAlphaPixels,width:opacityBefore.image.width,height:opacityBefore.image.height};assert.ok(partialAlphaPixels>0,'opaque output cannot prove opacity preservation');assert.equal(alphaChanged,0,'appearance trims changed visible opacity');assert.ok(rgbChanged>0,'appearance trims did not change visible radiance');
     await page.screenshot({path:`${out}/flame-appearance.png`});
     await page.evaluate(()=>window.kaminosSceneEdits.undo());assert.equal(await page.locator('#flame-appearance-trim').inputValue(),'0');
     await page.evaluate(()=>window.kaminosSceneEdits.redo());assert.equal(await page.locator('#flame-appearance-trim').inputValue(),'1');

@@ -22448,6 +22448,11 @@ function renderVolumeEmitterReceipt(receipt) {
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
+  const trimsActive=s.physicalColor?.effective==='emissive-transport-v2';
+  for(const control of document.querySelectorAll('#flame-appearance-trim,#smoke-illumination-trim,[data-authoring-alias="flame-appearance-trim"],[data-authoring-alias="smoke-illumination-trim"]')) {
+    control.disabled=!trimsActive;
+    control.title=trimsActive?'Visible radiance trim; emitted source and extinction are unchanged':'Requires the emissive transport material';
+  }
   syncVolumeCockpitModeAvailability(document, readVolumeControls(), s.physicalColor);
   if (s.physicalColor?.requested === 'emissive-transport-v2') {
     document.getElementById('volume-physical-mode-val').textContent = s.physicalColor.effective === 'emissive-transport-v2'
