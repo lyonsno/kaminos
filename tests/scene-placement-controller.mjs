@@ -11,7 +11,7 @@ class Element extends EventTarget {
  setPointerCapture(id){this.captures.add(id);} hasPointerCapture(id){return this.captures.has(id);} releasePointerCapture(id){this.captures.delete(id);}
 }
 function emit(target,type,values={}){const event=new Event(type,{cancelable:true});for(const [key,value] of Object.entries(values))Object.defineProperty(event,key,{configurable:true,value});target.dispatchEvent(event);return event;}
-function fixture(){
+function fixture({localOrientation=()=>[0,0,0],transformSettings=()=>({orientation:"world",explicit:true})}={}){
  const document=new Element(),window=new Element(),viewport=new Element(),input=new Element(),grip=new Element(),status=new Element(),historyControl=new Element(),numberControl=new Element(),historyScope=new Element();
  historyControl.tagName='INPUT';historyControl.type='range';numberControl.tagName='INPUT';numberControl.type='number';numberControl.closest=()=>numberControl;historyScope.contains=target=>target===historyControl||target===numberControl;
  document.body=new Element();document.activeElement=new Element();
@@ -25,7 +25,7 @@ function fixture(){
  let pose={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},allowed=true,busy=false;
  const sceneObject={userData:{kaminosSceneObject:{label:'kiln'}},updateWorldMatrix(){}};
  let frames=0;
- const tools=installScenePlacementTools({viewport,camera,controls,gizmo,selected:()=> 'kiln',read:()=>structuredClone(pose),write:(_,p)=>pose=structuredClone(p),object:()=>sceneObject,refresh(){},allowed:()=>allowed,busy:()=>busy,frameSelected:()=>frames++,historyScopes:[historyScope]});
+ const tools=installScenePlacementTools({viewport,camera,controls,gizmo,selected:()=> 'kiln',read:()=>structuredClone(pose),write:(_,p)=>pose=structuredClone(p),object:()=>sceneObject,refresh(){},localOrientation,transformSettings,allowed:()=>allowed,busy:()=>busy,frameSelected:()=>frames++,historyScopes:[historyScope]});
  return {tools,input,grip,document,window,viewport,status,controls,gizmo,helper,historyControl,numberControl,historyScope,get frames(){return frames;},get pose(){return pose;},set allowed(v){allowed=v;},set busy(v){busy=v;},
    set position(value){pose.position=[...value];tools.draw();},
    get hud(){return viewport.children.find(child=>child.id==='scene-edit-hud');},get overlay(){return viewport.children.find(child=>child.id==='scene-edit-overlay');},
@@ -170,4 +170,17 @@ test('scene undo and redo work over a Burner control while ordinary text undo re
  assert.equal(event.defaultPrevented,false,'text editing keeps the browser undo path');
  event=emit(f.document,'keydown',{key:'z',metaKey:true,target:f.numberControl});
  assert.equal(event.defaultPrevented,false,'uncommitted number editing keeps the browser undo path');
+});
+
+test('modal World to Local cycle uses the active orientation rather than the shared World frame',()=>{
+ const f=fixture({localOrientation:()=>[0,0,Math.PI/2]});f.position=[1,0,0];f.tools.start('translate');
+ for(const key of ['x','x','1'])emit(f.document,'keydown',{key});
+ assert.equal(f.tools.state().modal.frame,'local');assert.ok(Math.abs(f.pose.position[0]-1)<1e-9);assert.ok(Math.abs(f.pose.position[1]-1)<1e-9);
+ f.tools.start('rotate');assert.equal(f.tools.state().modal.frame,'local');f.tools.finish(false);assert.deepEqual(f.pose.position,[1,0,0]);
+});
+
+test('Local to World cycle and Local rotation/scale share the captured active basis',()=>{
+ const rotate=fixture({localOrientation:()=>[0,0,Math.PI/2]});rotate.tools.start('rotate');for(const key of ['x','x','9','0'])emit(rotate.document,'keydown',{key});assert.ok(Math.abs(rotate.pose.rotation[1]-Math.PI/2)<1e-9);rotate.tools.finish(false);
+ const scale=fixture({localOrientation:()=>[0,0,Math.PI/2]});scale.tools.start('scale');for(const key of ['x','x','2'])emit(scale.document,'keydown',{key});assert.deepEqual(scale.pose.scale,[1,2,1]);scale.tools.finish(false);
+ const local=fixture({localOrientation:()=>[0,0,Math.PI/2],transformSettings:()=>({orientation:'local',explicit:true})});local.position=[1,0,0];local.tools.start('translate');for(const key of ['x','x','1'])emit(local.document,'keydown',{key});assert.equal(local.tools.state().modal.frame,'world');assert.deepEqual(local.pose.position,[2,0,0]);local.tools.finish(false);
 });

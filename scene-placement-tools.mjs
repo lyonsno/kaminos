@@ -23,7 +23,7 @@ export function getPivotViewState(camera, point, width, height) {
 export function installScenePlacementTools({
   viewport, historyScope = null, camera, controls, gizmo, selected, read, write, object, refresh,
   allowed = () => true, busy = () => false, frameSelected = () => {},
-  settled = () => {}, captureContext = () => null, historyScopes = [],
+  settled = () => {}, captureContext = () => null, historyScopes = [], prepare=()=>{}, transformSettings=()=>({orientation:'world'}),localOrientation=()=>read(selected())?.rotation||[0,0,0],
 }) {
   const hud = document.createElement('div');
   hud.id = 'scene-edit-hud';
@@ -59,6 +59,7 @@ export function installScenePlacementTools({
   const state = () => ({
     ...edits.state(), gizmoEditing, gizmoDragging: gizmo.dragging, gizmoVisible: gizmo.getHelper().visible,
     controlsEnabled: controls.enabled,
+    gizmoPose:gizmo.object?{position:gizmo.object.position.toArray(),rotation:[gizmo.object.rotation.x,gizmo.object.rotation.y,gizmo.object.rotation.z],scale:gizmo.object.scale.toArray()}:null,
     modal: modal ? { operation: modal.operation, axis: modal.axis, frame: modal.frame, plane: modal.plane, numeric: modal.numeric, snapping: modal.snap } : null,
   });
   const isText = target => !!target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
@@ -102,7 +103,7 @@ export function installScenePlacementTools({
     return !error;
   }
   function begin(id, label) {
-    try { edits.begin(id, label); return true; }
+    try { prepare(); edits.begin(id, label); return true; }
     catch (error) { hud.textContent = error.message; return false; }
   }
   function start(operation,completed=null) {
@@ -110,7 +111,7 @@ export function installScenePlacementTools({
     if (field) finish(true);
     if (!modal) {
       if (!begin(selected(), 'Transform')) return false;
-      modal = { completed, axis: null, plane: false, frame: 'world', frameRotation: [...pose().rotation], numeric: '', snap: false, precise: false, prior: priorControls() };
+      modal = { completed, axis: null, plane: false, frame: transformSettings().orientation || 'world', frameRotation: [...localOrientation()], numeric: '', snap: false, precise: false, prior: priorControls() };
     }
     // Operation changes are alternatives within one gesture. Always restart
     // from the accepted pose captured by begin(), then preview only this mode.
@@ -121,7 +122,7 @@ export function installScenePlacementTools({
     modal.awaitViewportEntry = !pointerInViewport(lastPointer);
     modal.numeric = '';
     modal.amount = operation === 'scale' ? 1 : 0;
-    if (operation === 'scale' && modal.axis) modal.frame = 'local';
+    if (operation === 'scale' && modal.axis && !transformSettings().explicit) modal.frame = 'local';
     controls.enabled = false;
     gizmo.enabled = false;
     gizmo.getHelper().visible = false;
@@ -171,7 +172,14 @@ export function installScenePlacementTools({
       }
     }
     const snap = current.snap ? (current.operation === 'rotate' ? Math.PI / 36 : .1) : 0;
-    edits.preview(transformPose(current.base, { ...current, amount, delta: delta.toArray(), viewAxis: forward.toArray(), snap }));
+    let base=current.base;
+    if(base.roots){
+      // The selected roots stay at gesture-start identity; constraint cycling
+      // changes only the frame used to apply this alternative transform.
+      const rotation=current.frame==='local'?current.frameRotation:[0,0,0];
+      base={...base,rotation:[...rotation],frame:{position:[...base.position],rotation:[...rotation],scale:[...base.scale]},preferences:{...base.preferences,orientation:current.frame}};
+    }
+    edits.preview({...base,...transformPose(base, { ...current, amount, delta: delta.toArray(), viewAxis: forward.toArray(), snap })});
     current.amount = amount;
     draw();
   }
@@ -291,9 +299,13 @@ export function installScenePlacementTools({
       if (['g', 'r', 's'].includes(key)) { start({ g: 'translate', r: 'rotate', s: 'scale' }[key]); return; }
       if (['x', 'y', 'z'].includes(key)) {
         if (modal.axis === key && modal.plane === event.shiftKey) {
-          if (modal.frame === 'world' && modal.operation !== 'scale') modal.frame = 'local';
+          if(transformSettings().explicit){
+            const first=transformSettings().orientation;
+            if(modal.frame===first)modal.frame=first==='world'?'local':'world';
+            else {modal.axis=null;modal.plane=false;modal.frame=first;}
+          }else if (modal.frame === 'world' && modal.operation !== 'scale') modal.frame = 'local';
           else { modal.axis = null; modal.plane = false; modal.frame = 'world'; }
-        } else { modal.axis = key; modal.plane = event.shiftKey; modal.frame = modal.operation === 'scale' ? 'local' : 'world'; }
+        } else { modal.axis = key; modal.plane = event.shiftKey; modal.frame = transformSettings().explicit?transformSettings().orientation:modal.operation === 'scale' ? 'local' : 'world'; }
       } else if (event.key === 'Backspace') modal.numeric = modal.numeric.slice(0, -1);
       else if (/^[0-9.\-]$/.test(event.key)) modal.numeric += event.key;
       modal.snap = event.ctrlKey; modal.precise = event.shiftKey; preview(); return;

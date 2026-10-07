@@ -2332,6 +2332,57 @@ def _sha256_file(path):
     return digest.hexdigest()
 
 
+def read_mesh_generation_origins(sha256):
+    root = Path(BROWSE_ROOTS['generated-meshes']).resolve()
+    path = root / ('.' + sha256 + '.glb.origins.json')
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text())
+    if data.get('schema') != 'kaminos.mesh-generation-origins.v1' or data.get('sha256') != sha256 or not isinstance(data.get('origins'), dict):
+        raise ValueError('Invalid generated mesh origin record')
+    return data
+
+
+def save_mesh_generation_origin(result):
+    sha = result.get('sha256', '')
+    if not isinstance(sha, str) or not re.fullmatch(r'[a-f0-9]{64}', sha):
+        raise ValueError('Generated mesh requires a content digest')
+    root = Path(BROWSE_ROOTS['generated-meshes']).resolve()
+    artifact = root / (sha + '.glb')
+    if not artifact.is_file():
+        raise ValueError('Generated mesh bytes are not stored')
+    generation = result.get('generation')
+    source = '/api/read?' + urlencode({'root': 'generated-meshes', 'path': sha + '.glb'})
+    if result.get('source') != source or not isinstance(generation, dict) or generation.get('schema') != 'kaminos.asset-generation.v1' or generation.get('sha256') != sha or generation.get('bytes') != artifact.stat().st_size:
+        raise ValueError('Generation origin does not match the stored mesh')
+    run_id = generation.get('runId')
+    image = generation.get('input')
+    if not isinstance(run_id, str) or not run_id or not isinstance(image, dict) or not isinstance(image.get('sha256'), str) or not re.fullmatch(r'[a-f0-9]{64}', image['sha256']) or not generation.get('route') or generation.get('receiptValidation', {}).get('ok') is not True:
+        raise ValueError('Generation input, run and validated route required')
+    name = result.get('name')
+    if not isinstance(name, str) or not name:
+        raise ValueError('Generated asset name required')
+    origin = {'name': name, 'generation': generation}
+    path = root / ('.' + sha + '.glb.origins.json')
+    with (root / ('.' + sha + '.origin.lock')).open('a+b') as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        data = read_mesh_generation_origins(sha) or {'schema': 'kaminos.mesh-generation-origins.v1', 'sha256': sha, 'origins': {}}
+        previous = data['origins'].get(run_id)
+        if previous is not None and previous != origin:
+            raise ValueError('Existing generation run origin is immutable')
+        if previous is None:
+            data['origins'][run_id] = origin
+            data['latestRunId'] = run_id
+            with tempfile.NamedTemporaryFile(mode='w', dir=root, prefix='.mesh-origin-', delete=False) as handle:
+                temporary = Path(handle.name)
+                json.dump(data, handle)
+            try:
+                os.replace(temporary, path)
+            finally:
+                temporary.unlink(missing_ok=True)
+    return {'schema': 'kaminos.mesh-generation-origin.v1', 'result': result}
+
+
 def pipeline_manifest_payload():
     document = json.loads(PIPELINE_MANIFEST_PATH.read_text())
     return {
@@ -3007,6 +3058,14 @@ def ingest_image_asset(filename, content):
     return entry
 
 
+def authoring_asset_catalog(collection):
+    from authoring_asset_catalog import read_catalog
+    return read_catalog(collection, roots=BROWSE_ROOTS,
+        image_entries=lambda: list_asset_entries(kind='image'),
+        origins=read_mesh_generation_origins,
+        output_resolver=resolve_greenroom_output_dir, label=_clean_label)
+
+
 def greenroom_output_roots():
     """Roots that can lawfully serve receipt output_dir files."""
     roots = [Path.home().resolve()]
@@ -3096,6 +3155,13 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_pipeline_manifest()
         elif parsed.path == "/api/browse":
             self.handle_browse(parse_qs(parsed.query))
+        elif parsed.path == "/api/authoring-assets":
+            try:
+                self.send_json(authoring_asset_catalog(parse_qs(parsed.query).get("collection", ["generated-meshes"])[0]))
+            except ValueError as error:
+                self.send_json({"error": str(error)}, 400)
+            except FileNotFoundError as error:
+                self.send_json({"error": str(error)}, 404)
         elif parsed.path == "/api/assets":
             self.handle_assets(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
@@ -3135,7 +3201,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/ingest-mesh":
+        if parsed.path == "/api/mesh-generation-origin":
+            self.handle_mesh_generation_origin()
+        elif parsed.path == "/api/ingest-mesh":
             self.handle_ingest_mesh()
         elif parsed.path == "/api/save-scene":
             self.handle_save_scene()
@@ -3687,6 +3755,23 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         _atomic_write_json(scene_path, data)
         self.send_json({"saved": filename, "path": str(scene_path)})
 
+    def handle_mesh_generation_origin(self):
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+            if length <= 0:
+                raise ValueError('Generation origin body required')
+            body = self.rfile.read(length)
+            if len(body) != length:
+                raise ValueError('Incomplete generation origin body')
+            payload = json.loads(body)
+            if not isinstance(payload, dict):
+                raise ValueError('Generation origin must be an object')
+            self.send_json(save_mesh_generation_origin(payload))
+        except (ValueError, KeyError, TypeError) as error:
+            self.send_json({'error': str(error), 'phase': 'origin-persistence'}, 400)
+        except OSError as error:
+            self.send_json({'error': str(error), 'phase': 'origin-persistence'}, 500)
+
     def handle_ingest_mesh(self):
         """Persist a generated GLB by content hash for the existing scene loader."""
         try:
@@ -3951,6 +4036,16 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     receipt=status_receipt,
                     size=info["size"],
                 )
+            if root_name == 'generated-meshes' and entry.is_file() and re.fullmatch(r'[a-f0-9]{64}\.glb', entry.name):
+                try:
+                    origins = read_mesh_generation_origins(entry.stem)
+                    if origins:
+                        origin = origins['origins'][origins['latestRunId']]
+                        info['generation'] = origin['generation']
+                        info['generationOriginCount'] = len(origins['origins'])
+                        info['display']['title'] = origin['name']
+                except (ValueError, KeyError, OSError) as error:
+                    info['originError'] = str(error)
             entries.append(info)
 
         self.send_json({
