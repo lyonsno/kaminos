@@ -37,8 +37,8 @@ try {
   if(operation==='--product-controls') {
     report.phase='product-controls';await save();
     await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
-    await page.selectOption('#scene-gi-mode','combined');await page.locator('#scene-gi-mode').blur();
-    for(const id of ['rendering-angular-pattern','rendering-smoke-solver','rendering-surface-scattering','rendering-retain-comparisons','rendering-angular-swap','rendering-light-mode','rendering-match-flame-camera','exposure-slider'])assert.equal(await page.locator('#'+id).isVisible(),false,`${id} remains on normal authoring surface`);
+    await page.evaluate(()=>window.kaminosAuthoringParameters.set('@scene-gi',{mode:'combined'}));
+    for(const id of ['scene-gi-mode','rendering-angular-pattern','rendering-smoke-solver','rendering-surface-scattering','rendering-retain-comparisons','rendering-angular-swap','rendering-light-mode','rendering-match-flame-camera','exposure-slider'])assert.equal(await page.locator('#'+id).isVisible(),false,`${id} remains on normal authoring surface`);
     const settle=async()=>{const frame=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);await page.waitForFunction(f=>window.__kaminosVolumePrototype.debugState().frameCount>f+2,frame,{timeout:0});};
     const sourceHash=async()=>createHash('sha256').update(JSON.stringify(await page.evaluate(async()=> (await window.__kaminosVolumePrototype.sampleSceneVolumeSource()).values))).digest('hex');
     await settle();report.sourceBefore=await sourceHash();

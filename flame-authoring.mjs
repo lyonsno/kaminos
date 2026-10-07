@@ -120,6 +120,7 @@ export function createFlameInspector({ document, host, sharedHost = host, camera
   };
   const aliases=[];
   for(const group of [...FLAME_PROPERTY_GROUPS,...(cameraHost?[CAMERA_PROPERTY_GROUP]:[])]) {
+    if(group.name==='Legacy appearance'&&new URLSearchParams(document.defaultView?.location?.search||'').get('lighting_diagnostics')!=='1')continue;
     const section=document.createElement('details');section.open=!!group.open;
     const title=document.createElement('summary');title.textContent=group.name;section.append(title);
     const scope=document.createElement('p');scope.className='flame-scope';scope.textContent=group.scope;section.append(scope);

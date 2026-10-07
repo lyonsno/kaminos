@@ -4,7 +4,7 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 assert.ok(html.includes('id="scene-gi-mode"'), 'operator must be able to select combined AO/GI in the actual scene');
 const { resolveSceneGISettings, sceneGIReceives } = await import('../scene-gi-settings.mjs');
 const defaults = resolveSceneGISettings();
-assert.equal(defaults.mode, 'gtao');
+assert.equal(defaults.mode, 'combined');
 assert.equal(defaults.gain, 10);
 assert.equal(resolveSceneGISettings({gain:1}).gain,1,'authored gain remains authoritative');
 assert.equal(defaults.view, 'scene');

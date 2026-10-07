@@ -3475,7 +3475,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="volume-authored-mix-kicker">Scene light</div>
       <h2 class="volume-authored-mix-title">Surface Illumination</h2>
       <div id="scene-gi-panel">
-      <div class="field"><label for="scene-gi-mode">Surface illumination</label><select id="scene-gi-mode"><option value="gtao">GTAO baseline</option><option value="combined">Combined AO + GI</option></select></div>
+      <div class="field" data-lighting-diagnostic><label for="scene-gi-mode">Surface illumination</label><select id="scene-gi-mode"><option value="gtao">GTAO baseline</option><option value="combined" selected>Combined AO + GI</option></select></div>
       <div id="scene-gi-controls" hidden>
         <div class="field"><label for="scene-gi-view">View</label><select id="scene-gi-view"><option value="scene">Scene</option><option value="ao">AO visibility</option><option value="gi">Received bounce</option><option value="incoming">Incoming GI</option></select></div>
         <div class="field"><label for="scene-gi-gain" title="Artistic multiplier on estimated surface bounce; not camera exposure">Bounce gain</label><input id="scene-gi-gain" type="number" min="0" step="0.1" value="10"></div>
@@ -3490,7 +3490,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="scene-gi-status" role="status"></div>
       </div>
       <p class="rendering-description">Switch light contributions while viewing the same kiln. The flame, environment and authored geometry remain visible in every mode.</p>
-      <h2>Light Contributions</h2>
+      <section id="scene-flame-light-controls"><h2>Light Contributions</h2>
       <label for="rendering-light-mode" data-lighting-diagnostic>Light paths</label>
       <select class="rendering-channel-select" id="rendering-light-mode" data-lighting-diagnostic>
         <option value="all">Transport + legacy field (additive)</option>
@@ -3530,6 +3530,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <p class="rendering-description">The flame-derived field lights scene surfaces. This gain adjusts its receiving pass; it does not change the visible flame or shared point source.</p>
       <p class="rendering-description">Flame field gain and test geometry remain in the authoring light inspector.</p>
       </details>
+      </section>
     </div>
     <div id="authored-mix-panel-content" role="tabpanel" aria-labelledby="right-tab-mix">
     <div class="volume-authored-mix-kicker">Volume</div>
@@ -3666,6 +3667,7 @@ let renderingSourcePosition = parseSceneSourcePosition(renderingUrlState.get('re
 
 function refreshRenderingControls() {
   const hasSharedRoute = fireLightFieldRouteParams().get('volume_light_field_shared_source') === '1';
+  document.getElementById('scene-flame-light-controls').hidden=!hasSharedRoute&&!lightingDiagnostics;
   if (!hasSharedRoute && renderingMode === 'all') renderingMode = 'flame-field';
   const selected = renderingChannelsForMode(renderingMode);
   const source = window.__kaminosSceneRadiance;
@@ -3712,6 +3714,8 @@ function refreshRenderingControls() {
     const position = source?.debugState().source?.position?.map(value => value.toFixed(2)).join(', ');
     status.textContent = `${distributed ? 'Distributed flame' : 'Shared point source'} (mesh + smoke): ${sharedState}${position ? ` · XYZ ${position}` : ''}${distributed ? ` · ${source.debugState().directions} directions · ${source.debugState().status}` : ''}\nFlame field (mesh): ${fieldState}`;
     status.dataset.status = source || fireLightFieldPass ? 'active' : 'unavailable';
+    const healthy=distributed&&source.debugState().status==='submitted-awaiting-presentation'&&!source.debugState().previewStale&&!source.debugState().error;
+    status.style.display=!lightingDiagnostics&&healthy?'none':'';
   }
   window._kaminosDirty?.();
 }
@@ -25092,7 +25096,7 @@ function installAuthoringParameterEditing() {
     read:readRimLightSettings,write:setRimLight,check:checkedRimRecipe,
   });
   bind('@scene-gi',{controls:document.querySelectorAll('#scene-gi-controls input, #scene-gi-controls select, #scene-gi-mode'),label:'Tune surface illumination',
-    read:()=>({...sceneGISettings}),write:setSceneGIControls,check:resolveSceneGISettings});
+    read:()=>({...sceneGISettings}),write:setSceneGIControls,check:value=>resolveSceneGISettings(lightingDiagnostics?value:{...value,mode:'combined'})});
   for(const [id,label,selector] of [
     ['@scene-ao','Tune ambient occlusion','#scene-ao-panel input'],
     ['@scene-ground','Tune ground','#composition-ground-visible, #composition-ground-height, #composition-ground-color, #composition-ground-roughness'],
@@ -25241,6 +25245,14 @@ function updateBackground() {
 }
 
 // --- AO Controls ---
+const lightingQuality=document.createElement('details');lightingQuality.id='scene-lighting-quality';
+lightingQuality.innerHTML='<summary>Lighting Quality</summary>';
+for(const id of ['rendering-angular-samples','rendering-source-softness','rendering-surface-reconstruction']) {
+  const control=document.getElementById(id);
+  if(control.tagName==='SELECT') {const row=document.createElement('div');row.className='field';row.append(document.querySelector(`label[for="${id}"]`),control);lightingQuality.append(row);}
+  else lightingQuality.append(control.closest('.slider-row'));
+}
+document.getElementById('rendering-distributed-controls').append(lightingQuality);
 for(const [key,id] of [['exposureEV','scene-camera-ev'],['whiteBalanceKelvin','scene-camera-white'],['highlightKnee','scene-camera-knee']])document.getElementById(id).addEventListener('input',event=>{
   if(!event.target.value.trim()||!event.target.validity.valid)return;
   try{setSceneCameraControls({...sceneCameraSettings,[key]:Number(event.target.value)});}catch(error){setSceneCameraControls(sceneCameraSettings);setInfo(error.message);}
@@ -25256,7 +25268,7 @@ for(const description of document.querySelectorAll('#rendering-panel-content .re
 if (!isFireLightFieldRoute()) document.getElementById('scene-gi-general-slot').append(document.getElementById('scene-gi-panel'));
 document.getElementById('scene-gi-panel').append(document.getElementById('scene-ao-panel'));
 function setSceneGIControls(value) {
-  const settings = resolveSceneGISettings(value);
+  const settings = resolveSceneGISettings(lightingDiagnostics?value:{...value,mode:'combined'});
   if (updateSceneGI) updateSceneGI(settings);
   else sceneGISettings = settings;
   for (const key of Object.keys(settings)) document.getElementById(`scene-gi-${key}`).value = String(settings[key]);

@@ -1,5 +1,5 @@
 export function resolveSceneGISettings(value = {}) {
-  const settings = {mode:'gtao', view:'scene', gain:10, radius:4, thickness:.3, slices:3, steps:8, denoise:3};
+  const settings = {mode:'combined', view:'scene', gain:10, radius:4, thickness:.3, slices:3, steps:8, denoise:3};
   for (const key of Object.keys(settings)) if (Object.hasOwn(value,key)) settings[key]=value[key];
   if (!['gtao','combined'].includes(settings.mode)) throw new Error('Invalid scene GI mode');
   if (!['scene','ao','gi','incoming'].includes(settings.view)) throw new Error('Invalid scene GI view');
