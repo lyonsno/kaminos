@@ -1,5 +1,12 @@
 import { graphTetrahedron,microelasticBonds } from './structural-material-solid-reference.mjs';
 
+export function inspectResidentCoverage(models,results){
+ const errors=[];if(!Array.isArray(results)||results.length!==models.length)return['Resident candidate coverage incomplete'];
+ for(const model of models){const matches=results.filter(r=>r.kind===model.kind);if(matches.length!==1){errors.push(`Resident ${model.kind} missing or duplicated`);continue;}
+  const stages=matches[0].stages;if(!Array.isArray(stages)||stages.length!==5||['rest','loaded','damaged','post-damage','released'].some(name=>stages.filter(s=>s.name===name).length!==1))errors.push(`Resident ${model.kind} stage coverage incomplete`);
+ }return errors;
+}
+
 export function inspectResidentEvaluation(model,observed){
  const errors=[],n=model.positions.length;
  if(observed?.route!=='kaminos.deformable-material.colored-vbd.webgpu.v0'||observed.kind!==model.kind)errors.push('Effective resident material route mismatch');

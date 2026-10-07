@@ -7,12 +7,12 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { materialConformanceCases,inspectMaterialEvaluation } from './structural-material-solid-conformance.mjs';
 import { prepareSolidTopology,packSolidTopology } from './structural-material-solid-topology.mjs';
-import { inspectResidentEvaluation } from './structural-material-solid-resident-evidence.mjs';
+import { inspectResidentEvaluation,inspectResidentCoverage } from './structural-material-solid-resident-evidence.mjs';
 
-const [outputInput,executableInput,exercise='energy']=process.argv.slice(2);
+const [outputInput,executableInput,exercise='energy',preparedRootInput]=process.argv.slice(2);
 if(!outputInput)throw new Error('usage: node structural-material-solid-native.mjs OUTPUT.json INDEPENDENT_BROWSER');
 const root=path.dirname(fileURLToPath(import.meta.url)),output=path.resolve(outputInput),hash=b=>createHash('sha256').update(b).digest('hex');
-const report={status:'running',phase:'preflight',root,argv:process.argv,exercise,sources:{},errors:[],checks:[],lastTrustworthyEvidence:'invocation',claim:exercise==='resident'?'Tiny resident load/damage controls, not stress-generated crack surfaces':'Prescribed-position material energy/force conformance only, not dynamics or crack surfaces'};
+const report={status:'running',phase:'preflight',root,argv:process.argv,exercise,sources:{},errors:[],checks:[],lastTrustworthyEvidence:'invocation',claim:exercise==='imported'?'Imported-interior resident load/transmission controls; explicit cut, not stress-generated shards':exercise==='resident'?'Tiny resident load/damage controls, not stress-generated crack surfaces':'Prescribed-position material energy/force conformance only, not dynamics or crack surfaces'};
 fs.mkdirSync(path.dirname(output),{recursive:true});const save=()=>fs.writeFileSync(output,JSON.stringify(report,null,2));save();
 let server,child,socket,stderr='',nextId=0;const pending=new Map(),sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++nextId;pending.set(id,{resolve,reject});socket.send(JSON.stringify({id,method,params}));});
@@ -32,30 +32,45 @@ try{
  inverted.coefficients=[Array.from({length:6},()=>Array(6).fill(0))];p.disconnected=await evaluateSolidMaterial(device,inverted);
  const resident=await(await fetch('/resident-inputs.json')).json();p.resident=[];
  for(const input of resident){
-  const arrays=Object.fromEntries(Object.entries(input.arrays).map(([name,values])=>[name,['state','parameters','coefficients'].includes(name)?Float32Array.from(values):Uint32Array.from(values)]));
-  const model=await createSolidResident(device,input.descriptor,arrays),stages=[];const options={timeStep:1/60,iterations:12,lineSearchTrials:8,gravity:0,damping:.98,floor:-10};
-  stages.push({name:'rest',state:await model.read()});await model.pin([0,2,3]);await model.grip(1,[1.05,.02,.03],100000);
-  for(let step=0;step<8;step++)await model.step(options);stages.push({name:'loaded',state:await model.read()});
+  const arrays={};
+  if(input.arrays)for(const [name,values] of Object.entries(input.arrays))arrays[name]=['state','parameters','coefficients'].includes(name)?Float32Array.from(values):Uint32Array.from(values);
+  else for(const [name,entry] of Object.entries(input.buffers)){const bytes=await(await fetch('/resident-buffers/'+entry.filename)).arrayBuffer();const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');if(bytes.byteLength!==entry.byteLength||digest!==entry.sha256)throw new Error('Effective resident buffer differs: '+name);arrays[name]=entry.type==='Float32Array'?new Float32Array(bytes):new Uint32Array(bytes);}
+  const start=performance.now(),model=await createSolidResident(device,input.descriptor,arrays),stages=[],timings=[];const options={timeStep:1/60,iterations:12,lineSearchTrials:8,gravity:0,damping:.98,floor:-10};
+  const step=async()=>{const start=performance.now();await model.step(options);timings.push(performance.now()-start);};
+  stages.push({name:'rest',state:await model.read()});await model.pin(input.supports);await model.grip(input.grip.index,input.grip.target,100000);
+  for(let i=0;i<8;i++)await step();stages.push({name:'loaded',state:await model.read()});
   await model.damagePlane([1,0,0],.5);stages.push({name:'damaged',state:await model.read()});
-  for(let step=0;step<4;step++)await model.step(options);stages.push({name:'post-damage',state:await model.read()});
-  await model.release();await model.step(options);stages.push({name:'released',state:await model.read()});model.dispose();p.resident.push({kind:input.descriptor.kind,stages});
+  for(let i=0;i<4;i++)await step();stages.push({name:'post-damage',state:await model.read()});
+  await model.release();await step();stages.push({name:'released',state:await model.read()});model.dispose();p.resident.push({kind:input.descriptor.kind,stages,timings,totalMilliseconds:performance.now()-start});
  }
  await device.queue.onSubmittedWorkDone();p.phase='complete';p.status=p.errors.length?'failed':'passed';device.destroy();
 }catch(error){window.__solidProbe.status='failed';window.__solidProbe.failure={message:error.message,stack:error.stack};}
 `;
 try{
- if(!['energy','resident'].includes(exercise))throw new Error('Unknown material exercise');
+ if(!['energy','resident','imported'].includes(exercise))throw new Error('Unknown material exercise');
  const executable=fs.realpathSync(executableInput);if(executable.includes('/Google Chrome.app/')||!/chrome-headless-shell$|\/Chromium$|Google Chrome for Testing$/.test(executable))throw new Error('Independent browser required');
  report.browser={executable,version:execFileSync(executable,['--version'],{encoding:'utf8'}).trim()};
  report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
- for(const name of ['structural-material-solid-native.mjs','structural-material-solid-kernels.js','structural-material-solid-reference.mjs','structural-material-solid-conformance.mjs',...(exercise==='resident'?['structural-material-solid-resident.js','structural-material-solid-topology.mjs','structural-material-solid-resident-evidence.mjs']:[])])report.sources[name]=hash(fs.readFileSync(path.join(root,name)));
+ for(const name of ['structural-material-solid-native.mjs','structural-material-solid-kernels.js','structural-material-solid-reference.mjs','structural-material-solid-conformance.mjs',...(exercise!=='energy'?['structural-material-solid-resident.js','structural-material-solid-topology.mjs','structural-material-solid-resident-evidence.mjs']:[])])report.sources[name]=hash(fs.readFileSync(path.join(root,name)));
  const cases=materialConformanceCases(),groups=['graph','pmb'].map(kind=>{
   const group={kind,positions:[],indices:[],parameters:[],coefficients:[]};
   for(const test of cases.filter(c=>c.input.kind===kind)){const offset=group.positions.length;group.positions.push(...test.input.positions);group.indices.push(...test.input.indices.map(ids=>ids.map((v,i)=>i<(kind==='graph'?4:2)?v+offset:v)));group.parameters.push(...test.input.parameters);if(kind==='graph')group.coefficients.push(...test.input.coefficients);}
   return group;
  });
- const residentModels=exercise==='resident'?['graph','pmb'].map(kind=>prepareSolidTopology({status:'passed',route:'ftetwild-cpu-wildmeshing-0.4.1',positions:[[0,0,0],[1,0,0],[0,1,0],[0,0,1]],tetrahedra:[[0,1,2,3]],volume:1/6},{kind,young:1000,poisson:.25,density:1000,horizon:1.5})):[];
- const residentInputs=residentModels.map(model=>({descriptor:{kind:model.kind,points:model.positions.length,elements:model.elements.length,bonds:model.bonds.length,colorCount:model.colorCount},arrays:Object.fromEntries(Object.entries(packSolidTopology(model)).map(([name,array])=>[name,Array.from(array)]))}));
+ let residentModels=exercise==='resident'?['graph','pmb'].map(kind=>prepareSolidTopology({status:'passed',route:'ftetwild-cpu-wildmeshing-0.4.1',positions:[[0,0,0],[1,0,0],[0,1,0],[0,0,1]],tetrahedra:[[0,1,2,3]],volume:1/6},{kind,young:1000,poisson:.25,density:1000,horizon:1.5})):[];
+ let residentInputs=residentModels.map(model=>({descriptor:{kind:model.kind,points:model.positions.length,elements:model.elements.length,bonds:model.bonds.length,colorCount:model.colorCount},supports:[0,2,3],grip:{index:1,target:[1.05,.02,.03]},arrays:Object.fromEntries(Object.entries(packSolidTopology(model)).map(([name,array])=>[name,Array.from(array)]))}));
+ const preparedBuffers=new Map();
+ if(exercise==='imported'){
+  if(!preparedRootInput)throw new Error('Imported resident exercise requires explicit prepared root');const preparedRoot=fs.realpathSync(preparedRootInput),bytes=fs.readFileSync(path.join(preparedRoot,'report.json')),prepared=JSON.parse(bytes);
+  if(prepared.status!=='passed'||prepared.models.length!==2||new Set(prepared.models.map(m=>m.kind)).size!==2)throw new Error('Complete passed paired material preparation required');
+  const meshBytes=fs.readFileSync(prepared.input),mesh=JSON.parse(meshBytes);if(hash(meshBytes)!==prepared.inputSha256||mesh.status!=='passed')throw new Error('Effective interior differs from prepared source');
+  report.prepared={root:preparedRoot,manifestSha256:hash(bytes),inputSha256:prepared.inputSha256,sourceSha256:prepared.sourceSha256,models:prepared.models};residentModels=[];residentInputs=[];
+  for(const descriptor of prepared.models){const arrays={};for(const [name,entry] of Object.entries(descriptor.buffers)){if(path.basename(entry.filename)!==entry.filename)throw new Error('Prepared buffer must be a leaf path');const data=fs.readFileSync(path.join(preparedRoot,entry.filename));if(data.byteLength!==entry.byteLength||hash(data)!==entry.sha256||!['Float32Array','Uint32Array'].includes(entry.type))throw new Error('Prepared buffer identity mismatch: '+name);preparedBuffers.set(entry.filename,data);const Type=entry.type==='Float32Array'?Float32Array:Uint32Array;arrays[name]=new Type(data.buffer.slice(data.byteOffset,data.byteOffset+data.byteLength));}
+   const positions=mesh.positions,masses=positions.map((_,i)=>arrays.state[i*16+3]),bonds=Array.from({length:descriptor.bonds},(_,i)=>Array.from(arrays.bonds.slice(i*4,i*4+2))),elements=Array.from({length:descriptor.elements},(_,i)=>Array.from(arrays.elements.slice(i*4,i*4+4))),elementBonds=descriptor.kind==='graph'?elements.map((_,i)=>Array.from(arrays.elementBonds.slice(i*8,i*8+6))):[];
+   const minX=Math.min(...positions.map(p=>p[0])),maxX=Math.max(...positions.map(p=>p[0])),supports=positions.flatMap((p,i)=>p[0]<minX+.03?[i]:[]);let index=0;positions.forEach((p,i)=>{if(p[0]>positions[index][0])index=i;});
+   const target=positions[index].map((v,a)=>v+(a===0?.003:0));residentModels.push({kind:descriptor.kind,positions,masses,volumes:masses.map(m=>m/descriptor.material.density),bonds,elements,elementBonds,material:descriptor.material});residentInputs.push({descriptor,buffers:descriptor.buffers,supports,grip:{index,target},bounds:{minX,maxX}});
+  }
+ }
  report.cases=cases;report.inputGroups=groups;report.residentInputs=residentInputs;save();
  server=createServer((req,res)=>{
   const route=new URL(req.url,'http://localhost').pathname;res.setHeader('cache-control','no-store');
@@ -63,6 +78,7 @@ try{
   if(route==='/probe.js'){res.setHeader('content-type','text/javascript');res.end(probe);return;}
   if(route==='/inputs.json'){res.setHeader('content-type','application/json');res.end(JSON.stringify(groups));return;}
   if(route==='/resident-inputs.json'){res.setHeader('content-type','application/json');res.end(JSON.stringify(residentInputs));return;}
+  if(route.startsWith('/resident-buffers/')&&preparedBuffers.has(route.slice(18))){res.end(preparedBuffers.get(route.slice(18)));return;}
   if(['/structural-material-solid-kernels.js','/structural-material-solid-resident.js'].includes(route)){res.setHeader('content-type','text/javascript');res.end(fs.readFileSync(path.join(root,route.slice(1))));return;}
   res.writeHead(404).end();
  });
@@ -84,11 +100,13 @@ try{
   if(offset!==result.values.length)throw new Error('Unexpected or partial GPU output');
  }
  report.checks.push({name:'live inversion rejected without disabling disconnected elements',passed:observed.inversion.rejected&&observed.inversion.message.includes('valid deformation domain')&&observed.disconnected.values.every(v=>v===0)});
+ const coverage=inspectResidentCoverage(residentModels,observed.resident);report.checks.push({name:'all requested resident candidates and stages returned',passed:coverage.length===0,errors:coverage});if(coverage.length)throw new Error('Resident coverage incomplete');
  for(const result of observed.resident){
   const model=residentModels.find(m=>m.kind===result.kind);for(const stage of result.stages){const errors=inspectResidentEvaluation(model,stage.state);report.checks.push({name:result.kind+'-'+stage.name+'-resident-energy-gradient',passed:errors.length===0,errors});}
   const states=Object.fromEntries(result.stages.map(s=>[s.name,s.state])),at=(state,i)=>state.state.slice(i*16+4,i*16+7),broken=state=>state.bonds.filter((v,i)=>i%4===2&&v===0).length;
-  report.checks.push({name:result.kind+'-load-comes-from-grip-not-prescribed-field',passed:Math.hypot(...at(states.loaded,1).map((v,a)=>v-model.positions[1][a]))>.01&&[0,2,3].every(i=>at(states.loaded,i).every((v,a)=>v===model.positions[i][a]))});
-  report.checks.push({name:result.kind+'-damage-and-unload-retain-state',passed:broken(states.damaged)===3&&broken(states.released)===3&&states.released.steps===13&&states.released.grip===null&&states.released.damageEpoch===1});
+  const input=residentInputs.find(i=>i.descriptor.kind===result.kind),index=input.grip.index;
+  report.checks.push({name:result.kind+'-load-comes-from-grip-not-prescribed-field',passed:Math.hypot(...at(states.loaded,index).map((v,a)=>v-model.positions[index][a]))>(exercise==='imported'?1e-4:.01)&&input.supports.every(i=>at(states.loaded,i).every((v,a)=>Math.abs(v-model.positions[i][a])<1e-6))});
+  report.checks.push({name:result.kind+'-damage-and-unload-retain-state',passed:(exercise==='imported'?broken(states.damaged)>0:broken(states.damaged)===3)&&broken(states.released)===broken(states.damaged)&&states.released.steps===13&&states.released.grip===null&&states.released.damageEpoch===1});
  }
  for(const [name,digest] of Object.entries(report.sources))if(hash(fs.readFileSync(path.join(root,name)))!==digest)throw new Error(`Source changed during native conformance: ${name}`);
  if(report.checks.some(c=>!c.passed)||report.errors.length)throw new Error('Material conformance predicates failed');
