@@ -5763,6 +5763,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   let velTransported = advected.xyz * transportVelocityDamping();
   var vel = velTransported;
+  // Forces derived from the velocity field itself (confinement, curl, the detail
+  // forces); under the staggered reading they are already at the face positions
+  // and are added as before, while scalar-derived forces are averaged onto the
+  // faces by csFaceForces (report section 29).
+  var velocityDerivedForce = vec3<f32>(0.0);
   var smoke = material.x * stepRate(0.990);
   var heat = material.y * stepRate(0.982);
   var fuel = material.z * stepRate(0.990);
@@ -6387,14 +6392,23 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let projectionCorrection = vec3<f32>(0.0);
   let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
   vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain * artisticSwirl;
+  velocityDerivedForce = velocityDerivedForce + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain * artisticSwirl;
   vel = vel + confinement;
+  velocityDerivedForce = velocityDerivedForce + confinement;
   vel = vel + oracleActivityCurl;
+  velocityDerivedForce = velocityDerivedForce + oracleActivityCurl;
   vel = vel + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
+  velocityDerivedForce = velocityDerivedForce + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
   vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireDetailForcesAblation;
+  velocityDerivedForce = velocityDerivedForce + bonfireReferenceConfinement * bonfireScene * bonfireDetailForcesAblation;
   vel = vel + detailForce;
+  velocityDerivedForce = velocityDerivedForce + detailForce;
   vel = vel + microForce;
+  velocityDerivedForce = velocityDerivedForce + microForce;
   vel = vel + shredForce;
+  velocityDerivedForce = velocityDerivedForce + shredForce;
   vel = vel + fineBreakup;
+  velocityDerivedForce = velocityDerivedForce + fineBreakup;
   vel = vel + heatExpansion;
   vel = vel + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
   vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireThermalRiseDirection * mix(1.0, canonicalBuoyancyLift, canonicalPlumeScene);
@@ -6470,8 +6484,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * bonfireCenteringCarrier
     * (0.076 + speed * 0.0120);
   vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireInstabilityProbe * 1.6;
+  velocityDerivedForce = velocityDerivedForce + bonfireReferenceConfinement * bonfireScene * bonfireInstabilityProbe * 1.6;
   vel = vel + bonfireUpperDepinchOutflow * bonfireDepinchAblation;
+  velocityDerivedForce = velocityDerivedForce + bonfireUpperDepinchOutflow * bonfireDepinchAblation;
   vel = vel + bonfireNonWindCenteringForce;
+  velocityDerivedForce = velocityDerivedForce + bonfireNonWindCenteringForce;
   let windMaterialCoupling = clamp(smoke * 0.54 + heat * 0.30 + source * 0.34 + flame * 0.18, 0.0, 1.6);
   let bonfireWindResponseGain = mix(1.0, 4.0, bonfireScene);
   vel = vel + windDirection * windStrength * windHeightRamp * windMaterialCoupling * bonfireWindResponseGain * (0.020 + speed * 0.004);
@@ -6480,8 +6497,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // (1.0 under the legacy mode).
   let forceIncrement = (vel - velTransported) * timeStep;
   if (faceForcesOn()) {
-    forceDeltaStore(cellI, forceIncrement);
-    vel = velTransported;
+    // Velocity-derived forces stay on the stored value; the scalar-derived
+    // remainder goes to the face-force pass.
+    let velocityDerivedIncrement = velocityDerivedForce * timeStep;
+    forceDeltaStore(cellI, forceIncrement - velocityDerivedIncrement);
+    vel = velTransported + velocityDerivedIncrement;
   } else {
     vel = velTransported + forceIncrement;
   }

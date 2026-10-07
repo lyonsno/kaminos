@@ -110,7 +110,13 @@ test('staggered: the main kernel separates the force increment and the face-forc
   assert.match(source, /size: \[gridSize, gridHeight, gridSize \* 3\],/, 'three components along depth');
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
   assert.match(main, /let forceIncrement = \(vel - velTransported\) \* timeStep;/);
-  assert.match(main, /if \(faceForcesOn\(\)\) \{\s*forceDeltaStore\(cellI, forceIncrement\);\s*vel = velTransported;\s*\} else \{\s*vel = velTransported \+ forceIncrement;\s*\}/);
+  assert.match(main, /var velocityDerivedForce = vec3<f32>\(0\.0\);/);
+  for (const term of ['confinement', 'oracleActivityCurl', 'detailForce', 'microForce', 'shredForce', 'fineBreakup']) {
+    assert.match(main, new RegExp(`vel = vel \\+ ${term};\\s*velocityDerivedForce = velocityDerivedForce \\+ ${term};`), `${term} is velocity-derived`);
+  }
+  assert.doesNotMatch(main, /velocityDerivedForce = velocityDerivedForce \+ heatExpansion;/, 'thermal expansion is scalar-derived and is averaged');
+  assert.doesNotMatch(main, /velocityDerivedForce = velocityDerivedForce \+ thermalBuoyancyForce/, 'buoyancy is scalar-derived and is averaged');
+  assert.match(main, /if \(faceForcesOn\(\)\) \{[\s\S]*?let velocityDerivedIncrement = velocityDerivedForce \* timeStep;\s*forceDeltaStore\(cellI, forceIncrement - velocityDerivedIncrement\);\s*vel = velTransported \+ velocityDerivedIncrement;\s*\} else \{\s*vel = velTransported \+ forceIncrement;\s*\}/);
   const pass = source.slice(source.indexOf('fn csFaceForces('), source.indexOf('\n}\n', source.indexOf('fn csFaceForces(')));
   assert.match(pass, /let here = vec3<f32>\(forceDeltaLoad\(c, 0\), forceDeltaLoad\(c, 1\), forceDeltaLoad\(c, 2\)\);/);
   assert.match(pass, /forceDeltaLoad\(c \+ vec3<i32>\(1, 0, 0\), 0\), gid\.x \+ 1u < GRID\)/);
