@@ -50,7 +50,7 @@ test('effective SF3D cooperative DINO executor stops after a settled duty on cal
  const {readFile,writeFile,mkdtemp,rm}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {pathToFileURL}=await import('node:url');const sourceText=await readFile(new URL('../lib/sf3d/sf3d-producer.js',import.meta.url),'utf8');
  const scratch=await mkdtemp(`${tmpdir()}/modal-executor-`);let runCooperativeDino;
  try{await writeFile(`${scratch}/producer.mjs`,sourceText+'\nexport {runCooperativeDino};');({runCooperativeDino}=await import(pathToFileURL(`${scratch}/producer.mjs`)));}finally{await rm(scratch,{recursive:true});}
- const calls=[];const abort=new AbortController();let c;
+ const calls=[];let c;
  const producer={run:async(_,options)=>{
   const device={queue:{submit:buffers=>calls.push(['submit',buffers]),onSubmittedWorkDone:async()=>calls.push(['settled'])},createCommandEncoder:()=>({finish:()=>({command:'dino'})})};
   await runCooperativeDino({device,numBlocks:3,chunkBlocks:1,schedulingMode:'cooperative',tokenizer:{encodeCooperative:async({driver})=>{for(let i=0;i<3;i++)await driver(i,i+1,()=>{});return{};}},onProgress:p=>{if(p.completedItems===1)c.stop();options.onProgress(`DINOv2 blocks ${p.completedItems}/${p.totalItems} (${p.percent.toFixed(0)}%)`);}});
@@ -58,4 +58,28 @@ test('effective SF3D cooperative DINO executor stops after a settled duty on cal
  }};
  c=createAuthoringGeneration({loadInput:async()=>source,initialize:async()=>producer,persist:async()=>assert.fail('Canceled execution must not persist an output')});
  assert.equal(await c.run({source:'image'}),null);assert.equal(c.read().status,'stopped');assert.equal(calls.filter(r=>r[0]==='submit').length,1);assert.equal(calls.filter(r=>r[0]==='settled').length,1);
+});
+
+test('native Fetch AbortSignal preserves a stopped input result and prevents initialization',async()=>{
+ let initializes=0;const c=createAuthoringGeneration({loadInput:async(_,options)=>{await fetch('data:text/plain,image',options);return source;},initialize:async()=>{initializes++;return{run:async()=>result};},persist:async()=>assert.fail('stopped input cannot be persisted')});
+ const run=c.run({source:'image'});c.stop();assert.equal(await run,null);assert.equal(c.read().status,'stopped');assert.equal(c.read().terminal.error.name,'AbortError');assert.match(c.read().terminal.error.message,/stop/i);assert.equal(initializes,0);
+});
+
+test('bundled bounded-prefix cancellation with a rejected drain fence remains a failure',async()=>{
+ const {readFile,writeFile,mkdtemp,rm}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {pathToFileURL}=await import('node:url');const sourceText=await readFile(new URL('../lib/sf3d/sf3d-producer.js',import.meta.url),'utf8');
+ const scratch=await mkdtemp(`${tmpdir()}/modal-bounded-`);let bundle;
+ try{await writeFile(`${scratch}/producer.mjs`,sourceText+'\nexport {createWebGpuCooperativeExecution,createSf3dCooperativeRuntime,definePostProcessorChannelManifest};');bundle=await import(pathToFileURL(`${scratch}/producer.mjs`));}finally{await rm(scratch,{recursive:true});}
+ let submits=0,fences=0,c;
+ const producer={run:async(_,options)=>{
+  const device={queue:{submit:()=>submits++,onSubmittedWorkDone:()=>++fences===1?Promise.resolve():Promise.reject(Error('second prefix fence rejected during cancellation drain'))}};
+  const manifest=bundle.definePostProcessorChannelManifest(16),execution=bundle.createWebGpuCooperativeExecution({runtime:bundle.createSf3dCooperativeRuntime(device),manifest,invocationId:'stop-drain',schedulingMode:'cooperative',completionPolicy:'bounded-prefix',maxInFlightGpuDuties:2,onProgress:p=>{if(p.completedItems===1)c.stop();options.onProgress(`Post-processor duties ${p.completedItems}/${p.totalItems} (${p.percent.toFixed(0)}%)`);}});
+  try{await execution.run(async facade=>{const gpu=facade.startBoundary(manifest.phases[0].boundaries[0].boundaryId);let range;while((range=gpu.nextRange()))await gpu.runGpuDuty(range,{encode:()=>({command:'post'})});});}catch(error){await bundle.finishProducerRunWithEvidence({prepared:{release:async()=>({status:'succeeded'})},pipelineFailed:true,pipelineError:error,runId:'stop-drain',lastProgress:'Post-processor',startedAtMs:0,deviceInjected:true,commit:'effective-bundle'});}
+  return result;
+ }};
+ c=createAuthoringGeneration({loadInput:async()=>source,initialize:async()=>producer,persist:async()=>assert.fail('failed drain cannot persist an output')});
+ await assert.rejects(c.run({source:'image'}),/second prefix fence/);assert.equal(c.read().status,'failed');assert.equal(submits,2);assert.equal(fences,2);assert.equal(c.read().terminal.cooperative.failure.secondaryFailures[0].phase,'queue-completion');
+});
+
+test('primitive producer rejections retain a visible reason and terminal evidence',async()=>{
+ const c=createAuthoringGeneration({loadInput:async()=>source,initialize:async()=>({run:async()=>{throw 'producer rejection';}}),persist:async()=>assert.fail('no output')});await assert.rejects(c.run({source:'image'}),value=>value==='producer rejection');assert.equal(c.read().error,'inference: producer rejection');assert.equal(c.read().terminal.error.message,'producer rejection');
 });

@@ -10,6 +10,8 @@ export function generationProgress(value) {
     percent:Number.isFinite(percent)&&percent>=0&&percent<=100?percent:null};
 }
 
+const errorIdentity=value=>({name:typeof value?.name==='string'?value.name:'Error',message:typeof value?.message==='string'?value.message:String(value)});
+
 export function createAuthoringGeneration({initialize,loadInput,persist,changed=()=>{}}) {
   let producer=null,active=false,abort=null;
   let state={status:'idle',progress:'Weights load when you generate.',stage:null,percent:null,canStop:false,error:null,terminal:null,results:[],pending:null};
@@ -18,7 +20,7 @@ export function createAuthoringGeneration({initialize,loadInput,persist,changed=
     if(abort?.signal.aborted)return;
     const parsed=generationProgress(value);state.progress=parsed.message;state.stage=parsed.stage;state.percent=parsed.percent;publish();
   };
-  const checkStop=()=>{if(abort?.signal.aborted)throw new DOMException('Generation stopped','AbortError');};
+  const checkStop=()=>{if(abort?.signal.aborted)throw abort.signal.reason;};
   async function storePending() {
     state.status='saving';state.canStop=false;state.stage='Saving mesh';state.percent=null;state.progress='Saving generated mesh…';publish();
     const {glb,generation,label}=state.pending;
@@ -29,14 +31,14 @@ export function createAuthoringGeneration({initialize,loadInput,persist,changed=
     read:()=>structuredClone(state),
     stop() {
       if(!active||!state.canStop||abort.signal.aborted)return false;
-      abort.abort('operator-stop');state.canStop=false;state.status='stopping';state.progress='Stopping… waiting for the current work to settle.';publish();return true;
+      abort.abort(new DOMException('Generation stopped by operator','AbortError'));state.canStop=false;state.status='stopping';state.progress='Stopping… waiting for the current work to settle.';publish();return true;
     },
     async retryPersistence() {
       if(active)throw Error('Generation is already running');
       if(!state.pending)throw Error('No generated output needs saving');
       active=true;
       try{return await storePending();}
-      catch(error){state.status='failed';state.error=`persistence: ${error.message}`;publish();throw error;}
+      catch(error){state.status='failed';state.error=`persistence: ${errorIdentity(error).message}`;publish();throw error;}
       finally{active=false;}
     },
     async run(input) {
@@ -64,9 +66,14 @@ export function createAuthoringGeneration({initialize,loadInput,persist,changed=
         state.pending={glb:result.glb,generation,label:input.label || input.name || 'Generated'};phase='persistence';
         return await storePending();
       }catch(error){
-        state.terminal={phase,run:error.sf3dRun || null,cooperative:error.cooperativeExecutionReport || null,error:{name:error.name,message:error.message}};
-        if(phase!=='persistence'&&abort.signal.aborted&&error.name==='AbortError'){state.status='stopped';state.error=null;state.percent=null;state.stage=null;state.progress='Generation stopped. Your scene is unchanged.';return null;}
-        state.status='failed';state.error=`${phase}: ${error.message}`;throw error;
+        const identity=errorIdentity(error),secondary=error?.cooperativeExecutionReport?.failure?.secondaryFailures || [];
+        state.terminal={phase,run:error?.sf3dRun || null,cooperative:error?.cooperativeExecutionReport || null,error:identity};
+        if(phase!=='persistence'&&abort.signal.aborted&&identity.name==='AbortError'&&secondary.length===0){state.status='stopped';state.error=null;state.percent=null;state.stage=null;state.progress='Generation stopped. Your scene is unchanged.';return null;}
+        state.status='failed';
+        const message=secondary.length?`${identity.message}; cancellation drain failed: ${secondary.map(failure=>errorIdentity(failure.error).message).join('; ')}`:identity.message;
+        state.error=`${phase}: ${message}`;
+        if(secondary.length)throw new AggregateError([error,...secondary.map(failure=>Error(errorIdentity(failure.error).message))],message,{cause:error});
+        throw error;
       }finally{active=false;state.canStop=false;abort=null;publish();}
     },
   };
