@@ -3269,7 +3269,8 @@ struct NonRidgeOpticalCaptureRow {
 // staggered reading and averaged onto the faces by csFaceForces. One r32float
 // 3-D storage texture with the three components stacked along depth
 // (z + component x GRID): compute is at its storage-buffer limit.
-@group(0) @binding(20) var forceDelta: texture_storage_3d<r32float, read_write>;
+// Binding 22: 20/21 are reserved for the joined outer grid's optical and solid textures (Sexy Fireman).
+@group(0) @binding(22) var forceDelta: texture_storage_3d<r32float, read_write>;
 
 fn forceDeltaStore(c: vec3<i32>, f: vec3<f32>) {
   textureStore(forceDelta, c, vec4<f32>(f.x, 0.0, 0.0, 0.0));
@@ -11717,7 +11718,7 @@ export function createKaminosVolumePrototype({
         { binding: 17, resource: inflowCoverageTexture.createView() },
         { binding: 18, resource: inflowPerturbationTexture.createView() },
         { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
-        { binding: 20, resource: forceDeltaTexture.createView({ dimension: '3d' }) },
+        { binding: 22, resource: forceDeltaTexture.createView({ dimension: '3d' }) },
       ],
     });
   }
@@ -13652,7 +13653,7 @@ export function createKaminosVolumePrototype({
         { binding: 18, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
         // The raymarch fragment entry point reaches divergenceAtCell through the shared module, so the binding must be fragment-visible too (slice-2 lesson at 1e8996ab).
         { binding: 19, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
-        { binding: 20, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
+        { binding: 22, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
