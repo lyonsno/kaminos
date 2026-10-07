@@ -187,8 +187,8 @@ test('cockpit, schema and layout carry the time-step mode', () => {
   assert.deepEqual(control.allowedValues, ['legacy', 'uniform']);
   assert.equal(control.additiveSinceControlCount, 216);
   // 217 and 218 are the inflow-boundary emitter controls (fuel fraction, inlet temperature); 219–227 the aperture pattern, swirl and wind model controls; 228–233 line weight, jet jitter, inlet turbulence (+ scale), puffing (+ period).
-  assert.equal(schema.controlCount, 247);
-  assert.equal(schema.controls.length, 247);
+  assert.equal(schema.controlCount, 248);
+  assert.equal(schema.controls.length, 248);
 });
 
 test('the arm capture records and checks the time-step mode', () => {

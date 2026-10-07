@@ -2100,6 +2100,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-immersed-cap-fraction-val">0.5</span>
     </div>
     <span class="slider-help">Diagnostic: the most volume one cell may create per step, as a fraction of one velocity unit. The receipt shows requested against effective supply and how many cells the cap clipped; lowering it starves the source, it is not a physical control.</span>
+    <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
+      <span class="slider-label">Back wall</span>
+      <input type="range" id="volume-immersed-back-wall" data-volume-settings-param="volume_immersed_back_wall" min="0" max="1" step="1" value="1">
+      <span class="slider-val" id="volume-immersed-back-wall-val">on</span>
+    </div>
+    <span class="slider-help">A solid disc two cells thick immediately behind the source, written into the same collision mask the kiln uses, so the created gas can only leave forward and sideways. Off is the pure volumetric source, which the bench showed leaking about half its supply backward; keep it on for a nozzle, turn it off to compare.</span>
     <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
       <span class="slider-label">Fixed Source Dephase</span>
       <input type="checkbox" id="volume-fixed-source-dephase" data-volume-settings-param="volume_fixed_source_dephase" checked>
@@ -22430,6 +22436,7 @@ function readVolumeControls() {
     immersedTemperature: parseFloat(document.getElementById('volume-immersed-temperature').value),
     immersedMomentumGain: parseFloat(document.getElementById('volume-immersed-momentum-gain').value),
     immersedCapFraction: parseFloat(document.getElementById('volume-immersed-cap-fraction').value),
+    immersedBackWall: parseFloat(document.getElementById('volume-immersed-back-wall').value),
     pressureSolverIterations: parseFloat(document.getElementById('volume-pressure-solver-iterations').value),
     advectionScheme: document.getElementById('volume-advection-scheme').value,
     confinement: document.getElementById('volume-confinement').value,
@@ -22551,6 +22558,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-immersed-temperature-val').textContent = Number(c.immersedTemperature).toFixed(2);
   document.getElementById('volume-immersed-momentum-gain-val').textContent = Number(c.immersedMomentumGain).toFixed(2);
   document.getElementById('volume-immersed-cap-fraction-val').textContent = Number(c.immersedCapFraction).toFixed(2);
+  document.getElementById('volume-immersed-back-wall-val').textContent = c.immersedBackWall >= 0.5 ? 'on' : 'off';
   document.getElementById('volume-emitter-line-weight-val').textContent = c.emitterLineWeight.toFixed(2);
   document.getElementById('volume-emitter-jet-jitter-val').textContent = c.emitterJetJitter.toFixed(2);
   document.getElementById('volume-emitter-inlet-turbulence-val').textContent = c.emitterInletTurbulence.toFixed(2);
@@ -22901,7 +22909,7 @@ function refreshVolumeReadout() {
   document.getElementById('volume-immersed-source-state').textContent = !immersed || immersed.requested.sourceLaw !== 'immersed-source'
     ? 'off'
     : (immersed.effective.admitted
-      ? `requested ${immersed.effective.fluxRequested.toFixed(2)} · effective ${immersed.effective.fluxEffectivePredicted.toFixed(2)} cells³/step · ${immersed.effective.footprint.cells} cells${immersed.effective.clipPredicted.cells ? ` · CAP CLIPPING ${immersed.effective.clipPredicted.cells}` : ''} · aim ${immersed.requested.yaw.toFixed(0)}°/${immersed.requested.pitch.toFixed(0)}°`
+      ? `requested ${immersed.effective.fluxRequested.toFixed(2)} · effective ${immersed.effective.fluxEffectivePredicted.toFixed(2)} cells³/step · ${immersed.effective.footprint.cells} cells${immersed.effective.clipPredicted.cells ? ` · CAP CLIPPING ${immersed.effective.clipPredicted.cells}` : ''} · aim ${immersed.requested.yaw.toFixed(0)}°/${immersed.requested.pitch.toFixed(0)}° · wall ${immersed.effective.backWall.requested ? `${s.sceneCollision?.emitterBackWallCells ?? 0} cells` : 'off'}`
       : `immersed — NOT ADMITTED (${immersed.effective.reason}); set Pressure solver to converged and Projection above 0`);
   document.getElementById('volume-inflow-boundary-state').textContent = !inflow
     ? 'off'
@@ -23240,7 +23248,7 @@ async function initKaminosVolumeRoute() {
   // select shows the family shape the map falls back to, and the request is
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
-  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction'];
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
     if (!param || !params.has(param)) continue;
@@ -24136,6 +24144,7 @@ async function initKaminosVolumeRoute() {
     'volume-immersed-temperature',
     'volume-immersed-momentum-gain',
     'volume-immersed-cap-fraction',
+    'volume-immersed-back-wall',
     'volume-wind-model',
     'volume-wind-gust',
     'volume-wind-gust-period',

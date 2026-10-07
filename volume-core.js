@@ -2416,6 +2416,36 @@ export function immersedSourceWeights(effective, { grid, gridHeight }) {
       }
   return { cells, sum };
 }
+// Bounded A (section 31): the source's back wall is a solid disc of
+// IMMERSED_BACK_WALL_CELLS cells immediately behind the source slab (along in
+// [-(t/2 + wall), -t/2)), sealed half a cell beyond the radius, written into the
+// scene-solid mask so the solve, the backtrace and the projection treat it as
+// the kiln. The source layer and the wall are disjoint by construction.
+export const IMMERSED_BACK_WALL_CELLS = 2;
+export function immersedBackWallCells(effective, { grid, gridHeight }) {
+  const c = effective.centreCells, n = effective.direction, r = effective.radiusCells + 0.5, half = effective.thickness / 2;
+  const depth = effective.backWall?.thicknessCells ?? IMMERSED_BACK_WALL_CELLS;
+  const reach = Math.ceil(Math.max(r, half + depth) + 1);
+  const cells = [];
+  for (let z = Math.max(0, Math.floor(c[2] - reach)); z <= Math.min(grid - 1, Math.ceil(c[2] + reach)); z += 1)
+    for (let y = Math.max(0, Math.floor(c[1] - reach)); y <= Math.min(gridHeight - 1, Math.ceil(c[1] + reach)); y += 1)
+      for (let x = Math.max(0, Math.floor(c[0] - reach)); x <= Math.min(grid - 1, Math.ceil(c[0] + reach)); x += 1) {
+        const d = [x + 0.5 - c[0], y + 0.5 - c[1], z + 0.5 - c[2]];
+        const along = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
+        if (!(along < -half && along >= -(half + depth))) continue;
+        const radial = Math.hypot(d[0] - along * n[0], d[1] - along * n[1], d[2] - along * n[2]);
+        if (radial <= r) cells.push({ x, y, z });
+      }
+  return cells;
+}
+// The scene-solid field with the wall added: a copy of the kiln's cells (or
+// zeros) with each wall cell set; addedCells counts cells that were not solid.
+export function composeSolidField(baseCells, wallCells, { grid, gridHeight }) {
+  const cells = baseCells ? new Uint8Array(baseCells) : new Uint8Array(grid * gridHeight * grid);
+  let addedCells = 0;
+  for (const w of wallCells) { const i = w.x + grid * (w.y + gridHeight * w.z); if (!cells[i]) { cells[i] = 1; addedCells += 1; } }
+  return { cells, addedCells };
+}
 export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const grid = normalizeGridSize(options.grid ?? 64);
   const gridHeight = options.gridHeight ?? grid * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
@@ -2431,7 +2461,8 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const temperature = clampFinite(controls.immersedTemperature, 0, 2, 1.2);
   const momentumGain = clampFinite(controls.immersedMomentumGain, 0, 2, 1);
   const capFraction = clampFinite(controls.immersedCapFraction, 0.1, 1, 0.5);
-  const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness, speed, fuel, temperature, momentumGain, capFraction, puffFactor };
+  const backWallRequested = clampFinite(controls.immersedBackWall, 0, 1, 1) >= 0.5;
+  const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness, speed, fuel, temperature, momentumGain, capFraction, puffFactor, backWall: backWallRequested };
   const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, puffFactor } });
   if (sourceLaw !== IMMERSED_SOURCE_LAW) return off('source-law-is-not-immersed-source');
   if (pressure.solver !== PRESSURE_SOLVER_CONVERGED) return off('immersed-source-requires-converged-pressure-solver');
@@ -2444,7 +2475,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   // A cell cannot create more volume per step than its faces can carry out:
   // the cap is a fraction of one stored-velocity unit per step. Reported, never silent.
   const capPerCell = capFraction;
-  const effective = { admitted: true, reason: null, grid, centreCells, direction, radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor };
+  const effective = { admitted: true, reason: null, grid, centreCells, direction, radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS } };
   // The normaliser is the discrete weight sum, so Σ target = Q exactly on this
   // grid; the analytic slab volume π r² t is kept for reference (the antialiased
   // skirt and the cell lattice make the sum run a few percent over it).
@@ -11964,8 +11995,17 @@ export function createKaminosVolumePrototype({
     rebuildSelectiveHeadLiveBindGroups();
   }
 
+  // The immersed source's back wall for the current step, from the receipt the
+  // uniform pack just resolved (empty when the law is off or the wall toggled off).
+  function immersedBackWallForState() {
+    const e = state.immersedSource?.effective;
+    if (!e?.admitted || !e.backWall?.requested) return { cells: [], key: 'none' };
+    const cells = immersedBackWallCells(e, { grid: gridSize, gridHeight });
+    return { cells, key: `${e.centreCells.map(v => v.toFixed(2)).join(',')}/${e.direction.map(v => v.toFixed(3)).join(',')}/${e.radiusCells.toFixed(2)}/${e.thickness}/${e.backWall.thicknessCells}` };
+  }
   function refreshSceneCollision() {
     if (!device || typeof getSceneCollision !== 'function') return;
+    const backWall = immersedBackWallForState();
     const source = getSceneCollision();
     const requested = source?.requested === true;
     const sourceId = requested ? String(source.id || '') : null;
@@ -11978,6 +12018,18 @@ export function createKaminosVolumePrototype({
       : !transport.commonCharacteristic ? `unsupported-transport-regime:${transport.scheme}`
       : null;
     if (reason || !requested) {
+      if (backWall.cells.length) {
+        // No kiln: the mask carries the emitter's back wall alone.
+        const key = `wall:${backWall.key}`;
+        if (sceneSolidRevisionKey !== key) {
+          const composed = composeSolidField(null, backWall.cells, { grid: gridSize, gridHeight });
+          installSceneSolidTexture({ cells: composed.cells, surfaceCellCount: composed.addedCells, interiorCellCount: 0, blockedFaceCount: null });
+          rebuildSceneSolidBindingViews();
+          sceneSolidRevisionKey = key;
+        }
+        state.sceneCollision = {requested, effective: 'emitter-back-wall', sourceId, reason, grid: gridSize, solidCellCount: backWall.cells.length, emitterBackWallCells: backWall.cells.length};
+        return;
+      }
       const key = `${requested}:${sourceId}:${reason}`;
       if (sceneSolidRevisionKey !== key) {
         if (sceneSolidCellsCpu) {
@@ -11986,14 +12038,14 @@ export function createKaminosVolumePrototype({
         }
         sceneSolidRevisionKey = key;
       }
-      state.sceneCollision = {requested, effective: 'off', sourceId, reason, grid: gridSize, solidCellCount: 0};
+      state.sceneCollision = {requested, effective: 'off', sourceId, reason, grid: gridSize, solidCellCount: 0, emitterBackWallCells: 0};
       return;
     }
     let key = null;
     try {
       const revision = sceneSolidRevision(source.object, productTransform);
       const emitterBoundsRevision = `${analyticEmitterDispatch.cellMin.join(',')}/${analyticEmitterDispatch.cellExtent.join(',')}`;
-      key = `${gridSize}:${sourceId}:${revision}:${solver.solver}:${solver.projection}:${transport.scheme}:${emitterBoundsRevision}:${analyticEmitterDescriptorSignature}`;
+      key = `${gridSize}:${sourceId}:${revision}:${solver.solver}:${solver.projection}:${transport.scheme}:${emitterBoundsRevision}:${analyticEmitterDescriptorSignature}:wall:${backWall.key}`;
       if (key === sceneSolidRevisionKey) return;
       const started = performance.now();
       const extraction = trianglesFromSceneObject(source.object, productTransform);
@@ -12017,16 +12069,19 @@ export function createKaminosVolumePrototype({
       if (sourceBounds.active && sourceSupport.fluidSupportCells === 0) {
         throw new Error('authored-solid-occludes-emitter-source-support');
       }
+      const composedWall = composeSolidField(field.cells, backWall.cells, { grid: gridSize, gridHeight });
+      if (backWall.cells.length) field.cells = composedWall.cells;
       installSceneSolidTexture(field);
       rebuildSceneSolidBindingViews();
       sceneSolidRevisionKey = key;
       state.sceneCollision = {
         requested: true, effective: 'mesh-voxel-solid', sourceId, reason: null,
+        emitterBackWallCells: composedWall.addedCells,
         geometryRevision: revision, grid: gridSize,
         triangleCount: extraction.triangles.length,
         surfaceCellCount: field.surfaceCellCount,
         interiorCellCount: field.interiorCellCount,
-        solidCellCount: field.surfaceCellCount + field.interiorCellCount,
+        solidCellCount: field.surfaceCellCount + field.interiorCellCount + composedWall.addedCells,
         blockedFaceCount: field.blockedFaceCount,
         sourceBoundsSolidCells,
         sourceBoundsCellCount: sourceBounds.cellCount,
@@ -16021,7 +16076,7 @@ export function createKaminosVolumePrototype({
     pressureResidualCopyPending = true;
     pressureResidualCopyStep = state.simStepCount;
     pressureResidualCopyFrame = state.frameCount;
-    pressureResidualCopyFluidCells = gridCellCount(gridSize) - (state.sceneCollision?.effective === 'mesh-voxel-solid' ? state.sceneCollision.solidCellCount : 0);
+    pressureResidualCopyFluidCells = gridCellCount(gridSize) - (state.sceneCollision?.solidCellCount ?? 0);
     pressureResidualCopySolver = state.pressureSolver?.effective ? { ...state.pressureSolver.effective } : null;
     pressureResidualCopyMeasurement = pressureResidualMeasurement(state.heatRelease);
   }

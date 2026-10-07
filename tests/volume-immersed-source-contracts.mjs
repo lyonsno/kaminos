@@ -112,6 +112,55 @@ test('cockpit: the source law option, eleven bench rows with help, snapshot, lis
     assert.equal(control.additiveSinceControlCount, e.additiveSinceControlCount);
     assert.ok('additiveDefault' in control);
   }
-  assert.equal(schema.controlCount, 247);
-  assert.equal(schema.controls.length, 247);
+  assert.equal(schema.controlCount, 248);
+  assert.equal(schema.controls.length, 248);
+});
+
+// Bounded A (report section 31, after the cold bench): a solid back disc one to
+// two cells thick immediately behind the source layer, written into the
+// scene-solid mask the kiln collision uses, so the projection can only expand
+// the created volume forward and sideways. Toggle for the bench comparison.
+test('the back wall: resolved as a toggle, its cells lie strictly behind the source slab inside the radius, and compose into a solid field', () => {
+  const on = core.resolveImmersedSourceConfig(base, { grid: 64 });
+  assert.deepEqual(on.effective.backWall, { requested: true, thicknessCells: 2 }, 'on by default');
+  assert.deepEqual(core.resolveImmersedSourceConfig({ ...base, immersedBackWall: 0 }, { grid: 64 }).effective.backWall, { requested: false, thicknessCells: 2 });
+  const wall = core.immersedBackWallCells(on.effective, { grid: 64, gridHeight: 128 });
+  assert.ok(wall.length > 0);
+  const n = on.effective.direction, c = on.effective.centreCells, r = on.effective.radiusCells, half = on.effective.thickness / 2;
+  for (const cell of wall) {
+    const d = [cell.x + 0.5 - c[0], cell.y + 0.5 - c[1], cell.z + 0.5 - c[2]];
+    const along = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
+    const radial = Math.hypot(d[0] - along * n[0], d[1] - along * n[1], d[2] - along * n[2]);
+    assert.ok(along < -half + 1e-9 && along >= -(half + 2) - 1e-9, `behind the slab: along ${along}`);
+    assert.ok(radial <= r + 0.5 + 1e-9, `inside the sealed radius: ${radial}`);
+  }
+  // No wall cell carries source weight: the source layer and the wall are disjoint.
+  const weights = core.immersedSourceWeights(on.effective, { grid: 64, gridHeight: 128 });
+  const weightKeys = new Set(weights.cells.filter(w => w.w > 0.5).map(w => `${w.x},${w.y},${w.z}`));
+  assert.ok(!wall.some(w => weightKeys.has(`${w.x},${w.y},${w.z}`)), 'the wall never sits on a cell that is mostly source');
+  // Aimed +x the wall stands on the −x side of the disc.
+  const side = core.resolveImmersedSourceConfig({ ...base, immersedPitch: 0 }, { grid: 64 });
+  const sideWall = core.immersedBackWallCells(side.effective, { grid: 64, gridHeight: 128 });
+  assert.ok(sideWall.every(w => w.x + 0.5 < side.effective.centreCells[0]), 'behind means −x for a +x aim');
+  // Composition into the mask: zeros plus the wall, or a kiln field plus the wall.
+  const composed = core.composeSolidField(null, wall, { grid: 64, gridHeight: 128 });
+  assert.equal(composed.cells.length, 64 * 128 * 64);
+  assert.equal(composed.addedCells, wall.length);
+  assert.equal(composed.cells[wall[0].x + 64 * (wall[0].y + 128 * wall[0].z)], 1);
+  const kiln = new Uint8Array(64 * 128 * 64); kiln[5] = 1; kiln[wall[0].x + 64 * (wall[0].y + 128 * wall[0].z)] = 1;
+  const merged = core.composeSolidField(kiln, wall, { grid: 64, gridHeight: 128 });
+  assert.equal(merged.cells[5], 1, 'the kiln is kept');
+  assert.equal(merged.addedCells, wall.length - 1, 'a wall cell already solid is not counted twice');
+  // The collision refresh composes the wall whether or not a kiln is requested, keyed by the source pose.
+  const refresh = source.slice(source.indexOf('function refreshSceneCollision()'), source.indexOf('\n  }\n', source.indexOf('function refreshSceneCollision()') + 10));
+  assert.match(refresh, /const backWall = immersedBackWallForState\(\);/);
+  assert.match(refresh, /effective: 'emitter-back-wall'/, 'a wall without a kiln is its own mode');
+  assert.match(refresh, /composeSolidField\(field\.cells, backWall\.cells/, 'a wall with a kiln is composed into the voxel field');
+  assert.match(source, /pressureResidualCopyFluidCells = gridCellCount\(gridSize\) - \(state\.sceneCollision\?\.solidCellCount \?\? 0\);/, 'fluid-cell count follows any solid mode');
+  // Cockpit and schema.
+  assert.match(index, /<input type="range" id="volume-immersed-back-wall" data-volume-settings-param="volume_immersed_back_wall" min="0" max="1" step="1" value="1">/);
+  assert.match(index, /immersedBackWall: parseFloat\(document\.getElementById\('volume-immersed-back-wall'\)\.value\)/);
+  const control = schema.controls.find(c => c.key === 'volume-immersed-back-wall');
+  assert.deepEqual(control, { key: 'volume-immersed-back-wall', param: 'volume_immersed_back_wall', tagName: 'INPUT', type: 'range', additiveDefault: 1, additiveSinceControlCount: 248 });
+  assert.equal(schema.controlCount, 248);
 });

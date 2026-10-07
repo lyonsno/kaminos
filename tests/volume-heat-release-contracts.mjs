@@ -78,7 +78,7 @@ test('cockpit: the expansion gain is a control with help, restored from routes, 
   assert.match(index, /heat-release — NOT ADMITTED \(\$\{/, 'a refused expansion is named');
   const control = schema.controls.find(c => c.key === 'volume-heat-release-expansion');
   assert.deepEqual(control, { key: 'volume-heat-release-expansion', param: 'volume_heat_release_expansion', tagName: 'INPUT', type: 'range', additiveDefault: 0, additiveSinceControlCount: 234 });
-  assert.equal(schema.controlCount, 247);
+  assert.equal(schema.controlCount, 248);
 });
 
 test('the residual probe names what it measures once expansion is active (review HR-02)', () => {

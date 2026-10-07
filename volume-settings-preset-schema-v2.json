@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 247,
+  "controlCount": 248,
   "controls": [
     {
       "key": "volume-physical-material-law",
@@ -529,6 +529,14 @@
       "type": "range",
       "additiveDefault": 0.5,
       "additiveSinceControlCount": 247
+    },
+    {
+      "key": "volume-immersed-back-wall",
+      "param": "volume_immersed_back_wall",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 1,
+      "additiveSinceControlCount": 248
     },
     {
       "key": "volume-pyro-compare",
