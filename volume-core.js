@@ -2549,18 +2549,24 @@ export function pressureResidualMeasurement(heatRelease, immersedSource) {
   const i = immersedSource?.effective;
   const immersedAdmitted = i?.admitted === true;
   const fluxRequested = immersedAdmitted && Number.isFinite(i.fluxRequested) ? i.fluxRequested : 0;
+  const fluxEffectivePredicted = immersedAdmitted && Number.isFinite(i.fluxEffectivePredicted) ? i.fluxEffectivePredicted : 0;
+  const capPerCell = immersedAdmitted && Number.isFinite(i.capPerCell) ? i.capPerCell : 0;
+  const clipPredicted = immersedAdmitted && i.clipPredicted ? { cells: i.clipPredicted.cells, of: i.clipPredicted.of } : { cells: 0, of: 0 };
   const targets = [];
   if (admitted) targets.push('heat-release');
   if (immersedAdmitted) targets.push('immersed-source');
   const terms = [];
   if (admitted) terms.push(`heat-release expansion target at gain ${expansion}`);
-  if (immersedAdmitted) terms.push(`immersed source supply ${fluxRequested} cells³/step over its slab`);
+  // The immersed term is the capped per-cell law (confirmation IS-04-C): the
+  // requested Q is the authored supply, the predicted effective total is the
+  // CPU model's sum of the capped targets on the dispatched mask.
+  if (immersedAdmitted) terms.push(`immersed source target min(cap ${capPerCell}, w × Q/Σw) per slab cell: requested Q ${fluxRequested.toFixed(2)}, predicted effective ${fluxEffectivePredicted.toFixed(2)} cells³/step (${clipPredicted.cells ? `${clipPredicted.cells} of ${clipPredicted.of} cells clipped` : 'no cell clipped'})`);
   return {
     compact: targets.length ? 'divergence-minus-expansion-target' : 'divergence',
     wide: 'legacy-central-divergence',
     targets,
     heatRelease: { admitted, expansion },
-    immersedSource: { admitted: immersedAdmitted, fluxRequested },
+    immersedSource: { admitted: immersedAdmitted, fluxRequested, fluxEffectivePredicted, capPerCell, clipPredicted, law: immersedAdmitted ? 'min(cap, w × Q / Σw) per slab cell on the dispatched mask' : null },
     statement: targets.length
       ? `compact = |D(v) − S| on the compact operator, S = ${terms.join(' + ')}; a converged solve drives D(v) to S, a partial projection to (1 − gain) × D(v_before) + gain × S`
       : 'compact = |D(v)| on the compact operator; heat-release expansion and immersed source off',
@@ -15348,7 +15354,15 @@ export function createKaminosVolumePrototype({
     const velocityStaggeringConfig = resolveVelocityStaggeringConfig(controlsSnapshot);
     uniforms.set(velocityStaggeringUniformValues(velocityStaggeringConfig), VELOCITY_STAGGERING_UNIFORM_OFFSET);
     state.velocityStaggering = velocityStaggeringConfig;
-    const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: inflowBoundaryConfig.requested?.inletDynamics?.puffFactor ?? resolveInletDynamicsConfig(controlsSnapshot, inletSignals).effective.puffFactor, solidCells: sceneSolidCellsCpu });
+    // Pose → mask → supply (confirmation IS-03-C): the pose is resolved and
+    // published first so the collision refresh composes and installs this
+    // step's mask (the wall follows the pose only); the supply is then
+    // normalised against the mask the kernel will actually dispatch on. The
+    // refresh in encodeSim is a no-op by key after this.
+    const immersedPuffFactor = inflowBoundaryConfig.requested?.inletDynamics?.puffFactor ?? resolveInletDynamicsConfig(controlsSnapshot, inletSignals).effective.puffFactor;
+    state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor });
+    refreshSceneCollision();
+    const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, solidCells: sceneSolidCellsCpu });
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
     if (inflowBoundaryConfig.effective.admitted && inflowCoverageTexture) {

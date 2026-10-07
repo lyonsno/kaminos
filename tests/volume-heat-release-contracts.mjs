@@ -83,7 +83,7 @@ test('cockpit: the expansion gain is a control with help, restored from routes, 
 
 test('the residual probe names what it measures once expansion is active (review HR-02)', () => {
   const offMeasure = core.pressureResidualMeasurement({ effective: { admitted: false, expansion: 0, reason: 'heat-release-expansion-is-zero' } });
-  assert.deepEqual(offMeasure, { compact: 'divergence', wide: 'legacy-central-divergence', targets: [], heatRelease: { admitted: false, expansion: 0 }, immersedSource: { admitted: false, fluxRequested: 0 }, statement: 'compact = |D(v)| on the compact operator; heat-release expansion and immersed source off' });
+  assert.deepEqual(offMeasure, { compact: 'divergence', wide: 'legacy-central-divergence', targets: [], heatRelease: { admitted: false, expansion: 0 }, immersedSource: { admitted: false, fluxRequested: 0, fluxEffectivePredicted: 0, capPerCell: 0, clipPredicted: { cells: 0, of: 0 }, law: null }, statement: 'compact = |D(v)| on the compact operator; heat-release expansion and immersed source off' });
   const onMeasure = core.pressureResidualMeasurement({ effective: { admitted: true, expansion: 1.5, reason: null } });
   assert.equal(onMeasure.compact, 'divergence-minus-expansion-target');
   assert.deepEqual(onMeasure.heatRelease, { admitted: true, expansion: 1.5 });

@@ -219,13 +219,13 @@ test('IS-03: supply accounting follows the composed fluid support: the wall sits
 
 test('IS-04: the residual measurement names the combined target (heat release + immersed source), snapshotted at copy time', () => {
   const hrOn = { effective: { admitted: true, expansion: 1 } }, hrOff = { effective: { admitted: false, expansion: 0 } };
-  const imOn = { effective: { admitted: true, fluxRequested: 12.9 } }, imOff = { effective: { admitted: false, fluxRequested: 0 } };
+  const imOn = { effective: { admitted: true, fluxRequested: 12.9, fluxEffectivePredicted: 12.9, capPerCell: 0.5, clipPredicted: { cells: 0, of: 296 } } }, imOff = { effective: { admitted: false, fluxRequested: 0 } };
   assert.equal(core.pressureResidualMeasurement(hrOff, imOff).compact, 'divergence');
   const both = core.pressureResidualMeasurement(hrOn, imOn);
   assert.equal(both.compact, 'divergence-minus-expansion-target');
   assert.deepEqual(both.targets, ['heat-release', 'immersed-source']);
   assert.match(both.statement, /heat-release expansion target at gain 1/);
-  assert.match(both.statement, /immersed source supply 12\.9/);
+  assert.match(both.statement, /immersed source target min\(cap 0\.5, w × Q\/Σw\) per slab cell: requested Q 12\.90/);
   assert.deepEqual(core.pressureResidualMeasurement(hrOff, imOn).targets, ['immersed-source']);
   assert.equal(core.pressureResidualMeasurement(hrOff, imOn).compact, 'divergence-minus-expansion-target');
   assert.deepEqual(core.pressureResidualMeasurement(hrOn, imOff).targets, ['heat-release']);
@@ -247,14 +247,14 @@ test('IS-05: the capture compares every immersed control an arm sets against the
   assert.equal(effectiveMismatches({ set: [['volume-immersed-speed', '0.1']] }, { immersedSource: { requested: { speed: 0.1 }, effective: { admitted: false, reason: 'immersed-source-requires-open-top-pressure-solver' } } }, null).length, 1, 'a refused receipt fails a source-dependent arm');
 });
 
-test('IS-06: the residual probe counts the full tall grid, with and without the wall', async () => {
+test('IS-06 (withdrawn as a defect; kept as the explicit shape contract): the residual probe snapshots the full tall grid, with and without the wall', async () => {
   const vm = await import('node:vm');
   const start = source.indexOf('  function finishPressureResidualProbe(');
   const end = source.indexOf('  function encodePressureProjection(', start);
   const run = async (solidCellCount) => {
     let release; const mapped = new Promise(r => { release = r; });
     const state = { frameCount: 50, simStepCount: 48, heatRelease: { effective: { admitted: false, expansion: 0 } }, immersedSource: { effective: { admitted: false } }, sceneCollision: { solidCellCount }, pressureSolver: { effective: { solver: 'converged', openTop: true } } };
-    const context = { state, gridSize: 4, gridHeight: 8, pressureResidualCopyPending: false, pressureResidualMapPending: false, pressureResidualMapStartedFrame: 0, pressureResidualMapGeneration: 0, pressureResidualWorkgroupCount: 2, pressureResidualCopyStep: 0, pressureResidualCopyFrame: 0, pressureResidualCopyFluidCells: 0, pressureResidualCopyCells: 0, pressureResidualCopyGridHeight: 0, pressureResidualCopySolver: null, pressureResidualCopyMeasurement: null, pressureResidualAfterPipeline: {}, pressureResidualBindGroup: {}, pressureResidualPartialsBuffer: {}, fluidBindGroup: () => ({}), pressureResidualReadbackBuffer: { mapAsync: () => mapped, getMappedRange: () => new Float32Array(2 * 20).buffer, unmap() {} }, GPUMapMode: { READ: 1 }, setTimeout, clearTimeout, Float32Array, performance, Math, Number, Promise, Error, PRESSURE_RESIDUAL_MAP_TIMEOUT_MS: 10000, PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR: 'synthetic-timeout', PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP: 20, gridCellCount: g => g ** 3, gridHeightForSize: g => g * 2, pressureResidualMeasurement: core.pressureResidualMeasurement, residualProfileFromPartials: core.residualProfileFromPartials };
+    const context = { state, gridSize: 4, gridHeight: 8, pressureResidualCopyPending: false, pressureResidualMapPending: false, pressureResidualMapStartedFrame: 0, pressureResidualMapGeneration: 0, pressureResidualWorkgroupCount: 2, pressureResidualCopyStep: 0, pressureResidualCopyFrame: 0, pressureResidualCopyFluidCells: 0, pressureResidualCopyCells: 0, pressureResidualCopyGridHeight: 0, pressureResidualCopySolver: null, pressureResidualCopyMeasurement: null, pressureResidualAfterPipeline: {}, pressureResidualBindGroup: {}, pressureResidualPartialsBuffer: {}, fluidBindGroup: () => ({}), pressureResidualReadbackBuffer: { mapAsync: () => mapped, getMappedRange: () => new Float32Array(2 * 20).buffer, unmap() {} }, GPUMapMode: { READ: 1 }, setTimeout, clearTimeout, Float32Array, performance, Math, Number, Promise, Error, PRESSURE_RESIDUAL_MAP_TIMEOUT_MS: 10000, PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR: 'synthetic-timeout', PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP: 20, gridCellCount: g => g * 2 * g * g, gridHeightForSize: g => g * 2, pressureResidualMeasurement: core.pressureResidualMeasurement, residualProfileFromPartials: core.residualProfileFromPartials };
     context.encoder = { beginComputePass: () => ({ setPipeline() {}, setBindGroup() {}, dispatchWorkgroups() {}, end() {} }), copyBufferToBuffer() {} };
     const pending = vm.runInNewContext(source.slice(start, end) + '\nfinishPressureResidualProbe(encoder);\nresolvePressureResidualProbe();', context);
     release(); await pending;
@@ -266,4 +266,75 @@ test('IS-06: the residual probe counts the full tall grid, with and without the 
   assert.equal(plain.fluidCells, 4 * 8 * 4);
   const walled = await run(10);
   assert.equal(walled.cells, 128); assert.equal(walled.fluidCells, 118); assert.equal(walled.solidCells, 10);
+});
+
+// Confirmation 1 at eb8bb6a0 (IS-03-C, IS-04-C).
+test('IS-03-C: the source uniforms are packed against the mask the same step dispatches (pose → mask → normaliser)', async () => {
+  const vm = await import('node:vm');
+  const shape = { grid: 64, gridHeight: 128 };
+  const pose = { ...base, immersedSpeed: 0.01, immersedCapFraction: 1, immersedBackWall: 1 };
+  const makeContext = () => {
+    const ctx = { device: {}, getSceneCollision: () => ({ requested: false }), gridSize: 64, gridHeight: 128, state: {}, controlsSnapshot: pose, sceneSolidRevisionKey: null, sceneSolidCellsCpu: null, immersedBackWallCells: core.immersedBackWallCells, composeSolidField: core.composeSolidField, resolvePressureSolverConfig: core.resolvePressureSolverConfig, resolveTransportConfig: core.resolveTransportConfig, rebuildSceneSolidBindingViews() {} };
+    ctx.installSceneSolidTexture = (field = null) => { ctx.sceneSolidCellsCpu = field?.cells ?? null; };
+    vm.createContext(ctx);
+    const from = source.indexOf('  function immersedBackWallForState()');
+    const to = source.indexOf('  function fluidBindGroup(', from);
+    vm.runInContext(source.slice(from, to), ctx);
+    return ctx;
+  };
+  const targetSumOnMask = (e, mask) => core.immersedSourceWeights(e, shape).cells.reduce((s, p) => s + (mask?.[p.x + 64 * (p.y + 128 * p.z)] ? 0 : Math.min(e.capPerCell, p.w * e.fluxRequested / e.normaliser)), 0);
+  // The pack's sequence, as production performs it: resolve the pose, let the
+  // collision refresh compose/install that pose's mask, then resolve the
+  // supply against the installed mask.
+  const packLikeProduction = (ctx, controls) => {
+    ctx.controlsSnapshot = controls;
+    ctx.state.immersedSource = core.resolveImmersedSourceConfig(controls, shape);
+    vm.runInContext('refreshSceneCollision();', ctx);
+    ctx.state.immersedSource = core.resolveImmersedSourceConfig(controls, { ...shape, solidCells: ctx.sceneSolidCellsCpu });
+    return ctx.state.immersedSource.effective;
+  };
+  // The eb8bb6a0 sequence (supply against the previous mask, refresh afterwards) is the replayed defect.
+  const packLikeDefect = (ctx, controls) => {
+    ctx.controlsSnapshot = controls;
+    ctx.state.immersedSource = core.resolveImmersedSourceConfig(controls, { ...shape, solidCells: ctx.sceneSolidCellsCpu });
+    const e = ctx.state.immersedSource.effective;
+    vm.runInContext('refreshSceneCollision();', ctx);
+    return e;
+  };
+  const moved = { ...pose, immersedCentreY: -0.5625 };
+  const defect = makeContext(); packLikeDefect(defect, pose);
+  const eDefect = packLikeDefect(defect, moved);
+  assert.ok(targetSumOnMask(eDefect, defect.sceneSolidCellsCpu) > 100 * eDefect.fluxEffectivePredicted + 1, 'the replayed defect: the old wall covered the moved slab, the receipt predicted ~0, the dispatched mask received the cap everywhere');
+  const fixed = makeContext(); packLikeProduction(fixed, pose);
+  const e = packLikeProduction(fixed, moved);
+  assert.ok(Math.abs(targetSumOnMask(e, fixed.sceneSolidCellsCpu) - e.fluxEffectivePredicted) < 1e-9, 'moved with the wall: the receipt predicts the target on the dispatched mask');
+  assert.ok(Math.abs(e.fluxEffectivePredicted - e.fluxRequested) < 1e-9 && e.masked.cells === 0, 'the wall of the new pose masks nothing');
+  // A kiln-style mask change under a fixed pose: the mask the solve runs on is the one the receipt saw.
+  const kiln = new Uint8Array(64 * 128 * 64);
+  for (const p of core.immersedSourceWeights(e, shape).cells) if (p.x + 0.5 < e.centreCells[0]) kiln[p.x + 64 * (p.y + 128 * p.z)] = 1;
+  fixed.getSceneCollision = () => ({ requested: false });
+  fixed.installSceneSolidTexture({ cells: kiln });
+  fixed.sceneSolidRevisionKey = 'kiln-installed-by-test';
+  const eKiln = core.resolveImmersedSourceConfig(moved, { ...shape, solidCells: fixed.sceneSolidCellsCpu });
+  assert.ok(eKiln.effective.masked.cells > 0 && Math.abs(targetSumOnMask(eKiln.effective, kiln) - eKiln.effective.fluxEffectivePredicted) < 1e-9);
+  // Production ordering pin: inside updateUniforms the pose is resolved and published, the collision refreshed, then the supply packed against the installed mask.
+  const pack = source.slice(source.indexOf('  function updateUniforms('), source.indexOf('IMMERSED_SOURCE_UNIFORM_OFFSET);', source.indexOf('  function updateUniforms(')));
+  const poseAt = pack.indexOf('state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor });');
+  const refreshAt = pack.indexOf('refreshSceneCollision();');
+  const supplyAt = pack.indexOf('const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, solidCells: sceneSolidCellsCpu });');
+  assert.ok(poseAt > 0 && refreshAt > poseAt && supplyAt > refreshAt, `pose ${poseAt} → refresh ${refreshAt} → supply ${supplyAt}`);
+});
+
+test('IS-04-C: the residual measurement names the capped per-cell law and keeps requested apart from predicted effective supply', () => {
+  const clipped = core.resolveImmersedSourceConfig({ ...base, immersedSpeed: 1, immersedCapFraction: 0.1 }, { grid: 64 });
+  assert.ok(clipped.effective.clipPredicted.cells > 200 && clipped.effective.fluxEffectivePredicted < 0.3 * clipped.effective.fluxRequested, 'a clipped fixture');
+  const m = core.pressureResidualMeasurement(null, clipped);
+  assert.deepEqual(m.immersedSource, { admitted: true, fluxRequested: clipped.effective.fluxRequested, fluxEffectivePredicted: clipped.effective.fluxEffectivePredicted, capPerCell: 0.1, clipPredicted: clipped.effective.clipPredicted, law: 'min(cap, w × Q / Σw) per slab cell on the dispatched mask' });
+  assert.match(m.statement, /min\(cap 0\.1, w × Q\/Σw\)/);
+  assert.match(m.statement, /requested Q 128\.68/);
+  assert.match(m.statement, /predicted effective 29\.07 cells³\/step \(280 of 296 cells clipped\)/);
+  assert.doesNotMatch(m.statement, /supply 128\.6\d+ cells³\/step over its slab/, 'requested Q is never described as the delivered total');
+  const open = core.pressureResidualMeasurement(null, core.resolveImmersedSourceConfig(base, { grid: 64 }));
+  assert.match(open.statement, /predicted effective 12\.87 cells³\/step \(no cell clipped\)/);
+  assert.deepEqual(core.pressureResidualMeasurement(null, null).immersedSource, { admitted: false, fluxRequested: 0, fluxEffectivePredicted: 0, capPerCell: 0, clipPredicted: { cells: 0, of: 0 }, law: null });
 });
