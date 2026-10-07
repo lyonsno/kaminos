@@ -172,8 +172,9 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     status.previewStale=changed;
     if(changed&&editing.size) {
       status.status='editing-stale-preview';
-    } else if(changed&&editCommitted&&!rebuildAnnounced) {
-      // Let the browser present status before the synchronous CPU preparation.
+    } else if(changed&&handle&&editCommitted&&!rebuildAnnounced) {
+      // An existing layout can present its explicit stale preview before a
+      // rebuild. The first frame has no layout/depth to present: build it now.
       status.status='rebuild-pending';rebuildAnnounced=true;
     } else if(changed) {
       status.status='building-static-visibility';onStatus({...status});

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.webgpu.js';
 import {mountDistributedSceneRadiance} from '../scene-distributed-radiance.mjs';
+import {prepareSceneSourceFrame} from '../scene-volume-source.mjs';
 
 // Actual local Three geometry/material lifecycle; no GPU arithmetic claim.
 globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,UNIFORM:4,COPY_SRC:8};
@@ -26,9 +27,25 @@ function fixture(castShadow=true) {
   const emitter={position:[0,-.76,0],radius:.19,height:2.2,depth:.24};
   const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,getSourceGuide:()=>emitter,onStatus:s=>statuses.push(s)});
   const field={source:{status:'encoded',texture:{createView(){return {}; }},localMax:[1,3,1],dimensions:[32,64,32],generation:1,frame:1}};
+  prototype.sceneVolumeSourceField=()=>field.source;
   return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,buffers,field,emitter,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='initial-coarse-frame'){
+ const f=fixture();f.mount.setReceiverSpacing(.16);f.mount.setDirections(8);f.mount.setAngularPattern('guided');
+ let hostDrawn=false,volumeEncoderCreated=false;
+ assert.doesNotThrow(()=>prepareSceneSourceFrame({encoder:f.device.createCommandEncoder(),encode:()=>f.field,
+  submit(){},consume(){f.prepare();},
+  renderHost(){if(!f.mount.canRender())return null;hostDrawn=true;return {label:'current host depth'};},
+  createEncoder(){volumeEncoderCreated=true;return {};}}),
+  'initial coarse selection must prepare current receivers before requiring host depth');
+ assert.equal(hostDrawn,true);assert.equal(volumeEncoderCreated,true);
+ const state=f.mount.debugState();assert.equal(state.geometryBuilds,1);assert.equal(state.previewStale,false);
+ assert.equal(state.frame.generation,f.field.source.generation);assert.equal(state.frame.directions,8);
+ assert.equal(state.frame.receiverSampling.spacing,.16);assert.equal(state.frame.angularPattern,'guided');
+ f.prepare();assert.equal(f.mount.debugState().geometryBuilds,1,'following unchanged frame reuses the initial layout');
+ f.mount.dispose();
+}
 if(!selected||selected==='source-guide'){
  const f=fixture();assert.doesNotThrow(()=>f.mount.setAngularPattern('guided'),'emitter-informed mode must reach live gathering');
  f.mount.setDirections(12);f.prepare();let s=f.mount.debugState().frame;
