@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 234,
+  "controlCount": 235,
   "controls": [
     {
       "key": "volume-physical-material-law",
@@ -425,6 +425,14 @@
       "type": "range",
       "additiveDefault": 0,
       "additiveSinceControlCount": 234
+    },
+    {
+      "key": "volume-velocity-staggering",
+      "param": "volume_velocity_staggering",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "collocated",
+      "additiveSinceControlCount": 235
     },
     {
       "key": "volume-pyro-compare",

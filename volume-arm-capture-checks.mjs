@@ -22,6 +22,12 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
       if (!Number.isFinite(effective) || Math.abs(effective - Number(value)) > 1e-6) mismatches.push(`swirl requested ${value}, effective ${effective}`);
     }
     if (cid === 'volume-wind-model' && end.wind?.effective?.model !== value) mismatches.push(`wind model requested ${value}, effective ${end.wind?.effective?.model}`);
+    if (cid === 'volume-velocity-staggering') {
+      const effective = end.velocityStaggering?.effective;
+      if (!effective) mismatches.push(`velocity staggering requested ${value}, no receipt`);
+      else if (value === 'staggered' && effective.admitted !== true) mismatches.push(`velocity staggering requested but not admitted (${effective.reason})`);
+      else if (value !== 'staggered' && effective.mode !== 'collocated') mismatches.push(`velocity staggering requested ${value} but effective ${effective.mode}`);
+    }
     if (cid === 'volume-heat-release-expansion') {
       const requestedGain = Number(value); const effective = end.heatRelease?.effective;
       if (!Number.isFinite(requestedGain)) mismatches.push(`heat release requested ${JSON.stringify(value)} is not a number`);

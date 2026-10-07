@@ -2066,7 +2066,9 @@ export const INFLOW_UNIFORM_FLOATS = 12;
 // gain when admitted (0 refuses, so the legacy solve never sees a source).
 export const HEAT_RELEASE_UNIFORM_OFFSET = INFLOW_UNIFORM_OFFSET + INFLOW_UNIFORM_FLOATS;
 export const HEAT_RELEASE_UNIFORM_FLOATS = 4;
-export const VOLUME_UNIFORM_FLOATS = HEAT_RELEASE_UNIFORM_OFFSET + HEAT_RELEASE_UNIFORM_FLOATS;
+export const VELOCITY_STAGGERING_UNIFORM_OFFSET = HEAT_RELEASE_UNIFORM_OFFSET + HEAT_RELEASE_UNIFORM_FLOATS;
+export const VELOCITY_STAGGERING_UNIFORM_FLOATS = 4;
+export const VOLUME_UNIFORM_FLOATS = VELOCITY_STAGGERING_UNIFORM_OFFSET + VELOCITY_STAGGERING_UNIFORM_FLOATS;
 
 // The aperture pattern (slice 2): which coverage pattern the floor map is built
 // from, its count / ratio / seed, and the swirl (tangential fraction of the
@@ -2344,6 +2346,25 @@ export function resolveHeatReleaseConfig(controls = {}) {
   if (pressure.solver !== PRESSURE_SOLVER_CONVERGED || !pressure.openTop) return off('heat-release-requires-converged-open-top-pressure-solver');
   if (pressure.dispatch !== PRESSURE_SOLVER_CONVERGED) return off(`heat-release-requires-pressure-projection-dispatch:${pressure.disabledReason || 'disabled'}`);
   return { identity: HEAT_RELEASE_IDENTITY, requested, effective: { admitted: true, expansion, reason: null } };
+}
+export const VELOCITY_STAGGERING_IDENTITY = 'kaminos.volume.velocity-staggering.v1';
+// Velocity staggering. The converged solve reads the stored velocity as the
+// upper face of each axis (compact backward divergence, forward gradient);
+// the transport read the same value as the cell centre, a half-cell shift
+// along +x and +z that leaned every plume toward -x -z. Staggered transport
+// reads it as faces everywhere. Opt-in; admitted only under the converged
+// solver, whose compact pair defines the face reading.
+export function resolveVelocityStaggeringConfig(controls = {}) {
+  const requestedMode = String(controls.velocityStaggering ?? 'collocated');
+  const pressure = resolvePressureSolverConfig(controls).effective;
+  const requested = { mode: requestedMode, pressureSolver: pressure.solver };
+  const off = reason => ({ identity: VELOCITY_STAGGERING_IDENTITY, requested, effective: { mode: 'collocated', admitted: false, reason } });
+  if (requestedMode !== 'staggered') return off('velocity-staggering-not-requested');
+  if (pressure.solver !== PRESSURE_SOLVER_CONVERGED) return off('velocity-staggering-requires-converged-pressure-solver');
+  return { identity: VELOCITY_STAGGERING_IDENTITY, requested, effective: { mode: 'staggered', admitted: true, reason: null } };
+}
+export function velocityStaggeringUniformValues(config) {
+  return [config?.effective?.admitted ? 1 : 0, 0, 0, 0];
 }
 export function heatReleaseUniformValues(config) {
   const e = config?.effective;
@@ -3165,6 +3186,8 @@ struct Uniforms {
   inflow_shape: vec4<f32>,
   // Heat-release expansion: .x gain (0 off).
   heat_release: vec4<f32>,
+  // Velocity staggering: .x 1 when the carried velocity is read as face values.
+  velocity_staggering: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -3722,7 +3745,8 @@ fn macCormackSlot(c: vec3<i32>, idx: u32, backCell: vec3<f32>, forwardCell: vec3
   if (inflowGhostBlend(backCell) > 0.0) {
     return predicted;
   }
-  let reversed = samplePredictSlot(forwardCell, slot);
+  var reversed = samplePredictSlot(forwardCell, slot);
+  if (slot == 0u) { reversed = samplePredictVelocity(forwardCell); }
   let current = fluidSrc[idx * SLOTS_PER_CELL + slot];
   let corrected = predicted + (current - reversed) * 0.5;
   let extrema = slotExtrema(backCell, slot);
@@ -4129,6 +4153,47 @@ fn divergenceCompactAtCell(c: vec3<i32>) -> f32 {
     + (compactFaceVelocity(c, 1u) - compactFaceVelocity(c - vec3<i32>(0, 1, 0), 1u))
     + (compactFaceVelocity(c, 2u) - compactFaceVelocity(c - vec3<i32>(0, 0, 1), 2u))
     - heatReleaseExpansion(c);
+}
+
+fn velocityStaggered() -> bool {
+  return u.velocity_staggering.x > 0.5;
+}
+
+// The velocity at a cell centre for the characteristic. Collocated: the stored
+// value. Staggered: the stored value is the upper face of each axis, exactly as
+// the compact divergence and the forward gradient read it, so the centre is
+// the mean of the two faces; the lower faces of the first cells are the walls
+// and the inflow floor, as compactFaceVelocity defines them.
+fn centreVelocityAt(c: vec3<i32>) -> vec3<f32> {
+  let stored = readSlot(c, 0u).xyz;
+  if (!velocityStaggered()) { return stored; }
+  return 0.5 * vec3<f32>(
+    compactFaceVelocity(c, 0u) + compactFaceVelocity(c - vec3<i32>(1, 0, 0), 0u),
+    compactFaceVelocity(c, 1u) + compactFaceVelocity(c - vec3<i32>(0, 1, 0), 1u),
+    compactFaceVelocity(c, 2u) + compactFaceVelocity(c - vec3<i32>(0, 0, 1), 2u));
+}
+
+// The carried velocity sampled at a characteristic foot. Staggered: each stored
+// component lives on the upper face of its axis, half a cell beyond where the
+// sampler assumes it, so it is sampled half a cell back along its own axis.
+fn sampleCarriedVelocity(p: vec3<f32>) -> vec4<f32> {
+  let plain = sampleFluidSlotInflow(p, 0u);
+  if (!velocityStaggered()) { return plain; }
+  return vec4<f32>(
+    sampleFluidSlotInflow(p - vec3<f32>(0.5, 0.0, 0.0), 0u).x,
+    sampleFluidSlotInflow(p - vec3<f32>(0.0, 0.5, 0.0), 0u).y,
+    sampleFluidSlotInflow(p - vec3<f32>(0.0, 0.0, 0.5), 0u).z,
+    plain.w);
+}
+
+fn samplePredictVelocity(p: vec3<f32>) -> vec4<f32> {
+  let plain = samplePredictSlot(p, 0u);
+  if (!velocityStaggered()) { return plain; }
+  return vec4<f32>(
+    samplePredictSlot(p - vec3<f32>(0.5, 0.0, 0.0), 0u).x,
+    samplePredictSlot(p - vec3<f32>(0.0, 0.5, 0.0), 0u).y,
+    samplePredictSlot(p - vec3<f32>(0.0, 0.0, 0.5), 0u).z,
+    plain.w);
 }
 
 fn blockedSceneFaceFluxAtCell(c: vec3<i32>) -> vec2<f32> {
@@ -5477,10 +5542,13 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
   let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
   let bonfireAdvectionLateralDamping = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
-  let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
+  let centreVelocity = centreVelocityAt(vec3<i32>(gid));
+  let advectVelocity = vec3<f32>(centreVelocity.x * bonfireAdvectionLateralDamping, centreVelocity.y, centreVelocity.z * bonfireAdvectionLateralDamping);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
   for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) {
-    fluidPredict[base + slot] = sampleFluidSlotInflow(backCell, slot);
+    var sample = sampleFluidSlotInflow(backCell, slot);
+    if (slot == 0u) { sample = sampleCarriedVelocity(backCell); }
+    fluidPredict[base + slot] = sample;
   }
 }
 
@@ -5576,7 +5644,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let microdetailRiseDirection = bonfireThermalRiseDirection;
   let bonfireLocalLateralTransportGain = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
   let bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain;
-  let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
+  let centreVelocity = centreVelocityAt(cellI);
+  let advectVelocity = vec3<f32>(centreVelocity.x * bonfireAdvectionLateralDamping, centreVelocity.y, centreVelocity.z * bonfireAdvectionLateralDamping);
   let backtraceScale = transportBacktraceScale(speed) * timeStep;
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * backtraceScale);
   let macCormack = u.transport_controls.x > 1.5;
@@ -5602,7 +5671,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       microLayer = sampleFluidSlotMasked(backCell, 3u);
     }
   } else {
-    advected = sampleFluidSlotInflow(backCell, 0u);
+    advected = sampleCarriedVelocity(backCell);
     if (commonGasTransport) {
       material = sampleFluidSlotMasked(backCell, 1u);
       fireLayer = sampleFluidSlotMasked(backCell, 2u);
@@ -14932,6 +15001,9 @@ export function createKaminosVolumePrototype({
     const heatReleaseConfig = resolveHeatReleaseConfig(controlsSnapshot);
     uniforms.set(heatReleaseUniformValues(heatReleaseConfig), HEAT_RELEASE_UNIFORM_OFFSET);
     state.heatRelease = heatReleaseConfig;
+    const velocityStaggeringConfig = resolveVelocityStaggeringConfig(controlsSnapshot);
+    uniforms.set(velocityStaggeringUniformValues(velocityStaggeringConfig), VELOCITY_STAGGERING_UNIFORM_OFFSET);
+    state.velocityStaggering = velocityStaggeringConfig;
     if (inflowBoundaryConfig.effective.admitted && inflowCoverageTexture) {
       const coverageSignature = inflowCoverageSignatureFor(inflowBoundaryConfig);
       if (coverageSignature !== inflowCoverageSignature) {

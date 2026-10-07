@@ -177,7 +177,7 @@ test('the inflow resolver admits only a converged open-top solve and packs the a
   assert.equal(closedTop.effective.projection, null);
   const physicalColor = await import('../volume-physical-color.mjs');
   assert.equal(core.INFLOW_UNIFORM_OFFSET, physicalColor.PHYSICAL_COLOR_UNIFORM_FLOATS, 'the inflow slots follow the physical colour block (thermal LUT and emissive floats), the last occupied slots');
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.INFLOW_UNIFORM_OFFSET + 12 + 4, 'the inflow block, then the heat-release block');
+  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.INFLOW_UNIFORM_OFFSET + 12 + 4 + 4, 'the inflow block, then the heat-release block, then the velocity-staggering block');
   assert.equal(core.VOLUME_UNIFORM_FLOATS % 4, 0, 'vec4 aligned');
 });
 
@@ -262,15 +262,16 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
   // sampler the raymarch, sidecar and irradiance passes use never reaches the
   // coverage texture, so their pipelines' layouts stay as they were.
   assert.doesNotMatch(wgslFunction('sampleFluidSlot'), /inflowGhost/, 'the plain sampler has no ghost');
-  assert.match(mainKernel(), /advected = sampleFluidSlotInflow\(backCell, 0u\);/, 'the main kernel transports velocity through the inflow sampler');
-  assert.match(source, /fluidPredict\[base \+ slot\] = sampleFluidSlotInflow\(backCell, slot\);/, 'so does the predictor');
+  assert.match(mainKernel(), /advected = sampleCarriedVelocity\(backCell\);/, 'the main kernel transports velocity through the carried-velocity sampler');
+  assert.match(source, /fn sampleCarriedVelocity\(p: vec3<f32>\) -> vec4<f32> \{\s*let plain = sampleFluidSlotInflow\(p, 0u\);/, 'which reads through the inflow sampler');
+  assert.match(source, /var sample = sampleFluidSlotInflow\(backCell, slot\);\s*if \(slot == 0u\) \{ sample = sampleCarriedVelocity\(backCell\); \}\s*fluidPredict\[base \+ slot\] = sample;/, 'so does the predictor');
   for (const sampler of ['sampleFluidSlotInflow', 'samplePredictSlot']) {
     const body = wgslFunction(sampler);
     assert.match(body, /let ghost = inflowGhostBlend\(cellCenter\);/, `${sampler} blends toward the ghost`);
     assert.match(body, /return mix\([a-zA-Z0-9_(), .]+, inflowGhostState\(slot, [a-zA-Z0-9_]+, cellCenter\), ghost\);/, `${sampler} returns the blended sample`);
   }
   const macCormack = wgslFunction('macCormackSlot');
-  assert.match(macCormack, /let predicted = fluidPredict\[idx \* SLOTS_PER_CELL \+ slot\];[\s\S]{0,600}if \(inflowGhostBlend\(backCell\) > 0\.0\) \{\s*return predicted;\s*\}\s*let reversed = samplePredictSlot\(forwardCell, slot\);/, 'a floor cell fed by the ghost keeps the first-order prediction: the reverse trace cannot measure an error against a reservoir outside the domain (confirmation 1 of 22e2c61e: the corrector removed ~27 % of the entering fuel)');
+  assert.match(macCormack, /let predicted = fluidPredict\[idx \* SLOTS_PER_CELL \+ slot\];[\s\S]{0,600}if \(inflowGhostBlend\(backCell\) > 0\.0\) \{\s*return predicted;\s*\}\s*var reversed = samplePredictSlot\(forwardCell, slot\);/, 'a floor cell fed by the ghost keeps the first-order prediction: the reverse trace cannot measure an error against a reservoir outside the domain (confirmation 1 of 22e2c61e: the corrector removed ~27 % of the entering fuel)');
   const extrema = wgslFunction('slotExtrema');
   assert.match(extrema, /inflowGhostState\(slot, lo, cellCenter\)/, 'the MacCormack limiter range admits the ghost state so the inflow is not reverted at the floor');
   const main = mainKernel();
@@ -295,7 +296,7 @@ test('cockpit: the law is selectable, the two inflow controls exist and recompil
   assert.ok(keys.includes('volume-emitter-inlet-temperature'));
   assert.equal(schema.controls.find(control => control.key === 'volume-emitter-fuel-fraction').additiveDefault, 0.56);
   assert.equal(schema.controls.find(control => control.key === 'volume-emitter-inlet-temperature').additiveDefault, 1.2);
-  assert.equal(schema.controlCount, 234);
+  assert.equal(schema.controlCount, 235);
   assert.match(source, /state\.inflowBoundary = inflowBoundaryConfig;/, 'the receipt carries the resolved inflow');
   assert.match(index, /id="volume-inflow-boundary-state"/, 'the cockpit shows the inflow admission');
   assert.match(index, /NOT admitted: \$\{inflow\.effective\.reason\}/, 'a requested but refused inflow looks refused');

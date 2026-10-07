@@ -28,7 +28,7 @@ test('heat release resolves from the controls and is admitted only under a dispa
 test('the heat-release uniform follows the inflow block and packs the gain only when admitted', () => {
   assert.equal(core.HEAT_RELEASE_UNIFORM_OFFSET, core.INFLOW_UNIFORM_OFFSET + core.INFLOW_UNIFORM_FLOATS);
   assert.equal(core.HEAT_RELEASE_UNIFORM_FLOATS, 4);
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.HEAT_RELEASE_UNIFORM_OFFSET + 4);
+  assert.equal(core.VELOCITY_STAGGERING_UNIFORM_OFFSET, core.HEAT_RELEASE_UNIFORM_OFFSET + 4, 'the velocity-staggering block follows');
   assert.equal(core.VOLUME_UNIFORM_FLOATS % 4, 0);
   assert.deepEqual(core.heatReleaseUniformValues(core.resolveHeatReleaseConfig({ heatReleaseExpansion: 1.5, pressureSolver: 'converged-open-top' })), [1.5, 0, 0, 0]);
   assert.deepEqual(core.heatReleaseUniformValues(core.resolveHeatReleaseConfig({ heatReleaseExpansion: 1.5 })), [0, 0, 0, 0], 'a refused expansion packs zero: the legacy solve never sees a source');
@@ -78,7 +78,7 @@ test('cockpit: the expansion gain is a control with help, restored from routes, 
   assert.match(index, /heat-release — NOT ADMITTED \(\$\{/, 'a refused expansion is named');
   const control = schema.controls.find(c => c.key === 'volume-heat-release-expansion');
   assert.deepEqual(control, { key: 'volume-heat-release-expansion', param: 'volume_heat_release_expansion', tagName: 'INPUT', type: 'range', additiveDefault: 0, additiveSinceControlCount: 234 });
-  assert.equal(schema.controlCount, 234);
+  assert.equal(schema.controlCount, 235);
 });
 
 test('the residual probe names what it measures once expansion is active (review HR-02)', () => {

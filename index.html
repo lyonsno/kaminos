@@ -1378,6 +1378,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="field"><span class="field-key">Emitter fallback</span><span class="field-val" id="volume-emitter-fallback">no</span></div>
       <div class="field"><span class="field-key">Inflow boundary</span><span class="field-val" id="volume-inflow-boundary-state">off</span></div>
       <div class="field"><span class="field-key">Heat release</span><span class="field-val" id="volume-heat-release-state">off</span></div>
+      <div class="field"><span class="field-key">Velocity grid</span><span class="field-val" id="volume-velocity-staggering-state">collocated</span></div>
       <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state" role="status" aria-live="polite">connecting...</span></div>
       <div class="field"><span class="field-key">Promotion</span><span class="field-val" id="volume-basin-promotion-state" role="status" aria-live="polite">idle</span></div>
       <div class="volume-presentation-switch" role="group" aria-label="Volume presentation">
@@ -2824,6 +2825,15 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-advection-scheme-val">legacy</span>
     </div>
     <span class="slider-help">Legacy is first-order semi-Lagrangian with 0.982 velocity damping every step and a fixed velocity clamp. Undamped keeps the first-order step but drops the damping and bounds the step by backtrace distance instead. MacCormack adds a predictor pass and a limited round-trip error correction on one shared characteristic, so vortex roll-up and plume pulsing that the first-order step smears away can survive without synthetic stirring. Live switching keeps evolved state.</span>
+    <div class="slider-row">
+      <span class="slider-label">Velocity grid</span>
+      <select id="volume-velocity-staggering" class="select-input" data-volume-settings-param="volume_velocity_staggering">
+        <option value="collocated" selected>Collocated (as saved)</option>
+        <option value="staggered">Staggered faces</option>
+      </select>
+      <span class="slider-val" id="volume-velocity-staggering-val">collocated</span>
+    </div>
+    <span class="slider-help">How the transport reads the stored velocity. The converged solve treats each stored component as the upper face of its axis, but Collocated transport reads the same value as the cell centre: half a cell of disagreement along +x and +z, which pushes every plume toward −x −z as it rises (the diagonal lean). Staggered reads faces everywhere: the characteristic uses the mean of the two faces and each carried component is sampled half a cell back along its own axis. Needs the converged pressure solver; otherwise the receipt says NOT ADMITTED. Saved basins are unchanged at Collocated.</span>
     <div class="slider-row">
       <span class="slider-label">Confinement</span>
       <select id="volume-confinement" class="select-input" data-volume-settings-param="volume_confinement">
@@ -21797,6 +21807,7 @@ function readVolumeControls() {
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureSolver: document.getElementById('volume-pressure-solver').value,
     heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
+    velocityStaggering: document.getElementById('volume-velocity-staggering').value || 'collocated',
     pressureSolverIterations: parseFloat(document.getElementById('volume-pressure-solver-iterations').value),
     advectionScheme: document.getElementById('volume-advection-scheme').value,
     confinement: document.getElementById('volume-confinement').value,
@@ -21905,6 +21916,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-aperture-seed-val').textContent = String(Math.round(c.emitterApertureSeed));
   document.getElementById('volume-emitter-swirl-val').textContent = c.emitterSwirl.toFixed(2);
   document.getElementById('volume-heat-release-expansion-val').textContent = c.heatReleaseExpansion.toFixed(2);
+  document.getElementById('volume-velocity-staggering-val').textContent = c.velocityStaggering;
   document.getElementById('volume-emitter-line-weight-val').textContent = c.emitterLineWeight.toFixed(2);
   document.getElementById('volume-emitter-jet-jitter-val').textContent = c.emitterJetJitter.toFixed(2);
   document.getElementById('volume-emitter-inlet-turbulence-val').textContent = c.emitterInletTurbulence.toFixed(2);
@@ -22245,6 +22257,12 @@ function refreshVolumeReadout() {
     : (heatRelease.effective.admitted
       ? `admitted · gain ${heatRelease.effective.expansion.toFixed(2)} · residual measures D(v) − S`
       : `heat-release — NOT ADMITTED (${heatRelease.effective.reason}); set Pressure solver to converged open top and Projection above 0`);
+  const staggering = s.velocityStaggering;
+  document.getElementById('volume-velocity-staggering-state').textContent = !staggering || staggering.requested.mode !== 'staggered'
+    ? 'collocated'
+    : (staggering.effective.admitted
+      ? 'staggered · faces averaged to the centre, components sampled at their faces'
+      : `staggered — NOT ADMITTED (${staggering.effective.reason}); set Pressure solver to converged`);
   document.getElementById('volume-inflow-boundary-state').textContent = !inflow
     ? 'off'
     : (inflow.effective.admitted
@@ -22582,7 +22600,7 @@ async function initKaminosVolumeRoute() {
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
   const VOLUME_RETIRED_APERTURE_PATTERNS = ['concentric', 'spiral'];
-  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
     if (!param || !params.has(param)) continue;
@@ -23458,6 +23476,7 @@ async function initKaminosVolumeRoute() {
     'volume-emitter-puff',
     'volume-emitter-puff-period',
     'volume-heat-release-expansion',
+    'volume-velocity-staggering',
     'volume-wind-model',
     'volume-wind-gust',
     'volume-wind-gust-period',
