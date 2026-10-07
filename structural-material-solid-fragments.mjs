@@ -1,0 +1,39 @@
+import Module from 'manifold-3d';
+
+export async function createPlaneFractureSurface(geometry,{sourceSha256,wasm:provided}={}){
+ if(!Number.isInteger(geometry?.numProp)||geometry.numProp<3||!Array.isArray(geometry.properties)||!geometry.properties.length||geometry.properties.length%geometry.numProp||!geometry.properties.every(Number.isFinite)||!Array.isArray(geometry.indices)||!geometry.indices.length||geometry.indices.length%3||!geometry.indices.every(i=>Number.isInteger(i)&&i>=0&&i<geometry.properties.length/geometry.numProp))throw new Error('Complete finite oriented source geometry required');
+ const wasm=provided??await Module();if(!provided)wasm.setup();const {Mesh,Manifold}=wasm,sourceId=Manifold.reserveIDs(1);
+ const mesh=new Mesh({numProp:geometry.numProp,vertProperties:Float32Array.from(geometry.properties),triVerts:Uint32Array.from(geometry.indices),runIndex:Uint32Array.from([0,geometry.indices.length]),runOriginalID:Uint32Array.from([sourceId])});mesh.merge();
+ const solid=new Manifold(mesh),volume=solid.volume();if(!(Number.isFinite(volume)&&volume>0)){solid.delete();throw new Error('Positive source solid required for event surfaces');}
+ let pieces=[{id:0,solid,halfspaces:[]}],nextId=1,epoch=0,disposed=false;const events=[],replays=new Map();
+ const serialize=piece=>{const mesh=piece.solid.getMesh(),exterior=[];for(let run=0;run<mesh.runOriginalID.length;run++)for(let tri=mesh.runIndex[run]/3;tri<mesh.runIndex[run+1]/3;tri++)exterior[tri]=mesh.runOriginalID[run]===sourceId;
+  return{id:piece.id,volume:piece.solid.volume(),halfspaces:structuredClone(piece.halfspaces),geometry:{numProp:mesh.numProp,properties:Array.from(mesh.vertProperties),indices:Array.from(mesh.triVerts),exterior}};};
+ const witness=()=>({route:'kaminos.event-surface.plane-cut.manifold-3.5.4.v0',sourceSha256,epoch,volume,pieces:pieces.map(serialize),events:structuredClone(events),claim:'Event-time geometry follows supplied released transmission; caller selects plane; not stress-generation or fragment dynamics proof'});
+ return{witness,
+  cut(event){
+   if(disposed)throw new Error('Fracture surface disposed');const {id,normal,offset,rest,before,after,route,kind}=event??{};
+   if(typeof id!=='string'||!id||route!=='kaminos.deformable-material.colored-vbd.webgpu.v0'||typeof kind!=='string'||!kind||!Array.isArray(normal)||normal.length!==3||!normal.every(Number.isFinite)||Math.abs(Math.hypot(...normal)-1)>1e-6||!Number.isFinite(offset))throw new Error('Explicit identified material event and unit plane required');
+   const fingerprint=JSON.stringify({normal,offset,rest,before,after,route,kind});
+   if(replays.has(id)){if(replays.get(id)!==fingerprint)throw new Error('Material event identity reused for different cut');return{replayed:true,witness:witness()};}
+   if(!Array.isArray(rest)||!rest.length||!rest.every(p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite))||!Array.isArray(before)||!Array.isArray(after)||before.length!==after.length||!before.length||before.length%4)throw new Error('Complete before/after material transmission required');
+   const effectiveNormal=normal.map(Math.fround),effectiveOffset=Math.fround(offset),distance=p=>p.reduce((sum,v,a)=>sum+effectiveNormal[a]*Math.fround(v),-effectiveOffset);let brokenAdded=0;
+   for(let i=0;i<before.length;i+=4){const [a,b,alive]=before.slice(i,i+3);if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||b<0||a>=rest.length||b>=rest.length||![0,1].includes(alive)||after[i]!==a||after[i+1]!==b||![0,1].includes(after[i+2]))throw new Error('Stable material bond identity/liveness required');
+    const crosses=distance(rest[a])*distance(rest[b])<0,expected=alive&& !crosses?1:0;if(after[i+2]!==expected)throw new Error('Surface plane disagrees with released transmission');if(alive&&!expected)brokenAdded++;
+   }
+   if(!brokenAdded)throw new Error('No newly released transmission; refuse a picture-only cut');
+   const staged=[],created=[],replaced=[],length=Math.hypot(...effectiveNormal);let cursor=nextId;
+   try{
+    for(const piece of pieces){const split=piece.solid.splitByPlane(effectiveNormal,effectiveOffset/length);created.push(...split);const volumes=split.map(p=>p.volume());
+     if(volumes.every(v=>Number.isFinite(v)&&v>0)){
+      if(Math.abs(volumes[0]+volumes[1]-piece.solid.volume())>volume*1e-6)throw new Error('Event cut did not conserve source volume');
+      split.forEach((solid,side)=>staged.push({id:cursor++,solid,halfspaces:[...piece.halfspaces,{normal:effectiveNormal,offset:effectiveOffset,side:side===0?1:-1,event:id}]}));replaced.push(piece);
+     }else{split.forEach(p=>{p.delete();created.splice(created.indexOf(p),1);});staged.push(piece);}
+    }
+    if(!replaced.length)throw new Error('Released transmission did not intersect the visible solid');
+    const stagedVolume=staged.reduce((sum,p)=>sum+p.solid.volume(),0);if(Math.abs(stagedVolume-volume)>volume*1e-6)throw new Error('Fragment collection lost source volume');
+    staged.forEach(serialize);pieces=staged;nextId=cursor;epoch++;replaced.forEach(p=>p.solid.delete());events.push({id,kind,normal:effectiveNormal,offset:effectiveOffset,brokenAdded,epoch});replays.set(id,fingerprint);return{replayed:false,witness:witness()};
+   }catch(error){for(const solid of created)solid.delete();throw error;}
+  },
+  dispose(){if(!disposed){pieces.forEach(p=>p.solid.delete());disposed=true;}}
+ };
+}
