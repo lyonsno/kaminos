@@ -19,8 +19,12 @@ export function coarsenGpuArchProfile(source, columns=14, rows=10) {
 }
 
 export async function createGpuArchCollapse(profile, renderer, options={}) {
+  return createGpuStructuralFixture(buildGpuArchFixture(profile,options),renderer);
+}
+
+export async function createGpuStructuralFixture(fixture, renderer) {
   if(!renderer.backend.isWebGPUBackend)throw new Error('GPU collapse requires a native WebGPU renderer');
-  const fixture=buildGpuArchFixture(profile,options),{cells,bonds,config,dimensions,floorY}=fixture;
+  const {cells,bonds,config,dimensions,floorY}=fixture;
   const {dx,dy,dz}=dimensions,device=renderer.backend.device,n=cells.length+1;
   if(cells.length===0)throw new Error('GPU arch requires occupied cells');
   let engine,disposed=false;

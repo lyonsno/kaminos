@@ -22,7 +22,7 @@ export function readArchGlbTriangles(bytes) {
     throw new Error('arch GLB extraction does not admit node transforms');
   }
   const primitives = gltf.meshes?.flatMap(mesh => mesh.primitives || []) || [];
-  if (primitives.length !== 1 || primitives[0].mode !== 4) {
+  if (primitives.length !== 1 || (primitives[0].mode ?? 4) !== 4) {
     throw new Error('arch GLB extraction requires one triangle primitive');
   }
   const primitive = primitives[0];
