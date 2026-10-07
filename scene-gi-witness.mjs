@@ -34,7 +34,16 @@ try {
     await page.check('#rendering-surface-scattering');
     await page.waitForTimeout(1000);
   }
-  if(operation==='--authoring') {
+  if(operation==='--live-preview') {
+    report.phase='live-preview';await save();
+    await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;window.__kaminosVolumePrototype.setSimulationPaused(false);});
+    await page.waitForTimeout(4000);
+    report.preview=await page.evaluate(()=>({gi:window.kaminosSceneGIDebugState(),volume:window.__kaminosVolumePrototype.debugState(),lighting:window.kaminosAuthoringParameters.read('@scene-transport')}));
+    assert.equal(report.preview.gi.gain,10);assert.equal(report.preview.gi.effectiveMode,'combined');assert.equal(report.preview.lighting['rendering-surface-gain'],0);assert.ok(report.preview.volume.frameCount>12);assert.equal(report.preview.volume.error,null);
+    await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();await page.screenshot({path:`${out}/live-authoring.png`});
+    await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
+    await page.setViewportSize({width:800,height:700});await page.waitForTimeout(500);await page.screenshot({path:`${out}/compact.png`});
+  } else if(operation==='--authoring') {
     report.phase='authoring-controls';await save();
     await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
     await page.selectOption('#scene-gi-mode','combined');
