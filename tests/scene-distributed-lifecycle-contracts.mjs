@@ -96,7 +96,7 @@ if(!selected||selected==='interaction') {
   f.prepare();assert.equal(f.uploads.length,2);f.mount.dispose();
 }
 if(!selected||selected==='angular') {
-  const f=fixture();f.prepare();
+  const f=fixture();f.mount.setAngularPattern('fixed');f.prepare();
   f.mount.setRetainComparisons(true);
   for(const count of [12,16,24,12]) {
     f.mount.setDirections(count);f.prepare();
