@@ -84,7 +84,7 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
       await write();
       return document;
     };
-    const retain = async ({ name, capture = true, settle = async () => {}, observe = async () => null }) => {
+    const retain = async ({ name, capture = true, settle = async () => {}, observe = async () => null, verify = async () => {} }) => {
       assert.ok(/^[a-z0-9][a-z0-9_-]*$/i.test(name), 'Observation name must be a path-safe filename');
       report.phase = `observe:${name}`; await write();
       await settle(page);
@@ -102,6 +102,7 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
         assertCapturePixels(decodeScreenshotPngRgb(png), persisted.capture);
         await fs.writeFile(path.join(out, `${name}.png`), png);
       }
+      await verify();
       const observation = { name, filename: result.filename, url: result.url, captured: capture,
         effective, savedAt: new Date().toISOString() };
       report.observations.push(observation); await write();

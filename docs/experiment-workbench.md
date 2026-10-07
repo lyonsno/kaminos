@@ -88,3 +88,52 @@ The local-water clock reports a run ID, submitted and GPU-completed steps, fixed
 Observations pair effective camera, objects, water/source generation and clock with a PNG and saved editable scene. A changed runtime, source, pose or camera during capture fails the experiment. `report.json` carries its last retained observations and failure; launch and planning failures also leave reports at the supplied output path.
 
 A saved scene restores authored inputs and starts a fresh water runtime. The observation records the former run's moment. Opening the handoff URL lets a person edit and save that setup with the ordinary controls. The next experiment can take the saved filename as its input. Liquid-state checkpoint restoration, arbitrary mesh collision, feature registration for new object types, and coordinated multi-simulation clocks are future extensions with their own runtime adapters.
+
+## Use an existing runtime
+
+An existing experiment supplies four operations once for its runtime:
+
+```js
+const runtime = {
+  settle,       // await pending physical work and the corresponding presentation
+  read,         // return current source, run, time, camera and feature state
+  camera,       // apply a view and await its presentation; return effective camera
+  assertStable, // compare before/after capture; throw if the inspected state changed
+};
+```
+
+These are ordinary caller functions, including closures over Playwright or a CDP connection. `read()` uses the feature's own state structure. An optional `validate(state, options)` checks each read before comparison; otherwise the reader checks its own held-state prerequisites. `assertStable(before, after, options)` compares the meaningful source, run, configuration, completed time, camera and physical state. Presentation counters may increase while held. Preserve construction-load time offsets and reset identities. The feature owns the actual stepping, forces and investigation decisions.
+
+For a caller with an existing browser runner, `observationSession` supplies image/state retention:
+
+```js
+import { experiment } from './experiment-work.mjs';
+import { observationSession } from './observation-session.mjs';
+import { viewsAround } from './experiment-scene.mjs';
+
+await observationSession({
+  out: outputDirectory,
+  source: verifiedSource, // caller's effective checkout, route and configuration
+  capture: () => page.screenshot({ type: 'png' }),
+  exercise: async ({ retain }) => {
+    const work = experiment({ runtime, retain });
+    await stone.hold();
+    await stone.pull(.03);
+    await stone.advance(30);
+    const bounds = await stone.currentBounds();
+    const views = viewsAround(bounds, { aspect: 16 / 9 });
+    for (const view of views) {
+      await work.camera(view);
+      await work.observe(view.name);
+    }
+  },
+});
+```
+
+Here `stone`, `runtime` and `verifiedSource` come from the consumer's existing feature. The shared modules own view planning, capture retention and the observation sequence; the feature owns injury and current bounds. Browser lifetime stays with the caller. Use `visualWork` when the editable-scene save/reopen path is part of the experiment.
+
+`capture()` returns fresh PNG bytes from the caller's actual browser or canvas. The caller verifies the effective route and GPU/backend at the appropriate feature boundary. Shared retention checks image structure and nonuniform pixels; the runtime checks state consistency. These checks support inspection, while the operator or agent still inspects the images for the phenomenon in question.
+
+Choose a fresh output directory per session. `report.json` records source, each observation's full effective state, image path/hash/dimensions, failure phase and last verified observation. A failed or changing capture retains its raw output as unverified; a caught retention error still fails the session. Existing reports and repeated observation names are protected from overwrite. A runtime/setup failure inside `exercise` leaves its report even before the first image. Include route verification and startup inside `exercise` when those failures need the same report.
+
+An existing custom `retain` can also be used. It receives `{name, observe, verify}`: call `observe()` immediately before capture, then `verify()` afterward, and only then publish the observation as successful. The default workbench retention implements that sequence. `experiment` requires post-capture verification; incomplete retention fails explicitly. Water callers keep `experiment({page, retain})` and `{water:true}` unchanged.
