@@ -18,3 +18,20 @@ test('depth draw excludes both background forms and restores them after success 
  assert.deepEqual(scene,saved);
  assert.throws(()=>m.withLocalLiquidDepthBackground(scene,()=>{throw Error('draw failed');}),/draw failed/);assert.deepEqual(scene,saved);
 });
+
+test('delayed depth readback preserves the copied draw metadata',async()=>{
+ const m=await import('../local-liquid-depth-background.mjs');
+ assert.equal(typeof m.readLocalLiquidDepthFrame,'function');
+ let finish;const renderer={readRenderTargetPixelsAsync:()=>new Promise(r=>finish=r)};
+ const frame={frameId:'copied-1',cameraFar:100,supportVisible:true};
+ const pending=m.readLocalLiquidDepthFrame(renderer,{},frame);
+ frame.frameId='later-2';frame.cameraFar=200;frame.supportVisible=false;
+ finish(new Float32Array([100]));
+ assert.deepEqual(await pending,{frameId:'copied-1',cameraFar:100,supportVisible:true,pixel:[100]});
+ await assert.rejects(m.readLocalLiquidDepthFrame(renderer,{},null),/depth draw/);
+});
+
+test('depth evidence rejects nonfinite pixel data',async()=>{
+ const {readLocalLiquidDepthFrame}=await import('../local-liquid-depth-background.mjs');
+ await assert.rejects(readLocalLiquidDepthFrame({readRenderTargetPixelsAsync:async()=>new Float32Array([NaN])},{},{frameId:'frame',cameraFar:100,supportVisible:false}),/pixel/);
+});

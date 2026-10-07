@@ -1,4 +1,4 @@
-import { withLocalLiquidDepthBackground } from './local-liquid-depth-background.mjs';
+import { withLocalLiquidDepthBackground, readLocalLiquidDepthFrame } from './local-liquid-depth-background.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import { texture, vec4, positionView, pmremTexture, equirectDirection, uv, uniform } from './lib/three.tsl.js';
 import {
@@ -69,7 +69,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   pipeline.outputColorTransform=false; pipeline.needsUpdate=true;
   const environmentRotation=uniform(new THREE.Matrix3()), environmentIntensity=uniform(1);
   let environmentTarget=null, environmentQuad=null, environmentSource=null, environmentKey=null, environmentGeneration=0;
-  let frameCount=0, paused=false, failure=null, lastFrame=null, disposed=false;
+  let frameCount=0, paused=false, failure=null, lastFrame=null, lastDepthFrame=null, disposed=false;
   const onGpuError=event=>{failure=event.error?.message || 'Host WebGPU error';};
   device.addEventListener('uncapturederror',onGpuError);
   device.lost.then(info=>{if(!disposed)failure=info.message || 'Host WebGPU device lost';});
@@ -117,8 +117,10 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       renderer.setRenderObjectFunction((...args)=>{
         depthMaterial.side=args[4].side; renderer.renderObject(...args);
       });
-      renderer.setClearColor(new THREE.Color(camera.far,0,0),1);
+      const depthFrame={frameId:`local-liquid-${frameCount+1}`,cameraFar:camera.far,supportVisible:group.visible};
+      renderer.setClearColor(new THREE.Color(depthFrame.cameraFar,0,0),1);
       renderer.setRenderTarget(depthTarget); withLocalLiquidDepthBackground(scene,()=>renderer.render(scene,camera));
+      lastDepthFrame=depthFrame;
       scene.overrideMaterial=previousOverride; scene.background=previousBackground;
       renderer.setRenderObjectFunction(previousRenderObject);
       renderer.setClearColor(clearColor,clearAlpha);
@@ -154,8 +156,8 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   const host = {group,render,
     setSupportVisibleForWitness(value) {group.visible=Boolean(value);},
     async readBackgroundDepthForWitness() {
-      const values=await renderer.readRenderTargetPixelsAsync(depthTarget,0,0,1,1);
-      return {frameId:lastFrame?.frameId,cameraFar:camera.far,pixel:Array.from(values),supportVisible:group.visible};
+      if(disposed || failure)throw Error('Local liquid depth draw is unavailable');
+      return readLocalLiquidDepthFrame(renderer,depthTarget,lastDepthFrame);
     },
     contactFrame() {
       if(disposed || failure || paused || !lastFrame)return null;
