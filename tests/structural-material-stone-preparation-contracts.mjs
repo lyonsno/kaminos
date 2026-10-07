@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { readArchGlbTriangles } from '../structural-material-arch-profile.mjs';
 import { prepareStoneFromGlb } from '../structural-material-stone-prepare.mjs';
-import { buildGpuStoneFixture } from '../structural-material-stone-fixture.js';
+import { buildGpuStoneFixture, preparedContactNormal } from '../structural-material-stone-fixture.js';
 
 const bytes = fs.readFileSync(new URL('../assets/arch-stones/03-bedded-stone-500-normal.glb', import.meta.url));
 const source = readArchGlbTriangles(bytes);
@@ -28,4 +28,9 @@ json.accessors[json.meshes[0].primitives[0].indices].count-=3;
 const open=Buffer.from(bytes),edited=Buffer.from(JSON.stringify(json));
 assert(edited.length<=jsonLength);open.fill(32,20,20+jsonLength);edited.copy(open,20);
 assert.throws(()=>prepareStoneFromGlb(open,{size:[2.4,.3,.6],cellSize:.3}),/manifold/i,'an open imported surface cannot silently become a filled box');
+const cell=thick.cells[31],g=cell.geometry,tri=g.exterior.map((v,i)=>v?i:null).filter(v=>v!==null)[40];
+const [a,b,c]=g.indices.slice(tri*3,tri*3+3).map(i=>g.properties.slice(i*g.numProp,i*g.numProp+3));
+const u=b.map((v,i)=>v-a[i]),v=c.map((n,i)=>n-a[i]),normal=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]];
+assert.deepEqual(preparedContactNormal(normal,[[1,0,0],[0,1,0],[0,0,1]]),[1,0,0],'recorded R2 hit near a cut boundary remains a tip-surface contact');
+assert.equal(preparedContactNormal([1,0,0],[]),null);
 console.log('stone preparation, volume, interface and material contracts passed');

@@ -21,3 +21,9 @@ export function buildGpuStoneFixture(prepared, options = {}) {
   });
   return { cells, bonds, config, dimensions: Object.fromEntries(['dx','dy','dz'].map((key, i) => [key, prepared.spacing[i]])), floorY: -1.5 };
 }
+
+export function preparedContactNormal(surfaceNormal, exposed) {
+  if(!Array.isArray(surfaceNormal)||surfaceNormal.length!==3||!surfaceNormal.every(Number.isFinite)||!Array.isArray(exposed))throw new Error('Finite triangle direction and exposed faces required');
+  const ranked=exposed.map(normal=>({normal,dot:normal.reduce((sum,n,a)=>sum+n*surfaceNormal[a],0)})).sort((a,b)=>b.dot-a.dot);
+  return ranked[0]?.dot>0?[...ranked[0].normal]:null;
+}

@@ -3,12 +3,12 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createElement, Pause, Play, RotateCcw, Hand } from 'lucide';
 import { createNativeGpuRenderer } from './dist/structural-material-arch-gpu-engine.js';
 import { createGpuStructuralFixture } from './structural-material-arch-gpu.js';
-import { buildGpuStoneFixture } from './structural-material-stone-fixture.js';
-import { loadStoneAssets, structuralFaceAt } from './structural-material-arch-stones.js';
+import { buildGpuStoneFixture, preparedContactNormal } from './structural-material-stone-fixture.js';
+import { loadStoneAssets } from './structural-material-arch-stones.js';
 
 export const STONE_ROUTE='kaminos.structural-material.imported-stone-thickness.webgpu.v0';
 const params=new URLSearchParams(location.search),errorNode=document.querySelector('#error');
-let phase='loading',failure=null,identity=null,prepared=null,preparedSha256=null,models=[],meshes=[[],[]],grab=null,paired=false,pairBaselines=[],lastPick=null,busy=false,mode='shear',paused=params.get('smoke')==='1',operations=Promise.resolve();
+let phase='loading',failure=null,identity=null,prepared=null,preparedSha256=null,models=[],meshes=[[],[]],grab=null,contactPointer=null,paired=false,pairBaselines=[],lastPick=null,busy=false,mode='shear',paused=params.get('smoke')==='1',operations=Promise.resolve();
 const failures=[],offsets=[new THREE.Vector3(-1.6,0,0),new THREE.Vector3(1.6,0,0)],vec=p=>new THREE.Vector3(p.x,p.y,p.z);
 function fail(operation,error){failure={operation,message:error.message??String(error),stack:error.stack};failures.push(failure);paused=true;phase='failed';errorNode.textContent=failure.message;console.error(error);}
 const serial=(name,fn)=>{const work=operations.then(async()=>{busy=true;try{return await fn();}catch(error){fail(name,error);throw error;}finally{busy=false;}});operations=work.catch(()=>{});return work;};
@@ -19,7 +19,8 @@ try {
   document.querySelector('#device').textContent=`WebGPU AVBD · ${identity.architecture||identity.vendor}`;
   renderer.setPixelRatio(devicePixelRatio);renderer.setSize(innerWidth,innerHeight);
   const scene=new THREE.Scene();scene.background=new THREE.Color('#101717');
-  const camera=new THREE.PerspectiveCamera(38,innerWidth/innerHeight,.03,100);camera.position.set(4,3.3,8);camera.position.multiplyScalar(Math.max(1,.85/camera.aspect));
+  const camera=new THREE.PerspectiveCamera(38,innerWidth/innerHeight,.03,100);camera.position.set(4,3.3,8);
+  function projection(){camera.aspect=innerWidth/innerHeight;camera.fov=2*Math.atan(Math.tan(38*Math.PI/360)*Math.max(1,(1280/900)/camera.aspect))*180/Math.PI;camera.updateProjectionMatrix();}projection();
   const controls=new OrbitControls(camera,canvas);controls.target.set(0,-.1,0);controls.update();
   scene.add(new THREE.HemisphereLight(0xe1f7ea,0x263334,2));const light=new THREE.DirectionalLight(0xffedcf,3);light.position.set(-4,8,5);scene.add(light);
   const floor=new THREE.Mesh(new THREE.PlaneGeometry(22,16),new THREE.MeshStandardMaterial({color:0x33393b,roughness:1}));floor.rotation.x=-Math.PI/2;floor.position.y=-1.503;scene.add(floor);
@@ -62,35 +63,38 @@ try {
     marker.visible=Boolean(grab);if(grab){const mesh=meshes[grab.specimen][grab.index];marker.position.copy(mesh.localToWorld(grab.local.clone()));}
     scene.updateMatrixWorld(true);renderer.render(scene,camera);
   }
-  function release(){for(const model of models)model.release();grab=null;paired=false;controls.enabled=true;document.querySelector('#pull').value='0';draw();}
+  function release(){for(const model of models)model.release();grab=null;contactPointer=null;paired=false;controls.enabled=true;document.querySelector('#pull').value='0';draw();}
   const cohesion=()=>{const v=Number(document.querySelector('#strength').value);if(!(v>0)||!Number.isFinite(v))throw new Error('Cohesion must be positive and finite');return v;};
   async function reset(){const next=[];try{for(const s of prepared.specimens)next.push(await createGpuStructuralFixture(buildGpuStoneFixture(s,{strength:cohesion()}),renderer));}catch(error){for(const m of next)m.dispose();throw error;}
     for(const model of models)model.dispose();for(const group of meshes)for(const mesh of group)scene.remove(mesh);models=next;
     meshes=prepared.specimens.map((s,specimen)=>s.cells.map((c,index)=>{const mesh=new THREE.Mesh(skinGeometries[specimen][index],[assets[0].material,capMaterial]);mesh.userData={specimen,index,epoch:null};scene.add(mesh);return mesh;}));
-    grab=null;paired=false;controls.enabled=true;failure=null;errorNode.textContent='';phase='interactive';draw();
+    grab=null;contactPointer=null;paired=false;controls.enabled=true;failure=null;errorNode.textContent='';phase='interactive';draw();
   }
   function pairedPull(travel){if(!Number.isFinite(travel)||travel<0)throw new Error('Pull must be nonnegative and finite');
+    if(mode!=='shear')throw new Error('Paired pull requires Shear mode');
     if(!paired){release();pairBaselines=models.map((m,i)=>{const contact=tipContacts[i],local=contact.point.clone().sub(new THREE.Vector3(...prepared.specimens[i].cells[contact.index].position)),body=m.snapshot().bodies[contact.index];
       const point=local.clone().applyQuaternion(new THREE.Quaternion(body.quaternion.x,body.quaternion.y,body.quaternion.z,body.quaternion.w)).add(vec(body.position));m.setSurfaceHand(contact.index,point,local,{x:1,y:0,z:0},'embedded-visual');return point;});paired=true;}
-    models.forEach((m,i)=>{const target=pairBaselines[i].clone();target.y-=travel;m.moveHand(target);});
+    models.forEach((m,i)=>{const target=pairBaselines[i].clone();target.y-=travel;m.moveHand(target);});const slider=document.querySelector('#pull');if(travel>Number(slider.max))slider.max=String(travel);slider.value=String(travel);
   }
   async function advance(count){if(!Number.isInteger(count)||count<0)throw new Error('Advance requires a nonnegative integer');for(let i=0;i<count;i++)for(let n=0;n<models.length;n++){if(grab?.specimen===n&&mode==='bind')models[n].bind(grab.index);await models[n].step();}draw();}
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();
   function ray(event){camera.updateMatrixWorld(true);const rect=canvas.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);return raycaster.ray;}
-  canvas.addEventListener('pointerdown',event=>{if(event.button!==0||phase!=='interactive')return;try{ray(event);const hit=raycaster.intersectObjects(meshes.flat(),false)[0];if(!hit)return;event.stopImmediatePropagation();event.preventDefault();release();controls.enabled=false;canvas.setPointerCapture(event.pointerId);
-    const {specimen,index}=hit.object.userData,m=models[specimen],cell=m.cells[index],point=hit.point.clone().sub(offsets[specimen]),local=m.worldToLocalPoint(index,point),normal=structuralFaceAt(local,cell.half);lastPick={specimen,index,world:hit.point.toArray(),local:local.toArray(),normal:normal.toArray(),faceIndex:hit.faceIndex};
-    if(cell.pinned||!m.isExposedFace(index,normal))return;m.setSurfaceHand(index,point,local,normal,'embedded-visual');const direction=new THREE.Vector3();camera.getWorldDirection(direction);
+  canvas.addEventListener('pointerdown',event=>{if(event.button!==0||phase!=='interactive')return;try{ray(event);const hit=raycaster.intersectObjects(meshes.flat(),false)[0];if(!hit)return;event.stopImmediatePropagation();event.preventDefault();release();contactPointer=event.pointerId;controls.enabled=false;canvas.setPointerCapture(event.pointerId);
+    const {specimen,index}=hit.object.userData,m=models[specimen],cell=m.cells[index],point=hit.point.clone().sub(offsets[specimen]),local=m.worldToLocalPoint(index,point);
+    const directions=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]],normal=preparedContactNormal(hit.face.normal.toArray(),directions.filter(n=>m.isExposedFace(index,{x:n[0],y:n[1],z:n[2]})));
+    lastPick={specimen,index,world:hit.point.toArray(),local:local.toArray(),normal,surfaceNormal:hit.face.normal.toArray(),faceIndex:hit.faceIndex};
+    if(cell.pinned||!normal)return;m.setSurfaceHand(index,point,local,{x:normal[0],y:normal[1],z:normal[2]},'embedded-visual');const direction=new THREE.Vector3();camera.getWorldDirection(direction);
     grab={specimen,index,local,pointerId:event.pointerId,plane:new THREE.Plane().setFromNormalAndCoplanarPoint(direction,hit.point)};draw();
   }catch(error){fail('Grab',error);}},true);
   canvas.addEventListener('pointermove',event=>{if(!grab||event.pointerId!==grab.pointerId)return;try{const world=ray(event).intersectPlane(grab.plane,new THREE.Vector3());if(world)models[grab.specimen].moveHand(world.sub(offsets[grab.specimen]));event.stopImmediatePropagation();event.preventDefault();draw();}catch(error){fail('Drag',error);}},true);
-  for(const name of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(name,event=>{if(grab&&event.pointerId!==grab.pointerId)return;release();},true);
-  for(const name of ['shear','bind'])document.querySelector(`#${name}`).onclick=()=>{release();mode=name;for(const n of ['shear','bind'])document.querySelector(`#${n}`).setAttribute('aria-pressed',String(n===name));};
+  for(const name of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(name,event=>{if(contactPointer===null||event.pointerId!==contactPointer)return;release();},true);
+  for(const name of ['shear','bind'])document.querySelector(`#${name}`).onclick=()=>{release();mode=name;document.querySelector('#pull').disabled=mode==='bind';for(const n of ['shear','bind'])document.querySelector(`#${n}`).setAttribute('aria-pressed',String(n===name));};
   const icon=(id,definition)=>document.querySelector(id).replaceChildren(createElement(definition));
-  const pauseIcon=()=>{icon('#pause',paused?Play:Pause);document.querySelector('#pause').title=paused?'Resume':'Pause';};pauseIcon();icon('#reset',RotateCcw);icon('#release',Hand);
+  const pauseIcon=()=>{icon('#pause',paused?Play:Pause);document.querySelector('#pause').title=document.querySelector('#pause').ariaLabel=paused?'Resume':'Pause';};pauseIcon();icon('#reset',RotateCcw);icon('#release',Hand);
   document.querySelector('#pause').onclick=()=>{paused=!paused;pauseIcon();};document.querySelector('#reset').onclick=()=>serial('Reset',reset).catch(()=>{});document.querySelector('#release').onclick=release;
   document.querySelector('#pull').oninput=event=>{try{pairedPull(Number(event.target.value));if(paused)serial('Paired pull',()=>advance(1)).catch(()=>{});}catch(error){fail('Paired pull',error);}};
   document.querySelector('#strength').onchange=()=>{try{const value=cohesion();for(const m of models)m.setStrength(value);}catch(error){fail('Cohesion',error);}};
-  addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);draw();});
+  addEventListener('resize',()=>{projection();renderer.setSize(innerWidth,innerHeight);draw();});
   await reset();
   let last=performance.now(),carry=0;async function frame(now){requestAnimationFrame(frame);const elapsed=(now-last)/1000;last=now;if(phase!=='interactive'||paused||busy){carry=0;return;}carry+=elapsed;const dt=models[0].snapshot().config.timeStep;if(carry>=dt){carry-=dt;await serial('Live step',()=>advance(1)).catch(()=>{});}else draw();}requestAnimationFrame(frame);
   const cameraState=()=>({position:camera.position.toArray(),quaternion:camera.quaternion.toArray()});
