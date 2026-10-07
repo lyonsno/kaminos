@@ -213,5 +213,6 @@ assert.equal(describeVolumeSettingsPartialSave({ partial: true, localError: 'x',
   'in library /lib as vsp-666666666666; NOT saved locally: x');
 assert.match(save, /if \(!sceneSnapshot\) \{\s*const reuseBlock = volumeSettingsPresetLabelReuseBlock/, 'scene snapshots move no label, so the reuse guard does not apply');
 assert.match(save, /result\.partial[\s\S]*describeVolumeSettingsPartialSave\(result\)[\s\S]*partialSave = true/, 'a partial save is raised as partial');
+assert.match(save, /result\.partial[\s\S]*await refreshVolumeSettingsPresetList\(result\.sharedPublication\.presetId\)[\s\S]*partialSave = true/, 'after a partial save the picker shows what the library now holds');
 assert.match(save, /error\.partialSave \? 'PRESET SAVE PARTIAL' : 'PRESET SAVE FAILED'/, 'the status distinguishes a partial save');
 console.log('volume settings projection receipt contracts passed');

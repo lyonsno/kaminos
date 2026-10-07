@@ -608,6 +608,17 @@ def test_partial_save_is_reported_truthfully(tmp):
     else:
         raise AssertionError("a corrupt local label must fail the save")
     assert _alias_target(library, "kiln") == first["effective"]["presetId"], "nothing reached the library"
+    # Over HTTP the failure names this server's store, not the library.
+    serve.VOLUME_SETTINGS_STORE, serve.SHARED_BASIN_STORE = local, library
+    original_schema = serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH
+    (tmp / "schema.json").write_text(json.dumps(BASE_SCHEMA))
+    serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH = tmp / "schema.json"
+    try:
+        request = _Request({"label": "kiln", "preset": payload(BASE_SCHEMA, {**BASE_VALUES, "volume-detail": 0.5})})
+        serve.KaminosHandler.handle_volume_settings_presets_post(request)
+    finally:
+        serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH = original_schema
+    assert request.result[0] == 400 and request.result[1]["failurePhase"] == "local-preset-precheck", request.result
     alias_path.write_text(good_alias)
     # A later local failure (an unwritable presets directory) after the library took the basin.
     os.chmod(local / "presets", 0o500)

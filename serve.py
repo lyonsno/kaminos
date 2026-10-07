@@ -1676,6 +1676,10 @@ def publish_volume_settings_preset(shared_store_path, document, label, source, s
     }
 
 
+class VolumeSettingsLocalPrecheckError(ValueError):
+    """This server's own store failed a precondition before anything was published."""
+
+
 class VolumeSettingsPartialSave(ValueError):
     """The basin reached the shared library but this server's store could not be written."""
 
@@ -1710,10 +1714,13 @@ def write_volume_settings_preset_to_library(local_store_path, shared_store_path,
     shared = _volume_settings_store_path(shared_store_path)
     # The local label is a precondition of the local write: a damaged one fails
     # the save here, before anything reaches the library.
-    local_current = (
-        _volume_settings_alias_document(local, _volume_settings_alias_for_label(local, effective_label))
-        if publish_alias else None
-    )
+    try:
+        local_current = (
+            _volume_settings_alias_document(local, _volume_settings_alias_for_label(local, effective_label))
+            if publish_alias else None
+        )
+    except (OSError, ValueError) as error:
+        raise VolumeSettingsLocalPrecheckError(f"this server's store {local}: {error}") from error
     document = {
         "identity": VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY,
         "presetId": preset_id,
@@ -3391,6 +3398,15 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 volume_settings_server_source(),
                 publish_alias=request.get("publishAlias", True),
             )
+        except VolumeSettingsLocalPrecheckError as error:
+            self.send_json({
+                "error": str(error),
+                "requestedLabel": request.get("label"),
+                "storePath": str(VOLUME_SETTINGS_STORE),
+                "stores": volume_settings_store_layer_receipt(),
+                "failurePhase": "local-preset-precheck",
+            }, 400)
+            return
         except VolumeSettingsPartialSave as error:
             # The library has the basin; this server's store does not. Say both.
             self.send_json({

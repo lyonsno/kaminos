@@ -203,7 +203,7 @@ test('cockpit and schema carry the new controls', () => {
     assert.match(index, new RegExp(`id="${id}"`), `${id} exists`);
     assert.ok(schema.controls.some(control => control.key === id), `${id} is in the schema`);
   }
-  assert.match(index, /emitterAperturePattern: document\.getElementById\('volume-emitter-aperture-pattern'\)\.dataset\.volumeRetiredPatternRequest \|\| document\.getElementById\('volume-emitter-aperture-pattern'\)\.value/, 'the snapshot sends a kept retired request, else the select value');
+  assert.match(index, /emitterAperturePattern: volumeAperturePatternValue\(document\.getElementById\('volume-emitter-aperture-pattern'\)\)/, 'the snapshot sends a kept retired request, else the select value');
   assert.match(index, /emitterSwirl: parseFloat\(document\.getElementById\('volume-emitter-swirl'\)\.value\)/);
   assert.match(index, /windModel: document\.getElementById\('volume-wind-model'\)\.value/);
   assert.match(index, /<option value="jets">Ring of jets<\/option>/);

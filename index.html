@@ -16171,9 +16171,31 @@ function adoptVolumeRenderScaleSliderValue() {
   if (control) setVolumeRenderScaleControlValue(control.value);
 }
 
+// Aperture patterns a basin may request that the select no longer offers; the
+// request is kept beside the shape fallback (see the route loader).
+const VOLUME_RETIRED_APERTURE_PATTERNS = ['concentric', 'spiral'];
+
+// The aperture pattern the basin asks for: a kept retired request while the
+// select still shows its shape fallback, otherwise the chosen pattern.
+function volumeAperturePatternValue(select) {
+  return select.value === 'shape' && select.dataset.volumeRetiredPatternRequest ? select.dataset.volumeRetiredPatternRequest : select.value;
+}
+
 function setVolumeControlValue(id, value) {
   if (id === 'volume-render-scale') {
     setVolumeRenderScaleControlValue(value);
+    return;
+  }
+  if (id === 'volume-emitter-aperture-pattern') {
+    const select = document.getElementById(id);
+    if (!select) return;
+    if (VOLUME_RETIRED_APERTURE_PATTERNS.includes(String(value))) {
+      select.value = 'shape';
+      select.dataset.volumeRetiredPatternRequest = String(value);
+    } else {
+      select.value = String(value);
+      delete select.dataset.volumeRetiredPatternRequest;
+    }
     return;
   }
   const el = document.getElementById(id);
@@ -16194,6 +16216,32 @@ function normalizeVolumeHexColor(value, fallback = '#ffffff') {
 
 function setVolumeColorControlValue(id, value, fallback) {
   setVolumeControlValue(id, normalizeVolumeHexColor(value, fallback));
+}
+
+// Set a saved value on a range input. The renderer clamps each control to its
+// slider's range, so a value outside it loads at the limit and the readback
+// reports the difference; an in-range value off the step grid switches the
+// step to any rather than snapping, and is recorded.
+function applyVolumeRangeSavedValue(el, value) {
+  if (!el || !Number.isFinite(value)) return;
+  const min = el.min === '' ? -Infinity : Number(el.min);
+  const max = el.max === '' ? Infinity : Number(el.max);
+  const held = Math.min(max, Math.max(min, value));
+  const step = Number(el.step);
+  if (el.step !== 'any' && Number.isFinite(step) && step > 0) {
+    const steps = (held - (Number.isFinite(min) ? min : 0)) / step;
+    if (Math.abs(steps - Math.round(steps)) > 1e-9) {
+      window.__kaminosVolumeControlStepsMadeContinuous?.push({ id: el.id, value: held, step: el.step });
+      el.step = 'any';
+    }
+  }
+  el.value = String(held);
+}
+
+// Whether a select offers a value, so route selects accept every option the
+// page has instead of a hand-kept list that drifts.
+function volumeSelectOffers(select, value) {
+  return Boolean(select) && [...select.options].some(option => option.value === value);
 }
 
 function formatVolumePresetControlValue(key, value) {
@@ -16715,7 +16763,7 @@ function readVolumeDomControlValue(el) {
   // A retired aperture pattern kept from a saved route is the basin's request
   // until the operator authors a pattern: saving (and the capture route) keeps
   // it rather than migrating the basin to the shape it falls back to.
-  if (el.id === 'volume-emitter-aperture-pattern' && el.dataset.volumeRetiredPatternRequest) return el.dataset.volumeRetiredPatternRequest;
+  if (el.id === 'volume-emitter-aperture-pattern') return volumeAperturePatternValue(el);
   if (el.type === 'checkbox') return Boolean(el.checked);
   if (['color', 'text', 'url', 'search', 'password'].includes(el.type) || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return el.value;
   const numericValue = Number(el.value);
@@ -16855,8 +16903,9 @@ function activeVolumeSettingsPresetStatus() {
   if (!receipt) return { text: '', warning: false };
   const projection = describeVolumeSettingsPresetProjection(receipt.serverProjection);
   const applied = describeVolumeSettingsPresetAppliedDifferences(activeVolumeSettingsPresetApplied);
+  const continuous = window.__kaminosVolumeControlStepsMadeContinuous || [];
   return {
-    text: `${receipt.label || receipt.presetId} | requested ${receipt.requestedPresetRef} | effective ${receipt.presetId} | ${receipt.schemaIdentity} | ${receipt.storePath}${projection.text ? ` | ${projection.text}` : ''}${applied.text ? ` | ${applied.text}` : ''}`,
+    text: `${receipt.label || receipt.presetId} | requested ${receipt.requestedPresetRef} | effective ${receipt.presetId} | ${receipt.schemaIdentity} | ${receipt.storePath}${projection.text ? ` | ${projection.text}` : ''}${applied.text ? ` | ${applied.text}` : ''}${continuous.length ? ` | ${continuous.length} slider${continuous.length === 1 ? '' : 's'} made continuous to hold saved precision: ${continuous.map(entry => entry.id).join(', ')}` : ''}`,
     warning: projection.warning || applied.warning,
   };
 }
@@ -16977,6 +17026,7 @@ async function saveVolumeSettingsPreset({ preset: suppliedPreset, label: supplie
     const result = await response.json();
     if (result.partial && result.sharedPublication?.published) {
       // The library took the basin but this server's store did not.
+      try { await refreshVolumeSettingsPresetList(result.sharedPublication.presetId); } catch { /* the partial report stands */ }
       const partial = new Error(describeVolumeSettingsPartialSave(result));
       partial.partialSave = true;
       throw partial;
@@ -21802,7 +21852,7 @@ function readVolumeControls() {
     emitterEdgeEntrainment: parseFloat(document.getElementById('volume-emitter-edge-entrainment').value),
     emitterFuelFraction: parseFloat(document.getElementById('volume-emitter-fuel-fraction').value),
     emitterInletTemperature: parseFloat(document.getElementById('volume-emitter-inlet-temperature').value),
-    emitterAperturePattern: document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest || document.getElementById('volume-emitter-aperture-pattern').value,
+    emitterAperturePattern: volumeAperturePatternValue(document.getElementById('volume-emitter-aperture-pattern')),
     emitterApertureCount: parseFloat(document.getElementById('volume-emitter-aperture-count').value),
     emitterApertureRatio: parseFloat(document.getElementById('volume-emitter-aperture-ratio').value),
     emitterApertureSeed: parseFloat(document.getElementById('volume-emitter-aperture-seed').value),
@@ -22120,7 +22170,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-edge-entrainment-val').textContent = c.emitterEdgeEntrainment.toFixed(2);
   document.getElementById('volume-emitter-fuel-fraction-val').textContent = c.emitterFuelFraction.toFixed(2);
   document.getElementById('volume-emitter-inlet-temperature-val').textContent = c.emitterInletTemperature.toFixed(2);
-  document.getElementById('volume-emitter-aperture-pattern-val').textContent = document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest ? `shape (${c.emitterAperturePattern} retired)` : c.emitterAperturePattern;
+  document.getElementById('volume-emitter-aperture-pattern-val').textContent = VOLUME_RETIRED_APERTURE_PATTERNS.includes(c.emitterAperturePattern) ? `shape (${c.emitterAperturePattern} retired)` : c.emitterAperturePattern;
   document.getElementById('volume-emitter-aperture-count-val').textContent = String(Math.round(c.emitterApertureCount));
   document.getElementById('volume-emitter-aperture-ratio-val').textContent = c.emitterApertureRatio.toFixed(2);
   document.getElementById('volume-emitter-aperture-seed-val').textContent = String(Math.round(c.emitterApertureSeed));
@@ -22664,6 +22714,7 @@ function reportKaminosVolumeRouteInitFailure(error) {
 
 async function initKaminosVolumeRoute() {
   if (compositionSetupError) throw compositionSetupError;
+  window.__kaminosVolumeControlStepsMadeContinuous = [];
   const params = new URLSearchParams(window.location.search);
   // Bare smoke routes boot into the committed default basin. Settings-preset
   // routes carry their own complete basin and must not inherit this one.
@@ -22809,7 +22860,6 @@ async function initKaminosVolumeRoute() {
   // select shows the family shape the map falls back to, and the request is
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
-  const VOLUME_RETIRED_APERTURE_PATTERNS = ['concentric', 'spiral'];
   const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
@@ -22828,9 +22878,11 @@ async function initKaminosVolumeRoute() {
     document.getElementById('volume-fire-render-mode').value = routeFireRenderMode;
   }
   const routeShellInspectMode = (params.get('volume_shell_inspect_mode') ?? params.get('volume_shell_inspect') ?? '').toLowerCase().replace(/-/g, '_');
+  // An empty saved mode is what the renderer draws as shell (mode 0); the
+  // select offers no empty option, so load it as shell.
   if (params.has('volume_shell_inspect_mode') && routeShellInspectMode === '') {
-    document.getElementById('volume-shell-inspect-mode').value = '';
-  } else if (['shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence'].includes(routeShellInspectMode)) {
+    document.getElementById('volume-shell-inspect-mode').value = 'shell';
+  } else if (volumeSelectOffers(document.getElementById('volume-shell-inspect-mode'), routeShellInspectMode)) {
     document.getElementById('volume-shell-inspect-mode').value = routeShellInspectMode;
   }
   for (const [param, id, min, max] of [
@@ -22852,7 +22904,7 @@ async function initKaminosVolumeRoute() {
   ]) {
     const routed = Number(params.get(param));
     if (params.has(param) && Number.isFinite(routed)) {
-      document.getElementById(id).value = String(Math.max(min, Math.min(max, routed)));
+      applyVolumeRangeSavedValue(document.getElementById(id), routed);
     }
   }
   const routeDensity = Number(params.get('volume_density'));
@@ -23278,10 +23330,9 @@ async function initKaminosVolumeRoute() {
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const routeValue = Number(params.get(field.param));
     if (!params.has(field.param) || !Number.isFinite(routeValue)) continue;
-    const clampedValue = clampVolumeControlValue(routeValue, field);
-    document.getElementById(field.id).value = field.continuous
-      ? String(clampedValue)
-      : clampedValue.toFixed(field.decimals);
+    const el = document.getElementById(field.id);
+    if (el?.type === 'range') applyVolumeRangeSavedValue(el, routeValue);
+    else if (el) el.value = clampVolumeControlValue(routeValue, field).toFixed(field.decimals);
   }
   const routePyroCompare = params.get('volume_pyro_compare');
   if (['live', 'base'].includes(routePyroCompare)) {
@@ -25025,7 +25076,9 @@ function checkFlameSettingsState(state) {
       if(axis==='presentationControls') {if(!['on','off'].includes(descriptor.value))throw Error('Invalid smoke presentation');continue;}
       const source=document.getElementById(id),value=descriptor.rawValue??descriptor.value;
       if(!source)throw Error(`Missing flame setting ${id}`);
-      if(source.tagName==='SELECT') {if(![...source.options].some(option=>option.value===String(value)))throw Error(`Unsupported ${id}: ${value}`);}
+      if(source.tagName==='SELECT') {
+        const retired=id==='volume-emitter-aperture-pattern'&&VOLUME_RETIRED_APERTURE_PATTERNS.includes(String(value));
+        if(!retired&&![...source.options].some(option=>option.value===String(value)))throw Error(`Unsupported ${id}: ${value}`);}
       else if(source.type==='checkbox') {if(typeof value!=='boolean'&&!['0','1','true','false'].includes(String(value)))throw Error(`Invalid ${id}`);}
       else if(['range','number'].includes(source.type)) {
         if(!Number.isFinite(Number(value)))throw Error(`Nonfinite ${id}`);
