@@ -63,3 +63,38 @@ Integration must account for the current solver's kernel/volume units and
 non-pressure scheduling explicitly. The parent's packed-density branch is not
 included in this reference branch; an adoption comparison must consume that
 accepted baseline or name the missing optimization.
+
+## Native implementation and provisional basin integration
+
+The shared WGSL math and dense conformance driver agree with the CPU reference
+on four small Apple Metal3 fixtures at zero and nonzero compliance, including
+a sparse particle and permutation. A deliberately doubled GPU update is
+rejected. Production grid/boundary/cadence claims require the exercised route.
+
+Select with `finger_fluid_pressure_solver=ipbf`; `pbf` remains default. Queries
+expose compliance, alternate compliance, damping (0/1), and beta. Runtime
+metadata exposes method, kernel, particle volume, damping and boundary model.
+The state buffer is96 bytes/particle; combined layout requires11 storage
+bindings. Adaptive refinement is unsupported by this first integration.
+
+Cubic support radius scales with the fixed-volume particle radius. Volume is
+calibrated from the incumbent poly6 volume integral: V=(64*pi/315)*h^3/24.3,
+times represented-volume scale. For h=0.185 this approximates0.055 spacing cubed.
+This explicit calibration connects physical volume and the density target when
+changing kernels; it is not the published implementation's particle units.
+
+The grid traverses cell bounds of full cubic support rather than assuming a
+fixed27-cell stencil, and skips dormant particles. Density ratio is stored in
+incumbent units for classification/cohesion; pressure uses the dimensionless
+clamped constraint. Density/gradient and update stages remain globally ordered.
+
+Integration limits: collision projection uses existing host boundaries; IPBF
+has no analytical boundary-density term yet. Viscosity, vorticity, cohesion,
+inlet control and contact retain the post-projection schedule, differing from
+the paper's constant non-pressure-force predictor. Paper damping replaces
+uniform0.991 velocity damping. Inlet attenuation and collision projection
+remain host operations. No equal-quality claim follows from conformance.
+
+Optional-Pyro-clock repair is ported from4733c149. Its focused test reproduced
+the null-debugState exception before repair and passes afterward. The broader
+liquid-fire suite stops earlier at an existing flame-quench source regex.
