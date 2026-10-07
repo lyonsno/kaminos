@@ -60,7 +60,7 @@ export function assertEnvironmentPoleProbe(result) {
   assert.equal(result?.backend,'webgpu_compute');
   assert.equal(result.validationError,null);
   assert.match(JSON.stringify(result.adapter),/apple/i,'this conformance witness requires native Apple WebGPU');
-  assert.notEqual(result.adapter.isFallbackAdapter,true);
+  assert.equal(result.adapter.isFallbackAdapter,false,'native adapter identity must explicitly reject fallback');
   assert.equal(result.rawWords?.length,24,'complete six-direction readback');
   for (const word of result.rawWords) assert.ok(Number.isInteger(word) && word >= 0 && word <= 0xffffffff,'raw f32 bits');
   const values = new Float32Array(new Uint32Array(result.rawWords).buffer);
@@ -74,6 +74,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   environmentPoleShader(readFileSync(new URL('../finger-fluid-webgpu-core.js',import.meta.url),'utf8'));
   const good={backend:'webgpu_compute',adapter:{vendor:'apple',isFallbackAdapter:false},validationError:null,rawWords:Array.from(new Uint32Array(new Float32Array(Array.from({length:6},()=>[1.44,2.88,5.76,1]).flat()).buffer))};
   assertEnvironmentPoleProbe(good);
+  for (const value of [undefined, null, 'true', 1]) {
+    const adapter={...good.adapter};
+    if(value===undefined) delete adapter.isFallbackAdapter;
+    else adapter.isFallbackAdapter=value;
+    assert.throws(()=>assertEnvironmentPoleProbe({...good,adapter}),/native adapter identity/);
+  }
   for(const changed of [{backend:'cpu'},{adapter:{vendor:'google',description:'SwiftShader'}},{adapter:{vendor:'apple',isFallbackAdapter:true}},{validationError:'failed'},{rawWords:[]},{rawWords:good.rawWords.slice(4)},{rawWords:good.rawWords.map((v,i)=>i===0?0x7fc00000:v)},{rawWords:good.rawWords.map((v,i)=>i===0?0:v)}]) assert.throws(()=>assertEnvironmentPoleProbe({...good,...changed}));
   console.log('HDR pole witness rejects fallback, partial, zero and nonfinite samples; native GPU execution required for sampler conformance');
 }
