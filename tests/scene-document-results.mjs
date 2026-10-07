@@ -18,6 +18,7 @@ function mounted() {
     buildSceneData: capture => ({ label: 'Comparison', composition: null,
       objects: [{ id: 'actual-object', transform: { position: [1, 2, 3] } }], capture: capture || null }),
     fetch: async () => ({ ok: true, json: async () => ({ saved: 'accepted.kaminos.json' }) }),
+    selectionCaptureSuspended:false,selectionFeedback:null,selectionBoxes:new Map(),updateSelectionFeedback(){},
     sceneObjects: [], volumePrototype: null, activeSceneComposition: null,
     transformControls: null, renderer: { domElement: {} }, FLAME_EMITTER_ID: 'flame',
     requestAnimationFrame: callback => callback(),

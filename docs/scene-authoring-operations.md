@@ -71,3 +71,46 @@ Scene hierarchy rows select on one click. Double-click a name (or use F2 on a fo
 Viewport → Transform gizmos is a view preference across selections, independent of saved object poses. Navigation hints are another viewport preference. Move/Rotate/Scale toolbar buttons explicitly enable their gizmo. These preferences are session-local, not authored scene history. Grid and global wireframe controls are not implemented by this menu.
 
 Numeric scrub fields display three significant figures while idle; the input retains its precise value and shows it for text editing. Relative numeric drags (including transform axis labels) and G/R/S request browser Pointer Lock, use unbounded logical movement and draw a wrapping software cursor. The browser restores its system cursor to the entry point on release. Escape or unexpected lock loss cancels the edit. When Pointer Lock is unavailable, ordinary bounded dragging remains usable. This does not change native Three.js gizmo-handle dragging or trackpad camera navigation.
+
+## Selection sets, pivots and editor symbols
+
+Shift-click extends or toggles viewport/hierarchy selection; the last added item is active. A selects all scene objects and group frames; Alt-A clears. B enters projected-bounds box selection: left drag adds, middle drag subtracts, Escape/right click cancels. Box selection is through projected object bounds, not fragment-visibility picking. A selected group suppresses selected children as transform roots, so a child never receives the delta twice.
+
+The toolbar exposes World/Local axes and Median/Active/Individual origins. Modal G/R/S, native gizmo and transform-number fields use the existing scene ledger. Operation switching restarts every chosen root from the gesture-start snapshot. A selection transform is one undo entry; a provider rejection cannot leave a sibling changed. Finite world-TRS/provider restrictions remain: unrepresentable shear is rejected, water aperture uses positive uniform scale, and flame sources cannot be independently duplicated.
+
+Selection transform fields edit the shared frame; geometry/material/emission/light fields below edit the active item. The inspector states the active item and which pose values are mixed. Selection feedback uses orange/yellow world bounding boxes, not a new postprocessing silhouette pass. Viewport → Emitter symbols & helpers hides source/light symbols and field guides without removing scene objects, disabling emission or hiding authored mesh geometry. View preferences remain session-local.
+
+`window.kaminosSelection.read()` returns `ids`, `activeId`, expanded `memberIds` and transform preferences. Groups use `@group:<groupId>` keys. `set(ids, activeId)`, `all()`, `clear()`, `settings({orientation, pivot})`, `transform(patch)`, `duplicate({interactive})`, `remove()`, `group(label)`, and `ungroup()` use the same objects and ledger as the UI. Await membership undo/redo. `transform(patch)` edits the frame returned by the current selection; its scale starts at one, so a frame scale is a selection multiplier. Bulk insertion/removal retains actual GLB/procedural/light instances for reversal; simulation source restoration recreates its editor handle through the existing source adapter and preserves settings. Undo does not rewind fluid particles.
+
+Scene version7 adds `selectionIds` beside the existing active object/group fields. Save/reopen preserves the chosen set and active item; older documents keep their single-item behavior. Temporary asset inspection restores the original selection. Glyph visibility can be observed as `objectVisible` in `kaminosSceneObjectDebugState()`; actual light binding visibility remains in `kaminosSceneLightState()`.
+
+## Assets and image-to-mesh generation
+
+In Authoring, **Assets** and **Generate** open an in-context drawer. Browse the existing mounted locations, enter folders, filter the current folder, and choose a GLB or source image. **Open file…** accepts GLB, PNG, JPEG or WebP. A mesh is copied into the existing content-addressed store and appended through the ordinary scene membership operation; the current composition remains intact. Undo removes that instance and redo restores it without re-reading its original external folder. Source images use the existing image inbox and preserve their display name and content identity.
+
+The first generation route is Stable Fast 3D image-to-textured-mesh, using the existing shared-device producer and ordinary flame foreground host. Choose a source image, then explicitly **Generate mesh**. Weights load on the first run. An unsupported host/device or a scene already owned by another composition module is shown as unavailable. Generation does not insert automatically: the retained result gets an **Add** action. Its source image, digest, route, run ID, producer identity/receipt and GLB digest travel with the scene instance through undo/redo and save/reopen. A failed storage step retains the computed bytes and offers **Retry saving result**, rather than rerunning inference. This route needs the deployed SF3D weights/tet assets; generation failure is reported in its actual phase. Browsing existing Trellis outputs does not establish a callable Trellis generation route.
+
+`window.kaminosAssets` exposes `read()`, `refresh()`, `browse(root, path)`, `select(entry)`, `upload(file)`, `add(entry)`, `generate()`, `recover()`, `generation()`, `open(mode)` and `close()`. The UI uses this same controller. For example:
+
+```js
+const assets = window.kaminosAssets;
+await assets.browse('image-inbox', 'a-source-folder');
+assets.select(assets.read().entries.find(entry => entry.kind === 'image'));
+const output = await assets.generate();
+const objectId = await assets.add({...output, kind: 'mesh'});
+window.kaminosSetSceneObjectTransform(objectId, {position: [1, 0, 0]});
+```
+
+Ordinary static meshes now have selected/active silhouette feedback. **Viewport → Object bounds** enables bounding boxes separately. Source/light editor symbols retain the existing helper control. Skinned, instanced and Splat outlines are not provided by this static mask; clean scene capture suspends selection contours and bounds. The mask has its own scene/materials and does not alter authored materials, geometry, lighting inputs or saved records.
+
+Assets/Generate occupies a page region below the authoring viewport. Closing it
+restores the viewport area; it does not cancel generation or mutate the scene.
+The thin generation bar reflects the producer's current-stage percentage. Phases
+without a denominator remain indeterminate; stage resets are not overall run
+estimates. Stop aborts source fetches, prevents inference after a stopped weight
+load, and throws AbortError at SF3D's existing cooperative progress boundaries.
+The producer's finish path settles admitted work before another run is admitted.
+Loading weights currently settles before stopping; the shared scene device is
+never destroyed. A completed mesh wins a Stop race and is saved or retained for
+storage retry. Persistence has no Stop button because it preserves completed
+bytes. A device/foreground drain failure stays a failure, not a clean stop.
