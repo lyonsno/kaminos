@@ -8,7 +8,7 @@ import { loadStoneAssets } from './structural-material-arch-stones.js';
 
 export const STONE_ROUTE='kaminos.structural-material.imported-stone-thickness.webgpu.v0';
 const params=new URLSearchParams(location.search),errorNode=document.querySelector('#error');
-let phase='loading',failure=null,identity=null,prepared=null,preparedSha256=null,models=[],meshes=[[],[]],grab=null,contactPointer=null,paired=false,pairBaselines=[],lastPick=null,busy=false,mode='shear',paused=params.get('smoke')==='1',operations=Promise.resolve();
+let phase='loading',failure=null,identity=null,prepared=null,preparedSha256=null,models=[],meshes=[[],[]],grab=null,contactPointer=null,paired=false,pairBaselines=[],lastPick=null,busy=false,mode='shear',paused=params.get('smoke')==='1',operations=Promise.resolve(),sceneSubmissions=0,resetReceipt=null,resetGeneration=0;
 const failures=[],offsets=[new THREE.Vector3(-1.6,0,0),new THREE.Vector3(1.6,0,0)],vec=p=>new THREE.Vector3(p.x,p.y,p.z);
 function fail(operation,error){failure={operation,message:error.message??String(error),stack:error.stack};failures.push(failure);paused=true;phase='failed';errorNode.textContent=failure.message;console.error(error);}
 const serial=(name,fn)=>{const work=operations.then(async()=>{busy=true;try{return await fn();}catch(error){fail(name,error);throw error;}finally{busy=false;}});operations=work.catch(()=>{});return work;};
@@ -61,14 +61,18 @@ try {
       document.querySelector(specimen?'#thick':'#thin').textContent=`${specimen?'Thick 0.60':'Thin 0.30'} · ${state.broken} broken · reaction ${force.toFixed(2)}`;
     }
     marker.visible=Boolean(grab);if(grab){const mesh=meshes[grab.specimen][grab.index];marker.position.copy(mesh.localToWorld(grab.local.clone()));}
-    scene.updateMatrixWorld(true);renderer.render(scene,camera);
+    scene.updateMatrixWorld(true);renderer.render(scene,camera);sceneSubmissions++;
   }
   function release(){for(const model of models)model.release();grab=null;contactPointer=null;paired=false;controls.enabled=true;document.querySelector('#pull').value='0';draw();}
   const cohesion=()=>{const v=Number(document.querySelector('#strength').value);if(!(v>0)||!Number.isFinite(v))throw new Error('Cohesion must be positive and finite');return v;};
-  async function reset(){const next=[];try{for(const s of prepared.specimens)next.push(await createGpuStructuralFixture(buildGpuStoneFixture(s,{strength:cohesion()}),renderer));}catch(error){for(const m of next)m.dispose();throw error;}
+  controls.addEventListener('change',()=>{try{draw();}catch(error){fail('Camera presentation',error);}});
+  async function reset(){const next=[],constructionStrength=cohesion();let publishedStrength;
+    try{for(const s of prepared.specimens)next.push(await createGpuStructuralFixture(buildGpuStoneFixture(s,{strength:constructionStrength}),renderer));
+      publishedStrength=cohesion();for(const m of next)m.setStrength(publishedStrength);
+    }catch(error){for(const m of next)m.dispose();throw error;}
     for(const model of models)model.dispose();for(const group of meshes)for(const mesh of group)scene.remove(mesh);models=next;
     meshes=prepared.specimens.map((s,specimen)=>s.cells.map((c,index)=>{const mesh=new THREE.Mesh(skinGeometries[specimen][index],[assets[0].material,capMaterial]);mesh.userData={specimen,index,epoch:null};scene.add(mesh);return mesh;}));
-    grab=null;contactPointer=null;paired=false;controls.enabled=true;failure=null;errorNode.textContent='';phase='interactive';draw();
+    grab=null;contactPointer=null;paired=false;document.querySelector('#pull').value='0';controls.enabled=true;failure=null;errorNode.textContent='';phase='interactive';resetReceipt={generation:++resetGeneration,constructionStrength,publishedStrength};draw();
   }
   function pairedPull(travel){if(!Number.isFinite(travel)||travel<0)throw new Error('Pull must be nonnegative and finite');
     if(mode!=='shear')throw new Error('Paired pull requires Shear mode');
@@ -105,7 +109,7 @@ try {
     }finally{buffer.destroy();}}
   window.__stoneThickness={advance:n=>serial('Advance',()=>advance(n)),reset:()=>serial('Reset',reset),pull:pairedPull,release,
     setStrength:value=>{document.querySelector('#strength').value=String(value);const strength=cohesion();for(const m of models)m.setStrength(strength);},
-    witness:()=>({route:STONE_ROUTE,phase,failure,failures:[...failures],identity,preparedSha256,sourceSha256:prepared.sourceSha256,camera:cameraState(),viewport:{width:innerWidth,height:innerHeight},paused,mode,paired,lastPick,
+    witness:()=>({route:STONE_ROUTE,phase,failure,failures:[...failures],identity,preparedSha256,sourceSha256:prepared.sourceSha256,camera:cameraState(),viewport:{width:innerWidth,height:innerHeight},presentation:{sceneSubmissions},resetReceipt,paused,mode,paired,lastPick,
       specimens:models.map((m,i)=>({preparation:Object.fromEntries(['schema','sourceSha256','size','spacing','grid','volume','totalVolume'].map(key=>[key,prepared.specimens[i][key]])),state:m.snapshot(),rendererPoses:meshes[i].map(mesh=>({index:mesh.userData.index,position:mesh.position.toArray(),quaternion:mesh.quaternion.toArray()})),offset:offsets[i].toArray(),normalMapped:meshes[i].every(mesh=>mesh.material[0].normalMap?.isTexture),visibleCaps:meshes[i].reduce((n,mesh)=>n+mesh.geometry.groups.filter(g=>g.materialIndex===1).reduce((sum,g)=>sum+g.count/3,0),0)}))}),
     contacts:()=>models.map((m,i)=>{const contact=tipContacts[i],mesh=meshes[i][contact.index],local=contact.point.clone().sub(new THREE.Vector3(...prepared.specimens[i].cells[contact.index].position)),world=mesh.localToWorld(local),screen=world.clone().project(camera);return{index:contact.index,world:world.toArray(),screen:{x:(screen.x+1)*innerWidth/2,y:(1-screen.y)*innerHeight/2}};}),
     pixels,capture:async()=>{await operations;draw();await device.queue.onSubmittedWorkDone();return await new Promise(resolve=>canvas.toBlob(async blob=>resolve(Array.from(new Uint8Array(await blob.arrayBuffer()))),'image/png'));}

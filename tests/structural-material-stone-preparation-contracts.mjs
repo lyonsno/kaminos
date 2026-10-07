@@ -8,6 +8,11 @@ const bytes = fs.readFileSync(new URL('../assets/arch-stones/03-bedded-stone-500
 const source = readArchGlbTriangles(bytes);
 assert.equal(source.triangles.length, 500, 'the actual imported stone uses the standard default triangle mode');
 assert(source.bounds3d.max.every((value, axis) => value > source.bounds3d.min[axis]));
+const containerJsonLength=bytes.readUInt32LE(12),invalidModeJson=JSON.parse(bytes.toString('utf8',20,20+containerJsonLength));
+invalidModeJson.meshes[0].primitives[0].mode=null;
+const jsonBytes=Buffer.from(JSON.stringify(invalidModeJson)),padded=Buffer.alloc(Math.ceil(jsonBytes.length/4)*4,32);jsonBytes.copy(padded);
+const binary=bytes.subarray(20+containerJsonLength),header=Buffer.alloc(20);header.write('glTF');header.writeUInt32LE(2,4);header.writeUInt32LE(20+padded.length+binary.length,8);header.writeUInt32LE(padded.length,12);header.writeUInt32LE(0x4e4f534a,16);
+assert.throws(()=>readArchGlbTriangles(Buffer.concat([header,padded,binary])),/triangle primitive/,'only omitted mode uses the triangle default; explicit null is malformed');
 const [thin, thick] = [.3, .6].map(t => prepareStoneFromGlb(bytes, { size: [2.4,t,.6], cellSize:.3 }));
 assert.equal(thin.cells.length, 16); assert.equal(thick.cells.length, 32);
 assert.deepEqual(thin.spacing, thick.spacing);
