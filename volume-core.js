@@ -4396,7 +4396,8 @@ fn immersedSourceWeight(cellCenter: vec3<f32>) -> f32 {
   let radial = length(d - along * n);
   let halfThickness = 0.5 * u.immersed_source_c.x;
   let radius = u.immersed_source_b.w;
-  return smoothstep(halfThickness + 0.5, halfThickness - 0.5, abs(along)) * smoothstep(radius + 0.5, radius - 0.5, radial);
+  // Edges ascend: Metal leaves smoothstep with reversed edges undefined.
+  return (1.0 - smoothstep(halfThickness - 0.5, halfThickness + 0.5, abs(along))) * (1.0 - smoothstep(radius - 0.5, radius + 0.5, radial));
 }
 
 fn blockedSceneFaceFluxAtCell(c: vec3<i32>) -> vec2<f32> {

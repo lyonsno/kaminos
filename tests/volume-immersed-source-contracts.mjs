@@ -76,8 +76,9 @@ test('the CPU weight model mirrors the shader: an antialiased slab, normalised t
 test('the shader derives target, momentum and scalar entry from one weight and one flux, caps the target, and stores it beside heat release', () => {
   const weight = source.slice(source.indexOf('fn immersedSourceWeight('), source.indexOf('\n}\n', source.indexOf('fn immersedSourceWeight(')));
   assert.match(weight, /let along = dot\(d, n\);/);
-  assert.match(weight, /smoothstep\(halfThickness \+ 0\.5, halfThickness - 0\.5, abs\(along\)\)/);
-  assert.match(weight, /smoothstep\(radius \+ 0\.5, radius - 0\.5, radial\)/);
+  assert.match(weight, /\(1\.0 - smoothstep\(halfThickness - 0\.5, halfThickness \+ 0\.5, abs\(along\)\)\)/, 'ascending edges (Metal leaves reversed edges undefined)');
+  assert.match(weight, /\(1\.0 - smoothstep\(radius - 0\.5, radius \+ 0\.5, radial\)\)/);
+  assert.doesNotMatch(weight, /smoothstep\([a-zA-Z]+ \+ 0\.5, [a-zA-Z]+ - 0\.5/, 'no reversed-edge smoothstep');
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
   assert.match(main, /let immersedWeight = immersedSourceWeight\(cell\);/);
   assert.match(main, /let immersedTarget = min\(u\.immersed_source_d\.y, immersedWeight \* u\.immersed_source_d\.z\);/, 'target per cell = min(cap, w × Q/Σw)');
