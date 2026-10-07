@@ -26,6 +26,10 @@ try {
   await page.goto(url);
   await page.waitForFunction(()=>window.__kaminosSceneRadianceSetup?.status==='failed'||window.__kaminosVolumePrototype?.debugState().error||(window.kaminosSceneObjectDebugState?.().some(o=>o.id==='kiln')&&window.__kaminosSceneRadiance?.canRender()&&window.__kaminosVolumePrototype.debugState().frameCount>=12),null,{timeout:0});
   report.phase='loaded';await save();
+  if(operation==='--product-controls'||operation==='--product-controls-guided') {
+    await page.waitForFunction(()=>/^(Scene loaded:|Scene load failed:|Scene restore failed:|Auto-load scene failed:|Invalid scene)/.test(document.getElementById('info-bar').textContent),null,{timeout:0});
+    report.sceneLoad=await page.locator('#info-bar').textContent();assert.ok(report.sceneLoad.startsWith('Scene loaded:'),report.sceneLoad);await save();
+  }
   await page.evaluate(()=>{window.setGizmoMode?.(null);window.__kaminosVolumePrototype.setSimulationPaused(true);window.__kaminosSetSceneCameraFrame([3,2,9],[0,.7,0]);window.__kaminosSetActiveTab('assets');window.kaminosWorkspace?.setMode('workbench');document.getElementById('right-tab-rendering').click();});
   if(operation==='--composition') {
     await page.selectOption('#rendering-light-mode','shared');

@@ -23,6 +23,7 @@ export function resolveVolumeAppearanceTrims(value={}) {
 // These are deliberate product-path migrations, not fallback for unknown laws.
 export function productTransportSettings(value) {
   const next={...value};
+  if(!Object.hasOwn(next,'rendering-receiver-spacing'))next['rendering-receiver-spacing']='0';
   const key='rendering-angular-pattern';
   if(!['fixed','spatial','source','guided'].includes(next[key]))throw Error('Unknown lighting angular pattern');
   if(!['legacy','distributed'].includes(next['rendering-smoke-solver']))throw Error('Unknown smoke illumination solver');

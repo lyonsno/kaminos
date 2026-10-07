@@ -36,6 +36,16 @@ test('product restore preserves the newly accepted emitter-informed sampler',()=
   assert.equal(productTransportSettings(settings)['rendering-angular-pattern'],'guided');
 });
 
+test('old transport snapshots explicitly acquire the additive receiver default without accepting malformed values',async()=>{
+  const {createLightingControlTarget}=await import('../scene-lighting-authoring.mjs');
+  const control={id:'rendering-receiver-spacing',tagName:'SELECT',value:'0',options:[{value:'0'},{value:'0.16'}]};
+  const target=createLightingControlTarget([control]);
+  const old={'rendering-angular-pattern':'source','rendering-smoke-solver':'distributed','rendering-surface-scattering':true,'rendering-light-mode':'shared'};
+  assert.equal(target.check(productTransportSettings(old))['rendering-receiver-spacing'],'0');
+  assert.equal(target.check(productTransportSettings({...old,'rendering-receiver-spacing':'0.16'}))['rendering-receiver-spacing'],'0.16');
+  for(const value of [null,17,'unknown'])assert.throws(()=>target.check(productTransportSettings({...old,'rendering-receiver-spacing':value})),/Invalid/);
+});
+
 test('actual product GI setter rejects unknown supplied modes before effective state changes',()=>{
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const start=html.indexOf('function setSceneGIControls('),end=html.indexOf('for (const key of Object.keys(sceneGISettings))',start);
