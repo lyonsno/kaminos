@@ -50,7 +50,11 @@ shared.device.pushErrorScope=()=>{};shared.device.popErrorScope=async()=>null;sh
 shared.sharedGpu.adapter.info={vendor:'apple',architecture:'metal-3',description:'controlled shared Apple device',isFallbackAdapter:false};
 let extraDeviceRequests=0;
 Object.defineProperty(globalThis,'navigator',{configurable:true,value:{gpu:{requestAdapter(){extraDeviceRequests++;throw Error('a shared composition must not request another adapter');}}}});
-globalThis.fetch=async url=>url==='/fixture/manifest.json'?new Response(manifest):new Response('');
+const acknowledgments=[];
+globalThis.fetch=async url=>{
+  if(url==='/fixture/manifest.json')return new Response(manifest);
+  const response=new Response('{}');acknowledgments.push(response);return response;
+};
 const sharedFailure=await runGenerationWitness(sha,{sharedComposition:shared});
 assert.equal(sharedFailure.error?.message,'observed checkpoint array allocation failure',
   'complete generation must consume the existing shared host rather than attempt another adapter');
@@ -58,4 +62,5 @@ assert.equal(sharedFailure.deviceTopology,'same-device');
 assert.equal(sharedFailure.sharedRelease?.status,'released');
 assert.equal(extraDeviceRequests,0);assert.equal(shared.destroyed,0);
 assert.equal(shared.active,false);assert.equal(shared.requester,null);
+assert.ok(acknowledgments.every(r=>r.bodyUsed),'phase/raw acknowledgments must finish reading before the next request');
 console.log('Full witness failure uses the actual borrowed host/kit bridge, preserves causal failure, releases its route and leaves the host device alive.');

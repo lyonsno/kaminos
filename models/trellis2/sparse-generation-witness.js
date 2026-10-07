@@ -16,6 +16,7 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
   const stageCounts={},save=async(name,values,shape,dtype)=>{
     const response=await fetch('/output/'+name,{method:'POST',headers:{'X-Tensor-Dtype':dtype},body:values});
     if(!response.ok)throw Error('complete raw output not saved '+name);
+    await response.text();
     report.outputs[name]={shape,dtype,byteLength:values.byteLength,sha256:await hash(values),finite:values.every(Number.isFinite)};
   };
   const savePhase=async extra=>{
@@ -24,6 +25,7 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
       verifiedTensorCount:report.verifiedTensorCount,verifiedInputBytes:report.verifiedInputBytes,
       ...(memory?{deviceMemory:memory.snapshot()}:{}),...extra})});
     if(!saved.ok)throw Error('generation phase evidence not saved: '+await saved.text());
+    await saved.text();
   };
   try{
     if(typeof memoryMonitor!=='boolean')throw TypeError('explicit boolean memory-monitor selection required');
