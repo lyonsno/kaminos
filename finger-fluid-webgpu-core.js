@@ -8759,7 +8759,11 @@ fn loadEnvironmentTexel(pixel: vec2<i32>) -> vec3<f32> {
 
 fn sampleEnvironment(rayDirection: vec3<f32>) -> vec3<f32> {
   let direction = normalize(rayDirection);
-  let longitude = atan2(direction.z, direction.x);
+  // Longitude is arbitrary at either pole; atan2(0, 0) can produce NaN.
+  var longitude = 0.0;
+  if (dot(direction.xz, direction.xz) > 0.0) {
+    longitude = atan2(direction.z, direction.x);
+  }
   let uv = vec2<f32>(fract(0.5 + longitude / (2.0 * 3.14159265)), acos(clamp(direction.y, -1.0, 1.0)) / 3.14159265);
   let dims = vec2<f32>(textureDimensions(hdrEnvironmentTexture));
   let texelPosition = uv * dims - vec2<f32>(0.5);
