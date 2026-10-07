@@ -2,7 +2,7 @@ import {createVolumeGather,sourceRaySample,sourceGuideRaySample,deriveSourceGuid
 import {buildTriangleVisibility} from '../scene-light-visibility.mjs';
 export async function checkSourceAwareGPU({guided=false}={}){
   const adapter=await navigator.gpu.requestAdapter();
-  if(!adapter||adapter.isFallbackAdapter||/swiftshader/i.test(JSON.stringify(adapter.info)))throw new Error('native WebGPU required');
+  if(!adapter||adapter.info.isFallbackAdapter!==false||/swiftshader/i.test(JSON.stringify(adapter.info)))throw new Error('verified native WebGPU required');
   const device=await adapter.requestDevice(),errors=[],outputs=[];
   device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
   const receivers=[
@@ -53,7 +53,7 @@ export async function checkSourceAwareGPU({guided=false}={}){
     }
     await device.queue.onSubmittedWorkDone();
     if(errors.length)throw new Error(errors.join('\n'));
-    return {adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture},outputs,errors,status:'passed'};
+    return {adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:adapter.info.isFallbackAdapter},outputs,errors,status:'passed'};
   }catch(e){return {status:'failed',error:String(e),outputs,errors};}
   finally{gather.destroy();texture.destroy();device.destroy();}
 }

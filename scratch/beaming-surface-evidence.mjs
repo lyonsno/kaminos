@@ -89,7 +89,7 @@ export function assertSurfaceView(signal,{baseline,count,pattern,passes}) {
 export function assertSourceGuideEvidence(signal,requested){
   const {runtime,source,adapter,lighting,sourceGeneration,primary,front,back,errors,httpFailures}=signal;
   if(!runtime?.source||runtime.source.repoRoot!==source?.root||runtime.source.commit!==source?.revision||runtime.source.dirty||source.dirty)throw Error('wrong/unverified clean source-guide route');
-  if(adapter?.vendor!=='apple'||adapter.isFallbackAdapter)throw Error('source-guide evidence requires the native Apple route');
+  if(adapter?.vendor!=='apple'||adapter.isFallbackAdapter!==false)throw Error('source-guide evidence requires the verified native Apple route');
   const frame=lighting?.frame;
   if(!Number.isSafeInteger(sourceGeneration)||sourceGeneration<0||frame?.generation!==sourceGeneration||frame.angularPattern!==requested.pattern||frame.directions!==requested.count||frame.receiverSampling?.spacing!==requested.spacing||lighting.gain!==requested.gain||lighting.surfaceGain!==1||!frame.surfaceScattering?.enabled||lighting.previewStale)throw Error('source-guide requested/effective config or generation mismatch');
   if(requested.pattern==='guided'&&(!frame.sourceGuide||!['lo','hi'].every(k=>Array.isArray(frame.sourceGuide[k])&&frame.sourceGuide[k].length===3&&frame.sourceGuide[k].every(Number.isFinite))))throw Error('effective source guide missing');
