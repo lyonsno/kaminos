@@ -13908,6 +13908,8 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     activeRatio: 0.34,
     frameTimeMsEstimate: fingerFluidBenchLastFrameMs,
     solverBackend: gpuState.solver_backend,
+    solverIdentity: gpuState.solverRoute,
+    pressureProjection: gpuState.pressureSolver==='ipbf'?'implicit_variational_position_update':'iterative_position_density_projection',
     renderBackend: gpuState.render_backend,
     rendererIdentity: gpuState.effectiveRenderer,
     requestedRendererMode: gpuState.requestedRendererMode,

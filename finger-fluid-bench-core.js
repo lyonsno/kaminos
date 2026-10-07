@@ -121,7 +121,7 @@ export function createFingerFluidBenchState(options = {}) {
       sourcePacketId: options.sourcePacketId || 'kaminos-native-fluid-bench-synthetic-source-v0',
     },
     solver: {
-      identity: KAMINOS_FINGER_FLUID_SOLVER_IDENTITY,
+      identity: options.solverIdentity || KAMINOS_FINGER_FLUID_SOLVER_IDENTITY,
       backend: options.solverBackend || 'loading',
       mode: 'gpu_3d_linked_cell_position_based_fluid',
       particleCount: nonNegativeInteger(options.particleCount, 0),
@@ -129,7 +129,7 @@ export function createFingerFluidBenchState(options = {}) {
       neighborGridContract: options.neighborGridContract || 'wgsl-linked-cell-neighbor-grid-v0',
       densityContinuity: options.densityContract || 'wgsl-pbf-density-constraint-v0',
       boundaryPressureContract: options.boundaryPressureContract || 'wgsl-analytic-boundary-density-support-v0',
-      pressureProjection: 'iterative_position_density_projection',
+      pressureProjection: options.pressureProjection || 'iterative_position_density_projection',
       vorticityConfinement: options.vorticityConfinementContract || 'wgsl-neighbor-vorticity-confinement-v0',
       freeSurfaceCohesion: options.freeSurfaceContract || 'wgsl-neighbor-free-surface-cohesion-v0',
       restStateContract: options.restStateContract || KAMINOS_FINGER_FLUID_REST_STATE_IDENTITY,

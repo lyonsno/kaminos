@@ -12694,7 +12694,10 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
   };
 }
 
-export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
+export function evaluateFingerFluidTruthTrajectory(scene, trajectory, {boundaryPressureContract=KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT}={}) {
+  if (![KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,'ipbf-collision-projection-only-v0'].includes(boundaryPressureContract)) {
+    throw new Error(`Unsupported boundary pressure contract: ${boundaryPressureContract}`);
+  }
   const effectiveScene = resolveFingerFluidTruthScene(scene);
   if (!Array.isArray(trajectory) || trajectory.length < 2) {
     throw new Error(`Finger fluid truth trajectory requires at least two checkpoints: ${trajectory?.length || 0}`);
@@ -12734,7 +12737,7 @@ export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
     ) {
       throw new Error(`Finger fluid truth checkpoint ${index} contains invalid density evidence`);
     }
-    if (snapshot.boundaryPressureContract !== KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT) {
+    if (snapshot.boundaryPressureContract !== boundaryPressureContract) {
       throw new Error(`Finger fluid truth checkpoint ${index} has invalid boundary pressure contract: ${snapshot.boundaryPressureContract}`);
     }
     if (!Number.isFinite(snapshot.totalKineticEnergy) || snapshot.totalKineticEnergy < 0) {
@@ -12831,6 +12834,7 @@ export function evaluateFingerFluidTruthTrajectory(scene, trajectory) {
   const verticalCollapse = initial.centerOfMass[1] - final.centerOfMass[1];
   const receipt = {
     contract: 'kaminos-fluid-truth-trajectory-v0',
+    boundaryPressureContract,
     scene: effectiveScene,
     checkpointCount: snapshots.length,
     elapsedHorizonMs: Number(elapsedHorizonMs.toFixed(1)),
