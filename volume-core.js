@@ -2643,7 +2643,7 @@ export const TRANSPORT_MAX_BACKTRACE_CELLS = 8;
 export function joinedVelocityUnits(grid, surroundingSmoke = false) {
   return {referenceGrid:32, cellScale:surroundingSmoke ? grid / 32 : 1,
     field:'cells-per-reference-transport-tick', driving:'core32-cell-units',
-    normalized:['inlet-speed','buoyancy','authored-lift','wind','velocity-bound'],
+    normalized:['inlet-speed','buoyancy','authored-lift','wind','velocity-bound','optical-velocity-proxies'],
     remaining:'grid-scale-detail-force-and-source-footprint-discretization'};
 }
 export function joinedPressurePolicy(grid, referenceSweeps) {
@@ -3116,6 +3116,9 @@ override LEAN_STOCK_RAYMARCH: bool = false;
 const OUTER_SMOKE: bool = false;
 const OUTER_EXTENT: f32 = 4.0;
 fn joinedVelocityScale() -> f32 { return select(1.0, f32(GRID) / 32.0, OUTER_SMOKE); }
+// Appearance proxies use the authored core32 velocity reading, not a count of
+// the finer cells traversed by the same local motion. Transport stays in cells.
+fn opticalVelocityMagnitude(v:vec3<f32>) -> f32 { return length(v) / joinedVelocityScale(); }
 @group(0) @binding(20) var outerSmokeOptical: texture_3d<f32>;
 @group(0) @binding(21) var outerSceneSolidCells: texture_3d<u32>;
 const SLOTS_PER_CELL: u32 = 4u;
@@ -4033,7 +4036,7 @@ fn sampleWorldFlowReconstructedSidecar(p: vec3<f32>, reconstructed: FlowReconstr
 }
 
 fn directCellOpticalSupportFromSlots(velocityDensity: vec4<f32>, material: vec4<f32>, fireLayer: vec4<f32>, microLayer: vec4<f32>, combustionFrontTopology: f32) -> f32 {
-  let velMag = length(velocityDensity.xyz);
+  let velMag = opticalVelocityMagnitude(velocityDensity.xyz);
   let smoke = material.x + microLayer.x * 0.52 + microLayer.y * 0.34;
   let fire = fireLayer.x * 1.25 + fireLayer.y * 0.42 + fireLayer.z * 0.55 + fireLayer.w * 0.72 + combustionFrontTopology * 0.35 + microLayer.z * 0.70 + material.y * 0.28;
   let density = max(velocityDensity.w, smoke * 0.82 + material.y * 0.22 + material.w * 0.18);
@@ -5283,7 +5286,7 @@ fn emissiveTemperature(fireLayer: vec4<f32>, material: vec4<f32>, microLayer: ve
 }
 
 fn boundarySupportFromSlots(velocityDensity: vec4<f32>, material: vec4<f32>, fireLayer: vec4<f32>, microLayer: vec4<f32>, frontTopology: f32, supportWeights: vec4<f32>) -> f32 {
-  let velMag = length(velocityDensity.xyz);
+  let velMag = opticalVelocityMagnitude(velocityDensity.xyz);
   let rawTemp = emissiveTemperature(fireLayer, material, microLayer, velMag);
   let heat = material.y;
   let fuel = material.z;
@@ -5472,7 +5475,7 @@ fn csIrradianceSeed(@builtin(global_invocation_id) gid: vec3<u32>) {
         let material = readSlot(c, 1u);
         let fireLayer = readSlot(c, 2u);
         let microLayer = readSlot(c, 3u);
-        let velMag = length(velocityDensity.xyz);
+        let velMag = opticalVelocityMagnitude(velocityDensity.xyz);
         let temp = emissiveTemperature(fireLayer, material, microLayer, velMag);
         // Gate by live combustion presence so the emission-law ambient floor
         // cannot masquerade as fire light in empty cells.
@@ -7410,7 +7413,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     let fireLayer = reconstructed.fireLayer;
     let microLayer = reconstructed.microLayer;
     let combustionFrontTopology = reconstructed.frontTopology;
-    let velMag = length(state.xyz);
+    let velMag = opticalVelocityMagnitude(state.xyz);
     let smokeDensity = material.x;
     let heat = material.y;
     let fuel = material.z;
@@ -7677,7 +7680,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       let boundaryGradientGate = smoothstep(boundaryCut, boundaryCut + boundarySoftness + boundarySidecarStepFootprintWidth, boundaryGradientEffective * boundaryGradientGain);
       let boundaryCoreGate = clamp(mix(1.0, 1.0 - shellCoreBody, shellCoreSuppress), 0.0, 1.0);
       let supportThinning = boundaryGradientGate * (1.0 - smoothstep(0.62, 1.12, boundarySupportEffective));
-      let upwardTransport = smoothstep(0.006, 0.085, max(0.0, state.y) + velMag * 0.12);
+      let upwardTransport = smoothstep(0.006, 0.085, max(0.0, state.y) / joinedVelocityScale() + velMag * 0.12);
       let sootSupport = smoothstep(0.012, 0.42, smoke + microSmoke * 0.50 + rawExtinction * 0.32 + materialDetail * 0.16);
       let fuelDepletionProxy = smoothstep(0.020, 0.52, heat + flameDetail * 0.46 + combustionFront * 0.28) * (1.0 - smoothstep(0.018, 0.18, fuel));
       let boundaryFireTipGate = clamp(supportThinning * (0.35 + boundaryFireRidgeEffective * 0.65) * (0.30 + upwardTransport * 0.70) * (0.45 + fuelDepletionProxy * 0.55), 0.0, 1.0);
@@ -26338,7 +26341,7 @@ export function createKaminosVolumePrototype({
               const fireLayer = slotAt(x, y, z, 2);
               const microLayer = slotAt(x, y, z, 3);
               const topo = front[idx(x, y, z)];
-              const velMag = Math.hypot(st[0], st[1], st[2]);
+              const velMag = Math.hypot(st[0], st[1], st[2]) / joinedVelocityUnits(n,outerRequested).cellScale;
               const rawTemp = clampf(fireLayer[0] * 1.22 + fireLayer[1] * 0.46 + fireLayer[2] * 0.40 + microLayer[2] * 1.18 + microLayer[3] * 0.48 + material[1] * 0.20 + velMag * 0.30, 0, 2.4);
               if (rawTemp < 0.04 && topo < 0.002 && fireLayer[2] < 0.01) continue;
               activeCells += 1;
