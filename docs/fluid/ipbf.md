@@ -160,3 +160,15 @@ and effective pressure boundary accompany all16words/particle; invalid shape
 or identity fails. Integer words preserve nonfinite bits for diagnosis rather
 than JSON-coercing them to null. This adds no readback to ordinary serving and
 no additional GPU copy to the existing explicit diagnostic operation.
+
+Wall-only constraints can produce semidefinite pressure blocks. The solver
+returns the minimum-norm f/trace(H) solution when H*f=trace(H)*f within32machine
+epsilons (f64reference/f32native); this covers the consistent rank-one block
+without adding pressure regularization. Exactly zero unforced coordinates are
+held at zero while the remaining block is solved. Unsupported singular blocks
+still fail the reference rather than introducing a tunable stabilizer. Tests
+cover axis-aligned and oblique wall-only motion and H*delta=force.
+
+An explicit full-particle request fails visibly if another diagnostic readback
+is pending or the runtime is stopped. It cannot complete with an old sparse
+capture. Ordinary diagnostic callers retain the existing cached-return behavior.

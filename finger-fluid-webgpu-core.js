@@ -15403,6 +15403,8 @@ export async function createWebGPUFingerFluidSolver({
 
   async function requestDiagnostics({captureParticleState=false}={}) {
     if(typeof captureParticleState!=='boolean') throw new TypeError('Particle-state capture must be boolean');
+    if(captureParticleState&&diagnosticsPending) throw new Error('Full particle-state capture is busy: diagnostics are pending');
+    if(captureParticleState&&runtimeLifecycle.stopped) throw new Error('Full particle-state capture failed: runtime is stopped');
     if (diagnosticsPending || runtimeLifecycle.stopped) return diagnostics;
     diagnosticsPending = true;
     diagnosticsRequestCount += 1;

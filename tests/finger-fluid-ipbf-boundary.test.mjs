@@ -74,3 +74,14 @@ test('remote boundary is neutral and malformed planes fail explicitly',()=>{
  for(const key of ['densities','forces','hessians','updates'])assert.deepEqual(a[key],b[key]);
  for(const malformed of [null,[{normal:[0,0,0],offset:0}],[{normal:[0,2,0],offset:0}],[{normal:[0,1,0],offset:NaN}]])assert.throws(()=>evaluateIPBF({...fixture,boundaryPlanes:malformed}),/boundary/);
 });
+
+test('wall-only semidefinite blocks give finite minimum-norm motion',()=>{
+ for(const [position,normal] of [[[0,.1,0],[0,1,0]],[[0,0,0],[Math.SQRT1_2,Math.SQRT1_2,0]]]){
+  const s={positions:[position],inertial:[position],masses:[.3],restDensity:1,supportRadius:1,dt:.1,compliance:0,boundaryPlanes:[{normal,offset:0}]};
+  const e=evaluateIPBF(s);assert.ok(e.updates[0].every(Number.isFinite));
+  for(let a=0;a<3;a++)near(e.hessians[0][a].reduce((sum,x,b)=>sum+x*e.updates[0][b],0),e.forces[0][a],1e-8);
+  const along=e.updates[0].reduce((sum,x,a)=>sum+x*normal[a],0);
+  assert.ok(along>0,'positive wall pressure moves toward fluid');
+  for(let a=0;a<3;a++)near(e.updates[0][a],along*normal[a]);
+ }
+});

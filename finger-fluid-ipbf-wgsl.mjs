@@ -20,9 +20,18 @@ fn ipbf_hessian_term(g:vec3<f32>,D:mat3x3<f32>,C:f32) -> mat3x3<f32> {
 }
 fn ipbf_solve(H:mat3x3<f32>,f:vec3<f32>) -> vec3<f32> {
  if(all(f==vec3<f32>(0))){return vec3<f32>(0);}
- let l00=sqrt(H[0][0]);let l10=H[0][1]/l00;let l20=H[0][2]/l00;
- let l11=sqrt(H[1][1]-l10*l10);let l21=(H[1][2]-l20*l10)/l11;
- let l22=sqrt(H[2][2]-l20*l20-l21*l21);
+ let trace=H[0][0]+H[1][1]+H[2][2];
+ if(trace>0.0){
+  let candidate=f/trace;let residual=H*candidate-f;
+  if(max(max(abs(residual.x),abs(residual.y)),abs(residual.z))<=0.000003814697265625*max(max(abs(f.x),abs(f.y)),abs(f.z))){return candidate;}
+ }
+ var activeH=H;
+ if(all(H[0]==vec3<f32>(0))&&f.x==0.0){activeH[0][0]=1.0;}
+ if(all(H[1]==vec3<f32>(0))&&f.y==0.0){activeH[1][1]=1.0;}
+ if(all(H[2]==vec3<f32>(0))&&f.z==0.0){activeH[2][2]=1.0;}
+ let l00=sqrt(activeH[0][0]);let l10=activeH[0][1]/l00;let l20=activeH[0][2]/l00;
+ let l11=sqrt(activeH[1][1]-l10*l10);let l21=(activeH[1][2]-l20*l10)/l11;
+ let l22=sqrt(activeH[2][2]-l20*l20-l21*l21);
  let y0=f.x/l00;let y1=(f.y-l10*y0)/l11;let y2=(f.z-l20*y0-l21*y1)/l22;
  let x2=y2/l22;let x1=(y1-l21*x2)/l11;let x0=(y0-l10*x1-l20*x2)/l00;
  return vec3<f32>(x0,x1,x2);

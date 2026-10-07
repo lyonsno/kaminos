@@ -18,3 +18,16 @@ test('partial, stale or substituted raw particle evidence fails visibly',()=>{
  assert.throws(()=>core.captureFingerFluidParticleWordsForWitness(input,2,{...identity,pressureSolver:'pbf'}),/boundary/);
  assert.throws(()=>core.captureFingerFluidParticleWordsForWitness(input,2,{...identity,boundaryPressureContract:'unknown'}),/boundary/);
 });
+
+test('pending or stopped diagnostics cannot silently complete a full capture',async()=>{
+ const {readFileSync}=await import('node:fs');const source=readFileSync(new URL('../finger-fluid-webgpu-core.js',import.meta.url),'utf8');
+ const start=source.indexOf('  async function requestDiagnostics('),open=source.indexOf('{\n',start);assert.ok(start>=0&&open>=0);
+ let depth=1,end=open+1;for(;depth&&end<source.length;){end++;if(source[end]==='{')depth++;if(source[end]==='}')depth--;}
+ const actual=source.slice(start,end+1).trim();
+ const construct=new Function('diagnosticsPending','diagnostics','runtimeLifecycle',`return (${actual});`);
+ const cached={stepCount:119,particleSnapshot:null};
+ const pending=construct(true,cached,{stopped:false}),stopped=construct(false,cached,{stopped:true});
+ await assert.rejects(pending({captureParticleState:true}),/pending|busy/);
+ await assert.rejects(stopped({captureParticleState:true}),/stopped/);
+ assert.equal(await pending(),cached,'ordinary diagnostics retain cached behavior');
+});

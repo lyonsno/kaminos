@@ -80,11 +80,22 @@ function validate(s){
 
 function solveSymmetric(H,f){
  if(f.every(x=>x===0))return zero();
+ // A wall alone can leave tangential directions unconstrained. A consistent
+ // rank-one PSD block has H*f=trace(H)*f; its minimum-norm solution is f/trace.
+ // The comparison admits only floating-point roundoff, not artist damping.
+ const trace=H[0][0]+H[1][1]+H[2][2];
+ if(trace>0){
+  const candidate=scale(f,1/trace);
+  const residual=H.map((row,i)=>dot(row,candidate)-f[i]);
+  if(Math.max(...residual.map(Math.abs))<=32*Number.EPSILON*Math.max(...f.map(Math.abs)))return candidate;
+ }
+ const activeH=H.map(row=>row.slice());
+ for(let i=0;i<3;i++)if(H[i].every(x=>x===0)&&f[i]===0)activeH[i][i]=1;
  // Cholesky without a tunable regularizer: the paper's column-norm diagonal
  // makes active pressure blocks positive; compliance adds a positive diagonal.
  const L=matrix();
  for(let i=0;i<3;i++)for(let j=0;j<=i;j++){
-  let v=H[i][j];for(let k=0;k<j;k++)v-=L[i][k]*L[j][k];
+  let v=activeH[i][j];for(let k=0;k<j;k++)v-=L[i][k]*L[j][k];
   if(i===j){if(!(v>0)||!Number.isFinite(v))throw new Error('IPBF local Hessian is not positive definite');L[i][j]=Math.sqrt(v);}
   else L[i][j]=v/L[j][j];
  }
