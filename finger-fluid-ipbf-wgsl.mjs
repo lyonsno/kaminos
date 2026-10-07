@@ -82,7 +82,7 @@ fn commit(@builtin(global_invocation_id) gid:vec3<u32>){
 }
 `;
 
-export function createIPBFGridShader({radius,volume,compliance=0,alternativeCompliance=.001}){
+export function createIPBFGridShader({radius,volume,compliance=0,alternativeCompliance=.001,damping=true,beta=60}){
  for(const [name,value] of Object.entries({radius,volume,compliance,alternativeCompliance}))if(!Number.isFinite(value)||value<0||(['radius','volume'].includes(name)&&value===0))throw new RangeError(`IPBF ${name} invalid`);
  const neighbors=body=>`
  let minimum=gridCoord(position-vec3<f32>(ipbfRadius));let maximum=gridCoord(position+vec3<f32>(ipbfRadius));
@@ -94,8 +94,17 @@ export function createIPBFGridShader({radius,volume,compliance=0,alternativeComp
  return IPBF_MATH_WGSL+`
  const ipbfRadius:f32=${radius};const ipbfVolume:f32=${volume};
  const ipbfAlpha:f32=${compliance};const ipbfAlternativeAlpha:f32=${alternativeCompliance};
+ const ipbfDampingEnabled:bool=${damping};const ipbfBeta:f32=${beta};
  struct IPBFState { inertial:vec4<f32>, gradient:vec4<f32>, h0:vec4<f32>, h1:vec4<f32>, h2:vec4<f32>, alternative:vec4<f32> }
  @group(1) @binding(0) var<storage,read_write> ipbfStates:array<IPBFState>;
+ @compute @workgroup_size(64)
+ fn ipbf_velocity(@builtin(global_invocation_id) gid:vec3<u32>){
+  let i=gid.x;if(i>=params.particleCount){return;}
+  let position=particles[i].predicted.xyz;
+  var velocity=(position-particles[i].position.xyz)/params.dt;
+  if(ipbfDampingEnabled){let alternate=ipbfStates[i].alternative.xyz;velocity=ipbf_damp(velocity,(alternate-particles[i].position.xyz)/params.dt,distance(position,alternate),ipbfRadius,ipbfBeta);}
+  particles[i].delta=vec4<f32>(velocity,particles[i].delta.w);
+ }
  @compute @workgroup_size(64)
  fn ipbf_prepare(@builtin(global_invocation_id) gid:vec3<u32>){let i=gid.x;if(i>=params.particleCount){return;}ipbfStates[i].inertial=particles[i].predicted;}
  @compute @workgroup_size(64)
@@ -117,7 +126,7 @@ export function createIPBFGridShader({radius,volume,compliance=0,alternativeComp
   let delta=ipbf_solve(H+ipbf_diagonal(vec3<f32>(inertia)),force-inertia*displacement);
   particles[i].delta=vec4<f32>(0.5*delta,particles[i].delta.w);
   let altInertia=ipbfAlternativeAlpha*ipbfVolume/(params.dt*params.dt);
-  ipbfStates[i].alternative=vec4<f32>(position+0.5*ipbf_solve(H+ipbf_diagonal(vec3<f32>(altInertia)),force-altInertia*displacement),0);
+  ipbfStates[i].alternative=vec4<f32>(pressure_candidate_position(i,position,0.5*ipbf_solve(H+ipbf_diagonal(vec3<f32>(altInertia)),force-altInertia*displacement)),0);
  }
  `;
 }

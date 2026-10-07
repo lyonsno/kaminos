@@ -13,3 +13,8 @@ test('IPBF settings validate before GPU admission',async()=>{
  await assert.rejects(core.createWebGPUFingerFluidSolver({pressureSolver:'ipbf',adaptiveDensity:true}),/adaptive/i);
  await assert.rejects(core.createWebGPUFingerFluidSolver({pressureSolver:'ipbf',ipbfDamping:'yes'}),/damping/i);
 });
+
+test('IPBF admits the same ten-storage-binding device as incumbent stages',async()=>{
+ const result=await core.createWebGPUFingerFluidSolver({pressureSolver:'ipbf',canvas:{getContext:()=>null},webgpuDevice:{limits:{maxStorageBuffersPerShaderStage:10}}});
+ assert.equal(result.reason,'GPUCanvasContext unavailable','binding admission should pass before the deliberately absent canvas context');
+});
