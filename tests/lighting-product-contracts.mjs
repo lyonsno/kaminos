@@ -17,6 +17,8 @@ test('camera is independent scene state and known legacy transport paths migrate
   const next=productTransportSettings(before);
   assert.equal(next['rendering-angular-pattern'],'source');assert.equal(next['rendering-smoke-solver'],'distributed');assert.equal(next['rendering-surface-scattering'],true);assert.equal(next['rendering-light-mode'],'shared');assert.equal(next['rendering-shared-gain'],2);assert.equal(before['rendering-angular-pattern'],'fixed');
   assert.throws(()=>productTransportSettings({...before,'rendering-angular-pattern':'unrecognized'}),/Unknown/);
+  assert.throws(()=>productTransportSettings({...before,'rendering-light-mode':'unrecognized'}),/Unknown/);
+  assert.throws(()=>productTransportSettings({...before,'rendering-surface-scattering':'true'}),/Invalid/);
 });
 
 test('appearance trims are independent finite radiance multipliers with neutral defaults',()=>{
