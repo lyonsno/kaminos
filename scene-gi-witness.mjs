@@ -43,6 +43,7 @@ try {
       await page.evaluate(()=>window.kaminosAuthoringParameters.set('@scene-transport',{'rendering-angular-pattern':'guided','rendering-angular-samples':'8'}));
       await page.locator('#scene-lighting-quality').evaluate(node=>node.open=true);
       const beforeSpacing=await page.evaluate(()=>({value:window.kaminosAuthoringParameters.read('@scene-transport')['rendering-receiver-spacing'],history:window.kaminosSceneEdits.state().undoCount}));
+      await page.locator('#rendering-receiver-spacing').focus();
       await page.selectOption('#rendering-receiver-spacing','0.16');
       assert.equal(await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),beforeSpacing.history+1);
       await page.evaluate(()=>window.kaminosSceneEdits.undo());assert.equal(await page.locator('#rendering-receiver-spacing').inputValue(),beforeSpacing.value);
