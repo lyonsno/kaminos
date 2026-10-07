@@ -3898,6 +3898,7 @@ import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { assetArrivalFramingWindow, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
+import { exportCloneInWorld } from './scene-export.mjs';
 import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
@@ -26200,16 +26201,6 @@ function selectionForExport() {
   if (entry) return { label: sceneObjectDisplayLabel(entry), entries: [entry] };
   if (currentMesh && !currentMesh.userData?.kaminosEditorHelper) return { label: glbFileName || 'model', entries: [{ object: currentMesh, type: 'glb' }] };
   return null;
-}
-
-function exportCloneInWorld(object) {
-  object.updateWorldMatrix(true, true);
-  const clone = object.clone(true);
-  const helpers = [];
-  clone.traverse(child => { if (child !== clone && child.userData?.kaminosEditorHelper) helpers.push(child); });
-  for (const helper of helpers) helper.removeFromParent();
-  object.matrixWorld.decompose(clone.position, clone.quaternion, clone.scale);
-  return clone;
 }
 
 window.exportGLB = async function({ name = null } = {}) {
