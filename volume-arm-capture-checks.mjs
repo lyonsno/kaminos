@@ -24,9 +24,12 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
     if (cid === 'volume-wind-model' && end.wind?.effective?.model !== value) mismatches.push(`wind model requested ${value}, effective ${end.wind?.effective?.model}`);
     if (cid === 'volume-velocity-staggering') {
       const effective = end.velocityStaggering?.effective;
+      // The complete pair is checked: the shader runs from `admitted`, the arm is
+      // identified by `mode`, and a receipt that disagrees with itself or lacks
+      // either field cannot satisfy either arm.
       if (!effective) mismatches.push(`velocity staggering requested ${value}, no receipt`);
-      else if (value === 'staggered' && effective.admitted !== true) mismatches.push(`velocity staggering requested but not admitted (${effective.reason})`);
-      else if (value !== 'staggered' && effective.mode !== 'collocated') mismatches.push(`velocity staggering requested ${value} but effective ${effective.mode}`);
+      else if (value === 'staggered' && !(effective.mode === 'staggered' && effective.admitted === true)) mismatches.push(`velocity staggering requested but effective ${effective.mode ?? 'no mode'} / admitted ${effective.admitted} (${effective.reason ?? 'no reason'})`);
+      else if (value !== 'staggered' && !(effective.mode === 'collocated' && effective.admitted === false)) mismatches.push(`velocity staggering requested ${value} but effective ${effective.mode ?? 'no mode'} / admitted ${effective.admitted}`);
     }
     if (cid === 'volume-heat-release-expansion') {
       const requestedGain = Number(value); const effective = end.heatRelease?.effective;

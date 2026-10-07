@@ -87,4 +87,9 @@ test('the capture carries the staggering receipt and its check cannot be satisfi
   const off = { set: [['volume-velocity-staggering', 'collocated']] };
   assert.deepEqual(effectiveMismatches(off, { velocityStaggering: { effective: { mode: 'collocated', admitted: false, reason: 'velocity-staggering-not-requested' } } }, null), []);
   assert.equal(effectiveMismatches(off, { velocityStaggering: { effective: { mode: 'staggered', admitted: true, reason: null } } }, null).length, 1, 'requested collocated must reject a staggered receipt');
+  // Review LS-01: the complete pair is checked, so a contradictory or partial receipt cannot pass either arm.
+  assert.equal(effectiveMismatches(on, { velocityStaggering: { effective: { mode: 'collocated', admitted: true } } }, null).length, 1, 'a collocated effective mode must fail a staggered arm even when admitted');
+  assert.equal(effectiveMismatches(on, { velocityStaggering: { effective: { admitted: true } } }, null).length, 1, 'a receipt without a mode fails a staggered arm');
+  assert.equal(effectiveMismatches(off, { velocityStaggering: { effective: { mode: 'collocated', admitted: true } } }, null).length, 1, 'active admission fails a collocated arm');
+  assert.equal(effectiveMismatches(off, { velocityStaggering: { effective: { admitted: false } } }, null).length, 1, 'a receipt without a mode fails a collocated arm');
 });
