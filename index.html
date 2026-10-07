@@ -127,6 +127,22 @@ canvas { display: block; }
 #volume-authored-mix-control-root .slider-row { margin: 8px 0; }
 #volume-authored-mix-control-root .slider-label { min-width: 92px; color: #879398; }
 #volume-authored-mix-control-root .slider-val { color: #aab4b7; }
+.right-render-tabs { display: flex; gap: 4px; margin: 0 0 15px; border-bottom: 1px solid #293033; }
+.right-render-tabs button { flex: 1; padding: 8px 4px; border: 0; border-bottom: 2px solid transparent; background: none; color: #879398; font: inherit; font-size: 11px; cursor: pointer; }
+.right-render-tabs button[aria-selected="true"] { color: #e6ecee; border-bottom-color: #62a9cd; }
+#rendering-panel-content[hidden], #authored-mix-panel-content[hidden] { display: none; }
+.rendering-description { margin: 0 0 14px; color: #a6b2b5; font-size: 11px; line-height: 1.45; }
+.rendering-channel-select { display: block; width: 100%; padding: 8px; margin: 8px 0; border: 1px solid #405158; border-radius: 4px; background: #15191a; color: #e6ecee; font-size: 11px; }
+#rendering-distributed-controls > label { display: block; margin-top: 12px; font-size: 11px; color: #a6b2b5; }
+#rendering-distributed-controls > select { display: block; width: 100%; padding: 8px; margin: 6px 0 10px; border: 1px solid #405158; border-radius: 4px; background: #15191a; color: #e6ecee; font-size: 11px; }
+#rendering-angular-swap { display: block; margin: 10px 0; padding: 7px 10px; border: 1px solid #405158; border-radius: 4px; background: #15191a; color: #e6ecee; cursor: pointer; }
+#rendering-angular-swap:disabled { color: #687276; cursor: default; }
+.rendering-channel-status { margin: 12px 0; padding: 9px; border-left: 2px solid #59676b; background: #121617; color: #a6b2b5; font: 10px 'SF Mono', monospace; line-height: 1.5; white-space: pre-wrap; }
+.rendering-channel-status[data-status="active"] { border-color: #4aa36a; }
+.rendering-channel-status[data-status="unavailable"] { border-color: #b88943; }
+.rendering-position-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 9px 0; }
+.rendering-position-row label { display: block; color: #9aa7aa; font-size: 10px; }
+.rendering-position-row input { box-sizing: border-box; width: 100%; margin-top: 4px; padding: 6px; border: 1px solid #405158; border-radius: 4px; background: #15191a; color: #e6ecee; font: 11px 'SF Mono', monospace; }
 @media (max-width: 1100px) {
   #sidebar { width: 330px; }
   #volume-authored-mix-panel { flex-basis: 320px; width: 320px; min-width: 320px; }
@@ -235,7 +251,21 @@ canvas { display: block; }
 .volume-layout-editing .volume-layout-group-body:not([hidden]) { min-height: 24px; }
 .slider-label { font-size: 10px; color: #666; min-width: 60px; user-select: none; -webkit-user-select: none; }
 .slider-val { font-size: 10px; color: #888; font-family: 'SF Mono', monospace; min-width: 30px; user-select: none; -webkit-user-select: none; }
-.slider-help { display: block; margin: -2px 0 6px 68px; color: #4f6470; font-size: 9px; line-height: 1.25; user-select: none; -webkit-user-select: none; }
+.slider-help { display: none; }
+/* The help popover lives on body: the sidebar is a transformed ancestor, so a
+   fixed-position box inside it is positioned against the sidebar and lands
+   offscreen (seen live 2026-10-06). The row's help span stays in place and
+   hidden; its text is shown here. */
+#volume-help-popover { display: none; position: fixed; z-index: 60; max-width: 300px; padding: 7px 9px; border: 1px solid #3a4a52; border-radius: 6px; background: rgba(16,21,23,0.97); color: #9fb1b8; font-size: 10px; line-height: 1.35; box-shadow: 0 6px 18px rgba(0,0,0,0.45); user-select: none; -webkit-user-select: none; pointer-events: none; }
+#volume-help-popover[data-open="true"] { display: block; }
+/* Controls retired from the interface but kept in the DOM so saved basins still
+   load and route their values (tiered pressure bounds, the concentric ratio). */
+.slider-row[data-volume-ui-retired] { display: none; }
+/* Rows that only the shallow-primary / filled-volume laws read; hidden while
+   the inflow law is selected. */
+.slider-row[data-volume-inflow-hidden="true"] { display: none; }
+.slider-info { display: inline-flex; align-items: center; justify-content: center; width: 12px; height: 12px; margin-left: 4px; border: 1px solid #3f4d53; border-radius: 50%; color: #6f8188; font: 8px/1 'SF Mono', monospace; cursor: help; flex: none; }
+.slider-info:hover, .slider-info:focus-visible { border-color: #7fa3ad; color: #d7e6ea; outline: none; }
 input[type="range"] { flex: 1; -webkit-appearance: none; height: 3px; background: #333; border-radius: 2px; outline: none; }
 .slider-row input[type="range"] { min-height: 24px; cursor: grab; touch-action: pan-y; }
 .slider-row input[type="range"]:active { cursor: grabbing; }
@@ -680,7 +710,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .saved-scene-picture img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; }
 .saved-scene-basin { padding: 0 8px 8px; color: #aaa; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
 .saved-scene-shot .gr-name { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
-body.composition-authoring #volume-authored-mix-panel { display: none; }
+body.composition-authoring #volume-authored-mix-panel:not([data-rendering-route="true"]) { display: none; }
 body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width: max-content; flex-wrap: wrap; justify-content: center; }
 @media (max-width: 760px) {
   body.composition-authoring { flex-direction: column-reverse; }
@@ -1291,6 +1321,31 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
   <!-- Volume Tab -->
   <div class="tab-content" id="tab-volume">
     <div id="volume-primary-control-root" data-volume-control-root="primary">
+    <div class="panel" id="volume-basin-panel" aria-label="Basin save and load">
+      <h2>Basins</h2>
+      <div class="volume-actions">
+        <input id="settings-preset-label" class="search-input" type="text" placeholder="Preset name" aria-label="Preset name">
+        <button class="btn" id="settings-preset-save">Save</button>
+      </div>
+      <div class="volume-actions">
+        <select id="settings-preset-select" class="select-input" aria-label="Saved volume preset">
+          <option value="">Loading presets...</option>
+        </select>
+      </div>
+      <div class="volume-actions">
+        <button class="btn" id="settings-preset-load-here">Load Here</button>
+        <button class="btn" id="settings-preset-open-fresh">Open Fresh</button>
+      </div>
+      <div class="volume-actions">
+        <select id="settings-preset-view" class="select-input" aria-label="Preset renderer view">
+          <option value="splat-only">Splat only</option>
+          <option value="raymarch-only" selected>Raymarch only</option>
+          <option value="smoke-hybrid">Smoke hybrid</option>
+          <option value="full-hybrid-diagnostic">Full hybrid diagnostic</option>
+        </select>
+        <button class="btn" id="settings-preset-inspect-fresh">Inspect Fresh</button>
+      </div>
+    </div>
     <div id="volume-cockpit-layout-toolbar" class="volume-cockpit-layout-toolbar" data-editing="false" data-volume-basin-drive-ignore data-volume-cockpit-layout-ui aria-label="Cockpit layout">
       <div class="volume-cockpit-layout-toolbar-row">
         <select id="volume-cockpit-layout-select" data-volume-layout-control aria-label="Saved cockpit layout"></select>
@@ -1321,6 +1376,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="field"><span class="field-key">Emitter effective</span><span class="field-val" id="volume-emitter-effective">cluster</span></div>
       <div class="field"><span class="field-key">Emitter source</span><span class="field-val" id="volume-emitter-carrier">off / 0</span></div>
       <div class="field"><span class="field-key">Emitter fallback</span><span class="field-val" id="volume-emitter-fallback">no</span></div>
+      <div class="field"><span class="field-key">Inflow boundary</span><span class="field-val" id="volume-inflow-boundary-state">off</span></div>
+      <div class="field"><span class="field-key">Heat release</span><span class="field-val" id="volume-heat-release-state">off</span></div>
+      <div class="field"><span class="field-key">Velocity reading</span><span class="field-val" id="volume-velocity-staggering-state">collocated</span></div>
       <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state" role="status" aria-live="polite">connecting...</span></div>
       <div class="field"><span class="field-key">Promotion</span><span class="field-val" id="volume-basin-promotion-state" role="status" aria-live="polite">idle</span></div>
       <div class="volume-presentation-switch" role="group" aria-label="Volume presentation">
@@ -1342,28 +1400,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button class="btn" id="volume-fit-camera">Frame</button>
         <button class="btn" id="volume-basin-warm-cap">Warm Cap</button>
         <button class="btn" id="volume-basin-bonfire-family">Bonfire</button>
-      </div>
-      <div class="volume-actions">
-        <input id="settings-preset-label" class="search-input" type="text" placeholder="Preset name" aria-label="Preset name">
-        <button class="btn" id="settings-preset-save">Save</button>
-      </div>
-      <div class="volume-actions">
-        <select id="settings-preset-select" class="select-input" aria-label="Saved volume preset">
-          <option value="">Loading presets...</option>
-        </select>
-      </div>
-      <div class="volume-actions">
-        <button class="btn" id="settings-preset-load-here">Load Here</button>
-        <button class="btn" id="settings-preset-open-fresh">Open Fresh</button>
-      </div>
-      <div class="volume-actions">
-        <select id="settings-preset-view" class="select-input" aria-label="Preset renderer view">
-          <option value="splat-only">Splat only</option>
-          <option value="raymarch-only" selected>Raymarch only</option>
-          <option value="smoke-hybrid">Smoke hybrid</option>
-          <option value="full-hybrid-diagnostic">Full hybrid diagnostic</option>
-        </select>
-        <button class="btn" id="settings-preset-inspect-fresh">Inspect Fresh</button>
       </div>
       <div class="volume-actions">
         <input id="basin-promotion-handle" class="search-input" type="text" placeholder="Handle" aria-label="Basin promotion handle">
@@ -1838,8 +1874,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <select id="volume-emitter-source-law" data-volume-settings-param="volume_emitter_source_law" class="select-input">
         <option value="legacy-volume">Filled volume</option>
         <option value="shallow-primary">Shallow primary</option>
+        <option value="inflow-boundary">Inflow boundary (floor)</option>
       </select>
       <span class="slider-val" id="volume-emitter-source-law-val">legacy-volume</span>
+      <span class="slider-help">Filled volume and Shallow primary add velocity and material inside the emitter every step: a per-step increment, then a clamp at 0.52 per component, then max() floors on smoke, heat and fuel. Inflow boundary puts the emitter's footprint on the floor face as a prescribed inflow: the pressure solve carries that flux through the floor, the floor cells take in the inflow's fuel and temperature in proportion to that flux each step, and the backtrace below the floor reads the inflow velocity, so nothing is pushed in the interior and nothing is clamped. It needs the converged open-top pressure solver and an upright emitter; Inlet Δv is then the inflow velocity, and Link momentum, Shear width, Edge entrainment and Source depth do not apply.</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="source-law">
       <span class="slider-label">Source Depth (volume-local)</span>
@@ -1875,6 +1913,83 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="range" id="volume-emitter-edge-entrainment" data-volume-settings-param="volume_emitter_edge_entrainment" min="0" max="2" step="any" value="0.65">
       <span class="slider-val" id="volume-emitter-edge-entrainment-val">0.65</span>
     </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Fuel fraction (inflow)</span>
+      <input type="range" id="volume-emitter-fuel-fraction" data-volume-settings-param="volume_emitter_fuel_fraction" min="0" max="1" step="any" value="0.56">
+      <span class="slider-val" id="volume-emitter-fuel-fraction-val">0.56</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Inlet temperature (inflow)</span>
+      <input type="range" id="volume-emitter-inlet-temperature" data-volume-settings-param="volume_emitter_inlet_temperature" min="0" max="2.4" step="any" value="1.2">
+      <span class="slider-val" id="volume-emitter-inlet-temperature-val">1.20</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Aperture pattern (inflow)</span>
+      <select id="volume-emitter-aperture-pattern" data-volume-settings-param="volume_emitter_aperture_pattern" class="select-input">
+        <option value="shape">Family shape</option>
+        <option value="jets">Ring of jets</option>
+        <option value="slot">Slot</option>
+        <option value="bed">Porous bed</option>
+      </select>
+      <span class="slider-val" id="volume-emitter-aperture-pattern-val">shape</span>
+      <span class="slider-help">Under the inflow law the floor opening is a coverage map built from the chosen pattern on the family's geometry: the ring radius is the pattern's reach, the tube radius its line weight. Count is the number of jets, rings or spiral turns; Ratio is the inner rings' share of the flux; Seed places the jets and shapes the bed. Swirl adds a tangential velocity to the entering gas, which the open-top solve turns into a fire whirl.</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Aperture count</span>
+      <input type="range" id="volume-emitter-aperture-count" data-volume-settings-param="volume_emitter_aperture_count" min="1" max="32" step="1" value="12">
+      <span class="slider-val" id="volume-emitter-aperture-count-val">12</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile" data-volume-ui-retired="volume-emitter-aperture-ratio">
+      <span class="slider-label">Aperture ratio</span>
+      <input type="range" id="volume-emitter-aperture-ratio" data-volume-settings-param="volume_emitter_aperture_ratio" min="0" max="1" step="any" value="0.6">
+      <span class="slider-val" id="volume-emitter-aperture-ratio-val">0.60</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Aperture seed</span>
+      <input type="range" id="volume-emitter-aperture-seed" data-volume-settings-param="volume_emitter_aperture_seed" min="0" max="99" step="1" value="1">
+      <span class="slider-val" id="volume-emitter-aperture-seed-val">1</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Swirl (inflow)</span>
+      <input type="range" id="volume-emitter-swirl" data-volume-settings-param="volume_emitter_swirl" min="-1" max="1" step="any" value="0">
+      <span class="slider-val" id="volume-emitter-swirl-val">0.00</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Line weight (inflow)</span>
+      <input type="range" id="volume-emitter-line-weight" data-volume-settings-param="volume_emitter_line_weight" min="0.25" max="3" step="any" value="1">
+      <span class="slider-val" id="volume-emitter-line-weight-val">1.00</span>
+    </div>
+    <span class="slider-help">Scales the band every pattern draws with: the ring's tube, each jet's radius, the slot's width. The family geometry (ring radius, slot length) is untouched. Thinner bands carry less flux, so the plume is thinner too.</span>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Jet size jitter</span>
+      <input type="range" id="volume-emitter-jet-jitter" data-volume-settings-param="volume_emitter_jet_jitter" min="0" max="1" step="any" value="0">
+      <span class="slider-val" id="volume-emitter-jet-jitter-val">0.00</span>
+    </div>
+    <span class="slider-help">For the ring of jets: each jet's radius varies by up to ±60 % of this, in a fixed pattern set by the aperture seed. Zero makes every jet the same size.</span>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Inlet turbulence</span>
+      <input type="range" id="volume-emitter-inlet-turbulence" data-volume-settings-param="volume_emitter_inlet_turbulence" min="0" max="1" step="any" value="0">
+      <span class="slider-val" id="volume-emitter-inlet-turbulence-val">0.00</span>
+    </div>
+    <span class="slider-help">A slow stochastic field of inlet-speed perturbations across the floor opening: each patch of the aperture breathes faster or slower by up to this fraction, drifting on a half-second correlation. It roughens the base of the flame the way a real bed or burner does; mass still enters only through the floor. Seeded and step-locked, so a replay repeats.</span>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Turbulence scale</span>
+      <input type="range" id="volume-emitter-inlet-turbulence-scale" data-volume-settings-param="volume_emitter_inlet_turbulence_scale" min="1" max="32" step="1" value="6">
+      <span class="slider-val" id="volume-emitter-inlet-turbulence-scale-val">6</span>
+    </div>
+    <span class="slider-help">Size of the turbulence patches in floor cells. Small patches give fine ripples at the base; large patches make whole sectors of the opening surge together.</span>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Puffing</span>
+      <input type="range" id="volume-emitter-puff" data-volume-settings-param="volume_emitter_puff" min="0" max="1" step="any" value="0">
+      <span class="slider-val" id="volume-emitter-puff-val">0.00</span>
+    </div>
+    <span class="slider-help">A slow stochastic modulation of the whole inlet's speed, by up to this fraction either way (1 can close the inlet momentarily, never reverse it). The receipt shows the puff factor in force.</span>
+    <div class="slider-row" data-volume-visual-cost-knob="source-profile">
+      <span class="slider-label">Puff period (s)</span>
+      <input type="range" id="volume-emitter-puff-period" data-volume-settings-param="volume_emitter_puff_period" min="0.5" max="30" step="any" value="3">
+      <span class="slider-val" id="volume-emitter-puff-period-val">3.0</span>
+    </div>
+    <span class="slider-help">Correlation time of the puffing in simulated seconds (so it follows Speed under the uniform time step). Short periods flutter; long ones heave.</span>
     <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
       <span class="slider-label">Fixed Source Dephase</span>
       <input type="checkbox" id="volume-fixed-source-dephase" data-volume-settings-param="volume_fixed_source_dephase" checked>
@@ -1891,31 +2006,31 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="checkbox" id="volume-phased-sway" checked>
       <span class="slider-val" id="volume-phased-sway-val">on</span>
     </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation">
+    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-procedural-detail-forces">
       <span class="slider-label">Master</span>
       <input type="checkbox" id="volume-procedural-detail-forces" checked>
       <span class="force-contribution-gloss">Gates all active force contributions; transported material fields and prior velocity remain.</span>
       <span class="slider-val" id="volume-procedural-detail-forces-val">on</span>
     </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation">
+    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-force-micro-carrier">
       <span class="slider-label">Micro-carrier</span>
       <input type="checkbox" id="volume-force-micro-carrier" data-volume-settings-param="volume_force_micro_carrier" checked>
       <span class="force-contribution-gloss">Returns transported microstructure to velocity; feeds articulated lateral motion.</span>
       <span class="slider-val" id="volume-force-micro-carrier-val">on</span>
     </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation">
+    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-force-interface-shred">
       <span class="slider-label">Interface shred</span>
       <input type="checkbox" id="volume-force-interface-shred" data-volume-settings-param="volume_force_interface_shred" checked>
       <span class="force-contribution-gloss">Returns material boundaries and local curl to velocity; feeds interface opening and roughness.</span>
       <span class="slider-val" id="volume-force-interface-shred-val">on</span>
     </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation">
+    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-force-fine-breakup">
       <span class="slider-label">Fine breakup</span>
       <input type="checkbox" id="volume-force-fine-breakup" data-volume-settings-param="volume_force_fine_breakup" checked>
       <span class="force-contribution-gloss">Returns heat, smoke, source and curl to velocity; can disturb coupled reaction regimes.</span>
       <span class="slider-val" id="volume-force-fine-breakup-val">on</span>
     </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation">
+    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-fine-breakup-localization">
       <span class="slider-label">Fine breakup localization</span>
       <input type="range" id="volume-fine-breakup-localization" data-volume-settings-param="volume_fine_breakup_localization" min="0" max="1" step="0.01" value="0">
       <span class="force-contribution-gloss">0 keeps legacy broad support; 1 confines Fine breakup to reaction-front, material-interface, and curl-shear support.</span>
@@ -2022,6 +2137,30 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-label">Wind Height</span>
       <input type="range" id="volume-wind-height" min="-0.8" max="0.8" step="0.05" value="0.15">
       <span class="slider-val" id="volume-wind-height-val">0.15</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
+      <span class="slider-label">Wind model</span>
+      <select id="volume-wind-model" data-volume-settings-param="volume_wind_model" class="select-input">
+        <option value="steady">Steady</option>
+        <option value="gusty">Gusty</option>
+      </select>
+      <span class="slider-val" id="volume-wind-model-val">steady</span>
+      <span class="slider-help">Steady is the authored wind: one constant strength and angle, applied where there is smoke or heat. Gusty drives the same wind with a slow deterministic signal from the simulation clock (the gust period is simulated seconds under the uniform time step, so there it follows Speed; the legacy time step counts steps): strength breathes between (1 − gust) and (1 + gust) times the slider, never above the wind ceiling of 1.5 (the receipt says when it saturates), and the direction veers by up to the veer angle, over the gust period. No per-cell noise; saved basins are unchanged on Steady.</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
+      <span class="slider-label">Gust</span>
+      <input type="range" id="volume-wind-gust" data-volume-settings-param="volume_wind_gust" min="0" max="1" step="any" value="0.6">
+      <span class="slider-val" id="volume-wind-gust-val">0.60</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
+      <span class="slider-label">Gust period (s)</span>
+      <input type="range" id="volume-wind-gust-period" data-volume-settings-param="volume_wind_gust_period" min="2" max="30" step="any" value="8">
+      <span class="slider-val" id="volume-wind-gust-period-val">8.0</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
+      <span class="slider-label">Gust veer (°)</span>
+      <input type="range" id="volume-wind-gust-veer" data-volume-settings-param="volume_wind_gust_veer" min="0" max="60" step="any" value="25">
+      <span class="slider-val" id="volume-wind-gust-veer-val">25</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Input Radius</span>
@@ -2662,7 +2801,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-pyro-overdrive-val">1.00</span>
     </div>
     <span class="slider-help">Continuous carrier gain; normal mode can reach end-range looks.</span>
-    <div class="slider-row">
+    <div class="slider-row" data-volume-ui-retired="volume-pressure-mode">
       <span class="slider-label">Pressure</span>
       <select id="volume-pressure-mode" class="select-input">
         <option value="auto" selected>Default</option>
@@ -2683,7 +2822,13 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-pressure-solver-val">legacy</span>
     </div>
-    <span class="slider-help">Legacy keeps the damped 1-3 pass Jacobi with material-weighted partial projection. Converged runs red-black SOR on a consistent compact operator and applies a 0-1 gain on the correction; the gain is Projection, and in the Bonfire scene the gain is Projection × its projection ablation. At effective gain 1.0 the carried velocity is divergence-free up to the solver residual and the velocity bound; below 1.0 it is a partial projection that leaves (1 − gain) of the divergence. Pressure iterations 0 (route override or the GPU-pressure impostor tier) or gain 0 turns pressure work off in either mode. Open top vents pressure through the upper face so buoyant gas can leave. The residual readout measures the velocity actually carried forward.</span>
+    <span class="slider-help">Legacy keeps the damped 1-3 pass Jacobi with material-weighted partial projection. Converged runs red-black SOR on a consistent compact operator and applies a 0-1 gain on the correction; the gain is Projection, and in the Bonfire scene the gain is Projection × its projection ablation. At effective gain 1.0 the carried velocity is divergence-free up to the solver residual and the velocity bound; below 1.0 it is a partial projection that leaves (1 − gain) of the divergence. When Heat release is above 0 the converged solve targets that expansion instead of zero: at gain 1.0 the divergence converges to the target S, and a partial projection leaves (1 − gain) × D(v_before) + gain × S. Pressure iterations 0 (route override or the GPU-pressure impostor tier) or gain 0 turns pressure work off in either mode. Open top vents pressure through the upper face so buoyant gas can leave. The residual readout measures the velocity actually carried forward.</span>
+    <div class="slider-row">
+      <span class="slider-label">Heat release</span>
+      <input type="range" id="volume-heat-release-expansion" data-volume-settings-param="volume_heat_release_expansion" min="0" max="3" step="any" value="0">
+      <span class="slider-val" id="volume-heat-release-expansion-val">0.00</span>
+    </div>
+    <span class="slider-help">Expansion where fuel burns: the converged solve is given a positive divergence target, this gain times the fuel consumption rate, so the surrounding gas moves outward to make room for the hot products and the plume billows instead of only rising. 0 is off. Needs the converged open-top solver (the open top absorbs the net volume); otherwise the receipt says NOT ADMITTED. The pressure residual readout then measures divergence minus that target, not divergence alone. Heat and smoke are carried undiluted through the expansion, so their field totals grow with the gain and are not conservation evidence. Saved basins are unchanged at 0.</span>
     <div class="slider-row">
       <span class="slider-label">Solver Sweeps</span>
       <input type="range" id="volume-pressure-solver-iterations" min="4" max="240" step="4" value="60" data-volume-settings-param="volume_pressure_solver_iterations">
@@ -2700,6 +2845,15 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-advection-scheme-val">legacy</span>
     </div>
     <span class="slider-help">Legacy is first-order semi-Lagrangian with 0.982 velocity damping every step and a fixed velocity clamp. Undamped keeps the first-order step but drops the damping and bounds the step by backtrace distance instead. MacCormack adds a predictor pass and a limited round-trip error correction on one shared characteristic, so vortex roll-up and plume pulsing that the first-order step smears away can survive without synthetic stirring. Live switching keeps evolved state.</span>
+    <div class="slider-row">
+      <span class="slider-label">Velocity reading</span>
+      <select id="volume-velocity-staggering" class="select-input" data-volume-settings-param="volume_velocity_staggering">
+        <option value="collocated" selected>Collocated (as saved)</option>
+        <option value="staggered">Staggered (faces)</option>
+      </select>
+      <span class="slider-val" id="volume-velocity-staggering-val">collocated</span>
+    </div>
+    <span class="slider-help">How the transport reads the stored velocity (a reading of the same stored field, not a different storage or solver). The converged solve treats each stored component as the upper face of its axis, but Collocated transport reads the same value as the cell centre: half a cell of disagreement along +x and +z, which pushes every plume toward −x −z as it rises (the diagonal lean). Staggered reads faces: the characteristic that carries everything uses the mean of the two faces, so the rising column feels its own entrainment where it actually is. Needs the converged pressure solver; otherwise the receipt says NOT ADMITTED. Saved basins are unchanged at Collocated.</span>
     <div class="slider-row">
       <span class="slider-label">Confinement</span>
       <select id="volume-confinement" class="select-input" data-volume-settings-param="volume_confinement">
@@ -2719,22 +2873,22 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-time-step-val">legacy</span>
     </div>
     <span class="slider-help">Legacy is the law every saved basin was authored under: Speed scales buoyancy and the advection backtrace but not the inlet velocity, edge entrainment, thermal expansion or confinement, so lowering Speed lets the injected momentum win and the plume sloshes instead of rising slower. Uniform reads every authored coefficient at Speed 1 and multiplies the transport distance and every per-step velocity increment by Speed, so Speed changes the rate of the same dynamics; at Speed 1 the two modes are identical. The bounded emitter is not a prescribed boundary: each step it adds its inlet and entrainment velocities to the flow and then clamps at 0.52 per component, so those additions scale with Speed like every other increment while the clamp does not. Uniform needs the shared gas characteristic on a non-legacy scheme (Undamped with Common gas transport, or a MacCormack scheme): the legacy scheme's fixed clamp and 0.982 per-step damping and the split scalar layers' fixed backtraces are not time-step aware. The scalar channels' decays, reaction, conversion and the boundary sponges follow the same step (a per-step survival becomes rate^Speed, an increment is multiplied by Speed), as do the Bonfire scene's diffusion and symmetry blends and the wall velocity sponge; the emitter's per-component clamp and the max() birth floors stay per step. That makes the authored coefficients one law across Speeds; how the fire itself changes with Speed still depends on the Advection scheme (at equal simulated time, first-order scalars lose most of their heat and smoke at low Speed while MacCormack all fields keeps most of it, measured on one basin), so judge the motion live. The 8-cell transport bound caps displacement per step, so a very large Speed is limited by resolution rather than allowed to skip cells.</span>
-    <div class="slider-row">
+    <div class="slider-row" data-volume-ui-retired="volume-pressure-tier-overlay">
       <span class="slider-label">Tier Overlay</span>
       <input type="range" id="volume-pressure-tier-overlay" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-pressure-tier-overlay-val">0.00</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-volume-ui-retired="volume-pressure-tier-lower-max">
       <span class="slider-label">P2 Max</span>
       <input type="range" id="volume-pressure-tier-lower-max" min="0.10" max="0.98" step="0.01" value="0.50">
       <span class="slider-val" id="volume-pressure-tier-lower-max-val">0.50</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-volume-ui-retired="volume-pressure-tier-hero-min">
       <span class="slider-label">P3 Min</span>
       <input type="range" id="volume-pressure-tier-hero-min" min="0" max="0.95" step="0.01" value="0.05">
       <span class="slider-val" id="volume-pressure-tier-hero-min-val">0.05</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-volume-ui-retired="volume-pressure-tier-hero-max">
       <span class="slider-label">P3 Max</span>
       <input type="range" id="volume-pressure-tier-hero-max" min="0.02" max="0.98" step="0.01" value="0.22">
       <span class="slider-val" id="volume-pressure-tier-hero-max-val">0.22</span>
@@ -3027,6 +3181,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
   </nav>
   <input type="file" id="scene-mesh-file" accept=".glb" hidden>
+  <div id="lighting-edit-status" role="status" aria-live="polite" hidden style="position:absolute;bottom:48px;left:50%;transform:translateX(-50%);z-index:30;padding:8px 12px;background:#202020e8;color:#eee;border:1px solid #666;border-radius:6px;pointer-events:none;font-size:12px"></div>
   <div id="navigation-hint" aria-live="polite">Two-finger orbit · Shift pan · Cmd/Ctrl zoom · F frame selected · Home frame all</div>
   <div id="sam-image-viewport" hidden>
     <div class="sam-image-viewbar">
@@ -3301,9 +3456,55 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
   <div id="viewport-drop-overlay">Drop GLB, OBJ, PLY/SPZ, or .kaminos.json</div>
 </div>
 
-<aside id="volume-authored-mix-panel" data-collapsed="false" data-cockpit-status="pending" aria-label="Authored mix controls" hidden>
+<aside id="volume-authored-mix-panel" data-collapsed="false" data-right-tab="mix" data-cockpit-status="pending" aria-label="Volume and rendering controls" hidden>
   <button id="volume-authored-mix-toggle" type="button" aria-label="Collapse authored mix controls" aria-expanded="true" title="Collapse authored mix controls">&gt;</button>
   <div id="volume-authored-mix-body">
+    <div class="right-render-tabs" role="tablist" aria-label="Right-side controls">
+      <button type="button" id="right-tab-rendering" role="tab" aria-controls="rendering-panel-content" aria-selected="false">Rendering</button>
+      <button type="button" id="right-tab-mix" role="tab" aria-controls="authored-mix-panel-content" aria-selected="true">Volume Mix</button>
+    </div>
+    <div id="rendering-panel-content" role="tabpanel" aria-labelledby="right-tab-rendering" hidden>
+      <div class="volume-authored-mix-kicker">Scene light</div>
+      <h2 class="volume-authored-mix-title">Rendering</h2>
+      <p class="rendering-description">Switch light contributions while viewing the same kiln. The flame, environment and authored geometry remain visible in every mode.</p>
+      <label for="rendering-light-mode">Light contributions</label>
+      <select class="rendering-channel-select" id="rendering-light-mode">
+        <option value="all">Both light paths</option>
+        <option value="shared">Shared ON · flame field OFF</option>
+        <option value="flame-field">Shared OFF · flame field ON</option>
+        <option value="neither">Both paths OFF</option>
+      </select>
+      <div id="rendering-light-status" class="rendering-channel-status" data-status="unavailable" role="status">Inspecting renderer route…</div>
+      <h2 id="rendering-source-title">Shared point source</h2>
+      <p class="rendering-description" id="rendering-source-description">This study source lights both mesh and smoke. Its gain changes source energy on both paths.</p>
+      <div class="rendering-position-row" aria-label="Shared point source position">
+        <label for="rendering-source-x">X<input type="number" id="rendering-source-x" step="0.1" value="0"></label>
+        <label for="rendering-source-y">Y<input type="number" id="rendering-source-y" step="0.1" value="1.4"></label>
+        <label for="rendering-source-z">Z<input type="number" id="rendering-source-z" step="0.1" value="0.7"></label>
+      </div>
+      <div class="slider-row"><label class="slider-label" for="rendering-shared-gain">Source gain (stops)</label><input type="range" id="rendering-shared-gain" min="-4" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-shared-gain-value">+0.00</span></div>
+      <div id="rendering-distributed-controls" hidden><label for="rendering-angular-samples">Distributed flame directions</label><select id="rendering-angular-samples"><option>12</option><option>16</option><option selected>24</option><option>48</option><option>96</option></select>
+        <label class="import-mode"><input type="checkbox" id="rendering-surface-scattering" checked><span>Smoke scattered light on surfaces</span></label>
+        <p class="rendering-description">Includes one scattering event in smoke before light reaches the kiln. Smoke albedo changes this contribution. Uncheck to compare direct flame illumination.</p>
+        <div class="slider-row"><label class="slider-label" for="rendering-surface-gain">Surface illumination trim (stops)</label><input type="range" id="rendering-surface-gain" min="-8" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-surface-gain-value">+0.00</span></div>
+        <p class="rendering-description">Artistic adjustment to flame-lit surfaces only. Zero keeps the calculated illumination. Does not change smoke scattering, extinction, or flame emission.</p>
+        <label class="import-mode"><input type="checkbox" id="rendering-retain-comparisons"><span>Keep visited direction sets for A/B</span></label>
+        <button type="button" id="rendering-angular-swap" disabled>Swap previous direction count</button>
+        <label for="rendering-angular-pattern">Angular pattern</label><select id="rendering-angular-pattern"><option value="fixed">Fixed constellation (baseline)</option><option value="spatial">Stable spatial jitter (experimental)</option><option value="source">Source-aware progressive (experimental)</option></select>
+        <p class="rendering-description" id="rendering-angular-cache">First visit prepares visibility. Retention uses extra GPU memory; geometry edits invalidate every set. Only the selected set runs each frame.</p>
+        <label class="import-mode"><input type="checkbox" id="rendering-match-flame-camera"><span>Match flame camera on scene (experimental)</span></label>
+        <p class="rendering-description" id="rendering-camera-status">Off: scene uses its existing camera transform. Matching applies the flame's white balance, EV and highlight shoulder to the whole mesh scene, including environment and rim light; source energy is unchanged.</p>
+        <div class="slider-row"><label class="slider-label" for="rendering-source-softness">Lighting source softness</label><input type="range" id="rendering-source-softness" min="0" max="16" step="1" value="0"><span class="slider-val" id="rendering-source-softness-value">0</span></div>
+        <p class="rendering-description">Artistic lighting-source redistribution. Zero is unfiltered. Spreading emission while keeping extinction fixed can increase escaped light and reduce flicker; this is not brightness-neutral reconstruction. Visible flame and saved settings are unchanged.</p>
+        <label for="rendering-smoke-solver">Smoke illumination</label><select id="rendering-smoke-solver"><option value="distributed">Distributed · geometry-visible, full height</option><option value="legacy">Legacy comparison · lower cube, no solid visibility</option></select>
+        <div class="slider-row"><label class="slider-label" for="rendering-surface-reconstruction">Surface reconstruction</label><input type="range" id="rendering-surface-reconstruction" min="0" max="32" step="2" value="0"><span class="slider-val" id="rendering-surface-reconstruction-value">0</span></div>
+        <p class="rendering-description">Experimental same-frame mesh smoothing passes. Follows triangle connectivity and stops across sharp normal changes; split vertices remain split. No temporal history. Does not alter smoke or the visible flame. Zero bypasses reconstruction.</p>
+        <p class="rendering-description">Transported-light gain adjusts surface and distributed smoke illumination together; direct flame emission is unchanged. Surface scattering uses the distributed incident field even during legacy smoke comparison. Surface-to-surface bounce and repeated smoke scattering are not included.</p></div>
+      <h2>Flame field</h2>
+      <p class="rendering-description">The flame-derived field lights scene surfaces. This gain adjusts its receiving pass; it does not change the visible flame or shared point source.</p>
+      <p class="rendering-description">Flame field gain and test geometry remain in the authoring light inspector.</p>
+    </div>
+    <div id="authored-mix-panel-content" role="tabpanel" aria-labelledby="right-tab-mix">
     <div class="volume-authored-mix-kicker">Volume</div>
     <h2 class="volume-authored-mix-title">Authored Mix</h2>
     <section class="volume-full-support-stage" aria-label="Full support coefficient authoring">
@@ -3337,6 +3538,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="volume-stage-b-status" data-status="disabled">stage-b-resources-missing | requested matched-optical-recurrence-v0 | effective none | renderer not encoded/applied</div>
     </section>
     <div id="volume-authored-mix-control-root" data-volume-control-root="authored-mix"></div>
+    </div>
   </div>
 </aside>
 
@@ -3354,18 +3556,21 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 <script type="module">
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
-import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
+import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
+import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
+import { createSceneEmissiveCamera, applySceneEmissiveCamera } from './scene-emissive-camera.mjs';
+import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createFlameAuthoring, createFlameInspector } from './flame-authoring.mjs';
-import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-time-step-0926b';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
 import { createSceneLoadRequests } from './scene-load-generation.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
-import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-inlet-1006';
+import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs?v=flame-doctor-inlet-1006';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
   defaultFlameEmitterPose, normalizeFlameEmitterPose, createFlameEmitterHandle,
   updateFlameEmitterSupportOutline, flameDomainTranslationForAcceptedPose,
@@ -3380,7 +3585,7 @@ import {
   VOLUME_EMITTER_INLET_PROFILES,
   VOLUME_EMITTER_SOURCE_LAWS,
   resolveVolumeEmitterInletVelocity,
-} from './volume-emitter-basis.mjs';
+} from './volume-emitter-basis.mjs?v=flame-doctor-inlet-1006';
 import { installFireActorLiveParitySurface } from './fire-actor-live-parity-browser.mjs';
 import { FIRE_ACTOR_LIVE_PARITY_IDENTITY } from './fire-actor-live-parity-contract.mjs';
 import { FULL_SUPPORT_STAGE_A, admitFullSupportStageA } from './volume-full-support-cockpit.mjs';
@@ -3414,6 +3619,65 @@ let compositionModule = null;
 let compositionSetupError = null;
 const importCompositionModule = url => import(url);
 let fireLightFieldPass = null;
+let renderingMode = 'all';
+const renderingUrlState = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+const renderingUrlGain = Number(renderingUrlState.get('rendering_source_gain'));
+let renderingGainStops = renderingUrlState.has('rendering_source_gain') && Number.isFinite(renderingUrlGain)
+  ? Math.max(-4, Math.min(8, renderingUrlGain)) : 0;
+let renderingSourceIntensity = null;
+let renderingSourcePosition = parseSceneSourcePosition(renderingUrlState.get('rendering_source_xyz'));
+
+function refreshRenderingControls() {
+  const hasSharedRoute = fireLightFieldRouteParams().get('volume_light_field_shared_source') === '1';
+  if (!hasSharedRoute && renderingMode === 'all') renderingMode = 'flame-field';
+  const selected = renderingChannelsForMode(renderingMode);
+  const source = window.__kaminosSceneRadiance;
+  const distributed=source?.debugState().identity==='distributed-volume-direct-radiance-v0';
+  document.getElementById('rendering-distributed-controls').hidden=!distributed;
+  document.querySelector('.rendering-position-row').hidden=distributed;
+  document.querySelector('.rendering-position-row').style.display=distributed ? 'none' : '';
+  document.getElementById('rendering-source-title').textContent=distributed ? 'Distributed flame source' : 'Shared point source';
+  document.querySelector('label[for="rendering-shared-gain"]').textContent=distributed?'Transported-light gain (stops)':'Source gain (stops)';
+  document.getElementById('rendering-source-description').textContent=distributed?'Artistic illumination master for surfaces and distributed smoke. Direct visible flame emission stays unchanged.':'This study source lights both mesh and smoke. Its gain changes source energy on both paths.';
+  if(distributed)source.setGain(selected.shared ? 2**renderingGainStops : 0);
+  if(distributed)source.setSurfaceGain(2**Number(document.getElementById('rendering-surface-gain').value));
+  if(distributed)source.setSurfaceScattering(document.getElementById('rendering-surface-scattering').checked);
+  if(distributed)source.setSmokeMode(document.getElementById('rendering-smoke-solver').value);
+  if(distributed)source.setSourceSoftness(Number(document.getElementById('rendering-source-softness').value));
+  if(distributed)source.setSurfaceReconstruction(Number(document.getElementById('rendering-surface-reconstruction').value));
+  if(distributed)source.setRetainComparisons(document.getElementById('rendering-retain-comparisons').checked);
+  if(distributed)source.setAngularPattern(document.getElementById('rendering-angular-pattern').value);
+  if (source && !distributed) {
+    renderingSourceIntensity ||= source.debugState().source.intensity.slice();
+    renderingSourcePosition ||= source.debugState().source.position.slice();
+    source.setSource({
+      position: renderingSourcePosition,
+      intensity: sceneSourceIntensityForMode(renderingSourceIntensity, renderingMode, renderingGainStops),
+    });
+  }
+  if (renderingSourcePosition) {
+    for (const [axis, value] of ['x', 'y', 'z'].map((axis, index) => [axis, renderingSourcePosition[index]])) {
+      document.getElementById(`rendering-source-${axis}`).value = String(value);
+    }
+  }
+  fireLightFieldPass?.setWitnessMute(!selected.flameField);
+  const select = document.getElementById('rendering-light-mode');
+  if (select) {
+    select.value = renderingMode;
+    for (const option of select.options) {
+      option.disabled = (option.value === 'shared' || option.value === 'all') && !hasSharedRoute;
+    }
+  }
+  const status = document.getElementById('rendering-light-status');
+  if (status) {
+    const sharedState = !hasSharedRoute ? 'not mounted on this route' : source ? (selected.shared ? 'on' : 'off') : 'mounting';
+    const fieldState = !fireLightFieldPass ? 'not mounted on this route' : selected.flameField ? 'on' : 'off';
+    const position = source?.debugState().source?.position?.map(value => value.toFixed(2)).join(', ');
+    status.textContent = `${distributed ? 'Distributed flame' : 'Shared point source'} (mesh + smoke): ${sharedState}${position ? ` · XYZ ${position}` : ''}${distributed ? ` · ${source.debugState().directions} directions · ${source.debugState().status}` : ''}\nFlame field (mesh): ${fieldState}`;
+    status.dataset.status = source || fireLightFieldPass ? 'active' : 'unavailable';
+  }
+  window._kaminosDirty?.();
+}
 let ordinarySceneDepthProvider = null;
 let compositionHost = null;
 
@@ -10937,7 +11201,11 @@ async function initScene() {
   pmremGenerator = new THREE.PMREMGenerator(renderer);
 
   // Ground plane (subtle reflective floor)
-  const groundGeo = new THREE.CircleGeometry(5, 64);
+  // Distributed irradiance is interpolated per vertex. The old radius-length
+  // fan projects a center sample across the entire floor. Local ring cells
+  // keep that receiving footprint below .3 units on the experimental route.
+  const groundGeo = fireLightFieldRouteParams().get('volume_light_field_distributed') === '1'
+    ? new THREE.RingGeometry(0, 5, 128, 40) : new THREE.CircleGeometry(5, 64);
   const groundMat = new THREE.MeshStandardMaterial({
     color: 0x111111,
     roughness: 0.5,
@@ -11009,19 +11277,6 @@ async function initScene() {
     controls.update();
   }
 
-  // Key light for shadows
-  const keyLight = new THREE.DirectionalLight(0xffffff, 0.5);
-  keyLight.position.set(3, 5, 4);
-  keyLight.castShadow = true;
-  keyLight.shadow.mapSize.set(1024, 1024);
-  keyLight.shadow.camera.near = 0.1;
-  keyLight.shadow.camera.far = 20;
-  keyLight.shadow.camera.left = -3;
-  keyLight.shadow.camera.right = 3;
-  keyLight.shadow.camera.top = 3;
-  keyLight.shadow.camera.bottom = -3;
-  keyLight.shadow.bias = -0.001;
-  scene.add(keyLight);
   rimLight = new THREE.SpotLight(0xd6e5ff, 120);
   rimLight.name = 'Authored rim light';
   rimLight.castShadow = true;
@@ -11035,6 +11290,7 @@ async function initScene() {
   transformControls = new TransformControls(camera, renderer.domElement);
   transformControls.addEventListener('dragging-changed', e => {
     transformGizmoDragging = e.value;
+    window.__kaminosSceneRadiance?.setEditing?.('gizmo',e.value);
     controls.enabled = !e.value; // disable orbit while dragging gizmo
   });
   transformControls.setSize(0.75);
@@ -11051,7 +11307,11 @@ async function initScene() {
   const prePass = pass(scene, camera);
   prePass.name = 'Pre-Pass';
   prePass.transparent = false;
-  prePass.setMRT(mrt({ output: packNormalToRGB(normalView) }));
+  // GTAO integrates the visible hemisphere. With inconsistent authored winding,
+  // Three's material-side normal can face away even on a visible double-sided
+  // surface. Correct this screen-space input, not the asset or material normal.
+  const aoNormalView = normalView.dot(positionViewDirection).lessThan(0).select(normalView.negate(), normalView);
+  prePass.setMRT(mrt({ output: packNormalToRGB(aoNormalView) }));
   const prePassNormal = sample((uv) => unpackRGBToNormal(prePass.getTextureNode().sample(uv)));
   const prePassDepth = prePass.getTextureNode('depth');
   const normalTexture = prePass.getTexture('output');
@@ -11098,9 +11358,17 @@ async function initScene() {
   if (isFireLightFieldRoute() && sharedGpu?.device) {
     fireLightFieldPass = createFireLightFieldReceiverPass(baseSceneOutput, prePassDepth, prePassNormal);
     renderPipeline.outputNode = fireLightFieldPass.outputNode;
+    refreshRenderingControls();
   } else {
     renderPipeline.outputNode = baseSceneOutput;
   }
+  let sceneEmissiveCamera=null;
+  const rawSceneOutput=renderPipeline.outputNode;
+  if(fireLightFieldRouteParams().get('volume_light_field_distributed')==='1') {
+    sceneEmissiveCamera=createSceneEmissiveCamera(rawSceneOutput,{TSL:{uniform,vec3,vec4,float},THREE});
+  }
+  window.kaminosSceneEmissiveCameraDebugState=()=>sceneEmissiveCamera?.debugState()??{requested:false,effective:false,reason:'distributed-route-not-mounted'};
+  let sceneCameraStatusText='';
   window.kaminosFireLightFieldDebugState = () => (fireLightFieldPass
     ? fireLightFieldPass.debugState()
     : {
@@ -11352,7 +11620,7 @@ async function initScene() {
     syncViewportRendererSize();
     camera.updateMatrixWorld();
     fireLightFieldPass?.update();
-    renderSceneFrame();
+    if (renderSceneFrame() === false) return null;
     sceneRenderedForVolume = true;
     const texture = renderer.backend.get(prePass.getTexture('depth')).texture;
     return {device:sharedGpu.device, camera, texture};
@@ -11367,9 +11635,20 @@ async function initScene() {
   let fpsLast = performance.now();
 
   function renderSceneFrame() {
+    // Shared-source reset may span an await while this host's RAF keeps
+    // running. Keep the previous presented frame until both consumers have
+    // current inputs; do not submit retired medium resources or unlit fill.
+    if (window.__kaminosSceneRadiance && !window.__kaminosSceneRadiance.canRender()) return false;
     const t0 = performance.now();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
+    if(sceneEmissiveCamera) {
+      const requested=document.getElementById('rendering-match-flame-camera').checked;
+      const state=sceneEmissiveCamera.update(requested,window.__kaminosVolumePrototype?.emissiveCameraState());
+      applySceneEmissiveCamera(renderPipeline,rawSceneOutput,sceneEmissiveCamera.outputNode,state.effective);
+      const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)} · shoulder ${state.highlightKnee.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
+      if(text!==sceneCameraStatusText){document.getElementById('rendering-camera-status').textContent=text;sceneCameraStatusText=text;}
+    }
     if (localLiquidHost) {
       try { localLiquidHost.render(); }
       catch (error) {
@@ -12080,7 +12359,7 @@ function setActiveTab(tabName, { reveal = tabName !== 'assets' } = {}) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
   const volumeCockpitPanel = document.getElementById('volume-authored-mix-panel');
-  if (volumeCockpitPanel) volumeCockpitPanel.hidden = tabName !== 'volume';
+  if (volumeCockpitPanel) volumeCockpitPanel.hidden = tabName !== 'volume' && !isFireLightFieldRoute();
   const transformBar = document.getElementById('transform-bar');
   if (transformBar) transformBar.hidden = tabName === 'volume';
   const fingerJuiceHostPanel = document.getElementById('finger-juice-host-operator-panel');
@@ -12106,6 +12385,74 @@ function setActiveTab(tabName, { reveal = tabName !== 'assets' } = {}) {
 
 window.__kaminosSetActiveTab = setActiveTab;
 window.__kaminosActiveTab = () => document.querySelector('.tab.active[data-tab]')?.dataset.tab || null;
+function setRightPanelTab(name) {
+  if (name !== 'mix' && name !== 'rendering') throw new Error(`unknown right panel tab: ${name}`);
+  const panel = document.getElementById('volume-authored-mix-panel');
+  panel.dataset.rightTab = name;
+  panel.dataset.renderingRoute = String(isFireLightFieldRoute());
+  document.getElementById('rendering-panel-content').hidden = name !== 'rendering';
+  document.getElementById('authored-mix-panel-content').hidden = name !== 'mix';
+  for (const tabName of ['rendering', 'mix']) {
+    document.getElementById(`right-tab-${tabName}`).setAttribute('aria-selected', String(name === tabName));
+  }
+  if (name === 'rendering') refreshRenderingControls();
+}
+for (const name of ['rendering', 'mix']) {
+  document.getElementById(`right-tab-${name}`).addEventListener('click', () => setRightPanelTab(name));
+}
+document.getElementById('rendering-light-mode').addEventListener('change', event => {
+  renderingMode = event.target.value;
+  refreshRenderingControls();
+});
+document.getElementById('rendering-shared-gain').addEventListener('input', event => {
+  renderingGainStops = Number(event.target.value);
+  document.getElementById('rendering-shared-gain-value').textContent = `${renderingGainStops >= 0 ? '+' : ''}${renderingGainStops.toFixed(2)}`;
+  refreshRenderingControls();
+});
+let previousAngularCount=null,currentAngularCount=24;
+function selectAngularCount(value) {
+  if(value!==currentAngularCount){previousAngularCount=currentAngularCount;currentAngularCount=value;}
+  document.getElementById('rendering-angular-samples').value=String(value);
+  document.getElementById('rendering-angular-swap').disabled=previousAngularCount===null;
+  document.getElementById('rendering-angular-swap').textContent=previousAngularCount===null?'Swap previous direction count':`Swap to ${previousAngularCount} directions`;
+  window.__kaminosSceneRadiance?.setDirections?.(value);
+  refreshRenderingControls();
+}
+document.getElementById('rendering-angular-samples').addEventListener('change',event=>selectAngularCount(Number(event.target.value)));
+document.getElementById('rendering-angular-swap').addEventListener('click',()=>{if(previousAngularCount!==null)selectAngularCount(previousAngularCount);});
+document.getElementById('rendering-retain-comparisons').addEventListener('change',refreshRenderingControls);
+document.getElementById('rendering-angular-pattern').addEventListener('change',refreshRenderingControls);
+document.getElementById('rendering-smoke-solver').addEventListener('change',refreshRenderingControls);
+document.getElementById('rendering-surface-scattering').addEventListener('change',refreshRenderingControls);
+document.getElementById('rendering-surface-gain').addEventListener('input',event=>{
+  const value=Number(event.target.value);document.getElementById('rendering-surface-gain-value').textContent=`${value>=0?'+':''}${value.toFixed(2)}`;refreshRenderingControls();
+});
+document.getElementById('rendering-surface-reconstruction').addEventListener('input',event=>{
+  document.getElementById('rendering-surface-reconstruction-value').textContent=event.target.value;
+  refreshRenderingControls();
+});
+document.getElementById('rendering-source-softness').addEventListener('input',event=>{
+  document.getElementById('rendering-source-softness-value').textContent=event.target.value;
+  refreshRenderingControls();
+});
+for (const axis of ['x', 'y', 'z']) {
+  document.getElementById(`rendering-source-${axis}`).addEventListener('change', () => {
+    const input = ['x', 'y', 'z'].map(name => document.getElementById(`rendering-source-${name}`).value).join(',');
+    const position = parseSceneSourcePosition(input);
+    if (position) {
+      renderingSourcePosition = position;
+      refreshRenderingControls();
+    }
+  });
+}
+document.getElementById('rendering-shared-gain').value = String(renderingGainStops);
+const surfaceStops=Number(renderingUrlState.get('rendering_surface_gain'));
+if(renderingUrlState.has('rendering_surface_gain')&&Number.isFinite(surfaceStops)){
+  const input=document.getElementById('rendering-surface-gain');input.value=String(surfaceStops);input.dispatchEvent(new Event('input'));
+}
+if(renderingUrlState.has('rendering_surface_scattering'))document.getElementById('rendering-surface-scattering').checked=renderingUrlState.get('rendering_surface_scattering')==='1';
+document.getElementById('rendering-shared-gain-value').textContent = `${renderingGainStops >= 0 ? '+' : ''}${renderingGainStops.toFixed(2)}`;
+setRightPanelTab(isFireLightFieldRoute() ? 'rendering' : 'mix');
 // Tab switching also stops inactive benches; initialize their state first.
 if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');
 
@@ -16261,6 +16608,10 @@ function volumeDomControlParamFromElement(el) {
 function readVolumeDomControlValue(el) {
   if (!el) return null;
   if (el.id === 'volume-render-scale') return readVolumeRenderScaleControlValue();
+  // A retired aperture pattern kept from a saved route is the basin's request
+  // until the operator authors a pattern: saving (and the capture route) keeps
+  // it rather than migrating the basin to the shape it falls back to.
+  if (el.id === 'volume-emitter-aperture-pattern' && el.dataset.volumeRetiredPatternRequest) return el.dataset.volumeRetiredPatternRequest;
   if (el.type === 'checkbox') return Boolean(el.checked);
   if (['color', 'text', 'url', 'search', 'password'].includes(el.type) || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return el.value;
   const numericValue = Number(el.value);
@@ -21248,6 +21599,10 @@ function readVolumeControls() {
     windStrength: parseFloat(document.getElementById('volume-wind-strength').value),
     windAngle: parseFloat(document.getElementById('volume-wind-angle').value),
     windHeight: parseFloat(document.getElementById('volume-wind-height').value),
+    windModel: document.getElementById('volume-wind-model').value,
+    windGust: parseFloat(document.getElementById('volume-wind-gust').value),
+    windGustPeriod: parseFloat(document.getElementById('volume-wind-gust-period').value),
+    windGustVeer: parseFloat(document.getElementById('volume-wind-gust-veer').value),
     renderScale: readVolumeRenderScaleControlValue(),
     inputRadius: parseFloat(document.getElementById('volume-input-radius').value),
     flowRate: parseFloat(document.getElementById('volume-flow-rate').value),
@@ -21258,6 +21613,19 @@ function readVolumeControls() {
     emitterInletVelocity: parseFloat(document.getElementById('volume-emitter-inlet-velocity').value),
     emitterShearWidthCells: parseFloat(document.getElementById('volume-emitter-shear-width').value),
     emitterEdgeEntrainment: parseFloat(document.getElementById('volume-emitter-edge-entrainment').value),
+    emitterFuelFraction: parseFloat(document.getElementById('volume-emitter-fuel-fraction').value),
+    emitterInletTemperature: parseFloat(document.getElementById('volume-emitter-inlet-temperature').value),
+    emitterAperturePattern: document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest || document.getElementById('volume-emitter-aperture-pattern').value,
+    emitterApertureCount: parseFloat(document.getElementById('volume-emitter-aperture-count').value),
+    emitterApertureRatio: parseFloat(document.getElementById('volume-emitter-aperture-ratio').value),
+    emitterApertureSeed: parseFloat(document.getElementById('volume-emitter-aperture-seed').value),
+    emitterSwirl: parseFloat(document.getElementById('volume-emitter-swirl').value),
+    emitterLineWeight: parseFloat(document.getElementById('volume-emitter-line-weight').value),
+    emitterJetJitter: parseFloat(document.getElementById('volume-emitter-jet-jitter').value),
+    emitterInletTurbulence: parseFloat(document.getElementById('volume-emitter-inlet-turbulence').value),
+    emitterInletTurbulenceScale: parseFloat(document.getElementById('volume-emitter-inlet-turbulence-scale').value),
+    emitterPuff: parseFloat(document.getElementById('volume-emitter-puff').value),
+    emitterPuffPeriod: parseFloat(document.getElementById('volume-emitter-puff-period').value),
     fixedSourceDephase: document.getElementById('volume-fixed-source-dephase').checked,
     reactionLiveView,
     reactionLiveViewIdentity: 'reaction-live-view-shader-inspect-v0',
@@ -21464,6 +21832,8 @@ function readVolumeControls() {
     pressureMode: pressureConfig.pressureMode,
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureSolver: document.getElementById('volume-pressure-solver').value,
+    heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
+    velocityStaggering: document.getElementById('volume-velocity-staggering').value || 'collocated',
     pressureSolverIterations: parseFloat(document.getElementById('volume-pressure-solver-iterations').value),
     advectionScheme: document.getElementById('volume-advection-scheme').value,
     confinement: document.getElementById('volume-confinement').value,
@@ -21545,6 +21915,10 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-wind-strength-val').textContent = c.windStrength.toFixed(2);
   document.getElementById('volume-wind-angle-val').textContent = formatVolumeWindDirection(c.windAngle);
   document.getElementById('volume-wind-height-val').textContent = c.windHeight.toFixed(2);
+  document.getElementById('volume-wind-model-val').textContent = c.windModel;
+  document.getElementById('volume-wind-gust-val').textContent = c.windGust.toFixed(2);
+  document.getElementById('volume-wind-gust-period-val').textContent = c.windGustPeriod.toFixed(1);
+  document.getElementById('volume-wind-gust-veer-val').textContent = String(Math.round(c.windGustVeer));
   document.getElementById('volume-render-scale-val').textContent = `${(c.renderScale * 100).toFixed(1)}%`;
   document.getElementById('volume-residual-mode-val').textContent = c.volumeResidualMode === 'webgpu-direct-residual' ? 'direct' : 'off';
   document.getElementById('volume-residual-strength-val').textContent = c.volumeResidualStrength.toFixed(2);
@@ -21560,6 +21934,21 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-inlet-velocity-val').textContent = c.emitterInletVelocity.toFixed(4);
   document.getElementById('volume-emitter-shear-width-val').textContent = c.emitterShearWidthCells.toFixed(1);
   document.getElementById('volume-emitter-edge-entrainment-val').textContent = c.emitterEdgeEntrainment.toFixed(2);
+  document.getElementById('volume-emitter-fuel-fraction-val').textContent = c.emitterFuelFraction.toFixed(2);
+  document.getElementById('volume-emitter-inlet-temperature-val').textContent = c.emitterInletTemperature.toFixed(2);
+  document.getElementById('volume-emitter-aperture-pattern-val').textContent = document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest ? `shape (${c.emitterAperturePattern} retired)` : c.emitterAperturePattern;
+  document.getElementById('volume-emitter-aperture-count-val').textContent = String(Math.round(c.emitterApertureCount));
+  document.getElementById('volume-emitter-aperture-ratio-val').textContent = c.emitterApertureRatio.toFixed(2);
+  document.getElementById('volume-emitter-aperture-seed-val').textContent = String(Math.round(c.emitterApertureSeed));
+  document.getElementById('volume-emitter-swirl-val').textContent = c.emitterSwirl.toFixed(2);
+  document.getElementById('volume-heat-release-expansion-val').textContent = c.heatReleaseExpansion.toFixed(2);
+  document.getElementById('volume-velocity-staggering-val').textContent = c.velocityStaggering;
+  document.getElementById('volume-emitter-line-weight-val').textContent = c.emitterLineWeight.toFixed(2);
+  document.getElementById('volume-emitter-jet-jitter-val').textContent = c.emitterJetJitter.toFixed(2);
+  document.getElementById('volume-emitter-inlet-turbulence-val').textContent = c.emitterInletTurbulence.toFixed(2);
+  document.getElementById('volume-emitter-inlet-turbulence-scale-val').textContent = String(Math.round(c.emitterInletTurbulenceScale));
+  document.getElementById('volume-emitter-puff-val').textContent = c.emitterPuff.toFixed(2);
+  document.getElementById('volume-emitter-puff-period-val').textContent = c.emitterPuffPeriod.toFixed(1);
   document.getElementById('volume-fixed-source-dephase-val').textContent = c.fixedSourceDephase ? 'on' : 'off';
   document.getElementById('volume-reaction-boundary-fire-clean-color-val').textContent = c.reactionBoundaryFireCleanColor;
   document.getElementById('volume-reaction-boundary-fire-soot-color-val').textContent = c.reactionBoundaryFireSootColor;
@@ -21885,6 +22274,38 @@ function refreshVolumeReadout() {
       : `inactive: ${s.physicalColor.inactiveReason || 'unverified route'}`;
   }
   renderVolumeEmitterReceipt(window.__kaminosVolumeEmitterReceipt);
+  // The inflow law is admitted per frame by the core (it needs the converged
+  // open-top solver); an inflow that was asked for and refused must look refused.
+  const inflow = s.inflowBoundary;
+  // A refused inflow must be visible where the operator is looking: next to
+  // the Source Law select, not only in the receipt panel. Switching to the law
+  // rebuilds the fluid state, so a refusal reads as a black screen otherwise.
+  const sourceLawValue = document.getElementById('volume-emitter-source-law-val');
+  applyVolumeInflowLawRowVisibility(document.getElementById('volume-emitter-source-law')?.value);
+  if (sourceLawValue && inflow?.requested?.sourceLaw === 'inflow-boundary') {
+    sourceLawValue.textContent = inflow.effective.admitted
+      ? 'inflow-boundary · admitted'
+      : `inflow-boundary — NOT ADMITTED (${inflow.effective.reason}); set Pressure solver to converged open top and Projection above 0`;
+  }
+  const heatRelease = s.heatRelease;
+  document.getElementById('volume-heat-release-state').textContent = !heatRelease || heatRelease.requested.expansion <= 0
+    ? 'off'
+    : (heatRelease.effective.admitted
+      ? `admitted · gain ${heatRelease.effective.expansion.toFixed(2)} · residual measures D(v) − S`
+      : `heat-release — NOT ADMITTED (${heatRelease.effective.reason}); set Pressure solver to converged open top and Projection above 0`);
+  const staggering = s.velocityStaggering;
+  document.getElementById('volume-velocity-staggering-state').textContent = !staggering || staggering.requested.mode !== 'staggered'
+    ? 'collocated'
+    : (staggering.effective.admitted
+      ? 'staggered · characteristic from the two-face mean'
+      : `staggered — NOT ADMITTED (${staggering.effective.reason}); set Pressure solver to converged`);
+  document.getElementById('volume-inflow-boundary-state').textContent = !inflow
+    ? 'off'
+    : (inflow.effective.admitted
+      ? `admitted · ${inflow.effective.apertureKind} · v ${inflow.effective.inletVelocity.toFixed(3)} · fuel ${inflow.effective.fuelFraction.toFixed(2)} · T ${inflow.effective.inletTemperature.toFixed(2)} · projection ${inflow.effective.projection}`
+      : (inflow.requested.sourceLaw === 'inflow-boundary'
+        ? `NOT admitted: ${inflow.effective.reason}`
+        : 'off'));
   syncVolumePresentationControls(s.volumePresentationReceipt);
   syncRaymarchSmokePresentationControls(s.raymarchSmokePresentationReceipt);
   const timing = s.timing || {};
@@ -22217,6 +22638,31 @@ async function initKaminosVolumeRoute() {
   }
   if (params.has('volume_fixed_source_dephase')) {
     setVolumeControlValue('volume-fixed-source-dephase', params.get('volume_fixed_source_dephase'));
+  }
+  // A saved basin is its route. The inflow-boundary emitter controls (fuel
+  // fraction, inlet temperature, aperture pattern / count / ratio / seed,
+  // swirl, line weight, jet jitter, inlet turbulence and scale, puffing and
+  // period) and the wind model controls had no route read here, so a cold load
+  // of a saved basin fell back to the page defaults for all of them (witnessed
+  // at e05f6323). Each takes its route value through the shared setter.
+  // A retired aperture pattern (spiral, concentric) has no option in the select:
+  // assigning it would clear the selection and lose the saved request. The
+  // select shows the family shape the map falls back to, and the request is
+  // kept beside it so the controls snapshot still sends it to the resolver and
+  // the receipt names the fallback. Authoring a new pattern clears it.
+  const VOLUME_RETIRED_APERTURE_PATTERNS = ['concentric', 'spiral'];
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
+    const param = document.getElementById(id)?.dataset.volumeSettingsParam;
+    if (!param || !params.has(param)) continue;
+    const value = params.get(param);
+    const patternSelect = document.getElementById('volume-emitter-aperture-pattern');
+    if (id === 'volume-emitter-aperture-pattern' && VOLUME_RETIRED_APERTURE_PATTERNS.includes(value)) {
+      patternSelect.value = 'shape';
+      patternSelect.dataset.volumeRetiredPatternRequest = value;
+      continue;
+    }
+    setVolumeControlValue(id, value);
   }
   const routeFireRenderMode = (params.get('volume_fire_render_mode') || '').toLowerCase().replace(/-/g, '_');
   if (['shell', 'inspect', 'off', 'stock'].includes(routeFireRenderMode)) {
@@ -22759,6 +23205,33 @@ async function initKaminosVolumeRoute() {
     if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
   }
   window.__kaminosVolumePrototype = volumePrototype;
+  if (fireLightFieldRouteParams().get('volume_light_field_shared_source') === '1') {
+    if (!isFireLightFieldRoute()) throw new Error('shared scene source requires ordinary fire light-field route');
+    window.__kaminosSceneRadianceSetup = {status:'mounting'};
+    const distributed=fireLightFieldRouteParams().get('volume_light_field_distributed')==='1';
+    if(distributed)renderingMode='shared';
+    import(distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs').then(module => {
+      window.__kaminosSceneRadiance = distributed
+        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,onStatus:state=>{
+          const badge=document.getElementById('lighting-edit-status'),message=lightingEditStatus(state);
+          if(badge.textContent!==message)badge.textContent=message;
+          badge.hidden=!message;
+          const cache=window.__kaminosSceneRadiance?.debugState().frame?.angularCache;
+          if(cache){
+            const text=`Prepared: ${cache.counts.join(', ')} directions · ${(cache.bytes/1048576).toFixed(1)} MiB direction/visibility buffers. ${cache.retained?'A/B retention on.':'Only current set retained.'} Geometry edits invalidate all sets.`;
+            const label=document.getElementById('rendering-angular-cache');
+            if(label.textContent!==text)label.textContent=text;
+          }
+        }})
+        : module.mountSceneRadiance({renderer,scene,prototype:volumePrototype});
+      if(distributed)bindSceneLightEditInteraction({document,window,getLighting:()=>window.__kaminosSceneRadiance});
+      window.__kaminosSceneRadianceSetup.status='mounted';
+      refreshRenderingControls();
+    }).catch(error=>{
+      window.__kaminosSceneRadianceSetup={status:'failed',error:String(error.message)};
+      console.error('shared scene radiance mount failed',error);
+    });
+  }
   // Optional composition-module seam: a URL HASH entry
   // #composition_module_url=<module> (hash, not query — settings routes are
   // contract-validated and reject unexpected query parameters) loads an ES
@@ -22983,6 +23456,8 @@ async function initKaminosVolumeRoute() {
     'volume-emitter-inlet-velocity',
     'volume-emitter-shear-width',
     'volume-emitter-edge-entrainment',
+    'volume-emitter-fuel-fraction',
+    'volume-emitter-inlet-temperature',
     'volume-input-radius',
     'volume-flow-rate',
     'volume-speed',
@@ -23029,6 +23504,8 @@ async function initKaminosVolumeRoute() {
     setVolumeRenderScaleControlValue(nextValue);
     syncControls({ target: document.getElementById('volume-render-scale-full') });
   });
+  // Authoring a pattern clears a retired request kept from a saved route.
+  document.getElementById('volume-emitter-aperture-pattern').addEventListener('change', () => { delete document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest; });
   for (const id of [
     'volume-emitter-source-law',
     'volume-emitter-source-depth',
@@ -23037,6 +23514,25 @@ async function initKaminosVolumeRoute() {
     'volume-emitter-inlet-velocity',
     'volume-emitter-shear-width',
     'volume-emitter-edge-entrainment',
+    'volume-emitter-fuel-fraction',
+    'volume-emitter-inlet-temperature',
+    'volume-emitter-aperture-pattern',
+    'volume-emitter-aperture-count',
+    'volume-emitter-aperture-ratio',
+    'volume-emitter-aperture-seed',
+    'volume-emitter-swirl',
+    'volume-emitter-line-weight',
+    'volume-emitter-jet-jitter',
+    'volume-emitter-inlet-turbulence',
+    'volume-emitter-inlet-turbulence-scale',
+    'volume-emitter-puff',
+    'volume-emitter-puff-period',
+    'volume-heat-release-expansion',
+    'volume-velocity-staggering',
+    'volume-wind-model',
+    'volume-wind-gust',
+    'volume-wind-gust-period',
+    'volume-wind-gust-veer',
     'volume-fixed-source-dephase',
     'volume-pressure-solver',
     'volume-pressure-solver-iterations',
@@ -28687,6 +29183,63 @@ sceneInitialization.then(() => {
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 });
+</script>
+<script>
+// Help text lives behind a small info mark on each control row: the
+// `.slider-help` span stays where it was authored (the layout editor moves it
+// with its row and the contracts read it), hidden until the mark is hovered or
+// focused, then shown as a floating box under the row.
+// Rows that only the shallow-primary / filled-volume source laws read (the
+// older emitter dynamics and the boundary gradient / softness / cut) hide
+// while the inflow law is selected; nothing is removed, saved values still load.
+const VOLUME_INFLOW_HIDDEN_CONTROL_IDS = ['volume-emitter-source-depth', 'volume-emitter-inlet-profile', 'volume-emitter-momentum-linked', 'volume-emitter-shear-width', 'volume-emitter-edge-entrainment', 'volume-reaction-boundary-gradient', 'volume-reaction-boundary-softness', 'volume-reaction-boundary-cut'];
+window.applyVolumeInflowLawRowVisibility = function applyVolumeInflowLawRowVisibility(sourceLaw) {
+  const hide = sourceLaw === 'inflow-boundary';
+  for (const id of VOLUME_INFLOW_HIDDEN_CONTROL_IDS) {
+    const row = document.getElementById(id)?.closest('.slider-row');
+    if (row) row.dataset.volumeInflowHidden = hide ? 'true' : 'false';
+  }
+};
+(function installVolumeHelpMarks() {
+  // One popover on body shows the hovered row's help text at the viewport
+  // position of the row; the sidebar is transformed, so a fixed box inside it
+  // would be positioned against the sidebar, not the viewport.
+  const popover = document.createElement('div');
+  popover.id = 'volume-help-popover'; popover.setAttribute('role', 'tooltip');
+  document.body.appendChild(popover);
+  const close = () => { popover.removeAttribute('data-open'); popover.textContent = ''; };
+  const show = (help, row) => {
+    const r = row.getBoundingClientRect();
+    popover.textContent = help.textContent;
+    popover.setAttribute('data-open', 'true');
+    popover.style.left = `${Math.max(8, Math.min(r.left + 8, window.innerWidth - 316))}px`;
+    popover.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 16)}px`;
+    const h = popover.getBoundingClientRect().height;
+    if (r.bottom + 4 + h > window.innerHeight) popover.style.top = `${Math.max(8, r.top - h - 4)}px`;
+  };
+  const install = help => {
+    if (help.dataset.helpMark === 'installed') return;
+    const row = help.previousElementSibling;
+    if (!row || !row.classList.contains('slider-row')) return;
+    const label = row.querySelector('.slider-label') || row.firstElementChild;
+    if (!label) return;
+    const mark = document.createElement('span');
+    mark.className = 'slider-info'; mark.textContent = 'i'; mark.tabIndex = 0; mark.setAttribute('role', 'img');
+    mark.setAttribute('aria-label', 'help'); mark.title = '';
+    mark.addEventListener('mouseenter', () => show(help, row));
+    mark.addEventListener('focus', () => show(help, row));
+    mark.addEventListener('click', event => { event.preventDefault(); if (popover.dataset.open === 'true' && popover.textContent === help.textContent) close(); else show(help, row); });
+    mark.addEventListener('mouseleave', close);
+    mark.addEventListener('blur', close);
+    label.appendChild(mark);
+    help.dataset.helpMark = 'installed';
+  };
+  const installAll = () => document.querySelectorAll('.slider-help').forEach(install);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installAll, { once: true }); else installAll();
+  new MutationObserver(installAll).observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('scroll', close, true);
+  window.addEventListener('resize', close);
+})();
 </script>
 </body>
 </html>

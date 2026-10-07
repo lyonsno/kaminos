@@ -173,6 +173,8 @@ export function applyVolumeEmitterFamilyRuntime({
   const inletVelocity = finiteNumber(controls.emitterInletVelocity ?? 0.04, 'controls.emitterInletVelocity');
   const shearWidthCells = finiteNumber(controls.emitterShearWidthCells ?? 3, 'controls.emitterShearWidthCells');
   const edgeEntrainment = finiteNumber(controls.emitterEdgeEntrainment ?? 0.65, 'controls.emitterEdgeEntrainment');
+  const fuelFraction = finiteNumber(controls.emitterFuelFraction ?? 0.56, 'controls.emitterFuelFraction');
+  const inletTemperature = finiteNumber(controls.emitterInletTemperature ?? 1.2, 'controls.emitterInletTemperature');
   // The cockpit passes the time-step dynamics Speed as emitterTransportSpeed
   // (the requested Speed under the legacy step, the reference under uniform);
   // plain Speed remains the fallback for callers that do not.
@@ -226,6 +228,8 @@ export function applyVolumeEmitterFamilyRuntime({
       inletVelocity,
       shearWidthCells,
       edgeEntrainment,
+      fuelFraction,
+      inletTemperature,
       chemistry: HELD_ASSAY_CHEMISTRY,
       temporal: HELD_ASSAY_TEMPORAL,
       lifetime: 0.55,
@@ -268,6 +272,8 @@ export function applyVolumeEmitterFamilyRuntime({
       inletVelocity,
       shearWidthCells,
       edgeEntrainment,
+      fuelFraction,
+      inletTemperature,
       frameId,
       timestampMs,
       emitterPose: placement.pose,
@@ -286,6 +292,9 @@ export function applyVolumeEmitterFamilyRuntime({
       effectiveInletVelocity: compilerReceipt?.effective.effectiveInletVelocity ?? null,
       shearWidthCells: compilerReceipt?.effective.shearWidthCells ?? null,
       edgeEntrainment: compilerReceipt?.effective.edgeEntrainment ?? null,
+      fuelFraction: compilerReceipt?.effective.fuelFraction ?? null,
+      inletTemperature: compilerReceipt?.effective.inletTemperature ?? null,
+      inflow: compilerReceipt?.effective.inflow ?? null,
       coordinateSpace: sourceReceipt.coordinateSpace,
       emitterPose: fixedAnalytic ? placement.pose : null,
       externalStrength: compilerReceipt?.effective.strength ?? 0,

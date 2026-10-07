@@ -11,7 +11,9 @@
 // where an arm is name[,controlId=value,...]. A control id starting with `@` is
 // a debug-API request instead of a DOM control: `@confinementEpsilon=<value|null>`
 // calls setConfinementEpsilonOverride so a calibration sweep can vary the
-// calibrated epsilon without a persisted knob; the receipt names the override.
+// calibrated epsilon without a persisted knob; the receipt names the override;
+// `@savePreset=<label>` saves the arm's controls as a basin through the
+// cockpit's Save button and records the preset id the cockpit reports.
 // During each settle the capture samples the renderer receipt every 2 s
 // (steps, enstrophy, divergence) so a trend is visible, not just an endpoint.
 // Frames are admission and attribution evidence for the implementer; the
@@ -33,6 +35,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { effectiveMismatches, parseArms, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
 
 const CAPTURE_IDENTITY = 'kaminos.volume.transport-arm-capture.v1';
 const positional = [];
@@ -65,7 +68,7 @@ const report = {
   effective: { source: null, sourceVerified: false },
   // The browser this run spawned and drove; a capture must never attach to
   // another instance (2026-09-26: a fixed port let it attach to an orphan).
-  browser: { pid: null, port: null, profile: null, devtoolsUrl: null },
+  browser: { executable: null, resolvedExecutable: null, executableSource: null, version: null, versionUnavailable: null, pid: null, port: null, profile: null, devtoolsUrl: null },
   cleanupWarning: null,
   admitted: null,
   arms: [],
@@ -81,7 +84,8 @@ if (!url || !outDir || !armsArg) fail('argument-validation', 'usage: <url> <outD
 if (!expectedRepoRoot || !expectedCommit) { report.failure = 'expected repo root and commit are required so the capture cannot pass on an unintended server'; writeReport(); console.error(report.failure); process.exit(1); }
 const FAULTS = ['arm-error', 'packed-epsilon', 'stale-residual', 'null-mode-drift'];
 if (fault && !FAULTS.includes(fault)) { report.failure = `unknown fault ${fault}; known: ${FAULTS.join(', ')}`; writeReport(); console.error(report.failure); process.exit(1); }
-const arms = armsArg.split(';').map(a => { const [name, ...pairs] = a.split(','); return { name, set: pairs.map(p => p.split('=')) }; });
+let arms;
+try { arms = parseArms(armsArg); } catch (error) { report.failure = String(error.message); writeReport(); console.error(report.failure); process.exit(1); }
 mkdirSync(outDir, { recursive: true });
 writeReport();
 
@@ -101,53 +105,8 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 const errors = report.browserErrors;
 
-// Requested control value -> the effective receipt it must produce. Controls
-// without an effective receipt are checked at the DOM only.
-const solverExpectation = { legacy: { solver: 'legacy' }, converged: { solver: 'converged', openTop: false }, 'converged-open-top': { solver: 'converged', openTop: true } };
-// `expectedMode` is the last requested confinement mode (or the admitted one), so
-// an arm that only changes the override cannot complete in a different mode.
-function effectiveMismatches(arm, end, expectedMode) {
-  const mismatches = [];
-  for (const [cid, value] of arm.set) {
-    if (cid === 'volume-advection-scheme' && end.transport?.scheme !== value) mismatches.push(`scheme requested ${value}, effective ${end.transport?.scheme}`);
-    if (cid === 'volume-time-step' && end.timeStep?.mode !== value) mismatches.push(`time step requested ${value}, effective ${end.timeStep?.mode}${end.timeStep?.reason ? ` (${end.timeStep.reason})` : ''}`);
-    if (cid === 'volume-confinement') {
-      if (end.confinement?.mode !== value) mismatches.push(`confinement requested ${value}, effective ${end.confinement?.mode}`);
-      const packedMode = { 'curl-slider': 0, calibrated: 1, off: 2 }[value];
-      if (end.confinementUniform?.mode !== packedMode) mismatches.push(`confinement ${value} requested but uniform slot 345 holds mode ${end.confinementUniform?.mode}`);
-    }
-    if (cid === '@confinementEpsilon') {
-      // The shader reads uniform slot 346 (a Float32Array element), so the packed
-      // value must equal the float32 rounding of the request, not just the
-      // resolver's double. `packed-epsilon` perturbs the observation to prove
-      // this comparison can fail.
-      const packed = end.confinementUniform?.confinementAmount;
-      const observed = fault === 'packed-epsilon' ? (Number(packed) || 0) + 1 : packed;
-      // The drift fault targets the null-override arm specifically, the case the
-      // confirmation review constructed (override-only arm ending in `off`).
-      const observedMode = fault === 'null-mode-drift' && value === 'null' ? 'off' : end.confinement?.mode;
-      const packedMode = { 'curl-slider': 0, calibrated: 1, off: 2 }[expectedMode];
-      if (!expectedMode) mismatches.push('override requested but no confinement mode has been requested or admitted');
-      else if (observedMode !== expectedMode) mismatches.push(`confinement mode drifted: expected ${expectedMode} (last requested or admitted), observed ${observedMode}`);
-      else if (!(fault === 'null-mode-drift' && value === 'null') && end.confinementUniform?.mode !== packedMode) mismatches.push(`confinement mode ${expectedMode} expected but uniform slot 345 holds ${end.confinementUniform?.mode}`);
-      if (value === 'null') {
-        if (expectedMode === 'calibrated') {
-          if (end.confinement?.calibration?.source !== 'table') mismatches.push(`null override requested but calibration source is ${end.confinement?.calibration?.source}`);
-          if (observed !== Math.fround(Number(end.confinement?.calibration?.epsilon))) mismatches.push(`null override: packed epsilon ${observed} is not the table value ${end.confinement?.calibration?.epsilon}`);
-        }
-      } else {
-        if (end.confinement?.confinementAmount !== Number(value)) mismatches.push(`confinement epsilon override ${value} requested, effective amount ${end.confinement?.confinementAmount} (mode ${end.confinement?.mode})`);
-        if (observed !== Math.fround(Number(value))) mismatches.push(`packed epsilon ${observed} is not the float32 of the requested ${value} (${Math.fround(Number(value))})`);
-      }
-    }
-    if (cid === 'volume-pressure-solver') {
-      const expected = solverExpectation[value];
-      if (!expected) mismatches.push(`unknown solver request ${value}`);
-      else if (end.solver?.solver !== expected.solver || (expected.openTop !== undefined && Boolean(end.solver?.openTop) !== expected.openTop)) mismatches.push(`solver requested ${value}, effective ${end.solver?.solver}${end.solver?.openTop ? ' open top' : ''}`);
-    }
-  }
-  return mismatches;
-}
+// Requested control value -> the effective receipt it must produce: see
+// volume-arm-capture-checks.mjs (effectiveMismatches).
 
 try {
   report.failurePhase = 'runtime-config';
@@ -162,26 +121,54 @@ try {
   writeReport();
 
   report.failurePhase = 'browser-launch';
-  chrome = spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', ['--headless=new','--enable-unsafe-webgpu','--no-first-run','--no-default-browser-check','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--window-size=1400,900','about:blank'], { stdio: ['ignore','pipe','pipe'] });
+  // An independent executable, never the installed GUI Chrome (shared operator machine).
+  let headlessBrowser;
+  try { headlessBrowser = resolveHeadlessBrowser(); } catch (error) { fail('browser-launch', String(error?.message || error)); }
+  report.browser.executable = headlessBrowser.executable; report.browser.resolvedExecutable = headlessBrowser.resolvedExecutable; report.browser.executableSource = headlessBrowser.source; report.browser.profile = profile; writeReport();
+  // --use-mock-keychain: a fresh Chrome binary otherwise raises the macOS
+  // keychain (Chrome Safe Storage) password dialog on the operator's screen and
+  // the page sits behind the modal (2026-10-01: Page.navigate timed out that way).
+  // A launch error Node reports asynchronously (ENOENT, EACCES) must reach the
+  // same failure and cleanup path as everything else, not end the process.
+  let launchError = null;
+  chrome = spawn(headlessBrowser.executable, ['--headless=new','--enable-unsafe-webgpu','--no-first-run','--no-default-browser-check','--use-mock-keychain','--password-store=basic','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--window-size=1400,900','about:blank'], { stdio: ['ignore','pipe','pipe'] });
+  chrome.on('error', error => { launchError = error; });
   chrome.stdout.on('data', () => {}); chrome.stderr.on('data', () => {});
   // Chrome publishes the port it actually bound in DevToolsActivePort inside this
   // run's own profile directory, so the capture can only attach to the browser it spawned.
   let port = null;
-  for (let i = 0; i < 200 && port === null; i++) { try { const line = readFileSync(`${profile}/DevToolsActivePort`, 'utf8').split('\n')[0].trim(); if (/^\d+$/.test(line)) port = Number(line); } catch { /* not written yet */ } if (port === null) await sleep(100); }
+  for (let i = 0; i < 200 && port === null; i++) { if (launchError) fail('browser-launch', `${headlessBrowser.executable} failed to launch: ${String(launchError?.message || launchError)}`); try { const line = readFileSync(`${profile}/DevToolsActivePort`, 'utf8').split('\n')[0].trim(); if (/^\d+$/.test(line)) port = Number(line); } catch { /* not written yet */ } if (port === null) await sleep(100); }
   if (port === null) fail('browser-launch', `the spawned browser (pid ${chrome.pid}) never published DevToolsActivePort in ${profile}`);
-  let pages = null; for (let i = 0; i < 100 && !pages; i++) { try { pages = await (await fetch(`http://127.0.0.1:${port}/json`)).json(); } catch { await sleep(100); } }
+  // Discovery waits for a page target, not just for /json to answer: a browser
+  // that has not opened its first page lists none yet.
+  let pages = null; let page = null;
+  for (let i = 0; i < 100 && !page; i++) {
+    try { pages = await (await fetch(`http://127.0.0.1:${port}/json`, { signal: AbortSignal.timeout(callTimeoutMs) })).json(); } catch { pages = null; }
+    page = pages?.find(p => p.type === 'page');
+    if (!page) await sleep(100);
+  }
   if (!pages) fail('browser-launch', `devtools endpoint on port ${port} (pid ${chrome.pid}) never answered`);
-  const page = pages.find(p => p.type === 'page'); ws = new WebSocket(page.webSocketDebuggerUrl);
-  report.browser = { pid: chrome.pid, port, profile, devtoolsUrl: page.webSocketDebuggerUrl };
+  if (!page) fail('browser-launch', `devtools endpoint on port ${port} (pid ${chrome.pid}) never listed a page target (${pages.length} targets: ${pages.map(p => p.type).join(',') || 'none'})`);
+  // The version is read before the socket is opened: an await between
+  // constructing the socket and attaching the open listener can miss the open
+  // event and wait forever (which is what happened at 5ec49992).
+  // Optional metadata, bounded like every other launch wait: a pending response
+  // or body is abandoned at --call-timeout-ms and the version recorded as
+  // unavailable, never a stall before the socket timeout starts.
+  let browserVersion = null; let versionUnavailable = null;
+  try { browserVersion = (await (await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(callTimeoutMs) })).json())?.Browser ?? null; }
+  catch (error) { versionUnavailable = `${String(error?.message || error)} (read bounded by --call-timeout-ms ${callTimeoutMs})`; }
+  report.browser = { executable: headlessBrowser.executable, resolvedExecutable: headlessBrowser.resolvedExecutable, executableSource: headlessBrowser.source, version: browserVersion, versionUnavailable, pid: chrome.pid, port, profile, devtoolsUrl: page.webSocketDebuggerUrl };
   writeReport();
-  await new Promise(res => ws.addEventListener('open', res, { once: true }));
+  ws = new WebSocket(page.webSocketDebuggerUrl);
+  await new Promise((res, rej) => { const timer = setTimeout(() => rej(new PhaseFailure('browser-launch', `devtools socket did not open within ${callTimeoutMs} ms (--call-timeout-ms)`)), callTimeoutMs); ws.addEventListener('open', () => { clearTimeout(timer); res(); }, { once: true }); ws.addEventListener('error', () => { clearTimeout(timer); rej(new PhaseFailure('browser-launch', 'devtools socket error before open')); }, { once: true }); });
   let id = 0; const pending = new Map();
   const callTimeout = (ms, label) => new Error(`${label} after ${ms} ms (--call-timeout-ms)`);
   ws.addEventListener('message', ev => { const m = JSON.parse(ev.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); return; } if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map(a => a.value ?? a.description ?? '').join(' ').slice(0, 300)); if (m.method === 'Runtime.exceptionThrown') errors.push('exception: ' + (m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text).slice(0, 300)); });
   const call = (method, params = {}) => new Promise((res, rej) => { const myId = ++id; pending.set(myId, res); setTimeout(() => { pending.delete(myId); rej(callTimeout(callTimeoutMs, 'timeout ' + method)); }, callTimeoutMs); ws.send(JSON.stringify({ id: myId, method, params })); });
   const evaluate = async expr => { const r = await call('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description || 'evaluate failed'); return r.result?.result?.value; };
   const op = body => `(() => { const f = document.querySelector('#basin'); const w = f?.contentWindow || window; const d = w.document; return (${body}); })()`;
-  const stateExpr = op(`(() => { const s = w.__kaminosVolumePrototype?.debugState?.(); if (!s) return null; return { backend: s.backend, error: s.error, simStepCount: s.simStepCount, frameCount: s.frameCount, transport: s.transport?.effective ?? null, transportUniform: s.transport?.uniform ?? null, predictorPasses: s.transportPredictorPasses, predictorBufferBytes: s.transport?.predictorBufferBytes ?? null, predictorAllocated: s.transport?.predictorAllocated ?? null, confinement: s.confinement?.effective ?? null, confinementUniform: s.confinement?.uniform ?? null, timeStep: s.timeStep?.effective ?? null, timeStepEmitter: s.timeStep?.emitterPacked ?? null, confinementOverride: s.confinement?.confinementEpsilonOverride ?? null, vorticity: s.pressureSolver?.residual?.vorticity ?? null, heightProfile: s.pressureSolver?.residual?.profile ?? null, breakdownTotal: s.fullGridPassBreakdown?.total, residual: s.pressureSolver?.residual ? { step: s.pressureSolver.residual.step, compactBefore: s.pressureSolver.residual.compact.before, compactAfter: s.pressureSolver.residual.compact.after } : null, solver: s.pressureSolver?.effective ?? null, forces: { fine: d.getElementById('volume-force-fine-breakup')?.checked, shred: d.getElementById('volume-force-interface-shred')?.checked, micro: d.getElementById('volume-force-micro-carrier')?.checked }, schemeDom: d.getElementById('volume-advection-scheme')?.value, schemeLabel: d.getElementById('volume-advection-scheme-val')?.textContent, commonLabel: d.getElementById('volume-common-gas-transport-val')?.textContent, projection: d.getElementById('volume-projection')?.value }; })()`);
+  const stateExpr = op(`(() => { const s = w.__kaminosVolumePrototype?.debugState?.(); if (!s) return null; return { backend: s.backend, error: s.error, simStepCount: s.simStepCount, frameCount: s.frameCount, transport: s.transport?.effective ?? null, transportUniform: s.transport?.uniform ?? null, predictorPasses: s.transportPredictorPasses, predictorBufferBytes: s.transport?.predictorBufferBytes ?? null, predictorAllocated: s.transport?.predictorAllocated ?? null, confinement: s.confinement?.effective ?? null, confinementUniform: s.confinement?.uniform ?? null, timeStep: s.timeStep?.effective ?? null, timeStepEmitter: s.timeStep?.emitterPacked ?? null, inflowBoundary: s.inflowBoundary ?? null, heatRelease: s.heatRelease ?? null, velocityStaggering: s.velocityStaggering ?? null, emitterSourceLaw: s.analyticEmitterSourceLaw ?? null, wind: s.wind ?? null, confinementOverride: s.confinement?.confinementEpsilonOverride ?? null, vorticity: s.pressureSolver?.residual?.vorticity ?? null, heightProfile: s.pressureSolver?.residual?.profile ?? null, breakdownTotal: s.fullGridPassBreakdown?.total, residual: s.pressureSolver?.residual ? { step: s.pressureSolver.residual.step, compactBefore: s.pressureSolver.residual.compact.before, compactAfter: s.pressureSolver.residual.compact.after, residualMeasurement: s.pressureSolver.residual.measurement ?? null, heatCentroidCells: s.pressureSolver.residual.profile?.heatCentroidCells ?? null, smokeCentroidCells: s.pressureSolver.residual.profile?.smokeCentroidCells ?? null, heatMean: s.pressureSolver.residual.profile?.heatMean ?? null } : null, solver: s.pressureSolver?.effective ?? null, forces: { fine: d.getElementById('volume-force-fine-breakup')?.checked, shred: d.getElementById('volume-force-interface-shred')?.checked, micro: d.getElementById('volume-force-micro-carrier')?.checked }, schemeDom: d.getElementById('volume-advection-scheme')?.value, schemeLabel: d.getElementById('volume-advection-scheme-val')?.textContent, commonLabel: d.getElementById('volume-common-gas-transport-val')?.textContent, projection: d.getElementById('volume-projection')?.value }; })()`);
   const setControl = (cid, value) => evaluate(op(`(() => { const e = d.getElementById(${JSON.stringify(cid)}); if (!e) throw new Error('missing ' + ${JSON.stringify(cid)}); if (e.type === 'checkbox') { e.checked = ${JSON.stringify(value)} === 'true'; } else { e.value = ${JSON.stringify(value)}; } e.dispatchEvent(new w.Event('input', { bubbles: true })); e.dispatchEvent(new w.Event('change', { bubbles: true })); return e.type === 'checkbox' ? String(e.checked) : e.value; })()`));
   await call('Page.enable'); await call('Runtime.enable'); await call('Log.enable'); await call('Page.navigate', { url });
 
@@ -207,6 +194,27 @@ try {
         if (applied_ !== (value === 'null' ? 'null' : String(Number(value)))) { report.lastTrustworthyEvidence.applied = applied; fail(report.failurePhase, `${cid} requested ${value} but the receipt holds ${JSON.stringify(applied_)}`); }
         continue;
       }
+      if (cid === '@savePreset') {
+        // Save the arm's current controls as a basin through the cockpit's own
+        // Save button: the cockpit builds the authoritative payload and the
+        // server content-addresses it. The cockpit's status line is the receipt
+        // (`<label> | <vsp-id> | …`); no id, or its failure text, fails the arm.
+        const label = String(value || '').trim();
+        if (!label) fail(report.failurePhase, '@savePreset needs a label');
+        await evaluate(op(`(() => { const i = d.getElementById('settings-preset-label'); i.value = ${JSON.stringify(label)}; i.dispatchEvent(new Event('input', { bubbles: true })); d.getElementById('settings-preset-save').click(); return true; })()`));
+        let status = '';
+        for (let i = 0; i < 100; i++) {
+          status = String(await evaluate(op(`d.getElementById('volume-settings-preset-state')?.textContent || ''`)));
+          if (status.startsWith(`${label} | vsp-`) || /PRESET SAVE FAILED/.test(status)) break;
+          await sleep(200);
+        }
+        if (/PRESET SAVE FAILED/.test(status)) fail(report.failurePhase, `@savePreset ${value}: ${status}`);
+        const presetId = (status.match(/\|\s*(vsp-[0-9a-f]{64})/) || [])[1] || null;
+        if (!presetId) fail(report.failurePhase, `@savePreset ${value} did not produce a saved preset id (status: ${JSON.stringify(status)})`);
+        (arm.presetSaves ||= []).push({ label, presetId, status });
+        applied.push([cid, value, presetId]);
+        continue;
+      }
       if (cid.startsWith('@')) fail(report.failurePhase, `unknown debug-API control ${cid}`);
       if (cid === 'volume-confinement') expectedMode = value;
       const domValue = await setControl(cid, value);
@@ -224,14 +232,14 @@ try {
       await sleep(Math.min(2000, Math.max(50, settleMs - (Date.now() - t0))));
       const probe = await evaluate(stateExpr);
       if (!probe) break;
-      samples.push({ tMs: Date.now() - t0, simStepCount: probe.simStepCount, residualStep: probe.residual?.step ?? null, enstrophyMean: probe.vorticity?.enstrophyMean ?? null, vorticityMax: probe.vorticity?.maxAbs ?? null, compactAfterMeanAbs: probe.residual?.compactAfter?.meanAbs ?? null, error: probe.error ?? null });
+      samples.push({ tMs: Date.now() - t0, simStepCount: probe.simStepCount, residualStep: probe.residual?.step ?? null, enstrophyMean: probe.vorticity?.enstrophyMean ?? null, vorticityMax: probe.vorticity?.maxAbs ?? null, compactAfterMeanAbs: probe.residual?.compactAfter?.meanAbs ?? null, heatCentroidCells: probe.residual?.heatCentroidCells ?? null, heatMean: probe.residual?.heatMean ?? null, error: probe.error ?? null });
       if (settleSteps !== null && probe.simStepCount - s0 >= settleSteps) { settledBySteps = true; break; }
     }
     if (settleSteps !== null && !settledBySteps) fail(report.failurePhase, `arm ${arm.name} did not reach ${settleSteps} settle steps within the ${settleMs} ms wall cap`);
     let end = await evaluate(stateExpr);
     if (!end) fail(report.failurePhase, 'renderer state unavailable after settle');
     if (fault === 'arm-error' && report.arms.length === 0) end = { ...end, error: 'synthetic-fault:arm-error' };
-    const entry = { arm: arm.name, set: arm.set, applied, afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
+    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
     report.arms.push(entry);
     report.lastTrustworthyEvidence.lastArm = arm.name;
     writeReport();
@@ -241,7 +249,7 @@ try {
     // after the switch; `stale-residual` makes that impossible to prove the check.
     const freshnessFloor = fault === 'stale-residual' ? Number.POSITIVE_INFINITY : s0;
     if (!(end.residual?.step > freshnessFloor)) fail(report.failurePhase, `stale residual: probe step ${end.residual?.step ?? 'none'} is not newer than the required floor ${freshnessFloor} (arm switch at step ${s0}${fault === 'stale-residual' ? ', fault stale-residual' : ''}); the arm's enstrophy is not its own measurement`);
-    const mismatches = effectiveMismatches(arm, end, expectedMode);
+    const mismatches = effectiveMismatches(arm, end, expectedMode, fault);
     if (mismatches.length) fail(report.failurePhase, `effective state does not match arm ${arm.name}: ${mismatches.join('; ')}`);
     report.failurePhase = `arm-${arm.name}-capture`;
     const shot = await call('Page.captureScreenshot', { format: 'png' });

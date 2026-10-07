@@ -47,7 +47,8 @@ export function forwardCompositionHash(target, sourceHash) {
   const forwarded = new URLSearchParams();
   for (const [key, value] of hash) {
     if (['authoring', 'scene', 'composition_module_url', 'volume_collision',
-      'volume_outer_smoke', 'volume_outer_grid', 'volume_outer_extent', 'volume_outer_pressure'].includes(key)
+      'volume_outer_smoke', 'volume_outer_grid', 'volume_outer_extent', 'volume_outer_pressure',
+      'rendering_source_xyz', 'rendering_source_gain', 'rendering_surface_gain', 'rendering_surface_scattering'].includes(key)
       || key.startsWith('volume_light_field')) forwarded.set(key, value);
   }
   url.hash = forwarded.toString();

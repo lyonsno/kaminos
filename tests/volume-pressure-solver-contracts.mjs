@@ -68,7 +68,7 @@ test('converged kernels exist and drop the legacy damping and material-weighted 
   const compact = wgslFunction('divergenceCompactAtCell');
   assert.match(compact, /compactFaceVelocity\(c, 0u\) - compactFaceVelocity\(c - vec3<i32>\(1, 0, 0\), 0u\)/, 'compact divergence is the backward face-flux difference per axis');
   const face = wgslFunction('compactFaceVelocity');
-  assert.match(face, /if \(c\[axis\] < 0\) \{\s*return 0\.0;/, 'the ghost face below the first cell carries no flux');
+  assert.match(face, /if \(c\[axis\] < 0\) \{\s*if \(axis == 1u\) \{\s*return inflowFaceVelocity\(c\);\s*\}\s*return 0\.0;/, 'the ghost face below the first cell carries no flux, except the floor face inside an inflow aperture (emitter law inflow-boundary), which carries the prescribed inflow');
   assert.match(face, /axis == 1u && pressureSolverOpenTop\(\)/, 'only the open top lets the last cell\'s upper face carry flux');
   assert.match(project, /if \(c\.y >= i32\(GRID_Y\) - 1 && !pressureSolverOpenTop\(\)\)/, 'closed top zeroes the top-face flux of the tall domain in the corrected field');
   const neighbor = wgslFunction('pressureNeighborInPlace');

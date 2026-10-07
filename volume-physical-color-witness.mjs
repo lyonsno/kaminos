@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { assertArmEquivalent } from './volume-physical-color-witness-contract.mjs';
+import { assertArmEquivalent, assertSceneSourceCapture, assertSharedSceneConsumers, assertWitnessCamera } from './volume-physical-color-witness-contract.mjs';
+import { integrateSceneMediumSegment } from './scene-volume-source.mjs';
 const [url, output, expectedRoot, expectedCommit, armsPath] = process.argv.slice(2);
 assert.ok(output, 'usage: URL OUT_DIR REPO_ROOT COMMIT');
 const out = resolve(output);
@@ -123,28 +124,98 @@ try {
         const input = document.getElementById(id); input.value = String(value); input.dispatchEvent(new Event('input', {bubbles:true}));
       }
       const core = window.__kaminosVolumePrototype;
-      const sample = await core.sampleFrame({advanceSim:false,includeRgba:true,now:${report.replay.finalTimeMs}});
-      if (!sample.ok || sample.simAdvanced || !sample.image) throw new Error('native sample failed');
+      if (${Boolean(arm.camera)}) {
+        const pose=${JSON.stringify(arm.camera || null)};
+        window.__kaminosSetSceneCameraFrame(pose.position,pose.target);
+      }
+      if (${Boolean(arm.sharedSource)}) {
+        if (!window.__kaminosSceneRadiance) throw new Error('shared scene radiance not mounted: '+JSON.stringify(window.__kaminosSceneRadianceSetup));
+        window.__kaminosSceneRadiance.setSource(${JSON.stringify(arm.sharedSource || null)});
+      }
+      if (${arm.sourceProbe === true}) core.setSceneVolumeSourceEnabled(true);
+      const smokePresentation = ${typeof arm.smokePresentation === 'string'} ? core.setRaymarchSmokePresentationMode(${JSON.stringify(arm.smokePresentation || 'on')}) : null;
+      if (${Boolean(arm.mediumSource)}) core.setSceneMediumSource(${JSON.stringify(arm.mediumSource || null)});
+      let preparedSource = null;
+      if (${arm.sourceFrameProbe === true}) core.setSceneSourceFrameConsumer(field => {
+        preparedSource = {generation:field.source.generation,frame:field.source.frame,
+          mediumGeneration:field.medium.generation,simStepCount:field.simStepCount};
+      });
+      const sample = await core.sampleFrame({advanceSim:false,includeRgba:true,presentToCanvas:${Boolean(arm.sharedSource)},now:${report.replay.finalTimeMs}});
+      if (!sample.ok || sample.simAdvanced || !sample.image) throw new Error('native sample failed: '+JSON.stringify({sample,shared:window.__kaminosSceneRadiance?.debugState()}));
       const {width,height,rgba} = sample.image;
       if (rgba.length !== width*height*4) throw new Error('partial RGBA');
       const image = document.createElement('canvas'); image.width=width; image.height=height;
       image.getContext('2d').putImageData(new ImageData(Uint8ClampedArray.from(rgba),width,height),0,0);
       const profile = ${arm.profile === true && arm.mode === 2} ? await core.sampleEmissiveLightProfile() : null;
       if (profile && !profile.ok) throw new Error('native timing failed: '+profile.reason);
-      return {sample, profile, state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
+      const source = ${arm.sourceProbe === true} ? await core.sampleSceneVolumeSource() : null;
+      const optical = ${Boolean(arm.mediumSource)} ? await core.sampleSceneMediumOpticalDepth() : null;
+      return {sample, source, optical, profile, smokePresentation, preparedSource,
+        shared:${Boolean(arm.sharedSource)}?window.__kaminosSceneRadiance.debugState():null,
+        camera:window.kaminosCameraDebugState(),state:core.debugState(), png:image.toDataURL('image/png').split(',')[1]};
     })()`);
     assert.equal(result.state.simStepCount, 160, 'color edit advanced/reset fluid');
+    if(arm.camera) assertWitnessCamera(arm.camera,result.camera);
     assert.equal(result.state.physicalColor.effective, arm.mode === 2 ? 'emissive-transport-v2' : arm.mode ? 'thermal-reaction-v1' : 'legacy');
     assert.equal(result.state.physicalColor.exposureEV, arm.ev);
     assert.equal(result.state.physicalColor.temperature, arm.temperature);
     assert.ok(result.sample.litPixels > 0, 'blank native frame');
+    if (arm.sharedSource) {
+      assertSharedSceneConsumers(result.shared,160);
+      const screenshot = await call('Page.captureScreenshot',{format:'png'});
+      writeFileSync(join(out,`${arm.id}-scene.png`),Buffer.from(screenshot.data,'base64'));
+    }
+    if (arm.smokePresentation) {
+      assert.equal(result.smokePresentation?.effectiveMode, arm.smokePresentation, 'smoke presentation request did not take effect');
+      assert.equal(result.smokePresentation?.fallbackReason, null, 'smoke presentation fell back');
+    }
+    if (arm.sourceProbe) {
+      const source = result.source;
+      assertSceneSourceCapture(source,result.state.frameCount);
+      if (arm.sourceFrameProbe) {
+        assert.equal(result.preparedSource?.generation, source.generation, 'host received a different source generation');
+        assert.equal(result.preparedSource?.frame, source.frame, 'host received a different source frame');
+        assert.equal(result.preparedSource?.simStepCount, result.state.simStepCount);
+        assert.equal(result.state.ordinarySceneDepth?.effective, true, 'actual host scene-depth render missing');
+        if (arm.mediumSource) assert.equal(result.preparedSource?.mediumGeneration, source.generation);
+      }
+      const raw = Buffer.from(new Float32Array(source.values).buffer);
+      if (arm.sourceEquals) assert.deepEqual(raw, readFileSync(join(out, `${arm.sourceEquals}.source.f32`)), 'display edit changed physical source');
+      writeFileSync(join(out, `${arm.id}.source.f32`), raw);
+      report.sourceCaptures ||= [];
+      report.sourceCaptures.push({arm: arm.id, frame: source.frame, sourceIndex: source.sourceIndex,
+        generation: source.generation, dimensions: source.dimensions, path: `${arm.id}.source.f32`});
+      if (arm.mediumSource) {
+        const optical = result.optical;
+        // Preserve complete native output before judging selected rays.
+        assert.equal(optical?.values?.length, source.values.length/4, 'partial optical depth');
+        writeFileSync(join(out,`${arm.id}.tau.f32`),Buffer.from(new Float32Array(optical.values).buffer));
+        assert.equal(optical.generation,source.generation,'stale medium generation');
+        assert.equal(optical.frame,source.frame,'stale medium frame');
+        assert.ok(optical.values.every(v=>Number.isFinite(v)&&v>=0),'invalid optical depth');
+        const anchors=[], dims=source.dimensions, pitch=2/dims[0];
+        for (const z of [0,Math.floor(dims[2]/2),dims[2]-1]) for (const y of [0,Math.floor(dims[1]/2),dims[1]-1]) for (const x of [0,Math.floor(dims[0]/2),dims[0]-1]) {
+          const receiver=[x,y,z].map(c=>-1+(c+.5)*pitch);
+          const expected=integrateSceneMediumSegment(source,arm.mediumSource.position,receiver,arm.mediumSource.stepLength);
+          const actual=optical.values[x+dims[0]*(y+dims[1]*z)];
+          anchors.push({cell:[x,y,z],expected,actual,error:Math.abs(actual-expected)});
+        }
+        report.mediumCaptures ||= [];
+        report.mediumCaptures.push({arm:arm.id,sourcePosition:optical.sourcePosition,stepLength:optical.stepLength,anchors,path:`${arm.id}.tau.f32`}); save();
+        assert.ok(anchors.every(a=>a.error<=1e-4*Math.max(1,a.expected)),'native medium segments differ from CPU reference');
+      }
+    }
     writeFileSync(join(out, `${arm.id}.png`), Buffer.from(result.png, 'base64'));
     writeFileSync(join(out, `${arm.id}.rgba`), Buffer.from(result.sample.image.rgba));
     const rgba = Buffer.from(result.sample.image.rgba);
     assertArmEquivalent(arm,rgba,earlierRgba);
     earlierRgba.set(arm.id,rgba);
     const {image, ...sample} = result.sample;
-    report.captures.push({arm, sample, profile:result.profile, state:result.state, image:{width:image.width,height:image.height,path:`${arm.id}.png`}});
+    report.captures.push({arm, sample, profile:result.profile, state:result.state,
+      preparedSource:result.preparedSource, smokePresentation:result.smokePresentation,
+      shared:result.shared,
+      camera:result.camera,
+      image:{width:image.width,height:image.height,path:`${arm.id}.png`}});
   }
   const screenshot = await call('Page.captureScreenshot', {format:'png'});
   writeFileSync(join(out, 'cockpit.png'), Buffer.from(screenshot.data, 'base64'));

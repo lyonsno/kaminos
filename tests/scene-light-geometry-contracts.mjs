@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import * as THREE from '../lib/three.webgpu.js';
+import { collectStaticSceneGeometry, staticSceneGeometryRevision } from '../scene-light-geometry.mjs';
+
+const scene = new THREE.Scene();
+const geometry = new THREE.BufferGeometry();
+geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0xffffff }));
+mesh.position.set(2, 3, 4);
+mesh.castShadow = true;
+scene.add(mesh);
+
+const first = collectStaticSceneGeometry(scene);
+assert.equal(first.triangles.length, 1);
+assert.deepEqual(first.triangles[0].a, [2, 3, 4]);
+assert.deepEqual(first.triangles[0].b, [3, 3, 4]);
+assert.deepEqual(first.triangles[0].c, [2, 4, 4]);
+assert.equal(first.triangles[0].identity, `${mesh.uuid}:0`);
+assert.equal(first.surfaces?.length, 1, 'the static triangles also expose their surface samples');
+assert.ok(Math.abs(first.surfaces[0].position[0] - (2 + 1 / 3)) < 1e-12);
+assert.ok(Math.abs(first.surfaces[0].position[1] - (3 + 1 / 3)) < 1e-12);
+assert.equal(first.surfaces[0].position[2], 4);
+assert.deepEqual(first.surfaces[0].normal, [0, 0, 1]);
+assert.equal(first.surfaces[0].area, 0.5);
+assert.deepEqual(first.surfaces[0].albedo, [1, 1, 1]);
+assert.equal(first.revision, collectStaticSceneGeometry(scene).revision, 'unchanged geometry reuses its revision');
+assert.equal(staticSceneGeometryRevision(scene), first.revision, 'cheap revision agrees with full collection');
+
+mesh.position.x = 7;
+assert.notEqual(collectStaticSceneGeometry(scene).revision, first.revision, 'transform change invalidates geometry');
+assert.notEqual(staticSceneGeometryRevision(scene), first.revision, 'revision check need not recollect vertices');
+mesh.position.x = 2;
+mesh.visible = false;
+assert.equal(collectStaticSceneGeometry(scene).triangles.length, 0, 'hidden caster leaves transfer');
+mesh.visible = true;
+mesh.morphTargetInfluences = [0];
+assert.throws(() => collectStaticSceneGeometry(scene), /morph/i, 'morph caster cannot enter static cache');
+mesh.morphTargetInfluences = undefined;
+mesh.material.transparent = true;
+assert.throws(() => collectStaticSceneGeometry(scene), /transparent/i, 'transparent caster needs another visibility law');
+console.log('scene light geometry contracts passed');

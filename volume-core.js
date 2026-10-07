@@ -1,4 +1,6 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
+import { buildInflowCoverageMap, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
+import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
 import {
   detailForceContributionMask,
   detailForceContributionReceipt,
@@ -9,6 +11,10 @@ import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { outerSmokeConfig, createOuterSmoke, validateOuterSmokeDevice, OUTER_SMOKE_OPTICS_WGSL } from './volume-outer-smoke.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid } from './volume-scene-solid.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
+import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
+import { SCENE_POINT_SMOKE_WGSL, createScenePointBindings } from './scene-point-light.mjs';
+import { DISTRIBUTED_SMOKE_WGSL } from './scene-volume-gather.mjs';
+import { createDistributedSmokeBindings } from './scene-smoke-reconstruction.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
   LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
@@ -1545,7 +1551,46 @@ export const PRESSURE_RESIDUAL_PROBE_FRESHNESS_FRAMES = 120;
 export const PRESSURE_RESIDUAL_MAP_TIMEOUT_MS = 5000;
 const PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR = 'pressure-residual-map-timeout';
 // Four vec4 partials per workgroup: compact divergence, wide divergence, vorticity (enstrophy sum, max |omega|), height profile (sum vertical velocity, heat, smoke).
-export const PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP = 16;
+export const PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP = 20;
+
+// Pure fold of the probe's per-workgroup partials into the height profile.
+// Workgroups are 4x4x4 cells, so each slab is four cell rows across the whole
+// x-z plane; the fifth partial carries the lateral first moments of heat and
+// smoke, which give a per-slab centroid in cells relative to the grid centre.
+// A slab without material reports null, never zero: zero would read as centred.
+export function residualProfileFromPartials(partials, { grid, workgroupsX, workgroupsY, workgroupCount }) {
+  const slabCells = grid * grid * 4;
+  const centre = (grid - 1) / 2;
+  const zero = () => new Array(workgroupsY).fill(0);
+  const vertical = zero(), heat = zero(), smoke = zero(), hot = zero(), heatX = zero(), heatZ = zero(), smokeX = zero(), smokeZ = zero();
+  for (let i = 0; i < workgroupCount; i += 1) {
+    const at = i * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP;
+    const slab = Math.floor(i / workgroupsX) % workgroupsY;
+    vertical[slab] += partials[at + 12];
+    heat[slab] += partials[at + 13];
+    smoke[slab] += partials[at + 14];
+    hot[slab] += partials[at + 15];
+    heatX[slab] += partials[at + 16];
+    heatZ[slab] += partials[at + 17];
+    smokeX[slab] += partials[at + 18];
+    smokeZ[slab] += partials[at + 19];
+  }
+  const centroid = (mass, mx, mz) => mass.map((m, slab) => (m > 1e-9 ? [mx[slab] / m - centre, mz[slab] / m - centre] : null));
+  return {
+    identity: 'height-profile-before-projection-v1',
+    slabRows: 4,
+    slabs: workgroupsY,
+    verticalVelocityMean: vertical.map(sum => sum / slabCells),
+    heatMean: heat.map(sum => sum / slabCells),
+    smokeMean: smoke.map(sum => sum / slabCells),
+    // Heat-weighted mean vertical velocity per slab: the hot gas's own rise speed.
+    hotVerticalVelocityMean: hot.map((sum, slab) => (heat[slab] > 1e-9 ? sum / heat[slab] : 0)),
+    // Where the hot gas and the smoke sit in the x-z plane, per slab, in cells
+    // from the grid centre: a plume that leans shows a centroid that walks with height.
+    heatCentroidCells: centroid(heat, heatX, heatZ),
+    smokeCentroidCells: centroid(smoke, smokeX, smokeZ),
+  };
+}
 const PRESSURE_SOLVER_VALUES = Object.freeze([PRESSURE_SOLVER_LEGACY, PRESSURE_SOLVER_CONVERGED, PRESSURE_SOLVER_CONVERGED_OPEN_TOP]);
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
@@ -1730,7 +1775,10 @@ const ANALYTIC_EMITTER_FAMILY_MODE = Object.freeze({
 const ANALYTIC_EMITTER_SOURCE_LAW_MODE = Object.freeze({
   'legacy-volume': 0,
   'shallow-primary': 1,
+  'inflow-boundary': 2,
 });
+
+const ANALYTIC_EMITTER_INFLOW_APERTURE_KINDS = Object.freeze(['disc', 'annulus', 'rectangle']);
 
 const ANALYTIC_EMITTER_INLET_PROFILE_MODE = Object.freeze({
   plug: 0,
@@ -1759,6 +1807,36 @@ function orthonormalAnalyticEmitterSupportAxis(axis, value) {
   const length = Math.hypot(...perpendicular);
   if (length <= 1e-9) throw new Error('analytic emitter supportAxis must not be parallel to axis');
   return perpendicular.map(component => component / length);
+}
+
+// The inflow block of an inflow-boundary descriptor: the floor aperture and
+// the state the inflow carries. Clamped like every other descriptor field.
+function normalizeAnalyticEmitterInflow(inflow) {
+  if (!inflow || typeof inflow !== 'object' || Array.isArray(inflow)) {
+    throw new Error('inflow-boundary descriptor needs an inflow block');
+  }
+  const apertureKind = String(inflow.apertureKind || '');
+  if (!ANALYTIC_EMITTER_INFLOW_APERTURE_KINDS.includes(apertureKind)) {
+    throw new Error(`unsupported inflow aperture kind: ${apertureKind || 'missing'}`);
+  }
+  const center = Array.isArray(inflow.center) && inflow.center.length === 2 && inflow.center.every(component => Number.isFinite(Number(component)))
+    ? inflow.center.map(Number)
+    : null;
+  if (!center) throw new Error('inflow aperture center must be a finite [x, z]');
+  const side = Array.isArray(inflow.sideAxis) && inflow.sideAxis.length === 2 ? inflow.sideAxis.map(Number) : [1, 0];
+  const sideLength = Math.hypot(side[0], side[1]);
+  return {
+    apertureKind,
+    center,
+    ringRadius: clampFinite(inflow.ringRadius, 0, 0.95, 0),
+    bandHalfWidth: clampFinite(inflow.bandHalfWidth, 0.006, 0.5, 0.04),
+    halfLength: clampFinite(inflow.halfLength, 0, 0.95, 0),
+    sideAxis: Number.isFinite(sideLength) && sideLength > 1e-9 ? side.map(component => component / sideLength) : [1, 0],
+    inletVelocity: clampFinite(inflow.inletVelocity, 0, 1, 0.04),
+    fuelFraction: clampFinite(inflow.fuelFraction, 0, 1, 0.56),
+    inletTemperature: clampFinite(inflow.inletTemperature, 0, 2.4, 1.2),
+    linkIgnored: true,
+  };
 }
 
 function normalizeAnalyticEmitterDescriptor(descriptor) {
@@ -1810,6 +1888,14 @@ function normalizeAnalyticEmitterDescriptor(descriptor) {
       detail: clampFinite(chemistry.detail, 0, 3, 0),
     },
   };
+  if (sourceLaw === 'inflow-boundary') {
+    normalized.inflow = normalizeAnalyticEmitterInflow(descriptor.inflow);
+    // A prescribed inflow has no per-step increment to link: the face velocity
+    // is the requested inlet velocity.
+    normalized.effectiveInletVelocity = normalized.inletVelocity;
+  } else {
+    delete normalized.inflow;
+  }
   return normalized;
 }
 
@@ -1888,6 +1974,11 @@ export function analyticEmitterInjectionDispatch(descriptor, gridSize, gridHeigh
   };
   if (descriptor === null || descriptor === undefined) return inactive;
   const normalized = normalizeAnalyticEmitterDescriptor(descriptor);
+  if (normalized.sourceLaw === 'inflow-boundary') {
+    // A prescribed inflow is a boundary condition of the pressure solve and a
+    // ghost state for the backtrace; nothing is injected in the interior.
+    return { ...inactive, family: normalized.family, reason: 'inflow-boundary-has-no-interior-injection' };
+  }
   const cellWidth = 2 / grid;
   const edgeMargin = normalized.inletProfile === 'edge-entrained'
     ? normalized.shearWidthCells * cellWidth
@@ -1960,6 +2051,342 @@ export function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, 
   floats[27] = descriptor.shearWidthCells;
   words.set([...dispatch.cellMin, dispatch.grid], 28);
   words.set([...dispatch.cellExtent, 0], 32);
+}
+
+// Inflow boundary (emitter source law inflow-boundary). The emitter's footprint
+// is an aperture on the floor face carrying a prescribed inflow velocity: the
+// converged solve reads it as the flux through the ghost face below the first
+// cell layer, and the backtrace reads the inflow state from a ghost cell below
+// the floor. It needs the converged open-top solver: a closed box with a net
+// inflow has no divergence-free solution.
+export const INFLOW_BOUNDARY_IDENTITY = 'kaminos.volume.inflow-boundary.v1';
+export const INFLOW_APERTURE_KIND_MODE = Object.freeze({ off: 0, disc: 1, annulus: 2, rectangle: 3 });
+export const INFLOW_UNIFORM_OFFSET = PHYSICAL_COLOR_UNIFORM_FLOATS;
+export const INFLOW_UNIFORM_FLOATS = 12;
+// Heat-release expansion: one vec4 after the inflow block; .x the expansion
+// gain when admitted (0 refuses, so the legacy solve never sees a source).
+export const HEAT_RELEASE_UNIFORM_OFFSET = INFLOW_UNIFORM_OFFSET + INFLOW_UNIFORM_FLOATS;
+export const HEAT_RELEASE_UNIFORM_FLOATS = 4;
+export const VELOCITY_STAGGERING_UNIFORM_OFFSET = HEAT_RELEASE_UNIFORM_OFFSET + HEAT_RELEASE_UNIFORM_FLOATS;
+export const VELOCITY_STAGGERING_UNIFORM_FLOATS = 4;
+export const VOLUME_UNIFORM_FLOATS = VELOCITY_STAGGERING_UNIFORM_OFFSET + VELOCITY_STAGGERING_UNIFORM_FLOATS;
+
+// The aperture pattern (slice 2): which coverage pattern the floor map is built
+// from, its count / ratio / seed, and the swirl (tangential fraction of the
+// inflow velocity). Defaults reproduce the family's own shape with no swirl.
+export function resolveInflowAperturePattern(controls = {}) {
+  const requested = String(controls.emitterAperturePattern ?? 'shape');
+  // A retired pattern (concentric, spiral) is kept as the requested kind so the
+  // coverage map can name the fallback; anything unknown is the family shape.
+  const kind = INFLOW_APERTURE_PATTERNS.includes(requested) || INFLOW_APERTURE_RETIRED_PATTERNS.includes(requested) ? requested : 'shape';
+  return {
+    kind,
+    count: Math.round(clampFinite(controls.emitterApertureCount, 1, 64, 12)),
+    ratio: clampFinite(controls.emitterApertureRatio, 0, 1, 0.6),
+    seed: Math.round(clampFinite(controls.emitterApertureSeed, 0, 9999, 1)),
+    lineWeight: clampFinite(controls.emitterLineWeight, 0.25, 3, 1),
+    jetJitter: clampFinite(controls.emitterJetJitter, 0, 1, 0),
+  };
+}
+
+export function resolveInflowBoundaryConfig(controls = {}, descriptor = null, options = {}) {
+  const grid = normalizeGridSize(options.grid ?? 64);
+  const pressure = resolvePressureSolverConfig(controls).effective;
+  const sourceLaw = descriptor ? String(descriptor.sourceLaw ?? 'legacy-volume') : null;
+  const pattern = resolveInflowAperturePattern(controls);
+  const swirl = clampFinite(controls.emitterSwirl, -1, 1, 0);
+  // Puffing and inlet turbulence: properties of the prescribed inflow, resolved
+  // from the controls and the step-locked signals the caller sampled.
+  const inletDynamics = resolveInletDynamicsConfig(controls, options.inletSignals ?? {}).effective;
+  const requested = { sourceLaw, family: descriptor?.family ?? null, pressureSolver: pressure.solver, openTop: pressure.openTop, pattern, swirl, inletDynamics: { turbulence: inletDynamics.turbulence, turbulenceScaleCells: inletDynamics.turbulenceScaleCells, puff: inletDynamics.puff, puffPeriod: inletDynamics.puffPeriod } };
+  const off = reason => ({
+    identity: INFLOW_BOUNDARY_IDENTITY,
+    requested,
+    effective: {
+      admitted: false, mode: 'off', grid, apertureKind: 'off', center: [0, 0], ringRadius: 0, bandHalfWidth: 0, halfLength: 0, sideAxis: [1, 0],
+      inletVelocity: 0, fuelFraction: 0, inletTemperature: 0, antialiasWidth: 2 / grid, projection: null,
+      pattern: { kind: 'shape', count: 12, ratio: 0.6, seed: 1, lineWeight: 1, jetJitter: 0 }, swirl: 0,
+      inletDynamics: { turbulence: 0, turbulenceScaleCells: inletDynamics.turbulenceScaleCells, turbulenceRms: 0, puff: 0, puffPeriod: inletDynamics.puffPeriod, puffSignal: 0, puffFactor: 1, active: false }, reason,
+    },
+  });
+  if (!descriptor) return off('no-analytic-emitter');
+  if (sourceLaw !== 'inflow-boundary') return off('source-law-is-not-inflow-boundary');
+  if (!descriptor.inflow) return off('inflow-block-missing');
+  if (pressure.solver !== PRESSURE_SOLVER_CONVERGED || !pressure.openTop) return off('inflow-boundary-requires-converged-open-top-pressure-solver');
+  // The solver name is not the solve: with the pressure dispatch disabled
+  // (iterations 0, projection 0) no projection would accommodate the flux.
+  if (pressure.dispatch !== PRESSURE_SOLVER_CONVERGED) return off(`inflow-boundary-requires-pressure-projection-dispatch:${pressure.disabledReason || 'disabled'}`);
+  const inflow = descriptor.inflow;
+  return {
+    identity: INFLOW_BOUNDARY_IDENTITY,
+    requested,
+    effective: {
+      admitted: true,
+      mode: 'inflow-boundary',
+      grid,
+      apertureKind: inflow.apertureKind,
+      center: [...inflow.center],
+      ringRadius: inflow.ringRadius,
+      bandHalfWidth: inflow.bandHalfWidth,
+      halfLength: inflow.halfLength,
+      sideAxis: [...inflow.sideAxis],
+      inletVelocity: inflow.inletVelocity,
+      fuelFraction: inflow.fuelFraction,
+      inletTemperature: inflow.inletTemperature,
+      antialiasWidth: 2 / grid,
+      // A partial projection gain leaves (1 - gain) of the divergence, inflow
+      // included; the receipt keeps that distinct from a fully corrected field.
+      projection: pressure.projection,
+      pattern,
+      swirl,
+      inletDynamics,
+      reason: null,
+    },
+  };
+}
+
+// The floor coverage map for an admitted inflow: the family's aperture geometry
+// drawn by the chosen pattern, one weight per floor cell, averaged over a 4 x 4
+// footprint. Built on the CPU and uploaded; the shader reads the weight.
+export function inflowCoverageMapForConfig(config, options = {}) {
+  const e = config?.effective;
+  if (!e || !e.admitted) return null;
+  return buildInflowCoverageMap({
+    grid: e.grid,
+    supersample: options.supersample ?? 4,
+    spec: {
+      kind: e.apertureKind,
+      pattern: e.pattern.kind,
+      lineWeight: e.pattern.lineWeight,
+      jetJitter: e.pattern.jetJitter,
+      center: e.center,
+      ringRadius: e.ringRadius,
+      bandHalfWidth: e.bandHalfWidth,
+      halfLength: e.halfLength,
+      sideAxis: e.sideAxis,
+      count: e.pattern.count,
+      ratio: e.pattern.ratio,
+      seed: e.pattern.seed,
+      antialias: e.antialiasWidth,
+    },
+  });
+}
+
+export function inflowCoverageSignatureFor(config) {
+  const e = config?.effective;
+  if (!e || !e.admitted) return '';
+  return JSON.stringify([e.grid, e.apertureKind, e.center, e.ringRadius, e.bandHalfWidth, e.halfLength, e.sideAxis, e.pattern, e.antialiasWidth]);
+}
+
+// CPU model of the shader's inflowGhostVelocity: the entering gas moves up at
+// the inflow velocity and, with swirl, around the aperture centre at swirl x
+// that velocity (tangent = (-z, x) of the offset from the centre).
+export function inflowGhostVelocityModel({ position, center = [0, 0], inletVelocity, swirl = 0 }) {
+  const q = [position[0] - center[0], position[1] - center[1]];
+  const length = Math.max(Math.hypot(q[0], q[1]), 1e-4);
+  const tangent = [-q[1] / length, q[0] / length];
+  return [inletVelocity * tangent[0] * swirl, inletVelocity, inletVelocity * tangent[1] * swirl];
+}
+
+// Wind model (slice 2). `steady` is the authored law: one constant strength and
+// angle. `gusty` drives the same two uniforms with a slow stochastic signal:
+// two Ornstein-Uhlenbeck processes (correlated noise with a correlation time
+// of `windGustPeriod` seconds of simulated time, 60 reference steps per second
+// scaled by the time step's dtScale), seeded and
+// advanced per simulation step, so a replay at the same seed and step count is
+// the same wind. Gusts are stochastic in nature; this is the standard
+// first-order model of their statistics. No periodic math, no per-cell noise,
+// and the shader is unchanged: strength = base x (1 + gust x s1), angle =
+// base + veer x s2.
+export const WIND_MODEL_IDENTITY = 'kaminos.volume.wind-model.v1';
+export const WIND_MODELS = Object.freeze(['steady', 'gusty']);
+export const WIND_GUST_STEPS_PER_SECOND = 60;
+// The shader clamps the wind strength uniform to this ceiling (predictor and
+// main kernel); the effective receipt never claims more than the shader uses.
+export const WIND_STRENGTH_CEILING = 1.5;
+// The gust correlation time in simulation steps: `windGustPeriod` seconds of
+// simulated time. Under the uniform time step each step advances dtScale of the
+// reference step, so a slow Speed takes proportionally more steps to
+// decorrelate and the gust keeps pace with the fluid, not with the frame rate.
+// The legacy time step has no dt scale (1).
+export function windGustTauSteps(controls = {}) {
+  const period = clampFinite(controls.windGustPeriod, 2, 30, 8);
+  const dtScale = resolveTimeStepConfig(controls).effective.dtScale;
+  return period * WIND_GUST_STEPS_PER_SECOND / Math.max(1e-3, Number.isFinite(dtScale) ? dtScale : 1);
+}
+export class WindGustProcess {
+  constructor(seed = 1) {
+    this.seed = Math.max(1, Math.floor(Number(seed) || 1)) >>> 0;
+    this.reset();
+  }
+  reset() {
+    this.rng = (this.seed * 2654435761 + 1013904223) >>> 0;
+    this.step = 0;
+    this.s1 = 0;
+    this.s2 = 0;
+  }
+  // xorshift32 → uniform, summed twelve times → an approximately normal draw
+  // with unit variance (Irwin–Hall), no transcendental functions.
+  gaussian() {
+    let sum = 0;
+    for (let i = 0; i < 12; i += 1) {
+      let x = this.rng;
+      x ^= x << 13; x >>>= 0;
+      x ^= x >>> 17;
+      x ^= x << 5; x >>>= 0;
+      this.rng = x;
+      sum += x / 4294967296;
+    }
+    return sum - 6;
+  }
+  // The two signals at a simulation step: advanced incrementally from the last
+  // sampled step; a step before the last restarts from the seed. Stationary
+  // standard deviation 0.45, clamped to [-1, 1]; `tauSteps` is the correlation
+  // time in steps.
+  sampleAt(step, tauSteps) {
+    const target = Math.max(0, Math.floor(Number(step) || 0));
+    const tau = Math.max(1, Number(tauSteps) || 1);
+    if (target < this.step) this.reset();
+    const decay = Math.exp(-1 / tau);
+    const kick = 0.45 * Math.sqrt(1 - decay * decay);
+    while (this.step < target) {
+      this.s1 = this.s1 * decay + kick * this.gaussian();
+      this.s2 = this.s2 * decay + kick * this.gaussian();
+      this.step += 1;
+    }
+    return { s1: Math.max(-1, Math.min(1, this.s1)), s2: Math.max(-1, Math.min(1, this.s2)), step: this.step };
+  }
+}
+export function resolveWindConfig(controls = {}, gustSignal = { s1: 0, s2: 0, step: 0 }) {
+  const requestedModel = String(controls.windModel ?? 'steady');
+  const model = WIND_MODELS.includes(requestedModel) ? requestedModel : 'steady';
+  const base = { strength: normalizeWindStrength(controls.windStrength), angleDeg: normalizeWindAngle(controls.windAngle), height: normalizeWindHeight(controls.windHeight) };
+  const gust = clampFinite(controls.windGust, 0, 1, 0.6);
+  const period = clampFinite(controls.windGustPeriod, 2, 30, 8);
+  const veer = clampFinite(controls.windGustVeer, 0, 60, 25);
+  if (model !== 'gusty') {
+    return { identity: WIND_MODEL_IDENTITY, requested: { model: requestedModel, ...base, gust, period, veer }, effective: { model: 'steady', ...base, unsaturatedStrength: base.strength, saturated: false, gust: 0, period, veer: 0, signal: [0, 0], step: null } };
+  }
+  const s1 = Number.isFinite(gustSignal?.s1) ? gustSignal.s1 : 0;
+  const s2 = Number.isFinite(gustSignal?.s2) ? gustSignal.s2 : 0;
+  const unsaturatedStrength = base.strength * Math.max(0, 1 + gust * s1);
+  return {
+    identity: WIND_MODEL_IDENTITY,
+    requested: { model: requestedModel, ...base, gust, period, veer },
+    effective: {
+      model: 'gusty',
+      strength: Math.min(WIND_STRENGTH_CEILING, unsaturatedStrength),
+      unsaturatedStrength,
+      saturated: unsaturatedStrength > WIND_STRENGTH_CEILING,
+      angleDeg: base.angleDeg + veer * s2,
+      height: base.height,
+      gust, period, veer,
+      signal: [s1, s2],
+      step: Number.isFinite(gustSignal?.step) ? gustSignal.step : null,
+    },
+  };
+}
+
+// CPU model of the shader's inflowGhostBlend, for the contract: below the first
+// cell centre the sample blends toward the ghost cell linearly over one cell,
+// but no deeper than the flux's own displacement in this step (v_in x backtrace
+// scale x dt), and only inside the aperture.
+export function inflowGhostBlendModel({ cellCenterY, inletVelocity, backtraceScale, timeStep = 1, apertureWeight = 1 }) {
+  const below = 0.5 - cellCenterY;
+  if (!(below > 0)) return 0;
+  // Covered flux: the fluid that crossed a partly covered face is pure inflow,
+  // and there is coverage-times less of it; coverage is not applied twice.
+  const penetration = Math.min(below, Math.max(0, inletVelocity) * Math.max(0, apertureWeight) * backtraceScale * timeStep);
+  return Math.min(1, Math.max(0, penetration));
+}
+
+// CPU model of the scalar entry into one floor cell in one step, on the
+// kernel rule: the face flux brings a fraction v_in x coverage x
+// backtraceScale x dt of the cell volume in as pure inflow (fuel at the fuel
+// fraction, heat at the inlet temperature), independent of the cell velocity
+// and of the scalar scheme: the mass accounting of an inflow face. `scheme` and
+// `cellVelocity` are accepted so the contract can state that neither changes
+// the entry; what the flux displaces is the transport's business. The live
+// arms remain the witness that the floor is fed on the GPU.
+export function inflowFloorCellEntryModel({ scheme = 'first-order', inletVelocity, coverage = 1, backtraceScale, timeStep = 1, fuelFraction, inletTemperature, cellVelocity = null }) {
+  void scheme; void cellVelocity;
+  const fraction = Math.min(1, Math.max(0, inletVelocity) * Math.max(0, Math.min(1, coverage)) * backtraceScale * timeStep);
+  return { fuel: fuelFraction * fraction, heat: inletTemperature * fraction, fraction };
+}
+
+// Three vec4: aperture (mode, centre x, centre z, ring radius), state (band
+// half-width, inlet velocity, fuel fraction, inlet temperature), shape (side
+// axis x, side axis z, half length, antialias width). A refused inflow packs
+// mode 0, which turns every inflow branch in the shader off.
+export function inflowBoundaryUniformValues(config) {
+  const e = config?.effective;
+  if (!e || !e.admitted) return new Array(INFLOW_UNIFORM_FLOATS).fill(0);
+  // The third vec4 carries the swirl (tangential fraction of the inflow
+  // velocity) and the antialias width; the shape itself lives in the coverage map.
+  // inflow_state.x is the puff factor (1 when steady); inflow_shape.y the inlet
+  // turbulence intensity (0 when off; the field itself is a floor texture).
+  return [
+    INFLOW_APERTURE_KIND_MODE[e.apertureKind] ?? 0, e.center[0], e.center[1], e.ringRadius,
+    e.inletDynamics.puffFactor, e.inletVelocity, e.fuelFraction, e.inletTemperature,
+    e.swirl, e.inletDynamics.turbulence, 0, e.antialiasWidth,
+  ];
+}
+
+// Heat-release expansion (slice 4 of the emitter rewrite): where fuel burns,
+// the converged solve is given a positive divergence target, gain x the fuel
+// consumption rate the reaction used, so the surrounding gas moves outward to
+// make room for the hot products. The open top absorbs the net volume, which
+// is why a closed top or a disabled dispatch refuses it. Opt-in: gain 0 is off.
+export const HEAT_RELEASE_IDENTITY = 'kaminos.volume.heat-release-expansion.v1';
+export function resolveHeatReleaseConfig(controls = {}) {
+  const expansion = clampFinite(controls.heatReleaseExpansion, 0, 3, 0);
+  const pressure = resolvePressureSolverConfig(controls).effective;
+  const requested = { expansion, pressureSolver: pressure.solver, openTop: pressure.openTop };
+  const off = reason => ({ identity: HEAT_RELEASE_IDENTITY, requested, effective: { admitted: false, expansion: 0, reason } });
+  if (!(expansion > 0)) return off('heat-release-expansion-is-zero');
+  if (pressure.solver !== PRESSURE_SOLVER_CONVERGED || !pressure.openTop) return off('heat-release-requires-converged-open-top-pressure-solver');
+  if (pressure.dispatch !== PRESSURE_SOLVER_CONVERGED) return off(`heat-release-requires-pressure-projection-dispatch:${pressure.disabledReason || 'disabled'}`);
+  return { identity: HEAT_RELEASE_IDENTITY, requested, effective: { admitted: true, expansion, reason: null } };
+}
+export const VELOCITY_STAGGERING_IDENTITY = 'kaminos.volume.velocity-staggering.v1';
+// Velocity staggering. The converged solve reads the stored velocity as the
+// upper face of each axis (compact backward divergence, forward gradient);
+// the transport read the same value as the cell centre, a half-cell shift
+// along +x and +z that leaned every plume toward -x -z. Staggered transport
+// reads it as faces everywhere. Opt-in; admitted only under the converged
+// solver, whose compact pair defines the face reading.
+export function resolveVelocityStaggeringConfig(controls = {}) {
+  const requestedMode = String(controls.velocityStaggering ?? 'collocated');
+  const pressure = resolvePressureSolverConfig(controls).effective;
+  const requested = { mode: requestedMode, pressureSolver: pressure.solver };
+  const off = reason => ({ identity: VELOCITY_STAGGERING_IDENTITY, requested, effective: { mode: 'collocated', admitted: false, reason } });
+  if (requestedMode !== 'staggered') return off('velocity-staggering-not-requested');
+  if (pressure.solver !== PRESSURE_SOLVER_CONVERGED) return off('velocity-staggering-requires-converged-pressure-solver');
+  return { identity: VELOCITY_STAGGERING_IDENTITY, requested, effective: { mode: 'staggered', admitted: true, reason: null } };
+}
+export function velocityStaggeringUniformValues(config) {
+  return [config?.effective?.admitted ? 1 : 0, 0, 0, 0];
+}
+export function heatReleaseUniformValues(config) {
+  const e = config?.effective;
+  return [e?.admitted ? e.expansion : 0, 0, 0, 0];
+}
+// What the pressure residual probe measures: once expansion is admitted the
+// converged solve targets S = gain × burn rate, so the compact operator's
+// residual is D(v) − S, not D(v). Carried on every readback so a reader never
+// has to infer it from the controls at the time.
+export function pressureResidualMeasurement(heatRelease) {
+  const e = heatRelease?.effective;
+  const admitted = e?.admitted === true;
+  const expansion = admitted && Number.isFinite(e.expansion) ? e.expansion : 0;
+  return {
+    compact: admitted ? 'divergence-minus-expansion-target' : 'divergence',
+    wide: 'legacy-central-divergence',
+    heatRelease: { admitted, expansion },
+    statement: admitted
+      ? `compact = |D(v) − S| on the compact operator, S = heat-release expansion target at gain ${expansion}; a converged solve drives D(v) to S, a partial projection to (1 − gain) × D(v_before) + gain × S`
+      : 'compact = |D(v)| on the compact operator; heat-release expansion off',
+  };
 }
 
 function normalizePyroDynamicDetailEnabled(value) {
@@ -2674,8 +3101,8 @@ override IRRADIANCE_GRID: u32 = 32u;
 override LEAN_STOCK_RAYMARCH: bool = false;
 const OUTER_SMOKE: bool = false;
 const OUTER_EXTENT: f32 = 4.0;
-@group(0) @binding(17) var outerSmokeOptical: texture_3d<f32>;
-@group(0) @binding(18) var outerSceneSolidCells: texture_3d<u32>;
+@group(0) @binding(20) var outerSmokeOptical: texture_3d<f32>;
+@group(0) @binding(21) var outerSceneSolidCells: texture_3d<u32>;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 
@@ -2756,6 +3183,17 @@ struct Uniforms {
   emissive_white_g: vec4<f32>,
   emissive_white_b: vec4<f32>,
   emissive_reserved: vec4<f32>,
+  // Inflow boundary (emitter source law inflow-boundary), packed from the emitter descriptor when admitted.
+  // .x aperture mode (0 off, 1 disc, 2 annulus, 3 rectangle); .y centre x; .z centre z; .w ring radius.
+  inflow_aperture: vec4<f32>,
+  // .x band half-width; .y inlet velocity (face flux, field units); .z fuel fraction; .w inlet temperature.
+  inflow_state: vec4<f32>,
+  // .x swirl (tangential fraction of the inflow velocity); .y, .z reserved; .w antialias width (one cell, volume units).
+  inflow_shape: vec4<f32>,
+  // Heat-release expansion: .x gain (0 off).
+  heat_release: vec4<f32>,
+  // Velocity staggering: .x 1 when the carried velocity is read as face values.
+  velocity_staggering: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -2803,6 +3241,18 @@ struct NonRidgeOpticalCaptureRow {
 @group(0) @binding(10) var<storage, read> boundarySidecar: array<vec4<f32>>;
 @group(0) @binding(13) var<storage, read> quenchSrc: array<u32>;
 @group(0) @binding(14) var<storage, read_write> quenchDst: array<u32>;
+// Inflow aperture coverage map: one weight per floor cell (texel x, z), built on the CPU.
+// A texture rather than a storage buffer: the compute stage's storage-buffer budget (10) is spent.
+@group(0) @binding(17) var inflowCoverage: texture_2d<f32>;
+// Inlet turbulence: one perturbation per floor cell in [-1, 1], a slow stochastic
+// field rewritten each step while the intensity is above zero.
+@group(0) @binding(18) var inflowPerturbation: texture_2d<f32>;
+// Fuel burn rate per cell this step (the reaction's own fuel consumption rate),
+// written by the main kernel and read by the pressure kernels as the heat
+// release expansion target. One read-write storage texture, no usage conflict.
+@group(0) @binding(19) var burnRate: texture_storage_3d<r32float, read_write>;
+// (It holds gain x rate, the expansion target; the pressure kernels bind the
+// fluid-front read layout, which carries no uniform.)
 @group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
 @group(0) @binding(12) var<storage, read_write> nonRidgeOpticalCaptureRows: array<f32>;
 // MacCormack predictor: the forward semi-Lagrangian estimate of every slot,
@@ -2828,6 +3278,10 @@ var<workgroup> pressureResidualVerticalVelocitySum: array<f32, 64>;
 var<workgroup> pressureResidualHeatSum: array<f32, 64>;
 var<workgroup> pressureResidualSmokeSum: array<f32, 64>;
 var<workgroup> pressureResidualHotVelocitySum: array<f32, 64>;
+var<workgroup> pressureResidualHeatXSum: array<f32, 64>;
+var<workgroup> pressureResidualHeatZSum: array<f32, 64>;
+var<workgroup> pressureResidualSmokeXSum: array<f32, 64>;
+var<workgroup> pressureResidualSmokeZSum: array<f32, 64>;
 @group(1) @binding(1) var<storage, read_write> irradianceDst: array<vec4<f32>>;
 @group(1) @binding(2) var<storage, read> irradianceSrc: array<vec4<f32>>;
 @group(1) @binding(3) var irradianceAtlasOut: texture_storage_2d<rgba16float, write>;
@@ -2932,6 +3386,93 @@ fn readQuenchField(c: vec3<i32>) -> f32 {
   return f32(quenchSrc[index3(clampCell(c))]) / 65536.0;
 }
 
+// Inflow boundary (emitter source law inflow-boundary). The emitter's footprint
+// is an aperture on the floor face (y = -1) carrying a prescribed inflow
+// velocity. The converged solve reads it as the flux through the ghost face
+// below the first cell layer (compactFaceVelocity), and the backtrace reads the
+// inflow state from a ghost cell below the floor (inflowGhostBlend), so
+// momentum, fuel and temperature all enter by transport: no interior
+// increment, no clamp, no birth floor. Mode 0 turns all of it off.
+// Aperture weight of one floor cell, read from the coverage map (the family's
+// shape drawn by the chosen pattern, averaged over the cell's footprint on the
+// CPU). Mode 0 turns the inflow off.
+fn inflowApertureWeight(cell: vec3<i32>) -> f32 {
+  if (u.inflow_aperture.x < 0.5) {
+    return 0.0;
+  }
+  return textureLoad(inflowCoverage, vec2<i32>(clamp(cell.x, 0, i32(GRID) - 1), clamp(cell.z, 0, i32(GRID) - 1)), 0).x;
+}
+
+// The inlet speed through a floor cell: the inlet velocity times the puff
+// factor, times one plus the turbulence intensity times the cell's
+// perturbation, never negative (a full negative puff closes the inlet). Every
+// inflow quantity, the face flux, the floor source, the ghost's reach and the
+// momentum it carries, derives from this one number so the converged solve,
+// the material entry and the velocity entry agree.
+fn inflowInletSpeed(cell: vec3<i32>) -> f32 {
+  var perturbation = 0.0;
+  if (u.inflow_shape.y > 0.0) {
+    perturbation = textureLoad(inflowPerturbation, vec2<i32>(clamp(cell.x, 0, i32(GRID) - 1), clamp(cell.z, 0, i32(GRID) - 1)), 0).x;
+  }
+  return u.inflow_state.y * u.inflow_state.x * max(0.0, 1.0 + u.inflow_shape.y * perturbation);
+}
+
+fn inflowFaceVelocity(cell: vec3<i32>) -> f32 {
+  return inflowInletSpeed(cell) * inflowApertureWeight(cell);
+}
+
+fn inflowFloorCellOf(cellCenter: vec3<f32>) -> vec3<i32> {
+  return vec3<i32>(i32(floor(clamp(cellCenter.x, 0.0, f32(GRID) - 1.0))), 0, i32(floor(clamp(cellCenter.z, 0.0, f32(GRID) - 1.0))));
+}
+
+// The state a ghost cell below the floor holds inside the aperture: the inflow
+// velocity straight up (density carried from the sample). The ghost carries
+// momentum only. Material does not enter by the backtrace (from rest the first
+// transport step would admit nothing, and a slower interior would starve the
+// entry); it enters as the face flux in the main kernel (inflowFraction), so
+// every other slot samples the domain.
+// The velocity the entering gas carries: the inflow velocity straight up and,
+// with swirl, swirl x that velocity around the aperture centre (the fire whirl).
+fn inflowGhostVelocity(cellCenter: vec3<f32>) -> vec3<f32> {
+  let p = vec2<f32>(cellCenter.x * (2.0 / f32(GRID)) - 1.0, cellCenter.z * (2.0 / f32(GRID)) - 1.0);
+  let q = p - u.inflow_aperture.yz;
+  let tangent = vec2<f32>(-q.y, q.x) / max(length(q), 1e-4);
+  let swirl = u.inflow_shape.x;
+  let floorCell = inflowFloorCellOf(cellCenter);
+  return inflowInletSpeed(floorCell) * vec3<f32>(tangent.x * swirl, 1.0, tangent.y * swirl);
+}
+
+fn inflowGhostState(slot: u32, sample: vec4<f32>, cellCenter: vec3<f32>) -> vec4<f32> {
+  if (slot == 0u) {
+    return vec4<f32>(inflowGhostVelocity(cellCenter), sample.w);
+  }
+  return sample;
+}
+
+// Below the first cell centre a sample interpolates toward the ghost cell
+// centred half a cell under the floor, only inside the aperture and only as
+// far as the prescribed flux reaches in one step.
+fn inflowGhostBlend(cellCenter: vec3<f32>) -> f32 {
+  if (u.inflow_aperture.x < 0.5) {
+    return 0.0;
+  }
+  let below = 0.5 - cellCenter.y;
+  if (below <= 0.0) {
+    return 0.0;
+  }
+  // The reservoir below the floor supplies only what the prescribed flux carries
+  // across the face in one step: penetration is capped by v_in x coverage x
+  // backtrace scale x dt (cells). Zero flux admits no ghost; a backtrace driven
+  // deeper by an existing upward interior velocity takes only the flux's worth.
+  // The flux through a partly covered floor cell is v_in x coverage; the fluid
+  // that crossed is pure inflow. So the covered flux sets how deep the ghost
+  // reaches and the ghost state is not scaled by coverage again.
+  let floorCell = inflowFloorCellOf(cellCenter);
+  let coverage = inflowApertureWeight(floorCell);
+  let penetration = min(below, inflowInletSpeed(floorCell) * coverage * dynamicsBacktraceScale());
+  return clamp(penetration, 0.0, 1.0);
+}
+
 fn sampleFrontField(cellCenter: vec3<f32>) -> f32 {
   let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
@@ -2998,6 +3539,16 @@ fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
   let y0 = mix(x00, x10, f.y);
   let y1 = mix(x01, x11, f.y);
   return mix(y0, y1, f.z);
+}
+// The transport sampler: the plain sample blended toward the inflow ghost below
+// the floor (momentum only). Only the transport kernels use it, so the raymarch,
+// sidecar and irradiance passes never touch the coverage texture.
+fn sampleFluidSlotInflow(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
+  // Composed with the kiln collision mask: the backtrace sample excludes solid
+  // cells first, then the inflow ghost blends in below the floor aperture.
+  let sample = sampleFluidSlotMasked(cellCenter, slot);
+  let ghost = inflowGhostBlend(cellCenter);
+  return mix(sample, inflowGhostState(slot, sample, cellCenter), ghost);
 }
 
 fn sampleFluidSlotMasked(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
@@ -3066,7 +3617,9 @@ fn samplePredictSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
   let x11 = mix(c011, c111, f.x);
   let y0 = mix(x00, x10, f.y);
   let y1 = mix(x01, x11, f.y);
-  return mix(y0, y1, f.z);
+  let sample = mix(y0, y1, f.z);
+  let ghost = inflowGhostBlend(cellCenter);
+  return mix(sample, inflowGhostState(slot, sample, cellCenter), ghost);
 }
 
 struct SlotExtrema {
@@ -3106,6 +3659,14 @@ fn slotExtrema(cellCenter: vec3<f32>, slot: u32) -> SlotExtrema {
         hi = max(hi, v);
       }
     }
+  }
+  // The limiter's range admits the ghost state below the floor, so the
+  // corrected value the inflow produces is not reverted as an overshoot.
+  let ghost = inflowGhostBlend(cellCenter);
+  if (ghost > 0.0) {
+    let ghostValue = inflowGhostState(slot, lo, cellCenter);
+    lo = min(lo, ghostValue);
+    hi = max(hi, ghostValue);
   }
   return SlotExtrema(lo, hi);
 }
@@ -3180,6 +3741,16 @@ fn boundVelocity(v: vec3<f32>) -> vec3<f32> {
 // steps, inflated every field to its peak (observed as a saturated domain).
 fn macCormackSlot(c: vec3<i32>, idx: u32, backCell: vec3<f32>, forwardCell: vec3<f32>, slot: u32) -> vec4<f32> {
   let predicted = fluidPredict[idx * SLOTS_PER_CELL + slot];
+  // A forward sample that came partly from the inflow ghost (which now carries
+  // the inflow velocity only) has no reverse trace to correct against: the
+  // reservoir is not in the domain, so the corrector would read the injected
+  // momentum as a transport error and remove part of it. Cells whose backtrace
+  // touches the ghost keep the first-order prediction for every slot. Scalar
+  // entry itself follows the prescribed face flux through the floor source in
+  // the main kernel (inflowFraction), not through this return.
+  if (inflowGhostBlend(backCell) > 0.0) {
+    return predicted;
+  }
   let reversed = samplePredictSlot(forwardCell, slot);
   let current = fluidSrc[idx * SLOTS_PER_CELL + slot];
   let corrected = predicted + (current - reversed) * 0.5;
@@ -3548,11 +4119,16 @@ fn pressureSolverOpenTop() -> bool {
 
 // Flux through the upper face of cell c on one axis. The domain is a closed box:
 // the ghost face below cell 0 and the upper face of the last cell carry no flux,
-// except the top face when the open-top option lets buoyant gas leave; that
-// stored flux is then corrected by the forward pressure gradient like any other.
+// except the top face when the open-top option lets buoyant gas leave (that
+// stored flux is then corrected by the forward pressure gradient like any other)
+// and the floor face inside an inflow aperture, which carries the prescribed
+// inflow. The floor face is never stored, so the projection cannot alter it.
 fn compactFaceVelocity(c: vec3<i32>, axis: u32) -> f32 {
   if (sceneSolidAt(c) || !sceneFaceOpen(c, axis)) { return 0.0; }
   if (c[axis] < 0) {
+    if (axis == 1u) {
+      return inflowFaceVelocity(c);
+    }
     return 0.0;
   }
   if (c[axis] >= gridExtent(axis) - 1) {
@@ -3564,12 +4140,51 @@ fn compactFaceVelocity(c: vec3<i32>, axis: u32) -> f32 {
   return readSlot(c, 0u)[axis];
 }
 
+// Heat-release expansion target at a cell (gain x the fuel burn rate, stored by
+// the main kernel; zero when the gain is zero or refused). Only the converged
+// solve's compact divergence carries it; the legacy wide stencil is untouched.
+fn heatReleaseExpansion(c: vec3<i32>) -> f32 {
+  return max(0.0, textureLoad(burnRate, c).x);
+}
+
+// The compact divergence the converged solve drives to zero, minus the
+// expansion target: after a converged solve the corrected field has velocity
+// divergence equal to the expansion where fuel burns and zero elsewhere. The
+// residual probe measures the same quantity, so its divergence-after reads
+// near zero when the solve converged to the target.
 fn divergenceCompactAtCell(c: vec3<i32>) -> f32 {
   if (sceneSolidAt(c)) { return 0.0; }
   return (compactFaceVelocity(c, 0u) - compactFaceVelocity(c - vec3<i32>(1, 0, 0), 0u))
     + (compactFaceVelocity(c, 1u) - compactFaceVelocity(c - vec3<i32>(0, 1, 0), 1u))
-    + (compactFaceVelocity(c, 2u) - compactFaceVelocity(c - vec3<i32>(0, 0, 1), 2u));
+    + (compactFaceVelocity(c, 2u) - compactFaceVelocity(c - vec3<i32>(0, 0, 1), 2u))
+    - heatReleaseExpansion(c);
 }
+
+fn velocityStaggered() -> bool {
+  return u.velocity_staggering.x > 0.5;
+}
+
+// The velocity at a cell centre for the characteristic. Collocated: the stored
+// value. Staggered: the stored value is the upper face of each axis, exactly as
+// the compact divergence and the forward gradient read it, so the centre is
+// the mean of the two faces; the lower faces of the first cells are the walls
+// and the inflow floor, as compactFaceVelocity defines them.
+fn centreVelocityAt(c: vec3<i32>) -> vec3<f32> {
+  let stored = readSlot(c, 0u).xyz;
+  if (!velocityStaggered()) { return stored; }
+  return 0.5 * vec3<f32>(
+    compactFaceVelocity(c, 0u) + compactFaceVelocity(c - vec3<i32>(1, 0, 0), 0u),
+    compactFaceVelocity(c, 1u) + compactFaceVelocity(c - vec3<i32>(0, 1, 0), 1u),
+    compactFaceVelocity(c, 2u) + compactFaceVelocity(c - vec3<i32>(0, 0, 1), 2u));
+}
+
+// The carried velocity itself is sampled at the plain foot even when
+// staggered: the destination u(c) is the upper face at centre + ½, the value
+// it needs is the physical velocity at (centre + ½) − U·dt, and the sampler
+// reads stored values half a cell below their physical position, so the two
+// half-cell offsets cancel and the query is centre − U·dt, the same foot the
+// scalars use. (A per-component −½ sample offset was tried first and moved the
+// velocity pattern +½ cell per step: the lean flipped to +x instead of going.)
 
 fn blockedSceneFaceFluxAtCell(c: vec3<i32>) -> vec2<f32> {
   if (!sceneSolidEnabled()) { return vec2<f32>(0.0); }
@@ -3980,6 +4595,10 @@ fn pressureResidualReduce(
   var heatValue = 0.0;
   var smokeValue = 0.0;
   var hotVelocity = 0.0;
+  var heatX = 0.0;
+  var heatZ = 0.0;
+  var smokeX = 0.0;
+  var smokeZ = 0.0;
   if (all(gid < vec3<u32>(GRID, GRID_Y, GRID))) {
     if (!afterProjection) {
       if (!sceneSolidAt(vec3<i32>(gid))) {
@@ -4000,6 +4619,12 @@ fn pressureResidualReduce(
       // Heat-weighted vertical velocity: the speed of the hot gas itself, which a
       // slab mean over mostly quiescent air cannot show.
       hotVelocity = verticalVelocity * heatValue;
+      // Lateral first moments in grid cells: the CPU fold divides by the slab's
+      // mass for a centroid, the instrument for a plume that leans without wind.
+      heatX = heatValue * f32(gid.x);
+      heatZ = heatValue * f32(gid.z);
+      smokeX = smokeValue * f32(gid.x);
+      smokeZ = smokeValue * f32(gid.z);
       }
     } else {
       if (!sceneSolidAt(vec3<i32>(gid))) {
@@ -4021,6 +4646,10 @@ fn pressureResidualReduce(
   pressureResidualHeatSum[localIndex] = heatValue;
   pressureResidualSmokeSum[localIndex] = smokeValue;
   pressureResidualHotVelocitySum[localIndex] = hotVelocity;
+  pressureResidualHeatXSum[localIndex] = heatX;
+  pressureResidualHeatZSum[localIndex] = heatZ;
+  pressureResidualSmokeXSum[localIndex] = smokeX;
+  pressureResidualSmokeZSum[localIndex] = smokeZ;
   workgroupBarrier();
   if (localIndex != 0u) {
     return;
@@ -4035,6 +4664,10 @@ fn pressureResidualReduce(
   var heatSum = 0.0;
   var smokeSum = 0.0;
   var hotVelocitySum = 0.0;
+  var heatXSum = 0.0;
+  var heatZSum = 0.0;
+  var smokeXSum = 0.0;
+  var smokeZSum = 0.0;
   for (var i = 0u; i < 64u; i = i + 1u) {
     sum = sum + pressureResidualSum[i];
     peak = max(peak, pressureResidualMax[i]);
@@ -4046,8 +4679,12 @@ fn pressureResidualReduce(
     heatSum = heatSum + pressureResidualHeatSum[i];
     smokeSum = smokeSum + pressureResidualSmokeSum[i];
     hotVelocitySum = hotVelocitySum + pressureResidualHotVelocitySum[i];
+    heatXSum = heatXSum + pressureResidualHeatXSum[i];
+    heatZSum = heatZSum + pressureResidualHeatZSum[i];
+    smokeXSum = smokeXSum + pressureResidualSmokeXSum[i];
+    smokeZSum = smokeZSum + pressureResidualSmokeZSum[i];
   }
-  let partialIndex = 4u * (workgroupId.x + workgroupId.y * workgroupCount.x + workgroupId.z * workgroupCount.x * workgroupCount.y);
+  let partialIndex = 5u * (workgroupId.x + workgroupId.y * workgroupCount.x + workgroupId.z * workgroupCount.x * workgroupCount.y);
   let previousCompact = pressureResidualPartials[partialIndex];
   let previousWide = pressureResidualPartials[partialIndex + 1u];
   if (afterProjection) {
@@ -4060,6 +4697,7 @@ fn pressureResidualReduce(
     pressureResidualPartials[partialIndex + 1u] = vec4<f32>(wideSum, widePeak, 0.0, 0.0);
     pressureResidualPartials[partialIndex + 2u] = vec4<f32>(enstrophySum, vorticityPeak, 0.0, 0.0);
     pressureResidualPartials[partialIndex + 3u] = vec4<f32>(verticalVelocitySum, heatSum, smokeSum, hotVelocitySum);
+    pressureResidualPartials[partialIndex + 4u] = vec4<f32>(heatXSum, heatZSum, smokeXSum, smokeZSum);
   }
 }
 
@@ -4540,6 +5178,7 @@ fn boxHit(ro: vec3<f32>, rd: vec3<f32>, b: vec3<f32>) -> vec2<f32> {
 
 ${PHYSICAL_COLOR_WGSL}
 ${EMISSIVE_TRANSPORT_WGSL}
+${SCENE_VOLUME_SOURCE_WGSL}
 
 fn fireColor(temp: f32) -> vec3<f32> {
   let ember = vec3<f32>(0.70, 0.10, 0.018);
@@ -4893,10 +5532,11 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
   let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
   let bonfireAdvectionLateralDamping = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
-  let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
+  let centreVelocity = centreVelocityAt(vec3<i32>(gid));
+  let advectVelocity = vec3<f32>(centreVelocity.x * bonfireAdvectionLateralDamping, centreVelocity.y, centreVelocity.z * bonfireAdvectionLateralDamping);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
   for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) {
-    fluidPredict[base + slot] = sampleFluidSlotMasked(backCell, slot);
+    fluidPredict[base + slot] = sampleFluidSlotInflow(backCell, slot);
   }
 }
 
@@ -4992,7 +5632,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let microdetailRiseDirection = bonfireThermalRiseDirection;
   let bonfireLocalLateralTransportGain = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
   let bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain;
-  let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
+  let centreVelocity = centreVelocityAt(cellI);
+  let advectVelocity = vec3<f32>(centreVelocity.x * bonfireAdvectionLateralDamping, centreVelocity.y, centreVelocity.z * bonfireAdvectionLateralDamping);
   let backtraceScale = transportBacktraceScale(speed) * timeStep;
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * backtraceScale);
   let macCormack = u.transport_controls.x > 1.5;
@@ -5018,7 +5659,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       microLayer = sampleFluidSlotMasked(backCell, 3u);
     }
   } else {
-    advected = sampleFluidSlotMasked(backCell, 0u);
+    advected = sampleFluidSlotInflow(backCell, 0u);
     if (commonGasTransport) {
       material = sampleFluidSlotMasked(backCell, 1u);
       fireLayer = sampleFluidSlotMasked(backCell, 2u);
@@ -5097,6 +5738,29 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var interfaceShred = microLayer.y * stepRate(0.948);
   var fireLick = microLayer.z * stepRate(0.902);
   var emberFleck = microLayer.w * stepRate(0.934);
+  // Inflow boundary: the prescribed flux through the floor face brings a
+  // fraction v_in x coverage x backtraceScale x dt of the floor cell volume in
+  // as pure inflow each step (fuel at the fuel fraction, heat at the inlet
+  // temperature, nothing else), independent of the cell velocity: the mass
+  // accounting of an inflow face, not a backtrace. The projection carries the
+  // momentum; the ghost below the floor carries only the inflow velocity.
+  if (cellI.y == 0 && u.inflow_aperture.x > 0.5) {
+    let inflowFraction = clamp(inflowInletSpeed(cellI) * inflowApertureWeight(cellI) * dynamicsBacktraceScale(), 0.0, 1.0);
+    smoke = mix(smoke, 0.0, inflowFraction);
+    heat = mix(heat, u.inflow_state.w, inflowFraction);
+    fuel = mix(fuel, u.inflow_state.z, inflowFraction);
+    materialDetail = mix(materialDetail, 0.0, inflowFraction);
+    flame = mix(flame, 0.0, inflowFraction);
+    ember = mix(ember, 0.0, inflowFraction);
+    visibleFireCarrier = mix(visibleFireCarrier, 0.0, inflowFraction);
+    flameDetail = visibleFireCarrier;
+    combustionFront = mix(combustionFront, 0.0, inflowFraction);
+    microSmoke = mix(microSmoke, 0.0, inflowFraction);
+    interfaceShred = mix(interfaceShred, 0.0, inflowFraction);
+    fireLick = mix(fireLick, 0.0, inflowFraction);
+    emberFleck = mix(emberFleck, 0.0, inflowFraction);
+    combustionFrontTopology = mix(combustionFrontTopology, 0.0, inflowFraction);
+  }
 
   let sourceCenter = p - u.primitive_source.xyz;
   let radial = length(p.xz);
@@ -5866,7 +6530,20 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Reaction increments are rates: they carry the time step (1.0 under legacy).
   smoke = smoke + tallPlumeReactionSmokeBirth * timeStep;
   heat = heat + (tallPlumeFuelHeatReaction * mix(0.0, 0.16, tallPlumeScene) + tallPlumePilotReaction * 0.030) * timeStep;
-  fuel = max(fuel - (heat * 0.018 + fuelConsumption) * timeStep, 0.0);
+  // The fuel consumption rate is also the heat-release expansion source the
+  // pressure solve targets this step (gain in u.heat_release.x; stored for
+  // every cell, burning or not, so a cell that stops burning stops expanding).
+  let fuelBurnRate = heat * 0.018 + fuelConsumption;
+  // The fuel actually consumed this step, per unit time: the decrement is
+  // capped by the fuel present, so a hot cell with no fuel burns nothing and
+  // expands nothing (the first look stored the uncapped rate and the whole hot
+  // plume expanded: heat mass x3.6 at gain 1).
+  let fuelBurned = min(fuel, fuelBurnRate * timeStep);
+  fuel = fuel - fuelBurned;
+  // Stored as the expansion target itself (gain x the burned fuel per unit
+  // time; zero when the gain is zero or refused), so the pressure kernels,
+  // which bind no uniform, read it directly.
+  textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * fuelBurned / max(timeStep, 1e-6), 0.0, 0.0, 0.0));
   let bonfireDetailBirthCarrier = bonfireAdvectedSmokeBirth * 0.48 + bonfireSootBirth * 0.30 + bonfireBroadSupportSmokeSource * 0.046 * bonfireLayeredSmokeBreakup + smokeFromHeat * bonfireInterfaceSmokeBand * 0.13 + bonfireInterfaceBirth * 0.18 + bonfireCombustion.z * 0.036 + smoke * 0.070;
   let bonfireSmokeDetailCurlFold = clamp(
     0.50
@@ -6149,7 +6826,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // expanded domain ceiling. The old symmetric abs(y) wall would suppress
   // every added cell above y=1 and silently recreate the old clip.
   let expandedTopY = -1.0 + 2.0 * f32(GRID_Y) / f32(GRID);
-  let verticalWall = select(max(-p.y, p.y - expandedTopY + 1.0), -p.y, OUTER_SMOKE);
+  // Inside an inflow aperture the floor is an inlet, not a wall: the sponge
+  // leaves it alone (the converged solve enforces the walls themselves).
+  let floorExempt = select(0.0, inflowApertureWeight(cellI), p.y < -0.8);
+  let lowerWall = mix(-p.y, -1.0, floorExempt);
+  let verticalWall = select(max(lowerWall, p.y - expandedTopY + 1.0), lowerWall, OUTER_SMOKE);
   let wall = max(max(abs(p.x), verticalWall), abs(p.z));
   let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
   let smokeTopFade = select(1.0 - smoothstep(expandedTopY - (1.0 - mix(0.66, 0.84, plumeHeight01)), expandedTopY - 0.005, p.y), 1.0, OUTER_SMOKE);
@@ -9439,7 +10120,7 @@ export function createKaminosVolumePrototype({
   const productModelMatrix = new THREE.Matrix4();
   const productViewProj = new THREE.Matrix4();
   const productLocalCameraPosition = new THREE.Vector3();
-  const uniforms = new Float32Array(PHYSICAL_COLOR_UNIFORM_FLOATS);
+  const uniforms = new Float32Array(VOLUME_UNIFORM_FLOATS);
   uniforms.set(THERMAL_LUT, 376);
   const volumePresentationControls = new Float32Array([1, 0, 0, 0]);
   const initialControlRetirement = stripRetiredRaymarchControls(getControls());
@@ -9678,6 +10359,7 @@ export function createKaminosVolumePrototype({
     coreEmitterSourceReceipt: null,
     analyticEmitterMode: 'off',
     analyticEmitterFamily: 'cluster',
+    inflowBoundary: null,
     analyticEmitterRequestedSourceLaw: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume'),
     analyticEmitterRequestedSourceDepth: Number(controlsSnapshot.emitterSourceDepth ?? 0.04),
     analyticEmitterRequestedInletProfile: String(controlsSnapshot.emitterInletProfile ?? 'plug'),
@@ -10150,6 +10832,20 @@ export function createKaminosVolumePrototype({
   let pressureResidualAfterPipeline = null;
   let boundarySidecarBuildPipeline = null;
   let emissiveLightField = null;
+  let sceneVolumeSource = null;
+  let sceneVolumeSourceRequested = false;
+  let scenePointBindings = null;
+  let scenePointBindGroup = null;
+  let scenePointFrame = null;
+  let distributedFrame = null;
+  let distributedGroup = null;
+  let distributedLayout = null;
+  let distributedBindings = null;
+  const distributedPipelines = new Map();
+  const scenePointPipelines = new Map();
+  let sceneSourceFrameConsumer = null;
+  const sceneSourcePreparedEncoders = new WeakSet();
+  let sceneMediumSource = null;
   let emissiveWhiteKelvin = null;
   let emissiveWhiteMatrix = null;
   let boundarySplatCompactPipeline = null;
@@ -10328,6 +11024,19 @@ export function createKaminosVolumePrototype({
   let outerSmoke = null;
   let outerSmokeInspection = 'off';
   let outerSmokeFallback = null;
+  // Inflow aperture coverage map (one f32 per floor cell), rebuilt with the grid
+  // and rewritten when the admitted aperture or pattern changes.
+  let inflowCoverageTexture = null;
+  // Inlet turbulence field (one f32 per floor cell) and the puff signal: seeded,
+  // step-locked processes; the field is rebuilt with the grid.
+  let inflowPerturbationTexture = null;
+  let inletPerturbationField = null;
+  // Fuel burn rate per cell (heat-release expansion source), rebuilt with the grid.
+  let burnRateTexture = null;
+  const inletPuffProcess = new StochasticSignalSet(2, 1);
+  const windGustProcess = new WindGustProcess(1);
+  let inflowCoverageSignature = '';
+  let inflowCoverageMap = null;
   let fluidPredictBuffer = null;
   let fluidPredictBufferBytes = 0;
   // Evidence route only: a calibrated-mode epsilon set through the debug API,
@@ -10524,6 +11233,7 @@ export function createKaminosVolumePrototype({
       effectiveInletVelocity: analyticEmitterDescriptor ? analyticEmitterDescriptor.effectiveInletVelocity : null,
       shearWidthCells: analyticEmitterDescriptor ? analyticEmitterDescriptor.shearWidthCells : null,
       edgeEntrainment: analyticEmitterDescriptor ? analyticEmitterDescriptor.edgeEntrainment : null,
+      inflow: analyticEmitterDescriptor?.inflow ?? null,
       coordinateSpace: analyticEmitterDescriptor ? 'volume-local' : 'none',
       count: analyticEmitterDescriptor ? 1 : 0,
       frameId: analyticEmitterDescriptor?.frameId || null,
@@ -10893,6 +11603,8 @@ export function createKaminosVolumePrototype({
     sceneSolidTextureView = null;
     sceneSolidRevisionKey = null;
     sceneSolidCellsCpu = null;
+    sceneVolumeSource?.destroy();
+    sceneVolumeSource = null;
     emissiveLightField?.destroy();
     emissiveLightField = null;
     selectiveHeadLiveRuntime?.destroy();
@@ -10901,6 +11613,15 @@ export function createKaminosVolumePrototype({
     for (const buffer of fluidBuffers) buffer.destroy();
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of quenchBuffers) buffer.destroy();
+    inflowCoverageTexture?.destroy();
+    inflowCoverageTexture = null;
+    inflowCoverageSignature = '';
+    inflowCoverageMap = null;
+    inflowPerturbationTexture?.destroy();
+    inflowPerturbationTexture = null;
+    inletPerturbationField = null;
+    burnRateTexture?.destroy();
+    burnRateTexture = null;
     for (const buffer of pressureBuffers) buffer.destroy();
     pressureResidualPartialsBuffer?.destroy();
     pressureResidualReadbackBuffer?.destroy();
@@ -11030,8 +11751,11 @@ export function createKaminosVolumePrototype({
         { binding: 14, resource: { buffer: quenchWrite } },
         { binding: 15, resource: { buffer: emissiveLightField.incident } },
         { binding: 16, resource: sceneSolidTextureView },
-        { binding: 17, resource: (outerSmoke?.optical || outerSmokeFallback).createView() },
-        { binding: 18, resource: outerSmoke?.solids.createView() || sceneSolidTextureView },
+        { binding: 20, resource: (outerSmoke?.optical || outerSmokeFallback).createView() },
+        { binding: 21, resource: outerSmoke?.solids.createView() || sceneSolidTextureView },
+        { binding: 17, resource: inflowCoverageTexture.createView() },
+        { binding: 18, resource: inflowPerturbationTexture.createView() },
+        { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
       ],
     });
   }
@@ -11122,6 +11846,7 @@ export function createKaminosVolumePrototype({
         {binding: 1, resource: {buffer}},
         {binding: 7, resource: {buffer: frontBuffers[index]}},
         {binding: 16, resource: sceneSolidTextureView},
+        {binding: 19, resource: burnRateTexture.createView({ dimension: '3d' })},
       ],
     }));
     boundarySidecarReadBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
@@ -11259,6 +11984,7 @@ export function createKaminosVolumePrototype({
       || !boundarySplatFeatureBuffer
       || quenchBuffers.length !== 2
       || !flowKernelDescriptorBuffer
+      || !burnRateTexture
     ) {
       selectiveHeadLiveBindGroups = null;
       return;
@@ -11292,6 +12018,7 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluid } },
           { binding: 7, resource: { buffer: front } },
           { binding: 16, resource: sceneSolidTextureView },
+          { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
       sidecar: device.createBindGroup({
@@ -12066,6 +12793,31 @@ export function createKaminosVolumePrototype({
       device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize)));
       return buffer;
     });
+    inflowCoverageTexture = device.createTexture({
+      label: `kaminos inflow aperture coverage map ${gridSize}x${gridSize}`,
+      size: [gridSize, gridSize, 1],
+      format: 'r32float',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    device.queue.writeTexture({ texture: inflowCoverageTexture }, new Float32Array(gridSize * gridSize), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
+    inflowCoverageSignature = '';
+    inflowCoverageMap = null;
+    inflowPerturbationTexture = device.createTexture({
+      label: `kaminos inflow inlet perturbation ${gridSize}x${gridSize}`,
+      size: [gridSize, gridSize, 1],
+      format: 'r32float',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    device.queue.writeTexture({ texture: inflowPerturbationTexture }, new Float32Array(gridSize * gridSize), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
+    inletPerturbationField = new InletPerturbationField({ grid: gridSize, seed: 1 });
+    burnRateTexture = device.createTexture({
+      label: `kaminos fuel burn rate ${gridSize}x${gridHeight}x${gridSize}`,
+      size: [gridSize, gridHeight, gridSize],
+      dimension: '3d',
+      format: 'r32float',
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    device.queue.writeTexture({ texture: burnRateTexture }, new Float32Array(gridSize * gridHeight * gridSize), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize]);
     quenchBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
         label: `kaminos recoverable liquid quench and source state ${gridSize}x${gridHeight}x${gridSize} ${i}`,
@@ -12123,6 +12875,7 @@ export function createKaminosVolumePrototype({
     }
     const renderPipelineConstants = { GRID: gridSize, GRID_Y: gridHeight, TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0, LEAN_STOCK_RAYMARCH: false };
     ordinaryDepthPipelines.clear();
+    scenePointPipelines.clear();
     const leanStockRenderPipelineConstants = { ...renderPipelineConstants, LEAN_STOCK_RAYMARCH: true };
     const computePipelineConstants = { GRID: gridSize, GRID_Y: gridHeight };
     const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => device.createRenderPipeline({
@@ -12541,6 +13294,7 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluidBuffers[0] } },
           { binding: 7, resource: { buffer: frontBuffers[0] } },
           { binding: 16, resource: sceneSolidTextureView },
+          { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
       device.createBindGroup({
@@ -12550,6 +13304,7 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
           { binding: 7, resource: { buffer: frontBuffers[1] } },
           { binding: 16, resource: sceneSolidTextureView },
+          { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
     ];
@@ -12928,8 +13683,14 @@ export function createKaminosVolumePrototype({
         { binding: 13, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
         { binding: 14, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 16, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
-        { binding: 17, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '3d' } },
-        { binding: 18, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'uint', viewDimension: '3d' } },
+        { binding: 20, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '3d' } },
+        { binding: 21, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'uint', viewDimension: '3d' } },
+        // The raymarch fragment stage samples the fluid through sampleFluidSlot,
+        // which reads the coverage map below the floor, so both stages see it.
+        { binding: 17, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
+        { binding: 18, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
+        // The raymarch fragment entry point reaches divergenceAtCell through the shared module, so the binding must be fragment-visible too (slice-2 lesson at 1e8996ab).
+        { binding: 19, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -13000,6 +13761,8 @@ export function createKaminosVolumePrototype({
           buffer: { type: 'read-only-storage' },
         },
         { binding: 16, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
+        // The pressure kernels read the heat-release expansion target here.
+        { binding: 19, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
       ],
     });
     boundarySidecarWriteBindGroupLayout = device.createBindGroupLayout({
@@ -13869,8 +14632,7 @@ export function createKaminosVolumePrototype({
     return browserResidualBindGroup;
   }
 
-  function updateUniforms(now) {
-    resize();
+  function updateOrdinarySceneDepth() {
     if (typeof getSceneDepth === 'function' && productFrameOwner === 'prototype') {
       const source = getSceneDepth();
       const texture = source === null ? null : validateOrdinarySceneDepth(source, {device, camera});
@@ -13880,7 +14642,14 @@ export function createKaminosVolumePrototype({
         reason: texture ? null : 'host-disabled', width: texture?.width ?? null,
         height: texture?.height ?? null, sampleCount: texture?.sampleCount ?? null, convention: 'webgpu-zero-one-top-down',
         source: 'same-camera-same-device-scene-prepass'};
+      return texture;
     }
+    return null;
+  }
+
+  function updateUniforms(now) {
+    resize();
+    if (!sceneSourceFrameConsumer) updateOrdinarySceneDepth();
     camera.updateMatrixWorld();
     const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     if (lookFreeze) {
@@ -14025,8 +14794,10 @@ export function createKaminosVolumePrototype({
     updateExternalEmitterDebug(now);
     uniforms[51] = state.coreEmitterSourceMode === 'analytic-only' ? 0 : state.externalEmitterCount;
     uniforms[52] = volumeSceneMode(controlsSnapshot.volumeScene);
-    uniforms[53] = normalizeWindStrength(controlsSnapshot.windStrength);
-    uniforms[54] = normalizeWindAngle(controlsSnapshot.windAngle) * Math.PI / 180;
+    const windConfig = resolveWindConfig(controlsSnapshot, windGustProcess.sampleAt(state.simStepCount ?? 0, windGustTauSteps(controlsSnapshot)));
+    uniforms[53] = windConfig.effective.strength;
+    uniforms[54] = windConfig.effective.angleDeg * Math.PI / 180;
+    state.wind = windConfig;
     uniforms[55] = normalizeWindHeight(controlsSnapshot.windHeight);
     uniforms[56] = bonfireAblation.recenter;
     uniforms[57] = bonfireAblation.lateralDamping;
@@ -14360,6 +15131,37 @@ export function createKaminosVolumePrototype({
     const timeStepConfig = resolveTimeStepConfig(controlsSnapshot);
     uniforms[354] = timeStepModeUniformValue(timeStepConfig.effective.mode);
     uniforms[355] = timeStepConfig.effective.referenceSpeed;
+    // Inlet dynamics signals for this step: the puff (one slow signal) and the
+    // turbulence field (a patchwork of signals on the floor), both step-locked;
+    // sampled before the resolver so the receipt and the uniforms agree.
+    const inletStep = state.simStepCount ?? 0;
+    const inletDynamicsRequested = resolveInletDynamicsConfig(controlsSnapshot).requested;
+    const inletSignals = {
+      puff: inletDynamicsRequested.puff > 0 ? inletPuffProcess.sampleAt(inletStep, inletDynamicsTauSteps(controlsSnapshot, inletDynamicsRequested.puffPeriod)) : [0],
+      turbulence: null,
+    };
+    if (inletDynamicsRequested.turbulence > 0 && inletPerturbationField && inflowPerturbationTexture) {
+      device.queue.writeTexture({ texture: inflowPerturbationTexture }, inletPerturbationField.sampleAt({ step: inletStep, tauSteps: inletDynamicsTauSteps(controlsSnapshot, INLET_TURBULENCE_CORRELATION_SECONDS), scaleCells: inletDynamicsRequested.turbulenceScaleCells }), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
+      inletSignals.turbulence = { rms: inletPerturbationField.rms };
+    }
+    const inflowBoundaryConfig = resolveInflowBoundaryConfig(controlsSnapshot, analyticEmitterDescriptor, { grid: gridSize, inletSignals });
+    uniforms.set(inflowBoundaryUniformValues(inflowBoundaryConfig), INFLOW_UNIFORM_OFFSET);
+    state.inflowBoundary = inflowBoundaryConfig;
+    const heatReleaseConfig = resolveHeatReleaseConfig(controlsSnapshot);
+    uniforms.set(heatReleaseUniformValues(heatReleaseConfig), HEAT_RELEASE_UNIFORM_OFFSET);
+    state.heatRelease = heatReleaseConfig;
+    const velocityStaggeringConfig = resolveVelocityStaggeringConfig(controlsSnapshot);
+    uniforms.set(velocityStaggeringUniformValues(velocityStaggeringConfig), VELOCITY_STAGGERING_UNIFORM_OFFSET);
+    state.velocityStaggering = velocityStaggeringConfig;
+    if (inflowBoundaryConfig.effective.admitted && inflowCoverageTexture) {
+      const coverageSignature = inflowCoverageSignatureFor(inflowBoundaryConfig);
+      if (coverageSignature !== inflowCoverageSignature) {
+        inflowCoverageMap = inflowCoverageMapForConfig(inflowBoundaryConfig);
+        device.queue.writeTexture({ texture: inflowCoverageTexture }, inflowCoverageMap.cells, { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
+        inflowCoverageSignature = coverageSignature;
+      }
+      state.inflowBoundary.effective.coverage = { pattern: inflowCoverageMap.pattern, patternFallback: inflowCoverageMap.patternFallback, coveredCells: inflowCoverageMap.coveredCells, totalCoverage: inflowCoverageMap.totalCoverage, peak: inflowCoverageMap.peak };
+    }
     writeAnalyticEmitterInjectionUniform(
       analyticEmitterInjectionUniformFloats,
       analyticEmitterInjectionUniformWords,
@@ -15044,6 +15846,9 @@ export function createKaminosVolumePrototype({
   }
 
   let pressureResidualCopySolver = null;
+  // The heat-release context the probed numbers came from, taken at copy time:
+  // controls may change before the asynchronous readback completes.
+  let pressureResidualCopyMeasurement = null;
 
   function retirePressureResidualMap(reason) {
     // A map that never settled retires its buffer so the diagnostic stops
@@ -15130,6 +15935,7 @@ export function createKaminosVolumePrototype({
     pressureResidualCopyFrame = state.frameCount;
     pressureResidualCopyFluidCells = gridCellCount(gridSize) - (state.sceneCollision?.effective === 'mesh-voxel-solid' ? state.sceneCollision.solidCellCount : 0);
     pressureResidualCopySolver = state.pressureSolver?.effective ? { ...state.pressureSolver.effective } : null;
+    pressureResidualCopyMeasurement = pressureResidualMeasurement(state.heatRelease);
   }
 
   async function resolvePressureResidualProbe() {
@@ -15144,6 +15950,7 @@ export function createKaminosVolumePrototype({
     const grid = gridSize;
     const fluidCells = pressureResidualCopyFluidCells;
     const solver = pressureResidualCopySolver;
+    const measurement = pressureResidualCopyMeasurement;
     let timeoutTimer = null;
     try {
       const mapPromise = buffer.mapAsync(GPUMapMode.READ);
@@ -15185,26 +15992,16 @@ export function createKaminosVolumePrototype({
       };
       let enstrophySum = 0;
       let vorticityPeak = 0;
-      // Height profile: fold the per-workgroup sums by the workgroup's y index
-      // into per-slab means (each slab is four cell rows across the whole x-z plane).
+      // Height profile and lateral centroids: the pure fold below; here only
+      // the vorticity and blocked-face reductions stay inline.
       const workgroupsX = Math.ceil(grid / 4);
       const workgroupsY = Math.ceil(gridHeightForSize(grid) / 4);
-      const slabCells = grid * grid * 4;
-      const profileVerticalVelocity = new Array(workgroupsY).fill(0);
-      const profileHeat = new Array(workgroupsY).fill(0);
-      const profileSmoke = new Array(workgroupsY).fill(0);
-      const profileHotVelocity = new Array(workgroupsY).fill(0);
       let blockedFaceAbsSum = 0;
       let blockedFaceMaxAbs = 0;
       for (let i = 0; i < workgroupCount; i += 1) {
         const at = i * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP + 8;
         enstrophySum += partials[at];
         vorticityPeak = Math.max(vorticityPeak, partials[at + 1]);
-        const slab = Math.floor(i / workgroupsX) % workgroupsY;
-        profileVerticalVelocity[slab] += partials[at + 4];
-        profileHeat[slab] += partials[at + 5];
-        profileSmoke[slab] += partials[at + 6];
-        profileHotVelocity[slab] += partials[at + 7];
         blockedFaceAbsSum += partials[at + 2];
         blockedFaceMaxAbs = Math.max(blockedFaceMaxAbs, partials[at + 3]);
       }
@@ -15222,6 +16019,7 @@ export function createKaminosVolumePrototype({
         // legacy 2h central divergence. Both are measured on the same fields.
         compact: reduceOperator(0),
         wide: reduceOperator(4),
+        measurement,
         blockedFaceFlux: { sumAbs: blockedFaceAbsSum, maxAbs: blockedFaceMaxAbs },
         vorticity: {
           identity: 'enstrophy-before-projection-v0',
@@ -15229,16 +16027,7 @@ export function createKaminosVolumePrototype({
           enstrophySum,
           maxAbs: vorticityPeak,
         },
-        profile: {
-          identity: 'height-profile-before-projection-v0',
-          slabRows: 4,
-          slabs: workgroupsY,
-          verticalVelocityMean: profileVerticalVelocity.map(sum => sum / slabCells),
-          heatMean: profileHeat.map(sum => sum / slabCells),
-          smokeMean: profileSmoke.map(sum => sum / slabCells),
-          // Heat-weighted mean vertical velocity per slab: the hot gas's own rise speed.
-          hotVerticalVelocityMean: profileHotVelocity.map((sum, slab) => (profileHeat[slab] > 1e-9 ? sum / profileHeat[slab] : 0)),
-        },
+        profile: residualProfileFromPartials(partials, { grid, workgroupsX, workgroupsY, workgroupCount }),
         measuredAtMs: Number(performance.now().toFixed(3)),
       };
       const residualHistory = [...(state.pressureSolver?.residualHistory ?? []).slice(-15), residual];
@@ -18166,8 +18955,40 @@ export function createKaminosVolumePrototype({
     return effectivePipeline;
   }
 
+  function encodeSharedSceneSource(encoder) {
+    if (!sceneVolumeSourceRequested || uniforms[368] <= 1.5) {
+      sceneVolumeSource?.invalidate('inactive-source-route');
+      if (sceneSourceFrameConsumer) throw new Error('shared-scene-source-requires-emissive-material-route');
+      return null;
+    }
+    sceneVolumeSource ||= createSceneVolumeSource({device, module: shader, uniformBuffer, fluidBuffers, frontBuffers,
+      grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
+    sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);
+    if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
+    return {source: sceneVolumeSource.describe(), medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount};
+  }
+
+  function prepareSharedSceneConsumers(encoder, foregroundService = null) {
+    if (!sceneSourceFrameConsumer) return encoder;
+    if (boundarySplatRequested() || browserResidualCanApply() || productFrameOwner !== 'prototype') {
+      throw new Error('shared-scene-source-first-experiment-requires-ordinary-raymarch');
+    }
+    const next = prepareSceneSourceFrame({encoder, encode: encodeSharedSceneSource,
+      submit: commands => foregroundService
+        ? foregroundService.submit(commands, {metadata:{renderer:'scene-source-preparation',simStepCount:state.simStepCount}})
+        : device.queue.submit(commands),
+      consume: sceneSourceFrameConsumer, renderHost: updateOrdinarySceneDepth,
+      createEncoder: () => device.createCommandEncoder({label:'same-source scene volume presentation'})});
+    sceneSourcePreparedEncoders.add(next);
+    if (scenePointFrame) scenePointFrame.hostDepthEffective = true;
+    return next;
+  }
+
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
     assertOuterRoute();
+    if (sceneSourceFrameConsumer && !sceneSourcePreparedEncoders.has(encoder)) {
+      throw new Error('shared-scene-source-frame-not-prepared');
+    }
     if (!ordinarySceneDepthFallback) {
       ordinarySceneDepthFallback = device.createTexture({label:'ordinary depth unoccluded fallback',
         size:[1,1], format:'depth32float', usage:GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT});
@@ -18207,10 +19028,58 @@ export function createKaminosVolumePrototype({
       }
       drawPipeline = ordinaryDepthPipelines.get(basePipeline);
     }
-    if (uniforms[368] > 1.5) {
-      emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
-      state.physicalColor.incidentLight = { model: 'six-direction-single-scattering-v1', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits' };
+    if (scenePointBindGroup) {
+      if (!sceneSourceFrameConsumer || scenePointFrame?.generation !== sceneVolumeSource?.describe().generation) {
+        throw new Error('shared-point-light-not-current-for-volume-frame');
+      }
+      const key = `${multisampled}:${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}`;
+      if (!scenePointPipelines.has(key)) {
+        let code = WGSL.replace('medium.scattering * incidentAt(p)', 'medium.scattering * (incidentAt(p) + scenePointIncident(p))') + SCENE_POINT_SMOKE_WGSL;
+        if (multisampled) code = code.replace('var productSceneDepth: texture_depth_2d;', 'var productSceneDepth: texture_depth_multisampled_2d;')
+          .replace('let depth = textureLoad(productSceneDepth, pixel, 0);', `var depth = textureLoad(productSceneDepth, pixel, 0);
+            for (var sample = 1u; sample < textureNumSamples(productSceneDepth); sample++) {
+              depth = min(depth, textureLoad(productSceneDepth, pixel, sample));
+            }`);
+        const module = device.createShaderModule({label:'shared point light ordinary smoke',code});
+        const layout = device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,
+          multisampled ? ordinaryMultisampleDepthLayout : productRaymarchDepthBindGroupLayout,scenePointBindings.layout]});
+        scenePointPipelines.set(key,device.createRenderPipeline({label:'shared point light smoke consumer',layout,
+          vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',
+            constants:{GRID:gridSize,GRID_Y:gridHeight,TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false},
+            targets:[{format:targetPipeline === readbackPipeline?'rgba8unorm':format}]},primitive:{topology:'triangle-list'}}));
+      }
+      drawPipeline = scenePointPipelines.get(key);
     }
+    if(distributedGroup) {
+      if(distributedFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('distributed flame lighting is stale');
+      const key=`${multisampled}:${targetPipeline===readbackPipeline}:${gridSize}:${gridHeight}`;
+      if(!distributedPipelines.has(key)) {
+        // Replace internal flame incident lighting so this emission is counted
+        // once. Direct camera emission and material scattering stay intact.
+        let code=WGSL.replace('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')+DISTRIBUTED_SMOKE_WGSL;
+        if(multisampled)code=code.replace('var productSceneDepth: texture_depth_2d;','var productSceneDepth: texture_depth_multisampled_2d;')
+          .replace('let depth = textureLoad(productSceneDepth, pixel, 0);',`var depth=textureLoad(productSceneDepth,pixel,0);
+          for(var sample=1u;sample<textureNumSamples(productSceneDepth);sample++){depth=min(depth,textureLoad(productSceneDepth,pixel,sample));}`);
+        const module=device.createShaderModule({label:'distributed flame smoke consumer',code});
+        const layout=device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,multisampled?ordinaryMultisampleDepthLayout:productRaymarchDepthBindGroupLayout,distributedLayout]});
+        distributedPipelines.set(key,device.createRenderPipeline({label:'distributed flame scene smoke',layout,
+          vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',constants:{GRID:gridSize,GRID_Y:gridHeight,TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false},
+          targets:[{format:targetPipeline===readbackPipeline?'rgba8unorm':format}]},primitive:{topology:'triangle-list'}}));
+      }
+      drawPipeline=distributedPipelines.get(key);
+    }
+    if (uniforms[368] > 1.5) {
+      if (!sceneSourcePreparedEncoders.has(encoder)) encodeSharedSceneSource(encoder);
+      if(distributedGroup) {
+        state.physicalColor.incidentLight={model:'distributed-volume-direct-radiance-v0',source:'same-generation-raw-emission-extinction',
+          support:'full-height-geometry-visible-receivers',generation:distributedFrame.generation,frame:distributedFrame.frame,
+          receivers:distributedFrame.volumeReceivers,directions:distributedFrame.directions,legacyDispatched:false};
+      } else {
+        emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
+        state.physicalColor.incidentLight = { model: 'six-direction-single-scattering-v1', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits',legacyDispatched:true };
+      }
+    }
+    if (uniforms[368] <= 1.5 || !sceneVolumeSourceRequested) sceneVolumeSource?.invalidate('inactive-source-route');
     const pass = encoder.beginRenderPass({
       label,
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
@@ -18226,6 +19095,8 @@ export function createKaminosVolumePrototype({
     pass.setPipeline(drawPipeline);
     pass.setBindGroup(0, options.bindGroup || fluidBindGroup());
     pass.setBindGroup(1, ordinarySceneDepthBindGroup);
+    if (scenePointBindGroup) pass.setBindGroup(2, scenePointBindGroup);
+    if (distributedGroup) pass.setBindGroup(2,distributedGroup);
     pass.draw(3);
     pass.end();
   }
@@ -18436,7 +19307,7 @@ export function createKaminosVolumePrototype({
       const cpuStart = performance.now();
       controls?.update?.();
       updateUniforms(now);
-      const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
+      let encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
       let liveCoefficientEncoded = false;
       const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
       state.lookFreeze = lookFreeze;
@@ -18463,6 +19334,7 @@ export function createKaminosVolumePrototype({
           );
         }
       }
+      encoder = prepareSharedSceneConsumers(encoder, foregroundService);
       const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
       const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
       const selectiveRender = selectiveHeadLiveRoleGroups('render');
@@ -22571,7 +23443,7 @@ export function createKaminosVolumePrototype({
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
     device.pushErrorScope('validation');
-    const encoder = device.createCommandEncoder({ label: 'kaminos volume witness readback encoder' });
+    let encoder = device.createCommandEncoder({ label: 'kaminos volume witness readback encoder' });
     const sampleLookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     state.simulationPaused = simulationPaused;
     let sampleSelectiveHeadLiveFields = null;
@@ -22594,6 +23466,7 @@ export function createKaminosVolumePrototype({
         descriptorSource: selectiveHeadLiveRoleDescriptorSource(),
       };
     }
+    encoder = prepareSharedSceneConsumers(encoder);
     encodeBoundarySidecar(encoder, { readBindGroup: sampleSelectiveHeadLiveFields?.sidecar || null });
     if (sampleSelectiveHeadLiveFields?.splat) {
       encodeBoundarySplats(encoder, {
@@ -22685,6 +23558,10 @@ export function createKaminosVolumePrototype({
       encodeBoundarySplatTelemetry(encoder, true);
     } else {
       encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
+      if (options.presentToCanvas === true) {
+        encodeDraw(encoder, context.getCurrentTexture().createView(), 'kaminos held shared scene canvas');
+        if (scenePointFrame) scenePointFrame.presented = true;
+      }
       state.volumeReconstructionStyle = volumePresentationModeEffective === 'intrinsic'
         ? INTRINSIC_PRESENTATION_TARGET_IDENTITY
         : (state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution');
@@ -25215,6 +26092,7 @@ export function createKaminosVolumePrototype({
       // (state.confinement) proves application on the next frame.
       return { confinementEpsilonOverride, appliesOn: 'next-frame', previous: state.confinement };
     },
+    emissiveCameraState() { return state.physicalColor ? {...state.physicalColor} : null; },
     debugState() {
       return {
         ...state,
@@ -25406,6 +26284,65 @@ export function createKaminosVolumePrototype({
       }
     },
     fireIrradianceLightField,
+    setSceneVolumeSourceEnabled(enabled) {
+      sceneVolumeSourceRequested = enabled === true;
+      if (!sceneVolumeSourceRequested) {sceneVolumeSource?.destroy(); sceneVolumeSource = null;}
+      return {requested: sceneVolumeSourceRequested};
+    },
+    setSceneSourceFrameConsumer(consumer) {
+      if (consumer !== null && typeof consumer !== 'function') throw new Error('scene source consumer must be a function or null');
+      if (consumer && (productFrameOwner !== 'prototype' || typeof getSceneDepth !== 'function')) {
+        throw new Error('scene source consumer requires ordinary shared-device scene-depth host');
+      }
+      sceneSourceFrameConsumer = consumer;
+      if (consumer) sceneVolumeSourceRequested = true;
+      return {enabled: Boolean(consumer), authority: 'ordered-submission-not-gpu-completion'};
+    },
+    setScenePointLightFrame(input) {
+      if (input === null) {scenePointBindGroup=null;scenePointFrame=null;return;}
+      if (!device || !sceneSourceFrameConsumer || input.medium.generation !== sceneVolumeSource?.describe().generation) {
+        throw new Error('shared point light requires active same-generation source consumer');
+      }
+      scenePointBindings ||= createScenePointBindings(device);
+      scenePointBindGroup = scenePointBindings.update(input);
+      scenePointFrame = {generation:input.medium.generation,frame:input.medium.frame,
+        sourcePosition:input.source.position.slice(),intensity:input.source.intensity.slice(),
+        mediumStep:input.medium.stepLength,solidVisibility:true,normalization:'isotropic-1-over-4pi'};
+      return {...scenePointFrame};
+    },
+    scenePointLightFrame() {return scenePointFrame ? {...scenePointFrame} : null;},
+    setSceneDistributedLightFrame(input) {
+      if(input===null){distributedFrame=null;distributedGroup=null;return;}
+      if(!device||!sceneSourceFrameConsumer||input.generation!==sceneVolumeSource?.describe().generation)throw new Error('distributed lighting needs same-generation source');
+      distributedBindings ||= createDistributedSmokeBindings(device);
+      distributedLayout = distributedBindings.layout;
+      distributedGroup = distributedBindings.update(input);
+      distributedFrame=input;
+    },
+    sceneVolumeSourceField() {
+      return {requested: sceneVolumeSourceRequested, ...(sceneVolumeSource?.describe() || {status: 'unbuilt', texture: null})};
+    },
+    setSceneMediumSource(source) {
+      if (source !== null && (!Array.isArray(source?.position) || source.position.length !== 3 || !source.position.every(Number.isFinite)
+        || !Number.isFinite(source.stepLength) || source.stepLength <= 0)) throw new Error('finite local source position and positive stepLength required');
+      sceneMediumSource = source === null ? null : {position: source.position.slice(), stepLength: source.stepLength};
+      sceneVolumeSource?.invalidate('medium-source-changed');
+    },
+    sceneMediumOpticalDepthField() {
+      return sceneVolumeSource?.opticalDepthField() || {status: 'unbuilt', texture: null};
+    },
+    async sampleSceneMediumOpticalDepth() {
+      if (!sceneVolumeSourceRequested || !sceneVolumeSource) throw new Error('scene source not enabled/encoded');
+      return sceneVolumeSource.readback('optical-depth');
+    },
+    async sampleSceneVolumeSource() {
+      if (!sceneVolumeSourceRequested || !sceneVolumeSource) throw new Error('scene source not enabled/encoded');
+      return sceneVolumeSource.readback();
+    },
+    async sampleSceneVolumeScattering() {
+      if (!sceneVolumeSourceRequested || !sceneVolumeSource) throw new Error('scene source not enabled/encoded');
+      return sceneVolumeSource.readback('scattering');
+    },
     sampleFireLightFieldGpuProfile,
     sampleFrame,
     sampleLiquidFireContactConsumer,
@@ -25447,6 +26384,7 @@ export function createKaminosVolumePrototype({
     releaseFlowKernelDescriptorCapture,
     dispose() {
       this.setActive(false);
+      scenePointBindings?.dispose();
       persistentSparseCohortGpuState = null;
       fourArmHeldStateRuntimeState = null;
       fourArmHeldStateResidualGrid = null;

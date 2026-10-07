@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './sam-vit-cooperative-ranges-contracts.mjs';
 import { existsSync, readFileSync } from 'node:fs';
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));

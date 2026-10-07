@@ -318,6 +318,11 @@ export function collectVolumeCockpitControlElements(documentRef) {
 }
 
 function isAuthorableControl(control) {
+  // Rows retired from the interface (data-volume-ui-retired) stay authorable:
+  // saved layouts already name them, and the layout validator rejects a
+  // document naming a control the page does not author (3d73ef32 excluded
+  // them and every saved layout failed to load: volume-cockpit-layout-unknown-control).
+  // The stylesheet hides their rows wherever the layout puts them.
   return control.type !== 'hidden' && !control.closest('[data-volume-retired-control-state]');
 }
 

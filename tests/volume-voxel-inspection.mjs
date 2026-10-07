@@ -9,7 +9,7 @@ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
 test('voxel inspection reads solver masks, not geometry or smoke opacity',()=>{
   assert.match(core,/raymarchCollisionVoxels\(ro, rd/,'dedicated collision-mask traversal exists');
-  assert.match(core,/binding\(18\).*outerSceneSolidCells/);
+  assert.match(core,/binding\(21\).*outerSceneSolidCells/);
   assert.match(core,/outerSmoke\?\.solids/,'bind actual coarse solver texture');
   assert.match(core,/uniforms\[333\] = .*collisionVoxelView/);
 });

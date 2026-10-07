@@ -81,8 +81,14 @@ for (const name of ['readSlot', 'readFrontField', 'sampleFrontField', 'sampleFlu
   assert.doesNotMatch(shaderFunction(name), /sceneSolidAt|sceneSolidEnabled/,
     `${name} is shared with raymarch and must not pull wall lookups into optical shader compilation`);
 }
-assert.match(shaderFunction('csTransportPredict'), /sampleFluidSlotMasked\(/,
+// The predictor samples through the inflow transport sampler, which is built
+// on the masked sampler: solid corners are excluded first, then the floor
+// inflow ghost blends in. Either name proves wall-aware transport as long as
+// the inflow sampler itself is masked.
+assert.match(shaderFunction('csTransportPredict'), /sampleFluidSlot(Masked|Inflow)\(/,
   'the actual predictor must consume wall-aware transport samples');
+assert.match(shaderFunction('sampleFluidSlotInflow'), /sampleFluidSlotMasked\(cellCenter, slot\)/,
+  'the inflow transport sampler is composed over the masked sampler');
 assert.match(shaderFunction('slotExtrema'), /sceneSolidAt\(sampleCell\)/,
   'MacCormack limiter must exclude masked solid corners from its source envelope');
 const selectiveRoles = shader.slice(shader.indexOf('function rebuildSelectiveHeadLiveBindGroups()'),

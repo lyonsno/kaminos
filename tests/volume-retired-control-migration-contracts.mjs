@@ -135,10 +135,10 @@ assert.equal(legacyFineBreakupReceipt.preset.domControls[commonGasTransport.key]
   'both 209- and 210-control basins retain the legacy gas transport law');
 assert.equal(validateVolumeSettingsPresetDocument(currentPresetArtifact(), parentArtifact.presetId, schema)
   .preset.domControls[commonGasTransport.key].value, false);
-const flameDoctorControls = ['volume-pressure-solver', 'volume-pressure-solver-iterations', 'volume-advection-scheme', 'volume-confinement', 'volume-time-step']
+const flameDoctorControls = ['volume-pressure-solver', 'volume-pressure-solver-iterations', 'volume-advection-scheme', 'volume-confinement', 'volume-time-step', 'volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering']
   .map(key => schema.controls.find(control => control.key === key));
-assert.deepEqual(flameDoctorControls.map(control => control?.additiveSinceControlCount), [212, 213, 214, 215, 216],
-  'the pressure solver, solver sweeps, advection scheme, confinement mode, and time-step mode declare successive additive counts after common gas transport');
+assert.deepEqual(flameDoctorControls.map(control => control?.additiveSinceControlCount), [212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235],
+  'the pressure solver, solver sweeps, advection scheme, confinement mode, time-step mode, the inflow-boundary emitter controls (fuel fraction, inlet temperature), the aperture pattern controls and swirl, and the wind model controls declare successive additive counts after common gas transport');
 const legacySolverArtifact = currentPresetArtifact();
 const legacySolverRoute = new URL(legacySolverArtifact.preset.route);
 for (const control of schema.controls.filter(control => control.additiveSinceControlCount >= 212)) {
@@ -165,6 +165,8 @@ assert.equal(legacySolverReceipt.preset.domControls['volume-pressure-solver'].va
 assert.equal(legacySolverReceipt.preset.domControls['volume-pressure-solver-iterations'].value, 60);
 assert.equal(legacySolverReceipt.preset.domControls['volume-advection-scheme'].value, 'legacy', 'a 211-control basin keeps legacy damped transport');
 assert.equal(legacySolverReceipt.presetRoute.searchParams.get('volume_advection_scheme'), 'legacy');
+assert.equal(legacySolverReceipt.preset.domControls['volume-emitter-fuel-fraction'].value, 0.56, 'a 211-control basin gains the inflow fuel fraction default without changing its law');
+assert.equal(legacySolverReceipt.preset.domControls['volume-emitter-inlet-temperature'].value, 1.2);
 assert.equal(legacySolverReceipt.preset.domControls['volume-confinement'].value, 'curl-slider', 'a 211-control basin keeps the Curl-driven confinement law');
 assert.equal(legacySolverReceipt.preset.domControls['volume-time-step'].value, 'legacy', 'a 211-control basin keeps the legacy time-step law');
 assert.equal(legacySolverReceipt.preset.domControls[commonGasTransport.key].value, false, 'the 211-control basin keeps its stored common gas value');

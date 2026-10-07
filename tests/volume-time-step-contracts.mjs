@@ -189,5 +189,5 @@ test('the arm capture records and checks the time-step mode', () => {
   const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
   assert.match(capture, /timeStep: s\.timeStep\?\.effective \?\? null/, 'effective time step in the arm receipt');
   assert.match(capture, /timeStepEmitter: s\.timeStep\?\.emitterPacked \?\? null/, 'the packed emitter increments are in the arm receipt');
-  assert.match(capture, /cid === 'volume-time-step'/, 'requested-vs-effective check covers the time-step mode');
+  assert.match(readFileSync(new URL('../volume-arm-capture-checks.mjs', import.meta.url), 'utf8'), /cid === 'volume-time-step'/, 'requested-vs-effective check covers the time-step mode');
 });

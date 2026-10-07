@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {surfaceGraph,reconstructSurfaceCPU,validateSurfaceReconstruction} from '../scene-surface-reconstruction.mjs';
+const receivers=Array.from({length:7},(_,i)=>({position:[i%3,0,0],normal:i===6?[0,0,-1]:[0,0,1]}));
+const graph=surfaceGraph(receivers,[0,1,2,0,1,2,3,4,5,0,1,6]);
+assert.deepEqual(Array.from(graph.neighbors),[1,2,0,2,0,1,4,5,3,5,3,4]);
+assert.equal(graph.offsets[6],graph.offsets[7],'opposite normal is isolated');
+const impulse=new Float32Array(28);impulse.set([12,6,3,1]);
+const result=reconstructSurfaceCPU(impulse,graph,2);
+assert.deepEqual(Array.from(result.slice(0,4)),[4.5,2.25,1.125,.375]);
+assert.ok(result[4]>0&&result[0]<12,'spatial impulse spreads immediately');
+assert.ok(result.slice(12).every(v=>v===0),'disconnected close wall and sharp fold stay dark');
+assert.deepEqual(reconstructSurfaceCPU(new Float32Array(28),graph,8),new Float32Array(28),'next black frame has no history');
+assert.deepEqual(reconstructSurfaceCPU(new Float32Array(28).fill(3),graph,16),new Float32Array(28).fill(3),'constant field preserved including isolated vertices');
+assert.deepEqual(reconstructSurfaceCPU(impulse,graph,0),impulse,'off exact');
+assert.equal(impulse[0],12,'input not mutated');
+for(const value of [-2,1,NaN,Infinity])assert.throws(()=>validateSurfaceReconstruction(value),/nonnegative even integer/);
+assert.throws(()=>surfaceGraph(receivers,[0,1,70]),/out of range/);
+console.log('surface reconstruction: immediate diffusion, constant preservation, connectivity and normal isolation passed');
