@@ -315,6 +315,8 @@ async function runSnapGroundLevelScenario(ws) {
       const frames = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const record = () => window.kaminosSceneObjectDebugState().find(item => item.id === id);
       await frames();
+      const undoLeveling = document.getElementById('tb-undo-leveling');
+      if (undoLeveling && !undoLeveling.hidden) { undoLeveling.click(); await frames(); }
       const before = { pose: record().transform, resting: window.kaminosRestingPlaneDebugState(id) };
       const button = [...document.querySelectorAll('#transform-bar button')].find(item => item.textContent.trim() === 'Snap Ground');
       if (!button) throw new Error('Snap Ground button missing');
@@ -376,6 +378,33 @@ async function runToolbarRotateLiveScenario(ws) {
   if (changedFraction < 0.01) throw new Error('viewport did not redraw after Rot X while the object stayed selected: ' + JSON.stringify({ changedFraction }));
   const near = (x, y) => x.every((value, index) => Math.abs(value - y[index]) < 1e-6);
   if (!['position', 'rotation', 'scale'].every(key => near(undone.transform[key], before.transform[key]))) throw new Error('undo did not restore the pose before Rot X: ' + JSON.stringify(lastEvidence.toolbarRotateLive));
+}
+
+// An asset that arrives a few degrees off its base is leveled on arrival. The
+// toolbar then offers Undo Leveling, which turns it back to how the file stored
+// it (still on the ground) and hides itself; Cmd/Ctrl+Z brings the leveling and
+// the button back.
+async function runArrivalAutoLevelScenario(ws) {
+  await runMeshAssetArrivalScenario(ws);
+  phase = 'scenario-arrival-auto-level';
+  const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
+  const state = `(() => {
+    const id = ${JSON.stringify(objectId)};
+    const record = window.kaminosSceneObjectDebugState().find(item => item.id === id);
+    const button = document.getElementById('tb-undo-leveling');
+    return { resting: window.kaminosRestingPlaneDebugState(id), arrival: record.arrival, pose: record.transform, minY: record.worldBounds.min[1], groundY: window.kaminosCameraDebugState().groundY, undoButtonShown: !!button && !button.hidden && !!button.offsetParent };
+  })()`;
+  const frames = 'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))';
+  const arrived = await evaluate(ws, state);
+  const unleveled = await evaluate(ws, `(async () => { document.getElementById('tb-undo-leveling')?.click(); await ${frames}; return ${state}; })()`);
+  const redone = await evaluate(ws, `(async () => { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', metaKey: true, bubbles: true })); await ${frames}; return ${state}; })()`);
+  lastEvidence.arrivalAutoLevel = { arrived, unleveled, redone };
+  if (arrived.resting?.reason !== 'already-level' || !(arrived.arrival?.leveledDeg > 2)) throw new Error('asset was not leveled on arrival: ' + JSON.stringify(arrived));
+  if (!arrived.undoButtonShown) throw new Error('Undo Leveling is not offered after arrival leveling: ' + JSON.stringify(arrived));
+  if (unleveled.resting?.reason !== 'level' || Math.abs(unleveled.resting.tiltDeg - arrived.arrival.leveledDeg) > 0.2) throw new Error('Undo Leveling did not restore the stored tilt: ' + JSON.stringify(unleveled));
+  if (unleveled.undoButtonShown) throw new Error('Undo Leveling stayed visible after undoing: ' + JSON.stringify(unleveled));
+  if (Math.abs(unleveled.minY - unleveled.groundY) > 2e-3) throw new Error('Undo Leveling left the asset off the ground: ' + JSON.stringify(unleveled));
+  if (redone.resting?.reason !== 'already-level' || !redone.undoButtonShown) throw new Error('Cmd+Z did not bring the leveling and its button back: ' + JSON.stringify(redone));
 }
 
 async function runNavigationDepthIndexScenario(ws) {
@@ -5698,6 +5727,8 @@ try {
     await runSnapGroundLevelScenario(ws);
   } else if (scenario === 'toolbar-rotate-live') {
     await runToolbarRotateLiveScenario(ws);
+  } else if (scenario === 'arrival-auto-level') {
+    await runArrivalAutoLevelScenario(ws);
   } else if (scenario === 'mesh-asset-append-arrival') {
     await runMeshAssetAppendArrivalScenario(ws, args.get('--append-url'));
   } else if (scenario === 'navigation-depth-index') {

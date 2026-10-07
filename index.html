@@ -76,7 +76,7 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 #scene-add-menu-trigger { padding:7px 13px; }
 #scene-add-menu-popup { position:absolute; top:calc(100% + 4px); left:0; min-width:214px; padding:4px; border:1px solid #435159; border-radius:6px; background:#192023; box-shadow:0 8px 24px #000a; }
 #scene-add-menu-popup[hidden] { display:none; }
-#authoring-source-fire-light[hidden], #demo-buttons[hidden] { display: none !important; }
+#authoring-source-fire-light[hidden], #demo-buttons[hidden], #tb-undo-leveling[hidden] { display: none !important; }
 #scene-add-menu-popup button { display:flex; width:100%; justify-content:space-between; gap:20px; padding:9px 10px; text-align:left; white-space:nowrap; }
 #scene-add-menu-popup small { color:#8fa1a6; font:10px 'SF Mono',monospace; }
 #local-liquid-performance .hint { margin:8px 0 0; color:#96a3a8; font:11px/1.5 'SF Mono',monospace; }
@@ -1060,7 +1060,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div id="ao-controls">
       <div class="slider-row">
         <span class="slider-label">Radius</span>
-        <input type="range" id="ao-radius" min="0.5" max="10" step="0.1" value="10.0">
+        <input type="range" id="ao-radius" min="0.5" max="20" step="0.1" value="10.0">
         <span class="slider-val" id="ao-radius-val">10.00</span>
       </div>
       <div class="slider-row">
@@ -3410,6 +3410,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="tb-sep"></div>
     <button class="tb-btn" id="tb-opaque" onclick="forceOpaque()" title="Force all materials opaque (fix transparent textures)">Opaque</button>
     <button class="tb-btn" onclick="snapToGround()" title="Level onto its base if it is clearly a few degrees off, then rest on the ground plane">Snap Ground</button>
+    <button class="tb-btn" id="tb-undo-leveling" onclick="undoLeveling()" hidden>Undo Leveling</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" id="tb-gizmo-translate" onclick="setGizmoMode('translate')" title="Translate gizmo (W)">Move</button>
     <button class="tb-btn" id="tb-gizmo-rotate" onclick="setGizmoMode('rotate')" title="Rotate gizmo (E)">Rotate</button>
@@ -6617,6 +6618,7 @@ async function resetSelectedSplatCorrection() {
 }
 
 function updateTransformInspector() {
+  syncLevelingButton();
   if (flameDomainGuide) flameDomainGuide.visible = activeSceneObjectId === FLAME_EMITTER_ID || activeSceneFieldId==='flame-field';
   const inspector = document.getElementById('transform-inspector');
   const empty = document.getElementById('transform-inspector-empty');
@@ -12133,9 +12135,71 @@ function applyAssetArrival(object, mode) {
   if (!placement) return null;
   object.scale.multiplyScalar(placement.scale);
   object.position.fromArray(placement.position);
-  object.userData.kaminosAssetArrival = { mode, scale: placement.scale, sourceDiagonal: placement.sourceDiagonal };
+  const leveling = levelObjectOnArrival(object, mode === 'append' && controls ? [controls.target.x, controls.target.z] : [0, 0]);
+  object.userData.kaminosAssetArrival = { mode, scale: placement.scale, sourceDiagonal: placement.sourceDiagonal, leveledDeg: leveling?.tiltDeg ?? 0 };
   return placement;
 }
+
+// Arrivals that are clearly a few degrees off their base (Snap Ground's rule)
+// are stood level, then re-centred on the anchor. The object is not yet in the
+// scene here, so its local transform is its world transform.
+function levelObjectOnArrival(object, anchor) {
+  const { analysis, choice } = sceneObjectRestingAnalysis(object);
+  if (!analysis || choice.reason !== 'level') return null;
+  const delta = levelingWorldDelta({ plane: choice.plane, hullPoints: analysis.hullPoints, groundY: groundPlane ? groundPlane.position.y : 0 });
+  object.updateWorldMatrix(true, false);
+  object.matrixWorld.clone().premultiply(delta).decompose(object.position, object.quaternion, object.scale);
+  object.updateWorldMatrix(true, true);
+  const box = new THREE.Box3().setFromObject(object, true);
+  object.position.x += anchor[0] - (box.min.x + box.max.x) / 2;
+  object.position.z += anchor[1] - (box.min.z + box.max.z) / 2;
+  object.updateWorldMatrix(true, true);
+  recordLeveling(object, delta, choice.plane.tiltDeg);
+  return { tiltDeg: choice.plane.tiltDeg };
+}
+
+// Leveling is remembered as the turn it applied and the orientation it left,
+// so Undo Leveling is offered exactly while the object still sits that way
+// (history undo/redo and later rotations update it naturally).
+function recordLeveling(object, delta, tiltDeg) {
+  const turn = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().extractRotation(delta));
+  object.updateWorldMatrix(true, false);
+  object.userData.kaminosLeveling = { turn: turn.toArray(), leveledQuaternion: object.getWorldQuaternion(new THREE.Quaternion()).toArray(), tiltDeg };
+}
+
+function levelingStillApplied(object) {
+  const record = object?.userData?.kaminosLeveling;
+  if (!record) return null;
+  object.updateWorldMatrix(true, false);
+  const now = object.getWorldQuaternion(new THREE.Quaternion());
+  return Math.abs(now.dot(new THREE.Quaternion().fromArray(record.leveledQuaternion))) > 1 - 1e-7 ? record : null;
+}
+
+function syncLevelingButton() {
+  const button = document.getElementById('tb-undo-leveling');
+  if (!button) return;
+  const record = levelingStillApplied(currentMesh);
+  button.hidden = !record;
+  if (record) button.title = `Turn it back ${record.tiltDeg.toFixed(1)}° to how the file stored it, still resting on the ground`;
+}
+
+window.undoLeveling = function() {
+  const object = currentMesh, record = levelingStillApplied(object);
+  if (!record) return;
+  object.updateWorldMatrix(true, true);
+  const box = new THREE.Box3().setFromObject(object, true);
+  const pivot = new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2);
+  const back = new THREE.Matrix4().makeTranslation(pivot.x, pivot.y, pivot.z)
+    .multiply(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().fromArray(record.turn).invert()))
+    .multiply(new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z));
+  const points = sceneObjectWorldPoints(object), v = new THREE.Vector3();
+  let lowest = Infinity;
+  for (let i = 0; i < points.length; i += 3) lowest = Math.min(lowest, v.set(points[i], points[i + 1], points[i + 2]).applyMatrix4(back).y);
+  if (Number.isFinite(lowest)) back.premultiply(new THREE.Matrix4().makeTranslation(0, (groundPlane ? groundPlane.position.y : 0) - lowest, 0));
+  if (!commitToolbarPose(object, toolbarPoseFromWorld(object, object.matrixWorld.clone().premultiply(back)))) return;
+  syncLevelingButton();
+  setInfo(`Undid leveling (${record.tiltDeg.toFixed(1)}°)`);
+};
 
 function sceneObjectWorldGeometry(object, { triangles: withTriangles = false } = {}) {
   object.updateWorldMatrix(true, true);
@@ -25963,6 +26027,8 @@ window.snapToGround = function() {
   const delta = levelingWorldDelta({ plane: choice.reason === 'level' ? choice.plane : null, hullPoints: analysis.hullPoints, groundY: groundPlane.position.y });
   currentMesh.updateWorldMatrix(true, false);
   if (!commitToolbarPose(currentMesh, toolbarPoseFromWorld(currentMesh, currentMesh.matrixWorld.clone().premultiply(delta)))) return;
+  if (choice.reason === 'level') recordLeveling(currentMesh, delta, choice.plane.tiltDeg);
+  syncLevelingButton();
   if (choice.reason === 'level') setInfo(`Leveled ${choice.plane.tiltDeg.toFixed(1)}° onto its base and snapped to ground`);
   else if (choice.reason === 'already-level') setInfo('Snapped to ground (already standing level)');
   else setInfo('Snapped to ground (no clear base to level onto)');
