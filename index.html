@@ -3831,6 +3831,7 @@ import {
   resolveFingerFluidParticleCount,
   resolveFingerFluidPressureSolver,
   resolveFingerFluidPressureBoundary,
+  resolveFingerFluidIPBFPressureRadiusScale,
   resolveFingerFluidPressureOptimizations,
   measureFingerFluidParticleAllocationCapacity,
   evaluateFingerFluidParticleAllocationRequest,
@@ -4200,6 +4201,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   if (!['0','1'].includes(ipbfDampingValue)) throw new RangeError('IPBF damping must be 0 or 1');
   const ipbfDamping = ipbfDampingValue === '1';
   const ipbfDampingBeta = Number(params.get('finger_fluid_ipbf_beta') ?? 60);
+  const ipbfPressureRadiusScale = resolveFingerFluidIPBFPressureRadiusScale({pressureSolver:effectivePressureSolver,pressureRadiusScale:Number(params.get('finger_fluid_ipbf_pressure_radius_scale') ?? 1)});
   const pressureOptimizations=resolveFingerFluidPressureOptimizations({pressureSolver:effectivePressureSolver,adaptiveDensity:requestedAdaptiveDensity,densityCellRejection:requestedDensityCellRejection,uniformVolumeDensityKernel:requestedUniformVolumeDensityKernel});
   const requestedEnergyDiagnosticsMode = params.get('finger_fluid_energy_diagnostics') ?? 'every_step';
   const requestedWitnessTargetStepValue = params.get('finger_fluid_witness_target_step');
@@ -4297,7 +4299,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     requestedFixedVolumeReferenceParticleCount,
     effectiveFixedVolumeReferenceParticleCount: requestedFixedVolumeReferenceParticleCount
       ?? resolveFingerFluidParticleCount(requestedParticleCount),
-    requestedPressureSolver, effectivePressureSolver, ...pressureBoundary, ipbfCompliance, ipbfAlternativeCompliance, ipbfDamping, ipbfDampingBeta,
+    requestedPressureSolver, effectivePressureSolver, ...pressureBoundary, ipbfCompliance, ipbfAlternativeCompliance, ipbfDamping, ipbfDampingBeta, ipbfPressureRadiusScale,
     requestedPressureIterations,
     effectivePressureIterations: Math.max(1, Math.min(12, Math.round(Number.isFinite(requestedPressureIterations) ? requestedPressureIterations : 3))),
     requestedEnergyDiagnosticsMode,
@@ -14107,6 +14109,7 @@ async function startFingerFluidBench() {
       densityIterations: fingerFluidBenchConfig.effectivePressureIterations,
       pressureSolver: fingerFluidBenchConfig.effectivePressureSolver,
       ipbfBoundaryMode: fingerFluidBenchConfig.requestedIPBFBoundaryMode,
+      ipbfPressureRadiusScale: fingerFluidBenchConfig.ipbfPressureRadiusScale,
       ipbfCompliance: fingerFluidBenchConfig.ipbfCompliance,
       ipbfAlternativeCompliance: fingerFluidBenchConfig.ipbfAlternativeCompliance,
       ipbfDamping: fingerFluidBenchConfig.ipbfDamping,

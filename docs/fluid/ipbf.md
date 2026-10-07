@@ -85,6 +85,16 @@ times represented-volume scale. For h=0.185 this approximates0.055 spacing cubed
 This explicit calibration connects physical volume and the density target when
 changing kernels; it is not the published implementation's particle units.
 
+An experimental pressure bandwidth control,
+`finger_fluid_ipbf_pressure_radius_scale` (API `ipbfPressureRadiusScale`),
+multiplies only IPBF's cubic support radius. Default1 preserves the integration
+above. Particle volume continues to use the unmodified base kernel calibration;
+host collision, optical footprint, and retained non-pressure kernels keep their
+existing radii. Runtime `ipbfSettings` records the scale, resulting radius, and
+particle volume. Nonpositive/nonfinite values and custom scales under PBF fail
+explicitly. This separates a density-sampling experiment from changing the
+amount of water; no moving-quality or timing result is established by the control.
+
 The grid traverses cell bounds of full cubic support rather than assuming a
 fixed27-cell stencil, and skips dormant particles. Density ratio is stored in
 incumbent units for classification/cohesion; pressure uses the dimensionless

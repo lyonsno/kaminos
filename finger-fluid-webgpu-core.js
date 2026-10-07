@@ -5,6 +5,25 @@ export function resolveFingerFluidPressureSolver(value='pbf') {
   return value;
 }
 
+export function resolveFingerFluidIPBFPressureRadiusScale({pressureSolver='ipbf',pressureRadiusScale=1}={}) {
+  const method=resolveFingerFluidPressureSolver(pressureSolver);
+  if(!Number.isFinite(pressureRadiusScale)||pressureRadiusScale<=0) throw new RangeError('IPBF pressure radius scale must be finite and positive');
+  if(method!=='ipbf'&&pressureRadiusScale!==1) throw new RangeError('Custom IPBF pressure radius scale requires IPBF pressure');
+  return pressureRadiusScale;
+}
+
+/** Pressure bandwidth is independent of represented volume and host radii. */
+export function resolveFingerFluidIPBFSampling({kernelRadius,restDensity,particleRadiusScale=1,particleVolumeScale=1,pressureRadiusScale=1}) {
+  resolveFingerFluidIPBFPressureRadiusScale({pressureRadiusScale});
+  for(const [label,value] of Object.entries({kernelRadius,restDensity,particleRadiusScale,particleVolumeScale})) {
+    if(!Number.isFinite(value)||value<=0) throw new RangeError(`IPBF sampling ${label} must be finite and positive`);
+  }
+  return {
+    radius:kernelRadius*particleRadiusScale*pressureRadiusScale,
+    particleVolume:(64*Math.PI/315)*kernelRadius**3/restDensity*particleVolumeScale,
+  };
+}
+
 export const KAMINOS_FINGER_FLUID_IPBF_WALL_PRESSURE_CONTRACT = 'ipbf-cubic-tangent-plane-density-v1';
 export function resolveFingerFluidPressureBoundary({pressureSolver='pbf',ipbfBoundaryMode='collision_only'}={}) {
   const method=resolveFingerFluidPressureSolver(pressureSolver);
@@ -13075,6 +13094,7 @@ export async function createWebGPUFingerFluidSolver({
   ipbfAlternativeCompliance = .001,
   ipbfDampingBeta = 60,
   ipbfBoundaryMode = 'collision_only',
+  ipbfPressureRadiusScale = 1,
   densityCellRejection = false,
   uniformVolumeDensityKernel = false,
   energyDiagnosticsMode = 'every_step',
@@ -13109,6 +13129,7 @@ export async function createWebGPUFingerFluidSolver({
 } = {}) {
   const safePressureSolver = resolveFingerFluidPressureSolver(pressureSolver);
   const useIPBF = safePressureSolver === 'ipbf';
+  const safeIPBFPressureRadiusScale=resolveFingerFluidIPBFPressureRadiusScale({pressureSolver:safePressureSolver,pressureRadiusScale:ipbfPressureRadiusScale});
   const pressureBoundary=resolveFingerFluidPressureBoundary({pressureSolver:safePressureSolver,ipbfBoundaryMode});
   if(ipbfBoundaryMode==='tangent_plane'&&supportContactRoute!==KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE) throw new RangeError('IPBF tangent-plane wall support currently requires the analytic basin/sphere route');
   for (const [label,value] of [['compliance',ipbfCompliance],['alternative compliance',ipbfAlternativeCompliance]]) {
@@ -13534,8 +13555,11 @@ export async function createWebGPUFingerFluidSolver({
     )
     .replace(KAMINOS_FINGER_FLUID_SUPPORT_BINDINGS_TOKEN, supportShaderSource.bindings)
     .replace(KAMINOS_FINGER_FLUID_SUPPORT_FUNCTIONS_TOKEN, supportShaderSource.functions);
-  const ipbfRadius = safeKernelRadius * safeUniformParticleRadiusScale;
-  const ipbfParticleVolume = (64 * Math.PI / 315) * safeKernelRadius ** 3 / safeRestDensity * safeUniformParticleVolumeScale;
+  const {radius:ipbfRadius,particleVolume:ipbfParticleVolume}=resolveFingerFluidIPBFSampling({
+    kernelRadius:safeKernelRadius,restDensity:safeRestDensity,
+    particleRadiusScale:safeUniformParticleRadiusScale,particleVolumeScale:safeUniformParticleVolumeScale,
+    pressureRadiusScale:safeIPBFPressureRadiusScale,
+  });
   const ipbfStateBuffer = useIPBF ? device.createBuffer({label:'IPBF-inertia-gradient-hessian-alternative',size:safeParticleCount*96,usage:GPUBufferUsage.STORAGE}) : null;
   const ipbfLayout = useIPBF ? device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}}]}) : null;
   const ipbfBindGroup = useIPBF ? device.createBindGroup({layout:ipbfLayout,entries:[{binding:0,resource:{buffer:ipbfStateBuffer}}]}) : null;
@@ -16115,7 +16139,7 @@ export async function createWebGPUFingerFluidSolver({
       requestedIPBFBoundaryMode:pressureBoundary.requestedIPBFBoundaryMode,
       effectiveIPBFBoundaryMode:pressureBoundary.effectiveIPBFBoundaryMode,
       pressureSolverRoute: useIPBF ? 'webgpu-ipbf-cubic-spline-grid-v0' : KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE,
-      ipbfSettings: useIPBF ? {compliance:ipbfCompliance,damping:ipbfDamping,alternativeCompliance:ipbfAlternativeCompliance,beta:ipbfDampingBeta,kernel:'cubic_spline',radius:ipbfRadius,particleVolume:ipbfParticleVolume,relaxation:.5,boundaryPressure:ipbfBoundaryMode,wallGeometryApproximation:ipbfBoundaryMode==='tangent_plane'?'frozen_local_planes_with_product_union':'none',legacyUniformDamping:false,nonPressureScheduling:'retained_post_projection'} : null,
+      ipbfSettings: useIPBF ? {compliance:ipbfCompliance,damping:ipbfDamping,alternativeCompliance:ipbfAlternativeCompliance,beta:ipbfDampingBeta,kernel:'cubic_spline',radius:ipbfRadius,pressureRadiusScale:safeIPBFPressureRadiusScale,particleVolume:ipbfParticleVolume,relaxation:.5,boundaryPressure:ipbfBoundaryMode,wallGeometryApproximation:ipbfBoundaryMode==='tangent_plane'?'frozen_local_planes_with_product_union':'none',legacyUniformDamping:false,nonPressureScheduling:'retained_post_projection'} : null,
       truthScene: safeTruthScene,
       colorMode: safeColorMode,
       particleShiftStrength: safeParticleShiftStrength,
