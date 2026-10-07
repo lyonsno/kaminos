@@ -3659,14 +3659,34 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "Invalid JSON"}, 400)
             return
 
-        # Check for overwrite hint
-        hint = data.pop("_filename", None)
-        if hint:
-            safe_hint = "".join(c for c in hint if c.isalnum() or c in "._-")
-            if safe_hint and (SCENES_DIR / safe_hint).exists():
-                filename = safe_hint
-            else:
-                hint = None  # fall through to new file
+        # Save As with a chosen name: sanitized into the scenes directory, and
+        # an existing file is only replaced when the caller confirms it.
+        save_as_name = data.pop("_saveAsName", None)
+        overwrite = data.pop("_overwrite", False) is True
+        if save_as_name is not None:
+            stem = Path(str(save_as_name).strip()).name
+            if stem.endswith(".kaminos.json"):
+                stem = stem[: -len(".kaminos.json")]
+            stem = "-".join(stem.split())
+            stem = "".join(c for c in stem if c.isalnum() or c in "._-").strip(".-")
+            if not stem:
+                self.send_json({"error": "Scene name has no usable characters"}, 400)
+                return
+            filename = f"{stem}.kaminos.json"
+            if (SCENES_DIR / filename).exists() and not overwrite:
+                self.send_json({"error": f"{filename} already exists", "exists": filename}, 409)
+                return
+            data.pop("_filename", None)
+            hint = filename
+        else:
+            # Check for overwrite hint
+            hint = data.pop("_filename", None)
+            if hint:
+                safe_hint = "".join(c for c in hint if c.isalnum() or c in "._-")
+                if safe_hint and (SCENES_DIR / safe_hint).exists():
+                    filename = safe_hint
+                else:
+                    hint = None  # fall through to new file
 
         if not hint:
             # Generate new filename from model name and timestamp

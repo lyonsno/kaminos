@@ -80,6 +80,17 @@ body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !import
 #scene-add-menu-popup { position:absolute; top:calc(100% + 4px); left:0; min-width:214px; padding:4px; border:1px solid #435159; border-radius:6px; background:#192023; box-shadow:0 8px 24px #000a; }
 #scene-add-menu-popup[hidden] { display:none; }
 #authoring-source-fire-light[hidden], #demo-buttons[hidden], #tb-undo-leveling[hidden] { display: none !important; }
+.file-name-prompt { position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center; background:#0008; }
+.file-name-prompt-panel { min-width:340px; max-width:min(520px, calc(100vw - 32px)); padding:14px; border:1px solid #3a4245; border-radius:6px; background:#141819; box-shadow:0 8px 28px #000a; font:11px 'SF Mono',monospace; color:#d7e1e3; }
+.file-name-prompt-title { margin-bottom:10px; font-size:12px; color:#eef4f5; }
+.file-name-prompt-row { display:flex; align-items:center; gap:4px; }
+.file-name-prompt-row input { flex:1; min-width:0; padding:6px 8px; border:1px solid #405157; border-radius:4px; background:#0d1011; color:#eef4f5; font:inherit; outline:none; }
+.file-name-prompt-row input:focus { border-color:#1976d2; }
+.file-name-prompt-ext { color:#8a9a9e; }
+.file-name-prompt-message { min-height:14px; margin:8px 0 4px; color:#e0b86a; }
+.file-name-prompt-actions { display:flex; justify-content:flex-end; gap:8px; }
+.file-name-prompt-actions button { padding:5px 12px; border:1px solid #405157; border-radius:4px; background:#1d2426; color:#d7e1e3; font:inherit; cursor:pointer; }
+.file-name-prompt-actions button[type="submit"] { background:#1976d2; border-color:#1976d2; color:white; }
 #scene-add-menu-popup button { display:flex; width:100%; justify-content:space-between; gap:20px; padding:9px 10px; text-align:left; white-space:nowrap; }
 #scene-add-menu-popup small { color:#8fa1a6; font:10px 'SF Mono',monospace; }
 #local-liquid-performance .hint { margin:8px 0 0; color:#96a3a8; font:11px/1.5 'SF Mono',monospace; }
@@ -3428,10 +3439,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <button class="tb-btn" id="tb-gizmo-off" onclick="setGizmoMode(null)" title="Disable gizmo (Q)">No Gizmo</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" onclick="resetTransform()" title="Reset transforms">Reset</button>
-    <button class="tb-btn primary" onclick="exportGLB()" title="Save corrected GLB">Save GLB</button>
+    <button class="tb-btn primary" onclick="exportGLB()" title="Export the selected object or group as a GLB">Export GLB</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" onclick="saveScene()" title="Save/overwrite scene (Ctrl+S)">Save</button>
-    <button class="tb-btn" onclick="saveSceneAs()" title="Save as new scene (Ctrl+Shift+S)">Save As</button>
+    <button class="tb-btn" onclick="saveSceneAs({ promptName: true })" title="Save as a named scene (Ctrl+Shift+S)">Save As</button>
     <button class="tb-btn" onclick="document.getElementById('scene-file-input').click()" title="Load scene (Ctrl+O)">Load</button>
     <input type="file" id="scene-file-input" accept=".json,.kaminos" style="display:none">
   </div>
@@ -3886,6 +3897,7 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { assetArrivalFramingWindow, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
+import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
@@ -26176,24 +26188,57 @@ window.snapToGround = function() {
   else setInfo('Snapped to ground (no clear base to level onto)');
 };
 
-window.exportGLB = function() {
-  if (!currentMesh) return;
+// Export the selection (one object, or every member of a selected group) as a
+// binary GLB, keeping each object's place in the scene. Editor helpers and
+// objects GLB cannot carry (splats, lights, flame and water emitters) stay out.
+const GLB_EXPORT_SKIPPED_TYPES = new Set(['splat', 'light', FLAME_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_TYPE]);
 
-  // Bake the current transform into geometry so the export is corrected
-  const exportScene = currentMesh.clone(true);
+function selectionForExport() {
+  const group = selectedSceneGroupEntry();
+  if (group) return { label: sceneGroupDisplayLabel(group), entries: sceneObjects.filter(entry => group.objectIds.includes(entry.id)) };
+  const entry = selectedSceneObjectEntry();
+  if (entry) return { label: sceneObjectDisplayLabel(entry), entries: [entry] };
+  if (currentMesh && !currentMesh.userData?.kaminosEditorHelper) return { label: glbFileName || 'model', entries: [{ object: currentMesh, type: 'glb' }] };
+  return null;
+}
 
-  const exporter = new GLTFExporter();
-  exporter.parse(exportScene, result => {
-    const blob = new Blob([result], { type: 'model/gltf-binary' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const name = glbFileName.replace(/\.(glb|gltf)$/i, '') + '_fixed.glb';
-    a.href = url;
-    a.download = name;
-    a.click();
-    URL.revokeObjectURL(url);
-    setInfo(`Saved ${name}`);
-  }, { binary: true });
+function exportCloneInWorld(object) {
+  object.updateWorldMatrix(true, true);
+  const clone = object.clone(true);
+  const helpers = [];
+  clone.traverse(child => { if (child !== clone && child.userData?.kaminosEditorHelper) helpers.push(child); });
+  for (const helper of helpers) helper.removeFromParent();
+  object.matrixWorld.decompose(clone.position, clone.quaternion, clone.scale);
+  return clone;
+}
+
+window.exportGLB = async function({ name = null } = {}) {
+  const selection = selectionForExport();
+  if (!selection) { setInfo('Select an object or group to export'); return false; }
+  const entries = selection.entries.filter(entry => entry.object && !GLB_EXPORT_SKIPPED_TYPES.has(entry.type));
+  const skipped = selection.entries.length - entries.length;
+  if (!entries.length) { setInfo('Nothing in the selection can be exported as GLB'); return false; }
+  const stem = name === null
+    ? await promptForFileName({ title: 'Export selection as GLB', defaultStem: selection.label.replace(/\.(glb|gltf)$/i, ''), extension: '.glb' })
+    : sanitizeFileStem(name, '.glb');
+  if (!stem) { if (name === null) setInfo('Export cancelled'); return false; }
+  const root = new THREE.Group();
+  root.name = stem;
+  for (const entry of entries) root.add(exportCloneInWorld(entry.object));
+  try {
+    const glb = await new GLTFExporter().parseAsync(root, { binary: true });
+    const url = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${stem}.glb`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setInfo(`Exported ${entries.length} object${entries.length === 1 ? '' : 's'} to ${stem}.glb${skipped ? ` (skipped ${skipped} that GLB cannot carry)` : ''}`);
+    return true;
+  } catch (error) {
+    setInfo(`Export failed: ${error.message || error}`);
+    return false;
+  }
 };
 
 // --- Greenroom Browser ---
@@ -29101,9 +29146,10 @@ document.getElementById('composition-library').onclick = () => {
   grBrowseScenes().then(() => document.getElementById('scenes-list').scrollIntoView({ block: 'start' }));
 };
 
-async function saveToServer(sceneData, filename, { result: detailed = false } = {}) {
+async function saveToServer(sceneData, filename, { result: detailed = false, saveAsName = null, overwrite = false } = {}) {
   const body = { ...sceneData };
   if (filename) body._filename = filename; // hint to server to overwrite
+  if (saveAsName) { body._saveAsName = saveAsName; if (overwrite) body._overwrite = true; }
   const jsonStr = JSON.stringify(body, null, 2);
   try {
     const resp = await fetch('/api/save-scene', {
@@ -29112,10 +29158,13 @@ async function saveToServer(sceneData, filename, { result: detailed = false } = 
       body: jsonStr,
     });
     const result = await resp.json();
+    if (resp.status === 409 && result.exists) return detailed ? { ok: false, exists: result.exists, error: result.error } : false;
     if (!resp.ok) throw new Error(result.error || `Scene save failed: HTTP ${resp.status}`);
     if (typeof result.saved === 'string' && result.saved.endsWith('.kaminos.json') && !/[/\\]/.test(result.saved)) {
       const document = JSON.parse(jsonStr);
       delete document._filename;
+      delete document._saveAsName;
+      delete document._overwrite;
       const url = compositionRestoreUrl(document.composition, result.saved, location.origin);
       currentSceneFile = result.saved;
       setInfo(`Scene saved: ${result.saved}`);
@@ -29163,16 +29212,45 @@ window.saveScene = ({ result = false } = {}) => withAuthoringAction(async () => 
 }, { result });
 
 // Save As: always create a new scene file
-window.saveSceneAs = ({ result = false } = {}) => withAuthoringAction(async () => {
-  if (sceneSaveIsBlocked()) return false;
-  if (sceneIsEmpty()) {
-    setInfo('Nothing to save');
-    return false;
+// Save As from the button or Cmd/Ctrl+Shift+S asks for the scene's name and
+// confirms before replacing an existing scene; script callers that pass no
+// promptName keep the generated name and no dialog.
+function defaultSceneSaveStem() {
+  if (currentSceneFile) return currentSceneFile.replace(/\.kaminos\.json$/, '');
+  return sanitizeFileStem(document.getElementById('composition-label')?.value || '', '.kaminos.json') || 'scene';
+}
+
+window.saveSceneAs = async ({ result = false, promptName = false, name = null } = {}) => {
+  if (!promptName && name === null) {
+    return withAuthoringAction(async () => {
+      if (sceneSaveIsBlocked()) return false;
+      if (sceneIsEmpty()) {
+        setInfo('Nothing to save');
+        return false;
+      }
+      await collectSceneComposition();
+      const data = buildSceneData();
+      return saveToServer(data, null, { result });
+    }, { result });
   }
-  await collectSceneComposition();
-  const data = buildSceneData();
-  return saveToServer(data, null, { result });
-}, { result });
+  if (sceneIsEmpty()) { setInfo('Nothing to save'); return result ? { ok: false, error: 'Nothing to save' } : false; }
+  let stem = name === null ? await promptForFileName({ title: 'Save scene as', defaultStem: defaultSceneSaveStem(), extension: '.kaminos.json' }) : sanitizeFileStem(name, '.kaminos.json');
+  let overwrite = false;
+  while (stem) {
+    const saved = await withAuthoringAction(async () => {
+      if (sceneSaveIsBlocked()) return false;
+      await collectSceneComposition();
+      return saveToServer(buildSceneData(), null, { result: true, saveAsName: stem, overwrite });
+    }, { result: true });
+    if (!saved?.exists) return result ? saved : saved?.ok === true;
+    const again = await promptForFileName({ title: 'Save scene as', defaultStem: stem, extension: '.kaminos.json',
+      message: `${saved.exists} already exists. Save again to replace it, or choose another name.`, confirmLabel: 'Replace' });
+    overwrite = again === stem;
+    stem = again;
+  }
+  setInfo('Save As cancelled');
+  return result ? { ok: false, error: 'Save As cancelled' } : false;
+};
 
 function getMaterialState() {
   return getMaterialStateForObject(currentMesh);
@@ -29491,7 +29569,7 @@ window.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 's') {
     e.preventDefault();
     if (sceneIsEmpty()) return;
-    if (e.shiftKey) saveSceneAs();
+    if (e.shiftKey) saveSceneAs({ promptName: true });
     else saveScene();
   }
   if ((e.metaKey || e.ctrlKey) && e.key === 'o') {

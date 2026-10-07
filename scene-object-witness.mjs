@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { assertLocalLiquidSelectionContinuity } from './local-liquid-selection-evidence.mjs';
@@ -462,6 +462,93 @@ async function runArrivalAutoLevelScenario(ws) {
   lastEvidence.arrivalAutoLevel.reopened = reopened;
   if (!reopened.afterLoad.undoButtonShown || reopened.afterLoad.resting?.reason !== 'already-level') throw new Error('Undo Leveling not offered after save and reopen: ' + JSON.stringify(reopened));
   if (reopened.unleveled.resting?.reason !== 'level' || Math.abs(reopened.unleveled.resting.tiltDeg - arrived.arrival.leveledDeg) > 0.2) throw new Error('Undo Leveling after reopen did not restore the stored tilt: ' + JSON.stringify(reopened.unleveled));
+}
+
+// Export the selection as a GLB and Save As, both through the filename
+// dialog: a single object, a group of two, a new scene name, an existing name
+// that must be confirmed before it is replaced, and Escape declining.
+function readGlbSummary(path) {
+  const bytes = readFileSync(path);
+  if (bytes.toString('ascii', 0, 4) !== 'glTF' || bytes.readUInt32LE(4) !== 2 || bytes.readUInt32LE(8) !== bytes.length) throw new Error('export is not a binary glTF 2.0 file: ' + path);
+  const json = JSON.parse(bytes.toString('utf8', 20, 20 + bytes.readUInt32LE(12)));
+  return { bytes: bytes.length, meshes: json.meshes?.length ?? 0, meshNodes: (json.nodes || []).filter(node => node.mesh !== undefined).length, nodeNames: (json.nodes || []).map(node => node.name || null) };
+}
+
+async function runExportAndSaveAsNamesScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-export-and-save-as-names';
+  const downloads = resolve(dirname(out), 'exports-' + process.pid);
+  rmSync(downloads, { recursive: true, force: true });
+  mkdirSync(downloads, { recursive: true });
+  await wsRequest(ws, 'Page.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
+  const frames = 'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))';
+  const answer = (name, { expectMessage = false } = {}) => `(async () => {
+    let dialog = null;
+    for (let i = 0; i < 80 && !dialog; i++) { dialog = document.querySelector('.file-name-prompt'); if (!dialog) await new Promise(r => setTimeout(r, 50)); }
+    if (!dialog) throw new Error('filename dialog did not open');
+    const seen = { title: dialog.querySelector('.file-name-prompt-title').textContent, defaultValue: dialog.querySelector('input').value, message: dialog.querySelector('.file-name-prompt-message').textContent, confirm: dialog.querySelector('[data-file-name-confirm]').textContent };
+    ${name === null ? "dialog.querySelector('input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));" : "dialog.querySelector('input').value = " + JSON.stringify(name) + "; dialog.querySelector('[data-file-name-confirm]').click();"}
+    return seen;
+  })()`;
+  const click = label => `(() => { const button = [...document.querySelectorAll('#transform-bar button')].find(item => item.textContent.trim() === ${JSON.stringify(label)}); if (!button) throw new Error(${JSON.stringify(label)} + ' button missing'); button.click(); })()`;
+  const waitFile = async name => { for (let i = 0; i < 120; i++) { const path = resolve(downloads, name); if (existsSync(path) && readFileSync(path).length > 20) { await delay(200); return path; } await delay(125); } throw new Error('export never arrived: ' + name); };
+
+  const scenesAtStart = new Set(await evaluate(ws, `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`));
+  try {
+  await evaluate(ws, click('Export GLB'));
+  const singleDialog = await evaluate(ws, answer('chair-export'));
+  const single = readGlbSummary(await waitFile('chair-export.glb'));
+
+  // The arrived asset sits in its own group; parent a new cube into that group
+  // and select the group, so the export holds both meshes.
+  const grouped = await evaluate(ws, `(async () => {
+    const chairGroup = window.kaminosSceneObjectDebugState()[0].groupId;
+    if (!chairGroup) throw new Error('arrived asset has no group to extend');
+    document.querySelector('[data-scene-add="box"]').click(); await ${frames};
+    const parent = document.getElementById('object-parent');
+    parent.value = chairGroup; parent.dispatchEvent(new Event('change', { bubbles: true })); await ${frames};
+    document.querySelector('[data-scene-group-id="' + chairGroup + '"]').click(); await ${frames};
+    const objects = window.kaminosSceneObjectDebugState();
+    return { objects: objects.length, inGroup: objects.filter(object => object.groupId === chairGroup).length };
+  })()`);
+  await evaluate(ws, click('Export GLB'));
+  const groupDialog = await evaluate(ws, answer('chair-and-cube'));
+  const group = readGlbSummary(await waitFile('chair-and-cube.glb'));
+
+  const sceneName = 'dark-modal-save-as-witness-' + process.pid;
+  const listScenes = `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`;
+  await evaluate(ws, click('Save As'));
+  const saveDialog = await evaluate(ws, answer(sceneName));
+  let listed = [];
+  for (let i = 0; i < 80 && !listed.includes(sceneName + '.kaminos.json'); i++) { await delay(125); listed = await evaluate(ws, listScenes); }
+  const firstSaved = await evaluate(ws, `(async () => (await (await fetch('/api/read?root=scenes&path=${sceneName}.kaminos.json')).json()).timestamp)()`);
+  await delay(1100);
+  await evaluate(ws, click('Save As'));
+  if (!listed.includes(sceneName + '.kaminos.json')) throw new Error('Save As did not create the named scene: ' + JSON.stringify(listed.filter(name => !scenesAtStart.has(name))));
+  const sameNameDialog = await evaluate(ws, answer(sceneName));
+  const replaceDialog = await evaluate(ws, answer(sceneName));
+  await delay(600);
+  const secondSaved = await evaluate(ws, `(async () => (await (await fetch('/api/read?root=scenes&path=${sceneName}.kaminos.json')).json()).timestamp)()`);
+  const before = (await evaluate(ws, listScenes)).length;
+  await evaluate(ws, click('Save As'));
+  const escapeDialog = await evaluate(ws, answer(null));
+  await delay(600);
+  const after = (await evaluate(ws, listScenes)).length;
+  const dialogOpen = await evaluate(ws, `!!document.querySelector('.file-name-prompt')`);
+  lastEvidence.exportAndSaveAsNames = { downloads, singleDialog, single, grouped, groupDialog, group, saveDialog, listedSaved: listed.includes(sceneName + '.kaminos.json'), firstSaved, sameNameDialog, replaceDialog, secondSaved, scenesBeforeEscape: before, scenesAfterEscape: after, escapeDialog, dialogOpenAfterEscape: dialogOpen };
+  const e = lastEvidence.exportAndSaveAsNames;
+  if (single.meshNodes !== 1) throw new Error('single-object export did not contain exactly one mesh: ' + JSON.stringify(single));
+  if (grouped.inGroup !== 2 || group.meshNodes !== 2) throw new Error('group export did not contain both meshes: ' + JSON.stringify({ grouped, group }));
+  if (!e.listedSaved) throw new Error('Save As did not create the named scene: ' + sceneName);
+  if (!/already exists/.test(e.replaceDialog.message) || e.replaceDialog.confirm !== 'Replace') throw new Error('existing scene name was not confirmed before replacing: ' + JSON.stringify(e.replaceDialog));
+  if (!(e.secondSaved > e.firstSaved)) throw new Error('confirmed Replace did not overwrite the scene: ' + JSON.stringify({ firstSaved: e.firstSaved, secondSaved: e.secondSaved }));
+  if (e.scenesAfterEscape !== e.scenesBeforeEscape || e.dialogOpenAfterEscape) throw new Error('Escape did not cancel Save As: ' + JSON.stringify(e));
+  } finally {
+    // Remove every scene file this scenario created, pass or fail.
+    const created = (await evaluate(ws, `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`)).filter(name => !scenesAtStart.has(name));
+    for (const name of created) await evaluate(ws, `fetch('/api/delete-scene?name=' + encodeURIComponent(${JSON.stringify(name)})).then(response => response.status)`);
+    lastEvidence.exportAndSaveAsNamesCleanup = created;
+  }
 }
 
 async function runNavigationDepthIndexScenario(ws) {
@@ -5786,6 +5873,8 @@ try {
     await runToolbarRotateLiveScenario(ws);
   } else if (scenario === 'arrival-auto-level') {
     await runArrivalAutoLevelScenario(ws);
+  } else if (scenario === 'export-and-save-as-names') {
+    await runExportAndSaveAsNamesScenario(ws);
   } else if (scenario === 'mesh-asset-append-arrival') {
     await runMeshAssetAppendArrivalScenario(ws, args.get('--append-url'));
   } else if (scenario === 'navigation-depth-index') {
