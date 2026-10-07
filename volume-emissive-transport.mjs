@@ -147,8 +147,9 @@ fn sceneEmissiveMaterialAt(p: vec3<f32>) -> EmissiveMaterial {
 }
 fn emissiveCamera(rgb: vec3<f32>) -> vec3<f32> {
   let balanced = vec3<f32>(dot(u.emissive_white_r.xyz,rgb),dot(u.emissive_white_g.xyz,rgb),dot(u.emissive_white_b.xyz,rgb));
-  let exposed = max(vec3<f32>(0.0), balanced*exp2(u.physical_display.y));
-  let knee = u.physical_display.z;
+  let cameraEV=select(u.physical_display.y,u.emissive_reserved.z,u.emissive_reserved.w>0.5);
+  let exposed = max(vec3<f32>(0.0), balanced*exp2(cameraEV));
+  let knee = select(u.physical_display.z,u.physical_display.w,u.emissive_reserved.w>0.5);
   let d = 1.0-knee;
   let shoulder = vec3<f32>(1.0)-d*d/max(exposed+vec3<f32>(1.0-2.0*knee),vec3<f32>(d));
   let linear = select(exposed, shoulder, exposed > vec3<f32>(knee));

@@ -1,4 +1,5 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
+import {resolveSceneCameraSettings,resolveVolumeAppearanceTrims} from './scene-lighting-semantics.mjs';
 import { buildInflowCoverageMap, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
 import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
 import {
@@ -8096,7 +8097,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       let coverage = boundaryMaterialSupport * selectiveRaymarchFireAuthority;
       let medium = emissiveMaterial(reconstructed, coverage, visibleSmokeAuthority);
       let sigma = medium.absorption + medium.scattering;
-      let emission = medium.emission + medium.scattering * incidentAt(p);
+      let emission = medium.emission * exp2(u.emissive_reserved.x) + (medium.scattering * incidentAt(p)) * exp2(u.emissive_reserved.y);
       standardRadianceContribution = emission * emissionIntegral(sigma, localDt);
       standardExtinctionStep = sigma * localDt;
     } else if (u.physical_fire.x > 0.5) {
@@ -8275,7 +8276,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let overlay = clamp(gridAccum * u.grid_overlay_debug.x * 1.8, 0.0, 1.0);
   grade = mix(grade, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
   var current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
-  if (u.physical_fire.x > 0.5) {
+  if (u.emissive_reserved.w > 0.5) {
+    current=emissiveCamera(color);
+    current=mix(current,vec3<f32>(0.04,0.86,0.98),overlay*0.76);
+  } else if (u.physical_fire.x > 0.5) {
     if (u.physical_fire.x > 1.5) {
       current = emissiveCamera(color);
     } else {
@@ -9999,6 +10003,8 @@ export function createKaminosVolumePrototype({
   const volumePresentationControls = new Float32Array([1, 0, 0, 0]);
   const initialControlRetirement = stripRetiredRaymarchControls(getControls());
   let controlsSnapshot = applyRuntimeQualityControls(initialControlRetirement.controls);
+  let sceneCameraSettings=null;
+  let appearanceTrims=resolveVolumeAppearanceTrims();
   let volumePresentationModeRequestedRaw = 'beauty';
   let volumePresentationModeRequested = 'beauty';
   let volumePresentationModeEffective = 'beauty';
@@ -15029,8 +15035,8 @@ export function createKaminosVolumePrototype({
     uniforms[372] = controlsSnapshot.physicalCleanStrength ?? 0.08;
     uniforms[373] = controlsSnapshot.physicalExposureEV ?? 0;
     uniforms[374] = controlsSnapshot.physicalHighlightKnee ?? 0.6;
-    uniforms[375] = 0;
-    const whiteKelvin = controlsSnapshot.physicalWhiteBalance ?? 4000;
+    uniforms[375] = sceneCameraSettings?.highlightKnee ?? .6;
+    const whiteKelvin = sceneCameraSettings?.whiteBalanceKelvin ?? controlsSnapshot.physicalWhiteBalance ?? 4000;
     if (whiteKelvin !== emissiveWhiteKelvin) {
       emissiveWhiteMatrix = cameraWhiteBalance(whiteKelvin);
       emissiveWhiteKelvin = whiteKelvin;
@@ -15041,7 +15047,7 @@ export function createKaminosVolumePrototype({
       controlsSnapshot.physicalSmokeAlbedo ?? 0.35,
       controlsSnapshot.physicalAmbient ?? 0.02, transportedEmissiveMaterial ? 1 : 0,
       ...emissiveWhiteMatrix[0], 0, ...emissiveWhiteMatrix[1], 0, ...emissiveWhiteMatrix[2], 0,
-      0,0,0,0,
+      appearanceTrims.flameStops,appearanceTrims.smokeStops,sceneCameraSettings?.exposureEV??0,sceneCameraSettings?1:0,
     ], EMISSIVE_UNIFORM_OFFSET);
     const physicalModel = physicalColorMode === 2 ? 'emissive-transport-v2' : 'thermal-reaction-v1';
     state.physicalColor = {
@@ -15059,6 +15065,8 @@ export function createKaminosVolumePrototype({
       whiteBalanceKelvin: whiteKelvin,
       material: physicalColorMode === 2 ? { thermalControl: 'hot-soot-optical-density', smokeExtinction: uniforms[EMISSIVE_UNIFORM_OFFSET], scatteringAlbedo: uniforms[EMISSIVE_UNIFORM_OFFSET+1], ambientRadiance: uniforms[EMISSIVE_UNIFORM_OFFSET+2] } : null,
     };
+    state.sceneCamera=sceneCameraSettings?{...sceneCameraSettings,effective:true}:null;
+    state.appearanceTrims={...appearanceTrims,effective:physicalColorEffective&&physicalColorMode===2,scope:'visible-radiance-only',sourceEnergyChanged:false,extinctionChanged:false};
     volumePresentationControls[0] = volumeExposure;
     device.queue.writeBuffer(volumePresentationControlsBuffer, 0, volumePresentationControls);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
@@ -25890,6 +25898,8 @@ export function createKaminosVolumePrototype({
       return { confinementEpsilonOverride, appliesOn: 'next-frame', previous: state.confinement };
     },
     emissiveCameraState() { return state.physicalColor ? {...state.physicalColor} : null; },
+    setSceneCamera(value) {sceneCameraSettings=resolveSceneCameraSettings(value);return {...sceneCameraSettings};},
+    setAppearanceTrims(value) {appearanceTrims=resolveVolumeAppearanceTrims(value);return {...appearanceTrims};},
     debugState() {
       return {
         ...state,

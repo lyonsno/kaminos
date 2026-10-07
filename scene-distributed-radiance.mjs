@@ -11,7 +11,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   let gain=1,smokeMode='distributed',sourceSoftness=0,handle=null,revision=null,frame=null,external=null,externalBack=null,disposed=false;
   const originals=new Map();
   const editing=new Set();let editCommitted=false,rebuildAnnounced=false,retainComparisons=false;
-  let angularPattern='fixed',angularRotation=0;
+  let angularPattern='source',angularRotation=0;
   let surfaceReconstruction=0;
   let surfaceScattering=false;
   const surfaceGain=THREE.TSL.uniform(1);

@@ -1,0 +1,24 @@
+export function resolveSceneCameraSettings(value={}) {
+  const next={exposureEV:0,whiteBalanceKelvin:6504,highlightKnee:.6};
+  for(const key of Object.keys(next))if(Object.hasOwn(value,key))next[key]=value[key];
+  if(!Object.values(next).every(Number.isFinite)||next.whiteBalanceKelvin<=0||next.highlightKnee<0||next.highlightKnee>=1)throw Error('Invalid scene camera settings');
+  return next;
+}
+
+export function resolveVolumeAppearanceTrims(value={}) {
+  const next={flameStops:0,smokeStops:0};
+  for(const key of Object.keys(next))if(Object.hasOwn(value,key))next[key]=value[key];
+  if(!Object.values(next).every(v=>Number.isFinite(v)&&Number.isFinite(Math.fround(2**v))))throw Error('Invalid volume appearance trim');
+  return next;
+}
+
+// These are deliberate product-path migrations, not fallback for unknown laws.
+export function productTransportSettings(value) {
+  const next={...value};
+  const key='rendering-angular-pattern';
+  if(!['fixed','spatial','source'].includes(next[key]))throw Error('Unknown lighting angular pattern');
+  if(!['legacy','distributed'].includes(next['rendering-smoke-solver']))throw Error('Unknown smoke illumination solver');
+  next[key]='source';next['rendering-smoke-solver']='distributed';next['rendering-surface-scattering']=true;
+  next['rendering-light-mode']='shared';
+  return next;
+}

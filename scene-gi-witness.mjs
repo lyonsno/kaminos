@@ -34,7 +34,47 @@ try {
     await page.check('#rendering-surface-scattering');
     await page.waitForTimeout(1000);
   }
-  if(operation==='--light-coupling') {
+  if(operation==='--product-controls') {
+    report.phase='product-controls';await save();
+    await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
+    await page.selectOption('#scene-gi-mode','combined');await page.locator('#scene-gi-mode').blur();
+    for(const id of ['rendering-angular-pattern','rendering-smoke-solver','rendering-surface-scattering','rendering-retain-comparisons','rendering-angular-swap','rendering-light-mode','rendering-match-flame-camera','exposure-slider'])assert.equal(await page.locator('#'+id).isVisible(),false,`${id} remains on normal authoring surface`);
+    const settle=async()=>{const frame=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);await page.waitForFunction(f=>window.__kaminosVolumePrototype.debugState().frameCount>f+2,frame,{timeout:0});};
+    const sourceHash=async()=>createHash('sha256').update(JSON.stringify(await page.evaluate(async()=> (await window.__kaminosVolumePrototype.sampleSceneVolumeSource()).values))).digest('hex');
+    await settle();report.sourceBefore=await sourceHash();
+    const before=await page.evaluate(()=>window.kaminosAuthoringParameters.read('@scene-camera'));
+    await page.locator('#scene-camera-ev').click();await page.locator('#scene-camera-ev').fill(String(before.exposureEV+1));await page.locator('#scene-camera-ev').blur();await settle();
+    report.camera=await page.evaluate(()=>({scene:window.kaminosSceneEmissiveCameraDebugState(),volume:window.__kaminosVolumePrototype.debugState().sceneCamera,settings:window.kaminosAuthoringParameters.read('@scene-camera')}));
+    assert.equal(report.camera.scene.exposureEV,before.exposureEV+1);assert.equal(report.camera.volume.exposureEV,report.camera.scene.exposureEV);assert.equal(report.camera.scene.source,'scene-camera');
+    report.cameraSource=await sourceHash();assert.equal(report.cameraSource,report.sourceBefore,'camera changed emitted source');
+    await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();await page.screenshot({path:`${out}/scene-camera.png`});
+    await page.evaluate(()=>window.kaminosSceneEdits.undo());assert.deepEqual(await page.evaluate(()=>window.kaminosAuthoringParameters.read('@scene-camera')),before);
+    await page.locator('#smoke-illumination-trim').click();await page.locator('#smoke-illumination-trim').fill('1');await page.locator('#smoke-illumination-trim').blur();await settle();
+    assert.equal(await page.locator('#selected-smoke-illumination-trim').inputValue(),'1');
+    await page.evaluate(()=>{window.selectSceneField('flame-field');window.kaminosWorkspace.setContext('object');});
+    await page.locator('#selected-smoke-illumination-trim').click();await page.locator('#selected-smoke-illumination-trim').fill('2');await page.locator('#selected-smoke-illumination-trim').blur();await settle();
+    assert.equal(await page.locator('#smoke-illumination-trim').inputValue(),'2');
+    await page.locator('#selected-flame-appearance-trim').click();await page.locator('#selected-flame-appearance-trim').fill('1');await page.locator('#selected-flame-appearance-trim').blur();await settle();
+    report.appearance=await page.evaluate(()=>({settings:window.kaminosAuthoringParameters.read('@scene-appearance'),volume:window.__kaminosVolumePrototype.debugState().appearanceTrims}));
+    assert.deepEqual(report.appearance.settings,{flameStops:1,smokeStops:2});assert.equal(report.appearance.volume.effective,true);
+    report.appearanceSource=await sourceHash();assert.equal(report.appearanceSource,report.sourceBefore,'presentation trims changed emitted source');
+    await page.screenshot({path:`${out}/flame-appearance.png`});
+    await page.evaluate(()=>window.kaminosSceneEdits.undo());assert.equal(await page.locator('#flame-appearance-trim').inputValue(),'0');
+    await page.evaluate(()=>window.kaminosSceneEdits.redo());assert.equal(await page.locator('#flame-appearance-trim').inputValue(),'1');
+    report.transport=await page.evaluate(()=>({settings:window.kaminosAuthoringParameters.read('@scene-transport'),runtime:window.__kaminosSceneRadiance.debugState()}));
+    assert.equal(report.transport.runtime.angularPattern,'source');assert.equal(report.transport.runtime.smokeMode,'distributed');assert.equal(report.transport.runtime.surfaceScattering,true);
+    await page.evaluate(()=>document.getElementById('composition-label').value='Product lighting controls witness');
+    report.phase='save-reopen';await save();
+    report.saved=await page.evaluate(()=>window.saveSceneAs({result:true}));assert.ok(report.saved?.ok,JSON.stringify(report.saved));
+    assert.deepEqual(report.saved.document.postprocessing.sceneCamera,before);assert.deepEqual(report.saved.document.postprocessing.volumeAppearance,report.appearance.settings);
+    const restored=new URL(url),hash=new URLSearchParams(restored.hash.slice(1));hash.set('scene',report.saved.filename);restored.hash=hash.toString();await page.goto(restored.href);
+    await page.waitForFunction(()=>document.getElementById('info-bar').textContent.startsWith('Scene loaded:'),null,{timeout:0});
+    await settle();report.reopened=await page.evaluate(()=>({camera:window.kaminosAuthoringParameters.read('@scene-camera'),appearance:window.kaminosAuthoringParameters.read('@scene-appearance'),transport:window.kaminosAuthoringParameters.read('@scene-transport')}));
+    assert.deepEqual(report.reopened.camera,before);assert.deepEqual(report.reopened.appearance,report.appearance.settings);assert.equal(report.reopened.transport['rendering-angular-pattern'],'source');
+    await page.evaluate(()=>{window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
+    await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();await page.screenshot({path:`${out}/reopened.png`});
+    await page.setViewportSize({width:800,height:700});await page.waitForTimeout(500);await page.screenshot({path:`${out}/compact.png`});
+  } else if(operation==='--light-coupling') {
     report.phase='light-coupling';report.coupling=[];await save();
     await page.selectOption('#scene-gi-mode','combined');await page.selectOption('#scene-gi-view','gi');
     await page.evaluate(()=>window.kaminosAuthoringParameters.set('@scene-gi',{gain:10}));

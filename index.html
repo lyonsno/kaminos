@@ -29,6 +29,14 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 body[data-workspace="authoring"] #scene-edit-hud { max-width:calc(100% - 24px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 body[data-workspace="authoring"] #viewport #navigation-hint { max-width:calc(100% - 185px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !important; }
+[data-lighting-diagnostic] { display:none !important; }
+body[data-lighting-diagnostics="true"] [data-lighting-diagnostic] { display:revert !important; }
+#scene-camera-match-row, #scene-camera-host-exposure, #flame-appearance-workbench { display:none !important; }
+#scene-camera-fields .field, #rendering-distributed-controls .field { display:flex; align-items:center; gap:12px; margin:6px 0; }
+#scene-camera-fields .field label, #rendering-distributed-controls .field label { flex:1; min-width:0; font-size:11px; }
+#scene-camera-fields input, #rendering-distributed-controls .field input { width:148px; max-width:55%; min-width:0; box-sizing:border-box; }
+#scene-camera-fields .authoring-number-wrap, #rendering-distributed-controls .authoring-number-wrap { width:148px; max-width:55%; min-width:0; }
+#scene-camera-fields .authoring-number-wrap input, #rendering-distributed-controls .authoring-number-wrap input { width:100%; max-width:none; }
 .field-val { color: #999; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field-val.present { color: #66bb6a; }
 .field-val.missing { color: #ef5350; }
@@ -1056,7 +1064,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
     </section>
     <section id="authoring-source-render">
-    <section id="scene-camera-controls"><div id="scene-camera-fields"></div><div id="scene-camera-host-exposure"></div></section>
+    <section id="scene-camera-controls"><h2>Camera</h2><div id="scene-camera-fields">
+      <div class="field"><label for="scene-camera-ev">Exposure EV</label><input id="scene-camera-ev" type="number" min="-8" max="8" step="0.1" value="0"></div>
+      <div class="field"><label for="scene-camera-white">White balance K</label><input id="scene-camera-white" type="number" min="2500" max="10000" step="25" value="6504"></div>
+      <div class="field"><label for="scene-camera-knee">Highlight knee</label><input id="scene-camera-knee" type="number" min="0.1" max="0.95" step="0.01" value="0.6"></div>
+    </div><div id="scene-camera-host-exposure" hidden></div></section>
+    <div id="flame-appearance-workbench" hidden><input id="flame-appearance-trim" type="number" min="-8" max="8" step="0.1" value="0"></div>
     <h2>Post Processing</h2>
     <div id="scene-gi-general-slot"></div>
     <div id="scene-ao-panel">
@@ -3477,10 +3490,11 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="scene-gi-status" role="status"></div>
       </div>
       <p class="rendering-description">Switch light contributions while viewing the same kiln. The flame, environment and authored geometry remain visible in every mode.</p>
-      <label for="rendering-light-mode">Light contributions</label>
-      <select class="rendering-channel-select" id="rendering-light-mode">
+      <h2>Light Contributions</h2>
+      <label for="rendering-light-mode" data-lighting-diagnostic>Light paths</label>
+      <select class="rendering-channel-select" id="rendering-light-mode" data-lighting-diagnostic>
         <option value="all">Transport + legacy field (additive)</option>
-        <option value="shared">Transport only</option>
+        <option value="shared" selected>Transport only</option>
         <option value="flame-field">Legacy field only</option>
         <option value="neither">Neither flame light path</option>
       </select>
@@ -3494,23 +3508,24 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <div class="slider-row"><label class="slider-label" for="rendering-shared-gain">Source gain (stops)</label><input type="range" id="rendering-shared-gain" min="-4" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-shared-gain-value">+0.00</span></div>
       <div id="rendering-distributed-controls" hidden><label for="rendering-angular-samples">Distributed flame directions</label><select id="rendering-angular-samples"><option>12</option><option>16</option><option selected>24</option><option>48</option><option>96</option></select>
-        <label class="import-mode"><input type="checkbox" id="rendering-surface-scattering" checked><span>Smoke scattered light on surfaces</span></label>
+        <label class="import-mode" data-lighting-diagnostic><input type="checkbox" id="rendering-surface-scattering" checked><span>Smoke scattered light on surfaces</span></label>
         <p class="rendering-description">Includes one scattering event in smoke before light reaches the kiln. Smoke albedo changes this contribution. Uncheck to compare direct flame illumination.</p>
         <div class="slider-row"><label class="slider-label" for="rendering-surface-gain">Surface illumination trim (stops)</label><input type="range" id="rendering-surface-gain" min="-8" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-surface-gain-value">+0.00</span></div>
+        <div class="field"><label for="smoke-illumination-trim" title="Visible in-scattered smoke only; source light, opacity and surface illumination are unchanged">Smoke illumination trim</label><input id="smoke-illumination-trim" type="number" min="-8" max="8" step="0.1" value="0"></div>
         <p class="rendering-description">Artistic adjustment to flame-lit surfaces only. Zero keeps the calculated illumination. Does not change smoke scattering, extinction, or flame emission.</p>
-        <label class="import-mode"><input type="checkbox" id="rendering-retain-comparisons"><span>Keep visited direction sets for A/B</span></label>
-        <button type="button" id="rendering-angular-swap" disabled>Swap previous direction count</button>
-        <label for="rendering-angular-pattern">Angular pattern</label><select id="rendering-angular-pattern"><option value="fixed">Fixed constellation (baseline)</option><option value="spatial">Stable spatial jitter (experimental)</option><option value="source">Source-aware progressive (experimental)</option></select>
+        <label class="import-mode" data-lighting-diagnostic><input type="checkbox" id="rendering-retain-comparisons"><span>Keep visited direction sets for A/B</span></label>
+        <button type="button" id="rendering-angular-swap" data-lighting-diagnostic disabled>Swap previous direction count</button>
+        <label for="rendering-angular-pattern" data-lighting-diagnostic>Angular pattern</label><select id="rendering-angular-pattern" data-lighting-diagnostic><option value="fixed">Fixed constellation (baseline)</option><option value="spatial">Stable spatial jitter (experimental)</option><option value="source" selected>Source-aware progressive</option></select>
         <p class="rendering-description" id="rendering-angular-cache">First visit prepares visibility. Retention uses extra GPU memory; geometry edits invalidate every set. Only the selected set runs each frame.</p>
-        <label class="import-mode" id="scene-camera-match-row" title="Apply the emissive camera EV, white balance and highlight curve to mesh scene output as well. Off retains separate host and flame display transforms."><input type="checkbox" id="rendering-match-flame-camera"><span>Match emissive camera on surfaces</span></label>
+        <label hidden class="import-mode" id="scene-camera-match-row"><input type="checkbox" id="rendering-match-flame-camera" checked><span>Legacy camera replay</span></label>
         <p class="rendering-description" id="rendering-camera-status">Off: scene uses its existing camera transform. Matching applies the flame's white balance, EV and highlight shoulder to the whole mesh scene, including environment and rim light; source energy is unchanged.</p>
         <div class="slider-row"><label class="slider-label" for="rendering-source-softness">Lighting source softness</label><input type="range" id="rendering-source-softness" min="0" max="16" step="1" value="0"><span class="slider-val" id="rendering-source-softness-value">0</span></div>
         <p class="rendering-description">Artistic lighting-source redistribution. Zero is unfiltered. Spreading emission while keeping extinction fixed can increase escaped light and reduce flicker; this is not brightness-neutral reconstruction. Visible flame and saved settings are unchanged.</p>
-        <label for="rendering-smoke-solver">Smoke illumination</label><select id="rendering-smoke-solver"><option value="distributed">Distributed · geometry-visible, full height</option><option value="legacy">Legacy comparison · lower cube, no solid visibility</option></select>
+        <label for="rendering-smoke-solver" data-lighting-diagnostic>Smoke illumination</label><select id="rendering-smoke-solver" data-lighting-diagnostic><option value="distributed">Distributed · geometry-visible, full height</option><option value="legacy">Legacy comparison · lower cube, no solid visibility</option></select>
         <div class="slider-row"><label class="slider-label" for="rendering-surface-reconstruction">Surface reconstruction</label><input type="range" id="rendering-surface-reconstruction" min="0" max="32" step="2" value="0"><span class="slider-val" id="rendering-surface-reconstruction-value">0</span></div>
         <p class="rendering-description">Experimental same-frame mesh smoothing passes. Follows triangle connectivity and stops across sharp normal changes; split vertices remain split. No temporal history. Does not alter smoke or the visible flame. Zero bypasses reconstruction.</p>
         <p class="rendering-description">Transported-light gain adjusts surface and distributed smoke illumination together; direct flame emission is unchanged. Surface scattering uses the distributed incident field even during legacy smoke comparison. Repeated smoke scattering is not included; combined AO/GI adds the surface-to-surface bounce.</p></div>
-      <details id="scene-lighting-comparison"><summary>Legacy Field Comparisons</summary>
+      <details id="scene-lighting-comparison" data-lighting-diagnostic><summary>Legacy Field Comparisons</summary>
       <h2>Flame field</h2>
       <p class="rendering-description">The flame-derived field lights scene surfaces. This gain adjusts its receiving pass; it does not change the visible flame or shared point source.</p>
       <p class="rendering-description">Flame field gain and test geometry remain in the authoring light inspector.</p>
@@ -3639,8 +3654,10 @@ let compositionModule = null;
 let compositionSetupError = null;
 const importCompositionModule = url => import(url);
 let fireLightFieldPass = null;
-let renderingMode = 'all';
+let renderingMode = 'shared';
 const renderingUrlState = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+const lightingDiagnostics=new URLSearchParams(location.search).get('lighting_diagnostics')==='1';
+document.body.dataset.lightingDiagnostics=String(lightingDiagnostics);
 const renderingUrlGain = Number(renderingUrlState.get('rendering_source_gain'));
 let renderingGainStops = renderingUrlState.has('rendering_source_gain') && Number.isFinite(renderingUrlGain)
   ? Math.max(-4, Math.min(8, renderingUrlGain)) : 0;
@@ -3656,17 +3673,17 @@ function refreshRenderingControls() {
   document.getElementById('rendering-distributed-controls').hidden=!distributed;
   document.querySelector('.rendering-position-row').hidden=distributed;
   document.querySelector('.rendering-position-row').style.display=distributed ? 'none' : '';
-  document.getElementById('rendering-source-title').textContent=distributed ? 'Distributed flame source' : 'Shared point source';
+  document.getElementById('rendering-source-title').textContent=distributed ? 'Flame illumination' : 'Shared point source';
   document.querySelector('label[for="rendering-shared-gain"]').textContent=distributed?'Transported-light gain (stops)':'Source gain (stops)';
   document.getElementById('rendering-source-description').textContent=distributed?'Artistic illumination master for surfaces and distributed smoke. Direct visible flame emission stays unchanged.':'This study source lights both mesh and smoke. Its gain changes source energy on both paths.';
   if(distributed)source.setGain(selected.shared ? 2**renderingGainStops : 0);
   if(distributed)source.setSurfaceGain(2**Number(document.getElementById('rendering-surface-gain').value));
-  if(distributed)source.setSurfaceScattering(document.getElementById('rendering-surface-scattering').checked);
-  if(distributed)source.setSmokeMode(document.getElementById('rendering-smoke-solver').value);
+  if(distributed)source.setSurfaceScattering(lightingDiagnostics?document.getElementById('rendering-surface-scattering').checked:true);
+  if(distributed)source.setSmokeMode(lightingDiagnostics?document.getElementById('rendering-smoke-solver').value:'distributed');
   if(distributed)source.setSourceSoftness(Number(document.getElementById('rendering-source-softness').value));
   if(distributed)source.setSurfaceReconstruction(Number(document.getElementById('rendering-surface-reconstruction').value));
-  if(distributed)source.setRetainComparisons(document.getElementById('rendering-retain-comparisons').checked);
-  if(distributed)source.setAngularPattern(document.getElementById('rendering-angular-pattern').value);
+  if(distributed)source.setRetainComparisons(lightingDiagnostics&&document.getElementById('rendering-retain-comparisons').checked);
+  if(distributed)source.setAngularPattern(lightingDiagnostics?document.getElementById('rendering-angular-pattern').value:'source');
   if (source && !distributed) {
     renderingSourceIntensity ||= source.debugState().source.intensity.slice();
     renderingSourcePosition ||= source.debugState().source.position.slice();
@@ -3883,6 +3900,7 @@ import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { createLightingControlTarget } from './scene-lighting-authoring.mjs';
+import {resolveSceneCameraSettings,resolveVolumeAppearanceTrims,productTransportSettings} from './scene-lighting-semantics.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
 import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, checkedSceneLightRecord, sceneLightRuntimeRecipe } from './scene-rim-light.mjs';
@@ -3957,6 +3975,25 @@ let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
 let sceneGISettings = resolveSceneGISettings();
+let sceneCameraSettings=resolveSceneCameraSettings();
+let volumeAppearanceTrims=resolveVolumeAppearanceTrims();
+function setSceneCameraControls(value) {
+  const next=resolveSceneCameraSettings(value);
+  volumePrototype?.setSceneCamera(next);
+  sceneCameraSettings=next;
+  for(const [key,id] of [['exposureEV','scene-camera-ev'],['whiteBalanceKelvin','scene-camera-white'],['highlightKnee','scene-camera-knee']])document.getElementById(id).value=String(next[key]);
+  window._kaminosDirty?.();
+}
+function setVolumeAppearanceControls(value) {
+  const next=resolveVolumeAppearanceTrims(value);
+  volumePrototype?.setAppearanceTrims(next);
+  volumeAppearanceTrims=next;
+  for(const [key,id] of [['flameStops','flame-appearance-trim'],['smokeStops','smoke-illumination-trim']]) {
+    document.getElementById(id).value=String(next[key]);
+    document.querySelectorAll(`[data-authoring-alias="${id}"]`).forEach(alias=>{if(document.activeElement!==alias)alias.value=String(next[key]);});
+  }
+  window._kaminosDirty?.();
+}
 let updateSceneGI = null;
 let backdropMesh = null;
 let currentMesh = null;
@@ -11408,9 +11445,7 @@ async function initScene() {
   }
   rawSceneOutput=renderPipeline.outputNode;
   sceneEmissiveCamera=null;
-  if(fireLightFieldRouteParams().get('volume_light_field_distributed')==='1') {
-    sceneEmissiveCamera=createSceneEmissiveCamera(rawSceneOutput,{TSL:{uniform,vec3,vec4,float},THREE});
-  }
+  sceneEmissiveCamera=createSceneEmissiveCamera(rawSceneOutput,{TSL:{uniform,vec3,vec4,float},THREE});
     giOutputGraphs.set(graphKey,{rawSceneOutput,sceneEmissiveCamera,fireLightFieldPass});
     renderPipeline.outputColorTransform = true;
     renderPipeline.needsUpdate = true;
@@ -11715,10 +11750,9 @@ async function initScene() {
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
     if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {
-      const requested=document.getElementById('rendering-match-flame-camera').checked;
-      const state=sceneEmissiveCamera.update(requested,window.__kaminosVolumePrototype?.emissiveCameraState());
+      const state=sceneEmissiveCamera.updateSceneCamera(sceneCameraSettings);
       applySceneEmissiveCamera(renderPipeline,rawSceneOutput,sceneEmissiveCamera.outputNode,state.effective);
-      const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)} · shoulder ${state.highlightKnee.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
+      const text=`Scene camera: white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)} · shoulder ${state.highlightKnee.toFixed(2)}. Raw lighting unchanged.`;
       if(text!==sceneCameraStatusText){document.getElementById('rendering-camera-status').textContent=text;sceneCameraStatusText=text;}
     } else if(sceneEmissiveCamera) {
       applySceneEmissiveCamera(renderPipeline,rawSceneOutput,rawSceneOutput,false);
@@ -23337,6 +23371,8 @@ async function initKaminosVolumeRoute() {
     if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
   }
   window.__kaminosVolumePrototype = volumePrototype;
+  volumePrototype.setSceneCamera(sceneCameraSettings);
+  volumePrototype.setAppearanceTrims(volumeAppearanceTrims);
   if (fireLightFieldRouteParams().get('volume_light_field_shared_source') === '1') {
     if (!isFireLightFieldRoute()) throw new Error('shared scene source requires ordinary fire light-field route');
     window.__kaminosSceneRadianceSetup = {status:'mounting'};
@@ -24971,7 +25007,6 @@ function createFlameQuickFields() {
   const shared=document.createElement('section');shared.id='shared-flame-domain-properties';shared.innerHTML='<h3>Fire & smoke</h3><p class="flame-scope">Appearance and simulation data for this field.</p><button type="button" class="btn" id="field-source-action">Select emitter</button>';document.getElementById('selected-flame-properties').after(shared);scenePlacementTools.addHistoryScope(shared);
   document.getElementById('field-source-action').onclick=()=>{try{if(authoredFlamePresent)setActiveSceneObject(FLAME_EMITTER_ID);else window.kaminosBurnerAuthoring.add('flame-source');}catch(error){setInfo(error.message);}};
   flameInspector=createFlameInspector({document,host:document.getElementById('selected-flame-fields'),sharedHost:shared,
-    cameraHost:document.getElementById('scene-camera-fields'),
     listBasins:async()=>{await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
     applyBasin:id=>window.kaminosFlameAuthoring.applyBasin(id),
     readSource:()=>activeVolumeSettingsPresetReceipt ? {label:activeVolumeSettingsPresetReceipt.label,
@@ -25056,18 +25091,21 @@ function installAuthoringParameterEditing() {
   for(const [id,label,selector] of [
     ['@scene-ao','Tune ambient occlusion','#scene-ao-panel input'],
     ['@scene-ground','Tune ground','#composition-ground-visible, #composition-ground-height, #composition-ground-color, #composition-ground-roughness'],
-    ['@scene-camera','Grade scene camera','#volume-physical-exposure, #volume-physical-white, #volume-physical-knee, #volume-exposure, #rendering-match-flame-camera'],
     ['@scene-transport','Tune transported lighting','#rendering-light-mode, #rendering-shared-gain, #rendering-surface-gain, #rendering-surface-scattering, #rendering-angular-samples, #rendering-angular-pattern, #rendering-source-softness, #rendering-smoke-solver, #rendering-surface-reconstruction'],
   ]) {
     const target=createLightingControlTarget(document.querySelectorAll(selector));
+    if(id==='@scene-transport') {
+      const check=target.check,write=target.write,read=target.read;
+      target.check=state=>check(lightingDiagnostics?state:productTransportSettings(state));
+      target.write=state=>write(target.check(state));
+      target.read=()=>target.check(read());
+    }
     bind(id,{...target,label,controls:[...target.controls,...target.controls.flatMap(control=>[...document.querySelectorAll(`[data-authoring-alias="${control.id}"]`)])]});
   }
-  for(const id of ['volume-physical-exposure','volume-physical-white','volume-physical-knee','volume-exposure']) {
-    const control=document.getElementById(id);
-    authoringParameterTargets.set(`@parameter:${id}`,{read:()=>({value:Number(control.value)}),check:state=>{const target=authoringParameterTargets.get('@scene-camera');target.check({...target.read(),[id]:state.value});return state;},write:state=>{control.value=state.value;control.dispatchEvent(new Event('input',{bubbles:true}));}});
-  }
+  bind('@scene-camera',{controls:document.querySelectorAll('#scene-camera-fields input'),label:'Grade scene camera',read:()=>({...sceneCameraSettings}),write:setSceneCameraControls,check:resolveSceneCameraSettings});
+  bind('@scene-appearance',{controls:document.querySelectorAll('#flame-appearance-trim, #smoke-illumination-trim, [data-authoring-alias="flame-appearance-trim"], [data-authoring-alias="smoke-illumination-trim"]'),label:'Trim visible volume',read:()=>({...volumeAppearanceTrims}),write:setVolumeAppearanceControls,check:resolveVolumeAppearanceTrims});
   for(const control of collectVolumeCockpitControlElements(document)) {
-    if(['volume-input-radius','volume-flow-rate','volume-physical-exposure','volume-physical-white','volume-physical-knee','volume-exposure'].includes(control.id))continue;
+    if(['volume-input-radius','volume-flow-rate'].includes(control.id))continue;
     if(control.tagName!=='SELECT'&&!['range','number','checkbox','color'].includes(control.type))continue;
     const read=()=>({value:readVolumeDomControlValue(control)});
     const write=state=>{
@@ -25103,10 +25141,6 @@ function installAuthoringParameterEditing() {
     read:id=>{const target=authoringParameterTargets.get(id);if(!target)throw Error(`Unknown authored parameter ${id}`);return structuredClone(target.read());},
     set:(id,patch)=>{
       const target=authoringParameterTargets.get(id);if(!target)throw Error(`Unknown authored parameter ${id}`);
-      if(['@parameter:volume-physical-exposure','@parameter:volume-physical-white','@parameter:volume-physical-knee','@parameter:volume-exposure'].includes(id)) {
-        const next=target.check({...target.read(),...patch});
-        return edits.apply('@scene-camera',{[id.slice('@parameter:'.length)]:next.value},'Grade scene camera');
-      }
       if(id.startsWith('@parameter:volume-')||id==='@parameter:emitter-assay-family') {
         const next=target.check({...target.read(),...patch});
         window.kaminosFlameAuthoring.edit(()=>target.write(next),'Set authored parameter');return target.read();
@@ -25114,7 +25148,7 @@ function installAuthoringParameterEditing() {
       return edits.apply(id,patch,'Set authored parameter');
     },
   };
-  for(const scope of ['#rim-controls','#burner-controls','#selected-flame-fields','#shared-flame-domain-properties','#scene-camera-fields','#scene-gi-controls']) {
+  for(const scope of ['#rim-controls','#burner-controls','#selected-flame-fields','#shared-flame-domain-properties','#scene-camera-fields','#scene-gi-controls','#rendering-distributed-controls']) {
     for(const input of document.querySelectorAll(`${scope} input[type=number]`)) {
       const row=input.closest('.slider-row,.burner-field,.field');const grip=row?.querySelector('label');if(!grip)continue;
       const source=row.querySelector('input[type=range]');
@@ -25202,6 +25236,12 @@ function updateBackground() {
 }
 
 // --- AO Controls ---
+for(const [key,id] of [['exposureEV','scene-camera-ev'],['whiteBalanceKelvin','scene-camera-white'],['highlightKnee','scene-camera-knee']])document.getElementById(id).addEventListener('input',event=>{
+  try{setSceneCameraControls({...sceneCameraSettings,[key]:Number(event.target.value)});}catch(error){setSceneCameraControls(sceneCameraSettings);setInfo(error.message);}
+});
+for(const [key,id] of [['flameStops','flame-appearance-trim'],['smokeStops','smoke-illumination-trim']])document.getElementById(id).addEventListener('input',event=>{
+  try{setVolumeAppearanceControls({...volumeAppearanceTrims,[key]:Number(event.target.value)});}catch(error){setVolumeAppearanceControls(volumeAppearanceTrims);setInfo(error.message);}
+});
 for(const description of document.querySelectorAll('#rendering-panel-content .rendering-description')) {
   description.hidden=true;
   if(description.previousElementSibling)description.previousElementSibling.title=description.textContent;
@@ -28027,7 +28067,9 @@ function buildSceneData(capture = null) {
     volumePrimitives: getVolumePrimitiveState(),
     flameDomainTranslation: [...flameDomainTranslation],
     postprocessing: {
-      lighting: Object.fromEntries(['@scene-camera','@scene-transport'].map(id=>[id,authoringParameterTargets.get(id).read()])),
+      sceneCamera:{...sceneCameraSettings},
+      volumeAppearance:{...volumeAppearanceTrims},
+      lighting: Object.fromEntries(['@scene-transport'].map(id=>[id,authoringParameterTargets.get(id).read()])),
       sceneGI: {...sceneGISettings},
       ao: {
         enabled: document.getElementById('ao-toggle').checked,
@@ -29165,8 +29207,11 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   // Apply postprocessing
   if (data.postprocessing) {
     const lighting=data.postprocessing.lighting;
+    const legacyCamera=lighting?.['@scene-camera'];
+    setSceneCameraControls(data.postprocessing.sceneCamera??(legacyCamera?{exposureEV:legacyCamera['volume-physical-exposure'],whiteBalanceKelvin:legacyCamera['volume-physical-white'],highlightKnee:legacyCamera['volume-physical-knee']}:{exposureEV:Number(document.getElementById('volume-physical-exposure').value),whiteBalanceKelvin:Number(document.getElementById('volume-physical-white').value),highlightKnee:Number(document.getElementById('volume-physical-knee').value)}));
+    setVolumeAppearanceControls(data.postprocessing.volumeAppearance??{});
     if(lighting) {
-      const targets=['@scene-camera','@scene-transport'].filter(id=>Object.hasOwn(lighting,id));
+      const targets=['@scene-transport'].filter(id=>Object.hasOwn(lighting,id));
       for(const id of targets)authoringParameterTargets.get(id).check(lighting[id]);
       for(const id of targets)authoringParameterTargets.get(id).write(lighting[id]);
     }

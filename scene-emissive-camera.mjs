@@ -1,4 +1,5 @@
 import {cameraWhiteBalance} from './volume-emissive-transport.mjs';
+import {resolveSceneCameraSettings} from './scene-lighting-semantics.mjs';
 
 // Display-only comparison. Never alter raw emission, extinction or light gain.
 export function resolveSceneEmissiveCamera(requested, physical) {
@@ -31,9 +32,8 @@ export function createSceneEmissiveCamera(input,{TSL,THREE}) {
   const srgb=linear.lessThanEqual(.0031308).select(linear.mul(12.92),linear.pow(1/2.4).mul(1.055).sub(.055));
   const outputNode=vec4(srgb.mul(alpha),alpha);
   let state=resolveSceneEmissiveCamera(false),lastWhite=null;
-  return {outputNode,
-    update(requested,physical) {
-      state=resolveSceneEmissiveCamera(requested,physical);
+  function apply(next) {
+      state=next;
       if(state.effective) {
         exposure.value=2**state.exposureEV;knee.value=state.highlightKnee;
         if(lastWhite!==state.whiteBalanceKelvin) {
@@ -42,6 +42,10 @@ export function createSceneEmissiveCamera(input,{TSL,THREE}) {
         }
       }
       return state;
-    },debugState:()=>({...state}),
+  }
+  return {outputNode,
+    update(requested,physical) {return apply(resolveSceneEmissiveCamera(requested,physical));},
+    updateSceneCamera(value) {return apply({...resolveSceneCameraSettings(value),requested:true,effective:true,reason:null,source:'scene-camera',transform:'fixed-bradford-white-channel-shoulder-srgb-v4'});},
+    debugState:()=>({...state}),
   };
 }

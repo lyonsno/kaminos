@@ -50,6 +50,7 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
 // does not assign simulator-wide coefficients to independent scene emitters.
 export const FLAME_PROPERTY_GROUPS = [
   { name:'Appearance', open:true, scope:'Shared flame and smoke appearance', fields:[
+    ['flame-appearance-trim','Flame appearance trim'], ['smoke-illumination-trim','Smoke illumination trim'],
     ['volume-physical-temperature','Temperature'], ['volume-physical-spread','Temperature spread'],
     ['volume-physical-thermal','Thermal response'], ['volume-physical-clean','Clean flame'],
     ['volume-physical-smoke-extinction','Smoke extinction'],
