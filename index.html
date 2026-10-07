@@ -3830,6 +3830,10 @@ import { installAuthoringWorkspace } from './authoring-workspace.mjs';
 import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, checkedSceneLightRecord, sceneLightRuntimeRecipe } from './scene-rim-light.mjs';
 
 import {checkedPose} from './scene-edit-session.mjs';
+import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.mjs';
+import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
+import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
+import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,createSelectionTransformTarget} from './scene-selection.mjs';
 
 let authoringWorkspace = null;
@@ -3877,6 +3881,7 @@ function escapeHtml(s) {
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let viewportGizmosVisible=true;
+let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null;
 function attachViewportGizmo(target) {
   if(selectionTransforms&&sceneSelection.ids.length&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat')target=selectionTransformProxy();
   transformControls.attach(target);
@@ -3884,8 +3889,9 @@ function attachViewportGizmo(target) {
   transformControls.enabled=viewportGizmosVisible;
 }
 window.kaminosViewportSettings={
-  read:()=>({gizmos:viewportGizmosVisible,helpers:viewportHelpersVisible,hints:!document.getElementById('navigation-hint').hidden}),
-  set({gizmos=viewportGizmosVisible,hints,helpers}={}) {
+  read:()=>({gizmos:viewportGizmosVisible,bounds:viewportBoundsVisible,helpers:viewportHelpersVisible,hints:!document.getElementById('navigation-hint').hidden}),
+  set({gizmos=viewportGizmosVisible,hints,helpers,bounds}={}) {
+    if(bounds!==undefined){viewportBoundsVisible=!!bounds;updateSelectionFeedback();window._kaminosDirty?.();}
     if(helpers!==undefined){viewportHelpersVisible=!!helpers;syncEditorHelperVisibility();}
     if(gizmos!==viewportGizmosVisible)scenePlacementTools?.finish(false);
     viewportGizmosVisible=!!gizmos;
@@ -7215,6 +7221,7 @@ function registerSceneObject(object, metadata = {}) {
     renderCapabilities: metadata.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? null,
     sceneTransform,
+    generation:metadata.generation?structuredClone(metadata.generation):null,
     localLiquidEmitter: metadata.type === LOCAL_LIQUID_EMITTER_TYPE ? structuredClone(metadata.localLiquidEmitter) : null,
   };
   object.userData.kaminosSceneObject = {
@@ -7227,6 +7234,7 @@ function registerSceneObject(object, metadata = {}) {
     createdAt: record.createdAt,
     splat: record.splat,
     image: record.image,
+    generation:record.generation,
     renderRoute: record.renderRoute,
     renderCapabilities: record.renderCapabilities,
     renderHandoffSchema: record.renderHandoffSchema,
@@ -11067,10 +11075,18 @@ async function initScene() {
     throw error;
   }
   const requiresSharedDevice = compositionModule?.sharedGpuBufferRequirements !== undefined;
+  let generationAdapter=null,generationRequirements={};
+  if(new URLSearchParams(location.hash.slice(1)).get('authoring')==='1'){
+    generationAdapter=await navigator.gpu?.requestAdapter({powerPreference:'high-performance'});
+    if(generationAdapter && Object.entries(assetGenerationBufferRequirements).every(([name,value])=>generationAdapter.limits[name]>=value))generationRequirements=assetGenerationBufferRequirements;
+  }
+  const combinedRequirements={...generationRequirements};
+  for(const [name,value] of Object.entries(compositionModule?.sharedGpuBufferRequirements||{}))combinedRequirements[name]=Math.max(value,combinedRequirements[name]||0);
   window.__kaminosCompositionSetup.phase = 'shared-device-acquisition';
   try {
     sharedGpu = await requestKaminosSharedWebGpuDevice({
-      bufferRequirements: requiresSharedDevice ? compositionModule.sharedGpuBufferRequirements : {},
+      bufferRequirements: combinedRequirements,
+      adapter:generationAdapter,
       // A mounted SAM host borrows the same device, so its kit requirements
       // (all adapter features and limits) compose into the one acquisition.
       hostRequirements: samHostConfig?.mounted ? samHostDeviceRequirements : null,
@@ -11303,9 +11319,14 @@ async function initScene() {
   }
   let sceneEmissiveCamera=null;
   const rawSceneOutput=renderPipeline.outputNode;
+  selectionFeedback=createSelectionFeedback(camera);
+  const outlinedSceneOutput=selectionFeedback.output(rawSceneOutput);
+  renderPipeline.outputNode=outlinedSceneOutput;
+  window.kaminosSelectionFeedbackState=()=>selectionFeedback.state();
   if(fireLightFieldRouteParams().get('volume_light_field_distributed')==='1') {
     sceneEmissiveCamera=createSceneEmissiveCamera(rawSceneOutput,{TSL:{uniform,vec3,vec4,float},THREE});
   }
+  const outlinedCameraOutput=sceneEmissiveCamera?selectionFeedback.output(sceneEmissiveCamera.outputNode):null;
   window.kaminosSceneEmissiveCameraDebugState=()=>sceneEmissiveCamera?.debugState()??{requested:false,effective:false,reason:'distributed-route-not-mounted'};
   let sceneCameraStatusText='';
   window.kaminosFireLightFieldDebugState = () => (fireLightFieldPass
@@ -11516,6 +11537,7 @@ async function initScene() {
   setupSelectionTransforms();
   installBurnerAuthoring();
   createFlameQuickFields();
+  setupAuthoringAssets();
   sceneControlHistory = installSceneControlHistory({
     controls: document.querySelectorAll('#burner-enabled, #burner-controls input, #volume-input-radius, #volume-flow-rate, [data-authoring-alias="volume-flow-rate"], [data-authoring-alias="volume-input-radius"]'),
     edits: scenePlacementTools.edits,
@@ -11586,12 +11608,13 @@ async function initScene() {
     // current inputs; do not submit retired medium resources or unlit fill.
     if (window.__kaminosSceneRadiance && !window.__kaminosSceneRadiance.canRender()) return false;
     const t0 = performance.now();
+    updateSelectionFeedback();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
     if(sceneEmissiveCamera) {
       const requested=document.getElementById('rendering-match-flame-camera').checked;
       const state=sceneEmissiveCamera.update(requested,window.__kaminosVolumePrototype?.emissiveCameraState());
-      applySceneEmissiveCamera(renderPipeline,rawSceneOutput,sceneEmissiveCamera.outputNode,state.effective);
+      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,state.effective);
       const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)} · shoulder ${state.highlightKnee.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
       if(text!==sceneCameraStatusText){document.getElementById('rendering-camera-status').textContent=text;sceneCameraStatusText=text;}
     }
@@ -27579,6 +27602,7 @@ function serializeSceneObject(entry) {
     materials: getMaterialStateForObject(object),
     splat: metadata.splat ?? entry.splat ?? null,
     image: metadata.image ?? entry.image ?? null,
+    ...((metadata.generation ?? entry.generation)?{generation:structuredClone(metadata.generation ?? entry.generation)}:{}),
     renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
@@ -27866,6 +27890,8 @@ window.captureComposition = ({ result = false } = {}) => withAuthoringAction(asy
   let data;
   try {
     if (helper) helper.visible = false;
+    selectionCaptureSuspended=true;selectionFeedback?.suspend(true);
+    for(const box of selectionBoxes.values())box.visible=false;
     if (emitterHandle) emitterHandle.visible = false;
     if (rimHandle) rimHandle.visible = false;
     window._kaminosDirty?.();
@@ -27883,6 +27909,8 @@ window.captureComposition = ({ result = false } = {}) => withAuthoringAction(asy
     data = buildSceneData(capture);
   } finally {
     if (helper) helper.visible = visible;
+    selectionCaptureSuspended=false;selectionFeedback?.suspend(false);
+    updateSelectionFeedback();
     if (emitterHandle) emitterHandle.visible = emitterVisible;
     if (rimHandle) rimHandle.visible = rimVisible;
     window._kaminosDirty?.();
@@ -28125,7 +28153,7 @@ function duplicateSceneGroup(id,{interactive=false}={}) {
 }
 function duplicateSceneSelection(id,options={}){if(sceneSelection.ids.length>1)return duplicateSelectedSceneObjects(options);return sceneGroups.some(g=>g.id===id)?duplicateSceneGroup(id,{interactive:options.interactive===true}):duplicateSceneObject(id,{interactive:options.interactive===true});}
 
-async function importSceneMesh(file) {
+async function importSceneMesh(file,{generation:origin=null,label=null}={}) {
   assertSceneConstructionAvailable();if(!file?.name?.toLowerCase().endsWith('.glb'))throw Error('Choose a binary GLB mesh');
   const generation=sceneMutationToken,bytes=await file.arrayBuffer();
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -28134,7 +28162,7 @@ async function importSceneMesh(file) {
   if(receipt.schema!=='kaminos.generated-mesh.v0'||receipt.sha256!==digest||receipt.bytes!==bytes.byteLength||receipt.source!==`/api/read?root=generated-meshes&path=${digest}.glb`)throw Error('Mesh storage returned a different source');
   if(generation!==sceneMutationToken)throw Error('Scene changed while importing');assertSceneConstructionAvailable();
   const id=makeSceneObjectId('mesh'),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
-  await showGLB(receipt.source,{clear:false,normalize:false,isCurrent:()=>generation===sceneMutationToken&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:file.name.replace(/\.glb$/i,'')}});
+  await showGLB(receipt.source,{clear:false,normalize:false,isCurrent:()=>generation===sceneMutationToken&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:label||file.name.replace(/\.glb$/i,''),generation:origin}});
   try{await recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
   setInfo(`Imported ${file.name}`);return id;
 }
@@ -28263,11 +28291,13 @@ function setSceneSelection(ids,activeId=ids.at(-1)??null){
 }
 function updateSelectionFeedback(){
   const ids=new Set(sceneSelectionMembers());
+  const activeIds=activeSceneGroupId?sceneGroups.find(g=>g.id===activeSceneGroupId)?.objectIds||[]:[activeSceneObjectId];
+  selectionFeedback?.update(sceneObjects.filter(entry=>ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE),activeIds);
   for(const [id,box] of selectionBoxes)if(!ids.has(id)){box.removeFromParent();box.geometry.dispose();box.material.dispose();selectionBoxes.delete(id);}
   for(const id of ids){const entry=sceneObjects.find(o=>o.id===id);if(!entry)continue;
     let box=selectionBoxes.get(id);if(!box){box=new THREE.BoxHelper(entry.object);box.userData.kaminosEditorHelper=true;box.userData.kaminosEditorOnly=true;box.material.depthTest=false;box.renderOrder=1001;scene.add(box);selectionBoxes.set(id,box);}
     box.object=entry.object;box.update();box.material.color.set(id===activeSceneObjectId||activeSceneGroupId&&sceneGroups.find(g=>g.id===activeSceneGroupId)?.objectIds.includes(id)?0xffc66d:0xe78932);
-    box.visible=entry.object.visible;
+    box.visible=!selectionCaptureSuspended&&viewportBoundsVisible&&entry.object.visible;
   }
 }
 function syncEditorHelperVisibility(){
@@ -29258,6 +29288,31 @@ sceneInitialization.then(() => {
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 });
+
+function setupAuthoringAssets(){
+  let redraw=()=>{};
+  const request=async url=>{const response=await fetch(url,{cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error||`Assets HTTP ${response.status}`);return data;};
+  const generation=()=>{
+    if(!authoringGenerator)authoringGenerator=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:volumePrototype,host:compositionHost}),changed:()=>redraw(),blocked:()=>{
+      if(compositionModule)return 'This scene has another inference/performance host. Use its existing generation controls.';
+      return null;
+    }});
+    return authoringGenerator;
+  };
+  authoringAssets=createAuthoringAssets({request,generator:generation,nameForSource:source=>sceneObjects.find(entry=>entry.source===source)?.label,changed:state=>authoringAssetsUI?.render(state),
+    uploadImage:async file=>{
+      const response=await fetch('/api/ingest-image?'+new URLSearchParams({name:file.name}),{method:'POST',body:await file.arrayBuffer()});const value=await response.json();
+      if(!response.ok||value.schema!=='kaminos.asset-ingest.v0'||value.kind!=='image'||!value.entry?.source)throw Error(value.error||'Image storage failed');return value.entry;
+    },
+    addMesh:async entry=>{
+      if(entry.file)return importSceneMesh(entry.file);
+      const response=await fetch(entry.source);if(!response.ok)throw Error(`Mesh source HTTP ${response.status}`);
+      return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label});
+    }});
+  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>authoringAssetsUI.render(authoringAssets.read());
+  window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state()};
+}
+
 </script>
 <script>
 // Help text lives behind a small info mark on each control row: the
