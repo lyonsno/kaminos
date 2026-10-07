@@ -86,3 +86,16 @@ export function assertSurfaceView(signal,{baseline,count,pattern,passes}) {
     assert.deepEqual(signal.back,baseline.back,'raw back restoration mismatch');
   }
 }
+export function assertSourceGuideEvidence(signal,requested){
+  const {runtime,source,adapter,lighting,sourceGeneration,primary,front,back,errors,httpFailures}=signal;
+  if(!runtime?.source||runtime.source.repoRoot!==source?.root||runtime.source.commit!==source?.revision||runtime.source.dirty||source.dirty)throw Error('wrong/unverified clean source-guide route');
+  if(adapter?.vendor!=='apple'||adapter.isFallbackAdapter)throw Error('source-guide evidence requires the native Apple route');
+  const frame=lighting?.frame;
+  if(!Number.isSafeInteger(sourceGeneration)||sourceGeneration<0||frame?.generation!==sourceGeneration||frame.angularPattern!==requested.pattern||frame.directions!==requested.count||frame.receiverSampling?.spacing!==requested.spacing||lighting.gain!==requested.gain||lighting.surfaceGain!==1||!frame.surfaceScattering?.enabled||lighting.previewStale)throw Error('source-guide requested/effective config or generation mismatch');
+  if(requested.pattern==='guided'&&(!frame.sourceGuide||!['lo','hi'].every(k=>Array.isArray(frame.sourceGuide[k])&&frame.sourceGuide[k].length===3&&frame.sourceGuide[k].every(Number.isFinite))))throw Error('effective source guide missing');
+  for(const [name,values]of [['primary',primary],['front',front],['back',back]])if(!Array.isArray(values)||!values.length||values.length%4||!values.every(Number.isFinite))throw Error('missing/partial/nonfinite '+name);
+  const hasRGB=values=>values.some((v,i)=>i%4!==3&&v>0);
+  if(!hasRGB(primary)||!hasRGB(front)&&!hasRGB(back)||!front.some((v,i)=>i%4===3&&v===1))throw Error('blank/unwritten source-guide evidence');
+  if(!Array.isArray(errors)||errors.length||!Array.isArray(httpFailures)||httpFailures.length)throw Error('source-guide capture contains renderer/HTTP errors');
+  return signal;
+}

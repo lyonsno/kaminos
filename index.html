@@ -3501,7 +3501,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <p class="rendering-description">Artistic adjustment to flame-lit surfaces only. Zero keeps the calculated illumination. Does not change smoke scattering, extinction, or flame emission.</p>
         <label class="import-mode"><input type="checkbox" id="rendering-retain-comparisons"><span>Keep visited direction sets for A/B</span></label>
         <button type="button" id="rendering-angular-swap" disabled>Swap previous direction count</button>
-        <label for="rendering-angular-pattern">Angular pattern</label><select id="rendering-angular-pattern"><option value="fixed">Fixed constellation (baseline)</option><option value="spatial">Stable spatial jitter (experimental)</option><option value="source">Source-aware progressive (experimental)</option></select>
+        <label for="rendering-angular-pattern">Angular pattern</label><select id="rendering-angular-pattern"><option value="fixed">Fixed constellation (baseline)</option><option value="spatial">Stable spatial jitter (experimental)</option><option value="source">Source-aware progressive (experimental)</option><option value="guided">Emitter-informed progressive (experimental)</option></select>
+        <p class="rendering-description" id="rendering-source-guide-status" hidden>Stable authored emitter envelope plus full-volume coverage. Sampling weights change, not source energy.</p>
         <p class="rendering-description" id="rendering-angular-cache">First visit prepares visibility. Retention uses extra GPU memory; geometry edits invalidate every set. Only the selected set runs each frame.</p>
         <label class="import-mode"><input type="checkbox" id="rendering-match-flame-camera"><span>Match flame camera on scene (experimental)</span></label>
         <p class="rendering-description" id="rendering-camera-status">Off: scene uses its existing camera transform. Matching applies the flame's white balance, EV and highlight shoulder to the whole mesh scene, including environment and rim light; source energy is unchanged.</p>
@@ -12529,6 +12530,15 @@ if(renderingUrlState.has('rendering_receiver_spacing')){
   const select=document.getElementById('rendering-receiver-spacing');
   if(![...select.options].some(o=>Number(o.value)===value)){const option=document.createElement('option');option.value=String(value);option.textContent=`${value} source units · custom`;select.append(option);}
   select.value=String(value);
+}
+for(const [key,id]of [['rendering_angular_pattern','rendering-angular-pattern'],['rendering_directions','rendering-angular-samples']])if(renderingUrlState.has(key)){
+  const select=document.getElementById(id),value=renderingUrlState.get(key);
+  if(![...select.options].some(o=>o.value===value))throw new Error(`unsupported requested ${key}: ${value}`);
+  select.value=value;
+}
+if(renderingUrlState.has('rendering_match_camera')){
+  const value=renderingUrlState.get('rendering_match_camera');if(!['0','1'].includes(value))throw new Error('invalid requested camera match');
+  document.getElementById('rendering-match-flame-camera').checked=value==='1';
 }
 document.getElementById('rendering-shared-gain-value').textContent = `${renderingGainStops >= 0 ? '+' : ''}${renderingGainStops.toFixed(2)}`;
 setRightPanelTab(isFireLightFieldRoute() ? 'rendering' : 'mix');
@@ -23260,11 +23270,14 @@ async function initKaminosVolumeRoute() {
     if(distributed)renderingMode='shared';
     import(distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs').then(module => {
       window.__kaminosSceneRadiance = distributed
-        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,onStatus:state=>{
+        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
           const badge=document.getElementById('lighting-edit-status'),message=lightingEditStatus(state);
           if(badge.textContent!==message)badge.textContent=message;
           badge.hidden=!message;
           const cache=window.__kaminosSceneRadiance?.debugState().frame?.angularCache;
+          const guideLabel=document.getElementById('rendering-source-guide-status'),guide=window.__kaminosSceneRadiance?.debugState().frame?.sourceGuide;
+          guideLabel.hidden=!guide;
+          if(guide)guideLabel.textContent=`${guide.effective}: [${guide.lo.map(x=>x.toFixed(2))}] to [${guide.hi.map(x=>x.toFixed(2))}]. Three of each four rays target the stable envelope (radius 2× inlet radius); the rest cover the full volume. ${guide.reason||'No source-energy change; visibility reused while the flame flickers.'}`;
           if(cache){
             const text=`Prepared: ${cache.counts.join(', ')} directions · ${(cache.bytes/1048576).toFixed(1)} MiB direction/visibility buffers. ${cache.retained?'A/B retention on.':'Only current set retained.'} Geometry edits invalidate all sets.`;
             const label=document.getElementById('rendering-angular-cache');

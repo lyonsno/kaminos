@@ -8,8 +8,9 @@ import {validateSurfaceReconstruction} from './scene-surface-reconstruction.mjs'
 import {validateSceneSourceTransform,sceneSourceLocalPoint} from './scene-volume-source.mjs';
 import {surfaceReceiverLayout,validateReceiverSpacing} from './scene-surface-receivers.mjs';
 import {inspectSourceRays,validateInspectionSnapshot} from './scene-light-inspection.mjs';
+import {deriveSourceGuide} from './scene-source-guide.mjs';
 
-export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,onStatus=()=>{}}) {
+export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,getSourceGuide=null,onStatus=()=>{}}) {
   let gain=1,smokeMode='distributed',sourceSoftness=0,handle=null,revision=null,frame=null,external=null,externalBack=null,disposed=false;
   const originals=new Map();
   const editing=new Set();let editCommitted=false,rebuildAnnounced=false,retainComparisons=false;
@@ -183,6 +184,10 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     try {
       handle.setDirections(directions);
       handle.setAngularPattern(angularPattern,angularRotation);
+      if(angularPattern==='guided'){
+        if(!getSourceGuide)throw new Error('emitter-informed sampling requires an authored emitter descriptor');
+        handle.setSourceGuide(deriveSourceGuide(getSourceGuide(),sourceTransform));
+      }
       frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness,surfaceReconstruction,surfaceScattering});
     } catch(error) {
       status.status='preparation-failed';status.error=String(error.message);
@@ -206,7 +211,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setSurfaceReconstruction(value){surfaceReconstruction=validateSurfaceReconstruction(value);},
     setReceiverSpacing(value){value=validateReceiverSpacing(value);if(value!==receiverSpacing){receiverSpacing=value;status.receiverSpacingRequested=value;editCommitted=true;rebuildAnnounced=false;}},
     setDirections(value){lightingCount(value);directions=value;status.directions=value;},
-    setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','source'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');angularPattern=pattern;angularRotation=rotation;},
+    setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','source','guided'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');angularPattern=pattern;angularRotation=rotation;},
     setRetainComparisons(value){retainComparisons=!!value;handle?.setRetainComparisons(retainComparisons);},
     setEditing(key,active){if(active){editing.add(key);rebuildAnnounced=false;}else if(editing.delete(key)&&!editing.size)editCommitted=true;},
     debugState(){return {...status,gain,receiverSpacingRequested:receiverSpacing,sourceTransform:validateSceneSourceTransform(sourceTransform),surfaceGain:surfaceGain.value,surfaceScattering,smokeMode,sourceSoftness,surfaceReconstruction,frame,display:'mesh and flame retain separate camera transforms'};},
@@ -222,7 +227,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         if(vertexIds.some(i=>!Number.isInteger(i)||i<0||i>=row.clone.attributes.position.count))throw new Error('selected triangle indices invalid');
         prototype.setSelectiveHeadLiveCapturePaused(true);paused=true;
         const generation=frame.generation,build=status.geometryBuilds;
-        result.metadata={generation,frame:frame.frame,directions:frame.directions,angularPattern:frame.angularPattern,samplingLaw:frame.samplingLaw,surfaceGainFactor:frame.surfaceScattering.enabled?1:frame.gain,surfaceReconstruction:{passes:frame.surfaceReconstruction.passes},receiverSampling:{...frame.receiverSampling},geometryBuilds:build,geometryTriangles:frame.geometryTriangles};
+        result.metadata={generation,frame:frame.frame,directions:frame.directions,angularPattern:frame.angularPattern,samplingLaw:frame.samplingLaw,sourceGuide:frame.sourceGuide,surfaceGainFactor:frame.surfaceScattering.enabled?1:frame.gain,surfaceReconstruction:{passes:frame.surfaceReconstruction.passes},receiverSampling:{...frame.receiverSampling},geometryBuilds:build,geometryTriangles:frame.geometryTriangles};
         result.worldTransform=validateSceneSourceTransform(sourceTransform);result.selection={meshId:mesh.uuid,meshName:mesh.name,materialSide:(Array.isArray(row.material)?row.material[face.materialIndex]:row.material).side,point:point?.toArray?.()||point,cameraPosition:cameraPosition?.toArray?.()||cameraPosition,vertices:[]};
         const allIds=new Set(),worldPoint=new THREE.Vector3(),worldNormal=new THREE.Vector3(),nm=new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
         for(const vertex of vertexIds){

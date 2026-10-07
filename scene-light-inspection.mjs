@@ -1,8 +1,11 @@
 import {sourceInterval,integrateCellRay} from './scene-source-aware.mjs';
+import {sourceGuidePdf,normalizeSourceGuide} from './scene-source-guide.mjs';
 
 export function inspectSourceRays({inputs,field,metadata}){
   if(!Number.isFinite(metadata.surfaceGainFactor)||metadata.surfaceGainFactor<0)throw new Error('finite nonnegative inspection gain required');
-  if(metadata.angularPattern!=='source'||metadata.samplingLaw!=='progressive-volume-induced-solid-angle-v1')return {status:'unsupported',reason:'CPU ray replay currently supports source-aware progressive sampling only'};
+  const guided=metadata.angularPattern==='guided'&&metadata.samplingLaw==='emitter-envelope-mixture-solid-angle-v1';
+  if(!guided&&(metadata.angularPattern!=='source'||metadata.samplingLaw!=='progressive-volume-induced-solid-angle-v1'))return {status:'unsupported',reason:'CPU ray replay supports uniform source-aware and emitter-informed progressive sampling only'};
+  if(guided)validateGuideIdentity(inputs,metadata);
   const dims=field.dimensions,values=field.data;
   if(!Array.isArray(dims)||dims.length!==3||!dims.every(x=>Number.isSafeInteger(x)&&x>0)||values.length!==4*dims.reduce((a,b)=>a*b,1)||!values.every(Number.isFinite))throw new Error('complete finite inspection source required');
   if(inputs.directions!==metadata.directions||inputs.points.length!==metadata.directions)throw new Error('inspection direction identity mismatch');
@@ -12,7 +15,7 @@ export function inspectSourceRays({inputs,field,metadata}){
     const front=[0,0,0],back=[0,0,0];
     const rays=inputs.points.map((point,a)=>{
       const v=point.map((x,k)=>x-row.position[k]),length=Math.hypot(...v),direction=length?v.map(x=>x/length):[0,1,0],span=sourceInterval(row.position,direction),[near,far]=span;
-      const pdf=(far-near)*(far*far+far*near+near*near)/48;
+      const pdf=guided?sourceGuidePdf(row.position,direction,inputs.sourceGuide,metadata.directions):(far-near)*(far*far+far*near+near*near)/48;
       if(!Number.isFinite(pdf)||pdf<=0)throw new Error('inspection source density invalid');
       const cosine=row.normal.reduce((s,x,k)=>s+x*direction[k],0),side=row.twoSided&&cosine<0?'back':'front';
       const weight=(row.twoSided?Math.abs(cosine):Math.max(0,cosine))/(metadata.directions*pdf);
@@ -31,5 +34,10 @@ export function validateInspectionSnapshot(snapshot){
   for(const generation of [snapshot.metadata?.generation,snapshot.sourceGeneration,snapshot.inputs?.generation])if(!Number.isSafeInteger(generation)||generation<0)throw new Error('present nonnegative integer inspection generation required');
   if(snapshot.status!=='captured'||snapshot.metadata.generation!==snapshot.sourceGeneration||snapshot.metadata.generation!==snapshot.inputs.generation)throw new Error('inspection snapshot is partial or mixed-generation');
   if(!snapshot.inputs.rows.length||snapshot.inputs.rows.some(r=>!r.front.every(Number.isFinite)||!r.back.every(Number.isFinite)))throw new Error('actual receiver output required');
+  if(snapshot.metadata.angularPattern==='guided')validateGuideIdentity(snapshot.inputs,snapshot.metadata);
   return snapshot;
+}
+function validateGuideIdentity(inputs,metadata){
+  const actual=normalizeSourceGuide(inputs.sourceGuide),reported=normalizeSourceGuide(metadata.sourceGuide);
+  if(JSON.stringify([actual.lo,actual.hi])!==JSON.stringify([reported.lo,reported.hi]))throw new Error('actual GPU source guide differs from captured guide identity');
 }

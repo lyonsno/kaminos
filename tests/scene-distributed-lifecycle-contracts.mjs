@@ -23,11 +23,25 @@ function fixture(castShadow=true) {
   const mesh=new THREE.Mesh(geometry,material);mesh.castShadow=castShadow;
   const scene=new THREE.Scene();scene.add(mesh);
   const statuses=[];
-  const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,onStatus:s=>statuses.push(s)});
+  const emitter={position:[0,-.76,0],radius:.19,height:2.2,depth:.24};
+  const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,getSourceGuide:()=>emitter,onStatus:s=>statuses.push(s)});
   const field={source:{status:'encoded',texture:{createView(){return {}; }},localMax:[1,3,1],dimensions:[32,64,32],generation:1,frame:1}};
-  return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,buffers,field,prepare(){consume(field);}};
+  return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,buffers,field,emitter,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='source-guide'){
+ const f=fixture();assert.doesNotThrow(()=>f.mount.setAngularPattern('guided'),'emitter-informed mode must reach live gathering');
+ f.mount.setDirections(12);f.prepare();let s=f.mount.debugState().frame;
+ assert.equal(s.angularPattern,'guided');assert.equal(s.integration,'exact-cell');assert.equal(s.sourceGuide.effective,'emitter-envelope');
+ assert.deepEqual(s.sourceGuide.lo,[-.38,-1,-.38].map(Math.fround));
+ const prepared=s.angularCache.preparedRayDirections;
+ f.field.source.generation++;f.prepare();assert.equal(f.mount.debugState().frame.angularCache.preparedRayDirections,prepared,'changing emission must reuse guide visibility');
+ f.emitter.radius=.2;f.prepare();s=f.mount.debugState().frame;assert.equal(s.angularCache.preparedRayDirections,prepared+12,'authored envelope changes rebuild angular visibility');
+ assert.equal(f.mount.debugState().geometryBuilds,1,'guide changes retain receivers/caster BVH');
+ f.mount.setDirections(16);f.prepare();assert.equal(f.mount.debugState().frame.angularCache.lastPreparedDirections,4,'guided count growth reuses fixed prefixes');
+ assert(f.buffers.find(b=>b.label==='source guide bounds').usage&GPUBufferUsage.COPY_SRC,'inspection must copy consumed guide uniform');
+ f.mount.dispose();
+}
 if(!selected||selected==='receiver-material-groups'){
  const f=fixture(false);f.geometry.setAttribute('position',new THREE.Float32BufferAttribute([0,0,0,1,0,0,0,1,0,1,0,0,1,1,0,0,1,0],3));f.geometry.setIndex(null);f.geometry.computeVertexNormals();
  f.geometry.clearGroups();f.geometry.addGroup(0,3,0);f.geometry.addGroup(3,3,0);f.mesh.material=[f.material,new THREE.MeshStandardMaterial()];

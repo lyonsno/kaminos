@@ -15,6 +15,9 @@ const collisionTarget = new URL(forwardCompositionHash('http://localhost:8106/?s
 assert.equal(new URLSearchParams(collisionTarget.hash.slice(1)).get('volume_collision'), 'kiln',
   'the saved-preset launcher must retain the opt-in authored-kiln collision route');
 const lightingHash = new URL(forwardCompositionHash('http://localhost:8106/', '#scene=test.kaminos.json&rendering_source_xyz=0%2C0%2C0&rendering_source_gain=5'));
+const guidedHash=new URLSearchParams(new URL(forwardCompositionHash('http://localhost:8106/','#rendering_angular_pattern=guided&rendering_directions=12&rendering_match_camera=1')).hash.slice(1));
+assert.equal(guidedHash.get('rendering_angular_pattern'),'guided','basin restore must not silently replace requested sampling law');
+assert.equal(guidedHash.get('rendering_directions'),'12');assert.equal(guidedHash.get('rendering_match_camera'),'1');
 assert.equal(new URLSearchParams(lightingHash.hash.slice(1)).get('rendering_source_xyz'), '0,0,0');
 assert.equal(new URLSearchParams(lightingHash.hash.slice(1)).get('rendering_source_gain'), '5');
 const surfaceHash=new URL(forwardCompositionHash('http://localhost:8106/','#rendering_surface_gain=2&rendering_surface_scattering=0'));
