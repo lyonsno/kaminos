@@ -3463,7 +3463,15 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <label for="rendering-source-z">Z<input type="number" id="rendering-source-z" step="0.1" value="0.7"></label>
       </div>
       <div class="slider-row"><label class="slider-label" for="rendering-shared-gain">Source gain (stops)</label><input type="range" id="rendering-shared-gain" min="-4" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-shared-gain-value">+0.00</span></div>
-      <div id="rendering-distributed-controls" hidden><label for="rendering-angular-samples">Distributed flame directions</label><select id="rendering-angular-samples"><option>12</option><option>16</option><option selected>24</option><option>48</option><option>96</option></select>
+      <div id="rendering-distributed-controls" hidden><label for="rendering-angular-samples">Distributed flame directions</label><select id="rendering-angular-samples"><option>8</option><option>10</option><option>12</option><option>16</option><option selected>24</option><option>48</option><option>96</option></select>
+        <label for="rendering-receiver-spacing">Surface receiver spacing (experimental)</label><select id="rendering-receiver-spacing"><option value="0" selected>Per vertex · reference</option><option value="0.04">0.04 source units · fine</option><option value="0.08">0.08 source units · medium</option><option value="0.16">0.16 source units · coarse</option></select>
+        <p class="rendering-description" id="rendering-receiver-status">Reference mesh receivers; full render and shadow geometry retained.</p>
+        <details id="rendering-light-debug" hidden><summary>Receiver / ray debug</summary>
+          <button type="button" id="rendering-light-debug-pick">Select receiving surface</button><button type="button" id="rendering-light-debug-time">Measure 20 scene GPU frames</button><button type="button" id="rendering-light-debug-save">Save inspection JSON</button>
+          <p class="rendering-description" id="rendering-light-debug-status">Source-aware ray replay; other modes retain raw values and report unsupported replay. Snapshots are held data, not live contributions.</p>
+          <select id="rendering-light-debug-sample" aria-label="Captured lighting receiver"></select>
+          <div id="rendering-light-debug-plot"></div><div id="rendering-light-debug-rays" style="font-size:11px;overflow:auto"></div>
+        </details>
         <label class="import-mode"><input type="checkbox" id="rendering-surface-scattering" checked><span>Smoke scattered light on surfaces</span></label>
         <p class="rendering-description">Includes one scattering event in smoke before light reaches the kiln. Smoke albedo changes this contribution. Uncheck to compare direct flame illumination.</p>
         <div class="slider-row"><label class="slider-label" for="rendering-surface-gain">Surface illumination trim (stops)</label><input type="range" id="rendering-surface-gain" min="-8" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-surface-gain-value">+0.00</span></div>
@@ -3625,6 +3633,7 @@ function refreshRenderingControls() {
   if(distributed)source.setSmokeMode(document.getElementById('rendering-smoke-solver').value);
   if(distributed)source.setSourceSoftness(Number(document.getElementById('rendering-source-softness').value));
   if(distributed)source.setSurfaceReconstruction(Number(document.getElementById('rendering-surface-reconstruction').value));
+  if(distributed)source.setReceiverSpacing(Number(document.getElementById('rendering-receiver-spacing').value));
   if(distributed)source.setRetainComparisons(document.getElementById('rendering-retain-comparisons').checked);
   if(distributed)source.setAngularPattern(document.getElementById('rendering-angular-pattern').value);
   if (source && !distributed) {
@@ -11429,6 +11438,9 @@ async function initScene() {
     needsRender = true;
     return { position: camera.position.toArray(), target: controls.target.toArray() };
   };
+  let exclusiveInspectionRender=false,manualInspectionRender=false;
+  window.__kaminosBeginSceneInspection=()=>{if(exclusiveInspectionRender)throw new Error('scene inspection draw session already active');exclusiveInspectionRender=true;return ()=>{exclusiveInspectionRender=false;};};
+  window.__kaminosRenderSceneForInspection=()=>{const before=sceneFrameCount;manualInspectionRender=true;try{const result=renderSceneFrame();if(result===false||sceneFrameCount===before)throw new Error('inspection scene draw skipped');return {frame:renderer.info.frame,sceneFrameCount,drawn:true};}finally{manualInspectionRender=false;}};
   const IDLE_THRESHOLD = 3;
 
   const markDirty = () => { needsRender = true; idleFrames = 0; };
@@ -11615,6 +11627,7 @@ async function initScene() {
   let fpsLast = performance.now();
 
   function renderSceneFrame() {
+    if(exclusiveInspectionRender&&!manualInspectionRender)return false;
     // Shared-source reset may span an await while this host's RAF keeps
     // running. Keep the previous presented frame until both consumers have
     // current inputs; do not submit retired medium resources or unlit fill.
@@ -12402,6 +12415,7 @@ document.getElementById('rendering-angular-samples').addEventListener('change',e
 document.getElementById('rendering-angular-swap').addEventListener('click',()=>{if(previousAngularCount!==null)selectAngularCount(previousAngularCount);});
 document.getElementById('rendering-retain-comparisons').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-angular-pattern').addEventListener('change',refreshRenderingControls);
+document.getElementById('rendering-receiver-spacing').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-smoke-solver').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-surface-scattering').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-surface-gain').addEventListener('input',event=>{
@@ -12431,6 +12445,13 @@ if(renderingUrlState.has('rendering_surface_gain')&&Number.isFinite(surfaceStops
   const input=document.getElementById('rendering-surface-gain');input.value=String(surfaceStops);input.dispatchEvent(new Event('input'));
 }
 if(renderingUrlState.has('rendering_surface_scattering'))document.getElementById('rendering-surface-scattering').checked=renderingUrlState.get('rendering_surface_scattering')==='1';
+if(renderingUrlState.has('rendering_receiver_spacing')){
+  const value=Number(renderingUrlState.get('rendering_receiver_spacing'));
+  if(!Number.isFinite(value)||value<0)throw new Error('invalid requested receiver spacing');
+  const select=document.getElementById('rendering-receiver-spacing');
+  if(![...select.options].some(o=>Number(o.value)===value)){const option=document.createElement('option');option.value=String(value);option.textContent=`${value} source units · custom`;select.append(option);}
+  select.value=String(value);
+}
 document.getElementById('rendering-shared-gain-value').textContent = `${renderingGainStops >= 0 ? '+' : ''}${renderingGainStops.toFixed(2)}`;
 setRightPanelTab(isFireLightFieldRoute() ? 'rendering' : 'mix');
 // Tab switching also stops inactive benches; initialize their state first.
@@ -23169,11 +23190,14 @@ async function initKaminosVolumeRoute() {
           if(cache){
             const text=`Prepared: ${cache.counts.join(', ')} directions · ${(cache.bytes/1048576).toFixed(1)} MiB direction/visibility buffers. ${cache.retained?'A/B retention on.':'Only current set retained.'} Geometry edits invalidate all sets.`;
             const label=document.getElementById('rendering-angular-cache');
+            const receiverLabel=document.getElementById('rendering-receiver-status');
+            if(receiverLabel){const r=state.receiverSampling;receiverLabel.textContent=r?`Requested spacing ${state.receiverSpacingRequested}; effective ${r.spacing}. ${r.receivers.toLocaleString()} light receivers / ${r.renderVertices.toLocaleString()} render vertices · ${r.stencilWidth}-sample reconstruction · ${state.visibilityBuilds} packed visibility builds. ${state.previewStale?'Stale preview; rebuild pending.':''}`:`Receiver layout ${state.status}; no verified current count.`;}
             if(label.textContent!==text)label.textContent=text;
           }
         }})
         : module.mountSceneRadiance({renderer,scene,prototype:volumePrototype});
       if(distributed)bindSceneLightEditInteraction({document,window,getLighting:()=>window.__kaminosSceneRadiance});
+      if(distributed)import('./scene-light-debug-view.mjs').then(debug=>debug.mountLightingDebugView({document,renderer,camera,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,beginSceneInspection:()=>window.__kaminosBeginSceneInspection(),drawFrame:()=>window.__kaminosRenderSceneForInspection()})).catch(error=>{document.getElementById('rendering-light-debug-status').textContent=`Inspection unavailable: ${error.message}`;console.error(error);});
       window.__kaminosSceneRadianceSetup.status='mounted';
       refreshRenderingControls();
     }).catch(error=>{
