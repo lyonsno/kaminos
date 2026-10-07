@@ -58,6 +58,8 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('selected-object-relations'), 'authoring-type-slot');
   move(byId('selected-group-properties'), 'authoring-type-slot');
   move(byId('selected-assembly-properties'), 'authoring-type-slot');
+  move(byId('exposure-slider').closest('.slider-row'), 'scene-camera-host-exposure');
+  move(byId('scene-camera-match-row'), 'scene-camera-controls');
   move(byId('authoring-source-environment'), 'authoring-world-slot');
   move(byId('authoring-source-render'), 'authoring-render-slot');
   move(byId('authoring-source-fire-light'), 'authoring-render-slot');

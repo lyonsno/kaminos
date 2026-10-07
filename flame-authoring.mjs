@@ -52,8 +52,7 @@ export const FLAME_PROPERTY_GROUPS = [
   { name:'Appearance', open:true, scope:'Shared flame and smoke appearance', fields:[
     ['volume-physical-temperature','Temperature'], ['volume-physical-spread','Temperature spread'],
     ['volume-physical-thermal','Thermal response'], ['volume-physical-clean','Clean flame'],
-    ['volume-physical-exposure','Exposure'], ['volume-physical-knee','Highlight knee'],
-    ['volume-physical-white','White point'], ['volume-physical-smoke-extinction','Smoke extinction'],
+    ['volume-physical-smoke-extinction','Smoke extinction'],
     ['volume-physical-smoke-albedo','Smoke albedo'],
   ] },
   { name:'Emission', scope:'Selected flame source', fields:[
@@ -75,17 +74,22 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-common-gas-transport','Common gas transport'],
   ] },
   { name:'Legacy appearance', scope:'For presets using the earlier material model', fields:[
-    ['volume-exposure','Exposure'], ['volume-density','Density'], ['volume-fire','Fire'],
+    ['volume-density','Density'], ['volume-fire','Fire'],
     ['volume-radiance','Radiance'], ['volume-absorption','Absorption'], ['volume-glow','Glow'],
     ['volume-smoke','Smoke'], ['volume-fire-scale','Fire scale'], ['volume-detail-scale','Detail scale'],
   ] },
 ];
 
+export const CAMERA_PROPERTY_GROUP = {name:'Camera',open:true,scope:'Display transform; emitted and transported power are unchanged',fields:[
+  ['volume-physical-exposure','Exposure EV'], ['volume-physical-white','White balance K'],
+  ['volume-physical-knee','Highlight knee'], ['volume-exposure','Legacy flame exposure'],
+]};
+
 export function authoredFlameShapeOptions(options) {
   return [...options].filter(option=>option.value!=='cluster');
 }
 
-export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, openWorkbench, onError }) {
+export function createFlameInspector({ document, host, sharedHost = host, cameraHost, listBasins, applyBasin, readSource, openWorkbench, onError }) {
   const basin = document.createElement('details'); basin.id='flame-basin-browser'; basin.open=true;
   basin.innerHTML='<summary>Preset</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a preset…" aria-label="Find a preset"><select id="flame-basin-select" aria-label="Fire preset"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
   sharedHost.append(basin);
@@ -114,7 +118,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
     finally{button.disabled=!byId('flame-basin-select').value;sync();}
   };
   const aliases=[];
-  for(const group of FLAME_PROPERTY_GROUPS) {
+  for(const group of [...FLAME_PROPERTY_GROUPS,...(cameraHost?[CAMERA_PROPERTY_GROUP]:[])]) {
     const section=document.createElement('details');section.open=!!group.open;
     const title=document.createElement('summary');title.textContent=group.name;section.append(title);
     const scope=document.createElement('p');scope.className='flame-scope';scope.textContent=group.scope;section.append(scope);
@@ -126,7 +130,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       if(source.tagName==='SELECT')for(const option of id==='emitter-assay-family'?authoredFlameShapeOptions(source.options):source.options)field.append(option.cloneNode(true));
       else {field.type=source.type==='range'?'number':source.type;field.step='any';}
       field.className='transform-input';field.dataset.authoringAlias=id;field.id=`selected-${id}`;grip.htmlFor=field.id;
-      field.setAttribute('aria-label',`Flame ${label}`);
+      field.setAttribute('aria-label',`${group.name==='Camera'?'Camera':'Flame'} ${label}`);
       field.dataset.authoringDragStep=source.step==='any'?'.01':source.step||'.01';
       function syncField(force=false) {
         if(force!==true&&document.activeElement===field)return;
@@ -144,7 +148,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       source.addEventListener('input',syncField);source.addEventListener('change',syncField);
       aliases.push(syncField);syncField();row.append(grip,field);section.append(row);
     }
-    (group.name==='Emission'?host:sharedHost).append(section);
+    (group.name==='Camera'?cameraHost:group.name==='Emission'?host:sharedHost).append(section);
   }
   const more=document.createElement('button');more.type='button';more.className='btn';more.textContent='All controls in Workbench';more.onclick=openWorkbench;sharedHost.append(more);
   function sync(force=false) {
