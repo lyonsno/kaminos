@@ -101,7 +101,7 @@ test('draw admission rejects an unsupported mode even when simulation is paused'
     resolveTransportConfig:()=>({effective:{commonCharacteristic:true}}),
     ordinarySceneDepthFallback:null,device:{createTexture(){throw new Error('GPU draw reached before route admission');}},
     GPUTextureUsage:{TEXTURE_BINDING:1,RENDER_ATTACHMENT:2},
-    pipeline:{},simulationPaused:true,
+    pipeline:{},simulationPaused:true,sceneSourceFrameConsumer:null,
   });
   vm.runInContext(functionSource('assertOuterRoute')+functionSource('encodeDraw'),context);
   assert.throws(()=>vm.runInContext('encodeDraw({},null,"paused")',context),/outer smoke requires/);

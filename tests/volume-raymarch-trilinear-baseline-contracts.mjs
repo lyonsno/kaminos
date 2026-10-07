@@ -75,7 +75,7 @@ const supportAdmission = traversal.slice(
 );
 assert.match(
   supportAdmission,
-  /^let directSupport = directCellOpticalSupport\(p\);\s*if \(!fullGridCapture && directSupport <= 0\.0001\) \{\s*let cellExit = directCellExitDistance\(p, rd\);\s*let emptyCellAdvance = mix\(\s*dtBase,\s*max\(dtBase, cellExit \+ 0\.0001\),\s*occupancySkipStrength\s*\);\s*t = t \+ min\(emptyCellAdvance, max\(0\.0001, endT - t\)\);\s*continue;\s*\}\s*$/,
+  /^let directSupport = directCellOpticalSupport\(p\);\s*if \(!fullGridCapture && directSupport <= 0\.0001 && \(!OUTER_SMOKE \|\| sampleOuterSmoke\(p\)\.x<=0\.0001\)\) \{\s*let cellExit = directCellExitDistance\(p, rd\);\s*let emptyCellAdvance = mix\(\s*dtBase,\s*max\(dtBase, cellExit \+ 0\.0001\),\s*occupancySkipStrength\s*\);\s*t = t \+ min\(emptyCellAdvance, max\(0\.0001, endT - t\)\);\s*continue;\s*\}\s*$/,
   'one live direct-support skip must own admission before sampling',
 );
 const sampleBranch = traversal.slice(
@@ -83,7 +83,7 @@ const sampleBranch = traversal.slice(
 );
 assert.match(
   sampleBranch,
-  /^var reconstructed: FlowReconstructionSample;\s*if \(flowKernelReconstructionActive\) \{\s*reconstructed = sampleWorldFlowReconstruction\(p\);\s*\} else \{\s*reconstructed = sampleWorldFlowReconstructionRaw\(p\);\s*\}\s*expensiveSamples = expensiveSamples \+ 1u;\s*$/,
+  /^var reconstructed: FlowReconstructionSample;\s*if \(flowKernelReconstructionActive\) \{\s*reconstructed = sampleWorldFlowReconstruction\(p\);\s*\} else \{\s*reconstructed = sampleWorldFlowReconstructionRaw\(p\);\s*\}\s*if\(OUTER_SMOKE\)\{\s*let w=outerSmokeBlend\(p,min\(1\.0,max\(\.25,2\.0\*outerWidth\)\)\);\s*reconstructed.material.x=mix\(reconstructed.material.x,sampleOuterSmoke\(p\).x,w\);\s*reconstructed.material.w\*=1\.0-w;reconstructed.microLayer.x\*=1\.0-w;\s*\}\s*expensiveSamples = expensiveSamples \+ 1u;\s*$/,
   'raw zero route must contain one direct trilinear assignment and no filtering',
 );
 }
@@ -135,7 +135,7 @@ const falseClosureMutations = [
   [
     'dead support skip with live global-occupancy alias',
     source => source
-      .replace('    if (!fullGridCapture && directSupport <= 0.0001) {', '    if (false) {\n    if (!fullGridCapture && directSupport <= 0.0001) {')
+      .replace('    if (!fullGridCapture && directSupport <= 0.0001 && (!OUTER_SMOKE || sampleOuterSmoke(p).x<=0.0001)) {', '    if (false) {\n    if (!fullGridCapture && directSupport <= 0.0001 && (!OUTER_SMOKE || sampleOuterSmoke(p).x<=0.0001)) {')
       .replace('    var reconstructed: FlowReconstructionSample;', '    }\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
     /one live direct-support skip must own admission before sampling/,
   ],
