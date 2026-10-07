@@ -133,7 +133,7 @@ try {
       await page.evaluate(()=>document.getElementById('info-bar').textContent='');
       await page.locator('#scene-file-input').setInputFiles({name:'gi-validation.kaminos.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(data))});
       const invalid=!['gtao',undefined].includes(mode);
-      await page.waitForFunction(bad=>{const text=document.getElementById('info-bar').textContent;return bad?text==='Invalid scene format':text.startsWith('Scene loaded:');},invalid,{timeout:0});
+      await page.waitForFunction(bad=>{const text=document.getElementById('info-bar')?.textContent||'';return bad?text==='Invalid scene format':text.startsWith('Scene loaded:');},invalid,{timeout:0});
       const after=await page.evaluate(()=>({gi:window.kaminosAuthoringParameters.read('@scene-gi'),history:window.kaminosSceneEdits.state().undoCount,objects:window.kaminosSceneObjectDebugState().map(o=>o.id)}));
       report.restoreValidation.push({mode:mode===undefined?'absent':mode,invalid,prior,after});
       if(invalid)assert.deepEqual(after,prior);else assert.equal(after.gi.mode,'combined');
