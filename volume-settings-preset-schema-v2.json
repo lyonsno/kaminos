@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 235,
+  "controlCount": 247,
   "controls": [
     {
       "key": "volume-physical-material-law",
@@ -433,6 +433,102 @@
       "type": "select-one",
       "additiveDefault": "collocated",
       "additiveSinceControlCount": 235
+    },
+    {
+      "key": "volume-immersed-centre-x",
+      "param": "volume_immersed_centre_x",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0,
+      "additiveSinceControlCount": 236
+    },
+    {
+      "key": "volume-immersed-centre-y",
+      "param": "volume_immersed_centre_y",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": -0.5,
+      "additiveSinceControlCount": 237
+    },
+    {
+      "key": "volume-immersed-centre-z",
+      "param": "volume_immersed_centre_z",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0,
+      "additiveSinceControlCount": 238
+    },
+    {
+      "key": "volume-immersed-yaw",
+      "param": "volume_immersed_yaw",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0,
+      "additiveSinceControlCount": 239
+    },
+    {
+      "key": "volume-immersed-pitch",
+      "param": "volume_immersed_pitch",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 90,
+      "additiveSinceControlCount": 240
+    },
+    {
+      "key": "volume-immersed-radius",
+      "param": "volume_immersed_radius",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0.2,
+      "additiveSinceControlCount": 241
+    },
+    {
+      "key": "volume-immersed-thickness",
+      "param": "volume_immersed_thickness",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 1.5,
+      "additiveSinceControlCount": 242
+    },
+    {
+      "key": "volume-immersed-speed",
+      "param": "volume_immersed_speed",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0.1,
+      "additiveSinceControlCount": 243
+    },
+    {
+      "key": "volume-immersed-fuel",
+      "param": "volume_immersed_fuel",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0.56,
+      "additiveSinceControlCount": 244
+    },
+    {
+      "key": "volume-immersed-temperature",
+      "param": "volume_immersed_temperature",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 1.2,
+      "additiveSinceControlCount": 245
+    },
+    {
+      "key": "volume-immersed-momentum-gain",
+      "param": "volume_immersed_momentum_gain",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 1,
+      "additiveSinceControlCount": 246
+    },
+    {
+      "key": "volume-immersed-cap-fraction",
+      "param": "volume_immersed_cap_fraction",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0.5,
+      "additiveSinceControlCount": 247
     },
     {
       "key": "volume-pyro-compare",

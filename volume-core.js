@@ -2068,7 +2068,9 @@ export const HEAT_RELEASE_UNIFORM_OFFSET = INFLOW_UNIFORM_OFFSET + INFLOW_UNIFOR
 export const HEAT_RELEASE_UNIFORM_FLOATS = 4;
 export const VELOCITY_STAGGERING_UNIFORM_OFFSET = HEAT_RELEASE_UNIFORM_OFFSET + HEAT_RELEASE_UNIFORM_FLOATS;
 export const VELOCITY_STAGGERING_UNIFORM_FLOATS = 4;
-export const VOLUME_UNIFORM_FLOATS = VELOCITY_STAGGERING_UNIFORM_OFFSET + VELOCITY_STAGGERING_UNIFORM_FLOATS;
+export const IMMERSED_SOURCE_UNIFORM_OFFSET = VELOCITY_STAGGERING_UNIFORM_OFFSET + VELOCITY_STAGGERING_UNIFORM_FLOATS;
+export const IMMERSED_SOURCE_UNIFORM_FLOATS = 16;
+export const VOLUME_UNIFORM_FLOATS = IMMERSED_SOURCE_UNIFORM_OFFSET + IMMERSED_SOURCE_UNIFORM_FLOATS;
 
 // The aperture pattern (slice 2): which coverage pattern the floor map is built
 // from, its count / ratio / seed, and the swirl (tangential fraction of the
@@ -2381,6 +2383,90 @@ export function faceForceFoldModel({ solid = false, transported, localIncrement,
   // neighbour (the open top passes this cell's own value as that neighbour).
   const faceForce = written.map((f, axis) => (upperFaceOpen[axis] ? 0.5 * (f + upperCentredIncrement[axis][axis]) : 0));
   return { stored, written, completed: bound(stored.map((v, i) => v + faceForce[i])) };
+}
+// Immersed source (report section 31): an authored disc anywhere in the volume,
+// in any direction. One flux number Q = v π r² × puff (cells³ per reference
+// step) drives three consistent terms in the kernel: a divergence target
+// Q·w/Σw per cell (beside heat release), a momentum relaxation toward v·n in
+// the slab, and scalar entry with the created volume. Opt-in through the
+// Source Law select; the floor law and the legacy laws are untouched.
+export const IMMERSED_SOURCE_IDENTITY = 'kaminos.volume.immersed-source.v1';
+export const IMMERSED_SOURCE_LAW = 'immersed-source';
+function immersedDirectionFromAngles(yawDeg, pitchDeg) {
+  const yaw = yawDeg * Math.PI / 180, pitch = pitchDeg * Math.PI / 180;
+  return [Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw)];
+}
+// CPU mirror of the shader's immersedSourceWeight over the cells that can be
+// inside the slab: an antialiased indicator of |along| ≤ t/2 and radial ≤ r,
+// in cell units, cell centres at integer + 0.5.
+export function immersedSourceWeights(effective, { grid, gridHeight }) {
+  const c = effective.centreCells, n = effective.direction, r = effective.radiusCells, h = effective.thickness / 2;
+  const reach = Math.ceil(Math.max(r, h) + 1.5);
+  const cells = []; let sum = 0;
+  const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  for (let z = Math.max(0, Math.floor(c[2] - reach)); z <= Math.min(grid - 1, Math.ceil(c[2] + reach)); z += 1)
+    for (let y = Math.max(0, Math.floor(c[1] - reach)); y <= Math.min(gridHeight - 1, Math.ceil(c[1] + reach)); y += 1)
+      for (let x = Math.max(0, Math.floor(c[0] - reach)); x <= Math.min(grid - 1, Math.ceil(c[0] + reach)); x += 1) {
+        const d = [x + 0.5 - c[0], y + 0.5 - c[1], z + 0.5 - c[2]];
+        const along = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
+        const radial = Math.hypot(d[0] - along * n[0], d[1] - along * n[1], d[2] - along * n[2]);
+        const w = smooth(h + 0.5, h - 0.5, Math.abs(along)) * smooth(r + 0.5, r - 0.5, radial);
+        if (w > 0) { cells.push({ x, y, z, w }); sum += w; }
+      }
+  return { cells, sum };
+}
+export function resolveImmersedSourceConfig(controls = {}, options = {}) {
+  const grid = normalizeGridSize(options.grid ?? 64);
+  const gridHeight = options.gridHeight ?? grid * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
+  const pressure = resolvePressureSolverConfig(controls).effective;
+  const sourceLaw = String(controls.emitterSourceLaw ?? 'legacy-volume');
+  const puffFactor = Number.isFinite(options.puffFactor) ? options.puffFactor : 1;
+  const centre = [clampFinite(controls.immersedCentreX, -1, 1, 0), clampFinite(controls.immersedCentreY, -1, 3, -0.5), clampFinite(controls.immersedCentreZ, -1, 1, 0)];
+  const yaw = clampFinite(controls.immersedYaw, 0, 360, 0), pitch = clampFinite(controls.immersedPitch, -90, 90, 90);
+  const radius = clampFinite(controls.immersedRadius, 0.02, 0.5, 0.2);
+  const thickness = clampFinite(controls.immersedThickness, 1, 4, 1.5);
+  const speed = clampFinite(controls.immersedSpeed, 0, 1, 0.1);
+  const fuel = clampFinite(controls.immersedFuel, 0, 1, 0.56);
+  const temperature = clampFinite(controls.immersedTemperature, 0, 2, 1.2);
+  const momentumGain = clampFinite(controls.immersedMomentumGain, 0, 2, 1);
+  const capFraction = clampFinite(controls.immersedCapFraction, 0.1, 1, 0.5);
+  const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness, speed, fuel, temperature, momentumGain, capFraction, puffFactor };
+  const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, puffFactor } });
+  if (sourceLaw !== IMMERSED_SOURCE_LAW) return off('source-law-is-not-immersed-source');
+  if (pressure.solver !== PRESSURE_SOLVER_CONVERGED) return off('immersed-source-requires-converged-pressure-solver');
+  if (pressure.dispatch !== PRESSURE_SOLVER_CONVERGED) return off(`immersed-source-requires-pressure-projection-dispatch:${pressure.disabledReason || 'disabled'}`);
+  // Normalised domain coordinates → cells (cellToWorld's inverse, GRID on every axis).
+  const centreCells = centre.map(v => (v + 1) * grid / 2);
+  const direction = immersedDirectionFromAngles(yaw, pitch);
+  const radiusCells = radius * grid / 2;
+  const fluxRequested = speed * Math.PI * radiusCells * radiusCells * puffFactor;
+  // A cell cannot create more volume per step than its faces can carry out:
+  // the cap is a fraction of one stored-velocity unit per step. Reported, never silent.
+  const capPerCell = capFraction;
+  const effective = { admitted: true, reason: null, grid, centreCells, direction, radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor };
+  // The normaliser is the discrete weight sum, so Σ target = Q exactly on this
+  // grid; the analytic slab volume π r² t is kept for reference (the antialiased
+  // skirt and the cell lattice make the sum run a few percent over it).
+  const weights = immersedSourceWeights(effective, { grid, gridHeight });
+  effective.normaliser = Math.max(1e-6, weights.sum);
+  effective.analyticVolume = Math.PI * radiusCells * radiusCells * thickness;
+  const normaliser = effective.normaliser;
+  let clipped = 0, fluxEffective = 0;
+  for (const cell of weights.cells) { const target = fluxRequested * cell.w / normaliser; if (target > capPerCell) clipped += 1; fluxEffective += Math.min(capPerCell, target); }
+  effective.fluxEffectivePredicted = fluxEffective;
+  effective.clipPredicted = { cells: clipped, of: weights.cells.length };
+  effective.footprint = { cells: weights.cells.length, weightSum: weights.sum };
+  return { identity: IMMERSED_SOURCE_IDENTITY, requested, effective };
+}
+export function immersedSourceUniformValues(config) {
+  const e = config?.effective;
+  if (!e?.admitted) return new Array(IMMERSED_SOURCE_UNIFORM_FLOATS).fill(0);
+  return [
+    1, e.centreCells[0], e.centreCells[1], e.centreCells[2],
+    e.direction[0], e.direction[1], e.direction[2], e.radiusCells,
+    e.thickness, e.speed, e.fuel, e.temperature,
+    e.momentumGain, e.capPerCell, e.fluxRequested / e.normaliser, 0,
+  ];
 }
 export function velocityStaggeringUniformValues(config) {
   const admitted = config?.effective?.admitted ? 1 : 0;
@@ -3208,6 +3294,13 @@ struct Uniforms {
   heat_release: vec4<f32>,
   // Velocity staggering: .x 1 when the carried velocity is read as face values.
   velocity_staggering: vec4<f32>,
+  // Immersed source: a = enabled, centre (cells); b = direction, radius (cells);
+  // c = thickness, speed, fuel, temperature; d = momentum gain, cap per cell,
+  // target per unit weight (Q / Σw), unused.
+  immersed_source_a: vec4<f32>,
+  immersed_source_b: vec4<f32>,
+  immersed_source_c: vec4<f32>,
+  immersed_source_d: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -4255,6 +4348,24 @@ fn centreVelocityAt(c: vec3<i32>) -> vec3<f32> {
 // half-cell offsets cancel and the query is centre − U·dt, the same foot the
 // scalars use. (A per-component −½ sample offset was tried first and moved the
 // velocity pattern +½ cell per step: the lean flipped to +x instead of going.)
+
+fn immersedDirection() -> vec3<f32> {
+  return u.immersed_source_b.xyz;
+}
+
+// Weight of a cell in the immersed source's slab: an antialiased indicator of
+// |along| ≤ t/2 and radial ≤ r in cell units (cell centres at integer + 0.5).
+// The CPU mirror immersedSourceWeights computes the same number.
+fn immersedSourceWeight(cellCenter: vec3<f32>) -> f32 {
+  if (u.immersed_source_a.x < 0.5) { return 0.0; }
+  let d = cellCenter - u.immersed_source_a.yzw;
+  let n = immersedDirection();
+  let along = dot(d, n);
+  let radial = length(d - along * n);
+  let halfThickness = 0.5 * u.immersed_source_c.x;
+  let radius = u.immersed_source_b.w;
+  return smoothstep(halfThickness + 0.5, halfThickness - 0.5, abs(along)) * smoothstep(radius + 0.5, radius - 0.5, radial);
+}
 
 fn blockedSceneFaceFluxAtCell(c: vec3<i32>) -> vec2<f32> {
   if (!sceneSolidEnabled()) { return vec2<f32>(0.0); }
@@ -5638,6 +5749,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   let p = cellToWorld(cell);
   let prev = fluidSrc[base];
+  // Immersed source: one weight, one capped target; momentum and scalar entry
+  // below derive from the same two numbers (report section 31).
+  let immersedWeight = immersedSourceWeight(cell);
+  let immersedTarget = min(u.immersed_source_d.y, immersedWeight * u.immersed_source_d.z);
   let requestedSpeed = u.fire_smoke_curl_speed.w;
   let speed = dynamicsSpeed();
   let timeStep = timeStepScale();
@@ -5836,6 +5951,24 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     fireLick = mix(fireLick, 0.0, inflowFraction);
     emberFleck = mix(emberFleck, 0.0, inflowFraction);
     combustionFrontTopology = mix(combustionFrontTopology, 0.0, inflowFraction);
+  }
+  if (immersedTarget > 0.0) {
+    // The created volume brings the authored mixture, exactly as the floor flux does.
+    let immersedEntry = clamp(immersedTarget * dynamicsBacktraceScale(), 0.0, 1.0);
+    smoke = mix(smoke, 0.0, immersedEntry);
+    heat = mix(heat, u.immersed_source_c.w, immersedEntry);
+    fuel = mix(fuel, u.immersed_source_c.z, immersedEntry);
+    materialDetail = mix(materialDetail, 0.0, immersedEntry);
+    flame = mix(flame, 0.0, immersedEntry);
+    ember = mix(ember, 0.0, immersedEntry);
+    visibleFireCarrier = mix(visibleFireCarrier, 0.0, immersedEntry);
+    flameDetail = visibleFireCarrier;
+    combustionFront = mix(combustionFront, 0.0, immersedEntry);
+    microSmoke = mix(microSmoke, 0.0, immersedEntry);
+    interfaceShred = mix(interfaceShred, 0.0, immersedEntry);
+    fireLick = mix(fireLick, 0.0, immersedEntry);
+    emberFleck = mix(emberFleck, 0.0, immersedEntry);
+    combustionFrontTopology = mix(combustionFrontTopology, 0.0, immersedEntry);
   }
 
   let sourceCenter = p - u.primitive_source.xyz;
@@ -6526,6 +6659,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
   // Uniform time step: every per-step velocity increment above scales with dt
   // (1.0 under the legacy mode).
+  // Immersed source momentum: the slab relaxes toward the authored velocity.
+  // Velocity-dependent, so it stays on the stored value under the staggered reading.
+  if (immersedWeight > 0.0) {
+    vel = mix(vel, u.immersed_source_c.y * immersedDirection(), min(1.0, immersedWeight * u.immersed_source_d.x));
+  }
   let forceIncrement = (vel - velTransported) * timeStep;
   if (faceForcesOn()) {
     // The centred additive forces go to the face-force pass; everything else
@@ -6639,7 +6777,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Stored as the expansion target itself (gain x the burned fuel per unit
   // time; zero when the gain is zero or refused), so the pressure kernels,
   // which bind no uniform, read it directly.
-  textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * fuelBurned / max(timeStep, 1e-6), 0.0, 0.0, 0.0));
+  textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * fuelBurned / max(timeStep, 1e-6) + immersedTarget, 0.0, 0.0, 0.0));
   let bonfireDetailBirthCarrier = bonfireAdvectedSmokeBirth * 0.48 + bonfireSootBirth * 0.30 + bonfireBroadSupportSmokeSource * 0.046 * bonfireLayeredSmokeBreakup + smokeFromHeat * bonfireInterfaceSmokeBand * 0.13 + bonfireInterfaceBirth * 0.18 + bonfireCombustion.z * 0.036 + smoke * 0.070;
   let bonfireSmokeDetailCurlFold = clamp(
     0.50
@@ -15108,6 +15246,9 @@ export function createKaminosVolumePrototype({
     const velocityStaggeringConfig = resolveVelocityStaggeringConfig(controlsSnapshot);
     uniforms.set(velocityStaggeringUniformValues(velocityStaggeringConfig), VELOCITY_STAGGERING_UNIFORM_OFFSET);
     state.velocityStaggering = velocityStaggeringConfig;
+    const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: inflowBoundaryConfig.requested?.inletDynamics?.puffFactor ?? resolveInletDynamicsConfig(controlsSnapshot, inletSignals).effective.puffFactor });
+    uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
+    state.immersedSource = immersedSourceConfig;
     if (inflowBoundaryConfig.effective.admitted && inflowCoverageTexture) {
       const coverageSignature = inflowCoverageSignatureFor(inflowBoundaryConfig);
       if (coverageSignature !== inflowCoverageSignature) {

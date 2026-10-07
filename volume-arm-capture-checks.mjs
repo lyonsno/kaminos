@@ -57,6 +57,7 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
     if (cid === 'volume-emitter-source-law') {
       if (end.emitterSourceLaw !== value) mismatches.push(`emitter source law requested ${value}, effective ${end.emitterSourceLaw}`);
       if (value === 'inflow-boundary' && end.inflowBoundary?.effective?.admitted !== true) mismatches.push(`inflow-boundary requested but not admitted${end.inflowBoundary?.effective?.reason ? ` (${end.inflowBoundary.effective.reason})` : ''}`);
+      if (value === 'immersed-source' && end.immersedSource?.effective?.admitted !== true) mismatches.push(`immersed-source requested but not admitted${end.immersedSource?.effective?.reason ? ` (${end.immersedSource.effective.reason})` : ''}`);
     }
     if (cid === 'volume-time-step' && end.timeStep?.mode !== value) mismatches.push(`time step requested ${value}, effective ${end.timeStep?.mode}${end.timeStep?.reason ? ` (${end.timeStep.reason})` : ''}`);
     if (cid === 'volume-confinement') {

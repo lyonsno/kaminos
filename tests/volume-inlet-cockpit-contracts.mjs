@@ -23,7 +23,7 @@ test('the six slice-3 inlet controls exist, are read, displayed, listened to, he
     const inside = index.slice(index.indexOf(`id="${id}"`), rowEnd);
     assert.doesNotMatch(inside, /slider-help/, `${id} has no help span nested inside the row`);
   }
-  assert.equal(schema.controlCount, 235);
+  assert.equal(schema.controlCount, 247);
   assert.deepEqual(NEW.map(id => schema.controls.find(c => c.key === id)?.additiveSinceControlCount), [228, 229, 230, 231, 232, 233]);
   assert.deepEqual(NEW.map(id => schema.controls.find(c => c.key === id)?.additiveDefault), [1, 0, 0, 6, 0, 3]);
 });

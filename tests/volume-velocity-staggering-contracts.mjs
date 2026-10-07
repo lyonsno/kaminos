@@ -31,7 +31,7 @@ test('velocity staggering resolves from the control and is admitted only under t
 
 test('the staggering uniform follows the heat-release block and packs 1 only when admitted', () => {
   assert.equal(core.VELOCITY_STAGGERING_UNIFORM_OFFSET, core.HEAT_RELEASE_UNIFORM_OFFSET + 4);
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.VELOCITY_STAGGERING_UNIFORM_OFFSET + 4);
+  assert.equal(core.IMMERSED_SOURCE_UNIFORM_OFFSET, core.VELOCITY_STAGGERING_UNIFORM_OFFSET + 4, 'the immersed-source block follows');
   assert.deepEqual(core.velocityStaggeringUniformValues(core.resolveVelocityStaggeringConfig({ velocityStaggering: 'staggered', pressureSolver: 'converged-open-top' })), [1, 1, 0, 0]);
   assert.deepEqual(core.velocityStaggeringUniformValues(core.resolveVelocityStaggeringConfig({ velocityStaggering: 'staggered', pressureSolver: 'legacy' })), [0, 0, 0, 0]);
   assert.match(source, /heat_release: vec4<f32>,\n(?:\s*\/\/[^\n]*\n)*\s*velocity_staggering: vec4<f32>,/, 'uniform struct field after heat_release');
@@ -74,8 +74,8 @@ test('cockpit: the staggering select with help, snapshot, listener, route restor
   assert.match(index, /staggered — NOT ADMITTED \(\$\{/, 'a refused request is named');
   const control = schema.controls.find(c => c.key === 'volume-velocity-staggering');
   assert.deepEqual(control, { key: 'volume-velocity-staggering', param: 'volume_velocity_staggering', tagName: 'SELECT', type: 'select-one', additiveDefault: 'collocated', additiveSinceControlCount: 235 });
-  assert.equal(schema.controlCount, 235);
-  assert.equal(schema.controls.length, 235);
+  assert.equal(schema.controlCount, 247);
+  assert.equal(schema.controls.length, 247);
 });
 
 test('the capture carries the staggering receipt and its check cannot be satisfied by a refused or absent receipt', () => {

@@ -41,7 +41,7 @@ test('the main kernel stores the burn rate per cell and the converged solve targ
   // The stored rate is the fuel consumption rate the reaction itself used (the
   // per-time quantity that multiplies timeStep in the fuel decrement).
   assert.match(source, /let fuelBurnRate = heat \* 0\.018 \+ fuelConsumption;[\s\S]{0,500}?let fuelBurned = min\(fuel, fuelBurnRate \* timeStep\);\s*\n\s*fuel = fuel - fuelBurned;/, 'the fuel decrement is the fuel actually burned: capped by the fuel present, so a hot cell without fuel burns nothing');
-  assert.match(source, /textureStore\(burnRate, cellI, vec4<f32>\(u\.heat_release\.x \* fuelBurned \/ max\(timeStep, 1e-6\), 0\.0, 0\.0, 0\.0\)\);/, 'stored as the expansion target: gain x burned fuel per unit time; zero gain stores zero');
+  assert.match(source, /textureStore\(burnRate, cellI, vec4<f32>\(u\.heat_release\.x \* fuelBurned \/ max\(timeStep, 1e-6\) \+ immersedTarget, 0\.0, 0\.0, 0\.0\)\);/, 'stored as the expansion target beside the immersed source: gain x burned fuel per unit time; zero gain stores zero');
   assert.doesNotMatch(source, /fuel = max\(fuel - \(heat \* 0\.018 \+ fuelConsumption\) \* timeStep, 0\.0\);/, 'the old uncapped decrement form is gone (it was equivalent, but the stored rate must be the capped one)');
   const expansion = wgslFunction('heatReleaseExpansion');
   assert.match(expansion, /return max\(0\.0, textureLoad\(burnRate, c\)\.x\);/, 'the pressure kernels read the target directly (their layout binds no uniform), never negative');
@@ -78,7 +78,7 @@ test('cockpit: the expansion gain is a control with help, restored from routes, 
   assert.match(index, /heat-release — NOT ADMITTED \(\$\{/, 'a refused expansion is named');
   const control = schema.controls.find(c => c.key === 'volume-heat-release-expansion');
   assert.deepEqual(control, { key: 'volume-heat-release-expansion', param: 'volume_heat_release_expansion', tagName: 'INPUT', type: 'range', additiveDefault: 0, additiveSinceControlCount: 234 });
-  assert.equal(schema.controlCount, 235);
+  assert.equal(schema.controlCount, 247);
 });
 
 test('the residual probe names what it measures once expansion is active (review HR-02)', () => {

@@ -1414,6 +1414,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="field"><span class="field-key">Inflow boundary</span><span class="field-val" id="volume-inflow-boundary-state">off</span></div>
       <div class="field"><span class="field-key">Heat release</span><span class="field-val" id="volume-heat-release-state">off</span></div>
       <div class="field"><span class="field-key">Velocity reading</span><span class="field-val" id="volume-velocity-staggering-state">collocated</span></div>
+      <div class="field"><span class="field-key">Immersed source</span><span class="field-val" id="volume-immersed-source-state">off</span></div>
       <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state" role="status" aria-live="polite">connecting...</span></div>
       <div class="field"><span class="field-key">Promotion</span><span class="field-val" id="volume-basin-promotion-state" role="status" aria-live="polite">idle</span></div>
       <div class="volume-presentation-switch" role="group" aria-label="Volume presentation">
@@ -1910,6 +1911,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <option value="legacy-volume">Filled volume</option>
         <option value="shallow-primary">Shallow primary</option>
         <option value="inflow-boundary">Inflow boundary (floor)</option>
+        <option value="immersed-source">Immersed source (anywhere, any direction)</option>
       </select>
       <span class="slider-val" id="volume-emitter-source-law-val">legacy-volume</span>
       <span class="slider-help">Filled volume and Shallow primary add velocity and material inside the emitter every step: a per-step increment, then a clamp at 0.52 per component, then max() floors on smoke, heat and fuel. Inflow boundary puts the emitter's footprint on the floor face as a prescribed inflow: the pressure solve carries that flux through the floor, the floor cells take in the inflow's fuel and temperature in proportion to that flux each step, and the backtrace below the floor reads the inflow velocity, so nothing is pushed in the interior and nothing is clamped. It needs the converged open-top pressure solver and an upright emitter; Inlet Δv is then the inflow velocity, and Link momentum, Shear width, Edge entrainment and Source depth do not apply.</span>
@@ -2025,6 +2027,79 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-emitter-puff-period-val">3.0</span>
     </div>
     <span class="slider-help">Correlation time of the puffing in simulated seconds (so it follows Speed under the uniform time step). Short periods flutter; long ones heave.</span>
+    <!-- Immersed source bench (report section 31): active under Source Law "Immersed source". -->
+    <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
+      <span class="slider-label">Source X</span>
+      <input type="range" id="volume-immersed-centre-x" data-volume-settings-param="volume_immersed_centre_x" min="-1" max="1" step="any" value="0">
+      <span class="slider-val" id="volume-immersed-centre-x-val">0</span>
+    </div>
+    <span class="slider-help">Centre of the immersed source across the domain, −1 to 1 (0 is the middle).</span>
+    <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
+      <span class="slider-label">Source height</span>
+      <input type="range" id="volume-immersed-centre-y" data-volume-settings-param="volume_immersed_centre_y" min="-1" max="3" step="any" value="-0.5">
+      <span class="slider-val" id="volume-immersed-centre-y-val">-0.5</span>
+    </div>
+    <span class="slider-help">Centre height in domain units: −1 is the floor, 1 the top of a cube, higher for tall domains.</span>
+    <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
+      <span class="slider-label">Source Z</span>
+      <input type="range" id="volume-immersed-centre-z" data-volume-settings-param="volume_immersed_centre_z" min="-1" max="1" step="any" value="0">
+      <span class="slider-val" id="volume-immersed-centre-z-val">0</span>
+    </div>
+    <span class="slider-help">Centre of the immersed source along the depth axis.</span>
+    <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
+      <span class="slider-label">Aim yaw</span>
+      <input type="range" id="volume-immersed-yaw" data-volume-settings-param="volume_immersed_yaw" min="0" max="360" step="any" value="0">
+      <span class="slider-val" id="volume-immersed-yaw-val">0</span>
+    </div>
+    <span class="slider-help">Direction the source blows, around the vertical, in degrees.</span>
+    <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
+      <span class="slider-label">Aim pitch</span>
+      <input type="range" id="volume-immersed-pitch" data-volume-settings-param="volume_immersed_pitch" min="-90" max="90" step="any" value="90">
+      <span class="slider-val" id="volume-immersed-pitch-val">90</span>
+    </div>
+    <span class="slider-help">Direction the source blows above or below horizontal: 90 is straight up, 0 sideways.</span>
+    <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
+      <span class="slider-label">Source radius</span>
+      <input type="range" id="volume-immersed-radius" data-volume-settings-param="volume_immersed_radius" min="0.02" max="0.5" step="any" value="0.2">
+      <span class="slider-val" id="volume-immersed-radius-val">0.2</span>
+    </div>
+    <span class="slider-help">Disc radius in domain units (0.2 of the half-domain is 6.4 cells on a 64 grid).</span>
+    <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
+      <span class="slider-label">Source thickness</span>
+      <input type="range" id="volume-immersed-thickness" data-volume-settings-param="volume_immersed_thickness" min="1" max="4" step="any" value="1.5">
+      <span class="slider-val" id="volume-immersed-thickness-val">1.5</span>
+    </div>
+    <span class="slider-help">Thickness of the source slab in cells; thinner is sharper, thicker is gentler on the solve.</span>
+    <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
+      <span class="slider-label">Source speed</span>
+      <input type="range" id="volume-immersed-speed" data-volume-settings-param="volume_immersed_speed" min="0" max="1" step="any" value="0.1">
+      <span class="slider-val" id="volume-immersed-speed-val">0.1</span>
+    </div>
+    <span class="slider-help">Gas speed leaving the source, in the same units as the floor inlet velocity. With the radius this sets the supply Q = v π r².</span>
+    <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
+      <span class="slider-label">Source fuel</span>
+      <input type="range" id="volume-immersed-fuel" data-volume-settings-param="volume_immersed_fuel" min="0" max="1" step="any" value="0.56">
+      <span class="slider-val" id="volume-immersed-fuel-val">0.56</span>
+    </div>
+    <span class="slider-help">Fuel concentration of the entering gas.</span>
+    <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
+      <span class="slider-label">Source temperature</span>
+      <input type="range" id="volume-immersed-temperature" data-volume-settings-param="volume_immersed_temperature" min="0" max="2" step="any" value="1.2">
+      <span class="slider-val" id="volume-immersed-temperature-val">1.2</span>
+    </div>
+    <span class="slider-help">Temperature of the entering gas (not a pilot: the reaction burns wherever heat is present).</span>
+    <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
+      <span class="slider-label">Momentum gain</span>
+      <input type="range" id="volume-immersed-momentum-gain" data-volume-settings-param="volume_immersed_momentum_gain" min="0" max="2" step="any" value="1">
+      <span class="slider-val" id="volume-immersed-momentum-gain-val">1</span>
+    </div>
+    <span class="slider-help">How strongly the slab relaxes toward the authored velocity each step: 1 prescribes it, 0 lets the created volume leave however the solve likes.</span>
+    <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
+      <span class="slider-label">Rate cap</span>
+      <input type="range" id="volume-immersed-cap-fraction" data-volume-settings-param="volume_immersed_cap_fraction" min="0.1" max="1" step="any" value="0.5">
+      <span class="slider-val" id="volume-immersed-cap-fraction-val">0.5</span>
+    </div>
+    <span class="slider-help">Diagnostic: the most volume one cell may create per step, as a fraction of one velocity unit. The receipt shows requested against effective supply and how many cells the cap clipped; lowering it starves the source, it is not a physical control.</span>
     <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
       <span class="slider-label">Fixed Source Dephase</span>
       <input type="checkbox" id="volume-fixed-source-dephase" data-volume-settings-param="volume_fixed_source_dephase" checked>
@@ -22343,6 +22418,18 @@ function readVolumeControls() {
     pressureSolver: document.getElementById('volume-pressure-solver').value,
     heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
     velocityStaggering: document.getElementById('volume-velocity-staggering').value || 'collocated',
+    immersedCentreX: parseFloat(document.getElementById('volume-immersed-centre-x').value),
+    immersedCentreY: parseFloat(document.getElementById('volume-immersed-centre-y').value),
+    immersedCentreZ: parseFloat(document.getElementById('volume-immersed-centre-z').value),
+    immersedYaw: parseFloat(document.getElementById('volume-immersed-yaw').value),
+    immersedPitch: parseFloat(document.getElementById('volume-immersed-pitch').value),
+    immersedRadius: parseFloat(document.getElementById('volume-immersed-radius').value),
+    immersedThickness: parseFloat(document.getElementById('volume-immersed-thickness').value),
+    immersedSpeed: parseFloat(document.getElementById('volume-immersed-speed').value),
+    immersedFuel: parseFloat(document.getElementById('volume-immersed-fuel').value),
+    immersedTemperature: parseFloat(document.getElementById('volume-immersed-temperature').value),
+    immersedMomentumGain: parseFloat(document.getElementById('volume-immersed-momentum-gain').value),
+    immersedCapFraction: parseFloat(document.getElementById('volume-immersed-cap-fraction').value),
     pressureSolverIterations: parseFloat(document.getElementById('volume-pressure-solver-iterations').value),
     advectionScheme: document.getElementById('volume-advection-scheme').value,
     confinement: document.getElementById('volume-confinement').value,
@@ -22452,6 +22539,18 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-swirl-val').textContent = c.emitterSwirl.toFixed(2);
   document.getElementById('volume-heat-release-expansion-val').textContent = c.heatReleaseExpansion.toFixed(2);
   document.getElementById('volume-velocity-staggering-val').textContent = c.velocityStaggering;
+  document.getElementById('volume-immersed-centre-x-val').textContent = Number(c.immersedCentreX).toFixed(2);
+  document.getElementById('volume-immersed-centre-y-val').textContent = Number(c.immersedCentreY).toFixed(2);
+  document.getElementById('volume-immersed-centre-z-val').textContent = Number(c.immersedCentreZ).toFixed(2);
+  document.getElementById('volume-immersed-yaw-val').textContent = Number(c.immersedYaw).toFixed(2);
+  document.getElementById('volume-immersed-pitch-val').textContent = Number(c.immersedPitch).toFixed(2);
+  document.getElementById('volume-immersed-radius-val').textContent = Number(c.immersedRadius).toFixed(3);
+  document.getElementById('volume-immersed-thickness-val').textContent = Number(c.immersedThickness).toFixed(2);
+  document.getElementById('volume-immersed-speed-val').textContent = Number(c.immersedSpeed).toFixed(3);
+  document.getElementById('volume-immersed-fuel-val').textContent = Number(c.immersedFuel).toFixed(2);
+  document.getElementById('volume-immersed-temperature-val').textContent = Number(c.immersedTemperature).toFixed(2);
+  document.getElementById('volume-immersed-momentum-gain-val').textContent = Number(c.immersedMomentumGain).toFixed(2);
+  document.getElementById('volume-immersed-cap-fraction-val').textContent = Number(c.immersedCapFraction).toFixed(2);
   document.getElementById('volume-emitter-line-weight-val').textContent = c.emitterLineWeight.toFixed(2);
   document.getElementById('volume-emitter-jet-jitter-val').textContent = c.emitterJetJitter.toFixed(2);
   document.getElementById('volume-emitter-inlet-turbulence-val').textContent = c.emitterInletTurbulence.toFixed(2);
@@ -22798,6 +22897,12 @@ function refreshVolumeReadout() {
     : (staggering.effective.admitted
       ? 'staggered · characteristic from the two-face mean'
       : `staggered — NOT ADMITTED (${staggering.effective.reason}); set Pressure solver to converged`);
+  const immersed = s.immersedSource;
+  document.getElementById('volume-immersed-source-state').textContent = !immersed || immersed.requested.sourceLaw !== 'immersed-source'
+    ? 'off'
+    : (immersed.effective.admitted
+      ? `requested ${immersed.effective.fluxRequested.toFixed(2)} · effective ${immersed.effective.fluxEffectivePredicted.toFixed(2)} cells³/step · ${immersed.effective.footprint.cells} cells${immersed.effective.clipPredicted.cells ? ` · CAP CLIPPING ${immersed.effective.clipPredicted.cells}` : ''} · aim ${immersed.requested.yaw.toFixed(0)}°/${immersed.requested.pitch.toFixed(0)}°`
+      : `immersed — NOT ADMITTED (${immersed.effective.reason}); set Pressure solver to converged and Projection above 0`);
   document.getElementById('volume-inflow-boundary-state').textContent = !inflow
     ? 'off'
     : (inflow.effective.admitted
@@ -23135,7 +23240,7 @@ async function initKaminosVolumeRoute() {
   // select shows the family shape the map falls back to, and the request is
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
-  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
     if (!param || !params.has(param)) continue;
@@ -24019,6 +24124,18 @@ async function initKaminosVolumeRoute() {
     'volume-emitter-puff-period',
     'volume-heat-release-expansion',
     'volume-velocity-staggering',
+    'volume-immersed-centre-x',
+    'volume-immersed-centre-y',
+    'volume-immersed-centre-z',
+    'volume-immersed-yaw',
+    'volume-immersed-pitch',
+    'volume-immersed-radius',
+    'volume-immersed-thickness',
+    'volume-immersed-speed',
+    'volume-immersed-fuel',
+    'volume-immersed-temperature',
+    'volume-immersed-momentum-gain',
+    'volume-immersed-cap-fraction',
     'volume-wind-model',
     'volume-wind-gust',
     'volume-wind-gust-period',
