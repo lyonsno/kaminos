@@ -22,7 +22,7 @@ fn main(@builtin(global_invocation_id) id:vec3u){
  let P=F*S;let J=dot(F[0],cross(F[1],F[2]));let volume=gradients[i*4u].w;
  output[base]=vec4f(energy*volume*0.5,J,1.0,select(1.0,0.0,J>0.0));
  for(var k=0u;k<4u;k++){output[base+1u+k]=vec4f(-volume*(P*gradients[i*4u+k].xyz),0.0);}
- let sigma=P*transpose(F)/J;
+ let sigma=(P*transpose(F))*(1.0/J);
  for(var k=0u;k<3u;k++){output[base+5u+k]=vec4f(sigma[k],0.0);output[base+8u+k]=vec4f(F[k],0.0);}
  output[base+11u]=vec4f(0.0);
 }`;
