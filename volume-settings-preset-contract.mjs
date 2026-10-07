@@ -239,7 +239,7 @@ export function volumeSettingsPresetAppliedDifferences(saved, applied) {
     const appliedValues = presetControlValues(applied?.[field]);
     for (const [id, value] of Object.entries(savedValues)) {
       const present = Object.hasOwn(appliedValues, id);
-      if (present && sameAppliedControlValue(value, appliedValues[id])) continue;
+      if (present && sameAppliedControlValue(rendererEquivalentSavedValue(id, value), appliedValues[id])) continue;
       differences.push(Object.freeze({ axis, id, saved: value, applied: present ? appliedValues[id] : null }));
     }
   }
@@ -485,6 +485,14 @@ function presetControlValues(controls) {
   ]));
 }
 
+// Saved values the page no longer offers but the renderer draws identically:
+// an empty shell inspect mode is shell (mode 0).
+const RENDERER_EQUIVALENT_SAVED_VALUES = Object.freeze({ 'volume-shell-inspect-mode': Object.freeze({ '': 'shell' }) });
+function rendererEquivalentSavedValue(id, value) {
+  const equivalents = RENDERER_EQUIVALENT_SAVED_VALUES[id];
+  return equivalents && typeof value === 'string' && Object.hasOwn(equivalents, value) ? equivalents[value] : value;
+}
+
 // Schema additive defaults may be numeric strings ("4000") while the page reads
 // range inputs back as numbers (4000); both apply the same control value.
 function sameAppliedControlValue(left, right) {
@@ -504,7 +512,8 @@ export function volumeSettingsPresetControlValuesEqual(left, right) {
     const keys = Object.keys(leftValues);
     if (keys.length !== Object.keys(rightValues).length) return false;
     for (const key of keys) {
-      if (!Object.hasOwn(rightValues, key) || !sameAppliedControlValue(leftValues[key], rightValues[key])) return false;
+      if (!Object.hasOwn(rightValues, key)) return false;
+      if (!sameAppliedControlValue(rendererEquivalentSavedValue(key, leftValues[key]), rendererEquivalentSavedValue(key, rightValues[key]))) return false;
     }
   }
   return true;

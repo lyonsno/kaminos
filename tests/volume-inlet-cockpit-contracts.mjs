@@ -80,7 +80,7 @@ test('a retired pattern in a saved route loads as the family shape with its requ
   assert.match(index, /const VOLUME_RETIRED_APERTURE_PATTERNS = \['concentric', 'spiral'\];/);
   const init = index.slice(index.indexOf('async function initKaminosVolumeRoute()'), index.indexOf('\n}\n', index.indexOf('async function initKaminosVolumeRoute()')));
   assert.match(init, /if \(id === 'volume-emitter-aperture-pattern' && VOLUME_RETIRED_APERTURE_PATTERNS\.includes\(value\)\) \{\s*\n\s*patternSelect\.value = 'shape';\s*\n\s*patternSelect\.dataset\.volumeRetiredPatternRequest = value;/, 'the loader keeps the retired request beside a valid selection');
-  assert.match(index, /emitterAperturePattern: document\.getElementById\('volume-emitter-aperture-pattern'\)\.dataset\.volumeRetiredPatternRequest \|\| document\.getElementById\('volume-emitter-aperture-pattern'\)\.value/, 'the snapshot sends the kept request so the resolver names the fallback');
+  assert.match(index, /emitterAperturePattern: volumeAperturePatternValue\(document\.getElementById\('volume-emitter-aperture-pattern'\)\)/, 'the snapshot sends the kept request so the resolver names the fallback');
   assert.match(index, /delete document\.getElementById\('volume-emitter-aperture-pattern'\)\.dataset\.volumeRetiredPatternRequest/, 'authoring a pattern clears the kept request');
   assert.match(index, /volume-emitter-aperture-pattern-val'\)\.textContent = [^;]*retired/, 'the label says a retired request is standing in');
 });
@@ -90,7 +90,7 @@ test('a retired pattern in a saved route loads as the family shape with its requ
 // simulation snapshot does, until the operator authors a pattern.
 test('saving an untouched retired-pattern basin keeps its request (the DOM-control reader returns the kept request)', () => {
   const reader = index.slice(index.indexOf('function readVolumeDomControlValue(el)'), index.indexOf('\n}\n', index.indexOf('function readVolumeDomControlValue(el)')));
-  assert.match(reader, /if \(el\.id === 'volume-emitter-aperture-pattern' && el\.dataset\.volumeRetiredPatternRequest\) return el\.dataset\.volumeRetiredPatternRequest;/, 'the reader returns the kept retired request for the pattern select');
+  assert.match(reader, /if \(el\.id === 'volume-emitter-aperture-pattern'\) return volumeAperturePatternValue\(el\);/, 'the reader returns the kept retired request for the pattern select (volumeAperturePatternValue, tests/volume-exact-load-contracts.mjs)');
 });
 
 // The hover help renders through one popover on body: the sidebar is a

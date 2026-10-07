@@ -12,7 +12,7 @@ class Request:
  def send_json(self,body,status=200):self.result=(status,body)
 with tempfile.TemporaryDirectory() as temp:
  serve.VOLUME_SETTINGS_STORE=Path(temp)
- library=Path(temp+'-library');serve.SHARED_BASIN_STORE=library
+ library=Path(temp)/'library';serve.SHARED_BASIN_STORE=library
  original=serve.write_volume_settings_preset(temp,'Original basin',payload,{},schema)
  alias=Path(temp)/'aliases'/f"{original['effective']['alias']}.json";before=alias.read_bytes()
  changed=fixture['set_control'](payload,'volume-density',5.25)
