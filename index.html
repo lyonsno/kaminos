@@ -3808,7 +3808,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     );
   }
   if (requestedFixedVolumeReferenceParticleCount !== null
-    && !['multi_regime_playground', 'river_playground'].includes(effectiveTruthScene)) {
+    && !['multi_regime_playground', 'river_playground', 'pressure_playground'].includes(effectiveTruthScene)) {
     throw new RangeError(
       `Fixed-volume population comparison requires multi_regime_playground, not ${effectiveTruthScene}`,
     );
@@ -11919,7 +11919,7 @@ function updateFingerFluidBenchReadout() {
     state.config?.effectiveTruthScene || 'multi_regime_playground',
     `${state.solver?.densityIterationsPerStep ?? fingerFluidBenchConfig?.effectivePressureIterations ?? 'pending'} density passes/step`,
     `artificial pressure ${state.runtime?.artificialPressureMode ?? fingerFluidBenchConfig?.effectiveArtificialPressureMode ?? 'pending'}`,
-    `${state.playgroundZoneDiagnostics?.occupiedZoneCount || 0}/6 regimes`,
+    state.runtime?.pressurePlayground ? `gravity-fed reservoirs · gate ${state.runtime.pressurePlayground.gateOpen ? 'open' : 'closed'} · step ${state.runtime.stepCount}` : `${state.playgroundZoneDiagnostics?.occupiedZoneCount || 0}/6 regimes`,
     `${state.interfaceCarrier?.activeCount || 0} interface records`,
     state.downgrades?.[0] || 'no downgrade recorded',
   ].join(' · ');
@@ -13012,6 +13012,9 @@ async function startFingerFluidBench() {
       fingerFluidBenchConfig = fingerFluidBenchConfigFromRoute();
       if (fingerFluidBenchConfig.effectiveTruthScene === 'laminar_inlets') {
         fingerFluidBenchCamera = { yaw: -0.46, pitch: 0.38, distance: 5.35, target: [0, -0.28, -0.72] };
+      }
+      if (fingerFluidBenchConfig.effectiveTruthScene === 'pressure_playground') {
+        fingerFluidBenchCamera = {yaw: -0.28, pitch: 0.68, distance: 7.4, target: [0, -0.25, -0.9]};
       }
       if (fingerFluidBenchConfig.effectiveTruthScene === 'river_playground') {
         fingerFluidBenchCamera = {yaw: -0.46, pitch: 0.62, distance: 7.5, target: [-0.5, -0.35, 0]};

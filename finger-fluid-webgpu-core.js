@@ -1,3 +1,4 @@
+import {PRESSURE_COLLISION_WGSL, PRESSURE_RENDER_WGSL, PRESSURE_SOLID_VERTEX_COUNT, PRESSURE_STATIONS, PRESSURE_GATE_STEP, createPressureParticles} from './finger-fluid-pressure-vessels.mjs';
 import {RIVER_WGSL, riverSample, sampleRiverTerrain} from './finger-fluid-river-playground.mjs';
 import {capturePackedDensityWitness, capturePairedDensityWitness} from './finger-fluid-packed-density-witness.mjs';
 import {createPackedDensityLayout, PACKED_DENSITY_WGSL} from './finger-fluid-packed-density.mjs';
@@ -3268,7 +3269,7 @@ export function validateFingerFluidAdaptiveDensityLedger(
 }
 
 export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry', 'sheet_release']);
-export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['river_playground', 'multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets', 'waterfall_resolution_oracle', 'live_hand_inlets']);
+export const KAMINOS_FINGER_FLUID_TRUTH_SCENES = Object.freeze(['pressure_playground', 'river_playground', 'multi_regime_playground', 'deep_pool_rest', 'dam_break', 'laminar_inlets', 'waterfall_resolution_oracle', 'live_hand_inlets']);
 export const KAMINOS_FINGER_FLUID_WATERFALL_ORACLE_PRESETS = Object.freeze([
   'baseline', 'production', 'sweep3x', 'sweep4x', 'sweep6x', 'high',
 ]);
@@ -5924,7 +5925,9 @@ export const KAMINOS_FINGER_FLUID_PLAYGROUND_ZONES = Object.freeze([
 ]);
 
 const PLAYGROUND_WGSL = /* wgsl */`${RIVER_WGSL}
+${PRESSURE_COLLISION_WGSL}
 fn toyFloorHeight(p: vec3<f32>) -> f32 {
+  if (pressurePlaygroundEnabled) { return -0.95; }
   let radial = 0.15 * (p.x * p.x + p.z * p.z);
   let sourceShelfWidth = 1.0 - smoothstep(1.55, 2.55, abs(p.x + 0.35));
   let sourceShelf = (1.0 - smoothstep(-1.54, -1.31, p.z)) * 0.94 * sourceShelfWidth;
@@ -5984,12 +5987,14 @@ fn supportVelocityAt(position: vec3<f32>) -> vec3<f32> {
 }
 
 fn supportSignedDistanceFrame(position: vec3<f32>, radius: f32) -> vec4<f32> {
+  if (pressurePlaygroundEnabled) { let f = pressureSolidFrame(position, params.frameIndex < 90u); return vec4<f32>(f.xyz, f.w - radius); }
   let normal = floorNormal(position);
   let signedDistance = (position.y - (floorHeight(position) + radius)) * normal.y;
   return vec4<f32>(normal, signedDistance);
 }
 
 fn resolveSupportPenetration(inputPosition: vec3<f32>, radius: f32) -> vec3<f32> {
+  if (pressurePlaygroundEnabled) { return pressureResolve(inputPosition, radius, params.frameIndex < 90u); }
   var p = inputPosition;
   let normal = floorNormal(p);
   let penetration = floorHeight(p) + radius - p.y;
@@ -6014,6 +6019,10 @@ fn resolveSupportVelocity(inputVelocity: vec3<f32>, position: vec3<f32>, radius:
 
 fn supportContactFrame(position: vec3<f32>) -> vec4<f32> {
   let radius = params.fluid.x * 0.22;
+  if (pressurePlaygroundEnabled) {
+    let f = pressureSolidFrame(position, params.frameIndex < 90u);
+    return vec4<f32>(f.xyz, 1.0 - smoothstep(0.012, 0.09, max(0.0, f.w - radius)));
+  }
   let floorFrame = supportSignedDistanceFrame(position, radius);
   let floorSupport = 1.0 - smoothstep(0.012, 0.09, max(0.0, floorFrame.w));
   let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
@@ -8903,6 +8912,7 @@ struct RenderParams {
 ${HDR_ENVIRONMENT_SAMPLING_WGSL}
 
 ${PLAYGROUND_WGSL}
+${PRESSURE_RENDER_WGSL}
 
 fn triangleCorner(vertexInCell: u32) -> vec2<f32> {
   let corners = array<vec2<f32>, 6>(
@@ -8980,6 +8990,10 @@ fn vs_analytic_support_presentation(@builtin(vertex_index) vertexIndex: u32) -> 
     let z = mix(${BOUNDS_MIN[2]}, ${BOUNDS_MAX[2]}, v);
     worldPosition = vec3<f32>(x, toyFloorHeight(vec3<f32>(x, 0.0, z)), z);
     worldNormal = toyFloorNormal(worldPosition);
+  } else if (pressurePlaygroundEnabled) {
+    let vertex = pressureSolidVertex(vertexIndex - ${ANALYTIC_SUPPORT_TERRAIN_VERTEX_COUNT}u, params.hostFrameControls.y > 0.5);
+    worldPosition = vertex.position;
+    worldNormal = vertex.normal;
   } else if (vertexIndex < ${ANALYTIC_SUPPORT_BASE_VERTEX_COUNT}u) {
     let sphereVertex = vertexIndex - ${ANALYTIC_SUPPORT_TERRAIN_VERTEX_COUNT}u;
     let sphereCell = sphereVertex / 6u;
@@ -12580,12 +12594,14 @@ export function createFingerFluidTruthScenePopulation(particleCount, scene = 'mu
   if (safeReferenceParticleCount < safeParticleCount) {
     throw new RangeError(`Reference population must be at least the particle count: ${safeReferenceParticleCount} < ${safeParticleCount}`);
   }
-  if (!['multi_regime_playground', 'river_playground'].includes(effectiveScene) && safeReferenceParticleCount !== safeParticleCount) {
+  if (!['multi_regime_playground', 'river_playground', 'pressure_playground'].includes(effectiveScene) && safeReferenceParticleCount !== safeParticleCount) {
     throw new RangeError(`Fixed-volume population comparison is supported only for multi_regime_playground, not ${effectiveScene}`);
   }
   const particleVolumeScale = safeReferenceParticleCount / safeParticleCount;
   let particleData;
-  if (effectiveScene === 'river_playground') {
+  if (effectiveScene === 'pressure_playground') {
+    particleData = createPressureParticles(safeParticleCount, safeReferenceParticleCount);
+  } else if (effectiveScene === 'river_playground') {
     particleData = createRiverPlaygroundParticles(safeParticleCount, safeReferenceParticleCount);
   } else if (effectiveScene === 'multi_regime_playground') {
     particleData = createMultiRegimePlaygroundParticles(safeParticleCount, safeReferenceParticleCount);
@@ -13241,6 +13257,7 @@ export async function createWebGPUFingerFluidSolver({
   const safeUniformVolumeDensityKernel = uniformVolumeDensityKernel === true && !safeAdaptiveDensity;
   const safeSubsteps = Math.max(1, Math.floor(finite(substeps, 1)));
   const safeTruthScene = resolveFingerFluidTruthScene(truthScene);
+  if (safeTruthScene === 'pressure_playground' && supportContactRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE) throw new Error('Pressure vessel scene requires its analytic solid geometry');
   const safeWaterfallOraclePreset = resolveFingerFluidWaterfallOraclePreset(waterfallOraclePreset);
   const safeFixedVolumeReferenceParticleCount = fixedVolumeReferenceParticleCount === null
     ? safeBaseParticleCount
@@ -13248,7 +13265,7 @@ export async function createWebGPUFingerFluidSolver({
   if (safeFixedVolumeReferenceParticleCount < safeBaseParticleCount) {
     throw new RangeError(`Fixed-volume reference population ${safeFixedVolumeReferenceParticleCount} is below requested particle count ${safeBaseParticleCount}`);
   }
-  if (!['multi_regime_playground', 'river_playground'].includes(safeTruthScene)
+  if (!['multi_regime_playground', 'river_playground', 'pressure_playground'].includes(safeTruthScene)
     && safeFixedVolumeReferenceParticleCount !== safeBaseParticleCount) {
     throw new RangeError(`Fixed-volume population comparison requires multi_regime_playground, not ${safeTruthScene}`);
   }
@@ -13262,7 +13279,7 @@ export async function createWebGPUFingerFluidSolver({
   const safeVisibleParticleRadius = waterfallOracleConfig?.visibleParticleRadius ?? 0.046;
   const safeRestDensity = 24.3;
   const safeSourceRefinementFactor = waterfallOracleConfig?.refinementFactor ?? 1;
-  const analyticSupportVertexCount = ANALYTIC_SUPPORT_BASE_VERTEX_COUNT
+  const analyticSupportVertexCount = safeTruthScene === 'pressure_playground' ? ANALYTIC_SUPPORT_TERRAIN_VERTEX_COUNT + PRESSURE_SOLID_VERTEX_COUNT : ANALYTIC_SUPPORT_BASE_VERTEX_COUNT
     + (safeTruthScene !== 'live_hand_inlets' && isFingerFluidLaminarSourceScene(safeTruthScene)
       ? ANALYTIC_SUPPORT_INLET_FIXTURE_VERTEX_COUNT
       : 0);
@@ -13526,10 +13543,14 @@ export async function createWebGPUFingerFluidSolver({
     .replace(KAMINOS_FINGER_FLUID_SUPPORT_FUNCTIONS_TOKEN, supportShaderSource.functions);
   const createSceneShaderModule = descriptor => device.createShaderModule({
     ...descriptor,
-    code: descriptor.code.replaceAll('const riverPlaygroundEnabled: bool = false;', `const riverPlaygroundEnabled: bool = ${safeTruthScene === 'river_playground'};`),
+    code: descriptor.code
+      .replaceAll('const riverPlaygroundEnabled: bool = false;', `const riverPlaygroundEnabled: bool = ${safeTruthScene === 'river_playground'};`)
+      .replaceAll('const pressurePlaygroundEnabled: bool = false;', `const pressurePlaygroundEnabled: bool = ${safeTruthScene === 'pressure_playground'};`)
+      .replaceAll('const analyticObstacleSupportEnabled: bool = true;', `const analyticObstacleSupportEnabled: bool = ${safeTruthScene !== 'pressure_playground'};`),
   });
   computeShader = computeShader.replaceAll('__ARTIFICIAL_PRESSURE_COEFFICIENT__', safeArtificialPressureMode === 'off' ? '0.0' : '-0.0012');
   computeShader = computeShader.replaceAll('const riverPlaygroundEnabled: bool = false;', `const riverPlaygroundEnabled: bool = ${safeTruthScene === 'river_playground'};`);
+  if (safeTruthScene === 'pressure_playground') computeShader = computeShader.replaceAll('const pressurePlaygroundEnabled: bool = false;', 'const pressurePlaygroundEnabled: bool = true;').replaceAll('const analyticObstacleSupportEnabled: bool = true;', 'const analyticObstacleSupportEnabled: bool = false;');
   const computeModule = createSceneShaderModule({ label: KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: computeShader });
   const movingHillComputeLayoutEntries = movingHillSupportProvider
     ? [
@@ -15012,7 +15033,7 @@ export async function createWebGPUFingerFluidSolver({
       analyticCarrierGpuPayload?.particleSuppressionControls ?? [0, -1, 0, 0],
       56,
     );
-    renderData.set([validatedHostFrame ? 1 : 0, 0, 0, 0], 60);
+    renderData.set([validatedHostFrame ? 1 : 0, safeTruthScene === 'pressure_playground' && stepCount <= PRESSURE_GATE_STEP ? 1 : 0, 0, 0], 60);
     lastExternalCamera = externalCameraSnapshot;
     lastCameraSnapshot = cameraSnapshot;
     lastParticleVisibility = particleVisibility;
@@ -15160,7 +15181,7 @@ export async function createWebGPUFingerFluidSolver({
     });
     const isolateWorldReflection = refractionEnabled
       && ['reflection', 'reflection_hit_kind', 'reflection_distance', 'environment', 'liquid_support', 'environment_contribution', 'reflected_transport', 'reflection_footprint'].includes(effectiveOpticalDebugMode);
-    const drawDynamicToyMesh = drawAnalyticSupport && !isolateWorldReflection;
+    const drawDynamicToyMesh = drawAnalyticSupport && !isolateWorldReflection && safeTruthScene !== 'pressure_playground';
     if (drawDynamicToyMesh) {
       dynamicIndexedMeshPass.setPipeline(dynamicIndexedMeshPipeline);
       dynamicIndexedMeshPass.setBindGroup(0, dynamicIndexedMeshBindGroup);
@@ -16071,6 +16092,12 @@ export async function createWebGPUFingerFluidSolver({
         visualDisposition: 'pending_operator_observation',
       } : null,
       truthGauntletContract: KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT,
+      pressurePlayground: safeTruthScene === 'pressure_playground' ? {
+        stations: PRESSURE_STATIONS, gateSettlingSteps: PRESSURE_GATE_STEP,
+        gateOpen: stepCount > PRESSURE_GATE_STEP, firstOpenSolveStep: PRESSURE_GATE_STEP + 1,
+        forcing: 'resting-inventory-gravity-only', sourceRecirculation: false,
+        boundaryPressure: 'nearest-local-planar-support', geometry: 'shared-oriented-solid-boxes-v1',
+      } : null,
       artificialPressureMode: safeArtificialPressureMode,
       riverPlayground: safeTruthScene === 'river_playground' ? {referenceFraction: 1/3, flatReach: [-0.2, 0.9], inletSpeed: 0.3, releaseMode: 'per-lane-axial-slots'} : null,
       truthScene: safeTruthScene,
