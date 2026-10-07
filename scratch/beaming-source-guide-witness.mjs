@@ -42,14 +42,20 @@ try{
   if(await page.evaluate(()=>window.__beamingGatherDevice?.features.has('timestamp-query'))){await page.evaluate(()=>{window.__beamingGatherProfile={remaining:20,records:[],errors:[]};});await Promise.race([page.waitForFunction(()=>window.__beamingGatherProfile.errors.length||window.__beamingGatherProfile.records.length===20,null,{timeout:0}),broken]);profile=await page.evaluate(()=>window.__beamingGatherProfile);assert.deepEqual(profile.errors,[]);profile.status='measured';}
   await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(true));
   const capture=await page.evaluate(async()=>{const [fields,source]=await Promise.all([window.__kaminosSceneRadiance.readback(),window.__kaminosVolumePrototype.sampleSceneVolumeSource()]);return {lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),gi:window.kaminosSceneGIDebugState(),sourceGeneration:source.generation,sourceMetadata:{...source,values:undefined},primary:source.values,front:Array.from(fields.surface.data),back:Array.from(fields.surfaceBack.data),smoke:Array.from(fields.smoke.data),dimensions:{front:fields.surface.dimensions,back:fields.surfaceBack.dimensions,smoke:fields.smoke.dimensions}};});
+  const name=`arm-${report.views.length}-${pattern}-${count}`;
+  // Preserve the raw signal before admission: incomplete/nonfinite/blank fields
+  // remain disputable evidence of failure, never a successfully admitted view.
+  await fs.writeFile(`${out}/${name}-capture.json`,JSON.stringify({...capture,primary:undefined,front:undefined,back:undefined,smoke:undefined}));
+  for(const[field,values]of [['source',capture.primary],['front',capture.front],['back',capture.back],['smoke',capture.smoke]])await fs.writeFile(`${out}/${name}-${field}.f32`,Buffer.from(new Float32Array(values).buffer));
+  report.lastRawCapture={name,dimensions:capture.dimensions,sourceMetadata:capture.sourceMetadata,verification:'unverified'};report.phase='field-admission';await save();
   assertSourceGuideEvidence({...capture,runtime:report.runtime,source:report.source,adapter:report.adapter,errors:report.errors,httpFailures:report.httpFailures},{pattern,count,gain:2**report.scene.composition.lightGainStops,spacing:0});assert.equal(capture.volume.error,null);assert.equal(capture.gi.gain,10);
+  report.lastRawCapture.verification='admitted';report.phase='held-source-pattern-comparison';
   const sourceHash=hash(capture.primary);if(heldHash)assert.equal(sourceHash,heldHash,'all comparisons must share complete primary source');else{heldHash=sourceHash;geometryBuilds=capture.lighting.geometryBuilds;}
   assert.equal(capture.lighting.geometryBuilds,geometryBuilds,'sampling changes must retain rendered/caster layout');
   const hashes={source:sourceHash,front:hash(capture.front),back:hash(capture.back),smoke:hash(capture.smoke)};
   if(pattern==='source'&&count===12){if(baseline)assert.deepEqual(hashes,baseline,'restoring source12 restores all actual fields');else baseline=hashes;}
-  const name=`arm-${report.views.length}-${pattern}-${count}`;
-  for(const[field,values]of [['source',capture.primary],['front',capture.front],['back',capture.back],['smoke',capture.smoke]])await fs.writeFile(`${out}/${name}-${field}.f32`,Buffer.from(new Float32Array(values).buffer));
-  const canvas=page.locator('canvas').first(),rect=await canvas.boundingBox();
+  const canvas=page.locator('#kaminos-host-renderer-canvas'),rect=await canvas.boundingBox();
+  assert(rect&&rect.width>0&&rect.height>0,'actual renderer canvas must have visible selection bounds');
   // Select a left-wall region; a failed selection is retained, never success.
   const inspection=await page.evaluate(async({x,y})=>window.__kaminosLightingDebug.captureAt(x,y),{x:rect.x+rect.width*.42,y:rect.y+rect.height*.55});
   await fs.writeFile(`${out}/${name}-inspection.json`,JSON.stringify(inspection));

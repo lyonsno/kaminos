@@ -87,13 +87,23 @@ export function assertSurfaceView(signal,{baseline,count,pattern,passes}) {
   }
 }
 export function assertSourceGuideEvidence(signal,requested){
-  const {runtime,source,adapter,lighting,sourceGeneration,primary,front,back,errors,httpFailures}=signal;
+  const {runtime,source,adapter,lighting,sourceGeneration,sourceMetadata,dimensions,primary,front,back,smoke,errors,httpFailures}=signal;
   if(!runtime?.source||runtime.source.repoRoot!==source?.root||runtime.source.commit!==source?.revision||runtime.source.dirty||source.dirty)throw Error('wrong/unverified clean source-guide route');
   if(adapter?.vendor!=='apple'||adapter.isFallbackAdapter!==false)throw Error('source-guide evidence requires the verified native Apple route');
   const frame=lighting?.frame;
   if(!Number.isSafeInteger(sourceGeneration)||sourceGeneration<0||frame?.generation!==sourceGeneration||frame.angularPattern!==requested.pattern||frame.directions!==requested.count||frame.receiverSampling?.spacing!==requested.spacing||lighting.gain!==requested.gain||lighting.surfaceGain!==1||!frame.surfaceScattering?.enabled||lighting.previewStale)throw Error('source-guide requested/effective config or generation mismatch');
   if(requested.pattern==='guided'&&(!frame.sourceGuide||!['lo','hi'].every(k=>Array.isArray(frame.sourceGuide[k])&&frame.sourceGuide[k].length===3&&frame.sourceGuide[k].every(Number.isFinite))))throw Error('effective source guide missing');
-  for(const [name,values]of [['primary',primary],['front',front],['back',back]])if(!Array.isArray(values)||!values.length||values.length%4||!values.every(Number.isFinite))throw Error('missing/partial/nonfinite '+name);
+  const cells=d=>{
+    if(!Array.isArray(d)||d.length!==3||!d.every(n=>Number.isSafeInteger(n)&&n>0))throw Error('complete field dimensions required');
+    const n=d.reduce((a,b)=>a*b,1);if(!Number.isSafeInteger(n*4))throw Error('field dimensions exceed integer addressability');return n;
+  };
+  if(sourceMetadata?.generation!==sourceGeneration||sourceMetadata?.channels!==4)throw Error('primary field identity missing or mismatched');
+  const sizes={primary:cells(sourceMetadata.dimensions),front:cells(dimensions?.front),back:cells(dimensions?.back),smoke:cells(dimensions?.smoke)};
+  if(JSON.stringify(dimensions.front)!==JSON.stringify(dimensions.back)||dimensions.front[2]!==1||!Number.isSafeInteger(frame.surfaceReceivers)||frame.surfaceReceivers<1||Math.ceil(frame.surfaceReceivers/dimensions.front[0])!==dimensions.front[1])throw Error('surface field dimensions/count disagree with padded receiver layout');
+  if(frame.allocatedVolumeReceivers!==sizes.smoke||frame.transportVolumeReceivers!==sizes.smoke)throw Error('smoke field dimensions/count disagree with represented receiver layout');
+  for(const [name,values]of [['primary',primary],['front',front],['back',back],['smoke',smoke]])if(!Array.isArray(values)||values.length!==sizes[name]*4||!values.every(Number.isFinite))throw Error('missing/partial/nonfinite '+name);
+  for(let i=0;i<frame.surfaceReceivers;i++)if(front[i*4+3]!==1||back[i*4+3]!==1)throw Error('unwritten active surface receiver');
+  for(let i=0;i<sizes.smoke;i++)if(smoke[i*4+3]!==1)throw Error('unwritten smoke receiver');
   const hasRGB=values=>values.some((v,i)=>i%4!==3&&v>0);
   if(!hasRGB(primary)||!hasRGB(front)&&!hasRGB(back)||!front.some((v,i)=>i%4===3&&v===1))throw Error('blank/unwritten source-guide evidence');
   if(!Array.isArray(errors)||errors.length||!Array.isArray(httpFailures)||httpFailures.length)throw Error('source-guide capture contains renderer/HTTP errors');

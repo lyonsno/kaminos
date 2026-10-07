@@ -3661,6 +3661,7 @@ function refreshRenderingControls() {
   if(distributed)source.setSurfaceReconstruction(Number(document.getElementById('rendering-surface-reconstruction').value));
   if(distributed)source.setReceiverSpacing(Number(document.getElementById('rendering-receiver-spacing').value));
   if(distributed)source.setRetainComparisons(document.getElementById('rendering-retain-comparisons').checked);
+  if(distributed)source.setDirections(Number(document.getElementById('rendering-angular-samples').value));
   if(distributed)source.setAngularPattern(document.getElementById('rendering-angular-pattern').value);
   if (source && !distributed) {
     renderingSourceIntensity ||= source.debugState().source.intensity.slice();
@@ -12536,6 +12537,7 @@ for(const [key,id]of [['rendering_angular_pattern','rendering-angular-pattern'],
   if(![...select.options].some(o=>o.value===value))throw new Error(`unsupported requested ${key}: ${value}`);
   select.value=value;
 }
+currentAngularCount=Number(document.getElementById('rendering-angular-samples').value);
 if(renderingUrlState.has('rendering_match_camera')){
   const value=renderingUrlState.get('rendering_match_camera');if(!['0','1'].includes(value))throw new Error('invalid requested camera match');
   document.getElementById('rendering-match-flame-camera').checked=value==='1';
