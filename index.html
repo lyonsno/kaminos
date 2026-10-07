@@ -3574,6 +3574,7 @@ import { loadPersistentSparseCohortState } from './volume-persistent-sparse-coho
 import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontology.mjs';
 import {
   describeVolumeSettingsPresetAppliedDifferences,
+  describeVolumeSettingsPartialSave,
   describeVolumeSettingsPresetProjection,
   describeVolumeSettingsSaveOutcome,
   resolveVolumeSettingsPresetVisualView,
@@ -16841,8 +16842,10 @@ async function saveVolumeSettingsPreset({ preset: suppliedPreset, label: supplie
     || `Basin ${new Date().toISOString().replace(/[:.]/g, '-')}`;
   volumeSettingsPresetStatus(`saving ${label}...`);
   try {
-    const reuseBlock = volumeSettingsPresetLabelReuseBlock(activeVolumeSettingsPresetReceipt, label, activeVolumeSettingsPresetApplied);
-    if (reuseBlock) throw new Error(reuseBlock);
+    if (!sceneSnapshot) {
+      const reuseBlock = volumeSettingsPresetLabelReuseBlock(activeVolumeSettingsPresetReceipt, label, activeVolumeSettingsPresetApplied);
+      if (reuseBlock) throw new Error(reuseBlock);
+    }
     await volumeCockpitLayoutReady;
     const preset = suppliedPreset || buildVolumeSettingsPreset();
     const response = await fetch('/api/volume-settings-presets', {
@@ -16851,6 +16854,12 @@ async function saveVolumeSettingsPreset({ preset: suppliedPreset, label: supplie
       body: JSON.stringify({ label, preset, ...(sceneSnapshot ? {publishAlias:false} : {}) }),
     });
     const result = await response.json();
+    if (result.partial && result.sharedPublication?.published) {
+      // The library took the basin but this server's store did not.
+      const partial = new Error(describeVolumeSettingsPartialSave(result));
+      partial.partialSave = true;
+      throw partial;
+    }
     if (!response.ok || !result.ok) throw new Error(result.error || `preset save failed: ${response.status}`);
     if (result.identity !== 'kaminos-volume-settings-preset-write-receipt-v1'
       || result.effective?.schemaIdentity !== 'kaminos-volume-settings-preset-schema-v2'
@@ -16871,7 +16880,7 @@ async function saveVolumeSettingsPreset({ preset: suppliedPreset, label: supplie
     setInfo(`Volume settings preset saved: ${result.effective.label}`);
     return result;
   } catch (error) {
-    volumeSettingsPresetStatus(`PRESET SAVE FAILED | ${error.message || error}`, true);
+    volumeSettingsPresetStatus(`${error.partialSave ? 'PRESET SAVE PARTIAL' : 'PRESET SAVE FAILED'} | ${error.message || error}`, true);
     setInfo(`Volume settings preset failed: ${error.message || error}`);
     throw error;
   }

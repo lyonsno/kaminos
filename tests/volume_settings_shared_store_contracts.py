@@ -576,8 +576,65 @@ def test_library_decides_under_its_lock(tmp):
     assert resaved["effective"]["aliasHeld"] == resaved["sharedPublication"]["aliasHeld"], "the local store follows the library's actual decision"
 
 
+class _Request:
+    def __init__(self, body):
+        import io
+        raw = json.dumps(body).encode()
+        self.rfile = io.BytesIO(raw)
+        self.headers = {"Content-Length": str(len(raw))}
+        self.result = None
+
+    def send_json(self, body, status=200):
+        self.result = (status, body)
+
+
+def test_partial_save_is_reported_truthfully(tmp):
+    """The library publish can succeed and the local write fail; the save says exactly that."""
+    import os
+    library = tmp / "library"
+    local = tmp / "local"
+    first = serve.write_volume_settings_preset_to_library(local, library, "kiln", payload(BASE_SCHEMA, BASE_VALUES), SOURCE, BASE_SCHEMA)
+    # A corrupt local label is a known precondition: it fails before anything is published.
+    alias_path = local / "aliases" / "kiln.json"
+    good_alias = alias_path.read_text()
+    alias_path.write_text("{")
+    try:
+        serve.write_volume_settings_preset_to_library(
+            local, library, "kiln", payload(BASE_SCHEMA, {**BASE_VALUES, "volume-detail": 0.5}), SOURCE, BASE_SCHEMA)
+    except serve.VolumeSettingsPartialSave as error:
+        raise AssertionError(f"a local precondition failure must not publish first: {error}")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a corrupt local label must fail the save")
+    assert _alias_target(library, "kiln") == first["effective"]["presetId"], "nothing reached the library"
+    alias_path.write_text(good_alias)
+    # A later local failure (an unwritable presets directory) after the library took the basin.
+    os.chmod(local / "presets", 0o500)
+    try:
+        serve.VOLUME_SETTINGS_STORE, serve.SHARED_BASIN_STORE = local, library
+        request = _Request({"label": "kiln", "preset": payload(BASE_SCHEMA, {**BASE_VALUES, "volume-detail": 0.125})})
+        original_schema = serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH
+        schema_path = tmp / "schema.json"
+        schema_path.write_text(json.dumps(BASE_SCHEMA))
+        serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH = schema_path
+        try:
+            serve.KaminosHandler.handle_volume_settings_presets_post(request)
+        finally:
+            serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH = original_schema
+    finally:
+        os.chmod(local / "presets", 0o700)
+    status, body = request.result
+    assert status == 500 and body["failurePhase"] == "local-preset-write", (status, body)
+    publication = body["sharedPublication"]
+    assert publication["published"] is True and publication["aliasMoved"] is True, publication
+    assert _alias_target(library, "kiln") == publication["presetId"], "the library really has the new basin"
+    assert body["partial"] is True and "not saved locally" in body["error"].lower(), body
+
+
 def main():
     for test in (
+        test_partial_save_is_reported_truthfully,
         test_local_store_keeps_its_label_over_an_unrebased_pointer,
         test_library_decides_under_its_lock,
         test_library_is_the_label_authority,

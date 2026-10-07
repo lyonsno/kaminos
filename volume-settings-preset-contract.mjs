@@ -281,6 +281,13 @@ function describeVolumeSettingsLabelHold(held, label) {
     + 'save under a new label to name this version';
 }
 
+// A save whose library publish succeeded but whose local write failed.
+export function describeVolumeSettingsPartialSave(result) {
+  const publication = result?.sharedPublication || {};
+  const named = publication.aliasMoved ? ` under "${publication.label}"` : '';
+  return `in library ${publication.storePath} as ${String(publication.presetId).slice(0, 16)}${named}; NOT saved locally: ${result?.localError}`;
+}
+
 // The whole outcome of a save or promotion for its status line: where the
 // basin went, and whether a label stayed on a basin this branch cannot hold.
 export function describeVolumeSettingsSaveOutcome(result) {

@@ -5,6 +5,7 @@ import {
   describeVolumeSettingsLibraryPublication,
   describeVolumeSettingsPresetProjection,
   describeVolumeSettingsSaveOutcome,
+  describeVolumeSettingsPartialSave,
   describeVolumeSettingsPresetAppliedDifferences,
   volumeSettingsPresetAppliedDifferences,
   validateVolumeSettingsPresetDocument,
@@ -203,4 +204,14 @@ for (const [name, body] of [['save', save], ['promotion', promote]]) {
   assert.match(body, /volumeSettingsPresetLabelReuseBlock\(activeVolumeSettingsPresetReceipt, label, activeVolumeSettingsPresetApplied\)/,
     `${name} refuses to reuse the label of a basin that changed on load`);
 }
+// A save whose library publish succeeded and local write failed says both.
+assert.equal(describeVolumeSettingsPartialSave({ partial: true, localError: 'permission denied',
+  sharedPublication: { published: true, storePath: '/lib', presetId: `vsp-${'6'.repeat(64)}`, label: 'kiln', aliasMoved: true } }),
+  'in library /lib as vsp-666666666666 under "kiln"; NOT saved locally: permission denied');
+assert.equal(describeVolumeSettingsPartialSave({ partial: true, localError: 'x',
+  sharedPublication: { published: true, storePath: '/lib', presetId: `vsp-${'6'.repeat(64)}`, label: 'kiln', aliasMoved: false } }),
+  'in library /lib as vsp-666666666666; NOT saved locally: x');
+assert.match(save, /if \(!sceneSnapshot\) \{\s*const reuseBlock = volumeSettingsPresetLabelReuseBlock/, 'scene snapshots move no label, so the reuse guard does not apply');
+assert.match(save, /result\.partial[\s\S]*describeVolumeSettingsPartialSave\(result\)[\s\S]*partialSave = true/, 'a partial save is raised as partial');
+assert.match(save, /error\.partialSave \? 'PRESET SAVE PARTIAL' : 'PRESET SAVE FAILED'/, 'the status distinguishes a partial save');
 console.log('volume settings projection receipt contracts passed');

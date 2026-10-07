@@ -1575,7 +1575,7 @@ def _volume_settings_dropped_controls_hold(current_alias, current_payload, new_p
 
 
 def _publish_volume_settings_artifact_locked(store, document, label, published_at, source, schema, move_alias_only_forward=False,
-                                             fallback_hold=None):
+                                             fallback_hold=None, publish_alias=True):
     preset_id = _verify_volume_settings_artifact(document, schema)
     preset_path = store / "presets" / f"{preset_id}.json"
     created = _atomic_create_json(preset_path, document)
@@ -1583,6 +1583,10 @@ def _publish_volume_settings_artifact_locked(store, document, label, published_a
         existing = _read_json_object(preset_path, "artifact")
         if existing.get("contentHash") != document["contentHash"]:
             raise ValueError("volume settings preset content identity collision")
+    if not publish_alias:
+        # A scene snapshot is shared by id only; no label moves or records it.
+        return {"presetId": preset_id, "alias": None, "created": created, "aliasMoved": False,
+                "aliasHeld": None, "aliasKeptLive": False, "historyAppended": False}
     alias = _volume_settings_alias_for_label(store, label)
     alias_document = {
         "identity": "kaminos-volume-settings-preset-alias-v1",
@@ -1651,7 +1655,7 @@ def _publish_volume_settings_artifact_locked(store, document, label, published_a
     }
 
 
-def publish_volume_settings_preset(shared_store_path, document, label, source, schema=None, fallback_hold=None):
+def publish_volume_settings_preset(shared_store_path, document, label, source, schema=None, fallback_hold=None, publish_alias=True):
     """Publish one hash-verified basin artifact into the shared library."""
     schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
     _verify_volume_settings_artifact(document, schema)
@@ -1660,7 +1664,8 @@ def publish_volume_settings_preset(shared_store_path, document, label, source, s
     published_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     with _volume_settings_store_lock(store):
         result = _publish_volume_settings_artifact_locked(
-            store, document, effective_label, published_at, source, schema, fallback_hold=fallback_hold
+            store, document, effective_label, published_at, source, schema, fallback_hold=fallback_hold,
+            publish_alias=publish_alias,
         )
     return {
         "published": True,
@@ -1671,7 +1676,17 @@ def publish_volume_settings_preset(shared_store_path, document, label, source, s
     }
 
 
-def write_volume_settings_preset_to_library(local_store_path, shared_store_path, label, payload, source, schema=None):
+class VolumeSettingsPartialSave(ValueError):
+    """The basin reached the shared library but this server's store could not be written."""
+
+    def __init__(self, message, shared_publication, local_error):
+        super().__init__(message)
+        self.shared_publication = shared_publication
+        self.local_error = local_error
+
+
+def write_volume_settings_preset_to_library(local_store_path, shared_store_path, label, payload, source, schema=None, *,
+                                            publish_alias=True):
     """Publish a basin to the shared library, then save it into this server's store.
 
     With the library on, it is the label authority: the library decides under
@@ -1682,8 +1697,10 @@ def write_volume_settings_preset_to_library(local_store_path, shared_store_path,
     decides alone and the receipt says the basin did not reach the library.
     """
     schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    if not isinstance(publish_alias, bool):
+        raise ValueError("publishAlias must be a boolean")
     if shared_store_path is None:
-        receipt = write_volume_settings_preset(local_store_path, label, payload, source, schema)
+        receipt = write_volume_settings_preset(local_store_path, label, payload, source, schema, publish_alias=publish_alias)
         receipt["sharedPublication"] = {"published": False, "reason": "shared basin library disabled"}
         return receipt
     normalized_payload, _projection, content_hash = _prepare_volume_settings_preset_write(payload, schema)
@@ -1691,10 +1708,12 @@ def write_volume_settings_preset_to_library(local_store_path, shared_store_path,
     effective_label = str(label or "").strip() or "Unnamed preset"
     local = _volume_settings_store_path(local_store_path)
     shared = _volume_settings_store_path(shared_store_path)
-    try:
-        local_current = _volume_settings_alias_document(local, _volume_settings_alias_for_label(local, effective_label))
-    except (OSError, ValueError):
-        local_current = None
+    # The local label is a precondition of the local write: a damaged one fails
+    # the save here, before anything reaches the library.
+    local_current = (
+        _volume_settings_alias_document(local, _volume_settings_alias_for_label(local, effective_label))
+        if publish_alias else None
+    )
     document = {
         "identity": VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY,
         "presetId": preset_id,
@@ -1710,15 +1729,36 @@ def write_volume_settings_preset_to_library(local_store_path, shared_store_path,
         publication = publish_volume_settings_preset(
             shared, document, effective_label, source, schema,
             fallback_hold=_volume_settings_label_hold(local, local_current, preset_id, normalized_payload, schema),
+            publish_alias=publish_alias,
         )
         library_hold = publication.get("aliasHeld")
     except (OSError, ValueError) as error:
         # The local save stands; the receipt says the basin did not reach the library.
         publication = {"published": False, "storePath": str(shared), "error": str(error)}
         library_hold = _NO_LIBRARY_DECISION
-    receipt = write_volume_settings_preset(local, label, payload, source, schema, library_hold=library_hold)
+    try:
+        receipt = write_volume_settings_preset(
+            local, label, payload, source, schema, library_hold=library_hold, publish_alias=publish_alias
+        )
+    except (OSError, ValueError) as error:
+        if not publication.get("published"):
+            raise
+        named = f' under "{publication["label"]}"' if publication.get("aliasMoved") else ""
+        raise VolumeSettingsPartialSave(
+            f"basin {preset_id} is in the shared library at {publication['storePath']}{named}; "
+            f"not saved locally: {error}",
+            publication, str(error),
+        ) from error
     receipt["sharedPublication"] = publication
     return receipt
+
+
+def volume_settings_store_layer_receipt():
+    """The stores this server reads basins from, for error bodies."""
+    return [
+        {"role": role, "storePath": str(path)}
+        for role, path in volume_settings_store_layers(VOLUME_SETTINGS_STORE, SHARED_BASIN_STORE)
+    ]
 
 
 def _volume_settings_authority_order(layers):
@@ -3187,13 +3227,6 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
         self.send_json(document)
 
-    @staticmethod
-    def volume_settings_store_layer_receipt():
-        return [
-            {"role": role, "storePath": str(path)}
-            for role, path in volume_settings_store_layers(VOLUME_SETTINGS_STORE, SHARED_BASIN_STORE)
-        ]
-
     def handle_volume_settings_presets_get(self):
         try:
             self.send_json(list_volume_settings_presets_layered(
@@ -3203,7 +3236,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({
                 "error": str(error),
                 "storePath": str(VOLUME_SETTINGS_STORE),
-                "stores": self.volume_settings_store_layer_receipt(),
+                "stores": volume_settings_store_layer_receipt(),
                 "failurePhase": "shared-preset-index",
             }, 500)
 
@@ -3218,7 +3251,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 "error": str(error),
                 "requestedPresetRef": preset_ref,
                 "storePath": str(VOLUME_SETTINGS_STORE),
-                "stores": self.volume_settings_store_layer_receipt(),
+                "stores": volume_settings_store_layer_receipt(),
                 "failurePhase": "shared-preset-read",
             }, 404)
             return
@@ -3227,7 +3260,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 "error": str(error),
                 "requestedPresetRef": preset_ref,
                 "storePath": str(VOLUME_SETTINGS_STORE),
-                "stores": self.volume_settings_store_layer_receipt(),
+                "stores": volume_settings_store_layer_receipt(),
                 "failurePhase": "shared-preset-read",
             }, 400)
             return
@@ -3262,12 +3295,25 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 volume_settings_server_source(),
                 publish_alias=request.get("publishAlias", True),
             )
+        except VolumeSettingsPartialSave as error:
+            # The library has the basin; this server's store does not. Say both.
+            self.send_json({
+                "error": str(error),
+                "partial": True,
+                "localError": error.local_error,
+                "sharedPublication": error.shared_publication,
+                "requestedLabel": request.get("label"),
+                "storePath": str(VOLUME_SETTINGS_STORE),
+                "stores": volume_settings_store_layer_receipt(),
+                "failurePhase": "local-preset-write",
+            }, 500)
+            return
         except (OSError, ValueError, json.JSONDecodeError) as error:
             self.send_json({
                 "error": str(error),
                 "requestedLabel": request.get("label"),
                 "storePath": str(VOLUME_SETTINGS_STORE),
-                "stores": self.volume_settings_store_layer_receipt(),
+                "stores": volume_settings_store_layer_receipt(),
                 "failurePhase": "shared-preset-write",
             }, 400)
             return

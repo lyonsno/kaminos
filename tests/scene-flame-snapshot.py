@@ -12,6 +12,7 @@ class Request:
  def send_json(self,body,status=200):self.result=(status,body)
 with tempfile.TemporaryDirectory() as temp:
  serve.VOLUME_SETTINGS_STORE=Path(temp)
+ library=Path(temp+'-library');serve.SHARED_BASIN_STORE=library
  original=serve.write_volume_settings_preset(temp,'Original basin',payload,{},schema)
  alias=Path(temp)/'aliases'/f"{original['effective']['alias']}.json";before=alias.read_bytes()
  changed=fixture['set_control'](payload,'volume-density',5.25)
@@ -22,6 +23,10 @@ with tempfile.TemporaryDirectory() as temp:
  assert result['effective']['alias'] is None
  assert result['effective']['publishAlias'] is False
  assert alias.read_bytes()==before,'scene save must not repoint library alias'
+ assert result['sharedPublication']['published'] is True and result['sharedPublication']['alias'] is None,result['sharedPublication']
+ assert (library/'presets'/f"{result['effective']['presetId']}.json").exists(),'a scene snapshot is shared by id'
+ assert not (library/'aliases').exists() or not any((library/'aliases').iterdir()),'a scene snapshot names nothing in the library'
+ assert not (Path(temp)/'alias-history'/f"{original['effective']['alias']}.jsonl").read_text().count(result['effective']['presetId']),'no label history row for a snapshot'
  assert len(serve.list_volume_settings_presets(temp,schema)['entries'])==1
  loaded=serve.read_volume_settings_preset(temp,result['effective']['presetId'],schema)
  assert loaded['preset']['domControls']['volume-density']['value']==5.25
