@@ -36,7 +36,9 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
     LOCAL_LIQUID_EMITTER_TYPE: 'local-liquid-emitter',
     sceneObjects,
     sceneGroups,
+    sceneSelection:{ids:[],activeId:null},
     scene,
+    setSceneObjectMounted(entry,mounted){if(mounted)scene.add(entry.object);else scene.remove(entry.object);},
     window: { _kaminosDirty() {} },
     scenePlacementTools: { finish() {}, edits: null },
     sceneMembershipEditTargets: new Set(),
@@ -74,6 +76,7 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
       context.currentMesh = sceneObjects.find(entry => entry.id === id)?.object || null;
     },
     setActiveSceneGroup(id) { context.activeSceneGroupId = id; },
+    setSceneSelection(ids,activeId){context.sceneSelection={ids,activeId};context.setActiveSceneObject(activeId);context.renderSceneObjectList();},
     clearActiveSceneObjectSelection() {
       context.activeSceneObjectId = null;
       context.activeSceneGroupId = null;
@@ -257,4 +260,13 @@ test('membership undo restores repaired GLB geometry rather than its original so
   assert.equal(restored.texture.disposed, true, 'final disposal releases detached textures');
   assert.equal(restored.material.disposed, true, 'final disposal releases detached materials');
   assert.equal(restored.material.map, null, 'final disposal clears the detached texture map');
+});
+
+test('removing one selected member prunes it before a surviving selection is projected',()=>{
+ const {context,sceneObjects,scene}=makeSceneContext();
+ for(const id of ['original','copy-a','copy-b']){const object=repairedMesh();sceneObjects.push(makeRecord(id,object));scene.add(object);}
+ context.sceneSelection={ids:['copy-a','copy-b'],activeId:'copy-b'};context.activeSceneObjectId='copy-b';
+ context.renderSceneObjectList=()=>{for(const id of context.sceneSelection.ids)assert.ok(sceneObjects.some(entry=>entry.id===id),`Selection projection references removed ${id}`);};
+ assert.doesNotThrow(()=>vm.runInContext("removeSceneObjectInternal('copy-a',{recordHistory:false,preserveForMembershipHistory:true})",context));
+ assert.deepEqual(Array.from(context.sceneSelection.ids),['copy-b']);assert.ok(sceneObjects.some(entry=>entry.id==='copy-b'));
 });
