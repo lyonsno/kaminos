@@ -46,7 +46,7 @@ export function forwardCompositionHash(target, sourceHash) {
   const hash = new URLSearchParams(sourceHash.replace(/^#/, ''));
   const forwarded = new URLSearchParams();
   for (const [key, value] of hash) {
-    if (['authoring', 'scene', 'composition_module_url', 'volume_collision', 'rendering_source_xyz', 'rendering_source_gain', 'rendering_surface_gain', 'rendering_surface_scattering'].includes(key)
+    if (['authoring', 'scene', 'composition_module_url', 'volume_collision', 'rendering_source_xyz', 'rendering_source_gain', 'rendering_surface_gain', 'rendering_surface_scattering', 'rendering_receiver_spacing', 'rendering_angular_pattern', 'rendering_directions', 'rendering_match_camera'].includes(key)
       || key.startsWith('volume_light_field')) forwarded.set(key, value);
   }
   url.hash = forwarded.toString();

@@ -7,9 +7,17 @@ export function assertRequiredModuleResponse({url,status},origin){
  const parsed=new URL(url);
  if(parsed.origin===origin&&/\.m?js$/.test(parsed.pathname)&&status>=400)throw Error(`required-module-load-failed:${status}:${url}`);
 }
-export function assertScatteringView(signal,{count,albedo,enabled,trim,master}){
+export function assertScatteringView(signal,{count,albedo,enabled,trim,master,spacing}){
  assert.equal(signal.volume.error,null);assert.equal(signal.lighting.previewStale,false);
  const f=signal.lighting.frame;
+ if(spacing!==undefined){
+  const r=f.receiverSampling;assert.ok(r,'receiver sampling metadata required');
+  assert.equal(r.spacing,spacing,'receiver sampling effective spacing must match request');
+  assert.equal(signal.lighting.receiverSpacingRequested,spacing,'receiver sampling live request must match');
+  assert.equal(r.receivers,f.surfaceReceivers);assert.ok(Number.isSafeInteger(r.renderVertices)&&r.renderVertices>=r.receivers);
+  assert.equal(r.identity,spacing?'connected-cell-normal-band-v1':'vertex-reference-v1');
+  if(!spacing)assert.equal(r.receivers,r.renderVertices);
+ }
  assert.equal(f.directions,count);assert.equal(f.angularPattern,'source');assert.equal(f.sourceSoftness,0);assert.equal(f.surfaceReconstruction.passes,0);
  assert.equal(f.gain,2**master);assert.equal(signal.lighting.surfaceGain,2**trim);
  assert.equal(signal.volume.physicalColor.material.scatteringAlbedo,Math.fround(albedo));
@@ -77,4 +85,27 @@ export function assertSurfaceView(signal,{baseline,count,pattern,passes}) {
     assert.deepEqual(signal.surface,baseline.surface,'raw front restoration mismatch');
     assert.deepEqual(signal.back,baseline.back,'raw back restoration mismatch');
   }
+}
+export function assertSourceGuideEvidence(signal,requested){
+  const {runtime,source,adapter,lighting,sourceGeneration,sourceMetadata,dimensions,primary,front,back,smoke,errors,httpFailures}=signal;
+  if(!runtime?.source||runtime.source.repoRoot!==source?.root||runtime.source.commit!==source?.revision||runtime.source.dirty||source.dirty)throw Error('wrong/unverified clean source-guide route');
+  if(adapter?.vendor!=='apple'||adapter.isFallbackAdapter!==false)throw Error('source-guide evidence requires the verified native Apple route');
+  const frame=lighting?.frame;
+  if(!Number.isSafeInteger(sourceGeneration)||sourceGeneration<0||frame?.generation!==sourceGeneration||frame.angularPattern!==requested.pattern||frame.directions!==requested.count||frame.receiverSampling?.spacing!==requested.spacing||lighting.gain!==requested.gain||lighting.surfaceGain!==1||!frame.surfaceScattering?.enabled||lighting.previewStale)throw Error('source-guide requested/effective config or generation mismatch');
+  if(requested.pattern==='guided'&&(!frame.sourceGuide||!['lo','hi'].every(k=>Array.isArray(frame.sourceGuide[k])&&frame.sourceGuide[k].length===3&&frame.sourceGuide[k].every(Number.isFinite))))throw Error('effective source guide missing');
+  const cells=d=>{
+    if(!Array.isArray(d)||d.length!==3||!d.every(n=>Number.isSafeInteger(n)&&n>0))throw Error('complete field dimensions required');
+    const n=d.reduce((a,b)=>a*b,1);if(!Number.isSafeInteger(n*4))throw Error('field dimensions exceed integer addressability');return n;
+  };
+  if(sourceMetadata?.generation!==sourceGeneration||sourceMetadata?.channels!==4)throw Error('primary field identity missing or mismatched');
+  const sizes={primary:cells(sourceMetadata.dimensions),front:cells(dimensions?.front),back:cells(dimensions?.back),smoke:cells(dimensions?.smoke)};
+  if(JSON.stringify(dimensions.front)!==JSON.stringify(dimensions.back)||dimensions.front[2]!==1||!Number.isSafeInteger(frame.surfaceReceivers)||frame.surfaceReceivers<1||Math.ceil(frame.surfaceReceivers/dimensions.front[0])!==dimensions.front[1])throw Error('surface field dimensions/count disagree with padded receiver layout');
+  if(frame.allocatedVolumeReceivers!==sizes.smoke||frame.transportVolumeReceivers!==sizes.smoke)throw Error('smoke field dimensions/count disagree with represented receiver layout');
+  for(const [name,values]of [['primary',primary],['front',front],['back',back],['smoke',smoke]])if(!Array.isArray(values)||values.length!==sizes[name]*4||!values.every(Number.isFinite))throw Error('missing/partial/nonfinite '+name);
+  for(let i=0;i<frame.surfaceReceivers;i++)if(front[i*4+3]!==1||back[i*4+3]!==1)throw Error('unwritten active surface receiver');
+  for(let i=0;i<sizes.smoke;i++)if(smoke[i*4+3]!==1)throw Error('unwritten smoke receiver');
+  const hasRGB=(values,count=values.length/4)=>{for(let i=0;i<count;i++)for(let c=0;c<3;c++)if(values[i*4+c]>0)return true;return false;};
+  if(!hasRGB(primary)||!hasRGB(front,frame.surfaceReceivers)&&!hasRGB(back,frame.surfaceReceivers))throw Error('blank active source-guide evidence');
+  if(!Array.isArray(errors)||errors.length||!Array.isArray(httpFailures)||httpFailures.length)throw Error('source-guide capture contains renderer/HTTP errors');
+  return signal;
 }
