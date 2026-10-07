@@ -1550,7 +1550,46 @@ export const PRESSURE_RESIDUAL_PROBE_FRESHNESS_FRAMES = 120;
 export const PRESSURE_RESIDUAL_MAP_TIMEOUT_MS = 5000;
 const PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR = 'pressure-residual-map-timeout';
 // Four vec4 partials per workgroup: compact divergence, wide divergence, vorticity (enstrophy sum, max |omega|), height profile (sum vertical velocity, heat, smoke).
-export const PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP = 16;
+export const PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP = 20;
+
+// Pure fold of the probe's per-workgroup partials into the height profile.
+// Workgroups are 4x4x4 cells, so each slab is four cell rows across the whole
+// x-z plane; the fifth partial carries the lateral first moments of heat and
+// smoke, which give a per-slab centroid in cells relative to the grid centre.
+// A slab without material reports null, never zero: zero would read as centred.
+export function residualProfileFromPartials(partials, { grid, workgroupsX, workgroupsY, workgroupCount }) {
+  const slabCells = grid * grid * 4;
+  const centre = (grid - 1) / 2;
+  const zero = () => new Array(workgroupsY).fill(0);
+  const vertical = zero(), heat = zero(), smoke = zero(), hot = zero(), heatX = zero(), heatZ = zero(), smokeX = zero(), smokeZ = zero();
+  for (let i = 0; i < workgroupCount; i += 1) {
+    const at = i * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP;
+    const slab = Math.floor(i / workgroupsX) % workgroupsY;
+    vertical[slab] += partials[at + 12];
+    heat[slab] += partials[at + 13];
+    smoke[slab] += partials[at + 14];
+    hot[slab] += partials[at + 15];
+    heatX[slab] += partials[at + 16];
+    heatZ[slab] += partials[at + 17];
+    smokeX[slab] += partials[at + 18];
+    smokeZ[slab] += partials[at + 19];
+  }
+  const centroid = (mass, mx, mz) => mass.map((m, slab) => (m > 1e-9 ? [mx[slab] / m - centre, mz[slab] / m - centre] : null));
+  return {
+    identity: 'height-profile-before-projection-v1',
+    slabRows: 4,
+    slabs: workgroupsY,
+    verticalVelocityMean: vertical.map(sum => sum / slabCells),
+    heatMean: heat.map(sum => sum / slabCells),
+    smokeMean: smoke.map(sum => sum / slabCells),
+    // Heat-weighted mean vertical velocity per slab: the hot gas's own rise speed.
+    hotVerticalVelocityMean: hot.map((sum, slab) => (heat[slab] > 1e-9 ? sum / heat[slab] : 0)),
+    // Where the hot gas and the smoke sit in the x-z plane, per slab, in cells
+    // from the grid centre: a plume that leans shows a centroid that walks with height.
+    heatCentroidCells: centroid(heat, heatX, heatZ),
+    smokeCentroidCells: centroid(smoke, smokeX, smokeZ),
+  };
+}
 const PRESSURE_SOLVER_VALUES = Object.freeze([PRESSURE_SOLVER_LEGACY, PRESSURE_SOLVER_CONVERGED, PRESSURE_SOLVER_CONVERGED_OPEN_TOP]);
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
@@ -2023,7 +2062,13 @@ export const INFLOW_BOUNDARY_IDENTITY = 'kaminos.volume.inflow-boundary.v1';
 export const INFLOW_APERTURE_KIND_MODE = Object.freeze({ off: 0, disc: 1, annulus: 2, rectangle: 3 });
 export const INFLOW_UNIFORM_OFFSET = PHYSICAL_COLOR_UNIFORM_FLOATS;
 export const INFLOW_UNIFORM_FLOATS = 12;
-export const VOLUME_UNIFORM_FLOATS = INFLOW_UNIFORM_OFFSET + INFLOW_UNIFORM_FLOATS;
+// Heat-release expansion: one vec4 after the inflow block; .x the expansion
+// gain when admitted (0 refuses, so the legacy solve never sees a source).
+export const HEAT_RELEASE_UNIFORM_OFFSET = INFLOW_UNIFORM_OFFSET + INFLOW_UNIFORM_FLOATS;
+export const HEAT_RELEASE_UNIFORM_FLOATS = 4;
+export const VELOCITY_STAGGERING_UNIFORM_OFFSET = HEAT_RELEASE_UNIFORM_OFFSET + HEAT_RELEASE_UNIFORM_FLOATS;
+export const VELOCITY_STAGGERING_UNIFORM_FLOATS = 4;
+export const VOLUME_UNIFORM_FLOATS = VELOCITY_STAGGERING_UNIFORM_OFFSET + VELOCITY_STAGGERING_UNIFORM_FLOATS;
 
 // The aperture pattern (slice 2): which coverage pattern the floor map is built
 // from, its count / ratio / seed, and the swirl (tangential fraction of the
@@ -2284,6 +2329,63 @@ export function inflowBoundaryUniformValues(config) {
     e.inletDynamics.puffFactor, e.inletVelocity, e.fuelFraction, e.inletTemperature,
     e.swirl, e.inletDynamics.turbulence, 0, e.antialiasWidth,
   ];
+}
+
+// Heat-release expansion (slice 4 of the emitter rewrite): where fuel burns,
+// the converged solve is given a positive divergence target, gain x the fuel
+// consumption rate the reaction used, so the surrounding gas moves outward to
+// make room for the hot products. The open top absorbs the net volume, which
+// is why a closed top or a disabled dispatch refuses it. Opt-in: gain 0 is off.
+export const HEAT_RELEASE_IDENTITY = 'kaminos.volume.heat-release-expansion.v1';
+export function resolveHeatReleaseConfig(controls = {}) {
+  const expansion = clampFinite(controls.heatReleaseExpansion, 0, 3, 0);
+  const pressure = resolvePressureSolverConfig(controls).effective;
+  const requested = { expansion, pressureSolver: pressure.solver, openTop: pressure.openTop };
+  const off = reason => ({ identity: HEAT_RELEASE_IDENTITY, requested, effective: { admitted: false, expansion: 0, reason } });
+  if (!(expansion > 0)) return off('heat-release-expansion-is-zero');
+  if (pressure.solver !== PRESSURE_SOLVER_CONVERGED || !pressure.openTop) return off('heat-release-requires-converged-open-top-pressure-solver');
+  if (pressure.dispatch !== PRESSURE_SOLVER_CONVERGED) return off(`heat-release-requires-pressure-projection-dispatch:${pressure.disabledReason || 'disabled'}`);
+  return { identity: HEAT_RELEASE_IDENTITY, requested, effective: { admitted: true, expansion, reason: null } };
+}
+export const VELOCITY_STAGGERING_IDENTITY = 'kaminos.volume.velocity-staggering.v1';
+// Velocity staggering. The converged solve reads the stored velocity as the
+// upper face of each axis (compact backward divergence, forward gradient);
+// the transport read the same value as the cell centre, a half-cell shift
+// along +x and +z that leaned every plume toward -x -z. Staggered transport
+// reads it as faces everywhere. Opt-in; admitted only under the converged
+// solver, whose compact pair defines the face reading.
+export function resolveVelocityStaggeringConfig(controls = {}) {
+  const requestedMode = String(controls.velocityStaggering ?? 'collocated');
+  const pressure = resolvePressureSolverConfig(controls).effective;
+  const requested = { mode: requestedMode, pressureSolver: pressure.solver };
+  const off = reason => ({ identity: VELOCITY_STAGGERING_IDENTITY, requested, effective: { mode: 'collocated', admitted: false, reason } });
+  if (requestedMode !== 'staggered') return off('velocity-staggering-not-requested');
+  if (pressure.solver !== PRESSURE_SOLVER_CONVERGED) return off('velocity-staggering-requires-converged-pressure-solver');
+  return { identity: VELOCITY_STAGGERING_IDENTITY, requested, effective: { mode: 'staggered', admitted: true, reason: null } };
+}
+export function velocityStaggeringUniformValues(config) {
+  return [config?.effective?.admitted ? 1 : 0, 0, 0, 0];
+}
+export function heatReleaseUniformValues(config) {
+  const e = config?.effective;
+  return [e?.admitted ? e.expansion : 0, 0, 0, 0];
+}
+// What the pressure residual probe measures: once expansion is admitted the
+// converged solve targets S = gain × burn rate, so the compact operator's
+// residual is D(v) − S, not D(v). Carried on every readback so a reader never
+// has to infer it from the controls at the time.
+export function pressureResidualMeasurement(heatRelease) {
+  const e = heatRelease?.effective;
+  const admitted = e?.admitted === true;
+  const expansion = admitted && Number.isFinite(e.expansion) ? e.expansion : 0;
+  return {
+    compact: admitted ? 'divergence-minus-expansion-target' : 'divergence',
+    wide: 'legacy-central-divergence',
+    heatRelease: { admitted, expansion },
+    statement: admitted
+      ? `compact = |D(v) − S| on the compact operator, S = heat-release expansion target at gain ${expansion}; a converged solve drives D(v) to S, a partial projection to (1 − gain) × D(v_before) + gain × S`
+      : 'compact = |D(v)| on the compact operator; heat-release expansion off',
+  };
 }
 
 function normalizePyroDynamicDetailEnabled(value) {
@@ -3082,6 +3184,10 @@ struct Uniforms {
   inflow_state: vec4<f32>,
   // .x swirl (tangential fraction of the inflow velocity); .y, .z reserved; .w antialias width (one cell, volume units).
   inflow_shape: vec4<f32>,
+  // Heat-release expansion: .x gain (0 off).
+  heat_release: vec4<f32>,
+  // Velocity staggering: .x 1 when the carried velocity is read as face values.
+  velocity_staggering: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -3135,6 +3241,12 @@ struct NonRidgeOpticalCaptureRow {
 // Inlet turbulence: one perturbation per floor cell in [-1, 1], a slow stochastic
 // field rewritten each step while the intensity is above zero.
 @group(0) @binding(18) var inflowPerturbation: texture_2d<f32>;
+// Fuel burn rate per cell this step (the reaction's own fuel consumption rate),
+// written by the main kernel and read by the pressure kernels as the heat
+// release expansion target. One read-write storage texture, no usage conflict.
+@group(0) @binding(19) var burnRate: texture_storage_3d<r32float, read_write>;
+// (It holds gain x rate, the expansion target; the pressure kernels bind the
+// fluid-front read layout, which carries no uniform.)
 @group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
 @group(0) @binding(12) var<storage, read_write> nonRidgeOpticalCaptureRows: array<f32>;
 // MacCormack predictor: the forward semi-Lagrangian estimate of every slot,
@@ -3160,6 +3272,10 @@ var<workgroup> pressureResidualVerticalVelocitySum: array<f32, 64>;
 var<workgroup> pressureResidualHeatSum: array<f32, 64>;
 var<workgroup> pressureResidualSmokeSum: array<f32, 64>;
 var<workgroup> pressureResidualHotVelocitySum: array<f32, 64>;
+var<workgroup> pressureResidualHeatXSum: array<f32, 64>;
+var<workgroup> pressureResidualHeatZSum: array<f32, 64>;
+var<workgroup> pressureResidualSmokeXSum: array<f32, 64>;
+var<workgroup> pressureResidualSmokeZSum: array<f32, 64>;
 @group(1) @binding(1) var<storage, read_write> irradianceDst: array<vec4<f32>>;
 @group(1) @binding(2) var<storage, read> irradianceSrc: array<vec4<f32>>;
 @group(1) @binding(3) var irradianceAtlasOut: texture_storage_2d<rgba16float, write>;
@@ -4018,12 +4134,51 @@ fn compactFaceVelocity(c: vec3<i32>, axis: u32) -> f32 {
   return readSlot(c, 0u)[axis];
 }
 
+// Heat-release expansion target at a cell (gain x the fuel burn rate, stored by
+// the main kernel; zero when the gain is zero or refused). Only the converged
+// solve's compact divergence carries it; the legacy wide stencil is untouched.
+fn heatReleaseExpansion(c: vec3<i32>) -> f32 {
+  return max(0.0, textureLoad(burnRate, c).x);
+}
+
+// The compact divergence the converged solve drives to zero, minus the
+// expansion target: after a converged solve the corrected field has velocity
+// divergence equal to the expansion where fuel burns and zero elsewhere. The
+// residual probe measures the same quantity, so its divergence-after reads
+// near zero when the solve converged to the target.
 fn divergenceCompactAtCell(c: vec3<i32>) -> f32 {
   if (sceneSolidAt(c)) { return 0.0; }
   return (compactFaceVelocity(c, 0u) - compactFaceVelocity(c - vec3<i32>(1, 0, 0), 0u))
     + (compactFaceVelocity(c, 1u) - compactFaceVelocity(c - vec3<i32>(0, 1, 0), 1u))
-    + (compactFaceVelocity(c, 2u) - compactFaceVelocity(c - vec3<i32>(0, 0, 1), 2u));
+    + (compactFaceVelocity(c, 2u) - compactFaceVelocity(c - vec3<i32>(0, 0, 1), 2u))
+    - heatReleaseExpansion(c);
 }
+
+fn velocityStaggered() -> bool {
+  return u.velocity_staggering.x > 0.5;
+}
+
+// The velocity at a cell centre for the characteristic. Collocated: the stored
+// value. Staggered: the stored value is the upper face of each axis, exactly as
+// the compact divergence and the forward gradient read it, so the centre is
+// the mean of the two faces; the lower faces of the first cells are the walls
+// and the inflow floor, as compactFaceVelocity defines them.
+fn centreVelocityAt(c: vec3<i32>) -> vec3<f32> {
+  let stored = readSlot(c, 0u).xyz;
+  if (!velocityStaggered()) { return stored; }
+  return 0.5 * vec3<f32>(
+    compactFaceVelocity(c, 0u) + compactFaceVelocity(c - vec3<i32>(1, 0, 0), 0u),
+    compactFaceVelocity(c, 1u) + compactFaceVelocity(c - vec3<i32>(0, 1, 0), 1u),
+    compactFaceVelocity(c, 2u) + compactFaceVelocity(c - vec3<i32>(0, 0, 1), 2u));
+}
+
+// The carried velocity itself is sampled at the plain foot even when
+// staggered: the destination u(c) is the upper face at centre + ½, the value
+// it needs is the physical velocity at (centre + ½) − U·dt, and the sampler
+// reads stored values half a cell below their physical position, so the two
+// half-cell offsets cancel and the query is centre − U·dt, the same foot the
+// scalars use. (A per-component −½ sample offset was tried first and moved the
+// velocity pattern +½ cell per step: the lean flipped to +x instead of going.)
 
 fn blockedSceneFaceFluxAtCell(c: vec3<i32>) -> vec2<f32> {
   if (!sceneSolidEnabled()) { return vec2<f32>(0.0); }
@@ -4434,6 +4589,10 @@ fn pressureResidualReduce(
   var heatValue = 0.0;
   var smokeValue = 0.0;
   var hotVelocity = 0.0;
+  var heatX = 0.0;
+  var heatZ = 0.0;
+  var smokeX = 0.0;
+  var smokeZ = 0.0;
   if (all(gid < vec3<u32>(GRID, GRID_Y, GRID))) {
     if (!afterProjection) {
       if (!sceneSolidAt(vec3<i32>(gid))) {
@@ -4454,6 +4613,12 @@ fn pressureResidualReduce(
       // Heat-weighted vertical velocity: the speed of the hot gas itself, which a
       // slab mean over mostly quiescent air cannot show.
       hotVelocity = verticalVelocity * heatValue;
+      // Lateral first moments in grid cells: the CPU fold divides by the slab's
+      // mass for a centroid, the instrument for a plume that leans without wind.
+      heatX = heatValue * f32(gid.x);
+      heatZ = heatValue * f32(gid.z);
+      smokeX = smokeValue * f32(gid.x);
+      smokeZ = smokeValue * f32(gid.z);
       }
     } else {
       if (!sceneSolidAt(vec3<i32>(gid))) {
@@ -4475,6 +4640,10 @@ fn pressureResidualReduce(
   pressureResidualHeatSum[localIndex] = heatValue;
   pressureResidualSmokeSum[localIndex] = smokeValue;
   pressureResidualHotVelocitySum[localIndex] = hotVelocity;
+  pressureResidualHeatXSum[localIndex] = heatX;
+  pressureResidualHeatZSum[localIndex] = heatZ;
+  pressureResidualSmokeXSum[localIndex] = smokeX;
+  pressureResidualSmokeZSum[localIndex] = smokeZ;
   workgroupBarrier();
   if (localIndex != 0u) {
     return;
@@ -4489,6 +4658,10 @@ fn pressureResidualReduce(
   var heatSum = 0.0;
   var smokeSum = 0.0;
   var hotVelocitySum = 0.0;
+  var heatXSum = 0.0;
+  var heatZSum = 0.0;
+  var smokeXSum = 0.0;
+  var smokeZSum = 0.0;
   for (var i = 0u; i < 64u; i = i + 1u) {
     sum = sum + pressureResidualSum[i];
     peak = max(peak, pressureResidualMax[i]);
@@ -4500,8 +4673,12 @@ fn pressureResidualReduce(
     heatSum = heatSum + pressureResidualHeatSum[i];
     smokeSum = smokeSum + pressureResidualSmokeSum[i];
     hotVelocitySum = hotVelocitySum + pressureResidualHotVelocitySum[i];
+    heatXSum = heatXSum + pressureResidualHeatXSum[i];
+    heatZSum = heatZSum + pressureResidualHeatZSum[i];
+    smokeXSum = smokeXSum + pressureResidualSmokeXSum[i];
+    smokeZSum = smokeZSum + pressureResidualSmokeZSum[i];
   }
-  let partialIndex = 4u * (workgroupId.x + workgroupId.y * workgroupCount.x + workgroupId.z * workgroupCount.x * workgroupCount.y);
+  let partialIndex = 5u * (workgroupId.x + workgroupId.y * workgroupCount.x + workgroupId.z * workgroupCount.x * workgroupCount.y);
   let previousCompact = pressureResidualPartials[partialIndex];
   let previousWide = pressureResidualPartials[partialIndex + 1u];
   if (afterProjection) {
@@ -4514,6 +4691,7 @@ fn pressureResidualReduce(
     pressureResidualPartials[partialIndex + 1u] = vec4<f32>(wideSum, widePeak, 0.0, 0.0);
     pressureResidualPartials[partialIndex + 2u] = vec4<f32>(enstrophySum, vorticityPeak, 0.0, 0.0);
     pressureResidualPartials[partialIndex + 3u] = vec4<f32>(verticalVelocitySum, heatSum, smokeSum, hotVelocitySum);
+    pressureResidualPartials[partialIndex + 4u] = vec4<f32>(heatXSum, heatZSum, smokeXSum, smokeZSum);
   }
 }
 
@@ -5348,7 +5526,8 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
   let explicitWindAuthority = smoothstep(0.05, 1.0, windStrength);
   let bonfireAdvectionLateralDamping = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
-  let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
+  let centreVelocity = centreVelocityAt(vec3<i32>(gid));
+  let advectVelocity = vec3<f32>(centreVelocity.x * bonfireAdvectionLateralDamping, centreVelocity.y, centreVelocity.z * bonfireAdvectionLateralDamping);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
   for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) {
     fluidPredict[base + slot] = sampleFluidSlotInflow(backCell, slot);
@@ -5447,7 +5626,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let microdetailRiseDirection = bonfireThermalRiseDirection;
   let bonfireLocalLateralTransportGain = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
   let bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain;
-  let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
+  let centreVelocity = centreVelocityAt(cellI);
+  let advectVelocity = vec3<f32>(centreVelocity.x * bonfireAdvectionLateralDamping, centreVelocity.y, centreVelocity.z * bonfireAdvectionLateralDamping);
   let backtraceScale = transportBacktraceScale(speed) * timeStep;
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * backtraceScale);
   let macCormack = u.transport_controls.x > 1.5;
@@ -6344,7 +6524,20 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Reaction increments are rates: they carry the time step (1.0 under legacy).
   smoke = smoke + tallPlumeReactionSmokeBirth * timeStep;
   heat = heat + (tallPlumeFuelHeatReaction * mix(0.0, 0.16, tallPlumeScene) + tallPlumePilotReaction * 0.030) * timeStep;
-  fuel = max(fuel - (heat * 0.018 + fuelConsumption) * timeStep, 0.0);
+  // The fuel consumption rate is also the heat-release expansion source the
+  // pressure solve targets this step (gain in u.heat_release.x; stored for
+  // every cell, burning or not, so a cell that stops burning stops expanding).
+  let fuelBurnRate = heat * 0.018 + fuelConsumption;
+  // The fuel actually consumed this step, per unit time: the decrement is
+  // capped by the fuel present, so a hot cell with no fuel burns nothing and
+  // expands nothing (the first look stored the uncapped rate and the whole hot
+  // plume expanded: heat mass x3.6 at gain 1).
+  let fuelBurned = min(fuel, fuelBurnRate * timeStep);
+  fuel = fuel - fuelBurned;
+  // Stored as the expansion target itself (gain x the burned fuel per unit
+  // time; zero when the gain is zero or refused), so the pressure kernels,
+  // which bind no uniform, read it directly.
+  textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * fuelBurned / max(timeStep, 1e-6), 0.0, 0.0, 0.0));
   let bonfireDetailBirthCarrier = bonfireAdvectedSmokeBirth * 0.48 + bonfireSootBirth * 0.30 + bonfireBroadSupportSmokeSource * 0.046 * bonfireLayeredSmokeBreakup + smokeFromHeat * bonfireInterfaceSmokeBand * 0.13 + bonfireInterfaceBirth * 0.18 + bonfireCombustion.z * 0.036 + smoke * 0.070;
   let bonfireSmokeDetailCurlFold = clamp(
     0.50
@@ -10698,6 +10891,8 @@ export function createKaminosVolumePrototype({
   // step-locked processes; the field is rebuilt with the grid.
   let inflowPerturbationTexture = null;
   let inletPerturbationField = null;
+  // Fuel burn rate per cell (heat-release expansion source), rebuilt with the grid.
+  let burnRateTexture = null;
   const inletPuffProcess = new StochasticSignalSet(2, 1);
   const windGustProcess = new WindGustProcess(1);
   let inflowCoverageSignature = '';
@@ -11283,6 +11478,8 @@ export function createKaminosVolumePrototype({
     inflowPerturbationTexture?.destroy();
     inflowPerturbationTexture = null;
     inletPerturbationField = null;
+    burnRateTexture?.destroy();
+    burnRateTexture = null;
     for (const buffer of pressureBuffers) buffer.destroy();
     pressureResidualPartialsBuffer?.destroy();
     pressureResidualReadbackBuffer?.destroy();
@@ -11414,6 +11611,7 @@ export function createKaminosVolumePrototype({
         { binding: 16, resource: sceneSolidTextureView },
         { binding: 17, resource: inflowCoverageTexture.createView() },
         { binding: 18, resource: inflowPerturbationTexture.createView() },
+        { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
       ],
     });
   }
@@ -11504,6 +11702,7 @@ export function createKaminosVolumePrototype({
         {binding: 1, resource: {buffer}},
         {binding: 7, resource: {buffer: frontBuffers[index]}},
         {binding: 16, resource: sceneSolidTextureView},
+        {binding: 19, resource: burnRateTexture.createView({ dimension: '3d' })},
       ],
     }));
     boundarySidecarReadBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
@@ -11630,6 +11829,7 @@ export function createKaminosVolumePrototype({
       || !boundarySplatFeatureBuffer
       || quenchBuffers.length !== 2
       || !flowKernelDescriptorBuffer
+      || !burnRateTexture
     ) {
       selectiveHeadLiveBindGroups = null;
       return;
@@ -11663,6 +11863,7 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluid } },
           { binding: 7, resource: { buffer: front } },
           { binding: 16, resource: sceneSolidTextureView },
+          { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
       sidecar: device.createBindGroup({
@@ -12454,6 +12655,14 @@ export function createKaminosVolumePrototype({
     });
     device.queue.writeTexture({ texture: inflowPerturbationTexture }, new Float32Array(gridSize * gridSize), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
     inletPerturbationField = new InletPerturbationField({ grid: gridSize, seed: 1 });
+    burnRateTexture = device.createTexture({
+      label: `kaminos fuel burn rate ${gridSize}x${gridHeight}x${gridSize}`,
+      size: [gridSize, gridHeight, gridSize],
+      dimension: '3d',
+      format: 'r32float',
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    device.queue.writeTexture({ texture: burnRateTexture }, new Float32Array(gridSize * gridHeight * gridSize), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize]);
     quenchBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
         label: `kaminos recoverable liquid quench and source state ${gridSize}x${gridHeight}x${gridSize} ${i}`,
@@ -12928,6 +13137,7 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluidBuffers[0] } },
           { binding: 7, resource: { buffer: frontBuffers[0] } },
           { binding: 16, resource: sceneSolidTextureView },
+          { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
       device.createBindGroup({
@@ -12937,6 +13147,7 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
           { binding: 7, resource: { buffer: frontBuffers[1] } },
           { binding: 16, resource: sceneSolidTextureView },
+          { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
     ];
@@ -13319,6 +13530,8 @@ export function createKaminosVolumePrototype({
         // which reads the coverage map below the floor, so both stages see it.
         { binding: 17, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
         { binding: 18, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
+        // The raymarch fragment entry point reaches divergenceAtCell through the shared module, so the binding must be fragment-visible too (slice-2 lesson at 1e8996ab).
+        { binding: 19, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -13389,6 +13602,8 @@ export function createKaminosVolumePrototype({
           buffer: { type: 'read-only-storage' },
         },
         { binding: 16, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
+        // The pressure kernels read the heat-release expansion target here.
+        { binding: 19, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
       ],
     });
     boundarySidecarWriteBindGroupLayout = device.createBindGroupLayout({
@@ -14765,6 +14980,12 @@ export function createKaminosVolumePrototype({
     const inflowBoundaryConfig = resolveInflowBoundaryConfig(controlsSnapshot, analyticEmitterDescriptor, { grid: gridSize, inletSignals });
     uniforms.set(inflowBoundaryUniformValues(inflowBoundaryConfig), INFLOW_UNIFORM_OFFSET);
     state.inflowBoundary = inflowBoundaryConfig;
+    const heatReleaseConfig = resolveHeatReleaseConfig(controlsSnapshot);
+    uniforms.set(heatReleaseUniformValues(heatReleaseConfig), HEAT_RELEASE_UNIFORM_OFFSET);
+    state.heatRelease = heatReleaseConfig;
+    const velocityStaggeringConfig = resolveVelocityStaggeringConfig(controlsSnapshot);
+    uniforms.set(velocityStaggeringUniformValues(velocityStaggeringConfig), VELOCITY_STAGGERING_UNIFORM_OFFSET);
+    state.velocityStaggering = velocityStaggeringConfig;
     if (inflowBoundaryConfig.effective.admitted && inflowCoverageTexture) {
       const coverageSignature = inflowCoverageSignatureFor(inflowBoundaryConfig);
       if (coverageSignature !== inflowCoverageSignature) {
@@ -15439,6 +15660,9 @@ export function createKaminosVolumePrototype({
   }
 
   let pressureResidualCopySolver = null;
+  // The heat-release context the probed numbers came from, taken at copy time:
+  // controls may change before the asynchronous readback completes.
+  let pressureResidualCopyMeasurement = null;
 
   function retirePressureResidualMap(reason) {
     // A map that never settled retires its buffer so the diagnostic stops
@@ -15525,6 +15749,7 @@ export function createKaminosVolumePrototype({
     pressureResidualCopyFrame = state.frameCount;
     pressureResidualCopyFluidCells = gridCellCount(gridSize) - (state.sceneCollision?.effective === 'mesh-voxel-solid' ? state.sceneCollision.solidCellCount : 0);
     pressureResidualCopySolver = state.pressureSolver?.effective ? { ...state.pressureSolver.effective } : null;
+    pressureResidualCopyMeasurement = pressureResidualMeasurement(state.heatRelease);
   }
 
   async function resolvePressureResidualProbe() {
@@ -15539,6 +15764,7 @@ export function createKaminosVolumePrototype({
     const grid = gridSize;
     const fluidCells = pressureResidualCopyFluidCells;
     const solver = pressureResidualCopySolver;
+    const measurement = pressureResidualCopyMeasurement;
     let timeoutTimer = null;
     try {
       const mapPromise = buffer.mapAsync(GPUMapMode.READ);
@@ -15580,26 +15806,16 @@ export function createKaminosVolumePrototype({
       };
       let enstrophySum = 0;
       let vorticityPeak = 0;
-      // Height profile: fold the per-workgroup sums by the workgroup's y index
-      // into per-slab means (each slab is four cell rows across the whole x-z plane).
+      // Height profile and lateral centroids: the pure fold below; here only
+      // the vorticity and blocked-face reductions stay inline.
       const workgroupsX = Math.ceil(grid / 4);
       const workgroupsY = Math.ceil(gridHeightForSize(grid) / 4);
-      const slabCells = grid * grid * 4;
-      const profileVerticalVelocity = new Array(workgroupsY).fill(0);
-      const profileHeat = new Array(workgroupsY).fill(0);
-      const profileSmoke = new Array(workgroupsY).fill(0);
-      const profileHotVelocity = new Array(workgroupsY).fill(0);
       let blockedFaceAbsSum = 0;
       let blockedFaceMaxAbs = 0;
       for (let i = 0; i < workgroupCount; i += 1) {
         const at = i * PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP + 8;
         enstrophySum += partials[at];
         vorticityPeak = Math.max(vorticityPeak, partials[at + 1]);
-        const slab = Math.floor(i / workgroupsX) % workgroupsY;
-        profileVerticalVelocity[slab] += partials[at + 4];
-        profileHeat[slab] += partials[at + 5];
-        profileSmoke[slab] += partials[at + 6];
-        profileHotVelocity[slab] += partials[at + 7];
         blockedFaceAbsSum += partials[at + 2];
         blockedFaceMaxAbs = Math.max(blockedFaceMaxAbs, partials[at + 3]);
       }
@@ -15617,6 +15833,7 @@ export function createKaminosVolumePrototype({
         // legacy 2h central divergence. Both are measured on the same fields.
         compact: reduceOperator(0),
         wide: reduceOperator(4),
+        measurement,
         blockedFaceFlux: { sumAbs: blockedFaceAbsSum, maxAbs: blockedFaceMaxAbs },
         vorticity: {
           identity: 'enstrophy-before-projection-v0',
@@ -15624,16 +15841,7 @@ export function createKaminosVolumePrototype({
           enstrophySum,
           maxAbs: vorticityPeak,
         },
-        profile: {
-          identity: 'height-profile-before-projection-v0',
-          slabRows: 4,
-          slabs: workgroupsY,
-          verticalVelocityMean: profileVerticalVelocity.map(sum => sum / slabCells),
-          heatMean: profileHeat.map(sum => sum / slabCells),
-          smokeMean: profileSmoke.map(sum => sum / slabCells),
-          // Heat-weighted mean vertical velocity per slab: the hot gas's own rise speed.
-          hotVerticalVelocityMean: profileHotVelocity.map((sum, slab) => (profileHeat[slab] > 1e-9 ? sum / profileHeat[slab] : 0)),
-        },
+        profile: residualProfileFromPartials(partials, { grid, workgroupsX, workgroupsY, workgroupCount }),
         measuredAtMs: Number(performance.now().toFixed(3)),
       };
       const residualHistory = [...(state.pressureSolver?.residualHistory ?? []).slice(-15), residual];

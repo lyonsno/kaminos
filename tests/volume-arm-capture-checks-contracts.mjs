@@ -10,7 +10,8 @@ const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', impo
 
 test('swirl check: a missing or nonfinite effective swirl is a mismatch, not a pass', () => {
   const arm = { set: [['volume-emitter-swirl', '0.6']] };
-  const at = swirl => effectiveMismatches(arm, { inflowBoundary: { effective: swirl === undefined ? {} : { swirl } } }, null);
+  // Receipts carry admission: an inflow-dependent check first requires the inflow to be admitted (LS-02).
+  const at = swirl => effectiveMismatches(arm, { inflowBoundary: { effective: swirl === undefined ? { admitted: true } : { admitted: true, swirl } } }, null);
   assert.equal(at(0.6).length, 0, 'a matching finite value passes');
   assert.equal(at(0).length, 1, 'a different value fails');
   assert.equal(at(undefined).length, 1, 'an absent value fails');
@@ -19,12 +20,26 @@ test('swirl check: a missing or nonfinite effective swirl is a mismatch, not a p
   assert.match(at(undefined)[0], /swirl requested 0\.6, effective undefined/);
 });
 
+test('heat release gain is checked against the receipt: absent, refused or different fails', () => {
+  const arm = { set: [['volume-heat-release-expansion', '1.5']] };
+  assert.deepEqual(effectiveMismatches(arm, { heatRelease: { effective: { admitted: true, expansion: 1.5, reason: null } } }, null), []);
+  assert.equal(effectiveMismatches(arm, {}, null).length, 1, 'no receipt fails');
+  assert.match(effectiveMismatches(arm, { heatRelease: { effective: { admitted: false, expansion: 0, reason: 'heat-release-requires-converged-open-top-pressure-solver' } } }, null)[0], /not admitted/);
+  assert.equal(effectiveMismatches(arm, { heatRelease: { effective: { admitted: true, expansion: 1, reason: null } } }, null).length, 1, 'a different gain fails');
+  // The zero-gain arm is the control: an active expansion receipt must fail it (review HR-01).
+  const off = { set: [['volume-heat-release-expansion', '0']] };
+  assert.deepEqual(effectiveMismatches(off, { heatRelease: { effective: { admitted: false, expansion: 0, reason: 'heat-release-expansion-is-zero' } } }, null), [], 'off with a refused-zero receipt passes');
+  assert.equal(effectiveMismatches(off, { heatRelease: { effective: { admitted: true, expansion: 1, reason: null } } }, null).length, 1, 'requested off must reject an active gain-1 receipt');
+  assert.equal(effectiveMismatches(off, { heatRelease: { effective: { admitted: false, expansion: 0.4, reason: null } } }, null).length, 1, 'requested off must reject a nonzero effective gain even when not admitted');
+  assert.equal(effectiveMismatches({ set: [['volume-heat-release-expansion', 'abc']] }, { heatRelease: { effective: { admitted: false, expansion: 0, reason: 'heat-release-expansion-is-zero' } } }, null).length, 1, 'a non-numeric request is a mismatch on its own, not a pass');
+});
+
 test('slice-3 inlet controls are checked against the receipt and fail when absent', () => {
   const arm = { set: [['volume-emitter-inlet-turbulence', '0.4'], ['volume-emitter-puff-period', '3'], ['volume-emitter-line-weight', '1.5']] };
-  const good = { inflowBoundary: { effective: { pattern: { lineWeight: 1.5 }, inletDynamics: { turbulence: 0.4, puffPeriod: 3 } } } };
+  const good = { inflowBoundary: { effective: { admitted: true, pattern: { lineWeight: 1.5 }, inletDynamics: { turbulence: 0.4, puffPeriod: 3 } } } };
   assert.deepEqual(effectiveMismatches(arm, good, null), []);
-  assert.equal(effectiveMismatches(arm, { inflowBoundary: { effective: { pattern: {}, inletDynamics: { turbulence: 0.4 } } } }, null).length, 2, 'missing line weight and puff period fail');
-  assert.equal(effectiveMismatches(arm, { inflowBoundary: { effective: { pattern: { lineWeight: 1.5 }, inletDynamics: { turbulence: 0, puffPeriod: 3 } } } }, null).length, 1, 'a turbulence that did not take effect fails');
+  assert.equal(effectiveMismatches(arm, { inflowBoundary: { effective: { admitted: true, pattern: {}, inletDynamics: { turbulence: 0.4 } } } }, null).length, 2, 'missing line weight and puff period fail');
+  assert.equal(effectiveMismatches(arm, { inflowBoundary: { effective: { admitted: true, pattern: { lineWeight: 1.5 }, inletDynamics: { turbulence: 0, puffPeriod: 3 } } } }, null).length, 1, 'a turbulence that did not take effect fails');
 });
 
 test('confinement epsilon faults reach the checks through the fault argument, not a module variable', () => {
@@ -161,4 +176,37 @@ test('capture: devtools discovery waits for a page target and names its absence'
   assert.match(capture, /page = pages\?\.find\(p => p\.type === 'page'\);\s*\n\s*if \(!page\) await sleep\(100\);/, 'the page target is looked up inside the discovery loop and polled until present');
   assert.match(capture, /if \(!page\) fail\('browser-launch', `devtools endpoint on port \$\{port\} \(pid \$\{chrome\.pid\}\) never listed a page target/, 'absence of a page target is a named browser-launch failure');
   assert.doesNotMatch(capture, /const page = pages\.find\(p => p\.type === 'page'\); ws = new WebSocket/, 'the socket is never opened from an unchecked page lookup');
+});
+
+// An arm is name[,control=value,...]. A name carrying '=' or ':' is a control list
+// that the comma grammar would swallow silently (the run then reports the saved
+// basin under the arm's label), so the parser refuses it.
+test('arm parsing refuses a name that hides controls', async () => {
+  const { parseArms } = await import('../volume-arm-capture-checks.mjs');
+  assert.deepEqual(parseArms('saved;legacy,volume-pressure-solver=legacy'), [
+    { name: 'saved', set: [] },
+    { name: 'legacy', set: [['volume-pressure-solver', 'legacy']] },
+  ]);
+  assert.throws(() => parseArms('legacy-solver:volume-pressure-solver=legacy'), /arm name "legacy-solver:volume-pressure-solver=legacy" contains ':' or '='/);
+  assert.throws(() => parseArms('x,volume-wind-strength'), /control "volume-wind-strength" in arm "x" has no '='/);
+  assert.throws(() => parseArms('x;;y'), /empty arm/);
+});
+
+// Review LS-02: an inflow-dependent arm (aperture pattern, swirl, the inlet
+// controls) is evidence only while the inflow is admitted. The refused state
+// still carries the default pattern and zero values, so a matching name or a
+// matching zero must not pass.
+test('inflow-dependent arms require an admitted inflow, not just a matching field', () => {
+  const admitted = { inflowBoundary: { effective: { admitted: true, reason: null, pattern: { kind: 'shape', lineWeight: 1, jetJitter: 0 }, swirl: 0, inletDynamics: { turbulence: 0 } } } };
+  const refused = { inflowBoundary: { effective: { admitted: false, reason: 'inflow-boundary-requires-converged-open-top-pressure-solver', mode: 'off', pattern: { kind: 'shape', lineWeight: 1, jetJitter: 0 }, swirl: 0, inletDynamics: { turbulence: 0 } } } };
+  const pattern = { set: [['volume-emitter-aperture-pattern', 'shape']] };
+  assert.deepEqual(effectiveMismatches(pattern, admitted, null), []);
+  assert.match(effectiveMismatches(pattern, refused, null).join(';'), /aperture pattern requested shape but the inflow is not admitted \(inflow-boundary-requires-converged-open-top-pressure-solver\)/);
+  assert.equal(effectiveMismatches(pattern, {}, null).length, 1, 'no receipt fails');
+  const swirl = { set: [['volume-emitter-swirl', '0']] };
+  assert.deepEqual(effectiveMismatches(swirl, admitted, null), []);
+  assert.equal(effectiveMismatches(swirl, refused, null).length, 1, 'a matching zero swirl on a refused inflow is not evidence');
+  const turbulence = { set: [['volume-emitter-inlet-turbulence', '0']] };
+  assert.deepEqual(effectiveMismatches(turbulence, admitted, null), []);
+  assert.equal(effectiveMismatches(turbulence, refused, null).length, 1, 'a matching zero turbulence on a refused inflow is not evidence');
 });

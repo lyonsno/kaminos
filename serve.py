@@ -3438,6 +3438,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("X-Content-Type-Options", "nosniff")
+        # Every response is uncacheable: a module kept heuristically fresh by
+        # the browser across a plain reload has already broken the operator
+        # route once (scene-placement-tools.mjs without addHistoryScope).
+        self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
     def log_message(self, format, *args):
