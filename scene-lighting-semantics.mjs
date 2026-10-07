@@ -1,3 +1,11 @@
+import {resolveSceneGISettings} from './scene-gi-settings.mjs';
+
+export function resolveProductGISettings(value={},diagnostics=false) {
+  const next=resolveSceneGISettings(value);
+  if(!diagnostics)next.mode='combined';
+  return next;
+}
+
 export function resolveSceneCameraSettings(value={}) {
   const next={exposureEV:0,whiteBalanceKelvin:6504,highlightKnee:.6};
   for(const key of Object.keys(next))if(Object.hasOwn(value,key))next[key]=value[key];

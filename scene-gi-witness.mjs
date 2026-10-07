@@ -38,6 +38,18 @@ try {
     report.phase='product-controls';await save();
     await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
     await page.evaluate(()=>window.kaminosAuthoringParameters.set('@scene-gi',{mode:'combined'}));
+    report.giValidation=await page.evaluate(()=>{
+      const api=window.kaminosAuthoringParameters,edits=window.kaminosSceneEdits;
+      const before=api.read('@scene-gi'),history=edits.state().undoCount,attempts=[];
+      for(const mode of ['unsupported',17,null]) {
+        let error=null;try{api.set('@scene-gi',{mode});}catch(e){error=e.message;}
+        attempts.push({mode,error,state:api.read('@scene-gi'),history:edits.state().undoCount});
+      }
+      api.set('@scene-gi',{mode:'gtao'});const legacy=api.read('@scene-gi');
+      api.set('@scene-gi',{});return {before,history,attempts,legacy,absent:api.read('@scene-gi')};
+    });
+    for(const attempt of report.giValidation.attempts){assert.match(attempt.error,/Invalid/);assert.deepEqual(attempt.state,report.giValidation.before);assert.equal(attempt.history,report.giValidation.history);}
+    assert.equal(report.giValidation.legacy.mode,'combined');assert.equal(report.giValidation.absent.mode,'combined');
     for(const id of ['scene-gi-mode','rendering-angular-pattern','rendering-smoke-solver','rendering-surface-scattering','rendering-retain-comparisons','rendering-angular-swap','rendering-light-mode','rendering-match-flame-camera','exposure-slider'])assert.equal(await page.locator('#'+id).isVisible(),false,`${id} remains on normal authoring surface`);
     const settle=async()=>{const frame=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);await page.waitForFunction(f=>window.__kaminosVolumePrototype.debugState().frameCount>f+2,frame,{timeout:0});};
     const sourceHash=async()=>createHash('sha256').update(JSON.stringify(await page.evaluate(async()=> (await window.__kaminosVolumePrototype.sampleSceneVolumeSource()).values))).digest('hex');
@@ -57,9 +69,12 @@ try {
     await page.evaluate(()=>{window.selectSceneField('flame-field');window.kaminosWorkspace.setContext('object');});
     await page.locator('#selected-smoke-illumination-trim').click();await page.locator('#selected-smoke-illumination-trim').fill('2');await page.locator('#selected-smoke-illumination-trim').blur();await settle();
     assert.equal(await page.locator('#smoke-illumination-trim').inputValue(),'2');
-    await page.locator('#selected-flame-appearance-trim').click();await page.locator('#selected-flame-appearance-trim').fill('1');await page.locator('#selected-flame-appearance-trim').blur();await settle();
+    const trimHistory=await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount);
+    await page.locator('#selected-flame-appearance-trim').click();await page.locator('#selected-flame-appearance-trim').fill('.25');await page.locator('#selected-flame-appearance-trim').blur();await settle();
+    assert.equal(await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),trimHistory+1);
     report.appearance=await page.evaluate(()=>({settings:window.kaminosAuthoringParameters.read('@scene-appearance'),volume:window.__kaminosVolumePrototype.debugState().appearanceTrims}));
-    assert.deepEqual(report.appearance.settings,{flameStops:1,smokeStops:2});assert.equal(report.appearance.volume.effective,true);
+    assert.deepEqual(report.appearance.settings,{flameStops:.25,smokeStops:2});assert.equal(report.appearance.volume.effective,true);
+    assert.equal(report.appearance.volume.flameStops,.25);
     report.appearanceSource=await sourceHash();assert.equal(report.appearanceSource,report.sourceBefore,'presentation trims changed emitted source');
     const opacityAfter=await page.evaluate(now=>window.__kaminosVolumePrototype.sampleFrame({advanceSim:false,includeRgba:true,now}),sampleNow);
     await fs.writeFile(`${out}/appearance-after-frame.json`,JSON.stringify(opacityAfter));assert.ok(opacityAfter.ok);
@@ -73,7 +88,8 @@ try {
     report.appearancePixels={alphaChanged,rgbChanged,partialAlphaPixels,width:opacityBefore.image.width,height:opacityBefore.image.height};assert.ok(partialAlphaPixels>0,'opaque output cannot prove opacity preservation');assert.equal(alphaChanged,0,'appearance trims changed visible opacity');assert.ok(rgbChanged>0,'appearance trims did not change visible radiance');
     await page.screenshot({path:`${out}/flame-appearance.png`});
     await page.evaluate(()=>window.kaminosSceneEdits.undo());assert.equal(await page.locator('#flame-appearance-trim').inputValue(),'0');
-    await page.evaluate(()=>window.kaminosSceneEdits.redo());assert.equal(await page.locator('#flame-appearance-trim').inputValue(),'1');
+    await page.evaluate(()=>window.kaminosSceneEdits.redo());assert.equal(Number(await page.locator('#flame-appearance-trim').inputValue()),.25);
+    report.decimalHistory={before:trimHistory,after:await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),undo:0,redo:.25};
     report.transport=await page.evaluate(()=>({settings:window.kaminosAuthoringParameters.read('@scene-transport'),runtime:window.__kaminosSceneRadiance.debugState()}));
     assert.equal(report.transport.runtime.frame.angularPattern,'source');assert.equal(report.transport.runtime.smokeMode,'distributed');assert.equal(report.transport.runtime.surfaceScattering,true);
     await page.evaluate(()=>document.getElementById('composition-label').value='Product lighting controls witness');
@@ -87,6 +103,31 @@ try {
     await page.evaluate(()=>{window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
     await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();await page.screenshot({path:`${out}/reopened.png`});
     await page.setViewportSize({width:800,height:700});await page.waitForTimeout(500);await page.screenshot({path:`${out}/compact.png`});
+    report.restoreValidation=[];
+    for(const mode of ['unsupported',17,null,'gtao',undefined]) {
+      const data=structuredClone(report.saved.document);if(mode===undefined)delete data.postprocessing.sceneGI.mode;else data.postprocessing.sceneGI.mode=mode;
+      const prior=await page.evaluate(()=>({gi:window.kaminosAuthoringParameters.read('@scene-gi'),history:window.kaminosSceneEdits.state().undoCount,objects:window.kaminosSceneObjectDebugState().map(o=>o.id)}));
+      await page.evaluate(()=>document.getElementById('info-bar').textContent='');
+      await page.locator('#scene-file-input').setInputFiles({name:'gi-validation.kaminos.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(data))});
+      const invalid=!['gtao',undefined].includes(mode);
+      await page.waitForFunction(bad=>{const text=document.getElementById('info-bar').textContent;return bad?text==='Invalid scene format':text.startsWith('Scene loaded:');},invalid,{timeout:0});
+      const after=await page.evaluate(()=>({gi:window.kaminosAuthoringParameters.read('@scene-gi'),history:window.kaminosSceneEdits.state().undoCount,objects:window.kaminosSceneObjectDebugState().map(o=>o.id)}));
+      report.restoreValidation.push({mode:mode===undefined?'absent':mode,invalid,prior,after});
+      if(invalid)assert.deepEqual(after,prior);else assert.equal(after.gi.mode,'combined');
+      await save();
+    }
+    report.phase='vacuum';await save();
+    await page.evaluate(()=>{
+      window.__kaminosVolumePrototype.setSimulationPaused(true);
+      for(const id of ['volume-physical-thermal','volume-physical-clean','volume-physical-smoke-extinction'])window.kaminosAuthoringParameters.set('@parameter:'+id,{value:0});
+      window.kaminosAuthoringParameters.set('@scene-camera',{exposureEV:8});
+    });await settle();
+    const vacuumSource=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSceneVolumeSource());
+    await fs.writeFile(`${out}/vacuum-source.json`,JSON.stringify(vacuumSource));assert.ok(vacuumSource.ok);assert.ok(vacuumSource.values.length>0);assert.ok(vacuumSource.values.every(v=>v===0),'vacuum input contains emission or extinction');
+    const vacuum=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleFrame({advanceSim:false,includeRgba:true,now:performance.now()}));
+    await fs.writeFile(`${out}/vacuum-frame.json`,JSON.stringify(vacuum));assert.ok(vacuum.ok);assert.equal(vacuum.image.rgba.length,vacuum.image.width*vacuum.image.height*4);
+    report.vacuum={cameraEV:8,sourceComponents:vacuumSource.values.length,pixels:vacuum.image.width*vacuum.image.height,nonzeroAlpha:vacuum.image.rgba.filter((v,i)=>i%4===3&&v!==0).length};
+    assert.equal(report.vacuum.nonzeroAlpha,0,'zero-source volume darkens the scene');
   } else if(operation==='--light-coupling') {
     report.phase='light-coupling';report.coupling=[];await save();
     await page.selectOption('#scene-gi-mode','combined');await page.selectOption('#scene-gi-view','gi');

@@ -7141,7 +7141,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   var t = startT + jitter;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
-  var untrimmedEmissiveColor=color;
+  var untrimmedEmissiveColor=vec3<f32>(0.0);
   if (u.physical_fire.x > 0.5) { color = vec3<f32>(0.0); }
   var structuralATransmittance = 1.0;
   var structuralAColor = vec3<f32>(0.004, 0.005, 0.006);
