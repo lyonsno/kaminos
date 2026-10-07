@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import * as evidence from '../structural-material-solid-resident-evidence.mjs';
+assert.ok(evidence.retainMaterialProbe,'Interrupted native work must retain the last received probe signal');
+const report={},source={requestedUrl:'http://127.0.0.1:1/',path:'/caller/signals/first.json',sha256:'signal-one'};
+const probe={route:'kaminos.material-probe.native.v0',url:source.requestedUrl,runId:'run-a',status:'running',phase:'resident',progress:{sequence:3,phase:'graph-initialize'},results:[{unverified:'raw signal'}]};
+assert.equal(evidence.retainMaterialProbe(report,probe,source),true);assert.equal(report.observed.progress.sequence,3);assert.equal(report.probeSignals.length,1);
+assert.equal(evidence.retainMaterialProbe(report,probe,source),false);
+assert.equal(evidence.retainMaterialProbe(report,{...probe,extra:'changed without advancing sequence'},{...source,path:'/caller/signals/changed.json',sha256:'signal-two'}),true,'Changed raw evidence must not be discarded because its progress counter stayed unchanged');
+assert.throws(()=>evidence.retainMaterialProbe(report,{...probe,runId:'run-b'},{...source,sha256:'signal-three'}),/run identity/);
+assert.equal(report.lastRawSignal.sha256,'signal-three','Disputed signal must remain locatable even when rejected');
+assert.throws(()=>evidence.retainMaterialProbe({}, {...probe,url:'http://wrong-route/'},source),/route/);
+assert.throws(()=>evidence.retainMaterialProbe({}, {...probe,status:'complete-looking'},source),/status/);
+console.log('Native probe signals persist before closure; wrong routes and reset identity fail visibly');

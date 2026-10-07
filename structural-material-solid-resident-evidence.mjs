@@ -1,5 +1,18 @@
 import { graphTetrahedron,microelasticBonds } from './structural-material-solid-reference.mjs';
 
+export function retainMaterialProbe(report,probe,{requestedUrl,path,sha256}){
+ report.lastRawSignal={path,sha256};report.probeSignals??=[];
+ if(report.probeSignals.some(signal=>signal.sha256===sha256))return false;
+ report.probeSignals.push({path,sha256,runId:probe?.runId,status:probe?.status,progress:structuredClone(probe?.progress)});
+ if(probe?.route!=='kaminos.material-probe.native.v0'||probe.url!==requestedUrl)throw new Error('Native probe route differs from requested page');
+ if(!['running','passed','failed'].includes(probe.status))throw new Error('Native probe status is invalid');
+ if(typeof probe.runId!=='string'||!probe.runId||!Number.isInteger(probe.progress?.sequence)||probe.progress.sequence<0)throw new Error('Native probe run identity/progress required');
+ if(report.probeRunId&&report.probeRunId!==probe.runId)throw new Error('Native probe run identity changed during exercise');
+ report.probeRunId=probe.runId;report.observed=structuredClone(probe);
+ report.lastTrustworthyEvidence=`Retained browser signal ${probe.progress.sequence}: ${probe.progress.phase}; material predicates not yet admitted`;
+ return true;
+}
+
 export function inspectResidentCoverage(models,results){
  const errors=[];if(!Array.isArray(results)||results.length!==models.length)return['Resident candidate coverage incomplete'];
  for(const model of models){const matches=results.filter(r=>r.kind===model.kind);if(matches.length!==1){errors.push(`Resident ${model.kind} missing or duplicated`);continue;}
