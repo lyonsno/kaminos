@@ -104,8 +104,8 @@ export function assertSourceGuideEvidence(signal,requested){
   for(const [name,values]of [['primary',primary],['front',front],['back',back],['smoke',smoke]])if(!Array.isArray(values)||values.length!==sizes[name]*4||!values.every(Number.isFinite))throw Error('missing/partial/nonfinite '+name);
   for(let i=0;i<frame.surfaceReceivers;i++)if(front[i*4+3]!==1||back[i*4+3]!==1)throw Error('unwritten active surface receiver');
   for(let i=0;i<sizes.smoke;i++)if(smoke[i*4+3]!==1)throw Error('unwritten smoke receiver');
-  const hasRGB=values=>values.some((v,i)=>i%4!==3&&v>0);
-  if(!hasRGB(primary)||!hasRGB(front)&&!hasRGB(back)||!front.some((v,i)=>i%4===3&&v===1))throw Error('blank/unwritten source-guide evidence');
+  const hasRGB=(values,count=values.length/4)=>{for(let i=0;i<count;i++)for(let c=0;c<3;c++)if(values[i*4+c]>0)return true;return false;};
+  if(!hasRGB(primary)||!hasRGB(front,frame.surfaceReceivers)&&!hasRGB(back,frame.surfaceReceivers))throw Error('blank active source-guide evidence');
   if(!Array.isArray(errors)||errors.length||!Array.isArray(httpFailures)||httpFailures.length)throw Error('source-guide capture contains renderer/HTTP errors');
   return signal;
 }
