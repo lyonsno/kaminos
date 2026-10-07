@@ -6,16 +6,19 @@ import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { materialConformanceCases,inspectMaterialEvaluation } from './structural-material-solid-conformance.mjs';
+import { prepareSolidTopology,packSolidTopology } from './structural-material-solid-topology.mjs';
+import { inspectResidentEvaluation } from './structural-material-solid-resident-evidence.mjs';
 
-const [outputInput,executableInput]=process.argv.slice(2);
+const [outputInput,executableInput,exercise='energy']=process.argv.slice(2);
 if(!outputInput)throw new Error('usage: node structural-material-solid-native.mjs OUTPUT.json INDEPENDENT_BROWSER');
 const root=path.dirname(fileURLToPath(import.meta.url)),output=path.resolve(outputInput),hash=b=>createHash('sha256').update(b).digest('hex');
-const report={status:'running',phase:'preflight',root,argv:process.argv,sources:{},errors:[],checks:[],lastTrustworthyEvidence:'invocation',claim:'Prescribed-position material energy/force conformance only, not dynamics or crack surfaces'};
+const report={status:'running',phase:'preflight',root,argv:process.argv,exercise,sources:{},errors:[],checks:[],lastTrustworthyEvidence:'invocation',claim:exercise==='resident'?'Tiny resident load/damage controls, not stress-generated crack surfaces':'Prescribed-position material energy/force conformance only, not dynamics or crack surfaces'};
 fs.mkdirSync(path.dirname(output),{recursive:true});const save=()=>fs.writeFileSync(output,JSON.stringify(report,null,2));save();
 let server,child,socket,stderr='',nextId=0;const pending=new Map(),sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++nextId;pending.set(id,{resolve,reject});socket.send(JSON.stringify({id,method,params}));});
 const evaluate=async expression=>{const result=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(result.exceptionDetails)throw new Error(JSON.stringify(result.exceptionDetails));return result.result.value;};
 const probe=`import {evaluateSolidMaterial} from './structural-material-solid-kernels.js';
+import {createSolidResident} from './structural-material-solid-resident.js';
 window.__solidProbe={status:'running',phase:'adapter',errors:[]};
 try{
  const adapter=await navigator.gpu?.requestAdapter();if(!adapter||adapter.info.isFallbackAdapter)throw new Error('Native nonfallback WebGPU adapter required');
@@ -27,26 +30,40 @@ try{
  const inverted={kind:'graph',positions:[[0,0,0],[-1,0,0],[0,1,0],[0,0,1]],indices:[[0,1,2,3]],parameters:groups[0].parameters.slice(0,1),coefficients:groups[0].coefficients.slice(0,1)};
  p.inversion={rejected:false};try{await evaluateSolidMaterial(device,inverted);}catch(error){p.inversion={rejected:true,message:error.message};}
  inverted.coefficients=[Array.from({length:6},()=>Array(6).fill(0))];p.disconnected=await evaluateSolidMaterial(device,inverted);
+ const resident=await(await fetch('/resident-inputs.json')).json();p.resident=[];
+ for(const input of resident){
+  const arrays=Object.fromEntries(Object.entries(input.arrays).map(([name,values])=>[name,['state','parameters','coefficients'].includes(name)?Float32Array.from(values):Uint32Array.from(values)]));
+  const model=await createSolidResident(device,input.descriptor,arrays),stages=[];const options={timeStep:1/60,iterations:12,lineSearchTrials:8,gravity:0,damping:.98,floor:-10};
+  stages.push({name:'rest',state:await model.read()});await model.pin([0,2,3]);await model.grip(1,[1.05,.02,.03],100000);
+  for(let step=0;step<8;step++)await model.step(options);stages.push({name:'loaded',state:await model.read()});
+  await model.damagePlane([1,0,0],.5);stages.push({name:'damaged',state:await model.read()});
+  for(let step=0;step<4;step++)await model.step(options);stages.push({name:'post-damage',state:await model.read()});
+  await model.release();await model.step(options);stages.push({name:'released',state:await model.read()});model.dispose();p.resident.push({kind:input.descriptor.kind,stages});
+ }
  await device.queue.onSubmittedWorkDone();p.phase='complete';p.status=p.errors.length?'failed':'passed';device.destroy();
 }catch(error){window.__solidProbe.status='failed';window.__solidProbe.failure={message:error.message,stack:error.stack};}
 `;
 try{
+ if(!['energy','resident'].includes(exercise))throw new Error('Unknown material exercise');
  const executable=fs.realpathSync(executableInput);if(executable.includes('/Google Chrome.app/')||!/chrome-headless-shell$|\/Chromium$|Google Chrome for Testing$/.test(executable))throw new Error('Independent browser required');
  report.browser={executable,version:execFileSync(executable,['--version'],{encoding:'utf8'}).trim()};
  report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
- for(const name of ['structural-material-solid-native.mjs','structural-material-solid-kernels.js','structural-material-solid-reference.mjs','structural-material-solid-conformance.mjs'])report.sources[name]=hash(fs.readFileSync(path.join(root,name)));
+ for(const name of ['structural-material-solid-native.mjs','structural-material-solid-kernels.js','structural-material-solid-reference.mjs','structural-material-solid-conformance.mjs',...(exercise==='resident'?['structural-material-solid-resident.js','structural-material-solid-topology.mjs','structural-material-solid-resident-evidence.mjs']:[])])report.sources[name]=hash(fs.readFileSync(path.join(root,name)));
  const cases=materialConformanceCases(),groups=['graph','pmb'].map(kind=>{
   const group={kind,positions:[],indices:[],parameters:[],coefficients:[]};
   for(const test of cases.filter(c=>c.input.kind===kind)){const offset=group.positions.length;group.positions.push(...test.input.positions);group.indices.push(...test.input.indices.map(ids=>ids.map((v,i)=>i<(kind==='graph'?4:2)?v+offset:v)));group.parameters.push(...test.input.parameters);if(kind==='graph')group.coefficients.push(...test.input.coefficients);}
   return group;
  });
- report.cases=cases;report.inputGroups=groups;save();
+ const residentModels=exercise==='resident'?['graph','pmb'].map(kind=>prepareSolidTopology({status:'passed',route:'ftetwild-cpu-wildmeshing-0.4.1',positions:[[0,0,0],[1,0,0],[0,1,0],[0,0,1]],tetrahedra:[[0,1,2,3]],volume:1/6},{kind,young:1000,poisson:.25,density:1000,horizon:1.5})):[];
+ const residentInputs=residentModels.map(model=>({descriptor:{kind:model.kind,points:model.positions.length,elements:model.elements.length,bonds:model.bonds.length,colorCount:model.colorCount},arrays:Object.fromEntries(Object.entries(packSolidTopology(model)).map(([name,array])=>[name,Array.from(array)]))}));
+ report.cases=cases;report.inputGroups=groups;report.residentInputs=residentInputs;save();
  server=createServer((req,res)=>{
   const route=new URL(req.url,'http://localhost').pathname;res.setHeader('cache-control','no-store');
   if(route==='/'){res.setHeader('content-type','text/html');res.end('<!doctype html><title>Kaminos Material Numerical Probe</title><script type="module" src="/probe.js"></script>');return;}
   if(route==='/probe.js'){res.setHeader('content-type','text/javascript');res.end(probe);return;}
   if(route==='/inputs.json'){res.setHeader('content-type','application/json');res.end(JSON.stringify(groups));return;}
-  if(route==='/structural-material-solid-kernels.js'){res.setHeader('content-type','text/javascript');res.end(fs.readFileSync(path.join(root,route.slice(1))));return;}
+  if(route==='/resident-inputs.json'){res.setHeader('content-type','application/json');res.end(JSON.stringify(residentInputs));return;}
+  if(['/structural-material-solid-kernels.js','/structural-material-solid-resident.js'].includes(route)){res.setHeader('content-type','text/javascript');res.end(fs.readFileSync(path.join(root,route.slice(1))));return;}
   res.writeHead(404).end();
  });
  await new Promise(r=>server.listen(0,'127.0.0.1',r));report.requestedUrl=`http://127.0.0.1:${server.address().port}/`;
@@ -67,6 +84,12 @@ try{
   if(offset!==result.values.length)throw new Error('Unexpected or partial GPU output');
  }
  report.checks.push({name:'live inversion rejected without disabling disconnected elements',passed:observed.inversion.rejected&&observed.inversion.message.includes('valid deformation domain')&&observed.disconnected.values.every(v=>v===0)});
+ for(const result of observed.resident){
+  const model=residentModels.find(m=>m.kind===result.kind);for(const stage of result.stages){const errors=inspectResidentEvaluation(model,stage.state);report.checks.push({name:result.kind+'-'+stage.name+'-resident-energy-gradient',passed:errors.length===0,errors});}
+  const states=Object.fromEntries(result.stages.map(s=>[s.name,s.state])),at=(state,i)=>state.state.slice(i*16+4,i*16+7),broken=state=>state.bonds.filter((v,i)=>i%4===2&&v===0).length;
+  report.checks.push({name:result.kind+'-load-comes-from-grip-not-prescribed-field',passed:Math.hypot(...at(states.loaded,1).map((v,a)=>v-model.positions[1][a]))>.01&&[0,2,3].every(i=>at(states.loaded,i).every((v,a)=>v===model.positions[i][a]))});
+  report.checks.push({name:result.kind+'-damage-and-unload-retain-state',passed:broken(states.damaged)===3&&broken(states.released)===3&&states.released.steps===13&&states.released.grip===null&&states.released.damageEpoch===1});
+ }
  for(const [name,digest] of Object.entries(report.sources))if(hash(fs.readFileSync(path.join(root,name)))!==digest)throw new Error(`Source changed during native conformance: ${name}`);
  if(report.checks.some(c=>!c.passed)||report.errors.length)throw new Error('Material conformance predicates failed');
  report.status='passed';report.phase='complete';report.lastTrustworthyEvidence='Native energy/force outputs matched all reference cases';save();

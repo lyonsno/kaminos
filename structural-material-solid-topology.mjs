@@ -1,6 +1,13 @@
 import { graphTetrahedron,microelasticBonds } from './structural-material-solid-reference.mjs';
 
 const edgePairs=[[0,1],[0,2],[0,3],[1,2],[1,3],[2,3]];
+export function packSolidTopology(model){
+  const state=new Float32Array(model.positions.length*16);model.positions.forEach((p,i)=>state.set([...p,model.masses[i],...p,model.colors[i],0,0,0,0,...p,0],i*16));
+  const elementBonds=Uint32Array.from(model.elementBonds.flatMap(edges=>[...edges,0,0]));
+  return{state,elements:Uint32Array.from(model.elements.flat()),bonds:Uint32Array.from(model.bonds.flatMap(([a,b])=>[a,b,1,0])),
+    incidence:Uint32Array.from([...model.incidenceOffsets,...model.incidence.flat()]),parameters:model.parameters,coefficients:model.coefficients,
+    elementBonds:elementBonds.length?elementBonds:new Uint32Array(4)};
+}
 export function prepareSolidTopology(mesh,{kind,young=1000,poisson=.25,density=1000,horizon}={}){
   if(mesh.status!=='passed'||mesh.route!=='ftetwild-cpu-wildmeshing-0.4.1')throw new Error('An admitted exterior-derived tetrahedral interior is required');
   if(!['graph','pmb'].includes(kind)||!(Number.isFinite(density)&&density>0))throw new Error('Explicit material kind and positive density required');
