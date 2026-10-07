@@ -115,3 +115,11 @@ pressure. Unknown contracts and mixed-contract checkpoints fail. Numerical and
 scene-behavior thresholds remain unchanged. An accepted trajectory receipt
 records its selected boundary and establishes those existing checks only,
 not equality with PBF or production-quality water.
+
+The existing `finger-fluid-truth-witness.mjs` reads the expected pressure method
+from the supplied URL, checks effective method/backend/route/boundary at
+initialization and checkpoints, and explicitly passes that boundary to the
+trajectory validator. Its launcher consumes the existing independent-browser
+helper and requires KAMINOS_CHROME. Command-construction tests reject operator
+Chrome and require mock-keychain flags. This caller wiring is checked locally;
+the preview evidence above is the separate inspected live basin route.
