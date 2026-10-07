@@ -2423,13 +2423,14 @@ export function immersedSourceWeights(effective, { grid, gridHeight }) {
   return { cells, sum };
 }
 // Bounded A (section 31): the source's back wall is a solid disc of
-// IMMERSED_BACK_WALL_CELLS cells immediately behind the source slab (along in
-// [-(t/2 + wall), -t/2)), sealed half a cell beyond the radius, written into the
-// scene-solid mask so the solve, the backtrace and the projection treat it as
-// the kiln. The source layer and the wall are disjoint by construction.
+// IMMERSED_BACK_WALL_CELLS cells behind the source slab's antialias skirt
+// (along in [-(t/2 + ½ + wall), -(t/2 + ½)): the weight is zero at |along| ≥
+// t/2 + ½), sealed half a cell beyond the radius, written into the scene-solid
+// mask so the solve, the backtrace and the projection treat it as the kiln.
+// No wall cell carries source weight, so the wall never masks supply (IS-03).
 export const IMMERSED_BACK_WALL_CELLS = 2;
 export function immersedBackWallCells(effective, { grid, gridHeight }) {
-  const c = effective.centreCells, n = effective.direction, r = effective.radiusCells + 0.5, half = effective.thickness / 2;
+  const c = effective.centreCells, n = effective.direction, r = effective.radiusCells + 0.5, half = effective.thickness / 2 + 0.5;
   const depth = effective.backWall?.thicknessCells ?? IMMERSED_BACK_WALL_CELLS;
   const reach = Math.ceil(Math.max(r, half + depth) + 1);
   const cells = [];
@@ -2469,9 +2470,12 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const capFraction = clampFinite(controls.immersedCapFraction, 0.1, 1, 0.5);
   const backWallRequested = clampFinite(controls.immersedBackWall, 0, 1, 0) >= 0.5;
   const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness, speed, fuel, temperature, momentumGain, capFraction, puffFactor, backWall: backWallRequested };
-  const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, puffFactor } });
+  const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, masked: { cells: 0, weight: 0, weightShare: 0 }, puffFactor } });
   if (sourceLaw !== IMMERSED_SOURCE_LAW) return off('source-law-is-not-immersed-source');
   if (pressure.solver !== PRESSURE_SOLVER_CONVERGED) return off('immersed-source-requires-converged-pressure-solver');
+  // A positive supply needs a volume outlet: the closed box has none, so
+  // D(v) = S with ΣS > 0 is unsatisfiable there (review IS-02).
+  if (!pressure.openTop) return off('immersed-source-requires-open-top-pressure-solver');
   if (pressure.dispatch !== PRESSURE_SOLVER_CONVERGED) return off(`immersed-source-requires-pressure-projection-dispatch:${pressure.disabledReason || 'disabled'}`);
   // Normalised domain coordinates → cells (cellToWorld's inverse, GRID on every axis).
   const centreCells = centre.map(v => (v + 1) * grid / 2);
@@ -2482,18 +2486,27 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   // the cap is a fraction of one stored-velocity unit per step. Reported, never silent.
   const capPerCell = capFraction;
   const effective = { admitted: true, reason: null, grid, centreCells, direction, radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS } };
-  // The normaliser is the discrete weight sum, so Σ target = Q exactly on this
-  // grid; the analytic slab volume π r² t is kept for reference (the antialiased
-  // skirt and the cell lattice make the sum run a few percent over it).
+  // The normaliser is the discrete weight sum over the cells the kernel will
+  // actually write (the scene-solid mask skips its cells before the target), so
+  // Σ target over fluid cells = Q exactly on this grid; the analytic slab volume
+  // π r² t is kept for reference (the antialiased skirt and the cell lattice
+  // make the sum run a few percent over it). Masked cells are reported (IS-03).
   const weights = immersedSourceWeights(effective, { grid, gridHeight });
-  effective.normaliser = Math.max(1e-6, weights.sum);
+  const solidCells = options.solidCells ?? null;
+  const fluid = []; let fluidSum = 0, maskedCells = 0, maskedWeight = 0;
+  for (const cell of weights.cells) {
+    if (solidCells && solidCells[cell.x + grid * (cell.y + gridHeight * cell.z)]) { maskedCells += 1; maskedWeight += cell.w; continue; }
+    fluid.push(cell); fluidSum += cell.w;
+  }
+  effective.normaliser = Math.max(1e-6, fluidSum);
   effective.analyticVolume = Math.PI * radiusCells * radiusCells * thickness;
   const normaliser = effective.normaliser;
   let clipped = 0, fluxEffective = 0;
-  for (const cell of weights.cells) { const target = fluxRequested * cell.w / normaliser; if (target > capPerCell) clipped += 1; fluxEffective += Math.min(capPerCell, target); }
+  for (const cell of fluid) { const target = fluxRequested * cell.w / normaliser; if (target > capPerCell) clipped += 1; fluxEffective += Math.min(capPerCell, target); }
   effective.fluxEffectivePredicted = fluxEffective;
-  effective.clipPredicted = { cells: clipped, of: weights.cells.length };
-  effective.footprint = { cells: weights.cells.length, weightSum: weights.sum };
+  effective.clipPredicted = { cells: clipped, of: fluid.length };
+  effective.footprint = { cells: fluid.length, weightSum: fluidSum };
+  effective.masked = { cells: maskedCells, weight: maskedWeight, weightShare: weights.sum > 0 ? maskedWeight / weights.sum : 0 };
   return { identity: IMMERSED_SOURCE_IDENTITY, requested, effective };
 }
 export function immersedSourceUniformValues(config) {
@@ -2505,6 +2518,15 @@ export function immersedSourceUniformValues(config) {
     e.thickness, e.speed, e.fuel, e.temperature,
     e.momentumGain, e.capPerCell, e.fluxRequested / e.normaliser, 0,
   ];
+}
+// CPU model of the immersed momentum relaxation as the kernel completes it
+// (review IS-01): `transported` is the post-fold velocity component, the blend
+// is stepBlend(min(1, w × gain)) = 1 − (1 − b)^dt under the uniform step (dt = 1
+// under legacy), applied once, after the dt fold.
+export function immersedMomentumModel({ transported, target, weight, gain, dt = 1 }) {
+  const b = Math.min(1, weight * gain);
+  const blend = 1 - Math.pow(1 - b, dt);
+  return transported + (target - transported) * blend;
 }
 export function velocityStaggeringUniformValues(config) {
   const admitted = config?.effective?.admitted ? 1 : 0;
@@ -2518,17 +2540,30 @@ export function heatReleaseUniformValues(config) {
 // converged solve targets S = gain × burn rate, so the compact operator's
 // residual is D(v) − S, not D(v). Carried on every readback so a reader never
 // has to infer it from the controls at the time.
-export function pressureResidualMeasurement(heatRelease) {
+// The shader subtracts one combined target: heat release plus the immersed
+// source supply, whichever are admitted (review IS-04). Both are named here.
+export function pressureResidualMeasurement(heatRelease, immersedSource) {
   const e = heatRelease?.effective;
   const admitted = e?.admitted === true;
   const expansion = admitted && Number.isFinite(e.expansion) ? e.expansion : 0;
+  const i = immersedSource?.effective;
+  const immersedAdmitted = i?.admitted === true;
+  const fluxRequested = immersedAdmitted && Number.isFinite(i.fluxRequested) ? i.fluxRequested : 0;
+  const targets = [];
+  if (admitted) targets.push('heat-release');
+  if (immersedAdmitted) targets.push('immersed-source');
+  const terms = [];
+  if (admitted) terms.push(`heat-release expansion target at gain ${expansion}`);
+  if (immersedAdmitted) terms.push(`immersed source supply ${fluxRequested} cells³/step over its slab`);
   return {
-    compact: admitted ? 'divergence-minus-expansion-target' : 'divergence',
+    compact: targets.length ? 'divergence-minus-expansion-target' : 'divergence',
     wide: 'legacy-central-divergence',
+    targets,
     heatRelease: { admitted, expansion },
-    statement: admitted
-      ? `compact = |D(v) − S| on the compact operator, S = heat-release expansion target at gain ${expansion}; a converged solve drives D(v) to S, a partial projection to (1 − gain) × D(v_before) + gain × S`
-      : 'compact = |D(v)| on the compact operator; heat-release expansion off',
+    immersedSource: { admitted: immersedAdmitted, fluxRequested },
+    statement: targets.length
+      ? `compact = |D(v) − S| on the compact operator, S = ${terms.join(' + ')}; a converged solve drives D(v) to S, a partial projection to (1 − gain) × D(v_before) + gain × S`
+      : 'compact = |D(v)| on the compact operator; heat-release expansion and immersed source off',
   };
 }
 
@@ -6698,11 +6733,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
   // Uniform time step: every per-step velocity increment above scales with dt
   // (1.0 under the legacy mode).
-  // Immersed source momentum: the slab relaxes toward the authored velocity.
-  // Velocity-dependent, so it stays on the stored value under the staggered reading.
-  if (immersedWeight > 0.0) {
-    vel = mix(vel, u.immersed_source_c.y * immersedDirection(), stepBlend(min(1.0, immersedWeight * u.immersed_source_d.x)));
-  }
   let forceIncrement = (vel - velTransported) * timeStep;
   if (faceForcesOn()) {
     // The centred additive forces go to the face-force pass; everything else
@@ -6713,6 +6743,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     vel = velTransported + forceIncrement - centredIncrement;
   } else {
     vel = velTransported + forceIncrement;
+  }
+  // Immersed source momentum: the slab relaxes toward the authored velocity.
+  // Applied after the fold so stepBlend carries the step's only time
+  // dependence (review IS-01); velocity-dependent, so it stays on the stored
+  // value under the staggered reading. Under face forces the centred
+  // increment lands on top of the relaxed value in the pass.
+  if (immersedWeight > 0.0) {
+    vel = mix(vel, u.immersed_source_c.y * immersedDirection(), stepBlend(min(1.0, immersedWeight * u.immersed_source_d.x)));
   }
   let smokeFromHeat = heatToSmokeConversion(heat, fuel, p.y);
   let columnSmokeBirth = source * 0.46 + emberRing * 0.13;
@@ -11054,6 +11092,7 @@ export function createKaminosVolumePrototype({
   let pressureResidualCopyStep = 0;
   let pressureResidualCopyFrame = 0;
   let pressureResidualCopyFluidCells = 0;
+  let pressureResidualCopyCells = 0;
   let pressureResidualMapPending = false;
   let pressureResidualMapStartedFrame = 0;
   let pressureResidualMapGeneration = 0;
@@ -15309,7 +15348,7 @@ export function createKaminosVolumePrototype({
     const velocityStaggeringConfig = resolveVelocityStaggeringConfig(controlsSnapshot);
     uniforms.set(velocityStaggeringUniformValues(velocityStaggeringConfig), VELOCITY_STAGGERING_UNIFORM_OFFSET);
     state.velocityStaggering = velocityStaggeringConfig;
-    const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: inflowBoundaryConfig.requested?.inletDynamics?.puffFactor ?? resolveInletDynamicsConfig(controlsSnapshot, inletSignals).effective.puffFactor });
+    const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: inflowBoundaryConfig.requested?.inletDynamics?.puffFactor ?? resolveInletDynamicsConfig(controlsSnapshot, inletSignals).effective.puffFactor, solidCells: sceneSolidCellsCpu });
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
     if (inflowBoundaryConfig.effective.admitted && inflowCoverageTexture) {
@@ -16083,9 +16122,11 @@ export function createKaminosVolumePrototype({
     pressureResidualCopyPending = true;
     pressureResidualCopyStep = state.simStepCount;
     pressureResidualCopyFrame = state.frameCount;
-    pressureResidualCopyFluidCells = gridCellCount(gridSize) - (state.sceneCollision?.solidCellCount ?? 0);
+    // The full grid shape (grid × gridHeight × grid), snapshotted with the copy (IS-06).
+    pressureResidualCopyCells = gridSize * gridHeight * gridSize;
+    pressureResidualCopyFluidCells = pressureResidualCopyCells - (state.sceneCollision?.solidCellCount ?? 0);
     pressureResidualCopySolver = state.pressureSolver?.effective ? { ...state.pressureSolver.effective } : null;
-    pressureResidualCopyMeasurement = pressureResidualMeasurement(state.heatRelease);
+    pressureResidualCopyMeasurement = pressureResidualMeasurement(state.heatRelease, state.immersedSource);
   }
 
   async function resolvePressureResidualProbe() {
@@ -16099,6 +16140,7 @@ export function createKaminosVolumePrototype({
     const step = pressureResidualCopyStep;
     const grid = gridSize;
     const fluidCells = pressureResidualCopyFluidCells;
+    const cells = pressureResidualCopyCells;
     const solver = pressureResidualCopySolver;
     const measurement = pressureResidualCopyMeasurement;
     let timeoutTimer = null;
@@ -16121,7 +16163,6 @@ export function createKaminosVolumePrototype({
       }
       const partials = new Float32Array(buffer.getMappedRange()).slice();
       buffer.unmap();
-      const cells = gridCellCount(grid);
       const reduceOperator = offset => {
         let sumBefore = 0;
         let maxBefore = 0;

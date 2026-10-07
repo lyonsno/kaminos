@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as core from '../volume-core.js';
+import { effectiveMismatches } from '../volume-arm-capture-checks.mjs';
 
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -25,7 +26,7 @@ test('the immersed source resolves from the controls and is admitted only under 
   assert.ok(Math.abs(on.effective.fluxRequested - 0.1 * Math.PI * 6.4 * 6.4) < 1e-9, 'Q = v π r² at puff 1');
   assert.equal(core.resolveImmersedSourceConfig({ ...base, emitterSourceLaw: 'inflow-boundary' }, { grid: 64 }).effective.reason, 'source-law-is-not-immersed-source');
   assert.equal(core.resolveImmersedSourceConfig({ ...base, pressureSolver: 'legacy' }, { grid: 64 }).effective.reason, 'immersed-source-requires-converged-pressure-solver');
-  assert.equal(core.resolveImmersedSourceConfig({ ...base, pressureSolver: 'converged' }, { grid: 64 }).effective.admitted, true, 'closed top is fine: the source needs the target, not the top');
+  assert.equal(core.resolveImmersedSourceConfig({ ...base, pressureSolver: 'converged' }, { grid: 64 }).effective.reason, 'immersed-source-requires-open-top-pressure-solver', 'a positive supply needs the open top as its outlet (IS-02)');
   assert.match(core.resolveImmersedSourceConfig({ ...base, pressureIterations: 0 }, { grid: 64 }).effective.reason, /^immersed-source-requires-pressure-projection-dispatch/);
   const side = core.resolveImmersedSourceConfig({ ...base, immersedYaw: 90, immersedPitch: 0 }, { grid: 64 });
   assert.deepEqual(side.effective.direction.map(v => Number(v.toFixed(6))), [0, 0, 1], 'yaw 90 pitch 0 points along +z');
@@ -158,11 +159,111 @@ test('the back wall: resolved as a toggle, its cells lie strictly behind the sou
   assert.match(refresh, /const backWall = immersedBackWallForState\(\);/);
   assert.match(refresh, /effective: 'emitter-back-wall'/, 'a wall without a kiln is its own mode');
   assert.match(refresh, /composeSolidField\(field\.cells, backWall\.cells/, 'a wall with a kiln is composed into the voxel field');
-  assert.match(source, /pressureResidualCopyFluidCells = gridCellCount\(gridSize\) - \(state\.sceneCollision\?\.solidCellCount \?\? 0\);/, 'fluid-cell count follows any solid mode');
+  assert.match(source, /pressureResidualCopyFluidCells = pressureResidualCopyCells - \(state\.sceneCollision\?\.solidCellCount \?\? 0\);/, 'fluid-cell count follows any solid mode, over the full grid shape');
   // Cockpit and schema.
   assert.match(index, /<input type="range" id="volume-immersed-back-wall" data-volume-settings-param="volume_immersed_back_wall" min="0" max="1" step="1" value="0">/);
   assert.match(index, /immersedBackWall: parseFloat\(document\.getElementById\('volume-immersed-back-wall'\)\.value\)/);
   const control = schema.controls.find(c => c.key === 'volume-immersed-back-wall');
   assert.deepEqual(control, { key: 'volume-immersed-back-wall', param: 'volume_immersed_back_wall', tagName: 'INPUT', type: 'range', additiveDefault: 0, additiveSinceControlCount: 248 });
   assert.equal(schema.controlCount, 248);
+});
+
+// Fresh review at 25431599 (IS-01..06).
+test('IS-01: the momentum relaxation carries the time step once, after the fold', () => {
+  // CPU model of the completed update for an isolated relaxation.
+  for (const [w, dt, expected] of [[1, 0.5, 0.1], [1, 2, 0.1], [0.5, 0.5, 0.029289], [0.5, 2, 0.075], [0.5, 1, 0.05]]) {
+    const v = core.immersedMomentumModel({ transported: 0, target: 0.1, weight: w, gain: 1, dt });
+    assert.ok(Math.abs(v - expected) < 1e-5, `w ${w} dt ${dt}: ${v} vs ${expected}`);
+  }
+  assert.ok(Math.abs(core.immersedMomentumModel({ transported: 0.04, target: 0.1, weight: 1, gain: 0.5, dt: 1 }) - 0.07) < 1e-9, 'partial gain relaxes halfway');
+  const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
+  const foldAt = main.indexOf('let forceIncrement = (vel - velTransported) * timeStep;');
+  const relaxAt = main.indexOf('vel = mix(vel, u.immersed_source_c.y * immersedDirection(), stepBlend(min(1.0, immersedWeight * u.immersed_source_d.x)));');
+  const spongeAt = main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));');
+  assert.ok(foldAt > 0 && relaxAt > 0 && spongeAt > 0);
+  assert.ok(relaxAt > foldAt && relaxAt < spongeAt, 'the relaxation follows the fold (its stepBlend is the only time dependence) and precedes the sponge');
+});
+
+test('IS-02: positive supply needs a volume outlet — the closed-top converged solve is refused', () => {
+  const closed = core.resolveImmersedSourceConfig({ ...base, pressureSolver: 'converged' }, { grid: 64 });
+  assert.equal(closed.effective.admitted, false);
+  assert.equal(closed.effective.reason, 'immersed-source-requires-open-top-pressure-solver');
+  assert.equal(core.resolveImmersedSourceConfig({ ...base, pressureSolver: 'converged-open-top' }, { grid: 64 }).effective.admitted, true);
+  assert.match(index, /immersed — NOT ADMITTED \(\$\{immersed\.effective\.reason\}\); set Pressure solver to converged open top and Projection above 0/);
+});
+
+test('IS-03: supply accounting follows the composed fluid support: the wall sits beyond the antialias skirt and solid cells are excluded from the normaliser', () => {
+  const walled = core.resolveImmersedSourceConfig({ ...base, immersedBackWall: 1 }, { grid: 64 });
+  for (const pitch of [90, 45, 30, 0]) for (const thickness of [1, 1.5, 3]) {
+    const cfg = core.resolveImmersedSourceConfig({ ...base, immersedBackWall: 1, immersedPitch: pitch, immersedThickness: thickness }, { grid: 64 });
+    const weights = core.immersedSourceWeights(cfg.effective, { grid: 64, gridHeight: 128 });
+    const positive = new Set(weights.cells.filter(c => c.w > 0).map(c => `${c.x},${c.y},${c.z}`));
+    const wall = core.immersedBackWallCells(cfg.effective, { grid: 64, gridHeight: 128 });
+    assert.ok(!wall.some(c => positive.has(`${c.x},${c.y},${c.z}`)), `pitch ${pitch} thickness ${thickness}: no wall cell carries any source weight`);
+  }
+  // A solid mask covering part of the slab lowers the normaliser and the effective supply, and the receipt says so.
+  const open = core.resolveImmersedSourceConfig(base, { grid: 64 });
+  const solid = new Uint8Array(64 * 128 * 64);
+  const weights = core.immersedSourceWeights(open.effective, { grid: 64, gridHeight: 128 });
+  const covered = weights.cells.filter(c => c.x + 0.5 < open.effective.centreCells[0]);
+  for (const c of covered) solid[c.x + 64 * (c.y + 128 * c.z)] = 1;
+  const masked = core.resolveImmersedSourceConfig(base, { grid: 64, gridHeight: 128, solidCells: solid });
+  assert.ok(masked.effective.normaliser < open.effective.normaliser, 'the normaliser excludes solid cells');
+  assert.ok(Math.abs(masked.effective.normaliser - (open.effective.normaliser - covered.reduce((s, c) => s + c.w, 0))) < 1e-9);
+  assert.ok(Math.abs(masked.effective.fluxEffectivePredicted - masked.effective.fluxRequested) < 1e-9, 'with the normaliser over fluid cells, Σ target over fluid cells = Q again');
+  assert.equal(masked.effective.masked.cells, covered.length);
+  assert.ok(masked.effective.masked.weightShare > 0.3 && masked.effective.masked.weightShare < 0.7);
+  assert.match(index, /masked \$\{\(immersed\.effective\.masked\.weightShare \* 100\)\.toFixed\(0\)\}%/, 'the receipt names the masked share');
+  assert.match(source, /resolveImmersedSourceConfig\(controlsSnapshot, \{ grid: gridSize, gridHeight, puffFactor: [^}]*, solidCells: sceneSolidCellsCpu \}\)/, 'the pack passes the current solid mask');
+});
+
+test('IS-04: the residual measurement names the combined target (heat release + immersed source), snapshotted at copy time', () => {
+  const hrOn = { effective: { admitted: true, expansion: 1 } }, hrOff = { effective: { admitted: false, expansion: 0 } };
+  const imOn = { effective: { admitted: true, fluxRequested: 12.9 } }, imOff = { effective: { admitted: false, fluxRequested: 0 } };
+  assert.equal(core.pressureResidualMeasurement(hrOff, imOff).compact, 'divergence');
+  const both = core.pressureResidualMeasurement(hrOn, imOn);
+  assert.equal(both.compact, 'divergence-minus-expansion-target');
+  assert.deepEqual(both.targets, ['heat-release', 'immersed-source']);
+  assert.match(both.statement, /heat-release expansion target at gain 1/);
+  assert.match(both.statement, /immersed source supply 12\.9/);
+  assert.deepEqual(core.pressureResidualMeasurement(hrOff, imOn).targets, ['immersed-source']);
+  assert.equal(core.pressureResidualMeasurement(hrOff, imOn).compact, 'divergence-minus-expansion-target');
+  assert.deepEqual(core.pressureResidualMeasurement(hrOn, imOff).targets, ['heat-release']);
+  assert.match(source, /pressureResidualCopyMeasurement = pressureResidualMeasurement\(state\.heatRelease, state\.immersedSource\);/, 'both contexts snapshotted at copy time');
+});
+
+test('IS-05: the capture compares every immersed control an arm sets against the source receipt', () => {
+  const receipt = { immersedSource: { requested: { sourceLaw: 'immersed-source', speed: 0.1, yaw: 0, pitch: 90, backWall: false, radius: 0.2, centre: [0, -0.5, 0], capFraction: 0.5 }, effective: { admitted: true, reason: null, speed: 0.1, direction: [0, 1, 0], backWall: { requested: false } } } };
+  const ok = (cid, v) => effectiveMismatches({ set: [[cid, v]] }, receipt, null);
+  assert.deepEqual(ok('volume-immersed-speed', '0.1'), []);
+  assert.equal(ok('volume-immersed-speed', '0').length, 1, 'stale speed');
+  assert.equal(ok('volume-immersed-pitch', '0').length, 1, 'stale pitch');
+  assert.deepEqual(ok('volume-immersed-pitch', '90'), []);
+  assert.equal(ok('volume-immersed-back-wall', '1').length, 1, 'stale wall');
+  assert.deepEqual(ok('volume-immersed-back-wall', '0'), []);
+  assert.deepEqual(ok('volume-immersed-centre-x', '0'), []);
+  assert.equal(ok('volume-immersed-centre-x', '0.1').length, 1, 'stale centre');
+  assert.equal(effectiveMismatches({ set: [['volume-immersed-speed', '0.1']] }, {}, null).length, 1, 'no receipt fails');
+  assert.equal(effectiveMismatches({ set: [['volume-immersed-speed', '0.1']] }, { immersedSource: { requested: { speed: 0.1 }, effective: { admitted: false, reason: 'immersed-source-requires-open-top-pressure-solver' } } }, null).length, 1, 'a refused receipt fails a source-dependent arm');
+});
+
+test('IS-06: the residual probe counts the full tall grid, with and without the wall', async () => {
+  const vm = await import('node:vm');
+  const start = source.indexOf('  function finishPressureResidualProbe(');
+  const end = source.indexOf('  function encodePressureProjection(', start);
+  const run = async (solidCellCount) => {
+    let release; const mapped = new Promise(r => { release = r; });
+    const state = { frameCount: 50, simStepCount: 48, heatRelease: { effective: { admitted: false, expansion: 0 } }, immersedSource: { effective: { admitted: false } }, sceneCollision: { solidCellCount }, pressureSolver: { effective: { solver: 'converged', openTop: true } } };
+    const context = { state, gridSize: 4, gridHeight: 8, pressureResidualCopyPending: false, pressureResidualMapPending: false, pressureResidualMapStartedFrame: 0, pressureResidualMapGeneration: 0, pressureResidualWorkgroupCount: 2, pressureResidualCopyStep: 0, pressureResidualCopyFrame: 0, pressureResidualCopyFluidCells: 0, pressureResidualCopyCells: 0, pressureResidualCopyGridHeight: 0, pressureResidualCopySolver: null, pressureResidualCopyMeasurement: null, pressureResidualAfterPipeline: {}, pressureResidualBindGroup: {}, pressureResidualPartialsBuffer: {}, fluidBindGroup: () => ({}), pressureResidualReadbackBuffer: { mapAsync: () => mapped, getMappedRange: () => new Float32Array(2 * 20).buffer, unmap() {} }, GPUMapMode: { READ: 1 }, setTimeout, clearTimeout, Float32Array, performance, Math, Number, Promise, Error, PRESSURE_RESIDUAL_MAP_TIMEOUT_MS: 10000, PRESSURE_RESIDUAL_MAP_TIMEOUT_ERROR: 'synthetic-timeout', PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP: 20, gridCellCount: g => g ** 3, gridHeightForSize: g => g * 2, pressureResidualMeasurement: core.pressureResidualMeasurement, residualProfileFromPartials: core.residualProfileFromPartials };
+    context.encoder = { beginComputePass: () => ({ setPipeline() {}, setBindGroup() {}, dispatchWorkgroups() {}, end() {} }), copyBufferToBuffer() {} };
+    const pending = vm.runInNewContext(source.slice(start, end) + '\nfinishPressureResidualProbe(encoder);\nresolvePressureResidualProbe();', context);
+    release(); await pending;
+    if (!state.pressureSolver.residual) throw new Error(`probe did not publish: ${JSON.stringify(state.pressureSolver)}`);
+    return state.pressureSolver.residual;
+  };
+  const plain = await run(0);
+  assert.equal(plain.cells, 4 * 8 * 4, 'the full tall grid');
+  assert.equal(plain.fluidCells, 4 * 8 * 4);
+  const walled = await run(10);
+  assert.equal(walled.cells, 128); assert.equal(walled.fluidCells, 118); assert.equal(walled.solidCells, 10);
 });

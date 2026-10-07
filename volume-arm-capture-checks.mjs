@@ -59,6 +59,21 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
       if (value === 'inflow-boundary' && end.inflowBoundary?.effective?.admitted !== true) mismatches.push(`inflow-boundary requested but not admitted${end.inflowBoundary?.effective?.reason ? ` (${end.inflowBoundary.effective.reason})` : ''}`);
       if (value === 'immersed-source' && end.immersedSource?.effective?.admitted !== true) mismatches.push(`immersed-source requested but not admitted${end.immersedSource?.effective?.reason ? ` (${end.immersedSource.effective.reason})` : ''}`);
     }
+    // Immersed source controls (review IS-05): a source-dependent arm needs an
+    // admitted receipt, and every control it sets is compared to the receipt's
+    // requested value (the resolver's clamped reading of the control).
+    const immersedField = { 'volume-immersed-centre-x': ['centre', 0], 'volume-immersed-centre-y': ['centre', 1], 'volume-immersed-centre-z': ['centre', 2], 'volume-immersed-yaw': ['yaw'], 'volume-immersed-pitch': ['pitch'], 'volume-immersed-radius': ['radius'], 'volume-immersed-thickness': ['thickness'], 'volume-immersed-speed': ['speed'], 'volume-immersed-fuel': ['fuel'], 'volume-immersed-temperature': ['temperature'], 'volume-immersed-momentum-gain': ['momentumGain'], 'volume-immersed-cap-fraction': ['capFraction'], 'volume-immersed-back-wall': ['backWall'] }[cid];
+    if (immersedField) {
+      const receipt = end.immersedSource;
+      if (receipt?.effective?.admitted !== true) mismatches.push(`${cid} requested ${value} but the immersed source is not admitted (${receipt?.effective?.reason ?? 'no receipt'})`);
+      else if (immersedField[0] === 'backWall') {
+        const wanted = Number(value) >= 0.5;
+        if (receipt.requested?.backWall !== wanted || receipt.effective.backWall?.requested !== wanted) mismatches.push(`${cid} requested ${value}, receipt requested ${receipt.requested?.backWall} / effective ${receipt.effective.backWall?.requested}`);
+      } else {
+        const effective = immersedField.length === 2 ? receipt.requested?.[immersedField[0]]?.[immersedField[1]] : receipt.requested?.[immersedField[0]];
+        if (!Number.isFinite(effective) || Math.abs(effective - Number(value)) > 1e-6) mismatches.push(`${cid} requested ${value}, receipt ${effective}`);
+      }
+    }
     if (cid === 'volume-time-step' && end.timeStep?.mode !== value) mismatches.push(`time step requested ${value}, effective ${end.timeStep?.mode}${end.timeStep?.reason ? ` (${end.timeStep.reason})` : ''}`);
     if (cid === 'volume-confinement') {
       if (end.confinement?.mode !== value) mismatches.push(`confinement requested ${value}, effective ${end.confinement?.mode}`);

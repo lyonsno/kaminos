@@ -83,7 +83,7 @@ test('cockpit: the expansion gain is a control with help, restored from routes, 
 
 test('the residual probe names what it measures once expansion is active (review HR-02)', () => {
   const offMeasure = core.pressureResidualMeasurement({ effective: { admitted: false, expansion: 0, reason: 'heat-release-expansion-is-zero' } });
-  assert.deepEqual(offMeasure, { compact: 'divergence', wide: 'legacy-central-divergence', heatRelease: { admitted: false, expansion: 0 }, statement: 'compact = |D(v)| on the compact operator; heat-release expansion off' });
+  assert.deepEqual(offMeasure, { compact: 'divergence', wide: 'legacy-central-divergence', targets: [], heatRelease: { admitted: false, expansion: 0 }, immersedSource: { admitted: false, fluxRequested: 0 }, statement: 'compact = |D(v)| on the compact operator; heat-release expansion and immersed source off' });
   const onMeasure = core.pressureResidualMeasurement({ effective: { admitted: true, expansion: 1.5, reason: null } });
   assert.equal(onMeasure.compact, 'divergence-minus-expansion-target');
   assert.deepEqual(onMeasure.heatRelease, { admitted: true, expansion: 1.5 });
@@ -93,7 +93,7 @@ test('the residual probe names what it measures once expansion is active (review
   // The readback carries the measurement alongside the numbers, and the capture passes it through.
   const residualBlock = source.slice(source.indexOf("identity: 'pressure-divergence-residual-probe-v1'"), source.indexOf('measuredAtMs:', source.indexOf("identity: 'pressure-divergence-residual-probe-v1'")));
   assert.match(residualBlock, /\n\s+measurement,\n/, 'the readback publishes the copy-time snapshot');
-  assert.match(source, /pressureResidualCopyMeasurement = pressureResidualMeasurement\(state\.heatRelease\);/, 'snapshot taken where the copy is encoded');
+  assert.match(source, /pressureResidualCopyMeasurement = pressureResidualMeasurement\(state\.heatRelease, state\.immersedSource\);/, 'snapshot taken where the copy is encoded, both targets');
   const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
   assert.match(capture, /residualMeasurement: s\.pressureSolver\.residual\.measurement \?\? null/, 'the capture probe carries the measurement');
   assert.match(capture, /residualMeasurement: end\.residual\?\.residualMeasurement \?\? null/, 'the arm report records it');

@@ -22909,8 +22909,8 @@ function refreshVolumeReadout() {
   document.getElementById('volume-immersed-source-state').textContent = !immersed || immersed.requested.sourceLaw !== 'immersed-source'
     ? 'off'
     : (immersed.effective.admitted
-      ? `requested ${immersed.effective.fluxRequested.toFixed(2)} · effective ${immersed.effective.fluxEffectivePredicted.toFixed(2)} cells³/step · ${immersed.effective.footprint.cells} cells${immersed.effective.clipPredicted.cells ? ` · CAP CLIPPING ${immersed.effective.clipPredicted.cells}` : ''} · aim ${immersed.requested.yaw.toFixed(0)}°/${immersed.requested.pitch.toFixed(0)}° · wall ${immersed.effective.backWall.requested ? `${s.sceneCollision?.emitterBackWallCells ?? 0} cells` : 'off'}`
-      : `immersed — NOT ADMITTED (${immersed.effective.reason}); set Pressure solver to converged and Projection above 0`);
+      ? `requested ${immersed.effective.fluxRequested.toFixed(2)} · effective ${immersed.effective.fluxEffectivePredicted.toFixed(2)} cells³/step · ${immersed.effective.footprint.cells} cells${immersed.effective.clipPredicted.cells ? ` · CAP CLIPPING ${immersed.effective.clipPredicted.cells}` : ''}${immersed.effective.masked?.cells ? ` · masked ${(immersed.effective.masked.weightShare * 100).toFixed(0)}% (${immersed.effective.masked.cells} solid cells)` : ''} · aim ${immersed.requested.yaw.toFixed(0)}°/${immersed.requested.pitch.toFixed(0)}° · wall ${immersed.effective.backWall.requested ? `${s.sceneCollision?.emitterBackWallCells ?? 0} cells` : 'off'}`
+      : `immersed — NOT ADMITTED (${immersed.effective.reason}); set Pressure solver to converged open top and Projection above 0`);
   document.getElementById('volume-inflow-boundary-state').textContent = !inflow
     ? 'off'
     : (inflow.effective.admitted
