@@ -30,6 +30,15 @@ assert.deepEqual(inspected.specimens.map(s=>s.state),physics,'Camera inspection 
 assert.equal(inspected.clock.completedSteps,33);
 await assert.rejects(api.camera({position:[NaN,3,7],target:[0,0,0],up:[0,1,0]}),/Camera/);
 assert.deepEqual(api.witness().camera,inspected.camera,'Rejected camera must preserve prior view');
+await assert.rejects(api.camera({position:[5,3,7],target:[0,0,0],up:[0,1,0],near:200}),/Camera/,'Near-only edits must validate against retained far');
+assert.deepEqual(api.witness().camera,inspected.camera,'Invalid effective clipping pair must preserve prior camera');
+assert.equal(api.witness().phase,'interactive','Rejected camera request must not poison the physical runtime');
+const firstCamera=api.camera({position:[5,3,7],target:[0,0,0],up:[0,1,0],far:.05});
+const followingCamera=api.camera({position:[5,3,7],target:[0,0,0],up:[0,1,0],near:.1});
+await firstCamera;const acceptedCamera=api.witness().camera;
+await assert.rejects(followingCamera,/Camera/,'Queued partial edits validate against their actual retained predecessor');
+assert.deepEqual(api.witness().camera,acceptedCamera);
+assert.equal((await api.hold()).clock.presentationDrained,true);
 await api.reset();
 const reset=await api.hold();
 assert.notEqual(reset.clock.runId,first.clock.runId);

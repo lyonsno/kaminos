@@ -75,6 +75,9 @@ try {
       exercise:async({retain})=>{
         const work=shared.experiment({runtime,retain});
         const before=await work.observe('intact');
+        const rejected=await evaluate('window.__stoneThickness.camera({position:[5,3,7],target:[0,0,0],up:[0,1,0],near:200}).then(()=>({rejected:false}),error=>({rejected:true,message:error.message}))');
+        const afterRejected=await runtime.read();
+        check('invalid effective camera lens rejects without changing view or runtime',rejected.rejected&&JSON.stringify(afterRejected.camera)===JSON.stringify(before.observed.camera)&&afterRejected.phase==='interactive'&&!afterRejected.failure,rejected);
         await evaluate('window.__stoneThickness.pull(.24)');await evaluate('window.__stoneThickness.advance(30)');
         const injured=await work.observe('injured');
         check('shared observation retains actual hand-driven damage',injured.observed.specimens.some(s=>s.state.broken>0&&s.visibleCaps>0),injured.observed.specimens.map(s=>s.state.broken));

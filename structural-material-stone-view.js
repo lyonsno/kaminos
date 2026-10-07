@@ -12,7 +12,7 @@ let phase='loading',failure=null,identity=null,prepared=null,preparedSha256=null
 let runId=null,constructionSteps=0,submittedSteps=0,completedSteps=0,presentedSteps=null,drainedSubmission=0;
 const failures=[],offsets=[new THREE.Vector3(-1.6,0,0),new THREE.Vector3(1.6,0,0)],vec=p=>new THREE.Vector3(p.x,p.y,p.z);
 function fail(operation,error){failure={operation,message:error.message??String(error),stack:error.stack};failures.push(failure);paused=true;phase='failed';errorNode.textContent=failure.message;console.error(error);}
-const serial=(name,fn)=>{const work=operations.then(async()=>{busy=true;try{return await fn();}catch(error){fail(name,error);throw error;}finally{busy=false;}});operations=work.catch(()=>{});return work;};
+const serial=(name,fn)=>{const work=operations.then(async()=>{busy=true;try{return await fn();}catch(error){if(name!=='Camera inspection'||error.code!=='stone-camera-invalid')fail(name,error);throw error;}finally{busy=false;}});operations=work.catch(()=>{});return work;};
 try {
   const canvas=document.createElement('canvas');document.querySelector('#viewport').append(canvas);
   const native=await createNativeGpuRenderer(canvas),{renderer,device}=native;identity=native.identity;
@@ -112,11 +112,13 @@ try {
   async function hold(){paused=true;pauseIcon();await serial('Hold',drain);return window.__stoneThickness.witness();}
   async function inspectCamera(view){
     const finite3=p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite);
+    const invalid=()=>Object.assign(new RangeError('Camera requires finite position, target, up and valid lens'),{code:'stone-camera-invalid'});
     if(!finite3(view?.position)||!finite3(view?.target)||!finite3(view?.up)||!view.up.some(v=>v!==0)||view.position.every((v,i)=>v===view.target[i])
       ||(view.fov!==undefined&&!(Number.isFinite(view.fov)&&view.fov>0&&view.fov<180))
       ||(view.near!==undefined&&!(Number.isFinite(view.near)&&view.near>0))
-      ||(view.far!==undefined&&!(Number.isFinite(view.far)&&view.far>(view.near??camera.near))))throw new Error('Camera requires finite position, target, up and valid lens');
-    await serial('Camera inspection',async()=>{camera.position.fromArray(view.position);camera.up.fromArray(view.up);controls.target.fromArray(view.target);
+      ||(view.far!==undefined&&!(Number.isFinite(view.far)&&view.far>0)))throw invalid();
+    await serial('Camera inspection',async()=>{if((view.far??camera.far)<=(view.near??camera.near))throw invalid();
+      camera.position.fromArray(view.position);camera.up.fromArray(view.up);controls.target.fromArray(view.target);
       for(const name of ['fov','near','far'])if(view[name]!==undefined)camera[name]=view[name];camera.updateProjectionMatrix();controls.update();await drain();});return cameraState();
   }
   async function pixels(){draw();const texture=renderer.backend.context.getCurrentTexture(),width=canvas.width,height=canvas.height,bytesPerRow=Math.ceil(width*4/256)*256;
