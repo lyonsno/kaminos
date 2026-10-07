@@ -16165,6 +16165,12 @@ function adoptVolumeRenderScaleSliderValue() {
 // request is kept beside the shape fallback (see the route loader).
 const VOLUME_RETIRED_APERTURE_PATTERNS = ['concentric', 'spiral'];
 
+// The aperture pattern the basin asks for: a kept retired request while the
+// select still shows its shape fallback, otherwise the chosen pattern.
+function volumeAperturePatternValue(select) {
+  return select.value === 'shape' && select.dataset.volumeRetiredPatternRequest ? select.dataset.volumeRetiredPatternRequest : select.value;
+}
+
 function setVolumeControlValue(id, value) {
   if (id === 'volume-render-scale') {
     setVolumeRenderScaleControlValue(value);
@@ -16747,7 +16753,7 @@ function readVolumeDomControlValue(el) {
   // A retired aperture pattern kept from a saved route is the basin's request
   // until the operator authors a pattern: saving (and the capture route) keeps
   // it rather than migrating the basin to the shape it falls back to.
-  if (el.id === 'volume-emitter-aperture-pattern' && el.dataset.volumeRetiredPatternRequest) return el.dataset.volumeRetiredPatternRequest;
+  if (el.id === 'volume-emitter-aperture-pattern') return volumeAperturePatternValue(el);
   if (el.type === 'checkbox') return Boolean(el.checked);
   if (['color', 'text', 'url', 'search', 'password'].includes(el.type) || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return el.value;
   const numericValue = Number(el.value);
@@ -21836,7 +21842,7 @@ function readVolumeControls() {
     emitterEdgeEntrainment: parseFloat(document.getElementById('volume-emitter-edge-entrainment').value),
     emitterFuelFraction: parseFloat(document.getElementById('volume-emitter-fuel-fraction').value),
     emitterInletTemperature: parseFloat(document.getElementById('volume-emitter-inlet-temperature').value),
-    emitterAperturePattern: document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest || document.getElementById('volume-emitter-aperture-pattern').value,
+    emitterAperturePattern: volumeAperturePatternValue(document.getElementById('volume-emitter-aperture-pattern')),
     emitterApertureCount: parseFloat(document.getElementById('volume-emitter-aperture-count').value),
     emitterApertureRatio: parseFloat(document.getElementById('volume-emitter-aperture-ratio').value),
     emitterApertureSeed: parseFloat(document.getElementById('volume-emitter-aperture-seed').value),
@@ -22154,7 +22160,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-edge-entrainment-val').textContent = c.emitterEdgeEntrainment.toFixed(2);
   document.getElementById('volume-emitter-fuel-fraction-val').textContent = c.emitterFuelFraction.toFixed(2);
   document.getElementById('volume-emitter-inlet-temperature-val').textContent = c.emitterInletTemperature.toFixed(2);
-  document.getElementById('volume-emitter-aperture-pattern-val').textContent = document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest ? `shape (${c.emitterAperturePattern} retired)` : c.emitterAperturePattern;
+  document.getElementById('volume-emitter-aperture-pattern-val').textContent = VOLUME_RETIRED_APERTURE_PATTERNS.includes(c.emitterAperturePattern) ? `shape (${c.emitterAperturePattern} retired)` : c.emitterAperturePattern;
   document.getElementById('volume-emitter-aperture-count-val').textContent = String(Math.round(c.emitterApertureCount));
   document.getElementById('volume-emitter-aperture-ratio-val').textContent = c.emitterApertureRatio.toFixed(2);
   document.getElementById('volume-emitter-aperture-seed-val').textContent = String(Math.round(c.emitterApertureSeed));

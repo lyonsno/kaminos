@@ -512,7 +512,8 @@ export function volumeSettingsPresetControlValuesEqual(left, right) {
     const keys = Object.keys(leftValues);
     if (keys.length !== Object.keys(rightValues).length) return false;
     for (const key of keys) {
-      if (!Object.hasOwn(rightValues, key) || !sameAppliedControlValue(leftValues[key], rightValues[key])) return false;
+      if (!Object.hasOwn(rightValues, key)) return false;
+      if (!sameAppliedControlValue(rendererEquivalentSavedValue(key, leftValues[key]), rendererEquivalentSavedValue(key, rightValues[key]))) return false;
     }
   }
   return true;

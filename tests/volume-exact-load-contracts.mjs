@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { volumeSettingsPresetAppliedDifferences } from '../volume-settings-preset-contract.mjs';
+import { volumeSettingsPresetAppliedDifferences, volumeSettingsPresetControlValuesEqual } from '../volume-settings-preset-contract.mjs';
 
 // A saved basin loads with the values it was saved with, as far as the
 // renderer can draw them. The renderer clamps each control to its slider's
@@ -80,4 +80,17 @@ setter(pattern.id, 'spiral');
 assert.deepEqual([pattern.value, pattern.dataset.volumeRetiredPatternRequest], ['shape', 'spiral'], 'writing a retired pattern keeps it as the request');
 setter(pattern.id, 'ring');
 assert.deepEqual([pattern.value, pattern.dataset.volumeRetiredPatternRequest], ['ring', undefined], 'writing an offered pattern clears the request');
+// The kept request holds only while the select still shows its shape
+// fallback: choosing a pattern reads as that pattern at once, so the edit
+// session records the change (and undo restores the request).
+const requestSource = grab('function volumeAperturePatternValue(');
+assert.ok(requestSource, 'one reader decides the aperture pattern value');
+const patternValue = vm.runInNewContext(`${requestSource}; volumeAperturePatternValue`, {});
+assert.equal(patternValue({ value: 'shape', dataset: { volumeRetiredPatternRequest: 'spiral' } }), 'spiral');
+assert.equal(patternValue({ value: 'jets', dataset: { volumeRetiredPatternRequest: 'spiral' } }), 'jets', 'a chosen pattern wins over a stale request');
+assert.equal(patternValue({ value: 'ring', dataset: {} }), 'ring');
+assert.doesNotMatch(index.replace(requestSource, ''), /\.dataset\.volumeRetiredPatternRequest(?! =)(?!;)(?! \?)/,
+  'no reader outside volumeAperturePatternValue consults the request directly');
+// Every comparison of basins, not just the load readback, treats '' as shell.
+assert.equal(volumeSettingsPresetControlValuesEqual(inspectAs(''), inspectAs('shell')), true, 'a loaded empty-inspect basin is not Modified');
 console.log('volume exact load contracts passed');
