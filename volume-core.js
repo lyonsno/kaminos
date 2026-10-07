@@ -6662,7 +6662,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Immersed source momentum: the slab relaxes toward the authored velocity.
   // Velocity-dependent, so it stays on the stored value under the staggered reading.
   if (immersedWeight > 0.0) {
-    vel = mix(vel, u.immersed_source_c.y * immersedDirection(), min(1.0, immersedWeight * u.immersed_source_d.x));
+    vel = mix(vel, u.immersed_source_c.y * immersedDirection(), stepBlend(min(1.0, immersedWeight * u.immersed_source_d.x)));
   }
   let forceIncrement = (vel - velTransported) * timeStep;
   if (faceForcesOn()) {

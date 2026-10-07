@@ -32,6 +32,9 @@ function explicitTrigAuthorities(line) {
 const admitted = new Map([
   ['volume-core.js', [
     { class: 'operator-authored wind angle to direction', line: /windDirection = vec3<f32>\(cos\(windAngle\), 0\.0, sin\(windAngle\)\);/, calls: 2 },
+    // Operator-authored immersed-source aim (yaw/pitch sliders) to a unit
+    // direction, resolved once per uniform pack on the CPU; nothing animates.
+    { class: 'operator-authored source aim to direction', line: /return \[Math\.cos\(pitch\) \* Math\.cos\(yaw\), Math\.sin\(pitch\), Math\.cos\(pitch\) \* Math\.sin\(yaw\)\];/, calls: 5 },
   ]],
   ['volume-inflow-aperture.mjs', [
     // Static authored geometry of the inflow aperture coverage map: jets placed

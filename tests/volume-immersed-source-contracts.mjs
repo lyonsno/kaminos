@@ -85,7 +85,7 @@ test('the shader derives target, momentum and scalar entry from one weight and o
   assert.match(main, /let immersedEntry = clamp\(immersedTarget \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);/, 'scalar entry mirrors the floor law');
   assert.match(main, /heat = mix\(heat, u\.immersed_source_c\.w, immersedEntry\);/);
   assert.match(main, /fuel = mix\(fuel, u\.immersed_source_c\.z, immersedEntry\);/);
-  assert.match(main, /vel = mix\(vel, u\.immersed_source_c\.y \* immersedDirection\(\), min\(1\.0, immersedWeight \* u\.immersed_source_d\.x\)\);/, 'momentum relaxes toward v·n (velocity-dependent: stays local under the staggered reading)');
+  assert.match(main, /vel = mix\(vel, u\.immersed_source_c\.y \* immersedDirection\(\), stepBlend\(min\(1\.0, immersedWeight \* u\.immersed_source_d\.x\)\)\);/, 'momentum relaxes toward v·n through stepBlend (follows the step; velocity-dependent, so it stays local under the staggered reading)');
   assert.doesNotMatch(main, /centredForce = centredForce \+ [^\n]*immersed/, 'not averaged onto faces');
 });
 

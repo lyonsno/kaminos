@@ -145,7 +145,10 @@ test('review of 57b45f72: relaxation blends and the wall velocity sponge follow 
   // emitter law inflow-boundary) is the one blend whose weight is already per
   // unit time by construction: inflowFraction = v_in x coverage x
   // dynamicsBacktraceScale(), and dynamicsBacktraceScale() carries the step.
-  assert.doesNotMatch(main, new RegExp(`^\\s*(${relaxable}) = mix\\(\\1, [^,]+, (?!stepBlend\\(|inflowFraction\\))`, 'm'), 'no bare relaxation blend remains');
+  // The immersed source's entry (`mix(x, source, immersedEntry)`) is the same
+  // construction: immersedEntry = target x dynamicsBacktraceScale().
+  assert.doesNotMatch(main, new RegExp(`^\\s*(${relaxable}) = mix\\(\\1, [^,]+, (?!stepBlend\\(|inflowFraction\\)|immersedEntry\\))`, 'm'), 'no bare relaxation blend remains');
+  assert.match(main, /let immersedEntry = clamp\(immersedTarget \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);/, 'the immersed entry carries the step through dynamicsBacktraceScale');
   assert.match(main, /let inflowFraction = clamp\(inflowInletSpeed\(cellI\) \* inflowApertureWeight\(cellI\) \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);/, 'the inflow fraction carries the step through dynamicsBacktraceScale');
   // The wall sponge on velocity is written after the increment law's line, so
   // it takes the rate law directly.
