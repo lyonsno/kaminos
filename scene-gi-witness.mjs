@@ -34,7 +34,24 @@ try {
     await page.check('#rendering-surface-scattering');
     await page.waitForTimeout(1000);
   }
-  if(operation==='--live-preview') {
+  if(operation==='--light-coupling') {
+    report.phase='light-coupling';report.coupling=[];await save();
+    await page.selectOption('#scene-gi-mode','combined');await page.selectOption('#scene-gi-view','gi');
+    await page.evaluate(()=>window.kaminosAuthoringParameters.set('@scene-gi',{gain:10}));
+    report.beds=await page.evaluate(()=>{
+      const beds=window.kaminosSceneObjectDebugState().filter(o=>o.type==='procedural-mesh');
+      for(const bed of beds)window.kaminosSceneAuthoring.setMaterial(bed.id,{glow:0});
+      return beds;
+    });
+    for(const [name,mode,transport,surface] of [['off','neither',0,0],['base','shared',0,0],['transport4','shared',4,0],['surface4','shared',0,4],['surfaceLow','shared',0,-8],['offAgain','neither',0,0]]) {
+      await page.evaluate(({mode,transport,surface})=>window.kaminosAuthoringParameters.set('@scene-transport',{'rendering-light-mode':mode,'rendering-shared-gain':transport,'rendering-surface-gain':surface}),{mode,transport,surface});
+      await page.waitForTimeout(600);
+      const state=await page.evaluate(()=>({gi:window.kaminosSceneGIDebugState(),light:window.__kaminosSceneRadiance.debugState(),transport:window.kaminosAuthoringParameters.read('@scene-transport')}));
+      const buffers=await page.evaluate(async()=>Object.fromEntries(await Promise.all(['source','incoming','receiving'].map(async kind=>[kind,await window.kaminosSceneGIReadback(kind)]))));
+      for(const [kind,buffer] of Object.entries(buffers)){await fs.writeFile(`${out}/${name}-${kind}.json`,JSON.stringify(buffer));delete buffer.base64;}
+      report.coupling.push({name,...state,buffers});await page.screenshot({path:`${out}/${name}.png`});await save();
+    }
+  } else if(operation==='--live-preview') {
     report.phase='live-preview';await save();
     await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;window.__kaminosVolumePrototype.setSimulationPaused(false);});
     await page.waitForTimeout(4000);

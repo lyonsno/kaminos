@@ -73,9 +73,9 @@ export function createSceneGI(scene, camera, aoIntensity) {
       aoFilter.radius.value = giFilter.radius.value = settings.denoise;
     },
     async readback(renderer,kind='incoming') {
-      if (!['incoming','receiving'].includes(kind)) throw new Error('Invalid GI readback kind');
-      const target=kind==='receiving'?beauty.renderTarget:effect._ssgiRenderTarget;
-      const data=await renderer.readRenderTargetPixelsAsync(target,0,0,target.width,target.height,kind==='receiving'?0:1);
+      if (!['source','incoming','receiving'].includes(kind)) throw new Error('Invalid GI readback kind');
+      const target=kind==='source'?source.renderTarget:kind==='receiving'?beauty.renderTarget:effect._ssgiRenderTarget;
+      const data=await renderer.readRenderTargetPixelsAsync(target,0,0,target.width,target.height,kind==='incoming'?1:0);
       let sum=0,max=0,nonzero=0,finite=true;
       for(let i=0;i<data.length;i++)if(i%4<3){const v=DataUtils.fromHalfFloat(data[i]);finite&&=Number.isFinite(v);sum+=v;max=Math.max(max,v);if(v>0)nonzero++;}
       const bytes=new Uint8Array(data.buffer,data.byteOffset,data.byteLength),chunks=[];
