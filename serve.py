@@ -2126,6 +2126,8 @@ KAMINOS_IMAGE_INBOX_DIR = Path(os.environ.get(
     "KAMINOS_IMAGE_INBOX_DIR",
     str(KAMINOS_ASSETS_DIR / "images" / "inbox"),
 )).expanduser()
+KAMINOS_IMAGE_PREPARATION_DIR = Path(os.environ.get('KAMINOS_IMAGE_PREPARATION_DIR',
+    str(KAMINOS_ASSETS_DIR / 'images' / 'prepared'))).expanduser().resolve()
 SAM3_PACKET_ROOT = Path(os.environ['KAMINOS_SAM3_PACKET_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_SAM3_PACKET_ROOT') else None
 
 BROWSE_ROOTS = {
@@ -2135,6 +2137,7 @@ BROWSE_ROOTS = {
     "splat-inbox": KAMINOS_SPLAT_INBOX_DIR,
     "splat-production": KAMINOS_SPLAT_PRODUCTION_DIR,
     "image-inbox": KAMINOS_IMAGE_INBOX_DIR,
+    "image-preparations": KAMINOS_IMAGE_PREPARATION_DIR,
     "pipeline-runs": KAMINOS_PIPELINE_RUNS_DIR,
     "greenroom": Path(os.environ.get(
         "GPU_GREENROOM_DIR",
@@ -3058,6 +3061,29 @@ def ingest_image_asset(filename, content):
     return entry
 
 
+def prepare_authoring_image(content, *, source, name, expected_sha256):
+    parsed=urlparse(source);params=parse_qs(parsed.query)
+    if parsed.scheme or parsed.netloc or not ((parsed.path=='/api/read' and params.get('root') and params.get('path')) or (parsed.path=='/api/job-output' and params.get('job_id') and params.get('file'))):
+        raise ValueError('Preparation source must be a mounted image asset')
+    if hashlib.sha256(content).hexdigest()!=expected_sha256:
+        raise ValueError('Original image digest does not match the requested input')
+    original=ingest_image_asset(name,content)
+    executable=os.environ.get('KAMINOS_IMAGE_PREPARATION_PYTHON',sys.executable)
+    model=Path(os.environ.get('KAMINOS_BACKGROUND_MODEL_PATH','~/.u2net/u2net.onnx')).expanduser().resolve()
+    completed=subprocess.run([executable,str(ROOT/'authoring_image_preparation.py'),'--store',str(KAMINOS_IMAGE_PREPARATION_DIR),'--model',str(model)],input=content,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    try: value=json.loads(completed.stdout)
+    except (ValueError,UnicodeDecodeError) as error:
+        raise RuntimeError('Image preparation runtime did not return a report: '+completed.stderr.decode(errors='replace')) from error
+    if completed.returncode or value.get('status')!='complete':
+        raise RuntimeError(value.get('error','Image preparation failed'))
+    prepared=value.get('prepared',{});target=(KAMINOS_IMAGE_PREPARATION_DIR/prepared.get('path','')).resolve()
+    if not target.is_relative_to(KAMINOS_IMAGE_PREPARATION_DIR) or not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest()!=prepared.get('sha256') or value.get('original',{}).get('sha256')!=expected_sha256:
+        raise RuntimeError('Prepared image identity does not match retained bytes')
+    value['original'].update(source=source,retainedSource=original['source'],name=name)
+    value['prepared']['source']='/api/read?'+urlencode({'root':'image-preparations','path':prepared['path']})
+    return value
+
+
 def authoring_asset_catalog(collection):
     from authoring_asset_catalog import read_catalog
     return read_catalog(collection, roots=BROWSE_ROOTS,
@@ -3201,7 +3227,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/mesh-generation-origin":
+        if parsed.path == '/api/prepare-image':
+            self.handle_prepare_image(parse_qs(parsed.query))
+        elif parsed.path == "/api/mesh-generation-origin":
             self.handle_mesh_generation_origin()
         elif parsed.path == "/api/ingest-mesh":
             self.handle_ingest_mesh()
@@ -3846,6 +3874,19 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "kind": "splat",
             "entry": entry,
         })
+
+    def handle_prepare_image(self,params):
+        try:
+            length=int(self.headers.get('Content-Length',0))
+            if length<=0:raise ValueError('non-empty image body required')
+            content=self.rfile.read(length)
+            if len(content)!=length:raise ValueError('incomplete image body')
+            result=prepare_authoring_image(content,source=params.get('source',[''])[0],name=params.get('name',[''])[0],expected_sha256=params.get('sha256',[''])[0])
+        except (ValueError,PermissionError) as error:
+            self.send_json({'error':str(error),'phase':'image-preparation'},400);return
+        except (OSError,RuntimeError) as error:
+            self.send_json({'error':str(error),'phase':'image-preparation'},503);return
+        self.send_json(result)
 
     def handle_ingest_image(self, params):
         try:

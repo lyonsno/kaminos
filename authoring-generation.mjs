@@ -1,4 +1,5 @@
 import { createSharedDeviceSf3dProducer, connectSf3dForeground, snapshotSf3dSharedDevice } from './sf3d-host-device.mjs';
+import {mountedImageSource,validateImagePreparation} from './authoring-image-preparation.mjs';
 
 // The current SF3D producer reports denominator-bearing percentages per stage.
 // Unknown phases stay indeterminate; these are not estimated whole-run timings.
@@ -84,13 +85,16 @@ export function createSf3dAuthoringGeneration({context,request=fetch,changed=()=
   const service=createAuthoringGeneration({changed,
     async loadInput(input,{signal}) {
       const reason=blocked();if(reason)throw Error(reason);
-      const url=new URL(input.source,location.href);
-      if(url.origin!==location.origin || !((url.pathname==='/api/read'&&url.searchParams.get('root')&&url.searchParams.get('path'))||(url.pathname==='/api/job-output'&&url.searchParams.get('job_id')&&url.searchParams.get('file'))))throw Error('Generation source must be a mounted image asset');
-      const response=await request(input.source,{signal});if(!response.ok)throw Error(`Source image HTTP ${response.status}`);
+      mountedImageSource(input.source);
+      if(!input.preparation)throw Error('Prepare the image before generation');
+      const preparation=validateImagePreparation(input.preparation,{source:input.source,sha256:input.preparation.original?.sha256});
+      const response=await request(preparation.prepared.source,{signal});if(!response.ok)throw Error(`Prepared image HTTP ${response.status}`);
       const bytes=await response.arrayBuffer(),sha256=await hex(bytes),blob=new Blob([bytes],{type:response.headers.get('Content-Type')||'image/png'});
+      if(sha256!==preparation.prepared.sha256)throw Error('Prepared image bytes no longer match the selected input');
       const objectUrl=URL.createObjectURL(blob),image=new Image();
       try{image.src=objectUrl;await image.decode();}finally{URL.revokeObjectURL(objectUrl);}
-      return{image,identity:{source:input.source,sha256,name:input.name||input.label,width:image.naturalWidth,height:image.naturalHeight}};
+      if(image.naturalWidth!==preparation.prepared.width||image.naturalHeight!==preparation.prepared.height)throw Error('Prepared image dimensions do not match');
+      return{image,identity:{source:input.source,sha256:preparation.original.sha256,name:input.name||input.label,width:image.naturalWidth,height:image.naturalHeight,preparation}};
     },
     async initialize(progress) {
       const {sharedGpu,prototype,host}=context();

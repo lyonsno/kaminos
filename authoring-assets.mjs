@@ -4,14 +4,30 @@ const collections=new Set(['generated-meshes','image-inbox','greenroom','trellis
 export function assetSource(root, path) {
   return `/api/read?${new URLSearchParams({root, path})}`;
 }
-export function createAuthoringAssets({request, addMesh, uploadImage, generator, nameForSource=()=>null, changed = () => {}}) {
-  let state = {roots:[], root:'generated-meshes', path:'', entries:[], selected:null, loading:false, adding:false, error:null, results:[]};
+export function createAuthoringAssets({request, addMesh, uploadImage, prepareImage, generator, nameForSource=()=>null, changed = () => {}}) {
+  let state = {roots:[], root:'generated-meshes', path:'', entries:[], selected:null, preparation:null, loading:false, adding:false, error:null, results:[]};
+  let preparationTicket=0,preparationAbort=null,preparationPromise=null;
   let navigation = 0,revision=0;
   const publish = () => changed(copy(state));
   const get = async url => {const value = await request(url); if(value.error)throw Error(value.error);return value;};
+  function clearPreparation(){preparationTicket++;preparationAbort?.abort(new DOMException('Image selection changed','AbortError'));preparationAbort=null;preparationPromise=null;state.preparation=null;}
+  async function prepare(){
+    if(state.selected?.kind!=='image')throw Error('Choose a source image first');
+    if(state.preparation?.status==='complete')return state.preparation.value;
+    if(preparationPromise)return preparationPromise;
+    if(['input','loading','running','stopping','saving'].includes(generator?.()?.read()?.status))throw Error('Finish or stop the current generation before preparing another image');
+    if(!prepareImage)throw Error('Image preparation is unavailable');
+    const selected=copy(state.selected),input={...selected,source:selected.source||assetSource(selected.root,selected.path)},ticket=++preparationTicket,abort=new AbortController();preparationAbort=abort;
+    state.preparation={status:'preparing',value:null,error:null};state.error=null;publish();
+    preparationPromise=(async()=>{
+      try{const value=await prepareImage(input,{signal:abort.signal});if(ticket!==preparationTicket||abort.signal.aborted)return null;state.preparation={status:'complete',value,error:null};return value;}
+      catch(error){if(ticket!==preparationTicket)return null;if(abort.signal.aborted&&error.name==='AbortError'){state.preparation={status:'stopped',value:null,error:null};return null;}state.preparation={status:'failed',value:null,error:error.message};state.error=error.message;throw error;}
+      finally{if(ticket===preparationTicket){preparationAbort=null;preparationPromise=null;publish();}}
+    })();return preparationPromise;
+  }
   async function browse(root = state.root, path = '') {
     const ticket = ++navigation;
-    state = {...state, root, path:collections.has(root)?'':path, catalog:collections.has(root), selected:null, entries:[],warnings:[],listRevision:++revision,loading:true,error:null};publish();
+    clearPreparation();state = {...state, root, path:collections.has(root)?'':path, catalog:collections.has(root), selected:null, entries:[],warnings:[],listRevision:++revision,loading:true,error:null};publish();
     try {
       const result = await get(collections.has(root)?`/api/authoring-assets?${new URLSearchParams({collection:root})}`:`/api/browse?${new URLSearchParams({root,path})}`);
       if(ticket !== navigation)return false;
@@ -32,7 +48,7 @@ export function createAuthoringAssets({request, addMesh, uploadImage, generator,
     return !state.error;
   }
   return {
-    read:()=>copy(state), browse,
+    read:()=>copy(state), browse, prepare,
     async refresh() {
       try {
         const roots = await get('/api/roots');
@@ -41,7 +57,7 @@ export function createAuthoringAssets({request, addMesh, uploadImage, generator,
         return browse(state.root,state.path);
       }catch(error){state.error=error.message;publish();return false;}
     },
-    select(entry) {if(!entry || !['mesh','image'].includes(entry.kind))throw Error('Choose a mesh or source image');state.selected=copy(entry);state.error=null;publish();},
+    select(entry) {if(!entry || !['mesh','image'].includes(entry.kind))throw Error('Choose a mesh or source image');clearPreparation();state.selected=copy(entry);state.error=null;publish();},
     async add(entry = state.selected) {
       if(state.adding)throw Error('An asset is already being added');
       if(entry?.kind !== 'mesh')throw Error('Choose a GLB mesh to add');
@@ -55,13 +71,15 @@ export function createAuthoringAssets({request, addMesh, uploadImage, generator,
       if(kind==='mesh')return this.add({kind,name:file.name,label:file.name,file});
       const entry=await uploadImage(file);this.select({...entry,root:entry.root_id,kind:'image',label:entry.name});return entry;
     },
-    generation:()=>generator()?.read() || {status:'unavailable',error:'Generation host is initializing'},
-    stop:()=>generator()?.stop() || false,
+    generation:()=>state.preparation?.status==='preparing'?{status:'preparing',stage:'Preparing image',progress:'Removing background…',percent:null,canStop:true}:generator()?.read() || {status:'unavailable',error:'Generation host is initializing'},
+    stop(){if(preparationAbort&&!preparationAbort.signal.aborted){preparationAbort.abort(new DOMException('Image preparation stopped','AbortError'));return true;}return generator()?.stop() || false;},
     async recover() {const result=await generator().retryPersistence();state.results.push({...result,kind:'mesh',label:result.name});publish();return result;},
     async generate() {
       if(state.selected?.kind!=='image')throw Error('Choose a source image first');
       const service=generator();if(!service)throw Error('Generation host is unavailable');
-      const result=await service.run({...copy(state.selected),source:state.selected.source || assetSource(state.selected.root,state.selected.path)});
+      const selected=copy(state.selected),operation=prepare(),ticket=preparationTicket,preparation=await operation;
+      if(!preparation||ticket!==preparationTicket)return null;
+      const result=await service.run({...selected,source:selected.source || assetSource(selected.root,selected.path),preparation});
       if(result)state.results.push({...result,kind:'mesh',name:result.name,label:result.name});publish();return result;
     },
   };
@@ -72,7 +90,7 @@ export function installAuthoringAssets({document,controller,edits}) {
   panel.innerHTML=`<div id="asset-resize" role="separator" aria-label="Asset browser height" aria-orientation="horizontal" tabindex="0"></div><header><strong>Assets</strong><button type="button" id="asset-close" aria-label="Close assets">×</button></header>
     <nav><button type="button" data-assets-mode="browse">Browse</button><button type="button" data-assets-mode="generate">Generate</button></nav>
     <div class="asset-content"><div id="asset-browse"><div class="asset-folder-controls"><button type="button" id="asset-up" aria-label="Parent folder">↑</button><select id="asset-root" aria-label="Asset location"></select><button type="button" id="asset-refresh" aria-label="Refresh assets">↻</button></div><div id="asset-path"></div><input id="asset-filter" type="search" placeholder="Search assets…" aria-label="Search this asset collection"><div id="asset-entries"></div></div>
-    <div id="asset-generate" hidden><p>Image → textured mesh · Stable Fast 3D</p><p class="asset-help">Choose an image from Browse or open a local image. Generation keeps your scene in place; add the result when you want it.</p><button type="button" id="asset-run">Generate mesh</button><button type="button" id="asset-recover" hidden>Retry saving result</button><div id="asset-results"></div></div>
+    <div id="asset-generate" hidden><p>Image → textured mesh · Stable Fast 3D</p><p class="asset-help">Choose an image from Browse or open a local image. Its background is removed before generation; your scene stays in place.</p><div id="asset-preparation-status" role="status"></div><button type="button" id="asset-prepare" hidden>Prepare image</button><button type="button" id="asset-run">Generate mesh</button><button type="button" id="asset-recover" hidden>Retry saving result</button><div id="asset-results"></div></div>
     <div id="asset-detail" hidden><img id="asset-image" alt="Selected source image" hidden><strong id="asset-name"></strong><div id="asset-source"></div><button type="button" id="asset-add">Add to scene</button><button type="button" id="asset-use-image">Use for generation</button></div>
     </div><div id="asset-generation" hidden><div class="asset-generation-line"><span id="asset-generation-status" role="status"></span><span id="asset-percent"></span><button type="button" id="asset-stop">Stop</button></div><progress id="asset-progress" max="100" aria-label="Generation stage progress"></progress></div><div class="asset-browser-status"><span id="asset-loading" class="asset-loading-spinner" aria-hidden="true" hidden></span><div id="asset-status" role="status"></div></div><footer><button type="button" id="asset-file-open">Open file…</button><input id="asset-file" type="file" accept=".glb,.png,.jpg,.jpeg,.webp" hidden></footer>`;
   document.body.append(panel);installAssetPaneResize({document,panel});const byId=id=>document.getElementById(id);let mode='browse',listKey=null,rootsKey=null;
@@ -106,16 +124,20 @@ export function installAuthoringAssets({document,controller,edits}) {
     if(!state.loading&&!state.error&&state.unavailableCount)byId('asset-status').textContent+=(byId('asset-status').textContent?' · ':'')+`${state.unavailableCount} historical output records are unavailable.`;
     const selected=state.selected;byId('asset-detail').hidden=!selected;byId('asset-add').hidden=selected?.kind!=='mesh';byId('asset-use-image').hidden=selected?.kind!=='image';byId('asset-add').disabled=state.adding;
     if(selected){byId('asset-name').textContent=selected.label || selected.name;byId('asset-source').textContent=selected.root?(labels[selected.root]||selected.root):selected.generation?'Generated in this session':'Local file';byId('asset-source').title=selected.source || selected.path || '';}
-    byId('asset-image').hidden=selected?.kind!=='image';if(selected?.kind==='image'){const source=selected.source || assetSource(selected.root,selected.path);if(byId('asset-image').getAttribute('src')!==source)byId('asset-image').src=source;}
+    const preparation=state.preparation;
+    byId('asset-image').hidden=selected?.kind!=='image';if(selected?.kind==='image'){const source=mode==='generate'&&preparation?.status==='complete'?preparation.value.prepared.source:selected.source || assetSource(selected.root,selected.path);if(byId('asset-image').getAttribute('src')!==source)byId('asset-image').src=source;byId('asset-image').alt=mode==='generate'&&preparation?.status==='complete'?'Prepared generation input':'Original source image';}
+    byId('asset-preparation-status').textContent=preparation?.error||(preparation?.status==='complete'?(preparation.value.route==='input-alpha'?'Existing transparency retained.':'Background removed.')+' This is the image generation will use.':preparation?.status==='preparing'?'Removing background…':preparation?.status==='stopped'?'Image preparation stopped.':selected?.kind==='image'?'Prepare this image to preview the generation input.':'');
+    byId('asset-prepare').hidden=selected?.kind!=='image'||['preparing','complete'].includes(preparation?.status);
     const generation=controller.generation();
-    const active=['input','loading','running','stopping','saving'].includes(generation.status);runHeader.hidden=!active||(document.body.dataset.workspace!=='workbench'&&!panel.hidden);
+    byId('asset-use-image').disabled=byId('asset-prepare').disabled=['input','loading','running','stopping','saving'].includes(generation.status);
+    const active=['preparing','input','loading','running','stopping','saving'].includes(generation.status);runHeader.hidden=!active||(document.body.dataset.workspace!=='workbench'&&!panel.hidden);
     runById('generation-header-status').textContent=generation.status==='stopping'?'Stopping…':`${generation.stage||'Generating'}${Number.isFinite(generation.percent)?' · '+Math.round(generation.percent)+'%':''}`;runById('generation-header-show').title=generation.error||generation.progress||'Show generation';
     runById('generation-header-stop').hidden=!generation.canStop&&generation.status!=='stopping';runById('generation-header-stop').disabled=!generation.canStop;
-    byId('asset-run').disabled=selected?.kind!=='image'||!!generation.pending||['input','loading','running','stopping','saving','unavailable'].includes(generation.status);byId('asset-recover').hidden=!generation.pending;
-    byId('asset-generation').hidden=mode!=='generate'&&!['input','loading','running','stopping','saving'].includes(generation.status);
+    byId('asset-run').disabled=selected?.kind!=='image'||preparation?.status!=='complete'||!!generation.pending||['preparing','input','loading','running','stopping','saving','unavailable'].includes(generation.status);byId('asset-recover').hidden=!generation.pending;
+    byId('asset-generation').hidden=mode!=='generate'&&!active;
     byId('asset-stop').hidden=!generation.canStop&&generation.status!=='stopping';byId('asset-stop').disabled=!generation.canStop;byId('asset-stop').textContent=generation.status==='stopping'?'Stopping…':'Stop';
     const bar=byId('asset-progress');if(Number.isFinite(generation.percent))bar.value=generation.percent;else bar.removeAttribute('value');
-    bar.hidden=!['input','loading','running','stopping','saving','complete'].includes(generation.status);
+    bar.hidden=!['preparing','input','loading','running','stopping','saving','complete'].includes(generation.status);
     byId('asset-percent').textContent=Number.isFinite(generation.percent)?`${generation.stage || 'Stage'} · ${Math.round(generation.percent)}%`:'';
     byId('asset-generation-status').textContent=generation.error || generation.progress || (selected?.kind==='image'?'Source selected; generate when you want.':'Choose a source image.');
     byId('asset-results').replaceChildren(...state.results.map(result=>{const button=document.createElement('button');button.type='button';button.className='asset-result';button.textContent=`Add ${result.name}`;button.disabled=state.adding;button.onclick=()=>action(()=>controller.add(result));return button;}));
@@ -123,7 +145,7 @@ export function installAuthoringAssets({document,controller,edits}) {
   panel.querySelectorAll('[data-assets-mode]').forEach(button=>button.onclick=()=>setMode(button.dataset.assetsMode));
   byId('asset-close').onclick=close;byId('asset-root').onchange=event=>action(()=>controller.browse(event.target.value));byId('asset-up').onclick=()=>action(()=>{const s=controller.read();return controller.browse(s.root,s.path.split('/').slice(0,-1).join('/'));});
   byId('asset-refresh').onclick=()=>action(()=>controller.refresh());byId('asset-filter').oninput=()=>render(controller.read());
-  byId('asset-add').onclick=()=>action(async()=>{await controller.add();document.activeElement?.blur();});byId('asset-use-image').onclick=()=>setMode('generate');byId('asset-run').onclick=()=>action(()=>controller.generate());
+  byId('asset-add').onclick=()=>action(async()=>{await controller.add();document.activeElement?.blur();});byId('asset-use-image').onclick=()=>{setMode('generate');action(()=>controller.prepare());};byId('asset-prepare').onclick=()=>action(()=>controller.prepare());byId('asset-run').onclick=()=>action(()=>controller.generate());
   byId('asset-stop').onclick=()=>controller.stop();runById('generation-header-stop').onclick=()=>controller.stop();
   runById('generation-header-show').onclick=()=>{if(document.defaultView.kaminosWorkspace?.setMode('authoring')===false)return;panel.hidden=false;document.body.classList.add('has-assets-panel');setMode('generate');};
   document.addEventListener('kaminos-workspace-change',()=>render(controller.read()));
