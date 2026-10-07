@@ -34,10 +34,21 @@ try {
     await page.check('#rendering-surface-scattering');
     await page.waitForTimeout(1000);
   }
-  if(operation==='--product-controls') {
+  if(operation==='--product-controls'||operation==='--product-controls-guided') {
+    const productPattern=operation==='--product-controls-guided'?'guided':'source';
     report.phase='product-controls';await save();
     await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
     await page.evaluate(()=>window.kaminosAuthoringParameters.set('@scene-gi',{mode:'combined'}));
+    if(productPattern==='guided') {
+      await page.evaluate(()=>window.kaminosAuthoringParameters.set('@scene-transport',{'rendering-angular-pattern':'guided','rendering-angular-samples':'8'}));
+      await page.locator('#scene-lighting-quality').evaluate(node=>node.open=true);
+      const beforeSpacing=await page.evaluate(()=>({value:window.kaminosAuthoringParameters.read('@scene-transport')['rendering-receiver-spacing'],history:window.kaminosSceneEdits.state().undoCount}));
+      await page.selectOption('#rendering-receiver-spacing','0.16');
+      assert.equal(await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),beforeSpacing.history+1);
+      await page.evaluate(()=>window.kaminosSceneEdits.undo());assert.equal(await page.locator('#rendering-receiver-spacing').inputValue(),beforeSpacing.value);
+      await page.evaluate(()=>window.kaminosSceneEdits.redo());assert.equal(await page.locator('#rendering-receiver-spacing').inputValue(),'0.16');
+      report.receiverHistory={before:beforeSpacing,after:await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),redo:'0.16'};
+    }
     report.giValidation=await page.evaluate(()=>{
       const api=window.kaminosAuthoringParameters,edits=window.kaminosSceneEdits;
       const before=api.read('@scene-gi'),history=edits.state().undoCount,attempts=[];
@@ -91,7 +102,8 @@ try {
     await page.evaluate(()=>window.kaminosSceneEdits.redo());assert.equal(Number(await page.locator('#flame-appearance-trim').inputValue()),.25);
     report.decimalHistory={before:trimHistory,after:await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),undo:0,redo:.25};
     report.transport=await page.evaluate(()=>({settings:window.kaminosAuthoringParameters.read('@scene-transport'),runtime:window.__kaminosSceneRadiance.debugState()}));
-    assert.equal(report.transport.runtime.frame.angularPattern,'source');assert.equal(report.transport.runtime.smokeMode,'distributed');assert.equal(report.transport.runtime.surfaceScattering,true);
+    assert.equal(report.transport.runtime.frame.angularPattern,productPattern);assert.equal(report.transport.runtime.smokeMode,'distributed');assert.equal(report.transport.runtime.surfaceScattering,true);
+    if(productPattern==='guided'){assert.equal(report.transport.runtime.frame.directions,8);assert.equal(report.transport.settings['rendering-receiver-spacing'],'0.16');}
     await page.evaluate(()=>document.getElementById('composition-label').value='Product lighting controls witness');
     report.phase='save-reopen';await save();
     report.saved=await page.evaluate(()=>window.saveSceneAs({result:true}));assert.ok(report.saved?.ok,JSON.stringify(report.saved));
@@ -99,7 +111,8 @@ try {
     const restored=new URL(url),hash=new URLSearchParams(restored.hash.slice(1));hash.set('scene',report.saved.filename);restored.hash=hash.toString();await page.goto(restored.href);
     await page.waitForFunction(()=>document.getElementById('info-bar').textContent.startsWith('Scene loaded:'),null,{timeout:0});
     await settle();report.reopened=await page.evaluate(()=>({camera:window.kaminosAuthoringParameters.read('@scene-camera'),appearance:window.kaminosAuthoringParameters.read('@scene-appearance'),transport:window.kaminosAuthoringParameters.read('@scene-transport')}));
-    assert.deepEqual(report.reopened.camera,before);assert.deepEqual(report.reopened.appearance,report.appearance.settings);assert.equal(report.reopened.transport['rendering-angular-pattern'],'source');
+    assert.deepEqual(report.reopened.camera,before);assert.deepEqual(report.reopened.appearance,report.appearance.settings);assert.equal(report.reopened.transport['rendering-angular-pattern'],productPattern);
+    if(productPattern==='guided')assert.equal(report.reopened.transport['rendering-receiver-spacing'],'0.16');
     await page.evaluate(()=>{window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
     await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();await page.screenshot({path:`${out}/reopened.png`});
     await page.setViewportSize({width:800,height:700});await page.waitForTimeout(500);await page.screenshot({path:`${out}/compact.png`});

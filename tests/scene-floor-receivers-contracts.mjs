@@ -20,7 +20,8 @@ for(let i=0;i<g.index.count;i+=3)for(let j=0;j<3;j++) {
   maxEdge=Math.max(maxEdge,a.distanceTo(b));
 }
 assert.ok(maxEdge<.3,`distributed floor must interpolate locally, not along radius-length fan edges: ${maxEdge}`);
-assert.equal(mesh.position.y,-.85);assert.equal(mesh.material.color.getHex(),0x111111);
+assert.equal(mesh.position.y,-.85);assert.equal(mesh.material.color.getHex(),0x808080);
+assert.equal(mesh.material.metalness,0);assert.equal(mesh.material.roughness,.65);
 for(let i=0;i<p.count;i++)assert.ok(Math.hypot(p.getX(i),p.getY(i))<=5.000001);
 assert.equal(floor(false).geometry.type,'CircleGeometry','ordinary route retains its floor');
 console.log('floor receiver locality contracts passed', {maxEdge,vertices:p.count});
