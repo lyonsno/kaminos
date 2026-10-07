@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+const imported=await import('../structural-material-solid-surface.mjs').catch(error=>{if(error.code==='ERR_MODULE_NOT_FOUND')return null;throw error;});
+assert.ok(imported?.bindSolidSurface&&imported?.applySolidSurfaceBinding,'The imported skin must consume deformable material state');
+const positions=[[0,0,0],[1,0,0],[0,1,0],[0,0,1]],tetrahedra=[[0,1,2,3]],vertices=[[.2,.3,.1],[-.001,.3,.1]];
+const binding=imported.bindSolidSurface({positions,tetrahedra},vertices,{envelope:.002});
+assert.equal(binding.entries.length,2);assert.ok(binding.entries[1].distance>0);
+const transform=([x,y,z])=>[2-y,x+1,1.1*z+.02*x];
+const current=positions.map(transform),actual=imported.applySolidSurfaceBinding(binding,current,{components:[0,0,0,0]});
+actual.forEach((p,i)=>p.forEach((v,a)=>assert.ok(Math.abs(v-transform(vertices[i])[a])<1e-10,'Skin mapping must reproduce an affine field including the exterior offset')));
+assert.throws(()=>imported.applySolidSurfaceBinding(binding,current,{components:[0,1,0,0]}),/released connectivity/);
+assert.throws(()=>imported.bindSolidSurface({positions,tetrahedra},[[3,0,0]],{envelope:.002}),/outside/);
+assert.throws(()=>imported.applySolidSurfaceBinding(binding,current,{}),/component/);
+console.log('Surface coupling preserves affine deformation and refuses disconnected bridging');
