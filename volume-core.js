@@ -4583,7 +4583,7 @@ fn csJoinedPressureError(@builtin(global_invocation_id) gid:vec3<u32>) {
       +joinedProjectedFace(c,1u)-joinedProjectedFace(c-vec3<i32>(0,1,0),1u)
       +joinedProjectedFace(c,2u)-joinedProjectedFace(c-vec3<i32>(0,0,1),2u)-heatReleaseExpansion(c);
   }
-  pressureDst[index3(gid)].z=select(bitcast<f32>(0x7f800000u),abs(error),abs(error)<=1e30);
+  pressureDst[index3(gid)].z=select(1e30,abs(error),abs(error)<=1e30);
 }
 var<workgroup> joinedErrors:array<f32,64>;
 @compute @workgroup_size(64)
