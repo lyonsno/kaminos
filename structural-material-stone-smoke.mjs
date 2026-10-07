@@ -7,10 +7,10 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { inspectStoneThickness } from './structural-material-stone-evidence.mjs';
 
-const [outputInput,executableInput]=process.argv.slice(2);
+const [outputInput,executableInput,exercise='paired']=process.argv.slice(2);
 if(!outputInput||!executableInput)throw new Error('usage: node structural-material-stone-smoke.mjs OUTPUT.json INDEPENDENT_BROWSER');
 const root=path.dirname(fileURLToPath(import.meta.url)),output=path.resolve(outputInput),hash=b=>createHash('sha256').update(b).digest('hex');
-const report={status:'running',phase:'preflight',root,argv:process.argv,sourceRevision:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),sources:{},inputs:[],checks:[],states:{},captures:{},errors:[],lastTrustworthyEvidence:'invocation'};
+const report={status:'running',phase:'preflight',exercise,root,argv:process.argv,sourceRevision:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),sources:{},inputs:[],checks:[],states:{},captures:{},errors:[],lastTrustworthyEvidence:'invocation'};
 fs.mkdirSync(path.dirname(output),{recursive:true});const save=()=>fs.writeFileSync(output,JSON.stringify(report,null,2));save();
 let server,child,socket,stderr='',nextId=0,expectedStrength=200;const pending=new Map(),sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const send=(method,params={})=>new Promise((resolve,reject)=>{const id=++nextId;pending.set(id,{resolve,reject});socket.send(JSON.stringify({id,method,params}));});
@@ -28,6 +28,7 @@ async function capture(name){const state=await witness();report.states[name]=sta
   const frame=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false}),bytes=Buffer.from(frame.data,'base64'),target=`${output.slice(0,-path.extname(output).length)}-${name}.png`;fs.writeFileSync(target,bytes);report.captures[name]={path:target,sha256:hash(bytes),width:bytes.readUInt32BE(16),height:bytes.readUInt32BE(20),pixels};report.lastTrustworthyEvidence=`${name} at steps ${state.specimens.map(s=>s.state.step)}`;save();return state;
 }
 try {
+  if(!['paired','hold'].includes(exercise))throw new Error('Unknown stone exercise');
   const executable=fs.realpathSync(executableInput);if(executable.includes('/Google Chrome.app/')||!/chrome-headless-shell$|\/Chromium$|Google Chrome for Testing$/.test(executable))throw new Error('Independent browser required');
   report.browser={executable,version:execFileSync(executable,['--version'],{encoding:'utf8'}).trim()};
   for(const filename of ['structural-material-stone.html','structural-material-stone-view.js','structural-material-stone-fixture.js','structural-material-stone-prepare.mjs','structural-material-stone-smoke.mjs','structural-material-arch-gpu.js','structural-material-arch-gpu-kernels.js','structural-material-arch-stones.js','dist/structural-material-arch-gpu-engine.js','package-lock.json','artifacts/imported-stone-thickness/prepared.json','assets/arch-stones/03-bedded-stone-500-normal.glb'])report.sources[filename]=hash(fs.readFileSync(path.join(root,filename)));
@@ -44,6 +45,12 @@ try {
   while(!await evaluate('Boolean(window.__stoneThickness)')){if(report.errors.length)throw new Error(JSON.stringify(report.errors));await sleep(100);}await sleep(350);report.effectiveUrl=await evaluate('location.href');check('effective page equals requested route',report.effectiveUrl===report.requestedUrl,report.effectiveUrl);
   const initial=await capture('initial');check('same material, solver and external fixture',JSON.stringify(initial.specimens[0].state.config)===JSON.stringify(initial.specimens[1].state.config),initial.specimens.map(s=>s.state.config));
   check('both imported interiors stand intact before hand load',initial.specimens.every(s=>s.state.broken===0),initial.specimens.map(s=>s.state.broken));
+  if(exercise==='hold'){
+    report.phase='gravity-only-control';report.hold=[];save();
+    for(let i=0;i<8;i++){await evaluate('window.__stoneThickness.advance(30)');const state=await witness();report.hold.push(state);save();}
+    const held=await capture('gravity-only');check('gravity-only baseline remains intact through four seconds',held.specimens.every(s=>s.state.broken===0&&s.state.hand===null),held.specimens.map(s=>({broken:s.state.broken,step:s.state.step,maxStress:Math.max(...s.state.bonds.map(b=>b.stress))})));
+  }
+  if(exercise==='paired'){
   report.phase='intact-response';save();await evaluate('window.__stoneThickness.setStrength(1e8)');expectedStrength=1e8;await evaluate('window.__stoneThickness.pull(.08)');await evaluate('window.__stoneThickness.advance(60)');const elastic=await capture('intact-response');
   check('requested intact advancement completed on both models',elastic.specimens.every((s,i)=>s.state.step-initial.specimens[i].state.step===60),elastic.specimens.map(s=>s.state.step));
   const forces=elastic.specimens.map(s=>Math.hypot(s.state.hand.force.x,s.state.hand.force.y,s.state.hand.force.z));
@@ -65,6 +72,7 @@ try {
   await evaluate('window.__stoneThickness.release()');const beforeMode=await witness();await evaluate('document.querySelector("#bind").click()');const boundMode=await witness();check('Bind selection is inert and does not silently route paired pull',boundMode.mode==='bind'&&await evaluate('document.querySelector("#pull").disabled')&&JSON.stringify(beforeMode.specimens.map(s=>s.state))===JSON.stringify(boundMode.specimens.map(s=>s.state)),boundMode.mode);
   await evaluate('document.querySelector("#shear").click()');
   await evaluate('window.__stoneThickness.reset()');await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await sleep(350);await capture('mobile');check('mobile controls fit',await evaluate('document.documentElement.scrollWidth<=innerWidth'),null);
+  }
   check('no browser exceptions',report.errors.length===0,report.errors);report.status='passed';report.phase='complete';save();
 }catch(error){report.status='failed';report.failure={message:error.message,stack:error.stack};save();process.exitCode=1;}
 finally{socket?.close();if(child&&child.exitCode===null){child.kill('SIGTERM');await new Promise(r=>child.once('close',r));}if(server)await new Promise(r=>server.close(r));report.browser??={};report.browser.stderr=stderr;report.browser.ownedChildExited=child?.exitCode!==null;save();console.log(JSON.stringify({status:report.status,phase:report.phase,output,failure:report.failure?.message}));}
