@@ -5,7 +5,7 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { assertLocalLiquidSelectionContinuity } from './local-liquid-selection-evidence.mjs';
 import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
-import { countChangedVisibleWaterPixels, countVisibleWaterPixels } from './screenshot-png-rgb.mjs';
+import { countChangedVisibleWaterPixels, countVisibleWaterPixels, decodeScreenshotPngRgb } from './screenshot-png-rgb.mjs';
 import { compositionRestoreUrl } from './scene-authoring.mjs';
 
 const args = new Map();
@@ -342,6 +342,40 @@ async function runSnapGroundLevelScenario(ws) {
   if (Math.abs(min[1] - after.groundY) > 2e-3 * diagonal) throw new Error('Snap Ground did not rest the asset on the ground: ' + JSON.stringify({ bounds: after.bounds, groundY: after.groundY }));
   const near = (a, b) => a.every((value, index) => Math.abs(value - b[index]) < 1e-6);
   if (!['position', 'rotation', 'scale'].every(key => near(undone[key], before.pose[key]))) throw new Error('undo did not restore the arrival pose: ' + JSON.stringify({ before: before.pose, undone }));
+}
+
+// Toolbar orientation buttons act on the selected object at once: the
+// viewport redraws on the click (no deselect needed), the object stays
+// selected, and one undo restores the previous pose.
+async function runToolbarRotateLiveScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-toolbar-rotate-live';
+  const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
+  const record = `window.kaminosSceneObjectDebugState().find(item => item.id === ${JSON.stringify(objectId)})`;
+  await delay(2500); // let the on-demand renderer go idle
+  const before = await evaluate(ws, record);
+  const beforePath = out.replace(/\.png$/i, '-before-rot.png');
+  await capturePngScreenshot(ws, beforePath);
+  await evaluate(ws, `(() => { const button = [...document.querySelectorAll('#transform-bar button')].find(item => item.textContent.trim() === 'Rot X'); if (!button) throw new Error('Rot X button missing'); button.click(); })()`);
+  await delay(600);
+  const after = await evaluate(ws, record);
+  const afterPath = out.replace(/\.png$/i, '-after-rot.png');
+  await capturePngScreenshot(ws, afterPath);
+  const a = decodeScreenshotPngRgb(readFileSync(beforePath)), b = decodeScreenshotPngRgb(readFileSync(afterPath));
+  let changed = 0;
+  for (let i = 0; i < a.pixels.length; i += a.channels) if (Math.abs(a.pixels[i] - b.pixels[i]) + Math.abs(a.pixels[i + 1] - b.pixels[i + 1]) + Math.abs(a.pixels[i + 2] - b.pixels[i + 2]) > 24) changed++;
+  const changedFraction = changed / (a.width * a.height);
+  const undone = await evaluate(ws, `(async () => {
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', metaKey: true, bubbles: true }));
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return ${record};
+  })()`);
+  lastEvidence.toolbarRotateLive = { before: before.transform, after: after.transform, afterActive: after.active, changedFraction, undone: undone.transform };
+  if (after.transform.rotation.every((value, index) => Math.abs(value - before.transform.rotation[index]) < 1e-6)) throw new Error('Rot X did not change the object pose: ' + JSON.stringify(lastEvidence.toolbarRotateLive));
+  if (!after.active) throw new Error('Rot X deselected the object');
+  if (changedFraction < 0.01) throw new Error('viewport did not redraw after Rot X while the object stayed selected: ' + JSON.stringify({ changedFraction }));
+  const near = (x, y) => x.every((value, index) => Math.abs(value - y[index]) < 1e-6);
+  if (!['position', 'rotation', 'scale'].every(key => near(undone.transform[key], before.transform[key]))) throw new Error('undo did not restore the pose before Rot X: ' + JSON.stringify(lastEvidence.toolbarRotateLive));
 }
 
 async function runNavigationDepthIndexScenario(ws) {
@@ -5662,6 +5696,8 @@ try {
     await runMeshAssetArrivalScenario(ws);
   } else if (scenario === 'snap-ground-level') {
     await runSnapGroundLevelScenario(ws);
+  } else if (scenario === 'toolbar-rotate-live') {
+    await runToolbarRotateLiveScenario(ws);
   } else if (scenario === 'mesh-asset-append-arrival') {
     await runMeshAssetAppendArrivalScenario(ws, args.get('--append-url'));
   } else if (scenario === 'navigation-depth-index') {

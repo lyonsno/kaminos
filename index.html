@@ -76,6 +76,7 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 #scene-add-menu-trigger { padding:7px 13px; }
 #scene-add-menu-popup { position:absolute; top:calc(100% + 4px); left:0; min-width:214px; padding:4px; border:1px solid #435159; border-radius:6px; background:#192023; box-shadow:0 8px 24px #000a; }
 #scene-add-menu-popup[hidden] { display:none; }
+#authoring-source-fire-light[hidden], #demo-buttons[hidden] { display: none !important; }
 #scene-add-menu-popup button { display:flex; width:100%; justify-content:space-between; gap:20px; padding:9px 10px; text-align:left; white-space:nowrap; }
 #scene-add-menu-popup small { color:#8fa1a6; font:10px 'SF Mono',monospace; }
 #local-liquid-performance .hint { margin:8px 0 0; color:#96a3a8; font:11px/1.5 'SF Mono',monospace; }
@@ -866,7 +867,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </section>
     <section id="selected-flame-properties" hidden><h2>Selected Flame</h2><div id="selected-flame-fields"></div></section>
 
-    <section id="authoring-source-fire-light">
+    <!-- Hidden from the sidebar (Noah, 2026-10-07). Saved compositions still store and
+         restore the gain, and witnesses drive these controls, so they stay in the page. -->
+    <section id="authoring-source-fire-light" hidden>
     <h2>Fire Light</h2>
     <div class="panel">
       <label class="import-mode">
@@ -982,7 +985,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
     </div>
 
-    <div id="demo-buttons">
+    <!-- Hidden (Noah, 2026-10-07); witnesses still load the demo through this button. -->
+    <div id="demo-buttons" hidden>
       <h2>Demo Assets</h2>
       <div id="demo-list"></div>
     </div>
@@ -1007,13 +1011,13 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
     <div class="slider-row" style="margin-top: 10px;">
       <span class="slider-label">Exposure</span>
-      <input type="range" id="exposure-slider" min="0.2" max="4" step="0.1" value="1.5">
-      <span class="slider-val" id="exposure-val">1.5</span>
+      <input type="range" id="exposure-slider" min="0.2" max="4" step="0.1" value="1.1">
+      <span class="slider-val" id="exposure-val">1.1</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Env Intensity</span>
-      <input type="range" id="env-intensity-slider" min="0.1" max="5" step="0.1" value="1.0">
-      <span class="slider-val" id="env-intensity-val">1.0</span>
+      <input type="range" id="env-intensity-slider" min="0.1" max="5" step="0.1" value="0.7">
+      <span class="slider-val" id="env-intensity-val">0.7</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Rotation</span>
@@ -1022,15 +1026,15 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div class="slider-row" style="margin-top: 6px;">
       <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-        <input type="checkbox" id="show-env-bg"> Show Map
+        <input type="checkbox" id="show-env-bg" checked> Show Map
       </label>
     </div>
-    <div class="slider-row" id="blur-row" style="display: none;">
+    <div class="slider-row" id="blur-row">
       <span class="slider-label">Blur</span>
       <input type="range" id="env-blur-slider" min="0" max="1" step="0.01" value="0.4">
       <span class="slider-val" id="env-blur-val">0.4</span>
     </div>
-    <div id="env-backdrop-controls" style="display: none;">
+    <div id="env-backdrop-controls">
       <div class="slider-row">
         <label class="slider-label" for="env-bg-brightness">BG Brightness</label>
         <input type="range" id="env-bg-brightness" min="0" max="5" step="0.05" value="0.6">
@@ -1056,8 +1060,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div id="ao-controls">
       <div class="slider-row">
         <span class="slider-label">Radius</span>
-        <input type="range" id="ao-radius" min="0.5" max="10" step="0.1" value="4.0">
-        <span class="slider-val" id="ao-radius-val">4.00</span>
+        <input type="range" id="ao-radius" min="0.5" max="10" step="0.1" value="10.0">
+        <span class="slider-val" id="ao-radius-val">10.00</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Intensity</span>
@@ -1066,18 +1070,18 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <div class="slider-row">
         <span class="slider-label">Scale</span>
-        <input type="range" id="ao-scale" min="0.1" max="5" step="0.05" value="1.62">
-        <span class="slider-val" id="ao-scale-val">1.62</span>
+        <input type="range" id="ao-scale" min="0.1" max="5" step="0.05" value="0.75">
+        <span class="slider-val" id="ao-scale-val">0.75</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Thickness</span>
-        <input type="range" id="ao-thickness" min="0.1" max="5" step="0.05" value="1.81">
-        <span class="slider-val" id="ao-thickness-val">1.81</span>
+        <input type="range" id="ao-thickness" min="0.1" max="5" step="0.05" value="1.45">
+        <span class="slider-val" id="ao-thickness-val">1.45</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Falloff</span>
-        <input type="range" id="ao-falloff" min="0" max="1" step="0.01" value="0.74">
-        <span class="slider-val" id="ao-falloff-val">0.74</span>
+        <input type="range" id="ao-falloff" min="0" max="1" step="0.01" value="0.48">
+        <span class="slider-val" id="ao-falloff-val">0.48</span>
       </div>
     </div>
 
@@ -3482,7 +3486,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <p class="rendering-description">Transported-light gain adjusts surface and distributed smoke illumination together; direct flame emission is unchanged. Surface scattering uses the distributed incident field even during legacy smoke comparison. Surface-to-surface bounce and repeated smoke scattering are not included.</p></div>
       <h2>Flame field</h2>
       <p class="rendering-description">The flame-derived field lights scene surfaces. This gain adjusts its receiving pass; it does not change the visible flame or shared point source.</p>
-      <p class="rendering-description">Flame field gain and test geometry remain in the authoring light inspector.</p>
     </div>
     <div id="authored-mix-panel-content" role="tabpanel" aria-labelledby="right-tab-mix">
     <div class="volume-authored-mix-kicker">Volume</div>
@@ -3933,7 +3936,7 @@ let currentEnvName = null;
 let environmentRecipes = {};
 let environmentLoadToken = 0;
 let rimLight = null;
-let showEnvBg = false;
+let showEnvBg = true;
 let currentEnvMap = null;
 let glbSourceScene = null; // raw loaded gltf scene for export
 let glbFileName = 'model.glb';
@@ -10671,8 +10674,9 @@ const HDR_ENVS = {
   studio: {
     label: 'Studio',
     url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',
-    exposure: 1.5,
-    intensity: 1.0,
+    // Noah's interim viewing defaults (2026-10-07), until the new lighting lands.
+    exposure: 1.1,
+    intensity: 0.7,
   },
   sunset: {
     label: 'Sunset',
@@ -11350,6 +11354,12 @@ async function initScene() {
   const depthTexNode = texture(depthRT.texture);
   const normalTexNode = texture(normalTexture);
   aoPass = aoCompute(depthTexNode, normalTexNode, camera);
+  // The sliders own the AO starting values; the addon's constructor defaults
+  // are not Kaminos defaults.
+  for (const [id, key] of [['ao-radius', 'radius'], ['ao-scale', 'scale'], ['ao-thickness', 'thickness'], ['ao-falloff', 'distanceFallOff']]) {
+    const value = parseFloat(document.getElementById(id)?.value);
+    if (Number.isFinite(value)) aoPass[key].value = value;
+  }
   configureMaterialSideAODepth(aoPass, { scene, camera, depthRT, depthMaterial }, THREE.RendererUtils);
 
   const aoResolved = convertToTexture(aoPass.getTextureNode());
@@ -25621,32 +25631,37 @@ window.flipAxis = function(axis) {
     toggleSplatCorrectionAxisFlip(axis);
     return;
   }
-  if (!currentMesh) return;
-  const s = currentMesh.scale;
-  if (axis === 'x') s.x *= -1;
-  else if (axis === 'y') s.y *= -1;
-  else if (axis === 'z') s.z *= -1;
+  if (!currentMesh || !['x', 'y', 'z'].includes(axis)) return;
+  commitToolbarPose(currentMesh, editedToolbarPose(currentMesh, probe => { probe.scale[axis] *= -1; }));
 };
 
 window.rotateAxis = function(axis) {
   if (!currentMesh) return;
-  if (axis === 'x') currentMesh.rotateX(HALF_PI);
-  else if (axis === 'y') currentMesh.rotateY(HALF_PI);
-  else if (axis === 'z') currentMesh.rotateZ(HALF_PI);
+  const turn = { x: 'rotateX', y: 'rotateY', z: 'rotateZ' }[axis];
+  if (!turn) return;
+  commitToolbarPose(currentMesh, editedToolbarPose(currentMesh, probe => probe[turn](HALF_PI)));
 };
 
+// Reset: undo orientation and scale edits, landing the object the way a fresh
+// import arrives (shared size, resting on the ground) where it stands now.
 window.resetTransform = function() {
   if (!currentMesh) return;
-  // Re-center and re-scale from scratch
-  currentMesh.rotation.set(0, 0, 0);
-  currentMesh.scale.set(1, 1, 1);
-  currentMesh.position.set(0, 0, 0);
-  const box = new THREE.Box3().setFromObject(currentMesh);
-  const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3()).length();
-  currentMesh.position.sub(center);
-  const scale = 2.0 / size;
-  currentMesh.scale.setScalar(scale);
+  const saved = { position: currentMesh.position.clone(), quaternion: currentMesh.quaternion.clone(), scale: currentMesh.scale.clone() };
+  currentMesh.updateWorldMatrix(true, true);
+  const here = new THREE.Box3().setFromObject(currentMesh, true).getCenter(new THREE.Vector3());
+  currentMesh.position.set(0, 0, 0); currentMesh.quaternion.identity(); currentMesh.scale.set(1, 1, 1);
+  currentMesh.updateWorldMatrix(true, true);
+  const box = new THREE.Box3().setFromObject(currentMesh, true);
+  const placement = box.isEmpty() ? null : computeAssetArrivalPlacement({
+    bounds: { min: box.min.toArray(), max: box.max.toArray() },
+    rootPosition: currentMesh.position.toArray(),
+    groundY: groundPlane ? groundPlane.position.y : 0,
+    anchor: [here.x, here.z],
+  });
+  currentMesh.position.copy(saved.position); currentMesh.quaternion.copy(saved.quaternion); currentMesh.scale.copy(saved.scale);
+  currentMesh.updateWorldMatrix(true, true);
+  if (!placement) return;
+  commitToolbarPose(currentMesh, { position: placement.position, rotation: [0, 0, 0], scale: [placement.scale, placement.scale, placement.scale] });
 };
 
 window.reverseWinding = function() {
@@ -25886,6 +25901,40 @@ window.addEventListener('keydown', e => {
   }
 });
 
+// Toolbar pose edits (flip, rotate, reset, Snap Ground) commit through scene
+// history like a gizmo edit: the viewport redraws at once and Cmd/Ctrl+Z
+// undoes them. Objects outside the scene list (Greenroom preview) are posed
+// directly.
+function commitToolbarPose(object, transform) {
+  const entry = sceneObjects.find(item => item.object === object);
+  try {
+    if (entry) window.kaminosSetSceneObjectTransform(entry.id, transform);
+    else applySceneObjectTransformState(object, transform);
+  } catch (error) {
+    setInfo(`Could not change pose: ${error.message}`);
+    return false;
+  }
+  window._kaminosDirty?.();
+  return true;
+}
+
+function toolbarPoseFromWorld(object, world) {
+  const local = world.clone();
+  if (object.parent) local.premultiply(object.parent.matrixWorld.clone().invert());
+  const position = new THREE.Vector3(), quaternion = new THREE.Quaternion(), scale = new THREE.Vector3();
+  local.decompose(position, quaternion, scale);
+  const rotation = new THREE.Euler().setFromQuaternion(quaternion, object.rotation.order);
+  return { position: position.toArray(), rotation: [rotation.x, rotation.y, rotation.z], scale: scale.toArray() };
+}
+
+function editedToolbarPose(object, edit) {
+  const probe = new THREE.Object3D();
+  probe.rotation.order = object.rotation.order;
+  probe.position.copy(object.position); probe.quaternion.copy(object.quaternion); probe.scale.copy(object.scale);
+  edit(probe);
+  return { position: probe.position.toArray(), rotation: [probe.rotation.x, probe.rotation.y, probe.rotation.z], scale: probe.scale.toArray() };
+}
+
 // Snap Ground: when the object is not standing on a level base but clearly
 // could (a stable flat face within a few degrees of straight down, such as a
 // chair's leg tips), turn it onto that base first; then rest it on the ground.
@@ -25895,6 +25944,10 @@ function sceneObjectRestingAnalysis(object) {
   const analysis = findRestingPlanes(points, triangles);
   return { analysis, choice: chooseLevelingPlane(analysis) };
 }
+
+// Every transform-bar action changes what the viewport shows; redraw after the
+// button's own handler runs, whether or not it routed through scene history.
+document.getElementById('transform-bar')?.addEventListener('click', () => window._kaminosDirty?.());
 
 window.kaminosRestingPlaneDebugState = function(id) {
   const entry = sceneObjects.find(item => item.id === id);
@@ -25909,21 +25962,7 @@ window.snapToGround = function() {
   if (!analysis) return;
   const delta = levelingWorldDelta({ plane: choice.reason === 'level' ? choice.plane : null, hullPoints: analysis.hullPoints, groundY: groundPlane.position.y });
   currentMesh.updateWorldMatrix(true, false);
-  const local = currentMesh.matrixWorld.clone().premultiply(delta);
-  if (currentMesh.parent) local.premultiply(currentMesh.parent.matrixWorld.clone().invert());
-  const position = new THREE.Vector3(), quaternion = new THREE.Quaternion(), scale = new THREE.Vector3();
-  local.decompose(position, quaternion, scale);
-  const rotation = new THREE.Euler().setFromQuaternion(quaternion, currentMesh.rotation.order);
-  const transform = { position: position.toArray(), rotation: [rotation.x, rotation.y, rotation.z], scale: scale.toArray() };
-  const entry = sceneObjects.find(item => item.object === currentMesh);
-  try {
-    if (entry) window.kaminosSetSceneObjectTransform(entry.id, transform);
-    else applySceneObjectTransformState(currentMesh, transform);
-  } catch (error) {
-    setInfo(`Snap Ground failed: ${error.message}`);
-    return;
-  }
-  window._kaminosDirty?.();
+  if (!commitToolbarPose(currentMesh, toolbarPoseFromWorld(currentMesh, currentMesh.matrixWorld.clone().premultiply(delta)))) return;
   if (choice.reason === 'level') setInfo(`Leveled ${choice.plane.tiltDeg.toFixed(1)}° onto its base and snapped to ground`);
   else if (choice.reason === 'already-level') setInfo('Snapped to ground (already standing level)');
   else setInfo('Snapped to ground (no clear base to level onto)');
