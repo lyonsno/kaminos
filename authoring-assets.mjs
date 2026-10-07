@@ -17,7 +17,7 @@ export function createAuthoringAssets({request, addMesh, uploadImage, generator,
       if(result.type !== 'dir' || result.root !== root || result.path !== path || !Array.isArray(result.entries))throw Error('Asset folder response does not match the requested folder');
       state.entries = result.entries.filter(entry => entry.type === 'dir' || assetKind(entry.name)).map(entry => ({...entry,
         root, path:[path,entry.name].filter(Boolean).join('/'), kind:entry.type==='dir'?'folder':assetKind(entry.name),
-        label:nameForSource(assetSource(root,[path,entry.name].filter(Boolean).join('/'))) || entry.metadata?.name || (/^[a-f0-9]{64}\.glb$/i.test(entry.name)?`Saved mesh · ${entry.name.slice(0,8)}`:entry.display?.title || entry.name)}));
+        label:nameForSource(assetSource(root,[path,entry.name].filter(Boolean).join('/'))) || entry.metadata?.name || (entry.generation?entry.display?.title:null) || (/^[a-f0-9]{64}\.glb$/i.test(entry.name)?`Saved mesh · ${entry.name.slice(0,8)}`:entry.display?.title || entry.name)}));
     } catch(error) {if(ticket===navigation){state.entries=[];state.error=error.message;}}
     finally {if(ticket===navigation){state.loading=false;publish();}}
     return !state.error;

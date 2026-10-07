@@ -70,7 +70,11 @@ export function createSf3dAuthoringGeneration({context,request=fetch,changed=()=
       const sha256=await hex(glb),response=await request('/api/ingest-mesh',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});
       const saved=await response.json();
       if(!response.ok||saved.schema!=='kaminos.generated-mesh.v0'||saved.sha256!==sha256||saved.bytes!==glb.byteLength||saved.source!==`/api/read?root=generated-meshes&path=${sha256}.glb`)throw Error(saved.error||'Generated mesh storage returned a different artifact');
-      return{source:saved.source,sha256,name:`${label.replace(/\.[^.]+$/,'')} · SF3D.glb`,generation:{...generation,sha256,bytes:glb.byteLength}};
+      const result={source:saved.source,sha256,name:`${label.replace(/\.[^.]+$/,'')} · SF3D.glb`,generation:{...generation,sha256,bytes:glb.byteLength}};
+      const originResponse=await request('/api/mesh-generation-origin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(result)});
+      const origin=await originResponse.json();
+      if(!originResponse.ok||origin.schema!=='kaminos.mesh-generation-origin.v1'||origin.result?.source!==result.source||origin.result?.sha256!==result.sha256||origin.result?.name!==result.name||origin.result?.generation?.runId!==generation.runId||origin.result?.generation?.input?.sha256!==generation.input.sha256||origin.result?.generation?.route!==generation.route||origin.result?.generation?.bytes!==glb.byteLength)throw Error(origin.error||'Generation origin storage returned a different result');
+      return result;
     },
   });
   return {...service,read(){

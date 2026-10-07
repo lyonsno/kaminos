@@ -23,7 +23,7 @@ export function getPivotViewState(camera, point, width, height) {
 export function installScenePlacementTools({
   viewport, historyScope = null, camera, controls, gizmo, selected, read, write, object, refresh,
   allowed = () => true, busy = () => false, frameSelected = () => {},
-  settled = () => {}, captureContext = () => null, historyScopes = [], prepare=()=>{}, transformSettings=()=>({orientation:'world'}),
+  settled = () => {}, captureContext = () => null, historyScopes = [], prepare=()=>{}, transformSettings=()=>({orientation:'world'}),localOrientation=()=>read(selected())?.rotation||[0,0,0],
 }) {
   const hud = document.createElement('div');
   hud.id = 'scene-edit-hud';
@@ -110,7 +110,7 @@ export function installScenePlacementTools({
     if (field) finish(true);
     if (!modal) {
       if (!begin(selected(), 'Transform')) return false;
-      modal = { completed, axis: null, plane: false, frame: transformSettings().orientation || 'world', frameRotation: [...pose().rotation], numeric: '', snap: false, precise: false, prior: priorControls() };
+      modal = { completed, axis: null, plane: false, frame: transformSettings().orientation || 'world', frameRotation: [...localOrientation()], numeric: '', snap: false, precise: false, prior: priorControls() };
     }
     // Operation changes are alternatives within one gesture. Always restart
     // from the accepted pose captured by begin(), then preview only this mode.
@@ -171,7 +171,14 @@ export function installScenePlacementTools({
       }
     }
     const snap = current.snap ? (current.operation === 'rotate' ? Math.PI / 36 : .1) : 0;
-    edits.preview(transformPose(current.base, { ...current, amount, delta: delta.toArray(), viewAxis: forward.toArray(), snap }));
+    let base=current.base;
+    if(base.roots){
+      // The selected roots stay at gesture-start identity; constraint cycling
+      // changes only the frame used to apply this alternative transform.
+      const rotation=current.frame==='local'?current.frameRotation:[0,0,0];
+      base={...base,rotation:[...rotation],frame:{position:[...base.position],rotation:[...rotation],scale:[...base.scale]},preferences:{...base.preferences,orientation:current.frame}};
+    }
+    edits.preview({...base,...transformPose(base, { ...current, amount, delta: delta.toArray(), viewAxis: forward.toArray(), snap })});
     current.amount = amount;
     draw();
   }

@@ -11509,6 +11509,7 @@ async function initScene() {
     selected: () => selectedPlacementEntry()?.id || null,
     prepare:()=>{if(sceneSelection.ids.length)selectionTransforms?.prepare();},
     transformSettings:()=>transformPreferences,
+    localOrientation:()=>sceneSelection.activeId?selectionRootState(sceneSelection.activeId).rotation:[0,0,0],
     read: id => {
       if(id==='@selection-transform')return selectionTransforms.pose();
       if (id?.startsWith('@group:')) return structuredClone(sceneGroups.find(group=>`@group:${group.id}`===id)?.transform || null);
@@ -29035,7 +29036,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
 
   if (legacyBurner?.enabled !== false && legacyBurner && !objectRecords.some(record=>record.type===PROCEDURAL_MESH_TYPE)) migrateLegacyBurner(legacyBurner);
   if (!authoredFlamePresent) applyFlameEmitterPose?.(flameEmitterPose,{sourceEnabled:false});
-  if(data.selectionIds?.length){const valid=data.selectionIds.filter(id=>sceneObjects.some(o=>o.id===id)||sceneGroups.some(g=>'@group:'+g.id===id));if(valid.length)setSceneSelection(valid,valid.includes(data.activeGroupId?'@group:'+data.activeGroupId:data.activeObjectId)?(data.activeGroupId?'@group:'+data.activeGroupId:data.activeObjectId):valid.at(-1));}
+  if(Array.isArray(data.selectionIds)){const valid=data.selectionIds.filter(id=>sceneObjects.some(o=>o.id===id)||sceneGroups.some(g=>'@group:'+g.id===id));setSceneSelection(valid,valid.includes(data.activeGroupId?'@group:'+data.activeGroupId:data.activeObjectId)?(data.activeGroupId?'@group:'+data.activeGroupId:data.activeObjectId):valid.at(-1)??null);}
   if(data.activeFieldId && (data.activeFieldId==='flame-field'?activeSceneComposition:localLiquidSetup))window.selectSceneField(data.activeFieldId);
 
   // The pinned basin is already mounted. Reapplying identical primitives would
@@ -29053,7 +29054,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   }
 
   syncRimAuthoringHandle();
-  if (data.activeObjectId === RIM_LIGHT_ID) setActiveSceneObject(RIM_LIGHT_ID);
+  if (!Array.isArray(data.selectionIds) && data.activeObjectId === RIM_LIGHT_ID) setActiveSceneObject(RIM_LIGHT_ID);
 
   // Apply camera
   if (data.camera) {

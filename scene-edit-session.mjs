@@ -253,8 +253,9 @@ export function transformPose(base, {
   } else if (operation === 'scale') {
     const index = { x: 0, y: 1, z: 2 }[axis];
     const factors=[0,1,2].map(i=>!axis||(plane?i!==index:i===index)?amount:1);
-    if(axis&&frame==='world'){
-      const target=new Matrix4().makeScale(...factors).multiply(new Matrix4().compose(new Vector3(),new Quaternion().setFromEuler(new Euler(...base.rotation)),new Vector3(...base.scale)));
+    if(axis&&(frame==='world'||JSON.stringify(frameRotation)!==JSON.stringify(base.rotation))){
+      const basis=new Matrix4().makeRotationFromQuaternion(new Quaternion().setFromEuler(new Euler(...(frame==='local'?frameRotation:[0,0,0]))));
+      const target=basis.clone().multiply(new Matrix4().makeScale(...factors)).multiply(basis.clone().invert()).multiply(new Matrix4().compose(new Vector3(),new Quaternion().setFromEuler(new Euler(...base.rotation)),new Vector3(...base.scale)));
       const position=new Vector3(),rotation=new Quaternion(),scale=new Vector3();target.decompose(position,rotation,scale);
       const reconstructed=new Matrix4().compose(position,rotation,scale),extent=Math.max(1,...target.elements.map(Math.abs));
       if(![...rotation.toArray(),...scale.toArray()].every(Number.isFinite)||target.elements.some((v,i)=>Math.abs(v-reconstructed.elements[i])>1e-7*extent))throw Error('This World-axis scale introduces shear; use Local axes or uniform scale');

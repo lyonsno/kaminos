@@ -29,3 +29,9 @@ test('scene save and restore retain generated input and result identity',()=>{
  const object={id:'generated',type:'glb',source:'/api/read?root=generated-meshes&path=mesh.glb',generation,transform:{position:[1,2,3],rotation:[0,0,0],scale:[1,1,1]}};
  const document=buildSceneDocument({objects:[object],activeObjectId:'generated'});assert.deepEqual(document.objects[0].generation,generation);assert.deepEqual(planSceneRestore(document).objects[0].generation,generation);
 });
+
+test('an explicit empty selection survives document normalization while legacy omission keeps its fallback',()=>{
+ const objects=[{id:'a',source:'/api/read?root=generated-meshes&path=a.glb',type:'glb'},{id:'b',source:'/api/read?root=generated-meshes&path=b.glb',type:'glb'}];
+ const empty=buildSceneDocument({objects,selectionIds:[],activeObjectId:null});assert.equal(empty.activeObjectId,null);assert.equal(planSceneRestore(empty).activeObjectId,null);
+ const legacy=buildSceneDocument({objects});assert.equal(legacy.activeObjectId,'a');assert.equal(Object.hasOwn(legacy,'selectionIds'),false);
+});

@@ -158,7 +158,7 @@ export function planSceneRestore(data) {
   const loadedIds = new Set(objects.map(record => record.id));
   const requestedActiveId = data.activeObjectId && loadedIds.has(data.activeObjectId) ? data.activeObjectId : null;
   const requestedActiveGroupId = data.activeGroupId && groups.some(group => group.id === data.activeGroupId) ? data.activeGroupId : null;
-  const activeObjectId = requestedActiveId || objects.at(-1)?.id || null;
+  const activeObjectId = requestedActiveId || (Array.isArray(data.selectionIds)?null:objects.at(-1)?.id || null);
   return {
     schema: data.schema || null,
     version: data.version,
@@ -181,7 +181,7 @@ export function buildSceneDocument({
   groups = [],
   activeObjectId = null,
   activeGroupId = null,
-  activeFieldId = null, selectionIds = [],
+  activeFieldId = null, selectionIds = null,
   volumePrimitives = { schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] },
   provenance = null,
   composition = null,
@@ -200,7 +200,7 @@ export function buildSceneDocument({
     throw new Error('Authored water emitters require a saved local liquid domain');
   }
   const sceneGroups = getSceneGroupRecords({ groups }, sceneObjects);
-  const activeObject = sceneObjects.find(obj => obj.id === activeObjectId) || sceneObjects[0] || null;
+  const activeObject = sceneObjects.find(obj => obj.id === activeObjectId) || (Array.isArray(selectionIds)?null:sceneObjects[0] || null);
   const activeGroup = sceneGroups.find(group => group.id === activeGroupId) || null;
   const flameSource = sceneObjects.find(object => object.type === FLAME_EMITTER_TYPE);
   const authoredFlameDomain = flameSource
@@ -220,7 +220,7 @@ export function buildSceneDocument({
     activeObjectId: activeObject?.id || activeObjectId || null,
     activeGroupId: activeGroup?.id || null,
     activeFieldId: ['flame-field','water-field'].includes(activeFieldId)?activeFieldId:null,
-    selectionIds:[...selectionIds],
+    ...(Array.isArray(selectionIds)?{selectionIds:[...selectionIds]}:{}),
     model: activeObject ? {
       source: activeObject.source,
       type: activeObject.type,
