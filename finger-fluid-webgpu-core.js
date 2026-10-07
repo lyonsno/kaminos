@@ -6773,7 +6773,8 @@ fn constrain_laminar_inlet_reservoir(position: vec3<f32>, phase: f32) -> vec3<f3
 }
 
 fn sourceParticleResetPosition(index: u32) -> vec3<f32> {
-  let sourceOrdinal = (index / 20u) * 8u + min(index % 20u, 7u);
+  let sourceReferenceIndex = select(index, u32(materialTracers[index].liveInletAgeState.x), riverPlaygroundEnabled);
+  let sourceOrdinal = (sourceReferenceIndex / 20u) * 8u + min(sourceReferenceIndex % 20u, 7u);
   let xIndex = sourceOrdinal % 20u;
   let zIndex = (sourceOrdinal / 20u) % 20u;
   let yIndex = sourceOrdinal / 400u;
@@ -7042,7 +7043,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
       let interval = max(1.0, round(0.055 / 0.3 / params.dt));
       let tick = u32(floor(f32(params.frameIndex) / interval));
       let previousTick = u32(floor(f32(params.frameIndex - min(params.frameIndex, 1u)) / interval));
-      if (tick == previousTick || (tick - 1u) % 101u != u32(riverState.w)) {
+      if (tick == previousTick || (tick - 1u) % 101u != u32(-riverState.w - 1.0)) {
         particle.predicted = vec4<f32>(particle.position.xyz, 0.0);
         particle.delta = vec4<f32>(0.0);
         particles[index] = particle;
@@ -13333,10 +13334,16 @@ export async function createWebGPUFingerFluidSolver({
   );
   if (safeTruthScene === 'river_playground') {
     for (let index = 0; index < safeBaseParticleCount; index++) {
-      if (index % 3 !== 0) continue;
+      if (index % 3 !== 0) {
+        const oldIndex = index - Math.floor(index / 3) - 1;
+        const oldCount = safeBaseParticleCount - Math.ceil(safeBaseParticleCount / 3);
+        const referenceOldCount = safeFixedVolumeReferenceParticleCount - Math.ceil(safeFixedVolumeReferenceParticleCount / 3);
+        materialTracerData[index * MATERIAL_TRACER_FLOATS + 12] = Math.floor(oldIndex * referenceOldCount / oldCount);
+        continue;
+      }
       const ordinal = Math.floor(Math.floor(index / 3) * Math.ceil(safeFixedVolumeReferenceParticleCount / 3) / Math.ceil(safeBaseParticleCount / 3));
       const sample = riverSample(ordinal);
-      materialTracerData.set([sample.xOffset, sample.height, sample.releaseSlot], index * MATERIAL_TRACER_FLOATS + 13);
+      materialTracerData.set([sample.xOffset, sample.height, -sample.releaseSlot - 1], index * MATERIAL_TRACER_FLOATS + 13);
     }
   }
   const initialChemistryMass = materialTracerData.reduce((sum, value, index) => sum + (index % MATERIAL_TRACER_FLOATS === 0 ? value : 0), 0);

@@ -39,7 +39,11 @@ try {
   const requested={particleCount:36864,truthScene:'river_playground',artificialPressureMode:mode};
   for(const visit of ['load','refresh','reopen']) {
    report.phase=mode+'-'+visit;const row={mode,visit,requestedUrl:url.href,states:[]};report.observations.push(row);save();
-   if(visit==='refresh')await client.call('Page.reload',{ignoreCache:false});
+   if(visit==='refresh') {
+    row.persistedSettingsFixture={"ao-toggle":false,"dof-toggle":false,"show-env-bg":true};
+    await evaluate('localStorage.setItem("kaminos-settings",'+JSON.stringify(JSON.stringify(row.persistedSettingsFixture))+');true');
+    await client.call('Page.reload',{ignoreCache:false});
+   }
    else {if(visit==='reopen'){const old=await evaluate('location.href');row.closedUrl=old;const oldId=(await cdp(port,'/json/list')).find(p=>p.webSocketDebuggerUrl===client.ws.url)?.id;client.ws.close();if(oldId)await fetch(`http://127.0.0.1:${port}/json/close/${oldId}`);const page=await(await fetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();await attach(page)}await client.call('Page.navigate',{url:url.href})}
    let before;while(true){failOnBrowserError();before=await state();if(before?.status==='error')throw Error(JSON.stringify(before));if(before?.status==='running')break;await delay(100)}
    row.effectiveUrl=await evaluate('location.href');assert.equal(row.effectiveUrl,url.href);checkLiveFluidState(before,requested);row.states.push(before);save();
@@ -51,7 +55,7 @@ try {
    for(const target of targets){while(after.runtime.stepCount<target){await delay(100);failOnBrowserError();after=await state();checkLiveFluidState(after,requested);if(after.runtime.stepCount!==lastStep){lastChange=Date.now();lastStep=after.runtime.stepCount}assert.ok(Date.now()-lastChange<10000,'RAF stopped for ten seconds before selected visual step')}
     const image=await client.call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});const file=join(out,mode+'-'+visit+'-'+target+'.png');writeFileSync(file,Buffer.from(image.data,'base64'));row.visuals??=[];row.visuals.push({path:file,effectiveStep:after.runtime.stepCount,effectiveState:after});save();
    }
-   row.localStorage=await evaluate('Object.fromEntries(Object.entries(localStorage))');row.complete=true;report.primaryOutputWritten=true;save();
+   row.localStorage=await evaluate('Object.fromEntries(Object.entries(localStorage))');failOnBrowserError();row.complete=true;report.primaryOutputWritten=true;save();
    if(visit==='reopen') {
     report.phase=mode+'-native-particle-state';save();
     await evaluate('window.kaminosFingerFluidBenchSetSimulationPausedForWitness(true);window.kaminosFingerFluidBenchAdvanceToStepForWitness(720);true');
@@ -64,6 +68,7 @@ try {
 
   }
  }
- assert.equal(git(root,'rev-parse','HEAD'),revision);assert.equal(git(root,'status','--porcelain'),'');report.status='done';report.phase=null;
+ failOnBrowserError();
+ assert.equal(git(root,'rev-parse','HEAD'),revision);assert.equal(git(root,'status','--porcelain'),'');failOnBrowserError();report.status='done';report.phase=null;
 }catch(e){report.status='failed';report.error=e.stack||String(e);report.lastTrustworthyEvidence={source:report.source?.revision,completed:report.observations.filter(r=>r.complete).map(r=>[r.mode,r.visit])};process.exitCode=1}
 finally{client?.ws.close();if(child){report.browser.cleanup={pid:child.pid,signal:'SIGTERM'};if(child.exitCode===null&&!child.signalCode)await new Promise(yes=>{child.once('close',yes);child.kill('SIGTERM')});report.browser.cleanup.exitCode=child.exitCode;report.browser.cleanup.signalCode=child.signalCode}report.completedAt=new Date().toISOString();save()}
