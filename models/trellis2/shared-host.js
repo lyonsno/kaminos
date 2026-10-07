@@ -85,6 +85,15 @@ export async function createTrellisSharedHost({sharedGpu,host,prototype,session:
         }else if(!foreground.snapshot().activeRun)active=null;
         throw error;
       }
+      let currentInvocation=null,readSequence=0;
+      const enqueue=input=>{
+        if(typeof input?.execute!=='function')return route.enqueue(input);
+        const execute=input.execute;
+        return route.enqueue({...input,execute:async invocation=>{
+          currentInvocation=invocation;
+          try{return await execute(invocation);}finally{currentInvocation=null;}
+        }});
+      };
       const runtime=Object.freeze({...route.runtime,
         async runKernel(kernel,options={}){
           throwIfStopped(signal);
@@ -95,11 +104,28 @@ export async function createTrellisSharedHost({sharedGpu,host,prototype,session:
             throwIfStopped(signal);return typeof dispatch==='function'?dispatch(boundary):dispatch;
           }});
         },
-        readTensor(tensor,options){throwIfStopped(signal);return route.runtime.readTensor(tensor,options);},
+        async readTensor(tensor,options={}){
+          throwIfStopped(signal);
+          if(options.schedulerInvocation&&options.schedulerInvocation!==currentInvocation)
+            throw Error('TRELLIS readback requires the current actual scheduler invocation');
+          if(currentInvocation)return route.runtime.readTensor(tensor,{...options,schedulerInvocation:currentInvocation});
+          // A post-model consumer still submits a staging copy. Admit that
+          // copy as an actual queued job rather than inventing an invocation id
+          // or bypassing pending foreground work.
+          const job=enqueue({jobId:runId+':readback:'+(++readSequence),execute:invocation=>{
+            throwIfStopped(signal);return route.runtime.readTensor(tensor,{...options,schedulerInvocation:invocation});
+          }});
+          const terminal=await job.completion;
+          if(terminal.status!=='succeeded'){
+            const failure=terminal.failure;
+            const error=Error(failure?.message??'TRELLIS readback '+terminal.status);error.name=failure?.name??'Error';throw error;
+          }
+          return terminal.output;
+        },
       });
       state.status='active';let finishing;
       return Object.freeze({
-        runId,route:Object.freeze({...route,runtime}),
+        runId,route:Object.freeze({...route,runtime,enqueue}),
         withForeground(phase,work){
           throwIfStopped(signal);return frameRun.withForeground(phase,work);
         },

@@ -7,9 +7,13 @@ const {createTrellisSharedHost}=await import(source);
 function fixture(){
   const events=[];let requester,active=false,destroyed=0,bufferDestroyed=0,settlementFailure;
   const device={features:new Set(),limits:{maxBufferSize:2**30,maxStorageBufferBindingSize:2**29},lost:new Promise(()=>{}),
-    queue:{submit(buffers){events.push(...buffers.map(b=>b.kind));},async onSubmittedWorkDone(){events.push('gpu-settled');if(settlementFailure)throw Error(settlementFailure);}},
-    destroy(){destroyed++;},createBuffer({size}){return{size,destroy(){bufferDestroyed++;}};},
-    createCommandEncoder(){events.push('model-encoded');return{beginComputePass(){return{setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return{kind:'model-submitted'};}};}
+    queue:{submit(buffers){events.push(...buffers.map(b=>b.kind));for(const b of buffers)for(const [from,sourceOffset,to,targetOffset,size]of b.copies??[])
+      new Uint8Array(to.data).set(new Uint8Array(from.data,sourceOffset,size),targetOffset);},
+      async onSubmittedWorkDone(){events.push('gpu-settled');if(settlementFailure)throw Error(settlementFailure);}},
+    destroy(){destroyed++;},createBuffer({size}){const data=new ArrayBuffer(size);let gone=false;return{size,data,
+      async mapAsync(){},getMappedRange(){return data;},unmap(){},destroy(){if(!gone){gone=true;bufferDestroyed++;}}};},
+    createCommandEncoder(){events.push('model-encoded');const copies=[];return{beginComputePass(){return{setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},
+      copyBufferToBuffer(...args){copies.push(args);},finish(){return{kind:'model-submitted',copies};}};}
   };
   const sharedGpu={device,queue:device.queue,adapter:{info:{vendor:'fixture'},features:device.features,limits:device.limits}},
     prototype={foregroundGpuContext:()=>({device,queue:device.queue,renderer:'ordinary-volume',productFrameOwner:'prototype'}),
@@ -67,6 +71,20 @@ const borrowed=await createTrellisSharedHost({...external,session});
 const third=await borrowed.beginRun({runId:'external'});await third.finish();await borrowed.dispose();
 assert.equal(session.snapshot().status,'active','bridge disposal must not close caller-owned session');session.close();
 assert.equal(external.destroyed,0);
+
+const reading=fixture(),readBridge=await createTrellisSharedHost({...reading,sessionId:'readback'});
+const readRun=await readBridge.beginRun({runId:'readback'});
+const readBuffer=readRun.route.runtime.createBuffer({size:4,usage:132,label:'resident-output'});
+new Float32Array(readBuffer.data)[0]=7;
+const tensor={name:'resident-output',buffer:readBuffer,byteLength:4,shape:[1],dtype:'f32',usage:132};
+const inFrame=reading.requester({requestId:'in-read-frame',run:ctx=>ctx.submit([{kind:'in-read-frame'}])});
+const readJob=readRun.route.enqueue({jobId:'model-count-read',execute:()=>readRun.route.runtime.readTensor(tensor)});
+const readCompletion=await readJob.completion;
+assert.equal(readCompletion.status,'succeeded','active metadata readback must inherit its actual scheduler invocation: '+JSON.stringify(readCompletion.failure));
+assert.equal(new Float32Array(readCompletion.output)[0],7);await inFrame.completion;
+const postFrame=reading.requester({requestId:'post-read-frame',run:ctx=>ctx.submit([{kind:'post-read-frame'}])});
+assert.equal(new Float32Array(await readRun.route.runtime.readTensor(tensor))[0],7,'post-model readback must acquire its own real scheduler invocation');
+await postFrame.completion;await readRun.finish();await readBridge.dispose();assert.equal(reading.destroyed,0);
 
 const failed=fixture(),failureBridge=await createTrellisSharedHost({...failed,sessionId:'settlement-failure'});
 const failedRun=await failureBridge.beginRun({runId:'failed'});
