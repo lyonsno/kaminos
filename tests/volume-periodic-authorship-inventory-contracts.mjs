@@ -106,6 +106,7 @@ function assertPeriodicAuthorshipInventory(entries) {
       'inflow aperture static coverage geometry',
       'offline model-probe static Fourier coordinate representation',
       'offline trainer static Fourier x/y coordinate representation',
+      'operator-authored source aim to direction',
       'operator-authored wind angle to direction',
     ].sort(),
     'the remaining explicit trig inventory must contain only named geometry or static learned-coordinate classes',
