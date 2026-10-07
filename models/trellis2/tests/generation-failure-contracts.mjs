@@ -42,3 +42,20 @@ globalThis.fetch=async url=>url==='/fixture/manifest.json'?new Response(manifest
 const rejectedPhase=await runGenerationWitness(sha);
 assert.match(rejectedPhase.error.message,/complete native kernel event required/,'The actual phase receiver rejection must survive in the failure report.');
 console.log('Actual kit queue failure survives the unchanged witness body and names its last phase; synthetic device/model ports do not claim native execution.');
+
+const hostTest=await fs.readFile(new URL('./shared-host-contracts.mjs',import.meta.url),'utf8');
+const fixture=Function(hostTest.slice(hostTest.indexOf('function fixture()'),hostTest.indexOf('const kernel='))+';return fixture;')();
+const shared=fixture();
+shared.device.pushErrorScope=()=>{};shared.device.popErrorScope=async()=>null;shared.device.addEventListener=()=>{};
+shared.sharedGpu.adapter.info={vendor:'apple',architecture:'metal-3',description:'controlled shared Apple device',isFallbackAdapter:false};
+let extraDeviceRequests=0;
+Object.defineProperty(globalThis,'navigator',{configurable:true,value:{gpu:{requestAdapter(){extraDeviceRequests++;throw Error('a shared composition must not request another adapter');}}}});
+globalThis.fetch=async url=>url==='/fixture/manifest.json'?new Response(manifest):new Response('');
+const sharedFailure=await runGenerationWitness(sha,{sharedComposition:shared});
+assert.equal(sharedFailure.error?.message,'observed checkpoint array allocation failure',
+  'complete generation must consume the existing shared host rather than attempt another adapter');
+assert.equal(sharedFailure.deviceTopology,'same-device');
+assert.equal(sharedFailure.sharedRelease?.status,'released');
+assert.equal(extraDeviceRequests,0);assert.equal(shared.destroyed,0);
+assert.equal(shared.active,false);assert.equal(shared.requester,null);
+console.log('Full witness failure uses the actual borrowed host/kit bridge, preserves causal failure, releases its route and leaves the host device alive.');

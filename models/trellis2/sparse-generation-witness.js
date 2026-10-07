@@ -5,11 +5,12 @@ import {GENERATION_ROUTE,GENERATION_FIELDS,validateGenerationResult} from './spa
 import {validateNativePrefixBackend,prefixAdapterName} from './sparse-prefix-witness-checks.js';
 import {createTrellisAssetAdapter} from './trellis-material.js';
 import {observeDeviceMemory} from './device-memory.js';
+import {createTrellisSharedHost} from './shared-host.js';
 const hash=async data=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),v=>v.toString(16).padStart(2,'0')).join('');
-export async function runGenerationWitness(expectedSha,{memoryMonitor=false}={}){
+export async function runGenerationWitness(expectedSha,{memoryMonitor=false,sharedComposition}={}){
   const report={status:'failed',phase:'input-manifest',requestedRoute:GENERATION_ROUTE,numericalStatus:'not-compared',
     comparison:'actual WebGPU image generation with retained prepared pixels and browser noise; no matched MLX fidelity claim',outputs:{}},errors=[];
-  let session,device,implementation,assetConsumer,runtime,scope=false,invocationOwner,serving=false,currentPhase='new',memory;
+  let session,device,implementation,assetConsumer,runtime,scope=false,invocationOwner,serving=false,currentPhase='new',memory,bridge,sharedRun;
   report.memory={requested:memoryMonitor};
   const setPhase=(phase,modelRole)=>{report.phase=phase;memory?.setPhase(modelRole?phase+':'+modelRole:phase);};
   const stageCounts={},save=async(name,values,shape,dtype)=>{
@@ -44,22 +45,28 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false}={})
       report.inputLoading.phase='typed-array';const values=new Float32Array(raw);report.inputLoading.phase='verified';
       report.verifiedTensorCount++;report.verifiedInputBytes+=raw.byteLength;return values;
     };
-    setPhase('native-device');const adapter=await navigator.gpu?.requestAdapter();if(!adapter)throw Error('WebGPU unavailable');
+    setPhase('native-device');const adapter=sharedComposition?sharedComposition.sharedGpu?.adapter:await navigator.gpu?.requestAdapter();if(!adapter)throw Error('WebGPU unavailable');
     report.backend={vendor:adapter.info.vendor,architecture:adapter.info.architecture,description:adapter.info.description,
       device:adapter.info.device,isFallbackAdapter:adapter.info.isFallbackAdapter??adapter.isFallbackAdapter};validateNativePrefixBackend(report.backend);
     if(report.backend.isFallbackAdapter!==false)throw Error('explicit nonfallback native adapter required');
-    report.requiredLimits={maxStorageBufferBindingSize:adapter.limits.maxStorageBufferBindingSize,maxBufferSize:adapter.limits.maxBufferSize,
-      maxComputeWorkgroupsPerDimension:adapter.limits.maxComputeWorkgroupsPerDimension};
-    device=await adapter.requestDevice({requiredLimits:report.requiredLimits});
+    const limits=sharedComposition?.sharedGpu?.device?.limits??adapter.limits;
+    report.requiredLimits={maxStorageBufferBindingSize:limits.maxStorageBufferBindingSize,maxBufferSize:limits.maxBufferSize,
+      maxComputeWorkgroupsPerDimension:limits.maxComputeWorkgroupsPerDimension};
+    device=sharedComposition?sharedComposition.sharedGpu.device:await adapter.requestDevice({requiredLimits:report.requiredLimits});
+    report.deviceTopology=sharedComposition?'same-device':'isolated-device';
     if(memoryMonitor)memory=observeDeviceMemory(device);
     setPhase('native-device');
     device.pushErrorScope('validation');scope=true;
     device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
     device.lost.then(info=>{if(info.reason!=='destroyed')errors.push('device lost: '+info.reason+' '+info.message);});
-    session=await createWebGpuInferenceSession({sessionId:'image-generation-'+crypto.randomUUID(),adapter,device,adapterName:prefixAdapterName(adapter.info)});
+    const sessionId='image-generation-'+crypto.randomUUID();
+    if(sharedComposition){
+      bridge=await createTrellisSharedHost({...sharedComposition,sessionId});
+      session=bridge.session;sharedRun=await bridge.beginRun({runId:sessionId});
+    }else session=await createWebGpuInferenceSession({sessionId,adapter,device,adapterName:prefixAdapterName(adapter.info)});
     const requiredStages=['dinov3-serving-patch-embedding','dinov3-serving-prefix-assembly','dinov3-final-no-affine-layernorm-resident',
       'flow-resident-conditioning-bf16','flow-resident-negative-zero','terminal-output-projection','decoder-sparse-conv','slat-coordinate-rope','slat-texture-concat'];
-    const actual=await session.registerRoute({routeId:GENERATION_ROUTE,runtimeOptions:{requiredStages,kernel:{profile:'trellis2-complete-image-generation-v0'}}});
+    const actual=sharedRun?.route??await session.registerRoute({routeId:GENERATION_ROUTE,runtimeOptions:{requiredStages,kernel:{profile:'trellis2-complete-image-generation-v0'}}});
     report.effectiveRoute=actual.routeId;if(actual.routeId!==GENERATION_ROUTE)throw Error('effective generation route mismatch');
     runtime={...actual.runtime,
       async runKernel(k,o){if(o.schedulerInvocation!==invocationOwner)throw Error('same generation invocation required');
@@ -136,7 +143,13 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false}={})
     memory?.setPhase('cleanup');
     if(scope)try{const e=await device.popErrorScope();if(e)errors.push(e.message);}catch(e){errors.push(e.message);}
     report.errors=errors;if(errors.length)report.status='failed';
-    for(const [name,cleanup]of [['asset',()=>assetConsumer?.dispose()],['generation',()=>implementation?.dispose()],['session',async()=>{if(session){await session.drain();session.close();}}],['device',()=>device?.destroy()]])
+    if(sharedRun)try{report.sharedRelease=await sharedRun.finish();}catch(error){
+      report.cleanupErrors??=[];report.cleanupErrors.push({name:'shared-run',message:error.message});report.status='failed';
+    }
+    const held=sharedRun&&report.sharedRelease?.status!=='released';
+    for(const [name,cleanup]of held?[]:[['asset',()=>assetConsumer?.dispose()],['generation',()=>implementation?.dispose()],
+      ['session',async()=>{if(bridge)await bridge.dispose();else if(session){await session.drain();session.close();}}],
+      ['device',()=>{if(!sharedComposition)device?.destroy();}]])
       try{await cleanup();}catch(error){report.cleanupErrors??=[];report.cleanupErrors.push({name,message:error.message});report.status='failed';}
   }
   if(memory){report.memory.device=memory.snapshot();report.memory.deviceEvents=[...memory.events];memory.restore();}
