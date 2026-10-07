@@ -58,7 +58,7 @@ try {
     const raw=await evaluateJsonTransfer(client,'window.kaminosFingerFluidBenchCapturePackedDensityForWitness()');
     assert.equal(raw.count,36864);assert.equal(raw.stepCount,720);assert.equal(Buffer.from(raw.buffers.source,'base64').length,36864*64);
     const file=join(out,mode+'-native-particles-720.json');writeFileSync(file,JSON.stringify(raw));row.nativeParticleSnapshot={path:file,sha256:sha(readFileSync(file)),count:raw.count,step:raw.stepCount,meaning:'Native source particle buffer after paused exact advance; scratch density results also preserved, no live cadence claim.'};save();
-    await evaluate('window.kaminosFingerFluidBenchSetCameraForWitness({yaw:0.6,pitch:1.05,distance:5.5,target:[-1.2,-0.55,0]});window.kaminosFingerFluidBenchRenderCurrentStateForWitness('screen_space_refraction');true');
+    await evaluate('window.kaminosFingerFluidBenchSetCameraForWitness({yaw:0.6,pitch:1.05,distance:5.5,target:[-1.2,-0.55,0]});window.kaminosFingerFluidBenchRenderCurrentStateForWitness("screen_space_refraction");true');
     const image=await client.call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:false});const imagePath=join(out,mode+'-river-focus-720.png');writeFileSync(imagePath,Buffer.from(image.data,'base64'));row.nativeParticleSnapshot.visual=imagePath;row.nativeParticleSnapshot.effectiveVisualState=await state();checkLiveFluidState(row.nativeParticleSnapshot.effectiveVisualState,requested);save();
    }
 
