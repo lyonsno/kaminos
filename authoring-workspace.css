@@ -188,3 +188,14 @@ body[data-workspace=authoring].has-assets-panel #authoring-hierarchy,body[data-w
 
 .asset-entry[data-preview-state=loading]::before{content:'Loading preview…';font-size:10px;color:#929da2;}
 .asset-entry[data-preview-state=unavailable]::before{content:'Preview unavailable';font-size:10px;color:#929da2;}
+
+body[data-workspace=workbench] #authoring-assets{display:none!important;}
+.asset-browser-status{display:flex;align-items:center;gap:7px;flex:none;margin-top:8px;}
+.asset-browser-status #asset-status{margin:0;}
+.asset-loading-spinner{width:10px;height:10px;flex:none;box-sizing:border-box;border:1.5px solid #505559;border-top-color:#b6a486;border-radius:50%;animation:asset-loading-spin .85s linear infinite;}
+@keyframes asset-loading-spin{to{transform:rotate(360deg);}}
+@media(prefers-reduced-motion:reduce){.asset-loading-spinner{animation:none;}}
+#authoring-generation-header{display:flex;align-items:center;gap:3px;min-width:0;}
+#authoring-generation-header[hidden]{display:none;}
+#authoring-header #generation-header-show{max-width:190px;overflow:hidden;text-overflow:ellipsis;color:#b9a986;}
+#authoring-header #generation-header-stop{color:#dcc1a4;border-color:#786452;}

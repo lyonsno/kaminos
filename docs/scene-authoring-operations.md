@@ -131,3 +131,10 @@ Source images retain their ingestion names. Drag the asset area's upper separato
 vertically to change its height; Up/Down arrows also resize it. Its extent survives
 closing/reopening the pane during the current page, while scene poses, camera
 pose and authored undo history remain unchanged.
+
+The authoring asset pane leaves the Workbench layout while preserving its open
+state and current generation. Active generation remains visible and stoppable in
+the workspace header; its status button returns to the Authoring generation pane.
+Workspace switching changes presentation without starting, stopping or restarting
+inference. Catalog loading shows a small spinner beside the loading text and sets
+`aria-busy`; reduced-motion preferences retain the indicator without animation.

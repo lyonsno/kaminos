@@ -101,6 +101,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     }
     mode = next;
     document.body.dataset.workspace = mode;
+    document.dispatchEvent(new document.defaultView.CustomEvent('kaminos-workspace-change',{detail:{mode}}));
     header.querySelectorAll('[data-workspace-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.workspaceMode === mode)));
     return true;
   }
