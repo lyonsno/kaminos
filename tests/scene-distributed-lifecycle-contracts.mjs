@@ -6,11 +6,11 @@ import {mountDistributedSceneRadiance} from '../scene-distributed-radiance.mjs';
 globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,UNIFORM:4,COPY_SRC:8};
 globalThis.GPUTextureUsage={STORAGE_BINDING:1,TEXTURE_BINDING:2,COPY_SRC:4};
 function fixture(castShadow=true) {
-  const uploads=[],passes=[],copies=[];
+  const uploads=[],passes=[],copies=[],buffers=[];
   const pipeline={getBindGroupLayout(){return {};}};
   const device={limits:{maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024,maxTextureDimension3D:256,maxComputeWorkgroupsPerDimension:65535},
     queue:{writeBuffer(buffer,offset,data){if(buffer.label==='surface and smoke receivers')uploads.push(new Float32Array(data));},submit(){}},
-    createBuffer({label}){return {label,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
+    createBuffer({label,usage}){const b={label,usage,destroy(){}};buffers.push(b);return b;},createTexture(){return {createView(){return {};},destroy(){}};},
     createShaderModule(){return {};},createComputePipeline(){return pipeline;},createBindGroup(){return {};},
     createCommandEncoder(){return {copyBufferToBuffer(...args){copies.push(args);},beginComputePass({label}){passes.push(label);return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
   let consume;
@@ -23,11 +23,59 @@ function fixture(castShadow=true) {
   const mesh=new THREE.Mesh(geometry,material);mesh.castShadow=castShadow;
   const scene=new THREE.Scene();scene.add(mesh);
   const statuses=[];
-  const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,onStatus:s=>statuses.push(s)});
+  const emitter={position:[0,-.76,0],radius:.19,height:2.2,depth:.24};
+  const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,getSourceGuide:()=>emitter,onStatus:s=>statuses.push(s)});
   const field={source:{status:'encoded',texture:{createView(){return {}; }},localMax:[1,3,1],dimensions:[32,64,32],generation:1,frame:1}};
-  return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,field,prepare(){consume(field);}};
+  return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,buffers,field,emitter,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='source-guide'){
+ const f=fixture();assert.doesNotThrow(()=>f.mount.setAngularPattern('guided'),'emitter-informed mode must reach live gathering');
+ f.mount.setDirections(12);f.prepare();let s=f.mount.debugState().frame;
+ assert.equal(s.angularPattern,'guided');assert.equal(s.integration,'exact-cell');assert.equal(s.sourceGuide.effective,'emitter-envelope');
+ assert.deepEqual(s.sourceGuide.lo,[-.38,-1,-.38].map(Math.fround));
+ const prepared=s.angularCache.preparedRayDirections;
+ f.field.source.generation++;f.prepare();assert.equal(f.mount.debugState().frame.angularCache.preparedRayDirections,prepared,'changing emission must reuse guide visibility');
+ f.emitter.radius=.2;f.prepare();s=f.mount.debugState().frame;assert.equal(s.angularCache.preparedRayDirections,prepared+12,'authored envelope changes rebuild angular visibility');
+ assert.equal(f.mount.debugState().geometryBuilds,1,'guide changes retain receivers/caster BVH');
+ f.mount.setDirections(16);f.prepare();assert.equal(f.mount.debugState().frame.angularCache.lastPreparedDirections,4,'guided count growth reuses fixed prefixes');
+ assert(f.buffers.find(b=>b.label==='source guide bounds').usage&GPUBufferUsage.COPY_SRC,'inspection must copy consumed guide uniform');
+ f.mount.dispose();
+}
+if(!selected||selected==='receiver-material-groups'){
+ const f=fixture(false);f.geometry.setAttribute('position',new THREE.Float32BufferAttribute([0,0,0,1,0,0,0,1,0,1,0,0,1,1,0,0,1,0],3));f.geometry.setIndex(null);f.geometry.computeVertexNormals();
+ f.geometry.clearGroups();f.geometry.addGroup(0,3,0);f.geometry.addGroup(3,3,0);f.mesh.material=[f.material,new THREE.MeshStandardMaterial()];
+ f.mount.setReceiverSpacing(2);f.prepare();f.prepare();assert.equal(f.mount.debugState().surfaceReceivers,1);
+ f.mesh.geometry.groups[1].materialIndex=1;f.prepare();f.prepare();assert.equal(f.mount.debugState().surfaceReceivers,2,'noncasting material split must invalidate the coarsened receiver layout');
+ const splitBuilds=f.mount.debugState().geometryBuilds;f.prepare();assert.equal(f.mount.debugState().geometryBuilds,splitBuilds,'unchanged material groups reuse layout');
+ f.mesh.geometry.groups[1].materialIndex=0;f.prepare();f.prepare();assert.equal(f.mount.debugState().surfaceReceivers,1,'merging material groups also invalidates layout');
+ f.mount.dispose();
+}
+if(!selected||selected==='ray-inspection'){
+ const f=fixture();f.prepare();
+ for(const label of ['surface and smoke receivers','distributed incident directions'])assert(f.buffers.find(b=>b.label===label).usage&GPUBufferUsage.COPY_SRC,'inspection must read actual GPU inputs without invalid copy commands');
+ assert.equal(typeof f.mount.inspectSurface,'function','actual surface selection must reach reusable inspection');
+ f.mount.dispose();
+}
+if(!selected||selected==='receiver-spacing'){
+  const f=fixture();f.prepare();
+  assert.equal(typeof f.mount.setReceiverSpacing,'function','receiver spacing must be a real live-mount control');
+  const originalIndex=f.mesh.geometry.getAttribute('sceneReceiverIndex');
+  f.mount.setReceiverSpacing(2);f.prepare();f.prepare();
+  let state=f.mount.debugState();
+  assert.equal(state.receiverSampling.spacing,2);
+  assert(state.surfaceReceivers<3,'coarse layout must reduce actual GPU ray receiver rows');
+  assert.equal(state.renderVertices,3,'render mesh remains intact');
+  assert.equal(state.visibilityBuilds,1,'changing spacing reuses packed caster geometry');
+  assert.equal(f.mesh.geometry.getAttribute('sceneReceiverIndex').itemSize,4);
+  assert.equal(f.mesh.geometry.getAttribute('sceneReceiverWeight').itemSize,4);
+  f.mount.setReceiverSpacing(0);f.prepare();f.prepare();
+  state=f.mount.debugState();assert.equal(state.surfaceReceivers,3);assert.equal(state.visibilityBuilds,1);
+  assert.equal(f.mesh.geometry.getAttribute('sceneReceiverIndex').itemSize,originalIndex.itemSize);
+  assert.equal(f.mesh.geometry.hasAttribute('sceneReceiverWeight'),false);
+  f.mesh.position.x=.1;f.prepare();assert.equal(f.mount.debugState().visibilityBuilds,2,'actual geometry movement invalidates cached packed triangles');
+  f.mount.dispose();assert.equal(f.mesh.geometry.hasAttribute('sceneReceiverIndex'),false);assert.equal(f.mesh.geometry.hasAttribute('sceneReceiverWeight'),false);
+}
 if(!selected||selected==='source') {
   const f=fixture();f.mount.setDirections(12);
   assert.doesNotThrow(()=>f.mount.setAngularPattern('source'),'source-aware mode must reach the live mount');

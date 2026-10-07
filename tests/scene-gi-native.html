@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Scene GI material assay</title>
+<style>body{margin:0;background:#000}canvas{display:block;width:100vw;height:100vh}</style>
+<script type="importmap">{"imports":{"three/webgpu":"/lib/three.webgpu.js","three/tsl":"/lib/three.tsl.js"}}</script>
+<script type="module">
+import * as THREE from 'three/webgpu';
+import {uniform} from 'three/tsl';
+import {createSceneGI} from '../scene-gi.mjs';
+const antialias=new URLSearchParams(location.search).get('antialias')==='1';
+const renderer=new THREE.WebGPURenderer({antialias});
+await renderer.init();
+renderer.setSize(800,600);renderer.setPixelRatio(1);
+renderer.toneMapping=THREE.NoToneMapping;
+document.body.append(renderer.domElement);
+const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(45,800/600,.1,30);
+window.addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();pipeline.render();});
+scene.background=new THREE.Color(0);
+camera.position.set(4,3,5);camera.lookAt(0,.5,0);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(8,8),new THREE.MeshStandardNodeMaterial({color:0xffffff,roughness:1,metalness:0}));
+floor.rotation.x=-Math.PI/2;scene.add(floor);
+const emitter=new THREE.Mesh(new THREE.PlaneGeometry(3,2),new THREE.MeshStandardNodeMaterial({color:0,emissive:0xff2205,emissiveIntensity:4,side:THREE.DoubleSide}));
+emitter.position.set(-1,1,0);emitter.rotation.y=Math.PI/2;scene.add(emitter);
+const aoStrength=uniform(1);
+const gi=createSceneGI(scene,camera,aoStrength);
+const pipeline=new THREE.RenderPipeline(renderer);pipeline.outputNode=gi.output();
+const frames=async()=>{for(let i=0;i<3;i++){pipeline.render();await renderer.backend.device.queue.onSubmittedWorkDone();}};
+const read=async()=>Array.from(await renderer.readRenderTargetPixelsAsync(gi.beauty.renderTarget,0,0,800,600),THREE.DataUtils.fromHalfFloat);
+window.giAssay={
+  state:()=>({rendererSamples:renderer.samples,...gi.debugState()}),
+  async receivedComparison() {
+    const results=[];
+    for(const ordinary of [false,true])for(const color of [0xffffff,0x111111]) {
+      floor.material.dispose();
+      const Type=ordinary?THREE.MeshStandardMaterial:THREE.MeshStandardNodeMaterial;
+      floor.material=new Type({color,roughness:1,metalness:0});
+      aoStrength.value=0;
+      gi.setSettings({mode:'combined',view:'scene',gain:0});await frames();const zero=await read();
+      gi.setSettings({mode:'combined',view:'scene',gain:1});await frames();const lit=await read();
+      gi.setSettings({mode:'combined',view:'gi',gain:1});await frames();const received=await read();
+      let differenceSum=0,receivedSum=0,errorSum=0,maxError=0;
+      for(let i=0;i<lit.length;i++)if(i%4<3) {
+        const difference=lit[i]-zero[i],error=Math.abs(difference-received[i]);
+        differenceSum+=difference;receivedSum+=received[i];errorSum+=error;maxError=Math.max(maxError,error);
+      }
+      aoStrength.value=1;await frames();const withAO=await read();
+      let aoError=0;for(let i=0;i<received.length;i++)if(i%4<3)aoError=Math.max(aoError,Math.abs(received[i]-withAO[i]));
+      results.push({ordinary,color,linearColor:floor.material.color.toArray(),differenceSum,receivedSum,errorSum,maxError,aoError});
+    }
+    floor.material.color.set(0xffffff);
+    const pane=new THREE.Mesh(new THREE.PlaneGeometry(8,8),new THREE.MeshBasicNodeMaterial({color:0,transparent:true,opacity:.5,depthWrite:false,side:THREE.DoubleSide}));
+    pane.rotation.x=-Math.PI/2;pane.position.y=.1;scene.add(pane);
+    aoStrength.value=0;
+    gi.setSettings({mode:'combined',view:'scene',gain:0});await frames();const paneZero=await read();
+    gi.setSettings({mode:'combined',view:'scene',gain:1});await frames();const paneLit=await read();
+    gi.setSettings({mode:'combined',view:'gi',gain:1});await frames();const paneReceived=await read();
+    let paneMaxError=0,paneDifferenceSum=0;
+    for(let i=0;i<paneLit.length;i++)if(i%4<3) {
+      const difference=paneLit[i]-paneZero[i];
+      paneDifferenceSum+=difference;paneMaxError=Math.max(paneMaxError,Math.abs(difference-paneReceived[i]));
+    }
+    results.push({transparentPane:true,differenceSum:paneDifferenceSum,maxError:paneMaxError,aoError:0});
+    scene.remove(pane);pane.geometry.dispose();pane.material.dispose();
+    const custom=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.NodeMaterial());
+    custom.material.fragmentNode=THREE.TSL.vec4(1,0,0,1);scene.add(custom);
+    let customRejected=false;
+    try{gi.setSettings({mode:'combined',view:'gi'});}catch(error){customRejected=/custom fragment/.test(error.message);}
+    scene.remove(custom);custom.geometry.dispose();custom.material.dispose();
+    if(!customRejected)throw new Error('Unsupported fragment diagnostic must fail visibly');
+    aoStrength.value=1;floor.material.dispose();
+    floor.material=new THREE.MeshStandardNodeMaterial({color:0xffffff,roughness:1,metalness:0});
+    gi.setSettings({mode:'combined',view:'scene',gain:1});await frames();
+    return results;
+  },
+  async sourceResponse() {
+    floor.material.metalness=0;gi.setSettings({mode:'combined',gain:1});
+    const result=[];
+    for(const power of [4,1,0]){emitter.material.emissiveIntensity=power;await frames();result.push({power,raw:(await gi.readback(renderer)).stats});}
+    emitter.material.emissiveIntensity=4;await frames();return result;
+  },
+  async material() {
+    const results=[];
+    for(const metalness of [0,.5,1]) {
+      floor.material.metalness=metalness;
+      gi.setSettings({mode:'combined',gain:0});await frames();const zero=await read();
+      gi.setSettings({mode:'combined',gain:1});await frames();const lit=await read();
+      let sum=0,max=0;
+      for(let i=0;i<lit.length;i++)if(i%4<3){const d=Math.abs(lit[i]-zero[i]);sum+=d;max=Math.max(max,d);}
+      results.push({metalness,sum,max,raw:(await gi.readback(renderer)).stats});
+    }
+    return results;
+  },
+  async view(gain,position=[4,3,5]) {
+    floor.material.metalness=0;camera.position.fromArray(position);camera.lookAt(0,.5,0);
+    gi.setSettings({mode:'combined',gain});await frames();
+    return gi.debugState();
+  }
+};
+await window.giAssay.view(1);window.assayLoaded=true;
+</script></html>
