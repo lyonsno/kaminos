@@ -1,7 +1,7 @@
 export function resolveSceneCameraSettings(value={}) {
   const next={exposureEV:0,whiteBalanceKelvin:6504,highlightKnee:.6};
   for(const key of Object.keys(next))if(Object.hasOwn(value,key))next[key]=value[key];
-  if(!Object.values(next).every(Number.isFinite)||next.whiteBalanceKelvin<=0||next.highlightKnee<0||next.highlightKnee>=1)throw Error('Invalid scene camera settings');
+  if(!Object.values(next).every(Number.isFinite)||!Number.isFinite(Math.fround(2**next.exposureEV))||next.whiteBalanceKelvin<=0||next.highlightKnee<0||next.highlightKnee>=1)throw Error('Invalid scene camera settings');
   return next;
 }
 

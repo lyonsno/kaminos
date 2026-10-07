@@ -25237,9 +25237,11 @@ function updateBackground() {
 
 // --- AO Controls ---
 for(const [key,id] of [['exposureEV','scene-camera-ev'],['whiteBalanceKelvin','scene-camera-white'],['highlightKnee','scene-camera-knee']])document.getElementById(id).addEventListener('input',event=>{
+  if(!event.target.value.trim()||!event.target.validity.valid)return;
   try{setSceneCameraControls({...sceneCameraSettings,[key]:Number(event.target.value)});}catch(error){setSceneCameraControls(sceneCameraSettings);setInfo(error.message);}
 });
 for(const [key,id] of [['flameStops','flame-appearance-trim'],['smokeStops','smoke-illumination-trim']])document.getElementById(id).addEventListener('input',event=>{
+  if(!event.target.value.trim()||!event.target.validity.valid)return;
   try{setVolumeAppearanceControls({...volumeAppearanceTrims,[key]:Number(event.target.value)});}catch(error){setVolumeAppearanceControls(volumeAppearanceTrims);setInfo(error.message);}
 });
 for(const description of document.querySelectorAll('#rendering-panel-content .rendering-description')) {

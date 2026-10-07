@@ -62,7 +62,7 @@ try {
     await page.evaluate(()=>window.kaminosSceneEdits.undo());assert.equal(await page.locator('#flame-appearance-trim').inputValue(),'0');
     await page.evaluate(()=>window.kaminosSceneEdits.redo());assert.equal(await page.locator('#flame-appearance-trim').inputValue(),'1');
     report.transport=await page.evaluate(()=>({settings:window.kaminosAuthoringParameters.read('@scene-transport'),runtime:window.__kaminosSceneRadiance.debugState()}));
-    assert.equal(report.transport.runtime.angularPattern,'source');assert.equal(report.transport.runtime.smokeMode,'distributed');assert.equal(report.transport.runtime.surfaceScattering,true);
+    assert.equal(report.transport.runtime.frame.angularPattern,'source');assert.equal(report.transport.runtime.smokeMode,'distributed');assert.equal(report.transport.runtime.surfaceScattering,true);
     await page.evaluate(()=>document.getElementById('composition-label').value='Product lighting controls witness');
     report.phase='save-reopen';await save();
     report.saved=await page.evaluate(()=>window.saveSceneAs({result:true}));assert.ok(report.saved?.ok,JSON.stringify(report.saved));
