@@ -15,14 +15,14 @@ const plan = decoderModule.buildSparseDecoderPlan({ resolution: 2, latentChannel
   numResBlocks: 1, numResBlocksMiddle: 1 });
 const weights = Object.fromEntries(Object.entries(decoderModule.sparseDecoderWeightShapes(plan)).map(([name, shape]) =>
   [name, new Float32Array(shape.reduce((a, b) => a * b, 1))]));
-const allocations = [], runs = [], uploads = [], reads = [];
+const allocations = [], runs = [], uploads = [], reads = [], readInvocations = [];
 let reportedCount = 7, failStage;
 const runtime = { device: { limits: { maxStorageBufferBindingSize: 134217728, maxComputeWorkgroupsPerDimension: 65535 } },
   createTensor(spec) { const t = { ...spec, byteLength: spec.shape.reduce((a, b) => a * b, 4),
     buffer: spec.buffer ?? { destroy() { t.destroyed = true; } } }; allocations.push(t); return t; },
   uploadTensor(t, data) { uploads.push({ t, data }); }, defineComputeKernel(spec) { return spec; },
   async runKernel(kernel, options) { runs.push({ kernel, options }); if (options.stage === failStage) throw Error('injected coordinate dispatch failure'); },
-  async readTensor(t) { reads.push(t); assert.equal(t.dtype, 'u32'); assert.equal(t.byteLength, 4);
+  async readTensor(t,options={}) { reads.push(t); readInvocations.push(options.schedulerInvocation); assert.equal(t.dtype, 'u32'); assert.equal(t.byteLength, 4);
     return new Uint32Array([reportedCount]); } };
 const route = { runtime, routeId: 'resident-decoder-coordinate-contract' };
 const latent = runtime.createTensor({ name: 'sampler-owned-final-latent', shape: plan.inputShape, dtype: 'f32', usage: U.storage });
@@ -31,7 +31,8 @@ const coordinates = createTrellisOccupancyCoordinatesAdapter({ route, resolution
 await assert.rejects(coordinates.coordinates(), /not.*completed|uninitialized/);
 const invocation = { id: 'one-sampler-decoder-coordinate-session' };
 await decoder.run({}, invocation); await coordinates.run(invocation);
-const tensor = await coordinates.coordinates();
+const tensor = await coordinates.coordinates(invocation);
+assert.strictEqual(readInvocations[0],invocation,'in-job occupancy count read must carry the actual caller invocation');
 assert.deepEqual(tensor.shape, [7, 3]); assert.equal(tensor.dtype, 'i32'); assert.equal(tensor.byteLength, 84);
 assert.strictEqual(tensor.buffer, coordinates.outputs.coordinateCapacity.buffer);
 assert.ok(runs.every(r => r.options.schedulerInvocation === invocation));
