@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+const core=await import('../glb-animation-preview.mjs');
+assert.equal(typeof core.assertNativeAnimationEvidence,'function','source-motion witness must reject a static or incomplete clip');
+const frame=(time,x)=>({duration:5.95,time,status:'playing',native:{frames:120,fps:20,retargeted:false,joint_names:['pelvis','fore','hind']},poses:[{name:'joint_0',position:[x,1,0]},{name:'joint_1',position:[0,0,1]},{name:'joint_2',position:[1,0,0]}]});
+const first=frame(.1,0),second=frame(2,1);
+core.assertNativeAnimationEvidence(first,second);
+assert.throws(()=>core.assertNativeAnimationEvidence(first,{...second,poses:first.poses}),/positions did not change/);
+assert.throws(()=>core.assertNativeAnimationEvidence(first,{...second,native:{...second.native,frames:60}}),/identity/);
+assert.throws(()=>core.assertNativeAnimationEvidence(first,{...second,poses:second.poses.slice(0,2)}),/joint count/);
+assert.throws(()=>core.assertNativeAnimationEvidence(first,{...second,duration:2}),/duration/);
+assert.throws(()=>core.assertNativeAnimationEvidence(first,{...second,time:0}),/time/);
+console.log('Native animation evidence contracts passed');

@@ -3836,6 +3836,7 @@ import {
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { createGLBAnimationPreview } from './glb-animation-preview.mjs';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
@@ -3934,6 +3935,40 @@ let rimLight = null;
 let showEnvBg = false;
 let currentEnvMap = null;
 let glbSourceScene = null; // raw loaded gltf scene for export
+let glbAnimationRoot=null;
+const glbAnimationPreview=createGLBAnimationPreview({THREE,onDirty:()=>window._kaminosDirty?.()});
+window.kaminosGLBAnimationDebugState=()=>{
+  const poses=[];
+  glbAnimationRoot?.traverse(o=>{if(o.name.startsWith('joint_'))poses.push({name:o.name,position:o.position.toArray()});});
+  return {...glbAnimationPreview.state(),source:glbAnimationRoot?.userData?.kaminosSceneObject?.source||null,
+    native:glbAnimationRoot?.userData?.native_motion||null,poses};
+};
+function showGLBAnimationControls(root,clips){
+  glbAnimationPreview.play(root,clips);
+  glbAnimationRoot=root;
+  const native=root.userData.native_motion;
+  if(native?.display_bounds){
+    const box=new THREE.Box3(new THREE.Vector3(...native.display_bounds.min),new THREE.Vector3(...native.display_bounds.max));
+    const center=box.getCenter(new THREE.Vector3()),radius=box.getSize(new THREE.Vector3()).length()/2;
+    const angle=Math.min(THREE.MathUtils.degToRad(camera.fov/2),Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*camera.aspect));
+    camera.position.copy(center).add(new THREE.Vector3(1,.35,.75).normalize().multiplyScalar(radius/Math.sin(angle)*1.25));
+    controls.target.copy(center);controls.update();
+    groundPlane.position.y=0;document.getElementById('composition-ground-height').value=0;
+  }
+  let panel=document.getElementById('glb-animation-controls');
+  if(!panel){
+    panel=document.createElement('div');panel.id='glb-animation-controls';
+    panel.style.cssText='position:fixed;right:16px;top:110px;z-index:1000;background:#171d20e8;padding:10px;border:1px solid #657680;border-radius:6px;font-size:12px;max-width:260px';
+    const title=document.createElement('div');title.id='glb-animation-label';panel.append(title);
+    for(const [id,text,run] of [['glb-animation-replay','Replay source clip',()=>glbAnimationPreview.replay()],['glb-animation-pause','Pause',()=>glbAnimationPreview.pause()]]){
+      const button=document.createElement('button');button.id=id;button.textContent=text;button.className='btn';
+      button.onclick=run;panel.append(button);
+    }
+    document.body.append(panel);
+  }
+  panel.hidden=false;
+  document.getElementById('glb-animation-label').textContent=(root.userData.native_motion?.label||clips[0]?.name||'GLB source clip')+' · one shot, held at end';
+}
 let glbFileName = 'model.glb';
 let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
@@ -12077,6 +12112,7 @@ async function showPBRPreview(options = {}) {
 
 // --- GLB Inspector ---
 async function showGLB(file, options = {}) {
+  const animateSource=new URLSearchParams(window.location.search).get('mesh_animate')==='1';
   if (shouldClearSceneForImport(options)) clearScene();
   const loadToken = sceneMutationToken;
   const isBlob = typeof file !== 'string';
@@ -12098,7 +12134,13 @@ async function showGLB(file, options = {}) {
         reject(new Error('stale async GLB load ignored'));
         return;
       }
-      if (options.normalize !== false) {
+      if(animateSource && (!gltf.animations.length || !Number.isFinite(gltf.animations[0].duration) || gltf.animations[0].duration<=0)){
+        disposeObjectTree(model);
+        const error=new Error('Requested GLB has no usable animation clip');
+        setInfo('GLB animation unavailable: '+error.message);reject(error);return;
+      }
+      if(animateSource)model.traverse(child=>{if(child.userData.native_motion)model.userData.native_motion=child.userData.native_motion;});
+      if (options.normalize !== false && !animateSource) {
         const box = new THREE.Box3().setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3()).length();
@@ -12139,6 +12181,10 @@ async function showGLB(file, options = {}) {
         });
       }
       document.getElementById('transform-bar').classList.add('visible');
+      if(animateSource){
+        try{showGLBAnimationControls(model,gltf.animations);}
+        catch(error){setInfo('GLB animation unavailable: '+error.message);reject(error);return;}
+      }
       setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
       resolve(model);
     }, undefined, (err) => {

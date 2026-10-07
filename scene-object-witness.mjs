@@ -7,6 +7,7 @@ import { assertLocalLiquidSelectionContinuity } from './local-liquid-selection-e
 import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
 import { countChangedVisibleWaterPixels, countVisibleWaterPixels } from './screenshot-png-rgb.mjs';
 import { compositionRestoreUrl } from './scene-authoring.mjs';
+import { assertNativeAnimationEvidence } from './glb-animation-preview.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -33,6 +34,7 @@ let lastEvidence = {};
 let effectiveUrl = null;
 let effectiveServerRoots = null;
 let browserVersion = null;
+const pageErrors=[];
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -53,6 +55,7 @@ function writeReport(report) {
     settleMs,
     phase,
     browserVersion,
+    pageErrors,
     stderrTail: stderr.slice(-2000),
     ...report,
   }, null, 2));
@@ -226,6 +229,27 @@ async function runMeshAssetLinkScenario(ws) {
       };
     })()
   `, { timeoutMs: 45000 });
+}
+
+async function runNativeAnimationScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase='scenario-native-animation';
+  await evaluate(ws,`document.getElementById('glb-animation-replay').click()`);
+  await delay(200);
+  const first=await evaluate(ws,'window.kaminosGLBAnimationDebugState()');
+  const firstShot=await capturePngScreenshot(ws,siblingPngPath('-first'));
+  await delay(1800);
+  const second=await evaluate(ws,'window.kaminosGLBAnimationDebugState()');
+  const secondShot=await capturePngScreenshot(ws,siblingPngPath('-second'));
+  assertNativeAnimationEvidence(first,second);
+  await delay(2000);
+  const third=await evaluate(ws,'window.kaminosGLBAnimationDebugState()');
+  const thirdShot=await capturePngScreenshot(ws,siblingPngPath('-third'));
+  await delay(2200);
+  const held=await evaluate(ws,'window.kaminosGLBAnimationDebugState()');
+  assert.equal(held.status,'held','source sequence must stop, not silently become a seamless cycle');
+  assert.ok(Math.abs(held.time-held.duration)<1e-5);
+  lastEvidence.nativeAnimation={first,second,third,held,screenshots:[firstShot.path,secondShot.path,thirdShot.path]};
 }
 
 async function runNavigationDepthIndexScenario(ws) {
@@ -5519,7 +5543,13 @@ try {
   if (!target?.webSocketDebuggerUrl) throw Error('Owned browser blank page is missing');
   ws = new WebSocket(target.webSocketDebuggerUrl);
   await waitForWebSocketOpen(ws);
+  ws.addEventListener('message',event=>{
+    const message=JSON.parse(String(event.data));
+    if(message.method==='Runtime.exceptionThrown')pageErrors.push(message.params);
+    if(message.method==='Log.entryAdded'&&message.params.entry.level==='error')pageErrors.push(message.params);
+  });
   await wsRequest(ws, 'Runtime.enable');
+  await wsRequest(ws, 'Log.enable');
   await wsRequest(ws, 'Page.enable');
   await wsRequest(ws, 'Page.bringToFront');
   await wsRequest(ws,'Page.navigate',{url},{timeoutMs:60000});
@@ -5542,6 +5572,8 @@ try {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
+  } else if (scenario === 'native-glb-animation') {
+    await runNativeAnimationScenario(ws);
   } else if (scenario === 'navigation-depth-index') {
     await runNavigationDepthIndexScenario(ws);
   } else if (scenario === 'modal-pivot-visibility') {
