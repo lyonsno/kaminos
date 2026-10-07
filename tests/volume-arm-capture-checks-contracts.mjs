@@ -10,7 +10,8 @@ const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', impo
 
 test('swirl check: a missing or nonfinite effective swirl is a mismatch, not a pass', () => {
   const arm = { set: [['volume-emitter-swirl', '0.6']] };
-  const at = swirl => effectiveMismatches(arm, { inflowBoundary: { effective: swirl === undefined ? {} : { swirl } } }, null);
+  // Receipts carry admission: an inflow-dependent check first requires the inflow to be admitted (LS-02).
+  const at = swirl => effectiveMismatches(arm, { inflowBoundary: { effective: swirl === undefined ? { admitted: true } : { admitted: true, swirl } } }, null);
   assert.equal(at(0.6).length, 0, 'a matching finite value passes');
   assert.equal(at(0).length, 1, 'a different value fails');
   assert.equal(at(undefined).length, 1, 'an absent value fails');
@@ -35,10 +36,10 @@ test('heat release gain is checked against the receipt: absent, refused or diffe
 
 test('slice-3 inlet controls are checked against the receipt and fail when absent', () => {
   const arm = { set: [['volume-emitter-inlet-turbulence', '0.4'], ['volume-emitter-puff-period', '3'], ['volume-emitter-line-weight', '1.5']] };
-  const good = { inflowBoundary: { effective: { pattern: { lineWeight: 1.5 }, inletDynamics: { turbulence: 0.4, puffPeriod: 3 } } } };
+  const good = { inflowBoundary: { effective: { admitted: true, pattern: { lineWeight: 1.5 }, inletDynamics: { turbulence: 0.4, puffPeriod: 3 } } } };
   assert.deepEqual(effectiveMismatches(arm, good, null), []);
-  assert.equal(effectiveMismatches(arm, { inflowBoundary: { effective: { pattern: {}, inletDynamics: { turbulence: 0.4 } } } }, null).length, 2, 'missing line weight and puff period fail');
-  assert.equal(effectiveMismatches(arm, { inflowBoundary: { effective: { pattern: { lineWeight: 1.5 }, inletDynamics: { turbulence: 0, puffPeriod: 3 } } } }, null).length, 1, 'a turbulence that did not take effect fails');
+  assert.equal(effectiveMismatches(arm, { inflowBoundary: { effective: { admitted: true, pattern: {}, inletDynamics: { turbulence: 0.4 } } } }, null).length, 2, 'missing line weight and puff period fail');
+  assert.equal(effectiveMismatches(arm, { inflowBoundary: { effective: { admitted: true, pattern: { lineWeight: 1.5 }, inletDynamics: { turbulence: 0, puffPeriod: 3 } } } }, null).length, 1, 'a turbulence that did not take effect fails');
 });
 
 test('confinement epsilon faults reach the checks through the fault argument, not a module variable', () => {
