@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+const directory=fs.mkdtempSync(path.join(os.tmpdir(),'solid-failure-')),output=path.join(directory,'report.json');
+const result=spawnSync(process.execPath,['structural-material-solid-native.mjs',output,'/missing/independent-browser'],{encoding:'utf8'});
+assert.notEqual(result.status,0);
+assert.ok(fs.existsSync(output),'Native material failure must preserve a report before browser acquisition');
+const report=JSON.parse(fs.readFileSync(output));
+assert.equal(report.status,'failed');assert.equal(report.phase,'preflight');assert.equal(report.lastTrustworthyEvidence,'invocation');assert.ok(report.failure.message.includes('ENOENT'));
+console.log('Native material pre-output failure is durable');

@@ -36,28 +36,33 @@ function deformationResult(F,S,energy,forces,extra={}){
   const P=multiply(F,S),cauchy=scale(multiply(P,transpose(F)),1/J);
   return{active:true,energy,forces,deformationGradient:F,stress:S,stressMeasure:'second-piola',cauchyStress:cauchy,firstPiola:P,...extra};
 }
+function connectedTetrahedron(alive){const reached=new Set([0]);for(let pass=0;pass<4;pass++)pairs.forEach(([a,b],i)=>{if(alive[i]&&(reached.has(a)||reached.has(b))){reached.add(a);reached.add(b);}});return reached.size===4;}
 export function graphTetrahedron(rest,material){
   points(rest,4);rest=structuredClone(rest);const elastic=elasticity(material);
   const Dm=columns(rest.slice(1).map(p=>sub(p,rest[0]))),invDm=inverse(Dm),volume=Math.abs(determinant(Dm))/6;
   const gradients=[scale(add(add(invDm.slice(0,3),invDm.slice(3,6)),invDm.slice(6,9)),-1),invDm.slice(0,3),invDm.slice(3,6),invDm.slice(6,9)];
-  const T=pairs.map(([i,j])=>{const e=sub(rest[j],rest[i]),d=scale(e,1/Math.sqrt(dot(e,e)));return[d[0]**2,d[1]**2,d[2]**2,2*d[0]*d[1],2*d[0]*d[2],2*d[1]*d[2]];});
-  inverseSquare(T);
+  const T=pairs.map(([i,j])=>{const e=sub(rest[j],rest[i]),d=scale(e,1/Math.sqrt(dot(e,e)));return[d[0]**2,d[1]**2,d[2]**2,d[0]*d[1],d[0]*d[2],d[1]*d[2]];});
+  const invT=inverseSquare(T);
   const C=Array.from({length:6},(_,j)=>Capply(Array.from({length:6},(_,k)=>Number(k===j)),elastic));
+  const A=Array.from({length:6},(_,i)=>Array.from({length:6},(_,j)=>C.reduce((sum,row,a)=>sum+invT[a][i]*row.reduce((s,v,b)=>s+v*invT[b][j],0),0)));
   const stiffness=new Map();
   function releasedStiffness(alive){
     const key=alive.map(Number).join('');if(stiffness.has(key))return stiffness.get(key);
-    const B=T.filter((_,i)=>!alive[i]);let result;
-    if(!B.length)result=C.map(row=>[...row]);else if(B.length===6)result=Array.from({length:6},()=>Array(6).fill(0));
+    const kept=alive.flatMap((v,i)=>v?[i]:[]),released=alive.flatMap((v,i)=>!v?[i]:[]);let result;
+    if(!released.length)result=C.map(row=>[...row]);else if(!connectedTetrahedron(alive))result=Array.from({length:6},()=>Array(6).fill(0));
     else{
-      // Minimize elastic energy over the released strain directions: C - C B^T (B C B^T)^-1 B C.
-      const CB=B.map(row=>C.map(c=>dot(c,row))),Q=B.map(row=>CB.map(column=>dot(row,column))),invQ=inverseSquare(Q);
-      result=C.map((row,i)=>row.map((v,j)=>v-CB.reduce((sum,column,a)=>sum+column[i]*invQ[a].reduce((s,q,b)=>s+q*CB[b][j],0),0)));
+      // Condense released edge strains; broken-edge force derivatives are zero.
+      const inverseReleased=inverseSquare(released.map(i=>released.map(j=>A[i][j]))),effective=Array.from({length:6},()=>Array(6).fill(0));
+      for(const i of kept)for(const j of kept)effective[i][j]=A[i][j]-released.reduce((sum,a,k)=>sum+A[i][a]*inverseReleased[k].reduce((s,v,l)=>s+v*A[released[l]][j],0),0);
+      result=T[0].map((_,i)=>T[0].map((_,j)=>T.reduce((sum,row,a)=>sum+row[i]*effective[a].reduce((s,v,b)=>s+v*T[b][j],0),0)));
     }
     stiffness.set(key,result);return result;
   }
   return{route:'graph-directional-stvk-reference-v0',volume,rest,gradients,directionalBasis:T,
+    stiffnessForEdges(alive=Array(6).fill(true)){if(!Array.isArray(alive)||alive.length!==6||!alive.every(v=>typeof v==='boolean'))throw new Error('Six boolean graph-edge states required');return releasedStiffness(alive).map(row=>[...row]);},
     evaluate(current,alive=Array(6).fill(true)){
       points(current,4);if(!Array.isArray(alive)||alive.length!==6||!alive.every(v=>typeof v==='boolean'))throw new Error('Six boolean graph-edge states required');
+      if(!connectedTetrahedron(alive))return{active:false,energy:0,forces:Array.from({length:4},()=>[0,0,0]),stress:Array(9).fill(0),cauchyStress:Array(9).fill(0),alive:[...alive],degradation:'disconnected-element-energy-removed'};
       const F=multiply(columns(current.slice(1).map(p=>sub(p,current[0]))),invDm),e=strainVector(F);
       const s=releasedStiffness(alive).map(row=>dot(row,e));
       const S=stressMatrix(s),P=multiply(F,S),energy=volume*dot(e,s)/2,forces=gradients.map(g=>scale(apply(P,g),-volume));
@@ -105,7 +110,7 @@ export function microelasticBonds(rest,links,{young,poisson,horizon,volumes}){
       const forces=rest.map(()=>[0,0,0]);let energy=0;
       const bondStates=bonds.map((bond,i)=>{
         const delta=sub(current[bond.b],current[bond.a]),length=Math.hypot(...delta),extension=length-bond.restLength;
-        if(!(length>0))throw new Error('Coincident live material points are outside the PMB reference');
+        if(alive[i]&&!(length>0))throw new Error('Coincident live material points are outside the PMB reference');
         const stored=alive[i]?bond.stiffness*extension**2/2:0;
         if(alive[i]){const force=scale(delta,bond.stiffness*extension/length);forces[bond.a]=add(forces[bond.a],force);forces[bond.b]=sub(forces[bond.b],force);}
         energy+=stored;return{...bond,alive:alive[i],stretch:extension/bond.restLength,energy:stored};

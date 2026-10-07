@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { materialConformanceCases,inspectMaterialEvaluation } from '../structural-material-solid-conformance.mjs';
+const test=materialConformanceCases().find(c=>c.name==='graph-rest-0');
+assert.ok(inspectMaterialEvaluation(test,{}).some(e=>e.includes('route')));
+for(const values of [[],Array(48).fill(NaN)])assert.ok(inspectMaterialEvaluation(test,{route:'kaminos.material-energy-gradient.webgpu.v0',kind:'graph',count:1,stride:48,values}).some(e=>e.includes('complete finite')));
+const zero={route:'kaminos.material-energy-gradient.webgpu.v0',kind:'graph',count:1,stride:48,values:Array(48).fill(0)};
+assert.ok(inspectMaterialEvaluation(test,zero).includes('effective graph connectivity mismatch'));
+zero.values[2]=1;assert.deepEqual(inspectMaterialEvaluation(test,zero),[]);
+assert.ok(inspectMaterialEvaluation(materialConformanceCases().find(c=>c.name==='graph-stretch-0'),zero).some(e=>e.includes('energy')));
+zero.values[3]=1;assert.ok(inspectMaterialEvaluation(test,zero).some(e=>e.includes('invalid deformation')));
+console.log('Material conformance evidence contracts passed (synthetic policy controls, not GPU conformance)');

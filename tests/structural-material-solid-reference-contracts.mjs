@@ -25,6 +25,10 @@ for(let mask=0;mask<64;mask++){
   const alive=Array.from({length:6},(_,i)=>Boolean(mask&(1<<i)));
   assert.ok(graph.evaluate(stretched,alive).energy<=response.energy+1e-12,`Releasing directions must not inject stored energy at fixed deformation: mask ${mask}`);
 }
+const separated=[false,true,true,false,false,true];
+const separatedResponse=graph.evaluate(stretched,separated);
+assert.equal(separatedResponse.active,false,'A disconnected tetrahedron must not retain cross-fragment constitutive coupling');
+assert(separatedResponse.forces.flat().every(v=>Math.abs(v)<1e-10));
 const directions=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
 const pd=solid.correspondencePoint([0,0,0],directions,{...material,volume:1,neighborVolumes:directions.map(()=>1),weights:directions.map(()=>1),stabilization:.1});
 const pdr=pd.evaluate([0,0,0],directions.map(([x,y,z])=>[1.01*x,y,z]));
