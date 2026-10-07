@@ -3886,7 +3886,7 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { assetArrivalFramingWindow, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
-import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta } from './asset-resting-plane.mjs';
+import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
@@ -12241,23 +12241,24 @@ function levelObjectOnArrival(object, anchor) {
   if (!analysis || choice.reason !== 'level') return null;
   const delta = levelingWorldDelta({ plane: choice.plane, hullPoints: analysis.hullPoints, groundY: groundPlane ? groundPlane.position.y : 0 });
   object.updateWorldMatrix(true, false);
+  const storedQuaternion = object.getWorldQuaternion(new THREE.Quaternion());
   object.matrixWorld.clone().premultiply(delta).decompose(object.position, object.quaternion, object.scale);
   object.updateWorldMatrix(true, true);
   const box = new THREE.Box3().setFromObject(object, true);
   object.position.x += anchor[0] - (box.min.x + box.max.x) / 2;
   object.position.z += anchor[1] - (box.min.z + box.max.z) / 2;
   object.updateWorldMatrix(true, true);
-  recordLeveling(object, delta, choice.plane.tiltDeg);
+  // Arrival leveling is remembered as the orientation the file stored and the
+  // orientation leveling left, saved with the scene object. Undo Leveling is
+  // offered exactly while the object sits in the leveled orientation (history
+  // and later rotations show or hide it) and always returns to the stored
+  // orientation. Later Snap Ground leveling is undone with Cmd/Ctrl+Z instead.
+  object.userData.kaminosLeveling = {
+    storedQuaternion: storedQuaternion.toArray(),
+    leveledQuaternion: object.getWorldQuaternion(new THREE.Quaternion()).toArray(),
+    tiltDeg: choice.plane.tiltDeg,
+  };
   return { tiltDeg: choice.plane.tiltDeg };
-}
-
-// Leveling is remembered as the turn it applied and the orientation it left,
-// so Undo Leveling is offered exactly while the object still sits that way
-// (history undo/redo and later rotations update it naturally).
-function recordLeveling(object, delta, tiltDeg) {
-  const turn = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().extractRotation(delta));
-  object.updateWorldMatrix(true, false);
-  object.userData.kaminosLeveling = { turn: turn.toArray(), leveledQuaternion: object.getWorldQuaternion(new THREE.Quaternion()).toArray(), tiltDeg };
 }
 
 function levelingStillApplied(object) {
@@ -12282,8 +12283,10 @@ window.undoLeveling = function() {
   object.updateWorldMatrix(true, true);
   const box = new THREE.Box3().setFromObject(object, true);
   const pivot = new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2);
+  const toStored = new THREE.Quaternion().fromArray(record.storedQuaternion)
+    .multiply(object.getWorldQuaternion(new THREE.Quaternion()).invert());
   const back = new THREE.Matrix4().makeTranslation(pivot.x, pivot.y, pivot.z)
-    .multiply(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().fromArray(record.turn).invert()))
+    .multiply(new THREE.Matrix4().makeRotationFromQuaternion(toStored))
     .multiply(new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z));
   const points = sceneObjectWorldPoints(object), v = new THREE.Vector3();
   let lowest = Infinity;
@@ -26162,12 +26165,11 @@ window.kaminosRestingPlaneDebugState = function(id) {
 
 window.snapToGround = function() {
   if (!currentMesh) return;
-  const { analysis, choice } = sceneObjectRestingAnalysis(currentMesh);
-  if (!analysis) return;
-  const delta = levelingWorldDelta({ plane: choice.reason === 'level' ? choice.plane : null, hullPoints: analysis.hullPoints, groundY: groundPlane.position.y });
+  const { points, triangles } = sceneObjectWorldGeometry(currentMesh, { triangles: true });
+  if (!points.length) return;
+  const { delta, choice } = snapGroundWorldDelta({ points, triangles, groundY: groundPlane.position.y });
   currentMesh.updateWorldMatrix(true, false);
   if (!commitToolbarPose(currentMesh, toolbarPoseFromWorld(currentMesh, currentMesh.matrixWorld.clone().premultiply(delta)))) return;
-  if (choice.reason === 'level') recordLeveling(currentMesh, delta, choice.plane.tiltDeg);
   syncLevelingButton();
   if (choice.reason === 'level') setInfo(`Leveled ${choice.plane.tiltDeg.toFixed(1)}° onto its base and snapped to ground`);
   else if (choice.reason === 'already-level') setInfo('Snapped to ground (already standing level)');
@@ -27893,6 +27895,7 @@ async function grBrowseScenes() {
     for (const entry of items) {
       const div = document.createElement('div');
       div.className = 'gr-entry';
+      div.dataset.sceneFile = entry.name;
       if (currentSceneFile === entry.name) div.style.borderLeft = '2px solid #1976d2';
 
       const icon = document.createElement('span');
@@ -28088,6 +28091,7 @@ function serializeSceneObject(entry) {
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
     localLiquidEmitter: metadata.localLiquidEmitter ?? entry.localLiquidEmitter ?? null,
+    ...(object?.userData?.kaminosLeveling ? { arrivalLeveling: structuredClone(object.userData.kaminosLeveling) } : {}),
     ...(entry.type==='light'?{light:structuredClone(entry.light)}:{}),
     ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface)} : {}),
   };
@@ -28140,11 +28144,14 @@ async function addSceneObjectFromSource(record, loadRequestId = null) {
         isCurrent: loadRequestId === null ? undefined : () => sceneLoadRequests.isCurrent(loadRequestId),
       });
     }
-    return showGLB(record.source, {
+    const object = await showGLB(record.source, {
       clear: false,
       normalize: false,
       metadata: record,
     });
+    const leveling = normalizeArrivalLeveling(record.arrivalLeveling);
+    if (leveling) object.userData.kaminosLeveling = leveling;
+    return object;
   }
   throw new Error(`Scene object "${record.fileName || record.id}" must be re-dropped; source "${record.source}" is not reloadable`);
 }

@@ -405,6 +405,63 @@ async function runArrivalAutoLevelScenario(ws) {
   if (unleveled.undoButtonShown) throw new Error('Undo Leveling stayed visible after undoing: ' + JSON.stringify(unleveled));
   if (Math.abs(unleveled.minY - unleveled.groundY) > 2e-3) throw new Error('Undo Leveling left the asset off the ground: ' + JSON.stringify(unleveled));
   if (redone.resting?.reason !== 'already-level' || !redone.undoButtonShown) throw new Error('Cmd+Z did not bring the leveling and its button back: ' + JSON.stringify(redone));
+
+  // A later leveling that history undoes must not replace what Undo Leveling
+  // restores: tilt 5 degrees, Snap Ground, undo both, then Undo Leveling still
+  // returns the file's stored tilt.
+  const undoKey = `document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', metaKey: true, bubbles: true }))`;
+  const relevelHistory = await evaluate(ws, `(async () => {
+    const id = ${JSON.stringify(objectId)};
+    const pose = window.kaminosSceneObjectDebugState().find(item => item.id === id).transform;
+    window.kaminosSetSceneObjectTransform(id, { ...pose, rotation: [pose.rotation[0] + 5 * Math.PI / 180, pose.rotation[1], pose.rotation[2]] });
+    await ${frames};
+    [...document.querySelectorAll('#transform-bar button')].find(item => item.textContent.trim() === 'Snap Ground').click();
+    await ${frames};
+    const afterSnap = ${state};
+    ${undoKey}; await ${frames};
+    ${undoKey}; await ${frames};
+    const backAtArrival = ${state};
+    document.getElementById('tb-undo-leveling')?.click();
+    await ${frames};
+    const unleveled = ${state};
+    ${undoKey}; await ${frames};
+    return { afterSnap, backAtArrival, unleveled, releveled: ${state} };
+  })()`, { timeoutMs: 30000 });
+  lastEvidence.arrivalAutoLevel.relevelHistory = relevelHistory;
+  if (!relevelHistory.backAtArrival.undoButtonShown) throw new Error('Undo Leveling not offered after history returned to the arrival pose: ' + JSON.stringify(relevelHistory.backAtArrival));
+  if (relevelHistory.unleveled.resting?.reason !== 'level' || Math.abs(relevelHistory.unleveled.resting.tiltDeg - arrived.arrival.leveledDeg) > 0.2) throw new Error('Undo Leveling after a later leveling and history undo did not restore the stored tilt: ' + JSON.stringify({ expected: arrived.arrival.leveledDeg, unleveled: relevelHistory.unleveled.resting }));
+
+  // The leveling, and its undo, survive save and reopen.
+  const reopened = await evaluate(ws, `(async () => {
+    const id = ${JSON.stringify(objectId)};
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const listScenes = async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name).filter(name => name.endsWith('.kaminos.json'));
+    const before = new Set(await listScenes());
+    await window.saveSceneAs();
+    let savedFile = null;
+    for (let i = 0; i < 120 && !savedFile; i++) { savedFile = (await listScenes()).find(name => !before.has(name)) || null; if (!savedFile) await wait(125); }
+    if (!savedFile) throw new Error('scene save produced no file');
+    const saved = await (await fetch('/api/read?root=scenes&path=' + encodeURIComponent(savedFile))).json();
+    document.querySelector('[data-tab="greenroom"]').click();
+    let entry = null;
+    for (let i = 0; i < 120 && !entry; i++) { entry = [...document.querySelectorAll('#scenes-list .gr-entry')].find(item => item.dataset.sceneFile === savedFile); if (!entry) await wait(125); }
+    if (!entry) { await fetch('/api/delete-scene?name=' + encodeURIComponent(savedFile)); throw new Error('saved scene not listed: ' + savedFile); }
+    [...entry.querySelectorAll('button')].find(button => button.textContent.trim() === 'Load').click();
+    let restored = null;
+    for (let i = 0; i < 200; i++) { await wait(125); restored = window.kaminosSceneObjectDebugState().find(item => item.id === id); if (restored && window.kaminosSceneObjectDebugState().length === 1) break; }
+    document.querySelector('[data-tab="assets"]')?.click();
+    document.querySelector('[data-scene-object-id="' + id + '"]')?.click();
+    await ${frames};
+    const afterLoad = ${state};
+    document.getElementById('tb-undo-leveling')?.click();
+    await ${frames};
+    const unleveled = ${state};
+    const cleanup = await (await fetch('/api/delete-scene?name=' + encodeURIComponent(savedFile))).json().catch(error => ({ error: String(error) }));
+    return { savedFile, savedLeveling: saved.objects?.find(object => object.id === id)?.arrivalLeveling ?? null, afterLoad, unleveled, cleanup };
+  })()`, { timeoutMs: 60000 });
+  lastEvidence.arrivalAutoLevel.reopened = reopened;
+  if (!reopened.afterLoad.undoButtonShown || reopened.afterLoad.resting?.reason !== 'already-level') throw new Error('Undo Leveling not offered after save and reopen: ' + JSON.stringify(reopened));
+  if (reopened.unleveled.resting?.reason !== 'level' || Math.abs(reopened.unleveled.resting.tiltDeg - arrived.arrival.leveledDeg) > 0.2) throw new Error('Undo Leveling after reopen did not restore the stored tilt: ' + JSON.stringify(reopened.unleveled));
 }
 
 async function runNavigationDepthIndexScenario(ws) {

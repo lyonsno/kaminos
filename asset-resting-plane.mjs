@@ -86,7 +86,11 @@ export function findRestingPlanes(points, triangles = null, { coplanarDeg = 6 } 
   if (!(weight > 0)) { for (let i = 0; i < count; i++) com.add(v.fromArray(points, 3 * i)); weight = count; }
   com.divideScalar(weight);
 
-  const hull = new ConvexHull().setFromPoints(hullCandidates(points));
+  // Collinear or otherwise degenerate input has no hull; callers fall back to
+  // grounding without leveling.
+  let hull;
+  try { hull = new ConvexHull().setFromPoints(hullCandidates(points)); } catch { return null; }
+  if (!hull.faces.length) return null;
   const faces = hull.faces.map(face => {
     const corners = []; let edge = face.edge;
     do { corners.push(edge.head().point); edge = edge.next; } while (edge !== face.edge);
@@ -149,4 +153,23 @@ export function levelingWorldDelta({ plane = null, hullPoints, groundY }) {
   for (let i = 0; i < hullPoints.length; i += 3) lowest = Math.min(lowest, v.fromArray(hullPoints, i).applyMatrix4(delta).y);
   if (Number.isFinite(lowest)) delta.premultiply(new Matrix4().makeTranslation(0, groundY - lowest, 0));
   return delta;
+}
+
+// Snap Ground: level onto a clear base when there is one, and always rest the
+// lowest point on groundY. Geometry without a hull (a lone triangle, collapsed
+// scale) is grounded from its own points.
+export function snapGroundWorldDelta({ points, triangles = null, groundY }) {
+  const analysis = findRestingPlanes(points, triangles);
+  const choice = chooseLevelingPlane(analysis);
+  const delta = levelingWorldDelta({ plane: choice.reason === 'level' ? choice.plane : null, hullPoints: analysis ? analysis.hullPoints : points, groundY });
+  return { delta, choice, analysis };
+}
+
+// Arrival leveling as saved with a scene object: the orientation the file
+// stored, the orientation leveling produced, and the tilt removed. Anything
+// malformed is dropped, so older scenes and hand edits load without it.
+export function normalizeArrivalLeveling(value) {
+  const quaternion = q => Array.isArray(q) && q.length === 4 && q.every(Number.isFinite) && Math.abs(Math.hypot(...q) - 1) < 1e-3;
+  if (!value || !quaternion(value.storedQuaternion) || !quaternion(value.leveledQuaternion) || !Number.isFinite(value.tiltDeg)) return null;
+  return { storedQuaternion: [...value.storedQuaternion], leveledQuaternion: [...value.leveledQuaternion], tiltDeg: value.tiltDeg };
 }

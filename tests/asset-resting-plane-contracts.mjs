@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Matrix4, Vector3 } from '../lib/three.core.js';
-import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta } from '../asset-resting-plane.mjs';
+import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from '../asset-resting-plane.mjs';
 
 // A chair-like cloud: four thin legs under a seat, back rising at the rear.
 function chairPoints() {
@@ -55,4 +55,34 @@ test('a round object with no flat base is not rotated', () => {
     points.push(r * Math.cos(a), y, r * Math.sin(a));
   }
   assert.equal(chooseLevelingPlane(findRestingPlanes(points)).reason, 'no-obvious-base');
+});
+
+test('geometry that cannot form a hull yields no resting analysis instead of throwing', () => {
+  assert.equal(findRestingPlanes([0, 2, 0, 1, 2, 0, 0, 2, 1]), null, 'a single triangle');
+  assert.equal(findRestingPlanes([0, 0, 0, 1, 0, 0, 2, 0, 0, 3, 0, 0, 4, 0, 0]), null, 'collinear points');
+});
+
+test('Snap Ground still grounds geometry with no usable hull', () => {
+  for (const points of [[0, 2, 0, 1, 2, 0, 0, 2, 1], [0, 3, 0, 1, 3, 0, 2, 3, 0, 3, 3, 0]]) {
+    const { delta, choice } = snapGroundWorldDelta({ points, groundY: -0.85 });
+    assert.equal(choice.reason, 'no-geometry');
+    assert.ok(Math.abs(lowestY(transformed(points, delta)) + 0.85) < 1e-9, 'lowest point rests on the ground');
+  }
+});
+
+test('Snap Ground levels a tilted chair and grounds it through the same entry point', () => {
+  const tilted = transformed(chairPoints(), new Matrix4().makeRotationX(10 * Math.PI / 180));
+  const { delta, choice } = snapGroundWorldDelta({ points: tilted, groundY: 0 });
+  assert.equal(choice.reason, 'level');
+  const leveled = transformed(tilted, delta);
+  assert.equal(chooseLevelingPlane(findRestingPlanes(leveled)).reason, 'already-level');
+  assert.ok(Math.abs(lowestY(leveled)) < 1e-9);
+});
+
+test('saved arrival leveling is restored only when well formed', () => {
+  const valid = { storedQuaternion: [0.0868, 0, 0, 0.9962], leveledQuaternion: [0, 0, 0, 1], tiltDeg: 9.9 };
+  assert.deepEqual(normalizeArrivalLeveling(valid), valid);
+  for (const bad of [undefined, null, {}, { ...valid, tiltDeg: 'x' }, { ...valid, storedQuaternion: [0, 0, 1] }, { ...valid, leveledQuaternion: [0, 0, 0, 0] }, { ...valid, storedQuaternion: [NaN, 0, 0, 1] }]) {
+    assert.equal(normalizeArrivalLeveling(bad), null, JSON.stringify(bad));
+  }
 });

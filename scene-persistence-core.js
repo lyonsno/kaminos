@@ -46,6 +46,10 @@ function normalizeSceneObjectRecord(record) {
     renderHandoffSchema: record.renderHandoffSchema ?? null,
     ...(record.type === LOCAL_LIQUID_EMITTER_TYPE && record.source === LOCAL_LIQUID_EMITTER_SOURCE
       ? { localLiquidEmitter: cloneJson(record.localLiquidEmitter) } : {}),
+    // Arrival leveling (stored/leveled orientation) keeps Undo Leveling
+    // available after reopen; the page validates it when restoring.
+    ...(record.arrivalLeveling && typeof record.arrivalLeveling === 'object'
+      ? { arrivalLeveling: cloneJson(record.arrivalLeveling) } : {}),
   };
 }
 
