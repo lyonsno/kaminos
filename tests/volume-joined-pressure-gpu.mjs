@@ -15,6 +15,27 @@ try {
   globalThis.__joinedPressureGPU=create(['backend=metal']);const adapter=await globalThis.__joinedPressureGPU.requestAdapter();
   assert.ok(adapter);device=await adapter.requestDevice();report.route={backend:'metal',vendor:adapter.info.vendor,device:adapter.info.device};
   const errors=[];device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
+  // Execute the production appearance helpers on identical local velocities,
+  // separately from the pressure/transport fixtures below.
+  const coreSource=readFileSync(resolve(root,'volume-core.js'),'utf8');
+  function fn(name){const start=coreSource.indexOf(`fn ${name}(`),open=coreSource.indexOf('{',start);assert.ok(start>=0);let depth=1,i=open+1;for(;depth&&i<coreSource.length;i++){if(coreSource[i]==='{')depth++;if(coreSource[i]==='}')depth--;}return coreSource.slice(start,i);}
+  const opticalShader=device.createShaderModule({code:`override GRID:u32=32u;const OUTER_SMOKE:bool=true;
+    ${['joinedVelocityScale','opticalVelocityMagnitude','emissiveTemperature','boundarySupportFromSlots'].map(fn).join('\n')}
+    @group(0) @binding(0) var<storage,read_write> result:array<vec4<f32>>;
+    @compute @workgroup_size(1) fn check(){
+      let v=vec4<f32>(0.0,.5*f32(GRID)/32.0,0.0,0.0);
+      let m=vec4<f32>(.1,.2,.05,0.0);let f=vec4<f32>(.04,0.0,.03,.01);let d=vec4<f32>(0.0,0.0,.005,0.0);
+      let speed=opticalVelocityMagnitude(v.xyz);
+      result[0]=vec4<f32>(speed,emissiveTemperature(f,m,d,speed),boundarySupportFromSlots(v,m,f,d,.01,vec4<f32>(1.0)),0.0);
+    }`});
+  report.optical=[];let firstOptical;
+  for(const grid of [32,64]){
+    report.phase=`optical-${grid}`;const p=device.createComputePipeline({layout:'auto',compute:{module:opticalShader,entryPoint:'check',constants:{GRID:grid}}});
+    const b=device.createBuffer({size:16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC}),read=device.createBuffer({size:16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+    try{const e=device.createCommandEncoder(),pass=e.beginComputePass();pass.setPipeline(p);pass.setBindGroup(0,device.createBindGroup({layout:p.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:b}}]}));pass.dispatchWorkgroups(1);pass.end();e.copyBufferToBuffer(b,0,read,0,16);device.queue.submit([e.finish()]);await read.mapAsync(GPUMapMode.READ);const v=Array.from(new Float32Array(read.getMappedRange()));read.unmap();
+      report.optical.push({grid,speed:v[0],temperatureProxy:v[1],boundarySupport:v[2]});if(firstOptical)assert.deepEqual(v,firstOptical);else firstOptical=v;
+    }finally{b.destroy();read.destroy();}
+  }
   let reference;
   for(const n of [32,64]) {
     report.phase=`core-${n}`;const values=new Float32Array(n**3*16);
