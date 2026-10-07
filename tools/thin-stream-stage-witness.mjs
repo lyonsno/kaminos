@@ -1,0 +1,50 @@
+import {installThinStreamStageTap,validateThinStreamStageTrace} from './thin-stream-stage-tap.mjs';
+import {evaluateJsonTransfer} from './cdp-json-transfer.mjs';
+import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {resolve,join} from 'node:path';
+import {createHash} from 'node:crypto';
+import {spawn,spawnSync} from 'node:child_process';
+import assert from 'node:assert/strict';
+const args=process.argv.slice(2),arg=k=>args[args.indexOf(k)+1];
+const out=resolve(args.includes('--out-dir')?arg('--out-dir'):'.thin-stream-stage-output');mkdirSync(out,{recursive:true});
+const report={schema:'soggy.thin-stream-stage-witness.v1',status:'starting',phase:'input',receiver:'soggy-lazarus-rehydration-department',frames:[],events:[],primaryOutputWritten:false};
+const save=()=>writeFileSync(join(out,'report.json'),JSON.stringify(report,null,2));save();
+const sha=b=>createHash('sha256').update(b).digest('hex');const delay=ms=>new Promise(r=>setTimeout(r,ms));
+let child=null,client=null;
+function git(root,...args){const p=spawnSync('/usr/bin/git',args,{cwd:root,encoding:'utf8'});if(p.status)throw Error(p.stderr);return p.stdout.trim()}
+async function connect(url){const ws=new WebSocket(url);await new Promise((yes,no)=>{ws.addEventListener('open',yes,{once:true});ws.addEventListener('error',no,{once:true})});let id=0,closed=false;const pending=new Map();
+ const fail=()=>{closed=true;for(const p of pending.values())p.no(Error('CDP transport closed'));pending.clear()};ws.addEventListener('close',fail);ws.addEventListener('error',fail);
+ ws.addEventListener('message',e=>{const m=JSON.parse(String(e.data));if(m.id){const p=pending.get(m.id);if(!p)return;pending.delete(m.id);m.error?p.no(Error(JSON.stringify(m.error))):p.yes(m.result)}else if(['Runtime.exceptionThrown','Runtime.consoleAPICalled'].includes(m.method))report.events.push(m)});
+ return {ws,call(method,params={}){return new Promise((yes,no)=>{if(closed)return no(Error('CDP closed'));const i=++id;pending.set(i,{yes,no});ws.send(JSON.stringify({id:i,method,params}))})}};
+}
+async function evaluate(expression){const r=await client.call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result.value}
+async function cdp(port,path){const r=await fetch(`http://127.0.0.1:${port}${path}`);if(!r.ok)throw Error('CDP HTTP '+r.status);return r.json()}
+function checkState(s,input){
+ assert.equal(s.status,'running');const r=s.runtime;
+ for(const [key,value] of Object.entries({particleCount:input.particleCount,densityIterationsPerStep:input.densityIterations,truthScene:'multi_regime_playground',solver_backend:'webgpu_compute',fixedVolumeReferenceParticleCount:input.particleCount,particleVolumeScale:1,adaptiveDensity:false,effectivePackedDensity:true,effectiveUniformVolumeDensityKernel:true,effectiveDensityCellRejection:true}))assert.equal(r[key],value,'effective '+key);
+ assert.equal(r.energyDiagnostics.effectiveMode,'disabled');
+}
+try{
+ assert.ok(args.includes('--manifest'),'--manifest required');const manifestPath=resolve(arg('--manifest'));const raw=readFileSync(manifestPath),input=JSON.parse(raw);report.input={path:manifestPath,sha256:sha(raw),manifest:input};save();
+ assert.equal(input.schema,'soggy.thin-stream-stage-input.v1');assert.equal(input.particleCount,36864);assert.equal(input.densityIterations,3);assert.ok(Array.isArray(input.steps)&&input.steps.length>0&&input.steps.every((s,i)=>Number.isSafeInteger(s)&&s>0&&(i===0||s>input.steps[i-1])),'strictly increasing caller-selected steps');
+ const root=resolve(input.repoRoot),revision=git(root,'rev-parse','HEAD');assert.equal(revision,input.revision);assert.equal(git(root,'status','--porcelain'),'','clean source required');report.source={root,revision,files:[]};
+ report.phase='source-server';save();const response=await fetch(new URL('/api/runtime-config',input.url));assert.equal(response.status,200);const runtime=await response.json(),identity=runtime.sourceIdentity||runtime.source;assert.equal(resolve(identity.repoRoot),root);assert.equal(identity.commit||identity.revision,revision);report.source.runtimeConfig=runtime;
+ for(const name of ['index.html','finger-fluid-webgpu-core.js','finger-fluid-bench-core.js','tools/thin-stream-stage-tap.mjs','tools/thin-stream-stage-witness.mjs','tools/cdp-json-transfer.mjs']){const local=readFileSync(join(root,name));const r=await fetch(new URL(name,input.url));assert.equal(r.status,200);const served=Buffer.from(await r.arrayBuffer());assert.equal(sha(served),sha(local),'served source '+name);report.source.files.push({name,sha256:sha(local)})}
+ const helper=await import(input.browserHelper);const launch=helper.fluidBrowserLaunch({executable:input.browserExecutable,debugPort:input.debugPort,userDataDir:join(out,'browser-profile'),width:1440,height:900});report.browser={executable:launch.executable,args:launch.args,helper:input.browserHelper,helperSha256:sha(readFileSync(input.browserHelper))};save();
+ if(args.includes('--preflight-only')){report.status='preflight_passed';report.phase=null;save();process.exit(0)}
+ assert.ok(process.env.SOGGY_EXECUTION_SOURCE,'execution source required');report.executionSource=process.env.SOGGY_EXECUTION_SOURCE;report.phase='browser-start';save();
+ child=spawn(launch.executable,launch.args,{stdio:['ignore','ignore','pipe']});child.stderr.on('data',b=>{report.browser.stderr=(report.browser.stderr||'')+b.toString()});await new Promise((yes,no)=>{child.once('spawn',yes);child.once('error',no)});
+ let version;while(!version){if(child.exitCode!==null)throw Error('owned Chrome exited before CDP');try{version=await cdp(input.debugPort,'/json/version')}catch{await delay(100)}}report.browser.version=version.Browser;report.browser.pid=child.pid;
+ const pages=await cdp(input.debugPort,'/json/list'),page=pages.find(p=>p.type==='page'&&p.url==='about:blank');assert.ok(page,'owned initial page');client=await connect(page.webSocketDebuggerUrl);await client.call('Runtime.enable');await client.call('Page.enable');await client.call('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false});
+ await client.call('Page.addScriptToEvaluateOnNewDocument',{source:'('+installThinStreamStageTap.toString()+')()'});
+ const url=new URL(input.url);for(const [k,v] of Object.entries({kaminos_finger_fluid_bench:1,finger_fluid_truth_scene:'multi_regime_playground',finger_fluid_renderer:'screen_space_refraction',finger_fluid_color_mode:'phase',finger_fluid_particle_count:input.particleCount,finger_fluid_fixed_volume_reference_count:input.particleCount,finger_fluid_density_iterations:3,finger_fluid_density_cell_rejection:1,finger_fluid_uniform_volume_density_kernel:1,finger_fluid_packed_density:1,finger_fluid_adaptive_density:0,finger_fluid_energy_diagnostics:'disabled'}))url.searchParams.set(k,String(v));report.requestedUrl=url.href;report.phase='scene-start';save();await client.call('Page.navigate',{url:url.href});
+ let state;while(true){if(child.exitCode!==null)throw Error('owned browser exited during load');state=await evaluate('window.kaminosFingerFluidBenchDebugState?.()||null');if(state?.status==='error')throw Error(JSON.stringify(state));if(state?.status==='running')break;await delay(100)}
+ const paused=await evaluate(`(()=>{window.kaminosFingerFluidBenchSetSimulationPausedForWitness(true);window.__thinRAF=window.requestAnimationFrame;window.requestAnimationFrame=()=>0;return window.kaminosFingerFluidBenchDebugState()})()`);checkState(paused,input);report.initialState=paused;assert.ok(paused.runtime.stepCount<input.steps[0],'first requested step not overshot');report.effectiveUrl=await evaluate('location.href');assert.equal(report.effectiveUrl,url.href);save();
+ for(const target of input.steps){
+  report.phase='trace-step-'+target;save();const before=await evaluate(`(()=>{const current=window.kaminosFingerFluidBenchDebugState().runtime.stepCount;if(current<${target-1})window.kaminosFingerFluidBenchAdvanceToStepForWitness(${target-1});window.__thinStreamTrace.active={step:${target}};return window.kaminosFingerFluidBenchDebugState()})()`);assert.equal(before.runtime.stepCount,target-1);
+  await evaluate(`window.kaminosFingerFluidBenchAdvanceToStepForWitness(${target});true`);
+  const data=await evaluateJsonTransfer(client,'window.__thinStreamTrace.finish()',{onProgress:p=>{report.transfer=p;save()}});const path=join(out,`step-${target}.json`);writeFileSync(path,JSON.stringify(data));const row={step:target,path,sha256:sha(readFileSync(path)),bytes:readFileSync(path).length};report.frames.push(row);save();row.validation=validateThinStreamStageTrace(data,target,input.particleCount,input.densityIterations);const after=await evaluate('window.kaminosFingerFluidBenchDebugState()');checkState(after,input);assert.equal(after.runtime.stepCount,target);row.effectiveState=after;report.primaryOutputWritten=true;save();
+ }
+ assert.ok(!report.events.some(e=>e.method==='Runtime.exceptionThrown'||e.params?.type==='error'),'browser error recorded');assert.equal(git(root,'rev-parse','HEAD'),revision);assert.equal(git(root,'status','--porcelain'),'');report.status='done';report.phase=null;
+}catch(error){report.status='failed';report.error=error.stack||String(error);report.lastTrustworthyEvidence={source:report.source?.revision,completedStages:report.frames.filter(f=>f.validation?.complete).map(f=>f.step)};process.exitCode=1}
+finally{client?.ws.close();if(child){report.browser.cleanup={pid:child.pid,signal:'SIGTERM'};if(child.exitCode===null&&!child.signalCode)await new Promise(yes=>{child.once('close',yes);child.kill('SIGTERM')});report.browser.cleanup.exitCode=child.exitCode;report.browser.cleanup.signalCode=child.signalCode}report.completedAt=new Date().toISOString();save()}
