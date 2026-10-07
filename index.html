@@ -12493,7 +12493,13 @@ function selectAngularCount(value) {
   refreshRenderingControls();
 }
 document.getElementById('rendering-angular-samples').addEventListener('change',event=>selectAngularCount(Number(event.target.value)));
-document.getElementById('rendering-angular-swap').addEventListener('click',()=>{if(previousAngularCount!==null)selectAngularCount(previousAngularCount);});
+document.getElementById('rendering-angular-swap').addEventListener('click',()=>{
+  if(previousAngularCount===null)return;
+  try {
+    authoringControlSessions.forEach(session=>session.commit());
+    window.kaminosAuthoringParameters.set('@scene-transport',{'rendering-angular-samples':String(previousAngularCount)});
+  } catch(error){setInfo(error.message);}
+});
 document.getElementById('rendering-retain-comparisons').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-angular-pattern').addEventListener('change',refreshRenderingControls);
 document.getElementById('rendering-smoke-solver').addEventListener('change',refreshRenderingControls);

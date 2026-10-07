@@ -71,9 +71,24 @@ try {
     await page.evaluate(()=>window.kaminosSceneEdits.undo());
     assert.equal(await page.locator('#volume-physical-exposure').inputValue(),exposure);
     report.cameraSourceAfter=await sourceHash();assert.equal(report.cameraSourceAfter,report.cameraSourceBefore,'camera grading changed raw emitted source');
+    report.phase='direction-swap-history';await save();
+    await page.evaluate(()=>{
+      window.kaminosAuthoringParameters.set('@scene-transport',{'rendering-angular-samples':'24','rendering-shared-gain':0});
+      window.kaminosAuthoringParameters.set('@scene-transport',{'rendering-angular-samples':'12'});
+      window.kaminosAuthoringParameters.set('@scene-transport',{'rendering-shared-gain':1});
+    });
+    const swapHistory=await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount);
+    await page.locator('#rendering-angular-swap').click();
+    assert.equal(await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),swapHistory+1);
+    assert.equal(await page.locator('#rendering-angular-samples').inputValue(),'24');
+    await page.evaluate(()=>window.kaminosSceneEdits.undo());
+    assert.equal(await page.locator('#rendering-angular-samples').inputValue(),'12');assert.equal(await page.locator('#rendering-shared-gain').inputValue(),'1');
+    await page.evaluate(()=>window.kaminosSceneEdits.redo());
+    assert.equal(await page.locator('#rendering-angular-samples').inputValue(),'24');assert.equal(await page.locator('#rendering-shared-gain').inputValue(),'1');
+    report.swapHistory={before:swapHistory,after:await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),undo:{directions:12,gain:1},redo:{directions:24,gain:1}};
     await page.evaluate(()=>{
       window.kaminosAuthoringParameters.set('@scene-ground',{'composition-ground-color':'#808080','composition-ground-roughness':.65});
-      window.kaminosAuthoringParameters.set('@scene-transport',{'rendering-light-mode':'shared','rendering-surface-gain':.5});
+      window.kaminosAuthoringParameters.set('@scene-transport',{'rendering-light-mode':'shared','rendering-shared-gain':0,'rendering-surface-gain':.5});
       document.getElementById('composition-label').value='Handy integrated lighting authoring';
     });
     report.effective=await page.evaluate(()=>({gi:window.kaminosSceneGIDebugState(),ground:window.kaminosGroundDebugState(),camera:window.kaminosAuthoringParameters.read('@scene-camera'),transport:window.kaminosAuthoringParameters.read('@scene-transport')}));
