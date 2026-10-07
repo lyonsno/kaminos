@@ -6664,6 +6664,7 @@ function updateTransformInspector() {
       input.value = String(value);
     }
   }
+  if(selectionProxy&&sceneSelection.ids.length&&!transformControls?.dragging)selectionTransformProxy();
   scenePlacementTools?.draw();
 }
 
@@ -11435,7 +11436,7 @@ async function initScene() {
     if (splatCorrectionTransformTarget()) {
       syncSplatCorrectionDraftFromActiveTarget();
     } else {
-      if(transformControls.object===selectionProxy&&transformControls.dragging){try{selectionTransforms.write({...selectionTransforms.read(),...sceneObjectTransformState(selectionProxy)});}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}updateTransformInspector();return;}
+      if(transformControls.object===selectionProxy&&transformControls.dragging){if(!scenePlacementTools?.state().gizmoEditing||!scenePlacementTools.edits.state().active)return;try{selectionTransforms.write({...selectionTransforms.read(),...sceneObjectTransformState(selectionProxy)});}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}updateTransformInspector();return;}
       const assembly=selectedSceneGroupEntry();
       if (assembly?.type===GROUP_TYPE && transformControls.dragging) {
         try {writeGroupPose(assembly.id,sceneObjectTransformState(groupProxies.get(assembly.id)));}

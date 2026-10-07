@@ -59,6 +59,7 @@ export function installScenePlacementTools({
   const state = () => ({
     ...edits.state(), gizmoEditing, gizmoDragging: gizmo.dragging, gizmoVisible: gizmo.getHelper().visible,
     controlsEnabled: controls.enabled,
+    gizmoPose:gizmo.object?{position:gizmo.object.position.toArray(),rotation:[gizmo.object.rotation.x,gizmo.object.rotation.y,gizmo.object.rotation.z],scale:gizmo.object.scale.toArray()}:null,
     modal: modal ? { operation: modal.operation, axis: modal.axis, frame: modal.frame, plane: modal.plane, numeric: modal.numeric, snapping: modal.snap } : null,
   });
   const isText = target => !!target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
