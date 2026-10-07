@@ -385,6 +385,7 @@ try {
   report.status = 'succeeded'; report.phase = null;
 } catch (error) {
   report.error = { message: error.message, stack: error.stack };
+  if(error.memorySummary)report.memory.processes=error.memorySummary;
   if(child)report.ownedBrowserAtFailure={pid:child.pid,exitCode:child.exitCode,signalCode:child.signalCode,
     meaning:'child-process observation before cleanup; null exit fields alone do not prove liveness'};
   process.exitCode = 1;

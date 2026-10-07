@@ -11,6 +11,7 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false}={})
     comparison:'actual WebGPU image generation with retained prepared pixels and browser noise; no matched MLX fidelity claim',outputs:{}},errors=[];
   let session,device,implementation,assetConsumer,runtime,scope=false,invocationOwner,serving=false,currentPhase='new',memory;
   report.memory={requested:memoryMonitor};
+  const setPhase=(phase,modelRole)=>{report.phase=phase;memory?.setPhase(modelRole?phase+':'+modelRole:phase);};
   const stageCounts={},save=async(name,values,shape,dtype)=>{
     const response=await fetch('/output/'+name,{method:'POST',headers:{'X-Tensor-Dtype':dtype},body:values});
     if(!response.ok)throw Error('complete raw output not saved '+name);
@@ -43,7 +44,7 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false}={})
       report.inputLoading.phase='typed-array';const values=new Float32Array(raw);report.inputLoading.phase='verified';
       report.verifiedTensorCount++;report.verifiedInputBytes+=raw.byteLength;return values;
     };
-    report.phase='native-device';const adapter=await navigator.gpu?.requestAdapter();if(!adapter)throw Error('WebGPU unavailable');
+    setPhase('native-device');const adapter=await navigator.gpu?.requestAdapter();if(!adapter)throw Error('WebGPU unavailable');
     report.backend={vendor:adapter.info.vendor,architecture:adapter.info.architecture,description:adapter.info.description,
       device:adapter.info.device,isFallbackAdapter:adapter.info.isFallbackAdapter??adapter.isFallbackAdapter};validateNativePrefixBackend(report.backend);
     if(report.backend.isFallbackAdapter!==false)throw Error('explicit nonfallback native adapter required');
@@ -51,6 +52,7 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false}={})
       maxComputeWorkgroupsPerDimension:adapter.limits.maxComputeWorkgroupsPerDimension};
     device=await adapter.requestDevice({requiredLimits:report.requiredLimits});
     if(memoryMonitor)memory=observeDeviceMemory(device);
+    setPhase('native-device');
     device.pushErrorScope('validation');scope=true;
     device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
     device.lost.then(info=>{if(info.reason!=='destroyed')errors.push('device lost: '+info.reason+' '+info.message);});
@@ -69,12 +71,11 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false}={})
       async readTensor(t){if(serving&&(t.dtype!=='u32'||t.byteLength!==4))throw Error('learned-feature/coordinate CPU read during serving forbidden');
         if(serving)report.servingMetadataReadbackBytes=(report.servingMetadataReadbackBytes??0)+4;
         return actual.runtime.readTensor(t);}};
-    report.phase='cached-checkpoint-input-loading';
+    setPhase('cached-checkpoint-input-loading');
     const inputs=await loadGenerationInputs(m,fetchTensor);
     report.checkpointLoading='per-role uncached complete weights; shared identity-checked activation tables';
     const onPhase=async e=>{
-      currentPhase=e.phase;report.phase=e.phase;
-      memory?.setPhase(e.modelRole?e.phase+':'+e.modelRole:e.phase);
+      currentPhase=e.phase;setPhase(e.phase,e.modelRole);
       report.loadingModelRole=e.modelRole??null;
       await savePhase({backend:report.backend,requiredLimits:report.requiredLimits});
     };
@@ -83,7 +84,7 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false}={})
         await save('noise.'+input.stage,input.values,input.shape,'f32');
         await savePhase({noiseInput:{stage:input.stage,...report.outputs['noise.'+input.stage],source:input.source,seed:input.seed}});
       }});
-    report.phase='complete-image-generation';const started=performance.now();serving=true;
+    setPhase('complete-image-generation');const started=performance.now();serving=true;
     const job=actual.enqueue({jobId:'actual-image-to-geometry-material',execute:invocation=>{invocationOwner=invocation;return implementation.run(invocation);}}),
       completed=await job.completion;serving=false;report.hostElapsedMs=performance.now()-started;
     report.jobCompletion={schema:completed.schema,routeId:completed.routeId,jobId:completed.jobId,status:completed.status,
@@ -100,7 +101,7 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false}={})
       coordinateBytesToCPUDuringServing:out.coordinateBytesToCPUDuringServing,stageCounts,sessionId:session.snapshot().sessionId,
       geometryResolution:out.geometry.resolution,materialResolution:out.material.resolution,pipelineType:out.pipelineType,
       geometryLevels:out.geometry.levels,materialLevels:out.material.levels};
-    report.phase='post-model-observation-retention';
+    setPhase('post-model-observation-retention');
     const fields={conditioning:out.conditioning,'geometry.features':out.geometry.features,'geometry.coordinates':out.geometry.coordinates,
       'material.features':out.material.features,'material.coordinates':out.material.coordinates,shapeCodes:out.shapeCodes,textureCodes:out.textureCodes};
     for(const [i,t]of out.geometry.subdivisions.entries())fields['geometry.subdivision'+i]=t;
@@ -109,9 +110,9 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false}={})
     assetConsumer=createTrellisAssetAdapter({runtime,geometry:out.geometry,material:out.material,
       provenance:{inputManifestSha256:expectedSha,route:actual.routeId,sessionId:session.snapshot().sessionId,modelIdentities:out.modelIdentities,
         input:'actual current WebGPU image generation; exact borrowed geometry/material tensors',comparison:report.comparison},
-      async onPhase(e){report.phase=e.phase;await savePhase({backend:report.backend,requiredLimits:report.requiredLimits});}});
+      async onPhase(e){setPhase(e.phase,e.modelRole);await savePhase({backend:report.backend,requiredLimits:report.requiredLimits});}});
     const asset=await assetConsumer.run();
-    report.phase='post-model-asset-retention';
+    setPhase('post-model-asset-retention');
     const persisted=await fetch('/asset-output',{method:'POST',body:asset.glb});
     if(!persisted.ok)throw Error('learned PBR GLB was not saved');
     report.assetArtifact=await persisted.json();
@@ -119,11 +120,12 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false}={})
       throw Error('partial/changed learned asset receipt');
     report.assetHandoff=asset.handoff;report.assetPostprocess={uv:asset.mesh.uvMetadata,material:asset.textures.metadata,
       textureSize:[asset.textures.width,asset.textures.height],coveredPixels:asset.textures.coveredPixels};
-    report.phase='profile';report.profile=actual.runtime.finishProfile({evidence:{mode:'live',source:'actual-image-to-learned-fields'}});report.profileStatus='passed';
+    setPhase('profile');report.profile=actual.runtime.finishProfile({evidence:{mode:'live',source:'actual-image-to-learned-fields'}});report.profileStatus='passed';
     const validation=await device.popErrorScope();scope=false;if(validation)errors.push(validation.message);if(errors.length)throw Error(errors.join('\n'));
     report.status='succeeded';validateGenerationResult(report,m);report.phase=null;
     report.handoff='actual borrowed learned fields become retained PBR GLB; Kaminos inspection/placement/save/reopen outstanding';
   }catch(error){report.status='failed';report.error={name:error.name,message:error.message,stack:error.stack};report.lastGenerationPhase=implementation?.phase;
+    memory?.setPhase('failure-retention-readback');
     if(implementation){serving=false;for(const [name,n]of Object.entries(implementation.noiseInputs))if(!report.outputs['noise.'+name])
       try{await save('noise.'+name,n.values,n.shape,'f32');}catch(e){report.retentionErrors??=[];report.retentionErrors.push(e.message);}}
     if(implementation?.conditioning&&!report.outputs.conditioning)try{const t=implementation.conditioning;
@@ -131,6 +133,7 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false}={})
     }catch(e){report.retentionErrors??=[];report.retentionErrors.push(e.message);}
     report.stageCounts=stageCounts;
   }finally{
+    memory?.setPhase('cleanup');
     if(scope)try{const e=await device.popErrorScope();if(e)errors.push(e.message);}catch(e){errors.push(e.message);}
     report.errors=errors;if(errors.length)report.status='failed';
     for(const [name,cleanup]of [['asset',()=>assetConsumer?.dispose()],['generation',()=>implementation?.dispose()],['session',async()=>{if(session){await session.drain();session.close();}}],['device',()=>device?.destroy()]])
