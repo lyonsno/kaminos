@@ -25605,7 +25605,7 @@ export function createKaminosVolumePrototype({
       outerSmokeInspection = mode;
       return {mode,authority:'native-density-same-scale-no-incident-light'};
     },
-    async readOuterSmokeState(){if(!outerSmoke)throw new Error('outer smoke inactive');return {receipt:outerSmoke.receipt(),values:await outerSmoke.readState()};},
+    async readOuterSmokeState(){if(!outerSmoke)throw new Error('outer smoke inactive');const values=await outerSmoke.readState();return {receipt:outerSmoke.receipt(),values};},
     relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives) {
       if (productFrameOwner !== 'prototype') throw new Error('Only the ordinary prototype owns its domain translation');
       if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
