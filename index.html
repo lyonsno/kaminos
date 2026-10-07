@@ -3466,6 +3466,7 @@ import {
   resolveFingerFluidEnergyDiagnosticsMode,
   resolveFingerFluidColorMode,
   resolveFingerFluidTruthScene,
+  resolveFingerFluidArtificialPressureMode,
   resolveFingerFluidRendererMode,
   resolveFingerFluidOpticalDebugMode,
   resolveFingerFluidOpticalLightingMode,
@@ -3772,6 +3773,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     throw new RangeError(`Finger Fluid adaptive density must be 0 or 1: ${requestedAdaptiveDensityValue}`);
   }
   const requestedAdaptiveDensity = requestedAdaptiveDensityValue === '1';
+  const requestedArtificialPressureMode = resolveFingerFluidArtificialPressureMode(params.get('finger_fluid_artificial_pressure') || 'standard');
   const requestedDensityCellRejectionValue = params.get('finger_fluid_density_cell_rejection');
   if (requestedDensityCellRejectionValue !== null && !['0', '1'].includes(requestedDensityCellRejectionValue)) {
     throw new RangeError(`Finger Fluid density cell rejection must be 0 or 1: ${requestedDensityCellRejectionValue}`);
@@ -3806,7 +3808,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     );
   }
   if (requestedFixedVolumeReferenceParticleCount !== null
-    && effectiveTruthScene !== 'multi_regime_playground') {
+    && !['multi_regime_playground', 'river_playground'].includes(effectiveTruthScene)) {
     throw new RangeError(
       `Fixed-volume population comparison requires multi_regime_playground, not ${effectiveTruthScene}`,
     );
@@ -3900,6 +3902,8 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     effectiveMaxFluidSpeed: resolveFingerFluidMaxSpeed(requestedMaxFluidSpeed),
     requestedAdaptiveDensity,
     effectiveAdaptiveDensity: requestedAdaptiveDensity,
+    requestedArtificialPressureMode,
+    effectiveArtificialPressureMode: requestedArtificialPressureMode,
     requestedDensityCellRejection,
     effectiveDensityCellRejection: requestedDensityCellRejection && !requestedAdaptiveDensity,
     densityCellRejectionBypassReason: requestedDensityCellRejection && requestedAdaptiveDensity
@@ -11913,7 +11917,8 @@ function updateFingerFluidBenchReadout() {
     state.source?.sourceTruthAuthority || 'synthetic source',
     `${state.solver?.particleCount || 0} particles`,
     state.config?.effectiveTruthScene || 'multi_regime_playground',
-    `${state.solver?.densityIterationCount || 0} density iterations`,
+    `${state.solver?.densityIterationsPerStep || fingerFluidBenchConfig.effectivePressureIterations} density passes/step`,
+    `artificial pressure ${state.runtime?.artificialPressureMode || fingerFluidBenchConfig.effectiveArtificialPressureMode}`,
     `${state.playgroundZoneDiagnostics?.occupiedZoneCount || 0}/6 regimes`,
     `${state.interfaceCarrier?.activeCount || 0} interface records`,
     state.downgrades?.[0] || 'no downgrade recorded',
@@ -13008,6 +13013,9 @@ async function startFingerFluidBench() {
       if (fingerFluidBenchConfig.effectiveTruthScene === 'laminar_inlets') {
         fingerFluidBenchCamera = { yaw: -0.46, pitch: 0.38, distance: 5.35, target: [0, -0.28, -0.72] };
       }
+      if (fingerFluidBenchConfig.effectiveTruthScene === 'river_playground') {
+        fingerFluidBenchCamera = {yaw: -0.46, pitch: 0.62, distance: 7.5, target: [-0.5, -0.35, 0]};
+      }
       if (fingerFluidBenchConfig.effectiveTruthScene === 'waterfall_resolution_oracle') {
         const camera = fingerFluidBenchConfig.waterfallOracleConfig.camera;
         fingerFluidBenchCamera = { ...camera, target: [...camera.target] };
@@ -13093,6 +13101,7 @@ async function startFingerFluidBench() {
       particleCount: fingerFluidBenchConfig.effectiveParticleCount,
       fixedVolumeReferenceParticleCount: fingerFluidBenchConfig.requestedFixedVolumeReferenceParticleCount,
       densityIterations: fingerFluidBenchConfig.effectivePressureIterations,
+      artificialPressureMode: fingerFluidBenchConfig.effectiveArtificialPressureMode,
       densityCellRejection: fingerFluidBenchConfig.effectiveDensityCellRejection,
       packedDensity: fingerFluidBenchConfig.effectivePackedDensity,
       uniformVolumeDensityKernel: fingerFluidBenchConfig.effectiveUniformVolumeDensityKernel,
