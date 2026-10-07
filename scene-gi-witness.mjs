@@ -55,7 +55,7 @@ try {
     const exposure=await page.locator('#selected-volume-physical-exposure').inputValue();
     report.phase='camera-gesture';await save();
     await page.locator('#selected-volume-physical-exposure').click();await page.locator('#selected-volume-physical-exposure').fill(String(Number(exposure)+.25));await page.locator('#selected-volume-physical-exposure').blur();
-    assert.equal(await page.locator('#volume-physical-exposure').inputValue(),String(Number(exposure)+.25));
+    assert.ok(Math.abs(Number(await page.locator('#volume-physical-exposure').inputValue())-(Number(exposure)+.25))<1e-12,'camera EV gesture did not apply');
     await page.evaluate(()=>window.kaminosSceneEdits.undo());
     assert.equal(await page.locator('#volume-physical-exposure').inputValue(),exposure);
     report.cameraSourceAfter=await sourceHash();assert.equal(report.cameraSourceAfter,report.cameraSourceBefore,'camera grading changed raw emitted source');
