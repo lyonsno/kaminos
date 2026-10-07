@@ -123,7 +123,7 @@ try {
       window.kaminosAuthoringParameters.set('@scene-camera',{exposureEV:8});
     });await settle();
     const vacuumSource=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSceneVolumeSource());
-    await fs.writeFile(`${out}/vacuum-source.json`,JSON.stringify(vacuumSource));assert.ok(vacuumSource.ok);assert.ok(vacuumSource.values.length>0);assert.ok(vacuumSource.values.every(v=>v===0),'vacuum input contains emission or extinction');
+    await fs.writeFile(`${out}/vacuum-source.json`,JSON.stringify(vacuumSource));assert.equal(vacuumSource.kind,'coefficients');assert.equal(vacuumSource.channels,4);assert.equal(vacuumSource.values.length,vacuumSource.dimensions.reduce((a,b)=>a*b,4));assert.ok(vacuumSource.values.every(v=>v===0),'vacuum input contains emission or extinction');
     const vacuum=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleFrame({advanceSim:false,includeRgba:true,now:performance.now()}));
     await fs.writeFile(`${out}/vacuum-frame.json`,JSON.stringify(vacuum));assert.ok(vacuum.ok);assert.equal(vacuum.image.rgba.length,vacuum.image.width*vacuum.image.height*4);
     report.vacuum={cameraEV:8,sourceComponents:vacuumSource.values.length,pixels:vacuum.image.width*vacuum.image.height,nonzeroAlpha:vacuum.image.rgba.filter((v,i)=>i%4===3&&v!==0).length};
