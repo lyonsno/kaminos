@@ -7141,6 +7141,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   var t = startT + jitter;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
+  var untrimmedEmissiveColor=color;
   if (u.physical_fire.x > 0.5) { color = vec3<f32>(0.0); }
   var structuralATransmittance = 1.0;
   var structuralAColor = vec3<f32>(0.004, 0.005, 0.006);
@@ -8097,7 +8098,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       let coverage = boundaryMaterialSupport * selectiveRaymarchFireAuthority;
       let medium = emissiveMaterial(reconstructed, coverage, visibleSmokeAuthority);
       let sigma = medium.absorption + medium.scattering;
-      let emission = medium.emission * exp2(u.emissive_reserved.x) + (medium.scattering * incidentAt(p)) * exp2(u.emissive_reserved.y);
+      let scatteredEmission=medium.scattering * incidentAt(p);
+      untrimmedEmissiveColor += trans * (medium.emission+scatteredEmission) * emissionIntegral(sigma,localDt);
+      let emission = medium.emission * exp2(u.emissive_reserved.x) + scatteredEmission * exp2(u.emissive_reserved.y);
       standardRadianceContribution = emission * emissionIntegral(sigma, localDt);
       standardExtinctionStep = sigma * localDt;
     } else if (u.physical_fire.x > 0.5) {
@@ -8287,7 +8290,8 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     }
     current = mix(current, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
   }
-  let composedAlpha = clamp(1.0 - trans + max(max(current.r, current.g), current.b) * 0.08, 0.0, 1.0);
+  let alphaColor=select(current,mix(emissiveCamera(untrimmedEmissiveColor),vec3<f32>(0.04,0.86,0.98),overlay*0.76),u.physical_fire.x>1.5);
+  let composedAlpha = clamp(1.0 - trans + max(max(alphaColor.r, alphaColor.g), alphaColor.b) * 0.08, 0.0, 1.0);
   let outputAlpha = mix(1.0, composedAlpha, TRANSPARENT_CANVAS);
   let outputColor = mix(current, current * outputAlpha, TRANSPARENT_CANVAS);
   let residualFeature = vec4<f32>(

@@ -49,6 +49,9 @@ try {
     report.cameraSource=await sourceHash();assert.equal(report.cameraSource,report.sourceBefore,'camera changed emitted source');
     await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();await page.screenshot({path:`${out}/scene-camera.png`});
     await page.evaluate(()=>window.kaminosSceneEdits.undo());assert.deepEqual(await page.evaluate(()=>window.kaminosAuthoringParameters.read('@scene-camera')),before);
+    const sampleNow=await page.evaluate(()=>performance.now());
+    const opacityBefore=await page.evaluate(now=>window.__kaminosVolumePrototype.sampleFrame({advanceSim:false,includeRgba:true,now}),sampleNow);
+    await fs.writeFile(`${out}/appearance-before-frame.json`,JSON.stringify(opacityBefore));assert.ok(opacityBefore.ok);
     await page.locator('#smoke-illumination-trim').click();await page.locator('#smoke-illumination-trim').fill('1');await page.locator('#smoke-illumination-trim').blur();await settle();
     assert.equal(await page.locator('#selected-smoke-illumination-trim').inputValue(),'1');
     await page.evaluate(()=>{window.selectSceneField('flame-field');window.kaminosWorkspace.setContext('object');});
@@ -58,6 +61,12 @@ try {
     report.appearance=await page.evaluate(()=>({settings:window.kaminosAuthoringParameters.read('@scene-appearance'),volume:window.__kaminosVolumePrototype.debugState().appearanceTrims}));
     assert.deepEqual(report.appearance.settings,{flameStops:1,smokeStops:2});assert.equal(report.appearance.volume.effective,true);
     report.appearanceSource=await sourceHash();assert.equal(report.appearanceSource,report.sourceBefore,'presentation trims changed emitted source');
+    const opacityAfter=await page.evaluate(now=>window.__kaminosVolumePrototype.sampleFrame({advanceSim:false,includeRgba:true,now}),sampleNow);
+    await fs.writeFile(`${out}/appearance-after-frame.json`,JSON.stringify(opacityAfter));assert.ok(opacityAfter.ok);
+    assert.equal(opacityAfter.rgba.length,opacityBefore.rgba.length);
+    let alphaChanged=0,rgbChanged=0;
+    for(let i=0;i<opacityBefore.rgba.length;i++)if(opacityBefore.rgba[i]!==opacityAfter.rgba[i]){if(i%4===3)alphaChanged++;else rgbChanged++;}
+    report.appearancePixels={alphaChanged,rgbChanged,width:opacityBefore.width,height:opacityBefore.height};assert.equal(alphaChanged,0,'appearance trims changed visible opacity');assert.ok(rgbChanged>0,'appearance trims did not change visible radiance');
     await page.screenshot({path:`${out}/flame-appearance.png`});
     await page.evaluate(()=>window.kaminosSceneEdits.undo());assert.equal(await page.locator('#flame-appearance-trim').inputValue(),'0');
     await page.evaluate(()=>window.kaminosSceneEdits.redo());assert.equal(await page.locator('#flame-appearance-trim').inputValue(),'1');

@@ -1065,9 +1065,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </section>
     <section id="authoring-source-render">
     <section id="scene-camera-controls"><h2>Camera</h2><div id="scene-camera-fields">
-      <div class="field"><label for="scene-camera-ev">Exposure EV</label><input id="scene-camera-ev" type="number" min="-8" max="8" step="0.1" value="0"></div>
-      <div class="field"><label for="scene-camera-white">White balance K</label><input id="scene-camera-white" type="number" min="2500" max="10000" step="25" value="6504"></div>
-      <div class="field"><label for="scene-camera-knee">Highlight knee</label><input id="scene-camera-knee" type="number" min="0.1" max="0.95" step="0.01" value="0.6"></div>
+      <div class="field"><label for="scene-camera-ev">Exposure EV</label><input id="scene-camera-ev" type="number" min="-8" max="8" step="any" data-authoring-drag-step="0.1" value="0"></div>
+      <div class="field"><label for="scene-camera-white">White balance K</label><input id="scene-camera-white" type="number" min="2500" max="10000" step="any" data-authoring-drag-step="25" value="6504"></div>
+      <div class="field"><label for="scene-camera-knee">Highlight knee</label><input id="scene-camera-knee" type="number" min="0.1" max="0.95" step="any" data-authoring-drag-step="0.01" value="0.6"></div>
     </div><div id="scene-camera-host-exposure" hidden></div></section>
     <div id="flame-appearance-workbench" hidden><input id="flame-appearance-trim" type="number" min="-8" max="8" step="0.1" value="0"></div>
     <h2>Post Processing</h2>
@@ -3511,7 +3511,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <label class="import-mode" data-lighting-diagnostic><input type="checkbox" id="rendering-surface-scattering" checked><span>Smoke scattered light on surfaces</span></label>
         <p class="rendering-description">Includes one scattering event in smoke before light reaches the kiln. Smoke albedo changes this contribution. Uncheck to compare direct flame illumination.</p>
         <div class="slider-row"><label class="slider-label" for="rendering-surface-gain">Surface illumination trim (stops)</label><input type="range" id="rendering-surface-gain" min="-8" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-surface-gain-value">+0.00</span></div>
-        <div class="field"><label for="smoke-illumination-trim" title="Visible in-scattered smoke only; source light, opacity and surface illumination are unchanged">Smoke illumination trim</label><input id="smoke-illumination-trim" type="number" min="-8" max="8" step="0.1" value="0"></div>
+        <div class="field"><label for="smoke-illumination-trim" title="Visible in-scattered smoke only; emitted source, extinction and surface illumination are unchanged">Smoke illumination trim</label><input id="smoke-illumination-trim" type="number" min="-8" max="8" step="any" data-authoring-drag-step="0.1" value="0"></div>
         <p class="rendering-description">Artistic adjustment to flame-lit surfaces only. Zero keeps the calculated illumination. Does not change smoke scattering, extinction, or flame emission.</p>
         <label class="import-mode" data-lighting-diagnostic><input type="checkbox" id="rendering-retain-comparisons"><span>Keep visited direction sets for A/B</span></label>
         <button type="button" id="rendering-angular-swap" data-lighting-diagnostic disabled>Swap previous direction count</button>
