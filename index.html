@@ -1378,7 +1378,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="field"><span class="field-key">Emitter fallback</span><span class="field-val" id="volume-emitter-fallback">no</span></div>
       <div class="field"><span class="field-key">Inflow boundary</span><span class="field-val" id="volume-inflow-boundary-state">off</span></div>
       <div class="field"><span class="field-key">Heat release</span><span class="field-val" id="volume-heat-release-state">off</span></div>
-      <div class="field"><span class="field-key">Velocity grid</span><span class="field-val" id="volume-velocity-staggering-state">collocated</span></div>
+      <div class="field"><span class="field-key">Velocity reading</span><span class="field-val" id="volume-velocity-staggering-state">collocated</span></div>
       <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state" role="status" aria-live="polite">connecting...</span></div>
       <div class="field"><span class="field-key">Promotion</span><span class="field-val" id="volume-basin-promotion-state" role="status" aria-live="polite">idle</span></div>
       <div class="volume-presentation-switch" role="group" aria-label="Volume presentation">
@@ -2826,14 +2826,14 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <span class="slider-help">Legacy is first-order semi-Lagrangian with 0.982 velocity damping every step and a fixed velocity clamp. Undamped keeps the first-order step but drops the damping and bounds the step by backtrace distance instead. MacCormack adds a predictor pass and a limited round-trip error correction on one shared characteristic, so vortex roll-up and plume pulsing that the first-order step smears away can survive without synthetic stirring. Live switching keeps evolved state.</span>
     <div class="slider-row">
-      <span class="slider-label">Velocity grid</span>
+      <span class="slider-label">Velocity reading</span>
       <select id="volume-velocity-staggering" class="select-input" data-volume-settings-param="volume_velocity_staggering">
         <option value="collocated" selected>Collocated (as saved)</option>
-        <option value="staggered">Staggered faces</option>
+        <option value="staggered">Staggered (faces)</option>
       </select>
       <span class="slider-val" id="volume-velocity-staggering-val">collocated</span>
     </div>
-    <span class="slider-help">How the transport reads the stored velocity. The converged solve treats each stored component as the upper face of its axis, but Collocated transport reads the same value as the cell centre: half a cell of disagreement along +x and +z, which pushes every plume toward −x −z as it rises (the diagonal lean). Staggered reads faces: the characteristic that carries everything uses the mean of the two faces, so the rising column feels its own entrainment where it actually is. Needs the converged pressure solver; otherwise the receipt says NOT ADMITTED. Saved basins are unchanged at Collocated.</span>
+    <span class="slider-help">How the transport reads the stored velocity (a reading of the same stored field, not a different storage or solver). The converged solve treats each stored component as the upper face of its axis, but Collocated transport reads the same value as the cell centre: half a cell of disagreement along +x and +z, which pushes every plume toward −x −z as it rises (the diagonal lean). Staggered reads faces: the characteristic that carries everything uses the mean of the two faces, so the rising column feels its own entrainment where it actually is. Needs the converged pressure solver; otherwise the receipt says NOT ADMITTED. Saved basins are unchanged at Collocated.</span>
     <div class="slider-row">
       <span class="slider-label">Confinement</span>
       <select id="volume-confinement" class="select-input" data-volume-settings-param="volume_confinement">
