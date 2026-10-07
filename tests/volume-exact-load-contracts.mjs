@@ -66,4 +66,18 @@ assert.deepEqual(volumeSettingsPresetAppliedDifferences(inspectAs(''), inspectAs
   'loading an empty shell inspect as shell is not a changed value');
 assert.equal(volumeSettingsPresetAppliedDifferences(inspectAs('thermal'), inspectAs('shell')).length, 1,
   'other shell inspect changes still show');
+
+// A retired aperture pattern (spiral, concentric) is kept as the basin's
+// request beside the shape fallback. The flame settings check accepts it, and
+// writing it back (undo) restores the request instead of blanking the select.
+const check = grab('function checkFlameSettingsState(');
+assert.match(check, /VOLUME_RETIRED_APERTURE_PATTERNS\.includes\(String\(value\)\)/, 'the flame check accepts a kept retired aperture pattern');
+const setSource = grab('function setVolumeControlValue(');
+const pattern = { id: 'volume-emitter-aperture-pattern', tagName: 'SELECT', type: 'select-one', value: 'shape', dataset: {} };
+const fakeDocument = { getElementById: id => (id === pattern.id ? pattern : null) };
+const setter = vm.runInNewContext(`const VOLUME_RETIRED_APERTURE_PATTERNS = ['concentric', 'spiral']; function setVolumeRenderScaleControlValue() {}; ${setSource}; setVolumeControlValue`, { document: fakeDocument, String });
+setter(pattern.id, 'spiral');
+assert.deepEqual([pattern.value, pattern.dataset.volumeRetiredPatternRequest], ['shape', 'spiral'], 'writing a retired pattern keeps it as the request');
+setter(pattern.id, 'ring');
+assert.deepEqual([pattern.value, pattern.dataset.volumeRetiredPatternRequest], ['ring', undefined], 'writing an offered pattern clears the request');
 console.log('volume exact load contracts passed');

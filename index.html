@@ -16161,9 +16161,25 @@ function adoptVolumeRenderScaleSliderValue() {
   if (control) setVolumeRenderScaleControlValue(control.value);
 }
 
+// Aperture patterns a basin may request that the select no longer offers; the
+// request is kept beside the shape fallback (see the route loader).
+const VOLUME_RETIRED_APERTURE_PATTERNS = ['concentric', 'spiral'];
+
 function setVolumeControlValue(id, value) {
   if (id === 'volume-render-scale') {
     setVolumeRenderScaleControlValue(value);
+    return;
+  }
+  if (id === 'volume-emitter-aperture-pattern') {
+    const select = document.getElementById(id);
+    if (!select) return;
+    if (VOLUME_RETIRED_APERTURE_PATTERNS.includes(String(value))) {
+      select.value = 'shape';
+      select.dataset.volumeRetiredPatternRequest = String(value);
+    } else {
+      select.value = String(value);
+      delete select.dataset.volumeRetiredPatternRequest;
+    }
     return;
   }
   const el = document.getElementById(id);
@@ -22828,7 +22844,6 @@ async function initKaminosVolumeRoute() {
   // select shows the family shape the map falls back to, and the request is
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
-  const VOLUME_RETIRED_APERTURE_PATTERNS = ['concentric', 'spiral'];
   const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
@@ -25045,7 +25060,9 @@ function checkFlameSettingsState(state) {
       if(axis==='presentationControls') {if(!['on','off'].includes(descriptor.value))throw Error('Invalid smoke presentation');continue;}
       const source=document.getElementById(id),value=descriptor.rawValue??descriptor.value;
       if(!source)throw Error(`Missing flame setting ${id}`);
-      if(source.tagName==='SELECT') {if(![...source.options].some(option=>option.value===String(value)))throw Error(`Unsupported ${id}: ${value}`);}
+      if(source.tagName==='SELECT') {
+        const retired=id==='volume-emitter-aperture-pattern'&&VOLUME_RETIRED_APERTURE_PATTERNS.includes(String(value));
+        if(!retired&&![...source.options].some(option=>option.value===String(value)))throw Error(`Unsupported ${id}: ${value}`);}
       else if(source.type==='checkbox') {if(typeof value!=='boolean'&&!['0','1','true','false'].includes(String(value)))throw Error(`Invalid ${id}`);}
       else if(['range','number'].includes(source.type)) {
         if(!Number.isFinite(Number(value)))throw Error(`Nonfinite ${id}`);
