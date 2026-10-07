@@ -47,3 +47,10 @@ export function applySolidSurfaceBinding(binding,positions,{components}={}){
   return point.toArray();
  });
 }
+
+export function materialComponents(pointCount,bonds){
+ if(!Number.isInteger(pointCount)||pointCount<=0||!Array.isArray(bonds)||bonds.length%4)throw new Error('Complete current material bond state required');
+ const parents=Array.from({length:pointCount},(_,i)=>i),root=i=>{while(parents[i]!==i){parents[i]=parents[parents[i]];i=parents[i];}return i;};
+ for(let i=0;i<bonds.length;i+=4){const [a,b,alive]=bonds.slice(i,i+3);if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||b<0||a>=pointCount||b>=pointCount||![0,1].includes(alive))throw new Error('Valid current material bond identity and liveness required');if(alive){const x=root(a),y=root(b);parents[Math.max(x,y)]=Math.min(x,y);}}
+ return parents.map((_,i)=>root(i));
+}

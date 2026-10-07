@@ -10,4 +10,6 @@ actual.forEach((p,i)=>p.forEach((v,a)=>assert.ok(Math.abs(v-transform(vertices[i
 assert.throws(()=>imported.applySolidSurfaceBinding(binding,current,{components:[0,1,0,0]}),/released connectivity/);
 assert.throws(()=>imported.bindSolidSurface({positions,tetrahedra},[[3,0,0]],{envelope:.002}),/outside/);
 assert.throws(()=>imported.applySolidSurfaceBinding(binding,current,{}),/component/);
+assert.deepEqual(imported.materialComponents(4,[0,1,1,0,1,2,0,0,2,3,1,0]),[0,0,2,2]);
+assert.throws(()=>imported.materialComponents(4,[0,4,1,0]),/identity/);
 console.log('Surface coupling preserves affine deformation and refuses disconnected bridging');
