@@ -1,8 +1,20 @@
 import assert from 'node:assert/strict';
+import {mkdtempSync,writeFileSync,readFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {spawnSync} from 'node:child_process';
 const core=await import('../tools/anytop-stage-comparison.mjs').catch(()=>({}));
 assert.equal(typeof core.validateStageBinary,'function','stage comparison must reject missing, partial or relabelled numeric evidence');
 const info={shape:[2,3,3],binary_sha256:'fixture'};
 assert.throws(()=>core.validateStageBinary(Buffer.alloc(17*4),info,'fixture'),/element count/);
 assert.throws(()=>core.validateStageBinary(Buffer.alloc(18*4),info,'wrong-hash'),/hash/);
 assert.equal(core.validateStageBinary(Buffer.alloc(18*4),info,'fixture').length,18);
+const directory=mkdtempSync(join(tmpdir(),'anytop-empty-probe-'));
+const probe=join(directory,'blank.json'),report=join(directory,'report.json');
+writeFileSync(probe,JSON.stringify({schema:'anytop.representation-probe.v1',status:'complete',cases:[]}));
+const result=spawnSync(process.execPath,[fileURLToPath(new URL('../tools/anytop-stage-comparison.mjs',import.meta.url)),
+  '--probe',probe,'--kit-root',fileURLToPath(new URL('../webgpu-inference-kit',import.meta.url)),'--out',report],{encoding:'utf8'});
+assert.equal(result.status,1,'blank source probe must not produce completed numerical evidence');
+assert.equal(JSON.parse(readFileSync(report)).status,'failed','pre-comparison failure must preserve durable report');
 console.log('Native stage comparison contracts passed');

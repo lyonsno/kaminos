@@ -10,6 +10,27 @@ export function validateStageBinary(buffer,info,hash){
   return new Float32Array(new Uint8Array(buffer).buffer);
 }
 
+export function validateProbe(probe){
+  if(probe.schema!=='anytop.representation-probe.v1'||probe.status!=='complete')throw Error('Wrong or incomplete source probe');
+  const required=[];
+  for(const object of ['Hound','Fox']){
+    required.push(`${object}/rest`,`${object}/shared-noise`);
+    for(let rep=0;rep<3;rep++)required.push(`${object}/initial-r${rep}`);
+  }
+  required.push('Hound/bundled-real-attack');
+  if(!Array.isArray(probe.cases)||!probe.cases.length)throw Error('Blank source probe has no numerical evidence');
+  const seen=new Set();
+  for(const source of probe.cases){
+    const id=`${source.object}/${source.label}`;
+    if(seen.has(id))throw Error('Duplicate source case identity');seen.add(id);
+    for(const stage of ['raw_xyz','rotation_fk','native_ik_fk','bvh_roundtrip_fk']){
+      const info=source.stages?.[stage];
+      if(!info||JSON.stringify(info.shape)!==JSON.stringify([source.frames,source.joints,3]))throw Error('Missing or incomplete source stage');
+    }
+  }
+  for(const id of required)if(!seen.has(id))throw Error('Required source case missing: '+id);
+}
+
 async function main(){
   const args=new Map();for(let i=2;i<process.argv.length;i+=2)args.set(process.argv[i],process.argv[i+1]);
   const out=resolve(args.get('--out'));
@@ -28,7 +49,7 @@ async function main(){
     const probe=JSON.parse(readFileSync(probePath));
     report.probe={path:probePath,sha256:createHash('sha256').update(readFileSync(probePath)).digest('hex'),
       sourceRevision:probe.source_revision,status:probe.status};
-    if(probe.status!=='complete')throw Error('Incomplete source probe cannot become completed stage comparison');
+    validateProbe(probe);
     const registry=kit.createWebGpuParityCaptureRegistry({runId:report.probe.sha256});
     report.phase='full-stage-comparisons';save();
     for(const source of probe.cases){
