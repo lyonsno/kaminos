@@ -9,7 +9,9 @@ export function judgeTrellisSharedComposition(s){
   if(s?.sameDevice!==true||r?.deviceTopology!=='same-device')errors.push('not the authored scene device');
   if(r?.status!=='succeeded')errors.push('complete generation did not succeed');
   if(release?.status!=='released'||release.gpuSettled!==true)errors.push('model resources not settled');
-  if(!release?.foreground?.receipts?.some(x=>x.runId===s.runId&&x.phase!=='foreground-run-finish'&&
+  if(!release?.foreground?.receipts?.some(x=>x.runId===s.runId&&
+    typeof x.boundary?.phase==='string'&&x.boundary.phase.length>0&&x.boundary.phase!=='foreground-run-finish'&&
+    typeof r?.jobCompletion?.jobId==='string'&&x.boundary.invocationId===r.jobCompletion.jobId&&
     x.status==='completed'&&x.submissionCount>0&&x.result?.renderer==='ordinary-volume'&&x.result?.status==='submitted'))
     errors.push('no ordinary foreground submission during model work');
   if(!(s?.after?.frameCount>s?.before?.frameCount&&s.after.simStepCount>s.before.simStepCount))errors.push('live flame did not advance');
@@ -25,7 +27,7 @@ export async function mountComposition({sharedGpu,host,prototype}){
   const snapshot=()=>{const d=prototype.debugState();return{frameCount:d.frameCount,simStepCount:d.simStepCount,
     preset:window.__kaminosVolumeSettingsPresetReceipt,objects:window.kaminosSceneObjectDebugState?.()};};
   try{
-    const params=new URLSearchParams(window.location.hash.slice(1)),sha=params.get('trellis_manifest_sha');
+    const sha=new URL(import.meta.url).searchParams.get('manifest_sha');
     if(!/^[a-f0-9]{64}$/.test(sha??''))throw Error('exact prepared input manifest required');
     for(;;){
       const d=prototype.debugState(),context=prototype.foregroundGpuContext(),objects=window.kaminosSceneObjectDebugState?.()??[];
