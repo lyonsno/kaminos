@@ -44,7 +44,7 @@ export function createAuthoringAssets({request, addMesh, uploadImage, generator,
     async upload(file) {
       const kind=assetKind(file?.name || '');if(!kind)throw Error('Choose a GLB, PNG, JPEG or WebP');
       if(kind==='mesh')return this.add({kind,name:file.name,label:file.name,file});
-      const entry=await uploadImage(file);this.select({...entry,kind:'image',label:entry.name});return entry;
+      const entry=await uploadImage(file);this.select({...entry,root:entry.root_id,kind:'image',label:entry.name});return entry;
     },
     generation:()=>generator()?.read() || {status:'unavailable',error:'Generation host is initializing'},
     async recover() {const result=await generator().retryPersistence();state.results.push({...result,kind:'mesh',label:result.name});publish();return result;},
@@ -82,7 +82,7 @@ export function installAuthoringAssets({document,controller,edits}) {
     }));
     byId('asset-status').textContent=state.loading?'Loading assets…':state.error || (entries.length?'':`No meshes, images or folders here`);
     const selected=state.selected;byId('asset-detail').hidden=!selected;byId('asset-add').hidden=selected?.kind!=='mesh';byId('asset-use-image').hidden=selected?.kind!=='image';byId('asset-add').disabled=state.adding;
-    if(selected){byId('asset-name').textContent=selected.label || selected.name;byId('asset-source').textContent=selected.root?`${labels[selected.root]||selected.root} / ${selected.path}`:selected.source || 'Local file';}
+    if(selected){byId('asset-name').textContent=selected.label || selected.name;byId('asset-source').textContent=selected.root?(labels[selected.root]||selected.root):selected.generation?'Generated in this session':'Local file';byId('asset-source').title=selected.source || selected.path || '';}
     byId('asset-image').hidden=selected?.kind!=='image';if(selected?.kind==='image')byId('asset-image').src=selected.source || assetSource(selected.root,selected.path);
     const generation=controller.generation();byId('asset-run').disabled=selected?.kind!=='image'||!!generation.pending||['loading','running','unavailable'].includes(generation.status);byId('asset-recover').hidden=!generation.pending;
     byId('asset-generation-status').textContent=generation.error || generation.progress || (selected?.kind==='image'?'Source selected; generate when you want.':'Choose a source image.');
@@ -91,9 +91,9 @@ export function installAuthoringAssets({document,controller,edits}) {
   panel.querySelectorAll('[data-assets-mode]').forEach(button=>button.onclick=()=>setMode(button.dataset.assetsMode));
   byId('asset-close').onclick=()=>panel.hidden=true;byId('asset-root').onchange=event=>action(()=>controller.browse(event.target.value));byId('asset-up').onclick=()=>action(()=>{const s=controller.read();return controller.browse(s.root,s.path.split('/').slice(0,-1).join('/'));});
   byId('asset-refresh').onclick=()=>action(()=>controller.refresh());byId('asset-filter').oninput=()=>render(controller.read());
-  byId('asset-add').onclick=()=>action(()=>controller.add());byId('asset-use-image').onclick=()=>setMode('generate');byId('asset-run').onclick=()=>action(()=>controller.generate());
+  byId('asset-add').onclick=()=>action(async()=>{await controller.add();document.activeElement?.blur();});byId('asset-use-image').onclick=()=>setMode('generate');byId('asset-run').onclick=()=>action(()=>controller.generate());
   byId('asset-recover').onclick=()=>action(()=>controller.recover());
   byId('asset-file-open').onclick=()=>byId('asset-file').click();byId('asset-file').onchange=event=>action(async()=>{const file=event.target.files[0];if(file)await controller.upload(file);event.target.value='';});
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!panel.hidden&&!edits.state().active){panel.hidden=true;event.preventDefault();}});
-  return {render,close(){panel.hidden=true;},open(next='browse'){panel.hidden=false;setMode(next);action(()=>controller.refresh());},state:()=>({open:!panel.hidden,mode})};
+  return {render,close(){if(panel.contains(document.activeElement))document.activeElement.blur();panel.hidden=true;},open(next='browse'){panel.hidden=false;setMode(next);action(()=>controller.refresh());},state:()=>({open:!panel.hidden,mode})};
 }

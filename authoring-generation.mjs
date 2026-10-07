@@ -46,7 +46,7 @@ export function createAuthoringGeneration({initialize,loadInput,persist,changed=
 
 export function createSf3dAuthoringGeneration({context,request=fetch,changed=()=>{},blocked=()=>null}) {
   const hex=buffer=>crypto.subtle.digest('SHA-256',buffer).then(value=>Array.from(new Uint8Array(value),b=>b.toString(16).padStart(2,'0')).join(''));
-  return createAuthoringGeneration({changed,
+  const service=createAuthoringGeneration({changed,
     async loadInput(input) {
       const reason=blocked();if(reason)throw Error(reason);
       const url=new URL(input.source,location.href);
@@ -73,4 +73,14 @@ export function createSf3dAuthoringGeneration({context,request=fetch,changed=()=
       return{source:saved.source,sha256,name:`${label.replace(/\.[^.]+$/,'')} · SF3D.glb`,generation:{...generation,sha256,bytes:glb.byteLength}};
     },
   });
+  return {...service,read(){
+    const state=service.read();
+    if(state.status==='idle'){
+      const current=context();let reason=blocked();
+      if(!reason&&!current.prototype?.foregroundGpuContext)reason='Load a Fire & smoke scene to use the current SF3D host.';
+      if(!reason){try{snapshotSf3dSharedDevice(current.sharedGpu);}catch(error){reason=error.message;}}
+      if(reason)return {...state,status:'unavailable',error:reason};
+    }
+    return state;
+  }};
 }
