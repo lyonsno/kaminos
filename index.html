@@ -2102,10 +2102,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <span class="slider-help">Diagnostic: the most volume one cell may create per step, as a fraction of one velocity unit. The receipt shows requested against effective supply and how many cells the cap clipped; lowering it starves the source, it is not a physical control.</span>
     <div class="slider-row" data-volume-visual-cost-knob="immersed-source">
       <span class="slider-label">Back wall</span>
-      <input type="range" id="volume-immersed-back-wall" data-volume-settings-param="volume_immersed_back_wall" min="0" max="1" step="1" value="1">
-      <span class="slider-val" id="volume-immersed-back-wall-val">on</span>
+      <input type="range" id="volume-immersed-back-wall" data-volume-settings-param="volume_immersed_back_wall" min="0" max="1" step="1" value="0">
+      <span class="slider-val" id="volume-immersed-back-wall-val">off</span>
     </div>
-    <span class="slider-help">A solid disc two cells thick immediately behind the source, written into the same collision mask the kiln uses, so the created gas can only leave forward and sideways. Off is the pure volumetric source, which the bench showed leaking about half its supply backward; keep it on for a nozzle, turn it off to compare.</span>
+    <span class="slider-help">Diagnostic: a solid disc two cells thick immediately behind the source, written into the same collision mask the kiln uses. The bench (report section 31) found the pure source already sends its heat where it is aimed and the wall changes nothing measurable at speeds 0.1 to 1.0, so it is off by default; turn it on to compare, or if a strong crossflow ever shows gas entering the source from behind.</span>
     <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
       <span class="slider-label">Fixed Source Dephase</span>
       <input type="checkbox" id="volume-fixed-source-dephase" data-volume-settings-param="volume_fixed_source_dephase" checked>

@@ -2467,7 +2467,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const temperature = clampFinite(controls.immersedTemperature, 0, 2, 1.2);
   const momentumGain = clampFinite(controls.immersedMomentumGain, 0, 2, 1);
   const capFraction = clampFinite(controls.immersedCapFraction, 0.1, 1, 0.5);
-  const backWallRequested = clampFinite(controls.immersedBackWall, 0, 1, 1) >= 0.5;
+  const backWallRequested = clampFinite(controls.immersedBackWall, 0, 1, 0) >= 0.5;
   const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness, speed, fuel, temperature, momentumGain, capFraction, puffFactor, backWall: backWallRequested };
   const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, puffFactor } });
   if (sourceLaw !== IMMERSED_SOURCE_LAW) return off('source-law-is-not-immersed-source');

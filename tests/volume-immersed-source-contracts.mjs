@@ -123,9 +123,10 @@ test('cockpit: the source law option, eleven bench rows with help, snapshot, lis
 // the created volume forward and sideways. Toggle for the bench comparison.
 test('the back wall: resolved as a toggle, its cells lie strictly behind the source slab inside the radius, and compose into a solid field', () => {
   const on = core.resolveImmersedSourceConfig(base, { grid: 64 });
-  assert.deepEqual(on.effective.backWall, { requested: true, thicknessCells: 2 }, 'on by default');
-  assert.deepEqual(core.resolveImmersedSourceConfig({ ...base, immersedBackWall: 0 }, { grid: 64 }).effective.backWall, { requested: false, thicknessCells: 2 });
-  const wall = core.immersedBackWallCells(on.effective, { grid: 64, gridHeight: 128 });
+  assert.deepEqual(on.effective.backWall, { requested: false, thicknessCells: 2 }, 'off by default: the bench found no measurable benefit (section 31)');
+  assert.deepEqual(core.resolveImmersedSourceConfig({ ...base, immersedBackWall: 1 }, { grid: 64 }).effective.backWall, { requested: true, thicknessCells: 2 });
+  const walled = core.resolveImmersedSourceConfig({ ...base, immersedBackWall: 1 }, { grid: 64 });
+  const wall = core.immersedBackWallCells(walled.effective, { grid: 64, gridHeight: 128 });
   assert.ok(wall.length > 0);
   const n = on.effective.direction, c = on.effective.centreCells, r = on.effective.radiusCells, half = on.effective.thickness / 2;
   for (const cell of wall) {
@@ -159,9 +160,9 @@ test('the back wall: resolved as a toggle, its cells lie strictly behind the sou
   assert.match(refresh, /composeSolidField\(field\.cells, backWall\.cells/, 'a wall with a kiln is composed into the voxel field');
   assert.match(source, /pressureResidualCopyFluidCells = gridCellCount\(gridSize\) - \(state\.sceneCollision\?\.solidCellCount \?\? 0\);/, 'fluid-cell count follows any solid mode');
   // Cockpit and schema.
-  assert.match(index, /<input type="range" id="volume-immersed-back-wall" data-volume-settings-param="volume_immersed_back_wall" min="0" max="1" step="1" value="1">/);
+  assert.match(index, /<input type="range" id="volume-immersed-back-wall" data-volume-settings-param="volume_immersed_back_wall" min="0" max="1" step="1" value="0">/);
   assert.match(index, /immersedBackWall: parseFloat\(document\.getElementById\('volume-immersed-back-wall'\)\.value\)/);
   const control = schema.controls.find(c => c.key === 'volume-immersed-back-wall');
-  assert.deepEqual(control, { key: 'volume-immersed-back-wall', param: 'volume_immersed_back_wall', tagName: 'INPUT', type: 'range', additiveDefault: 1, additiveSinceControlCount: 248 });
+  assert.deepEqual(control, { key: 'volume-immersed-back-wall', param: 'volume_immersed_back_wall', tagName: 'INPUT', type: 'range', additiveDefault: 0, additiveSinceControlCount: 248 });
   assert.equal(schema.controlCount, 248);
 });
