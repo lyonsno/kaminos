@@ -8,7 +8,7 @@ const report={status:'running',phase:'launch',url,modulePath,source:{root:proces
 const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
 await save();let browser;
 try {
-  const {chromium}=await import('/private/tmp/beaming-smoke-deps-1001/node_modules/playwright/index.mjs');
+  const {chromium}=await import(process.env.KAMINOS_PLAYWRIGHT_MODULE||'/Users/noahlyons/.local/state/kaminos/beaming-browser-deps-1007/node_modules/playwright/index.mjs');
   report.executable='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
   browser=await chromium.launch({headless:true,executablePath:report.executable,args:['--enable-unsafe-webgpu','--use-angle=metal']});
   const page=await browser.newPage();

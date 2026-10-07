@@ -15,7 +15,7 @@ try{
  const sceneResponse=await fetch(new URL('/api/read?root=scenes&path='+encodeURIComponent(sceneName),url));assert(sceneResponse.ok,'target scene not mounted');
  report.scene=await sceneResponse.json();assert.equal(report.scene.label,'importance-sampling-target-practice');assert.equal(new URL(url).searchParams.get('preset'),report.scene.composition.flame.presetId);
  assert.equal(report.scene.postprocessing.sceneGI.gain,10);assert((await fetch(new URL(report.scene.model.source,url))).ok,'actual kiln mesh missing');
- const {chromium}=await import('/private/tmp/beaming-smoke-deps-1001/node_modules/playwright/index.mjs');await fs.access(executable);
+ const {chromium}=await import(process.env.KAMINOS_PLAYWRIGHT_MODULE||'/Users/noahlyons/.local/state/kaminos/beaming-browser-deps-1007/node_modules/playwright/index.mjs');await fs.access(executable);
  browser=await chromium.launch({headless:true,executablePath:executable,args:['--enable-unsafe-webgpu','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
  const page=await browser.newPage({viewport:{width:1600,height:1200}});page.setDefaultTimeout(0);
  let fail;const broken=new Promise((_,reject)=>{fail=reject;});broken.catch(()=>{});
