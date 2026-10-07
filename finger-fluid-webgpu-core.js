@@ -1,3 +1,4 @@
+import { canPreserveLiquidReleaseEpoch, LIVE_LIQUID_INLET_FLOATS } from './local-liquid-inlet-continuity.mjs';
 export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';
 export const KAMINOS_FINGER_FLUID_DENSITY_CONTRACT = 'wgsl-pbf-density-constraint-v0';
@@ -3333,7 +3334,7 @@ function isFingerFluidLaminarSourceScene(scene) {
 }
 
 const LIVE_HAND_INLET_CAPACITY = 5;
-const LIVE_HAND_INLET_FLOATS = 20; // Four geometry/economics vectors plus explicit profile.
+const LIVE_HAND_INLET_FLOATS = LIVE_LIQUID_INLET_FLOATS;
 const LIVE_HAND_DEFAULT_RESIDENCE_SECONDS = 1.65;
 const LIVE_HAND_DEFAULT_RESIDENCE_DISTANCE_WORLD = 2.4;
 const MAX_FINITE_F32 = 3.402823466e38;
@@ -13302,6 +13303,7 @@ export async function createWebGPUFingerFluidSolver({
   const safeMaxFluidSpeed = resolveFingerFluidMaxSpeed(maxFluidSpeed);
   const safeInletCutoffStep = resolveFingerFluidInletCutoffStep(inletCutoffStep);
   const initialLiveInletPacket = packFingerFluidLiveInletPacket(liveInletPacket, safeBaseParticleCount);
+  let currentLiveInletPacked = initialLiveInletPacket;
   let currentLiveInletPacket = initialLiveInletPacket.normalized;
   let currentLiveInletEconomics = initialLiveInletPacket.economics;
   let liveInletActivated = currentLiveInletEconomics.effectiveActiveInletCount > 0;
@@ -14525,7 +14527,10 @@ export async function createWebGPUFingerFluidSolver({
     }
     const packed = packFingerFluidLiveInletPacket(packet, safeBaseParticleCount);
     liveInletGeneration = (liveInletGeneration % 0x00fffffe) + 1;
-    liveInletReleaseEpochFrame = frameIndex;
+    // A pose edit changes provenance and the inlet location, not its cadence.
+    // Restarting at ordinal zero blocks births on still-active predecessor IDs.
+    if (!canPreserveLiquidReleaseEpoch(currentLiveInletPacked,packed)) liveInletReleaseEpochFrame = frameIndex;
+    currentLiveInletPacked = packed;
     currentLiveInletPacket = packed.normalized;
     currentLiveInletEconomics = packed.economics;
     liveInletReleasePlan = measureFingerFluidLiveInletReleasePlan(packet, safeBaseParticleCount);
@@ -16014,6 +16019,7 @@ export async function createWebGPUFingerFluidSolver({
         ageContract: KAMINOS_FINGER_FLUID_LIVE_INLET_AGE_CONTRACT,
         cohortContract: KAMINOS_FINGER_FLUID_LIVE_INLET_COHORT_CONTRACT,
         generation: liveInletGeneration,
+        releaseEpochFrame: liveInletReleaseEpochFrame,
         capacity: LIVE_HAND_INLET_CAPACITY,
         activeInletCount: currentLiveInletEconomics.effectiveActiveInletCount,
         requestedActiveInletCount: currentLiveInletEconomics.requestedActiveInletCount,

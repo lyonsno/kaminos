@@ -1,3 +1,4 @@
+import { withLocalLiquidDepthBackground } from './local-liquid-depth-background.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import { texture, vec4, positionView, pmremTexture, equirectDirection, uv, uniform } from './lib/three.tsl.js';
 import {
@@ -117,7 +118,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         depthMaterial.side=args[4].side; renderer.renderObject(...args);
       });
       renderer.setClearColor(new THREE.Color(camera.far,0,0),1);
-      renderer.setRenderTarget(depthTarget); renderer.render(scene,camera);
+      renderer.setRenderTarget(depthTarget); withLocalLiquidDepthBackground(scene,()=>renderer.render(scene,camera));
       scene.overrideMaterial=previousOverride; scene.background=previousBackground;
       renderer.setRenderObjectFunction(previousRenderObject);
       renderer.setClearColor(clearColor,clearAlpha);
