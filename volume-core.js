@@ -3739,7 +3739,7 @@ fn boundVelocity(v: vec3<f32>) -> vec3<f32> {
   // Non-legacy schemes bound the per-step backtrace to a fixed number of
   // cells, symmetric in every direction. Semi-Lagrangian transport is stable
   // at any step; this keeps the trilinear footprint local and catches blow-ups.
-  let safe = clamp(v, vec3<f32>(-64.0), vec3<f32>(64.0));
+  let safe = clamp(v, vec3<f32>(-64.0) * joinedVelocityScale(), vec3<f32>(64.0) * joinedVelocityScale());
   let maxSpeed = max(0.05, u.transport_controls.z) / dynamicsBacktraceScale() * joinedVelocityScale();
   let magnitude = length(safe);
   if (magnitude > maxSpeed) {
@@ -15430,6 +15430,12 @@ export function createKaminosVolumePrototype({
       predictorBufferBytes: fluidPredictBufferBytes,
       predictorAllocated: fluidPredictBufferBytes === fluidBufferBytes(gridSize),
     };
+    if (outerRequested) {
+      const bounds=state.transport.effective.velocityBound,scale=state.transport.velocityUnits.cellScale;
+      state.transport.effective.velocityBound=bounds.kind==='backtrace-cells'
+        ? {...bounds,maxCells:bounds.maxCells*scale}
+        : {...bounds,min:bounds.min*scale,max:bounds.max*scale};
+    }
     state.volumeSceneAuthority = volumeSceneReceipt(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
@@ -16188,7 +16194,7 @@ export function createKaminosVolumePrototype({
       }
       const policy = outerRequested ? joinedPressurePolicy(gridSize,solverConfig.effective.iterations) : null;
       if (policy && solverConfig.effective.projectionGain < 1) {
-        policy.maxSweeps=policy.minSweeps;policy.nonConvergenceReason='authored-partial-projection';
+        policy.maxSweeps=solverConfig.effective.iterations;policy.nonConvergenceReason='authored-partial-projection';
       }
       const sweeps = policy?.maxSweeps ?? solverConfig.effective.iterations;
       const encodeSolverPass = (pipeline, label, readBindGroup, pressureBindGroup, passOptions = {}) => {

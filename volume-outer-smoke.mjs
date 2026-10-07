@@ -314,7 +314,7 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers) {
   const states=[buffer('outer smoke state A',count*32),buffer('outer smoke state B',count*32)];
   const pressures=[buffer('outer pressure A',count*8),buffer('outer pressure B',count*8)];
   const pressureStats=buffer('outer pressure completion',16);
-  const pressureBudget=Math.ceil(c.pressureIterations*4*(c.grid/32)**2);
+  const pressureBudget=Math.max(c.pressureIterations,Math.ceil(c.pressureIterations*4*(c.grid/32)**2));
   const params=device.createBuffer({label:'outer smoke step',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});owned.push(params);
   const optical=device.createTexture({label:'outer smoke optical material',size:c.shape,dimension:'3d',format:'rgba16float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING});owned.push(optical);
   const solids=device.createTexture({label:'outer authored solid',size:c.shape,dimension:'3d',format:'r8uint',usage:GPUTextureUsage.COPY_DST|GPUTextureUsage.TEXTURE_BINDING});owned.push(solids);
@@ -367,7 +367,7 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers) {
       try{const e=device.createCommandEncoder();e.copyBufferToBuffer(states[current],0,b,0,count*32);e.copyBufferToBuffer(pressureStats,0,b,count*32,16);device.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);
         const raw=b.getMappedRange(),words=new Uint32Array(raw,count*32,4),peak=new Float32Array(raw,count*32,1)[0];
         if(measuredStep>0 && words[2]===0)throw new Error('outer-pressure-execution-unverified:no-completed-sweeps');
-        pressureCompletion={measuredStep,target:.001,maxError:peak,satisfied:words[1]===0,sweeps:words[2],budgetExhausted:words[1]!==0,criterion:'max-free-exterior-divergence'};
+        pressureCompletion={measuredStep,target:.001,maxError:peak,verified:measuredStep>0&&words[2]>0,satisfied:measuredStep>0&&words[2]>0&&words[1]===0,sweeps:words[2],budgetExhausted:words[1]!==0,criterion:'max-free-exterior-divergence'};
         return new Float32Array(raw.slice(0,count*32));}finally{b.destroy();}},
     destroy(){for(const x of owned)x.destroy();},
   };
