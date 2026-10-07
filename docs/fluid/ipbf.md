@@ -57,8 +57,9 @@ and positive quadratic forms; simultaneous permutation-invariant updates;
 translation covariance and zero net internal force; damping energy/direction;
 last-iteration alternative state; and malformed numerical inputs.
 
-GPU/reference conformance, boundary support, actual emission/basin behavior,
-effective runtime settings and measured equal-simulated-time cost remain open.
+The original GPU/reference conformance is exercised on small fixtures. Moving
+basin quality and measured equal-simulated-time cost remain open. The opt-in
+wall extension below adds a separate numerical/native evidence boundary.
 Integration must account for the current solver's kernel/volume units and
 non-pressure scheduling explicitly. The parent's packed-density branch is not
 included in this reference branch; an adoption comparison must consume that
@@ -89,8 +90,9 @@ fixed27-cell stencil, and skips dormant particles. Density ratio is stored in
 incumbent units for classification/cohesion; pressure uses the dimensionless
 clamped constraint. Density/gradient and update stages remain globally ordered.
 
-Integration limits: collision projection uses existing host boundaries; IPBF
-has no analytical boundary-density term yet. Viscosity, vorticity, cohesion,
+Integration limits: collision projection uses existing host boundaries. Default
+IPBF uses collision-only pressure; the opt-in wall mode below adds cubic
+tangent-plane density support. Viscosity, vorticity, cohesion,
 inlet control and contact retain the post-projection schedule, differing from
 the paper's constant non-pressure-force predictor. Paper damping replaces
 uniform0.991 velocity damping. Inlet attenuation and collision projection
@@ -123,3 +125,38 @@ trajectory validator. Its launcher consumes the existing independent-browser
 helper and requires KAMINOS_CHROME. Command-construction tests reject operator
 Chrome and require mock-keychain flags. This caller wiring is checked locally;
 the preview evidence above is the separate inspected live basin route.
+
+## Opt-in cubic wall support
+
+Select `finger_fluid_ipbf_boundary=tangent_plane` with IPBF. Default is
+`collision_only`. Requesting wall support under PBF or an unknown mode fails
+explicitly. The first host adaptation supports the existing analytic basin and
+sphere; moving-heightfield admission is explicitly rejected. Runtime/snapshot
+identity is `ipbf-cubic-tangent-plane-density-v1`, distinct from collision-only.
+
+For a flat wall with distance d increasing toward fluid, the normalized cubic
+solid contribution is B(d)=2*pi*integral_d^R r*(r-d)*W(r)dr. With q=d/R in[0,1],
+B=.5-1.4q+(8/3)q^3-4.8q^5+3.2q^6 below.5; above.5 use
+B=(1-q)^5*(1.6-(16/15)*(1-q)). Inside the wall B(-d)=1-B(d). Outside kernel
+support it saturates at0or1 with zero derivatives. Its first and second
+derivatives contribute to the density constraint's self gradient and Hessian;
+the particle-neighbor terms remain unchanged. The CPU reference accepts fixed
+`boundaryPlanes` with finite unit normals and offsets. Independent kernel
+quadrature and finite differences check the integral, energy force and Hessian.
+
+The live geometry uses the physical solid surface before collision-radius
+expansion. Each pressure evaluation approximates the local terrain/sphere with
+a frozen tangent plane. Curvature derivatives and true curved-solid kernel
+integration are omitted. For overlapping floor/sphere contributions, the
+bounded product union A+B-AB is an approximation; its derivatives include both
+cross terms. This is a disclosed host extension rather than an assertion that
+the paper prescribes these boundary conditions. Collision and inlet transforms
+remain shared between the main and alternate damping candidates.
+
+The existing explicit diagnostic readback can optionally retain every particle
+record as f32 bit patterns: `requestDiagnostics({captureParticleState:true})`.
+The bench diagnostic entrypoint forwards the same option. Count, step, packing
+and effective pressure boundary accompany all16words/particle; invalid shape
+or identity fails. Integer words preserve nonfinite bits for diagnosis rather
+than JSON-coercing them to null. This adds no readback to ordinary serving and
+no additional GPU copy to the existing explicit diagnostic operation.

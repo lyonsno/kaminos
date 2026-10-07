@@ -30,6 +30,47 @@ export function cubicSplineKernel(offset,supportRadius){
  return {value:k*f,gradient:scale(u,k*first/supportRadius),hessian:H};
 }
 
+/** Integral of the normalized cubic kernel over a solid halfspace. Distance
+ * increases toward fluid; derivatives are with respect to physical distance.
+ * Integrating spherical caps gives 2*pi*integral_d^R r*(r-d)*W(r) dr. */
+export function cubicSplineHalfspace(distance,supportRadius){
+ positive(supportRadius,'boundary supportRadius');
+ if(!Number.isFinite(distance))throw new RangeError('boundary distance must be finite');
+ if(distance>=supportRadius)return {value:0,first:0,second:0};
+ if(distance<=-supportRadius)return {value:1,first:0,second:0};
+ const q=Math.abs(distance)/supportRadius;
+ let value,first,second;
+ if(q<.5){
+  value=.5-7/5*q+8/3*q**3-24/5*q**5+16/5*q**6;
+  first=-7/5+8*q*q-24*q**4+96/5*q**5;
+  second=16*q-96*q**3+96*q**4;
+ }else{
+  const t=1-q;
+  value=t**5*(8/5-16/15*t);
+  first=t**4*(-8+32/5*t);
+  second=32*q*t**3;
+ }
+ return {value:distance<0?1-value:value,first:first/supportRadius,second:Math.sign(distance)*second/supportRadius**2};
+}
+
+/** Fixed tangent planes, with fluid on normal.dot(x)>=offset. The bounded
+ * product union is an explicit overlap approximation, not an exact corner
+ * integral. Its value/gradient/Hessian remain mutually consistent. */
+export function evaluateIPBFBoundaryPlanes(position,supportRadius,planes=[]){
+ vectors([position],'boundary position');positive(supportRadius,'boundary supportRadius');
+ if(!Array.isArray(planes))throw new TypeError('boundary planes must be an array');
+ let value=0,gradient=zero(),hessian=matrix();
+ for(const plane of planes){
+  if(!plane||!Array.isArray(plane.normal)||plane.normal.length!==3||plane.normal.some(v=>!Number.isFinite(v))||Math.abs(norm(plane.normal)-1)>1e-8||!Number.isFinite(plane.offset))throw new TypeError('boundary plane requires a finite unit normal and offset');
+  const b=cubicSplineHalfspace(dot(plane.normal,position)-plane.offset,supportRadius);
+  const g=scale(plane.normal,b.first),H=matrix();
+  for(let a=0;a<3;a++)for(let c=0;c<3;c++)H[a][c]=(1-b.value)*hessian[a][c]+(1-value)*b.second*plane.normal[a]*plane.normal[c]-gradient[a]*g[c]-g[a]*gradient[c];
+  gradient=add(scale(gradient,1-b.value),scale(g,1-value));
+  value=value+b.value-value*b.value;hessian=H;
+ }
+ return {value,gradient,hessian};
+}
+
 function validate(s){
  vectors(s.positions,'positions');vectors(s.inertial,'inertial',s.positions.length);
  if(!Array.isArray(s.masses)||s.masses.length!==s.positions.length||s.masses.some(m=>!Number.isFinite(m)||m<=0))throw new TypeError('masses must be finite positive values matching positions');
@@ -57,9 +98,10 @@ export function evaluateIPBF(state){
  const s={compliance:0,...state};validate(s);
  const {positions:x,inertial:y,masses:m,restDensity:rho0,supportRadius:R,dt,compliance:alpha}=s,n=x.length;
  const kernels=x.map(a=>x.map(b=>cubicSplineKernel(sub(a,b),R)));
- const densities=x.map((_,i)=>m.reduce((v,mj,j)=>v+mj*kernels[i][j].value,0));
+ const boundary=x.map(p=>evaluateIPBFBoundaryPlanes(p,R,s.boundaryPlanes));
+ const densities=x.map((_,i)=>m.reduce((v,mj,j)=>v+mj*kernels[i][j].value,rho0*boundary[i].value));
  const constraints=densities.map(rho=>Math.max(rho/rho0-1,0));
- const selfGradients=x.map(()=>zero()),selfHessians=x.map(()=>matrix());
+ const selfGradients=boundary.map(b=>b.gradient.slice()),selfHessians=boundary.map(b=>b.hessian.map(row=>row.slice()));
  for(let i=0;i<n;i++)for(let j=0;j<n;j++)if(j!==i){
   selfGradients[i]=add(selfGradients[i],scale(kernels[i][j].gradient,m[j]/rho0));
   for(let a=0;a<3;a++)for(let b=0;b<3;b++)selfHessians[i][a][b]+=m[j]/rho0*kernels[i][j].hessian[a][b];

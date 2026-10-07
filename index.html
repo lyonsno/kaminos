@@ -3830,6 +3830,7 @@ import {
   resolveFingerFluidInletCutoffStep,
   resolveFingerFluidParticleCount,
   resolveFingerFluidPressureSolver,
+  resolveFingerFluidPressureBoundary,
   resolveFingerFluidPressureOptimizations,
   measureFingerFluidParticleAllocationCapacity,
   evaluateFingerFluidParticleAllocationRequest,
@@ -4191,6 +4192,8 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   const requestedPressureIterations = Number(params.get('finger_fluid_density_iterations') ?? oracleCockpitRequested?.pressureIterations ?? 3);
   const requestedPressureSolver = params.get('finger_fluid_pressure_solver') ?? 'pbf';
   const effectivePressureSolver = resolveFingerFluidPressureSolver(requestedPressureSolver);
+  const requestedIPBFBoundaryMode = params.get('finger_fluid_ipbf_boundary') ?? 'collision_only';
+  const pressureBoundary=resolveFingerFluidPressureBoundary({pressureSolver:effectivePressureSolver,ipbfBoundaryMode:requestedIPBFBoundaryMode});
   const ipbfCompliance = Number(params.get('finger_fluid_ipbf_compliance') ?? 0);
   const ipbfAlternativeCompliance = Number(params.get('finger_fluid_ipbf_alternative_compliance') ?? .001);
   const ipbfDampingValue = params.get('finger_fluid_ipbf_damping') ?? '1';
@@ -4294,7 +4297,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     requestedFixedVolumeReferenceParticleCount,
     effectiveFixedVolumeReferenceParticleCount: requestedFixedVolumeReferenceParticleCount
       ?? resolveFingerFluidParticleCount(requestedParticleCount),
-    requestedPressureSolver, effectivePressureSolver, ipbfCompliance, ipbfAlternativeCompliance, ipbfDamping, ipbfDampingBeta,
+    requestedPressureSolver, effectivePressureSolver, ...pressureBoundary, ipbfCompliance, ipbfAlternativeCompliance, ipbfDamping, ipbfDampingBeta,
     requestedPressureIterations,
     effectivePressureIterations: Math.max(1, Math.min(12, Math.round(Number.isFinite(requestedPressureIterations) ? requestedPressureIterations : 3))),
     requestedEnergyDiagnosticsMode,
@@ -13279,9 +13282,9 @@ async function sampleFingerFluidPyroComposition() {
   };
 }
 
-async function requestFingerFluidBenchDiagnostics() {
+async function requestFingerFluidBenchDiagnostics(options={}) {
   if (!fingerFluidBenchSolver?.available) return null;
-  const diagnostics = await fingerFluidBenchSolver.requestDiagnostics();
+  const diagnostics = await fingerFluidBenchSolver.requestDiagnostics(options);
   if (fingerFluidBenchRunning) updateFingerFluidBenchReadout();
   const runtime = fingerFluidBenchSolver.getDebugState();
   return {
@@ -14103,6 +14106,7 @@ async function startFingerFluidBench() {
       fixedVolumeReferenceParticleCount: fingerFluidBenchConfig.requestedFixedVolumeReferenceParticleCount,
       densityIterations: fingerFluidBenchConfig.effectivePressureIterations,
       pressureSolver: fingerFluidBenchConfig.effectivePressureSolver,
+      ipbfBoundaryMode: fingerFluidBenchConfig.requestedIPBFBoundaryMode,
       ipbfCompliance: fingerFluidBenchConfig.ipbfCompliance,
       ipbfAlternativeCompliance: fingerFluidBenchConfig.ipbfAlternativeCompliance,
       ipbfDamping: fingerFluidBenchConfig.ipbfDamping,

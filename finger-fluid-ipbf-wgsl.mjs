@@ -32,6 +32,30 @@ fn ipbf_damp(v:vec3<f32>,alternative:vec3<f32>,difference:f32,R:f32,beta:f32) ->
  if(k==0.0||a>=k||difference>=threshold){return v;}
  let d=1.0-difference/threshold;return v*sqrt(max(0.0,1.0-d*(k-a)/k));
 }
+struct IPBFBoundary { value:f32, gradient:vec3<f32>, hessian:mat3x3<f32> }
+fn ipbf_halfspace(distance:f32,R:f32) -> vec3<f32> {
+ if(distance>=R){return vec3<f32>(0);}
+ if(distance<=-R){return vec3<f32>(1,0,0);}
+ let q=abs(distance)/R;var value:f32;var first:f32;var second:f32;
+ if(q<0.5){
+  let q2=q*q;let q3=q2*q;let q4=q2*q2;let q5=q4*q;let q6=q3*q3;
+  value=0.5-1.4*q+(8.0/3.0)*q3-4.8*q5+3.2*q6;
+  first=-1.4+8.0*q2-24.0*q4+19.2*q5;
+  second=16.0*q-96.0*q3+96.0*q4;
+ }else{
+  let t=1.0-q;let t2=t*t;let t3=t2*t;let t4=t2*t2;let t5=t4*t;
+  value=t5*(1.6-(16.0/15.0)*t);first=t4*(-8.0+6.4*t);second=32.0*q*t3;
+ }
+ return vec3<f32>(select(value,1.0-value,distance<0.0),first/R,sign(distance)*second/(R*R));
+}
+fn ipbf_plane_boundary(frame:vec4<f32>,R:f32) -> IPBFBoundary {
+ let b=ipbf_halfspace(frame.w,R);
+ return IPBFBoundary(b.x,frame.xyz*b.y,ipbf_outer(frame.xyz)*b.z);
+}
+fn ipbf_union_boundary(a:IPBFBoundary,b:IPBFBoundary) -> IPBFBoundary {
+ let crossTerms=mat3x3<f32>(a.gradient*b.gradient.x+b.gradient*a.gradient.x,a.gradient*b.gradient.y+b.gradient*a.gradient.y,a.gradient*b.gradient.z+b.gradient*a.gradient.z);
+ return IPBFBoundary(a.value+b.value-a.value*b.value,a.gradient*(1.0-b.value)+b.gradient*(1.0-a.value),a.hessian*(1.0-b.value)+b.hessian*(1.0-a.value)-crossTerms);
+}
 `;
 
 /** Dense all-pairs native conformance route. Integration reuses the math above
@@ -82,8 +106,31 @@ fn commit(@builtin(global_invocation_id) gid:vec3<u32>){
 }
 `;
 
-export function createIPBFGridShader({radius,volume,compliance=0,alternativeCompliance=.001,damping=true,beta=60}){
+/** Native conformance for fixed planes, without changing the particle buffer
+ * or runtime params. The CPU numerical reference accepts the same planes. */
+export function createIPBFConformanceShader(planes=[]){
+ if(!Array.isArray(planes)||planes.some(p=>!p||!Array.isArray(p.normal)||p.normal.length!==3||p.normal.some(v=>!Number.isFinite(v))||Math.abs(Math.hypot(...p.normal)-1)>1e-8||!Number.isFinite(p.offset)))throw new TypeError('IPBF boundary planes require finite unit normals and offsets');
+ const expressions=planes.map(p=>`boundary=ipbf_union_boundary(boundary,ipbf_plane_boundary(vec4<f32>(vec3<f32>(${p.normal.join(',')}),dot(vec3<f32>(${p.normal.join(',')}),position)-(${p.offset})),params.radius));`).join('\n');
+ const helper=`fn ipbf_conformance_boundary(position:vec3<f32>) -> IPBFBoundary {var boundary=IPBFBoundary(0.0,vec3<f32>(0),ipbf_zero_matrix());${expressions}return boundary;}\n`;
+ return IPBF_CONFORMANCE_WGSL.replace('@compute @workgroup_size(64)\nfn density',helper+'@compute @workgroup_size(64)\nfn density').replace('states[i].density=vec4<f32>(rho,','let boundary=ipbf_conformance_boundary(particles[i].x.xyz);rho+=params.restDensity*boundary.value;gradient+=boundary.gradient;D+=boundary.hessian;\n states[i].density=vec4<f32>(rho,');
+}
+
+export function createIPBFGridShader({radius,volume,compliance=0,alternativeCompliance=.001,damping=true,beta=60,boundaryMode='collision_only',obstacleCenter=null,obstacleRadius=null}){
  for(const [name,value] of Object.entries({radius,volume,compliance,alternativeCompliance}))if(!Number.isFinite(value)||value<0||(['radius','volume'].includes(name)&&value===0))throw new RangeError(`IPBF ${name} invalid`);
+ if(!['collision_only','tangent_plane'].includes(boundaryMode))throw new RangeError(`IPBF boundary mode invalid: ${boundaryMode}`);
+ if(boundaryMode==='tangent_plane'&&(!Array.isArray(obstacleCenter)||obstacleCenter.length!==3||obstacleCenter.some(v=>!Number.isFinite(v))||!Number.isFinite(obstacleRadius)||obstacleRadius<=0))throw new RangeError('IPBF wall support requires the host obstacle geometry');
+ const wall=boundaryMode==='tangent_plane'?`
+ fn ipbf_host_boundary(position:vec3<f32>) -> IPBFBoundary {
+  // Physical wall, before collision-radius expansion. Curvature is frozen as
+  // a tangent plane for this local pressure solve, not an exact solid integral.
+  var boundary=ipbf_plane_boundary(supportSignedDistanceFrame(position,0.0),ipbfRadius);
+  if(analyticObstacleSupportEnabled){
+   let offset=position-vec3<f32>(${obstacleCenter?.join(',')});let distance=length(offset);
+   var normal=vec3<f32>(0,1,0);if(distance>0.0){normal=offset/distance;}
+   boundary=ipbf_union_boundary(boundary,ipbf_plane_boundary(vec4<f32>(normal,distance-${obstacleRadius}),ipbfRadius));
+  }
+  return boundary;
+ }`:'';
  const neighbors=body=>`
  let minimum=gridCoord(position-vec3<f32>(ipbfRadius));let maximum=gridCoord(position+vec3<f32>(ipbfRadius));
  for(var z=minimum.z;z<=maximum.z;z++){for(var y=minimum.y;y<=maximum.y;y++){for(var x=minimum.x;x<=maximum.x;x++){
@@ -95,6 +142,7 @@ export function createIPBFGridShader({radius,volume,compliance=0,alternativeComp
  const ipbfRadius:f32=${radius};const ipbfVolume:f32=${volume};
  const ipbfAlpha:f32=${compliance};const ipbfAlternativeAlpha:f32=${alternativeCompliance};
  const ipbfDampingEnabled:bool=${damping};const ipbfBeta:f32=${beta};
+ ${wall}
  struct IPBFState { inertial:vec4<f32>, gradient:vec4<f32>, h0:vec4<f32>, h1:vec4<f32>, h2:vec4<f32>, alternative:vec4<f32> }
  @group(1) @binding(0) var<storage,read_write> ipbfStates:array<IPBFState>;
  @compute @workgroup_size(64)
@@ -113,6 +161,7 @@ export function createIPBFGridShader({radius,volume,compliance=0,alternativeComp
   if(particles[i].velocity.w<0.0){particles[i].predicted.w=0.0;particles[i].delta.w=0.0;return;}
   let position=particles[i].predicted.xyz;var rho=0.0;var gradient=vec3<f32>(0);var D=ipbf_zero_matrix();
   ${neighbors(`let kernel=ipbf_kernel(position-particles[j].predicted.xyz,ipbfRadius);rho+=ipbfVolume*kernel.value;if(i!=j){gradient+=ipbfVolume*kernel.gradient;D+=kernel.hessian*ipbfVolume;}`)}
+  ${boundaryMode==='tangent_plane'?'let boundary=ipbf_host_boundary(position);rho+=boundary.value;gradient+=boundary.gradient;D+=boundary.hessian;':''}
   particles[i].predicted.w=max(rho-1.0,0.0);particles[i].delta.w=rho*params.fluid.y;
   ipbfStates[i].gradient=vec4<f32>(gradient,0);ipbfStates[i].h0=vec4<f32>(D[0],0);ipbfStates[i].h1=vec4<f32>(D[1],0);ipbfStates[i].h2=vec4<f32>(D[2],0);
  }

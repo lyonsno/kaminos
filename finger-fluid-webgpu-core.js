@@ -5,6 +5,25 @@ export function resolveFingerFluidPressureSolver(value='pbf') {
   return value;
 }
 
+export const KAMINOS_FINGER_FLUID_IPBF_WALL_PRESSURE_CONTRACT = 'ipbf-cubic-tangent-plane-density-v1';
+export function resolveFingerFluidPressureBoundary({pressureSolver='pbf',ipbfBoundaryMode='collision_only'}={}) {
+  const method=resolveFingerFluidPressureSolver(pressureSolver);
+  if(!['collision_only','tangent_plane'].includes(ipbfBoundaryMode)) throw new RangeError(`Unsupported IPBF boundary mode: ${ipbfBoundaryMode}`);
+  if(method!=='ipbf'&&ipbfBoundaryMode!=='collision_only') throw new RangeError('IPBF wall support requires IPBF pressure');
+  return {requestedIPBFBoundaryMode:ipbfBoundaryMode,effectiveIPBFBoundaryMode:method==='ipbf'?ipbfBoundaryMode:'not_applicable',boundaryPressureContract:method==='ipbf'?(ipbfBoundaryMode==='tangent_plane'?KAMINOS_FINGER_FLUID_IPBF_WALL_PRESSURE_CONTRACT:'ipbf-collision-projection-only-v0'):KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT};
+}
+
+/** Opt-in raw diagnostic payload. Uint32 words preserve NaN/Inf bits for replay;
+ * they are not filtered samples and cannot certify finiteness by themselves. */
+export function captureFingerFluidParticleWordsForWitness(values,particleCount,{stepCount,pressureSolver,boundaryPressureContract}={}) {
+  if(!(values instanceof Float32Array)||!Number.isSafeInteger(particleCount)||particleCount<1||values.length!==particleCount*16) throw new RangeError('Raw particle diagnostic shape must contain every 16-word record');
+  if(!Number.isSafeInteger(stepCount)||stepCount<0) throw new RangeError('Raw particle diagnostic step must be a nonnegative integer');
+  const method=resolveFingerFluidPressureSolver(pressureSolver);
+  const allowed=method==='pbf'?[KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT]:['ipbf-collision-projection-only-v0',KAMINOS_FINGER_FLUID_IPBF_WALL_PRESSURE_CONTRACT];
+  if(!allowed.includes(boundaryPressureContract)) throw new RangeError('Raw particle diagnostic boundary does not match its pressure solver');
+  return {schema:'kaminos.finger-fluid-particle-words.v1',packing:'position_predicted_velocity_delta_vec4x4_f32_bits',particleCount,recordWords:16,stepCount,pressureSolver:method,boundaryPressureContract,words:Array.from(new Uint32Array(values.buffer,values.byteOffset,values.length))};
+}
+
 export function resolveFingerFluidPressureOptimizations({pressureSolver='pbf',adaptiveDensity=false,densityCellRejection=false,uniformVolumeDensityKernel=false}={}) {
   const method=resolveFingerFluidPressureSolver(pressureSolver);
   const active=method==='pbf'&&!adaptiveDensity;
@@ -12694,19 +12713,19 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
   };
 }
 
-export function validateFingerFluidTruthPressureState(requestedPressureSolver,runtime) {
+export function validateFingerFluidTruthPressureState(requestedPressureSolver,runtime, {ipbfBoundaryMode='collision_only'}={}) {
   const requested=resolveFingerFluidPressureSolver(requestedPressureSolver);
   if(runtime?.solver_backend!=='webgpu_compute') throw new Error('Truth pressure backend must be webgpu_compute');
   if(runtime.pressureSolver!==requested) throw new Error(`Truth pressure solver mismatch: requested ${requested}, effective ${runtime.pressureSolver}`);
   const expectedRoute=requested==='ipbf'?'webgpu-ipbf-cubic-spline-grid-v0':KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE;
   if(runtime.solverRoute!==expectedRoute) throw new Error(`Truth pressure solver route mismatch: ${runtime.solverRoute}`);
-  const boundaryPressureContract=requested==='ipbf'?'ipbf-collision-projection-only-v0':KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT;
+  const {boundaryPressureContract}=resolveFingerFluidPressureBoundary({pressureSolver:requested,ipbfBoundaryMode});
   if(runtime.boundaryPressureContract!==boundaryPressureContract) throw new Error(`Truth pressure boundary mismatch: ${runtime.boundaryPressureContract}`);
   return {requestedPressureSolver:requested,effectivePressureSolver:runtime.pressureSolver,boundaryPressureContract};
 }
 
 export function evaluateFingerFluidTruthTrajectory(scene, trajectory, {boundaryPressureContract=KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT}={}) {
-  if (![KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,'ipbf-collision-projection-only-v0'].includes(boundaryPressureContract)) {
+  if (![KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,'ipbf-collision-projection-only-v0',KAMINOS_FINGER_FLUID_IPBF_WALL_PRESSURE_CONTRACT].includes(boundaryPressureContract)) {
     throw new Error(`Unsupported boundary pressure contract: ${boundaryPressureContract}`);
   }
   const effectiveScene = resolveFingerFluidTruthScene(scene);
@@ -13055,6 +13074,7 @@ export async function createWebGPUFingerFluidSolver({
   ipbfDamping = true,
   ipbfAlternativeCompliance = .001,
   ipbfDampingBeta = 60,
+  ipbfBoundaryMode = 'collision_only',
   densityCellRejection = false,
   uniformVolumeDensityKernel = false,
   energyDiagnosticsMode = 'every_step',
@@ -13089,6 +13109,8 @@ export async function createWebGPUFingerFluidSolver({
 } = {}) {
   const safePressureSolver = resolveFingerFluidPressureSolver(pressureSolver);
   const useIPBF = safePressureSolver === 'ipbf';
+  const pressureBoundary=resolveFingerFluidPressureBoundary({pressureSolver:safePressureSolver,ipbfBoundaryMode});
+  if(ipbfBoundaryMode==='tangent_plane'&&supportContactRoute!==KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE) throw new RangeError('IPBF tangent-plane wall support currently requires the analytic basin/sphere route');
   for (const [label,value] of [['compliance',ipbfCompliance],['alternative compliance',ipbfAlternativeCompliance]]) {
     if (!Number.isFinite(value)||value<0) throw new RangeError(`IPBF ${label} must be finite and nonnegative`);
   }
@@ -13518,7 +13540,7 @@ export async function createWebGPUFingerFluidSolver({
   const ipbfLayout = useIPBF ? device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}}]}) : null;
   const ipbfBindGroup = useIPBF ? device.createBindGroup({layout:ipbfLayout,entries:[{binding:0,resource:{buffer:ipbfStateBuffer}}]}) : null;
   if (useIPBF) {
-    computeShader += createIPBFGridShader({radius:ipbfRadius,volume:ipbfParticleVolume,compliance:ipbfCompliance,alternativeCompliance:ipbfAlternativeCompliance,damping:ipbfDamping,beta:ipbfDampingBeta});
+    computeShader += createIPBFGridShader({radius:ipbfRadius,volume:ipbfParticleVolume,compliance:ipbfCompliance,alternativeCompliance:ipbfAlternativeCompliance,damping:ipbfDamping,beta:ipbfDampingBeta,boundaryMode:ipbfBoundaryMode,obstacleCenter:OBSTACLE_CENTER,obstacleRadius:OBSTACLE_RADIUS});
     const velocityAnchor = '  var velocity = (position - particle.position.xyz) / max(params.dt, 0.00001);';
     if (!computeShader.includes(velocityAnchor)) throw new Error('IPBF velocity integration anchor missing');
     computeShader = computeShader.replace(velocityAnchor,'  var velocity = particle.delta.xyz;');
@@ -15379,7 +15401,8 @@ export async function createWebGPUFingerFluidSolver({
     return lastHostFrameCompositionEvidence;
   }
 
-  async function requestDiagnostics() {
+  async function requestDiagnostics({captureParticleState=false}={}) {
+    if(typeof captureParticleState!=='boolean') throw new TypeError('Particle-state capture must be boolean');
     if (diagnosticsPending || runtimeLifecycle.stopped) return diagnostics;
     diagnosticsPending = true;
     diagnosticsRequestCount += 1;
@@ -15673,7 +15696,7 @@ export async function createWebGPUFingerFluidSolver({
         restDensity: safeRestDensity,
         kernelRadius: safeKernelRadius,
         sourceRecirculationCount: interfaceCounters[2],
-        boundaryPressureContract:useIPBF?'ipbf-collision-projection-only-v0':KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,
+        boundaryPressureContract:pressureBoundary.boundaryPressureContract,
       });
       const energyLedger = captureEnergyDiagnostics
         ? summarizeFingerFluidEnergyLedger(energyValues, safeParticleCount, diagnosticsStepCount)
@@ -15708,7 +15731,8 @@ export async function createWebGPUFingerFluidSolver({
         })
         : null;
       diagnostics = {
-        readbackMode: 'explicit_sparse_gpu_diagnostics_v0',
+        readbackMode: captureParticleState?'explicit_full_particle_gpu_diagnostics_v1':'explicit_sparse_gpu_diagnostics_v0',
+        particleSnapshot:captureParticleState?captureFingerFluidParticleWordsForWitness(values,safeParticleCount,{stepCount:diagnosticsStepCount,pressureSolver:safePressureSolver,boundaryPressureContract:pressureBoundary.boundaryPressureContract}):null,
         stepCount: diagnosticsStepCount,
         capturedAtMs: Number(diagnosticsCapturedAtMs.toFixed(1)),
         activeExtent3d: {
@@ -15970,7 +15994,7 @@ export async function createWebGPUFingerFluidSolver({
         owner: 'kaminos_diagnostic',
         fallbackRoute: null,
       },
-      boundaryPressureContract: useIPBF ? 'ipbf-collision-projection-only-v0' : KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,
+      boundaryPressureContract: pressureBoundary.boundaryPressureContract,
       supportFrictionContract: KAMINOS_FINGER_FLUID_SUPPORT_FRICTION_CONTRACT,
       energyLedgerContract: KAMINOS_FINGER_FLUID_ENERGY_LEDGER_CONTRACT,
       energyDiagnostics: {
@@ -16086,8 +16110,10 @@ export async function createWebGPUFingerFluidSolver({
       } : null,
       truthGauntletContract: KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT,
       pressureSolver: safePressureSolver,
+      requestedIPBFBoundaryMode:pressureBoundary.requestedIPBFBoundaryMode,
+      effectiveIPBFBoundaryMode:pressureBoundary.effectiveIPBFBoundaryMode,
       pressureSolverRoute: useIPBF ? 'webgpu-ipbf-cubic-spline-grid-v0' : KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE,
-      ipbfSettings: useIPBF ? {compliance:ipbfCompliance,damping:ipbfDamping,alternativeCompliance:ipbfAlternativeCompliance,beta:ipbfDampingBeta,kernel:'cubic_spline',radius:ipbfRadius,particleVolume:ipbfParticleVolume,relaxation:.5,boundaryPressure:'collision_projection_only',legacyUniformDamping:false,nonPressureScheduling:'retained_post_projection'} : null,
+      ipbfSettings: useIPBF ? {compliance:ipbfCompliance,damping:ipbfDamping,alternativeCompliance:ipbfAlternativeCompliance,beta:ipbfDampingBeta,kernel:'cubic_spline',radius:ipbfRadius,particleVolume:ipbfParticleVolume,relaxation:.5,boundaryPressure:ipbfBoundaryMode,wallGeometryApproximation:ipbfBoundaryMode==='tangent_plane'?'frozen_local_planes_with_product_union':'none',legacyUniformDamping:false,nonPressureScheduling:'retained_post_projection'} : null,
       truthScene: safeTruthScene,
       colorMode: safeColorMode,
       particleShiftStrength: safeParticleShiftStrength,
