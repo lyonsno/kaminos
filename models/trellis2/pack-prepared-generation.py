@@ -8,11 +8,18 @@ from pathlib import Path
 import subprocess
 import sys
 import traceback
+import time
 import numpy as np
 from PIL import Image
 
 p=argparse.ArgumentParser(description=__doc__)
-for name in ['repo-root','base','foreground','out']:p.add_argument('--'+name,type=Path,required=True)
+for name in ['repo-root','base','out']:p.add_argument('--'+name,type=Path,required=True)
+image_source=p.add_mutually_exclusive_group(required=True)
+image_source.add_argument('--foreground',type=Path,help='explicit previously prepared foreground receipt directory')
+image_source.add_argument('--image',type=Path,help='ordinary image; source preparation runs before packaging')
+p.add_argument('--expected-image-sha256')
+p.add_argument('--preprocess-source-root',type=Path)
+p.add_argument('--expected-preprocess-source-commit')
 p.add_argument('--expected-commit',required=True)
 p.add_argument('--pipeline-type',choices=['512','1024_cascade'],required=True)
 p.add_argument('--steps',type=int,required=True)
@@ -49,15 +56,40 @@ try:
         elif previous.get('previousManifest'):
             report['previousManifest']=previous['previousManifest']
     block_current_attempt('running');persist()
-    root=a.repo_root.resolve();base=a.base.resolve();foreground=a.foreground.resolve()
+    root=a.repo_root.resolve();base=a.base.resolve();foreground=a.foreground.resolve() if a.foreground else out/'foreground'
     commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
     dirty=subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True)
     if commit!=a.expected_commit or dirty:raise ValueError('exact clean package producer required')
+    if Path(__file__).resolve()!=root/'models/trellis2/pack-prepared-generation.py':raise ValueError('effective packager root differs from requested source')
     if a.steps<1:raise ValueError('positive explicit sampler steps required')
     report['producer']={'root':str(root),'commit':commit,'dirty':dirty,'scriptSha256':file_sha(Path(__file__))}
     base_bytes=(base/'manifest.json').read_bytes();original=json.loads(base_bytes)
     if original.get('schema')!='trellis2.generation-inputs.v0' or original.get('status')!='succeeded' or original.get('modelCalls')!=0:
         raise ValueError('complete model-free retained checkpoint base required')
+    if a.image:
+        report['phase']='automatic-foreground-preparation';persist()
+        if not a.expected_image_sha256 or not a.preprocess_source_root or not a.expected_preprocess_source_commit:
+            raise ValueError('ordinary image requires exact image hash and explicit preprocessing source identity')
+        foreground.mkdir(parents=True,exist_ok=True)
+        command=[sys.executable,'-B',str(root/'models/trellis2/prepare-foreground.py'),
+            '--source-root',str(a.preprocess_source_root.resolve()),'--expected-source-commit',a.expected_preprocess_source_commit,
+            '--image',str(a.image.resolve()),'--expected-image-sha256',a.expected_image_sha256,'--out',str(foreground)]
+        report['imagePreparation']={'status':'running','command':command,'route':'actual source helper / explicit CPU foreground',
+            'reportPath':str(foreground/'report.json'),'stdout':str(foreground/'stdout.log'),'stderr':str(foreground/'stderr.log')};persist()
+        started=time.perf_counter()
+        with (foreground/'stdout.log').open('wb') as stdout,(foreground/'stderr.log').open('wb') as stderr:
+            child=subprocess.Popen(command,cwd=root,stdout=stdout,stderr=stderr)
+            _,status,usage=os.wait4(child.pid,0);child.returncode=os.waitstatus_to_exitcode(status)
+        rss=usage.ru_maxrss if sys.platform=='darwin' else usage.ru_maxrss*1024 if sys.platform.startswith('linux') else None
+        report['imagePreparation'].update(exitCode=child.returncode,pid=child.pid,elapsedSeconds=time.perf_counter()-started,
+            peakChildRssBytes=rss,rssUnit='bytes' if rss is not None else 'unavailable',
+            memoryMeaning='OS maximum child resident set; not unified physical footprint')
+        prep_raw=(foreground/'report.json').read_bytes();prep_result=json.loads(prep_raw)
+        report['imagePreparation'].update(status=prep_result.get('status'),reportSha256=sha(prep_raw),
+            effectiveRoute=prep_result.get('effectiveRoute'),backgroundModelCalls=prep_result.get('modelCalls'))
+        persist()
+        if child.returncode or prep_result.get('status')!='succeeded':
+            raise ValueError('automatic foreground preparation failed: '+prep_result.get('error',{}).get('message',str(child.returncode)))
     report['phase']='foreground-admission';persist()
     prep_bytes=(foreground/'report.json').read_bytes();prep=json.loads(prep_bytes)
     if prep.get('status')!='succeeded' or prep['preparation'].get('fallback') or prep['preparation']['foreground_pixels']<1:

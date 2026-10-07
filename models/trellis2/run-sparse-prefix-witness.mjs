@@ -14,9 +14,10 @@ import { validateOccupancyCoordinateFixture } from './occupancy-coordinate-witne
 import { validateSLatDecoderFixture, slatDecoderObservationShapes, validateSLatProjectionFixture, validateSLatProjectionResult, validateSLatConvolutionFixture, validateSLatConvolutionResult } from './slat-decoder-witness-checks.js';
 import {validateGenerationInputs} from './generation-inputs.js';
 import {generationFields,validateGenerationResult,persistGenerationPhase,persistGenerationAsset} from './sparse-generation-witness-checks.js';
+import {startProcessMemory} from './process-memory.mjs';
 
 const { values } = parseArgs({ options: { ...Object.fromEntries(
-  ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture', 'sampler-fixture', 'trajectory-fixture'].map(name => [name, { type: 'string' }])),
+  ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture', 'sampler-fixture', 'trajectory-fixture', 'memory-python'].map(name => [name, { type: 'string' }])),
   'mesh-output': { type: 'boolean', default: false } } });
 for (const name of ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver']) {
   if (!values[name]) throw new Error(`--${name} is required`);
@@ -34,7 +35,7 @@ const persist = async () => { await fs.mkdir(path.dirname(output), { recursive: 
   await fs.writeFile(output, JSON.stringify(report, null, 2) + '\n'); };
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
-let server, child, cdp, profile;
+let server, child, cdp, profile,processMemory;
 
 // Built-in CDP client: no dependency on an operator Chrome profile or GUI app.
 async function connect(url) {
@@ -243,6 +244,13 @@ try {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   report.requestedUrl = `http://127.0.0.1:${server.address().port}/`;
   report.phase = 'browser-launch'; await persist();
+  if(generationManifest){
+    const memoryScript=path.join(root,'models/trellis2/process-memory.py'),python=values['memory-python']??'/usr/bin/python3';
+    report.memory={requested:true,scope:'owned runner/browser descendants plus unique device-buffer ledger',
+      python,script:memoryScript,scriptSha256:digest(await fs.readFile(memoryScript))};
+    processMemory=await startProcessMemory({python,script:memoryScript,rawPath:path.join(evidenceRoot,'process-memory.jsonl')});
+    await persist();
+  }
   profile = await fs.mkdtemp(path.join(os.tmpdir(), 'trellis-sparse-chrome-'));
   report.profilePath = profile;
   child = spawn(report.chrome, ['--headless=new', '--enable-unsafe-webgpu', '--remote-debugging-port=0',
@@ -268,7 +276,7 @@ try {
   report.phase = `native-${witness}-execution`; await persist();
   const result = await cdp.call('Runtime.evaluate', { expression: `(async () => {
     const { ${witness==='generation' ? 'runGenerationWitness' : isSampler ? 'runSparseSamplerWitness' : witness === 'slat-convolution' ? 'runSLatConvolutionWitness' : witness === 'slat-projection' ? 'runSLatProjectionWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${isSampler?'sampler':witness}-witness.js');
-    const result = await ${witness==='generation' ? 'runGenerationWitness' : isSampler ? 'runSparseSamplerWitness' : witness === 'slat-convolution' ? 'runSLatConvolutionWitness' : witness === 'slat-projection' ? 'runSLatProjectionWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : witness === 'slat-decoder' ? `, {meshOutput:${JSON.stringify(values['mesh-output'])}}` : ''});
+    const result = await ${witness==='generation' ? 'runGenerationWitness' : isSampler ? 'runSparseSamplerWitness' : witness === 'slat-convolution' ? 'runSLatConvolutionWitness' : witness === 'slat-projection' ? 'runSLatProjectionWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${witness==='generation'?', {memoryMonitor:true}':isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : witness === 'slat-decoder' ? `, {meshOutput:${JSON.stringify(values['mesh-output'])}}` : ''});
     const saved = await fetch('/witness-result', { method: 'POST', body: JSON.stringify(result) });
     if (!saved.ok) throw new Error('browser result was not durably saved');
     return { url: location.href, receipt: await saved.json() };
@@ -382,6 +390,7 @@ try {
   process.exitCode = 1;
 }
 finally {
+  if(processMemory)await processMemory.sample();
   await finalizeSparseWitness({ report, persist, cleanup: [
     ['browser', async () => { if (cdp) { try { await cdp.call('Browser.close'); } catch {} cdp.close(); } }],
     ['child', async () => {
@@ -390,6 +399,8 @@ finally {
       }
     }],
     ['server', async () => { if (server) await new Promise(resolve => server.close(resolve)); }],
+    ['memory',async()=>{if(processMemory){report.memory.processes=await processMemory.stop();
+      if(report.memory.processes.status!=='observed')throw Error('requested process-memory observation failed: '+report.memory.processes.error);}}],
     // Only ephemeral state from the exact owned browser profile is removed.
     ['profile', async () => { if (profile) await fs.rm(profile, { recursive: true, force: true }); }],
   ] });

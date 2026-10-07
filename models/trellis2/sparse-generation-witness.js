@@ -4,11 +4,13 @@ import {loadGenerationInputs,validateGenerationInputs,generationPipelineType} fr
 import {GENERATION_ROUTE,GENERATION_FIELDS,validateGenerationResult} from './sparse-generation-witness-checks.js';
 import {validateNativePrefixBackend,prefixAdapterName} from './sparse-prefix-witness-checks.js';
 import {createTrellisAssetAdapter} from './trellis-material.js';
+import {observeDeviceMemory} from './device-memory.js';
 const hash=async data=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),v=>v.toString(16).padStart(2,'0')).join('');
-export async function runGenerationWitness(expectedSha){
+export async function runGenerationWitness(expectedSha,{memoryMonitor=false}={}){
   const report={status:'failed',phase:'input-manifest',requestedRoute:GENERATION_ROUTE,numericalStatus:'not-compared',
     comparison:'actual WebGPU image generation with retained prepared pixels and browser noise; no matched MLX fidelity claim',outputs:{}},errors=[];
-  let session,device,implementation,assetConsumer,runtime,scope=false,invocationOwner,serving=false,currentPhase='new';
+  let session,device,implementation,assetConsumer,runtime,scope=false,invocationOwner,serving=false,currentPhase='new',memory;
+  report.memory={requested:memoryMonitor};
   const stageCounts={},save=async(name,values,shape,dtype)=>{
     const response=await fetch('/output/'+name,{method:'POST',headers:{'X-Tensor-Dtype':dtype},body:values});
     if(!response.ok)throw Error('complete raw output not saved '+name);
@@ -17,10 +19,12 @@ export async function runGenerationWitness(expectedSha){
   const savePhase=async extra=>{
     const saved=await fetch('/phase',{method:'POST',body:JSON.stringify({phase:report.phase,effectiveRoute:report.effectiveRoute,
       sessionId:session.snapshot().sessionId,modelRole:report.loadingModelRole??null,
-      verifiedTensorCount:report.verifiedTensorCount,verifiedInputBytes:report.verifiedInputBytes,...extra})});
+      verifiedTensorCount:report.verifiedTensorCount,verifiedInputBytes:report.verifiedInputBytes,
+      ...(memory?{deviceMemory:memory.snapshot()}:{}),...extra})});
     if(!saved.ok)throw Error('generation phase evidence not saved: '+await saved.text());
   };
   try{
+    if(typeof memoryMonitor!=='boolean')throw TypeError('explicit boolean memory-monitor selection required');
     const fetched=await fetch('/fixture/manifest.json',{cache:'no-store'});if(!fetched.ok)throw Error('generation inputs unavailable');
     const bytes=await fetched.arrayBuffer();if(await hash(bytes)!==expectedSha)throw Error('changed generation manifest');
     const m=JSON.parse(new TextDecoder().decode(bytes));validateGenerationInputs(m);
@@ -45,7 +49,9 @@ export async function runGenerationWitness(expectedSha){
     if(report.backend.isFallbackAdapter!==false)throw Error('explicit nonfallback native adapter required');
     report.requiredLimits={maxStorageBufferBindingSize:adapter.limits.maxStorageBufferBindingSize,maxBufferSize:adapter.limits.maxBufferSize,
       maxComputeWorkgroupsPerDimension:adapter.limits.maxComputeWorkgroupsPerDimension};
-    device=await adapter.requestDevice({requiredLimits:report.requiredLimits});device.pushErrorScope('validation');scope=true;
+    device=await adapter.requestDevice({requiredLimits:report.requiredLimits});
+    if(memoryMonitor)memory=observeDeviceMemory(device);
+    device.pushErrorScope('validation');scope=true;
     device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
     device.lost.then(info=>{if(info.reason!=='destroyed')errors.push('device lost: '+info.reason+' '+info.message);});
     session=await createWebGpuInferenceSession({sessionId:'image-generation-'+crypto.randomUUID(),adapter,device,adapterName:prefixAdapterName(adapter.info)});
@@ -68,6 +74,7 @@ export async function runGenerationWitness(expectedSha){
     report.checkpointLoading='per-role uncached complete weights; shared identity-checked activation tables';
     const onPhase=async e=>{
       currentPhase=e.phase;report.phase=e.phase;
+      memory?.setPhase(e.modelRole?e.phase+':'+e.modelRole:e.phase);
       report.loadingModelRole=e.modelRole??null;
       await savePhase({backend:report.backend,requiredLimits:report.requiredLimits});
     };
@@ -129,5 +136,7 @@ export async function runGenerationWitness(expectedSha){
     for(const [name,cleanup]of [['asset',()=>assetConsumer?.dispose()],['generation',()=>implementation?.dispose()],['session',async()=>{if(session){await session.drain();session.close();}}],['device',()=>device?.destroy()]])
       try{await cleanup();}catch(error){report.cleanupErrors??=[];report.cleanupErrors.push({name,message:error.message});report.status='failed';}
   }
+  if(memory){report.memory.device=memory.snapshot();report.memory.deviceEvents=[...memory.events];memory.restore();}
+  else if(memoryMonitor){report.memory.status='unavailable';report.memory.error='device allocation observer was not installed';}
   return report;
 }
