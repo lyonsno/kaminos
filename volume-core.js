@@ -2365,6 +2365,20 @@ export function resolveVelocityStaggeringConfig(controls = {}) {
   // pass after the main kernel (report section 29), part of the staggered reading.
   return { identity: VELOCITY_STAGGERING_IDENTITY, requested, effective: { mode: 'staggered', admitted: true, reason: null, faceForces: true } };
 }
+// CPU model of the staggered fold and the face pass (the two kernels' arithmetic,
+// for the contracts; not the shader). `localIncrement` is everything that is not
+// a centred additive force (velocity-derived forces, velocity deltas, damping
+// effects); `centredIncrement` is the centred additive forces × dt;
+// `upperCentredIncrement[axis]` is the +1 neighbour's increment along that axis;
+// `upperFaceOpen[axis]` is false at a wall, a solid neighbour or the open top's
+// closed sides. A solid cell stores and writes zero.
+export function faceForceFoldModel({ solid = false, transported, localIncrement, centredIncrement, upperCentredIncrement, upperFaceOpen = [true, true, true], bound }) {
+  if (solid) return { stored: [0, 0, 0], written: [0, 0, 0], completed: [0, 0, 0] };
+  const stored = transported.map((v, i) => v + localIncrement[i]);
+  const written = centredIncrement.slice();
+  const faceForce = written.map((f, axis) => 0.5 * (f + (upperFaceOpen[axis] ? upperCentredIncrement[axis][axis] : f)));
+  return { stored, written, completed: bound(stored.map((v, i) => v + faceForce[i])) };
+}
 export function velocityStaggeringUniformValues(config) {
   const admitted = config?.effective?.admitted ? 1 : 0;
   return [admitted, config?.effective?.faceForces ? admitted : 0, 0, 0];
@@ -4194,9 +4208,12 @@ fn csFaceForces(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (sceneSolidAt(vec3<i32>(gid))) { return; }
   let c = vec3<i32>(gid);
   let here = vec3<f32>(forceDeltaLoad(c, 0), forceDeltaLoad(c, 1), forceDeltaLoad(c, 2));
-  let upX = select(here.x, forceDeltaLoad(c + vec3<i32>(1, 0, 0), 0), gid.x + 1u < GRID);
-  let upY = select(here.y, forceDeltaLoad(c + vec3<i32>(0, 1, 0), 1), gid.y + 1u < GRID_Y);
-  let upZ = select(here.z, forceDeltaLoad(c + vec3<i32>(0, 0, 1), 2), gid.z + 1u < GRID);
+  // A closed face (wall, solid neighbour) takes this cell's own value: the
+  // neighbour's increment, possibly stale behind a new solid, must not reach
+  // the bound through the tangential components.
+  let upX = select(here.x, forceDeltaLoad(c + vec3<i32>(1, 0, 0), 0), sceneFaceOpen(c, 0u) && gid.x + 1u < GRID);
+  let upY = select(here.y, forceDeltaLoad(c + vec3<i32>(0, 1, 0), 1), sceneFaceOpen(c, 1u) && gid.y + 1u < GRID_Y);
+  let upZ = select(here.z, forceDeltaLoad(c + vec3<i32>(0, 0, 1), 2), sceneFaceOpen(c, 2u) && gid.z + 1u < GRID);
   let faceForce = 0.5 * (here + vec3<f32>(upX, upY, upZ));
   let stored = fluidDst[base];
   fluidDst[base] = vec4<f32>(boundVelocity(stored.xyz + faceForce), stored.w);
@@ -5598,6 +5615,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let cell = vec3<f32>(gid) + vec3<f32>(0.5);
   let cellI = vec3<i32>(gid);
   if (sceneSolidAt(cellI)) {
+    forceDeltaStore(cellI, vec3<f32>(0.0));
     quenchDst[idx] = 0u;
     frontDst[idx] = 0.0;
     for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) { fluidDst[base + slot] = vec4<f32>(0.0); }
@@ -5763,11 +5781,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   let velTransported = advected.xyz * transportVelocityDamping();
   var vel = velTransported;
-  // Forces derived from the velocity field itself (confinement, curl, the detail
-  // forces); under the staggered reading they are already at the face positions
-  // and are added as before, while scalar-derived forces are averaged onto the
-  // faces by csFaceForces (report section 29).
-  var velocityDerivedForce = vec3<f32>(0.0);
+  // Centred additive forces (functions of scalars, position and controls):
+  // under the staggered reading these are averaged onto the faces by
+  // csFaceForces; everything else — velocity-derived forces, velocity deltas,
+  // the authored damping — stays on the stored value (report section 29).
+  var centredForce = vec3<f32>(0.0);
   var smoke = material.x * stepRate(0.990);
   var heat = material.y * stepRate(0.982);
   var fuel = material.z * stepRate(0.990);
@@ -6392,28 +6410,24 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let projectionCorrection = vec3<f32>(0.0);
   let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
   vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain * artisticSwirl;
-  velocityDerivedForce = velocityDerivedForce + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain * artisticSwirl;
+  centredForce = centredForce + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain * artisticSwirl;
   vel = vel + confinement;
-  velocityDerivedForce = velocityDerivedForce + confinement;
   vel = vel + oracleActivityCurl;
-  velocityDerivedForce = velocityDerivedForce + oracleActivityCurl;
   vel = vel + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
-  velocityDerivedForce = velocityDerivedForce + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
   vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireDetailForcesAblation;
-  velocityDerivedForce = velocityDerivedForce + bonfireReferenceConfinement * bonfireScene * bonfireDetailForcesAblation;
   vel = vel + detailForce;
-  velocityDerivedForce = velocityDerivedForce + detailForce;
   vel = vel + microForce;
-  velocityDerivedForce = velocityDerivedForce + microForce;
   vel = vel + shredForce;
-  velocityDerivedForce = velocityDerivedForce + shredForce;
   vel = vel + fineBreakup;
-  velocityDerivedForce = velocityDerivedForce + fineBreakup;
   vel = vel + heatExpansion;
+  centredForce = centredForce + heatExpansion;
   vel = vel + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
+  centredForce = centredForce + externalInjection.velocity.xyz * (0.18 + speed * 0.036);
   vel = vel + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireThermalRiseDirection * mix(1.0, canonicalBuoyancyLift, canonicalPlumeScene);
+  centredForce = centredForce + thermalBuoyancyForce(heat, smoke, fuel, speed) * plumeRiseScale * bonfireThermalRiseDirection * mix(1.0, canonicalBuoyancyLift, canonicalPlumeScene);
   let canonicalLiftGate = canonicalPlumeScene * (1.0 - smoothstep(0.52, 0.94, p.y));
   vel.y = vel.y + canonicalLiftGate * (source * (0.070 + speed * 0.012) * canonicalSourceInjection + smoke * (0.010 + speed * 0.002) * canonicalBuoyancyLift);
+  centredForce.y = centredForce.y + canonicalLiftGate * (source * (0.070 + speed * 0.012) * canonicalSourceInjection + smoke * (0.010 + speed * 0.002) * canonicalBuoyancyLift);
   let canonicalRadial = max(length(p.xz), 0.025);
   let canonicalEntrainmentBand = canonicalPlumeScene
     * smoothstep(-0.64, -0.28, p.y)
@@ -6440,6 +6454,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * canonicalRadialSpreadBand
     * (0.018 + speed * 0.004);
   vel = vel + canonicalRadialSpread;
+  centredForce = centredForce + canonicalRadialSpread;
   let bonfireLiftImpulse = bonfireEntrainedLift(smoke, heat, flame, source, bonfireCombustion, plumeRiseScale, speed);
   let bonfireTopologyLiftImpulse = bonfireCombustion.w * plumeRiseScale * (0.014 + speed * 0.0048 + fireLickAmount * 0.0012);
   let bonfireBroadSupportLiftImpulse = bonfireBroadSupportSmokeSource * plumeRiseScale * (0.012 + speed * 0.0028);
@@ -6450,6 +6465,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   ) * bonfireFrontLiftGate * plumeRiseScale * (0.011 + speed * 0.0026 + curl * 0.0012);
   let columnLiftImpulse = (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale;
   vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfireTopologyLiftImpulse + bonfireBroadSupportLiftImpulse + bonfireLiftedSootBuoyancy, bonfireScene) * bonfireThermalRiseDirection;
+  centredForce.y = centredForce.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfireTopologyLiftImpulse + bonfireBroadSupportLiftImpulse + bonfireLiftedSootBuoyancy, bonfireScene) * bonfireThermalRiseDirection;
   if (transportedLateralExcitationEnabled > 0.5) {
     let transportedLateralDelta = prev.xz - advected.xz;
     let transportedLateralGain = clamp((smoke + heat) * 0.16 + curl * 0.022, 0.0, 0.24);
@@ -6484,24 +6500,25 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * bonfireCenteringCarrier
     * (0.076 + speed * 0.0120);
   vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireInstabilityProbe * 1.6;
-  velocityDerivedForce = velocityDerivedForce + bonfireReferenceConfinement * bonfireScene * bonfireInstabilityProbe * 1.6;
   vel = vel + bonfireUpperDepinchOutflow * bonfireDepinchAblation;
-  velocityDerivedForce = velocityDerivedForce + bonfireUpperDepinchOutflow * bonfireDepinchAblation;
+  centredForce = centredForce + bonfireUpperDepinchOutflow * bonfireDepinchAblation;
   vel = vel + bonfireNonWindCenteringForce;
-  velocityDerivedForce = velocityDerivedForce + bonfireNonWindCenteringForce;
+  centredForce = centredForce + bonfireNonWindCenteringForce;
   let windMaterialCoupling = clamp(smoke * 0.54 + heat * 0.30 + source * 0.34 + flame * 0.18, 0.0, 1.6);
   let bonfireWindResponseGain = mix(1.0, 4.0, bonfireScene);
   vel = vel + windDirection * windStrength * windHeightRamp * windMaterialCoupling * bonfireWindResponseGain * (0.020 + speed * 0.004);
+  centredForce = centredForce + windDirection * windStrength * windHeightRamp * windMaterialCoupling * bonfireWindResponseGain * (0.020 + speed * 0.004);
   vel = vel - projectionCorrection * (0.32 + smoke * 0.08 + heat * 0.06);
   // Uniform time step: every per-step velocity increment above scales with dt
   // (1.0 under the legacy mode).
   let forceIncrement = (vel - velTransported) * timeStep;
   if (faceForcesOn()) {
-    // Velocity-derived forces stay on the stored value; the scalar-derived
-    // remainder goes to the face-force pass.
-    let velocityDerivedIncrement = velocityDerivedForce * timeStep;
-    forceDeltaStore(cellI, forceIncrement - velocityDerivedIncrement);
-    vel = velTransported + velocityDerivedIncrement;
+    // The centred additive forces go to the face-force pass; everything else
+    // (velocity-derived forces, velocity deltas, the damping) stays here. The
+    // stored value is left unbounded: the pass bounds once after its increment.
+    let centredIncrement = centredForce * timeStep;
+    forceDeltaStore(cellI, centredIncrement);
+    vel = velTransported + forceIncrement - centredIncrement;
   } else {
     vel = velTransported + forceIncrement;
   }
@@ -6985,7 +7002,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // increment law's line, so it takes the rate law directly.
   vel = vel * stepRate(mix(0.55, 1.0, wallFade));
   vel.y = mix(max(vel.y, -0.015), vel.y, bonfireScene);
-  fluidDst[base] = vec4<f32>(boundVelocity(vel), density);
+  fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), density);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
   fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
   fluidDst[base + 3u] = vec4<f32>(clamp(microSmoke, 0.0, 1.8), clamp(interfaceShred, 0.0, 1.8), clamp(fireLick, 0.0, 1.8), clamp(emberFleck, 0.0, 1.4));

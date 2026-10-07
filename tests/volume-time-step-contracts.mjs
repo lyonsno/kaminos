@@ -100,8 +100,12 @@ test('the shader reads coefficients at the dynamics speed and scales transport, 
   assert.match(main, /let velTransported = advected\.xyz \* transportVelocityDamping\(\);\s*\n\s*var vel = velTransported;/, 'the transported velocity is kept apart from the increments');
   assert.match(main, /let forceIncrement = \(vel - velTransported\) \* timeStep;/, 'every per-step increment scales with dt in one place');
   assert.match(main, /vel = velTransported \+ forceIncrement;/, 'and is folded back once (or handed to the face-force pass under the staggered reading)');
-  assert.ok(main.indexOf('let forceIncrement = (vel - velTransported) * timeStep;') > main.indexOf('vel = vel - projectionCorrection'), 'the scaling follows the last additive increment');
-  assert.ok(main.indexOf('vel = velTransported + (vel - velTransported) * timeStep;') < main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));'), 'the scaling precedes the wall damping');
+  const foldAt = main.indexOf('let forceIncrement = (vel - velTransported) * timeStep;');
+  const lastAdditiveAt = main.indexOf('vel = vel - projectionCorrection');
+  const spongeAt = main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));');
+  assert.ok(foldAt >= 0 && lastAdditiveAt >= 0 && spongeAt >= 0, 'fold, last additive increment and wall sponge all present');
+  assert.ok(foldAt > lastAdditiveAt, 'the scaling follows the last additive increment');
+  assert.ok(foldAt < spongeAt, 'the scaling precedes the wall damping');
   const bound = wgslFunction('boundVelocity');
   assert.match(bound, /fn boundVelocity\(v: vec3<f32>\) -> vec3<f32>/, 'the bound reads the effective backtrace itself');
   assert.match(bound, /\/ dynamicsBacktraceScale\(\)/, 'the bound divides by the dt-scaled backtrace');
