@@ -3058,6 +3058,14 @@ def ingest_image_asset(filename, content):
     return entry
 
 
+def authoring_asset_catalog(collection):
+    from authoring_asset_catalog import read_catalog
+    return read_catalog(collection, roots=BROWSE_ROOTS,
+        image_entries=lambda: list_asset_entries(kind='image'),
+        origins=read_mesh_generation_origins,
+        output_resolver=resolve_greenroom_output_dir, label=_clean_label)
+
+
 def greenroom_output_roots():
     """Roots that can lawfully serve receipt output_dir files."""
     roots = [Path.home().resolve()]
@@ -3147,6 +3155,13 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_pipeline_manifest()
         elif parsed.path == "/api/browse":
             self.handle_browse(parse_qs(parsed.query))
+        elif parsed.path == "/api/authoring-assets":
+            try:
+                self.send_json(authoring_asset_catalog(parse_qs(parsed.query).get("collection", ["generated-meshes"])[0]))
+            except ValueError as error:
+                self.send_json({"error": str(error)}, 400)
+            except FileNotFoundError as error:
+                self.send_json({"error": str(error)}, 404)
         elif parsed.path == "/api/assets":
             self.handle_assets(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":

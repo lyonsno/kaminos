@@ -7246,6 +7246,7 @@ function registerSceneObject(object, metadata = {}) {
     renderHandoffSchema: metadata.renderHandoffSchema ?? null,
     sceneTransform,
     generation:metadata.generation?structuredClone(metadata.generation):null,
+    assetOrigin:metadata.assetOrigin?structuredClone(metadata.assetOrigin):null,
     localLiquidEmitter: metadata.type === LOCAL_LIQUID_EMITTER_TYPE ? structuredClone(metadata.localLiquidEmitter) : null,
   };
   object.userData.kaminosSceneObject = {
@@ -27730,6 +27731,7 @@ function serializeSceneObject(entry) {
     splat: metadata.splat ?? entry.splat ?? null,
     image: metadata.image ?? entry.image ?? null,
     ...((metadata.generation ?? entry.generation)?{generation:structuredClone(metadata.generation ?? entry.generation)}:{}),
+    ...((metadata.assetOrigin ?? entry.assetOrigin)?{assetOrigin:structuredClone(metadata.assetOrigin ?? entry.assetOrigin)}:{}),
     renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
@@ -28280,7 +28282,7 @@ function duplicateSceneGroup(id,{interactive=false}={}) {
 }
 function duplicateSceneSelection(id,options={}){if(sceneSelection.ids.length>1)return duplicateSelectedSceneObjects(options);return sceneGroups.some(g=>g.id===id)?duplicateSceneGroup(id,{interactive:options.interactive===true}):duplicateSceneObject(id,{interactive:options.interactive===true});}
 
-async function importSceneMesh(file,{generation:origin=null,label=null}={}) {
+async function importSceneMesh(file,{generation:origin=null,label=null,assetOrigin=null}={}) {
   assertSceneConstructionAvailable();if(!file?.name?.toLowerCase().endsWith('.glb'))throw Error('Choose a binary GLB mesh');
   const generation=sceneMutationToken,bytes=await file.arrayBuffer();
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -28289,7 +28291,7 @@ async function importSceneMesh(file,{generation:origin=null,label=null}={}) {
   if(receipt.schema!=='kaminos.generated-mesh.v0'||receipt.sha256!==digest||receipt.bytes!==bytes.byteLength||receipt.source!==`/api/read?root=generated-meshes&path=${digest}.glb`)throw Error('Mesh storage returned a different source');
   if(generation!==sceneMutationToken)throw Error('Scene changed while importing');assertSceneConstructionAvailable();
   const id=makeSceneObjectId('mesh'),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
-  await showGLB(receipt.source,{clear:false,normalize:false,isCurrent:()=>generation===sceneMutationToken&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:label||file.name.replace(/\.glb$/i,''),generation:origin}});
+  await showGLB(receipt.source,{clear:false,normalize:false,isCurrent:()=>generation===sceneMutationToken&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:label||file.name.replace(/\.glb$/i,''),generation:origin,assetOrigin:assetOrigin?{...assetOrigin,sha256:digest}:null}});
   try{await recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
   setInfo(`Imported ${file.name}`);return id;
 }
@@ -29434,7 +29436,7 @@ function setupAuthoringAssets(){
     addMesh:async entry=>{
       if(entry.file)return importSceneMesh(entry.file);
       const response=await fetch(entry.source);if(!response.ok)throw Error(`Mesh source HTTP ${response.status}`);
-      return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label});
+      return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
     }});
   authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>authoringAssetsUI.render(authoringAssets.read());
   window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state()};

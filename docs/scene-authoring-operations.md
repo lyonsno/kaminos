@@ -114,3 +114,20 @@ Loading weights currently settles before stopping; the shared scene device is
 never destroyed. A completed mesh wins a Stop race and is saved or retained for
 storage retry. Persistence has no Stop button because it preserves completed
 bytes. A device/foreground drain failure stays a failure, not a clean stop.
+
+The authoring browser reads `/api/authoring-assets?collection=…` for saved meshes,
+source images, Trellis/Pixal outputs and completed generator results. Greenroom
+collections project generator receipts and recorded output directories, using
+output-file metadata when present. Queue administration and unrelated command
+screenshots are excluded. Missing historical outputs are counted separately;
+malformed records and escaping paths produce diagnostics. Entries preserve their
+canonical read/job-output URL. Import retains GLB bytes in the scene store and
+saves `assetOrigin` with the original URL, producer/job information and actual
+mesh digest. This is provenance, not a new producer-validation claim.
+
+Mesh cards use an independent, lazy WebGL2 preview context over the existing
+Three bundle. A failed preview is explicit; it never substitutes another asset.
+Source images retain their ingestion names. Drag the asset area's upper separator
+vertically to change its height; Up/Down arrows also resize it. Its extent survives
+closing/reopening the pane during the current page, while scene poses, camera
+pose and authored undo history remain unchanged.

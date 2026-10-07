@@ -85,7 +85,7 @@ export function createSf3dAuthoringGeneration({context,request=fetch,changed=()=
     async loadInput(input,{signal}) {
       const reason=blocked();if(reason)throw Error(reason);
       const url=new URL(input.source,location.href);
-      if(url.origin!==location.origin || url.pathname!=='/api/read' || !url.searchParams.get('root') || !url.searchParams.get('path'))throw Error('Generation source must be a mounted image asset');
+      if(url.origin!==location.origin || !((url.pathname==='/api/read'&&url.searchParams.get('root')&&url.searchParams.get('path'))||(url.pathname==='/api/job-output'&&url.searchParams.get('job_id')&&url.searchParams.get('file'))))throw Error('Generation source must be a mounted image asset');
       const response=await request(input.source,{signal});if(!response.ok)throw Error(`Source image HTTP ${response.status}`);
       const bytes=await response.arrayBuffer(),sha256=await hex(bytes),blob=new Blob([bytes],{type:response.headers.get('Content-Type')||'image/png'});
       const objectUrl=URL.createObjectURL(blob),image=new Image();

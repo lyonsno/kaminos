@@ -42,6 +42,7 @@ function normalizeSceneObjectRecord(record) {
     splat: cloneJson(record.splat ?? null),
     image: cloneJson(record.image ?? null),
     ...(record.generation?{generation:cloneJson(record.generation)}:{}),
+    ...(record.assetOrigin?{assetOrigin:cloneJson(record.assetOrigin)}:{}),
     renderRoute: record.renderRoute ?? null,
     renderCapabilities: cloneJson(record.renderCapabilities ?? null),
     renderHandoffSchema: record.renderHandoffSchema ?? null,

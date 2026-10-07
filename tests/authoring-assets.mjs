@@ -35,3 +35,12 @@ test('an explicit empty selection survives document normalization while legacy o
  const empty=buildSceneDocument({objects,selectionIds:[],activeObjectId:null});assert.equal(empty.activeObjectId,null);assert.equal(planSceneRestore(empty).activeObjectId,null);
  const legacy=buildSceneDocument({objects});assert.equal(legacy.activeObjectId,'a');assert.equal(Object.hasOwn(legacy,'selectionIds'),false);
 });
+test('catalog uses canonical asset sources and refuses folders or mismatched collections',async()=>{
+ let url;const c=createAuthoringAssets({request:async value=>{url=value;return{schema:'kaminos.authoring-assets.v1',collection:'greenroom',entries:[{id:'mesh',kind:'mesh',source:'/api/job-output?job_id=observed&file=asset.glb',name:'asset.glb',label:'Kiln'}],warnings:[]};}});
+ assert.equal(await c.browse('greenroom'),true);assert.match(url,/authoring-assets\?collection=greenroom/);assert.equal(c.read().entries[0].source,'/api/job-output?job_id=observed&file=asset.glb');assert.equal(c.read().catalog,true);
+ const bad=createAuthoringAssets({request:async()=>({schema:'kaminos.authoring-assets.v1',collection:'greenroom',entries:[{kind:'folder',source:'/api/read?root=greenroom&path=cache'}]})});assert.equal(await bad.browse('greenroom'),false);assert.match(bad.read().error,/invalid asset source/);
+});
+test('an imported generator asset retains its original source beside retained scene bytes',()=>{
+ const assetOrigin={source:'/api/job-output?job_id=observed&file=asset.glb',jobId:'observed',route:'trellis2.image-generation.webgpu.v0',sha256:'mesh'};
+ const object={id:'imported',type:'glb',source:'/api/read?root=generated-meshes&path=mesh.glb',assetOrigin};assert.deepEqual(planSceneRestore(buildSceneDocument({objects:[object]})).objects[0].assetOrigin,assetOrigin);
+});
