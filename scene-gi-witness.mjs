@@ -42,7 +42,8 @@ try {
     report.before=await page.evaluate(()=>({gi:window.kaminosSceneGIDebugState(),camera:window.kaminosAuthoringParameters.read('@scene-camera'),transport:window.kaminosAuthoringParameters.read('@scene-transport')}));
     assert.equal(await page.locator('#scene-camera-fields [data-authoring-alias="volume-physical-exposure"]').count(),1);
     assert.equal(await page.locator('#shared-flame-domain-properties [data-authoring-alias="volume-physical-exposure"]').count(),0);
-    await page.locator('#scene-gi-gain').fill('5');await page.locator('#scene-gi-gain').blur();
+    report.phase='gain-gesture';await save();
+    await page.locator('#scene-gi-gain').click();await page.locator('#scene-gi-gain').fill('5');await page.locator('#scene-gi-gain').blur();
     assert.equal(await page.evaluate(()=>window.kaminosSceneGIDebugState().gain),5);
     await page.evaluate(()=>window.kaminosSceneEdits.undo());
     assert.equal(await page.evaluate(()=>window.kaminosSceneGIDebugState().gain),report.before.gi.gain);
@@ -52,7 +53,8 @@ try {
     const sourceHash=async()=>createHash('sha256').update(JSON.stringify(await page.evaluate(async()=> (await window.__kaminosVolumePrototype.sampleSceneVolumeSource()).values))).digest('hex');
     report.cameraSourceBefore=await sourceHash();
     const exposure=await page.locator('#selected-volume-physical-exposure').inputValue();
-    await page.locator('#selected-volume-physical-exposure').fill(String(Number(exposure)+.25));await page.locator('#selected-volume-physical-exposure').blur();
+    report.phase='camera-gesture';await save();
+    await page.locator('#selected-volume-physical-exposure').click();await page.locator('#selected-volume-physical-exposure').fill(String(Number(exposure)+.25));await page.locator('#selected-volume-physical-exposure').blur();
     assert.equal(await page.locator('#volume-physical-exposure').inputValue(),String(Number(exposure)+.25));
     await page.evaluate(()=>window.kaminosSceneEdits.undo());
     assert.equal(await page.locator('#volume-physical-exposure').inputValue(),exposure);
