@@ -42,6 +42,19 @@ All times below are milliseconds. Native routes used an Apple `metal-3` adapter 
 | `source-guide-target-003` / `b7917782` | Gather only, held primary, per-vertex, ordinary12/ordinary96/guided12/guided8/guided96/restored ordinary12 | Medians1.143/8.640/1.177/0.860/12.346/1.150 | Guided12 was about3% above ordinary12; guided96 about43% above ordinary96. Eight is lower work than12 here, not an equal-count sampler speedup. |
 | `source-guide-budget-8-003` / `9530a842` | Gather only, another held primary, per-vertex | Ordinary8 initial7.170, guided8 3.741, identical restored ordinary8 0.857 | More than8× variation between identical ordinary8 fields. Comparing the first ordinary8 to guided8 would falsely suggest a48% win. Cause not attributed. |
 | Combined GI `cost001` / `01a7a009` | Held-source whole-app render-invocation throughput; GTAO/combined/restored GTAO | 59.856/59.176/59.998 invocations/s | Browser-pacing limited. Does not establish equal GPU cost or live simulation FPS. Render-only timestamp hooks also omit separate compute work. |
+| `source-guide-landing-native-003` / `8947221c` | First valid arm only: guided8, spacing0.16, 194,914 surface and8,192 smoke receivers, fluid resolution control48, held source, combined GI10 | 20 lighting-compute samples; total median1.249, range0.883–3.992 | Actual accepted controls on the composed host. The run later failed on missing/nonmonotonic timestamps in another arm; this is a partial observation, not a successful timing comparison or whole-frame budget. |
+
+The first valid arm of the last row also supplies a component snapshot:
+
+| Lighting compute component | Median GPU ms, same20recorded samples |
+| --- | ---: |
+| Direct light to smoke | 0.350 |
+| Prepared smoke illumination reconstruction | 0.089 |
+| Combine primary emission and once-scattered smoke source | 0.021 |
+| Primary plus smoke-scattered light to mesh surfaces | 0.686 |
+| **Observed lighting-compute total, including inter-pass gaps** | **1.249** |
+
+Use the observed total, not a sum of component medians. This scope excludes fluid dynamics/pressure, primary source seeding, visible volume raymarching, host scene drawing and GI/AO. The subsequent `source-guide-landing-native-004` consumer/restoration exercise explicitly did not request profiling and contributes no timing measurement. These records make the current budget question more concrete without repairing the profiler or claiming the whole system takes1.249ms.
 
 Re-exercise with existing witnesses rather than a new profiling framework: `scratch/beaming-distributed-witness.mjs --receiver-spacing-check`, `scratch/beaming-source-guide-witness.mjs`, and the Rendering tab's actual-input inspection / explicitly attributed scene GPU timing. Their required URL/output arguments and route admission matter. A saved basin records controls, not a replay of fluid/history buffers.
 
