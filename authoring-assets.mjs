@@ -47,12 +47,13 @@ export function createAuthoringAssets({request, addMesh, uploadImage, generator,
       const entry=await uploadImage(file);this.select({...entry,root:entry.root_id,kind:'image',label:entry.name});return entry;
     },
     generation:()=>generator()?.read() || {status:'unavailable',error:'Generation host is initializing'},
+    stop:()=>generator()?.stop() || false,
     async recover() {const result=await generator().retryPersistence();state.results.push({...result,kind:'mesh',label:result.name});publish();return result;},
     async generate() {
       if(state.selected?.kind!=='image')throw Error('Choose a source image first');
       const service=generator();if(!service)throw Error('Generation host is unavailable');
       const result=await service.run({...copy(state.selected),source:state.selected.source || assetSource(state.selected.root,state.selected.path)});
-      state.results.push({...result,kind:'mesh',name:result.name,label:result.name});publish();return result;
+      if(result)state.results.push({...result,kind:'mesh',name:result.name,label:result.name});publish();return result;
     },
   };
 }
@@ -61,13 +62,14 @@ export function installAuthoringAssets({document,controller,edits}) {
   const panel=document.createElement('aside');panel.id='authoring-assets';panel.hidden=true;panel.setAttribute('aria-label','Asset browser and generation');
   panel.innerHTML=`<header><strong>Assets</strong><button type="button" id="asset-close" aria-label="Close assets">×</button></header>
     <nav><button type="button" data-assets-mode="browse">Browse</button><button type="button" data-assets-mode="generate">Generate</button></nav>
-    <div id="asset-browse"><div class="asset-folder-controls"><button type="button" id="asset-up" aria-label="Parent folder">↑</button><select id="asset-root" aria-label="Asset location"></select><button type="button" id="asset-refresh" aria-label="Refresh assets">↻</button></div><div id="asset-path"></div><input id="asset-filter" type="search" placeholder="Filter this folder…" aria-label="Filter this asset folder"><div id="asset-entries"></div></div>
-    <div id="asset-generate" hidden><p>Image → textured mesh · Stable Fast 3D</p><p class="asset-help">Choose an image from Browse or open a local image. Generation keeps your scene in place; add the result when you want it.</p><button type="button" id="asset-run">Generate mesh</button><button type="button" id="asset-recover" hidden>Retry saving result</button><div id="asset-generation-status" role="status"></div><div id="asset-results"></div></div>
+    <div class="asset-content"><div id="asset-browse"><div class="asset-folder-controls"><button type="button" id="asset-up" aria-label="Parent folder">↑</button><select id="asset-root" aria-label="Asset location"></select><button type="button" id="asset-refresh" aria-label="Refresh assets">↻</button></div><div id="asset-path"></div><input id="asset-filter" type="search" placeholder="Filter this folder…" aria-label="Filter this asset folder"><div id="asset-entries"></div></div>
+    <div id="asset-generate" hidden><p>Image → textured mesh · Stable Fast 3D</p><p class="asset-help">Choose an image from Browse or open a local image. Generation keeps your scene in place; add the result when you want it.</p><button type="button" id="asset-run">Generate mesh</button><button type="button" id="asset-recover" hidden>Retry saving result</button><div id="asset-results"></div></div>
     <div id="asset-detail" hidden><img id="asset-image" alt="Selected source image" hidden><strong id="asset-name"></strong><div id="asset-source"></div><button type="button" id="asset-add">Add to scene</button><button type="button" id="asset-use-image">Use for generation</button></div>
-    <div id="asset-status" role="status"></div><footer><button type="button" id="asset-file-open">Open file…</button><input id="asset-file" type="file" accept=".glb,.png,.jpg,.jpeg,.webp" hidden></footer>`;
+    </div><div id="asset-generation" hidden><div class="asset-generation-line"><span id="asset-generation-status" role="status"></span><span id="asset-percent"></span><button type="button" id="asset-stop">Stop</button></div><progress id="asset-progress" max="100" aria-label="Generation stage progress"></progress></div><div id="asset-status" role="status"></div><footer><button type="button" id="asset-file-open">Open file…</button><input id="asset-file" type="file" accept=".glb,.png,.jpg,.jpeg,.webp" hidden></footer>`;
   document.body.append(panel);const byId=id=>document.getElementById(id);let mode='browse';
   const labels={'generated-meshes':'Saved meshes',trellis2mlx:'Trellis outputs',pixal3d:'Pixal outputs','image-inbox':'Source images',greenroom:'Generator outputs',assets:'Assets',scratch:'Scratch'};
   const action=fn=>Promise.resolve().then(fn).catch(error=>{byId('asset-status').textContent=error.message;});
+  function close(){if(panel.contains(document.activeElement))document.activeElement.blur();panel.hidden=true;document.body.classList.remove('has-assets-panel');}
   function setMode(next){mode=next;byId('asset-browse').hidden=mode!=='browse';byId('asset-generate').hidden=mode!=='generate';panel.querySelectorAll('[data-assets-mode]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.assetsMode===mode)));render(controller.read());}
   function render(state) {
     const roots=byId('asset-root');roots.replaceChildren(...state.roots.map(root=>{const o=document.createElement('option');o.value=root.id;o.textContent=labels[root.id]||root.id;return o;}));roots.value=state.root;
@@ -84,16 +86,22 @@ export function installAuthoringAssets({document,controller,edits}) {
     const selected=state.selected;byId('asset-detail').hidden=!selected;byId('asset-add').hidden=selected?.kind!=='mesh';byId('asset-use-image').hidden=selected?.kind!=='image';byId('asset-add').disabled=state.adding;
     if(selected){byId('asset-name').textContent=selected.label || selected.name;byId('asset-source').textContent=selected.root?(labels[selected.root]||selected.root):selected.generation?'Generated in this session':'Local file';byId('asset-source').title=selected.source || selected.path || '';}
     byId('asset-image').hidden=selected?.kind!=='image';if(selected?.kind==='image')byId('asset-image').src=selected.source || assetSource(selected.root,selected.path);
-    const generation=controller.generation();byId('asset-run').disabled=selected?.kind!=='image'||!!generation.pending||['loading','running','unavailable'].includes(generation.status);byId('asset-recover').hidden=!generation.pending;
+    const generation=controller.generation();byId('asset-run').disabled=selected?.kind!=='image'||!!generation.pending||['input','loading','running','stopping','saving','unavailable'].includes(generation.status);byId('asset-recover').hidden=!generation.pending;
+    byId('asset-generation').hidden=mode!=='generate'&&!['input','loading','running','stopping','saving'].includes(generation.status);
+    byId('asset-stop').hidden=!generation.canStop&&generation.status!=='stopping';byId('asset-stop').disabled=!generation.canStop;byId('asset-stop').textContent=generation.status==='stopping'?'Stopping…':'Stop';
+    const bar=byId('asset-progress');if(Number.isFinite(generation.percent))bar.value=generation.percent;else bar.removeAttribute('value');
+    bar.hidden=!['input','loading','running','stopping','saving','complete'].includes(generation.status);
+    byId('asset-percent').textContent=Number.isFinite(generation.percent)?`${generation.stage || 'Stage'} · ${Math.round(generation.percent)}%`:'';
     byId('asset-generation-status').textContent=generation.error || generation.progress || (selected?.kind==='image'?'Source selected; generate when you want.':'Choose a source image.');
     byId('asset-results').replaceChildren(...state.results.map(result=>{const button=document.createElement('button');button.type='button';button.className='asset-result';button.textContent=`Add ${result.name}`;button.disabled=state.adding;button.onclick=()=>action(()=>controller.add(result));return button;}));
   }
   panel.querySelectorAll('[data-assets-mode]').forEach(button=>button.onclick=()=>setMode(button.dataset.assetsMode));
-  byId('asset-close').onclick=()=>panel.hidden=true;byId('asset-root').onchange=event=>action(()=>controller.browse(event.target.value));byId('asset-up').onclick=()=>action(()=>{const s=controller.read();return controller.browse(s.root,s.path.split('/').slice(0,-1).join('/'));});
+  byId('asset-close').onclick=close;byId('asset-root').onchange=event=>action(()=>controller.browse(event.target.value));byId('asset-up').onclick=()=>action(()=>{const s=controller.read();return controller.browse(s.root,s.path.split('/').slice(0,-1).join('/'));});
   byId('asset-refresh').onclick=()=>action(()=>controller.refresh());byId('asset-filter').oninput=()=>render(controller.read());
   byId('asset-add').onclick=()=>action(async()=>{await controller.add();document.activeElement?.blur();});byId('asset-use-image').onclick=()=>setMode('generate');byId('asset-run').onclick=()=>action(()=>controller.generate());
+  byId('asset-stop').onclick=()=>controller.stop();
   byId('asset-recover').onclick=()=>action(()=>controller.recover());
   byId('asset-file-open').onclick=()=>byId('asset-file').click();byId('asset-file').onchange=event=>action(async()=>{const file=event.target.files[0];if(file)await controller.upload(file);event.target.value='';});
-  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!panel.hidden&&!edits.state().active){panel.hidden=true;event.preventDefault();}});
-  return {render,close(){if(panel.contains(document.activeElement))document.activeElement.blur();panel.hidden=true;},open(next='browse'){panel.hidden=false;setMode(next);action(()=>controller.refresh());},state:()=>({open:!panel.hidden,mode})};
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!panel.hidden&&!edits.state().active){close();event.preventDefault();}});
+  return {render,close,open(next='browse'){panel.hidden=false;document.body.classList.add('has-assets-panel');setMode(next);action(()=>controller.refresh());},state:()=>({open:!panel.hidden,mode})};
 }

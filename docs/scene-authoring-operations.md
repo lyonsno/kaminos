@@ -102,3 +102,15 @@ window.kaminosSetSceneObjectTransform(objectId, {position: [1, 0, 0]});
 ```
 
 Ordinary static meshes now have selected/active silhouette feedback. **Viewport → Object bounds** enables bounding boxes separately. Source/light editor symbols retain the existing helper control. Skinned, instanced and Splat outlines are not provided by this static mask; clean scene capture suspends selection contours and bounds. The mask has its own scene/materials and does not alter authored materials, geometry, lighting inputs or saved records.
+
+Assets/Generate occupies a page region below the authoring viewport. Closing it
+restores the viewport area; it does not cancel generation or mutate the scene.
+The thin generation bar reflects the producer's current-stage percentage. Phases
+without a denominator remain indeterminate; stage resets are not overall run
+estimates. Stop aborts source fetches, prevents inference after a stopped weight
+load, and throws AbortError at SF3D's existing cooperative progress boundaries.
+The producer's finish path settles admitted work before another run is admitted.
+Loading weights currently settles before stopping; the shared scene device is
+never destroyed. A completed mesh wins a Stop race and is saved or retained for
+storage retry. Persistence has no Stop button because it preserves completed
+bytes. A device/foreground drain failure stays a failure, not a clean stop.
