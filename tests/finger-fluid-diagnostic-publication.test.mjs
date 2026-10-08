@@ -18,3 +18,13 @@ test('completed explicit diagnostics replace stale bench runtime before readout'
   assert.equal(shown,32);
   assert.equal(state.runtime.effectivePressureIterations,5);
 });
+
+test('the actual cockpit resume callback restores a held witness frame loop',()=>{
+  const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const body=source.match(/setPaused:value=>\{([^}]+)\}/)?.[1];
+  assert.ok(body);
+  let resumes=0;
+  const setter=new Function('resumeFingerFluidBenchAfterWitness','let fingerFluidBenchSimulationPaused=true;return value=>{'+body+'};')(()=>resumes++);
+  setter(false);assert.equal(resumes,1);
+  setter(true);assert.equal(resumes,1);
+});

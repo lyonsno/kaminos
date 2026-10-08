@@ -14259,7 +14259,7 @@ function installFingerFluidPressureCockpit() {
   fingerFluidPressureCockpit=createIPBFPressureCockpit({
     root,getSolver:()=>fingerFluidBenchSolver,getStatus:()=>fingerFluidBenchState,
     isPaused:()=>fingerFluidBenchSimulationPaused,
-    setPaused:value=>{fingerFluidBenchSimulationPaused=value;},
+    setPaused:value=>{fingerFluidBenchSimulationPaused=value;if(!value)resumeFingerFluidBenchAfterWitness();},
     restart:resetFingerFluidPressureCockpitWater,
     onRequest:receipt=>{
       if(fingerFluidBenchConfig){
