@@ -1,5 +1,5 @@
-import {resolveFingerFluidCohesionModel,applyFingerFluidCohesionProfile} from './finger-fluid-cohesion.mjs';
-export {resolveFingerFluidCohesionModel,evaluateFingerFluidCohesionPairWeight,evaluateFingerFluidCohesionAcceleration,applyFingerFluidCohesionProfile} from './finger-fluid-cohesion.mjs';
+import {resolveFingerFluidCohesionModel,resolveFingerFluidCohesionStrength,applyFingerFluidCohesionProfile} from './finger-fluid-cohesion.mjs';
+export {resolveFingerFluidCohesionModel,resolveFingerFluidCohesionStrength,evaluateFingerFluidCohesionPairWeight,evaluateFingerFluidCohesionAcceleration,applyFingerFluidCohesionProfile} from './finger-fluid-cohesion.mjs';
 import {createIPBFGridShader} from './finger-fluid-ipbf-wgsl.mjs';
 import {createIPBFPressureControlState} from './finger-fluid-pressure-controls.mjs';
 export {createIPBFPressureControlState, ipbfBetaForRadius, ipbfPressureReplayURL} from './finger-fluid-pressure-controls.mjs';
@@ -11734,10 +11734,9 @@ export function evaluateFingerFluidInterfaceDensityConstraint({
   return Number(Math.max(finite(densityRatio, 0) - 1, -interiorTensionAllowance).toFixed(6));
 }
 
-export function resolveFingerFluidCapillaryStrength(value = KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH) {
-  const strength = finite(value, KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH);
-  if (strength < 0 || strength > 2) throw new RangeError(`Finger fluid capillary strength must be within [0, 2]: ${value}`);
-  return strength;
+export function resolveFingerFluidCapillaryStrength(value = KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH,{cohesionModel='legacy'}={}) {
+  const strength=cohesionModel==='legacy'?finite(value,KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH):value;
+  return resolveFingerFluidCohesionStrength(strength,cohesionModel);
 }
 
 export function resolveFingerFluidThinSheetVorticityAttenuation(
@@ -13136,6 +13135,7 @@ export async function createWebGPUFingerFluidSolver({
   const safePressureSolver = resolveFingerFluidPressureSolver(pressureSolver);
   const useIPBF = safePressureSolver === 'ipbf';
   const safeCohesionModel=resolveFingerFluidCohesionModel({pressureSolver:safePressureSolver,cohesionModel});
+  const admittedCohesionStrength=resolveFingerFluidCapillaryStrength(capillaryStrength,{cohesionModel:safeCohesionModel});
   if(typeof livePressureControls!=='boolean')throw new TypeError('Live pressure controls must be boolean');
   if(livePressureControls&&!useIPBF)throw new RangeError('Live pressure controls require IPBF');
   if(livePressureControls&&(!Number.isSafeInteger(densityIterations)||densityIterations<1))throw new RangeError('Live pressure passes must be a positive safe integer');
@@ -13333,7 +13333,7 @@ export async function createWebGPUFingerFluidSolver({
   const safeParticleShiftStrength = resolveFingerFluidParticleShiftStrength(particleShiftStrength);
   const safeSupportFriction = resolveFingerFluidSupportFriction(supportFriction);
   const safeChemistryDiffusion = resolveFingerFluidChemistryDiffusion(chemistryDiffusion);
-  let safeCapillaryStrength = resolveFingerFluidCapillaryStrength(capillaryStrength);
+  let safeCapillaryStrength = admittedCohesionStrength;
   const safeThinSheetVorticityAttenuation = resolveFingerFluidThinSheetVorticityAttenuation(thinSheetVorticityAttenuation);
   const safeFreeFlightViscosityBoost = resolveFingerFluidFreeFlightViscosityBoost(freeFlightViscosityBoost);
   const safeUnsupportedSheetStrength = resolveFingerFluidUnsupportedSheetStrength(unsupportedSheetStrength);
@@ -13574,7 +13574,7 @@ export async function createWebGPUFingerFluidSolver({
   let ipbfRadius=ipbfSampling.radius;
   const ipbfParticleVolume=ipbfSampling.particleVolume;
   const pressureControlState=livePressureControls?createIPBFPressureControlState({
-    baseRadius:ipbfRadius/safeIPBFPressureRadiusScale,pressureRadiusScale:safeIPBFPressureRadiusScale,
+    baseRadius:ipbfRadius/safeIPBFPressureRadiusScale,cohesionModel:safeCohesionModel,pressureRadiusScale:safeIPBFPressureRadiusScale,
     beta:ipbfDampingBeta,densityIterations:safeDensityIterations,capillaryStrength:safeCapillaryStrength,
   }):null;
   const ipbfControlBuffer=livePressureControls?device.createBuffer({label:'IPBF-live-pressure-controls',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC}):null;

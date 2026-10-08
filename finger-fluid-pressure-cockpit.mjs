@@ -58,8 +58,9 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
       }
     }
     if(find('ipbf-beta')!==root.ownerDocument.activeElement)find('ipbf-beta').value=numberText(values.beta);
+    if(state.cohesionModel==='ipbf_free_surface')find('ipbf-cohesion-number').removeAttribute('max');
     find('ipbf-cohesion-help').textContent=state.cohesionModel==='ipbf_free_surface'
-      ?'Recovered attraction · strength is a fraction of gravity · sparse-water support stays active'
+      ?'Recovered attraction · strength is a fraction of gravity. Higher numeric values expand the slider.'
       :'Legacy attraction · density weighted · acceleration capped at 0.42';
     find('ipbf-damping-readout').textContent=runtime.ipbfSettings.damping
       ?'Threshold '+(values.beta*values.radius).toPrecision(3)

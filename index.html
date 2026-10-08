@@ -4301,7 +4301,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     requestedChemistryDiffusion,
     effectiveChemistryDiffusion: resolveFingerFluidChemistryDiffusion(requestedChemistryDiffusion),
     requestedCapillaryStrength,
-    effectiveCapillaryStrength: resolveFingerFluidCapillaryStrength(requestedCapillaryStrength),
+    effectiveCapillaryStrength: resolveFingerFluidCapillaryStrength(requestedCapillaryStrength,{cohesionModel}),
     requestedThinSheetVorticityAttenuation,
     effectiveThinSheetVorticityAttenuation: resolveFingerFluidThinSheetVorticityAttenuation(requestedThinSheetVorticityAttenuation),
     requestedFreeFlightViscosityBoost,

@@ -1,3 +1,4 @@
+import {resolveFingerFluidCohesionStrength} from './finger-fluid-cohesion.mjs';
 const editable = new Set(['pressureRadiusScale', 'beta', 'densityIterations', 'capillaryStrength']);
 
 function positive(value, label) {
@@ -22,7 +23,7 @@ export function ipbfPressureReplayURL(url, values, linked) {
   return next.href;
 }
 
-export function createIPBFPressureControlState({baseRadius, ...initial}) {
+export function createIPBFPressureControlState({baseRadius, cohesionModel='legacy', ...initial}) {
   positive(baseRadius, 'Base pressure radius');
   function validate(values) {
     for (const key of Object.keys(values)) if (!editable.has(key)) throw new RangeError(`Unsupported live pressure control: ${key}`);
@@ -32,7 +33,7 @@ export function createIPBFPressureControlState({baseRadius, ...initial}) {
     // These are the actual f32 kernel/parameter capacities, not a tuning range.
     if (![radius,beta,8/(Math.PI*radius**3)].every(v=>Number.isFinite(Math.fround(v))&&Math.fround(v)>0)) throw new RangeError('Live pressure kernel cannot be represented in WebGPU f32');
     if (!Number.isSafeInteger(values.densityIterations)||values.densityIterations<1) throw new RangeError('Pressure passes must be a positive safe integer');
-    if (!Number.isFinite(values.capillaryStrength)||values.capillaryStrength<0||values.capillaryStrength>2) throw new RangeError('Cohesion must be within the existing [0,2] contract');
+    resolveFingerFluidCohesionStrength(values.capillaryStrength,cohesionModel);
     return {...values, radius};
   }
   let requested=validate(initial), effective={...requested};

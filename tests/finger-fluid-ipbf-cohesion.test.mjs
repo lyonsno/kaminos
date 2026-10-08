@@ -51,3 +51,15 @@ test('weak isolated pair weights fade the recovered force at the attraction boun
  const acceleration=core.evaluateFingerFluidCohesionAcceleration({weightedDirection:[.0001,0,0],totalWeight:.0001,strength:1,activity:1,gravity:9.2,cohesionModel:'ipbf_free_surface'});
  assert.ok(Math.abs(acceleration[0]-.00092)<1e-12,'weak band weight was cancelled into full-strength attraction');
 });
+
+test('the recovered force accepts stronger finite gains while legacy keeps its original range',()=>{
+ assert.equal(typeof core.resolveFingerFluidCohesionStrength,'function','model-specific gain range is missing');
+ assert.equal(core.resolveFingerFluidCohesionStrength(6,'ipbf_free_surface'),6);
+ assert.throws(()=>core.resolveFingerFluidCohesionStrength(6,'legacy'),/within.*2/);
+ assert.throws(()=>core.resolveFingerFluidCohesionStrength(Infinity,'ipbf_free_surface'),/finite/);
+ assert.throws(()=>core.resolveFingerFluidCohesionStrength(1e39,'ipbf_free_surface'),/f32/);
+ const control=core.createIPBFPressureControlState({baseRadius:.185,cohesionModel:'ipbf_free_surface',pressureRadiusScale:1,beta:60,densityIterations:3,capillaryStrength:1});
+ assert.equal(control.request({capillaryStrength:6}).requested.capillaryStrength,6);
+ const a=core.evaluateFingerFluidCohesionAcceleration({weightedDirection:[.5,0,0],totalWeight:1,strength:6,gravity:9.2,cohesionModel:'ipbf_free_surface'});
+ assert.ok(Math.abs(a[0]-27.6)<1e-12);
+});

@@ -4,6 +4,13 @@ export function resolveFingerFluidCohesionModel({pressureSolver='ipbf',cohesionM
   if(cohesionModel==='ipbf_free_surface'&&pressureSolver!=='ipbf')throw new RangeError('Recovered cohesion requires IPBF pressure');
   return cohesionModel;
 }
+export function resolveFingerFluidCohesionStrength(value,cohesionModel='legacy',gravity=9.2) {
+  resolveFingerFluidCohesionModel({cohesionModel});
+  if(!Number.isFinite(value)||value<0)throw new RangeError('Cohesion strength must be finite and nonnegative');
+  if(cohesionModel==='legacy'&&value>2)throw new RangeError('Legacy cohesion must be within [0, 2]');
+  if(cohesionModel==='ipbf_free_surface'&&(!Number.isFinite(Math.fround(value))||!Number.isFinite(Math.fround(Math.fround(value)*Math.fround(gravity)))))throw new RangeError('Cohesion force cannot be represented in WebGPU f32');
+  return value;
+}
 const smooth=(a,b,x)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
 export function evaluateFingerFluidCohesionPairWeight({q,surfaceFactor,neighborSurface,densityRatio,neighborDensityRatio,cohesionModel='legacy'}) {
   resolveFingerFluidCohesionModel({cohesionModel});
@@ -15,7 +22,8 @@ export function evaluateFingerFluidCohesionPairWeight({q,surfaceFactor,neighborS
 export function evaluateFingerFluidCohesionAcceleration({weightedDirection,totalWeight,strength,activity=1,gravity=9.2,cohesionModel='legacy'}) {
   resolveFingerFluidCohesionModel({cohesionModel});
   if(!Array.isArray(weightedDirection)||weightedDirection.length!==3||!weightedDirection.every(Number.isFinite)
-    ||![totalWeight,strength,activity,gravity].every(Number.isFinite)||totalWeight<0||strength<0||strength>2||activity<0||activity>1||gravity<0)throw new RangeError('Cohesion acceleration inputs are invalid');
+    ||![totalWeight,strength,activity,gravity].every(Number.isFinite)||totalWeight<0||activity<0||activity>1||gravity<0)throw new RangeError('Cohesion acceleration inputs are invalid');
+  resolveFingerFluidCohesionStrength(strength,cohesionModel,gravity);
   if(cohesionModel==='ipbf_free_surface')return totalWeight>0?weightedDirection.map(x=>x/Math.max(1,totalWeight)*gravity*strength*activity):[0,0,0];
   const raw=weightedDirection.map(x=>x*.12*strength*activity),length=Math.hypot(...raw);
   return length>.42?raw.map(x=>x*.42/length):raw;
