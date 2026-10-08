@@ -7,6 +7,7 @@ import {createPlaneFractureSurface} from './structural-material-solid-fragments.
 import {materialComponents} from './structural-material-solid-surface.mjs';
 import {bindComponentAffineField,applyComponentAffineField} from './structural-material-component-affine.mjs';
 import {contactPatch,selectStressRelease} from './structural-material-stress-release.mjs';
+import {createShardGeometry} from './structural-material-shard-render.js';
 
 const $=id=>document.getElementById(id),route='kaminos.picked-stone.stress-shards.webgpu.v0',inputs=[],events=[],timings=[];
 const configuration={timeStep:1/60,iterations:12,lineSearchTrials:8,gravity:0,damping:.98,floor:-10,patchRadius:.28,stressRadius:.16,reconstructionRadius:.45,gripStiffness:200000};
@@ -19,6 +20,7 @@ scene.add(new THREE.HemisphereLight('#eef5f1','#414644',2.5));const key=new THRE
 const support=new THREE.Mesh(new THREE.BoxGeometry(.12,.78,.72),new THREE.MeshStandardMaterial({color:'#657e89',roughness:.65,metalness:.35}));support.position.x=-1.26;scene.add(support);
 const marker=new THREE.Mesh(new THREE.SphereGeometry(.026,16,12),new THREE.MeshBasicMaterial({color:'#ff805b'}));marker.visible=false;scene.add(marker);
 const arrow=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),new THREE.LineBasicMaterial({color:'#e9bb63'}));arrow.visible=false;scene.add(arrow);
+const capMaterial=new THREE.MeshStandardMaterial({color:'#d3b999',roughness:1,side:THREE.DoubleSide});
 const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),normal=new THREE.Vector3(),plane=new THREE.Plane();let skinMaterial;
 const icon=(id,shape)=>{$(id).replaceChildren(createElement(shape));};icon('reset',RotateCcw);icon('pause',Pause);icon('release',Hand);
 const stamp=(kind,data)=>inputs.push({kind,data,at:performance.now(),steps:observed?.steps,epoch:observed?.damageEpoch});
@@ -32,11 +34,7 @@ function makeMeshes(){
  for(const piece of surface.witness().pieces){
   const nodes=body.positions.flatMap((p,i)=>inside(piece,p)?[i]:[]),membership=new Set(nodes.map(i=>components[i]));if(membership.size!==1)throw new Error('Visible piece must identify one surviving material component');const component=[...membership][0];
   const g=piece.geometry,vertices=Array.from({length:g.properties.length/g.numProp},(_,i)=>g.properties.slice(i*g.numProp,i*g.numProp+3)),binding=bindComponentAffineField(body.positions,vertices,{components,component,volumes,radius:configuration.reconstructionRadius});
-  const geometry=new THREE.BufferGeometry(),points=[],uv=[],normals=[],tangents=[];
-  for(const index of g.indices){const b=index*g.numProp;points.push(...g.properties.slice(b,b+3));normals.push(...g.properties.slice(b+3,b+6));uv.push(...g.properties.slice(b+6,b+8));tangents.push(...g.properties.slice(b+8,b+12));}
-  geometry.setAttribute('position',new THREE.Float32BufferAttribute(points,3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setAttribute('tangent',new THREE.Float32BufferAttribute(tangents,4));
-  for(let tri=0;tri<g.indices.length/3;tri++)geometry.addGroup(tri*3,3,g.exterior[tri]?0:1);
-  const mesh=new THREE.Mesh(geometry,[skinMaterial,new THREE.MeshStandardMaterial({color:'#d3b999',roughness:1,side:THREE.DoubleSide})]);mesh.userData.pieceId=piece.id;scene.add(mesh);pieces.push({...piece,nodes,component,binding,mesh});
+  const geometry=createShardGeometry(g),mesh=new THREE.Mesh(geometry,[skinMaterial,capMaterial]);mesh.userData.pieceId=piece.id;scene.add(mesh);pieces.push({...piece,nodes,component,binding,mesh});
  }
 }
 function present(){if(!observed)return;const current=positions(observed);for(const p of pieces){const deformed=applyComponentAffineField(p.binding,current,{components});const a=p.mesh.geometry.attributes.position;for(let i=0;i<p.geometry.indices.length;i++)a.setXYZ(i,...deformed[p.geometry.indices[i]]);a.needsUpdate=true;p.mesh.geometry.computeVertexNormals();p.mesh.geometry.computeBoundingSphere();}
