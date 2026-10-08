@@ -147,7 +147,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       frameCount=generation;
       lastFrame={frameId,cameraIdentity:cameraSnapshot.identity,cameraGeneration:generation,width,height,
         environmentSource:environmentSource.uuid,environmentGeneration,
-        route:ROUTE,submittedByHost:true,presentedByHost:true,displayTransform:'host-render-pipeline',
+        route:ROUTE,opticalDebugMode,submittedByHost:true,presentedByHost:true,displayTransform:'host-render-pipeline',
         simulationTimePolicy:'one-fixed-1/60-step-per-rendered-frame',simulationRewind:false,
         helperGroundPresentation:{policy:'retained-basin-suppresses-editor-helper',effectiveVisible:helperGround?.visible??null}};
     } catch(error) { failure=error.message || String(error); throw error; }

@@ -1,4 +1,4 @@
-import { localLiquidOpticalQueryControls } from './local-liquid-optical-query.mjs';
+import { localLiquidOpticalQueryControls, localLiquidHostOpticalInputs, LOCAL_LIQUID_HOST_OPTICAL_QUERY_ROUTE } from './local-liquid-optical-query.mjs';
 import { canPreserveLiquidReleaseEpoch, LIVE_LIQUID_INLET_FLOATS } from './local-liquid-inlet-continuity.mjs';
 export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';
@@ -16409,18 +16409,18 @@ export async function createWebGPUFingerFluidSolver({
         opticalQueryEvidence: {
           schema: KAMINOS_FINGER_FLUID_OPTICAL_QUERY_SCHEMA,
           requestedRoute: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
-          effectiveRoute: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
-          route: KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
-          deferredTraversalRoute: KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE,
-          worldProviderRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
+          effectiveRoute: lastHostFrameCompositionEvidence ? LOCAL_LIQUID_HOST_OPTICAL_QUERY_ROUTE : KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
+          route: lastHostFrameCompositionEvidence ? LOCAL_LIQUID_HOST_OPTICAL_QUERY_ROUTE : KAMINOS_FINGER_FLUID_HYBRID_OPTICAL_QUERY_ROUTE,
+          deferredTraversalRoute: lastHostFrameCompositionEvidence ? LOCAL_LIQUID_HOST_OPTICAL_QUERY_ROUTE : KAMINOS_FINGER_FLUID_DEFERRED_RAY_TRAVERSAL_ROUTE,
+          worldProviderRoute: lastHostFrameCompositionEvidence ? null : KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
           environmentRoute: KAMINOS_FINGER_FLUID_HDR_ENVIRONMENT_ROUTE,
-          resolverOrder: KAMINOS_FINGER_FLUID_OPTICAL_QUERY_RESOLVER_ORDER,
+          resolverOrder: lastHostFrameCompositionEvidence ? ['host_camera_scene','hdr_environment'] : KAMINOS_FINGER_FLUID_OPTICAL_QUERY_RESOLVER_ORDER,
           fallbackReason: null,
           queryFrameId: lastOpticalQueryFrameId,
           compositePassCount: hybridOpticalQueryCompositePassCount,
           maximumDeferredMarchSteps: 24,
           minimumDeferredConfidence: 0.55,
-          deferredInputs: configuredExtent ? {
+          deferredInputs: lastHostFrameCompositionEvidence ? localLiquidHostOpticalInputs(lastHostFrameCompositionEvidence,configuredExtent) : configuredExtent ? {
             linearDepthObject: { label: 'kaminos-finger-fluid-deferred-linear-depth-object', format: 'rgba16float', extent: configuredExtent },
             worldNormalRoughness: { label: 'kaminos-finger-fluid-deferred-world-normal-roughness', format: 'rgba16float', extent: configuredExtent },
             albedoMetallic: { label: 'kaminos-finger-fluid-deferred-albedo-metallic', format: 'rgba8unorm', extent: configuredExtent },
@@ -16434,9 +16434,9 @@ export async function createWebGPUFingerFluidSolver({
         worldSpaceReflectionEvidence: {
           schema: KAMINOS_FINGER_FLUID_REFLECTION_QUERY_SCHEMA,
           requestedProviderRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
-          effectiveProviderRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
-          providerRoute: KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
-          accelerationRoute: KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE,
+          effectiveProviderRoute: lastHostFrameCompositionEvidence ? LOCAL_LIQUID_HOST_OPTICAL_QUERY_ROUTE : KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
+          providerRoute: lastHostFrameCompositionEvidence ? LOCAL_LIQUID_HOST_OPTICAL_QUERY_ROUTE : KAMINOS_FINGER_FLUID_WORLD_SPACE_REFLECTION_ROUTE,
+          accelerationRoute: lastHostFrameCompositionEvidence ? 'host-camera-linear-depth-march-v1' : KAMINOS_FINGER_FLUID_REFLECTION_ACCELERATION_ROUTE,
           quadratureRoute: lastEffectiveOpticalFootprintMode === 'variance_filtered'
             ? KAMINOS_FINGER_FLUID_VARIANCE_FILTERED_REFLECTION_QUADRATURE_ROUTE
             : KAMINOS_FINGER_FLUID_REFLECTION_QUADRATURE_ROUTE,

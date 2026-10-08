@@ -7202,7 +7202,7 @@ document.getElementById('local-liquid-pause').addEventListener('click', () => wi
 
 // Witness access to the exact live GPU descriptor; no per-frame readback.
 window.kaminosLocalLiquidContactFrameForWitness = () => localLiquidHost?.contactFrame() ?? null;
-window.kaminosSetLocalLiquidOpticalDebugForWitness = value => localLiquidHost?.setOpticalDebugForWitness(value);
+window.kaminosSetLocalLiquidOpticalDebugForWitness = value => {const mode=localLiquidHost?.setOpticalDebugForWitness(value);if(mode)window._kaminosDirty?.();return mode;};
 window.kaminosSetLocalLiquidSupportVisibleForWitness = value => localLiquidHost?.setSupportVisibleForWitness(value);
 window.kaminosReadLocalLiquidBackgroundDepthForWitness = () => localLiquidHost?.readBackgroundDepthForWitness();
 window.kaminosLocalLiquidState = () => {
