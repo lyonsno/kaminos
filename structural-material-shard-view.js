@@ -6,11 +6,13 @@ import {createSolidResident,SOLID_RESIDENT_ROUTE} from './structural-material-so
 import {createPlaneFractureSurface} from './structural-material-solid-fragments.mjs';
 import {materialComponents} from './structural-material-solid-surface.mjs';
 import {bindComponentAffineField,applyComponentAffineField} from './structural-material-component-affine.mjs';
+import {bindComponentTransport,applyComponentTransport,COMPONENT_TRANSPORT_ROUTE} from './structural-material-component-transport.mjs';
 import {contactPatch,selectStressRelease} from './structural-material-stress-release.mjs';
 import {createShardGeometry} from './structural-material-shard-render.js';
 
 const $=id=>document.getElementById(id),route='kaminos.picked-stone.stress-shards.webgpu.v0',inputs=[],events=[],timings=[];
 const configuration={timeStep:1/60,iterations:12,lineSearchTrials:8,gravity:0,damping:.98,floor:-10,patchRadius:.28,stressRadius:.16,reconstructionRadius:.45,gripStiffness:200000};
+const affineComparison=new URLSearchParams(location.search).get('surface')==='affine';
 let device,resident,surface,body,manifest,arrays,observed,components,volumes,pieces=[],gesture=null,paused=false,busy=false,pendingPick=false,finishing=false,pickTask=null,gestureGeneration=0,failure=null,lastPick=null,latestSelection=null,frames=0;
 const scene=new THREE.Scene();scene.background=new THREE.Color('#111718');
 const camera=new THREE.PerspectiveCamera(36,innerWidth/innerHeight,.01,100);camera.position.set(2.3,1.25,3.6).multiplyScalar(Math.max(1,1.2/camera.aspect));
@@ -30,14 +32,17 @@ const fail=e=>{failure={message:e.message,stack:e.stack};$('failure').textConten
 const settle=async(includeInput=false)=>{while(busy||includeInput&&(pendingPick||finishing)){if(failure)throw new Error(failure.message);await new Promise(r=>setTimeout(r,5));}};
 function inside(piece,p){return piece.halfspaces.every(h=>h.side*(h.normal.reduce((s,v,k)=>s+v*Math.fround(p[k]),0)-h.offset)>=0);}
 function makeMeshes(){
- for(const p of pieces){scene.remove(p.mesh);p.mesh.geometry.dispose();}pieces=[];
- for(const piece of surface.witness().pieces){
+ const staged=[],current=positions(observed);
+ try{for(const piece of surface.witness().pieces){
   const nodes=body.positions.flatMap((p,i)=>inside(piece,p)?[i]:[]),membership=new Set(nodes.map(i=>components[i]));if(membership.size!==1)throw new Error('Visible piece must identify one surviving material component');const component=[...membership][0];
-  const g=piece.geometry,vertices=Array.from({length:g.properties.length/g.numProp},(_,i)=>g.properties.slice(i*g.numProp,i*g.numProp+3)),binding=bindComponentAffineField(body.positions,vertices,{components,component,volumes,radius:configuration.reconstructionRadius});
-  const geometry=createShardGeometry(g),mesh=new THREE.Mesh(geometry,[skinMaterial,capMaterial]);mesh.userData.pieceId=piece.id;scene.add(mesh);pieces.push({...piece,nodes,component,binding,mesh});
- }
+  const g=piece.geometry,vertices=Array.from({length:g.properties.length/g.numProp},(_,i)=>g.properties.slice(i*g.numProp,i*g.numProp+3)),binding=(affineComparison?bindComponentAffineField:bindComponentTransport)(body.positions,vertices,{components,component,volumes,radius:configuration.reconstructionRadius});
+  const geometry=createShardGeometry(g),mesh=new THREE.Mesh(geometry,[skinMaterial,capMaterial]);mesh.userData.pieceId=piece.id;const candidate={...piece,nodes,component,binding,mesh};staged.push(candidate);deformPiece(candidate,current);
+ }}catch(error){for(const p of staged)p.mesh.geometry.dispose();throw error;}
+ // No asynchronous boundary or rest-pose mesh is exposed during replacement.
+ for(const p of pieces){scene.remove(p.mesh);p.mesh.geometry.dispose();}pieces=staged;for(const p of pieces)scene.add(p.mesh);
 }
-function present(){if(!observed)return;const current=positions(observed);for(const p of pieces){const deformed=applyComponentAffineField(p.binding,current,{components});const a=p.mesh.geometry.attributes.position;for(let i=0;i<p.geometry.indices.length;i++)a.setXYZ(i,...deformed[p.geometry.indices[i]]);a.needsUpdate=true;p.mesh.geometry.computeVertexNormals();p.mesh.geometry.computeBoundingSphere();}
+function deformPiece(p,current){const deformed=(p.binding.route===COMPONENT_TRANSPORT_ROUTE?applyComponentTransport:applyComponentAffineField)(p.binding,current,{components});const a=p.mesh.geometry.attributes.position;for(let i=0;i<p.geometry.indices.length;i++)a.setXYZ(i,...deformed[p.geometry.indices[i]]);a.needsUpdate=true;p.mesh.geometry.computeVertexNormals();p.mesh.geometry.computeBoundingSphere();p.mesh.geometry.computeBoundingBox();}
+function present(){if(!observed)return;const current=positions(observed);for(const p of pieces)deformPiece(p,current);
  $('stats').textContent=`${pieces.length} pieces | ${observed.bonds.filter((v,i)=>i%4===2&&v===0).length} released bonds | step ${observed.steps}`;
 }
 async function loadVerified(url,expected){const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error(`Input ${url}: HTTP ${r.status}`);const bytes=await r.arrayBuffer(),digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(v=>v.toString(16).padStart(2,'0')).join('');if(expected&&digest!==expected)throw new Error(`Input drift: ${url}`);return bytes;}

@@ -1,5 +1,6 @@
 import {materialComponents} from './structural-material-solid-surface.mjs';
 import {applyComponentAffineField} from './structural-material-component-affine.mjs';
+import {applyComponentTransport,COMPONENT_TRANSPORT_ROUTE} from './structural-material-component-transport.mjs';
 export function inspectShardWitness(w,{model=w?.state?.model}={}){
  const errors=[];if(w?.route!=='kaminos.picked-stone.stress-shards.webgpu.v0'||w.phase!=='interactive'||w.failure)return['Live picked-stone route failed or substituted'];
  if(w.identity?.backend!=='webgpu'||w.identity.adapterFallback!==false)errors.push('Native GPU material authority absent');
@@ -17,7 +18,8 @@ export function inspectShardWitness(w,{model=w?.state?.model}={}){
   for(const piece of w.pieces??[]){
    if(!piece.nodes?.length||piece.nodes.some(i=>components[i]!==piece.component)||!(piece.volume>0)||piece.binding.component!==piece.component)throw new Error('Piece has foreign or absent material ownership');
    const g=piece.geometry;if(!Number.isInteger(g?.numProp)||g.numProp<12||!Array.isArray(g.properties)||!g.properties.length||g.properties.length%g.numProp||!g.properties.every(Number.isFinite)||!Array.isArray(g.indices)||!g.indices.length||g.indices.length%3||!g.indices.every(i=>Number.isInteger(i)&&i>=0&&i<g.properties.length/g.numProp)||!Array.isArray(g.exterior)||g.exterior.length!==g.indices.length/3||!g.exterior.every(v=>typeof v==='boolean')||!Array.isArray(piece.binding.entries)||piece.binding.entries.length!==g.properties.length/g.numProp)throw new Error('Complete nonempty fragment geometry and reconstruction required');
-   const values=applyComponentAffineField(piece.binding,current,{components}),expected=piece.geometry.indices.flatMap(i=>values[i]);
+   if(piece.binding.route===COMPONENT_TRANSPORT_ROUTE){if(piece.binding.frame.ids.length!==piece.nodes.length||piece.binding.frame.ids.some((id,i)=>!piece.nodes.includes(id)||piece.binding.frame.rest[i].some((x,k)=>Math.abs(x-w.state.state[id*16+k])>1e-6))||piece.binding.entries.some((e,i)=>e.point.some((x,k)=>x!==g.properties[i*g.numProp+k])))throw new Error('Transport correspondence differs from actual rest material or surface');}
+   const values=(piece.binding.route===COMPONENT_TRANSPORT_ROUTE?applyComponentTransport:applyComponentAffineField)(piece.binding,current,{components}),expected=piece.geometry.indices.flatMap(i=>values[i]);
    if(!Array.isArray(piece.renderedPositions)||expected.length!==piece.renderedPositions.length||!piece.renderedPositions.every((v,i)=>Number.isFinite(v)&&Math.abs(v-expected[i])<=2e-6))throw new Error('Rendered skin differs from current material field');
   }
   for(const event of w.events??[])if(event.material.runId!==w.runId||event.kind!=='component-tensile-through-cut-v0'||!(event.tension>=event.threshold)||!event.targetNodes?.length)throw new Error('Fracture event lacks measured criterion or component provenance');
