@@ -13310,8 +13310,19 @@ async function sampleFingerFluidPyroComposition() {
 async function requestFingerFluidBenchDiagnostics(options={}) {
   if (!fingerFluidBenchSolver?.available) return null;
   const diagnostics = await fingerFluidBenchSolver.requestDiagnostics(options);
-  if (fingerFluidBenchRunning) updateFingerFluidBenchReadout();
   const runtime = fingerFluidBenchSolver.getDebugState();
+  if(fingerFluidBenchState){
+    const controls=runtime.livePressureControls;
+    fingerFluidBenchState.runtime={...fingerFluidBenchState.runtime,...runtime,
+      effectivePressureIterations:runtime.densityIterationsPerStep,
+      ...(controls?.available?{
+        requestedPressureIterations:controls.requested.densityIterations,
+        requestedCapillaryStrength:controls.requested.capillaryStrength,
+        effectiveCapillaryStrength:runtime.capillaryStrength,
+      }:{}),
+    };
+  }
+  if (fingerFluidBenchRunning) updateFingerFluidBenchReadout();
   return {
     diagnosticsStepCount: diagnostics?.stepCount ?? null,
     diagnosticsRequestCount: runtime.diagnosticsRequestCount,
