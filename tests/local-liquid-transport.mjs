@@ -62,3 +62,26 @@ test('host shaded reflection and hit diagnostics share one origin rule',()=>{
  assert.match(s,/let rayOrigin = reflectionQueryOrigin\(worldPosition, worldNormal\)/);
  assert.match(s,/reflectionHit = sampleHybridOpticalQuery\(reflectionQueryOrigin\(worldPosition, worldNormal\), reflectionDirection\)/);
 });
+test('accepted f32 camera matrices yield finite liquid rays even when the far endpoint is at infinity',async()=>{
+ const {PerspectiveCamera,OrthographicCamera,WebGPUCoordinateSystem}=await import('../lib/three.core.js');
+ const {validateFingerFluidExternalCamera}=await import('../finger-fluid-webgpu-core.js');
+ const {LOCAL_LIQUID_TRANSPORT_WGSL,liquidCameraRayFromEndpoints}=await load();
+ const body=LOCAL_LIQUID_TRANSPORT_WGSL.slice(LOCAL_LIQUID_TRANSPORT_WGSL.indexOf('fn liquidCameraDirection('),LOCAL_LIQUID_TRANSPORT_WGSL.indexOf('fn liquidDepthPoint('));
+ const depths=[...body.matchAll(/inverseViewProjection \* vec4<f32>\(ndc, ([0-9.]+), 1\.0\)/g)].map(m=>Number(m[1]));
+ assert.equal(depths.length,2,'evaluate the actual two clip depths used by the WGSL camera helper');
+ const mul=(matrix,v)=>Array.from({length:4},(_,row)=>v.reduce((sum,x,col)=>Math.fround(sum+Math.fround(matrix[col*4+row]*x)),0));
+ for(const far of [100,1e8])for(const orthographic of [false,true]){
+  const camera=orthographic?new OrthographicCamera(-2,2,1.5,-1.5,.1,far):new PerspectiveCamera(60,4/3,.1,far);
+  camera.coordinateSystem=WebGPUCoordinateSystem;camera.updateProjectionMatrix();camera.updateMatrixWorld();
+  const view=camera.matrixWorldInverse.elements,projection=camera.projectionMatrix.elements;
+  const validated=validateFingerFluidExternalCamera({schema:'kaminos.finger-fluid.external-camera.v0',identity:'liquid-camera-regression',generation:0,projectionType:orthographic?'orthographic':'perspective',view,projection,viewProjection:projection,inverseViewProjection:camera.projectionMatrixInverse.elements,position:[0,0,0],right:[1,0,0],up:[0,1,0],forward:[0,0,-1],near:.1,far,viewport:{width:640,height:480}},{width:640,height:480});
+  if(!orthographic&&far===1e8)assert.equal(mul(validated.inverseViewProjection,[0,0,1,1])[3],0,'regression really has an infinite f32 far endpoint');
+  for(const [x,y] of [[0,0],[.5,-.25]]){
+   const endpoints=depths.map(z=>{const h=mul(validated.inverseViewProjection,[x,y,z,1]);return h.slice(0,3).map(value=>Math.fround(value/h[3]));});
+   assert.ok(endpoints.flat().every(Number.isFinite),'accepted camera must yield finite endpoints in the actual WGSL construction');
+   const ray=liquidCameraRayFromEndpoints(...endpoints);
+   const expected=orthographic?[0,0,-1]:[x/projection[0],y/projection[5],-1];const length=Math.hypot(...expected);
+   for(let i=0;i<3;i++)assert.ok(Math.abs(ray[i]-expected[i]/length)<1e-6);
+  }
+ }
+});
