@@ -103,12 +103,22 @@ export async function createSolidResident(device,descriptor,arrays,{onProgress=(
  for(let i=0;i<n;i++)if(arrays.incidence[i]>arrays.incidence[i+1])throw new Error('Monotone resident incidence offsets required');
  for(let i=n+1;i<colorBase;i+=2)if(arrays.incidence[i]>=count||arrays.incidence[i+1]>=(descriptor.kind==='graph'?4:2))throw new Error('Resident incident element out of range');
   if(descriptor.kind==='graph')for(let i=0;i<count;i++)for(let k=0;k<6;k++)if(arrays.elementBonds[i*8+k]>=bondCount)throw new Error('Resident graph edge out of range');
+ if(descriptor.kind==='graph'){
+  const pairs=[[0,1],[0,2],[0,3],[1,2],[1,3],[2,3]];
+  for(let element=0;element<count;element++)for(let edge=0;edge<6;edge++){
+   const [a,b]=pairs[edge].map(local=>arrays.elements[element*4+local]),index=arrays.elementBonds[element*8+edge],x=arrays.bonds[index*4],y=arrays.bonds[index*4+1];
+   if(Math.min(a,b)!==Math.min(x,y)||Math.max(a,b)!==Math.max(x,y))throw new Error('Resident constitutive edge disagrees with controlled bond endpoints');
+  }
+ }else{
+  if(count!==bondCount)throw new Error('Resident constitutive bond and element counts must agree');
+  for(let i=0;i<count;i++)if(arrays.elements[i*4]!==arrays.bonds[i*4]||arrays.elements[i*4+1]!==arrays.bonds[i*4+1])throw new Error('Resident constitutive bond disagrees with its material element');
+ }
  const expectedIncidence=Array.from({length:n},()=>new Set());
  for(let i=0;i<count;i++){const members=Array.from(arrays.elements.slice(i*4,i*4+(descriptor.kind==='graph'?4:2)));if(new Set(members).size!==members.length||new Set(members.map(node=>arrays.state[node*16+7])).size!==members.length)throw new Error('Conflicting material update colors');members.forEach((node,local)=>expectedIncidence[node].add(`${i}:${local}`));}
  if(arrays.incidence[0]!==0)throw new Error('Resident incidence must start at zero');
  for(let node=0;node<n;node++){const actual=new Set();for(let i=arrays.incidence[node];i<arrays.incidence[node+1];i++)actual.add(`${arrays.incidence[n+1+i*2]}:${arrays.incidence[n+2+i*2]}`);if(actual.size!==arrays.incidence[node+1]-arrays.incidence[node]||actual.size!==expectedIncidence[node].size||[...actual].some(key=>!expectedIncidence[node].has(key)))throw new Error('Complete correctly owned material incidence required');}
  const owned=[],buffers={},allocate=(name,size,usage)=>{if(size>device.limits.maxStorageBufferBindingSize)throw new Error(`Resident ${name} exceeds effective storage capacity`);const b=device.createBuffer({label:`Material ${name}`,size,usage});owned.push(b);return b;};
- let settings={timeStep:Math.fround(1/60),gravity:0,damping:1,floor:Math.fround(-1e20),lineSearchTrials:8,iterations:0},grip=null,steps=0,damageEpoch=0,operations=Promise.resolve(),failure=null;
+ const runId=crypto.randomUUID();let settings={timeStep:Math.fround(1/60),gravity:0,damping:1,floor:Math.fround(-1e20),lineSearchTrials:8,iterations:0},grip=null,steps=0,damageEpoch=0,operations=Promise.resolve(),failure=null;
  const valid=(condition,message)=>{if(!condition)throw Object.assign(new Error(message),{code:'material-command-invalid'});};
  const serial=fn=>{const run=operations.then(()=>{if(failure)throw new Error(failure);return fn();});operations=run.catch(error=>{if(error.code!=='material-command-invalid')failure=error.message;});return run;};
  try{
@@ -125,7 +135,7 @@ export async function createSolidResident(device,descriptor,arrays,{onProgress=(
   const dispatch=(encoder,name,color=0,count=n)=>{const pass=encoder.beginComputePass();pass.setPipeline(pipelines[name]);pass.setBindGroup(0,groups[color]);pass.dispatchWorkgroups(Math.ceil(count/64));pass.end();};
   async function readNow(){configure();const encoder=device.createCommandEncoder();dispatch(encoder,'diagnose');const names=['state','bonds','diagnostics'],readbacks=names.map(name=>allocate(`readback ${name}`,buffers[name].size,GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ));
    names.forEach((name,i)=>encoder.copyBufferToBuffer(buffers[name],0,readbacks[i],0,buffers[name].size));device.queue.submit([encoder.finish()]);
-   try{onProgress('readback-await');await Promise.all(readbacks.map(b=>b.mapAsync(GPUMapMode.READ)));const state=Array.from(new Float32Array(readbacks[0].getMappedRange())),bonds=Array.from(new Uint32Array(readbacks[1].getMappedRange())),diagnostics=Array.from(new Float32Array(readbacks[2].getMappedRange()));onProgress('readback-complete');return{route:SOLID_RESIDENT_ROUTE,kind:descriptor.kind,steps,damageEpoch,settings:{...settings},grip:grip&&structuredClone(grip),state,bonds,diagnostics,claim:'Resident colored local-energy dynamics; explicit plane damage command and point-floor contact are provisional, not stress-generated shards'};}finally{for(const b of readbacks){b.destroy();owned.splice(owned.indexOf(b),1);}}
+   try{onProgress('readback-await');await Promise.all(readbacks.map(b=>b.mapAsync(GPUMapMode.READ)));const state=Array.from(new Float32Array(readbacks[0].getMappedRange())),bonds=Array.from(new Uint32Array(readbacks[1].getMappedRange())),diagnostics=Array.from(new Float32Array(readbacks[2].getMappedRange()));onProgress('readback-complete');return{route:SOLID_RESIDENT_ROUTE,runId,kind:descriptor.kind,steps,damageEpoch,settings:{...settings},grip:grip&&structuredClone(grip),state,bonds,diagnostics,claim:'Resident colored local-energy dynamics; explicit plane damage command and point-floor contact are provisional, not stress-generated shards'};}finally{for(const b of readbacks){b.destroy();owned.splice(owned.indexOf(b),1);}}
   }
   return{route:SOLID_RESIDENT_ROUTE,
    pin(indices){return serial(()=>{valid(Array.isArray(indices)&&indices.every(i=>Number.isInteger(i)&&i>=0&&i<n),'Valid support point indices required');for(const index of indices)device.queue.writeBuffer(buffers.state,(index*16+11)*4,new Float32Array([1]));});},
