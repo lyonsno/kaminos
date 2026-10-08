@@ -318,7 +318,7 @@ async function runSnapGroundLevelScenario(ws) {
       const undoLeveling = document.getElementById('tb-undo-leveling');
       if (undoLeveling && !undoLeveling.hidden) { undoLeveling.click(); await frames(); }
       const before = { pose: record().transform, resting: window.kaminosRestingPlaneDebugState(id) };
-      const button = [...document.querySelectorAll('#transform-bar button')].find(item => item.textContent.trim() === 'Snap Ground');
+      const button = [...document.querySelectorAll('.tb-btn')].find(item => item.textContent.trim() === 'Snap Ground');
       if (!button) throw new Error('Snap Ground button missing');
       button.click();
       await frames();
@@ -358,7 +358,7 @@ async function runToolbarRotateLiveScenario(ws) {
   const before = await evaluate(ws, record);
   const beforePath = out.replace(/\.png$/i, '-before-rot.png');
   await capturePngScreenshot(ws, beforePath);
-  await evaluate(ws, `(() => { const button = [...document.querySelectorAll('#transform-bar button')].find(item => item.textContent.trim() === 'Rot X'); if (!button) throw new Error('Rot X button missing'); button.click(); })()`);
+  await evaluate(ws, `(() => { const button = [...document.querySelectorAll('.tb-btn')].find(item => item.textContent.trim() === 'Rot X'); if (!button) throw new Error('Rot X button missing'); button.click(); })()`);
   await delay(600);
   const after = await evaluate(ws, record);
   const afterPath = out.replace(/\.png$/i, '-after-rot.png');
@@ -415,7 +415,7 @@ async function runArrivalAutoLevelScenario(ws) {
     const pose = window.kaminosSceneObjectDebugState().find(item => item.id === id).transform;
     window.kaminosSetSceneObjectTransform(id, { ...pose, rotation: [pose.rotation[0] + 5 * Math.PI / 180, pose.rotation[1], pose.rotation[2]] });
     await ${frames};
-    [...document.querySelectorAll('#transform-bar button')].find(item => item.textContent.trim() === 'Snap Ground').click();
+    [...document.querySelectorAll('.tb-btn')].find(item => item.textContent.trim() === 'Snap Ground').click();
     await ${frames};
     const afterSnap = ${state};
     ${undoKey}; await ${frames};
@@ -490,7 +490,7 @@ async function runExportAndSaveAsNamesScenario(ws) {
     ${name === null ? "dialog.querySelector('input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));" : "dialog.querySelector('input').value = " + JSON.stringify(name) + "; dialog.querySelector('[data-file-name-confirm]').click();"}
     return seen;
   })()`;
-  const click = label => `(() => { const button = [...document.querySelectorAll('#transform-bar button')].find(item => item.textContent.trim() === ${JSON.stringify(label)}); if (!button) throw new Error(${JSON.stringify(label)} + ' button missing'); button.click(); })()`;
+  const click = label => `(() => { const button = [...document.querySelectorAll('.tb-btn')].find(item => item.textContent.trim() === ${JSON.stringify(label)}); if (!button) throw new Error(${JSON.stringify(label)} + ' button missing'); button.click(); })()`;
   const waitFile = async name => { for (let i = 0; i < 120; i++) { const path = resolve(downloads, name); if (existsSync(path) && readFileSync(path).length > 20) { await delay(200); return path; } await delay(125); } throw new Error('export never arrived: ' + name); };
 
   const scenesAtStart = new Set(await evaluate(ws, `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`));
@@ -564,7 +564,7 @@ async function runLoadPickerScenario(ws) {
       const saved = await window.saveSceneAs({ name: ${JSON.stringify(name)}, result: true });
       document.getElementById('info-bar').textContent = '';
       if (!saved?.ok) throw new Error('named save failed: ' + JSON.stringify(saved));
-      [...document.querySelectorAll('#transform-bar button, .tb-btn')].find(item => item.textContent.trim() === 'Load').click();
+      [...document.querySelectorAll('.tb-btn')].find(item => item.textContent.trim() === 'Load').click();
       let picker = null;
       for (let i = 0; i < 80 && !picker; i++) { picker = document.querySelector('.scene-load-picker'); if (!picker) await wait(50); }
       if (!picker) throw new Error('Load did not open the saved-scene list');

@@ -12345,11 +12345,17 @@ function sceneObjectWorldPoints(object) {
   return sceneObjectWorldGeometry(object).points;
 }
 
+// The Workbench transform toolbar floats over the top of the canvas; in
+// Authoring it lives in the inspector. Only a toolbar actually overlapping the
+// canvas's top half shrinks the framing window.
 function viewportOverlayTopNdc() {
   const canvasRect = renderer.domElement.getBoundingClientRect();
   const bar = document.getElementById('transform-bar');
   const barRect = bar?.classList.contains('visible') ? bar.getBoundingClientRect() : null;
-  if (!barRect || !(canvasRect.height > 0)) return 1;
+  if (!barRect || !(canvasRect.height > 0) || !(barRect.width > 0 && barRect.height > 0)) return 1;
+  const overlaps = barRect.left < canvasRect.right && barRect.right > canvasRect.left
+    && barRect.bottom > canvasRect.top && barRect.top < canvasRect.top + canvasRect.height / 2;
+  if (!overlaps) return 1;
   return 1 - 2 * Math.max(0, barRect.bottom - canvasRect.top) / canvasRect.height;
 }
 
