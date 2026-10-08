@@ -210,7 +210,11 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
   const outputs = {};
   const phaseResults = [];
   const schedulerInvocation = options.schedulerInvocation || null;
-  for (const phase of program.phases) {
+  const inferenceControl = options.inferenceControl ?? null;
+  if (inferenceControl != null && typeof inferenceControl.runDuty !== 'function') {
+    throw new TypeError('inferenceControl must expose runDuty');
+  }
+  async function runPhase(phase) {
     if (phase.kind === 'kernel') {
       const commandBuffer = await runtime.runKernel(phase.kernel, {
         stage: phase.name,
@@ -228,7 +232,7 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
         },
       });
       phaseResults.push({ name: phase.name, kind: phase.kind, commandBuffer });
-      continue;
+      return;
     }
 
     if (phase.kind === 'readback') {
@@ -250,10 +254,14 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
       });
       Object.assign(outputs, phaseOutputs);
       phaseResults.push({ name: phase.name, kind: phase.kind, outputs: Object.keys(phaseOutputs) });
-      continue;
+      return;
     }
 
     throw new Error(`unsupported phase kind ${phase.kind}`);
+  }
+  for (const phase of program.phases) {
+    if (inferenceControl) await inferenceControl.runDuty(() => runPhase(phase));
+    else await runPhase(phase);
   }
 
   return {
