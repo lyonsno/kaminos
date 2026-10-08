@@ -3,7 +3,7 @@ import { withLocalLiquidDepthBackground, readLocalLiquidDepthFrame } from './loc
 import * as THREE from './lib/three.webgpu.js';
 import { texture, vec4, positionView, pmremTexture, equirectDirection, uv, uniform } from './lib/three.tsl.js';
 import {
-  createWebGPUFingerFluidSolver, sampleFingerFluidPlaygroundHeight, fingerFluidAnalyticalSupportGeometry,
+  createWebGPUFingerFluidSolver, sampleFingerFluidPlaygroundHeight, fingerFluidAnalyticalSupportGeometry, resolveFingerFluidOpticalDebugMode,
   KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE as SUPPORT,
   KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_ROUTE as ROUTE,
   KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_SCHEMA as FRAME_SCHEMA,
@@ -70,6 +70,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   pipeline.outputColorTransform=false; pipeline.needsUpdate=true;
   const environmentRotation=uniform(new THREE.Matrix3()), environmentIntensity=uniform(1);
   let environmentTarget=null, environmentQuad=null, environmentSource=null, environmentKey=null, environmentGeneration=0;
+  let opticalDebugMode='shaded';
   let frameCount=0, paused=false, failure=null, lastFrame=null, lastDepthFrame=null, disposed=false;
   const onGpuError=event=>{failure=event.error?.message || 'Host WebGPU error';};
   device.addEventListener('uncapturederror',onGpuError);
@@ -140,7 +141,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         sceneDepth:attachment('host-depth',depthTarget,{format:'r32float',encoding:'linear_view_depth_meters'}),
         environment:attachment('host-environment',environmentTarget,{format:'rgba16float',mapping:'equirectangular_world_radiance'}),
         target:attachment('host-liquid-output',outputTarget,{format:'rgba16float',colorSpace:'linear_hdr'})};
-      solver.render({hostFrame,externalCamera:cameraSnapshot});
+      solver.render({hostFrame,externalCamera:cameraSnapshot,opticalDebugMode});
       device.queue.submit([commandEncoder.finish()]);
       renderer.setRenderTarget(previousTarget); presentation.render();
       frameCount=generation;
@@ -158,6 +159,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   }
 
   const host = {group,render,
+    setOpticalDebugForWitness(value) {opticalDebugMode=resolveFingerFluidOpticalDebugMode(value);return opticalDebugMode;},
     setSupportVisibleForWitness(value) {group.visible=Boolean(value);},
     async readBackgroundDepthForWitness() {
       if(disposed || failure)throw Error('Local liquid depth draw is unavailable');
