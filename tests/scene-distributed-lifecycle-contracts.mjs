@@ -7,12 +7,12 @@ import {prepareSceneSourceFrame} from '../scene-volume-source.mjs';
 globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,UNIFORM:4,COPY_SRC:8};
 globalThis.GPUTextureUsage={STORAGE_BINDING:1,TEXTURE_BINDING:2,COPY_SRC:4};
 function fixture(castShadow=true) {
-  const uploads=[],passes=[],copies=[],buffers=[];
+  const uploads=[],passes=[],copies=[],buffers=[],pipelines=[],writes=[];
   const pipeline={getBindGroupLayout(){return {};}};
   const device={limits:{maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024,maxTextureDimension3D:256,maxComputeWorkgroupsPerDimension:65535},
-    queue:{writeBuffer(buffer,offset,data){if(buffer.label==='surface and smoke receivers')uploads.push(new Float32Array(data));},submit(){}},
+    queue:{writeBuffer(buffer,offset,data){writes.push({label:buffer.label,values:Array.from(data)});if(buffer.label==='surface and smoke receivers')uploads.push(new Float32Array(data));},submit(){}},
     createBuffer({label,usage}){const b={label,usage,destroy(){}};buffers.push(b);return b;},createTexture(){return {createView(){return {};},destroy(){}};},
-    createShaderModule(){return {};},createComputePipeline(){return pipeline;},createBindGroup(){return {};},
+    createShaderModule(){return {};},createComputePipeline(spec){pipelines.push(spec);return pipeline;},createBindGroup(){return {};},
     createCommandEncoder(){return {copyBufferToBuffer(...args){copies.push(args);},beginComputePass({label}){passes.push(label);return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
   let consume;
   const prototype={setSceneMediumSource(){},setSceneSourceFrameConsumer(fn){consume=fn;},setSceneDistributedLightFrame(){}};
@@ -28,9 +28,31 @@ function fixture(castShadow=true) {
   const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,getSourceGuide:()=>emitter,onStatus:s=>statuses.push(s)});
   const field={source:{status:'encoded',texture:{createView(){return {}; }},localMax:[1,3,1],dimensions:[32,64,32],generation:1,frame:1}};
   prototype.sceneVolumeSourceField=()=>field.source;
-  return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,buffers,field,emitter,prepare(){consume(field);}};
+  return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,buffers,pipelines,writes,field,emitter,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='live-guide'){
+ const f=fixture();f.mount.setAngularPattern('guided');f.mount.setDirections(8);f.prepare();
+ const resources=[f.buffers.length,f.pipelines.length];
+ f.mount.setEditing('radius-drag',true);
+ for(const radius of [.20,.21,.19]){
+  const prepared=f.mount.debugState().frame.angularCache.preparedRayDirections;
+  f.emitter.radius=radius;f.prepare();
+  assert.deepEqual([f.buffers.length,f.pipelines.length],resources,'live guide changes must reuse buffers and pipelines');
+  assert.equal(f.mount.debugState().frame.angularCache.preparedRayDirections,prepared+8,'changed rays need fresh solid intersections');
+ }
+ f.mount.setEditing('radius-drag',false);
+ const unchanged=f.mount.debugState().frame.angularCache.preparedRayDirections;f.prepare();
+ assert.equal(f.mount.debugState().frame.angularCache.preparedRayDirections,unchanged);
+ f.mount.setDirections(12);f.prepare();assert.equal(f.mount.debugState().frame.angularCache.lastPreparedDirections,4);
+ const grownResources=[f.buffers.length,f.pipelines.length],before=f.mount.debugState().frame.angularCache.preparedRayDirections;
+ f.emitter.radius=.22;f.prepare();
+ assert.deepEqual([f.buffers.length,f.pipelines.length],grownResources,'grown prefix pipeline must also support full refresh');
+ assert.equal(f.mount.debugState().frame.angularCache.preparedRayDirections,before+12);
+ assert.deepEqual(f.writes.filter(w=>w.label==='visibility refresh range').at(-1).values,[0,12,0,0],'old compile-time prefix must not skip refreshed rays');
+ assert.equal(f.mount.debugState().geometryBuilds,1);assert.equal(f.mount.debugState().visibilityBuilds,1);
+ f.mount.dispose();
+}
 if(!selected||selected==='initial-coarse-frame'){
  const f=fixture();f.mount.setReceiverSpacing(.16);f.mount.setDirections(8);f.mount.setAngularPattern('guided');
  let hostDrawn=false,volumeEncoderCreated=false;

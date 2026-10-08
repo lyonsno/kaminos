@@ -25,9 +25,10 @@ export function installGatherProfiler(device){
   for(const command of list){const row=pending.get(command);if(!row)continue;pending.delete(command);
    row.mapped.mapAsync(GPUMapMode.READ).then(()=>{
     const times=Array.from(new BigUint64Array(row.mapped.getMappedRange())).slice(0,row.slots);
-    if(times.some((t,i)=>t===0n||(i&&t<times[i-1])))throw Error('missing/nonmonotonic lighting timestamps');
-    row.request.records.push({rawNanoseconds:times.map(String),totalMs:Number(times.at(-1)-times[0])/1e6,
-      passes:row.labels.map((label,i)=>({label,ms:Number(times[2*i+1]-times[2*i])/1e6}))});
+    const valid=!times.some((t,i)=>t===0n||(i&&t<times[i-1]));
+    row.request.records.push({valid,rawNanoseconds:times.map(String),totalMs:valid?Number(times.at(-1)-times[0])/1e6:null,
+      passes:row.labels.map((label,i)=>({label,ms:valid?Number(times[2*i+1]-times[2*i])/1e6:null}))});
+    if(!valid)throw Error('missing/nonmonotonic lighting timestamps');
    }).catch(e=>row.request.errors.push(String(e))).finally(()=>{row.mapped.destroy();row.resolved.destroy();row.query.destroy();});
   }
  };
