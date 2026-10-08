@@ -7,9 +7,10 @@ import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFl
   flameDomainTranslationForPose, normalizeFlameDomainTranslation, flamePoseInDomain } from './scene-flame-emitter.mjs';
 import { LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';
 import {normalizeCameraViews} from './scene-camera-views.mjs';
+import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,normalizeSceneCamera} from './scene-camera.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 7;
+export const SCENE_VERSION = 8;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -18,6 +19,7 @@ function cloneJson(value) {
 
 function normalizeSceneObjectRecord(record) {
   if (!record || typeof record !== 'object') throw new Error('Scene object record must be an object');
+  if(record.type===CAMERA_TYPE)record=checkedCameraRecord(record);
   if(record.type==='light')record=checkedSceneLightRecord(record);
   const id = String(record.id || record.fileName || record.source || 'object');
   if (record.type === FLAME_EMITTER_TYPE && (id !== FLAME_EMITTER_ID || record.source !== FLAME_EMITTER_SOURCE)) {
@@ -26,6 +28,7 @@ function normalizeSceneObjectRecord(record) {
   if (record.type === BURNER_BED_TYPE || record.type==='burner-bed' || record.type===PROCEDURAL_MESH_TYPE) record=checkedProceduralMesh(record);
   return {
     id,
+    ...(record.type===CAMERA_TYPE?{camera:cloneJson(record.camera)}:{}),
     ...(record.type==='light'?{light:cloneJson(record.light)}:{}),
     ...(record.type === PROCEDURAL_MESH_TYPE ? {geometry:cloneJson(record.geometry),surface:cloneJson(record.surface)} : {}),
     source: record.source ?? null,
@@ -123,6 +126,7 @@ export function sceneDocumentIsLoadable(data) {
 }
 
 export function isReloadableSceneObjectRecord(record) {
+  if(record?.type===CAMERA_TYPE&&record.source===CAMERA_SOURCE){try{checkedCameraRecord(record);return true;}catch{return false;}}
   if(record?.type==='light' && record.source==='kaminos:scene-spot-light'){try{if(record.light?.kind!=='spot')return false;checkedSceneLightRecord(record);return true;}catch{return false;}}
   if(record?.type===PROCEDURAL_MESH_TYPE && record.source===PROCEDURAL_MESH_SOURCE){try{checkedProceduralMesh(record);return true;}catch{return false;}}
 
@@ -164,6 +168,8 @@ export function planSceneRestore(data) {
   return {
     schema: data.schema || null,
     cameraViews: normalizeCameraViews(data.cameraViews),
+    sceneCamera:normalizeSceneCamera(data.sceneCamera,objects),
+    viewport:cloneJson(data.viewport??null),
     version: data.version,
     objects,
     groups,
@@ -193,6 +199,8 @@ export function buildSceneDocument({
   capture = null,
   camera = null,
   cameraViews = null,
+  sceneCamera = null,
+  viewport = null,
   environment = null,
   postprocessing = null,
   backdrop = false,
@@ -238,6 +246,8 @@ export function buildSceneDocument({
     transform: cloneJson(activeObject?.transform ?? null),
     camera: cloneJson(camera),
     cameraViews: normalizeCameraViews(cameraViews),
+    sceneCamera:normalizeSceneCamera(sceneCamera,sceneObjects),
+    viewport:cloneJson(viewport),
     environment: cloneJson(environment),
     volumePrimitives: normalizeVolumePrimitiveState(volumePrimitives),
     materials: cloneJson(activeObject?.materials ?? null),

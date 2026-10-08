@@ -3163,6 +3163,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button type="button" role="menuitem" data-scene-add="sphere">Sphere</button>
         <button type="button" role="menuitem" data-scene-add="cylinder">Cylinder</button>
         <button type="button" role="menuitem" data-scene-add="annular">Annular plate</button>
+        <button type="button" role="menuitem" data-scene-add="camera">Camera</button>
         <div class="scene-menu-heading">Light</div>
         <button type="button" role="menuitem" data-scene-add="spot-light">Spot</button>
         <div class="scene-menu-heading">Emitter</div>
@@ -3888,6 +3889,9 @@ import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
 import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-camera-views.mjs';
 import {installCameraViewsPanel} from './authoring-camera-views.mjs';
+import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,createSceneCameras} from './scene-camera.mjs';
+import {installCameraAuthoring} from './authoring-cameras.mjs';
+import {installViewPie} from './view-navigation-pie.mjs';
 import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, checkedSceneLightRecord, sceneLightRuntimeRecipe } from './scene-rim-light.mjs';
 
 import {checkedPose} from './scene-edit-session.mjs';
@@ -3900,6 +3904,7 @@ import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,
 
 let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
+let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null;
 let restoringSceneLight=false;
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -7236,6 +7241,7 @@ sceneAddMenuPopup.addEventListener('click', event => {
   if ([...Object.keys(GEOMETRY_DEFAULTS),'annular'].includes(action.dataset.sceneAdd)) {
     try{addProceduralMesh(action.dataset.sceneAdd);document.activeElement?.blur?.();}catch(error){setInfo(error.message);}
   }
+  if(action.dataset.sceneAdd==='camera'){try{addAuthoredCamera();}catch(error){setInfo(error.message);}}
   if(action.dataset.sceneAdd==='spot-light'){try{addSceneSpotLight();}catch(error){setInfo(error.message);}}
   if(action.dataset.sceneAdd==='import-mesh')document.getElementById('scene-mesh-file').click();
   if (action.dataset.sceneAdd === 'water-emitter') {
@@ -7544,7 +7550,8 @@ function applyAuthoredScenePose(id, transform = {}) {
   if (id.startsWith('@group:')) return writeGroupPose(id.slice(7), transform);
   const entry = sceneObjects.find(obj => obj.id === id);
   if (!entry) throw new Error(`Scene object "${id}" was not found`);
-  if (entry.type==='light') {
+  if(entry.type===CAMERA_TYPE){mountAuthoredCamera({...serializeSceneObject(entry),transform});}
+  else if (entry.type==='light') {
     if(id===RIM_LIGHT_ID){restoringSceneLight=true;try{setRimLight(sceneLightRuntimeRecipe({...serializeSceneObject(entry),transform}));}finally{restoringSceneLight=false;}}
     mountSceneSpotLight({...serializeSceneObject(entry),transform});
   } else if (entry.type === FLAME_EMITTER_TYPE) {
@@ -10409,6 +10416,7 @@ function sceneObjectMembershipSnapshot(id) {
       ? [{ ...group, groupIndex, objectIds: [...group.objectIds] }]
       : []),
     selection: { objectId: activeSceneObjectId, groupId: activeSceneGroupId },
+    activeCameraId:sceneCameras?.read().settings.activeId??null,
   };
 }
 
@@ -10430,6 +10438,7 @@ function checkedSceneObjectMembership(value, id) {
     index: value.index,
     groups: value.groups.map(group => ({ ...structuredClone(group), objectIds: [...group.objectIds] })),
     selection: structuredClone(value.selection),
+    activeCameraId:value.activeCameraId??null,
   };
 }
 
@@ -10457,6 +10466,7 @@ async function restoreSceneObjectMembership(snapshot) {
     sceneObjects.push(retainedEntry);
     setSceneObjectMounted(retainedEntry,true);
     if(retainedEntry.type==='light')mountSceneSpotLight(snapshot.record);
+    if(retainedEntry.type===CAMERA_TYPE)mountAuthoredCamera(snapshot.record);
     sceneNavigation?.prepare(object);
     sceneSaveBlockedByFailedRestore = false;
   } else {
@@ -10469,6 +10479,7 @@ async function restoreSceneObjectMembership(snapshot) {
   sceneObjects.splice(sceneObjects.indexOf(entry), 1);
   sceneObjects.splice(Math.min(index, sceneObjects.length), 0, entry);
   restoreSceneObjectGroups(entry, groups);
+  if(entry.type===CAMERA_TYPE)sceneCameras?.membershipChanged(snapshot.activeCameraId);
   if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) syncLocalLiquidHostEmitters();
   if (selection.groupId && sceneGroups.some(group => group.id === selection.groupId)) {
     setActiveSceneGroup(selection.groupId);
@@ -10554,7 +10565,8 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
     transformControls.visible = false;
   }
   scene.remove(entry.object);
-  const retainForMembershipHistory = ['glb','light',PROCEDURAL_MESH_TYPE].includes(entry.type) && (Boolean(editId) || preserveForMembershipHistory || (
+  if(entry.type===CAMERA_TYPE)sceneCameras?.membershipChanged();
+  const retainForMembershipHistory = ['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE].includes(entry.type) && (Boolean(editId) || preserveForMembershipHistory || (
     !recordHistory
     && (scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(id))||scenePlacementTools?.edits.hasHistoryEntry(compoundRetentionTargets.get(id)))
     && (preserveForMembershipHistory || scenePlacementTools.edits.state().replaying)
@@ -11118,6 +11130,8 @@ async function initScene() {
 
   camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
   camera.position.set(0, 0.6, 3);
+  cameraProjectionBase=camera.updateProjectionMatrix.bind(camera);
+  camera.updateProjectionMatrix=()=>{const state=sceneCameras?.state();if(state?.mode!=='camera')camera.aspect=document.getElementById('viewport').clientWidth/document.getElementById('viewport').clientHeight;if(state?.mode==='camera'){camera.aspect=sceneCameras.read().settings.aspect[0]/sceneCameras.read().settings.aspect[1];}cameraProjectionBase();if(state?.mode==='camera'){const vp=document.getElementById('viewport'),frame=state.frame;const clip=new THREE.Matrix4().set(frame.width/vp.clientWidth,0,0,2*(frame.x+frame.width/2)/vp.clientWidth-1,0,frame.height/vp.clientHeight,0,1-2*(frame.y+frame.height/2)/vp.clientHeight,0,0,1,0,0,0,0,1);camera.projectionMatrix.premultiply(clip);camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();}};
 
   try {
     const response = await fetch('/api/runtime-config', { cache: 'no-store' });
@@ -11512,6 +11526,7 @@ async function initScene() {
     depthRT.setSize(Math.round(size.x * aoResScale), Math.round(size.y * aoResScale));
     needsRender = true;
     idleFrames = 0;
+    cameraAuthoring?.refresh();
   }
   window.addEventListener('resize', syncViewportRendererSize);
   const viewportResizeObserver = new ResizeObserver(syncViewportRendererSize);
@@ -11581,7 +11596,8 @@ async function initScene() {
   viewportEl.addEventListener('dblclick', handleViewportDoubleClick);
   renderer.domElement.addEventListener('pointerdown', markDirty);
   renderer.domElement.addEventListener('wheel', markDirty);
-  window._kaminosDirty = markDirty;
+  let cameraSyncing=false;
+  window._kaminosDirty = ()=>{if(sceneCameras&&sceneCameras.state().mode==='camera'&&!sceneCameras.state().writing&&!cameraSyncing){cameraSyncing=true;try{sceneCameras.sync();}finally{cameraSyncing=false;}}markDirty();};
   const navigationInput = document.getElementById('navigation-input-mode');
   let savedNavigationInput;
   try { savedNavigationInput = localStorage.getItem('kaminos.navigationInput'); } catch {}
@@ -11598,9 +11614,10 @@ async function initScene() {
     camera,
     controls,
     gizmo: transformControls,
-    roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat' && entry.type!=='light').map(entry => entry.object),
+    roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat' && entry.type!=='light' && entry.type!==CAMERA_TYPE).map(entry => entry.object),
       ...(currentMesh && !sceneObjects.some(entry => entry.object === currentMesh) ? [currentMesh] : [])],
     occluders: () => groundPlane ? [groundPlane] : [],
+    navigationHook:{begin:mode=>sceneCameras?.beginNavigation(mode)??false,changed:()=>sceneCameras?.navigationChanged(),end:cancel=>sceneCameras?.endNavigation(cancel),wheelEnd:()=>sceneCameras?.wheelEnd(),frameLayout:()=>sceneCameras?.frameLayout(),restoreFrameLayout:value=>sceneCameras?.restoreFrameLayout(value),pan:(dx,dy)=>sceneCameras?.panFrame(dx,dy),zoom:factor=>sceneCameras?.zoomFrame(factor)},
     frameAll: () => { const framed = frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); if (framed) markDirty(); return framed; },
     frameSelected: () => { const framed = frameAuthoredSelection(); if (framed) markDirty(); return framed; },
     blocked: () => authoringBusy || scenePlacementTools?.edits.state().active?.id==='@viewport-lens' || transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
@@ -11695,13 +11712,21 @@ async function initScene() {
   cameraViews=createCameraViews({
     edits:scenePlacementTools.edits,
     readCamera:readAuthoredCameraView,
-    writeCamera:view=>{sceneNavigation.cancel();camera.position.fromArray(view.position);controls.target.fromArray(view.target);camera.up.fromArray(view.up);camera.fov=view.fov;camera.near=view.near;camera.far=view.far;camera.updateProjectionMatrix();sceneNavigation.resetView();window._kaminosDirty?.();},
+    writeCamera:view=>{sceneCameras?.leave();sceneNavigation.cancel();camera.position.fromArray(view.position);controls.target.fromArray(view.target);camera.up.fromArray(view.up);camera.fov=view.fov;camera.near=view.near;camera.far=view.far;camera.updateProjectionMatrix();sceneNavigation.resetView();window._kaminosDirty?.();},
     admit:()=>{assertSceneConstructionAvailable();if(!controls.enabled||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current camera or preview operation');},
     changed:()=>{cameraViewsPanel?.refresh();window._kaminosDirty?.();},
     capture:item=>window.captureComposition({result:true,cameraView:item}),
   });
+  sceneCameras=createSceneCameras({edits:scenePlacementTools.edits,supportsProjection:projection=>projection==='perspective',readObjects:()=>sceneObjects.filter(o=>o.type===CAMERA_TYPE).map(serializeSceneObject),writeCameras:writeAuthoredCameras,readViewport:readAuthoredCameraView,writeViewport:writeAuthoredCameraView,size:()=>({width:viewportEl.clientWidth,height:viewportEl.clientHeight}),changed:()=>{cameraAuthoring?.refresh();syncEditorHelperVisibility();markDirty();},admit:()=>{if(authoringBusy||sceneSaveBlockedByFailedRestore||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current document or preview action');},capture:(item,frame,original)=>window.captureComposition({result:true,cameraObject:item,cameraFrame:frame,cameraOriginal:original})});
   cameraViewsPanel=installCameraViewsPanel({document,views:cameraViews,edits:scenePlacementTools.edits,onError:error=>setInfo(error.message)});
   authoringControlSessions.push(cameraViewsPanel.session);
+  cameraAuthoring=installCameraAuthoring({document,service:sceneCameras,bookmarks:cameraViews,edits:scenePlacementTools.edits,selected:()=>selectedSceneObjectEntry(),select:id=>setActiveSceneObject(id),onError:error=>setInfo(error.message)});
+  authoringControlSessions.push(...cameraAuthoring.sessions);
+  scenePlacementTools.addHistoryScope(document.getElementById('selected-camera-properties'));
+  window.kaminosSceneCameras=sceneCameras;
+  const cameraViewAction=id=>{if(id==='camera'){sceneCameras.toggle();return;}if(id==='selected'){sceneCameras.leave();window.kaminosFrameSelected();return;}sceneCameras.leave();navigation.axis(id);};
+  installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
+  document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey)sceneCameras.setActive(selectedSceneObjectEntry()?.id);else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
   controls.addEventListener('change',()=>{if(authoringWorkspace.state().context==='camera')cameraViewsPanel.refresh();});
   window.kaminosCameraViews={...cameraViews,open:()=>{authoringWorkspace.setMode('authoring');authoringWorkspace.setContext('camera');cameraViewsPanel.refresh();}};
@@ -12003,6 +12028,7 @@ function clearScene({loadRequestId = null} = {}) {
   authoringControlSessions.forEach(session => session.cancel());
   sceneControlHistory?.cancel();
   scenePlacementTools?.clear();
+  sceneCameras?.clear();
   for(const proxy of groupProxies.values())proxy.removeFromParent();
   groupProxies.clear();
   for(const id of meshDataTargets)scenePlacementTools?.edits.unregister(id);meshDataTargets.clear();
@@ -25064,7 +25090,7 @@ function updateAuthoringPropertySelection() {
   syncBurnerInspector();
   syncSceneDataInspector();
   document.querySelectorAll('#transform-bar button[onclick]').forEach(button=>{
-    if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround/.test(button.getAttribute('onclick'))) button.hidden=sceneSelection.ids.length>1||!!activeSceneGroupId||selectedSceneObjectEntry()?.type==='light';
+    if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround/.test(button.getAttribute('onclick'))) button.hidden=sceneSelection.ids.length>1||!!activeSceneGroupId||['light',CAMERA_TYPE].includes(selectedSceneObjectEntry()?.type);
   });
 }
 let flameInspector = null;
@@ -27947,6 +27973,7 @@ function serializeSceneObject(entry) {
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
     localLiquidEmitter: metadata.localLiquidEmitter ?? entry.localLiquidEmitter ?? null,
+    ...(entry.type===CAMERA_TYPE?{camera:structuredClone(entry.camera)}:{}),
     ...(entry.type==='light'?{light:structuredClone(entry.light)}:{}),
     ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface)} : {}),
   };
@@ -27960,6 +27987,7 @@ function readNumberControl(id, fallback = 0) {
 
 async function addSceneObjectFromSource(record, loadRequestId = null) {
   if (!record?.source) throw new Error('Scene object missing source');
+  if(record.type===CAMERA_TYPE)return mountAuthoredCamera(record).object;
   if(record.type==='light'){if(record.id===RIM_LIGHT_ID){restoringSceneLight=true;try{setRimLight(sceneLightRuntimeRecipe(record));}finally{restoringSceneLight=false;}}return mountSceneSpotLight(record).object;}
   if (record.type === PROCEDURAL_MESH_TYPE) return mountProceduralMesh(record).object;
   if (record.type === FLAME_EMITTER_TYPE) {
@@ -28063,6 +28091,26 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
   return true;
 }
 
+function writeAuthoredCameraView(view){
+  if(!sceneCameras?.state().navigationId)sceneNavigation?.cancel();camera.position.fromArray(view.position);controls.target.fromArray(view.target);camera.up.fromArray(view.up);camera.fov=view.fov;camera.near=view.near;camera.far=view.far;camera.updateProjectionMatrix();if(!sceneCameras?.state().navigationId)sceneNavigation?.resetView();else controls.update();
+}
+function mountAuthoredCamera(raw){
+  const record=checkedCameraRecord(raw);let entry=sceneObjects.find(o=>o.id===record.id);
+  if(!entry){const object=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xa2acb9}));object.userData.kaminosEditorOnly=true;entry={...record,object};sceneObjects.push(entry);scene.add(object);}else Object.assign(entry,{...record,object:entry.object});
+  const aspect=sceneCameras?sceneCameras.read().settings.aspect[0]/sceneCameras.read().settings.aspect[1]:16/9;
+  const h=.65*record.camera.sensorWidth/(2*record.camera.lens*aspect),w=h*aspect,z=-.65;
+  const corners=[[-w,-h,z],[w,-h,z],[w,h,z],[-w,h,z]],points=[];
+  for(let i=0;i<4;i++){points.push(0,0,0,...corners[i],...corners[i],...corners[(i+1)%4]);}
+  points.push(-w*.3,h,z,0,h*1.5,z,0,h*1.5,z,w*.3,h,z);
+  const old=entry.object.geometry;entry.object.geometry=new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(points,3));old.dispose();
+  applySceneObjectTransformState(entry.object,record.transform);entry.object.userData.kaminosSceneObject={...record};return entry;
+}
+function writeAuthoredCameras(records){
+  const ids=new Set(records.map(o=>o.id));for(const entry of [...sceneObjects])if(entry.type===CAMERA_TYPE&&!ids.has(entry.id))removeSceneObjectInternal(entry.id,{recordHistory:false});
+  for(const record of records)mountAuthoredCamera(record);renderSceneObjectList();updateTransformInspector();
+}
+function addAuthoredCamera(label='Camera'){const id=sceneCameras.create(label);setActiveSceneObject(id);return id;}
+
 function readAuthoredCameraView(){return {position:camera.position.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),near:camera.near,far:camera.far,fov:camera.fov};}
 
 function buildSceneData(capture = null) {
@@ -28084,6 +28132,8 @@ function buildSceneData(capture = null) {
     localLiquid: localLiquidSetup,
     capture,
     cameraViews:cameraViews?.read(),
+    sceneCamera:sceneCameras?.read().settings,
+    viewport:sceneCameras?.viewportState(),
     camera: {
       position: camera.position.toArray(),
       target: controls.target.toArray(),
@@ -28214,7 +28264,9 @@ async function changeCompositionBasin(entry) {
   return window.kaminosFlameAuthoring.applyBasin(entry.presetId);
 }
 
-window.captureComposition = ({ result = false, cameraView = null } = {}) => withAuthoringAction(async () => {
+window.captureComposition = ({ result = false, cameraView = null, cameraObject=null, cameraFrame=null, cameraOriginal=null, viewportCapture=false } = {}) => {
+  if(!cameraView&&!cameraObject&&!viewportCapture&&sceneCameras?.active())return sceneCameras.capture();
+  return withAuthoringAction(async () => {
   if (sceneSaveIsBlocked() || sceneIsEmpty()) return false;
   if (volumePrototype?.debugState?.()?.active && !isFireLightFieldRoute()) {
     throw new Error('Capture supports the ordinary flame light-field composition, not this volume route');
@@ -28248,14 +28300,18 @@ window.captureComposition = ({ result = false, cameraView = null } = {}) => with
     assertUnchanged?.();
     if(!cameraViewsMatch(readAuthoredCameraView(),expectedView))throw Error('Camera changed before capture; no shot was saved');
     if (activeSceneComposition && (!state?.active || state.error)) throw new Error(state?.error || 'Flame stopped before capture');
+    let crop=null;if(cameraObject){if(sceneCameras.state().activeId!==cameraObject.id||sceneCameras.state().mode!=='camera'||JSON.stringify(serializeSceneObject(sceneObjects.find(o=>o.id===cameraObject.id)).transform)!==JSON.stringify(cameraObject.transform))throw Error('Active camera changed before capture');const frame=sceneCameras.state().frame,bounds=renderer.domElement.getBoundingClientRect(),sx=renderer.domElement.width/bounds.width,sy=renderer.domElement.height/bounds.height;const x=Math.round(frame.x*sx),y=Math.round(frame.y*sy),width=Math.floor(frame.width*sx),height=Math.floor(frame.height*sy);crop={x,y,width,height};}
     const capture = captureComposedCanvases({
+      crop,
       host: renderer.domElement,
       volume: activeSceneComposition ? volumePrototype.canvasElement() : null,
       document, label,
       simulation: activeSceneComposition ? { frameCount: state.frameCount, simStepCount: state.simStepCount, effectiveRoute: state.effectiveRoute, backend: state.backend } : null,
     });
     if(cameraView)capture.cameraView={id:cameraView.id,label:cameraView.label,view:expectedView};
+    if(cameraObject)capture.cameraObject={id:cameraObject.id,label:cameraObject.label,transform:cameraObject.transform,camera:cameraObject.camera,aspect:sceneCameras.read().settings.aspect,crop};
     data = buildSceneData(capture);
+    if(cameraOriginal){data.camera=cameraOriginal.camera;data.viewport=cameraOriginal.viewport;}
   } finally {
     if (helper) helper.visible = visible;
     selectionCaptureSuspended=false;selectionFeedback?.suspend(false);
@@ -28269,6 +28325,7 @@ window.captureComposition = ({ result = false, cameraView = null } = {}) => with
   compositionStatus(`${label} | ${activeSceneComposition?.flame.label || 'Mesh scene'}`);
   return saved;
 }, { result });
+};
 
 document.getElementById('composition-capture').onclick = window.captureComposition;
 document.getElementById('composition-ground-visible').onchange = event => {
@@ -28448,13 +28505,14 @@ function addSceneSpotLight() {
     light:{kind:'spot',enabled:true,color:'#ffffff',intensity:30,angle:30,penumbra:.3,aimDistance:3}});
   recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;
 }
-function canDuplicateObject(entry){return !!entry&&['glb','light',PROCEDURAL_MESH_TYPE].includes(entry.type);}
+function canDuplicateObject(entry){return !!entry&&['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE].includes(entry.type);}
 function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   assertSceneConstructionAvailable();const entry=sceneObjects.find(o=>o.id===id);
   if(!canDuplicateObject(entry))throw Error('Duplicate currently supports mesh objects; simulation sources retain their own creation rules');
   const copyId=makeSceneObjectId('mesh'),record={...serializeSceneObject(entry),id:copyId,label:`${sceneObjectDisplayLabel(entry)} copy`,groupId:null,createdAt:new Date().toISOString()};
   const target=ensureSceneObjectMembershipTarget(copyId);scenePlacementTools.edits.assertCanRecordApplied(target);
   if(entry.type===PROCEDURAL_MESH_TYPE)mountProceduralMesh(record);
+  else if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);
   else if(entry.type==='light'){if(entry.id===RIM_LIGHT_ID)setRimLight(sceneLightRuntimeRecipe(record));mountSceneSpotLight(record);}
   else {
     const copy=cloneSceneObjectHierarchy(entry.object);copy.traverse(child=>{if(child.geometry)child.geometry=child.geometry.clone();if(child.material)child.material=Array.isArray(child.material)?child.material.map(cloneSceneMaterial):cloneSceneMaterial(child.material);});
@@ -28651,7 +28709,7 @@ function setSceneSelection(ids,activeId=ids.at(-1)??null){
 function updateSelectionFeedback(){
   const ids=new Set(sceneSelectionMembers());
   const activeIds=activeSceneGroupId?sceneGroups.find(g=>g.id===activeSceneGroupId)?.objectIds||[]:[activeSceneObjectId];
-  selectionFeedback?.update(sceneObjects.filter(entry=>ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE),activeIds);
+  selectionFeedback?.update(sceneObjects.filter(entry=>ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==CAMERA_TYPE&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE),activeIds);
   for(const [id,box] of selectionBoxes)if(!ids.has(id)){box.removeFromParent();box.geometry.dispose();box.material.dispose();selectionBoxes.delete(id);}
   for(const id of ids){const entry=sceneObjects.find(o=>o.id===id);if(!entry)continue;
     let box=selectionBoxes.get(id);if(!box){box=new THREE.BoxHelper(entry.object);box.userData.kaminosEditorHelper=true;box.userData.kaminosEditorOnly=true;box.material.depthTest=false;box.renderOrder=1001;scene.add(box);selectionBoxes.set(id,box);}
@@ -28663,6 +28721,7 @@ function syncEditorHelperVisibility(){
   for(const entry of sceneObjects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE)entry.object.visible=viewportHelpersVisible;}
   for(const {marker,light} of sceneSpotLights.values())marker.visible=viewportHelpersVisible&&light.visible;
   if(flameDomainGuide)flameDomainGuide.visible=viewportHelpersVisible&&(sceneSelectionMembers().includes(FLAME_EMITTER_ID)||activeSceneFieldId==='flame-field');
+  for(const entry of sceneObjects)if(entry.type===CAMERA_TYPE)entry.object.visible=viewportHelpersVisible&&!(sceneCameras?.state().mode==='camera'&&sceneCameras.state().activeId===entry.id);
   updateSelectionFeedback();window._kaminosDirty?.();
 }
 function selectedRootIds(){return selectionTransformRoots(sceneSelection.ids,sceneGroups);}
@@ -28675,7 +28734,7 @@ function setupSelectionTransforms(){
     transform:patch=>selectionTransforms.apply(patch),settings:patch=>{scenePlacementTools.finish(false);const next={...transformPreferences,...patch};selectionFrame({test:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}},'test',next);transformPreferences=next;if(sceneSelection.ids.length)setSceneSelection(sceneSelection.ids,sceneSelection.activeId);return {...next};}};
 }
 
-function readSelectionMembership(){return {objects:sceneObjects.map(serializeSceneObject),groups:serializeSceneGroups(),selection:structuredClone(sceneSelection),field:activeSceneFieldId,domain:[...flameDomainTranslation]};}
+function readSelectionMembership(){return {objects:sceneObjects.map(serializeSceneObject),groups:serializeSceneGroups(),selection:structuredClone(sceneSelection),field:activeSceneFieldId,domain:[...flameDomainTranslation],activeCameraId:sceneCameras?.read().settings.activeId??null};}
 function checkSelectionMembership(raw){
   const value=structuredClone(raw);if(!Array.isArray(value.objects)||!Array.isArray(value.groups))throw Error('Scene membership records are required');
   const ids=new Set();for(const record of value.objects){if(!record.id||ids.has(record.id)||!isReloadableSceneObjectRecord(record))throw Error('Scene member has no retained source');ids.add(record.id);checkedPose(record.transform);}
@@ -28693,7 +28752,7 @@ async function writeSelectionMembershipUnchecked(value){
     let entry=sceneObjects.find(o=>o.id===record.id);
     if(!entry){
       const retained=sceneMembershipRetainedObjects.get(record.id);
-      if(retained){entry=retained;sceneObjects.push(entry);setSceneObjectMounted(entry,true);if(entry.type==='light')mountSceneSpotLight(record);}
+      if(retained){entry=retained;sceneObjects.push(entry);setSceneObjectMounted(entry,true);if(entry.type==='light')mountSceneSpotLight(record);if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);}
       else {await addSceneObjectFromSource(record);entry=sceneObjects.find(o=>o.id===record.id);}
     }
     const existing=serializeSceneObject(entry);
@@ -28704,6 +28763,7 @@ async function writeSelectionMembershipUnchecked(value){
   sceneObjects=value.objects.map(record=>sceneObjects.find(entry=>entry.id===record.id));
   sceneGroups=structuredClone(value.groups);for(const group of sceneGroups)ensureGroupTarget(group);
   setFlameDomainTranslation(value.domain);
+  sceneCameras?.membershipChanged(value.activeCameraId??null);
   if(value.field)window.selectSceneField(value.field);else setSceneSelection(value.selection.ids,value.selection.activeId);
   renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();
 }
@@ -29515,8 +29575,11 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     gain.dispatchEvent(new Event('input'));
     compositionStatus(`${data.label || 'Composition'} | ${activeSceneComposition.flame.label}`);
   }
+  sceneCameras?.restore(restorePlan.sceneCamera);
+  sceneCameras?.restoreViewport(restorePlan.viewport);
   cameraViews?.restore(restorePlan.cameraViews);
   sceneNavigation?.resetView();
+  cameraAuthoring?.refresh();
   sceneSaveBlockedByFailedRestore = false;
   if (objectRecords.length > 0) {
     setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}${localLiquidFailure ? `; water host unavailable: ${localLiquidFailure}` : ''}`);
