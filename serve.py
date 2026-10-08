@@ -3999,12 +3999,24 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         if target.is_symlink() or not target.resolve().is_relative_to(root.resolve()):
             self.send_json({"error": "Export destination is outside the exports folder"}, 400)
             return
-        if target.exists() and (params.get("overwrite") or [""])[0] != "1":
+        overwrite = (params.get("overwrite") or [""])[0] == "1"
+        if target.exists() and not overwrite:
             self.send_json({"error": f"{filename} already exists", "exists": filename}, 409)
             return
         staging = root / f".{filename}.{uuid.uuid4().hex}.tmp"
         staging.write_bytes(content)
-        os.replace(staging, target)
+        try:
+            if overwrite:
+                os.replace(staging, target)
+            else:
+                # Create-only: a same-named export written meanwhile is refused,
+                # never replaced without confirmation.
+                os.link(staging, target)
+        except FileExistsError:
+            self.send_json({"error": f"{filename} already exists", "exists": filename}, 409)
+            return
+        finally:
+            staging.unlink(missing_ok=True)
         self.send_json({"saved": filename, "root": "exports", "path": str(target)})
 
     def _scene_library_local_client(self):
@@ -4058,8 +4070,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         """List scenes saved by other Kaminos servers on this machine (read-only).
 
         Identical scene files (lane stores seeded from the same copies) collapse
-        to the most recently written one with a count of the other copies, and
-        scenes identical to one already here are not offered again."""
+        to the most recently written one with a count of the other copies;
+        scenes identical to one already here stay listed, marked alsoHere."""
         if not self._scene_library_local_client():
             return
         local_hashes = set()
@@ -4091,7 +4103,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         kept, by_digest = [], {}
         for mtime, store_id, path, digest, entry in found:
             if digest is not None and digest in local_hashes:
-                continue
+                # Still offered: its server may hold meshes this one lacks.
+                entry["alsoHere"] = True
             if digest is not None and digest in by_digest:
                 by_digest[digest]["copies"] = by_digest[digest].get("copies", 0) + 1
                 continue

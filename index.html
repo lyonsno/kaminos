@@ -3913,7 +3913,7 @@ import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './
 import { assetArrivalFramingWindow, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
-import { pickSavedScene } from './scene-load-picker.mjs';
+import { collapseIdenticalScenes, pickSavedScene } from './scene-load-picker.mjs';
 import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
@@ -29758,11 +29758,12 @@ window.openSavedScene = async function() {
   if (document.querySelector('.scene-load-picker')) return;
   const listing = await grFetchApi('browse', { root: 'scenes', path: '' });
   const names = (listing?.entries || []).map(entry => entry.name).filter(name => name.endsWith('.kaminos.json'));
-  const scenes = await Promise.all(names.map(async name => {
+  const scenes = collapseIdenticalScenes(await Promise.all(names.map(async name => {
     const data = await grFetchApi('read', { root: 'scenes', path: name }).catch(() => null);
     const image = data?.thumbnail || data?.capture?.image ? `/api/scene-image?${new URLSearchParams({ store: '', name })}` : null;
-    return { name, label: data?.label || data?.capture?.label || '', timestamp: data?.timestamp || '', image };
-  }));
+    return { name, label: data?.label || data?.capture?.label || '', timestamp: data?.timestamp || '', image,
+      contentKey: data && !data.error ? JSON.stringify(data) : null };
+  })));
   const more = fetch('/api/scene-library').then(async response => {
     const library = await response.json();
     if (!response.ok) throw new Error(library?.error || `HTTP ${response.status}`);

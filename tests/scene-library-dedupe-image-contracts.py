@@ -51,7 +51,8 @@ with TemporaryDirectory() as directory:
     entries = [(store["label"], scene["name"], scene.get("copies", 0), scene.get("hasImage")) for store in listing["stores"] for scene in store["scenes"]]
     seeds = [entry for entry in entries if entry[1] == "seed.kaminos.json"]
     assert len(seeds) == 1 and seeds[0][0] == "copy-b" and seeds[0][2] == 1, f"identical scenes collapse to the newest copy: {entries}"
-    assert not any(entry[1] == "local-twin.kaminos.json" for entry in entries), "a scene identical to one here is not offered again"
+    twins = [scene for store in listing["stores"] for scene in store["scenes"] if scene["name"] == "local-twin.kaminos.json"]
+    assert len(twins) == 1 and twins[0].get("alsoHere") is True, "a scene identical to one here stays reachable (its server may hold its meshes), marked as already here"
     assert ("copy-b", "tuned.kaminos.json", 0, True) in entries
 
     copy_b = next(store["id"] for store in listing["stores"] if store["label"] == "copy-b")

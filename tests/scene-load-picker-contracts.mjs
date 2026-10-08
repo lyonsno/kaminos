@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sceneMatchesFilter, sortScenesNewestFirst } from '../scene-load-picker.mjs';
+import { collapseIdenticalScenes, sceneMatchesFilter, sortScenesNewestFirst } from '../scene-load-picker.mjs';
 
 test('saved scenes list newest first and filter by label or file name words', () => {
   const scenes = [
@@ -22,4 +22,15 @@ test('scenes from other servers list after this server and match their server na
   ];
   assert.deepEqual(sortScenesNewestFirst(scenes).map(scene => scene.name), ['mine.kaminos.json', 'tuned.kaminos.json']);
   assert.equal(sceneMatchesFilter(scenes[0], 'beaming lighting'), true);
+});
+
+test('identical scenes on this server list once with a count of the copies', () => {
+  const scenes = collapseIdenticalScenes([
+    { name: 'kiln_a.kaminos.json', contentKey: 'k1', timestamp: '2026-10-08T10:00:00Z' },
+    { name: 'kiln_b.kaminos.json', contentKey: 'k1', timestamp: '2026-10-08T10:00:00Z' },
+    { name: 'kiln_c.kaminos.json', contentKey: 'k1', timestamp: '2026-10-08T10:00:00Z' },
+    { name: 'other.kaminos.json', contentKey: 'k2' },
+    { name: 'unread.kaminos.json' },
+  ]);
+  assert.deepEqual(scenes.map(scene => [scene.name, scene.copies || 0]), [['kiln_a.kaminos.json', 2], ['other.kaminos.json', 0], ['unread.kaminos.json', 0]]);
 });

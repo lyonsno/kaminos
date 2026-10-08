@@ -12,6 +12,21 @@ export function sortScenesNewestFirst(scenes) {
     || String(b.timestamp || '').localeCompare(String(a.timestamp || '')) || a.name.localeCompare(b.name));
 }
 
+// Identical scene documents (repeat imports, copied saves) collapse to the
+// first one listed, carrying how many other copies exist. Scenes that could not
+// be read (no contentKey) are never merged.
+export function collapseIdenticalScenes(scenes) {
+  const kept = [], byKey = new Map();
+  for (const scene of scenes) {
+    const twin = scene.contentKey ? byKey.get(scene.contentKey) : null;
+    if (twin) { twin.copies = (twin.copies || 0) + 1; continue; }
+    const entry = { ...scene };
+    if (scene.contentKey) byKey.set(scene.contentKey, entry);
+    kept.push(entry);
+  }
+  return kept;
+}
+
 export function sceneMatchesFilter(scene, filter) {
   const words = String(filter || '').toLowerCase().split(/\s+/).filter(Boolean);
   const haystack = `${scene.label || ''} ${scene.name} ${scene.store?.label || ''}`.toLowerCase();
@@ -64,7 +79,8 @@ export function pickSavedScene({ scenes, more = null, host = document.body } = {
       title.textContent = scene.label || scene.name.replace(/\.kaminos\.json$/, '');
       const meta = document.createElement('span');
       meta.className = 'scene-load-picker-meta';
-      meta.textContent = [scene.store ? `from ${scene.store.label}` : '', scene.copies ? `+${scene.copies} identical cop${scene.copies === 1 ? 'y' : 'ies'}` : '',
+      meta.textContent = [scene.store ? `from ${scene.store.label}` : '', scene.alsoHere ? 'already on this server' : '',
+        scene.copies ? `+${scene.copies} identical cop${scene.copies === 1 ? 'y' : 'ies'}` : '',
         scene.name.replace(/\.kaminos\.json$/, ''), savedWhen(scene.timestamp)].filter(Boolean).join(' · ');
       text.append(title, meta);
       row.append(picture, text);
