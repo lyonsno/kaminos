@@ -661,6 +661,20 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .finger-fluid-bench-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 8px; }
 .finger-fluid-bench-readout .field { margin: 0; padding: 0; }
 .finger-fluid-bench-readout .finger-fluid-bench-renderer-route { grid-column: 1 / -1; }
+.ipbf-cockpit[hidden] { display:none; }
+.ipbf-cockpit h3 { margin:0 0 12px; font-size:14px; color:#a9e5ec; }
+.ipbf-control { margin:10px 0; }
+.ipbf-control label { display:block; margin-bottom:5px; font-size:12px; }
+.ipbf-control > div { display:flex; gap:8px; align-items:center; }
+.ipbf-control input[type="range"] { flex:1; min-width:0; accent-color:#7fd7e0; }
+.ipbf-control input[type="number"], .ipbf-cockpit details input { width:75px; padding:5px; }
+.ipbf-link { display:flex; gap:7px; align-items:center; font-size:12px; margin-top:12px; }
+.ipbf-help { color:#919da7; font-size:11px; line-height:1.4; margin:5px 0; }
+.ipbf-actions { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:12px 0 9px; }
+.ipbf-actions .btn { padding:7px 5px; }
+#ipbf-control-status { font-size:11px; color:#7fd7e0; }
+#ipbf-control-error { font-size:11px; color:#ffa7a7; margin:5px 0; }
+#ipbf-replay { display:block; margin-top:10px; font-size:11px; color:#a9e5ec; }
 .finger-fluid-bench-downgrades { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .finger-fluid-bench-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid #3f3b66; color: #d8c4ff; background: #17152b; border-radius: 5px; padding: 3px 6px; font: 9px 'SF Mono', monospace; }
 #finger-fluid-bench-operator-panel { position: absolute; inset: 0; z-index: 4; background: #03070a; }
@@ -2974,6 +2988,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
   <!-- Finger Fluid Bench Tab -->
   <div class="tab-content" id="tab-finger-fluid-bench">
     <h2>Finger Fluid Bench</h2>
+    <div class="panel ipbf-cockpit" id="ipbf-pressure-cockpit" hidden></div>
     <div class="panel">
       <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_finger_fluid_bench=1</span></div>
       <div class="field"><span class="field-key">Bench</span><span class="field-val">kaminos/finger-fluid-bench</span></div>
@@ -3837,6 +3852,7 @@ import {
   evaluateFingerFluidParticleAllocationRequest,
   resolveFingerFluidWaterfallOraclePreset,
 } from './finger-fluid-webgpu-core.js';
+import {createIPBFPressureCockpit} from './finger-fluid-pressure-cockpit.mjs';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -4025,6 +4041,7 @@ let fingerFluidBenchAnimationFrame = null;
 let fingerFluidBenchFrameStartedAt = performance.now();
 let fingerFluidBenchLastFrameMs = 26.5;
 let fingerFluidBenchSolver = null;
+let fingerFluidPressureCockpit = null;
 let fingerFluidBenchSolverPromise = null;
 let fingerFluidBenchRunning = false;
 let fingerFluidBenchSimulationPaused = false;
@@ -4193,6 +4210,11 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   const requestedPressureIterations = Number(params.get('finger_fluid_density_iterations') ?? oracleCockpitRequested?.pressureIterations ?? 3);
   const requestedPressureSolver = params.get('finger_fluid_pressure_solver') ?? 'pbf';
   const effectivePressureSolver = resolveFingerFluidPressureSolver(requestedPressureSolver);
+  const pressureCockpitFlag=params.get('finger_fluid_pressure_cockpit')??'0';
+  if(!['0','1'].includes(pressureCockpitFlag))throw new RangeError('Pressure cockpit flag must be 0 or 1');
+  const pressureCockpitRequested=pressureCockpitFlag==='1';
+  if(pressureCockpitRequested&&effectivePressureSolver!=='ipbf')throw new RangeError('Pressure cockpit requires IPBF');
+  if(pressureCockpitRequested&&(!Number.isSafeInteger(requestedPressureIterations)||requestedPressureIterations<1))throw new RangeError('Pressure passes must be a positive safe integer');
   const requestedIPBFBoundaryMode = params.get('finger_fluid_ipbf_boundary') ?? 'collision_only';
   const pressureBoundary=resolveFingerFluidPressureBoundary({pressureSolver:effectivePressureSolver,ipbfBoundaryMode:requestedIPBFBoundaryMode});
   const ipbfCompliance = Number(params.get('finger_fluid_ipbf_compliance') ?? 0);
@@ -4299,9 +4321,9 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     requestedFixedVolumeReferenceParticleCount,
     effectiveFixedVolumeReferenceParticleCount: requestedFixedVolumeReferenceParticleCount
       ?? resolveFingerFluidParticleCount(requestedParticleCount),
-    requestedPressureSolver, effectivePressureSolver, ...pressureBoundary, ipbfCompliance, ipbfAlternativeCompliance, ipbfDamping, ipbfDampingBeta, ipbfPressureRadiusScale,
+    requestedPressureSolver, effectivePressureSolver, ...pressureBoundary, ipbfCompliance, ipbfAlternativeCompliance, ipbfDamping, ipbfDampingBeta, ipbfPressureRadiusScale, pressureCockpitRequested,
     requestedPressureIterations,
-    effectivePressureIterations: Math.max(1, Math.min(12, Math.round(Number.isFinite(requestedPressureIterations) ? requestedPressureIterations : 3))),
+    effectivePressureIterations: pressureCockpitRequested?requestedPressureIterations:Math.max(1, Math.min(12, Math.round(Number.isFinite(requestedPressureIterations) ? requestedPressureIterations : 3))),
     requestedEnergyDiagnosticsMode,
     effectiveEnergyDiagnosticsMode: resolveFingerFluidEnergyDiagnosticsMode(requestedEnergyDiagnosticsMode),
     requestedWitnessTargetStep,
@@ -12879,6 +12901,7 @@ function reloadFingerJuiceTabFrame() {
 }
 
 function updateFingerFluidBenchReadout() {
+  fingerFluidPressureCockpit?.update();
   const state = fingerFluidBenchState;
   const sourceEl = document.getElementById('finger-fluid-bench-source-schema');
   if (!sourceEl) return;
@@ -13866,7 +13889,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.requestedParticleCount = fingerFluidBenchConfig.requestedParticleCount;
   gpuState.effectiveParticleCount = gpuState.particleCount;
   gpuState.requestedPressureIterations = fingerFluidBenchConfig.requestedPressureIterations;
-  gpuState.effectivePressureIterations = fingerFluidBenchConfig.effectivePressureIterations;
+  gpuState.effectivePressureIterations = gpuState.densityIterationsPerStep;
   gpuState.requestedUnsupportedSheetStrength = fingerFluidBenchConfig.requestedUnsupportedSheetStrength;
   gpuState.effectiveUnsupportedSheetStrength = fingerFluidBenchConfig.effectiveUnsupportedSheetStrength;
   gpuState.requestedMaxFluidSpeed = fingerFluidBenchConfig.requestedMaxFluidSpeed;
@@ -14110,6 +14133,7 @@ async function startFingerFluidBench() {
       pressureSolver: fingerFluidBenchConfig.effectivePressureSolver,
       ipbfBoundaryMode: fingerFluidBenchConfig.requestedIPBFBoundaryMode,
       ipbfPressureRadiusScale: fingerFluidBenchConfig.ipbfPressureRadiusScale,
+      livePressureControls: fingerFluidBenchConfig.pressureCockpitRequested,
       ipbfCompliance: fingerFluidBenchConfig.ipbfCompliance,
       ipbfAlternativeCompliance: fingerFluidBenchConfig.ipbfAlternativeCompliance,
       ipbfDamping: fingerFluidBenchConfig.ipbfDamping,
@@ -14206,6 +14230,37 @@ function stopFingerFluidBench() {
   fingerFluidBenchRunning = false;
   if (fingerFluidBenchAnimationFrame) cancelAnimationFrame(fingerFluidBenchAnimationFrame);
   fingerFluidBenchAnimationFrame = null;
+}
+
+async function resetFingerFluidPressureCockpitWater() {
+  const camera={...fingerFluidBenchCamera,target:[...fingerFluidBenchCamera.target]};
+  stopFingerFluidBench();
+  fingerFluidBenchSolver?.destroy?.();
+  fingerFluidBenchSolver=null;fingerFluidBenchSolverPromise=null;fingerFluidBenchConfig=null;
+  await startFingerFluidBench();
+  fingerFluidBenchCamera=camera;
+  fingerFluidPressureCockpit?.update();
+}
+
+function installFingerFluidPressureCockpit() {
+  const root=document.getElementById('ipbf-pressure-cockpit');
+  if(!root||fingerFluidPressureCockpit||new URLSearchParams(location.search).get('finger_fluid_pressure_cockpit')!=='1')return;
+  fingerFluidPressureCockpit=createIPBFPressureCockpit({
+    root,getSolver:()=>fingerFluidBenchSolver,getStatus:()=>fingerFluidBenchState,
+    isPaused:()=>fingerFluidBenchSimulationPaused,
+    setPaused:value=>{fingerFluidBenchSimulationPaused=value;},
+    restart:resetFingerFluidPressureCockpitWater,
+    onRequest:receipt=>{
+      if(fingerFluidBenchConfig){
+        const r=receipt.requested;
+        fingerFluidBenchConfig={...fingerFluidBenchConfig,requestedPressureIterations:r.densityIterations,
+          requestedCapillaryStrength:r.capillaryStrength,ipbfPressureRadiusScale:r.pressureRadiusScale,ipbfDampingBeta:r.beta};
+      }
+    },
+  });
+  window.kaminosFingerFluidPressureCockpitState=()=>fingerFluidPressureCockpit.read();
+  window.kaminosFingerFluidPressureCockpitApply=patch=>fingerFluidPressureCockpit.apply(patch);
+  window.kaminosFingerFluidPressureCockpitReset=resetFingerFluidPressureCockpitWater;
 }
 
 function kaminosFingerFluidBenchDebugState() {
@@ -14307,6 +14362,7 @@ function initKaminosFingerFluidBenchRoute() {
   }, { passive: false });
   updateFingerFluidBenchReadout();
   installFingerFluidOracleCockpitControls();
+  installFingerFluidPressureCockpit();
   updateFingerFluidOracleCockpitState(fingerFluidBenchState.runtime || {});
   const params = new URLSearchParams(window.location.search);
   if (params.get('kaminos_finger_fluid_bench') === '1') {

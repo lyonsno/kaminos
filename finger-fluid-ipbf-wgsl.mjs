@@ -124,7 +124,7 @@ export function createIPBFConformanceShader(planes=[]){
  return IPBF_CONFORMANCE_WGSL.replace('@compute @workgroup_size(64)\nfn density',helper+'@compute @workgroup_size(64)\nfn density').replace('states[i].density=vec4<f32>(rho,','let boundary=ipbf_conformance_boundary(particles[i].x.xyz);rho+=params.restDensity*boundary.value;gradient+=boundary.gradient;D+=boundary.hessian;\n states[i].density=vec4<f32>(rho,');
 }
 
-export function createIPBFGridShader({radius,volume,compliance=0,alternativeCompliance=.001,damping=true,beta=60,boundaryMode='collision_only',obstacleCenter=null,obstacleRadius=null}){
+export function createIPBFGridShader({radius,volume,compliance=0,alternativeCompliance=.001,damping=true,beta=60,boundaryMode='collision_only',obstacleCenter=null,obstacleRadius=null,dynamicControls=false}){
  for(const [name,value] of Object.entries({radius,volume,compliance,alternativeCompliance}))if(!Number.isFinite(value)||value<0||(['radius','volume'].includes(name)&&value===0))throw new RangeError(`IPBF ${name} invalid`);
  if(!['collision_only','tangent_plane'].includes(boundaryMode))throw new RangeError(`IPBF boundary mode invalid: ${boundaryMode}`);
  if(boundaryMode==='tangent_plane'&&(!Array.isArray(obstacleCenter)||obstacleCenter.length!==3||obstacleCenter.some(v=>!Number.isFinite(v))||!Number.isFinite(obstacleRadius)||obstacleRadius<=0))throw new RangeError('IPBF wall support requires the host obstacle geometry');
@@ -147,7 +147,7 @@ export function createIPBFGridShader({radius,volume,compliance=0,alternativeComp
   while(current>=0){let j=u32(current);if(particles[j].velocity.w>=0.0){${body}}current=particleNext[j];}
  }}}
  `;
- return IPBF_MATH_WGSL+`
+ const source=IPBF_MATH_WGSL+`
  const ipbfRadius:f32=${radius};const ipbfVolume:f32=${volume};
  const ipbfAlpha:f32=${compliance};const ipbfAlternativeAlpha:f32=${alternativeCompliance};
  const ipbfDampingEnabled:bool=${damping};const ipbfBeta:f32=${beta};
@@ -187,4 +187,12 @@ export function createIPBFGridShader({radius,volume,compliance=0,alternativeComp
   ipbfStates[i].alternative=vec4<f32>(pressure_candidate_position(i,position,0.5*ipbf_solve(H+ipbf_diagonal(vec3<f32>(altInertia)),force-altInertia*displacement)),0);
  }
  `;
+ if(!dynamicControls)return source;
+ const live=source.replace(`const ipbfRadius:f32=${radius};`,'')
+  .replace(`const ipbfBeta:f32=${beta};`,'')
+  .replace(/\bipbfRadius\b/g,'ipbfControls.radius')
+  .replace(/\bipbfBeta\b/g,'ipbfControls.beta');
+ return `struct IPBFControlUniforms { radius:f32, beta:f32, padding:vec2<f32> }
+ @group(1) @binding(1) var<uniform> ipbfControls:IPBFControlUniforms;
+ `+live;
 }
