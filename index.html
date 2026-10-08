@@ -28092,7 +28092,8 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
 }
 
 function writeAuthoredCameraView(view){
-  if(!sceneCameras?.state().navigationId)sceneNavigation?.cancel();camera.position.fromArray(view.position);controls.target.fromArray(view.target);camera.up.fromArray(view.up);camera.fov=view.fov;camera.near=view.near;camera.far=view.far;camera.updateProjectionMatrix();if(!sceneCameras?.state().navigationId)sceneNavigation?.resetView();else controls.update();
+  const navigating=!!sceneNavigation?.state().gesture;
+  if(!navigating)sceneNavigation?.cancel();camera.position.fromArray(view.position);controls.target.fromArray(view.target);camera.up.fromArray(view.up);camera.fov=view.fov;camera.near=view.near;camera.far=view.far;camera.updateProjectionMatrix();if(!navigating)sceneNavigation?.resetView();else controls.update();
 }
 function mountAuthoredCamera(raw){
   const record=checkedCameraRecord(raw);let entry=sceneObjects.find(o=>o.id===record.id);
