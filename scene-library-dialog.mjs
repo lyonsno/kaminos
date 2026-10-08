@@ -4,7 +4,8 @@ export function createSceneLibraryDialog({document,list,refresh,importFile}) {
   dialog.innerHTML='<header><h2 id="scene-load-title">Load Scene</h2><button type="button" class="btn" data-scene-close aria-label="Close scene library">Close</button></header><div data-scene-list></div><footer><button type="button" class="btn" data-scene-refresh>Refresh</button><button type="button" class="btn" data-scene-import>Import scene file...</button></footer>';
   document.body.append(dialog);
   let marker=null;
-  const close=()=>{if(dialog.open)dialog.close();};
+  const restore=()=>{marker?.replaceWith(list);marker=null;};
+  const close=()=>{if(dialog.open){restore();dialog.close();}};
   const reload=async()=>{
     list.textContent='Loading scenes...';
     try{await refresh();}catch(error){list.textContent='Scene list failed: '+error.message;}
@@ -12,7 +13,8 @@ export function createSceneLibraryDialog({document,list,refresh,importFile}) {
   dialog.querySelector('[data-scene-close]').onclick=close;
   dialog.querySelector('[data-scene-refresh]').onclick=reload;
   dialog.querySelector('[data-scene-import]').onclick=()=>{close();importFile();};
-  dialog.addEventListener('close',()=>{marker?.replaceWith(list);marker=null;});
+  dialog.addEventListener('cancel',event=>{event.preventDefault();close();});
+  dialog.addEventListener('close',()=>{if(!dialog.open)restore();});
   dialog.addEventListener('click',event=>{
     const r=dialog.getBoundingClientRect();
     if(event.target===dialog && (event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom))close();
