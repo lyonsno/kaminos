@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+const text=fs.readFileSync(new URL('../structural-material-shard-view.js',import.meta.url),'utf8');
+const finish=text.slice(text.indexOf('async function finishGesture('),text.indexOf('async function release('));
+const start=text.indexOf("renderer.domElement.addEventListener('pointermove',")+"renderer.domElement.addEventListener('pointermove',".length,end=text.indexOf('},{capture:true});',start);
+const move=text.slice(start,end+1);assert.ok(move.startsWith('event=>'));
+let drain;const gate=new Promise(r=>drain=r),held={phase:'active',point:[0,0,0],displacement:[.1,.2,.3]},stamps=[],ctx={gesture:held,gestureGeneration:1,paused:false,finishing:false,pickTask:Promise.resolve(),settle:()=>gate,advance:async()=>{},release:async()=>{ctx.gesture=null;},stamp:(kind,data)=>stamps.push({kind,data}),THREE,plane:{},normal:{},ray:()=>({intersectPlane:()=>new THREE.Vector3(.8,.9,1)}),marker:{position:new THREE.Vector3()},arrow:{geometry:{setFromPoints(){}},visible:false},cameraState:()=>({position:[0,0,1]})};
+vm.runInNewContext(finish+'; task=finishGesture()',ctx);
+assert.equal(held.inputClosed,true,'Pointer-up must close this gesture input synchronously, before awaiting GPU work');
+const onMove=vm.runInNewContext('('+move+')',ctx),event={pointerId:1,buttons:0,clientX:100,clientY:100,stopImmediatePropagation(){}};
+onMove(event);assert.deepEqual(held.displacement,[.1,.2,.3]);assert.equal(stamps.filter(s=>s.kind==='move').length,0,'Released cursor motion must not author an old grip');
+const final=stamps.find(s=>s.kind==='gesture-finish-request').data;assert.deepEqual(Array.from(final.finalDisplacement),[.1,.2,.3]);
+ctx.gesture={phase:'active',point:[0,0,0],displacement:[0,0,0]};ctx.gestureGeneration=2;onMove({...event,buttons:1});assert.deepEqual(Array.from(ctx.gesture.displacement),[.8,.9,1],'A newer grip remains open while an older finish drains');drain();await ctx.task;assert.ok(ctx.gesture,'Old completion cannot release the new grip');
+console.log('Actual release and pointer handlers close old input immediately without suppressing a newer grip; synthetic scheduling does not claim native input conformance');
