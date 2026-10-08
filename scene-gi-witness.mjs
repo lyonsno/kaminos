@@ -63,6 +63,7 @@ try {
     await page.locator('#authoring-viewport-settings > summary').click();
     await page.locator('#viewport-emitter-opacity').click();await page.locator('#viewport-emitter-opacity').fill('.15');await page.locator('#viewport-emitter-opacity').blur();await settle();
     assert.equal((await emitterState()).settings.emitterGuideOpacity,.15);
+    await page.locator('#viewport-emitter-opacity').click();await page.locator('#viewport-emitter-opacity').fill('.23');await page.locator('#viewport-emitter-opacity').press('Escape');assert.equal((await emitterState()).settings.emitterGuideOpacity,.15);
     await page.screenshot({path:out+'/guides-faint.png'});
     await page.uncheck('#viewport-show-emitter-guides');await settle();assert.equal((await emitterState()).settings.emitterGuides,false);
     await page.screenshot({path:out+'/guides-hidden.png'});

@@ -43,8 +43,12 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   },true);
   for(const [id,key] of [['viewport-show-gizmos','gizmos'],['viewport-show-hints','hints'],['viewport-show-emitter-guides','emitterGuides']])byId(id).addEventListener('change',event=>document.defaultView.kaminosViewportSettings.set({[key]:event.target.checked}));
   const opacity=byId('viewport-emitter-opacity');
+  let opacityBefore=null;
+  opacity.addEventListener('focusin',()=>{if(opacityBefore===null)opacityBefore=document.defaultView.kaminosViewportSettings.read().emitterGuideOpacity;});
   opacity.addEventListener('input',()=>{if(opacity.value!==''&&opacity.validity.valid)document.defaultView.kaminosViewportSettings.set({emitterGuideOpacity:Number(opacity.value)});});
   opacity.addEventListener('change',()=>{opacity.value=String(document.defaultView.kaminosViewportSettings.read().emitterGuideOpacity);});
+  opacity.addEventListener('pointercancel',()=>{if(opacityBefore!==null)document.defaultView.kaminosViewportSettings.set({emitterGuideOpacity:opacityBefore});opacityBefore=null;});
+  opacity.addEventListener('blur',()=>{opacityBefore=null;});
   byId('apply-burner-preset').onclick=()=>{try{document.defaultView.kaminosApplyBurnerPreset();byId('authoring-presets').open=false;}catch(error){byId('info-bar').textContent=error.message;}};
   byId('scene-fire-data').onclick=()=>document.defaultView.selectSceneField('flame-field');
   byId('scene-water-data').onclick=()=>document.defaultView.selectSceneField('water-field');

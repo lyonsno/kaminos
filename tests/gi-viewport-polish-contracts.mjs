@@ -24,6 +24,17 @@ test('viewport exposes emitter checkbox and the existing numeric scrub primitive
   assert.ok(/<input[^>]*id="viewport-emitter-opacity"[^>]*type="number"[^>]*step="any"/.test(workspace),'missing opacity scrub field');
 });
 
+test('viewport opacity preview cancellation restores its prior value without adding scene history',()=>{
+  const workspace=readFileSync(new URL('../authoring-workspace.mjs',import.meta.url),'utf8');
+  const start=workspace.indexOf("  const opacity=byId('viewport-emitter-opacity');"),end=workspace.indexOf("  byId('apply-burner-preset')",start);
+  class Input extends EventTarget {value='.55';validity={valid:true};}
+  const opacity=new Input();let value=.55;
+  const api={read:()=>({emitterGuideOpacity:value}),set:next=>{value=next.emitterGuideOpacity;opacity.value=String(value);}};
+  vm.runInNewContext(workspace.slice(start,end),{byId:()=>opacity,document:{defaultView:{kaminosViewportSettings:api}}});
+  opacity.dispatchEvent(new Event('focusin'));opacity.value='.23';opacity.dispatchEvent(new Event('input'));assert.equal(value,.23);
+  opacity.dispatchEvent(new Event('pointercancel'));assert.equal(value,.55);
+});
+
 test('actual viewport API changes flame guides without changing source pose or invalid-value state',()=>{
   const handle=flame.createFlameEmitterHandle(THREE);
   flame.updateFlameEmitterSupportOutline(THREE,handle,{family:'ring',inputRadius:.3});
