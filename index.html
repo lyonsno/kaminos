@@ -3480,11 +3480,11 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <div class="field"><label for="scene-gi-view">View</label><select id="scene-gi-view"><option value="scene">Scene</option><option value="ao">AO visibility</option><option value="gi">Received bounce</option><option value="incoming">Incoming GI</option></select></div>
         <div class="field"><label for="scene-gi-gain" title="Artistic multiplier on estimated surface bounce; not camera exposure">Bounce gain</label><input id="scene-gi-gain" type="number" min="0" step="0.1" value="10"></div>
         <div class="field"><label for="scene-gi-radius" title="Maximum screen-space search reach in scene units; geometry outside the camera view is unavailable">Search radius</label><input id="scene-gi-radius" type="number" min="0.01" step="0.1" value="4"></div>
-        <div class="field"><label for="scene-gi-thickness" title="Assumed thickness behind visible depth, in scene units">Depth thickness</label><input id="scene-gi-thickness" type="number" min="0.01" step="0.01" value="0.3"></div>
-        <details><summary>Sampling &amp; Filter</summary>
-        <div class="field"><label for="scene-gi-slices" title="Angular slices per pixel; cost scales with slices times steps">Slices</label><input id="scene-gi-slices" type="number" min="1" step="1" value="3"></div>
-        <div class="field"><label for="scene-gi-steps" title="Samples on each side of a slice; more steps increase search cost">Steps / side</label><input id="scene-gi-steps" type="number" min="1" step="1" value="8"></div>
-        <div class="slider-row"><label class="slider-label" for="scene-gi-denoise" title="Same-frame depth/normal-aware spatial filter radius in pixels; zero bypasses the filter">Filter radius</label><input id="scene-gi-denoise" type="range" min="0" max="10" step="0.5" value="3"><output id="scene-gi-denoise-value">3</output></div>
+        <div class="field"><label for="scene-gi-thickness" title="Assumed thickness behind visible depth, in scene units">Depth thickness</label><input id="scene-gi-thickness" type="number" min="0" step="any" data-authoring-drag-step="0.01" value="0.3"></div>
+        <div class="field"><label for="scene-gi-slices" title="Angular slices per pixel; cost scales with slices times steps">Slices</label><input id="scene-gi-slices" type="number" min="1" step="1" data-authoring-drag-step="1" value="3"></div>
+        <div class="field"><label for="scene-gi-denoise" title="Same-frame depth/normal-aware spatial filter radius in pixels; zero bypasses the filter">Filter radius</label><input id="scene-gi-denoise" type="number" min="0" max="10" step="any" data-authoring-drag-step="0.1" value="3"><output id="scene-gi-denoise-value" hidden>3</output></div>
+        <details><summary>Sampling</summary>
+        <div class="field"><label for="scene-gi-steps" title="Samples on each side of a slice; more steps increase search cost">Steps / side</label><input id="scene-gi-steps" type="number" min="1" step="1" data-authoring-drag-step="1" value="8"></div>
         </details>
       </div>
       <div id="scene-gi-status" role="status"></div>
@@ -3613,7 +3613,8 @@ import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
   defaultFlameEmitterPose, normalizeFlameEmitterPose, createFlameEmitterHandle,
   updateFlameEmitterSupportOutline, flameDomainTranslationForAcceptedPose,
-  flamePoseInDomain, flamePoseToDomain, normalizeFlameDomainTranslation } from './scene-flame-emitter.mjs';
+  flamePoseInDomain, flamePoseToDomain, normalizeFlameDomainTranslation,
+  resolveFlameEmitterGuideSettings, applyFlameEmitterGuideSettings } from './scene-flame-emitter.mjs';
 let flameEmitterPose = defaultFlameEmitterPose(), applyFlameEmitterPose = null;
 let flameEmitterInjectionSuspended = false;
 let authoredFlamePresent = true;
@@ -3965,20 +3966,26 @@ function escapeHtml(s) {
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let viewportGizmosVisible=true;
+let emitterGuideSettings=resolveFlameEmitterGuideSettings();
 function attachViewportGizmo(target) {
   transformControls.attach(target);
   transformControls.getHelper().visible=viewportGizmosVisible;
   transformControls.enabled=viewportGizmosVisible;
 }
 window.kaminosViewportSettings={
-  read:()=>({gizmos:viewportGizmosVisible,hints:!document.getElementById('navigation-hint').hidden}),
-  set({gizmos=viewportGizmosVisible,hints}={}) {
+  read:()=>({gizmos:viewportGizmosVisible,hints:!document.getElementById('navigation-hint').hidden,emitterGuides:emitterGuideSettings.visible,emitterGuideOpacity:emitterGuideSettings.opacity}),
+  set({gizmos=viewportGizmosVisible,hints,emitterGuides=emitterGuideSettings.visible,emitterGuideOpacity=emitterGuideSettings.opacity}={}) {
+    const nextGuides=resolveFlameEmitterGuideSettings({visible:emitterGuides,opacity:emitterGuideOpacity});
     if(gizmos!==viewportGizmosVisible)scenePlacementTools?.finish(false);
     viewportGizmosVisible=!!gizmos;
     if(transformControls){transformControls.enabled=viewportGizmosVisible;transformControls.getHelper().visible=viewportGizmosVisible && !!transformControls.object;}
     if(hints!==undefined)document.getElementById('navigation-hint').hidden=!hints;
+    emitterGuideSettings=nextGuides;
+    for(const entry of sceneObjects)if(entry.type===FLAME_EMITTER_TYPE)applyFlameEmitterGuideSettings(entry.object,emitterGuideSettings);
     document.getElementById('viewport-show-gizmos')?.toggleAttribute('checked',viewportGizmosVisible);
     const checkbox=document.getElementById('viewport-show-gizmos');if(checkbox)checkbox.checked=viewportGizmosVisible;
+    const guideCheckbox=document.getElementById('viewport-show-emitter-guides');if(guideCheckbox)guideCheckbox.checked=emitterGuideSettings.visible;
+    const opacity=document.getElementById('viewport-emitter-opacity');if(opacity){opacity.value=String(emitterGuideSettings.opacity);opacity.disabled=!emitterGuideSettings.visible;}
     return this.read();
   },
 };
@@ -5712,6 +5719,7 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
   if (flameDomainGuide) flameDomainGuide.visible = activeSceneObjectId === FLAME_EMITTER_ID || activeSceneFieldId==='flame-field';
   if (entry) updateFlameEmitterSupportOutline(THREE, entry.object,
     window.__kaminosVolumeEmitterReceipt?.requested);
+  if (entry) applyFlameEmitterGuideSettings(entry.object,emitterGuideSettings);
   if (entry) applySceneObjectTransformState(entry.object, flameEmitterPose);
   return entry?.object || null;
 }
@@ -25249,7 +25257,7 @@ function installAuthoringParameterEditing() {
       return edits.apply(id,patch,'Set authored parameter');
     },
   };
-  for(const scope of ['#rim-controls','#burner-controls','#selected-flame-fields','#shared-flame-domain-properties','#scene-camera-fields','#scene-gi-controls','#rendering-distributed-controls']) {
+  for(const scope of ['#rim-controls','#burner-controls','#selected-flame-fields','#shared-flame-domain-properties','#scene-camera-fields','#scene-gi-controls','#rendering-distributed-controls','#authoring-viewport-settings']) {
     for(const input of document.querySelectorAll(`${scope} input[type=number]`)) {
       const row=input.closest('.slider-row,.burner-field,.field');const grip=row?.querySelector('label');if(!grip)continue;
       const source=row.querySelector('input[type=range]');

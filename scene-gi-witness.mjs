@@ -26,7 +26,7 @@ try {
   await page.goto(url);
   await page.waitForFunction(()=>window.__kaminosSceneRadianceSetup?.status==='failed'||window.__kaminosVolumePrototype?.debugState().error||(window.kaminosSceneObjectDebugState?.().some(o=>o.id==='kiln')&&window.__kaminosSceneRadiance?.canRender()&&window.__kaminosVolumePrototype.debugState().frameCount>=12),null,{timeout:0});
   report.phase='loaded';await save();
-  if(operation==='--product-controls'||operation==='--product-controls-guided') {
+  if(['--product-controls','--product-controls-guided','--gi-viewport-controls'].includes(operation)) {
     await page.waitForFunction(()=>/^(Scene loaded:|Scene load failed:|Scene restore failed:|Composition restore failed:|Auto-load scene failed:|Invalid scene)/.test(document.getElementById('info-bar').textContent),null,{timeout:0});
     report.sceneLoad=await page.locator('#info-bar').textContent();assert.ok(report.sceneLoad.startsWith('Scene loaded:'),report.sceneLoad);await save();
   }
@@ -38,7 +38,45 @@ try {
     await page.check('#rendering-surface-scattering');
     await page.waitForTimeout(1000);
   }
-  if(operation==='--product-controls'||operation==='--product-controls-guided') {
+  if(operation==='--gi-viewport-controls') {
+    report.phase='gi-viewport-controls';await save();
+    await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
+    const settle=async()=>{const f=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);await page.waitForFunction(before=>window.__kaminosVolumePrototype.debugState().frameCount>before+2,f,{timeout:0});};
+    const original=await page.evaluate(()=>window.kaminosAuthoringParameters.read('@scene-gi'));
+    report.giEdits=[];
+    for(const [id,key,value] of [['scene-gi-thickness','thickness',.0037],['scene-gi-denoise','denoise',2.35],['scene-gi-slices','slices',4]]) {
+      assert.equal(await page.locator('#'+id).isVisible(),true);
+      const before=await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount);
+      await page.locator('#'+id).click();await page.locator('#'+id).fill(String(value));await page.locator('#'+id).blur();await settle();
+      const current=await page.evaluate(()=>({settings:window.kaminosAuthoringParameters.read('@scene-gi'),runtime:window.kaminosSceneGIDebugState(),history:window.kaminosSceneEdits.state().undoCount}));
+      assert.equal(current.settings[key],value);assert.equal(current.runtime[key],value);assert.equal(current.history,before+1);
+      await page.evaluate(()=>window.kaminosSceneEdits.undo());assert.equal((await page.evaluate(()=>window.kaminosAuthoringParameters.read('@scene-gi')))[key],original[key]);
+      await page.evaluate(()=>window.kaminosSceneEdits.redo());assert.equal((await page.evaluate(()=>window.kaminosAuthoringParameters.read('@scene-gi')))[key],value);
+      report.giEdits.push({id,key,value,before,...current});await save();
+    }
+    await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();await page.screenshot({path:out+'/gi-controls.png'});
+    await page.evaluate(()=>{window.selectSceneObject('flame-emitter');window.kaminosWorkspace.setContext('object');});
+    const source=async()=>{const s=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSceneVolumeSource());return createHash('sha256').update(JSON.stringify(s.values)).digest('hex');};
+    report.sourceBefore=await source();
+    const emitterState=()=>page.evaluate(()=>{const data=window.kaminosSceneObjectDebugState().find(o=>o.id==='flame-emitter');return {settings:window.kaminosViewportSettings.read(),emitter:data,source:window.kaminosFlameEmitterState()};});
+    report.beforeGuides=await emitterState();
+    await page.locator('#authoring-viewport-settings > summary').click();
+    await page.locator('#viewport-emitter-opacity').click();await page.locator('#viewport-emitter-opacity').fill('.15');await page.locator('#viewport-emitter-opacity').blur();await settle();
+    assert.equal((await emitterState()).settings.emitterGuideOpacity,.15);
+    await page.screenshot({path:out+'/guides-faint.png'});
+    await page.uncheck('#viewport-show-emitter-guides');await settle();assert.equal((await emitterState()).settings.emitterGuides,false);
+    await page.screenshot({path:out+'/guides-hidden.png'});
+    await page.check('#viewport-show-emitter-guides');await settle();
+    report.afterGuides=await emitterState();report.sourceAfter=await source();
+    assert.equal(report.sourceAfter,report.sourceBefore);assert.deepEqual(report.afterGuides.emitter.transform,report.beforeGuides.emitter.transform);assert.deepEqual(report.afterGuides.source,report.beforeGuides.source);
+    report.phase='save-reopen';await save();report.saved=await page.evaluate(()=>window.saveSceneAs({result:true}));assert.ok(report.saved.ok,JSON.stringify(report.saved));
+    const restored=new URL(url),hash=new URLSearchParams(restored.hash.slice(1));hash.set('scene',report.saved.filename);restored.hash=hash.toString();await page.goto(restored.href);
+    await page.waitForFunction(()=>document.getElementById('info-bar')?.textContent.startsWith('Scene loaded:'),null,{timeout:0});
+    report.reopened=await page.evaluate(()=>window.kaminosAuthoringParameters.read('@scene-gi'));assert.equal(report.reopened.thickness,.0037);assert.equal(report.reopened.denoise,2.35);assert.equal(report.reopened.slices,4);
+    await page.evaluate(()=>{window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
+    await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();await page.screenshot({path:out+'/reopened.png'});
+    await page.setViewportSize({width:800,height:700});await page.waitForTimeout(500);await page.screenshot({path:out+'/compact.png'});
+  } else if(operation==='--product-controls'||operation==='--product-controls-guided') {
     const productPattern=operation==='--product-controls-guided'?'guided':'source';
     report.phase='product-controls';await save();
     await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});

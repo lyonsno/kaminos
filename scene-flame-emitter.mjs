@@ -88,6 +88,25 @@ export function createFlameEmitterHandle(THREE) {
   return group;
 }
 
+export function resolveFlameEmitterGuideSettings({visible=true,opacity=.55}={}) {
+  if(typeof visible!=='boolean'||!Number.isFinite(opacity)||opacity<0||opacity>1)throw Error('Invalid emitter guide settings');
+  return {visible,opacity};
+}
+
+export function applyFlameEmitterGuideSettings(group,value) {
+  const settings=resolveFlameEmitterGuideSettings(value);
+  if(!group)return settings;
+  group.visible=settings.visible;
+  group.traverse(node=>{
+    for(const material of node.material?[node.material].flat():[]) {
+      if(!material.transparent){material.transparent=true;material.needsUpdate=true;}
+      material.opacity=settings.opacity;
+      material.depthWrite=false;
+    }
+  });
+  return settings;
+}
+
 export function updateFlameEmitterSupportOutline(THREE, group, { family, inputRadius } = {}) {
   if (!group) return;
   const signature = `${family}:${inputRadius}`;

@@ -96,11 +96,11 @@ body[data-workspace=authoring] .authoring-splitter { display:block; grid-row:2; 
 #flame-basin-current { overflow-wrap:anywhere; }
 
 /* Numeric fields are relative scrub surfaces; text mode keeps normal selection. */
-#authoring-inspector .authoring-number { appearance:textfield; cursor:ew-resize; text-align:right; padding:4px 9px; border:1px solid #424348; border-radius:4px; background:linear-gradient(#37383c,#303135); font-variant-numeric:tabular-nums; transition:border-color .1s,background .1s; }
-#authoring-inspector .authoring-number:hover { background:#414247; border-color:#606168; }
-#authoring-inspector .authoring-number.scrubbing { background:#4b4131; border-color:#c3a06b; }
-#authoring-inspector .authoring-number:focus:not([readonly]) { cursor:text !important; background:#17181a; border-color:#c3a06b; outline:none; }
-#authoring-inspector .authoring-number::-webkit-inner-spin-button, #authoring-inspector .authoring-number::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+:is(#authoring-inspector,#authoring-viewport-settings) .authoring-number { appearance:textfield; cursor:ew-resize; text-align:right; padding:4px 9px; border:1px solid #424348; border-radius:4px; background:linear-gradient(#37383c,#303135); font-variant-numeric:tabular-nums; transition:border-color .1s,background .1s; }
+:is(#authoring-inspector,#authoring-viewport-settings) .authoring-number:hover { background:#414247; border-color:#606168; }
+:is(#authoring-inspector,#authoring-viewport-settings) .authoring-number.scrubbing { background:#4b4131; border-color:#c3a06b; }
+:is(#authoring-inspector,#authoring-viewport-settings) .authoring-number:focus:not([readonly]) { cursor:text !important; background:#17181a; border-color:#c3a06b; outline:none; }
+:is(#authoring-inspector,#authoring-viewport-settings) .authoring-number::-webkit-inner-spin-button, :is(#authoring-inspector,#authoring-viewport-settings) .authoring-number::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
 
 #authoring-inspector .slider-row:has(.authoring-number) input[type=range], #authoring-inspector .burner-field:has(.authoring-number) input[type=range] { display:none; }
 #authoring-inspector .slider-row .authoring-number { flex:1; min-width:0; }
@@ -125,6 +125,11 @@ body[data-workspace="authoring"] #authoring-burner-slot { display:none; }
 #authoring-viewport-settings summary { padding:5px 8px; cursor:pointer; list-style:none; }
 #authoring-viewport-settings > div { position:absolute; top:100%; right:0; min-width:190px; padding:12px; background:#25262a; border:1px solid #48494d; border-radius:5px; box-shadow:0 8px 24px #0008; }
 #authoring-viewport-settings label { display:block; margin:6px 0; white-space:nowrap; }
+#authoring-viewport-settings input[type=checkbox] { accent-color:#bca176; }
+#authoring-viewport-settings .viewport-guide-opacity { display:flex; align-items:center; gap:12px; margin-top:12px; }
+#authoring-viewport-settings .viewport-guide-opacity label { margin:0; flex:1; white-space:normal; }
+#authoring-viewport-settings > div { box-sizing:border-box; }
+#authoring-viewport-settings .authoring-number-wrap { flex:0 0 72px; }
 
 body[data-workspace=authoring] #tb-gizmo-off { display:none; }
 

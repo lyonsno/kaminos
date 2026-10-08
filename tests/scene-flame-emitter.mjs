@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildSceneDocument, planSceneRestore, isReloadableSceneObjectRecord } from '../scene-persistence-core.js';
 import { createSceneEdits } from '../scene-edit-session.mjs';
-import { flamePoseInDomain } from '../scene-flame-emitter.mjs';
+import { flamePoseInDomain, applyFlameEmitterGuideSettings, resolveFlameEmitterGuideSettings } from '../scene-flame-emitter.mjs';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
@@ -94,8 +94,8 @@ test('clearing a scene removes its old flame member before the next scene saves'
   assert.ok(start>0 && end>start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   const removed=[];
-  const context={authoringControlSessions:[],sceneControlHistory:null,assemblyProxies:new Map(),assemblyEditTargets:new Set(),authoredBurnerBeds:new Map(),FLAME_EMITTER_TYPE:'flame-emitter',scenePlacementTools:null,sceneMutationToken:0,sceneObjects:[flame],flameDomainGuide:null,
-    sceneLoadRequests:{invalidate:()=>{}},sceneMembershipEditTargets:new Set(),localLiquidGeneration:0,localLiquidHost:null,
+  const context={authoringControlSessions:[],sceneControlHistory:null,assemblyProxies:new Map(),assemblyEditTargets:new Set(),groupProxies:new Map(),groupEditTargets:new Set(),authoredBurnerBeds:new Map(),FLAME_EMITTER_TYPE:'flame-emitter',scenePlacementTools:null,sceneMutationToken:0,sceneObjects:[flame],flameDomainGuide:null,
+    sceneLoadRequests:{invalidate:()=>{}},sceneMembershipEditTargets:new Set(),meshDataTargets:new Set(),proceduralMeshes:new Map(),compoundInsertionTargets:new Set(),compoundRetentionTargets:new Set(),sceneSpotLights:new Map(),rimLight:null,localLiquidGeneration:0,localLiquidHost:null,
     scene:{remove:object=>removed.push(object)},disposeObjectTree:()=>{},
     greenroomPreviewState:null,currentMesh:null,sceneGroups:[],activeSceneObjectId:flame.id,
     activeSceneGroupId:null,glbSourceScene:null,transformControls:null,
@@ -127,7 +127,7 @@ test('a source-free analytic family retains the flame handle for editing and sav
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const start=html.indexOf('function ensureAuthoredFlameEmitter(metadata = {}) {');
   const end=html.indexOf('function writeAuthoredFlameEmitterPose(value)',start);
-  const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
+  const flame={id:'flame-emitter',type:'flame-emitter',object:{traverse(visit){visit(this);}}};
   let removed=0,updated=0;
   const context={authoredFlamePresent:true,scene:{remove:()=>removed++},isFireLightFieldRoute:()=>true,
     applyFlameEmitterPose:()=>{},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring',sourceMode:'off'}}},
@@ -135,6 +135,7 @@ test('a source-free analytic family retains the flame handle for editing and sav
     flameDomainTranslation:[0,0,0],
     flameEmitterPose:{position:[2,0,0],rotation:[0,0,0],scale:[1,1,1]},
     applySceneObjectTransformState:()=>updated++,updateFlameEmitterSupportOutline:()=>{},
+    applyFlameEmitterGuideSettings,emitterGuideSettings:resolveFlameEmitterGuideSettings(),
     THREE:{Vector3:class {add(){return this;}}}};
   vm.runInNewContext(html.slice(start,end)+'\nensureAuthoredFlameEmitter();',context);
   assert.equal(removed,0);
