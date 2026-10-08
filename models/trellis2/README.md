@@ -101,8 +101,44 @@ the sampled footprint of owned runner/browser descendants. For the recorded
 512 sneaker, GPUBuffer peak was about **6.27 GiB**; the sampled charged process
 footprint sum reached about **16.4 GiB**. These scopes are different: do not add
 them or interpret either as unique physical memory. Driver/upload-private
-memory and missed transients matter. Safe 16–18 GiB operation is not yet
-established; controlled admission and failure cleanup are the next target.
+memory and missed transients matter. Completion on 16–18 GiB hardware is not
+yet established.
+
+### Explicit refusal controls
+
+The generation command accepts caller-selected `--gpu-buffer-budget-mib` and
+`--process-memory-budget-mib`. Neither is set by default and neither changes
+the requested input, precision, steps or pipeline.
+
+The GPU control first checks declared F32 checkpoint demand before browser
+launch, then refuses any allocation that would exceed the device's live
+API-visible buffer allowance. The process control uses the native macOS
+owned-process footprint observer: an exceeded allowance, lost observation or
+partial coverage stops only the command's independent browser, preserving a
+failed terminal report and reached evidence. This is a command-owned isolated
+browser control, not a Stop button for an operator's shared browser.
+
+For example, adding the following to the generation command deliberately
+exercises early refusal with the current full F32 checkpoints:
+
+```sh
+--gpu-buffer-budget-mib 4096 --process-memory-budget-mib 8192
+```
+
+The sparse-flow checkpoint alone declares about 4.81 GiB, so the 4 GiB
+allowance refuses before inference rather than silently degrading the model.
+Choose an actual run's allowances from the machine's available headroom and
+observed workload, leaving room for its OS and other applications. The process
+observer samples at 1 Hz; these controls do not bound driver-private memory,
+other applications or unobserved transient spikes.
+
+Native component checks exercised real partial DINO allocation refusal,
+zero remaining tracked buffers, continued use of the borrowed device after
+retirement, and a footprint-triggered stop of the exact owned browser.
+They are safety-path evidence on the development machine, not a small-machine
+fit certificate. GPU ceilings currently reject shared-composition requests
+before touching the host: applying a model allowance to unrelated host
+allocations would be incorrect.
 
 ## Resident generation stages
 
