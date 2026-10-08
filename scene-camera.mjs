@@ -53,7 +53,7 @@ export function createSceneCameras({edits,readObjects,writeCameras,readViewport,
  const sync=()=>{if(mode==='camera'){const item=active();if(!item){mode='user';if(userView)applyViewport(userView);}else applyViewport(cameraViewFromRecord(item,settings.aspect[0]/settings.aspect[1],distance));}notify();};
  const read=()=>({settings:copy(settings),cameras:cameras()});
  const checked=value=>{const records=value.cameras.map(checkedCameraRecord),ids=new Set();for(const record of records){if(ids.has(record.id))throw Error('Duplicate camera identity');ids.add(record.id);}const meta=normalizeSceneCamera(value.settings,records);if(mode==='camera'&&meta.activeId&&!supportsProjection(records.find(o=>o.id===meta.activeId).camera.projection))throw Error('This render route does not support that camera projection');return {settings:meta,cameras:records};};
- const put=value=>{const next=checked(value);writeCameras(next.cameras);settings=next.settings;sync();};
+ const put=value=>{const next=checked(value),before=read();settings=next.settings;try{writeCameras(next.cameras);}catch(error){settings=before.settings;writeCameras(before.cameras);throw error;}sync();};
  edits.register('@scene-cameras',{read,check:checked,write:put});
  const available=()=>{admit();if(edits.state().active||edits.state().replaying)throw Error('Finish the current edit before changing cameras');};
  const change=(value,label)=>{available();return edits.apply('@scene-cameras',checked(value),label);};
@@ -79,6 +79,7 @@ export function createSceneCameras({edits,readObjects,writeCameras,readViewport,
   wheelEnd(){if(!navigationId)return;if(navigationTimer!==null)clearTimeout(navigationTimer);const id=navigationId;navigationTimer=setTimeout(()=>{navigationTimer=null;if(navigationId===id)finishNavigation(false);},180);},
   panFrame(dx,dy){const {width,height}=size();frameOffset=[frameOffset[0]+dx/width,frameOffset[1]+dy/height];sync();},
   zoomFrame(factor){if(!Number.isFinite(factor)||factor<=0)throw Error('Invalid camera-frame zoom');const next=frameZoom/factor;if(!Number.isFinite(next)||next<=0)throw Error('Camera frame exceeds numeric precision');frameZoom=next;sync();},
+  frameBounds(){if(mode!=='camera')return false;frameZoom=.85;frameOffset=[0,0];sync();return true;},
   frameLayout:()=>({zoom:frameZoom,offset:[...frameOffset]}),restoreFrameLayout(value){frameZoom=value.zoom;frameOffset=[...value.offset];sync();},
   async capture(){finishNavigation(false);const original={camera:copy(readViewport()),viewport:api.viewportState()},layout=api.frameLayout();enter();const record=active();try{return await capture(copy(record),frame(),original);}finally{mode=original.viewport.mode;locked=original.viewport.locked;userView=original.viewport.userView??null;frameZoom=layout.zoom;frameOffset=layout.offset;if(mode==='camera')sync();else {applyViewport(original.camera);notify();}}},
   clear(){finishNavigation(true);mode='user';userView=null;settings=normalizeSceneCamera(null,[]);notify();},

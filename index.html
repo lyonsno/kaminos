@@ -3935,7 +3935,7 @@ import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,
 
 let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
-let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null;
+let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null,viewPie=null;
 let restoringSceneLight=false;
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -11684,10 +11684,10 @@ async function initScene() {
     roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat' && entry.type!=='light' && entry.type!==CAMERA_TYPE).map(entry => entry.object),
       ...(currentMesh && !sceneObjects.some(entry => entry.object === currentMesh) ? [currentMesh] : [])],
     occluders: () => groundPlane ? [groundPlane] : [],
-    navigationHook:{begin:mode=>sceneCameras?.beginNavigation(mode)??false,changed:()=>sceneCameras?.navigationChanged(),end:cancel=>sceneCameras?.endNavigation(cancel),wheelEnd:()=>sceneCameras?.wheelEnd(),frameLayout:()=>sceneCameras?.frameLayout(),restoreFrameLayout:value=>sceneCameras?.restoreFrameLayout(value),pan:(dx,dy)=>sceneCameras?.panFrame(dx,dy),zoom:factor=>sceneCameras?.zoomFrame(factor)},
+    navigationHook:{viewChange:()=>sceneCameras?.leave({continueFromCamera:true}),frameBounds:()=>sceneCameras?.frameBounds(),begin:mode=>sceneCameras?.beginNavigation(mode)??false,changed:()=>sceneCameras?.navigationChanged(),end:cancel=>sceneCameras?.endNavigation(cancel),wheelEnd:()=>sceneCameras?.wheelEnd(),frameLayout:()=>sceneCameras?.frameLayout(),restoreFrameLayout:value=>sceneCameras?.restoreFrameLayout(value),pan:(dx,dy)=>sceneCameras?.panFrame(dx,dy),zoom:factor=>sceneCameras?.zoomFrame(factor)},
     frameAll: () => { const framed = frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); if (framed) markDirty(); return framed; },
     frameSelected: () => { const framed = frameAuthoredSelection(); if (framed) markDirty(); return framed; },
-    blocked: () => authoringBusy || scenePlacementTools?.edits.state().active?.id==='@viewport-lens' || transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
+    blocked: () => !!viewPie?.state() || authoringBusy || scenePlacementTools?.edits.state().active?.id==='@viewport-lens' || transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
     inputMode: () => navigationInput.value,
     status: updateNavigationHint,
   });
@@ -11723,7 +11723,7 @@ async function initScene() {
     write: applyAuthoredScenePose,
     object: id => id==='@selection-transform'?selectionTransformProxy():id?.startsWith('@group:') ? groupProxy(sceneGroups.find(group=>`@group:${group.id}`===id)) : sceneObjects.find(item => item.id === id)?.object,
     refresh: () => { updateTransformInspector(); markDirty(); },
-    allowed: () => !greenroomPreviewIsActive() && !splatCorrectionMode,
+    allowed: () => !viewPie?.state() && !greenroomPreviewIsActive() && !splatCorrectionMode,
     busy: () => authoringBusy,
     frameSelected: window.kaminosFrameSelected,
     captureContext: id => id==='@selection-transform'||id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
@@ -11793,7 +11793,7 @@ async function initScene() {
   scenePlacementTools.addHistoryScope(document.getElementById('selected-camera-properties'));
   window.kaminosSceneCameras=sceneCameras;
   const cameraViewAction=id=>{if(id==='camera'){sceneCameras.toggle();return;}if(id==='selected'){sceneCameras.leave();window.kaminosFrameSelected();return;}sceneCameras.leave();navigation.axis(id);};
-  installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
+  viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
   document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
   controls.addEventListener('change',()=>{if(authoringWorkspace.state().context==='camera')cameraViewsPanel.refresh();});
@@ -28476,7 +28476,7 @@ function mountAuthoredCamera(raw){
   const record=checkedCameraRecord(raw);let entry=sceneObjects.find(o=>o.id===record.id);
   if(!entry){const object=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xa2acb9}));object.userData.kaminosEditorOnly=true;entry={...record,object};sceneObjects.push(entry);scene.add(object);}else Object.assign(entry,{...record,object:entry.object});
   const aspect=sceneCameras?sceneCameras.read().settings.aspect[0]/sceneCameras.read().settings.aspect[1]:16/9;
-  const h=.65*record.camera.sensorWidth/(2*record.camera.lens*aspect),w=h*aspect,z=-.65;
+  const spec=cameraViewFromRecord(record,aspect),h=record.camera.projection==='orthographic'?spec.orthoScale/2:.65*Math.tan(spec.fov*Math.PI/360),w=h*aspect,z=-.65;
   const corners=[[-w,-h,z],[w,-h,z],[w,h,z],[-w,h,z]],points=[];
   for(let i=0;i<4;i++){points.push(0,0,0,...corners[i],...corners[i],...corners[(i+1)%4]);}
   points.push(-w*.3,h,z,0,h*1.5,z,0,h*1.5,z,w*.3,h,z);
@@ -29197,7 +29197,7 @@ function installSelectionInput(){
   function beginBox(){if(scenePlacementTools.edits.state().active)return;if(box)return;box={start:null,prior:controls.enabled};setInfo('Box selection · LMB adds · MMB removes · Escape cancels');}
   window.kaminosSelection.box=beginBox;
   document.addEventListener('keydown',event=>{
-    if(event.target.closest?.('input,textarea,select,[contenteditable="true"]')||event.ctrlKey||event.metaKey||(event.altKey&&event.key.toLowerCase()!=='a')||greenroomPreviewIsActive()||scenePlacementTools.state().modal)return;
+    if(viewPie?.state()||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||event.ctrlKey||event.metaKey||(event.altKey&&event.key.toLowerCase()!=='a')||greenroomPreviewIsActive()||scenePlacementTools.state().modal)return;
     if(box&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();stopBox();return;}
     if(event.key.toLowerCase()==='b'){event.preventDefault();beginBox();}
     if(event.key.toLowerCase()==='a'){event.preventDefault();event.altKey?window.kaminosSelection.clear():window.kaminosSelection.all();}

@@ -348,28 +348,28 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
       || !(hover || viewport.contains(document.activeElement)) || !permitted() || e.metaKey || e.altKey) return;
     const code = e.code;
     const sign = e.ctrlKey ? -1 : 1;
-    let action;
-    // Kaminos is Y-up: front +Z, right +X, top +Y. Cardinal views keep perspective.
-    if (code === 'Numpad1') action = () => viewCamera(camera, controls.target, new Vector3(0,0,sign));
-    else if (code === 'Numpad3') action = () => viewCamera(camera, controls.target, new Vector3(sign,0,0));
-    else if (code === 'Numpad7') action = () => viewCamera(camera, controls.target, new Vector3(0,sign,0));
-    else if ((e.ctrlKey || e.shiftKey) && ['Numpad4','Numpad6','Numpad8','Numpad2'].includes(code)) action = () => {
-      const pixels = canvas.clientHeight * .1;
-      const eye = camera.position.clone();
-      panCamera(camera, controls.target, code === 'Numpad4' ? pixels : code === 'Numpad6' ? -pixels : 0,
-        code === 'Numpad8' ? pixels : code === 'Numpad2' ? -pixels : 0, canvas.clientHeight);
-      workingPivot?.add(camera.position.clone().sub(eye));
-    };
-    else if (!e.ctrlKey && ['Numpad4','Numpad6','Numpad8','Numpad2','Numpad9'].includes(code)) action = () => {
-      const step = Math.PI / 12;
-      orbitCamera(camera, controls.target, controls.target.clone(),
-        code === 'Numpad4' ? -step : code === 'Numpad6' ? step : code === 'Numpad9' ? Math.PI : 0,
-        code === 'Numpad8' ? -step : code === 'Numpad2' ? step : 0);
-    };
-    else if (!e.ctrlKey && ['NumpadAdd','NumpadSubtract'].includes(code)) action = () => zoomCamera(camera, controls.target, code === 'NumpadAdd' ? 1/1.2 : 1.2);
-    else if (!e.ctrlKey && code === 'Home') action = () => {if (frameAll()) workingPivot = null;};
-    else if (!e.ctrlKey && !e.shiftKey && (e.key.toLowerCase() === 'f' || code === 'NumpadDecimal')) action = () => {if (frameSelected()) workingPivot = null;};
-    if (action) {take(e); action(); changed();}
+    let action,mode='orbit',leaveView=false,panDelta=null,zoomFactor=null,home=false;
+    // Y-up authored scenes retain their existing axis convention.
+    if (code === 'Numpad1'){leaveView=true;action=()=>viewCamera(camera,controls.target,new Vector3(0,0,sign));}
+    else if(code==='Numpad3'){leaveView=true;action=()=>viewCamera(camera,controls.target,new Vector3(sign,0,0));}
+    else if(code==='Numpad7'){leaveView=true;action=()=>viewCamera(camera,controls.target,new Vector3(0,sign,0));}
+    else if(e.ctrlKey&&['Numpad4','Numpad6','Numpad8','Numpad2'].includes(code)){
+      mode='pan';const pixels=canvas.clientHeight*.1;panDelta=[code==='Numpad4'?pixels:code==='Numpad6'?-pixels:0,code==='Numpad8'?pixels:code==='Numpad2'?-pixels:0];
+      action=()=>{const eye=camera.position.clone();panCamera(camera,controls.target,...panDelta,canvas.clientHeight);workingPivot?.add(camera.position.clone().sub(eye));};
+    }else if(e.shiftKey&&!e.ctrlKey&&['Numpad4','Numpad6'].includes(code)){
+      action=()=>{const rotation=new Quaternion().setFromAxisAngle(camera.getWorldDirection(new Vector3()),code==='Numpad4'?-Math.PI/12:Math.PI/12);camera.quaternion.premultiply(rotation);camera.up.set(0,1,0).applyQuaternion(camera.quaternion);};
+    }else if(!e.ctrlKey&&!e.shiftKey&&['Numpad4','Numpad6','Numpad8','Numpad2','Numpad9'].includes(code)){
+      action=()=>{const step=Math.PI/12;orbitCamera(camera,controls.target,controls.target.clone(),code==='Numpad4'?-step:code==='Numpad6'?step:code==='Numpad9'?Math.PI:0,code==='Numpad8'?-step:code==='Numpad2'?step:0);};
+    }else if(!e.ctrlKey&&['NumpadAdd','NumpadSubtract'].includes(code)){mode='dolly';zoomFactor=code==='NumpadAdd'?1/1.2:1.2;action=()=>zoomCamera(camera,controls.target,zoomFactor);}
+    else if(!e.ctrlKey&&code==='Home'){home=true;leaveView=true;action=()=>{if(frameAll())workingPivot=null;};}
+    else if(!e.ctrlKey&&!e.shiftKey&&(e.key.toLowerCase()==='f'||code==='NumpadDecimal')){leaveView=true;action=()=>{if(frameSelected())workingPivot=null;};}
+    if(action){
+      take(e);
+      if(home&&navigationHook.frameBounds?.()){changed();return;}
+      if(leaveView)navigationHook.viewChange?.();
+      else if(navigationHook.begin?.(mode)===true){if(mode==='pan')navigationHook.pan?.(...panDelta);else navigationHook.zoom?.(zoomFactor);return;}
+      action();changed();if(!leaveView){navigationHook.changed?.();navigationHook.end?.(false);}
+    }
   }, true);
   return {
     prepare: prepareNavigationGeometry,
