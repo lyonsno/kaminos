@@ -29622,9 +29622,24 @@ window.openSavedScene = async function() {
     const data = await grFetchApi('read', { root: 'scenes', path: name }).catch(() => null);
     return { name, label: data?.label || data?.capture?.label || '', timestamp: data?.timestamp || '' };
   }));
+  const library = await fetch('/api/scene-library').then(response => response.json()).catch(() => ({ stores: [] }));
+  for (const store of library.stores || []) {
+    for (const scene of store.scenes) if (!scene.error) scenes.push({ ...scene, store: { id: store.id, label: store.label } });
+  }
   const choice = await pickSavedScene({ scenes });
   if (choice === 'browse') { document.getElementById('scene-file-input').click(); return; }
   if (!choice?.name) return;
+  if (choice.store) {
+    // A scene from another server opens as a new scene here: loading saves a
+    // local copy (compositions reopen on their flame route) and never writes
+    // back to the other server's folder.
+    const response = await fetch(`/api/scene-library-read?${new URLSearchParams({ store: choice.store.id, name: choice.name })}`);
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || data.error) { setInfo(`Could not read ${choice.name} from ${choice.store.label}: ${data?.error || response.status}`); return; }
+    setInfo(`Opening ${data.label || choice.name} from ${choice.store.label}`);
+    await loadSceneFile(new File([JSON.stringify(data)], choice.name, { type: 'application/json' }));
+    return;
+  }
   const sceneData = await grFetchApi('read', { root: 'scenes', path: choice.name });
   if (!sceneData || sceneData.error) { setInfo(`Could not read ${choice.name}: ${sceneData?.error || 'unavailable'}`); return; }
   await loadSceneFile(new File([JSON.stringify(sceneData)], choice.name, { type: 'application/json' }), { sceneFile: choice.name });

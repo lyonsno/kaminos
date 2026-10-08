@@ -4,6 +4,7 @@
 import http.server
 import copy
 import fcntl
+import glob
 import hashlib
 import json
 import math
@@ -2112,6 +2113,29 @@ def parse_server_arguments(argv):
 
 # Directories the browse API can access
 SCENES_DIR = Path(os.environ.get("KAMINOS_SCENES_DIR", ROOT / "scenes")).expanduser().resolve()
+
+# Where other Kaminos servers on this machine keep scenes: copied lane stores,
+# shared stores, and the scene folders of sibling checkouts beside this one.
+# KAMINOS_SCENE_LIBRARY_GLOBS (os.pathsep-separated) replaces the defaults.
+SCENE_LIBRARY_DEFAULT_GLOBS = (
+    "~/.local/state/kaminos/*/scenes",
+    "~/.local/share/kaminos/*/scenes",
+    str(ROOT.parent / "*" / "scenes"),
+)
+
+
+def scene_library_stores():
+    configured = os.environ.get("KAMINOS_SCENE_LIBRARY_GLOBS")
+    patterns = configured.split(os.pathsep) if configured else SCENE_LIBRARY_DEFAULT_GLOBS
+    own = Path(SCENES_DIR).resolve()
+    stores = {}
+    for pattern in patterns:
+        for match in sorted(glob.glob(os.path.expanduser(pattern))):
+            path = Path(match).resolve()
+            if path == own or not path.is_dir():
+                continue
+            stores[hashlib.sha1(str(path).encode()).hexdigest()[:12]] = path
+    return stores
 SCENES_DIR.mkdir(parents=True, exist_ok=True)
 KAMINOS_ASSETS_DIR = Path(os.environ.get(
     "KAMINOS_ASSETS_DIR",
@@ -3103,6 +3127,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_pipeline_manifest()
         elif parsed.path == "/api/browse":
             self.handle_browse(parse_qs(parsed.query))
+        elif parsed.path == "/api/scene-library":
+            self.handle_scene_library(parse_qs(parsed.query))
+        elif parsed.path == "/api/scene-library-read":
+            self.handle_scene_library_read(parse_qs(parsed.query))
         elif parsed.path == "/api/assets":
             self.handle_assets(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
@@ -3891,6 +3919,44 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 "exists": path.exists(),
             }
         self.send_json(roots)
+
+    def handle_scene_library(self, params):
+        """List scenes saved by other Kaminos servers on this machine (read-only)."""
+        stores = []
+        for store_id, path in scene_library_stores().items():
+            scenes = []
+            for scene_path in sorted(path.glob("*.kaminos.json")):
+                entry = {"name": scene_path.name, "label": "", "timestamp": ""}
+                try:
+                    data = json.loads(scene_path.read_text())
+                    entry["label"] = str(data.get("label") or (data.get("capture") or {}).get("label") or "")
+                    entry["timestamp"] = str(data.get("timestamp") or "")
+                except (OSError, ValueError) as error:
+                    entry["error"] = str(error)
+                scenes.append(entry)
+            if scenes:
+                stores.append({"id": store_id, "label": path.parent.name, "path": str(path), "scenes": scenes})
+        self.send_json({"stores": stores})
+
+    def handle_scene_library_read(self, params):
+        """Read one scene from another server's store; never writes there."""
+        store_id = (params.get("store") or [""])[0]
+        name = (params.get("name") or [""])[0]
+        store = scene_library_stores().get(store_id)
+        if store is None:
+            self.send_json({"error": "Unknown scene store"}, 404)
+            return
+        if Path(name).name != name or not name.endswith(".kaminos.json"):
+            self.send_json({"error": "Invalid scene name"}, 400)
+            return
+        scene_path = (store / name).resolve()
+        if not scene_path.is_relative_to(store.resolve()) or not scene_path.is_file():
+            self.send_json({"error": "Scene not found"}, 404)
+            return
+        try:
+            self.send_json(json.loads(scene_path.read_text()))
+        except (OSError, ValueError) as error:
+            self.send_json({"error": f"Scene unreadable: {error}"}, 400)
 
     def handle_browse(self, params):
         """List directory contents. ?root=scratch&path=subdir"""

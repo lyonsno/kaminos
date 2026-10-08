@@ -14,3 +14,12 @@ test('saved scenes list newest first and filter by label or file name words', ()
   assert.equal(sceneMatchesFilter(scenes[2], 'undated'), true);
   assert.equal(sceneMatchesFilter(scenes[2], ''), true);
 });
+
+test('scenes from other servers list after this server and match their server name', () => {
+  const scenes = [
+    { name: 'tuned.kaminos.json', label: 'Unified lighting', timestamp: '2026-10-08T17:37:04Z', store: { id: 'a1', label: 'beaming-scene-source-0927' } },
+    { name: 'mine.kaminos.json', label: 'Mine', timestamp: '2026-10-01T00:00:00Z' },
+  ];
+  assert.deepEqual(sortScenesNewestFirst(scenes).map(scene => scene.name), ['mine.kaminos.json', 'tuned.kaminos.json']);
+  assert.equal(sceneMatchesFilter(scenes[0], 'beaming lighting'), true);
+});
