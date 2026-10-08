@@ -24,7 +24,21 @@ export function liquidDepthNormal(center,left,right,up,down,viewToCamera) {
  if(Math.hypot(...n)<1e-6)return view;
  n=normalize(n);return n.reduce((s,v,i)=>s+v*view[i],0)<0?n.map(v=>-v):n;
 }
+export function liquidCameraRayFromEndpoints(near,far) {
+ if(![near,far].every(p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite)))throw Error('Camera ray needs finite unprojected endpoints');
+ const d=far.map((v,i)=>v-near[i]),length=Math.hypot(...d);if(!(length>0))throw Error('Camera ray endpoints coincide');return d.map(v=>v/length);
+}
 export const LOCAL_LIQUID_TRANSPORT_WGSL=/* wgsl */`
+fn liquidCameraDirection(pixel: vec2<i32>) -> vec3<f32> {
+  let dims = vec2<f32>(textureDimensions(surfaceAccumulation));
+  var ndc = (vec2<f32>(pixel) + vec2<f32>(0.5)) / dims * 2.0 - vec2<f32>(1.0);
+  ndc.y = -ndc.y;
+  let nearH = params.inverseViewProjection * vec4<f32>(ndc, 0.0, 1.0);
+  let farH = params.inverseViewProjection * vec4<f32>(ndc, 1.0, 1.0);
+  let nearWorld = nearH.xyz / nearH.w;
+  let farWorld = farH.xyz / farH.w;
+  return normalize(farWorld - nearWorld);
+}
 fn liquidDepthPoint(pixel: vec2<i32>, referenceDepth: f32, backSurface: bool) -> vec4<f32> {
   let dims = vec2<i32>(textureDimensions(surfaceAccumulation));
   if (any(pixel < vec2<i32>(0)) || any(pixel >= dims)) { return vec4<f32>(0.0); }
@@ -37,9 +51,7 @@ fn liquidDepthPoint(pixel: vec2<i32>, referenceDepth: f32, backSurface: bool) ->
 fn liquidWorldNormalAtRadius(pixel: vec2<i32>, requestedRadius: i32, backSurface: bool) -> vec3<f32> {
   let depth = select(readFrontDepth(pixel), readBackDepth(pixel), backSurface);
   let center = reconstructWorldPosition(pixel, depth);
-  let viewOffset = params.cameraPosition.xyz - center;
-  var viewToCamera = -params.cameraForward.xyz;
-  if (length(viewOffset) > 0.000001) { viewToCamera = normalize(viewOffset); }
+  let viewToCamera = -liquidCameraDirection(pixel);
   var dx = vec3<f32>(0.0);
   var dy = vec3<f32>(0.0);
   var hasX = false;
