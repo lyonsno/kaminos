@@ -7194,7 +7194,6 @@ fn sampleOuterSmoke(p:vec3<f32>)->vec4<f32>{
     let w=select(1.0-f,f,vec3<bool>(x==1,y==1,z==1));result+=textureLoad(outerSmokeOptical,c,0)*w.x*w.y*w.z;
   }}}return result;
 }
-fn outerSmokeAmbient()->vec3<f32>{return vec3<f32>(u.emissive_material.z);}
 ${OUTER_SMOKE_OPTICS_WGSL}
 fn joinedSmokeIncidentAt(p:vec3<f32>,extinction:f32)->vec3<f32>{
   if(!OUTER_SMOKE){return incidentAt(p);}
@@ -7203,7 +7202,7 @@ fn joinedSmokeIncidentAt(p:vec3<f32>,extinction:f32)->vec3<f32>{
   // clamped edge column or switching to unattenuated ambient at the fine box.
   let inset=1.0/f32(LIGHT_GRID);
   let q=clamp(p,vec3<f32>(-1.0+inset),vec3<f32>(1.0-inset));
-  return continueOuterSmokeRadiance(incidentAt(q),outerSmokeAmbient(),length(p-q),extinction);
+  return continueOuterSmokeRadiance(incidentAt(q),length(p-q),extinction);
 }
 ${SMOKE_INCIDENT_WGSL}
 

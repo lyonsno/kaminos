@@ -11,16 +11,18 @@ export function outerSmokeConfig({grid=32, extent=4, pressureIterations=24, near
 export const outerCellCenter=(c,xyz)=>xyz.map((v,a)=>c.min[a]+(v+.5)*c.cellWidth);
 export const nearVelocityToLocal=(v,grid)=>v.map(x=>x*2/grid);
 // Consumer approximation beyond the existing incident lattice: continue the
-// boundary radiance smoothly toward authored ambient. Extinction uses local
-// smoke as a segment estimate; this is not an exterior lighting solve.
-export function continueOuterSmokeRadiance(incident,ambient,distance,extinction) {
+// boundary radiance with attenuation only. Ambient already participates in the
+// incident lattice; adding it again outside invents unoccluded illumination.
+// Extinction uses local smoke as a segment estimate, with heuristic geometric
+// dilution; this is not an exterior or environment lighting solve.
+export function continueOuterSmokeRadiance(incident,distance,extinction) {
   const d=Math.max(0,distance),w=Math.exp(-Math.max(0,extinction)*d)/(1+d*d);
-  return incident.map((v,i)=>ambient[i]+(v-ambient[i])*w);
+  return incident.map(v=>v*w);
 }
 export const OUTER_SMOKE_OPTICS_WGSL=/* wgsl */`
-fn continueOuterSmokeRadiance(incident:vec3<f32>,ambient:vec3<f32>,distance:f32,extinction:f32)->vec3<f32>{
+fn continueOuterSmokeRadiance(incident:vec3<f32>,distance:f32,extinction:f32)->vec3<f32>{
   let d=max(0.0,distance);let w=exp(-max(0.0,extinction)*d)/(1.0+d*d);
-  return mix(ambient,incident,w);
+  return incident*w;
 }
 `;
 // The outer domain evolves through the fine grid's sacrificial edge band.
