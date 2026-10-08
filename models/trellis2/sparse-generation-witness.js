@@ -7,11 +7,11 @@ import {createTrellisAssetAdapter} from './trellis-material.js';
 import {observeDeviceMemory} from './device-memory.js';
 import {createTrellisSharedHost} from './shared-host.js';
 const hash=async data=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),v=>v.toString(16).padStart(2,'0')).join('');
-export async function runGenerationWitness(expectedSha,{memoryMonitor=false,sharedComposition}={}){
+export async function runGenerationWitness(expectedSha,{memoryMonitor=false,sharedComposition,assetMode='raw-glb'}={}){
   const report={status:'failed',phase:'input-manifest',requestedRoute:GENERATION_ROUTE,numericalStatus:'not-compared',
     comparison:'actual WebGPU image generation with retained prepared pixels and browser noise; no matched MLX fidelity claim',outputs:{}},errors=[];
   let session,device,implementation,assetConsumer,runtime,scope=false,invocationOwner,serving=false,currentPhase='new',memory,bridge,sharedRun;
-  report.memory={requested:memoryMonitor};
+  report.memory={requested:memoryMonitor};report.assetMode=assetMode;
   const setPhase=(phase,modelRole)=>{report.phase=phase;memory?.setPhase(modelRole?phase+':'+modelRole:phase);};
   const stageCounts={},save=async(name,values,shape,dtype)=>{
     const response=await fetch('/output/'+name,{method:'POST',headers:{'X-Tensor-Dtype':dtype},body:values});
@@ -29,6 +29,7 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
   };
   try{
     if(typeof memoryMonitor!=='boolean')throw TypeError('explicit boolean memory-monitor selection required');
+    if(!['raw-glb','retained-fields-only'].includes(assetMode))throw TypeError('explicit supported asset mode required');
     const fetched=await fetch('/fixture/manifest.json',{cache:'no-store'});if(!fetched.ok)throw Error('generation inputs unavailable');
     const bytes=await fetched.arrayBuffer();if(await hash(bytes)!==expectedSha)throw Error('changed generation manifest');
     const m=JSON.parse(new TextDecoder().decode(bytes));validateGenerationInputs(m);
@@ -116,6 +117,7 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
     for(const [i,t]of out.geometry.subdivisions.entries())fields['geometry.subdivision'+i]=t;
     for(const [name,t]of Object.entries(fields)){const raw=await runtime.readTensor(t),data=t.dtype==='i32'?new Int32Array(raw):new Float32Array(raw);
       await save(name,data,t.shape,t.dtype);}
+    if(assetMode==='raw-glb'){
     assetConsumer=createTrellisAssetAdapter({runtime,geometry:out.geometry,material:out.material,
       provenance:{inputManifestSha256:expectedSha,route:actual.routeId,sessionId:session.snapshot().sessionId,modelIdentities:out.modelIdentities,
         input:'actual current WebGPU image generation; exact borrowed geometry/material tensors',comparison:report.comparison},
@@ -129,10 +131,13 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
       throw Error('partial/changed learned asset receipt');
     report.assetHandoff=asset.handoff;report.assetPostprocess={uv:asset.mesh.uvMetadata,material:asset.textures.metadata,
       textureSize:[asset.textures.width,asset.textures.height],coveredPixels:asset.textures.coveredPixels};
-    setPhase('profile');report.profile=actual.runtime.finishProfile({evidence:{mode:'live',source:'actual-image-to-learned-fields'}});report.profileStatus='passed';
+    }
+    setPhase('profile');report.profile=actual.runtime.finishProfile({requiredStages,evidence:{mode:'live',source:'actual-image-to-learned-fields'}});report.profileStatus='passed';
     const validation=await device.popErrorScope();scope=false;if(validation)errors.push(validation.message);if(errors.length)throw Error(errors.join('\n'));
     report.status='succeeded';validateGenerationResult(report,m);report.phase=null;
-    report.handoff='actual borrowed learned fields become retained PBR GLB; Kaminos inspection/placement/save/reopen outstanding';
+    report.handoff=assetMode==='retained-fields-only'
+      ?'complete retained WebGPU learned fields; cleanup/UV/PBR finishing is a separate model-free consumer'
+      :'actual borrowed learned fields become retained PBR GLB; Kaminos inspection/placement/save/reopen outstanding';
   }catch(error){report.status='failed';report.error={name:error.name,message:error.message,stack:error.stack};report.lastGenerationPhase=implementation?.phase;
     memory?.setPhase('failure-retention-readback');
     if(implementation){serving=false;for(const [name,n]of Object.entries(implementation.noiseInputs))if(!report.outputs['noise.'+name])
