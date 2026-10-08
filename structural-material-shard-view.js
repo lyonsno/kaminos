@@ -23,7 +23,7 @@ const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),normal=new THR
 const icon=(id,shape)=>{$(id).replaceChildren(createElement(shape));};icon('reset',RotateCcw);icon('pause',Pause);icon('release',Hand);
 const stamp=(kind,data)=>inputs.push({kind,data,at:performance.now(),steps:observed?.steps,epoch:observed?.damageEpoch});
 const positions=state=>Array.from({length:manifest.model.points},(_,i)=>state.state.slice(i*16+4,i*16+7));
-const cameraState=()=>({position:camera.position.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),near:camera.near,far:camera.far,fov:camera.fov});
+const cameraState=()=>{camera.updateMatrixWorld(true);return{position:camera.position.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),near:camera.near,far:camera.far,fov:camera.fov};};
 const fail=e=>{failure={message:e.message,stack:e.stack};$('failure').textContent=e.message;gesture=null;controls.enabled=true;};
 const settle=async()=>{while(busy){if(failure)throw new Error(failure.message);await new Promise(r=>setTimeout(r,5));}};
 function inside(piece,p){return piece.halfspaces.every(h=>h.side*(h.normal.reduce((s,v,k)=>s+v*Math.fround(p[k]),0)-h.offset)>=0);}
