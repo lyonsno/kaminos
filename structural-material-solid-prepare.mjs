@@ -13,7 +13,7 @@ try{
   const start=performance.now(),model=prepareSolidTopology(mesh,{...config,kind}),n=model.positions.length;
   const arrays=packSolidTopology(model),buffers={};
   for(const [name,array] of Object.entries(arrays)){const bytes=Buffer.from(array.buffer,array.byteOffset,array.byteLength),filename=`${kind}-${name}.bin`;fs.writeFileSync(path.join(out,filename),bytes);buffers[name]={filename,byteLength:bytes.byteLength,sha256:hash(bytes),type:array.constructor.name};}
-  report.models.push({kind,route:model.route,material:model.material,points:n,elements:model.elements.length,bonds:model.bonds.length,incidences:model.incidence.length,colorCount:model.colorCount,volume:model.volume,mass:model.masses.reduce((a,b)=>a+b,0),preparationMilliseconds:performance.now()-start,buffers,claim:model.claim});save();
+  report.models.push({kind,route:model.route,bufferLayout:model.bufferLayout,material:model.material,points:n,elements:model.elements.length,bonds:model.bonds.length,incidences:model.incidence.length,colorCount:model.colorCount,volume:model.volume,mass:model.masses.reduce((a,b)=>a+b,0),preparationMilliseconds:performance.now()-start,buffers,claim:model.claim});save();
  }
  report.status='passed';report.phase='complete';save();
 }catch(error){report.status='failed';report.failure={message:error.message,stack:error.stack};save();process.exitCode=1;}

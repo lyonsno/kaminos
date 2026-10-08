@@ -5,7 +5,7 @@ export function packSolidTopology(model){
   const state=new Float32Array(model.positions.length*16);model.positions.forEach((p,i)=>state.set([...p,model.masses[i],...p,model.colors[i],0,0,0,0,...p,0],i*16));
   const elementBonds=Uint32Array.from(model.elementBonds.flatMap(edges=>[...edges,0,0]));
   return{state,elements:Uint32Array.from(model.elements.flat()),bonds:Uint32Array.from(model.bonds.flatMap(([a,b])=>[a,b,1,0])),
-    incidence:Uint32Array.from([...model.incidenceOffsets,...model.incidence.flat()]),parameters:model.parameters,coefficients:model.coefficients,
+    incidence:Uint32Array.from([...model.incidenceOffsets,...model.incidence.flat(),...model.colorOffsets,...model.colorNodes]),parameters:model.parameters,coefficients:model.coefficients,
     elementBonds:elementBonds.length?elementBonds:new Uint32Array(4)};
 }
 export function prepareSolidTopology(mesh,{kind,young=1000,poisson=.25,density=1000,horizon}={}){
@@ -43,7 +43,8 @@ export function prepareSolidTopology(mesh,{kind,young=1000,poisson=.25,density=1
   const colors=Array(positions.length).fill(-1),order=positions.map((_,i)=>i).sort((a,b)=>neighbors[b].size-neighbors[a].size||a-b);
   for(const node of order){const used=new Set([...neighbors[node]].map(i=>colors[i]));let color=0;while(used.has(color))color++;colors[node]=color;}
   const offsets=[0];for(const list of incidence)offsets.push(offsets.at(-1)+list.length);
-  return{route:'kaminos.exterior-derived.material-topology.v0',kind,material:{young,poisson,density,horizon},positions:structuredClone(positions),volumes,masses:volumes.map(v=>v*density),volume:totalVolume,
-    elements,bonds,elementBonds,parameters,coefficients,colors,colorCount:Math.max(...colors)+1,incidence:incidence.flat(),incidenceOffsets:offsets,
+  const colorCount=Math.max(...colors)+1,colorOffsets=[0],colorNodes=[];for(let color=0;color<colorCount;color++){colors.forEach((value,node)=>{if(value===color)colorNodes.push(node);});colorOffsets.push(colorNodes.length);}
+  return{route:'kaminos.exterior-derived.material-topology.v0',bufferLayout:'compact-color-incidence-v1',kind,material:{young,poisson,density,horizon},positions:structuredClone(positions),volumes,masses:volumes.map(v=>v*density),volume:totalVolume,
+    elements,bonds,elementBonds,parameters,coefficients,colors,colorCount,colorOffsets,colorNodes,incidence:incidence.flat(),incidenceOffsets:offsets,
     claim:'Prepared material topology and coefficients only; no dynamic or fracture-surface admission'};
 }

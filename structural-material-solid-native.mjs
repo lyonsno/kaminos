@@ -38,8 +38,8 @@ try{
   if(input.arrays)for(const [name,values] of Object.entries(input.arrays))arrays[name]=['state','parameters','coefficients'].includes(name)?Float32Array.from(values):Uint32Array.from(values);
   else for(const [name,entry] of Object.entries(input.buffers)){const bytes=await(await fetch('/resident-buffers/'+entry.filename)).arrayBuffer();const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');if(bytes.byteLength!==entry.byteLength||digest!==entry.sha256)throw new Error('Effective resident buffer differs: '+name);arrays[name]=entry.type==='Float32Array'?new Float32Array(bytes):new Uint32Array(bytes);}
   const start=performance.now(),kind=input.descriptor.kind;progress('resident-'+kind+'-initialize');const model=await createSolidResident(device,input.descriptor,arrays,{onProgress:phase=>progress(kind+'/'+phase)}),stages=[],timings=[];const options={timeStep:1/60,iterations:12,lineSearchTrials:8,gravity:0,damping:.98,floor:-10};
-  const result={kind,stages,timings};p.resident.push(result);let stepIndex=0;
-  const step=async()=>{progress(kind+'/step-'+(++stepIndex)+'-submitted');const start=performance.now();await model.step(options);timings.push(performance.now()-start);progress(kind+'/step-'+stepIndex+'-completed');};
+  const result={kind,stages,timings,stepBreakdown:[]};p.resident.push(result);let stepIndex=0;
+  const step=async()=>{progress(kind+'/step-'+(++stepIndex)+'-submitted');const start=performance.now(),breakdown=await model.step(options);timings.push(performance.now()-start);result.stepBreakdown.push(breakdown);progress(kind+'/step-'+stepIndex+'-completed');};
   stages.push({name:'rest',state:await model.read()});progress(kind+'/rest-retained');await model.pin(input.supports);await model.grip(input.grip.index,input.grip.target,100000);
   for(let i=0;i<8;i++)await step();stages.push({name:'loaded',state:await model.read()});progress(kind+'/loaded-retained');
   await model.damagePlane([1,0,0],.5);stages.push({name:'damaged',state:await model.read()});progress(kind+'/damaged-retained');
@@ -62,7 +62,7 @@ try{
   return group;
  });
  let residentModels=exercise==='resident'?['graph','pmb'].map(kind=>prepareSolidTopology({status:'passed',route:'ftetwild-cpu-wildmeshing-0.4.1',positions:[[0,0,0],[1,0,0],[0,1,0],[0,0,1]],tetrahedra:[[0,1,2,3]],volume:1/6},{kind,young:1000,poisson:.25,density:1000,horizon:1.5})):[];
- let residentInputs=residentModels.map(model=>({descriptor:{kind:model.kind,points:model.positions.length,elements:model.elements.length,bonds:model.bonds.length,colorCount:model.colorCount},supports:[0,2,3],grip:{index:1,target:[1.05,.02,.03]},arrays:Object.fromEntries(Object.entries(packSolidTopology(model)).map(([name,array])=>[name,Array.from(array)]))}));
+ let residentInputs=residentModels.map(model=>({descriptor:{kind:model.kind,bufferLayout:model.bufferLayout,points:model.positions.length,elements:model.elements.length,bonds:model.bonds.length,colorCount:model.colorCount},supports:[0,2,3],grip:{index:1,target:[1.05,.02,.03]},arrays:Object.fromEntries(Object.entries(packSolidTopology(model)).map(([name,array])=>[name,Array.from(array)]))}));
  const preparedBuffers=new Map();
  if(exercise==='imported'){
   if(!preparedRootInput)throw new Error('Imported resident exercise requires explicit prepared root');const preparedRoot=fs.realpathSync(preparedRootInput),bytes=fs.readFileSync(path.join(preparedRoot,'report.json')),prepared=JSON.parse(bytes);

@@ -1,7 +1,7 @@
 export const SOLID_RESIDENT_ROUTE='kaminos.deformable-material.colored-vbd.webgpu.v0';
 export const solidResidentWgsl=`
 struct Point{rest:vec4f,position:vec4f,velocity:vec4f,predicted:vec4f};
-struct Settings{counts:vec4u,time:vec4f,grip:vec4f,destination:vec4f,plane:vec4f};
+struct Settings{counts:vec4u,time:vec4f,grip:vec4f,destination:vec4f,plane:vec4f,topology:vec4u};
 struct Local{gradient:vec3f,energy:f32,hessian:mat3x3f,invalid:u32};
 @group(0) @binding(0) var<storage,read_write> points:array<Point>;
 @group(0) @binding(1) var<storage,read> elements:array<vec4u>;
@@ -16,7 +16,7 @@ fn eye()->mat3x3f{return mat3x3f(vec3f(1,0,0),vec3f(0,1,0),vec3f(0,0,1));}
 fn outer(a:vec3f,b:vec3f)->mat3x3f{return mat3x3f(a*b.x,a*b.y,a*b.z);}
 fn position(index:u32,node:u32,trial:vec3f)->vec3f{if(index==node){return trial;}return points[index].position.xyz;}
 fn shape(element:u32,local:u32)->vec3f{let i=element*16u+local*4u;return vec3f(parameters[i],parameters[i+1u],parameters[i+2u]);}
-fn graph(element:u32,local:u32,node:u32,trial:vec3f)->Local{
+fn graph(element:u32,local:u32,node:u32,trial:vec3f,needHessian:bool)->Local{
  var result:Local;var mask=0u;
  for(var k=0u;k<6u;k++){let ids=elementBonds[element*2u+k/4u];if(bonds[ids[k%4u]].z==0u){mask|=1u<<k;}}
  let matrix=(element*64u+mask)*36u;var live=false;for(var k=0u;k<36u;k++){live=live||(coefficients[matrix+k]!=0.0);}
@@ -27,26 +27,26 @@ fn graph(element:u32,local:u32,node:u32,trial:vec3f)->Local{
  let C=transpose(F)*F;var e=array<f32,6>((C[0][0]-1.0)*0.5,(C[1][1]-1.0)*0.5,(C[2][2]-1.0)*0.5,C[1][0],C[2][0],C[2][1]);var s=array<f32,6>();
  for(var row=0u;row<6u;row++){for(var col=0u;col<6u;col++){s[row]+=coefficients[matrix+row*6u+col]*e[col];}result.energy+=e[row]*s[row];}
  let S=mat3x3f(vec3f(s[0],s[3],s[4]),vec3f(s[3],s[1],s[5]),vec3f(s[4],s[5],s[2]));let g=shape(element,local);let V=parameters[element*16u+3u];
- result.energy*=V*0.5;result.gradient=V*(F*S*g);
+ result.energy*=V*0.5;if(!needHessian){return result;}result.gradient=V*(F*S*g);
  var A=array<vec3f,6>(F[0]*g.x,F[1]*g.y,F[2]*g.z,F[1]*g.x+F[0]*g.y,F[2]*g.x+F[0]*g.z,F[2]*g.y+F[1]*g.z);
  for(var row=0u;row<6u;row++){for(var col=0u;col<6u;col++){result.hessian+=outer(A[row],A[col])*(V*coefficients[matrix+row*6u+col]);}}
  result.hessian+=eye()*max(0.0,V*dot(g,S*g));return result;
 }
-fn pmb(element:u32,local:u32,node:u32,trial:vec3f)->Local{
+fn pmb(element:u32,local:u32,node:u32,trial:vec3f,needHessian:bool)->Local{
  var result:Local;if(bonds[element].z==0u){return result;}
  let ids=elements[element];let delta=position(ids.y,node,trial)-position(ids.x,node,trial);let r=length(delta);
  if(r<=0.0){result.invalid=1u;result.energy=1e30;return result;}
  let r0=parameters[element*4u];let k=parameters[element*4u+1u];let extension=r-r0;let normal=delta/r;let N=outer(normal,normal);
- result.energy=0.5*k*extension*extension;result.gradient=select(-1.0,1.0,local==1u)*k*extension*normal;
+ result.energy=0.5*k*extension*extension;if(!needHessian){return result;}result.gradient=select(-1.0,1.0,local==1u)*k*extension*normal;
  result.hessian=N*k+(eye()-N)*max(0.0,k*(1.0-r0/r));return result;
 }
-fn evaluate(node:u32,trial:vec3f)->Local{
+fn evaluate(node:u32,trial:vec3f,needHessian:bool)->Local{
  let point=points[node];let inertia=point.rest.w/(settings.time.x*settings.time.x);let offset=trial-point.predicted.xyz;
  var result:Local;result.gradient=inertia*offset;result.energy=0.5*inertia*dot(offset,offset);result.hessian=eye()*inertia;
  let base=settings.counts.x+1u;
  for(var index=incidence[node];index<incidence[node+1u];index++){
   let element=incidence[base+index*2u];let local=incidence[base+index*2u+1u];var term:Local;
-  if(settings.counts.z==0u){term=graph(element,local,node,trial);}else{term=pmb(element,local,node,trial);}
+  if(settings.counts.z==0u){term=graph(element,local,node,trial,needHessian);}else{term=pmb(element,local,node,trial,needHessian);}
   result.gradient+=term.gradient;result.energy+=term.energy;result.hessian+=term.hessian;result.invalid|=term.invalid;
  }
  if(settings.grip.x>=0.0&&u32(settings.grip.x)==node){let d=trial-settings.destination.xyz;let k=settings.grip.y;result.gradient+=k*d;result.energy+=0.5*k*dot(d,d);result.hessian+=eye()*k;}
@@ -57,13 +57,14 @@ fn evaluate(node:u32,trial:vec3f)->Local{
  if(p.velocity.w==1.0){y=p.rest.xyz;}points[i].predicted=vec4f(y,0);points[i].position=vec4f(y,p.position.w);
 }
 @compute @workgroup_size(64) fn solve(@builtin(global_invocation_id) id:vec3u){
- let i=id.x;if(i>=settings.counts.x){return;}let p=points[i];if(p.velocity.w==1.0||u32(p.position.w)!=settings.counts.y){return;}
- let before=evaluate(i,p.position.xyz);if(before.invalid!=0u){return;}
+ let colors=settings.counts.x+1u+incidence[settings.counts.x]*2u;let start=incidence[colors+settings.counts.y];let end=incidence[colors+settings.counts.y+1u];if(id.x>=end-start){return;}
+ let i=incidence[colors+settings.topology.x+1u+start+id.x];let p=points[i];if(p.velocity.w==1.0){return;}
+ let before=evaluate(i,p.position.xyz,true);if(before.invalid!=0u){return;}
  let H=before.hessian;let determinant=dot(H[0],cross(H[1],H[2]));if(!(determinant>0.0)){return;}
  let inverse=transpose(mat3x3f(cross(H[1],H[2]),cross(H[2],H[0]),cross(H[0],H[1])))*(1.0/determinant);
  let delta=-(inverse*before.gradient);var step=1.0;
  for(var trial=0u;trial<settings.counts.w;trial++){
-  let candidate=p.position.xyz+step*delta;let after=evaluate(i,candidate);
+  let candidate=p.position.xyz+step*delta;let after=evaluate(i,candidate,false);
   if(after.invalid==0u&&after.energy<=before.energy){points[i].position=vec4f(candidate,p.position.w);return;}step*=0.5;
  }
 }
@@ -74,7 +75,7 @@ fn evaluate(node:u32,trial:vec3f)->Local{
  points[i].position=vec4f(x,p.position.w);points[i].velocity=vec4f(v,p.velocity.w);
 }
 @compute @workgroup_size(64) fn diagnose(@builtin(global_invocation_id) id:vec3u){
- let i=id.x;if(i>=settings.counts.x){return;}let value=evaluate(i,points[i].position.xyz);let base=i*6u;
+ let i=id.x;if(i>=settings.counts.x){return;}let value=evaluate(i,points[i].position.xyz,true);let base=i*6u;
  diagnostics[base]=vec4f(value.gradient,f32(value.invalid));for(var k=0u;k<3u;k++){diagnostics[base+1u+k]=vec4f(value.hessian[k],0);}
  diagnostics[base+4u]=vec4f(value.energy,points[i].velocity.w,0,0);diagnostics[base+5u]=vec4f(0);
 }
@@ -85,15 +86,22 @@ fn evaluate(node:u32,trial:vec3f)->Local{
 
 export async function createSolidResident(device,descriptor,arrays,{onProgress=()=>{}}={}){
  if(!['graph','pmb'].includes(descriptor?.kind)||!['points','elements','bonds','colorCount'].every(k=>Number.isInteger(descriptor[k])&&descriptor[k]>0))throw new Error('Complete explicit material descriptor required');
+ if(descriptor.bufferLayout!=='compact-color-incidence-v1')throw new Error('Explicit compact material buffer layout required; reprepare legacy buffers');
  const n=descriptor.points,count=descriptor.elements,bondCount=descriptor.bonds;
  const expected={state:n*16,elements:count*4,bonds:bondCount*4,parameters:count*(descriptor.kind==='graph'?16:4),coefficients:descriptor.kind==='graph'?count*64*36:1,elementBonds:descriptor.kind==='graph'?count*8:4};
  for(const [name,length] of Object.entries(expected)){const Type=['state','parameters','coefficients'].includes(name)?Float32Array:Uint32Array;if(!(arrays[name] instanceof Type)||arrays[name].length!==length||!arrays[name].every(Number.isFinite))throw new Error(`Complete finite resident ${name} required`);}
-  if(!(arrays.incidence instanceof Uint32Array)||arrays.incidence.length<n+1||(arrays.incidence.length-n-1)!==arrays.incidence[n]*2)throw new Error('Complete uncapped resident incidence required');
+ if(!(arrays.incidence instanceof Uint32Array)||arrays.incidence.length<n+1)throw new Error('Complete uncapped resident incidence required');
+ const colorBase=n+1+arrays.incidence[n]*2;
+ if(arrays.incidence.length!==colorBase+descriptor.colorCount+1+n)throw new Error('Complete compact material color schedule required');
+ const colorOffsets=Array.from(arrays.incidence.slice(colorBase,colorBase+descriptor.colorCount+1)),colorNodes=Array.from(arrays.incidence.slice(colorBase+descriptor.colorCount+1));
+ if(colorOffsets[0]!==0||colorOffsets.at(-1)!==n||new Set(colorNodes).size!==n||colorNodes.some(i=>i>=n)||colorOffsets.some((value,i)=>i&&value<=colorOffsets[i-1]))throw new Error('Compact colors must partition all material points exactly once');
+ const colorSizes=colorOffsets.slice(1).map((end,i)=>end-colorOffsets[i]);
+ for(let color=0;color<descriptor.colorCount;color++)if(colorNodes.slice(colorOffsets[color],colorOffsets[color+1]).some(node=>arrays.state[node*16+7]!==color))throw new Error('Compact schedule disagrees with material colors');
  for(let i=0;i<n;i++)if(!(arrays.state[i*16+3]>0)||!Number.isInteger(arrays.state[i*16+7])||arrays.state[i*16+7]>=descriptor.colorCount||arrays.state[i*16+7]<0||![0,1].includes(arrays.state[i*16+11]))throw new Error('Positive mass, valid color and support state required');
  for(let i=0;i<count;i++)for(let k=0;k<(descriptor.kind==='graph'?4:2);k++)if(arrays.elements[i*4+k]>=n)throw new Error('Resident element index out of range');
  for(let i=0;i<bondCount;i++)if(arrays.bonds[i*4]>=n||arrays.bonds[i*4+1]>=n||![0,1].includes(arrays.bonds[i*4+2]))throw new Error('Valid resident bond endpoints and liveness required');
  for(let i=0;i<n;i++)if(arrays.incidence[i]>arrays.incidence[i+1])throw new Error('Monotone resident incidence offsets required');
- for(let i=n+1;i<arrays.incidence.length;i+=2)if(arrays.incidence[i]>=count||arrays.incidence[i+1]>=(descriptor.kind==='graph'?4:2))throw new Error('Resident incident element out of range');
+ for(let i=n+1;i<colorBase;i+=2)if(arrays.incidence[i]>=count||arrays.incidence[i+1]>=(descriptor.kind==='graph'?4:2))throw new Error('Resident incident element out of range');
   if(descriptor.kind==='graph')for(let i=0;i<count;i++)for(let k=0;k<6;k++)if(arrays.elementBonds[i*8+k]>=bondCount)throw new Error('Resident graph edge out of range');
  const expectedIncidence=Array.from({length:n},()=>new Set());
  for(let i=0;i<count;i++){const members=Array.from(arrays.elements.slice(i*4,i*4+(descriptor.kind==='graph'?4:2)));if(new Set(members).size!==members.length||new Set(members.map(node=>arrays.state[node*16+7])).size!==members.length)throw new Error('Conflicting material update colors');members.forEach((node,local)=>expectedIncidence[node].add(`${i}:${local}`));}
@@ -112,8 +120,8 @@ export async function createSolidResident(device,descriptor,arrays,{onProgress=(
   const layout=device.createBindGroupLayout({entries:Array.from({length:9},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===8?'uniform':[0,5,7].includes(binding)?'storage':'read-only-storage'}}))}),pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]}),pipelines={};
   for(const entryPoint of ['predict','solve','finish','diagnose','damage']){onProgress(`pipeline-${entryPoint}`);pipelines[entryPoint]=await device.createComputePipelineAsync({layout:pipelineLayout,compute:{module:shader,entryPoint}});}onProgress('pipelines-compiled');
   const resources=['state','elements','parameters','coefficients','incidence','bonds','elementBonds','diagnostics'].map(name=>buffers[name]);
-  const groups=Array.from({length:descriptor.colorCount},(_,color)=>device.createBindGroup({layout,entries:[...resources.map((buffer,binding)=>({binding,resource:{buffer}})),{binding:8,resource:{buffer:uniform,offset:color*alignment,size:80}}]}));
-  const configure=plane=>{const bytes=new ArrayBuffer(descriptor.colorCount*alignment);for(let color=0;color<descriptor.colorCount;color++){const u=new Uint32Array(bytes,color*alignment,4),f=new Float32Array(bytes,color*alignment+16,16);u.set([n,color,descriptor.kind==='graph'?0:1,settings.lineSearchTrials]);f.set([settings.timeStep,settings.gravity,settings.damping,settings.floor,grip?.index??-1,grip?.stiffness??0,0,0,...(grip?.target??[0,0,0]),0,...(plane??[0,0,0,0])]);}device.queue.writeBuffer(uniform,0,bytes);};
+  const groups=Array.from({length:descriptor.colorCount},(_,color)=>device.createBindGroup({layout,entries:[...resources.map((buffer,binding)=>({binding,resource:{buffer}})),{binding:8,resource:{buffer:uniform,offset:color*alignment,size:96}}]}));
+  const configure=plane=>{const bytes=new ArrayBuffer(descriptor.colorCount*alignment);for(let color=0;color<descriptor.colorCount;color++){const u=new Uint32Array(bytes,color*alignment,4),f=new Float32Array(bytes,color*alignment+16,16);u.set([n,color,descriptor.kind==='graph'?0:1,settings.lineSearchTrials]);f.set([settings.timeStep,settings.gravity,settings.damping,settings.floor,grip?.index??-1,grip?.stiffness??0,0,0,...(grip?.target??[0,0,0]),0,...(plane??[0,0,0,0])]);new Uint32Array(bytes,color*alignment+80,4).set([descriptor.colorCount,0,0,0]);}device.queue.writeBuffer(uniform,0,bytes);};
   const dispatch=(encoder,name,color=0,count=n)=>{const pass=encoder.beginComputePass();pass.setPipeline(pipelines[name]);pass.setBindGroup(0,groups[color]);pass.dispatchWorkgroups(Math.ceil(count/64));pass.end();};
   async function readNow(){configure();const encoder=device.createCommandEncoder();dispatch(encoder,'diagnose');const names=['state','bonds','diagnostics'],readbacks=names.map(name=>allocate(`readback ${name}`,buffers[name].size,GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ));
    names.forEach((name,i)=>encoder.copyBufferToBuffer(buffers[name],0,readbacks[i],0,buffers[name].size));device.queue.submit([encoder.finish()]);
@@ -123,7 +131,7 @@ export async function createSolidResident(device,descriptor,arrays,{onProgress=(
    pin(indices){return serial(()=>{valid(Array.isArray(indices)&&indices.every(i=>Number.isInteger(i)&&i>=0&&i<n),'Valid support point indices required');for(const index of indices)device.queue.writeBuffer(buffers.state,(index*16+11)*4,new Float32Array([1]));});},
    grip(index,target,stiffness){return serial(()=>{valid(Number.isInteger(index)&&index>=0&&index<n&&Array.isArray(target)&&target.length===3&&target.every(v=>Number.isFinite(Math.fround(v)))&&Number.isFinite(Math.fround(stiffness))&&Math.fround(stiffness)>0,'Valid resident grip required');grip={index,target:target.map(Math.fround),stiffness:Math.fround(stiffness)};});},
    release(){return serial(()=>{grip=null;});},
-   step(request){return serial(async()=>{valid(request&&typeof request==='object','Explicit solver settings required');const {iterations,...next}=request;valid(Number.isInteger(iterations)&&iterations>0&&Number.isInteger(next.lineSearchTrials)&&next.lineSearchTrials>0&&next.lineSearchTrials<=0xffffffff&&['timeStep','gravity','damping','floor'].every(k=>Number.isFinite(next[k])&&Number.isFinite(Math.fround(next[k])))&&next.timeStep>0&&Math.fround(Math.fround(next.timeStep)**2)>0&&next.damping>=0&&next.damping<=1,'Explicit valid solver timestep, iterations, trial count, gravity, damping and floor required');settings={...Object.fromEntries(Object.entries(next).map(([key,value])=>[key,key==='lineSearchTrials'?value:Math.fround(value)])),iterations};configure();const encoder=device.createCommandEncoder();dispatch(encoder,'predict');for(let iteration=0;iteration<iterations;iteration++)for(let color=0;color<descriptor.colorCount;color++)dispatch(encoder,'solve',color);dispatch(encoder,'finish');device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();steps++;});},
+   step(request){return serial(async()=>{valid(request&&typeof request==='object','Explicit solver settings required');const {iterations,...next}=request;valid(Number.isInteger(iterations)&&iterations>0&&Number.isInteger(next.lineSearchTrials)&&next.lineSearchTrials>0&&next.lineSearchTrials<=0xffffffff&&['timeStep','gravity','damping','floor'].every(k=>Number.isFinite(next[k])&&Number.isFinite(Math.fround(next[k])))&&next.timeStep>0&&Math.fround(Math.fround(next.timeStep)**2)>0&&next.damping>=0&&next.damping<=1,'Explicit valid solver timestep, iterations, trial count, gravity, damping and floor required');settings={...Object.fromEntries(Object.entries(next).map(([key,value])=>[key,key==='lineSearchTrials'?value:Math.fround(value)])),iterations};const start=performance.now();configure();const encoder=device.createCommandEncoder();dispatch(encoder,'predict');for(let iteration=0;iteration<iterations;iteration++)for(let color=0;color<descriptor.colorCount;color++)dispatch(encoder,'solve',color,colorSizes[color]);dispatch(encoder,'finish');const command=encoder.finish(),encoded=performance.now();device.queue.submit([command]);const submitted=performance.now();await device.queue.onSubmittedWorkDone();const completed=performance.now();steps++;return{encodingMilliseconds:encoded-start,submitMilliseconds:submitted-encoded,completionWaitMilliseconds:completed-submitted,totalMilliseconds:completed-start,iterations,colorCount:descriptor.colorCount,solveDispatches:iterations*descriptor.colorCount,solveWorkgroups:iterations*colorSizes.reduce((sum,count)=>sum+Math.ceil(count/64),0)};});},
    damagePlane(normal,offset){return serial(async()=>{valid(Array.isArray(normal)&&normal.length===3&&normal.every(Number.isFinite)&&Math.abs(Math.hypot(...normal)-1)<=1e-6&&Number.isFinite(Math.fround(offset)),'Explicit unit damage plane required');configure([...normal,offset]);const encoder=device.createCommandEncoder();dispatch(encoder,'damage',0,bondCount);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();damageEpoch++;});},
    read(){return serial(readNow);},
    dispose(){for(const b of owned)b.destroy();failure='Resident material disposed';}
