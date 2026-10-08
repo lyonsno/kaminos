@@ -6981,7 +6981,7 @@ function pickSceneObjectFromViewportPointer(event) {
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
-  return !!event.target.closest?.('#authoring-viewport-tools, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu');
+  return !!event.target.closest?.('#authoring-viewport-tools, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie');
 }
 
 function viewportEventIsInsideCanvas(event) {
@@ -28720,10 +28720,10 @@ function updateSelectionFeedback(){
   }
 }
 function syncEditorHelperVisibility(){
-  for(const entry of sceneObjects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE)entry.object.visible=viewportHelpersVisible;}
-  for(const {marker,light} of sceneSpotLights.values())marker.visible=viewportHelpersVisible&&light.visible;
-  if(flameDomainGuide)flameDomainGuide.visible=viewportHelpersVisible&&(sceneSelectionMembers().includes(FLAME_EMITTER_ID)||activeSceneFieldId==='flame-field');
-  for(const entry of sceneObjects)if(entry.type===CAMERA_TYPE)entry.object.visible=viewportHelpersVisible&&!(sceneCameras?.state().mode==='camera'&&sceneCameras.state().activeId===entry.id);
+  for(const entry of sceneObjects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE)entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible;}
+  for(const {marker,light} of sceneSpotLights.values())marker.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&light.visible;
+  if(flameDomainGuide)flameDomainGuide.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&(sceneSelectionMembers().includes(FLAME_EMITTER_ID)||activeSceneFieldId==='flame-field');
+  for(const entry of sceneObjects)if(entry.type===CAMERA_TYPE)entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&!(sceneCameras?.state().mode==='camera'&&sceneCameras.state().activeId===entry.id);
   updateSelectionFeedback();window._kaminosDirty?.();
 }
 function selectedRootIds(){return selectionTransformRoots(sceneSelection.ids,sceneGroups);}
