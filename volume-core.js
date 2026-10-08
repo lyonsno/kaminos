@@ -14,6 +14,7 @@ import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, creat
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
 import { SCENE_POINT_SMOKE_WGSL, createScenePointBindings } from './scene-point-light.mjs';
 import { DISTRIBUTED_SMOKE_WGSL } from './scene-volume-gather.mjs';
+import { SMOKE_INCIDENT_WGSL, selectSmokeLightingShader } from './volume-smoke-lighting.mjs';
 import { createDistributedSmokeBindings } from './scene-smoke-reconstruction.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
@@ -7204,6 +7205,7 @@ fn joinedSmokeIncidentAt(p:vec3<f32>,extinction:f32)->vec3<f32>{
   let q=clamp(p,vec3<f32>(-1.0+inset),vec3<f32>(1.0-inset));
   return continueOuterSmokeRadiance(incidentAt(q),outerSmokeAmbient(),length(p-q),extinction);
 }
+${SMOKE_INCIDENT_WGSL}
 
 // Same density scale and lighting for both representations. Modes 3/4/5 are
 // joined/fine/outer inspection; actual field values, without incident radiance.
@@ -7481,7 +7483,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       if(t<nearHit.x && t+ds>nearHit.x){ds=nearHit.x-t+0.00001;}
       let medium=passiveEmissiveMaterial(sampleOuterSmoke(p),1.0-effectiveRaymarchSmokeSuppressed,selectiveRaymarchFireAuthority);
       let sigma=medium.absorption+medium.scattering;
-      color+=trans*(medium.emission+medium.scattering*joinedSmokeIncidentAt(p,sigma))*emissionIntegral(sigma,ds);
+      color+=trans*(medium.emission+medium.scattering*smokeIncidentAt(p,sigma))*emissionIntegral(sigma,ds);
       trans*=exp(-sigma*ds);t+=ds;continue;
     }
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
@@ -8411,7 +8413,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
         medium = blendEmissiveMaterial(medium, passiveEmissiveMaterial(sampleOuterSmoke(p),visibleSmokeAuthority,selectiveRaymarchFireAuthority), w);
       }
       let sigma = medium.absorption + medium.scattering;
-      let emission = medium.emission + medium.scattering * joinedSmokeIncidentAt(p,sigma);
+      let emission = medium.emission + medium.scattering * smokeIncidentAt(p,sigma);
       standardRadianceContribution = emission * emissionIntegral(sigma, localDt);
       standardExtinctionStep = sigma * localDt;
     } else if (u.physical_fire.x > 0.5) {
@@ -19293,7 +19295,7 @@ export function createKaminosVolumePrototype({
       }
       const key = `${multisampled}:${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}`;
       if (!scenePointPipelines.has(key)) {
-        let code = WGSL.replace('medium.scattering * incidentAt(p)', 'medium.scattering * (incidentAt(p) + scenePointIncident(p))') + SCENE_POINT_SMOKE_WGSL;
+        let code = selectSmokeLightingShader(activeVolumeShader(), 'point') + SCENE_POINT_SMOKE_WGSL;
         if (multisampled) code = code.replace('var productSceneDepth: texture_depth_2d;', 'var productSceneDepth: texture_depth_multisampled_2d;')
           .replace('let depth = textureLoad(productSceneDepth, pixel, 0);', `var depth = textureLoad(productSceneDepth, pixel, 0);
             for (var sample = 1u; sample < textureNumSamples(productSceneDepth); sample++) {
@@ -19315,7 +19317,7 @@ export function createKaminosVolumePrototype({
       if(!distributedPipelines.has(key)) {
         // Replace internal flame incident lighting so this emission is counted
         // once. Direct camera emission and material scattering stay intact.
-        let code=WGSL.replace('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')+DISTRIBUTED_SMOKE_WGSL;
+        let code=selectSmokeLightingShader(activeVolumeShader(),'distributed')+DISTRIBUTED_SMOKE_WGSL;
         if(multisampled)code=code.replace('var productSceneDepth: texture_depth_2d;','var productSceneDepth: texture_depth_multisampled_2d;')
           .replace('let depth = textureLoad(productSceneDepth, pixel, 0);',`var depth=textureLoad(productSceneDepth,pixel,0);
           for(var sample=1u;sample<textureNumSamples(productSceneDepth);sample++){depth=min(depth,textureLoad(productSceneDepth,pixel,sample));}`);
