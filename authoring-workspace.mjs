@@ -39,6 +39,15 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   document.body.append(hierarchy, inspector);
   byId('viewport').prepend(toolbar);
   const viewportSettings=byId('authoring-viewport-settings');
+  function positionViewportSettings() {
+    if(!viewportSettings.open)return;
+    const menu=viewportSettings.querySelector(':scope > div'),view=byId('viewport').getBoundingClientRect(),anchor=viewportSettings.getBoundingClientRect();
+    menu.style.minWidth='0';menu.style.width='190px';menu.style.maxWidth=Math.max(0,view.width-8)+'px';
+    const left=Math.max(view.left+4,Math.min(anchor.right-menu.getBoundingClientRect().width,view.right-menu.getBoundingClientRect().width-4));
+    menu.style.right='auto';menu.style.left=(left-anchor.left)+'px';
+  }
+  viewportSettings.addEventListener('toggle',positionViewportSettings);
+  document.defaultView.addEventListener('resize',positionViewportSettings);
   document.addEventListener('pointerdown',event=>{
     if(!viewportSettings.contains(event.target))viewportSettings.open=false;
     if(!byId('authoring-presets').contains(event.target))byId('authoring-presets').open=false;
@@ -47,8 +56,8 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   const opacity=byId('viewport-emitter-opacity');
   let opacityBefore=null;
   opacity.addEventListener('focusin',()=>{if(opacityBefore===null)opacityBefore=document.defaultView.kaminosViewportSettings.read().emitterGuideOpacity;});
-  opacity.addEventListener('input',()=>{if(opacity.value!==''&&opacity.validity.valid)document.defaultView.kaminosViewportSettings.set({emitterGuideOpacity:Number(opacity.value)});});
-  opacity.addEventListener('change',()=>{opacity.value=String(document.defaultView.kaminosViewportSettings.read().emitterGuideOpacity);});
+  opacity.addEventListener('input',()=>{if(opacity.value!==''&&opacity.validity.valid){if(opacityBefore===null)opacityBefore=document.defaultView.kaminosViewportSettings.read().emitterGuideOpacity;document.defaultView.kaminosViewportSettings.set({emitterGuideOpacity:Number(opacity.value)});}});
+  opacity.addEventListener('change',()=>{opacity.value=String(document.defaultView.kaminosViewportSettings.read().emitterGuideOpacity);opacityBefore=null;});
   opacity.addEventListener('pointercancel',()=>{if(opacityBefore!==null)document.defaultView.kaminosViewportSettings.set({emitterGuideOpacity:opacityBefore});opacityBefore=null;});
   opacity.addEventListener('blur',()=>{opacityBefore=null;});
   installRelativeNumberDrag({grip:opacity.previousElementSibling,input:opacity,step:.01});

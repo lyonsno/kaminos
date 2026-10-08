@@ -60,20 +60,36 @@ try {
     report.sourceBefore=await source();
     const emitterState=()=>page.evaluate(()=>{const data=window.kaminosSceneObjectDebugState().find(o=>o.id==='flame-emitter');return {settings:window.kaminosViewportSettings.read(),emitter:data,source:window.kaminosFlameEmitterState()};});
     report.beforeGuides=await emitterState();
+    report.authoredBefore=await page.evaluate(()=>window.kaminosSceneAuthoring.read());
     await page.locator('#authoring-viewport-settings > summary').click();
     await page.locator('#viewport-emitter-opacity').click();await page.locator('#viewport-emitter-opacity').fill('.15');await page.locator('#viewport-emitter-opacity').blur();await settle();
     assert.equal((await emitterState()).settings.emitterGuideOpacity,.15);
     await page.locator('#viewport-emitter-opacity').click();await page.locator('#viewport-emitter-opacity').fill('.23');await page.locator('#viewport-emitter-opacity').press('Escape');assert.equal((await emitterState()).settings.emitterGuideOpacity,.15);
+    report.scrubs=[];
+    for(const selector of ['#viewport-emitter-opacity','label[for="viewport-emitter-opacity"]']) {
+      const history=await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount);
+      const rect=await page.locator(selector).boundingBox(),x=rect.x+rect.width/2,y=rect.y+rect.height/2;
+      await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+10,y,{steps:2});await page.mouse.up();
+      const accepted=(await emitterState()).settings.emitterGuideOpacity;
+      await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+10,y,{steps:2});await page.keyboard.press('Escape');await page.mouse.up();
+      const final=await emitterState(),effective=await page.evaluate(()=>window.kaminosViewportSettings.inspectEmitterGuides());
+      assert.equal(final.settings.emitterGuideOpacity,accepted);assert.equal(Number(await page.locator('#viewport-emitter-opacity').inputValue()),accepted);assert.equal(await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),history);
+      assert.ok(effective.length>0&&effective.every(g=>g.opacities.length>0&&g.opacities.every(o=>o===accepted)));
+      report.scrubs.push({selector,accepted,final:final.settings,effective,history});await save();
+    }
     await page.screenshot({path:out+'/guides-faint.png'});
     await page.uncheck('#viewport-show-emitter-guides');await settle();assert.equal((await emitterState()).settings.emitterGuides,false);
     await page.screenshot({path:out+'/guides-hidden.png'});
     await page.check('#viewport-show-emitter-guides');await settle();
     report.afterGuides=await emitterState();report.sourceAfter=await source();
+    report.authoredAfter=await page.evaluate(()=>window.kaminosSceneAuthoring.read());assert.deepEqual(report.authoredAfter,report.authoredBefore,'guide appearance changed authored state');
     assert.equal(report.sourceAfter,report.sourceBefore);assert.deepEqual(report.afterGuides.emitter.transform,report.beforeGuides.emitter.transform);assert.deepEqual(report.afterGuides.source,report.beforeGuides.source);
     report.phase='save-reopen';await save();report.saved=await page.evaluate(()=>window.saveSceneAs({result:true}));assert.ok(report.saved.ok,JSON.stringify(report.saved));
+    assert.equal(report.saved.document.objects.find(o=>o.id==='flame-emitter').materials,null);assert.equal(report.saved.document.materials,null);
     const restored=new URL(url),hash=new URLSearchParams(restored.hash.slice(1));hash.set('scene',report.saved.filename);restored.hash=hash.toString();await page.goto(restored.href);
     await page.waitForFunction(()=>document.getElementById('info-bar')?.textContent.startsWith('Scene loaded:'),null,{timeout:0});
     report.reopened=await page.evaluate(()=>window.kaminosAuthoringParameters.read('@scene-gi'));assert.equal(report.reopened.thickness,.0037);assert.equal(report.reopened.denoise,2.35);assert.equal(report.reopened.slices,4);
+    report.reopenedGuides=await page.evaluate(()=>({settings:window.kaminosViewportSettings.read(),effective:window.kaminosViewportSettings.inspectEmitterGuides()}));assert.ok(report.reopenedGuides.effective.length>0&&report.reopenedGuides.effective.every(g=>g.opacities.every(o=>o===report.reopenedGuides.settings.emitterGuideOpacity)));
     await page.evaluate(()=>{window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
     await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();await page.screenshot({path:out+'/reopened.png'});
     await page.setViewportSize({width:800,height:700});await page.waitForTimeout(500);await page.screenshot({path:out+'/compact.png'});

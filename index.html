@@ -3973,6 +3973,10 @@ function attachViewportGizmo(target) {
   transformControls.enabled=viewportGizmosVisible;
 }
 window.kaminosViewportSettings={
+  inspectEmitterGuides:()=>sceneObjects.filter(entry=>entry.type===FLAME_EMITTER_TYPE).map(entry=>{
+    const opacities=[];entry.object.traverse(node=>{for(const material of node.material?[node.material].flat():[])opacities.push(material.opacity);});
+    return {id:entry.id,visible:entry.object.visible,opacities};
+  }),
   read:()=>({gizmos:viewportGizmosVisible,hints:!document.getElementById('navigation-hint').hidden,emitterGuides:emitterGuideSettings.visible,emitterGuideOpacity:emitterGuideSettings.opacity}),
   set({gizmos=viewportGizmosVisible,hints,emitterGuides=emitterGuideSettings.visible,emitterGuideOpacity=emitterGuideSettings.opacity}={}) {
     const nextGuides=resolveFlameEmitterGuideSettings({visible:emitterGuides,opacity:emitterGuideOpacity});
@@ -27996,7 +28000,7 @@ function provenanceForSource(source) {
 }
 
 function getMaterialStateForObject(object) {
-  if (!object) return null;
+  if (!object || object.userData?.kaminosEditorHelper) return null;
   const state = { side: THREE.FrontSide, transparent: true, opacity: 1 };
   object.traverse(child => {
     if (child.isMesh && child.material) {
@@ -29116,7 +29120,7 @@ function getMaterialState() {
 }
 
 function applyMaterialStateToObject(object, state) {
-  if (!object || !state) return;
+  if (!object || !state || object.userData?.kaminosEditorHelper) return;
   object.traverse(child => {
     if (!child.isMesh) return;
     const mats = Array.isArray(child.material) ? child.material : [child.material];
