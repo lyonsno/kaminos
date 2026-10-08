@@ -95,7 +95,8 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
     // drag outward at a limit must not create motion to repay on reversal.
     if(gesture.min!==null)gesture.value=Math.max(gesture.min,gesture.value);
     if(gesture.max!==null)gesture.value=Math.min(gesture.max,gesture.value);
-    let value=step>=1?Math.round(gesture.value):gesture.value;
+    const atLimit=gesture.value===gesture.min||gesture.value===gesture.max;
+    let value=step>=1&&!atLimit?Math.round(gesture.value):gesture.value;
     if(gesture.min!==null)value=Math.max(gesture.min,value);
     if(gesture.max!==null)value=Math.min(gesture.max,value);
     input.classList?.add('scrubbing');input.value=String(value);

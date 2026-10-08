@@ -49,6 +49,14 @@ test('fine dragging scales range speed and still makes one reversible history ge
   }finally{f.close();}
 });
 
+test('coarse drag hints still reach fractional limits exactly',()=>{
+  for(const [min,max] of [[.1,1.3],[-1.3,-.1]]) {
+    const f=boundedNumber({min,max,step:1,value:(min+max)/2});
+    try {f.move(1100);assert.equal(Number(f.input.value),max);f.move(-1000);assert.equal(Number(f.input.value),min);}
+    finally {f.close();}
+  }
+});
+
 function fixture(admit = () => {}, onError = () => {}) {
   let value = { recipe: { enabled: true, outerRadius: 0.8 }, radius: 0.24, flow: 0.8 };
   const control = new Control();
