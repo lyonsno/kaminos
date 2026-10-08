@@ -92,7 +92,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   // Child slots precede their parent slot so restoring is independent of order.
   for (const button of document.querySelectorAll('#transform-bar > button')) {
     const action = button.getAttribute('onclick') || '';
-    if (/saveScene|scene-file-input/.test(action)) move(button, 'authoring-document-actions');
+    if (/saveScene|scene-file-input|openSceneLibrary/.test(action)) move(button, 'authoring-document-actions');
     else if (/setGizmoMode/.test(action)) move(button, 'authoring-gizmo-slot');
   }
   move(byId('composition-capture'), 'authoring-document-actions');
