@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {startProcessMemory} from '../process-memory.mjs';
+const out=await fs.mkdtemp(path.join(os.tmpdir(),'trellis-memory-budget-'));
+const row=bytes=>({runId:'budget',rootPid:42,status:'observed',processes:[{pid:42,processStartAbstime:123,
+  physicalFootprintBytes:bytes,kernelLifetimePeakPhysicalFootprintBytes:bytes}],sampledAggregatePhysicalFootprintBytes:bytes});
+try{
+  let count=0,actions=[];
+  const monitor=await startProcessMemory({rootPid:42,runId:'budget',rawPath:path.join(out,'later.jsonl'),
+    maxFootprintBytes:150,onUnsafe:async r=>actions.push(r),probe:async()=>row(count++?200:100)});
+  await monitor.sample();const summary=await monitor.stop();
+  assert.equal(actions.length,1,'a caller-selected footprint ceiling needs an actual one-shot stop action');
+  assert.equal(summary.status,'budget-refused');assert.equal(summary.safety.reason,'process-footprint-budget');
+  assert.equal(summary.safety.observedBytes,200);assert.equal(summary.safety.maxFootprintBytes,150);
+  assert.equal(JSON.parse(await fs.readFile(summary.summaryPath)).safety.observedBytes,200);
+  actions=[];
+  await assert.rejects(startProcessMemory({rootPid:42,runId:'budget',rawPath:path.join(out,'initial.jsonl'),
+    maxFootprintBytes:50,onUnsafe:async r=>actions.push(r),probe:async()=>row(100)}),/memory budget/);
+  assert.equal(actions.length,1,'startup refusal occurs before browser launch');
+  actions=[];let probes=0;
+  const unavailable=await startProcessMemory({rootPid:42,runId:'budget',rawPath:path.join(out,'unavailable.jsonl'),
+    maxFootprintBytes:150,onUnsafe:async r=>actions.push(r),probe:async()=>probes++?row(-1):row(100)});
+  await unavailable.sample();await unavailable.stop();assert.equal(actions.length,1);
+  assert.equal(actions[0].reason,'memory-observation-unavailable','bounded run cannot continue when its guard loses observation');
+  await assert.rejects(startProcessMemory({rootPid:42,runId:'budget',rawPath:path.join(out,'no-action.jsonl'),
+    maxFootprintBytes:150,probe:async()=>row(100)}),/onUnsafe/);
+}finally{await fs.rm(out,{recursive:true,force:true});}
+console.log('Explicit process ceiling stops once, durably records refusal and fails closed on missing observation; synthetic samples do not prove OS pressure or whole-machine capacity.');

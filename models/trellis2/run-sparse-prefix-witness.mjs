@@ -15,9 +15,10 @@ import { validateSLatDecoderFixture, slatDecoderObservationShapes, validateSLatP
 import {validateGenerationInputs} from './generation-inputs.js';
 import {generationFields,validateGenerationResult,persistGenerationPhase,persistGenerationAsset} from './sparse-generation-witness-checks.js';
 import {startProcessMemory} from './process-memory.mjs';
+import {memoryBudgetBytes,admitGenerationGpuBudget} from './generation-memory-policy.js';
 
 const { values } = parseArgs({ options: { ...Object.fromEntries(
-  ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture', 'sampler-fixture', 'trajectory-fixture', 'memory-python'].map(name => [name, { type: 'string' }])),
+  ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture', 'sampler-fixture', 'trajectory-fixture', 'memory-python', 'gpu-buffer-budget-mib', 'process-memory-budget-mib'].map(name => [name, { type: 'string' }])),
   'fields-only': { type: 'boolean', default: false },
   'mesh-output': { type: 'boolean', default: false } } });
 for (const name of ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver']) {
@@ -36,7 +37,7 @@ const persist = async () => { await fs.mkdir(path.dirname(output), { recursive: 
   await fs.writeFile(output, JSON.stringify(report, null, 2) + '\n'); };
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
-let server, child, cdp, profile,processMemory;
+let server, child, cdp, profile,processMemory,gpuBufferBudgetBytes,processMemoryBudgetBytes;
 
 // Built-in CDP client: no dependency on an operator Chrome profile or GUI app.
 async function connect(url) {
@@ -122,7 +123,15 @@ try {
   if(witness==='generation'){
     report.phase='generation-input-admission';report.schema='trellis2.image-generation-browser.v0';
     generationManifest=JSON.parse(await fs.readFile(path.join(fixture,'manifest.json'),'utf8'));validateGenerationInputs(generationManifest);
+    report.phase='memory-budget-admission';
+    gpuBufferBudgetBytes=memoryBudgetBytes(values['gpu-buffer-budget-mib'],'--gpu-buffer-budget-mib');
+    processMemoryBudgetBytes=memoryBudgetBytes(values['process-memory-budget-mib'],'--process-memory-budget-mib');
+    report.memoryPolicy={gpuBufferBudgetBytes:gpuBufferBudgetBytes??null,processMemoryBudgetBytes:processMemoryBudgetBytes??null,
+      selection:'explicit caller limits; no precision/input/settings substitution'};
+    report.memoryPolicy.checkpointAdmission=admitGenerationGpuBudget(generationManifest,gpuBufferBudgetBytes);
   }
+  if(witness!=='generation'&&(values['gpu-buffer-budget-mib']!==undefined||values['process-memory-budget-mib']!==undefined))
+    throw Error('memory budget flags require generation witness');
   if(witness==='slat-convolution'){
     report.phase='convolution-reference-admission';report.schema='trellis2.slat-convolution-browser.v0';
     const m=JSON.parse(await fs.readFile(path.join(fixture,'manifest.json'),'utf8')),parents={};
@@ -249,7 +258,18 @@ try {
     const memoryScript=path.join(root,'models/trellis2/process-memory.py'),python=values['memory-python']??'/usr/bin/python3';
     report.memory={requested:true,scope:'owned runner/browser descendants plus unique device-buffer ledger',
       python,script:memoryScript,scriptSha256:digest(await fs.readFile(memoryScript))};
-    processMemory=await startProcessMemory({python,script:memoryScript,rawPath:path.join(evidenceRoot,'process-memory.jsonl')});
+    processMemory=await startProcessMemory({python,script:memoryScript,rawPath:path.join(evidenceRoot,'process-memory.jsonl'),
+      maxFootprintBytes:processMemoryBudgetBytes,
+      async onUnsafe(safety){
+        report.status='failed';report.memorySafety={...safety,ownedBrowserPid:child?.pid??null,action:'prevent-launch-or-stop-exact-owned-browser'};
+        await persist();
+        if(child&&child.exitCode===null&&child.signalCode===null){
+          // Independent command-owned browser only. Never signal GUI Chrome,
+          // another model's process, the runner or a borrowed host device.
+          if(!child.kill('SIGTERM'))throw Error('could not stop owned browser after memory refusal');
+          report.memorySafety.signalSent='SIGTERM';await persist();
+        }
+      }});
     await persist();
   }
   profile = await fs.mkdtemp(path.join(os.tmpdir(), 'trellis-sparse-chrome-'));
@@ -277,7 +297,7 @@ try {
   report.phase = `native-${witness}-execution`; await persist();
   const result = await cdp.call('Runtime.evaluate', { expression: `(async () => {
     const { ${witness==='generation' ? 'runGenerationWitness' : isSampler ? 'runSparseSamplerWitness' : witness === 'slat-convolution' ? 'runSLatConvolutionWitness' : witness === 'slat-projection' ? 'runSLatProjectionWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${isSampler?'sampler':witness}-witness.js');
-    const result = await ${witness==='generation' ? 'runGenerationWitness' : isSampler ? 'runSparseSamplerWitness' : witness === 'slat-convolution' ? 'runSLatConvolutionWitness' : witness === 'slat-projection' ? 'runSLatProjectionWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${witness==='generation'?', '+JSON.stringify({memoryMonitor:true,assetMode:values['fields-only']?'retained-fields-only':'raw-glb'}):isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : witness === 'slat-decoder' ? `, {meshOutput:${JSON.stringify(values['mesh-output'])}}` : ''});
+    const result = await ${witness==='generation' ? 'runGenerationWitness' : isSampler ? 'runSparseSamplerWitness' : witness === 'slat-convolution' ? 'runSLatConvolutionWitness' : witness === 'slat-projection' ? 'runSLatProjectionWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${witness==='generation'?', '+JSON.stringify({memoryMonitor:true,assetMode:values['fields-only']?'retained-fields-only':'raw-glb',gpuBufferBudgetBytes}):isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : witness === 'slat-decoder' ? `, {meshOutput:${JSON.stringify(values['mesh-output'])}}` : ''});
     const saved = await fetch('/witness-result', { method: 'POST', body: JSON.stringify(result) });
     if (!saved.ok) throw new Error('browser result was not durably saved');
     return { url: location.href, receipt: await saved.json() };
@@ -388,6 +408,7 @@ try {
   report.status = 'succeeded'; report.phase = null;
 } catch (error) {
   report.error = { message: error.message, stack: error.stack };
+  if(error.memoryBudget)report.memoryPolicy={...report.memoryPolicy,refusal:error.memoryBudget};
   if(error.memorySummary)report.memory.processes=error.memorySummary;
   if(child)report.ownedBrowserAtFailure={pid:child.pid,exitCode:child.exitCode,signalCode:child.signalCode,
     meaning:'child-process observation before cleanup; null exit fields alone do not prove liveness'};

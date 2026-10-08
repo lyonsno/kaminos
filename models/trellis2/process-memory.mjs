@@ -3,9 +3,13 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {randomUUID} from 'node:crypto';
 const execute=promisify(execFile);
-export async function startProcessMemory({python,script,rootPid=process.pid,rawPath,summaryPath=rawPath+'.summary.json',runId=randomUUID(),periodMs=1000,probe}={}){
+export async function startProcessMemory({python,script,rootPid=process.pid,rawPath,summaryPath=rawPath+'.summary.json',runId=randomUUID(),periodMs=1000,probe,maxFootprintBytes,onUnsafe}={}){
   if(!rawPath||!Number.isSafeInteger(rootPid)||rootPid<1||!Number.isFinite(periodMs)||periodMs<=0)
     throw Error('explicit memory output/owner and positive sample interval required');
+  if(maxFootprintBytes!==undefined){
+    if(!Number.isSafeInteger(maxFootprintBytes)||maxFootprintBytes<1)throw TypeError('positive caller-selected process memory budget required');
+    if(typeof onUnsafe!=='function')throw TypeError('budgeted process observation requires onUnsafe stop action');
+  }
   const collect=probe??(async()=>{
     const {stdout,stderr}=await execute(python,[script,'--root-pid',String(rootPid),'--run-id',runId],{maxBuffer:Infinity});
     return {stdout,stderr,exitStatus:0};
@@ -14,8 +18,17 @@ export async function startProcessMemory({python,script,rootPid=process.pid,rawP
     sampledPeakAggregatePhysicalFootprintBytes:null,processes:{},rawPath,summaryPath,
     unavailableProcessObservations:[],coverage:'sampled-owned-process-tree',
     meaning:'sampled simultaneous owned-process footprint including observer; per-process kernel peaks are not summed; not machine-capacity certification'};
-  await fs.writeFile(rawPath,'');let pending,stopped=false,timer,failed;
+  await fs.writeFile(rawPath,'');let pending,stopped=false,timer,failed,safetyStopped=false;
   const persist=()=>fs.writeFile(summaryPath,JSON.stringify(summary,null,2)+'\n');
+  const stopUnsafe=async reason=>{
+    if(maxFootprintBytes===undefined||safetyStopped)return;
+    safetyStopped=true;clearInterval(timer);
+    summary.safety={...reason,maxFootprintBytes,atUnixMs:Date.now(),actionStatus:'requested'};
+    await persist();
+    try{await onUnsafe(summary.safety);summary.safety.actionStatus='returned';}
+    catch(error){summary.safety.actionStatus='failed';summary.safety.actionError=error.message;throw error;}
+    finally{await persist();}
+  };
   const sample=async()=>{
     let row,transport;
     try{
@@ -53,14 +66,28 @@ export async function startProcessMemory({python,script,rootPid=process.pid,rawP
       summary.processes[key]={...p,observedPeakPhysicalFootprintBytes:Math.max(old?.observedPeakPhysicalFootprintBytes??0,p.physicalFootprintBytes),
         kernelLifetimePeakPhysicalFootprintBytes:Math.max(old?.kernelLifetimePeakPhysicalFootprintBytes??0,p.kernelLifetimePeakPhysicalFootprintBytes)};
     }
+    if(maxFootprintBytes!==undefined){
+      if(summary.coverage!=='sampled-owned-process-tree'){
+        await stopUnsafe({reason:'memory-observation-unavailable',error:'partial process coverage'});
+        throw Error('bounded memory observation unavailable: partial process coverage');
+      }
+      if(row.sampledAggregatePhysicalFootprintBytes>maxFootprintBytes){
+        await stopUnsafe({reason:'process-footprint-budget',observedBytes:row.sampledAggregatePhysicalFootprintBytes});
+        throw Error('TRELLIS process memory budget exceeded: '+row.sampledAggregatePhysicalFootprintBytes+' > '+maxFootprintBytes);
+      }
+    }
   };
   const request=()=>{
     if(stopped||failed||pending)return pending;
-    pending=sample().catch(async e=>{failed=e;summary.status='failed';summary.error=e.message;clearInterval(timer);await persist();}).finally(()=>pending=null);
+    pending=sample().catch(async e=>{
+      failed=e;summary.status=summary.safety?.reason==='process-footprint-budget'?'budget-refused':'failed';summary.error=e.message;clearInterval(timer);
+      try{await stopUnsafe({reason:'memory-observation-unavailable',error:e.message});}catch(actionError){summary.stopActionError=actionError.message;}
+      await persist();
+    }).finally(()=>pending=null);
     return pending;
   };
   try{await request();if(failed)throw failed;}catch(e){e.memorySummary=summary;throw e;}
   timer=setInterval(request,periodMs);
   return{sample:request,async stop(){if(stopped)return summary;await request();stopped=true;clearInterval(timer);if(pending)await pending;
-    summary.status=failed?'failed':'observed';await persist();return summary;}};
+    summary.status=failed?(summary.safety?.reason==='process-footprint-budget'?'budget-refused':'failed'):'observed';await persist();return summary;}};
 }
