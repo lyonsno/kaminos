@@ -551,6 +551,46 @@ async function runExportAndSaveAsNamesScenario(ws) {
   }
 }
 
+// Load opens the saved scenes, not an OS file picker: save a named scene,
+// clear the viewport, press Load, filter to the scene, and open it with Enter.
+async function runLoadPickerScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-load-picker';
+  const name = 'dark-modal-load-picker-' + process.pid;
+  const scenesAtStart = new Set(await evaluate(ws, `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`));
+  try {
+    const result = await evaluate(ws, `(async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const saved = await window.saveSceneAs({ name: ${JSON.stringify(name)}, result: true });
+      document.getElementById('info-bar').textContent = '';
+      if (!saved?.ok) throw new Error('named save failed: ' + JSON.stringify(saved));
+      [...document.querySelectorAll('#transform-bar button, .tb-btn')].find(item => item.textContent.trim() === 'Load').click();
+      let picker = null;
+      for (let i = 0; i < 80 && !picker; i++) { picker = document.querySelector('.scene-load-picker'); if (!picker) await wait(50); }
+      if (!picker) throw new Error('Load did not open the saved-scene list');
+      let rows = [];
+      for (let i = 0; i < 80; i++) { rows = [...picker.querySelectorAll('[data-scene-file]')]; if (rows.length) break; await wait(50); }
+      const listed = rows.map(row => row.dataset.sceneFile);
+      const filter = picker.querySelector('input');
+      filter.value = ${JSON.stringify(name)};
+      filter.dispatchEvent(new Event('input', { bubbles: true }));
+      await wait(50);
+      const visible = [...picker.querySelectorAll('[data-scene-file]')].filter(row => !row.hidden).map(row => row.dataset.sceneFile);
+      filter.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      let loaded = null;
+      for (let i = 0; i < 160; i++) { await wait(125); const info = document.getElementById('info-bar')?.textContent || ''; if (/^Scene loaded/.test(info.trim())) { loaded = info; break; } }
+      return { listed, visible, loaded, objects: window.kaminosSceneObjectDebugState().length, pickerOpen: !!document.querySelector('.scene-load-picker') };
+    })()`, { timeoutMs: 60000 });
+    lastEvidence.loadPicker = result;
+    if (!result.listed.includes(name + '.kaminos.json')) throw new Error('saved scene missing from the Load list: ' + JSON.stringify(result.listed));
+    if (result.visible.length !== 1 || result.visible[0] !== name + '.kaminos.json') throw new Error('filter did not narrow to the saved scene: ' + JSON.stringify(result.visible));
+    if (!result.loaded || result.pickerOpen) throw new Error('Enter did not load the chosen scene: ' + JSON.stringify(result));
+  } finally {
+    const created = (await evaluate(ws, `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`)).filter(entry => !scenesAtStart.has(entry));
+    for (const entry of created) await evaluate(ws, `fetch('/api/delete-scene?name=' + encodeURIComponent(${JSON.stringify(entry)})).then(response => response.status)`);
+  }
+}
+
 async function runNavigationDepthIndexScenario(ws) {
   await runMeshAssetLinkScenario(ws);
   phase = 'scenario-navigation-depth-index';
@@ -5875,6 +5915,8 @@ try {
     await runArrivalAutoLevelScenario(ws);
   } else if (scenario === 'export-and-save-as-names') {
     await runExportAndSaveAsNamesScenario(ws);
+  } else if (scenario === 'load-picker') {
+    await runLoadPickerScenario(ws);
   } else if (scenario === 'mesh-asset-append-arrival') {
     await runMeshAssetAppendArrivalScenario(ws, args.get('--append-url'));
   } else if (scenario === 'navigation-depth-index') {

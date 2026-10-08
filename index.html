@@ -91,6 +91,12 @@ body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !import
 .file-name-prompt-actions { display:flex; justify-content:flex-end; gap:8px; }
 .file-name-prompt-actions button { padding:5px 12px; border:1px solid #405157; border-radius:4px; background:#1d2426; color:#d7e1e3; font:inherit; cursor:pointer; }
 .file-name-prompt-actions button[type="submit"] { background:#1976d2; border-color:#1976d2; color:white; }
+.scene-load-picker-panel { width:min(560px, calc(100vw - 32px)); }
+.scene-load-picker-list { max-height:min(52vh, 420px); overflow-y:auto; margin-top:8px; border:1px solid #2a3235; border-radius:4px; }
+.scene-load-picker-row { display:flex; flex-direction:column; gap:2px; width:100%; padding:7px 9px; border:0; border-bottom:1px solid #1f2628; background:transparent; color:#d7e1e3; font:inherit; text-align:left; cursor:pointer; }
+.scene-load-picker-row[hidden] { display:none; }
+.scene-load-picker-row:hover, .scene-load-picker-row.active { background:#1d3a4a; color:white; }
+.scene-load-picker-meta { color:#8a9a9e; font-size:10px; }
 #scene-add-menu-popup button { display:flex; width:100%; justify-content:space-between; gap:20px; padding:9px 10px; text-align:left; white-space:nowrap; }
 #scene-add-menu-popup small { color:#8fa1a6; font:10px 'SF Mono',monospace; }
 #local-liquid-performance .hint { margin:8px 0 0; color:#96a3a8; font:11px/1.5 'SF Mono',monospace; }
@@ -3443,7 +3449,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="tb-sep"></div>
     <button class="tb-btn" onclick="saveScene()" title="Save/overwrite scene (Ctrl+S)">Save</button>
     <button class="tb-btn" onclick="saveSceneAs({ promptName: true })" title="Save as a named scene (Ctrl+Shift+S)">Save As</button>
-    <button class="tb-btn" onclick="document.getElementById('scene-file-input').click()" title="Load scene (Ctrl+O)">Load</button>
+    <button class="tb-btn" onclick="openSavedScene()" title="Open a saved scene (Ctrl+O)">Load</button>
     <input type="file" id="scene-file-input" accept=".json,.kaminos" style="display:none">
   </div>
   <div id="greenroom-preview-controls" hidden>
@@ -3899,6 +3905,7 @@ import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './
 import { assetArrivalFramingWindow, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
+import { pickSavedScene } from './scene-load-picker.mjs';
 import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
@@ -29599,6 +29606,24 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
 }
 
 // File input handler for Load Scene
+// Load lists the scenes Kaminos saved (the scenes root) rather than opening the
+// system file picker; "Browse files…" in the list still reaches it.
+window.openSavedScene = async function() {
+  if (document.querySelector('.scene-load-picker')) return;
+  const listing = await grFetchApi('browse', { root: 'scenes', path: '' });
+  const names = (listing?.entries || []).map(entry => entry.name).filter(name => name.endsWith('.kaminos.json'));
+  const scenes = await Promise.all(names.map(async name => {
+    const data = await grFetchApi('read', { root: 'scenes', path: name }).catch(() => null);
+    return { name, label: data?.label || data?.capture?.label || '', timestamp: data?.timestamp || '' };
+  }));
+  const choice = await pickSavedScene({ scenes });
+  if (choice === 'browse') { document.getElementById('scene-file-input').click(); return; }
+  if (!choice?.name) return;
+  const sceneData = await grFetchApi('read', { root: 'scenes', path: choice.name });
+  if (!sceneData || sceneData.error) { setInfo(`Could not read ${choice.name}: ${sceneData?.error || 'unavailable'}`); return; }
+  await loadSceneFile(new File([JSON.stringify(sceneData)], choice.name, { type: 'application/json' }), { sceneFile: choice.name });
+};
+
 document.getElementById('scene-file-input').addEventListener('change', e => {
   if (e.target.files[0]) loadSceneFile(e.target.files[0]);
   e.target.value = ''; // reset so same file can be loaded again
@@ -29618,7 +29643,7 @@ window.addEventListener('keydown', e => {
   }
   if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
     e.preventDefault();
-    document.getElementById('scene-file-input').click();
+    openSavedScene();
   }
 });
 
