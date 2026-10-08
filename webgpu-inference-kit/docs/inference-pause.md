@@ -1,7 +1,7 @@
 # Pause A Model Invocation
 
-Candidate API, not yet a published package capability. One invocation owns one
-control, shared by its leaf GPU and CPU duties:
+Available in Kit 0.1.56. One invocation owns one control, shared by its leaf
+GPU and CPU duties:
 
 ```js
 import { createWebGpuInferenceControl } from '@kaminos/webgpu-inference-kit/core';
