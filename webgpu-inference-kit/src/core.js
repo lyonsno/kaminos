@@ -1,4 +1,5 @@
 export { createWebGpuLinearShader } from './linear-kernel.js';
+export { createWebGpuInferenceControl } from './inference-control.js';
 
 export {
   assertAuthoritativeRouteReceipt,

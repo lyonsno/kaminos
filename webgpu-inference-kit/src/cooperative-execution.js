@@ -245,7 +245,14 @@ export function createWebGpuCooperativeExecution(input = {}) {
     throw new TypeError('now must be a function when provided');
   }
   const now = input.now || (() => globalThis.performance?.now?.() ?? Date.now());
-  const signal = input.signal || null;
+  const inferenceControl = input.inferenceControl ?? null;
+  if (inferenceControl != null && typeof inferenceControl.runDuty !== 'function') {
+    throw new TypeError('inferenceControl must expose runDuty');
+  }
+  if (inferenceControl && input.signal && input.signal !== inferenceControl.signal) {
+    throw new TypeError('inferenceControl and execution must share the same AbortSignal');
+  }
+  const signal = input.signal || inferenceControl?.signal || null;
   if (signal != null && typeof signal.aborted !== 'boolean') {
     throw new TypeError('signal must be an AbortSignal when provided');
   }
@@ -737,7 +744,7 @@ export function createWebGpuCooperativeExecution(input = {}) {
       return release;
     }
 
-    const controller = Object.freeze({
+    const controller = {
       boundaryId,
       kind: definition.boundary.kind,
       unit: definition.boundary.unit,
@@ -1046,7 +1053,14 @@ export function createWebGpuCooperativeExecution(input = {}) {
           ranges: boundaryState.ranges,
         }));
       },
-    });
+    };
+    if (inferenceControl) {
+      for (const method of ['runGpuDuty', 'runCpuDuty']) {
+        const duty = controller[method];
+        controller[method] = (...args) => inferenceControl.runDuty(() => duty(...args));
+      }
+    }
+    Object.freeze(controller);
     boundaryState.controller = controller;
     return controller;
   }
