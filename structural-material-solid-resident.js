@@ -55,7 +55,7 @@ fn evaluate(node:u32,trial:vec3f,needHessian:bool)->Local{
 }
 @compute @workgroup_size(64) fn predict(@builtin(global_invocation_id) id:vec3u){
  let i=id.x;if(i>=settings.counts.x){return;}let p=points[i];var y=p.position.xyz+settings.time.x*p.velocity.xyz*settings.time.z+vec3f(0,-settings.time.y,0)*settings.time.x*settings.time.x;
- if(p.velocity.w==1.0){y=p.rest.xyz;}points[i].predicted=vec4f(y,0);points[i].position=vec4f(y,p.position.w);
+ if(p.velocity.w==1.0){y=p.rest.xyz;points[i].position=vec4f(y,p.position.w);}points[i].predicted=vec4f(y,0);
 }
 @compute @workgroup_size(64) fn solve(@builtin(global_invocation_id) id:vec3u){
  let colors=settings.counts.x+1u+incidence[settings.counts.x]*2u;let start=incidence[colors+settings.counts.y];let end=incidence[colors+settings.counts.y+1u];if(id.x>=end-start){return;}
