@@ -586,6 +586,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .volume-flame-problems { margin-top: 8px; padding: 6px 8px; border: 1px solid #ff6b6b; border-radius: 4px; color: #ff8a8a; font-size: 11px; font-family: 'SF Mono', 'Fira Code', monospace; overflow-wrap: anywhere; }
 .volume-control-invalid { outline: 2px solid #ff6b6b; outline-offset: 1px; }
+.viewport-flame-problems { position: absolute; top: 56px; left: 16px; z-index: 12; max-width: min(560px, calc(100% - 32px)); box-sizing: border-box; padding: 6px 10px; border: 1px solid #ff6b6b; border-radius: 4px; background: rgba(30, 8, 8, 0.92); color: #ff9a9a; font: 11px/1.4 'SF Mono', 'Fira Code', monospace; overflow-wrap: anywhere; pointer-events: none; }
 .volume-presentation-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin: 8px 0; }
 .volume-presentation-switch .btn { margin: 0; min-height: 30px; font-size: 11px; }
 .volume-presentation-switch .btn.active { border-color: #4c9fba; background: #17333d; color: #d8f5ff; }
@@ -3155,6 +3156,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </div>
 
 <div id="viewport">
+  <div class="viewport-flame-problems" id="viewport-flame-settings-problems" role="alert" hidden></div>
   <nav class="scene-top-menu" aria-label="Scene menu">
     <div id="scene-add-menu">
       <button type="button" id="scene-add-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="scene-add-menu-popup" title="Add scene object (Shift+A)">Add</button>
@@ -16923,7 +16925,7 @@ function describeFlameSettingsProblems() {
   const problems = window.__kaminosFlameSettingsProblems || [];
   if (!problems.length) return { text: '', warning: false };
   return {
-    text: `FLAME EDITS REFUSED: ${problems.length} invalid control${problems.length === 1 ? '' : 's'} (${problems.map(problem => problem.id).join(', ')}); ${problems.map(problem => problem.message).join('; ')}`,
+    text: `FLAME EDITS REFUSED: ${problems.length} invalid control${problems.length === 1 ? '' : 's'} (${problems.map(flameSettingsProblemLabel).join(', ')}); ${problems.map(problem => problem.message).join('; ')}`,
     warning: true,
   };
 }
@@ -16932,8 +16934,9 @@ function describeFlameSettingsProblems() {
 // control where it sits, with the reason on hover.
 function showFlameSettingsProblems() {
   const problems = describeFlameSettingsProblems();
-  const banner = document.getElementById('volume-flame-settings-problems');
-  if (banner) {
+  for (const id of ['volume-flame-settings-problems', 'viewport-flame-settings-problems']) {
+    const banner = document.getElementById(id);
+    if (!banner) continue;
     banner.textContent = problems.text;
     banner.hidden = !problems.text;
   }
@@ -16945,12 +16948,36 @@ function showFlameSettingsProblems() {
     }
   }
   for (const problem of window.__kaminosFlameSettingsProblems || []) {
-    const el = document.getElementById(problem.id);
-    if (!el?.classList) continue;
-    if (!el.classList.contains('volume-control-invalid')) el.dataset.volumeInvalidPriorTitle = el.title || '';
-    el.classList.add('volume-control-invalid');
-    el.title = problem.message;
+    const source = document.getElementById(problem.id);
+    for (const el of [source, ...document.querySelectorAll(`[data-authoring-alias="${problem.id}"]`)]) {
+      if (!el?.classList) continue;
+      if (!el.classList.contains('volume-control-invalid')) el.dataset.volumeInvalidPriorTitle = el.title || '';
+      el.classList.add('volume-control-invalid');
+      el.title = problem.message;
+    }
   }
+}
+
+// A problem named the way the panel shows it: the control's row label, or
+// its id when it has none.
+function flameSettingsProblemLabel(problem) {
+  const label = document.getElementById(problem.id)?.closest?.('.slider-row')?.querySelector('.slider-label')?.textContent?.trim();
+  return label || problem.id;
+}
+
+// A refused flame press, shown above the volume canvas where the operator is
+// looking (the info bar paints under it).
+function showFlameEditRefused(error) {
+  const message = `Flame edit refused: ${error.message}`;
+  setInfo(message);
+  const banner = document.getElementById('viewport-flame-settings-problems');
+  if (banner) {
+    banner.textContent = message;
+    banner.hidden = false;
+  }
+  // Some refusals pass (a replay in progress); fall back to the load state.
+  clearTimeout(showFlameEditRefused.timer);
+  showFlameEditRefused.timer = setTimeout(showFlameSettingsProblems, 4000);
 }
 
 // Run the flame settings edit check on the loaded page once every control is
@@ -25124,6 +25151,7 @@ function flameSettingsStateProblems(state) {
     if(!wanted || Object.keys(wanted).sort().join()!==Object.keys(current[axis]).sort().join()){problems.push({id:axis,message:`Incomplete flame ${axis}`});continue;}
     for(const [id,descriptor] of Object.entries(wanted)) {
       const problem=message=>problems.push({id,message});
+      if(!descriptor||typeof descriptor!=='object'){problem(`Invalid flame setting ${id}`);continue;}
       if(axis==='presentationControls') {if(!['on','off'].includes(descriptor.value))problem('Invalid smoke presentation');continue;}
       const source=document.getElementById(id),value=descriptor.rawValue??descriptor.value;
       if(!source){problem(`Missing flame setting ${id}`);continue;}
@@ -25214,7 +25242,7 @@ function installAuthoringParameterEditing() {
     const definition={read,write,check};
     edits.register(id,definition);authoringParameterTargets.set(id,definition);
     authoringControlSessions.push(installSceneControlHistory({edits,id:'@flame-settings',
-      controls:[control,...document.querySelectorAll(`[data-authoring-alias="${control.id}"]`)],label,onError:error=>setInfo(`Flame edit refused: ${error.message}`)}));
+      controls:[control,...document.querySelectorAll(`[data-authoring-alias="${control.id}"]`)],label,onError:error=>showFlameEditRefused(error)}));
   }
   for(const id of ['fire-light-gain-stops','exposure-slider','env-intensity-slider','env-rotation-slider','env-bg-brightness','env-bg-contrast']) {
     const control=document.getElementById(id);if(!control)continue;
