@@ -9533,11 +9533,9 @@ fn traceDeferredScene(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> Deferred
     let objectId = depthObject.y;
     let depthDelta = projected.z - sceneDepth;
     let crossingTolerance = 0.028 + distance * 0.012;
-    let validSceneDepth = select(
-      depthObject.w > 0.5 && sceneDepth < 29.5,
-      sceneDepth > params.hostFrameControls.z && sceneDepth < params.hostFrameControls.y - 0.01,
-      hostScene,
-    );
+    let validToyDepth = (depthObject.w > 0.5) && (sceneDepth < 29.5);
+    let validHostDepth = (sceneDepth > params.hostFrameControls.z) && (sceneDepth < (params.hostFrameControls.y - 0.01));
+    let validSceneDepth = select(validToyDepth, validHostDepth, hostScene);
     if (validSceneDepth && depthDelta >= -crossingTolerance && depthDelta <= 0.18 + distance * 0.02) {
       hit.valid = 1.0;
       hit.uv = projected.xy;
