@@ -29531,7 +29531,7 @@ const authoredMaterialCockpit=mountMaterialCockpit(document.getElementById('loca
 });
 // The existing density value stays in the budget form for compatibility, but
 // its live slider above is the operator's single editing surface.
-document.getElementById('local-liquid-iterations')?.closest('.slider-row')?.setAttribute('hidden','');
+const legacyDensityRow=document.getElementById('local-liquid-iterations')?.parentElement;if(legacyDensityRow)legacyDensityRow.style.display='none';
 </script>
 <script>
 // Help text lives behind a small info mark on each control row: the
