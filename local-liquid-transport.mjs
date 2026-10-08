@@ -28,6 +28,10 @@ export function liquidCameraRayFromEndpoints(near,far) {
  if(![near,far].every(p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite)))throw Error('Camera ray needs finite unprojected endpoints');
  const d=far.map((v,i)=>v-near[i]),length=Math.hypot(...d);if(!(length>0))throw Error('Camera ray endpoints coincide');return d.map(v=>v/length);
 }
+export function liquidFrontVisible(frontDepth,sceneDepth) {
+ if(!Number.isFinite(frontDepth)||!Number.isFinite(sceneDepth))throw Error('Layer ordering requires finite depths');
+ return sceneDepth<=0||frontDepth<sceneDepth-.002;
+}
 export const LOCAL_LIQUID_TRANSPORT_WGSL=/* wgsl */`
 fn liquidCameraDirection(pixel: vec2<i32>) -> vec3<f32> {
   let dims = vec2<f32>(textureDimensions(surfaceAccumulation));
