@@ -78,4 +78,14 @@ with TemporaryDirectory() as directory:
         assert get(method, params, client="192.168.1.20")[1] == 403, method
     assert post({"store": store_id, "name": "study.kaminos.json"}, client="192.168.1.20")[1] == 403
     assert get("handle_scene_library", {}, client="::1")[1] == 200
+    # A symlink at the destination must not redirect the write outside the mesh root.
+    victim = root / "victim.txt"
+    victim.write_text("keep me")
+    glb2 = b"glTF" + bytes(range(64, 160))
+    digest2 = hashlib.sha256(glb2).hexdigest()
+    (there_meshes / f"{digest2}.glb").write_bytes(glb2)
+    (here_meshes / f"{digest2}.glb").symlink_to(victim)
+    dep = serve.scene_library_import_dependency(f"/api/read?root=generated-meshes&path={digest2}.glb", there_scenes)
+    assert dep["status"] == "missing", dep
+    assert victim.read_text() == "keep me", "the import never writes through a symlink"
 print("scene library import contracts passed")

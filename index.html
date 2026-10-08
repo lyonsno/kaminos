@@ -29636,7 +29636,14 @@ window.openSavedScene = async function() {
     if (!response.ok || !imported?.saved) { setInfo(`Could not import ${choice.name} from ${choice.store.label}: ${imported?.error || response.status}`); return; }
     const missing = (imported.dependencies || []).filter(dependency => dependency.status === 'missing');
     await loadSceneFile(new File([JSON.stringify(imported.document)], imported.saved, { type: 'application/json' }), { sceneFile: imported.saved });
-    if (missing.length) setInfo(`Opened ${imported.document.label || choice.name} from ${choice.store.label}; ${missing.length} asset${missing.length === 1 ? '' : 's'} only that server can read: ${missing.map(dependency => new URLSearchParams(dependency.source.split('?')[1] || '').get('path')).join(', ')}`);
+    if (!missing.length) return;
+    // A failed restore clears the document and blocks Save; keep its error and
+    // add which assets were unavailable rather than claiming the scene opened.
+    const names = missing.map(dependency => new URLSearchParams(dependency.source.split('?')[1] || '').get('path')).join(', ');
+    const opened = !sceneSaveBlockedByFailedRestore && currentSceneFile === imported.saved;
+    setInfo(opened
+      ? `Opened ${imported.document.label || choice.name} from ${choice.store.label}; ${missing.length} asset${missing.length === 1 ? '' : 's'} only that server can read: ${names}`
+      : `${document.getElementById('info-bar').textContent} (unavailable from ${choice.store.label}: ${names})`);
     return;
   }
   const sceneData = await grFetchApi('read', { root: 'scenes', path: choice.name });

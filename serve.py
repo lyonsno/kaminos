@@ -2134,10 +2134,18 @@ def scene_library_import_dependency(source, store):
     query = parse_qs(urlparse(source).query)
     root, path = (query.get("root") or [""])[0], (query.get("path") or [""])[0]
     local_root = BROWSE_ROOTS.get(root)
-    if local_root is not None and path and (Path(local_root) / path).resolve().is_relative_to(Path(local_root).resolve()) and (Path(local_root) / path).is_file():
+    if local_root is None or not path:
+        return {"source": source, "status": "missing"}
+    root_path = Path(local_root).resolve()
+    destination = Path(local_root) / path
+    # Anything at the destination that leaves the root (a symlink, ..) is
+    # neither trusted as present nor written through.
+    if destination.is_symlink() or not destination.resolve().is_relative_to(root_path):
+        return {"source": source, "status": "missing", "reason": "destination outside this server's root"}
+    if destination.is_file():
         return {"source": source, "status": "present"}
     match = re.fullmatch(r"([0-9a-f]{64})\.glb", path)
-    if root == "generated-meshes" and match and local_root is not None:
+    if root == "generated-meshes" and match:
         candidates = [store.parent / "assets" / "generated-meshes" / path]
         candidates += [Path(p) for p in glob.glob(os.path.expanduser("~/.local/state/kaminos/*/assets/generated-meshes/" + path))]
         candidates.append(Path(os.path.expanduser("~/.local/state/kaminos/assets/generated-meshes")) / path)
@@ -2147,8 +2155,10 @@ def scene_library_import_dependency(source, store):
             except OSError:
                 continue
             if hashlib.sha256(data).hexdigest() == match.group(1):
-                Path(local_root).mkdir(parents=True, exist_ok=True)
-                (Path(local_root) / path).write_bytes(data)
+                root_path.mkdir(parents=True, exist_ok=True)
+                staging = root_path / f".{path}.{uuid.uuid4().hex}.tmp"
+                staging.write_bytes(data)
+                os.replace(staging, root_path / path)
                 return {"source": source, "status": "imported", "from": str(candidate)}
     return {"source": source, "status": "missing"}
 

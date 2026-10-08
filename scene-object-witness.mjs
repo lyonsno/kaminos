@@ -600,7 +600,10 @@ async function runLoadFromOtherServerScenario(ws) {
   phase = 'scenario-load-from-other-server';
   const sourceMesh = args.get('--fixture-mesh');
   if (!sourceMesh) throw new Error('load-from-other-server requires --fixture-mesh');
-  const mesh = readFileSync(sourceMesh), digest = createHash('sha256').update(mesh).digest('hex');
+  // --fixture-missing-asset: the scene names a mesh no server has, so the
+  // restore must fail truthfully instead of reporting it opened.
+  const missingAsset = args.get('--fixture-missing-asset') === '1';
+  const mesh = readFileSync(sourceMesh), digest = missingAsset ? 'f'.repeat(64) : createHash('sha256').update(mesh).digest('hex');
   const roots = await (await fetch(new URL('/api/roots', url))).json();
   const localMesh = resolve(roots['generated-meshes'].path, digest + '.glb');
   if (existsSync(localMesh)) throw new Error('fixture mesh is already in this server, pick another: ' + localMesh);
@@ -611,7 +614,7 @@ async function runLoadFromOtherServerScenario(ws) {
   try {
     mkdirSync(resolve(lane, 'scenes'), { recursive: true });
     mkdirSync(resolve(lane, 'assets/generated-meshes'), { recursive: true });
-    writeFileSync(resolve(lane, 'assets/generated-meshes', digest + '.glb'), mesh);
+    if (!missingAsset) writeFileSync(resolve(lane, 'assets/generated-meshes', digest + '.glb'), mesh);
     writeFileSync(resolve(lane, 'scenes', name), JSON.stringify({ schema: 'kaminos.scene.v1', version: 7, label: 'Fixture study', timestamp: new Date().toISOString(),
       objects: [{ id: 'glb-fixture', type: 'glb', source: '/api/read?root=generated-meshes&path=' + digest + '.glb', fileName: digest + '.glb', label: 'Fixture mesh', transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } }] }));
     writeFileSync(localNamesake, JSON.stringify({ schema: 'kaminos.scene.v1', version: 7, label: 'Unrelated local namesake', objects: [] }));
@@ -626,18 +629,25 @@ async function runLoadFromOtherServerScenario(ws) {
       const rows = [...picker.querySelectorAll('[data-scene-file]')].filter(row => !row.hidden).map(row => row.dataset.sceneFile);
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       let loaded = null;
-      for (let i = 0; i < 160; i++) { await wait(125); const labels = window.kaminosSceneObjectDebugState().map(o => o.label); if (labels.includes('Fixture mesh')) { loaded = labels; break; } }
+      for (let i = 0; i < (${missingAsset} ? 48 : 160); i++) { await wait(125); const labels = window.kaminosSceneObjectDebugState().map(o => o.label); if (labels.includes('Fixture mesh')) { loaded = labels; break; } }
       await wait(500);
+      const info = document.getElementById('info-bar').textContent;
       const saved = await window.saveScene?.({ result: true });
-      return { rows, loaded, info: document.getElementById('info-bar').textContent, saved };
+      return { rows, loaded, info, saved };
     })()`, { timeoutMs: 60000 });
     const scenes = await (await fetch(new URL('/api/browse?root=scenes&path=', url))).json();
     imported = (scenes.entries || []).map(entry => entry.name).find(entry => entry.startsWith('fixture-study-' + process.pid + '_')) || null;
     lastEvidence.loadFromOtherServer = { ...result, imported, meshImported: existsSync(localMesh), namesake: JSON.parse(readFileSync(localNamesake, 'utf8')).label };
     const e = lastEvidence.loadFromOtherServer;
     if (e.rows.length !== 1 || e.rows[0] !== name) throw new Error('fixture store scene not listed: ' + JSON.stringify(e.rows));
+    if (missingAsset) {
+      if (e.loaded || /^Opened/.test(e.info) || e.saved?.ok) throw new Error('a scene whose mesh is unavailable was reported as opened or saved: ' + JSON.stringify(e));
+      if (!/unavailable from/.test(e.info)) throw new Error('failed restore did not name the unavailable asset: ' + JSON.stringify(e.info));
+      return;
+    }
     if (!e.loaded) throw new Error('scene from another server did not load its mesh: ' + JSON.stringify(e));
     if (!e.imported || !e.meshImported) throw new Error('import did not bring the scene and its mesh here: ' + JSON.stringify(e));
+    if (!e.saved?.ok || e.saved.filename !== e.imported) throw new Error('Save did not write the imported copy: ' + JSON.stringify({ saved: e.saved, imported: e.imported }));
     if (e.namesake !== 'Unrelated local namesake') throw new Error('importing or saving touched the local same-named scene: ' + JSON.stringify(e));
   } finally {
     rmSync(lane, { recursive: true, force: true });
