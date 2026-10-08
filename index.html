@@ -815,8 +815,16 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div id="burner-status" role="status"></div>
 
     </section>
+    <section id="selected-water-properties" hidden><h2>Water Emission</h2><div class="panel">
+      <div class="slider-row"><label class="slider-label" for="water-emitter-radius">Base radius</label><input id="water-emitter-radius" class="transform-input" type="number" min="0.035" max="0.18" step="any" data-water-setting="baseRadius"></div>
+      <div class="slider-row"><label class="slider-label" for="water-emitter-speed">Inlet speed</label><input id="water-emitter-speed" class="transform-input" type="number" min="0.25" max="2.6" step="any" data-water-setting="strength"></div>
+      <div class="slider-row"><label class="slider-label" for="water-emitter-profile">Profile</label><select id="water-emitter-profile" class="select-input" data-water-setting="inletProfile"><option value="plug">Unified stream</option><option value="round_poiseuille">Parabolic</option></select></div>
+      <label class="import-mode"><input id="water-emitter-auto" type="checkbox"><span>Supply from aperture and speed</span></label>
+      <div class="slider-row"><label class="slider-label" for="water-emitter-rate">Particles / sec</label><input id="water-emitter-rate" class="transform-input" type="number" min="0" step="any" value="1200" data-water-setting="rate"></div>
+      <p class="hint">Emission belongs to this source. Object scale multiplies the aperture. Zero explicit supply stops emission.</p>
+    </div></section>
     <section id="local-liquid-performance" hidden>
-      <h2>Water Simulation</h2>
+      <h2>Water Simulation</h2><p class="flame-scope">Shared by all water emitters in this scene.</p>
       <div class="panel">
         <div class="scene-object-tools">
           <button type="button" class="btn" data-water-budget="12288,1">Draft</button>
@@ -3579,6 +3587,7 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createFlameAuthoring, createFlameInspector } from './flame-authoring.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
+import { createLocalLiquidEmitterAuthoring } from './local-liquid-authoring.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
 import { createAuthoredLiquidFireContactBridge } from './authored-liquid-fire-contact.mjs';
@@ -4369,7 +4378,7 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
     const { createLocalLiquidHost } = await import('./local-liquid-host.mjs');
     return createLocalLiquidHost({
       renderer, scene, camera, pipeline: renderPipeline, device: sharedGpu?.device,
-      setup, emitters, isCurrent, sceneGeneration: generation,
+      setup, emitters, isCurrent, sceneGeneration: generation, helperGround: groundPlane,
       onContactRetired: host => authoredLiquidFireContact.retire(host),
     });
   },
@@ -7146,7 +7155,7 @@ async function applyLocalLiquidPerformance(values) {
 function refreshLocalLiquidPerformance() {
   const panel = document.getElementById('local-liquid-performance');
   if (!panel) return;
-  panel.hidden = !localLiquidSetup || (document.body.dataset.workspace==='authoring' && activeSceneFieldId!=='water-field');
+  panel.hidden = !localLiquidSetup || (document.body.dataset.workspace==='authoring' && activeSceneFieldId!=='water-field' && selectedSceneObjectEntry()?.type!==LOCAL_LIQUID_EMITTER_TYPE);
   if (!localLiquidSetup) { delete panel.dataset.setup; return; }
   const signature = JSON.stringify(localLiquidSetup);
   if (panel.dataset.setup !== signature) {
@@ -25041,12 +25050,55 @@ function updateAuthoringPropertySelection() {
   if(flame)flame.hidden=activeSceneObjectId!==FLAME_EMITTER_ID;
   const sourceAction=document.getElementById('field-source-action');if(sourceAction)sourceAction.textContent=authoredFlamePresent?'Select emitter':'Restore emitter';
   const field=document.getElementById('shared-flame-domain-properties');if(field)field.hidden=activeSceneFieldId!=='flame-field';
-  const water=document.getElementById('local-liquid-performance');if(water)water.hidden=activeSceneFieldId!=='water-field';
+  syncSelectedWaterInspector();refreshLocalLiquidPerformance();
   syncBurnerInspector();
   syncSceneDataInspector();
   document.querySelectorAll('#transform-bar button[onclick]').forEach(button=>{
     if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround/.test(button.getAttribute('onclick'))) button.hidden=activeSceneObjectId===RIM_LIGHT_ID;
   });
+}
+let waterEmitterAuthoring=null;
+function syncSelectedWaterInspector() {
+ const panel=document.getElementById('selected-water-properties'),entry=selectedSceneObjectEntry();
+ const selected=entry?.type===LOCAL_LIQUID_EMITTER_TYPE;
+ panel.hidden=!selected;if(!selected)return;
+ panel.dataset.objectId=entry.id;
+ const value=entry.localLiquidEmitter;
+ for(const input of panel.querySelectorAll('[data-water-setting]')) {
+  if(document.activeElement===input)continue;
+  const key=input.dataset.waterSetting;
+  if(key==='rate') {input.disabled=value.rate===null;if(value.rate!==null)input.value=value.rate;}
+  else input.value=key==='inletProfile'?(value[key]??'round_poiseuille'):value[key];
+ }
+ document.getElementById('water-emitter-auto').checked=value.rate===null;
+}
+function installWaterAuthoring() {
+ const edits=scenePlacementTools.edits,panel=document.getElementById('selected-water-properties');
+ waterEmitterAuthoring=createLocalLiquidEmitterAuthoring({edits,
+  readRecord:id=>{const entry=sceneObjects.find(o=>o.id===id);return entry?.type===LOCAL_LIQUID_EMITTER_TYPE?{transform:sceneObjectTransformState(entry.object),localLiquidEmitter:entry.localLiquidEmitter}:null;},
+  writeSettings:(id,value)=>{
+   const entry=sceneObjects.find(o=>o.id===id);if(!entry)throw Error('Water emitter is not in the scene');
+   entry.localLiquidEmitter=structuredClone(value);entry.object.userData.kaminosSceneObject.localLiquidEmitter=entry.localLiquidEmitter;
+   for(const child of entry.object.children)child.scale.set(value.baseRadius/.08,1,value.baseRadius/.08);
+   syncLocalLiquidHostEmitters();syncSelectedWaterInspector();window._kaminosDirty?.();
+  }});
+ const controls=[...panel.querySelectorAll('input,select')];
+ const session=installSceneControlHistory({controls,edits,id:()=>waterEmitterAuthoring.target(selectedSceneObjectEntry()?.id),label:'Edit water emission',onError:error=>setInfo(error.message)});
+ authoringControlSessions.push(session);scenePlacementTools.addHistoryScope(panel);
+ for(const input of controls)input.addEventListener(input.type==='checkbox'||input.tagName==='SELECT'?'change':'input',()=>{
+  if(input.type==='number'&&(!input.value.trim()||!input.validity.valid))return;
+  const entry=selectedSceneObjectEntry();if(entry?.type!==LOCAL_LIQUID_EMITTER_TYPE)return;
+  const patch=input.id==='water-emitter-auto'?{rate:input.checked?null:Number(document.getElementById('water-emitter-rate').value)}:
+   {[input.dataset.waterSetting]:input.tagName==='SELECT'?input.value:Number(input.value)};
+  try {
+   const key=waterEmitterAuthoring.target(entry.id);
+   if(edits.state().active?.id===key)edits.preview(patch);else waterEmitterAuthoring.apply(entry.id,patch);
+  }catch(error){session.cancel();syncSelectedWaterInspector();setInfo(error.message);}
+ });
+ for(const input of panel.querySelectorAll('input[type=number]'))installRelativeNumberDrag({input,grip:panel.querySelector(`label[for="${input.id}"]`),step:.01,onStart:()=>authoringControlSessions.forEach(s=>s.commit())});
+ edits.subscribe(()=>syncSelectedWaterInspector());
+ window.kaminosWaterEmitterAuthoring={read:id=>waterEmitterAuthoring.read(id),set:(id,patch)=>waterEmitterAuthoring.apply(id,patch)};
+ syncSelectedWaterInspector();
 }
 let flameInspector = null;
 function createFlameQuickFields() {
@@ -25125,6 +25177,7 @@ function installAuthoringParameterEditing() {
     if(event.target.closest?.('input,select,label,button,summary'))authoringControlSessions.forEach(session=>session.commit());
   },true);
   installFlameAuthoring();
+  installWaterAuthoring();
   const bind=(id,definition)=>{
     edits.register(id,definition);
     authoringParameterTargets.set(id,definition);

@@ -1,3 +1,4 @@
+import { withLocalLiquidHelperGround } from './local-liquid-authoring.mjs';
 import { withLocalLiquidDepthBackground, readLocalLiquidDepthFrame } from './local-liquid-depth-background.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import { texture, vec4, positionView, pmremTexture, equirectDirection, uv, uniform } from './lib/three.tsl.js';
@@ -39,7 +40,7 @@ function cameraFrame(camera, width, height, generation) {
     near:camera.near, far:camera.far, viewport:{width,height}};
 }
 
-export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], isCurrent = () => true, sceneGeneration = 0, onContactRetired = () => {}}) {
+export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], isCurrent = () => true, sceneGeneration = 0, onContactRetired = () => {}, helperGround = null}) {
   if (!device || renderer.backend.device !== device) throw Error('Local liquid requires the host WebGPU device');
   let authored = normalizeLocalLiquidSetup(setup), authoredEmitters = structuredClone(emitters), sourceGeneration = 1;
   const initialPacket=localLiquidInletPacket(authored,authoredEmitters,sourceGeneration);
@@ -97,7 +98,9 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     environmentKey=key; environmentGeneration++;
   }
 
-  function render({advance=true}={}) {
+  function render(options) {return withLocalLiquidHelperGround(helperGround,()=>renderFrame(options));}
+
+  function renderFrame({advance=true}={}) {
     if (disposed) throw Error('Local liquid host disposed');
     if (failure) throw Error(failure);
     const previousTarget=renderer.getRenderTarget(), previousOverride=scene.overrideMaterial, previousBackground=scene.background;
@@ -144,7 +147,8 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       lastFrame={frameId,cameraIdentity:cameraSnapshot.identity,cameraGeneration:generation,width,height,
         environmentSource:environmentSource.uuid,environmentGeneration,
         route:ROUTE,submittedByHost:true,presentedByHost:true,displayTransform:'host-render-pipeline',
-        simulationTimePolicy:'one-fixed-1/60-step-per-rendered-frame',simulationRewind:false};
+        simulationTimePolicy:'one-fixed-1/60-step-per-rendered-frame',simulationRewind:false,
+        helperGroundPresentation:{policy:'retained-basin-suppresses-editor-helper',effectiveVisible:helperGround?.visible??null}};
     } catch(error) { failure=error.message || String(error); throw error; }
     finally {
       scene.overrideMaterial=previousOverride; scene.background=previousBackground;

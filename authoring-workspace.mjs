@@ -51,6 +51,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('transform-inspector'), 'authoring-transform-slot');
   move(byId('selected-light-properties'), 'authoring-type-slot');
   move(byId('selected-flame-properties'), 'authoring-type-slot');
+  move(byId('selected-water-properties'), 'authoring-type-slot');
   move(byId('selected-bed-properties'), 'authoring-type-slot');
   move(byId('shared-flame-domain-properties'), 'authoring-type-slot');
   move(byId('selected-mesh-properties'), 'authoring-type-slot');
