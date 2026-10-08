@@ -20,7 +20,7 @@ test('camera objects, active scene camera and the freely navigated viewport rema
  const f=fixture(),first=f.service.create('Hero'),second=f.service.create('Side');assert.equal(f.service.read().settings.activeId,first);
  f.service.setActive(second);const stored=structuredClone(f.objects);f.service.enter();assert.equal(f.service.state().mode,'camera');f.service.leave();assert.deepEqual(f.viewport,view);
  f.navigate({...view,position:[7,2,1]});assert.deepEqual(f.objects,stored);assert.equal(f.service.read().settings.activeId,second);
- f.service.align();assert.deepEqual(f.objects[1].transform,cameraPoseFromView(f.viewport));f.edits.undo();assert.deepEqual(f.objects,stored);f.edits.redo();
+ const alignView=structuredClone(f.viewport);f.service.align();assert.deepEqual(f.objects[1].transform,cameraPoseFromView(alignView));assert.equal(f.service.state().mode,'camera');f.edits.undo();assert.deepEqual(f.objects,stored);f.edits.redo();
 });
 test('camera creation, active role and lens data share authored history without viewport navigation entries',()=>{
  const f=fixture(),id=f.service.create('Hero');f.service.updateData(id,{lens:85});assert.equal(f.objects[0].camera.lens,85);f.edits.undo();assert.notEqual(f.objects[0].camera.lens,85);f.edits.undo();assert.equal(f.objects.length,0);assert.equal(f.service.active(),null);f.edits.redo();assert.equal(f.service.active().id,id);

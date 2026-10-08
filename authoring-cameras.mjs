@@ -20,6 +20,7 @@ export function installCameraAuthoring({document,service,bookmarks,edits,selecte
   byId('scene-camera-lock').checked=state.locked;
   byId('scene-camera-status').textContent=state.mode==='camera'?(state.locked?'Camera view · navigation edits the camera':'Camera view · pan/zoom adjusts the frame; orbit leaves camera view'):'User view · navigating leaves cameras unchanged';
   for(const id of ['scene-camera-view','scene-camera-align','scene-camera-capture'])byId(id).disabled=!data.settings.activeId||!!edits.state().active||edits.state().replaying;
+  byId('scene-camera-align').disabled=state.mode==='camera'||!data.settings.activeId||!!edits.state().active;
   byId('scene-add-camera').disabled=!!edits.state().active||edits.state().replaying;
   byId('scene-frame-x').value=document.activeElement===byId('scene-frame-x')?byId('scene-frame-x').value:String(data.settings.aspect[0]);byId('scene-frame-y').value=document.activeElement===byId('scene-frame-y')?byId('scene-frame-y').value:String(data.settings.aspect[1]);
   objectPanel.hidden=!item;
@@ -34,7 +35,7 @@ export function installCameraAuthoring({document,service,bookmarks,edits,selecte
  byId('scene-camera-align').onclick=()=>run(()=>service.align());
  byId('scene-camera-lock').onchange=event=>run(()=>service.lock(event.target.checked));
  byId('scene-camera-capture').onclick=async()=>{try{const result=await service.capture();if(result?.ok===false)throw Error(result.error);}catch(error){fail(error);}};
- byId('selected-camera-active').onclick=()=>run(()=>service.setActive(selectedCamera().id));
+ byId('selected-camera-active').onclick=()=>run(()=>{service.setActive(selectedCamera().id);service.enter();});
  byId('selected-camera-view').onclick=()=>run(()=>{service.setActive(selectedCamera().id);service.enter();});
  byId('camera-bookmark-convert').onclick=()=>run(()=>{const data=bookmarks.read(),view=data.items.find(item=>item.id===data.selectedId);if(!view)throw Error('Select a view bookmark first');const id=service.createFromView(view.label,view.view);select(id);});
  const aspectControls=[byId('scene-frame-x'),byId('scene-frame-y')];
