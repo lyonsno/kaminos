@@ -26408,8 +26408,9 @@ window.snapToGround = function() {
 
 // Export the selection (one object, or every member of a selected group) as a
 // binary GLB, keeping each object's place in the scene. Editor helpers and
-// objects GLB cannot carry (splats, lights, flame and water emitters) stay out.
-const GLB_EXPORT_SKIPPED_TYPES = new Set(['splat', 'light', FLAME_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_TYPE]);
+// object types this exporter does not yet support stay out. Camera editor
+// wires are not camera data and must never be exported as authored geometry.
+const GLB_EXPORT_SKIPPED_TYPES = new Set(['splat', 'light', CAMERA_TYPE, FLAME_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_TYPE]);
 
 function selectionForExport() {
   const group = selectedSceneGroupEntry();
@@ -26441,7 +26442,7 @@ window.exportGLB = async function({ name = null } = {}) {
     link.download = `${stem}.glb`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setInfo(`Exported ${entries.length} object${entries.length === 1 ? '' : 's'} to ${stem}.glb${skipped ? ` (skipped ${skipped} that GLB cannot carry)` : ''}`);
+    setInfo(`Exported ${entries.length} object${entries.length === 1 ? '' : 's'} to ${stem}.glb${skipped ? ` (skipped ${skipped} unsupported object${skipped === 1 ? '' : 's'})` : ''}`);
     return true;
   } catch (error) {
     setInfo(`Export failed: ${error.message || error}`);
