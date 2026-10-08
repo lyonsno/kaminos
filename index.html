@@ -25088,8 +25088,6 @@ function installWaterAuthoring() {
    syncLocalLiquidHostEmitters();syncSelectedWaterInspector();window._kaminosDirty?.();
   }});
  const controls=[...panel.querySelectorAll('input,select')];
- const session=installSceneControlHistory({controls,edits,id:()=>waterEmitterAuthoring.target(selectedSceneObjectEntry()?.id),label:'Edit water emission',onError:error=>setInfo(error.message)});
- authoringControlSessions.push(session);scenePlacementTools.addHistoryScope(panel);
  for(const input of controls)input.addEventListener(input.type==='checkbox'||input.tagName==='SELECT'?'change':'input',()=>{
   if(input.type==='number'&&(!input.value.trim()||!input.validity.valid))return;
   const entry=selectedSceneObjectEntry();if(entry?.type!==LOCAL_LIQUID_EMITTER_TYPE)return;
@@ -25100,6 +25098,9 @@ function installWaterAuthoring() {
    if(edits.state().active?.id===key)edits.preview(patch);else waterEmitterAuthoring.apply(entry.id,patch);
   }catch(error){session.cancel();syncSelectedWaterInspector();setInfo(error.message);}
  });
+ // Apply change handlers before the history listener commits and refreshes checkbox state.
+ const session=installSceneControlHistory({controls,edits,id:()=>waterEmitterAuthoring.target(selectedSceneObjectEntry()?.id),label:'Edit water emission',onError:error=>setInfo(error.message)});
+ authoringControlSessions.push(session);scenePlacementTools.addHistoryScope(panel);
  for(const input of panel.querySelectorAll('input[type=number]'))installRelativeNumberDrag({input,grip:panel.querySelector(`label[for="${input.id}"]`),step:.01,onStart:()=>authoringControlSessions.forEach(s=>s.commit())});
  edits.subscribe(()=>syncSelectedWaterInspector());
  window.kaminosWaterEmitterAuthoring={read:id=>waterEmitterAuthoring.read(id),set:(id,patch)=>waterEmitterAuthoring.apply(id,patch)};
