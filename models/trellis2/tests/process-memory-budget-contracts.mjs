@@ -26,5 +26,18 @@ try{
   assert.equal(actions[0].reason,'memory-observation-unavailable','bounded run cannot continue when its guard loses observation');
   await assert.rejects(startProcessMemory({rootPid:42,runId:'budget',rawPath:path.join(out,'no-action.jsonl'),
     maxFootprintBytes:150,probe:async()=>row(100)}),/onUnsafe/);
+  actions=[];let ioProbes=0;
+  const broken=await startProcessMemory({rootPid:42,runId:'budget',rawPath:path.join(out,'broken-report.jsonl'),summaryPath:out,
+    maxFootprintBytes:150,onUnsafe:async r=>actions.push(r),probe:async()=>row(ioProbes++?200:100)});
+  await broken.sample().catch(()=>{});await broken.stop().catch(()=>{});
+  assert.equal(actions.length,1,'report persistence failure must not suppress the safety stop action');
+  const source=await fs.readFile(new URL('../run-sparse-prefix-witness.mjs',import.meta.url),'utf8'),
+    start=source.indexOf('async onUnsafe(safety){'),end=source.indexOf('\n      }});',start);
+  assert.ok(start>=0&&end>start,'actual runner safety callback must be tested');
+  const callback=new Function('report','persist','child','return ('+source.slice(start,end).replace('async onUnsafe(', 'async function onUnsafe(')+'\n});');
+  let signals=0;const child={pid:42,exitCode:null,signalCode:null,kill(signal){assert.equal(signal,'SIGTERM');signals++;return true;}};
+  const stop=callback({},async()=>{throw Error('intentional report-write failure');},child);
+  await stop({reason:'process-footprint-budget'}).catch(()=>{});
+  assert.equal(signals,1,'actual runner must signal its exact owned child despite report-write failure');
 }finally{await fs.rm(out,{recursive:true,force:true});}
 console.log('Explicit process ceiling stops once, durably records refusal and fails closed on missing observation; synthetic samples do not prove OS pressure or whole-machine capacity.');
