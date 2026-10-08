@@ -9828,6 +9828,10 @@ fn sampleWorldReflection(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> Refle
   return reflectionSampleFromOpticalQuery(sampleWorldOpticalQuery(rayOrigin, rayDirection));
 }
 
+fn reflectionQueryOrigin(worldPosition: vec3<f32>, worldNormal: vec3<f32>) -> vec3<f32> {
+  return select(worldPosition + worldNormal * 0.026, worldPosition, params.hostFrameControls.x > 0.5);
+}
+
 fn integrateWorldReflectionQuadrature(
   worldPosition: vec3<f32>,
   cameraRay: vec3<f32>,
@@ -9839,7 +9843,7 @@ fn integrateWorldReflectionQuadrature(
   let helperAxis = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(centerDirection.y) > 0.92);
   let tangent = normalize(cross(helperAxis, centerDirection));
   let bitangent = normalize(cross(centerDirection, tangent));
-  let rayOrigin = select(worldPosition + worldNormal * 0.026, worldPosition, params.hostFrameControls.x > 0.5);
+  let rayOrigin = reflectionQueryOrigin(worldPosition, worldNormal);
   let center = reflectionSampleFromOpticalQuery(sampleHybridOpticalQuery(rayOrigin, centerDirection));
   let tangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * coneRadius));
   let tangentNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * -coneRadius));
@@ -10468,7 +10472,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     return refractionOutput(vec4<f32>(sampleEnvironmentFiltered(reflectionDirection, reflectionRoughness), 1.0), supportOrderingDepth);
   }
   if (opticalDebugMode == 13 || opticalDebugMode == 14) {
-    let reflectionHit = sampleHybridOpticalQuery(worldPosition + worldNormal * 0.026, reflectionDirection);
+    let reflectionHit = sampleHybridOpticalQuery(reflectionQueryOrigin(worldPosition, worldNormal), reflectionDirection);
     if (opticalDebugMode == 13) {
       let hitKindColor = select(
         select(

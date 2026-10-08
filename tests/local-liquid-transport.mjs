@@ -57,3 +57,8 @@ test('a metric depth span divides by actual forward ray rate rather than a fixed
  assert.equal(m.liquidMetricPath(.1,.1),1);assert.equal(m.liquidMetricPath(.1,.5),.2);assert.equal(m.liquidMetricPath(0,1),0);
  assert.throws(()=>m.liquidMetricPath(.1,0),/forward/);assert.throws(()=>m.liquidMetricPath(.1,-1),/forward/);
 });
+test('host shaded reflection and hit diagnostics share one origin rule',()=>{
+ const s=readFileSync(new URL('../finger-fluid-webgpu-core.js',import.meta.url),'utf8');
+ assert.match(s,/let rayOrigin = reflectionQueryOrigin\(worldPosition, worldNormal\)/);
+ assert.match(s,/reflectionHit = sampleHybridOpticalQuery\(reflectionQueryOrigin\(worldPosition, worldNormal\), reflectionDirection\)/);
+});
