@@ -82,6 +82,34 @@ test('Stop interrupts parked admission without Resume', async () => {
   assert.equal(worked, false);
 });
 
+test('immediate Resume then Pause acknowledges renewed park and later resumes', async () => {
+  let fences = 0, worked = false, acknowledged = false;
+  const queue = { submit() {}, async onSubmittedWorkDone() { fences++; } };
+  const service = kit.createWebGpuForegroundService({ routeId: 'pause.renew', device: { queue } });
+  const run = await service.beginRun('renew');
+  const control = create({ queue, withForeground: run.withForeground });
+  await control.pause();
+  const resuming = control.resume();
+  const renewed = control.pause().then(state => { acknowledged = true; return state; });
+  const duty = control.runDuty(() => { worked = true; });
+  try {
+    await tick();
+    assert.equal(acknowledged, true, 'renewed pause must acknowledge its still-open parked window');
+    assert.equal(control.snapshot().status, 'paused');
+    assert.equal(worked, false);
+    assert.equal(fences, 1);
+    assert.equal(service.snapshot().activeRun.foregroundPhase, 'inference-paused');
+    assert.equal((await renewed).status, 'paused');
+  } finally {
+    await control.resume();
+    await Promise.all([resuming, renewed, duty]);
+    await control.close();
+    await run.finish();
+    await service.dispose();
+  }
+  assert.equal(worked, true);
+});
+
 test('fence failure never announces paused or admits more model work', async () => {
   const failure = new Error('lost queue');
   const control = create({ queue: { async onSubmittedWorkDone() { throw failure; } } });

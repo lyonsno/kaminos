@@ -52,9 +52,12 @@ export function createWebGpuInferenceControl({ queue, signal = null, withForegro
       if (!requested || closed || signal?.aborted) return;
       const wait = async () => {
         if (!requested || closed || signal?.aborted) return;
-        status = 'paused';
-        notify();
-        while (requested && !closed && !signal?.aborted) await changed.promise;
+        while (requested && !closed && !signal?.aborted) {
+          // A withdrawn request can be renewed before this waiter wakes.
+          status = 'paused';
+          notify();
+          await changed.promise;
+        }
       };
       if (withForeground) await withForeground('inference-paused', wait);
       else await wait();
