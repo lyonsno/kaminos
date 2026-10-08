@@ -38,3 +38,10 @@ test('metric normal orientation does not disappear when the same tangent stencil
   for(let i=0;i<3;i++)assert.ok(Math.abs(n[i]-expected[i])<1e-8);
  }
 });
+test('camera rays come from unprojected near/far endpoints so orthographic rays stay parallel',async()=>{
+ const m=await load();assert.equal(typeof m.liquidCameraRayFromEndpoints,'function');
+ for(const [x,y] of [[0,0],[2,-3]])assert.deepEqual(m.liquidCameraRayFromEndpoints([x,y,1],[x,y,10]),[0,0,1]);
+ const ray=m.liquidCameraRayFromEndpoints([.1,.2,1],[1,2,10]),length=Math.sqrt(1.05);
+ for(let i=0;i<3;i++)assert.ok(Math.abs(ray[i]-[.1,.2,1][i]/length)<1e-12);
+ const source=readFileSync(new URL('../finger-fluid-webgpu-core.js',import.meta.url),'utf8');assert.match(source,/viewDir = -liquidWorldDirectionToView\(liquidCameraDirection\(pixel\)\)/);
+});

@@ -10215,7 +10215,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let hostTransport = params.hostFrameControls.x > 0.5;
   let entryWorldPosition = reconstructWorldPosition(pixel, slab.entryDepth);
   var viewDir = vec3<f32>(0.0, 0.0, 1.0);
-  if (hostTransport) { viewDir = -liquidWorldDirectionToView(normalize(entryWorldPosition - params.cameraPosition.xyz)); }
+  if (hostTransport) { viewDir = -liquidWorldDirectionToView(liquidCameraDirection(pixel)); }
   let insideRay = refract(-viewDir, transportNormal, 1.0 / 1.333);
   let insideRayValid = length(insideRay) > 0.001;
   let geometricPathLength = slab.geometricPathLength / max(abs(insideRay.z), 0.25);
@@ -10409,7 +10409,8 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let reflectionEntryDepth = coherentSlabDepth(pixel, shadingDepth, false);
   let worldPosition = reconstructWorldPosition(pixel, reflectionEntryDepth);
   let worldNormal = reconstructWorldReflectionNormal(pixel);
-  let viewToCamera = normalize(params.cameraPosition.xyz - worldPosition);
+  var viewToCamera = normalize(params.cameraPosition.xyz - worldPosition);
+  if (hostTransport) { viewToCamera = -liquidCameraDirection(pixel); }
   let cameraRay = -viewToCamera;
   let macroFresnelNormal = worldNormal;
   let ndv = clamp(dot(macroFresnelNormal, viewToCamera), 0.0, 1.0);
