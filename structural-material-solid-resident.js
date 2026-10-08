@@ -22,12 +22,12 @@ fn graph(element:u32,local:u32,node:u32,trial:vec3f,needHessian:bool)->Local{
  let matrix=select((element*64u+mask)*36u,element*36u,settings.topology.z==1u);var live=false;for(var k=0u;k<36u;k++){live=live||(coefficients[matrix+k]!=0.0);}
  if(!live){return result;}
  let ids=elements[element];var F=mat3x3f(vec3f(0),vec3f(0),vec3f(0));
- for(var k=0u;k<4u;k++){F+=outer(position(ids[k],node,trial),shape(element,k));}
+ for(var k=1u;k<4u;k++){F+=outer(position(ids[k],node,trial)-position(ids[0],node,trial),shape(element,k));}
  let J=dot(F[0],cross(F[1],F[2]));if(J<=0.0){result.invalid=1u;result.energy=1e30;return result;}
  let C=transpose(F)*F;var e=array<f32,6>((C[0][0]-1.0)*0.5,(C[1][1]-1.0)*0.5,(C[2][2]-1.0)*0.5,C[1][0],C[2][0],C[2][1]);var s=array<f32,6>();
  for(var row=0u;row<6u;row++){for(var col=0u;col<6u;col++){s[row]+=coefficients[matrix+row*6u+col]*e[col];}result.energy+=e[row]*s[row];}
- let S=mat3x3f(vec3f(s[0],s[3],s[4]),vec3f(s[3],s[1],s[5]),vec3f(s[4],s[5],s[2]));let g=shape(element,local);let V=parameters[element*16u+3u];
- result.energy*=V*0.5;if(!needHessian){return result;}result.gradient=V*(F*S*g);
+ let S=mat3x3f(vec3f(s[0],s[3],s[4]),vec3f(s[3],s[1],s[5]),vec3f(s[4],s[5],s[2]));var g=shape(element,local);if(local==0u){g=-(shape(element,1u)+shape(element,2u)+shape(element,3u));}let V=parameters[element*16u+3u];let beta=select(0.0,parameters[element*16u+7u],settings.topology.w==1u);
+ result.energy*=V*0.5;if(beta>0.0){result.energy+=V*beta*(J-1.0-log(J));}if(!needHessian){return result;}let cofactor=mat3x3f(cross(F[1],F[2]),cross(F[2],F[0]),cross(F[0],F[1]));let q=cofactor*g;result.gradient=V*(F*S*g);if(beta>0.0){result.gradient+=V*beta*(1.0-1.0/J)*q;result.hessian=outer(q,q)*(V*beta/(J*J));}
  var A=array<vec3f,6>(F[0]*g.x,F[1]*g.y,F[2]*g.z,F[1]*g.x+F[0]*g.y,F[2]*g.x+F[0]*g.z,F[2]*g.y+F[1]*g.z);
  for(var row=0u;row<6u;row++){for(var col=0u;col<6u;col++){result.hessian+=outer(A[row],A[col])*(V*coefficients[matrix+row*6u+col]);}}
  result.hessian+=eye()*max(0.0,V*dot(g,S*g));return result;
@@ -88,11 +88,11 @@ fn evaluate(node:u32,trial:vec3f,needHessian:bool)->Local{
  for(var k=0u;k<6u;k++){let ids=elementBonds[i*2u+k/4u];if(bonds[ids[k%4u]].z==0u){mask|=1u<<k;}}
  let matrix=select((i*64u+mask)*36u,i*36u,settings.topology.z==1u);var live=false;for(var k=0u;k<36u;k++){live=live||(coefficients[matrix+k]!=0.0);}
  for(var k=0u;k<7u;k++){diagnostics[base+k]=vec4f(0);}if(!live){return;}
- let ids=elements[i];var F=mat3x3f(vec3f(0),vec3f(0),vec3f(0));for(var k=0u;k<4u;k++){F+=outer(points[ids[k]].position.xyz,shape(i,k));}
+ let ids=elements[i];var F=mat3x3f(vec3f(0),vec3f(0),vec3f(0));for(var k=1u;k<4u;k++){F+=outer(points[ids[k]].position.xyz-points[ids[0]].position.xyz,shape(i,k));}
  let J=dot(F[0],cross(F[1],F[2]));if(J<=0.0){diagnostics[base+6u]=vec4f(0,0,1,1);return;}
  let C=transpose(F)*F;let e=array<f32,6>((C[0][0]-1.0)*0.5,(C[1][1]-1.0)*0.5,(C[2][2]-1.0)*0.5,C[1][0],C[2][0],C[2][1]);var s=array<f32,6>();var energy=0.0;
  for(var row=0u;row<6u;row++){for(var col=0u;col<6u;col++){s[row]+=coefficients[matrix+row*6u+col]*e[col];}energy+=e[row]*s[row];}
- let S=mat3x3f(vec3f(s[0],s[3],s[4]),vec3f(s[3],s[1],s[5]),vec3f(s[4],s[5],s[2]));let sigma=F*S*transpose(F)*(1.0/J);
+ let S=mat3x3f(vec3f(s[0],s[3],s[4]),vec3f(s[3],s[1],s[5]),vec3f(s[4],s[5],s[2]));let beta=select(0.0,parameters[i*16u+7u],settings.topology.w==1u);var sigma=F*S*transpose(F)*(1.0/J);if(beta>0.0){sigma+=eye()*(beta*(1.0-1.0/J));energy+=2.0*beta*(J-1.0-log(J));}
  for(var k=0u;k<3u;k++){diagnostics[base+k]=vec4f(sigma[k],0);diagnostics[base+3u+k]=vec4f(F[k],0);}
  diagnostics[base+6u]=vec4f(parameters[i*16u+3u],energy*parameters[i*16u+3u]*0.5,1,0);
 }
@@ -106,8 +106,10 @@ export async function createSolidResident(device,descriptor,arrays,{onProgress=(
  if(descriptor.bufferLayout!=='compact-color-incidence-v1')throw new Error('Explicit compact material buffer layout required; reprepare legacy buffers');
  const n=descriptor.points,count=descriptor.elements,bondCount=descriptor.bonds;
  const separated=descriptor.constitutiveLayout==='separated-intact-tetrahedra-v1';if(descriptor.constitutiveLayout!==undefined&&!separated)throw new Error('Unknown constitutive layout');if(separated&&descriptor.kind!=='graph')throw new Error('Separated tetrahedral layout requires graph material');
+ const barrier=Math.fround(descriptor.volumeBarrier??0);if(!(Number.isFinite(barrier)&&barrier>=0)||barrier>0&&descriptor.kind!=='graph')throw new Error('Explicit nonnegative graph volume barrier required');
  const expected={state:n*16,elements:count*4,bonds:bondCount*4,parameters:count*(descriptor.kind==='graph'?16:4),coefficients:descriptor.kind==='graph'?count*(separated?1:64)*36:1,elementBonds:descriptor.kind==='graph'?count*8:4};
  for(const [name,length] of Object.entries(expected)){const Type=['state','parameters','coefficients'].includes(name)?Float32Array:Uint32Array;if(!(arrays[name] instanceof Type)||arrays[name].length!==length||!arrays[name].every(Number.isFinite))throw new Error(`Complete finite resident ${name} required`);}
+ if(barrier>0&&Array.from({length:count},(_,i)=>arrays.parameters[i*16+7]).some(v=>v!==barrier))throw new Error('Resident volume barrier coefficients disagree with descriptor');
  if(!(arrays.incidence instanceof Uint32Array)||arrays.incidence.length<n+1)throw new Error('Complete uncapped resident incidence required');
  const colorBase=n+1+arrays.incidence[n]*2;
  if(arrays.incidence.length!==colorBase+descriptor.colorCount+1+n)throw new Error('Complete compact material color schedule required');
@@ -150,7 +152,7 @@ export async function createSolidResident(device,descriptor,arrays,{onProgress=(
   for(const entryPoint of ['predict','solve','finish','diagnose','damage','capturePatch','stress']){onProgress(`pipeline-${entryPoint}`);pipelines[entryPoint]=await device.createComputePipelineAsync({layout:pipelineLayout,compute:{module:shader,entryPoint}});}onProgress('pipelines-compiled');
   const resources=['state','elements','parameters','coefficients','incidence','bonds','elementBonds','diagnostics'].map(name=>buffers[name]);
   const groups=Array.from({length:descriptor.colorCount},(_,color)=>device.createBindGroup({layout,entries:[...resources.map((buffer,binding)=>({binding,resource:{buffer}})),{binding:8,resource:{buffer:uniform,offset:color*alignment,size:96}}]}));
-  const configure=(plane,restricted=false)=>{const bytes=new ArrayBuffer(descriptor.colorCount*alignment);for(let color=0;color<descriptor.colorCount;color++){const u=new Uint32Array(bytes,color*alignment,4),f=new Float32Array(bytes,color*alignment+16,16);u.set([n,color,descriptor.kind==='graph'?0:1,settings.lineSearchTrials]);f.set([settings.timeStep,settings.gravity,settings.damping,settings.floor,grip?.index??-1,grip?.stiffness??0,0,0,...(grip?.target??[0,0,0]),0,...(plane??[0,0,0,0])]);new Uint32Array(bytes,color*alignment+80,4).set([descriptor.colorCount,restricted?1:0,separated?1:0,0]);}device.queue.writeBuffer(uniform,0,bytes);};
+  const configure=(plane,restricted=false)=>{const bytes=new ArrayBuffer(descriptor.colorCount*alignment);for(let color=0;color<descriptor.colorCount;color++){const u=new Uint32Array(bytes,color*alignment,4),f=new Float32Array(bytes,color*alignment+16,16);u.set([n,color,descriptor.kind==='graph'?0:1,settings.lineSearchTrials]);f.set([settings.timeStep,settings.gravity,settings.damping,settings.floor,grip?.index??-1,grip?.stiffness??0,0,0,...(grip?.target??[0,0,0]),0,...(plane??[0,0,0,0])]);new Uint32Array(bytes,color*alignment+80,4).set([descriptor.colorCount,restricted?1:0,separated?1:0,barrier>0?1:0]);}device.queue.writeBuffer(uniform,0,bytes);};
   const dispatch=(encoder,name,color=0,count=n)=>{const pass=encoder.beginComputePass();pass.setPipeline(pipelines[name]);pass.setBindGroup(0,groups[color]);pass.dispatchWorkgroups(Math.ceil(count/64));pass.end();};
   async function readNow(){configure();const encoder=device.createCommandEncoder();dispatch(encoder,'diagnose');if(descriptor.kind==='graph')dispatch(encoder,'stress',0,count);const names=['state','bonds','diagnostics'],readbacks=names.map(name=>allocate(`readback ${name}`,buffers[name].size,GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ));
    names.forEach((name,i)=>encoder.copyBufferToBuffer(buffers[name],0,readbacks[i],0,buffers[name].size));device.queue.submit([encoder.finish()]);
@@ -164,7 +166,7 @@ export async function createSolidResident(device,descriptor,arrays,{onProgress=(
    release(){return serial(()=>{grip=null;});},
    step(request){return serial(async()=>{valid(request&&typeof request==='object','Explicit solver settings required');const {iterations,...next}=request;valid(Number.isInteger(iterations)&&iterations>0&&Number.isInteger(next.lineSearchTrials)&&next.lineSearchTrials>0&&next.lineSearchTrials<=0xffffffff&&['timeStep','gravity','damping','floor'].every(k=>Number.isFinite(next[k])&&Number.isFinite(Math.fround(next[k])))&&next.timeStep>0&&Math.fround(Math.fround(next.timeStep)**2)>0&&next.damping>=0&&next.damping<=1,'Explicit valid solver timestep, iterations, trial count, gravity, damping and floor required');settings={...Object.fromEntries(Object.entries(next).map(([key,value])=>[key,key==='lineSearchTrials'?value:Math.fround(value)])),iterations};const start=performance.now();configure();const encoder=device.createCommandEncoder();dispatch(encoder,'predict');for(let iteration=0;iteration<iterations;iteration++)for(let color=0;color<descriptor.colorCount;color++)dispatch(encoder,'solve',color,colorSizes[color]);dispatch(encoder,'finish');const command=encoder.finish(),encoded=performance.now();device.queue.submit([command]);const submitted=performance.now();await device.queue.onSubmittedWorkDone();const completed=performance.now();steps++;return{encodingMilliseconds:encoded-start,submitMilliseconds:submitted-encoded,completionWaitMilliseconds:completed-submitted,totalMilliseconds:completed-start,iterations,colorCount:descriptor.colorCount,solveDispatches:iterations*descriptor.colorCount,solveWorkgroups:iterations*colorSizes.reduce((sum,count)=>sum+Math.ceil(count/64),0)};});},
    damagePlane(normal,offset,nodes){return serial(async()=>{valid(!separated,'Separated material requires an interior cut, not edge removal');valid(Array.isArray(normal)&&normal.length===3&&normal.every(Number.isFinite)&&Math.abs(Math.hypot(...normal)-1)<=1e-6&&Number.isFinite(Math.fround(offset)),'Explicit unit damage plane required');if(nodes!==undefined){valid(Array.isArray(nodes)&&nodes.length&&new Set(nodes).size===nodes.length&&nodes.every(i=>Number.isInteger(i)&&i>=0&&i<n),'Explicit material component nodes required');for(let i=0;i<n;i++)device.queue.writeBuffer(buffers.diagnostics,(i*24+18)*4,new Float32Array([0]));for(const i of nodes)device.queue.writeBuffer(buffers.diagnostics,(i*24+18)*4,new Float32Array([1]));}configure([...normal,offset],nodes!==undefined);const encoder=device.createCommandEncoder();dispatch(encoder,'damage',0,bondCount);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();damageEpoch++;});},
-   read(){return serial(readNow);},
+   read(){return serial(async()=>({...await readNow(),volumeBarrier:barrier,constitutiveLayout:descriptor.constitutiveLayout??'directional-edge-release-64-v0'}));},
    dispose(){for(const b of owned)b.destroy();failure='Resident material disposed';}
   };
  }catch(error){for(const b of owned)b.destroy();throw error;}

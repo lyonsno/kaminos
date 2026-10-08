@@ -4,6 +4,7 @@ import { Matrix3 } from 'three';
 const axes=[0,1,2],I=[1,0,0,0,1,0,0,0,1];
 const add=(a,b)=>a.map((v,i)=>v+b[i]),sub=(a,b)=>a.map((v,i)=>v-b[i]),scale=(a,s)=>a.map(v=>v*s);
 const dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),outer=(a,b)=>a.flatMap(v=>b.map(w=>v*w));
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const transpose=a=>axes.flatMap(i=>axes.map(j=>a[j*3+i]));
 const multiply=(a,b)=>axes.flatMap(i=>axes.map(j=>axes.reduce((s,k)=>s+a[i*3+k]*b[k*3+j],0)));
 const apply=(a,x)=>axes.map(i=>axes.reduce((s,j)=>s+a[i*3+j]*x[j],0));
@@ -39,8 +40,9 @@ function deformationResult(F,S,energy,forces,extra={}){
 function connectedTetrahedron(alive){const reached=new Set([0]);for(let pass=0;pass<4;pass++)pairs.forEach(([a,b],i)=>{if(alive[i]&&(reached.has(a)||reached.has(b))){reached.add(a);reached.add(b);}});return reached.size===4;}
 export function intactTetrahedron(rest,material){
   points(rest,4);rest=structuredClone(rest);const elastic=elasticity(material),Dm=columns(rest.slice(1).map(p=>sub(p,rest[0]))),invDm=inverse(Dm),volume=Math.abs(determinant(Dm))/6;
+  const volumeBarrier=material.volumeBarrier??0;if(!(Number.isFinite(volumeBarrier)&&volumeBarrier>=0))throw new Error('Nonnegative explicit volume barrier required');
   const gradients=[scale(add(add(invDm.slice(0,3),invDm.slice(3,6)),invDm.slice(6,9)),-1),invDm.slice(0,3),invDm.slice(3,6),invDm.slice(6,9)],stiffness=Array.from({length:6},(_,j)=>Capply(Array.from({length:6},(_,k)=>Number(k===j)),elastic));
-  return{volume,gradients,stiffness,evaluate(current){points(current,4);const F=multiply(columns(current.slice(1).map(p=>sub(p,rest[0]))),invDm),e=strainVector(F),s=stiffness.map(row=>dot(row,e)),S=stressMatrix(s),P=multiply(F,S);return deformationResult(F,S,volume*dot(e,s)/2,gradients.map(g=>scale(apply(P,g),-volume)));}};
+  return{volume,gradients,stiffness,volumeBarrier,evaluate(current){points(current,4);const F=multiply(columns(current.slice(1).map(p=>sub(p,current[0]))),invDm),e=strainVector(F),s=stiffness.map(row=>dot(row,e)),S=stressMatrix(s),J=determinant(F);if(!(J>0))throw new Error('Inverted deformation is outside this material reference');const cols=[0,1,2].map(k=>[F[k],F[3+k],F[6+k]]),cofactor=columns([cross(cols[1],cols[2]),cross(cols[2],cols[0]),cross(cols[0],cols[1])]),P=add(multiply(F,S),scale(cofactor,volumeBarrier*(1-1/J))),energy=volume*dot(e,s)/2+volume*volumeBarrier*(J-1-Math.log(J)),forces=gradients.map(g=>scale(apply(P,g),-volume));return{...deformationResult(F,S,energy,forces),firstPiola:P,cauchyStress:scale(multiply(P,transpose(F)),1/J),volumeBarrier};}};
 }
 export function graphTetrahedron(rest,material){
   points(rest,4);rest=structuredClone(rest);const elastic=elasticity(material);
