@@ -1,3 +1,4 @@
+import { localLiquidOpticalQueryControls } from './local-liquid-optical-query.mjs';
 import { canPreserveLiquidReleaseEpoch, LIVE_LIQUID_INLET_FLOATS } from './local-liquid-inlet-continuity.mjs';
 export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';
@@ -9515,9 +9516,7 @@ fn traceDeferredScene(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> Deferred
   hit.metallic = 0.0;
   hit.objectId = 0.0;
   hit.confidence = 0.0;
-  if (params.hostFrameControls.x > 0.5) {
-    return hit;
-  }
+  let hostScene = params.hostFrameControls.x > 0.5;
   let dims = vec2<i32>(textureDimensions(deferredLinearDepthObject));
   let dimsFloat = vec2<f32>(dims);
   var distance = 0.055;
@@ -9534,18 +9533,28 @@ fn traceDeferredScene(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> Deferred
     let objectId = depthObject.y;
     let depthDelta = projected.z - sceneDepth;
     let crossingTolerance = 0.028 + distance * 0.012;
-    if (depthObject.w > 0.5 && sceneDepth < 29.5 && depthDelta >= -crossingTolerance && depthDelta <= 0.18 + distance * 0.02) {
-      let normalRoughness = textureLoad(deferredWorldNormalRoughness, scenePixel, 0);
-      let albedoMetallic = textureLoad(deferredAlbedoMetallic, scenePixel, 0);
+    let validSceneDepth = select(
+      depthObject.w > 0.5 && sceneDepth < 29.5,
+      sceneDepth > params.hostFrameControls.z && sceneDepth < params.hostFrameControls.y - 0.01,
+      hostScene,
+    );
+    if (validSceneDepth && depthDelta >= -crossingTolerance && depthDelta <= 0.18 + distance * 0.02) {
       hit.valid = 1.0;
       hit.uv = projected.xy;
       hit.position = reconstructWorldPosition(scenePixel, sceneDepth);
       hit.distance = length(hit.position - rayOrigin);
-      hit.normal = normalize(normalRoughness.xyz);
-      hit.albedo = albedoMetallic.rgb;
-      hit.roughness = normalRoughness.w;
-      hit.metallic = albedoMetallic.w;
-      hit.objectId = objectId;
+      // Host supplies depth and final scene radiance, not private toy material
+      // or object buffers. Unknown fields remain unknown; radiance is sampled.
+      hit.normal = vec3<f32>(0.0);
+      if (!hostScene) {
+        let normalRoughness = textureLoad(deferredWorldNormalRoughness, scenePixel, 0);
+        let albedoMetallic = textureLoad(deferredAlbedoMetallic, scenePixel, 0);
+        hit.normal = normalize(normalRoughness.xyz);
+        hit.albedo = albedoMetallic.rgb;
+        hit.roughness = normalRoughness.w;
+        hit.metallic = albedoMetallic.w;
+        hit.objectId = objectId;
+      }
       hit.confidence = 1.0 - smoothstep(0.0, 0.22, abs(depthDelta));
       return hit;
     }
@@ -9785,6 +9794,9 @@ fn reflectionSampleFromOpticalQuery(query: OpticalQuerySample) -> ReflectionSamp
 }
 
 fn sampleWorldReflection(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> ReflectionSample {
+  if (params.hostFrameControls.x > 0.5) {
+    return reflectionSampleFromOpticalQuery(sampleHybridOpticalQuery(rayOrigin, rayDirection));
+  }
   return reflectionSampleFromOpticalQuery(sampleWorldOpticalQuery(rayOrigin, rayDirection));
 }
 
@@ -15005,7 +15017,7 @@ export async function createWebGPUFingerFluidSolver({
       analyticCarrierGpuPayload?.particleSuppressionControls ?? [0, -1, 0, 0],
       56,
     );
-    renderData.set([validatedHostFrame ? 1 : 0, 0, 0, 0], 60);
+    renderData.set(localLiquidOpticalQueryControls(cameraSnapshot,Boolean(validatedHostFrame)), 60);
     lastExternalCamera = externalCameraSnapshot;
     lastCameraSnapshot = cameraSnapshot;
     lastParticleVisibility = particleVisibility;
@@ -16417,7 +16429,7 @@ export async function createWebGPUFingerFluidSolver({
           } : null,
           consumers: ['reflection_center_ray', 'two_interface_refraction_exit_ray'],
           resultFields: ['origin', 'direction', 'cone', 'interval', 'hit_kind', 'object_id', 'distance', 'normal', 'material', 'radiance', 'transmittance', 'confidence', 'provider', 'fallback'],
-          deferredMissDisposition: 'uncapped_world_mesh_then_hdr_environment_v0',
+          deferredMissDisposition: lastHostFrameCompositionEvidence ? 'host-camera-miss-to-environment; no-world-mesh-provider' : 'uncapped_world_mesh_then_hdr_environment_v0',
           invalidSlabDisposition: 'legacy_entry_interface_uv_only_no_exit_query_claim_v0',
           participatingRadianceBoundary: 'reserved_zero_until_flame_contract_v0',
         },
@@ -16449,26 +16461,28 @@ export async function createWebGPUFingerFluidSolver({
           compositePassCount: worldSpaceReflectionCompositePassCount,
           reflectionProviderFrameId: lastReflectionProviderFrameId,
           providerExecution: lastHostFrameCompositionEvidence
-            ? 'host_scene_color_depth_environment_bound_toy_world_suppressed_v0'
+            ? 'host_camera_depth_radiance_query_v1'
             : safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
               ? 'toy_world_providers_suppressed_consumer_scene_not_yet_bound_v0'
               : 'analytic_and_indexed_toy_world_providers_executed_v0',
-          candidateCapMode: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+          hostSceneQueryScope: lastHostFrameCompositionEvidence ? 'camera-visible-first-depth-surface; hidden/offscreen rays fall back to environment' : null,
+          hostSceneSurfaceFields: lastHostFrameCompositionEvidence ? 'depth-and-radiance; object/material/normal unavailable' : null,
+          candidateCapMode: lastHostFrameCompositionEvidence ? 'host-camera-depth-image' : safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
             ? 'no_toy_candidates_environment_only_v0'
             : 'uncapped_exact_dynamic_mesh_triangle_population_v0',
-          exactTriangleCount: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+          exactTriangleCount: lastHostFrameCompositionEvidence ? 0 : safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
             ? 0
             : DYNAMIC_REFLECTION_MESH_TRIANGLE_COUNT,
-          hitKinds: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+          hitKinds: lastHostFrameCompositionEvidence ? ['environment','host_camera_scene'] : safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
             ? ['environment']
             : ['environment', 'analytic_sphere', 'indexed_mesh'],
-          dynamicMeshObjectId: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+          dynamicMeshObjectId: lastHostFrameCompositionEvidence ? null : safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
             ? null
             : DYNAMIC_REFLECTION_MESH_OBJECT_ID,
-          dynamicMeshTransformGeneration: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+          dynamicMeshTransformGeneration: lastHostFrameCompositionEvidence ? null : safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
             ? null
             : lastReflectionProviderTransformGeneration,
-          dynamicMeshPhase: safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
+          dynamicMeshPhase: lastHostFrameCompositionEvidence ? null : safePresentationMode === KAMINOS_FINGER_FLUID_MOVING_HILL_PRESENTATION_MODE
             ? null
             : Number(lastReflectionProviderPhase.toFixed(6)),
           dynamicMeshPresentationMode: lastDynamicMeshPresentationMode,
