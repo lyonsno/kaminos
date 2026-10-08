@@ -9,6 +9,8 @@ export function inspectShardWitness(w){
  if(!Array.isArray(w.pieces)||!w.pieces.length||new Set(w.pieces.map(p=>p.id)).size!==w.pieces.length||!Array.isArray(w.events)||w.events.length!==w.state.damageEpoch)errors.push('Fragment inventory or damage history incomplete');
  try{
   const n=w.state.state.length/16,current=Array.from({length:n},(_,i)=>w.state.state.slice(i*16+4,i*16+7)),components=materialComponents(n,w.state.bonds);
+  const owned=(w.pieces??[]).flatMap(p=>p.nodes??[]);
+  if(owned.length!==n||new Set(owned).size!==n||owned.some(i=>!Number.isInteger(i)||i<0||i>=n)||new Set((w.pieces??[]).map(p=>p.component)).size!==new Set(components).size)throw new Error('Visible fragments do not cover the complete material inventory');
   for(const piece of w.pieces??[]){
    if(!piece.nodes?.length||piece.nodes.some(i=>components[i]!==piece.component)||!(piece.volume>0)||piece.binding.component!==piece.component)throw new Error('Piece has foreign or absent material ownership');
    const values=applyComponentAffineField(piece.binding,current,{components}),expected=piece.geometry.indices.flatMap(i=>values[i]);
