@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+const imported=await import('../structural-material-component-affine.mjs').catch(error=>{if(error.code==='ERR_MODULE_NOT_FOUND')return null;throw error;});
+assert.ok(imported?.bindComponentAffineField&&imported?.applyComponentAffineField,'A new cut boundary needs explicit component-owned material correspondence');
+const rest=[];for(const x of [-1,-.5,.5,1])for(const y of [-.5,.5])for(const z of [-.5,.5])rest.push([x,y,z]);
+const components=rest.map(p=>p[0]<0?0:8),volumes=rest.map(()=>1/16),vertices=[[0,0,0],[0,.2,.2]],bindings=[0,8].map(component=>imported.bindComponentAffineField(rest,vertices,{components,component,volumes,radius:1.5}));
+const transform=(p,component)=>component===0?[2-p[1],p[0]+1,1.1*p[2]+.02*p[0]]:[p[1]-1,2-p[0],.9*p[2]-.03*p[1]],current=rest.map((p,i)=>transform(p,components[i]));
+bindings.forEach((binding,index)=>{const result=imported.applyComponentAffineField(binding,current,{components});result.forEach((p,i)=>p.forEach((v,a)=>assert.ok(Math.abs(v-transform(vertices[i],index===0?0:8)[a])<1e-10)));assert.equal(binding.entries[0].ids.length,8,'Every in-support component point participates');});
+assert.throws(()=>imported.applyComponentAffineField(bindings[0],current,{components:components.map((c,i)=>i===0?8:c)}),/component/);
+assert.throws(()=>imported.bindComponentAffineField(rest,vertices,{components,component:0,volumes,radius:.1}),/support/);
+assert.throws(()=>imported.bindComponentAffineField([[0,0,0],[1,0,0],[0,1,0],[1,1,0]],[[.5,.5,.1]],{components:[0,0,0,0],component:0,volumes:[1,1,1,1],radius:2}),/rank/);
+console.log('Component-owned affine reconstruction reproduces independent fields and refuses mixed or rank-deficient support');

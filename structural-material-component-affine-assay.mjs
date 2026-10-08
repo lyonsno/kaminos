@@ -1,0 +1,39 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { prepareStoneFromGlb } from './structural-material-stone-prepare.mjs';
+import { createPlaneFractureSurface } from './structural-material-solid-fragments.mjs';
+import { bindSolidSurface,materialComponents } from './structural-material-solid-surface.mjs';
+import { bindComponentAffineField,applyComponentAffineField } from './structural-material-component-affine.mjs';
+
+const [nativePath,assetPath,output,radiusInput,planeInput]=process.argv.slice(2);
+if(!nativePath||!assetPath||!output)throw new Error('usage: node structural-material-component-affine-assay.mjs NATIVE.json SOURCE.glb REPORT.json SUPPORT_RADIUS PLANE_JSON');
+fs.mkdirSync(path.dirname(path.resolve(output)),{recursive:true});const report={status:'running',phase:'input',argv:process.argv},save=()=>fs.writeFileSync(output,JSON.stringify(report,null,2)),hash=b=>createHash('sha256').update(b).digest('hex');save();let surface;
+try{
+ const nativeBytes=fs.readFileSync(nativePath),native=JSON.parse(nativeBytes),assetBytes=fs.readFileSync(assetPath),radius=Number(radiusInput),plane=JSON.parse(planeInput);
+ if(native.status!=='passed'||native.observed?.identity?.backend!=='webgpu'||native.observed.identity.adapterFallback!==false||native.observed.resident.length!==1)throw new Error('One complete retained native material candidate required');
+ if(!Array.isArray(plane)||plane.length!==4||!plane.every(Number.isFinite))throw new Error('Explicit plane control required');
+ const preparation=JSON.parse(fs.readFileSync(path.join(native.prepared.root,'report.json'))),interiorBytes=fs.readFileSync(preparation.input),interior=JSON.parse(interiorBytes),source=JSON.parse(fs.readFileSync(interior.source));
+ if(hash(interiorBytes)!==preparation.inputSha256||hash(assetBytes)!==preparation.sourceSha256||interior.sourceSha256!==preparation.sourceSha256)throw new Error('Native preparation and source geometry identity differ');
+ report.inputs={native:{path:path.resolve(nativePath),sha256:hash(nativeBytes)},asset:{path:path.resolve(assetPath),sha256:hash(assetBytes)},interior:{path:preparation.input,sha256:hash(interiorBytes)}};
+ report.radius=radius;report.plane=plane;report.phase='surface-event';save();
+ const result=native.observed.resident[0],stages=Object.fromEntries(result.stages.map(s=>[s.name,s.state])),n=interior.positions.length,components=materialComponents(n,stages.damaged.bonds),volumes=interior.positions.map((_,i)=>stages.rest.state[i*16+3]/preparation.config.density);
+ const prepared=prepareStoneFromGlb(assetBytes,{size:source.size,cellSize:Math.max(...source.size)*2});
+ surface=await createPlaneFractureSurface(prepared.cells[0].geometry,{sourceSha256:preparation.sourceSha256});
+ const material={runId:stages.damaged.runId??native.observed.runId,kind:result.kind,sourceSha256:preparation.sourceSha256};
+ report.identityAuthority=stages.damaged.runId?'resident-factory-run':'retained-single-model-probe-run';
+ const cut=surface.cut({id:'retained-native-plane-control',normal:plane.slice(0,3),offset:plane[3],rest:interior.positions,before:stages.loaded.bonds,after:stages.damaged.bonds,route:stages.damaged.route,kind:'explicit-control-plane',material}).witness;
+ report.surface=cut;report.pieces=[];report.phase='component-correspondence';save();
+ for(const piece of cut.pieces){
+  const memberships=new Set(interior.positions.flatMap((p,i)=>piece.halfspaces.every(h=>h.side*(h.normal.reduce((s,v,a)=>s+v*p[a],0)-h.offset)>=0)?[components[i]]:[]));
+  if(memberships.size!==1)throw new Error('Surface piece does not identify exactly one current material component');const component=[...memberships][0];
+  const vertices=Array.from({length:piece.geometry.properties.length/piece.geometry.numProp},(_,i)=>piece.geometry.properties.slice(i*piece.geometry.numProp,i*piece.geometry.numProp+3));
+  let oldBinding;try{bindSolidSurface(interior,vertices,{envelope:.003,components,component});oldBinding={accepted:true};}catch(error){oldBinding={accepted:false,message:error.message};}
+  const binding=bindComponentAffineField(interior.positions,vertices,{components,component,volumes,radius}),transform=([x,y,z])=>[2-y,x+1,1.01*z+.02*x],affine=applyComponentAffineField(binding,interior.positions.map(transform),{components});
+  const affineError=Math.max(...affine.flatMap((p,i)=>p.map((v,a)=>Math.abs(v-transform(vertices[i])[a]))));if(affineError>1e-10)throw new Error('Component correspondence failed independent affine control');
+  const fields={};for(const name of ['damaged','post-damage','released']){const current=interior.positions.map((_,i)=>stages[name].state.slice(i*16+4,i*16+7));fields[name]=applyComponentAffineField(binding,current,{components:materialComponents(n,stages[name].bonds)});}
+  report.pieces.push({id:piece.id,component,oldBinding,binding,affineError,fields,maxReleasedMotion:Math.max(...fields.released.map((p,i)=>Math.hypot(...p.map((v,a)=>v-vertices[i][a]))))});save();
+ }
+ report.status='passed';report.phase='complete';report.claim='Retained native explicit-plane release -> actual cut solid -> component-owned finite-support surface reconstruction; no rendered or force-selected shard claim';save();
+}catch(error){report.status='failed';report.failure={message:error.message,stack:error.stack};save();process.exitCode=1;}
+finally{surface?.dispose();console.log(JSON.stringify({status:report.status,phase:report.phase,output,failure:report.failure?.message}));}
