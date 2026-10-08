@@ -22,6 +22,7 @@ test('viewport exposes emitter checkbox and the existing numeric scrub primitive
   const workspace=readFileSync(new URL('../authoring-workspace.mjs',import.meta.url),'utf8');
   assert.ok(/<input[^>]*id="viewport-show-emitter-guides"[^>]*type="checkbox"/.test(workspace),'missing emitter guide checkbox');
   assert.ok(/<input[^>]*id="viewport-emitter-opacity"[^>]*type="number"[^>]*step="any"/.test(workspace),'missing opacity scrub field');
+  assert.ok(workspace.includes('installRelativeNumberDrag({grip:opacity.previousElementSibling,input:opacity,step:.01})'),'late-created viewport control must attach its scrub primitive at construction');
 });
 
 test('viewport opacity preview cancellation restores its prior value without adding scene history',()=>{
@@ -30,7 +31,7 @@ test('viewport opacity preview cancellation restores its prior value without add
   class Input extends EventTarget {value='.55';validity={valid:true};}
   const opacity=new Input();let value=.55;
   const api={read:()=>({emitterGuideOpacity:value}),set:next=>{value=next.emitterGuideOpacity;opacity.value=String(value);}};
-  vm.runInNewContext(workspace.slice(start,end),{byId:()=>opacity,document:{defaultView:{kaminosViewportSettings:api}}});
+  vm.runInNewContext(workspace.slice(start,end),{byId:()=>opacity,document:{defaultView:{kaminosViewportSettings:api}},installRelativeNumberDrag(){}});
   opacity.dispatchEvent(new Event('focusin'));opacity.value='.23';opacity.dispatchEvent(new Event('input'));assert.equal(value,.23);
   opacity.dispatchEvent(new Event('pointercancel'));assert.equal(value,.55);
 });

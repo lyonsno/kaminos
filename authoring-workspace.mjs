@@ -1,3 +1,5 @@
+import {installRelativeNumberDrag} from './scene-control-history.mjs';
+
 // One live set of controls, projected into two workspaces. Slots retain node,
 // listener, and value identity; no second scene model or simulation lifecycle.
 export function createControlSlots(document, entries) {
@@ -49,6 +51,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   opacity.addEventListener('change',()=>{opacity.value=String(document.defaultView.kaminosViewportSettings.read().emitterGuideOpacity);});
   opacity.addEventListener('pointercancel',()=>{if(opacityBefore!==null)document.defaultView.kaminosViewportSettings.set({emitterGuideOpacity:opacityBefore});opacityBefore=null;});
   opacity.addEventListener('blur',()=>{opacityBefore=null;});
+  installRelativeNumberDrag({grip:opacity.previousElementSibling,input:opacity,step:.01});
   byId('apply-burner-preset').onclick=()=>{try{document.defaultView.kaminosApplyBurnerPreset();byId('authoring-presets').open=false;}catch(error){byId('info-bar').textContent=error.message;}};
   byId('scene-fire-data').onclick=()=>document.defaultView.selectSceneField('flame-field');
   byId('scene-water-data').onclick=()=>document.defaultView.selectSceneField('water-field');

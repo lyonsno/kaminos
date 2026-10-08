@@ -25257,7 +25257,7 @@ function installAuthoringParameterEditing() {
       return edits.apply(id,patch,'Set authored parameter');
     },
   };
-  for(const scope of ['#rim-controls','#burner-controls','#selected-flame-fields','#shared-flame-domain-properties','#scene-camera-fields','#scene-gi-controls','#rendering-distributed-controls','#authoring-viewport-settings']) {
+  for(const scope of ['#rim-controls','#burner-controls','#selected-flame-fields','#shared-flame-domain-properties','#scene-camera-fields','#scene-gi-controls','#rendering-distributed-controls']) {
     for(const input of document.querySelectorAll(`${scope} input[type=number]`)) {
       const row=input.closest('.slider-row,.burner-field,.field');const grip=row?.querySelector('label');if(!grip)continue;
       const source=row.querySelector('input[type=range]');
