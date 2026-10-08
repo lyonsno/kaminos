@@ -13,6 +13,7 @@ function mounted() {
     document: { getElementById: () => ({ value: 'Comparison', disabled: false }) },
     compositionStatus: text => { status = text; }, setInfo: text => { status = text; },
     grBrowseScenes() {}, compositionRestoreUrl, location: { origin: 'http://localhost:9000' },
+    showSceneLightingRestoreWarnings() {},
     sceneSaveIsBlocked: () => false, sceneIsEmpty: () => false,
     collectSceneComposition: async () => () => {},
     buildSceneData: capture => ({ label: 'Comparison', composition: null,

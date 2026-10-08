@@ -736,6 +736,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 #scene-load-dialog .gr-entry { padding:10px 8px; border-bottom:1px solid #333; border-radius:0; }
 #scene-load-dialog .gr-name { display:block; white-space:normal; overflow-wrap:anywhere; font-size:13px; }
 #scene-load-dialog [title="Delete scene"] { display:none; }
+#scene-light-restore-warning { margin:8px 0 12px; padding:8px 10px; border-left:2px solid #c2a36b; color:#e0c493; background:#28251e; font-size:12px; line-height:1.5; overflow-wrap:anywhere; }
+#scene-light-restore-warning[hidden] { display:none; }
 body.composition-authoring #volume-authored-mix-panel:not([data-rendering-route="true"]) { display: none; }
 body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width: max-content; flex-wrap: wrap; justify-content: center; }
 @media (max-width: 760px) {
@@ -3500,6 +3502,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <p class="rendering-description">Switch light contributions while viewing the same kiln. The flame, environment and authored geometry remain visible in every mode.</p>
       <section id="scene-flame-light-controls"><h2>Light Contributions</h2>
+      <p id="scene-light-restore-warning" role="status" hidden></p>
       <label for="rendering-light-mode" data-lighting-diagnostic>Light paths</label>
       <select class="rendering-channel-select" id="rendering-light-mode" data-lighting-diagnostic>
         <option value="all">Transport + legacy field (additive)</option>
@@ -3926,7 +3929,7 @@ import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { createLightingControlTarget } from './scene-lighting-authoring.mjs';
-import {resolveSceneCameraSettings,resolveVolumeAppearanceTrims,productTransportSettings,resolveProductGISettings} from './scene-lighting-semantics.mjs';
+import {resolveSceneCameraSettings,resolveVolumeAppearanceTrims,productTransportSettings,resolveProductGISettings,sceneLightingRestoreWarnings} from './scene-lighting-semantics.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
 import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, checkedSceneLightRecord, sceneLightRuntimeRecipe } from './scene-rim-light.mjs';
@@ -4031,6 +4034,12 @@ function setVolumeAppearanceControls(value) {
   window._kaminosDirty?.();
 }
 let updateSceneGI = null;
+function showSceneLightingRestoreWarnings(data) {
+  const warnings=sceneLightingRestoreWarnings(data),notice=document.getElementById('scene-light-restore-warning');
+  notice.textContent=warnings.map(warning=>warning.message).join(' ');
+  notice.hidden=!warnings.length;
+  window.kaminosSceneLightingRestoreWarnings=warnings;
+}
 let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
@@ -29087,6 +29096,7 @@ async function saveToServer(sceneData, filename, { result: detailed = false } = 
       delete document._filename;
       const url = compositionRestoreUrl(document.composition, result.saved, location.origin);
       currentSceneFile = result.saved;
+      showSceneLightingRestoreWarnings(document);
       setInfo(`Scene saved: ${result.saved}`);
       grBrowseScenes();
       return detailed ? { ok: true, filename: result.saved, url, document } : true;
@@ -29448,6 +29458,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     compositionStatus(`${data.label || 'Composition'} | ${activeSceneComposition.flame.label}`);
   }
   sceneSaveBlockedByFailedRestore = false;
+  showSceneLightingRestoreWarnings(data);
   if (objectRecords.length > 0) {
     setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}${localLiquidFailure ? `; water host unavailable: ${localLiquidFailure}` : ''}`);
   } else {

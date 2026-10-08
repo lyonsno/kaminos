@@ -20,6 +20,20 @@ export function resolveVolumeAppearanceTrims(value={}) {
   return next;
 }
 
+export function sceneLightingRestoreWarnings(scene) {
+  if(scene?.composition?.route?.volume_light_field_distributed!=='1')return [];
+  const post=scene.postprocessing||{},lighting=post.lighting||{},warnings=[];
+  if(!Object.hasOwn(lighting,'@scene-transport'))warnings.push({
+    code:'transport-not-saved',
+    message:'This older scene did not store transported-light controls. The displayed values are not a recall of the capture.',
+  });
+  if(!post.sceneCamera && !Object.hasOwn(lighting,'@scene-camera'))warnings.push({
+    code:'camera-link-not-saved',
+    message:'Its original geometry/flame exposure-link mode was not stored.',
+  });
+  return warnings;
+}
+
 // These are deliberate product-path migrations, not fallback for unknown laws.
 export function productTransportSettings(value) {
   const next={...value};
