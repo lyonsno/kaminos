@@ -24,7 +24,9 @@ export async function startProcessMemory({python,script,rootPid=process.pid,rawP
     if(maxFootprintBytes===undefined||safetyStopped)return;
     safetyStopped=true;clearInterval(timer);
     summary.safety={...reason,maxFootprintBytes,atUnixMs:Date.now(),actionStatus:'requested'};
-    await persist();
+    // Report I/O must not be a predecessor of the safety intervention.
+    // Preserve the logging failure in memory and still perform the stop.
+    try{await persist();}catch(error){summary.safety.reportError=error.message;}
     try{await onUnsafe(summary.safety);summary.safety.actionStatus='returned';}
     catch(error){summary.safety.actionStatus='failed';summary.safety.actionError=error.message;throw error;}
     finally{await persist();}

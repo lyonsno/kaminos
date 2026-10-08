@@ -262,7 +262,7 @@ try {
       maxFootprintBytes:processMemoryBudgetBytes,
       async onUnsafe(safety){
         report.status='failed';report.memorySafety={...safety,ownedBrowserPid:child?.pid??null,action:'prevent-launch-or-stop-exact-owned-browser'};
-        await persist();
+        try{await persist();}catch(error){report.memorySafety.reportError=error.message;}
         if(child&&child.exitCode===null&&child.signalCode===null){
           // Independent command-owned browser only. Never signal GUI Chrome,
           // another model's process, the runner or a borrowed host device.
