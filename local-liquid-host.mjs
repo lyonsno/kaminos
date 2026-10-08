@@ -1,4 +1,3 @@
-import {readMaterialControlsURL,MATERIAL_QUERY_KEYS} from './finger-fluid-material-controls.mjs';
 import { withLocalLiquidHelperGround } from './local-liquid-authoring.mjs';
 import { withLocalLiquidDepthBackground, readLocalLiquidDepthFrame } from './local-liquid-depth-background.mjs';
 import * as THREE from './lib/three.webgpu.js';
@@ -46,12 +45,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   let authored = normalizeLocalLiquidSetup(setup), authoredEmitters = structuredClone(emitters), sourceGeneration = 1;
   const initialPacket=localLiquidInletPacket(authored,authoredEmitters,sourceGeneration);
   let publishedEmitterKey=JSON.stringify(initialPacket.emitters);
-  const tuningURL=globalThis.location?.href||'http://localhost/';
-  const material=readMaterialControlsURL(tuningURL,{particleRepulsionStrength:1,capillaryStrength:.72,freeFlightViscosityBoost:.17,...authored.materialControls,densityIterations:authored.densityIterations});
-  if(authored.materialControls||Object.values(MATERIAL_QUERY_KEYS).some(key=>new URL(tuningURL).searchParams.has(key))){
-    const {densityIterations,...materialControls}=material;
-    authored=normalizeLocalLiquidSetup({...authored,densityIterations,materialControls});
-  }
+  const material={particleRepulsionStrength:1,capillaryStrength:.72,freeFlightViscosityBoost:.17,...authored.materialControls,densityIterations:authored.densityIterations};
   const solver = await createWebGPUFingerFluidSolver({webgpuDevice:device, hostFrameComposition:true,
     hostFramePipelineIdentity:PIPELINE, presentationMode:'local_analytic_consumer', truthScene:'live_hand_inlets',
     particleCount:authored.particleCount, ...material,

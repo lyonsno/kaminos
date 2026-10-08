@@ -44,12 +44,12 @@ export function mountMaterialCockpit(root,{id,read,apply,getPaused,setPaused,cap
   pause.addEventListener('click',()=>{try{setPaused(!getPaused());error=null;refresh(true);}catch(e){error=e.message;refresh(true);}});
   const replay=document.createElement('button');replay.type='button';replay.textContent='Replay water';replay.dataset.fluidAction='replay';
   const cameraKey=`fluid-tuning-camera:${id}:${location.pathname}:${location.hash}:${new URL(location.href).searchParams.get('finger_fluid_truth_scene')||'authored'}`;
-  replay.addEventListener('click',()=>{
+  replay.addEventListener('click',async()=>{
     try{
       const state=read();if(!state?.effective)throw Error('Water is not mounted');
-      const view=captureCamera?.();if(view)sessionStorage.setItem(cameraKey,JSON.stringify(view));
       const url=materialControlsURL(location.href,state.effective);
-      if(onReplay)onReplay(url);else location.assign(url);
+      if(onReplay)await onReplay(url);
+      else {const view=captureCamera?.();if(view)sessionStorage.setItem(cameraKey,JSON.stringify(view));location.assign(url);}
     }catch(e){error=e.message;refresh(true);}
   });
   const copy=document.createElement('button');copy.type='button';copy.textContent='Copy settings link';copy.dataset.fluidAction='copy';

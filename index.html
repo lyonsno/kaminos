@@ -3576,6 +3576,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
 <script type="module">
 import {mountMaterialCockpit} from './finger-fluid-material-cockpit.mjs';
+import {readMaterialControlsURL,materialControlsURL} from './finger-fluid-material-controls.mjs';
 
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
@@ -4373,12 +4374,19 @@ let localLiquidFailure = null;
 let localLiquidPaused = false;
 let localLiquidGeneration = 0;
 const sceneLoadRequests = createSceneLoadRequests();
+let localLiquidMaterialInvocationConsumed=false;
 const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
   getGeneration: () => localLiquidGeneration,
   getHost: () => localLiquidHost,
   setHost: host => { localLiquidHost = host; },
   createHost: async ({ setup, emitters, isCurrent, generation }) => {
     const { createLocalLiquidHost } = await import('./local-liquid-host.mjs');
+    if(!localLiquidMaterialInvocationConsumed){
+      const values=readMaterialControlsURL(window.location.href,{particleRepulsionStrength:1,capillaryStrength:.72,freeFlightViscosityBoost:.17,...setup.materialControls,densityIterations:setup.densityIterations});
+      const {densityIterations,...materialControls}=values;
+      setup=normalizeLocalLiquidSetup({...setup,densityIterations,materialControls});
+    }
+
     return createLocalLiquidHost({
       renderer, scene, camera, pipeline: renderPipeline, device: sharedGpu?.device,
       setup, emitters, isCurrent, sceneGeneration: generation, helperGround: groundPlane,
@@ -4390,9 +4398,11 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
     setInfo(`Water emitter saved in the scene; host water unavailable: ${localLiquidFailure}`);
   },
   onMounted: host => {
+    localLiquidMaterialInvocationConsumed=true;
     if(localLiquidSetup)localLiquidSetup=normalizeLocalLiquidSetup(host.state().setup);
     if (localLiquidSetup) host.setEmitters(localLiquidEmitterState().emitters);
     host.setPaused(localLiquidPaused);
+    const values=host.getMaterialControls?.().effective;if(values)history.replaceState(history.state,'',materialControlsURL(location.href,values));
   },
 });
 let sceneImportStatus = null;
@@ -7152,7 +7162,8 @@ async function applyLocalLiquidPerformance(values) {
   refreshLocalLiquidPerformance();
   window._kaminosDirty?.();
   if (!mounted) throw Error(localLiquidFailure || 'Water host could not restart; settings retained for retry');
-  setInfo(`Water restarted: ${next.particleCount.toLocaleString()} particles · ${next.densityIterations} density passes. Emitter poses retained.`);
+  const effective=localLiquidHost.state().solver;
+  setInfo(`Water restarted: ${effective.particleCount.toLocaleString()} particles · ${effective.densityIterationsPerStep} density passes. Emitter poses retained.`);
   return true;
 }
 
@@ -29513,6 +29524,7 @@ const authoredMaterialCockpit=mountMaterialCockpit(document.getElementById('loca
   apply:window.kaminosSetLocalLiquidMaterialControls,
   getPaused:()=>localLiquidPaused,setPaused:window.kaminosPauseLocalLiquid,
   captureCamera:()=>({position:camera.position.toArray(),target:controls.target.toArray(),fov:camera.fov,zoom:camera.zoom}),
+  onReplay:async()=>{await applyLocalLiquidPerformance(localLiquidSetup);authoredMaterialCockpit?.refresh();},
   restoreCamera:view=>{camera.position.fromArray(view.position);controls.target.fromArray(view.target);
     if(Number.isFinite(view.fov))camera.fov=view.fov;if(Number.isFinite(view.zoom))camera.zoom=view.zoom;
     camera.updateProjectionMatrix();controls.update();window._kaminosDirty?.();},
