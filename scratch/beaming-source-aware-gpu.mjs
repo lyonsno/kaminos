@@ -1,6 +1,6 @@
 import {createVolumeGather,sourceRaySample,sourceGuideRaySample,deriveSourceGuide,integrateCellRay} from '../scene-volume-gather.mjs';
 import {buildTriangleVisibility} from '../scene-light-visibility.mjs';
-export async function checkSourceAwareGPU({guided=false}={}){
+export async function checkSourceAwareGPU({guided=false,liveGuide=false}={}){
   const adapter=await navigator.gpu.requestAdapter();
   if(!adapter||adapter.info.isFallbackAdapter!==false||/swiftshader/i.test(JSON.stringify(adapter.info)))throw new Error('verified native WebGPU required');
   const device=await adapter.requestDevice(),errors=[],outputs=[];
@@ -13,7 +13,7 @@ export async function checkSourceAwareGPU({guided=false}={}){
   ];
   const triangles=[{a:[-1,-1,.4],b:[1,-1,.4],c:[0,3,.4]}];
   const bvh=buildTriangleVisibility(triangles);
-  const guide=deriveSourceGuide({position:[0,-.76,0],radius:.19,height:2.2,depth:.24});
+  let guide=deriveSourceGuide({position:[0,-.76,0],radius:.19,height:2.2,depth:.24});
   const gather=createVolumeGather(device,{geometry:bvh.packGpu(),receivers,volumeGrid:2,directions:12,angularPattern:guided?'guided':'source'});
   if(guided)gather.setSourceGuide(guide);
   const dimensions=[4,8,4],source=new Float32Array(4*8*4*4);
@@ -21,6 +21,7 @@ export async function checkSourceAwareGPU({guided=false}={}){
   try{
     let frame=0;
     for(const [count,phase] of [[12,0],[16,1],[12,0],[24,2],[24,0]]){
+      if(liveGuide){guide=deriveSourceGuide({position:[frame%2?.55:-.4,-.76,frame%2?-.5:.4],radius:.15+.04*frame,height:1.2+.2*frame,depth:.24});gather.setSourceGuide(guide);}
       for(let z=0;z<4;z++)for(let y=0;y<8;y++)for(let x=0;x<4;x++){
         const i=(x+4*(y+8*z))*4;
         source.set(phase===2?[0,0,0,.2]:[x===phase?4:0,y/8,z/4,.2+x*.1],i);
@@ -47,7 +48,7 @@ export async function checkSourceAwareGPU({guided=false}={}){
         if(!Number.isFinite(field.data[i]))throw new Error('nonfinite native readback');
         error=Math.max(error,Math.abs(field.data[i]-want[i]));
       }
-      outputs.push({count,phase,metadata,source:Array.from(source),expected,expectedBack,
+      outputs.push({count,phase,guide,metadata,source:Array.from(source),expected,expectedBack,
         front:Array.from(actual.surface.data.slice(0,expected.length)),back:Array.from(actual.surfaceBack.data.slice(0,expectedBack.length)),maxError:error});
       if(error>0.002)throw new Error('source GPU/CPU mismatch '+error);
     }
