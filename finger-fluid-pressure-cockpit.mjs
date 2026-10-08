@@ -11,6 +11,7 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
     <div class="ipbf-control"><label for="ipbf-cohesion">Cohesion</label><div>
       <input id="ipbf-cohesion" type="range" min="0" max="2" step=".01" aria-label="Cohesion">
       <input id="ipbf-cohesion-number" type="number" min="0" max="2" step=".01" aria-label="Cohesion value"></div></div>
+    <p id="ipbf-cohesion-help" class="ipbf-help"></p>
     <div class="ipbf-control"><label for="ipbf-passes">Pressure passes</label><div>
       <input id="ipbf-passes" type="range" min="1" max="8" step="1" aria-label="Pressure passes">
       <input id="ipbf-passes-number" type="number" min="1" step="1" aria-label="Pressure passes value"></div></div>
@@ -20,8 +21,6 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
       <input id="ipbf-beta" type="number" min="0" step="1">
       <div id="ipbf-damping-readout" class="ipbf-help"></div></details>
     <div class="ipbf-actions">
-      <button type="button" class="btn" id="ipbf-wide">Existing radius</button>
-      <button type="button" class="btn" id="ipbf-narrow">Shorter radius</button>
       <button type="button" class="btn" id="ipbf-pause">Pause</button>
       <button type="button" class="btn" id="ipbf-reset">Reset water</button>
     </div>
@@ -59,6 +58,9 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
       }
     }
     if(find('ipbf-beta')!==root.ownerDocument.activeElement)find('ipbf-beta').value=numberText(values.beta);
+    find('ipbf-cohesion-help').textContent=state.cohesionModel==='ipbf_free_surface'
+      ?'Recovered attraction · strength is a fraction of gravity · sparse-water support stays active'
+      :'Legacy attraction · density weighted · acceleration capped at 0.42';
     find('ipbf-damping-readout').textContent=runtime.ipbfSettings.damping
       ?'Threshold '+(values.beta*values.radius).toPrecision(3)
       :'Damping is disabled on this route.';
@@ -100,8 +102,6 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
   }
   find('ipbf-beta').addEventListener('change',e=>change('beta',e.target.valueAsNumber));
   linked.addEventListener('change',()=>{try{apply({});}catch{}});
-  find('ipbf-wide').addEventListener('click',()=>change('radius',baseRadius));
-  find('ipbf-narrow').addEventListener('click',()=>change('radius',baseRadius*(.1155/.185)));
   find('ipbf-pause').addEventListener('click',()=>{setPaused(!isPaused());update();});
   find('ipbf-reset').addEventListener('click',async()=>{
     if(resetting)return;resetting=true;update();

@@ -3847,6 +3847,7 @@ import {
   resolveFingerFluidPressureSolver,
   resolveFingerFluidPressureBoundary,
   resolveFingerFluidIPBFPressureRadiusScale,
+  resolveFingerFluidCohesionModel,
   resolveFingerFluidPressureOptimizations,
   measureFingerFluidParticleAllocationCapacity,
   evaluateFingerFluidParticleAllocationRequest,
@@ -4223,6 +4224,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   if (!['0','1'].includes(ipbfDampingValue)) throw new RangeError('IPBF damping must be 0 or 1');
   const ipbfDamping = ipbfDampingValue === '1';
   const ipbfDampingBeta = Number(params.get('finger_fluid_ipbf_beta') ?? 60);
+  const cohesionModel=resolveFingerFluidCohesionModel({pressureSolver:effectivePressureSolver,cohesionModel:params.get('finger_fluid_cohesion_model')??'legacy'});
   const ipbfPressureRadiusScale = resolveFingerFluidIPBFPressureRadiusScale({pressureSolver:effectivePressureSolver,pressureRadiusScale:Number(params.get('finger_fluid_ipbf_pressure_radius_scale') ?? 1)});
   const pressureOptimizations=resolveFingerFluidPressureOptimizations({pressureSolver:effectivePressureSolver,adaptiveDensity:requestedAdaptiveDensity,densityCellRejection:requestedDensityCellRejection,uniformVolumeDensityKernel:requestedUniformVolumeDensityKernel});
   const requestedEnergyDiagnosticsMode = params.get('finger_fluid_energy_diagnostics') ?? 'every_step';
@@ -4321,7 +4323,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     requestedFixedVolumeReferenceParticleCount,
     effectiveFixedVolumeReferenceParticleCount: requestedFixedVolumeReferenceParticleCount
       ?? resolveFingerFluidParticleCount(requestedParticleCount),
-    requestedPressureSolver, effectivePressureSolver, ...pressureBoundary, ipbfCompliance, ipbfAlternativeCompliance, ipbfDamping, ipbfDampingBeta, ipbfPressureRadiusScale, pressureCockpitRequested,
+    requestedPressureSolver, effectivePressureSolver, ...pressureBoundary, ipbfCompliance, ipbfAlternativeCompliance, ipbfDamping, ipbfDampingBeta, ipbfPressureRadiusScale, pressureCockpitRequested, cohesionModel,
     requestedPressureIterations,
     effectivePressureIterations: pressureCockpitRequested?requestedPressureIterations:Math.max(1, Math.min(12, Math.round(Number.isFinite(requestedPressureIterations) ? requestedPressureIterations : 3))),
     requestedEnergyDiagnosticsMode,
@@ -14145,6 +14147,7 @@ async function startFingerFluidBench() {
       ipbfBoundaryMode: fingerFluidBenchConfig.requestedIPBFBoundaryMode,
       ipbfPressureRadiusScale: fingerFluidBenchConfig.ipbfPressureRadiusScale,
       livePressureControls: fingerFluidBenchConfig.pressureCockpitRequested,
+      cohesionModel: fingerFluidBenchConfig.cohesionModel,
       ipbfCompliance: fingerFluidBenchConfig.ipbfCompliance,
       ipbfAlternativeCompliance: fingerFluidBenchConfig.ipbfAlternativeCompliance,
       ipbfDamping: fingerFluidBenchConfig.ipbfDamping,

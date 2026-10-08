@@ -1,3 +1,5 @@
+import {resolveFingerFluidCohesionModel,applyFingerFluidCohesionProfile} from './finger-fluid-cohesion.mjs';
+export {resolveFingerFluidCohesionModel,evaluateFingerFluidCohesionPairWeight,evaluateFingerFluidCohesionAcceleration,applyFingerFluidCohesionProfile} from './finger-fluid-cohesion.mjs';
 import {createIPBFGridShader} from './finger-fluid-ipbf-wgsl.mjs';
 import {createIPBFPressureControlState} from './finger-fluid-pressure-controls.mjs';
 export {createIPBFPressureControlState, ipbfBetaForRadius, ipbfPressureReplayURL} from './finger-fluid-pressure-controls.mjs';
@@ -13098,6 +13100,7 @@ export async function createWebGPUFingerFluidSolver({
   ipbfBoundaryMode = 'collision_only',
   ipbfPressureRadiusScale = 1,
   livePressureControls = false,
+  cohesionModel = 'legacy',
   densityCellRejection = false,
   uniformVolumeDensityKernel = false,
   energyDiagnosticsMode = 'every_step',
@@ -13132,6 +13135,7 @@ export async function createWebGPUFingerFluidSolver({
 } = {}) {
   const safePressureSolver = resolveFingerFluidPressureSolver(pressureSolver);
   const useIPBF = safePressureSolver === 'ipbf';
+  const safeCohesionModel=resolveFingerFluidCohesionModel({pressureSolver:safePressureSolver,cohesionModel});
   if(typeof livePressureControls!=='boolean')throw new TypeError('Live pressure controls must be boolean');
   if(livePressureControls&&!useIPBF)throw new RangeError('Live pressure controls require IPBF');
   if(livePressureControls&&(!Number.isSafeInteger(densityIterations)||densityIterations<1))throw new RangeError('Live pressure passes must be a positive safe integer');
@@ -13561,6 +13565,7 @@ export async function createWebGPUFingerFluidSolver({
     )
     .replace(KAMINOS_FINGER_FLUID_SUPPORT_BINDINGS_TOKEN, supportShaderSource.bindings)
     .replace(KAMINOS_FINGER_FLUID_SUPPORT_FUNCTIONS_TOKEN, supportShaderSource.functions);
+  computeShader=applyFingerFluidCohesionProfile(computeShader,{pressureSolver:safePressureSolver,cohesionModel:safeCohesionModel});
   const ipbfSampling=resolveFingerFluidIPBFSampling({
     kernelRadius:safeKernelRadius,restDensity:safeRestDensity,
     particleRadiusScale:safeUniformParticleRadiusScale,particleVolumeScale:safeUniformParticleVolumeScale,
@@ -14783,7 +14788,7 @@ export async function createWebGPUFingerFluidSolver({
   }
   function getPressureControls() {
     return {available:!!pressureControlState&&!runtimeLifecycle.stopped,
-      ...(pressureControlState?.read()??{}),particleCount:safeParticleCount,particleVolume:ipbfParticleVolume,damping:ipbfDamping};
+      ...(pressureControlState?.read()??{}),particleCount:safeParticleCount,particleVolume:ipbfParticleVolume,damping:ipbfDamping,cohesionModel:safeCohesionModel};
   }
 
   function step(dt = 1 / 60) {
@@ -16083,6 +16088,8 @@ export async function createWebGPUFingerFluidSolver({
       },
       vorticityConfinementContract: KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT,
       freeSurfaceContract: KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT,
+      cohesionModel:safeCohesionModel,
+      cohesionSettings:safeCohesionModel==='ipbf_free_surface'?{contract:'ipbf-density-independent-normalized-attraction-v0',strengthUnit:'gravity_fraction',normalization:'pair_weight_sum',densityConfidenceGate:false,legacyAccelerationCap:false,neighborhoodRadius:safeKernelRadius,paperTerm:false}:{contract:'legacy-capillary-attraction-v0',strengthUnit:'legacy_gain',densityConfidenceGate:true,accelerationCap:.42},
       waterfallContinuityContract: KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT,
       unsupportedSheetContract: KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT,
       waterfallOracleContract: waterfallOracleConfig?.contract || null,
