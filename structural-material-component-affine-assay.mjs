@@ -1,22 +1,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { prepareStoneFromGlb } from './structural-material-stone-prepare.mjs';
-import { createPlaneFractureSurface } from './structural-material-solid-fragments.mjs';
-import { bindSolidSurface,materialComponents } from './structural-material-solid-surface.mjs';
-import { bindComponentAffineField,applyComponentAffineField } from './structural-material-component-affine.mjs';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const [nativePath,assetPath,output,radiusInput,planeInput]=process.argv.slice(2);
 if(!nativePath||!assetPath||!output)throw new Error('usage: node structural-material-component-affine-assay.mjs NATIVE.json SOURCE.glb REPORT.json SUPPORT_RADIUS PLANE_JSON');
 fs.mkdirSync(path.dirname(path.resolve(output)),{recursive:true});const report={status:'running',phase:'input',argv:process.argv},save=()=>fs.writeFileSync(output,JSON.stringify(report,null,2)),hash=b=>createHash('sha256').update(b).digest('hex');save();let surface;
 try{
  const nativeBytes=fs.readFileSync(nativePath),native=JSON.parse(nativeBytes),assetBytes=fs.readFileSync(assetPath),radius=Number(radiusInput),plane=JSON.parse(planeInput);
+ const root=path.dirname(fileURLToPath(import.meta.url));report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();report.runtime={executable:process.execPath,node:process.version,architecture:process.arch,platform:process.platform};report.sources=Object.fromEntries(['structural-material-component-affine-assay.mjs','structural-material-component-affine.mjs','structural-material-solid-fragments.mjs','structural-material-solid-surface.mjs','structural-material-stone-prepare.mjs','package-lock.json'].map(name=>[name,hash(fs.readFileSync(path.join(root,name)))]));
  if(native.status!=='passed'||native.observed?.identity?.backend!=='webgpu'||native.observed.identity.adapterFallback!==false||native.observed.resident.length!==1)throw new Error('One complete retained native material candidate required');
  if(!Array.isArray(plane)||plane.length!==4||!plane.every(Number.isFinite))throw new Error('Explicit plane control required');
  const preparation=JSON.parse(fs.readFileSync(path.join(native.prepared.root,'report.json'))),interiorBytes=fs.readFileSync(preparation.input),interior=JSON.parse(interiorBytes),source=JSON.parse(fs.readFileSync(interior.source));
  if(hash(interiorBytes)!==preparation.inputSha256||hash(assetBytes)!==preparation.sourceSha256||interior.sourceSha256!==preparation.sourceSha256)throw new Error('Native preparation and source geometry identity differ');
  report.inputs={native:{path:path.resolve(nativePath),sha256:hash(nativeBytes)},asset:{path:path.resolve(assetPath),sha256:hash(assetBytes)},interior:{path:preparation.input,sha256:hash(interiorBytes)}};
- report.radius=radius;report.plane=plane;report.phase='surface-event';save();
+ report.radius=radius;report.plane=plane;report.phase='backend-import';save();
+ const {prepareStoneFromGlb}=await import('./structural-material-stone-prepare.mjs'),{createPlaneFractureSurface}=await import('./structural-material-solid-fragments.mjs'),{bindSolidSurface,materialComponents}=await import('./structural-material-solid-surface.mjs'),{bindComponentAffineField,applyComponentAffineField}=await import('./structural-material-component-affine.mjs');report.phase='surface-event';save();
  const result=native.observed.resident[0],stages=Object.fromEntries(result.stages.map(s=>[s.name,s.state])),n=interior.positions.length,components=materialComponents(n,stages.damaged.bonds),volumes=interior.positions.map((_,i)=>stages.rest.state[i*16+3]/preparation.config.density);
  const prepared=prepareStoneFromGlb(assetBytes,{size:source.size,cellSize:Math.max(...source.size)*2});
  surface=await createPlaneFractureSurface(prepared.cells[0].geometry,{sourceSha256:preparation.sourceSha256});
