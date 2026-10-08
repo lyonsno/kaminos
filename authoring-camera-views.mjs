@@ -36,7 +36,9 @@ export function installCameraViewsPanel({document,views,edits,onError=()=>{}}) {
   for(const action of ['update','duplicate','remove'])byId('camera-view-'+action).onclick=()=>{run(()=>views[action]());byId('camera-view-'+action).blur();};
   byId('camera-view-capture').onclick=async()=>{try{const result=await views.capture();if(result?.ok===false)throw Error(result.error);refresh();}catch(error){fail(error);}};
   // Check before the history adapter commits, including typed invalid values.
-  input.addEventListener('change',()=>{if(!Number.isFinite(input.valueAsNumber)||input.valueAsNumber<=0||input.valueAsNumber>=180){session.cancel();input.value=String(views.current().fov);fail(Error('Field of view must be between 0 and 180 degrees'));}});
+  const rejectInvalid=()=>{if(Number.isFinite(input.valueAsNumber)&&input.valueAsNumber>0&&input.valueAsNumber<180)return false;session.cancel();input.value=String(views.current().fov);fail(Error('Field of view must be between 0 and 180 degrees'));return true;};
+  input.addEventListener('change',rejectInvalid);
+  input.addEventListener('keydown',event=>{if(event.key==='Enter'&&rejectInvalid()){event.preventDefault();event.stopImmediatePropagation();input.blur();}},true);
   session=installSceneControlHistory({controls:[input],edits,id:'@viewport-lens',label:'Adjust camera lens',onError:fail});
   input.addEventListener('input',()=>{
     const fov=input.valueAsNumber;if(!Number.isFinite(fov)||fov<=0||fov>=180)return;
