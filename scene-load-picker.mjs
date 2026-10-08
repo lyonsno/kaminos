@@ -3,7 +3,9 @@
 // close. "Browse files…" falls back to the system file picker.
 // scenes: [{ name, label, timestamp, store? }] where store ({ id, label })
 // marks a scene saved by another Kaminos server on this machine. This
-// server's scenes list first. Resolves { name, store }, 'browse', or null.
+// server's scenes list first. `more` (a promise of further scenes, such as the
+// other servers' scan) fills in after the list opens. Resolves
+// { name, store }, 'browse', or null.
 
 export function sortScenesNewestFirst(scenes) {
   return [...scenes].sort((a, b) => Number(!!a.store) - Number(!!b.store)
@@ -21,9 +23,10 @@ function savedWhen(timestamp) {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-export function pickSavedScene({ scenes, host = document.body } = {}) {
+export function pickSavedScene({ scenes, more = null, host = document.body } = {}) {
   return new Promise(resolve => {
-    const ordered = sortScenesNewestFirst(scenes);
+    let ordered = sortScenesNewestFirst(scenes);
+    let pending = !!more;
     const backdrop = document.createElement('div');
     backdrop.className = 'file-name-prompt scene-load-picker';
     backdrop.setAttribute('role', 'dialog');
@@ -38,7 +41,7 @@ export function pickSavedScene({ scenes, host = document.body } = {}) {
       </div>`;
     const list = backdrop.querySelector('.scene-load-picker-list'), input = backdrop.querySelector('input');
     const note = backdrop.querySelector('.file-name-prompt-message');
-    const rows = ordered.map(scene => {
+    const makeRow = scene => {
       const row = document.createElement('button');
       row.type = 'button';
       row.className = 'scene-load-picker-row';
@@ -52,9 +55,11 @@ export function pickSavedScene({ scenes, host = document.body } = {}) {
       meta.textContent = [scene.store ? `from ${scene.store.label}` : '', scene.name.replace(/\.kaminos\.json$/, ''), savedWhen(scene.timestamp)].filter(Boolean).join(' · ');
       row.append(title, meta);
       row.addEventListener('click', () => finish({ name: scene.name, store: scene.store || null }));
-      list.appendChild(row);
       return row;
-    });
+    };
+    let rows = ordered.map(makeRow);
+    list.append(...rows);
+    let open = true;
     let active = 0;
     const visible = () => rows.filter(row => !row.hidden);
     const highlight = () => {
@@ -63,14 +68,20 @@ export function pickSavedScene({ scenes, host = document.body } = {}) {
       rows.forEach(row => row.classList.remove('active'));
       shown[active]?.classList.add('active');
       shown[active]?.scrollIntoView({ block: 'nearest' });
-      note.textContent = rows.length ? (shown.length ? '' : 'No saved scene matches.') : 'No saved scenes yet. Cmd+S saves one.';
+      note.textContent = pending ? 'Loading scenes from other Kaminos servers…'
+        : rows.length ? (shown.length ? '' : 'No saved scene matches.') : 'No saved scenes yet. Cmd+S saves one.';
     };
-    const finish = value => { backdrop.remove(); resolve(value); };
-    input.addEventListener('input', () => {
-      ordered.forEach((scene, index) => { rows[index].hidden = !sceneMatchesFilter(scene, input.value); });
-      active = 0;
-      highlight();
-    });
+    const finish = value => { open = false; backdrop.remove(); resolve(value); };
+    const applyFilter = () => { ordered.forEach((scene, index) => { rows[index].hidden = !sceneMatchesFilter(scene, input.value); }); };
+    input.addEventListener('input', () => { applyFilter(); active = 0; highlight(); });
+    more?.then(extra => {
+      if (!open) return;
+      const added = sortScenesNewestFirst(extra || []);
+      const addedRows = added.map(makeRow);
+      ordered = [...ordered, ...added];
+      rows = [...rows, ...addedRows];
+      list.append(...addedRows);
+    }).catch(() => {}).finally(() => { if (!open) return; pending = false; applyFilter(); highlight(); });
     backdrop.addEventListener('keydown', event => {
       event.stopPropagation();
       if (event.key === 'Escape') { event.preventDefault(); finish(null); }

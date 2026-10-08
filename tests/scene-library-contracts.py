@@ -10,6 +10,7 @@ import serve
 
 def call(method, params):
     handler = serve.KaminosHandler.__new__(serve.KaminosHandler)
+    handler.client_address = ("127.0.0.1", 50000)
     replies = []
     handler.send_json = lambda value, *args: replies.append((value, args[0] if args else 200))
     getattr(handler, method)(params)

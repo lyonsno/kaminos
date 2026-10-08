@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { homedir } from 'node:os';
 import { assertLocalLiquidSelectionContinuity } from './local-liquid-selection-evidence.mjs';
 import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
 import { countChangedVisibleWaterPixels, countVisibleWaterPixels, decodeScreenshotPngRgb } from './screenshot-png-rgb.mjs';
@@ -436,11 +438,10 @@ async function runArrivalAutoLevelScenario(ws) {
     const id = ${JSON.stringify(objectId)};
     const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
     const listScenes = async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name).filter(name => name.endsWith('.kaminos.json'));
-    const before = new Set(await listScenes());
-    await window.saveSceneAs();
-    let savedFile = null;
-    for (let i = 0; i < 120 && !savedFile; i++) { savedFile = (await listScenes()).find(name => !before.has(name)) || null; if (!savedFile) await wait(125); }
-    if (!savedFile) throw new Error('scene save produced no file');
+    // Use the file this save reports, never "whatever appeared": other saves may land meanwhile.
+    const savedResult = await window.saveSceneAs({ result: true });
+    const savedFile = savedResult?.ok ? savedResult.filename : null;
+    if (!savedFile) throw new Error('scene save produced no file: ' + JSON.stringify(savedResult));
     const saved = await (await fetch('/api/read?root=scenes&path=' + encodeURIComponent(savedFile))).json();
     document.querySelector('[data-tab="greenroom"]').click();
     let entry = null;
@@ -494,6 +495,7 @@ async function runExportAndSaveAsNamesScenario(ws) {
   const waitFile = async name => { for (let i = 0; i < 120; i++) { const path = resolve(downloads, name); if (existsSync(path) && readFileSync(path).length > 20) { await delay(200); return path; } await delay(125); } throw new Error('export never arrived: ' + name); };
 
   const scenesAtStart = new Set(await evaluate(ws, `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`));
+  const sceneName = 'dark-modal-save-as-witness-' + process.pid;
   try {
   await evaluate(ws, click('Export GLB'));
   const singleDialog = await evaluate(ws, answer('chair-export'));
@@ -515,7 +517,6 @@ async function runExportAndSaveAsNamesScenario(ws) {
   const groupDialog = await evaluate(ws, answer('chair-and-cube'));
   const group = readGlbSummary(await waitFile('chair-and-cube.glb'));
 
-  const sceneName = 'dark-modal-save-as-witness-' + process.pid;
   const listScenes = `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`;
   await evaluate(ws, click('Save As'));
   const saveDialog = await evaluate(ws, answer(sceneName));
@@ -544,10 +545,10 @@ async function runExportAndSaveAsNamesScenario(ws) {
   if (!(e.secondSaved > e.firstSaved)) throw new Error('confirmed Replace did not overwrite the scene: ' + JSON.stringify({ firstSaved: e.firstSaved, secondSaved: e.secondSaved }));
   if (e.scenesAfterEscape !== e.scenesBeforeEscape || e.dialogOpenAfterEscape) throw new Error('Escape did not cancel Save As: ' + JSON.stringify(e));
   } finally {
-    // Remove every scene file this scenario created, pass or fail.
-    const created = (await evaluate(ws, `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`)).filter(name => !scenesAtStart.has(name));
-    for (const name of created) await evaluate(ws, `fetch('/api/delete-scene?name=' + encodeURIComponent(${JSON.stringify(name)})).then(response => response.status)`);
-    lastEvidence.exportAndSaveAsNamesCleanup = created;
+    // Remove only the scene this scenario named, pass or fail.
+    const own = sceneName + '.kaminos.json';
+    if (!scenesAtStart.has(own)) await evaluate(ws, `fetch('/api/delete-scene?name=' + encodeURIComponent(${JSON.stringify(own)})).then(response => response.status)`);
+    lastEvidence.exportAndSaveAsNamesCleanup = [own];
   }
 }
 
@@ -586,8 +587,63 @@ async function runLoadPickerScenario(ws) {
     if (result.visible.length !== 1 || result.visible[0] !== name + '.kaminos.json') throw new Error('filter did not narrow to the saved scene: ' + JSON.stringify(result.visible));
     if (!result.loaded || result.pickerOpen) throw new Error('Enter did not load the chosen scene: ' + JSON.stringify(result));
   } finally {
-    const created = (await evaluate(ws, `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`)).filter(entry => !scenesAtStart.has(entry));
-    for (const entry of created) await evaluate(ws, `fetch('/api/delete-scene?name=' + encodeURIComponent(${JSON.stringify(entry)})).then(response => response.status)`);
+    // Delete only the scene this scenario named; other saves made meanwhile are not ours.
+    if (!scenesAtStart.has(name + '.kaminos.json')) await evaluate(ws, `fetch('/api/delete-scene?name=' + encodeURIComponent(${JSON.stringify(name + '.kaminos.json')})).then(response => response.status)`);
+  }
+}
+
+// Open a scene saved by another server whose mesh only that server has, while
+// a same-named scene exists here: the import gets its own local name, the mesh
+// comes across, Save writes the copy, and the local namesake is untouched.
+async function runLoadFromOtherServerScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-load-from-other-server';
+  const sourceMesh = args.get('--fixture-mesh');
+  if (!sourceMesh) throw new Error('load-from-other-server requires --fixture-mesh');
+  const mesh = readFileSync(sourceMesh), digest = createHash('sha256').update(mesh).digest('hex');
+  const roots = await (await fetch(new URL('/api/roots', url))).json();
+  const localMesh = resolve(roots['generated-meshes'].path, digest + '.glb');
+  if (existsSync(localMesh)) throw new Error('fixture mesh is already in this server, pick another: ' + localMesh);
+  const lane = resolve(homedir(), '.local/state/kaminos', 'dark-modal-library-fixture-' + process.pid);
+  const name = 'fixture-study-' + process.pid + '.kaminos.json';
+  const localNamesake = resolve(roots.scenes.path, name);
+  let imported = null;
+  try {
+    mkdirSync(resolve(lane, 'scenes'), { recursive: true });
+    mkdirSync(resolve(lane, 'assets/generated-meshes'), { recursive: true });
+    writeFileSync(resolve(lane, 'assets/generated-meshes', digest + '.glb'), mesh);
+    writeFileSync(resolve(lane, 'scenes', name), JSON.stringify({ schema: 'kaminos.scene.v1', version: 7, label: 'Fixture study', timestamp: new Date().toISOString(),
+      objects: [{ id: 'glb-fixture', type: 'glb', source: '/api/read?root=generated-meshes&path=' + digest + '.glb', fileName: digest + '.glb', label: 'Fixture mesh', transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } }] }));
+    writeFileSync(localNamesake, JSON.stringify({ schema: 'kaminos.scene.v1', version: 7, label: 'Unrelated local namesake', objects: [] }));
+    const result = await evaluate(ws, `(async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      document.getElementById('info-bar').textContent = '';
+      window.openSavedScene();
+      let picker = null;
+      for (let i = 0; i < 200 && !picker?.querySelector('[data-scene-store]'); i++) { picker = document.querySelector('.scene-load-picker'); await wait(50); }
+      const input = picker.querySelector('input');
+      input.value = 'dark-modal-library-fixture-${process.pid}'; input.dispatchEvent(new Event('input', { bubbles: true }));
+      const rows = [...picker.querySelectorAll('[data-scene-file]')].filter(row => !row.hidden).map(row => row.dataset.sceneFile);
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      let loaded = null;
+      for (let i = 0; i < 160; i++) { await wait(125); const labels = window.kaminosSceneObjectDebugState().map(o => o.label); if (labels.includes('Fixture mesh')) { loaded = labels; break; } }
+      await wait(500);
+      const saved = await window.saveScene?.({ result: true });
+      return { rows, loaded, info: document.getElementById('info-bar').textContent, saved };
+    })()`, { timeoutMs: 60000 });
+    const scenes = await (await fetch(new URL('/api/browse?root=scenes&path=', url))).json();
+    imported = (scenes.entries || []).map(entry => entry.name).find(entry => entry.startsWith('fixture-study-' + process.pid + '_')) || null;
+    lastEvidence.loadFromOtherServer = { ...result, imported, meshImported: existsSync(localMesh), namesake: JSON.parse(readFileSync(localNamesake, 'utf8')).label };
+    const e = lastEvidence.loadFromOtherServer;
+    if (e.rows.length !== 1 || e.rows[0] !== name) throw new Error('fixture store scene not listed: ' + JSON.stringify(e.rows));
+    if (!e.loaded) throw new Error('scene from another server did not load its mesh: ' + JSON.stringify(e));
+    if (!e.imported || !e.meshImported) throw new Error('import did not bring the scene and its mesh here: ' + JSON.stringify(e));
+    if (e.namesake !== 'Unrelated local namesake') throw new Error('importing or saving touched the local same-named scene: ' + JSON.stringify(e));
+  } finally {
+    rmSync(lane, { recursive: true, force: true });
+    rmSync(localNamesake, { force: true });
+    if (imported) await fetch(new URL('/api/delete-scene?name=' + encodeURIComponent(imported), url));
+    rmSync(localMesh, { force: true });
   }
 }
 
@@ -5917,6 +5973,8 @@ try {
     await runExportAndSaveAsNamesScenario(ws);
   } else if (scenario === 'load-picker') {
     await runLoadPickerScenario(ws);
+  } else if (scenario === 'load-from-other-server') {
+    await runLoadFromOtherServerScenario(ws);
   } else if (scenario === 'mesh-asset-append-arrival') {
     await runMeshAssetAppendArrivalScenario(ws, args.get('--append-url'));
   } else if (scenario === 'navigation-depth-index') {
