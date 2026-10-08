@@ -10167,7 +10167,8 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let centerAccum = readAccum(pixel);
   if (centerAccum.z < 0.018 || centerAccum.x < 0.012) { discard; }
 
-  let supportOrderingDepth = readSupportOrderingDepth(pixel);
+  // Camera ordering concerns the visible interface, not particle centers.
+  let supportOrderingDepth = select(readSupportOrderingDepth(pixel), readFrontDepth(pixel), params.hostFrameControls.x > 0.5);
   if (params.hostFrameControls.x > 0.5) {
     let hostSceneDepth = textureLoad(deferredLinearDepthObject, pixel, 0).x;
     if (hostSceneDepth > 0.0 && supportOrderingDepth >= hostSceneDepth - 0.002) {
@@ -16483,6 +16484,7 @@ export async function createWebGPUFingerFluidSolver({
           minimumDeferredConfidence: 0.55,
           hostTransmissionEvents: lastHostFrameCompositionEvidence ? ['opaque-hit-inside-water','water-exit','outside-scene-or-environment'] : null,
           hostWaterPathAuthority: lastHostFrameCompositionEvidence ? 'supported-geometric-segment; overlap-proxy-only-for-invalid-geometry' : null,
+          hostWaterOrdering: lastHostFrameCompositionEvidence ? 'front-interface-before-camera-scene-depth' : null,
           deferredInputs: lastHostFrameCompositionEvidence ? localLiquidHostOpticalInputs(lastHostFrameCompositionEvidence,configuredExtent) : configuredExtent ? {
             linearDepthObject: { label: 'kaminos-finger-fluid-deferred-linear-depth-object', format: 'rgba16float', extent: configuredExtent },
             worldNormalRoughness: { label: 'kaminos-finger-fluid-deferred-world-normal-roughness', format: 'rgba16float', extent: configuredExtent },

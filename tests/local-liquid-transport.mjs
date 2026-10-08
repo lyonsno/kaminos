@@ -45,3 +45,10 @@ test('camera rays come from unprojected near/far endpoints so orthographic rays 
  for(let i=0;i<3;i++)assert.ok(Math.abs(ray[i]-[.1,.2,1][i]/length)<1e-12);
  const source=readFileSync(new URL('../finger-fluid-webgpu-core.js',import.meta.url),'utf8');assert.match(source,/viewDir = -liquidWorldDirectionToView\(liquidCameraDirection\(pixel\)\)/);
 });
+test('a solid between the water front and particle center must not discard the visible water interface',async()=>{
+ const m=await load();assert.equal(typeof m.liquidFrontVisible,'function');
+ assert.equal(m.liquidFrontVisible(1.8,1.9),true); // Particle center at2 is irrelevant.
+ assert.equal(m.liquidFrontVisible(2,1.9),false);assert.equal(m.liquidFrontVisible(1.8,1.8),false);
+ const source=readFileSync(new URL('../finger-fluid-webgpu-core.js',import.meta.url),'utf8');const fs=source.slice(source.indexOf('fn fs_refraction('));
+ assert.match(fs,/supportOrderingDepth = select\(readSupportOrderingDepth\(pixel\), readFrontDepth\(pixel\)/);
+});
