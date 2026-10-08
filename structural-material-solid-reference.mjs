@@ -37,6 +37,11 @@ function deformationResult(F,S,energy,forces,extra={}){
   return{active:true,energy,forces,deformationGradient:F,stress:S,stressMeasure:'second-piola',cauchyStress:cauchy,firstPiola:P,...extra};
 }
 function connectedTetrahedron(alive){const reached=new Set([0]);for(let pass=0;pass<4;pass++)pairs.forEach(([a,b],i)=>{if(alive[i]&&(reached.has(a)||reached.has(b))){reached.add(a);reached.add(b);}});return reached.size===4;}
+export function intactTetrahedron(rest,material){
+  points(rest,4);rest=structuredClone(rest);const elastic=elasticity(material),Dm=columns(rest.slice(1).map(p=>sub(p,rest[0]))),invDm=inverse(Dm),volume=Math.abs(determinant(Dm))/6;
+  const gradients=[scale(add(add(invDm.slice(0,3),invDm.slice(3,6)),invDm.slice(6,9)),-1),invDm.slice(0,3),invDm.slice(3,6),invDm.slice(6,9)],stiffness=Array.from({length:6},(_,j)=>Capply(Array.from({length:6},(_,k)=>Number(k===j)),elastic));
+  return{volume,gradients,stiffness,evaluate(current){points(current,4);const F=multiply(columns(current.slice(1).map(p=>sub(p,rest[0]))),invDm),e=strainVector(F),s=stiffness.map(row=>dot(row,e)),S=stressMatrix(s),P=multiply(F,S);return deformationResult(F,S,volume*dot(e,s)/2,gradients.map(g=>scale(apply(P,g),-volume)));}};
+}
 export function graphTetrahedron(rest,material){
   points(rest,4);rest=structuredClone(rest);const elastic=elasticity(material);
   const Dm=columns(rest.slice(1).map(p=>sub(p,rest[0]))),invDm=inverse(Dm),volume=Math.abs(determinant(Dm))/6;

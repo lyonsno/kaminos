@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const text=fs.readFileSync(new URL('../structural-material-shard-view.js',import.meta.url),'utf8');
-const source=text.slice(text.indexOf('function makeMeshes()'),text.indexOf('async function loadVerified'));
-assert.ok(source.startsWith('function makeMeshes()'));
+const source=text.slice(text.indexOf('function makeMeshes('),text.indexOf('async function loadVerified'));
+assert.ok(source.startsWith('function makeMeshes('));
 const fixture=reject=>{
  const old={mesh:{geometry:{dispose(){this.disposed=true;}}}},published=[],removed=[];
  const context={pieces:[old],body:{positions:[[0,0,0],[1,0,0],[0,1,0],[0,0,1]]},components:[0,0,0,0],volumes:[1,1,1,1],configuration:{reconstructionRadius:1},skinMaterial:{},capMaterial:{},
@@ -13,7 +13,7 @@ const fixture=reject=>{
   createShardGeometry:()=>({attributes:{position:{values:[0,0,0,1,0,0,0,1,0],setXYZ(i,...p){this.values.splice(i*3,3,...p);}}},computeVertexNormals(){},computeBoundingSphere(){},computeBoundingBox(){},dispose(){this.disposed=true;}}),
   THREE:{Mesh:class{constructor(geometry){this.geometry=geometry;this.userData={};}}},
   scene:{add(mesh){published.push([...mesh.geometry.attributes.position.values]);},remove(mesh){removed.push(mesh);}},$:()=>({textContent:''})};
- return{context,old,published,removed};
+ context.interiorSplit=false;context.interiorState=null;return{context,old,published,removed};
 };
 const success=fixture(false);vm.runInNewContext(source+';makeMeshes()',success.context);
 assert.deepEqual(success.published,[[2,0,0,3,0,0,2,1,0]],'A shard must be deformed before its first visible publication, with no rest-pose flash');

@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import * as topology from '../structural-material-solid-topology.mjs';
+import {splitMaterialInterior} from '../structural-material-interior-cut.mjs';
+assert.equal(typeof topology.prepareSeparatedTopology,'function','Separated interiors require intact elastic families, not masks that remove fractured tetrahedra');
+const positions=[[0,0,0],[1,0,0],[0,1,0],[0,0,1]],cut=splitMaterialInterior({positions,tetrahedra:[[0,1,2,3]],domains:[0]},{positions,velocities:positions.map(()=>[1,2,3]),pinned:positions.map(()=>false)},{targetDomain:0,normal:[1,0,0],offset:.3,children:[1,2]});
+const model=topology.prepareSeparatedTopology(cut.mesh,{young:1000,poisson:.25,density:2});
+assert.equal(model.constitutiveLayout,'separated-intact-tetrahedra-v1');assert.equal(model.coefficients.length,model.elements.length*36);assert.ok(model.incidenceOffsets.every((v,i)=>!i||v>model.incidenceOffsets[i-1]));
+assert.ok(Math.abs(model.masses.reduce((s,v)=>s+v,0)-1/3)<1e-12);
+const arrays=topology.packSolidTopology(model),descriptor={kind:'graph',bufferLayout:model.bufferLayout,constitutiveLayout:model.constitutiveLayout,points:positions.length,elements:model.elements.length,bonds:model.bonds.length,colorCount:model.colorCount};descriptor.points=model.positions.length;
+globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,COPY_SRC:4,UNIFORM:8,MAP_READ:16};const {createSolidResident}=await import('../structural-material-solid-resident.js'),device={limits:{maxStorageBufferBindingSize:1e9},createBuffer(){throw new Error('GPU allocation reached');}};
+await assert.rejects(createSolidResident(device,descriptor,arrays),/GPU allocation reached/);
+await assert.rejects(createSolidResident(device,{...descriptor,constitutiveLayout:'unknown'},arrays),/layout/);
+await assert.rejects(createSolidResident(device,{...descriptor,constitutiveLayout:undefined},arrays),/coefficients/);
+const broken=topology.packSolidTopology(model);broken.bonds[2]=0;await assert.rejects(createSolidResident(device,descriptor,broken),/intact internal/);
+console.log('Separated topology retains complete families, compact intact stiffness and explicit resident layout admission');

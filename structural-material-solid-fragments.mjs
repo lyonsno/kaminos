@@ -1,4 +1,5 @@
 import Module from 'manifold-3d';
+import {INTERIOR_CUT_ROUTE} from './structural-material-interior-cut.mjs';
 
 export async function createPlaneFractureSurface(geometry,{sourceSha256,wasm:provided}={}){
  if(!Number.isInteger(geometry?.numProp)||geometry.numProp<3||!Array.isArray(geometry.properties)||!geometry.properties.length||geometry.properties.length%geometry.numProp||!geometry.properties.every(Number.isFinite)||!Array.isArray(geometry.indices)||!geometry.indices.length||geometry.indices.length%3||!geometry.indices.every(i=>Number.isInteger(i)&&i>=0&&i<geometry.properties.length/geometry.numProp))throw new Error('Complete finite oriented source geometry required');
@@ -11,6 +12,21 @@ export async function createPlaneFractureSurface(geometry,{sourceSha256,wasm:pro
   return{id:piece.id,volume:piece.solid.volume(),halfspaces:structuredClone(piece.halfspaces),geometry:{numProp:mesh.numProp,properties:Array.from(mesh.vertProperties),indices:Array.from(mesh.triVerts),exterior}};};
  const witness=()=>({route:'kaminos.event-surface.plane-cut.manifold-3.5.4.v0',sourceSha256,material:accepted&&structuredClone(accepted.material),epoch,volume,pieces:pieces.map(serialize),events:structuredClone(events),claim:'Event-time geometry follows supplied released transmission; caller selects plane; not stress-generation or fragment dynamics proof'});
  return{witness,
+  interiorChildren(){return[nextId,nextId+1];},
+  stageInteriorCut(event){
+   if(disposed)throw new Error('Fracture surface disposed');const {id,normal,offset,targetPieceId,cut,material,kind}=event??{},r=cut?.receipt,target=pieces.find(p=>p.id===targetPieceId);
+   if(typeof id!=='string'||!id||replays.has(id)||kind!=='component-tensile-interior-cut-v0'||!target||!material?.runId||material.kind!=='graph'||material.sourceSha256!==sourceSha256)throw new Error('Identified interior cut and material source required');
+   if(r?.route!==INTERIOR_CUT_ROUTE||r.targetDomain!==targetPieceId||JSON.stringify(r.children)!==JSON.stringify([nextId,nextId+1])||JSON.stringify(r.normal)!==JSON.stringify(normal)||r.offset!==offset||!Array.isArray(normal)||Math.abs(Math.hypot(...normal)-1)>1e-6)throw new Error('Surface plane differs from actual interior cut');
+   if(!(r.volumeBefore>0&&r.volumeAfter>0)||Math.abs(r.volumeBefore-r.volumeAfter)>r.volumeBefore*1e-8||!r.childVolumes?.every(v=>v>0))throw new Error('Interior cut must conserve volume');
+   if(!Array.isArray(cut.mesh?.domains)||!cut.mesh.domains.includes(nextId)||!cut.mesh.domains.includes(nextId+1)||cut.mesh.domains.includes(targetPieceId)||cut.nodeDomains?.some((d,i)=>cut.mesh.tetrahedra.every((ids,t)=>!ids.includes(i)||cut.mesh.domains[t]!==d)))throw new Error('Interior fragments lack supported material ownership');
+   const effective=normal.map(Math.fround),length=Math.hypot(...effective),split=target.solid.splitByPlane(effective,Math.fround(offset)/length),created=[...split],volumes=split.map(p=>p.volume()),atEpoch=epoch,atId=nextId;
+   if(!volumes.every(v=>Number.isFinite(v)&&v>0)||Math.abs(volumes[0]+volumes[1]-target.solid.volume())>volume*1e-6){split.forEach(p=>p.delete());throw new Error('Interior cut does not conserve visible solid');}
+   const additions=split.map((solid,side)=>({id:atId+side,solid,halfspaces:[...target.halfspaces,{normal:effective,offset:Math.fround(offset),side:side===0?1:-1,event:id}]})),staged=pieces.flatMap(p=>p===target?additions:[p]);let closed=false;
+   try{const result=staged.map(serialize);return{pieces:result,
+    commit(){if(closed)throw new Error('Interior surface transaction closed');if(epoch!==atEpoch||nextId!==atId)throw new Error('Stale interior surface transaction');pieces=staged;nextId+=2;epoch++;closed=true;target.solid.delete();accepted={material:{...material}};events.push({id,kind,material:{...material},normal:effective,offset:Math.fround(offset),epoch,targetPieceId,interior:structuredClone(r)});replays.set(id,JSON.stringify(r));},
+    abort(){if(!closed){created.forEach(p=>p.delete());closed=true;}}
+   };}catch(e){created.forEach(p=>p.delete());throw e;}
+  },
   cut(event){
    if(disposed)throw new Error('Fracture surface disposed');const {id,normal,offset,rest,before,after,route,kind,material,targetPieceId,targetNodes}=event??{};
    if(typeof id!=='string'||!id||route!=='kaminos.deformable-material.colored-vbd.webgpu.v0'||typeof kind!=='string'||!kind||!Array.isArray(normal)||normal.length!==3||!normal.every(Number.isFinite)||Math.abs(Math.hypot(...normal)-1)>1e-6||!Number.isFinite(offset))throw new Error('Explicit identified material event and unit plane required');

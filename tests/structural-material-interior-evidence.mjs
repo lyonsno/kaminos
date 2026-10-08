@@ -1,0 +1,7 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';import * as evidence from '../structural-material-shard-evidence.mjs';
+assert.equal(typeof evidence.inspectInteriorShardWitness,'function','The new route must reject unsupported material, not inherit integrity-only closure');
+const [report,bodyFile]=process.argv.slice(2);if(!report||!bodyFile)throw new Error('Observed intact report and admitted body required');
+const r=JSON.parse(fs.readFileSync(report)),w=structuredClone(r.observations[0].effective.witness),body=JSON.parse(fs.readFileSync(bodyFile));w.route='kaminos.picked-stone.interior-shards.webgpu.v0';w.interior={route:'kaminos.conservative-interior-plane-cut.v0',epoch:0,mesh:{...body,domains:body.tetrahedra.map(()=>0)},nodeDomains:body.positions.map(()=>0),materialRuns:[w.runId],transfers:[]};
+assert.deepEqual(evidence.inspectInteriorShardWitness(w),[],'Observed intact data with explicitly synthetic route annotation should meet local support policy');
+for(const mutate of [x=>x.route='kaminos.picked-stone.stress-shards.webgpu.v0',x=>x.interior=null,x=>x.state.stresses[0].active=false,x=>x.interior.nodeDomains[0]=99,x=>x.interior.mesh.tetrahedra.pop()]){const bad=structuredClone(w);mutate(bad);assert.ok(evidence.inspectInteriorShardWitness(bad).length,'Missing, substituted or unsupported interior must fail');}
+console.log('Support predicate rejects legacy route substitution and absent elastic families; transformed route fixture is not native remeshing evidence');
