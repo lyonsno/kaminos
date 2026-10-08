@@ -16961,7 +16961,9 @@ function showFlameSettingsProblems() {
 // A problem named the way the panel shows it: the control's row label, or
 // its id when it has none.
 function flameSettingsProblemLabel(problem) {
-  const label = document.getElementById(problem.id)?.closest?.('.slider-row')?.querySelector('.slider-label')?.textContent?.trim();
+  // Only the label's own text: a help mark ("i") can sit inside it.
+  const labelEl = document.getElementById(problem.id)?.closest?.('.slider-row')?.querySelector('.slider-label');
+  const label = labelEl ? [...labelEl.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('').trim() : '';
   return label || problem.id;
 }
 

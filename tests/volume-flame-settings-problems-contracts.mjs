@@ -102,8 +102,13 @@ assert.match(index, /<div id="viewport">\n\s*<div class="viewport-flame-problems
 assert.match(index, /\.viewport-flame-problems\s*\{[^}]*position:\s*absolute[^}]*z-index:\s*12/, 'the viewport warning paints above the volume canvas and the edit HUD');
 const labelSource = grab('function flameSettingsProblemLabel(');
 assert.ok(labelSource, 'problems are named by their visible label');
-const row = { querySelector: sel => (sel === '.slider-label' ? { textContent: ' Wind model ' } : null) };
-const labelOf = vm.runInNewContext(`${labelSource}; flameSettingsProblemLabel`, { document: { getElementById: id => (id === 'volume-wind-model' ? { closest: () => row } : null) } });
+const TEXT_NODE = 3;
+const labelEl = text => ({ textContent: text, childNodes: [{ nodeType: TEXT_NODE, textContent: ' ' + text + ' ' }] });
+const row = { querySelector: sel => (sel === '.slider-label' ? labelEl('Wind model') : null) };
+// A help mark ("i") lives inside the label; it is not part of the name.
+const helpRow = { querySelector: sel => (sel === '.slider-label' ? { textContent: 'Pressure Solveri', childNodes: [{ nodeType: TEXT_NODE, textContent: 'Pressure Solver' }, { nodeType: 1, textContent: 'i' }] } : null) };
+const labelOf = vm.runInNewContext(`${labelSource}; flameSettingsProblemLabel`, { Node: { TEXT_NODE }, document: { getElementById: id => (id === 'volume-wind-model' ? { closest: () => row } : id === 'volume-pressure-solver' ? { closest: () => helpRow } : null) } });
+assert.equal(labelOf({ id: 'volume-pressure-solver' }), 'Pressure Solver', 'a help mark inside the label is not part of the name');
 assert.equal(labelOf({ id: 'volume-wind-model' }), 'Wind model', 'a control is named by its row label');
 assert.equal(labelOf({ id: 'domControls' }), 'domControls', 'a problem with no control keeps its id');
 const viewportBanner = { hidden: true, textContent: '' };
