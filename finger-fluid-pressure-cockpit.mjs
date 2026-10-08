@@ -84,12 +84,14 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
   function change(name,value,persist=true) {
     if(!Number.isFinite(value))return;
     const current=source();if(!current)return;
-    let patch;
-    if(name==='radius'){
-      const old=current.state.requested;
-      patch={pressureRadiusScale:value/baseRadius,beta:ipbfBetaForRadius({radius:value,previousRadius:old.radius,beta:old.beta,linked:linked.checked})};
-    } else patch={[{cohesion:'capillaryStrength',passes:'densityIterations',beta:'beta'}[name]]:value};
-    try {apply(patch,persist);}catch(e){error=e.message||String(e);update();}
+    try {
+      let patch;
+      if(name==='radius'){
+        const old=current.state.requested;
+        patch={pressureRadiusScale:value/baseRadius,beta:ipbfBetaForRadius({radius:value,previousRadius:old.radius,beta:old.beta,linked:linked.checked})};
+      } else patch={[{cohesion:'capillaryStrength',passes:'densityIterations',beta:'beta'}[name]]:value};
+      apply(patch,persist);
+    }catch(e){error=e.message||String(e);update();}
   }
   for(const name of ['radius','cohesion','passes']){
     find('ipbf-'+name).addEventListener('input',e=>change(name,Number(e.target.value),false));

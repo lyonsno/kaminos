@@ -14288,6 +14288,7 @@ export async function createWebGPUFingerFluidSolver({
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
     deferredLinearDepthObjectTexture?.destroy();
+    if(ownsDevice)device.destroy();
     deferredLinearDepthObjectTexture = device.createTexture({
       label: 'kaminos-finger-fluid-deferred-linear-depth-object',
       size: [targetWidth, targetHeight],
