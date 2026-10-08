@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { homedir } from 'node:os';
 import { assertLocalLiquidSelectionContinuity } from './local-liquid-selection-evidence.mjs';
 import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
-import { countChangedVisibleWaterPixels, countVisibleWaterPixels } from './screenshot-png-rgb.mjs';
+import { countChangedVisibleWaterPixels, countVisibleWaterPixels, decodeScreenshotPngRgb } from './screenshot-png-rgb.mjs';
 import { compositionRestoreUrl } from './scene-authoring.mjs';
 
 const args = new Map();
@@ -226,6 +228,433 @@ async function runMeshAssetLinkScenario(ws) {
       };
     })()
   `, { timeoutMs: 45000 });
+}
+
+// Arrival contract for a fresh viewer link: the asset rests on the live ground
+// plane and the camera frames all of it at a readable size.
+async function runMeshAssetArrivalScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-mesh-asset-arrival';
+  const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
+  const measured = await evaluate(ws, `
+    (async () => {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const object = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.id === ${JSON.stringify(objectId)});
+      return { object, camera: window.kaminosCameraDebugState?.(), screen: window.kaminosSceneObjectScreenExtentDebugState?.(${JSON.stringify(objectId)}) };
+    })()
+  `, { timeoutMs: 15000 });
+  const { object, camera, screen } = measured;
+  if (!object?.worldBounds || object.worldBounds.error || !screen) throw new Error('mesh asset arrival could not measure bounds or silhouette: ' + JSON.stringify(measured));
+  const { min, max } = object.worldBounds;
+  const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
+  const groundGap = min[1] - camera.groundY;
+  const span = Math.max(screen.right - screen.left, screen.top - screen.bottom);
+  lastEvidence.meshAssetArrival = { arrival: object.arrival, worldBounds: object.worldBounds, groundY: camera.groundY, groundGap, diagonal, camera: { position: camera.position, target: camera.target }, screen, span };
+  if (!Number.isFinite(camera.groundY)) throw new Error('mesh asset arrival has no ground plane height: ' + JSON.stringify(lastEvidence.meshAssetArrival));
+  if (Math.abs(groundGap) > Math.max(1e-4, diagonal * 2e-3)) throw new Error('mesh asset did not arrive resting on the ground plane: ' + JSON.stringify({ groundGap, groundY: camera.groundY, worldBounds: object.worldBounds }));
+  if (screen.outsideDepth || screen.left < -1 || screen.right > 1 || screen.bottom < -1 || screen.top > 1) throw new Error('mesh asset arrival is not fully inside the camera frame: ' + JSON.stringify(screen));
+  if (object.arrival?.mode !== 'fresh') throw new Error('mesh asset link did not record a fresh arrival: ' + JSON.stringify(object.arrival));
+  if (screen.top > screen.overlayTopNdc) throw new Error('mesh asset arrival is hidden under the transform toolbar: ' + JSON.stringify(screen));
+  if (span < 1.2) throw new Error('mesh asset arrival is framed too small: ' + JSON.stringify({ span, screen }));
+}
+
+// Arrival contract for adding into an existing scene through Add > Import
+// mesh: the new asset lands on the ground under the orbit pivot at the shared
+// size, and the camera and the existing object stay where they were.
+async function runMeshAssetAppendArrivalScenario(ws, appendUrl) {
+  await runMeshAssetArrivalScenario(ws);
+  phase = 'scenario-mesh-asset-append-arrival';
+  if (!appendUrl) throw new Error('mesh-asset-append-arrival requires --append-url');
+  lastEvidence.meshAssetAppendArrival = await evaluate(ws, `
+    (async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const pivot = [0.9, -0.2, -0.6];
+      const cameraBefore = window.kaminosSetCameraDebugPose({ position: [3.2, 1.4, 3.6], target: pivot });
+      const before = window.kaminosSceneObjectDebugState();
+      const response = await fetch(${JSON.stringify('__APPEND_URL__')});
+      if (!response.ok) throw new Error('append asset fetch failed: ' + response.status);
+      const file = new File([await response.blob()], 'appended-asset.glb', { type: 'model/gltf-binary' });
+      const input = document.getElementById('scene-mesh-file');
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      let after = before;
+      for (let i = 0; i < 160 && after.length === before.length; i++) { await wait(125); after = window.kaminosSceneObjectDebugState(); }
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      after = window.kaminosSceneObjectDebugState();
+      return { pivot, cameraBefore, cameraAfter: window.kaminosCameraDebugState(), before, after, info: document.getElementById('info-bar')?.textContent?.trim() };
+    })()
+  `.replace('__APPEND_URL__', appendUrl), { timeoutMs: 45000 });
+  const { pivot, cameraBefore, cameraAfter, before, after, info } = lastEvidence.meshAssetAppendArrival;
+  const added = after.find(record => !before.some(prior => prior.id === record.id));
+  if (!added) throw new Error('append import registered no new scene object: ' + JSON.stringify({ info, count: after.length }));
+  const near = (a, b, tolerance = 1e-6) => a.length === b.length && a.every((value, index) => Math.abs(value - b[index]) <= tolerance);
+  if (!near(cameraAfter.position, cameraBefore.position) || !near(cameraAfter.target, cameraBefore.target)) throw new Error('append import moved the camera: ' + JSON.stringify({ cameraBefore, cameraAfter }));
+  for (const prior of before) {
+    const now = after.find(record => record.id === prior.id);
+    if (!now || JSON.stringify(now.transform) !== JSON.stringify(prior.transform)) throw new Error('append import changed an existing object: ' + JSON.stringify({ prior, now }));
+  }
+  const { min, max } = added.worldBounds;
+  const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
+  if (Math.abs(min[1] - cameraAfter.groundY) > 2e-3 * diagonal) throw new Error('appended asset is not resting on the ground: ' + JSON.stringify({ worldBounds: added.worldBounds, groundY: cameraAfter.groundY }));
+  if (Math.abs((min[0] + max[0]) / 2 - pivot[0]) > 1e-3 || Math.abs((min[2] + max[2]) / 2 - pivot[2]) > 1e-3) throw new Error('appended asset did not land under the orbit pivot: ' + JSON.stringify({ worldBounds: added.worldBounds, pivot }));
+  if (Math.abs(diagonal - 2) > 1e-3) throw new Error('appended asset did not take the shared arrival size: ' + diagonal);
+  if (added.arrival?.mode !== 'append') throw new Error('append import did not record an append arrival: ' + JSON.stringify(added));
+  lastEvidence.meshAssetAppendArrival = { addedId: added.id, arrival: added.arrival, worldBounds: added.worldBounds, pivot, camera: cameraAfter.position, info };
+}
+
+// Snap Ground on an asset that arrives a few degrees off its base: the button
+// stands it level on that base and on the ground, and one undo restores the
+// arrival pose.
+async function runSnapGroundLevelScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-snap-ground-level';
+  const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
+  const result = await evaluate(ws, `
+    (async () => {
+      const id = ${JSON.stringify(objectId)};
+      const frames = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const record = () => window.kaminosSceneObjectDebugState().find(item => item.id === id);
+      await frames();
+      const undoLeveling = document.getElementById('tb-undo-leveling');
+      if (undoLeveling && !undoLeveling.hidden) { undoLeveling.click(); await frames(); }
+      const before = { pose: record().transform, resting: window.kaminosRestingPlaneDebugState(id) };
+      const button = [...document.querySelectorAll('.tb-btn')].find(item => item.textContent.trim() === 'Snap Ground');
+      if (!button) throw new Error('Snap Ground button missing');
+      button.click();
+      await frames();
+      const after = { pose: record().transform, bounds: record().worldBounds, resting: window.kaminosRestingPlaneDebugState(id), info: document.getElementById('info-bar')?.textContent?.trim(), groundY: window.kaminosCameraDebugState().groundY };
+      return { before, after };
+    })()
+  `, { timeoutMs: 30000 });
+  lastEvidence.snapGroundLevel = result;
+  await capturePngScreenshot(ws, out.replace(/\.png$/i, '-leveled.png'));
+  const undone = await evaluate(ws, `
+    (async () => {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', metaKey: true, bubbles: true }));
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return window.kaminosSceneObjectDebugState().find(item => item.id === ${JSON.stringify(objectId)}).transform;
+    })()
+  `, { timeoutMs: 15000 });
+  lastEvidence.snapGroundLevel.undone = undone;
+  const { before, after } = result;
+  if (before.resting?.reason !== 'level') throw new Error('asset did not arrive measurably off its base: ' + JSON.stringify(before.resting));
+  const { min, max } = after.bounds;
+  const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
+  if (after.resting?.reason !== 'already-level') throw new Error('Snap Ground left the asset off its base: ' + JSON.stringify({ before: before.resting, after: after.resting, info: after.info }));
+  if (Math.abs(min[1] - after.groundY) > 2e-3 * diagonal) throw new Error('Snap Ground did not rest the asset on the ground: ' + JSON.stringify({ bounds: after.bounds, groundY: after.groundY }));
+  const near = (a, b) => a.every((value, index) => Math.abs(value - b[index]) < 1e-6);
+  if (!['position', 'rotation', 'scale'].every(key => near(undone[key], before.pose[key]))) throw new Error('undo did not restore the arrival pose: ' + JSON.stringify({ before: before.pose, undone }));
+}
+
+// Toolbar orientation buttons act on the selected object at once: the
+// viewport redraws on the click (no deselect needed), the object stays
+// selected, and one undo restores the previous pose.
+async function runToolbarRotateLiveScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-toolbar-rotate-live';
+  const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
+  const record = `window.kaminosSceneObjectDebugState().find(item => item.id === ${JSON.stringify(objectId)})`;
+  await delay(2500); // let the on-demand renderer go idle
+  const before = await evaluate(ws, record);
+  const beforePath = out.replace(/\.png$/i, '-before-rot.png');
+  await capturePngScreenshot(ws, beforePath);
+  await evaluate(ws, `(() => { const button = [...document.querySelectorAll('.tb-btn')].find(item => item.textContent.trim() === 'Rot X'); if (!button) throw new Error('Rot X button missing'); button.click(); })()`);
+  await delay(600);
+  const after = await evaluate(ws, record);
+  const afterPath = out.replace(/\.png$/i, '-after-rot.png');
+  await capturePngScreenshot(ws, afterPath);
+  const a = decodeScreenshotPngRgb(readFileSync(beforePath)), b = decodeScreenshotPngRgb(readFileSync(afterPath));
+  let changed = 0;
+  for (let i = 0; i < a.pixels.length; i += a.channels) if (Math.abs(a.pixels[i] - b.pixels[i]) + Math.abs(a.pixels[i + 1] - b.pixels[i + 1]) + Math.abs(a.pixels[i + 2] - b.pixels[i + 2]) > 24) changed++;
+  const changedFraction = changed / (a.width * a.height);
+  const undone = await evaluate(ws, `(async () => {
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', metaKey: true, bubbles: true }));
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return ${record};
+  })()`);
+  lastEvidence.toolbarRotateLive = { before: before.transform, after: after.transform, afterActive: after.active, changedFraction, undone: undone.transform };
+  if (after.transform.rotation.every((value, index) => Math.abs(value - before.transform.rotation[index]) < 1e-6)) throw new Error('Rot X did not change the object pose: ' + JSON.stringify(lastEvidence.toolbarRotateLive));
+  if (!after.active) throw new Error('Rot X deselected the object');
+  if (changedFraction < 0.01) throw new Error('viewport did not redraw after Rot X while the object stayed selected: ' + JSON.stringify({ changedFraction }));
+  const near = (x, y) => x.every((value, index) => Math.abs(value - y[index]) < 1e-6);
+  if (!['position', 'rotation', 'scale'].every(key => near(undone.transform[key], before.transform[key]))) throw new Error('undo did not restore the pose before Rot X: ' + JSON.stringify(lastEvidence.toolbarRotateLive));
+}
+
+// An asset that arrives a few degrees off its base is leveled on arrival. The
+// toolbar then offers Undo Leveling, which turns it back to how the file stored
+// it (still on the ground) and hides itself; Cmd/Ctrl+Z brings the leveling and
+// the button back.
+async function runArrivalAutoLevelScenario(ws) {
+  await runMeshAssetArrivalScenario(ws);
+  phase = 'scenario-arrival-auto-level';
+  const objectId = lastEvidence.meshAssetLink.state.registeredObjectId;
+  const state = `(() => {
+    const id = ${JSON.stringify(objectId)};
+    const record = window.kaminosSceneObjectDebugState().find(item => item.id === id);
+    const button = document.getElementById('tb-undo-leveling');
+    return { resting: window.kaminosRestingPlaneDebugState(id), arrival: record.arrival, pose: record.transform, minY: record.worldBounds.min[1], groundY: window.kaminosCameraDebugState().groundY, undoButtonShown: !!button && !button.hidden && !!button.offsetParent };
+  })()`;
+  const frames = 'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))';
+  const arrived = await evaluate(ws, state);
+  const unleveled = await evaluate(ws, `(async () => { document.getElementById('tb-undo-leveling')?.click(); await ${frames}; return ${state}; })()`);
+  const redone = await evaluate(ws, `(async () => { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', metaKey: true, bubbles: true })); await ${frames}; return ${state}; })()`);
+  lastEvidence.arrivalAutoLevel = { arrived, unleveled, redone };
+  if (arrived.resting?.reason !== 'already-level' || !(arrived.arrival?.leveledDeg > 2)) throw new Error('asset was not leveled on arrival: ' + JSON.stringify(arrived));
+  if (!arrived.undoButtonShown) throw new Error('Undo Leveling is not offered after arrival leveling: ' + JSON.stringify(arrived));
+  if (unleveled.resting?.reason !== 'level' || Math.abs(unleveled.resting.tiltDeg - arrived.arrival.leveledDeg) > 0.2) throw new Error('Undo Leveling did not restore the stored tilt: ' + JSON.stringify(unleveled));
+  if (unleveled.undoButtonShown) throw new Error('Undo Leveling stayed visible after undoing: ' + JSON.stringify(unleveled));
+  if (Math.abs(unleveled.minY - unleveled.groundY) > 2e-3) throw new Error('Undo Leveling left the asset off the ground: ' + JSON.stringify(unleveled));
+  if (redone.resting?.reason !== 'already-level' || !redone.undoButtonShown) throw new Error('Cmd+Z did not bring the leveling and its button back: ' + JSON.stringify(redone));
+
+  // A later leveling that history undoes must not replace what Undo Leveling
+  // restores: tilt 5 degrees, Snap Ground, undo both, then Undo Leveling still
+  // returns the file's stored tilt.
+  const undoKey = `document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', metaKey: true, bubbles: true }))`;
+  const relevelHistory = await evaluate(ws, `(async () => {
+    const id = ${JSON.stringify(objectId)};
+    const pose = window.kaminosSceneObjectDebugState().find(item => item.id === id).transform;
+    window.kaminosSetSceneObjectTransform(id, { ...pose, rotation: [pose.rotation[0] + 5 * Math.PI / 180, pose.rotation[1], pose.rotation[2]] });
+    await ${frames};
+    [...document.querySelectorAll('.tb-btn')].find(item => item.textContent.trim() === 'Snap Ground').click();
+    await ${frames};
+    const afterSnap = ${state};
+    ${undoKey}; await ${frames};
+    ${undoKey}; await ${frames};
+    const backAtArrival = ${state};
+    document.getElementById('tb-undo-leveling')?.click();
+    await ${frames};
+    const unleveled = ${state};
+    ${undoKey}; await ${frames};
+    return { afterSnap, backAtArrival, unleveled, releveled: ${state} };
+  })()`, { timeoutMs: 30000 });
+  lastEvidence.arrivalAutoLevel.relevelHistory = relevelHistory;
+  if (!relevelHistory.backAtArrival.undoButtonShown) throw new Error('Undo Leveling not offered after history returned to the arrival pose: ' + JSON.stringify(relevelHistory.backAtArrival));
+  if (relevelHistory.unleveled.resting?.reason !== 'level' || Math.abs(relevelHistory.unleveled.resting.tiltDeg - arrived.arrival.leveledDeg) > 0.2) throw new Error('Undo Leveling after a later leveling and history undo did not restore the stored tilt: ' + JSON.stringify({ expected: arrived.arrival.leveledDeg, unleveled: relevelHistory.unleveled.resting }));
+
+  // The leveling, and its undo, survive save and reopen.
+  const reopened = await evaluate(ws, `(async () => {
+    const id = ${JSON.stringify(objectId)};
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const listScenes = async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name).filter(name => name.endsWith('.kaminos.json'));
+    // Use the file this save reports, never "whatever appeared": other saves may land meanwhile.
+    const savedResult = await window.saveSceneAs({ result: true });
+    const savedFile = savedResult?.ok ? savedResult.filename : null;
+    if (!savedFile) throw new Error('scene save produced no file: ' + JSON.stringify(savedResult));
+    const saved = await (await fetch('/api/read?root=scenes&path=' + encodeURIComponent(savedFile))).json();
+    document.querySelector('[data-tab="greenroom"]').click();
+    let entry = null;
+    for (let i = 0; i < 120 && !entry; i++) { entry = [...document.querySelectorAll('#scenes-list .gr-entry')].find(item => item.dataset.sceneFile === savedFile); if (!entry) await wait(125); }
+    if (!entry) { await fetch('/api/delete-scene?name=' + encodeURIComponent(savedFile)); throw new Error('saved scene not listed: ' + savedFile); }
+    [...entry.querySelectorAll('button')].find(button => button.textContent.trim() === 'Load').click();
+    let restored = null;
+    for (let i = 0; i < 200; i++) { await wait(125); restored = window.kaminosSceneObjectDebugState().find(item => item.id === id); if (restored && window.kaminosSceneObjectDebugState().length === 1) break; }
+    document.querySelector('[data-tab="assets"]')?.click();
+    document.querySelector('[data-scene-object-id="' + id + '"]')?.click();
+    await ${frames};
+    const afterLoad = ${state};
+    document.getElementById('tb-undo-leveling')?.click();
+    await ${frames};
+    const unleveled = ${state};
+    const cleanup = await (await fetch('/api/delete-scene?name=' + encodeURIComponent(savedFile))).json().catch(error => ({ error: String(error) }));
+    return { savedFile, savedLeveling: saved.objects?.find(object => object.id === id)?.arrivalLeveling ?? null, afterLoad, unleveled, cleanup };
+  })()`, { timeoutMs: 60000 });
+  lastEvidence.arrivalAutoLevel.reopened = reopened;
+  if (!reopened.afterLoad.undoButtonShown || reopened.afterLoad.resting?.reason !== 'already-level') throw new Error('Undo Leveling not offered after save and reopen: ' + JSON.stringify(reopened));
+  if (reopened.unleveled.resting?.reason !== 'level' || Math.abs(reopened.unleveled.resting.tiltDeg - arrived.arrival.leveledDeg) > 0.2) throw new Error('Undo Leveling after reopen did not restore the stored tilt: ' + JSON.stringify(reopened.unleveled));
+}
+
+// Export the selection as a GLB and Save As, both through the filename
+// dialog: a single object, a group of two, a new scene name, an existing name
+// that must be confirmed before it is replaced, and Escape declining.
+function readGlbSummary(path) {
+  const bytes = readFileSync(path);
+  if (bytes.toString('ascii', 0, 4) !== 'glTF' || bytes.readUInt32LE(4) !== 2 || bytes.readUInt32LE(8) !== bytes.length) throw new Error('export is not a binary glTF 2.0 file: ' + path);
+  const json = JSON.parse(bytes.toString('utf8', 20, 20 + bytes.readUInt32LE(12)));
+  return { bytes: bytes.length, meshes: json.meshes?.length ?? 0, meshNodes: (json.nodes || []).filter(node => node.mesh !== undefined).length, nodeNames: (json.nodes || []).map(node => node.name || null) };
+}
+
+async function runExportAndSaveAsNamesScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-export-and-save-as-names';
+  const downloads = resolve(dirname(out), 'exports-' + process.pid);
+  rmSync(downloads, { recursive: true, force: true });
+  mkdirSync(downloads, { recursive: true });
+  await wsRequest(ws, 'Page.setDownloadBehavior', { behavior: 'allow', downloadPath: downloads });
+  const frames = 'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))';
+  const answer = (name, { expectMessage = false } = {}) => `(async () => {
+    let dialog = null;
+    for (let i = 0; i < 80 && !dialog; i++) { dialog = document.querySelector('.file-name-prompt'); if (!dialog) await new Promise(r => setTimeout(r, 50)); }
+    if (!dialog) throw new Error('filename dialog did not open');
+    const seen = { title: dialog.querySelector('.file-name-prompt-title').textContent, defaultValue: dialog.querySelector('input').value, message: dialog.querySelector('.file-name-prompt-message').textContent, confirm: dialog.querySelector('[data-file-name-confirm]').textContent };
+    ${name === null ? "dialog.querySelector('input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));" : "dialog.querySelector('input').value = " + JSON.stringify(name) + "; dialog.querySelector('[data-file-name-confirm]').click();"}
+    return seen;
+  })()`;
+  const click = label => `(() => { const button = [...document.querySelectorAll('.tb-btn')].find(item => item.textContent.trim() === ${JSON.stringify(label)}); if (!button) throw new Error(${JSON.stringify(label)} + ' button missing'); button.click(); })()`;
+  const waitFile = async name => { for (let i = 0; i < 120; i++) { const path = resolve(downloads, name); if (existsSync(path) && readFileSync(path).length > 20) { await delay(200); return path; } await delay(125); } throw new Error('export never arrived: ' + name); };
+
+  const scenesAtStart = new Set(await evaluate(ws, `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`));
+  const sceneName = 'dark-modal-save-as-witness-' + process.pid;
+  try {
+  await evaluate(ws, click('Export GLB'));
+  const singleDialog = await evaluate(ws, answer('chair-export'));
+  const single = readGlbSummary(await waitFile('chair-export.glb'));
+
+  // The arrived asset sits in its own group; parent a new cube into that group
+  // and select the group, so the export holds both meshes.
+  const grouped = await evaluate(ws, `(async () => {
+    const chairGroup = window.kaminosSceneObjectDebugState()[0].groupId;
+    if (!chairGroup) throw new Error('arrived asset has no group to extend');
+    document.querySelector('[data-scene-add="box"]').click(); await ${frames};
+    const parent = document.getElementById('object-parent');
+    parent.value = chairGroup; parent.dispatchEvent(new Event('change', { bubbles: true })); await ${frames};
+    document.querySelector('[data-scene-group-id="' + chairGroup + '"]').click(); await ${frames};
+    const objects = window.kaminosSceneObjectDebugState();
+    return { objects: objects.length, inGroup: objects.filter(object => object.groupId === chairGroup).length };
+  })()`);
+  await evaluate(ws, click('Export GLB'));
+  const groupDialog = await evaluate(ws, answer('chair-and-cube'));
+  const group = readGlbSummary(await waitFile('chair-and-cube.glb'));
+
+  const listScenes = `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`;
+  await evaluate(ws, click('Save As'));
+  const saveDialog = await evaluate(ws, answer(sceneName));
+  let listed = [];
+  for (let i = 0; i < 80 && !listed.includes(sceneName + '.kaminos.json'); i++) { await delay(125); listed = await evaluate(ws, listScenes); }
+  const firstSaved = await evaluate(ws, `(async () => (await (await fetch('/api/read?root=scenes&path=${sceneName}.kaminos.json')).json()).timestamp)()`);
+  await delay(1100);
+  await evaluate(ws, click('Save As'));
+  if (!listed.includes(sceneName + '.kaminos.json')) throw new Error('Save As did not create the named scene: ' + JSON.stringify(listed.filter(name => !scenesAtStart.has(name))));
+  const sameNameDialog = await evaluate(ws, answer(sceneName));
+  const replaceDialog = await evaluate(ws, answer(sceneName));
+  await delay(600);
+  const secondSaved = await evaluate(ws, `(async () => (await (await fetch('/api/read?root=scenes&path=${sceneName}.kaminos.json')).json()).timestamp)()`);
+  const before = (await evaluate(ws, listScenes)).length;
+  await evaluate(ws, click('Save As'));
+  const escapeDialog = await evaluate(ws, answer(null));
+  await delay(600);
+  const after = (await evaluate(ws, listScenes)).length;
+  const dialogOpen = await evaluate(ws, `!!document.querySelector('.file-name-prompt')`);
+  lastEvidence.exportAndSaveAsNames = { downloads, singleDialog, single, grouped, groupDialog, group, saveDialog, listedSaved: listed.includes(sceneName + '.kaminos.json'), firstSaved, sameNameDialog, replaceDialog, secondSaved, scenesBeforeEscape: before, scenesAfterEscape: after, escapeDialog, dialogOpenAfterEscape: dialogOpen };
+  const e = lastEvidence.exportAndSaveAsNames;
+  if (single.meshNodes !== 1) throw new Error('single-object export did not contain exactly one mesh: ' + JSON.stringify(single));
+  if (grouped.inGroup !== 2 || group.meshNodes !== 2) throw new Error('group export did not contain both meshes: ' + JSON.stringify({ grouped, group }));
+  if (!e.listedSaved) throw new Error('Save As did not create the named scene: ' + sceneName);
+  if (!/already exists/.test(e.replaceDialog.message) || e.replaceDialog.confirm !== 'Replace') throw new Error('existing scene name was not confirmed before replacing: ' + JSON.stringify(e.replaceDialog));
+  if (!(e.secondSaved > e.firstSaved)) throw new Error('confirmed Replace did not overwrite the scene: ' + JSON.stringify({ firstSaved: e.firstSaved, secondSaved: e.secondSaved }));
+  if (e.scenesAfterEscape !== e.scenesBeforeEscape || e.dialogOpenAfterEscape) throw new Error('Escape did not cancel Save As: ' + JSON.stringify(e));
+  } finally {
+    // Remove only the scene this scenario named, pass or fail.
+    const own = sceneName + '.kaminos.json';
+    if (!scenesAtStart.has(own)) await evaluate(ws, `fetch('/api/delete-scene?name=' + encodeURIComponent(${JSON.stringify(own)})).then(response => response.status)`);
+    lastEvidence.exportAndSaveAsNamesCleanup = [own];
+  }
+}
+
+// Load opens the saved scenes, not an OS file picker: save a named scene,
+// clear the viewport, press Load, filter to the scene, and open it with Enter.
+async function runLoadPickerScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-load-picker';
+  const name = 'dark-modal-load-picker-' + process.pid;
+  const scenesAtStart = new Set(await evaluate(ws, `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`));
+  try {
+    const result = await evaluate(ws, `(async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const saved = await window.saveSceneAs({ name: ${JSON.stringify(name)}, result: true });
+      document.getElementById('info-bar').textContent = '';
+      if (!saved?.ok) throw new Error('named save failed: ' + JSON.stringify(saved));
+      [...document.querySelectorAll('.tb-btn')].find(item => item.textContent.trim() === 'Load').click();
+      let picker = null;
+      for (let i = 0; i < 80 && !picker; i++) { picker = document.querySelector('.scene-load-picker'); if (!picker) await wait(50); }
+      if (!picker) throw new Error('Load did not open the saved-scene list');
+      let rows = [];
+      for (let i = 0; i < 80; i++) { rows = [...picker.querySelectorAll('[data-scene-file]')]; if (rows.length) break; await wait(50); }
+      const listed = rows.map(row => row.dataset.sceneFile);
+      const filter = picker.querySelector('input');
+      filter.value = ${JSON.stringify(name)};
+      filter.dispatchEvent(new Event('input', { bubbles: true }));
+      await wait(50);
+      const visible = [...picker.querySelectorAll('[data-scene-file]')].filter(row => !row.hidden).map(row => row.dataset.sceneFile);
+      filter.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      let loaded = null;
+      for (let i = 0; i < 160; i++) { await wait(125); const info = document.getElementById('info-bar')?.textContent || ''; if (/^Scene loaded/.test(info.trim())) { loaded = info; break; } }
+      return { listed, visible, loaded, objects: window.kaminosSceneObjectDebugState().length, pickerOpen: !!document.querySelector('.scene-load-picker') };
+    })()`, { timeoutMs: 60000 });
+    lastEvidence.loadPicker = result;
+    if (!result.listed.includes(name + '.kaminos.json')) throw new Error('saved scene missing from the Load list: ' + JSON.stringify(result.listed));
+    if (result.visible.length !== 1 || result.visible[0] !== name + '.kaminos.json') throw new Error('filter did not narrow to the saved scene: ' + JSON.stringify(result.visible));
+    if (!result.loaded || result.pickerOpen) throw new Error('Enter did not load the chosen scene: ' + JSON.stringify(result));
+  } finally {
+    // Delete only the scene this scenario named; other saves made meanwhile are not ours.
+    if (!scenesAtStart.has(name + '.kaminos.json')) await evaluate(ws, `fetch('/api/delete-scene?name=' + encodeURIComponent(${JSON.stringify(name + '.kaminos.json')})).then(response => response.status)`);
+  }
+}
+
+// Open a scene saved by another server whose mesh only that server has, while
+// a same-named scene exists here: the import gets its own local name, the mesh
+// comes across, Save writes the copy, and the local namesake is untouched.
+async function runLoadFromOtherServerScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-load-from-other-server';
+  const sourceMesh = args.get('--fixture-mesh');
+  if (!sourceMesh) throw new Error('load-from-other-server requires --fixture-mesh');
+  // --fixture-missing-asset: the scene names a mesh no server has, so the
+  // restore must fail truthfully instead of reporting it opened.
+  const missingAsset = args.get('--fixture-missing-asset') === '1';
+  const mesh = readFileSync(sourceMesh), digest = missingAsset ? 'f'.repeat(64) : createHash('sha256').update(mesh).digest('hex');
+  const roots = await (await fetch(new URL('/api/roots', url))).json();
+  const localMesh = resolve(roots['generated-meshes'].path, digest + '.glb');
+  if (existsSync(localMesh)) throw new Error('fixture mesh is already in this server, pick another: ' + localMesh);
+  const lane = resolve(homedir(), '.local/state/kaminos', 'dark-modal-library-fixture-' + process.pid);
+  const name = 'fixture-study-' + process.pid + '.kaminos.json';
+  const localNamesake = resolve(roots.scenes.path, name);
+  let imported = null;
+  try {
+    mkdirSync(resolve(lane, 'scenes'), { recursive: true });
+    mkdirSync(resolve(lane, 'assets/generated-meshes'), { recursive: true });
+    if (!missingAsset) writeFileSync(resolve(lane, 'assets/generated-meshes', digest + '.glb'), mesh);
+    writeFileSync(resolve(lane, 'scenes', name), JSON.stringify({ schema: 'kaminos.scene.v1', version: 7, label: 'Fixture study', timestamp: new Date().toISOString(),
+      objects: [{ id: 'glb-fixture', type: 'glb', source: '/api/read?root=generated-meshes&path=' + digest + '.glb', fileName: digest + '.glb', label: 'Fixture mesh', transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } }] }));
+    writeFileSync(localNamesake, JSON.stringify({ schema: 'kaminos.scene.v1', version: 7, label: 'Unrelated local namesake', objects: [] }));
+    const result = await evaluate(ws, `(async () => {
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      document.getElementById('info-bar').textContent = '';
+      window.openSavedScene();
+      let picker = null;
+      for (let i = 0; i < 200 && !picker?.querySelector('[data-scene-store]'); i++) { picker = document.querySelector('.scene-load-picker'); await wait(50); }
+      const input = picker.querySelector('input');
+      input.value = 'dark-modal-library-fixture-${process.pid}'; input.dispatchEvent(new Event('input', { bubbles: true }));
+      const rows = [...picker.querySelectorAll('[data-scene-file]')].filter(row => !row.hidden).map(row => row.dataset.sceneFile);
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      let loaded = null;
+      for (let i = 0; i < (${missingAsset} ? 48 : 160); i++) { await wait(125); const labels = window.kaminosSceneObjectDebugState().map(o => o.label); if (labels.includes('Fixture mesh')) { loaded = labels; break; } }
+      await wait(500);
+      const info = document.getElementById('info-bar').textContent;
+      const saved = await window.saveScene?.({ result: true });
+      return { rows, loaded, info, saved };
+    })()`, { timeoutMs: 60000 });
+    const scenes = await (await fetch(new URL('/api/browse?root=scenes&path=', url))).json();
+    imported = (scenes.entries || []).map(entry => entry.name).find(entry => entry.startsWith('fixture-study-' + process.pid + '_')) || null;
+    lastEvidence.loadFromOtherServer = { ...result, imported, meshImported: existsSync(localMesh), namesake: JSON.parse(readFileSync(localNamesake, 'utf8')).label };
+    const e = lastEvidence.loadFromOtherServer;
+    if (e.rows.length !== 1 || e.rows[0] !== name) throw new Error('fixture store scene not listed: ' + JSON.stringify(e.rows));
+    if (missingAsset) {
+      if (e.loaded || /^Opened/.test(e.info) || e.saved?.ok) throw new Error('a scene whose mesh is unavailable was reported as opened or saved: ' + JSON.stringify(e));
+      if (!/unavailable from/.test(e.info)) throw new Error('failed restore did not name the unavailable asset: ' + JSON.stringify(e.info));
+      return;
+    }
+    if (!e.loaded) throw new Error('scene from another server did not load its mesh: ' + JSON.stringify(e));
+    if (!e.imported || !e.meshImported) throw new Error('import did not bring the scene and its mesh here: ' + JSON.stringify(e));
+    if (!e.saved?.ok || e.saved.filename !== e.imported) throw new Error('Save did not write the imported copy: ' + JSON.stringify({ saved: e.saved, imported: e.imported }));
+    if (e.namesake !== 'Unrelated local namesake') throw new Error('importing or saving touched the local same-named scene: ' + JSON.stringify(e));
+  } finally {
+    rmSync(lane, { recursive: true, force: true });
+    rmSync(localNamesake, { force: true });
+    if (imported) await fetch(new URL('/api/delete-scene?name=' + encodeURIComponent(imported), url));
+    rmSync(localMesh, { force: true });
+  }
 }
 
 async function runNavigationDepthIndexScenario(ws) {
@@ -5542,6 +5971,22 @@ try {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
+  } else if (scenario === 'mesh-asset-arrival') {
+    await runMeshAssetArrivalScenario(ws);
+  } else if (scenario === 'snap-ground-level') {
+    await runSnapGroundLevelScenario(ws);
+  } else if (scenario === 'toolbar-rotate-live') {
+    await runToolbarRotateLiveScenario(ws);
+  } else if (scenario === 'arrival-auto-level') {
+    await runArrivalAutoLevelScenario(ws);
+  } else if (scenario === 'export-and-save-as-names') {
+    await runExportAndSaveAsNamesScenario(ws);
+  } else if (scenario === 'load-picker') {
+    await runLoadPickerScenario(ws);
+  } else if (scenario === 'load-from-other-server') {
+    await runLoadFromOtherServerScenario(ws);
+  } else if (scenario === 'mesh-asset-append-arrival') {
+    await runMeshAssetAppendArrivalScenario(ws, args.get('--append-url'));
   } else if (scenario === 'navigation-depth-index') {
     await runNavigationDepthIndexScenario(ws);
   } else if (scenario === 'modal-pivot-visibility') {

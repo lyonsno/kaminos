@@ -4,6 +4,7 @@
 import http.server
 import copy
 import fcntl
+import glob
 import hashlib
 import json
 import math
@@ -2112,6 +2113,68 @@ def parse_server_arguments(argv):
 
 # Directories the browse API can access
 SCENES_DIR = Path(os.environ.get("KAMINOS_SCENES_DIR", ROOT / "scenes")).expanduser().resolve()
+
+# Where other Kaminos servers on this machine keep scenes: copied lane stores,
+# shared stores, and the scene folders of sibling checkouts beside this one.
+# KAMINOS_SCENE_LIBRARY_GLOBS (os.pathsep-separated) replaces the defaults.
+SCENE_LIBRARY_DEFAULT_GLOBS = (
+    "~/.local/state/kaminos/*/scenes",
+    "~/.local/share/kaminos/*/scenes",
+    str(ROOT.parent / "*" / "scenes"),
+)
+
+
+def scene_library_import_dependency(source, store):
+    """Make one /api/read source of an imported scene resolvable here.
+
+    Generated meshes are named by their SHA-256, so a copy found beside the
+    originating store (or in another lane's assets) is verified and copied into
+    this server's generated-meshes root. Other sources are reported missing
+    when this server cannot read them."""
+    query = parse_qs(urlparse(source).query)
+    root, path = (query.get("root") or [""])[0], (query.get("path") or [""])[0]
+    local_root = BROWSE_ROOTS.get(root)
+    if local_root is None or not path:
+        return {"source": source, "status": "missing"}
+    root_path = Path(local_root).resolve()
+    destination = Path(local_root) / path
+    # Anything at the destination that leaves the root (a symlink, ..) is
+    # neither trusted as present nor written through.
+    if destination.is_symlink() or not destination.resolve().is_relative_to(root_path):
+        return {"source": source, "status": "missing", "reason": "destination outside this server's root"}
+    if destination.is_file():
+        return {"source": source, "status": "present"}
+    match = re.fullmatch(r"([0-9a-f]{64})\.glb", path)
+    if root == "generated-meshes" and match:
+        candidates = [store.parent / "assets" / "generated-meshes" / path]
+        candidates += [Path(p) for p in glob.glob(os.path.expanduser("~/.local/state/kaminos/*/assets/generated-meshes/" + path))]
+        candidates.append(Path(os.path.expanduser("~/.local/state/kaminos/assets/generated-meshes")) / path)
+        for candidate in candidates:
+            try:
+                data = candidate.read_bytes()
+            except OSError:
+                continue
+            if hashlib.sha256(data).hexdigest() == match.group(1):
+                root_path.mkdir(parents=True, exist_ok=True)
+                staging = root_path / f".{path}.{uuid.uuid4().hex}.tmp"
+                staging.write_bytes(data)
+                os.replace(staging, root_path / path)
+                return {"source": source, "status": "imported", "from": str(candidate)}
+    return {"source": source, "status": "missing"}
+
+
+def scene_library_stores():
+    configured = os.environ.get("KAMINOS_SCENE_LIBRARY_GLOBS")
+    patterns = configured.split(os.pathsep) if configured else SCENE_LIBRARY_DEFAULT_GLOBS
+    own = Path(SCENES_DIR).resolve()
+    stores = {}
+    for pattern in patterns:
+        for match in sorted(glob.glob(os.path.expanduser(pattern))):
+            path = Path(match).resolve()
+            if path == own or not path.is_dir():
+                continue
+            stores[hashlib.sha1(str(path).encode()).hexdigest()[:12]] = path
+    return stores
 SCENES_DIR.mkdir(parents=True, exist_ok=True)
 KAMINOS_ASSETS_DIR = Path(os.environ.get(
     "KAMINOS_ASSETS_DIR",
@@ -3195,6 +3258,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json({"error": str(error)}, 400)
             except FileNotFoundError as error:
                 self.send_json({"error": str(error)}, 404)
+        elif parsed.path == "/api/scene-library":
+            self.handle_scene_library(parse_qs(parsed.query))
+        elif parsed.path == "/api/scene-library-read":
+            self.handle_scene_library_read(parse_qs(parsed.query))
         elif parsed.path == "/api/assets":
             self.handle_assets(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
@@ -3240,6 +3307,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_mesh_generation_origin()
         elif parsed.path == "/api/ingest-mesh":
             self.handle_ingest_mesh()
+        elif parsed.path == "/api/scene-library-import":
+            self.handle_scene_library_import()
         elif parsed.path == "/api/save-scene":
             self.handle_save_scene()
         elif parsed.path == "/api/run-pipeline":
@@ -3771,14 +3840,34 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "Invalid JSON"}, 400)
             return
 
-        # Check for overwrite hint
-        hint = data.pop("_filename", None)
-        if hint:
-            safe_hint = "".join(c for c in hint if c.isalnum() or c in "._-")
-            if safe_hint and (SCENES_DIR / safe_hint).exists():
-                filename = safe_hint
-            else:
-                hint = None  # fall through to new file
+        # Save As with a chosen name: sanitized into the scenes directory, and
+        # an existing file is only replaced when the caller confirms it.
+        save_as_name = data.pop("_saveAsName", None)
+        overwrite = data.pop("_overwrite", False) is True
+        if save_as_name is not None:
+            stem = Path(str(save_as_name).strip()).name
+            if stem.endswith(".kaminos.json"):
+                stem = stem[: -len(".kaminos.json")]
+            stem = "-".join(stem.split())
+            stem = "".join(c for c in stem if c.isalnum() or c in "._-").strip(".-")
+            if not stem:
+                self.send_json({"error": "Scene name has no usable characters"}, 400)
+                return
+            filename = f"{stem}.kaminos.json"
+            if (SCENES_DIR / filename).exists() and not overwrite:
+                self.send_json({"error": f"{filename} already exists", "exists": filename}, 409)
+                return
+            data.pop("_filename", None)
+            hint = filename
+        else:
+            # Check for overwrite hint
+            hint = data.pop("_filename", None)
+            if hint:
+                safe_hint = "".join(c for c in hint if c.isalnum() or c in "._-")
+                if safe_hint and (SCENES_DIR / safe_hint).exists():
+                    filename = safe_hint
+                else:
+                    hint = None  # fall through to new file
 
         if not hint:
             # Generate new filename from model name and timestamp
@@ -3997,6 +4086,85 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 "exists": path.exists(),
             }
         self.send_json(roots)
+
+    def _scene_library_local_client(self):
+        # Other servers' scenes are only offered to this machine itself; the
+        # listener may be reachable from the network.
+        host = (getattr(self, "client_address", None) or ("",))[0]
+        if host in ("127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"):
+            return True
+        self.send_json({"error": "Scenes from other servers are only available on this machine"}, 403)
+        return False
+
+    def _scene_library_scene_path(self, store_id, name):
+        store = scene_library_stores().get(store_id)
+        if store is None:
+            self.send_json({"error": "Unknown scene store"}, 404)
+            return None, None
+        if Path(name).name != name or not name.endswith(".kaminos.json"):
+            self.send_json({"error": "Invalid scene name"}, 400)
+            return None, None
+        scene_path = (store / name).resolve()
+        if not scene_path.is_relative_to(store.resolve()) or not scene_path.is_file():
+            self.send_json({"error": "Scene not found"}, 404)
+            return None, None
+        return store, scene_path
+
+    def handle_scene_library_import(self):
+        """Copy another server's scene into this server under a fresh name and
+        bring over the generated meshes it needs that only that server had."""
+        if not self._scene_library_local_client():
+            return
+        try:
+            request = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        except ValueError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        store, scene_path = self._scene_library_scene_path(str(request.get("store") or ""), str(request.get("name") or ""))
+        if store is None:
+            return
+        try:
+            document = json.loads(scene_path.read_text())
+        except (OSError, ValueError) as error:
+            self.send_json({"error": f"Scene unreadable: {error}"}, 400)
+            return
+        dependencies = [scene_library_import_dependency(obj.get("source"), store)
+                        for obj in document.get("objects") or [] if isinstance(obj, dict) and str(obj.get("source") or "").startswith("/api/read?")]
+        filename = f"{scene_path.name[: -len('.kaminos.json')]}_{uuid.uuid4().hex}.kaminos.json"
+        _atomic_write_json(SCENES_DIR / filename, document)
+        self.send_json({"saved": filename, "document": document, "dependencies": dependencies, "from": str(store.parent.name)})
+
+    def handle_scene_library(self, params):
+        """List scenes saved by other Kaminos servers on this machine (read-only)."""
+        if not self._scene_library_local_client():
+            return
+        stores = []
+        for store_id, path in scene_library_stores().items():
+            scenes = []
+            for scene_path in sorted(path.glob("*.kaminos.json")):
+                entry = {"name": scene_path.name, "label": "", "timestamp": ""}
+                try:
+                    data = json.loads(scene_path.read_text())
+                    entry["label"] = str(data.get("label") or (data.get("capture") or {}).get("label") or "")
+                    entry["timestamp"] = str(data.get("timestamp") or "")
+                except (OSError, ValueError) as error:
+                    entry["error"] = str(error)
+                scenes.append(entry)
+            if scenes:
+                stores.append({"id": store_id, "label": path.parent.name, "path": str(path), "scenes": scenes})
+        self.send_json({"stores": stores})
+
+    def handle_scene_library_read(self, params):
+        """Read one scene from another server's store; never writes there."""
+        if not self._scene_library_local_client():
+            return
+        store, scene_path = self._scene_library_scene_path((params.get("store") or [""])[0], (params.get("name") or [""])[0])
+        if store is None:
+            return
+        try:
+            self.send_json(json.loads(scene_path.read_text()))
+        except (OSError, ValueError) as error:
+            self.send_json({"error": f"Scene unreadable: {error}"}, 400)
 
     def handle_browse(self, params):
         """List directory contents. ?root=scratch&path=subdir"""

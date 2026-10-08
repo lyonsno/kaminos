@@ -75,11 +75,16 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('scene-add-menu').closest('nav'), 'authoring-add-slot');
   move(byId('navigation-input-mode').closest('label'), 'authoring-navigation-slot');
   // Child slots precede their parent slot so restoring is independent of order.
+  let exportButton = null;
   for (const button of document.querySelectorAll('#transform-bar > button')) {
     const action = button.getAttribute('onclick') || '';
-    if (/saveScene|scene-file-input/.test(action)) move(button, 'authoring-document-actions');
+    if (/exportGLB/.test(action)) exportButton = button;
+    else if (/saveScene|scene-file-input|openSavedScene/.test(action)) move(button, 'authoring-document-actions');
     else if (/setGizmoMode/.test(action)) move(button, 'authoring-gizmo-slot');
+    // Grounding sits with the transform it changes, visible without opening Object tools.
+    else if (/snapToGround|undoLeveling/.test(action)) move(button, 'authoring-transform-slot');
   }
+  if (exportButton) move(exportButton, 'authoring-document-actions');
   move(byId('composition-capture'), 'authoring-document-actions');
   move(byId('transform-bar'), 'authoring-object-tools');
   const slots = createControlSlots(document, entries);

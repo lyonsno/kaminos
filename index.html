@@ -79,6 +79,24 @@ body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !import
 #scene-add-menu-trigger { padding:7px 13px; }
 #scene-add-menu-popup { position:absolute; top:calc(100% + 4px); left:0; min-width:214px; padding:4px; border:1px solid #435159; border-radius:6px; background:#192023; box-shadow:0 8px 24px #000a; }
 #scene-add-menu-popup[hidden] { display:none; }
+#authoring-source-fire-light[hidden], #demo-buttons[hidden], #tb-undo-leveling[hidden] { display: none !important; }
+.file-name-prompt { position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center; background:#0008; }
+.file-name-prompt-panel { min-width:340px; max-width:min(520px, calc(100vw - 32px)); padding:14px; border:1px solid #3a4245; border-radius:6px; background:#141819; box-shadow:0 8px 28px #000a; font:11px 'SF Mono',monospace; color:#d7e1e3; }
+.file-name-prompt-title { margin-bottom:10px; font-size:12px; color:#eef4f5; }
+.file-name-prompt-row { display:flex; align-items:center; gap:4px; }
+.file-name-prompt-row input { flex:1; min-width:0; padding:6px 8px; border:1px solid #405157; border-radius:4px; background:#0d1011; color:#eef4f5; font:inherit; outline:none; }
+.file-name-prompt-row input:focus { border-color:#1976d2; }
+.file-name-prompt-ext { color:#8a9a9e; }
+.file-name-prompt-message { min-height:14px; margin:8px 0 4px; color:#e0b86a; }
+.file-name-prompt-actions { display:flex; justify-content:flex-end; gap:8px; }
+.file-name-prompt-actions button { padding:5px 12px; border:1px solid #405157; border-radius:4px; background:#1d2426; color:#d7e1e3; font:inherit; cursor:pointer; }
+.file-name-prompt-actions button[type="submit"] { background:#1976d2; border-color:#1976d2; color:white; }
+.scene-load-picker-panel { width:min(560px, calc(100vw - 32px)); }
+.scene-load-picker-list { max-height:min(52vh, 420px); overflow-y:auto; margin-top:8px; border:1px solid #2a3235; border-radius:4px; }
+.scene-load-picker-row { display:flex; flex-direction:column; gap:2px; width:100%; padding:7px 9px; border:0; border-bottom:1px solid #1f2628; background:transparent; color:#d7e1e3; font:inherit; text-align:left; cursor:pointer; }
+.scene-load-picker-row[hidden] { display:none; }
+.scene-load-picker-row:hover, .scene-load-picker-row.active { background:#1d3a4a; color:white; }
+.scene-load-picker-meta { color:#8a9a9e; font-size:10px; }
 #scene-add-menu-popup button { display:flex; width:100%; justify-content:space-between; gap:20px; padding:9px 10px; text-align:left; white-space:nowrap; }
 #scene-add-menu-popup small { color:#8fa1a6; font:10px 'SF Mono',monospace; }
 #local-liquid-performance .hint { margin:8px 0 0; color:#96a3a8; font:11px/1.5 'SF Mono',monospace; }
@@ -584,6 +602,9 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .volume-pyro-atlas-wrap { margin-top: 8px; border-top: 1px solid #282828; padding-top: 8px; }
 #volume-pyro-dynamic-atlas { width: 100%; height: 54px; border: 1px solid #333; border-radius: 6px; background: #080808; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.volume-flame-problems { margin-top: 8px; padding: 6px 8px; border: 1px solid #ff6b6b; border-radius: 4px; color: #ff8a8a; font-size: 11px; font-family: 'SF Mono', 'Fira Code', monospace; overflow-wrap: anywhere; }
+.volume-control-invalid { outline: 2px solid #ff6b6b; outline-offset: 1px; }
+.viewport-flame-problems { position: absolute; top: 56px; left: 16px; z-index: 12; max-width: min(560px, calc(100% - 32px)); box-sizing: border-box; padding: 6px 10px; border: 1px solid #ff6b6b; border-radius: 4px; background: rgba(30, 8, 8, 0.92); color: #ff9a9a; font: 11px/1.4 'SF Mono', 'Fira Code', monospace; overflow-wrap: anywhere; pointer-events: none; }
 .volume-presentation-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin: 8px 0; }
 .volume-presentation-switch .btn { margin: 0; min-height: 30px; font-size: 11px; }
 .volume-presentation-switch .btn.active { border-color: #4c9fba; background: #17333d; color: #d8f5ff; }
@@ -871,7 +892,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </section>
     <section id="selected-flame-properties" hidden><h2>Selected Flame</h2><div id="selected-flame-fields"></div></section>
 
-    <section id="authoring-source-fire-light">
+    <!-- Hidden from the sidebar (Noah, 2026-10-07). Saved compositions still store and
+         restore the gain, and witnesses drive these controls, so they stay in the page. -->
+    <section id="authoring-source-fire-light" hidden>
     <h2>Fire Light</h2>
     <div class="panel">
       <label class="import-mode">
@@ -987,7 +1010,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
     </div>
 
-    <div id="demo-buttons">
+    <!-- Hidden (Noah, 2026-10-07); witnesses still load the demo through this button. -->
+    <div id="demo-buttons" hidden>
       <h2>Demo Assets</h2>
       <div id="demo-list"></div>
     </div>
@@ -1012,13 +1036,13 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
     <div class="slider-row" style="margin-top: 10px;">
       <span class="slider-label">Exposure</span>
-      <input type="range" id="exposure-slider" min="0.2" max="4" step="0.1" value="1.5">
-      <span class="slider-val" id="exposure-val">1.5</span>
+      <input type="range" id="exposure-slider" min="0.2" max="4" step="0.1" value="1.1">
+      <span class="slider-val" id="exposure-val">1.1</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Env Intensity</span>
-      <input type="range" id="env-intensity-slider" min="0.1" max="5" step="0.1" value="1.0">
-      <span class="slider-val" id="env-intensity-val">1.0</span>
+      <input type="range" id="env-intensity-slider" min="0.1" max="5" step="0.1" value="0.7">
+      <span class="slider-val" id="env-intensity-val">0.7</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Rotation</span>
@@ -1027,15 +1051,15 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div class="slider-row" style="margin-top: 6px;">
       <label style="font-size: 10px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
-        <input type="checkbox" id="show-env-bg"> Show Map
+        <input type="checkbox" id="show-env-bg" checked> Show Map
       </label>
     </div>
-    <div class="slider-row" id="blur-row" style="display: none;">
+    <div class="slider-row" id="blur-row">
       <span class="slider-label">Blur</span>
       <input type="range" id="env-blur-slider" min="0" max="1" step="0.01" value="0.4">
       <span class="slider-val" id="env-blur-val">0.4</span>
     </div>
-    <div id="env-backdrop-controls" style="display: none;">
+    <div id="env-backdrop-controls">
       <div class="slider-row">
         <label class="slider-label" for="env-bg-brightness">BG Brightness</label>
         <input type="range" id="env-bg-brightness" min="0" max="5" step="0.05" value="0.6">
@@ -1069,23 +1093,23 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div id="gtao-shape-controls">
       <div class="slider-row">
         <span class="slider-label">Radius</span>
-        <input type="range" id="ao-radius" min="0.5" max="10" step="0.1" value="4.0">
-        <span class="slider-val" id="ao-radius-val">4.00</span>
+        <input type="range" id="ao-radius" min="0.5" max="20" step="0.1" value="10.0">
+        <span class="slider-val" id="ao-radius-val">10.00</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Scale</span>
-        <input type="range" id="ao-scale" min="0.1" max="5" step="0.05" value="1.62">
-        <span class="slider-val" id="ao-scale-val">1.62</span>
+        <input type="range" id="ao-scale" min="0.1" max="5" step="0.05" value="0.75">
+        <span class="slider-val" id="ao-scale-val">0.75</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Thickness</span>
-        <input type="range" id="ao-thickness" min="0.1" max="5" step="0.05" value="1.81">
-        <span class="slider-val" id="ao-thickness-val">1.81</span>
+        <input type="range" id="ao-thickness" min="0.1" max="5" step="0.05" value="1.45">
+        <span class="slider-val" id="ao-thickness-val">1.45</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Falloff</span>
-        <input type="range" id="ao-falloff" min="0" max="1" step="0.01" value="0.74">
-        <span class="slider-val" id="ao-falloff-val">0.74</span>
+        <input type="range" id="ao-falloff" min="0" max="1" step="0.01" value="0.48">
+        <span class="slider-val" id="ao-falloff-val">0.48</span>
       </div>
       </div>
     </div>
@@ -1333,6 +1357,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div id="volume-primary-control-root" data-volume-control-root="primary">
     <div class="panel" id="volume-basin-panel" aria-label="Basin save and load">
       <h2>Basins</h2>
+      <div class="volume-flame-problems" id="volume-flame-settings-problems" role="alert" hidden></div>
       <div class="volume-actions">
         <input id="settings-preset-label" class="search-input" type="text" placeholder="Preset name" aria-label="Preset name">
         <button class="btn" id="settings-preset-save">Save</button>
@@ -3152,6 +3177,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </div>
 
 <div id="viewport">
+  <div class="viewport-flame-problems" id="viewport-flame-settings-problems" role="alert" hidden></div>
   <nav class="scene-top-menu" aria-label="Scene menu">
     <div id="scene-add-menu">
       <button type="button" id="scene-add-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="scene-add-menu-popup" title="Add scene object (Shift+A)">Add</button>
@@ -3416,7 +3442,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <button class="tb-btn" id="tb-backface" onclick="toggleBackface()" title="Show only backfaces (diagnose inside-out)">Backface</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" id="tb-opaque" onclick="forceOpaque()" title="Force all materials opaque (fix transparent textures)">Opaque</button>
-    <button class="tb-btn" onclick="snapToGround()" title="Snap lowest vertex to ground plane">Snap Ground</button>
+    <button class="tb-btn" onclick="snapToGround()" title="Level onto its base if it is clearly a few degrees off, then rest on the ground plane">Snap Ground</button>
+    <button class="tb-btn" id="tb-undo-leveling" onclick="undoLeveling()" hidden>Undo Leveling</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" id="tb-gizmo-translate" onclick="setGizmoMode('translate')" title="Translate gizmo (W)">Move</button>
     <button class="tb-btn" id="tb-gizmo-rotate" onclick="setGizmoMode('rotate')" title="Rotate gizmo (E)">Rotate</button>
@@ -3424,11 +3451,11 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <button class="tb-btn" id="tb-gizmo-off" onclick="setGizmoMode(null)" title="Disable gizmo (Q)">No Gizmo</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" onclick="resetTransform()" title="Reset transforms">Reset</button>
-    <button class="tb-btn primary" onclick="exportGLB()" title="Save corrected GLB">Save GLB</button>
+    <button class="tb-btn primary" onclick="exportGLB()" title="Export the selected object or group as a GLB">Export GLB</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" onclick="saveScene()" title="Save/overwrite scene (Ctrl+S)">Save</button>
-    <button class="tb-btn" onclick="saveSceneAs()" title="Save as new scene (Ctrl+Shift+S)">Save As</button>
-    <button class="tb-btn" onclick="document.getElementById('scene-file-input').click()" title="Load scene (Ctrl+O)">Load</button>
+    <button class="tb-btn" onclick="saveSceneAs({ promptName: true })" title="Save as a named scene (Ctrl+Shift+S)">Save As</button>
+    <button class="tb-btn" onclick="openSavedScene()" title="Open a saved scene (Ctrl+O)">Load</button>
     <input type="file" id="scene-file-input" accept=".json,.kaminos" style="display:none">
   </div>
   <div id="greenroom-preview-controls" hidden>
@@ -3515,7 +3542,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <p class="rendering-description">Transported-light gain adjusts surface and distributed smoke illumination together; direct flame emission is unchanged. Surface scattering uses the distributed incident field even during legacy smoke comparison. Surface-to-surface bounce and repeated smoke scattering are not included.</p></div>
       <h2>Flame field</h2>
       <p class="rendering-description">The flame-derived field lights scene surfaces. This gain adjusts its receiving pass; it does not change the visible flame or shared point source.</p>
-      <p class="rendering-description">Flame field gain and test geometry remain in the authoring light inspector.</p>
     </div>
     <div id="authored-mix-panel-content" role="tabpanel" aria-labelledby="right-tab-mix">
     <div class="volume-authored-mix-kicker">Volume</div>
@@ -3882,6 +3908,11 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
+import { assetArrivalFramingWindow, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
+import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
+import { exportCloneInWorld } from './scene-export.mjs';
+import { pickSavedScene } from './scene-load-picker.mjs';
+import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
@@ -3989,7 +4020,7 @@ let currentEnvName = null;
 let environmentRecipes = {};
 let environmentLoadToken = 0;
 let rimLight = null;
-let showEnvBg = false;
+let showEnvBg = true;
 let currentEnvMap = null;
 let glbSourceScene = null; // raw loaded gltf scene for export
 let glbFileName = 'model.glb';
@@ -6673,7 +6704,8 @@ async function resetSelectedSplatCorrection() {
 }
 
 function updateTransformInspector() {
-  if (flameDomainGuide) flameDomainGuide.visible = viewportHelpersVisible&&(sceneSelectionMembers().includes(FLAME_EMITTER_ID)||activeSceneFieldId==='flame-field');
+  syncLevelingButton();
+  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended&&viewportHelpersVisible&&(sceneSelectionMembers().includes(FLAME_EMITTER_ID)||activeSceneFieldId==='flame-field');
   const inspector = document.getElementById('transform-inspector');
   const empty = document.getElementById('transform-inspector-empty');
   const fields = document.getElementById('transform-inspector-fields');
@@ -6823,6 +6855,7 @@ window.kaminosCameraDebugState = function() {
     target: controls ? controls.target.toArray() : null,
     projectionMatrix: camera ? Array.from(camera.projectionMatrix.elements) : null,
     matrixWorldInverse: camera ? Array.from(camera.matrixWorldInverse.elements) : null,
+    groundY: groundPlane ? groundPlane.position.y : null,
   };
 };
 window.kaminosSetCameraDebugPose = function(pose = {}) {
@@ -7362,6 +7395,31 @@ window.createSceneGroupFromAllObjects = function(label = null) {
   catch(error){setInfo(error.message);return null;}
 };
 
+function sceneObjectWorldBoundsState(object) {
+  if (!object) return null;
+  try {
+    object.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(object, true);
+    return box.isEmpty() ? null : { min: box.min.toArray(), max: box.max.toArray() };
+  } catch (error) {
+    return { error: error?.message || String(error) };
+  }
+}
+
+window.kaminosSceneObjectScreenExtentDebugState = function(id) {
+  const entry = sceneObjects.find(item => item.id === id);
+  if (!entry?.object || !camera) return null;
+  camera.updateMatrixWorld();
+  const points = sceneObjectWorldPoints(entry.object), v = new THREE.Vector3();
+  let left = Infinity, right = -Infinity, bottom = Infinity, top = -Infinity, behind = 0;
+  for (let i = 0; i < points.length; i += 3) {
+    v.set(points[i], points[i + 1], points[i + 2]).project(camera);
+    if (!(v.z > -1 && v.z < 1)) behind++;
+    left = Math.min(left, v.x); right = Math.max(right, v.x); bottom = Math.min(bottom, v.y); top = Math.max(top, v.y);
+  }
+  return { vertexCount: points.length / 3, left, right, bottom, top, outsideDepth: behind, overlayTopNdc: viewportOverlayTopNdc() };
+};
+
 window.kaminosSceneObjectDebugState = function() {
   return sceneObjects.map(record => ({
     id: record.id,
@@ -7375,6 +7433,8 @@ window.kaminosSceneObjectDebugState = function() {
     selected:sceneSelectionMembers().includes(record.id),
     objectVisible:record.object.visible,
     transform: sceneObjectTransformState(record.object),
+    worldBounds: sceneObjectWorldBoundsState(record.object),
+    arrival: record.object?.userData?.kaminosAssetArrival ? { ...record.object.userData.kaminosAssetArrival } : null,
     sceneTransform: record.sceneTransform ? cloneTransformState(record.sceneTransform) : null,
     splat: record.splat || null,
     image: record.image || null,
@@ -10681,8 +10741,9 @@ const HDR_ENVS = {
   studio: {
     label: 'Studio',
     url: './assets/hdr/studio_small_09_1k.hdr',
-    exposure: 1.5,
-    intensity: 1.0,
+    // Noah's interim viewing defaults (2026-10-07), until the new lighting lands.
+    exposure: 1.1,
+    intensity: 0.7,
   },
   sunset: {
     label: 'Sunset',
@@ -11370,6 +11431,12 @@ async function initScene() {
   const depthTexNode = texture(depthRT.texture);
   const normalTexNode = texture(normalTexture);
   aoPass = aoCompute(depthTexNode, normalTexNode, camera);
+  // The sliders own the AO starting values; the addon's constructor defaults
+  // are not Kaminos defaults.
+  for (const [id, key] of [['ao-radius', 'radius'], ['ao-scale', 'scale'], ['ao-thickness', 'thickness'], ['ao-falloff', 'distanceFallOff']]) {
+    const value = parseFloat(document.getElementById(id)?.value);
+    if (Number.isFinite(value)) aoPass[key].value = value;
+  }
   configureMaterialSideAODepth(aoPass, { scene, camera, depthRT, depthMaterial }, THREE.RendererUtils);
 
   const aoResolved = convertToTexture(aoPass.getTextureNode());
@@ -12223,8 +12290,157 @@ async function showPBRPreview(options = {}) {
 }
 
 // --- GLB Inspector ---
+// Imported assets land resting on the ground at the shared size. A fresh
+// arrival (scene just cleared) sits at the origin and gets a framed camera; an
+// append lands under the orbit pivot and leaves camera and lighting alone.
+function applyAssetArrival(object, mode) {
+  if (!mode) return null;
+  object.updateWorldMatrix(true, true);
+  const box = new THREE.Box3().setFromObject(object, true);
+  if (box.isEmpty()) return null;
+  const placement = computeAssetArrivalPlacement({
+    bounds: { min: box.min.toArray(), max: box.max.toArray() },
+    rootPosition: object.position.toArray(),
+    groundY: groundPlane ? groundPlane.position.y : 0,
+    anchor: mode === 'append' && controls ? [controls.target.x, controls.target.z] : [0, 0],
+  });
+  if (!placement) return null;
+  object.scale.multiplyScalar(placement.scale);
+  object.position.fromArray(placement.position);
+  const leveling = levelObjectOnArrival(object, mode === 'append' && controls ? [controls.target.x, controls.target.z] : [0, 0]);
+  object.userData.kaminosAssetArrival = { mode, scale: placement.scale, sourceDiagonal: placement.sourceDiagonal, leveledDeg: leveling?.tiltDeg ?? 0 };
+  return placement;
+}
+
+// Arrivals that are clearly a few degrees off their base (Snap Ground's rule)
+// are stood level, then re-centred on the anchor. The object is not yet in the
+// scene here, so its local transform is its world transform.
+function levelObjectOnArrival(object, anchor) {
+  const { analysis, choice } = sceneObjectRestingAnalysis(object);
+  if (!analysis || choice.reason !== 'level') return null;
+  const delta = levelingWorldDelta({ plane: choice.plane, hullPoints: analysis.hullPoints, groundY: groundPlane ? groundPlane.position.y : 0 });
+  object.updateWorldMatrix(true, false);
+  const storedQuaternion = object.getWorldQuaternion(new THREE.Quaternion());
+  object.matrixWorld.clone().premultiply(delta).decompose(object.position, object.quaternion, object.scale);
+  object.updateWorldMatrix(true, true);
+  const box = new THREE.Box3().setFromObject(object, true);
+  object.position.x += anchor[0] - (box.min.x + box.max.x) / 2;
+  object.position.z += anchor[1] - (box.min.z + box.max.z) / 2;
+  object.updateWorldMatrix(true, true);
+  // Arrival leveling is remembered as the orientation the file stored and the
+  // orientation leveling left, saved with the scene object. Undo Leveling is
+  // offered exactly while the object sits in the leveled orientation (history
+  // and later rotations show or hide it) and always returns to the stored
+  // orientation. Later Snap Ground leveling is undone with Cmd/Ctrl+Z instead.
+  object.userData.kaminosLeveling = {
+    storedQuaternion: storedQuaternion.toArray(),
+    leveledQuaternion: object.getWorldQuaternion(new THREE.Quaternion()).toArray(),
+    tiltDeg: choice.plane.tiltDeg,
+  };
+  return { tiltDeg: choice.plane.tiltDeg };
+}
+
+function levelingStillApplied(object) {
+  const record = object?.userData?.kaminosLeveling;
+  if (!record) return null;
+  object.updateWorldMatrix(true, false);
+  const now = object.getWorldQuaternion(new THREE.Quaternion());
+  return Math.abs(now.dot(new THREE.Quaternion().fromArray(record.leveledQuaternion))) > 1 - 1e-7 ? record : null;
+}
+
+function syncLevelingButton() {
+  const button = document.getElementById('tb-undo-leveling');
+  if (!button) return;
+  const record = levelingStillApplied(currentMesh);
+  button.hidden = !record;
+  if (record) button.title = `Turn it back ${record.tiltDeg.toFixed(1)}° to how the file stored it, still resting on the ground`;
+}
+
+window.undoLeveling = function() {
+  const object = currentMesh, record = levelingStillApplied(object);
+  if (!record) return;
+  object.updateWorldMatrix(true, true);
+  const box = new THREE.Box3().setFromObject(object, true);
+  const pivot = new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2);
+  const toStored = new THREE.Quaternion().fromArray(record.storedQuaternion)
+    .multiply(object.getWorldQuaternion(new THREE.Quaternion()).invert());
+  const back = new THREE.Matrix4().makeTranslation(pivot.x, pivot.y, pivot.z)
+    .multiply(new THREE.Matrix4().makeRotationFromQuaternion(toStored))
+    .multiply(new THREE.Matrix4().makeTranslation(-pivot.x, -pivot.y, -pivot.z));
+  const points = sceneObjectWorldPoints(object), v = new THREE.Vector3();
+  let lowest = Infinity;
+  for (let i = 0; i < points.length; i += 3) lowest = Math.min(lowest, v.set(points[i], points[i + 1], points[i + 2]).applyMatrix4(back).y);
+  if (Number.isFinite(lowest)) back.premultiply(new THREE.Matrix4().makeTranslation(0, (groundPlane ? groundPlane.position.y : 0) - lowest, 0));
+  if (!commitToolbarPose(object, toolbarPoseFromWorld(object, object.matrixWorld.clone().premultiply(back)))) return;
+  syncLevelingButton();
+  setInfo(`Undid leveling (${record.tiltDeg.toFixed(1)}°)`);
+};
+
+function sceneObjectWorldGeometry(object, { triangles: withTriangles = false } = {}) {
+  object.updateWorldMatrix(true, true);
+  const meshes = [];
+  object.traverse(child => { if (child.isMesh && child.geometry?.getAttribute('position')) meshes.push(child); });
+  const total = meshes.reduce((sum, mesh) => sum + mesh.geometry.getAttribute('position').count, 0);
+  const points = new Float32Array(total * 3), v = new THREE.Vector3();
+  const triangles = [];
+  let base = 0;
+  for (const mesh of meshes) {
+    const position = mesh.geometry.getAttribute('position');
+    for (let i = 0; i < position.count; i++) {
+      v.fromBufferAttribute(position, i).applyMatrix4(mesh.matrixWorld);
+      points[3 * (base + i)] = v.x; points[3 * (base + i) + 1] = v.y; points[3 * (base + i) + 2] = v.z;
+    }
+    if (withTriangles) {
+      const index = mesh.geometry.index;
+      const count = index ? index.count : position.count;
+      for (let i = 0; i < count; i++) triangles.push(base + (index ? index.getX(i) : i));
+    }
+    base += position.count;
+  }
+  return { points, triangles: withTriangles ? triangles : null };
+}
+
+function sceneObjectWorldPoints(object) {
+  return sceneObjectWorldGeometry(object).points;
+}
+
+// The Workbench transform toolbar floats over the top of the canvas; in
+// Authoring it lives in the inspector. Only a toolbar actually overlapping the
+// canvas's top half shrinks the framing window.
+function viewportOverlayTopNdc() {
+  const canvasRect = renderer.domElement.getBoundingClientRect();
+  const bar = document.getElementById('transform-bar');
+  const barRect = bar?.classList.contains('visible') ? bar.getBoundingClientRect() : null;
+  if (!barRect || !(canvasRect.height > 0) || !(barRect.width > 0 && barRect.height > 0)) return 1;
+  const overlaps = barRect.left < canvasRect.right && barRect.right > canvasRect.left
+    && barRect.bottom > canvasRect.top && barRect.top < canvasRect.top + canvasRect.height / 2;
+  if (!overlaps) return 1;
+  return 1 - 2 * Math.max(0, barRect.bottom - canvasRect.top) / canvasRect.height;
+}
+
+function frameAssetArrival(object) {
+  if (!object || !camera || !controls) return false;
+  const framing = computeAssetArrivalFraming({
+    points: sceneObjectWorldPoints(object),
+    fovDeg: camera.fov,
+    aspect: camera.aspect,
+    window: assetArrivalFramingWindow({ overlayTopNdc: viewportOverlayTopNdc() }),
+  });
+  if (!framing) return false;
+  camera.position.fromArray(framing.position);
+  controls.target.fromArray(framing.target);
+  camera.near = Math.min(camera.near, framing.near);
+  camera.far = Math.max(camera.far, framing.far);
+  camera.updateProjectionMatrix();
+  controls.update();
+  window._kaminosDirty?.();
+  return true;
+}
+
 async function showGLB(file, options = {}) {
-  if (shouldClearSceneForImport(options)) clearScene();
+  const cleared = shouldClearSceneForImport(options);
+  if (cleared) clearScene();
+  const arrival = resolveAssetArrivalMode({ arrival: options.arrival, normalize: options.normalize, cleared });
   const loadToken = sceneMutationToken;
   const isBlob = typeof file !== 'string';
   const url = isBlob ? URL.createObjectURL(file) : file;
@@ -12245,14 +12461,7 @@ async function showGLB(file, options = {}) {
         reject(new Error('stale async GLB load ignored'));
         return;
       }
-      if (options.normalize !== false) {
-        const box = new THREE.Box3().setFromObject(model);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3()).length();
-        model.position.sub(center);
-        const scale = 2.0 / size;
-        model.scale.setScalar(scale);
-      }
+      const arrivalPlacement = applyAssetArrival(model, arrival);
       model.traverse(child => {
         if (child.isMesh) {
           child.castShadow = true;
@@ -12286,6 +12495,7 @@ async function showGLB(file, options = {}) {
         });
       }
       document.getElementById('transform-bar').classList.add('visible');
+      if (arrival === 'fresh' && arrivalPlacement) frameAssetArrival(model);
       setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
       resolve(model);
     }, undefined, (err) => {
@@ -12298,7 +12508,9 @@ async function showGLB(file, options = {}) {
 
 // --- OBJ Inspector ---
 async function showOBJ(objFile, mtlFile, options = {}) {
-  if (shouldClearSceneForImport(options)) clearScene();
+  const cleared = shouldClearSceneForImport(options);
+  if (cleared) clearScene();
+  const arrival = resolveAssetArrivalMode({ arrival: options.arrival, normalize: options.normalize, cleared });
   const objUrl = URL.createObjectURL(objFile);
   glbFileName = objFile.name;
   modelSourceUrl = objFile.name;
@@ -12327,14 +12539,7 @@ async function showOBJ(objFile, mtlFile, options = {}) {
     objLoader.load(objUrl, obj => {
       URL.revokeObjectURL(objUrl);
       glbSourceScene = obj;
-      if (options.normalize !== false) {
-        const box = new THREE.Box3().setFromObject(obj);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3()).length();
-        obj.position.sub(center);
-        const scale = 2.0 / size;
-        obj.scale.setScalar(scale);
-      }
+      const arrivalPlacement = applyAssetArrival(obj, arrival);
       obj.traverse(child => {
         if (child.isMesh) {
           child.castShadow = true;
@@ -12360,6 +12565,7 @@ async function showOBJ(objFile, mtlFile, options = {}) {
         fileName: options.metadata?.fileName ?? glbFileName,
       });
       document.getElementById('transform-bar').classList.add('visible');
+      if (arrival === 'fresh' && arrivalPlacement) frameAssetArrival(obj);
       setInfo('OBJ Inspector — orbit to inspect | use toolbar to fix orientation');
       resolve(obj);
     }, undefined, (err) => {
@@ -16959,12 +17165,91 @@ function activeVolumeSettingsPresetStatus() {
 let volumeSettingsPresetIndexSummary = null;
 
 function showVolumeSettingsPresetStatus() {
+  const problems = describeFlameSettingsProblems();
   const active = activeVolumeSettingsPresetStatus();
   const summary = volumeSettingsPresetIndexSummary;
   volumeSettingsPresetStatus(
-    [active.text, summary?.text].filter(Boolean).join(' || '),
-    active.warning || Boolean(summary?.warning),
+    [problems.text, active.text, summary?.text].filter(Boolean).join(' || '),
+    problems.warning || active.warning || Boolean(summary?.warning),
   );
+}
+
+// The flame controls the loaded page holds invalid values for; while any
+// exists, every flame-control press is refused.
+function describeFlameSettingsProblems() {
+  const problems = window.__kaminosFlameSettingsProblems || [];
+  if (!problems.length) return { text: '', warning: false };
+  return {
+    text: `FLAME EDITS REFUSED: ${problems.length} invalid control${problems.length === 1 ? '' : 's'} (${problems.map(flameSettingsProblemLabel).join(', ')}); ${problems.map(problem => problem.message).join('; ')}`,
+    warning: true,
+  };
+}
+
+// Show the problems at the top of the Basins card and outline each invalid
+// control where it sits, with the reason on hover.
+function showFlameSettingsProblems() {
+  const problems = describeFlameSettingsProblems();
+  for (const id of ['volume-flame-settings-problems', 'viewport-flame-settings-problems']) {
+    const banner = document.getElementById(id);
+    if (!banner) continue;
+    banner.textContent = problems.text;
+    banner.hidden = !problems.text;
+  }
+  for (const el of document.querySelectorAll('.volume-control-invalid')) {
+    el.classList.remove('volume-control-invalid');
+    if (Object.hasOwn(el.dataset, 'volumeInvalidPriorTitle')) {
+      el.title = el.dataset.volumeInvalidPriorTitle;
+      delete el.dataset.volumeInvalidPriorTitle;
+    }
+  }
+  for (const problem of window.__kaminosFlameSettingsProblems || []) {
+    const source = document.getElementById(problem.id);
+    for (const el of [source, ...document.querySelectorAll(`[data-authoring-alias="${problem.id}"]`)]) {
+      if (!el?.classList) continue;
+      if (!el.classList.contains('volume-control-invalid')) el.dataset.volumeInvalidPriorTitle = el.title || '';
+      el.classList.add('volume-control-invalid');
+      el.title = problem.message;
+    }
+  }
+}
+
+// A problem named the way the panel shows it: the control's row label, or
+// its id when it has none.
+function flameSettingsProblemLabel(problem) {
+  // Only the label's own text: a help mark ("i") can sit inside it.
+  const labelEl = document.getElementById(problem.id)?.closest?.('.slider-row')?.querySelector('.slider-label');
+  const label = labelEl ? [...labelEl.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('').trim() : '';
+  return label || problem.id;
+}
+
+// A refused flame press, shown above the volume canvas where the operator is
+// looking (the info bar paints under it).
+function showFlameEditRefused(error) {
+  const message = `Flame edit refused: ${error.message}`;
+  setInfo(message);
+  const banner = document.getElementById('viewport-flame-settings-problems');
+  if (banner) {
+    banner.textContent = message;
+    banner.hidden = false;
+  }
+  // Some refusals pass (a replay in progress); fall back to the load state.
+  clearTimeout(showFlameEditRefused.timer);
+  showFlameEditRefused.timer = setTimeout(showFlameSettingsProblems, 4000);
+}
+
+// Run the flame settings edit check on the loaded page once every control is
+// set, so invalid controls show at load instead of as sliders that ignore the
+// mouse.
+function recordFlameSettingsProblems() {
+  try {
+    window.__kaminosFlameSettingsProblems = Object.freeze(flameSettingsStateProblems(flameSettingsState()));
+  } catch (error) {
+    window.__kaminosFlameSettingsProblems = Object.freeze([{ id: 'flame-settings', message: `flame settings check failed: ${error.message}` }]);
+  }
+  if (window.__kaminosFlameSettingsProblems.length) console.warn('Flame settings problems:', window.__kaminosFlameSettingsProblems);
+  showVolumeSettingsPresetStatus();
+  showFlameSettingsProblems();
+  return window.__kaminosFlameSettingsProblems;
 }
 
 // Read the controls back once the route has set them all, so a basin whose
@@ -24845,6 +25130,7 @@ async function initKaminosVolumeRoute() {
   });
   syncControls();
   recordVolumeSettingsPresetApplied();
+  recordFlameSettingsProblems();
   setInterval(refreshVolumeReadout, 500);
 }
 
@@ -25111,26 +25397,37 @@ function flameSettingsState(preset=buildVolumeSettingsPreset(),source=activeVolu
     presentationControls:preset.presentationControls,
     source:source ? {presetId:source.presetId,label:source.label,preset:source.preset} : null});
 }
-function checkFlameSettingsState(state) {
+// Every reason the flame settings edit would be refused, in the order the
+// check meets them. The edit session refuses a press on any flame control
+// while one exists, so the loaded page lists them all (recordFlameSettingsProblems).
+function flameSettingsStateProblems(state) {
+  const problems=[];
   const current=flameSettingsState();
   for(const axis of ['domControls','rendererControls','presentationControls']) {
     const wanted=state[axis];
-    if(!wanted || Object.keys(wanted).sort().join()!==Object.keys(current[axis]).sort().join())throw Error(`Incomplete flame ${axis}`);
+    if(!wanted || Object.keys(wanted).sort().join()!==Object.keys(current[axis]).sort().join()){problems.push({id:axis,message:`Incomplete flame ${axis}`});continue;}
     for(const [id,descriptor] of Object.entries(wanted)) {
-      if(axis==='presentationControls') {if(!['on','off'].includes(descriptor.value))throw Error('Invalid smoke presentation');continue;}
+      const problem=message=>problems.push({id,message});
+      if(!descriptor||typeof descriptor!=='object'){problem(`Invalid flame setting ${id}`);continue;}
+      if(axis==='presentationControls') {if(!['on','off'].includes(descriptor.value))problem('Invalid smoke presentation');continue;}
       const source=document.getElementById(id),value=descriptor.rawValue??descriptor.value;
-      if(!source)throw Error(`Missing flame setting ${id}`);
+      if(!source){problem(`Missing flame setting ${id}`);continue;}
       if(source.tagName==='SELECT') {
         const retired=id==='volume-emitter-aperture-pattern'&&VOLUME_RETIRED_APERTURE_PATTERNS.includes(String(value));
-        if(!retired&&![...source.options].some(option=>option.value===String(value)))throw Error(`Unsupported ${id}: ${value}`);}
-      else if(source.type==='checkbox') {if(typeof value!=='boolean'&&!['0','1','true','false'].includes(String(value)))throw Error(`Invalid ${id}`);}
+        if(!retired&&![...source.options].some(option=>option.value===String(value)))problem(`Unsupported ${id}: ${value}`);}
+      else if(source.type==='checkbox') {if(typeof value!=='boolean'&&!['0','1','true','false'].includes(String(value)))problem(`Invalid ${id}`);}
       else if(['range','number'].includes(source.type)) {
-        if(!Number.isFinite(Number(value)))throw Error(`Nonfinite ${id}`);
+        if(!Number.isFinite(Number(value))){problem(`Nonfinite ${id}`);continue;}
         // The render-scale control has an explicit Full/legacy value contract.
-        if(id!=='volume-render-scale'&&((source.min!==''&&Number(value)<Number(source.min))||(source.max!==''&&Number(value)>Number(source.max))))throw Error(`Out of range ${id}`);
-      } else if(source.type==='color'&&!/^#[0-9a-f]{6}$/i.test(value))throw Error(`Invalid color ${id}`);
+        if(id!=='volume-render-scale'&&((source.min!==''&&Number(value)<Number(source.min))||(source.max!==''&&Number(value)>Number(source.max))))problem(`Out of range ${id}`);
+      } else if(source.type==='color'&&!/^#[0-9a-f]{6}$/i.test(value))problem(`Invalid color ${id}`);
     }
   }
+  return problems;
+}
+function checkFlameSettingsState(state) {
+  const problems=flameSettingsStateProblems(state);
+  if(problems.length)throw Error(problems[0].message);
   return state;
 }
 function writeFlameSettingsState(state) {
@@ -25202,7 +25499,7 @@ function installAuthoringParameterEditing() {
     const definition={read,write,check};
     edits.register(id,definition);authoringParameterTargets.set(id,definition);
     authoringControlSessions.push(installSceneControlHistory({edits,id:'@flame-settings',
-      controls:[control,...document.querySelectorAll(`[data-authoring-alias="${control.id}"]`)],label,onError:error=>setInfo(error.message)}));
+      controls:[control,...document.querySelectorAll(`[data-authoring-alias="${control.id}"]`)],label,onError:error=>showFlameEditRefused(error)}));
   }
   for(const id of ['fire-light-gain-stops','exposure-slider','env-intensity-slider','env-rotation-slider','env-bg-brightness','env-bg-contrast']) {
     const control=document.getElementById(id);if(!control)continue;
@@ -25770,32 +26067,37 @@ window.flipAxis = function(axis) {
     toggleSplatCorrectionAxisFlip(axis);
     return;
   }
-  if (!currentMesh) return;
-  const s = currentMesh.scale;
-  if (axis === 'x') s.x *= -1;
-  else if (axis === 'y') s.y *= -1;
-  else if (axis === 'z') s.z *= -1;
+  if (!currentMesh || !['x', 'y', 'z'].includes(axis)) return;
+  commitToolbarPose(currentMesh, editedToolbarPose(currentMesh, probe => { probe.scale[axis] *= -1; }));
 };
 
 window.rotateAxis = function(axis) {
   if (!currentMesh) return;
-  if (axis === 'x') currentMesh.rotateX(HALF_PI);
-  else if (axis === 'y') currentMesh.rotateY(HALF_PI);
-  else if (axis === 'z') currentMesh.rotateZ(HALF_PI);
+  const turn = { x: 'rotateX', y: 'rotateY', z: 'rotateZ' }[axis];
+  if (!turn) return;
+  commitToolbarPose(currentMesh, editedToolbarPose(currentMesh, probe => probe[turn](HALF_PI)));
 };
 
+// Reset: undo orientation and scale edits, landing the object the way a fresh
+// import arrives (shared size, resting on the ground) where it stands now.
 window.resetTransform = function() {
   if (!currentMesh) return;
-  // Re-center and re-scale from scratch
-  currentMesh.rotation.set(0, 0, 0);
-  currentMesh.scale.set(1, 1, 1);
-  currentMesh.position.set(0, 0, 0);
-  const box = new THREE.Box3().setFromObject(currentMesh);
-  const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3()).length();
-  currentMesh.position.sub(center);
-  const scale = 2.0 / size;
-  currentMesh.scale.setScalar(scale);
+  const saved = { position: currentMesh.position.clone(), quaternion: currentMesh.quaternion.clone(), scale: currentMesh.scale.clone() };
+  currentMesh.updateWorldMatrix(true, true);
+  const here = new THREE.Box3().setFromObject(currentMesh, true).getCenter(new THREE.Vector3());
+  currentMesh.position.set(0, 0, 0); currentMesh.quaternion.identity(); currentMesh.scale.set(1, 1, 1);
+  currentMesh.updateWorldMatrix(true, true);
+  const box = new THREE.Box3().setFromObject(currentMesh, true);
+  const placement = box.isEmpty() ? null : computeAssetArrivalPlacement({
+    bounds: { min: box.min.toArray(), max: box.max.toArray() },
+    rootPosition: currentMesh.position.toArray(),
+    groundY: groundPlane ? groundPlane.position.y : 0,
+    anchor: [here.x, here.z],
+  });
+  currentMesh.position.copy(saved.position); currentMesh.quaternion.copy(saved.quaternion); currentMesh.scale.copy(saved.scale);
+  currentMesh.updateWorldMatrix(true, true);
+  if (!placement) return;
+  commitToolbarPose(currentMesh, { position: placement.position, rotation: [0, 0, 0], scale: [placement.scale, placement.scale, placement.scale] });
 };
 
 window.reverseWinding = function() {
@@ -26035,47 +26337,115 @@ window.addEventListener('keydown', e => {
   }
 });
 
-window.snapToGround = function() {
-  if (!currentMesh) return;
-  // Find the lowest Y vertex in world space
-  let minY = Infinity;
-  currentMesh.traverse(child => {
-    if (!child.isMesh || !child.geometry) return;
-    const pos = child.geometry.getAttribute('position');
-    if (!pos) return;
-    const worldMatrix = child.matrixWorld;
-    const v = new THREE.Vector3();
-    for (let i = 0; i < pos.count; i++) {
-      v.fromBufferAttribute(pos, i);
-      v.applyMatrix4(worldMatrix);
-      if (v.y < minY) minY = v.y;
-    }
-  });
-  if (minY === Infinity) return;
-  // Shift model so lowest vertex sits on the ground plane
-  const groundY = groundPlane.position.y;
-  currentMesh.position.y += groundY - minY;
-  setInfo(`Snapped to ground (shifted ${(groundY - minY).toFixed(3)})`);
+// Toolbar pose edits (flip, rotate, reset, Snap Ground) commit through scene
+// history like a gizmo edit: the viewport redraws at once and Cmd/Ctrl+Z
+// undoes them. Objects outside the scene list (Greenroom preview) are posed
+// directly.
+function commitToolbarPose(object, transform) {
+  const entry = sceneObjects.find(item => item.object === object);
+  try {
+    if (entry) window.kaminosSetSceneObjectTransform(entry.id, transform);
+    else applySceneObjectTransformState(object, transform);
+  } catch (error) {
+    setInfo(`Could not change pose: ${error.message}`);
+    return false;
+  }
+  window._kaminosDirty?.();
+  return true;
+}
+
+function toolbarPoseFromWorld(object, world) {
+  const local = world.clone();
+  if (object.parent) local.premultiply(object.parent.matrixWorld.clone().invert());
+  const position = new THREE.Vector3(), quaternion = new THREE.Quaternion(), scale = new THREE.Vector3();
+  local.decompose(position, quaternion, scale);
+  const rotation = new THREE.Euler().setFromQuaternion(quaternion, object.rotation.order);
+  return { position: position.toArray(), rotation: [rotation.x, rotation.y, rotation.z], scale: scale.toArray() };
+}
+
+function editedToolbarPose(object, edit) {
+  const probe = new THREE.Object3D();
+  probe.rotation.order = object.rotation.order;
+  probe.position.copy(object.position); probe.quaternion.copy(object.quaternion); probe.scale.copy(object.scale);
+  edit(probe);
+  return { position: probe.position.toArray(), rotation: [probe.rotation.x, probe.rotation.y, probe.rotation.z], scale: probe.scale.toArray() };
+}
+
+// Snap Ground: when the object is not standing on a level base but clearly
+// could (a stable flat face within a few degrees of straight down, such as a
+// chair's leg tips), turn it onto that base first; then rest it on the ground.
+// Goes through scene history, so it undoes like any other pose edit.
+function sceneObjectRestingAnalysis(object) {
+  const { points, triangles } = sceneObjectWorldGeometry(object, { triangles: true });
+  const analysis = findRestingPlanes(points, triangles);
+  return { analysis, choice: chooseLevelingPlane(analysis) };
+}
+
+// Every transform-bar action changes what the viewport shows; redraw after the
+// button's own handler runs, whether or not it routed through scene history.
+document.getElementById('transform-bar')?.addEventListener('click', () => window._kaminosDirty?.());
+
+window.kaminosRestingPlaneDebugState = function(id) {
+  const entry = sceneObjects.find(item => item.id === id);
+  if (!entry?.object) return null;
+  const { choice } = sceneObjectRestingAnalysis(entry.object);
+  return { reason: choice.reason, tiltDeg: choice.plane?.tiltDeg ?? null, relArea: choice.plane?.relArea ?? null, stableMargin: choice.plane?.stableMargin ?? null };
 };
 
-window.exportGLB = function() {
+window.snapToGround = function() {
   if (!currentMesh) return;
+  const { points, triangles } = sceneObjectWorldGeometry(currentMesh, { triangles: true });
+  if (!points.length) return;
+  const { delta, choice } = snapGroundWorldDelta({ points, triangles, groundY: groundPlane.position.y });
+  currentMesh.updateWorldMatrix(true, false);
+  if (!commitToolbarPose(currentMesh, toolbarPoseFromWorld(currentMesh, currentMesh.matrixWorld.clone().premultiply(delta)))) return;
+  syncLevelingButton();
+  if (choice.reason === 'level') setInfo(`Leveled ${choice.plane.tiltDeg.toFixed(1)}° onto its base and snapped to ground`);
+  else if (choice.reason === 'already-level') setInfo('Snapped to ground (already standing level)');
+  else setInfo('Snapped to ground (no clear base to level onto)');
+};
 
-  // Bake the current transform into geometry so the export is corrected
-  const exportScene = currentMesh.clone(true);
+// Export the selection (one object, or every member of a selected group) as a
+// binary GLB, keeping each object's place in the scene. Editor helpers and
+// objects GLB cannot carry (splats, lights, flame and water emitters) stay out.
+const GLB_EXPORT_SKIPPED_TYPES = new Set(['splat', 'light', FLAME_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_TYPE]);
 
-  const exporter = new GLTFExporter();
-  exporter.parse(exportScene, result => {
-    const blob = new Blob([result], { type: 'model/gltf-binary' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const name = glbFileName.replace(/\.(glb|gltf)$/i, '') + '_fixed.glb';
-    a.href = url;
-    a.download = name;
-    a.click();
-    URL.revokeObjectURL(url);
-    setInfo(`Saved ${name}`);
-  }, { binary: true });
+function selectionForExport() {
+  const group = selectedSceneGroupEntry();
+  if (group) return { label: sceneGroupDisplayLabel(group), entries: sceneObjects.filter(entry => group.objectIds.includes(entry.id)) };
+  const entry = selectedSceneObjectEntry();
+  if (entry) return { label: sceneObjectDisplayLabel(entry), entries: [entry] };
+  if (currentMesh && !currentMesh.userData?.kaminosEditorHelper) return { label: glbFileName || 'model', entries: [{ object: currentMesh, type: 'glb' }] };
+  return null;
+}
+
+window.exportGLB = async function({ name = null } = {}) {
+  const selection = selectionForExport();
+  if (!selection) { setInfo('Select an object or group to export'); return false; }
+  const entries = selection.entries.filter(entry => entry.object && !GLB_EXPORT_SKIPPED_TYPES.has(entry.type));
+  const skipped = selection.entries.length - entries.length;
+  if (!entries.length) { setInfo('Nothing in the selection can be exported as GLB'); return false; }
+  const stem = name === null
+    ? await promptForFileName({ title: 'Export selection as GLB', defaultStem: selection.label.replace(/\.(glb|gltf)$/i, ''), extension: '.glb' })
+    : sanitizeFileStem(name, '.glb');
+  if (!stem) { if (name === null) setInfo('Export cancelled'); return false; }
+  const root = new THREE.Group();
+  root.name = stem;
+  for (const entry of entries) root.add(exportCloneInWorld(entry.object));
+  try {
+    const glb = await new GLTFExporter().parseAsync(root, { binary: true });
+    const url = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${stem}.glb`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setInfo(`Exported ${entries.length} object${entries.length === 1 ? '' : 's'} to ${stem}.glb${skipped ? ` (skipped ${skipped} that GLB cannot carry)` : ''}`);
+    return true;
+  } catch (error) {
+    setInfo(`Export failed: ${error.message || error}`);
+    return false;
+  }
 };
 
 // --- Greenroom Browser ---
@@ -27777,6 +28147,7 @@ async function grBrowseScenes() {
     for (const entry of items) {
       const div = document.createElement('div');
       div.className = 'gr-entry';
+      div.dataset.sceneFile = entry.name;
       if (currentSceneFile === entry.name) div.style.borderLeft = '2px solid #1976d2';
 
       const icon = document.createElement('span');
@@ -27975,6 +28346,8 @@ function serializeSceneObject(entry) {
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
     localLiquidEmitter: metadata.localLiquidEmitter ?? entry.localLiquidEmitter ?? null,
     ...(entry.type===CAMERA_TYPE?{camera:structuredClone(entry.camera)}:{}),
+    ...(object?.userData?.kaminosLeveling ? { arrivalLeveling: structuredClone(object.userData.kaminosLeveling) } : {}),
+
     ...(entry.type==='light'?{light:structuredClone(entry.light)}:{}),
     ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface)} : {}),
   };
@@ -28028,11 +28401,14 @@ async function addSceneObjectFromSource(record, loadRequestId = null) {
         isCurrent: loadRequestId === null ? undefined : () => sceneLoadRequests.isCurrent(loadRequestId),
       });
     }
-    return showGLB(record.source, {
+    const object = await showGLB(record.source, {
       clear: false,
       normalize: false,
       metadata: record,
     });
+    const leveling = normalizeArrivalLeveling(record.arrivalLeveling);
+    if (leveling) object.userData.kaminosLeveling = leveling;
+    return object;
   }
   throw new Error(`Scene object "${record.fileName || record.id}" must be re-dropped; source "${record.source}" is not reloadable`);
 }
@@ -28581,7 +28957,7 @@ async function importSceneMesh(file,{generation:origin=null,label=null,assetOrig
   if(receipt.schema!=='kaminos.generated-mesh.v0'||receipt.sha256!==digest||receipt.bytes!==bytes.byteLength||receipt.source!==`/api/read?root=generated-meshes&path=${digest}.glb`)throw Error('Mesh storage returned a different source');
   if(generation!==sceneMutationToken)throw Error('Scene changed while importing');assertSceneConstructionAvailable();
   const id=makeSceneObjectId('mesh'),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
-  await showGLB(receipt.source,{clear:false,normalize:false,isCurrent:()=>generation===sceneMutationToken&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:label||file.name.replace(/\.glb$/i,''),generation:origin,assetOrigin:assetOrigin?{...assetOrigin,sha256:digest}:null}});
+  await showGLB(receipt.source,{clear:false,arrival:'append',isCurrent:()=>generation===sceneMutationToken&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:label||file.name.replace(/\.glb$/i,''),generation:origin,assetOrigin:assetOrigin?{...assetOrigin,sha256:digest}:null}});
   try{await recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
   setInfo(`Imported ${file.name}`);return id;
 }
@@ -29209,9 +29585,10 @@ document.getElementById('composition-library').onclick = () => {
   grBrowseScenes().then(() => document.getElementById('scenes-list').scrollIntoView({ block: 'start' }));
 };
 
-async function saveToServer(sceneData, filename, { result: detailed = false } = {}) {
+async function saveToServer(sceneData, filename, { result: detailed = false, saveAsName = null, overwrite = false } = {}) {
   const body = { ...sceneData };
   if (filename) body._filename = filename; // hint to server to overwrite
+  if (saveAsName) { body._saveAsName = saveAsName; if (overwrite) body._overwrite = true; }
   const jsonStr = JSON.stringify(body, null, 2);
   try {
     const resp = await fetch('/api/save-scene', {
@@ -29220,10 +29597,13 @@ async function saveToServer(sceneData, filename, { result: detailed = false } = 
       body: jsonStr,
     });
     const result = await resp.json();
+    if (resp.status === 409 && result.exists) return detailed ? { ok: false, exists: result.exists, error: result.error } : false;
     if (!resp.ok) throw new Error(result.error || `Scene save failed: HTTP ${resp.status}`);
     if (typeof result.saved === 'string' && result.saved.endsWith('.kaminos.json') && !/[/\\]/.test(result.saved)) {
       const document = JSON.parse(jsonStr);
       delete document._filename;
+      delete document._saveAsName;
+      delete document._overwrite;
       const url = compositionRestoreUrl(document.composition, result.saved, location.origin);
       currentSceneFile = result.saved;
       setInfo(`Scene saved: ${result.saved}`);
@@ -29271,16 +29651,45 @@ window.saveScene = ({ result = false } = {}) => withAuthoringAction(async () => 
 }, { result });
 
 // Save As: always create a new scene file
-window.saveSceneAs = ({ result = false } = {}) => withAuthoringAction(async () => {
-  if (sceneSaveIsBlocked()) return false;
-  if (sceneIsEmpty()) {
-    setInfo('Nothing to save');
-    return false;
+// Save As from the button or Cmd/Ctrl+Shift+S asks for the scene's name and
+// confirms before replacing an existing scene; script callers that pass no
+// promptName keep the generated name and no dialog.
+function defaultSceneSaveStem() {
+  if (currentSceneFile) return currentSceneFile.replace(/\.kaminos\.json$/, '');
+  return sanitizeFileStem(document.getElementById('composition-label')?.value || '', '.kaminos.json') || 'scene';
+}
+
+window.saveSceneAs = async ({ result = false, promptName = false, name = null } = {}) => {
+  if (!promptName && name === null) {
+    return withAuthoringAction(async () => {
+      if (sceneSaveIsBlocked()) return false;
+      if (sceneIsEmpty()) {
+        setInfo('Nothing to save');
+        return false;
+      }
+      await collectSceneComposition();
+      const data = buildSceneData();
+      return saveToServer(data, null, { result });
+    }, { result });
   }
-  await collectSceneComposition();
-  const data = buildSceneData();
-  return saveToServer(data, null, { result });
-}, { result });
+  if (sceneIsEmpty()) { setInfo('Nothing to save'); return result ? { ok: false, error: 'Nothing to save' } : false; }
+  let stem = name === null ? await promptForFileName({ title: 'Save scene as', defaultStem: defaultSceneSaveStem(), extension: '.kaminos.json' }) : sanitizeFileStem(name, '.kaminos.json');
+  let overwrite = false;
+  while (stem) {
+    const saved = await withAuthoringAction(async () => {
+      if (sceneSaveIsBlocked()) return false;
+      await collectSceneComposition();
+      return saveToServer(buildSceneData(), null, { result: true, saveAsName: stem, overwrite });
+    }, { result: true });
+    if (!saved?.exists) return result ? saved : saved?.ok === true;
+    const again = await promptForFileName({ title: 'Save scene as', defaultStem: stem, extension: '.kaminos.json',
+      message: `${saved.exists} already exists. Save again to replace it, or choose another name.`, confirmLabel: 'Replace' });
+    overwrite = again === stem;
+    stem = again;
+  }
+  setInfo('Save As cancelled');
+  return result ? { ok: false, error: 'Save As cancelled' } : false;
+};
 
 function getMaterialState() {
   return getMaterialStateForObject(currentMesh);
@@ -29591,6 +30000,45 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
 }
 
 // File input handler for Load Scene
+// Load lists the scenes Kaminos saved (the scenes root) rather than opening the
+// system file picker; "Browse files…" in the list still reaches it.
+window.openSavedScene = async function() {
+  if (document.querySelector('.scene-load-picker')) return;
+  const listing = await grFetchApi('browse', { root: 'scenes', path: '' });
+  const names = (listing?.entries || []).map(entry => entry.name).filter(name => name.endsWith('.kaminos.json'));
+  const scenes = await Promise.all(names.map(async name => {
+    const data = await grFetchApi('read', { root: 'scenes', path: name }).catch(() => null);
+    return { name, label: data?.label || data?.capture?.label || '', timestamp: data?.timestamp || '' };
+  }));
+  const more = fetch('/api/scene-library').then(response => response.json()).then(library =>
+    (library.stores || []).flatMap(store => store.scenes.filter(scene => !scene.error).map(scene => ({ ...scene, store: { id: store.id, label: store.label } }))));
+  const choice = await pickSavedScene({ scenes, more });
+  if (choice === 'browse') { document.getElementById('scene-file-input').click(); return; }
+  if (!choice?.name) return;
+  if (choice.store) {
+    // A scene from another server is imported as a new local copy (its own
+    // fresh name, so Save never touches a local scene of the same name) along
+    // with any generated meshes only that server had; then the copy opens.
+    const response = await fetch('/api/scene-library-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ store: choice.store.id, name: choice.name }) });
+    const imported = await response.json().catch(() => null);
+    if (!response.ok || !imported?.saved) { setInfo(`Could not import ${choice.name} from ${choice.store.label}: ${imported?.error || response.status}`); return; }
+    const missing = (imported.dependencies || []).filter(dependency => dependency.status === 'missing');
+    await loadSceneFile(new File([JSON.stringify(imported.document)], imported.saved, { type: 'application/json' }), { sceneFile: imported.saved });
+    if (!missing.length) return;
+    // A failed restore clears the document and blocks Save; keep its error and
+    // add which assets were unavailable rather than claiming the scene opened.
+    const names = missing.map(dependency => new URLSearchParams(dependency.source.split('?')[1] || '').get('path')).join(', ');
+    const opened = !sceneSaveBlockedByFailedRestore && currentSceneFile === imported.saved;
+    setInfo(opened
+      ? `Opened ${imported.document.label || choice.name} from ${choice.store.label}; ${missing.length} asset${missing.length === 1 ? '' : 's'} only that server can read: ${names}`
+      : `${document.getElementById('info-bar').textContent} (unavailable from ${choice.store.label}: ${names})`);
+    return;
+  }
+  const sceneData = await grFetchApi('read', { root: 'scenes', path: choice.name });
+  if (!sceneData || sceneData.error) { setInfo(`Could not read ${choice.name}: ${sceneData?.error || 'unavailable'}`); return; }
+  await loadSceneFile(new File([JSON.stringify(sceneData)], choice.name, { type: 'application/json' }), { sceneFile: choice.name });
+};
+
 document.getElementById('scene-file-input').addEventListener('change', e => {
   if (e.target.files[0]) loadSceneFile(e.target.files[0]);
   e.target.value = ''; // reset so same file can be loaded again
@@ -29605,12 +30053,12 @@ window.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 's') {
     e.preventDefault();
     if (sceneIsEmpty()) return;
-    if (e.shiftKey) saveSceneAs();
+    if (e.shiftKey) saveSceneAs({ promptName: true });
     else saveScene();
   }
   if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
     e.preventDefault();
-    document.getElementById('scene-file-input').click();
+    openSavedScene();
   }
 });
 
