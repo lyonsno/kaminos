@@ -6,8 +6,9 @@ import {validateNativePrefixBackend,prefixAdapterName} from './sparse-prefix-wit
 import {createTrellisAssetAdapter} from './trellis-material.js';
 import {observeDeviceMemory} from './device-memory.js';
 import {createTrellisSharedHost} from './shared-host.js';
+import {admitGenerationGpuBudget} from './generation-memory-policy.js';
 const hash=async data=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),v=>v.toString(16).padStart(2,'0')).join('');
-export async function runGenerationWitness(expectedSha,{memoryMonitor=false,sharedComposition,assetMode='raw-glb'}={}){
+export async function runGenerationWitness(expectedSha,{memoryMonitor=false,sharedComposition,assetMode='raw-glb',gpuBufferBudgetBytes}={}){
   const report={status:'failed',phase:'input-manifest',requestedRoute:GENERATION_ROUTE,numericalStatus:'not-compared',
     comparison:'actual WebGPU image generation with retained prepared pixels and browser noise; no matched MLX fidelity claim',outputs:{}},errors=[];
   let session,device,implementation,assetConsumer,runtime,scope=false,invocationOwner,serving=false,currentPhase='new',memory,bridge,sharedRun;
@@ -30,9 +31,12 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
   try{
     if(typeof memoryMonitor!=='boolean')throw TypeError('explicit boolean memory-monitor selection required');
     if(!['raw-glb','retained-fields-only'].includes(assetMode))throw TypeError('explicit supported asset mode required');
+    if(sharedComposition&&gpuBufferBudgetBytes!==undefined)
+      throw Error('GPU buffer budget currently requires an isolated owned device; borrowed host allocations must not be capped');
     const fetched=await fetch('/fixture/manifest.json',{cache:'no-store'});if(!fetched.ok)throw Error('generation inputs unavailable');
     const bytes=await fetched.arrayBuffer();if(await hash(bytes)!==expectedSha)throw Error('changed generation manifest');
     const m=JSON.parse(new TextDecoder().decode(bytes));validateGenerationInputs(m);
+    setPhase('memory-budget-admission');report.memory.admission=admitGenerationGpuBudget(m,gpuBufferBudgetBytes);
     report.input={manifestSha256:expectedSha,producer:m.producer,references:m.references,image:m.image,modelIdentities:
       Object.fromEntries(Object.entries(m.models).map(([k,v])=>[k,v.identity])),dinoIdentity:m.dino.identity,seed:m.seed,
       meshResolution:m.meshResolution,pipelineType:generationPipelineType(m),samplingSteps:m.samplingSteps??12};
@@ -57,7 +61,7 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
       maxComputeWorkgroupsPerDimension:limits.maxComputeWorkgroupsPerDimension};
     device=sharedComposition?sharedComposition.sharedGpu.device:await adapter.requestDevice({requiredLimits:report.requiredLimits});
     report.deviceTopology=sharedComposition?'same-device':'isolated-device';
-    if(memoryMonitor)memory=observeDeviceMemory(device);
+    if(memoryMonitor||gpuBufferBudgetBytes!==undefined)memory=observeDeviceMemory(device,{maxLiveBytes:gpuBufferBudgetBytes});
     setPhase('native-device');
     device.pushErrorScope('validation');scope=true;
     device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
@@ -139,6 +143,7 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
       ?'complete retained WebGPU learned fields; cleanup/UV/PBR finishing is a separate model-free consumer'
       :'actual borrowed learned fields become retained PBR GLB; Kaminos inspection/placement/save/reopen outstanding';
   }catch(error){report.status='failed';report.error={name:error.name,message:error.message,stack:error.stack};report.lastGenerationPhase=implementation?.phase;
+    if(error.memoryBudget)report.memory.refusal=error.memoryBudget;
     memory?.setPhase('failure-retention-readback');
     if(implementation){serving=false;for(const [name,n]of Object.entries(implementation.noiseInputs))if(!report.outputs['noise.'+name])
       try{await save('noise.'+name,n.values,n.shape,'f32');}catch(e){report.retentionErrors??=[];report.retentionErrors.push(e.message);}}

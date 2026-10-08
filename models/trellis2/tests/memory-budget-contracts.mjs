@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {observeDeviceMemory} from '../device-memory.js';
+const device={calls:0,createBuffer(d){this.calls++;return{size:d.size,destroy(){}};},destroy(){throw Error('borrowed device must not be destroyed');}};
+const tracker=observeDeviceMemory(device,{maxLiveBytes:512});
+const first=device.createBuffer({size:256});
+assert.throws(()=>device.createBuffer({size:257}),/memory budget/,'refuse before calling the real allocator, not after allocating beyond the ceiling');
+assert.equal(device.calls,1);assert.equal(tracker.snapshot().liveBytes,256);
+assert.equal(tracker.snapshot().budget.maxLiveBytes,512);
+assert.equal(tracker.snapshot().budget.refusal.requestedBytes,257);
+first.destroy();const second=device.createBuffer({size:512});assert.equal(device.calls,2);
+assert.throws(()=>device.createBuffer({size:4}),/memory budget/);
+second.destroy();assert.equal(tracker.snapshot().liveBytes,0);tracker.restore();
+assert.throws(()=>observeDeviceMemory(device,{maxLiveBytes:0}),/positive/);
+console.log('Caller-selected allocation ceiling refuses before allocation; retired bytes permit later work, exact refusal retained, device not destroyed.');
