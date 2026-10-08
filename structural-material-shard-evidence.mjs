@@ -1,6 +1,6 @@
 import {materialComponents} from './structural-material-solid-surface.mjs';
 import {applyComponentAffineField} from './structural-material-component-affine.mjs';
-import {applyComponentTransport,COMPONENT_TRANSPORT_ROUTE} from './structural-material-component-transport.mjs';
+import {bindComponentTransport,applyComponentTransport,COMPONENT_TRANSPORT_ROUTE} from './structural-material-component-transport.mjs';
 export function inspectShardWitness(w,{model=w?.state?.model}={}){
  const errors=[];if(w?.route!=='kaminos.picked-stone.stress-shards.webgpu.v0'||w.phase!=='interactive'||w.failure)return['Live picked-stone route failed or substituted'];
  if(w.identity?.backend!=='webgpu'||w.identity.adapterFallback!==false)errors.push('Native GPU material authority absent');
@@ -19,6 +19,16 @@ export function inspectShardWitness(w,{model=w?.state?.model}={}){
    if(!piece.nodes?.length||piece.nodes.some(i=>components[i]!==piece.component)||!(piece.volume>0)||piece.binding.component!==piece.component)throw new Error('Piece has foreign or absent material ownership');
    const g=piece.geometry;if(!Number.isInteger(g?.numProp)||g.numProp<12||!Array.isArray(g.properties)||!g.properties.length||g.properties.length%g.numProp||!g.properties.every(Number.isFinite)||!Array.isArray(g.indices)||!g.indices.length||g.indices.length%3||!g.indices.every(i=>Number.isInteger(i)&&i>=0&&i<g.properties.length/g.numProp)||!Array.isArray(g.exterior)||g.exterior.length!==g.indices.length/3||!g.exterior.every(v=>typeof v==='boolean')||!Array.isArray(piece.binding.entries)||piece.binding.entries.length!==g.properties.length/g.numProp)throw new Error('Complete nonempty fragment geometry and reconstruction required');
    if(piece.binding.route===COMPONENT_TRANSPORT_ROUTE){if(piece.binding.frame.ids.length!==piece.nodes.length||piece.binding.frame.ids.some((id,i)=>!piece.nodes.includes(id)||piece.binding.frame.rest[i].some((x,k)=>Math.abs(x-w.state.state[id*16+k])>1e-6))||piece.binding.entries.some((e,i)=>e.point.some((x,k)=>x!==g.properties[i*g.numProp+k])))throw new Error('Transport correspondence differs from actual rest material or surface');}
+   if(piece.binding.route===COMPONENT_TRANSPORT_ROUTE){
+    const radius=w.configuration?.reconstructionRadius,rest=Array.from({length:n},(_,i)=>w.state.state.slice(i*16,i*16+3)),volumes=Array.from({length:n},(_,i)=>w.state.state[i*16+3]);
+    if(!(Number.isFinite(radius)&&radius>0)||piece.binding.radius!==radius)throw new Error('Transport construction law: effective radius differs');
+    const derived=bindComponentTransport(rest,piece.binding.entries.map(e=>e.point),{components,component:piece.component,volumes,radius}),frameWeights=new Map(derived.frame.ids.map((id,i)=>[id,derived.frame.weights[i]]));
+    if(piece.binding.frame.ids.some((id,i)=>Math.abs(piece.binding.frame.weights[i]-frameWeights.get(id))>1e-10))throw new Error('Transport construction law: frame weights differ');
+    // CPU source positions and resident rest coordinates differ by f32 rounding; observed weight error is ~1.1e-7.
+    for(let i=0;i<derived.entries.length;i++){const actual=piece.binding.entries[i],expected=derived.entries[i],weights=new Map(expected.ids.map((id,j)=>[id,expected.weights[j]])),supplied=new Map(actual.ids.map((id,j)=>[id,actual.weights[j]]));
+     if(!(Number.isFinite(actual.effectiveRadius)&&actual.effectiveRadius>0)||Math.abs(actual.effectiveRadius-expected.effectiveRadius)>1e-6||actual.ids.some((id,j)=>Math.abs(actual.weights[j]-(weights.get(id)??0))>1e-6)||expected.ids.some((id,j)=>Math.abs(expected.weights[j]-(supplied.get(id)??0))>1e-6))throw new Error('Transport construction law: surface weights or support radius differ');
+    }
+   }
    const values=(piece.binding.route===COMPONENT_TRANSPORT_ROUTE?applyComponentTransport:applyComponentAffineField)(piece.binding,current,{components}),expected=piece.geometry.indices.flatMap(i=>values[i]);
    if(!Array.isArray(piece.renderedPositions)||expected.length!==piece.renderedPositions.length||!piece.renderedPositions.every((v,i)=>Number.isFinite(v)&&Math.abs(v-expected[i])<=2e-6))throw new Error('Rendered skin differs from current material field');
   }
