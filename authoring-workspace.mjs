@@ -29,6 +29,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   const inspector = document.createElement('aside');
   inspector.id = 'authoring-inspector'; inspector.setAttribute('aria-label', 'Properties');
   inspector.innerHTML = `<nav class="inspector-switch" aria-label="Properties context"><button type="button" data-inspector-context="object" aria-pressed="true">Selection</button><button type="button" data-inspector-context="scene" aria-pressed="false">Scene</button></nav>
+    <div id="authoring-camera-properties" class="authoring-inspector-body" hidden></div>
     <div id="authoring-object-properties" class="authoring-inspector-body"><div id="authoring-transform-slot"></div><div id="authoring-type-slot"></div><details id="authoring-object-tools"><summary>Object tools</summary></details></div>
     <div id="authoring-scene-properties" class="authoring-inspector-body" hidden><h2>Composition</h2><div class="scene-data-choices"><button type="button" id="scene-fire-data">Fire & smoke data</button><button type="button" id="scene-water-data">Water simulation data</button></div><div id="authoring-composition-slot"></div><details open id="authoring-world-slot"><summary>Environment</summary></details><div id="authoring-water-slot"></div><details id="authoring-render-slot"><summary>Rendering</summary></details></div>`;
   const toolbar = document.createElement('div'); toolbar.id = 'authoring-viewport-tools';
@@ -36,6 +37,8 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   document.body.prepend(header);
   document.body.append(hierarchy, inspector);
   byId('viewport').prepend(toolbar);
+  const cameraTab=document.createElement('button');cameraTab.type='button';cameraTab.dataset.inspectorContext='camera';cameraTab.textContent='Camera';cameraTab.setAttribute('aria-pressed','false');inspector.querySelector('.inspector-switch').append(cameraTab);
+  const cameraButton=document.createElement('button');cameraButton.type='button';cameraButton.id='authoring-camera';cameraButton.textContent='Camera';cameraButton.onclick=()=>setContext('camera');byId('authoring-frame').before(cameraButton);
   const viewportSettings=byId('authoring-viewport-settings');
   document.addEventListener('pointerdown',event=>{
     if(!viewportSettings.contains(event.target))viewportSettings.open=false;
@@ -80,11 +83,14 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('composition-capture'), 'authoring-document-actions');
   move(byId('transform-bar'), 'authoring-object-tools');
   const slots = createControlSlots(document, entries);
-  let mode = null;
+  let mode = null, inspectorContext='object';
   function setContext(context) {
+    if(!['object','scene','camera'].includes(context))throw Error('Unknown properties context');
+    inspectorContext=context;
     const object = context === 'object';
     byId('authoring-object-properties').hidden = !object;
-    byId('authoring-scene-properties').hidden = object;
+    byId('authoring-scene-properties').hidden = context!=='scene';
+    byId('authoring-camera-properties').hidden = context!=='camera';
     inspector.querySelectorAll('[data-inspector-context]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.inspectorContext === context)));
   }
   function setMode(next) {
@@ -156,5 +162,5 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   }
   document.body.classList.add('has-authoring-workspace');
   setMode(initialMode);
-  return { setMode, setContext, state: () => ({ mode, context: byId('authoring-object-properties').hidden ? 'scene' : 'object' }) };
+  return { setMode, setContext, state: () => ({ mode, context: inspectorContext }) };
 }

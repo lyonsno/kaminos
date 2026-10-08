@@ -379,6 +379,7 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     },
     state: () => ({gesture:gesture?.mode || null, inputMode:inputMode(), depth:lastDepth, position:camera.position.toArray(), target:controls.target.toArray(), up:camera.up.toArray(), near:camera.near, far:camera.far, fov:camera.fov, projection:'perspective', autoDepth:true, zoomToMouse:false}),
     cancel: () => finish(true),
+    resetView() { finish(false); workingPivot=null;lastDepth=null;changed(); },
     dispose: () => {finish(true); for (const dispose of disposers) dispose();},
   };
 }

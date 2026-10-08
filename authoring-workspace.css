@@ -218,3 +218,18 @@ body[data-workspace=workbench] #authoring-assets{display:none!important;}
 #authoring-generation-header[hidden]{display:none;}
 #authoring-header #generation-header-show{max-width:190px;overflow:hidden;text-overflow:ellipsis;color:#b9a986;}
 #authoring-header #generation-header-stop{color:#dcc1a4;border-color:#786452;}
+
+#camera-view-list { display:grid; gap:5px; margin:10px 0 16px; }
+#camera-view-list button { text-align:left; overflow-wrap:anywhere; padding:9px 10px; color:#bfc0c4; border:1px solid #36373c; border-radius:4px; background:#25262a; cursor:pointer; }
+#camera-view-list button[aria-pressed=true] { border-color:#a88755; background:#353027; color:#eee; }
+#camera-view-list button:hover { background:#303135; }
+#authoring-camera-properties form { display:flex; flex-wrap:wrap; gap:6px; margin:14px 0; }
+#authoring-camera-properties input[type=text], #camera-view-name, #camera-view-label { box-sizing:border-box; flex:1; min-width:120px; padding:8px; color:#dedee1; background:#25262a; border:1px solid #37383d; border-radius:4px; font:11px -apple-system,BlinkMacSystemFont,sans-serif; }
+#authoring-camera-properties .btn { font-size:11px; margin:0; padding:7px 9px; }
+.camera-actions { display:flex; flex-wrap:wrap; gap:6px; margin:15px 0; }
+.camera-note { font-size:11px; color:#999ba3; line-height:1.5; }
+.camera-lens-row { display:flex; align-items:center; gap:7px; font-size:11px; margin:18px 0; }
+.camera-lens-row > span:first-child { flex:1; }
+.camera-lens-row .authoring-number-wrap { width:95px; }
+.camera-lens-row input { width:100%; }
+#authoring-camera-properties button:disabled { opacity:.4; cursor:default; }

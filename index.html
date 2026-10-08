@@ -3886,6 +3886,8 @@ import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './sce
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
+import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-camera-views.mjs';
+import {installCameraViewsPanel} from './authoring-camera-views.mjs';
 import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, checkedSceneLightRecord, sceneLightRuntimeRecipe } from './scene-rim-light.mjs';
 
 import {checkedPose} from './scene-edit-session.mjs';
@@ -3897,6 +3899,7 @@ import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,createSelectionTransformTarget} from './scene-selection.mjs';
 
 let authoringWorkspace = null;
+let cameraViews=null,cameraViewsPanel=null;
 let restoringSceneLight=false;
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -11600,7 +11603,7 @@ async function initScene() {
     occluders: () => groundPlane ? [groundPlane] : [],
     frameAll: () => { const framed = frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); if (framed) markDirty(); return framed; },
     frameSelected: () => { const framed = frameAuthoredSelection(); if (framed) markDirty(); return framed; },
-    blocked: () => transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
+    blocked: () => authoringBusy || scenePlacementTools?.edits.state().active?.id==='@viewport-lens' || transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
     inputMode: () => navigationInput.value,
     status: updateNavigationHint,
   });
@@ -11636,6 +11639,7 @@ async function initScene() {
     object: id => id==='@selection-transform'?selectionTransformProxy():id?.startsWith('@group:') ? groupProxy(sceneGroups.find(group=>`@group:${group.id}`===id)) : sceneObjects.find(item => item.id === id)?.object,
     refresh: () => { updateTransformInspector(); markDirty(); },
     allowed: () => !greenroomPreviewIsActive() && !splatCorrectionMode,
+    busy: () => authoringBusy,
     frameSelected: window.kaminosFrameSelected,
     captureContext: id => id==='@selection-transform'||id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
     settled: event => {
@@ -11688,6 +11692,19 @@ async function initScene() {
     openWorkbenchTab: tab => setActiveTab(tab),
   });
   window.kaminosWorkspace = authoringWorkspace;
+  cameraViews=createCameraViews({
+    edits:scenePlacementTools.edits,
+    readCamera:readAuthoredCameraView,
+    writeCamera:view=>{sceneNavigation.cancel();camera.position.fromArray(view.position);controls.target.fromArray(view.target);camera.up.fromArray(view.up);camera.fov=view.fov;camera.near=view.near;camera.far=view.far;camera.updateProjectionMatrix();sceneNavigation.resetView();window._kaminosDirty?.();},
+    admit:()=>{assertSceneConstructionAvailable();if(!controls.enabled||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current camera or preview operation');},
+    changed:()=>{cameraViewsPanel?.refresh();window._kaminosDirty?.();},
+    capture:item=>window.captureComposition({result:true,cameraView:item}),
+  });
+  cameraViewsPanel=installCameraViewsPanel({document,views:cameraViews,edits:scenePlacementTools.edits,onError:error=>setInfo(error.message)});
+  authoringControlSessions.push(cameraViewsPanel.session);
+  scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
+  controls.addEventListener('change',()=>{if(authoringWorkspace.state().context==='camera')cameraViewsPanel.refresh();});
+  window.kaminosCameraViews={...cameraViews,open:()=>{authoringWorkspace.setMode('authoring');authoringWorkspace.setContext('camera');cameraViewsPanel.refresh();}};
   installSelectionInput();
 
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1'
@@ -28046,6 +28063,8 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
   return true;
 }
 
+function readAuthoredCameraView(){return {position:camera.position.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),near:camera.near,far:camera.far,fov:camera.fov};}
+
 function buildSceneData(capture = null) {
   rememberEnvironmentRecipe();
   const objects = sceneObjects.map(serializeSceneObject);
@@ -28064,6 +28083,7 @@ function buildSceneData(capture = null) {
     composition: activeSceneComposition,
     localLiquid: localLiquidSetup,
     capture,
+    cameraViews:cameraViews?.read(),
     camera: {
       position: camera.position.toArray(),
       target: controls.target.toArray(),
@@ -28194,7 +28214,7 @@ async function changeCompositionBasin(entry) {
   return window.kaminosFlameAuthoring.applyBasin(entry.presetId);
 }
 
-window.captureComposition = ({ result = false } = {}) => withAuthoringAction(async () => {
+window.captureComposition = ({ result = false, cameraView = null } = {}) => withAuthoringAction(async () => {
   if (sceneSaveIsBlocked() || sceneIsEmpty()) return false;
   if (volumePrototype?.debugState?.()?.active && !isFireLightFieldRoute()) {
     throw new Error('Capture supports the ordinary flame light-field composition, not this volume route');
@@ -28204,26 +28224,29 @@ window.captureComposition = ({ result = false } = {}) => withAuthoringAction(asy
   }
   const label = document.getElementById('composition-label').value.trim();
   if (!label) throw new Error('Give this shot a label');
+  const expectedView=cameraView?checkedCameraView(cameraView.view):checkedCameraView(readAuthoredCameraView());
+  if(!cameraViewsMatch(readAuthoredCameraView(),expectedView))throw Error('Recall the saved camera view before capture');
   compositionStatus('Capturing...');
   const assertUnchanged = await collectSceneComposition();
   const helper = transformControls?.getHelper();
   const visible = helper?.visible;
-  const emitterHandle = sceneObjects.find(entry => entry.id === FLAME_EMITTER_ID)?.object;
-  const emitterVisible = emitterHandle?.visible;
-  const rimHandle = sceneObjects.find(entry => entry.id === RIM_LIGHT_ID)?.object;
-  const rimVisible = rimHandle?.visible;
+  const captureHelpers=[];
+  scene.traverse(object=>{if(object.userData.kaminosEditorHelper||object.userData.kaminosEditorOnly)captureHelpers.push([object,object.visible]);});
+  for(const entry of sceneObjects)if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type)||entry.id===RIM_LIGHT_ID)captureHelpers.push([entry.object,entry.object.visible]);
+  const controlsEnabled=controls.enabled;
   let data;
   try {
     if (helper) helper.visible = false;
     selectionCaptureSuspended=true;selectionFeedback?.suspend(true);
     for(const box of selectionBoxes.values())box.visible=false;
-    if (emitterHandle) emitterHandle.visible = false;
-    if (rimHandle) rimHandle.visible = false;
+    for(const [object] of captureHelpers)object.visible=false;
+    controls.enabled=false;
     window._kaminosDirty?.();
     // The second callback samples after both render loops have had a turn.
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const state = volumePrototype?.debugState?.();
     assertUnchanged?.();
+    if(!cameraViewsMatch(readAuthoredCameraView(),expectedView))throw Error('Camera changed before capture; no shot was saved');
     if (activeSceneComposition && (!state?.active || state.error)) throw new Error(state?.error || 'Flame stopped before capture');
     const capture = captureComposedCanvases({
       host: renderer.domElement,
@@ -28231,13 +28254,14 @@ window.captureComposition = ({ result = false } = {}) => withAuthoringAction(asy
       document, label,
       simulation: activeSceneComposition ? { frameCount: state.frameCount, simStepCount: state.simStepCount, effectiveRoute: state.effectiveRoute, backend: state.backend } : null,
     });
+    if(cameraView)capture.cameraView={id:cameraView.id,label:cameraView.label,view:expectedView};
     data = buildSceneData(capture);
   } finally {
     if (helper) helper.visible = visible;
     selectionCaptureSuspended=false;selectionFeedback?.suspend(false);
     updateSelectionFeedback();
-    if (emitterHandle) emitterHandle.visible = emitterVisible;
-    if (rimHandle) rimHandle.visible = rimVisible;
+    for(const [object,wasVisible] of captureHelpers)object.visible=wasVisible;
+    controls.enabled=controlsEnabled;
     window._kaminosDirty?.();
   }
   const saved = await saveToServer(data, null, { result });
@@ -29491,6 +29515,8 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     gain.dispatchEvent(new Event('input'));
     compositionStatus(`${data.label || 'Composition'} | ${activeSceneComposition.flame.label}`);
   }
+  cameraViews?.restore(restorePlan.cameraViews);
+  sceneNavigation?.resetView();
   sceneSaveBlockedByFailedRestore = false;
   if (objectRecords.length > 0) {
     setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}${localLiquidFailure ? `; water host unavailable: ${localLiquidFailure}` : ''}`);

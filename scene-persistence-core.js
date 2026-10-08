@@ -6,6 +6,7 @@ import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.m
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFlameEmitterPose,
   flameDomainTranslationForPose, normalizeFlameDomainTranslation, flamePoseInDomain } from './scene-flame-emitter.mjs';
 import { LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';
+import {normalizeCameraViews} from './scene-camera-views.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 export const SCENE_VERSION = 7;
@@ -162,6 +163,7 @@ export function planSceneRestore(data) {
   const activeObjectId = requestedActiveId || (Array.isArray(data.selectionIds)?null:objects.at(-1)?.id || null);
   return {
     schema: data.schema || null,
+    cameraViews: normalizeCameraViews(data.cameraViews),
     version: data.version,
     objects,
     groups,
@@ -190,6 +192,7 @@ export function buildSceneDocument({
   localLiquid = null,
   capture = null,
   camera = null,
+  cameraViews = null,
   environment = null,
   postprocessing = null,
   backdrop = false,
@@ -234,6 +237,7 @@ export function buildSceneDocument({
     capture: normalizeSceneCapture(capture),
     transform: cloneJson(activeObject?.transform ?? null),
     camera: cloneJson(camera),
+    cameraViews: normalizeCameraViews(cameraViews),
     environment: cloneJson(environment),
     volumePrimitives: normalizeVolumePrimitiveState(volumePrimitives),
     materials: cloneJson(activeObject?.materials ?? null),
