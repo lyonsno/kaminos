@@ -1,4 +1,5 @@
 import {createMaterialControlState, validateMaterialControls, decodeMaterialInputs, PBF_REPULSION_COEFFICIENT} from './finger-fluid-material-controls.mjs';
+import { LOCAL_LIQUID_TRANSPORT_WGSL } from './local-liquid-transport.mjs';
 import { localLiquidOpticalQueryControls, localLiquidHostOpticalInputs, LOCAL_LIQUID_HOST_OPTICAL_QUERY_ROUTE } from './local-liquid-optical-query.mjs';
 import { canPreserveLiquidReleaseEpoch, LIVE_LIQUID_INLET_FLOATS } from './local-liquid-inlet-continuity.mjs';
 export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';
@@ -9507,6 +9508,9 @@ fn projectWorldToDeferred(worldPosition: vec3<f32>) -> vec4<f32> {
 }
 
 fn traceDeferredScene(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> DeferredSceneHit {
+  return traceDeferredSceneInterval(rayOrigin, rayDirection, select(0.012, 0.0, params.hostFrameControls.x > 0.5), 60.0, false);
+}
+fn traceDeferredSceneInterval(rayOrigin: vec3<f32>, rayDirection: vec3<f32>, minimumDistance: f32, maximumDistance: f32, waterSegment: bool) -> DeferredSceneHit {
   var hit: DeferredSceneHit;
   hit.valid = 0.0;
   hit.distance = 60.0;
@@ -9518,11 +9522,16 @@ fn traceDeferredScene(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> Deferred
   hit.metallic = 0.0;
   hit.objectId = 0.0;
   hit.confidence = 0.0;
+  if (maximumDistance < minimumDistance) { return hit; }
   let hostScene = params.hostFrameControls.x > 0.5;
   let dims = vec2<i32>(textureDimensions(deferredLinearDepthObject));
   let dimsFloat = vec2<f32>(dims);
-  var distance = 0.055;
+  var distance = select(0.055, minimumDistance, hostScene);
   for (var stepIndex = 0u; stepIndex < 24u; stepIndex = stepIndex + 1u) {
+    if (waterSegment) {
+      distance = minimumDistance + (maximumDistance - minimumDistance) * f32(stepIndex) / 23.0;
+    }
+    if (distance > maximumDistance) { break; }
     let samplePosition = rayOrigin + rayDirection * distance;
     let projected = projectWorldToDeferred(samplePosition);
     if (projected.w < 0.5 || any(projected.xy <= vec2<f32>(0.001)) || any(projected.xy >= vec2<f32>(0.999))) {
@@ -9539,10 +9548,22 @@ fn traceDeferredScene(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> Deferred
     let validHostDepth = (sceneDepth > params.hostFrameControls.z) && (sceneDepth < (params.hostFrameControls.y - 0.01));
     let validSceneDepth = select(validToyDepth, validHostDepth, hostScene);
     if (validSceneDepth && depthDelta >= -crossingTolerance && depthDelta <= 0.18 + distance * 0.02) {
+      let scenePosition = reconstructWorldPosition(scenePixel, sceneDepth);
+      let alongRay = dot(scenePosition - rayOrigin, rayDirection);
+      if (hostScene) {
+        let across = reconstructWorldPosition(scenePixel + vec2<i32>(1, 0), sceneDepth) - scenePosition;
+        let down = reconstructWorldPosition(scenePixel + vec2<i32>(0, 1), sceneDepth) - scenePosition;
+        let pixelFootprint = max(length(across) + length(down), 0.0001);
+        let transverseError = length(scenePosition - (rayOrigin + rayDirection * alongRay));
+        if (alongRay < minimumDistance || alongRay > maximumDistance || transverseError > pixelFootprint) {
+          distance = distance + 0.05 + distance * 0.105;
+          continue;
+        }
+      }
       hit.valid = 1.0;
       hit.uv = projected.xy;
-      hit.position = reconstructWorldPosition(scenePixel, sceneDepth);
-      hit.distance = length(hit.position - rayOrigin);
+      hit.position = select(scenePosition, rayOrigin + rayDirection * alongRay, hostScene);
+      hit.distance = select(length(scenePosition - rayOrigin), alongRay, hostScene);
       // Host supplies depth and final scene radiance, not private toy material
       // or object buffers. Unknown fields remain unknown; radiance is sampled.
       hit.normal = vec3<f32>(0.0);
@@ -9722,26 +9743,33 @@ fn sampleWorldOpticalQuery(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> Opt
   return sample;
 }
 
-fn sampleHybridOpticalQuery(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> OpticalQuerySample {
-  let deferredHit = traceDeferredScene(rayOrigin, rayDirection);
-  if (deferredHit.valid > 0.5 && deferredHit.confidence >= 0.55) {
+fn deferredOpticalQuerySample(hit: DeferredSceneHit, rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> OpticalQuerySample {
     var sample: OpticalQuerySample;
-    sample.radiance = textureSampleLevel(refractionSceneColor, refractionSceneSampler, deferredHit.uv, 0.0).rgb
-      + integrateParticipatingRadiance(rayOrigin, rayDirection, deferredHit.distance);
+    sample.radiance = textureSampleLevel(refractionSceneColor, refractionSceneSampler, hit.uv, 0.0).rgb
+      + integrateParticipatingRadiance(rayOrigin, rayDirection, hit.distance);
     sample.environmentRadiance = vec3<f32>(0.0);
-    sample.distance = deferredHit.distance;
+    sample.distance = hit.distance;
     sample.hitKind = REFLECTION_HIT_DEFERRED_SCENE;
     sample.providerKind = OPTICAL_PROVIDER_DEFERRED;
-    sample.position = deferredHit.position;
-    sample.normal = deferredHit.normal;
-    sample.albedo = deferredHit.albedo;
-    sample.roughness = deferredHit.roughness;
-    sample.metallic = deferredHit.metallic;
-    sample.objectId = deferredHit.objectId;
-    sample.confidence = deferredHit.confidence;
+    sample.position = hit.position;
+    sample.normal = hit.normal;
+    sample.albedo = hit.albedo;
+    sample.roughness = hit.roughness;
+    sample.metallic = hit.metallic;
+    sample.objectId = hit.objectId;
+    sample.confidence = hit.confidence;
     return sample;
-  }
+}
+fn sampleHybridOpticalQuery(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> OpticalQuerySample {
+  let hit = traceDeferredScene(rayOrigin, rayDirection);
+  if (hit.valid > 0.5 && hit.confidence >= 0.55) { return deferredOpticalQuerySample(hit, rayOrigin, rayDirection); }
   return sampleWorldOpticalQuery(rayOrigin, rayDirection);
+}
+fn sampleHostWaterSegment(rayOrigin: vec3<f32>, rayDirection: vec3<f32>, waterPath: f32) -> OpticalQuerySample {
+  let hit = traceDeferredSceneInterval(rayOrigin, rayDirection, 0.0, waterPath, true);
+  if (hit.valid > 0.5 && hit.confidence >= 0.55) { return deferredOpticalQuerySample(hit, rayOrigin, rayDirection); }
+  // A miss inside water means continue to the exit, not sample sky inside it.
+  return makeNoOpticalQuerySample();
 }
 
 fn integrateTransmissionQuadrature(
@@ -9811,7 +9839,7 @@ fn integrateWorldReflectionQuadrature(
   let helperAxis = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(centerDirection.y) > 0.92);
   let tangent = normalize(cross(helperAxis, centerDirection));
   let bitangent = normalize(cross(centerDirection, tangent));
-  let rayOrigin = worldPosition + worldNormal * 0.026;
+  let rayOrigin = select(worldPosition + worldNormal * 0.026, worldPosition, params.hostFrameControls.x > 0.5);
   let center = reflectionSampleFromOpticalQuery(sampleHybridOpticalQuery(rayOrigin, centerDirection));
   let tangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * coneRadius));
   let tangentNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * -coneRadius));
@@ -9901,6 +9929,8 @@ fn reconstructSurfaceNormal(pixel: vec2<i32>, centerDepth: f32) -> vec3<f32> {
   return normalize(vec3<f32>(-gradient.x * 7.2, gradient.y * 7.2, 1.0 + centerDepth * 0.015));
 }
 
+${LOCAL_LIQUID_TRANSPORT_WGSL}
+
 fn coherentSlabDepth(pixel: vec2<i32>, centerDepth: f32, backSurface: bool) -> f32 {
   let candidate = select(readFrontDepth(pixel), readBackDepth(pixel), backSurface);
   let populated = select((candidate < 29.5), (candidate > 0.001), backSurface);
@@ -9908,6 +9938,7 @@ fn coherentSlabDepth(pixel: vec2<i32>, centerDepth: f32, backSurface: bool) -> f
 }
 
 fn reconstructWorldReflectionNormal(pixel: vec2<i32>) -> vec3<f32> {
+  if (params.hostFrameControls.x > 0.5) { return liquidWorldNormalAtRadius(pixel, 6, false); }
   let leftPixel = pixel + vec2<i32>(-6, 0);
   let rightPixel = pixel + vec2<i32>(6, 0);
   let screenUpPixel = pixel + vec2<i32>(0, -6);
@@ -9924,6 +9955,7 @@ fn reconstructWorldReflectionNormal(pixel: vec2<i32>) -> vec3<f32> {
 }
 
 fn reconstructWorldReflectionDetailNormal(pixel: vec2<i32>) -> vec3<f32> {
+  if (params.hostFrameControls.x > 0.5) { return liquidWorldNormalAtRadius(pixel, 2, false); }
   let leftPixel = pixel + vec2<i32>(-2, 0);
   let rightPixel = pixel + vec2<i32>(2, 0);
   let screenUpPixel = pixel + vec2<i32>(0, -2);
@@ -9940,6 +9972,7 @@ fn reconstructWorldReflectionDetailNormal(pixel: vec2<i32>) -> vec3<f32> {
 }
 
 fn reconstructEntryNormalAtRadius(pixel: vec2<i32>, centerDepth: f32, radius: i32) -> vec3<f32> {
+  if (params.hostFrameControls.x > 0.5) { return liquidWorldDirectionToView(liquidWorldNormalAtRadius(pixel, radius, false)); }
   let left = coherentSlabDepth(pixel + vec2<i32>(-radius, 0), centerDepth, false);
   let right = coherentSlabDepth(pixel + vec2<i32>(radius, 0), centerDepth, false);
   let down = coherentSlabDepth(pixel + vec2<i32>(0, -radius), centerDepth, false);
@@ -9981,6 +10014,7 @@ fn estimateInterfaceNormal(
 }
 
 fn reconstructExitNormalAtRadius(pixel: vec2<i32>, centerDepth: f32, radius: i32) -> vec3<f32> {
+  if (params.hostFrameControls.x > 0.5) { return -liquidWorldDirectionToView(liquidWorldNormalAtRadius(pixel, radius, true)); }
   let left = coherentSlabDepth(pixel + vec2<i32>(-radius, 0), centerDepth, true);
   let right = coherentSlabDepth(pixel + vec2<i32>(radius, 0), centerDepth, true);
   let down = coherentSlabDepth(pixel + vec2<i32>(0, -radius), centerDepth, true);
@@ -10178,12 +10212,17 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     return refractionOutput(vec4<f32>(interfaceNormal.denseBodyConfidence, coverageContinuity, interfaceNormal.variance, 1.0), supportOrderingDepth);
   }
   let thickness = centerAccum.x;
-  let viewDir = vec3<f32>(0.0, 0.0, 1.0);
+  let hostTransport = params.hostFrameControls.x > 0.5;
+  let entryWorldPosition = reconstructWorldPosition(pixel, slab.entryDepth);
+  var viewDir = vec3<f32>(0.0, 0.0, 1.0);
+  if (hostTransport) { viewDir = -liquidWorldDirectionToView(normalize(entryWorldPosition - params.cameraPosition.xyz)); }
   let insideRay = refract(-viewDir, transportNormal, 1.0 / 1.333);
   let insideRayValid = length(insideRay) > 0.001;
   let geometricPathLength = slab.geometricPathLength / max(abs(insideRay.z), 0.25);
   let insideOffset = projectViewRayOffset(insideRay, geometricPathLength, slab.entryDepth);
-  let unclampedExitUv = sceneUv + insideOffset / dimsFloat;
+  let insideWorldRay = viewDirectionToWorld(insideRay);
+  var unclampedExitUv = sceneUv + insideOffset / dimsFloat;
+  if (hostTransport) { unclampedExitUv = projectWorldToDeferred(entryWorldPosition + insideWorldRay * geometricPathLength).xy; }
   let exitInFrame = all(unclampedExitUv >= vec2<f32>(0.001)) && all(unclampedExitUv <= vec2<f32>(0.999));
   let exitUv = clamp(unclampedExitUv, vec2<f32>(0.001), vec2<f32>(0.999));
   let exitPixel = vec2<i32>(exitUv * dimsFloat);
@@ -10196,7 +10235,12 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let exitRayAngularVariance = max(exitNormalVariance, interfaceNormal.variance * 0.85);
   let outgoingRay = refract(insideRay, -exitTransportNormal, 1.333);
   let outgoingRayValid = length(outgoingRay) > 0.001;
-  let exitWorldPosition = reconstructWorldPosition(exitPixel, sampledExitDepth);
+  var exitWorldPosition = reconstructWorldPosition(exitPixel, sampledExitDepth);
+  var metricExitPath = geometricPathLength;
+  if (hostTransport && exitDepthValid && exitInFrame) {
+    metricExitPath = (sampledExitDepth - slab.entryDepth) / max(dot(insideWorldRay, params.cameraForward.xyz), 0.000001);
+    exitWorldPosition = entryWorldPosition + insideWorldRay * metricExitPath;
+  }
   let outgoingWorldRay = viewDirectionToWorld(select(insideRay, outgoingRay, outgoingRayValid));
   let exitDirectionDelta = outgoingRay.xy / max(abs(outgoingRay.z), 0.25)
     - insideRay.xy / max(abs(insideRay.z), 0.25);
@@ -10206,7 +10250,25 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let exitValidity = slab.exitValidity
     * select(0.0, 1.0, exitInFrame)
     * select(0.0, 1.0, insideRayValid && outgoingRayValid && exitDepthValid);
-  let queryValidity = select(0.0, 1.0, exitValidity > 0.5);
+  var queryValidity = select(0.0, 1.0, exitValidity > 0.5);
+  let geometricPathKnown = (slab.exitValidity > 0.5) && insideRayValid;
+  var waterPath = metricExitPath;
+  var queryOrigin = select(exitWorldPosition + outgoingWorldRay * 0.035, exitWorldPosition, hostTransport);
+  var queryDirection = outgoingWorldRay;
+  var submergedSurface = false;
+  var refractionQuery = makeNoOpticalQuerySample();
+  if (hostTransport && geometricPathKnown) {
+    let insideHit = sampleHostWaterSegment(entryWorldPosition, insideWorldRay, waterPath);
+    if (insideHit.providerKind == OPTICAL_PROVIDER_DEFERRED && insideHit.distance >= 0.0 && insideHit.distance <= waterPath) {
+      refractionQuery = insideHit;
+      waterPath = insideHit.distance;
+      submergedSurface = true;
+      queryValidity = 1.0;
+      queryOrigin = entryWorldPosition;
+      queryDirection = insideWorldRay;
+    }
+  }
+  if (!submergedSurface && queryValidity > 0.5) { refractionQuery = sampleHybridOpticalQuery(queryOrigin, queryDirection); }
   let transmissionFootprintActivation = interfaceNormal.denseBodyConfidence
     * smoothstep(0.04, 0.34, exitRayAngularVariance)
     * queryValidity;
@@ -10218,9 +10280,9 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let effectiveTransmissionQuadratureMode = select(
     0,
     1,
-    transmissionFootprintMode == 1 && transmissionFootprintActivation > 0.05,
+    transmissionFootprintMode == 1 && transmissionFootprintActivation > 0.05 && !submergedSurface,
   );
-  let offsetPixels = mix(entryOnlyOffset, twoInterfaceOffset, queryValidity);
+  let offsetPixels = mix(entryOnlyOffset, twoInterfaceOffset, select(0.0, 1.0, exitValidity > 0.5));
   let refractedUv = clamp(sceneUv + offsetPixels / dimsFloat, vec2<f32>(0.001), vec2<f32>(0.999));
   let refractedScene = textureSampleLevel(refractionSceneColor, refractionSceneSampler, refractedUv, 0.0);
   let opticalThicknessPath = thickness * 0.12;
@@ -10234,7 +10296,8 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     denseBodyPathActivation,
   );
   let robustBodyPathWithFallback = mix(opticalThicknessPath, robustBodyPath, queryValidity);
-  let absorptionPath = select(geometricSlabPath, robustBodyPathWithFallback, bodyTransportMode == 1);
+  var absorptionPath = select(geometricSlabPath, robustBodyPathWithFallback, bodyTransportMode == 1);
+  if (hostTransport && geometricPathKnown) { absorptionPath = waterPath; }
   let calibratedAbsorptionCoefficient = vec3<f32>(1.10, 0.42, 0.18);
   let legacyAbsorptionCoefficient = vec3<f32>(0.46, 0.15, 0.055);
   let absorptionCoefficient = select(calibratedAbsorptionCoefficient, legacyAbsorptionCoefficient, opticalLightingMode == 2);
@@ -10285,10 +10348,6 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     ), supportOrderingDepth);
   }
 
-  var refractionQuery = makeNoOpticalQuerySample();
-  if (queryValidity > 0.5) {
-    refractionQuery = sampleHybridOpticalQuery(exitWorldPosition + outgoingWorldRay * 0.035, outgoingWorldRay);
-  }
   if (opticalDebugMode == 19) {
     if (queryValidity <= 0.5) {
       return refractionOutput(vec4<f32>(0.86, 0.10, 0.68, 1.0), supportOrderingDepth);
@@ -10314,8 +10373,8 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   var transmissionQuadratureRadiance = refractionQuery.radiance;
   if (queryValidity > 0.5) {
     transmissionQuadratureRadiance = integrateTransmissionQuadrature(
-      exitWorldPosition + outgoingWorldRay * 0.035,
-      outgoingWorldRay,
+      queryOrigin,
+      queryDirection,
       refractionQuery,
       transmissionConeRadius,
       effectiveTransmissionQuadratureMode,
@@ -10438,7 +10497,8 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   }
 
   let absorptionLoss = vec3<f32>(1.0) - absorption;
-  let waterScatter = vec3<f32>(0.055, 0.30, 0.42) * (vec3<f32>(0.42) + absorptionLoss * 0.58);
+  var waterScatter = vec3<f32>(0.055, 0.30, 0.42) * absorptionLoss;
+  if (!hostTransport) { waterScatter = vec3<f32>(0.055, 0.30, 0.42) * (vec3<f32>(0.42) + absorptionLoss * 0.58); }
   let directRoughness = select(
     0.0,
     clamp(interfaceNormal.variance * interfaceNormal.denseBodyConfidence, 0.0, 0.48),
@@ -16459,6 +16519,8 @@ export async function createWebGPUFingerFluidSolver({
           compositePassCount: hybridOpticalQueryCompositePassCount,
           maximumDeferredMarchSteps: 24,
           minimumDeferredConfidence: 0.55,
+          hostTransmissionEvents: lastHostFrameCompositionEvidence ? ['opaque-hit-inside-water','water-exit','outside-scene-or-environment'] : null,
+          hostWaterPathAuthority: lastHostFrameCompositionEvidence ? 'supported-geometric-segment; overlap-proxy-only-for-invalid-geometry' : null,
           deferredInputs: lastHostFrameCompositionEvidence ? localLiquidHostOpticalInputs(lastHostFrameCompositionEvidence,configuredExtent) : configuredExtent ? {
             linearDepthObject: { label: 'kaminos-finger-fluid-deferred-linear-depth-object', format: 'rgba16float', extent: configuredExtent },
             worldNormalRoughness: { label: 'kaminos-finger-fluid-deferred-world-normal-roughness', format: 'rgba16float', extent: configuredExtent },
