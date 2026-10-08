@@ -7,3 +7,5 @@ assert.deepEqual(normalizeLocalLiquidSetup(JSON.parse(JSON.stringify(scene))),sc
 for(const patch of [{particleRepulsionStrength:-1},{capillaryStrength:3},{freeFlightViscosityBoost:.5}])assert.throws(()=>normalizeLocalLiquidSetup({...scene,materialControls:{...materialControls,...patch}}));
 const {materialControls:omitted,...legacy}=scene;assert.deepEqual(normalizeLocalLiquidSetup(legacy),legacy);
 console.log('Authored water material settings round-trip; invalid values reject and old scenes remain compatible');
+
+for(const materialControls of [null,true,[],"bad"])assert.throws(()=>normalizeLocalLiquidSetup({...scene,materialControls}),/material controls.*object/i);

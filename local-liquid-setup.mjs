@@ -73,6 +73,8 @@ function normalizeLocalLiquidSetupCore(value) {
   }
   const result={schema:LOCAL_LIQUID_SCHEMA,support:value.support,particleCount:value.particleCount,densityIterations:value.densityIterations};
   if(Object.hasOwn(value,'materialControls')){
+    if(!value.materialControls||typeof value.materialControls!=='object'||Array.isArray(value.materialControls))throw new TypeError('Local liquid material controls require an object');
+    if(Object.hasOwn(value.materialControls,'densityIterations')&&value.materialControls.densityIterations!==value.densityIterations)throw new Error('Conflicting density passes in saved material controls');
     const values=validateMaterialControls({particleRepulsionStrength:1,capillaryStrength:.72,freeFlightViscosityBoost:.17,...value.materialControls,densityIterations:value.densityIterations});
     const {densityIterations,...material}=values;result.materialControls=material;
   }
