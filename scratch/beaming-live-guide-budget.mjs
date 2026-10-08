@@ -7,11 +7,15 @@ import {createHash} from 'node:crypto';
 import {assertSourceGuideEvidence} from './beaming-surface-evidence.mjs';
 const [url,out,iterationsText='32']=process.argv.slice(2),iterations=Number(iterationsText);
 await fs.mkdir(out,{recursive:true});
-const report={status:'running',phase:'preflight',requestedUrl:url,iterations,claim:'held-source changing-guide visibility and gather cost only',source:{root:process.cwd(),revision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),dirty:execFileSync('git',['status','--porcelain'],{encoding:'utf8'})},errors:[],httpFailures:[],arms:[]};
+const report={status:'running',phase:'preflight',requestedUrl:url,iterations,claim:'held-source changing-guide visibility and gather cost only',source:{root:process.cwd(),revision:null,dirty:null},errors:[],httpFailures:[],arms:[]};
 const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
 const hash=v=>createHash('sha256').update(Buffer.from(new Float32Array(v).buffer)).digest('hex');
 await save();let browser;
 try{
+ report.phase='source-identity';await save();
+ report.source.revision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+ report.source.dirty=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
+ report.phase='preflight';await save();
  assert(Number.isSafeInteger(iterations)&&iterations>0,'positive explicit sample count');
  for(const name of ['beaming-live-guide-budget.mjs','beaming-source-aware-gpu.mjs','beaming-gather-profiler.mjs','beaming-surface-evidence.mjs'])await fs.copyFile(new URL(name,import.meta.url),out+'/'+name);
  report.runtime=await(await fetch(new URL('/api/runtime-config',url))).json();
