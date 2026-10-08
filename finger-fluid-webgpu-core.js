@@ -16089,7 +16089,7 @@ export async function createWebGPUFingerFluidSolver({
       vorticityConfinementContract: KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT,
       freeSurfaceContract: KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT,
       cohesionModel:safeCohesionModel,
-      cohesionSettings:safeCohesionModel==='ipbf_free_surface'?{contract:'ipbf-density-independent-normalized-attraction-v0',strengthUnit:'gravity_fraction',normalization:'pair_weight_sum',densityConfidenceGate:false,legacyAccelerationCap:false,neighborhoodRadius:safeKernelRadius,paperTerm:false}:{contract:'legacy-capillary-attraction-v0',strengthUnit:'legacy_gain',densityConfidenceGate:true,accelerationCap:.42},
+      cohesionSettings:safeCohesionModel==='ipbf_free_surface'?{contract:'ipbf-density-independent-normalized-attraction-v0',strengthUnit:'gravity_fraction',normalization:'max_1_pair_weight_sum',densityConfidenceGate:false,legacyAccelerationCap:false,neighborhoodRadius:safeKernelRadius,paperTerm:false}:{contract:'legacy-capillary-attraction-v0',strengthUnit:'legacy_gain',densityConfidenceGate:true,accelerationCap:.42},
       waterfallContinuityContract: KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT,
       unsupportedSheetContract: KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT,
       waterfallOracleContract: waterfallOracleConfig?.contract || null,

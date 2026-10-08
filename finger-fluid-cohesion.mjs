@@ -16,7 +16,7 @@ export function evaluateFingerFluidCohesionAcceleration({weightedDirection,total
   resolveFingerFluidCohesionModel({cohesionModel});
   if(!Array.isArray(weightedDirection)||weightedDirection.length!==3||!weightedDirection.every(Number.isFinite)
     ||![totalWeight,strength,activity,gravity].every(Number.isFinite)||totalWeight<0||strength<0||strength>2||activity<0||activity>1||gravity<0)throw new RangeError('Cohesion acceleration inputs are invalid');
-  if(cohesionModel==='ipbf_free_surface')return totalWeight>0?weightedDirection.map(x=>x/totalWeight*gravity*strength*activity):[0,0,0];
+  if(cohesionModel==='ipbf_free_surface')return totalWeight>0?weightedDirection.map(x=>x/Math.max(1,totalWeight)*gravity*strength*activity):[0,0,0];
   const raw=weightedDirection.map(x=>x*.12*strength*activity),length=Math.hypot(...raw);
   return length>.42?raw.map(x=>x*.42/length):raw;
 }
@@ -29,7 +29,7 @@ export function applyFingerFluidCohesionProfile(source,{pressureSolver='ipbf',co
     ['var attraction = vec3<f32>(0.0);','var attraction = vec3<f32>(0.0);\n  var attractionWeight = 0.0;'],
     ['attraction = attraction + (offset / distance) * weight;','attraction = attraction + (offset / distance) * weight;\n              attractionWeight = attractionWeight + weight;'],
     ['var cohesionAcceleration = attraction * (0.12 * params.chemistry.y) * cohesionActivity;\n  let cohesionLength = length(cohesionAcceleration);\n  if (cohesionLength > 0.42) { cohesionAcceleration = cohesionAcceleration * (0.42 / cohesionLength); }',
-     'var cohesionAcceleration = vec3<f32>(0.0);\n  if (attractionWeight > 0.0) {\n    cohesionAcceleration = (attraction / attractionWeight) * (abs(params.forces.x) * params.chemistry.y * cohesionActivity);\n  }'],
+     'var cohesionAcceleration = vec3<f32>(0.0);\n  if (attractionWeight > 0.0) {\n    cohesionAcceleration = (attraction / max(1.0, attractionWeight)) * (abs(params.forces.x) * params.chemistry.y * cohesionActivity);\n  }'],
   ];
   let result=source;
   for(const [from,to] of replacements){

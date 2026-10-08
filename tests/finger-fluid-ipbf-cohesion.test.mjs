@@ -40,9 +40,14 @@ test('the actual cohesion shader changes only under its admitted opt-in profile'
  const shader=source.match(/const COMPUTE_SHADER = \/\* wgsl \*\/`([\s\S]*?)`;/)?.[1];assert.ok(shader,'actual compute shader is unavailable');
  assert.equal(core.applyFingerFluidCohesionProfile(shader),shader,'legacy shader changed');
  const changed=core.applyFingerFluidCohesionProfile(shader,{cohesionModel:'ipbf_free_surface'});
- assert.match(changed,/cohesionAcceleration = \(attraction \/ attractionWeight\) \* \(abs\(params.forces.x\) \* params.chemistry.y \* cohesionActivity\)/);
+ assert.match(changed,/cohesionAcceleration = \(attraction \/ max\(1.0, attractionWeight\)\) \* \(abs\(params.forces.x\) \* params.chemistry.y \* cohesionActivity\)/);
  assert.match(changed,/pairSupportConfidence = 1.0/);
  assert.doesNotMatch(changed,/cohesionLength > 0.42/);
  assert.throws(()=>core.applyFingerFluidCohesionProfile(shader,{pressureSolver:'pbf',cohesionModel:'ipbf_free_surface'}),/requires IPBF/);
  assert.throws(()=>core.applyFingerFluidCohesionProfile('wrong shader',{cohesionModel:'ipbf_free_surface'}),/anchor missing/);
+});
+
+test('weak isolated pair weights fade the recovered force at the attraction boundary',()=>{
+ const acceleration=core.evaluateFingerFluidCohesionAcceleration({weightedDirection:[.0001,0,0],totalWeight:.0001,strength:1,activity:1,gravity:9.2,cohesionModel:'ipbf_free_surface'});
+ assert.ok(Math.abs(acceleration[0]-.00092)<1e-12,'weak band weight was cancelled into full-strength attraction');
 });
