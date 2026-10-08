@@ -28,9 +28,11 @@ try {
     const module=device.createShaderModule({code});
     const errors=[...(await module.getCompilationInfo()).messages].filter(m=>m.type==='error').map(m=>m.message);
     assert.deepEqual(errors,[]);
-    await device.createRenderPipelineAsync({layout:'auto',vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',constants:{GRID:32,GRID_Y:32,TRANSPARENT_CANVAS:0,LEAN_STOCK_RAYMARCH:false},targets:[{format:'rgba8unorm'}]},primitive:{topology:'triangle-list'}});
+    await device.createRenderPipelineAsync({layout:'auto',vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',constants:{GRID:32,GRID_Y:32,TRANSPARENT_CANVAS:0,LEAN_STOCK_RAYMARCH:0},targets:[{format:'rgba8unorm'}]},primitive:{topology:'triangle-list'}});
     report.cases.push({route,outer:enabled,pipelineCreated:true,sha256:createHash('sha256').update(code).digest('hex')});save();
   }
   report.phase='complete';report.passed=true;
-}catch(error){report.error=error.stack;process.exitCode=1;}
+}catch(error){report.error=error.stack;console.error(report.error);process.exitCode=1;}
 finally{device?.destroy();save();}
+// Native runtime teardown must not turn a failed durable report into exit 0.
+process.exit(report.passed ? 0 : 1);
