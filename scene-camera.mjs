@@ -61,7 +61,7 @@ export function createSceneCameras({edits,readObjects,writeCameras,readViewport,
  function leave({continueFromCamera=false}={}){finishNavigation(false);if(mode!=='camera')return;const current=readViewport();mode='user';if(userView&&!continueFromCamera)applyViewport(userView);else applyViewport(current);notify();}
  function finishNavigation(cancel=false){if(navigationTimer!==null){clearTimeout(navigationTimer);navigationTimer=null;}if(!navigationId)return;const id=navigationId;navigationId=null;if(cancel&&navigationDistanceBefore!==null)distance=navigationDistanceBefore;navigationDistanceBefore=null;if(edits.state().active?.id===id){cancel?edits.cancel():edits.commit();}sync();}
  const api={read,state:()=>({mode,locked,activeId:settings.activeId,frame:mode==='camera'?frame():null,writing,navigationId}),active:()=>copy(active()),sync,
-  restore(value){finishNavigation(true);settings=normalizeSceneCamera(value,readObjects());sync();},
+  restore(value){finishNavigation(true);put({settings:normalizeSceneCamera(value,readObjects()),cameras:cameras()});},
   restoreViewport(value){value=normalizeCameraViewport(value,settings);mode='user';userView=null;locked=!!value?.locked;if(value?.mode==='camera'&&active()){if(!supportsProjection(active().camera.projection))throw Error('This render route does not support that camera projection');userView=value.userView?copy(value.userView):copy(readViewport());mode='camera';}sync();},
   viewportState:()=>({mode,locked,...(userView?{userView:copy(userView)}:{})}),
   membershipChanged(activeId=settings.activeId){if(activeId!==null&&!cameras().some(o=>o.id===activeId))activeId=null;settings={...settings,activeId};sync();},
