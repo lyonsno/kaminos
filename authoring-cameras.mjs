@@ -33,7 +33,7 @@ export function installCameraAuthoring({document,service,bookmarks,edits,selecte
  byId('scene-camera-view').onclick=()=>{run(()=>service.toggle());byId('scene-camera-view').blur();};
  byId('scene-active-camera').onchange=event=>{run(()=>service.setActive(event.target.value||null));event.target.blur();};
  byId('scene-camera-align').onclick=()=>run(()=>service.align());
- byId('scene-camera-lock').onchange=event=>run(()=>service.lock(event.target.checked));
+ byId('scene-camera-lock').onchange=event=>{run(()=>service.lock(event.target.checked));event.target.blur();};
  byId('scene-camera-capture').onclick=async()=>{try{const result=await service.capture();if(result?.ok===false)throw Error(result.error);}catch(error){fail(error);}};
  byId('selected-camera-active').onclick=()=>run(()=>{service.setActive(selectedCamera().id);service.enter();});
  byId('selected-camera-view').onclick=()=>run(()=>{service.setActive(selectedCamera().id);service.enter();});

@@ -11644,6 +11644,7 @@ async function initScene() {
     gizmo: transformControls,
     selected: () => selectedPlacementEntry()?.id || null,
     prepare:()=>{if(sceneSelection.ids.length)selectionTransforms?.prepare();},
+    viewReference:id=>{const state=sceneCameras?.state();return state?.mode==='camera'&&id===state.activeId?{point:controls.target.toArray(),screen:[state.frame.x+state.frame.width/2,state.frame.y+state.frame.height/2]}:null;},
     transformSettings:()=>transformPreferences,
     localOrientation:()=>sceneSelection.activeId?selectionRootState(sceneSelection.activeId).rotation:[0,0,0],
     read: id => {
