@@ -23710,6 +23710,7 @@ async function initKaminosVolumeRoute() {
     if (params.has(param)) setVolumeControlValue(id, params.get(param));
   }
   updateVolumeControlLabels();
+  flameInspector?.sync(true);
   volumePrototype = createKaminosVolumePrototype({
     THREE,
     viewport: document.getElementById('viewport'),
