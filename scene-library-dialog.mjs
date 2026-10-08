@@ -1,11 +1,11 @@
-export function createSceneLibraryDialog({document,list,refresh,importFile}) {
+export function createSceneLibraryDialog({document,list,refresh,importFile,onCancel=()=>{}}) {
   const dialog=document.createElement('dialog');
   dialog.id='scene-load-dialog';dialog.setAttribute('aria-labelledby','scene-load-title');
   dialog.innerHTML='<header><h2 id="scene-load-title">Load Scene</h2><button type="button" class="btn" data-scene-close aria-label="Close scene library">Close</button></header><div data-scene-list></div><footer><button type="button" class="btn" data-scene-refresh>Refresh</button><button type="button" class="btn" data-scene-import>Import scene file...</button></footer>';
   document.body.append(dialog);
   let marker=null;
   const restore=()=>{marker?.replaceWith(list);marker=null;};
-  const close=()=>{if(dialog.open){restore();dialog.close();}};
+  const close=()=>{onCancel();if(dialog.open){restore();dialog.close();}};
   const reload=async()=>{
     list.textContent='Loading scenes...';
     try{await refresh();}catch(error){list.textContent='Scene list failed: '+error.message;}

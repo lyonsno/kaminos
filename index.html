@@ -26158,7 +26158,8 @@ window.exportGLB = function() {
 
 // --- Greenroom Browser ---
 let grCurrentRoot = 'greenroom';
-const sceneLibraryDialog=createSceneLibraryDialog({document,list:document.getElementById('scenes-list'),refresh:()=>grBrowseScenes(),importFile:()=>document.getElementById('scene-file-input').click()});
+const sceneLibraryReads=createSceneLoadRequests();
+const sceneLibraryDialog=createSceneLibraryDialog({document,list:document.getElementById('scenes-list'),refresh:()=>grBrowseScenes(),importFile:()=>document.getElementById('scene-file-input').click(),onCancel:()=>sceneLibraryReads.invalidate()});
 window.openSceneLibrary=()=>sceneLibraryDialog.open();
 let grCurrentPath = '';
 const GR_STATUS_DIRS = ['done', 'failed', 'pending', 'running', 'cancelled'];
@@ -27892,13 +27893,15 @@ async function grBrowseScenes() {
       btn.textContent = 'Load';
       btn.onclick = async (e) => {
         e.stopPropagation();
+        const selection=sceneLibraryReads.begin();
         const sceneData = await grFetchApi('read', { root: 'scenes', path: entry.name });
+        if(!sceneLibraryReads.isCurrent(selection))return;
         if (sceneData && !sceneData.error) {
           sceneLibraryDialog.close();
           const blob = new Blob([JSON.stringify(sceneData)], { type: 'application/json' });
           const file = new File([blob], entry.name);
           loadSceneFile(file, { sceneFile: entry.name });
-        }
+        } else setInfo('Scene load failed: '+(sceneData?.error || 'No scene data returned'));
       };
       const delBtn = document.createElement('button');
       delBtn.className = 'btn';

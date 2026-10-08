@@ -44,6 +44,31 @@ try {
   report.loadedParameters=await page.evaluate(()=>window.kaminosAuthoringParameters.read('@scene-gi'));
   assert.deepEqual(report.loadedParameters,report.loadedDocument.postprocessing.sceneGI);
   assert.equal(await page.evaluate(()=>document.getElementById('scene-load-dialog').open),false);
+  report.phase='cancel-pending-read';await save();
+  const authoredBefore=await page.evaluate(()=>JSON.stringify(window.kaminosSceneAuthoring.read()));
+  await page.evaluate(()=>window.openSceneLibrary());
+  const pendingButton=page.locator('#scene-load-dialog .gr-entry').filter({hasText:sceneFile}).getByRole('button',{name:'Load',exact:true});
+  await pendingButton.evaluate(button=>{
+    const action=button.onclick;window.__sceneReadFinished=false;
+    button.onclick=async function(event){await action.call(this,event);window.__sceneReadFinished=true;};
+  });
+  let hold=true,release,admitted;
+  const held=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>admitted=resolve);
+  await page.route('**/api/read?**',async route=>{
+    if(hold && new URL(route.request().url()).searchParams.get('path')===sceneFile) {
+      hold=false;const response=await route.fetch();
+      report.delayedRead={url:route.request().url(),status:response.status(),control:'real response held until after cancel/reopen'};
+      await fs.writeFile(out+'/delayed-scene-read.json',await response.text());
+      admitted();await held;await route.fulfill({response});
+    }else await route.continue();
+  });
+  await pendingButton.click();await ready;await page.keyboard.press('Escape');
+  await page.evaluate(()=>window.openSceneLibrary());
+  release();await page.waitForFunction(()=>window.__sceneReadFinished);
+  assert.equal(await page.evaluate(()=>document.getElementById('scene-load-dialog').open),true,'cancelled response dismissed reopened library');
+  assert.equal(await page.evaluate(()=>JSON.stringify(window.kaminosSceneAuthoring.read())),authoredBefore,'cancelled response changed the loaded kiln');
+  report.cancelledRead={reopened:true,authoredStateUnchanged:true};await save();
+  await page.unroute('**/api/read?**');await page.keyboard.press('Escape');
   report.phase='save-as-save';await save();
   await page.evaluate(()=>document.getElementById('composition-label').value='Handy save-load controls smoke');
   report.saved=await page.evaluate(()=>window.saveSceneAs({result:true}));assert.equal(report.saved.ok,true);
