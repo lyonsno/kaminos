@@ -27,9 +27,22 @@ export function collapseIdenticalScenes(scenes) {
   return kept;
 }
 
+// Other servers' scenes identical to a listed local scene join that local row
+// as its mesh source (recoverFrom) instead of adding a second row.
+export function mergeForeignTwins(local, foreign) {
+  const byName = new Map(local.map(scene => [scene.name, { ...scene }]));
+  const rest = [];
+  for (const scene of foreign) {
+    const twin = scene.alsoHere ? byName.get(scene.alsoHere) : null;
+    if (twin && !twin.recoverFrom) twin.recoverFrom = { store: scene.store, name: scene.name };
+    else if (!twin) rest.push(scene);
+  }
+  return { local: [...byName.values()], foreign: rest };
+}
+
 export function sceneMatchesFilter(scene, filter) {
   const words = String(filter || '').toLowerCase().split(/\s+/).filter(Boolean);
-  const haystack = `${scene.label || ''} ${scene.name} ${scene.store?.label || ''}`.toLowerCase();
+  const haystack = `${scene.label || ''} ${scene.name} ${scene.store?.label || ''} ${scene.recoverFrom?.store?.label || ''}`.toLowerCase();
   return words.every(word => haystack.includes(word));
 }
 
@@ -80,11 +93,12 @@ export function pickSavedScene({ scenes, more = null, host = document.body } = {
       const meta = document.createElement('span');
       meta.className = 'scene-load-picker-meta';
       meta.textContent = [scene.store ? `from ${scene.store.label}` : '', scene.alsoHere ? 'already on this server' : '',
+        scene.recoverFrom ? `meshes from ${scene.recoverFrom.store.label}` : '',
         scene.copies ? `+${scene.copies} identical cop${scene.copies === 1 ? 'y' : 'ies'}` : '',
         scene.name.replace(/\.kaminos\.json$/, ''), savedWhen(scene.timestamp)].filter(Boolean).join(' · ');
       text.append(title, meta);
       row.append(picture, text);
-      row.addEventListener('click', () => finish({ name: scene.name, store: scene.store || null }));
+      row.addEventListener('click', () => finish({ name: scene.name, store: scene.store || null, recoverFrom: scene.recoverFrom || null }));
       return row;
     };
     let rows = ordered.map(makeRow);
@@ -107,7 +121,17 @@ export function pickSavedScene({ scenes, more = null, host = document.body } = {
     input.addEventListener('input', () => { applyFilter(); active = 0; highlight(); });
     more?.then(extra => {
       if (!open) return;
-      const added = sortScenesNewestFirst(extra || []);
+      const localScenes = ordered.filter(scene => !scene.store);
+      const { local: merged, foreign } = mergeForeignTwins(localScenes, extra || []);
+      for (const scene of merged) {
+        const index = ordered.findIndex(entry => !entry.store && entry.name === scene.name);
+        if (!scene.recoverFrom || index < 0 || ordered[index].recoverFrom) continue;
+        ordered[index] = scene;
+        const replacement = makeRow(scene);
+        rows[index].replaceWith(replacement);
+        rows[index] = replacement;
+      }
+      const added = sortScenesNewestFirst(foreign);
       const addedRows = added.map(makeRow);
       ordered = [...ordered, ...added];
       rows = [...rows, ...addedRows];
@@ -121,7 +145,7 @@ export function pickSavedScene({ scenes, more = null, host = document.body } = {
       else if (event.key === 'Enter') {
         event.preventDefault();
         const chosen = visible()[active];
-        if (chosen) finish({ name: chosen.dataset.sceneFile, store: ordered[rows.indexOf(chosen)].store || null });
+        if (chosen) { const scene = ordered[rows.indexOf(chosen)]; finish({ name: scene.name, store: scene.store || null, recoverFrom: scene.recoverFrom || null }); }
       }
     });
     backdrop.querySelector('[data-scene-browse]').addEventListener('click', () => finish('browse'));

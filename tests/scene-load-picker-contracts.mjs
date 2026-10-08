@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { collapseIdenticalScenes, sceneMatchesFilter, sortScenesNewestFirst } from '../scene-load-picker.mjs';
+import { collapseIdenticalScenes, mergeForeignTwins, sceneMatchesFilter, sortScenesNewestFirst } from '../scene-load-picker.mjs';
 
 test('saved scenes list newest first and filter by label or file name words', () => {
   const scenes = [
@@ -33,4 +33,18 @@ test('identical scenes on this server list once with a count of the copies', () 
     { name: 'unread.kaminos.json' },
   ]);
   assert.deepEqual(scenes.map(scene => [scene.name, scene.copies || 0]), [['kiln_a.kaminos.json', 2], ['other.kaminos.json', 0], ['unread.kaminos.json', 0]]);
+});
+
+test('a scene here and on another server shows once, keeping that server as its mesh source', () => {
+  const local = [{ name: 'kiln.kaminos.json', label: 'Kiln' }, { name: 'mine.kaminos.json', label: 'Mine' }];
+  const foreign = [
+    { name: 'kiln_copy.kaminos.json', alsoHere: 'kiln.kaminos.json', store: { id: 's1', label: 'beaming' } },
+    { name: 'tuned.kaminos.json', store: { id: 's1', label: 'beaming' } },
+  ];
+  const { local: merged, foreign: rest } = mergeForeignTwins(local, foreign);
+  assert.deepEqual(merged[0].recoverFrom, { store: { id: 's1', label: 'beaming' }, name: 'kiln_copy.kaminos.json' });
+  assert.equal(merged[1].recoverFrom, undefined);
+  assert.deepEqual(rest.map(scene => scene.name), ['tuned.kaminos.json']);
+  const orphan = mergeForeignTwins([], [{ name: 'x.kaminos.json', alsoHere: 'gone.kaminos.json', store: { id: 's2' } }]);
+  assert.deepEqual(orphan.foreign.map(scene => scene.name), ['x.kaminos.json'], 'a twin whose local scene is not listed stays visible');
 });

@@ -612,6 +612,9 @@ async function runLoadFromOtherServerScenario(ws) {
   // --fixture-missing-asset: the scene names a mesh no server has, so the
   // restore must fail truthfully instead of reporting it opened.
   const missingAsset = args.get('--fixture-missing-asset') === '1';
+  // --fixture-twin: the same scene is already saved here; Load must show one
+  // row that still brings the mesh over from the other server.
+  const twin = args.get('--fixture-twin') === '1';
   const mesh = readFileSync(sourceMesh), digest = missingAsset ? 'f'.repeat(64) : createHash('sha256').update(mesh).digest('hex');
   const roots = await (await fetch(new URL('/api/roots', url))).json();
   const localMesh = resolve(roots['generated-meshes'].path, digest + '.glb');
@@ -624,9 +627,10 @@ async function runLoadFromOtherServerScenario(ws) {
     mkdirSync(resolve(lane, 'scenes'), { recursive: true });
     mkdirSync(resolve(lane, 'assets/generated-meshes'), { recursive: true });
     if (!missingAsset) writeFileSync(resolve(lane, 'assets/generated-meshes', digest + '.glb'), mesh);
-    writeFileSync(resolve(lane, 'scenes', name), JSON.stringify({ schema: 'kaminos.scene.v1', version: 7, label: 'Fixture study', timestamp: new Date().toISOString(),
-      objects: [{ id: 'glb-fixture', type: 'glb', source: '/api/read?root=generated-meshes&path=' + digest + '.glb', fileName: digest + '.glb', label: 'Fixture mesh', transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } }] }));
-    writeFileSync(localNamesake, JSON.stringify({ schema: 'kaminos.scene.v1', version: 7, label: 'Unrelated local namesake', objects: [] }));
+    const fixtureScene = JSON.stringify({ schema: 'kaminos.scene.v1', version: 7, label: 'Fixture study', timestamp: new Date().toISOString(),
+      objects: [{ id: 'glb-fixture', type: 'glb', source: '/api/read?root=generated-meshes&path=' + digest + '.glb', fileName: digest + '.glb', label: 'Fixture mesh', transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } }] });
+    writeFileSync(resolve(lane, 'scenes', name), fixtureScene);
+    writeFileSync(localNamesake, twin ? fixtureScene : JSON.stringify({ schema: 'kaminos.scene.v1', version: 7, label: 'Unrelated local namesake', objects: [] }));
     const result = await evaluate(ws, `(async () => {
       const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
       document.getElementById('info-bar').textContent = '';
@@ -635,7 +639,11 @@ async function runLoadFromOtherServerScenario(ws) {
       for (let i = 0; i < 200 && !picker?.querySelector('[data-scene-store]'); i++) { picker = document.querySelector('.scene-load-picker'); await wait(50); }
       const input = picker.querySelector('input');
       input.value = 'dark-modal-library-fixture-${process.pid}'; input.dispatchEvent(new Event('input', { bubbles: true }));
-      const rows = [...picker.querySelectorAll('[data-scene-file]')].filter(row => !row.hidden).map(row => row.dataset.sceneFile);
+      for (let i = 0; i < 100 && picker.querySelector('.file-name-prompt-message')?.textContent?.startsWith('Loading'); i++) await wait(50);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      const shown = [...picker.querySelectorAll('[data-scene-file]')].filter(row => !row.hidden);
+      const rows = shown.map(row => row.dataset.sceneFile);
+      const rowMeta = shown.map(row => row.querySelector('.scene-load-picker-meta')?.textContent || '');
       if (rows.length !== 1) {
         const note = picker.querySelector('.file-name-prompt-message')?.textContent;
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -647,13 +655,19 @@ async function runLoadFromOtherServerScenario(ws) {
       await wait(500);
       const info = document.getElementById('info-bar').textContent;
       const saved = await window.saveScene?.({ result: true });
-      return { rows, loaded, info, saved };
+      return { rows, rowMeta, loaded, info, saved };
     })()`, { timeoutMs: 60000 });
     const scenes = await (await fetch(new URL('/api/browse?root=scenes&path=', url))).json();
     imported = (scenes.entries || []).map(entry => entry.name).find(entry => entry.startsWith('fixture-study-' + process.pid + '_')) || null;
     lastEvidence.loadFromOtherServer = { ...result, imported, meshImported: existsSync(localMesh), namesake: JSON.parse(readFileSync(localNamesake, 'utf8')).label };
     const e = lastEvidence.loadFromOtherServer;
-    if (e.rows.length !== 1 || e.rows[0] !== name) throw new Error('fixture store scene not listed: ' + JSON.stringify({ rows: e.rows, note: e.note }));
+    if (e.rows.length !== 1 || e.rows[0] !== name) throw new Error('fixture store scene not listed exactly once: ' + JSON.stringify({ rows: e.rows, note: e.note }));
+    if (twin) {
+      if (/^from /.test(e.rowMeta[0]) || !/meshes from dark-modal-library-fixture/.test(e.rowMeta[0])) throw new Error('the scene here did not absorb its twin as a mesh source: ' + JSON.stringify(e.rowMeta));
+      if (!e.loaded || !e.meshImported) throw new Error('opening the local twin did not bring its mesh over: ' + JSON.stringify(e));
+      if (e.imported) throw new Error('opening a local twin made another scene copy: ' + e.imported);
+      return;
+    }
     if (missingAsset) {
       if (e.loaded || /^Opened/.test(e.info) || e.saved?.ok) throw new Error('a scene whose mesh is unavailable was reported as opened or saved: ' + JSON.stringify(e));
       if (!/unavailable from/.test(e.info)) throw new Error('failed restore did not name the unavailable asset: ' + JSON.stringify(e.info));

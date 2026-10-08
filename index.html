@@ -29774,6 +29774,13 @@ window.openSavedScene = async function() {
   const choice = await pickSavedScene({ scenes, more });
   if (choice === 'browse') { document.getElementById('scene-file-input').click(); return; }
   if (!choice?.name) return;
+  if (choice.recoverFrom) {
+    // A local scene whose identical twin lives on another server: bring over
+    // any meshes only that server has (no new scene copy), then open it here.
+    const response = await fetch('/api/scene-library-import', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ store: choice.recoverFrom.store.id, name: choice.recoverFrom.name, dependenciesOnly: true }) }).catch(() => null);
+    if (!response?.ok) console.warn('Mesh recovery from', choice.recoverFrom.store.label, 'unavailable');
+  }
   if (choice.store) {
     // A scene from another server is imported as a new local copy (its own
     // fresh name, so Save never touches a local scene of the same name) along

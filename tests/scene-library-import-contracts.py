@@ -78,6 +78,14 @@ with TemporaryDirectory() as directory:
         assert get(method, params, client="192.168.1.20")[1] == 403, method
     assert post({"store": store_id, "name": "study.kaminos.json"}, client="192.168.1.20")[1] == 403
     assert get("handle_scene_library", {}, client="::1")[1] == 200
+    # Dependencies only: bring the meshes over without writing another scene copy.
+    before = sorted(here_scenes.glob("*.kaminos.json"))
+    (here_meshes / f"{digest}.glb").unlink()
+    reply, status = post({"store": store_id, "name": "study.kaminos.json", "dependenciesOnly": True})
+    assert status == 200 and "saved" not in reply, (reply, status)
+    assert {d["source"]: d["status"] for d in reply["dependencies"]}[f"/api/read?root=generated-meshes&path={digest}.glb"] == "imported"
+    assert sorted(here_scenes.glob("*.kaminos.json")) == before, "no new scene file"
+
     # A symlink at the destination must not redirect the write outside the mesh root.
     victim = root / "victim.txt"
     victim.write_text("keep me")

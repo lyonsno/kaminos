@@ -4062,6 +4062,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
         dependencies = [scene_library_import_dependency(obj.get("source"), store)
                         for obj in document.get("objects") or [] if isinstance(obj, dict) and str(obj.get("source") or "").startswith("/api/read?")]
+        if request.get("dependenciesOnly") is True:
+            # Opening a local twin: bring its meshes over, write no scene.
+            self.send_json({"dependencies": dependencies, "from": str(store.parent.name)})
+            return
         filename = f"{scene_path.name[: -len('.kaminos.json')]}_{uuid.uuid4().hex}.kaminos.json"
         _atomic_write_json(SCENES_DIR / filename, document)
         self.send_json({"saved": filename, "document": document, "dependencies": dependencies, "from": str(store.parent.name)})
@@ -4074,10 +4078,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         scenes identical to one already here stay listed, marked alsoHere."""
         if not self._scene_library_local_client():
             return
-        local_hashes = set()
-        for local in Path(SCENES_DIR).glob("*.kaminos.json"):
+        local_hashes = {}
+        for local in sorted(Path(SCENES_DIR).glob("*.kaminos.json")):
             try:
-                local_hashes.add(hashlib.sha1(local.read_bytes()).hexdigest())
+                local_hashes.setdefault(hashlib.sha1(local.read_bytes()).hexdigest(), local.name)
             except OSError:
                 pass
         found = []
@@ -4103,8 +4107,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         kept, by_digest = [], {}
         for mtime, store_id, path, digest, entry in found:
             if digest is not None and digest in local_hashes:
-                # Still offered: its server may hold meshes this one lacks.
-                entry["alsoHere"] = True
+                # Its server may hold meshes this one lacks: name the local
+                # twin so Load can show one row that recovers from here.
+                entry["alsoHere"] = local_hashes[digest]
             if digest is not None and digest in by_digest:
                 by_digest[digest]["copies"] = by_digest[digest].get("copies", 0) + 1
                 continue
