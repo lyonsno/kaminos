@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+const [observedPath,assetPath]=process.argv.slice(2);if(!observedPath||!assetPath)throw Error('Observed native report and source asset required');
+const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),directory=fs.mkdtempSync(path.join(os.tmpdir(),'affine-provenance-'));
+const native=JSON.parse(fs.readFileSync(observedPath)),prepared=JSON.parse(fs.readFileSync(path.join(native.prepared.root,'report.json'))),interior=JSON.parse(fs.readFileSync(prepared.input)),source=JSON.parse(fs.readFileSync(interior.source));
+source.size[0]*=1.001;const sourcePath=path.join(directory,'wrong-source.json');fs.writeFileSync(sourcePath,JSON.stringify(source));interior.source=sourcePath;
+const interiorPath=path.join(directory,'mesh.json'),interiorBytes=Buffer.from(JSON.stringify(interior));fs.writeFileSync(interiorPath,interiorBytes);prepared.input=interiorPath;prepared.inputSha256=hash(interiorBytes);fs.writeFileSync(path.join(directory,'report.json'),JSON.stringify(prepared));native.prepared.root=directory;
+native.prepared.manifestSha256=hash(fs.readFileSync(path.join(directory,'report.json')));
+const nativePath=path.join(directory,'native.json'),output=path.join(directory,'assay.json');fs.writeFileSync(nativePath,JSON.stringify(native));
+const result=spawnSync(process.execPath,['structural-material-component-affine-assay.mjs',nativePath,assetPath,output,'.24','[1,0,0,0.5]'],{encoding:'utf8'}),report=JSON.parse(fs.readFileSync(output));
+assert.notEqual(result.status,0,'Retargeting the admitted exterior metadata must fail, not construct a different solid');assert.equal(report.status,'failed');assert.match(report.failure.message,/source/);
+console.log('Changed exterior metadata rejects; observed native fixture is replayed only for local provenance policy');
