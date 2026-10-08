@@ -25066,7 +25066,7 @@ function syncSelectedWaterInspector() {
  panel.dataset.objectId=entry.id;
  const value=entry.localLiquidEmitter;
  for(const input of panel.querySelectorAll('[data-water-setting]')) {
-  if(document.activeElement===input)continue;
+  if(document.activeElement===input && scenePlacementTools?.edits.state().active?.id===`@water-emitter:${entry.id}`)continue;
   const key=input.dataset.waterSetting;
   if(key==='rate') {input.disabled=value.rate===null;input.value=value.rate??'';input.placeholder='Automatic';}
   else input.value=key==='inletProfile'?(value[key]??'round_poiseuille'):value[key];

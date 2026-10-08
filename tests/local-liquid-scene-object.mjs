@@ -22,6 +22,7 @@ class Group {
 }
 
 class Mesh {
+  scale = new Vec3();
   position = new Vec3();
   rotation = new Vec3();
   constructor(geometry, material) { this.geometry = geometry; this.material = material; }
@@ -48,6 +49,7 @@ test('a saved water emitter rehydrates with its authored settings and stable ID'
   saved.groupId = 'collection-study';
   const { object, record } = createLocalLiquidEmitterObject(THREE, saved);
   assert.equal(record.id, saved.id);
+  for(const mesh of object.children)assert.deepEqual(mesh.scale.values,[saved.localLiquidEmitter.baseRadius/.08,1,saved.localLiquidEmitter.baseRadius/.08]);
   assert.deepEqual(record.transform, saved.transform);
   assert.deepEqual(record.localLiquidEmitter, saved.localLiquidEmitter);
   assert.equal(record.fileName, saved.fileName);
