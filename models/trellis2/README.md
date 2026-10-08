@@ -33,6 +33,7 @@ For a 512 preview with eight sampling steps:
 python models/trellis2/pack-prepared-generation.py \
   --repo-root KAMINOS_WORKTREE --expected-commit EXACT_COMMIT \
   --base CACHED_CHECKPOINT_PACKAGE --image INPUT_IMAGE \
+  --expected-image-sha256 EXACT_INPUT_SHA256 \
   --preprocess-source-root TRELLIS_MLX_WORKTREE \
   --expected-preprocess-source-commit EXACT_MLX_COMMIT \
   --pipeline-type 512 --steps 8 --out PREPARED_INPUT_DIRECTORY
