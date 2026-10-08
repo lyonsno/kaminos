@@ -44,10 +44,12 @@ fn liquidCameraDirection(pixel: vec2<i32>) -> vec3<f32> {
   var ndc = (vec2<f32>(pixel) + vec2<f32>(0.5)) / dims * 2.0 - vec2<f32>(1.0);
   ndc.y = -ndc.y;
   let nearH = params.inverseViewProjection * vec4<f32>(ndc, 0.0, 1.0);
-  let farH = params.inverseViewProjection * vec4<f32>(ndc, 1.0, 1.0);
+  // Interior clip depth stays finite when f32 rounds the far plane to infinity.
+  // Two points on the same camera line preserve perspective and orthographic rays.
+  let interiorH = params.inverseViewProjection * vec4<f32>(ndc, 0.5, 1.0);
   let nearWorld = nearH.xyz / nearH.w;
-  let farWorld = farH.xyz / farH.w;
-  return normalize(farWorld - nearWorld);
+  let interiorWorld = interiorH.xyz / interiorH.w;
+  return normalize(interiorWorld - nearWorld);
 }
 fn liquidDepthPoint(pixel: vec2<i32>, referenceDepth: f32, backSurface: bool) -> vec4<f32> {
   let dims = vec2<i32>(textureDimensions(surfaceAccumulation));
