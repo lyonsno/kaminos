@@ -496,10 +496,14 @@ async function runExportAndSaveAsNamesScenario(ws) {
 
   const scenesAtStart = new Set(await evaluate(ws, `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`));
   const sceneName = 'dark-modal-save-as-witness-' + process.pid;
+  const singleName = 'chair-export-' + process.pid, groupName = 'chair-and-cube-' + process.pid;
+  const exportsRoot = (await (await fetch(new URL('/api/roots', url))).json()).exports?.path;
   try {
   await evaluate(ws, click('Export GLB'));
-  const singleDialog = await evaluate(ws, answer('chair-export'));
-  const single = readGlbSummary(await waitFile('chair-export.glb'));
+  const singleDialog = await evaluate(ws, answer(singleName));
+  const single = readGlbSummary(await waitFile(singleName + '.glb'));
+  if (!exportsRoot || !existsSync(resolve(exportsRoot, singleName + '.glb'))) throw new Error('export was not kept in Kaminos exports: ' + exportsRoot);
+  if (!readFileSync(resolve(exportsRoot, singleName + '.glb')).equals(readFileSync(resolve(downloads, singleName + '.glb')))) throw new Error('the kept export differs from the download');
 
   // The arrived asset sits in its own group; parent a new cube into that group
   // and select the group, so the export holds both meshes.
@@ -514,8 +518,8 @@ async function runExportAndSaveAsNamesScenario(ws) {
     return { objects: objects.length, inGroup: objects.filter(object => object.groupId === chairGroup).length };
   })()`);
   await evaluate(ws, click('Export GLB'));
-  const groupDialog = await evaluate(ws, answer('chair-and-cube'));
-  const group = readGlbSummary(await waitFile('chair-and-cube.glb'));
+  const groupDialog = await evaluate(ws, answer(groupName));
+  const group = readGlbSummary(await waitFile(groupName + '.glb'));
 
   const listScenes = `(async () => ((await (await fetch('/api/browse?root=scenes&path=')).json()).entries || []).map(entry => entry.name))()`;
   await evaluate(ws, click('Save As'));
@@ -548,7 +552,8 @@ async function runExportAndSaveAsNamesScenario(ws) {
     // Remove only the scene this scenario named, pass or fail.
     const own = sceneName + '.kaminos.json';
     if (!scenesAtStart.has(own)) await evaluate(ws, `fetch('/api/delete-scene?name=' + encodeURIComponent(${JSON.stringify(own)})).then(response => response.status)`);
-    lastEvidence.exportAndSaveAsNamesCleanup = [own];
+    if (exportsRoot) for (const kept of [singleName, groupName]) rmSync(resolve(exportsRoot, kept + '.glb'), { force: true });
+    lastEvidence.exportAndSaveAsNamesCleanup = [own, singleName + '.glb', groupName + '.glb'];
   }
 }
 
@@ -577,14 +582,18 @@ async function runLoadPickerScenario(ws) {
       filter.dispatchEvent(new Event('input', { bubbles: true }));
       await wait(50);
       const visible = [...picker.querySelectorAll('[data-scene-file]')].filter(row => !row.hidden).map(row => row.dataset.sceneFile);
+      const thumb = [...picker.querySelectorAll('[data-scene-file]')].find(row => row.dataset.sceneFile === ${JSON.stringify(name)} + '.kaminos.json')?.querySelector('img');
+      for (let i = 0; i < 80 && thumb && !(thumb.complete && thumb.naturalWidth); i++) await wait(50);
+      const thumbnail = thumb ? { width: thumb.naturalWidth, height: thumb.naturalHeight, src: thumb.getAttribute('src') } : null;
       filter.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       let loaded = null;
       for (let i = 0; i < 160; i++) { await wait(125); const info = document.getElementById('info-bar')?.textContent || ''; if (/^Scene loaded/.test(info.trim())) { loaded = info; break; } }
-      return { listed, visible, loaded, objects: window.kaminosSceneObjectDebugState().length, pickerOpen: !!document.querySelector('.scene-load-picker') };
+      return { listed, visible, thumbnail, loaded, objects: window.kaminosSceneObjectDebugState().length, pickerOpen: !!document.querySelector('.scene-load-picker') };
     })()`, { timeoutMs: 60000 });
     lastEvidence.loadPicker = result;
     if (!result.listed.includes(name + '.kaminos.json')) throw new Error('saved scene missing from the Load list: ' + JSON.stringify(result.listed));
     if (result.visible.length !== 1 || result.visible[0] !== name + '.kaminos.json') throw new Error('filter did not narrow to the saved scene: ' + JSON.stringify(result.visible));
+    if (!(result.thumbnail?.width > 0) || result.thumbnail.width > 320) throw new Error('saved scene shows no thumbnail in Load: ' + JSON.stringify(result.thumbnail));
     if (!result.loaded || result.pickerOpen) throw new Error('Enter did not load the chosen scene: ' + JSON.stringify(result));
   } finally {
     // Delete only the scene this scenario named; other saves made meanwhile are not ours.
@@ -627,6 +636,11 @@ async function runLoadFromOtherServerScenario(ws) {
       const input = picker.querySelector('input');
       input.value = 'dark-modal-library-fixture-${process.pid}'; input.dispatchEvent(new Event('input', { bubbles: true }));
       const rows = [...picker.querySelectorAll('[data-scene-file]')].filter(row => !row.hidden).map(row => row.dataset.sceneFile);
+      if (rows.length !== 1) {
+        const note = picker.querySelector('.file-name-prompt-message')?.textContent;
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        return { rows, note, loaded: null, info: '', saved: null };
+      }
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       let loaded = null;
       for (let i = 0; i < (${missingAsset} ? 48 : 160); i++) { await wait(125); const labels = window.kaminosSceneObjectDebugState().map(o => o.label); if (labels.includes('Fixture mesh')) { loaded = labels; break; } }
@@ -639,7 +653,7 @@ async function runLoadFromOtherServerScenario(ws) {
     imported = (scenes.entries || []).map(entry => entry.name).find(entry => entry.startsWith('fixture-study-' + process.pid + '_')) || null;
     lastEvidence.loadFromOtherServer = { ...result, imported, meshImported: existsSync(localMesh), namesake: JSON.parse(readFileSync(localNamesake, 'utf8')).label };
     const e = lastEvidence.loadFromOtherServer;
-    if (e.rows.length !== 1 || e.rows[0] !== name) throw new Error('fixture store scene not listed: ' + JSON.stringify(e.rows));
+    if (e.rows.length !== 1 || e.rows[0] !== name) throw new Error('fixture store scene not listed: ' + JSON.stringify({ rows: e.rows, note: e.note }));
     if (missingAsset) {
       if (e.loaded || /^Opened/.test(e.info) || e.saved?.ok) throw new Error('a scene whose mesh is unavailable was reported as opened or saved: ' + JSON.stringify(e));
       if (!/unavailable from/.test(e.info)) throw new Error('failed restore did not name the unavailable asset: ' + JSON.stringify(e.info));

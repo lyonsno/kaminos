@@ -26,7 +26,7 @@ function savedWhen(timestamp) {
 export function pickSavedScene({ scenes, more = null, host = document.body } = {}) {
   return new Promise(resolve => {
     let ordered = sortScenesNewestFirst(scenes);
-    let pending = !!more;
+    let pending = !!more, moreError = '';
     const backdrop = document.createElement('div');
     backdrop.className = 'file-name-prompt scene-load-picker';
     backdrop.setAttribute('role', 'dialog');
@@ -48,12 +48,26 @@ export function pickSavedScene({ scenes, more = null, host = document.body } = {
       row.dataset.sceneFile = scene.name;
       if (scene.store) row.dataset.sceneStore = scene.store.id;
       row.setAttribute('role', 'option');
+      const picture = document.createElement('span');
+      picture.className = 'scene-load-picker-thumb';
+      if (scene.image) {
+        const image = document.createElement('img');
+        image.loading = 'lazy';
+        image.alt = '';
+        image.src = scene.image;
+        image.addEventListener('error', () => image.remove());
+        picture.append(image);
+      }
+      const text = document.createElement('span');
+      text.className = 'scene-load-picker-text';
       const title = document.createElement('span');
       title.textContent = scene.label || scene.name.replace(/\.kaminos\.json$/, '');
       const meta = document.createElement('span');
       meta.className = 'scene-load-picker-meta';
-      meta.textContent = [scene.store ? `from ${scene.store.label}` : '', scene.name.replace(/\.kaminos\.json$/, ''), savedWhen(scene.timestamp)].filter(Boolean).join(' · ');
-      row.append(title, meta);
+      meta.textContent = [scene.store ? `from ${scene.store.label}` : '', scene.copies ? `+${scene.copies} identical cop${scene.copies === 1 ? 'y' : 'ies'}` : '',
+        scene.name.replace(/\.kaminos\.json$/, ''), savedWhen(scene.timestamp)].filter(Boolean).join(' · ');
+      text.append(title, meta);
+      row.append(picture, text);
       row.addEventListener('click', () => finish({ name: scene.name, store: scene.store || null }));
       return row;
     };
@@ -69,6 +83,7 @@ export function pickSavedScene({ scenes, more = null, host = document.body } = {
       shown[active]?.classList.add('active');
       shown[active]?.scrollIntoView({ block: 'nearest' });
       note.textContent = pending ? 'Loading scenes from other Kaminos servers…'
+        : moreError ? `Could not list other servers' scenes: ${moreError}`
         : rows.length ? (shown.length ? '' : 'No saved scene matches.') : 'No saved scenes yet. Cmd+S saves one.';
     };
     const finish = value => { open = false; backdrop.remove(); resolve(value); };
@@ -81,7 +96,7 @@ export function pickSavedScene({ scenes, more = null, host = document.body } = {
       ordered = [...ordered, ...added];
       rows = [...rows, ...addedRows];
       list.append(...addedRows);
-    }).catch(() => {}).finally(() => { if (!open) return; pending = false; applyFilter(); highlight(); });
+    }).catch(error => { moreError = error?.message || String(error); }).finally(() => { if (!open) return; pending = false; applyFilter(); highlight(); });
     backdrop.addEventListener('keydown', event => {
       event.stopPropagation();
       if (event.key === 'Escape') { event.preventDefault(); finish(null); }

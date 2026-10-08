@@ -78,3 +78,30 @@ export function captureComposedCanvases({ host, volume, document, label, simulat
     image: canvas.toDataURL('image/png'), simulation: simulation || null,
     layers: volume ? ['mesh', 'ordinary-emissive-volume'] : ['mesh'] });
 }
+
+// A small JPEG of the composed view (scene canvas plus the flame canvas at its
+// on-screen place) saved with every scene so Load can show what it is.
+export function sceneThumbnailSize(width, height, longest = 320) {
+  const scale = Math.min(1, longest / Math.max(width, height));
+  return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
+}
+
+export function composeSceneThumbnail({ host, volume = null, document, longest = 320, quality = 0.82 }) {
+  if (!host?.width || !host?.height || typeof host.getBoundingClientRect !== 'function') return null;
+  const bounds = host.getBoundingClientRect();
+  if (!(bounds.width > 0 && bounds.height > 0)) return null;
+  const { width, height } = sceneThumbnailSize(host.width, host.height, longest);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  context.drawImage(host, 0, 0, width, height);
+  if (volume?.width && volume?.height) {
+    const rect = volume.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      context.drawImage(volume, (rect.left - bounds.left) * width / bounds.width, (rect.top - bounds.top) * height / bounds.height,
+        rect.width * width / bounds.width, rect.height * height / bounds.height);
+    }
+  }
+  return canvas.toDataURL('image/jpeg', quality);
+}

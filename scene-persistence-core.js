@@ -15,6 +15,11 @@ function cloneJson(value) {
   return value === null ? null : JSON.parse(JSON.stringify(value));
 }
 
+function normalizeSceneThumbnail(value) {
+  if (typeof value !== 'string' || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(value)) throw new Error('Scene thumbnail must be an image data URL');
+  return value;
+}
+
 function normalizeSceneObjectRecord(record) {
   if (!record || typeof record !== 'object') throw new Error('Scene object record must be an object');
   if(record.type==='light')record=checkedSceneLightRecord(record);
@@ -191,6 +196,7 @@ export function buildSceneDocument({
   flameDomainTranslation = undefined,
   localLiquid = null,
   capture = null,
+  thumbnail = null,
   camera = null,
   environment = null,
   postprocessing = null,
@@ -233,6 +239,7 @@ export function buildSceneDocument({
     ...(flameSource ? { flameDomainTranslation: authoredFlameDomain } : {}),
     localLiquid: liquidSetup,
     capture: normalizeSceneCapture(capture),
+    ...(thumbnail == null ? {} : { thumbnail: normalizeSceneThumbnail(thumbnail) }),
     transform: cloneJson(activeObject?.transform ?? null),
     camera: cloneJson(camera),
     environment: cloneJson(environment),

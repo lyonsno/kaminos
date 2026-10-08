@@ -92,11 +92,14 @@ body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !import
 .file-name-prompt-actions button { padding:5px 12px; border:1px solid #405157; border-radius:4px; background:#1d2426; color:#d7e1e3; font:inherit; cursor:pointer; }
 .file-name-prompt-actions button[type="submit"] { background:#1976d2; border-color:#1976d2; color:white; }
 .scene-load-picker-panel { width:min(560px, calc(100vw - 32px)); }
-.scene-load-picker-list { max-height:min(52vh, 420px); overflow-y:auto; margin-top:8px; border:1px solid #2a3235; border-radius:4px; }
-.scene-load-picker-row { display:flex; flex-direction:column; gap:2px; width:100%; padding:7px 9px; border:0; border-bottom:1px solid #1f2628; background:transparent; color:#d7e1e3; font:inherit; text-align:left; cursor:pointer; }
+.scene-load-picker-list { max-height:min(52vh, 420px); overflow-y:auto; overflow-x:hidden; margin-top:8px; border:1px solid #2a3235; border-radius:4px; }
+.scene-load-picker-row { display:flex; align-items:center; gap:10px; width:100%; padding:6px 9px; border:0; border-bottom:1px solid #1f2628; background:transparent; color:#d7e1e3; font:inherit; text-align:left; cursor:pointer; }
+.scene-load-picker-thumb { flex:0 0 auto; width:88px; height:50px; border-radius:3px; background:#0d1011; overflow:hidden; }
+.scene-load-picker-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.scene-load-picker-text { display:flex; flex-direction:column; gap:2px; min-width:0; }
 .scene-load-picker-row[hidden] { display:none; }
 .scene-load-picker-row:hover, .scene-load-picker-row.active { background:#1d3a4a; color:white; }
-.scene-load-picker-meta { color:#8a9a9e; font-size:10px; }
+.scene-load-picker-meta { color:#8a9a9e; font-size:10px; overflow-wrap:anywhere; }
 #scene-add-menu-popup button { display:flex; width:100%; justify-content:space-between; gap:20px; padding:9px 10px; text-align:left; white-space:nowrap; }
 #scene-add-menu-popup small { color:#8fa1a6; font:10px 'SF Mono',monospace; }
 #local-liquid-performance .hint { margin:8px 0 0; color:#96a3a8; font:11px/1.5 'SF Mono',monospace; }
@@ -3795,7 +3798,7 @@ import {
   isReloadableSceneObjectRecord,
   planSceneRestore,
 } from './scene-persistence-core.js';
-import { COMPOSITION_SCHEMA, compositionRestoreUrl, captureComposedCanvases } from './scene-authoring.mjs';
+import { COMPOSITION_SCHEMA, compositionRestoreUrl, captureComposedCanvases, composeSceneThumbnail } from './scene-authoring.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,checkedGeometry,createProceduralMesh,GEOMETRY_DEFAULTS} from './scene-geometry.mjs';
 import {GROUP_TYPE,checkedGroupPose,checkedGroupEdit,moveGroupMembers,identityGroupPose} from './scene-group.mjs';
 import { BURNER_DEFAULTS, normalizeBurner, burnerSource, createAnnularBurner } from './annular-burner.mjs';
@@ -11730,9 +11733,12 @@ async function initScene() {
   await volumeCockpitLayoutReady;
   const workspaceParam = initialViewerParams.get('workspace');
   const authoredRoute = new URLSearchParams(location.hash.slice(1)).get('authoring') === '1';
+  const assetLinkRoute = !!(kaminosMeshAssetRouteFromSearch(initialViewerParams) || kaminosSplatAssetRouteFromSearch(initialViewerParams) || kaminosImageAssetRouteFromSearch(initialViewerParams));
   authoringWorkspace = installAuthoringWorkspace({
     document, edits: scenePlacementTools.edits,
-    initialMode: workspaceParam === 'authoring' || (authoredRoute && workspaceParam !== 'workbench') ? 'authoring' : 'workbench',
+    // Authoring is the product surface: authored routes and asset viewer links
+    // open there unless workspace=workbench asks otherwise.
+    initialMode: workspaceParam === 'authoring' || ((authoredRoute || assetLinkRoute) && workspaceParam !== 'workbench') ? 'authoring' : 'workbench',
     beforeSwitch: next => {
       // Never relocate a control under an unresolved modal gesture/replay.
       authoringControlSessions.forEach(session => session.commit());
@@ -26380,14 +26386,28 @@ window.exportGLB = async function({ name = null } = {}) {
   for (const entry of entries) root.add(exportCloneInWorld(entry.object));
   try {
     const glb = await new GLTFExporter().parseAsync(root, { binary: true });
+    // Keep a named copy in Kaminos (the exports root, viewer-linkable) and
+    // download it; an existing export name is replaced only after confirming.
+    let fileStem = stem, overwrite = false, stored = null;
+    while (fileStem) {
+      const response = await fetch(`/api/export-glb?${new URLSearchParams({ name: fileStem, ...(overwrite ? { overwrite: '1' } : {}) })}`, { method: 'POST', headers: { 'Content-Type': 'model/gltf-binary' }, body: glb });
+      const reply = await response.json().catch(() => ({}));
+      if (response.ok) { stored = reply; break; }
+      if (response.status !== 409 || name !== null) throw new Error(reply.error || `export save failed: HTTP ${response.status}`);
+      const again = await promptForFileName({ title: 'Export selection as GLB', defaultStem: fileStem, extension: '.glb',
+        message: `${reply.exists} already exists in Kaminos exports. Export again to replace it, or choose another name.`, confirmLabel: 'Replace' });
+      overwrite = again === fileStem;
+      fileStem = again;
+    }
+    if (!stored) { setInfo('Export cancelled'); return false; }
     const url = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${stem}.glb`;
+    link.download = stored.saved;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setInfo(`Exported ${entries.length} object${entries.length === 1 ? '' : 's'} to ${stem}.glb${skipped ? ` (skipped ${skipped} that GLB cannot carry)` : ''}`);
-    return true;
+    setInfo(`Exported ${entries.length} object${entries.length === 1 ? '' : 's'} to ${stored.saved} in Kaminos exports and Downloads${skipped ? ` (skipped ${skipped} that GLB cannot carry)` : ''}`);
+    return { ok: true, saved: stored.saved, root: stored.root };
   } catch (error) {
     setInfo(`Export failed: ${error.message || error}`);
     return false;
@@ -28409,7 +28429,30 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
   return true;
 }
 
-function buildSceneData(capture = null) {
+// A small image of the view for the Load list: editor helpers hidden for two
+// frames, the scene and flame canvases composed, then restored. A failure only
+// means the save carries no thumbnail.
+async function sceneThumbnailForSave() {
+  const helper = transformControls?.getHelper();
+  const emitterHandle = sceneObjects.find(entry => entry.id === FLAME_EMITTER_ID)?.object;
+  const rimHandle = sceneObjects.find(entry => entry.id === RIM_LIGHT_ID)?.object;
+  const hidden = [helper, emitterHandle, rimHandle].filter(Boolean).map(object => [object, object.visible]);
+  try {
+    for (const [object] of hidden) object.visible = false;
+    window._kaminosDirty?.();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const volume = activeSceneComposition ? volumePrototype?.canvasElement?.() : null;
+    return composeSceneThumbnail({ host: renderer.domElement, volume, document });
+  } catch (error) {
+    console.warn('Scene thumbnail unavailable:', error);
+    return null;
+  } finally {
+    for (const [object, visible] of hidden) object.visible = visible;
+    window._kaminosDirty?.();
+  }
+}
+
+function buildSceneData(capture = null, thumbnail = null) {
   rememberEnvironmentRecipe();
   const objects = sceneObjects.map(serializeSceneObject);
   const activeObject = objects.find(obj => obj.id === activeSceneObjectId) || objects[0] || null;
@@ -28417,6 +28460,7 @@ function buildSceneData(capture = null) {
 
   const data = buildSceneDocument({
     timestamp: new Date().toISOString(),
+    thumbnail,
     objects,
     groups: serializeSceneGroups(),
     activeObjectId: activeSceneObjectId,
@@ -29360,7 +29404,7 @@ window.saveScene = ({ result = false } = {}) => withAuthoringAction(async () => 
     return false;
   }
   await collectSceneComposition();
-  const data = buildSceneData();
+  const data = buildSceneData(null, await sceneThumbnailForSave());
   return saveToServer(data, currentSceneFile, { result });
 }, { result });
 
@@ -29382,7 +29426,7 @@ window.saveSceneAs = async ({ result = false, promptName = false, name = null } 
         return false;
       }
       await collectSceneComposition();
-      const data = buildSceneData();
+      const data = buildSceneData(null, await sceneThumbnailForSave());
       return saveToServer(data, null, { result });
     }, { result });
   }
@@ -29393,7 +29437,7 @@ window.saveSceneAs = async ({ result = false, promptName = false, name = null } 
     const saved = await withAuthoringAction(async () => {
       if (sceneSaveIsBlocked()) return false;
       await collectSceneComposition();
-      return saveToServer(buildSceneData(), null, { result: true, saveAsName: stem, overwrite });
+      return saveToServer(buildSceneData(null, await sceneThumbnailForSave()), null, { result: true, saveAsName: stem, overwrite });
     }, { result: true });
     if (!saved?.exists) return result ? saved : saved?.ok === true;
     const again = await promptForFileName({ title: 'Save scene as', defaultStem: stem, extension: '.kaminos.json',
@@ -29716,10 +29760,16 @@ window.openSavedScene = async function() {
   const names = (listing?.entries || []).map(entry => entry.name).filter(name => name.endsWith('.kaminos.json'));
   const scenes = await Promise.all(names.map(async name => {
     const data = await grFetchApi('read', { root: 'scenes', path: name }).catch(() => null);
-    return { name, label: data?.label || data?.capture?.label || '', timestamp: data?.timestamp || '' };
+    const image = data?.thumbnail || data?.capture?.image ? `/api/scene-image?${new URLSearchParams({ store: '', name })}` : null;
+    return { name, label: data?.label || data?.capture?.label || '', timestamp: data?.timestamp || '', image };
   }));
-  const more = fetch('/api/scene-library').then(response => response.json()).then(library =>
-    (library.stores || []).flatMap(store => store.scenes.filter(scene => !scene.error).map(scene => ({ ...scene, store: { id: store.id, label: store.label } }))));
+  const more = fetch('/api/scene-library').then(async response => {
+    const library = await response.json();
+    if (!response.ok) throw new Error(library?.error || `HTTP ${response.status}`);
+    return library;
+  }).then(library =>
+    (library.stores || []).flatMap(store => store.scenes.filter(scene => !scene.error).map(scene => ({ ...scene, store: { id: store.id, label: store.label },
+      image: scene.hasImage ? `/api/scene-image?${new URLSearchParams({ store: store.id, name: scene.name })}` : null }))));
   const choice = await pickSavedScene({ scenes, more });
   if (choice === 'browse') { document.getElementById('scene-file-input').click(); return; }
   if (!choice?.name) return;
