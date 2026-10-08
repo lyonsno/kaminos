@@ -66,9 +66,9 @@ try {
     }
     const filter=page.locator('#scene-gi-denoise');
     await filter.click();await filter.press('Meta+A');await page.keyboard.type('235');
-    await filter.press('Home');await filter.press('ArrowRight');await page.keyboard.type('.');
+    await page.keyboard.press('Home');await page.keyboard.press('ArrowRight');await page.keyboard.type('.');
     assert.equal(await filter.inputValue(),'2.35','inserting a decimal in the middle lost the caret');
-    await filter.press('ArrowRight');await page.keyboard.type('7');
+    await page.keyboard.press('ArrowRight');await page.keyboard.type('7');
     assert.equal(await filter.inputValue(),'2.375','typing after middle insertion lost the caret');
     await filter.press('Escape');
     await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();await page.screenshot({path:out+'/number-editing.png'});
