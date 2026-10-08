@@ -12,14 +12,22 @@ export async function createPlaneFractureSurface(geometry,{sourceSha256,wasm:pro
  const witness=()=>({route:'kaminos.event-surface.plane-cut.manifold-3.5.4.v0',sourceSha256,material:accepted&&structuredClone(accepted.material),epoch,volume,pieces:pieces.map(serialize),events:structuredClone(events),claim:'Event-time geometry follows supplied released transmission; caller selects plane; not stress-generation or fragment dynamics proof'});
  return{witness,
   cut(event){
-   if(disposed)throw new Error('Fracture surface disposed');const {id,normal,offset,rest,before,after,route,kind,material}=event??{};
+   if(disposed)throw new Error('Fracture surface disposed');const {id,normal,offset,rest,before,after,route,kind,material,targetPieceId,targetNodes}=event??{};
    if(typeof id!=='string'||!id||route!=='kaminos.deformable-material.colored-vbd.webgpu.v0'||typeof kind!=='string'||!kind||!Array.isArray(normal)||normal.length!==3||!normal.every(Number.isFinite)||Math.abs(Math.hypot(...normal)-1)>1e-6||!Number.isFinite(offset))throw new Error('Explicit identified material event and unit plane required');
    if(typeof material?.runId!=='string'||!material.runId||!['graph','pmb'].includes(material.kind))throw new Error('Explicit material identity required for surface event');
    const identity={runId:material.runId,kind:material.kind,sourceSha256:material.sourceSha256??null};
    if(identity.sourceSha256!==null&&sourceSha256!==undefined&&identity.sourceSha256!==sourceSha256)throw new Error('Surface and material identity source disagree');
-   const fingerprint=JSON.stringify({normal,offset,rest,before,after,route,kind,material:identity});
+   const fingerprint=JSON.stringify({normal,offset,rest,before,after,route,kind,material:identity,targetPieceId,targetNodes});
    if(replays.has(id)){if(replays.get(id)!==fingerprint)throw new Error('Material event identity reused for different cut');return{replayed:true,witness:witness()};}
    if(!Array.isArray(rest)||!rest.length||!rest.every(p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite))||!Array.isArray(before)||!Array.isArray(after)||before.length!==after.length||!before.length||before.length%4)throw new Error('Complete before/after material transmission required');
+   let targetSet=null;
+   if(targetPieceId!==undefined||targetNodes!==undefined){
+    const target=pieces.find(p=>p.id===targetPieceId);
+    if(!target||!Array.isArray(targetNodes)||!targetNodes.length||new Set(targetNodes).size!==targetNodes.length||!targetNodes.every(i=>Number.isInteger(i)&&i>=0&&i<rest.length))throw new Error('Existing target piece and complete material nodes required');
+    targetSet=new Set(targetNodes);
+    const inside=p=>target.halfspaces.every(h=>h.side*(h.normal.reduce((s,v,k)=>s+v*Math.fround(p[k]),0)-h.offset)>=0);
+    if(rest.some((p,i)=>inside(p)!==targetSet.has(i)))throw new Error('Target material nodes disagree with selected surface piece');
+   }
    if(accepted){
     if(identity.runId!==accepted.material.runId||identity.kind!==accepted.material.kind||identity.sourceSha256!==accepted.material.sourceSha256)throw new Error('Surface material identity changed; construct a new surface for a new material run');
     if(!same(rest.flat(),accepted.rest.flat()))throw new Error('Surface rest identity changed');
@@ -27,12 +35,13 @@ export async function createPlaneFractureSurface(geometry,{sourceSha256,wasm:pro
    }
    const effectiveNormal=normal.map(Math.fround),effectiveOffset=Math.fround(offset),distance=p=>p.reduce((sum,v,a)=>sum+effectiveNormal[a]*Math.fround(v),-effectiveOffset);let brokenAdded=0;
    for(let i=0;i<before.length;i+=4){const [a,b,alive]=before.slice(i,i+3);if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||b<0||a>=rest.length||b>=rest.length||![0,1].includes(alive)||after[i]!==a||after[i+1]!==b||![0,1].includes(after[i+2]))throw new Error('Stable material bond identity/liveness required');
-    const crosses=distance(rest[a])*distance(rest[b])<0,expected=alive&& !crosses?1:0;if(after[i+2]!==expected)throw new Error('Surface plane disagrees with released transmission');if(alive&&!expected)brokenAdded++;
+    if(targetSet&&alive&&targetSet.has(a)!==targetSet.has(b))throw new Error('Target material is not a released component');
+    const crosses=distance(rest[a])*distance(rest[b])<0&&(!targetSet||targetSet.has(a)&&targetSet.has(b)),expected=alive&& !crosses?1:0;if(after[i+2]!==expected)throw new Error('Surface plane disagrees with released transmission');if(alive&&!expected)brokenAdded++;
    }
    if(!brokenAdded)throw new Error('No newly released transmission; refuse a picture-only cut');
    const staged=[],created=[],replaced=[],length=Math.hypot(...effectiveNormal);let cursor=nextId;
    try{
-    for(const piece of pieces){const split=piece.solid.splitByPlane(effectiveNormal,effectiveOffset/length);created.push(...split);const volumes=split.map(p=>p.volume());
+    for(const piece of pieces){if(targetPieceId!==undefined&&piece.id!==targetPieceId){staged.push(piece);continue;}const split=piece.solid.splitByPlane(effectiveNormal,effectiveOffset/length);created.push(...split);const volumes=split.map(p=>p.volume());
      if(volumes.every(v=>Number.isFinite(v)&&v>0)){
       if(Math.abs(volumes[0]+volumes[1]-piece.solid.volume())>volume*1e-6)throw new Error('Event cut did not conserve source volume');
       split.forEach((solid,side)=>staged.push({id:cursor++,solid,halfspaces:[...piece.halfspaces,{normal:effectiveNormal,offset:effectiveOffset,side:side===0?1:-1,event:id}]}));replaced.push(piece);
@@ -40,7 +49,7 @@ export async function createPlaneFractureSurface(geometry,{sourceSha256,wasm:pro
     }
     if(!replaced.length)throw new Error('Released transmission did not intersect the visible solid');
     const stagedVolume=staged.reduce((sum,p)=>sum+p.solid.volume(),0);if(Math.abs(stagedVolume-volume)>volume*1e-6)throw new Error('Fragment collection lost source volume');
-    staged.forEach(serialize);pieces=staged;nextId=cursor;epoch++;replaced.forEach(p=>p.solid.delete());accepted={material:identity,rest:structuredClone(rest),transmission:transmission(after)};events.push({id,kind,material:identity,normal:effectiveNormal,offset:effectiveOffset,brokenAdded,epoch});replays.set(id,fingerprint);return{replayed:false,witness:witness()};
+    staged.forEach(serialize);pieces=staged;nextId=cursor;epoch++;replaced.forEach(p=>p.solid.delete());accepted={material:identity,rest:structuredClone(rest),transmission:transmission(after)};events.push({id,kind,material:identity,normal:effectiveNormal,offset:effectiveOffset,brokenAdded,epoch,...(targetPieceId===undefined?{}:{targetPieceId,targetNodes:[...targetNodes]})});replays.set(id,fingerprint);return{replayed:false,witness:witness()};
    }catch(error){for(const solid of created)solid.delete();throw error;}
   },
   dispose(){if(!disposed){pieces.forEach(p=>p.solid.delete());disposed=true;}}

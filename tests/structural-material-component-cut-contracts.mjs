@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import Module from 'manifold-3d';
+import {createPlaneFractureSurface} from '../structural-material-solid-fragments.mjs';
+const wasm=await Module();wasm.setup();const solid=wasm.Manifold.cube([2,2,2],true),mesh=solid.getMesh(),surface=await createPlaneFractureSurface({numProp:mesh.numProp,properties:Array.from(mesh.vertProperties),indices:Array.from(mesh.triVerts)},{wasm});solid.delete();
+const rest=[[-1,-1,-1],[-1,1,-1],[-1,-1,1],[-1,1,1],[1,-1,-1],[1,1,-1],[1,-1,1],[1,1,1]],pairs=[];for(let a=0;a<8;a++)for(let b=a+1;b<8;b++)pairs.push([a,b]);
+const before=pairs.flatMap(([a,b])=>[a,b,1,0]),released=(bonds,normal,nodes)=>bonds.map((v,i)=>i%4===2&&nodes.includes(bonds[i-2])&&nodes.includes(bonds[i-1])&&rest[bonds[i-2]][normal]*rest[bonds[i-1]][normal]<0?0:v);
+const common={rest,route:'kaminos.deformable-material.colored-vbd.webgpu.v0',kind:'component-tensile-through-cut-v0',material:{runId:'component-control',kind:'graph'}};
+const after=released(before,0,rest.map((_,i)=>i));const first=surface.cut({...common,id:'first',normal:[1,0,0],offset:0,before,after}).witness;
+const target=first.pieces.find(p=>p.halfspaces[0].side===-1),other=first.pieces.find(p=>p!==target),next=released(after,1,[0,1,2,3]);
+const second=surface.cut({...common,id:'second-local',normal:[0,1,0],offset:0,before:after,after:next,targetPieceId:target.id,targetNodes:[0,1,2,3]}).witness;
+assert.equal(second.pieces.length,3,'Further injury splits only its selected material piece');assert.deepEqual(second.pieces.find(p=>p.id===other.id),other,'Unselected geometry remains byte-identical');
+assert.throws(()=>surface.cut({...common,id:'wrong-owner',normal:[0,0,1],offset:0,before:next,after:released(next,2,[4,5,6,7]),targetPieceId:other.id,targetNodes:[0,1,2,3]}),/target|transmission/i);
+surface.dispose();console.log('Selected-component cuts leave unrelated detached geometry and transmission unchanged');
