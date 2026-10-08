@@ -176,6 +176,34 @@ test('compact numeric presentation retains useful scale without trailing noise',
  assert.equal(module.formatAuthoringNumber('1.0000000000000002'),'1');
 });
 
+test('numeric model echoes do not rewrite native editing text, but changed values still restore',async()=>{
+ const {installRelativeNumberDrag}=await import('../scene-control-history.mjs');
+ class NativeInput extends Control {
+  constructor(){super();this.raw='3';this.writes=0;this.parentNode={};this.classList={add(){},remove(){}};}
+  get value(){return this.raw;}
+  set value(value){this.writes++;this.raw=String(value);}
+  before(){}
+ }
+ const doc=new Control(),input=new NativeInput();
+ doc.defaultView={HTMLInputElement:NativeInput};
+ doc.createElement=()=>({className:'',setAttribute(){},append(){}});
+ doc.activeElement=input;input.ownerDocument=doc;
+ globalThis.document=doc;globalThis.window=new Control();
+ try {
+  installRelativeNumberDrag({input,step:.01});input.readOnly=false;
+  input.value='3';
+  assert.equal(input.writes,0,'same-value echo must not reset the native caret');
+  input.raw='03.00';input.value='3';
+  assert.equal(input.writes,0,'equivalent numeric echo must retain editing spelling');
+  assert.equal(input.value,'03.00');
+  input.value='2.5';
+  assert.equal(input.value,'2.5','undo/cancel must apply a changed model value');
+  assert.equal(input.writes,1);
+  doc.activeElement=null;input.value='2.50';
+  assert.equal(input.value,'2.50','nonediting refresh may replace the spelling');
+ }finally{delete globalThis.document;delete globalThis.window;}
+});
+
 test('late pointer-lock acquisition is released after the gesture already ended',async()=>{
  const {beginContinuousPointer}=await import('../continuous-pointer.mjs');
  const doc=new Control(),target={ownerDocument:doc};doc.defaultView={};let complete,exits=0;

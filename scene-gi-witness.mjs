@@ -26,7 +26,7 @@ try {
   await page.goto(url);
   await page.waitForFunction(()=>window.__kaminosSceneRadianceSetup?.status==='failed'||window.__kaminosVolumePrototype?.debugState().error||(window.kaminosSceneObjectDebugState?.().some(o=>o.id==='kiln')&&window.__kaminosSceneRadiance?.canRender()&&window.__kaminosVolumePrototype.debugState().frameCount>=12),null,{timeout:0});
   report.phase='loaded';await save();
-  if(['--product-controls','--product-controls-guided','--gi-viewport-controls'].includes(operation)) {
+  if(['--product-controls','--product-controls-guided','--gi-viewport-controls','--number-editing'].includes(operation)) {
     await page.waitForFunction(()=>/^(Scene loaded:|Scene load failed:|Scene restore failed:|Composition restore failed:|Auto-load scene failed:|Invalid scene)/.test(document.getElementById('info-bar').textContent),null,{timeout:0});
     report.sceneLoad=await page.locator('#info-bar').textContent();assert.ok(report.sceneLoad.startsWith('Scene loaded:'),report.sceneLoad);await save();
   }
@@ -38,7 +38,49 @@ try {
     await page.check('#rendering-surface-scattering');
     await page.waitForTimeout(1000);
   }
-  if(operation==='--gi-viewport-controls') {
+  if(operation==='--number-editing') {
+    report.phase='number-editing';report.typing=[];await save();
+    await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
+    for(const [id,target,key,text] of [
+      ['scene-gi-thickness','@scene-gi','thickness','0.0037'],
+      ['scene-gi-denoise','@scene-gi','denoise','2.35'],
+      ['scene-camera-ev','@scene-camera','exposureEV','-1.25'],
+    ]) {
+      const input=page.locator('#'+id);
+      const before=await page.evaluate(target=>window.kaminosAuthoringParameters.read(target),target);
+      const history=await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount);
+      await input.click();await input.press('Meta+A');
+      const trace=[];
+      for(const character of text){await page.keyboard.type(character);trace.push({character,value:await input.inputValue()});}
+      report.typing.push({id,text,trace});await save();
+      assert.equal(await input.inputValue(),text,'per-character typing changed the number');
+      await input.blur();
+      assert.equal((await page.evaluate(target=>window.kaminosAuthoringParameters.read(target),target))[key],Number(text));
+      assert.equal(await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),history+1);
+      await page.evaluate(()=>window.kaminosSceneEdits.undo());
+      assert.equal(Number(await input.inputValue()),before[key]);
+      await page.evaluate(()=>window.kaminosSceneEdits.redo());
+      assert.equal(Number(await input.inputValue()),Number(text));
+      await input.click();await input.press('Meta+A');await page.keyboard.type('1.75');await input.press('Escape');
+      assert.equal(Number(await input.inputValue()),Number(text),'Escape did not restore accepted edit');
+    }
+    const filter=page.locator('#scene-gi-denoise');
+    await filter.click();await filter.press('Meta+A');await page.keyboard.type('235');
+    await filter.press('Home');await filter.press('ArrowRight');await page.keyboard.type('.');
+    assert.equal(await filter.inputValue(),'2.35','inserting a decimal in the middle lost the caret');
+    await filter.press('ArrowRight');await page.keyboard.type('7');
+    assert.equal(await filter.inputValue(),'2.375','typing after middle insertion lost the caret');
+    await filter.press('Escape');
+    await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();await page.screenshot({path:out+'/number-editing.png'});
+    await page.locator('#authoring-viewport-settings > summary').click();
+    const opacity=page.locator('#viewport-emitter-opacity');
+    const original=await opacity.inputValue();await opacity.click();await opacity.press('Meta+A');
+    await page.keyboard.type('0.23');
+    assert.equal(await opacity.inputValue(),'0.23');
+    assert.equal((await page.evaluate(()=>window.kaminosViewportSettings.read())).emitterGuideOpacity,.23);
+    await opacity.press('Escape');assert.equal(Number(await opacity.inputValue()),Number(original));
+    await page.screenshot({path:out+'/viewport-number-editing.png'});
+  } else if(operation==='--gi-viewport-controls') {
     report.phase='gi-viewport-controls';await save();
     await page.evaluate(()=>{window.kaminosWorkspace.setMode('authoring');window.kaminosWorkspace.setContext('scene');document.getElementById('authoring-render-slot').open=true;});
     const settle=async()=>{const f=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().frameCount);await page.waitForFunction(before=>window.__kaminosVolumePrototype.debugState().frameCount>before+2,f,{timeout:0});};

@@ -7,6 +7,25 @@ import * as flame from '../scene-flame-emitter.mjs';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 
+test('GI typing retains incomplete decimals without admitting invalid runtime values',()=>{
+  const control=new EventTarget();control.value='3.68';control.validity={valid:true};
+  const status={textContent:''},sceneGISettings={thickness:3.68},accepted=[];
+  const start=html.indexOf('for (const key of Object.keys(sceneGISettings)) {'),end=html.indexOf("document.getElementById('ao-toggle')",start);
+  vm.runInNewContext(html.slice(start,end),{
+    sceneGISettings,window:{},document:{getElementById:id=>id==='scene-gi-status'?status:control},
+    setSceneGIControls(next){if(!(next.thickness>0))throw Error('Invalid thickness');accepted.push(next.thickness);sceneGISettings.thickness=next.thickness;},
+  });
+  control.value='0';control.dispatchEvent(new Event('input'));
+  assert.equal(control.value,'0','a rejected preview must not erase a decimal prefix');
+  assert.deepEqual(accepted,[]);
+  control.value='';control.validity.valid=false;control.dispatchEvent(new Event('input'));
+  assert.equal(control.value,'','bad-input intermediate must remain editable');
+  control.value='0.0037';control.validity.valid=true;control.dispatchEvent(new Event('input'));
+  assert.deepEqual(accepted,[.0037]);
+  control.value='0';control.dispatchEvent(new Event('change'));
+  assert.equal(control.value,'0.0037','invalid commit restores the last admitted value');
+});
+
 test('GI thickness accepts fine decimals and slices/filter stay in the primary controls',()=>{
   const thickness=html.match(/<input[^>]*id="scene-gi-thickness"[^>]*>/)?.[0];
   assert.match(thickness,/step="any"/);

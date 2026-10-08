@@ -25382,13 +25382,14 @@ function setSceneGIControls(value) {
 }
 for (const key of Object.keys(sceneGISettings)) {
   const change=event => {
+    if(event.type==='input' && (!event.target.value.trim() || !event.target.validity.valid))return;
     try {
       const value = ['mode','view'].includes(key) ? event.target.value : Number(event.target.value);
       setSceneGIControls({...sceneGISettings,[key]:value});
       window._kaminosDirty?.();
       document.getElementById('scene-gi-status').textContent = '';
     } catch (error) {
-      event.target.value = String(sceneGISettings[key]);
+      if(event.type!=='input')event.target.value = String(sceneGISettings[key]);
       document.getElementById('scene-gi-status').textContent = error.message;
     }
   };

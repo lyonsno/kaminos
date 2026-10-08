@@ -59,7 +59,16 @@ function installNumberPresentation(input) {
   const display=doc.createElement('span');display.className='authoring-number-display';display.setAttribute('aria-hidden','true');
   input.before(wrapper);wrapper.append(input,display);
   const update=()=>{display.textContent=formatAuthoringNumber(descriptor.get.call(input));};
-  Object.defineProperty(input,'value',{configurable:true,get(){return descriptor.get.call(this);},set(value){descriptor.set.call(this,value);update();}});
+  Object.defineProperty(input,'value',{configurable:true,get(){return descriptor.get.call(this);},set(value){
+    const current=descriptor.get.call(this),next=String(value);
+    // A native number input can retain a trailing dot internally even though
+    // .value reports "3". Reassigning that same number resets its text/caret.
+    const editing=doc.activeElement===this && !this.readOnly;
+    const equivalent=editing && current!=='' && next!=='' &&
+      Number.isFinite(Number(current)) && Number(current)===Number(next);
+    if(current!==next && !equivalent)descriptor.set.call(this,value);
+    update();
+  }});
   input.addEventListener('input',update);input.addEventListener('change',update);update();
 }
 
