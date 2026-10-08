@@ -36,6 +36,7 @@ async function render(index, selected = '', active = null) {
     describeVolumeSettingsPresetProjection,
     activeVolumeSettingsPresetReceipt: active?.receipt || null,
     activeVolumeSettingsPresetStatus: () => active?.status || { text: '', warning: false },
+    describeFlameSettingsProblems: () => ({ text: '', warning: false }),
     volumeSettingsPresetStatus: (...args) => statuses.push(args),
     volumeSettingsPresetIndexSummary: null,
   });
@@ -116,7 +117,7 @@ assert.equal(reasonsView.statuses.at(-1)[1], true);
 // lands last, the status keeps both the loaded basin's report and the index summary.
 {
   const grab = head => source.match(new RegExp(`${head.replace(/[()]/g, '\\$&')}[^]*?\\n\\}`))?.[0];
-  const pageFns = [grab('function activeVolumeSettingsPresetStatus()'), grab('function recordVolumeSettingsPresetApplied()'), showStatus, refresh]
+  const pageFns = [grab('function describeFlameSettingsProblems()'), grab('function activeVolumeSettingsPresetStatus()'), grab('function recordVolumeSettingsPresetApplied()'), showStatus, refresh]
     .filter(Boolean).join('\n');
   const receipt = { presetId: available.presetId, label: 'Live kiln', requestedPresetRef: 'live-kiln', schemaIdentity: 's', storePath: '/store',
     serverProjection: { defaultsApplied: [], retiredControlIds: [], carriedControls: [], unsupportedValuesDefaulted: [] },
