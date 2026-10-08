@@ -44,6 +44,7 @@ try {
     for(const [id,target,key,text] of [
       ['scene-gi-thickness','@scene-gi','thickness','0.0037'],
       ['scene-gi-denoise','@scene-gi','denoise','2.35'],
+      ['scene-gi-steps','@scene-gi','steps','9'],
       ['scene-camera-ev','@scene-camera','exposureEV','-1.25'],
     ]) {
       const input=page.locator('#'+id);
@@ -65,8 +66,10 @@ try {
       assert.equal(Number(await input.inputValue()),Number(text),'Escape did not restore accepted edit');
     }
     const filter=page.locator('#scene-gi-denoise');
+    await filter.evaluate(input=>{window.numberKeyTrace=[];input.addEventListener('keyup',e=>numberKeyTrace.push({key:e.key,prevented:e.defaultPrevented,value:input.value,readOnly:input.readOnly}));});
     await filter.click();await filter.press('Meta+A');await page.keyboard.type('235');
-    await page.keyboard.press('Home');await page.keyboard.press('ArrowRight');await page.keyboard.type('.');
+    await page.keyboard.press('ArrowLeft');await page.keyboard.press('ArrowLeft');await page.keyboard.type('.');
+    report.middleEntry=await page.evaluate(()=>window.numberKeyTrace);await save();
     assert.equal(await filter.inputValue(),'2.35','inserting a decimal in the middle lost the caret');
     await page.keyboard.press('ArrowRight');await page.keyboard.type('7');
     assert.equal(await filter.inputValue(),'2.375','typing after middle insertion lost the caret');

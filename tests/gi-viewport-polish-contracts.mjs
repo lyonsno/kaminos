@@ -33,6 +33,7 @@ test('GI thickness accepts fine decimals and slices/filter stay in the primary c
   const start=html.indexOf('<div id="scene-gi-controls"'),end=html.indexOf('<details',start);
   const primary=html.slice(start,end);
   assert.ok(primary.includes('id="scene-gi-slices"'),'slices must not require opening advanced settings');
+  assert.ok(primary.includes('id="scene-gi-steps"'),'steps must be visible alongside slices');
   assert.ok(primary.includes('id="scene-gi-denoise"'),'filter radius must not require opening advanced settings');
   assert.match(primary,/<input[^>]*id="scene-gi-denoise"[^>]*type="number"[^>]*step="any"/);
 });
