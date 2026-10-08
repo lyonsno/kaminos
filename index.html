@@ -81,7 +81,7 @@ body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !import
 #scene-add-menu-popup[hidden] { display:none; }
 #scene-add-menu-popup button { display:flex; width:100%; justify-content:space-between; gap:20px; padding:9px 10px; text-align:left; white-space:nowrap; }
 #scene-add-menu-popup small { color:#8fa1a6; font:10px 'SF Mono',monospace; }
-#local-liquid-performance .hint { margin:8px 0 0; color:#96a3a8; font:11px/1.5 'SF Mono',monospace; }
+#local-liquid-performance .hint, #selected-water-properties .hint { margin:8px 0 0; color:#96a3a8; font:11px/1.5 'SF Mono',monospace; }
 #local-liquid-performance .slider-label { flex:0 0 105px; }
 #local-liquid-performance-status { color:#add4d6 !important; }
 .navigation-input { position:relative; display:flex; align-items:center; gap:7px; width:max-content; margin:10px 0 8px; padding:5px 7px; border:1px solid #282828; border-radius:5px; background:rgba(8,8,8,.76); color:#777; font:10px 'SF Mono',monospace; }
@@ -821,6 +821,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="slider-row"><label class="slider-label" for="water-emitter-profile">Profile</label><select id="water-emitter-profile" class="select-input" data-water-setting="inletProfile"><option value="plug">Unified stream</option><option value="round_poiseuille">Parabolic</option></select></div>
       <label class="import-mode"><input id="water-emitter-auto" type="checkbox"><span>Supply from aperture and speed</span></label>
       <div class="slider-row"><label class="slider-label" for="water-emitter-rate">Particles / sec</label><input id="water-emitter-rate" class="transform-input" type="number" min="0" step="any" value="1200" data-water-setting="rate"></div>
+      <p id="water-emitter-status" class="hint" role="status"></p>
       <p class="hint">Emission belongs to this source. Object scale multiplies the aperture. Zero explicit supply stops emission.</p>
     </div></section>
     <section id="local-liquid-performance" hidden>
@@ -25067,10 +25068,14 @@ function syncSelectedWaterInspector() {
  for(const input of panel.querySelectorAll('[data-water-setting]')) {
   if(document.activeElement===input)continue;
   const key=input.dataset.waterSetting;
-  if(key==='rate') {input.disabled=value.rate===null;if(value.rate!==null)input.value=value.rate;}
+  if(key==='rate') {input.disabled=value.rate===null;input.value=value.rate??'';input.placeholder='Automatic';}
   else input.value=key==='inletProfile'?(value[key]??'round_poiseuille'):value[key];
  }
  document.getElementById('water-emitter-auto').checked=value.rate===null;
+ const inlet=localLiquidHost?.state().solver?.liveInlets?.inlets?.find(o=>o.id===entry.id);
+ document.getElementById('water-emitter-status').textContent=inlet?.effective
+  ? `${value.rate===null?'Automatic':'Explicit'} supply · ${Number(inlet.effective.particleReleaseRate.toPrecision(4))} particles / sec effective${inlet.effective.releaseSaturated?' · solver capacity reached':''}`
+  : 'Emission settings saved; waiting for the water host.';
 }
 function installWaterAuthoring() {
  const edits=scenePlacementTools.edits,panel=document.getElementById('selected-water-properties');
@@ -25088,7 +25093,7 @@ function installWaterAuthoring() {
  for(const input of controls)input.addEventListener(input.type==='checkbox'||input.tagName==='SELECT'?'change':'input',()=>{
   if(input.type==='number'&&(!input.value.trim()||!input.validity.valid))return;
   const entry=selectedSceneObjectEntry();if(entry?.type!==LOCAL_LIQUID_EMITTER_TYPE)return;
-  const patch=input.id==='water-emitter-auto'?{rate:input.checked?null:Number(document.getElementById('water-emitter-rate').value)}:
+  const patch=input.id==='water-emitter-auto'?{rate:input.checked?null:(localLiquidHost?.state().solver?.liveInlets?.inlets?.find(o=>o.id===entry.id)?.effective?.particleReleaseRate ?? 1200)}:
    {[input.dataset.waterSetting]:input.tagName==='SELECT'?input.value:Number(input.value)};
   try {
    const key=waterEmitterAuthoring.target(entry.id);
