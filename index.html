@@ -3266,6 +3266,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </script>
 
 <script type="module">
+import {mountMaterialCockpit} from './finger-fluid-material-cockpit.mjs';
+import {readMaterialControlsURL} from './finger-fluid-material-controls.mjs';
+
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
@@ -11917,8 +11920,8 @@ function updateFingerFluidBenchReadout() {
     state.source?.sourceTruthAuthority || 'synthetic source',
     `${state.solver?.particleCount || 0} particles`,
     state.config?.effectiveTruthScene || 'multi_regime_playground',
-    `${state.solver?.densityIterationsPerStep ?? fingerFluidBenchConfig?.effectivePressureIterations ?? 'pending'} density passes/step`,
-    `artificial pressure ${state.runtime?.artificialPressureMode ?? fingerFluidBenchConfig?.effectiveArtificialPressureMode ?? 'pending'}`,
+    `${state.runtime?.densityIterationsPerStep ?? state.solver?.densityIterationsPerStep ?? fingerFluidBenchConfig?.effectivePressureIterations ?? 'pending'} density passes/step`,
+    `particle repulsion ${state.runtime?.particleRepulsionStrength ?? 'pending'}×`,
     state.runtime?.pressurePlayground ? `gravity-fed reservoirs · gate ${state.runtime.pressurePlayground.gateOpen ? 'open' : 'closed'} · step ${state.runtime.stepCount}` : `${state.playgroundZoneDiagnostics?.occupiedZoneCount || 0}/6 regimes`,
     `${state.interfaceCarrier?.activeCount || 0} interface records`,
     state.downgrades?.[0] || 'no downgrade recorded',
@@ -13105,6 +13108,7 @@ async function startFingerFluidBench() {
       fixedVolumeReferenceParticleCount: fingerFluidBenchConfig.requestedFixedVolumeReferenceParticleCount,
       densityIterations: fingerFluidBenchConfig.effectivePressureIterations,
       artificialPressureMode: fingerFluidBenchConfig.effectiveArtificialPressureMode,
+      particleRepulsionStrength: Number(new URL(window.location.href).searchParams.get('finger_fluid_repulsion_strength') ?? (fingerFluidBenchConfig.effectiveArtificialPressureMode === 'off' ? 0 : 1)),
       densityCellRejection: fingerFluidBenchConfig.effectiveDensityCellRejection,
       packedDensity: fingerFluidBenchConfig.effectivePackedDensity,
       uniformVolumeDensityKernel: fingerFluidBenchConfig.effectiveUniformVolumeDensityKernel,
@@ -13155,6 +13159,7 @@ async function startFingerFluidBench() {
       updateFingerFluidBenchReadout();
       return;
     }
+    fingerFluidBenchSolver.setMaterialControls(readMaterialControlsURL(window.location.href, fingerFluidBenchSolver.getMaterialControls().effective));
     try {
       configureFingerFluidAnalyticCarrierSmoke();
     } catch (error) {
@@ -27215,6 +27220,29 @@ sceneInitialization.then(() => {
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 });
+
+if(new URL(window.location.href).searchParams.get('kaminos_finger_fluid_bench') === '1') {
+  window.kaminosFingerFluidBenchSetMaterialControls=patch=>{
+    const receipt=fingerFluidBenchSolver.setMaterialControls(patch);
+    fingerFluidBenchConfig.requestedPressureIterations=receipt.effective.densityIterations;
+    fingerFluidBenchConfig.effectivePressureIterations=receipt.effective.densityIterations;
+    fingerFluidBenchConfig.requestedCapillaryStrength=receipt.effective.capillaryStrength;
+    fingerFluidBenchConfig.effectiveCapillaryStrength=receipt.effective.capillaryStrength;
+    fingerFluidBenchConfig.requestedFreeFlightViscosityBoost=receipt.effective.freeFlightViscosityBoost;
+    fingerFluidBenchConfig.effectiveFreeFlightViscosityBoost=receipt.effective.freeFlightViscosityBoost;
+    if(fingerFluidBenchState)fingerFluidBenchState.runtime=fingerFluidBenchSolver.getDebugState();
+    updateFingerFluidBenchReadout();return receipt;
+  };
+  window.kaminosFingerFluidBenchReadMaterialInputs=()=>fingerFluidBenchSolver.readMaterialInputs();
+  mountMaterialCockpit(document.getElementById('tab-finger-fluid-bench'),{
+    id:'fluid-tuning-bench',read:()=>fingerFluidBenchSolver?.getMaterialControls?.(),
+    apply:window.kaminosFingerFluidBenchSetMaterialControls,
+    getPaused:()=>fingerFluidBenchSimulationPaused,
+    setPaused:value=>{fingerFluidBenchSimulationPaused=!!value;return fingerFluidBenchSimulationPaused;},
+    captureCamera:()=>structuredClone(fingerFluidBenchCamera),
+    restoreCamera:setFingerFluidBenchCameraForWitness,
+  });
+}
 </script>
 </body>
 </html>
