@@ -11,6 +11,17 @@ try{
  const nativeBytes=fs.readFileSync(nativePath),native=JSON.parse(nativeBytes),assetBytes=fs.readFileSync(assetPath),radius=Number(radiusInput),plane=JSON.parse(planeInput);
  const root=path.dirname(fileURLToPath(import.meta.url));report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();report.runtime={executable:process.execPath,node:process.version,architecture:process.arch,platform:process.platform};report.sources=Object.fromEntries(['structural-material-component-affine-assay.mjs','structural-material-component-affine.mjs','structural-material-solid-fragments.mjs','structural-material-solid-surface.mjs','structural-material-stone-prepare.mjs','package-lock.json'].map(name=>[name,hash(fs.readFileSync(path.join(root,name)))]));
  if(native.status!=='passed'||native.observed?.identity?.backend!=='webgpu'||native.observed.identity.adapterFallback!==false||native.observed.resident.length!==1)throw new Error('One complete retained native material candidate required');
+ if(native.observed.status!=='passed'||native.observed.route!=='kaminos.material-probe.native.v0')throw new Error('A passed native probe on the recorded route is required');
+ const candidate=native.observed.resident[0],requiredStages=['rest','loaded','damaged','post-damage','released'];
+ if(!['graph','pmb'].includes(candidate.kind))throw new Error('Supported native material kind required');
+ if(!Array.isArray(candidate.stages)||new Set(candidate.stages.map(s=>s.name)).size!==candidate.stages.length||requiredStages.some(name=>candidate.stages.filter(s=>s.name===name).length!==1))throw new Error('Unique complete native stage coverage required');
+ const runId=candidate.stages[0].state?.runId;
+ for(const stage of candidate.stages){
+  if(stage.state?.route!=='kaminos.deformable-material.colored-vbd.webgpu.v0')throw new Error(`Native resident route differs at ${stage.name}`);
+  if(stage.state.kind!==candidate.kind)throw new Error(`Native material kind differs at ${stage.name}`);
+  if(stage.state.runId!==runId||runId!==undefined&&(typeof runId!=='string'||!runId))throw new Error('Native resident factory identity changed during replay');
+ }
+ if(runId===undefined&&(typeof native.observed.runId!=='string'||!native.observed.runId))throw new Error('Historical single-probe identity is unavailable');
  if(!Array.isArray(plane)||plane.length!==4||!plane.every(Number.isFinite))throw new Error('Explicit plane control required');
  const preparationBytes=fs.readFileSync(path.join(native.prepared.root,'report.json'));if(hash(preparationBytes)!==native.prepared.manifestSha256)throw new Error('Native preparation source metadata changed');
  const preparation=JSON.parse(preparationBytes),interiorBytes=fs.readFileSync(preparation.input),interior=JSON.parse(interiorBytes),sourceBytes=fs.readFileSync(interior.source),source=JSON.parse(sourceBytes);
