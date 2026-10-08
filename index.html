@@ -584,6 +584,9 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .volume-pyro-atlas-wrap { margin-top: 8px; border-top: 1px solid #282828; padding-top: 8px; }
 #volume-pyro-dynamic-atlas { width: 100%; height: 54px; border: 1px solid #333; border-radius: 6px; background: #080808; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.volume-flame-problems { margin-top: 8px; padding: 6px 8px; border: 1px solid #ff6b6b; border-radius: 4px; color: #ff8a8a; font-size: 11px; font-family: 'SF Mono', 'Fira Code', monospace; overflow-wrap: anywhere; }
+.volume-control-invalid { outline: 2px solid #ff6b6b; outline-offset: 1px; }
+.viewport-flame-problems { position: absolute; top: 56px; left: 16px; z-index: 12; max-width: min(560px, calc(100% - 32px)); box-sizing: border-box; padding: 6px 10px; border: 1px solid #ff6b6b; border-radius: 4px; background: rgba(30, 8, 8, 0.92); color: #ff9a9a; font: 11px/1.4 'SF Mono', 'Fira Code', monospace; overflow-wrap: anywhere; pointer-events: none; }
 .volume-presentation-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin: 8px 0; }
 .volume-presentation-switch .btn { margin: 0; min-height: 30px; font-size: 11px; }
 .volume-presentation-switch .btn.active { border-color: #4c9fba; background: #17333d; color: #d8f5ff; }
@@ -1333,6 +1336,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div id="volume-primary-control-root" data-volume-control-root="primary">
     <div class="panel" id="volume-basin-panel" aria-label="Basin save and load">
       <h2>Basins</h2>
+      <div class="volume-flame-problems" id="volume-flame-settings-problems" role="alert" hidden></div>
       <div class="volume-actions">
         <input id="settings-preset-label" class="search-input" type="text" placeholder="Preset name" aria-label="Preset name">
         <button class="btn" id="settings-preset-save">Save</button>
@@ -3152,6 +3156,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </div>
 
 <div id="viewport">
+  <div class="viewport-flame-problems" id="viewport-flame-settings-problems" role="alert" hidden></div>
   <nav class="scene-top-menu" aria-label="Scene menu">
     <div id="scene-add-menu">
       <button type="button" id="scene-add-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="scene-add-menu-popup" title="Add scene object (Shift+A)">Add</button>
@@ -16905,12 +16910,91 @@ function activeVolumeSettingsPresetStatus() {
 let volumeSettingsPresetIndexSummary = null;
 
 function showVolumeSettingsPresetStatus() {
+  const problems = describeFlameSettingsProblems();
   const active = activeVolumeSettingsPresetStatus();
   const summary = volumeSettingsPresetIndexSummary;
   volumeSettingsPresetStatus(
-    [active.text, summary?.text].filter(Boolean).join(' || '),
-    active.warning || Boolean(summary?.warning),
+    [problems.text, active.text, summary?.text].filter(Boolean).join(' || '),
+    problems.warning || active.warning || Boolean(summary?.warning),
   );
+}
+
+// The flame controls the loaded page holds invalid values for; while any
+// exists, every flame-control press is refused.
+function describeFlameSettingsProblems() {
+  const problems = window.__kaminosFlameSettingsProblems || [];
+  if (!problems.length) return { text: '', warning: false };
+  return {
+    text: `FLAME EDITS REFUSED: ${problems.length} invalid control${problems.length === 1 ? '' : 's'} (${problems.map(flameSettingsProblemLabel).join(', ')}); ${problems.map(problem => problem.message).join('; ')}`,
+    warning: true,
+  };
+}
+
+// Show the problems at the top of the Basins card and outline each invalid
+// control where it sits, with the reason on hover.
+function showFlameSettingsProblems() {
+  const problems = describeFlameSettingsProblems();
+  for (const id of ['volume-flame-settings-problems', 'viewport-flame-settings-problems']) {
+    const banner = document.getElementById(id);
+    if (!banner) continue;
+    banner.textContent = problems.text;
+    banner.hidden = !problems.text;
+  }
+  for (const el of document.querySelectorAll('.volume-control-invalid')) {
+    el.classList.remove('volume-control-invalid');
+    if (Object.hasOwn(el.dataset, 'volumeInvalidPriorTitle')) {
+      el.title = el.dataset.volumeInvalidPriorTitle;
+      delete el.dataset.volumeInvalidPriorTitle;
+    }
+  }
+  for (const problem of window.__kaminosFlameSettingsProblems || []) {
+    const source = document.getElementById(problem.id);
+    for (const el of [source, ...document.querySelectorAll(`[data-authoring-alias="${problem.id}"]`)]) {
+      if (!el?.classList) continue;
+      if (!el.classList.contains('volume-control-invalid')) el.dataset.volumeInvalidPriorTitle = el.title || '';
+      el.classList.add('volume-control-invalid');
+      el.title = problem.message;
+    }
+  }
+}
+
+// A problem named the way the panel shows it: the control's row label, or
+// its id when it has none.
+function flameSettingsProblemLabel(problem) {
+  // Only the label's own text: a help mark ("i") can sit inside it.
+  const labelEl = document.getElementById(problem.id)?.closest?.('.slider-row')?.querySelector('.slider-label');
+  const label = labelEl ? [...labelEl.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('').trim() : '';
+  return label || problem.id;
+}
+
+// A refused flame press, shown above the volume canvas where the operator is
+// looking (the info bar paints under it).
+function showFlameEditRefused(error) {
+  const message = `Flame edit refused: ${error.message}`;
+  setInfo(message);
+  const banner = document.getElementById('viewport-flame-settings-problems');
+  if (banner) {
+    banner.textContent = message;
+    banner.hidden = false;
+  }
+  // Some refusals pass (a replay in progress); fall back to the load state.
+  clearTimeout(showFlameEditRefused.timer);
+  showFlameEditRefused.timer = setTimeout(showFlameSettingsProblems, 4000);
+}
+
+// Run the flame settings edit check on the loaded page once every control is
+// set, so invalid controls show at load instead of as sliders that ignore the
+// mouse.
+function recordFlameSettingsProblems() {
+  try {
+    window.__kaminosFlameSettingsProblems = Object.freeze(flameSettingsStateProblems(flameSettingsState()));
+  } catch (error) {
+    window.__kaminosFlameSettingsProblems = Object.freeze([{ id: 'flame-settings', message: `flame settings check failed: ${error.message}` }]);
+  }
+  if (window.__kaminosFlameSettingsProblems.length) console.warn('Flame settings problems:', window.__kaminosFlameSettingsProblems);
+  showVolumeSettingsPresetStatus();
+  showFlameSettingsProblems();
+  return window.__kaminosFlameSettingsProblems;
 }
 
 // Read the controls back once the route has set them all, so a basin whose
@@ -24791,6 +24875,7 @@ async function initKaminosVolumeRoute() {
   });
   syncControls();
   recordVolumeSettingsPresetApplied();
+  recordFlameSettingsProblems();
   setInterval(refreshVolumeReadout, 500);
 }
 
@@ -25057,26 +25142,37 @@ function flameSettingsState(preset=buildVolumeSettingsPreset(),source=activeVolu
     presentationControls:preset.presentationControls,
     source:source ? {presetId:source.presetId,label:source.label,preset:source.preset} : null});
 }
-function checkFlameSettingsState(state) {
+// Every reason the flame settings edit would be refused, in the order the
+// check meets them. The edit session refuses a press on any flame control
+// while one exists, so the loaded page lists them all (recordFlameSettingsProblems).
+function flameSettingsStateProblems(state) {
+  const problems=[];
   const current=flameSettingsState();
   for(const axis of ['domControls','rendererControls','presentationControls']) {
     const wanted=state[axis];
-    if(!wanted || Object.keys(wanted).sort().join()!==Object.keys(current[axis]).sort().join())throw Error(`Incomplete flame ${axis}`);
+    if(!wanted || Object.keys(wanted).sort().join()!==Object.keys(current[axis]).sort().join()){problems.push({id:axis,message:`Incomplete flame ${axis}`});continue;}
     for(const [id,descriptor] of Object.entries(wanted)) {
-      if(axis==='presentationControls') {if(!['on','off'].includes(descriptor.value))throw Error('Invalid smoke presentation');continue;}
+      const problem=message=>problems.push({id,message});
+      if(!descriptor||typeof descriptor!=='object'){problem(`Invalid flame setting ${id}`);continue;}
+      if(axis==='presentationControls') {if(!['on','off'].includes(descriptor.value))problem('Invalid smoke presentation');continue;}
       const source=document.getElementById(id),value=descriptor.rawValue??descriptor.value;
-      if(!source)throw Error(`Missing flame setting ${id}`);
+      if(!source){problem(`Missing flame setting ${id}`);continue;}
       if(source.tagName==='SELECT') {
         const retired=id==='volume-emitter-aperture-pattern'&&VOLUME_RETIRED_APERTURE_PATTERNS.includes(String(value));
-        if(!retired&&![...source.options].some(option=>option.value===String(value)))throw Error(`Unsupported ${id}: ${value}`);}
-      else if(source.type==='checkbox') {if(typeof value!=='boolean'&&!['0','1','true','false'].includes(String(value)))throw Error(`Invalid ${id}`);}
+        if(!retired&&![...source.options].some(option=>option.value===String(value)))problem(`Unsupported ${id}: ${value}`);}
+      else if(source.type==='checkbox') {if(typeof value!=='boolean'&&!['0','1','true','false'].includes(String(value)))problem(`Invalid ${id}`);}
       else if(['range','number'].includes(source.type)) {
-        if(!Number.isFinite(Number(value)))throw Error(`Nonfinite ${id}`);
+        if(!Number.isFinite(Number(value))){problem(`Nonfinite ${id}`);continue;}
         // The render-scale control has an explicit Full/legacy value contract.
-        if(id!=='volume-render-scale'&&((source.min!==''&&Number(value)<Number(source.min))||(source.max!==''&&Number(value)>Number(source.max))))throw Error(`Out of range ${id}`);
-      } else if(source.type==='color'&&!/^#[0-9a-f]{6}$/i.test(value))throw Error(`Invalid color ${id}`);
+        if(id!=='volume-render-scale'&&((source.min!==''&&Number(value)<Number(source.min))||(source.max!==''&&Number(value)>Number(source.max))))problem(`Out of range ${id}`);
+      } else if(source.type==='color'&&!/^#[0-9a-f]{6}$/i.test(value))problem(`Invalid color ${id}`);
     }
   }
+  return problems;
+}
+function checkFlameSettingsState(state) {
+  const problems=flameSettingsStateProblems(state);
+  if(problems.length)throw Error(problems[0].message);
   return state;
 }
 function writeFlameSettingsState(state) {
@@ -25148,7 +25244,7 @@ function installAuthoringParameterEditing() {
     const definition={read,write,check};
     edits.register(id,definition);authoringParameterTargets.set(id,definition);
     authoringControlSessions.push(installSceneControlHistory({edits,id:'@flame-settings',
-      controls:[control,...document.querySelectorAll(`[data-authoring-alias="${control.id}"]`)],label,onError:error=>setInfo(error.message)}));
+      controls:[control,...document.querySelectorAll(`[data-authoring-alias="${control.id}"]`)],label,onError:error=>showFlameEditRefused(error)}));
   }
   for(const id of ['fire-light-gain-stops','exposure-slider','env-intensity-slider','env-rotation-slider','env-bg-brightness','env-bg-contrast']) {
     const control=document.getElementById(id);if(!control)continue;

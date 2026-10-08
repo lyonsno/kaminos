@@ -70,7 +70,7 @@ assert.equal(volumeSettingsPresetAppliedDifferences(inspectAs('thermal'), inspec
 // A retired aperture pattern (spiral, concentric) is kept as the basin's
 // request beside the shape fallback. The flame settings check accepts it, and
 // writing it back (undo) restores the request instead of blanking the select.
-const check = grab('function checkFlameSettingsState(');
+const check = grab('function flameSettingsStateProblems('); // the edit check's rules (checkFlameSettingsState throws its first problem)
 assert.match(check, /VOLUME_RETIRED_APERTURE_PATTERNS\.includes\(String\(value\)\)/, 'the flame check accepts a kept retired aperture pattern');
 const setSource = grab('function setVolumeControlValue(');
 const pattern = { id: 'volume-emitter-aperture-pattern', tagName: 'SELECT', type: 'select-one', value: 'shape', dataset: {} };
