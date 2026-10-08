@@ -1,3 +1,4 @@
+import {materialComponents} from './structural-material-solid-surface.mjs';
 const pointsValid=p=>Array.isArray(p)&&p.length&&p.every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite));
 const distance=(a,b)=>Math.hypot(...a.map((v,k)=>v-b[k]));
 const dot=(a,b)=>a.reduce((s,v,k)=>s+v*b[k],0);
@@ -24,7 +25,19 @@ export function principalTension(matrix){
  return{value:a[axis][axis],normal};
 }
 
-export function selectStressRelease({rest,elements,samples,components,component,radius,threshold}){
+export function planComponentCut(rest,bonds,nodes,normal,offset){
+ if(!pointsValid(rest)||!Array.isArray(nodes)||!nodes.length||new Set(nodes).size!==nodes.length||!nodes.every(i=>Number.isInteger(i)&&i>=0&&i<rest.length)||!pointsValid([normal])||Math.abs(Math.hypot(...normal)-1)>1e-6||!Number.isFinite(offset))throw new Error('Complete identified component cut required');
+ const before=materialComponents(rest.length,bonds),set=new Set(nodes),owner=before[nodes[0]];
+ if(new Set(nodes.map(i=>before[i])).size!==1||before.some((c,i)=>c===owner&&!set.has(i)))throw new Error('Cut target must be a complete surviving material component');
+ const n=normal.map(Math.fround),d=Math.fround(offset),distances=rest.map(p=>dot(n,p.map(Math.fround))-d);
+ for(const i of nodes){const magnitude=Math.abs(d)+rest[i].reduce((s,v,k)=>s+Math.abs(Math.fround(v)*n[k]),0);if(Math.abs(distances[i])<=8*2**-23*magnitude)return{admitted:false,reason:'Component cut has an unresolved float32 plane-side classification'};}
+ const after=bonds.map((v,i)=>i%4===2&&set.has(bonds[i-2])&&set.has(bonds[i-1])&&distances[bonds[i-2]]*distances[bonds[i-1]]<0?0:v),labels=materialComponents(rest.length,after),groups=new Map();
+ for(const i of nodes){if(!groups.has(labels[i]))groups.set(labels[i],[]);groups.get(labels[i]).push(i);}
+ if(groups.size!==2||[...groups.values()].some(g=>g.length<4))return{admitted:false,reason:'Component cut cannot produce two reconstructable connected pieces',sizes:[...groups.values()].map(g=>g.length)};
+ return{admitted:true,after,components:labels,sizes:[...groups.values()].map(g=>g.length),normal:n,offset:d};
+}
+
+export function selectStressRelease({rest,elements,samples,components,component,radius,threshold,bonds}){
  if(!pointsValid(rest)||!Array.isArray(elements)||!Array.isArray(samples)||samples.length!==elements.length||!Array.isArray(components)||components.length!==rest.length||!(radius>0&&Number.isFinite(radius))||!(threshold>0&&Number.isFinite(threshold)))throw new Error('A complete resident stress field and explicit criterion required');
  const centers=elements.map(ids=>ids.reduce((s,i)=>s.map((v,k)=>v+rest[i][k]/ids.length),[0,0,0]));
  if(samples.some(s=>s.invalid||!Array.isArray(s.stress)||!Array.isArray(s.F)||![...s.stress.flat(),...s.F.flat(),s.volume,s.energy].every(Number.isFinite)))throw new Error('Invalid or incomplete resident stress field');
@@ -40,6 +53,7 @@ export function selectStressRelease({rest,elements,samples,components,component,
   const normal=pulledBack.map(v=>v/length),offset=dot(normal,centers[index]),sides=[0,0];
   rest.forEach((p,i)=>{if(components[i]===component)sides[dot(normal,p)>=offset?0:1]++;});
   if(Math.min(...sides)<4)continue;
+  if(bonds){const nodes=components.flatMap((c,i)=>c===component?[i]:[]);if(!planComponentCut(rest,bonds,nodes,normal,offset).admitted)continue;}
   best={kind:'component-tensile-through-cut-v0',normal,offset,tension:principal.value,currentNormal:principal.normal,element:index,center:centers[index],averagingRadius:radius,threshold,sidePoints:sides};
  }
  return best;
