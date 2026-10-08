@@ -1,6 +1,6 @@
 # Flame system performance ledger
 
-Updated 2026-10-07. This is a working budget ledger, not a benchmark claim. Its purpose is to make room for larger fluid grids and composed scene features while protecting the accepted flame-driven light character. Keep measurements, structural work estimates, and missing measurements distinct.
+Updated 2026-10-08. This is a working budget ledger, not a benchmark claim. Its purpose is to make room for larger fluid grids and composed scene features while protecting the accepted flame-driven light character. Keep measurements, structural work estimates, and missing measurements distinct.
 
 ## Current budget model
 
@@ -10,7 +10,7 @@ The distributed route shares a current emission/extinction source between mesh r
 | --- | --- | --- |
 | Fluid update, advection and pressure | Full allocated grid, iterations, active solver and boundary passes | No comparable current GPU-ms estimate collated yet. A hidden upper half of a volume is not computationally free. |
 | Primary volume-source preparation | Full source-grid cells, material evaluation, copies | Not isolated in the current timing records. Camera display exposure is distinct from source power. |
-| Static mesh packing and ray visibility | Caster triangles, receiver count × directions; rebuilds after relevant geometry/receiver/guide edits | Preparation cost, not steady-frame cost. Emission-only changes reuse visibility. Receiver-only edits retain packed caster geometry. |
+| Static mesh packing and ray visibility | Caster triangles, receiver count × directions; rebuilds after relevant geometry/receiver/guide edits | Preparation cost only while rays stay fixed. Emission-only changes reuse visibility; moving the guide makes visibility a recurring cost. Receiver-only edits retain packed caster geometry. Live-guide observation below finds this recurring work prohibitive on the tested kiln. |
 | Live distributed gather | Surface plus smoke receiver rays, source cells crossed, extinction/scattering | GPU gather observations below. The source-guide PDF adds arithmetic; importance sampling is not a free equal-count optimization. |
 | Surface receiver reconstruction | Render vertices and four-sample reconstruction/material reads | Added when coarsening. No independently isolated GPU-ms estimate; retaining full geometry means gather savings are not render savings. |
 | Optional source softening / surface reconstruction filtering | Grid / receiver texture size × passes | Additional opt-in work. Current low-count acceptance does not require promoting these filters. |
@@ -59,6 +59,22 @@ Use the observed total, not a sum of component medians. This scope excludes flui
 Re-exercise with existing witnesses rather than a new profiling framework: `scratch/beaming-distributed-witness.mjs --receiver-spacing-check`, `scratch/beaming-source-guide-witness.mjs`, and the Rendering tab's actual-input inspection / explicitly attributed scene GPU timing. Their required URL/output arguments and route admission matter. A saved basin records controls, not a replay of fluid/history buffers.
 
 The two96direction references in the held guide comparisons differ themselves. Low-count guide results fill a local miss but show overshoot and worse aggregate field error against both references in those fixtures. Appearance acceptance in the separately authored composition does not convert either reference into ground truth or erase that numerical evidence.
+
+## October 8: changing the guide makes solid visibility the dominant cost
+
+Experimental source `fb125bd362ec09e8a37ed7e607b0b9041fe2db94`, based on accepted `d0624507`, not current-main adoption. Dataset `beaming-live-guide-budget-1008-003`, independent Chrome for Testing154 / Apple metal-3 / nonfallback. Accepted saved kiln composition and basin, guided8, receiver spacing0.16, GI10, source/filter reconstruction0, camera matching on, master/surface gain0 stops, held source generation129. Fluid resolution control48; effective coefficient grid32×64×32. 194,914 surface +8,192 smoke receivers and412,879 triangles:1,624,848 receiver-ray visibility queries per full guide refresh. Viewport1600×1200; timestamps cover lighting compute only, not scene drawing/GI, fluid update, source preparation or visible volume rendering.
+
+| Recorded scope | Valid GPU samples / requested | Median ms | Range ms |
+| --- | ---: | ---: | ---: |
+| Cached-guide lighting compute | 32 /32 | 1.533581 | 0.945318–4.264810 |
+| Changing-guide lighting compute, including refreshed visibility | 18 /32 | 86.793717 | 71.667240–96.799523 |
+| Visibility pass within those18 changing-guide records | 18 /32 | 84.322630 | 69.973099–94.278437 |
+
+This is a **partial failed run**, not a completed A/B/restoration benchmark. Changing record19 (zero-based18) failed the existing strict timestamp-order guard: successive pass ranges overlap; raw timestamps remain recorded, costs are null, and the cause is not attributed. No failing sample was deleted, repaired or counted as valid. The remaining13 changing samples and all32 restored samples were not executed; final source/output byte restoration therefore remains unproved. All51 recorded invocations show exactly one encode, no new pipelines or ray buffers, constant source-generation metadata129 and visibility preparation count advancing exactly for each changed guide. Native five-state prefix-growth/changed-guide arithmetic passed separately in the same run, maximum error7.68e-7. Baseline kiln/blue-gold flame screenshot was inspected; no changed-guide visual-quality claim.
+
+CPU encode medians over all recorded samples were0.20ms cached /0.40ms changing. Submit-to-queue-completion wall medians were5.25ms cached /141.5ms changing (ranges2.2–145.5 and82.7–279.9). These include waiting and are not GPU-pass cost; retain every outlier. Per-pass timestamp observations already identify approximately70–94ms visibility work, even after eliminating allocation churn. This direct full-refresh implementation is not an affordable per-frame route for the accepted kiln; this does **not** establish the cost of an optimized/shared visibility representation or actual-emission guide construction. Do not build the emission hierarchy on the assumption that replacing emitter bounds makes this path cheap. Return the visibility architecture decision first.
+
+The dataset retains the raw report, original/executed modules, native outputs, baseline fields and screenshot. The missing restoration limits comparison precision, not the observed order-of-magnitude mismatch to an interactive frame budget. No repeat is scheduled merely to obtain a successful status label.
 
 ## Updating this ledger
 
