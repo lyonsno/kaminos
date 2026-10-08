@@ -1,0 +1,11 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const file=process.argv[2];if(!file)throw new Error('Observed shared observation report required');
+const report=JSON.parse(fs.readFileSync(file)),w=report.observations.find(o=>o.name==='first-injury')?.effective;
+assert.ok(w?.gesture,'The same hand grip must survive its first material fracture');
+assert.equal(w.gesture.pieceId,w.pieces.find(p=>p.component===w.gesture.component).id);
+assert.ok(w.gesture.patch.every(p=>w.pieces.find(q=>q.id===w.gesture.pieceId).nodes.includes(p.index)),'Grip must not keep pulling a different released piece');
+assert.deepEqual(w.gesture.displacement,w.gesture.baselineDisplacement,'Post-fracture grip rebases to the accepted current pose');
+assert.equal(w.state.grip.index,-2);assert.deepEqual(w.state.grip.patch,w.gesture.patch);
+for(const p of w.gesture.patch)assert.ok(Math.hypot(...w.state.state.slice(p.index*16+4,p.index*16+7).map((v,k)=>v-w.state.diagnostics[p.index*24+20+k]))<1e-6);
+console.log('Observed fracture keeps one current component-owned grip without a pose snap');
