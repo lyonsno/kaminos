@@ -3,8 +3,8 @@ import {materialControlsURL} from './finger-fluid-material-controls.mjs';
 const fields=[
   ['particleRepulsionStrength','Particle repulsion',0,2,.01,null],
   ['densityIterations','Density passes',1,6,1,null],
-  ['capillaryStrength','Cohesion',0,2,.01,2],
-  ['freeFlightViscosityBoost','Free-flight smoothing',0,.3,.01,.3],
+  ['capillaryStrength','Surface cohesion',0,2,.01,2],
+  ['freeFlightViscosityBoost','Flight smoothing boost',0,.3,.01,.3],
 ];
 
 export function mountMaterialCockpit(root,{id,read,apply,getPaused,setPaused,captureCamera,restoreCamera,onReplay}={}) {

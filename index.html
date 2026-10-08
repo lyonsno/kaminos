@@ -13102,13 +13102,19 @@ async function startFingerFluidBench() {
     }
     fingerFluidBenchState = createFingerFluidBenchState({ status: 'loading', solverBackend: 'loading', renderBackend: 'loading' });
     updateFingerFluidBenchReadout();
+    const initialMaterial = readMaterialControlsURL(window.location.href, {
+      particleRepulsionStrength:fingerFluidBenchConfig.effectiveArtificialPressureMode==='off'?0:1,
+      densityIterations:fingerFluidBenchConfig.effectivePressureIterations,
+      capillaryStrength:fingerFluidBenchConfig.effectiveCapillaryStrength,
+      freeFlightViscosityBoost:fingerFluidBenchConfig.effectiveFreeFlightViscosityBoost,
+    });
     fingerFluidBenchSolverPromise = createWebGPUFingerFluidSolver({
       canvas,
       particleCount: fingerFluidBenchConfig.effectiveParticleCount,
       fixedVolumeReferenceParticleCount: fingerFluidBenchConfig.requestedFixedVolumeReferenceParticleCount,
-      densityIterations: fingerFluidBenchConfig.effectivePressureIterations,
+      densityIterations: initialMaterial.densityIterations,
       artificialPressureMode: fingerFluidBenchConfig.effectiveArtificialPressureMode,
-      particleRepulsionStrength: Number(new URL(window.location.href).searchParams.get('finger_fluid_repulsion_strength') ?? (fingerFluidBenchConfig.effectiveArtificialPressureMode === 'off' ? 0 : 1)),
+      particleRepulsionStrength: initialMaterial.particleRepulsionStrength,
       densityCellRejection: fingerFluidBenchConfig.effectiveDensityCellRejection,
       packedDensity: fingerFluidBenchConfig.effectivePackedDensity,
       uniformVolumeDensityKernel: fingerFluidBenchConfig.effectiveUniformVolumeDensityKernel,
@@ -13126,9 +13132,9 @@ async function startFingerFluidBench() {
       particleShiftStrength: fingerFluidBenchConfig.effectiveParticleShiftStrength,
       supportFriction: fingerFluidBenchConfig.effectiveSupportFriction,
       chemistryDiffusion: fingerFluidBenchConfig.effectiveChemistryDiffusion,
-      capillaryStrength: fingerFluidBenchConfig.effectiveCapillaryStrength,
+      capillaryStrength: initialMaterial.capillaryStrength,
       thinSheetVorticityAttenuation: fingerFluidBenchConfig.effectiveThinSheetVorticityAttenuation,
-      freeFlightViscosityBoost: fingerFluidBenchConfig.effectiveFreeFlightViscosityBoost,
+      freeFlightViscosityBoost: initialMaterial.freeFlightViscosityBoost,
       unsupportedSheetStrength: fingerFluidBenchConfig.effectiveUnsupportedSheetStrength,
       maxFluidSpeed: fingerFluidBenchConfig.effectiveMaxFluidSpeed,
       adaptiveDensity: fingerFluidBenchConfig.effectiveAdaptiveDensity,
@@ -13159,7 +13165,10 @@ async function startFingerFluidBench() {
       updateFingerFluidBenchReadout();
       return;
     }
-    fingerFluidBenchSolver.setMaterialControls(readMaterialControlsURL(window.location.href, fingerFluidBenchSolver.getMaterialControls().effective));
+    const initialApplied=fingerFluidBenchSolver.setMaterialControls(initialMaterial).effective;
+    fingerFluidBenchConfig.effectivePressureIterations=initialApplied.densityIterations;
+    fingerFluidBenchConfig.effectiveCapillaryStrength=initialApplied.capillaryStrength;
+    fingerFluidBenchConfig.effectiveFreeFlightViscosityBoost=initialApplied.freeFlightViscosityBoost;
     try {
       configureFingerFluidAnalyticCarrierSmoke();
     } catch (error) {
