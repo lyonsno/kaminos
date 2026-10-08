@@ -3575,6 +3575,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </script>
 
 <script type="module">
+import {mountMaterialCockpit} from './finger-fluid-material-cockpit.mjs';
+
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
@@ -4388,6 +4390,7 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
     setInfo(`Water emitter saved in the scene; host water unavailable: ${localLiquidFailure}`);
   },
   onMounted: host => {
+    if(localLiquidSetup)localLiquidSetup=normalizeLocalLiquidSetup(host.state().setup);
     if (localLiquidSetup) host.setEmitters(localLiquidEmitterState().emitters);
     host.setPaused(localLiquidPaused);
   },
@@ -29497,6 +29500,26 @@ sceneInitialization.then(() => {
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 });
+
+window.kaminosSetLocalLiquidMaterialControls=patch=>{
+  if(!localLiquidHost)throw Error('Water is not mounted');
+  const receipt=localLiquidHost.setMaterialControls(patch);
+  localLiquidSetup=normalizeLocalLiquidSetup(localLiquidHost.state().setup);
+  refreshLocalLiquidPerformance();window._kaminosDirty?.();return receipt;
+};
+window.kaminosReadLocalLiquidMaterialInputs=()=>localLiquidHost?.readMaterialInputs();
+const authoredMaterialCockpit=mountMaterialCockpit(document.getElementById('local-liquid-performance'),{
+  id:'fluid-tuning-authored',read:()=>localLiquidHost?.getMaterialControls(),
+  apply:window.kaminosSetLocalLiquidMaterialControls,
+  getPaused:()=>localLiquidPaused,setPaused:window.kaminosPauseLocalLiquid,
+  captureCamera:()=>({position:camera.position.toArray(),target:controls.target.toArray(),fov:camera.fov,zoom:camera.zoom}),
+  restoreCamera:view=>{camera.position.fromArray(view.position);controls.target.fromArray(view.target);
+    if(Number.isFinite(view.fov))camera.fov=view.fov;if(Number.isFinite(view.zoom))camera.zoom=view.zoom;
+    camera.updateProjectionMatrix();controls.update();window._kaminosDirty?.();},
+});
+// The existing density value stays in the budget form for compatibility, but
+// its live slider above is the operator's single editing surface.
+document.getElementById('local-liquid-iterations')?.closest('.slider-row')?.setAttribute('hidden','');
 </script>
 <script>
 // Help text lives behind a small info mark on each control row: the

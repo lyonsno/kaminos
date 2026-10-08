@@ -1,3 +1,4 @@
+import {validateMaterialControls} from './finger-fluid-material-controls.mjs';
 import { Euler, Vector3 } from './lib/three.core.js';
 
 export const LOCAL_LIQUID_SCHEMA = 'kaminos.local-liquid-setup.v1';
@@ -70,7 +71,12 @@ function normalizeLocalLiquidSetupCore(value) {
   for(const key of ['particleCount','densityIterations']) {
     if(!Number.isSafeInteger(value[key]) || value[key]<1)throw Error(`Invalid local liquid ${key}`);
   }
-  return {schema:LOCAL_LIQUID_SCHEMA,support:value.support,particleCount:value.particleCount,densityIterations:value.densityIterations};
+  const result={schema:LOCAL_LIQUID_SCHEMA,support:value.support,particleCount:value.particleCount,densityIterations:value.densityIterations};
+  if(Object.hasOwn(value,'materialControls')){
+    const values=validateMaterialControls({particleRepulsionStrength:1,capillaryStrength:.72,freeFlightViscosityBoost:.17,...value.materialControls,densityIterations:value.densityIterations});
+    const {densityIterations,...material}=values;result.materialControls=material;
+  }
+  return result;
 }
 
 export function normalizeLocalLiquidSetup(value) {

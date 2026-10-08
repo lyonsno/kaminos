@@ -1,3 +1,4 @@
+import {createMaterialControlState, validateMaterialControls, decodeMaterialInputs, PBF_REPULSION_COEFFICIENT} from './finger-fluid-material-controls.mjs';
 import { localLiquidOpticalQueryControls, localLiquidHostOpticalInputs, LOCAL_LIQUID_HOST_OPTICAL_QUERY_ROUTE } from './local-liquid-optical-query.mjs';
 import { canPreserveLiquidReleaseEpoch, LIVE_LIQUID_INLET_FLOATS } from './local-liquid-inlet-continuity.mjs';
 export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';
@@ -7422,7 +7423,7 @@ fn solve_position_delta(@builtin(global_invocation_id) gid: vec3<u32>) {
           if (neighborIndex != index) {
             let offset = position - particles[neighborIndex].predicted.xyz;
             let weight = density_pair_kernel_weight(index, neighborIndex, length(offset));
-            let tensile = -0.0012 * pow(weight / referenceWeight, 4.0);
+            let tensile = bitcast<f32>(params.liveInletControl.z) * pow(weight / referenceWeight, 4.0);
             correction = correction + (lambda + particles[neighborIndex].predicted.w + tensile) * density_pair_kernel_gradient(index, neighborIndex, offset);
           }
           current = particleNext[neighborIndex];
@@ -8764,7 +8765,8 @@ fn loadEnvironmentTexel(pixel: vec2<i32>) -> vec3<f32> {
 
 fn sampleEnvironment(rayDirection: vec3<f32>) -> vec3<f32> {
   let direction = normalize(rayDirection);
-  let longitude = atan2(direction.z, direction.x);
+  var longitude=0.0;
+  if(dot(direction.xz,direction.xz)>0.0){longitude=atan2(direction.z,direction.x);}
   let uv = vec2<f32>(fract(0.5 + longitude / (2.0 * 3.14159265)), acos(clamp(direction.y, -1.0, 1.0)) / 3.14159265);
   let dims = vec2<f32>(textureDimensions(hdrEnvironmentTexture));
   let texelPosition = uv * dims - vec2<f32>(0.5);
@@ -13089,6 +13091,7 @@ export async function createWebGPUFingerFluidSolver({
   particleCount = DEFAULT_PARTICLE_COUNT,
   densityIterations = 3,
   densityCellRejection = false,
+  particleRepulsionStrength = 1,
   uniformVolumeDensityKernel = false,
   energyDiagnosticsMode = 'every_step',
   substeps = 1,
@@ -13121,6 +13124,11 @@ export async function createWebGPUFingerFluidSolver({
   movingHillSupportContactProviderFactory = null,
   composedRevision = null,
 } = {}) {
+  const initialMaterialControls = validateMaterialControls({particleRepulsionStrength,
+    densityIterations:Math.max(1,Math.floor(finite(densityIterations,3))),
+    capillaryStrength:resolveFingerFluidCapillaryStrength(capillaryStrength),
+    freeFlightViscosityBoost:resolveFingerFluidFreeFlightViscosityBoost(freeFlightViscosityBoost)});
+  const materialControlState=createMaterialControlState(initialMaterialControls);
   if (typeof densityCellRejection !== 'boolean') {
     throw new TypeError(`Finger Fluid density cell rejection must be a boolean: ${String(densityCellRejection)}`);
   }
@@ -13265,7 +13273,7 @@ export async function createWebGPUFingerFluidSolver({
       particleAllocationPreflight,
     });
   }
-  const safeDensityIterations = Math.max(1, Math.floor(finite(densityIterations, 3)));
+  let safeDensityIterations = Math.max(1, Math.floor(finite(densityIterations, 3)));
   const safeDensityCellRejection = densityCellRejection === true && !safeAdaptiveDensity;
   const safeUniformVolumeDensityKernel = uniformVolumeDensityKernel === true && !safeAdaptiveDensity;
   const safeSubsteps = Math.max(1, Math.floor(finite(substeps, 1)));
@@ -13306,9 +13314,9 @@ export async function createWebGPUFingerFluidSolver({
   const safeParticleShiftStrength = resolveFingerFluidParticleShiftStrength(particleShiftStrength);
   const safeSupportFriction = resolveFingerFluidSupportFriction(supportFriction);
   const safeChemistryDiffusion = resolveFingerFluidChemistryDiffusion(chemistryDiffusion);
-  const safeCapillaryStrength = resolveFingerFluidCapillaryStrength(capillaryStrength);
+  let safeCapillaryStrength = resolveFingerFluidCapillaryStrength(capillaryStrength);
   const safeThinSheetVorticityAttenuation = resolveFingerFluidThinSheetVorticityAttenuation(thinSheetVorticityAttenuation);
-  const safeFreeFlightViscosityBoost = resolveFingerFluidFreeFlightViscosityBoost(freeFlightViscosityBoost);
+  let safeFreeFlightViscosityBoost = resolveFingerFluidFreeFlightViscosityBoost(freeFlightViscosityBoost);
   const safeUnsupportedSheetStrength = resolveFingerFluidUnsupportedSheetStrength(unsupportedSheetStrength);
   const safeMaxFluidSpeed = resolveFingerFluidMaxSpeed(maxFluidSpeed);
   const safeInletCutoffStep = resolveFingerFluidInletCutoffStep(inletCutoffStep);
@@ -13381,7 +13389,7 @@ export async function createWebGPUFingerFluidSolver({
   const paramsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-params',
     size: 224,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
   });
   const liveInletBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-live-inlets',
@@ -14472,6 +14480,9 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function writeSimulationParams(dt) {
+    const live=materialControlState.read().requested;
+    safeDensityIterations=live.densityIterations;safeCapillaryStrength=live.capillaryStrength;
+    safeFreeFlightViscosityBoost=live.freeFlightViscosityBoost;
     const buffer = new ArrayBuffer(224);
     const view = new DataView(buffer);
     view.setFloat32(0, dt, true);
@@ -14522,13 +14533,15 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(188, safeDensityCellRejection ? 1 : 0, true);
     view.setUint32(192, liveInletGeneration, true);
     view.setUint32(196, liveInletReleaseEpochFrame, true);
-    view.setUint32(200, 0, true);
+    // Reserved ABI word .z carries the numerical coefficient, read via WGSL bitcast.
+    view.setFloat32(200, PBF_REPULSION_COEFFICIENT * live.particleRepulsionStrength, true);
     view.setUint32(204, 0, true);
     view.setFloat32(208, safeUniformParticleVolumeScale, true);
     view.setFloat32(212, safeUniformParticleRadiusScale, true);
     view.setFloat32(216, safeUniformVolumeKernelNormalization, true);
     view.setFloat32(220, safeUniformVolumeDensityKernel ? 1 : 0, true);
     device.queue.writeBuffer(paramsBuffer, 0, buffer);
+    materialControlState.submit(stepCount);
   }
 
   function setLiveInletPacket(packet) {
@@ -14698,6 +14711,30 @@ export async function createWebGPUFingerFluidSolver({
       writtenPairs: capture.writtenPairs,
       nextQueryIndex: capture.firstQueryIndex + (capture.writtenPairs * 2),
     };
+  }
+
+  function getMaterialControls() {
+    return {available:!runtimeLifecycle.stopped,...materialControlState.read(),
+      particleCount:safeParticleCount,fixedVolumeReferenceParticleCount:safeFixedVolumeReferenceParticleCount};
+  }
+  function setMaterialControls(patch) {
+    if(runtimeLifecycle.stopped)throw new Error('Cannot tune a stopped fluid solver');
+    if([solverGpuTimestampCapture,solverStageGpuTimestampCapture,rendererGpuTimestampCapture].some(c=>c&&c.writtenPairs<c.pairCount))throw new Error('Finish the active timing capture before tuning fluid');
+    materialControlState.request(patch);
+    writeSimulationParams(1/60/safeSubsteps);
+    return getMaterialControls();
+  }
+  async function readMaterialInputs() {
+    if(runtimeLifecycle.stopped)throw new Error('Cannot read stopped fluid inputs');
+    const readback=device.createBuffer({label:'PBF-material-inputs-readback',size:224,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+    try {
+      const encoder=device.createCommandEncoder({label:'PBF-material-inputs-copy'});
+      encoder.copyBufferToBuffer(paramsBuffer,0,readback,0,224);device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const words=Array.from(new Uint32Array(readback.getMappedRange().slice(0)));
+      let values=null,validationError=null;try{values=decodeMaterialInputs(words);}catch(error){validationError=error.message;}
+      return {schema:'kaminos.fluid.material-inputs.v1',backend:'webgpu_compute',words,values,validationError,controls:getMaterialControls()};
+    } finally {if(readback.mapState==='mapped')readback.unmap();readback.destroy();}
   }
 
   function step(dt = 1 / 60) {
@@ -16090,6 +16127,8 @@ export async function createWebGPUFingerFluidSolver({
       supportFriction: safeSupportFriction,
       chemistryDiffusion: safeChemistryDiffusion,
       capillaryStrength: safeCapillaryStrength,
+      particleRepulsionStrength:materialControlState.read().effective?.particleRepulsionStrength??initialMaterialControls.particleRepulsionStrength,
+      liveMaterialControls:getMaterialControls(),
       thinSheetVorticityAttenuation: safeThinSheetVorticityAttenuation,
       freeFlightViscosityBoost: safeFreeFlightViscosityBoost,
       unsupportedSheetStrength: safeUnsupportedSheetStrength,
@@ -16774,6 +16813,8 @@ export async function createWebGPUFingerFluidSolver({
     deferredLinearDepthObjectTexture?.destroy();
   }
 
+  writeSimulationParams(1/60/safeSubsteps);
+
   runtimeApi = {
     available: true,
     solver_backend: 'webgpu_compute',
@@ -16785,6 +16826,9 @@ export async function createWebGPUFingerFluidSolver({
     body_transport_mode: safeBodyTransportMode,
     interface_frequency_mode: safeInterfaceFrequencyMode,
     step,
+    getMaterialControls,
+    setMaterialControls,
+    readMaterialInputs,
     armSolverGpuTimestampCaptureForWitness,
     finishSolverGpuTimestampCaptureForWitness,
     armSolverStageGpuTimestampCaptureForWitness,

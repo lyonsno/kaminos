@@ -1,3 +1,4 @@
+import {readMaterialControlsURL,MATERIAL_QUERY_KEYS} from './finger-fluid-material-controls.mjs';
 import { withLocalLiquidHelperGround } from './local-liquid-authoring.mjs';
 import { withLocalLiquidDepthBackground, readLocalLiquidDepthFrame } from './local-liquid-depth-background.mjs';
 import * as THREE from './lib/three.webgpu.js';
@@ -45,9 +46,15 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   let authored = normalizeLocalLiquidSetup(setup), authoredEmitters = structuredClone(emitters), sourceGeneration = 1;
   const initialPacket=localLiquidInletPacket(authored,authoredEmitters,sourceGeneration);
   let publishedEmitterKey=JSON.stringify(initialPacket.emitters);
+  const tuningURL=globalThis.location?.href||'http://localhost/';
+  const material=readMaterialControlsURL(tuningURL,{particleRepulsionStrength:1,capillaryStrength:.72,freeFlightViscosityBoost:.17,...authored.materialControls,densityIterations:authored.densityIterations});
+  if(authored.materialControls||Object.values(MATERIAL_QUERY_KEYS).some(key=>new URL(tuningURL).searchParams.has(key))){
+    const {densityIterations,...materialControls}=material;
+    authored=normalizeLocalLiquidSetup({...authored,densityIterations,materialControls});
+  }
   const solver = await createWebGPUFingerFluidSolver({webgpuDevice:device, hostFrameComposition:true,
     hostFramePipelineIdentity:PIPELINE, presentationMode:'local_analytic_consumer', truthScene:'live_hand_inlets',
-    particleCount:authored.particleCount, densityIterations:authored.densityIterations,
+    particleCount:authored.particleCount, ...material,
     rendererMode:'screen_space_refraction', bodyTransportMode:'robust_dense_body', interfaceFrequencyMode:'macro_micro_separated',
     liveInletPacket:initialPacket, liquidFireContactCoverage:'active-liquid-particles'});
   if (!isCurrent()) {
@@ -191,6 +198,14 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       solver.setLiveInletPacket(localLiquidInletPacket(next,authoredEmitters,sourceGeneration+1));
       sourceGeneration++;
       authored=next;
+    },
+    getMaterialControls:()=>solver.getMaterialControls(),
+    readMaterialInputs:()=>solver.readMaterialInputs(),
+    setMaterialControls(patch){
+      const receipt=solver.setMaterialControls(patch);
+      const {densityIterations,...materialControls}=receipt.effective;
+      authored=normalizeLocalLiquidSetup({...authored,densityIterations,materialControls});
+      return receipt;
     },
     setPaused(value){paused=Boolean(value);return paused;},
     get paused(){return paused;},
