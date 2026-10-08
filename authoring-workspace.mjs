@@ -92,6 +92,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     byId('authoring-scene-properties').hidden = context!=='scene';
     byId('authoring-camera-properties').hidden = context!=='camera';
     inspector.querySelectorAll('[data-inspector-context]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.inspectorContext === context)));
+    document.dispatchEvent(new document.defaultView.CustomEvent('kaminos-inspector-context-change',{detail:{context}}));
   }
   function setMode(next) {
     if (!['authoring', 'workbench'].includes(next)) throw new Error('Unknown workspace');

@@ -46,6 +46,8 @@ export function installCameraViewsPanel({document,views,edits,onError=()=>{}}) {
     run(()=>edits.preview({fov}));
   });
   const drag=installRelativeNumberDrag({input,step:.1});
+  input.addEventListener('blur',()=>{if(!session.state().pending)input.value=String(views.current().fov);refresh();});
+  document.addEventListener('kaminos-inspector-context-change',event=>{if(event.detail.context==='camera')refresh();});
   edits.subscribe(()=>{if(!session.state().pending)drag.stop();refresh();});
   refresh();
   return {refresh,session};
