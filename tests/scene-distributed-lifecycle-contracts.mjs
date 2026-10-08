@@ -31,6 +31,16 @@ function fixture(castShadow=true) {
   return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,buffers,pipelines,writes,field,emitter,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='live-guide-growth'){
+ const f=fixture();f.mount.setAngularPattern('guided');
+ for(const count of [8,12,16,24,32]){
+  f.emitter.radius+=.01;f.mount.setDirections(count);f.prepare();
+  assert.deepEqual(f.mount.debugState().frame.angularCache.counts,[count],'changed guide plus growth must retire superseded capacities');
+ }
+ f.mount.setDirections(8);f.emitter.radius+=.01;f.prepare();
+ assert.deepEqual(f.mount.debugState().frame.angularCache.counts,[32],'lower count may reuse one larger allocation');
+ f.mount.dispose();
+}
 if(!selected||selected==='live-guide'){
  const f=fixture();f.mount.setAngularPattern('guided');f.mount.setDirections(8);f.prepare();
  const resources=[f.buffers.length,f.pipelines.length];

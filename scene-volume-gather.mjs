@@ -189,10 +189,10 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       }
       if(surfaceReconstruction)reconstruction.encode(encoder,surfaceReconstruction);
       device.queue.submit([encoder.finish()]);
-      if(state.prefix){
-        for(const [key,old] of angularStates)if(old!==state&&old.family===state.family){for(const b of old.owned)b.destroy();angularStates.delete(key);}
-        state.prefix=null;
-      }
+      // A larger progressive allocation supersedes its smaller family members
+      // even when changed guide data prevented copying their old visibility.
+      if(sourcePattern())for(const [key,old] of angularStates)if(old!==state&&old.family===state.family&&old.capacity<state.capacity){for(const b of old.owned)b.destroy();angularStates.delete(key);}
+      state.prefix=null;
       lastField=field;lastLightingTexture=lightingTexture;lastOptions={surfaceScattering,gain};
       lastMetadata={generation:field.generation,frame:field.frame,surfaceReceivers:receivers.length,volumeReceivers:smokeEnabled?volumeCount:0,transportVolumeReceivers:smokeEnabled||surfaceScattering?volumeCount:0,allocatedVolumeReceivers:volumeCount,directions,stepLength,gain,surfaceScattering:{enabled:surfaceScattering,orders:surfaceScattering?1:0,sourceGeneration:surfaceScattering?field.scatteringGeneration:null},sourceSoftness,sourceSoftening:softening?{...softening.metadata}:null,geometryTriangles:geometry.triangleCount,smokeReconstruction,
         angularPattern,angularRotation,sourceGuide:angularPattern==='guided'?{...sourceGuide}:null,integration:sourcePattern()?'exact-cell':'midpoint',samplingLaw:angularPattern==='guided'?'emitter-envelope-mixture-solid-angle-v1':angularPattern==='source'?'progressive-volume-induced-solid-angle-v1':'uniform-sphere-v1',surfaceReconstruction:{passes:surfaceReconstruction,...reconstruction?.metadata},

@@ -21,7 +21,9 @@ export async function checkSourceAwareGPU({guided=false,liveGuide=false}={}){
   try{
     let frame=0;
     for(const [count,phase] of [[12,0],[16,1],[12,0],[24,2],[24,0]]){
-      if(liveGuide){guide=deriveSourceGuide({position:[frame%2?.55:-.4,-.76,frame%2?-.5:.4],radius:.15+.04*frame,height:1.2+.2*frame,depth:.24});gather.setSourceGuide(guide);}
+      // Same-guide growth first copies a valid prefix; the next changed guide
+      // must refresh that grown pipeline from zero, not its old prefix start.
+      if(liveGuide&&frame%2===0){guide=deriveSourceGuide({position:[frame===2?.55:-.4,-.76,frame===2?-.5:.4],radius:.15+.04*frame,height:1.2+.2*frame,depth:.24});gather.setSourceGuide(guide);}
       for(let z=0;z<4;z++)for(let y=0;y<8;y++)for(let x=0;x<4;x++){
         const i=(x+4*(y+8*z))*4;
         source.set(phase===2?[0,0,0,.2]:[x===phase?4:0,y/8,z/4,.2+x*.1],i);
