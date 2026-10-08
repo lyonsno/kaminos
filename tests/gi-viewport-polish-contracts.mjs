@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from '../lib/three.webgpu.js';
 import * as flame from '../scene-flame-emitter.mjs';
+import {resolveSceneGISettings} from '../scene-gi-settings.mjs';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 
@@ -24,6 +25,29 @@ test('GI typing retains incomplete decimals without admitting invalid runtime va
   assert.deepEqual(accepted,[.0037]);
   control.value='0';control.dispatchEvent(new Event('change'));
   assert.equal(control.value,'0.0037','invalid commit restores the last admitted value');
+});
+
+test('unfinished GI gain/filter commits restore state while explicitly supplied zero is accepted',()=>{
+  class Input extends EventTarget {value='';validity={valid:true};}
+  for(const key of ['gain','denoise']) {
+    const state=resolveSceneGISettings({mode:'combined'}),nodes=new Map(Object.keys(state).map(k=>['scene-gi-'+k,new Input()]));
+    const status={textContent:''};nodes.set('scene-gi-status',status);
+    const start=html.indexOf('for (const key of Object.keys(sceneGISettings)) {'),end=html.indexOf("document.getElementById('ao-toggle')",start);
+    vm.runInNewContext(html.slice(start,end),{
+      sceneGISettings:state,window:{},document:{getElementById:id=>nodes.get(id)},
+      setSceneGIControls(next){Object.assign(state,resolveSceneGISettings(next));},
+    });
+    const control=nodes.get('scene-gi-'+key),before=state[key];
+    for(const valid of [false,true]) {
+      control.value='';control.validity.valid=valid;
+      control.dispatchEvent(new Event('input'));assert.equal(state[key],before);
+      control.dispatchEvent(new Event('change'));
+      assert.equal(state[key],before,'unfinished commit must not become zero');
+      assert.equal(control.value,String(before));
+    }
+    control.value='0';control.validity.valid=true;control.dispatchEvent(new Event('input'));control.dispatchEvent(new Event('change'));
+    assert.equal(state[key],0,'explicit zero remains a valid setting');
+  }
 });
 
 test('GI thickness accepts fine decimals and slices/filter stay in the primary controls',()=>{

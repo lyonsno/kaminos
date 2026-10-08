@@ -25380,7 +25380,13 @@ function setSceneGIControls(value) {
 }
 for (const key of Object.keys(sceneGISettings)) {
   const change=event => {
-    if(event.type==='input' && (!event.target.value.trim() || !event.target.validity.valid))return;
+    if(!['mode','view'].includes(key) && (!event.target.value.trim() || !event.target.validity.valid)) {
+      if(event.type!=='input') {
+        event.target.value=String(sceneGISettings[key]);
+        document.getElementById('scene-gi-status').textContent='Enter a valid number';
+      }
+      return;
+    }
     try {
       const value = ['mode','view'].includes(key) ? event.target.value : Number(event.target.value);
       setSceneGIControls({...sceneGISettings,[key]:value});

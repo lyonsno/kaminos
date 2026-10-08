@@ -74,6 +74,25 @@ try {
     await page.keyboard.press('ArrowRight');await page.keyboard.type('7');
     assert.equal(await filter.inputValue(),'2.375','typing after middle insertion lost the caret');
     await filter.press('Escape');
+    report.incompleteCommits=[];
+    for(const key of ['gain','denoise']) {
+      const input=page.locator('#scene-gi-'+key),before=await input.inputValue();
+      for(const commit of ['blur','Enter']) {
+        const history=await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount);
+        await input.click();await input.press('Meta+A');await page.keyboard.type('-');
+        assert.equal(await input.inputValue(),'');
+        if(commit==='blur')await input.blur();else await input.press('Enter');
+        assert.equal(Number(await input.inputValue()),Number(before));
+        assert.equal((await page.evaluate(()=>window.kaminosAuthoringParameters.read('@scene-gi')))[key],Number(before));
+        assert.equal(await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),history);
+        report.incompleteCommits.push({key,commit,before,after:await input.inputValue(),history});await save();
+      }
+      const history=await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount);
+      await input.click();await input.press('Meta+A');await page.keyboard.type('0');await input.blur();
+      assert.equal((await page.evaluate(()=>window.kaminosAuthoringParameters.read('@scene-gi')))[key],0);
+      assert.equal(await page.evaluate(()=>window.kaminosSceneEdits.state().undoCount),history+1);
+      await page.evaluate(()=>window.kaminosSceneEdits.undo());assert.equal(Number(await input.inputValue()),Number(before));
+    }
     await page.locator('#scene-gi-panel').scrollIntoViewIfNeeded();await page.screenshot({path:out+'/number-editing.png'});
     await page.locator('#authoring-viewport-settings > summary').click();
     const opacity=page.locator('#viewport-emitter-opacity');
