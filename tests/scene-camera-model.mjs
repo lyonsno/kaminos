@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {buildSceneDocument,planSceneRestore,isReloadableSceneObjectRecord} from '../scene-persistence-core.js';
-const camera={id:'camera-hero',type:'camera',source:'kaminos:camera',label:'Kiln hero',transform:{position:[2,3,5],rotation:[0,.3,0],scale:[1,1,1]},camera:{projection:'perspective',lens:50,sensorWidth:36,near:.01,far:1000}};
+const camera={id:'camera-hero',type:'camera',source:'kaminos:camera',label:'Kiln hero',transform:{position:[2,3,5],rotation:[0,.3,0],scale:[1,1,1]},camera:{projection:'perspective',lens:50,sensorWidth:36,sensorHeight:24,sensorFit:'auto',near:.01,far:1000}};
 const sceneCamera={schema:'kaminos.scene-camera.v1',activeId:camera.id,aspect:[16,9]};
 test('authored camera data and scene active camera survive the same scene document',()=>{
  assert.equal(isReloadableSceneObjectRecord(camera),true,'camera is an authored reloadable scene object');
@@ -37,3 +37,5 @@ test('camera object scale does not change lens or shot aim; output frame retains
  const frame=cameraFrameRect(1000,800,16/9,.85);assert.ok(Math.abs(frame.width/frame.height-16/9)<1e-12);assert.ok(frame.x>0&&frame.y>0);assert.throws(()=>normalizeSceneCamera({...sceneCamera,aspect:[0,9]},[camera]),/frame/);
 });
 test('Add Camera creates Blender lens defaults at the initial cursor origin; bookmark conversion is explicit',()=>{const f=fixture(),id=f.service.create('Camera');const record=f.objects.find(o=>o.id===id);assert.equal(record.camera.lens,50);assert.equal(record.camera.near,.1);assert.deepEqual(record.transform.position,[0,0,0]);const converted=f.service.createFromView('Saved angle',view);assert.deepEqual(f.objects.find(o=>o.id===converted).transform.position,view.position);});
+test('Blender Auto sensor fit uses the long frame dimension, including portrait shots',()=>{const wide=cameraViewFromRecord(camera,16/9),portrait=cameraViewFromRecord(camera,.5);const expected=2*Math.atan(36/100)*180/Math.PI;assert.ok(Math.abs(portrait.fov-expected)<1e-10);assert.ok(wide.fov<portrait.fov);});
+test('new viewport state and camera identity ambiguity refuse before scene mutation',()=>{const doc=buildSceneDocument({objects:[camera],sceneCamera});assert.throws(()=>planSceneRestore({...doc,objects:[camera,camera]}),/camera.*identity|duplicate/i);assert.throws(()=>planSceneRestore({...doc,viewport:{mode:'camera',locked:false,userView:{...view,position:[null,1,2]}}}),/viewport|finite|camera/i);});

@@ -5,14 +5,16 @@ export const CAMERA_TYPE='camera',CAMERA_SOURCE='kaminos:camera',SCENE_CAMERA_SC
 const copy=value=>structuredClone(value),rad=Math.PI/180;
 export function checkedCameraRecord(raw){
  if(raw?.type!==CAMERA_TYPE||raw.source!==CAMERA_SOURCE||typeof raw.id!=='string'||!raw.id)throw Error('Unsupported camera object');
- const data=raw.camera,transform=checkedPose(raw.transform);
+ const data={sensorFit:'auto',sensorHeight:24,...raw.camera},transform=checkedPose(raw.transform);
  if(!data||!['perspective','orthographic'].includes(data.projection)||!Number.isFinite(data.lens)||data.lens<=0||!Number.isFinite(data.sensorWidth)||data.sensorWidth<=0||!Number.isFinite(data.near)||data.near<=0||!Number.isFinite(data.far)||data.far<=data.near)throw Error('Invalid camera lens or clipping planes');
+ if(!['auto','horizontal','vertical'].includes(data.sensorFit)||!Number.isFinite(data.sensorHeight)||data.sensorHeight<=0)throw Error('Invalid camera sensor fit');
  if(data.projection==='orthographic'&&(!Number.isFinite(data.orthoScale)||data.orthoScale<=0))throw Error('Orthographic camera needs a positive scale');
- return {...copy(raw),transform,camera:{projection:data.projection,lens:data.lens,sensorWidth:data.sensorWidth,near:data.near,far:data.far,...(data.projection==='orthographic'?{orthoScale:data.orthoScale}:{})}};
+ return {...copy(raw),transform,camera:{projection:data.projection,lens:data.lens,sensorWidth:data.sensorWidth,sensorHeight:data.sensorHeight,sensorFit:data.sensorFit,near:data.near,far:data.far,...(data.projection==='orthographic'?{orthoScale:data.orthoScale}:{})}};
 }
 export function normalizeSceneCamera(raw,objects){
  const value=raw??{schema:SCENE_CAMERA_SCHEMA,activeId:null,aspect:[16,9]};
  if(value.schema!==SCENE_CAMERA_SCHEMA||!Array.isArray(value.aspect)||value.aspect.length!==2||!value.aspect.every(v=>Number.isFinite(v)&&v>0))throw Error('Invalid scene camera frame');
+ for(const item of objects.filter(o=>o.type===CAMERA_TYPE))if(objects.filter(o=>o.id===item.id).length!==1)throw Error('Duplicate camera identity');
  const activeId=value.activeId??null;if(activeId!==null&&!objects.some(o=>o.id===activeId&&o.type===CAMERA_TYPE))throw Error('Scene active camera is missing or is not a camera');
  return {schema:SCENE_CAMERA_SCHEMA,activeId,aspect:[...value.aspect]};
 }
@@ -22,16 +24,22 @@ export function cameraPoseFromView(raw){
 }
 export function cameraViewFromRecord(raw,aspect=16/9,distance=3){
  const record=checkedCameraRecord(raw),q=new Quaternion().setFromEuler(new Euler(...record.transform.rotation)),position=new Vector3(...record.transform.position);
- const fov=2*Math.atan(record.camera.sensorWidth/(2*record.camera.lens*aspect))/rad;
- return {position:position.toArray(),target:position.clone().addScaledVector(new Vector3(0,0,-1).applyQuaternion(q),distance).toArray(),up:new Vector3(0,1,0).applyQuaternion(q).toArray(),fov,near:record.camera.near,far:record.camera.far,projection:record.camera.projection,...(record.camera.projection==='orthographic'?{orthoScale:record.camera.orthoScale}:{})};
+ const fit=record.camera.sensorFit,vertical=fit==='vertical'||fit==='auto'&&aspect<1,sensor=fit==='vertical'?record.camera.sensorHeight:record.camera.sensorWidth;
+ const fov=2*Math.atan(sensor/(2*record.camera.lens*(vertical?1:aspect)))/rad;
+ return {position:position.toArray(),target:position.clone().addScaledVector(new Vector3(0,0,-1).applyQuaternion(q),distance).toArray(),up:new Vector3(0,1,0).applyQuaternion(q).toArray(),fov,near:record.camera.near,far:record.camera.far,projection:record.camera.projection,...(record.camera.projection==='orthographic'?{orthoScale:record.camera.orthoScale/(vertical?1:aspect)}:{})};
 }
 export function cameraRecordFromView(id,label,raw,aspect=16/9){
- const view=checkedCameraView(raw);return checkedCameraRecord({id,label,type:CAMERA_TYPE,source:CAMERA_SOURCE,fileName:'Camera',createdAt:new Date().toISOString(),transform:cameraPoseFromView(view),camera:{projection:'perspective',lens:36/(2*aspect*Math.tan(view.fov*rad/2)),sensorWidth:36,near:view.near,far:view.far}});
+ const view=checkedCameraView(raw);return checkedCameraRecord({id,label,type:CAMERA_TYPE,source:CAMERA_SOURCE,fileName:'Camera',createdAt:new Date().toISOString(),transform:cameraPoseFromView(view),camera:{projection:'perspective',lens:36/(2*Math.max(aspect,1)*Math.tan(view.fov*rad/2)),sensorWidth:36,near:view.near,far:view.far}});
 }
 export function cameraFrameRect(width,height,aspect,zoom=1,offset=[0,0]){
  if(![width,height,aspect,zoom].every(v=>Number.isFinite(v)&&v>0)||!offset.every(Number.isFinite))throw Error('Invalid camera frame geometry');
  let w=width,h=w/aspect;if(h>height){h=height;w=h*aspect;}w*=zoom;h*=zoom;
  return {x:(width-w)/2+offset[0]*width,y:(height-h)/2+offset[1]*height,width:w,height:h};
+}
+export function normalizeCameraViewport(raw,settings){
+ if(raw==null)return null;
+ if(!['user','camera'].includes(raw.mode)||typeof raw.locked!=='boolean'||raw.mode==='camera'&&!settings.activeId)throw Error('Invalid camera viewport state');
+ return {mode:raw.mode,locked:raw.locked,...(raw.userView?{userView:checkedCameraView(raw.userView)}:{})};
 }
 /** Objects remain in the caller's scene; only active-camera/output references live here. */
 export function createSceneCameras({edits,readObjects,writeCameras,readViewport,writeViewport,size,changed=()=>{},admit=()=>{},capture,supportsProjection=()=>true,makeId=()=>crypto.randomUUID()}){
@@ -54,7 +62,7 @@ export function createSceneCameras({edits,readObjects,writeCameras,readViewport,
  function finishNavigation(cancel=false){if(navigationTimer!==null){clearTimeout(navigationTimer);navigationTimer=null;}if(!navigationId)return;const id=navigationId;navigationId=null;if(cancel&&navigationDistanceBefore!==null)distance=navigationDistanceBefore;navigationDistanceBefore=null;if(edits.state().active?.id===id){cancel?edits.cancel():edits.commit();}sync();}
  const api={read,state:()=>({mode,locked,activeId:settings.activeId,frame:mode==='camera'?frame():null,writing,navigationId}),active:()=>copy(active()),sync,
   restore(value){finishNavigation(true);settings=normalizeSceneCamera(value,readObjects());sync();},
-  restoreViewport(value){mode='user';userView=null;locked=!!value?.locked;if(value?.mode==='camera'&&active()){if(!supportsProjection(active().camera.projection))throw Error('This render route does not support that camera projection');userView=value.userView?copy(value.userView):copy(readViewport());mode='camera';}sync();},
+  restoreViewport(value){value=normalizeCameraViewport(value,settings);mode='user';userView=null;locked=!!value?.locked;if(value?.mode==='camera'&&active()){if(!supportsProjection(active().camera.projection))throw Error('This render route does not support that camera projection');userView=value.userView?copy(value.userView):copy(readViewport());mode='camera';}sync();},
   viewportState:()=>({mode,locked,...(userView?{userView:copy(userView)}:{})}),
   membershipChanged(activeId=settings.activeId){if(activeId!==null&&!cameras().some(o=>o.id===activeId))activeId=null;settings={...settings,activeId};sync();},
   create(label='Camera'){available();const id=makeId(),record=checkedCameraRecord({id,label,type:CAMERA_TYPE,source:CAMERA_SOURCE,fileName:'Camera',createdAt:new Date().toISOString(),transform:{...cameraPoseFromView(readViewport()),position:[0,0,0]},camera:{projection:'perspective',lens:50,sensorWidth:36,near:.1,far:1000}});change({cameras:[...cameras(),record],settings:{...settings,activeId:settings.activeId??id}},'Add camera');return id;},

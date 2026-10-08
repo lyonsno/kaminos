@@ -7,7 +7,7 @@ import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFl
   flameDomainTranslationForPose, normalizeFlameDomainTranslation, flamePoseInDomain } from './scene-flame-emitter.mjs';
 import { LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';
 import {normalizeCameraViews} from './scene-camera-views.mjs';
-import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,normalizeSceneCamera} from './scene-camera.mjs';
+import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,normalizeSceneCamera,normalizeCameraViewport} from './scene-camera.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
 export const SCENE_VERSION = 8;
@@ -169,7 +169,7 @@ export function planSceneRestore(data) {
     schema: data.schema || null,
     cameraViews: normalizeCameraViews(data.cameraViews),
     sceneCamera:normalizeSceneCamera(data.sceneCamera,objects),
-    viewport:cloneJson(data.viewport??null),
+    viewport:normalizeCameraViewport(data.viewport,normalizeSceneCamera(data.sceneCamera,objects)),
     version: data.version,
     objects,
     groups,
@@ -247,7 +247,7 @@ export function buildSceneDocument({
     camera: cloneJson(camera),
     cameraViews: normalizeCameraViews(cameraViews),
     sceneCamera:normalizeSceneCamera(sceneCamera,sceneObjects),
-    viewport:cloneJson(viewport),
+    viewport:normalizeCameraViewport(viewport,normalizeSceneCamera(sceneCamera,sceneObjects)),
     environment: cloneJson(environment),
     volumePrimitives: normalizeVolumePrimitiveState(volumePrimitives),
     materials: cloneJson(activeObject?.materials ?? null),
