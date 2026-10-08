@@ -52,3 +52,8 @@ test('a solid between the water front and particle center must not discard the v
  const source=readFileSync(new URL('../finger-fluid-webgpu-core.js',import.meta.url),'utf8');const fs=source.slice(source.indexOf('fn fs_refraction('));
  assert.match(fs,/supportOrderingDepth = select\(readSupportOrderingDepth\(pixel\), readFrontDepth\(pixel\)/);
 });
+test('a metric depth span divides by actual forward ray rate rather than a fixed angle clamp',async()=>{
+ const m=await load();assert.equal(typeof m.liquidMetricPath,'function');
+ assert.equal(m.liquidMetricPath(.1,.1),1);assert.equal(m.liquidMetricPath(.1,.5),.2);assert.equal(m.liquidMetricPath(0,1),0);
+ assert.throws(()=>m.liquidMetricPath(.1,0),/forward/);assert.throws(()=>m.liquidMetricPath(.1,-1),/forward/);
+});

@@ -10217,9 +10217,12 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   if (hostTransport) { viewDir = -liquidWorldDirectionToView(liquidCameraDirection(pixel)); }
   let insideRay = refract(-viewDir, transportNormal, 1.0 / 1.333);
   let insideRayValid = length(insideRay) > 0.001;
-  let geometricPathLength = slab.geometricPathLength / max(abs(insideRay.z), 0.25);
-  let insideOffset = projectViewRayOffset(insideRay, geometricPathLength, slab.entryDepth);
   let insideWorldRay = viewDirectionToWorld(insideRay);
+  let forwardDepthRate = dot(insideWorldRay, params.cameraForward.xyz);
+  let metricRaySupported = insideRayValid && (forwardDepthRate > 0.000001);
+  var geometricPathLength = slab.geometricPathLength / max(abs(insideRay.z), 0.25);
+  if (hostTransport && metricRaySupported) { geometricPathLength = liquidMetricPath(slab.geometricPathLength, forwardDepthRate); }
+  let insideOffset = projectViewRayOffset(insideRay, geometricPathLength, slab.entryDepth);
   var unclampedExitUv = sceneUv + insideOffset / dimsFloat;
   if (hostTransport) { unclampedExitUv = projectWorldToDeferred(entryWorldPosition + insideWorldRay * geometricPathLength).xy; }
   let exitInFrame = all(unclampedExitUv >= vec2<f32>(0.001)) && all(unclampedExitUv <= vec2<f32>(0.999));
@@ -10236,8 +10239,8 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let outgoingRayValid = length(outgoingRay) > 0.001;
   var exitWorldPosition = reconstructWorldPosition(exitPixel, sampledExitDepth);
   var metricExitPath = geometricPathLength;
-  if (hostTransport && exitDepthValid && exitInFrame) {
-    metricExitPath = (sampledExitDepth - slab.entryDepth) / max(dot(insideWorldRay, params.cameraForward.xyz), 0.000001);
+  if (hostTransport && metricRaySupported && exitDepthValid && exitInFrame) {
+    metricExitPath = liquidMetricPath(sampledExitDepth - slab.entryDepth, forwardDepthRate);
     exitWorldPosition = entryWorldPosition + insideWorldRay * metricExitPath;
   }
   let outgoingWorldRay = viewDirectionToWorld(select(insideRay, outgoingRay, outgoingRayValid));
@@ -10248,9 +10251,9 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let entryOnlyOffset = reconstructRefractionOffset(transportNormal, thickness);
   let exitValidity = slab.exitValidity
     * select(0.0, 1.0, exitInFrame)
-    * select(0.0, 1.0, insideRayValid && outgoingRayValid && exitDepthValid);
+    * select(0.0, 1.0, insideRayValid && outgoingRayValid && exitDepthValid && (!hostTransport || metricRaySupported));
   var queryValidity = select(0.0, 1.0, exitValidity > 0.5);
-  let geometricPathKnown = (slab.exitValidity > 0.5) && insideRayValid;
+  let geometricPathKnown = (slab.exitValidity > 0.5) && insideRayValid && (!hostTransport || metricRaySupported);
   var waterPath = metricExitPath;
   var queryOrigin = select(exitWorldPosition + outgoingWorldRay * 0.035, exitWorldPosition, hostTransport);
   var queryDirection = outgoingWorldRay;

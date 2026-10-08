@@ -32,7 +32,13 @@ export function liquidFrontVisible(frontDepth,sceneDepth) {
  if(!Number.isFinite(frontDepth)||!Number.isFinite(sceneDepth))throw Error('Layer ordering requires finite depths');
  return sceneDepth<=0||frontDepth<sceneDepth-.002;
 }
+export function liquidMetricPath(depthSpan,forwardRate) {
+ if(!Number.isFinite(depthSpan)||depthSpan<0||!Number.isFinite(forwardRate)||forwardRate<=0)throw Error('Metric path needs a nonnegative span and positive forward rate');return depthSpan/forwardRate;
+}
 export const LOCAL_LIQUID_TRANSPORT_WGSL=/* wgsl */`
+fn liquidMetricPath(depthSpan: f32, forwardRate: f32) -> f32 {
+  return depthSpan / forwardRate;
+}
 fn liquidCameraDirection(pixel: vec2<i32>) -> vec3<f32> {
   let dims = vec2<f32>(textureDimensions(surfaceAccumulation));
   var ndc = (vec2<f32>(pixel) + vec2<f32>(0.5)) / dims * 2.0 - vec2<f32>(1.0);
