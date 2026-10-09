@@ -22,6 +22,7 @@ const imageUrl = params.get('image_root') && params.get('image_path')
 const autopauseMs = params.has('autopause') ? Number(params.get('autopause')) : null;
 const pauseForMs = Number(params.get('pausefor') ?? 1500);
 const autostopMs = params.has('autostop') ? Number(params.get('autostop')) : null;
+const repeat = Math.max(1, Number(params.get('repeat') ?? 1));
 const state = window.__supermatDemo = { status: 'loading', error: null, runs: [], identity: null, imageSource: null };
 const $ = id => document.getElementById(id);
 $('cooperative').checked = params.get('cooperative') !== '0';
@@ -148,11 +149,14 @@ async function load(blob, label) {
     current = await decodeImageRgba(blob, device);
     state.imageSource = label;
     drawModelInput(current);
-    await infer();
+    for (let index = 0; index < repeat; index++) {
+      await infer({ final: index === repeat - 1 });
+      if (state.runs.at(-1)?.status !== 'done') break;
+    }
   } catch (error) { fail(error); }
 }
 
-async function infer() {
+async function infer({ final = true } = {}) {
   if (!current || !adapter || active) return;
   const cooperative = $('cooperative').checked;
   const runId = `supermat:${crypto.randomUUID()}`;
@@ -225,7 +229,7 @@ async function infer() {
     frames.gaps = null;
     state.runs.push(record);
     showRun(record);
-    if (state.status !== 'error') state.status = record.status;
+    if (state.status !== 'error') state.status = final || record.status !== 'done' ? record.status : 'running';
     active = null;
     setRunControls(false);
   }
