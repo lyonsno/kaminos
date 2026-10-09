@@ -259,3 +259,27 @@ test('one data control can select per-object targets without merging their histo
  input.fire('focusin');values.a=3;input.fire('change');current='b';input.fire('focusin');values.b=4;input.fire('pointercancel');
  assert.deepEqual(values,{a:3,b:2});assert.deepEqual(past,[{id:'a',before:1,after:3}]);assert.equal(active,null);
 });
+
+test('flame aperture refusal ends its scrub so further pointer motion cannot escape history',async()=>{
+  const {readFileSync}=await import('node:fs');const vm=await import('node:vm');
+  const index=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const start=index.indexOf("  for(const scope of ['#rim-controls','#burner-controls','#selected-flame-fields'");
+  const setup=index.slice(start,index.indexOf('  edits.subscribe(()=>{',start));
+  for(const [scale,initial,motions] of [[.8,.05,[-20,-25]],[2,.2,[35,40]]]){
+    const doc=new Control();globalThis.document=doc;globalThis.window=new Control();
+    const input=new Control();input.type='number';input.min='.02';input.max='.5';input.value=String(initial);input.dataset={authoringDragStep:'.01'};input.style={};input.setPointerCapture=()=>{};input.hasPointerCapture=()=>false;
+    const row={querySelector:selector=>selector==='label'?input:null};input.closest=()=>row;
+    doc.querySelectorAll=selector=>selector.startsWith('#selected-flame-fields')?[input]:[];
+    let value=initial,inputs=0;const edits=createSceneEdits({read:()=>null,write(){}});
+    edits.register('@flame-settings',{read:()=>({value}),write:next=>{value=next.value;input.value=String(value);},check:next=>{if(next.value*scale<.02||next.value*scale>.5)throw Error('invalid aperture');return next;}});
+    const history=installSceneControlHistory({controls:[input],edits,id:'@flame-settings'});
+    input.addEventListener('input',()=>{inputs++;const before=edits.state().active?.before;value=Number(input.value);if(before&&(value*scale<.02||value*scale>.5)){value=before.value;input.value=String(value);edits.cancel();}});
+    try {
+      vm.runInNewContext(setup,{document:doc,Number,installRelativeNumberDrag,authoringControlSessions:[history],edits});
+      input.fire('pointerdown',{button:0,pointerId:1,clientX:0,clientY:0});
+      for(const x of motions)input.fire('pointermove',{pointerId:1,clientX:x,clientY:0});
+      input.fire('pointerup',{pointerId:1});
+      assert.equal(value,initial,'continued motion retains the accepted source');assert.equal(Number(input.value),initial);assert.equal(inputs,1,'the refused scrub must stop emitting previews');assert.equal(edits.state().undoCount,0);assert.equal(edits.state().active,null);
+    } finally {delete globalThis.document;delete globalThis.window;}
+  }
+});

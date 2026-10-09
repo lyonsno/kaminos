@@ -25729,7 +25729,8 @@ function installAuthoringParameterEditing() {
       const source=row.querySelector('input[type=range]');
       // Number edits preview through the same preexisting setter used on commit.
       const step=Number(input.dataset.authoringDragStep) || (source?.step && source.step!=='any'?Number(source.step):.01);
-      installRelativeNumberDrag({grip,input,step,onStart:()=>authoringControlSessions.forEach(session=>session.commit())});
+      const scrub=installRelativeNumberDrag({grip,input,step,onStart:()=>authoringControlSessions.forEach(session=>session.commit())});
+      edits.subscribe(state=>{if(!state.active)scrub.stop();});
     }
   }
   edits.subscribe(()=>{
