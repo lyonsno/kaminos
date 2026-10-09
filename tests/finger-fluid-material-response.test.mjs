@@ -84,7 +84,7 @@ test('native fixture imports the exact preflighted module under a server prefix'
   const moduleURL=pathToFileURL(root+'/prefix/finger-fluid-webgpu-core.js').href;
   const originalLocation=globalThis.location,originalDocument=globalThis.document,originalGPU=Object.getOwnPropertyDescriptor(navigator,'gpu');
   const device={queue:{writeBuffer(){}},createBuffer(){},createBindGroup(){},createComputePipelineAsync(){},destroy(){}};
-  Object.defineProperty(navigator,'gpu',{configurable:true,value:{requestAdapter:async()=>({info:{vendor:'apple'},isFallbackAdapter:false,limits:{maxStorageBuffersPerShaderStage:10},requestDevice:async()=>device})}});
+  Object.defineProperty(navigator,'gpu',{configurable:true,value:{requestAdapter:async()=>({info:{vendor:'apple',isFallbackAdapter:false},limits:{maxStorageBuffersPerShaderStage:10},requestDevice:async()=>device})}});
   globalThis.location={origin:pathToFileURL(root).href};globalThis.document={createElement:()=>({})};
   try{await assert.rejects(()=>nativeCohesionFixture([{name:'zero',dt:.01,strength:0}],moduleURL),e=>e.message==='imported:'+moduleURL);}
   finally{
@@ -103,4 +103,12 @@ test('native admission preserves source prefixes and refuses unusable GPU inputs
   for(const dt of [0,-1,NaN,Infinity,1e-50,1e40])assert.throws(()=>validateNativeCases([{name:'invalid',dt,strength:1}]),/timestep/);
   for(const strength of [-1,NaN,Infinity,1e40,1e38])assert.throws(()=>validateNativeCases([{name:'invalid',dt:.01,strength}]),/strength/);
   assert.doesNotThrow(()=>validateNativeCases([{name:'zero',dt:.01,strength:0},{name:'small-step',dt:1e-40,strength:1}]));
+});
+
+// Current WebGPU IDL: GPUAdapterInfo carries fallback status. Unknown is not native.
+test('native admission rejects an adapter whose current fallback identity is unknown',async()=>{
+  const original=Object.getOwnPropertyDescriptor(navigator,'gpu');let requested=false;
+  Object.defineProperty(navigator,'gpu',{configurable:true,value:{requestAdapter:async()=>({info:{vendor:'apple'},limits:{maxStorageBuffersPerShaderStage:10},requestDevice:async()=>{requested=true;throw Error('device-requested');}})}});
+  try {await assert.rejects(()=>nativeCohesionFixture([{name:'zero',dt:.01,strength:0}],'unused'),/Native Apple adapter unavailable\/fallback/);assert.equal(requested,false);}
+  finally {if(original)Object.defineProperty(navigator,'gpu',original);else delete navigator.gpu;}
 });

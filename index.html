@@ -4320,6 +4320,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   const ipbfDamping = ipbfDampingValue === '1';
   const ipbfDampingBeta = Number(params.get('finger_fluid_ipbf_beta') ?? 60);
   const cohesionModel=resolveFingerFluidCohesionModel({pressureSolver:effectivePressureSolver,cohesionModel:params.get('finger_fluid_cohesion_model')??'legacy'});
+  if(cohesionModel==='akinci_2013'&&!params.has('finger_fluid_capillary_strength'))throw new RangeError('Akinci experiment requires an explicit surface coefficient');
   const ipbfPressureRadiusScale = resolveFingerFluidIPBFPressureRadiusScale({pressureSolver:effectivePressureSolver,pressureRadiusScale:Number(params.get('finger_fluid_ipbf_pressure_radius_scale') ?? 1)});
   const pressureOptimizations=resolveFingerFluidPressureOptimizations({pressureSolver:effectivePressureSolver,adaptiveDensity:requestedAdaptiveDensity,densityCellRejection:requestedDensityCellRejection,uniformVolumeDensityKernel:requestedUniformVolumeDensityKernel});
   const requestedEnergyDiagnosticsMode = params.get('finger_fluid_energy_diagnostics') ?? 'every_step';

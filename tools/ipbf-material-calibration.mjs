@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {materialResponse,validateNativeCases,validateNativeCohesion,nativeModuleURL} from './ipbf-material-response.mjs';
 import {nativeCohesionFixture} from './ipbf-cohesion-native.mjs';
+import {validateNativeSurface,validateSurfaceCases} from './akinci-surface-validation.mjs';
 import {fluidBrowserLaunch} from '../finger-fluid-browser-launch.mjs';
 
 const arg=key=>{const i=process.argv.indexOf(key);if(i<0||!process.argv[i+1])throw Error(`Required ${key}`);return process.argv[i+1];};
@@ -23,7 +24,7 @@ try{
  report.phase='source-preflight';save();
  const git=(...args)=>{const r=spawnSync('git',args,{cwd:root,encoding:'utf8'});if(r.status!==0)throw Error(r.stderr);return r.stdout.trim();};
  assert.equal(git('rev-parse','HEAD'),revision,'Source revision mismatch');
- report.source={repoRoot:root,revision,dirty:git('status','--porcelain'),files:['finger-fluid-webgpu-core.js','finger-fluid-ipbf-wgsl.mjs','finger-fluid-ipbf-reference.mjs','finger-fluid-cohesion.mjs','finger-fluid-browser-launch.mjs','tools/ipbf-material-response.mjs','tools/ipbf-cohesion-native.mjs','tools/ipbf-material-calibration.mjs'].map(name=>({name,sha256:sha(readFileSync(root+'/'+name))}))};
+ report.source={repoRoot:root,revision,dirty:git('status','--porcelain'),files:['finger-fluid-webgpu-core.js','finger-fluid-ipbf-wgsl.mjs','finger-fluid-ipbf-reference.mjs','finger-fluid-cohesion.mjs','finger-fluid-akinci.mjs','finger-fluid-browser-launch.mjs','tools/ipbf-material-response.mjs','tools/akinci-surface-validation.mjs','tools/ipbf-cohesion-native.mjs','tools/ipbf-material-calibration.mjs'].map(name=>({name,sha256:sha(readFileSync(root+'/'+name))}))};
  report.lastTrustworthyEvidence='source-and-full-input-recorded';report.phase='cpu-equation-audit';save();
  report.response=materialResponse(config);
  report.resolution=config.resolutionVolumeScales.map(scale=>materialResponse({...config,particleVolume:config.particleVolume*scale,pressureRadius:config.pressureRadius*Math.cbrt(scale)}));
@@ -52,6 +53,13 @@ try{
   report.native=await evalPage('('+nativeCohesionFixture.toString()+')('+JSON.stringify(config.nativeCases)+','+JSON.stringify(moduleURL)+')',sessionId);save();
   report.phase='native-response-validation';save();assert.equal(report.native?.moduleURL,moduleURL,'Effective imported module URL mismatch');validateNativeCohesion(report.native,config.nativeCases);
   report.lastTrustworthyEvidence='complete-production-cohesion-responses';save();
+  if(config.surfaceCases){
+   report.phase='surface-input-admission';save();validateSurfaceCases(config.surfaceCases);
+   report.phase='native-surface-dispatch';save();
+   report.surface=await evalPage('('+nativeCohesionFixture.toString()+')('+JSON.stringify(config.surfaceCases)+','+JSON.stringify(moduleURL)+', {cohesionModel:"akinci_2013"})',sessionId);save();
+   report.phase='native-surface-validation';save();assert.equal(report.surface?.moduleURL,moduleURL,'Surface imported module URL mismatch');validateNativeSurface(report.surface,config.surfaceCases);
+   report.lastTrustworthyEvidence='complete-production-surface-fields-and-force';save();
+  }
  }
  report.phase='source-postflight';save();
  for(const f of report.source.files)assert.equal(sha(readFileSync(report.source.repoRoot+'/'+f.name)),f.sha256,'Source changed during calibration');

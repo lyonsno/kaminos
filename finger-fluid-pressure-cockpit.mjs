@@ -58,8 +58,11 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
       }
     }
     if(find('ipbf-beta')!==root.ownerDocument.activeElement)find('ipbf-beta').value=numberText(values.beta);
-    if(state.cohesionModel==='ipbf_free_surface')find('ipbf-cohesion-number').removeAttribute('max');
-    find('ipbf-cohesion-help').textContent=state.cohesionModel==='ipbf_free_surface'
+    if(state.cohesionModel!=='legacy')find('ipbf-cohesion-number').removeAttribute('max');
+    root.querySelector('label[for=ipbf-cohesion]').textContent=state.cohesionModel==='akinci_2013'?'Surface coefficient':'Cohesion';
+    find('ipbf-cohesion-help').textContent=state.cohesionModel==='akinci_2013'
+      ?'Published Akinci surface force · model coefficient, not calibrated N/m. Surface radius follows particle spacing; pressure radius is independent.'
+      :state.cohesionModel==='ipbf_free_surface'
       ?'Recovered attraction · strength is a fraction of gravity. Higher numeric values expand the slider.'
       :'Legacy attraction · density weighted · acceleration capped at 0.42';
     find('ipbf-damping-readout').textContent=runtime.ipbfSettings.damping
