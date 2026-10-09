@@ -12,10 +12,10 @@ export { mapsFromPlanes };
 
 export const SUPERMAT_ROUTE_ID = 'supermat.image-to-pbr.webgpu-local.v0';
 export const SUPERMAT_IMAGE_SIZE = 512;
-// Encoded work per cooperative duty. About 8 ms of GPU time at the ~2 TFLOP/s
-// this F32 route sustains on an M4 Max; single ops larger than this (the
-// full-resolution decoder convs) still submit whole.
-export const DEFAULT_DUTY_FLOPS = 16e9;
+// Cooperative duties start at this much encoded work and adapt toward the
+// target completed-queue time; large GEMMs split into column ranges to fit.
+export const DEFAULT_DUTY_FLOPS = 4e9;
+export const DEFAULT_TARGET_DUTY_MS = 12;
 const PACKAGE_SCHEMA = 'supermat.browser-weight-package.v0';
 
 const CPU_WORKER_MODULE = 'supermat.cpu-phases.v0';
@@ -119,14 +119,14 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
     device.pushErrorScope('out-of-memory');
     let error = null;
     try {
-      ops.setSchedule(schedule ? { dutyFlops: DEFAULT_DUTY_FLOPS, ...schedule } : null);
+      ops.setSchedule(schedule ? { dutyFlops: DEFAULT_DUTY_FLOPS, targetDutyMs: DEFAULT_TARGET_DUTY_MS, ...schedule } : null);
       t = performance.now();
       const pixels = ops.upload([3, SUPERMAT_IMAGE_SIZE, SUPERMAT_IMAGE_SIZE], input, 'input');
       const latent = await encodeImage(ops, w, pixels);
       ops.release(pixels);
       await mark('encodeMs', t);
       t = performance.now();
-      const tembSilu = timeEmbedding(ops, w);
+      const tembSilu = await timeEmbedding(ops, w);
       const heads = await runUnet(ops, w, latent, { tensor: w('conditioning.empty_prompt'), rows: 77 }, tembSilu);
       ops.release(latent);
       ops.release(tembSilu);
@@ -155,7 +155,7 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
       const duties = ops.stats.dutyHistory.slice(historyStart).map(row => ({ ...row }));
       return { width: SUPERMAT_IMAGE_SIZE, height: SUPERMAT_IMAGE_SIZE, maps, planes: { albedo: planes[0], orm: planes[1] },
         alpha, timings, run: runs, identity, cooperative: Boolean(schedule), cpuWorker,
-        dutyCount: ops.stats.duties - dutiesBefore, duties, opStats: { ...ops.stats, dutyHistory: undefined } };
+        dutyCount: ops.stats.duties - dutiesBefore, duties, schedule: schedule ? ops.scheduleState() : null, opStats: { ...ops.stats, dutyHistory: undefined } };
     } catch (caught) {
       error = caught;
       await ops.discard();

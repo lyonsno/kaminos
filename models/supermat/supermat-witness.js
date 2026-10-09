@@ -106,7 +106,7 @@ export async function runSuperMatWitness({ stage, fixtureSha256, weightsSha256 }
     }
     if (stage === 'unet' || stage === 'full') {
       const context = { tensor: tensors['conditioning.empty_prompt'], rows: 77 };
-      const tembSilu = timeEmbedding(ops, w, { capture });
+      const tembSilu = await timeEmbedding(ops, w, { capture });
       const [vAlbedo, vOrm] = await runUnet(ops, w, outputs.latent, context, tembSilu, { capture });
       ops.release(tembSilu);
       const scale = weightPackage.constants?.vScale;

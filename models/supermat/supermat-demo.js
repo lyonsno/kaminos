@@ -212,6 +212,8 @@ async function infer({ final = true } = {}) {
     record.timings = lastResult.timings;
     record.dutyCount = lastResult.dutyCount;
     record.longestDutyQueueMs = Math.max(0, ...lastResult.duties.map(duty => duty.queueMs ?? 0));
+    record.slowestDuties = [...lastResult.duties].sort((a, b) => (b.queueMs ?? 0) - (a.queueMs ?? 0)).slice(0, 6)
+      .map(({ label, queueMs, estimatedFlops, gateWaitMs }) => ({ label, queueMs, gflops: estimatedFlops / 1e9, gateWaitMs }));
     render();
     await Promise.all(['albedo', 'roughness', 'metallic'].map(name => setDownload(name, lastResult.maps[name])));
     record.status = 'done';

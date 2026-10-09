@@ -38,7 +38,22 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
   let encoder = null, pass = null, transient = [];
   // Cooperative schedule for one run: { runtime, invocation, control, signal, dutyFlops }.
   // Without it every op lands in one submission at flush().
-  let schedule = null, pendingFlops = 0, lastFence = Promise.resolve();
+  let schedule = null, pendingFlops = 0, lastFence = Promise.resolve(), adaptiveFlops = null;
+  // Duty budget adapts toward schedule.targetDutyMs from completed queue time
+  // (one duty in flight, so a duty's fence time is its own GPU time plus any
+  // foreground frames admitted ahead of it). Bounds are caller-overridable.
+  function currentDutyFlops() {
+    if (!schedule) return 0;
+    if (!schedule.targetDutyMs) return schedule.dutyFlops ?? 0;
+    return adaptiveFlops ?? schedule.dutyFlops ?? 4e9;
+  }
+  function observeDuty(flops, queueMs) {
+    if (!schedule?.targetDutyMs || !(queueMs > 0) || !(flops > 0)) return;
+    const [min, max] = schedule.dutyFlopsBounds ?? [5e8, 6.4e10];
+    const ideal = flops * schedule.targetDutyMs / queueMs;
+    const current = currentDutyFlops();
+    adaptiveFlops = Math.min(max, Math.max(min, current * Math.sqrt(ideal / current)));
+  }
   const stats = { dispatches: 0, pipelines: 0, createdBuffers: 0, createdBytes: 0, liveBytes: 0, peakLiveBytes: 0, flushes: 0,
     duties: 0, dutyHistory: [] };
 
@@ -153,8 +168,10 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
     stats.duties++;
     const row = { label, estimatedFlops: flops, submittedAt: submitted, gateWaitMs: submitted - gateStart };
     stats.dutyHistory.push(row);
+    row.dutyFlopsBudget = currentDutyFlops();
     lastFence = device.queue.onSubmittedWorkDone().then(() => {
       row.queueMs = performance.now() - submitted;
+      observeDuty(flops, row.queueMs);
       for (const buffer of buffers) buffer.destroy();
     });
   }
@@ -163,7 +180,7 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
   async function yieldPoint(label) {
     if (!schedule) return;
     throwIfStopped();
-    if (pendingFlops >= (schedule.dutyFlops ?? 0)) await submitDuty(label);
+    if (pendingFlops >= currentDutyFlops()) await submitDuty(label);
   }
 
   // Drop unsubmitted work after a failed or stopped run so the next run starts clean.
@@ -190,6 +207,7 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
     pendingFlops = 0;
     lastFence = Promise.resolve();
   }
+  const scheduleState = () => ({ adaptiveFlops, currentDutyFlops: currentDutyFlops() });
 
   async function flush() {
     if (schedule) {
@@ -221,8 +239,9 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
     return words;
   }
 
-  // General strided, batched GEMM. Output tensor `c` is allocated unless given.
-  function gemm(spec) {
+  // One dispatch of the general strided, batched GEMM (optionally a
+  // tile-aligned column range). Output tensor `c` is allocated unless given.
+  function issueGemm(spec) {
     const { M, N, K, batch = 1 } = spec;
     for (const [name, value] of Object.entries({ M, N, K, batch })) {
       if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`gemm ${name} must be positive`);
@@ -251,8 +270,28 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
 
   // NCHW conv2d (batch 1) as implicit GEMM. Bottom/right padding is implied by
   // the output size; `upsample` reads a nearest-2x view of the input.
-  // Under a cooperative schedule, a conv larger than the duty budget is issued
-  // as tile-aligned output-pixel ranges with a yield point between them.
+  // Under a cooperative schedule, a GEMM larger than the current duty budget
+  // is issued as tile-aligned output-column ranges with a yield between them.
+  async function gemm(spec) {
+    const c = spec.c ?? alloc(spec.outShape ?? [spec.batch ?? 1, spec.M, spec.N], spec.name ?? 'gemm');
+    const batch = spec.batch ?? 1;
+    const flops = 2 * spec.M * spec.N * spec.K * batch;
+    const budget = schedule ? currentDutyFlops() : 0;
+    if (!budget || flops <= budget) {
+      issueGemm({ ...spec, c });
+    } else {
+      const perColumn = 2 * spec.M * spec.K * batch;
+      const columns = Math.max(GEMM_TILE, Math.floor(budget / perColumn / GEMM_TILE) * GEMM_TILE);
+      for (let nBase = 0; nBase < spec.N; nBase += columns) {
+        issueGemm({ ...spec, c, nBase, nCount: Math.min(columns, spec.N - nBase) });
+        await yieldPoint(`${spec.name ?? 'gemm'}[${nBase}]`);
+      }
+    }
+    return c;
+  }
+
+  // NCHW conv2d (batch 1) as implicit GEMM. Bottom/right padding is implied by
+  // the output size; `upsample` reads a nearest-2x view of the input.
   async function conv2d({ x, shape: [cin, h, w], weight, bias, biasM2, residual, kernel = 3, stride = 1,
     pad = [1, 1, 1, 1], upsample = false, name = 'conv' }) {
     const [cout, wcin, kh, kw] = weight.shape;
@@ -267,17 +306,7 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
       ? { a: weight, b: x, c, M: cout, N, K: cin, aSM: cin, aSK: 1, bSK: h * w, bSN: 1, cSM: N, cSN: 1, biasM: bias, biasM2, residual }
       : { a: weight, b: x, c, M: cout, N, K, aSM: K, aSK: 1, bSK: h, bSN: w, bSB: wout, cSM: N, cSN: 1,
         padTop: top, padLeft: left, biasM: bias, biasM2, residual, conv: { kh, kw, stride, upsample } };
-    const flops = 2 * cout * N * spec.K;
-    const budget = schedule?.dutyFlops ?? 0;
-    if (!schedule || !budget || flops <= budget) {
-      gemm(spec);
-    } else {
-      const columns = Math.max(GEMM_TILE, Math.floor(budget / (2 * cout * spec.K) / GEMM_TILE) * GEMM_TILE);
-      for (let nBase = 0; nBase < N; nBase += columns) {
-        gemm({ ...spec, nBase, nCount: Math.min(columns, N - nBase) });
-        await yieldPoint(`${name}[${nBase}]`);
-      }
-    }
+    await gemm({ ...spec, name });
     c.shape = [cout, hout, wout];
     return c;
   }
@@ -357,5 +386,5 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
   }
 
   return { alloc, release, gemm, conv2d, groupNorm, layerNorm, softmax, geglu, affine, copy, upload, read, flush, yieldPoint,
-    setSchedule, discard, destroy, stats };
+    setSchedule, scheduleState, discard, destroy, stats };
 }

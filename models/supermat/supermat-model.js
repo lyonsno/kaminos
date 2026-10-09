@@ -19,9 +19,9 @@ export function createWeightAccessor(tensors) {
   return get;
 }
 
-function linear(ops, x, rows, weight, bias, { residual, name }) {
+async function linear(ops, x, rows, weight, bias, { residual, name }) {
   const [out, inner] = weight.shape;
-  return ops.gemm({ a: x, b: weight, M: rows, N: out, K: inner, aSM: inner, aSK: 1, bSK: 1, bSN: inner,
+  return await ops.gemm({ a: x, b: weight, M: rows, N: out, K: inner, aSM: inner, aSK: 1, bSK: 1, bSN: inner,
     cSM: out, cSN: 1, biasN: bias, residual, outShape: [rows, out], name });
 }
 
@@ -40,7 +40,7 @@ async function resnet(ops, w, prefix, x, { eps, tembSilu = null }) {
   let temb = null;
   if (tembSilu) {
     const proj = w(`${prefix}.time_emb_proj.weight`);
-    temb = linear(ops, tembSilu, 1, proj, w(`${prefix}.time_emb_proj.bias`), { name: `${prefix}.temb` });
+    temb = await linear(ops, tembSilu, 1, proj, w(`${prefix}.time_emb_proj.bias`), { name: `${prefix}.temb` });
   }
   const n1 = ops.groupNorm({ x, shape: [c, h, wd], gamma: w(`${prefix}.norm1.weight`), beta: w(`${prefix}.norm1.bias`),
     eps, silu: true, name: `${prefix}.norm1` });
@@ -68,24 +68,24 @@ async function resnet(ops, w, prefix, x, { eps, tembSilu = null }) {
 // Token-major multi-head attention with materialized F32 scores.
 async function attention(ops, w, prefix, xNorm, rows, channels, heads, { context = null, residual }) {
   const dh = channels / heads;
-  const q = linear(ops, xNorm, rows, w(`${prefix}.to_q.weight`), null, { name: `${prefix}.q` });
+  const q = await linear(ops, xNorm, rows, w(`${prefix}.to_q.weight`), null, { name: `${prefix}.q` });
   const source = context ?? { tensor: xNorm, rows };
-  const k = linear(ops, source.tensor, source.rows, w(`${prefix}.to_k.weight`), null, { name: `${prefix}.k` });
-  const v = linear(ops, source.tensor, source.rows, w(`${prefix}.to_v.weight`), null, { name: `${prefix}.v` });
+  const k = await linear(ops, source.tensor, source.rows, w(`${prefix}.to_k.weight`), null, { name: `${prefix}.k` });
+  const v = await linear(ops, source.tensor, source.rows, w(`${prefix}.to_v.weight`), null, { name: `${prefix}.v` });
   const keys = source.rows;
-  const scores = ops.gemm({ a: q, b: k, M: rows, N: keys, K: dh, batch: heads, alpha: 1 / Math.sqrt(dh),
+  const scores = await ops.gemm({ a: q, b: k, M: rows, N: keys, K: dh, batch: heads, alpha: 1 / Math.sqrt(dh),
     aSM: channels, aSK: 1, aSB: dh, bSK: 1, bSN: channels, bSB: dh, cSM: keys, cSN: 1, cSB: rows * keys,
     outShape: [heads, rows, keys], name: `${prefix}.scores` });
   ops.release(q);
   ops.release(k);
   ops.softmax({ s: scores, rows: heads * rows, cols: keys });
   await ops.yieldPoint(`${prefix}.scores`);
-  const mixed = ops.gemm({ a: scores, b: v, M: rows, N: dh, K: keys, batch: heads,
+  const mixed = await ops.gemm({ a: scores, b: v, M: rows, N: dh, K: keys, batch: heads,
     aSM: keys, aSK: 1, aSB: rows * keys, bSK: channels, bSN: 1, bSB: dh, cSM: channels, cSN: 1, cSB: dh,
     outShape: [rows, channels], name: `${prefix}.mixed` });
   ops.release(scores);
   ops.release(v);
-  const out = linear(ops, mixed, rows, w(`${prefix}.to_out.0.weight`), w(`${prefix}.to_out.0.bias`),
+  const out = await linear(ops, mixed, rows, w(`${prefix}.to_out.0.weight`), w(`${prefix}.to_out.0.bias`),
     { residual, name: `${prefix}.out` });
   ops.release(mixed);
   await ops.yieldPoint(`${prefix}.out`);
@@ -97,7 +97,7 @@ async function transformer(ops, w, prefix, x, heads, context) {
   const normed = ops.groupNorm({ x, shape: [c, h, wd], gamma: w(`${prefix}.norm.weight`), beta: w(`${prefix}.norm.bias`),
     eps: TRANSFORMER_NORM_EPS, name: `${prefix}.norm` });
   const pin = w(`${prefix}.proj_in.weight`);
-  let t = ops.gemm({ a: normed, b: pin, M: rows, N: c, K: c, aSM: 1, aSK: rows, bSK: 1, bSN: c, cSM: c, cSN: 1,
+  let t = await ops.gemm({ a: normed, b: pin, M: rows, N: c, K: c, aSM: 1, aSK: rows, bSK: 1, bSN: c, cSM: c, cSN: 1,
     biasN: w(`${prefix}.proj_in.bias`), outShape: [rows, c], name: `${prefix}.proj_in` });
   ops.release(normed);
   const block = `${prefix}.transformer_blocks.0`;
@@ -110,17 +110,17 @@ async function transformer(ops, w, prefix, x, heads, context) {
   next = await attention(ops, w, `${block}.attn2`, n, rows, c, heads, { context, residual: t });
   ops.release(n); ops.release(t); t = next;
   n = layer('norm3', t);
-  const proj = linear(ops, n, rows, w(`${block}.ff.net.0.proj.weight`), w(`${block}.ff.net.0.proj.bias`),
+  const proj = await linear(ops, n, rows, w(`${block}.ff.net.0.proj.weight`), w(`${block}.ff.net.0.proj.bias`),
     { name: `${block}.ff.proj` });
   ops.release(n);
   const gated = ops.geglu({ x: proj, rows, inner: proj.shape[1] / 2, name: `${block}.ff.geglu` });
   ops.release(proj);
-  next = linear(ops, gated, rows, w(`${block}.ff.net.2.weight`), w(`${block}.ff.net.2.bias`),
+  next = await linear(ops, gated, rows, w(`${block}.ff.net.2.weight`), w(`${block}.ff.net.2.bias`),
     { residual: t, name: `${block}.ff.out` });
   ops.release(gated); ops.release(t); t = next;
   await ops.yieldPoint(`${block}.ff`);
   const pout = w(`${prefix}.proj_out.weight`);
-  const out = ops.gemm({ a: pout, b: t, M: c, N: rows, K: c, aSM: c, aSK: 1, bSK: 1, bSN: c, cSM: rows, cSN: 1,
+  const out = await ops.gemm({ a: pout, b: t, M: c, N: rows, K: c, aSM: c, aSK: 1, bSK: 1, bSN: c, cSM: rows, cSN: 1,
     biasM: w(`${prefix}.proj_out.bias`), residual: x, outShape: [c, h, wd], name: `${prefix}.proj_out` });
   ops.release(t);
   await ops.yieldPoint(`${prefix}.proj_out`);
@@ -132,20 +132,20 @@ async function vaeAttention(ops, w, prefix, x) {
   const [c, h, wd] = x.shape, n = h * wd;
   const normed = ops.groupNorm({ x, shape: [c, h, wd], gamma: w(`${prefix}.group_norm.weight`),
     beta: w(`${prefix}.group_norm.bias`), eps: VAE_EPS, name: `${prefix}.norm` });
-  const project = name => ops.gemm({ a: w(`${prefix}.${name}.weight`), b: normed, M: c, N: n, K: c, aSM: c, aSK: 1,
+  const project = async name => await ops.gemm({ a: w(`${prefix}.${name}.weight`), b: normed, M: c, N: n, K: c, aSM: c, aSK: 1,
     bSK: n, bSN: 1, cSM: n, cSN: 1, biasM: w(`${prefix}.${name}.bias`), outShape: [c, n], name: `${prefix}.${name}` });
-  const q = project('to_q'), k = project('to_k'), v = project('to_v');
+  const q = await project('to_q'), k = await project('to_k'), v = await project('to_v');
   ops.release(normed);
   await ops.yieldPoint(`${prefix}.qkv`);
-  const scores = ops.gemm({ a: q, b: k, M: n, N: n, K: c, alpha: 1 / Math.sqrt(c), aSM: 1, aSK: n, bSK: n, bSN: 1,
+  const scores = await ops.gemm({ a: q, b: k, M: n, N: n, K: c, alpha: 1 / Math.sqrt(c), aSM: 1, aSK: n, bSK: n, bSN: 1,
     cSM: n, cSN: 1, outShape: [n, n], name: `${prefix}.scores` });
   ops.release(q); ops.release(k);
   ops.softmax({ s: scores, rows: n, cols: n });
   await ops.yieldPoint(`${prefix}.scores`);
-  const mixed = ops.gemm({ a: v, b: scores, M: c, N: n, K: n, aSM: n, aSK: 1, bSK: 1, bSN: n, cSM: n, cSN: 1,
+  const mixed = await ops.gemm({ a: v, b: scores, M: c, N: n, K: n, aSM: n, aSK: 1, bSK: 1, bSN: n, cSM: n, cSN: 1,
     outShape: [c, n], name: `${prefix}.mixed` });
   ops.release(scores); ops.release(v);
-  const out = ops.gemm({ a: w(`${prefix}.to_out.0.weight`), b: mixed, M: c, N: n, K: c, aSM: c, aSK: 1, bSK: n, bSN: 1,
+  const out = await ops.gemm({ a: w(`${prefix}.to_out.0.weight`), b: mixed, M: c, N: n, K: c, aSM: c, aSK: 1, bSK: n, bSN: 1,
     cSM: n, cSN: 1, biasM: w(`${prefix}.to_out.0.bias`), residual: x, outShape: [c, h, wd], name: `${prefix}.out` });
   ops.release(mixed);
   await ops.yieldPoint(`${prefix}.out`);
@@ -242,13 +242,13 @@ export async function decodeScaledLatent(ops, w, z, { capture = () => {}, call =
 
 // The t=999 sinusoid is a packaged source constant (`conditioning.time_proj`):
 // re-deriving it in JS differs from torch's F32 exp by an ulp that t amplifies.
-export function timeEmbedding(ops, w, { capture = () => {} } = {}) {
+export async function timeEmbedding(ops, w, { capture = () => {} } = {}) {
   const sinusoid = w('conditioning.time_proj');
-  const hidden = linear(ops, sinusoid, 1, w('unet.time_embedding.linear_1.weight'), w('unet.time_embedding.linear_1.bias'),
+  const hidden = await linear(ops, sinusoid, 1, w('unet.time_embedding.linear_1.weight'), w('unet.time_embedding.linear_1.bias'),
     { name: 'unet.time.linear_1' });
   const activated = ops.affine({ x: hidden, shape: hidden.shape, silu: true, name: 'unet.time.silu' });
   ops.release(hidden);
-  const temb = linear(ops, activated, 1, w('unet.time_embedding.linear_2.weight'), w('unet.time_embedding.linear_2.bias'),
+  const temb = await linear(ops, activated, 1, w('unet.time_embedding.linear_2.weight'), w('unet.time_embedding.linear_2.bias'),
     { name: 'unet.temb' });
   ops.release(activated);
   capture('unet.temb#0', temb);
