@@ -192,7 +192,7 @@ var<workgroup> red:array<f32,256>;
 fn main(@builtin(local_invocation_index) lane:u32, @builtin(workgroup_id) wid:vec3<u32>, @builtin(num_workgroups) grid:vec3<u32>) {
   let row=wid.x+wid.y*grid.x;if(row>=p.rows){return;}
   let base=row*p.cols;
-  var mx=-3.4028235e38;for(var c=lane;c<p.cols;c+=256u){mx=max(mx,s[base+c]);}
+  var mx=-3.402823e38;for(var c=lane;c<p.cols;c+=256u){mx=max(mx,s[base+c]);}
   red[lane]=mx;workgroupBarrier();
   for(var k=128u;k>0u;k/=2u){if(lane<k){red[lane]=max(red[lane],red[lane+k]);}workgroupBarrier();}
   mx=red[0];workgroupBarrier();
