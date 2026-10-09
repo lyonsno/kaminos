@@ -9,16 +9,17 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
-const STAGES = ['vae-encoder', 'vae-decoder', 'unet', 'full'];
+const STAGES = ['vae-encoder', 'vae-decoder', 'unet', 'full', 'route'];
 const { values } = parseArgs({ options: Object.fromEntries(
-  ['repo-root', 'expected-commit', 'fixture', 'weights', 'chrome', 'report', 'stage', 'receiver']
-    .map(name => [name, { type: 'string' }])) });
+  ['repo-root', 'expected-commit', 'fixture', 'weights', 'chrome', 'report', 'stage', 'receiver', 'image',
+    'decoded-reference'].map(name => [name, { type: 'string' }])) });
 const output = path.resolve(values.report ?? 'supermat-witness-report.json');
 const rawRoot = path.join(path.dirname(output), 'raw');
 const report = { schema: 'supermat.stage-witness.runner.v0', status: 'failed', phase: 'arguments',
   receiver: values.receiver ?? null, terminalEvidence: output, command: process.argv,
   requested: { repoRoot: values['repo-root'], fixture: values.fixture, weights: values.weights,
-    stage: values.stage, expectedCommit: values['expected-commit'], chrome: values.chrome },
+    stage: values.stage, expectedCommit: values['expected-commit'], chrome: values.chrome, image: values.image ?? null,
+    decodedReference: values['decoded-reference'] ?? null },
   servedSources: {}, rawOutputs: {} };
 const persist = async () => {
   await fs.mkdir(path.dirname(output), { recursive: true });
@@ -87,6 +88,19 @@ try {
   report.weights = { root: weights, packageSha256: digest(weightManifest) };
   if (JSON.parse(weightManifest).status !== 'succeeded') throw new Error('weight package is not a succeeded pack');
 
+  let imagePath = null, decodedReferencePath = null;
+  if (values.stage === 'route') {
+    if (!values.image) throw new Error('--image is required for the route stage');
+    imagePath = await fs.realpath(values.image);
+    report.image = { path: imagePath, sha256: digest(await fs.readFile(imagePath)) };
+    const referenceImage = JSON.parse(fixtureManifest).image?.sha256;
+    if (referenceImage && referenceImage !== report.image.sha256) throw new Error('route image is not the fixture reference image');
+    if (values['decoded-reference']) {
+      decodedReferencePath = await fs.realpath(values['decoded-reference']);
+      report.decodedReference = { path: decodedReferencePath, sha256: digest(await fs.readFile(decodedReferencePath)) };
+    }
+  }
+
   report.phase = 'browser-admission';
   report.chrome = await fs.realpath(values.chrome);
   if (/\/Applications\/Google Chrome\.app\//.test(report.chrome)) throw new Error('GUI Google Chrome is not an isolated headless executable');
@@ -100,10 +114,20 @@ try {
         const chunks = [];
         for await (const chunk of req) chunks.push(chunk);
         const bytes = Buffer.concat(chunks), name = pathname.slice('/output/'.length);
-        const target = path.join(rawRoot, `${name}.f32`);
+        const target = path.join(rawRoot, /\.png$/.test(name) ? name : `${name}.f32`);
         await fs.writeFile(target, bytes);
         report.rawOutputs[name] = { path: target, byteLength: bytes.length, sha256: digest(bytes) };
         res.end('saved');
+        return;
+      }
+      if (pathname === '/image' || pathname === '/decoded-reference') {
+        const file = pathname === '/image' ? imagePath : decodedReferencePath;
+        if (!file) { res.writeHead(404).end(); return; }
+        const type = /\.webp$/i.test(file) ? 'image/webp' : /\.png$/i.test(file) ? 'image/png'
+          : /\.jpe?g$/i.test(file) ? 'image/jpeg' : 'application/octet-stream';
+        res.setHeader('Content-Type', type);
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(await fs.readFile(file));
         return;
       }
       if (pathname === '/') {
@@ -176,8 +200,11 @@ try {
   await persist();
   const started = Date.now();
   const evaluation = await cdp.call('Runtime.evaluate', {
-    expression: `import('/models/supermat/supermat-witness.js').then(m => m.runSuperMatWitness(${JSON.stringify({
-      stage: values.stage, fixtureSha256: report.fixture.manifestSha256, weightsSha256: report.weights.packageSha256 })}))`,
+    expression: values.stage === 'route'
+      ? `import('/models/supermat/supermat-route-witness.js').then(m => m.runSuperMatRouteWitness(${JSON.stringify({
+        fixtureSha256: report.fixture.manifestSha256, weightsSha256: report.weights.packageSha256 })}))`
+      : `import('/models/supermat/supermat-witness.js').then(m => m.runSuperMatWitness(${JSON.stringify({
+        stage: values.stage, fixtureSha256: report.fixture.manifestSha256, weightsSha256: report.weights.packageSha256 })}))`,
     awaitPromise: true, returnByValue: true,
   }, sessionId);
   report.wallMs = Date.now() - started;
