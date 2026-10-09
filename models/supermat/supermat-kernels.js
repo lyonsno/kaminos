@@ -244,3 +244,56 @@ function formatFloat(value) {
   const text = Number(value).toExponential();
   return text.includes('.') || text.includes('e') ? text : `${text}.0`;
 }
+
+export const FLASH_HEAD_DIM = 64;
+export const FLASH_QUERY_TILE = 64;
+const FLASH_KEY_TILE = 32;
+
+// Streaming (online-softmax) multi-head attention for head dim 64. One thread
+// owns one query row of one head and folds 32-key tiles of K and V from
+// workgroup memory into a running max, normalizer and F32 accumulator, so no
+// [heads, queries, keys] score matrix is ever stored. Q/K/V/out are
+// token-major with head h at columns [h*64, h*64+64).
+export function flashAttentionShader() {
+  const D = FLASH_HEAD_DIM, T = FLASH_KEY_TILE;
+  return `
+struct Params { queries:u32, keys:u32, q_stride:u32, kv_stride:u32, out_stride:u32, row_base:u32, scale:f32, z0:u32 };
+${storage(0, 'q')}${storage(1, 'k')}${storage(2, 'v')}${storage(3, 'o', true)}${uniform(4, 'Params')}
+var<workgroup> kt:array<f32,${T * D}>;
+var<workgroup> vt:array<f32,${T * D}>;
+@compute @workgroup_size(${FLASH_QUERY_TILE})
+fn main(@builtin(local_invocation_index) lane:u32, @builtin(workgroup_id) wid:vec3<u32>) {
+  let head=wid.y;let row=p.row_base+wid.x*${FLASH_QUERY_TILE}u+lane;let live=row<p.queries;
+  var qv:array<f32,${D}>;var acc:array<f32,${D}>;
+  if(live){for(var d=0u;d<${D}u;d++){qv[d]=q[row*p.q_stride+head*${D}u+d]*p.scale;}}
+  var running_max=-3.402823e38;var norm=0.0;
+  for(var k0=0u;k0<p.keys;k0+=${T}u){
+    for(var i=lane;i<${T * D}u;i+=${FLASH_QUERY_TILE}u){
+      let key=k0+i/${D}u;let d=i%${D}u;var kval=0.0;var vval=0.0;
+      if(key<p.keys){kval=k[key*p.kv_stride+head*${D}u+d];vval=v[key*p.kv_stride+head*${D}u+d];}
+      kt[i]=kval;vt[i]=vval;
+    }
+    workgroupBarrier();
+    if(live){
+      var s:array<f32,${T}>;var tile_max=running_max;
+      for(var j=0u;j<${T}u;j++){
+        var dot=0.0;
+        for(var d=0u;d<${D}u;d++){dot=fma(qv[d],kt[j*${D}u+d],dot);}
+        if(k0+j>=p.keys){dot=-3.402823e38;}
+        s[j]=dot;tile_max=max(tile_max,dot);
+      }
+      let correction=exp(running_max-tile_max);
+      norm*=correction;
+      for(var d=0u;d<${D}u;d++){acc[d]*=correction;}
+      for(var j=0u;j<${T}u;j++){
+        if(k0+j>=p.keys){continue;}
+        let w=exp(s[j]-tile_max);norm+=w;
+        for(var d=0u;d<${D}u;d++){acc[d]=fma(w,vt[j*${D}u+d],acc[d]);}
+      }
+      running_max=tile_max;
+    }
+    workgroupBarrier();
+  }
+  if(live){let inv=1.0/norm;for(var d=0u;d<${D}u;d++){o[row*p.out_stride+head*${D}u+d]=acc[d]*inv;}}
+}`;
+}

@@ -4,7 +4,7 @@
 import {
   gemmShader, GEMM_PARAMS_WORDS, GEMM_TILE, GROUPNORM_CHUNK, groupNormPartialShader,
   groupNormCombineShader, groupNormApplyShader, layerNormShader, softmaxShader, gegluShader,
-  affineShader,
+  affineShader, flashAttentionShader, FLASH_HEAD_DIM, FLASH_QUERY_TILE,
 } from './supermat-kernels.js';
 
 const STORAGE = 0x0080, COPY_SRC = 0x0004, COPY_DST = 0x0008, UNIFORM = 0x0040;
@@ -31,7 +31,9 @@ function dispatch1D(total, workgroupSize = 256, limit = 65535) {
   return [x, y, 1];
 }
 
-export function createSuperMatOps(device, { label = 'supermat' } = {}) {
+// attention: 'streaming' (online softmax, no score matrix) or 'materialized'.
+export function createSuperMatOps(device, { label = 'supermat', attention = 'streaming' } = {}) {
+  if (!['streaming', 'materialized'].includes(attention)) throw new Error(`unknown attention mode ${attention}`);
   const pipelines = new Map();
   const pool = new Map();
   const owned = new Set();
@@ -311,6 +313,29 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
     return c;
   }
 
+  // Multi-head self/cross attention over token-major Q [queries, heads*64] and
+  // K/V [keys, heads*64]; splits query ranges to the duty budget.
+  async function flashAttention({ q, k, v, queries, keys, heads, scale, name = 'attention' }) {
+    const channels = heads * FLASH_HEAD_DIM;
+    const out = alloc([queries, channels], name);
+    const flops = 4 * queries * keys * FLASH_HEAD_DIM * heads;
+    const budget = schedule ? currentDutyFlops() : 0;
+    const rows = !budget || flops <= budget ? queries
+      : Math.max(FLASH_QUERY_TILE, Math.floor(budget / (4 * keys * FLASH_HEAD_DIM * heads) / FLASH_QUERY_TILE) * FLASH_QUERY_TILE);
+    for (let rowBase = 0; rowBase < queries; rowBase += rows) {
+      const count = Math.min(rows, queries - rowBase);
+      const words = new Uint32Array(8);
+      const floats = new Float32Array(words.buffer);
+      words.set([queries, keys, channels, channels, channels, rowBase], 0);
+      floats[6] = scale;
+      dispatch(flashAttentionShader(), [bindingView(q), bindingView(k), bindingView(v), bindingView(out), params(words)],
+        [Math.ceil(count / FLASH_QUERY_TILE), heads, 1]);
+      pendingFlops += 4 * count * keys * FLASH_HEAD_DIM * heads;
+      if (rows < queries) await yieldPoint(`${name}[${rowBase}]`);
+    }
+    return out;
+  }
+
   function groupNorm({ x, shape: [channels, h, w], groups = 32, gamma, beta, eps, silu = false, name = 'groupnorm' }) {
     const groupSize = (channels / groups) * h * w;
     if (!Number.isSafeInteger(groupSize)) throw new Error(`${name}: channels must divide into groups`);
@@ -386,5 +411,6 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
   }
 
   return { alloc, release, gemm, conv2d, groupNorm, layerNorm, softmax, geglu, affine, copy, upload, read, flush, yieldPoint,
-    setSchedule, scheduleState, discard, destroy, stats };
+    setSchedule, scheduleState, discard, destroy, stats, flashAttention,
+    attentionMode: attention };
 }

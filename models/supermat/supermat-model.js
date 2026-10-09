@@ -65,7 +65,8 @@ async function resnet(ops, w, prefix, x, { eps, tembSilu = null }) {
   return out;
 }
 
-// Token-major multi-head attention with materialized F32 scores.
+// Token-major multi-head attention: streaming online softmax by default,
+// materialized F32 scores when ops are created with attention: 'materialized'.
 async function attention(ops, w, prefix, xNorm, rows, channels, heads, { context = null, residual }) {
   const dh = channels / heads;
   const q = await linear(ops, xNorm, rows, w(`${prefix}.to_q.weight`), null, { name: `${prefix}.q` });
@@ -73,18 +74,26 @@ async function attention(ops, w, prefix, xNorm, rows, channels, heads, { context
   const k = await linear(ops, source.tensor, source.rows, w(`${prefix}.to_k.weight`), null, { name: `${prefix}.k` });
   const v = await linear(ops, source.tensor, source.rows, w(`${prefix}.to_v.weight`), null, { name: `${prefix}.v` });
   const keys = source.rows;
-  const scores = await ops.gemm({ a: q, b: k, M: rows, N: keys, K: dh, batch: heads, alpha: 1 / Math.sqrt(dh),
-    aSM: channels, aSK: 1, aSB: dh, bSK: 1, bSN: channels, bSB: dh, cSM: keys, cSN: 1, cSB: rows * keys,
-    outShape: [heads, rows, keys], name: `${prefix}.scores` });
-  ops.release(q);
-  ops.release(k);
-  ops.softmax({ s: scores, rows: heads * rows, cols: keys });
-  await ops.yieldPoint(`${prefix}.scores`);
-  const mixed = await ops.gemm({ a: scores, b: v, M: rows, N: dh, K: keys, batch: heads,
-    aSM: keys, aSK: 1, aSB: rows * keys, bSK: channels, bSN: 1, bSB: dh, cSM: channels, cSN: 1, cSB: dh,
-    outShape: [rows, channels], name: `${prefix}.mixed` });
-  ops.release(scores);
-  ops.release(v);
+  let mixed;
+  if (ops.attentionMode === 'streaming' && dh === 64) {
+    mixed = await ops.flashAttention({ q, k, v, queries: rows, keys, heads, scale: 1 / Math.sqrt(dh), name: `${prefix}.mixed` });
+    ops.release(q);
+    ops.release(k);
+    ops.release(v);
+  } else {
+    const scores = await ops.gemm({ a: q, b: k, M: rows, N: keys, K: dh, batch: heads, alpha: 1 / Math.sqrt(dh),
+      aSM: channels, aSK: 1, aSB: dh, bSK: 1, bSN: channels, bSB: dh, cSM: keys, cSN: 1, cSB: rows * keys,
+      outShape: [heads, rows, keys], name: `${prefix}.scores` });
+    ops.release(q);
+    ops.release(k);
+    ops.softmax({ s: scores, rows: heads * rows, cols: keys });
+    await ops.yieldPoint(`${prefix}.scores`);
+    mixed = await ops.gemm({ a: scores, b: v, M: rows, N: dh, K: keys, batch: heads,
+      aSM: keys, aSK: 1, aSB: rows * keys, bSK: channels, bSN: 1, bSB: dh, cSM: channels, cSN: 1, cSB: dh,
+      outShape: [rows, channels], name: `${prefix}.mixed` });
+    ops.release(scores);
+    ops.release(v);
+  }
   const out = await linear(ops, mixed, rows, w(`${prefix}.to_out.0.weight`), w(`${prefix}.to_out.0.bias`),
     { residual, name: `${prefix}.out` });
   ops.release(mixed);
