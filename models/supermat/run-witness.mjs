@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { launchChrome, openPage } from './chrome-cdp.mjs';
 
-const STAGES = ['vae-encoder', 'vae-decoder', 'unet', 'full', 'route'];
+const STAGES = ['vae-encoder', 'vae-decoder', 'unet', 'full', 'route', 'bench'];
 const { values } = parseArgs({ options: Object.fromEntries(
   ['repo-root', 'expected-commit', 'fixture', 'weights', 'chrome', 'report', 'stage', 'receiver', 'image',
     'decoded-reference'].map(name => [name, { type: 'string' }])) });
@@ -144,7 +144,9 @@ try {
   await persist();
   const started = Date.now();
   const evaluation = await cdp.call('Runtime.evaluate', {
-    expression: values.stage === 'route'
+    expression: values.stage === 'bench'
+      ? `import('/models/supermat/supermat-bench.js').then(m => m.runSuperMatBench())`
+      : values.stage === 'route'
       ? `import('/models/supermat/supermat-route-witness.js').then(m => m.runSuperMatRouteWitness(${JSON.stringify({
         fixtureSha256: report.fixture.manifestSha256, weightsSha256: report.weights.packageSha256 })}))`
       : `import('/models/supermat/supermat-witness.js').then(m => m.runSuperMatWitness(${JSON.stringify({

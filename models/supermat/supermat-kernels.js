@@ -6,16 +6,29 @@ const storage = (index, name, write = false) =>
   `@group(0) @binding(${index}) var<storage,${write ? 'read_write' : 'read'}> ${name}:array<f32>;`;
 const uniform = (index, type) => `@group(0) @binding(${index}) var<uniform> p:${type};`;
 
-export const GEMM_TILE = 64;
 export const GEMM_PARAMS_WORDS = 20;
 
 // C[b,m,n] = alpha * sum_k A[b,m,k] * B[b,k,n] (+ biasM[m]) (+ biasM2[m]) (+ biasN[n]) (+ R[b,m,n])
 // Element offsets/strides are uniforms. `aKContiguous` and `bNContiguous`
 // choose the coalesced tile-load order; they do not change the arithmetic.
 // `conv` replaces the B load with implicit im2col over an NCHW input.
+// Tile shape: a 16x16 thread grid computes a (16*tm) x (16*tn) output tile,
+// stepping K by bk. `aF16`/`bF16` read that operand as packed binary16 pairs
+// (u32 words) and widen to F32; accumulation stays F32.
+export function gemmTileShape({ tm = 4, tn = 4, bk = 16 } = {}) {
+  return { tm, tn, bk, bm: 16 * tm, bn: 16 * tn };
+}
+
 export function gemmShader({ aKContiguous = true, bNContiguous = true, biasM = false, biasM2 = false,
-  biasN = false, residual = false, conv = null } = {}) {
-  const bindings = [storage(0, 'a'), storage(1, 'b')];
+  biasN = false, residual = false, conv = null, tile = {}, aF16 = false, bF16 = false } = {}) {
+  const { tm, tn, bk, bm, bn } = gemmTileShape(tile);
+  const operand = (index, name, half) => half
+    ? `@group(0) @binding(${index}) var<storage,read> ${name}:array<u32>;`
+    : storage(index, name);
+  const fetch = (name, half, index) => half
+    ? `unpack2x16float(${name}[(${index})>>1u])[(${index})&1u]`
+    : `${name}[${index}]`;
+  const bindings = [operand(0, 'a', aF16), operand(1, 'b', bF16)];
   let next = 2;
   if (biasM) bindings.push(storage(next++, 'bias_m'));
   if (biasM2) bindings.push(storage(next++, 'bias_m2'));
@@ -24,11 +37,11 @@ export function gemmShader({ aKContiguous = true, bNContiguous = true, biasM = f
   bindings.push(storage(next++, 'c', true));
   bindings.push(uniform(next++, 'Params'));
   const loadA = aKContiguous
-    ? 'let kk=idx%16u;let mm=idx/16u;'
-    : 'let mm=idx%64u;let kk=idx/64u;';
+    ? `let kk=idx%${bk}u;let mm=idx/${bk}u;`
+    : `let mm=idx%${bm}u;let kk=idx/${bm}u;`;
   const loadBOrder = bNContiguous || conv
-    ? 'let nn=idx%64u;let kk=idx/64u;'
-    : 'let kk=idx%16u;let nn=idx/16u;';
+    ? `let nn=idx%${bn}u;let kk=idx/${bn}u;`
+    : `let kk=idx%${bk}u;let nn=idx/${bk}u;`;
   let loadB;
   if (conv) {
     const { kh, kw, stride, upsample } = conv;
@@ -39,10 +52,10 @@ export function gemmShader({ aKContiguous = true, bNContiguous = true, biasM = f
       let eh=i32(p.b_sk${upsample ? '*2u' : ''});let ew=i32(p.b_sn${upsample ? '*2u' : ''});
       if(iy>=0&&ix>=0&&iy<eh&&ix<ew){
         let sy=u32(iy)${upsample ? '/2u' : ''};let sx=u32(ix)${upsample ? '/2u' : ''};
-        value=b[p.b_off+ci*p.b_sk*p.b_sn+sy*p.b_sn+sx];
+        value=${fetch('b', bF16, 'p.b_off+ci*p.b_sk*p.b_sn+sy*p.b_sn+sx')};
       }`;
   } else {
-    loadB = 'value=b[p.b_off+bat*p.b_sb+k*p.b_sk+n*p.b_sn];';
+    loadB = `value=${fetch('b', bF16, 'p.b_off+bat*p.b_sb+k*p.b_sk+n*p.b_sn')};`;
   }
   let epilogue = 'var v=p.alpha*acc[i][j];';
   if (biasM) epilogue += 'v+=bias_m[m];';
@@ -50,6 +63,7 @@ export function gemmShader({ aKContiguous = true, bNContiguous = true, biasM = f
   if (biasN) epilogue += 'v+=bias_n[n];';
   const cIndex = 'p.c_off+bat*p.c_sb+m*p.c_sm+n*p.c_sn';
   if (residual) epilogue += `v+=res[${cIndex}];`;
+  const loadsA = (bk * bm) / 256, loadsB = (bk * bn) / 256;
   return `
 struct Params {
   M:u32, N:u32, K:u32, alpha:f32,
@@ -59,38 +73,41 @@ struct Params {
   pad_top:u32, pad_left:u32, n_base:u32, z1:u32,
 };
 ${bindings.join('\n')}
-var<workgroup> tile_a:array<f32,1024>;
-var<workgroup> tile_b:array<f32,1024>;
+var<workgroup> tile_a:array<f32,${bk * bm}>;
+var<workgroup> tile_b:array<f32,${bk * bn}>;
 @compute @workgroup_size(16,16)
 fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:vec3<u32>) {
   let tid=lid.y*16u+lid.x;
-  let m0=wid.y*64u;let n0=p.n_base+wid.x*64u;let bat=wid.z;
-  var acc:array<array<f32,4>,4>;
-  for(var k0=0u;k0<p.K;k0+=16u){
-    for(var q=0u;q<4u;q++){
+  let m0=wid.y*${bm}u;let n0=p.n_base+wid.x*${bn}u;let bat=wid.z;
+  var acc:array<array<f32,${tn}>,${tm}>;
+  for(var k0=0u;k0<p.K;k0+=${bk}u){
+    for(var q=0u;q<${loadsA}u;q++){
       let idx=tid+q*256u;
-      { ${loadA}
-        let m=m0+mm;let k=k0+kk;var value=0.0;
-        if(m<p.M&&k<p.K){value=a[p.a_off+bat*p.a_sb+m*p.a_sm+k*p.a_sk];}
-        tile_a[kk*64u+mm]=value; }
-      { ${loadBOrder}
-        let n=n0+nn;let k=k0+kk;var value=0.0;
-        if(n<p.N&&k<p.K){ ${loadB} }
-        tile_b[kk*64u+nn]=value; }
+      ${loadA}
+      let m=m0+mm;let k=k0+kk;var value=0.0;
+      if(m<p.M&&k<p.K){value=${fetch('a', aF16, 'p.a_off+bat*p.a_sb+m*p.a_sm+k*p.a_sk')};}
+      tile_a[kk*${bm}u+mm]=value;
+    }
+    for(var q=0u;q<${loadsB}u;q++){
+      let idx=tid+q*256u;
+      ${loadBOrder}
+      let n=n0+nn;let k=k0+kk;var value=0.0;
+      if(n<p.N&&k<p.K){ ${loadB} }
+      tile_b[kk*${bn}u+nn]=value;
     }
     workgroupBarrier();
-    for(var kk=0u;kk<16u;kk++){
-      var av:array<f32,4>;var bv:array<f32,4>;
-      for(var i=0u;i<4u;i++){av[i]=tile_a[kk*64u+lid.y+16u*i];}
-      for(var j=0u;j<4u;j++){bv[j]=tile_b[kk*64u+lid.x+16u*j];}
-      for(var i=0u;i<4u;i++){for(var j=0u;j<4u;j++){acc[i][j]=fma(av[i],bv[j],acc[i][j]);}}
+    for(var kk=0u;kk<${bk}u;kk++){
+      var av:array<f32,${tm}>;var bv:array<f32,${tn}>;
+      for(var i=0u;i<${tm}u;i++){av[i]=tile_a[kk*${bm}u+lid.y+16u*i];}
+      for(var j=0u;j<${tn}u;j++){bv[j]=tile_b[kk*${bn}u+lid.x+16u*j];}
+      for(var i=0u;i<${tm}u;i++){for(var j=0u;j<${tn}u;j++){acc[i][j]=fma(av[i],bv[j],acc[i][j]);}}
     }
     workgroupBarrier();
   }
-  for(var i=0u;i<4u;i++){
+  for(var i=0u;i<${tm}u;i++){
     let m=m0+lid.y+16u*i;
     if(m>=p.M){continue;}
-    for(var j=0u;j<4u;j++){
+    for(var j=0u;j<${tn}u;j++){
       let n=n0+lid.x+16u*j;
       if(n>=p.N){continue;}
       ${epilogue}

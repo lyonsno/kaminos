@@ -2,7 +2,7 @@
 // pass per flush, reuses activation buffers by exact byte size, and creates one
 // small uniform buffer per dispatch (destroyed after the flush completes).
 import {
-  gemmShader, GEMM_PARAMS_WORDS, GEMM_TILE, GROUPNORM_CHUNK, groupNormPartialShader,
+  gemmShader, gemmTileShape, GEMM_PARAMS_WORDS, GROUPNORM_CHUNK, groupNormPartialShader,
   groupNormCombineShader, groupNormApplyShader, layerNormShader, softmaxShader, gegluShader,
   affineShader, flashAttentionShader, FLASH_HEAD_DIM, FLASH_QUERY_TILE,
 } from './supermat-kernels.js';
@@ -32,7 +32,9 @@ function dispatch1D(total, workgroupSize = 256, limit = 65535) {
 }
 
 // attention: 'streaming' (online softmax, no score matrix) or 'materialized'.
-export function createSuperMatOps(device, { label = 'supermat', attention = 'streaming' } = {}) {
+// gemmTile: { tm, tn, bk } per-thread outputs and K step (16x16 threads per workgroup).
+export function createSuperMatOps(device, { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 } } = {}) {
+  const tileShape = gemmTileShape(gemmTile);
   if (!['streaming', 'materialized'].includes(attention)) throw new Error(`unknown attention mode ${attention}`);
   const pipelines = new Map();
   const pool = new Map();
@@ -253,7 +255,8 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
     const layout = {
       aKContiguous: spec.aSK === 1, bNContiguous: spec.bSN === 1,
       biasM: Boolean(spec.biasM), biasM2: Boolean(spec.biasM2), biasN: Boolean(spec.biasN),
-      residual: Boolean(spec.residual), conv: spec.conv ?? null,
+      residual: Boolean(spec.residual), conv: spec.conv ?? null, tile: gemmTile,
+      aF16: spec.a.dtype === 'f16', bF16: spec.b.dtype === 'f16',
     };
     const views = [bindingView(spec.a, 'gemm a'), bindingView(spec.b, 'gemm b')];
     if (spec.biasM) views.push(bindingView(spec.biasM, 'gemm biasM'));
@@ -263,8 +266,8 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
     views.push(bindingView(c, 'gemm c'));
     views.push(params(gemmWords(spec)));
     const nBase = spec.nBase ?? 0, nCount = spec.nCount ?? N - nBase;
-    if (nBase % GEMM_TILE || nBase < 0 || nCount <= 0 || nBase + nCount > N) throw new Error('gemm column range must be tile-aligned and inside N');
-    const groups = [Math.ceil(nCount / GEMM_TILE), Math.ceil(M / GEMM_TILE), batch];
+    if (nBase % tileShape.bn || nBase < 0 || nCount <= 0 || nBase + nCount > N) throw new Error('gemm column range must be tile-aligned and inside N');
+    const groups = [Math.ceil(nCount / tileShape.bn), Math.ceil(M / tileShape.bm), batch];
     if (groups.some(value => value > 65535)) throw new RangeError('gemm grid exceeds device workgroup limit');
     dispatch(gemmShader(layout), views, groups);
     pendingFlops += 2 * M * nCount * K * batch;
@@ -284,7 +287,7 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
       issueGemm({ ...spec, c });
     } else {
       const perColumn = 2 * spec.M * spec.K * batch;
-      const columns = Math.max(GEMM_TILE, Math.floor(budget / perColumn / GEMM_TILE) * GEMM_TILE);
+      const columns = Math.max(tileShape.bn, Math.floor(budget / perColumn / tileShape.bn) * tileShape.bn);
       for (let nBase = 0; nBase < spec.N; nBase += columns) {
         issueGemm({ ...spec, c, nBase, nCount: Math.min(columns, spec.N - nBase) });
         await yieldPoint(`${spec.name ?? 'gemm'}[${nBase}]`);
@@ -413,5 +416,5 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
 
   return { alloc, release, gemm, conv2d, groupNorm, layerNorm, softmax, geglu, affine, copy, upload, read, flush, yieldPoint,
     setSchedule, scheduleState, discard, destroy, stats, flashAttention,
-    attentionMode: attention };
+    attentionMode: attention, gemmTile: tileShape };
 }
