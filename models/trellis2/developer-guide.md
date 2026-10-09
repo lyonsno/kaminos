@@ -57,6 +57,7 @@ TRELLIS_IMAGE="/absolute/path/to/object.png"
 ~~~
 
 `TRELLIS_WEIGHTS` contains the prepared package's `manifest.json`.
+Store that package outside the two source checkouts.
 `TRELLIS_MLX` contains `trellmlx/preprocess.py` and a configured `.venv`.
 `TRELLIS_CHROME` names the executable itself, not the application directory.
 `TRELLIS_IMAGE` is the original image.
@@ -78,7 +79,7 @@ The image packer uses hard links to share weight files without copying them,
 so its input-package output must be on the **same filesystem as the weights**.
 The example resolves the weights' actual path and places the output beside
 that directory; this also works when the weights are on an external drive.
-You can choose another output directory on that filesystem. Keep generated
+You can choose another writable output directory on that filesystem. Keep generated
 files outside the Kaminos and TRELLIS2MLX source checkouts: these tools require
 clean source trees. Revisions and the image hash are computed above.
 

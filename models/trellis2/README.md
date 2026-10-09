@@ -8,6 +8,10 @@ The output is a **GLB**: a single 3D file containing the mesh and its textures,
 which you can open in Kaminos, Blender or another glTF-compatible application.
 Materials include color, roughness and metallic textures.
 
+![A red textured sneaker generated with the WebGPU port, shown in a three-quarter view in Kaminos](assets/sneaker.png)
+
+*A 512-resolution generated sneaker, displayed in Kaminos.*
+
 ## What it does
 
 - **512-resolution previews** for exploring an image, and **1024-resolution
@@ -22,7 +26,7 @@ Materials include color, roughness and metallic textures.
 - **Stage-by-stage loading:** load and release each model's weights as the
   pipeline progresses instead of keeping all models in GPU memory together.
 
-The learned model runs on WebGPU. Image preparation and mesh finishing use
+TRELLIS generation runs on WebGPU. Image preparation and mesh finishing use
 local Python and worker tools.
 
 ## Using the port
