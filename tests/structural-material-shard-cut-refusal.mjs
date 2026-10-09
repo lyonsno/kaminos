@@ -17,7 +17,7 @@ async function exercise(candidateFault='support'){
   splitMaterialInterior:()=>{proposals++;return {mesh,fields:{positions:[point],velocities:[point],pinned:[false]},receipt:{route:'fixture',volumeBefore:1,volumeAfter:1}};},
   prepareSeparatedTopology:()=>({positions:[point],elements:[],bonds:[],constitutiveLayout:'fixture',bufferLayout:{},colorCount:1}),packSolidTopology:()=>({state:new Float32Array(16)}),createSolidResident:async()=>candidate,
   surface:{interiorChildren:()=>[1,2],stageInteriorCut:()=>{throw new Error('Invalid candidate reached publication');}},
-  stamp:(kind,data)=>log.push({kind,data}),fail:e=>{ctx.failure={message:e.message};ctx.gesture=null;ctx.controls.enabled=true;},present:()=>log.push('present'),$:id=>id==='failure'?status:other,settle:async()=>{},controls:{enabled:false},marker:{position:{fromArray(){}},visible:true},arrow:{visible:true}};
+  stamp:(kind,data)=>log.push({kind,data}),fail:e=>{ctx.failure={message:e.message};ctx.gesture=null;ctx.controls.enabled=true;},present:()=>log.push('present'),observeSurface:async()=>log.push('surface-observation'),$:id=>id==='failure'?status:other,settle:async()=>{},controls:{enabled:false},marker:{position:{fromArray(){}},visible:true},arrow:{visible:true}};
  vm.runInNewContext(source,ctx);
  if(candidateFault==='device'){await assert.rejects(ctx.advance(),/GPU device lost/);assert.equal(ctx.failure.message,'GPU device lost');return;}
  await assert.doesNotReject(ctx.advance(),'A rejected candidate must not latch a failure of the retained material');

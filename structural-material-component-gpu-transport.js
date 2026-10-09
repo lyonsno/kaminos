@@ -11,12 +11,18 @@ export function packGpuTransport(binding,indices){
  return{ranges:new Uint32Array(ranges),offsets:new Float32Array(offsets),ids:new Uint32Array(ids),weights:new Float32Array(weights)};
 }
 
+const surfaceStates=new WeakMap();
+function acquireSurfaceState(resident){
+ let shared=surfaceStates.get(resident);if(!shared){const source=resident.stateBuffer(),device=resident.device,buffer=device.createBuffer({label:'published material surface pose',size:source.size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});shared={buffer,references:0,capture(){const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(resident.stateBuffer(),0,buffer,0,source.size);device.queue.submit([encoder.finish()]);}};surfaceStates.set(resident,shared);}shared.references++;
+ return{buffer:shared.buffer,capture:()=>shared.capture(),release(){if(--shared.references===0){shared.buffer.destroy();surfaceStates.delete(resident);}}};
+}
+
 export function createGpuTransport(renderer,resident,binding,indices,materials){
  if(!renderer.backend.isWebGPUBackend||renderer.backend.device!==resident.device)throw new Error('Surface and material must share the effective GPU device');
  const packed=packGpuTransport(binding,indices),attributes=[],node=(data,type,size)=>{const attribute=new StorageBufferAttribute(data,size);attributes.push(attribute);return storage(attribute,type,attribute.count).toReadOnly();};
- const points=new StorageBufferAttribute(new Float32Array(binding.points*16),4);
- // Three 0.183's backend owns the binding wrapper; the material resident owns this buffer.
- renderer.backend.get(points).buffer=resident.stateBuffer();
+ const published=acquireSurfaceState(resident),points=new StorageBufferAttribute(new Float32Array(binding.points*16),4);
+ // A GPU copy publishes a stable pose, so camera rendering need not await the next solve.
+ renderer.backend.get(points).buffer=published.buffer;
  const positions=storage(points,'vec4',binding.points*4).toReadOnly(),ranges=node(packed.ranges,'uvec2',2),offsets=node(packed.offsets,'vec4',4),ids=node(packed.ids,'uint',1),weights=node(packed.weights,'float',1),quaternion=uniform(new Vector4(0,0,0,1));
  const transported=Fn(([index])=>{
   const range=ranges.element(index),offset=offsets.element(index).xyz,center=vec3(0).toVar();
@@ -24,5 +30,5 @@ export function createGpuTransport(renderer,resident,binding,indices,materials){
   const t=cross(quaternion.xyz,offset).mul(2);return center.add(offset).add(t.mul(quaternion.w)).add(cross(quaternion.xyz,t));
  }),position=transported(vertexIndex);
  const owned=materials.map(source=>{const material=new MeshStandardNodeMaterial();for(const key of ['color','map','normalMap','normalScale','normalMapType','roughness','roughnessMap','metalness','metalnessMap','aoMap','aoMapIntensity','emissive','emissiveMap','emissiveIntensity','side'])if(source[key]!==undefined)material[key]=source[key]?.clone&&!source[key].isTexture?source[key].clone():source[key];material.flatShading=true;material.positionNode=position;return material;});
- return{route:'kaminos.deformable-surface.resident-vertex-transport.webgpu.v0',materials:owned,setQuaternion(q){quaternion.value.set(q.x,q.y,q.z,q.w);},async readPositions(){const attribute=new StorageBufferAttribute(new Float32Array(indices.length*4),4),output=storage(attribute,'vec4',indices.length),compute=Fn(()=>{output.element(instanceIndex).assign(vec4(transported(instanceIndex),1));})().compute(indices.length);try{await renderer.computeAsync(compute);const values=new Float32Array(await renderer.getArrayBufferAsync(attribute));return Array.from({length:indices.length},(_,i)=>Array.from(values.slice(i*4,i*4+3)));}finally{compute.dispose();if(renderer.backend.get(attribute).buffer)renderer.backend.destroyAttribute(attribute);}},dispose(){for(const material of owned)material.dispose();for(const attribute of attributes)if(renderer.backend.get(attribute).buffer)renderer.backend.destroyAttribute(attribute);},stateAttribute:points};
+ return{route:'kaminos.deformable-surface.resident-vertex-transport.webgpu.v0',materials:owned,captureState:published.capture,setQuaternion(q){quaternion.value.set(q.x,q.y,q.z,q.w);},async readPositions(){const attribute=new StorageBufferAttribute(new Float32Array(indices.length*4),4),output=storage(attribute,'vec4',indices.length),compute=Fn(()=>{output.element(instanceIndex).assign(vec4(transported(instanceIndex),1));})().compute(indices.length);try{await renderer.computeAsync(compute);const values=new Float32Array(await renderer.getArrayBufferAsync(attribute));return Array.from({length:indices.length},(_,i)=>Array.from(values.slice(i*4,i*4+3)));}finally{compute.dispose();if(renderer.backend.get(attribute).buffer)renderer.backend.destroyAttribute(attribute);}},dispose(){for(const material of owned)material.dispose();for(const attribute of attributes)if(renderer.backend.get(attribute).buffer)renderer.backend.destroyAttribute(attribute);renderer.backend.delete(points);published.release();},stateAttribute:points};
 }

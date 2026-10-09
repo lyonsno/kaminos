@@ -1,12 +1,13 @@
 import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';
 const text=fs.readFileSync(new URL('../structural-material-shard-view.js',import.meta.url),'utf8'),source=text.slice(text.indexOf('async function advance('),text.indexOf('function ray('));
 const calls=[],state={model:{points:4},state:Array(64).fill(0),bonds:[],stresses:[]};
-const ctx={busy:false,failure:null,gesture:null,resident:{step:async(...args)=>{calls.push(['step',...args]);return{totalMilliseconds:1};},read:async()=>{calls.push(['full']);return state;},readFrame:async request=>{calls.push(['frame',request]);return state;}},configuration:{iterations:12},observed:state,materialComponents:()=>[0,0,0,0],components:[],latestSelection:null,interiorSplit:true,present(){},timings:[],performance,$:()=>({value:18,textContent:''}),fail(e){throw e;}};
+const ctx={busy:false,failure:null,gesture:null,resident:{step:async(...args)=>{calls.push(['step',...args]);return{totalMilliseconds:1};},read:async()=>{calls.push(['full']);return state;},readFrame:async request=>{calls.push(['frame',request]);return state;}},configuration:{iterations:12},observed:state,materialComponents:()=>[0,0,0,0],components:[],latestSelection:null,interiorSplit:true,present(){},observeSurface:async()=>calls.push(['surface']),timings:[],performance,$:()=>({value:18,textContent:''}),fail(e){throw e;}};
 vm.runInNewContext(source,ctx);
 await ctx.advance({fracture:false,evidence:false});
 assert.equal(calls.filter(x=>x[0]==='full').length,0,'Normal frames must not request the full diagnostic readback');
 assert.equal(calls.filter(x=>x[0]==='frame').length,1);assert.equal(calls.find(x=>x[0]==='frame')[1].stress,false);
 assert.equal(calls.find(x=>x[0]==='step')[2].wait,false,'The frame readback already synchronizes this step');
-calls.length=0;await ctx.advance({fracture:false});assert.equal(calls.filter(x=>x[0]==='full').length,1,'Explicit witness advances retain full diagnosis');
+assert.equal(calls.filter(x=>x[0]==='surface').length,0,'Normal frames must not read the rendered vertices back');
+calls.length=0;await ctx.advance({fracture:false});assert.equal(calls.filter(x=>x[0]==='full').length,1,'Explicit witness advances retain full diagnosis');assert.equal(calls.filter(x=>x[0]==='surface').length,1,'Explicit witness advance observes the effective GPU surface');
 assert.match(text,/advance\(\{evidence:false\}\)/,'The actual draw loop must exercise the lightweight path');
 console.log('Actual view uses lightweight normal frames and retains explicit full witness advances; mock resident proves host routing, not GPU speed.');
