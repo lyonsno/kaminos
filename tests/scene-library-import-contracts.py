@@ -55,7 +55,7 @@ with TemporaryDirectory() as directory:
     serve.SCENES_DIR = here_scenes
     serve.BROWSE_ROOTS["generated-meshes"] = here_meshes
     os.environ["KAMINOS_SCENE_LIBRARY_GLOBS"] = str(root / "*" / "scenes")
-    store_id = next(store["id"] for store in get("handle_scene_library", {})[0]["stores"] if store["label"] == "lane")
+    store_id = next(store_id for store_id, path in serve.scene_library_stores().items() if path.parent.name == "lane")
 
     reply, status = post({"store": store_id, "name": "study.kaminos.json"})
     assert status == 200, (reply, status)
@@ -74,10 +74,10 @@ with TemporaryDirectory() as directory:
     assert again["saved"] != reply["saved"], "a second import is a second local copy"
     assert {d["source"]: d["status"] for d in again["dependencies"]}[f"/api/read?root=generated-meshes&path={digest}.glb"] == "present"
 
-    for method, params in (("handle_scene_library", {}), ("handle_scene_library_read", {"store": [store_id], "name": ["study.kaminos.json"]})):
+    for method, params in (("handle_scene_catalog", {}), ("handle_scene_library_read", {"store": [store_id], "name": ["study.kaminos.json"]})):
         assert get(method, params, client="192.168.1.20")[1] == 403, method
     assert post({"store": store_id, "name": "study.kaminos.json"}, client="192.168.1.20")[1] == 403
-    assert get("handle_scene_library", {}, client="::1")[1] == 200
+    assert get("handle_scene_catalog", {}, client="::1")[1] == 200
     # Dependencies only: bring the meshes over without writing another scene copy.
     before = sorted(here_scenes.glob("*.kaminos.json"))
     (here_meshes / f"{digest}.glb").unlink()

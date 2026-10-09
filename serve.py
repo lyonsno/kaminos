@@ -2164,6 +2164,13 @@ def scene_library_import_dependency(source, store):
     return {"source": source, "status": "missing"}
 
 
+def scene_identity(document):
+    """The identity of a saved scene: its content, independent of formatting,
+    key order, file name and which server's folder holds it."""
+    canonical = json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def scene_image_data_url(document):
     if not isinstance(document, dict):
         return None
@@ -3178,8 +3185,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_pipeline_manifest()
         elif parsed.path == "/api/browse":
             self.handle_browse(parse_qs(parsed.query))
-        elif parsed.path == "/api/scene-library":
-            self.handle_scene_library(parse_qs(parsed.query))
+        elif parsed.path == "/api/scene-catalog":
+            self.handle_scene_catalog(parse_qs(parsed.query))
         elif parsed.path == "/api/scene-image":
             self.handle_scene_image(parse_qs(parsed.query))
         elif parsed.path == "/api/scene-library-read":
@@ -4070,58 +4077,52 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         _atomic_write_json(SCENES_DIR / filename, document)
         self.send_json({"saved": filename, "document": document, "dependencies": dependencies, "from": str(store.parent.name)})
 
-    def handle_scene_library(self, params):
-        """List scenes saved by other Kaminos servers on this machine (read-only).
+    def handle_scene_catalog(self, params):
+        """Every saved scene this server can open, grouped by scene identity.
 
-        Identical scene files (lane stores seeded from the same copies) collapse
-        to the most recently written one with a count of the other copies;
-        scenes identical to one already here stay listed, marked alsoHere."""
-        if not self._scene_library_local_client():
+        Identity is the scene's content (scene_identity), so a scene saved
+        here several times, formatted differently, or copied into other
+        servers' folders is one entry. Each entry lists its copies here
+        (opened directly) and on other servers (mesh sources, or the import
+        source when there is no copy here). scope=local lists only this
+        server's scenes; other servers' scenes are for this machine only."""
+        scope = (params.get("scope") or ["all"])[0]
+        if scope != "local" and not self._scene_library_local_client():
             return
-        local_hashes = {}
-        for local in sorted(Path(SCENES_DIR).glob("*.kaminos.json")):
-            try:
-                local_hashes.setdefault(hashlib.sha1(local.read_bytes()).hexdigest(), local.name)
-            except OSError:
-                pass
-        found = []
-        for store_id, path in scene_library_stores().items():
-            for scene_path in path.glob("*.kaminos.json"):
-                entry = {"name": scene_path.name, "label": "", "timestamp": "", "hasImage": False}
-                digest = None
+        sources = [("", "", Path(SCENES_DIR))]
+        if scope != "local":
+            sources += [(store_id, path.parent.name, path) for store_id, path in scene_library_stores().items()]
+        groups, by_identity = [], {}
+        for store_id, store_label, folder in sources:
+            for scene_path in sorted(folder.glob("*.kaminos.json")):
                 try:
-                    raw = scene_path.read_bytes()
-                    digest = hashlib.sha1(raw).hexdigest()
-                    data = json.loads(raw)
-                    entry["label"] = str(data.get("label") or (data.get("capture") or {}).get("label") or "")
-                    entry["timestamp"] = str(data.get("timestamp") or "")
-                    entry["hasImage"] = bool(scene_image_data_url(data))
-                except (OSError, ValueError) as error:
-                    entry["error"] = str(error)
-                try:
+                    data = json.loads(scene_path.read_text())
                     mtime = scene_path.stat().st_mtime
-                except OSError:
-                    mtime = 0
-                found.append((mtime, store_id, path, digest, entry))
-        found.sort(key=lambda item: -item[0])
-        kept, by_digest = [], {}
-        for mtime, store_id, path, digest, entry in found:
-            if digest is not None and digest in local_hashes:
-                # Its server may hold meshes this one lacks: name the local
-                # twin so Load can show one row that recovers from here.
-                entry["alsoHere"] = local_hashes[digest]
-            if digest is not None and digest in by_digest:
-                by_digest[digest]["copies"] = by_digest[digest].get("copies", 0) + 1
-                continue
-            if digest is not None:
-                by_digest[digest] = entry
-            kept.append((store_id, path, entry))
-        stores = {}
-        for store_id, path, entry in kept:
-            stores.setdefault(store_id, {"id": store_id, "label": path.parent.name, "path": str(path), "scenes": []})["scenes"].append(entry)
-        for store in stores.values():
-            store["scenes"].sort(key=lambda scene: scene["name"])
-        self.send_json({"stores": sorted(stores.values(), key=lambda store: store["label"])})
+                except (OSError, ValueError) as error:
+                    if not store_id:
+                        groups.append({"identity": None, "label": "", "timestamp": "", "image": None, "local": [scene_path.name], "foreign": [], "copies": 0, "error": str(error)})
+                    continue
+                identity = scene_identity(data)
+                group = by_identity.get(identity)
+                if group is None:
+                    group = {"identity": identity, "label": str(data.get("label") or (data.get("capture") or {}).get("label") or ""),
+                             "timestamp": str(data.get("timestamp") or ""), "image": None, "local": [], "foreign": [], "copies": -1, "_mtime": mtime}
+                    by_identity[identity] = group
+                    groups.append(group)
+                group["copies"] += 1
+                if store_id:
+                    group["foreign"].append({"store": store_id, "storeLabel": store_label, "name": scene_path.name})
+                else:
+                    group["local"].append(scene_path.name)
+                if group["image"] is None or (not store_id and group["image"]["store"]):
+                    if scene_image_data_url(data):
+                        group["image"] = {"store": store_id, "name": scene_path.name}
+                group["_mtime"] = max(group["_mtime"], mtime)
+        for group in groups:
+            group.pop("_mtime", None)
+            group["foreign"].sort(key=lambda member: (member["storeLabel"], member["name"]))
+            group["local"].sort()
+        self.send_json({"groups": groups})
 
     def handle_scene_image(self, params):
         """The image saved with a scene (its thumbnail, else its Capture), from

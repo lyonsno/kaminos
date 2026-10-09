@@ -31,15 +31,9 @@ with TemporaryDirectory() as directory:
     serve.SCENES_DIR = own
     os.environ["KAMINOS_SCENE_LIBRARY_GLOBS"] = os.pathsep.join([str(root / "*" / "scenes")])
 
-    listing, status = call("handle_scene_library", {})
-    assert status == 200
-    stores = {store["label"]: store for store in listing["stores"]}
-    assert set(stores) == {"beaming"}, "other stores with scenes are listed; this server's own and empty stores are not"
-    scenes = {scene["name"]: scene for scene in stores["beaming"]["scenes"]}
-    assert scenes["tuned-kiln.kaminos.json"]["label"] == "Unified lighting"
-    assert scenes["tuned-kiln.kaminos.json"]["timestamp"] == "2026-10-08T17:37:04Z"
-    assert scenes["broken.kaminos.json"]["label"] == "" and "error" in scenes["broken.kaminos.json"], "an unreadable scene is listed as unreadable, not dropped"
-    store_id = stores["beaming"]["id"]
+    stores = {path.parent.name: store_id for store_id, path in serve.scene_library_stores().items()}
+    assert "beaming" in stores and "own" not in stores, "other servers' folders are stores; this server's own is not"
+    store_id = stores["beaming"]
 
     scene, status = call("handle_scene_library_read", {"store": [store_id], "name": ["tuned-kiln.kaminos.json"]})
     assert status == 200 and scene["label"] == "Unified lighting"

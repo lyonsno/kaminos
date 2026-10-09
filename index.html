@@ -3913,7 +3913,7 @@ import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './
 import { assetArrivalFramingWindow, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
-import { collapseIdenticalScenes, pickSavedScene } from './scene-load-picker.mjs';
+import { pickSavedScene } from './scene-load-picker.mjs';
 import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
@@ -29756,53 +29756,52 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
 // system file picker; "Browse files…" in the list still reaches it.
 window.openSavedScene = async function() {
   if (document.querySelector('.scene-load-picker')) return;
-  const listing = await grFetchApi('browse', { root: 'scenes', path: '' });
-  const names = (listing?.entries || []).map(entry => entry.name).filter(name => name.endsWith('.kaminos.json'));
-  const scenes = collapseIdenticalScenes(await Promise.all(names.map(async name => {
-    const data = await grFetchApi('read', { root: 'scenes', path: name }).catch(() => null);
-    const image = data?.thumbnail || data?.capture?.image ? `/api/scene-image?${new URLSearchParams({ store: '', name })}` : null;
-    return { name, label: data?.label || data?.capture?.label || '', timestamp: data?.timestamp || '', image,
-      contentKey: data && !data.error ? JSON.stringify(data) : null };
-  })));
-  const more = fetch('/api/scene-library').then(async response => {
-    const library = await response.json();
-    if (!response.ok) throw new Error(library?.error || `HTTP ${response.status}`);
-    return library;
-  }).then(library =>
-    (library.stores || []).flatMap(store => store.scenes.filter(scene => !scene.error).map(scene => ({ ...scene, store: { id: store.id, label: store.label },
-      image: scene.hasImage ? `/api/scene-image?${new URLSearchParams({ store: store.id, name: scene.name })}` : null }))));
-  const choice = await pickSavedScene({ scenes, more });
+  // The scene catalog owns scene identity: one group per scene, wherever and
+  // however many times it was saved. This server's groups show at once; the
+  // full catalog (other servers too) replaces them when its scan finishes.
+  const catalog = async scope => {
+    const response = await fetch(`/api/scene-catalog${scope ? `?scope=${scope}` : ''}`);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
+    return body.groups || [];
+  };
+  const groups = await catalog('local').catch(error => { setInfo(`Could not list saved scenes: ${error.message}`); return []; });
+  const choice = await pickSavedScene({ groups, more: catalog() });
   if (choice === 'browse') { document.getElementById('scene-file-input').click(); return; }
-  if (!choice?.name) return;
-  if (choice.recoverFrom) {
-    // A local scene whose identical twin lives on another server: bring over
-    // any meshes only that server has (no new scene copy), then open it here.
-    const response = await fetch('/api/scene-library-import', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ store: choice.recoverFrom.store.id, name: choice.recoverFrom.name, dependenciesOnly: true }) }).catch(() => null);
-    if (!response?.ok) console.warn('Mesh recovery from', choice.recoverFrom.store.label, 'unavailable');
-  }
-  if (choice.store) {
-    // A scene from another server is imported as a new local copy (its own
-    // fresh name, so Save never touches a local scene of the same name) along
-    // with any generated meshes only that server had; then the copy opens.
-    const response = await fetch('/api/scene-library-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ store: choice.store.id, name: choice.name }) });
-    const imported = await response.json().catch(() => null);
-    if (!response.ok || !imported?.saved) { setInfo(`Could not import ${choice.name} from ${choice.store.label}: ${imported?.error || response.status}`); return; }
-    const missing = (imported.dependencies || []).filter(dependency => dependency.status === 'missing');
-    await loadSceneFile(new File([JSON.stringify(imported.document)], imported.saved, { type: 'application/json' }), { sceneFile: imported.saved });
-    if (!missing.length) return;
-    // A failed restore clears the document and blocks Save; keep its error and
-    // add which assets were unavailable rather than claiming the scene opened.
-    const names = missing.map(dependency => new URLSearchParams(dependency.source.split('?')[1] || '').get('path')).join(', ');
-    const opened = !sceneSaveBlockedByFailedRestore && currentSceneFile === imported.saved;
-    setInfo(opened
-      ? `Opened ${imported.document.label || choice.name} from ${choice.store.label}; ${missing.length} asset${missing.length === 1 ? '' : 's'} only that server can read: ${names}`
-      : `${document.getElementById('info-bar').textContent} (unavailable from ${choice.store.label}: ${names})`);
+  if (!choice?.local || (!choice.local.length && !choice.foreign.length)) return;
+  if (choice.local.length) {
+    // Open a copy here; first bring over any meshes only another server that
+    // holds this scene has (no new scene copy is written).
+    for (const member of choice.foreign) {
+      const response = await fetch('/api/scene-library-import', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ store: member.store, name: member.name, dependenciesOnly: true }) }).catch(() => null);
+      const reply = await response?.json().catch(() => null);
+      if (!response?.ok) console.warn('Mesh recovery from', member.storeLabel, 'unavailable');
+      if (response?.ok && !(reply?.dependencies || []).some(dependency => dependency.status === 'missing')) break;
+    }
+    const name = choice.local[0];
+    const sceneData = await grFetchApi('read', { root: 'scenes', path: name });
+    if (!sceneData || sceneData.error) { setInfo(`Could not read ${name}: ${sceneData?.error || 'unavailable'}`); return; }
+    await loadSceneFile(new File([JSON.stringify(sceneData)], name, { type: 'application/json' }), { sceneFile: name });
     return;
   }
-  const sceneData = await grFetchApi('read', { root: 'scenes', path: choice.name });
-  if (!sceneData || sceneData.error) { setInfo(`Could not read ${choice.name}: ${sceneData?.error || 'unavailable'}`); return; }
-  await loadSceneFile(new File([JSON.stringify(sceneData)], choice.name, { type: 'application/json' }), { sceneFile: choice.name });
+  // Only on other servers: import it as a new local copy (its own fresh name,
+  // so Save never touches a local scene of the same name) with any generated
+  // meshes only that server had; then the copy opens.
+  const source = choice.foreign[0];
+  const response = await fetch('/api/scene-library-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ store: source.store, name: source.name }) });
+  const imported = await response.json().catch(() => null);
+  if (!response.ok || !imported?.saved) { setInfo(`Could not import ${source.name} from ${source.storeLabel}: ${imported?.error || response.status}`); return; }
+  const missing = (imported.dependencies || []).filter(dependency => dependency.status === 'missing');
+  await loadSceneFile(new File([JSON.stringify(imported.document)], imported.saved, { type: 'application/json' }), { sceneFile: imported.saved });
+  if (!missing.length) return;
+  // A failed restore clears the document and blocks Save; keep its error and
+  // add which assets were unavailable rather than claiming the scene opened.
+  const names = missing.map(dependency => new URLSearchParams(dependency.source.split('?')[1] || '').get('path')).join(', ');
+  const opened = !sceneSaveBlockedByFailedRestore && currentSceneFile === imported.saved;
+  setInfo(opened
+    ? `Opened ${imported.document.label || source.name} from ${source.storeLabel}; ${missing.length} asset${missing.length === 1 ? '' : 's'} only that server can read: ${names}`
+    : `${document.getElementById('info-bar').textContent} (unavailable from ${source.storeLabel}: ${names})`);
 };
 
 document.getElementById('scene-file-input').addEventListener('change', e => {

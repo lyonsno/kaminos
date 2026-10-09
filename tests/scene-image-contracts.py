@@ -47,15 +47,7 @@ with TemporaryDirectory() as directory:
     serve.SCENES_DIR = stores["here"]
     os.environ["KAMINOS_SCENE_LIBRARY_GLOBS"] = str(root / "*" / "scenes")
 
-    listing = call("handle_scene_library", {}).json
-    entries = [(store["label"], scene["name"], scene.get("copies", 0), scene.get("hasImage")) for store in listing["stores"] for scene in store["scenes"]]
-    seeds = [entry for entry in entries if entry[1] == "seed.kaminos.json"]
-    assert len(seeds) == 1 and seeds[0][0] == "copy-b" and seeds[0][2] == 1, f"identical scenes collapse to the newest copy: {entries}"
-    twins = [scene for store in listing["stores"] for scene in store["scenes"] if scene["name"] == "local-twin.kaminos.json"]
-    assert len(twins) == 1 and twins[0].get("alsoHere") == "twin.kaminos.json", "a scene identical to one here names its local twin so Load can show it once and still recover its meshes"
-    assert ("copy-b", "tuned.kaminos.json", 0, True) in entries
-
-    copy_b = next(store["id"] for store in listing["stores"] if store["label"] == "copy-b")
+    copy_b = next(store_id for store_id, path in serve.scene_library_stores().items() if path.parent.name == "copy-b")
     image = call("handle_scene_image", {"store": [copy_b], "name": ["tuned.kaminos.json"]})
     assert image.status == 200 and image.body == jpeg and image.headers_sent["Content-Type"] == "image/jpeg"
     local = call("handle_scene_image", {"store": [""], "name": ["mine.kaminos.json"]})
@@ -63,4 +55,4 @@ with TemporaryDirectory() as directory:
     assert call("handle_scene_image", {"store": [""], "name": ["twin.kaminos.json"]}).status == 404
     assert call("handle_scene_image", {"store": [copy_b], "name": ["tuned.kaminos.json"]}, client="10.0.0.5").status == 403
     assert call("handle_scene_image", {"store": [""], "name": ["../escape.kaminos.json"]}).status == 400
-print("scene library dedupe and image contracts passed")
+print("scene image contracts passed")

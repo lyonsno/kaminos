@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
@@ -622,6 +622,8 @@ async function runLoadFromOtherServerScenario(ws) {
   const lane = resolve(homedir(), '.local/state/kaminos', 'dark-modal-library-fixture-' + process.pid);
   const name = 'fixture-study-' + process.pid + '.kaminos.json';
   const localNamesake = resolve(roots.scenes.path, name);
+  // In twin mode a second copy here is formatted differently; it is still the same scene.
+  const localReformatted = resolve(roots.scenes.path, 'fixture-study-' + process.pid + '-reformatted.kaminos.json');
   let imported = null;
   try {
     mkdirSync(resolve(lane, 'scenes'), { recursive: true });
@@ -631,6 +633,7 @@ async function runLoadFromOtherServerScenario(ws) {
       objects: [{ id: 'glb-fixture', type: 'glb', source: '/api/read?root=generated-meshes&path=' + digest + '.glb', fileName: digest + '.glb', label: 'Fixture mesh', transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } }] });
     writeFileSync(resolve(lane, 'scenes', name), fixtureScene);
     writeFileSync(localNamesake, twin ? fixtureScene : JSON.stringify({ schema: 'kaminos.scene.v1', version: 7, label: 'Unrelated local namesake', objects: [] }));
+    if (twin) writeFileSync(localReformatted, JSON.stringify(JSON.parse(fixtureScene), null, 2));
     const result = await evaluate(ws, `(async () => {
       const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
       document.getElementById('info-bar').textContent = '';
@@ -661,9 +664,10 @@ async function runLoadFromOtherServerScenario(ws) {
     imported = (scenes.entries || []).map(entry => entry.name).find(entry => entry.startsWith('fixture-study-' + process.pid + '_')) || null;
     lastEvidence.loadFromOtherServer = { ...result, imported, meshImported: existsSync(localMesh), namesake: JSON.parse(readFileSync(localNamesake, 'utf8')).label };
     const e = lastEvidence.loadFromOtherServer;
-    if (e.rows.length !== 1 || e.rows[0] !== name) throw new Error('fixture store scene not listed exactly once: ' + JSON.stringify({ rows: e.rows, note: e.note }));
+    const acceptable = twin ? [name, basename(localReformatted)] : [name];
+    if (e.rows.length !== 1 || !acceptable.includes(e.rows[0])) throw new Error('fixture store scene not listed exactly once: ' + JSON.stringify({ rows: e.rows, note: e.note }));
     if (twin) {
-      if (/^from /.test(e.rowMeta[0]) || !/meshes from dark-modal-library-fixture/.test(e.rowMeta[0])) throw new Error('the scene here did not absorb its twin as a mesh source: ' + JSON.stringify(e.rowMeta));
+      if (/^from /.test(e.rowMeta[0]) || !/meshes from dark-modal-library-fixture/.test(e.rowMeta[0]) || !/\+2 identical copies/.test(e.rowMeta[0])) throw new Error('the scene here did not absorb its copies and twin into one row: ' + JSON.stringify(e.rowMeta));
       if (!e.loaded || !e.meshImported) throw new Error('opening the local twin did not bring its mesh over: ' + JSON.stringify(e));
       if (e.imported) throw new Error('opening a local twin made another scene copy: ' + e.imported);
       return;
@@ -680,6 +684,7 @@ async function runLoadFromOtherServerScenario(ws) {
   } finally {
     rmSync(lane, { recursive: true, force: true });
     rmSync(localNamesake, { force: true });
+    rmSync(localReformatted, { force: true });
     if (imported) await fetch(new URL('/api/delete-scene?name=' + encodeURIComponent(imported), url));
     rmSync(localMesh, { force: true });
   }

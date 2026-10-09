@@ -1,48 +1,38 @@
-// Saved-scene picker for Load: the scenes Kaminos saved, newest first, with a
-// filter. Type to narrow, arrows to move, Enter or a click to open, Escape to
-// close. "Browse files…" falls back to the system file picker.
-// scenes: [{ name, label, timestamp, store? }] where store ({ id, label })
-// marks a scene saved by another Kaminos server on this machine. This
-// server's scenes list first. `more` (a promise of further scenes, such as the
-// other servers' scan) fills in after the list opens. Resolves
-// { name, store }, 'browse', or null.
+// Saved-scene picker for Load. It renders scene-catalog groups (one per scene
+// identity, decided by the server) and never decides on its own which scenes
+// are the same. Scenes with a copy here list first, then newest first. Type to
+// narrow, arrows to move, Enter or a click to open, Escape to close. "Browse
+// files…" falls back to the system file picker.
+//
+// pickSavedScene({ groups, more }): `groups` show at once (this server's
+// catalog); `more`, a promise of the full catalog including other servers,
+// replaces them when it arrives. Resolves the chosen group, 'browse', or null.
 
-export function sortScenesNewestFirst(scenes) {
-  return [...scenes].sort((a, b) => Number(!!a.store) - Number(!!b.store)
-    || String(b.timestamp || '').localeCompare(String(a.timestamp || '')) || a.name.localeCompare(b.name));
+// One catalog group as a picker entry.
+export function catalogEntry(group) {
+  const primary = group.local[0] ? { name: group.local[0], store: null } : { name: group.foreign[0]?.name, store: group.foreign[0] || null };
+  const servers = [...new Set(group.foreign.map(member => member.storeLabel))];
+  return {
+    group,
+    key: group.identity || `unreadable:${primary.name}`,
+    name: primary.name,
+    label: group.label,
+    timestamp: group.timestamp,
+    here: group.local.length > 0,
+    servers,
+    copies: group.copies || 0,
+    image: group.image ? `/api/scene-image?${new URLSearchParams({ store: group.image.store, name: group.image.name })}` : null,
+  };
 }
 
-// Identical scene documents (repeat imports, copied saves) collapse to the
-// first one listed, carrying how many other copies exist. Scenes that could not
-// be read (no contentKey) are never merged.
-export function collapseIdenticalScenes(scenes) {
-  const kept = [], byKey = new Map();
-  for (const scene of scenes) {
-    const twin = scene.contentKey ? byKey.get(scene.contentKey) : null;
-    if (twin) { twin.copies = (twin.copies || 0) + 1; continue; }
-    const entry = { ...scene };
-    if (scene.contentKey) byKey.set(scene.contentKey, entry);
-    kept.push(entry);
-  }
-  return kept;
+export function sortEntries(entries) {
+  return [...entries].sort((a, b) => Number(!a.here) - Number(!b.here)
+    || String(b.timestamp || '').localeCompare(String(a.timestamp || '')) || String(a.name).localeCompare(String(b.name)));
 }
 
-// Other servers' scenes identical to a listed local scene join that local row
-// as its mesh source (recoverFrom) instead of adding a second row.
-export function mergeForeignTwins(local, foreign) {
-  const byName = new Map(local.map(scene => [scene.name, { ...scene }]));
-  const rest = [];
-  for (const scene of foreign) {
-    const twin = scene.alsoHere ? byName.get(scene.alsoHere) : null;
-    if (twin && !twin.recoverFrom) twin.recoverFrom = { store: scene.store, name: scene.name };
-    else if (!twin) rest.push(scene);
-  }
-  return { local: [...byName.values()], foreign: rest };
-}
-
-export function sceneMatchesFilter(scene, filter) {
+export function entryMatchesFilter(entry, filter) {
   const words = String(filter || '').toLowerCase().split(/\s+/).filter(Boolean);
-  const haystack = `${scene.label || ''} ${scene.name} ${scene.store?.label || ''} ${scene.recoverFrom?.store?.label || ''}`.toLowerCase();
+  const haystack = `${entry.label || ''} ${entry.name} ${entry.servers.join(' ')}`.toLowerCase();
   return words.every(word => haystack.includes(word));
 }
 
@@ -51,10 +41,20 @@ function savedWhen(timestamp) {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-export function pickSavedScene({ scenes, more = null, host = document.body } = {}) {
+export function entryMeta(entry) {
+  return [
+    !entry.here && entry.servers.length ? `from ${entry.servers[0]}` : '',
+    entry.here && entry.servers.length ? `meshes from ${entry.servers.join(', ')}` : '',
+    entry.copies ? `+${entry.copies} identical cop${entry.copies === 1 ? 'y' : 'ies'}` : '',
+    String(entry.name || '').replace(/\.kaminos\.json$/, ''),
+    savedWhen(entry.timestamp),
+  ].filter(Boolean).join(' · ');
+}
+
+export function pickSavedScene({ groups, more = null, host = document.body } = {}) {
   return new Promise(resolve => {
-    let ordered = sortScenesNewestFirst(scenes);
-    let pending = !!more, moreError = '';
+    let entries = sortEntries(groups.map(catalogEntry));
+    let pending = !!more, moreError = '', open = true;
     const backdrop = document.createElement('div');
     backdrop.className = 'file-name-prompt scene-load-picker';
     backdrop.setAttribute('role', 'dialog');
@@ -69,41 +69,37 @@ export function pickSavedScene({ scenes, more = null, host = document.body } = {
       </div>`;
     const list = backdrop.querySelector('.scene-load-picker-list'), input = backdrop.querySelector('input');
     const note = backdrop.querySelector('.file-name-prompt-message');
-    const makeRow = scene => {
+    const finish = value => { open = false; backdrop.remove(); resolve(value); };
+    const makeRow = entry => {
       const row = document.createElement('button');
       row.type = 'button';
       row.className = 'scene-load-picker-row';
-      row.dataset.sceneFile = scene.name;
-      if (scene.store) row.dataset.sceneStore = scene.store.id;
+      row.dataset.sceneFile = entry.name;
+      if (!entry.here && entry.group.foreign[0]) row.dataset.sceneStore = entry.group.foreign[0].store;
       row.setAttribute('role', 'option');
       const picture = document.createElement('span');
       picture.className = 'scene-load-picker-thumb';
-      if (scene.image) {
+      if (entry.image) {
         const image = document.createElement('img');
         image.loading = 'lazy';
         image.alt = '';
-        image.src = scene.image;
+        image.src = entry.image;
         image.addEventListener('error', () => image.remove());
         picture.append(image);
       }
       const text = document.createElement('span');
       text.className = 'scene-load-picker-text';
       const title = document.createElement('span');
-      title.textContent = scene.label || scene.name.replace(/\.kaminos\.json$/, '');
+      title.textContent = entry.label || String(entry.name || '').replace(/\.kaminos\.json$/, '');
       const meta = document.createElement('span');
       meta.className = 'scene-load-picker-meta';
-      meta.textContent = [scene.store ? `from ${scene.store.label}` : '', scene.alsoHere ? 'already on this server' : '',
-        scene.recoverFrom ? `meshes from ${scene.recoverFrom.store.label}` : '',
-        scene.copies ? `+${scene.copies} identical cop${scene.copies === 1 ? 'y' : 'ies'}` : '',
-        scene.name.replace(/\.kaminos\.json$/, ''), savedWhen(scene.timestamp)].filter(Boolean).join(' · ');
+      meta.textContent = entryMeta(entry);
       text.append(title, meta);
       row.append(picture, text);
-      row.addEventListener('click', () => finish({ name: scene.name, store: scene.store || null, recoverFrom: scene.recoverFrom || null }));
+      row.addEventListener('click', () => finish(entry.group));
       return row;
     };
-    let rows = ordered.map(makeRow);
-    list.append(...rows);
-    let open = true;
+    let rows = [];
     let active = 0;
     const visible = () => rows.filter(row => !row.hidden);
     const highlight = () => {
@@ -116,27 +112,22 @@ export function pickSavedScene({ scenes, more = null, host = document.body } = {
         : moreError ? `Could not list other servers' scenes: ${moreError}`
         : rows.length ? (shown.length ? '' : 'No saved scene matches.') : 'No saved scenes yet. Cmd+S saves one.';
     };
-    const finish = value => { open = false; backdrop.remove(); resolve(value); };
-    const applyFilter = () => { ordered.forEach((scene, index) => { rows[index].hidden = !sceneMatchesFilter(scene, input.value); }); };
+    const applyFilter = () => { entries.forEach((entry, index) => { rows[index].hidden = !entryMatchesFilter(entry, input.value); }); };
+    const render = () => {
+      rows = entries.map(makeRow);
+      list.replaceChildren(...rows);
+      applyFilter();
+      highlight();
+    };
     input.addEventListener('input', () => { applyFilter(); active = 0; highlight(); });
-    more?.then(extra => {
+    more?.then(full => {
       if (!open) return;
-      const localScenes = ordered.filter(scene => !scene.store);
-      const { local: merged, foreign } = mergeForeignTwins(localScenes, extra || []);
-      for (const scene of merged) {
-        const index = ordered.findIndex(entry => !entry.store && entry.name === scene.name);
-        if (!scene.recoverFrom || index < 0 || ordered[index].recoverFrom) continue;
-        ordered[index] = scene;
-        const replacement = makeRow(scene);
-        rows[index].replaceWith(replacement);
-        rows[index] = replacement;
-      }
-      const added = sortScenesNewestFirst(foreign);
-      const addedRows = added.map(makeRow);
-      ordered = [...ordered, ...added];
-      rows = [...rows, ...addedRows];
-      list.append(...addedRows);
-    }).catch(error => { moreError = error?.message || String(error); }).finally(() => { if (!open) return; pending = false; applyFilter(); highlight(); });
+      const chosenKey = visible()[active] ? entries[rows.indexOf(visible()[active])]?.key : null;
+      entries = sortEntries(full.map(catalogEntry));
+      render();
+      const keep = chosenKey ? visible().findIndex(row => entries[rows.indexOf(row)].key === chosenKey) : -1;
+      if (keep > 0) { active = keep; highlight(); }
+    }).catch(error => { moreError = error?.message || String(error); }).finally(() => { if (!open) return; pending = false; highlight(); });
     backdrop.addEventListener('keydown', event => {
       event.stopPropagation();
       if (event.key === 'Escape') { event.preventDefault(); finish(null); }
@@ -145,14 +136,14 @@ export function pickSavedScene({ scenes, more = null, host = document.body } = {
       else if (event.key === 'Enter') {
         event.preventDefault();
         const chosen = visible()[active];
-        if (chosen) { const scene = ordered[rows.indexOf(chosen)]; finish({ name: scene.name, store: scene.store || null, recoverFrom: scene.recoverFrom || null }); }
+        if (chosen) finish(entries[rows.indexOf(chosen)].group);
       }
     });
     backdrop.querySelector('[data-scene-browse]').addEventListener('click', () => finish('browse'));
     backdrop.querySelector('[data-scene-cancel]').addEventListener('click', () => finish(null));
     backdrop.addEventListener('pointerdown', event => { if (event.target === backdrop) finish(null); });
     host.appendChild(backdrop);
-    highlight();
+    render();
     input.focus();
   });
 }
