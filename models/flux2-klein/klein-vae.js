@@ -254,13 +254,16 @@ export class KleinVaeDecoder {
       this.uniform([this.latH, this.latW, this.f32bits(this.manifest.config.batch_norm_eps), 0])], Math.ceil(n / 256));
   }
 
-  // Decode channels-last latents [2h*2w][32] (GPU buffer) to channels-last RGB [H*W][3] in this.b.
-  decode(enc, z) {
+  // Decode channels-last latents [2h*2w][32] (GPU buffer) to channels-last RGB [H*W][3] in this.out.
+  // Submits after every resnet, attention and upsampler so no command buffer spans the whole decoder.
+  decode(z) {
+    let enc = this.device.createCommandEncoder();
+    const cut = () => { this.device.queue.submit([enc.finish()]); enc = this.device.createCommandEncoder(); };
     let s = { H: this.latH * 2, W: this.latW * 2, C: 32 };
     this.conv(enc, z, this.t2, 'post_quant_conv', { Hin: s.H, Win: s.W, Cin: 32 });
     s = this.conv(enc, this.t2, this.a, 'decoder.conv_in', { Hin: s.H, Win: s.W, Cin: 32 });
     let cur = this.a, other = this.b;
-    const swap = () => { [cur, other] = [other, cur]; };
+    const swap = () => { [cur, other] = [other, cur]; cut(); };
     s = this.resnet(enc, cur, other, 'decoder.mid_block.resnets.0', s); swap();
     s = this.attention(enc, cur, other, 'decoder.mid_block.attentions.0', s); swap();
     s = this.resnet(enc, cur, other, 'decoder.mid_block.resnets.1', s); swap();
@@ -273,6 +276,7 @@ export class KleinVaeDecoder {
     }
     this.groupNorm(enc, cur, this.t1, 'decoder.conv_norm_out', { HW: s.H * s.W, C: s.C, silu: true });
     s = this.conv(enc, this.t1, other, 'decoder.conv_out', { Hin: s.H, Win: s.W, Cin: s.C });
+    this.device.queue.submit([enc.finish()]);
     this.out = other;
     return s;
   }

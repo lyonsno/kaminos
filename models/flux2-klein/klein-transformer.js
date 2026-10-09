@@ -192,10 +192,12 @@ export class KleinTransformer {
     dev.queue.writeBuffer(a.tproj, 0, timestepProjection(tModel));
     const silu = this.pipeline('silu', siluShader());
     let enc = dev.createCommandEncoder();
+    // Every boundary ends the current command buffer so no single submit spans more than
+    // one block (multi-second command buffers were observed to kill the device). Taps,
+    // when present, read the boundary after its work is submitted.
     const flush = async (name, buf, rows, cols, byteOffset = 0) => {
-      if (!taps) return;
       dev.queue.submit([enc.finish()]);
-      await taps(name, buf, rows, cols, byteOffset);
+      if (taps) await taps(name, buf, rows, cols, byteOffset);
       enc = dev.createCommandEncoder();
     };
 

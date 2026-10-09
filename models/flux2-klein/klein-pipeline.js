@@ -112,8 +112,8 @@ export class KleinPipeline {
     t0 = performance.now();
     let enc = dev.createCommandEncoder();
     this.vae.prepLatents(enc, this.transformer.act.latents);
-    this.vae.decode(enc, this.vae.prepped);
     dev.queue.submit([enc.finish()]);
+    this.vae.decode(this.vae.prepped);
     const bytes = width * height * 3 * 4;
     const rb = dev.createBuffer({ size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     enc = dev.createCommandEncoder(); enc.copyBufferToBuffer(this.vae.out, 0, rb, 0, bytes); dev.queue.submit([enc.finish()]);

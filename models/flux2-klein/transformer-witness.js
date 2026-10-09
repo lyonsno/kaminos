@@ -183,7 +183,7 @@ window.runTransformerWitness = async function (cfg) {
       const decodeTo = async (zBuf, label) => {
         state.phase = `vae-decode:${label}`;
         const t1 = performance.now();
-        const e2 = device.createCommandEncoder(); vae.decode(e2, zBuf); device.queue.submit([e2.finish()]);
+        vae.decode(zBuf);
         await device.queue.onSubmittedWorkDone();
         const ms = performance.now() - t1;
         const rgb = await readback(vae.out, HWi * 3 * 4);
