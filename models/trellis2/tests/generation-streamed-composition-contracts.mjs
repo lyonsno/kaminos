@@ -13,7 +13,10 @@ const runtime={device:{limits:{maxStorageBufferBindingSize:134217728},queue:{asy
   conditioning=runtime.createTensor({name:'borrowed-context',shape:[1,7,5],dtype:'f32',usage:U.storage}),
   options={route:{runtime,routeId:'streamed-composition-contract'},conditioningTensor:conditioning,
     models:Object.fromEntries(Object.entries(models).map(([role,model])=>[role,{config:model.config}])),meshResolution:128,
-    onPhase(e){phase=e.phase;if(phase==='learned-cascade-support')marked=false;},
+    onPhase(e){phase=e.phase;if(phase==='learned-cascade-support')marked=false;
+      if(['occupancy-decoding','learned-cascade-support','learned-geometry-decoding','shape-guided-material-decoding'].includes(phase))
+        assert.equal(allocated.filter(t=>t.name.startsWith('trellis.block.')&&!t.destroyed).length,0,
+          'Completed flow weights/scratch must not overlap decoder loading: '+phase);},
     async loadModel(role,selection){
       requested.push(role);
       if(!roles.includes(role))return{role,...models[role]};

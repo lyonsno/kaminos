@@ -90,11 +90,16 @@ function* constructSparseFlow({ route, config={}, weights, conditioning, conditi
     if(!(weights?.terminal?.[key] instanceof Float32Array)||weights.terminal[key].length!==count||
         !weights.terminal[key].every(Number.isFinite))throw new TypeError(`complete finite terminal ${key} required`);
   }
-  const resources=[],blocks=[];let prefix,workspace,disposed=false,running=false,initialized=!!sampleTensor;
+  const resources=[],blocks=[];let prefix,workspace,ownedSample,disposed=false,parametersRetired=false,running=false,initialized=!!sampleTensor;
   const tensor=(name,shape)=>{const t=runtime.createTensor({name:`trellis.flow.${name}`,shape,dtype:'f32',usage:U.storage|U.copyDst|U.copySrc});resources.push(t);return t;};
-  const cleanup=()=>{for(const block of blocks)block.dispose();prefix?.dispose();workspace?.dispose();for(const t of resources)t.buffer?.destroy?.();};
+  const releaseParameters=()=>{
+    if(disposed||parametersRetired)return;if(running)throw new Error('sparse flow adapter in use');
+    for(const block of blocks)block.dispose();prefix?.dispose();workspace?.dispose();
+    for(const t of resources)if(t!==ownedSample)t.buffer?.destroy?.();parametersRetired=true;
+  };
+  const cleanup=()=>{releaseParameters();ownedSample?.buffer?.destroy?.();};
   try{
-    const sample=sampleTensor??tensor('sample',plan.prefix.inputShape);
+    const sample=sampleTensor??(ownedSample=tensor('sample',plan.prefix.inputShape));
     prefix=createTrellisSparsePrefixAdapter({route,config,weights:weights.prefix,sampleTensor:sample});
     workspace=createTrellisSparseBlockWorkspace({route,config,conditioning,conditioningTensor,phases,phaseTensor});
     let hidden=prefix.outputs.projected;
@@ -117,7 +122,8 @@ function* constructSparseFlow({ route, config={}, weights, conditioning, conditi
       ...(conditioningTensor!==undefined?{conditioning:conditioningTensor}:{})}),outputs:Object.freeze({prediction}),
       diagnostics:Object.freeze({hidden,normalized,...prefix.outputs}),
       async run({sample:cpuSample,timestep,conditioning:nextConditioning,zeroConditioning=false}={},invocation){
-        if(disposed)throw new Error('sparse flow adapter disposed');if(running)throw new Error('sparse flow adapter in use');
+        if(disposed)throw new Error('sparse flow adapter disposed');if(parametersRetired)throw new Error('sparse flow parameters retired');
+        if(running)throw new Error('sparse flow adapter in use');
         if(!Number.isFinite(timestep))throw new TypeError('finite model timestep required');
         if(typeof zeroConditioning!=='boolean')throw TypeError('explicit conditioning polarity required');
         if(conditioningTensor!==undefined&&nextConditioning!==undefined)throw TypeError('borrowed resident conditioning forbids CPU replacement');
@@ -137,7 +143,10 @@ function* constructSparseFlow({ route, config={}, weights, conditioning, conditi
           return {prediction,blocksExecuted:blocks.length,arithmetic:plan.arithmetic};
         }finally{running=false;}
       },
-      dispose(){if(running)throw new Error('sparse flow adapter in use');if(disposed)return;disposed=true;cleanup();}
+      // The sampler's final input lives independently of no-longer-needed
+      // parameters, prediction and scratch. Caller drains GPU work first.
+      releaseParameters,
+      dispose(){if(running)throw new Error('sparse flow adapter in use');if(disposed)return;cleanup();disposed=true;}
     });
   }catch(error){cleanup();throw error;}
 }
