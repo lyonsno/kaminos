@@ -3,11 +3,11 @@
 // requested clean commit; fixture and weight roots are digest-bound.
 import fs from 'node:fs/promises';
 import http from 'node:http';
-import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
+import { launchChrome, openPage } from './chrome-cdp.mjs';
 
 const STAGES = ['vae-encoder', 'vae-decoder', 'unet', 'full', 'route'];
 const { values } = parseArgs({ options: Object.fromEntries(
@@ -26,40 +26,7 @@ const persist = async () => {
   await fs.writeFile(output, JSON.stringify(report, null, 2) + '\n');
 };
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
-let server, child, profile, socket;
-
-async function cdpConnect(url) {
-  const ws = new WebSocket(url), pending = new Map();
-  let next = 0, failure = null;
-  await new Promise((resolve, reject) => {
-    ws.addEventListener('open', resolve, { once: true });
-    ws.addEventListener('error', () => reject(new Error('CDP connection error')), { once: true });
-  });
-  const fail = message => {
-    failure ??= new Error(message);
-    for (const entry of pending.values()) entry.reject(failure);
-    pending.clear();
-  };
-  ws.addEventListener('message', event => {
-    const row = JSON.parse(event.data);
-    if (!row.id) return;
-    const entry = pending.get(row.id);
-    pending.delete(row.id);
-    if (row.error) entry?.reject(new Error(JSON.stringify(row.error))); else entry?.resolve(row.result);
-  });
-  ws.addEventListener('close', () => fail('CDP connection closed'));
-  return {
-    socket: ws,
-    call(method, params = {}, sessionId) {
-      return new Promise((resolve, reject) => {
-        if (failure) { reject(failure); return; }
-        const id = ++next;
-        pending.set(id, { resolve, reject });
-        ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
-      });
-    },
-  };
-}
+let server, browser;
 
 try {
   await persist();
@@ -167,34 +134,11 @@ try {
 
   report.phase = 'browser-launch';
   await persist();
-  profile = await fs.mkdtemp(path.join(os.tmpdir(), 'supermat-witness-chrome-'));
-  child = spawn(report.chrome, ['--headless=new', '--enable-unsafe-webgpu', '--remote-debugging-port=0',
-    '--use-mock-keychain', '--password-store=basic', '--no-first-run', `--user-data-dir=${profile}`, 'about:blank'],
-  { stdio: ['ignore', 'ignore', 'pipe'] });
-  report.ownedBrowserPid = child.pid;
-  child.once('exit', (code, signal) => { report.ownedBrowserExit = { code, signal, at: new Date().toISOString() }; });
-  const wsUrl = await new Promise((resolve, reject) => {
-    let stderr = '';
-    child.stderr.on('data', bytes => {
-      stderr += bytes.toString();
-      const match = stderr.match(/DevTools listening on (ws:\/\/\S+)/);
-      if (match) resolve(match[1]);
-    });
-    child.once('error', reject);
-    child.once('exit', (code, signal) => reject(new Error(`browser exited before CDP: ${code}/${signal}`)));
-  });
-  const cdp = await cdpConnect(wsUrl);
-  socket = cdp.socket;
-  report.browserVersion = await cdp.call('Browser.getVersion');
-  const { targetId } = await cdp.call('Target.createTarget', { url: report.requestedUrl });
-  const { sessionId } = await cdp.call('Target.attachToTarget', { targetId, flatten: true });
-  for (let attempt = 0; ; attempt++) {
-    const state = await cdp.call('Runtime.evaluate', { expression: '[location.href, document.readyState]', returnByValue: true }, sessionId);
-    const [href, readyState] = state.result.value ?? [];
-    if (href === report.requestedUrl && readyState === 'complete') break;
-    if (attempt > 200) throw new Error(`witness page did not load: ${href} ${readyState}`);
-    await new Promise(resolve => setTimeout(resolve, 50));
-  }
+  browser = await launchChrome({ chrome: report.chrome, onExit: exit => { report.ownedBrowserExit = exit; } });
+  const { cdp } = browser;
+  report.ownedBrowserPid = browser.child.pid;
+  report.browserVersion = browser.version;
+  const sessionId = await openPage(cdp, report.requestedUrl);
 
   report.phase = `native-${values.stage}-witness`;
   await persist();
@@ -218,14 +162,8 @@ try {
   report.error = `${error?.name ?? 'Error'}: ${error?.message ?? String(error)}`;
   process.exitCode = 1;
 } finally {
-  try { socket?.close(); } catch {}
-  if (child && child.exitCode === null) {
-    child.kill('SIGTERM');
-    await new Promise(resolve => setTimeout(resolve, 500));
-    if (child.exitCode === null) child.kill('SIGKILL');
-  }
+  await browser?.close();
   server?.close();
-  if (profile) await fs.rm(profile, { recursive: true, force: true });
   await persist();
   console.log(JSON.stringify({ status: report.status, phase: report.phase, error: report.error ?? null, report: output }));
 }
