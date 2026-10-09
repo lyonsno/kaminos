@@ -9,6 +9,16 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
+// Effective source identity of the code this run actually executed.
+function sourceIdentity(dir) {
+  try {
+    const rev = execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    const dirty = execFileSync('git', ['-C', dir, 'status', '--porcelain', '--', '.'], { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+    return { rev, dirtyFiles: dirty };
+  } catch (e) { return { error: String(e) }; }
+}
+
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -16,9 +26,9 @@ const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] :
 const chrome = opt('--chrome'), outPath = opt('--out');
 const roots = { '/weights/': path.resolve(opt('--weights', '')), '/ref/': path.resolve(opt('--ref', '')), '/vae/': path.resolve(opt('--vae', '.')), '/te/': path.resolve(opt('--te', '.')), '/': here };
 const cfg = { step: Number(opt('--step', '0')), tolerance: Number(opt('--tolerance', '1e-3')),
-  timingRuns: Number(opt('--timing-runs', '2')), verifyDigests: !args.includes('--no-digests'), vae: Boolean(opt('--vae')), textEncoder: Boolean(opt('--te')), profile: args.includes('--profile') };
+  timingRuns: Number(opt('--timing-runs', '2')), verifyDigests: !args.includes('--no-digests'), vae: Boolean(opt('--vae')), textEncoder: Boolean(opt('--te')), profile: args.includes('--profile'), gemmVersion: Number(opt('--gemm-version', '1')), sharedType: opt('--shared-type', 'f32') };
 const report = { schema: 'kaminos.flux2-klein.transformer-witness-run.v0', requestedChrome: chrome, roots, config: cfg,
-  host: os.hostname(), startedAt: new Date().toISOString(), phase: 'launch' };
+  host: os.hostname(), startedAt: new Date().toISOString(), source: sourceIdentity(here), phase: 'launch' };
 let child, server, ws;
 const send = (() => { let id = 0; const pending = new Map();
   const fn = (method, params = {}) => new Promise(r => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });

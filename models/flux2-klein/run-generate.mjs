@@ -7,12 +7,22 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer, launchChrome } from './cdp-harness.mjs';
+import { execFileSync } from 'node:child_process';
+// Effective source identity of the code this run actually executed.
+function sourceIdentity(dir) {
+  try {
+    const rev = execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    const dirty = execFileSync('git', ['-C', dir, 'status', '--porcelain', '--', '.'], { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+    return { rev, dirtyFiles: dirty };
+  } catch (e) { return { error: String(e) }; }
+}
+
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
 const outDir = path.resolve(opt('--out'));
-const report = { schema: 'kaminos.flux2-klein.generate-run.v0', host: os.hostname(), startedAt: new Date().toISOString(), phase: 'setup',
+const report = { schema: 'kaminos.flux2-klein.generate-run.v0', host: os.hostname(), startedAt: new Date().toISOString(), source: sourceIdentity(here), phase: 'setup',
   roots: { te: path.resolve(opt('--te')), dit: path.resolve(opt('--dit')), vae: path.resolve(opt('--vae')) } };
 let browser, server;
 async function finish(code) {

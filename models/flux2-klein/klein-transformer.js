@@ -3,7 +3,7 @@
 // modulation, double-stream blocks, single-stream blocks, AdaLN output norm and
 // projection. Weights come from pack-transformer.py bundles (f16 [out, in]).
 import { LN_EPS, gemmShader, layerNormModulateShader, qkvPrepShader, softmaxShader, swigluShader,
-  headsToRowsShader, siluShader, axpyShader } from './klein-kernels.js';
+  headsToRowsShader, siluShader, axpyShader, gemmShaderV2 } from './klein-kernels.js';
 
 const HEAD = 128;
 
@@ -135,7 +135,11 @@ export class KleinTransformer {
   // C = alpha * A[M,K] * B[N,K]^T with strides; epilogue 'store' | 'add' | 'gated-residual'.
   gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bType = 'f16', c, cOff = 0, cRs, cBs = 0,
     M, N, K, batch = 1, alpha = 1, epilogue = 'store', gate = null, gateOff = 0, scaleOff = 0 }) {
-    const pipe = this.pipeline(`gemm-${bType}-${epilogue}`, gemmShader({ bType, epilogue }));
+    // gemmVersion 2 (default) is the probe-derived kernel; 1 keeps the original parity kernel for A/B.
+    const v2 = (this.gemmVersion ?? 2) === 2 && K % 4 === 0;
+    const pipe = v2
+      ? this.pipeline(`gemm2-${bType}-${epilogue}-${this.sharedType ?? 'f32'}`, gemmShaderV2({ bType, epilogue, sType: this.sharedType ?? 'f32' }))
+      : this.pipeline(`gemm-${bType}-${epilogue}`, gemmShader({ bType, epilogue }));
     const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, gateOff, 0, scaleOff]);
     const entries = [{ binding: 0, resource: { buffer: a } }, { binding: 1, resource: { buffer: b } },
       { binding: 2, resource: { buffer: c } }, { binding: 3, resource: { buffer: u } }];

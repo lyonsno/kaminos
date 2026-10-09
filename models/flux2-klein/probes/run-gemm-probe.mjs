@@ -8,6 +8,16 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
+// Effective source identity of the code this run actually executed.
+function sourceIdentity(dir) {
+  try {
+    const rev = execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    const dirty = execFileSync('git', ['-C', dir, 'status', '--porcelain', '--', '.'], { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+    return { rev, dirtyFiles: dirty };
+  } catch (e) { return { error: String(e) }; }
+}
+
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -42,7 +52,7 @@ const chromeFlags = ['--headless=new', '--remote-debugging-port=0', '--use-mock-
   '--no-first-run', ...(flag('--subgroup-matrix') ? ['--enable-unsafe-webgpu', '--enable-features=WebGPUDeveloperFeatures'] : [])];
 
 const report = { schema: 'kaminos.flux2-klein.gemm-probe-run.v0', requestedChrome: chrome, chromeFlags, shapeSet: shapeKey,
-  host: os.hostname(), startedAt: new Date().toISOString(), phase: 'launch' };
+  host: os.hostname(), startedAt: new Date().toISOString(), source: sourceIdentity(here), phase: 'launch' };
 let child, server;
 async function finish(code) {
   report.finishedAt = new Date().toISOString();

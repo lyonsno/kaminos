@@ -57,6 +57,8 @@ window.runTransformerWitness = async function (cfg) {
 
     state.phase = 'weights';
     const model = new KleinTransformer(device, wm);
+    model.gemmVersion = cfg.gemmVersion ?? 2; model.sharedType = cfg.sharedType ?? 'f32';
+    report.kernelConfig = { gemmVersion: model.gemmVersion, sharedType: model.sharedType };
     const t0 = performance.now();
     await model.loadBundles(async (file, bundle) => {
       const buf = await getBytes(`/weights/${file}`);

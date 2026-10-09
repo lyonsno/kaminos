@@ -340,3 +340,99 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   y[r * p.y_rs + p.y_off + c] = x[r * p.cols + c];
 }`;
 }
+
+// GEMM v2: same contract and uniforms as gemmShader, restructured after the GEMM probe:
+// vec4 loads along K for both operands, a K tile of 32, and a selectable shared-memory
+// type (f32 keeps activations exact; f16 halves shared traffic). Requires K, row strides
+// and offsets to be multiples of 4.
+export function gemmShaderV2({ bType = 'f16', epilogue = 'store', sType = 'f32' } = {}) {
+  const quant = bType === 'i8' || bType === 'i4';
+  const bArray = quant ? 'array<u32>' : bType === 'f16' ? 'array<vec4<f16>>' : 'array<vec4<f32>>';
+  const gateBinding = epilogue === 'gated-residual' ? '@group(0) @binding(4) var<storage, read> gate: array<f32>;' : '';
+  const scaleBinding = quant ? '@group(0) @binding(5) var<storage, read> bs: array<f16>;' : '';
+  let store;
+  if (epilogue === 'store') store = 'c[ci] = v;';
+  else if (epilogue === 'add') store = 'c[ci] = c[ci] + v;';
+  else store = 'c[ci] = c[ci] + gate[p.gate_off + n] * v;';
+  let loadB;
+  if (!quant) {
+    loadB = `for (var q = 0u; q < 2u; q++) {
+      let idx = tid + q * 256u; let row = idx / 8u; let c4 = idx % 8u; let n = n0 + row; let k = k0 + c4 * 4u;
+      var v = vec4<f32>(0.0);
+      if (n < p.N && k < p.K) { v = vec4<f32>(b[(p.b_off + bbat * p.b_bs + n * p.b_rs + k) / 4u]); }
+      for (var c = 0u; c < 4u; c++) { tb[(c4 * 4u + c) * 64u + row] = ${sType}(v[c]); }
+    }`;
+  } else if (bType === 'i8') {
+    loadB = `for (var q = 0u; q < 2u; q++) {
+      let idx = tid + q * 256u; let row = idx / 8u; let c4 = idx % 8u; let n = n0 + row; let k = k0 + c4 * 4u;
+      var v = vec4<f32>(0.0);
+      if (n < p.N && k < p.K) {
+        v = vec4<f32>(unpack4xI8(b[p.b_off + n * (p.K / 4u) + k / 4u])) * f32(bs[p.z1 + n * (p.K / 64u) + k / 64u]);
+      }
+      for (var c = 0u; c < 4u; c++) { tb[(c4 * 4u + c) * 64u + row] = ${sType}(v[c]); }
+    }`;
+  } else {
+    loadB = `{
+      let row = tid / 4u; let c8 = tid % 4u; let n = n0 + row; let k = k0 + c8 * 8u;
+      var lo = vec4<f32>(0.0); var hi = vec4<f32>(0.0);
+      if (n < p.N && k < p.K) {
+        let w = b[p.b_off + n * (p.K / 8u) + k / 8u];
+        let sb = p.z1 + (n * (p.K / 64u) + k / 64u) * 2u;
+        let sc = f32(bs[sb]); let bi = f32(bs[sb + 1u]);
+        lo = vec4<f32>(vec4<u32>(w, w >> 4u, w >> 8u, w >> 12u) & vec4<u32>(15u)) * sc + bi;
+        hi = vec4<f32>(vec4<u32>(w >> 16u, w >> 20u, w >> 24u, w >> 28u) & vec4<u32>(15u)) * sc + bi;
+      }
+      for (var c = 0u; c < 4u; c++) {
+        tb[(c8 * 8u + c) * 64u + row] = ${sType}(lo[c]);
+        tb[(c8 * 8u + 4u + c) * 64u + row] = ${sType}(hi[c]);
+      }
+    }`;
+  }
+  return `enable f16;
+struct P {
+  M: u32, N: u32, K: u32, alpha: f32,
+  a_off: u32, a_rs: u32, a_bs: u32, b_off: u32,
+  b_rs: u32, b_bs: u32, c_off: u32, c_rs: u32,
+  c_bs: u32, gate_off: u32, z0: u32, z1: u32,
+};
+@group(0) @binding(0) var<storage, read> a: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> b: ${bArray};
+@group(0) @binding(2) var<storage, read_write> c: array<f32>;
+@group(0) @binding(3) var<uniform> p: P;
+${gateBinding}
+${scaleBinding}
+var<workgroup> ta: array<${sType}, 2048>;
+var<workgroup> tb: array<${sType}, 2048>;
+@compute @workgroup_size(16, 16)
+fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>) {
+  let tid = lid.y * 16u + lid.x;
+  let m0 = wid.y * 64u; let n0 = wid.x * 64u; let bat = wid.z; let bbat = bat / max(p.z0, 1u);
+  var acc: array<array<f32, 4>, 4>;
+  for (var k0 = 0u; k0 < p.K; k0 += 32u) {
+    for (var q = 0u; q < 2u; q++) {
+      let idx = tid + q * 256u; let row = idx / 8u; let c4 = idx % 8u; let m = m0 + row; let k = k0 + c4 * 4u;
+      var v = vec4<f32>(0.0);
+      if (m < p.M && k < p.K) { v = a[(p.a_off + bat * p.a_bs + m * p.a_rs + k) / 4u]; }
+      for (var cc = 0u; cc < 4u; cc++) { ta[(c4 * 4u + cc) * 64u + row] = ${sType}(v[cc]); }
+    }
+    ${loadB}
+    workgroupBarrier();
+    for (var kk = 0u; kk < 32u; kk++) {
+      var av: array<f32, 4>; var bv: array<f32, 4>;
+      for (var i = 0u; i < 4u; i++) { av[i] = f32(ta[kk * 64u + lid.y * 4u + i]); }
+      for (var j = 0u; j < 4u; j++) { bv[j] = f32(tb[kk * 64u + lid.x * 4u + j]); }
+      for (var i = 0u; i < 4u; i++) { for (var j = 0u; j < 4u; j++) { acc[i][j] = fma(av[i], bv[j], acc[i][j]); } }
+    }
+    workgroupBarrier();
+  }
+  for (var i = 0u; i < 4u; i++) {
+    let m = m0 + lid.y * 4u + i; if (m >= p.M) { continue; }
+    for (var j = 0u; j < 4u; j++) {
+      let n = n0 + lid.x * 4u + j; if (n >= p.N) { continue; }
+      let v = p.alpha * acc[i][j];
+      let ci = p.c_off + bat * p.c_bs + m * p.c_rs + n;
+      ${store}
+    }
+  }
+}`;
+}
