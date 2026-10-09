@@ -13385,6 +13385,11 @@ export async function createWebGPUFingerFluidSolver({
   const device = webgpuDevice ?? await adapter.requestDevice({
       requiredLimits: { maxStorageBuffersPerShaderStage: requiredStorageBindings },
     });
+  // The host supplies a device without the fluid acquiring its own adapter.
+  // Read identity from the device actually executing the submitted work.
+  const effectiveAdapterInfo = device.adapterInfo ?? adapter?.info ?? null;
+  const adapterInfoSource = device.adapterInfo ? 'GPUDevice.adapterInfo'
+    : adapter?.info ? 'GPUAdapter.info' : 'unavailable';
   let movingHillSupportProvider = null;
   if (supportContactRoute === KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE) {
     if (typeof movingHillSupportContactProviderFactory !== 'function') {
@@ -17063,12 +17068,15 @@ export async function createWebGPUFingerFluidSolver({
         ...diagnostics,
         ageMs: Number(Math.max(0, performance.now() - diagnostics.capturedAtMs).toFixed(1)),
       } : null,
-      adapterInfo: adapter?.info ? {
-        vendor: adapter.info.vendor || null,
-        architecture: adapter.info.architecture || null,
-        device: adapter.info.device || null,
-        description: adapter.info.description || null,
-      } : { vendor: 'unknown' },
+      adapterInfo: {
+        vendor: effectiveAdapterInfo?.vendor || 'unknown',
+        architecture: effectiveAdapterInfo?.architecture || null,
+        device: effectiveAdapterInfo?.device || null,
+        description: effectiveAdapterInfo?.description || null,
+        isFallbackAdapter: typeof effectiveAdapterInfo?.isFallbackAdapter === 'boolean'
+          ? effectiveAdapterInfo.isFallbackAdapter : null,
+        source: adapterInfoSource,
+      },
     };
   }
 
