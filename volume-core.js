@@ -1,4 +1,5 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
+import { CUBIC_RECONSTRUCTION_WGSL } from './volume-cubic-reconstruction.mjs';
 import { buildInflowCoverageMap, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
 import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
 import {
@@ -4127,6 +4128,8 @@ struct FlowReconstructionSample {
   frontTopology: f32,
 };
 
+${CUBIC_RECONSTRUCTION_WGSL}
+
 fn sampleWorldFlowReconstructionRaw(p: vec3<f32>) -> FlowReconstructionSample {
   var sample: FlowReconstructionSample;
   sample.velocityDensity = sampleWorldVelocity(p);
@@ -4135,6 +4138,18 @@ fn sampleWorldFlowReconstructionRaw(p: vec3<f32>) -> FlowReconstructionSample {
   sample.microLayer = sampleWorldMicrodetail(p);
   sample.kernelTangentRadius = vec4<f32>(0.0);
   sample.frontTopology = sampleWorldFrontField(p);
+  return sample;
+}
+
+fn sampleWorldCameraReconstruction(p: vec3<f32>) -> FlowReconstructionSample {
+  if (!cameraCubicEnabled()) { return sampleWorldFlowReconstructionRaw(p); }
+  var sample: FlowReconstructionSample;
+  sample.velocityDensity = sampleWorldCameraCubic(p, 0u);
+  sample.material = sampleWorldCameraCubic(p, 1u);
+  sample.fireLayer = sampleWorldCameraCubic(p, 2u);
+  sample.microLayer = sampleWorldCameraCubic(p, 3u);
+  sample.frontTopology = sampleWorldCameraCubic(p, 4u).x;
+  sample.kernelTangentRadius = vec4<f32>(0.0);
   return sample;
 }
 
@@ -4181,7 +4196,7 @@ fn mixFlowReconstructionSample(
 }
 
 fn sampleWorldFlowReconstruction(p: vec3<f32>) -> FlowReconstructionSample {
-  let center = sampleWorldFlowReconstructionRaw(p);
+  let center = sampleWorldCameraReconstruction(p);
   let strength = clamp(u.reconstruction_kernel_controls.x, 0.0, 1.0);
   if (strength <= 0.0) { return center; }
   let normal = flowReconstructionNormal(p);
@@ -4198,21 +4213,21 @@ fn sampleWorldFlowReconstruction(p: vec3<f32>) -> FlowReconstructionSample {
   let coherence = clamp(u.reconstruction_kernel_controls.z, 0.0, 2.0);
   let kernelCurlActivity = smoothstep(0.015, 0.30, curlMagnitudeAtCell(sampleCell));
   let radiusWorld = clamp(u.reconstruction_kernel_controls.y, 0.0025, 0.12) * mix(1.0, 1.0 + kernelCurlActivity, coherence * 0.5);
-  let forward = sampleWorldFlowReconstructionRaw(p + tangent * radiusWorld);
-  let backward = sampleWorldFlowReconstructionRaw(p - tangent * radiusWorld);
+  let forward = sampleWorldCameraReconstruction(p + tangent * radiusWorld);
+  let backward = sampleWorldCameraReconstruction(p - tangent * radiusWorld);
   var result = mixFlowReconstructionSample(center, forward, backward, strength);
   result.kernelTangentRadius = vec4<f32>(tangent, radiusWorld);
   return result;
 }
 
 fn sampleWorldFlowReconstructedSidecar(p: vec3<f32>, reconstructed: FlowReconstructionSample) -> vec4<f32> {
-  let center = sampleWorldBoundarySidecar(p);
+  let center = sampleWorldCameraSidecar(p);
   let strength = clamp(u.reconstruction_kernel_controls.x, 0.0, 1.0);
   if (strength <= 0.0) { return center; }
   let tangent = reconstructed.kernelTangentRadius.xyz;
   let radiusWorld = reconstructed.kernelTangentRadius.w;
-  let forward = sampleWorldBoundarySidecar(p + tangent * radiusWorld);
-  let backward = sampleWorldBoundarySidecar(p - tangent * radiusWorld);
+  let forward = sampleWorldCameraSidecar(p + tangent * radiusWorld);
+  let backward = sampleWorldCameraSidecar(p - tangent * radiusWorld);
   let centerWeight = 0.5;
   let neighborWeight = 0.25;
   let filtered = center * centerWeight + (forward + backward) * neighborWeight;
@@ -5494,6 +5509,13 @@ fn liveBoundarySupportAt(p: vec3<f32>, supportWeights: vec4<f32>) -> f32 {
   let microLayer = sampleWorldMicrodetail(p);
   let frontTopology = sampleWorldFrontField(p);
   return boundarySupportFromSlots(velocityDensity, material, fireLayer, microLayer, frontTopology, supportWeights);
+}
+
+fn liveCameraBoundarySupportAt(p: vec3<f32>, supportWeights: vec4<f32>) -> f32 {
+  if (!cameraCubicEnabled()) { return liveBoundarySupportAt(p, supportWeights); }
+  let sample = sampleWorldCameraReconstruction(p);
+  return boundarySupportFromSlots(sample.velocityDensity, sample.material, sample.fireLayer,
+    sample.microLayer, sample.frontTopology, supportWeights);
 }
 
 fn fireRadianceEmission(temp: f32, flameDetail: f32, fireLick: f32, emberFleck: f32, radianceGain: f32, glowGain: f32) -> vec3<f32> {
@@ -7518,10 +7540,12 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       continue;
     }
     var reconstructed: FlowReconstructionSample;
-    if (flowKernelReconstructionActive) {
+    if (fullGridCapture) {
+      reconstructed = sampleWorldFlowReconstructionRaw(p);
+    } else if (flowKernelReconstructionActive) {
       reconstructed = sampleWorldFlowReconstruction(p);
     } else {
-      reconstructed = sampleWorldFlowReconstructionRaw(p);
+      reconstructed = sampleWorldCameraReconstruction(p);
     }
     expensiveSamples = expensiveSamples + 1u;
     let state = reconstructed.velocityDensity;
@@ -7764,13 +7788,13 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
         boundaryFireRidgeEffective = boundarySidecarSample.z;
         boundarySidecarStepFootprintWidth = clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.046, boundarySidecarFootprintWidth * 0.036);
       } else {
-        let boundarySupport = liveBoundarySupportAt(p, boundarySupportWeights);
-        let boundarySupportPx = liveBoundarySupportAt(p + boundaryDx, boundarySupportWeights);
-        let boundarySupportNx = liveBoundarySupportAt(p - boundaryDx, boundarySupportWeights);
-        let boundarySupportPy = liveBoundarySupportAt(p + boundaryDy, boundarySupportWeights);
-        let boundarySupportNy = liveBoundarySupportAt(p - boundaryDy, boundarySupportWeights);
-        let boundarySupportPz = liveBoundarySupportAt(p + boundaryDz, boundarySupportWeights);
-        let boundarySupportNz = liveBoundarySupportAt(p - boundaryDz, boundarySupportWeights);
+        let boundarySupport = liveCameraBoundarySupportAt(p, boundarySupportWeights);
+        let boundarySupportPx = liveCameraBoundarySupportAt(p + boundaryDx, boundarySupportWeights);
+        let boundarySupportNx = liveCameraBoundarySupportAt(p - boundaryDx, boundarySupportWeights);
+        let boundarySupportPy = liveCameraBoundarySupportAt(p + boundaryDy, boundarySupportWeights);
+        let boundarySupportNy = liveCameraBoundarySupportAt(p - boundaryDy, boundarySupportWeights);
+        let boundarySupportPz = liveCameraBoundarySupportAt(p + boundaryDz, boundarySupportWeights);
+        let boundarySupportNz = liveCameraBoundarySupportAt(p - boundaryDz, boundarySupportWeights);
         let boundaryGradient = length(vec3<f32>(
           boundarySupportPx - boundarySupportNx,
           boundarySupportPy - boundarySupportNy,
@@ -14995,6 +15019,7 @@ export function createKaminosVolumePrototype({
     uniforms.fill(0, 41, 47);
     // Reuse a retired history slot; presentation flags retain their own lanes.
     uniforms[44] = controlsSnapshot.flowDebug || 0;
+    uniforms[45] = controlsSnapshot.raymarchInterpolation === 'cubic' ? 1 : 0;
     const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
     uniforms[47] = 0;
     uniforms[48] = controlsSnapshot.fireScale ?? 0.86;

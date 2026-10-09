@@ -2292,6 +2292,13 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="volume-control-section" data-volume-control-section="render-budget">
       <div class="volume-control-section-title">Render Budget</div>
     <div class="slider-row">
+      <label class="slider-label" for="volume-raymarch-interpolation">Interpolation</label>
+      <select id="volume-raymarch-interpolation" data-volume-settings-role="renderer" class="select-input">
+        <option value="linear">Linear</option>
+        <option value="cubic">Cubic</option>
+      </select>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Ray Steps</span>
       <input type="range" id="volume-steps" min="24" max="160" step="1" value="96">
       <span class="slider-val" id="volume-steps-val">96</span>
@@ -17008,6 +17015,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureTierHeroMin', 'volume_pressure_tier_hero_min'],
   ['pressureTierHeroMax', 'volume_pressure_tier_hero_max'],
   ['reactionLiveView', 'volume_reaction_live_view'],
+  ['raymarchInterpolation', 'volume_raymarch_interpolation'],
   ['boundarySidecarSource', 'volume_boundary_sidecar_source'],
   ['boundarySidecarView', 'volume_boundary_sidecar_view'],
   ['boundarySplatMode', 'volume_boundary_splat_mode'],
@@ -22184,6 +22192,7 @@ function readVolumeControls() {
     projection: parseFloat(document.getElementById('volume-projection').value),
     speed: parseFloat(document.getElementById('volume-speed').value),
     raySteps: parseFloat(document.getElementById('volume-steps').value),
+    raymarchInterpolation: document.getElementById('volume-raymarch-interpolation').value,
     adaptiveRays: parseFloat(document.getElementById('volume-adaptive-rays').value),
     occupancySkip: parseFloat(document.getElementById('volume-occupancy-skip').value),
     fireScale: parseFloat(document.getElementById('volume-fire-scale').value),
@@ -23709,6 +23718,9 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_boundary_sidecar_source')) {
     document.getElementById('volume-boundary-sidecar-source').value = normalizeBoundarySidecarSource(params.get('volume_boundary_sidecar_source'));
   }
+  if (params.has('volume_raymarch_interpolation')) {
+    document.getElementById('volume-raymarch-interpolation').value = params.get('volume_raymarch_interpolation') === 'cubic' ? 'cubic' : 'linear';
+  }
   if (params.has('volume_boundary_sidecar_view')) {
     document.getElementById('volume-boundary-sidecar-view').value = normalizeBoundarySidecarView(params.get('volume_boundary_sidecar_view'));
   }
@@ -24111,6 +24123,7 @@ async function initKaminosVolumeRoute() {
   document.getElementById('volume-emitter-aperture-pattern').addEventListener('change', () => { delete document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest; });
   for (const id of [
     'volume-emitter-source-law',
+    'volume-raymarch-interpolation',
     'volume-emitter-source-depth',
     'volume-emitter-inlet-profile',
     'volume-emitter-momentum-linked',

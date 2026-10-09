@@ -1693,6 +1693,14 @@
   ],
   "rendererControls": [
     {
+      "key": "volume-raymarch-interpolation",
+      "param": "volume_raymarch_interpolation",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "allowedValues": ["linear", "cubic"],
+      "additiveDefault": "linear"
+    },
+    {
       "key": "volume-flow-kernel-strength",
       "param": "volume_flow_kernel_strength",
       "tagName": "INPUT",

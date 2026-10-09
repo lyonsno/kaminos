@@ -56,7 +56,7 @@ assert.doesNotMatch(
 assert.doesNotMatch(core, /fn flowReconstructionOpticalSupport\b/, 'optional filtering does not become a second authority for material support');
 assert.match(
   traversal,
-  /if \(flowKernelReconstructionActive\) \{[\s\S]*reconstructed = sampleWorldFlowReconstruction\(p\);[\s\S]*\} else \{[\s\S]*reconstructed = sampleWorldFlowReconstructionRaw\(p\);/,
+  /if \(flowKernelReconstructionActive\) \{[\s\S]*reconstructed = sampleWorldFlowReconstruction\(p\);[\s\S]*\} else \{[\s\S]*reconstructed = sampleWorldCameraReconstruction\(p\);/,
   'explicit reconstruction filters only already-supported samples while zero stays direct trilinear',
 );
 assert.equal(
@@ -81,9 +81,12 @@ assert.match(
 const sampleBranch = traversal.slice(
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 );
+const cameraSampler = balancedWgslBlock(executableCore, 'fn sampleWorldCameraReconstruction(');
+assert.match(cameraSampler, /if \(!cameraCubicEnabled\(\)\) \{ return sampleWorldFlowReconstructionRaw\(p\); \}/,
+  'linear camera choice returns the unchanged raw sampler before cubic work');
 assert.match(
   sampleBranch,
-  /^var reconstructed: FlowReconstructionSample;\s*if \(flowKernelReconstructionActive\) \{\s*reconstructed = sampleWorldFlowReconstruction\(p\);\s*\} else \{\s*reconstructed = sampleWorldFlowReconstructionRaw\(p\);\s*\}\s*expensiveSamples = expensiveSamples \+ 1u;\s*$/,
+  /^var reconstructed: FlowReconstructionSample;\s*if \(fullGridCapture\) \{\s*reconstructed = sampleWorldFlowReconstructionRaw\(p\);\s*\} else if \(flowKernelReconstructionActive\) \{\s*reconstructed = sampleWorldFlowReconstruction\(p\);\s*\} else \{\s*reconstructed = sampleWorldCameraReconstruction\(p\);\s*\}\s*expensiveSamples = expensiveSamples \+ 1u;\s*$/,
   'raw zero route must contain one direct trilinear assignment and no filtering',
 );
 }
@@ -129,7 +132,7 @@ const falseClosureMutations = [
     'hidden filter on raw zero route',
     source => source
       .replace('fn sampleWorldFlowReconstructionRaw(', 'fn hiddenRawFilter(p: vec3<f32>, center: FlowReconstructionSample) -> FlowReconstructionSample { return mixFlowReconstructionSample(center, sampleWorldFlowReconstructionRaw(p + vec3<f32>(0.01)), sampleWorldFlowReconstructionRaw(p - vec3<f32>(0.01)), 0.5); }\n\nfn sampleWorldFlowReconstructionRaw(')
-      .replace('      reconstructed = sampleWorldFlowReconstructionRaw(p);', '      reconstructed = sampleWorldFlowReconstructionRaw(p);\n      reconstructed = hiddenRawFilter(p, reconstructed);'),
+      .replace('      reconstructed = sampleWorldCameraReconstruction(p);', '      reconstructed = sampleWorldCameraReconstruction(p);\n      reconstructed = hiddenRawFilter(p, reconstructed);'),
     /raw zero route must contain one direct trilinear assignment and no filtering/,
   ],
   [

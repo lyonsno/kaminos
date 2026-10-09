@@ -36,10 +36,10 @@ const reconstructionFunction = core.match(/fn sampleWorldFlowReconstruction\(p: 
 const reconstructionNormalFunction = core.match(/fn flowReconstructionNormal\(p: vec3<f32>\) -> vec3<f32> \{([\s\S]*?)\n\}/)?.[1] || '';
 const reconstructionMixFunction = core.match(/fn mixFlowReconstructionSample\([\s\S]*?\) -> FlowReconstructionSample \{([\s\S]*?)\n\}/)?.[1] || '';
 const reconstructionRawFunction = core.match(/fn sampleWorldFlowReconstructionRaw\(p: vec3<f32>\) -> FlowReconstructionSample \{([\s\S]*?)\n\}/)?.[1] || '';
-assert.match(reconstructionFunction, /let center = sampleWorldFlowReconstructionRaw\(p\)/, 'every reconstruction starts from the authoritative trilinear center sample');
+assert.match(reconstructionFunction, /let center = sampleWorldCameraReconstruction\(p\)/, 'every reconstruction starts from the explicit camera interpolation choice');
 assert.match(reconstructionFunction, /if \(strength <= 0\.0\) \{ return center; \}/, 'zero strength is an exact identity path before auxiliary taps');
-assert.match(reconstructionFunction, /let forward = sampleWorldFlowReconstructionRaw\(p \+ tangent \* radiusWorld\)/, 'positive tangent tap remains a trilinear world sample');
-assert.match(reconstructionFunction, /let backward = sampleWorldFlowReconstructionRaw\(p - tangent \* radiusWorld\)/, 'negative tangent tap is symmetric with the positive tap');
+assert.match(reconstructionFunction, /let forward = sampleWorldCameraReconstruction\(p \+ tangent \* radiusWorld\)/, 'positive tangent tap uses the explicit camera interpolation choice');
+assert.match(reconstructionFunction, /let backward = sampleWorldCameraReconstruction\(p - tangent \* radiusWorld\)/, 'negative tangent tap is symmetric with the positive tap');
 assert.match(reconstructionMixFunction, /centerWeight = 0\.5/, 'the fixed center tap is positive');
 assert.match(reconstructionMixFunction, /neighborWeight = 0\.25/, 'both fixed neighbor taps are positive and normalized with the center');
 const radiusExpression = reconstructionFunction.match(/let radiusWorld\s*=([^;]+);/)?.[1] || '';
@@ -50,14 +50,14 @@ assert.match(reconstructionFunction, /kernelCurlActivity[\s\S]*coherence[\s\S]*r
 assert.doesNotMatch(reconstructionFunction, /divergenceAtCell[\s\S]*tangent/, 'divergence does not become a sampling direction');
 assert.doesNotMatch(reconstructionRawFunction, /sampleWorldBoundarySidecar/, 'kernel-off raymarch does not add sidecar reads to modes that never consume the sidecar');
 const reconstructedSidecarFunction = core.match(/fn sampleWorldFlowReconstructedSidecar\([\s\S]*?\) -> vec4<f32> \{([\s\S]*?)\n\}/)?.[1] || '';
-assert.match(reconstructedSidecarFunction, /let center = sampleWorldBoundarySidecar\(p\)/, 'sidecar reconstruction stays lazy at its semantic consumer');
+assert.match(reconstructedSidecarFunction, /let center = sampleWorldCameraSidecar\(p\)/, 'sidecar reconstruction stays lazy at its semantic consumer');
 assert.match(reconstructedSidecarFunction, /if \(strength <= 0\.0\) \{ return center; \}/, 'kernel-off sidecar sampling returns before neighbor taps');
 
 const raymarchLoopStart = core.indexOf('let expensiveSampleBudget');
 const raymarchLoopEnd = core.indexOf('let exposed =', raymarchLoopStart);
 const raymarchLoop = core.slice(raymarchLoopStart, raymarchLoopEnd);
 assert.match(raymarchLoop, /if \(flowKernelReconstructionActive\) \{[\s\S]*reconstructed = sampleWorldFlowReconstruction\(p\)/, 'raymarch consumes the reconstructed semantic bundle only on the explicit reconstruction path');
-assert.match(raymarchLoop, /let directSupport = directCellOpticalSupport\(p\);[\s\S]*if \(flowKernelReconstructionActive\)[\s\S]*else \{[\s\S]*reconstructed = sampleWorldFlowReconstructionRaw\(p\)/, 'kernel-off raymarch preserves direct admission before its one trilinear semantic sample');
+assert.match(raymarchLoop, /let directSupport = directCellOpticalSupport\(p\);[\s\S]*if \(flowKernelReconstructionActive\)[\s\S]*else \{[\s\S]*reconstructed = sampleWorldCameraReconstruction\(p\)/, 'kernel-off raymarch preserves direct admission before its chosen interpolation sample');
 assert.match(raymarchLoop, /reconstructed\.velocityDensity[\s\S]*reconstructed\.material[\s\S]*reconstructed\.fireLayer[\s\S]*reconstructed\.microLayer[\s\S]*reconstructed\.frontTopology/, 'raymarch consumes every reconstructed field lane together');
 
 assert.match(core, /struct BoundarySplatCamera[\s\S]*reconstructionControls:\s*vec4<f32>/, 'splat compaction receives the same effective reconstruction controls');

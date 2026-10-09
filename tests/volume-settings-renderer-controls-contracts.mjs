@@ -11,6 +11,7 @@ const schema = JSON.parse(readFileSync(join(root, 'volume-settings-preset-schema
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 
 const expectedRendererControls = [
+  ['volume-raymarch-interpolation', 'volume_raymarch_interpolation'],
   ['volume-flow-kernel-strength', 'volume_flow_kernel_strength'],
   ['volume-flow-kernel-radius', 'volume_flow_kernel_radius'],
   ['volume-flow-kernel-coherence', 'volume_flow_kernel_coherence'],
@@ -59,7 +60,7 @@ const rendererControls = Object.fromEntries(contractSchema.rendererControls.map(
     param: descriptor.param,
     tagName: descriptor.tagName,
     type: descriptor.type,
-    value: descriptor.param === 'volume_flow_kernel_radius' ? 0.03 : 1,
+    value: descriptor.param === 'volume_raymarch_interpolation' ? 'cubic' : descriptor.param === 'volume_flow_kernel_radius' ? 0.03 : 1,
   },
 ]));
 const route = new URL('http://kaminos.invalid/');
@@ -103,6 +104,7 @@ const target = buildVolumeSettingsPresetVisualTarget(receipt, 'http://127.0.0.1:
 assert.equal(target.searchParams.get('volume_flow_kernel_strength'), '1');
 assert.equal(target.searchParams.get('volume_flow_kernel_radius'), '0.03');
 assert.equal(target.searchParams.get('volume_flow_kernel_coherence'), '1');
-assert.equal(receipt.rendererControlCount, 3);
+assert.equal(target.searchParams.get('volume_raymarch_interpolation'), 'cubic');
+assert.equal(receipt.rendererControlCount, 4);
 
 console.log('volume settings renderer controls contracts passed');
