@@ -57,9 +57,10 @@ const CASES = [
 
 export const BENCH_VARIANTS = [
   { id: 't64-f32', gemmTile: { tm: 4, tn: 4, bk: 16 }, f16: false },
-  { id: 't128-f32', gemmTile: { tm: 8, tn: 8, bk: 8 }, f16: false },
-  { id: 't64-f16w', gemmTile: { tm: 4, tn: 4, bk: 16 }, f16: true },
-  { id: 't128-f16w', gemmTile: { tm: 8, tn: 8, bk: 8 }, f16: true },
+  { id: 't64-bk32', gemmTile: { tm: 4, tn: 4, bk: 32 }, f16: false },
+  { id: 't64x128', gemmTile: { tm: 4, tn: 8, bk: 16 }, f16: false },
+  { id: 't32x64', gemmTile: { tm: 2, tn: 4, bk: 16 }, f16: false },
+  { id: 'attn-vec4', gemmTile: { tm: 4, tn: 4, bk: 16 }, f16: false, attentionKernel: 'vec4', attentionOnly: true },
 ];
 
 export async function runSuperMatBench({ iterations = 6, variants = BENCH_VARIANTS, cases = CASES } = {}) {
@@ -72,7 +73,9 @@ export async function runSuperMatBench({ iterations = 6, variants = BENCH_VARIAN
       let baseline = null;
       for (const variant of variants) {
         if (testCase.kind === 'attention' && variant.f16) continue;
-        const ops = createSuperMatOps(device, { label: `bench.${variant.id}`, gemmTile: variant.gemmTile });
+        if (variant.attentionOnly && testCase.kind !== 'attention') continue;
+        const ops = createSuperMatOps(device, { label: `bench.${variant.id}`, gemmTile: variant.gemmTile,
+          attentionKernel: variant.attentionKernel ?? 'scalar' });
         const inputs = [];
         let flops, run;
         if (testCase.kind === 'conv') {

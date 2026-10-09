@@ -4,7 +4,7 @@
 import {
   gemmShader, gemmTileShape, GEMM_PARAMS_WORDS, GROUPNORM_CHUNK, groupNormPartialShader,
   groupNormCombineShader, groupNormApplyShader, layerNormShader, softmaxShader, gegluShader,
-  affineShader, flashAttentionShader, FLASH_HEAD_DIM, FLASH_QUERY_TILE,
+  affineShader, flashAttentionShader, flashAttentionVec4Shader, FLASH_HEAD_DIM, FLASH_QUERY_TILE,
 } from './supermat-kernels.js';
 
 const STORAGE = 0x0080, COPY_SRC = 0x0004, COPY_DST = 0x0008, UNIFORM = 0x0040;
@@ -33,7 +33,9 @@ function dispatch1D(total, workgroupSize = 256, limit = 65535) {
 
 // attention: 'streaming' (online softmax, no score matrix) or 'materialized'.
 // gemmTile: { tm, tn, bk } per-thread outputs and K step (16x16 threads per workgroup).
-export function createSuperMatOps(device, { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 } } = {}) {
+// attentionKernel: 'scalar' or 'vec4' streaming implementation.
+export function createSuperMatOps(device, { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 },
+  attentionKernel = 'scalar' } = {}) {
   const tileShape = gemmTileShape(gemmTile);
   if (!['streaming', 'materialized'].includes(attention)) throw new Error(`unknown attention mode ${attention}`);
   const pipelines = new Map();
@@ -332,7 +334,7 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
       const floats = new Float32Array(words.buffer);
       words.set([queries, keys, channels, channels, channels, rowBase], 0);
       floats[6] = scale;
-      dispatch(flashAttentionShader(), [bindingView(q), bindingView(k), bindingView(v), bindingView(out), params(words)],
+      dispatch(attentionKernel === 'vec4' ? flashAttentionVec4Shader() : flashAttentionShader(), [bindingView(q), bindingView(k), bindingView(v), bindingView(out), params(words)],
         [Math.ceil(count / FLASH_QUERY_TILE), heads, 1]);
       pendingFlops += 4 * count * keys * FLASH_HEAD_DIM * heads;
       if (rows < queries) await yieldPoint(`${name}[${rowBase}]`);

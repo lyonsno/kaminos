@@ -314,3 +314,60 @@ fn main(@builtin(local_invocation_index) lane:u32, @builtin(workgroup_id) wid:ve
   if(live){let inv=1.0/norm;for(var d=0u;d<${D}u;d++){o[row*p.out_stride+head*${D}u+d]=acc[d]*inv;}}
 }`;
 }
+
+// Vectorized streaming attention: same online-softmax recurrence as
+// flashAttentionShader, with Q held as 16 vec4s and K/V tiles in vec4
+// workgroup memory so each key dot and value update is 16 vec4 FMAs.
+export function flashAttentionVec4Shader({ keyTile = 32 } = {}) {
+  const D4 = FLASH_HEAD_DIM / 4, T = keyTile;
+  return `
+struct Params { queries:u32, keys:u32, q_stride:u32, kv_stride:u32, out_stride:u32, row_base:u32, scale:f32, z0:u32 };
+${storage(0, 'q')}${storage(1, 'k')}${storage(2, 'v')}${storage(3, 'o', true)}${uniform(4, 'Params')}
+var<workgroup> kt:array<vec4<f32>,${T * D4}>;
+var<workgroup> vt:array<vec4<f32>,${T * D4}>;
+@compute @workgroup_size(${FLASH_QUERY_TILE})
+fn main(@builtin(local_invocation_index) lane:u32, @builtin(workgroup_id) wid:vec3<u32>) {
+  let head=wid.y;let row=p.row_base+wid.x*${FLASH_QUERY_TILE}u+lane;let live=row<p.queries;
+  var qv:array<vec4<f32>,${D4}>;var acc:array<vec4<f32>,${D4}>;
+  if(live){
+    let qb=row*p.q_stride+head*${FLASH_HEAD_DIM}u;
+    for(var d=0u;d<${D4}u;d++){qv[d]=vec4<f32>(q[qb+4u*d],q[qb+4u*d+1u],q[qb+4u*d+2u],q[qb+4u*d+3u])*p.scale;}
+  }
+  var running_max=-3.402823e38;var norm=0.0;
+  for(var k0=0u;k0<p.keys;k0+=${T}u){
+    for(var i=lane;i<${T * D4}u;i+=${FLASH_QUERY_TILE}u){
+      let key=k0+i/${D4}u;let d=i%${D4}u;var kv=vec4<f32>(0.0);var vv=vec4<f32>(0.0);
+      if(key<p.keys){
+        let b=key*p.kv_stride+head*${FLASH_HEAD_DIM}u+4u*d;
+        kv=vec4<f32>(k[b],k[b+1u],k[b+2u],k[b+3u]);vv=vec4<f32>(v[b],v[b+1u],v[b+2u],v[b+3u]);
+      }
+      kt[i]=kv;vt[i]=vv;
+    }
+    workgroupBarrier();
+    if(live){
+      var s:array<f32,${T}>;var tile_max=running_max;
+      for(var j=0u;j<${T}u;j++){
+        var dot4=vec4<f32>(0.0);
+        for(var d=0u;d<${D4}u;d++){dot4=fma(qv[d],kt[j*${D4}u+d],dot4);}
+        var dot=dot4.x+dot4.y+dot4.z+dot4.w;
+        if(k0+j>=p.keys){dot=-3.402823e38;}
+        s[j]=dot;tile_max=max(tile_max,dot);
+      }
+      let correction=exp(running_max-tile_max);
+      norm*=correction;
+      for(var d=0u;d<${D4}u;d++){acc[d]*=correction;}
+      for(var j=0u;j<${T}u;j++){
+        if(k0+j>=p.keys){continue;}
+        let w=exp(s[j]-tile_max);norm+=w;
+        for(var d=0u;d<${D4}u;d++){acc[d]=fma(vec4<f32>(w),vt[j*${D4}u+d],acc[d]);}
+      }
+      running_max=tile_max;
+    }
+    workgroupBarrier();
+  }
+  if(live){
+    let inv=1.0/norm;let ob=row*p.out_stride+head*${FLASH_HEAD_DIM}u;
+    for(var d=0u;d<${D4}u;d++){let r=acc[d]*inv;o[ob+4u*d]=r.x;o[ob+4u*d+1u]=r.y;o[ob+4u*d+2u]=r.z;o[ob+4u*d+3u]=r.w;}
+  }
+}`;
+}
