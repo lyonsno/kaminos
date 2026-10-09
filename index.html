@@ -25591,6 +25591,13 @@ function flameSettingsStateProblems(state) {
       } else if(source.type==='color'&&!/^#[0-9a-f]{6}$/i.test(value))problem(`Invalid color ${id}`);
     }
   }
+  if(state.domControls?.['volume-emitter-source-law']?.value==='immersed-source') {
+    try {
+      const radius=state.domControls['volume-immersed-radius'];
+      immersedControlsForFlamePose({immersedRadius:Number(radius?.rawValue??radius?.value)},
+        flamePoseToDomain(state.sourcePose||flameEmitterPose,flameDomainTranslation),false);
+    } catch(error) {problems.push({id:'volume-immersed-radius',message:error.message});}
+  }
   return problems;
 }
 function checkFlameSettingsState(state) {
@@ -25666,6 +25673,11 @@ function installAuthoringParameterEditing() {
       else if(control.type==='checkbox'){if(typeof state.value!=='boolean')throw Error('Expected an enabled/disabled value');}
       else if(control.type==='color'){if(!/^#[\da-f]{6}$/i.test(state.value))throw Error('Expected a hex color');}
       else if(!Number.isFinite(state.value)||(control.min!==''&&state.value<Number(control.min))||(control.max!==''&&state.value>Number(control.max)))throw Error('Parameter is outside its supported range');
+      if(['volume-immersed-radius','volume-emitter-source-law'].includes(control.id)) {
+        const next=flameSettingsState();
+        next.domControls[control.id]={...next.domControls[control.id],value:state.value,rawValue:String(state.value)};
+        checkFlameSettingsState(next);
+      }
       return {value:state.value};
     };
     const id=`@parameter:${control.id}`,label=`Adjust ${control.id.replace(/^volume-/,'').replaceAll('-',' ')}`;
@@ -25673,6 +25685,23 @@ function installAuthoringParameterEditing() {
     edits.register(id,definition);authoringParameterTargets.set(id,definition);
     authoringControlSessions.push(installSceneControlHistory({edits,id:'@flame-settings',
       controls:[control,...document.querySelectorAll(`[data-authoring-alias="${control.id}"]`)],label,onError:error=>showFlameEditRefused(error)}));
+    if(['volume-immersed-radius','volume-emitter-source-law'].includes(control.id)) {
+      // DOM listener exceptions cannot reject dispatchEvent in the caller.
+      // Refuse an invalid aperture before the live runtime handlers see it.
+      const validatePreview=event=>{
+        const active=edits.state().active;
+        if(active?.id!=='@flame-settings')return;
+        try {checkFlameSettingsState(flameSettingsState());}
+        catch(error) {
+          event.stopImmediatePropagation();
+          writeFlameSettingsState(active.before);
+          edits.cancel();
+          showFlameEditRefused(error);
+        }
+      };
+      control.addEventListener('input',validatePreview,true);
+      control.addEventListener('change',validatePreview,true);
+    }
   }
   for(const id of ['fire-light-gain-stops','exposure-slider','env-intensity-slider','env-rotation-slider','env-bg-brightness','env-bg-contrast']) {
     const control=document.getElementById(id);if(!control)continue;
