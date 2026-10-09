@@ -56,6 +56,19 @@ export async function runVisibilityComparison({page,out,report,save,iterations,c
       device.queue.writeTexture({texture:window.__beamingReplayTexture},new Float32Array(source),{bytesPerRow:field.dimensions[0]*16,rowsPerImage:field.dimensions[1]},field.dimensions);
       window.__beamingReplayField={...field,texture:window.__beamingReplayTexture,generation,scatteringGeneration:generation};
     },{source:Array.from(replay.source),generation});
+    if(occupancy&&i===0){
+      // A new source texture rebinds the existing scattering-source consumer.
+      // Pay and receipt that one-time replay installation before recurring work;
+      // the same replay texture remains bound throughout all measured pairs.
+      report.replaySetup=await page.evaluate(async()=>{
+        const {api,options}=window.__beamingOriginalCapture,device=window.__beamingGatherDevice;
+        const before=window.__beamingAllocations.pipelines.length,start=performance.now();
+        const metadata=api.encode(window.__beamingReplayField,options);
+        await device.queue.onSubmittedWorkDone();
+        return {metadata,submitAndCompleteMs:performance.now()-start,newPipelines:window.__beamingAllocations.pipelines.slice(before),reason:'one-time replacement of live source texture with stable replay texture'};
+      });
+      preparations=report.replaySetup.metadata.angularCache.visibilityPreparations;await save();
+    }
     const pair={index:i,guide,material:replay?.metadata.kind??'held',generation,arms:[],parity:null};report.pairs.push(pair);await save();
     const fields=[];
     for(const mode of ['unbounded',candidate]){
