@@ -32,7 +32,7 @@ try {
     const evaluation = await browser.cdp.call('Runtime.evaluate',
       { expression: 'JSON.stringify(window.__supermatDemo ?? null)', returnByValue: true }, sessionId);
     state = JSON.parse(evaluation.result.value ?? 'null');
-    if (state?.status === 'done' || state?.status === 'error') break;
+    if (['done', 'error', 'stopped'].includes(state?.status)) break;
     if (Date.now() - started > timeoutMs) throw new Error(`demo did not finish within ${timeoutMs} ms (status ${state?.status})`);
     await new Promise(resolve => setTimeout(resolve, 250));
   }
@@ -46,7 +46,7 @@ try {
   await fs.writeFile(screenshot, Buffer.from(shot.data, 'base64'));
   report.screenshot = screenshot;
   report.phase = 'complete';
-  report.status = state.status === 'done' ? 'passed' : 'page-error';
+  report.status = state.status === 'done' ? 'passed' : state.status === 'stopped' ? 'stopped' : 'page-error';
 } catch (error) {
   report.error = `${error?.name ?? 'Error'}: ${error?.message ?? String(error)}`;
   process.exitCode = 1;

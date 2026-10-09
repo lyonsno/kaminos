@@ -31,10 +31,14 @@
   <h1>SuperMat materials</h1>
   <label class="file">Choose image<input id="file" type="file" accept="image/*"></label>
   <button id="run" disabled>Infer materials</button>
+  <button id="pause" disabled>Pause</button>
+  <button id="stop" disabled>Stop</button>
+  <label class="toggle"><input id="cooperative" type="checkbox" checked>Cooperative</label>
   <label class="toggle"><input id="mask" type="checkbox" checked>Hide background</label>
   <span id="status">Loading…</span>
 </header>
 <main id="drop">
+  <figure><canvas id="scene" width="512" height="512"></canvas><figcaption>Live scene (same GPU device)</figcaption></figure>
   <figure><canvas id="input" width="512" height="512"></canvas><figcaption>Input</figcaption></figure>
   <figure><canvas id="albedo" width="512" height="512"></canvas><figcaption>Albedo <a id="albedo-link" download="albedo.png" hidden>PNG</a></figcaption></figure>
   <figure><canvas id="roughness" width="512" height="512"></canvas><figcaption>Roughness <a id="roughness-link" download="roughness.png" hidden>PNG</a></figcaption></figure>

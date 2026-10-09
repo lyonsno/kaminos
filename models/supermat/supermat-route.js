@@ -9,6 +9,10 @@ import { preprocessForSuperMat, resizeRgbaBilinear } from './supermat-preprocess
 
 export const SUPERMAT_ROUTE_ID = 'supermat.image-to-pbr.webgpu-local.v0';
 export const SUPERMAT_IMAGE_SIZE = 512;
+// Encoded work per cooperative duty. About 8 ms of GPU time at the ~2 TFLOP/s
+// this F32 route sustains on an M4 Max; single ops larger than this (the
+// full-resolution decoder convs) still submit whole.
+export const DEFAULT_DUTY_FLOPS = 16e9;
 const PACKAGE_SCHEMA = 'supermat.browser-weight-package.v0';
 
 // numpy (x * 255.0).round() on float32: half-to-even after an F32 product.
@@ -79,17 +83,21 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
     revision: weightPackage.revision, weightDtype: 'f32', imageSize: SUPERMAT_IMAGE_SIZE,
     provenance: weightPackage.provenance,
   });
-  let runs = 0, released = false;
+  let runs = 0, released = false, busy = false;
 
   // image: { width, height, data: RGBA bytes }. Returns 512x512 RGBA8 maps,
-  // the float planes and per-phase timings.
-  async function run({ image, signal: runSignal } = {}) {
+  // the float planes and per-phase timings. `schedule` makes the run
+  // cooperative: { runtime, invocation } from a per-run route job, plus an
+  // optional kit inference control (pause/resume), AbortSignal and dutyFlops.
+  async function run({ image, schedule = null } = {}) {
     if (released) throw new Error('SuperMat adapter is released');
+    if (busy) throw new Error('SuperMat adapter already has an active run');
+    busy = true;
     const timings = {};
+    const dutiesBefore = ops.stats.duties, historyStart = ops.stats.dutyHistory.length;
     const mark = async (name, start) => {
       await ops.flush();
       timings[name] = performance.now() - start;
-      runSignal?.throwIfAborted?.();
       onProgress?.({ phase: name });
     };
     let t = performance.now();
@@ -100,14 +108,15 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
     device.pushErrorScope('out-of-memory');
     let error = null;
     try {
+      ops.setSchedule(schedule ? { dutyFlops: DEFAULT_DUTY_FLOPS, ...schedule } : null);
       t = performance.now();
       const pixels = ops.upload([3, SUPERMAT_IMAGE_SIZE, SUPERMAT_IMAGE_SIZE], input, 'input');
-      const latent = encodeImage(ops, w, pixels);
+      const latent = await encodeImage(ops, w, pixels);
       ops.release(pixels);
       await mark('encodeMs', t);
       t = performance.now();
       const tembSilu = timeEmbedding(ops, w);
-      const heads = runUnet(ops, w, latent, { tensor: w('conditioning.empty_prompt'), rows: 77 }, tembSilu);
+      const heads = await runUnet(ops, w, latent, { tensor: w('conditioning.empty_prompt'), rows: 77 }, tembSilu);
       ops.release(latent);
       ops.release(tembSilu);
       await mark('unetMs', t);
@@ -116,7 +125,7 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
         t = performance.now();
         const x0 = ops.affine({ x: v, shape: v.shape, scale: vScale, name: `x0.${index}` });
         ops.release(v);
-        const decoded = decodeLatent(ops, w, x0, { call: index });
+        const decoded = await decodeLatent(ops, w, x0, { call: index });
         ops.release(x0);
         await mark(index === 0 ? 'decodeAlbedoMs' : 'decodeOrmMs', t);
         t = performance.now();
@@ -128,12 +137,17 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
       const alpha = new Uint8ClampedArray(SUPERMAT_IMAGE_SIZE * SUPERMAT_IMAGE_SIZE);
       for (let i = 0; i < alpha.length; i++) alpha[i] = mask.data[i * 4 + 3];
       runs++;
+      const duties = ops.stats.dutyHistory.slice(historyStart).map(row => ({ ...row }));
       return { width: SUPERMAT_IMAGE_SIZE, height: SUPERMAT_IMAGE_SIZE, maps, planes: { albedo: planes[0], orm: planes[1] },
-        alpha, timings, run: runs, identity, opStats: { ...ops.stats } };
+        alpha, timings, run: runs, identity, cooperative: Boolean(schedule),
+        dutyCount: ops.stats.duties - dutiesBefore, duties, opStats: { ...ops.stats, dutyHistory: undefined } };
     } catch (caught) {
       error = caught;
+      await ops.discard();
       throw caught;
     } finally {
+      ops.setSchedule(null);
+      busy = false;
       const oom = await device.popErrorScope();
       const validation = await device.popErrorScope();
       const gpuError = oom ?? validation;

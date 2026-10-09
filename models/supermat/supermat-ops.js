@@ -36,7 +36,11 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
   const pool = new Map();
   const owned = new Set();
   let encoder = null, pass = null, transient = [];
-  const stats = { dispatches: 0, pipelines: 0, createdBuffers: 0, createdBytes: 0, liveBytes: 0, peakLiveBytes: 0, flushes: 0 };
+  // Cooperative schedule for one run: { runtime, invocation, control, signal, dutyFlops }.
+  // Without it every op lands in one submission at flush().
+  let schedule = null, pendingFlops = 0, lastFence = Promise.resolve();
+  const stats = { dispatches: 0, pipelines: 0, createdBuffers: 0, createdBytes: 0, liveBytes: 0, peakLiveBytes: 0, flushes: 0,
+    duties: 0, dutyHistory: [] };
 
   function pipeline(code) {
     let entry = pipelines.get(code);
@@ -111,7 +115,86 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
     encoder.copyBufferToBuffer(src.buffer, src.offset + sourceOffset, dst.buffer, dst.offset + destinationOffset, size);
   }
 
+  function throwIfStopped() {
+    const signal = schedule?.signal;
+    if (!signal?.aborted) return;
+    const error = new Error(String(signal.reason?.message ?? signal.reason ?? 'SuperMat stopped'));
+    error.name = 'AbortError';
+    throw error;
+  }
+
+  // Submit the encoded block as one command duty: wait for the previous duty's
+  // queue fence (one duty in flight), pass the pause gate, let pending
+  // foreground frames submit first, then submit and settle.
+  async function submitDuty(label) {
+    if (pass) { pass.end(); pass = null; }
+    throwIfStopped();
+    if (!encoder) return;
+    const commands = encoder.finish();
+    encoder = null;
+    const buffers = transient;
+    transient = [];
+    const flops = pendingFlops;
+    pendingFlops = 0;
+    await lastFence;
+    const { runtime, invocation, control } = schedule;
+    const work = async () => {
+      throwIfStopped();
+      const descriptor = await runtime.prepareCommandDutyAtBoundary({ phase: label, kind: 'compute',
+        metadata: { model: 'supermat', estimatedFlops: flops } }, invocation);
+      throwIfStopped();
+      runtime.settleCommandDuty(descriptor, { status: 'encoded' });
+      device.queue.submit([commands]);
+    };
+    const submitted = performance.now();
+    if (control) await control.runDuty(work); else await work();
+    stats.duties++;
+    const row = { label, estimatedFlops: flops, submittedAt: submitted };
+    stats.dutyHistory.push(row);
+    lastFence = device.queue.onSubmittedWorkDone().then(() => {
+      row.queueMs = performance.now() - submitted;
+      for (const buffer of buffers) buffer.destroy();
+    });
+  }
+
+  // Graph yield point: submit once the encoded block reaches the duty budget.
+  async function yieldPoint(label) {
+    if (!schedule) return;
+    throwIfStopped();
+    if (pendingFlops >= (schedule.dutyFlops ?? 0)) await submitDuty(label);
+  }
+
+  // Drop unsubmitted work after a failed or stopped run so the next run starts clean.
+  async function discard() {
+    if (pass) { pass.end(); pass = null; }
+    encoder = null;
+    pendingFlops = 0;
+    const buffers = transient;
+    transient = [];
+    await lastFence.catch(() => {});
+    await device.queue.onSubmittedWorkDone();
+    for (const buffer of buffers) buffer.destroy();
+    schedule = null;
+    lastFence = Promise.resolve();
+  }
+
+  function setSchedule(next) {
+    if (encoder || pass) throw new Error('cannot change the SuperMat schedule with unsubmitted work');
+    if (next && (typeof next.runtime?.prepareCommandDutyAtBoundary !== 'function'
+      || typeof next.runtime?.settleCommandDuty !== 'function' || !next.invocation)) {
+      throw new Error('SuperMat schedule requires a route runtime and its queued invocation');
+    }
+    schedule = next;
+    pendingFlops = 0;
+    lastFence = Promise.resolve();
+  }
+
   async function flush() {
+    if (schedule) {
+      await submitDuty('flush');
+      await lastFence;
+      return;
+    }
     if (pass) { pass.end(); pass = null; }
     const buffers = transient;
     transient = [];
@@ -158,6 +241,7 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
     const groups = [Math.ceil(N / GEMM_TILE), Math.ceil(M / GEMM_TILE), batch];
     if (groups.some(value => value > 65535)) throw new RangeError('gemm grid exceeds device workgroup limit');
     dispatch(gemmShader(layout), views, groups);
+    pendingFlops += 2 * M * N * K * batch;
     return c;
   }
 
@@ -259,5 +343,6 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
     owned.clear();
   }
 
-  return { alloc, release, gemm, conv2d, groupNorm, layerNorm, softmax, geglu, affine, copy, upload, read, flush, destroy, stats };
+  return { alloc, release, gemm, conv2d, groupNorm, layerNorm, softmax, geglu, affine, copy, upload, read, flush, yieldPoint,
+    setSchedule, discard, destroy, stats };
 }

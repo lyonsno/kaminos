@@ -97,7 +97,7 @@ export async function runSuperMatWitness({ stage, fixtureSha256, weightsSha256 }
     if (stage === 'vae-encoder' || stage === 'full') {
       const rgb = await fetchReference(reference, 'input.rgb');
       const image = ops.upload(squeezeBatch(rgb.shape), rgb.values, 'input.rgb');
-      outputs.latent = encodeImage(ops, w, image, { capture });
+      outputs.latent = await encodeImage(ops, w, image, { capture });
       ops.release(image);
     }
     if (stage === 'unet') {
@@ -107,7 +107,7 @@ export async function runSuperMatWitness({ stage, fixtureSha256, weightsSha256 }
     if (stage === 'unet' || stage === 'full') {
       const context = { tensor: tensors['conditioning.empty_prompt'], rows: 77 };
       const tembSilu = timeEmbedding(ops, w, { capture });
-      const [vAlbedo, vOrm] = runUnet(ops, w, outputs.latent, context, tembSilu, { capture });
+      const [vAlbedo, vOrm] = await runUnet(ops, w, outputs.latent, context, tembSilu, { capture });
       ops.release(tembSilu);
       const scale = weightPackage.constants?.vScale;
       if (!Number.isFinite(scale)) throw new Error('weight package lacks the source scheduler vScale constant');
@@ -119,7 +119,8 @@ export async function runSuperMatWitness({ stage, fixtureSha256, weightsSha256 }
       });
     }
     if (stage === 'full') {
-      outputs.images = outputs.x0.map((x0, call) => decodeLatent(ops, w, x0, { capture, call }));
+      outputs.images = [];
+      for (const [call, x0] of outputs.x0.entries()) outputs.images.push(await decodeLatent(ops, w, x0, { capture, call }));
       capture('output.albedo', outputs.images[0]);
       capture('output.orm', outputs.images[1]);
     }
@@ -128,7 +129,7 @@ export async function runSuperMatWitness({ stage, fixtureSha256, weightsSha256 }
       for (const call of [0, 1]) {
         const input = await fetchReference(reference, `vae.decode.in#${call}`);
         const z = ops.upload(squeezeBatch(input.shape), input.values, `vae.decode.in#${call}`);
-        outputs.images.push(decodeScaledLatent(ops, w, z, { capture, call }));
+        outputs.images.push(await decodeScaledLatent(ops, w, z, { capture, call }));
         ops.release(z);
       }
       capture('output.albedo', outputs.images[0]);
