@@ -1,6 +1,6 @@
 /* Experiment instruments use the same live controls as the other workspaces. */
 body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:250px minmax(0,1fr) 310px; }
-body.experiment-workspace #sidebar, body.experiment-workspace #volume-authored-mix-panel, body.experiment-workspace #transform-bar, body.experiment-workspace #finger-fluid-bench-overlay, body.experiment-workspace #scene-add-menu { display:none !important; }
+body.experiment-workspace #sidebar, body.experiment-workspace #volume-authored-mix-panel, body.experiment-workspace #transform-bar, body.experiment-workspace #finger-fluid-bench-overlay { display:none !important; }
 #experiment-setup,#experiment-instruments { grid-row:2; min-height:0; min-width:0; display:flex; flex-direction:column; background:#1b1c1e; border-right:1px solid #303134; }
 #experiment-setup { grid-column:1; } #experiment-instruments { grid-column:3; border-right:0; border-left:1px solid #303134; }
 #experiment-setup[hidden],#experiment-instruments[hidden],#experiment-toolbar[hidden],#experiment-run-strip[hidden] { display:none; }
@@ -48,3 +48,10 @@ body.experiment-workspace #info-bar { bottom:91px; } body.experiment-workspace #
 @media(max-width:1150px) { body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:210px minmax(0,1fr) 280px; } }
 @media(max-width:800px) { body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:minmax(0,1fr) 270px; grid-template-rows:42px minmax(260px,1fr) 190px; } body.experiment-workspace #viewport { grid-column:1; grid-row:2; width:auto; } #experiment-setup { grid-column:1; grid-row:3; } #experiment-instruments { grid-column:2; grid-row:2/4; } #experiment-toolbar strong,#experiment-navigation-slot,#experiment-clock { display:none; } #experiment-source { width:100%; } #experiment-toolbar { gap:4px; padding:6px; } #experiment-run-strip { flex-wrap:wrap; } }
 @media(max-width:540px) { body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:minmax(0,1fr); grid-template-rows:42px minmax(280px,1fr) minmax(170px,25vh) minmax(170px,25vh); } #experiment-setup { grid-column:1; grid-row:4; } #experiment-instruments { grid-column:1; grid-row:3; } #experiment-run-controls { gap:6px; flex-wrap:wrap; } }
+
+#experiment-add-slot .scene-top-menu { position:relative; inset:auto; padding:0; background:transparent; border:0; box-shadow:none; }
+#experiment-scene-slot .scene-object-tools { display:none; }
+#experiment-scene-slot .scene-object-meta,#experiment-scene-slot .scene-object-chip { display:none; }
+#experiment-selection-slot .transform-input { max-width:100%; min-width:0; }
+#experiment-setup #experiment-viewer-slot h2 { display:none; }
+@media(max-width:800px) { body.experiment-workspace #navigation-hint { display:none; } }

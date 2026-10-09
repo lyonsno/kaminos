@@ -11825,13 +11825,18 @@ async function initScene() {
       if (scenePlacementTools.edits.state().active || scenePlacementTools.edits.state().replaying) {
         setInfo('Finish or cancel the current edit before switching workspace'); return false;
       }
+      const preserveFluid = next === 'authoring' && fluidWorkbench?.state().active && fingerFluidBenchRunning;
       fluidWorkbench?.setActive(false);
       if (next === 'authoring' && !['assets', 'volume'].includes(window.__kaminosActiveTab())) {
-        setActiveTab('assets', { reveal: false });
+        setActiveTab('assets', { reveal: false, preserveFluid });
       }
       return true;
     },
-    afterSwitch: mode => { installFluidWorkbench(); fluidWorkbench?.setActive(mode === 'workbench' && window.__kaminosActiveTab() === 'finger-fluid-bench'); },
+    afterSwitch: mode => {
+      installFluidWorkbench();
+      if(mode === 'workbench' && fluidWorkbench && fingerFluidBenchRunning && !document.getElementById('finger-fluid-bench-operator-panel').hidden)setActiveTab('finger-fluid-bench');
+      fluidWorkbench?.setActive(mode === 'workbench' && window.__kaminosActiveTab() === 'finger-fluid-bench');
+    },
     openWorkbenchTab: tab => setActiveTab(tab),
   });
   window.kaminosWorkspace = authoringWorkspace;
@@ -12731,7 +12736,7 @@ function ensureFingerJuiceTabFrameLoaded() {
   fingerJuiceFrame.src = fingerJuiceFrame.dataset.src || FINGER_JUICE_STANDALONE_ROUTE;
 }
 
-function setActiveTab(tabName, { reveal = tabName !== 'assets' } = {}) {
+function setActiveTab(tabName, { reveal = tabName !== 'assets', preserveFluid = false } = {}) {
   if (reveal && authoringWorkspace?.state().mode === 'authoring' && !authoringWorkspace.setMode('workbench')) return;
   document.body.classList.toggle('sam-image-active', tabName === 'masks');
   document.getElementById('sam-image-viewport').hidden = tabName !== 'masks';
@@ -12751,9 +12756,9 @@ function setActiveTab(tabName, { reveal = tabName !== 'assets' } = {}) {
   }
   const fingerFluidBenchPanel = document.getElementById('finger-fluid-bench-operator-panel');
   if (fingerFluidBenchPanel) {
-    fingerFluidBenchPanel.hidden = tabName !== 'finger-fluid-bench';
+    fingerFluidBenchPanel.hidden = tabName !== 'finger-fluid-bench' && !preserveFluid;
     if (tabName === 'finger-fluid-bench') startFingerFluidBench();
-    else stopFingerFluidBench();
+    else if(!preserveFluid) stopFingerFluidBench();
   }
   const fingerJuicePanel = document.getElementById('finger-juice-operator-panel');
   if (fingerJuicePanel) {
@@ -14715,6 +14720,7 @@ function installFluidWorkbench() {
     detailNodes:[...byId('tab-finger-fluid-bench').querySelectorAll(':scope > .panel')].filter(node=>node!==root),
     runNodes:[root.querySelector('.ipbf-actions'),byId('ipbf-control-status')],
     viewerNodes:['authoring-source-environment','authoring-source-render','authoring-source-fire-light'].map(byId),
+    sceneActions:byId('scene-add-menu').closest('nav'),
     navigation:byId('navigation-input-mode').closest('label'),
     tools:[...document.querySelectorAll('.tab[data-tab]')].map(node=>({id:node.dataset.tab,label:node.textContent.trim()})),
     openTool:tab=>setActiveTab(tab),openSetup:()=>window.open(byId('ipbf-replay').href,'_blank','noopener'),
