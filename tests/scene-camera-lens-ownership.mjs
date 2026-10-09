@@ -29,3 +29,7 @@ test('free viewport lens changes and undo preserve camera-view pose, camera lens
  assert.equal(service.readNavigationView().fov,65);assert.deepEqual(view,shot);assert.deepEqual(objects,before);assert.equal(service.state().mode,'camera');assert.equal(service.state().activeId,'hero');
  edits.undo();assert.equal(service.readNavigationView().fov,40);assert.deepEqual(view,shot);edits.redo();service.leave();assert.equal(view.fov,65);assert.deepEqual(objects,before);
 });
+test('orbit and cardinal continuation keep the navigation lens while continuing from the shot pose',()=>{
+ let objects=[structuredClone(record)],view={position:[2,3,5],target:[0,0,0],up:[0,1,0],fov:40,near:.1,far:1000};const edits=createSceneEdits({read:()=>null,write:()=>{}}),service=camera.createSceneCameras({edits,readObjects:()=>objects,writeCameras:x=>objects=structuredClone(x),readViewport:()=>view,writeViewport:x=>view=structuredClone(x),size:()=>({width:800,height:600})});service.restore({schema:'kaminos.scene-camera.v1',activeId:'hero',aspect:[16,9]});service.enter();service.setNavigationLens(65);const shot=structuredClone(view),before=structuredClone(objects),count=edits.state().undoCount;
+ service.beginNavigation('orbit');assert.equal(view.fov,65);assert.deepEqual(view.position,shot.position);assert.deepEqual(objects,before);assert.equal(edits.state().undoCount,count);assert.equal(service.state().activeId,'hero');service.enter();service.leave({continueFromCamera:true});assert.equal(view.fov,65);service.enter();service.leave();assert.equal(view.fov,65);
+});
