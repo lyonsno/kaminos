@@ -338,3 +338,16 @@ test('IS-04-C: the residual measurement names the capped per-cell law and keeps 
   assert.match(open.statement, /predicted effective 12\.87 cells³\/step \(no cell clipped\)/);
   assert.deepEqual(core.pressureResidualMeasurement(null, null).immersedSource, { admitted: false, fluxRequested: 0, fluxEffectivePredicted: 0, capPerCell: 0, clipPredicted: { cells: 0, of: 0 }, law: null });
 });
+
+// Noah 2026-10-09: a wide source at the floor aimed straight up went out
+// (heat total 1.34 tilted → 0.05 upright on his 32 basin). The wall sponge
+// damped the slab: at 0.8 cells above the floor heat kept half per step while
+// the gas left the band at a tenth of a cell per step. The inflow law already
+// exempts its aperture; the immersed slab is a source too.
+test('the wall sponge leaves the immersed slab alone, like the inflow aperture', () => {
+  const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
+  const weightAt = main.indexOf('let immersedWeight = ');
+  const fadeAt = main.indexOf('let wallFade = max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedWeight, 0.0, 1.0));');
+  assert.ok(weightAt > 0 && fadeAt > weightAt, 'the fade is exempt wherever the slab has weight, after the weight is known');
+  assert.ok(!main.includes('let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);'), 'the unexempted fade is gone');
+});

@@ -7148,7 +7148,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let floorExempt = select(0.0, inflowApertureWeight(cellI), p.y < -0.8);
   let verticalWall = max(mix(-p.y, -1.0, floorExempt), p.y - expandedTopY + 1.0);
   let wall = max(max(abs(p.x), verticalWall), abs(p.z));
-  let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
+  // The immersed slab is a source wherever it sits (floor, side, or in the
+  // open): the sponge leaves it alone, as it leaves the inflow aperture.
+  let wallFade = max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedWeight, 0.0, 1.0));
   let smokeTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.66, 0.84, plumeHeight01)), expandedTopY - 0.005, p.y);
   let legacyHeatTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.42, 0.62, plumeHeight01)), expandedTopY - 0.040, p.y);
   let tallPlumeHeatTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.62, 0.84, plumeHeight01)), expandedTopY - 0.010, p.y);
