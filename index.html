@@ -13514,7 +13514,7 @@ function setFingerFluidBenchCameraForWitness(nextCamera = {}) {
     throw new RangeError('Finger Fluid witness camera exceeds the operator orbit bounds');
   }
   fingerFluidBenchCamera = { yaw, pitch, distance, target };
-  syncFingerFluidCompositionCamera({initial:true});markDirty();
+  syncFingerFluidCompositionCamera({initial:true});window._kaminosDirty?.();
   return fingerFluidCompositionCameraState();
 }
 
@@ -14133,13 +14133,13 @@ function renderFingerFluidBenchCurrentStateForWitness(
 function setFingerFluidBenchReflectionMeshPhaseForWitness(phase) {
   if (!fingerFluidBenchSolver?.available) throw new Error('Finger Fluid solver unavailable for reflection mesh witness');
   const result=fingerFluidBenchSolver.setReflectionMeshPhaseForWitness(phase);
-  fingerFluidBenchScene?.setReflectionPhase(phase);markDirty();return result;
+  fingerFluidBenchScene?.setReflectionPhase(phase);window._kaminosDirty?.();return result;
 }
 
 function resumeFingerFluidBenchAfterWitness() {
   if (!fingerFluidBenchSolver?.available || fingerFluidBenchAnimationFrame) return;
   fingerFluidBenchRunning = true;
-  if(fingerFluidBenchViewport){markDirty();return;}
+  if(fingerFluidBenchViewport){window._kaminosDirty?.();return;}
   drawFingerFluidBenchFrame.lastNow = performance.now() - 16.7;
   fingerFluidBenchAnimationFrame = requestAnimationFrame(drawFingerFluidBenchFrame);
 }
@@ -14218,7 +14218,7 @@ function advanceFingerFluidBenchToStepForWitness(targetStep) {
 }
 
 function drawFingerFluidBenchFrame(now = performance.now(),{fromHost=false}={}) {
-  if(fingerFluidUsesSharedViewport()&&!fromHost){markDirty();return;}
+  if(fingerFluidUsesSharedViewport()&&!fromHost){window._kaminosDirty?.();return;}
   const canvas = fingerFluidBenchViewport?renderer.domElement:document.getElementById('finger-fluid-bench-canvas');
   const panel = document.getElementById('finger-fluid-bench-operator-panel');
   if (!canvas || !panel || panel.hidden || !fingerFluidBenchRunning) {
@@ -14651,7 +14651,7 @@ async function startFingerFluidBench() {
   }
   await activateFingerFluidPyroComposition();
   if(!isCurrent())return;
-  if(sharedViewport){markDirty();return;}
+  if(sharedViewport){window._kaminosDirty?.();return;}
   if (!fingerFluidBenchAnimationFrame && fingerFluidBenchRunning) {
     fingerFluidBenchFrameStartedAt = performance.now();
     drawFingerFluidBenchFrame.lastNow = performance.now() - 16.7;
@@ -14670,7 +14670,7 @@ function stopFingerFluidBench() {
   ++fingerFluidBenchStartGeneration;
   fingerFluidBenchRunning = false;
   fingerFluidBenchViewport?.dispose();fingerFluidBenchViewport=null;
-  fingerFluidBenchScene?.dispose();fingerFluidBenchScene=null;markDirty();
+  fingerFluidBenchScene?.dispose();fingerFluidBenchScene=null;window._kaminosDirty?.();
   if (fingerFluidBenchAnimationFrame) cancelAnimationFrame(fingerFluidBenchAnimationFrame);
   fingerFluidBenchAnimationFrame = null;
 }
@@ -14682,7 +14682,7 @@ async function resetFingerFluidPressureCockpitWater() {
   fingerFluidBenchSolver=null;fingerFluidBenchSolverPromise=null;fingerFluidBenchConfig=null;
   await startFingerFluidBench();
   if(!fingerFluidBenchRunning)return;
-  fingerFluidBenchCamera=camera;syncFingerFluidCompositionCamera({initial:true});markDirty();
+  fingerFluidBenchCamera=camera;syncFingerFluidCompositionCamera({initial:true});window._kaminosDirty?.();
   fingerFluidPressureCockpit?.update();
 }
 
@@ -14692,10 +14692,10 @@ function installFingerFluidPressureCockpit() {
   fingerFluidPressureCockpit=createIPBFPressureCockpit({
     root,getSolver:()=>fingerFluidBenchSolver,getStatus:()=>fingerFluidBenchState,
     isPaused:()=>fingerFluidBenchSimulationPaused,
-    setPaused:value=>{fingerFluidBenchSimulationPaused=value;markDirty();if(!value)resumeFingerFluidBenchAfterWitness();},
+    setPaused:value=>{fingerFluidBenchSimulationPaused=value;window._kaminosDirty?.();if(!value)resumeFingerFluidBenchAfterWitness();},
     restart:resetFingerFluidPressureCockpitWater,
     onRequest:receipt=>{
-      markDirty();
+      window._kaminosDirty?.();
       if(fingerFluidBenchConfig){
         const r=receipt.requested;
         fingerFluidBenchConfig={...fingerFluidBenchConfig,requestedPressureIterations:r.densityIterations,
