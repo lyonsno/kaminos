@@ -94,7 +94,8 @@ test('clearing a scene removes its old flame member before the next scene saves'
   assert.ok(start>0 && end>start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   const removed=[];
-  const context={authoringControlSessions:[],sceneControlHistory:null,assemblyProxies:new Map(),assemblyEditTargets:new Set(),authoredBurnerBeds:new Map(),FLAME_EMITTER_TYPE:'flame-emitter',scenePlacementTools:null,sceneMutationToken:0,sceneObjects:[flame],flameDomainGuide:null,
+  const context={sceneCameras:null,groupProxies:new Map(),meshDataTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),compoundInsertionTargets:new Set(),compoundRetentionTargets:new Set(),sceneSpotLights:new Map(),rimLight:null,
+    authoringControlSessions:[],sceneControlHistory:null,assemblyProxies:new Map(),assemblyEditTargets:new Set(),authoredBurnerBeds:new Map(),FLAME_EMITTER_TYPE:'flame-emitter',scenePlacementTools:null,sceneMutationToken:0,sceneObjects:[flame],flameDomainGuide:null,
     sceneLoadRequests:{invalidate:()=>{}},sceneMembershipEditTargets:new Set(),localLiquidGeneration:0,localLiquidHost:null,
     scene:{remove:object=>removed.push(object)},disposeObjectTree:()=>{},
     greenroomPreviewState:null,currentMesh:null,sceneGroups:[],activeSceneObjectId:flame.id,
@@ -117,7 +118,7 @@ test('switching to cluster removes the analytic member from scene membership', (
     applyFlameEmitterPose:()=>{},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'cluster',sourceMode:'cluster'}}},
     sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:null,flameDomainGuide:null,
     scenePlacementTools:{finish:()=>{},edits:{discard:()=>{}}},
-    disposeObjectTree:()=>{},renderSceneObjectList:()=>{}};
+    disposeObjectTree:()=>{},renderSceneObjectList:()=>{},pruneSceneGroups:()=>{},pruneSceneSelection:()=>{}};
   vm.runInNewContext(html.slice(start,end)+'\nensureAuthoredFlameEmitter();',context);
   assert.equal(context.sceneObjects.length,0);
   assert.deepEqual(removed,[flame.object]);
@@ -132,7 +133,7 @@ test('a source-free analytic family retains the flame handle for editing and sav
   const context={authoredFlamePresent:true,scene:{remove:()=>removed++},isFireLightFieldRoute:()=>true,
     applyFlameEmitterPose:()=>{},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring',sourceMode:'off'}}},
     sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:'flame-emitter',flameDomainGuide:{visible:false,box:{set:()=>{}}},
-    flameDomainTranslation:[0,0,0],
+    flameDomainTranslation:[0,0,0],viewportHelpersVisible:true,sceneSelectionMembers:()=>['flame-emitter'],activeSceneFieldId:null,
     flameEmitterPose:{position:[2,0,0],rotation:[0,0,0],scale:[1,1,1]},
     applySceneObjectTransformState:()=>updated++,updateFlameEmitterSupportOutline:()=>{},
     THREE:{Vector3:class {add(){return this;}}}};

@@ -2472,6 +2472,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness, speed, fuel, temperature, momentumGain, capFraction, puffFactor, backWall: backWallRequested };
   const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, masked: { cells: 0, weight: 0, weightShare: 0 }, puffFactor } });
   if (sourceLaw !== IMMERSED_SOURCE_LAW) return off('source-law-is-not-immersed-source');
+  if (controls.immersedSourceEnabled === false) return off('source-disabled');
   if (pressure.solver !== PRESSURE_SOLVER_CONVERGED) return off('immersed-source-requires-converged-pressure-solver');
   // A positive supply needs a volume outlet: the closed box has none, so
   // D(v) = S with ΣS > 0 is unsatisfiable there (review IS-02).

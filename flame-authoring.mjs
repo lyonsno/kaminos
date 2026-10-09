@@ -57,8 +57,13 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-physical-smoke-albedo','Smoke albedo'],
   ] },
   { name:'Emission', scope:'Selected flame source', fields:[
+    ['volume-emitter-source-law','Source law'],
+    ['volume-immersed-radius','Radius'], ['volume-immersed-speed','Inlet speed'],
+    ['volume-immersed-fuel','Fuel'], ['volume-immersed-temperature','Inlet temperature'],
+    ['volume-immersed-cap-fraction','Rate cap'], ['volume-immersed-momentum-gain','Momentum coupling'],
+    ['volume-immersed-thickness','Source thickness (cells)'], ['volume-immersed-back-wall','Backing wall'],
     ['emitter-assay-family','Shape'], ['volume-flow-rate','Flow'], ['volume-input-radius','Radius'],
-    ['volume-emitter-source-law','Source law'], ['volume-emitter-source-depth','Source depth'],
+    ['volume-emitter-source-depth','Source depth'],
     ['volume-emitter-inlet-profile','Inlet profile'], ['volume-emitter-momentum-linked','Link momentum'],
     ['volume-emitter-inlet-velocity','Inlet velocity'], ['volume-emitter-shear-width','Shear width'],
     ['volume-emitter-edge-entrainment','Edge entrainment'],
@@ -81,11 +86,16 @@ export const FLAME_PROPERTY_GROUPS = [
   ] },
 ];
 
+export function flameEmissionControlApplies(id, law) {
+  if (id === 'volume-emitter-source-law') return true;
+  return id.startsWith('volume-immersed-') === (law === 'immersed-source');
+}
+
 export function authoredFlameShapeOptions(options) {
   return [...options].filter(option=>option.value!=='cluster');
 }
 
-export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, openWorkbench, onError }) {
+export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, readSourceRuntime = () => null, openWorkbench, onError }) {
   const basin = document.createElement('details'); basin.id='flame-basin-browser'; basin.open=true;
   basin.innerHTML='<summary>Preset</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a preset…" aria-label="Find a preset"><select id="flame-basin-select" aria-label="Fire preset"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
   sharedHost.append(basin);
@@ -113,7 +123,8 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
     catch(error){status(error.message);onError(error);}
     finally{button.disabled=!byId('flame-basin-select').value;sync();}
   };
-  const aliases=[];
+  const aliases=[], emissionRows=[];
+  const runtimeStatus=document.createElement('p');runtimeStatus.className='flame-scope';runtimeStatus.id='selected-flame-source-status';runtimeStatus.setAttribute('role','status');
   for(const group of FLAME_PROPERTY_GROUPS) {
     const section=document.createElement('details');section.open=!!group.open;
     const title=document.createElement('summary');title.textContent=group.name;section.append(title);
@@ -143,12 +154,23 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       });
       source.addEventListener('input',syncField);source.addEventListener('change',syncField);
       aliases.push(syncField);syncField();row.append(grip,field);section.append(row);
+      if(group.name==='Emission')emissionRows.push({id,row});
     }
+    if(group.name==='Emission')section.append(runtimeStatus);
     (group.name==='Emission'?host:sharedHost).append(section);
   }
   const more=document.createElement('button');more.type='button';more.className='btn';more.textContent='All controls in Workbench';more.onclick=openWorkbench;sharedHost.append(more);
   function sync(force=false) {
     aliases.forEach(sync=>sync(force));
+    const immersed=byId('volume-emitter-source-law').value==='immersed-source';
+    emissionRows.forEach(({id,row})=>row.hidden=!flameEmissionControlApplies(id,byId('volume-emitter-source-law').value));
+    runtimeStatus.hidden=!immersed;
+    if(immersed) {
+      const source=readSourceRuntime();
+      runtimeStatus.textContent=!source||source.requested?.sourceLaw!=='immersed-source'?'Source awaiting simulation step'
+        : !source.effective.admitted ? `Supply off · ${source.effective.reason}`
+        : `Gas supply ${Number(source.effective.fluxEffectivePredicted).toPrecision(3)} cells³/step${source.effective.clipPredicted?.cells?' · rate capped':''}${source.effective.masked?.cells?' · intersects scene geometry':''}`;
+    }
     const source=readSource();byId('flame-basin-current').textContent=source?`${source.label || 'Loaded basin'}${source.modified?' · Modified':''}`:'Scene working settings';
   }
   void refresh();sync();

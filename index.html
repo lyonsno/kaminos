@@ -3696,7 +3696,8 @@ import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
   defaultFlameEmitterPose, normalizeFlameEmitterPose, createFlameEmitterHandle,
   updateFlameEmitterSupportOutline, flameDomainTranslationForAcceptedPose,
-  flamePoseInDomain, flamePoseToDomain, normalizeFlameDomainTranslation } from './scene-flame-emitter.mjs';
+  flamePoseInDomain, flamePoseToDomain, normalizeFlameDomainTranslation,
+  flamePoseFromImmersedControls, immersedControlsForFlamePose } from './scene-flame-emitter.mjs';
 let flameEmitterPose = defaultFlameEmitterPose(), applyFlameEmitterPose = null;
 let flameEmitterInjectionSuspended = false;
 let authoredFlamePresent = true;
@@ -22914,6 +22915,13 @@ for (const button of document.querySelectorAll('[data-raymarch-smoke-presentatio
 
 function renderVolumeEmitterReceipt(receipt) {
   if (!receipt) return;
+  if(receipt.requested.sourceLaw==='immersed-source') {
+    const c=receipt.requested.immersedControls;
+    document.getElementById('volume-emitter-requested').textContent=`immersed disc · centre ${[c.immersedCentreX,c.immersedCentreY,c.immersedCentreZ].map(v=>Number(v).toPrecision(3)).join(', ')} · speed ${Number(c.immersedSpeed).toPrecision(3)}`;
+    document.getElementById('volume-emitter-effective').textContent=receipt.requested.sourceEnabled?'Configured · simulation admission below':'Source disabled';
+    document.getElementById('volume-emitter-carrier').textContent='Immersed gas supply · analytic and floor injectors off';
+    document.getElementById('volume-emitter-fallback').textContent='no';return;
+  }
   const formatVolumeEmitterInletVelocity = value => Number(value).toFixed(4);
   const requestedMomentum = receipt.requested.momentumLinked
     ? `linked ${formatVolumeEmitterInletVelocity(receipt.effective.effectiveInletVelocity)}`
@@ -22930,6 +22938,7 @@ function renderVolumeEmitterReceipt(receipt) {
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
+  flameInspector?.sync();
   syncVolumeCockpitModeAvailability(document, readVolumeControls(), s.physicalColor);
   if (s.physicalColor?.requested === 'emissive-transport-v2') {
     document.getElementById('volume-physical-mode-val').textContent = s.physicalColor.effective === 'emissive-transport-v2'
@@ -23944,6 +23953,16 @@ async function initKaminosVolumeRoute() {
       receipt.requested.worldEmitterPose = structuredClone(pose);
       receipt.effective.worldEmitterPose = structuredClone(pose);
       receipt.effective.domainTranslation = [...flameDomainTranslation];
+      if (controlsSnapshot.emitterSourceLaw === 'immersed-source') {
+        // Keep the Workbench representation of centre/aim in agreement with
+        // the authored object. Radius remains source data; S scales the object.
+        const mapped=receipt.requested.immersedControls;
+        for(const [suffix,key] of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']]) {
+          const control=document.getElementById(`volume-immersed-${suffix}`);
+          control.step='any';setVolumeControlValue(control.id,mapped[key]);
+        }
+        updateVolumeControlLabels();
+      }
     }
     renderVolumeEmitterReceipt(receipt);
     if (receipt.effective.worldEmitterPose) flameEmitterPose = structuredClone(receipt.effective.worldEmitterPose);
@@ -24092,6 +24111,9 @@ async function initKaminosVolumeRoute() {
     seedVolumePrimitiveFixture(params.get('volume_primitive_fixture'));
   }
 
+  if (readVolumeControls().emitterSourceLaw === 'immersed-source') {
+    flameEmitterPose=flamePoseFromImmersedControls(readVolumeControls(),flameDomainTranslation,flameEmitterPose);
+  }
   applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls());
   void activateFingerFluidPyroComposition().catch(error => {
     fingerFluidPyroCompositionState = {
@@ -24148,7 +24170,12 @@ async function initKaminosVolumeRoute() {
     updateVolumeControlLabels();
     const controlsSnapshot = readVolumeControls();
     const selectedEmitterFamily = document.getElementById('emitter-assay-family').value;
-    if (emitterMorphologyControls.has(event?.target?.id)) {
+    if (controlsSnapshot.emitterSourceLaw === 'immersed-source') {
+      if (/^volume-immersed-(centre-[xyz]|yaw|pitch)$/.test(event?.target?.id||'')) {
+        flameEmitterPose=flamePoseFromImmersedControls(controlsSnapshot,flameDomainTranslation,flameEmitterPose);
+      }
+      applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot);
+    } else if (emitterMorphologyControls.has(event?.target?.id)) {
       applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot);
     } else if (event?.target?.id === 'volume-scene' && selectedEmitterFamily !== 'cluster') {
       applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot);
@@ -25519,13 +25546,24 @@ function createFlameQuickFields() {
     applyBasin:id=>window.kaminosFlameAuthoring.applyBasin(id),
     readSource:()=>activeVolumeSettingsPresetReceipt ? {label:activeVolumeSettingsPresetReceipt.label,
       modified:!volumeSettingsPresetControlValuesEqual(buildVolumeSettingsPreset(),activeVolumeSettingsPresetReceipt.preset)} : null,
+    readSourceRuntime:()=>volumePrototype?.debugState?.().immersedSource,
     openWorkbench:()=>setActiveTab('volume'),onError:error=>setInfo(error.message)});
 }
 
 function flameSettingsState(preset=buildVolumeSettingsPreset(),source=activeVolumeSettingsPresetReceipt) {
-  return structuredClone({domControls:preset.domControls,rendererControls:preset.rendererControls,
+  const state=structuredClone({domControls:preset.domControls,rendererControls:preset.rendererControls,
     presentationControls:preset.presentationControls,
+    sourcePose:flameEmitterPose,
     source:source ? {presetId:source.presetId,label:source.label,preset:source.preset} : null});
+  // Applying a look preset keeps the source where the author put it. Its feed
+  // coefficients are replaced; preset centre/aim are only startup defaults.
+  if(arguments.length && state.domControls['volume-emitter-source-law']?.value==='immersed-source') {
+    const mapped=immersedControlsForFlamePose({immersedRadius:Number(state.domControls['volume-immersed-radius'].value)},flamePoseToDomain(state.sourcePose,flameDomainTranslation),false);
+    for(const [suffix,key] of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']]) {
+      const descriptor=state.domControls[`volume-immersed-${suffix}`];descriptor.value=mapped[key];descriptor.rawValue=String(mapped[key]);
+    }
+  }
+  return state;
 }
 // Every reason the flame settings edit would be refused, in the order the
 // check meets them. The edit session refuses a press on any flame control
@@ -25558,14 +25596,19 @@ function flameSettingsStateProblems(state) {
 function checkFlameSettingsState(state) {
   const problems=flameSettingsStateProblems(state);
   if(problems.length)throw Error(problems[0].message);
+  if(state.sourcePose)normalizeFlameEmitterPose(state.sourcePose);
   return state;
 }
 function writeFlameSettingsState(state) {
-  for(const axis of ['domControls','rendererControls'])for(const [id,descriptor] of Object.entries(state[axis]))setVolumeControlValue(id,descriptor.rawValue??descriptor.value);
+  for(const axis of ['domControls','rendererControls'])for(const [id,descriptor] of Object.entries(state[axis])) {
+    const control=document.getElementById(id);
+    if(control?.type==='range')applyVolumeRangeSavedValue(control,Number(descriptor.rawValue??descriptor.value));
+    else setVolumeControlValue(id,descriptor.rawValue??descriptor.value);
+  }
   activeCanonicalVolumeMacroPreset='';activeVolumeRayBudgetPreset='';routedVolumeRayBudgetPreset='';
   updateVolumeControlLabels();
   // One complete source update, preserving its authored world pose and domain.
-  applyFlameEmitterPose(flameEmitterPose);
+  applyFlameEmitterPose(state.sourcePose||flameEmitterPose);
   const smoke=state.presentationControls['raymarch-smoke-presentation'].value;
   const receipt=volumePrototype.setRaymarchSmokePresentationMode(smoke);
   if(receipt?.fallbackReason || receipt?.effectiveMode!==smoke)throw Error('Smoke presentation did not apply');

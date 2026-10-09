@@ -2,7 +2,7 @@ import {
   VOLUME_EMITTER_FAMILIES,
   compileVolumeEmitterFamily,
 } from './volume-emitter-basis.mjs';
-import { flameEmitterFrame } from './scene-flame-emitter.mjs';
+import { flameEmitterFrame, immersedControlsForFlamePose } from './scene-flame-emitter.mjs';
 
 export const VOLUME_EMITTER_RUNTIME_SCHEMA = 'kaminos.volume-emitter-runtime.v1';
 
@@ -161,6 +161,31 @@ export function applyVolumeEmitterFamilyRuntime({
   }
   if (!controls || typeof controls !== 'object' || Array.isArray(controls)) {
     throw new Error('controls must be an object');
+  }
+  if (controls.emitterSourceLaw === 'immersed-source') {
+    if (requestedFamily === 'cluster' || requestedExternalRequest !== null) {
+      throw new Error('Immersed source requires the placeable source route without external emitters');
+    }
+    const placement = flameEmitterFrame(emitterPose);
+    const mapped = immersedControlsForFlamePose(controls, placement.pose, sourceEnabled);
+    // Validate first, then clear the earlier analytic injector and suppress the
+    // floor source. The core admits the immersed supply independently per step.
+    prototype.setControls(mapped);
+    const sourceReceipt = prototype.setAnalyticEmitterDescriptor(null);
+    if (sourceReceipt?.mode !== 'off' || sourceReceipt?.count !== 0) throw new Error('Immersed source retained an analytic injector');
+    const coreSourceReceipt = prototype.setCoreEmitterSourceMode('analytic-only');
+    if (coreSourceReceipt?.effectiveMode !== 'analytic-only' || coreSourceReceipt.effectiveFlowRate !== 0) throw new Error('Immersed source retained a floor injector');
+    return { schema: VOLUME_EMITTER_RUNTIME_SCHEMA,
+      requested: { family: requestedFamily, sourceLaw: 'immersed-source', sourceEnabled,
+        emitterPose: placement.pose, immersedRadius: Number(controls.immersedRadius ?? .2),
+        immersedControls: mapped, frameId, timestampMs },
+      effective: { family: requestedFamily, sourceLaw: sourceEnabled ? 'immersed-source' : 'inactive',
+        sourceMode: sourceEnabled ? 'immersed-configured' : 'off', sourceCount: sourceEnabled ? 1 : 0,
+        coordinateSpace: sourceEnabled ? 'volume-local' : 'none', coreFlowRate: 0,
+        emitterPose: placement.pose, inletProfile: 'inactive', effectiveInletVelocity: null,
+        admission: 'reported-by-core-per-step' },
+      compilerReceipt: null, sourceReceipt, coreSourceReceipt, carrierReceipt: null,
+      fallbackUsed: false, failures: [] };
   }
   const inputRadius = finiteNumber(controls.inputRadius, 'controls.inputRadius');
   const requestedCoreFlowRate = finiteNumber(controls.flowRate, 'controls.flowRate');

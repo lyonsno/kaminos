@@ -1,4 +1,4 @@
-import { Euler, Vector3 } from './lib/three.core.js';
+import { Euler, Quaternion, Vector3 } from './lib/three.core.js';
 import { checkedPose } from './scene-edit-session.mjs';
 
 export const FLAME_EMITTER_ID = 'flame-emitter';
@@ -70,6 +70,41 @@ export function flameEmitterFrame(value) {
     scale: pose.scale[0] };
 }
 
+// Doctor's engine uses a disc centre and yaw/pitch in domain coordinates.
+// The authored object's local +Y is its nozzle axis; roll remains authored
+// even though the circular supply does not depend on it.
+export function immersedControlsForFlamePose(controls, value, sourceEnabled = true) {
+  const frame = flameEmitterFrame(value);
+  if (sourceEnabled && !flamePoseInDomain(frame.pose, [0, 0, 0])) {
+    throw new Error('Immersed source centre is outside the current domain');
+  }
+  const radius = Number(controls.immersedRadius ?? 0.2) * frame.scale;
+  if (!Number.isFinite(radius) || radius < 0.02 || radius > 0.5) {
+    throw new Error('Scaled immersed source radius must be within [0.02, 0.5]');
+  }
+  const [x, y, z] = frame.direction;
+  const yaw = Math.hypot(x, z) < 1e-12 ? Number(controls.immersedYaw ?? 0)
+    : (Math.atan2(z, x) * 180 / Math.PI + 360) % 360;
+  return { ...controls, immersedCentreX: frame.origin[0], immersedCentreY: frame.origin[1],
+    immersedCentreZ: frame.origin[2], immersedYaw: yaw,
+    immersedPitch: Math.asin(Math.max(-1, Math.min(1, y))) * 180 / Math.PI,
+    immersedRadius: radius, immersedSourceEnabled: sourceEnabled };
+}
+
+export function flamePoseFromImmersedControls(controls, translation = [0, 0, 0], previous = defaultFlameEmitterPose()) {
+  const pose = normalizeFlameEmitterPose(previous);
+  const yaw = Number(controls.immersedYaw ?? 0) * Math.PI / 180;
+  const pitch = Number(controls.immersedPitch ?? 90) * Math.PI / 180;
+  const direction = new Vector3(Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw));
+  // Preserve the existing roll when the controls describe the same direction.
+  if (new Vector3(...flameEmitterFrame(pose).direction).distanceTo(direction) > 1e-10) {
+    pose.rotation = new Euler().setFromQuaternion(new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), direction)).toArray().slice(0, 3);
+  }
+  const domain = normalizeFlameDomainTranslation(translation);
+  pose.position = [Number(controls.immersedCentreX ?? 0), Number(controls.immersedCentreY ?? -0.5), Number(controls.immersedCentreZ ?? 0)].map((v, i) => v + domain[i]);
+  return normalizeFlameEmitterPose(pose);
+}
+
 export function createFlameEmitterHandle(THREE) {
   const group = new THREE.Group();
   group.name = 'Flame source';
@@ -88,9 +123,11 @@ export function createFlameEmitterHandle(THREE) {
   return group;
 }
 
-export function updateFlameEmitterSupportOutline(THREE, group, { family, inputRadius } = {}) {
+export function updateFlameEmitterSupportOutline(THREE, group, { family, inputRadius, sourceLaw, immersedRadius } = {}) {
   if (!group) return;
-  const signature = `${family}:${inputRadius}`;
+  const immersed = sourceLaw === 'immersed-source';
+  const radius = immersed ? immersedRadius : inputRadius;
+  const signature = `${family}:${sourceLaw}:${radius}`;
   if (group.userData.supportSignature === signature) return;
   const previous = group.userData.supportOutline;
   if (previous) {
@@ -100,10 +137,11 @@ export function updateFlameEmitterSupportOutline(THREE, group, { family, inputRa
   }
   group.userData.supportOutline = null;
   group.userData.supportSignature = signature;
-  if (family !== 'ring' || !Number.isFinite(inputRadius) || inputRadius <= 0) return;
+  if ((!immersed && family !== 'ring') || !Number.isFinite(radius) || radius <= 0) return;
   const material = new THREE.MeshBasicMaterial({ color: 0xffbf66, wireframe: true,
     transparent: true, opacity: 0.55, depthTest: false, depthWrite: false, toneMapped: false });
-  const outline = new THREE.Mesh(new THREE.TorusGeometry(inputRadius, inputRadius * 0.2, 6, 48), material);
+  const outline = new THREE.Mesh(immersed ? new THREE.CircleGeometry(radius, 48)
+    : new THREE.TorusGeometry(radius, radius * 0.2, 6, 48), material);
   outline.rotation.x = -Math.PI / 2;
   outline.renderOrder = 1001;
   outline.userData.kaminosEditorHelper = true;
