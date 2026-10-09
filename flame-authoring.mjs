@@ -56,7 +56,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-physical-white','White point'], ['volume-physical-smoke-extinction','Smoke extinction'],
     ['volume-physical-smoke-albedo','Smoke albedo'],
   ] },
-  { name:'Emission', scope:'Selected flame source', fields:[
+  { name:'Emission', open:true, scope:'Selected flame source', fields:[
     ['volume-emitter-source-law','Source law'],
     ['volume-immersed-radius','Radius'], ['volume-immersed-speed','Inlet speed'],
     ['volume-immersed-fuel','Fuel'], ['volume-immersed-temperature','Inlet temperature'],
