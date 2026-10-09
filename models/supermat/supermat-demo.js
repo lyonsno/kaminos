@@ -26,6 +26,8 @@ const repeat = Math.max(1, Number(params.get('repeat') ?? 1));
 const state = window.__supermatDemo = { status: 'loading', error: null, runs: [], identity: null, imageSource: null };
 const $ = id => document.getElementById(id);
 $('cooperative').checked = params.get('cooperative') !== '0';
+if (params.get('size')) $('size').value = params.get('size');
+const attention = params.get('attention') ?? 'streaming';
 let adapter, device, session, foreground, current = null, lastResult = null, active = null;
 
 function setStatus(text, isError = false) {
@@ -163,7 +165,8 @@ async function infer({ final = true } = {}) {
   const abort = new AbortController();
   const frames = state.scene;
   frames.gaps = [];
-  const record = { runId, cooperative, pauses: [] };
+  const size = Number($('size').value);
+  const record = { runId, cooperative, size, attention, pauses: [] };
   active = { abort, control: null, record };
   setRunControls(true);
   state.status = 'running';
@@ -197,7 +200,7 @@ async function infer({ final = true } = {}) {
       record.stopRequestedAtMs = performance.now() - started;
       active?.abort.abort(new Error('stopped by autostop'));
     }, autostopMs);
-    const job = route.enqueue({ jobId: runId, execute: invocation => adapter.run({ image: current,
+    const job = route.enqueue({ jobId: runId, execute: invocation => adapter.run({ image: current, size,
       schedule: cooperative ? { runtime: route.runtime, invocation, control, signal: abort.signal } : null }) });
     const completion = await job.completion;
     if (completion.status !== 'succeeded') {
@@ -239,7 +242,7 @@ async function infer({ final = true } = {}) {
 
 function showRun(record) {
   const t = record.timings, f = record.frames, ms = value => `${value.toFixed(0)} ms`;
-  const lines = [`${record.cooperative ? 'cooperative' : 'blocking'} run: ${record.status}`
+  const lines = [`${record.size}×${record.size} ${record.cooperative ? 'cooperative' : 'blocking'} run (${record.attention} attention): ${record.status}`
     + (record.wallMs ? `, ${ms(record.wallMs)} wall` : '')];
   if (t) lines.push(`preprocess ${ms(t.preprocessMs)} · encode ${ms(t.encodeMs)} · unet ${ms(t.unetMs)}`
     + ` · decode albedo ${ms(t.decodeAlbedoMs)} · decode orm ${ms(t.decodeOrmMs)}`
@@ -301,7 +304,7 @@ try {
     backendIdentity: context.backendIdentity });
   startScene();
   const weightsRoute = await session.registerRoute({ routeId: `${SUPERMAT_ROUTE_ID}.resident-weights` });
-  adapter = await createSuperMatAdapter({ route: weightsRoute, weightsUrl, onProgress(event) {
+  adapter = await createSuperMatAdapter({ route: weightsRoute, weightsUrl, attention, onProgress(event) {
     if (event.phase === 'weights') {
       const mb = value => (value / 1e6).toFixed(0);
       setStatus(`Loading weights ${event.resourceIndex + 1}/${event.resourceCount} (${event.resourceId}`

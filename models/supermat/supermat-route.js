@@ -51,7 +51,8 @@ async function runCpuPhase(useWorker, operationId, payload, transfer, signal) {
   return output;
 }
 
-export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgress, cpuWorker = typeof Worker !== 'undefined' } = {}) {
+export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgress, cpuWorker = typeof Worker !== 'undefined',
+  attention = 'streaming' } = {}) {
   if (!route?.runtime?.device || typeof route.loadModelResourcesFromSource !== 'function') {
     throw new Error('SuperMat adapter requires a registered kit session route');
   }
@@ -86,10 +87,10 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
   const weightLoadMs = performance.now() - loadStart;
   const w = createWeightAccessor(tensors);
   const device = route.runtime.device;
-  const ops = createSuperMatOps(device, { label: 'supermat' });
+  const ops = createSuperMatOps(device, { label: 'supermat', attention });
   const identity = Object.freeze({
     routeId: SUPERMAT_ROUTE_ID, backend: 'webgpu-local', modelId: 'supermat.single-image',
-    revision: weightPackage.revision, weightDtype: 'f32', imageSize: SUPERMAT_IMAGE_SIZE,
+    revision: weightPackage.revision, weightDtype: 'f32', defaultImageSize: SUPERMAT_IMAGE_SIZE, attention,
     provenance: weightPackage.provenance,
   });
   let runs = 0, released = false, busy = false;
@@ -98,7 +99,9 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
   // the float planes and per-phase timings. `schedule` makes the run
   // cooperative: { runtime, invocation } from a per-run route job, plus an
   // optional kit inference control (pause/resume), AbortSignal and dutyFlops.
-  async function run({ image, schedule = null } = {}) {
+  // size: square model resolution, a multiple of 64 (SuperMat recommends 512).
+  async function run({ image, schedule = null, size = SUPERMAT_IMAGE_SIZE } = {}) {
+    if (!Number.isSafeInteger(size) || size < 64 || size % 64) throw new Error('SuperMat size must be a positive multiple of 64');
     if (released) throw new Error('SuperMat adapter is released');
     if (busy) throw new Error('SuperMat adapter already has an active run');
     busy = true;
@@ -112,7 +115,7 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
     let t = performance.now();
     const source = new Uint8Array(image.data);
     const prepared = await runCpuPhase(cpuWorker, 'supermat.preprocess', { width: image.width, height: image.height,
-      data: source.buffer, size: SUPERMAT_IMAGE_SIZE }, [source.buffer], schedule?.signal);
+      data: source.buffer, size: size }, [source.buffer], schedule?.signal);
     const input = new Float32Array(prepared.planes);
     timings.preprocessMs = performance.now() - t;
     device.pushErrorScope('validation');
@@ -121,7 +124,7 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
     try {
       ops.setSchedule(schedule ? { dutyFlops: DEFAULT_DUTY_FLOPS, targetDutyMs: DEFAULT_TARGET_DUTY_MS, ...schedule } : null);
       t = performance.now();
-      const pixels = ops.upload([3, SUPERMAT_IMAGE_SIZE, SUPERMAT_IMAGE_SIZE], input, 'input');
+      const pixels = ops.upload([3, size, size], input, 'input');
       const latent = await encodeImage(ops, w, pixels);
       ops.release(pixels);
       await mark('encodeMs', t);
@@ -146,15 +149,15 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
       }
       t = performance.now();
       const packed = await runCpuPhase(cpuWorker, 'supermat.maps', { albedo: planes[0].slice().buffer,
-        orm: planes[1].slice().buffer, size: SUPERMAT_IMAGE_SIZE }, [], schedule?.signal);
+        orm: planes[1].slice().buffer, size: size }, [], schedule?.signal);
       const maps = Object.fromEntries(Object.entries(packed).map(([name, buffer]) => [name,
-        { width: SUPERMAT_IMAGE_SIZE, height: SUPERMAT_IMAGE_SIZE, data: new Uint8ClampedArray(buffer) }]));
+        { width: size, height: size, data: new Uint8ClampedArray(buffer) }]));
       timings.packMapsMs = performance.now() - t;
       const alpha = new Uint8ClampedArray(prepared.alpha);
       runs++;
       const duties = ops.stats.dutyHistory.slice(historyStart).map(row => ({ ...row }));
-      return { width: SUPERMAT_IMAGE_SIZE, height: SUPERMAT_IMAGE_SIZE, maps, planes: { albedo: planes[0], orm: planes[1] },
-        alpha, timings, run: runs, identity, cooperative: Boolean(schedule), cpuWorker,
+      return { width: size, height: size, maps, planes: { albedo: planes[0], orm: planes[1] },
+        alpha, timings, run: runs, identity, size, cooperative: Boolean(schedule), cpuWorker,
         dutyCount: ops.stats.duties - dutiesBefore, duties, schedule: schedule ? ops.scheduleState() : null, opStats: { ...ops.stats, dutyHistory: undefined } };
     } catch (caught) {
       error = caught;

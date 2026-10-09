@@ -67,9 +67,9 @@ export async function runSuperMatRouteWitness({ fixtureSha256, weightsSha256, ru
     const outputs = [];
     for (let index = 0; index < runs; index++) {
       t = performance.now();
-      const out = await adapter.run({ image });
+      const out = await adapter.run({ image, size: reference.imageSize ?? 512 });
       outputs.push(out);
-      result.runs.push({ run: out.run, wallMs: performance.now() - t, timings: out.timings,
+      result.runs.push({ run: out.run, size: out.size, wallMs: performance.now() - t, timings: out.timings,
         peakLiveBytes: out.opStats.peakLiveBytes, dispatches: out.opStats.dispatches });
     }
 
@@ -87,7 +87,7 @@ export async function runSuperMatRouteWitness({ fixtureSha256, weightsSha256, ru
       pass &&= row.pass;
       result.comparisons[name] = row;
     }
-    const referenceMaps = mapsFromPlanes(refAlbedo, refOrm);
+    const referenceMaps = mapsFromPlanes(refAlbedo, refOrm, reference.imageSize ?? 512);
     result.eightBit = Object.fromEntries(['albedo', 'roughness', 'metallic'].map(name =>
       [name, byteDifference(cold.maps[name].data, referenceMaps[name].data)]));
     if (warm) {
