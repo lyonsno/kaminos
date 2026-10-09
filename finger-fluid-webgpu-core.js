@@ -13095,7 +13095,7 @@ function createInitialMaterialTracers(
   return data;
 }
 
-function createDynamicReflectionMeshData() {
+export function createDynamicReflectionMeshData() {
   const positions = [];
   const normals = [];
   const indices = [];
@@ -13123,7 +13123,7 @@ function createDynamicReflectionMeshData() {
   };
 }
 
-function dynamicReflectionMeshMatrices(phase) {
+export function dynamicReflectionMeshMatrices(phase) {
   const angle = finite(phase, 0);
   const cosine = Math.cos(angle);
   const sine = Math.sin(angle);
