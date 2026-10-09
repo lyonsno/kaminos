@@ -23,14 +23,14 @@ for (const config of [{ tokenRows: 0 }, { tokenRows: 1, channels: [12, 8], numBl
 
 const config = { tokenRows: 3, latentChannels: 2, resolution: 2, channels: [16, 8], numBlocks: [1, 0] };
 function harness(count = 5) {
-  const allocations = [], uploads = [], runs = [], reads = []; let failure;
+  const allocations = [], uploads = [], runs = [], reads = [], readInvocations = []; let failure;
   const runtime = { device: { limits: { maxStorageBufferBindingSize: 134217728, maxComputeWorkgroupsPerDimension: 65535 },
     queue: { async onSubmittedWorkDone() {} } },
     createTensor(spec) { const t = { ...spec, byteLength: spec.shape.reduce((a, b) => a * b, 4),
       buffer: spec.buffer ?? { destroy() { t.destroyed = true; } } }; allocations.push(t); return t; },
     uploadTensor(t, values) { uploads.push({ t, values }); }, defineComputeKernel(spec) { return spec; },
     async runKernel(kernel, options) { runs.push({ kernel, options }); if (options.stage === failure) throw Error('injected decoder failure'); },
-    async readTensor(t) { reads.push(t); assert.equal(t.dtype, 'u32'); assert.equal(t.byteLength, 4);
+    async readTensor(t,options={}) { reads.push(t); readInvocations.push(options.schedulerInvocation); assert.equal(t.dtype, 'u32'); assert.equal(t.byteLength, 4);
       return new Uint32Array([t.name.includes('hash-status') ? 0 : count]); } };
   const route = { runtime, routeId: 'local-sparse-decoder-contract' };
   const sample = runtime.createTensor({ name: 'shape-owned-codes', shape: [3, 2], dtype: 'f32', usage: U.storage });
@@ -38,7 +38,7 @@ function harness(count = 5) {
   const plan = buildSLatDecoderPlan(config), weights = Object.fromEntries(Object.entries(slatDecoderWeightShapes(plan))
     .map(([name, shape]) => [name, new Float32Array(shape.reduce((a, b) => a * b, 1))]));
   const siluTable = new Float32Array(65536);
-  return { runtime, route, sample, coordinates, weights, siluTable, allocations, uploads, runs, reads,
+  return { runtime, route, sample, coordinates, weights, siluTable, allocations, uploads, runs, reads, readInvocations,
     fail(stage) { failure = stage; } };
 }
 const h = harness(), adapter = createTrellisSLatDecoderAdapter({ route: h.route, config, weights: h.weights,
@@ -66,6 +66,7 @@ for (const r of h.runs) if (r.options.stage === 'decoder-silu') {
     'In-place SiLU must have one writable storage binding, not alias it through a second read-only binding.');
 }
 assert.equal(h.reads.length, 3, 'Only hash-validation words and learned child-count metadata cross CPU during serving.');
+assert.ok(h.readInvocations.every(i=>i===invocation),'every in-job hash/count read must carry the actual caller invocation');
 assert.ok(!h.uploads.some(r => r.t === h.sample || r.t === h.coordinates));
 assert.match(h.runs.find(r => r.options.stage === 'decoder-neighbors').kernel.code, /offset\/9u/);
 assert.match(h.runs.find(r => r.options.stage === 'decoder-sparse-conv').kernel.code, /round_f16\(sum\)/,

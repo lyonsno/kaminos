@@ -145,7 +145,7 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
         await occupancy.run({},invocation);
         const coordinates=own(createTrellisOccupancyCoordinatesAdapter({route,resolution:occupancy.plan.outputResolution,
           logitsTensor:occupancy.outputs.logits}));await coordinates.run(invocation);
-        const lrCoordinates=await coordinates.coordinates(),lrResolution=coordinates.plan.outputResolution;
+        const lrCoordinates=await coordinates.coordinates(invocation),lrResolution=coordinates.plan.outputResolution;
         await retire(occupancy,sparseSampler,sparse);
         const lrFlow=await shapeFlow('lowResolutionShape',lrCoordinates),lr=await sampleShape('lowResolutionShape',lrFlow,'lowResolutionShape',invocation);
         // The decoder expands the latent coordinate grid, not the final mesh grid.

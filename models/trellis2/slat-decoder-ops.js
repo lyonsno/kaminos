@@ -159,8 +159,8 @@ export function createSLatDecoderKernelOps(runtime) {
       bindings: args.map((resource, i) => ({ name: `b${i}`, resource, access: i < readBindings ? 'read-only-storage' : 'storage' })) });
     return runtime.runKernel(kernel, { stage, dispatch: decoderDispatch(groups, dispatchLimit), schedulerInvocation: invocation, yieldAfter: true });
   };
-  const word = async t => {
-    const raw = await runtime.readTensor(t), data = raw instanceof ArrayBuffer ? new Uint32Array(raw) : raw;
+  const word = async (t,invocation) => {
+    const raw = await runtime.readTensor(t,{schedulerInvocation:invocation}), data = raw instanceof ArrayBuffer ? new Uint32Array(raw) : raw;
     if (!(data instanceof Uint32Array) || data.length !== 1) throw Error('complete decoder scalar metadata required');
     metadataReadbackBytes += 4;return data[0];
   };
@@ -176,7 +176,7 @@ export function createSLatDecoderKernelOps(runtime) {
       try {
         await dispatch('decoder-hash-clear', code.clear, [keys, values, status], Math.ceil(capacity / 256), invocation, 0);
         await dispatch('decoder-hash-insert', code.insert, [coordinates, keys, values, status], Math.ceil(rows / 256), invocation, 1);
-        const error = await word(status);if (error) throw Error(`invalid, duplicate or overflowing sparse coordinate hash: status${error}`);
+        const error = await word(status,invocation);if (error) throw Error(`invalid, duplicate or overflowing sparse coordinate hash: status${error}`);
         await dispatch('decoder-neighbors', code.neighbors, [coordinates, keys, values, neighbors], Math.ceil(rows * 27 / 256), invocation);
         await runtime.device?.queue?.onSubmittedWorkDone?.();return neighbors;
       } finally { release(keys);release(values);release(status); }
@@ -208,7 +208,7 @@ export function createSLatDecoderKernelOps(runtime) {
       }
       for (let i = levels.length - 2; i >= 0; i--) await dispatch('decoder-child-scan-add', slatDecoderScanAddShader(levels[i].n),
         [levels[i + 1].prefix, levels[i].prefix], Math.ceil(levels[i].n / 256), invocation, 1);
-      const count = await word(levels.at(-1).sums);
+      const count = await word(levels.at(-1).sums,invocation);
       if (count > rows * 8) throw Error('learned child count exceeds capacity');
       if (!count) throw Error('learned decoder generated empty cells; no replacement support');
       const prefix = levels[0].prefix;

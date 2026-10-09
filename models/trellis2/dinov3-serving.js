@@ -83,6 +83,8 @@ fn main(@builtin(local_invocation_id) local:vec3<u32>, @builtin(workgroup_id) gr
     stride = stride / 2u;
   }
   let mean = reduction[0] / f32(dims.channels);
+  // All invocations must read the mean before scratch is reused for variance.
+  workgroupBarrier();
   var variance_partial = 0.0;
   for (var channel=lane; channel<dims.channels; channel=channel+64u) {
     let delta = input_values[base+channel] - mean;
@@ -126,6 +128,8 @@ fn main(@builtin(local_invocation_id) local:vec3<u32>, @builtin(workgroup_id) gr
     stride = stride / 2u;
   }
   let mean = reduction[0] / f32(dims.channels);
+  // All invocations must read the mean before scratch is reused for variance.
+  workgroupBarrier();
   var variance_partial = 0.0;
   for (var channel=lane; channel<dims.channels; channel=channel+64u) {
     let delta = input_values[base+channel] - mean;

@@ -29,7 +29,7 @@ The repository spans four connected capabilities:
 | --- | --- | --- |
 | Browser combustion films | A stateful WebGPU fire material captured while being driven through ignition, contraction, chromatic change, extinction, and rebirth | [Watch the captured studies](https://lyonsno.github.io/kaminos/) |
 | WebGPU inference kit | Shared-device lifecycle, persistent model routes, queues, cooperative scheduling, resource residency, progress, and runtime telemetry | [Read the package guide](webgpu-inference-kit/README.md) or [open npm](https://www.npmjs.com/package/@kaminos/webgpu-inference-kit) |
-| Spatial model ports | MoGe depth and normals, SHARP Gaussian reconstruction, SF3D textured meshes, Kimodo motion diffusion, and an in-tree SAM segmentation route | [Inspect the port family](webgpu-inference-kit/README.md#one-runtime-different-models) |
+| Spatial model ports | MoGe depth and normals, SHARP Gaussian reconstruction, SF3D and TRELLIS 2 textured meshes, Kimodo motion diffusion, and SAM segmentation | [Inspect the port family](webgpu-inference-kit/README.md#one-runtime-different-models) |
 | Spatial Asset Kiln | The workbench architecture for generated assets, live routes, World Chambers, Preview Benches, and Smoke Offers | [Read the architecture](docs/spatial-asset-kiln.md) |
 
 ## One Browser, One GPU
@@ -76,8 +76,18 @@ shapes:
 | [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | A textured, UV-unwrapped GLB from one image | Cooperative GPU work, reusable scratch memory, and worker offload |
 | [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Skeletal motion from a text prompt | Browser diffusion and motion decoding with rendering opportunities between transformer passes |
 | [SAM 3](webgpu-inference-kit/docs/sam-semantic-demo.md) | Visible instance masks from an image and text prompt | Complete browser WebGPU route, 3.32 GB persistent model package, cached image features, queued prompts, and same-device foreground submissions |
+| [TRELLIS 2](models/trellis2/README.md) | Learned geometry and PBR materials from an image, exported as a textured GLB | Complete WebGPU image encoder, sparse structure, shape and texture generation; staged checkpoint residency and an exercised shared-device foreground bridge |
 
-The SAM 3 image detector is the largest complete in-tree consumer of the shared runtime. Its browser
+The in-tree TRELLIS 2 port executes the complete learned image-to-3D pipeline in
+WebGPU, from DINOv3 conditioning through sparse structure, shape, geometry and
+materials. It supports 512/no-cascade previews and 1024/cascade generation.
+Foreground preparation runs before conditioning; mesh cleanup, simplification,
+UV unwrapping and texture baking consume the retained model output afterward.
+The [model guide](models/trellis2/README.md) describes the source-checkout tools,
+shared-device integration and finishing path. The model is in this repository,
+separate from the reusable npm runtime.
+
+The SAM 3 image detector is another complete in-tree consumer of the shared runtime. Its browser
 route executes the image backbone, prompt encoder, DETR encoder and decoder,
 scoring, selection, and mask decoder without an MLX process. On the exact
 merged native-1008 route, cold and warm mask outputs were bit-exact against the

@@ -97,8 +97,19 @@ The kit connects a growing family of browser model ports: recover a scene's geom
 | [SHARP](https://github.com/lyonsno/sharp-webgpu) | Gaussian splat scenes from a single image | Adaptive cooperative scheduling, shared-device foreground rendering, staged output construction, and shared tensor-comparison helpers for port development. |
 | [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Animated skeletal motion from a text prompt | Browser diffusion and motion decoding, bounded GPU submissions, reusable model resources, and a host-callable producer with rendering opportunities between transformer passes. Text embeddings come from an external server. |
 | [SAM 3](./docs/sam-semantic-demo.md) | Instance masks from an image and text prompt | A complete browser WebGPU route with authenticated persistent model resources, cached image features, queued semantic requests, and same-device foreground submissions at phase boundaries. |
+| [TRELLIS 2](https://github.com/lyonsno/kaminos/tree/main/models/trellis2) | Learned geometry and PBR materials from an image, finished as a textured GLB | Complete in-tree WebGPU image-to-3D pipeline, staged checkpoint loading, resident stage outputs, and a model-owned bridge to the application's borrowed device and foreground service. |
 
 These ports provide different starting points for application integration. MoGe exposes an existing feed-forward pipeline as an embeddable library. SF3D combines GPU computation with worker-based geometry and texture processing. Kimodo exposes repeated diffusion passes where a host can interleave rendering. SHARP demonstrates the complete result: substantial inference running alongside a continuously rendering application.
+
+TRELLIS 2 executes DINOv3 conditioning, sparse structure, shape sampling,
+geometry decoding, texture sampling and material decoding in WebGPU. Its
+source-checkout flow supports 512/no-cascade previews and 1024/cascade
+generation, with foreground preparation and model-free mesh finishing as
+separate steps. A shared-device run preserved all retained learned fields
+exactly against the accepted isolated run while the Kaminos flame advanced.
+The [TRELLIS model guide](https://github.com/lyonsno/kaminos/tree/main/models/trellis2)
+contains the runnable tools and integration entrypoints. TRELLIS weights,
+kernels and finishing tools live in the Kaminos repository, not in the npm kit.
 
 Ports can adopt a common application-facing shape:
 
