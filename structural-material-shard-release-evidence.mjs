@@ -42,3 +42,14 @@ export function inspectLoadedReleaseSources(expected,observed){
  }
  return errors;
 }
+
+export function inspectCutRefusalRegrip(declined,gripped){
+ const errors=[],cut=declined?.interior?.lastFailedCut,candidate=cut?.candidateState;
+ if(cut?.disposition!=='retained-material-continue'||!Array.isArray(candidate?.stresses)||!candidate.stresses.some(s=>s.invalid||!s.active)||!candidate.runId||candidate.runId===declined?.runId)errors.push('Native invalid candidate refusal is absent');
+ if(!declined||!gripped)return [...errors,'Refusal or regrip observation is absent'];
+ if(declined.phase!=='interactive'||gripped.phase!=='interactive'||declined.failure!==null||gripped.failure!==null)errors.push('Retained material is unavailable');
+ if(!declined.runId||gripped.runId!==declined.runId||gripped.interior?.epoch!==declined.interior?.epoch)errors.push('Reset or material replacement substituted for regrip');
+ if(gripped.gesture?.phase!=='active'||gripped.gesture.inputClosed===true||JSON.stringify(gripped.camera)!==JSON.stringify(declined.camera))errors.push('Pointer fell through to camera or closed input');
+ if(!(gripped.totalSteps>declined.totalSteps)||!Array.isArray(gripped.state?.state)||!Array.isArray(declined.state?.state)||gripped.state.state.length!==declined.state.state.length||!gripped.state.state.some((v,i)=>i%16>=4&&i%16<=6&&Number.isFinite(v)&&Math.abs(v-declined.state.state[i])>1e-7))errors.push('Native motion after regrip is absent');
+ return errors;
+}
