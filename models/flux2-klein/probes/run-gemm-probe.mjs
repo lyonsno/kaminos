@@ -36,7 +36,7 @@ const shapeSets = {
 shapeSets.all = [...shapeSets['klein4b-512'], ...shapeSets['klein4b-1024']];
 const shapeKey = opt('--shapes', 'klein4b-512');
 const shapes = (shapeSets[shapeKey] || []).map((s, i) => ({ ...s, seed: 1000 + i }));
-const cfg = { shapes, iters: Number(opt('--iters', '10')), warmup: 3, samples: Number(opt('--samples', '64')),
+const cfg = { shapes, iters: Number(opt('--iters', '10')), rowBudgetMs: Number(opt('--row-budget-ms', '4000')), samples: Number(opt('--samples', '64')),
   tolF32Acc: 1e-2, tolF16Acc: 5e-2, kernels: opt('--kernels') ? opt('--kernels').split(',') : null };
 const chromeFlags = ['--headless=new', '--remote-debugging-port=0', '--use-mock-keychain', '--password-store=basic',
   '--no-first-run', ...(flag('--subgroup-matrix') ? ['--enable-unsafe-webgpu', '--enable-features=WebGPUDeveloperFeatures'] : [])];

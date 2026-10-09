@@ -80,7 +80,8 @@ async function checkAndTime(device, variant, shape, ops, cfg) {
   else if (kind === 'i8') { wb = buffer(device, new Uint32Array(ops.i8.buffer)); sb = buffer(device, ops.i8s); }
   else { wb = buffer(device, ops.i4); sb = buffer(device, ops.i4sb); }
   bufs.push(wb); if (sb) bufs.push(sb);
-  const yb = device.createBuffer({ size: Math.ceil(M * N * 2 / 16) * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+  const outBytes = variant.outputType === 'f32' ? 4 : 2;
+  const yb = device.createBuffer({ size: Math.ceil(M * N * outBytes / 16) * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
   bufs.push(yb);
   const ub = buffer(device, new Uint32Array([M, N, K, K / GROUP]), GPUBufferUsage.UNIFORM); bufs.push(ub);
   const entries = [
@@ -105,7 +106,8 @@ async function checkAndTime(device, variant, shape, ops, cfg) {
     const rb = device.createBuffer({ size: yb.size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     enc.copyBufferToBuffer(yb, 0, rb, 0, yb.size); device.queue.submit([enc.finish()]);
     await rb.mapAsync(GPUMapMode.READ);
-    const y = new Float16Array(rb.getMappedRange().slice(0, M * N * 2)); rb.unmap(); rb.destroy();
+    const raw = rb.getMappedRange().slice(0, M * N * outBytes); rb.unmap(); rb.destroy();
+    const y = outBytes === 4 ? new Float32Array(raw) : new Float16Array(raw);
     const r = rng(shape.seed ^ 0x9e3779b9);
     let maxErr = 0, sumSq = 0, nonFinite = 0;
     const samples = cfg.samples;
@@ -125,31 +127,53 @@ async function checkAndTime(device, variant, shape, ops, cfg) {
     if (nonFinite || !(maxErr / rms <= tol)) { row.status = 'wrong'; bufs.forEach(b => b.destroy()); return row; }
   }
 
-  // Timing: warmups, then one timestamped pass per iteration.
-  for (let i = 0; i < cfg.warmup; i++) { const enc = device.createCommandEncoder(); encodeOnce(enc); device.queue.submit([enc.finish()]); }
-  await device.queue.onSubmittedWorkDone();
-  const iters = cfg.iters;
-  const qs = device.createQuerySet({ type: 'timestamp', count: 2 * iters });
-  const qb = device.createBuffer({ size: 16 * iters, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
-  const qr = device.createBuffer({ size: 16 * iters, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
-  const t0 = performance.now();
-  const enc = device.createCommandEncoder();
-  for (let i = 0; i < iters; i++) encodeOnce(enc, { querySet: qs, beginningOfPassWriteIndex: 2 * i, endOfPassWriteIndex: 2 * i + 1 });
-  enc.resolveQuerySet(qs, 0, 2 * iters, qb, 0); enc.copyBufferToBuffer(qb, 0, qr, 0, 16 * iters);
-  device.queue.submit([enc.finish()]);
-  await qr.mapAsync(GPUMapMode.READ);
-  const wallMs = performance.now() - t0;
-  const ts = new BigInt64Array(qr.getMappedRange().slice(0)); qr.unmap();
-  const gpuMs = [];
-  for (let i = 0; i < iters; i++) gpuMs.push(Number(ts[2 * i + 1] - ts[2 * i]) / 1e6);
-  gpuMs.sort((a, b) => a - b);
-  const median = gpuMs[Math.floor(iters / 2)];
+  // Timing: one dispatch per submit so no command buffer runs long (a multi-second
+  // batch was observed to kill the device). One warmup, then up to cfg.iters timed
+  // submits, stopping early once cfg.rowBudgetMs of GPU time is spent.
+  const qs = device.createQuerySet({ type: 'timestamp', count: 2 });
+  const qb = device.createBuffer({ size: 16, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+  const timeOnce = async () => {
+    const qr = device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = device.createCommandEncoder();
+    encodeOnce(enc, { querySet: qs, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 });
+    enc.resolveQuerySet(qs, 0, 2, qb, 0); enc.copyBufferToBuffer(qb, 0, qr, 0, 16);
+    const t0 = performance.now();
+    device.queue.submit([enc.finish()]);
+    await qr.mapAsync(GPUMapMode.READ);
+    const wall = performance.now() - t0;
+    const ts = new BigInt64Array(qr.getMappedRange().slice(0)); qr.unmap(); qr.destroy();
+    return { gpu: Number(ts[1] - ts[0]) / 1e6, wall };
+  };
+  await timeOnce();
+  const gpuMs = [], wallMs = []; let spent = 0;
+  while (gpuMs.length < cfg.iters && spent < cfg.rowBudgetMs) {
+    const t = await timeOnce(); gpuMs.push(t.gpu); wallMs.push(t.wall); spent += Math.max(t.gpu, t.wall);
+  }
+  const iters = gpuMs.length;
+  gpuMs.sort((a, b) => a - b); wallMs.sort((a, b) => a - b);
+  const median = gpuMs[Math.floor(iters / 2)], wallMedian = wallMs[Math.floor(iters / 2)];
   const flop = 2 * M * N * K;
-  row.timing = { iters, gpuMsMedian: median, gpuMsMin: gpuMs[0], gpuMsMax: gpuMs[iters - 1], wallMsBatch: wallMs,
-    tflopsMedian: flop / (median * 1e-3) / 1e12, tflopsWall: flop * iters / (wallMs * 1e-3) / 1e12 };
+  row.timing = { iters, gpuMsMedian: median, gpuMsMin: gpuMs[0], gpuMsMax: gpuMs[iters - 1], wallMsMedian: wallMedian,
+    tflopsMedian: flop / (median * 1e-3) / 1e12, tflopsWall: flop / (wallMedian * 1e-3) / 1e12 };
+  qs.destroy(); qb.destroy(); bufs.forEach(b => b.destroy());
   row.status = median > 0 ? 'ok' : 'timestamp-invalid';
-  qs.destroy(); qb.destroy(); qr.destroy(); bufs.forEach(b => b.destroy());
   return row;
+}
+
+
+// Known-answer dispatch: y[i] = 3 * i + 1. A lost or wedged device reads back zeros.
+let healthPipeline = null;
+async function deviceHealthy(device) {
+  healthPipeline ??= device.createComputePipeline({ layout: 'auto', compute: { entryPoint: 'main', module: device.createShaderModule({ code: `
+@group(0) @binding(0) var<storage, read_write> y: array<u32>;
+@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) g: vec3<u32>) { y[g.x] = 3u * g.x + 1u; }` }) } });
+  const buf = device.createBuffer({ size: 256, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+  const rb = device.createBuffer({ size: 256, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  const enc = device.createCommandEncoder(); const pass = enc.beginComputePass();
+  pass.setPipeline(healthPipeline); pass.setBindGroup(0, device.createBindGroup({ layout: healthPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: buf } }] }));
+  pass.dispatchWorkgroups(1); pass.end(); enc.copyBufferToBuffer(buf, 0, rb, 0, 256); device.queue.submit([enc.finish()]);
+  await rb.mapAsync(GPUMapMode.READ); const y = new Uint32Array(rb.getMappedRange().slice(0)); rb.unmap(); rb.destroy(); buf.destroy();
+  return y.every((v, i) => v === 3 * i + 1);
 }
 
 window.runGemmProbe = async function runGemmProbe(cfg) {
@@ -182,6 +206,10 @@ window.runGemmProbe = async function runGemmProbe(cfg) {
         }
         report.currentRow = `${shape.name}/${v.name}`;
         report.rows.push(await checkAndTime(device, v, shape, ops, cfg));
+        if (!(await deviceHealthy(device))) {
+          report.deviceDeadAfter = report.currentRow;
+          throw new Error(`device stopped returning correct results after ${report.currentRow}`);
+        }
       }
     }
     delete report.currentRow;
