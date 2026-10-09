@@ -388,7 +388,8 @@ export function gemmSubgroupMatrixShader({ aKContiguous = true, bNContiguous = t
     base.indexOf('    workgroupBarrier();'));
   const epilogue = base.slice(base.indexOf('      var v=p.alpha*acc[i][j];'), base.indexOf('      c[p.c_off'))
     .replace('acc[i][j]', 'outt[ml*64u+nl]');
-  return `enable chromium_experimental_subgroup_matrix;
+  return `enable subgroups;
+enable chromium_experimental_subgroup_matrix;
 ${header}
 var<workgroup> tile_a:array<f32,1024>;
 var<workgroup> tile_b:array<f32,1024>;
@@ -397,7 +398,8 @@ var<workgroup> outt:array<f32,4096>;
 fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:vec3<u32>) {
   let tid=lid.y*16u+lid.x;
   let m0=wid.y*64u;let n0=p.n_base+wid.x*64u;let bat=wid.z;
-  let sg=tid/32u;let sm=(sg/2u)*16u;let sn=(sg%2u)*32u;
+  // Subgroup-matrix offsets must be subgroup-uniform; 32 lanes per subgroup.
+  let sg=subgroupBroadcastFirst(tid/32u);let sm=(sg/2u)*16u;let sn=(sg%2u)*32u;
   var acc00=subgroup_matrix_result<f32,8,8>();var acc01=subgroup_matrix_result<f32,8,8>();
   var acc02=subgroup_matrix_result<f32,8,8>();var acc03=subgroup_matrix_result<f32,8,8>();
   var acc10=subgroup_matrix_result<f32,8,8>();var acc11=subgroup_matrix_result<f32,8,8>();
