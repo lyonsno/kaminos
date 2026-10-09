@@ -9,6 +9,11 @@ const exteriorWall=[[[-2,-1,2],[2,-1,2],[2,3,2]],[[-2,-1,2],[2,3,2],[-2,3,2]]];
 const baseline=voxelizeTriangleSolid(exteriorWall,16);
 assert.equal(baseline.surfaceCellCount,0,'fluid-only control excludes the exterior wall');
 const pack=triangles=>buildTriangleVisibility(triangles.map(([a,b,c])=>({a,b,c}))).packGpu();
+// Observed saved-scene loading route constructs an empty gather before assets
+// arrive. It must remain usable, but cannot satisfy the nonempty kiln witness.
+const loadingProxy=buildSceneOccupancy(pack([]),[],32);
+assert.equal(loadingProxy.metadata.nodeCount,0);
+assert.equal(occupancyDistance(loadingProxy,[0,1,4],[0,0,-1]),1e20);
 const proxy=buildSceneOccupancy(pack(exteriorWall),[{position:[0,1,4]}],32);
 assert(proxy.metadata.surfaceCellCount>0,'visibility geometry must include blockers outside the fluid box');
 const hit=occupancyDistance(proxy,[0,1,4],[0,0,-1]);

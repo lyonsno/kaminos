@@ -3,7 +3,6 @@ import {voxelizeTriangleSolid} from '../volume-scene-solid.mjs';
 
 export function buildSceneOccupancy(geometry,receivers,grid){
   if(!Number.isSafeInteger(grid)||grid<2||(grid&(grid-1)))throw Error('power-of-two occupancy grid required');
-  if(!geometry.triangleCount)throw Error('visibility proxy requires geometry');
   const started=performance.now(),lo=[-1,-1,-1],hi=[1,3,1];
   for(let a=0;a<3;a++){lo[a]=Math.min(lo[a],geometry.nodes[a]);hi[a]=Math.max(hi[a],geometry.nodes[a+4]);}
   for(const r of receivers)for(let a=0;a<3;a++){lo[a]=Math.min(lo[a],r.position[a]);hi[a]=Math.max(hi[a],r.position[a]);}
