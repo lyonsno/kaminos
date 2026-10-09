@@ -41,3 +41,22 @@ test('actual normal teardown destroys only its own device, once',()=>{
     assert.equal(deviceDestroyCount,owned?1:0);
   }
 });
+
+
+test('run controls keep their handlers and disabled state when mounted outside the tuning panel',async()=>{
+  const oldLocation=globalThis.location,oldHistory=globalThis.history;
+  globalThis.location={href:'http://localhost/index.html?finger_fluid_pressure_solver=ipbf'};
+  globalThis.history={state:null,replaceState(){}};
+  try {
+    const model=createIPBFPressureControlState({baseRadius:.185,pressureRadiusScale:1,beta:60,densityIterations:3,capillaryStrength:.72});
+    const nodes=new Map(),detached=new Set();let paused=false,finishReset;
+    const node=id=>{if(!nodes.has(id))nodes.set(id,{type:id.endsWith('-number')?'number':'range',min:'0',max:'8',value:'',checked:false,listeners:{},addEventListener(type,callback){this.listeners[type]=callback;}});return nodes.get(id);};
+    const root={hidden:true,innerHTML:'',ownerDocument:{activeElement:null},querySelector:s=>detached.has(s.slice(1))?null:node(s.slice(1)),querySelectorAll:()=>[...nodes].filter(([id])=>!detached.has(id)).map(([,node])=>node)};
+    const cockpit=createIPBFPressureCockpit({root,getSolver:()=>({available:true,getPressureControls:()=>({available:true,...model.read(),particleCount:12288,damping:true}),setPressureControls:patch=>model.request(patch)}),isPaused:()=>paused,setPaused:v=>{paused=v;},restart:()=>new Promise(resolve=>{finishReset=resolve;})});
+    for(const id of ['ipbf-pause','ipbf-reset','ipbf-control-status'])detached.add(id);
+    assert.doesNotThrow(()=>cockpit.update());
+    node('ipbf-pause').listeners.click();assert.equal(paused,true);assert.equal(node('ipbf-pause').textContent,'Resume');
+    const reset=node('ipbf-reset').listeners.click();assert.equal(node('ipbf-pause').disabled,true);assert.equal(node('ipbf-reset').disabled,true);
+    finishReset();await reset;assert.equal(node('ipbf-pause').disabled,false);assert.match(node('ipbf-control-status').textContent,/Paused/);
+  }finally{globalThis.location=oldLocation;globalThis.history=oldHistory;}
+});

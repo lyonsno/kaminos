@@ -29,7 +29,10 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
     <p class="ipbf-help">Particle count and represented volume stay fixed. Edits apply on the next step.</p>
     <a id="ipbf-replay" target="_blank" rel="noopener">Open these settings in a fresh tab</a>
   `;
-  const find=id=>root.querySelector('#'+id);
+  // Retain node identity when the workspace mounts run controls elsewhere.
+  const nodes=new Map();
+  const find=id=>{if(!nodes.has(id))nodes.set(id,root.querySelector('#'+id));return nodes.get(id);};
+  for(const id of ['ipbf-pause','ipbf-reset','ipbf-control-status'])find(id);
   const linked=find('ipbf-link-damping');
   linked.checked=new URL(location.href).searchParams.get('finger_fluid_pressure_cockpit_linked')!=='0';
   let baseRadius=null,resetting=false,error='';
@@ -40,7 +43,7 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
   }
   function update() {
     const current=source();
-    root.querySelectorAll('input,button').forEach(el=>{el.disabled=!current||resetting;});
+    for(const el of [...root.querySelectorAll('input,button'),find('ipbf-pause'),find('ipbf-reset')])el.disabled=!current||resetting;
     if(!current){
       const status=getStatus?.();
       find('ipbf-control-status').textContent=resetting?'Resetting water…':status?.status==='error'

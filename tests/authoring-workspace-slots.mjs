@@ -43,3 +43,17 @@ test('nested document commands return to their original toolbar when both move',
   slots.showWorkbench(); assert.equal(save.parent, toolbar); assert.equal(toolbar.parent, viewport);
   assert.deepEqual(ids(toolbar), ['save', 'gizmo']);
 });
+
+test('experiment slots share the same live controls and release them before Authoring takes custody', () => {
+  const sidebar = new Node('sidebar'), authoring = new Node('authoring'), experiment = new Node('experiment');
+  const light = new Node('environment'); sidebar.append(light); light.value = .7;
+  const editorSlots = createControlSlots(document, [{node:light,destination:authoring}]);
+  const experimentSlots = createControlSlots(document, [{node:light,destination:experiment}]);
+  assert.equal(typeof experimentSlots.setActive, 'function', 'control slots need a mode-neutral activation operation');
+  experimentSlots.setActive(true); light.value = .3;
+  experimentSlots.setActive(false); editorSlots.showAuthoring();
+  assert.equal(light.parent,authoring); assert.equal(light.value,.3);
+  editorSlots.showWorkbench(); experimentSlots.setActive(true);
+  assert.deepEqual(ids(experiment),['environment']);
+  experimentSlots.setActive(false); assert.equal(light.parent,sidebar);
+});

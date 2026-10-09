@@ -7,13 +7,15 @@ export function createControlSlots(document, entries) {
     node.before(marker);
     return { node, destination, marker };
   });
-  return {
-    showAuthoring() { for (const { node, destination } of slots) destination.append(node); },
-    showWorkbench() { for (const { node, marker } of slots) marker.after(node); },
+  const setActive = active => {
+    for (const { node, destination, marker } of slots) {
+      if (active) destination.append(node); else marker.after(node);
+    }
   };
+  return { setActive, showAuthoring: () => setActive(true), showWorkbench: () => setActive(false) };
 }
 
-export function installAuthoringWorkspace({ document, initialMode = 'workbench', beforeSwitch = () => true, openWorkbenchTab, edits }) {
+export function installAuthoringWorkspace({ document, initialMode = 'workbench', beforeSwitch = () => true, afterSwitch = () => {}, openWorkbenchTab, edits }) {
   const byId = id => document.getElementById(id);
   const header = document.createElement('header');
   header.id = 'authoring-header';
@@ -105,6 +107,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     mode = next;
     document.body.dataset.workspace = mode;
     header.querySelectorAll('[data-workspace-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.workspaceMode === mode)));
+    afterSwitch(mode);
     return true;
   }
   header.querySelectorAll('[data-workspace-mode]').forEach(button => button.addEventListener('click', () => setMode(button.dataset.workspaceMode)));
