@@ -14,7 +14,8 @@ export function buildSceneOccupancy(geometry,receivers,grid){
     for(let v=0;v<3;v++)tri.push([0,1,2].map(a=>((raw[offset+a]+(v?raw[offset+v*4+a]:0)-lo[a])/pitch)*2/grid-1));
     tris.push(tri);
   }
-  const raster=voxelizeTriangleSolid(tris,grid),levels=[{data:raster.cells,dims:[grid,2*grid,grid]}];
+  const raster=tris.length?voxelizeTriangleSolid(tris,grid):{cells:new Uint8Array(2*grid**3),surfaceCellCount:0,interiorCellCount:0};
+  const levels=[{data:raster.cells,dims:[grid,2*grid,grid]}];
   // 0 empty, 1 completely occupied, 2 mixed. Full blocks collapse to one leaf.
   while(levels.at(-1).dims.some(x=>x>1)){
     const previous=levels.at(-1),dims=previous.dims.map(x=>Math.ceil(x/2)),data=new Uint8Array(dims[0]*dims[1]*dims[2]);
