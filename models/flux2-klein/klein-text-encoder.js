@@ -57,18 +57,25 @@ export class KleinTextEncoder {
 
   w(layer, name) {
     const b = this.weights[`layer${String(layer).padStart(2, '0')}`]; const t = b.tensors[name];
-    return { buf: b.buf, elemOff: t.offset / 2, shape: t.shape };
+    const format = t.format ?? 'f16';
+    return { buf: b.buf, format, elemOff: format === 'f16' ? t.offset / 2 : t.offset / 4, shape: t.shape,
+      scaleOff: t.scale_offset !== undefined ? t.scale_offset / 2 : 0 };
   }
 
-  gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bDiv = 1, bType = 'f16', c, cOff = 0, cRs, cBs = 0, M, N, K, batch = 1, alpha = 1, epilogue = 'store' }) {
+  gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bDiv = 1, bType = 'f16', c, cOff = 0, cRs, cBs = 0, M, N, K, batch = 1, alpha = 1, epilogue = 'store', scaleOff = 0 }) {
     const pipe = this.pipeline(`gemm-${bType}-${epilogue}`, gemmShader({ bType, epilogue }));
-    this.dispatch(enc, pipe, [a, b, c, this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, 0, bDiv, 0])],
-      Math.ceil(N / 64), Math.ceil(M / 64), batch);
+    const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, 0, bDiv, scaleOff]);
+    const entries = [a, b, c, u].map((buffer, i) => ({ binding: i, resource: { buffer } }));
+    if (bType === 'i8' || bType === 'i4') entries.push({ binding: 5, resource: { buffer: b } });
+    const bind = this.device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries });
+    const pass = enc.beginComputePass(); pass.setPipeline(pipe); pass.setBindGroup(0, bind);
+    pass.dispatchWorkgroups(Math.ceil(N / 64), Math.ceil(M / 64), batch); pass.end();
   }
 
   linear(enc, x, rows, weight, out, epilogue = 'store') {
     const [N, K] = weight.shape;
-    this.gemm(enc, { a: x, aRs: K, b: weight.buf, bOff: weight.elemOff, bRs: K, c: out, cRs: N, M: rows, N, K, epilogue });
+    this.gemm(enc, { a: x, aRs: K, b: weight.buf, bOff: weight.elemOff, bRs: K, bType: weight.format, scaleOff: weight.scaleOff,
+      c: out, cRs: N, M: rows, N, K, epilogue });
   }
 
   allocate(L) {

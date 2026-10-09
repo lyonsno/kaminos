@@ -73,7 +73,10 @@ export class KleinTransformer {
   w(bundle, name) {
     const b = this.weights[bundle]; const t = b.tensors[name];
     if (!t) throw new Error(`missing weight ${bundle}/${name}`);
-    return { buf: b.buf, elemOff: t.offset / 2, byteOff: t.offset, bytes: t.bytes, shape: t.shape };
+    const format = t.format ?? 'f16';
+    const elemOff = format === 'f16' ? t.offset / 2 : t.offset / 4;
+    return { buf: b.buf, format, elemOff, byteOff: t.offset, bytes: t.bytes, shape: t.shape,
+      scaleOff: t.scale_offset !== undefined ? t.scale_offset / 2 : 0 };
   }
 
   buffer(bytes, usage = 0) {
@@ -100,18 +103,20 @@ export class KleinTransformer {
 
   // C = alpha * A[M,K] * B[N,K]^T with strides; epilogue 'store' | 'add' | 'gated-residual'.
   gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bType = 'f16', c, cOff = 0, cRs, cBs = 0,
-    M, N, K, batch = 1, alpha = 1, epilogue = 'store', gate = null, gateOff = 0 }) {
+    M, N, K, batch = 1, alpha = 1, epilogue = 'store', gate = null, gateOff = 0, scaleOff = 0 }) {
     const pipe = this.pipeline(`gemm-${bType}-${epilogue}`, gemmShader({ bType, epilogue }));
-    const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, gateOff, 0, 0]);
+    const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, gateOff, 0, scaleOff]);
     const entries = [{ binding: 0, resource: { buffer: a } }, { binding: 1, resource: { buffer: b } },
       { binding: 2, resource: { buffer: c } }, { binding: 3, resource: { buffer: u } }];
     if (epilogue === 'gated-residual') entries.push({ binding: 4, resource: { buffer: gate } });
+    if (bType === 'i8' || bType === 'i4') entries.push({ binding: 5, resource: { buffer: b } });
     this.dispatch(enc, pipe, entries, Math.ceil(N / 64), Math.ceil(M / 64), batch);
   }
 
   linear(enc, x, rows, weight, out, opts = {}) {
     const [N, K] = weight.shape;
     this.gemm(enc, { a: x, aOff: opts.aOff ?? 0, aRs: opts.aRs ?? K, b: weight.buf, bOff: weight.elemOff, bRs: K,
+      bType: weight.format, scaleOff: weight.scaleOff,
       c: out, cOff: opts.cOff ?? 0, cRs: opts.cRs ?? N, M: rows, N, K, epilogue: opts.epilogue ?? 'store',
       gate: opts.gate, gateOff: opts.gateOff ?? 0 });
   }

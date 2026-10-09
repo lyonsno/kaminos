@@ -10,16 +10,31 @@ export const LN_EPS = 1e-6;
 
 // C[b][m][n] = alpha * sum_k A[b][m][k] * B[b / b_div][n][k], A f32, B f16 or f32.
 // b_div (uniform z0, 0 meaning 1) lets grouped-query attention share K/V heads.
+// bType i8/i4 reads group-64 quantized weights (pack-transformer.py) with scales at
+// f16 element offset z1 of binding 5; b_off is then a u32 word offset.
 // Epilogues: 'store' writes C; 'gated-residual' does R[m][n] += gate[n] * value
 // in place (R is the C binding); 'add' does C += value.
 export function gemmShader({ bType = 'f16', epilogue = 'store' } = {}) {
-  const bArray = bType === 'f16' ? 'array<f16>' : 'array<f32>';
+  const quant = bType === 'i8' || bType === 'i4';
+  const bArray = quant ? 'array<u32>' : bType === 'f16' ? 'array<f16>' : 'array<f32>';
+  let loadB = 'bv = f32(b[p.b_off + bbat * p.b_bs + n * p.b_rs + k]);';
+  if (bType === 'i8') {
+    loadB = `let word = b[p.b_off + n * (p.K / 4u) + k / 4u];
+        let q = i32(word << (24u - 8u * (k % 4u))) >> 24u;
+        bv = f32(q) * f32(bs[p.z1 + n * (p.K / 64u) + k / 64u]);`;
+  } else if (bType === 'i4') {
+    loadB = `let word = b[p.b_off + n * (p.K / 8u) + k / 8u];
+        let q = (word >> (4u * (k % 8u))) & 15u;
+        let sb = p.z1 + (n * (p.K / 64u) + k / 64u) * 2u;
+        bv = f32(q) * f32(bs[sb]) + f32(bs[sb + 1u]);`;
+  }
+  const scaleBinding = quant ? '@group(0) @binding(5) var<storage, read> bs: array<f16>;' : '';
   const gateBinding = epilogue === 'gated-residual' ? '@group(0) @binding(4) var<storage, read> gate: array<f32>;' : '';
   let store;
   if (epilogue === 'store') store = 'c[ci] = v;';
   else if (epilogue === 'add') store = 'c[ci] = c[ci] + v;';
   else store = 'c[ci] = c[ci] + gate[p.gate_off + n] * v;';
-  return `${bType === 'f16' ? 'enable f16;' : ''}
+  return `${bType === 'f32' ? '' : 'enable f16;'}
 struct P {
   M: u32, N: u32, K: u32, alpha: f32,
   a_off: u32, a_rs: u32, a_bs: u32, b_off: u32,
@@ -31,6 +46,7 @@ struct P {
 @group(0) @binding(2) var<storage, read_write> c: array<f32>;
 @group(0) @binding(3) var<uniform> p: P;
 ${gateBinding}
+${scaleBinding}
 var<workgroup> ta: array<f32, 1024>;
 var<workgroup> tb: array<f32, 1024>;
 @compute @workgroup_size(16, 16)
@@ -46,7 +62,7 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
       if (m < p.M && k < p.K) { av = a[p.a_off + bat * p.a_bs + m * p.a_rs + k]; }
       ta[kk * 64u + rr] = av;
       let n = n0 + rr; var bv = 0.0;
-      if (n < p.N && k < p.K) { bv = f32(b[p.b_off + bbat * p.b_bs + n * p.b_rs + k]); }
+      if (n < p.N && k < p.K) { ${loadB} }
       tb[kk * 64u + rr] = bv;
     }
     workgroupBarrier();

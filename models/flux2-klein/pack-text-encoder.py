@@ -7,7 +7,11 @@ output. Each layer is one f16 bundle (256-byte aligned) with q/k/v fused to
 separate row-major f16 file so the browser can fetch only the rows a prompt
 uses with HTTP range requests. tokenizer.json is copied beside the manifest.
 
-  python pack-text-encoder.py --model-dir <hf snapshot> --out <dir>
+--format i8|i4 quantizes the 2-D linears exactly as pack-transformer.py does
+(group 64; norms stay f16). The embedding table stays f16 because only the
+prompt's rows are ever fetched.
+
+  python pack-text-encoder.py --model-dir <hf snapshot> --out <dir> [--format f16|i8|i4]
 """
 import argparse
 import hashlib
@@ -19,6 +23,10 @@ import numpy as np
 import torch
 from safetensors import safe_open
 
+from importlib import import_module
+quantize = import_module('pack-transformer').quantize
+GROUP = 64
+
 ALIGN = 256
 TAPS = (9, 18, 27)
 
@@ -27,6 +35,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model-dir", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--format", default="f16", choices=["f16", "i8", "i4"])
     args = ap.parse_args()
     src = Path(args.model_dir) / "text_encoder"
     out = Path(args.out)
@@ -42,8 +51,8 @@ def main():
         return handles[fname].get_tensor(name).to(torch.float32)
 
     layers_needed = max(TAPS)
-    manifest = {"schema": "kaminos.flux2-klein.text-encoder-weights.v0", "source": str(src.resolve()), "config": config,
-                "taps": list(TAPS), "layers": layers_needed, "dtype": "f16", "bundles": {}}
+    manifest = {"schema": "kaminos.flux2-klein.text-encoder-weights.v1", "source": str(src.resolve()), "config": config,
+                "taps": list(TAPS), "layers": layers_needed, "format": args.format, "group": GROUP, "bundles": {}}
 
     for i in range(layers_needed):
         p = f"model.layers.{i}."
@@ -58,18 +67,32 @@ def main():
             ("down", t(p + "mlp.down_proj.weight")),
         ]
         parts, entries, offset = [], [], 0
-        for name, w in tensors:
-            a = w.numpy().astype(np.float16)
-            if not np.all(np.isfinite(a)):
-                raise SystemExit(f"layer {i} {name} overflows f16")
+
+        def put(data):
+            nonlocal offset
             pad = (-offset) % ALIGN
             if pad:
                 parts.append(b"\0" * pad)
                 offset += pad
-            data = a.tobytes()
-            entries.append({"name": name, "shape": list(a.shape), "offset": offset, "bytes": len(data)})
+            at = offset
             parts.append(data)
             offset += len(data)
+            return at
+
+        for name, w in tensors:
+            w32 = w.numpy()
+            fmt = args.format if (w32.ndim == 2 and w32.shape[1] % GROUP == 0) else "f16"
+            if fmt == "f16":
+                a = w32.astype(np.float16)
+                if not np.all(np.isfinite(a)):
+                    raise SystemExit(f"layer {i} {name} overflows f16")
+                data = a.tobytes()
+                entries.append({"name": name, "format": "f16", "shape": list(a.shape), "offset": put(data), "bytes": len(data)})
+            else:
+                qdata, sdata, deq = quantize(w32, fmt)
+                err = float(np.linalg.norm(deq - w32) / max(np.linalg.norm(w32), 1e-30))
+                entries.append({"name": name, "format": fmt, "shape": list(w32.shape), "offset": put(qdata), "bytes": len(qdata),
+                                "scale_offset": put(sdata), "scale_bytes": len(sdata), "weight_rel_l2": err})
         blob = b"".join(parts)
         bname = f"layer{i:02d}"
         (out / f"te-{bname}.bin").write_bytes(blob)

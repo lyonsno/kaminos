@@ -67,7 +67,12 @@ try {
   });
   const base = wsUrl.replace('ws://', 'http://').replace(/\/devtools\/browser\/.*/, '');
   report.effectiveBrowser = (await (await fetch(`${base}/json/version`)).json()).Browser;
-  const page = (await (await fetch(`${base}/json/list`)).json()).find(t => t.type === 'page');
+  let page;
+  for (let i = 0; i < 50 && !page; i++) {
+    page = (await (await fetch(`${base}/json/list`)).json()).find(t => t.type === 'page');
+    if (!page) await new Promise(r => setTimeout(r, 100));
+  }
+  if (!page) throw new Error('no page target after 5 s');
   ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
   const consoleLines = []; report.console = consoleLines;
