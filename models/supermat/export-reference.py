@@ -89,13 +89,15 @@ def main():
     p.add_argument('--expected-image-sha256', required=True)
     p.add_argument('--image-size', type=int, default=512)
     p.add_argument('--threads', type=int, required=True)
+    p.add_argument('--captures', choices=('all', 'endpoints'), default='all',
+                   help='endpoints keeps input, latent, conditioning, v predictions, decoder inputs and outputs')
     p.add_argument('--out', type=Path, required=True)
     args = p.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     report_path = args.out / 'manifest.json'
     report = {'schema': SCHEMA, 'status': 'failed', 'phase': 'source', 'tensors': {},
               'referenceRoute': 'pinned-source-pipeline/torch-cpu-float32',
-              'imageSize': args.image_size, 'calls': {}}
+              'imageSize': args.image_size, 'captures': args.captures, 'calls': {}}
     start = time.perf_counter()
     try:
         root = args.source_root.resolve()
@@ -130,6 +132,8 @@ def main():
                              'torch': torch.__version__, 'diffusers': diffusers.__version__,
                              'transformers': transformers.__version__, 'device': 'cpu',
                              'dtype': 'float32', 'threads': torch.get_num_threads()}
+        # Importing the pinned source must not write __pycache__ into it.
+        sys.dont_write_bytecode = True
         sys.path.insert(0, str(root))
         from diffusers import DDIMScheduler
         from src.adapters import SuperMatAdapterWrapper
@@ -151,7 +155,11 @@ def main():
                                 'num_train_timesteps', 'clip_sample', 'timestep_spacing')}
         report['vaeScalingFactor'] = float(pipe.vae.config.scaling_factor)
 
+        endpoint_prefixes = ('input.', 'unet.in.', 'unet.conv_out.', 'vae.decode.in', 'vae.quant', 'output.')
+
         def save(name, tensor, **extra):
+            if args.captures == 'endpoints' and not name.startswith(endpoint_prefixes):
+                return
             values = np.ascontiguousarray(tensor.detach().to(torch.float32).cpu().numpy(), dtype='<f4')
             if not np.isfinite(values).all():
                 raise ValueError(f'{name}: non-finite tensor')
