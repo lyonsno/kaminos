@@ -35,7 +35,7 @@ async function fetchJson(url) {
 async function fetchReference(manifest, name) {
   const row = manifest.tensors[name];
   if (!row) throw new Error(`reference tensor ${name} is missing`);
-  const response = await fetch(`/fixture/${row.file}`, { cache: 'no-store' });
+  const response = await fetch(`/fixture/${encodeURIComponent(row.file)}`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`reference ${name}: HTTP ${response.status}`);
   const values = new Float32Array(await response.arrayBuffer());
   const expected = row.shape.reduce((a, b) => a * b, 1);
