@@ -231,7 +231,6 @@ export function decodeScaledLatent(ops, w, z, { capture = () => {}, call = 0 } =
 // re-deriving it in JS differs from torch's F32 exp by an ulp that t amplifies.
 export function timeEmbedding(ops, w, { capture = () => {} } = {}) {
   const sinusoid = w('conditioning.time_proj');
-  capture('unet.time_proj#0', sinusoid);
   const hidden = linear(ops, sinusoid, 1, w('unet.time_embedding.linear_1.weight'), w('unet.time_embedding.linear_1.bias'),
     { name: 'unet.time.linear_1' });
   const activated = ops.affine({ x: hidden, shape: hidden.shape, silu: true, name: 'unet.time.silu' });
