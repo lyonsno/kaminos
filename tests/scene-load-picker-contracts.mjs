@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { catalogEntry, entryMatchesFilter, entryMeta, sortEntries } from '../scene-load-picker.mjs';
+import { catalogEntry, entryMatchesFilter, entryMeta, openPlan, retainedIndex, sortEntries } from '../scene-load-picker.mjs';
 
 const group = (extra) => ({ identity: 'i', label: '', timestamp: '', image: null, local: [], foreign: [], copies: 0, ...extra });
 
@@ -29,4 +29,20 @@ test('scenes with a copy here list first, then newest first', () => {
     catalogEntry(group({ identity: 'c', timestamp: '2026-10-07T00:00:00Z', local: ['c.kaminos.json'] })),
   ]);
   assert.deepEqual(entries.map(entry => entry.group.identity), ['c', 'b', 'a']);
+});
+
+test('opening a scene uses the full catalog group and every other server that holds it', () => {
+  const local = group({ identity: 'k', local: ['kiln.kaminos.json'] });
+  const full = [group({ identity: 'k', local: ['kiln.kaminos.json'], foreign: [{ store: 'a', storeLabel: 'a-missing', name: 'k.kaminos.json' }, { store: 'z', storeLabel: 'z-complete', name: 'k.kaminos.json' }] })];
+  assert.deepEqual(openPlan(local, full), { open: 'kiln.kaminos.json', importFrom: null, meshSources: full[0].foreign });
+  const remote = group({ identity: 't', foreign: [{ store: 'a', storeLabel: 'a-missing', name: 't.kaminos.json' }, { store: 'z', storeLabel: 'z-complete', name: 't.kaminos.json' }] });
+  assert.deepEqual(openPlan(remote, null), { open: null, importFrom: remote.foreign[0], meshSources: [remote.foreign[1]] });
+  assert.deepEqual(openPlan(group({ identity: null, local: ['broken.kaminos.json'] }), full), { open: 'broken.kaminos.json', importFrom: null, meshSources: [] });
+});
+
+test('a highlighted scene stays highlighted when the list is replaced, even at the top', () => {
+  assert.equal(retainedIndex(['b', 'a', 'c'], 'b'), 0);
+  assert.equal(retainedIndex(['b', 'a', 'c'], 'c'), 2);
+  assert.equal(retainedIndex(['b', 'a'], 'gone'), 0);
+  assert.equal(retainedIndex([], 'a'), 0);
 });

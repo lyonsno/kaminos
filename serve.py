@@ -2171,6 +2171,44 @@ def scene_identity(document):
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+_SCENE_SUMMARY_CACHE = {}
+_SCENE_SUMMARY_LOCK = threading.Lock()
+
+
+def scene_file_summary(scene_path):
+    """Identity and listing fields of one scene file, cached by path, size and
+    modification time so Load does not re-parse every scene each time."""
+    stat = scene_path.stat()
+    key = str(scene_path)
+    stamp = (stat.st_mtime_ns, stat.st_size)
+    with _SCENE_SUMMARY_LOCK:
+        cached = _SCENE_SUMMARY_CACHE.get(key)
+    if cached and cached[0] == stamp:
+        return cached[1]
+    try:
+        data = json.loads(scene_path.read_text())
+        if not isinstance(data, dict):
+            raise ValueError("scene file is not a JSON object")
+        capture = data.get("capture") if isinstance(data.get("capture"), dict) else {}
+        summary = {"identity": scene_identity(data), "label": str(data.get("label") or capture.get("label") or ""),
+                   "timestamp": str(data.get("timestamp") or ""), "hasImage": bool(scene_image_data_url(data)), "mtime": stat.st_mtime}
+    except (OSError, ValueError, TypeError) as error:
+        summary = {"error": str(error)}
+    with _SCENE_SUMMARY_LOCK:
+        _SCENE_SUMMARY_CACHE[key] = (stamp, summary)
+    return summary
+
+
+def warm_scene_catalog():
+    """Fill the scene summary cache in the background at server start."""
+    for folder in [Path(SCENES_DIR), *scene_library_stores().values()]:
+        for scene_path in folder.glob("*.kaminos.json"):
+            try:
+                scene_file_summary(scene_path)
+            except OSError:
+                pass
+
+
 def scene_image_data_url(document):
     if not isinstance(document, dict):
         return None
@@ -4096,17 +4134,20 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         for store_id, store_label, folder in sources:
             for scene_path in sorted(folder.glob("*.kaminos.json")):
                 try:
-                    data = json.loads(scene_path.read_text())
-                    mtime = scene_path.stat().st_mtime
-                except (OSError, ValueError) as error:
+                    summary = scene_file_summary(scene_path)
+                    if "error" in summary:
+                        raise ValueError(summary["error"])
+                    identity, label, timestamp, has_image, mtime = summary["identity"], summary["label"], summary["timestamp"], summary["hasImage"], summary["mtime"]
+                except (OSError, ValueError, TypeError) as error:
+                    # Unreadable or misshapen: listed alone (here) so it never
+                    # breaks the catalog or merges with anything.
                     if not store_id:
                         groups.append({"identity": None, "label": "", "timestamp": "", "image": None, "local": [scene_path.name], "foreign": [], "copies": 0, "error": str(error)})
                     continue
-                identity = scene_identity(data)
                 group = by_identity.get(identity)
                 if group is None:
-                    group = {"identity": identity, "label": str(data.get("label") or (data.get("capture") or {}).get("label") or ""),
-                             "timestamp": str(data.get("timestamp") or ""), "image": None, "local": [], "foreign": [], "copies": -1, "_mtime": mtime}
+                    group = {"identity": identity, "label": label,
+                             "timestamp": timestamp, "image": None, "local": [], "foreign": [], "copies": -1, "_mtime": mtime}
                     by_identity[identity] = group
                     groups.append(group)
                 group["copies"] += 1
@@ -4115,7 +4156,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 else:
                     group["local"].append(scene_path.name)
                 if group["image"] is None or (not store_id and group["image"]["store"]):
-                    if scene_image_data_url(data):
+                    if has_image:
                         group["image"] = {"store": store_id, "name": scene_path.name}
                 group["_mtime"] = max(group["_mtime"], mtime)
         for group in groups:
@@ -4523,6 +4564,7 @@ if __name__ == "__main__":
     print(f"  Shared basin library: {SHARED_BASIN_STORE or 'disabled'}")
     print(f"  Volume basin session store: {VOLUME_BASIN_SESSION_STORE}")
     print(f"  Volume cockpit layout store: {VOLUME_COCKPIT_LAYOUT_STORE}")
+    threading.Thread(target=warm_scene_catalog, name="scene-catalog-warm", daemon=True).start()
     server = http.server.ThreadingHTTPServer(("", PORT), KaminosHandler)
     try:
         server.serve_forever()

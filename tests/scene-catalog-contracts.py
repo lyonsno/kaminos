@@ -63,4 +63,19 @@ with TemporaryDirectory() as directory:
     local_only, status = catalog(scope="local", client="10.0.0.5")
     assert status == 200 and all(not group["foreign"] for group in local_only["groups"]), "this server's own scenes need no other servers"
     assert catalog(client="10.0.0.5")[1] == 403, "other servers' scenes are only for this machine"
+    # Valid JSON of the wrong shape is unreadable, listed alone, and never breaks the catalog.
+    (here / "array.kaminos.json").write_text("[1, 2]")
+    (here / "odd-capture.kaminos.json").write_text(json.dumps({"capture": "not an object"}))
+    (lane_a / "array.kaminos.json").write_text("[3]")
+    reply, status = catalog()
+    assert status == 200, (reply, status)
+    odd = sorted(group["local"][0] for group in reply["groups"] if group.get("error") and group["local"])
+    assert "array.kaminos.json" in odd, odd
+    assert any(group["local"] == ["odd-capture.kaminos.json"] and not group.get("error") for group in reply["groups"]), "a scene with a malformed capture still lists (capture ignored)"
+    assert len([g for g in reply["groups"] if g["label"] == "Kiln"]) == 1
+    # A re-saved scene is re-read: the cached summary follows the file.
+    time.sleep(0.01)
+    (lane_b / "tuned.kaminos.json").write_text(json.dumps({"label": "Tuned again", "timestamp": "2026-10-09T00:00:00Z"}))
+    labels = {group["label"] for group in catalog()[0]["groups"]}
+    assert "Tuned again" in labels and "Tuned" not in labels, labels
 print("scene catalog contracts passed")

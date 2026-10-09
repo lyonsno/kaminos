@@ -36,6 +36,23 @@ export function entryMatchesFilter(entry, filter) {
   return words.every(word => haystack.includes(word));
 }
 
+// How to open a chosen group. The full catalog (when it has arrived) is the
+// authority for which other servers hold the scene; the group chosen from
+// the quick local list may not know them yet. A copy here opens directly; all
+// other-server copies are mesh sources. With no copy here the first other
+// copy is imported and the rest are mesh sources.
+export function openPlan(group, fullGroups) {
+  const latest = (group.identity && fullGroups?.find(candidate => candidate.identity === group.identity)) || group;
+  if (latest.local.length) return { open: latest.local[0], importFrom: null, meshSources: group.identity ? latest.foreign : [] };
+  return { open: null, importFrom: latest.foreign[0] || null, meshSources: latest.foreign.slice(1) };
+}
+
+// Index of the previously highlighted entry in a replaced list (0 if gone).
+export function retainedIndex(visibleKeys, chosenKey) {
+  const index = visibleKeys.indexOf(chosenKey);
+  return index < 0 ? 0 : index;
+}
+
 function savedWhen(timestamp) {
   const date = new Date(timestamp);
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -125,8 +142,8 @@ export function pickSavedScene({ groups, more = null, host = document.body } = {
       const chosenKey = visible()[active] ? entries[rows.indexOf(visible()[active])]?.key : null;
       entries = sortEntries(full.map(catalogEntry));
       render();
-      const keep = chosenKey ? visible().findIndex(row => entries[rows.indexOf(row)].key === chosenKey) : -1;
-      if (keep > 0) { active = keep; highlight(); }
+      active = retainedIndex(visible().map(row => entries[rows.indexOf(row)].key), chosenKey);
+      highlight();
     }).catch(error => { moreError = error?.message || String(error); }).finally(() => { if (!open) return; pending = false; highlight(); });
     backdrop.addEventListener('keydown', event => {
       event.stopPropagation();

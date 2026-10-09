@@ -615,11 +615,19 @@ async function runLoadFromOtherServerScenario(ws) {
   // --fixture-twin: the same scene is already saved here; Load must show one
   // row that still brings the mesh over from the other server.
   const twin = args.get('--fixture-twin') === '1';
+  // --fixture-split: the same scene on two other servers, the mesh only on the
+  // one that sorts second; opening must still find it.
+  const split = args.get('--fixture-split') === '1';
   const mesh = readFileSync(sourceMesh), digest = missingAsset ? 'f'.repeat(64) : createHash('sha256').update(mesh).digest('hex');
   const roots = await (await fetch(new URL('/api/roots', url))).json();
   const localMesh = resolve(roots['generated-meshes'].path, digest + '.glb');
   if (existsSync(localMesh)) throw new Error('fixture mesh is already in this server, pick another: ' + localMesh);
-  const lane = resolve(homedir(), '.local/state/kaminos', 'dark-modal-library-fixture-' + process.pid);
+  // Split fixtures sit beside this server's checkout (a scene folder the
+  // catalog reads) so the mesh is reachable only through the second server's
+  // own folder, not the machine-wide lane-asset fallback.
+  const fixtureParent = split ? dirname(dirname(roots.scenes.path)) : resolve(homedir(), '.local/state/kaminos');
+  const lane = resolve(fixtureParent, (split ? 'dark-modal-library-fixture-z-' : 'dark-modal-library-fixture-') + process.pid);
+  const emptyLane = resolve(fixtureParent, 'dark-modal-library-fixture-a-' + process.pid);
   const name = 'fixture-study-' + process.pid + '.kaminos.json';
   const localNamesake = resolve(roots.scenes.path, name);
   // In twin mode a second copy here is formatted differently; it is still the same scene.
@@ -632,6 +640,7 @@ async function runLoadFromOtherServerScenario(ws) {
     const fixtureScene = JSON.stringify({ schema: 'kaminos.scene.v1', version: 7, label: 'Fixture study', timestamp: new Date().toISOString(),
       objects: [{ id: 'glb-fixture', type: 'glb', source: '/api/read?root=generated-meshes&path=' + digest + '.glb', fileName: digest + '.glb', label: 'Fixture mesh', transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } }] });
     writeFileSync(resolve(lane, 'scenes', name), fixtureScene);
+    if (split) { mkdirSync(resolve(emptyLane, 'scenes'), { recursive: true }); writeFileSync(resolve(emptyLane, 'scenes', name), fixtureScene); }
     writeFileSync(localNamesake, twin ? fixtureScene : JSON.stringify({ schema: 'kaminos.scene.v1', version: 7, label: 'Unrelated local namesake', objects: [] }));
     if (twin) writeFileSync(localReformatted, JSON.stringify(JSON.parse(fixtureScene), null, 2));
     const result = await evaluate(ws, `(async () => {
@@ -641,8 +650,8 @@ async function runLoadFromOtherServerScenario(ws) {
       let picker = null;
       for (let i = 0; i < 200 && !picker?.querySelector('[data-scene-store]'); i++) { picker = document.querySelector('.scene-load-picker'); await wait(50); }
       const input = picker.querySelector('input');
-      input.value = 'dark-modal-library-fixture-${process.pid}'; input.dispatchEvent(new Event('input', { bubbles: true }));
-      for (let i = 0; i < 100 && picker.querySelector('.file-name-prompt-message')?.textContent?.startsWith('Loading'); i++) await wait(50);
+      input.value = ${JSON.stringify(split ? 'dark-modal-library-fixture-z-' + process.pid : 'dark-modal-library-fixture-' + process.pid)}; input.dispatchEvent(new Event('input', { bubbles: true }));
+      for (let i = 0; i < 400 && picker.querySelector('.file-name-prompt-message')?.textContent?.startsWith('Loading'); i++) await wait(50);
       input.dispatchEvent(new Event('input', { bubbles: true }));
       const shown = [...picker.querySelectorAll('[data-scene-file]')].filter(row => !row.hidden);
       const rows = shown.map(row => row.dataset.sceneFile);
@@ -683,6 +692,7 @@ async function runLoadFromOtherServerScenario(ws) {
     if (e.namesake !== 'Unrelated local namesake') throw new Error('importing or saving touched the local same-named scene: ' + JSON.stringify(e));
   } finally {
     rmSync(lane, { recursive: true, force: true });
+    rmSync(emptyLane, { recursive: true, force: true });
     rmSync(localNamesake, { force: true });
     rmSync(localReformatted, { force: true });
     if (imported) await fetch(new URL('/api/delete-scene?name=' + encodeURIComponent(imported), url));
