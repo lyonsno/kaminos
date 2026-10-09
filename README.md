@@ -66,8 +66,7 @@ and outputs.
 npm install @kaminos/webgpu-inference-kit
 ```
 
-The same runtime grammar now composes model implementations with very different
-shapes:
+The same runtime supports several kinds of model:
 
 | Port | Browser-native result | Runtime integration |
 | --- | --- | --- |
@@ -76,38 +75,21 @@ shapes:
 | [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | A textured, UV-unwrapped GLB from one image | Cooperative GPU work, reusable scratch memory, and worker offload |
 | [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Skeletal motion from a text prompt | Browser diffusion and motion decoding with rendering opportunities between transformer passes |
 | [SAM 3](webgpu-inference-kit/docs/sam-semantic-demo.md) | Visible instance masks from an image and text prompt | Complete browser WebGPU route, 3.32 GB persistent model package, cached image features, queued prompts, and same-device foreground submissions |
-| [TRELLIS 2](models/trellis2/README.md) | Learned geometry and PBR materials from an image, exported as a textured GLB | Complete WebGPU image encoder, sparse structure, shape and texture generation; staged checkpoint residency and an exercised shared-device foreground bridge |
+| [TRELLIS 2](models/trellis2/README.md) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and GPU sharing with the application renderer |
 
-The in-tree TRELLIS 2 port executes the complete learned image-to-3D pipeline in
-WebGPU, from DINOv3 conditioning through sparse structure, shape, geometry and
-materials. It supports 512/no-cascade previews and 1024/cascade generation.
-Foreground preparation runs before conditioning; mesh cleanup, simplification,
-UV unwrapping and texture baking consume the retained model output afterward.
-The [model guide](models/trellis2/README.md) describes the source-checkout tools,
-shared-device integration and finishing path. The model is in this repository,
-separate from the reusable npm runtime.
+TRELLIS 2 turns an image into a textured 3D mesh. Its neural networks run on
+WebGPU, with 512-resolution previews and a higher-detail 1024-resolution mode.
+Local tools prepare the image, simplify the mesh and bake its materials.
+The [model guide](models/trellis2/README.md) explains the outputs, requirements
+and developer setup. TRELLIS is a developer port in this repository; its model
+weights and tools are separate from the npm inference runtime.
 
-The SAM 3 image detector is another complete in-tree consumer of the shared runtime. Its browser
-route executes the image backbone, prompt encoder, DETR encoder and decoder,
-scoring, selection, and mask decoder without an MLX process. On the exact
-merged native-1008 route, cold and warm mask outputs were bit-exact against the
-accepted source-equivalent baseline, a nonsense-prompt control returned exactly
-empty, and input-driven source-viewport work continued through the same WebGPU
-device at the model's existing phase boundaries. This is a direct shared-runtime
-composition result, not a frame-pacing claim.
-
-The [SAM image example](webgpu-inference-kit/docs/sam-image-example.md), included in kit 0.1.55,
-accepts uploaded images and text, exposes all retained instances, and exports
-source-sized masks, transparent cutouts, and provenance through the public kit
-entrypoints. Native browser runs exercise cold and cached prompts, multiple
-instances, an empty negative control, and source-sized PNG exports. Recent
-Apple Metal source-checkout runs returned cached prompts in **about 2.3 seconds**
-and a new image with the model resident in **17.2 seconds**. Complete-output
-scheduling changes preserved all 1,327,104 selected logits and their masks
-exactly across the recorded five-case corpus. It shares
-its session with a moving source-image renderer, but observed foreground stalls
-remain: shared-device execution is not a smooth-frame-pacing claim. See the
-example guide for the current numerical and performance boundaries.
+SAM 3 finds object instances in an uploaded image from a text prompt. Its
+browser example exports full-size masks and transparent cutouts, and keeps
+image features in memory so subsequent prompts can reuse them. The
+[SAM image example](webgpu-inference-kit/docs/sam-image-example.md), included
+in kit 0.1.55, provides the upload/prompt interface and export controls.
+See its guide for model setup, usage and performance measurements.
 
 The package includes a complete minimal port, an executable render-plus-inference
 walkthrough, focused integration documentation, and runtime contracts for
@@ -165,9 +147,8 @@ not merely viewed. Current substrate includes:
 - mesh/splat hybrid rendering and scene-context integration;
 - motion generation, transposition, preview, and export experiments;
 - browser-native fluid, particle, and volumetric material processes;
-- World Chambers and Preview Benches for coherent generated environments;
-- Smoke Offers and browser witnesses for handing live visual work between
-  producers and the operator.
+- saved world scenes and preview workbenches for generated environments;
+- shareable asset previews and browser tools for inspecting generated output.
 
 The architecture is documented in [Spatial Asset Kiln](docs/spatial-asset-kiln.md).
 Splat correction and renderer-consumption contracts are documented in

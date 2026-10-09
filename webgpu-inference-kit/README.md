@@ -97,27 +97,31 @@ The kit connects a growing family of browser model ports: recover a scene's geom
 | [SHARP](https://github.com/lyonsno/sharp-webgpu) | Gaussian splat scenes from a single image | Adaptive cooperative scheduling, shared-device foreground rendering, staged output construction, and shared tensor-comparison helpers for port development. |
 | [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Animated skeletal motion from a text prompt | Browser diffusion and motion decoding, bounded GPU submissions, reusable model resources, and a host-callable producer with rendering opportunities between transformer passes. Text embeddings come from an external server. |
 | [SAM 3](./docs/sam-semantic-demo.md) | Instance masks from an image and text prompt | A complete browser WebGPU route with authenticated persistent model resources, cached image features, queued semantic requests, and same-device foreground submissions at phase boundaries. |
-| [TRELLIS 2](https://github.com/lyonsno/kaminos/tree/main/models/trellis2) | Learned geometry and PBR materials from an image, finished as a textured GLB | Complete in-tree WebGPU image-to-3D pipeline, staged checkpoint loading, resident stage outputs, and a model-owned bridge to the application's borrowed device and foreground service. |
+| [TRELLIS 2](https://github.com/lyonsno/kaminos/tree/main/models/trellis2) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and a shared GPU device with the application renderer. |
 
 These ports provide different starting points for application integration. MoGe exposes an existing feed-forward pipeline as an embeddable library. SF3D combines GPU computation with worker-based geometry and texture processing. Kimodo exposes repeated diffusion passes where a host can interleave rendering. SHARP demonstrates the complete result: substantial inference running alongside a continuously rendering application.
 
-TRELLIS 2 executes DINOv3 conditioning, sparse structure, shape sampling,
-geometry decoding, texture sampling and material decoding in WebGPU. Its
-source-checkout flow supports 512/no-cascade previews and 1024/cascade
-generation, with foreground preparation and model-free mesh finishing as
-separate steps. A shared-device run preserved all retained learned fields
-exactly against the accepted isolated run while the Kaminos flame advanced.
+TRELLIS 2 generates a textured 3D mesh from an image using WebGPU. It supports
+512-resolution previews and higher-detail 1024-resolution generation, with
+local tools for background removal, mesh simplification and texture baking.
+Its model adapter can share the host application's GPU device and make room
+for rendering between model operations.
 The [TRELLIS model guide](https://github.com/lyonsno/kaminos/tree/main/models/trellis2)
-contains the runnable tools and integration entrypoints. TRELLIS weights,
-kernels and finishing tools live in the Kaminos repository, not in the npm kit.
+explains the current developer setup and integration interfaces. The TRELLIS
+model code is in the Kaminos repository; its weights and local finishing tools
+are separate from this npm runtime.
 
 Ports can adopt a common application-facing shape:
 
-The in-tree [SAM 3 image detector](./docs/sam-semantic-demo.md) is a complete image-plus-text consumer of that shape. Its browser serving path executes the image backbone, prompt encoder, DETR encoder and decoder, scoring, selection, and mask tail without an MLX process. One authenticated model package stays resident, image features are cached across prompts, and every retained instance mask is available to the application.
+The [SAM 3 image detector](./docs/sam-semantic-demo.md) finds object instances
+from an image and a text prompt. It runs in the browser, keeps reusable model
+weights in memory, and caches image features across prompts.
 
-The [SAM image example](./docs/sam-image-example.md), included in kit **0.1.55**, uses the public `./core`, `./sam`, and `./examples/sam-image` entrypoints for uploaded images, prompt-selected instances, source-sized mask/cutout PNGs, and provenance JSON. A recent Apple Metal source-checkout run returned cached prompts in **about 2.3 seconds** and a new image with the model resident in **17.2 seconds**. Native browser runs exercise cold and cached prompts, multiple instances, an empty negative control, and source-sized PNG exports; complete-output scheduling changes preserved all **1,327,104 selected logits** and their masks exactly across the recorded five-case corpus. Its moving source renderer shares the explicit session/device with inference; measured foreground stalls remain, so this is not a smooth-frame-pacing claim. The example guide separates numerical verification, execution, and timing evidence. Timings describe the named source-checkout witness; installing the package does not establish performance on another device.
-
-The exact merged native-1008 witness produced bit-exact cold and warm mask outputs against its accepted baseline, returned an exactly empty nonsense-prompt control, and reused cached image features for a 5.0-second warm prompt. Input-driven source-viewport work continued through the same device and queue at the model's existing phase boundaries. That is direct shared-device composition evidence, not a frame-pacing claim; the [demo guide](./docs/sam-semantic-demo.md) preserves the boundary and the runnable route.
+The [SAM image example](./docs/sam-image-example.md), included in kit
+**0.1.55**, provides image upload, prompt entry, full-size masks and transparent
+PNG cutouts. Applications can use the public `./core`, `./sam` and
+`./examples/sam-image` entrypoints to build the same flow.
+See the example guide for model setup, exports and performance measurements.
 
 ```text
 shared session
@@ -145,8 +149,6 @@ Using a Kaminos fire basin as the foreground workload? Follow [Load an exported 
 In one measured run on an M4 Max in Chrome, **SHARP generated 1,179,648 Gaussian splats in 185.3 seconds** while a full Kaminos fire volume continued to simulate on every frame in the same browser and on the same GPU. Across 21,818 foreground frame intervals, p95 and p99 were 9.3ms and 10.0ms; 40 intervals exceeded 33.3ms.
 
 **Stable Fast 3D generated a complete textured GLB in 41.9 seconds** while servicing 3,644 test host frames through the kit's shared-device foreground interlock. Page frame intervals had a p99 of 9.7ms and a maximum of 92.4ms. The GLB was byte-identical to the monolithic route's output.
-
-SF3D also runs alongside Kaminos' live flame in an experimental host integration. That integration currently uses separate devices on the same GPU; coordinated shared-device rendering is the next step toward recovering throughput under the full rendering workload.
 
 Together, these examples show how model ports can expose useful scheduling boundaries, preserve their outputs, and make room for the application around them.
 
