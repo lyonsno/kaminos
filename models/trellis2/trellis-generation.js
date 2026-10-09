@@ -124,10 +124,14 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
     async model=>own(await(model.loadBlockWeights?createTrellisSLatFlowAdapterAsync:createTrellisSLatFlowAdapter)({route,
       config:{...model.config,tokenRows:coordinates.shape[0],mode:role==='textureFlow'?'texture':'shape'},
       weights:model.weights,loadBlockWeights:model.loadBlockWeights,conditioningTensor,coordinateTensor:coordinates,...(concatTensor?{concatTensor}:{})})));
+  const releaseFlow=async flow=>{
+    await runtime.device?.queue?.onSubmittedWorkDone?.();flow.releaseParameters();
+  };
   const sampleShape=async(role,flow,stage,invocation)=>{
     const sampler=own(createTrellisSLatSamplerAdapter({route,flow,config:{...models[role].config,
       tokenRows:flow.plan.tokenRows,mode:flow.plan.mode},conditioningTensor}));
-    await sampler.run({sample:await noise(stage,flow.plan.inputShape)},invocation);return{sampler,sample:sampler.outputs.sample};
+    await sampler.run({sample:await noise(stage,flow.plan.inputShape)},invocation);
+    await releaseFlow(flow);return{sampler,sample:sampler.outputs.sample};
   };
   return Object.freeze({runtime,routeId:route.routeId,inputs:Object.freeze({conditioning:conditioningTensor}),
     get state(){return state;},get phase(){return phase;},get noiseInputs(){return Object.freeze({...noiseInputs});},
@@ -142,6 +146,7 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
           weights:model.weights,loadBlockWeights:model.loadBlockWeights,phases:model.phases,conditioningTensor}))),
           sparseSampler=own(createTrellisSparseSamplerAdapter({route,flow:sparse,config:models.sparseFlow.config,conditioningTensor}));
         await sparseSampler.run({sample:await noise('sparse',sparse.plan.prefix.inputShape)},invocation);
+        await releaseFlow(sparse);
         const occupancy=await consume('occupancyDecoder','occupancy-decoding',model=>own(createTrellisSparseDecoderAdapter({route,config:model.config,
           weights:model.weights,sampleTensor:sparseSampler.outputs.sample})));
         await occupancy.run({},invocation);

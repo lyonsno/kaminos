@@ -85,7 +85,7 @@ function* constructSLatFlow({ route, config = {}, weights, conditioning, conditi
     Math.fround(1 / Math.fround(Math.pow(10000, Math.fround(i / plan.frequencies)))));
   if (!(frequencies instanceof Float32Array) || frequencies.length !== plan.frequencies ||
     !frequencies.every(v => Number.isFinite(v) && v > 0)) throw new TypeError('complete finite source RoPE frequencies required');
-  const owned = []; let flow, disposed = false, running = false, phasesInitialized = false, initialized = !!sampleTensor;
+  const owned = []; let flow, ownedSample, disposed = false, parametersRetired = false, running = false, phasesInitialized = false, initialized = !!sampleTensor;
   const tensor = (name, shape, dtype = 'f32') => {
     const bytes = shape.reduce((a, b) => a * b, 4);
     if (bytes > (runtime.device?.limits?.maxStorageBufferBindingSize ?? 134217728)) throw new RangeError(`${name} exceeds actual storage binding capacity`);
@@ -95,9 +95,13 @@ function* constructSLatFlow({ route, config = {}, weights, conditioning, conditi
     const x = Math.min(groups, limit), y = Math.ceil(groups / x); if (y > limit) throw new RangeError('SLat dispatch exceeds device capacity'); return [x, y, 1]; };
   const define = (stage, code, resources, dispatch) => ({ stage, dispatch, kernel: runtime.defineComputeKernel({ name: `trellis.${stage}`, code,
     bindings: resources.map((resource, i) => ({ name: `b${i}`, resource, access: i === resources.length - 1 ? 'storage' : 'read-only-storage' })) }) });
-  const cleanup = () => { flow?.dispose(); for (const t of owned) t.buffer?.destroy?.(); };
+  const releaseParameters = () => {
+    if(disposed||parametersRetired)return;if(running)throw new Error('SLat flow adapter in use');
+    flow?.releaseParameters();for(const t of owned)if(t!==ownedSample)t.buffer?.destroy?.();parametersRetired=true;
+  };
+  const cleanup = () => { releaseParameters();flow?.dispose();ownedSample?.buffer?.destroy?.(); };
   try {
-    const sample = sampleTensor ?? tensor('sample', plan.inputShape);
+    const sample = sampleTensor ?? (ownedSample=tensor('sample', plan.inputShape));
     const coords = coordinateTensor ?? tensor('coordinates', plan.coordinateShape, 'i32');
     if (!coordinateTensor) runtime.uploadTensor(coords, coordinates);
     const freqs = tensor('rope-frequencies', [Math.max(1, plan.frequencies)]);
@@ -117,7 +121,8 @@ function* constructSLatFlow({ route, config = {}, weights, conditioning, conditi
       inputs: Object.freeze({ sample, coordinates: coords,
         ...(conditioningTensor!==undefined?{conditioning:conditioningTensor}:{}) }), outputs: flow.outputs, diagnostics: Object.freeze({ ...flow.diagnostics, phases }),
       async run({ sample: initial, timestep, conditioning: nextConditioning, zeroConditioning = false } = {}, invocation) {
-        if (disposed) throw new Error('SLat flow adapter disposed'); if (running) throw new Error('SLat flow adapter in use');
+        if (disposed) throw new Error('SLat flow adapter disposed'); if(parametersRetired)throw new Error('SLat flow parameters retired');
+        if (running) throw new Error('SLat flow adapter in use');
         if (!Number.isFinite(timestep)) throw new TypeError('finite model timestep required');
         if (sampleTensor && initial !== undefined) throw new TypeError('borrowed SLat sample forbids CPU reupload');
         if (initial !== undefined && (!(initial instanceof Float32Array) || initial.length !== plan.tokenRows * 32 ||
@@ -131,7 +136,8 @@ function* constructSLatFlow({ route, config = {}, weights, conditioning, conditi
           return await flow.run({ timestep, conditioning: nextConditioning, zeroConditioning }, invocation);
         } finally { running = false; }
       },
-      dispose() { if (running) throw new Error('SLat flow adapter in use'); if (disposed) return; disposed = true; cleanup(); }
+      releaseParameters,
+      dispose() { if (running) throw new Error('SLat flow adapter in use'); if (disposed) return; cleanup(); disposed = true; }
     });
   } catch (error) { cleanup(); throw error; }
 }
