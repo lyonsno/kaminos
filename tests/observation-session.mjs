@@ -3,6 +3,7 @@ import test from 'node:test';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { observationSession } from '../observation-session.mjs';
 import * as observationKit from '../observation-session.mjs';
 import { experiment } from '../experiment-work.mjs';
@@ -17,6 +18,27 @@ async function workspace(t) {
   t.after(() => fs.rm(out, { recursive: true, force: true })); return out;
 }
 const readReport = async out => JSON.parse(await fs.readFile(path.join(out, 'report.json'), 'utf8'));
+
+test('observation kit executes with only its decoder and pure pixel predicate deployed', async t => {
+  const out = await workspace(t), root = new URL('../', import.meta.url);
+  const modules = ['observation-session.mjs', 'screenshot-png-rgb.mjs', 'capture-pixels.mjs'];
+  for (const filename of await fs.readdir(root)) {
+    if (modules.includes(filename)) await fs.copyFile(new URL(filename, root), path.join(out, filename));
+  }
+  const script = `
+    import assert from 'node:assert/strict';
+    import { observationSession, readObservationSession } from './observation-session.mjs';
+    const state = { run: 'standalone-kit', step: 7 };
+    const session = await observationSession({ out: './retained', source: { route: 'isolated-library-test' },
+      capture: async () => Buffer.from(process.argv[1], 'base64'),
+      exercise: ({ retain }) => retain({ name: 'standalone', observe: async () => state, verify: async () => {} }) });
+    assert.equal(session.status, 'passed');
+    assert.deepEqual(session.result.effective, state);
+    const restored = await readObservationSession('./retained/report.json');
+    assert.deepEqual(restored.observations[0].effective, state);
+  `;
+  execFileSync(process.execPath, ['--input-type=module', '-e', script, png.toString('base64')], { cwd: out, stdio: 'pipe' });
+});
 
 test('retains PNG, actual caller state and source without scene-save machinery', async t => {
   const out = await workspace(t);

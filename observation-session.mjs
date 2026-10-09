@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { serialize, deserialize } from 'node:v8';
 import { decodeScreenshotPngRgb } from './screenshot-png-rgb.mjs';
-import { assertCapturePixels } from './visual-work.mjs';
+import { assertCapturePixels } from './capture-pixels.mjs';
 
 const storageFormat = 'observation-session-v2';
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');

@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { assertMountedScene, assertSavedResult, assertCapturePixels } from '../visual-work.mjs';
+import { assertCapturePixels as pureCapturePixels } from '../capture-pixels.mjs';
 
 const object = { id: 'chair', type: 'glb', source: '/real.glb', transform: { position: [0, 1, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } };
 test('startup failure survives before the scene report exists', async () => {
@@ -39,6 +40,7 @@ test('mount requires requested identity, source and authored pose', () => {
 });
 
 test('capture rejects blank, transparent and inconsistent pixels', () => {
+  assert.equal(assertCapturePixels, pureCapturePixels, 'Legacy export must use the shared predicate');
   const capture = { width: 2, height: 1 };
   const decoded = { width: 2, height: 1, channels: 4, pixels: Buffer.from([20, 30, 40, 255, 70, 60, 50, 255]) };
   assertCapturePixels(decoded, capture);
