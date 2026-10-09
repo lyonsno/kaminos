@@ -63,7 +63,7 @@ export async function startProcessMemory({python,script,rootPid=process.pid,rawP
       !row.processes.some(p=>p.pid===rootPid)||!Number.isSafeInteger(row.sampledAggregatePhysicalFootprintBytes)||row.sampledAggregatePhysicalFootprintBytes<1)
       throw Error('observed current-owner process-memory sample required; stale/missing output is not zero memory'+(row.error?': '+row.error:''));
     for(const p of row.processes)if(!Number.isSafeInteger(p.physicalFootprintBytes)||p.physicalFootprintBytes<0||
-      !Number.isSafeInteger(p.kernelLifetimePeakPhysicalFootprintBytes)||p.kernelLifetimePeakPhysicalFootprintBytes<p.physicalFootprintBytes||!p.processStartAbstime)
+      !Number.isSafeInteger(p.kernelLifetimePeakPhysicalFootprintBytes)||p.kernelLifetimePeakPhysicalFootprintBytes<0||!p.processStartAbstime)
       throw Error('actual process footprint/start identity required');
     if(row.processes.reduce((total,p)=>total+p.physicalFootprintBytes,0)!==row.sampledAggregatePhysicalFootprintBytes)
       throw Error('process-memory aggregate disagrees with observed process rows');

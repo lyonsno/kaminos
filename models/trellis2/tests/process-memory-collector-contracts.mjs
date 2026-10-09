@@ -11,6 +11,19 @@ try{
   await monitor.sample();const s=await monitor.stop();assert.equal(s.status,'observed');assert.ok(s.sampleCount>=2);
   assert.equal(s.sampledPeakAggregatePhysicalFootprintBytes,100);assert.equal(s.processes['42:123'].kernelLifetimePeakPhysicalFootprintBytes,120);
   assert.equal((await fs.readFile(s.rawPath,'utf8')).trim().split('\n').length,s.sampleCount);
+  // Native libproc sample: memory-current-native-r3/report.json,
+  // PID28064/start2545885766296. Current and lifetime counters can disagree;
+  // retain both instead of assuming an atomic ordered snapshot.
+  const nativeCounters={...row(),processes:[{...row().processes[0],
+    physicalFootprintBytes:1309445288,kernelLifetimePeakPhysicalFootprintBytes:1309412520}],
+    sampledAggregatePhysicalFootprintBytes:1309445288};
+  const nativeMonitor=await startProcessMemory({rootPid:42,runId:'one',rawPath:path.join(out,'native-counters.jsonl'),
+    probe:async()=>nativeCounters,maxFootprintBytes:8589934592,onUnsafe:()=>assert.fail('valid native counters must not stop generation')});
+  const nativeSummary=await nativeMonitor.stop();assert.equal(nativeSummary.status,'observed');
+  assert.equal(nativeSummary.sampledPeakAggregatePhysicalFootprintBytes,1309445288);
+  assert.equal(nativeSummary.processes['42:123'].kernelLifetimePeakPhysicalFootprintBytes,1309412520);
+  await assert.rejects(startProcessMemory({rootPid:42,runId:'one',rawPath:path.join(out,'negative-peak.jsonl'),
+    probe:async()=>({...row(),processes:[{...row().processes[0],kernelLifetimePeakPhysicalFootprintBytes:-1}]})}),/footprint\/start/);
   await assert.rejects(startProcessMemory({rootPid:42,runId:'one',rawPath:path.join(out,'stale.jsonl'),probe:async()=>row('old')}),/current-owner/);
   await assert.rejects(startProcessMemory({rootPid:42,runId:'one',rawPath:path.join(out,'missing.jsonl'),probe:async()=>({...row(),status:'unavailable'})}),/current-owner/);
   let count=0;const failed=await startProcessMemory({rootPid:42,runId:'one',rawPath:path.join(out,'failed.jsonl'),probe:async()=>{
