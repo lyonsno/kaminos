@@ -196,6 +196,35 @@ Those counters measure different allocations and must not be added together;
 the process sum is not unique physical RAM usage. Measurements for smaller
 16–18 GB machines are still pending.
 
+### Setting a memory allowance
+
+The generation command accepts `--gpu-buffer-budget-mib` and
+`--process-memory-budget-mib`. Both are optional; they stop a run that exceeds
+your allowance rather than changing its precision, image, steps or model.
+
+The GPU allowance checks checkpoint sizes before launching the browser and
+then checks live WebGPU buffer allocations. The process allowance samples the
+runner and its browser's process footprints once per second on macOS. If the
+allowance is exceeded or observation fails, the command stops its own
+independent browser and retains the failure report and any reached outputs.
+
+For a quick refusal check, add these options to the generation command:
+
+~~~sh
+--gpu-buffer-budget-mib 4096 --process-memory-budget-mib 8192
+~~~
+
+The current float32 sparse-flow checkpoint alone needs about 4.81 GiB, so
+this 4 GiB buffer allowance rejects the run before inference. For generation,
+choose allowances from your machine's available headroom, leaving space for
+the operating system and other applications. These controls do not measure
+all driver-private allocations or catch every spike between samples.
+
+GPU-buffer allowances currently support the command's isolated browser only;
+shared-renderer runs with a GPU allowance are rejected before touching the
+host device. The process control stops only a command-owned browser, not an
+operator's ordinary browser.
+
 ## Weight conversion and model development
 
 [`pack-generation.py`](pack-generation.py) assembles the prepared weight
