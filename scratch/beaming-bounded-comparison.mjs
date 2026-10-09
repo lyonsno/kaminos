@@ -19,19 +19,48 @@ export function validateVisibilitySample(sample,{mode,generation,preparations}){
   return record.valid;
 }
 
-export async function runVisibilityComparison({page,out,report,save,iterations,capture,broken}){
-  report.claim='paired source-volume-exit visibility cost and lighting parity; held material, prescribed guide; no live emission-discovery or whole-frame claim';
+export function replayMaterial(primary,dimensions,kind){
+  const [nx,ny,nz]=dimensions,source=new Float32Array(primary.length);
+  const offsets=kind==='displaced'?[[6,8,-4,1]]:kind==='split'?[[-6,8,0,.5],[6,8,0,.5]]:[[0,0,0,1]];
+  let sum=0,center=[0,0,0],variance=[0,0,0];
+  for(let z=0;z<nz;z++)for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
+    const i=(x+nx*(y+ny*z))*4;source[i+3]=primary[i+3];
+    for(const [dx,dy,dz,weight]of offsets){const from=(((x-dx+nx)%nx)+nx*(((y-dy+ny)%ny)+ny*((z-dz+nz)%nz)))*4;for(let c=0;c<3;c++)source[i+c]+=weight*primary[from+c];}
+    const w=source[i]+source[i+1]+source[i+2],p=[x,y,z].map(v=>-1+(v+.5)*2/nx);sum+=w;for(let a=0;a<3;a++)center[a]+=w*p[a];
+  }
+  assert(sum>0,'material replay requires nonblank emission');center=center.map(v=>v/sum);
+  for(let z=0;z<nz;z++)for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){const i=(x+nx*(y+ny*z))*4,w=source[i]+source[i+1]+source[i+2];for(let a=0;a<3;a++)variance[a]+=w*(-1+([x,y,z][a]+.5)*2/nx-center[a])**2/sum;}
+  const radius=variance.map(v=>Math.max(2/nx,2*Math.sqrt(v)));
+  const guide={lo:center.map((v,a)=>Math.max(-1,v-radius[a])),hi:center.map((v,a)=>Math.min(a===1?3:1,v+radius[a])),effective:'offline-emission-moments',reason:'replay-only; not a live GPU proposal builder'};
+  return {source,guide,metadata:{kind,offsets,emissionSum:sum,center,variance,extinction:'held original',boundary:'periodic RGB translation',proposal:'all-cell CPU emission moments, full-volume mixture retained'}};
+}
+
+export async function runVisibilityComparison({page,out,report,save,iterations,capture,broken,candidate='source-volume'}){
+  const occupancy=candidate==='occupancy';
+  report.claim=occupancy?'paired full-scene occupancy visibility experiment; fixed burner, offline displaced/split emission replay; visible flame held; no production source discovery or whole-frame claim':'paired source-volume-exit visibility cost and lighting parity; held material, prescribed guide; no live emission-discovery or whole-frame claim';
   report.phase='paired-visibility';report.pairs=[];report.timing={valid:0,invalid:0};await save();
   let preparations=capture.lighting.frame.angularCache.visibilityPreparations;
+  const replays=occupancy?['original','displaced','split'].map(kind=>replayMaterial(capture.primary,capture.sourceMetadata.dimensions,kind)):[];
+  report.replays=replays.map(r=>({guide:r.guide,...r.metadata}));
+  for(const r of replays)await fs.writeFile(`${out}/replay-${r.metadata.kind}-source.f32`,Buffer.from(r.source.buffer));
+  await page.evaluate(()=>{window.__beamingOriginalCapture=window.__beamingCurrentGather;});
   // Begin opposite the first measured mode; every measured arm must refresh.
   await page.evaluate(()=>window.__beamingCurrentGather.api.setVisibilityBounds('source-volume'));
   for(let i=0;i<iterations;i++){
-    const guide={lo:[-.7+.04*(i%8),-1,-.7],hi:[.65+.04*(i%8),1.44,.7]};
-    const pair={index:i,guide,arms:[],parity:null};report.pairs.push(pair);await save();
+    const replay=occupancy?replays[i%replays.length]:null;
+    const guide=replay?.guide??{lo:[-.7+.04*(i%8),-1,-.7],hi:[.65+.04*(i%8),1.44,.7]};
+    const generation=occupancy?capture.sourceGeneration+1+i%replays.length:capture.sourceGeneration;
+    if(occupancy)await page.evaluate(({source,generation})=>{
+      const {field}=window.__beamingOriginalCapture,device=window.__beamingGatherDevice;
+      if(!window.__beamingReplayTexture)window.__beamingReplayTexture=device.createTexture({size:field.dimensions,dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.COPY_DST|GPUTextureUsage.COPY_SRC|GPUTextureUsage.TEXTURE_BINDING});
+      device.queue.writeTexture({texture:window.__beamingReplayTexture},new Float32Array(source),{bytesPerRow:field.dimensions[0]*16,rowsPerImage:field.dimensions[1]},field.dimensions);
+      window.__beamingReplayField={...field,texture:window.__beamingReplayTexture,generation,scatteringGeneration:generation};
+    },{source:Array.from(replay.source),generation});
+    const pair={index:i,guide,material:replay?.metadata.kind??'held',generation,arms:[],parity:null};report.pairs.push(pair);await save();
     const fields=[];
-    for(const mode of ['unbounded','source-volume']){
+    for(const mode of ['unbounded',candidate]){
       const sample=await Promise.race([page.evaluate(async({mode,guide,readFields})=>{
-        const {api,field,options}=window.__beamingCurrentGather,device=window.__beamingGatherDevice;
+        const {api,options}=window.__beamingOriginalCapture,field=window.__beamingReplayField??window.__beamingOriginalCapture.field,device=window.__beamingGatherDevice;
         if(!device.features.has('timestamp-query'))throw Error('native timestamps unavailable');
         const counts=()=>({encodes:window.__beamingEncodeCount,pipelines:window.__beamingAllocations.pipelines.length,rayBuffers:window.__beamingAllocations.buffers.filter(b=>b.label==='cached first solid distance per receiver ray').length});
         const before=counts(),profile=window.__beamingGatherProfile={remaining:1,records:[],errors:[]},start=performance.now();
@@ -43,9 +72,10 @@ export async function runVisibilityComparison({page,out,report,save,iterations,c
         return result;
       },{mode,guide,readFields:i<8}),broken]);
       fields.push(sample.fields);delete sample.fields;pair.arms.push({mode,...sample});await save();
-      const valid=validateVisibilitySample(sample,{mode,generation:capture.sourceGeneration,preparations:++preparations});
+      const valid=validateVisibilitySample(sample,{mode,generation,preparations:++preparations});
       report.timing[valid?'valid':'invalid']++;
       if(fields.at(-1))for(const [name,field] of Object.entries(fields.at(-1)))await fs.writeFile(`${out}/pair-${i}-${mode}-${name}.f32`,Buffer.from(new Float32Array(field.data).buffer));
+      if(occupancy&&i<3){await page.evaluate(async()=>{await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);});await page.screenshot({path:`${out}/lighting-only-${pair.material}-${mode}.png`});}
     }
     // Eight distinct guide states, each full surface-front/back and smoke field.
     if(i<8){
@@ -53,16 +83,16 @@ export async function runVisibilityComparison({page,out,report,save,iterations,c
       for(const name of ['surface','surfaceBack','smoke']){
         assert.deepEqual(fields[0][name].dimensions,fields[1][name].dimensions);
         const a=fields[0][name].data,b=fields[1][name].data;assert.equal(a.length,b.length);assert(a.length>0);
-        let maxError=0,scale=0,nonzero=0;
-        for(let j=0;j<a.length;j++){assert(Number.isFinite(a[j])&&Number.isFinite(b[j]));if(j%4!==3){maxError=Math.max(maxError,Math.abs(a[j]-b[j]));scale=Math.max(scale,Math.abs(a[j]));if(a[j]!==0)nonzero++;}}
-        pair.parity[name]={maxError,scale,nonzero,values:a.length};await save();
-        assert(maxError<=2e-5*Math.max(1,scale),'bounded/unbounded field mismatch '+name);
+        let maxError=0,scale=0,nonzero=0,squaredError=0,squaredReference=0,referenceSum=0,candidateSum=0;
+        for(let j=0;j<a.length;j++){assert(Number.isFinite(a[j])&&Number.isFinite(b[j]));if(j%4!==3){maxError=Math.max(maxError,Math.abs(a[j]-b[j]));scale=Math.max(scale,Math.abs(a[j]));if(a[j]!==0)nonzero++;squaredError+=(a[j]-b[j])**2;squaredReference+=a[j]**2;referenceSum+=a[j];candidateSum+=b[j];}}
+        pair.parity[name]={maxError,scale,nonzero,values:a.length,relativeL2:Math.sqrt(squaredError/Math.max(squaredReference,1e-30)),energyRatio:candidateSum/Math.max(referenceSum,1e-30)};await save();
+        if(!occupancy)assert(maxError<=2e-5*Math.max(1,scale),'bounded/unbounded field mismatch '+name);
         if(name!=='surfaceBack')assert(nonzero>0,'blank primary field '+name);
       }
     }
     await save();
   }
   report.phase='restore-accepted-guide';await save();
-  await page.evaluate(async guide=>{const {api,field,options}=window.__beamingCurrentGather;api.setVisibilityBounds('unbounded');api.setSourceGuide(guide);api.encode(field,options);await window.__beamingGatherDevice.queue.onSubmittedWorkDone();},capture.lighting.frame.sourceGuide);
+  await page.evaluate(async guide=>{const {api,field,options}=window.__beamingOriginalCapture;api.setVisibilityBounds('unbounded');api.setSourceGuide(guide);api.encode(field,options);await window.__beamingGatherDevice.queue.onSubmittedWorkDone();window.__beamingReplayTexture?.destroy();},capture.lighting.frame.sourceGuide);
   report.timing.status=report.timing.invalid?'partial-invalid-timestamps-preserved':'complete';
 }

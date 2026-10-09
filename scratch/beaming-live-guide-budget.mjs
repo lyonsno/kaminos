@@ -6,7 +6,8 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {assertSourceGuideEvidence} from './beaming-surface-evidence.mjs';
 import {runVisibilityComparison} from './beaming-bounded-comparison.mjs';
-const [url,out,iterationsText='32',experiment='guide']=process.argv.slice(2),iterations=Number(iterationsText);
+import {instrumentOccupancy} from './beaming-occupancy-visibility.mjs';
+const [url,out,iterationsText='32',experiment='guide',gridText='64']=process.argv.slice(2),iterations=Number(iterationsText);
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'preflight',requestedUrl:url,iterations,claim:'held-source changing-guide visibility and gather cost only',source:{root:process.cwd(),revision:null,dirty:null},errors:[],httpFailures:[],arms:[]};
 const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
@@ -18,8 +19,8 @@ try{
  report.source.dirty=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
  report.phase='preflight';await save();
  assert(Number.isSafeInteger(iterations)&&iterations>0,'positive explicit sample count');
- assert(['guide','visibility'].includes(experiment),'unknown experiment');report.experiment=experiment;
- for(const name of ['beaming-live-guide-budget.mjs','beaming-bounded-comparison.mjs','beaming-source-aware-gpu.mjs','beaming-gather-profiler.mjs','beaming-surface-evidence.mjs'])await fs.copyFile(new URL(name,import.meta.url),out+'/'+name);
+ assert(['guide','visibility','occupancy'].includes(experiment),'unknown experiment');report.experiment=experiment;
+ for(const name of ['beaming-live-guide-budget.mjs','beaming-bounded-comparison.mjs','beaming-occupancy-visibility.mjs','beaming-source-aware-gpu.mjs','beaming-gather-profiler.mjs','beaming-surface-evidence.mjs'])await fs.copyFile(new URL(name,import.meta.url),out+'/'+name);
  report.runtime=await(await fetch(new URL('/api/runtime-config',url))).json();
  assert.equal(report.runtime.source.repoRoot,report.source.root);assert.equal(report.runtime.source.commit,report.source.revision);assert.equal(report.source.dirty,'');assert.equal(report.runtime.source.dirty,false);
  const params=new URLSearchParams(new URL(url).hash.slice(1)),sceneName=params.get('scene');assert(sceneName);
@@ -45,11 +46,12 @@ try{
  await page.route('**/scene-volume-gather.mjs',async route=>{
    const response=await route.fetch(),original=await response.text(),needle='  const resources=[];',capture='      const state=angularState();\n      const encoder=device.createCommandEncoder';
    assert.equal(original.split(needle).length,2);assert.equal(original.split(capture).length,2);
-   const body="import {installGatherProfiler} from './scratch/beaming-gather-profiler.mjs';\n"+original.replace(needle,needle+` installGatherProfiler(device);
+   let body="import {installGatherProfiler} from './scratch/beaming-gather-profiler.mjs';\n"+original.replace(needle,needle+` installGatherProfiler(device);
      if(!window.__beamingAllocations){window.__beamingAllocations={buffers:[],pipelines:[]};for(const [method,key] of [['createBuffer','buffers'],['createComputePipeline','pipelines']]){const originalMethod=device[method].bind(device);device[method]=spec=>{window.__beamingAllocations[key].push({label:spec.label||'',size:spec.size});return originalMethod(spec);};}}
    `).replace(capture,`      window.__beamingEncodeCount=(window.__beamingEncodeCount||0)+1;
       window.__beamingCurrentGather={api:this,field,options:{gain,stepLength,smokeEnabled,sourceSoftness,surfaceReconstruction,surfaceScattering}};
 `+capture);
+   if(experiment==='occupancy')body=instrumentOccupancy(body,Number(gridText));
    await fs.writeFile(out+'/scene-volume-gather.executed.mjs',body);await fs.writeFile(out+'/scene-volume-gather.original.mjs',original);
    await route.fulfill({response,body});
  });
@@ -70,7 +72,8 @@ try{
  assert.deepEqual(capture.lighting.frame.angularCache.counts,[8],'no hidden higher capacity');
  assert.equal(capture.lighting.frame.surfaceReceivers,194914,'accepted receiver population');assert.equal(capture.lighting.frame.allocatedVolumeReceivers,8192);
  await page.screenshot({path:out+'/accepted-held-kiln.png'});
- if(experiment==='visibility')await runVisibilityComparison({page,out,report,save,iterations,capture,broken});
+ if(experiment==='occupancy'){report.occupancy=await page.evaluate(()=>window.__beamingOccupancy);await save();assert.equal(report.occupancy.grid,Number(gridText));assert(report.occupancy.nodeCount>0);}
+ if(experiment!=='guide')await runVisibilityComparison({page,out,report,save,iterations,capture,broken,candidate:experiment==='occupancy'?'occupancy':'source-volume'});
  else {
  report.phase='sequential-lighting-only-budget';report.samples=[];await save();
  let expectedPreparation=capture.lighting.frame.angularCache.visibilityPreparations;
@@ -105,7 +108,7 @@ try{
  const restored=await page.evaluate(async()=>{const {api}=window.__beamingCurrentGather,fields=await api.readback({includeSource:true});return Object.fromEntries(Object.entries(fields).map(([k,v])=>[k,{dimensions:v.dimensions,data:Array.from(v.data)}]));});
  report.restoredHashes={};for(const [key,original] of [['surface','front'],['surfaceBack','back'],['smoke','smoke'],['primarySource','primary']]){const values=restored[key].data;await fs.writeFile(out+'/restored-'+key+'.f32',Buffer.from(new Float32Array(values).buffer));report.restoredHashes[key]=hash(values);assert.equal(hash(values),hash(capture[original]),'restored source/output mismatch '+key);}
  assert.deepEqual(report.errors,[]);assert.deepEqual(report.httpFailures,[]);
- report.status=report.timing?.invalid?'parity-passed-timing-partial':'measured';report.phase='complete';await save();
+ report.status=report.timing?.invalid?(experiment==='occupancy'?'comparison-timing-partial':'parity-passed-timing-partial'):'measured';report.phase='complete';await save();
 }catch(e){report.status='failed';report.error=String(e.stack||e);process.exitCode=1;}
 finally{await save();await browser?.close();}
 console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,out}));
