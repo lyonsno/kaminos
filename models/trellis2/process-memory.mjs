@@ -50,8 +50,14 @@ export async function startProcessMemory({python,script,rootPid=process.pid,rawP
     // Preserve the complete attempted observation before admitting it to any arithmetic.
     await fs.appendFile(rawPath,JSON.stringify(row??{status:'unavailable',error:'missing probe output'})+'\n');
     summary.lastObservation=row;
-    for(const missing of row.unavailableProcesses??[])if(!missing.expectedProbeExit){
+    for(const missing of row.unavailableProcesses??[]){
+      const exit=missing.exitEvidence;
+      const retired=missing.pid!==rootPid&&missing.errno===3&&missing.exitedBeforeMeasurement===true&&
+        exit?.route==='ps-pid-status'&&!exit.stderr&&typeof exit.status==='string'&&
+        ((exit.returnCode===1&&exit.status==='')||(exit.returnCode===0&&exit.status.startsWith('Z')));
+      if(!missing.expectedProbeExit&&!retired){
       summary.unavailableProcessObservations.push({atUnixMs:row.atUnixMs,...missing});summary.coverage='partial-process-coverage';
+      }
     }
     if((transport&&transport.exitStatus!==0)||row.runId!==runId||row.rootPid!==rootPid||row.status!=='observed'||!Array.isArray(row.processes)||
       !row.processes.some(p=>p.pid===rootPid)||!Number.isSafeInteger(row.sampledAggregatePhysicalFootprintBytes)||row.sampledAggregatePhysicalFootprintBytes<1)

@@ -1,5 +1,5 @@
 """One uncapped owned-process sample using actual Darwin libproc RUSAGE_INFO_V4."""
-import argparse,ctypes,json,os,subprocess,sys,time
+import argparse,ctypes,errno,json,os,subprocess,sys,time
 
 # Exact current SDK sys/resource.h ABI: UUID16 plus35 uint64 fields, in declaration order.
 FIELDS='user_time system_time pkg_idle_wkups interrupt_wkups pageins wired_size resident_size phys_footprint proc_start_abstime proc_exit_abstime child_user_time child_system_time child_pkg_idle_wkups child_interrupt_wkups child_pageins child_elapsed_abstime diskio_bytesread diskio_byteswritten cpu_time_qos_default cpu_time_qos_maintenance cpu_time_qos_background cpu_time_qos_utility cpu_time_qos_legacy cpu_time_qos_user_initiated cpu_time_qos_user_interactive billed_system_time serviced_system_time logical_writes lifetime_max_phys_footprint instructions cycles billed_energy serviced_energy interval_max_phys_footprint runnable_time'.split()
@@ -29,8 +29,24 @@ def sample_owned_processes(root_pid,run_id):
         for pid in sorted(owned):
             info=RUsageInfoV4();error=library.proc_pid_rusage(pid,4,ctypes.byref(info))
             if error:
-                report.setdefault('unavailableProcesses',[]).append({**rows[pid],'errno':ctypes.get_errno(),
-                    'expectedProbeExit':rows[pid]['parentPid']==os.getpid() and rows[pid]['executable']=='/bin/ps'});continue
+                missing={**rows[pid],'errno':ctypes.get_errno(),
+                    'expectedProbeExit':rows[pid]['parentPid']==os.getpid() and rows[pid]['executable']=='/bin/ps'}
+                # The tree snapshot and libproc reads are not atomic. A short
+                # source-attestation git child can exit between them. Only an
+                # ESRCH plus a fresh OS absence/zombie check proves retirement;
+                # a live or inaccessible process remains missing coverage.
+                if pid!=root_pid and missing['errno']==errno.ESRCH:
+                    try:
+                        check=subprocess.run(['/bin/ps','-p',str(pid),'-o','stat='],capture_output=True,text=True)
+                        state=check.stdout.strip()
+                        evidence={'route':'ps-pid-status','returnCode':check.returncode,'status':state,'stderr':check.stderr}
+                        missing['exitEvidence']=evidence
+                        if not check.stderr and ((check.returncode==1 and not state) or
+                                (check.returncode==0 and state.startswith('Z'))):
+                            missing['exitedBeforeMeasurement']=True
+                    except Exception as error:
+                        missing['exitCheckError']=str(error)
+                report.setdefault('unavailableProcesses',[]).append(missing);continue
             report['processes'].append({**rows[pid],'physicalFootprintBytes':info.phys_footprint,
                 'residentBytes':info.resident_size,'kernelLifetimePeakPhysicalFootprintBytes':info.lifetime_max_phys_footprint,
                 'processStartAbstime':info.proc_start_abstime,'observerProcess':pid==os.getpid()})

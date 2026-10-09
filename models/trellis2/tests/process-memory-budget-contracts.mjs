@@ -24,6 +24,20 @@ try{
     maxFootprintBytes:150,onUnsafe:async r=>actions.push(r),probe:async()=>probes++?row(-1):row(100)});
   await unavailable.sample();await unavailable.stop();assert.equal(actions.length,1);
   assert.equal(actions[0].reason,'memory-observation-unavailable','bounded run cannot continue when its guard loses observation');
+  const exited={pid:43,parentPid:42,errno:3,exitedBeforeMeasurement:true,
+    exitEvidence:{route:'ps-pid-status',returnCode:0,status:'Z'}};
+  const retired=await startProcessMemory({rootPid:42,runId:'budget',rawPath:path.join(out,'exited.jsonl'),
+    maxFootprintBytes:150,onUnsafe:async()=>{throw Error('confirmed exit must not stop a run');},
+    probe:async()=>({...row(100),unavailableProcesses:[exited]})});
+  assert.equal((await retired.stop()).status,'observed','OS-confirmed exited descendants do not make live coverage partial');
+  for(const missing of [{...exited,exitEvidence:{...exited.exitEvidence,status:'S'}},
+    {...exited,errno:13},{...exited,exitEvidence:undefined}]){
+    const stopped=[];
+    await assert.rejects(startProcessMemory({rootPid:42,runId:'budget',rawPath:path.join(out,'live-missing.jsonl'),
+      maxFootprintBytes:150,onUnsafe:async reason=>stopped.push(reason),
+      probe:async()=>({...row(100),unavailableProcesses:[missing]})}),/partial process coverage/);
+    assert.equal(stopped.length,1,'an exit label without observed OS exit evidence cannot waive missing coverage');
+  }
   await assert.rejects(startProcessMemory({rootPid:42,runId:'budget',rawPath:path.join(out,'no-action.jsonl'),
     maxFootprintBytes:150,probe:async()=>row(100)}),/onUnsafe/);
   actions=[];let ioProbes=0;
