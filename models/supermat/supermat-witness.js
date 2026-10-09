@@ -158,7 +158,7 @@ export async function runSuperMatWitness({ stage, fixtureSha256, weightsSha256 }
       row.pass = m.relativeL2Error !== null && m.relativeL2Error <= tolerance.relativeL2
         && m.cosineSimilarity >= tolerance.cosine
         && (!isOutput || tolerance.outputMaxAbs === undefined || m.maxAbsoluteError <= tolerance.outputMaxAbs)
-        && comparison.nonFinite.actual === 0;
+        && comparison.nonFinite.actual.count === 0;
       pass &&= row.pass;
       result.comparisons[name] = row;
       if (isOutput) {
