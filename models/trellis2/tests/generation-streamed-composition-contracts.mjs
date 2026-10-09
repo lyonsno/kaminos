@@ -19,7 +19,11 @@ const runtime={device:{limits:{maxStorageBufferBindingSize:134217728},queue:{asy
           'Completed flow weights/scratch must not overlap decoder loading: '+phase);},
     async loadModel(role,selection){
       requested.push(role);
-      if(!roles.includes(role))return{role,...models[role]};
+      if(!roles.includes(role)){
+        if(role==='occupancyDecoder')return{role,...models[role]};
+        assert.equal(selection?.streamParameters,true,'Actual generation must select parameter-staged learned decoder loading.');
+        return{role,weights:{},siluTable:models[role].siluTable,async loadWeight(name){return models[role].weights[name];}};
+      }
       assert.equal(selection?.streamBlocks,true,'The production consumer must explicitly request sequential flow checkpoint loading.');
       const {blocks,...weights}=models[role].weights;
       return{role,weights,phases:models[role].phases,async loadBlockWeights(i){loaded.push([role,i]);return blocks[i];}};
@@ -31,6 +35,14 @@ try{
   assert.deepEqual(requested,['sparseFlow','occupancyDecoder','lowResolutionShape','shapeDecoder','highResolutionShape','shapeDecoder','textureFlow','textureDecoder']);
 }finally{adapter.dispose();}
 assert.ok(!conditioning.destroyed);
+assert.ok(allocated.filter(t=>t!==conditioning&&t.name!=='trellis.occupancy.occupied-view').every(t=>t.destroyed));
+const failedDecoder=createTrellisGenerationFromConditioningAdapter({...options,async loadModel(role,selection){
+  const checkpoint=await options.loadModel(role,selection);
+  if(role==='shapeDecoder')checkpoint.loadWeight=async()=>{throw Error('streamed decoder fetch failed');};
+  return checkpoint;
+}});
+await assert.rejects(failedDecoder.run({id:'failure-decoder-generation'}),/streamed decoder fetch failed/);
+assert.equal(failedDecoder.state,'failed');assert.equal(failedDecoder.outputs,undefined);failedDecoder.dispose();
 assert.ok(allocated.filter(t=>t!==conditioning&&t.name!=='trellis.occupancy.occupied-view').every(t=>t.destroyed));
 const failed=createTrellisGenerationFromConditioningAdapter({...options,async loadModel(role,selection){
   const checkpoint=await options.loadModel(role,selection);
