@@ -115,6 +115,18 @@ def main():
             hooks.append(b.register_forward_hook(block_hook(f"double{i:02d}"), with_kwargs=True))
         for i, b in enumerate(pipe.transformer.single_transformer_blocks):
             hooks.append(b.register_forward_hook(block_hook(f"single{i:02d}"), with_kwargs=True))
+        tr = pipe.transformer
+        for name, mod in [("x_embedder", tr.x_embedder), ("context_embedder", tr.context_embedder),
+                          ("temb", tr.time_guidance_embed), ("mod_double_img", tr.double_stream_modulation_img),
+                          ("mod_double_txt", tr.double_stream_modulation_txt),
+                          ("mod_single", tr.single_stream_modulation), ("norm_out", tr.norm_out)]:
+            hooks.append(mod.register_forward_hook(block_hook(f"model/{name}"), with_kwargs=True))
+        pos_calls = []
+
+        def pos_hook(module, a, kw, output):
+            if len(calls) - 1 == args.block_step:
+                pos_calls.append(output)
+        hooks.append(tr.pos_embed.register_forward_hook(pos_hook, with_kwargs=True))
 
         generator = torch.Generator("cpu").manual_seed(args.seed)
         t0 = time.time()
@@ -133,7 +145,11 @@ def main():
             save(f"denoise/step{i}/timestep", c["timestep"])
             save(f"denoise/step{i}/velocity", c["output"][0])
         for name, t in block_outputs.items():
-            save(f"blocks_step{args.block_step}/{name}", t[0])
+            save(f"blocks_step{args.block_step}/{name}", t[0] if t.ndim == 3 else t)
+        # Flux2PosEmbed runs on image ids first, then text ids.
+        for label, (cos, sin) in zip(("img", "txt"), pos_calls):
+            save(f"blocks_step{args.block_step}/rope/{label}_cos", cos)
+            save(f"blocks_step{args.block_step}/rope/{label}_sin", sin)
 
         # VAE boundary: `latents` is already de-normalized and unpatchified by the pipeline.
         report["phase"] = "vae-decode"
