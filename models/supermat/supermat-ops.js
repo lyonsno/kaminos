@@ -4,7 +4,7 @@
 import {
   gemmShader, gemmTileShape, GEMM_PARAMS_WORDS, GROUPNORM_CHUNK, groupNormPartialShader,
   groupNormCombineShader, groupNormApplyShader, layerNormShader, softmaxShader, gegluShader,
-  affineShader, gemmSubgroupMatrixShader, flashAttentionShader, flashAttentionVec4Shader, FLASH_HEAD_DIM, FLASH_QUERY_TILE,
+  affineShader, gemmSubgroupMatrixShader, SUBGROUP_MATRIX_TILE, flashAttentionShader, flashAttentionVec4Shader, FLASH_HEAD_DIM, FLASH_QUERY_TILE,
 } from './supermat-kernels.js';
 
 const STORAGE = 0x0080, COPY_SRC = 0x0004, COPY_DST = 0x0008, UNIFORM = 0x0040;
@@ -47,8 +47,7 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
   if (!['auto', 'tiled', 'subgroup-matrix'].includes(gemmKernel)) throw new Error(`unknown gemm kernel ${gemmKernel}`);
   const subgroupMatrix = gemmKernel === 'subgroup-matrix' || (gemmKernel === 'auto' && subgroupMatrixUsable(device));
   if (subgroupMatrix && !subgroupMatrixUsable(device)) throw new Error('subgroup-matrix GEMM requested but unavailable on this device');
-  if (subgroupMatrix) gemmTile = { tm: 4, tn: 4, bk: 16 };
-  const tileShape = gemmTileShape(gemmTile);
+  const tileShape = subgroupMatrix ? { ...SUBGROUP_MATRIX_TILE } : gemmTileShape(gemmTile);
   if (!['streaming', 'materialized'].includes(attention)) throw new Error(`unknown attention mode ${attention}`);
   const pipelines = new Map();
   const pool = new Map();

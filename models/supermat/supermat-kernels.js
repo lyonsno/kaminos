@@ -19,9 +19,11 @@ export function gemmTileShape({ tm = 4, tn = 4, bk = 16 } = {}) {
   return { tm, tn, bk, bm: 16 * tm, bn: 16 * tn };
 }
 
-export function gemmShader({ aKContiguous = true, bNContiguous = true, biasM = false, biasM2 = false,
-  biasN = false, residual = false, conv = null, tile = {}, aF16 = false, bF16 = false } = {}) {
-  const { tm, tn, bk, bm, bn } = gemmTileShape(tile);
+// Shared pieces of the GEMM kernels: bindings, params struct, operand fetches,
+// tile loaders (for `threads` threads filling bk x bm / bk x bn tiles) and the
+// epilogue that turns accumulator value ACC into the stored output.
+function gemmParts({ aKContiguous = true, bNContiguous = true, biasM = false, biasM2 = false, biasN = false,
+  residual = false, conv = null, aF16 = false, bF16 = false }, { bm, bn, bk, threads, aLayout = 'k-major' }) {
   const operand = (index, name, half) => half
     ? `@group(0) @binding(${index}) var<storage,read> ${name}:array<u32>;`
     : storage(index, name);
@@ -36,17 +38,21 @@ export function gemmShader({ aKContiguous = true, bNContiguous = true, biasM = f
   if (residual) bindings.push(storage(next++, 'res'));
   bindings.push(storage(next++, 'c', true));
   bindings.push(uniform(next++, 'Params'));
-  const loadA = aKContiguous
-    ? `let kk=idx%${bk}u;let mm=idx/${bk}u;`
-    : `let mm=idx%${bm}u;let kk=idx/${bm}u;`;
-  const loadBOrder = bNContiguous || conv
-    ? `let nn=idx%${bn}u;let kk=idx/${bn}u;`
-    : `let kk=idx%${bk}u;let nn=idx/${bk}u;`;
-  let loadB;
+  const header = `struct Params {
+  M:u32, N:u32, K:u32, alpha:f32,
+  a_off:u32, a_sm:u32, a_sk:u32, a_sb:u32,
+  b_off:u32, b_sk:u32, b_sn:u32, b_sb:u32,
+  c_off:u32, c_sm:u32, c_sn:u32, c_sb:u32,
+  pad_top:u32, pad_left:u32, n_base:u32, z1:u32,
+};
+${bindings.join('\n')}`;
+  const orderA = aKContiguous ? `let kk=idx%${bk}u;let mm=idx/${bk}u;` : `let mm=idx%${bm}u;let kk=idx/${bm}u;`;
+  const orderB = bNContiguous || conv ? `let nn=idx%${bn}u;let kk=idx/${bn}u;` : `let kk=idx%${bk}u;let nn=idx/${bk}u;`;
+  let valueB;
   if (conv) {
     const { kh, kw, stride, upsample } = conv;
     // p.b_sk/p.b_sn/p.b_sb are reused as input H, input W and output W.
-    loadB = `let ci=k/${kh * kw}u;let r=k%${kh * kw}u;let ky=r/${kw}u;let kx=r%${kw}u;
+    valueB = `let ci=k/${kh * kw}u;let r=k%${kh * kw}u;let ky=r/${kw}u;let kx=r%${kw}u;
       let oy=n/p.b_sb;let ox=n%p.b_sb;
       let iy=i32(oy*${stride}u+ky)-i32(p.pad_top);let ix=i32(ox*${stride}u+kx)-i32(p.pad_left);
       let eh=i32(p.b_sk${upsample ? '*2u' : ''});let ew=i32(p.b_sn${upsample ? '*2u' : ''});
@@ -55,24 +61,38 @@ export function gemmShader({ aKContiguous = true, bNContiguous = true, biasM = f
         value=${fetch('b', bF16, 'p.b_off+ci*p.b_sk*p.b_sn+sy*p.b_sn+sx')};
       }`;
   } else {
-    loadB = `value=${fetch('b', bF16, 'p.b_off+bat*p.b_sb+k*p.b_sk+n*p.b_sn')};`;
+    valueB = `value=${fetch('b', bF16, 'p.b_off+bat*p.b_sb+k*p.b_sk+n*p.b_sn')};`;
   }
-  let epilogue = 'var v=p.alpha*acc[i][j];';
+  const storeA = aLayout === 'k-major' ? `tile_a[kk*${bm}u+mm]=value;` : `tile_a[mm*${bk}u+kk]=value;`;
+  const loaders = `    for(var q=0u;q<${(bk * bm) / threads}u;q++){
+      let idx=tid+q*${threads}u;
+      ${orderA}
+      let m=m0+mm;let k=k0+kk;var value=0.0;
+      if(m<p.M&&k<p.K){value=${fetch('a', aF16, 'p.a_off+bat*p.a_sb+m*p.a_sm+k*p.a_sk')};}
+      ${storeA}
+    }
+    for(var q=0u;q<${(bk * bn) / threads}u;q++){
+      let idx=tid+q*${threads}u;
+      ${orderB}
+      let n=n0+nn;let k=k0+kk;var value=0.0;
+      if(n<p.N&&k<p.K){ ${valueB} }
+      tile_b[kk*${bn}u+nn]=value;
+    }`;
+  let epilogue = 'var v=p.alpha*(ACC);';
   if (biasM) epilogue += 'v+=bias_m[m];';
   if (biasM2) epilogue += 'v+=bias_m2[m];';
   if (biasN) epilogue += 'v+=bias_n[n];';
   const cIndex = 'p.c_off+bat*p.c_sb+m*p.c_sm+n*p.c_sn';
   if (residual) epilogue += `v+=res[${cIndex}];`;
-  const loadsA = (bk * bm) / 256, loadsB = (bk * bn) / 256;
+  epilogue += `c[${cIndex}]=v;`;
+  return { header, loaders, epilogue };
+}
+
+export function gemmShader({ tile = {}, ...layout } = {}) {
+  const { tm, tn, bk, bm, bn } = gemmTileShape(tile);
+  const { header, loaders, epilogue } = gemmParts(layout, { bm, bn, bk, threads: 256 });
   return `
-struct Params {
-  M:u32, N:u32, K:u32, alpha:f32,
-  a_off:u32, a_sm:u32, a_sk:u32, a_sb:u32,
-  b_off:u32, b_sk:u32, b_sn:u32, b_sb:u32,
-  c_off:u32, c_sm:u32, c_sn:u32, c_sb:u32,
-  pad_top:u32, pad_left:u32, n_base:u32, z1:u32,
-};
-${bindings.join('\n')}
+${header}
 var<workgroup> tile_a:array<f32,${bk * bm}>;
 var<workgroup> tile_b:array<f32,${bk * bn}>;
 @compute @workgroup_size(16,16)
@@ -81,20 +101,7 @@ fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:
   let m0=wid.y*${bm}u;let n0=p.n_base+wid.x*${bn}u;let bat=wid.z;
   var acc:array<array<f32,${tn}>,${tm}>;
   for(var k0=0u;k0<p.K;k0+=${bk}u){
-    for(var q=0u;q<${loadsA}u;q++){
-      let idx=tid+q*256u;
-      ${loadA}
-      let m=m0+mm;let k=k0+kk;var value=0.0;
-      if(m<p.M&&k<p.K){value=${fetch('a', aF16, 'p.a_off+bat*p.a_sb+m*p.a_sm+k*p.a_sk')};}
-      tile_a[kk*${bm}u+mm]=value;
-    }
-    for(var q=0u;q<${loadsB}u;q++){
-      let idx=tid+q*256u;
-      ${loadBOrder}
-      let n=n0+nn;let k=k0+kk;var value=0.0;
-      if(n<p.N&&k<p.K){ ${loadB} }
-      tile_b[kk*${bn}u+nn]=value;
-    }
+${loaders}
     workgroupBarrier();
     for(var kk=0u;kk<${bk}u;kk++){
       var av:array<f32,${tm}>;var bv:array<f32,${tn}>;
@@ -110,9 +117,56 @@ fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:
     for(var j=0u;j<${tn}u;j++){
       let n=n0+lid.x+16u*j;
       if(n>=p.N){continue;}
-      ${epilogue}
-      c[${cIndex}]=v;
+      ${epilogue.replace('ACC', 'acc[i][j]')}
     }
+  }
+}`;
+}
+
+// Subgroup-matrix GEMM (chromium-experimental-subgroup-matrix, Apple
+// simdgroup matrices). One 32-lane subgroup per workgroup so every matrix
+// offset derives from workgroup_id (WGSL requires uniform offsets). Each
+// workgroup computes a 32x64 tile as 4x8 F32 8x8 results, K step 16.
+export const SUBGROUP_MATRIX_TILE = Object.freeze({ bm: 32, bn: 64, bk: 16 });
+
+export function gemmSubgroupMatrixShader(layout = {}) {
+  const { bm, bn, bk } = SUBGROUP_MATRIX_TILE;
+  const { header, loaders, epilogue } = gemmParts(layout, { bm, bn, bk, threads: 32, aLayout: 'm-major' });
+  const rows = bm / 8, cols = bn / 8;
+  const name = (i, j) => `acc${i}_${j}`;
+  let declare = '', mma = '', store = '';
+  for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) {
+    declare += `var ${name(i, j)}=subgroup_matrix_result<f32,8,8>();`;
+    mma += `${name(i, j)}=subgroupMatrixMultiplyAccumulate(l${i},r${j},${name(i, j)});`;
+    store += `subgroupMatrixStore(&outt,${i * 8 * bn + j * 8}u,${name(i, j)},false,${bn}u);`;
+  }
+  let loads = '';
+  for (let i = 0; i < rows; i++) loads += `let l${i}=subgroupMatrixLoad<subgroup_matrix_left<f32,8,8>>(&tile_a,${i * 8 * bk}u+kk,false,${bk}u);`;
+  for (let j = 0; j < cols; j++) loads += `let r${j}=subgroupMatrixLoad<subgroup_matrix_right<f32,8,8>>(&tile_b,kk*${bn}u+${j * 8}u,false,${bn}u);`;
+  return `enable chromium_experimental_subgroup_matrix;
+${header}
+var<workgroup> tile_a:array<f32,${bm * bk}>;
+var<workgroup> tile_b:array<f32,${bk * bn}>;
+var<workgroup> outt:array<f32,${bm * bn}>;
+@compute @workgroup_size(32)
+fn main(@builtin(local_invocation_index) tid:u32, @builtin(workgroup_id) wid:vec3<u32>) {
+  let m0=wid.y*${bm}u;let n0=p.n_base+wid.x*${bn}u;let bat=wid.z;
+  ${declare}
+  for(var k0=0u;k0<p.K;k0+=${bk}u){
+${loaders}
+    workgroupBarrier();
+    for(var kk=0u;kk<${bk}u;kk+=8u){
+      ${loads}
+      ${mma}
+    }
+    workgroupBarrier();
+  }
+  ${store}
+  workgroupBarrier();
+  for(var e=tid;e<${bm * bn}u;e+=32u){
+    let ml=e/${bn}u;let nl=e%${bn}u;let m=m0+ml;let n=n0+nl;
+    if(m>=p.M||n>=p.N){continue;}
+    ${epilogue.replace('ACC', `outt[ml*${bn}u+nl]`)}
   }
 }`;
 }
@@ -368,74 +422,6 @@ fn main(@builtin(local_invocation_index) lane:u32, @builtin(workgroup_id) wid:ve
   if(live){
     let inv=1.0/norm;let ob=row*p.out_stride+head*${FLASH_HEAD_DIM}u;
     for(var d=0u;d<${D4}u;d++){let r=acc[d]*inv;o[ob+4u*d]=r.x;o[ob+4u*d+1u]=r.y;o[ob+4u*d+2u]=r.z;o[ob+4u*d+3u]=r.w;}
-  }
-}`;
-}
-
-// GEMM on Apple simdgroup matrices via chromium-experimental-subgroup-matrix.
-// Same operands, loaders and epilogue as gemmShader with a 64x64x16 tile; the
-// inner product runs as 8x8 F32 multiply-accumulates. 256 threads = 8
-// subgroups of 32 (required subgroup size), arranged 4 (M) x 2 (N), each
-// owning a 16x32 block = 2x4 result matrices.
-export function gemmSubgroupMatrixShader({ aKContiguous = true, bNContiguous = true, biasM = false, biasM2 = false,
-  biasN = false, residual = false, conv = null, aF16 = false, bF16 = false } = {}) {
-  const base = gemmShader({ aKContiguous, bNContiguous, biasM, biasM2, biasN, residual, conv, aF16, bF16 });
-  // Reuse the generated bindings, params struct and B loader text from the tiled kernel.
-  const header = base.slice(0, base.indexOf('var<workgroup> tile_a'));
-  const loadA = aKContiguous ? 'let kk=idx%16u;let mm=idx/16u;' : 'let mm=idx%64u;let kk=idx/64u;';
-  const fetchA = aF16 ? 'unpack2x16float(a[(IDX)>>1u])[(IDX)&1u]' : 'a[IDX]';
-  const bBlock = base.slice(base.indexOf('    for(var q=0u;q<4u;q++){', base.indexOf('tile_a[kk*')),
-    base.indexOf('    workgroupBarrier();'));
-  const epilogue = base.slice(base.indexOf('      var v=p.alpha*acc[i][j];'), base.indexOf('      c[p.c_off'))
-    .replace('acc[i][j]', 'outt[ml*64u+nl]');
-  return `enable subgroups;
-enable chromium_experimental_subgroup_matrix;
-${header}
-var<workgroup> tile_a:array<f32,1024>;
-var<workgroup> tile_b:array<f32,1024>;
-var<workgroup> outt:array<f32,4096>;
-@compute @workgroup_size(16,16)
-fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:vec3<u32>) {
-  let tid=lid.y*16u+lid.x;
-  let m0=wid.y*64u;let n0=p.n_base+wid.x*64u;let bat=wid.z;
-  // Subgroup-matrix offsets must be subgroup-uniform; 32 lanes per subgroup.
-  let sg=subgroupBroadcastFirst(tid/32u);let sm=(sg/2u)*16u;let sn=(sg%2u)*32u;
-  var acc00=subgroup_matrix_result<f32,8,8>();var acc01=subgroup_matrix_result<f32,8,8>();
-  var acc02=subgroup_matrix_result<f32,8,8>();var acc03=subgroup_matrix_result<f32,8,8>();
-  var acc10=subgroup_matrix_result<f32,8,8>();var acc11=subgroup_matrix_result<f32,8,8>();
-  var acc12=subgroup_matrix_result<f32,8,8>();var acc13=subgroup_matrix_result<f32,8,8>();
-  for(var k0=0u;k0<p.K;k0+=16u){
-    for(var q=0u;q<4u;q++){
-      let idx=tid+q*256u;
-      ${loadA}
-      let m=m0+mm;let k=k0+kk;var value=0.0;
-      if(m<p.M&&k<p.K){value=${fetchA.replaceAll('IDX', 'p.a_off+bat*p.a_sb+m*p.a_sm+k*p.a_sk')};}
-      tile_a[mm*16u+kk]=value;
-    }
-${bBlock}    workgroupBarrier();
-    for(var kk=0u;kk<16u;kk+=8u){
-      let l0=subgroupMatrixLoad<subgroup_matrix_left<f32,8,8>>(&tile_a,sm*16u+kk,false,16u);
-      let l1=subgroupMatrixLoad<subgroup_matrix_left<f32,8,8>>(&tile_a,(sm+8u)*16u+kk,false,16u);
-      let r0=subgroupMatrixLoad<subgroup_matrix_right<f32,8,8>>(&tile_b,kk*64u+sn,false,64u);
-      let r1=subgroupMatrixLoad<subgroup_matrix_right<f32,8,8>>(&tile_b,kk*64u+sn+8u,false,64u);
-      let r2=subgroupMatrixLoad<subgroup_matrix_right<f32,8,8>>(&tile_b,kk*64u+sn+16u,false,64u);
-      let r3=subgroupMatrixLoad<subgroup_matrix_right<f32,8,8>>(&tile_b,kk*64u+sn+24u,false,64u);
-      acc00=subgroupMatrixMultiplyAccumulate(l0,r0,acc00);acc01=subgroupMatrixMultiplyAccumulate(l0,r1,acc01);
-      acc02=subgroupMatrixMultiplyAccumulate(l0,r2,acc02);acc03=subgroupMatrixMultiplyAccumulate(l0,r3,acc03);
-      acc10=subgroupMatrixMultiplyAccumulate(l1,r0,acc10);acc11=subgroupMatrixMultiplyAccumulate(l1,r1,acc11);
-      acc12=subgroupMatrixMultiplyAccumulate(l1,r2,acc12);acc13=subgroupMatrixMultiplyAccumulate(l1,r3,acc13);
-    }
-    workgroupBarrier();
-  }
-  subgroupMatrixStore(&outt,sm*64u+sn,acc00,false,64u);subgroupMatrixStore(&outt,sm*64u+sn+8u,acc01,false,64u);
-  subgroupMatrixStore(&outt,sm*64u+sn+16u,acc02,false,64u);subgroupMatrixStore(&outt,sm*64u+sn+24u,acc03,false,64u);
-  subgroupMatrixStore(&outt,(sm+8u)*64u+sn,acc10,false,64u);subgroupMatrixStore(&outt,(sm+8u)*64u+sn+8u,acc11,false,64u);
-  subgroupMatrixStore(&outt,(sm+8u)*64u+sn+16u,acc12,false,64u);subgroupMatrixStore(&outt,(sm+8u)*64u+sn+24u,acc13,false,64u);
-  workgroupBarrier();
-  for(var e=tid;e<4096u;e+=256u){
-    let ml=e/64u;let nl=e%64u;let m=m0+ml;let n=n0+nl;
-    if(m>=p.M||n>=p.N){continue;}
-${epilogue}      c[p.c_off+bat*p.c_sb+m*p.c_sm+n*p.c_sn]=v;
   }
 }`;
 }
