@@ -3,7 +3,7 @@
 // cooperative command duties that can be paused, resumed or stopped.
 //
 // Query: ?image_root=&image_path= (Kaminos /api/read) or ?image=<url>,
-// ?weights=<base url> (default /scratch/supermat-weights/f32/),
+// ?weights=<base url> (default /scratch/supermat-weights/f16/; f32 at .../f32/),
 // ?cooperative=0 for the blocking A/B, ?autopause=<ms after start> with
 // ?pausefor=<ms> for an unattended pause/resume check.
 import {
@@ -15,7 +15,7 @@ import { decodeImageRgba } from './supermat-image.js';
 import { compositeOnGray, resizeRgbaBilinear } from './supermat-preprocess.js';
 
 const params = new URLSearchParams(location.search);
-const weightsUrl = params.get('weights') ?? '/scratch/supermat-weights/f32/';
+const weightsUrl = params.get('weights') ?? '/scratch/supermat-weights/f16/';
 const imageUrl = params.get('image_root') && params.get('image_path')
   ? `/api/read?${new URLSearchParams({ root: params.get('image_root'), path: params.get('image_path') })}`
   : params.get('image');
