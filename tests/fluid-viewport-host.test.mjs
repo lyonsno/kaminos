@@ -27,3 +27,21 @@ test('authored water and the bench consume the same render-host adapter',()=>{
  assert.match(bench,/createFluidViewportHost/,'ordinary bench should bind the same viewport component');
  assert.doesNotMatch(authored,/new THREE\.RenderTarget/,'authored water must not maintain a second copy of scene capture');
 });
+
+test('shared renderer default is admitted without overriding an explicit request',async()=>{
+ const m=await load();assert.equal(typeof m.resolveFluidViewportRenderer,'function');
+ assert.equal(m.resolveFluidViewportRenderer(new URLSearchParams()),'screen_space_refraction');
+ assert.equal(m.resolveFluidViewportRenderer(new URLSearchParams('finger_fluid_viewport=producer')),'screen_space_surface');
+ assert.equal(m.resolveFluidViewportRenderer(new URLSearchParams('finger_fluid_renderer=particles')),'particles');
+});
+test('capture stays linear and matched camera transforms the complete image once',async()=>{
+ const m=await load();assert.equal(typeof m.applyFluidViewportDisplayPolicy,'function');
+ const raw={},matched={},composed={},ordinaryMatched={};
+ for(const effective of [false,true]){
+  const pipeline={outputNode:ordinaryMatched,outputColorTransform:true},presentation={};
+  const restore=m.applyFluidViewportDisplayPolicy({pipeline,presentation,rawOutput:raw,composedOutput:composed,matchedOutput:matched,effective});
+  assert.equal(pipeline.outputNode,raw);assert.equal(pipeline.outputColorTransform,false);
+  assert.equal(presentation.outputNode,effective?matched:composed);assert.equal(presentation.outputColorTransform,!effective);
+  restore();assert.equal(pipeline.outputNode,ordinaryMatched);assert.equal(pipeline.outputColorTransform,true);
+ }
+});

@@ -2679,7 +2679,7 @@ async function main() {
         const fpsCounter = document.getElementById('fps-counter');
         if (overlay) overlay.style.visibility = 'hidden';
         if (fpsCounter) fpsCounter.style.visibility = 'hidden';
-        const canvas = document.getElementById('finger-fluid-bench-canvas');
+        const canvas = (window.kaminosFingerFluidBenchCanvasForWitness?.() ?? document.getElementById('finger-fluid-bench-canvas'));
         if (!canvas || !canvas.width || !canvas.height) return null;
         const rect = canvas.getBoundingClientRect();
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -3476,7 +3476,7 @@ async function main() {
       }
       const invalidCanvasRect = await evaluate(ws, `(() => {
         document.getElementById('finger-fluid-bench-overlay')?.setAttribute('hidden', '');
-        const canvas = document.getElementById('finger-fluid-bench-canvas');
+        const canvas = (window.kaminosFingerFluidBenchCanvasForWitness?.() ?? document.getElementById('finger-fluid-bench-canvas'));
         if (!canvas) return null;
         const rect = canvas.getBoundingClientRect();
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -3546,7 +3546,7 @@ async function main() {
       }
       const invalidOpticalFootprintCanvasRect = await evaluate(ws, `(() => {
         document.getElementById('finger-fluid-bench-overlay')?.setAttribute('hidden', '');
-        const canvas = document.getElementById('finger-fluid-bench-canvas');
+        const canvas = (window.kaminosFingerFluidBenchCanvasForWitness?.() ?? document.getElementById('finger-fluid-bench-canvas'));
         if (!canvas) return null;
         const rect = canvas.getBoundingClientRect();
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -3616,7 +3616,7 @@ async function main() {
       }
       const invalidTransmissionFootprintCanvasRect = await evaluate(ws, `(() => {
         document.getElementById('finger-fluid-bench-overlay')?.setAttribute('hidden', '');
-        const canvas = document.getElementById('finger-fluid-bench-canvas');
+        const canvas = (window.kaminosFingerFluidBenchCanvasForWitness?.() ?? document.getElementById('finger-fluid-bench-canvas'));
         if (!canvas) return null;
         const rect = canvas.getBoundingClientRect();
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -3685,7 +3685,7 @@ async function main() {
       }
       const invalidBodyTransportCanvasRect = await evaluate(ws, `(() => {
         document.getElementById('finger-fluid-bench-overlay')?.setAttribute('hidden', '');
-        const canvas = document.getElementById('finger-fluid-bench-canvas');
+        const canvas = (window.kaminosFingerFluidBenchCanvasForWitness?.() ?? document.getElementById('finger-fluid-bench-canvas'));
         if (!canvas) return null;
         const rect = canvas.getBoundingClientRect();
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -3754,7 +3754,7 @@ async function main() {
       }
       const invalidInterfaceFrequencyCanvasRect = await evaluate(ws, `(() => {
         document.getElementById('finger-fluid-bench-overlay')?.setAttribute('hidden', '');
-        const canvas = document.getElementById('finger-fluid-bench-canvas');
+        const canvas = (window.kaminosFingerFluidBenchCanvasForWitness?.() ?? document.getElementById('finger-fluid-bench-canvas'));
         if (!canvas) return null;
         const rect = canvas.getBoundingClientRect();
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -4139,7 +4139,7 @@ async function main() {
 
     phase = 'measure_canvas';
     const canvasRect = await evaluate(ws, `(() => {
-      const canvas = document.getElementById('finger-fluid-bench-canvas');
+      const canvas = (window.kaminosFingerFluidBenchCanvasForWitness?.() ?? document.getElementById('finger-fluid-bench-canvas'));
       if (!canvas || !canvas.width || !canvas.height) return null;
       const rect = canvas.getBoundingClientRect();
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -4445,7 +4445,7 @@ async function main() {
     });
     await delay(160);
     const resizedCanvasRect = await evaluate(ws, `(() => {
-      const canvas = document.getElementById('finger-fluid-bench-canvas');
+      const canvas = (window.kaminosFingerFluidBenchCanvasForWitness?.() ?? document.getElementById('finger-fluid-bench-canvas'));
       if (!canvas) return null;
       const rect = canvas.getBoundingClientRect();
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -4985,7 +4985,7 @@ async function main() {
     }
     const invalidCanvasRect = await evaluate(ws, `(() => {
       document.getElementById('finger-fluid-bench-overlay')?.setAttribute('hidden', '');
-      const canvas = document.getElementById('finger-fluid-bench-canvas');
+      const canvas = (window.kaminosFingerFluidBenchCanvasForWitness?.() ?? document.getElementById('finger-fluid-bench-canvas'));
       if (!canvas) return null;
       const rect = canvas.getBoundingClientRect();
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -5048,7 +5048,7 @@ async function main() {
     }
     const invalidOpticalLightingCanvasRect = await evaluate(ws, `(() => {
       document.getElementById('finger-fluid-bench-overlay')?.setAttribute('hidden', '');
-      const canvas = document.getElementById('finger-fluid-bench-canvas');
+      const canvas = (window.kaminosFingerFluidBenchCanvasForWitness?.() ?? document.getElementById('finger-fluid-bench-canvas'));
       if (!canvas) return null;
       const rect = canvas.getBoundingClientRect();
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };

@@ -11,7 +11,7 @@ const PIPELINE = 'kaminos/local-liquid-authoring-v0';
 
 
 
-export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], isCurrent = () => true, sceneGeneration = 0, onContactRetired = () => {}, helperGround = null}) {
+export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], isCurrent = () => true, sceneGeneration = 0, onContactRetired = () => {}, helperGround = null, getDisplayPolicy = null}) {
   if (!device || renderer.backend.device !== device) throw Error('Local liquid requires the host WebGPU device');
   let authored = normalizeLocalLiquidSetup(setup), authoredEmitters = structuredClone(emitters), sourceGeneration = 1;
   const initialPacket=localLiquidInletPacket(authored,authoredEmitters,sourceGeneration);
@@ -28,7 +28,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   }
   if (!solver.available) throw Error(solver.reason || 'Local liquid solver unavailable');
   const group = createFluidAnalyticalSupport(); scene.add(group);
-  const viewport=createFluidViewportHost({renderer,scene,camera,pipeline,device,solver,group,helperGround,pipelineIdentity:PIPELINE});
+  const viewport=createFluidViewportHost({renderer,scene,camera,pipeline,device,solver,group,helperGround,getDisplayPolicy,pipelineIdentity:PIPELINE});
   let disposed=false;
 
   const host = {group,render:options=>viewport.render(options),

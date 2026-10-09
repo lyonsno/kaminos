@@ -1,5 +1,6 @@
+import {createSceneEmissiveCamera} from './scene-emissive-camera.mjs';
 import * as THREE from './lib/three.webgpu.js';
-import {texture,vec4,positionView,pmremTexture,equirectDirection,uv,uniform} from './lib/three.tsl.js';
+import {texture,vec4,positionView,pmremTexture,equirectDirection,uv,uniform,vec3,float} from './lib/three.tsl.js';
 import {withLocalLiquidHelperGround} from './local-liquid-authoring.mjs';
 import {withLocalLiquidDepthBackground,readLocalLiquidDepthFrame} from './local-liquid-depth-background.mjs';
 import {resolveFingerFluidOpticalDebugMode,KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_ROUTE as ROUTE,KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_SCHEMA as FRAME_SCHEMA,KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE as SUPPORT} from './finger-fluid-webgpu-core.js';
@@ -8,6 +9,20 @@ export function resolveFluidViewportMode(params=new URLSearchParams()) {
   const mode=params.get('finger_fluid_viewport')??'shared';
   if(!['shared','producer'].includes(mode))throw new RangeError(`Unknown fluid viewport: ${mode}`);
   return mode;
+}
+
+export function resolveFluidViewportRenderer(params=new URLSearchParams()) {
+  return params.get('finger_fluid_renderer') || (resolveFluidViewportMode(params)==='shared'?'screen_space_refraction':'screen_space_surface');
+}
+
+export function applyFluidViewportDisplayPolicy({pipeline,presentation,rawOutput,composedOutput,matchedOutput,effective}) {
+  const output=pipeline.outputNode,transform=pipeline.outputColorTransform;
+  pipeline.outputNode=rawOutput;pipeline.outputColorTransform=false;pipeline.needsUpdate=true;
+  const finalOutput=effective?matchedOutput:composedOutput,finalTransform=!effective;
+  if(presentation.outputNode!==finalOutput||presentation.outputColorTransform!==finalTransform){
+    presentation.outputNode=finalOutput;presentation.outputColorTransform=finalTransform;presentation.needsUpdate=true;
+  }
+  return ()=>{pipeline.outputNode=output;pipeline.outputColorTransform=transform;pipeline.needsUpdate=true;};
 }
 
 export function fluidViewportCameraFrame(camera, width, height, generation) {
@@ -24,7 +39,7 @@ export function fluidViewportCameraFrame(camera, width, height, generation) {
 
 /** Scene capture and final presentation are shared; the caller owns solver lifetime. */
 export function createFluidViewportHost({renderer,scene,camera,pipeline,device,solver,
-  pipelineIdentity='kaminos/local-liquid-authoring-v0',framePrefix='local-liquid',group=null,helperGround=null}) {
+  pipelineIdentity='kaminos/local-liquid-authoring-v0',framePrefix='local-liquid',group=null,helperGround=null,getDisplayPolicy=null}) {
   if(!device||renderer.backend.device!==device)throw Error('Fluid viewport requires the host WebGPU device');
   if(!solver?.available||typeof solver.render!=='function')throw Error('Fluid viewport requires an available solver');
   const targetOptions = {type:THREE.HalfFloatType, depthBuffer:false, minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter};
@@ -36,9 +51,9 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
   depthTarget.texture.name='Local liquid host linear depth';
   const depthMaterial = new THREE.NodeMaterial(); depthMaterial.fragmentNode=vec4(positionView.z.negate(),0,0,1);
   depthMaterial.blending=THREE.NoBlending; depthMaterial.toneMapped=false; depthMaterial.side=THREE.DoubleSide;
-  const presentation = new THREE.RenderPipeline(renderer,texture(outputTarget.texture));
-  const originalOutputTransform=pipeline.outputColorTransform;
-  pipeline.outputColorTransform=false; pipeline.needsUpdate=true;
+  const composedOutput=texture(outputTarget.texture);
+  const presentation = new THREE.RenderPipeline(renderer,composedOutput);
+  const finalCamera=createSceneEmissiveCamera(composedOutput,{TSL:{uniform,vec3,vec4,float},THREE});
   const environmentRotation=uniform(new THREE.Matrix3()), environmentIntensity=uniform(1);
   let environmentTarget=null, environmentQuad=null, environmentSource=null, environmentKey=null, environmentGeneration=0;
   let opticalDebugMode='shaded';
@@ -78,7 +93,12 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
     const previousTarget=renderer.getRenderTarget(), previousOverride=scene.overrideMaterial, previousBackground=scene.background;
     const previousRenderObject=renderer.getRenderObjectFunction();
     const clearColor=renderer.getClearColor(new THREE.Color()), clearAlpha=renderer.getClearAlpha();
+    let restoreDisplay=null;
     try {
+      const policy=getDisplayPolicy?.()??{rawOutput:pipeline.outputNode,cameraState:{effective:false}};
+      const cameraState=policy.cameraState??{effective:false};
+      finalCamera.update(cameraState.effective,{...cameraState,effective:'emissive-transport-v2'});
+      restoreDisplay=applyFluidViewportDisplayPolicy({pipeline,presentation,rawOutput:policy.rawOutput,composedOutput,matchedOutput:finalCamera.outputNode,effective:cameraState.effective});
       const size=renderer.getDrawingBufferSize(new THREE.Vector2()), width=size.x, height=size.y;
       for (const target of [colorTarget,depthTarget,outputTarget]) target.setSize(width,height);
       renderer.initRenderTarget(outputTarget);
@@ -118,11 +138,12 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
       frameCount=generation;
       lastFrame={frameId,cameraIdentity:cameraSnapshot.identity,cameraGeneration:generation,width,height,
         environmentSource:environmentSource.uuid,environmentGeneration,
-        route:ROUTE,opticalDebugMode,submittedByHost:true,presentedByHost:true,displayTransform:'host-render-pipeline',exposure:renderer.toneMappingExposure,environmentIntensity:scene.environmentIntensity,
-        simulationTimePolicy:'one-fixed-1/60-step-per-rendered-frame',simulationRewind:false,
+        route:ROUTE,opticalDebugMode,submittedByHost:true,presentedByHost:true,captureColorSpace:'linear_hdr',displayTransform:cameraState.effective?cameraState.transform:'host-render-pipeline',exposure:renderer.toneMappingExposure,environmentIntensity:scene.environmentIntensity,
+        simulationTimePolicy:advance?'one-fixed-1/60-step-per-rendered-frame':'caller-owned-step',simulationRewind:false,
         helperGroundPresentation:{policy:'retained-basin-suppresses-editor-helper',effectiveVisible:helperGround?.visible??null}};
     } catch(error) { failure=error.message || String(error); throw error; }
     finally {
+      restoreDisplay?.();
       scene.overrideMaterial=previousOverride; scene.background=previousBackground;
       renderer.setRenderObjectFunction(previousRenderObject);
       renderer.setClearColor(clearColor,clearAlpha); renderer.setRenderTarget(previousTarget);
@@ -142,7 +163,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
       disposed=true;device.removeEventListener('uncapturederror',onGpuError);
       for(const target of [colorTarget,depthTarget,outputTarget,environmentTarget])target?.dispose();
       depthMaterial.dispose();environmentQuad?.material.dispose();presentation.dispose();
-      pipeline.outputColorTransform=originalOutputTransform;pipeline.needsUpdate=true;
+
     }
   };
 }

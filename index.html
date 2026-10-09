@@ -3622,7 +3622,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 import {mountMaterialCockpit} from './finger-fluid-material-cockpit.mjs';
 import {readMaterialControlsURL,materialControlsURL} from './finger-fluid-material-controls.mjs';
 
-import {createFluidViewportHost,resolveFluidViewportMode} from './fluid-viewport-host.mjs';
+import {createFluidViewportHost,resolveFluidViewportRenderer,resolveFluidViewportMode} from './fluid-viewport-host.mjs';
 import {createFluidBenchScene,FINGER_FLUID_BENCH_VIEWPORT_PIPELINE} from './finger-fluid-bench-viewport.mjs';
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
@@ -4137,6 +4137,8 @@ fluidViewportReady.catch(()=>{});
 function fingerFluidUsesSharedViewport(){return resolveFluidViewportMode(new URLSearchParams(location.search))==='shared';}
 let fingerFluidPressureCockpit = null;
 let fingerFluidBenchSolverPromise = null;
+let fingerFluidBenchStartGeneration=0;
+let getFluidDisplayPolicy=null;
 let fingerFluidBenchRunning = false;
 let fingerFluidBenchSimulationPaused = false;
 let fingerFluidBenchCamera = { yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] };
@@ -4237,7 +4239,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     ? createFingerFluidWaterfallOracleConfig(effectiveWaterfallOraclePreset)
     : null;
   const requestedColorMode = params.get('finger_fluid_color_mode') || 'phase';
-  const requestedRendererMode = params.get('finger_fluid_renderer') || 'screen_space_surface';
+  const requestedRendererMode = resolveFluidViewportRenderer(params);
   const requestedAnalyticCarrierMode = params.get('finger_fluid_analytic_carrier');
   const effectiveAnalyticCarrierMode = resolveFingerFluidAnalyticCarrierMode(
     requestedAnalyticCarrierMode,
@@ -4467,7 +4469,7 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
 
     return createLocalLiquidHost({
       renderer, scene, camera, pipeline: renderPipeline, device: sharedGpu?.device,
-      setup, emitters, isCurrent, sceneGeneration: generation, helperGround: groundPlane,
+      setup, emitters, isCurrent, sceneGeneration: generation, helperGround: groundPlane, getDisplayPolicy:()=>getFluidDisplayPolicy?.(),
       onContactRetired: host => authoredLiquidFireContact.retire(host),
     });
   },
@@ -11588,6 +11590,7 @@ async function initScene() {
     return hit?{isGround:hit.object===groundPlane,uuid:hit.object.uuid,point:hit.point.toArray(),linearColor:hit.object.material?.color?.toArray()}:null;
   };
   window.kaminosSceneEmissiveCameraDebugState=()=>sceneEmissiveCamera?.debugState()??{requested:false,effective:false,reason:'distributed-route-not-mounted'};
+  getFluidDisplayPolicy=()=>({rawOutput:rawSceneOutput,cameraState:sceneEmissiveCamera && (sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')?sceneEmissiveCamera.debugState():{effective:false}});
   let sceneCameraStatusText='';
   window.kaminosFireLightFieldDebugState = () => (fireLightFieldPass
     ? fireLightFieldPass.debugState()
@@ -11875,7 +11878,7 @@ async function initScene() {
     } else if(sceneEmissiveCamera) {
       applySceneEmissiveCamera(renderPipeline,rawSceneOutput,rawSceneOutput,false);
     }
-    if (fingerFluidBenchViewport && fingerFluidBenchRunning) {
+    if (fingerFluidBenchViewport && fingerFluidBenchRunning && !document.getElementById('finger-fluid-bench-operator-panel').hidden) {
       try { drawFingerFluidBenchFrame(performance.now(),{fromHost:true}); }
       catch(error){
         console.error('Shared fluid bench frame failed',error);
@@ -14438,8 +14441,12 @@ function drawFingerFluidBenchFrame(now = performance.now(),{fromHost=false}={}) 
 }
 
 async function startFingerFluidBench() {
+  const startGeneration=++fingerFluidBenchStartGeneration;
+  const isCurrent=()=>startGeneration===fingerFluidBenchStartGeneration;
+  try {
   const sharedViewport=fingerFluidUsesSharedViewport();
   if(sharedViewport)await fluidViewportReady;
+  if(!isCurrent())return;
   if(sharedViewport&&localLiquidHost)throw new Error('Close the authored water simulation before opening its separate calibration bench');
   fingerFluidBenchRunning = true;
   document.getElementById('finger-fluid-bench-operator-panel').dataset.viewport=sharedViewport?'shared':'producer';
@@ -14576,7 +14583,11 @@ async function startFingerFluidBench() {
         : null,
       transparentBackground: fingerFluidPyroCompositionRequested(),
     });
-    fingerFluidBenchSolver = await fingerFluidBenchSolverPromise;
+    const pendingSolver=fingerFluidBenchSolverPromise;
+    const createdSolver=await pendingSolver;
+    if(pendingSolver!==fingerFluidBenchSolverPromise){createdSolver.destroy?.();return;}
+    fingerFluidBenchSolver=createdSolver;
+    if(!isCurrent())return;
     if (!fingerFluidBenchSolver.available) {
       fingerFluidBenchState = createFingerFluidBenchState({
         status: 'error',
@@ -14627,21 +14638,36 @@ async function startFingerFluidBench() {
       return;
     }
   }
+  if(!fingerFluidBenchSolver&&fingerFluidBenchSolverPromise){
+    const pendingSolver=fingerFluidBenchSolverPromise,createdSolver=await pendingSolver;
+    if(pendingSolver!==fingerFluidBenchSolverPromise){createdSolver.destroy?.();return;}
+    fingerFluidBenchSolver=createdSolver;
+  }
+  if(!isCurrent())return;
   if(sharedViewport&&!fingerFluidBenchViewport){
     fingerFluidBenchScene=createFluidBenchScene({scene,truthScene:fingerFluidBenchConfig.effectiveTruthScene});
-    fingerFluidBenchViewport=createFluidViewportHost({renderer,scene,camera,pipeline:renderPipeline,device:renderer.backend.device,solver:fingerFluidBenchSolver,group:fingerFluidBenchScene.group,helperGround:groundPlane,pipelineIdentity:FINGER_FLUID_BENCH_VIEWPORT_PIPELINE,framePrefix:'fluid-bench'});
+    fingerFluidBenchViewport=createFluidViewportHost({renderer,scene,camera,pipeline:renderPipeline,device:renderer.backend.device,solver:fingerFluidBenchSolver,group:fingerFluidBenchScene.group,helperGround:groundPlane,getDisplayPolicy:()=>getFluidDisplayPolicy?.(),pipelineIdentity:FINGER_FLUID_BENCH_VIEWPORT_PIPELINE,framePrefix:'fluid-bench'});
     syncFingerFluidCompositionCamera({initial:true});
   }
   await activateFingerFluidPyroComposition();
+  if(!isCurrent())return;
   if(sharedViewport){markDirty();return;}
   if (!fingerFluidBenchAnimationFrame && fingerFluidBenchRunning) {
     fingerFluidBenchFrameStartedAt = performance.now();
     drawFingerFluidBenchFrame.lastNow = performance.now() - 16.7;
     fingerFluidBenchAnimationFrame = requestAnimationFrame(drawFingerFluidBenchFrame);
   }
+  } catch(error) {
+    if(!isCurrent())return;
+    stopFingerFluidBench();
+    fingerFluidBenchState=createFingerFluidBenchState({status:'error',solverBackend:'startup_failed',renderBackend:'startup_failed'});
+    fingerFluidBenchState.runtime={available:false,reason:error.message||String(error)};
+    updateFingerFluidBenchReadout();setInfo('Fluid bench unavailable: '+fingerFluidBenchState.runtime.reason);
+  }
 }
 
 function stopFingerFluidBench() {
+  ++fingerFluidBenchStartGeneration;
   fingerFluidBenchRunning = false;
   fingerFluidBenchViewport?.dispose();fingerFluidBenchViewport=null;
   fingerFluidBenchScene?.dispose();fingerFluidBenchScene=null;markDirty();
@@ -14655,6 +14681,7 @@ async function resetFingerFluidPressureCockpitWater() {
   fingerFluidBenchSolver?.destroy?.();
   fingerFluidBenchSolver=null;fingerFluidBenchSolverPromise=null;fingerFluidBenchConfig=null;
   await startFingerFluidBench();
+  if(!fingerFluidBenchRunning)return;
   fingerFluidBenchCamera=camera;syncFingerFluidCompositionCamera({initial:true});markDirty();
   fingerFluidPressureCockpit?.update();
 }
