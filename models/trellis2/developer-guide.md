@@ -167,8 +167,9 @@ if (result.status === "succeeded") {
 
 For Kaminos renderer integration, [`createTrellisSharedHost`](shared-host.js)
 attaches to the host's existing device and queue. Its `beginRun({runId,signal})`
-returns the model route; `finish()` waits for model/foreground work and releases
-the route. The host retains ownership of its device. The
+returns a run object with a `route` field; use that route for generation, then
+call the run's `finish()` to wait for model/foreground work and release it.
+The host retains ownership of its device. The
 [shared-generation example](shared-generation-smoke.js) shows that connection.
 
 ## Memory and performance

@@ -58,6 +58,8 @@ generated surface, not for removing a photographed background.
 Start with the 512 profile and eight sampling steps. The 1024 profile adds a
 second shape-generation pass for more detail and takes longer. The finishing
 command lets you choose the target triangle count independently of generation.
+These profile sizes describe the model's 3D grid, not the texture dimensions;
+the finishing tools bake 1K textures.
 
 This version uses float32 model weights and is developed on high-memory Apple
 Silicon Macs. Support for 16–18 GB machines is being worked on. See the
