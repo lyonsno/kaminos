@@ -206,7 +206,7 @@ export function orbitCamera(camera, target, pivot, yaw, pitch) {
 }
 
 export function panCamera(camera, target, dx, dy, height) {
-  const perPixel = 2 * camera.position.distanceTo(target) * Math.tan(camera.fov * Math.PI / 360) / camera.zoom / height;
+  const perPixel = 2 * camera.position.distanceTo(target) / Math.abs(camera.projectionMatrix.elements[5]) / height;
   const shift = new Vector3(-dx * perPixel, dy * perPixel, 0).applyQuaternion(camera.quaternion);
   camera.position.add(shift);
   target.add(shift);
@@ -247,6 +247,7 @@ const take = e => { e.preventDefault(); e.stopImmediatePropagation(); };
 
 export function installSceneNavigation({canvas, viewport, camera, controls, roots, frameAll, frameSelected = () => {}, gizmo = null,
   occluders = () => [],
+  navigationHook = {},
   inputMode = () => 'mouse', blocked = () => false, status = () => {}, document = globalThis.document, window = globalThis.window}) {
   let gesture = null, hover = false, lastDepth = null, workingPivot = null, workingTarget = controls.target.clone();
   const listen = (node, type, fn, options) => {
@@ -273,9 +274,11 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     if (!gesture) return;
     const old = gesture;
     gesture = null;
-    if (cancel) {camera.position.copy(old.before.position); controls.target.copy(old.before.target); camera.up.copy(old.before.up); workingPivot = old.beforePivot; changed();}
+    if(cancel&&old.frameOverride)navigationHook.restoreFrameLayout?.(old.frameLayout);
+    if (cancel&&!old.frameOverride) {camera.position.copy(old.before.position); controls.target.copy(old.before.target); camera.up.copy(old.before.up); workingPivot = old.beforePivot; changed();}
     if (canvas.hasPointerCapture(old.pointerId)) canvas.releasePointerCapture(old.pointerId);
     if (old.gizmo) {gizmo.enabled = old.gizmo.enabled; gizmo.getHelper().visible = old.gizmo.visible;}
+    navigationHook.end?.(cancel);
     controls.dispatchEvent({type:'end'});
     status('');
   };
@@ -287,8 +290,9 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     // this canvas handler. Otherwise RMB and MMB share the same navigation.
     take(e);
     if (gesture || !permitted()) return;
-    const before = pose(), beforePivot = workingPivot?.clone() || null, pivot = sample(e);
-    gesture = {pointerId:e.pointerId, x:e.clientX, y:e.clientY, mode:modeFor(e), pivot, before, beforePivot};
+    const mode=modeFor(e),frameOverride=navigationHook.begin?.(mode)===true;
+    const before = pose(), beforePivot = workingPivot?.clone() || null, pivot = frameOverride?controls.target.clone():sample(e);
+    gesture = {pointerId:e.pointerId, x:e.clientX, y:e.clientY, mode, pivot, before, beforePivot,frameOverride,frameLayout:navigationHook.frameLayout?.()};
     if (gizmo) {
       gesture.gizmo = {enabled:gizmo.enabled, visible:gizmo.getHelper().visible};
       gizmo.enabled = false; gizmo.axis = null; gizmo.getHelper().visible = false;
@@ -302,13 +306,14 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     take(e);
     if (!permitted()) {finish(true); return;}
     const mode = modeFor(e);
+    if(gesture.frameOverride){const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;if(mode==='pan')navigationHook.pan?.(dx,dy);else if(mode==='dolly')navigationHook.zoom?.(Math.exp(dy*.01));gesture.x=e.clientX;gesture.y=e.clientY;return;}
     if (mode !== gesture.mode) {gesture.mode = mode; gesture.pivot = sample(e);}
     const dx = e.clientX - gesture.x, dy = e.clientY - gesture.y;
     if (mode === 'orbit') orbitCamera(camera, controls.target, gesture.pivot, -dx * .005, -dy * .005);
     else if (mode === 'pan') {const eye=camera.position.clone();panCamera(camera, controls.target, dx, dy, canvas.clientHeight);workingPivot?.add(camera.position.clone().sub(eye));}
     else zoomCamera(camera, controls.target, Math.exp(dy * .01));
     gesture.x = e.clientX; gesture.y = e.clientY;
-    changed();
+    changed();navigationHook.changed?.();
   }, true);
   listen(canvas, 'pointerup', e => {
     if (!gesture || e.pointerId !== gesture.pointerId) return;
@@ -328,13 +333,14 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     const mode = inputMode() === 'trackpad' ? modeFor(e) : 'dolly';
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? canvas.clientHeight : 1;
     const dx = (e.deltaX || 0) * unit, dy = e.deltaY * unit;
+    if(navigationHook.begin?.(mode)===true){if(mode==='pan')navigationHook.pan?.(-dx,-dy);else navigationHook.zoom?.(Math.exp(dy*.0015));return;}
     const pivot = sample(e);
     // Scroll deltas describe content displacement opposite to pointer motion.
     // Each packet completes immediately; no click, capture or idle timer needed.
     if (mode === 'orbit') orbitCamera(camera, controls.target, pivot, dx * .005, dy * .005);
     else if (mode === 'pan') {const eye=camera.position.clone();panCamera(camera, controls.target, -dx, -dy, canvas.clientHeight);workingPivot?.add(camera.position.clone().sub(eye));}
     else zoomCamera(camera, controls.target, Math.exp(dy * .0015));
-    changed();
+    changed();navigationHook.changed?.();navigationHook.wheelEnd?.();
   }, {capture:true, passive:false});
   listen(document, 'keydown', e => {
     if (gesture) {take(e); if (e.key === 'Escape') finish(true); return;}
@@ -342,28 +348,28 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
       || !(hover || viewport.contains(document.activeElement)) || !permitted() || e.metaKey || e.altKey) return;
     const code = e.code;
     const sign = e.ctrlKey ? -1 : 1;
-    let action;
-    // Kaminos is Y-up: front +Z, right +X, top +Y. Cardinal views keep perspective.
-    if (code === 'Numpad1') action = () => viewCamera(camera, controls.target, new Vector3(0,0,sign));
-    else if (code === 'Numpad3') action = () => viewCamera(camera, controls.target, new Vector3(sign,0,0));
-    else if (code === 'Numpad7') action = () => viewCamera(camera, controls.target, new Vector3(0,sign,0));
-    else if ((e.ctrlKey || e.shiftKey) && ['Numpad4','Numpad6','Numpad8','Numpad2'].includes(code)) action = () => {
-      const pixels = canvas.clientHeight * .1;
-      const eye = camera.position.clone();
-      panCamera(camera, controls.target, code === 'Numpad4' ? pixels : code === 'Numpad6' ? -pixels : 0,
-        code === 'Numpad8' ? pixels : code === 'Numpad2' ? -pixels : 0, canvas.clientHeight);
-      workingPivot?.add(camera.position.clone().sub(eye));
-    };
-    else if (!e.ctrlKey && ['Numpad4','Numpad6','Numpad8','Numpad2','Numpad9'].includes(code)) action = () => {
-      const step = Math.PI / 12;
-      orbitCamera(camera, controls.target, controls.target.clone(),
-        code === 'Numpad4' ? -step : code === 'Numpad6' ? step : code === 'Numpad9' ? Math.PI : 0,
-        code === 'Numpad8' ? -step : code === 'Numpad2' ? step : 0);
-    };
-    else if (!e.ctrlKey && ['NumpadAdd','NumpadSubtract'].includes(code)) action = () => zoomCamera(camera, controls.target, code === 'NumpadAdd' ? 1/1.2 : 1.2);
-    else if (!e.ctrlKey && code === 'Home') action = () => {if (frameAll()) workingPivot = null;};
-    else if (!e.ctrlKey && !e.shiftKey && (e.key.toLowerCase() === 'f' || code === 'NumpadDecimal')) action = () => {if (frameSelected()) workingPivot = null;};
-    if (action) {take(e); action(); changed();}
+    let action,mode='orbit',leaveView=false,panDelta=null,zoomFactor=null,home=false;
+    // Y-up authored scenes retain their existing axis convention.
+    if (code === 'Numpad1'){leaveView=true;action=()=>viewCamera(camera,controls.target,new Vector3(0,0,sign));}
+    else if(code==='Numpad3'){leaveView=true;action=()=>viewCamera(camera,controls.target,new Vector3(sign,0,0));}
+    else if(code==='Numpad7'){leaveView=true;action=()=>viewCamera(camera,controls.target,new Vector3(0,sign,0));}
+    else if(e.ctrlKey&&['Numpad4','Numpad6','Numpad8','Numpad2'].includes(code)){
+      mode='pan';const pixels=canvas.clientHeight*.1;panDelta=[code==='Numpad4'?pixels:code==='Numpad6'?-pixels:0,code==='Numpad8'?pixels:code==='Numpad2'?-pixels:0];
+      action=()=>{const eye=camera.position.clone();panCamera(camera,controls.target,...panDelta,canvas.clientHeight);workingPivot?.add(camera.position.clone().sub(eye));};
+    }else if(e.shiftKey&&!e.ctrlKey&&['Numpad4','Numpad6'].includes(code)){
+      action=()=>{const rotation=new Quaternion().setFromAxisAngle(camera.getWorldDirection(new Vector3()),code==='Numpad4'?-Math.PI/12:Math.PI/12);camera.quaternion.premultiply(rotation);camera.up.set(0,1,0).applyQuaternion(camera.quaternion);};
+    }else if(!e.ctrlKey&&!e.shiftKey&&['Numpad4','Numpad6','Numpad8','Numpad2','Numpad9'].includes(code)){
+      action=()=>{const step=Math.PI/12;orbitCamera(camera,controls.target,controls.target.clone(),code==='Numpad4'?-step:code==='Numpad6'?step:code==='Numpad9'?Math.PI:0,code==='Numpad8'?-step:code==='Numpad2'?step:0);};
+    }else if(!e.ctrlKey&&['NumpadAdd','NumpadSubtract'].includes(code)){mode='dolly';zoomFactor=code==='NumpadAdd'?1/1.2:1.2;action=()=>zoomCamera(camera,controls.target,zoomFactor);}
+    else if(!e.ctrlKey&&code==='Home'){home=true;leaveView=true;action=()=>{if(frameAll())workingPivot=null;};}
+    else if(!e.ctrlKey&&!e.shiftKey&&(e.key.toLowerCase()==='f'||code==='NumpadDecimal')){leaveView=true;action=()=>{if(frameSelected())workingPivot=null;};}
+    if(action){
+      take(e);
+      if(home&&navigationHook.frameBounds?.()){changed();return;}
+      if(leaveView)navigationHook.viewChange?.();
+      else if(navigationHook.begin?.(mode)===true){if(mode==='pan')navigationHook.pan?.(...panDelta);else navigationHook.zoom?.(zoomFactor);return;}
+      action();changed();if(!leaveView){navigationHook.changed?.();navigationHook.end?.(false);}
+    }
   }, true);
   return {
     prepare: prepareNavigationGeometry,
@@ -379,6 +385,8 @@ export function installSceneNavigation({canvas, viewport, camera, controls, root
     },
     state: () => ({gesture:gesture?.mode || null, inputMode:inputMode(), depth:lastDepth, position:camera.position.toArray(), target:controls.target.toArray(), up:camera.up.toArray(), near:camera.near, far:camera.far, fov:camera.fov, projection:'perspective', autoDepth:true, zoomToMouse:false}),
     cancel: () => finish(true),
+    axis(name){const direction={front:[0,0,1],back:[0,0,-1],left:[-1,0,0],right:[1,0,0],top:[0,1,0],bottom:[0,-1,0]}[name];if(!direction)throw Error('Unknown view axis');viewCamera(camera,controls.target,new Vector3(...direction));workingPivot=null;changed();},
+    resetView() { finish(false); workingPivot=null;lastDepth=null;changed(); },
     dispose: () => {finish(true); for (const dispose of disposers) dispose();},
   };
 }

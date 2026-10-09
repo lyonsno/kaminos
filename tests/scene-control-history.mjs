@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createSceneEdits } from '../scene-edit-session.mjs';
 import { installSceneControlHistory } from '../scene-control-history.mjs';
+import { installRelativeNumberDrag } from '../scene-control-history.mjs';
 
 class Control extends EventTarget {
   constructor(){super();this.style={};}
@@ -12,6 +13,49 @@ class Control extends EventTarget {
     return event;
   }
 }
+
+function boundedNumber({min,max,step,value}) {
+  const f=fixture();globalThis.document=new Control();globalThis.window=new Control();
+  const input=f.control;input.type='number';input.min=String(min);input.max=String(max);input.value=String(value);
+  f.value.flow=value;input.setPointerCapture=()=>{};input.hasPointerCapture=()=>false;
+  input.addEventListener('input',()=>{f.value.flow=Number(input.value);});
+  installRelativeNumberDrag({input,step});
+  input.fire('pointerdown',{button:0,pointerId:1,clientX:100,clientY:50});
+  return{...f,get value(){return f.value;},input,move:x=>input.fire('pointermove',{pointerId:1,clientX:x,clientY:50}),close(){input.fire('pointercancel');delete globalThis.document;delete globalThis.window;}};
+}
+
+test('bounded scrub reverses immediately after either limit without repaying excess motion',()=>{
+  const f=boundedNumber({min:0,max:1,step:.01,value:.5});
+  try{
+    f.move(1100);assert.equal(Number(f.input.value),1);f.move(1097);assert.ok(Number(f.input.value)<1,'outward motion at max must not accumulate reversal debt');
+    f.move(-1000);assert.equal(Number(f.input.value),0);f.move(-997);assert.ok(Number(f.input.value)>0,'outward motion at min must not accumulate reversal debt');
+  }finally{f.close();}
+});
+
+test('bounded scrubs traverse the same fraction of their range despite different source steps',()=>{
+  for(const [min,max,step] of [[0,1,.001],[-20,80,1],[100,10100,100]]){
+    const f=boundedNumber({min,max,step,value:min});
+    try{f.move(175);assert.ok(Math.abs((Number(f.input.value)-min)/(max-min)-.25)<1e-10,'75px should traverse a quarter of the bounded range');}
+    finally{f.close();}
+  }
+});
+
+test('fine dragging scales range speed and still makes one reversible history gesture',()=>{
+  const f=boundedNumber({min:0,max:1,step:.01,value:.5});
+  try{
+    f.input.fire('pointermove',{pointerId:1,clientX:175,clientY:50,shiftKey:true});assert.ok(Math.abs(Number(f.input.value)-.525)<1e-10);
+    f.move(250);assert.ok(Math.abs(Number(f.input.value)-.775)<1e-10);f.input.fire('pointerup');assert.equal(f.edits.state().undoCount,1);
+    f.edits.undo();assert.equal(f.value.flow,.5);assert.equal(f.edits.state().active,null);f.edits.redo();assert.ok(Math.abs(f.value.flow-.775)<1e-10);assert.equal(f.edits.state().undoCount,1);
+  }finally{f.close();}
+});
+
+test('coarse drag hints still reach fractional limits exactly',()=>{
+  for(const [min,max] of [[.1,1.3],[-1.3,-.1]]) {
+    const f=boundedNumber({min,max,step:1,value:(min+max)/2});
+    try {f.move(1100);assert.equal(Number(f.input.value),max);f.move(-1000);assert.equal(Number(f.input.value),min);}
+    finally {f.close();}
+  }
+});
 
 function fixture(admit = () => {}, onError = () => {}) {
   let value = { recipe: { enabled: true, outerRadius: 0.8 }, radius: 0.24, flow: 0.8 };

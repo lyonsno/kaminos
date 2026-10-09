@@ -29,19 +29,25 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   const inspector = document.createElement('aside');
   inspector.id = 'authoring-inspector'; inspector.setAttribute('aria-label', 'Properties');
   inspector.innerHTML = `<nav class="inspector-switch" aria-label="Properties context"><button type="button" data-inspector-context="object" aria-pressed="true">Selection</button><button type="button" data-inspector-context="scene" aria-pressed="false">Scene</button></nav>
+    <div id="authoring-camera-properties" class="authoring-inspector-body" hidden></div>
     <div id="authoring-object-properties" class="authoring-inspector-body"><div id="authoring-transform-slot"></div><div id="authoring-type-slot"></div><details id="authoring-object-tools"><summary>Object tools</summary></details></div>
     <div id="authoring-scene-properties" class="authoring-inspector-body" hidden><h2>Composition</h2><div class="scene-data-choices"><button type="button" id="scene-fire-data">Fire & smoke data</button><button type="button" id="scene-water-data">Water simulation data</button></div><div id="authoring-composition-slot"></div><details open id="authoring-world-slot"><summary>Environment</summary></details><div id="authoring-water-slot"></div><details id="authoring-render-slot"><summary>Rendering</summary></details></div>`;
   const toolbar = document.createElement('div'); toolbar.id = 'authoring-viewport-tools';
-  toolbar.innerHTML = `<div id="authoring-add-slot"></div><details id="authoring-presets"><summary>Presets</summary><div><button type="button" id="apply-burner-preset">Burner setup</button><p>Apply to the current fire field</p></div></details><div id="authoring-gizmo-slot" aria-label="Transform gizmo"></div><details id="authoring-viewport-settings"><summary>Viewport</summary><div><label><input id="viewport-show-gizmos" type="checkbox" checked> Transform gizmos</label><label><input id="viewport-show-hints" type="checkbox" checked> Navigation hints</label></div></details><div class="authoring-header-spacer"></div><button type="button" id="authoring-frame" title="Frame selected (F)">Frame</button><button type="button" id="authoring-undo" title="Undo (Cmd/Ctrl Z)">Undo</button><button type="button" id="authoring-redo" title="Redo (Cmd/Ctrl Shift Z)">Redo</button><div id="authoring-navigation-slot"></div>`;
+  toolbar.innerHTML = `<div id="authoring-add-slot"></div><details id="authoring-presets"><summary>Presets</summary><div><button type="button" id="apply-burner-preset">Burner setup</button><p>Apply to the current fire field</p></div></details><label class="selection-setting">Axes <select id="selection-orientation"><option value="world">World</option><option value="local">Local</option></select></label><label class="selection-setting">Pivot <select id="selection-pivot"><option value="median">Median</option><option value="active">Active</option><option value="individual">Individual origins</option></select></label><div id="authoring-gizmo-slot" aria-label="Transform gizmo"></div><details id="authoring-viewport-settings"><summary>Viewport</summary><div><label><input id="viewport-show-gizmos" type="checkbox" checked> Transform gizmos</label><label><input id="viewport-show-bounds" type="checkbox"> Object bounds</label><label><input id="viewport-show-helpers" type="checkbox" checked> Emitter symbols &amp; helpers</label><label><input id="viewport-show-hints" type="checkbox" checked> Navigation hints</label></div></details><div class="authoring-header-spacer"></div><button type="button" id="authoring-box">Box · B</button><button type="button" id="authoring-duplicate">Duplicate</button><button type="button" id="authoring-delete">Delete</button><button type="button" id="authoring-frame" title="Frame selected (F)">Frame</button><button type="button" id="authoring-undo" title="Undo (Cmd/Ctrl Z)">Undo</button><button type="button" id="authoring-redo" title="Redo (Cmd/Ctrl Shift Z)">Redo</button><div id="authoring-navigation-slot"></div>`;
   document.body.prepend(header);
   document.body.append(hierarchy, inspector);
   byId('viewport').prepend(toolbar);
+  const shot=document.createElement('details');shot.id='scene-camera-settings';shot.open=true;shot.innerHTML='<summary>Camera &amp; output</summary>';shot.append(byId('authoring-camera-properties'));byId('authoring-composition-slot').after(shot);
+  const cameraButton=document.createElement('button');cameraButton.type='button';cameraButton.id='authoring-camera';cameraButton.textContent='Camera';cameraButton.onclick=()=>{setContext('scene');shot.open=true;shot.scrollIntoView({block:'nearest'});};byId('authoring-frame').before(cameraButton);
   const viewportSettings=byId('authoring-viewport-settings');
   document.addEventListener('pointerdown',event=>{
     if(!viewportSettings.contains(event.target))viewportSettings.open=false;
     if(!byId('authoring-presets').contains(event.target))byId('authoring-presets').open=false;
   },true);
-  for(const [id,key] of [['viewport-show-gizmos','gizmos'],['viewport-show-hints','hints']])byId(id).addEventListener('change',event=>document.defaultView.kaminosViewportSettings.set({[key]:event.target.checked}));
+  for(const [id,key] of [['viewport-show-gizmos','gizmos'],['viewport-show-bounds','bounds'],['viewport-show-hints','hints'],['viewport-show-helpers','helpers']])byId(id).addEventListener('change',event=>document.defaultView.kaminosViewportSettings.set({[key]:event.target.checked}));
+  for(const [id,key] of [['selection-orientation','orientation'],['selection-pivot','pivot']])byId(id).onchange=event=>{document.defaultView.kaminosSelection.settings({[key]:event.target.value});event.target.blur();};
+  for(const [id,action] of [['authoring-box','box'],['authoring-duplicate','duplicate'],['authoring-delete','remove']])byId(id).onclick=()=>{try{document.defaultView.kaminosSelection[action]();}catch(error){byId('info-bar').textContent=error.message;}byId(id).blur();};
+  document.querySelector('[data-scene-group-create]').textContent='Group selection';
   byId('apply-burner-preset').onclick=()=>{try{document.defaultView.kaminosApplyBurnerPreset();byId('authoring-presets').open=false;}catch(error){byId('info-bar').textContent=error.message;}};
   byId('scene-fire-data').onclick=()=>document.defaultView.selectSceneField('flame-field');
   byId('scene-water-data').onclick=()=>document.defaultView.selectSceneField('water-field');
@@ -82,12 +88,17 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('composition-capture'), 'authoring-document-actions');
   move(byId('transform-bar'), 'authoring-object-tools');
   const slots = createControlSlots(document, entries);
-  let mode = null;
+  let mode = null, inspectorContext='object';
   function setContext(context) {
+    if(context==='camera')context='scene'; // Existing camera-panel callers open scene-owned shot settings.
+    if(!['object','scene','camera'].includes(context))throw Error('Unknown properties context');
+    inspectorContext=context;
     const object = context === 'object';
     byId('authoring-object-properties').hidden = !object;
-    byId('authoring-scene-properties').hidden = object;
+    byId('authoring-scene-properties').hidden = context!=='scene';
+    byId('authoring-camera-properties').hidden = context!=='scene';
     inspector.querySelectorAll('[data-inspector-context]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.inspectorContext === context)));
+    document.dispatchEvent(new document.defaultView.CustomEvent('kaminos-inspector-context-change',{detail:{context}}));
   }
   function setMode(next) {
     if (!['authoring', 'workbench'].includes(next)) throw new Error('Unknown workspace');
@@ -103,11 +114,12 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     }
     mode = next;
     document.body.dataset.workspace = mode;
+    document.dispatchEvent(new document.defaultView.CustomEvent('kaminos-workspace-change',{detail:{mode}}));
     header.querySelectorAll('[data-workspace-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.workspaceMode === mode)));
     return true;
   }
   header.querySelectorAll('[data-workspace-mode]').forEach(button => button.addEventListener('click', () => setMode(button.dataset.workspaceMode)));
-  header.querySelectorAll('[data-workbench-tab]').forEach(button => button.addEventListener('click', () => { if (setMode('workbench')) openWorkbenchTab(button.dataset.workbenchTab); }));
+  header.querySelectorAll('[data-workbench-tab]').forEach(button => button.addEventListener('click', () => { if(mode==='authoring'&&document.defaultView.kaminosAssets)document.defaultView.kaminosAssets.open(button.dataset.workbenchTab==='generate'?'generate':'browse');else if(setMode('workbench'))openWorkbenchTab(button.dataset.workbenchTab); }));
   inspector.querySelectorAll('[data-inspector-context]').forEach(button => button.addEventListener('click', () => setContext(button.dataset.inspectorContext)));
   byId('authoring-frame').onclick = () => { document.defaultView.kaminosFrameSelected?.(); byId('authoring-frame').blur(); };
   for (const action of ['undo', 'redo']) byId(`authoring-${action}`).onclick = () => {
@@ -129,7 +141,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     const key = `${source.dataset.selectedObjectId}/${source.dataset.selectedGroupId}/${source.dataset.selectedFieldId}`;
     if (key === selectionKey) return;
     selectionKey = key;
-    byId('authoring-object-tools').hidden=!!source.dataset.selectedFieldId;
+    byId('authoring-object-tools').hidden=!!source.dataset.selectedFieldId||Number(source.dataset.selectionCount)>1||!!source.dataset.selectedGroupId;
     setContext('object');
 
   });
@@ -157,5 +169,5 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   }
   document.body.classList.add('has-authoring-workspace');
   setMode(initialMode);
-  return { setMode, setContext, state: () => ({ mode, context: byId('authoring-object-properties').hidden ? 'scene' : 'object' }) };
+  return { setMode, setContext, state: () => ({ mode, context: inspectorContext }) };
 }
