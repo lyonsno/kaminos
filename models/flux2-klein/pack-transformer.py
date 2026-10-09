@@ -73,10 +73,15 @@ def main():
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     config = json.loads((src / "config.json").read_text())
-    f = safe_open(str(src / "diffusion_pytorch_model.safetensors"), "pt")
+    index_path = src / "diffusion_pytorch_model.safetensors.index.json"
+    weight_map = json.loads(index_path.read_text())["weight_map"] if index_path.exists() else None
+    handles = {}
 
     def t(name):
-        return f.get_tensor(name)
+        fname = weight_map[name] if weight_map else "diffusion_pytorch_model.safetensors"
+        if fname not in handles:
+            handles[fname] = safe_open(str(src / fname), "pt")
+        return handles[fname].get_tensor(name)
 
     bundles = {"globals": [("x_embedder", t("x_embedder.weight")),
                            ("context_embedder", t("context_embedder.weight")),
