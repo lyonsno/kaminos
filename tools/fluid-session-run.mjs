@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {parseArgs} from 'node:util';
 import {pathToFileURL} from 'node:url';
+import {createHash} from 'node:crypto';
 import {openFluidBrowser, attachFluidBrowser, closeFluidBrowser} from '../fluid-session-browser.mjs';
 
 const {values: early} = parseArgs({options: {out: {type: 'string'}}, strict: false});
@@ -21,7 +22,14 @@ try {
   if (values.close) {
     record.phase = 'close'; await write(); await closeFluidBrowser(values.session);
   } else {
-    if (!values.observe || !values.exercise) throw Error('--observe module and --exercise program are required');
+    if (!values.exercise) throw Error('--exercise program is required');
+    values.observe ||= new URL('../observation-session.mjs', import.meta.url).pathname;
+    record.modules = {};
+    for (const [name, filename] of Object.entries({observe: values.observe, exercise: values.exercise,
+      ...(values.inputs ? {inputs: values.inputs} : {})})) {
+      record.modules[name] = {path: path.resolve(filename),
+        sha256: createHash('sha256').update(await fs.readFile(filename)).digest('hex')};
+    }
     record.phase = 'connect'; await write();
     connection = values.url
       ? await openFluidBrowser({sessionFile: values.session, url: values.url, repo: values.repo,
@@ -32,10 +40,10 @@ try {
     const {default: exercise} = await import(pathToFileURL(path.resolve(values.exercise)));
     const inputs = values.inputs ? JSON.parse(await fs.readFile(values.inputs, 'utf8')) : {};
     record.phase = 'exercise'; await write();
-    const result = await observationSession({out: path.join(out, 'observations'), source: connection.descriptor,
+    record.observations = path.join(out, 'observations', 'report.json');
+    const result = await observationSession({out: path.join(out, 'observations'), source: {...connection.descriptor, modules: record.modules},
       capture: () => connection.page.screenshot(),
       exercise: ({retain}) => exercise({fluid: connection.session, page: connection.page, retain, inputs})});
-    record.observations = path.join(out, 'observations', 'report.json');
     if (result.status !== 'passed') throw Error('Observation session did not pass');
   }
   record.status = 'passed'; record.phase = 'complete';
@@ -48,7 +56,8 @@ try {
   }
 } finally {
   // Closing a CDP connection disconnects the client; the held browser persists.
-  await connection?.browser.close();
+  try {await connection?.browser.close();}
+  catch (error) {record.disconnectFailure = String(error); record.status = 'failed'; process.exitCode = 1;}
   record.finishedAt = new Date().toISOString(); await write();
   console.log(JSON.stringify({out, status: record.status, failure: record.failure}));
 }

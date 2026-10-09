@@ -110,7 +110,7 @@ export async function openFluidBrowser({sessionFile, url, repo, executable, play
   }
 }
 
-export async function attachFluidBrowser(sessionFile) {
+async function ownedBrowser(sessionFile) {
   const descriptor = JSON.parse(await fs.readFile(sessionFile, 'utf8'));
   assert.equal(descriptor.status, 'held', 'Fluid session is not attachable');
   const active = (await fs.readFile(path.join(descriptor.profile, 'DevToolsActivePort'), 'utf8')).trim().split('\n');
@@ -118,27 +118,34 @@ export async function attachFluidBrowser(sessionFile) {
   assert.equal(descriptor.browserEndpoint, active[1]);
   const version = await json(`${descriptor.endpoint}/json/version`);
   assert.ok(version.webSocketDebuggerUrl.endsWith(descriptor.browserEndpoint), 'Fluid browser was replaced');
-  const identity = await fluidSourceIdentity(descriptor.url, descriptor.repo);
-  assert.deepEqual(identity, descriptor.source, 'Fluid source/store identity changed; attach requires the original source');
   const {chromium} = await import(pathToFileURL(path.resolve(descriptor.playwrightModule)));
   const browser = await chromium.connectOverCDP(descriptor.endpoint, {timeout: 0});
+  return {browser, descriptor};
+}
+
+export async function attachFluidBrowser(sessionFile) {
+  const {browser, descriptor} = await ownedBrowser(sessionFile);
   try {
+    const identity = await fluidSourceIdentity(descriptor.url, descriptor.repo);
+    assert.deepEqual(identity, descriptor.source, 'Fluid source/store identity changed; attach requires the original source');
     let selected;
     for (const page of browser.contexts().flatMap(context => context.pages())) {
-      if (page.url() !== descriptor.url) continue;
+      if (new URL(page.url()).origin !== new URL(descriptor.url).origin) continue;
       if (await page.evaluate(id => window.__kaminosFluidWorkingSessions?.has(id) === true, descriptor.binding)) {
         assert.ok(!selected, 'Fluid session page identity is ambiguous'); selected = page;
       }
     }
     assert.ok(selected, 'Held fluid page expired; a new page would be different water');
     selected.setDefaultTimeout(0); selected.setDefaultNavigationTimeout(0);
+    await selected.setViewportSize(descriptor.viewport);
     const session = await bindFluidWorkingSession(selected, {id: descriptor.binding});
+    descriptor.currentUrl = selected.url();
     return {browser, page: selected, session, descriptor};
   } catch (error) {await browser.close(); throw error;}
 }
 
 export async function closeFluidBrowser(sessionFile) {
-  const connection = await attachFluidBrowser(sessionFile);
+  const connection = await ownedBrowser(sessionFile);
   const cdp = await connection.browser.newBrowserCDPSession();
   try {await cdp.send('Browser.close');}
   catch (error) {if (!/closed|disconnect/i.test(String(error))) throw error;}

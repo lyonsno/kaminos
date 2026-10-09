@@ -132,9 +132,14 @@ export async function bindFluidWorkingSession(page, {id = null} = {}) {
     advanceTo: (step, options) => call('advanceTo', [step, options]),
     apply: patch => call('apply', [patch]), view: patch => call('view', [patch]),
     async observe(retain, name) {
-      const before = await call('hold');
+      let before, invalid;
+      try {before = await call('hold');}
+      catch (error) {invalid = error; before = await call('read');}
       return retain({name, observe: async () => before,
-        verify: async () => assertFluidObservationStable(before, await call('read'))});
+        verify: async () => {
+          if (invalid) throw invalid;
+          assertFluidObservationStable(before, await call('read'));
+        }});
     },
   };
 }

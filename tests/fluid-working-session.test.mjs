@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createFluidWorkingSession, assertFluidObservationStable} from '../fluid-working-session.mjs';
+import {createFluidWorkingSession, bindFluidWorkingSession, assertFluidObservationStable} from '../fluid-working-session.mjs';
 import {createIPBFPressureControlState} from '../finger-fluid-pressure-controls.mjs';
 
 // Local policy fixture; native conformance uses the real mounted bench.
@@ -85,4 +85,19 @@ test('fallback backend, unpaused water and changed camera cannot silently pass',
   assert.throws(() => assertFluidObservationStable(a, session.read()), /camera changed/);
   f.runtime.solver_backend = 'cpu_fallback';
   await assert.rejects(session.hold(), /GPU route/);
+});
+
+test('invalid held diagnostics retain the available state and image before refusing verification', async () => {
+  let retained = false;
+  const raw = {clock: {step: 34}, bench: {runtime: {diagnosticsPending: true}}};
+  const page = {evaluate: async (fn, arg) => {
+    if (arg === null) return 'binding';
+    if (arg.method === 'hold') throw Error('Fluid diagnostics are missing or stale');
+    if (arg.method === 'read') return raw;
+  }};
+  const session = await bindFluidWorkingSession(page);
+  await assert.rejects(session.observe(async ({observe, verify}) => {
+    assert.deepEqual(await observe(), raw); retained = true; await verify();
+  }, 'stale'), /stale/);
+  assert.equal(retained, true);
 });
