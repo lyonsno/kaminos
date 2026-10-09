@@ -182,3 +182,31 @@ cover axis-aligned and oblique wall-only motion and H*delta=force.
 An explicit full-particle request fails visibly if another diagnostic readback
 is pending or the runtime is stopped. It cannot complete with an old sparse
 capture. Ordinary diagnostic callers retain the existing cached-return behavior.
+
+## Material response calibration station
+
+`tools/ipbf-material-calibration.mjs` audits explicit caller-owned JSON inputs
+offline and can dispatch the actual factory's isolated cohesion stage on native
+Apple WebGPU. Supply `--repo-root`, its full `--revision`, `--config` and
+`--out-dir`; native runs also require `--native`, `--base-url` serving that exact
+checkout and the independent browser executable in `KAMINOS_CHROME`. The full
+input, source digests, effective GPU packet and all fixture vectors are retained.
+A failure writes `report.json` with its phase. `complete` means measurement
+completed; mechanical targets may still fail.
+
+The input names the IPBF pressure and recovered `ipbf_free_surface` cohesion
+routes, base `kernelRadius`, `particleVolume`, `pressureRadius`, `beta`, positive
+gravity magnitude, `dt`, pressure `passes` and cohesion gain. It also declares
+`resolutionVolumeScales` and native cases with name, dt and strength. Ideal
+compact-support cubic-lattice quadrature reports R/cbrt(V), bulk and incomplete
+surface support. It is reference-volume spacing, not live neighbor spacing.
+
+Recovered cohesion uses a gravity-relative acceleration gain. Its per-particle
+neighbor-weight normalization can break reciprocal internal momentum in an
+asymmetric closed cluster. The station reports that failure explicitly; a gain
+does not yet identify physical surface tension. Paper damping's beta*R is a
+world-distance threshold, not kinematic viscosity. Holding beta*R constant
+preserves that threshold, without establishing whole-solver timestep invariance.
+Neither the station nor manually selected basin values establish physical water
+defaults. These measurements exclude pressure, contacts, classification and
+basin trajectory; the remaining motion must be judged on an exercised consumer.
