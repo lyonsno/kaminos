@@ -44,7 +44,7 @@ async function resnet(ops, w, prefix, x, { eps, tembSilu = null }) {
   }
   const n1 = ops.groupNorm({ x, shape: [c, h, wd], gamma: w(`${prefix}.norm1.weight`), beta: w(`${prefix}.norm1.bias`),
     eps, silu: true, name: `${prefix}.norm1` });
-  const h1 = ops.conv2d({ x: n1, shape: [c, h, wd], weight: conv1, bias: w(`${prefix}.conv1.bias`), biasM2: temb,
+  const h1 = await ops.conv2d({ x: n1, shape: [c, h, wd], weight: conv1, bias: w(`${prefix}.conv1.bias`), biasM2: temb,
     name: `${prefix}.conv1` });
   ops.release(n1);
   await ops.yieldPoint(`${prefix}.conv1`);
@@ -54,10 +54,10 @@ async function resnet(ops, w, prefix, x, { eps, tembSilu = null }) {
   ops.release(h1);
   let shortcut = x;
   if (w.has(`${prefix}.conv_shortcut.weight`)) {
-    shortcut = ops.conv2d({ x, shape: [c, h, wd], weight: w(`${prefix}.conv_shortcut.weight`),
+    shortcut = await ops.conv2d({ x, shape: [c, h, wd], weight: w(`${prefix}.conv_shortcut.weight`),
       bias: w(`${prefix}.conv_shortcut.bias`), kernel: 1, pad: [0, 0, 0, 0], name: `${prefix}.shortcut` });
   }
-  const out = ops.conv2d({ x: n2, shape: [cout, h, wd], weight: w(`${prefix}.conv2.weight`),
+  const out = await ops.conv2d({ x: n2, shape: [cout, h, wd], weight: w(`${prefix}.conv2.weight`),
     bias: w(`${prefix}.conv2.bias`), residual: shortcut, name: `${prefix}.out` });
   ops.release(n2);
   if (shortcut !== x) ops.release(shortcut);
@@ -160,7 +160,7 @@ function step(ops, previous, next) {
 // image: [3, H, W] in [0, 1] (gray-composited). Returns latent [4, H/8, W/8] scaled by 0.18215.
 export async function encodeImage(ops, w, image, { capture = () => {} } = {}) {
   const input = ops.affine({ x: image, shape: image.shape, scale: 2, shift: -1, name: 'vae.input' });
-  let x = ops.conv2d({ x: input, shape: input.shape, weight: w('vae.encoder.conv_in.weight'),
+  let x = await ops.conv2d({ x: input, shape: input.shape, weight: w('vae.encoder.conv_in.weight'),
     bias: w('vae.encoder.conv_in.bias'), name: 'vae.encoder.conv_in' });
   ops.release(input);
   capture('vae.encoder.conv_in#0', x);
@@ -170,7 +170,7 @@ export async function encodeImage(ops, w, image, { capture = () => {} } = {}) {
       x = step(ops, x, await resnet(ops, w, `vae.encoder.down_blocks.${b}.resnets.${r}`, x, { eps: VAE_EPS }));
     }
     if (b < VAE_CHANNELS.length - 1) {
-      x = step(ops, x, ops.conv2d({ x, shape: x.shape, weight: w(`vae.encoder.down_blocks.${b}.downsamplers.0.conv.weight`),
+      x = step(ops, x, await ops.conv2d({ x, shape: x.shape, weight: w(`vae.encoder.down_blocks.${b}.downsamplers.0.conv.weight`),
         bias: w(`vae.encoder.down_blocks.${b}.downsamplers.0.conv.bias`), stride: 2, pad: [0, 0, 1, 1],
         name: `vae.encoder.down.${b}` }));
     }
@@ -183,10 +183,10 @@ export async function encodeImage(ops, w, image, { capture = () => {} } = {}) {
   capture('vae.encoder.mid#0', x);
   x = step(ops, x, ops.groupNorm({ x, shape: x.shape, gamma: w('vae.encoder.conv_norm_out.weight'),
     beta: w('vae.encoder.conv_norm_out.bias'), eps: VAE_EPS, silu: true, name: 'vae.encoder.norm_out' }));
-  x = step(ops, x, ops.conv2d({ x, shape: x.shape, weight: w('vae.encoder.conv_out.weight'),
+  x = step(ops, x, await ops.conv2d({ x, shape: x.shape, weight: w('vae.encoder.conv_out.weight'),
     bias: w('vae.encoder.conv_out.bias'), name: 'vae.encoder.out' }));
   capture('vae.encoder.out#0', x);
-  const moments = ops.conv2d({ x, shape: x.shape, weight: w('vae.quant_conv.weight'), bias: w('vae.quant_conv.bias'),
+  const moments = await ops.conv2d({ x, shape: x.shape, weight: w('vae.quant_conv.weight'), bias: w('vae.quant_conv.bias'),
     kernel: 1, pad: [0, 0, 0, 0], name: 'vae.quant' });
   ops.release(x);
   capture('vae.quant#0', moments);
@@ -208,10 +208,10 @@ export async function decodeLatent(ops, w, latent, { capture = () => {}, call = 
 
 // z: decoder input (latent / 0.18215), [4, h, w]. The caller keeps ownership of z.
 export async function decodeScaledLatent(ops, w, z, { capture = () => {}, call = 0 } = {}) {
-  let x = ops.conv2d({ x: z, shape: z.shape, weight: w('vae.post_quant_conv.weight'), bias: w('vae.post_quant_conv.bias'),
+  let x = await ops.conv2d({ x: z, shape: z.shape, weight: w('vae.post_quant_conv.weight'), bias: w('vae.post_quant_conv.bias'),
     kernel: 1, pad: [0, 0, 0, 0], name: 'vae.post_quant' });
   capture(`vae.post_quant#${call}`, x);
-  x = step(ops, x, ops.conv2d({ x, shape: x.shape, weight: w('vae.decoder.conv_in.weight'),
+  x = step(ops, x, await ops.conv2d({ x, shape: x.shape, weight: w('vae.decoder.conv_in.weight'),
     bias: w('vae.decoder.conv_in.bias'), name: 'vae.decoder.conv_in' }));
   capture(`vae.decoder.conv_in#${call}`, x);
   x = step(ops, x, await resnet(ops, w, 'vae.decoder.mid_block.resnets.0', x, { eps: VAE_EPS }));
@@ -223,7 +223,7 @@ export async function decodeScaledLatent(ops, w, z, { capture = () => {}, call =
       x = step(ops, x, await resnet(ops, w, `vae.decoder.up_blocks.${b}.resnets.${r}`, x, { eps: VAE_EPS }));
     }
     if (b < VAE_CHANNELS.length - 1) {
-      x = step(ops, x, ops.conv2d({ x, shape: x.shape, weight: w(`vae.decoder.up_blocks.${b}.upsamplers.0.conv.weight`),
+      x = step(ops, x, await ops.conv2d({ x, shape: x.shape, weight: w(`vae.decoder.up_blocks.${b}.upsamplers.0.conv.weight`),
         bias: w(`vae.decoder.up_blocks.${b}.upsamplers.0.conv.bias`), upsample: true, name: `vae.decoder.up.${b}` }));
     }
     capture(`vae.decoder.up.${b}#${call}`, x);
@@ -231,7 +231,7 @@ export async function decodeScaledLatent(ops, w, z, { capture = () => {}, call =
   }
   x = step(ops, x, ops.groupNorm({ x, shape: x.shape, gamma: w('vae.decoder.conv_norm_out.weight'),
     beta: w('vae.decoder.conv_norm_out.bias'), eps: VAE_EPS, silu: true, name: 'vae.decoder.norm_out' }));
-  x = step(ops, x, ops.conv2d({ x, shape: x.shape, weight: w('vae.decoder.conv_out.weight'),
+  x = step(ops, x, await ops.conv2d({ x, shape: x.shape, weight: w('vae.decoder.conv_out.weight'),
     bias: w('vae.decoder.conv_out.bias'), name: 'vae.decoder.out' }));
   capture(`vae.decoder.out#${call}`, x);
   await ops.yieldPoint('vae.decoder.out');
@@ -260,7 +260,7 @@ export function timeEmbedding(ops, w, { capture = () => {} } = {}) {
 // latent: image latent [4, 64, 64]; context: {tensor [77, 1024], rows: 77}.
 // Returns the two v predictions [albedo, orm], each [4, 64, 64].
 export async function runUnet(ops, w, latent, context, tembSilu, { capture = () => {} } = {}) {
-  let x = ops.conv2d({ x: latent, shape: latent.shape, weight: w('unet.conv_in.weight'), bias: w('unet.conv_in.bias'),
+  let x = await ops.conv2d({ x: latent, shape: latent.shape, weight: w('unet.conv_in.weight'), bias: w('unet.conv_in.bias'),
     name: 'unet.conv_in' });
   capture('unet.conv_in#0', x);
   const skips = [x];
@@ -272,7 +272,7 @@ export async function runUnet(ops, w, latent, context, tembSilu, { capture = () 
       x = y;
     }
     if (b < 3) {
-      x = ops.conv2d({ x, shape: x.shape, weight: w(`unet.down_blocks.${b}.downsamplers.0.conv.weight`),
+      x = await ops.conv2d({ x, shape: x.shape, weight: w(`unet.down_blocks.${b}.downsamplers.0.conv.weight`),
         bias: w(`unet.down_blocks.${b}.downsamplers.0.conv.bias`), stride: 2, name: `unet.down.${b}` });
       skips.push(x);
     }
@@ -293,7 +293,7 @@ export async function runUnet(ops, w, latent, context, tembSilu, { capture = () 
       ops.release(joined);
       if (b > 0) x = step(ops, x, await transformer(ops, w, `unet.up_blocks.${b}.attentions.${r}`, x, UNET_HEADS[3 - b], context));
     }
-    x = step(ops, x, ops.conv2d({ x, shape: x.shape, weight: w(`unet.up_blocks.${b}.upsamplers.0.conv.weight`),
+    x = step(ops, x, await ops.conv2d({ x, shape: x.shape, weight: w(`unet.up_blocks.${b}.upsamplers.0.conv.weight`),
       bias: w(`unet.up_blocks.${b}.upsamplers.0.conv.bias`), upsample: true, name: `unet.up.${b}` }));
     capture(`unet.up.${b}#0`, x);
     await ops.yieldPoint(`unet.up.${b}`);
@@ -312,7 +312,7 @@ export async function runUnet(ops, w, latent, context, tembSilu, { capture = () 
     const normed = ops.groupNorm({ x: y, shape: y.shape, gamma: w('unet.conv_norm_out.weight'), beta: w('unet.conv_norm_out.bias'),
       eps: UNET_EPS, silu: true, name: `unet.norm_out.${head}` });
     ops.release(y);
-    const v = ops.conv2d({ x: normed, shape: normed.shape, weight: w(`unet.rep_conv_out.${head}.weight`),
+    const v = await ops.conv2d({ x: normed, shape: normed.shape, weight: w(`unet.rep_conv_out.${head}.weight`),
       bias: w(`unet.rep_conv_out.${head}.bias`), name: `unet.conv_out.${head}` });
     ops.release(normed);
     capture(`unet.conv_out.${head}#0`, v);

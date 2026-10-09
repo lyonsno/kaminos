@@ -56,7 +56,7 @@ struct Params {
   a_off:u32, a_sm:u32, a_sk:u32, a_sb:u32,
   b_off:u32, b_sk:u32, b_sn:u32, b_sb:u32,
   c_off:u32, c_sm:u32, c_sn:u32, c_sb:u32,
-  pad_top:u32, pad_left:u32, z0:u32, z1:u32,
+  pad_top:u32, pad_left:u32, n_base:u32, z1:u32,
 };
 ${bindings.join('\n')}
 var<workgroup> tile_a:array<f32,1024>;
@@ -64,7 +64,7 @@ var<workgroup> tile_b:array<f32,1024>;
 @compute @workgroup_size(16,16)
 fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:vec3<u32>) {
   let tid=lid.y*16u+lid.x;
-  let m0=wid.y*64u;let n0=wid.x*64u;let bat=wid.z;
+  let m0=wid.y*64u;let n0=p.n_base+wid.x*64u;let bat=wid.z;
   var acc:array<array<f32,4>,4>;
   for(var k0=0u;k0<p.K;k0+=16u){
     for(var q=0u;q<4u;q++){

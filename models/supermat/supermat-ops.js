@@ -146,10 +146,12 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
       runtime.settleCommandDuty(descriptor, { status: 'encoded' });
       device.queue.submit([commands]);
     };
-    const submitted = performance.now();
-    if (control) await control.runDuty(work); else await work();
+    const gateStart = performance.now();
+    let submitted = null;
+    const timed = async () => { await work(); submitted = performance.now(); };
+    if (control) await control.runDuty(timed); else await timed();
     stats.duties++;
-    const row = { label, estimatedFlops: flops, submittedAt: submitted };
+    const row = { label, estimatedFlops: flops, submittedAt: submitted, gateWaitMs: submitted - gateStart };
     stats.dutyHistory.push(row);
     lastFence = device.queue.onSubmittedWorkDone().then(() => {
       row.queueMs = performance.now() - submitted;
@@ -215,7 +217,7 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
     words.set([spec.aOff ?? 0, spec.aSM, spec.aSK, spec.aSB ?? 0], 4);
     words.set([spec.bOff ?? 0, spec.bSK, spec.bSN, spec.bSB ?? 0], 8);
     words.set([spec.cOff ?? 0, spec.cSM, spec.cSN, spec.cSB ?? 0], 12);
-    words.set([spec.padTop ?? 0, spec.padLeft ?? 0, 0, 0], 16);
+    words.set([spec.padTop ?? 0, spec.padLeft ?? 0, spec.nBase ?? 0, 0], 16);
     return words;
   }
 
@@ -238,16 +240,20 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
     if (spec.residual) views.push(bindingView(spec.residual, 'gemm residual'));
     views.push(bindingView(c, 'gemm c'));
     views.push(params(gemmWords(spec)));
-    const groups = [Math.ceil(N / GEMM_TILE), Math.ceil(M / GEMM_TILE), batch];
+    const nBase = spec.nBase ?? 0, nCount = spec.nCount ?? N - nBase;
+    if (nBase % GEMM_TILE || nBase < 0 || nCount <= 0 || nBase + nCount > N) throw new Error('gemm column range must be tile-aligned and inside N');
+    const groups = [Math.ceil(nCount / GEMM_TILE), Math.ceil(M / GEMM_TILE), batch];
     if (groups.some(value => value > 65535)) throw new RangeError('gemm grid exceeds device workgroup limit');
     dispatch(gemmShader(layout), views, groups);
-    pendingFlops += 2 * M * N * K * batch;
+    pendingFlops += 2 * M * nCount * K * batch;
     return c;
   }
 
   // NCHW conv2d (batch 1) as implicit GEMM. Bottom/right padding is implied by
   // the output size; `upsample` reads a nearest-2x view of the input.
-  function conv2d({ x, shape: [cin, h, w], weight, bias, biasM2, residual, kernel = 3, stride = 1,
+  // Under a cooperative schedule, a conv larger than the duty budget is issued
+  // as tile-aligned output-pixel ranges with a yield point between them.
+  async function conv2d({ x, shape: [cin, h, w], weight, bias, biasM2, residual, kernel = 3, stride = 1,
     pad = [1, 1, 1, 1], upsample = false, name = 'conv' }) {
     const [cout, wcin, kh, kw] = weight.shape;
     if (wcin !== cin || kh !== kernel || kw !== kernel) throw new Error(`${name}: weight shape ${weight.shape} does not match input ${cin}x${kernel}x${kernel}`);
@@ -257,13 +263,20 @@ export function createSuperMatOps(device, { label = 'supermat' } = {}) {
     const wout = Math.floor((ew + left + right - kw) / stride) + 1;
     const N = hout * wout, K = cin * kh * kw;
     const c = alloc([cout, hout, wout], name);
-    if (kh === 1 && stride === 1 && !upsample && top === 0 && left === 0) {
-      gemm({ a: weight, b: x, c, M: cout, N, K: cin, aSM: cin, aSK: 1, bSK: h * w, bSN: 1,
-        cSM: N, cSN: 1, biasM: bias, biasM2, residual });
+    const spec = kh === 1 && stride === 1 && !upsample && top === 0 && left === 0
+      ? { a: weight, b: x, c, M: cout, N, K: cin, aSM: cin, aSK: 1, bSK: h * w, bSN: 1, cSM: N, cSN: 1, biasM: bias, biasM2, residual }
+      : { a: weight, b: x, c, M: cout, N, K, aSM: K, aSK: 1, bSK: h, bSN: w, bSB: wout, cSM: N, cSN: 1,
+        padTop: top, padLeft: left, biasM: bias, biasM2, residual, conv: { kh, kw, stride, upsample } };
+    const flops = 2 * cout * N * spec.K;
+    const budget = schedule?.dutyFlops ?? 0;
+    if (!schedule || !budget || flops <= budget) {
+      gemm(spec);
     } else {
-      gemm({ a: weight, b: x, c, M: cout, N, K, aSM: K, aSK: 1, bSK: h, bSN: w, bSB: wout,
-        cSM: N, cSN: 1, padTop: top, padLeft: left, biasM: bias, biasM2, residual,
-        conv: { kh, kw, stride, upsample } });
+      const columns = Math.max(GEMM_TILE, Math.floor(budget / (2 * cout * spec.K) / GEMM_TILE) * GEMM_TILE);
+      for (let nBase = 0; nBase < N; nBase += columns) {
+        gemm({ ...spec, nBase, nCount: Math.min(columns, N - nBase) });
+        await yieldPoint(`${name}[${nBase}]`);
+      }
     }
     c.shape = [cout, hout, wout];
     return c;
