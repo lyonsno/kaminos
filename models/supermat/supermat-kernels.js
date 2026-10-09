@@ -371,3 +371,69 @@ fn main(@builtin(local_invocation_index) lane:u32, @builtin(workgroup_id) wid:ve
   }
 }`;
 }
+
+// GEMM on Apple simdgroup matrices via chromium-experimental-subgroup-matrix.
+// Same operands, loaders and epilogue as gemmShader with a 64x64x16 tile; the
+// inner product runs as 8x8 F32 multiply-accumulates. 256 threads = 8
+// subgroups of 32 (required subgroup size), arranged 4 (M) x 2 (N), each
+// owning a 16x32 block = 2x4 result matrices.
+export function gemmSubgroupMatrixShader({ aKContiguous = true, bNContiguous = true, biasM = false, biasM2 = false,
+  biasN = false, residual = false, conv = null, aF16 = false, bF16 = false } = {}) {
+  const base = gemmShader({ aKContiguous, bNContiguous, biasM, biasM2, biasN, residual, conv, aF16, bF16 });
+  // Reuse the generated bindings, params struct and B loader text from the tiled kernel.
+  const header = base.slice(0, base.indexOf('var<workgroup> tile_a'));
+  const loadA = aKContiguous ? 'let kk=idx%16u;let mm=idx/16u;' : 'let mm=idx%64u;let kk=idx/64u;';
+  const fetchA = aF16 ? 'unpack2x16float(a[(IDX)>>1u])[(IDX)&1u]' : 'a[IDX]';
+  const bBlock = base.slice(base.indexOf('    for(var q=0u;q<4u;q++){', base.indexOf('tile_a[kk*')),
+    base.indexOf('    workgroupBarrier();'));
+  const epilogue = base.slice(base.indexOf('      var v=p.alpha*acc[i][j];'), base.indexOf('      c[p.c_off'))
+    .replace('acc[i][j]', 'outt[ml*64u+nl]');
+  return `enable chromium_experimental_subgroup_matrix;
+${header}
+var<workgroup> tile_a:array<f32,1024>;
+var<workgroup> tile_b:array<f32,1024>;
+var<workgroup> outt:array<f32,4096>;
+@compute @workgroup_size(16,16)
+fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:vec3<u32>) {
+  let tid=lid.y*16u+lid.x;
+  let m0=wid.y*64u;let n0=p.n_base+wid.x*64u;let bat=wid.z;
+  let sg=tid/32u;let sm=(sg/2u)*16u;let sn=(sg%2u)*32u;
+  var acc00=subgroup_matrix_result<f32,8,8>();var acc01=subgroup_matrix_result<f32,8,8>();
+  var acc02=subgroup_matrix_result<f32,8,8>();var acc03=subgroup_matrix_result<f32,8,8>();
+  var acc10=subgroup_matrix_result<f32,8,8>();var acc11=subgroup_matrix_result<f32,8,8>();
+  var acc12=subgroup_matrix_result<f32,8,8>();var acc13=subgroup_matrix_result<f32,8,8>();
+  for(var k0=0u;k0<p.K;k0+=16u){
+    for(var q=0u;q<4u;q++){
+      let idx=tid+q*256u;
+      ${loadA}
+      let m=m0+mm;let k=k0+kk;var value=0.0;
+      if(m<p.M&&k<p.K){value=${fetchA.replaceAll('IDX', 'p.a_off+bat*p.a_sb+m*p.a_sm+k*p.a_sk')};}
+      tile_a[mm*16u+kk]=value;
+    }
+${bBlock}    workgroupBarrier();
+    for(var kk=0u;kk<16u;kk+=8u){
+      let l0=subgroupMatrixLoad<subgroup_matrix_left<f32,8,8>>(&tile_a,sm*16u+kk,false,16u);
+      let l1=subgroupMatrixLoad<subgroup_matrix_left<f32,8,8>>(&tile_a,(sm+8u)*16u+kk,false,16u);
+      let r0=subgroupMatrixLoad<subgroup_matrix_right<f32,8,8>>(&tile_b,kk*64u+sn,false,64u);
+      let r1=subgroupMatrixLoad<subgroup_matrix_right<f32,8,8>>(&tile_b,kk*64u+sn+8u,false,64u);
+      let r2=subgroupMatrixLoad<subgroup_matrix_right<f32,8,8>>(&tile_b,kk*64u+sn+16u,false,64u);
+      let r3=subgroupMatrixLoad<subgroup_matrix_right<f32,8,8>>(&tile_b,kk*64u+sn+24u,false,64u);
+      acc00=subgroupMatrixMultiplyAccumulate(l0,r0,acc00);acc01=subgroupMatrixMultiplyAccumulate(l0,r1,acc01);
+      acc02=subgroupMatrixMultiplyAccumulate(l0,r2,acc02);acc03=subgroupMatrixMultiplyAccumulate(l0,r3,acc03);
+      acc10=subgroupMatrixMultiplyAccumulate(l1,r0,acc10);acc11=subgroupMatrixMultiplyAccumulate(l1,r1,acc11);
+      acc12=subgroupMatrixMultiplyAccumulate(l1,r2,acc12);acc13=subgroupMatrixMultiplyAccumulate(l1,r3,acc13);
+    }
+    workgroupBarrier();
+  }
+  subgroupMatrixStore(&outt,sm*64u+sn,acc00,false,64u);subgroupMatrixStore(&outt,sm*64u+sn+8u,acc01,false,64u);
+  subgroupMatrixStore(&outt,sm*64u+sn+16u,acc02,false,64u);subgroupMatrixStore(&outt,sm*64u+sn+24u,acc03,false,64u);
+  subgroupMatrixStore(&outt,(sm+8u)*64u+sn,acc10,false,64u);subgroupMatrixStore(&outt,(sm+8u)*64u+sn+8u,acc11,false,64u);
+  subgroupMatrixStore(&outt,(sm+8u)*64u+sn+16u,acc12,false,64u);subgroupMatrixStore(&outt,(sm+8u)*64u+sn+24u,acc13,false,64u);
+  workgroupBarrier();
+  for(var e=tid;e<4096u;e+=256u){
+    let ml=e/64u;let nl=e%64u;let m=m0+ml;let n=n0+nl;
+    if(m>=p.M||n>=p.N){continue;}
+${epilogue}      c[p.c_off+bat*p.c_sb+m*p.c_sm+n*p.c_sn]=v;
+  }
+}`;
+}

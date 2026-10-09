@@ -18,6 +18,17 @@ export const DEFAULT_DUTY_FLOPS = 4e9;
 export const DEFAULT_TARGET_DUTY_MS = 12;
 const PACKAGE_SCHEMA = 'supermat.browser-weight-package.v0';
 
+// Optional device features SuperMat uses when present (subgroup-matrix GEMM).
+export const SUPERMAT_OPTIONAL_FEATURES = ['chromium-experimental-subgroup-matrix', 'subgroups', 'shader-f16'];
+
+// Device options for requestBrowserWebGpuDevice / createWebGpuInferenceSession
+// that request only the optional features this adapter actually exposes.
+export async function superMatDeviceOptions(gpu, { adapterName = 'supermat' } = {}) {
+  const adapter = await gpu.requestAdapter();
+  const requiredFeatures = SUPERMAT_OPTIONAL_FEATURES.filter(feature => adapter?.features?.has(feature));
+  return { adapterName, requirements: { requiredFeatures } };
+}
+
 const CPU_WORKER_MODULE = 'supermat.cpu-phases.v0';
 
 // CPU phases run in a module Worker when available (`cpuWorker: false` keeps
@@ -52,7 +63,7 @@ async function runCpuPhase(useWorker, operationId, payload, transfer, signal) {
 }
 
 export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgress, cpuWorker = typeof Worker !== 'undefined',
-  attention = 'streaming' } = {}) {
+  attention = 'streaming', gemmKernel = 'auto' } = {}) {
   if (!route?.runtime?.device || typeof route.loadModelResourcesFromSource !== 'function') {
     throw new Error('SuperMat adapter requires a registered kit session route');
   }
@@ -87,10 +98,11 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
   const weightLoadMs = performance.now() - loadStart;
   const w = createWeightAccessor(tensors);
   const device = route.runtime.device;
-  const ops = createSuperMatOps(device, { label: 'supermat', attention });
+  const ops = createSuperMatOps(device, { label: 'supermat', attention, gemmKernel });
   const identity = Object.freeze({
     routeId: SUPERMAT_ROUTE_ID, backend: 'webgpu-local', modelId: 'supermat.single-image',
     revision: weightPackage.revision, weightDtype: 'f32', defaultImageSize: SUPERMAT_IMAGE_SIZE, attention,
+    gemmKernel: ops.gemmKernel,
     provenance: weightPackage.provenance,
   });
   let runs = 0, released = false, busy = false;

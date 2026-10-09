@@ -4,7 +4,7 @@
 import {
   gemmShader, gemmTileShape, GEMM_PARAMS_WORDS, GROUPNORM_CHUNK, groupNormPartialShader,
   groupNormCombineShader, groupNormApplyShader, layerNormShader, softmaxShader, gegluShader,
-  affineShader, flashAttentionShader, flashAttentionVec4Shader, FLASH_HEAD_DIM, FLASH_QUERY_TILE,
+  affineShader, gemmSubgroupMatrixShader, flashAttentionShader, flashAttentionVec4Shader, FLASH_HEAD_DIM, FLASH_QUERY_TILE,
 } from './supermat-kernels.js';
 
 const STORAGE = 0x0080, COPY_SRC = 0x0004, COPY_DST = 0x0008, UNIFORM = 0x0040;
@@ -34,8 +34,20 @@ function dispatch1D(total, workgroupSize = 256, limit = 65535) {
 // attention: 'streaming' (online softmax, no score matrix) or 'materialized'.
 // gemmTile: { tm, tn, bk } per-thread outputs and K step (16x16 threads per workgroup).
 // attentionKernel: 'scalar' or 'vec4' streaming implementation.
+// gemmKernel: 'auto' (subgroup matrices when the device enables them with a
+// fixed 32-lane subgroup), 'subgroup-matrix', or 'tiled'.
+export function subgroupMatrixUsable(device) {
+  const info = device.adapterInfo;
+  return device.features.has('chromium-experimental-subgroup-matrix')
+    && info?.subgroupMinSize === 32 && info?.subgroupMaxSize === 32;
+}
+
 export function createSuperMatOps(device, { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 },
-  attentionKernel = 'scalar' } = {}) {
+  attentionKernel = 'scalar', gemmKernel = 'auto' } = {}) {
+  if (!['auto', 'tiled', 'subgroup-matrix'].includes(gemmKernel)) throw new Error(`unknown gemm kernel ${gemmKernel}`);
+  const subgroupMatrix = gemmKernel === 'subgroup-matrix' || (gemmKernel === 'auto' && subgroupMatrixUsable(device));
+  if (subgroupMatrix && !subgroupMatrixUsable(device)) throw new Error('subgroup-matrix GEMM requested but unavailable on this device');
+  if (subgroupMatrix) gemmTile = { tm: 4, tn: 4, bk: 16 };
   const tileShape = gemmTileShape(gemmTile);
   if (!['streaming', 'materialized'].includes(attention)) throw new Error(`unknown attention mode ${attention}`);
   const pipelines = new Map();
@@ -271,7 +283,7 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
     if (nBase % tileShape.bn || nBase < 0 || nCount <= 0 || nBase + nCount > N) throw new Error('gemm column range must be tile-aligned and inside N');
     const groups = [Math.ceil(nCount / tileShape.bn), Math.ceil(M / tileShape.bm), batch];
     if (groups.some(value => value > 65535)) throw new RangeError('gemm grid exceeds device workgroup limit');
-    dispatch(gemmShader(layout), views, groups);
+    dispatch(subgroupMatrix ? gemmSubgroupMatrixShader(layout) : gemmShader(layout), views, groups);
     pendingFlops += 2 * M * nCount * K * batch;
     return c;
   }
@@ -418,5 +430,5 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
 
   return { alloc, release, gemm, conv2d, groupNorm, layerNorm, softmax, geglu, affine, copy, upload, read, flush, yieldPoint,
     setSchedule, scheduleState, discard, destroy, stats, flashAttention,
-    attentionMode: attention, gemmTile: tileShape };
+    attentionMode: attention, gemmTile: tileShape, gemmKernel: subgroupMatrix ? 'subgroup-matrix' : 'tiled' };
 }

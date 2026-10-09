@@ -7,6 +7,7 @@ import { createSuperMatOps } from './supermat-ops.js';
 import {
   createWeightAccessor, decodeLatent, decodeScaledLatent, encodeImage, runUnet, timeEmbedding,
 } from './supermat-model.js';
+import { superMatDeviceOptions } from './supermat-route.js';
 
 // Predeclared before the first native run. A stage passes only when every
 // captured boundary meets its tolerance; failures are retained, not relaxed.
@@ -62,7 +63,7 @@ export async function runSuperMatWitness({ stage, fixtureSha256, weightsSha256 }
 
     result.phase = 'device';
     session = await createWebGpuInferenceSession({ sessionId: `supermat-witness-${stage}`, gpu: navigator.gpu,
-      adapterName: 'supermat-witness' });
+      deviceOptions: await superMatDeviceOptions(navigator.gpu, { adapterName: 'supermat-witness' }) });
     route = await session.registerRoute({ routeId: 'supermat.image-to-pbr.webgpu-local.v0' });
     const device = route.runtime.device;
     result.adapter = route.runtime.backendIdentity ?? null;
@@ -141,7 +142,9 @@ export async function runSuperMatWitness({ stage, fixtureSha256, weightsSha256 }
     const oom = await device.popErrorScope();
     const validation = await device.popErrorScope();
     if (oom || validation) throw new Error(`WebGPU ${oom ? 'out-of-memory' : 'validation'} error: ${(oom ?? validation).message}`);
-    result.opStats = { ...ops.stats };
+    result.opStats = { ...ops.stats, dutyHistory: undefined };
+    result.gemmKernel = ops.gemmKernel;
+    result.attention = ops.attentionMode;
 
     result.phase = 'comparison';
     const tolerance = STAGE_TOLERANCES[stage];

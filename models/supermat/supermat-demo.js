@@ -10,7 +10,7 @@ import {
   createWebGpuForegroundService, createWebGpuInferenceControl, createWebGpuInferenceSession,
   requestBrowserWebGpuDevice,
 } from '../../webgpu-inference-kit/src/core.js';
-import { createSuperMatAdapter, SUPERMAT_ROUTE_ID } from './supermat-route.js';
+import { createSuperMatAdapter, SUPERMAT_ROUTE_ID, superMatDeviceOptions } from './supermat-route.js';
 import { decodeImageRgba } from './supermat-image.js';
 import { compositeOnGray, resizeRgbaBilinear } from './supermat-preprocess.js';
 
@@ -333,7 +333,7 @@ drop.addEventListener('drop', event => {
 
 try {
   if (!navigator.gpu) throw new Error('WebGPU is not available in this browser');
-  const context = await requestBrowserWebGpuDevice(navigator.gpu, { adapterName: 'supermat-demo' });
+  const context = await requestBrowserWebGpuDevice(navigator.gpu, await superMatDeviceOptions(navigator.gpu, { adapterName: 'supermat-demo' }));
   device = context.device;
   foreground = createWebGpuForegroundService({ routeId: SUPERMAT_ROUTE_ID, device });
   session = await createWebGpuInferenceSession({ sessionId: crypto.randomUUID(), device, adapter: context.adapter,

@@ -3,6 +3,7 @@
 // same random inputs, so a faster variant cannot hide a wrong answer.
 import { compareWebGpuParityArrays, requestBrowserWebGpuDevice } from '../../webgpu-inference-kit/src/core.js';
 import { createSuperMatOps } from './supermat-ops.js';
+import { superMatDeviceOptions } from './supermat-route.js';
 
 // IEEE binary16 bits from float32, round to nearest even.
 export function float32ToFloat16Bits(value) {
@@ -56,16 +57,16 @@ const CASES = [
 ];
 
 export const BENCH_VARIANTS = [
-  { id: 't64-f32', gemmTile: { tm: 4, tn: 4, bk: 16 }, f16: false },
-  { id: 't64-bk32', gemmTile: { tm: 4, tn: 4, bk: 32 }, f16: false },
-  { id: 't64x128', gemmTile: { tm: 4, tn: 8, bk: 16 }, f16: false },
-  { id: 't32x64', gemmTile: { tm: 2, tn: 4, bk: 16 }, f16: false },
-  { id: 'attn-vec4', gemmTile: { tm: 4, tn: 4, bk: 16 }, f16: false, attentionKernel: 'vec4', attentionOnly: true },
+  { id: 'tiled-f32', gemmKernel: 'tiled', f16: false },
+  { id: 'sgmatrix-f32', gemmKernel: 'subgroup-matrix', f16: false },
+  { id: 'tiled-f16w', gemmKernel: 'tiled', f16: true },
+  { id: 'sgmatrix-f16w', gemmKernel: 'subgroup-matrix', f16: true },
 ];
 
 export async function runSuperMatBench({ iterations = 6, variants = BENCH_VARIANTS, cases = CASES } = {}) {
   const result = { schema: 'supermat.kernel-bench.v0', status: 'failed', rows: [], iterations };
-  const { device, backendIdentity } = await requestBrowserWebGpuDevice(navigator.gpu, { adapterName: 'supermat-bench' });
+  const { device, backendIdentity } = await requestBrowserWebGpuDevice(navigator.gpu,
+    await superMatDeviceOptions(navigator.gpu, { adapterName: 'supermat-bench' }));
   result.adapter = backendIdentity;
   try {
     device.pushErrorScope('validation');
@@ -74,7 +75,7 @@ export async function runSuperMatBench({ iterations = 6, variants = BENCH_VARIAN
       for (const variant of variants) {
         if (testCase.kind === 'attention' && variant.f16) continue;
         if (variant.attentionOnly && testCase.kind !== 'attention') continue;
-        const ops = createSuperMatOps(device, { label: `bench.${variant.id}`, gemmTile: variant.gemmTile,
+        const ops = createSuperMatOps(device, { label: `bench.${variant.id}`, gemmKernel: variant.gemmKernel,
           attentionKernel: variant.attentionKernel ?? 'scalar' });
         const inputs = [];
         let flops, run;

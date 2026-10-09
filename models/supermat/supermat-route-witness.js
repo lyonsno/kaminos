@@ -2,7 +2,7 @@
 // cold then warm, against the pinned CPU reference outputs. No proof captures
 // run inside the route, so its phase timings are the route's own.
 import { compareWebGpuParityArrays, createWebGpuInferenceSession } from '../../webgpu-inference-kit/src/core.js';
-import { createSuperMatAdapter, mapsFromPlanes } from './supermat-route.js';
+import { createSuperMatAdapter, mapsFromPlanes, superMatDeviceOptions } from './supermat-route.js';
 import { decodeImageRgba } from './supermat-image.js';
 
 // Predeclared: the full-route output tolerance, and warm == cold exactly.
@@ -41,7 +41,7 @@ export async function runSuperMatRouteWitness({ fixtureSha256, weightsSha256, ru
     if (reference.status !== 'succeeded') throw new Error('reference manifest is not a succeeded export');
     result.phase = 'device';
     session = await createWebGpuInferenceSession({ sessionId: 'supermat-route-witness', gpu: navigator.gpu,
-      adapterName: 'supermat-route-witness' });
+      deviceOptions: await superMatDeviceOptions(navigator.gpu, { adapterName: 'supermat-route-witness' }) });
     route = await session.registerRoute({ routeId: 'supermat.image-to-pbr.webgpu-local.v0' });
     const device = route.runtime.device;
     result.adapter = route.runtime.backendIdentity ?? null;
