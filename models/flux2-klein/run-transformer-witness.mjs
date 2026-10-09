@@ -14,9 +14,9 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
 const chrome = opt('--chrome'), outPath = opt('--out');
-const roots = { '/weights/': path.resolve(opt('--weights', '')), '/ref/': path.resolve(opt('--ref', '')), '/': here };
+const roots = { '/weights/': path.resolve(opt('--weights', '')), '/ref/': path.resolve(opt('--ref', '')), '/vae/': path.resolve(opt('--vae', '.')), '/': here };
 const cfg = { step: Number(opt('--step', '0')), tolerance: Number(opt('--tolerance', '1e-3')),
-  timingRuns: Number(opt('--timing-runs', '2')), verifyDigests: !args.includes('--no-digests') };
+  timingRuns: Number(opt('--timing-runs', '2')), verifyDigests: !args.includes('--no-digests'), vae: Boolean(opt('--vae')) };
 const report = { schema: 'kaminos.flux2-klein.transformer-witness-run.v0', requestedChrome: chrome, roots, config: cfg,
   host: os.hostname(), startedAt: new Date().toISOString(), phase: 'launch' };
 let child, server, ws;
@@ -82,6 +82,12 @@ try {
   report.phase = 'witness';
   const res = await send('Runtime.evaluate', { expression: `window.runTransformerWitness(${JSON.stringify(cfg)})`, awaitPromise: true, returnByValue: true });
   report.witness = res.result?.result?.value ?? { evaluateError: res.result?.exceptionDetails ?? res.error ?? res };
+  if (report.witness?.browserImagePngBase64) {
+    const png = path.join(path.dirname(outPath), 'browser-image.png');
+    await fsp.mkdir(path.dirname(outPath), { recursive: true });
+    await fsp.writeFile(png, Buffer.from(report.witness.browserImagePngBase64, 'base64'));
+    report.browserImagePng = png; delete report.witness.browserImagePngBase64;
+  }
   report.phase = report.witness?.phase === 'done' ? 'done' : `witness-${report.witness?.phase ?? 'unknown'}`;
   await finish(report.phase === 'done' && report.witness.parityPass ? 0 : 1);
 } catch (e) {

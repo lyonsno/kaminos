@@ -205,3 +205,16 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let v = x[i]; y[i] = v / (1.0 + exp(-v));
 }`;
 }
+
+// y[i] += alpha * x[i] for i < n.
+export function axpyShader() {
+  return `struct P { n: u32, alpha: f32, z0: u32, z1: u32 };
+@group(0) @binding(0) var<storage, read_write> y: array<f32>;
+@group(0) @binding(1) var<storage, read> x: array<f32>;
+@group(0) @binding(2) var<uniform> p: P;
+@compute @workgroup_size(256)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let i = gid.x; if (i >= p.n) { return; }
+  y[i] = y[i] + p.alpha * x[i];
+}`;
+}

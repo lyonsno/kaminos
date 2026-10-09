@@ -3,6 +3,8 @@
 // then an untapped timing run. Served by run-transformer-witness.mjs with
 // /weights -> packed bundles and /ref -> export-reference.py output.
 import { KleinTransformer, ropeTable } from './klein-transformer.js';
+import { kleinSchedule, transformerTime } from './klein-schedule.js';
+import { KleinVaeDecoder } from './klein-vae.js';
 
 const state = { phase: 'init' };
 window.transformerWitnessState = state;
@@ -10,6 +12,8 @@ window.transformerWitnessState = state;
 async function getJson(url) { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); }
 async function getBytes(url) { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.arrayBuffer(); }
 async function sha256(buf) { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map(b => b.toString(16).padStart(2, '0')).join(''); }
+
+function nchwToNhwcInverse(nhwc, C, HW) { const o = new Float32Array(C * HW); for (let i = 0; i < HW; i++) for (let c = 0; c < C; c++) o[c * HW + i] = nhwc[i * C + c]; return o; }
 
 function compare(got, ref) {
   let num = 0, den = 0, maxAbs = 0, refMax = 0, nonFinite = 0;
@@ -67,8 +71,7 @@ window.runTransformerWitness = async function (cfg) {
     const imgIds = Float64Array.from(await refTensor('denoise/img_ids'));
     const txtIds = Float64Array.from(await refTensor('text/text_ids'));
     const imgTokens = imgIds.length / 4, txtTokens = txtIds.length / 4;
-    const tModel = Math.fround(Math.fround(timestep) * 1000);
-    report.inputs = { step, timestep, tModel, imgTokens, txtTokens };
+    report.inputs = { step, timestep, imgTokens, txtTokens };
 
     // RoPE table check against the oracle (host-side math, no GPU).
     const blockStep = rm.tensors['blocks_step0/rope/img_cos'] ? 0 : null;
@@ -83,17 +86,23 @@ window.runTransformerWitness = async function (cfg) {
       }
     }
 
-    state.phase = 'parity-forward';
+    // Schedule check: the browser's sigma schedule against the pipeline's.
+    const steps = rm.steps;
+    const sched = kleinSchedule(imgTokens, steps);
+    report.schedule = { mine: sched.sigmas, reference: rm.sigmas,
+      maxAbsDiff: Math.max(...sched.sigmas.map((v, i) => Math.abs(v - rm.sigmas[i]))) };
+
+    state.phase = 'parity-denoise';
     model.allocate(imgTokens, txtTokens);
-    const refNames = { 'velocity': `denoise/step${step}/velocity` };
-    const taps = async (name, buf, rows, cols, byteOffset) => {
-      const refName = refNames[name] ?? `blocks_step${step}/${name}`;
-      if (!rm.tensors[refName]) return;
-      const bytes = rows * cols * 4;
+    model.prepare({ latents, promptEmbeds, imgIds, txtIds });
+    const readback = async (buf, bytes, byteOffset = 0) => {
       const rb = device.createBuffer({ size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
       const enc = device.createCommandEncoder(); enc.copyBufferToBuffer(buf, byteOffset, rb, 0, bytes); device.queue.submit([enc.finish()]);
       await rb.mapAsync(GPUMapMode.READ);
       const got = new Float32Array(rb.getMappedRange().slice(0)); rb.unmap(); rb.destroy();
+      return got;
+    };
+    const check = async (name, refName, got) => {
       const ref = await refTensor(refName);
       if (ref.length !== got.length) { report.boundaries.push({ name, pass: false, shapeMismatch: [got.length, ref.length] }); return; }
       const row = { name, ...compare(got, ref) };
@@ -101,18 +110,80 @@ window.runTransformerWitness = async function (cfg) {
       report.boundaries.push(row);
       state.phase = `parity:${name}`;
     };
-    await model.forward({ latents, promptEmbeds, tModel, imgIds, txtIds }, taps);
+    for (let i = 0; i < steps; i++) {
+      if (i > 0) await check(`step${i}/latents_in`, `denoise/step${i}/latents_in`, await readback(model.act.latents, imgTokens * 128 * 4));
+      const tModel = transformerTime(sched.timesteps[i]);
+      const taps = async (name, buf, rows, cols, byteOffset) => {
+        const refName = name === 'velocity' ? `denoise/step${i}/velocity` : `blocks_step${i}/${name}`;
+        if (!rm.tensors[refName]) return;
+        await check(i === 0 || name === 'velocity' ? `step${i}/${name}` : name, refName, await readback(buf, rows * cols * 4, byteOffset));
+      };
+      await model.forward({ tModel }, taps);
+      await model.eulerStep(Math.fround(sched.sigmas[i + 1] - sched.sigmas[i]));
+    }
+
+    // VAE: latent prep from the browser's own final latents, then decode both the
+    // browser latents and (teacher-forced) the reference decoder input.
+    if (cfg.vae) {
+      state.phase = 'vae-load';
+      const vm = await getJson('/vae/manifest.json');
+      const vbytes = await getBytes(`/vae/${vm.bundle.file}`);
+      if (cfg.verifyDigests && await sha256(vbytes) !== vm.bundle.sha256) throw new Error('VAE bundle digest mismatch');
+      const vae = new KleinVaeDecoder(device, vm);
+      await vae.load(vbytes);
+      const latH = Math.round(Math.sqrt(imgTokens)), latW = imgTokens / latH;
+      vae.allocate(latH, latW);
+      const nchwToNhwc = (src, C, HW) => { const o = new Float32Array(C * HW); for (let c = 0; c < C; c++) for (let i = 0; i < HW; i++) o[i * C + c] = src[c * HW + i]; return o; };
+      const refZ = await refTensor('vae/latents_in');
+      const refImg = await refTensor('vae/image');
+      const HWz = (latH * 2) * (latW * 2), HWi = (latH * 16) * (latW * 16);
+      state.phase = 'vae-prep';
+      let enc = device.createCommandEncoder();
+      vae.prepLatents(enc, model.act.latents);
+      device.queue.submit([enc.finish()]);
+      await check('vae/latents_in', 'vae/latents_in', nchwToNhwcInverse(await readback(vae.prepped, HWz * 32 * 4), 32, HWz));
+      const decodeTo = async (zBuf, label) => {
+        state.phase = `vae-decode:${label}`;
+        const t1 = performance.now();
+        const e2 = device.createCommandEncoder(); vae.decode(e2, zBuf); device.queue.submit([e2.finish()]);
+        await device.queue.onSubmittedWorkDone();
+        const ms = performance.now() - t1;
+        const rgb = await readback(vae.out, HWi * 3 * 4);
+        vae.releaseUniforms();
+        await check(`vae/image(${label})`, 'vae/image', nchwToNhwcInverse(rgb, 3, HWi));
+        report.vaeDecodeMs = { ...(report.vaeDecodeMs || {}), [label]: ms };
+        return rgb;
+      };
+      const zRef = vae.buffer(HWz * 32 * 4); device.queue.writeBuffer(zRef, 0, nchwToNhwc(refZ, 32, HWz));
+      await decodeTo(zRef, 'reference-latents');
+      const rgb = await decodeTo(vae.prepped, 'browser-latents');
+      const W = latW * 16, H = latH * 16;
+      const img = new ImageData(W, H);
+      for (let i = 0; i < W * H; i++) for (let c = 0; c < 3; c++) img.data[i * 4 + c] = Math.round(Math.min(1, Math.max(0, rgb[i * 3 + c] / 2 + 0.5)) * 255);
+      for (let i = 0; i < W * H; i++) img.data[i * 4 + 3] = 255;
+      const canvas = new OffscreenCanvas(W, H); canvas.getContext('2d').putImageData(img, 0, 0);
+      const blob = await canvas.convertToBlob({ type: 'image/png' });
+      const bytes = new Uint8Array(await blob.arrayBuffer()); let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      const b64 = btoa(bin);
+      report.browserImagePngBase64 = b64;
+    }
     report.parityPass = report.boundaries.filter(b => b.pass !== undefined).every(b => b.pass);
 
     state.phase = 'timing';
     const timings = [];
     for (let r = 0; r < (cfg.timingRuns ?? 2); r++) {
-      const t1 = performance.now();
-      await model.forward({ latents, promptEmbeds, tModel, imgIds, txtIds });
-      await device.queue.onSubmittedWorkDone();
-      timings.push(performance.now() - t1);
+      model.prepare({ latents, promptEmbeds, imgIds, txtIds });
+      const t1 = performance.now(); const perStep = [];
+      for (let i = 0; i < steps; i++) {
+        const ts = performance.now();
+        await model.forward({ tModel: transformerTime(sched.timesteps[i]) });
+        await model.eulerStep(Math.fround(sched.sigmas[i + 1] - sched.sigmas[i]));
+        perStep.push(performance.now() - ts);
+      }
+      timings.push({ totalMs: performance.now() - t1, perStepMs: perStep });
     }
-    report.forwardMs = timings;
+    report.denoiseTiming = timings;
     state.phase = 'done';
     report.phase = 'done';
   } catch (e) {

@@ -3,7 +3,7 @@
 // modulation, double-stream blocks, single-stream blocks, AdaLN output norm and
 // projection. Weights come from pack-transformer.py bundles (f16 [out, in]).
 import { LN_EPS, gemmShader, layerNormModulateShader, qkvPrepShader, softmaxShader, swigluShader,
-  headsToRowsShader, siluShader } from './klein-kernels.js';
+  headsToRowsShader, siluShader, axpyShader } from './klein-kernels.js';
 
 const HEAD = 128;
 
@@ -160,14 +160,31 @@ export class KleinTransformer {
 
   // One transformer evaluation. `taps(name, buffer, rows, cols, byteOffset)` lets a witness read
   // boundaries; it receives the encoder state after the boundary's work was encoded.
-  async forward({ latents, promptEmbeds, tModel, imgIds, txtIds }, taps = null) {
-    const dev = this.device, a = this.act, D = this.D, F = this.F;
-    const { imgTokens: Li, txtTokens: Lt, L } = this.shape;
+  // Upload per-image inputs once: initial latents, prompt embeddings, RoPE table.
+  prepare({ latents, promptEmbeds, imgIds, txtIds }) {
+    const dev = this.device, a = this.act;
+    const { txtTokens: Lt, L } = this.shape;
     dev.queue.writeBuffer(a.latents, 0, latents);
     dev.queue.writeBuffer(a.promptEmbeds, 0, promptEmbeds);
-    dev.queue.writeBuffer(a.tproj, 0, timestepProjection(tModel));
     const allIds = new Float64Array(L * 4); allIds.set(txtIds, 0); allIds.set(imgIds, Lt * 4);
     dev.queue.writeBuffer(a.rope, 0, ropeTable(allIds));
+  }
+
+  // latents += dt * velocity (FlowMatchEulerDiscreteScheduler.step, f32).
+  async eulerStep(dt) {
+    const pipe = this.pipeline('axpy', axpyShader());
+    const enc = this.device.createCommandEncoder();
+    const n = this.shape.imgTokens * 128;
+    this.dispatch(enc, pipe, [this.act.latents, this.act.velocity, this.uniform([n, this.f32bits(dt), 0, 0])], Math.ceil(n / 256));
+    this.device.queue.submit([enc.finish()]);
+    await this.device.queue.onSubmittedWorkDone();
+    this.uniformPool.forEach(b => b.destroy()); this.uniformPool = [];
+  }
+
+  async forward({ tModel }, taps = null) {
+    const dev = this.device, a = this.act, D = this.D, F = this.F;
+    const { imgTokens: Li, txtTokens: Lt, L } = this.shape;
+    dev.queue.writeBuffer(a.tproj, 0, timestepProjection(tModel));
     const silu = this.pipeline('silu', siluShader());
     let enc = dev.createCommandEncoder();
     const flush = async (name, buf, rows, cols, byteOffset = 0) => {
