@@ -12,7 +12,7 @@ async function exercise(candidateFault='support'){
  const candidate={read:async()=>{if(candidateFault==='device')throw new Error('GPU device lost');return {...live,runId:'candidate',stresses:[{active:true,invalid:true}]};},dispose:()=>log.push('candidate-disposed')};
  const status={textContent:''},other={textContent:'',value:18};let proposals=0;
  const ctx={performance,crypto,device:{},interiorSplit:true,gesture:held,gestureGeneration:1,failure:null,busy:false,paused:false,pendingPick:false,finishing:false,pickTask:Promise.resolve(),resident:retained,observed:live,
-  body:{...mesh},pieces:[{id:0,component:0,nodes:[0]}],components:[0],volumes:[1],interiorState:{epoch:0,mesh,nodeDomains:[0],transfers:[]},initialBody:{geometry:{}},configuration:{patchRadius:1,gripStiffness:1,volumeBarrier:400},manifest:{material:{density:1}},events:[],timings:[],latestSelection:null,lastPick:null,
+  body:{...mesh},pieces:[{id:0,component:0,nodes:[0]}],components:[0],volumes:[1],interiorState:{epoch:0,mesh,nodeDomains:[0],transfers:[]},initialBody:{geometry:{}},materialRegime:null,configuration:{patchRadius:1,gripStiffness:1,volumeBarrier:400},manifest:{material:{density:1}},events:[],timings:[],latestSelection:null,lastPick:null,
   positions:()=>[point],contactPatch:()=>[{index:0,weight:1}],materialComponents:()=>[0],selectStressRelease:()=>({normal:[1,0,0],offset:0}),
   splitMaterialInterior:()=>{proposals++;return {mesh,fields:{positions:[point],velocities:[point],pinned:[false]},receipt:{route:'fixture',volumeBefore:1,volumeAfter:1}};},
   prepareSeparatedTopology:()=>({positions:[point],elements:[],bonds:[],constitutiveLayout:'fixture',bufferLayout:{},colorCount:1}),packSolidTopology:()=>({state:new Float32Array(16)}),createSolidResident:async()=>candidate,

@@ -34,9 +34,9 @@ export function splitMaterialInterior(mesh,fields,{targetDomain,normal,offset,ch
   ring.sort((a,b)=>Math.atan2(dot(sub(a.p,center),v),dot(sub(a.p,center),unit))-Math.atan2(dot(sub(b.p,center),v),dot(sub(b.p,center),unit)));
   for(const [side,child]of [[1,children[0]],[-1,children[1]]]){
    const polygons=[...faces.map(f=>clippedFace(f.map(i=>verts[i]),side)).filter(f=>f.length>=3),ring],unique=[...new Map(polygons.flat().map(p=>[p.key,p])).values()];
-   const centerVertex={key:`c:${t}:${side}`,p:[0,1,2].map(k=>unique.reduce((s,p)=>s+p.p[k]/unique.length,0)),basis:combine(unique.map(p=>[p.basis,1/unique.length])),distance:0};
-   // A canonical face fan keeps adjacent clipped tetrahedra conforming.
-   for(const polygon of polygons){let start=0;polygon.forEach((p,i)=>{if(p.key<polygon[start].key)start=i;});const ordered=polygon.map((_,i)=>polygon[(i+start)%polygon.length]);for(let i=1;i<ordered.length-1;i++)emit([centerVertex,ordered[0],ordered[i],ordered[i+1]],child);}
+   const anchor=unique.reduce((a,b)=>a.key<b.key?a:b);
+   // Pulling triangulation uses one global vertex order on cells and their faces.
+   for(const polygon of polygons){if(polygon.some(p=>p.key===anchor.key))continue;let start=0;polygon.forEach((p,i)=>{if(p.key<polygon[start].key)start=i;});const ordered=polygon.map((_,i)=>polygon[(i+start)%polygon.length]);for(let i=1;i<ordered.length-1;i++)emit([anchor,ordered[0],ordered[i],ordered[i+1]],child);}
   }
  });
  if(!childVolumes.every(v=>v>0))throw new Error('Cut does not intersect the target interior');
@@ -46,5 +46,5 @@ export function splitMaterialInterior(mesh,fields,{targetDomain,normal,offset,ch
  const nextFields={positions:lineage.map(p=>value(p,fields.positions)),velocities:lineage.map(p=>value(p,fields.velocities)),pinned:lineage.map(p=>p.every(e=>fields.pinned[e.index]))},volumeAfter=output.tetrahedra.reduce((s,ids)=>s+Math.abs(signedVolume(...ids.map(i=>output.positions[i]))),0);
  if(Math.abs(volumeAfter-volumeBefore)>volumeBefore*1e-8)throw new Error('Interior cut failed volume conservation');
  output.volume=volumeAfter;output.route=INTERIOR_CUT_ROUTE;output.status='passed';
- return{mesh:output,fields:nextFields,parents:lineage,nodeDomains:owners,oldToNew:oldToNew.map(list=>list.filter(p=>compact.has(p.index)).map(p=>({...p,index:compact.get(p.index)}))),receipt:{route:INTERIOR_CUT_ROUTE,targetDomain,children:[...children],normal:[...normal],offset,volumeBefore,volumeAfter,childVolumes,pointsBefore:n,pointsAfter:output.positions.length,elementsBefore:tets.length,elementsAfter:output.tetrahedra.length,claim:'Conservative plane subdivision and piecewise-affine pose/velocity transfer; no propagation law or compression repair'}};
+ return{mesh:output,fields:nextFields,parents:lineage,nodeDomains:owners,oldToNew:oldToNew.map(list=>list.filter(p=>compact.has(p.index)).map(p=>({...p,index:compact.get(p.index)}))),receipt:{route:INTERIOR_CUT_ROUTE,triangulation:'canonical-vertex-pulling-v1',targetDomain,children:[...children],normal:[...normal],offset,volumeBefore,volumeAfter,childVolumes,pointsBefore:n,pointsAfter:output.positions.length,elementsBefore:tets.length,elementsAfter:output.tetrahedra.length,claim:'Conservative plane subdivision and piecewise-affine pose/velocity transfer; no propagation law or compression repair'}};
 }

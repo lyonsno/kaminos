@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {intactTetrahedron} from '../structural-material-solid-reference.mjs';
+const {configureStoneRegime}=await import('../structural-material-stone-regime.mjs').catch(e=>{if(e.code==='ERR_MODULE_NOT_FOUND')return {};throw e;});
+assert.equal(typeof configureStoneRegime,'function','The live stone needs an explicit effective stiffness and brittle threshold, separate from source preparation');
+const rest=[[0,0,0],[1,0,0],[0,1,0],[0,0,1]],source={young:1000,poisson:.25,density:1000},matrix=intactTetrahedron(rest,source).stiffness.flat(),coefficients=new Float32Array(64*36);
+coefficients.set(matrix);const parameters=new Float32Array(16),arrays={coefficients,parameters},manifest={material:source,model:{kind:'graph',elements:1}};
+const next=configureStoneRegime(manifest,arrays,'stiff-brittle-v1');
+assert.deepEqual(manifest.material,source);assert.equal(next.profile.sourceMaterial.young,1000);assert.equal(next.profile.material.young,100000);assert.equal(next.profile.threshold,180);assert.equal(next.model.constitutiveLayout,'separated-intact-tetrahedra-v1');
+assert.equal(next.arrays.coefficients.length,36,'Intact split-route cells need one matrix, not all 64 binary damage combinations');
+const expected=intactTetrahedron(rest,next.profile.material).stiffness.flat();expected.forEach((v,i)=>assert.ok(Math.abs(v-next.arrays.coefficients[i])<=Math.max(1,Math.abs(v))*1e-6));
+assert.equal(next.arrays.parameters[7],40000);assert.equal(parameters[7],0);assert.equal(coefficients.length,64*36);
+assert.ok(next.profile.threshold/next.profile.material.young<18/source.young,'The new regime must fail at a smaller stress-to-stiffness ratio');
+const legacy=configureStoneRegime(manifest,arrays,'legacy');assert.equal(legacy.profile.material.young,1000);assert.equal(legacy.profile.threshold,18);
+assert.throws(()=>configureStoneRegime(manifest,arrays,'stone-calibrated'),/Unknown/);
+assert.throws(()=>configureStoneRegime(manifest,{...arrays,coefficients:new Float32Array(36)},'stiff-brittle-v1'),/matrix/);
+console.log('Explicit provisional stiff/brittle profile preserves source parameters and matches the intact constitutive reference');
