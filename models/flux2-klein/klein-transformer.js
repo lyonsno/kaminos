@@ -165,7 +165,7 @@ export class KleinTransformer {
     const dev = this.device, a = this.act;
     const { txtTokens: Lt, L } = this.shape;
     dev.queue.writeBuffer(a.latents, 0, latents);
-    dev.queue.writeBuffer(a.promptEmbeds, 0, promptEmbeds);
+    if (promptEmbeds) dev.queue.writeBuffer(a.promptEmbeds, 0, promptEmbeds);
     const allIds = new Float64Array(L * 4); allIds.set(txtIds, 0); allIds.set(imgIds, Lt * 4);
     dev.queue.writeBuffer(a.rope, 0, ropeTable(allIds));
   }

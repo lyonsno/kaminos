@@ -14,9 +14,9 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
 const chrome = opt('--chrome'), outPath = opt('--out');
-const roots = { '/weights/': path.resolve(opt('--weights', '')), '/ref/': path.resolve(opt('--ref', '')), '/vae/': path.resolve(opt('--vae', '.')), '/': here };
+const roots = { '/weights/': path.resolve(opt('--weights', '')), '/ref/': path.resolve(opt('--ref', '')), '/vae/': path.resolve(opt('--vae', '.')), '/te/': path.resolve(opt('--te', '.')), '/': here };
 const cfg = { step: Number(opt('--step', '0')), tolerance: Number(opt('--tolerance', '1e-3')),
-  timingRuns: Number(opt('--timing-runs', '2')), verifyDigests: !args.includes('--no-digests'), vae: Boolean(opt('--vae')) };
+  timingRuns: Number(opt('--timing-runs', '2')), verifyDigests: !args.includes('--no-digests'), vae: Boolean(opt('--vae')), textEncoder: Boolean(opt('--te')) };
 const report = { schema: 'kaminos.flux2-klein.transformer-witness-run.v0', requestedChrome: chrome, roots, config: cfg,
   host: os.hostname(), startedAt: new Date().toISOString(), phase: 'launch' };
 let child, server, ws;
@@ -41,6 +41,12 @@ try {
     fs.stat(file, (err, st) => {
       if (err || !st.isFile()) { r.writeHead(404); return r.end(); }
       const type = file.endsWith('.js') || file.endsWith('.mjs') ? 'text/javascript' : file.endsWith('.json') ? 'application/json' : file.endsWith('.html') ? 'text/html' : 'application/octet-stream';
+      const range = /^bytes=(\d+)-(\d+)$/.exec(q.headers.range || '');
+      if (range) {
+        const start = Number(range[1]), end = Math.min(Number(range[2]), st.size - 1);
+        r.writeHead(206, { 'content-type': type, 'content-length': end - start + 1, 'content-range': `bytes ${start}-${end}/${st.size}`, 'cache-control': 'no-store' });
+        return fs.createReadStream(file, { start, end }).pipe(r);
+      }
       r.writeHead(200, { 'content-type': type, 'content-length': st.size, 'cache-control': 'no-store' });
       fs.createReadStream(file).pipe(r);
     });

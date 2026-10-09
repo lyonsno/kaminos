@@ -5,6 +5,8 @@
 import { KleinTransformer, ropeTable } from './klein-transformer.js';
 import { kleinSchedule, transformerTime } from './klein-schedule.js';
 import { KleinVaeDecoder } from './klein-vae.js';
+import { KleinTextEncoder, gatherEmbeddings } from './klein-text-encoder.js';
+import { QwenTokenizer } from './qwen-tokenizer.js';
 
 const state = { phase: 'init' };
 window.transformerWitnessState = state;
@@ -110,6 +112,42 @@ window.runTransformerWitness = async function (cfg) {
       report.boundaries.push(row);
       state.phase = `parity:${name}`;
     };
+    if (cfg.textEncoder) {
+      // Text path: tokenizer and Qwen3 encoder from the prompt string, written straight into the
+      // transformer's prompt-embedding buffer, so the denoise below runs from browser text features.
+      state.phase = 'text-encoder-load';
+      const tm = await getJson('/te/manifest.json');
+      const tokJson = await getJson(`/te/${tm.tokenizer.file}`);
+      const tok = new QwenTokenizer(tokJson);
+      const framed = tok.kleinPromptIds(rm.prompt);
+      const refIds = await refTensor('tokenizer/input_ids'), refMask = await refTensor('tokenizer/attention_mask');
+      report.tokenizer = { textMatches: framed.text === rm.chat_template_text, length: framed.length,
+        idsMatch: framed.inputIds.every((v, i) => v === refIds[i]), maskMatches: framed.attentionMask.every((v, i) => v === refMask[i]) };
+      if (!report.tokenizer.idsMatch || !report.tokenizer.maskMatches) throw new Error('tokenizer mismatch');
+      const te = new KleinTextEncoder(device, tm);
+      const t2 = performance.now();
+      await te.loadBundles(async (file, bundle) => {
+        const buf = await getBytes(`/te/${file}`);
+        if (buf.byteLength !== bundle.bytes) throw new Error(`bundle ${file} size mismatch`);
+        if (cfg.verifyDigests && await sha256(buf) !== bundle.sha256) throw new Error(`bundle digest mismatch ${file}`);
+        return buf;
+      }, name => { state.phase = `te-weights:${name}`; });
+      report.textEncoderLoadMs = performance.now() - t2;
+      const rowBytes = tm.embedding.row_bytes;
+      const fetchRows = async ids => new Map(await Promise.all(ids.map(async id => {
+        const r = await fetch(`/te/${tm.embedding.file}`, { headers: { Range: `bytes=${id * rowBytes}-${(id + 1) * rowBytes - 1}` } });
+        if (r.status !== 206) throw new Error(`embedding range request returned ${r.status}`);
+        const b = await r.arrayBuffer(); if (b.byteLength !== rowBytes) throw new Error('short embedding row');
+        return [id, b];
+      })));
+      state.phase = 'text-encode';
+      const emb = await gatherEmbeddings([...framed.inputIds], tm.config.hidden_size, fetchRows);
+      te.allocate(framed.inputIds.length);
+      const t3 = performance.now();
+      await te.encode(emb, framed.attentionMask, model.act.promptEmbeds);
+      report.textEncodeMs = performance.now() - t3;
+      await check('text/prompt_embeds', 'text/prompt_embeds', await readback(model.act.promptEmbeds, txtTokens * tm.taps.length * tm.config.hidden_size * 4));
+    }
     for (let i = 0; i < steps; i++) {
       if (i > 0) await check(`step${i}/latents_in`, `denoise/step${i}/latents_in`, await readback(model.act.latents, imgTokens * 128 * 4));
       const tModel = transformerTime(sched.timesteps[i]);
