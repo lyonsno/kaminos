@@ -27,7 +27,7 @@ try{
   assert.equal(events.at(-1).error,'observed libproc refusal');assert.equal(events.at(-1).transport.stderr,'probe-stderr');
   for(const [name,probe]of [
     ['malformed-json',async()=>({stdout:'not JSON',stderr:'bad report',exitStatus:0})],
-    ['malformed-row',async()=>({...row,processes:[{...row.processes[0],kernelLifetimePeakPhysicalFootprintBytes:1}]})],
+    ['malformed-row',async()=>({...row,processes:[{...row.processes[0],kernelLifetimePeakPhysicalFootprintBytes:-1}]})],
     ['missing-report',async()=>null],
     ['nonzero-observed',async()=>({stdout:JSON.stringify(row),stderr:'nonzero',exitStatus:1})],
   ]){
