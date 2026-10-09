@@ -160,6 +160,9 @@ export function createIPBFGridShader({radius,volume,compliance=0,alternativeComp
   let position=particles[i].predicted.xyz;
   var velocity=(position-particles[i].position.xyz)/params.dt;
   if(ipbfDampingEnabled){let alternate=ipbfStates[i].alternative.xyz;velocity=ipbf_damp(velocity,(alternate-particles[i].position.xyz)/params.dt,distance(position,alternate),ipbfRadius,ipbfBeta);}
+  // Publish one reconstructed, paper-damped field before viscosity reads
+  // neighbors. Viscosity writes delta only, leaving this input immutable.
+  particles[i].velocity=vec4<f32>(velocity,particles[i].velocity.w);
   particles[i].delta=vec4<f32>(velocity,particles[i].delta.w);
  }
  @compute @workgroup_size(64)
