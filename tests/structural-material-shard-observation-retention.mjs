@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {createShardObservationWork} from '../structural-material-shard-observation-retention.mjs';
+const full={history:Array.from({length:20},(_,i)=>({id:i,field:[i,i+1]}))},paths=[],reports=[];
+let calls=0;
+const observationSession=async({out,source,exercise})=>{paths.push(out);assert.equal(source.revision,'exact');const result=await exercise({retain:async options=>({name:options.name,effective:await options.observe(),status:'verified'})});return{status:'passed',result};};
+const experiment=({retain})=>({observe:async name=>{const result=await retain({name,observe:async()=>full});return{...result,observed:full};}});
+const work=createShardObservationWork({out:'/caller/observations',source:{revision:'exact'},observationSession,experiment,runtime:{},capture:()=>{},record:r=>reports.push(r)});
+for(const name of ['first','second'])assert.deepEqual((await work.observe(name)).observed,full);
+assert.deepEqual(paths,['/caller/observations/first','/caller/observations/second']);assert.deepEqual(reports.map(r=>r.status),['running','passed','running','passed']);assert.ok(reports.every(r=>!('effective'in r)));
+const broken=createShardObservationWork({out:'/caller/failure',source:{revision:'exact'},observationSession:async()=>{calls++;return{status:'failed'};},experiment,runtime:{},capture:()=>{},record:r=>reports.push(r)});
+await assert.rejects(broken.observe('failed'),/verified/);assert.equal(calls,1);assert.equal(reports.at(-1).status,'failed');
+console.log('Full observations use independent shared sessions; reports retain references and failed/missing verification cannot close.');

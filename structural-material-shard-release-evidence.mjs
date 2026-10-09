@@ -43,10 +43,16 @@ export function inspectLoadedReleaseSources(expected,observed){
  return errors;
 }
 
-export function inspectCutRefusalRegrip(declined,gripped){
+export function inspectCutRefusalRegrip(declined,gripped,before){
  const errors=[],cut=declined?.interior?.lastFailedCut,candidate=cut?.candidateState;
  if(cut?.disposition!=='retained-material-continue'||!Array.isArray(candidate?.stresses)||!candidate.stresses.some(s=>s.invalid||!s.active)||!candidate.runId||candidate.runId===declined?.runId)errors.push('Native invalid candidate refusal is absent');
  if(!declined||!gripped)return [...errors,'Refusal or regrip observation is absent'];
+ if(!before)return [...errors,'Immediate pre-refusal observation is absent'];
+ const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+ if(before.runId!==declined.runId||before.interior?.epoch!==declined.interior?.epoch||!Array.isArray(before.interior?.materialRuns)||!same(before.interior.materialRuns,declined.interior?.materialRuns)||!Array.isArray(before.events)||!same(before.events,declined.events)||!same(before.camera,declined.camera))errors.push('Refusal replaced material, injury history or camera');
+ const newInputs=Array.isArray(before.inputs)&&Array.isArray(declined.inputs)&&same(before.inputs,declined.inputs.slice(0,before.inputs.length))?declined.inputs.slice(before.inputs.length):[];
+ const refusals=newInputs.filter(i=>i.kind==='interior-cut-declined');
+ if(refusals.length!==1||refusals[0].data?.generation!==before.gesture?.generation||refusals[0].data?.epoch!==before.interior?.epoch||candidate?.runId===before.interior?.lastFailedCut?.candidateState?.runId||!(declined.totalSteps>before.totalSteps))errors.push('Refusal is not a fresh candidate from this advance');
  if(declined.phase!=='interactive'||gripped.phase!=='interactive'||declined.failure!==null||gripped.failure!==null)errors.push('Retained material is unavailable');
  if(!declined.runId||gripped.runId!==declined.runId||gripped.interior?.epoch!==declined.interior?.epoch)errors.push('Reset or material replacement substituted for regrip');
  if(gripped.gesture?.phase!=='active'||gripped.gesture.inputClosed===true||JSON.stringify(gripped.camera)!==JSON.stringify(declined.camera))errors.push('Pointer fell through to camera or closed input');
