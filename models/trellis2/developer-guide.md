@@ -219,6 +219,9 @@ this 4 GiB buffer allowance rejects the run before inference. For generation,
 choose allowances from your machine's available headroom, leaving space for
 the operating system and other applications. These controls do not measure
 all driver-private allocations or catch every spike between samples.
+The process allowance is a stop threshold, not a hard RAM limit: memory can
+grow by several GiB between samples. Leave room for that growth as well; do
+not set the threshold equal to all available memory.
 
 GPU-buffer allowances currently support the command's isolated browser only;
 shared-renderer runs with a GPU allowance are rejected before touching the
