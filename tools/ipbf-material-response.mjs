@@ -6,6 +6,23 @@ const positive=(x,name)=>{if(!Number.isFinite(x)||x<=0)throw new RangeError(`${n
 const vector=(v,name)=>{if(!Array.isArray(v)||v.length!==3||!v.every(Number.isFinite))throw new TypeError(`${name} must be a finite 3D vector`);};
 const norm=v=>Math.hypot(...v);
 
+export function validateNativeCases(cases) {
+  if(!Array.isArray(cases)||!cases.length)throw new Error('Native cases must be nonempty');
+  for(const c of cases){
+    if(typeof c?.name!=='string'||!c.name.trim())throw new Error('Native case name missing');
+    if(!Number.isFinite(c.dt)||c.dt<=0||!Number.isFinite(Math.fround(c.dt))||Math.fround(c.dt)<=0)throw new Error('Native timestep must be positive and representable in f32');
+    if(!Number.isFinite(c.strength)||c.strength<0||!Number.isFinite(Math.fround(c.strength))||!Number.isFinite(Math.fround(Math.fround(c.strength)*Math.fround(9.2))))throw new Error('Native strength must be nonnegative and representable in the GPU acceleration');
+  }
+  return cases;
+}
+
+export function nativeModuleURL(baseURL) {
+  const base=new URL(baseURL);
+  if(!['http:','https:'].includes(base.protocol)||base.search||base.hash)throw new Error('Native source base must be an HTTP(S) directory without query or fragment');
+  if(!base.pathname.endsWith('/'))base.pathname+='/';
+  return new URL('finger-fluid-webgpu-core.js',base).href;
+}
+
 /** Current recovered force on an explicit, unsupported cluster. Its pair
  * weights are reciprocal; its per-particle normalization need not be. */
 export function cohesionCluster({positions,volumeScales,surfaceFactors,strength,gravity,kernelRadius}) {
@@ -66,6 +83,7 @@ export function materialResponse(config) {
 }
 
 export function validateNativeCohesion(native,expectedCases) {
+  validateNativeCases(expectedCases);
   if(native?.route!=='actual-factory-ipbf-cohesion'||native?.adapter?.vendor!=='apple'||native?.adapter?.fallback!==false)throw new Error('Wrong/fallback native route');
   if(native?.effective?.pressureSolver!=='ipbf'||native?.effective?.cohesionModel!=='ipbf_free_surface')throw new Error('Wrong effective force model');
   if(!Array.isArray(native.cases)||native.cases.length!==expectedCases.length)throw new Error('Missing/partial native cases');
@@ -90,6 +108,7 @@ export function validateNativeCohesion(native,expectedCases) {
     const observed=[0,1,2].map(i=>[0,1,2].map(a=>(output[i*16+12+a]-input[i*16+12+a])/Math.fround(actual.dt)));
     let maxError=0;
     for(let i=0;i<3;i++)for(let axis=0;axis<3;axis++)maxError=Math.max(maxError,Math.abs(observed[i][axis]-oracle.accelerations[i][axis]));
+    if(!observed.every(v=>v.every(Number.isFinite))||!Number.isFinite(maxError))throw new Error('Nonfinite derived native response');
     if(maxError>3e-5*Math.max(1,actual.strength))throw new Error('Native attraction differs from independent equation response');
     for(let i=0;i<3;i++)for(const word of [0,1,2,3,4,5,6,7,8,9,10,11,15])if(output[i*16+word]!==input[i*16+word])throw new Error('Native stage changed immutable input/metadata');
     actual.oracle=oracle;actual.observedAccelerations=observed;actual.maxAccelerationError=maxError;

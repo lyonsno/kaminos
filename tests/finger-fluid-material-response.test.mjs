@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {cohesionCluster,latticeSampling,materialResponse,validateNativeCohesion} from '../tools/ipbf-material-response.mjs';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync,realpathSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {pathToFileURL} from 'node:url';
+import {nativeCohesionFixture} from '../tools/ipbf-cohesion-native.mjs';
+import {cohesionCluster,latticeSampling,materialResponse,validateNativeCases,validateNativeCohesion,nativeModuleURL} from '../tools/ipbf-material-response.mjs';
 
 const config={pressureSolver:'ipbf',cohesionModel:'ipbf_free_surface',kernelRadius:.185,particleVolume:(64*Math.PI/315)*.185**3/24.3,pressureRadius:.151,beta:.0113,gravity:9.2,dt:1/60,passes:2,cohesion:9.35};
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-11,`${a} != ${b}`);
@@ -57,6 +61,11 @@ test('native evidence checks effective GPU words and full unsupported fixture in
   const row={...spec,input:Array.from(input),output:Array.from(input),simulationWords:Array.from(words),restInput:Array(12).fill(0),topologyInput:Array.from(topology)};
   const make=change=>({route:'actual-factory-ipbf-cohesion',adapter:{vendor:'apple',fallback:false},effective:{pressureSolver:'ipbf',cohesionModel:'ipbf_free_surface'},cases:[{...structuredClone(row),...change}]});
   assert.doesNotThrow(()=>validateNativeCohesion(make({}),[spec]));
+  assert.throws(()=>validateNativeCohesion({...make({}),cases:[]},[]),/nonempty/);
+  for(const dt of [0,1e-50]){
+    const packet=words.slice();new Float32Array(packet.buffer)[0]=dt;
+    assert.throws(()=>validateNativeCohesion(make({dt,simulationWords:Array.from(packet)}),[{...spec,dt}]),/timestep/);
+  }
   const stale=words.slice();new Float32Array(stale.buffer)[0]=.02;
   assert.throws(()=>validateNativeCohesion(make({simulationWords:Array.from(stale)}),[spec]),/effective GPU/);
   assert.throws(()=>validateNativeCohesion(make({simulationWords:[]}),[spec]),/GPU/);
@@ -64,4 +73,34 @@ test('native evidence checks effective GPU words and full unsupported fixture in
   assert.throws(()=>validateNativeCohesion(make({topologyInput:Array(108).fill(0)}),[spec]),/topology/);
   const wrong=input.slice();wrong[4]+=.01;
   assert.throws(()=>validateNativeCohesion(make({input:Array.from(wrong),output:Array.from(wrong)}),[spec]),/fixture input/);
+});
+
+test('native fixture imports the exact preflighted module under a server prefix',async()=>{
+  // Only exercises URL selection: these modules intentionally throw before
+  // any simulation. This is not an external WebGPU conformance fixture.
+  const root=realpathSync(mkdtempSync(tmpdir()+'/ipbf-source-route-'));mkdirSync(root+'/prefix');
+  writeFileSync(root+'/package.json','{"type":"module"}');
+  for(const dir of [root,root+'/prefix'])writeFileSync(dir+'/finger-fluid-webgpu-core.js','export function createWebGPUFingerFluidSolver(){throw Error("imported:"+import.meta.url)}');
+  const moduleURL=pathToFileURL(root+'/prefix/finger-fluid-webgpu-core.js').href;
+  const originalLocation=globalThis.location,originalDocument=globalThis.document,originalGPU=Object.getOwnPropertyDescriptor(navigator,'gpu');
+  const device={queue:{writeBuffer(){}},createBuffer(){},createBindGroup(){},createComputePipelineAsync(){},destroy(){}};
+  Object.defineProperty(navigator,'gpu',{configurable:true,value:{requestAdapter:async()=>({info:{vendor:'apple'},isFallbackAdapter:false,limits:{maxStorageBuffersPerShaderStage:10},requestDevice:async()=>device})}});
+  globalThis.location={origin:pathToFileURL(root).href};globalThis.document={createElement:()=>({})};
+  try{await assert.rejects(()=>nativeCohesionFixture([{name:'zero',dt:.01,strength:0}],moduleURL),e=>e.message==='imported:'+moduleURL);}
+  finally{
+    if(originalGPU)Object.defineProperty(navigator,'gpu',originalGPU);else delete navigator.gpu;
+    if(originalLocation===undefined)delete globalThis.location;else globalThis.location=originalLocation;
+    if(originalDocument===undefined)delete globalThis.document;else globalThis.document=originalDocument;
+    rmSync(root,{recursive:true});
+  }
+});
+
+test('native admission preserves source prefixes and refuses unusable GPU inputs',()=>{
+  assert.equal(nativeModuleURL('http://127.0.0.1:20216/prefix'),'http://127.0.0.1:20216/prefix/finger-fluid-webgpu-core.js');
+  assert.equal(nativeModuleURL('http://127.0.0.1:20216/prefix/'),'http://127.0.0.1:20216/prefix/finger-fluid-webgpu-core.js');
+  assert.throws(()=>nativeModuleURL('http://127.0.0.1:20216/?route=other'),/directory/);
+  assert.throws(()=>validateNativeCases([]),/nonempty/);
+  for(const dt of [0,-1,NaN,Infinity,1e-50,1e40])assert.throws(()=>validateNativeCases([{name:'invalid',dt,strength:1}]),/timestep/);
+  for(const strength of [-1,NaN,Infinity,1e40,1e38])assert.throws(()=>validateNativeCases([{name:'invalid',dt:.01,strength}]),/strength/);
+  assert.doesNotThrow(()=>validateNativeCases([{name:'zero',dt:.01,strength:0},{name:'small-step',dt:1e-40,strength:1}]));
 });

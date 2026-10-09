@@ -1,5 +1,5 @@
 /** Diagnostic dispatch of the actual factory's isolated cohesion stage. */
-export async function nativeCohesionFixture(cases) {
+export async function nativeCohesionFixture(cases,moduleURL) {
   const adapter=await navigator.gpu.requestAdapter();
   if(!adapter||adapter.isFallbackAdapter||adapter.info.vendor!=='apple')throw Error('Native Apple adapter unavailable/fallback');
   const device=await adapter.requestDevice({requiredLimits:{maxStorageBuffersPerShaderStage:adapter.limits.maxStorageBuffersPerShaderStage}});
@@ -16,7 +16,7 @@ export async function nativeCohesionFixture(cases) {
   const pipeline=device.createComputePipelineAsync.bind(device);
   Object.defineProperty(device,'createComputePipelineAsync',{configurable:true,value:async d=>{const p=await pipeline(d);pipelines.set(d.compute.entryPoint,p);return p;}});
   try {
-    const core=await import(location.origin+'/finger-fluid-webgpu-core.js');
+    const core=await import(moduleURL);
     const canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;
     solver=await core.createWebGPUFingerFluidSolver({canvas,webgpuDevice:device,particleCount:1024,pressureSolver:'ipbf',livePressureControls:true,ipbfDamping:true,cohesionModel:'ipbf_free_surface',capillaryStrength:0,energyDiagnosticsMode:'disabled',rendererMode:'screen_space_refraction'});
     if(!solver.available)throw Error('Actual factory unavailable: '+JSON.stringify(solver));
@@ -50,7 +50,7 @@ export async function nativeCohesionFixture(cases) {
       outputs.push({...c,input:Array.from(input),output,simulationWords:Array.from(new Uint32Array(packet.buffer)),restInput:Array(12).fill(0),topologyInput:Array.from(topo)});
     }
     const state=solver.getDebugState();
-    return {route:'actual-factory-ipbf-cohesion',adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,description:adapter.info.description,fallback:adapter.isFallbackAdapter},effective:{pressureSolver:state.pressureSolver,cohesionModel:state.cohesionModel},cases:outputs,
+    return {route:'actual-factory-ipbf-cohesion',moduleURL,adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,description:adapter.info.description,fallback:adapter.isFallbackAdapter},effective:{pressureSolver:state.pressureSolver,cohesionModel:state.cohesionModel},cases:outputs,
       claimLimit:'Only the isolated production cohesion dispatch, with explicit unsupported particles; pressure, damping, classification, contacts and basin motion are excluded.'};
   } finally {solver?.destroy();device.destroy();}
 }

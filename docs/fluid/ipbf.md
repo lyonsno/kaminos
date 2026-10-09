@@ -194,6 +194,12 @@ input, source digests, effective GPU packet and all fixture vectors are retained
 A failure writes `report.json` with its phase. `complete` means measurement
 completed; mechanical targets may still fail.
 
+Native cases must be nonempty, with positive f32-representable timesteps and
+nonnegative gains representable in the GPU acceleration. Invalid cases fail
+before browser launch. The checked module URL retains any server path prefix;
+navigation, dynamic import and the report use that exact URL. Derived native
+measurements must be finite before they can complete the response check.
+
 The input names the IPBF pressure and recovered `ipbf_free_surface` cohesion
 routes, base `kernelRadius`, `particleVolume`, `pressureRadius`, `beta`, positive
 gravity magnitude, `dt`, pressure `passes` and cohesion gain. It also declares

@@ -2,7 +2,7 @@ import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {spawn,spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
-import {materialResponse,validateNativeCohesion} from './ipbf-material-response.mjs';
+import {materialResponse,validateNativeCases,validateNativeCohesion,nativeModuleURL} from './ipbf-material-response.mjs';
 import {nativeCohesionFixture} from './ipbf-cohesion-native.mjs';
 import {fluidBrowserLaunch} from '../finger-fluid-browser-launch.mjs';
 
@@ -29,9 +29,10 @@ try{
  report.resolution=config.resolutionVolumeScales.map(scale=>materialResponse({...config,particleVolume:config.particleVolume*scale,pressureRadius:config.pressureRadius*Math.cbrt(scale)}));
  report.native=null;report.phase='cpu-equation-audit-complete';save();
  if(report.requested.native){
-  const baseUrl=arg('--base-url');report.requested.baseUrl=baseUrl;
+  report.phase='native-input-admission';save();validateNativeCases(config.nativeCases);
+  const baseUrl=arg('--base-url'),moduleURL=nativeModuleURL(baseUrl),directoryURL=new URL('.',moduleURL);report.requested.baseUrl=baseUrl;report.requested.moduleURL=moduleURL;
   report.phase='served-source-preflight';save();
-  for(const f of report.source.files){const res=await fetch(baseUrl+'/'+f.name);assert.ok(res.ok,'Source route missing '+f.name);assert.equal(sha(await res.text()),f.sha256,'Served source mismatch '+f.name);}
+  for(const f of report.source.files){const res=await fetch(new URL(f.name,directoryURL));assert.ok(res.ok,'Source route missing '+f.name);assert.equal(sha(await res.text()),f.sha256,'Served source mismatch '+f.name);}
   const launch=fluidBrowserLaunch({executable:process.env.KAMINOS_CHROME,debugPort:0,userDataDir:out+'/profile',width:1280,height:900});launch.args.push('--headless=new','--enable-unsafe-webgpu','--use-angle=metal');
   report.browser=launch;report.phase='browser-launch';save();
   child=spawn(launch.executable,launch.args,{stdio:['ignore','pipe','pipe']});report.browser.pid=child.pid;
@@ -43,13 +44,13 @@ try{
   report.browser.version=await call('Browser.getVersion');
   const {targetId}=await call('Target.createTarget',{url:'about:blank'}),{sessionId}=await call('Target.attachToTarget',{targetId,flatten:true});
   await call('Page.enable',{},sessionId);await call('Runtime.enable',{},sessionId);
-  report.phase='navigation';save();const navigation=await call('Page.navigate',{url:baseUrl+'/finger-fluid-webgpu-core.js'},sessionId);report.navigation=navigation;
+  report.phase='navigation';save();const navigation=await call('Page.navigate',{url:moduleURL},sessionId);report.navigation=navigation;
   if(navigation.errorText||navigation.isDownload)throw Error('Native document navigation failed '+JSON.stringify(navigation));
   await evalPage('new Promise(r=>document.readyState==="complete"?r():addEventListener("load",r,{once:true}))',sessionId);
-  report.page=await evalPage('({href:location.href,secure:isSecureContext,gpu:!!navigator.gpu})',sessionId);assert.equal(report.page.href,baseUrl+'/finger-fluid-webgpu-core.js');assert.ok(report.page.secure&&report.page.gpu);
+  report.page=await evalPage('({href:location.href,secure:isSecureContext,gpu:!!navigator.gpu})',sessionId);assert.equal(report.page.href,moduleURL);assert.ok(report.page.secure&&report.page.gpu);
   report.phase='native-cohesion-dispatch';save();
-  report.native=await evalPage('('+nativeCohesionFixture.toString()+')('+JSON.stringify(config.nativeCases)+')',sessionId);save();
-  report.phase='native-response-validation';save();validateNativeCohesion(report.native,config.nativeCases);
+  report.native=await evalPage('('+nativeCohesionFixture.toString()+')('+JSON.stringify(config.nativeCases)+','+JSON.stringify(moduleURL)+')',sessionId);save();
+  report.phase='native-response-validation';save();assert.equal(report.native?.moduleURL,moduleURL,'Effective imported module URL mismatch');validateNativeCohesion(report.native,config.nativeCases);
   report.lastTrustworthyEvidence='complete-production-cohesion-responses';save();
  }
  report.phase='source-postflight';save();
