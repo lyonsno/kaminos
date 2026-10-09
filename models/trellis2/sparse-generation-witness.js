@@ -87,7 +87,7 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
         return actual.runtime.readTensor(t,options);}};
     setPhase('cached-checkpoint-input-loading');
     const inputs=await loadGenerationInputs(m,fetchTensor);
-    report.checkpointLoading='per-role uncached complete weights; shared identity-checked activation tables';
+    report.checkpointLoading='per-role uncached complete weights; flow blocks fetched/uploaded sequentially with queue drains; shared identity-checked activation tables';
     const onPhase=async e=>{
       currentPhase=e.phase;setPhase(e.phase,e.modelRole);
       report.loadingModelRole=e.modelRole??null;
