@@ -87,17 +87,26 @@ export async function loadGenerationInputs(m,fetchTensor){
   let gelu,silu;
   // Cache only small, identity-checked activation tables. Full checkpoints
   // belong to their consuming stage and are never cached across model roles.
-  const loadModel=async role=>{
+  const loadModel=async(role,{streamBlocks=false}={})=>{
     if(!roles.includes(role))throw RangeError('known active generation model role required');
     const model=m.models[role],flat={},flow='gelu' in plan.shapes.models[role],
       table=flow?await(gelu??=fetchTensor(m.models.sparseFlow.tensors.gelu)):undefined;
-    for(const [key,name]of Object.entries(model.tensors))flat[key]=key==='gelu'?table:await fetchTensor(name);
+    for(const [key,name]of Object.entries(model.tensors)){
+      if(flow&&streamBlocks&&/^block\d+\./.test(key))continue;
+      flat[key]=key==='gelu'?table:await fetchTensor(name);
+    }
+    const loadBlockWeights=async i=>{
+      if(!Number.isSafeInteger(i)||i<0||i>=model.config.numBlocks)throw RangeError('actual flow block index required');
+      const prefix='block'+i+'.',block={};
+      for(const [key,name]of Object.entries(model.tensors))if(key.startsWith(prefix))block[key.slice(prefix.length)]=await fetchTensor(name);
+      return{...block,gelu:table};
+    };
     let weights=flat;
     if(flow)weights={
       prefix:Object.fromEntries(Object.entries(flat).filter(([k])=>k.startsWith('prefix.')).map(([k,v])=>[k.slice(7),v])),
-      blocks:Array.from({length:model.config.numBlocks},(_,i)=>({...Object.fromEntries(Object.entries(flat).filter(([k])=>k.startsWith('block'+i+'.'))
-        .map(([k,v])=>[k.slice(('block'+i+'.').length),v])),gelu:table})),terminal:{weight:flat['terminal.weight'],bias:flat['terminal.bias']}};
-    return{role,weights,...(model.phases?{phases:await fetchTensor(model.phases)}:{}),
+      ...(!streamBlocks?{blocks:Array.from({length:model.config.numBlocks},(_,i)=>({...Object.fromEntries(Object.entries(flat).filter(([k])=>k.startsWith('block'+i+'.'))
+        .map(([k,v])=>[k.slice(('block'+i+'.').length),v])),gelu:table}))}:{}),terminal:{weight:flat['terminal.weight'],bias:flat['terminal.bias']}};
+    return{role,weights,...(flow&&streamBlocks?{loadBlockWeights}:{}),...(model.phases?{phases:await fetchTensor(model.phases)}:{}),
       ...(model.siluTable?{siluTable:await(silu??=fetchTensor(m.models.shapeDecoder.siluTable))}:{})};
   };
   const prefixWeights={};for(const [key,name]of Object.entries(m.dino.prefix))prefixWeights[key]=await fetchTensor(name);

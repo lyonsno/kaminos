@@ -57,10 +57,35 @@ fn main(@builtin(local_invocation_id) lid:vec3<u32>,@builtin(workgroup_id) wid:v
   if(row<${rows}u&&col<${columns}u){output[${tokenMajor ? `row * ${columns}u + col` : `col * ${rows}u + row`}]=sum+bias[col];}
 }`;
 
-export function createTrellisSparseFlowAdapter({ route, config={}, weights, conditioning, conditioningTensor, phases, phaseTensor, sampleTensor }) {
+// Both construction routes use the same builder. Only CPU weight delivery and
+// upload backpressure differ; every source block remains resident for sampling.
+export function createTrellisSparseFlowAdapter(options) {
+  return constructSparseFlow(options).next().value;
+}
+
+export async function createTrellisSparseFlowAdapterAsync({loadBlockWeights,...options}) {
+  if(typeof loadBlockWeights!=='function')throw new TypeError('complete source block checkpoint loader required');
+  const queue=options.route?.runtime?.device?.queue;
+  if(typeof queue?.onSubmittedWorkDone!=='function')throw new TypeError('WebGPU upload completion queue required');
+  const construction=constructSparseFlow(options,true);let step=construction.next();
+  try{
+    while(!step.done){
+      let blockWeights=await loadBlockWeights(step.value);
+      step=construction.next(blockWeights);blockWeights=null;
+      await queue.onSubmittedWorkDone();
+    }
+    return step.value;
+  }catch(error){
+    // A final upload-drain failure occurs after the builder returned its adapter.
+    if(step.done)step.value?.dispose();else construction.throw(error);
+    throw error;
+  }
+}
+
+function* constructSparseFlow({ route, config={}, weights, conditioning, conditioningTensor, phases, phaseTensor, sampleTensor },streaming=false) {
   const plan=buildSparseFlowPlan(config),runtime=route?.runtime;
   if(!runtime?.createTensor||!runtime?.runKernel)throw new TypeError('registered WebGPU runtime required');
-  if(!Array.isArray(weights?.blocks)||weights.blocks.length!==plan.numBlocks)throw new TypeError('complete source block weight sets required');
+  if(!streaming&&(!Array.isArray(weights?.blocks)||weights.blocks.length!==plan.numBlocks))throw new TypeError('complete source block weight sets required');
   for(const [key,count] of [['weight',plan.outChannels*plan.block.channels],['bias',plan.outChannels]]){
     if(!(weights?.terminal?.[key] instanceof Float32Array)||weights.terminal[key].length!==count||
         !weights.terminal[key].every(Number.isFinite))throw new TypeError(`complete finite terminal ${key} required`);
@@ -73,8 +98,12 @@ export function createTrellisSparseFlowAdapter({ route, config={}, weights, cond
     prefix=createTrellisSparsePrefixAdapter({route,config,weights:weights.prefix,sampleTensor:sample});
     workspace=createTrellisSparseBlockWorkspace({route,config,conditioning,conditioningTensor,phases,phaseTensor});
     let hidden=prefix.outputs.projected;
-    for(const blockWeights of weights.blocks){const block=createTrellisSparseBlockAdapter({route,config,weights:blockWeights,
-      inputs:{projected:hidden,modulation:prefix.outputs.modulation},workspace});blocks.push(block);hidden=block.outputs.hidden;}
+    for(let i=0;i<plan.numBlocks;i++){
+      let blockWeights=streaming?(yield i):weights.blocks[i];
+      const block=createTrellisSparseBlockAdapter({route,config,weights:blockWeights,
+        inputs:{projected:hidden,modulation:prefix.outputs.modulation},workspace});
+      blocks.push(block);hidden=block.outputs.hidden;blockWeights=null;
+    }
     const normalized=tensor('terminal-normalized',plan.block.outputShape);
     const prediction=tensor('prediction',plan.outputShape);
     const weight=tensor('output.weight',[plan.outChannels,plan.block.channels]),bias=tensor('output.bias',[plan.outChannels]);

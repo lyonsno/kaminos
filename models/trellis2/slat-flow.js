@@ -1,7 +1,7 @@
 // Source SLat shape/texture flow. Learned computation stays in the registered
 // WebGPU runtime; fixtures and reference comparisons belong to offline observers.
 import { WEBGPU_BUFFER_USAGE as U } from '../../webgpu-inference-kit/src/core.js';
-import { buildSparseFlowPlan, createTrellisSparseFlowAdapter } from './sparse-flow.js';
+import { buildSparseFlowPlan, createTrellisSparseFlowAdapter, createTrellisSparseFlowAdapterAsync } from './sparse-flow.js';
 
 export const SLAT_FLOW_ROUTE = 'trellis2.slat-flow.webgpu.v0';
 
@@ -52,7 +52,19 @@ function validateBorrowed(tensor, shape, dtype, label) {
   }
 }
 
-export function createTrellisSLatFlowAdapter({ route, config = {}, weights, conditioning, conditioningTensor, coordinates,
+export function createTrellisSLatFlowAdapter(options) {
+  const construction=constructSLatFlow(options),step=construction.next();
+  try{return construction.next(createTrellisSparseFlowAdapter(step.value)).value;}
+  catch(error){construction.throw(error);throw error;}
+}
+
+export async function createTrellisSLatFlowAdapterAsync({loadBlockWeights,...options}) {
+  const construction=constructSLatFlow(options),step=construction.next();
+  try{return construction.next(await createTrellisSparseFlowAdapterAsync({...step.value,loadBlockWeights})).value;}
+  catch(error){construction.throw(error);throw error;}
+}
+
+function* constructSLatFlow({ route, config = {}, weights, conditioning, conditioningTensor, coordinates,
   coordinateTensor, sampleTensor, concatTensor, concatConditioning, ropeFrequencies }) {
   const plan = buildSLatFlowPlan(config), runtime = route?.runtime;
   if (!runtime?.createTensor || !runtime?.runKernel) throw new TypeError('registered WebGPU runtime required');
@@ -99,7 +111,7 @@ export function createTrellisSLatFlowAdapter({ route, config = {}, weights, cond
       packed = tensor('texture-model-input', [plan.tokenRows, 64]);
       concatOperation = define('slat-texture-concat', concatShader(plan.tokenRows), [sample, shape, packed], grid(plan.tokenRows * 32));
     }
-    flow = createTrellisSparseFlowAdapter({ route, config: plan.flowConfig, weights, conditioning, conditioningTensor, phaseTensor: phases, sampleTensor: packed });
+    flow = yield { route, config: plan.flowConfig, weights, conditioning, conditioningTensor, phaseTensor: phases, sampleTensor: packed };
     const dispatch = (op, invocation) => runtime.runKernel(op.kernel, { stage: op.stage, dispatch: op.dispatch, schedulerInvocation: invocation, yieldAfter: true });
     return Object.freeze({ plan: Object.freeze({ ...plan, block: flow.plan.block }), runtime, routeId: route.routeId,
       inputs: Object.freeze({ sample, coordinates: coords,
