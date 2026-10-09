@@ -4,7 +4,7 @@ const camera={id:'camera-hero',type:'camera',source:'kaminos:camera',label:'Kiln
 const sceneCamera={schema:'kaminos.scene-camera.v1',activeId:camera.id,aspect:[16,9]};
 test('authored camera data and scene active camera survive the same scene document',()=>{
  assert.equal(isReloadableSceneObjectRecord(camera),true,'camera is an authored reloadable scene object');
- const doc=buildSceneDocument({objects:[camera],sceneCamera});assert.deepEqual(doc.objects[0].camera,camera.camera);assert.deepEqual(doc.sceneCamera,sceneCamera);assert.deepEqual(planSceneRestore(doc).sceneCamera,sceneCamera);
+ const doc=buildSceneDocument({objects:[camera],sceneCamera});assert.deepEqual(doc.objects[0].camera,{...camera.camera,lensUnit:'millimeters'});assert.deepEqual(doc.sceneCamera,sceneCamera);assert.deepEqual(planSceneRestore(doc).sceneCamera,sceneCamera);
 });
 test('scene active camera rejects dangling or non-camera references before restoration',()=>{
  const doc=buildSceneDocument({objects:[{id:'kiln',type:'glb',source:'/api/read?root=generated-meshes&path=kiln.glb'}]});

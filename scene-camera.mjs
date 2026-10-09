@@ -5,12 +5,17 @@ export const CAMERA_TYPE='camera',CAMERA_SOURCE='kaminos:camera',SCENE_CAMERA_SC
 const copy=value=>structuredClone(value),rad=Math.PI/180;
 export function checkedCameraRecord(raw){
  if(raw?.type!==CAMERA_TYPE||raw.source!==CAMERA_SOURCE||typeof raw.id!=='string'||!raw.id)throw Error('Unsupported camera object');
- const data={sensorFit:'auto',sensorHeight:24,...raw.camera},transform=checkedPose(raw.transform);
+ const data={sensorFit:'auto',sensorHeight:24,lensUnit:'millimeters',...raw.camera},transform=checkedPose(raw.transform);
  if(!data||!['perspective','orthographic'].includes(data.projection)||!Number.isFinite(data.lens)||data.lens<=0||!Number.isFinite(data.sensorWidth)||data.sensorWidth<=0||!Number.isFinite(data.near)||data.near<=0||!Number.isFinite(data.far)||data.far<=data.near)throw Error('Invalid camera lens or clipping planes');
  if(!['auto','horizontal','vertical'].includes(data.sensorFit)||!Number.isFinite(data.sensorHeight)||data.sensorHeight<=0)throw Error('Invalid camera sensor fit');
  if(data.projection==='orthographic'&&(!Number.isFinite(data.orthoScale)||data.orthoScale<=0))throw Error('Orthographic camera needs a positive scale');
- return {...copy(raw),transform,camera:{projection:data.projection,lens:data.lens,sensorWidth:data.sensorWidth,sensorHeight:data.sensorHeight,sensorFit:data.sensorFit,near:data.near,far:data.far,...(data.projection==='orthographic'?{orthoScale:data.orthoScale}:{})}};
+ if(!['millimeters','fov'].includes(data.lensUnit))throw Error('Invalid camera lens unit');
+ return {...copy(raw),transform,camera:{projection:data.projection,lens:data.lens,lensUnit:data.lensUnit,sensorWidth:data.sensorWidth,sensorHeight:data.sensorHeight,sensorFit:data.sensorFit,near:data.near,far:data.far,...(data.projection==='orthographic'?{orthoScale:data.orthoScale}:{})}};
 }
+// Blender's Lens Unit angle uses the chosen sensor dimension, not the
+// renderer's vertical field of view, which also depends on output aspect.
+export function cameraLensValue(raw){const data=checkedCameraRecord(raw).camera;return data.lensUnit==='fov'?2*Math.atan((data.sensorFit==='vertical'?data.sensorHeight:data.sensorWidth)/(2*data.lens))/rad:data.lens;}
+export function cameraLensPatch(raw,value){const data=checkedCameraRecord(raw).camera;if(!Number.isFinite(value)||value<=0)throw Error('Enter a positive camera lens');if(data.lensUnit==='fov'&&value>=180)throw Error('Camera field of view must be between 0 and 180 degrees');return {lens:data.lensUnit==='fov'?(data.sensorFit==='vertical'?data.sensorHeight:data.sensorWidth)/(2*Math.tan(value*rad/2)):value};}
 export function normalizeSceneCamera(raw,objects){
  const value=raw??{schema:SCENE_CAMERA_SCHEMA,activeId:null,aspect:[16,9]};
  if(value.schema!==SCENE_CAMERA_SCHEMA||!Array.isArray(value.aspect)||value.aspect.length!==2||!value.aspect.every(v=>Number.isFinite(v)&&v>0))throw Error('Invalid scene camera frame');
@@ -61,6 +66,8 @@ export function createSceneCameras({edits,readObjects,writeCameras,readViewport,
  function leave({continueFromCamera=false}={}){finishNavigation(false);if(mode!=='camera')return;const current=readViewport();mode='user';if(userView&&!continueFromCamera)applyViewport(userView);else applyViewport(current);notify();}
  function finishNavigation(cancel=false){if(navigationTimer!==null){clearTimeout(navigationTimer);navigationTimer=null;}if(!navigationId)return;const id=navigationId;navigationId=null;if(cancel&&navigationDistanceBefore!==null)distance=navigationDistanceBefore;navigationDistanceBefore=null;if(edits.state().active?.id===id){cancel?edits.cancel():edits.commit();}sync();}
  const api={read,state:()=>({mode,locked,activeId:settings.activeId,frame:mode==='camera'?frame():null,writing,navigationId}),active:()=>copy(active()),sync,
+  readNavigationView:()=>checkedCameraView(mode==='camera'&&userView?userView:readViewport()),
+  setNavigationLens(fov){const view=checkedCameraView({...api.readNavigationView(),fov});if(mode==='camera')userView=view;else applyViewport(view);notify();},
   restore(value){finishNavigation(true);put({settings:normalizeSceneCamera(value,readObjects()),cameras:cameras()});},
   restoreViewport(value){value=normalizeCameraViewport(value,settings);mode='user';userView=null;locked=!!value?.locked;if(value?.mode==='camera'&&active()){if(!supportsProjection(active().camera.projection))throw Error('This render route does not support that camera projection');userView=value.userView?copy(value.userView):copy(readViewport());mode='camera';}sync();},
   viewportState:()=>({mode,locked,...(userView?{userView:copy(userView)}:{})}),

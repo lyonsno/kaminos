@@ -29,7 +29,7 @@ export function cameraViewsMatch(a,b) {
   const left=checkedCameraView(a),right=checkedCameraView(b);
   return Object.keys(left).every(key=>[left[key]].flat().every((v,i)=>Math.abs(v-[right[key]].flat()[i])<=1e-8*Math.max(1,Math.abs(v))));
 }
-export function createCameraViews({edits,readCamera,writeCamera,admit=()=>{},changed=()=>{},capture,makeId=()=>crypto.randomUUID()}) {
+export function createCameraViews({edits,readCamera,writeCamera,readLens=()=>({fov:readCamera().fov}),writeLens=null,admit=()=>{},changed=()=>{},capture,makeId=()=>crypto.randomUUID()}) {
   let state=normalizeCameraViews();
   const publish=()=>changed(copy(state));
   const applyView=value=>{
@@ -37,13 +37,14 @@ export function createCameraViews({edits,readCamera,writeCamera,admit=()=>{},cha
     try{writeCamera(next);}catch(error){try{writeCamera(before);}catch(rollback){throw new AggregateError([error,rollback],'Camera could not be restored');}throw error;}
   };
   edits.register('@camera-views',{read:()=>copy(state),check:normalizeCameraViews,write:value=>{state=normalizeCameraViews(value);publish();}});
+  const applyLens=writeLens??(value=>applyView({...readCamera(),fov:value.fov}));
   // Lens undo changes the lens of the current view, never a later navigated pose.
-  edits.register('@viewport-lens',{read:()=>({fov:readCamera().fov}),check:value=>({fov:checkedCameraView({...readCamera(),fov:value.fov}).fov}),write:value=>{applyView({...readCamera(),fov:value.fov});publish();}});
+  edits.register('@viewport-lens',{read:()=>copy(readLens()),check:value=>({fov:checkedCameraView({...readCamera(),fov:value.fov}).fov}),write:value=>{const before=copy(readLens());try{applyLens(value);}catch(error){applyLens(before);throw error;}publish();}});
   const available=()=>{admit();const e=edits.state();if(e.active||e.replaying)throw Error('Finish the current edit before changing camera views');};
   const find=id=>{const item=state.items.find(item=>item.id===id);if(!item)throw Error('Camera view was not found');return item;};
   const change=(next,label)=>{available();edits.apply('@camera-views',normalizeCameraViews(next),label);return copy(state);};
   return {
-    read:()=>copy(state),current:()=>checkedCameraView(readCamera()),
+    read:()=>copy(state),current:()=>checkedCameraView(readCamera()),lens:()=>readLens().fov,
     setLens(fov){available();edits.apply('@viewport-lens',{fov},'Adjust camera lens');return checkedCameraView(readCamera());},
     restore(value){state=normalizeCameraViews(value);publish();},
     save(label){available();const item={id:makeId(),label,view:checkedCameraView(readCamera())};change({...state,items:[...state.items,item],selectedId:item.id},'Save camera view');return copy(find(item.id));},

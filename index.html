@@ -11780,12 +11780,14 @@ async function initScene() {
   cameraViews=createCameraViews({
     edits:scenePlacementTools.edits,
     readCamera:readAuthoredCameraView,
+    readLens:()=>({fov:sceneCameras?.readNavigationView().fov??camera.fov}),
+    writeLens:value=>sceneCameras.setNavigationLens(value.fov),
     writeCamera:view=>{sceneCameras?.leave();sceneNavigation.cancel();camera.position.fromArray(view.position);controls.target.fromArray(view.target);camera.up.fromArray(view.up);camera.fov=view.fov;camera.near=view.near;camera.far=view.far;camera.updateProjectionMatrix();sceneNavigation.resetView();window._kaminosDirty?.();},
     admit:()=>{assertSceneConstructionAvailable();if(!controls.enabled||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current camera or preview operation');},
     changed:()=>{cameraViewsPanel?.refresh();window._kaminosDirty?.();},
     capture:item=>window.captureComposition({result:true,cameraView:item}),
   });
-  sceneCameras=createSceneCameras({edits:scenePlacementTools.edits,supportsProjection:projection=>projection==='perspective',readObjects:()=>sceneObjects.filter(o=>o.type===CAMERA_TYPE).map(serializeSceneObject),writeCameras:writeAuthoredCameras,readViewport:readAuthoredCameraView,writeViewport:writeAuthoredCameraView,size:()=>({width:viewportEl.clientWidth,height:viewportEl.clientHeight}),changed:()=>{cameraAuthoring?.refresh();syncEditorHelperVisibility();markDirty();},admit:()=>{if(authoringBusy||sceneSaveBlockedByFailedRestore||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current document or preview action');},capture:(item,frame,original)=>window.captureComposition({result:true,cameraObject:item,cameraFrame:frame,cameraOriginal:original})});
+  sceneCameras=createSceneCameras({edits:scenePlacementTools.edits,supportsProjection:projection=>projection==='perspective',readObjects:()=>sceneObjects.filter(o=>o.type===CAMERA_TYPE).map(serializeSceneObject),writeCameras:writeAuthoredCameras,readViewport:readAuthoredCameraView,writeViewport:writeAuthoredCameraView,size:()=>({width:viewportEl.clientWidth,height:viewportEl.clientHeight}),changed:()=>{cameraAuthoring?.refresh();cameraViewsPanel?.refresh();syncEditorHelperVisibility();markDirty();},admit:()=>{if(authoringBusy||sceneSaveBlockedByFailedRestore||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current document or preview action');},capture:(item,frame,original)=>window.captureComposition({result:true,cameraObject:item,cameraFrame:frame,cameraOriginal:original})});
   cameraViewsPanel=installCameraViewsPanel({document,views:cameraViews,edits:scenePlacementTools.edits,onError:error=>setInfo(error.message)});
   authoringControlSessions.push(cameraViewsPanel.session);
   cameraAuthoring=installCameraAuthoring({document,service:sceneCameras,bookmarks:cameraViews,edits:scenePlacementTools.edits,selected:()=>selectedSceneObjectEntry(),select:id=>setActiveSceneObject(id),onError:error=>setInfo(error.message)});
@@ -11796,7 +11798,8 @@ async function initScene() {
   viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
   document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
-  controls.addEventListener('change',()=>{if(authoringWorkspace.state().context==='camera')cameraViewsPanel.refresh();});
+  scenePlacementTools.addHistoryScope(document.getElementById('authoring-viewport-settings'));
+  controls.addEventListener('change',()=>cameraViewsPanel.refresh());
   window.kaminosCameraViews={...cameraViews,open:()=>{authoringWorkspace.setMode('authoring');authoringWorkspace.setContext('camera');cameraViewsPanel.refresh();}};
   installSelectionInput();
 

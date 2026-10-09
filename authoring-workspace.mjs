@@ -37,8 +37,8 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   document.body.prepend(header);
   document.body.append(hierarchy, inspector);
   byId('viewport').prepend(toolbar);
-  const cameraTab=document.createElement('button');cameraTab.type='button';cameraTab.dataset.inspectorContext='camera';cameraTab.textContent='Camera';cameraTab.setAttribute('aria-pressed','false');inspector.querySelector('.inspector-switch').append(cameraTab);
-  const cameraButton=document.createElement('button');cameraButton.type='button';cameraButton.id='authoring-camera';cameraButton.textContent='Camera';cameraButton.onclick=()=>setContext('camera');byId('authoring-frame').before(cameraButton);
+  const shot=document.createElement('details');shot.id='scene-camera-settings';shot.open=true;shot.innerHTML='<summary>Camera &amp; output</summary>';shot.append(byId('authoring-camera-properties'));byId('authoring-composition-slot').after(shot);
+  const cameraButton=document.createElement('button');cameraButton.type='button';cameraButton.id='authoring-camera';cameraButton.textContent='Camera';cameraButton.onclick=()=>{setContext('scene');shot.open=true;shot.scrollIntoView({block:'nearest'});};byId('authoring-frame').before(cameraButton);
   const viewportSettings=byId('authoring-viewport-settings');
   document.addEventListener('pointerdown',event=>{
     if(!viewportSettings.contains(event.target))viewportSettings.open=false;
@@ -90,12 +90,13 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   const slots = createControlSlots(document, entries);
   let mode = null, inspectorContext='object';
   function setContext(context) {
+    if(context==='camera')context='scene'; // Existing camera-panel callers open scene-owned shot settings.
     if(!['object','scene','camera'].includes(context))throw Error('Unknown properties context');
     inspectorContext=context;
     const object = context === 'object';
     byId('authoring-object-properties').hidden = !object;
     byId('authoring-scene-properties').hidden = context!=='scene';
-    byId('authoring-camera-properties').hidden = context!=='camera';
+    byId('authoring-camera-properties').hidden = context!=='scene';
     inspector.querySelectorAll('[data-inspector-context]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.inspectorContext === context)));
     document.dispatchEvent(new document.defaultView.CustomEvent('kaminos-inspector-context-change',{detail:{context}}));
   }
