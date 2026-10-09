@@ -76,6 +76,31 @@ CPU encode medians over all recorded samples were0.20ms cached /0.40ms changing.
 
 The dataset retains the raw report, original/executed modules, native outputs, baseline fields and screenshot. The missing restoration limits comparison precision, not the observed order-of-magnitude mismatch to an interactive frame budget. No repeat is scheduled merely to obtain a successful status label.
 
+## October 8: bounded exact rays and scene-covering occupancy
+
+These are completed native paired experiments, not production adoption. Source4f843328 (`native-001`) tests exact source-volume-exit bounds with held material and eight prescribed guide states. Source93bda024 (`occupancy-{64,128}-003`) tests exact-near triangles plus conservative scene-covering occupancy farther away. All use independent Chrome for Testing154.0.8037.92, Apple metal-3/nonfallback, the accepted authored kiln/basin, guided8/.16/GI10, 194,914 surface plus8,192 smoke receivers,412,879 triangles, and a32×64×32 coefficient grid. Each run retains32pairs/64valid timings, zero invalid samples, no browser/HTTP errors, and exact original source/output restoration. Raw records: `/Users/noahlyons/.local/state/kaminos/beaming-bounded-visibility-1008/`.
+
+| Paired run | Unbounded exact visibility median | Candidate visibility median | Candidate lighting command span median | Visibility reduction |
+| --- | ---: | ---: | ---: | ---: |
+| Exact source-volume bounds | 29.324ms | 24.923ms | 25.794ms | 15.0% |
+| Scene occupancy64×128×64 | 35.692ms | 14.882ms | 15.332ms | 58.3% |
+| Scene occupancy128×256×128 | 36.116ms | 12.953ms | 13.503ms | 64.1% |
+
+Visibility ranges: exact-bounds baseline28.335–49.545/candidate24.434–41.916ms; occupancy64 baseline29.761–53.663/candidate13.606–32.916ms; occupancy128 baseline27.292–47.534/candidate12.239–34.212ms. Median within-pair savings4.299/19.537/21.447ms;29/32,31/32 and32/32 pairs favor the corresponding candidate. Arm order is fixed reference-then-candidate. Compare within each run; the earlier failed84ms baseline does not establish an84→13ms optimization.
+
+The exact-bounds experiment has byte-identical full front/back/smoke fields across all eight guide states. Occupancy deliberately trades fidelity: original/displaced/split RGB replay holds extinction and burner controls fixed, uses an offline all-cell CPU-moment guide and leaves the visible flame held. It measures the visibility response to changed emission, **not** live GPU guide discovery or moving-fluid animation. Replay texture/scattering installation is reported separately; every measured pair retains strict no-new-pipeline/no-new-ray-buffer checks.
+
+| Occupancy proxy | Front-field relative L2, original/displaced/split | Back-field energy ratio, original/displaced/split | Static CPU proxy build | Packed nodes |
+| --- | --- | --- | ---: | ---: |
+| 64×128×64 | 2.46% /7.71% /6.53% | 83.24% /97.25% /96.50% | 872.7ms | 237,216bytes |
+| 128×256×128 | 3.85% /9.53% /8.79% | 81.18% /97.13% /94.17% | 1,344.9ms | 1,660,176bytes |
+
+These ratios describe packed receiver fields, not area-weighted physical power. Baseline coefficient/output bytes match between the two occupancy runs although generation counters differ. Increasing resolution also halves the exact-near radius (.54144→.27068 source units), so this is a coupled policy comparison, not a clean grid-convergence study. Finer occupancy is not established as a fidelity improvement. All complete raw fields remain available; no tail/error sample was omitted.
+
+All12 lighting-only frames were inspected: the kiln and broad wall/door response persist, with no gross collapse at the captured view. This is not wall/opening fidelity or motion acceptance; global field errors and the17–19% original back-field energy deficit remain material. Presentation-frame identity is not independently recorded for these screenshots; raw GPU fields bear the numeric comparison.
+
+Budget interpretation: cheaper blockers demonstrably buy a2.4–2.8× refresh reduction, but13–15ms recurring visibility alone still crowds out fluid-grid and composition work. A60Hz frame is16.67ms; the candidate consumes78–89% of that budget before fluid simulation, source discovery/preparation, scene/GI or visible-volume rendering. This is budget arithmetic, not measured application FPS. Keep exact bounded queries as a useful lossless control; do not promote either occupancy setting as the live-lighting solution. The next architecture decision is how to avoid refreshing1.625million receiver-ray visibility queries whenever source guidance moves.
+
 ## Updating this ledger
 
 For each useful new estimate, record source revision, effective route/device, source/scene configuration, grid and receiver counts, directions, viewport, pass scope, sample distribution/restoration, and whether the source was held or changing. Link retained raw evidence in the local accountability record. State unsupported/unknown rather than inserting a guessed zero or multiplying a gather ratio into whole-frame time.

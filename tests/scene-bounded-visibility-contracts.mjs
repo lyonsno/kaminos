@@ -26,5 +26,22 @@ assert.throws(()=>api.setVisibilityBounds('typo'),/visibility bounds/);
 api.setDirections(12);m=api.encode(field);assert.equal(m.angularCache.lastPreparedDirections,4);
 api.setVisibilityBounds('unbounded');m=api.encode(field);assert.equal(m.angularCache.lastPreparedDirections,12,'bounds change must invalidate a grown prefix');
 api.destroy();
+// Source-texture installation is setup; subsequent same-texture generation,
+// guide and visibility edits must preserve that scattering pipeline.
+const scatteringApi=createVolumeGather(device,options);
+const scatteringField={...field,scatteringTexture:{createView:()=>({})},scatteringGeneration:1};
+scatteringApi.encode(scatteringField,{surfaceScattering:true});
+const installed=pipelines.length;
+const replayField={...scatteringField,texture:{createView:()=>({})}};
+scatteringApi.encode(replayField,{surfaceScattering:true});
+assert.equal(pipelines.length,installed+1,'new replay binding has one explicit setup pipeline');
+const replayResources=[buffers.length,pipelines.length];
+for(let generation=2;generation<=4;generation++){
+ scatteringApi.setVisibilityBounds(generation%2?'source-volume':'unbounded');
+ scatteringApi.setSourceGuide({lo:[-.5,-1,-.5],hi:[.5,1+.01*generation,.5]});
+ scatteringApi.encode({...replayField,generation,scatteringGeneration:generation},{surfaceScattering:true});
+ assert.deepEqual([buffers.length,pipelines.length],replayResources,'recurring replay must not pay setup again');
+}
+scatteringApi.destroy();
 assert.throws(()=>createVolumeGather(device,{...options,visibilityBounds:'typo'}),/visibility bounds/);
 console.log('bounded visibility mode, invalidation, growth and persistent allocation contracts passed');

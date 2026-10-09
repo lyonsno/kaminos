@@ -85,9 +85,11 @@ export async function runVisibilityComparison({page,out,report,save,iterations,c
         return result;
       },{mode,guide,readFields:i<8}),broken]);
       fields.push(sample.fields);delete sample.fields;pair.arms.push({mode,...sample});await save();
+      // Preserve observed bytes even if route/resource/timing admission rejects
+      // this arm. The report retains the effective identity and failure phase.
+      if(fields.at(-1))for(const [name,field] of Object.entries(fields.at(-1)))await fs.writeFile(`${out}/pair-${i}-${mode}-${name}.f32`,Buffer.from(new Float32Array(field.data).buffer));
       const valid=validateVisibilitySample(sample,{mode,generation,preparations:++preparations});
       report.timing[valid?'valid':'invalid']++;
-      if(fields.at(-1))for(const [name,field] of Object.entries(fields.at(-1)))await fs.writeFile(`${out}/pair-${i}-${mode}-${name}.f32`,Buffer.from(new Float32Array(field.data).buffer));
       if(occupancy&&i<3){await page.evaluate(async()=>{await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);});await page.screenshot({path:`${out}/lighting-only-${pair.material}-${mode}.png`});}
     }
     // Eight distinct guide states, each full surface-front/back and smoke field.
