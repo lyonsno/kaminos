@@ -37,8 +37,10 @@ export function receiverDispatch(count,limit) {
   return [Math.min(groups,limit),Math.ceil(groups/limit)];
 }
 
-export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed'}) {
+export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed',visibilityBounds='unbounded'}) {
   lightingDirections(directions); // Validate before allocating shared resources.
+  const validateBounds=value=>{if(!['unbounded','source-volume'].includes(value))throw new Error('valid visibility bounds required');};
+  validateBounds(visibilityBounds);
   const volumeDimensions=[volumeGrid,volumeGrid*2,volumeGrid];
   const volumeCount=volumeDimensions.reduce((a,b)=>a*b,1);
   const total=receivers.length+volumeCount;
@@ -114,6 +116,10 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
     for(const [key,state] of angularStates)if(state.family!==family()||(!sourcePattern()&&state.capacity!==directions)){for(const b of state.owned)b.destroy();angularStates.delete(key);}
   }
   return {surface,surfaceBack,smoke,surfaceDimensions:[surfaceWidth,surfaceHeight],volumeDimensions,
+    setVisibilityBounds(value){
+      validateBounds(value);if(value===visibilityBounds)return;visibilityBounds=value;
+      for(const state of angularStates.values()){state.cacheBuilt=false;state.prefix=null;}
+    },
     setDirections(value){lightingDirections(value);directions=value;},
     setAngularPattern(pattern,rotation=0){
       if(!['fixed','spatial','source','guided'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern and finite rotation required');
@@ -164,7 +170,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
         if(state.prefix)encoder.copyBufferToBuffer(state.prefix.distances,0,state.distances,0,total*state.prefix.capacity*4);
         const pass=encoder.beginComputePass({label:'static kiln visibility preparation'});
         lastPreparedDirections=state.capacity-(state.prefix?.capacity||0);
-        device.queue.writeBuffer(state.cacheRange,0,new Uint32Array([state.prefix?.capacity||0,state.capacity,0,0]));
+        device.queue.writeBuffer(state.cacheRange,0,new Uint32Array([state.prefix?.capacity||0,state.capacity,visibilityBounds==='source-volume'?1:0,0]));
         pass.setPipeline(state.cache);pass.setBindGroup(0,state.cacheGroup);pass.dispatchWorkgroups(...receiverDispatch(total*lastPreparedDirections,dispatchLimit));pass.end();state.cacheBuilt=true;visibilityPreparations++;preparedRayDirections+=lastPreparedDirections;
       }
       if(surfaceScattering){
@@ -195,7 +201,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       state.prefix=null;
       lastField=field;lastLightingTexture=lightingTexture;lastOptions={surfaceScattering,gain};
       lastMetadata={generation:field.generation,frame:field.frame,surfaceReceivers:receivers.length,volumeReceivers:smokeEnabled?volumeCount:0,transportVolumeReceivers:smokeEnabled||surfaceScattering?volumeCount:0,allocatedVolumeReceivers:volumeCount,directions,stepLength,gain,surfaceScattering:{enabled:surfaceScattering,orders:surfaceScattering?1:0,sourceGeneration:surfaceScattering?field.scatteringGeneration:null},sourceSoftness,sourceSoftening:softening?{...softening.metadata}:null,geometryTriangles:geometry.triangleCount,smokeReconstruction,
-        angularPattern,angularRotation,sourceGuide:angularPattern==='guided'?{...sourceGuide}:null,integration:sourcePattern()?'exact-cell':'midpoint',samplingLaw:angularPattern==='guided'?'emitter-envelope-mixture-solid-angle-v1':angularPattern==='source'?'progressive-volume-induced-solid-angle-v1':'uniform-sphere-v1',surfaceReconstruction:{passes:surfaceReconstruction,...reconstruction?.metadata},
+        visibilityBounds,angularPattern,angularRotation,sourceGuide:angularPattern==='guided'?{...sourceGuide}:null,integration:sourcePattern()?'exact-cell':'midpoint',samplingLaw:angularPattern==='guided'?'emitter-envelope-mixture-solid-angle-v1':angularPattern==='source'?'progressive-volume-induced-solid-angle-v1':'uniform-sphere-v1',surfaceReconstruction:{passes:surfaceReconstruction,...reconstruction?.metadata},
         angularCache:{retained:retainComparisons,counts:[...angularStates.values()].filter(s=>s.family===family()).map(s=>s.capacity),variants:[...angularStates.keys()],visibilityPreparations,preparedRayDirections,lastPreparedDirections,guideUpdates:'persistent-resources-fresh-visibility',bytes:[...angularStates.values()].reduce((sum,s)=>sum+s.capacity*(total*4+16)+16,0)}};
       return lastMetadata;
     },
@@ -223,7 +229,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
         const rows=ids.map((id,i)=>({id,position:Array.from(data.subarray(i*8,i*8+3)),normal:Array.from(data.subarray(i*8+4,i*8+7)),twoSided:data[i*8+3]>1.5,firstHits:Array.from(data.subarray(hitOffset/4+i*count,hitOffset/4+(i+1)*count)),front:Array.from(data.subarray(colorOffset/4+i*128,colorOffset/4+i*128+3)),back:Array.from(data.subarray(colorOffset/4+i*128+64,colorOffset/4+i*128+67))}));
         if(rows.some(r=>Math.abs(Math.hypot(...r.normal)-1)>.0001||r.firstHits.some(x=>!Number.isFinite(x)||x<=0)))throw new Error('lighting inspection contains unwritten ray inputs');
         const guide=angularPattern==='guided'?{lo:Array.from(data.subarray(guideOffset/4,guideOffset/4+3)),hi:Array.from(data.subarray(guideOffset/4+4,guideOffset/4+7))}:null;
-        return {generation:lastMetadata.generation,directions:count,capacityDirections:state.capacity,sourceGuide:guide,points,rows};
+        return {generation:lastMetadata.generation,visibilityBounds:lastMetadata.visibilityBounds,firstHitMeaning:lastMetadata.visibilityBounds==='source-volume'?'nearest-solid-or-source-exit; noncontributing-ray-sentinel=1e20':'nearest-solid-or-sentinel=1e20',directions:count,capacityDirections:state.capacity,sourceGuide:guide,points,rows};
       }finally{staging.destroy();}
     },
     async readback({includeScattering=false,includeSource=false,sourceOnly=false}={}) {
@@ -312,6 +318,13 @@ fn cacheGeometry(@builtin(global_invocation_id) global:vec3<u32>) {
   if(SOURCE_PATTERN){d=sourceDirection(r.position.xyz,a);}
   let p=receiverOrigin(r,d);
   var closest=1e20;var n=0u;
+  if(cacheRange.z==1u){
+    // Integration has no support beyond this box. Preserve blockers between
+    // an exterior receiver and the box entrance: only the far end is bounded.
+    let sourceSpan=interval(p,d,vec3<f32>(-1.0),vec3<f32>(1.0,3.0,1.0),closest);
+    if(sourceSpan.y<=sourceSpan.x){firstHits[address]=closest;return;}
+    closest=sourceSpan.y;
+  }
   loop {
     if(n>=NODE_COUNT){break;}
     let node=nodes[n];let span=interval(p,d,node.lo.xyz,node.hi.xyz,closest);

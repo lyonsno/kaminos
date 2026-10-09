@@ -1,6 +1,6 @@
 import {createVolumeGather,sourceRaySample,sourceGuideRaySample,deriveSourceGuide,integrateCellRay} from '../scene-volume-gather.mjs';
 import {buildTriangleVisibility} from '../scene-light-visibility.mjs';
-export async function checkSourceAwareGPU({guided=false,liveGuide=false}={}){
+export async function checkSourceAwareGPU({guided=false,liveGuide=false,visibilityBounds='unbounded'}={}){
   const adapter=await navigator.gpu.requestAdapter();
   if(!adapter||adapter.info.isFallbackAdapter!==false||/swiftshader/i.test(JSON.stringify(adapter.info)))throw new Error('verified native WebGPU required');
   const device=await adapter.requestDevice(),errors=[],outputs=[];
@@ -11,10 +11,15 @@ export async function checkSourceAwareGPU({guided=false,liveGuide=false}={}){
     {position:[1,1,0],normal:[-1,0,0]},
     {position:[-1,3,-1],normal:[1,0,0],twoSided:true},
   ];
-  const triangles=[{a:[-1,-1,.4],b:[1,-1,.4],c:[0,3,.4]}];
+  // The exterior receiver sees a blocker before volume entry; the interior
+  // receiver also sees geometry beyond volume exit. Neither may change the
+  // CPU reference integral when only the visibility far bound changes.
+  const triangles=[{a:[-1,-1,.4],b:[1,-1,.4],c:[0,3,.4]},
+    {a:[-.6,-1,1.5],b:[.6,-1,1.5],c:[0,3,1.5]},
+    {a:[-4,-4,-2],b:[4,-4,-2],c:[0,8,-2]}];
   const bvh=buildTriangleVisibility(triangles);
   let guide=deriveSourceGuide({position:[0,-.76,0],radius:.19,height:2.2,depth:.24});
-  const gather=createVolumeGather(device,{geometry:bvh.packGpu(),receivers,volumeGrid:2,directions:12,angularPattern:guided?'guided':'source'});
+  const gather=createVolumeGather(device,{geometry:bvh.packGpu(),receivers,volumeGrid:2,directions:12,angularPattern:guided?'guided':'source',visibilityBounds});
   if(guided)gather.setSourceGuide(guide);
   const dimensions=[4,8,4],source=new Float32Array(4*8*4*4);
   const texture=device.createTexture({size:dimensions,dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.COPY_DST|GPUTextureUsage.TEXTURE_BINDING});
@@ -31,7 +36,25 @@ export async function checkSourceAwareGPU({guided=false,liveGuide=false}={}){
       device.queue.writeTexture({texture},source,{bytesPerRow:64,rowsPerImage:8},dimensions);
       gather.setDirections(count);
       const metadata=gather.encode({status:'encoded',texture,dimensions,localMax:[1,3,1],generation:1,frame:frame++},{smokeEnabled:false});
-      const actual=await gather.readback(),expected=[],expectedBack=[];
+      if(metadata.visibilityBounds!==visibilityBounds)throw Error('requested visibility mode not effective');
+      const actual=await gather.readback(),rayInputs=await gather.inspectRayInputs(receivers.map((_,i)=>i)),expected=[],expectedBack=[];
+      const visibilityCases={beforeEntry:0,beyondExit:0,noSolid:0},rayExpectations=[];
+      for(let ri=0;ri<receivers.length;ri++)for(let a=0;a<count;a++){
+        const p=receivers[ri].position,s=guided?sourceGuideRaySample(p,a,guide,count):sourceRaySample(p,a);
+        let near=0,far=Infinity;
+        for(let axis=0;axis<3;axis++){
+          const t0=(-1-p[axis])/s.direction[axis],t1=((axis===1?3:1)-p[axis])/s.direction[axis];
+          if(Math.abs(s.direction[axis])>1e-20){near=Math.max(near,Math.min(t0,t1));far=Math.min(far,Math.max(t0,t1));}
+        }
+        const hit=bvh.trace(p,s.direction)?.distance??1e20;
+        if(hit<near)visibilityCases.beforeEntry++;
+        else if(hit<1e19&&hit>far)visibilityCases.beyondExit++;
+        else if(hit>=1e19)visibilityCases.noSolid++;
+        const want=visibilityBounds==='source-volume'&&far>near?Math.min(hit,far):hit;
+        const got=rayInputs.rows[ri].firstHits[a];
+        rayExpectations.push({receiver:ri,direction:a,near,far,solid:hit,want,got});
+        if(Math.abs(got-want)>2e-5*Math.max(1,Math.abs(want)))throw Error('visibility distance mismatch '+JSON.stringify(rayExpectations.at(-1)));
+      }
       for(const r of receivers){
         const front=[0,0,0],back=[0,0,0];
         for(let a=0;a<count;a++){
@@ -50,11 +73,12 @@ export async function checkSourceAwareGPU({guided=false,liveGuide=false}={}){
         if(!Number.isFinite(field.data[i]))throw new Error('nonfinite native readback');
         error=Math.max(error,Math.abs(field.data[i]-want[i]));
       }
-      outputs.push({count,phase,guide,metadata,source:Array.from(source),expected,expectedBack,
+      outputs.push({count,phase,guide,metadata,visibilityCases,rayExpectations,rayInputs,source:Array.from(source),expected,expectedBack,
         front:Array.from(actual.surface.data.slice(0,expected.length)),back:Array.from(actual.surfaceBack.data.slice(0,expectedBack.length)),maxError:error});
       if(error>0.002)throw new Error('source GPU/CPU mismatch '+error);
     }
     await device.queue.onSubmittedWorkDone();
+    for(const key of ['beforeEntry','beyondExit','noSolid'])if(!outputs.some(o=>o.visibilityCases[key]>0))throw Error('unexercised visibility case '+key);
     if(errors.length)throw new Error(errors.join('\n'));
     return {adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,isFallbackAdapter:adapter.info.isFallbackAdapter},outputs,errors,status:'passed'};
   }catch(e){return {status:'failed',error:String(e),outputs,errors};}
