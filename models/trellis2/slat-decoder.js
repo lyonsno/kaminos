@@ -42,7 +42,30 @@ export function slatDecoderWeightShapes(plan) {
   if (!plan.structureOnly) linear('output_layer', plan.channels.at(-1), plan.outChannels);return shapes;
 }
 
-export function createTrellisSLatDecoderAdapter({ route, config, weights, siluTable, sampleTensor, coordinateTensor, guideSubdivisions }) {
+export function createTrellisSLatDecoderAdapter(options) {
+  return constructSLatDecoder(options).next().value;
+}
+
+// Same single-use decoder and source kernels; only parameter delivery changes.
+export async function createTrellisSLatDecoderAdapterAsync({loadWeight,...options}) {
+  if(typeof loadWeight!=='function')throw TypeError('complete learned-decoder parameter loader required');
+  const queue=options.route?.runtime?.device?.queue;
+  if(typeof queue?.onSubmittedWorkDone!=='function')throw TypeError('WebGPU upload completion queue required');
+  const construction=constructSLatDecoder(options,true);let step=construction.next();
+  try{
+    while(!step.done){
+      let values=await loadWeight(step.value);
+      step=construction.next(values);values=null;
+      await queue.onSubmittedWorkDone();
+    }
+    return step.value;
+  }catch(error){
+    if(step.done)step.value?.dispose();else construction.throw(error);
+    throw error;
+  }
+}
+
+function* constructSLatDecoder({ route, config, weights, siluTable, sampleTensor, coordinateTensor, guideSubdivisions },streaming=false) {
   const runtime = route?.runtime, plan = buildSLatDecoderPlan(config), shapes = slatDecoderWeightShapes(plan);
   const admitted = (t, shape, dtype) => t?.buffer && t.dtype === dtype && (t.usage & U.storage) &&
     t.byteLength === shape.reduce((a, b) => a * b, 4) && JSON.stringify(t.shape) === JSON.stringify(shape);
@@ -50,9 +73,12 @@ export function createTrellisSLatDecoderAdapter({ route, config, weights, siluTa
   if (!admitted(coordinateTensor, [plan.tokenRows, 3], 'i32')) throw TypeError('borrowed complete Int32 sparse coordinates required');
   if (!(siluTable instanceof Float32Array) || siluTable.length !== 65536) throw TypeError('complete source-native FP16 SiLU table required');
   for (let i = 0; i < siluTable.length; i++) if ((i & 0x7c00) !== 0x7c00 && !Number.isFinite(siluTable[i])) throw TypeError('finite source-native SiLU outputs required for every finite half input');
-  for (const [name, shape] of Object.entries(shapes)) {
-    const value = weights?.[name];
+  const validateWeight=(name,shape,value)=>{
     if (!(value instanceof Float32Array) || value.length !== shape.reduce((a, b) => a * b, 1) || !value.every(Number.isFinite)) throw TypeError('complete finite learned-decoder weight ' + name + ' required');
+  };
+  if(!streaming)for (const [name, shape] of Object.entries(shapes)) {
+    const value = weights?.[name];
+    validateWeight(name,shape,value);
   }
   if (plan.mode === 'texture' && (!Array.isArray(guideSubdivisions) || guideSubdivisions.length !== plan.subdivisionLevels)) throw TypeError('resident complete learned shape subdivision guide required for texture');
   if (plan.mode === 'shape' && guideSubdivisions !== undefined) throw TypeError('shape uses learned subdivision, not replacement guide');
@@ -60,7 +86,11 @@ export function createTrellisSLatDecoderAdapter({ route, config, weights, siluTa
   const outputs = {};
   for (const name of ['features', 'coordinates', 'subdivisions']) Object.defineProperty(outputs, name, { enumerable: true, get: () => output?.[name] });
   try {
-    for (const [name, shape] of Object.entries(shapes)) parameters[name] = ops.upload(name, shape, weights[name]);
+    for (const [name, shape] of Object.entries(shapes)) {
+      let values=streaming?(yield name):weights[name];
+      if(streaming)validateWeight(name,shape,values);
+      parameters[name]=ops.upload(name,shape,values);values=null;
+    }
     const table = ops.upload('source-half-silu', [65536], siluTable);
     const linear = (key, input, to, half, invocation) => ops.linear(input, parameters[key + '.weight'], parameters[key + '.bias'], to, half, invocation),
       conv = (key, input, neighbors, to, invocation) => ops.conv(input, neighbors, parameters[key + '.weight'], parameters[key + '.bias'], to, invocation),
