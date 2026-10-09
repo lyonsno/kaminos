@@ -4,7 +4,10 @@ import * as camera from '../scene-camera.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {createCameraViews} from '../scene-camera-views.mjs';
 import {buildSceneDocument,planSceneRestore} from '../scene-persistence-core.js';
+import fs from 'node:fs';
+import vm from 'node:vm';
 const record={id:'hero',type:'camera',source:'kaminos:camera',transform:{position:[0,0,3],rotation:[0,0,0],scale:[1,1,1]},camera:{lens:50,lensUnit:'fov',sensorWidth:36,sensorHeight:24,sensorFit:'auto',projection:'perspective',near:.1,far:1000}};
+test('camera properties read canonical data instead of cloning the live Three helper',()=>{const source=fs.readFileSync(new URL('../authoring-cameras.mjs',import.meta.url),'utf8'),a=source.indexOf('const selectedCamera='),b=source.indexOf('const fieldsState=',a),context={selected:()=>({...record,object:{onRotationChange(){}}}),service:{read:()=>({cameras:[record]})}};vm.runInNewContext(source.slice(a,b)+'result=selectedCamera();',context);assert.doesNotThrow(()=>camera.cameraLensValue(context.result));assert.equal(context.result.object,undefined);});
 test('lens unit survives normalization and the authored scene; invalid unit refuses',()=>{
  assert.equal(camera.checkedCameraRecord(record).camera.lensUnit,'fov');
  const normalized=camera.checkedCameraRecord(record),doc=buildSceneDocument({objects:[normalized]});assert.equal(planSceneRestore(doc).objects[0].camera.lensUnit,'fov');

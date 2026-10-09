@@ -12,7 +12,7 @@ export function installCameraAuthoring({document,service,bookmarks,edits,selecte
   const row=document.createElement('label');row.className='camera-lens-row';row.innerHTML=`<span${key==='lens'?' id="selected-camera-lens-label"':''}>${label}</span><input class="transform-input" id="selected-camera-${key}" type="number" step="any" min="0.001">`;objectPanel.querySelector('#selected-camera-data').append(row);const input=row.querySelector('input');input.setAttribute('aria-label',label);controls.push(input);fields.push({input,key,step});
  }
  const byId=id=>document.getElementById(id),fail=error=>{byId('scene-camera-status').textContent=error.message;onError(error);},run=action=>{try{return action();}catch(error){fail(error);}};
- const selectedCamera=()=>selected()?.type==='camera'?selected():null;
+ const selectedCamera=()=>{const item=selected();return item?.type==='camera'?service.read().cameras.find(record=>record.id===item.id)??null:null;};
  const fieldsState=()=>service.read();
  function refresh(){
   const data=service.read(),state=service.state(),item=selectedCamera(),choice=byId('scene-active-camera'),key=JSON.stringify([data.cameras.map(({id,label})=>({id,label})),data.settings.activeId]);
