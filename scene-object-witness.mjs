@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { assertLiquidVolumeCapture } from './local-liquid-stream-evidence.mjs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -1806,6 +1807,47 @@ async function runLocalLiquidLiveHostScenario(ws) {
   }
   lastEvidence.localLiquidLiveHost.shortcutOpened = shortcutOpened;
   lastEvidence.localLiquidLiveHost.reopened = reopened;
+}
+
+async function runUnifiedWaterScenario(ws) {
+  await runLocalLiquidLiveHostScenario(ws);
+  phase = 'unified-water-gpu-volume-capture';
+  lastEvidence.unifiedWater = await evaluate(ws, `(async()=>{
+    const until=async()=>{const start=performance.now();while(window.kaminosLocalLiquidState().solver?.stepCount<90){if(performance.now()-start>60000)throw Error('Water solver did not reach the capture step');await new Promise(r=>setTimeout(r,100));}};
+    await until();
+    const frame=window.kaminosLocalLiquidContactFrameForWitness();
+    if(!frame)throw Error('Current water contact frame is unavailable');
+    const d=frame.descriptor, device=d.device;
+    if(device.queue!==d.queue)throw Error('Volume descriptor queue differs from its device');
+    const buffers=[device.createBuffer({size:d.headerBytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ}),device.createBuffer({size:d.capacity*d.recordBytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ})];
+    try {
+      const encoder=device.createCommandEncoder({label:'unified-water-live-volume-readback'});
+      encoder.copyBufferToBuffer(d.headerBuffer,0,buffers[0],0,d.headerBytes);
+      encoder.copyBufferToBuffer(d.recordsBuffer,0,buffers[1],0,d.capacity*d.recordBytes);
+      device.queue.submit([encoder.finish()]);
+      await Promise.all(buffers.map(b=>b.mapAsync(GPUMapMode.READ)));
+      const header=Array.from(new Uint32Array(buffers[0].getMappedRange()));
+      const records=Array.from(new Float32Array(buffers[1].getMappedRange(),0,Math.min(header[9],d.capacity)*32));
+      const state=window.kaminosLocalLiquidState();
+      return {coverage:d.coverage,volumeMeaning:d.volumeMeaning,requestedProfile:state.emitters[0].localLiquidEmitter.inletProfile,effectiveProfile:state.solver.liveInlets?.inlets?.find(inlet=>inlet.id===state.emitters[0].id)?.profile,expectedProfile:'plug',hostFrameId:frame.hostFrameId,sourceIds:frame.sourceIds,producerTick:frame.producerTick,allocationGeneration:d.allocationGeneration,epoch:d.epoch,sourceFrameId:d.sourceFrameId,sourceFrameHash:d.sourceFrameHash,header,records,liveState:state};
+    }finally{for(const b of buffers){if(b.mapState==='mapped')b.unmap();b.destroy();}}
+  })()`, {timeoutMs:90000});
+  lastEvidence.unifiedWater.summary=assertLiquidVolumeCapture(lastEvidence.unifiedWater);
+  const saved=lastEvidence.localLiquidLiveHost;
+  const savedRead=await evaluate(ws, `fetch('/api/read?root=scenes&path='+encodeURIComponent(${JSON.stringify(saved.savedFile)})).then(r=>r.json())`);
+  const water=savedRead.objects?.find(r=>r.id===saved.emitterIds[0]);
+  if(water?.localLiquidEmitter?.inletProfile!=='plug')throw Error('Saved scene lost the plug inlet profile');
+  phase='unified-water-move-undo';
+  lastEvidence.unifiedWater.move=await evaluate(ws, `(async()=>{
+    const before=window.kaminosLocalLiquidState().emitters[0],p=before.transform.position;
+    const target=[p[0]+.2,p[1],p[2]];
+    await window.kaminosSceneEdits.apply(before.id,{position:target},'Move unified water stream');
+    const moved=window.kaminosLocalLiquidState().emitters[0];
+    await window.kaminosSceneEdits.undo();
+    const undone=window.kaminosLocalLiquidState().emitters[0];
+    if(JSON.stringify(moved.transform.position)!==JSON.stringify(target)||JSON.stringify(undone.transform)!==JSON.stringify(before.transform))throw Error('Water move/undo did not retain the authored pose');
+    return {before,moved,undone};
+  })()`);
 }
 
 async function runLocalLiquidSelectionContinuityScenario(ws) {
@@ -6015,6 +6057,8 @@ try {
     await runSaveLoadRoundtripScenario(ws);
   } else if (scenario === 'local-liquid-performance') {
     await runLocalLiquidPerformanceScenario(ws);
+  } else if (scenario === 'unified-water') {
+    await runUnifiedWaterScenario(ws);
   } else if (scenario === 'local-liquid-live-host') {
     await runLocalLiquidLiveHostScenario(ws);
   } else if (scenario === 'local-liquid-selection-continuity') {

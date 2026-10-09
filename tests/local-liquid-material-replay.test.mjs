@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const start=source.indexOf('const authoredMaterialCockpit=mountMaterialCockpit('),end=source.indexOf('</script>',start);
+assert.ok(start>=0&&end>start);
+const current={particleCount:49152,densityIterations:2,materialControls:{particleRepulsionStrength:.25,capillaryStrength:.4,freeFlightViscosityBoost:.1}};
+let options,restart;
+const context={document:{getElementById:()=>null},mountMaterialCockpit:(_root,config)=>{options=config;},window:{kaminosSetLocalLiquidMaterialControls(){},kaminosPauseLocalLiquid(){}},localLiquidSetup:current,applyLocalLiquidPerformance:async value=>{restart=value;return true;}};
+vm.runInNewContext(source.slice(start,end),context);
+assert.equal(typeof options.onReplay,'function','authored Replay must restart the current water without page navigation');
+await options.onReplay('http://localhost/?old=2#scene=saved.kaminos.json');
+assert.deepEqual(restart,current);
+console.log('Authored Replay uses current setup/emitter restart rather than saved-scene navigation');

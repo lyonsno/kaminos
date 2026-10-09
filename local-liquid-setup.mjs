@@ -1,3 +1,4 @@
+import {validateMaterialControls} from './finger-fluid-material-controls.mjs';
 import { Euler, Vector3 } from './lib/three.core.js';
 
 export const LOCAL_LIQUID_SCHEMA = 'kaminos.local-liquid-setup.v1';
@@ -37,6 +38,7 @@ export function normalizeLocalLiquidEmitterPose(value) {
 export function normalizeLocalLiquidEmitter(value, pose = null) {
   if (!value || value.schema !== LOCAL_LIQUID_EMITTER_SCHEMA) throw Error('Unsupported local liquid emitter settings');
   for (const key of ['baseRadius','strength','rate']) {
+    if (key === 'rate' && value.rate === null) continue; // Explicit aperture-derived supply.
     if (!Number.isFinite(value[key])) throw Error(`Invalid local liquid emitter ${key}`);
   }
   if (value.baseRadius < .035 || value.baseRadius > .18) throw Error('Local liquid emitter baseRadius must be between 0.035 and 0.18');
@@ -47,7 +49,10 @@ export function normalizeLocalLiquidEmitter(value, pose = null) {
     const radius=value.baseRadius*checked.scale[0];
     if (radius < .035 || radius > .18) throw Error('Water emitter aperture must stay between 0.035 and 0.18');
   }
-  return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius,strength:value.strength,rate:value.rate};
+  const profile=value.inletProfile;
+  if (profile !== undefined && !['plug','round_poiseuille'].includes(profile)) throw Error('Unsupported water inlet profile');
+  return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius,strength:value.strength,rate:value.rate,
+    ...(profile === undefined ? {} : {inletProfile:profile})};
 }
 
 function normalizeLegacySetup(value) {
@@ -66,7 +71,14 @@ function normalizeLocalLiquidSetupCore(value) {
   for(const key of ['particleCount','densityIterations']) {
     if(!Number.isSafeInteger(value[key]) || value[key]<1)throw Error(`Invalid local liquid ${key}`);
   }
-  return {schema:LOCAL_LIQUID_SCHEMA,support:value.support,particleCount:value.particleCount,densityIterations:value.densityIterations};
+  const result={schema:LOCAL_LIQUID_SCHEMA,support:value.support,particleCount:value.particleCount,densityIterations:value.densityIterations};
+  if(Object.hasOwn(value,'materialControls')){
+    if(!value.materialControls||typeof value.materialControls!=='object'||Array.isArray(value.materialControls))throw new TypeError('Local liquid material controls require an object');
+    if(Object.hasOwn(value.materialControls,'densityIterations')&&value.materialControls.densityIterations!==value.densityIterations)throw new Error('Conflicting density passes in saved material controls');
+    const values=validateMaterialControls({particleRepulsionStrength:1,capillaryStrength:.72,freeFlightViscosityBoost:.17,...value.materialControls,densityIterations:value.densityIterations});
+    const {densityIterations,...material}=values;result.materialControls=material;
+  }
+  return result;
 }
 
 export function normalizeLocalLiquidSetup(value) {
@@ -104,12 +116,14 @@ export function localLiquidInletPacket(setup, sceneEmitters = [], generation = 1
     const settings=normalizeLocalLiquidEmitter(record.localLiquidEmitter,pose);
     const radius=settings.baseRadius*pose.scale[0];
     const aim=new Vector3(0,0,1).applyEuler(new Euler(...pose.rotation)).normalize().toArray();
-    return {id:record.id,active:settings.rate>0,emission_state:settings.rate>0?'jet':'off',
+    const active=settings.rate===null || settings.rate>0;
+    return {id:record.id,active,emission_state:active?'jet':'off',
       origin_world:pose.position,aim_world:aim,radius:radius/1.45,strength:settings.strength/1.35,
       // `particleCount` is the scene-wide solver pool. Leaving per-inlet
       // budgets unspecified lets the retained solver share that pool across
       // active emitters instead of reserving the whole pool once per object.
-      source_flux_particles_per_second:settings.rate,residence_seconds:20};
+      ...(settings.rate===null ? {} : {source_flux_particles_per_second:settings.rate}),residence_seconds:20,
+      ...(settings.inletProfile === undefined ? {} : {inlet_profile:settings.inletProfile})};
   });
   return {packet_id:`kaminos-authored-liquid-${generation}`,route_identity:'kaminos-authored-liquid-source-v1',
     simulation_authority:'live_simulation',authority:{simulation_safe:true,stale:false},emitters};

@@ -1,7 +1,9 @@
+import { withLocalLiquidHelperGround } from './local-liquid-authoring.mjs';
+import { withLocalLiquidDepthBackground, readLocalLiquidDepthFrame } from './local-liquid-depth-background.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import { texture, vec4, positionView, pmremTexture, equirectDirection, uv, uniform } from './lib/three.tsl.js';
 import {
-  createWebGPUFingerFluidSolver, sampleFingerFluidPlaygroundHeight, fingerFluidAnalyticalSupportGeometry,
+  createWebGPUFingerFluidSolver, sampleFingerFluidPlaygroundHeight, fingerFluidAnalyticalSupportGeometry, resolveFingerFluidOpticalDebugMode,
   KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE as SUPPORT,
   KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_ROUTE as ROUTE,
   KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_SCHEMA as FRAME_SCHEMA,
@@ -38,16 +40,17 @@ function cameraFrame(camera, width, height, generation) {
     near:camera.near, far:camera.far, viewport:{width,height}};
 }
 
-export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], isCurrent = () => true}) {
+export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], isCurrent = () => true, sceneGeneration = 0, onContactRetired = () => {}, helperGround = null}) {
   if (!device || renderer.backend.device !== device) throw Error('Local liquid requires the host WebGPU device');
   let authored = normalizeLocalLiquidSetup(setup), authoredEmitters = structuredClone(emitters), sourceGeneration = 1;
   const initialPacket=localLiquidInletPacket(authored,authoredEmitters,sourceGeneration);
   let publishedEmitterKey=JSON.stringify(initialPacket.emitters);
+  const material={particleRepulsionStrength:1,capillaryStrength:.72,freeFlightViscosityBoost:.17,...authored.materialControls,densityIterations:authored.densityIterations};
   const solver = await createWebGPUFingerFluidSolver({webgpuDevice:device, hostFrameComposition:true,
     hostFramePipelineIdentity:PIPELINE, presentationMode:'local_analytic_consumer', truthScene:'live_hand_inlets',
-    particleCount:authored.particleCount, densityIterations:authored.densityIterations,
+    particleCount:authored.particleCount, ...material,
     rendererMode:'screen_space_refraction', bodyTransportMode:'robust_dense_body', interfaceFrequencyMode:'macro_micro_separated',
-    liveInletPacket:initialPacket});
+    liveInletPacket:initialPacket, liquidFireContactCoverage:'active-liquid-particles'});
   if (!isCurrent()) {
     solver.destroy?.();
     return null;
@@ -68,7 +71,8 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   pipeline.outputColorTransform=false; pipeline.needsUpdate=true;
   const environmentRotation=uniform(new THREE.Matrix3()), environmentIntensity=uniform(1);
   let environmentTarget=null, environmentQuad=null, environmentSource=null, environmentKey=null, environmentGeneration=0;
-  let frameCount=0, paused=false, failure=null, lastFrame=null, disposed=false;
+  let opticalDebugMode='shaded';
+  let frameCount=0, paused=false, failure=null, lastFrame=null, lastDepthFrame=null, disposed=false;
   const onGpuError=event=>{failure=event.error?.message || 'Host WebGPU error';};
   device.addEventListener('uncapturederror',onGpuError);
   device.lost.then(info=>{if(!disposed)failure=info.message || 'Host WebGPU device lost';});
@@ -96,7 +100,9 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     environmentKey=key; environmentGeneration++;
   }
 
-  function render({advance=true}={}) {
+  function render(options) {return withLocalLiquidHelperGround(helperGround,()=>renderFrame(options));}
+
+  function renderFrame({advance=true}={}) {
     if (disposed) throw Error('Local liquid host disposed');
     if (failure) throw Error(failure);
     const previousTarget=renderer.getRenderTarget(), previousOverride=scene.overrideMaterial, previousBackground=scene.background;
@@ -116,8 +122,10 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       renderer.setRenderObjectFunction((...args)=>{
         depthMaterial.side=args[4].side; renderer.renderObject(...args);
       });
-      renderer.setClearColor(new THREE.Color(camera.far,0,0),1);
-      renderer.setRenderTarget(depthTarget); renderer.render(scene,camera);
+      const depthFrame={frameId:`local-liquid-${frameCount+1}`,cameraFar:camera.far,supportVisible:group.visible};
+      renderer.setClearColor(new THREE.Color(depthFrame.cameraFar,0,0),1);
+      renderer.setRenderTarget(depthTarget); withLocalLiquidDepthBackground(scene,()=>renderer.render(scene,camera));
+      lastDepthFrame=depthFrame;
       scene.overrideMaterial=previousOverride; scene.background=previousBackground;
       renderer.setRenderObjectFunction(previousRenderObject);
       renderer.setClearColor(clearColor,clearAlpha);
@@ -134,14 +142,15 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         sceneDepth:attachment('host-depth',depthTarget,{format:'r32float',encoding:'linear_view_depth_meters'}),
         environment:attachment('host-environment',environmentTarget,{format:'rgba16float',mapping:'equirectangular_world_radiance'}),
         target:attachment('host-liquid-output',outputTarget,{format:'rgba16float',colorSpace:'linear_hdr'})};
-      solver.render({hostFrame,externalCamera:cameraSnapshot});
+      solver.render({hostFrame,externalCamera:cameraSnapshot,opticalDebugMode});
       device.queue.submit([commandEncoder.finish()]);
       renderer.setRenderTarget(previousTarget); presentation.render();
       frameCount=generation;
       lastFrame={frameId,cameraIdentity:cameraSnapshot.identity,cameraGeneration:generation,width,height,
         environmentSource:environmentSource.uuid,environmentGeneration,
-        route:ROUTE,submittedByHost:true,presentedByHost:true,displayTransform:'host-render-pipeline',
-        simulationTimePolicy:'one-fixed-1/60-step-per-rendered-frame',simulationRewind:false};
+        route:ROUTE,opticalDebugMode,submittedByHost:true,presentedByHost:true,displayTransform:'host-render-pipeline',
+        simulationTimePolicy:'one-fixed-1/60-step-per-rendered-frame',simulationRewind:false,
+        helperGroundPresentation:{policy:'retained-basin-suppresses-editor-helper',effectiveVisible:helperGround?.visible??null}};
     } catch(error) { failure=error.message || String(error); throw error; }
     finally {
       scene.overrideMaterial=previousOverride; scene.background=previousBackground;
@@ -150,7 +159,21 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     }
   }
 
-  return {group,render,
+  const host = {group,render,
+    setOpticalDebugForWitness(value) {opticalDebugMode=resolveFingerFluidOpticalDebugMode(value);return opticalDebugMode;},
+    setSupportVisibleForWitness(value) {group.visible=Boolean(value);},
+    async readBackgroundDepthForWitness() {
+      if(disposed || failure)throw Error('Local liquid depth draw is unavailable');
+      return readLocalLiquidDepthFrame(renderer,depthTarget,lastDepthFrame);
+    },
+    contactFrame() {
+      if(disposed || failure || paused || !lastFrame)return null;
+      const descriptor=solver.getLiquidFireContactDescriptor();
+      if(descriptor.writeTick<1)return null;
+      return {schema:'kaminos.authored-liquid-contact-frame.v1',hostFrameId:lastFrame.frameId,
+        sceneGeneration,sourceGeneration,sourceIds:authoredEmitters.map(record=>record.id),
+        producerTick:descriptor.writeTick,descriptor};
+    },
     setEmitters(records) {
       const packet=localLiquidInletPacket(authored,records,sourceGeneration+1);
       const key=JSON.stringify(packet.emitters);
@@ -170,11 +193,20 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       sourceGeneration++;
       authored=next;
     },
+    getMaterialControls:()=>solver.getMaterialControls(),
+    readMaterialInputs:()=>solver.readMaterialInputs(),
+    setMaterialControls(patch){
+      const receipt=solver.setMaterialControls(patch);
+      const {densityIterations,...materialControls}=receipt.effective;
+      authored=normalizeLocalLiquidSetup({...authored,densityIterations,materialControls});
+      return receipt;
+    },
     setPaused(value){paused=Boolean(value);return paused;},
     get paused(){return paused;},
     state:()=>({requestedRoute:ROUTE,effectiveRoute:frameCount && !failure ? ROUTE : null,registered:true,mounted:true,
       frameCount,paused,failure,setup:structuredClone(authored),lastFrame,solver:solver.getDebugState()}),
     dispose() {
+      onContactRetired(host);
       disposed=true;device.removeEventListener('uncapturederror',onGpuError); solver.destroy(); scene.remove(group);
       const materials=new Set(); group.traverse(child=>{child.geometry?.dispose();if(child.material)materials.add(child.material);});
       for(const material of materials)material.dispose();
@@ -182,4 +214,5 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       depthMaterial.dispose(); environmentQuad?.material.dispose(); presentation.dispose();
       pipeline.outputColorTransform=originalOutputTransform; pipeline.needsUpdate=true;
     }};
+  return host;
 }
