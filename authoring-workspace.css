@@ -51,6 +51,7 @@ body[data-workspace=authoring] #authoring-inspector { display:flex; flex-directi
 #authoring-inspector .transform-axis-field:nth-child(2) .transform-axis { color:#a2ba8c; }
 #authoring-inspector .transform-axis-field:nth-child(3) .transform-axis { color:#8dadd1; }
 #authoring-inspector .slider-row { gap:7px; margin:10px 0; }
+#authoring-inspector .slider-row[hidden] { display:none; }
 #authoring-inspector .slider-label { flex:0 0 83px; color:#a3a5ab; font-size:11px; }
 #authoring-inspector .slider-row input[type=range] { min-width:25px; accent-color:#a99778; }
 #authoring-inspector input[type=checkbox] { accent-color:#bca176; }
