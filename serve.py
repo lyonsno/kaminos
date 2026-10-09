@@ -2125,6 +2125,19 @@ SCENE_LIBRARY_DEFAULT_GLOBS = (
 )
 
 
+def scene_dependency_missing(source):
+    """True when an /api/read source of a scene cannot be read here."""
+    query = parse_qs(urlparse(source).query)
+    root, path = (query.get("root") or [""])[0], (query.get("path") or [""])[0]
+    local_root = BROWSE_ROOTS.get(root)
+    if local_root is None or not path:
+        return True
+    destination = Path(local_root) / path
+    if destination.is_symlink() or not destination.resolve().is_relative_to(Path(local_root).resolve()):
+        return True
+    return not destination.is_file()
+
+
 def scene_library_import_dependency(source, store):
     """Make one /api/read source of an imported scene resolvable here.
 
@@ -2176,11 +2189,13 @@ _SCENE_SUMMARY_LOCK = threading.Lock()
 
 
 def scene_file_summary(scene_path):
-    """Identity and listing fields of one scene file, cached by path, size and
-    modification time so Load does not re-parse every scene each time."""
+    """Identity and listing fields of one scene file, cached so Load does not
+    re-parse every scene each time. The cache key includes the inode and the
+    status-change time, which the kernel updates on any rewrite or rename and
+    copy tools cannot preserve, besides size and modification time."""
     stat = scene_path.stat()
     key = str(scene_path)
-    stamp = (stat.st_mtime_ns, stat.st_size)
+    stamp = (stat.st_ino, stat.st_ctime_ns, stat.st_mtime_ns, stat.st_size)
     with _SCENE_SUMMARY_LOCK:
         cached = _SCENE_SUMMARY_CACHE.get(key)
     if cached and cached[0] == stamp:
@@ -3225,6 +3240,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_browse(parse_qs(parsed.query))
         elif parsed.path == "/api/scene-catalog":
             self.handle_scene_catalog(parse_qs(parsed.query))
+        elif parsed.path == "/api/scene-missing-dependencies":
+            self.handle_scene_missing_dependencies(parse_qs(parsed.query))
         elif parsed.path == "/api/scene-image":
             self.handle_scene_image(parse_qs(parsed.query))
         elif parsed.path == "/api/scene-library-read":
@@ -4164,6 +4181,26 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             group["foreign"].sort(key=lambda member: (member["storeLabel"], member["name"]))
             group["local"].sort()
         self.send_json({"groups": groups})
+
+    def handle_scene_missing_dependencies(self, params):
+        """Which /api/read sources of one of this server's scenes are missing
+        here (nothing is copied). Lets Load open self-contained scenes at once."""
+        name = (params.get("name") or [""])[0]
+        if Path(name).name != name or not name.endswith(".kaminos.json"):
+            self.send_json({"error": "Invalid scene name"}, 400)
+            return
+        scene_path = (Path(SCENES_DIR) / name).resolve()
+        if not scene_path.is_relative_to(Path(SCENES_DIR).resolve()) or not scene_path.is_file():
+            self.send_json({"error": "Scene not found"}, 404)
+            return
+        try:
+            document = json.loads(scene_path.read_text())
+        except (OSError, ValueError) as error:
+            self.send_json({"error": f"Scene unreadable: {error}"}, 400)
+            return
+        objects = document.get("objects") if isinstance(document, dict) and isinstance(document.get("objects"), list) else []
+        sources = [str(obj.get("source")) for obj in objects if isinstance(obj, dict) and str(obj.get("source") or "").startswith("/api/read?")]
+        self.send_json({"missing": [source for source in sources if scene_dependency_missing(source)]})
 
     def handle_scene_image(self, params):
         """The image saved with a scene (its thumbnail, else its Capture), from

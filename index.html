@@ -29770,10 +29770,6 @@ window.openSavedScene = async function() {
   const choice = await pickSavedScene({ groups, more: full });
   if (choice === 'browse') { document.getElementById('scene-file-input').click(); return; }
   if (!choice?.local) return;
-  // The full catalog decides which other servers hold the chosen scene, even
-  // if it was picked from the quick local list before the scan finished.
-  if (choice.identity) setInfo('Checking other Kaminos servers for this scene\u2019s meshes\u2026');
-  const plan = openPlan(choice, choice.identity ? await full.catch(() => null) : null);
   // Try each other server holding the scene until no mesh is missing; no
   // scene copy is written by these requests.
   const recoverMeshes = async (sources, missing) => {
@@ -29787,13 +29783,23 @@ window.openSavedScene = async function() {
     }
     return missing || [];
   };
-  if (plan.open) {
-    await recoverMeshes(plan.meshSources, null);
-    const sceneData = await grFetchApi('read', { root: 'scenes', path: plan.open });
-    if (!sceneData || sceneData.error) { setInfo(`Could not read ${plan.open}: ${sceneData?.error || 'unavailable'}`); return; }
-    await loadSceneFile(new File([JSON.stringify(sceneData)], plan.open, { type: 'application/json' }), { sceneFile: plan.open });
+  // Only a scene missing a mesh here waits for the full catalog, which decides
+  // which other servers hold it (even if the row was picked from the quick
+  // local list before the scan finished).
+  const fullPlan = async () => {
+    setInfo('Checking other Kaminos servers for this scene\u2019s meshes\u2026');
+    return openPlan(choice, choice.identity ? await full.catch(() => null) : null);
+  };
+  if (choice.local.length) {
+    const name = choice.local[0];
+    const check = await fetch(`/api/scene-missing-dependencies?${new URLSearchParams({ name })}`).then(response => response.json()).catch(() => null);
+    if (check?.missing?.length && choice.identity) await recoverMeshes((await fullPlan()).meshSources, null);
+    const sceneData = await grFetchApi('read', { root: 'scenes', path: name });
+    if (!sceneData || sceneData.error) { setInfo(`Could not read ${name}: ${sceneData?.error || 'unavailable'}`); return; }
+    await loadSceneFile(new File([JSON.stringify(sceneData)], name, { type: 'application/json' }), { sceneFile: name });
     return;
   }
+  const plan = openPlan(choice, null);
   if (!plan.importFrom) return;
   // Only on other servers: import it as a new local copy (its own fresh name,
   // so Save never touches a local scene of the same name) with any generated
@@ -29802,7 +29808,8 @@ window.openSavedScene = async function() {
   const response = await fetch('/api/scene-library-import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ store: source.store, name: source.name }) });
   const imported = await response.json().catch(() => null);
   if (!response.ok || !imported?.saved) { setInfo(`Could not import ${source.name} from ${source.storeLabel}: ${imported?.error || response.status}`); return; }
-  const missing = await recoverMeshes(plan.meshSources, (imported.dependencies || []).filter(dependency => dependency.status === 'missing'));
+  const importMissing = (imported.dependencies || []).filter(dependency => dependency.status === 'missing');
+  const missing = importMissing.length ? await recoverMeshes((await fullPlan()).meshSources, importMissing) : [];
   await loadSceneFile(new File([JSON.stringify(imported.document)], imported.saved, { type: 'application/json' }), { sceneFile: imported.saved });
   if (!missing.length) return;
   // A failed restore clears the document and blocks Save; keep its error and

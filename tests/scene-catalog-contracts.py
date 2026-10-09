@@ -78,4 +78,29 @@ with TemporaryDirectory() as directory:
     (lane_b / "tuned.kaminos.json").write_text(json.dumps({"label": "Tuned again", "timestamp": "2026-10-09T00:00:00Z"}))
     labels = {group["label"] for group in catalog()[0]["groups"]}
     assert "Tuned again" in labels and "Tuned" not in labels, labels
+    # Replacing a scene while keeping its size and modification time still refreshes it.
+    target = lane_b / "tuned.kaminos.json"
+    before = target.stat()
+    replacement = json.dumps({"label": "Tuned swap!", "timestamp": "2026-10-09T00:00:00Z"})
+    replacement = replacement + " " * (before.st_size - len(replacement)) if len(replacement) < before.st_size else replacement[: before.st_size]
+    spare = lane_b / ".swap"
+    spare.write_text(replacement)
+    os.utime(spare, ns=(before.st_atime_ns, before.st_mtime_ns))
+    os.replace(spare, target)
+    assert target.stat().st_size == before.st_size and target.stat().st_mtime_ns == before.st_mtime_ns
+    labels = {group["label"] for group in catalog()[0]["groups"]}
+    assert "Tuned swap!" in labels and "Tuned again" not in labels, labels
+
+    # Which of a local scene's meshes are missing here, without copying anything.
+    handler = serve.KaminosHandler.__new__(serve.KaminosHandler)
+    out = []
+    handler.send_json = lambda value, *args: out.append((value, args[0] if args else 200))
+    meshes = root / "here-meshes"
+    meshes.mkdir()
+    (meshes / "k.glb").write_bytes(b"glTF")
+    serve.BROWSE_ROOTS["generated-meshes"] = meshes
+    (here / "needs.kaminos.json").write_text(json.dumps({"objects": [{"source": "/api/read?root=generated-meshes&path=k.glb"}, {"source": "/api/read?root=generated-meshes&path=gone.glb"}, {"source": "kaminos:analytic-flame"}]}))
+    handler.handle_scene_missing_dependencies({"name": ["needs.kaminos.json"]})
+    assert out[-1] == ({"missing": ["/api/read?root=generated-meshes&path=gone.glb"]}, 200), out[-1]
+    assert not (meshes / "gone.glb").exists()
 print("scene catalog contracts passed")
