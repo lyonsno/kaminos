@@ -63,7 +63,7 @@ async function runCpuPhase(useWorker, operationId, payload, transfer, signal) {
 }
 
 export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgress, cpuWorker = typeof Worker !== 'undefined',
-  attention = 'streaming', gemmKernel = 'auto' } = {}) {
+  attention = 'streaming', gemmKernel = 'tiled' } = {}) {
   if (!route?.runtime?.device || typeof route.loadModelResourcesFromSource !== 'function') {
     throw new Error('SuperMat adapter requires a registered kit session route');
   }
@@ -101,7 +101,7 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
   const ops = createSuperMatOps(device, { label: 'supermat', attention, gemmKernel });
   const identity = Object.freeze({
     routeId: SUPERMAT_ROUTE_ID, backend: 'webgpu-local', modelId: 'supermat.single-image',
-    revision: weightPackage.revision, weightDtype: 'f32', defaultImageSize: SUPERMAT_IMAGE_SIZE, attention,
+    revision: weightPackage.revision, weightDtype: weightPackage.dtype ?? 'f32', defaultImageSize: SUPERMAT_IMAGE_SIZE, attention,
     gemmKernel: ops.gemmKernel,
     provenance: weightPackage.provenance,
   });

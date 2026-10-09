@@ -34,8 +34,10 @@ function dispatch1D(total, workgroupSize = 256, limit = 65535) {
 // attention: 'streaming' (online softmax, no score matrix) or 'materialized'.
 // gemmTile: { tm, tn, bk } per-thread outputs and K step (16x16 threads per workgroup).
 // attentionKernel: 'scalar' or 'vec4' streaming implementation.
-// gemmKernel: 'auto' (subgroup matrices when the device enables them with a
-// fixed 32-lane subgroup), 'subgroup-matrix', or 'tiled'.
+// gemmKernel: 'tiled' (default), 'subgroup-matrix' (experimental Apple
+// simdgroup matrices; correct but ~2x slower than tiled in the 2026-10-09
+// bench with one subgroup per workgroup), or 'auto' (subgroup matrices when
+// the device enables them with a fixed 32-lane subgroup).
 export function subgroupMatrixUsable(device) {
   const info = device.adapterInfo;
   return device.features.has('chromium-experimental-subgroup-matrix')
@@ -43,7 +45,7 @@ export function subgroupMatrixUsable(device) {
 }
 
 export function createSuperMatOps(device, { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 },
-  attentionKernel = 'scalar', gemmKernel = 'auto' } = {}) {
+  attentionKernel = 'scalar', gemmKernel = 'tiled' } = {}) {
   if (!['auto', 'tiled', 'subgroup-matrix'].includes(gemmKernel)) throw new Error(`unknown gemm kernel ${gemmKernel}`);
   const subgroupMatrix = gemmKernel === 'subgroup-matrix' || (gemmKernel === 'auto' && subgroupMatrixUsable(device));
   if (subgroupMatrix && !subgroupMatrixUsable(device)) throw new Error('subgroup-matrix GEMM requested but unavailable on this device');

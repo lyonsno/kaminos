@@ -91,13 +91,14 @@ def write_bundle(out, resource_id, tensors, model_id, revision):
             end = 0
             for name, values, tensor_offset in rows:
                 f.seek(bundle_offset + tensor_offset)
-                f.write(np.ascontiguousarray(values, dtype='<f4').tobytes())
+                f.write(np.ascontiguousarray(values).tobytes())
                 end = tensor_offset + values.nbytes
             length = (end + ALIGN - 1) // ALIGN * ALIGN
             manifest_allocations.append({
                 'allocationId': f'{resource_id}.{index}', 'byteOffset': bundle_offset, 'byteLength': length,
                 'usage': STORAGE_COPY_DST,
-                'tensors': [{'name': name, 'dtype': 'f32', 'shape': list(values.shape) or [1],
+                'tensors': [{'name': name, 'dtype': 'f16' if values.dtype == np.float16 else 'f32',
+                             'shape': list(values.shape) or [1],
                              'byteOffset': tensor_offset, 'byteLength': values.nbytes}
                             for name, values, tensor_offset in rows]})
             bundle_offset += length
@@ -117,6 +118,8 @@ def main():
     p.add_argument('--reference', type=Path, required=True,
                    help='export-reference.py output supplying the empty-prompt conditioning')
     p.add_argument('--out', type=Path, required=True)
+    p.add_argument('--dtype', choices=('f32', 'f16'), default='f32',
+                   help='f16 stores matrix and conv weights (2+ dims) as binary16; vectors and conditioning stay f32')
     args = p.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     report_path = args.out / 'package.json'
@@ -143,7 +146,7 @@ def main():
         report['constants'] = {'timestep': reference['timestep'], 'alphaBar': reference['x0Rule']['alphaBar'],
                                'vScale': reference['x0Rule']['vScale'],
                                'vaeScalingFactor': reference['vaeScalingFactor']}
-        revision = f'oyiya/SuperMat@91ffb8ed:{checkpoint_sha[:16]}+sd2-1-vae:{vae_sha[:16]}'
+        revision = f'oyiya/SuperMat@91ffb8ed:{checkpoint_sha[:16]}+sd2-1-vae:{vae_sha[:16]}:{args.dtype}'
         report['provenance'] = {'checkpoint': {'path': str(args.checkpoint.resolve()), 'sha256': checkpoint_sha},
                                 'vae': {'path': str(vae_path), 'sha256': vae_sha},
                                 'conditioning': {'reference': str(args.reference.resolve()),
@@ -170,6 +173,19 @@ def main():
         sections['conditioning'] = [('conditioning.empty_prompt', conditioning[0]),
                                     ('conditioning.time_proj', time_proj[0])]
         report['tensorCounts'] = {name: len(rows) for name, rows in sections.items()}
+        report['dtype'] = args.dtype
+        for name, rows in sections.items():
+            converted = []
+            for tensor_name, values in rows:
+                values = np.asarray(values, dtype='<f4')
+                if args.dtype == 'f16' and name != 'conditioning' and values.ndim >= 2:
+                    if values.size % 2:
+                        raise ValueError(f'{tensor_name}: f16 storage needs an even element count')
+                    if not np.isfinite(values.astype('<f2')).all():
+                        raise ValueError(f'{tensor_name}: value overflows binary16')
+                    values = values.astype('<f2')
+                converted.append((tensor_name, values))
+            sections[name] = converted
 
         report['phase'] = 'bundle-write'
         for resource_id in sorted(sections):

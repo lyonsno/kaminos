@@ -6,7 +6,9 @@ import { createSuperMatAdapter, mapsFromPlanes, superMatDeviceOptions } from './
 import { decodeImageRgba } from './supermat-image.js';
 
 // Predeclared: the full-route output tolerance, and warm == cold exactly.
+// F16 weight storage gets its own bar (declared before its first run).
 export const ROUTE_TOLERANCE = Object.freeze({ relativeL2: 1e-3, cosine: 0.9999, maxAbs: 2e-3 });
+export const ROUTE_TOLERANCE_F16_WEIGHTS = Object.freeze({ relativeL2: 1e-2, cosine: 0.9999, maxAbs: 0.03 });
 
 async function fetchFloat(manifest, name) {
   const row = manifest.tensors[name];
@@ -49,6 +51,8 @@ export async function runSuperMatRouteWitness({ fixtureSha256, weightsSha256, ru
     result.phase = 'weights';
     adapter = await createSuperMatAdapter({ route, weightsUrl: '/weights/' });
     result.identity = adapter.identity;
+    const tolerance = adapter.identity.weightDtype === 'f16' ? ROUTE_TOLERANCE_F16_WEIGHTS : ROUTE_TOLERANCE;
+    result.tolerance = tolerance;
     result.weightLoadMs = adapter.weightLoadMs;
 
     result.phase = 'decode';
@@ -82,8 +86,8 @@ export async function runSuperMatRouteWitness({ fixtureSha256, weightsSha256, ru
     for (const [name, actual, expected] of [['albedo', cold.planes.albedo, refAlbedo], ['orm', cold.planes.orm, refOrm]]) {
       const m = compareWebGpuParityArrays(actual, expected, { stageId: `route.${name}` }).metrics;
       const row = { relativeL2Error: m.relativeL2Error, cosineSimilarity: m.cosineSimilarity, maxAbsoluteError: m.maxAbsoluteError };
-      row.pass = m.relativeL2Error <= ROUTE_TOLERANCE.relativeL2 && m.cosineSimilarity >= ROUTE_TOLERANCE.cosine
-        && m.maxAbsoluteError <= ROUTE_TOLERANCE.maxAbs;
+      row.pass = m.relativeL2Error <= tolerance.relativeL2 && m.cosineSimilarity >= tolerance.cosine
+        && m.maxAbsoluteError <= tolerance.maxAbs;
       pass &&= row.pass;
       result.comparisons[name] = row;
     }
