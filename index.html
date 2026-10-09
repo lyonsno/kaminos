@@ -13288,6 +13288,11 @@ function updateFingerFluidBenchReadout() {
   fingerFluidPressureCockpit?.update();
   const state = fingerFluidBenchState;
   fluidWorkbench?.update({source:'Synthetic fluid',status:state.status === 'running' ? (fingerFluidBenchSimulationPaused ? 'paused' : 'live') : state.status || 'loading',clock:`Step ${state.runtime?.stepCount ?? 0}`});
+  const fixtureLabel=document.getElementById('fluid-workbench-fixture');
+  if(fixtureLabel) {
+    const text=state.status==='error' ? 'Fixture unavailable' : state.config?.effectiveTruthScene?.replaceAll('_',' ') || 'Resolving fixture…';
+    if(fixtureLabel.textContent!==text)fixtureLabel.textContent=text;
+  }
   const sourceEl = document.getElementById('finger-fluid-bench-source-schema');
   if (!sourceEl) return;
   sourceEl.textContent = state.source?.schema || BIG_PAPA_FLUID_SOURCE_SCHEMA;
@@ -14709,8 +14714,7 @@ function installFluidWorkbench() {
   if(new URLSearchParams(location.search).get('finger_fluid_viewport') === 'producer') return;
   const byId=id=>document.getElementById(id),root=byId('ipbf-pressure-cockpit');
   const setup=document.createElement('section');setup.id='fluid-workbench-setup';
-  const sceneName=(fingerFluidBenchConfig?.effectiveTruthScene || 'multi_regime_playground').replaceAll('_',' ');
-  const name=document.createElement('strong');name.textContent=sceneName;setup.append(name);
+  const name=document.createElement('strong');name.id='fluid-workbench-fixture';name.textContent='Resolving fixture…';setup.append(name);
   const note=document.createElement('p');note.textContent='Numerical fixture · reset water to replay these settings. Fixture geometry is fixed for this experiment.';setup.append(note);
   byId('tab-finger-fluid-bench').append(setup);
   fluidWorkbench=installExperimentWorkspace({document,title:'Fluid',subtitle:'Tune water in the shared scene',

@@ -18,7 +18,7 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
   right.querySelector('h2').textContent=instrumentTitle;right.querySelector('p').textContent=instrumentHelp;
   const toolbar=make('nav','experiment-toolbar',`<details id="experiment-browser"><summary>Workbenches</summary><div><input type="search" aria-label="Find a workbench" placeholder="Find a workbench…"><div class="experiment-browser-list"></div></div></details>
     <strong></strong><div id="experiment-add-slot"></div><span class="experiment-toolbar-spacer"></span>
-    <button type="button" id="experiment-open-setup">Open these settings</button>
+    <button type="button" id="experiment-open-setup">Open solver settings</button>
     <button type="button" id="experiment-frame">Frame</button><div id="experiment-navigation-slot"></div>`);
   toolbar.setAttribute('aria-label','Experiment tools'); toolbar.querySelector('strong').textContent=title;
   const run=make('div','experiment-run-strip',`<span id="experiment-source">Synthetic fluid · loading</span><div id="experiment-run-controls"></div><span id="experiment-clock"></span>`);
