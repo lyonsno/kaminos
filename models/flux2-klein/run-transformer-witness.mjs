@@ -16,7 +16,7 @@ const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] :
 const chrome = opt('--chrome'), outPath = opt('--out');
 const roots = { '/weights/': path.resolve(opt('--weights', '')), '/ref/': path.resolve(opt('--ref', '')), '/vae/': path.resolve(opt('--vae', '.')), '/te/': path.resolve(opt('--te', '.')), '/': here };
 const cfg = { step: Number(opt('--step', '0')), tolerance: Number(opt('--tolerance', '1e-3')),
-  timingRuns: Number(opt('--timing-runs', '2')), verifyDigests: !args.includes('--no-digests'), vae: Boolean(opt('--vae')), textEncoder: Boolean(opt('--te')) };
+  timingRuns: Number(opt('--timing-runs', '2')), verifyDigests: !args.includes('--no-digests'), vae: Boolean(opt('--vae')), textEncoder: Boolean(opt('--te')), profile: args.includes('--profile') };
 const report = { schema: 'kaminos.flux2-klein.transformer-witness-run.v0', requestedChrome: chrome, roots, config: cfg,
   host: os.hostname(), startedAt: new Date().toISOString(), phase: 'launch' };
 let child, server, ws;

@@ -37,7 +37,8 @@ window.runTransformerWitness = async function (cfg) {
     if (!adapter.features.has('shader-f16')) throw new Error('shader-f16 unavailable');
     const info = adapter.info || {};
     report.adapter = { vendor: info.vendor, architecture: info.architecture, description: info.description };
-    const device = await adapter.requestDevice({ requiredFeatures: ['shader-f16'], requiredLimits: {
+    const features = ['shader-f16', ...(adapter.features.has('timestamp-query') ? ['timestamp-query'] : [])];
+    const device = await adapter.requestDevice({ requiredFeatures: features, requiredLimits: {
       maxBufferSize: adapter.limits.maxBufferSize, maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
       maxStorageBuffersPerShaderStage: adapter.limits.maxStorageBuffersPerShaderStage } });
     device.lost.then(l => { report.deviceLost = { reason: l.reason, message: l.message }; });
@@ -222,6 +223,15 @@ window.runTransformerWitness = async function (cfg) {
       timings.push({ totalMs: performance.now() - t1, perStepMs: perStep });
     }
     report.denoiseTiming = timings;
+    if (cfg.profile && device.features.has('timestamp-query')) {
+      state.phase = 'profile';
+      model.prepare({ latents, promptEmbeds, imgIds, txtIds });
+      model.startProfile();
+      const t1 = performance.now();
+      await model.forward({ tModel: transformerTime(sched.timesteps[0]) });
+      report.profileWallMs = performance.now() - t1;
+      report.profile = await model.endProfile();
+    }
     state.phase = 'done';
     report.phase = 'done';
   } catch (e) {

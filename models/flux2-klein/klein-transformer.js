@@ -55,8 +55,33 @@ export class KleinTransformer {
     if (!this.pipelines[key]) {
       const module = this.device.createShaderModule({ code });
       this.pipelines[key] = this.device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'main' } });
+      this.pipelines[key].label = key;
     }
     return this.pipelines[key];
+  }
+
+  // Optional GPU-time profile: every dispatch writes begin/end timestamps, labeled by
+  // pipeline (plus `profileTag`, e.g. 'attention'). Needs the device's timestamp-query feature.
+  startProfile(capacity = 4096) {
+    this.profile = { qs: this.device.createQuerySet({ type: 'timestamp', count: capacity }), labels: [], capacity };
+  }
+
+  async endProfile() {
+    const { qs, labels } = this.profile; const n = labels.length * 2;
+    const qb = this.device.createBuffer({ size: n * 8, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+    const rb = this.device.createBuffer({ size: n * 8, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.resolveQuerySet(qs, 0, n, qb, 0); enc.copyBufferToBuffer(qb, 0, rb, 0, n * 8);
+    this.device.queue.submit([enc.finish()]);
+    await rb.mapAsync(GPUMapMode.READ);
+    const ts = new BigInt64Array(rb.getMappedRange().slice(0)); rb.unmap(); rb.destroy(); qb.destroy(); qs.destroy();
+    const byLabel = {};
+    labels.forEach((label, i) => {
+      const ms = Number(ts[2 * i + 1] - ts[2 * i]) / 1e6;
+      const e = (byLabel[label] ??= { dispatches: 0, ms: 0 }); e.dispatches++; e.ms += ms;
+    });
+    this.profile = null;
+    return { dispatches: labels.length, byLabel };
   }
 
   async loadBundles(fetchBundle, onProgress) {
@@ -97,7 +122,13 @@ export class KleinTransformer {
   dispatch(enc, pipeline, entries, x, y = 1, z = 1) {
     const bind = this.device.createBindGroup({ layout: pipeline.getBindGroupLayout(0),
       entries: entries.map((e, i) => ({ binding: e.binding ?? i, resource: e.resource ?? { buffer: e } })) });
-    const pass = enc.beginComputePass();
+    let desc = {};
+    if (this.profile && this.profile.labels.length * 2 < this.profile.capacity) {
+      const i = this.profile.labels.length;
+      this.profile.labels.push(this.profileTag ? `${this.profileTag}:${pipeline.label}` : pipeline.label);
+      desc = { timestampWrites: { querySet: this.profile.qs, beginningOfPassWriteIndex: 2 * i, endOfPassWriteIndex: 2 * i + 1 } };
+    }
+    const pass = enc.beginComputePass(desc);
     pass.setPipeline(pipeline); pass.setBindGroup(0, bind); pass.dispatchWorkgroups(x, y, z); pass.end();
   }
 
@@ -129,6 +160,7 @@ export class KleinTransformer {
 
   attention(enc, L) {
     const a = this.act, H = this.H;
+    this.profileTag = 'attention';
     this.gemm(enc, { a: a.q, aRs: HEAD, aBs: L * HEAD, b: a.k, bType: 'f32', bRs: HEAD, bBs: L * HEAD,
       c: a.scores, cRs: L, cBs: L * L, M: L, N: L, K: HEAD, batch: H, alpha: 1 / Math.sqrt(HEAD) });
     const rows = H * L;
@@ -136,6 +168,7 @@ export class KleinTransformer {
     this.dispatch(enc, sm, [a.scores, this.uniform([rows, L, 0, 0])], Math.min(rows, 65535), Math.ceil(rows / 65535));
     this.gemm(enc, { a: a.scores, aRs: L, aBs: L * L, b: a.vt, bType: 'f32', bRs: L, bBs: HEAD * L,
       c: a.o, cRs: HEAD, cBs: L * HEAD, M: L, N: HEAD, K: L, batch: H });
+    this.profileTag = null;
   }
 
   headsToRows(enc, L, rowBegin, rows, y, yRs, yOff) {
