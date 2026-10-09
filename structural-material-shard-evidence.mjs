@@ -3,7 +3,8 @@ import {applyComponentAffineField} from './structural-material-component-affine.
 import {bindComponentTransport,applyComponentTransport,COMPONENT_TRANSPORT_ROUTE} from './structural-material-component-transport.mjs';
 export function inspectInteriorShardWitness(w){return inspectShardWitness(w,{interior:true});}
 function inspectGpuSurface(w){
- if(!w.pieces?.some(p=>p.renderedPositionsSource==='cpu-transport-reference-for-picking')&&w.identity?.surface!=='resident-vertex-transport')return[];
+ if(w.identity?.renderer==='three-webgpu-visual-consumer'&&w.identity.surface==='cpu-affine-comparison'&&w.identity.surfaceState==='cpu-geometry'&&w.pieces?.every(p=>p.renderedPositionsSource==='cpu-geometry'))return[];
+ if(!w.pieces?.some(p=>p.renderedPositionsSource==='cpu-transport-reference-for-picking')&&w.identity?.surface!=='resident-vertex-transport'&&w.identity?.renderer!=='three-webgpu-visual-consumer')return[];
  const s=w.surfaceObservation,route='kaminos.deformable-surface.resident-vertex-transport.webgpu.v0';
  if(w.identity.renderer!=='three-webgpu-visual-consumer'||w.identity.surface!=='resident-vertex-transport'||w.identity.surfaceState!=='published-gpu-copy'||s?.source!=='native-webgpu-transport-compute-readback'||s.runId!==w.runId||s.steps!==w.state?.steps||!Array.isArray(s.pieces)||s.pieces.length!==w.pieces.length||new Set(s.pieces.map(p=>p.pieceId)).size!==s.pieces.length)return['GPU surface identity or current native observation absent'];
  for(const p of w.pieces){const actual=s.pieces.find(x=>x.pieceId===p.id);if(p.surfaceRoute!==route||actual?.route!==route||actual.runId!==w.runId||actual.step!==w.state.steps||!Array.isArray(actual.gpu)||actual.gpu.length*3!==p.renderedPositions?.length||actual.gpu.some((v,i)=>!Array.isArray(v)||v.length!==3||v.some((x,k)=>!Number.isFinite(x)||Math.abs(x-p.renderedPositions[i*3+k])>3e-6)))return['GPU surface differs from the complete current picking reference'];}
@@ -12,6 +13,7 @@ function inspectGpuSurface(w){
 export function inspectShardWitness(w,{model=w?.state?.model,interior=false}={}){
  const errors=[];if(w?.route!==(interior?'kaminos.picked-stone.interior-shards.webgpu.v0':'kaminos.picked-stone.stress-shards.webgpu.v0')||w.phase!=='interactive'||w.failure)return['Live picked-stone route failed or substituted'];
  if(w.identity?.backend!=='webgpu'||w.identity.adapterFallback!==false)errors.push('Native GPU material authority absent');
+ if(!['three-webgl-visual-consumer','three-webgpu-visual-consumer'].includes(w.identity?.renderer))errors.push('GPU surface consumer identity absent or substituted');
  errors.push(...inspectGpuSurface(w));
  if(w.state?.route!=='kaminos.deformable-material.colored-vbd.webgpu.v0'||w.state.kind!=='graph'||!w.runId||w.runId!==w.state.runId)errors.push('Resident material identity differs');
  if(w.sourceSha256!=='33eb6f774a3b2bd52751c052029b529359957a71ec3eeee2e93c51bee46d8011'||!w.preparationSha256)errors.push('Admitted imported source absent');

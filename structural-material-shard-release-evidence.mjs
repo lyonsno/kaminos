@@ -43,6 +43,13 @@ export function inspectLoadedReleaseSources(expected,observed){
  return errors;
 }
 
+export function inspectCameraPresentation(sample){
+ const p=sample?.presentation,a=p?.camera,b=sample?.requested;
+ const vector=(x,y)=>Array.isArray(x)&&Array.isArray(y)&&x.length===3&&y.length===3&&x.every((v,i)=>Number.isFinite(v)&&Number.isFinite(y[i])&&Math.abs(v-y[i])<=1e-9);
+ const same=a&&b&&['position','target','up'].every(k=>vector(a[k],b[k]))&&['near','far','fov'].every(k=>Number.isFinite(a[k])&&a[k]===b[k]);
+ return sample?.completed===false&&p?.materialBusy===true&&Number.isInteger(p.frame)&&Number.isInteger(sample.beforeFrame)&&p.frame>sample.beforeFrame&&same?[]:['Requested camera was not presented during native material wait'];
+}
+
 export function inspectCutRefusalRegrip(declined,gripped,before){
  const errors=[],cut=declined?.interior?.lastFailedCut,candidate=cut?.candidateState;
  if(cut?.disposition!=='retained-material-continue'||!Array.isArray(candidate?.stresses)||!candidate.stresses.some(s=>s.invalid||!s.active)||!candidate.runId||candidate.runId===declined?.runId)errors.push('Native invalid candidate refusal is absent');
