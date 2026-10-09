@@ -101,3 +101,36 @@ test('invalid held diagnostics retain the available state and image before refus
   }, 'stale'), /stale/);
   assert.equal(retained, true);
 });
+
+for (const [name, mutate] of [
+  ['GPU failure', s => {s.viewport.failure = 'Host WebGPU error';}],
+  ['exposure change', s => {s.viewport.lastFrame.exposure = 2;}],
+  ['lost presentation', s => {s.viewport.lastFrame.presentedByHost = false;}],
+  ['dimension change', s => {s.viewport.lastFrame.width = 640;}],
+  ['stale diagnostics', s => {s.bench.runtime.diagnostics.stepCount--;}],
+  ['render backend change', s => {s.bench.runtime.render_backend = 'fallback';}],
+]) {
+  test(`post-capture ${name} cannot verify retained pixels`, async () => {
+    const f = fixture(), local = createFluidWorkingSession(f.host), before = await local.hold();
+    before.viewport.lastFrame.exposure = 1;
+    before.viewport.lastFrame.width = 880;
+    before.bench.runtime.render_backend = 'webgpu_direct_render';
+    const after = structuredClone(before); mutate(after);
+    const page = {evaluate: async (fn, arg) => arg === null ? 'binding' : arg.method === 'hold' ? before : after};
+    const session = await bindFluidWorkingSession(page);
+    let captured;
+    await assert.rejects(session.observe(async ({observe, verify}) => {
+      captured = await observe(); await verify();
+    }, 'late-change'), /viewport|diagnostics|presentation|backend/i);
+    assert.deepEqual(captured, before);
+  });
+}
+
+test('incidental render counters may advance with unchanged held presentation', async () => {
+  const f = fixture(), local = createFluidWorkingSession(f.host), before = await local.hold();
+  const after = structuredClone(before);
+  after.viewport.frameCount = 9;
+  after.viewport.lastFrame.frameId = 'next';
+  after.viewport.lastFrame.cameraGeneration = 9;
+  assert.doesNotThrow(() => assertFluidObservationStable(before, after));
+});
