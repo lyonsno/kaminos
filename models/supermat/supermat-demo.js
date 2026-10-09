@@ -23,6 +23,9 @@ const autopauseMs = params.has('autopause') ? Number(params.get('autopause')) : 
 const pauseForMs = Number(params.get('pausefor') ?? 1500);
 const autostopMs = params.has('autostop') ? Number(params.get('autostop')) : null;
 const repeat = Math.max(1, Number(params.get('repeat') ?? 1));
+// URL-supplied images run only with ?autorun=1 (agent smokes); chosen or
+// dropped images wait for Infer materials.
+const autorun = params.get('autorun') === '1';
 const state = window.__supermatDemo = { status: 'loading', error: null, runs: [], identity: null, imageSource: null };
 const $ = id => document.getElementById(id);
 $('cooperative').checked = params.get('cooperative') !== '0';
@@ -139,6 +142,32 @@ function frameStats(gaps) {
     over33ms: gaps.filter(gap => gap > 33.3).length, over100ms: gaps.filter(gap => gap > 100).length };
 }
 
+const PHASE_NAMES = { preprocess: 'Preprocess', encode: 'Image encoder', unet: 'UNet', 'decode-albedo': 'Decode albedo',
+  'decode-orm': 'Decode roughness/metal', 'pack-maps': 'Pack maps' };
+let telemetryFrame = null, latestProgress = null, runStartedAt = 0;
+
+function showProgress(progress) {
+  latestProgress = progress;
+  if (telemetryFrame) return;
+  telemetryFrame = requestAnimationFrame(() => {
+    telemetryFrame = null;
+    const p = latestProgress, bar = $('progress');
+    if (!p) { bar.removeAttribute('value'); $('telemetry').textContent = 'Idle.'; return; }
+    if (p.totalFlops) bar.value = Math.min(1, p.completedFlops / p.totalFlops); else bar.removeAttribute('value');
+    const frames = state.scene?.gaps ?? [];
+    const recent = frames.slice(-30);
+    const fps = recent.length ? 1000 / (recent.reduce((a, b) => a + b, 0) / recent.length) : null;
+    const parts = [`${PHASE_NAMES[p.phase] ?? p.phase} (${p.phaseIndex + 1}/${p.phaseCount})`];
+    if (p.totalFlops) parts.push(`${Math.round(100 * p.completedFlops / p.totalFlops)}% of work`);
+    else if (p.duties) parts.push('first run at this size: no total yet');
+    if (p.duties) parts.push(`${p.duties} duties`, `last ${p.lastDutyMs?.toFixed(0)} ms`);
+    parts.push(`${((performance.now() - runStartedAt) / 1000).toFixed(1)} s`);
+    if (fps) parts.push(`scene ${fps.toFixed(0)} fps`);
+    if (p.dutyLabel) parts.push(p.dutyLabel);
+    $('telemetry').textContent = parts.join(' · ');
+  });
+}
+
 function setRunControls(running) {
   $('run').disabled = running || !current;
   $('pause').disabled = !running;
@@ -146,11 +175,15 @@ function setRunControls(running) {
   $('pause').textContent = 'Pause';
 }
 
-async function load(blob, label) {
+async function load(blob, label, { runNow = false } = {}) {
   try {
     current = await decodeImageRgba(blob, device);
     state.imageSource = label;
     drawModelInput(current);
+    $('run').disabled = Boolean(active);
+    state.status = 'loaded';
+    setStatus(`Loaded ${current.width}×${current.height}. Press Infer materials.`);
+    if (!runNow) return;
     for (let index = 0; index < repeat; index++) {
       await infer({ final: index === repeat - 1 });
       if (state.runs.at(-1)?.status !== 'done') break;
@@ -172,6 +205,8 @@ async function infer({ final = true } = {}) {
   state.status = 'running';
   setStatus(`Inferring materials (${cooperative ? 'cooperative' : 'blocking'})…`);
   const started = performance.now();
+  runStartedAt = started;
+  showProgress({ phase: 'preprocess', phaseIndex: 0, phaseCount: 6, duties: 0, completedFlops: 0, totalFlops: null });
   let frameRun = null, route = null;
   try {
     frameRun = await foreground.beginRun(runId);
@@ -200,7 +235,7 @@ async function infer({ final = true } = {}) {
       record.stopRequestedAtMs = performance.now() - started;
       active?.abort.abort(new Error('stopped by autostop'));
     }, autostopMs);
-    const job = route.enqueue({ jobId: runId, execute: invocation => adapter.run({ image: current, size,
+    const job = route.enqueue({ jobId: runId, execute: invocation => adapter.run({ image: current, size, onRunProgress: showProgress,
       schedule: cooperative ? { runtime: route.runtime, invocation, control, signal: abort.signal } : null }) });
     const completion = await job.completion;
     if (completion.status !== 'succeeded') {
@@ -220,6 +255,7 @@ async function infer({ final = true } = {}) {
     render();
     await Promise.all(['albedo', 'roughness', 'metallic'].map(name => setDownload(name, lastResult.maps[name])));
     record.status = 'done';
+    $('progress').value = 1;
     setStatus(`Done in ${(wallMs / 1000).toFixed(2)} s. Drop another image or choose a file.`);
   } catch (error) {
     record.status = abort.signal.aborted ? 'stopped' : 'error';
@@ -318,6 +354,6 @@ try {
   if (imageUrl) {
     const response = await fetch(imageUrl);
     if (!response.ok) throw new Error(`image ${imageUrl}: HTTP ${response.status}`);
-    await load(await response.blob(), imageUrl);
+    await load(await response.blob(), imageUrl, { runNow: autorun });
   }
 } catch (error) { fail(error); }

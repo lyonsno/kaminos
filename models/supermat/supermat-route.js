@@ -94,18 +94,35 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
     provenance: weightPackage.provenance,
   });
   let runs = 0, released = false, busy = false;
+  // Retired cooperative work per (size, attention), learned from completed runs.
+  const totalFlopsBySize = new Map();
 
   // image: { width, height, data: RGBA bytes }. Returns 512x512 RGBA8 maps,
   // the float planes and per-phase timings. `schedule` makes the run
   // cooperative: { runtime, invocation } from a per-run route job, plus an
   // optional kit inference control (pause/resume), AbortSignal and dutyFlops.
   // size: square model resolution, a multiple of 64 (SuperMat recommends 512).
-  async function run({ image, schedule = null, size = SUPERMAT_IMAGE_SIZE } = {}) {
+  // onRunProgress receives { phase, phaseIndex, phaseCount, dutyLabel, duties, completedFlops,
+  // totalFlops (null until one cooperative run at this size has completed), lastDutyMs }.
+  async function run({ image, schedule = null, size = SUPERMAT_IMAGE_SIZE, onRunProgress = null } = {}) {
     if (!Number.isSafeInteger(size) || size < 64 || size % 64) throw new Error('SuperMat size must be a positive multiple of 64');
     if (released) throw new Error('SuperMat adapter is released');
     if (busy) throw new Error('SuperMat adapter already has an active run');
     busy = true;
     const timings = {};
+    const phases = ['preprocess', 'encode', 'unet', 'decode-albedo', 'decode-orm', 'pack-maps'];
+    const progress = { phase: 'preprocess', phaseIndex: 0, phaseCount: phases.length, dutyLabel: null, duties: 0,
+      completedFlops: 0, totalFlops: schedule ? totalFlopsBySize.get(`${size}:${attention}`) ?? null : null, lastDutyMs: null };
+    const emit = () => { try { onRunProgress?.({ ...progress }); } catch { /* telemetry must not fail inference */ } };
+    const enter = phase => { progress.phase = phase; progress.phaseIndex = phases.indexOf(phase); emit(); };
+    const onDuty = row => {
+      progress.duties++;
+      progress.completedFlops += row.estimatedFlops;
+      progress.dutyLabel = row.label;
+      progress.lastDutyMs = row.queueMs;
+      emit();
+    };
+    emit();
     const dutiesBefore = ops.stats.duties, historyStart = ops.stats.dutyHistory.length;
     const mark = async (name, start) => {
       await ops.flush();
@@ -122,12 +139,14 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
     device.pushErrorScope('out-of-memory');
     let error = null;
     try {
-      ops.setSchedule(schedule ? { dutyFlops: DEFAULT_DUTY_FLOPS, targetDutyMs: DEFAULT_TARGET_DUTY_MS, ...schedule } : null);
+      ops.setSchedule(schedule ? { dutyFlops: DEFAULT_DUTY_FLOPS, targetDutyMs: DEFAULT_TARGET_DUTY_MS, ...schedule, onDuty } : null);
+      enter('encode');
       t = performance.now();
       const pixels = ops.upload([3, size, size], input, 'input');
       const latent = await encodeImage(ops, w, pixels);
       ops.release(pixels);
       await mark('encodeMs', t);
+      enter('unet');
       t = performance.now();
       const tembSilu = await timeEmbedding(ops, w);
       const heads = await runUnet(ops, w, latent, { tensor: w('conditioning.empty_prompt'), rows: 77 }, tembSilu);
@@ -136,6 +155,7 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
       await mark('unetMs', t);
       const planes = [];
       for (const [index, v] of heads.entries()) {
+        enter(index === 0 ? 'decode-albedo' : 'decode-orm');
         t = performance.now();
         const x0 = ops.affine({ x: v, shape: v.shape, scale: vScale, name: `x0.${index}` });
         ops.release(v);
@@ -147,6 +167,7 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
         ops.release(decoded);
         timings[index === 0 ? 'readAlbedoMs' : 'readOrmMs'] = performance.now() - t;
       }
+      enter('pack-maps');
       t = performance.now();
       const packed = await runCpuPhase(cpuWorker, 'supermat.maps', { albedo: planes[0].slice().buffer,
         orm: planes[1].slice().buffer, size: size }, [], schedule?.signal);
@@ -155,6 +176,7 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
       timings.packMapsMs = performance.now() - t;
       const alpha = new Uint8ClampedArray(prepared.alpha);
       runs++;
+      if (schedule) totalFlopsBySize.set(`${size}:${attention}`, progress.completedFlops);
       const duties = ops.stats.dutyHistory.slice(historyStart).map(row => ({ ...row }));
       return { width: size, height: size, maps, planes: { albedo: planes[0], orm: planes[1] },
         alpha, timings, run: runs, identity, size, cooperative: Boolean(schedule), cpuWorker,

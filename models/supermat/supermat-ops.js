@@ -174,6 +174,7 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
     lastFence = device.queue.onSubmittedWorkDone().then(() => {
       row.queueMs = performance.now() - submitted;
       observeDuty(flops, row.queueMs);
+      try { schedule?.onDuty?.(row); } catch { /* telemetry must not fail inference */ }
       for (const buffer of buffers) buffer.destroy();
     });
   }

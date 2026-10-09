@@ -7,7 +7,7 @@ import { parseArgs } from 'node:util';
 import { launchChrome, openPage } from './chrome-cdp.mjs';
 
 const { values } = parseArgs({ options: Object.fromEntries(
-  ['url', 'chrome', 'report', 'screenshot', 'timeout-ms'].map(name => [name, { type: 'string' }])) });
+  ['url', 'chrome', 'report', 'screenshot', 'timeout-ms', 'mid-screenshot', 'mid-delay-ms'].map(name => [name, { type: 'string' }])) });
 const output = path.resolve(values.report ?? 'supermat-demo-report.json');
 const report = { schema: 'supermat.demo-witness.v0', status: 'failed', phase: 'arguments', requestedUrl: values.url ?? null,
   command: process.argv };
@@ -27,11 +27,17 @@ try {
   const sessionId = await openPage(browser.cdp, values.url);
   report.phase = 'page-terminal-state';
   const started = Date.now();
-  let state;
+  let state, midTaken = !values['mid-screenshot'];
   for (;;) {
     const evaluation = await browser.cdp.call('Runtime.evaluate',
       { expression: 'JSON.stringify(window.__supermatDemo ?? null)', returnByValue: true }, sessionId);
     state = JSON.parse(evaluation.result.value ?? 'null');
+    if (!midTaken && state?.status === 'running' && Date.now() - started >= Number(values['mid-delay-ms'] ?? 0)) {
+      const mid = await browser.cdp.call('Page.captureScreenshot', { format: 'png' }, sessionId);
+      await fs.writeFile(path.resolve(values['mid-screenshot']), Buffer.from(mid.data, 'base64'));
+      report.midScreenshot = { path: path.resolve(values['mid-screenshot']), atMs: Date.now() - started };
+      midTaken = true;
+    }
     if (['done', 'error', 'stopped'].includes(state?.status)) break;
     if (Date.now() - started > timeoutMs) throw new Error(`demo did not finish within ${timeoutMs} ms (status ${state?.status})`);
     await new Promise(resolve => setTimeout(resolve, 250));

@@ -22,6 +22,9 @@
   figcaption a { color: var(--accent); text-decoration: none; }
   #drop { outline: 2px dashed transparent; outline-offset: -8px; }
   #drop.over { outline-color: var(--accent); }
+  #progress-row { display: flex; gap: 12px; align-items: center; padding: 10px 16px 0; color: var(--dim); font: 12px/1.4 ui-monospace, monospace; }
+  #progress { flex: 0 0 280px; height: 8px; accent-color: var(--accent); }
+  #telemetry { flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #timings { padding: 0 16px 16px; color: var(--dim); font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap; }
   .toggle { display: flex; gap: 6px; align-items: center; color: var(--dim); }
 </style>
@@ -38,6 +41,7 @@
   <label class="toggle"><input id="mask" type="checkbox" checked>Hide background</label>
   <span id="status">Loading…</span>
 </header>
+<div id="progress-row"><progress id="progress" max="1"></progress><span id="telemetry">Idle.</span></div>
 <main id="drop">
   <figure><canvas id="scene" width="512" height="512"></canvas><figcaption>Live scene (same GPU device)</figcaption></figure>
   <figure><canvas id="input" width="512" height="512"></canvas><figcaption>Input</figcaption></figure>
