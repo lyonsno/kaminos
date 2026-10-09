@@ -10,8 +10,11 @@ The current generation tools require a **prepared weight package**: a directory
 containing `manifest.json` and the float32 tensor files named by that manifest.
 This is different from the original Hugging Face safetensors download.
 
-The package combines the TRELLIS shape/material models and the DINOv3 image
-encoder, and can be reused for different images. The conversion tools currently
+For the examples below, use the **full base package** assembled by
+`pack-generation.py`, including the high-resolution shape model. It combines
+the TRELLIS shape/material models and the DINOv3 image encoder and can be reused
+for different images. This base is separate from the per-image preview package
+written later under `TRELLIS_OUTPUT/input`. The conversion tools currently
 assemble it from exported model stages; the repository does not yet provide
 a standalone converter for every stage, including the DINOv3 export.
 If you only have the original checkpoints, preparation of this package is
@@ -66,14 +69,18 @@ TRELLIS_KAMINOS_REV="$(git rev-parse HEAD)"
 TRELLIS_MLX_REV="$(git -C "$TRELLIS_MLX" rev-parse HEAD)"
 TRELLIS_PYTHON="$TRELLIS_MLX/.venv/bin/python"
 TRELLIS_IMAGE_SHA="$(shasum -a 256 "$TRELLIS_IMAGE" | cut -d ' ' -f 1)"
-TRELLIS_OUTPUT="$(dirname "$TRELLIS_KAMINOS_ROOT")/trellis-output/object"
+TRELLIS_WEIGHTS="$(node -p 'require("node:fs").realpathSync(process.argv[1])' "$TRELLIS_WEIGHTS")"
+TRELLIS_OUTPUT="$(dirname "$TRELLIS_WEIGHTS")/trellis-output/object"
 mkdir -p "$TRELLIS_OUTPUT"
 ~~~
 
-You can choose another output directory. Keep generated files outside the
-Kaminos and TRELLIS2MLX source checkouts: these tools require clean source
-trees. The revision and image-hash arguments are computed above so you do not
-have to fill them in manually.
+The image packer uses hard links to share weight files without copying them,
+so its input-package output must be on the **same filesystem as the weights**.
+The example resolves the weights' actual path and places the output beside
+that directory; this also works when the weights are on an external drive.
+You can choose another output directory on that filesystem. Keep generated
+files outside the Kaminos and TRELLIS2MLX source checkouts: these tools require
+clean source trees. Revisions and the image hash are computed above.
 
 ## 1. Prepare the image
 
@@ -96,6 +103,9 @@ shoe image. Transparent images use their existing alpha channel.
 
 For the higher-resolution route, change `--pipeline-type 512` to
 `--pipeline-type 1024_cascade`. This adds a second shape-sampling pass.
+Keep `TRELLIS_WEIGHTS` pointing to the full base package. A reduced 512 package
+omits the high-resolution model and cannot enable the cascade merely by
+changing this argument.
 `--steps` chooses the sampling-step count; eight is a useful preview starting
 point, while the original full configuration uses twelve.
 

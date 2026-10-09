@@ -111,8 +111,6 @@ explains the current developer setup and integration interfaces. The TRELLIS
 model code is in the Kaminos repository; its weights and local finishing tools
 are separate from this npm runtime.
 
-Ports can adopt a common application-facing shape:
-
 The [SAM 3 image detector](./docs/sam-semantic-demo.md) finds object instances
 from an image and a text prompt. It runs in the browser, keeps reusable model
 weights in memory, and caches image features across prompts.
@@ -122,6 +120,8 @@ The [SAM image example](./docs/sam-image-example.md), included in kit
 PNG cutouts. Applications can use the public `./core`, `./sam` and
 `./examples/sam-image` entrypoints to build the same flow.
 See the example guide for model setup, exports and performance measurements.
+
+Ports can adopt a common application-facing shape:
 
 ```text
 shared session
