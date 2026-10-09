@@ -14680,8 +14680,10 @@ async function resetFingerFluidPressureCockpitWater() {
   stopFingerFluidBench();
   fingerFluidBenchSolver?.destroy?.();
   fingerFluidBenchSolver=null;fingerFluidBenchSolverPromise=null;fingerFluidBenchConfig=null;
-  await startFingerFluidBench();
-  if(!fingerFluidBenchRunning)return;
+  const startup=startFingerFluidBench();
+  const resetGeneration=fingerFluidBenchStartGeneration;
+  await startup;
+  if(resetGeneration!==fingerFluidBenchStartGeneration||!fingerFluidBenchRunning)return;
   fingerFluidBenchCamera=camera;syncFingerFluidCompositionCamera({initial:true});window._kaminosDirty?.();
   fingerFluidPressureCockpit?.update();
 }

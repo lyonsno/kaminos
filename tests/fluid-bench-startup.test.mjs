@@ -14,3 +14,22 @@ test('authored-water conflict and scene initialization failures reach the visibl
   const h=harness(ready,options);await h.start();assert.equal(h.state().running,false);assert.equal(h.state().state.status,'error');assert.match(h.state().state.runtime.reason,message);
  }
 });
+
+function resetHarness(){
+ const pending=[],writes=[];let savedCamera=1;
+ const env={fingerFluidCompositionCameraState:()=>savedCamera,window:{_kaminosDirty(){}},cancelAnimationFrame(){},syncFingerFluidCompositionCamera(){writes.push(env.readCamera());},fingerFluidPressureCockpit:{update(){}},pending};
+ const h=new Function('env',`with(env){let fingerFluidBenchStartGeneration=0,fingerFluidBenchRunning=false,fingerFluidBenchViewport=null,fingerFluidBenchScene=null,fingerFluidBenchAnimationFrame=null,fingerFluidBenchSolver=null,fingerFluidBenchSolverPromise=null,fingerFluidBenchConfig=null,fingerFluidBenchCamera=null;
+ async function startFingerFluidBench(){const generation=++fingerFluidBenchStartGeneration;fingerFluidBenchRunning=true;await new Promise(resolve=>pending.push(resolve));if(generation!==fingerFluidBenchStartGeneration)return;}
+ ${fn('stopFingerFluidBench')};${fn('resetFingerFluidPressureCockpitWater')};
+ return {reset:resetFingerFluidPressureCockpitWater,start:startFingerFluidBench,stop:stopFingerFluidBench,camera:()=>fingerFluidBenchCamera};}`)(env);
+ env.readCamera=h.camera;return {...h,pending,writes,saveCamera:value=>{savedCamera=value;}};
+}
+test('a superseded reset cannot restore its camera into a newer reset',async()=>{
+ const h=resetHarness();const a=h.reset();h.saveCamera(2);const b=h.reset();h.pending[0]();await a;assert.deepEqual(h.writes,[]);h.pending[1]();await b;assert.deepEqual(h.writes,[2]);
+});
+test('a reset superseded by tab exit and re-entry cannot restore its camera',async()=>{
+ const h=resetHarness();const reset=h.reset();h.stop();const reentry=h.start();h.pending[0]();await reset;assert.deepEqual(h.writes,[]);h.pending[1]();await reentry;assert.deepEqual(h.writes,[]);
+});
+test('an owned single reset retains the saved camera',async()=>{
+ const h=resetHarness();h.saveCamera(3);const reset=h.reset();h.pending[0]();await reset;assert.deepEqual(h.writes,[3]);
+});
