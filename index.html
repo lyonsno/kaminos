@@ -14764,6 +14764,13 @@ function initKaminosFingerFluidBenchRoute() {
   if (fingerFluidBenchRouteInitialized) return;
   fingerFluidBenchRouteInitialized = true;
   window.kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
+  window.kaminosFingerFluidBenchSessionState = () => ({
+    generation: fingerFluidBenchStartGeneration,
+    paused: fingerFluidBenchSimulationPaused,
+    running: fingerFluidBenchRunning,
+    available: fingerFluidBenchSolver?.available === true,
+    step: fingerFluidBenchSolver?.getDebugState?.().stepCount ?? null,
+  });
   window.__kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.kaminosFingerFluidBenchRequestDiagnostics = requestFingerFluidBenchDiagnostics;
   window.kaminosFingerFluidBenchBeginSolverTimestampCaptureForWitness = (querySet, firstQueryIndex, pairCount) => {
