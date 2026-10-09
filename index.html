@@ -14719,11 +14719,9 @@ function installFluidWorkbench() {
   byId('tab-finger-fluid-bench').append(setup);
   fluidWorkbench=installExperimentWorkspace({document,title:'Fluid',subtitle:'Tune water in the shared scene',
     instrumentTitle:'Fluid tuning',instrumentHelp:'Simulation controls stay here while you inspect the scene.',instruments:root,setup,
-    sceneNodes:[byId('scene-object-list').closest('.panel')],
-    selectionNodes:['transform-inspector','selected-light-properties','selected-flame-properties','selected-water-properties','selected-bed-properties','shared-flame-domain-properties','selected-mesh-properties','selected-spot-properties','selected-object-relations','selected-group-properties','selected-assembly-properties','local-liquid-performance'].map(byId),
+    inspector:authoringWorkspace,
     detailNodes:[...byId('tab-finger-fluid-bench').querySelectorAll(':scope > .panel')].filter(node=>node!==root),
     runNodes:[root.querySelector('.ipbf-actions'),byId('ipbf-control-status')],
-    viewerNodes:['authoring-source-environment','authoring-source-render','authoring-source-fire-light'].map(byId),
     sceneActions:byId('scene-add-menu').closest('nav'),
     navigation:byId('navigation-input-mode').closest('label'),
     tools:[...document.querySelectorAll('.tab[data-tab]')].map(node=>({id:node.dataset.tab,label:node.textContent.trim()})),
