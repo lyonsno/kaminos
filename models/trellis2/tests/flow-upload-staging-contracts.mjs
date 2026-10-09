@@ -50,3 +50,4 @@ for(const kind of ['sparse','shape','texture']){
   assert.ok(drainFailed.allocations.every(t=>t.destroyed));
 }
 console.log('Sequential CPU staging/drained uploads preserve the full sparse/shape/texture shader graph and retire partial constructions on failure; fake runtime does not prove memory savings.');
+export {config,weights,harness};
