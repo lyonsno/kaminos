@@ -3,13 +3,49 @@ function requireValue(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function assertHeldState(result, captureParticleState = true) {
+  const runtime = result.bench?.runtime, step = result.clock.step;
+  requireValue(result.clock.paused && runtime?.available && runtime.solver_backend === 'webgpu_compute',
+    'Fluid live GPU route unavailable or water is unpaused');
+  requireValue(runtime.diagnostics?.stepCount === step && !runtime.diagnosticsPending,
+    'Fluid diagnostics did not complete at the held step');
+  requireValue(result.viewport?.effective === 'shared' && !result.viewport.failure
+    && result.viewport.lastFrame?.presentedByHost, 'Fluid shared viewport unavailable');
+  if (captureParticleState) {
+    const particles = runtime.diagnostics?.particleSnapshot;
+    requireValue(particles?.stepCount === step && particles.words?.length === runtime.particleCount * 16,
+      'Fluid full particle readback is missing or partial');
+  }
+}
+
+const select = (value, keys) => Object.fromEntries(keys.map(key => [key, value?.[key]]));
+function presentation(state) {
+  return {
+    viewport: select(state.viewport, ['requested', 'effective', 'owner', 'paused']),
+    frame: select(state.viewport.lastFrame, ['cameraIdentity', 'width', 'height', 'environmentSource',
+      'environmentGeneration', 'route', 'opticalDebugMode', 'submittedByHost', 'presentedByHost',
+      'captureColorSpace', 'displayTransform', 'exposure', 'environmentIntensity', 'helperGroundPresentation']),
+    renderer: select(state.bench.runtime, ['solverRoute', 'render_backend', 'renderRoute',
+      'effectiveRenderer', 'effectiveRendererMode', 'fallbackReason', 'opticalDebugMode',
+      'effectiveOpticalLightingMode', 'effectiveOpticalLightingRoute', 'opticalLightingFallbackReason',
+      'effectiveOpticalFootprintMode', 'effectiveOpticalFootprintRoute', 'opticalFootprintFallbackReason',
+      'effectiveTransmissionFootprintMode', 'effectiveTransmissionFootprintRoute', 'transmissionFootprintFallbackReason',
+      'effectiveBodyTransportMode', 'effectiveBodyTransportRoute', 'bodyTransportFallbackReason',
+      'effectiveInterfaceFrequencyMode', 'effectiveInterfaceFrequencyRoute', 'interfaceFrequencyFallbackReason',
+      'environmentMapEvidence']),
+  };
+}
+
 export function assertFluidObservationStable(before, after) {
+  assertHeldState(before); assertHeldState(after);
   for (const key of ['generation', 'step', 'paused', 'available']) {
     requireValue(before.clock[key] === after.clock[key], `Fluid ${key} changed during observation`);
   }
   for (const key of ['camera', 'controls']) {
     requireValue(JSON.stringify(before[key]) === JSON.stringify(after[key]), `Fluid ${key} changed during observation`);
   }
+  requireValue(JSON.stringify(presentation(before)) === JSON.stringify(presentation(after)),
+    'Fluid presentation changed during observation');
 }
 
 export function createFluidWorkingSession(host) {
@@ -60,17 +96,7 @@ export function createFluidWorkingSession(host) {
     requireValue(receipt?.diagnosticsStepCount === after.step, 'Fluid diagnostics are missing or stale');
     redraw();
     const result = read();
-    const runtime = result.bench?.runtime;
-    requireValue(runtime?.available && runtime.solver_backend === 'webgpu_compute', 'Fluid live GPU route unavailable');
-    requireValue(runtime.diagnostics?.stepCount === after.step && !runtime.diagnosticsPending,
-      'Fluid diagnostics did not complete at the held step');
-    requireValue(result.viewport?.effective === 'shared' && !result.viewport.failure
-      && result.viewport.lastFrame?.presentedByHost, 'Fluid shared viewport unavailable');
-    if (captureParticleState) {
-      const particles = runtime.diagnostics?.particleSnapshot;
-      requireValue(particles?.stepCount === after.step && particles.words?.length === runtime.particleCount * 16,
-        'Fluid full particle readback is missing or partial');
-    }
+    assertHeldState(result, captureParticleState);
     return result;
   }
 

@@ -2,7 +2,7 @@
 
 The Fluid working session holds the existing Fluid workbench between short JavaScript experiments. Open the bench, advance to an interesting state, inspect its image, then run another program against the same paused water. Each program uses the existing pressure controls, camera and GPU solver.
 
-Start this checkout's server with caller-owned stores, then choose a Fluid route from the current bench. The first exercised route uses `kaminos_finger_fluid_bench=1`, `finger_fluid_pressure_solver=ipbf`, `finger_fluid_pressure_cockpit=1`, and `finger_fluid_particle_count=12288`. Its other parameters remain ordinary bench URL parameters. An omitted `witness_target_step` gives the bench its existing open step horizon; a supplied target keeps its declared stop.
+Start this checkout's server with caller-owned stores, then choose a Fluid route from the current bench. The first exercised route uses `kaminos_finger_fluid_bench=1`, `finger_fluid_pressure_solver=ipbf`, `finger_fluid_pressure_cockpit=1`, and `finger_fluid_particle_count=12288`. Its other parameters remain ordinary bench URL parameters. An omitted `finger_fluid_witness_target_step` gives the bench its existing open step horizon; a supplied target keeps its declared stop. Opening holds the first available runtime; read its actual step before choosing an absolute `advanceTo` target for comparisons.
 
 ## First Question
 
