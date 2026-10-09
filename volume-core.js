@@ -7185,6 +7185,11 @@ fn outerSmokeBlend(p:vec3<f32>,width:f32)->f32 {
   let d=min(min(1.0-abs(p.x),1.0-abs(p.z)),min(p.y+1.0,2.0*f32(GRID_Y)/f32(GRID)-1.0-p.y));
   return 1.0-smoothstep(0.0,width,d);
 }
+fn outerSmokeMaterialBlend(p:vec3<f32>,width:f32)->f32 {
+  // Passive smoke owns side/top outflow, not the fresh fine inlet source.
+  let d=min(min(1.0-abs(p.x),1.0-abs(p.z)),2.0*f32(GRID_Y)/f32(GRID)-1.0-p.y);
+  return 1.0-smoothstep(0.0,width,d);
+}
 fn sampleOuterSmoke(p:vec3<f32>)->vec4<f32>{
   let dims=vec3<i32>(textureDimensions(outerSmokeOptical));
   let q=(p+OUTER_EXTENT)*(f32(dims.x)/(2.0*OUTER_EXTENT))-.5;
@@ -8408,7 +8413,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
         // Blend complete per-length coefficients, not smoke alone. The inner
         // endpoint is the unchanged authored fine material; the boundary
         // endpoint is exactly the passive material sampled by the far branch.
-        let w = outerSmokeBlend(p,min(1.0,max(.25,2.0*outerWidth)));
+        let w = outerSmokeMaterialBlend(p,min(1.0,max(.25,2.0*outerWidth)));
         medium = blendEmissiveMaterial(medium, passiveEmissiveMaterial(sampleOuterSmoke(p),visibleSmokeAuthority,selectiveRaymarchFireAuthority), w);
       }
       let sigma = medium.absorption + medium.scattering;

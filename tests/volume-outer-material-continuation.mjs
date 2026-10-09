@@ -29,6 +29,37 @@ const far=core.slice(core.indexOf('if (OUTER_SMOKE && !outerInsideNear(p))'),cor
 assert.match(far,/passiveEmissiveMaterial/);
 assert.match(far,/medium\.emission\s*\+\s*medium\.scattering/,'outer emission must reach the ray integral');
 assert.match(core,/medium\s*=\s*blendEmissiveMaterial\(medium,\s*passiveEmissiveMaterial/);
+// Execute the weight helper selected by the actual transported camera path.
+// The passive endpoint has no fresh reaction source: the inlet floor must not
+// replace fine flame material merely because fuel enters there. Side/top
+// outflow still uses the existing complete-coefficient transition.
+const materialPath=core.slice(core.indexOf('var medium = emissiveMaterial(reconstructed'),
+  core.indexOf('let sigma = medium.absorption',core.indexOf('var medium = emissiveMaterial(reconstructed')));
+const selected=materialPath.match(/let w\s*=\s*(\w+)\(p,min\(1\.0,max\(\.25,2\.0\*outerWidth\)\)\)/);
+assert.ok(selected,'transported camera weight helper is missing');
+const smoothstep=(lo,hi,x)=>{const t=Math.max(0,Math.min(1,(x-lo)/(hi-lo)));return t*t*(3-2*t);};
+const cameraWeight=name=>{
+  const match=core.match(new RegExp(`fn ${name}\\(p:vec3<f32>,width:f32\\)->f32 \\{([\\s\\S]*?)\\n\\}`));
+  assert.ok(match,`selected camera weight ${name} is missing`);
+  const fn=new Function('p','width','GRID_Y','GRID','min','abs','smoothstep','f32',
+    match[1].replace(/\blet\b/g,'const').replace(/p\.([xyz])/g,(_,a)=>`p[${'xyz'.indexOf(a)}]`));
+  return (p,width,ratio=1)=>fn(p,width,32*ratio,32,Math.min,Math.abs,smoothstep,Number);
+};
+const handoff=cameraWeight(selected[1]),legacyWeight=cameraWeight('outerSmokeBlend');
+assert.equal(handoff([0,-1,0],.5),0,'inlet floor must retain the existing fine emission source');
+assert.equal(handoff([0,-.875,0],.5),0,'inlet transition band must not fade fine material');
+assert.ok(handoff([.091763,-.999163,.502080],.5)<.001,'observed inlet source must survive the selected material handoff');
+assert.equal(legacyWeight([0,-1,0],.5),1,'legacy smoke blending remains unchanged');
+for(const ratio of [1,2]){
+  assert.equal(handoff([0,0,0],.5,ratio),0);
+  for(const p of [[1,0,0],[0,0,-1],[0,2*ratio-1,0],[.875,0,0],[0,2*ratio-1-.125,0]]){
+    assert.equal(handoff(p,.5,ratio),legacyWeight(p,.5,ratio),'side/top handoff must retain its existing coefficient weight');
+  }
+  assert.equal(handoff([.875,-1,0],.5,ratio),legacyWeight([.875,0,0],.5,ratio),
+    'a side overlap remains active even beside the inlet floor');
+}
+const inlet=blend(a,b,handoff([0,-1,0],.5),mix,(x,l,h)=>Math.min(h,Math.max(l,x)),make);
+assert.deepEqual(inlet,a,'complete fine coefficients, including emission and extinction, survive at the inlet');
 // Integration stays bounded and split-step invariant for the blended medium.
 const m=run(.5), sigma=m.absorption+m.scattering;
 const full=integrateEmission(m.emission,sigma,.4), half=integrateEmission(m.emission,sigma,.2);
