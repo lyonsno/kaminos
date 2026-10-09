@@ -28,6 +28,14 @@ function chunk(type, payload) {
   return Buffer.concat([length, typeBytes, payload, checksum]);
 }
 
+export function createRgbPng(width, height, pixels) {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 2;
+  const rows = Buffer.alloc(height * (width * 3 + 1));
+  for (let row = 0; row < height; row++) Buffer.from(pixels).copy(rows, row * (width * 3 + 1) + 1, row * width * 3, (row + 1) * width * 3);
+  return Buffer.concat([PNG_SIGNATURE, chunk('IHDR', ihdr), chunk('IDAT', deflateSync(rows)), chunk('IEND', Buffer.alloc(0))]);
+}
+
 export function createPng(width, height, value = 127) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
