@@ -21,6 +21,7 @@ const imageUrl = params.get('image_root') && params.get('image_path')
   : params.get('image');
 const autopauseMs = params.has('autopause') ? Number(params.get('autopause')) : null;
 const pauseForMs = Number(params.get('pausefor') ?? 1500);
+const autostopMs = params.has('autostop') ? Number(params.get('autostop')) : null;
 const state = window.__supermatDemo = { status: 'loading', error: null, runs: [], identity: null, imageSource: null };
 const $ = id => document.getElementById(id);
 $('cooperative').checked = params.get('cooperative') !== '0';
@@ -188,6 +189,10 @@ async function infer() {
         }, pauseForMs);
       }, autopauseMs);
     }
+    if (autostopMs !== null) setTimeout(() => {
+      record.stopRequestedAtMs = performance.now() - started;
+      active?.abort.abort(new Error('stopped by autostop'));
+    }, autostopMs);
     const job = route.enqueue({ jobId: runId, execute: invocation => adapter.run({ image: current,
       schedule: cooperative ? { runtime: route.runtime, invocation, control, signal: abort.signal } : null }) });
     const completion = await job.completion;
@@ -208,7 +213,8 @@ async function infer() {
     record.status = 'done';
     setStatus(`Done in ${(wallMs / 1000).toFixed(2)} s. Drop another image or choose a file.`);
   } catch (error) {
-    record.status = error?.name === 'AbortError' ? 'stopped' : 'error';
+    record.status = abort.signal.aborted ? 'stopped' : 'error';
+    record.stoppedAtMs = performance.now() - started;
     record.error = `${error?.name ?? 'Error'}: ${error?.message ?? String(error)}`;
     if (record.status === 'stopped') setStatus('Stopped.'); else fail(error);
   } finally {

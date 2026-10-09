@@ -2,10 +2,13 @@
 // One adapter keeps the F32 weights, pipelines and activation pool resident on
 // a registered route; each run maps one RGBA image to albedo, roughness and
 // metallic maps at 512x512, following the pinned source pipeline.
-import { defineWebGpuModelResourceManifest } from '../../webgpu-inference-kit/src/core.js';
+import { defineWebGpuModelResourceManifest, runWebGpuWorkerPhase } from '../../webgpu-inference-kit/src/core.js';
 import { createSuperMatOps } from './supermat-ops.js';
 import { createWeightAccessor, decodeLatent, encodeImage, runUnet, timeEmbedding } from './supermat-model.js';
 import { preprocessForSuperMat, resizeRgbaBilinear } from './supermat-preprocess.js';
+import { mapsFromPlanes } from './supermat-maps.js';
+
+export { mapsFromPlanes };
 
 export const SUPERMAT_ROUTE_ID = 'supermat.image-to-pbr.webgpu-local.v0';
 export const SUPERMAT_IMAGE_SIZE = 512;
@@ -15,34 +18,40 @@ export const SUPERMAT_IMAGE_SIZE = 512;
 export const DEFAULT_DUTY_FLOPS = 16e9;
 const PACKAGE_SCHEMA = 'supermat.browser-weight-package.v0';
 
-// numpy (x * 255.0).round() on float32: half-to-even after an F32 product.
-function quantize(value) {
-  const scaled = Math.fround(Math.fround(Math.min(1, Math.max(0, value))) * 255);
-  const floor = Math.floor(scaled), fraction = scaled - floor;
-  if (fraction > 0.5) return floor + 1;
-  if (fraction < 0.5) return floor;
-  return floor % 2 === 0 ? floor : floor + 1;
-}
+const CPU_WORKER_MODULE = 'supermat.cpu-phases.v0';
 
-export function mapsFromPlanes(albedo, orm, size = SUPERMAT_IMAGE_SIZE) {
-  const plane = size * size;
-  const make = () => new Uint8ClampedArray(plane * 4);
-  const maps = { albedo: make(), roughness: make(), metallic: make(), orm: make() };
-  for (let i = 0; i < plane; i++) {
-    const o = i * 4;
-    for (let c = 0; c < 3; c++) {
-      maps.albedo[o + c] = quantize(albedo[c * plane + i]);
-      maps.orm[o + c] = quantize(orm[c * plane + i]);
+// CPU phases run in a module Worker when available (`cpuWorker: false` keeps
+// them inline). Both paths call the same preprocessing and quantization code.
+async function runCpuPhase(useWorker, operationId, payload, transfer, signal) {
+  if (!useWorker) {
+    if (operationId === 'supermat.preprocess') {
+      const image = { width: payload.width, height: payload.height, data: new Uint8Array(payload.data) };
+      const planes = preprocessForSuperMat(image, payload.size);
+      const resized = resizeRgbaBilinear(image, payload.size, payload.size);
+      const alpha = new Uint8ClampedArray(payload.size * payload.size);
+      for (let i = 0; i < alpha.length; i++) alpha[i] = resized.data[i * 4 + 3];
+      return { planes: planes.buffer, alpha: alpha.buffer };
     }
-    const roughness = quantize(orm[plane + i]), metallic = quantize(orm[2 * plane + i]);
-    maps.roughness[o] = maps.roughness[o + 1] = maps.roughness[o + 2] = roughness;
-    maps.metallic[o] = maps.metallic[o + 1] = maps.metallic[o + 2] = metallic;
-    maps.albedo[o + 3] = maps.roughness[o + 3] = maps.metallic[o + 3] = maps.orm[o + 3] = 255;
+    const maps = mapsFromPlanes(new Float32Array(payload.albedo), new Float32Array(payload.orm), payload.size);
+    return Object.fromEntries(Object.entries(maps).map(([name, map]) => [name, map.data.buffer]));
   }
-  return Object.fromEntries(Object.entries(maps).map(([name, data]) => [name, { width: size, height: size, data }]));
+  const { output } = await runWebGpuWorkerPhase({
+    executionId: crypto.randomUUID(), operationId, moduleId: CPU_WORKER_MODULE,
+    createWorker: () => ({
+      worker: new Worker(new URL('./supermat-cpu-worker.js', import.meta.url), { type: 'module', name: 'supermat-cpu' }),
+      identity: { moduleId: CPU_WORKER_MODULE, workerType: 'module', source: 'supermat-cpu-worker.js' },
+    }),
+    payload, transfer, signal,
+    validateOutput(value) {
+      const required = operationId === 'supermat.preprocess' ? ['planes', 'alpha'] : ['albedo', 'roughness', 'metallic', 'orm'];
+      for (const name of required) if (!(value?.[name] instanceof ArrayBuffer)) throw new Error(`${operationId} output lacks ${name}`);
+      return value;
+    },
+  });
+  return output;
 }
 
-export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgress } = {}) {
+export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgress, cpuWorker = typeof Worker !== 'undefined' } = {}) {
   if (!route?.runtime?.device || typeof route.loadModelResourcesFromSource !== 'function') {
     throw new Error('SuperMat adapter requires a registered kit session route');
   }
@@ -101,8 +110,10 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
       onProgress?.({ phase: name });
     };
     let t = performance.now();
-    const input = preprocessForSuperMat(image, SUPERMAT_IMAGE_SIZE);
-    const mask = resizeRgbaBilinear(image, SUPERMAT_IMAGE_SIZE, SUPERMAT_IMAGE_SIZE);
+    const source = new Uint8Array(image.data);
+    const prepared = await runCpuPhase(cpuWorker, 'supermat.preprocess', { width: image.width, height: image.height,
+      data: source.buffer, size: SUPERMAT_IMAGE_SIZE }, [source.buffer], schedule?.signal);
+    const input = new Float32Array(prepared.planes);
     timings.preprocessMs = performance.now() - t;
     device.pushErrorScope('validation');
     device.pushErrorScope('out-of-memory');
@@ -133,13 +144,17 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
         ops.release(decoded);
         timings[index === 0 ? 'readAlbedoMs' : 'readOrmMs'] = performance.now() - t;
       }
-      const maps = mapsFromPlanes(planes[0], planes[1]);
-      const alpha = new Uint8ClampedArray(SUPERMAT_IMAGE_SIZE * SUPERMAT_IMAGE_SIZE);
-      for (let i = 0; i < alpha.length; i++) alpha[i] = mask.data[i * 4 + 3];
+      t = performance.now();
+      const packed = await runCpuPhase(cpuWorker, 'supermat.maps', { albedo: planes[0].slice().buffer,
+        orm: planes[1].slice().buffer, size: SUPERMAT_IMAGE_SIZE }, [], schedule?.signal);
+      const maps = Object.fromEntries(Object.entries(packed).map(([name, buffer]) => [name,
+        { width: SUPERMAT_IMAGE_SIZE, height: SUPERMAT_IMAGE_SIZE, data: new Uint8ClampedArray(buffer) }]));
+      timings.packMapsMs = performance.now() - t;
+      const alpha = new Uint8ClampedArray(prepared.alpha);
       runs++;
       const duties = ops.stats.dutyHistory.slice(historyStart).map(row => ({ ...row }));
       return { width: SUPERMAT_IMAGE_SIZE, height: SUPERMAT_IMAGE_SIZE, maps, planes: { albedo: planes[0], orm: planes[1] },
-        alpha, timings, run: runs, identity, cooperative: Boolean(schedule),
+        alpha, timings, run: runs, identity, cooperative: Boolean(schedule), cpuWorker,
         dutyCount: ops.stats.duties - dutiesBefore, duties, opStats: { ...ops.stats, dutyHistory: undefined } };
     } catch (caught) {
       error = caught;
