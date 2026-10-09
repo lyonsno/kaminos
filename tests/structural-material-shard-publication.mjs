@@ -6,7 +6,7 @@ const source=text.slice(text.indexOf('function makeMeshes('),text.indexOf('async
 assert.ok(source.startsWith('function makeMeshes('));
 const fixture=reject=>{
  const old={mesh:{geometry:{dispose(){this.disposed=true;}}}},published=[],removed=[];
- const context={pieces:[old],body:{positions:[[0,0,0],[1,0,0],[0,1,0],[0,0,1]]},components:[0,0,0,0],volumes:[1,1,1,1],configuration:{reconstructionRadius:1},skinMaterial:{},capMaterial:{},
+ const context={pieces:[old],resident:{},body:{positions:[[0,0,0],[1,0,0],[0,1,0],[0,0,1]]},components:[0,0,0,0],volumes:[1,1,1,1],configuration:{reconstructionRadius:1},skinMaterial:{},capMaterial:{},
   observed:{state:[],bonds:[],steps:4},positions:()=>[[2,0,0],[3,0,0],[2,1,0],[2,0,1]],inside:()=>true,
   surface:{witness:()=>({pieces:[{id:1,halfspaces:[],geometry:{numProp:3,properties:[0,0,0,1,0,0,0,1,0],indices:[0,1,2]}}]})},
   affineComparison:true,COMPONENT_TRANSPORT_ROUTE:'transport-fixture',bindComponentAffineField(){if(reject)throw new Error('binding refused');return{route:'affine-fixture'};},applyComponentAffineField:()=>[[2,0,0],[3,0,0],[2,1,0]],

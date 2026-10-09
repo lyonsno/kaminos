@@ -36,11 +36,16 @@ export function bindComponentTransport(rest,vertices,{components,component,volum
  return{route:COMPONENT_TRANSPORT_ROUTE,points:rest.length,component,radius,frame:{ids,weights:frameWeights,rest:ids.map(i=>[...rest[i]])},entries,claim:'Component rotation plus positive material-position blend and transported rest offset; no affine-strain reproduction, added mechanics or displacement clipping'};
 }
 
-export function applyComponentTransport(binding,current,{components}={}){
+export function componentTransportQuaternion(binding,current,{components}={}){
  if(binding?.route!==COMPONENT_TRANSPORT_ROUTE||!finitePoints(current)||current.length!==binding.points||!labels(components,current.length))throw new Error('Matching current component transport required');
  const valid=(ids,weights)=>Array.isArray(ids)&&ids.length&&new Set(ids).size===ids.length&&ids.every(id=>Number.isInteger(id)&&id>=0&&id<current.length&&components[id]===binding.component)&&Array.isArray(weights)&&weights.length===ids.length&&weights.every(w=>Number.isFinite(w)&&w>0)&&Math.abs(weights.reduce((a,b)=>a+b,0)-1)<1e-10;
  if(!valid(binding.frame?.ids,binding.frame?.weights)||binding.frame.ids.length!==components.filter(c=>c===binding.component).length||!finitePoints(binding.frame.rest)||binding.frame.rest.length!==binding.frame.ids.length)throw new Error('Complete positive component frame required');
- const rest=Array(current.length);binding.frame.ids.forEach((id,i)=>rest[id]=binding.frame.rest[i]);const q=rotation(rest,current,binding.frame.ids,binding.frame.weights);
+ const rest=Array(current.length);binding.frame.ids.forEach((id,i)=>rest[id]=binding.frame.rest[i]);return rotation(rest,current,binding.frame.ids,binding.frame.weights);
+}
+
+export function applyComponentTransport(binding,current,{components}={}){
+ const q=componentTransportQuaternion(binding,current,{components}),rest=Array(current.length);binding.frame.ids.forEach((id,i)=>rest[id]=binding.frame.rest[i]);
+ const valid=(ids,weights)=>Array.isArray(ids)&&ids.length&&new Set(ids).size===ids.length&&ids.every(id=>Number.isInteger(id)&&id>=0&&id<current.length&&components[id]===binding.component)&&Array.isArray(weights)&&weights.length===ids.length&&weights.every(w=>Number.isFinite(w)&&w>0)&&Math.abs(weights.reduce((a,b)=>a+b,0)-1)<1e-10;
  return binding.entries.map(entry=>{
   if(!valid(entry.ids,entry.weights)||!finitePoints([entry.offset,entry.point]))throw new Error('Positive component-owned surface support required');
   const center=[0,0,0];entry.ids.forEach((id,i)=>rest[id].forEach((x,k)=>center[k]+=entry.weights[i]*x));if(entry.offset.some((x,k)=>Math.abs(x-(entry.point[k]-center[k]))>1e-10*Math.max(1,Math.abs(entry.point[k]),Math.abs(center[k]))))throw new Error('Transported rest offset differs from component correspondence');
