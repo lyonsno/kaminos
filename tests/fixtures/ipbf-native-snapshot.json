@@ -1,0 +1,55 @@
+{
+  "source": {
+    "revision": "5ffe17b3cbe0dec64f0c7bd4a63bdaae9a417314",
+    "route": "existing-Kaminos-short-IPBF-12-step-smoke",
+    "reportSha256": "43c17af713191c34874fe150fd1451cd7ad9af3af783a61e9b295e500f80b72b",
+    "adapter": {
+      "vendor": "apple",
+      "architecture": "metal-3",
+      "device": null,
+      "description": null
+    },
+    "meaning": "Observed native snapshot; repeated snapshots in unit tests establish contract admission only, not motion."
+  },
+  "snapshot": {
+    "schema": "kaminos.finger-fluid-truth-snapshot.v0",
+    "contract": "kaminos-fluid-truth-gauntlet-v0",
+    "boundaryPressureContract": "ipbf-collision-projection-only-v0",
+    "scene": "multi_regime_playground",
+    "populationMode": "finite_source_recirculation",
+    "particleCount": 12288,
+    "finiteParticleCount": 12288,
+    "activeParticleCount": 12288,
+    "dormantParticleCount": 0,
+    "retainedParticleCount": 12288,
+    "retainedParticleRatio": 1,
+    "sourceRecirculationCount": 0,
+    "centerOfMass": [
+      -0.15886,
+      -0.44559,
+      -0.49515
+    ],
+    "totalKineticEnergy": 6039.273687,
+    "averageKineticEnergy": 0.491477,
+    "averageDensity": 16.66915,
+    "maxDensity": 25.16373,
+    "relativeDensityErrorMean": 0.314069,
+    "relativeDensityErrorP95": 0.614404,
+    "boundaryParticleCount": 8646,
+    "bulkParticleCount": 3642,
+    "boundaryRelativeDensityErrorMean": 0.279885,
+    "boundaryRelativeDensityErrorP95": 0.569128,
+    "bulkRelativeDensityErrorMean": 0.395223,
+    "bulkRelativeDensityErrorP95": 0.655921,
+    "maximumBoundaryPenetration": 0,
+    "occupiedCellCount": 593,
+    "occupiedVolumeProxy": 5.623308,
+    "maximumCellOccupancy": 58,
+    "p95CellOccupancy": 44,
+    "gridDimensions": [
+      32,
+      20,
+      32
+    ]
+  }
+}

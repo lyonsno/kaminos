@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {fluidBrowserLaunch} from './finger-fluid-browser-launch.mjs';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -7,6 +8,9 @@ import {
   KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION,
   KAMINOS_FINGER_FLUID_LIVE_INLET_WITNESS_CAMERA,
   evaluateFingerFluidTruthTrajectory,
+  resolveFingerFluidPressureSolver,
+  validateFingerFluidTruthPressureState,
+  KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,
   planFingerFluidLiveInletEconomics,
   validateFingerFluidLiveInletCohortLedger,
   validateFingerFluidLiveInletCohortTrajectory as validateFingerFluidLiveInletCohortTrajectoryContract,
@@ -20,6 +24,8 @@ for (let index = 2; index < process.argv.length; index += 2) args.set(process.ar
 const requestedUrl = args.get('--url') || 'http://127.0.0.1:8100/index.html?kaminos_finger_fluid_bench=1&finger_fluid_truth_scene=multi_regime_playground';
 const requestedUrlObject = new URL(requestedUrl);
 const requestedTruthScene = requestedUrlObject.searchParams.get('finger_fluid_truth_scene') || 'multi_regime_playground';
+const requestedPressureSolver=requestedUrlObject.searchParams.get('finger_fluid_pressure_solver')||'pbf';
+const requestedBoundaryPressureContract={pbf:KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,ipbf:'ipbf-collision-projection-only-v0'}[requestedPressureSolver]??null;
 const requestedRendererMode = requestedUrlObject.searchParams.get('finger_fluid_renderer') || 'screen_space_surface';
 const requestedSupportFriction = Number(requestedUrlObject.searchParams.get('finger_fluid_support_friction') ?? KAMINOS_FINGER_FLUID_DEFAULT_SUPPORT_FRICTION);
 const checkpointOffsetsMs = String(args.get('--checkpoints-ms') || '500,2500,7000')
@@ -54,13 +60,15 @@ const requestedLiveInletSecondReplacementPacketPath = args.get('--live-inlet-sec
 const liveInletSecondReplacementAfterCheckpoint = Number(
   args.get('--live-inlet-second-replacement-after-checkpoint') ?? 1,
 );
-const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const chrome = process.env.KAMINOS_CHROME;
+let browserLaunch=null;
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-fluid-truth-profile-${debugPort}-${process.pid}`;
 
 let phase = 'validate_config';
 let primary_output_written = false;
 let effectiveUrl = null;
 let effectiveTruthScene = null;
+let effectivePressureSolver=null;
 let effectiveRendererMode = null;
 let initialRendererAuthority = null;
 let lastRendererAuthority = null;
@@ -134,6 +142,7 @@ function writeReport(extra = {}) {
     effectiveTruthScene,
     requestedRendererMode,
     effectiveRendererMode,
+    requestedPressureSolver,effectivePressureSolver,requestedBoundaryPressureContract,
     requestedSupportFriction,
     requestedLiveInletPacketPath,
     requestedLiveInletReplacementPacketPath,
@@ -155,7 +164,8 @@ function writeReport(extra = {}) {
     checkpointStepTargetSource,
     viewport: { width: viewportWidth, height: viewportHeight, deviceScaleFactor },
     debugPort,
-    chrome,
+    chrome:browserLaunch?.executable??chrome??null,
+    browserLaunch,
     userDataDir,
     failure_phase: phase,
     primary_output_written,
@@ -342,6 +352,7 @@ async function requestCheckpoint(socket, checkpointIndex, elapsedMs, targetStep)
   if (effectiveSupportFriction !== requestedSupportFriction) {
     throw new Error(`support friction changed during trajectory: ${JSON.stringify({ requestedSupportFriction, effectiveSupportFriction })}`);
   }
+  validateFingerFluidTruthPressureState(requestedPressureSolver,state.runtime);
   const rendererAuthority = validateFingerFluidTruthRendererState(requestedRendererMode, state.runtime);
   if (rendererAuthority.effectiveRendererMode !== effectiveRendererMode) {
     throw new Error(`truth renderer changed during trajectory: ${JSON.stringify({
@@ -660,18 +671,8 @@ async function main() {
   phase = 'bind_served_source';
   servedSourceIdentity = await bindServedSourceIdentity();
   phase = 'launch_browser';
-  const chromeProcess = spawn(chrome, [
-    `--remote-debugging-port=${debugPort}`,
-    `--user-data-dir=${userDataDir}`,
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--disable-extensions',
-    '--disable-background-timer-throttling',
-    '--disable-renderer-backgrounding',
-    '--disable-backgrounding-occluded-windows',
-    `--window-size=${viewportWidth},${viewportHeight}`,
-    'about:blank',
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  browserLaunch=fluidBrowserLaunch({executable:chrome,debugPort,userDataDir,width:viewportWidth,height:viewportHeight});
+  const chromeProcess=spawn(browserLaunch.executable,browserLaunch.args,{stdio:['ignore','ignore','pipe']});
   chromeProcess.stderr.on('data', chunk => { stderr += chunk.toString(); });
 
   try {
@@ -707,6 +708,8 @@ async function main() {
     }
     effectiveUrl = await evaluate(socket, 'window.location.href');
     effectiveTruthScene = lastDebugState.runtime?.effectiveTruthScene;
+    const pressureAuthority=validateFingerFluidTruthPressureState(requestedPressureSolver,lastDebugState.runtime);
+    effectivePressureSolver=pressureAuthority.effectivePressureSolver;
     globalThis.effectiveTruthScene = effectiveTruthScene;
     if (requestedTruthScene !== effectiveTruthScene) {
       throw new Error(`truth scene silently fell back: ${JSON.stringify({ requestedTruthScene, effectiveTruthScene })}`);
@@ -791,7 +794,7 @@ async function main() {
       liveInletCohortAcceptance = validateLiveInletCohortTrajectory();
     }
     phase = 'evaluate_trajectory';
-    trajectoryAcceptance = evaluateFingerFluidTruthTrajectory(effectiveTruthScene, trajectory);
+    trajectoryAcceptance = evaluateFingerFluidTruthTrajectory(effectiveTruthScene, trajectory,{boundaryPressureContract:requestedBoundaryPressureContract});
     if (consoleEvents.some(event => event.type === 'exception' || event.type === 'error')) {
       throw new Error(`browser console contains runtime errors: ${JSON.stringify(consoleEvents)}`);
     }
