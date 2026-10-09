@@ -2,11 +2,11 @@
 // Model adapters below are the production kernels, not injectable model or
 // reference callbacks. Initial noise is CPU-authored input; learned fields
 // and coordinates stay resident. Mesh extraction/UV/PBR are later consumers.
-import {createTrellisSparseFlowAdapter} from './sparse-flow.js';
+import {createTrellisSparseFlowAdapter,createTrellisSparseFlowAdapterAsync} from './sparse-flow.js';
 import {createTrellisSparseSamplerAdapter} from './sparse-sampler.js';
 import {createTrellisSparseDecoderAdapter} from './sparse-decoder.js';
 import {createTrellisOccupancyCoordinatesAdapter} from './occupancy-coordinates.js';
-import {createTrellisSLatFlowAdapter} from './slat-flow.js';
+import {createTrellisSLatFlowAdapter,createTrellisSLatFlowAdapterAsync} from './slat-flow.js';
 import {createTrellisSLatSamplerAdapter} from './slat-sampler.js';
 import {createTrellisSLatCascadeSupportAdapter} from './slat-cascade.js';
 import {createTrellisSLatScaleAdapter} from './slat-scale.js';
@@ -112,17 +112,18 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
   const consume=async(role,name,factory)=>{
     if(staged){phase='generation-checkpoint-input-loading';
       await onPhase?.({phase,modelRole:role,routeId:route.routeId});}
-    const checkpoint=staged?await loadModel(role):models[role];
+    const checkpoint=staged?await loadModel(role,{streamBlocks:true}):models[role];
     if(!checkpoint?.weights||checkpoint.role!==undefined&&checkpoint.role!==role)
       throw TypeError('actual checkpoint weights for model role required: '+role);
     await enter(name);
-    return factory({...models[role],weights:checkpoint.weights,phases:checkpoint.phases,siluTable:checkpoint.siluTable});
+    return factory({...models[role],weights:checkpoint.weights,phases:checkpoint.phases,siluTable:checkpoint.siluTable,
+      loadBlockWeights:checkpoint.loadBlockWeights});
   };
   const shapeFlow=(role,coordinates,concatTensor)=>consume(role,
     role==='lowResolutionShape'?'low-resolution-shape-sampling':role==='highResolutionShape'?'high-resolution-shape-sampling':'shape-conditioned-texture-sampling',
-    model=>own(createTrellisSLatFlowAdapter({route,
+    async model=>own(await(model.loadBlockWeights?createTrellisSLatFlowAdapterAsync:createTrellisSLatFlowAdapter)({route,
       config:{...model.config,tokenRows:coordinates.shape[0],mode:role==='textureFlow'?'texture':'shape'},
-      weights:model.weights,conditioningTensor,coordinateTensor:coordinates,...(concatTensor?{concatTensor}:{})})));
+      weights:model.weights,loadBlockWeights:model.loadBlockWeights,conditioningTensor,coordinateTensor:coordinates,...(concatTensor?{concatTensor}:{})})));
   const sampleShape=async(role,flow,stage,invocation)=>{
     const sampler=own(createTrellisSLatSamplerAdapter({route,flow,config:{...models[role].config,
       tokenRows:flow.plan.tokenRows,mode:flow.plan.mode},conditioningTensor}));
@@ -136,8 +137,9 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
       if(state!=='new')throw Error(state==='running'?'generation adapter in use':'generation adapter is '+state);
       state='running';
       try{
-        const sparse=await consume('sparseFlow','sparse-structure-sampling',model=>own(createTrellisSparseFlowAdapter({route,config:model.config,
-          weights:model.weights,phases:model.phases,conditioningTensor}))),
+        const sparse=await consume('sparseFlow','sparse-structure-sampling',async model=>own(await
+          (model.loadBlockWeights?createTrellisSparseFlowAdapterAsync:createTrellisSparseFlowAdapter)({route,config:model.config,
+          weights:model.weights,loadBlockWeights:model.loadBlockWeights,phases:model.phases,conditioningTensor}))),
           sparseSampler=own(createTrellisSparseSamplerAdapter({route,flow:sparse,config:models.sparseFlow.config,conditioningTensor}));
         await sparseSampler.run({sample:await noise('sparse',sparse.plan.prefix.inputShape)},invocation);
         const occupancy=await consume('occupancyDecoder','occupancy-decoding',model=>own(createTrellisSparseDecoderAdapter({route,config:model.config,
