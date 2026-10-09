@@ -12,12 +12,12 @@
 
 export const GROUP = 64;
 
-function tiledGemm({ name, bm, bn, bk, weight }) {
+function tiledGemm({ name, bm, bn, bk, weight, xType = 'f16', sType = 'f16' }) {
   const tm = bm / 16, tn = bn / 16;
   const loadsA = (bm * bk) / 4 / 256;         // vec4<f16> loads per thread
   const header = `enable f16;
 struct P { M:u32, N:u32, K:u32, groups:u32 };
-@group(0) @binding(0) var<storage, read> X: array<vec4<f16>>;
+@group(0) @binding(0) var<storage, read> X: array<vec4<${xType}>>;
 @group(0) @binding(2) var<storage, read_write> Y: array<f16>;
 @group(0) @binding(3) var<uniform> p: P;
 `;
@@ -29,7 +29,7 @@ struct P { M:u32, N:u32, K:u32, groups:u32 };
       let idx = tid + q * 256u; let row = idx / ${bk / 4}u; let c4 = idx % ${bk / 4}u;
       let n = n0 + row; var v = vec4<f16>(0.0);
       if (n < p.N) { v = W[n * (p.K / 4u) + k0 / 4u + c4]; }
-      for (var c = 0u; c < 4u; c++) { Bs[(c4 * 4u + c) * ${bn}u + row] = v[c]; }
+      for (var c = 0u; c < 4u; c++) { Bs[(c4 * 4u + c) * ${bn}u + row] = ${sType}(v[c]); }
     }`;
   } else if (weight === 'i8') {
     weightDecl = `@group(0) @binding(1) var<storage, read> W: array<u32>;
@@ -44,7 +44,7 @@ struct P { M:u32, N:u32, K:u32, groups:u32 };
         let s = S[n * p.groups + k / ${GROUP}u];
         v = vec4<f16>(unpack4xI8(W[n * (p.K / 4u) + k / 4u])) * s;
       }
-      for (var c = 0u; c < 4u; c++) { Bs[(c4 * 4u + c) * ${bn}u + row] = v[c]; }
+      for (var c = 0u; c < 4u; c++) { Bs[(c4 * 4u + c) * ${bn}u + row] = ${sType}(v[c]); }
     }`;
   } else if (weight === 'i4') {
     weightDecl = `@group(0) @binding(1) var<storage, read> W: array<u32>;
@@ -65,15 +65,15 @@ struct P { M:u32, N:u32, K:u32, groups:u32 };
         lo = vec4<f16>(ql) * sb.x + sb.y; hi = vec4<f16>(qh) * sb.x + sb.y;
       }
       for (var c = 0u; c < 4u; c++) {
-        Bs[(c8 * 8u + c) * ${bn}u + row] = lo[c];
-        Bs[(c8 * 8u + 4u + c) * ${bn}u + row] = hi[c];
+        Bs[(c8 * 8u + c) * ${bn}u + row] = ${sType}(lo[c]);
+        Bs[(c8 * 8u + 4u + c) * ${bn}u + row] = ${sType}(hi[c]);
       }
     }`;
   } else throw new Error(`unknown weight ${weight}`);
 
   const code = `${header}${weightDecl}
-var<workgroup> As: array<f16, ${bk * bm}>;
-var<workgroup> Bs: array<f16, ${bk * bn}>;
+var<workgroup> As: array<${sType}, ${bk * bm}>;
+var<workgroup> Bs: array<${sType}, ${bk * bn}>;
 @compute @workgroup_size(16, 16)
 fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>) {
   let tid = lid.y * 16u + lid.x;
@@ -82,9 +82,9 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
   for (var k0 = 0u; k0 < p.K; k0 += ${bk}u) {
     for (var q = 0u; q < ${loadsA}u; q++) {
       let idx = tid + q * 256u; let row = idx / ${bk / 4}u; let c4 = idx % ${bk / 4}u;
-      let m = m0 + row; var v = vec4<f16>(0.0);
+      let m = m0 + row; var v = vec4<${xType}>(0.0);
       if (m < p.M) { v = X[m * (p.K / 4u) + k0 / 4u + c4]; }
-      for (var c = 0u; c < 4u; c++) { As[(c4 * 4u + c) * ${bm}u + row] = v[c]; }
+      for (var c = 0u; c < 4u; c++) { As[(c4 * 4u + c) * ${bm}u + row] = ${sType}(v[c]); }
     }
     ${loadB}
     workgroupBarrier();
@@ -104,7 +104,7 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
     }
   }
 }`;
-  return { name, code, weight, tileM: bm, tileN: bn, workgroupSize: 256, accumulate: 'f32' };
+  return { name, code, weight, xType, tileM: bm, tileN: bn, workgroupSize: 256, accumulate: 'f32' };
 }
 
 // One subgroup computes a 32x32 block as 4x4 tiles of 8x8; a 128-thread
@@ -281,14 +281,12 @@ fn main(@builtin(local_invocation_index) tid: u32, @builtin(workgroup_id) wid: v
 export function kernelVariants() {
   return [
     tiledGemm({ name: 'f16-64x64x32', bm: 64, bn: 64, bk: 32, weight: 'f16' }),
+    tiledGemm({ name: 'f32x-f16s-64x64x32', bm: 64, bn: 64, bk: 32, weight: 'f16', xType: 'f32', sType: 'f16' }),
+    tiledGemm({ name: 'f32x-f32s-64x64x32', bm: 64, bn: 64, bk: 32, weight: 'f16', xType: 'f32', sType: 'f32' }),
+    tiledGemm({ name: 'f32x-f32s-64x64x16', bm: 64, bn: 64, bk: 16, weight: 'f16', xType: 'f32', sType: 'f32' }),
+    tiledGemm({ name: 'f32x-f16s-i4-64x64x32', bm: 64, bn: 64, bk: 32, weight: 'i4', xType: 'f32', sType: 'f16' }),
+    tiledGemm({ name: 'f32x-f32s-i4-64x64x32', bm: 64, bn: 64, bk: 32, weight: 'i4', xType: 'f32', sType: 'f32' }),
     tiledGemm({ name: 'i8g64-64x64x32', bm: 64, bn: 64, bk: 32, weight: 'i8' }),
     tiledGemm({ name: 'i4g64-64x64x32', bm: 64, bn: 64, bk: 32, weight: 'i4' }),
-    vec4Gemm({ name: 'vec4-f16-64x64', tm: 4, vn: 1, weight: 'f16' }),
-    vec4Gemm({ name: 'vec4-f16-64x128', tm: 4, vn: 2, weight: 'f16' }),
-    vec4Gemm({ name: 'vec4-f16-128x64', tm: 8, vn: 1, weight: 'f16' }),
-    vec4Gemm({ name: 'vec4-i4-64x64', tm: 4, vn: 1, weight: 'i4' }),
-    vec4Gemm({ name: 'vec4-i4-64x128', tm: 4, vn: 2, weight: 'i4' }),
-    sgmatSharedGemm('f16'),
-    sgmatSharedGemm('f32'),
   ];
 }

@@ -74,7 +74,7 @@ async function checkAndTime(device, variant, shape, ops, cfg) {
   if (!pipeline) { await device.popErrorScope(); return row; }
 
   const bufs = [];
-  const xb = buffer(device, ops.x); bufs.push(xb);
+  const xb = buffer(device, variant.xType === 'f32' ? new Float32Array(ops.x) : ops.x); bufs.push(xb);
   let wb, sb = null;
   if (kind === 'f16') wb = buffer(device, ops.wf16);
   else if (kind === 'i8') { wb = buffer(device, new Uint32Array(ops.i8.buffer)); sb = buffer(device, ops.i8s); }
