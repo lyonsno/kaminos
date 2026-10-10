@@ -8,6 +8,7 @@
 // --site-dir serves an assembled Pages site (scripts/assemble-pages-site.mjs) under /kaminos/, as
 // project Pages does, and opens the demo at /kaminos/inference-kit/klein/.
 // --weights-dir serves a staged repository folder from a second, CORS-enabled origin.
+// --throttle-mbps N limits the page's download speed (to watch a slow first visit locally).
 // --profile-dir keeps and reuses a Chrome profile (and its weight cache); otherwise the profile is
 // temporary and removed at exit. --stall-ms (default 300000) fails a wait whose status stops changing.
 // Writes report.json (written even when a phase fails), per-size PNGs and page screenshots.
@@ -94,11 +95,29 @@ try {
   if (report.beforeLoad.loadDisabled) throw new Error(`load button disabled before load: ${report.beforeLoad.status}`);
 
   report.phase = 'load';
+  if (opt('--throttle-mbps')) {
+    report.throttleMbps = Number(opt('--throttle-mbps'));
+    await browser.send('Network.enable');
+    const throttled = await browser.send('Network.emulateNetworkConditions', { offline: false, latency: 0, uploadThroughput: -1,
+      downloadThroughput: report.throttleMbps * 1e6 / 8 });
+    if (throttled.error) throw new Error(`network throttling failed: ${JSON.stringify(throttled.error)}`);
+  }
+  // The scene must keep drawing while the weights load: count its frames across the load.
+  const framesAtClick = await browser.evaluate('window.kleinDemo.scene.frames');
   const loadStarted = Date.now();
   await browser.evaluate(`document.getElementById('load').click()`, false);
+  const during = await waitFor(`(() => { const s = ${pageState}; return /MB\\/s/.test(s.status) || s.controls || /failed/i.test(s.status) ? s : null; })()`, 'load progress');
+  if (!during.controls) {
+    report.duringLoad = { ...during, sceneFrames: await browser.evaluate('window.kleinDemo.scene.frames') - framesAtClick, atMs: Date.now() - loadStarted };
+    await screenshot('during-load-desktop', desktop);
+  }
   report.afterLoad = await waitFor(`(() => { const s = ${pageState}; return s.controls || /failed/i.test(s.status) ? s : null; })()`, 'load');
   report.afterLoad.wallMs = Date.now() - loadStarted;
   if (!report.afterLoad.controls) throw new Error(`load failed: ${report.afterLoad.status}`);
+  report.afterLoad.sceneFrames = await browser.evaluate('window.kleinDemo.scene.frames') - framesAtClick;
+  report.afterLoad.sceneFps = report.afterLoad.sceneFrames / (report.afterLoad.wallMs / 1000);
+  if (report.afterLoad.sceneFps < 5) throw new Error(`the scene drew ${report.afterLoad.sceneFrames} frames during a ${report.afterLoad.wallMs} ms load`);
+  if (report.throttleMbps) await browser.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
   report.loadStats = await browser.evaluate('window.kleinDemo.pipeline.loadStats');
 
   report.phase = 'generate';

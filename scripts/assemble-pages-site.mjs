@@ -1,5 +1,5 @@
 // Assemble the Kaminos GitHub Pages site into a new directory: the flame boutique at the root,
-// the FLUX.2 [klein] browser demo at inference-kit/klein/, and the inference kit source the
+// the FLUX.2 [klein] browser demo (with its example images) at inference-kit/klein/, and the inference kit source the
 // demo imports (../../webgpu-inference-kit/src/ from the demo page). Nothing else from the
 // repository is published.
 // Usage: node scripts/assemble-pages-site.mjs <out-dir>   (the directory must not exist)
@@ -20,6 +20,10 @@ export function assemblePagesSite(out) {
     if (file === "index.html" || file === "qwen-tokenizer.js" || /^klein-[\w-]+\.js$/.test(file)) {
       fs.copyFileSync(path.join(klein, file), path.join(demo, file));
     }
+  }
+  fs.mkdirSync(path.join(demo, "assets"));
+  for (const file of fs.readdirSync(path.join(klein, "assets"))) {
+    if (/\.(jpg|png)$/.test(file)) fs.copyFileSync(path.join(klein, "assets", file), path.join(demo, "assets", file));
   }
   fs.cpSync(path.join(repoRoot, "webgpu-inference-kit", "src"), path.join(out, "webgpu-inference-kit", "src"), {
     recursive: true,

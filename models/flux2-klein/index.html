@@ -46,6 +46,9 @@
   #status { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: pre-wrap; min-height: 1.5em; }
   #status.warn { color: var(--warn); }
   .image { position: relative; }
+  figure { margin: 0; display: grid; gap: 8px; }
+  figure img { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); }
+  figcaption { font-size: 14px; }
   canvas { display: block; width: 100%; height: auto; border-radius: 10px; background: var(--bg); }
   #out { aspect-ratio: 1; border: 1px solid var(--line); }
   .scene { display: grid; grid-template-columns: 112px 1fr; gap: 12px; align-items: center; }
@@ -98,7 +101,11 @@
     </section>
 
     <section class="image" aria-label="Generated image">
-      <canvas id="out" width="512" height="512"></canvas>
+      <figure id="examples">
+        <img src="assets/examples.jpg" width="1168" height="776" alt="Six images generated with this page: a fisherman portrait, a celadon teapot, a misty forest valley, a watercolor fox under a mushroom, a neon OPEN ALL NIGHT sign, and a brass toy locomotive">
+        <figcaption class="muted">Made with this page at 512 × 512. Your images appear here.</figcaption>
+      </figure>
+      <canvas id="out" class="hidden" width="512" height="512"></canvas>
     </section>
   </div>
 
@@ -129,26 +136,51 @@ async function unsupportedReason() {
   return null;
 }
 
+// Download speed over the last few seconds and the time left at that speed.
+const samples = [];
+function loadProgress({ loadedBytes, totalBytes }) {
+  const now = performance.now();
+  samples.push([now, loadedBytes]);
+  while (samples.length > 2 && now - samples[0][0] > 8000) samples.shift();
+  const [t0, b0] = samples[0], span = (now - t0) / 1000;
+  const rate = span > 1.5 ? (loadedBytes - b0) / span : 0;
+  let text = `Loading weights: ${gb(loadedBytes)} of ${gb(totalBytes)}`;
+  if (rate > 0) {
+    const left = (totalBytes - loadedBytes) / rate;
+    text += ` · ${(rate / 1e6).toFixed(1)} MB/s · ${left < 60 ? 'under a minute' : `about ${Math.round(left / 60)} min`} left`;
+  }
+  return text;
+}
+
 async function prepare() {
   const reason = await unsupportedReason();
   if (reason) { loadButton.textContent = 'WebGPU unavailable'; say(reason, true); return; }
+  try {
+    // The scene starts drawing now, on the device the model will use, and keeps drawing through the download.
+    demo = await createKleinDemo({ canvas: $('scene'), urls, load: false });
+    window.kleinDemo = demo;
+  } catch (e) { loadButton.textContent = 'WebGPU unavailable'; say(`Could not start WebGPU: ${e.message ?? e}`, true); return; }
   let weights;
   try { weights = await kleinWeightStatus(urls); }
   catch (e) { loadButton.textContent = 'Model unavailable'; say(`Could not reach the model files: ${e.message}`, true); return; }
-  loadButton.textContent = weights.complete ? 'Load model (cached)' : `Download model (${gb(weights.totalBytes - weights.cachedBytes)})`;
+  const remaining = weights.totalBytes - weights.cachedBytes;
+  loadButton.textContent = weights.complete ? 'Load model (cached)' : `Download model (${gb(remaining)})`;
   loadButton.disabled = false;
-  say(weights.complete ? 'The model is in this browser’s cache.' : 'Nothing downloads until you press the button.');
+  say(weights.complete ? 'The model is in this browser’s cache.'
+    : weights.cachedBytes > 0 ? `${gb(weights.cachedBytes)} is already cached from an earlier visit; the rest downloads when you press the button.`
+    : 'Nothing downloads until you press the button.');
 }
 
 loadButton.onclick = async () => {
-  loadButton.disabled = true; progress.classList.remove('hidden');
+  loadButton.disabled = true; loadButton.textContent = 'Downloading…'; progress.classList.remove('hidden');
   navigator.storage?.persist?.().catch(() => {});
+  samples.length = 0;
   try {
-    demo = await createKleinDemo({ canvas: $('scene'), urls, onStatus: s => {
+    await demo.load(s => {
       if (!s.totalBytes) return;
       progress.value = s.loadedBytes / s.totalBytes;
-      say(`Loading weights: ${gb(s.loadedBytes)} of ${gb(s.totalBytes)}`);
-    } });
+      say(`${loadProgress(s)}\nKeep this tab open. If the download stops, finished parts are kept and the next try picks up the rest.`);
+    });
   } catch (e) {
     progress.classList.add('hidden'); loadButton.disabled = false; loadButton.textContent = 'Try again';
     say(`Loading failed: ${e.message ?? e}`, true); return;
@@ -157,7 +189,6 @@ loadButton.onclick = async () => {
   $('setup').classList.add('hidden'); progress.classList.add('hidden'); $('controls').classList.remove('hidden');
   say(`Model ready in ${seconds(demo.loadMs)}${stats.downloadedBytes ? `, ${gb(stats.downloadedBytes)} downloaded` : ' from the cache'}${stats.cacheErrors.length ? '. The browser could not cache every file, so the next visit may download again.' : '.'}`,
     stats.cacheErrors.length > 0);
-  window.kleinDemo = demo;
 };
 
 function setRunning(running) {
@@ -175,6 +206,7 @@ $('go').onclick = async () => {
       onPhase: phase => say(phase === 'text' ? 'Reading the prompt…' : phase === 'decode' ? 'Decoding the image…' : 'Denoising…'),
       onStep: (i, n) => say(`Denoising, step ${i} of ${n}…`) });
     const out = $('out'); out.width = r.width; out.height = r.height;
+    $('examples').classList.add('hidden'); out.classList.remove('hidden');
     out.getContext('2d').putImageData(new ImageData(r.rgba, r.width, r.height), 0, 0);
     lastImage = { prompt, seed, size };
     $('save').disabled = false;
