@@ -81,7 +81,7 @@ try {
 
   const plan = values.plan ?? 'profiles';
   summary.plan = plan;
-  if (!['profiles', 'coop-sweep', 'coop-alternate', 'landing-check'].includes(plan)) throw new Error(`unknown plan ${plan}`);
+  if (!['profiles', 'coop-sweep', 'coop-alternate', 'landing-check', 'profile'].includes(plan)) throw new Error(`unknown plan ${plan}`);
   const page = (id, query) => run(id, demo, ['--url',
     `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
     '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
@@ -107,6 +107,18 @@ try {
     for (const [id, query] of coop) {
       run(id, demo, ['--url', `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
         '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
+    }
+  } else if (plan === 'profile') {
+    // Per-dispatch GPU timings (own timestamped pass per dispatch) at 512, with
+    // an unprofiled control to size the profiler's own overhead.
+    summary.phase = 'dispatch-profile';
+    for (const [id, options] of [
+      ['profile-product', { activations: 'f16', fuseNorm: true, profile: true }],
+      ['profile-faithful', { activations: 'f32', fuseNorm: false, profile: true }],
+      ['control-product', { activations: 'f16', fuseNorm: true }],
+    ]) {
+      run(id, witness, [...common, '--stage', 'route', '--fixture', `${state}/reference/ring-0000-512`, '--weights', `${state}/weights/f16`,
+        ...image, '--options', JSON.stringify(options), '--run-options', JSON.stringify({ runs: 3 })]);
     }
   } else if (plan === 'landing-check') {
     // Correctness gate before landing: F32 route parity, the product profile,
