@@ -65,9 +65,11 @@ async function generate(job) {
 
 window.kleinReady = (async () => {
   demo = await createKleinDemo({ canvas: $('scene'), urls, kernels,
-    onStatus: s => { status.textContent = `Loading ${s.detail}…`; } });
+    onStatus: s => { status.textContent = s.totalBytes ? `Loading weights: ${(s.loadedBytes / 1e9).toFixed(2)} of ${(s.totalBytes / 1e9).toFixed(2)} GB…` : `Loading ${s.detail}…`; } });
   const gb = Object.values(demo.residentBytes).reduce((a, b) => a + b, 0) / 1e9;
-  status.textContent = `Weights loaded in ${ms(demo.loadMs)} (${gb.toFixed(2)} GB resident). The scene keeps drawing while an image generates.`;
+  const ls = demo.pipeline.loadStats;
+  const source = ls.downloadedBytes ? `downloaded ${(ls.downloadedBytes / 1e9).toFixed(2)} GB${ls.cachedBytes ? `, ${(ls.cachedBytes / 1e9).toFixed(2)} GB from cache` : ''}` : 'all from the browser cache';
+  status.textContent = `Weights loaded in ${ms(demo.loadMs)} (${gb.toFixed(2)} GB resident; ${source}). The scene keeps drawing while an image generates.`;
   go.disabled = false; go.textContent = 'Generate';
   return true;
 })().catch(e => { status.textContent = String(e); throw e; });
@@ -97,7 +99,9 @@ window.kleinBatch = async (jobs, { cooperative = true, targetDutyMs = 12, maxInF
     results.push({ name: job.name, seed: job.seed, size: job.size, cooperative: r.cooperative, wallMs: r.wallMs, timings: r.timings,
       promptTokens: r.promptTokens, frames: r.frames, dutyCount: r.dutyCount, longestDutyMs: r.longestDutyMs, longestDuties: longest, png: btoa(bin) });
   }
-  return { results, residentBytes: demo.residentBytes, loadMs: demo.loadMs, kernels: demo.kernels };
+  return { results, residentBytes: demo.residentBytes, loadMs: demo.loadMs, kernels: demo.kernels, loadStats: demo.pipeline.loadStats };
 };
+window.kleinLoadStats = () => demo?.pipeline.loadStats;
+window.kleinLoadMs = () => demo?.loadMs;
 window.kleinPageReady = true;
 </script>

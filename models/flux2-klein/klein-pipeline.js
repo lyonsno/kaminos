@@ -12,7 +12,42 @@ import { kleinSchedule, transformerTime } from './klein-schedule.js';
 import { KleinDutyScheduler } from './klein-duties.js';
 
 async function getJson(url) { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); }
-async function getBytes(url) { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.arrayBuffer(); }
+
+// Weight files are immutable per manifest digest, so they are cached in the browser Cache API
+// under URL + sha256: a second visit loads from disk with no network. Downloads stream so the
+// caller can show byte progress; a size mismatch against the manifest fails loud and is not
+// cached. Cache failures (private windows, quota) fall back to the network.
+export const WEIGHT_CACHE = 'flux2-klein-weights-v1';
+async function openWeightCache() {
+  try { return await caches.open(WEIGHT_CACHE); } catch { return null; }
+}
+async function getWeightBytes(url, { sha256 = null, bytes = null, onBytes = () => {} } = {}, stats) {
+  const cache = await openWeightCache();
+  const key = sha256 ? `${url}#sha256=${sha256}` : url;
+  const hit = cache ? await cache.match(key).catch(() => null) : null;
+  if (hit) {
+    const buf = await hit.arrayBuffer();
+    if (bytes == null || buf.byteLength === bytes) { stats.cachedBytes += buf.byteLength; onBytes(buf.byteLength); return buf; }
+    await cache.delete(key).catch(() => {});
+  }
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${url}: ${response.status}`);
+  const total = bytes ?? Number(response.headers.get('content-length')) ?? 0;
+  const out = new Uint8Array(total || 0);
+  const chunks = []; let received = 0;
+  const reader = response.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (total && received + value.byteLength <= total) out.set(value, received); else chunks.push(value);
+    received += value.byteLength; onBytes(value.byteLength);
+  }
+  if (bytes != null && received !== bytes) throw new Error(`${url}: received ${received} bytes, manifest says ${bytes}`);
+  const buf = total && received === total ? out.buffer : await new Blob(chunks).arrayBuffer();
+  stats.downloadedBytes += received;
+  if (cache) await cache.put(key, new Response(buf, { headers: { 'content-type': 'application/octet-stream' } })).catch(e => { stats.cacheErrors.push(String(e)); });
+  return buf;
+}
 
 // splitmix64-seeded xoshiro128** with Box-Muller, f32 output.
 export function gaussianNoise(n, seed) {
@@ -51,26 +86,34 @@ export class KleinPipeline {
     this.sched = new KleinDutyScheduler(device, { label: 'flux2-klein' });
   }
 
+  // onProgress(part, name, { loadedBytes, totalBytes }) reports per-bundle progress over all weights.
   async load(onProgress = () => {}) {
     const { textEncoderUrl: te, transformerUrl: dit, vaeUrl: vae } = this.urls;
     const t0 = performance.now();
     this.teManifest = await getJson(`${te}/manifest.json`);
+    this.ditManifest = await getJson(`${dit}/manifest.json`);
+    this.vaeManifest = await getJson(`${vae}/manifest.json`);
+    const bundleBytes = m => Object.values(m.bundles ?? {}).reduce((sum, b) => sum + b.bytes, 0);
+    const totalBytes = bundleBytes(this.teManifest) + bundleBytes(this.ditManifest) + this.vaeManifest.bundle.bytes;
+    const stats = this.loadStats = { totalBytes, cachedBytes: 0, downloadedBytes: 0, cacheErrors: [] };
+    let loadedBytes = 0;
+    const progress = (part, name) => onProgress(part, name, { loadedBytes, totalBytes });
+    const fetchBundle = (root, part) => (file, bundle) => getWeightBytes(`${root}/${file}`,
+      { sha256: bundle?.sha256, bytes: bundle?.bytes, onBytes: n => { loadedBytes += n; progress(part, file); } }, stats);
     this.tokenizer = new QwenTokenizer(await getJson(`${te}/${this.teManifest.tokenizer.file}`));
     this.textEncoder = new KleinTextEncoder(this.device, this.teManifest);
     Object.assign(this.textEncoder, this.kernels); this.textEncoder.sched = this.sched;
     let bytes = 0;
-    await this.textEncoder.loadBundles(f => getBytes(`${te}/${f}`), (n, b) => { bytes += b; onProgress('text-encoder', n); });
+    await this.textEncoder.loadBundles(fetchBundle(te, 'text-encoder'), (n, b) => { bytes += b; });
     this.residentBytes.textEncoder = bytes;
-    this.ditManifest = await getJson(`${dit}/manifest.json`);
     this.transformer = new KleinTransformer(this.device, this.ditManifest);
     Object.assign(this.transformer, this.kernels); this.transformer.sched = this.sched;
     bytes = 0;
-    await this.transformer.loadBundles(f => getBytes(`${dit}/${f}`), (n, b) => { bytes += b; onProgress('transformer', n); });
+    await this.transformer.loadBundles(fetchBundle(dit, 'transformer'), (n, b) => { bytes += b; });
     this.residentBytes.transformer = bytes;
-    this.vaeManifest = await getJson(`${vae}/manifest.json`);
     this.vae = new KleinVaeDecoder(this.device, this.vaeManifest);
     this.vae.sharedType = this.kernels.sharedType; this.vae.sched = this.sched;
-    const vb = await getBytes(`${vae}/${this.vaeManifest.bundle.file}`);
+    const vb = await fetchBundle(vae, 'vae')(this.vaeManifest.bundle.file, this.vaeManifest.bundle);
     await this.vae.load(vb); this.residentBytes.vae = vb.byteLength;
     this.timings.loadMs = performance.now() - t0;
   }

@@ -45,7 +45,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
   const session = await createWebGpuInferenceSession({ sessionId: `flux2-klein:${crypto.randomUUID()}`, device, adapterName: 'browser-primary-adapter' });
   const foreground = createWebGpuForegroundService({ routeId: KLEIN_ROUTE_ID, device });
   const pipeline = new KleinPipeline(device, { ...urls, ...kernels });
-  await pipeline.load((part, name) => onStatus({ phase: 'load', detail: `${part} ${name}` }));
+  await pipeline.load((part, name, p) => onStatus({ phase: 'load', detail: `${part} ${name}`, ...p }));
 
   // Live scene through the foreground service.
   const surface = canvas.getContext('webgpu');

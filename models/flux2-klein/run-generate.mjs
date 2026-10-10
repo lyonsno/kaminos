@@ -51,15 +51,20 @@ try {
   report.phase = 'load';
   const kq = `&gemm=${opt('--gemm-version', '2')}&shared=${opt('--shared-type', 'f16')}`;
   report.requestedKernels = { gemmVersion: Number(opt('--gemm-version', '2')), sharedType: opt('--shared-type', 'f16') };
-  await browser.navigate(`${report.origin}/generate.html?te=/te&dit=/dit&vae=/vae${kq}`, 'window.kleinPageReady === true');
-  await browser.evaluate('window.kleinReady');
+  // --loads N reloads the page N times in one browser profile (cache-hit evidence); the batch runs on the last load.
+  report.loads = [];
+  for (let n = 0; n < Number(opt('--loads', '1')); n++) {
+    await browser.navigate(`${report.origin}/generate.html?te=/te&dit=/dit&vae=/vae${kq}`, 'window.kleinPageReady === true');
+    await browser.evaluate('window.kleinReady');
+    report.loads.push(await browser.evaluate('({ loadMs: window.kleinLoadMs?.(), stats: window.kleinLoadStats?.() })'));
+  }
   report.phase = 'generate';
   const batchOptions = { cooperative: !args.includes('--blocking'), targetDutyMs: Number(opt('--target-duty-ms', '12')), maxInFlight: Number(opt('--max-in-flight', '1')) };
   report.batchOptions = batchOptions;
   const res = await browser.evaluate(`window.kleinBatch(${JSON.stringify(jobs)}, ${JSON.stringify(batchOptions)})`);
   await fsp.mkdir(outDir, { recursive: true });
   for (const r of res.results) { await fsp.writeFile(path.join(outDir, `${r.name}.png`), Buffer.from(r.png, 'base64')); delete r.png; }
-  report.results = res.results; report.residentBytes = res.residentBytes; report.loadMs = res.loadMs; report.effectiveKernels = res.kernels;
+  report.results = res.results; report.residentBytes = res.residentBytes; report.loadMs = res.loadMs; report.effectiveKernels = res.kernels; report.loadStats = res.loadStats;
   report.phase = 'done';
   await finish(0);
 } catch (e) {
