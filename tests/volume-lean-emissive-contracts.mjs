@@ -18,12 +18,13 @@ for (const mutation of [
   assert.ok(result.refusalReasons.length > 0);
 }
 assert.equal(leanEmissiveRaymarchAdmission().eligible, false);
-assert.match(RAYMARCH_NEIGHBORHOOD_WGSL, /array<FlowReconstructionSample, 8>/);
-assert.match(RAYMARCH_NEIGHBORHOOD_WGSL, /result\.corners\[7\]\.velocityDensity = fluidSrc\[idx7 \* SLOTS_PER_CELL\]/,
+assert.doesNotMatch(RAYMARCH_NEIGHBORHOOD_WGSL, /array<FlowReconstructionSample/,
+  'camera loop does not carry or copy an eight-sample aggregate');
+assert.match(RAYMARCH_NEIGHBORHOOD_WGSL, /let velocityDensity7 = fluidSrc\[idx7 \* SLOTS_PER_CELL\]/,
   'the fixed eight-corner footprint has compile-time load indices');
-assert.match(RAYMARCH_NEIGHBORHOOD_WGSL, /result\.corners\[7\]\.frontTopology = frontSrc\[idx7\];/,
+assert.match(RAYMARCH_NEIGHBORHOOD_WGSL, /let frontTopology7 = frontSrc\[idx7\];/,
   'combustion front is float storage, unlike the separate quantized quench field');
-assert.match(RAYMARCH_NEIGHBORHOOD_WGSL, /max\(max\(support\[0\], support\[1\]\), max\(support\[2\], support\[3\]\)\)/);
+assert.match(RAYMARCH_NEIGHBORHOOD_WGSL, /max\(max\(support0, support1\), max\(support2, support3\)\)/);
 assert.match(core, /reconstructed = reconstructRaymarchNeighborhood\(neighborhood\);/);
 assert.match(core, /LEAN_EMISSIVE_RAYMARCH: selectEmissive/);
 assert.match(core, /const key=`\$\{multisampled\}:\$\{targetPipeline===readbackPipeline\}:\$\{gridSize\}:\$\{gridHeight\}:\$\{selectEmissive\}`/);
