@@ -24,8 +24,10 @@ try{
  meshes.push({name:'three-cuts',mesh});
  const {chromium}=await import(pathToFileURL(playwright));browser=await chromium.launch({executablePath:effective,headless:true,args:['--enable-unsafe-webgpu','--use-gl=angle','--use-angle=metal']});page=await browser.newPage();
  page.on('pageerror',e=>report.errors.push(e.message));
- await page.goto(new URL('README.md',url).href,{waitUntil:'load',timeout:0});
- report.effectiveUrl=page.url();assert.equal(report.effectiveUrl,new URL('README.md',url).href);
+ const benchmarkUrl=new URL('__material_energy_benchmark',url).href;
+ await page.route(benchmarkUrl,route=>route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Material energy benchmark fixture</title>'}));
+ await page.goto(benchmarkUrl,{waitUntil:'load',timeout:0});
+ report.effectiveUrl=page.url();report.pageMode='same-origin synthetic benchmark fixture; no visual consumer';assert.equal(report.effectiveUrl,benchmarkUrl);
  report.phase='source-admission';save();
  const source=await page.evaluate(async names=>Object.fromEntries(await Promise.all(names.map(async name=>{const r=await fetch(name,{cache:'no-store'});if(!r.ok)throw new Error(`Source HTTP ${r.status}`);const bytes=await r.arrayBuffer(),digest=await crypto.subtle.digest('SHA-256',bytes);return[name,Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('')];}))),Object.keys(report.sources));
  assert.deepEqual(source,report.sources);report.loadedSources=source;
