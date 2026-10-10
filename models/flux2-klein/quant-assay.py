@@ -42,6 +42,7 @@ SCHEMES = {
     "te-3bit": {"te": ("affine", 3, 64), "blocks": ("affine", 4, 64), "globals": ("sym", 8, 64)},
     "dit-3bit": {"te": ("affine", 4, 64), "blocks": ("affine", 3, 64), "globals": ("sym", 8, 64)},
     "all-3bit": {"te": ("affine", 3, 64), "blocks": ("affine", 3, 64), "globals": ("sym", 8, 64)},
+    "lean-int4": {"te": ("affine", 4, 128), "blocks": ("affine", 4, 128), "globals": ("affine", 4, 64)},
 }
 FIXED_BYTES = {"vae": 99_241_984, "tokenizer": 11_422_654}  # unchanged by these schemes
 
