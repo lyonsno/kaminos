@@ -64,6 +64,10 @@ export const BENCH_VARIANTS = [
   { id: 'f16act', f16: true, activations: 'f16' },
   { id: 'f16act-fused', f16: true, activations: 'f16', fuseNorm: true, normOnly: true },
   { id: 'f16act-f16partial', f16: true, activations: 'f16', gemmPrecision: 'f16-partial' },
+  { id: 'f32act-bk32', f16: true, gemmTile: { tm: 4, tn: 4, bk: 32 } },
+  { id: 'f32act-f16tiles', f16: true, gemmPrecision: 'f16-tiles' },
+  { id: 'f32act-f16tiles-bk32', f16: true, gemmPrecision: 'f16-tiles', gemmTile: { tm: 4, tn: 4, bk: 32 } },
+  { id: 'f16act-fused-f16tiles', f16: true, activations: 'f16', fuseNorm: true, normOnly: true, gemmPrecision: 'f16-tiles' },
 ];
 
 export async function runSuperMatBench({ iterations = 6, variants = BENCH_VARIANTS, cases = CASES } = {}) {
@@ -81,7 +85,7 @@ export async function runSuperMatBench({ iterations = 6, variants = BENCH_VARIAN
         if (variant.normOnly && testCase.kind !== 'normconv') continue;
         const ops = createSuperMatOps(device, { label: `bench.${variant.id}`, gemmKernel: variant.gemmKernel ?? 'tiled',
           gemmPrecision: variant.gemmPrecision ?? 'f32', activations: variant.activations ?? 'f32', fuseNorm: Boolean(variant.fuseNorm),
-          attentionKernel: variant.attentionKernel ?? 'scalar' });
+          attentionKernel: variant.attentionKernel ?? 'scalar', ...(variant.gemmTile ? { gemmTile: variant.gemmTile } : {}) });
         const inputs = [];
         let flops, run;
         if (testCase.kind === 'normconv') {
