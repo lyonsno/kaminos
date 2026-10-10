@@ -287,7 +287,8 @@ function showRun(record) {
     + ` · ${f.over33ms} gaps > 33 ms · ${f.over100ms} gaps > 100 ms`);
   for (const pause of record.pauses) lines.push(`paused ${ms(pause.heldMs)} after ${ms(pause.pauseSettledMs)} to settle;`
     + ` scene drew ${pause.framesDuringPause} frames while paused`);
-  if (adapter) lines.push(`route ${adapter.identity.routeId} · backend ${adapter.identity.backend} · weights ${adapter.identity.weightDtype}`);
+  if (adapter) lines.push(`route ${adapter.identity.routeId} · backend ${adapter.identity.backend} · weights ${adapter.identity.weightDtype}`
+    + ` · activations ${adapter.identity.activations} · fused norm ${adapter.identity.fuseNorm ? 'on' : 'off'} · GEMM ${adapter.identity.gemmPrecision}`);
   $('timings').textContent = lines.join('\n');
 }
 
@@ -341,9 +342,13 @@ try {
   startScene();
   state.scene.gaps = [];
   const weightsRoute = await session.registerRoute({ routeId: `${SUPERMAT_ROUTE_ID}.resident-weights` });
+  // Product profile: F16 activation storage and fused GroupNorm+SiLU where the
+  // device has shader-f16 (F32 math; albedo relL2 ~3e-4 vs the F32 reference); F32 otherwise.
+  // ?activations=f32&fuseNorm=0 selects the reference-faithful path.
+  const f16Capable = device.features.has('shader-f16');
   adapter = await createSuperMatAdapter({ route: weightsRoute, weightsUrl, attention,
     weightLoading: params.get('weightLoading') ?? 'auto', gemmPrecision: params.get('precision') ?? 'f32',
-    activations: params.get('activations') ?? 'f32', fuseNorm: params.get('fuseNorm') === '1', onProgress(event) {
+    activations: params.get('activations') ?? (f16Capable ? 'f16' : 'f32'), fuseNorm: params.get('fuseNorm') !== '0', onProgress(event) {
     if (event.phase === 'weights') {
       const mb = value => (value / 1e6).toFixed(0);
       setStatus(`Loading weights ${event.resourceIndex + 1}/${event.resourceCount} (${event.resourceId}`

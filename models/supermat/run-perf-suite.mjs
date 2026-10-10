@@ -17,12 +17,23 @@ const persist = async () => {
   await fs.writeFile(path.join(out, 'summary.json'), JSON.stringify(summary, null, 2) + '\n');
 };
 
+// Whole-GPU utilization sampled before each step: Greenroom serializes queued
+// jobs only, so outside work (leases, interactive pages) must stay visible.
+function gpuUtilization() {
+  try {
+    const text = execFileSync('ioreg', ['-r', '-d', '1', '-c', 'IOAccelerator'], { encoding: 'utf8' });
+    const value = name => Number(text.match(new RegExp(`"${name}"=(\\d+)`))?.[1] ?? NaN);
+    return { device: value('Device Utilization %'), renderer: value('Renderer Utilization %'), at: new Date().toISOString() };
+  } catch (error) { return { error: String(error) }; }
+}
+
 function run(id, script, args) {
   const report = path.join(out, id, 'report.json');
+  const gpuBefore = gpuUtilization();
   const started = Date.now();
   const child = spawnSync(process.execPath, [script, ...args, '--report', report], { cwd: values['repo-root'], encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024 });
-  const step = { id, exitCode: child.status, wallMs: Date.now() - started, report, stdoutTail: child.stdout?.slice(-400),
+  const step = { id, exitCode: child.status, wallMs: Date.now() - started, report, gpuBefore, stdoutTail: child.stdout?.slice(-400),
     stderrTail: child.stderr?.slice(-2000), signal: child.signal };
   try { step.result = JSON.parse(execFileSync('cat', [report], { encoding: 'utf8' })); } catch (error) { step.reportError = String(error); }
   summary.steps.push(step);
@@ -68,14 +79,14 @@ try {
   run('bench', witness, [...common, '--stage', 'bench', '--fixture', `${state}/reference/ring-0000-512`, '--weights', `${state}/weights/f16`]);
 
   summary.phase = 'route-timing';
+  // Reference-faithful profile (F32 activations, unfused) vs the demo's product
+  // profile (F16 activations, fused GroupNorm+SiLU), both on F16 weights.
   const routes = [
-    ['route-512-f16w', 'ring-0000-512', 'f16', {}],
-    ['route-512-f16w-fused', 'ring-0000-512', 'f16', { fuseNorm: true }],
-    ['route-512-f16w-f16act', 'ring-0000-512', 'f16', { activations: 'f16' }],
-    ['route-512-f16w-f16act-fused', 'ring-0000-512', 'f16', { activations: 'f16', fuseNorm: true }],
-    ['route-512-f16w-f16act-fused-f16partial', 'ring-0000-512', 'f16', { activations: 'f16', fuseNorm: true, gemmPrecision: 'f16-partial' }],
-    ['route-1024-f16w', 'ring-0000-1024', 'f16', {}],
-    ['route-1024-f16w-f16act-fused', 'ring-0000-1024', 'f16', { activations: 'f16', fuseNorm: true }],
+    ['route-512-faithful', 'ring-0000-512', 'f16', { activations: 'f32', fuseNorm: false }],
+    ['route-512-f16act', 'ring-0000-512', 'f16', { activations: 'f16', fuseNorm: false }],
+    ['route-512-product', 'ring-0000-512', 'f16', { activations: 'f16', fuseNorm: true }],
+    ['route-1024-faithful', 'ring-0000-1024', 'f16', { activations: 'f32', fuseNorm: false }],
+    ['route-1024-product', 'ring-0000-1024', 'f16', { activations: 'f16', fuseNorm: true }],
   ];
   for (const [id, fixture, weights, options] of routes) {
     run(id, witness, [...common, '--stage', 'route', '--fixture', `${state}/reference/${fixture}`, '--weights', `${state}/weights/${weights}`,
@@ -83,13 +94,15 @@ try {
   }
 
   summary.phase = 'cooperative-run-frames';
-  const coop = [['coop-f16w', 'weights=/scratch/supermat-weights/f16/'],
-    ['coop-f16w-fused', 'weights=/scratch/supermat-weights/f16/&fuseNorm=1'],
-    ['coop-f16w-f16act', 'weights=/scratch/supermat-weights/f16/&activations=f16']];
+  const coop = [['coop-faithful', 'weights=/scratch/supermat-weights/f16/&activations=f32&fuseNorm=0'],
+    ['coop-product', 'weights=/scratch/supermat-weights/f16/']];
   for (const [id, query] of coop) {
     run(id, demo, ['--url', `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
       '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
   }
+
+  summary.phase = 'control-bench';
+  run('bench-end', witness, [...common, '--stage', 'bench', '--fixture', `${state}/reference/ring-0000-512`, '--weights', `${state}/weights/f16`]);
 
   summary.phase = 'complete';
   summary.status = summary.steps.every(step => step.exitCode === 0) ? 'passed' : 'completed-with-failures';
