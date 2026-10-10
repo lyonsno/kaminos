@@ -83,11 +83,11 @@ $('pause').onclick = async () => { const s = await demo.togglePause(); if (s) $(
 $('stop').onclick = () => demo.stop();
 
 // Headless batch entry point: PNG base64 plus timings, duties and scene frame stats per job.
-window.kleinBatch = async (jobs, { cooperative = true, targetDutyMs = 12 } = {}) => {
+window.kleinBatch = async (jobs, { cooperative = true, targetDutyMs = 12, maxInFlight = 1 } = {}) => {
   await window.kleinReady;
   const results = [];
   for (const job of jobs) {
-    const r = await generate({ ...job, cooperative, targetDutyMs });
+    const r = await generate({ ...job, cooperative, targetDutyMs, maxInFlight });
     const canvas = new OffscreenCanvas(r.width, r.height);
     canvas.getContext('2d').putImageData(new ImageData(r.rgba, r.width, r.height), 0, 0);
     const bytes = new Uint8Array(await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer());

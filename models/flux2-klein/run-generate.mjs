@@ -54,7 +54,7 @@ try {
   await browser.navigate(`${report.origin}/generate.html?te=/te&dit=/dit&vae=/vae${kq}`, 'window.kleinPageReady === true');
   await browser.evaluate('window.kleinReady');
   report.phase = 'generate';
-  const batchOptions = { cooperative: !args.includes('--blocking'), targetDutyMs: Number(opt('--target-duty-ms', '12')) };
+  const batchOptions = { cooperative: !args.includes('--blocking'), targetDutyMs: Number(opt('--target-duty-ms', '12')), maxInFlight: Number(opt('--max-in-flight', '1')) };
   report.batchOptions = batchOptions;
   const res = await browser.evaluate(`window.kleinBatch(${JSON.stringify(jobs)}, ${JSON.stringify(batchOptions)})`);
   await fsp.mkdir(outDir, { recursive: true });
