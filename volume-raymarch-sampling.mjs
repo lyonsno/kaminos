@@ -35,7 +35,7 @@ fn sampleRaymarchNeighborhood(p: vec3<f32>) -> RaymarchNeighborhood {
   result.corners[${k}].material = fluidSrc[idx${k} * SLOTS_PER_CELL + 1u];
   result.corners[${k}].fireLayer = fluidSrc[idx${k} * SLOTS_PER_CELL + 2u];
   result.corners[${k}].microLayer = fluidSrc[idx${k} * SLOTS_PER_CELL + 3u];
-  result.corners[${k}].frontTopology = f32(frontSrc[idx${k}]) / 65536.0;`).join('\n  ')}
+  result.corners[${k}].frontTopology = frontSrc[idx${k}];`).join('\n  ')}
   return result;
 }
 
