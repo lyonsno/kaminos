@@ -208,6 +208,7 @@ export class KleinTransformer {
   }
 
   allocate(imgTokens, txtTokens) {
+    for (const b of Object.values(this.act ?? {})) b.destroy();
     const D = this.D, F = this.F, H = this.H, L = imgTokens + txtTokens;
     const f = n => this.buffer(n * 4);
     this.shape = { imgTokens, txtTokens, L };

@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FLUX.2 [klein] in the browser</title>
+<meta name="description" content="Text-to-image with FLUX.2 [klein] 4B, running entirely on your own GPU through WebGPU.">
+<meta name="klein-weights" content="https://huggingface.co/BasinShapers/flux2-klein-4b-webgpu/resolve/main">
+<style>
+  :root {
+    color-scheme: light; --bg: #f5f4f0; --panel: #ffffff; --fg: #1c1b19; --muted: #6a6862; --line: #dcd9d1;
+    --accent: #c4701c; --accent-fg: #ffffff; --warn: #9a3b12;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark; --bg: #151514; --panel: #1d1d1b; --fg: #ecebe6; --muted: #9b9990; --line: #34332f;
+      --accent: #e08a2e; --accent-fg: #17130e; --warn: #f0a072;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark; --bg: #151514; --panel: #1d1d1b; --fg: #ecebe6; --muted: #9b9990; --line: #34332f;
+    --accent: #e08a2e; --accent-fg: #17130e; --warn: #f0a072;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; display: grid; gap: 24px; }
+  h1 { margin: 0; font-size: clamp(24px, 4vw, 32px); line-height: 1.15; letter-spacing: -0.01em; }
+  p { margin: 0; }
+  a { color: inherit; text-underline-offset: 2px; }
+  .lede { display: grid; gap: 10px; max-width: 68ch; }
+  .muted { color: var(--muted); }
+  .layout { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 20px; align-items: start; }
+  @media (max-width: 760px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 14px; }
+  label { display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+  textarea, input, select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; }
+  textarea { min-height: 92px; resize: vertical; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+  .row > label { flex: 1 1 120px; }
+  .check { display: flex; gap: 8px; align-items: center; color: var(--fg); font-size: 15px; }
+  .check input { width: auto; }
+  button { font: inherit; border-radius: 8px; padding: 8px 16px; border: 1px solid var(--line); background: transparent; color: var(--fg); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+  button:disabled { opacity: 0.45; cursor: default; }
+  .icon { padding: 8px 12px; }
+  progress { width: 100%; height: 8px; accent-color: var(--accent); }
+  #status { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: pre-wrap; min-height: 1.5em; }
+  #status.warn { color: var(--warn); }
+  .image { position: relative; }
+  canvas { display: block; width: 100%; height: auto; border-radius: 10px; background: var(--bg); }
+  #out { aspect-ratio: 1; border: 1px solid var(--line); }
+  .scene { display: grid; grid-template-columns: 112px 1fr; gap: 12px; align-items: center; }
+  .scene canvas { aspect-ratio: 1; border: 1px solid var(--line); }
+  .scene p { font-size: 14px; }
+  .hidden { display: none !important; }
+  footer { font-size: 14px; color: var(--muted); display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+<main>
+  <header class="lede">
+    <h1>FLUX.2 [klein] 4B in the browser</h1>
+    <p>Text-to-image generation on your own GPU through WebGPU. The prompt, the model and the image stay on your machine; no server does any of the work.</p>
+    <p class="muted">The first visit downloads 3.9 GB of model weights, which the browser keeps for later visits. Tested in Chrome on Apple-silicon Macs with 16 GB of memory or more: a 512 × 512 image takes about 7 seconds on an M4 Max and about 20 seconds on an M2 Pro.</p>
+  </header>
+
+  <div class="layout">
+    <section class="panel" aria-label="Controls">
+      <div id="setup" class="row">
+        <button id="load" class="primary" disabled>Checking WebGPU…</button>
+      </div>
+      <progress id="progress" class="hidden" max="1" value="0"></progress>
+      <div id="controls" class="hidden" style="display:grid;gap:14px">
+        <label>Prompt
+          <textarea id="prompt">A small brass toy steam locomotive, isolated on a plain white background, studio product photo</textarea>
+        </label>
+        <div class="row">
+          <label>Seed <input id="seed" type="number" value="7006" min="0" step="1"></label>
+          <button id="reseed" class="icon" title="New random seed" aria-label="New random seed">New seed</button>
+          <label>Size
+            <select id="size">
+              <option value="512" selected>512 × 512</option>
+              <option value="768">768 × 768 (slower)</option>
+              <option value="1024">1024 × 1024 (slowest)</option>
+            </select>
+          </label>
+        </div>
+        <label class="check"><input id="cooperative" type="checkbox" checked> Keep the animation running while generating</label>
+        <div class="row">
+          <button id="go" class="primary">Generate</button>
+          <button id="pause" disabled>Pause</button>
+          <button id="stop" disabled>Stop</button>
+          <button id="save" disabled>Save image</button>
+        </div>
+      </div>
+      <div id="status" role="status" aria-live="polite"></div>
+      <div class="scene">
+        <canvas id="scene" width="224" height="224" aria-label="Animation rendered on the same GPU"></canvas>
+        <p class="muted">This animation draws on the same GPU while an image generates. The inference kit submits the model's work in short pieces and lets each frame through between them.</p>
+      </div>
+    </section>
+
+    <section class="image" aria-label="Generated image">
+      <canvas id="out" width="512" height="512"></canvas>
+    </section>
+  </div>
+
+  <footer>
+    <p>Model: <a href="https://huggingface.co/black-forest-labs/FLUX.2-klein-4B">FLUX.2 [klein] 4B</a> by Black Forest Labs, with the Qwen3-4B text encoder, both Apache 2.0. Weights quantized for this page: <a href="https://huggingface.co/BasinShapers/flux2-klein-4b-webgpu">BasinShapers/flux2-klein-4b-webgpu</a>.</p>
+    <p>Runs on the <a href="https://github.com/lyonsno/kaminos/tree/main/webgpu-inference-kit">Kaminos WebGPU inference kit</a>.</p>
+  </footer>
+</main>
+<script type="module">
+import { createKleinDemo } from './klein-demo.js';
+import { kleinWeightStatus } from './klein-pipeline.js';
+
+const q = new URLSearchParams(location.search);
+const base = (q.get('weights') ?? document.querySelector('meta[name="klein-weights"]').content).replace(/\/$/, '');
+const urls = { textEncoderUrl: `${base}/te`, transformerUrl: `${base}/dit`, vaeUrl: `${base}/vae` };
+const $ = id => document.getElementById(id);
+const status = $('status'), loadButton = $('load'), progress = $('progress');
+const gb = bytes => `${(bytes / 1e9).toFixed(1)} GB`;
+const seconds = ms => `${(ms / 1000).toFixed(1)} s`;
+const say = (text, warn = false) => { status.textContent = text; status.classList.toggle('warn', warn); };
+let demo = null, lastImage = null;
+
+async function unsupportedReason() {
+  if (!navigator.gpu) return 'This browser does not expose WebGPU. Try a recent Chrome or Edge on a desktop computer.';
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }).catch(() => null);
+  if (!adapter) return 'WebGPU is available, but the browser did not provide a GPU adapter.';
+  if (!adapter.features.has('shader-f16')) return 'This browser or GPU lacks 16-bit shader support (shader-f16), which the model needs.';
+  return null;
+}
+
+async function prepare() {
+  const reason = await unsupportedReason();
+  if (reason) { loadButton.textContent = 'WebGPU unavailable'; say(reason, true); return; }
+  let weights;
+  try { weights = await kleinWeightStatus(urls); }
+  catch (e) { loadButton.textContent = 'Model unavailable'; say(`Could not reach the model files: ${e.message}`, true); return; }
+  loadButton.textContent = weights.complete ? 'Load model (cached)' : `Download model (${gb(weights.totalBytes - weights.cachedBytes)})`;
+  loadButton.disabled = false;
+  say(weights.complete ? 'The model is in this browser’s cache.' : 'Nothing downloads until you press the button.');
+}
+
+loadButton.onclick = async () => {
+  loadButton.disabled = true; progress.classList.remove('hidden');
+  navigator.storage?.persist?.().catch(() => {});
+  try {
+    demo = await createKleinDemo({ canvas: $('scene'), urls, onStatus: s => {
+      if (!s.totalBytes) return;
+      progress.value = s.loadedBytes / s.totalBytes;
+      say(`Loading weights: ${gb(s.loadedBytes)} of ${gb(s.totalBytes)}`);
+    } });
+  } catch (e) {
+    progress.classList.add('hidden'); loadButton.disabled = false; loadButton.textContent = 'Try again';
+    say(`Loading failed: ${e.message ?? e}`, true); return;
+  }
+  const stats = demo.pipeline.loadStats;
+  $('setup').classList.add('hidden'); progress.classList.add('hidden'); $('controls').classList.remove('hidden');
+  say(`Model ready in ${seconds(demo.loadMs)}${stats.downloadedBytes ? `, ${gb(stats.downloadedBytes)} downloaded` : ' from the cache'}${stats.cacheErrors.length ? '. The browser could not cache every file, so the next visit may download again.' : '.'}`,
+    stats.cacheErrors.length > 0);
+  window.kleinDemo = demo;
+};
+
+function setRunning(running) {
+  const cooperative = $('cooperative').checked;
+  for (const id of ['go', 'reseed', 'prompt', 'seed', 'size', 'cooperative']) $(id).disabled = running;
+  $('pause').disabled = !running || !cooperative; $('stop').disabled = !running || !cooperative;
+  $('pause').textContent = 'Pause';
+}
+
+$('go').onclick = async () => {
+  setRunning(true);
+  const prompt = $('prompt').value.trim(), seed = Math.max(0, Math.floor(Number($('seed').value) || 0)), size = Number($('size').value);
+  try {
+    const r = await demo.generate({ prompt, seed, size, cooperative: $('cooperative').checked,
+      onPhase: phase => say(phase === 'text' ? 'Reading the prompt…' : phase === 'decode' ? 'Decoding the image…' : 'Denoising…'),
+      onStep: (i, n) => say(`Denoising, step ${i} of ${n}…`) });
+    const out = $('out'); out.width = r.width; out.height = r.height;
+    out.getContext('2d').putImageData(new ImageData(r.rgba, r.width, r.height), 0, 0);
+    lastImage = { prompt, seed, size };
+    $('save').disabled = false;
+    const frames = r.frames ? `; the animation kept drawing at a median ${Math.round(1000 / r.frames.p50)} frames per second` : '';
+    say(`${r.width} × ${r.height} in ${seconds(r.wallMs)}${frames}.`);
+    window.kleinLast = { wallMs: r.wallMs, timings: r.timings, frames: r.frames, width: r.width, height: r.height };
+  } catch (e) {
+    say(e?.name === 'AbortError' ? 'Stopped.' : `Generation failed: ${e.message ?? e}`, e?.name !== 'AbortError');
+  }
+  setRunning(false);
+};
+$('pause').onclick = async () => { const state = await demo.togglePause(); if (state) $('pause').textContent = state === 'paused' ? 'Resume' : 'Pause'; };
+$('stop').onclick = () => demo.stop();
+$('reseed').onclick = () => { $('seed').value = Math.floor(Math.random() * 1e9); };
+$('save').onclick = () => $('out').toBlob(blob => {
+  const slug = lastImage.prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'image';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `klein-${slug}-${lastImage.seed}.png`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}, 'image/png');
+$('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !$('go').disabled) $('go').click(); });
+
+window.kleinPrepared = prepare();
+</script>
+</html>

@@ -1,11 +1,20 @@
 // Shared harness for Klein browser runs: a static server over named roots (with
 // HTTP range support), an owned Chrome for Testing over CDP, and evaluation helpers.
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+
+// Effective source identity of the code a run actually executed.
+export function sourceIdentity(dir) {
+  try {
+    const rev = execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    const dirty = execFileSync('git', ['-C', dir, 'status', '--porcelain', '--', '.'], { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+    return { rev, dirtyFiles: dirty };
+  } catch (e) { return { error: String(e) }; }
+}
 
 // cors: answer any origin and expose the range headers, as a cross-origin weight host would.
 export async function startServer(roots, port = 0, { cors = false } = {}) {

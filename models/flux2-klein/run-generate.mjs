@@ -6,17 +6,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startServer, launchChrome } from './cdp-harness.mjs';
-import { execFileSync } from 'node:child_process';
-// Effective source identity of the code this run actually executed.
-function sourceIdentity(dir) {
-  try {
-    const rev = execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-    const dirty = execFileSync('git', ['-C', dir, 'status', '--porcelain', '--', '.'], { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
-    return { rev, dirtyFiles: dirty };
-  } catch (e) { return { error: String(e) }; }
-}
-
+import { startServer, launchChrome, sourceIdentity } from './cdp-harness.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);

@@ -97,6 +97,7 @@ export class KleinTextEncoder {
   }
 
   allocate(L) {
+    for (const b of Object.values(this.act ?? {})) b.destroy();
     const D = this.D, F = this.F, QH = this.QH, KVH = this.KVH;
     const f = n => this.buffer(n * 4);
     this.L = L;

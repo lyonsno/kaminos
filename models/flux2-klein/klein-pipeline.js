@@ -49,6 +49,23 @@ async function getWeightBytes(url, { sha256 = null, bytes = null, onBytes = () =
   return buf;
 }
 
+// How much of a weight set is already in the browser cache, from its manifests alone, so a page
+// can say whether loading means a download before starting one.
+export async function kleinWeightStatus({ textEncoderUrl: te, transformerUrl: dit, vaeUrl: vae }) {
+  const [teM, ditM, vaeM] = await Promise.all([te, dit, vae].map(root => getJson(`${root}/manifest.json`)));
+  const files = [[te, teM.tokenizer], ...[[te, teM], [dit, ditM]].flatMap(([root, m]) => Object.values(m.bundles).map(b => [root, b])),
+    [vae, vaeM.bundle]];
+  const cache = await openWeightCache();
+  // Byte totals cover the weight bundles (the load progress total); the tokenizer only counts toward complete.
+  let totalBytes = 0, cachedBytes = 0, missing = 0;
+  for (const [root, f] of files) {
+    const hit = cache ? await cache.match(`${root}/${f.file}#sha256=${f.sha256}`).catch(() => null) : null;
+    totalBytes += f.bytes ?? 0;
+    if (hit) cachedBytes += f.bytes ?? 0; else missing++;
+  }
+  return { totalBytes, cachedBytes, complete: missing === 0 };
+}
+
 // splitmix64-seeded xoshiro128** with Box-Muller, f32 output.
 export function gaussianNoise(n, seed) {
   let s = [0, 0, 0, 0];
@@ -100,7 +117,8 @@ export class KleinPipeline {
     const progress = (part, name) => onProgress(part, name, { loadedBytes, totalBytes });
     const fetchBundle = (root, part) => (file, bundle) => getWeightBytes(`${root}/${file}`,
       { sha256: bundle?.sha256, bytes: bundle?.bytes, onBytes: n => { loadedBytes += n; progress(part, file); } }, stats);
-    this.tokenizer = new QwenTokenizer(await getJson(`${te}/${this.teManifest.tokenizer.file}`));
+    const tokenizerBytes = await getWeightBytes(`${te}/${this.teManifest.tokenizer.file}`, { sha256: this.teManifest.tokenizer.sha256 }, stats);
+    this.tokenizer = new QwenTokenizer(JSON.parse(new TextDecoder().decode(tokenizerBytes)));
     this.textEncoder = new KleinTextEncoder(this.device, this.teManifest);
     Object.assign(this.textEncoder, this.kernels); this.textEncoder.sched = this.sched;
     let bytes = 0;

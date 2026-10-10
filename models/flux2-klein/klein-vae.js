@@ -326,7 +326,9 @@ export class KleinVaeDecoder {
     return s;
   }
 
+  // Sized per image shape; buffers from the previous shape are released.
   allocate(latH, latW) {
+    for (const name of ['a', 'b', 't1', 't2', 'q', 'k', 'vt', 'scores', 'gnPart', 'gnStats', 'latents', 'prepped']) this[name]?.destroy();
     // Largest activation: 256 channels at full resolution (up block 2 output).
     const H = latH * 16, W = latW * 16;
     const big = H * W * 256 * 4;
@@ -336,13 +338,13 @@ export class KleinVaeDecoder {
     this.scores = this.buffer(Lm * Lm * 4);
     this.gnPart = this.buffer(GROUPS * Math.ceil(H * W / 1024) * 4); this.gnStats = this.buffer(GROUPS * 2 * 4);
     this.latents = this.buffer(latH * latW * 128 * 4);
+    this.prepped = this.buffer(Lm * 32 * 4);
     this.latH = latH; this.latW = latW;
   }
 
   // Packed latents (GPU buffer [h*w][128]) -> decoder input [2h*2w][32] in this.prepped.
   prepLatents(enc, packed) {
     const n = this.latH * 2 * this.latW * 2 * 32;
-    this.prepped ??= this.buffer(n * 4);
     this.dispatch(enc, this.pipeline('latent-prep', latentPrepShader), [packed, this.bn, this.prepped,
       this.uniform([this.latH, this.latW, this.f32bits(this.manifest.config.batch_norm_eps), 0])], Math.ceil(n / 256));
   }
