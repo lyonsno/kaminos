@@ -39,7 +39,7 @@ function concatChannels(ops, a, b, name) {
 // materialized. Both paths compute the same function. The caller keeps x.
 async function normConv(ops, x, { gamma, beta, eps, silu = true, normName, ...conv }) {
   if (ops.fuseNorm) return ops.conv2d({ x, shape: x.shape, norm: { gamma, beta, eps, silu }, ...conv });
-  const normed = ops.groupNorm({ x, shape: x.shape, gamma, beta, eps, silu, name: normName });
+  const normed = ops.groupNorm({ x, shape: x.shape, gamma, beta, eps, silu, name: normName, dtype: 'f32' });
   const out = await ops.conv2d({ x: normed, shape: normed.shape, ...conv });
   ops.release(normed);
   return out;

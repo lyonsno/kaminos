@@ -403,10 +403,10 @@ export function createSuperMatOps(device, options = {}) {
     return statsTensor;
   }
 
-  function groupNorm({ x, shape: [channels, h, w], groups = 32, gamma, beta, eps, silu = false, name = 'groupnorm' }) {
+  function groupNorm({ x, shape: [channels, h, w], groups = 32, gamma, beta, eps, silu = false, name = 'groupnorm', dtype = activations }) {
     const statsTensor = groupNormStats({ x, shape: [channels, h, w], groups, eps, name });
     const total = channels * h * w;
-    const y = alloc([channels, h, w], name);
+    const y = alloc([channels, h, w], name, { dtype });
     dispatch(groupNormApplyShader({ silu, x: storageKind(x), y: storageKind(y) }), [bindingView(x), bindingView(statsTensor), bindingView(gamma, `${name} gamma`),
       bindingView(beta, `${name} beta`), bindingView(y), params(new Uint32Array([total, h * w, channels / groups, 0]))],
     dispatch1D(total));
