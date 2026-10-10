@@ -45,9 +45,10 @@ export function evaluateAkinciSurface({positions,volume,coefficient,h=2*Math.cbr
  * per-particle normalization, interface activity gate, or force cap is inherited.
  * Existing support/contact/speed handling still applies in the predictor.
  */
-export function createAkinciSurfaceShader({volume,referenceDensity=AKINCI_REFERENCE_DENSITY}) {
+export function createAkinciSurfaceShader({volume,referenceDensity=AKINCI_REFERENCE_DENSITY,supportRadius=2*Math.cbrt(volume)}) {
   positive(volume,'Equal particle volume');positive(referenceDensity,'Reference density');
-  const h=2*Math.cbrt(volume);
+  positive(supportRadius,'Surface support radius');
+  const h=supportRadius;
   for(const v of [volume,h,referenceDensity,32/(Math.PI*h**3),8/(Math.PI*h**3)]){
     if(!(Math.fround(v)>0)||!Number.isFinite(Math.fround(v)))throw new RangeError('Surface kernel exceeds f32 capacity');
   }

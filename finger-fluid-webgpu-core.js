@@ -4,6 +4,8 @@ import { localLiquidOpticalQueryControls, localLiquidHostOpticalInputs, LOCAL_LI
 import { canPreserveLiquidReleaseEpoch, LIVE_LIQUID_INLET_FLOATS } from './local-liquid-inlet-continuity.mjs';
 import {resolveFingerFluidCohesionModel,resolveFingerFluidCohesionStrength,applyFingerFluidCohesionProfile} from './finger-fluid-cohesion.mjs';
 export {resolveFingerFluidCohesionModel,resolveFingerFluidCohesionStrength,evaluateFingerFluidCohesionPairWeight,evaluateFingerFluidCohesionAcceleration,applyFingerFluidCohesionProfile} from './finger-fluid-cohesion.mjs';
+import {applyFingerFluidDiagnosticDynamics,resolveFingerFluidDiagnosticDynamics,validateFingerFluidDiagnosticPopulation,subdivideDiagnosticPopulation} from './finger-fluid-discriminator.mjs';
+export {applyFingerFluidDiagnosticDynamics,validateFingerFluidDiagnosticPopulation} from './finger-fluid-discriminator.mjs';
 import {createAkinciSurfaceShader,AKINCI_REFERENCE_DENSITY} from './finger-fluid-akinci.mjs';
 import {createIPBFGridShader} from './finger-fluid-ipbf-wgsl.mjs';
 import {createIPBFPressureControlState} from './finger-fluid-pressure-controls.mjs';
@@ -13233,6 +13235,23 @@ export function resolveFingerFluidLiquidFireContactCoverage(value = 'supported-i
   return value;
 }
 
+export function createFingerFluidDiagnosticShaderFixture(){return COMPUTE_SHADER;}
+export function createFingerFluidDiscriminatorPopulation({fixture='basin',refinement=1}={}) {
+  let data;
+  if(fixture==='basin') {
+    data=createFingerFluidTruthScenePopulation(12288,'multi_regime_playground').particleData.slice();
+    for(let i=0;i<data.length/16;i++)if(data[i*16+11]<.15)data[i*16+11]=.18;
+  } else if(fixture==='drop') {
+    const positions=[],d=Math.cbrt((64*Math.PI/315)*.185**3/24.3);
+    for(let z=-6;z<=6;z++)for(let y=-6;y<=6;y++)for(let x=-8;x<=8;x++) {
+      const q=[x*d,y*d,z*d];if((q[0]/.43)**2+(q[1]/.32)**2+(q[2]/.35)**2<=1)positions.push([q[0]-1.4,q[1]+2.1,q[2]+.4]);
+    }
+    data=new Float32Array(positions.length*16);
+    positions.forEach((q,i)=>data.set([...q,1,...q,1,0,0,0,.3,0,0,0,24.3],i*16));
+  } else throw new RangeError('Unknown discriminator fixture: '+fixture);
+  return subdivideDiagnosticPopulation({schema:'kaminos.fluid-discriminator-population.v1',fixture,refinement:1,particleCount:data.length/16,particleData:data,particleVolumeScale:1,source:'finite_initial_water_no_recycling'},refinement);
+}
+
 export async function createWebGPUFingerFluidSolver({
   canvas,
   hostFrameComposition = false,
@@ -13249,6 +13268,9 @@ export async function createWebGPUFingerFluidSolver({
   ipbfPressureRadiusScale = 1,
   livePressureControls = false,
   cohesionModel = 'legacy',
+  diagnosticDynamics = 'assembled',
+  diagnosticPopulation = null,
+  akinciSupportRadius = null,
   densityCellRejection = false,
   particleRepulsionStrength = 1,
   uniformVolumeDensityKernel = false,
@@ -13287,6 +13309,11 @@ export async function createWebGPUFingerFluidSolver({
   const useIPBF = safePressureSolver === 'ipbf';
   const safeCohesionModel=resolveFingerFluidCohesionModel({pressureSolver:safePressureSolver,cohesionModel});
   const useAkinci=safeCohesionModel==='akinci_2013';
+  const safeDiagnosticDynamics=resolveFingerFluidDiagnosticDynamics(diagnosticDynamics);
+  const reducedDynamics=safeDiagnosticDynamics==='pressure_surface';
+  if((reducedDynamics||diagnosticPopulation||akinciSupportRadius!==null)&&(!useIPBF||!useAkinci||adaptiveDensity||truthScene!=='multi_regime_playground'))throw new RangeError('Diagnostic dynamics require fixed-volume IPBF/Akinci analytic playground');
+  if(akinciSupportRadius!==null&&(!Number.isFinite(akinciSupportRadius)||akinciSupportRadius<=0))throw new RangeError('Diagnostic surface support radius must be positive');
+  if(reducedDynamics&&(chemistryDiffusion!==0||particleShiftStrength!==0||unsupportedSheetStrength!==0||liveInletPacket!==null))throw new RangeError('Reduced diagnostic core excludes shifting, chemistry, sheet correction and external inlets');
   if(useAkinci&&capillaryStrength===null)throw new RangeError('Akinci experiment requires an explicit surface coefficient');
   capillaryStrength=capillaryStrength??KAMINOS_FINGER_FLUID_DEFAULT_CAPILLARY_STRENGTH;
   const admittedCohesionStrength=resolveFingerFluidCapillaryStrength(capillaryStrength,{cohesionModel:safeCohesionModel});
@@ -13519,7 +13546,7 @@ export async function createWebGPUFingerFluidSolver({
   const liquidFireContactAllocationGeneration = nextLiquidFireContactAllocationGeneration;
   nextLiquidFireContactAllocationGeneration = (nextLiquidFireContactAllocationGeneration % 0x00fffffe) + 1;
   const liquidFireContactEpoch = 1;
-  const population = safeTruthScene === 'live_hand_inlets'
+  const population = diagnosticPopulation ? validateFingerFluidDiagnosticPopulation(diagnosticPopulation,safeBaseParticleCount) : safeTruthScene === 'live_hand_inlets'
     ? null
     : createFingerFluidTruthScenePopulation(safeBaseParticleCount, safeTruthScene, {
       waterfallOraclePreset: safeWaterfallOraclePreset,
@@ -13757,7 +13784,9 @@ export async function createWebGPUFingerFluidSolver({
     computeShader = computeShader.replace(velocityAnchor,'  var velocity = particle.delta.xyz;');
     computeShader = computeShader.replace('  velocity = velocity * params.forces.y;', '  // IPBF paper damping replaces the legacy uniform velocity damping.');
   }
-  if(useAkinci)computeShader+=createAkinciSurfaceShader({volume:ipbfParticleVolume});
+  computeShader=applyFingerFluidDiagnosticDynamics(computeShader,safeDiagnosticDynamics);
+  const effectiveAkinciRadius=akinciSupportRadius??2*Math.cbrt(ipbfParticleVolume);
+  if(useAkinci)computeShader+=createAkinciSurfaceShader({volume:ipbfParticleVolume,supportRadius:effectiveAkinciRadius});
   const computeModule = device.createShaderModule({ label: useIPBF ? 'webgpu-ipbf-cubic-spline-v0' : KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: computeShader });
   const movingHillComputeLayoutEntries = movingHillSupportProvider
     ? [
@@ -15101,7 +15130,7 @@ export async function createWebGPUFingerFluidSolver({
       if(useIPBF)dispatch(pass,pipelines.ipbfVelocity,safeParticleCount);
       dispatch(pass, pipelines.velocity, safeParticleCount);
       dispatchEnergy(pass, energyPipelines.viscosity);
-      if (frameIndex % VORTICITY_UPDATE_INTERVAL === 0) {
+      if (!reducedDynamics && frameIndex % VORTICITY_UPDATE_INTERVAL === 0) {
         dispatch(pass, pipelines.vorticity, safeParticleCount);
         dispatch(pass, pipelines.confinement, safeParticleCount);
         vorticityPassCount += 2;
@@ -16276,6 +16305,7 @@ export async function createWebGPUFingerFluidSolver({
     const effectivePressureControls=pressureControlState?.read().effective;
     return {
       available: true,
+      diagnosticDynamics:{requested:diagnosticDynamics,effective:safeDiagnosticDynamics,neighborSmoothing:!reducedDynamics,vorticityConfinement:!reducedDynamics,speedClipping:!reducedDynamics,boundaryVelocityResponse:true,population:diagnosticPopulation?{schema:diagnosticPopulation.schema,fixture:diagnosticPopulation.fixture,refinement:diagnosticPopulation.refinement,source:diagnosticPopulation.source,particleCount:safeBaseParticleCount,particleVolume:ipbfParticleVolume,representedVolume:safeBaseParticleCount*ipbfParticleVolume}:null},
       liquidFireContactCoverage: effectiveLiquidFireContactCoverage,
       solver_backend: 'webgpu_compute',
       render_backend: 'webgpu_direct_render',
@@ -16317,7 +16347,7 @@ export async function createWebGPUFingerFluidSolver({
       vorticityConfinementContract: KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT,
       freeSurfaceContract: KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT,
       cohesionModel:safeCohesionModel,
-      cohesionSettings:useAkinci?{contract:'akinci2013-equal-volume-surface-force-v0',coefficient:safeCapillaryStrength,coefficientMeaning:'published_model_gamma_not_calibrated_SI_sigma',referenceDensity:AKINCI_REFERENCE_DENSITY,particleVolume:ipbfParticleVolume,neighborhoodRadius:2*Math.cbrt(ipbfParticleVolume),supportRadiusSource:'twice_equal_volume_spacing',phaseRule:'all_active_fluid_source_tags_do_not_partition_water',schedule:'before_predictor_and_pressure',passes:3,adhesion:false,physicalSurfaceTension:'unestablished',angularMomentum:'unestablished',ipbfPaperTerm:false}:safeCohesionModel==='ipbf_free_surface'?{contract:'ipbf-density-independent-normalized-attraction-v0',strengthUnit:'gravity_fraction',normalization:'max_1_pair_weight_sum',densityConfidenceGate:false,legacyAccelerationCap:false,neighborhoodRadius:safeKernelRadius,paperTerm:false}:{contract:'legacy-capillary-attraction-v0',strengthUnit:'legacy_gain',densityConfidenceGate:true,accelerationCap:.42},
+      cohesionSettings:useAkinci?{contract:'akinci2013-equal-volume-surface-force-v0',coefficient:safeCapillaryStrength,coefficientMeaning:'published_model_gamma_not_calibrated_SI_sigma',referenceDensity:AKINCI_REFERENCE_DENSITY,particleVolume:ipbfParticleVolume,neighborhoodRadius:effectiveAkinciRadius,supportRadiusSource:akinciSupportRadius===null?'twice_equal_volume_spacing':'explicit_diagnostic_world_radius',phaseRule:'all_active_fluid_source_tags_do_not_partition_water',schedule:'before_predictor_and_pressure',passes:3,adhesion:false,physicalSurfaceTension:'unestablished',angularMomentum:'unestablished',ipbfPaperTerm:false}:safeCohesionModel==='ipbf_free_surface'?{contract:'ipbf-density-independent-normalized-attraction-v0',strengthUnit:'gravity_fraction',normalization:'max_1_pair_weight_sum',densityConfidenceGate:false,legacyAccelerationCap:false,neighborhoodRadius:safeKernelRadius,paperTerm:false}:{contract:'legacy-capillary-attraction-v0',strengthUnit:'legacy_gain',densityConfidenceGate:true,accelerationCap:.42},
       waterfallContinuityContract: KAMINOS_FINGER_FLUID_WATERFALL_CONTINUITY_CONTRACT,
       unsupportedSheetContract: KAMINOS_FINGER_FLUID_UNSUPPORTED_SHEET_CONTRACT,
       waterfallOracleContract: waterfallOracleConfig?.contract || null,
