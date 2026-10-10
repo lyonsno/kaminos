@@ -111,7 +111,8 @@ try {
     // Paired blocking/cooperative alternation inside one page session (17 runs:
     // a cold blocking run, then 8 cooperative/blocking pairs) per profile.
     summary.phase = 'cooperative-alternate';
-    for (const [name, query] of [['product', ''], ['faithful', 'activations=f32&fuseNorm=0'], ['product-2', '']]) {
+    for (const [name, query] of [['product-12ms', 'dutyMs=12'], ['product-16ms', 'dutyMs=16'], ['product-20ms', 'dutyMs=20'],
+      ['product-12ms-repeat', 'dutyMs=12']]) {
       run(`alternate-${name}`, demo, ['--url',
         `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=17&alternate=1&${query}`,
         '--chrome', values.chrome, '--screenshot', path.join(out, `alternate-${name}`, 'screen.png')]);
