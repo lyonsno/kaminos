@@ -28,6 +28,16 @@ import numpy as np
 import torch
 from safetensors import safe_open
 
+
+def source_identity(path):
+    """Hugging Face repo identity for a cached snapshot path, else the path's basename only."""
+    parts = Path(path).resolve().parts
+    for i, part in enumerate(parts):
+        if part.startswith("models--") and i + 2 < len(parts) and parts[i + 1] == "snapshots":
+            repo = part[len("models--"):].replace("--", "/")
+            return {"repo": repo, "revision": parts[i + 2], "subfolder": "/".join(parts[i + 3:])}
+    return {"path": Path(path).name}
+
 ALIGN = 256
 GROUP = 64
 
@@ -114,7 +124,7 @@ def main():
 
     manifest = {"schema": "kaminos.flux2-klein.transformer-weights.v1", "format": args.format,
                 "globals_format": globals_format, "group": GROUP, "layout": "row-major [out, in]",
-                "source": str(src.resolve()), "config": config, "bundles": {}, "conversion": {}}
+                "source": source_identity(src), "config": config, "bundles": {}, "conversion": {}}
     total_overflow = total_subnormal = 0
     for bname, tensors in bundles.items():
         fmt_for = globals_format if bname == "globals" else args.format

@@ -24,9 +24,9 @@ import torch
 from safetensors import safe_open
 
 from importlib import import_module
-quantize = import_module('pack-transformer').quantize
+_packer = import_module('pack-transformer')
+quantize, source_identity = _packer.quantize, _packer.source_identity
 GROUP = 64
-
 ALIGN = 256
 TAPS = (9, 18, 27)
 
@@ -51,7 +51,7 @@ def main():
         return handles[fname].get_tensor(name).to(torch.float32)
 
     layers_needed = max(TAPS)
-    manifest = {"schema": "kaminos.flux2-klein.text-encoder-weights.v1", "source": str(src.resolve()), "config": config,
+    manifest = {"schema": "kaminos.flux2-klein.text-encoder-weights.v1", "source": source_identity(src), "config": config,
                 "taps": list(TAPS), "layers": layers_needed, "format": args.format, "group": GROUP, "bundles": {}}
 
     for i in range(layers_needed):

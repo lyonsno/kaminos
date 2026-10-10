@@ -16,8 +16,10 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from importlib import import_module
 from safetensors import safe_open
 
+source_identity = import_module('pack-transformer').source_identity
 ALIGN = 256
 
 
@@ -61,7 +63,7 @@ def main():
 
     blob = b"".join(parts)
     (out / "vae-decoder.bin").write_bytes(blob)
-    manifest = {"schema": "kaminos.flux2-klein.vae-decoder-weights.v0", "source": str(src.resolve()), "config": config,
+    manifest = {"schema": "kaminos.flux2-klein.vae-decoder-weights.v0", "source": source_identity(src), "config": config,
                 "conv3x3_layout": "[Cout, ky, kx, Cin]", "bundle": {"file": "vae-decoder.bin", "bytes": len(blob),
                 "sha256": hashlib.sha256(blob).hexdigest(), "tensors": entries}}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1))

@@ -7,7 +7,9 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
-export async function startServer(roots, port = 0) {
+// cors: answer any origin and expose the range headers, as a cross-origin weight host would.
+export async function startServer(roots, port = 0, { cors = false } = {}) {
+  const corsHeaders = cors ? { 'access-control-allow-origin': '*', 'access-control-expose-headers': 'content-range, content-length' } : {};
   const prefixes = Object.keys(roots).sort((a, b) => b.length - a.length);
   const server = http.createServer((q, r) => {
     const url = decodeURIComponent(new URL(q.url, 'http://x').pathname);
@@ -21,10 +23,10 @@ export async function startServer(roots, port = 0) {
       const range = /^bytes=(\d+)-(\d+)$/.exec(q.headers.range || '');
       if (range) {
         const start = Number(range[1]), end = Math.min(Number(range[2]), st.size - 1);
-        r.writeHead(206, { 'content-type': type, 'content-length': end - start + 1, 'content-range': `bytes ${start}-${end}/${st.size}`, 'cache-control': 'no-store' });
+        r.writeHead(206, { ...corsHeaders, 'content-type': type, 'content-length': end - start + 1, 'content-range': `bytes ${start}-${end}/${st.size}`, 'cache-control': 'no-store' });
         return fs.createReadStream(file, { start, end }).pipe(r);
       }
-      r.writeHead(200, { 'content-type': type, 'content-length': st.size, 'cache-control': 'no-store' });
+      r.writeHead(200, { ...corsHeaders, 'content-type': type, 'content-length': st.size, 'cache-control': 'no-store' });
       fs.createReadStream(file).pipe(r);
     });
   });

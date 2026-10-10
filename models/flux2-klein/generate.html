@@ -37,7 +37,10 @@
 <script type="module">
 import { createKleinDemo } from './klein-demo.js';
 const q = new URLSearchParams(location.search);
-const urls = { textEncoderUrl: q.get('te') ?? '/te', transformerUrl: q.get('dit') ?? '/dit', vaeUrl: q.get('vae') ?? '/vae' };
+// Weights come from one base URL holding te/, dit/ and vae/ (?weights=, else the page's klein-weights meta,
+// else the serving origin); ?te= / ?dit= / ?vae= override a single component.
+const base = (q.get('weights') ?? document.querySelector('meta[name="klein-weights"]')?.content ?? '').replace(/\/$/, '');
+const urls = { textEncoderUrl: q.get('te') ?? `${base}/te`, transformerUrl: q.get('dit') ?? `${base}/dit`, vaeUrl: q.get('vae') ?? `${base}/vae` };
 const kernels = { gemmVersion: Number(q.get('gemm') ?? 2), sharedType: q.get('shared') ?? 'f16' };
 const $ = id => document.getElementById(id);
 const status = $('status'), go = $('go');

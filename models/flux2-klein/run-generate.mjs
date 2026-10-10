@@ -1,6 +1,6 @@
 // Batch text-to-image through generate.html in an independent Chrome for Testing.
-// Usage: node run-generate.mjs --chrome <exe> --te <dir> --dit <dir> --vae <dir> --prompts <dir of .txt>
-//        --out <dir> [--seed-base 7000] [--size 512] [--only name,name]
+// Usage: node run-generate.mjs --chrome <exe> (--te <dir> --dit <dir> --vae <dir> | --weights-url <base> | --weights-dir <dir>)
+//        --prompts <dir of .txt> --out <dir> [--seed-base 7000] [--size 512] [--only name,name]
 // Prompt files are taken in sorted order; seed = seed-base + 1-based index. Writes <name>.png and report.json.
 import fsp from 'node:fs/promises';
 import os from 'node:os';
@@ -23,13 +23,13 @@ const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
 const outDir = path.resolve(opt('--out'));
 const report = { schema: 'kaminos.flux2-klein.generate-run.v0', host: os.hostname(), startedAt: new Date().toISOString(), source: sourceIdentity(here), phase: 'setup',
-  roots: { te: path.resolve(opt('--te')), dit: path.resolve(opt('--dit')), vae: path.resolve(opt('--vae')) } };
-let browser, server;
+  roots: opt('--te') ? { te: path.resolve(opt('--te')), dit: path.resolve(opt('--dit')), vae: path.resolve(opt('--vae')) } : null };
+let browser, server, weightServer;
 async function finish(code) {
   report.finishedAt = new Date().toISOString();
   await fsp.mkdir(outDir, { recursive: true });
   await fsp.writeFile(path.join(outDir, 'report.json'), JSON.stringify(report, null, 2));
-  browser?.close(); server?.close();
+  browser?.close(); server?.close(); weightServer?.close();
   process.exit(code);
 }
 try {
@@ -44,9 +44,18 @@ try {
     jobs.push({ name, prompt: (await fsp.readFile(path.join(promptDir, f), 'utf8')).trim(), seed: seedBase + i + 1, size });
   }
   report.jobs = jobs.map(({ name, seed, size: s, prompt }) => ({ name, seed, size: s, prompt }));
+  // Weights from one base URL (--weights-url, e.g. a Hugging Face resolve URL), or --weights-dir served from a
+  // second, CORS-enabled origin; otherwise --te/--dit/--vae served beside the page.
+  if (opt('--weights-dir')) {
+    report.weightsDir = path.resolve(opt('--weights-dir'));
+    const s = await startServer({ '/': report.weightsDir }, 0, { cors: true });
+    weightServer = s.server; report.weightsUrl = s.origin;
+  } else if (opt('--weights-url')) report.weightsUrl = opt('--weights-url');
+  const pageRoots = report.roots ? { '/te/': report.roots.te, '/dit/': report.roots.dit, '/vae/': report.roots.vae } : {};
   if (opt('--origin')) report.origin = opt('--origin');
-  else ({ server } = await startServer({ '/te/': report.roots.te, '/dit/': report.roots.dit, '/vae/': report.roots.vae,
+  else ({ server } = await startServer({ ...pageRoots,
     '/webgpu-inference-kit/': path.resolve(opt('--kit', path.join(here, '../../webgpu-inference-kit'))), '/': here }).then(s => { report.origin = s.origin; return s; }));
+  const weightQuery = report.weightsUrl ? `weights=${encodeURIComponent(report.weightsUrl)}` : 'te=/te&dit=/dit&vae=/vae';
   browser = await launchChrome(opt('--chrome'), [], report);
   report.phase = 'load';
   const kq = `&gemm=${opt('--gemm-version', '2')}&shared=${opt('--shared-type', 'f16')}`;
@@ -54,7 +63,7 @@ try {
   // --loads N reloads the page N times in one browser profile (cache-hit evidence); the batch runs on the last load.
   report.loads = [];
   for (let n = 0; n < Number(opt('--loads', '1')); n++) {
-    await browser.navigate(`${report.origin}/generate.html?te=/te&dit=/dit&vae=/vae${kq}`, 'window.kleinPageReady === true');
+    await browser.navigate(`${report.origin}/generate.html?${weightQuery}${kq}`, 'window.kleinPageReady === true');
     await browser.evaluate('window.kleinReady');
     report.loads.push(await browser.evaluate('({ loadMs: window.kleinLoadMs?.(), stats: window.kleinLoadStats?.() })'));
   }
