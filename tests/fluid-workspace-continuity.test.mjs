@@ -35,6 +35,7 @@ for(const running of [false,true])test(`Authoring round trip retains available s
   assert.equal(f.read().stops,0,'workspace presentation must not stop the held water');
   assert.equal(f.context.fingerFluidBenchViewport,f.viewport);
   assert.equal(f.node('finger-fluid-bench-operator-panel').hidden,false);
+  assert.equal(f.context.fingerFluidBenchRunning,true,'ordinary Authoring frames must continue presenting held water');
   f.switchMode('workbench');
   assert.equal(f.read().generation,1,'returning to the same water must retain session identity');
   assert.equal(f.read().starts,0);

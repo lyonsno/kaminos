@@ -11836,6 +11836,7 @@ async function initScene() {
     },
     afterSwitch: mode => {
       installFluidWorkbench();
+      if(mode === 'authoring' && fingerFluidBenchSolver?.available && fingerFluidBenchViewport && !document.getElementById('finger-fluid-bench-operator-panel').hidden)resumeFingerFluidBenchAfterWitness();
       if(mode === 'workbench' && fluidWorkbench && fingerFluidBenchSolver?.available && fingerFluidBenchViewport && !document.getElementById('finger-fluid-bench-operator-panel').hidden)setActiveTab('finger-fluid-bench');
       fluidWorkbench?.setActive(mode === 'workbench' && window.__kaminosActiveTab() === 'finger-fluid-bench');
     },
