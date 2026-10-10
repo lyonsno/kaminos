@@ -1,5 +1,5 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
-import { buildInflowCoverageMap, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
+import { buildInflowCoverageMap, normalizeInflowApertureSpec, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
 import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
 import {
   detailForceContributionMask,
@@ -2076,7 +2076,7 @@ export const HEAT_RELEASE_UNIFORM_FLOATS = 4;
 export const VELOCITY_STAGGERING_UNIFORM_OFFSET = HEAT_RELEASE_UNIFORM_OFFSET + HEAT_RELEASE_UNIFORM_FLOATS;
 export const VELOCITY_STAGGERING_UNIFORM_FLOATS = 4;
 export const IMMERSED_SOURCE_UNIFORM_OFFSET = VELOCITY_STAGGERING_UNIFORM_OFFSET + VELOCITY_STAGGERING_UNIFORM_FLOATS;
-export const IMMERSED_SOURCE_UNIFORM_FLOATS = 16;
+export const IMMERSED_SOURCE_UNIFORM_FLOATS = 24;
 export const VOLUME_UNIFORM_FLOATS = IMMERSED_SOURCE_UNIFORM_OFFSET + IMMERSED_SOURCE_UNIFORM_FLOATS;
 
 // The aperture pattern (slice 2): which coverage pattern the floor map is built
@@ -2404,25 +2404,79 @@ export function faceForceFoldModel({ solid = false, transported, localIncrement,
 // Source Law select; the floor law and the legacy laws are untouched.
 export const IMMERSED_SOURCE_IDENTITY = 'kaminos.volume.immersed-source.v1';
 export const IMMERSED_SOURCE_LAW = 'immersed-source';
-function immersedDirectionFromAngles(yawDeg, pitchDeg) {
+export function immersedDirectionFromAngles(yawDeg, pitchDeg) {
   const yaw = yawDeg * Math.PI / 180, pitch = pitchDeg * Math.PI / 180;
   return [Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw)];
 }
 // CPU mirror of the shader's immersedSourceWeight over the cells that can be
 // inside the slab: an antialiased indicator of |along| ≤ t/2 and radial ≤ r,
 // in cell units, cell centres at integer + 0.5.
+// Slab-local basis (slab inlet dynamics, report §33): e1 and e2 span the disc
+// plane; a disc facing up has u along +x and v along +z so the floor coverage
+// map and lattice read in their own orientation. e2 = e1 × n, as the shader forms it.
+export function immersedSlabBasis(n) {
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+  const e1 = Math.abs(n[1]) > 0.999 ? [1, 0, 0] : norm(cross([0, 1, 0], n));
+  // For the upright disc e1 × n = x × y = +z.
+  return { e1, e2: norm(cross(e1, n)) };
+}
+// The slab's pattern as a floor-map spec in slab-local units (normalised: the
+// slab radius r in units of the half grid). 'shape' means the plain disc and
+// builds no map. Jets ride a ring at 0.62 r with a band of 0.22 r × line
+// weight (inside the disc); slot and bed reach the full radius.
+export function immersedPatternSpec(effective) {
+  const pattern = effective?.pattern;
+  if (!pattern || pattern.kind === 'shape') return null;
+  const r = effective.radiusCells * 2 / effective.grid;
+  return {
+    kind: 'annulus', pattern: pattern.kind, center: [0, 0],
+    ringRadius: pattern.kind === 'jets' ? 0.62 * r : r,
+    bandHalfWidth: 0.22 * r, lineWeight: pattern.lineWeight, jetJitter: pattern.jetJitter,
+    count: pattern.count, ratio: pattern.ratio, seed: pattern.seed, antialias: 2 / effective.grid,
+  };
+}
+const immersedCoverageCache = new Map();
+export function immersedCoverageSignatureFor(config) {
+  const e = config?.effective;
+  if (!e?.admitted || !e.pattern || e.pattern.kind === 'shape') return '';
+  return JSON.stringify([e.grid, Number(e.radiusCells.toFixed(4)), e.pattern]);
+}
+export function immersedCoverageMapForConfig(config, options = {}) {
+  const e = config?.effective;
+  const spec = e?.admitted ? immersedPatternSpec(e) : null;
+  if (!spec) return null;
+  const key = immersedCoverageSignatureFor(config) + `|${options.supersample ?? 4}`;
+  if (!immersedCoverageCache.has(key)) {
+    if (immersedCoverageCache.size > 16) immersedCoverageCache.clear();
+    immersedCoverageCache.set(key, buildInflowCoverageMap({ grid: e.grid, supersample: options.supersample ?? 4, spec }));
+  }
+  return immersedCoverageCache.get(key);
+}
 export function immersedSourceWeights(effective, { grid, gridHeight }) {
   const c = effective.centreCells, n = effective.direction, r = effective.radiusCells, h = effective.thickness / 2;
   const reach = Math.ceil(Math.max(r, h) + 1.5);
   const cells = []; let sum = 0;
   const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  // The pattern, if any, multiplies the slab indicator through the slab-local
+  // cell of the coverage map (the same lookup the kernel makes).
+  const map = immersedCoverageMapForConfig({ effective: { ...effective, admitted: true } });
+  const basis = effective.basis ?? immersedSlabBasis(n);
+  const coverageAt = d => {
+    if (!map) return 1;
+    const u = d[0] * basis.e1[0] + d[1] * basis.e1[1] + d[2] * basis.e1[2];
+    const v = d[0] * basis.e2[0] + d[1] * basis.e2[1] + d[2] * basis.e2[2];
+    const ix = Math.min(grid - 1, Math.max(0, Math.floor(grid * 0.5 + u)));
+    const iz = Math.min(grid - 1, Math.max(0, Math.floor(grid * 0.5 + v)));
+    return map.cells[iz * grid + ix];
+  };
   for (let z = Math.max(0, Math.floor(c[2] - reach)); z <= Math.min(grid - 1, Math.ceil(c[2] + reach)); z += 1)
     for (let y = Math.max(0, Math.floor(c[1] - reach)); y <= Math.min(gridHeight - 1, Math.ceil(c[1] + reach)); y += 1)
       for (let x = Math.max(0, Math.floor(c[0] - reach)); x <= Math.min(grid - 1, Math.ceil(c[0] + reach)); x += 1) {
         const d = [x + 0.5 - c[0], y + 0.5 - c[1], z + 0.5 - c[2]];
         const along = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
         const radial = Math.hypot(d[0] - along * n[0], d[1] - along * n[1], d[2] - along * n[2]);
-        const w = smooth(h + 0.5, h - 0.5, Math.abs(along)) * smooth(r + 0.5, r - 0.5, radial);
+        const w = smooth(h + 0.5, h - 0.5, Math.abs(along)) * smooth(r + 0.5, r - 0.5, radial) * coverageAt(d);
         if (w > 0) { cells.push({ x, y, z, w }); sum += w; }
       }
   return { cells, sum };
@@ -2474,8 +2528,15 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const momentumGain = clampFinite(controls.immersedMomentumGain, 0, 2, 1);
   const capFraction = clampFinite(controls.immersedCapFraction, 0.1, 1, 0.5);
   const backWallRequested = clampFinite(controls.immersedBackWall, 0, 1, 0) >= 0.5;
-  const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness, speed, fuel, temperature, momentumGain, capFraction, puffFactor, backWall: backWallRequested };
-  const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, masked: { cells: 0, weight: 0, weightShare: 0 }, puffFactor } });
+  // Slab inlet dynamics (report §33): the floor law's pattern, turbulence and
+  // puff controls read on the slab too. The pattern spec is normalised the
+  // way the floor map normalises it (retired patterns fall back to the shape).
+  const patternRequested = resolveInflowAperturePattern(controls);
+  const patternNormalised = normalizeInflowApertureSpec({ kind: 'disc', pattern: patternRequested.kind, lineWeight: patternRequested.lineWeight, jetJitter: patternRequested.jetJitter, count: patternRequested.count, ratio: patternRequested.ratio, seed: patternRequested.seed });
+  const pattern = { kind: patternNormalised.pattern, count: patternNormalised.count, ratio: patternNormalised.ratio, seed: patternNormalised.seed, lineWeight: patternNormalised.lineWeight, jetJitter: patternNormalised.jetJitter, patternFallback: patternNormalised.patternFallback };
+  const inletDynamics = resolveInletDynamicsConfig(controls, options.inletSignals ?? {}).effective;
+  const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness, speed, fuel, temperature, momentumGain, capFraction, puffFactor, backWall: backWallRequested, pattern: patternRequested, inletDynamics: { turbulence: inletDynamics.turbulence, turbulenceScaleCells: inletDynamics.turbulenceScaleCells, puff: inletDynamics.puff, puffPeriod: inletDynamics.puffPeriod } };
+  const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], basis: { e1: [1, 0, 0], e2: [0, 0, 1] }, radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, masked: { cells: 0, weight: 0, weightShare: 0 }, puffFactor, pattern, inletDynamics: { ...inletDynamics, turbulence: 0, turbulenceRms: 0, puff: 0, puffSignal: 0, puffFactor: 1, active: false } } });
   if (sourceLaw !== IMMERSED_SOURCE_LAW) return off('source-law-is-not-immersed-source');
   if (pressure.solver !== PRESSURE_SOLVER_CONVERGED) return off('immersed-source-requires-converged-pressure-solver');
   // A positive supply needs a volume outlet: the closed box has none, so
@@ -2490,7 +2551,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   // A cell cannot create more volume per step than its faces can carry out:
   // the cap is a fraction of one stored-velocity unit per step. Reported, never silent.
   const capPerCell = capFraction;
-  const effective = { admitted: true, reason: null, grid, centreCells, direction, radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS } };
+  const effective = { admitted: true, reason: null, grid, centreCells, direction, basis: immersedSlabBasis(direction), radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS }, pattern, inletDynamics };
   // The normaliser is the discrete weight sum over the cells the kernel will
   // actually write (the scene-solid mask skips its cells before the target), so
   // Σ target over fluid cells = Q exactly on this grid; the analytic slab volume
@@ -2522,6 +2583,8 @@ export function immersedSourceUniformValues(config) {
     e.direction[0], e.direction[1], e.direction[2], e.radiusCells,
     e.thickness, e.speed, e.fuel, e.temperature,
     e.momentumGain, e.capPerCell, e.fluxRequested / e.normaliser, 0,
+    e.basis.e1[0], e.basis.e1[1], e.basis.e1[2], e.inletDynamics?.turbulence ?? 0,
+    e.pattern && e.pattern.kind !== 'shape' ? 1 : 0, 0, 0, 0,
   ];
 }
 // CPU model of the immersed momentum relaxation as the kernel completes it
@@ -3441,6 +3504,10 @@ struct Uniforms {
   immersed_source_b: vec4<f32>,
   immersed_source_c: vec4<f32>,
   immersed_source_d: vec4<f32>,
+  // e = slab basis e1 (cells), inlet turbulence amplitude; f = pattern on
+  // (the coverage map holds the slab's pattern), unused ×3.
+  immersed_source_e: vec4<f32>,
+  immersed_source_f: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -4506,6 +4573,25 @@ fn immersedSourceWeight(cellCenter: vec3<f32>) -> f32 {
   let radius = u.immersed_source_b.w;
   // Edges ascend: Metal leaves smoothstep with reversed edges undefined.
   return (1.0 - smoothstep(halfThickness - 0.5, halfThickness + 0.5, abs(along))) * (1.0 - smoothstep(radius - 0.5, radius + 0.5, radial));
+}
+
+// The slab's pattern and inlet turbulence (slab inlet dynamics, report §33):
+// the slab-local cell (u, v) of the disc plane indexes the floor coverage map
+// (built for the slab's pattern, centred at GRID/2) and the inlet turbulence
+// lattice, exactly as the CPU mirror indexes them. slabWeight is the plain
+// disc indicator; the pattern can only remove, the turbulence modulates.
+fn immersedPatternedWeight(cellCenter: vec3<f32>, slabWeight: f32) -> f32 {
+  if (slabWeight <= 0.0) { return 0.0; }
+  let d = cellCenter - u.immersed_source_a.yzw;
+  let n = immersedDirection();
+  let e1 = u.immersed_source_e.xyz;
+  let e2 = cross(e1, n);
+  let slabCell = vec2<i32>(clamp(i32(floor(f32(GRID) * 0.5 + dot(d, e1))), 0, i32(GRID) - 1), clamp(i32(floor(f32(GRID) * 0.5 + dot(d, e2))), 0, i32(GRID) - 1));
+  var coverage = 1.0;
+  if (u.immersed_source_f.x > 0.5) { coverage = textureLoad(inflowCoverage, slabCell, 0).x; }
+  var perturbation = 0.0;
+  if (u.immersed_source_e.w > 0.0) { perturbation = textureLoad(inflowPerturbation, slabCell, 0).x; }
+  return slabWeight * coverage * max(0.0, 1.0 + u.immersed_source_e.w * perturbation);
 }
 
 fn blockedSceneFaceFluxAtCell(c: vec3<i32>) -> vec2<f32> {
@@ -5887,7 +5973,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let prev = fluidSrc[base];
   // Immersed source: one weight, one capped target; momentum and scalar entry
   // below derive from the same two numbers (report section 31).
-  let immersedWeight = immersedSourceWeight(cell);
+  let immersedSlabWeight = immersedSourceWeight(cell);
+  let immersedWeight = immersedPatternedWeight(cell, immersedSlabWeight);
   let immersedTarget = min(u.immersed_source_d.y, immersedWeight * u.immersed_source_d.z);
   let requestedSpeed = u.fire_smoke_curl_speed.w;
   let speed = dynamicsSpeed();
@@ -7206,7 +7293,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let wall = max(max(abs(p.x), verticalWall), abs(p.z));
   // The immersed slab is a source wherever it sits (floor, side, or in the
   // open): the sponge leaves it alone, as it leaves the inflow aperture.
-  let wallFade = max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedWeight, 0.0, 1.0));
+  let wallFade = max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSlabWeight, 0.0, 1.0));
   let smokeTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.66, 0.84, plumeHeight01)), expandedTopY - 0.005, p.y);
   let legacyHeatTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.42, 0.62, plumeHeight01)), expandedTopY - 0.040, p.y);
   let tallPlumeHeatTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.62, 0.84, plumeHeight01)), expandedTopY - 0.010, p.y);
@@ -15418,9 +15505,9 @@ export function createKaminosVolumePrototype({
     // normalised against the mask the kernel will actually dispatch on. The
     // refresh in encodeSim is a no-op by key after this.
     const immersedPuffFactor = inflowBoundaryConfig.requested?.inletDynamics?.puffFactor ?? resolveInletDynamicsConfig(controlsSnapshot, inletSignals).effective.puffFactor;
-    state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor });
+    state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals });
     refreshSceneCollision();
-    const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, solidCells: sceneSolidCellsCpu });
+    const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu });
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
     if (inflowBoundaryConfig.effective.admitted && inflowCoverageTexture) {
@@ -15431,6 +15518,19 @@ export function createKaminosVolumePrototype({
         inflowCoverageSignature = coverageSignature;
       }
       state.inflowBoundary.effective.coverage = { pattern: inflowCoverageMap.pattern, patternFallback: inflowCoverageMap.patternFallback, coveredCells: inflowCoverageMap.coveredCells, totalCoverage: inflowCoverageMap.totalCoverage, peak: inflowCoverageMap.peak };
+    } else if (immersedSourceConfig.effective.admitted && inflowCoverageTexture) {
+      const coverageSignature = immersedCoverageSignatureFor(immersedSourceConfig);
+      // The floor law is inactive under the immersed law, so the coverage
+      // texture holds the slab's pattern (empty signature: plain disc, no map).
+      if (coverageSignature !== inflowCoverageSignature) {
+        inflowCoverageMap = immersedCoverageMapForConfig(immersedSourceConfig);
+        if (inflowCoverageMap) device.queue.writeTexture({ texture: inflowCoverageTexture }, inflowCoverageMap.cells, { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
+        inflowCoverageSignature = coverageSignature;
+      }
+      state.immersedSource.effective.coverage = {
+        pattern: inflowCoverageMap?.pattern ?? 'shape', patternFallback: inflowCoverageMap?.patternFallback ?? immersedSourceConfig.effective.pattern.patternFallback,
+        coveredCells: inflowCoverageMap?.coveredCells ?? null, totalCoverage: inflowCoverageMap?.totalCoverage ?? null, peak: inflowCoverageMap?.peak ?? null,
+      };
     }
     writeAnalyticEmitterInjectionUniform(
       analyticEmitterInjectionUniformFloats,

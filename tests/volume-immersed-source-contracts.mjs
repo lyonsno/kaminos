@@ -36,11 +36,11 @@ test('the immersed source resolves from the controls and is admitted only under 
 
 test('the uniform block follows velocity staggering and packs the compiled source only when admitted', () => {
   assert.equal(core.IMMERSED_SOURCE_UNIFORM_OFFSET, core.VELOCITY_STAGGERING_UNIFORM_OFFSET + 4);
-  assert.equal(core.IMMERSED_SOURCE_UNIFORM_FLOATS, 16);
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.IMMERSED_SOURCE_UNIFORM_OFFSET + 16);
+  assert.equal(core.IMMERSED_SOURCE_UNIFORM_FLOATS, 24);
+  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.IMMERSED_SOURCE_UNIFORM_OFFSET + 24);
   const on = core.resolveImmersedSourceConfig(base, { grid: 64 });
   const u = core.immersedSourceUniformValues(on);
-  assert.equal(u.length, 16);
+  assert.equal(u.length, 24);
   assert.deepEqual(u.slice(0, 4).map(v => Number(v.toFixed(3))), [1, 32, 16, 32], 'enabled + centre in cells');
   assert.deepEqual(u.slice(4, 8).map(v => Number(v.toFixed(3))), [0, 1, 0, 6.4], 'direction + radius in cells');
   assert.deepEqual(u.slice(8, 12).map(v => Number(v.toFixed(3))), [1.5, 0.1, 0.56, 1.2], 'thickness, speed, fuel, temperature');
