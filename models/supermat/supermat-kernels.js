@@ -43,11 +43,11 @@ function gemmParts({ aKContiguous = true, bNContiguous = true, biasM = false, bi
   if (biasM2) bindings.push(binding(next++, 'bias_m2', t.biasM2));
   if (biasN) bindings.push(binding(next++, 'bias_n', t.biasN));
   if (residual) bindings.push(binding(next++, 'res', t.residual));
-  // normB: GroupNorm (+SiLU) of the conv input applied while loading B tiles,
-  // from precomputed per-group [mean, rstd]; p.z1 = channels per group.
+  // normB: GroupNorm (+SiLU) of the conv input applied while loading B tiles.
+  // normB: per-channel [scale, shift] (scale = rstd*gamma, shift = beta - mean*scale).
   if (normB) {
     if (!conv) throw new Error('fused input normalization requires a conv GEMM');
-    bindings.push(storage(next++, 'norm_stats'), storage(next++, 'norm_gamma'), storage(next++, 'norm_beta'));
+    bindings.push(storage(next++, 'norm_ss'));
   }
   bindings.push(binding(next++, 'c', t.c, true));
   bindings.push(uniform(next++, 'Params'));
@@ -63,18 +63,26 @@ function gemmParts({ aKContiguous = true, bNContiguous = true, biasM = false, bi
 ${bindings.join('\n')}`;
   const orderA = aKContiguous ? `let kk=idx%${bk}u;let mm=idx/${bk}u;` : `let mm=idx%${bm}u;let kk=idx/${bm}u;`;
   const orderB = bNContiguous || conv ? `let nn=idx%${bn}u;let kk=idx/${bn}u;` : `let kk=idx%${bk}u;let nn=idx/${bk}u;`;
-  let valueB;
+  let valueB, prologue = '';
   if (conv) {
     const { kh, kw, stride, upsample } = conv;
     // p.b_sk/p.b_sn/p.b_sb are reused as input H, input W and output W.
+    // When each thread's B column is fixed for the whole K loop (threads a
+    // multiple of bn), its output position and input origin are computed once.
+    const hoisted = threads % bn === 0;
+    if (hoisted) {
+      prologue = `let b_n=n0+tid%${bn}u;let b_oy=b_n/p.b_sb;let b_ox=b_n%p.b_sb;
+  let b_iy0=i32(b_oy*${stride}u)-i32(p.pad_top);let b_ix0=i32(b_ox*${stride}u)-i32(p.pad_left);
+  let b_eh=i32(p.b_sk${upsample ? '*2u' : ''});let b_ew=i32(p.b_sn${upsample ? '*2u' : ''});`;
+    }
     valueB = `let ci=k/${kh * kw}u;let r=k%${kh * kw}u;let ky=r/${kw}u;let kx=r%${kw}u;
-      let oy=n/p.b_sb;let ox=n%p.b_sb;
+      ${hoisted ? 'let iy=b_iy0+i32(ky);let ix=b_ix0+i32(kx);let eh=b_eh;let ew=b_ew;' : `let oy=n/p.b_sb;let ox=n%p.b_sb;
       let iy=i32(oy*${stride}u+ky)-i32(p.pad_top);let ix=i32(ox*${stride}u+kx)-i32(p.pad_left);
-      let eh=i32(p.b_sk${upsample ? '*2u' : ''});let ew=i32(p.b_sn${upsample ? '*2u' : ''});
+      let eh=i32(p.b_sk${upsample ? '*2u' : ''});let ew=i32(p.b_sn${upsample ? '*2u' : ''});`}
       if(iy>=0&&ix>=0&&iy<eh&&ix<ew){
         let sy=u32(iy)${upsample ? '/2u' : ''};let sx=u32(ix)${upsample ? '/2u' : ''};
         value=${load('b', t.b, 'p.b_off+ci*p.b_sk*p.b_sn+sy*p.b_sn+sx')};
-        ${normB ? `let g=ci/p.z1;value=(value-norm_stats[g*2u])*norm_stats[g*2u+1u]*norm_gamma[ci]+norm_beta[ci];
+        ${normB ? `value=fma(value,norm_ss[ci*2u],norm_ss[ci*2u+1u]);
         ${normB.silu ? 'value=value/(1.0+exp(-value));' : ''}` : ''}
       }`;
   } else {
@@ -102,7 +110,7 @@ ${bindings.join('\n')}`;
   const cIndex = 'p.c_off+bat*p.c_sb+m*p.c_sm+n*p.c_sn';
   if (residual) epilogue += `v+=${load('res', t.residual, cIndex)};`;
   epilogue += store('c', t.c, cIndex, 'v');
-  return { header, loaders, epilogue, used };
+  return { header, loaders, epilogue, used, prologue };
 }
 
 // precision: 'f32' (default); 'f16-tiles' rounds both operand tiles to f16 in
@@ -112,7 +120,7 @@ ${bindings.join('\n')}`;
 export function gemmShader({ tile = {}, precision = 'f32', ...layout } = {}) {
   if (precision !== 'f32') return gemmShaderF16({ tile, precision, ...layout });
   const { tm, tn, bk, bm, bn } = gemmTileShape(tile);
-  const { header, loaders, epilogue, used } = gemmParts(layout, { bm, bn, bk, threads: 256 });
+  const { header, loaders, epilogue, used, prologue } = gemmParts(layout, { bm, bn, bk, threads: 256 });
   return `${enables(used)}
 ${header}
 var<workgroup> tile_a:array<f32,${bk * bm}>;
@@ -122,6 +130,7 @@ fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:
   let tid=lid.y*16u+lid.x;
   let m0=wid.y*${bm}u;let n0=p.n_base+wid.x*${bn}u;let bat=wid.z;
   var acc:array<array<f32,${tn}>,${tm}>;
+  ${prologue}
   for(var k0=0u;k0<p.K;k0+=${bk}u){
 ${loaders}
     workgroupBarrier();
@@ -147,7 +156,7 @@ ${loaders}
 
 function gemmShaderF16({ tile = {}, precision, ...layout }) {
   const { tm, tn, bk, bm, bn } = gemmTileShape(tile);
-  const { header, loaders, epilogue, used } = gemmParts(layout, { bm, bn, bk, threads: 256 });
+  const { header, loaders, epilogue, used, prologue } = gemmParts(layout, { bm, bn, bk, threads: 256 });
   const half = precision === 'f16-partial';
   return `${enables(used, true)}
 ${header}
@@ -158,6 +167,7 @@ fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:
   let tid=lid.y*16u+lid.x;
   let m0=wid.y*${bm}u;let n0=p.n_base+wid.x*${bn}u;let bat=wid.z;
   var acc:array<array<f32,${tn}>,${tm}>;
+  ${prologue}
   for(var k0=0u;k0<p.K;k0+=${bk}u){
 ${loaders.replaceAll('tile_a[kk*', 'tile_a[kk*').replace(/(tile_a\[[^\]]+\])=value;/, '$1=f16(value);').replace(/(tile_b\[[^\]]+\])=value;/, '$1=f16(value);')}
     workgroupBarrier();
@@ -193,7 +203,7 @@ export const SUBGROUP_MATRIX_TILE = Object.freeze({ bm: 32, bn: 64, bk: 16 });
 
 export function gemmSubgroupMatrixShader(layout = {}) {
   const { bm, bn, bk } = SUBGROUP_MATRIX_TILE;
-  const { header, loaders, epilogue, used } = gemmParts(layout, { bm, bn, bk, threads: 32, aLayout: 'm-major' });
+  const { header, loaders, epilogue, used, prologue } = gemmParts(layout, { bm, bn, bk, threads: 32, aLayout: 'm-major' });
   const rows = bm / 8, cols = bn / 8;
   const name = (i, j) => `acc${i}_${j}`;
   let declare = '', mma = '', store = '';
@@ -213,6 +223,7 @@ var<workgroup> outt:array<f32,${bm * bn}>;
 @compute @workgroup_size(32)
 fn main(@builtin(local_invocation_index) tid:u32, @builtin(workgroup_id) wid:vec3<u32>) {
   let m0=wid.y*${bm}u;let n0=p.n_base+wid.x*${bn}u;let bat=wid.z;
+  ${prologue}
   ${declare}
   for(var k0=0u;k0<p.K;k0+=${bk}u){
 ${loaders}
@@ -274,6 +285,21 @@ fn main(@builtin(global_invocation_id) gid:vec3<u32>) {
     mean=mean+delta*nb/n;m2=m2+m2b+delta*delta*count*nb/n;count=n;
   }
   stats[group*2u]=mean;stats[group*2u+1u]=inverseSqrt(m2/count+${formatFloat(eps)});
+}`;
+}
+
+// Per-channel affine form of GroupNorm for fused conv loaders:
+// ss[c] = [rstd[g]*gamma[c], beta[c] - mean[g]*rstd[g]*gamma[c]].
+export function groupNormChannelAffineShader() {
+  return `
+struct Params { channels:u32, channels_per_group:u32, z0:u32, z1:u32 };
+${storage(0, 'stats')}${storage(1, 'gamma')}${storage(2, 'beta')}${storage(3, 'ss', true)}${uniform(4, 'Params')}
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid:vec3<u32>) {
+  let c=gid.x;if(c>=p.channels){return;}
+  let g=c/p.channels_per_group;
+  let scale=stats[g*2u+1u]*gamma[c];
+  ss[c*2u]=scale;ss[c*2u+1u]=beta[c]-stats[g*2u]*scale;
 }`;
 }
 
