@@ -12,13 +12,19 @@ let image,selection,active=false,viewer,gpu,session,moge,materials,weightRoute,s
 let imageTicket=0;
 function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
 function view(mode){
+  if(mode==='materials'&&!viewer?.maps)mode='photo';
+  if(mode==='photo'&&!viewer?.surface)mode='original';
   if(viewer)viewer.mode=mode;
   for(const button of document.querySelectorAll('[data-view]'))button.classList.toggle('selected',button.dataset.view===mode);
   $('stage-label').textContent={original:'Original photograph',photo:'Inferred depth',materials:'Inferred materials'}[mode];
 }
-async function load(blob,label,key=null){
+function resetLightingControls(){ $('light').value=-35;$('height').value=35;$('exposure').value=1; }
+function disableMaterials(){
+  document.querySelector('[data-view=materials]').disabled=true;
+  for(const id of ['map','light','height','exposure','gi'])$(id).disabled=true;
+}
+async function load(blob,label,key=null,ticket=++imageTicket){
   if(active)return;
-  const ticket=++imageTicket;
   const bitmap=await createImageBitmap(blob);
   if(ticket!==imageTicket){bitmap.close();return;}
   const canvas=new OffscreenCanvas(bitmap.width,bitmap.height),context=canvas.getContext('2d');
@@ -29,7 +35,7 @@ async function load(blob,label,key=null){
   const url=URL.createObjectURL(blob);$('preview').src=url;$('preview').dataset.blob=url;
   if(old)URL.revokeObjectURL(old);
   $('preview').hidden=false;$('scene').hidden=true;
-  viewer?.clear();view('original');
+  viewer?.clear();resetLightingControls();view('original');
   for(const button of document.querySelectorAll('[data-view]:not([data-view=original])'))button.disabled=true;
   for(const id of ['map','light','height','exposure','gi','reset'])$(id).disabled=true;
   for(const button of document.querySelectorAll('[data-sample]'))button.classList.toggle('selected',button.dataset.sample===key);
@@ -37,7 +43,16 @@ async function load(blob,label,key=null){
   $('progress').value=0;$('elapsed').textContent='';$('timings').textContent='';$('run').disabled=false;
   status('Photograph loaded');
 }
-async function sample(key){const response=await fetch(photos[key][1]);if(!response.ok)throw Error(`Image HTTP ${response.status}`);await load(await response.blob(),photos[key][0],key);}
+async function sample(key){
+  if(active)return;
+  const ticket=++imageTicket;
+  try{
+    const response=await fetch(photos[key][1]);
+    if(ticket!==imageTicket)return;
+    if(!response.ok)throw Error(`Image HTTP ${response.status}`);
+    await load(await response.blob(),photos[key][0],key,ticket);
+  }catch(error){if(ticket===imageTicket)throw error;}
+}
 
 async function setup(){
   if(setupPromise)return setupPromise;
@@ -45,10 +60,16 @@ async function setup(){
     status('Connecting shared WebGPU device');
     gpu=await requestBrowserWebGpuDevice(navigator.gpu,await superMatDeviceOptions(navigator.gpu,{adapterName:'material-photograph'}));
     session=await createWebGpuInferenceSession({sessionId:crypto.randomUUID(),device:gpu.device,adapter:gpu.adapter,backendIdentity:gpu.backendIdentity});
-    viewer=await new MaterialPhotoViewer().init($('scene'),gpu.device);
+    viewer=new MaterialPhotoViewer();await viewer.init($('scene'),gpu.device);
     gpu.device.lost.then(info=>{if(info.reason!=='destroyed'){state.status='error';state.error=`WebGPU device lost: ${info.message}`;status(state.error,true);}});
     state.identity={backend:gpu.backendIdentity,renderer:'kaminos-three-webgpu',gi:viewer.gi.debugState().route??'three-ssilvb-scene-gi-v1',sharedDevice:viewer.renderer.backend.device===gpu.device};
-  })();
+  })().catch(async error=>{
+    for(const cleanup of [()=>viewer?.dispose(),()=>session?.close(),()=>gpu?.device.destroy()]){
+      try{await cleanup();}catch(cause){(state.cleanupErrors??=[]).push(String(cause));}
+    }
+    viewer=session=gpu=null;setupPromise=null;
+    throw error;
+  });
   return setupPromise;
 }
 async function infer(){
@@ -73,8 +94,9 @@ async function infer(){
     let phase=performance.now();
     const depth=await moge.run(input,{scheduler:{mode:'cooperative',splitVitBlocks:true,splitDecoderResBlocks:true,pacing:'bounded-prefix'}});
     record.phases.geometryMs=performance.now()-phase;
-    record.moge={weights:moge.weightsSource,width:depth.width,height:depth.height,route:depth.webGpuRouteReceipt??null};
+    record.moge={weights:moge.weightsSource,width:depth.width,height:depth.height,route:depth.routeResult?.receipt??null};
     results.publish(token,'geometry',depth);
+    disableMaterials();resetLightingControls();
     viewer.setImage(input,depth);viewer.map='surface';$('map').value='surface';
     $('preview').hidden=true;$('scene').hidden=false;
     document.querySelector('[data-view=photo]').disabled=false;$('reset').disabled=false;view('photo');
@@ -125,7 +147,7 @@ $('map').onchange=()=>{viewer.map=$('map').value;};
 for(const id of ['light','height'])$(id).oninput=()=>viewer.setLight(Number($('light').value),Number($('height').value));
 $('exposure').oninput=()=>{viewer.renderer.toneMappingExposure=Number($('exposure').value);};
 $('gi').onchange=()=>{viewer.useGI=$('gi').checked;};
-$('reset').onclick=()=>{viewer.reset();$('light').value=-35;$('height').value=35;$('exposure').value=1;};
+$('reset').onclick=()=>{viewer.reset();resetLightingControls();};
 function fail(error){state.status='error';state.error=error.message;status(error.message,true);}
 window.__materialPhotoActions={infer,sample,view,async pixels(presentedFrame){
   // Inspect the browser's presented canvas screenshot, not a discarded WebGPU drawing buffer.

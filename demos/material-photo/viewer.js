@@ -7,6 +7,7 @@ import { texturePixels } from './photo-contracts.js';
 export class MaterialPhotoViewer {
   async init(canvas, device) {
     this.canvas = canvas;
+    this.textures = [];
     this.renderer = new THREE.WebGPURenderer({ canvas, device, antialias: true });
     await this.renderer.init();
     if (this.renderer.backend.device !== device) throw new Error('Renderer did not borrow the inference GPUDevice');
@@ -154,14 +155,14 @@ export class MaterialPhotoViewer {
   clear() {
     for (const mesh of [this.mesh,this.original]) if(mesh){this.scene.remove(mesh);mesh.geometry.dispose();}
     for (const material of [this.original?.material,this.photoMaterial,this.physicalMaterial,this.mapMaterial]) material?.dispose();
-    for (const texture of this.textures) texture.dispose();
+    for (const texture of this.textures??[]) texture.dispose();
     this.textures=[]; this.original=this.mesh=this.maps=this.surface=this.normalMap=null;
     this.photoMaterial=this.physicalMaterial=this.mapMaterial=null;
   }
   async dispose() {
-    this.renderer.setAnimationLoop(null);this.resizeObserver.disconnect();
-    for(const [event,handler]of Object.entries(this.listeners))this.canvas.removeEventListener(event,handler);
-    await this.renderer.backend.device.queue.onSubmittedWorkDone();
-    this.clear();this.pipeline.dispose();this.gi.beauty.dispose();this.environment.dispose();this.renderer.dispose();
+    this.renderer?.setAnimationLoop(null);this.resizeObserver?.disconnect();
+    for(const [event,handler]of Object.entries(this.listeners??{}))this.canvas.removeEventListener(event,handler);
+    try{await this.renderer?.backend.device.queue.onSubmittedWorkDone();}
+    finally{this.clear();this.pipeline?.dispose();this.gi?.source.dispose();this.gi?.beauty.dispose();this.environment?.dispose();this.renderer?.dispose();}
   }
 }

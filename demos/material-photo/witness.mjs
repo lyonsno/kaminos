@@ -4,7 +4,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { createHash } from 'node:crypto';
 import { launchChrome, openPage } from '../../models/supermat/chrome-cdp.mjs';
-import { validateEpisode } from './witness-checks.js';
+import { validateEpisode, captureSurfaceFrame } from './witness-checks.js';
 
 const {values}=parseArgs({options:Object.fromEntries(['repo-root','expected-commit','chrome','output','port'].map(key=>[key,{type:'string'}]))});
 const output=path.resolve(values.output??'material-photo-witness');
@@ -51,7 +51,7 @@ try{
     await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     episode.materials=await capture(`${key}-materials`);
     const clip=await evaluate("(()=>{const c=document.getElementById('scene');if(c.hidden)throw Error('Surface canvas hidden');const r=c.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height,scale:1};})()");
-    const frame=await browser.cdp.call('Page.captureScreenshot',{format:'png',clip,captureBeyondViewport:true},sessionId);
+    const frame=await captureSurfaceFrame(evaluate,()=>browser.cdp.call('Page.captureScreenshot',{format:'png',clip,captureBeyondViewport:true},sessionId));
     episode.canvasFrame=path.join(output,`${key}-canvas.png`);
     await fs.writeFile(episode.canvasFrame,Buffer.from(frame.data,'base64'));
     episode.pixels=await evaluate(`window.__materialPhotoActions.pixels(${JSON.stringify('data:image/png;base64,'+frame.data)})`);
