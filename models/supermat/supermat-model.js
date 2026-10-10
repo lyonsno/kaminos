@@ -313,7 +313,7 @@ export async function runUnet(ops, w, latent, context, tembSilu, { capture = () 
     await ops.yieldPoint(`unet.up.${b}`);
   }
   const heads = [];
-  for (const head of [1, 0]) {
+  for (let head = 0; head < 2; head++) {
     let y = x;
     for (let r = 0; r < 3; r++) {
       const joined = concatChannels(ops, y, skips[skips.length - 1 - r], `unet.last_up.${head}.${r}.concat`);
@@ -328,7 +328,7 @@ export async function runUnet(ops, w, latent, context, tembSilu, { capture = () 
       bias: w(`unet.rep_conv_out.${head}.bias`), name: `unet.conv_out.${head}` });
     ops.release(y);
     capture(`unet.conv_out.${head}#0`, v);
-    heads[head] = v;
+    heads.push(v);
   }
   ops.release(x);
   for (const skip of skips) ops.release(skip);
