@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import * as core from '../volume-core.js';
 
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+const sharedSource = readFileSync(new URL('../volume-passive-material.mjs', import.meta.url), 'utf8');
 
 // The passive material law (emitter report §30, return to Sexy Fireman):
 // the fine kernel's plain cooling of transported smoke and heat, exported so
@@ -52,7 +53,8 @@ test('the fine kernel compiles its heat-to-smoke conversion from the exported WG
   const kernel = source.slice(source.indexOf('const WGSL = /* wgsl */`'));
   assert.ok(!kernel.includes('fn heatToSmokeConversion('), 'no hand-written copy inside the kernel template');
   assert.match(kernel, /\$\{PASSIVE_MATERIAL_WGSL\}/, 'the kernel splices the exported block');
-  assert.equal((source.match(/fn heatToSmokeConversion\(/g) || []).length, 1, 'exactly one definition: the generator');
+  assert.equal((sharedSource.match(/fn heatToSmokeConversion\(/g) || []).length, 1, 'exactly one definition: the shared generator');
+  assert.equal((source.match(/fn heatToSmokeConversion\(/g) || []).length, 0, 'core consumes rather than duplicates the generator');
   // The constants in the WGSL are generated from the same object.
   assert.ok(core.PASSIVE_MATERIAL_WGSL.includes(`${core.PASSIVE_MATERIAL_LAW.heatToSmoke.rate}`));
 });

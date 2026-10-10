@@ -30,6 +30,7 @@ const resources = {
   nonRidgeOpticalCaptureHeaderBuffer: buffer('capture header'),
   emissiveLightField: { incident: buffer('incident') }, quenchBuffers,
   sceneSolidTextureView: { label: 'scene solid view' },
+  outerSmoke:null,outerSmokeFallback:{createView:()=>({label:'outer optical fallback'})},
   // The inflow aperture coverage map (binding 17) is a texture in the same closure.
   inflowCoverageTexture: { createView: () => ({ label: 'inflow coverage view' }) },
   inflowPerturbationTexture: { createView: () => ({ label: 'inflow perturbation view' }) },

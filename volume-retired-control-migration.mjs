@@ -111,13 +111,36 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
   if (changedAxes.has('domControls') && migrated.controlCount !== undefined) {
     migrated.controlCount = preset.controlCount;
   }
+  // A named pre-composition branch added these controls before main's later
+  // additions. Recognize its exact inventory, not its count alone; retain its
+  // authored values while walking the canonical main additions in order.
+  const branchControls = new Set();
+  const sourceKeys = Object.keys(preset.domControls || {});
+  for (const branch of schema.additiveBranches || []) {
+    const base = (schema.controls || []).filter(c => !Number.isSafeInteger(Number(c.additiveSinceControlCount))
+      || Number(c.additiveSinceControlCount) <= branch.baseControlCount).map(c => c.key);
+    const n = sourceKeys.length - branch.baseControlCount;
+    const additions = branch.controlIds?.slice(0, n) || [];
+    if (n < 1 || n > branch.controlIds?.length || base.length !== branch.baseControlCount) continue;
+    const expected = new Set([...base, ...additions]);
+    if (sourceKeys.length !== expected.size || sourceKeys.some(key => !expected.has(key))) continue;
+    for (const key of additions) {
+      const control = schema.controls.find(c => c.key === key), entry = preset.domControls[key];
+      if (!control || !sameDescriptor(entry, control)) throw new Error(`additive branch descriptor mismatch for ${key}`);
+      const values = route.searchParams.getAll(control.param);
+      const value = String(Object.hasOwn(entry, 'rawValue') ? entry.rawValue : (entry.value ?? ''));
+      if (values.length !== 1 || values[0] !== value) throw new Error(`additive branch route mismatch for ${key}`);
+      branchControls.add(key);
+    }
+  }
   for (const control of schema.controls || []) {
     const introducedAt = Number(control.additiveSinceControlCount);
     if (!Number.isSafeInteger(introducedAt)) continue;
     if (!Object.hasOwn(control, 'additiveDefault')) {
       throw new Error(`additive control is missing its default: ${control.key}`);
     }
-    const activeCount = Object.keys(preset.domControls || {}).length;
+    if (branchControls.has(control.key)) continue;
+    const activeCount = Object.keys(preset.domControls || {}).length - branchControls.size;
     if (activeCount >= introducedAt) continue;
     if (activeCount !== introducedAt - 1) {
       throw new Error(`settings preset cannot bridge additive control history at ${control.key}`);

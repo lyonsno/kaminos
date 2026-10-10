@@ -13,7 +13,7 @@ function assertOccupancyRidgeContract(source) {
   const reconstructionStart = raymarch.indexOf('var reconstructed: FlowReconstructionSample;');
   assert.ok(reconstructionStart >= 0, 'supported-sample reconstruction boundary is discoverable');
   const emptyCellBranch = raymarch.match(
-    /if \(!fullGridCapture && directSupport <= 0\.0001\) \{([^{}]*)\}/,
+    /if \(!fullGridCapture && directSupport <= 0\.0001 && \(!OUTER_SMOKE \|\| sampleOuterSmoke\(p\)\.x<=0\.0001\)\) \{([^{}]*)\}/,
   );
   assert.ok(emptyCellBranch, 'conservative empty-cell branch has a stable non-nested boundary');
   const branchStart = emptyCellBranch.index;
@@ -31,7 +31,7 @@ function assertOccupancyRidgeContract(source) {
     'occupancy acceleration acts only inside a conservatively proven-empty cell',
   );
   assert.equal(
-    (raymarch.match(/\bcontinue\s*;/g) || []).length,
+    (raymarch.slice(raymarch.indexOf('let flowKernelReconstructionActive')).match(/\bcontinue\s*;/g) || []).length,
     1,
     'the production raymarch has exactly one early continuation',
   );

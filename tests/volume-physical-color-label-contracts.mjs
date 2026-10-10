@@ -9,9 +9,10 @@ const update = page.slice(updateStart, page.indexOf("  document.getElementById('
 for (const [mode, render, inspect, expected] of [[0,'inspect','boundary_fire','legacy'],[1,'stock','boundary_fire','inactive route'],[1,'inspect','front','inactive route'],[1,'inspect','boundary_fire','active']]) {
   const nodes = new Map();
   const context = {
-    c: new Proxy({physicalColorMode:mode,fireRenderMode:render,shellInspectMode:inspect,physicalThermalStrength:2}, {get:(o,k)=>k in o?o[k]:0}),
-    document:{getElementById:id=>{if(id.includes('control-root'))return null;if(!nodes.has(id))nodes.set(id,{dataset:{}});return nodes.get(id)}, querySelectorAll:()=>[]},
+    c: new Proxy({physicalColorMode:mode,fireRenderMode:render,shellInspectMode:inspect,physicalThermalStrength:2,outerResolution:32}, {get:(o,k)=>k in o?o[k]:0}),
+    document:{getElementById:id=>{if(id.includes('control-root'))return null;if(!nodes.has(id))nodes.set(id,{dataset:{},options:[{value:'32'}]});return nodes.get(id)}, querySelectorAll:()=>[]},
     volumePrototype: null,
+    URLSearchParams,location:{search:'',hash:''},
     syncVolumeCockpitModeAvailability,
     REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS:[{id:'volume-physical-mode',key:'physicalColorMode',decimals:0},{id:'volume-physical-thermal',key:'physicalThermalStrength',decimals:2}],
     normalizeReactionFrontLiveView:v=>v, normalizeBoundarySidecarSource:v=>v, normalizeBoundarySidecarView:v=>v, normalizeBoundarySplatMode:v=>v,

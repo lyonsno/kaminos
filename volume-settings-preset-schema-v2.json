@@ -1,6 +1,7 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 248,
+  "controlCount": 251,
+  "additiveBranches": [{"baseControlCount":216,"controlIds":["volume-domain-shape","volume-outer-resolution","volume-collision-voxels"]}],
   "controls": [
     {
       "key": "volume-physical-material-law",
@@ -434,6 +435,9 @@
       "additiveDefault": "collocated",
       "additiveSinceControlCount": 235
     },
+    {"key":"volume-domain-shape","param":"volume_domain_shape","tagName":"SELECT","type":"select-one","additiveDefault":"tall","allowedValues":["cube","tall"],"additiveSinceControlCount":236},
+    {"key":"volume-outer-resolution","param":"volume_outer_grid","tagName":"SELECT","type":"select-one","additiveDefault":"32","additiveSinceControlCount":237},
+    {"key":"volume-collision-voxels","param":"volume_collision_voxels","tagName":"SELECT","type":"select-one","additiveDefault":"off","allowedValues":["off","fine","outer"],"additiveSinceControlCount":238},
     {
       "key": "volume-immersed-centre-x",
       "param": "volume_immersed_centre_x",

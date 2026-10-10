@@ -46,13 +46,17 @@ const reactionRGB = xyzToRGB.map(row => Math.max(0, row.reduce((sum, v, i) => su
 export const REACTION_RGB = reactionRGB.map(v => v / linearLuminance(reactionRGB));
 export const EMISSIVE_LIGHT_GRID = 32;
 
-export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers) {
+export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers, grid, gridHeight) {
+  if (!Number.isInteger(grid) || !Number.isInteger(gridHeight) || grid < 2 || gridHeight < 2) {
+    throw new Error('emissive light requires the effective fluid grid dimensions');
+  }
   const cells = EMISSIVE_LIGHT_GRID ** 3;
   const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE });
   const coefficients = allocate('emissive material coefficients', cells);
   const directions = allocate('six-direction incident radiance', cells*6);
   const incident = allocate('single-scattering mean incident radiance', cells);
-  const pipeline = name => device.createComputePipeline({ label: name, layout: 'auto', compute: { module, entryPoint: name } });
+  const pipeline = name => device.createComputePipeline({ label: name, layout: 'auto', compute: { module, entryPoint: name,
+    ...(name === 'seedEmissiveLight' ? {constants:{GRID:grid,GRID_Y:gridHeight}} : {}) } });
   const seed = pipeline('seedEmissiveLight'), sweep = pipeline('sweepEmissiveLight'), resolve = pipeline('resolveEmissiveLight');
   const group = (pipe, index, buffers) => device.createBindGroup({
     layout: pipe.getBindGroupLayout(index),
@@ -137,6 +141,21 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
   let gas = vec3<f32>(${REACTION_RGB.join(',')}) * clean * u.physical_display.x;
   let emission = hotSoot*thermalRadiance(kelvin) + gas;
   return EmissiveMaterial(emission, absorption, scattering);
+}
+// The outer field stores the restricted smoke proxy and transported heat, not
+// fresh reaction support. Do not synthesize fuel/front or count detail twice.
+// Legacy material keeps its prior scattering-only outer path: its soot floor
+// is an appearance law and cannot be extended through empty outer space.
+fn passiveEmissiveMaterial(material: vec4<f32>, smokeVisible: f32, fireVisible: f32) -> EmissiveMaterial {
+  var r: FlowReconstructionSample;
+  r.material = vec4<f32>(material.xy, 0.0, 0.0);
+  let transported = u.physical_fire.x > 1.5 && u.emissive_material.w > 0.5;
+  return emissiveMaterial(r, select(0.0, fireVisible, transported), smokeVisible);
+}
+fn blendEmissiveMaterial(fine: EmissiveMaterial, outer: EmissiveMaterial, weight: f32) -> EmissiveMaterial {
+  let w = clamp(weight, 0.0, 1.0);
+  return EmissiveMaterial(mix(fine.emission, outer.emission, w),
+    mix(fine.absorption, outer.absorption, w), mix(fine.scattering, outer.scattering, w));
 }
 fn sceneEmissiveMaterialAt(p: vec3<f32>) -> EmissiveMaterial {
   let r = sampleWorldFlowReconstructionRaw(p);
