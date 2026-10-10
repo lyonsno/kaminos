@@ -15,6 +15,7 @@ import {prepareSeparatedTopology,packSolidTopology} from './structural-material-
 import {configureStoneRegime} from './structural-material-stone-regime.mjs';
 
 const interiorSplit=new URLSearchParams(location.search).get('interior')==='split';
+const energyKernel=new URLSearchParams(location.search).get('energyKernel')??'auto';
 const $=id=>document.getElementById(id),route=interiorSplit?'kaminos.picked-stone.interior-shards.webgpu.v0':'kaminos.picked-stone.stress-shards.webgpu.v0',inputs=[],events=[],timings=[];
 const configuration={timeStep:1/60,iterations:12,lineSearchTrials:8,gravity:0,damping:.98,floor:-10,patchRadius:.28,stressRadius:.16,reconstructionRadius:.45,gripStiffness:200000,volumeBarrier:0};
 const affineComparison=new URLSearchParams(location.search).get('surface')==='affine';
@@ -57,7 +58,7 @@ async function loadVerified(url,expected){const r=await fetch(url,{cache:'no-sto
 async function reset(){pendingPick=true;gestureGeneration++;await settle();busy=true;try{
  gesture=null;controls.enabled=true;resident?.dispose();surface?.dispose();let initialArrays=arrays,initialModel=manifest.model;
  if(interiorSplit){body=initialBody;const configured=configureStoneRegime(manifest,arrays,new URLSearchParams(location.search).get('material')??'stiff-brittle-v1');materialRegime=configured.profile;configuration.volumeBarrier=materialRegime.volumeBarrier;initialArrays=configured.arrays;initialModel=configured.model;}
- resident=await createSolidResident(device,initialModel,initialArrays);const min=Math.min(...body.positions.map(p=>p[0]));await resident.pin(body.positions.flatMap((p,i)=>p[0]<min+.035?[i]:[]));surface=await createPlaneFractureSurface(body.geometry,{sourceSha256:manifest.sourceSha256});observed=await resident.read();components=materialComponents(observed.model.points,observed.bonds);volumes=body.positions.map((_,i)=>observed.state[i*16+3]/manifest.material.density);if(interiorSplit)interiorState={route:INTERIOR_CUT_ROUTE,law:'stvk-log-volume-barrier-v0',epoch:0,mesh:{positions:body.positions,tetrahedra:body.tetrahedra,domains:body.tetrahedra.map(()=>0)},nodeDomains:body.positions.map(()=>0),transfers:[],materialRuns:[observed.runId]};events.length=0;latestSelection=null;marker.visible=false;arrow.visible=false;makeMeshes();present();failure=null;$('failure').textContent='';stamp('reset',{});
+ resident=await createSolidResident(device,initialModel,initialArrays,{energyKernel});const min=Math.min(...body.positions.map(p=>p[0]));await resident.pin(body.positions.flatMap((p,i)=>p[0]<min+.035?[i]:[]));surface=await createPlaneFractureSurface(body.geometry,{sourceSha256:manifest.sourceSha256});observed=await resident.read();components=materialComponents(observed.model.points,observed.bonds);volumes=body.positions.map((_,i)=>observed.state[i*16+3]/manifest.material.density);if(interiorSplit)interiorState={route:INTERIOR_CUT_ROUTE,law:'stvk-log-volume-barrier-v0',epoch:0,mesh:{positions:body.positions,tetrahedra:body.tetrahedra,domains:body.tetrahedra.map(()=>0)},nodeDomains:body.positions.map(()=>0),transfers:[],materialRuns:[observed.runId]};events.length=0;latestSelection=null;marker.visible=false;arrow.visible=false;makeMeshes();present();failure=null;$('failure').textContent='';stamp('reset',{});
  }finally{busy=false;pendingPick=false;}}
 async function beginPick(pieceId,point){
  if(failure)throw new Error('Material is unavailable for a new grip');const original=pieces.find(p=>p.id===pieceId);if(!original)throw new Error('Picked piece no longer exists');
@@ -75,7 +76,7 @@ async function cutInterior(active,applied,selection){
  for(let i=0;i<model.positions.length;i++){packed.state.set(cut.fields.positions[i],i*16+4);packed.state.set(cut.fields.velocities[i],i*16+8);packed.state[i*16+11]=Number(cut.fields.pinned[i]);packed.state.set(cut.fields.positions[i],i*16+12);}
  const prepared=performance.now();let next,transaction,previous,candidateObserved,supportRefused=false;
  try{
-  next=await createSolidResident(device,descriptor,packed);const nextObserved=candidateObserved=await next.read();if(nextObserved.stresses.some(s=>!s.active||s.invalid)){supportRefused=true;throw new Error('Remeshed material has invalid or absent elastic support');}
+  next=await createSolidResident(device,descriptor,packed,{energyKernel});const nextObserved=candidateObserved=await next.read();if(nextObserved.stresses.some(s=>!s.active||s.invalid)){supportRefused=true;throw new Error('Remeshed material has invalid or absent elastic support');}
   for(let i=0;i<packed.state.length;i++)if(nextObserved.state[i]!==packed.state[i])throw new Error('Remeshed GPU state did not retain the transferred field');
   const event={...selection,id:crypto.randomUUID(),kind:'component-tensile-interior-cut-v0',normal,offset,targetPieceId:target.id,targetNodes:[...target.nodes],route:SOLID_RESIDENT_ROUTE,material:{runId:nextObserved.runId,kind:'graph',sourceSha256:manifest.sourceSha256},interior:cut.receipt,beforeRunId:observed.runId};
   transaction=surface.stageInteriorCut({...event,cut});previous={body,observed,components,volumes,interiorState,resident};
