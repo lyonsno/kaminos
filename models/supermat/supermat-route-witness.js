@@ -87,7 +87,7 @@ export async function runSuperMatRouteWitness({ fixtureSha256, weightsSha256, ru
       result.runs.push({ run: out.run, size: out.size, wallMs: performance.now() - t, timings: out.timings,
         peakLiveBytes: out.opStats.peakLiveBytes, dispatches: out.opStats.dispatches, cooperative: out.cooperative,
         dutyCount: out.dutyCount, ownMsSum: out.duties?.reduce((sum, row) => sum + (row.ownMs ?? 0), 0) ?? null,
-        targetDutyMs: out.schedule?.targetDutyMs ?? null });
+        targetDutyMs: out.schedule?.targetDutyMs ?? null, profile: out.profile });
     }
 
     result.phase = 'comparison';
