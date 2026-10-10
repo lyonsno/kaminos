@@ -17,33 +17,74 @@ async function getJson(url) { const r = await fetch(url); if (!r.ok) throw new E
 // under URL + sha256: a second visit loads from disk with no network. Downloads stream so the
 // caller can show byte progress; a size mismatch against the manifest fails loud and is not
 // cached. Cache failures (private windows, quota) fall back to the network.
+//
+// A manifest entry may name a gzip copy ({ gzip: { file, bytes } }). When the browser has
+// DecompressionStream, the copy is downloaded and decompressed in the page; progress and download
+// counts are then in transferred (compressed) bytes, and the cache still holds the decompressed
+// file under the original URL. A missing copy falls back to the original file.
 export const WEIGHT_CACHE = 'flux2-klein-weights-v1';
+const canGunzip = typeof DecompressionStream === 'function';
 async function openWeightCache() {
   try { return await caches.open(WEIGHT_CACHE); } catch { return null; }
 }
-async function getWeightBytes(url, { sha256 = null, bytes = null, onBytes = () => {} } = {}, stats) {
+// Bytes a file costs to fetch: its gzip copy when one is published and the browser can inflate it.
+export function transferBytes(entry) { return canGunzip && entry?.gzip ? entry.gzip.bytes : entry?.bytes; }
+
+async function readAll(stream, expected) {
+  const out = expected ? new Uint8Array(expected) : null;
+  const chunks = []; let n = 0;
+  const reader = stream.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (out && n + value.byteLength <= expected) out.set(value, n); else chunks.push(value);
+    n += value.byteLength;
+  }
+  return { buf: out && n === expected ? out.buffer : await new Blob(out ? [out.subarray(0, Math.min(n, expected)), ...chunks] : chunks).arrayBuffer(), n };
+}
+
+// The response body, counted as it arrives and inflated when it starts with the gzip magic bytes
+// (a host may already have decoded it).
+async function inflatedBody(response, onChunk) {
+  const reader = response.body.getReader();
+  const first = await reader.read();
+  const counted = new ReadableStream({
+    start(controller) { if (!first.done) { onChunk(first.value.byteLength); controller.enqueue(first.value); } else controller.close(); },
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) { controller.close(); return; }
+      onChunk(value.byteLength); controller.enqueue(value);
+    },
+    cancel(reason) { return reader.cancel(reason); },
+  });
+  const gzipped = !first.done && first.value[0] === 0x1f && first.value[1] === 0x8b;
+  return gzipped ? counted.pipeThrough(new DecompressionStream('gzip')) : counted;
+}
+
+async function getWeightBytes(url, { sha256 = null, bytes = null, gzip = null, onBytes = () => {} } = {}, stats) {
   const cache = await openWeightCache();
   const key = sha256 ? `${url}#sha256=${sha256}` : url;
   const hit = cache ? await cache.match(key).catch(() => null) : null;
   if (hit) {
     const buf = await hit.arrayBuffer();
-    if (bytes == null || buf.byteLength === bytes) { stats.cachedBytes += buf.byteLength; onBytes(buf.byteLength); return buf; }
+    if (bytes == null || buf.byteLength === bytes) {
+      const cost = transferBytes({ bytes: buf.byteLength, gzip });
+      stats.cachedBytes += cost; onBytes(cost); return buf;
+    }
     await cache.delete(key).catch(() => {});
   }
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`${url}: ${response.status}`);
-  const total = bytes ?? Number(response.headers.get('content-length')) ?? 0;
-  const out = new Uint8Array(total || 0);
-  const chunks = []; let received = 0;
-  const reader = response.body.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (total && received + value.byteLength <= total) out.set(value, received); else chunks.push(value);
-    received += value.byteLength; onBytes(value.byteLength);
+  let received = 0;
+  const count = n => { received += n; onBytes(n); };
+  let response = canGunzip && gzip ? await fetch(url.replace(/[^/]+$/, gzip.file)).catch(() => null) : null;
+  let body;
+  if (response?.ok) body = await inflatedBody(response, count);
+  else {
+    response = await fetch(url);
+    if (!response.ok) throw new Error(`${url}: ${response.status}`);
+    body = await inflatedBody(response, count);
   }
-  if (bytes != null && received !== bytes) throw new Error(`${url}: received ${received} bytes, manifest says ${bytes}`);
-  const buf = total && received === total ? out.buffer : await new Blob(chunks).arrayBuffer();
+  const { buf, n } = await readAll(body, bytes);
+  if (bytes != null && n !== bytes) throw new Error(`${url}: received ${n} bytes, manifest says ${bytes}`);
   stats.downloadedBytes += received;
   if (cache) await cache.put(key, new Response(buf, { headers: { 'content-type': 'application/octet-stream' } })).catch(e => { stats.cacheErrors.push(String(e)); });
   return buf;
@@ -56,12 +97,14 @@ export async function kleinWeightStatus({ textEncoderUrl: te, transformerUrl: di
   const files = [[te, teM.tokenizer], ...[[te, teM], [dit, ditM]].flatMap(([root, m]) => Object.values(m.bundles).map(b => [root, b])),
     [vae, vaeM.bundle]];
   const cache = await openWeightCache();
-  // Byte totals cover the weight bundles (the load progress total); the tokenizer only counts toward complete.
+  // Byte totals cover what loading transfers (gzip copies where published); a file without a
+  // listed size (an older tokenizer entry) only counts toward complete.
   let totalBytes = 0, cachedBytes = 0, missing = 0;
   for (const [root, f] of files) {
     const hit = cache ? await cache.match(`${root}/${f.file}#sha256=${f.sha256}`).catch(() => null) : null;
-    totalBytes += f.bytes ?? 0;
-    if (hit) cachedBytes += f.bytes ?? 0; else missing++;
+    const cost = transferBytes(f) ?? 0;
+    totalBytes += cost;
+    if (hit) cachedBytes += cost; else missing++;
   }
   return { totalBytes, cachedBytes, complete: missing === 0 };
 }
@@ -110,14 +153,17 @@ export class KleinPipeline {
     this.teManifest = await getJson(`${te}/manifest.json`);
     this.ditManifest = await getJson(`${dit}/manifest.json`);
     this.vaeManifest = await getJson(`${vae}/manifest.json`);
-    const bundleBytes = m => Object.values(m.bundles ?? {}).reduce((sum, b) => sum + b.bytes, 0);
-    const totalBytes = bundleBytes(this.teManifest) + bundleBytes(this.ditManifest) + this.vaeManifest.bundle.bytes;
+    const bundleBytes = m => Object.values(m.bundles ?? {}).reduce((sum, b) => sum + transferBytes(b), 0);
+    const totalBytes = bundleBytes(this.teManifest) + bundleBytes(this.ditManifest) + transferBytes(this.vaeManifest.bundle)
+      + (transferBytes(this.teManifest.tokenizer) ?? 0);
     const stats = this.loadStats = { totalBytes, cachedBytes: 0, downloadedBytes: 0, cacheErrors: [] };
     let loadedBytes = 0;
     const progress = (part, name) => onProgress(part, name, { loadedBytes, totalBytes });
     const fetchBundle = (root, part) => (file, bundle) => getWeightBytes(`${root}/${file}`,
-      { sha256: bundle?.sha256, bytes: bundle?.bytes, onBytes: n => { loadedBytes += n; progress(part, file); } }, stats);
-    const tokenizerBytes = await getWeightBytes(`${te}/${this.teManifest.tokenizer.file}`, { sha256: this.teManifest.tokenizer.sha256 }, stats);
+      { sha256: bundle?.sha256, bytes: bundle?.bytes, gzip: bundle?.gzip, onBytes: n => { loadedBytes += n; progress(part, file); } }, stats);
+    const tok = this.teManifest.tokenizer;
+    const tokenizerBytes = await getWeightBytes(`${te}/${tok.file}`, { sha256: tok.sha256, bytes: tok.bytes, gzip: tok.gzip,
+      onBytes: n => { if (transferBytes(tok)) { loadedBytes += n; progress('text-encoder', tok.file); } } }, stats);
     this.tokenizer = new QwenTokenizer(JSON.parse(new TextDecoder().decode(tokenizerBytes)));
     this.textEncoder = new KleinTextEncoder(this.device, this.teManifest);
     Object.assign(this.textEncoder, this.kernels); this.textEncoder.sched = this.sched;
