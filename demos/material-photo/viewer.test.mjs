@@ -91,3 +91,14 @@ test('presentation records effective geometry, normals, material and light rathe
   viewer.mesh.geometry.attributes.normal.array=new Float32Array(viewer.surface.normal);
   assert.equal(viewer.presentation().normalsMatchSurface,false);
 });
+
+test('ordinary sun drags project roundoff-prone rim positions without rejecting them',async()=>{
+  const {viewer}=await viewerFixture();
+  for(const [u,v]of [[.88,.158],[.12,.842],[1,1],[0,0],[.3,.4]]) {
+    assert.doesNotThrow(()=>viewer.setLightScreenPosition(u,v));
+    const light=viewer.getLightHandle();assert.ok(Math.hypot(light.x,light.y)<=1);
+    const preset=JSON.parse(JSON.stringify(viewer.exportPreset()));assert.doesNotThrow(()=>viewer.applyPreset(preset));
+  }
+  const preset=JSON.parse(JSON.stringify(viewer.exportPreset()));preset.light={x:1.001,y:0};
+  assert.throws(()=>viewer.applyPreset(preset),/hemisphere/);
+});

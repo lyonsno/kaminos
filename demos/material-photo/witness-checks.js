@@ -38,4 +38,17 @@ export function validateComparison(views) {
     if(view.physicalbaseline.geometryId!==reference.physicalbaseline.geometryId||view.normalsMatchSurface!==true||
         view.physicalbaseline.environmentIntensity!==reference.physicalbaseline.environmentIntensity)throw Error('Comparison changed geometry, normals or environment');
   }
+  const materialKeys=['uuid','roughness','metalness','mapUUID','roughnessMapUUID','metalnessMapUUID','emissiveMapUUID','emissiveIntensity'];
+  for(const mode of ['relit','materials']) {
+    const baseline=views[mode].physicalbaseline;
+    const configured=baseline[mode], active=baseline.activeMaterial;
+    if(!configured||!active||!materialKeys.every(key=>Object.hasOwn(active,key)&&Object.hasOwn(configured,key)&&active[key]===configured[key])||
+        typeof active.uuid!=='string'||!active.uuid||typeof active.mapUUID!=='string'||!active.mapUUID||active.emissiveIntensity!==0)
+      throw Error('Effective comparison material and glow-off state required');
+    if(mode==='relit'&&(active.roughness!==.4||active.metalness!==0||active.roughnessMapUUID!==null||
+        active.metalnessMapUUID!==null||active.emissiveMapUUID!==null))throw Error('Effective image-albedo baseline required');
+    if(mode==='materials'&&(active.roughness!==1||active.metalness!==1||typeof active.roughnessMapUUID!=='string'||
+        !active.roughnessMapUUID||active.metalnessMapUUID!==active.roughnessMapUUID||active.mapUUID===reference.physicalbaseline.relit.mapUUID||
+        active.uuid===reference.physicalbaseline.relit.uuid))throw Error('Effective inferred albedo and ORM maps required');
+  }
 }

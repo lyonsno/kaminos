@@ -39,14 +39,29 @@ test('comparison witness rejects changed camera, lighting and unfair baseline',a
   assert.equal(typeof checks.validateComparison,'function','four-view fair comparison admission is missing');
   const common={map:'surface',camera:{position:[.2,0,1],orbit:[.2,0],quaternion:[0,0,0,1],zoom:.79},
     light:{x:.1,y:.2,position:[1,2,3],intensity:3,color:1},
-    physicalbaseline:{exposure:1,relit:{roughness:.4,metalness:0},geometryId:'same',environmentIntensity:.6},normalsMatchSurface:true,
+    physicalbaseline:{exposure:1,relit:{uuid:'relit',roughness:.4,metalness:0,mapUUID:'photograph',roughnessMapUUID:null,metalnessMapUUID:null,emissiveMapUUID:null,emissiveIntensity:0},
+      materials:{uuid:'materials',roughness:1,metalness:1,mapUUID:'albedo',roughnessMapUUID:'orm',metalnessMapUUID:'orm',emissiveMapUUID:'emission',emissiveIntensity:0},
+      geometryId:'same',environmentIntensity:.6},normalsMatchSurface:true,
     gi:{enabled:true,settings:{steps:16},debugState:{estimator:{expFactor:2}}},glow:false};
   const views=Object.fromEntries(['original','photo','relit','materials'].map(mode=>[mode,{...structuredClone(common),mode}]));
+  for(const mode of ['relit','materials'])views[mode].physicalbaseline.activeMaterial=structuredClone(views[mode].physicalbaseline[mode]);
   assert.doesNotThrow(()=>checks.validateComparison(views));
   for(const mutate of [v=>{delete v.photo;},v=>{v.original.camera.position=[0,0,1];},
     v=>{v.materials.light.intensity=5;},v=>{v.relit.physicalbaseline.relit.roughness=1;},
     v=>{v.materials.physicalbaseline.geometryId='other';},v=>{v.materials.gi.settings.steps=8;},
-    v=>{v.materials.glow=true;},v=>{v.relit.physicalbaseline.exposure=2;}]) {
+    v=>{v.materials.glow=true;},v=>{v.relit.physicalbaseline.exposure=2;},
+    v=>{delete v.relit.physicalbaseline.activeMaterial;},
+    v=>{delete v.materials.physicalbaseline.materials;},
+    v=>{v.materials.physicalbaseline.activeMaterial=structuredClone(v.materials.physicalbaseline.relit);},
+    v=>{v.relit.physicalbaseline.activeMaterial.roughness=1;},
+    v=>{v.relit.physicalbaseline.activeMaterial.mapUUID='albedo';},
+    v=>{v.relit.physicalbaseline.activeMaterial.roughnessMapUUID='orm';},
+    v=>{v.materials.physicalbaseline.activeMaterial.roughnessMapUUID=null;},
+    v=>{v.materials.physicalbaseline.activeMaterial.emissiveIntensity=1;},
+    v=>{v.relit.physicalbaseline.relit.mapUUID='albedo';v.relit.physicalbaseline.activeMaterial.mapUUID='albedo';},
+    v=>{v.materials.physicalbaseline.materials.roughnessMapUUID=null;v.materials.physicalbaseline.activeMaterial.roughnessMapUUID=null;},
+    v=>{v.relit.physicalbaseline.relit.emissiveMapUUID='emission';v.relit.physicalbaseline.activeMaterial.emissiveMapUUID='emission';},
+  ]) {
     const bad=structuredClone(views);mutate(bad);assert.throws(()=>checks.validateComparison(bad));
   }
 });

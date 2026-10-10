@@ -174,7 +174,9 @@ export class MaterialPhotoViewer {
   setLightScreenPosition(u,v) { this.setLightHandle((u-.5)/.38,(.5-v)/.38); }
   setLightHandle(x,y) {
     const radius = Math.hypot(x,y);
-    this.lightHandle = validateLight({x:radius>1?x/radius:x,y:radius>1?y/radius:y});
+    // Leave a few ulps inside the disk so projection and preset round trips agree.
+    const scale = radius>1 ? (1-4*Number.EPSILON)/radius : 1;
+    this.lightHandle = validateLight({x:x*scale,y:y*scale});
     this.updateLight();
   }
   setLight(azimuth=-35, elevation=35) {
