@@ -2,6 +2,16 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { test } from 'node:test';
 
+test('presented-frame pixels distinguish real content from blank capture', async () => {
+  const { pixelSummary } = await import('./photo-contracts.js');
+  assert.equal(typeof pixelSummary, 'function', 'Presented-frame pixel admission is missing');
+  assert.equal(pixelSummary(new Uint8Array(16), 2, 2).nonBackground, 0);
+  const live = pixelSummary(new Uint8Array([0,0,0,255, 200,50,30,255]), 2, 1);
+  assert.equal(live.range, 200);
+  assert.equal(live.nonBackground, 1);
+  assert.throws(() => pixelSummary(new Uint8Array(4), 2, 2), /dimensions/);
+});
+
 test('material photograph exposes aligned map and selection contracts', async () => {
   const url = new URL('./photo-contracts.js', import.meta.url);
   assert.ok(existsSync(url), 'The material photograph has no map alignment or selection lifecycle contract');

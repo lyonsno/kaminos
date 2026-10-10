@@ -39,10 +39,10 @@ try{
   };
   const capture=async(name)=>{const shot=await browser.cdp.call('Page.captureScreenshot',{format:'png'},sessionId);const file=path.join(output,`${name}.png`);await fs.writeFile(file,Buffer.from(shot.data,'base64'));return file;};
   await browser.cdp.call('Runtime.enable',{},sessionId);
-  for(const [key,label]of [['celebration','Celebration'],['bag','Leather & metal']]){
+  for(const [key,label]of [['celebration','Celebration'],['bag','Backpack'],['orb','Metal & glow']]){
     report.phase=`inference-${key}`;await persist();
     await evaluate(`window.__materialPhotoActions.sample(${JSON.stringify(key)})`);
-    const bytes=await fs.readFile(path.join(root,`demos/material-photo/images/${key==='celebration'?'celebration.png':'bag.webp'}`));
+    const bytes=await fs.readFile(path.join(root,`demos/material-photo/images/${({celebration:'celebration.png',bag:'bag.webp',orb:'evil-orb.png'})[key]}`));
     const episode={source:label,inputSha256:createHash('sha256').update(bytes).digest('hex')};
     report.episodes.push(episode);await persist();
     await evaluate('window.__materialPhotoActions.infer()');
@@ -50,7 +50,11 @@ try{
     validateEpisode(episode.state,label);
     await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     episode.materials=await capture(`${key}-materials`);
-    episode.pixels=await evaluate('window.__materialPhotoActions.pixels()');
+    const clip=await evaluate("(()=>{const c=document.getElementById('scene');if(c.hidden)throw Error('Surface canvas hidden');const r=c.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height,scale:1};})()");
+    const frame=await browser.cdp.call('Page.captureScreenshot',{format:'png',clip,captureBeyondViewport:true},sessionId);
+    episode.canvasFrame=path.join(output,`${key}-canvas.png`);
+    await fs.writeFile(episode.canvasFrame,Buffer.from(frame.data,'base64'));
+    episode.pixels=await evaluate(`window.__materialPhotoActions.pixels(${JSON.stringify('data:image/png;base64,'+frame.data)})`);
     if(!(episode.pixels.range>12&&episode.pixels.nonBackground>1000))throw Error('Blank surface canvas');
     await evaluate("document.getElementById('light').value=80;document.getElementById('light').dispatchEvent(new Event('input'))");
     await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');

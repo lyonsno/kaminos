@@ -27,3 +27,14 @@ export function createPhotoRunState() {
     snapshot() { return { revision, source, geometry, materials }; },
   };
 }
+
+export function pixelSummary(rgba, width, height) {
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || rgba.length !== width * height * 4) throw new Error('Invalid frame dimensions');
+  let min = 255, max = 0, nonBackground = 0;
+  for (let i = 0; i < rgba.length; i += 4) {
+    const low = Math.min(rgba[i], rgba[i+1], rgba[i+2]), high = Math.max(rgba[i], rgba[i+1], rgba[i+2]);
+    min = Math.min(min, low); max = Math.max(max, high);
+    if (high - low > 20 || rgba[i] > 45) nonBackground++;
+  }
+  return { width, height, range: max-min, nonBackground };
+}

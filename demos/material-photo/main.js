@@ -2,10 +2,10 @@ import { requestBrowserWebGpuDevice, createWebGpuInferenceSession, createWebGpuI
 import { createSuperMatAdapter, SUPERMAT_ROUTE_ID, superMatDeviceOptions } from '../../models/supermat/supermat-route.js';
 import { MoGeInference } from './moge-producer.js';
 import { MaterialPhotoViewer } from './viewer.js';
-import { createPhotoRunState } from './photo-contracts.js';
+import { createPhotoRunState, pixelSummary } from './photo-contracts.js';
 
 const $=id=>document.getElementById(id), params=new URLSearchParams(location.search);
-const photos={celebration:['Celebration','./images/celebration.png'],bag:['Leather & metal','./images/bag.webp'],orb:['Stone & glow','./images/evil-orb.png']};
+const photos={celebration:['Celebration','./images/celebration.png'],bag:['Backpack','./images/bag.webp'],orb:['Metal & glow','./images/evil-orb.png']};
 const results=createPhotoRunState();
 const state=window.__materialPhoto={status:'loading-image',error:null,source:null,runs:[],identity:null};
 let image,selection,active=false,viewer,gpu,session,moge,materials,weightRoute,setupPromise;
@@ -127,13 +127,11 @@ $('exposure').oninput=()=>{viewer.renderer.toneMappingExposure=Number($('exposur
 $('gi').onchange=()=>{viewer.useGI=$('gi').checked;};
 $('reset').onclick=()=>{viewer.reset();$('light').value=-35;$('height').value=35;$('exposure').value=1;};
 function fail(error){state.status='error';state.error=error.message;status(error.message,true);}
-window.__materialPhotoActions={infer,sample,view,async pixels(){
-  viewer.render();await gpu.device.queue.onSubmittedWorkDone();
-  const source=$('scene'),canvas=new OffscreenCanvas(source.width,source.height),context=canvas.getContext('2d');
-  context.drawImage(source,0,0);const rgba=context.getImageData(0,0,source.width,source.height).data;
-  let min=255,max=0,nonBackground=0;
-  for(let i=0;i<rgba.length;i+=4){for(let c=0;c<3;c++){min=Math.min(min,rgba[i+c]);max=Math.max(max,rgba[i+c]);}
-    if(Math.max(rgba[i],rgba[i+1],rgba[i+2])-Math.min(rgba[i],rgba[i+1],rgba[i+2])>20||rgba[i]>45)nonBackground++;
-  }return{width:source.width,height:source.height,range:max-min,nonBackground};
+window.__materialPhotoActions={infer,sample,view,async pixels(presentedFrame){
+  // Inspect the browser's presented canvas screenshot, not a discarded WebGPU drawing buffer.
+  const response=await fetch(presentedFrame),bitmap=await createImageBitmap(await response.blob());
+  const canvas=new OffscreenCanvas(bitmap.width,bitmap.height),context=canvas.getContext('2d');
+  context.drawImage(bitmap,0,0);bitmap.close();
+  return pixelSummary(context.getImageData(0,0,canvas.width,canvas.height).data,canvas.width,canvas.height);
 }};
 try{await sample(params.get('sample') in photos?params.get('sample'):'celebration');if(params.get('autorun')==='1')await infer();}catch(error){fail(error);}
