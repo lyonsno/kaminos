@@ -3,7 +3,7 @@
 // small uniform buffer per dispatch (destroyed after the flush completes).
 import {
   gemmShader, gemmTileShape, GEMM_PARAMS_WORDS, GROUPNORM_CHUNK, groupNormPartialShader,
-  groupNormCombineShader, groupNormApplyShader, layerNormShader, softmaxShader, gegluShader,
+  groupNormCombineShader, groupNormApplyShader, groupNormChannelAffineShader, layerNormShader, softmaxShader, gegluShader,
   affineShader, gemmSubgroupMatrixShader, SUBGROUP_MATRIX_TILE, flashAttentionShader, flashAttentionVec4Shader, FLASH_HEAD_DIM, FLASH_QUERY_TILE,
 } from './supermat-kernels.js';
 
@@ -390,7 +390,7 @@ export function createSuperMatOps(device, options = {}) {
     words.set([spec.aOff ?? 0, spec.aSM, spec.aSK, spec.aSB ?? 0], 4);
     words.set([spec.bOff ?? 0, spec.bSK, spec.bSN, spec.bSB ?? 0], 8);
     words.set([spec.cOff ?? 0, spec.cSM, spec.cSN, spec.cSB ?? 0], 12);
-    words.set([spec.padTop ?? 0, spec.padLeft ?? 0, spec.nBase ?? 0, spec.normB?.channelsPerGroup ?? 0], 16);
+    words.set([spec.padTop ?? 0, spec.padLeft ?? 0, spec.nBase ?? 0, 0], 16);
     return words;
   }
 
@@ -416,8 +416,7 @@ export function createSuperMatOps(device, options = {}) {
     if (spec.biasM2) views.push(bindingView(spec.biasM2, 'gemm biasM2'));
     if (spec.biasN) views.push(bindingView(spec.biasN, 'gemm biasN'));
     if (spec.residual) views.push(bindingView(spec.residual, 'gemm residual'));
-    if (spec.normB) views.push(bindingView(spec.normB.stats, 'norm stats'), bindingView(spec.normB.gamma, 'norm gamma'),
-      bindingView(spec.normB.beta, 'norm beta'));
+    if (spec.normB) views.push(bindingView(spec.normB.ss, 'norm scale/shift'));
     views.push(bindingView(c, 'gemm c'));
     views.push(params(gemmWords(spec)));
     const nBase = spec.nBase ?? 0, nCount = spec.nCount ?? N - nBase;
@@ -471,15 +470,20 @@ export function createSuperMatOps(device, options = {}) {
     let normB = null;
     if (norm) {
       const groups = norm.groups ?? 32;
-      normB = { stats: groupNormStats({ x, shape: [cin, h, w], groups, eps: norm.eps, name: `${name}.norm` }),
-        gamma: norm.gamma, beta: norm.beta, silu: norm.silu, channelsPerGroup: cin / groups };
+      const statsTensor = groupNormStats({ x, shape: [cin, h, w], groups, eps: norm.eps, name: `${name}.norm` });
+      const ss = alloc([cin * 2], `${name}.norm.ss`, { dtype: 'f32' });
+      dispatch(groupNormChannelAffineShader(), [bindingView(statsTensor), bindingView(norm.gamma, `${name} gamma`),
+        bindingView(norm.beta, `${name} beta`), bindingView(ss), params(new Uint32Array([cin, cin / groups, 0, 0]))],
+      [Math.ceil(cin / 64), 1, 1], `norm-affine:${name}`);
+      release(statsTensor);
+      normB = { ss, silu: norm.silu };
     }
     const spec = kh === 1 && stride === 1 && !upsample && top === 0 && left === 0 && !normB
       ? { a: weight, b: x, c, M: cout, N, K: cin, aSM: cin, aSK: 1, bSK: h * w, bSN: 1, cSM: N, cSN: 1, biasM: bias, biasM2, residual }
       : { a: weight, b: x, c, M: cout, N, K, aSM: K, aSK: 1, bSK: h, bSN: w, bSB: wout, cSM: N, cSN: 1,
         padTop: top, padLeft: left, biasM: bias, biasM2, residual, conv: { kh, kw, stride, upsample }, normB };
     await gemm({ ...spec, name });
-    if (normB) release(normB.stats);
+    if (normB) release(normB.ss);
     c.shape = [cout, hout, wout];
     return c;
   }
