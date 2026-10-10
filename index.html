@@ -11825,7 +11825,9 @@ async function initScene() {
       if (scenePlacementTools.edits.state().active || scenePlacementTools.edits.state().replaying) {
         setInfo('Finish or cancel the current edit before switching workspace'); return false;
       }
-      const preserveFluid = next === 'authoring' && fluidWorkbench?.state().active && fingerFluidBenchRunning;
+      // A held observation stops scheduling; its solver and shared viewport
+      // still own live water that must survive a workspace presentation change.
+      const preserveFluid = next === 'authoring' && fluidWorkbench?.state().active && fingerFluidBenchSolver?.available && fingerFluidBenchViewport;
       fluidWorkbench?.setActive(false);
       if (next === 'authoring' && !['assets', 'volume'].includes(window.__kaminosActiveTab())) {
         setActiveTab('assets', { reveal: false, preserveFluid });
@@ -11834,7 +11836,7 @@ async function initScene() {
     },
     afterSwitch: mode => {
       installFluidWorkbench();
-      if(mode === 'workbench' && fluidWorkbench && fingerFluidBenchRunning && !document.getElementById('finger-fluid-bench-operator-panel').hidden)setActiveTab('finger-fluid-bench');
+      if(mode === 'workbench' && fluidWorkbench && fingerFluidBenchSolver?.available && fingerFluidBenchViewport && !document.getElementById('finger-fluid-bench-operator-panel').hidden)setActiveTab('finger-fluid-bench');
       fluidWorkbench?.setActive(mode === 'workbench' && window.__kaminosActiveTab() === 'finger-fluid-bench');
     },
     openWorkbenchTab: tab => setActiveTab(tab),
@@ -12757,7 +12759,10 @@ function setActiveTab(tabName, { reveal = tabName !== 'assets', preserveFluid = 
   const fingerFluidBenchPanel = document.getElementById('finger-fluid-bench-operator-panel');
   if (fingerFluidBenchPanel) {
     fingerFluidBenchPanel.hidden = tabName !== 'finger-fluid-bench' && !preserveFluid;
-    if (tabName === 'finger-fluid-bench') startFingerFluidBench();
+    if (tabName === 'finger-fluid-bench') {
+      if(fingerFluidBenchSolver?.available && fingerFluidBenchViewport)resumeFingerFluidBenchAfterWitness();
+      else startFingerFluidBench();
+    }
     else if(!preserveFluid) stopFingerFluidBench();
   }
   const fingerJuicePanel = document.getElementById('finger-juice-operator-panel');
