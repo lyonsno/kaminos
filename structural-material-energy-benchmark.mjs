@@ -58,7 +58,7 @@ try{
   const raw=path.join(out,`${fixture.name}.v8`);fs.writeFileSync(raw,serialize(result));
   assert.deepEqual(result.errors,[]);assert.equal(result.adapter.isFallbackAdapter,false);
   const lengthScale=Math.max(...[0,1,2].map(k=>Math.max(...model.positions.map(p=>p[k]))-Math.min(...model.positions.map(p=>p[k]))));
-  const parity=compareEnergyRuns(result.runs,descriptor.points,lengthScale);
+  const parity=compareEnergyRuns(result.runs,descriptor.points,lengthScale,{elements:descriptor.elements,coefficients:arrays.coefficients,volumeBarrier:descriptor.volumeBarrier});
   const median=values=>{const sorted=[...values].sort((a,b)=>a-b);return(sorted[(sorted.length-1)>>1]+sorted[sorted.length>>1])/2;};
   const entries=result.runs.map(run=>({requested:run.requested,effective:run.effective,medianSolveMilliseconds:median(run.timings.map(t=>t.totalMilliseconds)),timings:run.timings,settings:run.settings})),dense=median(entries.filter(r=>r.requested==='dense-reference').map(r=>r.medianSolveMilliseconds)),fast=median(entries.filter(r=>r.requested==='auto').map(r=>r.medianSolveMilliseconds));
   report.runs.push({name:fixture.name,descriptor,adapter:result.adapter,raw:{path:raw,sha256:hash(fs.readFileSync(raw))},parity,entries,denseMilliseconds:dense,optimizedMilliseconds:fast,speedup:dense/fast});save();
