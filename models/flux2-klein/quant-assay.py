@@ -34,7 +34,12 @@ GLOBALS = ["x_embedder", "context_embedder", "time_guidance_embed.timestep_embed
            "time_guidance_embed.timestep_embedder.linear_2", "double_stream_modulation_img.linear",
            "double_stream_modulation_txt.linear", "single_stream_modulation.linear", "norm_out.linear", "proj_out"]
 
-# Each component is quantized as (kind, bits, group): "affine" like the int4 packer, "sym" like int8.
+# Each component is quantized as (kind, bits, group). All but "sym" are the int4 packer's affine
+# format (q * scale + bias, f16 scale and bias per group) with different ways of choosing the range:
+# "affine" min/max; "mse" the per-group range shrink that minimizes squared error; "hqq" min/max
+# with the zero point optimized by HQQ; "sign" (1 bit) +/- mean |w| per group. "sym" is int8.
+# On a transformer block weight, relative error at 2 bits is minmax 0.46, hqq 0.44, mse 0.34; at
+# 1 bit minmax 1.7, hqq 1.05, sign 0.61 (zeroing the weight would be 1.0).
 SCHEMES = {
     "int4-g64": {"te": ("affine", 4, 64), "blocks": ("affine", 4, 64), "globals": ("sym", 8, 64)},
     "int4-g128": {"te": ("affine", 4, 128), "blocks": ("affine", 4, 128), "globals": ("sym", 8, 64)},
@@ -43,13 +48,69 @@ SCHEMES = {
     "dit-3bit": {"te": ("affine", 4, 64), "blocks": ("affine", 3, 64), "globals": ("sym", 8, 64)},
     "all-3bit": {"te": ("affine", 3, 64), "blocks": ("affine", 3, 64), "globals": ("sym", 8, 64)},
     "lean-int4": {"te": ("affine", 4, 128), "blocks": ("affine", 4, 128), "globals": ("affine", 4, 64)},
+    # Low-bit ladder: the transformer blocks (and optionally the text encoder) below 4 bits.
+    "q3-dit": {"te": ("affine", 4, 128), "blocks": ("mse", 3, 64), "globals": ("affine", 4, 64)},
+    "q3-all": {"te": ("mse", 3, 64), "blocks": ("mse", 3, 64), "globals": ("affine", 4, 64)},
+    "q2-dit": {"te": ("affine", 4, 128), "blocks": ("mse", 2, 64), "globals": ("affine", 4, 64)},
+    "q2-all": {"te": ("mse", 2, 64), "blocks": ("mse", 2, 64), "globals": ("affine", 4, 64)},
+    "q1-dit": {"te": ("affine", 4, 128), "blocks": ("sign", 1, 64), "globals": ("affine", 4, 64)},
+    "q1-all": {"te": ("sign", 1, 64), "blocks": ("sign", 1, 64), "globals": ("affine", 4, 64)},
 }
 FIXED_BYTES = {"vae": 99_241_984, "tokenizer": 11_422_654}  # unchanged by these schemes
 
 
-def fake_quantize(w, kind, bits, group):
-    """Dequantized f32 copy of a 2-D weight [N, K], matching the packers' rounding (CPU, f32)."""
+def hqq_params(g, bits, iters=20, lp_norm=0.7, beta=10.0, kappa=1.01):
+    """HQQ (half-quadratic quantization, Badri & Shaji 2023): starting from the min/max range, fit
+    each group's zero point to minimize an l_p (p < 1) error that tolerates outliers. Returns the
+    affine scale and bias (dequantized = q * scale + bias) for groups g [..., group]."""
+    levels = 2 ** bits - 1
+    lo, hi = g.amin(dim=-1, keepdim=True), g.amax(dim=-1, keepdim=True)
+    inv = (levels / (hi - lo)).clamp(max=2e4)
+    zero = -lo * inv
+    best_zero, best_err = zero, float("inf")
+    for _ in range(iters):
+        q = torch.round(g * inv + zero).clamp(0, levels)
+        diff = g - (q - zero) / inv
+        err = float(diff.abs().mean())
+        if err >= best_err:
+            break
+        best_err, best_zero = err, zero
+        mag = diff.abs()
+        shrunk = torch.sign(diff) * torch.relu(mag - (1.0 / beta) * mag.pow(lp_norm - 1))
+        zero = (q - (g - shrunk) * inv).mean(dim=-1, keepdim=True)
+        beta *= kappa
+    scale = 1.0 / inv
+    return scale, -best_zero * scale
+
+
+def fake_quantize(w, kind, bits, group, device="cpu"):
+    """Dequantized f32 copy of a 2-D weight [N, K], matching the packers' rounding (CPU, f32).
+    hqq runs on `device` (its result is a scale and bias per group, stored f16 like the packer's)."""
     n, k = w.shape
+    levels = 2 ** bits - 1
+
+    def dequant(g, scale, bias):
+        scale, bias = scale.half().float(), bias.half().float()
+        safe = torch.where(scale == 0, torch.ones_like(scale), scale)
+        return torch.clamp(torch.round((g - bias) / safe), 0, levels) * scale + bias
+
+    if kind in ("hqq", "mse", "sign"):
+        g = w.reshape(n, k // group, group).to(device, torch.float32)
+        if kind == "hqq":
+            out = dequant(g, *hqq_params(g, bits))
+        elif kind == "sign":
+            assert bits == 1, "sign is the 1-bit scheme"
+            a = g.abs().mean(dim=-1, keepdim=True)
+            out = dequant(g, 2 * a, -a)
+        else:
+            lo, hi = g.amin(dim=-1, keepdim=True), g.amax(dim=-1, keepdim=True)
+            out, best = None, None
+            for r in torch.linspace(0.3, 1.0, 20).tolist():
+                d = dequant(g, (hi - lo) * r / levels, lo * r)
+                e = ((d - g) ** 2).sum(dim=-1, keepdim=True)
+                out = d if out is None else torch.where(e < best, d, out)
+                best = e if best is None else torch.minimum(e, best)
+        return out.reshape(n, k).cpu()
     g = w.reshape(n, k // group, group).to(torch.float32)
     if kind == "sym":
         qmax = 2 ** (bits - 1) - 1
@@ -170,7 +231,7 @@ def main():
                 for (name, mod), w in zip(lst, originals[comp]):
                     assert w.shape[1] % group == 0, f"{name}: in_features {w.shape[1]} not divisible by {group}"
                     with torch.no_grad():
-                        mod.weight.copy_(fake_quantize(w, kind, bits, group).to(mod.weight.device))
+                        mod.weight.copy_(fake_quantize(w, kind, bits, group, args.device).to(mod.weight.device))
                 nbytes[comp] = params[comp] * bits_per_weight(kind, bits, group) / 8
             report["schemes"][scheme] = {"bytes": nbytes, "download_bytes": sum(nbytes.values()), "quantize_s": time.time() - t0}
             report["phase"] = f"generate {scheme}"
