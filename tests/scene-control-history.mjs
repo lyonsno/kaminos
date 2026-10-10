@@ -211,6 +211,26 @@ test('locked scrub uses movement deltas when screen coordinates stop changing', 
  }finally{delete globalThis.document;delete globalThis.window;}
 });
 
+test('pointer capture released during lock acquisition does not cancel the numeric edit', () => {
+ const f=boundedNumber({min:0,max:1,step:.01,value:.5});
+ const doc=globalThis.document;
+ f.input.ownerDocument=doc;
+ f.input.requestPointerLock=()=>{
+   // Browser lock ownership changes before the queued pointerlockchange event.
+   doc.pointerLockElement=f.input;
+   f.input.fire('lostpointercapture',{pointerId:1});
+ };
+ doc.exitPointerLock=()=>{doc.pointerLockElement=null;doc.fire('pointerlockchange');};
+ try {
+   f.move(115);
+   assert.equal(f.value.flow,.55,'lock handover must retain the live preview');
+   assert.equal(f.edits.state().active.id,'@burner','handover must keep its transaction');
+   doc.fire('pointerlockchange');doc.fire('mouseup',{button:0});
+   assert.equal(f.edits.state().undoCount,1);assert.equal(f.value.flow,.55);
+   f.edits.undo();assert.equal(f.value.flow,.5);f.edits.redo();assert.equal(f.value.flow,.55);
+ } finally {f.close();}
+});
+
 test('compact numeric presentation retains useful scale without trailing noise',async()=>{
  const module=await import('../scene-control-history.mjs');
  assert.equal(typeof module.formatAuthoringNumber,'function');
