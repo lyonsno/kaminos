@@ -11,7 +11,7 @@ mkdir -p "$OUT"
 W=$ROOT/weights; C=$ROOT/code
 PORT=${KLEIN_PORT:-18719}
 caffeinate -dimsu -w $$ &
-node "$C/serve-klein.mjs" --port $PORT --te "$W/klein4b-text-encoder-i4" --dit "$W/klein4b-transformer-i4" --vae "$W/klein4b-vae-decoder-f16" > "$OUT/server.log" 2>&1 &
+node "$C/serve-klein.mjs" --port $PORT --kit "$ROOT/webgpu-inference-kit" --te "$W/klein4b-text-encoder-i4" --dit "$W/klein4b-transformer-i4" --vae "$W/klein4b-vae-decoder-f16" > "$OUT/server.log" 2>&1 &
 SERVER=$!
 (while true; do echo "$(date +%T) $(memory_pressure -Q | tail -1) swapused=$(sysctl -n vm.swapusage | awk '{print $6}')"; sleep 5; done) > "$OUT/mem.log" 2>&1 &
 MEM=$!
