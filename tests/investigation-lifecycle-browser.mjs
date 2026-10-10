@@ -87,3 +87,29 @@ test('reload terminates the lost investigation while same-document control URL c
   assert.equal((await f.report()).status, 'disconnected');
   assert.equal((await f.report()).captures[0].status, 'retained');
 });
+
+test('browser loss during failed final metadata persistence settles the handback and preserves prior captures', async t => {
+  const f = await mount(t, 'final-save-loss');
+  await f.handle.capture('keep this observation');
+  const write = fs.writeFile;
+  let injected = false;
+  fs.writeFile = async (destination, data, ...rest) => {
+    if (destination === `${f.handle.reportPath}.next` && typeof data === 'string'
+      && JSON.parse(data).status === 'finished' && !injected) {
+      injected = true;
+      await browser.close();
+      await fs.mkdir(destination);
+      try {return await write(destination, data, ...rest);}
+      finally {await fs.rmdir(destination);}
+    }
+    return write(destination, data, ...rest);
+  };
+  try {await assert.rejects(f.handle.finish('lost during save'));}
+  finally {fs.writeFile = write;}
+  assert.equal(injected, true);
+  assert.equal(f.page.isClosed(), true);
+  assert.notEqual((await f.report()).status, 'finish-failed', 'a lost browser cannot offer a live retry');
+  await assert.rejects(f.handle.finished, /lost/);
+  assert.equal((await f.report()).status, 'disconnected');
+  assert.equal((await f.report()).captures[0].status, 'retained');
+});

@@ -25,7 +25,7 @@ export async function mountFluidInvestigation({page, out, source, guide}) {
     return writing;
   };
   await save();
-  let resolveFinished, rejectFinished, busy = false, frozen = null, lost = null;
+  let resolveFinished, rejectFinished, busy = false, frozen = null, lost = null, completed = false;
   const finished = new Promise((resolve, reject) => {resolveFinished = resolve; rejectFinished = reject;});
   // Startup callers may not yet have received the handle when setup fails.
   finished.catch(() => {});
@@ -66,7 +66,10 @@ export async function mountFluidInvestigation({page, out, source, guide}) {
       if (lost) throw lost;
       report.status = 'finished'; report.complete = frozen.recording.complete;
       report.note = note; report.recording = 'recording.v8'; report.finishedAt = new Date().toISOString();
+      delete report.failure;
       await save();
+      if (lost) throw lost;
+      completed = true;
       resolveFinished(report);
       await page.evaluate(id => window.__kaminosInvestigations.get(id).disconnect('Investigation retained'), id).catch(() => {});
       return {message: 'Investigation retained', report: reportPath};
@@ -80,7 +83,7 @@ export async function mountFluidInvestigation({page, out, source, guide}) {
     } finally {busy = false;}
   };
   const terminate = reason => {
-    if (['finished', 'disconnected', 'failed'].includes(report.status)) return;
+    if (completed || ['disconnected', 'failed'].includes(report.status)) return;
     lost = Error(reason);
     report.status = 'disconnected'; report.failure = reason;
     save().then(() => rejectFinished(lost), rejectFinished);
