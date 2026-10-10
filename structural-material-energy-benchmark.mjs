@@ -7,6 +7,7 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {splitMaterialInterior} from './structural-material-interior-cut.mjs';
 import {prepareSeparatedTopology,packSolidTopology} from './structural-material-solid-topology.mjs';
+import {compareEnergyRuns} from './structural-material-energy-comparison.mjs';
 const [out,executable,playwright,url,bodyPath,planesPath]=process.argv.slice(2);
 fs.mkdirSync(out,{recursive:true});
 const report={status:'running',phase:'setup',runs:[],errors:[],claim:'Same-law paired native solve timing; not complete frame or cut latency closure'},hash=b=>createHash('sha256').update(b).digest('hex'),save=()=>fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));
@@ -54,15 +55,13 @@ try{
     return{adapter:{vendor:adapter.info.vendor,description:adapter.info.description,isFallbackAdapter:adapter.info.isFallbackAdapter},runs,errors};
    }finally{device.destroy();}
   },{descriptor,packed});
-  assert.deepEqual(result.errors,[]);assert.equal(result.adapter.isFallbackAdapter,false);
-  for(const run of result.runs)assert.equal(run.effective,run.requested==='auto'?'isotropic-intact-v1':'dense-reference');
   const raw=path.join(out,`${fixture.name}.v8`);fs.writeFileSync(raw,serialize(result));
-  const differences=(a,b)=>({absolute:Math.max(...a.map((v,i)=>Math.abs(v-b[i]))),relative:Math.max(...a.map((v,i)=>Math.abs(v-b[i])/(1+Math.abs(v))))});
-  const initialParity=differences(result.runs[0].initial.diagnostics,result.runs[1].initial.diagnostics),finalParity=differences(result.runs[0].final.state,result.runs[1].final.state);
-  assert.ok(initialParity.relative<1e-5&&finalParity.absolute<1e-3,JSON.stringify({initialParity,finalParity}));
+  assert.deepEqual(result.errors,[]);assert.equal(result.adapter.isFallbackAdapter,false);
+  const lengthScale=Math.max(...[0,1,2].map(k=>Math.max(...model.positions.map(p=>p[k]))-Math.min(...model.positions.map(p=>p[k]))));
+  const parity=compareEnergyRuns(result.runs,descriptor.points,lengthScale);
   const median=values=>{const sorted=[...values].sort((a,b)=>a-b);return(sorted[(sorted.length-1)>>1]+sorted[sorted.length>>1])/2;};
   const entries=result.runs.map(run=>({requested:run.requested,effective:run.effective,medianSolveMilliseconds:median(run.timings.map(t=>t.totalMilliseconds)),timings:run.timings,settings:run.settings})),dense=median(entries.filter(r=>r.requested==='dense-reference').map(r=>r.medianSolveMilliseconds)),fast=median(entries.filter(r=>r.requested==='auto').map(r=>r.medianSolveMilliseconds));
-  report.runs.push({name:fixture.name,descriptor,adapter:result.adapter,raw:{path:raw,sha256:hash(fs.readFileSync(raw))},initialParity,finalParity,entries,denseMilliseconds:dense,optimizedMilliseconds:fast,speedup:dense/fast});save();
+  report.runs.push({name:fixture.name,descriptor,adapter:result.adapter,raw:{path:raw,sha256:hash(fs.readFileSync(raw))},parity,entries,denseMilliseconds:dense,optimizedMilliseconds:fast,speedup:dense/fast});save();
  }
  assert.deepEqual(report.errors,[]);for(const[name,digest]of Object.entries(report.sources))assert.equal(hash(fs.readFileSync(path.join(root,name))),digest);
  report.status='passed';report.phase='complete';save();
