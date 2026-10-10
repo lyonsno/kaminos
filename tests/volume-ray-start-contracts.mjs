@@ -1,8 +1,17 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { reconcileVolumeCockpitLayoutDocument, VOLUME_COCKPIT_LAYOUT_IDENTITY } from '../volume-cockpit-layout.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const statusStatement = html.match(/document\.getElementById\('volume-ray-start-noise-val'\)\.textContent[^;]*;/)?.[0];
+assert.ok(statusStatement, 'ray-start status must be synchronized from the live controls');
+for (const rayStartNoise of [true, false, false, true]) {
+  const label = {textContent:'on'};
+  runInNewContext(statusStatement, {c:{rayStartNoise},document:{getElementById:()=>label}});
+  assert.equal(label.textContent, rayStartNoise ? 'on' : 'off');
+}
 assert.match(core, /let jitter = dtBase \* rayStartPhase\(in\.pos\.xy, u\.reserved_render_controls\.w, fullGridCapture\)/,
   'the actual camera marcher must offset starts by per-pixel noise while preserving full-grid capture');
 const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url)));
