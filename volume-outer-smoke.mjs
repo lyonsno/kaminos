@@ -1,5 +1,6 @@
 // One-way coarse atmosphere. All positions are in the detailed domain's local
 // metric; velocities are local distance per reference transport tick, not cells.
+import {PASSIVE_MATERIAL_LAW, PASSIVE_MATERIAL_WGSL} from './volume-passive-material.mjs';
 export function outerSmokeConfig({grid=32, extent=4, pressureIterations=24, nearHeightRatio=2}={}) {
   if (![1,2].includes(nearHeightRatio)) throw new Error('near height ratio must be 1 or 2');
   if (!Number.isInteger(grid) || grid<2) throw new Error('outer grid must be an integer >= 2');
@@ -80,8 +81,11 @@ const H:f32=${c.cellWidth.toFixed(9)};
 const LO=vec3<f32>(${(-c.extent).toFixed(9)});
 const NEAR:i32=${nearGrid};
 const NEAR_HEIGHT:i32=${nearGrid*(c.nearHeightRatio??2)};
+const MATERIAL_HEAT_SURVIVAL:f32=${PASSIVE_MATERIAL_LAW.heatSurvivalPerStep};
+const MATERIAL_SMOKE_SURVIVAL:f32=${PASSIVE_MATERIAL_LAW.smokeSurvivalPerStep};
+${PASSIVE_MATERIAL_WGSL}
 struct Cell { velocity:vec4<f32>, material:vec4<f32> }
-struct Params { stepScale:f32, transportScale:f32, buoyancy:f32, cooling:f32 }
+struct Params { stepScale:f32, transportScale:f32, buoyancy:f32, padding:f32 }
 @group(0) @binding(0) var<uniform> params:Params;
 @group(0) @binding(1) var<storage,read> near:array<vec4<f32>>;
 @group(0) @binding(2) var<storage,read> src:array<Cell>;
@@ -214,8 +218,14 @@ fn advect(@builtin(global_invocation_id) id:vec3<u32>){
   let c=vec3<i32>(id);if(any(c>=STORAGE)){return;}var result:Cell;
   if(inside(c)&&!solid(c)){
     let p=point(c);let end=clipCharacteristic(p,p-velocity(p)*params.transportScale);
-    result.material=vec4<f32>(sampleChannel(end,3)*pow(.9995,params.stepScale),
-      sampleChannel(end,4)*pow(params.cooling,params.stepScale),0.0,0.0);
+    // p is already in the fine kernel's normalised metric (-1 at its floor).
+    // Cool the transported heat before conversion, as in the fine kernel.
+    // There is no outer fuel, source birth, reaction or fine wall sponge.
+    let heat=sampleChannel(end,4)*pow(MATERIAL_HEAT_SURVIVAL,params.stepScale);
+    let smoke=sampleChannel(end,3)*pow(MATERIAL_SMOKE_SURVIVAL,params.stepScale)
+      +passiveHeatToSmokeRate(heat,p.y)*params.stepScale;
+    result.material=vec4<f32>(smoke,heat,0.0,0.0);
+    // Donors carry this tick's already-evolved fine material; do not age twice.
     if(nearPoint(p)){result.material=nearMaterial(c);}
   }
   for(var a=0;a<3;a++){
@@ -349,7 +359,7 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers) {
     config:c,optical,solids,shader,clearSolids,
     setSolids(packed,revision){device.queue.writeTexture({texture:solids},packed.data,{bytesPerRow:packed.bytesPerRow,rowsPerImage:packed.rowsPerImage},c.shape);solidRevision=revision;},
     encode(encoder,nearIndex,{dtScale,backtraceScale},buoyancy=.002){
-      device.queue.writeBuffer(params,0,new Float32Array([dtScale,backtraceScale,buoyancy,.998]));
+      device.queue.writeBuffer(params,0,new Float32Array([dtScale,backtraceScale,buoyancy,0]));
       const dispatch=(name,s,p)=>{const pass=encoder.beginComputePass({label:`outer smoke ${name}`});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group(nearIndex,s,p));
         if(name==='pressureErrorReset'||name==='pressureErrorFinish'){pass.dispatchWorkgroups(1);}
         else{pass.dispatchWorkgroups(Math.ceil((c.grid+1)/4),Math.ceil((2*c.grid+1)/4),Math.ceil((c.grid+1)/4));}pass.end();};
@@ -364,6 +374,7 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers) {
       dispatch('publish',current,p);steps++;
     },
     receipt(){return {requested:true,effective:'one-way-coarse-pressure-smoke-v0',shape:c.shape,bounds:{min:c.min,max:c.max},cellWidth:c.cellWidth,
+      passiveMaterial:{identity:PASSIVE_MATERIAL_LAW.identity,heatSurvivalPerStep:PASSIVE_MATERIAL_LAW.heatSurvivalPerStep,smokeSurvivalPerStep:PASSIVE_MATERIAL_LAW.smokeSurvivalPerStep,conversion:'cooled-heat-fuel-free',heightFrame:PASSIVE_MATERIAL_LAW.heightFrame,donorAging:'already-evolved-fine-overwrite'},
       pressureIterations:c.pressureIterations,pressureBudget,pressureWarmStart:true,pressureScheme:'red-black-sor',pressureTarget:.001,pressureCompletion,steps,solidRevision,stateAndPressureBytes:count*80+16,advection:'bounded-cubic-velocity-smoke-heat-v0',wallInterpolation:'masked-trilinear-near-solids-and-exterior',donorBounds:outerDonorBounds(c),innerFeedback:false,scalarTransfer:'interior-overlap-volume-average-dirichlet-not-conservative-flux',outerBoundary:'ambient-zero-pressure'};},
     async readState(){const measuredStep=steps,b=device.createBuffer({size:count*32+16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
       try{const e=device.createCommandEncoder();e.copyBufferToBuffer(states[current],0,b,0,count*32);e.copyBufferToBuffer(pressureStats,0,b,count*32,16);device.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);
