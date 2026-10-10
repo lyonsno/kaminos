@@ -187,6 +187,9 @@ def main():
     ap.add_argument("--seed-base", type=int, default=7000)
     ap.add_argument("--device", default="mps")
     ap.add_argument("--quant-device", default="cpu", help="where fake quantization runs (cpu matches the packers)")
+    ap.add_argument("--only", default=None, help="comma-separated prompt names; seeds stay those of the full sorted set")
+    ap.add_argument("--baseline-dir", default=None,
+                    help="earlier run whose first-scheme images (same prompts and seeds) are reused instead of regenerated")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -210,6 +213,10 @@ def main():
         from diffusers import Flux2KleinPipeline
         prompt_files = sorted(Path(args.prompts).glob("*.txt"))
         prompts = [(p.stem, p.read_text().strip(), args.seed_base + i + 1) for i, p in enumerate(prompt_files)]
+        if args.only:
+            keep = args.only.split(",")
+            prompts = [row for row in prompts if row[0] in keep]
+            assert len(prompts) == len(keep), f"--only names not all found: {keep}"
         report["prompts"] = [{"name": n, "prompt": t, "seed": s} for n, t, s in prompts]
         report["phase"] = "load"
         t0 = time.time()
@@ -225,7 +232,27 @@ def main():
         save_report()
 
         applied = {}  # component -> spec currently in the model, so unchanged components are not redone
+        if args.baseline_dir:
+            # Reuse the first scheme's images when the earlier run used the same prompt text and seed.
+            base = Path(args.baseline_dir)
+            prior = json.loads((base / "report.json").read_text())
+            first = schemes[0]
+            (out / first).mkdir(exist_ok=True)
+            known = {(p["name"], p["prompt"], p["seed"]) for p in prior["prompts"]}
+            times = {i["prompt"]: i["seconds"] for i in prior["images"] if i["scheme"] == first}
+            for name, prompt, seed in prompts:
+                if (name, prompt, seed) not in known or name not in times:
+                    raise RuntimeError(f"baseline {base} has no {first} image for {name} with this prompt and seed")
+                Image.open(base / first / f"{name}.png").save(out / first / f"{name}.png")
+                report["images"].append({"scheme": first, "prompt": name, "seed": seed, "seconds": times[name], "reused_from": str(base)})
+            spec = SCHEMES[first]
+            report["schemes"][first] = {"bytes": {**FIXED_BYTES, **{c: params[c] * bits_per_weight(*spec[c]) / 8 for c in params}},
+                                        "reused_from": str(base)}
+            report["schemes"][first]["download_bytes"] = sum(report["schemes"][first]["bytes"].values())
+            save_report()
         for scheme in schemes:
+            if scheme in report["schemes"]:
+                continue
             report["phase"] = f"quantize {scheme}"
             t0 = time.time()
             spec = SCHEMES[scheme]
