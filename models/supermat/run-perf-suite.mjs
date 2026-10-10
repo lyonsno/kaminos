@@ -80,7 +80,7 @@ try {
 
   const plan = values.plan ?? 'profiles';
   summary.plan = plan;
-  if (!['profiles', 'coop-sweep'].includes(plan)) throw new Error(`unknown plan ${plan}`);
+  if (!['profiles', 'coop-sweep', 'coop-alternate'].includes(plan)) throw new Error(`unknown plan ${plan}`);
   const page = (id, query) => run(id, demo, ['--url',
     `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
     '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
@@ -106,6 +106,15 @@ try {
     for (const [id, query] of coop) {
       run(id, demo, ['--url', `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
         '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
+    }
+  } else if (plan === 'coop-alternate') {
+    // Paired blocking/cooperative alternation inside one page session (17 runs:
+    // a cold blocking run, then 8 cooperative/blocking pairs) per profile.
+    summary.phase = 'cooperative-alternate';
+    for (const [name, query] of [['product', ''], ['faithful', 'activations=f32&fuseNorm=0'], ['product-2', '']]) {
+      run(`alternate-${name}`, demo, ['--url',
+        `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=17&alternate=1&${query}`,
+        '--chrome', values.chrome, '--screenshot', path.join(out, `alternate-${name}`, 'screen.png')]);
     }
   } else {
     // Cooperative 512 throughput vs scene smoothness: duty target sweep for

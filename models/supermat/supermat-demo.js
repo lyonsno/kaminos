@@ -130,7 +130,8 @@ function startScene() {
       if (frames.last !== null && frames.gaps) frames.gaps.push(now - frames.last);
       frames.last = now;
       frames.completed++;
-      requestAnimationFrame(frame);
+      // ?scene=0 (diagnostic): draw once, then leave the scene still.
+      if (params.get('scene') !== '0') requestAnimationFrame(frame);
     });
   };
   requestAnimationFrame(frame);
@@ -187,6 +188,9 @@ async function load(blob, label, { runNow = false } = {}) {
     setStatus(`Loaded ${current.width}×${current.height}. Press Infer materials.`);
     if (!runNow) return;
     for (let index = 0; index < repeat; index++) {
+      // ?alternate=1 (diagnostic): alternate blocking and cooperative runs in one
+      // session so slow drift in outside GPU load cancels within each pair.
+      if (params.get('alternate') === '1') $('cooperative').checked = index % 2 === 1;
       await infer({ final: index === repeat - 1 });
       if (state.runs.at(-1)?.status !== 'done') break;
     }
