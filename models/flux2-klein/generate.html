@@ -1,16 +1,20 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Klein text-to-image</title>
 <style>
   :root { color-scheme: light dark; --bg: #f6f5f2; --fg: #1d1d1b; --muted: #6b6a66; --line: #d9d6cf; }
   @media (prefers-color-scheme: dark) { :root { --bg: #161615; --fg: #ecebe7; --muted: #9a988f; --line: #33322f; } }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, sans-serif; }
-  main { max-width: 760px; margin: 0 auto; padding: 24px 16px; display: grid; gap: 14px; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px; display: grid; gap: 14px; }
   textarea { width: 100%; box-sizing: border-box; min-height: 70px; font: inherit; padding: 10px; background: transparent; color: inherit; border: 1px solid var(--line); border-radius: 8px; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   input, select, button { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; }
   button { cursor: pointer; } button:disabled { opacity: 0.5; cursor: default; }
-  canvas { max-width: 100%; border-radius: 8px; border: 1px solid var(--line); }
+  .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .panes { grid-template-columns: 1fr; } }
+  canvas { width: 100%; aspect-ratio: 1; border-radius: 8px; border: 1px solid var(--line); display: block; }
+  .label { color: var(--muted); font-size: 13px; margin-bottom: 4px; }
   #status { color: var(--muted); font-variant-numeric: tabular-nums; white-space: pre-wrap; }
 </style>
 <main>
@@ -19,61 +23,81 @@
   <div class="row">
     <label>Seed <input id="seed" type="number" value="7006" style="width:8em"></label>
     <label>Size <select id="size"><option>512</option><option>768</option><option>1024</option></select></label>
+    <label><input id="cooperative" type="checkbox" checked> Share the GPU with the scene</label>
     <button id="go" disabled>Loading weights…</button>
+    <button id="pause" disabled>Pause</button>
+    <button id="stop" disabled>Stop</button>
   </div>
   <div id="status"></div>
-  <canvas id="out" width="512" height="512"></canvas>
+  <div class="panes">
+    <div><div class="label">Live scene (same GPU)</div><canvas id="scene" width="512" height="512"></canvas></div>
+    <div><div class="label">Generated image</div><canvas id="out" width="512" height="512"></canvas></div>
+  </div>
 </main>
 <script type="module">
-import { KleinPipeline } from './klein-pipeline.js';
+import { createKleinDemo } from './klein-demo.js';
 const q = new URLSearchParams(location.search);
-const urls = { textEncoderUrl: q.get('te') ?? '/te', transformerUrl: q.get('dit') ?? '/dit', vaeUrl: q.get('vae') ?? '/vae',
-  gemmVersion: Number(q.get('gemm') ?? 2), sharedType: q.get('shared') ?? 'f16' };
-const status = document.getElementById('status'), go = document.getElementById('go');
-let pipeline;
-async function init() {
-  const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
-  if (!adapter?.features.has('shader-f16')) throw new Error('WebGPU with shader-f16 is required');
-  const device = await adapter.requestDevice({ requiredFeatures: ['shader-f16'], requiredLimits: {
-    maxBufferSize: adapter.limits.maxBufferSize, maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
-    maxStorageBuffersPerShaderStage: adapter.limits.maxStorageBuffersPerShaderStage } });
-  pipeline = new KleinPipeline(device, urls);
-  await pipeline.load((part, name) => { status.textContent = `Loading ${part} ${name}…`; });
-  const gb = Object.values(pipeline.residentBytes).reduce((a, b) => a + b, 0) / 1e9;
-  status.textContent = `Weights loaded in ${(pipeline.timings.loadMs / 1000).toFixed(1)} s (${gb.toFixed(2)} GB resident)`;
-  go.disabled = false; go.textContent = 'Generate';
-  return pipeline;
+const urls = { textEncoderUrl: q.get('te') ?? '/te', transformerUrl: q.get('dit') ?? '/dit', vaeUrl: q.get('vae') ?? '/vae' };
+const kernels = { gemmVersion: Number(q.get('gemm') ?? 2), sharedType: q.get('shared') ?? 'f16' };
+const $ = id => document.getElementById(id);
+const status = $('status'), go = $('go');
+let demo;
+const ms = v => `${(v / 1000).toFixed(2)} s`;
+
+function describe(r) {
+  const t = r.timings, lines = [`${ms(r.wallMs)} ${r.cooperative ? 'sharing the GPU' : 'blocking'}: text ${ms(t.textEncodeMs)}, `
+    + `steps ${t.stepMs.map(x => (x / 1000).toFixed(2)).join(' / ')} s, decode ${ms(t.vaeDecodeMs)}`];
+  if (r.cooperative) lines.push(`${r.dutyCount} GPU duties, longest ${r.longestDutyMs.toFixed(0)} ms`);
+  if (r.frames) lines.push(`scene during run: ${r.frames.frames} frames, p50 ${r.frames.p50.toFixed(0)} ms, p95 ${r.frames.p95.toFixed(0)} ms, `
+    + `max ${r.frames.max.toFixed(0)} ms, ${r.frames.over33ms} gaps over 33 ms`);
+  return lines.join('\n');
 }
-async function generate({ prompt, seed, size }) {
-  const r = await pipeline.generate({ prompt, seed, width: size, height: size,
-    onStep: (i, n) => { status.textContent = `Step ${i}/${n}…`; } });
-  const canvas = document.getElementById('out'); canvas.width = r.width; canvas.height = r.height;
-  canvas.getContext('2d').putImageData(new ImageData(r.rgba, r.width, r.height), 0, 0);
-  const t = r.timings;
-  status.textContent = `${(t.totalMs / 1000).toFixed(2)} s: text ${(t.textEncodeMs / 1000).toFixed(2)} s, ` +
-    `steps ${t.stepMs.map(x => (x / 1000).toFixed(2)).join(' / ')} s, decode ${(t.vaeDecodeMs / 1000).toFixed(2)} s`;
+
+async function generate(job) {
+  const size = job.size;
+  const r = await demo.generate({ ...job, onStep: (i, n) => { status.textContent = `Step ${i}/${n}…`; },
+    onPhase: phase => { status.textContent = phase === 'text' ? 'Reading the prompt…' : phase === 'decode' ? 'Decoding…' : 'Denoising…'; } });
+  const out = $('out'); out.width = r.width; out.height = r.height;
+  out.getContext('2d').putImageData(new ImageData(r.rgba, r.width, r.height), 0, 0);
+  status.textContent = describe(r);
   return r;
 }
-window.kleinReady = init().then(() => true, e => { status.textContent = String(e); throw e; });
+
+window.kleinReady = (async () => {
+  demo = await createKleinDemo({ canvas: $('scene'), urls, kernels,
+    onStatus: s => { status.textContent = `Loading ${s.detail}…`; } });
+  const gb = Object.values(demo.residentBytes).reduce((a, b) => a + b, 0) / 1e9;
+  status.textContent = `Weights loaded in ${ms(demo.loadMs)} (${gb.toFixed(2)} GB resident). The scene keeps drawing while an image generates.`;
+  go.disabled = false; go.textContent = 'Generate';
+  return true;
+})().catch(e => { status.textContent = String(e); throw e; });
+
+const setRunning = running => { go.disabled = running; $('pause').disabled = !running || !$('cooperative').checked; $('stop').disabled = !running || !$('cooperative').checked; $('pause').textContent = 'Pause'; };
 go.onclick = async () => {
-  go.disabled = true;
-  try { await generate({ prompt: document.getElementById('prompt').value, seed: Number(document.getElementById('seed').value), size: Number(document.getElementById('size').value) }); }
-  catch (e) { status.textContent = String(e); }
-  go.disabled = false;
+  setRunning(true);
+  try { await generate({ prompt: $('prompt').value, seed: Number($('seed').value), size: Number($('size').value), cooperative: $('cooperative').checked }); }
+  catch (e) { status.textContent = e?.name === 'AbortError' ? 'Stopped.' : String(e); }
+  setRunning(false);
 };
-// Headless batch entry point: returns PNG base64 per job plus timings.
-window.kleinBatch = async jobs => {
+$('pause').onclick = async () => { const s = await demo.togglePause(); if (s) $('pause').textContent = s === 'paused' ? 'Resume' : 'Pause'; };
+$('stop').onclick = () => demo.stop();
+
+// Headless batch entry point: PNG base64 plus timings, duties and scene frame stats per job.
+window.kleinBatch = async (jobs, { cooperative = true, targetDutyMs = 12 } = {}) => {
   await window.kleinReady;
   const results = [];
   for (const job of jobs) {
-    const r = await generate(job);
+    const r = await generate({ ...job, cooperative, targetDutyMs });
     const canvas = new OffscreenCanvas(r.width, r.height);
     canvas.getContext('2d').putImageData(new ImageData(r.rgba, r.width, r.height), 0, 0);
     const bytes = new Uint8Array(await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer());
     let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    results.push({ name: job.name, seed: job.seed, size: job.size, promptTokens: r.promptTokens, timings: r.timings, png: btoa(bin) });
+    const longest = [...r.duties].sort((a, b) => (b.queueMs ?? 0) - (a.queueMs ?? 0)).slice(0, 5)
+      .map(({ label, queueMs, estimatedFlops }) => ({ label, queueMs, gflops: estimatedFlops / 1e9 }));
+    results.push({ name: job.name, seed: job.seed, size: job.size, cooperative: r.cooperative, wallMs: r.wallMs, timings: r.timings,
+      promptTokens: r.promptTokens, frames: r.frames, dutyCount: r.dutyCount, longestDutyMs: r.longestDutyMs, longestDuties: longest, png: btoa(bin) });
   }
-  return { results, residentBytes: pipeline.residentBytes, loadMs: pipeline.timings.loadMs, kernels: pipeline.kernels };
+  return { results, residentBytes: demo.residentBytes, loadMs: demo.loadMs, kernels: demo.kernels };
 };
 window.kleinPageReady = true;
 </script>

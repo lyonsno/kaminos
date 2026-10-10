@@ -45,7 +45,8 @@ try {
   }
   report.jobs = jobs.map(({ name, seed, size: s, prompt }) => ({ name, seed, size: s, prompt }));
   if (opt('--origin')) report.origin = opt('--origin');
-  else ({ server } = await startServer({ '/te/': report.roots.te, '/dit/': report.roots.dit, '/vae/': report.roots.vae, '/': here }).then(s => { report.origin = s.origin; return s; }));
+  else ({ server } = await startServer({ '/te/': report.roots.te, '/dit/': report.roots.dit, '/vae/': report.roots.vae,
+    '/webgpu-inference-kit/': path.resolve(opt('--kit', path.join(here, '../../webgpu-inference-kit'))), '/': here }).then(s => { report.origin = s.origin; return s; }));
   browser = await launchChrome(opt('--chrome'), [], report);
   report.phase = 'load';
   const kq = `&gemm=${opt('--gemm-version', '2')}&shared=${opt('--shared-type', 'f16')}`;
@@ -53,7 +54,9 @@ try {
   await browser.navigate(`${report.origin}/generate.html?te=/te&dit=/dit&vae=/vae${kq}`, 'window.kleinPageReady === true');
   await browser.evaluate('window.kleinReady');
   report.phase = 'generate';
-  const res = await browser.evaluate(`window.kleinBatch(${JSON.stringify(jobs)})`);
+  const batchOptions = { cooperative: !args.includes('--blocking'), targetDutyMs: Number(opt('--target-duty-ms', '12')) };
+  report.batchOptions = batchOptions;
+  const res = await browser.evaluate(`window.kleinBatch(${JSON.stringify(jobs)}, ${JSON.stringify(batchOptions)})`);
   await fsp.mkdir(outDir, { recursive: true });
   for (const r of res.results) { await fsp.writeFile(path.join(outDir, `${r.name}.png`), Buffer.from(r.png, 'base64')); delete r.png; }
   report.results = res.results; report.residentBytes = res.residentBytes; report.loadMs = res.loadMs; report.effectiveKernels = res.kernels;

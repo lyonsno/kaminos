@@ -3,6 +3,7 @@
 // and 27, concatenated per token into [L][3 * hidden]. Residual stream f32;
 // weights f16 from pack-text-encoder.py. Token embeddings are gathered on the
 // host from rows fetched by the caller (HTTP range requests in the browser).
+import { KleinDutyScheduler } from './klein-duties.js';
 import { gemmShader, gemmShaderV2, rmsNormShader, qwenQkvPrepShader, maskedSoftmaxShader, swigluShader, copyColumnsShader,
   headsToRowsShader } from './klein-kernels.js';
 
@@ -27,7 +28,8 @@ export class KleinTextEncoder {
     this.device = device; this.manifest = manifest; this.cfg = manifest.config;
     this.D = this.cfg.hidden_size; this.QH = this.cfg.num_attention_heads; this.KVH = this.cfg.num_key_value_heads;
     this.F = this.cfg.intermediate_size; this.layers = manifest.layers; this.taps = manifest.taps;
-    this.weights = {}; this.pipelines = {}; this.uniformPool = [];
+    this.weights = {}; this.pipelines = {};
+    this.sched = new KleinDutyScheduler(device, { label: 'klein.te' });
   }
 
   pipeline(key, code) {
@@ -37,12 +39,13 @@ export class KleinTextEncoder {
   buffer(bytes) { return this.device.createBuffer({ size: Math.max(16, Math.ceil(bytes / 16) * 16), usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST }); }
   uniform(words) {
     const b = this.device.createBuffer({ size: Math.ceil(words.length * 4 / 16) * 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.device.queue.writeBuffer(b, 0, new Uint32Array(words)); this.uniformPool.push(b); return b;
+    this.device.queue.writeBuffer(b, 0, new Uint32Array(words)); return this.sched.track(b);
   }
   f32bits(x) { return new Uint32Array(new Float32Array([x]).buffer)[0]; }
   dispatch(enc, pipe, buffers, x, y = 1, z = 1) {
     const bind = this.device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: buffers.map((b, i) => ({ binding: i, resource: { buffer: b } })) });
-    const pass = enc.beginComputePass(); pass.setPipeline(pipe); pass.setBindGroup(0, bind); pass.dispatchWorkgroups(x, y, z); pass.end();
+    const e = enc?.encoder ? enc.encoder() : enc;
+    const pass = e.beginComputePass(); pass.setPipeline(pipe); pass.setBindGroup(0, bind); pass.dispatchWorkgroups(x, y, z); pass.end();
   }
 
   async loadBundles(fetchBundle, onProgress) {
@@ -62,23 +65,35 @@ export class KleinTextEncoder {
       scaleOff: t.scale_offset !== undefined ? t.scale_offset / 2 : 0 };
   }
 
-  gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bDiv = 1, bType = 'f16', c, cOff = 0, cRs, cBs = 0, M, N, K, batch = 1, alpha = 1, epilogue = 'store', scaleOff = 0 }) {
+  // Same splitting contract as KleinTransformer.gemm: column ranges under a cooperative budget.
+  async gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bDiv = 1, bType = 'f16', c, cOff = 0, cRs, cBs = 0, M, N, K, batch = 1, alpha = 1, epilogue = 'store', scaleOff = 0, label = 'gemm' }) {
     const v2 = (this.gemmVersion ?? 2) === 2 && K % 4 === 0;
     const st = this.sharedType ?? 'f32';
     const pipe = v2 ? this.pipeline(`gemm2-${bType}-${epilogue}-${st}`, gemmShaderV2({ bType, epilogue, sType: st }))
       : this.pipeline(`gemm-${bType}-${epilogue}`, gemmShader({ bType, epilogue }));
-    const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, 0, bDiv, scaleOff]);
-    const entries = [a, b, c, u].map((buffer, i) => ({ binding: i, resource: { buffer } }));
-    if (bType === 'i8' || bType === 'i4') entries.push({ binding: 5, resource: { buffer: b } });
-    const bind = this.device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries });
-    const pass = enc.beginComputePass(); pass.setPipeline(pipe); pass.setBindGroup(0, bind);
-    pass.dispatchWorkgroups(Math.ceil(N / 64), Math.ceil(M / 64), batch); pass.end();
+    const issue = (nBase, nCount) => {
+      const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, 0, bDiv, scaleOff, nBase, 0, 0, 0]);
+      const entries = [a, b, c, u].map((buffer, i) => ({ binding: i, resource: { buffer } }));
+      if (bType === 'i8' || bType === 'i4') entries.push({ binding: 5, resource: { buffer: b } });
+      const bind = this.device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries });
+      const e = enc?.encoder ? enc.encoder() : enc;
+      const pass = e.beginComputePass(); pass.setPipeline(pipe); pass.setBindGroup(0, bind);
+      pass.dispatchWorkgroups(Math.ceil(nCount / 64), Math.ceil(M / 64), batch); pass.end();
+      this.sched.addFlops(2 * M * nCount * K * batch);
+    };
+    const flops = 2 * M * N * K * batch, budget = this.sched.budget();
+    if (!v2 || flops <= budget) { issue(0, N); return; }
+    const columns = Math.max(64, Math.floor(budget / (2 * M * K * batch) / 64) * 64);
+    for (let nBase = 0; nBase < N; nBase += columns) {
+      issue(nBase, Math.min(columns, N - nBase));
+      await this.sched.boundary(`${label}[${nBase}]`);
+    }
   }
 
   linear(enc, x, rows, weight, out, epilogue = 'store') {
     const [N, K] = weight.shape;
-    this.gemm(enc, { a: x, aRs: K, b: weight.buf, bOff: weight.elemOff, bRs: K, bType: weight.format, scaleOff: weight.scaleOff,
-      c: out, cRs: N, M: rows, N, K, epilogue });
+    return this.gemm(enc, { a: x, aRs: K, b: weight.buf, bOff: weight.elemOff, bRs: K, bType: weight.format, scaleOff: weight.scaleOff,
+      c: out, cRs: N, M: rows, N, K, epilogue, label: 'te.linear' });
   }
 
   allocate(L) {
@@ -101,34 +116,45 @@ export class KleinTextEncoder {
     dev.queue.writeBuffer(a.hidden, 0, embeddings);
     dev.queue.writeBuffer(a.mask, 0, mask);
     const rms = this.pipeline('rmsnorm', rmsNormShader());
+    const enc = this.sched;
+    const group = (() => {
+      const budget = this.sched.budget(), rep = QH / KVH;
+      if (!Number.isFinite(budget)) return QH;
+      const g = Math.floor(budget / (4 * L * L * HEAD));
+      return Math.max(rep, Math.min(QH, g - (g % rep)));
+    })();
     for (let i = 0; i < this.layers; i++) {
-      const enc = dev.createCommandEncoder();
       const lw = name => this.w(i, name);
       this.dispatch(enc, rms, [a.hidden, lw('input_layernorm').buf, a.norm, this.uniform([L, D, lw('input_layernorm').elemOff, eps])], L);
-      this.linear(enc, a.norm, L, lw('qkv'), a.proj);
+      await this.linear(enc, a.norm, L, lw('qkv'), a.proj);
       this.dispatch(enc, this.pipeline('qwen-qkv', qwenQkvPrepShader()), [a.proj, lw('q_norm').buf, a.rope, a.q, a.k, a.vt,
         this.uniform([L, QH, KVH, lw('q_norm').elemOff, lw('k_norm').elemOff, eps, 0, 0])], L, QH);
-      this.gemm(enc, { a: a.q, aRs: HEAD, aBs: L * HEAD, b: a.k, bType: 'f32', bRs: HEAD, bBs: L * HEAD, bDiv: QH / KVH,
-        c: a.scores, cRs: L, cBs: L * L, M: L, N: L, K: HEAD, batch: QH, alpha: 1 / Math.sqrt(HEAD) });
-      const rows = QH * L;
-      this.dispatch(enc, this.pipeline('masked-softmax', maskedSoftmaxShader()), [a.scores, a.mask, this.uniform([rows, L, 0, 0])], Math.min(rows, 65535), Math.ceil(rows / 65535));
-      this.gemm(enc, { a: a.scores, aRs: L, aBs: L * L, b: a.vt, bType: 'f32', bRs: L, bBs: HEAD * L, bDiv: QH / KVH,
-        c: a.o, cRs: HEAD, cBs: L * HEAD, M: L, N: HEAD, K: L, batch: QH });
+      await this.sched.boundary(`te.layer${i}.qkv`);
+      // Attention in head groups aligned to the grouped KV heads (one group when uncooperative).
+      for (let h0 = 0; h0 < QH; h0 += group) {
+        const hn = Math.min(group, QH - h0);
+        await this.gemm(enc, { a: a.q, aOff: h0 * L * HEAD, aRs: HEAD, aBs: L * HEAD, b: a.k, bOff: (h0 / (QH / KVH)) * L * HEAD, bType: 'f32', bRs: HEAD, bBs: L * HEAD,
+          bDiv: QH / KVH, c: a.scores, cOff: h0 * L * L, cRs: L, cBs: L * L, M: L, N: L, K: HEAD, batch: hn, alpha: 1 / Math.sqrt(HEAD), label: 'te.scores' });
+        const rows = hn * L;
+        this.dispatch(enc, this.pipeline('masked-softmax', maskedSoftmaxShader()), [a.scores, a.mask, this.uniform([rows, L, h0 * L, 0])], Math.min(rows, 65535), Math.ceil(rows / 65535));
+        await this.gemm(enc, { a: a.scores, aOff: h0 * L * L, aRs: L, aBs: L * L, b: a.vt, bOff: (h0 / (QH / KVH)) * HEAD * L, bType: 'f32', bRs: L, bBs: HEAD * L,
+          bDiv: QH / KVH, c: a.o, cOff: h0 * L * HEAD, cRs: HEAD, cBs: L * HEAD, M: L, N: HEAD, K: L, batch: hn, label: 'te.values' });
+        if (hn < QH) await this.sched.boundary(`te.layer${i}.attention[${h0}]`);
+      }
       this.dispatch(enc, this.pipeline('h2r', headsToRowsShader()), [a.o, a.attn, this.uniform([L, QH, QH * HEAD, 0, 0, L, 0, 0])], L, QH);
-      this.linear(enc, a.attn, L, lw('o_proj'), a.hidden, 'add');
+      await this.linear(enc, a.attn, L, lw('o_proj'), a.hidden, 'add');
       this.dispatch(enc, rms, [a.hidden, lw('post_attention_layernorm').buf, a.norm, this.uniform([L, D, lw('post_attention_layernorm').elemOff, eps])], L);
-      this.linear(enc, a.norm, L, lw('gate_up'), a.proj);
+      await this.linear(enc, a.norm, L, lw('gate_up'), a.proj);
       this.dispatch(enc, this.pipeline('swiglu', swigluShader()), [a.proj, a.ffAct, this.uniform([L, F, 2 * F, 0, F, 0, 0, 0])], Math.ceil(F / 256), L);
-      this.linear(enc, a.ffAct, L, lw('down'), a.hidden, 'add');
+      await this.linear(enc, a.ffAct, L, lw('down'), a.hidden, 'add');
       const tap = this.taps.indexOf(i + 1);
       if (tap >= 0) {
         this.dispatch(enc, this.pipeline('copy-cols', copyColumnsShader()), [a.hidden, out, this.uniform([L, D, this.taps.length * D, tap * D])], Math.ceil(D / 256), L);
       }
-      dev.queue.submit([enc.finish()]);
-      if (onLayer) await onLayer(i + 1, a.hidden);
+      await this.sched.boundary(`te.layer${i}`, { force: !this.sched.cooperative });
+      if (onLayer) { await this.sched.flush(`te.layer${i}.tap`); await onLayer(i + 1, a.hidden); }
     }
-    await dev.queue.onSubmittedWorkDone();
-    this.uniformPool.forEach(b => b.destroy()); this.uniformPool = [];
+    await this.sched.flush('te.end');
   }
 }
 

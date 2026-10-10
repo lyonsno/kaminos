@@ -4,6 +4,7 @@
 // and Decoder (conv_in, mid block with single-head attention, four up blocks,
 // GroupNorm + SiLU, conv_out). Weights come from pack-vae.py.
 import { gemmShader, gemmShaderV2, softmaxShader } from './klein-kernels.js';
+import { KleinDutyScheduler } from './klein-duties.js';
 
 const GN_EPS = 1e-6;
 const GROUPS = 32;
@@ -68,11 +69,13 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
 
 // Conv v2: the GEMM-v2 structure for the implicit-GEMM convolution. vec4 loads run along
 // input channels, which are contiguous in channels-last activations and never cross a tap
-// because Cin is a multiple of 4; K tile 32; selectable shared-tile type.
+// because Cin is a multiple of 4; K tile 32; selectable shared-tile type; m_base selects a
+// pixel-row range so a cooperative caller can split one convolution into duties.
 function convShaderV2(epilogue, sType) {
   const store = epilogue === 'bias' ? 'c[ci] = v;' : 'c[ci] = c[ci] + v;';
   return `enable f16;
-struct P { M: u32, N: u32, K: u32, Cin: u32, Hout: u32, Wout: u32, Hin: u32, Win: u32, taps: u32, w_off: u32, b_off: u32, up: u32 };
+struct P { M: u32, N: u32, K: u32, Cin: u32, Hout: u32, Wout: u32, Hin: u32, Win: u32, taps: u32, w_off: u32, b_off: u32, up: u32,
+  m_base: u32, z0: u32, z1: u32, z2: u32 };
 @group(0) @binding(0) var<storage, read> x: array<vec4<f32>>;
 @group(0) @binding(1) var<storage, read> w: array<f16>;
 @group(0) @binding(2) var<storage, read_write> c: array<f32>;
@@ -92,7 +95,7 @@ fn load4(m: u32, k: u32) -> vec4<f32> {
 @compute @workgroup_size(16, 16)
 fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>) {
   let tid = lid.y * 16u + lid.x;
-  let m0 = wid.y * 64u; let n0 = wid.x * 64u;
+  let m0 = p.m_base + wid.y * 64u; let n0 = wid.x * 64u;
   var acc: array<array<f32, 4>, 4>;
   for (var k0 = 0u; k0 < p.K; k0 += 32u) {
     for (var q = 0u; q < 2u; q++) {
@@ -211,7 +214,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 export class KleinVaeDecoder {
   constructor(device, manifest) {
-    this.device = device; this.manifest = manifest; this.pipelines = {}; this.uniformPool = [];
+    this.device = device; this.manifest = manifest; this.pipelines = {};
+    this.sched = new KleinDutyScheduler(device, { label: 'klein.vae' });
     this.tensors = Object.fromEntries(manifest.bundle.tensors.map(t => [t.name, t]));
   }
 
@@ -233,24 +237,39 @@ export class KleinVaeDecoder {
   buffer(bytes) { return this.device.createBuffer({ size: Math.max(16, Math.ceil(bytes / 16) * 16), usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST }); }
   uniform(words) {
     const b = this.device.createBuffer({ size: Math.ceil(words.length * 4 / 16) * 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.device.queue.writeBuffer(b, 0, new Uint32Array(words)); this.uniformPool.push(b); return b;
+    this.device.queue.writeBuffer(b, 0, new Uint32Array(words)); return this.sched.track(b);
   }
   f32bits(x) { return new Uint32Array(new Float32Array([x]).buffer)[0]; }
   dispatch(enc, pipe, buffers, x, y = 1, z = 1) {
     const bind = this.device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: buffers.map((b, i) => ({ binding: i, resource: { buffer: b } })) });
-    const pass = enc.beginComputePass(); pass.setPipeline(pipe); pass.setBindGroup(0, bind); pass.dispatchWorkgroups(x, y, z); pass.end();
+    const e = enc?.encoder ? enc.encoder() : enc;
+    const pass = e.beginComputePass(); pass.setPipeline(pipe); pass.setBindGroup(0, bind); pass.dispatchWorkgroups(x, y, z); pass.end();
   }
   t(name) { const t = this.tensors[name]; if (!t) throw new Error(`missing VAE tensor ${name}`); return t; }
 
-  conv(enc, x, out, name, { Hin, Win, Cin, up = false, epilogue = 'bias' }) {
+  // Under a cooperative schedule a convolution above the duty budget runs as pixel-row
+  // ranges (conv v2 only) with a split point between them.
+  async conv(enc, x, out, name, { Hin, Win, Cin, up = false, epilogue = 'bias' }) {
     const wt = this.t(`${name}.weight`), bt = this.t(`${name}.bias`);
     const [Cout, K] = wt.shape; const taps = K / Cin;
     const Hout = up ? Hin * 2 : Hin, Wout = up ? Win * 2 : Win, M = Hout * Wout;
     const v2 = (this.convVersion ?? 2) === 2 && Cin % 4 === 0;
     const st = this.sharedType ?? 'f32';
     const pipe = v2 ? this.pipeline(`conv2-${epilogue}-${st}`, convShaderV2(epilogue, st)) : this.pipeline(`conv-${epilogue}`, convShader(epilogue));
-    this.dispatch(enc, pipe, [x, this.wbuf, out, this.uniform([M, Cout, K, Cin, Hout, Wout, Hin, Win, taps, wt.offset / 2, bt.offset / 2, up ? 1 : 0])],
-      Math.ceil(Cout / 64), Math.ceil(M / 64));
+    const issue = (mBase, mCount) => {
+      this.dispatch(enc, pipe, [x, this.wbuf, out, this.uniform([M, Cout, K, Cin, Hout, Wout, Hin, Win, taps, wt.offset / 2, bt.offset / 2, up ? 1 : 0, mBase, 0, 0, 0])],
+        Math.ceil(Cout / 64), Math.ceil(mCount / 64));
+      this.sched.addFlops(2 * mCount * Cout * K);
+    };
+    const flops = 2 * M * Cout * K, budget = this.sched.budget();
+    if (!v2 || flops <= budget) issue(0, M);
+    else {
+      const rows = Math.max(64, Math.floor(budget / (2 * Cout * K) / 64) * 64);
+      for (let mBase = 0; mBase < M; mBase += rows) {
+        issue(mBase, Math.min(rows, M - mBase));
+        await this.sched.boundary(`${name}[${mBase}]`);
+      }
+    }
     return { H: Hout, W: Wout, C: Cout };
   }
 
@@ -267,34 +286,43 @@ export class KleinVaeDecoder {
       Math.min(groups, 65535), Math.ceil(groups / 65535));
   }
 
-  copy(enc, src, dst, bytes) { enc.copyBufferToBuffer(src, 0, dst, 0, bytes); }
+  copy(enc, src, dst, bytes) { (enc?.encoder ? enc.encoder() : enc).copyBufferToBuffer(src, 0, dst, 0, bytes); }
 
-  resnet(enc, x, out, name, s, CoutNew) {
+  async resnet(enc, x, out, name, s, CoutNew) {
     const { H, W, C } = s; const HW = H * W; const Cout = CoutNew ?? C;
     this.groupNorm(enc, x, this.t1, `${name}.norm1`, { HW, C, silu: true });
-    this.conv(enc, this.t1, this.t2, `${name}.conv1`, { Hin: H, Win: W, Cin: C });
+    await this.conv(enc, this.t1, this.t2, `${name}.conv1`, { Hin: H, Win: W, Cin: C });
     this.groupNorm(enc, this.t2, this.t1, `${name}.norm2`, { HW, C: Cout, silu: true });
-    if (this.tensors[`${name}.conv_shortcut.weight`]) this.conv(enc, x, out, `${name}.conv_shortcut`, { Hin: H, Win: W, Cin: C });
+    if (this.tensors[`${name}.conv_shortcut.weight`]) await this.conv(enc, x, out, `${name}.conv_shortcut`, { Hin: H, Win: W, Cin: C });
     else this.copy(enc, x, out, HW * C * 4);
-    this.conv(enc, this.t1, out, `${name}.conv2`, { Hin: H, Win: W, Cin: Cout, epilogue: 'bias-add' });
+    await this.conv(enc, this.t1, out, `${name}.conv2`, { Hin: H, Win: W, Cin: Cout, epilogue: 'bias-add' });
     return { H, W, C: Cout };
   }
 
-  attention(enc, x, out, name, s) {
+  // Single-head attention over latent pixels; cooperative runs split it into query-row ranges.
+  async attention(enc, x, out, name, s) {
     const { H, W, C } = s; const L = H * W;
     this.groupNorm(enc, x, this.t1, `${name}.group_norm`, { HW: L, C, silu: false });
-    this.conv(enc, this.t1, this.q, `${name}.to_q`, { Hin: H, Win: W, Cin: C });
-    this.conv(enc, this.t1, this.k, `${name}.to_k`, { Hin: H, Win: W, Cin: C });
-    this.conv(enc, this.t1, this.t2, `${name}.to_v`, { Hin: H, Win: W, Cin: C });
+    await this.conv(enc, this.t1, this.q, `${name}.to_q`, { Hin: H, Win: W, Cin: C });
+    await this.conv(enc, this.t1, this.k, `${name}.to_k`, { Hin: H, Win: W, Cin: C });
+    await this.conv(enc, this.t1, this.t2, `${name}.to_v`, { Hin: H, Win: W, Cin: C });
     this.dispatch(enc, this.pipeline('transpose', transposeShader), [this.t2, this.vt, this.uniform([L, C, 0, 0])], Math.ceil(C / 16), Math.ceil(L / 16));
     const st = this.sharedType ?? 'f32';
-    const g = (this.convVersion ?? 2) === 2 ? this.pipeline(`gemm2-f32-store-${st}`, gemmShaderV2({ bType: 'f32', epilogue: 'store', sType: st }))
+    const v2 = (this.convVersion ?? 2) === 2;
+    const g = v2 ? this.pipeline(`gemm2-f32-store-${st}`, gemmShaderV2({ bType: 'f32', epilogue: 'store', sType: st }))
       : this.pipeline('gemm-f32-store', gemmShader({ bType: 'f32', epilogue: 'store' }));
-    this.dispatch(enc, g, [this.q, this.k, this.scores, this.uniform([L, L, C, this.f32bits(1 / Math.sqrt(C)), 0, C, 0, 0, C, 0, 0, L, 0, 0, 0, 0])], Math.ceil(L / 64), Math.ceil(L / 64));
-    this.dispatch(enc, this.pipeline('softmax', softmaxShader()), [this.scores, this.uniform([L, L, 0, 0])], L);
-    this.dispatch(enc, g, [this.scores, this.vt, this.t1, this.uniform([L, C, L, this.f32bits(1), 0, L, 0, 0, L, 0, 0, C, 0, 0, 0, 0])], Math.ceil(C / 64), Math.ceil(L / 64));
+    const budget = this.sched.budget();
+    const rows = !v2 || !Number.isFinite(budget) ? L : Math.min(L, Math.max(64, Math.floor(budget / (4 * L * C) / 64) * 64));
+    for (let r0 = 0; r0 < L; r0 += rows) {
+      const rn = Math.min(rows, L - r0);
+      this.dispatch(enc, g, [this.q, this.k, this.scores, this.uniform([L, L, C, this.f32bits(1 / Math.sqrt(C)), 0, C, 0, 0, C, 0, 0, L, 0, 0, 0, 0, 0, r0, 0, 0])], Math.ceil(L / 64), Math.ceil(rn / 64));
+      this.dispatch(enc, this.pipeline('softmax', softmaxShader()), [this.scores, this.uniform([rn, L, r0, 0])], rn);
+      this.dispatch(enc, g, [this.scores, this.vt, this.t1, this.uniform([L, C, L, this.f32bits(1), 0, L, 0, 0, L, 0, 0, C, 0, 0, 0, 0, 0, r0, 0, 0])], Math.ceil(C / 64), Math.ceil(rn / 64));
+      this.sched.addFlops(4 * rn * L * C);
+      if (rn < L) await this.sched.boundary(`${name}.rows[${r0}]`);
+    }
     this.copy(enc, x, out, L * C * 4);
-    this.conv(enc, this.t1, out, `${name}.to_out.0`, { Hin: H, Win: W, Cin: C, epilogue: 'bias-add' });
+    await this.conv(enc, this.t1, out, `${name}.to_out.0`, { Hin: H, Win: W, Cin: C, epilogue: 'bias-add' });
     return s;
   }
 
@@ -320,31 +348,33 @@ export class KleinVaeDecoder {
   }
 
   // Decode channels-last latents [2h*2w][32] (GPU buffer) to channels-last RGB [H*W][3] in this.out.
-  // Submits after every resnet, attention and upsampler so no command buffer spans the whole decoder.
-  decode(z) {
-    let enc = this.device.createCommandEncoder();
-    const cut = () => { this.device.queue.submit([enc.finish()]); enc = this.device.createCommandEncoder(); };
+  // Uncooperatively every resnet, attention and upsampler ends its own command buffer; under a
+  // cooperative schedule the scheduler submits at the duty budget. Resolves when the GPU is done.
+  async decode(z) {
+    const enc = this.sched;
+    const cut = label => this.sched.boundary(label, { force: !this.sched.cooperative });
     let s = { H: this.latH * 2, W: this.latW * 2, C: 32 };
-    this.conv(enc, z, this.t2, 'post_quant_conv', { Hin: s.H, Win: s.W, Cin: 32 });
-    s = this.conv(enc, this.t2, this.a, 'decoder.conv_in', { Hin: s.H, Win: s.W, Cin: 32 });
+    await this.conv(enc, z, this.t2, 'post_quant_conv', { Hin: s.H, Win: s.W, Cin: 32 });
+    s = await this.conv(enc, this.t2, this.a, 'decoder.conv_in', { Hin: s.H, Win: s.W, Cin: 32 });
     let cur = this.a, other = this.b;
-    const swap = () => { [cur, other] = [other, cur]; cut(); };
-    s = this.resnet(enc, cur, other, 'decoder.mid_block.resnets.0', s); swap();
-    s = this.attention(enc, cur, other, 'decoder.mid_block.attentions.0', s); swap();
-    s = this.resnet(enc, cur, other, 'decoder.mid_block.resnets.1', s); swap();
+    const swap = label => { [cur, other] = [other, cur]; return cut(label); };
+    s = await this.resnet(enc, cur, other, 'decoder.mid_block.resnets.0', s); await swap('vae.mid.resnet0');
+    s = await this.attention(enc, cur, other, 'decoder.mid_block.attentions.0', s); await swap('vae.mid.attention');
+    s = await this.resnet(enc, cur, other, 'decoder.mid_block.resnets.1', s); await swap('vae.mid.resnet1');
     const outCh = [512, 512, 256, 128];
     for (let u = 0; u < 4; u++) {
       for (let r = 0; r < 3; r++) {
-        s = this.resnet(enc, cur, other, `decoder.up_blocks.${u}.resnets.${r}`, s, r === 0 ? outCh[u] : undefined); swap();
+        s = await this.resnet(enc, cur, other, `decoder.up_blocks.${u}.resnets.${r}`, s, r === 0 ? outCh[u] : undefined); await swap(`vae.up${u}.resnet${r}`);
       }
-      if (u < 3) { s = this.conv(enc, cur, other, `decoder.up_blocks.${u}.upsamplers.0.conv`, { Hin: s.H, Win: s.W, Cin: s.C, up: true }); swap(); }
+      if (u < 3) { s = await this.conv(enc, cur, other, `decoder.up_blocks.${u}.upsamplers.0.conv`, { Hin: s.H, Win: s.W, Cin: s.C, up: true }); await swap(`vae.up${u}.upsample`); }
     }
     this.groupNorm(enc, cur, this.t1, 'decoder.conv_norm_out', { HW: s.H * s.W, C: s.C, silu: true });
-    s = this.conv(enc, this.t1, other, 'decoder.conv_out', { Hin: s.H, Win: s.W, Cin: s.C });
-    this.device.queue.submit([enc.finish()]);
+    s = await this.conv(enc, this.t1, other, 'decoder.conv_out', { Hin: s.H, Win: s.W, Cin: s.C });
     this.out = other;
+    await this.sched.flush('vae.end');
     return s;
   }
 
-  releaseUniforms() { this.uniformPool.forEach(b => b.destroy()); this.uniformPool = []; }
+  // Uniforms now live with the duty that used them; kept for callers of the earlier API.
+  releaseUniforms() {}
 }

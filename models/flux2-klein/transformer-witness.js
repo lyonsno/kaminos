@@ -180,14 +180,13 @@ window.runTransformerWitness = async function (cfg) {
       const refImg = await refTensor('vae/image');
       const HWz = (latH * 2) * (latW * 2), HWi = (latH * 16) * (latW * 16);
       state.phase = 'vae-prep';
-      let enc = device.createCommandEncoder();
-      vae.prepLatents(enc, model.act.latents);
-      device.queue.submit([enc.finish()]);
+      vae.prepLatents(vae.sched, model.act.latents);
+      await vae.sched.flush('vae.prep');
       await check('vae/latents_in', 'vae/latents_in', nchwToNhwcInverse(await readback(vae.prepped, HWz * 32 * 4), 32, HWz));
       const decodeTo = async (zBuf, label) => {
         state.phase = `vae-decode:${label}`;
         const t1 = performance.now();
-        vae.decode(zBuf);
+        await vae.decode(zBuf);
         await device.queue.onSubmittedWorkDone();
         const ms = performance.now() - t1;
         const rgb = await readback(vae.out, HWi * 3 * 4);

@@ -9,6 +9,7 @@ import { KleinTextEncoder, gatherEmbeddings } from './klein-text-encoder.js';
 import { KleinVaeDecoder } from './klein-vae.js';
 import { QwenTokenizer } from './qwen-tokenizer.js';
 import { kleinSchedule, transformerTime } from './klein-schedule.js';
+import { KleinDutyScheduler } from './klein-duties.js';
 
 async function getJson(url) { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); }
 async function getBytes(url) { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.arrayBuffer(); }
@@ -45,6 +46,9 @@ export class KleinPipeline {
     this.device = device; this.urls = { textEncoderUrl, transformerUrl, vaeUrl };
     this.kernels = { gemmVersion, sharedType };
     this.timings = {}; this.residentBytes = {};
+    // One duty scheduler for all three components so a cooperative run has a single
+    // fence chain and FLOP budget from the first text-encoder layer to the last VAE stage.
+    this.sched = new KleinDutyScheduler(device, { label: 'flux2-klein' });
   }
 
   async load(onProgress = () => {}) {
@@ -53,19 +57,19 @@ export class KleinPipeline {
     this.teManifest = await getJson(`${te}/manifest.json`);
     this.tokenizer = new QwenTokenizer(await getJson(`${te}/${this.teManifest.tokenizer.file}`));
     this.textEncoder = new KleinTextEncoder(this.device, this.teManifest);
-    Object.assign(this.textEncoder, this.kernels);
+    Object.assign(this.textEncoder, this.kernels); this.textEncoder.sched = this.sched;
     let bytes = 0;
     await this.textEncoder.loadBundles(f => getBytes(`${te}/${f}`), (n, b) => { bytes += b; onProgress('text-encoder', n); });
     this.residentBytes.textEncoder = bytes;
     this.ditManifest = await getJson(`${dit}/manifest.json`);
     this.transformer = new KleinTransformer(this.device, this.ditManifest);
-    Object.assign(this.transformer, this.kernels);
+    Object.assign(this.transformer, this.kernels); this.transformer.sched = this.sched;
     bytes = 0;
     await this.transformer.loadBundles(f => getBytes(`${dit}/${f}`), (n, b) => { bytes += b; onProgress('transformer', n); });
     this.residentBytes.transformer = bytes;
     this.vaeManifest = await getJson(`${vae}/manifest.json`);
     this.vae = new KleinVaeDecoder(this.device, this.vaeManifest);
-    this.vae.sharedType = this.kernels.sharedType;
+    this.vae.sharedType = this.kernels.sharedType; this.vae.sched = this.sched;
     const vb = await getBytes(`${vae}/${this.vaeManifest.bundle.file}`);
     await this.vae.load(vb); this.residentBytes.vae = vb.byteLength;
     this.timings.loadMs = performance.now() - t0;
@@ -81,8 +85,22 @@ export class KleinPipeline {
     })));
   }
 
-  // Returns { rgba: Uint8ClampedArray, width, height, timings }.
-  async generate({ prompt, seed = 0, width = 512, height = 512, steps = 4, onStep = null }) {
+  // Returns { rgba: Uint8ClampedArray, width, height, timings, duties }.
+  // `schedule` (optional) runs the image as kit command duties: { runtime, invocation, control,
+  // signal, targetDutyMs, onDuty }. Without it the run is uncooperative but still submits per block.
+  async generate({ prompt, seed = 0, width = 512, height = 512, steps = 4, onStep = null, onPhase = null, schedule = null }) {
+    this.sched.setSchedule(schedule);
+    try {
+      return await this.generateScheduled({ prompt, seed, width, height, steps, onStep, onPhase });
+    } catch (error) {
+      await this.sched.discard();
+      throw error;
+    } finally {
+      if (this.sched.cooperative) this.sched.setSchedule(null);
+    }
+  }
+
+  async generateScheduled({ prompt, seed, width, height, steps, onStep, onPhase }) {
     if (width % 16 || height % 16) throw new Error('width and height must be multiples of 16');
     const dev = this.device, t = {};
     const latH = height / 16, latW = width / 16, imgTokens = latH * latW;
@@ -102,11 +120,13 @@ export class KleinPipeline {
     let t0 = performance.now();
     const emb = await gatherEmbeddings([...framed.inputIds], this.teManifest.config.hidden_size, ids => this.fetchEmbeddingRows(ids));
     t.embeddingFetchMs = performance.now() - t0;
+    onPhase?.('text');
     t0 = performance.now();
     await this.textEncoder.encode(emb, framed.attentionMask, this.transformer.act.promptEmbeds);
     t.textEncodeMs = performance.now() - t0;
 
     const sched = kleinSchedule(imgTokens, steps);
+    onPhase?.('denoise');
     t.stepMs = [];
     for (let i = 0; i < steps; i++) {
       t0 = performance.now();
@@ -116,10 +136,10 @@ export class KleinPipeline {
       onStep?.(i + 1, steps);
     }
     t0 = performance.now();
-    let enc = dev.createCommandEncoder();
-    this.vae.prepLatents(enc, this.transformer.act.latents);
-    dev.queue.submit([enc.finish()]);
-    this.vae.decode(this.vae.prepped);
+    onPhase?.('decode');
+    this.vae.prepLatents(this.vae.sched, this.transformer.act.latents);
+    await this.vae.decode(this.vae.prepped);
+    let enc;
     const bytes = width * height * 3 * 4;
     const rb = dev.createBuffer({ size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     enc = dev.createCommandEncoder(); enc.copyBufferToBuffer(this.vae.out, 0, rb, 0, bytes); dev.queue.submit([enc.finish()]);
@@ -133,6 +153,7 @@ export class KleinPipeline {
       rgba[i * 4 + 3] = 255;
     }
     t.totalMs = t.embeddingFetchMs + t.textEncodeMs + t.stepMs.reduce((a, b) => a + b, 0) + t.vaeDecodeMs;
-    return { rgba, width, height, timings: t, promptTokens: framed.length };
+    const duties = this.sched.stats.history.splice(0);
+    return { rgba, width, height, timings: t, promptTokens: framed.length, duties };
   }
 }

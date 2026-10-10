@@ -161,7 +161,7 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
 }`;
 }
 
-// In-place row softmax over N columns for rows*batches rows.
+// In-place row softmax over N columns for `rows` rows starting at row z0.
 export function softmaxShader() {
   return `struct P { rows: u32, N: u32, z0: u32, z1: u32 };
 @group(0) @binding(0) var<storage, read_write> s: array<f32>;
@@ -169,8 +169,8 @@ export function softmaxShader() {
 var<workgroup> red: array<f32, 256>;
 @compute @workgroup_size(256)
 fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>) {
-  let r = wid.x + wid.y * 65535u; if (r >= p.rows) { return; }
-  let t = lid.x; let base = r * p.N;
+  let rr = wid.x + wid.y * 65535u; if (rr >= p.rows) { return; }
+  let t = lid.x; let base = (p.z0 + rr) * p.N;
   var m = -3.4e38;
   for (var i = t; i < p.N; i += 256u) { m = max(m, s[base + i]); }
   red[t] = m; workgroupBarrier();
@@ -298,8 +298,8 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
 }`;
 }
 
-// Row softmax with a causal mask and a key padding mask: row r of head-major scores is
-// query i = r % L; key j counts iff j <= i and mask[j] != 0.
+// Row softmax with a causal mask and a key padding mask over `rows` rows starting at row z0;
+// row r of head-major scores is query i = r % L; key j counts iff j <= i and mask[j] != 0.
 export function maskedSoftmaxShader() {
   return `struct P { rows: u32, L: u32, z0: u32, z1: u32 };
 @group(0) @binding(0) var<storage, read_write> s: array<f32>;
@@ -308,7 +308,8 @@ export function maskedSoftmaxShader() {
 var<workgroup> red: array<f32, 256>;
 @compute @workgroup_size(256)
 fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>) {
-  let r = wid.x + wid.y * 65535u; if (r >= p.rows) { return; }
+  let rr = wid.x + wid.y * 65535u; if (rr >= p.rows) { return; }
+  let r = p.z0 + rr;
   let t = lid.x; let base = r * p.L; let qi = r % p.L;
   var m = -3.4e38;
   for (var j = t; j < p.L; j += 256u) { if (j <= qi && mask[j] != 0) { m = max(m, s[base + j]); } }
@@ -341,7 +342,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }`;
 }
 
-// GEMM v2: same contract and uniforms as gemmShader, restructured after the GEMM probe:
+// GEMM v2: same contract as gemmShader plus n_base/m_base (uniform words 16-17) so a
+// cooperative caller can dispatch one tile-aligned column or row range. Restructured after the GEMM probe:
 // vec4 loads along K for both operands, a K tile of 32, and a selectable shared-memory
 // type (f32 keeps activations exact; f16 halves shared traffic). Requires K, row strides
 // and offsets to be multiples of 4.
@@ -394,6 +396,7 @@ struct P {
   a_off: u32, a_rs: u32, a_bs: u32, b_off: u32,
   b_rs: u32, b_bs: u32, c_off: u32, c_rs: u32,
   c_bs: u32, gate_off: u32, z0: u32, z1: u32,
+  n_base: u32, m_base: u32, z2: u32, z3: u32,
 };
 @group(0) @binding(0) var<storage, read> a: array<vec4<f32>>;
 @group(0) @binding(1) var<storage, read> b: ${bArray};
@@ -406,7 +409,7 @@ var<workgroup> tb: array<${sType}, 2048>;
 @compute @workgroup_size(16, 16)
 fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>) {
   let tid = lid.y * 16u + lid.x;
-  let m0 = wid.y * 64u; let n0 = wid.x * 64u; let bat = wid.z; let bbat = bat / max(p.z0, 1u);
+  let m0 = p.m_base + wid.y * 64u; let n0 = p.n_base + wid.x * 64u; let bat = wid.z; let bbat = bat / max(p.z0, 1u);
   var acc: array<array<f32, 4>, 4>;
   for (var k0 = 0u; k0 < p.K; k0 += 32u) {
     for (var q = 0u; q < 2u; q++) {
