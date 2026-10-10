@@ -4,7 +4,9 @@
 // every size again in reverse order: each size must give identical pixels in both sessions, so
 // an output that depends on which sizes ran earlier (stale or undersized buffers) fails.
 // Usage: node run-page-smoke.mjs --chrome <exe> (--weights-url <base> | --weights-dir <dir>) --out <dir>
-//        [--sizes 512,768,1024] [--seed 7006] [--prompt "..."] [--origin <page origin>]
+//        [--sizes 512,768,1024] [--seed 7006] [--prompt "..."] [--origin <page origin> | --site-dir <dir>]
+// --site-dir serves an assembled Pages site (scripts/assemble-pages-site.mjs) under /kaminos/, as
+// project Pages does, and opens the demo at /kaminos/inference-kit/klein/.
 // --weights-dir serves a staged repository folder from a second, CORS-enabled origin.
 // Writes report.json (written even when a phase fails), per-size PNGs and page screenshots.
 import fsp from 'node:fs/promises';
@@ -66,7 +68,11 @@ try {
   } else report.weightsUrl = opt('--weights-url');
   if (!report.weightsUrl) throw new Error('--weights-url or --weights-dir is required');
   if (opt('--origin')) report.origin = opt('--origin');
-  else ({ server } = await startServer({ '/webgpu-inference-kit/': path.resolve(opt('--kit', path.join(here, '../../webgpu-inference-kit'))), '/': here })
+  else if (opt('--site-dir')) {
+    report.siteDir = path.resolve(opt('--site-dir'));
+    const s = await startServer({ '/kaminos/': report.siteDir });
+    server = s.server; report.origin = `${s.origin}/kaminos/inference-kit/klein`;
+  } else ({ server } = await startServer({ '/webgpu-inference-kit/': path.resolve(opt('--kit', path.join(here, '../../webgpu-inference-kit'))), '/': here })
     .then(s => { report.origin = s.origin; return s; }));
   browser = await launchChrome(opt('--chrome'), [], report);
   const desktop = { width: 1280, height: 900 };

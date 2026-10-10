@@ -1,6 +1,7 @@
 ---
 license: apache-2.0
 base_model: black-forest-labs/FLUX.2-klein-4B
+base_model_relation: quantized
 pipeline_tag: text-to-image
 library_name: kaminos
 tags:

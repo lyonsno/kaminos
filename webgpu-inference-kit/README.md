@@ -88,7 +88,7 @@ Kaminos separates common runtime machinery from model implementation and product
 
 ## One Runtime, Different Models
 
-The kit connects a growing family of browser model ports: recover a scene's geometry, generate a textured object, turn an image into Gaussian splats, or animate a character from a text prompt. Each port brings its own model implementation and adopts shared runtime facilities where they serve its workload.
+The kit connects a growing family of browser model ports: generate an image from a text prompt, recover a scene's geometry, generate a textured object, turn an image into Gaussian splats, or animate a character from a text prompt. Each port brings its own model implementation and adopts shared runtime facilities where they serve its workload.
 
 | Model Port | What You Can Build | Integration |
 | --- | --- | --- |
@@ -98,6 +98,7 @@ The kit connects a growing family of browser model ports: recover a scene's geom
 | [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Animated skeletal motion from a text prompt | Browser diffusion and motion decoding, bounded GPU submissions, reusable model resources, and a host-callable producer with rendering opportunities between transformer passes. Text embeddings come from an external server. |
 | [SAM 3](./docs/sam-semantic-demo.md) | Instance masks from an image and text prompt | A complete browser WebGPU route with authenticated persistent model resources, cached image features, queued semantic requests, and same-device foreground submissions at phase boundaries. |
 | [TRELLIS 2](https://github.com/lyonsno/kaminos/tree/main/models/trellis2) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and a shared GPU device with the application renderer. |
+| [FLUX.2 [klein] 4B](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein) | Images from a text prompt, generated on the visitor's GPU ([live demo](https://lyonsno.github.io/kaminos/inference-kit/klein/)) | The text encoder, 4-step transformer and image decoder all run in the browser, with int4 weights cached after the first download. GPU work is submitted in duties sized to measured throughput, so the application keeps rendering, and the inference control can pause, resume or stop a run. |
 
 These ports provide different starting points for application integration. MoGe exposes an existing feed-forward pipeline as an embeddable library. SF3D combines GPU computation with worker-based geometry and texture processing. Kimodo exposes repeated diffusion passes where a host can interleave rendering. SHARP demonstrates the complete result: substantial inference running alongside a continuously rendering application.
 

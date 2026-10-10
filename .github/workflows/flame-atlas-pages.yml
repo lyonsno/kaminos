@@ -1,4 +1,4 @@
-name: Deploy Flame Boutique
+name: Deploy Kaminos Pages
 
 on:
   push:
@@ -6,6 +6,11 @@ on:
       - main
     paths:
       - docs/flame-atlas/**
+      - models/flux2-klein/index.html
+      - models/flux2-klein/klein-*.js
+      - models/flux2-klein/qwen-tokenizer.js
+      - webgpu-inference-kit/src/**
+      - scripts/assemble-pages-site.mjs
       - .github/workflows/flame-atlas-pages.yml
   workflow_dispatch:
 
@@ -33,11 +38,14 @@ jobs:
         with:
           enablement: true
 
-      - name: Upload flame boutique
+      - name: Assemble site (flame boutique at the root, Klein demo at inference-kit/klein/)
+        run: node scripts/assemble-pages-site.mjs _site
+
+      - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/flame-atlas
+          path: _site
 
-      - name: Deploy flame boutique
+      - name: Deploy site
         id: deployment
         uses: actions/deploy-pages@v4
