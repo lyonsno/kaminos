@@ -72,7 +72,7 @@ export async function captureDiscriminatorState(evaluate,onPhase=()=>{}){
     if(new Uint8Array(new Uint32Array([1]).buffer)[0]!==1)throw Error('Particle transfer requires little-endian captured words');
     const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new Uint32Array(raw.words).buffer)),b=>b.toString(16).padStart(2,'0')).join('');
     const captureId=crypto.randomUUID();globalThis.__discriminatorReadback={captureId,words:raw.words};
-    return {adapter:d.adapterInfo,dynamics:d.diagnosticDynamics,pressure:d.ipbfSettings,surface:d.cohesionSettings,step:d.stepCount,particleSnapshot:{...raw,words:undefined},diagnostics:{...diagnostics,particleSnapshot:undefined},stages:{density:d.densityIterationCount,surface:d.surfaceForcePassCount,vorticity:d.vorticityPassCount},errors:discriminator.errors,transfer:{encoding:'u32-le-json-chunks-v1',captureId,wordCount:raw.words.length,sha256}};
+    return {adapter:d.adapterInfo,box:d.diagnosticBox,dynamics:d.diagnosticDynamics,pressure:d.ipbfSettings,surface:d.cohesionSettings,step:d.stepCount,particleSnapshot:{...raw,words:undefined},diagnostics:{...diagnostics,particleSnapshot:undefined},stages:{density:d.densityIterationCount,surface:d.surfaceForcePassCount,vorticity:d.vorticityPassCount},errors:discriminator.errors,transfer:{encoding:'u32-le-json-chunks-v1',captureId,wordCount:raw.words.length,sha256}};
   })()`);
   const chunks=[],wordCount=metadata?.transfer?.wordCount;
   if(!Number.isSafeInteger(wordCount)||wordCount<=0||wordCount!==metadata.particleSnapshot?.particleCount*16)throw Error('Particle transfer header mismatch');
@@ -88,7 +88,7 @@ export function validateDiscriminatorState(actual,request) {
   if(d?.effective!==(reduced?'pressure_surface':'assembled')||d.neighborSmoothing!==!reduced||d.vorticityConfinement!==!reduced||d.speedClipping!==!reduced)throw Error('Effective dynamics mismatch');
   if(actual.step!==request.step)throw Error('Stale step');
   const raw=actual.particleSnapshot,diagnostics=actual.diagnostics;
-  if(raw?.schema!=='kaminos.finger-fluid-particle-words.v1'||raw.packing!=='position_predicted_velocity_delta_vec4x4_f32_bits'||raw.particleCount!==request.particleCount||raw.recordWords!==16||raw.stepCount!==request.step||raw.pressureSolver!=='ipbf'||raw.boundaryPressureContract!=='ipbf-collision-projection-only-v0'||diagnostics?.stepCount!==request.step||diagnostics.readbackMode!=='explicit_full_particle_gpu_diagnostics_v1')throw Error('Raw readback identity mismatch');
+  if(raw?.schema!=='kaminos.finger-fluid-particle-words.v1'||raw.packing!=='position_predicted_velocity_delta_vec4x4_f32_bits'||raw.particleCount!==request.particleCount||raw.recordWords!==16||raw.stepCount!==request.step||raw.pressureSolver!=='ipbf'||raw.boundaryPressureContract!==(request.boundaryContract??'ipbf-collision-projection-only-v0')||diagnostics?.stepCount!==request.step||diagnostics.readbackMode!=='explicit_full_particle_gpu_diagnostics_v1')throw Error('Raw readback identity mismatch');
   const inputs=diagnostics.pressureControlInputs;
   if(inputs?.packing!=='ipbf_vec4f_and_finger_fluid_params_v0_u32_bits'||inputs.pressureWords?.length!==4||inputs.simulationWords?.length!==56)throw Error('Missing effective GPU timestep/input bytes');
   const uniform=new Float32Array(new Uint32Array(inputs.simulationWords).buffer);
@@ -99,6 +99,15 @@ export function validateDiscriminatorState(actual,request) {
   const values=new Float32Array(new Uint32Array(actual.words).buffer);
   if(!values.every(Number.isFinite))throw Error('Particle state is not finite');
   for(let i=0;i<request.particleCount;i++)if(values[i*16+11]<.15)throw Error('Inactive/recycling source in finite pour');
+  return values;
+}
+export function validateBoxReferenceState(actual,fixture,step,{radiusRatio=2,passes=2,gamma=0,beta=.0113,dt=1/240}={}){
+  if(JSON.stringify(actual?.box)!==JSON.stringify(fixture.box))throw Error('Effective reference box mismatch');
+  const values=validateDiscriminatorState(actual,{arm:'reduced',particleCount:fixture.particleCount,volume:fixture.particleVolume,radius:radiusRatio*fixture.spacing,surfaceRadius:fixture.surfaceRadius,gamma,step,dt,boundaryContract:'ipbf-cubic-tangent-plane-density-v1'});
+  const inputs=actual.diagnostics.pressureControlInputs,u=new Float32Array(new Uint32Array(inputs.simulationWords).buffer),p=new Float32Array(new Uint32Array(inputs.pressureWords).buffer);
+  if(actual.pressure.boundaryPressure!=='tangent_plane'||p[0]!==Math.fround(radiusRatio*fixture.spacing)||p[1]!==Math.fround(beta)||u[29]!==Math.fround(gamma)||new Uint32Array(inputs.simulationWords)[1]!==fixture.particleCount)throw Error('Effective box pressure inputs mismatch');
+  for(let k=0;k<3;k++)if(u[8+k]!==Math.fround(fixture.box.bounds.min[k])||u[12+k]!==Math.fround(fixture.box.bounds.max[k]))throw Error('GPU collision box bounds mismatch');
+  if(actual.stages.density!==passes*step||actual.stages.surface!==3*step||actual.stages.vorticity!==0||actual.errors.length)throw Error('Box stage execution or GPU errors mismatch');
   return values;
 }
 export function summarizeParticleState(values) {

@@ -124,11 +124,20 @@ export function createIPBFConformanceShader(planes=[]){
  return IPBF_CONFORMANCE_WGSL.replace('@compute @workgroup_size(64)\nfn density',helper+'@compute @workgroup_size(64)\nfn density').replace('states[i].density=vec4<f32>(rho,','let boundary=ipbf_conformance_boundary(particles[i].x.xyz);rho+=params.restDensity*boundary.value;gradient+=boundary.gradient;D+=boundary.hessian;\n states[i].density=vec4<f32>(rho,');
 }
 
-export function createIPBFGridShader({radius,volume,compliance=0,alternativeCompliance=.001,damping=true,beta=60,boundaryMode='collision_only',obstacleCenter=null,obstacleRadius=null,dynamicControls=false}){
+export function createIPBFGridShader({radius,volume,compliance=0,alternativeCompliance=.001,damping=true,beta=60,boundaryMode='collision_only',obstacleCenter=null,obstacleRadius=null,dynamicControls=false,boundaryPlanes=null}){
  for(const [name,value] of Object.entries({radius,volume,compliance,alternativeCompliance}))if(!Number.isFinite(value)||value<0||(['radius','volume'].includes(name)&&value===0))throw new RangeError(`IPBF ${name} invalid`);
  if(!['collision_only','tangent_plane'].includes(boundaryMode))throw new RangeError(`IPBF boundary mode invalid: ${boundaryMode}`);
- if(boundaryMode==='tangent_plane'&&(!Array.isArray(obstacleCenter)||obstacleCenter.length!==3||obstacleCenter.some(v=>!Number.isFinite(v))||!Number.isFinite(obstacleRadius)||obstacleRadius<=0))throw new RangeError('IPBF wall support requires the host obstacle geometry');
- const wall=boundaryMode==='tangent_plane'?`
+ if(boundaryPlanes!==null){
+  if(boundaryMode!=='tangent_plane')throw new RangeError('Explicit boundary planes require tangent_plane pressure');
+  createIPBFConformanceShader(boundaryPlanes); // shared finite unit-normal validation
+  if(!boundaryPlanes.length)throw new RangeError('Explicit boundary planes cannot be empty');
+ }
+ if(boundaryMode==='tangent_plane'&&boundaryPlanes===null&&(!Array.isArray(obstacleCenter)||obstacleCenter.length!==3||obstacleCenter.some(v=>!Number.isFinite(v))||!Number.isFinite(obstacleRadius)||obstacleRadius<=0))throw new RangeError('IPBF wall support requires the host obstacle geometry');
+ const wall=boundaryPlanes!==null?`fn ipbf_host_boundary(position:vec3<f32>)->IPBFBoundary {
+ var boundary=IPBFBoundary(0.0,vec3<f32>(0),ipbf_zero_matrix());
+ ${boundaryPlanes.map(p=>`boundary=ipbf_union_boundary(boundary,ipbf_plane_boundary(vec4<f32>(vec3<f32>(${p.normal.join(',')}),dot(vec3<f32>(${p.normal.join(',')}),position)-(${p.offset})),ipbfRadius));`).join('\n')}
+ return boundary;
+ }`:boundaryMode==='tangent_plane'?`
  fn ipbf_host_boundary(position:vec3<f32>) -> IPBFBoundary {
   // Physical wall, before collision-radius expansion. Curvature is frozen as
   // a tangent plane for this local pressure solve, not an exact solid integral.

@@ -4,7 +4,7 @@ import { localLiquidOpticalQueryControls, localLiquidHostOpticalInputs, LOCAL_LI
 import { canPreserveLiquidReleaseEpoch, LIVE_LIQUID_INLET_FLOATS } from './local-liquid-inlet-continuity.mjs';
 import {resolveFingerFluidCohesionModel,resolveFingerFluidCohesionStrength,applyFingerFluidCohesionProfile} from './finger-fluid-cohesion.mjs';
 export {resolveFingerFluidCohesionModel,resolveFingerFluidCohesionStrength,evaluateFingerFluidCohesionPairWeight,evaluateFingerFluidCohesionAcceleration,applyFingerFluidCohesionProfile} from './finger-fluid-cohesion.mjs';
-import {applyFingerFluidDiagnosticDynamics,resolveFingerFluidDiagnosticDynamics,validateFingerFluidDiagnosticPopulation,subdivideDiagnosticPopulation} from './finger-fluid-discriminator.mjs';
+import {applyFingerFluidDiagnosticDynamics,resolveFingerFluidDiagnosticDynamics,validateFingerFluidDiagnosticPopulation,subdivideDiagnosticPopulation,validateFingerFluidReferenceBox,fingerFluidReferenceBoxSupport} from './finger-fluid-discriminator.mjs';
 export {applyFingerFluidDiagnosticDynamics,validateFingerFluidDiagnosticPopulation} from './finger-fluid-discriminator.mjs';
 import {createAkinciSurfaceShader,AKINCI_REFERENCE_DENSITY} from './finger-fluid-akinci.mjs';
 import {createIPBFGridShader} from './finger-fluid-ipbf-wgsl.mjs';
@@ -13270,6 +13270,7 @@ export async function createWebGPUFingerFluidSolver({
   cohesionModel = 'legacy',
   diagnosticDynamics = 'assembled',
   diagnosticPopulation = null,
+  diagnosticBox = null,
   akinciSupportRadius = null,
   densityCellRejection = false,
   particleRepulsionStrength = 1,
@@ -13311,6 +13312,8 @@ export async function createWebGPUFingerFluidSolver({
   const useAkinci=safeCohesionModel==='akinci_2013';
   const safeDiagnosticDynamics=resolveFingerFluidDiagnosticDynamics(diagnosticDynamics);
   const reducedDynamics=safeDiagnosticDynamics==='pressure_surface';
+  const safeDiagnosticBox=diagnosticBox===null?null:validateFingerFluidReferenceBox(diagnosticBox);
+  if(safeDiagnosticBox&&(!diagnosticPopulation||!reducedDynamics||ipbfBoundaryMode!=='tangent_plane'||hostFrameComposition||supportContactRoute!==KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE))throw new RangeError('Reference box requires finite reduced IPBF water, explicit plane pressure and standalone presentation');
   if((reducedDynamics||diagnosticPopulation||akinciSupportRadius!==null)&&(!useIPBF||!useAkinci||adaptiveDensity||truthScene!=='multi_regime_playground'))throw new RangeError('Diagnostic dynamics require fixed-volume IPBF/Akinci analytic playground');
   if(akinciSupportRadius!==null&&(!Number.isFinite(akinciSupportRadius)||akinciSupportRadius<=0))throw new RangeError('Diagnostic surface support radius must be positive');
   if(reducedDynamics&&(chemistryDiffusion!==0||particleShiftStrength!==0||unsupportedSheetStrength!==0||liveInletPacket!==null))throw new RangeError('Reduced diagnostic core excludes shifting, chemistry, sheet correction and external inlets');
@@ -13377,7 +13380,7 @@ export async function createWebGPUFingerFluidSolver({
   if (!webgpuDevice && !globalThis.navigator?.gpu) {
     return createUnavailableSolver('navigator.gpu unavailable');
   }
-  const supportShaderSource = supportShaderSourceForRoute(supportContactRoute);
+  const supportShaderSource = safeDiagnosticBox ? {bindings:'',functions:fingerFluidReferenceBoxSupport(safeDiagnosticBox)} : supportShaderSourceForRoute(supportContactRoute);
   const safeComposedRevision = typeof composedRevision === 'string' && /^[0-9a-f]{40}$/.test(composedRevision)
     ? composedRevision
     : null;
@@ -13778,13 +13781,14 @@ export async function createWebGPUFingerFluidSolver({
   const ipbfLayout = useIPBF ? device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}},...(livePressureControls?[{binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}}]:[])]}) : null;
   const ipbfBindGroup = useIPBF ? device.createBindGroup({label:'kaminos-finger-fluid-ipbf-bind-group',layout:ipbfLayout,entries:[{binding:0,resource:{buffer:ipbfStateBuffer}},...(livePressureControls?[{binding:1,resource:{buffer:ipbfControlBuffer}}]:[])]}) : null;
   if (useIPBF) {
-    computeShader += createIPBFGridShader({radius:ipbfRadius,volume:ipbfParticleVolume,compliance:ipbfCompliance,alternativeCompliance:ipbfAlternativeCompliance,damping:ipbfDamping,beta:ipbfDampingBeta,boundaryMode:ipbfBoundaryMode,obstacleCenter:OBSTACLE_CENTER,obstacleRadius:OBSTACLE_RADIUS,dynamicControls:livePressureControls});
+    computeShader += createIPBFGridShader({radius:ipbfRadius,volume:ipbfParticleVolume,compliance:ipbfCompliance,alternativeCompliance:ipbfAlternativeCompliance,damping:ipbfDamping,beta:ipbfDampingBeta,boundaryMode:ipbfBoundaryMode,obstacleCenter:OBSTACLE_CENTER,obstacleRadius:OBSTACLE_RADIUS,dynamicControls:livePressureControls,boundaryPlanes:safeDiagnosticBox?.planes??null});
     const velocityAnchor = '  var velocity = (position - particle.position.xyz) / max(params.dt, 0.00001);';
     if (!computeShader.includes(velocityAnchor)) throw new Error('IPBF velocity integration anchor missing');
     computeShader = computeShader.replace(velocityAnchor,'  var velocity = particle.delta.xyz;');
     computeShader = computeShader.replace('  velocity = velocity * params.forces.y;', '  // IPBF paper damping replaces the legacy uniform velocity damping.');
   }
   computeShader=applyFingerFluidDiagnosticDynamics(computeShader,safeDiagnosticDynamics);
+  if(safeDiagnosticBox)computeShader=computeShader.replaceAll('params.fluid.x * 0.22',String(safeDiagnosticBox.collisionRadius));
   const effectiveAkinciRadius=akinciSupportRadius??2*Math.cbrt(ipbfParticleVolume);
   if(useAkinci)computeShader+=createAkinciSurfaceShader({volume:ipbfParticleVolume,supportRadius:effectiveAkinciRadius});
   const computeModule = device.createShaderModule({ label: useIPBF ? 'webgpu-ipbf-cubic-spline-v0' : KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: computeShader });
@@ -14765,8 +14769,8 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(20, GRID_DIMS[1], true);
     view.setUint32(24, GRID_DIMS[2], true);
     view.setUint32(28, GRID_CELL_COUNT, true);
-    BOUNDS_MIN.forEach((value, index) => view.setFloat32(32 + index * 4, value, true));
-    BOUNDS_MAX.forEach((value, index) => view.setFloat32(48 + index * 4, value, true));
+    (safeDiagnosticBox?.bounds.min??BOUNDS_MIN).forEach((value, index) => view.setFloat32(32 + index * 4, value, true));
+    (safeDiagnosticBox?.bounds.max??BOUNDS_MAX).forEach((value, index) => view.setFloat32(48 + index * 4, value, true));
     view.setFloat32(64, safeKernelRadius, true);
     view.setFloat32(68, safeRestDensity, true);
     view.setFloat32(72, 0.012, true);
@@ -15198,8 +15202,10 @@ export async function createWebGPUFingerFluidSolver({
     externalCamera = null,
     hostFrame = null,
     particleVisibility = 'visible',
+    diagnosticGlyphScale = 1,
   } = {}) {
     if (runtimeLifecycle.stopped) return;
+    if(!Number.isFinite(diagnosticGlyphScale)||diagnosticGlyphScale<=0||(!safeDiagnosticBox&&diagnosticGlyphScale!==1))throw new RangeError('Diagnostic glyph scale requires a reference box and a positive scale');
     const renderStartedAt = performance.now();
     lastHostFrameCompositionEvidence = null;
     analyticCarrierLastFrameDrawCount = 0;
@@ -15352,7 +15358,7 @@ export async function createWebGPUFingerFluidSolver({
     renderData.set([...up, KAMINOS_FINGER_FLUID_OPTICAL_DEBUG_MODES.indexOf(effectiveOpticalDebugMode)], 36);
     renderData.set([...forward, KAMINOS_FINGER_FLUID_OPTICAL_LIGHTING_MODES.indexOf(resolvedOpticalLightingMode)], 40);
     renderData.set([...eye, KAMINOS_FINGER_FLUID_OPTICAL_FOOTPRINT_MODES.indexOf(resolvedOpticalFootprintMode)], 44);
-    renderData.set([extent.width, extent.height, safeVisibleParticleRadius, safeParticleCount], 48);
+    renderData.set([extent.width, extent.height, safeVisibleParticleRadius*diagnosticGlyphScale, safeParticleCount], 48);
     renderData.set([
       KAMINOS_FINGER_FLUID_TRANSMISSION_FOOTPRINT_MODES.indexOf(resolvedTransmissionFootprintMode),
       KAMINOS_FINGER_FLUID_BODY_TRANSPORT_MODES.indexOf(resolvedBodyTransportMode),
@@ -15423,7 +15429,7 @@ export async function createWebGPUFingerFluidSolver({
       })
       : screenSpaceRefractionCompositeBindGroup;
     const liquidSupportDiagnostic = effectiveOpticalDebugMode === 'liquid_support';
-    const drawAnalyticSupport = safePresentationMode === KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE;
+    const drawAnalyticSupport = !safeDiagnosticBox && safePresentationMode === KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE;
     if (!validatedHostFrame) {
     const hdrWorldBackgroundPass = encoder.beginRenderPass({
       label: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
@@ -16305,6 +16311,7 @@ export async function createWebGPUFingerFluidSolver({
     const effectivePressureControls=pressureControlState?.read().effective;
     return {
       available: true,
+      diagnosticBox: safeDiagnosticBox,
       diagnosticDynamics:{requested:diagnosticDynamics,effective:safeDiagnosticDynamics,neighborSmoothing:!reducedDynamics,vorticityConfinement:!reducedDynamics,speedClipping:!reducedDynamics,boundaryVelocityResponse:true,population:diagnosticPopulation?{schema:diagnosticPopulation.schema,fixture:diagnosticPopulation.fixture,refinement:diagnosticPopulation.refinement,source:diagnosticPopulation.source,particleCount:safeBaseParticleCount,particleVolume:ipbfParticleVolume,representedVolume:safeBaseParticleCount*ipbfParticleVolume}:null},
       liquidFireContactCoverage: effectiveLiquidFireContactCoverage,
       solver_backend: 'webgpu_compute',
