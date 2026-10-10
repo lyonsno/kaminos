@@ -4018,6 +4018,7 @@ import {
   resolveFingerFluidWaterfallOraclePreset,
 } from './finger-fluid-webgpu-core.js';
 import {createIPBFPressureCockpit} from './finger-fluid-pressure-cockpit.mjs';
+import {investigationOperations} from './investigation-recording.mjs';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -11764,6 +11765,12 @@ async function initScene() {
 
   const markDirty = () => { needsRender = true; idleFrames = 0; };
   controls.addEventListener('change', markDirty);
+  controls.addEventListener('change', () => {
+    if(investigationOperations.active && window.kaminosNavigationState) {
+      investigationOperations.emit({kind:'camera.pose',phase:'changed',target:'camera',
+        effective:window.kaminosNavigationState(),clock:window.kaminosFingerFluidBenchSessionState?.()});
+    }
+  });
   transformControls.addEventListener('change', () => {
     markDirty();
     if (splatCorrectionTransformTarget()) {
@@ -14769,6 +14776,7 @@ async function startFingerFluidBench() {
     fingerFluidBenchState=createFingerFluidBenchState({status:'error',solverBackend:'startup_failed',renderBackend:'startup_failed'});
     fingerFluidBenchState.runtime={available:false,reason:error.message||String(error)};
     updateFingerFluidBenchReadout();setInfo('Fluid bench unavailable: '+fingerFluidBenchState.runtime.reason);
+    return 'failed';
   }
 }
 
@@ -14782,16 +14790,25 @@ function stopFingerFluidBench() {
 }
 
 async function resetFingerFluidPressureCockpitWater() {
+  const recordReset=phase=>{
+    if(investigationOperations.active)investigationOperations.emit({kind:'fluid.reset',phase,target:'fluid',
+      effective:window.kaminosFingerFluidBenchSessionState?.(),clock:window.kaminosFingerFluidBenchSessionState?.()});
+  };
+  recordReset('started');
   const camera=fingerFluidCompositionCameraState();
   stopFingerFluidBench();
   fingerFluidBenchSolver?.destroy?.();
   fingerFluidBenchSolver=null;fingerFluidBenchSolverPromise=null;fingerFluidBenchConfig=null;
   const startup=startFingerFluidBench();
   const resetGeneration=fingerFluidBenchStartGeneration;
-  await startup;
-  if(resetGeneration!==fingerFluidBenchStartGeneration||!fingerFluidBenchRunning)return;
+  let outcome;
+  try { outcome=await startup; } catch(error) { recordReset('failed');throw error; }
+  if(outcome==='failed'){recordReset('failed');return;}
+  if(resetGeneration!==fingerFluidBenchStartGeneration){recordReset('superseded');return;}
+  if(!fingerFluidBenchRunning||!fingerFluidBenchSolver?.available){recordReset('failed');return;}
   fingerFluidBenchCamera=camera;syncFingerFluidCompositionCamera({initial:true});window._kaminosDirty?.();
   fingerFluidPressureCockpit?.update();
+  recordReset('applied');
 }
 
 
@@ -14828,7 +14845,11 @@ function installFingerFluidPressureCockpit() {
   fingerFluidPressureCockpit=createIPBFPressureCockpit({
     root,getSolver:()=>fingerFluidBenchSolver,getStatus:()=>fingerFluidBenchState,
     isPaused:()=>fingerFluidBenchSimulationPaused,
-    setPaused:value=>{fingerFluidBenchSimulationPaused=value;window._kaminosDirty?.();if(!value)resumeFingerFluidBenchAfterWitness();},
+    setPaused:value=>{
+      fingerFluidBenchSimulationPaused=value;window._kaminosDirty?.();if(!value)resumeFingerFluidBenchAfterWitness();
+      if(investigationOperations.active)investigationOperations.emit({kind:'fluid.pause',phase:'applied',target:'fluid',
+        effective:{paused:fingerFluidBenchSimulationPaused},clock:window.kaminosFingerFluidBenchSessionState?.()});
+    },
     restart:resetFingerFluidPressureCockpitWater,
     onRequest:receipt=>{
       window._kaminosDirty?.();
@@ -14837,6 +14858,9 @@ function installFingerFluidPressureCockpit() {
         fingerFluidBenchConfig={...fingerFluidBenchConfig,requestedPressureIterations:r.densityIterations,
           requestedCapillaryStrength:r.capillaryStrength,ipbfPressureRadiusScale:r.pressureRadiusScale,ipbfDampingBeta:r.beta};
       }
+      if(investigationOperations.active)investigationOperations.emit({kind:'fluid.controls',phase:'requested',target:'fluid',
+        requested:receipt.requested,effective:receipt.effective,controlState:receipt,
+        clock:window.kaminosFingerFluidBenchSessionState?.()});
     },
   });
   window.kaminosFingerFluidPressureCockpitState=()=>fingerFluidPressureCockpit.read();
