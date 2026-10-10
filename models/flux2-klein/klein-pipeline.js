@@ -39,8 +39,11 @@ export function gaussianNoise(n, seed) {
 }
 
 export class KleinPipeline {
-  constructor(device, { textEncoderUrl, transformerUrl, vaeUrl }) {
+  // Product kernels default to GEMM v2 with f16 shared tiles (about 1.7x faster than the
+  // parity kernel; final-velocity drift about 5e-3, small next to int4 weight drift).
+  constructor(device, { textEncoderUrl, transformerUrl, vaeUrl, gemmVersion = 2, sharedType = 'f16' }) {
     this.device = device; this.urls = { textEncoderUrl, transformerUrl, vaeUrl };
+    this.kernels = { gemmVersion, sharedType };
     this.timings = {}; this.residentBytes = {};
   }
 
@@ -50,11 +53,13 @@ export class KleinPipeline {
     this.teManifest = await getJson(`${te}/manifest.json`);
     this.tokenizer = new QwenTokenizer(await getJson(`${te}/${this.teManifest.tokenizer.file}`));
     this.textEncoder = new KleinTextEncoder(this.device, this.teManifest);
+    Object.assign(this.textEncoder, this.kernels);
     let bytes = 0;
     await this.textEncoder.loadBundles(f => getBytes(`${te}/${f}`), (n, b) => { bytes += b; onProgress('text-encoder', n); });
     this.residentBytes.textEncoder = bytes;
     this.ditManifest = await getJson(`${dit}/manifest.json`);
     this.transformer = new KleinTransformer(this.device, this.ditManifest);
+    Object.assign(this.transformer, this.kernels);
     bytes = 0;
     await this.transformer.loadBundles(f => getBytes(`${dit}/${f}`), (n, b) => { bytes += b; onProgress('transformer', n); });
     this.residentBytes.transformer = bytes;

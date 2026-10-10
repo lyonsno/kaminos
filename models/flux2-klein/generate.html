@@ -27,7 +27,8 @@
 <script type="module">
 import { KleinPipeline } from './klein-pipeline.js';
 const q = new URLSearchParams(location.search);
-const urls = { textEncoderUrl: q.get('te') ?? '/te', transformerUrl: q.get('dit') ?? '/dit', vaeUrl: q.get('vae') ?? '/vae' };
+const urls = { textEncoderUrl: q.get('te') ?? '/te', transformerUrl: q.get('dit') ?? '/dit', vaeUrl: q.get('vae') ?? '/vae',
+  gemmVersion: Number(q.get('gemm') ?? 2), sharedType: q.get('shared') ?? 'f16' };
 const status = document.getElementById('status'), go = document.getElementById('go');
 let pipeline;
 async function init() {
@@ -72,7 +73,7 @@ window.kleinBatch = async jobs => {
     let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
     results.push({ name: job.name, seed: job.seed, size: job.size, promptTokens: r.promptTokens, timings: r.timings, png: btoa(bin) });
   }
-  return { results, residentBytes: pipeline.residentBytes, loadMs: pipeline.timings.loadMs };
+  return { results, residentBytes: pipeline.residentBytes, loadMs: pipeline.timings.loadMs, kernels: pipeline.kernels };
 };
 window.kleinPageReady = true;
 </script>

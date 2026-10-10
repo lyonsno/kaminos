@@ -3,7 +3,7 @@
 // and 27, concatenated per token into [L][3 * hidden]. Residual stream f32;
 // weights f16 from pack-text-encoder.py. Token embeddings are gathered on the
 // host from rows fetched by the caller (HTTP range requests in the browser).
-import { gemmShader, rmsNormShader, qwenQkvPrepShader, maskedSoftmaxShader, swigluShader, copyColumnsShader,
+import { gemmShader, gemmShaderV2, rmsNormShader, qwenQkvPrepShader, maskedSoftmaxShader, swigluShader, copyColumnsShader,
   headsToRowsShader } from './klein-kernels.js';
 
 const HEAD = 128;
@@ -63,7 +63,10 @@ export class KleinTextEncoder {
   }
 
   gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bDiv = 1, bType = 'f16', c, cOff = 0, cRs, cBs = 0, M, N, K, batch = 1, alpha = 1, epilogue = 'store', scaleOff = 0 }) {
-    const pipe = this.pipeline(`gemm-${bType}-${epilogue}`, gemmShader({ bType, epilogue }));
+    const v2 = (this.gemmVersion ?? 2) === 2 && K % 4 === 0;
+    const st = this.sharedType ?? 'f32';
+    const pipe = v2 ? this.pipeline(`gemm2-${bType}-${epilogue}-${st}`, gemmShaderV2({ bType, epilogue, sType: st }))
+      : this.pipeline(`gemm-${bType}-${epilogue}`, gemmShader({ bType, epilogue }));
     const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, 0, bDiv, scaleOff]);
     const entries = [a, b, c, u].map((buffer, i) => ({ binding: i, resource: { buffer } }));
     if (bType === 'i8' || bType === 'i4') entries.push({ binding: 5, resource: { buffer: b } });

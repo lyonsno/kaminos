@@ -48,13 +48,15 @@ try {
   else ({ server } = await startServer({ '/te/': report.roots.te, '/dit/': report.roots.dit, '/vae/': report.roots.vae, '/': here }).then(s => { report.origin = s.origin; return s; }));
   browser = await launchChrome(opt('--chrome'), [], report);
   report.phase = 'load';
-  await browser.navigate(`${report.origin}/generate.html?te=/te&dit=/dit&vae=/vae`, 'window.kleinPageReady === true');
+  const kq = `&gemm=${opt('--gemm-version', '2')}&shared=${opt('--shared-type', 'f16')}`;
+  report.requestedKernels = { gemmVersion: Number(opt('--gemm-version', '2')), sharedType: opt('--shared-type', 'f16') };
+  await browser.navigate(`${report.origin}/generate.html?te=/te&dit=/dit&vae=/vae${kq}`, 'window.kleinPageReady === true');
   await browser.evaluate('window.kleinReady');
   report.phase = 'generate';
   const res = await browser.evaluate(`window.kleinBatch(${JSON.stringify(jobs)})`);
   await fsp.mkdir(outDir, { recursive: true });
   for (const r of res.results) { await fsp.writeFile(path.join(outDir, `${r.name}.png`), Buffer.from(r.png, 'base64')); delete r.png; }
-  report.results = res.results; report.residentBytes = res.residentBytes; report.loadMs = res.loadMs;
+  report.results = res.results; report.residentBytes = res.residentBytes; report.loadMs = res.loadMs; report.effectiveKernels = res.kernels;
   report.phase = 'done';
   await finish(0);
 } catch (e) {
