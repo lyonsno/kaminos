@@ -63,8 +63,14 @@ const assertSamPublicClaims = ({ rootReadme: root, packageReadme, samDemoGuide: 
     'SAM demo guide': guide,
   };
 
-  for (const [name, copy] of Object.entries(surfaces)) {
-    assert.match(copy, /SAM 3 image detector/i, `${name} must identify the image detector rather than imply a SAM 3.1 video result`);
+  // The READMEs are reader-facing summaries; the witness detail (bit-exact cold/warm outputs, the
+  // empty negative control, boundary semantics) is held on the SAM guide below. Every surface must
+  // present the image detector, never a SAM 3.1 or video result.
+  assert.match(packageReadme, /SAM 3 image detector/i, 'package README must identify the image detector');
+  assert.match(guide, /SAM 3 image detector/i, 'SAM demo guide must identify the image detector');
+  assert.match(surfaces['root README'], /object instances in an uploaded image from a text prompt/i, 'root README must describe the image detector');
+  for (const name of ['root README', 'package README']) {
+    assert.doesNotMatch(surfaces[name], /SAM 3\.1|\bvideo\b/i, `${name} must not imply a SAM 3.1 video result`);
   }
   assert.match(guide, /SAM 3\.1 tracking primitives[\s\S]*do not exercise a video/i, 'image evidence must remain distinct from tracking primitives');
 
@@ -74,9 +80,7 @@ const assertSamPublicClaims = ({ rootReadme: root, packageReadme, samDemoGuide: 
     ['persistent model resources', /persistent model package/i],
     ['cached image features', /cached image features/i],
     ['queued prompts', /queued prompts/i],
-    ['same-device foreground submissions at existing boundaries', /same-device foreground submissions[\s\S]*existing phase boundaries/i],
-    ['exact cold/warm witness equality', /cold and warm mask outputs were bit-exact/i],
-    ['an exactly empty negative control', /nonsense-prompt control returned exactly\s+empty/i],
+    ['same-device foreground submissions', /same-device foreground submissions/i],
   ]);
   assertSurfaceSemantics('package README', surfaces['package README'], [
     ['an image-plus-text mask result', /masks from an image and text prompt/i],
@@ -84,9 +88,7 @@ const assertSamPublicClaims = ({ rootReadme: root, packageReadme, samDemoGuide: 
     ['persistent authenticated model resources', /authenticated persistent model resources/i],
     ['cached image features', /cached image features/i],
     ['queued requests', /queued semantic requests/i],
-    ['same-device foreground submissions at existing boundaries', /same-device foreground submissions[\s\S]*existing phase boundaries/i],
-    ['exact cold/warm witness equality', /bit-exact cold and warm mask outputs/i],
-    ['an exactly empty negative control', /exactly\s+empty nonsense-prompt control/i],
+    ['same-device foreground submissions at phase boundaries', /same-device foreground submissions at phase boundaries/i],
   ]);
   assertSurfaceSemantics('SAM demo guide', surfaces['SAM demo guide'], [
     ['an image-plus-text browser WebGPU route', /image and text prompt[\s\S]*in browser WebGPU/i],
@@ -128,29 +130,29 @@ assert.match(modelRows.find(line => line.includes('/kimodo-webgpu)')), /text emb
 assertSamPublicClaims({ rootReadme, packageReadme: readme, samDemoGuide });
 const contradictoryClaims = [
   {
-    name: 'same-sentence while disclaimer and frame guarantee',
+    name: 'same-sentence while-clause frame guarantee',
     field: 'rootReadme',
     value: rootReadme.replace(
-      'composition result, not a frame-pacing claim.',
-      'composition result, not a frame-pacing claim, while SAM guarantees 60 FPS during inference.',
+      'usage and performance measurements.',
+      'usage and performance measurements, while SAM guarantees 60 FPS during inference.',
     ),
     expected: /presentation|frame|latency/i,
   },
   {
-    name: 'same-sentence comma-less disclaimer and frame guarantee',
+    name: 'same-sentence comma-less frame guarantee',
     field: 'rootReadme',
     value: rootReadme.replace(
-      'composition result, not a frame-pacing claim.',
-      'composition result, not a frame-pacing claim but SAM guarantees 60 FPS during inference.',
+      'usage and performance measurements.',
+      'usage and performance measurements but SAM guarantees 60 FPS during inference.',
     ),
     expected: /presentation|frame|latency/i,
   },
   {
-    name: 'same-sentence disclaimer and frame guarantee',
+    name: 'same-sentence frame guarantee',
     field: 'rootReadme',
     value: rootReadme.replace(
-      'composition result, not a frame-pacing claim.',
-      'composition result, not a frame-pacing claim, and SAM guarantees 60 FPS during inference.',
+      'usage and performance measurements.',
+      'usage and performance measurements, and SAM guarantees 60 FPS during inference.',
     ),
     expected: /presentation|frame|latency/i,
   },
@@ -166,13 +168,13 @@ const contradictoryClaims = [
   {
     name: 'root-README frame guarantee',
     field: 'rootReadme',
-    value: withClaim(rootReadme, 'composition result, not a frame-pacing claim.', 'SAM guarantees 60 FPS during inference.'),
+    value: withClaim(rootReadme, 'See its guide for model setup, usage and performance measurements.', 'SAM guarantees 60 FPS during inference.'),
     expected: /presentation|frame|latency/i,
   },
   {
     name: 'package adaptive/preemptive scheduling claim',
     field: 'packageReadme',
-    value: withClaim(readme, "model's existing phase boundaries.", 'SAM adaptively budgets every frame and preempts submitted GPU dispatches.'),
+    value: withClaim(readme, 'caches image features across prompts.', 'SAM adaptively budgets every frame and preempts submitted GPU dispatches.'),
     expected: /adaptive|preemptive/i,
   },
   {
@@ -184,13 +186,13 @@ const contradictoryClaims = [
   {
     name: 'root broad semantic/native-resolution claim',
     field: 'rootReadme',
-    value: withClaim(rootReadme, 'composition result, not a frame-pacing claim.', 'SAM is semantically accurate across arbitrary images and prompts at native resolution.'),
+    value: withClaim(rootReadme, 'See its guide for model setup, usage and performance measurements.', 'SAM is semantically accurate across arbitrary images and prompts at native resolution.'),
     expected: /semantic|native-resolution/i,
   },
   {
     name: 'package general-throughput claim',
     field: 'packageReadme',
-    value: withClaim(readme, "model's existing phase boundaries.", 'SAM guarantees streaming throughput for every supported model package.'),
+    value: withClaim(readme, 'caches image features across prompts.', 'SAM guarantees streaming throughput for every supported model package.'),
     expected: /throughput/i,
   },
 ];
