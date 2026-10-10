@@ -16,7 +16,12 @@ export function judgeOrdinaryMemorySmoke(r) {
       !Array.isArray(r.modelPayloadRequests) || r.modelPayloadRequests.length) errors.push('model is not held before payload');
   if (r?.sourceHead?.status !== 503 || r.sourceHead.authority !== 'circuit-breaker-only' || r.sourceHead.bodyBytes !== 0) errors.push('actual static weight boundary is not held');
   if (r?.events?.some(x => x.kind === 'pageerror')) errors.push('page exception');
-  if (!Array.isArray(r?.adapters) || r.adapters.length !== 1 || r.adapters[0].isFallbackAdapter !== false ||
+  const adapter = r?.adapters?.[0], fallback = adapter?.fallbackEvidence;
+  const fieldsValid = fallback && [fallback.info, fallback.legacy].every(x => x === null || typeof x === 'boolean');
+  const consistent = fieldsValid && !(fallback.info !== null && fallback.legacy !== null && fallback.info !== fallback.legacy);
+  const authority = fallback?.source === 'GPUAdapterInfo.isFallbackAdapter' ? fallback.info :
+    fallback?.source === 'GPUAdapter.isFallbackAdapter' && fallback.info === null ? fallback.legacy : null;
+  if (!Array.isArray(r?.adapters) || r.adapters.length !== 1 || adapter.isFallbackAdapter !== false || !consistent || authority !== false ||
       r.adapters[0].info?.vendor !== 'apple' || !r.adapters[0].info?.architecture?.startsWith('metal')) errors.push('wrong or fallback effective adapter');
   for (const frame of [r?.before, r?.after]) {
     if (frame?.renderer !== 'ordinary-volume' || frame.active !== true || frame.error || frame.simGrid !== r.requested?.grid ||
@@ -142,7 +147,11 @@ export async function runOrdinaryMemorySmoke(args) {
       const request = navigator.gpu.requestAdapter.bind(navigator.gpu);
       navigator.gpu.requestAdapter = async (...args) => {
         const adapter = await request(...args);
-        window.__ordinaryMemoryAdapters.push(adapter ? {isFallbackAdapter: adapter.isFallbackAdapter,
+        window.__ordinaryMemoryAdapters.push(adapter ? {
+          isFallbackAdapter: adapter.info.isFallbackAdapter ?? adapter.isFallbackAdapter,
+          fallbackEvidence: {info: adapter.info.isFallbackAdapter ?? null, legacy: adapter.isFallbackAdapter ?? null,
+            source: typeof adapter.info.isFallbackAdapter === 'boolean' ? 'GPUAdapterInfo.isFallbackAdapter' :
+              typeof adapter.isFallbackAdapter === 'boolean' ? 'GPUAdapter.isFallbackAdapter' : 'unavailable'},
           info: {vendor: adapter.info.vendor, architecture: adapter.info.architecture, description: adapter.info.description}} : null);
         return adapter; // Observation only: no alternate device or allocation hook.
       };

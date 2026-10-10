@@ -2,9 +2,22 @@ import assert from 'node:assert/strict';
 import {existsSync, mkdtempSync, readFileSync} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import vm from 'node:vm';
 const witness = new URL('../sf3d-ordinary-memory-smoke.mjs', import.meta.url);
 const module = existsSync(witness) ? await import(witness) : {};
 assert.equal(typeof module.judgeOrdinaryMemorySmoke, 'function', 'ordinary consumer evidence must have an explicit false-closure judge');
+// Execute the real injected observation callback against the canonical current
+// GPUAdapterInfo interface, not a report fixture sharing an obsolete location.
+const injected = readFileSync(witness, 'utf8').match(/await page\.evaluateOnNewDocument\((\(\) => \{[\s\S]*?\n    \})\);/);
+assert.ok(injected, 'actual adapter observation callback required');
+const currentAdapter = {info: {vendor: 'apple', architecture: 'metal-3', description: '', isFallbackAdapter: false}};
+const observedWindow = {};
+const observedNavigator = {gpu: {requestAdapter: async () => currentAdapter}};
+vm.runInNewContext('('+injected[1]+')()', {window: observedWindow, navigator: observedNavigator});
+assert.equal(await observedNavigator.gpu.requestAdapter(), currentAdapter, 'observation must return unchanged actual adapter');
+assert.equal(observedWindow.__ordinaryMemoryAdapters[0].isFallbackAdapter, false,
+  'current GPUAdapterInfo.isFallbackAdapter must be observed rather than silently omitted');
+assert.equal(observedWindow.__ordinaryMemoryAdapters[0].fallbackEvidence.source, 'GPUAdapterInfo.isFallbackAdapter');
 const source = {repoRoot: '/fixture', revision: 'a'.repeat(40), clean: true};
 const frame = n => ({renderer: 'ordinary-volume', active: true, error: null,
   frameCount: n, simStepCount: n, simGrid: 32, controls: {emitterSourceDepth: 0.125},
@@ -18,7 +31,7 @@ const report = {schema: 'kaminos.sf3d-ordinary-memory-smoke.v0', runId: 'fixture
     observation: {source: 'live-macos-sysctl', machine: 'Mac14,9', cpu: 'Apple M2 Pro', hostTotalBytes: 17179869184}},
   model: {initialized: false, error: {sourceAdmission: {verdict: 'refused', authority: 'circuit-breaker-only'}}},
   sourceHead: {status: 503, authority: 'circuit-breaker-only', bodyBytes: 0},
-  adapters: [{isFallbackAdapter: false, info: {vendor: 'apple', architecture: 'metal-3'}}],
+  adapters: [{isFallbackAdapter: false, fallbackEvidence: {info: false, legacy: null, source: 'GPUAdapterInfo.isFallbackAdapter'}, info: {vendor: 'apple', architecture: 'metal-3'}}],
   before: frame(200), after: frame(220),
   captures: [{path: '/before.png', sha256: 'b'.repeat(64)}, {path: '/after.png', sha256: 'c'.repeat(64)}],
   processObservation: {status: 'observed', coverage: 'sampled-owned-process-tree', sampleCount: 2, rootPid: 42, runId: 'fixture-run'},
@@ -34,6 +47,9 @@ for (const mutate of [
   r => r.sourceHold.modelPayloadBytesServed = 10, r => r.model.initialized = true,
   r => r.modelPayloadRequests.push('/lib/sf3d/weights.bin'), r => delete r.model.error.sourceAdmission,
   r => r.adapters[0].isFallbackAdapter = true, r => r.adapters[0].info.vendor = 'software',
+  r => delete r.adapters[0].fallbackEvidence, r => r.adapters[0].fallbackEvidence.info = null,
+  r => r.adapters[0].fallbackEvidence.info = 'false', r => r.adapters[0].fallbackEvidence.legacy = true,
+  r => r.adapters[0].fallbackEvidence.source = 'unavailable',
   r => r.after.frameCount = r.before.frameCount, r => r.after.simStepCount = r.before.simStepCount,
   r => r.after.renderer = 'alternate-volume', r => r.after.active = false,
   r => r.after.simGrid = 160, r => r.after.controls.emitterSourceDepth = 0.006,
@@ -46,6 +62,9 @@ for (const mutate of [
   assert.ok(module.judgeOrdinaryMemorySmoke(bad).length, 'false closure must reject');
 }
 assert.ok(module.judgeOrdinaryMemorySmoke({}).length, 'early failure cannot pass without primary evidence');
+const legacy = structuredClone(report);
+legacy.adapters[0].fallbackEvidence = {info: null, legacy: false, source: 'GPUAdapter.isFallbackAdapter'};
+assert.deepEqual(module.judgeOrdinaryMemorySmoke(legacy), [], 'explicit observed legacy interface remains compatible');
 const failureOut = mkdtempSync(path.join(os.tmpdir(), 'sf3d-ordinary-memory-failure-'));
 const failed = await module.runOrdinaryMemorySmoke(['--out', failureOut]);
 const failureReport = JSON.parse(readFileSync(failed.reportPath, 'utf8'));
