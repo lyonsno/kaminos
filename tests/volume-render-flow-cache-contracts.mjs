@@ -15,6 +15,8 @@ assert.ok(draw.indexOf('encodeRenderFlowCache(') < draw.indexOf('const pass = en
   'refresh must precede the consumer, including held redraws');
 const refresh = balancedWgslBlock(core, 'function encodeRenderFlowCache(');
 assert.match(refresh, /fluidFrontReadBindGroups\[currentFluid\]/, 'current ping-pong state is the producer source');
+assert.match(draw, /selectRaymarchPipeline\(targetPipeline, !options\.bindGroup\)/,
+  'an override fluid binding cannot consume a cache made from the ordinary source');
 assert.doesNotMatch(refresh, /return;|simStepCount\s*===/, 'no step-only invalidation that misses imports or paused edits');
 assert.match(core, /renderFlowCacheTexture\?\.destroy\(\)/, 'grid rebuild/disposal releases the cache');
 assert.match(core, /renderFlowCache: \{[\s\S]*state\.renderFlowCache/);

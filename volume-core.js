@@ -19300,11 +19300,11 @@ export function createKaminosVolumePrototype({
     });
   }
 
-  function selectRaymarchPipeline(targetPipeline) {
+  function selectRaymarchPipeline(targetPipeline, allowRenderFlowCache = false) {
     const emissiveAdmission = emissiveRaymarchAdmission();
     if (uniforms[368] === 2) {
       const selectEmissive = emissiveAdmission.eligible && debugRaymarchShaderSpecialization !== 'force-full';
-      const selectCached = selectEmissive && debugRenderFlowCache !== 'off'
+      const selectCached = allowRenderFlowCache && selectEmissive && debugRenderFlowCache !== 'off'
         && productFrameOwner === 'prototype' && !boundarySplatRequested() && !browserResidualCanApply();
       const effectivePipeline = selectEmissive
         ? (targetPipeline === pipeline ? (selectCached ? cachedEmissivePipeline : leanEmissivePipeline)
@@ -19389,7 +19389,7 @@ export function createKaminosVolumePrototype({
         layout:multisampled ? ordinaryMultisampleDepthLayout : productRaymarchDepthBindGroupLayout,entries:[{binding:1,
           resource:(ordinarySceneDepthTexture || ordinarySceneDepthFallback).createView()}]});
     }
-    let drawPipeline = selectRaymarchPipeline(targetPipeline);
+    let drawPipeline = selectRaymarchPipeline(targetPipeline, !options.bindGroup);
     const selectCached = drawPipeline === cachedEmissivePipeline || drawPipeline === cachedEmissiveReadbackPipeline;
     const selectEmissive = selectCached || drawPipeline === leanEmissivePipeline || drawPipeline === leanEmissiveReadbackPipeline;
     if (multisampled) {
