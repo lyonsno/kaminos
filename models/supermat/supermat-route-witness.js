@@ -79,7 +79,7 @@ export async function runSuperMatRouteWitness({ fixtureSha256, weightsSha256, ru
     if (unknownRunOptions.length) throw new Error(`unknown route witness run option: ${unknownRunOptions.join(', ')}`);
     const fenced = runOptions.fencedDuties;
     const schedule = () => fenced ? { runtime: { prepareCommandDutyAtBoundary: async () => ({}), settleCommandDuty() {} },
-      invocation: null, control: null, targetDutyMs: fenced.targetDutyMs } : null;
+      invocation: { invocationId: 'route-witness-fenced-duties' }, control: null, targetDutyMs: fenced.targetDutyMs } : null;
     for (let index = 0; index < (runOptions.runs ?? runs); index++) {
       t = performance.now();
       const out = await adapter.run({ image, size: reference.imageSize ?? 512, schedule: schedule() });
