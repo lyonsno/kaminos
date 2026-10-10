@@ -4,7 +4,7 @@ import {createControlSlots} from './authoring-workspace.mjs';
 // existing owners. Release these slots before another workspace acquires them.
 export function installExperimentWorkspace({document, title, subtitle, instruments, instrumentTitle=title, instrumentHelp='',
   setup, inspector, detailNodes=[], runNodes=[],
-  sceneActions, navigation, tools, openTool, openSetup, frame}) {
+  sceneActions, navigation, tools, openTool, frame}) {
   const make=(tag,id,html)=>{const node=document.createElement(tag);node.id=id;node.innerHTML=html;return node;};
   const left=make('aside','experiment-instruments',`<div class="experiment-panel-heading"><h2></h2><p></p></div>
     <div class="experiment-instruments-body"><details id="experiment-browser"><summary>Experiments</summary><div><input type="search" aria-label="Find a workbench" placeholder="Find an experiment…"><div class="experiment-browser-list"></div></div></details>
@@ -12,7 +12,6 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
     <details id="experiment-details"><summary>Runtime details</summary><div id="experiment-detail-slot"></div></details></div>`);
   left.querySelector('h2').textContent=title;left.querySelector('p').textContent=subtitle;
   const toolbar=make('nav','experiment-toolbar',`<strong></strong><div id="experiment-add-slot"></div><span class="experiment-toolbar-spacer"></span>
-    <button type="button" id="experiment-open-setup">Open solver settings</button>
     <button type="button" id="experiment-frame">Frame</button><div id="experiment-navigation-slot"></div>`);
   toolbar.setAttribute('aria-label','Experiment tools'); toolbar.querySelector('strong').textContent=title;
   const run=make('div','experiment-run-strip',`<span id="experiment-source">Synthetic fluid · loading</span><div id="experiment-run-controls"></div><span id="experiment-clock"></span>`);
@@ -35,7 +34,6 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
     left.querySelectorAll('[data-workbench]').forEach(button=>{button.hidden=!button.textContent.toLowerCase().includes(term);});
   });
   byId('experiment-frame').onclick=frame;
-  byId('experiment-open-setup').onclick=openSetup;
   document.addEventListener('pointerdown',event=>{if(!byId('experiment-browser').contains(event.target))byId('experiment-browser').open=false;},true);
   let active=false;
   const text=(id,value)=>{const node=byId(id);if(node.textContent!==value)node.textContent=value;};

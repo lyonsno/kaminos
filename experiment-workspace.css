@@ -21,7 +21,7 @@ body.experiment-workspace.has-workbench-inspector #authoring-inspector { display
 #experiment-instruments input[type=number] { background:#292b30; color:#e1e4e9; border:1px solid #43464e; border-radius:4px; padding:5px 7px; font-size:12px; font-variant-numeric:tabular-nums; }
 #experiment-instruments input[type=range] { accent-color:#9ebec7; } #experiment-instruments input[type=checkbox] { accent-color:#9ebec7; }
 #experiment-instruments .ipbf-help { font-size:10px; line-height:1.6; color:#9299a6; margin:8px 0 14px; }
-#experiment-instruments #ipbf-replay { display:none; } #experiment-instruments #ipbf-control-error { color:#f5a09d; margin:12px 0; font-size:11px; }
+#experiment-instruments #ipbf-control-error { color:#f5a09d; margin:12px 0; font-size:11px; }
 #experiment-instruments .field-val { max-width:165px; } #experiment-details .finger-fluid-bench-downgrades { overflow-wrap:anywhere; }
 #experiment-toolbar { position:absolute; top:0; left:0; right:0; z-index:30; display:flex; align-items:center; gap:10px; padding:8px 12px; background:#191a1ded; border-bottom:1px solid #303134; color:#c7cbd3; font-size:11px; }
 #experiment-toolbar strong { font-size:11px; font-weight:500; } .experiment-toolbar-spacer { flex:1; }
