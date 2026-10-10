@@ -1,7 +1,7 @@
 import { requestBrowserWebGpuDevice, createWebGpuInferenceSession, createWebGpuInferenceControl } from '../../webgpu-inference-kit/src/core.js';
 import { createSuperMatAdapter, SUPERMAT_ROUTE_ID, superMatDeviceOptions } from '../../models/supermat/supermat-route.js';
 import { MoGeInference } from './moge-producer.js';
-import { MaterialPhotoViewer } from './viewer.js';
+import { MaterialPhotoViewer } from './comparison-viewer.js';
 import { createPhotoRunState, pixelSummary } from './photo-contracts.js';
 
 const $=id=>document.getElementById(id), params=new URLSearchParams(location.search);
@@ -10,6 +10,7 @@ const results=createPhotoRunState();
 const state=window.__materialPhoto={status:'loading-image',error:null,source:null,runs:[],identity:null};
 let image,selection,active=false,viewer,gpu,session,moge,materials,weightRoute,setupPromise;
 let imageTicket=0;
+let environmentTicket=0;
 const viewOrder=['original','photo','relit','materials'];
 const tuningFields=['gain','radius','thickness','slices','steps','denoise','aoStrength','expFactor','screenSpaceSampling','linearThickness','backfaceLighting','depthPhi','normalPhi','lumaPhi'];
 function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
@@ -20,31 +21,44 @@ function view(mode){
   if(viewer){viewer.mode=mode;viewer.map='surface';}
   $('map').value='surface';
   for(const button of document.querySelectorAll('[data-view]')){
-    button.classList.toggle('selected',button.dataset.view===mode);
-    button.setAttribute('aria-pressed',String(button.dataset.view===mode));
+    button.classList.toggle('selected',!viewer?.comparison&&button.dataset.view===mode);
+    button.setAttribute('aria-pressed',String(!viewer?.comparison&&button.dataset.view===mode));
   }
   $('stage-label').textContent={original:'Original photograph',photo:'Inferred depth',relit:'Relit photograph',materials:'Inferred materials'}[mode];
+  syncControls();
+}
+function compare(){
+  viewer?.showComparison();
+  $('stage-label').textContent='One photograph. Four perspectives.';
+  $('compare').classList.add('selected');
+  for(const button of document.querySelectorAll('[data-view]')){button.classList.remove('selected');button.setAttribute('aria-pressed','false');}
   syncControls();
 }
 function syncSun(){
   const light=viewer?.getLightHandle();
   if(!light)return;
-  $('sun').style.left=`${(0.5+light.x*.38)*100}%`;
-  $('sun').style.top=`${(0.5-light.y*.38)*100}%`;
+  const position=viewer.getLightRing();
+  $('sun').style.left=`${position.u*100}%`;
+  $('sun').style.top=`${position.v*100}%`;
   $('sun').setAttribute('aria-label',`Sun position ${Math.round(light.x*100)}, ${Math.round(light.y*100)}`);
 }
 function syncControls(){
-  const surface=!!viewer?.surface,lit=surface&&['relit','materials'].includes(viewer.mode);
+  const surface=!!viewer?.surface,lit=surface&&(viewer.comparison||['relit','materials'].includes(viewer.mode));
   $('sun').hidden=!lit;$('sun').disabled=!lit;
   $('gi').disabled=!surface;$('reset').disabled=!viewer?.original&&!surface;
   $('map').disabled=!surface;$('glow').disabled=!viewer?.maps||viewer.mode!=='materials';
   $('preset-export').disabled=$('preset-import').disabled=!surface;
+  $('compare').disabled=!surface;$('compare').classList.toggle('selected',!!viewer?.comparison);
+  for(const id of ['environment','environment-rotation','environment-intensity','direct-intensity'])$(id).disabled=!viewer;
   for(const id of tuningFields)$(id).disabled=!surface;
   for(const option of $('map').options??[])option.disabled=!viewer?.maps&&!['surface','normals'].includes(option.value);
   if(viewer){
     const settings=viewer.getTuning();
     for(const id of tuningFields)if(typeof settings[id]==='boolean')$(id).checked=settings[id];else $(id).value=settings[id];
     $('gi').checked=viewer.useGI;$('glow').checked=!!viewer.glow;
+    const lighting=viewer.getLighting();
+    $('environment').value=viewer.environment??'studio';
+    $('environment-rotation').value=lighting.rotation;$('environment-intensity').value=lighting.intensity;$('direct-intensity').value=lighting.direct;
   }
   const available=document.querySelectorAll('[data-view]');
   const count=[...available].filter(button=>!button.disabled).length;
@@ -107,12 +121,13 @@ async function setup(){
 async function infer(){
   if(active||!image)return;
   active=true;state.status='running';state.error=null;
-  const token=selection,input=image,started=performance.now(),record={source:state.source,status:'running',phases:{}};
+  const token=selection,input=image,size=Number($('material-size').value),started=performance.now(),record={source:state.source,status:'running',phases:{}};
   for(const button of document.querySelectorAll('[data-sample]'))button.disabled=true;
-  $('file').disabled=$('run').disabled=true;
+  $('file').disabled=$('run').disabled=$('material-size').disabled=true;
   const clock=setInterval(()=>{$('elapsed').textContent=`${((performance.now()-started)/1000).toFixed(1)} s elapsed`;},100);
   $('progress').removeAttribute('value');
   try{
+    if(![512,768,1024].includes(size))throw Error('Choose a supported material resolution');
     await setup();
     if(!moge){
       const candidate=new MoGeInference(gpu);
@@ -131,7 +146,7 @@ async function infer(){
     disableMaterials();
     viewer.setImage(input,depth);viewer.map='surface';$('map').value='surface';
     $('preview').hidden=true;$('scene').hidden=false;
-    document.querySelector('[data-view=photo]').disabled=false;document.querySelector('[data-view=relit]').disabled=false;view('photo');
+    document.querySelector('[data-view=photo]').disabled=false;document.querySelector('[data-view=relit]').disabled=false;compare();
     await new Promise(requestAnimationFrame);
     if(!materials){
       weightRoute??=await session.registerRoute({routeId:`${SUPERMAT_ROUTE_ID}.material-photo-weights`});
@@ -145,7 +160,7 @@ async function infer(){
     phase=performance.now();
     let output;
     try{
-      const job=route.enqueue({jobId:crypto.randomUUID(),execute:invocation=>materials.run({image:input,size:512,
+      const job=route.enqueue({jobId:crypto.randomUUID(),execute:invocation=>materials.run({image:input,size,
         schedule:{runtime:route.runtime,invocation,control},onRunProgress:progress=>{
           const names={preprocess:'Preparing image',encode:'Image encoder',unet:'Material inference','decode-albedo':'Albedo decoder','decode-orm':'Finish decoder','pack-maps':'Material maps'};
           status(`2/2 Materials: ${names[progress.phase]??progress.phase} (${progress.phaseIndex+1}/${progress.phaseCount})`);
@@ -156,19 +171,20 @@ async function infer(){
       output=completion.output;
     }finally{await control.close();await route.drain();session.unregisterRoute(route.routeId);}
     record.phases.materialsMs=performance.now()-phase;
-    record.supermat={identity:materials.identity,timings:output.timings,dutyCount:output.dutyCount};
+    if(output.width!==size||output.height!==size)throw Error('Material output resolution differs from selected resolution');
+    record.supermat={identity:materials.identity,size,timings:output.timings,dutyCount:output.dutyCount};
     results.publish(token,'materials',output);viewer.setMaterials(output);
     document.querySelector('[data-view=materials]').disabled=false;
-    view('materials');
+    compare();
     record.wallMs=performance.now()-started;record.status='done';
     record.output={surfaceVertices:viewer.surface.position.length/3,triangles:viewer.surface.indices.length/3,materialSize:[output.width,output.height]};
     state.status='done';state.result=record.output;state.identity.supermat=materials.identity;
     $('identity').textContent='MoGe-2 + SuperMat | same GPUDevice';
-    $('timings').textContent=`Depth ${(record.phases.geometryMs/1000).toFixed(2)} s | Materials ${(record.phases.materialsMs/1000).toFixed(2)} s`;
+    $('timings').textContent=`Depth ${(record.phases.geometryMs/1000).toFixed(2)} s | Materials ${size} x ${size}: ${(record.phases.materialsMs/1000).toFixed(2)} s`;
     $('progress').value=1;status('Depth & materials complete');
   }catch(error){record.status='error';record.error=String(error.stack??error);state.status='error';state.error=error.message;status(error.message,true);$('progress').removeAttribute('value');}
   finally{clearInterval(clock);record.elapsedMs=performance.now()-started;state.runs.push(record);active=false;
-    $('run').disabled=$('file').disabled=false;for(const button of document.querySelectorAll('[data-sample]'))button.disabled=false;
+    $('run').disabled=$('file').disabled=$('material-size').disabled=false;for(const button of document.querySelectorAll('[data-sample]'))button.disabled=false;
   }
 }
 for(const button of document.querySelectorAll('[data-sample]'))button.onclick=()=>sample(button.dataset.sample).catch(fail);
@@ -179,9 +195,11 @@ function cycleView(delta){
   view(available[(index+delta+available.length)%available.length]);
 }
 $('view-prev').onclick=()=>cycleView(-1);$('view-next').onclick=()=>cycleView(1);
+$('compare').onclick=compare;
+for(const button of document.querySelectorAll('[data-focus]'))button.onclick=()=>view(button.dataset.focus);
 $('file').onchange=()=>{const file=$('file').files[0];if(file)load(file,file.name).catch(fail);};
 $('run').onclick=infer;
-$('map').onchange=()=>{if(viewer)viewer.map=$('map').value;};
+$('map').onchange=()=>{if(viewer){const map=$('map').value;view('materials');viewer.map=map;$('map').value=map;}};
 $('gi').onchange=()=>{viewer.useGI=$('gi').checked;};
 $('glow').onchange=()=>{viewer.glow=$('glow').checked;};
 $('reset').onclick=()=>{viewer.reset();syncControls();};
@@ -196,7 +214,7 @@ for(const id of tuningFields)$(id).onchange=()=>{
 let sunPointer=null;
 function setLightPosition(u,v){viewer.setLightScreenPosition(u,v);syncSun();}
 function dragSun(event){
-  const bounds=$('scene').getBoundingClientRect();
+  const bounds=$('light-ring').getBoundingClientRect();
   setLightPosition((event.clientX-bounds.left)/bounds.width,(event.clientY-bounds.top)/bounds.height);
 }
 $('sun').onpointerdown=event=>{
@@ -213,8 +231,8 @@ $('sun').onkeydown=event=>{
   else if(event.key==='Home'){event.preventDefault();viewer.setLight();syncSun();}
 };
 function exportPreset(){if(!viewer?.surface)throw Error('Preset requires a depth surface');return viewer.exportPreset();}
-function importPreset(json){
-  try{if(!viewer?.surface)throw Error('Preset requires a depth surface');viewer.applyPreset(typeof json==='string'?JSON.parse(json):json);syncControls();$('preset-error').textContent='';return true;}
+async function importPreset(json){
+  try{if(!viewer?.surface)throw Error('Preset requires a depth surface');await viewer.applyPreset(typeof json==='string'?JSON.parse(json):json);syncControls();$('preset-error').textContent='';return true;}
   catch(error){$('preset-error').textContent=error.message;$('advanced').open=true;return false;}
 }
 $('preset-export').onclick=()=>{
@@ -224,11 +242,25 @@ $('preset-export').onclick=()=>{
 $('preset-import').onclick=()=>$('preset-file').click();
 $('preset-file').onchange=async()=>{
   const file=$('preset-file').files[0];
-  try{if(file)importPreset(await file.text());}catch(error){$('preset-error').textContent=error.message;}
+  try{if(file)await importPreset(await file.text());}catch(error){$('preset-error').textContent=error.message;}
   $('preset-file').value='';
 };
 function fail(error){state.status='error';state.error=error.message;status(error.message,true);}
-window.__materialPhotoActions={infer,sample,view,exportPreset,importPreset,setLightPosition,presentation:()=>viewer?.presentation()??null,async pixels(presentedFrame){
+async function changeEnvironment(name){
+  if(!viewer)return false;
+  const ticket=++environmentTicket;
+  $('environment-status').textContent='Loading HDR';
+  try{
+    const applied=await viewer.loadEnvironment(name);
+    if(ticket===environmentTicket){$('environment-status').textContent='';syncControls();}
+    return applied;
+  }catch(error){if(ticket===environmentTicket){$('environment-status').textContent=error.message;syncControls();}return false;}
+}
+$('environment').onchange=()=>changeEnvironment($('environment').value);
+for(const [id,key]of [['environment-rotation','rotation'],['environment-intensity','intensity'],['direct-intensity','direct']])$(id).oninput=()=>{
+  try{viewer.setLighting({[key]:Number($(id).value)});$('preset-error').textContent='';}catch(error){$('preset-error').textContent=error.message;}
+};
+window.__materialPhotoActions={infer,sample,view,compare,changeEnvironment,exportPreset,importPreset,setLightPosition,presentation:()=>viewer?.presentation()??null,async pixels(presentedFrame){
   // Inspect the browser's presented canvas screenshot, not a discarded WebGPU drawing buffer.
   const response=await fetch(presentedFrame),bitmap=await createImageBitmap(await response.blob());
   const canvas=new OffscreenCanvas(bitmap.width,bitmap.height),context=canvas.getContext('2d');

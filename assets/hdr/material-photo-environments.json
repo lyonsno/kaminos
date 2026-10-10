@@ -1,0 +1,28 @@
+{
+  "schema": "kaminos.hdr-environment-assets.v0",
+  "license": "CC0-1.0",
+  "licenseUrl": "https://polyhaven.com/license",
+  "format": "Radiance RGBE",
+  "width": 1024,
+  "height": 512,
+  "assets": [
+    {
+      "file": "studio_small_09_1k.hdr",
+      "sha256": "e7cfda5f4e98e623db12b8bfd0184e048488e4855d9c83e2751fb44a32e80c45",
+      "sourcePageUrl": "https://polyhaven.com/a/studio_small_09",
+      "sourceAssetUrl": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr"
+    },
+    {
+      "file": "empty_warehouse_01_1k.hdr",
+      "sha256": "9b3d611cadc32c3a0c7e084ce5611c0650293881c4a041e7fa13748fe0dc6451",
+      "sourcePageUrl": "https://polyhaven.com/a/empty_warehouse_01",
+      "sourceAssetUrl": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/empty_warehouse_01_1k.hdr"
+    },
+    {
+      "file": "kloofendal_48d_partly_cloudy_puresky_1k.hdr",
+      "sha256": "fd94c84997b8a3c353b62c2125a9b44e19509956986a126e472684432a02d798",
+      "sourcePageUrl": "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky",
+      "sourceAssetUrl": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_48d_partly_cloudy_puresky_1k.hdr"
+    }
+  ]
+}

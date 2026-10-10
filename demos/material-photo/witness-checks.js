@@ -1,4 +1,4 @@
-export function validateEpisode(state, source) {
+export function validateEpisode(state, source, size) {
   const run=state?.runs?.at(-1);
   if(state?.status!=='done'||run?.status!=='done')throw Error('Both models must complete');
   if(state.source!==source||run.source!==source)throw Error('Wrong photograph source');
@@ -7,6 +7,7 @@ export function validateEpisode(state, source) {
   if(state.identity.supermat?.routeId!=='supermat.image-to-pbr.webgpu-local.v0')throw Error('Actual SuperMat route required');
   if(!(run.output?.triangles>0&&run.output?.surfaceVertices>0))throw Error('Nonempty depth surface required');
   if(!run.output.materialSize?.every(x=>Number.isInteger(x)&&x>0)||run.output.materialSize.length!==2)throw Error('Material output required');
+  if(size!==undefined&&(run.supermat?.size!==size||!run.output.materialSize.every(value=>value===size)))throw Error('Effective material resolution differs from selected resolution');
 }
 
 export async function captureSurfaceFrame(evaluate, capture) {
@@ -37,6 +38,9 @@ export function validateComparison(views) {
         !close(view.gi?.settings,reference.gi?.settings)||!close(view.gi?.debugState?.estimator,reference.gi?.debugState?.estimator))throw Error('Comparison changed camera, light or GI');
     if(view.physicalbaseline.geometryId!==reference.physicalbaseline.geometryId||view.normalsMatchSurface!==true||
         view.physicalbaseline.environmentIntensity!==reference.physicalbaseline.environmentIntensity)throw Error('Comparison changed geometry, normals or environment');
+    if(reference.environment)for(const key of ['environment','source','rotation','intensity','direct']){
+      if(!Object.hasOwn(reference.environment,key)||view.environment?.[key]!==reference.environment[key])throw Error('Comparison changed HDR source or lighting');
+    }
   }
   const materialKeys=['uuid','roughness','metalness','mapUUID','roughnessMapUUID','metalnessMapUUID','emissiveMapUUID','emissiveIntensity'];
   for(const mode of ['relit','materials']) {

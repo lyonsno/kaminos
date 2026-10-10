@@ -26,6 +26,7 @@ test('witness rejects false completion, stale source and wrong device', async()=
     supermat:{routeId:'supermat.image-to-pbr.webgpu-local.v0'}},runs:[{source:'Celebration',status:'done',
     moge:{weights:'local'},supermat:{dutyCount:12},output:{surfaceVertices:16,triangles:18,materialSize:[512,512]}}]};
   assert.doesNotThrow(()=>validateEpisode(good,'Celebration'));
+  assert.throws(()=>validateEpisode(good,'Celebration',768),'Selected resolution cannot silently fall back');
   for(const mutate of [
     x=>{x.status='running';},x=>{x.source='Old photograph';},x=>{x.identity.sharedDevice=false;},
     x=>{x.identity.backend.kind='wasm';},x=>{x.runs[0].moge.weights='stub';},
@@ -42,10 +43,13 @@ test('comparison witness rejects changed camera, lighting and unfair baseline',a
     physicalbaseline:{exposure:1,relit:{uuid:'relit',roughness:.4,metalness:0,mapUUID:'photograph',roughnessMapUUID:null,metalnessMapUUID:null,emissiveMapUUID:null,emissiveIntensity:0},
       materials:{uuid:'materials',roughness:1,metalness:1,mapUUID:'albedo',roughnessMapUUID:'orm',metalnessMapUUID:'orm',emissiveMapUUID:'emission',emissiveIntensity:0},
       geometryId:'same',environmentIntensity:.6},normalsMatchSurface:true,
-    gi:{enabled:true,settings:{steps:16},debugState:{estimator:{expFactor:2}}},glow:false};
+    gi:{enabled:true,settings:{steps:16},debugState:{estimator:{expFactor:2}}},glow:false,
+    environment:{environment:'studio',source:'local/studio.hdr',rotation:0,intensity:1,direct:1}};
   const views=Object.fromEntries(['original','photo','relit','materials'].map(mode=>[mode,{...structuredClone(common),mode}]));
   for(const mode of ['relit','materials'])views[mode].physicalbaseline.activeMaterial=structuredClone(views[mode].physicalbaseline[mode]);
   assert.doesNotThrow(()=>checks.validateComparison(views));
+  const differentHDR=structuredClone(views);differentHDR.materials.environment.rotation=90;
+  assert.throws(()=>checks.validateComparison(differentHDR),'Different HDR lighting is not a fair comparison');
   for(const mutate of [v=>{delete v.photo;},v=>{v.original.camera.position=[0,0,1];},
     v=>{v.materials.light.intensity=5;},v=>{v.relit.physicalbaseline.relit.roughness=1;},
     v=>{v.materials.physicalbaseline.geometryId='other';},v=>{v.materials.gi.settings.steps=8;},

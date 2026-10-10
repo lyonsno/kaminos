@@ -102,3 +102,17 @@ test('ordinary sun drags project roundoff-prone rim positions without rejecting 
   const preset=JSON.parse(JSON.stringify(viewer.exportPreset()));preset.light={x:1.001,y:0};
   assert.throws(()=>viewer.applyPreset(preset),/hemisphere/);
 });
+test('environment controls rotate background and material lighting together and persist in presets',async()=>{
+  const {viewer}=await viewerFixture();
+  assert.equal(typeof viewer.setLighting,'function','HDR lighting controls must reach the live scene');
+  viewer.setLighting({rotation:90,intensity:1.2,direct:0});
+  assert.equal(viewer.scene.environmentRotation.y,Math.PI/2);
+  assert.equal(viewer.scene.backgroundRotation.y,Math.PI/2);
+  assert.equal(viewer.scene.environmentIntensity,1.2);assert.equal(viewer.key.intensity,0);
+  const preset=JSON.parse(JSON.stringify(viewer.exportPreset()));
+  viewer.setLighting({rotation:0,intensity:.6,direct:3});viewer.applyPreset(preset);
+  assert.equal(viewer.scene.environmentRotation.y,Math.PI/2);assert.equal(viewer.key.intensity,0);
+  const before=JSON.stringify(viewer.exportPreset());
+  assert.throws(()=>viewer.applyPreset({...preset,lighting:{...preset.lighting,intensity:-1}}));
+  assert.equal(JSON.stringify(viewer.exportPreset()),before);
+});

@@ -28,9 +28,14 @@ function validateLight(value) {
   if (!Number.isFinite(value?.x) || !Number.isFinite(value?.y) || Math.hypot(value.x,value.y)>1) throw new Error('Invalid preset light hemisphere');
   return {x:value.x,y:value.y};
 }
+function validateLighting(value) {
+  if(!Number.isFinite(value?.rotation)||!Number.isFinite(value?.intensity)||value.intensity<0||
+    !Number.isFinite(value?.direct)||value.direct<0)throw Error('Invalid preset environment lighting');
+  return {rotation:value.rotation,intensity:value.intensity,direct:value.direct};
+}
 
 export class MaterialPhotoViewer {
-  async init(canvas, device) {
+  async init(canvas, device, {interactive=true,interactionTarget=canvas,rig=null}={}) {
     this.canvas = canvas;
     this.textures = [];
     this.renderer = new THREE.WebGPURenderer({ canvas, device, antialias: true });
@@ -43,26 +48,8 @@ export class MaterialPhotoViewer {
     this.camera = new THREE.PerspectiveCamera(2 * Math.atan(0.5) * 180 / Math.PI, 1, 0.001, 100);
     this.camera.position.z = 1;
     this.key = new THREE.DirectionalLight(0xffeedc, 3);
-    this.fill = new THREE.DirectionalLight(0xbbddff, 0.65);
-    this.fill.position.set(-2, 0.5, 1);
-    this.scene.add(this.key, this.key.target, this.fill, new THREE.HemisphereLight(0xe7edff, 0x484b3b, 0.5));
-    // A small studio environment gives metals real reflections, not a diffuse substitute.
-    const studio = new THREE.Scene();
-    studio.background = new THREE.Color(0x59666b);
-    const walls = new THREE.Mesh(new THREE.BoxGeometry(12, 12, 12), new THREE.MeshBasicNodeMaterial({ color: 0x555e63, side: THREE.BackSide }));
-    studio.add(walls);
-    for (const [position, color, scale] of [
-      [[-3,3,2], 0xffffff, [2,4,1]], [[3,1,-2], 0x91b4d5, [2,3,1]], [[0,4,-1], 0xffe7bc, [4,1,3]],
-    ]) {
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(...scale), new THREE.MeshBasicNodeMaterial({ color }));
-      panel.position.fromArray(position); studio.add(panel);
-    }
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.environment = pmrem.fromScene(studio);
-    this.scene.environment = this.environment.texture;
-    this.scene.environmentIntensity = 0.6;
-    pmrem.dispose();
-    studio.traverse(object => { object.geometry?.dispose(); object.material?.dispose(); });
+    this.scene.add(this.key, this.key.target);
+    this.setLighting({rotation:0,intensity:1,direct:1});
     this.aoStrength = uniform(0.5);
     this.gi = createSceneGI(this.scene, this.camera, this.aoStrength);
     this.setTuning(DEFAULT_TUNING);
@@ -70,14 +57,15 @@ export class MaterialPhotoViewer {
     this.pipeline.outputNode = this.gi.output();
     this.textures = [];
     this.mode = 'original'; this.map = 'surface'; this.useGI = true; this.glow = false;
-    this.orbit = new THREE.Vector2(); this.target = new THREE.Vector2(); this.current = new THREE.Vector2();
+    this.rig=rig;
+    this.orbit = rig?.orbit??new THREE.Vector2(); this.target = rig?.target??new THREE.Vector2(); this.current = rig?.current??new THREE.Vector2();
     this.reset();
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas.parentElement);
     this.listeners = {
-      pointerdown: event => { this.drag = { x: event.clientX, y: event.clientY, ox: this.orbit.x, oy: this.orbit.y }; canvas.setPointerCapture(event.pointerId); },
+      pointerdown: event => { if(event.button!==0)return;this.drag = { x: event.clientX, y: event.clientY, ox: this.orbit.x, oy: this.orbit.y }; interactionTarget.setPointerCapture(event.pointerId); },
       pointermove: event => {
-        const bounds = canvas.getBoundingClientRect();
+        const bounds = interactionTarget.getBoundingClientRect();
         if (this.drag) this.orbit.set(
           THREE.MathUtils.clamp(this.drag.ox + (event.clientX-this.drag.x)/bounds.width, -0.5, 0.5),
           THREE.MathUtils.clamp(this.drag.oy + (event.clientY-this.drag.y)/bounds.height, -0.35, 0.35));
@@ -92,8 +80,10 @@ export class MaterialPhotoViewer {
         if (event.key === 'Home') this.reset();
       },
     };
-    for (const [event, handler] of Object.entries(this.listeners)) canvas.addEventListener(event, handler);
-    this.renderer.setAnimationLoop(() => this.render());
+    this.interactionTarget=interactionTarget;
+    if(interactive)for (const [event, handler] of Object.entries(this.listeners)) interactionTarget.addEventListener(event, handler);
+    else this.listeners={};
+    this.renderer.setAnimationLoop(time => this.render(time));
     return this;
   }
 
@@ -107,7 +97,7 @@ export class MaterialPhotoViewer {
     return texture;
   }
 
-  setImage(image, result = null) {
+  setImage(image, result = null, shared = null) {
     this.clear();
     this.image = image;
     this.aspect = image.width / image.height;
@@ -115,13 +105,16 @@ export class MaterialPhotoViewer {
     this.original = new THREE.Mesh(new THREE.PlaneGeometry(this.aspect, 1), new THREE.MeshBasicNodeMaterial({ map: texture, toneMapped: false, side: THREE.DoubleSide }));
     this.scene.add(this.original);
     if (result) {
-      const surface = buildPhotoSurface(result, this.aspect);
+      const surface = shared?.surface??buildPhotoSurface(result, this.aspect);
       this.surface = surface;
-      const geometry = new THREE.BufferGeometry();
-      for (const [name, data, size] of [['position',surface.position,3], ['normal',surface.normal,3], ['uv',surface.uv,2]]) {
-        geometry.setAttribute(name, new THREE.BufferAttribute(data, size));
+      const geometry = shared?.geometry??new THREE.BufferGeometry();
+      this.borrowedGeometry=!!shared;
+      if(!shared){
+        for (const [name, data, size] of [['position',surface.position,3], ['normal',surface.normal,3], ['uv',surface.uv,2]]) {
+          geometry.setAttribute(name, new THREE.BufferAttribute(data, size));
+        }
+        geometry.setIndex(new THREE.BufferAttribute(surface.indices, 1));
       }
-      geometry.setIndex(new THREE.BufferAttribute(surface.indices, 1));
       this.photoMaterial = new THREE.MeshBasicNodeMaterial({ map: texture, side: THREE.DoubleSide, toneMapped: false });
       this.relitMaterial = new THREE.MeshStandardNodeMaterial({ map: texture, side: THREE.DoubleSide, roughness: .4, metalness: 0, emissiveIntensity: 0 });
       this.physicalMaterial = new THREE.MeshStandardNodeMaterial({ map: texture, side: THREE.DoubleSide, roughness: 1, metalness: 0, emissive: 0xffffff, emissiveIntensity: 0 });
@@ -163,6 +156,21 @@ export class MaterialPhotoViewer {
   }
 
   getTuning() { return {...DEFAULT_TUNING,...this.settings}; }
+  getLighting() { return {...{rotation:0,intensity:1,direct:1},...this.lighting}; }
+  setLighting(value) {
+    const next=validateLighting({...this.getLighting(),...value});
+    this.scene.environmentRotation.y=this.scene.backgroundRotation.y=next.rotation*Math.PI/180;
+    this.scene.environmentIntensity=next.intensity;this.scene.backgroundIntensity=next.intensity;
+    this.key.intensity=next.direct;this.lighting=next;
+  }
+  setEnvironment(texture) {
+    const pmrem=new THREE.PMREMGenerator(this.renderer);
+    let target;
+    try{target=pmrem.fromEquirectangular(texture);}finally{pmrem.dispose();}
+    const old=this.environment;this.environment=target;
+    this.scene.environment=target.texture;this.scene.background=texture;this.scene.backgroundBlurriness=.08;
+    this.environmentIdentity={...texture.userData};old?.dispose();
+  }
   setTuning(value) {
     const next = validateTuning({...this.getTuning(),...value});
     this.gi.setSettings({mode:'combined',view:'scene',...pick(next,GI_KEYS)});
@@ -194,7 +202,7 @@ export class MaterialPhotoViewer {
   }
   exportPreset() {
     return {schema:'kaminos.material-photo-preset.v1',settings:this.getTuning(),light:this.getLightHandle(),
-      camera:{orbit:this.orbit.toArray()},gi:this.useGI,glow:this.glow??false};
+      camera:{orbit:this.orbit.toArray()},gi:this.useGI,glow:this.glow??false,lighting:this.getLighting()};
   }
   presentation() {
     const materialState=material=>material?{uuid:material.uuid,roughness:material.roughness,metalness:material.metalness,
@@ -207,14 +215,21 @@ export class MaterialPhotoViewer {
       emissiveIntensity:this.mesh?.material.emissiveIntensity??0,emissionStats:this.emissionStats??null,
       physicalbaseline:{geometryId:this.mesh?.geometry.uuid??null,exposure:this.renderer.toneMappingExposure,relit:materialState(this.relitMaterial),materials:materialState(this.physicalMaterial),
         activeMaterial:materialState(this.mesh?.material),environmentIntensity:this.scene.environmentIntensity},
+      environment:{...this.environmentIdentity,...this.getLighting(),textureUUID:this.scene.environment?.uuid??null},
       glow:this.glow,gi:{enabled:this.useGI,settings:this.getTuning(),debugState:this.gi.debugState()}};
   }
-  applyPreset(value) {
+  validatePreset(value) {
     if(value?.schema!=='kaminos.material-photo-preset.v1')throw new Error('Invalid preset schema');
     const tuning=validateTuning(value.settings),light=validateLight(value.light),orbit=value.camera?.orbit;
     if(!Array.isArray(orbit)||orbit.length!==2||!orbit.every(Number.isFinite)||Math.abs(orbit[0])>.5||Math.abs(orbit[1])>.35)throw new Error('Invalid preset camera orbit');
     if(typeof value.gi!=='boolean'||typeof value.glow!=='boolean')throw new Error('Invalid preset GI or glow');
+    const lighting=validateLighting(value.lighting??this.getLighting());
+    return {tuning,light,orbit,lighting};
+  }
+  applyPreset(value) {
+    const {tuning,light,orbit,lighting}=this.validatePreset(value);
     this.setTuning(tuning);
+    this.setLighting(lighting);
     this.setLightHandle(light.x,light.y);
     this.orbit.fromArray(orbit);this.target.set(0,0);this.current.set(0,0);
     this.useGI=value.gi;this.glow=value.glow;
@@ -228,8 +243,8 @@ export class MaterialPhotoViewer {
     this.camera.zoom=Math.min(1,this.camera.aspect/(this.aspect||1))*.79;
     this.camera.updateProjectionMatrix();
   }
-  render() {
-    if (!this.original || document.hidden) return;
+  render(time) {
+    if (!this.original || this.available===false || document.hidden || this.canvas?.parentElement.hidden) return;
     const original=this.mode==='original';
     this.original.visible=original;
     if (this.mesh) {
@@ -240,7 +255,7 @@ export class MaterialPhotoViewer {
       } else this.mesh.material=this.mode==='materials'&&this.maps?this.physicalMaterial:this.mode==='relit'?this.relitMaterial:this.photoMaterial;
       this.physicalMaterial.emissiveIntensity=this.mode==='materials'&&this.glow?1:0;
     }
-    this.current.lerp(this.target,.08);
+    if(!this.rig||this.rig.time!==time){this.current.lerp(this.target,.08);if(this.rig)this.rig.time=time;}
     this.camera.position.set(this.orbit.x+this.current.x,-this.orbit.y-this.current.y,1);
     this.camera.lookAt(0,0,0);
     this.updateLight();
@@ -248,7 +263,7 @@ export class MaterialPhotoViewer {
     else this.renderer.render(this.scene,this.camera);
   }
   clear() {
-    for (const mesh of [this.mesh,this.original]) if(mesh){this.scene.remove(mesh);mesh.geometry.dispose();}
+    for (const mesh of [this.mesh,this.original]) if(mesh){this.scene.remove(mesh);if(mesh===this.original||!this.borrowedGeometry)mesh.geometry.dispose();}
     for (const material of [this.original?.material,this.photoMaterial,this.relitMaterial,this.physicalMaterial,this.mapMaterial]) material?.dispose();
     for (const texture of this.textures??[]) texture.dispose();
     this.textures=[]; this.original=this.mesh=this.maps=this.surface=this.normalMap=this.emissionMap=this.emissionStats=this.image=null;
@@ -256,7 +271,7 @@ export class MaterialPhotoViewer {
   }
   async dispose() {
     this.renderer?.setAnimationLoop(null);this.resizeObserver?.disconnect();
-    for(const [event,handler]of Object.entries(this.listeners??{}))this.canvas.removeEventListener(event,handler);
+    for(const [event,handler]of Object.entries(this.listeners??{}))this.interactionTarget.removeEventListener(event,handler);
     try{await this.renderer?.backend.device.queue.onSubmittedWorkDone();}
     finally{this.clear();this.pipeline?.dispose();this.gi?.source.dispose();this.gi?.beauty.dispose();this.environment?.dispose();this.renderer?.dispose();}
   }

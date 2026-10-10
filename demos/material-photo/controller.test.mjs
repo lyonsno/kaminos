@@ -6,19 +6,20 @@ import { test } from 'node:test';
 async function controller() {
   const behavior = { failDevice: false, failMaterials: false, deviceRequests: 0, gates: new Map() };
   const node = dataset => ({ dataset, style: {}, value: '', disabled: false, hidden: false, checked: false, textContent: '', captures:new Set(),
-    classList: { toggle() {} }, removeAttribute() {}, setAttribute() {}, addEventListener() {},
+    classList: { toggle() {},add(){},remove(){} }, removeAttribute() {}, setAttribute() {}, addEventListener() {},
     setPointerCapture(id) {this.captures.add(id);}, releasePointerCapture(id) {this.captures.delete(id);},hasPointerCapture(id){return this.captures.has(id);}, getBoundingClientRect: () => ({ left:0,top:0,width: 400, height: 400 }) });
   const ids=['status','preview','scene','stage-label','run','file','map','light','height','exposure','gi','reset','name','resolution','progress','elapsed','timings','identity',
-    'view-prev','view-next','sun','glow','advanced','tuning','preset-export','preset-import','preset-file','preset-error',
+    'view-prev','view-next','sun','glow','advanced','tuning','preset-export','preset-import','preset-file','preset-error','material-size','compare','light-ring','environment','environment-status','environment-rotation','environment-intensity','direct-intensity',
     'gain','radius','thickness','slices','steps','denoise','aoStrength','expFactor','screenSpaceSampling','linearThickness','backfaceLighting','depthPhi','normalPhi','lumaPhi'];
   const elements = Object.fromEntries(ids.map(id => [id,node({})]));
+  elements['material-size'].value='512';elements.environment.value='studio';
   elements.light.value = -35; elements.height.value = 35; elements.exposure.value = 1;
   const views = ['original','photo','relit','materials'].map(view => node({ view }));
   const samples = ['celebration','bag','orb'].map(sample => node({ sample }));
   const document = {
     getElementById: id => elements[id],
     querySelector: selector => views.find(n => selector === `[data-view=${n.dataset.view}]`),
-    querySelectorAll: selector => selector === '[data-sample]' ? samples : selector.includes(':not') ? views.slice(1) : views,
+    querySelectorAll: selector => selector === '[data-focus]'?[]:selector === '[data-sample]' ? samples : selector.includes(':not') ? views.slice(1) : views,
   };
   const device = { queue: { async onSubmittedWorkDone() {} }, lost: new Promise(() => {}), destroy() {} };
   const route = () => ({ routeId: 'test', runtime: {}, async drain() {},
@@ -33,6 +34,9 @@ async function controller() {
     setLightHandle(x,y) { this.lightHandle={x,y}; }
     setLightScreenPosition(u,v) { this.setLightHandle((u-.5)/.38,(.5-v)/.38); }
     getLightHandle() { return this.lightHandle??{x:-.47,y:.57}; }
+    getLightRing(){return {u:.3,v:.2};}
+    getLighting(){return {rotation:0,intensity:1,direct:1};}
+    showComparison(){this.comparison=true;this.mode=this.maps?'materials':'photo';}
     setTuning(value) { this.settings={...this.settings,...value}; }
     getTuning() { return {gain:1,radius:.15,thickness:.03,slices:6,steps:16,denoise:3,aoStrength:.5,expFactor:2,screenSpaceSampling:false,linearThickness:false,backfaceLighting:0,depthPhi:.1,normalPhi:5,lumaPhi:5,...this.settings}; }
     exportPreset() { return {schema:'kaminos.material-photo-preset.v1',settings:this.getTuning(),light:this.getLightHandle(),camera:{orbit:[.1,.2]},gi:this.useGI??true,glow:this.glow??false}; }
@@ -51,7 +55,7 @@ async function controller() {
     createWebGpuInferenceControl: () => ({ async close() {} }),
   };
   const supermat = { SUPERMAT_ROUTE_ID:'supermat.image-to-pbr.webgpu-local.v0', superMatDeviceOptions:async()=>({}),
-    createSuperMatAdapter: async () => ({ identity:{}, async run() { if(behavior.failMaterials)throw Error('Material failure'); return { width:4,height:4,timings:{},dutyCount:1 }; } }) };
+    createSuperMatAdapter: async () => ({ identity:{}, async run(input) { behavior.materialSize=input.size;if(behavior.failMaterials)throw Error('Material failure'); return { width:input.size,height:input.size,timings:{},dutyCount:1 }; } }) };
   class Canvas { constructor(width,height) { this.width=width;this.height=height; } getContext() { return { drawImage() {}, getImageData: () => ({ width:this.width,height:this.height,data:new Uint8ClampedArray(this.width*this.height*4) }) }; } }
   class BlobURL extends URL { static createObjectURL() { return 'blob:test'; } static revokeObjectURL() {} }
   const response = () => ({ ok:true, blob:async()=>({}) });
@@ -77,6 +81,12 @@ test('latest requested photograph wins even when fetches complete out of order',
   const bag=c.actions.sample('bag'), orb=c.actions.sample('orb');
   releaseOrb(); await orb; releaseBag(); await bag;
   assert.equal(c.state.source, 'Metal & glow');
+});
+test('selected material resolution reaches the producer and survives the run record',async()=>{
+  const c=await controller();c.elements['material-size'].value='768';await c.actions.infer();
+  assert.equal(c.behavior.materialSize,768);
+  assert.equal(c.state.runs.at(-1).supermat.size,768);
+  assert.deepEqual(Array.from(c.state.result.materialSize),[768,768]);
 });
 test('transient device setup failure can be retried', async () => {
   const c=await controller(); c.behavior.failDevice=true; await c.actions.infer();
@@ -123,13 +133,13 @@ test('preset roundtrip restores light and settings and rejects invalid input bef
   const c=await controller();await c.actions.infer();
   assert.equal(typeof c.actions.exportPreset,'function');assert.equal(typeof c.actions.importPreset,'function');
   c.behavior.viewer.setTuning({gain:3,steps:96});c.behavior.viewer.setLightHandle(.2,-.3);
-  const preset=c.actions.exportPreset();c.behavior.viewer.setTuning({gain:1});c.actions.importPreset(JSON.stringify(preset));
+  const preset=c.actions.exportPreset();c.behavior.viewer.setTuning({gain:1});await c.actions.importPreset(JSON.stringify(preset));
   assert.equal(c.behavior.viewer.settings.gain,3);assert.deepEqual(JSON.parse(JSON.stringify(c.behavior.viewer.lightHandle)),{x:.2,y:-.3});
   assert.equal(Number(c.elements.steps.value),96);
   const before=JSON.stringify(c.behavior.viewer.exportPreset());
-  c.actions.importPreset(JSON.stringify({...preset,settings:{...preset.settings,gain:-1}}));
+  await c.actions.importPreset(JSON.stringify({...preset,settings:{...preset.settings,gain:-1}}));
   assert.equal(JSON.stringify(c.behavior.viewer.exportPreset()),before);assert.match(c.elements['preset-error'].textContent,/Invalid/);
-  c.actions.importPreset('{');assert.ok(c.elements['preset-error'].textContent);
+  await c.actions.importPreset('{');assert.ok(c.elements['preset-error'].textContent);
 });
 test('sun owns its pointer capture, ignores unrelated pointers and supports keyboard positioning',async()=>{
   const c=await controller();await c.actions.infer();const sun=c.elements.sun;

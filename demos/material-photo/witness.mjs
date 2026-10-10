@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { launchChrome, openPage } from '../../models/supermat/chrome-cdp.mjs';
 import { validateEpisode, captureSurfaceFrame, validateComparison } from './witness-checks.js';
 
-const {values}=parseArgs({options:Object.fromEntries(['repo-root','expected-commit','chrome','output','port'].map(key=>[key,{type:'string'}]))});
+const {values}=parseArgs({options:Object.fromEntries(['repo-root','expected-commit','chrome','output','port','samples','sizes'].map(key=>[key,{type:'string'}]))});
 const output=path.resolve(values.output??'material-photo-witness');
 const report={status:'failed',phase:'arguments',requested:values,episodes:[],errors:[],command:process.argv};
 let browser,server;
@@ -19,7 +19,7 @@ try{
   const root=await fs.realpath(values['repo-root']);
   const git=args=>execFileSync('git',args,{cwd:root,encoding:'utf8'}).trim();
   report.source={root,commit:git(['rev-parse','HEAD'])};
-  if(report.source.commit!==values['expected-commit']||git(['status','--porcelain','--','demos/material-photo','scene-gi.mjs','scene-gi-settings.mjs','lib','models/supermat','webgpu-inference-kit/src']))throw Error('Exact clean source required');
+  if(report.source.commit!==values['expected-commit']||git(['status','--porcelain','--','demos/material-photo','assets/hdr','finger-fluid-webgpu-core.js','scene-gi.mjs','scene-gi-settings.mjs','lib','models/supermat','webgpu-inference-kit/src']))throw Error('Exact clean source required');
   const port=Number(values.port??18741),base=`http://127.0.0.1:${port}`;
   report.phase='server';await persist();
   server=spawn('/usr/bin/python3',['-u','serve.py',String(port)],{cwd:root,stdio:['ignore','pipe','pipe']});
@@ -40,16 +40,33 @@ try{
   const capture=async(name)=>{const shot=await browser.cdp.call('Page.captureScreenshot',{format:'png'},sessionId);const file=path.join(output,`${name}.png`);await fs.writeFile(file,Buffer.from(shot.data,'base64'));return file;};
   await browser.cdp.call('Runtime.enable',{},sessionId);
   await evaluate("window.__materialPhotoWitnessErrors=[];addEventListener('error',e=>window.__materialPhotoWitnessErrors.push(e.message));addEventListener('unhandledrejection',e=>window.__materialPhotoWitnessErrors.push(String(e.reason)))");
-  for(const [key,label]of [['celebration','Celebration'],['bag','Backpack'],['orb','Metal & glow']]){
+  const samples=(values.samples??'celebration,bag,orb').split(','),sizes=(values.sizes??'512').split(',').map(Number);
+  if(!samples.length||samples.some(key=>!['celebration','bag','orb'].includes(key))||!sizes.length||sizes.some(size=>![512,768,1024].includes(size)))throw Error('Invalid samples or sizes');
+  report.plan={samples,sizes};
+  for(const [sampleKey,label]of [['celebration','Celebration'],['bag','Backpack'],['orb','Metal & glow']].filter(([key])=>samples.includes(key)))for(const size of sizes){
+    const key=`${sampleKey}-${size}`;
     report.phase=`inference-${key}`;await persist();
-    await evaluate(`window.__materialPhotoActions.sample(${JSON.stringify(key)})`);
-    const bytes=await fs.readFile(path.join(root,`demos/material-photo/images/${({celebration:'celebration.png',bag:'bag.webp',orb:'evil-orb.png'})[key]}`));
-    const episode={source:label,inputSha256:createHash('sha256').update(bytes).digest('hex')};
+    await evaluate(`(async()=>{await window.__materialPhotoActions.sample(${JSON.stringify(sampleKey)});document.getElementById('material-size').value=${JSON.stringify(String(size))}})()`);
+    const bytes=await fs.readFile(path.join(root,`demos/material-photo/images/${({celebration:'celebration.png',bag:'bag.webp',orb:'evil-orb.png'})[sampleKey]}`));
+    const episode={source:label,requestedSize:size,inputSha256:createHash('sha256').update(bytes).digest('hex')};
     report.episodes.push(episode);await persist();
     await evaluate('window.__materialPhotoActions.infer()');
     episode.state=await evaluate('window.__materialPhoto');
-    validateEpisode(episode.state,label);
+    validateEpisode(episode.state,label,size);
     const settle=()=>evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    await settle();
+    episode.comparison=await evaluate('window.__materialPhotoActions.presentation().comparison');
+    if(!episode.comparison.enabled)throw Error('Four-view comparison is not the default');
+    validateComparison(episode.comparison.views);
+    episode.grid=await capture(`${key}-comparison`);
+    episode.gridPixels={};
+    for(const mode of ['original','photo','relit','materials']){
+      const clip=await evaluate(`(()=>{const r=document.querySelector('[data-canvas=${mode}]').getBoundingClientRect();if(r.width<=0||r.height<=0)throw Error('Comparison view hidden');return{x:r.x,y:r.y,width:r.width,height:r.height,scale:1}})()`);
+      const frame=await browser.cdp.call('Page.captureScreenshot',{format:'png',clip,captureBeyondViewport:true},sessionId);
+      await fs.writeFile(path.join(output,`${key}-grid-${mode}.png`),Buffer.from(frame.data,'base64'));
+      episode.gridPixels[mode]=await evaluate(`window.__materialPhotoActions.pixels(${JSON.stringify('data:image/png;base64,'+frame.data)})`);
+      if(episode.gridPixels[mode].range<12||episode.gridPixels[mode].nonBackground<1000)throw Error(`Blank comparison view: ${mode}`);
+    }
     await evaluate("document.getElementById('glow').checked=false;document.getElementById('glow').dispatchEvent(new Event('change'))");
     await evaluate("document.getElementById('scene').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight'}))");
     episode.views={};
@@ -92,15 +109,27 @@ try{
     await evaluate("document.getElementById('glow').checked=true;document.getElementById('glow').dispatchEvent(new Event('change'))");await settle();
     episode.glowState=await evaluate('window.__materialPhotoActions.presentation()');
     if(episode.glowState.emissiveIntensity!==1)throw Error('Glow did not reach material emission');
-    if(key==='orb'&&!(episode.glowState.emissionStats?.nonzero>0))throw Error('Orb emission extraction is empty');
+    if(sampleKey==='orb'&&!(episode.glowState.emissionStats?.nonzero>0))throw Error('Orb emission extraction is empty');
     episode.glow=await capture(`${key}-glow`);
+    episode.environments={};
+    for(const name of ['studio','warehouse','sunset']){
+      if(!await evaluate(`window.__materialPhotoActions.changeEnvironment(${JSON.stringify(name)})`))throw Error(`HDR environment failed: ${name}`);
+      await settle();const effective=await evaluate('window.__materialPhotoActions.presentation().environment');
+      if(effective.environment!==name||!effective.source||!effective.textureUUID)throw Error('HDR selection did not reach lighting');
+      episode.environments[name]=effective;await capture(`${key}-${name}`);
+    }
+    await evaluate("document.getElementById('glow').checked=false;document.getElementById('glow').dispatchEvent(new Event('change'));window.__materialPhotoActions.compare();document.getElementById('environment-rotation').value=90;document.getElementById('environment-rotation').dispatchEvent(new Event('input'))");
+    await settle();
+    const rotated=await evaluate('window.__materialPhotoActions.presentation().comparison');
+    validateComparison(rotated.views);
+    episode.rotatedEnvironment=rotated;episode.rotated=await capture(`${key}-rotated`);
     for(const role of ['albedo','roughness','metallic']){
       await evaluate(`window.__materialPhotoActions.view('materials');document.getElementById('map').value=${JSON.stringify(role)};document.getElementById('map').dispatchEvent(new Event('change'))`);
       await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
       episode[role]=await capture(`${key}-${role}`);
     }
     await browser.cdp.call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true},sessionId);
-    await evaluate("document.getElementById('map').value='surface';document.getElementById('map').dispatchEvent(new Event('change'))");
+    await evaluate("document.getElementById('map').value='surface';document.getElementById('map').dispatchEvent(new Event('change'));window.__materialPhotoActions.compare()");
     await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     episode.mobile=await capture(`${key}-mobile`);
     episode.overflow=await evaluate('document.documentElement.scrollWidth>innerWidth');
