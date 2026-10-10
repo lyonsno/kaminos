@@ -17,7 +17,7 @@ export function compareEnergyRuns(runs,points,lengthScale){
     result[name]=Math.max(result[name],...a.map((v,k)=>Math.abs(v-b[k])/scale));
    }
    assert.equal(dense.initial.diagnostics[i*24+3],0,'Dense invalid element');assert.equal(fast.initial.diagnostics[i*24+3],0,'Optimized invalid element');
-   for(const [name,offsets]of [['position',[0,1,2]],['velocity',[12,13,14]]])for(const k of offsets)result[name]=Math.max(result[name],Math.abs(dense.final.state[i*16+k]-fast.final.state[i*16+k])/lengthScale);
+   for(const [name,offsets]of [['position',[4,5,6]],['velocity',[8,9,10]]])for(const k of offsets)result[name]=Math.max(result[name],Math.abs(dense.final.state[i*16+k]-fast.final.state[i*16+k])/lengthScale);
   }
   // Reordered f32 sums use a local block norm, not cancellation-sensitive entry ratios.
   for(const name of ['gradient','hessian','energy'])assert.ok(result[name]<=32*2**-23,`${name} same-law error ${result[name]}`);
