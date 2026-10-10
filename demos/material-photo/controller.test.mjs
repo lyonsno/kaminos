@@ -88,6 +88,12 @@ test('selected material resolution reaches the producer and survives the run rec
   assert.equal(c.state.runs.at(-1).supermat.size,768);
   assert.deepEqual(Array.from(c.state.result.materialSize),[768,768]);
 });
+test('comparison restores surface perspectives after inspecting a map',async()=>{
+  const c=await controller();await c.actions.infer();
+  c.elements.map.value='normals';c.elements.map.onchange();
+  assert.equal(c.behavior.viewer.map,'normals');c.actions.compare();
+  assert.equal(c.behavior.viewer.map,'surface');assert.equal(c.elements.map.value,'surface');
+});
 test('transient device setup failure can be retried', async () => {
   const c=await controller(); c.behavior.failDevice=true; await c.actions.infer();
   assert.equal(c.state.status,'error'); c.behavior.failDevice=false; await c.actions.infer();

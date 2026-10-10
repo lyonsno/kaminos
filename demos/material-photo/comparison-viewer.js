@@ -40,7 +40,7 @@ export class MaterialPhotoViewer {
   layout(){
     this.container.dataset.focus=this.focus??'';
     for(const mode of modes){
-      const view=this.views[mode];view.canvas.parentElement.hidden=!!this.focus&&this.focus!==mode;
+      const view=this.views[mode];view.canvas.closest('[data-tile]').hidden=!!this.focus&&this.focus!==mode;
       view.resize();
     }
   }

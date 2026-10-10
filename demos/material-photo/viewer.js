@@ -63,7 +63,7 @@ export class MaterialPhotoViewer {
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas.parentElement);
     this.listeners = {
-      pointerdown: event => { if(event.button!==0)return;this.drag = { x: event.clientX, y: event.clientY, ox: this.orbit.x, oy: this.orbit.y }; interactionTarget.setPointerCapture(event.pointerId); },
+      pointerdown: event => this.beginOrbit(event),
       pointermove: event => {
         const bounds = interactionTarget.getBoundingClientRect();
         if (this.drag) this.orbit.set(
@@ -87,11 +87,19 @@ export class MaterialPhotoViewer {
     return this;
   }
 
+  beginOrbit(event) {
+    if(event.button!==0||event.target?.closest?.('button,input,select,a'))return;
+    this.drag={x:event.clientX,y:event.clientY,ox:this.orbit.x,oy:this.orbit.y};
+    this.interactionTarget.setPointerCapture(event.pointerId);
+  }
+
   texture(map, role) {
     const pixels = texturePixels(map, role);
     const texture = new THREE.DataTexture(pixels.data, pixels.width, pixels.height, THREE.RGBAFormat);
     texture.colorSpace = pixels.color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-    texture.magFilter = texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
     texture.needsUpdate = true;
     this.textures.push(texture);
     return texture;
@@ -244,7 +252,7 @@ export class MaterialPhotoViewer {
     this.camera.updateProjectionMatrix();
   }
   render(time) {
-    if (!this.original || this.available===false || document.hidden || this.canvas?.parentElement.hidden) return;
+    if (!this.original || this.available===false || document.hidden || this.canvas?.parentElement.hidden || this.canvas?.closest?.('[data-tile]')?.hidden) return;
     const original=this.mode==='original';
     this.original.visible=original;
     if (this.mesh) {

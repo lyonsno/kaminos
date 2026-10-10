@@ -36,6 +36,29 @@ test('original remains DoubleSide and uses the same orbit as the depth surface',
   viewer.orbit.set(.2,.1);viewer.mode='photo';viewer.render();const camera=viewer.camera.position.toArray();
   viewer.mode='original';viewer.render();assert.deepEqual(viewer.camera.position.toArray(),camera);
 });
+test('a hidden comparison article submits no rendering work',async()=>{
+  const {viewer,calls}=await viewerFixture();
+  const article={hidden:true};viewer.canvas.closest=()=>article;
+  viewer.mode='materials';viewer.render();assert.equal(calls.gi,0);
+  article.hidden=false;viewer.render();assert.equal(calls.gi,1);
+});
+test('photograph and material maps use mipmaps for small comparison panes',async()=>{
+  const {viewer,THREE}=await viewerFixture();
+  for(const texture of [viewer.original.material.map,viewer.maps.albedo,viewer.maps.orm]){
+    assert.equal(texture.generateMipmaps,true);
+    assert.equal(texture.minFilter,THREE.LinearMipmapLinearFilter);
+    assert.equal(texture.magFilter,THREE.LinearFilter);
+  }
+});
+test('orbit capture leaves focus buttons clickable and still captures canvas drags',async()=>{
+  const {viewer}=await viewerFixture();let captured=0;
+  viewer.interactionTarget={setPointerCapture(){captured++;}};
+  const event={button:0,pointerId:1,clientX:20,clientY:30,target:{closest:()=>({})}};
+  assert.equal(typeof viewer.beginOrbit,'function','orbit handler must distinguish interactive descendants');
+  viewer.beginOrbit(event);assert.equal(captured,0);assert.equal(viewer.drag,undefined);
+  viewer.beginOrbit({...event,target:{closest:()=>null}});assert.equal(captured,1);
+  assert.equal(viewer.drag.x,20);
+});
 test('relit and inferred share geometry, camera, light, exposure and GI but not image maps',async()=>{
   const {viewer,calls}=await viewerFixture();
   viewer.mode='relit';viewer.render();assert.equal(calls.gi,1);

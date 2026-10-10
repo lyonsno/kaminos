@@ -28,6 +28,8 @@ function view(mode){
   syncControls();
 }
 function compare(){
+  if(viewer)viewer.map='surface';
+  $('map').value='surface';
   viewer?.showComparison();
   $('stage-label').textContent='One photograph. Four perspectives.';
   $('compare').classList.add('selected');

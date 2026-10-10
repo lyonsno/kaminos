@@ -38,21 +38,29 @@ try{
     if(response.exceptionDetails)throw Error(JSON.stringify(response.exceptionDetails));return response.result.value;
   };
   const capture=async(name)=>{const shot=await browser.cdp.call('Page.captureScreenshot',{format:'png'},sessionId);const file=path.join(output,`${name}.png`);await fs.writeFile(file,Buffer.from(shot.data,'base64'));return file;};
+  const click=async(selector)=>{
+    const point=await evaluate(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();if(r.width<=0||r.height<=0)throw Error('Click target hidden');return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+    await browser.cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',...point,button:'left',clickCount:1},sessionId);
+    await browser.cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',...point,button:'left',clickCount:1},sessionId);
+  };
   await browser.cdp.call('Runtime.enable',{},sessionId);
   await evaluate("window.__materialPhotoWitnessErrors=[];addEventListener('error',e=>window.__materialPhotoWitnessErrors.push(e.message));addEventListener('unhandledrejection',e=>window.__materialPhotoWitnessErrors.push(String(e.reason)))");
   const samples=(values.samples??'celebration,bag,orb').split(','),sizes=(values.sizes??'512').split(',').map(Number);
   if(!samples.length||samples.some(key=>!['celebration','bag','orb'].includes(key))||!sizes.length||sizes.some(size=>![512,768,1024].includes(size)))throw Error('Invalid samples or sizes');
   report.plan={samples,sizes};
+  let baselinePreset;
   for(const [sampleKey,label]of [['celebration','Celebration'],['bag','Backpack'],['orb','Metal & glow']].filter(([key])=>samples.includes(key)))for(const size of sizes){
     const key=`${sampleKey}-${size}`;
     report.phase=`inference-${key}`;await persist();
     await evaluate(`(async()=>{await window.__materialPhotoActions.sample(${JSON.stringify(sampleKey)});document.getElementById('material-size').value=${JSON.stringify(String(size))}})()`);
+    if(baselinePreset&&!await evaluate(`window.__materialPhotoActions.importPreset(${JSON.stringify(baselinePreset)})`))throw Error('Baseline preset rejected');
     const bytes=await fs.readFile(path.join(root,`demos/material-photo/images/${({celebration:'celebration.png',bag:'bag.webp',orb:'evil-orb.png'})[sampleKey]}`));
     const episode={source:label,requestedSize:size,inputSha256:createHash('sha256').update(bytes).digest('hex')};
     report.episodes.push(episode);await persist();
     await evaluate('window.__materialPhotoActions.infer()');
     episode.state=await evaluate('window.__materialPhoto');
     validateEpisode(episode.state,label,size);
+    baselinePreset??=await evaluate('window.__materialPhotoActions.exportPreset()');
     const settle=()=>evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     await settle();
     episode.comparison=await evaluate('window.__materialPhotoActions.presentation().comparison');
@@ -71,7 +79,11 @@ try{
     await evaluate("document.getElementById('scene').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight'}))");
     episode.views={};
     for(const mode of ['original','photo','relit','materials']) {
-      await evaluate(`window.__materialPhotoActions.view(${JSON.stringify(mode)})`);await settle();
+      await evaluate('window.__materialPhotoActions.compare()');await settle();
+      await click(`[data-focus=${mode}]`);await settle();
+      if(await evaluate('window.__materialPhotoActions.presentation().mode')!==mode)throw Error(`Physical focus click failed: ${mode}`);
+      const visible=await evaluate("[...document.querySelectorAll('[data-tile]')].filter(tile=>!tile.hidden).map(tile=>tile.dataset.tile)");
+      if(visible.length!==1||visible[0]!==mode)throw Error(`Focused view left other panes visible: ${mode}`);
       episode.views[mode]=await evaluate('window.__materialPhotoActions.presentation()');
       episode[mode]=await capture(`${key}-${mode}`);
     }
@@ -127,6 +139,18 @@ try{
       await evaluate(`window.__materialPhotoActions.view('materials');document.getElementById('map').value=${JSON.stringify(role)};document.getElementById('map').dispatchEvent(new Event('change'))`);
       await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
       episode[role]=await capture(`${key}-${role}`);
+    }
+    await evaluate("document.getElementById('map').value='normals';document.getElementById('map').dispatchEvent(new Event('change'))");
+    await click('#compare');await settle();
+    const restored=await evaluate('window.__materialPhotoActions.presentation().comparison');
+    if(Object.values(restored.views).some(view=>view.map!=='surface'))throw Error('Comparison retained inspector maps');
+    validateComparison(restored.views);
+    episode.layouts=[];
+    for(const width of [1100,1000]){
+      await browser.cdp.call('Emulation.setDeviceMetricsOverride',{width,height:800,deviceScaleFactor:1,mobile:false},sessionId);await settle();
+      const tiles=await evaluate("[...document.querySelectorAll('[data-tile]')].map(tile=>{const a=tile.getBoundingClientRect(),s=tile.querySelector('.view-surface').getBoundingClientRect(),l=tile.querySelector('button').getBoundingClientRect();return{mode:tile.dataset.tile,surfaceHeight:s.height,labelHeight:l.height,fits:s.bottom<=l.top+1&&l.bottom<=a.bottom+1&&s.top>=a.top-1}})");
+      if(tiles.some(tile=>!tile.fits||tile.surfaceHeight<=0||tile.labelHeight<=0))throw Error(`Comparison clipped at ${width}px`);
+      episode.layouts.push({width,tiles,frame:await capture(`${key}-layout-${width}`)});
     }
     await browser.cdp.call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true},sessionId);
     await evaluate("document.getElementById('map').value='surface';document.getElementById('map').dispatchEvent(new Event('change'));window.__materialPhotoActions.compare()");

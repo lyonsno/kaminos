@@ -6,7 +6,9 @@ import {Vector2} from '../../lib/three.webgpu.js';
 
 async function fixture(){
   const calls={devices:[],loads:[],gates:{},disposed:[]};
-  const tile=()=>({hidden:false,dataset:{}}),canvases=Object.fromEntries(['original','photo','relit','materials'].map(mode=>[mode,{parentElement:tile()}]));
+  const tile=()=>({hidden:false,dataset:{}}),canvases=Object.fromEntries(['original','photo','relit','materials'].map(mode=>{
+    const article=tile();return [mode,{parentElement:tile(),closest:()=>article}];
+  }));
   const container={dataset:{},querySelector:s=>canvases[s.match(/=(\w+)/)[1]]};
   class Viewer{
     async init(canvas,device,{rig,interactive}){this.canvas=canvas;this.renderer={backend:{device}};this.orbit=rig.orbit;this.target=rig.target;this.current=rig.current;this.interactive=interactive;calls.devices.push(device);this.settings={gain:1};this.lighting={rotation:0,intensity:1,direct:1};}
@@ -47,8 +49,8 @@ test('comparison borrows one device, shares geometry and orbit, and can focus wi
   assert.ok(views.every(v=>v.orbit===viewer.orbit));assert.equal(views.filter(v=>v.interactive).length,1);
   viewer.orbit.set(.2,.1);viewer.setLightHandle(.3,.4);viewer.setTuning({gain:2});
   assert.ok(views.every(v=>v.light.x===.3&&v.settings.gain===2));
-  viewer.mode='relit';assert.ok(Object.entries(canvases).every(([mode,c])=>c.parentElement.hidden===(mode!=='relit')));
-  viewer.showComparison();assert.ok(Object.values(canvases).every(c=>!c.parentElement.hidden));assert.deepEqual(viewer.orbit.toArray(),[.2,.1]);
+  viewer.mode='relit';assert.ok(Object.entries(canvases).every(([mode,c])=>c.closest('[data-tile]').hidden===(mode!=='relit')));
+  viewer.showComparison();assert.ok(Object.values(canvases).every(c=>!c.closest('[data-tile]').hidden));assert.deepEqual(viewer.orbit.toArray(),[.2,.1]);
 });
 test('environment selection is latest-wins; failures preserve the effective environment and can retry',async()=>{
   const {viewer,calls,texture}=await fixture();let release;
