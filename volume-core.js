@@ -12322,6 +12322,7 @@ export function createKaminosVolumePrototype({
         // No kiln: the mask carries the emitter's back wall alone.
         const key = `wall:${backWall.key}`;
         if (sceneSolidRevisionKey !== key) {
+          outerSmoke?.clearSolids();
           const composed = composeSolidField(null, backWall.cells, { grid: gridSize, gridHeight });
           installSceneSolidTexture({ cells: composed.cells, surfaceCellCount: composed.addedCells, interiorCellCount: 0, blockedFaceCount: null });
           rebuildSceneSolidBindingViews();

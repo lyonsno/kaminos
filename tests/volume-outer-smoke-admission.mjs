@@ -111,3 +111,41 @@ test('draw admission rejects an unsupported mode even when simulation is paused'
   assert.throws(()=>vm.runInContext('encodeDraw({},null,"paused")',context),/GPU draw reached/,
     'admitted frozen emissive rendering reaches the actual draw boundary');
 });
+
+test('mesh removal or refusal clears exterior solids while retaining the fine emitter back wall',()=>{
+  const triangles=[
+    [[-1.5,3.5,-1.5],[1.5,3.5,-1.5],[1.5,3.5,1.5]],
+    [[-1.5,3.5,-1.5],[1.5,3.5,1.5],[-1.5,3.5,1.5]],
+  ];
+  for(const nextSource of [{requested:false},{requested:true,id:'removed-mesh',object:null}]) {
+    let installedOuter=null,installedNear=null,clears=0;
+    const context=vm.createContext({device:{},
+      getSceneCollision:()=>({requested:true,id:'exterior-ceiling',object:{}}),
+      controlsSnapshot:{},outerRequested:true,PRESSURE_SOLVER_CONVERGED:'converged',
+      resolvePressureSolverConfig:()=>({effective:{solver:'converged',dispatch:'full',projection:'full'}}),
+      resolveTransportConfig:()=>({effective:{commonCharacteristic:true,scheme:'maccormack'}}),
+      sceneSolidRevision:()=> 'ceiling-revision',productTransform:{},sceneSolidRevisionKey:null,
+      analyticEmitterDispatch:{active:false,cellMin:[0,0,0],cellExtent:[0,0,0],cellCount:0},
+      analyticEmitterDescriptorSignature:'none',analyticEmitterDescriptor:null,
+      immersedBackWallForState:()=>({cells:[],key:'none'}),composeSolidField,
+      gridSize:16,gridHeight:32,performance,
+      trianglesFromSceneObject:()=>({triangles}),voxelizeTriangleSolid,packSolidTextureRows,
+      outerConfig:outerSmokeConfig(),
+      outerSmoke:{setSolids(packed){installedOuter=packed;},clearSolids(){installedOuter=null;clears++;}},
+      countEmitterChemicalSupport:()=>({fluidSupportCells:0}),sceneSolidCellsCpu:null,
+      installSceneSolidTexture(field){installedNear=field;},rebuildSceneSolidBindingViews(){},
+      state:{simStepCount:0},
+    });
+    vm.runInContext(functionSource('refreshSceneCollision')+'\nrefreshSceneCollision();',context);
+    assert.ok(installedOuter?.data.some(x=>x!==0),'actual authored exterior voxel mask installed');
+    context.getSceneCollision=()=>nextSource;
+    context.immersedBackWallForState=()=>({cells:[{x:8,y:8,z:8}],key:'wall-pose'});
+    vm.runInContext('refreshSceneCollision();',context);
+    assert.equal(context.state.sceneCollision.effective,'emitter-back-wall');
+    assert.equal(installedNear.cells[8+16*(8+32*8)],1,'fine wall survives the scene transition');
+    assert.ok(installedOuter===null,'removed/refused authored mesh must stop blocking coarse smoke');
+    assert.equal(clears,1,'clear at the keyed transition, not on every simulation step');
+    vm.runInContext('refreshSceneCollision();',context);
+    assert.equal(clears,1,'unchanged back-wall state remains cached');
+  }
+});
