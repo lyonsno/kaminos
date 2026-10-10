@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {fluidBrowserLaunch} from '../finger-fluid-browser-launch.mjs';
 import {boxReferenceConfiguration} from '../fluid-box-reference-view.mjs';
-import {validateBoxReferenceState,summarizeParticleState,collectDiscriminatorSources,verifyDiscriminatorServedSources,withDiscriminatorCleanup,captureDiscriminatorState} from './fluid-discriminator-evidence.mjs';
+import {validateBoxReferenceState,validateBoxReferenceBoot,summarizeParticleState,collectDiscriminatorSources,verifyDiscriminatorServedSources,withDiscriminatorCleanup,captureDiscriminatorState} from './fluid-discriminator-evidence.mjs';
 
 const arg=k=>{const i=process.argv.indexOf(k);if(i<0||!process.argv[i+1])throw Error('Required '+k);return process.argv[i+1];};
 const out=arg('--out-dir');mkdirSync(out,{recursive:true});
@@ -45,8 +45,9 @@ try {
       const nav=await call('Page.navigate',{url:url.href},sessionId);if(nav.errorText||nav.isDownload)throw Error('Navigation failed');await loaded;
       const boot=await evaluate('window.discriminatorBoot',sessionId);assert.ok(boot,'Missing boot result');
       const config=boxReferenceConfiguration({scene:fixture,resolution:report.requested.resolution});
+      validateBoxReferenceBoot(boot,config);
       writeFileSync(directory+'/initial-input.f32',Buffer.from(config.fixture.population.particleData.buffer));
-      const row={fixture,requested:boot.fixture,initialInputPath:directory+'/initial-input.f32',initialInputAuthority:'exact_factory_invocation_not_GPU_readback',url:url.href,adapter:boot.adapter,initialInputSha256:sha(Buffer.from(config.fixture.population.particleData.buffer)),captures:[]};
+      const row={fixture,requested:boot.fixture,boot,initialInputPath:directory+'/initial-input.f32',initialInputAuthority:'exact_factory_invocation_not_GPU_readback',url:url.href,adapter:boot.adapter,initialInputSha256:sha(Buffer.from(config.fixture.population.particleData.buffer)),captures:[]};
       report.cases.push(row);save();
       let previous=0;
       for(const step of steps) {

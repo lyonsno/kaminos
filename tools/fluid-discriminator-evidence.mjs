@@ -103,12 +103,22 @@ export function validateDiscriminatorState(actual,request) {
 }
 export function validateBoxReferenceState(actual,fixture,step,{radiusRatio=2,passes=2,gamma=0,beta=.0113,dt=1/240}={}){
   if(JSON.stringify(actual?.box)!==JSON.stringify(fixture.box))throw Error('Effective reference box mismatch');
+  const population=actual?.dynamics?.population;
+  if(population?.fixture!==fixture.scene||population.source!==fixture.population.source||population.refinement!==fixture.population.refinement)throw Error('Effective box population identity mismatch');
   const values=validateDiscriminatorState(actual,{arm:'reduced',particleCount:fixture.particleCount,volume:fixture.particleVolume,radius:radiusRatio*fixture.spacing,surfaceRadius:fixture.surfaceRadius,gamma,step,dt,boundaryContract:'ipbf-cubic-tangent-plane-density-v1'});
   const inputs=actual.diagnostics.pressureControlInputs,u=new Float32Array(new Uint32Array(inputs.simulationWords).buffer),p=new Float32Array(new Uint32Array(inputs.pressureWords).buffer);
   if(actual.pressure.boundaryPressure!=='tangent_plane'||p[0]!==Math.fround(radiusRatio*fixture.spacing)||p[1]!==Math.fround(beta)||u[29]!==Math.fround(gamma)||new Uint32Array(inputs.simulationWords)[1]!==fixture.particleCount)throw Error('Effective box pressure inputs mismatch');
   for(let k=0;k<3;k++)if(u[8+k]!==Math.fround(fixture.box.bounds.min[k])||u[12+k]!==Math.fround(fixture.box.bounds.max[k]))throw Error('GPU collision box bounds mismatch');
   if(actual.stages.density!==passes*step||actual.stages.surface!==3*step||actual.stages.vorticity!==0||actual.errors.length)throw Error('Box stage execution or GPU errors mismatch');
   return values;
+}
+export function validateBoxReferenceBoot(boot,config){
+  const {fixture,dt,solver}=config,actual=boot?.fixture;
+  if(!actual||actual.scene!==fixture.scene||actual.resolution!==fixture.resolution||boot.dt!==dt||JSON.stringify(actual.box)!==JSON.stringify(fixture.box))throw Error('Reference box boot scene mismatch');
+  for(const field of ['spacing','particleCount','particleVolume','representedVolume','pressureRadius','surfaceRadius'])if(actual[field]!==fixture[field])throw Error('Reference box boot sampling mismatch: '+field);
+  for(const field of ['pressureSolver','diagnosticDynamics','densityIterations','capillaryStrength','ipbfDampingBeta','ipbfPressureRadiusScale','akinciSupportRadius'])if(boot.config?.[field]!==solver[field])throw Error('Reference box boot configuration mismatch: '+field);
+  const population=boot.config?.diagnosticPopulation;
+  if(population?.fixture!==fixture.scene||population.source!==fixture.population.source||population.refinement!==fixture.population.refinement)throw Error('Reference box boot population identity mismatch');
 }
 export function summarizeParticleState(values) {
   const n=values.length/16,center=[0,0,0],velocity=[0,0,0],variance=[0,0,0],min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];

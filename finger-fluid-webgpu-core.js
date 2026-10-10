@@ -12783,8 +12783,11 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
   kernelRadius = 0.185,
   sourceRecirculationCount = 0,
   boundaryPressureContract = KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT,
+  diagnosticBox = null,
 } = {}) {
-  const effectiveScene = resolveFingerFluidTruthScene(scene);
+  const box=diagnosticBox===null?null:validateFingerFluidReferenceBox(diagnosticBox);
+  const effectiveScene = box ? scene : resolveFingerFluidTruthScene(scene);
+  const boundsMin=box?.bounds.min??BOUNDS_MIN,boundsMax=box?.bounds.max??BOUNDS_MAX;
   const count = Math.max(0, Math.min(Math.floor(finite(particleCount, 0)), Math.floor((particleData?.length || 0) / PARTICLE_FLOATS)));
   const occupancies = new Uint32Array(GRID_CELL_COUNT);
   const densityErrors = [];
@@ -12806,10 +12809,10 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
     const density = particleData[offset + 15];
     if (![...position, ...velocity, density].every(Number.isFinite)) continue;
     finiteParticleCount += 1;
-    const active = !isFingerFluidLaminarSourceScene(effectiveScene) || particleData[offset + 11] >= 0;
+    const active = box!==null || !isFingerFluidLaminarSourceScene(effectiveScene) || particleData[offset + 11] >= 0;
     if (!active) {
       dormantParticleCount += 1;
-      retainedParticleCount += Number(position.every((value, axis) => value >= BOUNDS_MIN[axis] && value <= BOUNDS_MAX[axis]));
+      retainedParticleCount += Number(position.every((value, axis) => value >= boundsMin[axis] && value <= boundsMax[axis]));
       continue;
     }
     activeParticleCount += 1;
@@ -12821,14 +12824,15 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
     maxDensity = Math.max(maxDensity, density);
     const relativeDensityError = Math.abs(density - restDensity) / Math.max(0.001, restDensity);
     densityErrors.push(relativeDensityError);
-    const boundary = measureAnalyticBoundaryDistance(position, kernelRadius);
+    const wallDistance=box ? Math.min(...box.planes.map(plane=>plane.normal.reduce((sum,n,k)=>sum+n*position[k],0)-plane.offset)) : null;
+    const boundary = box ? {distance:Math.max(0,wallDistance),penetration:Math.max(0,box.collisionRadius-wallDistance)} : measureAnalyticBoundaryDistance(position, kernelRadius);
     maximumBoundaryPenetration = Math.max(maximumBoundaryPenetration, boundary.penetration);
     (boundary.distance < kernelRadius ? boundaryDensityErrors : bulkDensityErrors).push(relativeDensityError);
-    const inBounds = position.every((value, axis) => value >= BOUNDS_MIN[axis] && value <= BOUNDS_MAX[axis]);
+    const inBounds = position.every((value, axis) => value >= boundsMin[axis] && value <= boundsMax[axis]);
     if (!inBounds) continue;
     retainedParticleCount += 1;
     const coord = position.map((value, axis) => {
-      const normalized = clamp((value - BOUNDS_MIN[axis]) / (BOUNDS_MAX[axis] - BOUNDS_MIN[axis]), 0, 0.999999);
+      const normalized = clamp((value - boundsMin[axis]) / (boundsMax[axis] - boundsMin[axis]), 0, 0.999999);
       return Math.floor(normalized * GRID_DIMS[axis]);
     });
     const cellIndex = coord[0] + GRID_DIMS[0] * (coord[1] + GRID_DIMS[1] * coord[2]);
@@ -12840,14 +12844,15 @@ export function measureFingerFluidTruthSnapshot(particleData, particleCount, {
   const sortedBulkDensityErrors = bulkDensityErrors.sort((a, b) => a - b);
   const percentile = (values, fraction) => values.length ? values[Math.min(values.length - 1, Math.floor((values.length - 1) * fraction))] : 0;
   const mean = values => values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
-  const cellSize = BOUNDS_MAX.map((value, axis) => (value - BOUNDS_MIN[axis]) / GRID_DIMS[axis]);
+  const cellSize = boundsMax.map((value, axis) => (value - boundsMin[axis]) / GRID_DIMS[axis]);
   const cellVolume = cellSize[0] * cellSize[1] * cellSize[2];
   return {
     schema: 'kaminos.finger-fluid-truth-snapshot.v0',
     contract: KAMINOS_FINGER_FLUID_TRUTH_GAUNTLET_CONTRACT,
     boundaryPressureContract,
     scene: effectiveScene,
-    populationMode: effectiveScene === 'multi_regime_playground' || isFingerFluidLaminarSourceScene(effectiveScene)
+    ...(box?{geometry:{kind:'reference_box',bounds:box.bounds,collisionRadius:box.collisionRadius,pressureRadius:kernelRadius}}:{}),
+    populationMode: !box && (effectiveScene === 'multi_regime_playground' || isFingerFluidLaminarSourceScene(effectiveScene))
       ? 'finite_source_recirculation'
       : 'closed_particle_population',
     particleCount: count,
@@ -15737,6 +15742,7 @@ export async function createWebGPUFingerFluidSolver({
     diagnosticsRequestCount += 1;
     const diagnosticsStartedAtMs = performance.now();
     const diagnosticsPressureControls=pressureControlState?.read()??null;
+    const diagnosticsPressureRadius=ipbfRadius;
     const capturePressureInputs=captureParticleState&&!!ipbfControlBuffer;
     const captureEnergyDiagnostics = energyDiagnosticsEnabled && energyDiagnosticsPassCount > 0;
     const readbackBuffers = [diagnosticsBuffer, ...(captureEnergyDiagnostics ? [energyDiagnosticsReadbackBuffer] : []), interfaceCountersReadbackBuffer, interfaceRecordsReadbackBuffer, restStateReadbackBuffer, neighborTopologyReadbackBuffer, materialTracerReadbackBuffer, liquidFireContactHeaderReadbackBuffer,...(capturePressureInputs?[ipbfControlReadback,liveSimulationParamsReadback]:[])];
@@ -16027,9 +16033,10 @@ export async function createWebGPUFingerFluidSolver({
         sampleRecords.push(readInterfaceRecord(sampleIndex));
       }
       const fluidTruthSnapshot = measureFingerFluidTruthSnapshot(values, safeParticleCount, {
-        scene: safeTruthScene,
+        scene: safeDiagnosticBox ? diagnosticPopulation.fixture : safeTruthScene,
         restDensity: safeRestDensity,
-        kernelRadius: safeKernelRadius,
+        kernelRadius: safeDiagnosticBox ? diagnosticsPressureRadius : safeKernelRadius,
+        diagnosticBox: safeDiagnosticBox,
         sourceRecirculationCount: interfaceCounters[2],
         boundaryPressureContract:pressureBoundary.boundaryPressureContract,
       });
