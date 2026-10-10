@@ -10,22 +10,22 @@ export const LN_EPS = 1e-6;
 
 // C[b][m][n] = alpha * sum_k A[b][m][k] * B[b / b_div][n][k], A f32, B f16 or f32.
 // b_div (uniform z0, 0 meaning 1) lets grouped-query attention share K/V heads.
-// bType i8/i4 reads group-64 quantized weights (pack-transformer.py) with scales at
+// bType i8/i4 reads group-quantized weights (pack-transformer.py; group 64 or 128, a multiple of 8) with scales at
 // f16 element offset z1 of binding 5; b_off is then a u32 word offset.
 // Epilogues: 'store' writes C; 'gated-residual' does R[m][n] += gate[n] * value
 // in place (R is the C binding); 'add' does C += value.
-export function gemmShader({ bType = 'f16', epilogue = 'store' } = {}) {
+export function gemmShader({ bType = 'f16', epilogue = 'store', group = 64 } = {}) {
   const quant = bType === 'i8' || bType === 'i4';
   const bArray = quant ? 'array<u32>' : bType === 'f16' ? 'array<f16>' : 'array<f32>';
   let loadB = 'bv = f32(b[p.b_off + bbat * p.b_bs + n * p.b_rs + k]);';
   if (bType === 'i8') {
     loadB = `let word = b[p.b_off + n * (p.K / 4u) + k / 4u];
         let q = i32(word << (24u - 8u * (k % 4u))) >> 24u;
-        bv = f32(q) * f32(bs[p.z1 + n * (p.K / 64u) + k / 64u]);`;
+        bv = f32(q) * f32(bs[p.z1 + n * (p.K / ${group}u) + k / ${group}u]);`;
   } else if (bType === 'i4') {
     loadB = `let word = b[p.b_off + n * (p.K / 8u) + k / 8u];
         let q = (word >> (4u * (k % 8u))) & 15u;
-        let sb = p.z1 + (n * (p.K / 64u) + k / 64u) * 2u;
+        let sb = p.z1 + (n * (p.K / ${group}u) + k / ${group}u) * 2u;
         bv = f32(q) * f32(bs[sb]) + f32(bs[sb + 1u]);`;
   }
   const scaleBinding = quant ? '@group(0) @binding(5) var<storage, read> bs: array<f16>;' : '';
@@ -347,7 +347,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 // vec4 loads along K for both operands, a K tile of 32, and a selectable shared-memory
 // type (f32 keeps activations exact; f16 halves shared traffic). Requires K, row strides
 // and offsets to be multiples of 4.
-export function gemmShaderV2({ bType = 'f16', epilogue = 'store', sType = 'f32' } = {}) {
+export function gemmShaderV2({ bType = 'f16', epilogue = 'store', sType = 'f32', group = 64 } = {}) {
   const quant = bType === 'i8' || bType === 'i4';
   const bArray = quant ? 'array<u32>' : bType === 'f16' ? 'array<vec4<f16>>' : 'array<vec4<f32>>';
   const gateBinding = epilogue === 'gated-residual' ? '@group(0) @binding(4) var<storage, read> gate: array<f32>;' : '';
@@ -369,7 +369,7 @@ export function gemmShaderV2({ bType = 'f16', epilogue = 'store', sType = 'f32' 
       let idx = tid + q * 256u; let row = idx / 8u; let c4 = idx % 8u; let n = n0 + row; let k = k0 + c4 * 4u;
       var v = vec4<f32>(0.0);
       if (n < p.N && k < p.K) {
-        v = vec4<f32>(unpack4xI8(b[p.b_off + n * (p.K / 4u) + k / 4u])) * f32(bs[p.z1 + n * (p.K / 64u) + k / 64u]);
+        v = vec4<f32>(unpack4xI8(b[p.b_off + n * (p.K / 4u) + k / 4u])) * f32(bs[p.z1 + n * (p.K / ${group}u) + k / ${group}u]);
       }
       for (var c = 0u; c < 4u; c++) { tb[(c4 * 4u + c) * 64u + row] = ${sType}(v[c]); }
     }`;
@@ -379,7 +379,7 @@ export function gemmShaderV2({ bType = 'f16', epilogue = 'store', sType = 'f32' 
       var lo = vec4<f32>(0.0); var hi = vec4<f32>(0.0);
       if (n < p.N && k < p.K) {
         let w = b[p.b_off + n * (p.K / 8u) + k / 8u];
-        let sb = p.z1 + (n * (p.K / 64u) + k / 64u) * 2u;
+        let sb = p.z1 + (n * (p.K / ${group}u) + k / ${group}u) * 2u;
         let sc = f32(bs[sb]); let bi = f32(bs[sb + 1u]);
         lo = vec4<f32>(vec4<u32>(w, w >> 4u, w >> 8u, w >> 12u) & vec4<u32>(15u)) * sc + bi;
         hi = vec4<f32>(vec4<u32>(w >> 16u, w >> 20u, w >> 24u, w >> 28u) & vec4<u32>(15u)) * sc + bi;
