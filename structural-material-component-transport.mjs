@@ -4,6 +4,22 @@ export const COMPONENT_TRANSPORT_ROUTE='kaminos.deformable-surface.corotated-pos
 const finitePoints=a=>Array.isArray(a)&&a.length>0&&a.every(p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite));
 const labels=(a,n)=>Array.isArray(a)&&a.length===n&&a.every(x=>Number.isInteger(x)&&x>=0);
 
+export function createComponentSupportIndex(rest,ids){
+ if(!finitePoints(rest)||!Array.isArray(ids)||!ids.length||new Set(ids).size!==ids.length||!ids.every(i=>Number.isInteger(i)&&i>=0&&i<rest.length))throw new Error('Finite component points and unique in-range ids required');
+ const order=(a,b)=>a.distance-b.distance||a.id-b.id;
+ const build=(nodes,depth)=>{if(!nodes.length)return null;const axis=depth%3,sorted=[...nodes].sort((a,b)=>rest[a][axis]-rest[b][axis]||a-b),middle=sorted.length>>1;return{id:sorted[middle],axis,left:build(sorted.slice(0,middle),depth+1),right:build(sorted.slice(middle+1),depth+1)};},root=build(ids,0);
+ const sample=(id,point)=>({id,distance:Math.hypot(...rest[id].map((x,k)=>x-point[k]))});
+ const pointCheck=point=>{if(!finitePoints([point]))throw new Error('Finite support query required');};
+ return{
+  nearest(point,count){pointCheck(point);if(!Number.isInteger(count)||count<1||count>ids.length)throw new Error('Available positive neighbor count required');const best=[];
+   const visit=node=>{if(!node)return;const delta=point[node.axis]-rest[node.id][node.axis],near=delta<0?node.left:node.right,far=delta<0?node.right:node.left;visit(near);best.push(sample(node.id,point));best.sort(order);if(best.length>count)best.pop();if(best.length<count||Math.abs(delta)<=best.at(-1).distance)visit(far);};visit(root);return best;
+  },
+  within(point,radius){pointCheck(point);if(!(Number.isFinite(radius)&&radius>0))throw new Error('Positive finite support radius required');const found=[];
+   const visit=node=>{if(!node)return;const delta=point[node.axis]-rest[node.id][node.axis],s=sample(node.id,point);if(s.distance<radius)found.push(s);if(delta<=radius)visit(node.left);if(delta>=-radius)visit(node.right);};visit(root);return found.sort(order);
+  }
+ };
+}
+
 // Horn's unit-quaternion fit: the largest algebraic eigenvector gives a proper rotation.
 function rotation(rest,current,ids,weights){
  const a=new Vector3(),b=new Vector3();ids.forEach((id,i)=>{a.addScaledVector(new Vector3(...rest[id]),weights[i]);b.addScaledVector(new Vector3(...current[id]),weights[i]);});
@@ -26,10 +42,11 @@ export function bindComponentTransport(rest,vertices,{components,component,volum
  if(!finitePoints(rest)||!finitePoints(vertices)||!labels(components,rest.length)||!Number.isInteger(component)||!Array.isArray(volumes)||volumes.length!==rest.length||!volumes.every(x=>Number.isFinite(x)&&x>0)||!(Number.isFinite(radius)&&radius>0))throw new Error('Explicit component, positive volumes and support radius required');
  const ids=rest.flatMap((_,i)=>components[i]===component?[i]:[]);if(ids.length<4)throw new Error('Complete component frame requires at least four material points');
  const total=ids.reduce((s,i)=>s+volumes[i],0),frameWeights=ids.map(i=>volumes[i]/total);
+ const support=createComponentSupportIndex(rest,ids);
  const entries=vertices.map(point=>{
-  const distances=ids.map(id=>({id,distance:Math.hypot(...rest[id].map((x,k)=>x-point[k]))})).sort((a,b)=>a.distance-b.distance);
+  const distances=support.nearest(point,4);
   // Surface-only support expansion makes sparse cut boundaries explicit; it adds no material nodes or stiffness.
-  const effectiveRadius=Math.max(radius,distances[3].distance*(1+Math.sqrt(Number.EPSILON))),samples=distances.filter(s=>s.distance<effectiveRadius),raw=samples.map(s=>volumes[s.id]*(1-(s.distance/effectiveRadius)**2)**2),sum=raw.reduce((a,b)=>a+b,0),weights=raw.map(w=>w/sum),center=[0,0,0];
+  const effectiveRadius=Math.max(radius,distances[3].distance*(1+Math.sqrt(Number.EPSILON))),samples=support.within(point,effectiveRadius),raw=samples.map(s=>volumes[s.id]*(1-(s.distance/effectiveRadius)**2)**2),sum=raw.reduce((a,b)=>a+b,0),weights=raw.map(w=>w/sum),center=[0,0,0];
   samples.forEach((s,i)=>rest[s.id].forEach((x,k)=>center[k]+=weights[i]*x));
   return{ids:samples.map(s=>s.id),weights,point:[...point],offset:point.map((x,k)=>x-center[k]),effectiveRadius,nearestDistance:distances[0].distance,weightL1:1};
  });
