@@ -8,6 +8,11 @@ const report = {status:'running',phase:'source',root,base,input,errors:[],arms:[
 const save = () => fs.writeFile(out+'/report.json', JSON.stringify(report,null,2));
 await save();
 let browser,page;
+process.on('SIGUSR2',async()=>{
+  if(!page)return;
+  report.diagnostic=await page.evaluate(()=>({volume:window.__kaminosVolumePrototype?.debugState(),camera:window.kaminosSceneEmissiveCameraDebugState?.(),gi:window.kaminosSceneGIDebugState?.()}));
+  await save();
+});
 try {
   report.runtime = await (await fetch(base+'/api/runtime-config')).json();
   assert.equal(report.runtime.source.repoRoot,root);
@@ -43,6 +48,8 @@ try {
   await page.waitForFunction(()=>window.kaminosSceneEmissiveCameraDebugState?.().effective);
   report.sceneCamera=await page.evaluate(()=>window.kaminosSceneEmissiveCameraDebugState());
   await page.screenshot({path:out+'/matched-agx-scene.png'});
+  report.phase='settling';
+  report.beforeSettle=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState());await save();
   await page.waitForFunction(()=>window.__kaminosVolumePrototype.debugState().simStepCount>150);
   report.frozen=await page.evaluate(()=>{window.__kaminosVolumePrototype.setSimulationPaused(true);return window.__kaminosVolumePrototype.debugState();});
   assert.equal(report.frozen.controls.toneMapping,'agx');
