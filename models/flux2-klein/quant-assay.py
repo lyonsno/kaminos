@@ -105,7 +105,7 @@ def fake_quantize(w, kind, bits, group, device="cpu"):
         else:
             lo, hi = g.amin(dim=-1, keepdim=True), g.amax(dim=-1, keepdim=True)
             out, best = None, None
-            for r in torch.linspace(0.3, 1.0, 20).tolist():
+            for r in torch.linspace(0.4, 1.0, 10).tolist():
                 d = dequant(g, (hi - lo) * r / levels, lo * r)
                 e = ((d - g) ** 2).sum(dim=-1, keepdim=True)
                 out = d if out is None else torch.where(e < best, d, out)
@@ -167,7 +167,9 @@ def contact_sheet(out, schemes, names, report):
         draw.text((label_w + c * cell + 8, 8), name, fill=(220, 220, 214), font=font)
     for r, scheme in enumerate(schemes):
         gb = report["schemes"][scheme]["download_bytes"] / 1e9
-        draw.text((10, head_h + r * cell + 12), f"{scheme}\n{gb:.2f} GB download", fill=(220, 220, 214), font=font)
+        err = report["schemes"][scheme].get("weight_rel_l2", {})
+        detail = "".join(f"\n{c} err {err[c]:.2f}" for c in ("te", "blocks") if c in err)
+        draw.text((10, head_h + r * cell + 12), f"{scheme}\n{gb:.2f} GB download{detail}", fill=(220, 220, 214), font=font)
         for c, name in enumerate(names):
             im = Image.open(out / scheme / f"{name}.png").convert("RGB").resize((cell, cell), Image.LANCZOS)
             sheet.paste(im, (label_w + c * cell, head_h + r * cell))
@@ -184,6 +186,7 @@ def main():
     ap.add_argument("--steps", type=int, default=4)
     ap.add_argument("--seed-base", type=int, default=7000)
     ap.add_argument("--device", default="mps")
+    ap.add_argument("--quant-device", default="cpu", help="where fake quantization runs (cpu matches the packers)")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -221,19 +224,37 @@ def main():
         report["load_s"] = time.time() - t0
         save_report()
 
+        applied = {}  # component -> spec currently in the model, so unchanged components are not redone
         for scheme in schemes:
             report["phase"] = f"quantize {scheme}"
             t0 = time.time()
             spec = SCHEMES[scheme]
-            nbytes = dict(FIXED_BYTES)
+            nbytes, weight_err = dict(FIXED_BYTES), {}
             for comp, lst in mods.items():
                 kind, bits, group = spec[comp]
+                nbytes[comp] = params[comp] * bits_per_weight(kind, bits, group) / 8
+                if applied.get(comp) == spec[comp]:
+                    weight_err[comp] = report["schemes"][applied[comp + ":scheme"]]["weight_rel_l2"][comp]
+                    continue
+                err2 = ref2 = 0.0
                 for (name, mod), w in zip(lst, originals[comp]):
                     assert w.shape[1] % group == 0, f"{name}: in_features {w.shape[1]} not divisible by {group}"
+                    d = fake_quantize(w, kind, bits, group, args.quant_device)
+                    if not torch.isfinite(d).all():
+                        raise RuntimeError(f"{scheme}: non-finite fake-quantized weight {name}")
+                    err2 += float(((d - w) ** 2).sum()); ref2 += float((w ** 2).sum())
                     with torch.no_grad():
-                        mod.weight.copy_(fake_quantize(w, kind, bits, group, args.device).to(mod.weight.device))
-                nbytes[comp] = params[comp] * bits_per_weight(kind, bits, group) / 8
-            report["schemes"][scheme] = {"bytes": nbytes, "download_bytes": sum(nbytes.values()), "quantize_s": time.time() - t0}
+                        mod.weight.copy_(d.to(mod.weight.device))
+                weight_err[comp] = math.sqrt(err2 / ref2)
+                applied[comp], applied[comp + ":scheme"] = spec[comp], scheme
+                # Zeroing a weight is 1.0; far above that means the quantizer, not the format, failed.
+                if weight_err[comp] > 1.2:
+                    raise RuntimeError(f"{scheme}: {comp} weight relative error {weight_err[comp]:.2f}")
+            if args.device == "mps":
+                torch.mps.synchronize()
+            report["schemes"][scheme] = {"bytes": nbytes, "download_bytes": sum(nbytes.values()),
+                                         "weight_rel_l2": weight_err, "quantize_s": time.time() - t0}
+            save_report()
             report["phase"] = f"generate {scheme}"
             (out / scheme).mkdir(exist_ok=True)
             for name, prompt, seed in prompts:
@@ -243,6 +264,11 @@ def main():
                              guidance_scale=1.0, generator=generator).images[0]
                 image.save(out / scheme / f"{name}.png")
                 row = {"scheme": scheme, "prompt": name, "seed": seed, "seconds": time.time() - t0}
+                # A device that stopped executing returns garbage instantly instead of raising.
+                first = [i["seconds"] for i in report["images"] if i["scheme"] == schemes[0]]
+                if scheme != schemes[0] and first and row["seconds"] < 0.25 * sorted(first)[len(first) // 2]:
+                    raise RuntimeError(f"{scheme}/{name} generated in {row['seconds']:.2f} s against "
+                                       f"{sorted(first)[len(first) // 2]:.1f} s for {schemes[0]}: the pipeline did not run")
                 if scheme != schemes[0]:
                     row["psnr_vs_first"] = psnr(np.asarray(image), np.asarray(Image.open(out / schemes[0] / f"{name}.png")))
                 report["images"].append(row)
