@@ -19549,13 +19549,19 @@ export function createKaminosVolumePrototype({
       if (validationError) return { ok: false, reason: 'raymarch-profile-gpu-validation', error: validationError.message, ...identity };
       if (times[0] === 0n || times[1] <= times[0]) return { ok: false, reason: 'missing-or-invalid-raymarch-timestamps', timestamps: Array.from(times, String), ...identity };
       const cacheDispatched = identity.renderFlowCache.refresh === 'each-draw-before-raster';
-      if (includeRenderFlow && cacheDispatched && (times[2] === 0n || times[3] <= times[2] || times[3] > times[0])) {
+      if (includeRenderFlow && cacheDispatched && (times[2] === 0n || times[3] <= times[2])) {
         return { ok: false, reason: 'missing-or-invalid-render-flow-timestamps', timestamps: Array.from(times, String), ...identity };
       }
       const cameraMs = Number(times[1] - times[0]) / 1e6;
       const renderFlowMs = includeRenderFlow && cacheDispatched ? Number(times[3] - times[2]) / 1e6 : 0;
+      const envelopeStart = includeRenderFlow && cacheDispatched && times[2] < times[0] ? times[2] : times[0];
+      const envelopeEnd = includeRenderFlow && cacheDispatched && times[3] > times[1] ? times[3] : times[1];
+      const envelopeMs = Number(envelopeEnd - envelopeStart) / 1e6;
+      const transitionMs = includeRenderFlow && cacheDispatched
+        ? Number((envelopeEnd - envelopeStart) - (times[1] - times[0]) - (times[3] - times[2])) / 1e6 : 0;
       if (includeRenderFlow) return { ok: true, scope: 'camera-raster-plus-render-flow-refresh-not-lighting-simulation-or-frame',
-        ms: cameraMs + renderFlowMs, cameraMs, renderFlowMs, timestamps: Array.from(times, String), ...identity };
+        ms: envelopeMs, cameraMs, renderFlowMs, transitionMs, timingBasis: 'enclosing-pass-timestamp-interval',
+        timestamps: Array.from(times, String), ...identity };
       return { ok: true, scope: 'camera-raymarch-raster-only-not-lighting-simulation-or-frame',
         ms: cameraMs, timestamps: Array.from(times, String), ...identity };
     } finally {

@@ -136,6 +136,7 @@ try {
         assert.equal(profile.raymarchShaderSpecialization.effective,specialization==='auto'?'lean-emissive-raymarch-v0':'full-authored-raymarch-v0');
         assert.equal(profile.incidentLight.model,'distributed-volume-direct-radiance-v0');
         assert.equal(profile.renderFlowCache.effective,cache==='auto'?'full-precision-grid-curl-divergence-v0':'direct-neighbor-stencil');
+        if(flowExperiment) assert.equal(profile.timingBasis,'enclosing-pass-timestamp-interval');
         report.profiles.push({pair,specialization,choice,cache,...profile});await save();
       }
     }
@@ -145,7 +146,8 @@ try {
     report.timing={pairCount:count,fullMedianMs:full,leanMedianMs:lean,reduction:1-lean/full};
     if(flowExperiment) report.timing={pairCount:count,uncachedMedianMs:full,cachedTotalMedianMs:lean,
       cacheComputeMedianMs:median(report.profiles.filter(x=>x.cache==='auto').map(x=>x.renderFlowMs)),
-      cachedCameraMedianMs:median(report.profiles.filter(x=>x.cache==='auto').map(x=>x.cameraMs)),reduction:1-lean/full};
+      cachedCameraMedianMs:median(report.profiles.filter(x=>x.cache==='auto').map(x=>x.cameraMs)),
+      transitionMedianMs:median(report.profiles.filter(x=>x.cache==='auto').map(x=>x.transitionMs)),reduction:1-lean/full};
   }
   assert.equal(report.errors.length,0,'native route and shader errors');
   report.status='observed';report.phase='complete';
