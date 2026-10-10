@@ -16,7 +16,9 @@ tags:
 
 Quantized weights of [FLUX.2 [klein] 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B), packed for text-to-image generation entirely in the browser with the [Kaminos](https://github.com/lyonsno/kaminos) WebGPU inference kit. The page downloads about 3.9 GB once (everything except the embedding table, from which it fetches only the rows a prompt uses), caches it, and generates on the visitor's own GPU. No server-side compute is involved.
 
-In Chrome, a 512 × 512 image (4 steps) takes 6–7 seconds on an Apple M4 Max and about 20 seconds on a 16 GB Apple M2 Pro.
+**[Try it in your browser](https://lyonsno.github.io/kaminos/inference-kit/klein/)** · [Source](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein)
+
+In Chrome, a 512 × 512 image (4 steps) takes 6–7 seconds on an Apple M4 Max and about 20 seconds on a 16 GB Apple M2 Pro. The page also offers 768 and 1024, and frees each stage's working memory before the next, so a 16 GB Mac generates at 1024 × 1024 without swapping.
 
 ## Contents
 
