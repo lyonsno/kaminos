@@ -10,9 +10,12 @@
   <header><a class="brand" href="../../index.html">Kaminos</a><span>Material photograph</span><a href="https://github.com/lyonsno/kaminos/tree/main/webgpu-inference-kit">Inference Kit <span aria-hidden="true">&#8599;</span></a></header>
   <main>
     <section class="stage" aria-label="Photograph surface">
-      <div class="title"><h1>A photograph.<br>A different light.</h1><p id="stage-label">Original photograph</p></div>
+      <div class="title"><h1>Material photograph</h1><p id="stage-label" role="status" aria-live="polite">Original photograph</p></div>
       <img id="preview" alt="Selected photograph">
       <canvas id="scene" tabindex="0" aria-label="Interactive photograph surface" hidden></canvas>
+      <button id="view-prev" class="icon-button carousel previous" aria-label="Previous view" title="Previous view" disabled><img src="./icons/chevron-left.svg" alt=""></button>
+      <button id="view-next" class="icon-button carousel next" aria-label="Next view" title="Next view" disabled><img src="./icons/chevron-right.svg" alt=""></button>
+      <button id="sun" class="icon-button sun" aria-label="Sun position" title="Sun position" hidden><img src="./icons/sun.svg" alt=""></button>
       <div class="stage-foot"><span id="name">Celebration</span><span id="resolution"></span></div>
     </section>
     <aside>
@@ -27,13 +30,32 @@
         <div class="progress"><p id="status" role="status" aria-live="polite">Photograph loaded</p><progress id="progress" max="1" value="0"></progress><span id="elapsed"></span></div>
       </section>
       <section><h2><span>02</span> Explore</h2>
-        <div class="segmented" aria-label="Surface view"><button data-view="original" class="selected">Original</button><button data-view="photo" disabled>Depth</button><button data-view="materials" disabled>Materials</button></div>
-        <label>View<select id="map" disabled><option value="surface">Lit surface</option><option value="albedo">Albedo</option><option value="roughness">Roughness</option><option value="metallic">Metallic</option><option value="normals">Surface normals</option></select></label>
-        <label>Light direction<input id="light" type="range" min="-180" max="180" value="-35" disabled></label>
-        <label>Light height<input id="height" type="range" min="-60" max="80" value="35" disabled></label>
-        <label>Exposure<input id="exposure" type="range" min="0.25" max="2.5" step="0.05" value="1" disabled></label>
+        <div class="segmented" aria-label="Surface view"><button data-view="original" class="selected" aria-pressed="true">Original</button><button data-view="photo" aria-pressed="false" disabled>Depth</button><button data-view="relit" aria-pressed="false" disabled>Relit</button><button data-view="materials" aria-pressed="false" disabled>Materials</button></div>
         <label class="check"><input id="gi" type="checkbox" checked disabled>Screen-space GI</label>
-        <button id="reset" title="Reset view and light" disabled>Reset view &amp; light</button>
+        <label class="check"><input id="glow" type="checkbox" disabled>Inferred glow</label>
+        <button id="reset" class="icon-button" aria-label="Reset view and light" title="Reset view and light" disabled><img src="./icons/rotate-ccw.svg" alt=""></button>
+        <details id="advanced"><summary>Advanced</summary>
+          <label>Inspector<select id="map" disabled><option value="surface">Surface</option><option value="albedo">Albedo</option><option value="roughness">Roughness</option><option value="metallic">Metallic</option><option value="orm">Packed ORM</option><option value="normals">Surface normals</option><option value="emission">Emission</option></select></label>
+          <div id="tuning" class="tuning">
+            <label>GI gain<input id="gain" type="number" min="0" step="any" value="1" disabled></label>
+            <label>AO strength<input id="aoStrength" type="number" min="0" step="any" value="0.5" disabled></label>
+            <label>Radius<input id="radius" type="number" min="0" step="any" value="0.15" disabled></label>
+            <label>Thickness<input id="thickness" type="number" min="0" step="any" value="0.03" disabled></label>
+            <label>Slices<input id="slices" type="number" min="1" step="1" value="6" disabled></label>
+            <label>Steps<input id="steps" type="number" min="1" step="1" value="16" disabled></label>
+            <label>Denoise radius<input id="denoise" type="number" min="0" step="any" value="3" disabled></label>
+            <label>Exponent<input id="expFactor" type="number" min="0" step="any" value="2" disabled></label>
+            <label>Backface lighting<input id="backfaceLighting" type="number" min="0" step="any" value="0" disabled></label>
+            <label>Depth phi<input id="depthPhi" type="number" min="0" step="any" value="0.1" disabled></label>
+            <label>Normal phi<input id="normalPhi" type="number" min="0" step="any" value="5" disabled></label>
+            <label>Luma phi<input id="lumaPhi" type="number" min="0" step="any" value="5" disabled></label>
+          </div>
+          <label class="check"><input id="screenSpaceSampling" type="checkbox" disabled>Screen-space sampling</label>
+          <label class="check"><input id="linearThickness" type="checkbox" disabled>Linear thickness</label>
+          <div class="preset-actions"><button id="preset-export" disabled>Export preset</button><button id="preset-import" disabled>Import preset</button></div>
+          <input id="preset-file" type="file" accept="application/json,.json" hidden>
+          <p id="preset-error" class="error" role="alert"></p>
+        </details>
       </section>
       <div class="identity"><span id="identity">MoGe-2 + SuperMat</span><span>Local WebGPU inference</span><span id="timings"></span></div>
     </aside>

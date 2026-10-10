@@ -10,12 +10,32 @@ export function validateEpisode(state, source) {
 }
 
 export async function captureSurfaceFrame(evaluate, capture) {
-  const selector='.stage .title, .stage .stage-foot';
+  const selector='.stage .title, .stage .stage-foot, .stage .carousel, .stage .sun';
   const previous=await evaluate(`Array.from(document.querySelectorAll(${JSON.stringify(selector)}),element=>{const prior=element.style.visibility;element.style.visibility='hidden';return prior;})`);
   try{
     await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     return await capture();
   }finally{
     await evaluate(`Array.from(document.querySelectorAll(${JSON.stringify(selector)})).forEach((element,i)=>{element.style.visibility=${JSON.stringify(previous)}[i];})`);
+  }
+}
+
+export function validateComparison(views) {
+  const reference=views?.relit;
+  if(!reference || reference.map!=='surface' || reference.physicalbaseline?.relit?.roughness!==.4 ||
+      reference.physicalbaseline?.relit?.metalness!==0 || !reference.physicalbaseline.geometryId ||
+      reference.normalsMatchSurface!==true) throw Error('Fair image-albedo baseline required');
+  const close=(a,b)=>{
+    if(typeof a==='number'||typeof b==='number')return Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<1e-4;
+    if(a&&b&&typeof a==='object'&&typeof b==='object')return Object.keys(a).length===Object.keys(b).length&&Object.keys(a).every(k=>close(a[k],b[k]));
+    return a===b;
+  };
+  for(const mode of ['original','photo','relit','materials']) {
+    const view=views[mode];
+    if(view?.mode!==mode||view.map!=='surface'||view.glow!==false||view.physicalbaseline?.exposure!==1)throw Error('Four comparable views with fixed exposure and glow off required');
+    if(!close(view.camera,reference.camera)||!close(view.light,reference.light)||view.gi?.enabled!==reference.gi?.enabled||
+        !close(view.gi?.settings,reference.gi?.settings)||!close(view.gi?.debugState?.estimator,reference.gi?.debugState?.estimator))throw Error('Comparison changed camera, light or GI');
+    if(view.physicalbaseline.geometryId!==reference.physicalbaseline.geometryId||view.normalsMatchSurface!==true||
+        view.physicalbaseline.environmentIntensity!==reference.physicalbaseline.environmentIntensity)throw Error('Comparison changed geometry, normals or environment');
   }
 }

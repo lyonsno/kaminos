@@ -2,7 +2,7 @@ import { DataUtils } from 'three/webgpu';
 import { pass, mrt, output, normalView, positionViewDirection, diffuseColor, metalness, context, builtinAOContext, texture, screenUV, vec3, vec4, float, mix, uniform, convertToTexture } from 'three/tsl';
 import { ssgi } from './lib/addons/tsl/display/SSGINode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { resolveSceneGISettings, sceneGIReceives } from './scene-gi-settings.mjs';
+import { resolveSceneGISettings, resolveSceneGIEstimatorSettings, sceneGIReceives } from './scene-gi-settings.mjs';
 
 export function createSceneGI(scene, camera, aoIntensity) {
   // The screen-space field samples one depth/normal per pixel on both device routes.
@@ -25,6 +25,7 @@ export function createSceneGI(scene, camera, aoIntensity) {
   const aoTexture = convertToTexture(aoFilter), giTexture = convertToTexture(giFilter);
   const rawAO = effect.getAONode(), rawGI = effect.getGINode();
   let settings = resolveSceneGISettings();
+  let estimator = resolveSceneGIEstimatorSettings();
   const gain = uniform(settings.gain), filtered = uniform(true,'bool'), viewMode = uniform(0,'int');
   const visibility = filtered.select(texture(aoTexture.value,screenUV).r,texture(rawAO.value,screenUV).r).clamp(0,1);
   const irradianceOverPi = filtered.select(texture(giTexture.value,screenUV).rgb,texture(rawGI.value,screenUV).rgb).mul(gain);
@@ -72,6 +73,15 @@ export function createSceneGI(scene, camera, aoIntensity) {
       viewMode.value = ['scene','ao','gi','incoming'].indexOf(settings.view);
       aoFilter.radius.value = giFilter.radius.value = settings.denoise;
     },
+    setEstimatorSettings(value) {
+      const next = resolveSceneGIEstimatorSettings({...estimator,...value});
+      effect.expFactor.value = next.expFactor;
+      effect.useScreenSpaceSampling.value = next.screenSpaceSampling;
+      effect.useLinearThickness.value = next.linearThickness;
+      effect.backfaceLighting.value = next.backfaceLighting;
+      for (const key of ['depthPhi','normalPhi','lumaPhi']) aoFilter[key].value = giFilter[key].value = next[key];
+      estimator = next;
+    },
     async readback(renderer,kind='incoming') {
       if (!['incoming','receiving'].includes(kind)) throw new Error('Invalid GI readback kind');
       const target=kind==='receiving'?beauty.renderTarget:effect._ssgiRenderTarget;
@@ -83,7 +93,7 @@ export function createSceneGI(scene, camera, aoIntensity) {
       for(let i=0;i<bytes.length;i+=16384)chunks.push(String.fromCharCode(...bytes.subarray(i,i+16384)));
       return {kind,view:settings.view,width:target.width,height:target.height,format:'rgba16f-little-endian',base64:btoa(chunks.join('')),stats:{sum,max,nonzero,finite}};
     },
-    debugState:()=>({identity:'three-ssilvb-scene-gi-v1',...settings,frames,
+    debugState:()=>({identity:'three-ssilvb-scene-gi-v1',...settings,estimator:{...estimator},frames,
       temporal:false,source:'opaque-linear-lit-surfaces',receiver:'opaque-physical-material-diffuse',
       resolution:[effect._ssgiRenderTarget.width,effect._ssgiRenderTarget.height],
       sourcePasses:1,receivingPasses:1,sourceSamples:source.renderTarget.samples,receivingSamples:beauty.renderTarget.samples,

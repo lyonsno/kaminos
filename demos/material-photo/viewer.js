@@ -3,6 +3,31 @@ import { uniform } from 'three/tsl';
 import { createSceneGI } from '../../scene-gi.mjs';
 import { buildPhotoSurface } from './photo-surface.js';
 import { texturePixels } from './photo-contracts.js';
+import { inferEmission, emissionTexturePixels } from './emission.js';
+
+const GI_KEYS = ['gain','radius','thickness','slices','steps','denoise'];
+const ESTIMATOR_KEYS = ['expFactor','screenSpaceSampling','linearThickness','backfaceLighting','depthPhi','normalPhi','lumaPhi'];
+const DEFAULT_TUNING = { gain:1, radius:.15, thickness:.03, slices:6, steps:16, denoise:3, aoStrength:.5,
+  expFactor:2, screenSpaceSampling:false, linearThickness:false, backfaceLighting:0, depthPhi:.1, normalPhi:5, lumaPhi:5 };
+const pick = (value,keys) => Object.fromEntries(keys.map(key=>[key,value[key]]));
+
+function validateTuning(value) {
+  for (const key of Object.keys(DEFAULT_TUNING)) {
+    if (typeof DEFAULT_TUNING[key] === 'boolean') {
+      if (typeof value?.[key] !== 'boolean') throw new Error(`Invalid preset ${key}`);
+    } else if (!Number.isFinite(value?.[key]) || value[key] < 0) throw new Error(`Invalid preset ${key}`);
+  }
+  for (const key of ['radius','thickness','slices','steps','expFactor','depthPhi','normalPhi','lumaPhi']) {
+    if (value[key] === 0) throw new Error(`Preset ${key} must be positive`);
+  }
+  for (const key of ['slices','steps']) if (!Number.isInteger(value[key])) throw new Error(`Preset ${key} must be integral`);
+  return pick(value,Object.keys(DEFAULT_TUNING));
+}
+
+function validateLight(value) {
+  if (!Number.isFinite(value?.x) || !Number.isFinite(value?.y) || Math.hypot(value.x,value.y)>1) throw new Error('Invalid preset light hemisphere');
+  return {x:value.x,y:value.y};
+}
 
 export class MaterialPhotoViewer {
   async init(canvas, device) {
@@ -20,7 +45,7 @@ export class MaterialPhotoViewer {
     this.key = new THREE.DirectionalLight(0xffeedc, 3);
     this.fill = new THREE.DirectionalLight(0xbbddff, 0.65);
     this.fill.position.set(-2, 0.5, 1);
-    this.scene.add(this.key, this.fill, new THREE.HemisphereLight(0xe7edff, 0x484b3b, 0.5));
+    this.scene.add(this.key, this.key.target, this.fill, new THREE.HemisphereLight(0xe7edff, 0x484b3b, 0.5));
     // A small studio environment gives metals real reflections, not a diffuse substitute.
     const studio = new THREE.Scene();
     studio.background = new THREE.Color(0x59666b);
@@ -38,12 +63,13 @@ export class MaterialPhotoViewer {
     this.scene.environmentIntensity = 0.6;
     pmrem.dispose();
     studio.traverse(object => { object.geometry?.dispose(); object.material?.dispose(); });
-    this.gi = createSceneGI(this.scene, this.camera, uniform(0.5));
-    this.gi.setSettings({ mode: 'combined', gain: 1, radius: 0.15, thickness: 0.03 });
+    this.aoStrength = uniform(0.5);
+    this.gi = createSceneGI(this.scene, this.camera, this.aoStrength);
+    this.setTuning(DEFAULT_TUNING);
     this.pipeline = new THREE.RenderPipeline(this.renderer);
     this.pipeline.outputNode = this.gi.output();
     this.textures = [];
-    this.mode = 'original'; this.map = 'surface'; this.useGI = true;
+    this.mode = 'original'; this.map = 'surface'; this.useGI = true; this.glow = false;
     this.orbit = new THREE.Vector2(); this.target = new THREE.Vector2(); this.current = new THREE.Vector2();
     this.reset();
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -83,9 +109,10 @@ export class MaterialPhotoViewer {
 
   setImage(image, result = null) {
     this.clear();
+    this.image = image;
     this.aspect = image.width / image.height;
     const texture = this.texture(image, 'albedo');
-    this.original = new THREE.Mesh(new THREE.PlaneGeometry(this.aspect, 1), new THREE.MeshBasicNodeMaterial({ map: texture, toneMapped: false }));
+    this.original = new THREE.Mesh(new THREE.PlaneGeometry(this.aspect, 1), new THREE.MeshBasicNodeMaterial({ map: texture, toneMapped: false, side: THREE.DoubleSide }));
     this.scene.add(this.original);
     if (result) {
       const surface = buildPhotoSurface(result, this.aspect);
@@ -96,7 +123,8 @@ export class MaterialPhotoViewer {
       }
       geometry.setIndex(new THREE.BufferAttribute(surface.indices, 1));
       this.photoMaterial = new THREE.MeshBasicNodeMaterial({ map: texture, side: THREE.DoubleSide, toneMapped: false });
-      this.physicalMaterial = new THREE.MeshStandardNodeMaterial({ map: texture, side: THREE.DoubleSide, roughness: 1, metalness: 0 });
+      this.relitMaterial = new THREE.MeshStandardNodeMaterial({ map: texture, side: THREE.DoubleSide, roughness: .4, metalness: 0, emissiveIntensity: 0 });
+      this.physicalMaterial = new THREE.MeshStandardNodeMaterial({ map: texture, side: THREE.DoubleSide, roughness: 1, metalness: 0, emissive: 0xffffff, emissiveIntensity: 0 });
       this.mesh = new THREE.Mesh(geometry, this.photoMaterial);
       this.mesh.frustumCulled = false;
       this.scene.add(this.mesh);
@@ -119,12 +147,75 @@ export class MaterialPhotoViewer {
     this.physicalMaterial.map = this.maps.albedo;
     this.physicalMaterial.roughnessMap = this.physicalMaterial.metalnessMap = this.maps.orm;
     this.physicalMaterial.roughness = this.physicalMaterial.metalness = 1;
+    const emission = emissionTexturePixels(inferEmission(this.image, result.maps.albedo));
+    let sum=0,nonzero=0;
+    for(let i=0;i<emission.data.length;i++)if(i%4<3){sum+=emission.data[i];if(emission.data[i]>0)nonzero++;}
+    this.emissionStats={width:emission.width,height:emission.height,sum,nonzero};
+    const upload=Uint16Array.from(emission.data,value=>THREE.DataUtils.toHalfFloat(value));
+    this.emissionMap = new THREE.DataTexture(upload, emission.width, emission.height, THREE.RGBAFormat, THREE.HalfFloatType);
+    this.emissionMap.colorSpace = THREE.NoColorSpace;
+    this.emissionMap.magFilter = this.emissionMap.minFilter = THREE.LinearFilter;
+    this.emissionMap.needsUpdate = true;
+    this.textures.push(this.emissionMap);
+    this.maps.emission = this.emissionMap;
+    this.physicalMaterial.emissiveMap = this.emissionMap;
     this.physicalMaterial.needsUpdate = true;
   }
 
+  getTuning() { return {...DEFAULT_TUNING,...this.settings}; }
+  setTuning(value) {
+    const next = validateTuning({...this.getTuning(),...value});
+    this.gi.setSettings({mode:'combined',view:'scene',...pick(next,GI_KEYS)});
+    this.gi.setEstimatorSettings(pick(next,ESTIMATOR_KEYS));
+    this.aoStrength.value = next.aoStrength;
+    this.settings = next;
+  }
+  getLightHandle() { return {...this.lightHandle}; }
+  setLightScreenPosition(u,v) { this.setLightHandle((u-.5)/.38,(.5-v)/.38); }
+  setLightHandle(x,y) {
+    const radius = Math.hypot(x,y);
+    this.lightHandle = validateLight({x:radius>1?x/radius:x,y:radius>1?y/radius:y});
+    this.updateLight();
+  }
   setLight(azimuth=-35, elevation=35) {
     const a=THREE.MathUtils.degToRad(azimuth), e=THREE.MathUtils.degToRad(elevation);
-    this.key.position.set(Math.sin(a)*Math.cos(e)*3, Math.sin(e)*3, Math.cos(a)*Math.cos(e)*3);
+    this.setLightHandle(Math.sin(a)*Math.cos(e),Math.sin(e));
+  }
+  updateLight() {
+    if (!this.lightHandle) return;
+    const {x,y}=this.lightHandle;
+    // The disk represents the front hemisphere in the current camera frame.
+    const direction = new THREE.Vector3(x,y,Math.max(.001,Math.sqrt(Math.max(0,1-x*x-y*y)))).normalize();
+    direction.applyQuaternion(this.camera.quaternion);
+    this.key.target.position.set(0,0,0);
+    this.key.position.copy(direction.multiplyScalar(3));
+  }
+  exportPreset() {
+    return {schema:'kaminos.material-photo-preset.v1',settings:this.getTuning(),light:this.getLightHandle(),
+      camera:{orbit:this.orbit.toArray()},gi:this.useGI,glow:this.glow??false};
+  }
+  presentation() {
+    const materialState=material=>material?{uuid:material.uuid,roughness:material.roughness,metalness:material.metalness,
+      mapUUID:material.map?.uuid??null,roughnessMapUUID:material.roughnessMap?.uuid??null,metalnessMapUUID:material.metalnessMap?.uuid??null,
+      emissiveMapUUID:material.emissiveMap?.uuid??null,emissiveIntensity:material.emissiveIntensity}:null;
+    const lightDirection=this.key.position.clone().sub(this.key.target.position).normalize();
+    return {mode:this.mode,map:this.map,camera:{position:this.camera.position.toArray(),quaternion:this.camera.quaternion.toArray(),orbit:this.orbit.toArray(),zoom:this.camera.zoom},
+      light:{...this.getLightHandle(),position:this.key.position.toArray(),target:this.key.target.position.toArray(),direction:lightDirection.toArray(),intensity:this.key.intensity,color:this.key.color.getHex()},
+      geometryUUID:this.mesh?.geometry.uuid??null,normalsMatchSurface:this.mesh?.geometry.attributes.normal.array===this.surface?.normal,
+      emissiveIntensity:this.mesh?.material.emissiveIntensity??0,emissionStats:this.emissionStats??null,
+      physicalbaseline:{geometryId:this.mesh?.geometry.uuid??null,exposure:this.renderer.toneMappingExposure,relit:materialState(this.relitMaterial),materials:materialState(this.physicalMaterial),
+        activeMaterial:materialState(this.mesh?.material),environmentIntensity:this.scene.environmentIntensity},
+      glow:this.glow,gi:{enabled:this.useGI,settings:this.getTuning(),debugState:this.gi.debugState()}};
+  }
+  applyPreset(value) {
+    if(value?.schema!=='kaminos.material-photo-preset.v1')throw new Error('Invalid preset schema');
+    const tuning=validateTuning(value.settings),light=validateLight(value.light),orbit=value.camera?.orbit;
+    if(!Array.isArray(orbit)||orbit.length!==2||!orbit.every(Number.isFinite)||Math.abs(orbit[0])>.5||Math.abs(orbit[1])>.35)throw new Error('Invalid preset camera orbit');
+    if(typeof value.gi!=='boolean'||typeof value.glow!=='boolean')throw new Error('Invalid preset GI or glow');
+    this.setTuning(tuning);
+    this.setLightHandle(light.x,light.y);
+    this.orbit.fromArray(orbit);this.target.set(0,0);this.current.set(0,0);
+    this.useGI=value.gi;this.glow=value.glow;
   }
   reset() { this.orbit?.set(0,0); this.target?.set(0,0); this.current?.set(0,0); this.setLight(); if (this.renderer) this.renderer.toneMappingExposure=1; }
   resize() {
@@ -142,22 +233,24 @@ export class MaterialPhotoViewer {
     if (this.mesh) {
       this.mesh.visible=!original;
       if (this.map==='normals') { this.mapMaterial.map=this.normalMap; this.mesh.material=this.mapMaterial; }
-      else if (this.mode==='materials' && this.map!=='surface' && this.maps) {
+      else if (this.map!=='surface' && this.maps?.[this.map]) {
         this.mapMaterial.map=this.maps[this.map]; this.mesh.material=this.mapMaterial;
-      } else this.mesh.material=this.mode==='materials'&&this.maps?this.physicalMaterial:this.photoMaterial;
+      } else this.mesh.material=this.mode==='materials'&&this.maps?this.physicalMaterial:this.mode==='relit'?this.relitMaterial:this.photoMaterial;
+      this.physicalMaterial.emissiveIntensity=this.mode==='materials'&&this.glow?1:0;
     }
     this.current.lerp(this.target,.08);
-    this.camera.position.set(original?0:this.orbit.x+this.current.x,original?0:-this.orbit.y-this.current.y,1);
+    this.camera.position.set(this.orbit.x+this.current.x,-this.orbit.y-this.current.y,1);
     this.camera.lookAt(0,0,0);
-    if (!original && this.mode==='materials' && this.map==='surface' && this.useGI) this.pipeline.render();
+    this.updateLight();
+    if (!original && ['relit','materials'].includes(this.mode) && this.map==='surface' && this.useGI) this.pipeline.render();
     else this.renderer.render(this.scene,this.camera);
   }
   clear() {
     for (const mesh of [this.mesh,this.original]) if(mesh){this.scene.remove(mesh);mesh.geometry.dispose();}
-    for (const material of [this.original?.material,this.photoMaterial,this.physicalMaterial,this.mapMaterial]) material?.dispose();
+    for (const material of [this.original?.material,this.photoMaterial,this.relitMaterial,this.physicalMaterial,this.mapMaterial]) material?.dispose();
     for (const texture of this.textures??[]) texture.dispose();
-    this.textures=[]; this.original=this.mesh=this.maps=this.surface=this.normalMap=null;
-    this.photoMaterial=this.physicalMaterial=this.mapMaterial=null;
+    this.textures=[]; this.original=this.mesh=this.maps=this.surface=this.normalMap=this.emissionMap=this.emissionStats=this.image=null;
+    this.photoMaterial=this.relitMaterial=this.physicalMaterial=this.mapMaterial=null;
   }
   async dispose() {
     this.renderer?.setAnimationLoop(null);this.resizeObserver?.disconnect();
