@@ -81,7 +81,7 @@ try {
 
   const plan = values.plan ?? 'profiles';
   summary.plan = plan;
-  if (!['profiles', 'coop-sweep', 'coop-alternate'].includes(plan)) throw new Error(`unknown plan ${plan}`);
+  if (!['profiles', 'coop-sweep', 'coop-alternate', 'landing-check'].includes(plan)) throw new Error(`unknown plan ${plan}`);
   const page = (id, query) => run(id, demo, ['--url',
     `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
     '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
@@ -107,6 +107,18 @@ try {
     for (const [id, query] of coop) {
       run(id, demo, ['--url', `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
         '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
+    }
+  } else if (plan === 'landing-check') {
+    // Correctness gate before landing: F32 route parity, the product profile,
+    // and F32 parity through fenced cooperative duties.
+    summary.phase = 'landing-check';
+    for (const [id, weights, options, runOptions] of [
+      ['parity-f32', 'f32', {}, {}],
+      ['product-f16', 'f16', { activations: 'f16', fuseNorm: true }, {}],
+      ['parity-f32-fenced-duties', 'f32', {}, { runs: 2, fencedDuties: { targetDutyMs: 12 } }],
+    ]) {
+      run(id, witness, [...common, '--stage', 'route', '--fixture', `${state}/reference/ring-0000-512`, '--weights', `${state}/weights/${weights}`,
+        ...image, '--options', JSON.stringify(options), '--run-options', JSON.stringify(runOptions)]);
     }
   } else if (plan === 'coop-alternate') {
     // Paired blocking/cooperative alternation inside one page session (17 runs:
