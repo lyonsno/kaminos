@@ -1,5 +1,6 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
 import { AGX_WGSL } from './volume-agx.mjs';
+import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
 import { buildInflowCoverageMap, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
 import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
 import {
@@ -5496,6 +5497,7 @@ fn boxHit(ro: vec3<f32>, rd: vec3<f32>, b: vec3<f32>) -> vec2<f32> {
 
 ${PHYSICAL_COLOR_WGSL}
 ${AGX_WGSL}
+${RAY_START_WGSL}
 ${EMISSIVE_TRANSPORT_WGSL}
 ${SCENE_VOLUME_SOURCE_WGSL}
 
@@ -7519,7 +7521,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   // Keep ordinary sample positions stable; clipping removes hidden samples,
   // rather than resampling the visible fire at a different density.
   let dtBase = (select(endT, select(hit.y, 4.0, fullGridCapture), preserveSamplePositions) - startT) / steps;
-  let jitter = dtBase * 0.5;
+  let jitter = dtBase * rayStartPhase(in.pos.xy, u.reserved_render_controls.w, fullGridCapture);
   var t = startT + jitter;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
@@ -11007,6 +11009,7 @@ export function createKaminosVolumePrototype({
 
   let adapter = null;
   let device = null;
+  let rayStartNoiseTexture = null;
   let gpuInitialized = false;
   let configuredSharedGpuContext = sharedGpuContext;
   let context = null;
@@ -12004,6 +12007,7 @@ export function createKaminosVolumePrototype({
         { binding: 18, resource: inflowPerturbationTexture.createView() },
         { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         { binding: 22, resource: forceDeltaTexture.createView({ dimension: '3d' }) },
+        { binding: 23, resource: rayStartNoiseTexture.createView() },
       ],
     });
   }
@@ -13753,6 +13757,7 @@ export function createKaminosVolumePrototype({
       device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
     }
     state.gpuInitStage = 'device';
+    rayStartNoiseTexture = await createRayStartTexture(device);
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
       reason: device.features?.has?.('timestamp-query') ? 'not-sampled-yet' : 'timestamp-query-not-supported',
@@ -13963,6 +13968,7 @@ export function createKaminosVolumePrototype({
         // The raymarch fragment entry point reaches divergenceAtCell through the shared module, so the binding must be fragment-visible too (slice-2 lesson at 1e8996ab).
         { binding: 19, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
         { binding: 22, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
+        { binding: 23, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '2d' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -15060,7 +15066,7 @@ export function createKaminosVolumePrototype({
     uniforms[44] = controlsSnapshot.flowDebug || 0;
     uniforms[46] = controlsSnapshot.toneMapping === 'custom' ? 0 : 1;
     const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
-    uniforms[47] = 0;
+    uniforms[47] = controlsSnapshot.rayStartNoise === false ? 0 : 1;
     uniforms[48] = controlsSnapshot.fireScale ?? 0.86;
     uniforms[49] = controlsSnapshot.detailScale ?? 1.75;
     uniforms[50] = controlsSnapshot.plumeHeight ?? 1.45;
@@ -15493,6 +15499,8 @@ export function createKaminosVolumePrototype({
       inactiveReason: physicalColorRequested && !physicalColorEffective ? 'requires-ordinary-beauty-boundary-fire-without-diagnostic-residual-splat-or-caller-presentation' : null,
       workingSpace: 'linear-srgb', outputSpace: 'srgb',
       toneMapping: uniforms[46] > 0.5 ? 'agx' : 'custom',
+      rayStartNoise: uniforms[47] > 0.5,
+      rayStartPattern: uniforms[47] > 0.5 ? 'stable-spatial-blue-noise-64-v1' : 'midpoint',
       displayTransform: uniforms[46] > 0.5 ? 'agx-rec2020-default-srgb-v1' : physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-bradford-white-channel-shoulder-srgb-v4' : 'peak-shoulder-delayed-neutral-srgb-v2') : 'legacy-exponential-power',
       materialLawRequested: physicalColorMode === 2 ? (transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
       materialLawEffective: physicalColorMode === 2 && physicalColorEffective ? (transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
@@ -26642,6 +26650,7 @@ export function createKaminosVolumePrototype({
       fourArmHeldStateResidualGrid = null;
       clearBoundarySplatLiveUnionCoefficientOverlay({ skipBindGroupRebuild: true, silent: true });
       frameTexture?.destroy();
+      rayStartNoiseTexture?.destroy();
       ordinarySceneDepthFallback?.destroy();
       boundarySplatHdrTexture?.destroy();
       boundarySplatOpticalTexture?.destroy();

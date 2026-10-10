@@ -2302,6 +2302,11 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-steps-val">96</span>
     </div>
     <div class="slider-row">
+      <label class="slider-label" for="volume-ray-start-noise">Blue-noise ray starts</label>
+      <input type="checkbox" id="volume-ray-start-noise" data-volume-settings-role="renderer" checked>
+      <span class="slider-val" id="volume-ray-start-noise-val">on</span>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Adaptive Rays</span>
       <input type="range" id="volume-adaptive-rays" min="0" max="1" step="0.05" value="0.65">
       <span class="slider-val" id="volume-adaptive-rays-val">0.65</span>
@@ -22242,6 +22247,7 @@ function readVolumeControls() {
     flowKernelRadius: parseFloat(document.getElementById('volume-flow-kernel-radius').value),
     flowKernelCoherence: parseFloat(document.getElementById('volume-flow-kernel-coherence').value),
     toneMapping: document.getElementById('volume-tone-mapping').value,
+    rayStartNoise: document.getElementById('volume-ray-start-noise').checked,
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v0',
       authority: 'band-limited-support-coverage-ridge-proximity-footprint-v1',
@@ -23982,7 +23988,7 @@ async function initKaminosVolumeRoute() {
           : String(requested) === String(effective);
         return equal ? [] : [{ id: control.id, requested, effective }];
       });
-      if (basinControls.length !== 186 || rendererControls.length !== 4 || substitutions.length) {
+      if (basinControls.length !== 186 || rendererControls.length !== 5 || substitutions.length) {
         throw new Error(`cockpit live parity control mismatch: ${JSON.stringify(substitutions.slice(0, 8))}`);
       }
       return {
@@ -24127,6 +24133,7 @@ async function initKaminosVolumeRoute() {
   for (const id of [
     'volume-emitter-source-law',
     'volume-tone-mapping',
+    'volume-ray-start-noise',
     'volume-emitter-source-depth',
     'volume-emitter-inlet-profile',
     'volume-emitter-momentum-linked',
