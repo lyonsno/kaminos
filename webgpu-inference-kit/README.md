@@ -8,6 +8,14 @@ Kaminos WebGPU Inference Kit gives model ports a shared session and device lifec
 npm install @kaminos/webgpu-inference-kit
 ```
 
+## Generate Images In Your Browser
+
+[![Six images generated in the browser with FLUX.2 [klein] 4B on WebGPU: a fisherman portrait, a celadon teapot, a misty forest valley, a watercolor fox under a mushroom, a neon OPEN ALL NIGHT sign, and a brass toy locomotive](https://raw.githubusercontent.com/lyonsno/kaminos/main/models/flux2-klein/assets/examples.jpg)](https://lyonsno.github.io/kaminos/inference-kit/klein/)
+
+**[Try FLUX.2 [klein] 4B in your browser](https://lyonsno.github.io/kaminos/inference-kit/klein/)**: type a prompt and get an image generated entirely on your own GPU. The Qwen3-4B text encoder, the 4-step diffusion transformer and the image decoder all run as WebGPU compute shaders, and nothing is sent to a server. A 512 × 512 image takes about 7 seconds on an Apple M4 Max and about 20 seconds on a 16 GB M2 Pro, while an animation on the same GPU keeps drawing at about 50 frames per second. The int4 weights download once (3.9 GB) and stay in the browser's cache.
+
+The port is built on this kit: generation runs as a queued route invocation, its GPU work is submitted in command duties sized to measured throughput so the application's frames get through between them, and the inference control pauses, resumes or stops a run. The [port's guide](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein) covers speed, memory and how to embed it.
+
 For a visual first run, [brighten a photo while a renderer stays active](./docs/getting-started.md#try-the-photo-walkthrough). The worked example walks through sharing a GPU device, queuing an operation, and displaying its result.
 
 ## Quick Look
