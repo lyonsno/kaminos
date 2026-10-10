@@ -171,6 +171,7 @@ window.runTransformerWitness = async function (cfg) {
       const vbytes = await getBytes(`/vae/${vm.bundle.file}`);
       if (cfg.verifyDigests && await sha256(vbytes) !== vm.bundle.sha256) throw new Error('VAE bundle digest mismatch');
       const vae = new KleinVaeDecoder(device, vm);
+      vae.sharedType = cfg.sharedType ?? 'f32';
       await vae.load(vbytes);
       const latH = Math.round(Math.sqrt(imgTokens)), latW = imgTokens / latH;
       vae.allocate(latH, latW);

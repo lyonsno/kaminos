@@ -3,7 +3,7 @@
 // de-normalization and un-patchify, then AutoencoderKLFlux2 post_quant_conv
 // and Decoder (conv_in, mid block with single-head attention, four up blocks,
 // GroupNorm + SiLU, conv_out). Weights come from pack-vae.py.
-import { gemmShader, softmaxShader } from './klein-kernels.js';
+import { gemmShader, gemmShaderV2, softmaxShader } from './klein-kernels.js';
 
 const GN_EPS = 1e-6;
 const GROUPS = 32;
@@ -50,6 +50,67 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
       var av: array<f32, 4>; var bv: array<f32, 4>;
       for (var i = 0u; i < 4u; i++) { av[i] = ta[kk * 64u + lid.y * 4u + i]; }
       for (var j = 0u; j < 4u; j++) { bv[j] = tb[kk * 64u + lid.x * 4u + j]; }
+      for (var i = 0u; i < 4u; i++) { for (var j = 0u; j < 4u; j++) { acc[i][j] = fma(av[i], bv[j], acc[i][j]); } }
+    }
+    workgroupBarrier();
+  }
+  for (var i = 0u; i < 4u; i++) {
+    let m = m0 + lid.y * 4u + i; if (m >= p.M) { continue; }
+    for (var j = 0u; j < 4u; j++) {
+      let n = n0 + lid.x * 4u + j; if (n >= p.N) { continue; }
+      let v = acc[i][j] + f32(w[p.b_off + n]);
+      let ci = m * p.N + n;
+      ${store}
+    }
+  }
+}`;
+}
+
+// Conv v2: the GEMM-v2 structure for the implicit-GEMM convolution. vec4 loads run along
+// input channels, which are contiguous in channels-last activations and never cross a tap
+// because Cin is a multiple of 4; K tile 32; selectable shared-tile type.
+function convShaderV2(epilogue, sType) {
+  const store = epilogue === 'bias' ? 'c[ci] = v;' : 'c[ci] = c[ci] + v;';
+  return `enable f16;
+struct P { M: u32, N: u32, K: u32, Cin: u32, Hout: u32, Wout: u32, Hin: u32, Win: u32, taps: u32, w_off: u32, b_off: u32, up: u32 };
+@group(0) @binding(0) var<storage, read> x: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> w: array<f16>;
+@group(0) @binding(2) var<storage, read_write> c: array<f32>;
+@group(0) @binding(3) var<uniform> p: P;
+var<workgroup> ta: array<${sType}, 2048>;
+var<workgroup> tb: array<${sType}, 2048>;
+fn load4(m: u32, k: u32) -> vec4<f32> {
+  let tap = k / p.Cin; let ci = k % p.Cin;
+  if (p.taps == 1u) { return x[(m * p.Cin + ci) / 4u]; }
+  let oy = m / p.Wout; let ox = m % p.Wout;
+  let iy = i32(oy) + i32(tap / 3u) - 1; let ix = i32(ox) + i32(tap % 3u) - 1;
+  if (iy < 0 || ix < 0 || iy >= i32(p.Hout) || ix >= i32(p.Wout)) { return vec4<f32>(0.0); }
+  var sy = u32(iy); var sx = u32(ix);
+  if (p.up == 1u) { sy = sy / 2u; sx = sx / 2u; }
+  return x[((sy * p.Win + sx) * p.Cin + ci) / 4u];
+}
+@compute @workgroup_size(16, 16)
+fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>) {
+  let tid = lid.y * 16u + lid.x;
+  let m0 = wid.y * 64u; let n0 = wid.x * 64u;
+  var acc: array<array<f32, 4>, 4>;
+  for (var k0 = 0u; k0 < p.K; k0 += 32u) {
+    for (var q = 0u; q < 2u; q++) {
+      let idx = tid + q * 256u; let row = idx / 8u; let c4 = idx % 8u; let k = k0 + c4 * 4u;
+      let m = m0 + row; var av = vec4<f32>(0.0);
+      if (m < p.M && k < p.K) { av = load4(m, k); }
+      let n = n0 + row; var bv = vec4<f32>(0.0);
+      if (n < p.N && k < p.K) {
+        let wi = p.w_off + n * p.K + k;
+        bv = vec4<f32>(f32(w[wi]), f32(w[wi + 1u]), f32(w[wi + 2u]), f32(w[wi + 3u]));
+      }
+      for (var cc = 0u; cc < 4u; cc++) { ta[(c4 * 4u + cc) * 64u + row] = ${sType}(av[cc]); tb[(c4 * 4u + cc) * 64u + row] = ${sType}(bv[cc]); }
+    }
+    workgroupBarrier();
+    for (var kk = 0u; kk < 32u; kk++) {
+      var av: array<f32, 4>; var bv: array<f32, 4>;
+      for (var i = 0u; i < 4u; i++) { av[i] = f32(ta[kk * 64u + lid.y * 4u + i]); }
+      for (var j = 0u; j < 4u; j++) { bv[j] = f32(tb[kk * 64u + lid.x * 4u + j]); }
       for (var i = 0u; i < 4u; i++) { for (var j = 0u; j < 4u; j++) { acc[i][j] = fma(av[i], bv[j], acc[i][j]); } }
     }
     workgroupBarrier();
@@ -185,7 +246,9 @@ export class KleinVaeDecoder {
     const wt = this.t(`${name}.weight`), bt = this.t(`${name}.bias`);
     const [Cout, K] = wt.shape; const taps = K / Cin;
     const Hout = up ? Hin * 2 : Hin, Wout = up ? Win * 2 : Win, M = Hout * Wout;
-    const pipe = this.pipeline(`conv-${epilogue}`, convShader(epilogue));
+    const v2 = (this.convVersion ?? 2) === 2 && Cin % 4 === 0;
+    const st = this.sharedType ?? 'f32';
+    const pipe = v2 ? this.pipeline(`conv2-${epilogue}-${st}`, convShaderV2(epilogue, st)) : this.pipeline(`conv-${epilogue}`, convShader(epilogue));
     this.dispatch(enc, pipe, [x, this.wbuf, out, this.uniform([M, Cout, K, Cin, Hout, Wout, Hin, Win, taps, wt.offset / 2, bt.offset / 2, up ? 1 : 0])],
       Math.ceil(Cout / 64), Math.ceil(M / 64));
     return { H: Hout, W: Wout, C: Cout };
@@ -224,7 +287,9 @@ export class KleinVaeDecoder {
     this.conv(enc, this.t1, this.k, `${name}.to_k`, { Hin: H, Win: W, Cin: C });
     this.conv(enc, this.t1, this.t2, `${name}.to_v`, { Hin: H, Win: W, Cin: C });
     this.dispatch(enc, this.pipeline('transpose', transposeShader), [this.t2, this.vt, this.uniform([L, C, 0, 0])], Math.ceil(C / 16), Math.ceil(L / 16));
-    const g = this.pipeline('gemm-f32-store', gemmShader({ bType: 'f32', epilogue: 'store' }));
+    const st = this.sharedType ?? 'f32';
+    const g = (this.convVersion ?? 2) === 2 ? this.pipeline(`gemm2-f32-store-${st}`, gemmShaderV2({ bType: 'f32', epilogue: 'store', sType: st }))
+      : this.pipeline('gemm-f32-store', gemmShader({ bType: 'f32', epilogue: 'store' }));
     this.dispatch(enc, g, [this.q, this.k, this.scores, this.uniform([L, L, C, this.f32bits(1 / Math.sqrt(C)), 0, C, 0, 0, C, 0, 0, L, 0, 0, 0, 0])], Math.ceil(L / 64), Math.ceil(L / 64));
     this.dispatch(enc, this.pipeline('softmax', softmaxShader()), [this.scores, this.uniform([L, L, 0, 0])], L);
     this.dispatch(enc, g, [this.scores, this.vt, this.t1, this.uniform([L, C, L, this.f32bits(1), 0, L, 0, 0, L, 0, 0, C, 0, 0, 0, 0])], Math.ceil(C / 64), Math.ceil(L / 64));

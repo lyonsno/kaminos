@@ -65,6 +65,7 @@ export class KleinPipeline {
     this.residentBytes.transformer = bytes;
     this.vaeManifest = await getJson(`${vae}/manifest.json`);
     this.vae = new KleinVaeDecoder(this.device, this.vaeManifest);
+    this.vae.sharedType = this.kernels.sharedType;
     const vb = await getBytes(`${vae}/${this.vaeManifest.bundle.file}`);
     await this.vae.load(vb); this.residentBytes.vae = vb.byteLength;
     this.timings.loadMs = performance.now() - t0;
