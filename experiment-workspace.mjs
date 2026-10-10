@@ -3,12 +3,12 @@ import {createControlSlots} from './authoring-workspace.mjs';
 // Layout custody only: all scene, controls, clock and rendering stay with their
 // existing owners. Release these slots before another workspace acquires them.
 export function installExperimentWorkspace({document, title, subtitle, instruments, instrumentTitle=title, instrumentHelp='',
-  setup, inspector, detailNodes=[], runNodes=[],
+  setup, inspector, investigation=null, detailNodes=[], runNodes=[],
   sceneActions, navigation, tools, openTool, frame}) {
   const make=(tag,id,html)=>{const node=document.createElement(tag);node.id=id;node.innerHTML=html;return node;};
   const left=make('aside','experiment-instruments',`<div class="experiment-panel-heading"><h2></h2><p></p></div>
     <div class="experiment-instruments-body"><details id="experiment-browser"><summary>Experiments</summary><div><input type="search" aria-label="Find a workbench" placeholder="Find an experiment…"><div class="experiment-browser-list"></div></div></details>
-    <section id="experiment-setup-slot"></section><h3 id="experiment-tuning-title"></h3><p id="experiment-tuning-help"></p><div id="experiment-instrument-slot"></div>
+    <section id="experiment-setup-slot"></section><section id="experiment-investigation-slot" aria-label="Investigation" hidden></section><h3 id="experiment-tuning-title"></h3><p id="experiment-tuning-help"></p><div id="experiment-instrument-slot"></div>
     <details id="experiment-details"><summary>Runtime details</summary><div id="experiment-detail-slot"></div></details></div>`);
   left.querySelector('h2').textContent=title;left.querySelector('p').textContent=subtitle;
   const toolbar=make('nav','experiment-toolbar',`<strong></strong><div id="experiment-add-slot"></div><span class="experiment-toolbar-spacer"></span>
@@ -37,7 +37,17 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
   document.addEventListener('pointerdown',event=>{if(!byId('experiment-browser').contains(event.target))byId('experiment-browser').open=false;},true);
   let active=false;
   const text=(id,value)=>{const node=byId(id);if(node.textContent!==value)node.textContent=value;};
+  const investigationSlot=byId('experiment-investigation-slot');
+  const setInvestigation=node=>{
+    // The investigation owner supplies one live component. Moving that node
+    // preserves its handlers, drafts and session binding through layout changes.
+    investigationSlot.replaceChildren(...(node ? [node] : []));
+    investigationSlot.hidden=!node;
+    document.defaultView._kaminosDirty?.();
+  };
+  setInvestigation(investigation);
   const api={
+    setInvestigation,
     setActive(value){
       if(active===value)return;
       // Existing focus/blur handlers own commit semantics.

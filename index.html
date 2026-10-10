@@ -14817,6 +14817,7 @@ function installFluidWorkbench() {
     frame:()=>{const objects=sceneObjectsForFraming(sceneObjects);if(fingerFluidBenchScene?.group)objects.push(fingerFluidBenchScene.group);const framed=frameObjects(objects,camera,controls);if(framed)window._kaminosDirty?.();return framed;},
   });
   window.kaminosFluidWorkbenchState=fluidWorkbench.state;
+  window.kaminosFluidWorkbenchSetInvestigation=fluidWorkbench.setInvestigation;
   fluidWorkbench.setActive(authoringWorkspace.state().mode==='workbench' && window.__kaminosActiveTab()==='finger-fluid-bench');
   updateFingerFluidBenchReadout();
 }

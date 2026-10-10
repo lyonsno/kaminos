@@ -49,3 +49,8 @@ body.experiment-workspace #info-bar { bottom:91px; } body.experiment-workspace #
 body.experiment-workspace #authoring-source-environment > h2 { display:none; }
 #authoring-inspector-tree-slot .scene-object-meta,#authoring-inspector-tree-slot .scene-object-chip,#authoring-inspector-tree-slot .scene-object-tools { display:none; }
 @media(max-width:800px) { body.experiment-workspace #navigation-hint { display:none; } }
+
+/* Shared investigation controls live alongside the experiment, not the scene inspector. */
+#experiment-investigation-slot { margin-top:20px; padding-top:16px; border-top:1px solid #34363b; overflow-wrap:anywhere; }
+#experiment-investigation-slot[hidden] { display:none; }
+#experiment-investigation-slot > * { min-width:0; }
