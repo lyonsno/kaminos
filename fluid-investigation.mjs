@@ -108,6 +108,14 @@ export async function mountFluidInvestigation({page, out, source, guide}) {
       if ([...window.__kaminosInvestigations.values()].some(item => item.read().recording.status === 'recording')) {
         throw Error('This page already has an active investigation');
       }
+      // A held witness stops presentation scheduling. Restore the interactive
+      // presenter at handoff, preserving the source-owned simulation pause.
+      const before = window.kaminosFingerFluidBenchSessionState();
+      window.kaminosFingerFluidBenchResumeAfterWitness();
+      const after = window.kaminosFingerFluidBenchSessionState();
+      if (!after.running || ['generation', 'step', 'paused'].some(key => before[key] !== after[key])) {
+        throw Error('Fluid presentation handoff changed the water or remained stopped');
+      }
       const context = () => ({clock: window.kaminosFingerFluidBenchSessionState(),
         controls: window.kaminosFingerFluidPressureCockpitState(),
         camera: window.kaminosNavigationState(), scene: window.kaminosSceneAuthoring.read(),

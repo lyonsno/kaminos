@@ -9,6 +9,7 @@ import {fluidSourceIdentity} from '../fluid-session-browser.mjs';
 // owner hooks must be composed before this can pass the operation assertions.
 export default async function ({page, fluid, inputs}) {
   await fluid.advanceTo((await fluid.read()).clock.step + 30);
+  await fluid.view({yaw: .7, pitch: .65, distance: 7, target: [0, -.25, .2]});
   const source = await fluidSourceIdentity(page.url(), inputs.repo, {
     additionalFiles: ['investigation-recording.mjs', 'investigation-guide.mjs', 'scene-navigation.mjs'],
   });
@@ -28,6 +29,9 @@ export default async function ({page, fluid, inputs}) {
   await page.mouse.down({button: 'middle'});
   await page.mouse.move(viewport.width * .68, viewport.height * .5, {steps: 6});
   await page.mouse.up({button: 'middle'});
+  const presentation = await page.evaluate(() => window.kaminosFingerFluidBenchSessionState());
+  assert.equal(presentation.running, true, 'interactive navigation must retain fluid presentation');
+  assert.equal(presentation.paused, true, 'presentation handoff must preserve held water');
   await guide.getByRole('button', {name: 'Capture', exact: true}).click();
   await page.waitForFunction(() => document.querySelector('.investigation-guide output')?.textContent !== 'Recording');
   const status = await guide.locator('output').textContent();

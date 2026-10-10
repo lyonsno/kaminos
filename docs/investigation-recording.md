@@ -14,9 +14,9 @@ import {investigationOperations} from './investigation-recording.mjs';
 
 if (investigationOperations.active) {
   investigationOperations.emit({
-    kind: 'fluid.controls', phase: 'applied', target: 'fluid',
+    kind: 'fluid.controls', phase: 'requested', target: 'fluid',
     requested: receipt.requested,
-    effective: solver.getDebugState(),
+    effective: receipt.effective,
     clock: window.kaminosFingerFluidBenchSessionState(),
   });
 }
@@ -72,6 +72,9 @@ through the existing `kaminosFluidWorkbenchSetInvestigation(node)` operation. It
 Try This and Why This Matters sections are independent; ordinary navigation and
 Fluid controls stay available. Capture writes to the caller's output home and
 Finish retains the final recording while leaving the browser's water alive.
+Mount restores the existing fluid presentation scheduler while preserving the
+simulation's step and pause state. This prepares the interactive handoff;
+Capture itself reads the displayed frame without a diagnostic redraw.
 
 `examples/fluid-investigation.mjs` composes this consumer with
 `tools/fluid-session-run.mjs`. Pass `--visible` on initial launch and input JSON

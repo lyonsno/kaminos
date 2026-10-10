@@ -16,7 +16,9 @@ const source = {route: 'synthetic-owner-native-browser-lifecycle', executable};
 const guide = {question: 'Lifecycle fixture', tryThis: 'Capture', whyThisMatters: 'Preserve a handback through failures'};
 const fixture = `<!doctype html><main id="slot"></main><script>
 window.kaminosFluidWorkbenchSetInvestigation = node => document.querySelector('#slot').replaceChildren(node);
-window.kaminosFingerFluidBenchSessionState = () => ({generation:1,step:47,available:true,paused:true});
+window.__presentationResumeCount = 0;
+window.kaminosFingerFluidBenchResumeAfterWitness = () => {window.__presentationResumeCount++;};
+window.kaminosFingerFluidBenchSessionState = () => ({generation:1,step:47,available:true,paused:true,running:window.__presentationResumeCount > 0});
 window.kaminosFingerFluidPressureCockpitState = () => ({requested:{cohesion:12},effective:{cohesion:12}});
 window.kaminosNavigationState = () => ({position:[1,2,3],target:[0,0,0],up:[0,1,0]});
 window.kaminosSceneAuthoring = {read:() => ({objects:[]})};
@@ -47,6 +49,15 @@ async function mount(t, name) {
   const handle = await mountFluidInvestigation({page, out, source, guide});
   return {page, out, handle, report: async () => JSON.parse(await fs.readFile(handle.reportPath))};
 }
+
+test('mount restores held-water presentation once without advancing water or redrawing at capture', async t => {
+  const f = await mount(t, 'presentation');
+  const state = await f.page.evaluate(() => window.kaminosFingerFluidBenchSessionState());
+  assert.deepEqual(state, {generation:1,step:47,available:true,paused:true,running:true});
+  await f.handle.capture('original displayed frame');
+  assert.equal(await f.page.evaluate(() => window.__presentationResumeCount), 1);
+  await f.handle.finish('done');
+});
 
 test('failed final write freezes visibly, rejects new captures and permits honest retry of the frozen recording', async t => {
   const f = await mount(t, 'write-failure');
