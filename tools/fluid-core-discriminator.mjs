@@ -18,7 +18,7 @@ const evaluate=async(expression,sessionId)=>{const r=await call('Runtime.evaluat
 try {
   const root=arg('--repo-root'),revision=arg('--revision'),base=arg('--base-url');
   const git=(...a)=>{const r=spawnSync('git',a,{cwd:root,encoding:'utf8'});if(r.status!==0)throw Error(r.stderr);return r.stdout.trim();};
-  report.requested={root,revision,base,basinSteps:[0,30,90,180],dropSteps:[0,6,12],dt:1/60};
+  report.requested={root,revision,base,basinSteps:[1,30,90,180],dropSteps:[1,6,12],dt:1/60};
   report.phase='source-preflight';save();assert.equal(git('rev-parse','HEAD'),revision,'Wrong source revision');
   assert.equal(git('status','--porcelain'),'','Dirty source cannot identify this experiment');
   const names=['finger-fluid-webgpu-core.js','finger-fluid-ipbf-wgsl.mjs','finger-fluid-akinci.mjs','finger-fluid-discriminator.mjs','fluid-core-discriminator.html','fluid-core-discriminator-view.mjs','tools/fluid-discriminator-evidence.mjs','tools/fluid-core-discriminator.mjs'];
@@ -43,7 +43,8 @@ try {
       const nav=await call('Page.navigate',{url:url.href},sessionId);if(nav.errorText||nav.isDownload)throw Error('Navigation failed');await loaded;
       const boot=await evaluate('window.discriminatorBoot',sessionId);assert.ok(boot,'Missing boot result');
       const config=discriminatorConfiguration({arm,fixture,coefficient:gamma});
-      const row={arm,fixture,gamma,url:url.href,adapter:boot.adapter,initialInputSha256:sha(Buffer.from(config.diagnosticPopulation.particleData.buffer)),captures:[]};
+      writeFileSync(directory+'/initial-input.f32',Buffer.from(config.diagnosticPopulation.particleData.buffer));
+      const row={arm,fixture,gamma,initialInputPath:directory+'/initial-input.f32',initialInputAuthority:'exact_factory_invocation_not_GPU_readback',url:url.href,adapter:boot.adapter,initialInputSha256:sha(Buffer.from(config.diagnosticPopulation.particleData.buffer)),captures:[]};
       (fixture==='basin'?report.arms:report.dropResponses).push(row);save();
       let previous=0;
       for(const step of steps) {
