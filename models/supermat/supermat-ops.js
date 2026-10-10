@@ -50,7 +50,7 @@ export function subgroupMatrixUsable(device) {
     && info?.subgroupMinSize === 32 && info?.subgroupMaxSize === 32;
 }
 
-export function createSuperMatOps(device, { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 },
+export function createSuperMatOps(device, { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 }, fuseNorm = false,
   attentionKernel = 'scalar', gemmKernel = 'tiled', gemmPrecision = 'f32', activations = 'f32' } = {}) {
   // activations: storage of intermediate tensors ('f16' halves memory traffic; math stays F32).
   if (!['f32', 'f16'].includes(activations)) throw new Error(`unknown activation storage ${activations}`);
@@ -266,7 +266,7 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
     words.set([spec.aOff ?? 0, spec.aSM, spec.aSK, spec.aSB ?? 0], 4);
     words.set([spec.bOff ?? 0, spec.bSK, spec.bSN, spec.bSB ?? 0], 8);
     words.set([spec.cOff ?? 0, spec.cSM, spec.cSN, spec.cSB ?? 0], 12);
-    words.set([spec.padTop ?? 0, spec.padLeft ?? 0, spec.nBase ?? 0, 0], 16);
+    words.set([spec.padTop ?? 0, spec.padLeft ?? 0, spec.nBase ?? 0, spec.normB?.channelsPerGroup ?? 0], 16);
     return words;
   }
 
@@ -282,6 +282,7 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
       aKContiguous: spec.aSK === 1, bNContiguous: spec.bSN === 1,
       biasM: Boolean(spec.biasM), biasM2: Boolean(spec.biasM2), biasN: Boolean(spec.biasN),
       residual: Boolean(spec.residual), conv: spec.conv ?? null, tile: gemmTile, precision: gemmPrecision,
+      normB: spec.normB ? { silu: Boolean(spec.normB.silu) } : null,
       types: { a: storageKind(spec.a), b: storageKind(spec.b), c: storageKind(c),
         ...(spec.biasM ? { biasM: storageKind(spec.biasM) } : {}), ...(spec.biasM2 ? { biasM2: storageKind(spec.biasM2) } : {}),
         ...(spec.biasN ? { biasN: storageKind(spec.biasN) } : {}), ...(spec.residual ? { residual: storageKind(spec.residual) } : {}) },
@@ -291,6 +292,8 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
     if (spec.biasM2) views.push(bindingView(spec.biasM2, 'gemm biasM2'));
     if (spec.biasN) views.push(bindingView(spec.biasN, 'gemm biasN'));
     if (spec.residual) views.push(bindingView(spec.residual, 'gemm residual'));
+    if (spec.normB) views.push(bindingView(spec.normB.stats, 'norm stats'), bindingView(spec.normB.gamma, 'norm gamma'),
+      bindingView(spec.normB.beta, 'norm beta'));
     views.push(bindingView(c, 'gemm c'));
     views.push(params(gemmWords(spec)));
     const nBase = spec.nBase ?? 0, nCount = spec.nCount ?? N - nBase;
@@ -326,8 +329,10 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
 
   // NCHW conv2d (batch 1) as implicit GEMM. Bottom/right padding is implied by
   // the output size; `upsample` reads a nearest-2x view of the input.
+  // norm: { gamma, beta, eps, silu, groups } applies GroupNorm(+SiLU) to x
+  // inside the conv's input loader instead of materializing the normed tensor.
   async function conv2d({ x, shape: [cin, h, w], weight, bias, biasM2, residual, kernel = 3, stride = 1,
-    pad = [1, 1, 1, 1], upsample = false, name = 'conv' }) {
+    pad = [1, 1, 1, 1], upsample = false, name = 'conv', norm = null }) {
     const [cout, wcin, kh, kw] = weight.shape;
     if (wcin !== cin || kh !== kernel || kw !== kernel) throw new Error(`${name}: weight shape ${weight.shape} does not match input ${cin}x${kernel}x${kernel}`);
     const [top, left, bottom, right] = pad;
@@ -336,11 +341,18 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
     const wout = Math.floor((ew + left + right - kw) / stride) + 1;
     const N = hout * wout, K = cin * kh * kw;
     const c = alloc([cout, hout, wout], name);
-    const spec = kh === 1 && stride === 1 && !upsample && top === 0 && left === 0
+    let normB = null;
+    if (norm) {
+      const groups = norm.groups ?? 32;
+      normB = { stats: groupNormStats({ x, shape: [cin, h, w], groups, eps: norm.eps, name: `${name}.norm` }),
+        gamma: norm.gamma, beta: norm.beta, silu: norm.silu, channelsPerGroup: cin / groups };
+    }
+    const spec = kh === 1 && stride === 1 && !upsample && top === 0 && left === 0 && !normB
       ? { a: weight, b: x, c, M: cout, N, K: cin, aSM: cin, aSK: 1, bSK: h * w, bSN: 1, cSM: N, cSN: 1, biasM: bias, biasM2, residual }
       : { a: weight, b: x, c, M: cout, N, K, aSM: K, aSK: 1, bSK: h, bSN: w, bSB: wout, cSM: N, cSN: 1,
-        padTop: top, padLeft: left, biasM: bias, biasM2, residual, conv: { kh, kw, stride, upsample } };
+        padTop: top, padLeft: left, biasM: bias, biasM2, residual, conv: { kh, kw, stride, upsample }, normB };
     await gemm({ ...spec, name });
+    if (normB) release(normB.stats);
     c.shape = [cout, hout, wout];
     return c;
   }
@@ -370,7 +382,8 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
     return out;
   }
 
-  function groupNorm({ x, shape: [channels, h, w], groups = 32, gamma, beta, eps, silu = false, name = 'groupnorm' }) {
+  // Per-group [mean, rstd] (F32) of an NCHW tensor.
+  function groupNormStats({ x, shape: [channels, h, w], groups = 32, eps, name = 'groupnorm' }) {
     const groupSize = (channels / groups) * h * w;
     if (!Number.isSafeInteger(groupSize)) throw new Error(`${name}: channels must divide into groups`);
     const chunks = Math.ceil(groupSize / GROUPNORM_CHUNK);
@@ -380,12 +393,17 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
     dispatch(groupNormPartialShader({ x: storageKind(x) }), [bindingView(x), bindingView(partial), params(groupWords)], [chunks, groups, 1]);
     dispatch(groupNormCombineShader(eps), [bindingView(partial), bindingView(statsTensor), params(groupWords)],
       [Math.ceil(groups / 64), 1, 1]);
+    release(partial);
+    return statsTensor;
+  }
+
+  function groupNorm({ x, shape: [channels, h, w], groups = 32, gamma, beta, eps, silu = false, name = 'groupnorm' }) {
+    const statsTensor = groupNormStats({ x, shape: [channels, h, w], groups, eps, name });
     const total = channels * h * w;
     const y = alloc([channels, h, w], name);
     dispatch(groupNormApplyShader({ silu, x: storageKind(x), y: storageKind(y) }), [bindingView(x), bindingView(statsTensor), bindingView(gamma, `${name} gamma`),
       bindingView(beta, `${name} beta`), bindingView(y), params(new Uint32Array([total, h * w, channels / groups, 0]))],
     dispatch1D(total));
-    release(partial);
     release(statsTensor);
     return y;
   }
@@ -448,5 +466,5 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
 
   return { alloc, release, gemm, conv2d, groupNorm, layerNorm, softmax, geglu, affine, copy, upload, read, flush, yieldPoint,
     setSchedule, scheduleState, discard, destroy, stats, flashAttention,
-    attentionMode: attention, gemmTile: tileShape, gemmPrecision, activations, gemmKernel: subgroupMatrix ? 'subgroup-matrix' : 'tiled' };
+    attentionMode: attention, gemmTile: tileShape, gemmPrecision, activations, fuseNorm, gemmKernel: subgroupMatrix ? 'subgroup-matrix' : 'tiled' };
 }

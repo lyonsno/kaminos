@@ -34,33 +34,38 @@ function concatChannels(ops, a, b, name) {
   return out;
 }
 
+// GroupNorm(+SiLU) followed by a 3x3 conv. With ops.fuseNorm the normalization
+// runs inside the conv's input loader; otherwise the normed tensor is
+// materialized. Both paths compute the same function. The caller keeps x.
+async function normConv(ops, x, { gamma, beta, eps, silu = true, normName, ...conv }) {
+  if (ops.fuseNorm) return ops.conv2d({ x, shape: x.shape, norm: { gamma, beta, eps, silu }, ...conv });
+  const normed = ops.groupNorm({ x, shape: x.shape, gamma, beta, eps, silu, name: normName });
+  const out = await ops.conv2d({ x: normed, shape: normed.shape, ...conv });
+  ops.release(normed);
+  return out;
+}
+
 async function resnet(ops, w, prefix, x, { eps, tembSilu = null }) {
   const [c, h, wd] = x.shape;
   const conv1 = w(`${prefix}.conv1.weight`);
-  const cout = conv1.shape[0];
   let temb = null;
   if (tembSilu) {
     const proj = w(`${prefix}.time_emb_proj.weight`);
     temb = await linear(ops, tembSilu, 1, proj, w(`${prefix}.time_emb_proj.bias`), { name: `${prefix}.temb` });
   }
-  const n1 = ops.groupNorm({ x, shape: [c, h, wd], gamma: w(`${prefix}.norm1.weight`), beta: w(`${prefix}.norm1.bias`),
-    eps, silu: true, name: `${prefix}.norm1` });
-  const h1 = await ops.conv2d({ x: n1, shape: [c, h, wd], weight: conv1, bias: w(`${prefix}.conv1.bias`), biasM2: temb,
-    name: `${prefix}.conv1` });
-  ops.release(n1);
+  const h1 = await normConv(ops, x, { gamma: w(`${prefix}.norm1.weight`), beta: w(`${prefix}.norm1.bias`), eps,
+    normName: `${prefix}.norm1`, weight: conv1, bias: w(`${prefix}.conv1.bias`), biasM2: temb, name: `${prefix}.conv1` });
   await ops.yieldPoint(`${prefix}.conv1`);
   ops.release(temb);
-  const n2 = ops.groupNorm({ x: h1, shape: [cout, h, wd], gamma: w(`${prefix}.norm2.weight`),
-    beta: w(`${prefix}.norm2.bias`), eps, silu: true, name: `${prefix}.norm2` });
-  ops.release(h1);
   let shortcut = x;
   if (w.has(`${prefix}.conv_shortcut.weight`)) {
     shortcut = await ops.conv2d({ x, shape: [c, h, wd], weight: w(`${prefix}.conv_shortcut.weight`),
       bias: w(`${prefix}.conv_shortcut.bias`), kernel: 1, pad: [0, 0, 0, 0], name: `${prefix}.shortcut` });
   }
-  const out = await ops.conv2d({ x: n2, shape: [cout, h, wd], weight: w(`${prefix}.conv2.weight`),
-    bias: w(`${prefix}.conv2.bias`), residual: shortcut, name: `${prefix}.out` });
-  ops.release(n2);
+  const out = await normConv(ops, h1, { gamma: w(`${prefix}.norm2.weight`), beta: w(`${prefix}.norm2.bias`), eps,
+    normName: `${prefix}.norm2`, weight: w(`${prefix}.conv2.weight`), bias: w(`${prefix}.conv2.bias`), residual: shortcut,
+    name: `${prefix}.out` });
+  ops.release(h1);
   if (shortcut !== x) ops.release(shortcut);
   await ops.yieldPoint(`${prefix}.conv2`);
   return out;
@@ -191,10 +196,9 @@ export async function encodeImage(ops, w, image, { capture = () => {} } = {}) {
   x = step(ops, x, await vaeAttention(ops, w, 'vae.encoder.mid_block.attentions.0', x));
   x = step(ops, x, await resnet(ops, w, 'vae.encoder.mid_block.resnets.1', x, { eps: VAE_EPS }));
   capture('vae.encoder.mid#0', x);
-  x = step(ops, x, ops.groupNorm({ x, shape: x.shape, gamma: w('vae.encoder.conv_norm_out.weight'),
-    beta: w('vae.encoder.conv_norm_out.bias'), eps: VAE_EPS, silu: true, name: 'vae.encoder.norm_out' }));
-  x = step(ops, x, await ops.conv2d({ x, shape: x.shape, weight: w('vae.encoder.conv_out.weight'),
-    bias: w('vae.encoder.conv_out.bias'), name: 'vae.encoder.out' }));
+  x = step(ops, x, await normConv(ops, x, { gamma: w('vae.encoder.conv_norm_out.weight'),
+    beta: w('vae.encoder.conv_norm_out.bias'), eps: VAE_EPS, normName: 'vae.encoder.norm_out',
+    weight: w('vae.encoder.conv_out.weight'), bias: w('vae.encoder.conv_out.bias'), name: 'vae.encoder.out' }));
   capture('vae.encoder.out#0', x);
   const moments = await ops.conv2d({ x, shape: x.shape, weight: w('vae.quant_conv.weight'), bias: w('vae.quant_conv.bias'),
     kernel: 1, pad: [0, 0, 0, 0], name: 'vae.quant' });
@@ -240,10 +244,9 @@ export async function decodeScaledLatent(ops, w, z, { capture = () => {}, call =
     capture(`vae.decoder.up.${b}#${call}`, x);
     await ops.yieldPoint(`vae.decoder.up.${b}`);
   }
-  x = step(ops, x, ops.groupNorm({ x, shape: x.shape, gamma: w('vae.decoder.conv_norm_out.weight'),
-    beta: w('vae.decoder.conv_norm_out.bias'), eps: VAE_EPS, silu: true, name: 'vae.decoder.norm_out' }));
-  x = step(ops, x, await ops.conv2d({ x, shape: x.shape, weight: w('vae.decoder.conv_out.weight'),
-    bias: w('vae.decoder.conv_out.bias'), name: 'vae.decoder.out' }));
+  x = step(ops, x, await normConv(ops, x, { gamma: w('vae.decoder.conv_norm_out.weight'),
+    beta: w('vae.decoder.conv_norm_out.bias'), eps: VAE_EPS, normName: 'vae.decoder.norm_out',
+    weight: w('vae.decoder.conv_out.weight'), bias: w('vae.decoder.conv_out.bias'), name: 'vae.decoder.out' }));
   capture(`vae.decoder.out#${call}`, x);
   await ops.yieldPoint('vae.decoder.out');
   const image = ops.affine({ x, shape: x.shape, scale: 0.5, shift: 0.5, clamp01: true, name: 'vae.image', dtype: 'f32' });
@@ -320,12 +323,10 @@ export async function runUnet(ops, w, latent, context, tembSilu, { capture = () 
       y = step(ops, y, await transformer(ops, w, `unet.last_up_blocks.${head}.attentions.${r}`, y, UNET_HEADS[0], context));
     }
     capture(`unet.last_up.${head}#0`, y);
-    const normed = ops.groupNorm({ x: y, shape: y.shape, gamma: w('unet.conv_norm_out.weight'), beta: w('unet.conv_norm_out.bias'),
-      eps: UNET_EPS, silu: true, name: `unet.norm_out.${head}` });
-    ops.release(y);
-    const v = await ops.conv2d({ x: normed, shape: normed.shape, weight: w(`unet.rep_conv_out.${head}.weight`),
+    const v = await normConv(ops, y, { gamma: w('unet.conv_norm_out.weight'), beta: w('unet.conv_norm_out.bias'),
+      eps: UNET_EPS, normName: `unet.norm_out.${head}`, weight: w(`unet.rep_conv_out.${head}.weight`),
       bias: w(`unet.rep_conv_out.${head}.bias`), name: `unet.conv_out.${head}` });
-    ops.release(normed);
+    ops.release(y);
     capture(`unet.conv_out.${head}#0`, v);
     heads.push(v);
   }

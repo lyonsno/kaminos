@@ -47,6 +47,8 @@ function upload(device, values, { f16 = false, shape }) {
 }
 
 const CASES = [
+  { id: 'decoder-normconv-256ch-512px', kind: 'normconv', cin: 256, cout: 256, size: 512 },
+  { id: 'decoder-normconv-128ch-512px', kind: 'normconv', cin: 128, cout: 128, size: 512 },
   { id: 'decoder-conv-256ch-256px', kind: 'conv', cin: 256, cout: 256, size: 256 },
   { id: 'decoder-conv-128ch-512px', kind: 'conv', cin: 128, cout: 128, size: 512 },
   { id: 'unet-conv-320ch-64px', kind: 'conv', cin: 320, cout: 320, size: 64 },
@@ -57,11 +59,11 @@ const CASES = [
 ];
 
 export const BENCH_VARIANTS = [
-  { id: 'f32-f32w', f16: false },
-  { id: 'f32-f16w', f16: true },
-  { id: 'f16tiles-f16w', f16: true, gemmPrecision: 'f16-tiles' },
-  { id: 'f16partial-f16w', f16: true, gemmPrecision: 'f16-partial' },
-  { id: 'sgmatrix-f16w', f16: true, gemmKernel: 'subgroup-matrix' },
+  { id: 'f32act', f16: true },
+  { id: 'f32act-fused', f16: true, fuseNorm: true, normOnly: true },
+  { id: 'f16act', f16: true, activations: 'f16' },
+  { id: 'f16act-fused', f16: true, activations: 'f16', fuseNorm: true, normOnly: true },
+  { id: 'f16act-f16partial', f16: true, activations: 'f16', gemmPrecision: 'f16-partial' },
 ];
 
 export async function runSuperMatBench({ iterations = 6, variants = BENCH_VARIANTS, cases = CASES } = {}) {
@@ -76,12 +78,29 @@ export async function runSuperMatBench({ iterations = 6, variants = BENCH_VARIAN
       for (const variant of variants) {
         if (testCase.kind === 'attention' && variant.f16) continue;
         if (variant.attentionOnly && testCase.kind !== 'attention') continue;
+        if (variant.normOnly && testCase.kind !== 'normconv') continue;
         const ops = createSuperMatOps(device, { label: `bench.${variant.id}`, gemmKernel: variant.gemmKernel ?? 'tiled',
-          gemmPrecision: variant.gemmPrecision ?? 'f32',
+          gemmPrecision: variant.gemmPrecision ?? 'f32', activations: variant.activations ?? 'f32', fuseNorm: Boolean(variant.fuseNorm),
           attentionKernel: variant.attentionKernel ?? 'scalar' });
         const inputs = [];
         let flops, run;
-        if (testCase.kind === 'conv') {
+        if (testCase.kind === 'normconv') {
+          const { cin, cout, size } = testCase;
+          const raw = upload(device, random(cin * size * size, 41, 3), { shape: [cin, size, size] });
+          const x = ops.affine({ x: raw, shape: [cin, size, size], name: 'bench.x' });
+          const weight = upload(device, random(cout * cin * 9, 43, 1 / Math.sqrt(cin * 9)), { f16: variant.f16, shape: [cout, cin, 3, 3] });
+          const gamma = upload(device, random(cin, 47, 1), { shape: [cin] }), beta = upload(device, random(cin, 53, 0.5), { shape: [cin] });
+          const bias = upload(device, random(cout, 59), { shape: [cout] });
+          inputs.push(raw, weight, gamma, beta, bias);
+          flops = 2 * cout * cin * 9 * size * size;
+          run = async () => {
+            if (ops.fuseNorm) return ops.conv2d({ x, shape: [cin, size, size], weight, bias, norm: { gamma, beta, eps: 1e-6, silu: true } });
+            const normed = ops.groupNorm({ x, shape: [cin, size, size], gamma, beta, eps: 1e-6, silu: true });
+            const out = await ops.conv2d({ x: normed, shape: [cin, size, size], weight, bias });
+            ops.release(normed);
+            return out;
+          };
+        } else if (testCase.kind === 'conv') {
           const { cin, cout, size } = testCase;
           const x = upload(device, random(cin * size * size, 7), { shape: [cin, size, size] });
           const weight = upload(device, random(cout * cin * 9, 11, 1 / Math.sqrt(cin * 9)), { f16: variant.f16, shape: [cout, cin, 3, 3] });
@@ -105,6 +124,11 @@ export async function runSuperMatBench({ iterations = 6, variants = BENCH_VARIAN
           run = () => ops.flashAttention({ q, k, v, queries: tokens, keys: tokens, heads, scale: 0.125 });
         }
         let output = await run();
+        if (output.storage === 'f16') {
+          const widened = ops.affine({ x: output, shape: output.shape, dtype: 'f32', name: 'bench.widen' });
+          ops.release(output);
+          output = widened;
+        }
         await ops.flush();
         const values = await ops.read(output);
         ops.release(output);

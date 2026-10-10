@@ -32,7 +32,8 @@ export function gemmTileShape({ tm = 4, tn = 4, bk = 16 } = {}) {
 // tile loaders (for `threads` threads filling bk x bm / bk x bn tiles) and the
 // epilogue that turns accumulator value ACC into the stored output.
 function gemmParts({ aKContiguous = true, bNContiguous = true, biasM = false, biasM2 = false, biasN = false,
-  residual = false, conv = null, aF16 = false, bF16 = false, types = {} }, { bm, bn, bk, threads, aLayout = 'k-major' }) {
+  residual = false, conv = null, aF16 = false, bF16 = false, types = {}, normB = null },
+  { bm, bn, bk, threads, aLayout = 'k-major' }) {
   const t = { a: types.a ?? (aF16 ? 'f16packed' : 'f32'), b: types.b ?? (bF16 ? 'f16packed' : 'f32'),
     biasM: types.biasM ?? 'f32', biasM2: types.biasM2 ?? 'f32', biasN: types.biasN ?? 'f32',
     residual: types.residual ?? 'f32', c: types.c ?? 'f32' };
@@ -42,6 +43,12 @@ function gemmParts({ aKContiguous = true, bNContiguous = true, biasM = false, bi
   if (biasM2) bindings.push(binding(next++, 'bias_m2', t.biasM2));
   if (biasN) bindings.push(binding(next++, 'bias_n', t.biasN));
   if (residual) bindings.push(binding(next++, 'res', t.residual));
+  // normB: GroupNorm (+SiLU) of the conv input applied while loading B tiles,
+  // from precomputed per-group [mean, rstd]; p.z1 = channels per group.
+  if (normB) {
+    if (!conv) throw new Error('fused input normalization requires a conv GEMM');
+    bindings.push(storage(next++, 'norm_stats'), storage(next++, 'norm_gamma'), storage(next++, 'norm_beta'));
+  }
   bindings.push(binding(next++, 'c', t.c, true));
   bindings.push(uniform(next++, 'Params'));
   const used = { a: t.a, b: t.b, c: t.c, ...(biasM ? { biasM: t.biasM } : {}), ...(biasM2 ? { biasM2: t.biasM2 } : {}),
@@ -67,6 +74,8 @@ ${bindings.join('\n')}`;
       if(iy>=0&&ix>=0&&iy<eh&&ix<ew){
         let sy=u32(iy)${upsample ? '/2u' : ''};let sx=u32(ix)${upsample ? '/2u' : ''};
         value=${load('b', t.b, 'p.b_off+ci*p.b_sk*p.b_sn+sy*p.b_sn+sx')};
+        ${normB ? `let g=ci/p.z1;value=(value-norm_stats[g*2u])*norm_stats[g*2u+1u]*norm_gamma[ci]+norm_beta[ci];
+        ${normB.silu ? 'value=value/(1.0+exp(-value));' : ''}` : ''}
       }`;
   } else {
     valueB = `value=${load('b', t.b, 'p.b_off+bat*p.b_sb+k*p.b_sk+n*p.b_sn')};`;

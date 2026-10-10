@@ -343,7 +343,7 @@ try {
   const weightsRoute = await session.registerRoute({ routeId: `${SUPERMAT_ROUTE_ID}.resident-weights` });
   adapter = await createSuperMatAdapter({ route: weightsRoute, weightsUrl, attention,
     weightLoading: params.get('weightLoading') ?? 'auto', gemmPrecision: params.get('precision') ?? 'f32',
-    activations: params.get('activations') ?? 'f32', onProgress(event) {
+    activations: params.get('activations') ?? 'f32', fuseNorm: params.get('fuseNorm') === '1', onProgress(event) {
     if (event.phase === 'weights') {
       const mb = value => (value / 1e6).toFixed(0);
       setStatus(`Loading weights ${event.resourceIndex + 1}/${event.resourceCount} (${event.resourceId}`
