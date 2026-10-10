@@ -211,9 +211,29 @@ assert.doesNotMatch(readme, /That firing exercises the architecture.*persistent 
 assert.doesNotMatch(readme, /\b(?:loadModelPort|LoadedModel|ModelRun)\b/);
 assert.doesNotMatch(readme, /^## Receipt And Evidence Layer$/m);
 
-assert.equal(packageJson.version, '0.1.56');
+assert.equal(packageJson.version, '0.1.57');
 assert.ok(packageJson.files.includes('docs'), 'published package must include linked documentation');
 assert.ok(packageJson.files.includes('examples'), 'published package must include the runnable example');
+
+const demoIndex = 'https://lyonsno.github.io/kaminos/inference-kit/';
+for (const [name, copy] of [['root README', rootReadme], ['package README', readme]]) {
+  for (const url of [demoIndex, 'https://lyonsno.github.io/moge-webgpu/', `${demoIndex}klein/`]) {
+    assert.ok(copy.includes(`](${url})`), `${name} must link to ${url}`);
+  }
+  const family = copy.split('\n').filter(line => line.startsWith('| ['));
+  for (const model of ['MoGe', 'SHARP', 'Stable Fast 3D', 'Kimodo', 'SAM 3', 'TRELLIS 2', 'FLUX.2', 'SuperMat']) {
+    assert.equal(family.filter(row => row.startsWith(`| [${model}`)).length, 1, `${name} must include one ${model} entry`);
+  }
+  const supermat = family.find(row => row.startsWith('| [SuperMat'));
+  assert.match(supermat, /tree\/cc\/supermat-webgpu-1008\/models\/supermat/);
+  assert.match(supermat, /development/i);
+}
+assert.match(packageJson.description, /WebGPU inference runtime/);
+assert.match(packageJson.description, /image, 3D, segmentation, and motion/);
+assert.equal(packageJson.homepage, demoIndex);
+for (const keyword of ['webgpu', 'browser-ai', 'inference', 'moge', 'sharp', 'stable-fast-3d', 'kimodo', 'sam3', 'trellis', 'flux', 'supermat']) {
+  assert.ok(packageJson.keywords?.includes(keyword), `npm discovery must include ${keyword}`);
+}
 
 const integrationReference = await readPackageFile('docs/integration-reference.md');
 assert.match(integrationReference, /^# @kaminos\/webgpu-inference-kit$/m);

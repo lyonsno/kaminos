@@ -1,5 +1,5 @@
 // Assemble the Kaminos GitHub Pages site into a new directory: the flame boutique at the root,
-// the FLUX.2 [klein] browser demo at inference-kit/klein/, and the inference kit source the
+// the model directory at inference-kit/, the FLUX.2 [klein] demo at inference-kit/klein/, and the kit source the
 // demo imports (../../webgpu-inference-kit/src/ from the demo page). Nothing else from the
 // repository is published.
 // Usage: node scripts/assemble-pages-site.mjs <out-dir>   (the directory must not exist)
@@ -12,6 +12,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 export function assemblePagesSite(out) {
   if (fs.existsSync(out)) throw new Error(`${out} already exists`);
   fs.cpSync(path.join(repoRoot, "docs", "flame-atlas"), out, { recursive: true });
+  fs.mkdirSync(path.join(out, "inference-kit"), { recursive: true });
+  fs.copyFileSync(path.join(repoRoot, "docs", "inference-kit", "index.html"), path.join(out, "inference-kit", "index.html"));
 
   const klein = path.join(repoRoot, "models", "flux2-klein");
   const demo = path.join(out, "inference-kit", "klein");

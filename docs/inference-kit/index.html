@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Try browser-native AI with Kaminos WebGPU Inference Kit: FLUX image generation, MoGe depth, and a growing family of image, 3D, segmentation, motion and material model ports.">
+  <title>Kaminos WebGPU Inference Kit</title>
+  <link rel="canonical" href="https://lyonsno.github.io/kaminos/inference-kit/">
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #f0f1ed; background: #191b1a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    a { color: #b9d58f; text-underline-offset: 4px; }
+    a:hover { color: #e6f6d0; }
+    a:focus-visible { outline: 2px solid #e6f6d0; outline-offset: 5px; }
+    header, main, footer { width: min(1120px, calc(100% - 48px)); margin: auto; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 28px 0; border-bottom: 1px solid #383d38; }
+    .brand { color: #f0f1ed; font-size: 20px; font-weight: 700; text-decoration: none; }
+    nav { display: flex; flex-wrap: wrap; gap: 24px; font-size: 14px; }
+    h1 { font-size: 40px; line-height: 1.15; margin: 0 0 16px; }
+    h2 { font-size: 24px; margin: 0 0 24px; }
+    h3 { font-size: 22px; margin: 0 0 10px; }
+    p { line-height: 1.6; margin: 0 0 16px; }
+    .intro { padding: 48px 0 32px; max-width: 760px; }
+    .lead { font-size: 20px; color: #d4d7ce; }
+    .intro p:last-child { color: #aeb5ac; }
+    section { padding: 28px 0 36px; }
+    .demos { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+    .demo { border-top: 2px solid #b9d58f; padding-top: 20px; }
+    .demo:nth-child(2) { border-color: #b9cfe4; }
+    .demo p { color: #c6cdc3; }
+    .actions { display: flex; flex-wrap: wrap; gap: 16px 24px; }
+    .action { font-weight: 650; }
+    .detail { font-size: 14px; color: #aeb5ac; margin-top: 16px; }
+    .gallery { margin: 28px 0 0; }
+    .gallery img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: contain; }
+    figcaption { margin-top: 10px; color: #aeb5ac; font-size: 13px; line-height: 1.5; }
+    .models { border-top: 1px solid #383d38; }
+    .model { display: grid; grid-template-columns: 210px 1fr 160px; gap: 24px; align-items: baseline; padding: 17px 0; border-bottom: 1px solid #383d38; }
+    .model dt { font-weight: 650; }
+    .model dd { margin: 0; color: #c6cdc3; line-height: 1.5; }
+    .model .route { font-size: 14px; }
+    .status { display: block; color: #aeb5ac; font-size: 12px; font-weight: 400; margin-top: 6px; }
+    .build { border-top: 1px solid #383d38; padding-bottom: 48px; }
+    .build p { max-width: 760px; color: #c6cdc3; }
+    code { display: inline-block; max-width: 100%; overflow-wrap: anywhere; font-size: 15px; color: #f0f1ed; }
+    footer { border-top: 1px solid #383d38; padding: 24px 0 40px; color: #aeb5ac; font-size: 13px; }
+    @media (max-width: 720px) {
+      header, main, footer { width: calc(100% - 32px); }
+      header { align-items: flex-start; gap: 16px; }
+      nav { gap: 12px 16px; justify-content: flex-end; }
+      h1 { font-size: 32px; }
+      .intro { padding-top: 32px; }
+      .demos { grid-template-columns: 1fr; gap: 28px; }
+      .gallery { margin-top: 20px; }
+      .model { grid-template-columns: 1fr; gap: 8px; padding: 18px 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="brand" href="https://github.com/lyonsno/kaminos">Kaminos</a>
+    <nav aria-label="Resources">
+      <a href="https://github.com/lyonsno/kaminos/tree/main/webgpu-inference-kit">Runtime guide</a>
+      <a href="https://www.npmjs.com/package/@kaminos/webgpu-inference-kit">npm</a>
+      <a href="https://github.com/lyonsno/kaminos">Source</a>
+    </nav>
+  </header>
+  <main>
+    <div class="intro">
+      <h1>Kaminos WebGPU Inference Kit</h1>
+      <p class="lead">Run generative and vision models locally in responsive browser applications.</p>
+      <p>A shared runtime for GPU devices, model loading, queued inference and cooperative scheduling. Try a model below, or use the kit to build your own application.</p>
+    </div>
+    <section aria-labelledby="try-heading">
+      <h2 id="try-heading">Try it in your browser</h2>
+      <div class="demos">
+        <article class="demo">
+          <h3>Generate an image with FLUX</h3>
+          <p>Type a prompt and watch FLUX.2 [klein] 4B generate an image on your GPU. The text encoder, four diffusion steps and image decoder all run in the browser.</p>
+          <div class="actions">
+            <a class="action" href="./klein/">Generate an image</a>
+            <a href="https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein">Model guide</a>
+          </div>
+          <p class="detail">First visit: 3.9 GB of weights, cached for later runs. Use a WebGPU-capable browser.</p>
+          <figure class="gallery">
+            <img src="https://raw.githubusercontent.com/lyonsno/kaminos/main/models/flux2-klein/assets/examples.jpg" width="1536" height="1024" alt="Six FLUX-generated images: a fisherman, a teapot, a forest valley, a watercolor illustration, a neon sign and a toy locomotive" loading="lazy">
+            <figcaption>Generated in Chrome, 512 by 512 pixels with four steps.</figcaption>
+          </figure>
+        </article>
+        <article class="demo">
+          <h3>Explore a photograph's depth with MoGe</h3>
+          <p>Choose a photograph, infer its depth and surface normals, then move around the reconstructed surface or change its lighting.</p>
+          <div class="actions">
+            <a class="action" href="https://lyonsno.github.io/moge-webgpu/">Reveal depth</a>
+            <a href="https://github.com/lyonsno/moge-webgpu">Model guide</a>
+          </div>
+          <p class="detail">Runs locally in a WebGPU-capable browser. Model weights load on first use.</p>
+        </article>
+      </div>
+    </section>
+    <section class="models" aria-labelledby="models-heading">
+      <h2 id="models-heading">One runtime, different models</h2>
+      <dl>
+        <div class="model"><dt>MoGe</dt><dd>Depth, surface normals and point maps from a photograph.</dd><dd class="route"><a href="https://github.com/lyonsno/moge-webgpu">Model guide</a></dd></div>
+        <div class="model"><dt>SHARP</dt><dd>A Gaussian-splat scene from one image.</dd><dd class="route"><a href="https://github.com/lyonsno/sharp-webgpu">Model guide</a></dd></div>
+        <div class="model"><dt>Stable Fast 3D</dt><dd>A textured, UV-unwrapped GLB mesh from one image.</dd><dd class="route"><a href="https://github.com/lyonsno/sf3d-webgpu">Model guide</a></dd></div>
+        <div class="model"><dt>Kimodo</dt><dd>Skeletal motion from a text prompt. Text embeddings use an external server.</dd><dd class="route"><a href="https://github.com/lyonsno/kimodo-webgpu">Model guide</a></dd></div>
+        <div class="model"><dt>SAM 3</dt><dd>Instance masks and transparent cutouts from an image and text prompt.</dd><dd class="route"><a href="https://github.com/lyonsno/kaminos/blob/main/webgpu-inference-kit/docs/sam-image-example.md">Example guide</a></dd></div>
+        <div class="model"><dt>TRELLIS 2</dt><dd>A textured 3D mesh from an image, with local tools for preparation and finishing.</dd><dd class="route"><a href="https://github.com/lyonsno/kaminos/tree/main/models/trellis2">Model guide</a></dd></div>
+        <div class="model"><dt>FLUX.2 [klein] 4B</dt><dd>Images from a prompt, with the full generation pipeline on WebGPU.</dd><dd class="route"><a href="https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein">Model guide</a></dd></div>
+        <div class="model"><dt>SuperMat<span class="status">Development branch</span></dt><dd>Albedo, roughness and metallic material maps from an image.</dd><dd class="route"><a href="https://github.com/lyonsno/kaminos/tree/cc/supermat-webgpu-1008/models/supermat">Port source</a></dd></div>
+      </dl>
+    </section>
+    <section class="build" aria-labelledby="build-heading">
+      <h2 id="build-heading">Build with the kit</h2>
+      <p>Start with a worked photograph example, then connect a model to the same session, route and invocation lifecycle. Model guides cover weights, device requirements and embedding each port.</p>
+      <p><code>npm install @kaminos/webgpu-inference-kit</code></p>
+      <div class="actions">
+        <a class="action" href="https://github.com/lyonsno/kaminos/tree/main/webgpu-inference-kit/docs/getting-started.md">Getting started</a>
+        <a href="https://github.com/lyonsno/kaminos/tree/main/webgpu-inference-kit">Runtime and architecture</a>
+        <a href="https://github.com/lyonsno/kaminos/blob/main/webgpu-inference-kit/docs/integration-reference.md">API reference</a>
+      </div>
+    </section>
+  </main>
+  <footer>Kaminos WebGPU Inference Kit &middot; Browser-native AI, built to live inside an application.</footer>
+</body>
+</html>

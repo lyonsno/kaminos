@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - docs/flame-atlas/**
+      - docs/inference-kit/**
       - models/flux2-klein/index.html
       - models/flux2-klein/klein-*.js
       - models/flux2-klein/qwen-tokenizer.js
@@ -38,7 +39,7 @@ jobs:
         with:
           enablement: true
 
-      - name: Assemble site (flame boutique at the root, Klein demo at inference-kit/klein/)
+      - name: Assemble site (flame boutique, model directory and Klein demo)
         run: node scripts/assemble-pages-site.mjs _site
 
       - name: Upload site

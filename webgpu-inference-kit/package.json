@@ -1,9 +1,16 @@
 {
   "name": "@kaminos/webgpu-inference-kit",
-  "version": "0.1.56",
+  "version": "0.1.57",
   "private": false,
   "type": "module",
-  "description": "A composable browser-native WebGPU inference runtime with cooperative scheduling, tensors, kernels, programs, and route adapters.",
+  "description": "WebGPU inference runtime for responsive browser AI: shared GPU devices, model loading, cooperative scheduling, and image, 3D, segmentation, and motion model ports.",
+  "homepage": "https://lyonsno.github.io/kaminos/inference-kit/",
+  "keywords": [
+    "webgpu", "browser-ai", "machine-learning", "inference", "wgsl",
+    "generative-ai", "image-generation", "image-to-3d", "gaussian-splatting",
+    "depth-estimation", "image-segmentation", "motion-generation",
+    "moge", "sharp", "stable-fast-3d", "kimodo", "sam3", "trellis", "flux", "supermat"
+  ],
   "license": "UNLICENSED",
   "repository": {
     "type": "git",

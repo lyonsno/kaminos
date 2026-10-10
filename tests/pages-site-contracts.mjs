@@ -20,7 +20,7 @@ function walk(root, dir = root) {
   });
 }
 
-test("Pages site keeps the flame boutique at the root and adds only the Klein demo and kit source", async () => {
+test("Pages site keeps the flame boutique at the root and publishes the model directory, Klein demo and kit source", async () => {
   const site = await assembled();
   const atlas = path.join(repoRoot, "docs", "flame-atlas");
   for (const file of walk(atlas)) {
@@ -28,10 +28,29 @@ test("Pages site keeps the flame boutique at the root and adds only the Klein de
   }
   const extra = walk(site).filter(file => !fs.existsSync(path.join(atlas, file)));
   for (const file of extra) {
-    assert.match(file, /^(inference-kit\/klein\/[^/]+\.(html|js)|webgpu-inference-kit\/src\/.+\.js)$/, `${file} is outside the published set`);
+    assert.match(file, /^(inference-kit\/index\.html|inference-kit\/klein\/[^/]+\.(html|js)|webgpu-inference-kit\/src\/.+\.js)$/, `${file} is outside the published set`);
   }
   assert.ok(fs.existsSync(path.join(site, "inference-kit", "klein", "index.html")));
   assert.ok(!fs.existsSync(path.join(site, "serve.py")));
+});
+
+test("published model directory routes visitors to existing demos and builder guides", async () => {
+  const site = await assembled();
+  const page = path.join(site, "inference-kit", "index.html");
+  assert.ok(fs.existsSync(page), "assembled site must contain the inference kit directory");
+  const html = fs.readFileSync(page, "utf8");
+  const links = [...html.matchAll(/href="([^"]+)"/g)].map(match => match[1]);
+  assert.ok(links.includes("./klein/"), "FLUX must link to its published demo");
+  assert.ok(links.includes("https://lyonsno.github.io/moge-webgpu/"), "MoGe must link to its live demo");
+  assert.ok(links.includes("https://github.com/lyonsno/kaminos/tree/main/webgpu-inference-kit/docs/getting-started.md"));
+  assert.ok(links.includes("https://www.npmjs.com/package/@kaminos/webgpu-inference-kit"));
+  for (const href of links.filter(href => !/^(?:https?:|#)/.test(href))) {
+    const target = path.resolve(path.dirname(page), href);
+    assert.ok(target.startsWith(site + path.sep), `${href} must stay in the assembled site`);
+    assert.ok(fs.existsSync(target), `${href} must resolve in the assembled site`);
+  }
+  assert.match(html, /tree\/cc\/supermat-webgpu-1008\/models\/supermat/);
+  assert.doesNotMatch(html, /tree\/main\/models\/supermat/);
 });
 
 test("every relative module import in the Klein demo resolves inside the site", async () => {
@@ -57,7 +76,7 @@ test("Pages workflow uploads the assembled site", () => {
   const workflow = fs.readFileSync(path.join(repoRoot, ".github", "workflows", "flame-atlas-pages.yml"), "utf8");
   assert.match(workflow, /node scripts\/assemble-pages-site\.mjs _site/);
   assert.match(workflow, /path:\s*_site\s*$/m);
-  for (const trigger of ["models/flux2-klein/index.html", "models/flux2-klein/klein-*.js", "webgpu-inference-kit/src/**", "scripts/assemble-pages-site.mjs"]) {
+  for (const trigger of ["docs/inference-kit/**", "models/flux2-klein/index.html", "models/flux2-klein/klein-*.js", "webgpu-inference-kit/src/**", "scripts/assemble-pages-site.mjs"]) {
     assert.ok(workflow.includes(`- ${trigger}`), `workflow does not trigger on ${trigger}`);
   }
 });

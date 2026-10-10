@@ -8,6 +8,11 @@ Kaminos WebGPU Inference Kit gives model ports a shared session and device lifec
 npm install @kaminos/webgpu-inference-kit
 ```
 
+**[Try the browser models](https://lyonsno.github.io/kaminos/inference-kit/)**:
+[generate an image with FLUX](https://lyonsno.github.io/kaminos/inference-kit/klein/)
+or [explore a photograph's depth with MoGe](https://lyonsno.github.io/moge-webgpu/).
+Each demo runs inference locally on your GPU.
+
 ## Generate Images In Your Browser
 
 [![Six images generated in the browser with FLUX.2 [klein] 4B on WebGPU: a fisherman portrait, a celadon teapot, a misty forest valley, a watercolor fox under a mushroom, a neon OPEN ALL NIGHT sign, and a brass toy locomotive](https://raw.githubusercontent.com/lyonsno/kaminos/main/models/flux2-klein/assets/examples.jpg)](https://lyonsno.github.io/kaminos/inference-kit/klein/)
@@ -107,6 +112,7 @@ The kit connects a growing family of browser model ports: generate an image from
 | [SAM 3](./docs/sam-semantic-demo.md) | Instance masks from an image and text prompt | A complete browser WebGPU route with authenticated persistent model resources, cached image features, queued semantic requests, and same-device foreground submissions at phase boundaries. |
 | [TRELLIS 2](https://github.com/lyonsno/kaminos/tree/main/models/trellis2) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and a shared GPU device with the application renderer. |
 | [FLUX.2 [klein] 4B](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein) | Images from a text prompt, generated on the visitor's GPU ([live demo](https://lyonsno.github.io/kaminos/inference-kit/klein/)) | The text encoder, 4-step transformer and image decoder all run in the browser, with int4 weights cached after the first download. GPU work is submitted in duties sized to measured throughput, so the application keeps rendering, and the inference control can pause, resume or stop a run. |
+| [SuperMat](https://github.com/lyonsno/kaminos/tree/cc/supermat-webgpu-1008/models/supermat) (development branch) | Albedo, roughness, and metallic maps from an image | Persistent model resources, cooperative GPU duties, worker-based image processing, and pause/resume control. |
 
 These ports provide different starting points for application integration. MoGe exposes an existing feed-forward pipeline as an embeddable library. SF3D combines GPU computation with worker-based geometry and texture processing. Kimodo exposes repeated diffusion passes where a host can interleave rendering. SHARP demonstrates the complete result: substantial inference running alongside a continuously rendering application.
 
