@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {fluidBrowserLaunch} from '../finger-fluid-browser-launch.mjs';
 import {discriminatorConfiguration,BASE_VOLUME} from '../fluid-core-discriminator-view.mjs';
-import {validateDiscriminatorState,summarizeParticleState,collectDiscriminatorSources,verifyDiscriminatorServedSources,withDiscriminatorCleanup} from './fluid-discriminator-evidence.mjs';
+import {validateDiscriminatorState,summarizeParticleState,collectDiscriminatorSources,verifyDiscriminatorServedSources,withDiscriminatorCleanup,captureDiscriminatorState} from './fluid-discriminator-evidence.mjs';
 
 const arg=k=>{const i=process.argv.indexOf(k);if(i<0||!process.argv[i+1])throw Error('Required '+k);return process.argv[i+1];};
 const out=arg('--out-dir');mkdirSync(out,{recursive:true});
@@ -50,22 +50,24 @@ try {
       (fixture==='basin'?report.arms:report.dropResponses).push(row);save();
       let previous=0;
       for(const step of steps) {
-        report.phase=fixture+'-'+arm+'-step-'+step;save();
+        const checkpoint=fixture+'-'+arm+'-step-'+step;
+        report.phase=checkpoint+'-advance';save();
         await evaluate('window.discriminator.advance('+String(step-previous)+')',sessionId);previous=step;
-        const snapshot=await evaluate('(async()=>{const diagnostics=await discriminator.snapshot(),d=discriminator.debug();return {adapter:d.adapterInfo,dynamics:d.diagnosticDynamics,pressure:d.ipbfSettings,surface:d.cohesionSettings,step:d.stepCount,particleSnapshot:{...diagnostics.particleSnapshot,words:undefined},words:diagnostics.particleSnapshot.words,diagnostics:{...diagnostics,particleSnapshot:undefined},stages:{density:d.densityIterationCount,surface:d.surfaceForcePassCount,vorticity:d.vorticityPassCount},errors:discriminator.errors};})()',sessionId);
+        const snapshot=await captureDiscriminatorState(expression=>evaluate(expression,sessionId),phase=>{report.phase=checkpoint+'-'+phase;save();});
         const values=validateDiscriminatorState(snapshot,{arm,particleCount:config.particleCount,volume:BASE_VOLUME*config.diagnosticPopulation.particleVolumeScale,radius:.125,surfaceRadius:config.akinciSupportRadius,gamma,step,dt:report.requested.dt});
         assert.equal(snapshot.errors.length,0,'GPU errors');assert.equal(snapshot.stages.density,4*step);assert.equal(snapshot.stages.surface,3*step);assert.equal(snapshot.stages.vorticity,arm==='assembled'?2*Math.ceil(step/3):0);
         if(step>0){const w=snapshot.diagnostics.pressureControlInputs;assert.ok(w?.pressureWords?.length===4&&w.simulationWords?.length===56,'Missing effective GPU input bytes');const pressure=new Float32Array(new Uint32Array(w.pressureWords).buffer),uniform=new Float32Array(new Uint32Array(w.simulationWords).buffer);assert.equal(pressure[0],Math.fround(.125));assert.equal(pressure[1],Math.fround(.0113));assert.equal(uniform[29],Math.fround(gamma));assert.equal(new Uint32Array(w.simulationWords)[1],config.particleCount);}
         const raw=Buffer.from(new Uint32Array(snapshot.words).buffer),stem=directory+'/step-'+step;writeFileSync(stem+'.u32',raw);
         const effectiveTimestep=new Float32Array(new Uint32Array(snapshot.diagnostics.pressureControlInputs.simulationWords).buffer)[0];
         const capture={step,simulationSeconds:step*effectiveTimestep,effectiveTimestep,requestedTimestep:report.requested.dt,sha256:sha(raw),rawPath:stem+'.u32',state:summarizeParticleState(values),effective:{...snapshot,words:undefined},views:[]};
-        row.captures.push(capture);save();
+        row.captures.push(capture);report.lastTrustworthyEvidence='validated-native-full-state-checkpoint';save();
         for(const mode of ['sphere_debug','screen_space_refraction']) {
+          report.phase=checkpoint+'-render-'+mode;save();
           await evaluate('discriminator.render('+JSON.stringify(mode)+')',sessionId);
           const image=await call('Page.captureScreenshot',{format:'png',fromSurface:true},sessionId),file=stem+'-'+mode+'.png';writeFileSync(file,Buffer.from(image.data,'base64'));capture.views.push({mode,path:file});
         }
-        const after=await evaluate('(async()=>{const d=await discriminator.snapshot();return d.particleSnapshot.words;})()',sessionId);
-        assert.equal(sha(Buffer.from(new Uint32Array(after).buffer)),capture.sha256,'Rendering changed the captured particle state');save();
+        const after=await captureDiscriminatorState(expression=>evaluate(expression,sessionId),phase=>{report.phase=checkpoint+'-after-render-'+phase;save();});
+        assert.equal(sha(Buffer.from(new Uint32Array(after.words).buffer)),capture.sha256,'Rendering changed the captured particle state');save();
       }
       await evaluate('discriminator.destroy()',sessionId);return row;
     },()=>call('Target.closeTarget',{targetId}),report);

@@ -48,6 +48,40 @@ export async function withDiscriminatorCleanup(action,cleanup,report){
   let primary;try{return await action();}catch(e){primary=e;throw e;}
   finally{try{await cleanup();}catch(e){(report.cleanupErrors??=[]).push(e.stack??String(e));if(!primary)throw e;}}
 }
+// Native Chrome154/Node25 CDP replay passed a 196608-word (2.16MB) JSON
+// response and disconnected on the 1572864-word response. This is a transport
+// batch size established by that replay, never a limit on captured state.
+export const DISCRIMINATOR_TRANSFER_WORDS=196608;
+export function assembleDiscriminatorChunks(metadata,chunks){
+  const t=metadata?.transfer;
+  if(t?.encoding!=='u32-le-json-chunks-v1'||typeof t.captureId!=='string'||!t.captureId||!Number.isSafeInteger(t.wordCount)||t.wordCount!==metadata.particleSnapshot?.particleCount*16||metadata.particleSnapshot?.recordWords!==16||!/^[a-f0-9]{64}$/.test(t.sha256))throw Error('Particle transfer header mismatch');
+  const words=[];
+  for(const c of chunks){
+    if(c.captureId!==t.captureId||c.offset!==words.length||!Array.isArray(c.words)||!c.words.length||!c.words.every(w=>Number.isInteger(w)&&w>=0&&w<=0xffffffff)||words.length+c.words.length>t.wordCount)throw Error('Particle transfer chunk mismatch');
+    for(const word of c.words)words.push(word);
+  }
+  if(words.length!==t.wordCount)throw Error('Particle transfer is incomplete');
+  const bytes=Buffer.alloc(words.length*4);words.forEach((w,i)=>bytes.writeUInt32LE(w,i*4));
+  if(createHash('sha256').update(bytes).digest('hex')!==t.sha256)throw Error('Particle transfer digest mismatch');
+  return {...metadata,words};
+}
+export async function captureDiscriminatorState(evaluate,onPhase=()=>{}){
+  onPhase('readback-header');
+  const metadata=await evaluate(`(async()=>{
+    const diagnostics=await discriminator.snapshot(),d=discriminator.debug(),raw=diagnostics.particleSnapshot;
+    if(new Uint8Array(new Uint32Array([1]).buffer)[0]!==1)throw Error('Particle transfer requires little-endian captured words');
+    const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new Uint32Array(raw.words).buffer)),b=>b.toString(16).padStart(2,'0')).join('');
+    const captureId=crypto.randomUUID();globalThis.__discriminatorReadback={captureId,words:raw.words};
+    return {adapter:d.adapterInfo,dynamics:d.diagnosticDynamics,pressure:d.ipbfSettings,surface:d.cohesionSettings,step:d.stepCount,particleSnapshot:{...raw,words:undefined},diagnostics:{...diagnostics,particleSnapshot:undefined},stages:{density:d.densityIterationCount,surface:d.surfaceForcePassCount,vorticity:d.vorticityPassCount},errors:discriminator.errors,transfer:{encoding:'u32-le-json-chunks-v1',captureId,wordCount:raw.words.length,sha256}};
+  })()`);
+  const chunks=[],wordCount=metadata?.transfer?.wordCount;
+  if(!Number.isSafeInteger(wordCount)||wordCount<=0||wordCount!==metadata.particleSnapshot?.particleCount*16)throw Error('Particle transfer header mismatch');
+  for(let offset=0;offset<wordCount;offset+=DISCRIMINATOR_TRANSFER_WORDS){
+    onPhase('readback-words-'+offset);
+    chunks.push(await evaluate(`(()=>{const held=globalThis.__discriminatorReadback;return {captureId:held.captureId,offset:${offset},words:held.words.slice(${offset},${Math.min(wordCount,offset+DISCRIMINATOR_TRANSFER_WORDS)})};})()`));
+  }
+  return assembleDiscriminatorChunks(metadata,chunks);
+}
 export function validateDiscriminatorState(actual,request) {
   if(actual?.adapter?.vendor!=='apple'||actual.adapter.isFallbackAdapter!==false)throw Error('Unverified native backend');
   const reduced=request.arm!=='assembled',d=actual.dynamics;
