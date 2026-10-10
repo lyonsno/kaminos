@@ -50,6 +50,20 @@ export function subgroupMatrixUsable(device) {
     && info?.subgroupMinSize === 32 && info?.subgroupMaxSize === 32;
 }
 
+// A duty's own execution time: from when it can start (submitted, and the work
+// queued ahead of it has completed) to its fence.
+export function dutyExecutionMs({ submittedAt, precedingDoneAt, doneAt }) {
+  return doneAt - Math.max(submittedAt, precedingDoneAt ?? submittedAt);
+}
+
+// Next duty FLOP budget: geometric step toward the size that would take
+// targetMs at the observed rate, clamped to bounds. Unusable samples keep it.
+export function adaptDutyFlops({ current, flops, ownMs, targetMs, bounds: [min, max] }) {
+  if (!(ownMs > 0) || !(flops > 0) || !(targetMs > 0)) return current;
+  const ideal = flops * targetMs / ownMs;
+  return Math.min(max, Math.max(min, current * Math.sqrt(ideal / current)));
+}
+
 export const SUPERMAT_OPS_OPTIONS = Object.freeze(['label', 'attention', 'gemmTile', 'fuseNorm', 'attentionKernel', 'gemmKernel',
   'gemmPrecision', 'activations']);
 
@@ -75,20 +89,17 @@ export function createSuperMatOps(device, options = {}) {
   // Cooperative schedule for one run: { runtime, invocation, control, signal, dutyFlops }.
   // Without it every op lands in one submission at flush().
   let schedule = null, pendingFlops = 0, lastFence = Promise.resolve(), adaptiveFlops = null;
-  // Duty budget adapts toward schedule.targetDutyMs from completed queue time
-  // (one duty in flight, so a duty's fence time is its own GPU time plus any
-  // foreground frames admitted ahead of it). Bounds are caller-overridable.
+  // Duty budget adapts toward schedule.targetDutyMs from each duty's own
+  // execution time (see dutyExecutionMs). Bounds are caller-overridable.
   function currentDutyFlops() {
     if (!schedule) return 0;
     if (!schedule.targetDutyMs) return schedule.dutyFlops ?? 0;
     return adaptiveFlops ?? schedule.dutyFlops ?? 4e9;
   }
-  function observeDuty(flops, queueMs) {
-    if (!schedule?.targetDutyMs || !(queueMs > 0) || !(flops > 0)) return;
-    const [min, max] = schedule.dutyFlopsBounds ?? [5e8, 6.4e10];
-    const ideal = flops * schedule.targetDutyMs / queueMs;
-    const current = currentDutyFlops();
-    adaptiveFlops = Math.min(max, Math.max(min, current * Math.sqrt(ideal / current)));
+  function observeDuty(flops, ownMs) {
+    if (!schedule?.targetDutyMs) return;
+    adaptiveFlops = adaptDutyFlops({ current: currentDutyFlops(), flops, ownMs, targetMs: schedule.targetDutyMs,
+      bounds: schedule.dutyFlopsBounds ?? [5e8, 6.4e10] });
   }
   const stats = { dispatches: 0, pipelines: 0, createdBuffers: 0, createdBytes: 0, liveBytes: 0, peakLiveBytes: 0, flushes: 0,
     duties: 0, dutyHistory: [] };
@@ -195,8 +206,12 @@ export function createSuperMatOps(device, options = {}) {
         metadata: { model: 'supermat', estimatedFlops: flops } }, invocation);
       throwIfStopped();
       runtime.settleCommandDuty(descriptor, { status: 'encoded' });
+      // Resolves when the work queued ahead (foreground frames) completes,
+      // which is when this duty starts executing.
+      precedingDone = device.queue.onSubmittedWorkDone().then(() => performance.now());
       device.queue.submit([commands]);
     };
+    let precedingDone = null;
     const gateStart = performance.now();
     let submitted = null;
     const timed = async () => { await work(); submitted = performance.now(); };
@@ -205,9 +220,12 @@ export function createSuperMatOps(device, options = {}) {
     const row = { label, estimatedFlops: flops, submittedAt: submitted, gateWaitMs: submitted - gateStart };
     stats.dutyHistory.push(row);
     row.dutyFlopsBudget = currentDutyFlops();
-    lastFence = device.queue.onSubmittedWorkDone().then(() => {
-      row.queueMs = performance.now() - submitted;
-      observeDuty(flops, row.queueMs);
+    lastFence = device.queue.onSubmittedWorkDone().then(async () => {
+      const doneAt = performance.now();
+      const precedingDoneAt = await precedingDone;
+      row.queueMs = doneAt - submitted;
+      row.ownMs = dutyExecutionMs({ submittedAt: submitted, precedingDoneAt, doneAt });
+      observeDuty(flops, row.ownMs);
       try { schedule?.onDuty?.(row); } catch { /* telemetry must not fail inference */ }
       for (const buffer of buffers) buffer.destroy();
     });

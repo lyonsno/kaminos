@@ -36,9 +36,12 @@ function byteDifference(a, b) {
   return { differing: count, maxDifference: max, total: a.length };
 }
 
-export async function runSuperMatRouteWitness({ fixtureSha256, weightsSha256, runs = 2, adapterOptions = {} }) {
+// runOptions.fencedDuties: { targetDutyMs } runs the cooperative duty split and
+// fences with a stub runtime and no foreground work, to separate splitting
+// cost from frame pacing.
+export async function runSuperMatRouteWitness({ fixtureSha256, weightsSha256, runs = 2, adapterOptions = {}, runOptions = {} }) {
   const result = { schema: 'supermat.route-witness.browser.v0', status: 'failed', phase: 'admission',
-    fixtureSha256, weightsSha256, tolerance: ROUTE_TOLERANCE, runs: [], adapterOptions };
+    fixtureSha256, weightsSha256, tolerance: ROUTE_TOLERANCE, runs: [], adapterOptions, runOptions };
   let session, route, adapter;
   try {
     const reference = await (await fetch('/fixture/manifest.json', { cache: 'no-store' })).json();
@@ -72,12 +75,19 @@ export async function runSuperMatRouteWitness({ fixtureSha256, weightsSha256, ru
 
     result.phase = 'runs';
     const outputs = [];
-    for (let index = 0; index < runs; index++) {
+    const unknownRunOptions = Object.keys(runOptions).filter(key => !['runs', 'fencedDuties'].includes(key));
+    if (unknownRunOptions.length) throw new Error(`unknown route witness run option: ${unknownRunOptions.join(', ')}`);
+    const fenced = runOptions.fencedDuties;
+    const schedule = () => fenced ? { runtime: { prepareCommandDutyAtBoundary: async () => ({}), settleCommandDuty() {} },
+      invocation: null, control: null, targetDutyMs: fenced.targetDutyMs } : null;
+    for (let index = 0; index < (runOptions.runs ?? runs); index++) {
       t = performance.now();
-      const out = await adapter.run({ image, size: reference.imageSize ?? 512 });
+      const out = await adapter.run({ image, size: reference.imageSize ?? 512, schedule: schedule() });
       outputs.push(out);
       result.runs.push({ run: out.run, size: out.size, wallMs: performance.now() - t, timings: out.timings,
-        peakLiveBytes: out.opStats.peakLiveBytes, dispatches: out.opStats.dispatches });
+        peakLiveBytes: out.opStats.peakLiveBytes, dispatches: out.opStats.dispatches, cooperative: out.cooperative,
+        dutyCount: out.dutyCount, ownMsSum: out.duties?.reduce((sum, row) => sum + (row.ownMs ?? 0), 0) ?? null,
+        targetDutyMs: out.schedule?.targetDutyMs ?? null });
     }
 
     result.phase = 'comparison';

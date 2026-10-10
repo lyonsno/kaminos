@@ -255,8 +255,8 @@ async function infer({ final = true } = {}) {
     record.targetDutyMs = lastResult.schedule?.targetDutyMs ?? null;
     record.longestDutyQueueMs = Math.max(0, ...lastResult.duties.map(duty => duty.queueMs ?? 0));
     // Per-duty timeline (ms since run start) for scheduling diagnosis.
-    record.dutyTimeline = lastResult.duties.map(({ label, estimatedFlops, submittedAt, gateWaitMs, queueMs, dutyFlopsBudget }) =>
-      ({ label, gflops: estimatedFlops / 1e9, at: submittedAt - started, gateWaitMs, queueMs, budgetGflops: dutyFlopsBudget / 1e9 }));
+    record.dutyTimeline = lastResult.duties.map(({ label, estimatedFlops, submittedAt, gateWaitMs, queueMs, ownMs, dutyFlopsBudget }) =>
+      ({ label, gflops: estimatedFlops / 1e9, at: submittedAt - started, gateWaitMs, queueMs, ownMs, budgetGflops: dutyFlopsBudget / 1e9 }));
     record.slowestDuties = [...lastResult.duties].sort((a, b) => (b.queueMs ?? 0) - (a.queueMs ?? 0)).slice(0, 6)
       .map(({ label, queueMs, estimatedFlops, gateWaitMs }) => ({ label, queueMs, gflops: estimatedFlops / 1e9, gateWaitMs }));
     render();
