@@ -27,8 +27,8 @@ export function createFlameTunePanel({document,host,read,set,onError,only=null,e
         for(const bound of ['min','max'])if(source[bound]!=='')input[bound]=source[bound];
         if(id==='volume-flow-rate'){input.min=KILN_FLOW_RANGE.min;input.max=KILN_FLOW_RANGE.max;}
       }
-      const value=()=>{const state=read();const control=state?.domControls[id]||state?.rendererControls[id];return control?.rawValue??control?.value;};
-      const show=()=>{const current=value();input.disabled=current===undefined;if(input.type==='checkbox')input.checked=!!current;else input.value=current??'';};
+      const value=(state=read())=>{const control=state?.domControls[id]||state?.rendererControls[id];return control?.rawValue??control?.value;};
+      const show=(state=read())=>{const current=value(state);input.disabled=current===undefined;if(input.type==='checkbox')input.checked=!!current;else input.value=current??'';};
       let before,checkpoint;
       const remember=()=>{before=value();checkpoint=capture(id);};
       const change=()=>{
@@ -39,11 +39,11 @@ export function createFlameTunePanel({document,host,read,set,onError,only=null,e
       input.addEventListener('focus',remember);
       input.addEventListener(input.type==='checkbox'||input.tagName==='SELECT'?'change':'input',change);
       input.addEventListener('pointercancel',()=>{if(before!==undefined){try{cancel(id,before,checkpoint);}catch(error){onError(error);}show();}});
-      input.addEventListener('blur',show);
+      input.addEventListener('blur',()=>show());
       fields.push({show});row.append(grip,input);section.append(row);
       if(input.type==='number')installRelativeNumberDrag({grip,input,step:Number.isFinite(Number(source.step))&&Number(source.step)>0?Number(source.step):.01,onStart:remember});
     }
     host.append(section);
   }
-  return {sync:()=>fields.forEach(field=>field.show())};
+  return {sync:()=>{const state=read();fields.forEach(field=>field.show(state));}};
 }

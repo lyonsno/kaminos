@@ -6,6 +6,7 @@ import {normalizeCueTune,tuneForCue} from '../kiln-cue-tunes.mjs';
 import {createFlameTunePanel} from '../flame-tune-panel.mjs';
 import * as workspace from '../kiln-cue-workspace.mjs';
 import {readFileSync} from 'node:fs';
+import {createSceneEdits} from '../scene-edit-session.mjs';
 
 const tune=(exposure=-3,id='blue')=>({domControls:{
   'volume-input-radius':{value:.4},'volume-flow-rate':{value:2},
@@ -16,6 +17,138 @@ function layered() {
   assert.equal(typeof cues.layerKilnCues,'function','saved basin looks must be independent of emitter animation');
   return cues.layerKilnCues(cues.defaultKilnCues(),tune());
 }
+
+test('actual host basin snapshot stays immutable through adoption, audition and scene roundtrip',async()=>{
+  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const start=html.indexOf('function flameSettingsState('),end=html.indexOf('// Every reason the flame settings edit',start);
+  const factory=new Function(html.slice(start,end)+';return flameSettingsState;')();
+  const preset=tune(-1,'alternate'),receipt={presetId:'alternate',label:'Blue',preset};
+  preset.domControls['volume-resolution'].value=160;
+  const incoming=factory(preset,receipt),original=structuredClone(preset);
+  assert.equal(incoming.domControls,incoming.source.preset.domControls,'replay the observed host alias structure');
+  let current=tune(),recipe=layered();
+  const editor=createCueTuneEditor({readCues:()=>recipe,writeCues:value=>{recipe=value;},
+    readTune:()=>current,applyTune:value=>{current=value;},validateTune:normalizeCueTune,loadTune:async()=>incoming});
+  editor.begin('work',1);await editor.useBasin('alternate');
+  assert.deepEqual(editor.state().tune.source.preset,original,'retaining scene settings must not rewrite the embedded source');
+  editor.audition();assert.deepEqual(editor.state().tune.source.preset,original);
+  editor.accept();
+  const reopened=JSON.parse(JSON.stringify(recipe));
+  assert.deepEqual(reopened.looks[0].tune.source.preset,original);
+  assert.equal(reopened.looks[0].tune.domControls['volume-resolution'].value,64);
+});
+
+test('basin search and refresh retain the owning pending-load button state',async()=>{
+  const source=readFileSync(new URL('../kiln-cue-workspace.mjs',import.meta.url),'utf8');
+  let start=source.indexOf('  let basinLoading=');
+  if(start<0)start=source.indexOf('  const showBasins=');
+  const body=source.slice(start,source.indexOf("  byId('cue-preview')",start));
+  const select={value:'alternate',options:[],replaceChildren(){this.options=[];},append(option){this.options.push(option);}};
+  const button={disabled:false,textContent:'Use basin'},search={value:''},feedback={textContent:''};
+  const elements={'cue-basin-select':select,'cue-basin-apply':button,'cue-basin-search':search,'cue-basin-status':feedback};
+  let resolve;const loaded=new Promise(done=>{resolve=done;});
+  let current=tune(),recipe=layered();const errors=[];
+  const editor=createCueTuneEditor({readCues:()=>recipe,writeCues:value=>{recipe=value;},
+    readTune:()=>current,applyTune:value=>{current=value;},validateTune:normalizeCueTune,loadTune:()=>loaded});
+  editor.begin('work',1);
+  const view=new Function('byId','document','api','basins','cueBasinEntries','guard','ensure','editor','syncPanels','status',
+    body+';return {showBasins};')(id=>elements[id],{createElement:()=>({})},{readTune:()=>current},
+    {entries:[{presetId:'alternate',label:'Blue'}]},workspace.cueBasinEntries,
+    action=>()=>Promise.resolve().then(action).catch(error=>errors.push(error.message)),()=>{},editor,()=>{},()=>{});
+  const pending=button.onclick();await Promise.resolve();await Promise.resolve();
+  try {
+    assert.equal(button.disabled,true);assert.equal(button.textContent,'Loading...');
+    search.oninput();assert.equal(button.disabled,true,'search must not release pending load state');
+    view.showBasins();assert.equal(button.disabled,true,'list refresh must not release pending load state');
+    await button.onclick();assert.deepEqual(errors,[]);
+    assert.equal(button.textContent,'Loading...');assert.equal(feedback.textContent,'Loading basin...');
+  }finally{resolve(tune(-1,'alternate'));await pending;}
+  assert.equal(button.disabled,false);assert.equal(button.textContent,'Use basin');
+});
+
+test('opening cues refreshes through context entry exactly once',()=>{
+  const source=readFileSync(new URL('../kiln-cue-workspace.mjs',import.meta.url),'utf8');
+  const body=source.slice(source.lastIndexOf('  return {open()'),source.lastIndexOf('\n}'));
+  let refreshes=0;const render=()=>refreshes++,panel={scrollTop:20};
+  const workspace={setMode(){},setContext:()=>render()};
+  const api=new Function('workspace','render','panel',body)(workspace,render,panel);
+  api.open();assert.equal(refreshes,1,'context entry already refreshes the cue inspector');
+  assert.equal(panel.scrollTop,0);
+});
+
+test('accept refreshes cues once after commit and history replay waits for settlement',async()=>{
+  const source=readFileSync(new URL('../kiln-cue-workspace.mjs',import.meta.url),'utf8');
+  const subscription=source.slice(source.indexOf('  window.kaminosSceneEdits.subscribe('),source.indexOf('  void api.listBasins'));
+  const command=source.split('\n').find(line=>line.includes("byId('cue-accept').onclick="));
+  let value={flow:1},refreshes=0,resolveReplay;
+  const edits=createSceneEdits({});
+  edits.register('@kiln-cues',{read:()=>value,check:next=>next,write:next=>{
+    value=next;
+    if(edits.state().undoCount)return new Promise(resolve=>{resolveReplay=resolve;});
+  }});
+  const render=()=>refreshes++,editor={active:()=>false};
+  new Function('window','workspace','editor','render',subscription)(
+    {kaminosSceneEdits:edits},{state:()=>({context:'cues'})},editor,render);
+  const button={};
+  new Function('byId','guard','accept','render','status',command)(()=>button,action=>action,
+    ()=>edits.apply('@kiln-cues',{flow:2},'Tune kiln keyframe'),render,()=>{});
+  button.onclick();
+  assert.equal(refreshes,1,'begin/preview notifications and the command must not repeat the committed refresh');
+  assert.equal(edits.state().undoCount,1);assert.equal(value.flow,2);
+  const pending=edits.undo();
+  assert.equal(refreshes,1,'do not refresh during an unfinished asynchronous history replay');
+  resolveReplay();await pending;
+  assert.equal(refreshes,2);assert.equal(value.flow,1);assert.equal(edits.state().redoCount,1);
+  edits.redo();assert.equal(refreshes,3);assert.equal(value.flow,2);
+});
+
+test('alternate basin appearance retains scene simulation and emitter animation with explicit provenance',async()=>{
+  let recipe=layered(),current=tune();current.domControls['volume-pressure-solver']={value:'converged'};
+  recipe=cues.layerKilnCues(cues.defaultKilnCues(),current);
+  const original=structuredClone(current),keys=structuredClone(recipe.work);
+  const incoming=tune(-1,'alternate-blue');
+  incoming.domControls['volume-resolution'].value=160;
+  incoming.domControls['volume-pressure-solver']={value:'jacobi'};
+  const untouched=structuredClone(incoming);
+  const editor=createCueTuneEditor({readCues:()=>recipe,writeCues:value=>{recipe=value;},
+    readTune:()=>current,applyTune:value=>{current=value;},validateTune:normalizeCueTune,loadTune:async()=>incoming});
+  editor.begin('work',1);await editor.useBasin('alternate-blue');
+  assert.equal(current.domControls['volume-resolution'].value,64);
+  assert.equal(current.domControls['volume-pressure-solver'].value,'converged');
+  assert.equal(current.domControls['volume-physical-exposure'].value,-1);
+  assert.deepEqual(current.source.cueSimulation.retainedFields,['volume-resolution','volume-pressure-solver']);
+  assert.deepEqual(incoming,untouched,'immutable library snapshot remains intact');
+  editor.accept();assert.deepEqual(recipe.work,keys);assert.deepEqual(current,original);
+});
+
+test('audition reapplies the current draft without accepting it or adding history',()=>{
+  let recipe=layered(),current=tune(),writes=0,applied=0;
+  const editor=createCueTuneEditor({readCues:()=>recipe,writeCues:value=>{writes++;recipe=value;},
+    readTune:()=>current,applyTune:value=>{applied++;current=value;},validateTune:normalizeCueTune,loadTune:async()=>tune()});
+  editor.begin('work',1);editor.set('volume-physical-exposure',-1);
+  const before=structuredClone(current),count=applied;
+  assert.equal(typeof editor.audition,'function');
+  editor.audition();assert.equal(applied,count+1);assert.deepEqual(current,before);
+  assert.equal(writes,0);assert.ok(editor.active());
+});
+
+test('one flame-panel refresh reads one tune snapshot for all fields',()=>{
+  class Element extends EventTarget {
+    constructor(tag,doc){super();this.tagName=tag.toUpperCase();this.ownerDocument=doc;this.children=[];this.style={};this.classList={add(){},remove(){}};this.type='';this.min='';this.max='';this.step='.01';}
+    append(...children){this.children.push(...children);}setAttribute(){}
+  }
+  const doc=new EventTarget();doc.createElement=tag=>new Element(tag,doc);
+  const source=doc.createElement('input');source.type='range';doc.getElementById=()=>source;
+  const oldDocument=globalThis.document,oldWindow=globalThis.window;globalThis.document=doc;globalThis.window=new EventTarget();
+  try{
+    let reads=0;const host=doc.createElement('div');
+    const panel=createFlameTunePanel({document:doc,host,read:()=>{reads++;return tune();},set(){},onError:error=>{throw error;},
+      only:['volume-input-radius','volume-flow-rate']});
+    panel.sync();assert.equal(reads,1,'a complete tune must not be rebuilt once per field');
+    assert.equal(host.children[0].children[1].children[1].value,.4);
+    assert.equal(host.children[0].children[2].children[1].value,2);
+  }finally{globalThis.document=oldDocument;globalThis.window=oldWindow;}
+});
 
 test('look replacement preserves emitter curves, complete coefficients and immutable basin identity',()=>{
   const recipe=layered(),before=structuredClone(recipe.work);
