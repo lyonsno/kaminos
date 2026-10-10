@@ -244,7 +244,7 @@ export function createSuperMatOps(device, options = {}) {
     pendingFlops = 0;
     lastFence = Promise.resolve();
   }
-  const scheduleState = () => ({ adaptiveFlops, currentDutyFlops: currentDutyFlops() });
+  const scheduleState = () => ({ adaptiveFlops, currentDutyFlops: currentDutyFlops(), targetDutyMs: schedule?.targetDutyMs ?? null });
 
   async function flush() {
     if (schedule) {
