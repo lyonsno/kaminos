@@ -17,7 +17,7 @@ await write();
 let connection;
 try {
   const {values} = parseArgs({options: {...Object.fromEntries(['out', 'session', 'url', 'repo', 'browser', 'playwright', 'observe', 'exercise', 'inputs']
-    .map(name => [name, {type: 'string'}])), close: {type: 'boolean'}}});
+    .map(name => [name, {type: 'string'}])), close: {type: 'boolean'}, visible: {type: 'boolean'}}});
   if (!values.session) throw Error('--session is required');
   if (values.close) {
     record.phase = 'close'; await write(); await closeFluidBrowser(values.session);
@@ -33,7 +33,7 @@ try {
     record.phase = 'connect'; await write();
     connection = values.url
       ? await openFluidBrowser({sessionFile: values.session, url: values.url, repo: values.repo,
-        executable: values.browser, playwrightModule: values.playwright})
+        executable: values.browser, playwrightModule: values.playwright, visible: values.visible})
       : await attachFluidBrowser(values.session);
     record.session = connection.descriptor;
     const {observationSession} = await import(pathToFileURL(path.resolve(values.observe)));

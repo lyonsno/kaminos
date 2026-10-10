@@ -18,12 +18,12 @@ async function json(url) {
   return response.json();
 }
 
-export async function fluidSourceIdentity(url, repo) {
+export async function fluidSourceIdentity(url, repo, {additionalFiles = []} = {}) {
   const origin = new URL(url).origin;
   const config = await json(`${origin}/api/runtime-config`);
   assert.equal(await fs.realpath(config.source.repoRoot), await fs.realpath(repo), 'Fluid server checkout mismatch');
   const bodies = {};
-  for (const file of sources) {
+  for (const file of new Set([...sources, ...additionalFiles])) {
     const response = await fetch(`${origin}/${file}`);
     assert.ok(response.ok, `Missing fluid source: ${file}`);
     const hash = sha(Buffer.from(await response.arrayBuffer()));
@@ -36,12 +36,13 @@ export async function fluidSourceIdentity(url, repo) {
 
 // The browser itself is the continuing runtime. This file is its caller-owned
 // attachment descriptor; no extra daemon or scene store is introduced.
-export async function openFluidBrowser({sessionFile, url, repo, executable, playwrightModule, viewport = {width: 1440, height: 900}}) {
+export async function openFluidBrowser({sessionFile, url, repo, executable, playwrightModule,
+  visible = false, viewport = {width: 1440, height: 900}}) {
   sessionFile = path.resolve(sessionFile);
   await fs.mkdir(path.dirname(sessionFile), {recursive: true});
   const lock = await fs.open(sessionFile, 'wx'); await lock.close();
   const descriptor = {schema: 'kaminos.fluid-working-session.v1', status: 'starting', url, repo,
-    playwrightModule, viewport, createdAt: new Date().toISOString()};
+    playwrightModule, viewport, visible, createdAt: new Date().toISOString()};
   const save = () => fs.writeFile(sessionFile, JSON.stringify(descriptor, null, 2));
   let child, browser;
   try {
@@ -52,7 +53,7 @@ export async function openFluidBrowser({sessionFile, url, repo, executable, play
     descriptor.executable = launch.executable;
     const stderr = openSync(path.join(descriptor.profile, 'stderr.log'), 'a');
     try {
-      child = spawn(launch.executable, [...launch.args, '--headless=new', '--enable-unsafe-webgpu', '--use-angle=metal'],
+      child = spawn(launch.executable, [...launch.args, ...(visible ? [] : ['--headless=new']), '--enable-unsafe-webgpu', '--use-angle=metal'],
         {detached: true, stdio: ['ignore', stderr, stderr]});
     } finally {closeSync(stderr);}
     let launchError;
@@ -79,7 +80,7 @@ export async function openFluidBrowser({sessionFile, url, repo, executable, play
     const page = context.pages().find(page => page.url() === 'about:blank');
     assert.ok(page, 'Owned initial page missing');
     page.setDefaultTimeout(0); page.setDefaultNavigationTimeout(0);
-    await page.setViewportSize(viewport);
+    if (!visible) await page.setViewportSize(viewport);
     await page.addInitScript(() => {
       window.__fluidSessionErrors = [];
       window.addEventListener('error', event => window.__fluidSessionErrors.push(event.message));
@@ -137,7 +138,7 @@ export async function attachFluidBrowser(sessionFile) {
     }
     assert.ok(selected, 'Held fluid page expired; a new page would be different water');
     selected.setDefaultTimeout(0); selected.setDefaultNavigationTimeout(0);
-    await selected.setViewportSize(descriptor.viewport);
+    if (!descriptor.visible) await selected.setViewportSize(descriptor.viewport);
     const session = await bindFluidWorkingSession(selected, {id: descriptor.binding});
     descriptor.currentUrl = selected.url();
     return {browser, page: selected, session, descriptor};

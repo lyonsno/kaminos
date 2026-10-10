@@ -53,6 +53,14 @@ test('reattachment follows binding across control URL edits and restores the cap
   await connection.browser.close();
 });
 
+test('visible-session attachment preserves the operator viewport', async t => {
+  const f = await fixture(t);
+  await fs.writeFile(f.file, JSON.stringify({...f.descriptor, visible: true}));
+  const connection = await attachFluidBrowser(f.file);
+  assert.equal(f.viewport, undefined, 'attaching must not resize the operator view');
+  await connection.browser.close();
+});
+
 test('changed checkout rejects work but cannot prevent exact owned-browser cleanup', async t => {
   const f = await fixture(t); f.drift(); f.expire();
   await assert.rejects(attachFluidBrowser(f.file), /checkout mismatch/);
