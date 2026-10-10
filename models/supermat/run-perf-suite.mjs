@@ -4,6 +4,7 @@
 // on every path, naming the step that failed.
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { assertSource } from './source-identity.mjs';
 import { parseArgs } from 'node:util';
@@ -35,7 +36,7 @@ function run(id, script, args) {
     maxBuffer: 64 * 1024 * 1024 });
   const step = { id, exitCode: child.status, wallMs: Date.now() - started, report, gpuBefore, stdoutTail: child.stdout?.slice(-400),
     stderrTail: child.stderr?.slice(-2000), signal: child.signal };
-  try { step.result = JSON.parse(execFileSync('cat', [report], { encoding: 'utf8' })); } catch (error) { step.reportError = String(error); }
+  try { step.result = JSON.parse(readFileSync(report, 'utf8')); } catch (error) { step.reportError = String(error); }
   summary.steps.push(step);
   assertSource(values['repo-root'], summary.commit, `after step ${id}`);
   return step;
@@ -133,7 +134,8 @@ try {
   run('bench-end', witness, [...common, '--stage', 'bench', '--fixture', `${state}/reference/ring-0000-512`, '--weights', `${state}/weights/f16`]);
 
   summary.phase = 'complete';
-  summary.status = summary.steps.every(step => step.exitCode === 0) ? 'passed' : 'completed-with-failures';
+  // A step passes only if it exited cleanly and its report was read back.
+  summary.status = summary.steps.every(step => step.exitCode === 0 && step.result && !step.reportError) ? 'passed' : 'completed-with-failures';
 } catch (error) {
   summary.error = `${error?.name ?? 'Error'}: ${error?.message ?? String(error)}`;
   process.exitCode = 1;
