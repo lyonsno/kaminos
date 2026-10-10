@@ -6,9 +6,10 @@ export function resolveSceneEmissiveCamera(requested, physical) {
   if(!requested)return {...base,reason:'comparison-off'};
   if(physical?.effective!=='emissive-transport-v2')return {...base,reason:'requires-effective-emissive-transport-v2'};
   const {exposureEV,highlightKnee,whiteBalanceKelvin}=physical;
+  const toneMapping = physical.toneMapping ?? 'agx';
   if(![exposureEV,highlightKnee,whiteBalanceKelvin].every(Number.isFinite)||highlightKnee<0||highlightKnee>=1||whiteBalanceKelvin<=0)
     return {...base,reason:'invalid-effective-camera-state'};
-  return {...base,effective:true,reason:null,transform:'fixed-bradford-white-channel-shoulder-srgb-v4',exposureEV,highlightKnee,whiteBalanceKelvin};
+  return {...base,effective:true,reason:null,transform:toneMapping === 'agx' ? 'agx-rec2020-default-srgb-v1' : 'fixed-bradford-white-channel-shoulder-srgb-v4',toneMapping,exposureEV,highlightKnee,whiteBalanceKelvin};
 }
 
 export function applySceneEmissiveCamera(pipeline,raw,matched,effective) {
@@ -19,15 +20,16 @@ export function applySceneEmissiveCamera(pipeline,raw,matched,effective) {
 }
 
 export function createSceneEmissiveCamera(input,{TSL,THREE}) {
-  const {uniform,vec3,vec4,float}=TSL;
-  const exposure=uniform(1),knee=uniform(.6);
+  const {uniform,vec3,vec4,float,agxToneMapping}=TSL;
+  const exposure=uniform(1),knee=uniform(.6),agx=uniform(1);
   const rows=[0,1,2].map(i=>uniform(new THREE.Vector3(...[0,1,2].map(j=>Number(i===j)))));
   const alpha=input.a.clamp(0,1);
   const straight=input.rgb.div(alpha.max(1e-6));
   const balanced=vec3(...rows.map(row=>row.dot(straight)));
   const exposed=balanced.mul(exposure).max(0),d=float(1).sub(knee);
   const shoulder=vec3(1).sub(d.mul(d).div(exposed.add(float(1).sub(knee.mul(2))).max(d)));
-  const linear=exposed.greaterThan(knee).select(shoulder,exposed);
+  const custom=exposed.greaterThan(knee).select(shoulder,exposed);
+  const linear=agx.greaterThan(.5).select(agxToneMapping(balanced,exposure),custom);
   const srgb=linear.lessThanEqual(.0031308).select(linear.mul(12.92),linear.pow(1/2.4).mul(1.055).sub(.055));
   const outputNode=vec4(srgb.mul(alpha),alpha);
   let state=resolveSceneEmissiveCamera(false),lastWhite=null;
@@ -36,6 +38,7 @@ export function createSceneEmissiveCamera(input,{TSL,THREE}) {
       state=resolveSceneEmissiveCamera(requested,physical);
       if(state.effective) {
         exposure.value=2**state.exposureEV;knee.value=state.highlightKnee;
+        agx.value=Number(state.toneMapping === 'agx');
         if(lastWhite!==state.whiteBalanceKelvin) {
           cameraWhiteBalance(state.whiteBalanceKelvin).forEach((row,i)=>rows[i].value.set(...row));
           lastWhite=state.whiteBalanceKelvin;

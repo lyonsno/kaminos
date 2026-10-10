@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { integrateEmission, thermalRadianceRGB, cameraWhiteBalance, displayEmissiveRGB, EMISSIVE_TRANSPORT_WGSL } from '../volume-emissive-transport.mjs';
+import { integrateEmission, thermalRadianceRGB, cameraWhiteBalance, displayEmissiveRGB as displayCameraRGB, EMISSIVE_TRANSPORT_WGSL } from '../volume-emissive-transport.mjs';
+const displayEmissiveRGB = (rgb, ev = 0, knee = .6, white) => displayCameraRGB(rgb, ev, knee, white, 'custom');
 import { linearLuminance } from '../volume-physical-color.mjs';
 
 // Transport, not a verdict on whether the flame looks right.

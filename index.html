@@ -1747,6 +1747,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <span class="slider-val" id="volume-physical-clean-val">0.08</span>
       </div>
       <div class="slider-row">
+        <label class="slider-label" for="volume-tone-mapping">Tone mapping</label>
+        <select id="volume-tone-mapping" data-volume-settings-role="renderer" class="select-input"><option value="agx" selected>AgX</option><option value="custom">Custom curve</option></select>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Exposure EV</span>
         <input type="range" id="volume-physical-exposure" min="-8" max="8" step="any" value="0">
         <span class="slider-val" id="volume-physical-exposure-val">0</span>
@@ -3679,7 +3683,7 @@ import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
 import { createSceneEmissiveCamera, applySceneEmissiveCamera } from './scene-emissive-camera.mjs';
-import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
+import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix, agxToneMapping } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { createSceneGI } from './scene-gi.mjs';
 import { resolveSceneGISettings } from './scene-gi-settings.mjs';
@@ -4807,7 +4811,7 @@ function currentHybridSplatOverlayEnvironmentContext() {
     intensity,
     rotationY,
     exposure,
-    toneMapping: renderer?.toneMapping === THREE.ACESFilmicToneMapping ? 'ACESFilmicToneMapping' : String(renderer?.toneMapping ?? 'unknown'),
+    toneMapping: renderer?.toneMapping === THREE.AgXToneMapping ? 'AgXToneMapping' : renderer?.toneMapping === THREE.ACESFilmicToneMapping ? 'ACESFilmicToneMapping' : String(renderer?.toneMapping ?? 'unknown'),
     backgroundVisible: !!showEnvBg,
     backgroundBlur: readNumberControl('env-blur-slider', scene?.backgroundBlurriness ?? 0),
   };
@@ -11335,7 +11339,7 @@ async function initScene() {
   renderer.domElement.id = 'kaminos-host-renderer-canvas';
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMapping = THREE.AgXToneMapping;
   renderer.toneMappingExposure = 1.5;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -11559,7 +11563,7 @@ async function initScene() {
   rawSceneOutput=renderPipeline.outputNode;
   sceneEmissiveCamera=null;
   if(fireLightFieldRouteParams().get('volume_light_field_distributed')==='1') {
-    sceneEmissiveCamera=createSceneEmissiveCamera(rawSceneOutput,{TSL:{uniform,vec3,vec4,float},THREE});
+    sceneEmissiveCamera=createSceneEmissiveCamera(rawSceneOutput,{TSL:{uniform,vec3,vec4,float,agxToneMapping},THREE});
   }
     giOutputGraphs.set(graphKey,{rawSceneOutput,sceneEmissiveCamera,fireLightFieldPass});
     renderPipeline.outputColorTransform = true;
@@ -11861,6 +11865,7 @@ async function initScene() {
 
   function renderSceneFrame() {
     if(exclusiveInspectionRender&&!manualInspectionRender)return false;
+    renderer.toneMapping = document.getElementById('volume-tone-mapping').value === 'custom' ? THREE.ACESFilmicToneMapping : THREE.AgXToneMapping;
     // Shared-source reset may span an await while this host's RAF keeps
     // running. Keep the previous presented frame until both consumers have
     // current inputs; do not submit retired medium resources or unlit fill.
@@ -11872,7 +11877,7 @@ async function initScene() {
       const requested=document.getElementById('rendering-match-flame-camera').checked;
       const state=sceneEmissiveCamera.update(requested,window.__kaminosVolumePrototype?.emissiveCameraState());
       applySceneEmissiveCamera(renderPipeline,rawSceneOutput,sceneEmissiveCamera.outputNode,state.effective);
-      const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)} · shoulder ${state.highlightKnee.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
+      const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: ${state.toneMapping === 'agx' ? 'AgX' : 'Custom curve'} · white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
       if(text!==sceneCameraStatusText){document.getElementById('rendering-camera-status').textContent=text;sceneCameraStatusText=text;}
     } else if(sceneEmissiveCamera) {
       applySceneEmissiveCamera(renderPipeline,rawSceneOutput,rawSceneOutput,false);
@@ -16925,6 +16930,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['renderScale', 'volume_render_scale'],
   ['resolution', 'volume_resolution'],
   ['flowDebug', 'volume_flow_debug'],
+  ['toneMapping', 'volume_tone_mapping'],
   ['oracleActivityCue', 'volume_oracle_activity_cue'],
   ['oracleActivityDisplay', 'volume_oracle_activity_display'],
   ['oracleActivityCurlNoise', 'volume_oracle_activity_curl_noise'],
@@ -22235,6 +22241,7 @@ function readVolumeControls() {
     flowKernelStrength: parseFloat(document.getElementById('volume-flow-kernel-strength').value),
     flowKernelRadius: parseFloat(document.getElementById('volume-flow-kernel-radius').value),
     flowKernelCoherence: parseFloat(document.getElementById('volume-flow-kernel-coherence').value),
+    toneMapping: document.getElementById('volume-tone-mapping').value,
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v0',
       authority: 'band-limited-support-coverage-ridge-proximity-footprint-v1',
@@ -22483,6 +22490,8 @@ function formatVolumeWindDirection(value) {
 
 function updateVolumeControlLabels() {
   const c = readVolumeControls();
+  const kneeRow = document.getElementById('volume-physical-knee').closest('.slider-row');
+  kneeRow.style.display = c.toneMapping === 'custom' ? '' : 'none';
   document.getElementById('volume-scene-val').textContent = (VOLUME_SCENE_PRESETS[c.volumeScene] || VOLUME_SCENE_PRESETS.compact_plume).label;
   document.getElementById('volume-artistic-swirl-val').textContent = c.artisticSwirl ? 'on' : 'off';
   document.getElementById('volume-phased-sway-val').textContent = c.phasedSway ? 'on' : 'off';
@@ -23716,6 +23725,11 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_boundary_splat_mode')) {
     document.getElementById('volume-boundary-splat-mode').value = normalizeBoundarySplatMode(params.get('volume_boundary_splat_mode'));
   }
+  if (params.has('volume_tone_mapping')) {
+    const mode = params.get('volume_tone_mapping');
+    if (!['agx', 'custom'].includes(mode)) throw new Error(`unsupported volume_tone_mapping route: ${mode}`);
+    document.getElementById('volume-tone-mapping').value = mode;
+  }
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const routeValue = Number(params.get(field.param));
     if (!params.has(field.param) || !Number.isFinite(routeValue)) continue;
@@ -23968,7 +23982,7 @@ async function initKaminosVolumeRoute() {
           : String(requested) === String(effective);
         return equal ? [] : [{ id: control.id, requested, effective }];
       });
-      if (basinControls.length !== 186 || rendererControls.length !== 3 || substitutions.length) {
+      if (basinControls.length !== 186 || rendererControls.length !== 4 || substitutions.length) {
         throw new Error(`cockpit live parity control mismatch: ${JSON.stringify(substitutions.slice(0, 8))}`);
       }
       return {
@@ -24112,6 +24126,7 @@ async function initKaminosVolumeRoute() {
   document.getElementById('volume-emitter-aperture-pattern').addEventListener('change', () => { delete document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest; });
   for (const id of [
     'volume-emitter-source-law',
+    'volume-tone-mapping',
     'volume-emitter-source-depth',
     'volume-emitter-inlet-profile',
     'volume-emitter-momentum-linked',

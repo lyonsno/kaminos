@@ -1,4 +1,5 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
+import { AGX_WGSL } from './volume-agx.mjs';
 import { buildInflowCoverageMap, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
 import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
 import {
@@ -5494,6 +5495,7 @@ fn boxHit(ro: vec3<f32>, rd: vec3<f32>, b: vec3<f32>) -> vec2<f32> {
 }
 
 ${PHYSICAL_COLOR_WGSL}
+${AGX_WGSL}
 ${EMISSIVE_TRANSPORT_WGSL}
 ${SCENE_VOLUME_SOURCE_WGSL}
 
@@ -8660,8 +8662,11 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     if (u.physical_fire.x > 1.5) {
       current = emissiveCamera(color);
     } else {
-      current = physicalDisplay(color, u.physical_display.y, u.physical_display.z);
+      current = select(physicalDisplay(color, u.physical_display.y, u.physical_display.z), agxDisplay(color, u.physical_display.y), u.reserved_render_controls.z > 0.5);
     }
+    current = mix(current, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
+  } else if (u.reserved_render_controls.z > 0.5) {
+    current = agxDisplay(color * volumeExposure, 0.0);
     current = mix(current, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
   }
   let composedAlpha = clamp(1.0 - trans + max(max(current.r, current.g), current.b) * 0.08, 0.0, 1.0);
@@ -15053,6 +15058,7 @@ export function createKaminosVolumePrototype({
     uniforms.fill(0, 41, 47);
     // Reuse a retired history slot; presentation flags retain their own lanes.
     uniforms[44] = controlsSnapshot.flowDebug || 0;
+    uniforms[46] = controlsSnapshot.toneMapping === 'custom' ? 0 : 1;
     const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
     uniforms[47] = 0;
     uniforms[48] = controlsSnapshot.fireScale ?? 0.86;
@@ -15486,7 +15492,8 @@ export function createKaminosVolumePrototype({
       effective: physicalColorEffective ? physicalModel : 'legacy',
       inactiveReason: physicalColorRequested && !physicalColorEffective ? 'requires-ordinary-beauty-boundary-fire-without-diagnostic-residual-splat-or-caller-presentation' : null,
       workingSpace: 'linear-srgb', outputSpace: 'srgb',
-      displayTransform: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-bradford-white-channel-shoulder-srgb-v4' : 'peak-shoulder-delayed-neutral-srgb-v2') : 'legacy-exponential-power',
+      toneMapping: uniforms[46] > 0.5 ? 'agx' : 'custom',
+      displayTransform: uniforms[46] > 0.5 ? 'agx-rec2020-default-srgb-v1' : physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-bradford-white-channel-shoulder-srgb-v4' : 'peak-shoulder-delayed-neutral-srgb-v2') : 'legacy-exponential-power',
       materialLawRequested: physicalColorMode === 2 ? (transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
       materialLawEffective: physicalColorMode === 2 && physicalColorEffective ? (transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
       temperatureAuthority: physicalColorMode === 2 ? (transportedEmissiveMaterial ? 'transported-heat-to-peak-kelvin-minus-cooling-spread' : 'mixed-heat-flame-ember-detail-lick-to-kelvin') : 'render-only-heat-proxy-to-kelvin',
