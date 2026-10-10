@@ -21,7 +21,7 @@ const persist = async () => {
 // jobs only, so outside work (leases, interactive pages) must stay visible.
 function gpuUtilization() {
   try {
-    const text = execFileSync('ioreg', ['-r', '-d', '1', '-c', 'IOAccelerator'], { encoding: 'utf8' });
+    const text = execFileSync('/usr/sbin/ioreg', ['-r', '-d', '1', '-c', 'IOAccelerator'], { encoding: 'utf8' });
     const value = name => Number(text.match(new RegExp(`"${name}"=(\\d+)`))?.[1] ?? NaN);
     return { device: value('Device Utilization %'), renderer: value('Renderer Utilization %'), at: new Date().toISOString() };
   } catch (error) { return { error: String(error) }; }
