@@ -36,11 +36,12 @@ export function subdivideDiagnosticPopulation(base,refinement=1) {
   return {...base,particleData:data,particleCount:base.particleCount*8,particleVolumeScale:base.particleVolumeScale/8,refinement};
 }
 
-/** Paper-inspired finite box controls. Dimensions stay fixed while resolution
- * changes spacing, sample volume, pressure/surface support and collision size. */
-export function createFingerFluidBoxReference({scene='block_drop',resolution=24}={}) {
+/** Finite box: refinement changes spacing, sample volume, surface support and
+ * collision size. Pressure support is an independent world-space distance. */
+export function createFingerFluidBoxReference({scene='block_drop',resolution=24,pressureRadius=1/12}={}) {
   if(!['block_drop','block_flop','dam_break'].includes(scene))throw new RangeError('Unknown box reference scene');
   if(!Number.isSafeInteger(resolution)||resolution<16||resolution%8!==0)throw new RangeError('Box resolution must be an integer multiple of eight, at least sixteen');
+  if(!Number.isFinite(pressureRadius)||pressureRadius<=0)throw new RangeError('World pressure radius must be finite and positive');
   const spacing=1/resolution,volume=spacing**3,baseVolume=(64*Math.PI/315)*.185**3/24.3;
   const bounds={min:[-1.5,-1,-.65],max:[1.5,2,.65]};
   const regions=[{size:[resolution,resolution,resolution],origin:scene==='dam_break'?[-1.5,-1,-.5]:[-.5,.4,-.5]}];
@@ -59,7 +60,7 @@ export function createFingerFluidBoxReference({scene='block_drop',resolution=24}
   }
   const box={schema:'kaminos.fluid-reference-box.v1',bounds,planes,collisionRadius:.5*spacing};
   const population={schema:'kaminos.fluid-discriminator-population.v1',fixture:scene,refinement:resolution/24,particleCount,particleData:data,particleVolumeScale:volume/baseVolume,source:'regular_lattice_finite_water_at_rest_no_recycling'};
-  return {scene,resolution,spacing,particleCount,particleVolume:volume,representedVolume:particleCount*volume,pressureRadius:2*spacing,surfaceRadius:2*spacing,box,population};
+  return {scene,resolution,spacing,particleCount,particleVolume:volume,representedVolume:particleCount*volume,pressureRadius,surfaceRadius:2*spacing,box,population};
 }
 
 export function validateFingerFluidReferenceBox(box) {

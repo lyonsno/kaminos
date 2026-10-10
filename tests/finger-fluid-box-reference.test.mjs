@@ -71,8 +71,8 @@ test('box references preserve physical volume and feature dimensions across reso
     assert.equal(b.particleCount,8*a.particleCount);
     assert.ok(Math.abs(a.representedVolume-b.representedVolume)<1e-12);
     assert.equal(a.spacing,2*b.spacing);
-    assert.equal(a.pressureRadius/a.spacing,2);
-    assert.equal(b.pressureRadius/b.spacing,2);
+    assert.equal(a.pressureRadius,b.pressureRadius);
+    assert.equal(a.pressureRadius,1/12);
     assert.deepEqual(a.box.bounds,b.box.bounds);
     for(const f of [a,b]){
       fixtures.validateFingerFluidDiagnosticPopulation(f.population);
@@ -110,4 +110,10 @@ test('box evidence rejects missing or substituted physical walls before acceptin
   const reference=fixtures.createFingerFluidBoxReference({resolution:16});
   assert.throws(()=>evidence.validateBoxReferenceState({},reference,1),/box/);
   assert.throws(()=>evidence.validateBoxReferenceState({box:{...reference.box,bounds:{min:[0,0,0],max:[1,1,1]}}},reference,1),/box/);
+});
+test('box evidence rejects a resolution-scaled pressure radius replacing the requested world radius',()=>{
+  const desired={...fixtures.createFingerFluidBoxReference({resolution:16}),pressureRadius:.07};
+  const wrong=boxedEvidence({...desired,pressureRadius:2*desired.spacing});
+  assert.throws(()=>evidence.validateBoxReferenceState(wrong,desired,1),/configuration|pressure inputs/);
+  assert.doesNotThrow(()=>evidence.validateBoxReferenceState(boxedEvidence(desired),desired,1));
 });

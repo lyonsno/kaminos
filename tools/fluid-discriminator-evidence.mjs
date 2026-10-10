@@ -101,13 +101,13 @@ export function validateDiscriminatorState(actual,request) {
   for(let i=0;i<request.particleCount;i++)if(values[i*16+11]<.15)throw Error('Inactive/recycling source in finite pour');
   return values;
 }
-export function validateBoxReferenceState(actual,fixture,step,{radiusRatio=2,passes=2,gamma=0,beta=.0113,dt=1/240}={}){
+export function validateBoxReferenceState(actual,fixture,step,{pressureRadius=fixture.pressureRadius,passes=2,gamma=0,beta=.0113,dt=1/240}={}){
   if(JSON.stringify(actual?.box)!==JSON.stringify(fixture.box))throw Error('Effective reference box mismatch');
   const population=actual?.dynamics?.population;
   if(population?.fixture!==fixture.scene||population.source!==fixture.population.source||population.refinement!==fixture.population.refinement)throw Error('Effective box population identity mismatch');
-  const values=validateDiscriminatorState(actual,{arm:'reduced',particleCount:fixture.particleCount,volume:fixture.particleVolume,radius:radiusRatio*fixture.spacing,surfaceRadius:fixture.surfaceRadius,gamma,step,dt,boundaryContract:'ipbf-cubic-tangent-plane-density-v1'});
+  const values=validateDiscriminatorState(actual,{arm:'reduced',particleCount:fixture.particleCount,volume:fixture.particleVolume,radius:pressureRadius,surfaceRadius:fixture.surfaceRadius,gamma,step,dt,boundaryContract:'ipbf-cubic-tangent-plane-density-v1'});
   const inputs=actual.diagnostics.pressureControlInputs,u=new Float32Array(new Uint32Array(inputs.simulationWords).buffer),p=new Float32Array(new Uint32Array(inputs.pressureWords).buffer);
-  if(actual.pressure.boundaryPressure!=='tangent_plane'||p[0]!==Math.fround(radiusRatio*fixture.spacing)||p[1]!==Math.fround(beta)||u[29]!==Math.fround(gamma)||new Uint32Array(inputs.simulationWords)[1]!==fixture.particleCount)throw Error('Effective box pressure inputs mismatch');
+  if(actual.pressure.boundaryPressure!=='tangent_plane'||p[0]!==Math.fround(pressureRadius)||p[1]!==Math.fround(beta)||u[29]!==Math.fround(gamma)||new Uint32Array(inputs.simulationWords)[1]!==fixture.particleCount)throw Error('Effective box pressure inputs mismatch');
   for(let k=0;k<3;k++)if(u[8+k]!==Math.fround(fixture.box.bounds.min[k])||u[12+k]!==Math.fround(fixture.box.bounds.max[k]))throw Error('GPU collision box bounds mismatch');
   if(actual.stages.density!==passes*step||actual.stages.surface!==3*step||actual.stages.vorticity!==0||actual.errors.length)throw Error('Box stage execution or GPU errors mismatch');
   return values;
