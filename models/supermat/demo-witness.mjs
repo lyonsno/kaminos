@@ -7,7 +7,7 @@ import { parseArgs } from 'node:util';
 import { launchChrome, openPage } from './chrome-cdp.mjs';
 
 const { values } = parseArgs({ options: Object.fromEntries(
-  ['url', 'chrome', 'report', 'screenshot', 'timeout-ms', 'mid-screenshot', 'mid-delay-ms'].map(name => [name, { type: 'string' }])) });
+  ['url', 'chrome', 'report', 'screenshot', 'timeout-ms', 'mid-screenshot', 'mid-delay-ms', 'until'].map(name => [name, { type: 'string' }])) });
 const output = path.resolve(values.report ?? 'supermat-demo-report.json');
 const report = { schema: 'supermat.demo-witness.v0', status: 'failed', phase: 'arguments', requestedUrl: values.url ?? null,
   command: process.argv };
@@ -38,7 +38,7 @@ try {
       report.midScreenshot = { path: path.resolve(values['mid-screenshot']), atMs: Date.now() - started };
       midTaken = true;
     }
-    if (['done', 'error', 'stopped'].includes(state?.status)) break;
+    if (['done', 'error', 'stopped'].includes(state?.status) || (values.until && state?.status === values.until)) break;
     if (Date.now() - started > timeoutMs) throw new Error(`demo did not finish within ${timeoutMs} ms (status ${state?.status})`);
     await new Promise(resolve => setTimeout(resolve, 250));
   }
@@ -52,7 +52,8 @@ try {
   await fs.writeFile(screenshot, Buffer.from(shot.data, 'base64'));
   report.screenshot = screenshot;
   report.phase = 'complete';
-  report.status = state.status === 'done' ? 'passed' : state.status === 'stopped' ? 'stopped' : 'page-error';
+  report.status = state.status === 'done' || (values.until && state.status === values.until) ? 'passed'
+    : state.status === 'stopped' ? 'stopped' : 'page-error';
 } catch (error) {
   report.error = `${error?.name ?? 'Error'}: ${error?.message ?? String(error)}`;
   process.exitCode = 1;
