@@ -45,12 +45,12 @@ try {
 
   summary.phase = 'route-timing';
   const routes = [
-    ['route-512-f32w-f32', 'ring-0000-512', 'f32', {}],
-    ['route-512-f16w-f32', 'ring-0000-512', 'f16', {}],
-    ['route-512-f16w-f16tiles', 'ring-0000-512', 'f16', { gemmPrecision: 'f16-tiles' }],
-    ['route-512-f16w-f16partial', 'ring-0000-512', 'f16', { gemmPrecision: 'f16-partial' }],
-    ['route-1024-f16w-f32', 'ring-0000-1024', 'f16', {}],
-    ['route-1024-f16w-f16partial', 'ring-0000-1024', 'f16', { gemmPrecision: 'f16-partial' }],
+    ['route-512-f16w-f32act', 'ring-0000-512', 'f16', {}],
+    ['route-512-f16w-f16act', 'ring-0000-512', 'f16', { activations: 'f16' }],
+    ['route-512-f16w-f16act-f16partial', 'ring-0000-512', 'f16', { activations: 'f16', gemmPrecision: 'f16-partial' }],
+    ['route-1024-f16w-f32act', 'ring-0000-1024', 'f16', {}],
+    ['route-1024-f16w-f16act', 'ring-0000-1024', 'f16', { activations: 'f16' }],
+    ['route-1024-f16w-f16act-f16partial', 'ring-0000-1024', 'f16', { activations: 'f16', gemmPrecision: 'f16-partial' }],
   ];
   for (const [id, fixture, weights, options] of routes) {
     run(id, witness, [...common, '--stage', 'route', '--fixture', `${state}/reference/${fixture}`, '--weights', `${state}/weights/${weights}`,
@@ -58,15 +58,20 @@ try {
   }
 
   summary.phase = 'weight-load-frames';
-  for (const mode of ['bundle', 'chunks', 'bundle', 'chunks']) {
-    const id = `load-${mode}-${summary.steps.filter(step => step.id.startsWith(`load-${mode}`)).length}`;
-    run(id, demo, ['--url', `${values['server-url']}/models/supermat/supermat-demo.html?weightLoading=${mode}`, '--chrome', values.chrome,
-      '--screenshot', path.join(out, id, 'screen.png'), '--until', 'ready']);
+  const loads = [['chunks16', 'f16'], ['chunks4', 'f16-c4'], ['chunks16', 'f16'], ['chunks4', 'f16-c4']];
+  for (const [index, [label, weights]] of loads.entries()) {
+    const id = `load-${label}-${index}`;
+    run(id, demo, ['--url', `${values['server-url']}/models/supermat/supermat-demo.html?weights=/scratch/supermat-weights/${weights}/`,
+      '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png'), '--until', 'ready']);
   }
 
   summary.phase = 'cooperative-run-frames';
-  run('coop-512-f16w', demo, ['--url', `${values['server-url']}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=2`,
-    '--chrome', values.chrome, '--screenshot', path.join(out, 'coop-512-f16w', 'screen.png')]);
+  const coop = [['coop-f32w', 'weights=/scratch/supermat-weights/f32/'], ['coop-f16w', 'weights=/scratch/supermat-weights/f16/'],
+    ['coop-f16w-f16act', 'weights=/scratch/supermat-weights/f16/&activations=f16']];
+  for (const [id, query] of coop) {
+    run(id, demo, ['--url', `${values['server-url']}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
+      '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
+  }
 
   summary.phase = 'complete';
   summary.status = summary.steps.every(step => step.exitCode === 0) ? 'passed' : 'completed-with-failures';
