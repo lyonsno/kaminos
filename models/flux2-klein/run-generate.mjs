@@ -16,10 +16,10 @@ const report = { schema: 'kaminos.flux2-klein.generate-run.v0', host: os.hostnam
   roots: opt('--te') ? { te: path.resolve(opt('--te')), dit: path.resolve(opt('--dit')), vae: path.resolve(opt('--vae')) } : null };
 let browser, server, weightServer;
 async function finish(code) {
+  await browser?.close(); server?.close(); weightServer?.close();
   report.finishedAt = new Date().toISOString();
   await fsp.mkdir(outDir, { recursive: true });
   await fsp.writeFile(path.join(outDir, 'report.json'), JSON.stringify(report, null, 2));
-  browser?.close(); server?.close(); weightServer?.close();
   process.exit(code);
 }
 try {

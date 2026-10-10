@@ -43,8 +43,12 @@ export async function startServer(roots, port = 0, { cors = false } = {}) {
   return { server, origin: `http://127.0.0.1:${server.address().port}` };
 }
 
-export async function launchChrome(chrome, extraFlags = [], report = {}) {
-  const profile = await fsp.mkdtemp(path.join(os.tmpdir(), 'klein-cdp-'));
+// profileDir: a caller-owned Chrome profile to use and keep (for example to resume a partly cached
+// download). Without it the profile is a fresh temporary directory, removed by close().
+export async function launchChrome(chrome, extraFlags = [], report = {}, { profileDir = null } = {}) {
+  const profile = profileDir ? path.resolve(profileDir) : await fsp.mkdtemp(path.join(os.tmpdir(), 'klein-cdp-'));
+  if (profileDir) await fsp.mkdir(profile, { recursive: true });
+  report.profile = { dir: profile, temporary: !profileDir };
   const flags = ['--headless=new', '--remote-debugging-port=0', '--use-mock-keychain', '--password-store=basic', '--no-first-run', ...extraFlags];
   const child = spawn(chrome, [...flags, `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   report.chromeFlags = flags; report.ownedBrowserPid = child.pid;
@@ -84,6 +88,15 @@ export async function launchChrome(chrome, extraFlags = [], report = {}) {
     for (let i = 0; i < 200; i++) { if (await evaluate(readyExpr, false).catch(() => false)) return; await new Promise(r => setTimeout(r, 100)); }
     throw new Error(`page not ready: ${readyExpr}`);
   };
-  const close = () => { try { ws.close(); } catch {} if (child.exitCode === null) child.kill('SIGTERM'); };
+  // Resolves once the browser has exited and a temporary profile is removed.
+  const close = async () => {
+    try { ws.close(); } catch {}
+    if (child.exitCode === null && child.signalCode === null) {
+      const exited = new Promise(resolve => child.once('exit', resolve));
+      child.kill('SIGTERM');
+      await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 10000))]);
+    }
+    if (!profileDir) await fsp.rm(profile, { recursive: true, force: true }).catch(e => { report.profileCleanupError = String(e); });
+  };
   return { send, evaluate, navigate, close, child };
 }

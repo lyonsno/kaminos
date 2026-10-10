@@ -8,6 +8,8 @@
 // --site-dir serves an assembled Pages site (scripts/assemble-pages-site.mjs) under /kaminos/, as
 // project Pages does, and opens the demo at /kaminos/inference-kit/klein/.
 // --weights-dir serves a staged repository folder from a second, CORS-enabled origin.
+// --profile-dir keeps and reuses a Chrome profile (and its weight cache); otherwise the profile is
+// temporary and removed at exit. --stall-ms (default 300000) fails a wait whose status stops changing.
 // Writes report.json (written even when a phase fails), per-size PNGs and page screenshots.
 import fsp from 'node:fs/promises';
 import os from 'node:os';
@@ -24,10 +26,10 @@ const report = { schema: 'kaminos.flux2-klein.page-smoke.v0', host: os.hostname(
 let browser, server, weightServer;
 
 async function finish(code) {
+  await browser?.close(); server?.close(); weightServer?.close();
   report.finishedAt = new Date().toISOString();
   await fsp.mkdir(outDir, { recursive: true });
   await fsp.writeFile(path.join(outDir, 'report.json'), JSON.stringify(report, null, 2));
-  browser?.close(); server?.close(); weightServer?.close();
   process.exit(code);
 }
 
@@ -40,14 +42,18 @@ const pageState = `({ load: document.getElementById('load').textContent, loadDis
   status: document.getElementById('status').textContent, warn: document.getElementById('status').classList.contains('warn'),
   controls: !document.getElementById('controls').classList.contains('hidden') })`;
 
-async function waitFor(expr, timeoutMs, label) {
-  const until = Date.now() + timeoutMs;
-  while (Date.now() < until) {
+// Wait until expr is truthy. There is no overall deadline (a first download can take many minutes
+// on a slow link); the wait fails only when the page's status text stops changing for stallMs.
+async function waitFor(expr, label, { stallMs = Number(opt('--stall-ms', String(5 * 60e3))) } = {}) {
+  let lastStatus = null, lastChange = Date.now();
+  for (;;) {
     const value = await browser.evaluate(expr, false).catch(() => null);
     if (value) return value;
+    const status = await browser.evaluate(`document.getElementById('status').textContent`, false).catch(() => null);
+    if (status !== lastStatus) { lastStatus = status; lastChange = Date.now(); }
+    if (Date.now() - lastChange > stallMs) throw new Error(`no progress for ${Math.round(stallMs / 1000)} s waiting for ${label}; last status: ${lastStatus}`);
     await new Promise(r => setTimeout(r, 250));
   }
-  throw new Error(`timed out waiting for ${label}`);
 }
 
 async function screenshot(name, { width, height, mobile = false }) {
@@ -74,7 +80,7 @@ try {
     server = s.server; report.origin = `${s.origin}/kaminos/inference-kit/klein`;
   } else ({ server } = await startServer({ '/webgpu-inference-kit/': path.resolve(opt('--kit', path.join(here, '../../webgpu-inference-kit'))), '/': here })
     .then(s => { report.origin = s.origin; return s; }));
-  browser = await launchChrome(opt('--chrome'), [], report);
+  browser = await launchChrome(opt('--chrome'), [], report, { profileDir: opt('--profile-dir') ?? null });
   const desktop = { width: 1280, height: 900 };
   await browser.send('Emulation.setDeviceMetricsOverride', { ...desktop, deviceScaleFactor: 1, mobile: false });
   const pageUrl = `${report.origin}/index.html?weights=${encodeURIComponent(report.weightsUrl)}`;
@@ -90,7 +96,7 @@ try {
   report.phase = 'load';
   const loadStarted = Date.now();
   await browser.evaluate(`document.getElementById('load').click()`, false);
-  report.afterLoad = await waitFor(`(() => { const s = ${pageState}; return s.controls || /failed/i.test(s.status) ? s : null; })()`, 15 * 60e3, 'load');
+  report.afterLoad = await waitFor(`(() => { const s = ${pageState}; return s.controls || /failed/i.test(s.status) ? s : null; })()`, 'load');
   report.afterLoad.wallMs = Date.now() - loadStarted;
   if (!report.afterLoad.controls) throw new Error(`load failed: ${report.afterLoad.status}`);
   report.loadStats = await browser.evaluate('window.kleinDemo.pipeline.loadStats');
@@ -110,7 +116,7 @@ try {
 
   report.phase = 'history-check';
   await browser.evaluate(`document.getElementById('load').click()`, false);
-  const reloaded = await waitFor(`(() => { const s = ${pageState}; return s.controls || /failed/i.test(s.status) ? s : null; })()`, 5 * 60e3, 'cached load');
+  const reloaded = await waitFor(`(() => { const s = ${pageState}; return s.controls || /failed/i.test(s.status) ? s : null; })()`, 'cached load');
   if (!reloaded.controls) throw new Error(`cached load failed: ${reloaded.status}`);
   report.reloadStats = await browser.evaluate('window.kleinDemo.pipeline.loadStats');
   await generateSizes([...sizes].reverse(), 2);
@@ -136,7 +142,7 @@ async function generateSizes(sizes, session) {
       ${opt('--prompt') ? `document.getElementById('prompt').value = ${JSON.stringify(opt('--prompt'))};` : ''}
       document.getElementById('go').click(); })()`, false);
     const done = await waitFor(`(() => { const s = ${pageState}; const go = document.getElementById('go');
-      return !go.disabled && (window.kleinLast || s.warn || /stopped/i.test(s.status)) ? { ...s, last: window.kleinLast } : null; })()`, 10 * 60e3, `generate ${size}`);
+      return !go.disabled && (window.kleinLast || s.warn || /stopped/i.test(s.status)) ? { ...s, last: window.kleinLast } : null; })()`, `generate ${size}`);
     const row = { session, size, status: done.status, warn: done.warn, ...(done.last ?? {}) };
     report.generations.push(row);
     if (!done.last) throw new Error(`generation at ${size} failed: ${done.status}`);
