@@ -50,6 +50,20 @@ export function subgroupMatrixUsable(device) {
     && info?.subgroupMinSize === 32 && info?.subgroupMaxSize === 32;
 }
 
+// A duty's own execution time: from when it can start (submitted, and the work
+// queued ahead of it has completed) to its fence.
+export function dutyExecutionMs({ submittedAt, precedingDoneAt, doneAt }) {
+  return doneAt - Math.max(submittedAt, precedingDoneAt ?? submittedAt);
+}
+
+// Next duty FLOP budget: geometric step toward the size that would take
+// targetMs at the observed rate, clamped to bounds. Unusable samples keep it.
+export function adaptDutyFlops({ current, flops, ownMs, targetMs, bounds: [min, max] }) {
+  if (!(ownMs > 0) || !(flops > 0) || !(targetMs > 0)) return current;
+  const ideal = flops * targetMs / ownMs;
+  return Math.min(max, Math.max(min, current * Math.sqrt(ideal / current)));
+}
+
 export const SUPERMAT_OPS_OPTIONS = Object.freeze(['label', 'attention', 'gemmTile', 'fuseNorm', 'attentionKernel', 'gemmKernel',
   'gemmPrecision', 'activations']);
 
@@ -75,20 +89,17 @@ export function createSuperMatOps(device, options = {}) {
   // Cooperative schedule for one run: { runtime, invocation, control, signal, dutyFlops }.
   // Without it every op lands in one submission at flush().
   let schedule = null, pendingFlops = 0, lastFence = Promise.resolve(), adaptiveFlops = null;
-  // Duty budget adapts toward schedule.targetDutyMs from completed queue time
-  // (one duty in flight, so a duty's fence time is its own GPU time plus any
-  // foreground frames admitted ahead of it). Bounds are caller-overridable.
+  // Duty budget adapts toward schedule.targetDutyMs from each duty's own
+  // execution time (see dutyExecutionMs). Bounds are caller-overridable.
   function currentDutyFlops() {
     if (!schedule) return 0;
     if (!schedule.targetDutyMs) return schedule.dutyFlops ?? 0;
     return adaptiveFlops ?? schedule.dutyFlops ?? 4e9;
   }
-  function observeDuty(flops, queueMs) {
-    if (!schedule?.targetDutyMs || !(queueMs > 0) || !(flops > 0)) return;
-    const [min, max] = schedule.dutyFlopsBounds ?? [5e8, 6.4e10];
-    const ideal = flops * schedule.targetDutyMs / queueMs;
-    const current = currentDutyFlops();
-    adaptiveFlops = Math.min(max, Math.max(min, current * Math.sqrt(ideal / current)));
+  function observeDuty(flops, ownMs) {
+    if (!schedule?.targetDutyMs) return;
+    adaptiveFlops = adaptDutyFlops({ current: currentDutyFlops(), flops, ownMs, targetMs: schedule.targetDutyMs,
+      bounds: schedule.dutyFlopsBounds ?? [5e8, 6.4e10] });
   }
   const stats = { dispatches: 0, pipelines: 0, createdBuffers: 0, createdBytes: 0, liveBytes: 0, peakLiveBytes: 0, flushes: 0,
     duties: 0, dutyHistory: [] };
@@ -140,10 +151,53 @@ export function createSuperMatOps(device, options = {}) {
     return { buffer, offset: 0, size };
   }
 
+  // Under a schedule, every compute pass of a duty writes begin/end GPU
+  // timestamps (when the device has timestamp-query); the duty's GPU time is
+  // last end - first begin. Foreground frames are separate submissions and
+  // cannot interleave inside it.
+  const DUTY_QUERY_CAPACITY = 128;
+  const timestamps = device.features?.has?.('timestamp-query') ?? false;
+  let dutyQuery = null;
   function ensurePass() {
     encoder ??= device.createCommandEncoder({ label: `${label}.encoder` });
+    if (!pass && schedule && timestamps) {
+      dutyQuery ??= { set: device.createQuerySet({ type: 'timestamp', count: DUTY_QUERY_CAPACITY }), used: 0, incomplete: false };
+      if (dutyQuery.used + 2 <= DUTY_QUERY_CAPACITY) {
+        pass = encoder.beginComputePass({ label: `${label}.pass`, timestampWrites: { querySet: dutyQuery.set,
+          beginningOfPassWriteIndex: dutyQuery.used, endOfPassWriteIndex: dutyQuery.used + 1 } });
+        dutyQuery.used += 2;
+      } else dutyQuery.incomplete = true;
+    }
     pass ??= encoder.beginComputePass({ label: `${label}.pass` });
     return pass;
+  }
+
+  // Encode the resolve of the current duty's timestamps; returns a reader that
+  // yields the duty's GPU milliseconds (null when incomplete or unavailable).
+  function resolveDutyTimestamps() {
+    const query = dutyQuery;
+    dutyQuery = null;
+    if (!query?.used || !encoder) { query?.set.destroy(); return null; }
+    const bytes = query.used * 8;
+    const resolve = device.createBuffer({ size: bytes, usage: 0x0200 | 0x0004 }); // QUERY_RESOLVE | COPY_SRC
+    const readback = device.createBuffer({ size: bytes, usage: 0x0001 | 0x0008 }); // MAP_READ | COPY_DST
+    encoder.resolveQuerySet(query.set, 0, query.used, resolve, 0);
+    encoder.copyBufferToBuffer(resolve, 0, readback, 0, bytes);
+    return async () => {
+      try {
+        await readback.mapAsync(0x0001);
+        const values = new BigUint64Array(readback.getMappedRange().slice(0));
+        readback.unmap();
+        let begin = null, end = null;
+        for (let index = 0; index < values.length; index += 2) {
+          const b = values[index], e = values[index + 1];
+          if (!b || !e || e < b) return null;
+          if (begin === null || b < begin) begin = b;
+          if (end === null || e > end) end = e;
+        }
+        return query.incomplete || begin === null ? null : Number(end - begin) / 1e6;
+      } catch { return null; } finally { readback.destroy(); resolve.destroy(); query.set.destroy(); }
+    };
   }
 
   function dispatch(code, views, groups) {
@@ -181,6 +235,7 @@ export function createSuperMatOps(device, options = {}) {
     if (pass) { pass.end(); pass = null; }
     throwIfStopped();
     if (!encoder) return;
+    const readGpuMs = resolveDutyTimestamps();
     const commands = encoder.finish();
     encoder = null;
     const buffers = transient;
@@ -195,8 +250,12 @@ export function createSuperMatOps(device, options = {}) {
         metadata: { model: 'supermat', estimatedFlops: flops } }, invocation);
       throwIfStopped();
       runtime.settleCommandDuty(descriptor, { status: 'encoded' });
+      // Resolves when the work queued ahead (foreground frames) completes,
+      // which is when this duty starts executing.
+      precedingDone = device.queue.onSubmittedWorkDone().then(() => performance.now());
       device.queue.submit([commands]);
     };
+    let precedingDone = null;
     const gateStart = performance.now();
     let submitted = null;
     const timed = async () => { await work(); submitted = performance.now(); };
@@ -205,12 +264,25 @@ export function createSuperMatOps(device, options = {}) {
     const row = { label, estimatedFlops: flops, submittedAt: submitted, gateWaitMs: submitted - gateStart };
     stats.dutyHistory.push(row);
     row.dutyFlopsBudget = currentDutyFlops();
-    lastFence = device.queue.onSubmittedWorkDone().then(() => {
-      row.queueMs = performance.now() - submitted;
-      observeDuty(flops, row.queueMs);
+    lastFence = device.queue.onSubmittedWorkDone().then(async () => {
+      const doneAt = performance.now();
+      const precedingDoneAt = await precedingDone;
+      row.queueMs = doneAt - submitted;
+      row.ownMs = dutyExecutionMs({ submittedAt: submitted, precedingDoneAt, doneAt });
+      row.gpuMs = readGpuMs ? await readGpuMs() : null;
+      // GPU timestamps when available; the fence-derived estimate otherwise
+      // (Chrome can deliver completion callbacks late and in batches).
+      observeDuty(flops, row.gpuMs ?? row.ownMs);
       try { schedule?.onDuty?.(row); } catch { /* telemetry must not fail inference */ }
       for (const buffer of buffers) buffer.destroy();
     });
+  }
+
+  // Before encoding work of `flops`, submit what is pending if adding it would
+  // carry the current duty past its budget, so duties stay near the budget.
+  async function admit(flops, label) {
+    if (!schedule || pendingFlops <= 0) return;
+    if (pendingFlops + flops > currentDutyFlops()) await submitDuty(`${label}:before`);
   }
 
   // Graph yield point: submit once the encoded block reaches the duty budget.
@@ -244,12 +316,17 @@ export function createSuperMatOps(device, options = {}) {
     pendingFlops = 0;
     lastFence = Promise.resolve();
   }
-  const scheduleState = () => ({ adaptiveFlops, currentDutyFlops: currentDutyFlops() });
+  const scheduleState = () => ({ adaptiveFlops, currentDutyFlops: currentDutyFlops(), targetDutyMs: schedule?.targetDutyMs ?? null });
+
+  // CPU-side waits on already-submitted GPU work run inside the schedule's
+  // foreground window (schedule.waitWindow) so foreground frames keep being
+  // serviced; GPU boundaries never happen inside it.
+  const waitOutside = work => schedule?.waitWindow ? schedule.waitWindow(work) : work();
 
   async function flush() {
     if (schedule) {
       await submitDuty('flush');
-      await lastFence;
+      await waitOutside(() => lastFence);
       return;
     }
     if (pass) { pass.end(); pass = null; }
@@ -321,11 +398,13 @@ export function createSuperMatOps(device, options = {}) {
     const flops = 2 * spec.M * spec.N * spec.K * batch;
     const budget = schedule ? currentDutyFlops() : 0;
     if (!budget || flops <= budget) {
+      await admit(flops, spec.name ?? 'gemm');
       issueGemm({ ...spec, c });
     } else {
       const perColumn = 2 * spec.M * spec.K * batch;
       const columns = Math.max(tileShape.bn, Math.floor(budget / perColumn / tileShape.bn) * tileShape.bn);
       for (let nBase = 0; nBase < spec.N; nBase += columns) {
+        await admit(perColumn * Math.min(columns, spec.N - nBase), `${spec.name ?? 'gemm'}[${nBase}]`);
         issueGemm({ ...spec, c, nBase, nCount: Math.min(columns, spec.N - nBase) });
         await yieldPoint(`${spec.name ?? 'gemm'}[${nBase}]`);
       }
@@ -374,6 +453,7 @@ export function createSuperMatOps(device, options = {}) {
       : Math.max(FLASH_QUERY_TILE, Math.floor(budget / (4 * keys * FLASH_HEAD_DIM * heads) / FLASH_QUERY_TILE) * FLASH_QUERY_TILE);
     for (let rowBase = 0; rowBase < queries; rowBase += rows) {
       const count = Math.min(rows, queries - rowBase);
+      await admit(4 * count * keys * FLASH_HEAD_DIM * heads, `${name}[${rowBase}]`);
       const words = new Uint32Array(8);
       const floats = new Float32Array(words.buffer);
       words.set([queries, keys, channels, channels, channels, rowBase], 0);
@@ -456,7 +536,7 @@ export function createSuperMatOps(device, options = {}) {
     const staging = device.createBuffer({ label: `${label}.readback`, size: view.size, usage: 0x0001 | COPY_DST });
     copy(tensor, { buffer: staging, offset: 0, byteLength: view.size }, { size: view.size });
     await flush();
-    await staging.mapAsync(0x0001);
+    await waitOutside(() => staging.mapAsync(0x0001));
     const values = new Float32Array(staging.getMappedRange().slice(0));
     staging.unmap();
     staging.destroy();

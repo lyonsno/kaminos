@@ -11,6 +11,7 @@ import {
   requestBrowserWebGpuDevice,
 } from '../../webgpu-inference-kit/src/core.js';
 import { createSuperMatAdapter, SUPERMAT_ROUTE_ID, superMatDeviceOptions } from './supermat-route.js';
+import { frameStats } from './frame-stats.js';
 import { decodeImageRgba } from './supermat-image.js';
 import { compositeOnGray, resizeRgbaBilinear } from './supermat-preprocess.js';
 
@@ -23,6 +24,8 @@ const autopauseMs = params.has('autopause') ? Number(params.get('autopause')) : 
 const pauseForMs = Number(params.get('pausefor') ?? 1500);
 const autostopMs = params.has('autostop') ? Number(params.get('autostop')) : null;
 const repeat = Math.max(1, Number(params.get('repeat') ?? 1));
+// Cooperative duty target in ms of completed queue time (route default when absent).
+const dutyMs = params.has('dutyMs') ? Number(params.get('dutyMs')) : null;
 // URL-supplied images run only with ?autorun=1 (agent smokes); chosen or
 // dropped images wait for Infer materials.
 const autorun = params.get('autorun') === '1';
@@ -30,6 +33,10 @@ const state = window.__supermatDemo = { status: 'loading', error: null, runs: []
 const $ = id => document.getElementById(id);
 $('cooperative').checked = params.get('cooperative') !== '0';
 if (params.get('size')) $('size').value = params.get('size');
+if (dutyMs > 0) {
+  if (![...$('chunk').options].some(option => Number(option.value) === dutyMs)) $('chunk').append(new Option(`${dutyMs} ms`, String(dutyMs)));
+  $('chunk').value = String(dutyMs);
+}
 const attention = params.get('attention') ?? 'streaming';
 let adapter, device, session, foreground, current = null, lastResult = null, active = null;
 
@@ -125,22 +132,16 @@ function startScene() {
     handle.completion.then(receipt => {
       if (receipt.status !== 'completed') return;
       const now = performance.now();
-      if (frames.last !== null && frames.gaps) frames.gaps.push(now - frames.last);
+      if (frames.last !== null && frames.gaps) { frames.gaps.push(now - frames.last); frames.times?.push(now); }
       frames.last = now;
       frames.completed++;
-      requestAnimationFrame(frame);
+      // ?scene=0 (diagnostic): draw once, then leave the scene still.
+      if (params.get('scene') !== '0') requestAnimationFrame(frame);
     });
   };
   requestAnimationFrame(frame);
 }
 
-function frameStats(gaps) {
-  if (!gaps?.length) return null;
-  const sorted = [...gaps].sort((a, b) => a - b);
-  const at = q => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
-  return { frames: gaps.length, p50: at(0.5), p95: at(0.95), p99: at(0.99), max: sorted.at(-1),
-    over33ms: gaps.filter(gap => gap > 33.3).length, over100ms: gaps.filter(gap => gap > 100).length };
-}
 
 const PHASE_NAMES = { preprocess: 'Preprocess', encode: 'Image encoder', unet: 'UNet', 'decode-albedo': 'Decode albedo',
   'decode-orm': 'Decode roughness/metal', 'pack-maps': 'Pack maps' };
@@ -185,6 +186,9 @@ async function load(blob, label, { runNow = false } = {}) {
     setStatus(`Loaded ${current.width}×${current.height}. Press Infer materials.`);
     if (!runNow) return;
     for (let index = 0; index < repeat; index++) {
+      // ?alternate=1 (diagnostic): alternate blocking and cooperative runs in one
+      // session so slow drift in outside GPU load cancels within each pair.
+      if (params.get('alternate') === '1') $('cooperative').checked = index % 2 === 1;
       await infer({ final: index === repeat - 1 });
       if (state.runs.at(-1)?.status !== 'done') break;
     }
@@ -198,6 +202,7 @@ async function infer({ final = true } = {}) {
   const abort = new AbortController();
   const frames = state.scene;
   frames.gaps = [];
+  frames.times = [];
   const size = Number($('size').value);
   const record = { runId, cooperative, size, attention, pauses: [] };
   active = { abort, control: null, record };
@@ -236,7 +241,8 @@ async function infer({ final = true } = {}) {
       active?.abort.abort(new Error('stopped by autostop'));
     }, autostopMs);
     const job = route.enqueue({ jobId: runId, execute: invocation => adapter.run({ image: current, size, onRunProgress: showProgress,
-      schedule: cooperative ? { runtime: route.runtime, invocation, control, signal: abort.signal } : null }) });
+      schedule: cooperative ? { runtime: route.runtime, invocation, control, signal: abort.signal,
+        targetDutyMs: Number($('chunk').value), withForeground: frameRun.withForeground } : null }) });
     const completion = await job.completion;
     if (completion.status !== 'succeeded') {
       const failure = completion.failure;
@@ -249,7 +255,11 @@ async function infer({ final = true } = {}) {
     record.wallMs = wallMs;
     record.timings = lastResult.timings;
     record.dutyCount = lastResult.dutyCount;
+    record.targetDutyMs = lastResult.schedule?.targetDutyMs ?? null;
     record.longestDutyQueueMs = Math.max(0, ...lastResult.duties.map(duty => duty.queueMs ?? 0));
+    // Per-duty timeline (ms since run start) for scheduling diagnosis.
+    record.dutyTimeline = lastResult.duties.map(({ label, estimatedFlops, submittedAt, gateWaitMs, queueMs, ownMs, gpuMs, dutyFlopsBudget }) =>
+      ({ label, gflops: estimatedFlops / 1e9, at: submittedAt - started, gateWaitMs, queueMs, ownMs, gpuMs, budgetGflops: dutyFlopsBudget / 1e9 }));
     record.slowestDuties = [...lastResult.duties].sort((a, b) => (b.queueMs ?? 0) - (a.queueMs ?? 0)).slice(0, 6)
       .map(({ label, queueMs, estimatedFlops, gateWaitMs }) => ({ label, queueMs, gflops: estimatedFlops / 1e9, gateWaitMs }));
     render();
@@ -267,7 +277,10 @@ async function infer({ final = true } = {}) {
     if (route) { await route.drain(); session.unregisterRoute(route.routeId); }
     if (frameRun) await frameRun.finish();
     record.frames = frameStats(frames.gaps);
+    // Every completed scene frame during the run (ms since run start, gap to the previous frame).
+    record.frameTimeline = frames.times.map((time, index) => ({ at: time - started, gapMs: frames.gaps[index] }));
     frames.gaps = null;
+    frames.times = null;
     state.runs.push(record);
     showRun(record);
     if (state.status !== 'error') state.status = final || record.status !== 'done' ? record.status : 'running';
@@ -283,8 +296,9 @@ function showRun(record) {
   if (t) lines.push(`preprocess ${ms(t.preprocessMs)} · encode ${ms(t.encodeMs)} · unet ${ms(t.unetMs)}`
     + ` · decode albedo ${ms(t.decodeAlbedoMs)} · decode orm ${ms(t.decodeOrmMs)}`
     + (record.dutyCount ? ` · ${record.dutyCount} duties, longest ${ms(record.longestDutyQueueMs)}` : ''));
-  if (f) lines.push(`scene during run: ${f.frames} frames · p50 ${ms(f.p50)} · p95 ${ms(f.p95)} · max ${ms(f.max)}`
-    + ` · ${f.over33ms} gaps > 33 ms · ${f.over100ms} gaps > 100 ms`);
+  if (f) lines.push(`scene during run: ${f.frames} frames · p50 ${ms(f.p50)} · p95 ${ms(f.p95)} · p99 ${ms(f.p99)} · max ${ms(f.max)}`
+    + ` · ${f.budget.missedFrames} missed vsyncs over ${f.budget.framesMissingVsync} frames · hitches ${f.hitches.over50ms} > 50 ms,`
+    + ` ${f.hitches.over100ms} > 100 ms`);
   for (const pause of record.pauses) lines.push(`paused ${ms(pause.heldMs)} after ${ms(pause.pauseSettledMs)} to settle;`
     + ` scene drew ${pause.framesDuringPause} frames while paused`);
   if (adapter) lines.push(`route ${adapter.identity.routeId} · backend ${adapter.identity.backend} · weights ${adapter.identity.weightDtype}`
@@ -333,6 +347,7 @@ drop.addEventListener('drop', event => {
 });
 
 try {
+  if (dutyMs !== null && !(dutyMs > 0)) throw new Error(`dutyMs must be a positive number, got ${params.get('dutyMs')}`);
   if (!navigator.gpu) throw new Error('WebGPU is not available in this browser');
   const context = await requestBrowserWebGpuDevice(navigator.gpu, await superMatDeviceOptions(navigator.gpu, { adapterName: 'supermat-demo' }));
   device = context.device;
@@ -362,7 +377,7 @@ try {
   state.status = 'ready';
   const lf = state.loadFrames;
   setStatus(`Model resident (${(adapter.weightLoadMs / 1000).toFixed(1)} s load via ${adapter.identity.weightLoading}`
-    + `${lf ? `; scene p95 ${lf.p95.toFixed(0)} ms, max ${lf.max.toFixed(0)} ms while loading` : ''}). Choose or drop an image.`);
+    + `${lf ? `; scene p95 ${lf.p95.toFixed(0)} ms, max ${lf.max.toFixed(0)} ms, ${lf.budget.missedFrames} missed vsyncs while loading` : ''}). Choose or drop an image.`);
   if (imageUrl) {
     const response = await fetch(imageUrl);
     if (!response.ok) throw new Error(`image ${imageUrl}: HTTP ${response.status}`);

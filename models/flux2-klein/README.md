@@ -11,7 +11,7 @@ Generate images from a text prompt with [FLUX.2 [klein] 4B](https://huggingface.
 ## What it does
 
 - **The whole model in the browser.** The Qwen3-4B text encoder (the 27 layers whose hidden states the model reads), the 4-step rectified-flow transformer and the VAE decoder all run as WGSL compute shaders.
-- **A 3.6 GB download, cached.** Weights are int4 (group-wise, weight-only), packed per block, downloaded as gzip copies that the page inflates, and kept in the browser's Cache API after the first visit. The 0.8 GB token-embedding table is never downloaded whole: the page fetches only the rows a prompt uses, with HTTP range requests.
+- **A 3.2 GB download, cached.** Weights are int4 (groups of 128, weight-only), packed per block, downloaded as gzip copies that the page inflates, and kept in the browser's Cache API after the first visit. The 0.8 GB token-embedding table is never downloaded whole: the page fetches only the rows a prompt uses, with HTTP range requests.
 - **Room for the application to keep rendering.** Model work is submitted as inference-kit command duties sized to measured GPU throughput, so a renderer on the same device keeps its frame rate during generation. Generation can be paused, resumed and stopped between duties.
 - **Same output either way.** A generation that shares the GPU produces the same pixels as one that runs without yielding, and on a given machine and browser the same seed and prompt reproduce the same image.
 
