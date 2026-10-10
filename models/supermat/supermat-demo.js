@@ -342,7 +342,7 @@ try {
   state.scene.gaps = [];
   const weightsRoute = await session.registerRoute({ routeId: `${SUPERMAT_ROUTE_ID}.resident-weights` });
   adapter = await createSuperMatAdapter({ route: weightsRoute, weightsUrl, attention,
-    weightLoading: params.get('weightLoading') ?? 'auto', onProgress(event) {
+    weightLoading: params.get('weightLoading') ?? 'auto', gemmPrecision: params.get('precision') ?? 'f32', onProgress(event) {
     if (event.phase === 'weights') {
       const mb = value => (value / 1e6).toFixed(0);
       setStatus(`Loading weights ${event.resourceIndex + 1}/${event.resourceCount} (${event.resourceId}`

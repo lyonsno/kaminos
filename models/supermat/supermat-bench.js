@@ -57,10 +57,11 @@ const CASES = [
 ];
 
 export const BENCH_VARIANTS = [
-  { id: 'tiled-f32', gemmKernel: 'tiled', f16: false },
-  { id: 'sgmatrix-f32', gemmKernel: 'subgroup-matrix', f16: false },
-  { id: 'tiled-f16w', gemmKernel: 'tiled', f16: true },
-  { id: 'sgmatrix-f16w', gemmKernel: 'subgroup-matrix', f16: true },
+  { id: 'f32-f32w', f16: false },
+  { id: 'f32-f16w', f16: true },
+  { id: 'f16tiles-f16w', f16: true, gemmPrecision: 'f16-tiles' },
+  { id: 'f16partial-f16w', f16: true, gemmPrecision: 'f16-partial' },
+  { id: 'sgmatrix-f16w', f16: true, gemmKernel: 'subgroup-matrix' },
 ];
 
 export async function runSuperMatBench({ iterations = 6, variants = BENCH_VARIANTS, cases = CASES } = {}) {
@@ -75,7 +76,8 @@ export async function runSuperMatBench({ iterations = 6, variants = BENCH_VARIAN
       for (const variant of variants) {
         if (testCase.kind === 'attention' && variant.f16) continue;
         if (variant.attentionOnly && testCase.kind !== 'attention') continue;
-        const ops = createSuperMatOps(device, { label: `bench.${variant.id}`, gemmKernel: variant.gemmKernel,
+        const ops = createSuperMatOps(device, { label: `bench.${variant.id}`, gemmKernel: variant.gemmKernel ?? 'tiled',
+          gemmPrecision: variant.gemmPrecision ?? 'f32',
           attentionKernel: variant.attentionKernel ?? 'scalar' });
         const inputs = [];
         let flops, run;

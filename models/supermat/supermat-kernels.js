@@ -88,7 +88,12 @@ ${bindings.join('\n')}`;
   return { header, loaders, epilogue };
 }
 
-export function gemmShader({ tile = {}, ...layout } = {}) {
+// precision: 'f32' (default); 'f16-tiles' rounds both operand tiles to f16 in
+// workgroup memory and multiplies in F32; 'f16-partial' also multiplies and
+// accumulates each bk-wide K step in f16, adding the partial into F32 per step.
+// Both f16 modes require the shader-f16 feature.
+export function gemmShader({ tile = {}, precision = 'f32', ...layout } = {}) {
+  if (precision !== 'f32') return gemmShaderF16({ tile, precision, ...layout });
   const { tm, tn, bk, bm, bn } = gemmTileShape(tile);
   const { header, loaders, epilogue } = gemmParts(layout, { bm, bn, bk, threads: 256 });
   return `
@@ -109,6 +114,46 @@ ${loaders}
       for(var j=0u;j<${tn}u;j++){bv[j]=tile_b[kk*${bn}u+lid.x+16u*j];}
       for(var i=0u;i<${tm}u;i++){for(var j=0u;j<${tn}u;j++){acc[i][j]=fma(av[i],bv[j],acc[i][j]);}}
     }
+    workgroupBarrier();
+  }
+  for(var i=0u;i<${tm}u;i++){
+    let m=m0+lid.y+16u*i;
+    if(m>=p.M){continue;}
+    for(var j=0u;j<${tn}u;j++){
+      let n=n0+lid.x+16u*j;
+      if(n>=p.N){continue;}
+      ${epilogue.replace('ACC', 'acc[i][j]')}
+    }
+  }
+}`;
+}
+
+function gemmShaderF16({ tile = {}, precision, ...layout }) {
+  const { tm, tn, bk, bm, bn } = gemmTileShape(tile);
+  const { header, loaders, epilogue } = gemmParts(layout, { bm, bn, bk, threads: 256 });
+  const half = precision === 'f16-partial';
+  return `enable f16;
+${header}
+var<workgroup> tile_a:array<f16,${bk * bm}>;
+var<workgroup> tile_b:array<f16,${bk * bn}>;
+@compute @workgroup_size(16,16)
+fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:vec3<u32>) {
+  let tid=lid.y*16u+lid.x;
+  let m0=wid.y*${bm}u;let n0=p.n_base+wid.x*${bn}u;let bat=wid.z;
+  var acc:array<array<f32,${tn}>,${tm}>;
+  for(var k0=0u;k0<p.K;k0+=${bk}u){
+${loaders.replaceAll('tile_a[kk*', 'tile_a[kk*').replace(/(tile_a\[[^\]]+\])=value;/, '$1=f16(value);').replace(/(tile_b\[[^\]]+\])=value;/, '$1=f16(value);')}
+    workgroupBarrier();
+    ${half ? `var part:array<array<f16,${tn}>,${tm}>;` : ''}
+    for(var kk=0u;kk<${bk}u;kk++){
+      var av:array<f16,${tm}>;var bv:array<f16,${tn}>;
+      for(var i=0u;i<${tm}u;i++){av[i]=tile_a[kk*${bm}u+lid.y+16u*i];}
+      for(var j=0u;j<${tn}u;j++){bv[j]=tile_b[kk*${bn}u+lid.x+16u*j];}
+      for(var i=0u;i<${tm}u;i++){for(var j=0u;j<${tn}u;j++){
+        ${half ? 'part[i][j]=fma(av[i],bv[j],part[i][j]);' : 'acc[i][j]=fma(f32(av[i]),f32(bv[j]),acc[i][j]);'}
+      }}
+    }
+    ${half ? `for(var i=0u;i<${tm}u;i++){for(var j=0u;j<${tn}u;j++){acc[i][j]+=f32(part[i][j]);}}` : ''}
     workgroupBarrier();
   }
   for(var i=0u;i<${tm}u;i++){

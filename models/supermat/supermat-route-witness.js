@@ -9,6 +9,8 @@ import { decodeImageRgba } from './supermat-image.js';
 // F16 weight storage gets its own bar (declared before its first run).
 export const ROUTE_TOLERANCE = Object.freeze({ relativeL2: 1e-3, cosine: 0.9999, maxAbs: 2e-3 });
 export const ROUTE_TOLERANCE_F16_WEIGHTS = Object.freeze({ relativeL2: 1e-2, cosine: 0.9999, maxAbs: 0.03 });
+// F16 GEMM arithmetic (declared before its first run): looser, characterization bar.
+export const ROUTE_TOLERANCE_F16_COMPUTE = Object.freeze({ relativeL2: 3e-2, cosine: 0.999, maxAbs: 0.1 });
 
 async function fetchFloat(manifest, name) {
   const row = manifest.tensors[name];
@@ -34,9 +36,9 @@ function byteDifference(a, b) {
   return { differing: count, maxDifference: max, total: a.length };
 }
 
-export async function runSuperMatRouteWitness({ fixtureSha256, weightsSha256, runs = 2 }) {
+export async function runSuperMatRouteWitness({ fixtureSha256, weightsSha256, runs = 2, adapterOptions = {} }) {
   const result = { schema: 'supermat.route-witness.browser.v0', status: 'failed', phase: 'admission',
-    fixtureSha256, weightsSha256, tolerance: ROUTE_TOLERANCE, runs: [] };
+    fixtureSha256, weightsSha256, tolerance: ROUTE_TOLERANCE, runs: [], adapterOptions };
   let session, route, adapter;
   try {
     const reference = await (await fetch('/fixture/manifest.json', { cache: 'no-store' })).json();
@@ -49,9 +51,10 @@ export async function runSuperMatRouteWitness({ fixtureSha256, weightsSha256, ru
     result.adapter = route.runtime.backendIdentity ?? null;
 
     result.phase = 'weights';
-    adapter = await createSuperMatAdapter({ route, weightsUrl: '/weights/' });
+    adapter = await createSuperMatAdapter({ route, weightsUrl: '/weights/', ...adapterOptions });
     result.identity = adapter.identity;
-    const tolerance = adapter.identity.weightDtype === 'f16' ? ROUTE_TOLERANCE_F16_WEIGHTS : ROUTE_TOLERANCE;
+    const tolerance = adapter.identity.gemmPrecision !== 'f32' ? ROUTE_TOLERANCE_F16_COMPUTE
+      : adapter.identity.weightDtype === 'f16' ? ROUTE_TOLERANCE_F16_WEIGHTS : ROUTE_TOLERANCE;
     result.tolerance = tolerance;
     result.weightLoadMs = adapter.weightLoadMs;
 

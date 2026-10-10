@@ -65,7 +65,7 @@ async function runCpuPhase(useWorker, operationId, payload, transfer, signal) {
 }
 
 export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgress, cpuWorker = typeof Worker !== 'undefined',
-  attention = 'streaming', gemmKernel = 'tiled', weightLoading = 'auto' } = {}) {
+  attention = 'streaming', gemmKernel = 'tiled', weightLoading = 'auto', gemmPrecision = 'f32' } = {}) {
   if (!['auto', 'chunks', 'bundle'].includes(weightLoading)) throw new Error(`unknown weight loading mode ${weightLoading}`);
   if (!route?.runtime?.device || typeof route.loadModelResourcesFromSource !== 'function') {
     throw new Error('SuperMat adapter requires a registered kit session route');
@@ -110,11 +110,11 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
   const weightLoadMs = performance.now() - loadStart;
   const w = createWeightAccessor(tensors);
   const device = route.runtime.device;
-  const ops = createSuperMatOps(device, { label: 'supermat', attention, gemmKernel });
+  const ops = createSuperMatOps(device, { label: 'supermat', attention, gemmKernel, gemmPrecision });
   const identity = Object.freeze({
     routeId: SUPERMAT_ROUTE_ID, backend: 'webgpu-local', modelId: 'supermat.single-image',
     revision: weightPackage.revision, weightDtype: weightPackage.dtype ?? 'f32', defaultImageSize: SUPERMAT_IMAGE_SIZE, attention,
-    gemmKernel: ops.gemmKernel, weightLoading: [...loadedVia].join('+'),
+    gemmKernel: ops.gemmKernel, gemmPrecision, weightLoading: [...loadedVia].join('+'),
     provenance: weightPackage.provenance,
   });
   let runs = 0, released = false, busy = false;

@@ -45,7 +45,9 @@ export function subgroupMatrixUsable(device) {
 }
 
 export function createSuperMatOps(device, { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 },
-  attentionKernel = 'scalar', gemmKernel = 'tiled' } = {}) {
+  attentionKernel = 'scalar', gemmKernel = 'tiled', gemmPrecision = 'f32' } = {}) {
+  if (!['f32', 'f16-tiles', 'f16-partial'].includes(gemmPrecision)) throw new Error(`unknown gemm precision ${gemmPrecision}`);
+  if (gemmPrecision !== 'f32' && !device.features.has('shader-f16')) throw new Error(`${gemmPrecision} GEMM needs the shader-f16 feature`);
   if (!['auto', 'tiled', 'subgroup-matrix'].includes(gemmKernel)) throw new Error(`unknown gemm kernel ${gemmKernel}`);
   const subgroupMatrix = gemmKernel === 'subgroup-matrix' || (gemmKernel === 'auto' && subgroupMatrixUsable(device));
   if (subgroupMatrix && !subgroupMatrixUsable(device)) throw new Error('subgroup-matrix GEMM requested but unavailable on this device');
@@ -270,7 +272,7 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
     const layout = {
       aKContiguous: spec.aSK === 1, bNContiguous: spec.bSN === 1,
       biasM: Boolean(spec.biasM), biasM2: Boolean(spec.biasM2), biasN: Boolean(spec.biasN),
-      residual: Boolean(spec.residual), conv: spec.conv ?? null, tile: gemmTile,
+      residual: Boolean(spec.residual), conv: spec.conv ?? null, tile: gemmTile, precision: gemmPrecision,
       aF16: spec.a.dtype === 'f16', bF16: spec.b.dtype === 'f16',
     };
     const views = [bindingView(spec.a, 'gemm a'), bindingView(spec.b, 'gemm b')];
@@ -431,5 +433,5 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
 
   return { alloc, release, gemm, conv2d, groupNorm, layerNorm, softmax, geglu, affine, copy, upload, read, flush, yieldPoint,
     setSchedule, scheduleState, discard, destroy, stats, flashAttention,
-    attentionMode: attention, gemmTile: tileShape, gemmKernel: subgroupMatrix ? 'subgroup-matrix' : 'tiled' };
+    attentionMode: attention, gemmTile: tileShape, gemmPrecision, gemmKernel: subgroupMatrix ? 'subgroup-matrix' : 'tiled' };
 }
