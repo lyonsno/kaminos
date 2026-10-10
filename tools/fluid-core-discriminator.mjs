@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {fluidBrowserLaunch} from '../finger-fluid-browser-launch.mjs';
 import {discriminatorConfiguration,BASE_VOLUME} from '../fluid-core-discriminator-view.mjs';
-import {validateDiscriminatorState,summarizeParticleState} from './fluid-discriminator-evidence.mjs';
+import {validateDiscriminatorState,summarizeParticleState,collectDiscriminatorSources,verifyDiscriminatorServedSources,withDiscriminatorCleanup} from './fluid-discriminator-evidence.mjs';
 
 const arg=k=>{const i=process.argv.indexOf(k);if(i<0||!process.argv[i+1])throw Error('Required '+k);return process.argv[i+1];};
 const out=arg('--out-dir');mkdirSync(out,{recursive:true});
@@ -21,15 +21,17 @@ try {
   report.requested={root,revision,base,basinSteps:[1,30,90,180],dropSteps:[1,6,12],dt:1/60};
   report.phase='source-preflight';save();assert.equal(git('rev-parse','HEAD'),revision,'Wrong source revision');
   assert.equal(git('status','--porcelain'),'','Dirty source cannot identify this experiment');
-  const names=['finger-fluid-webgpu-core.js','finger-fluid-ipbf-wgsl.mjs','finger-fluid-akinci.mjs','finger-fluid-discriminator.mjs','fluid-core-discriminator.html','fluid-core-discriminator-view.mjs','tools/fluid-discriminator-evidence.mjs','tools/fluid-core-discriminator.mjs'];
-  report.source={root,revision,files:names.map(name=>({name,sha256:sha(readFileSync(root+'/'+name))}))};
-  for(const f of report.source.files){const r=await fetch(new URL(f.name,base+'/'));assert.ok(r.ok,'Served source missing');assert.equal(sha(await r.text()),f.sha256,'Served source differs: '+f.name);}
+  report.source={root,revision,dependencyContract:'local-static-ESM-and-external-module-script-closure',files:collectDiscriminatorSources(root,['fluid-core-discriminator.html','tools/fluid-core-discriminator.mjs'])};
+  await verifyDiscriminatorServedSources(report.source.files,base);
   report.lastTrustworthyEvidence='frozen-source-and-served-source-match';report.phase='browser-launch';save();
-  const launch=fluidBrowserLaunch({executable:process.env.KAMINOS_CHROME,debugPort:0,userDataDir:out+'/browser-profile',width:1280,height:900});launch.args.push('--headless=new','--enable-unsafe-webgpu','--use-angle=metal');report.browser=launch;
+  const launch=fluidBrowserLaunch({executable:process.env.KAMINOS_CHROME,debugPort:0,userDataDir:out+'/browser-profile',width:1280,height:900});launch.args.push('--headless=new','--enable-unsafe-webgpu','--use-angle=metal','--disable-features=AperitifHelpers');report.browser={...launch,events:[]};
   browser=spawn(launch.executable,launch.args,{stdio:['ignore','pipe','pipe']});report.browser.pid=browser.pid;
   browser.stderr.on('data',b=>writeFileSync(out+'/browser-stderr.log',b,{flag:'a'}));
+  browser.stdout.on('data',b=>writeFileSync(out+'/browser-stdout.log',b,{flag:'a'}));
+  browser.on('exit',(code,signal)=>{report.browser.events.push({type:'exit',code,signal});save();});
   const endpoint=await new Promise((resolve,reject)=>{let text='';browser.once('error',reject);browser.once('exit',c=>reject(Error('Browser exited before CDP '+c)));browser.stderr.on('data',b=>{text+=b;const m=text.match(/DevTools listening on (ws:\/\/[^\s]+)/);if(m)resolve(m[1]);});});
-  ws=new WebSocket(endpoint);ws.addEventListener('close',()=>disconnect('Browser connection closed'));browser.once('exit',()=>disconnect('Owned browser exited'));
+  ws=new WebSocket(endpoint);ws.addEventListener('close',e=>{report.browser.events.push({type:'cdp-close',code:e.code,reason:e.reason});save();disconnect('Browser connection closed: '+e.code+' '+e.reason);});
+  ws.addEventListener('error',e=>{report.browser.events.push({type:'cdp-error',error:e.error?.stack??e.message??String(e)});save();disconnect('Browser WebSocket error: '+(e.error?.message??e.message??String(e)));});browser.once('exit',()=>disconnect('Owned browser exited'));
   ws.addEventListener('message',e=>{const r=JSON.parse(e.data);if(r.id){const p=pending.get(r.id);if(p){pending.delete(r.id);r.error?p.reject(Error(JSON.stringify(r.error))):p.resolve(r.result);}}});
   await new Promise((r,j)=>{ws.addEventListener('open',r,{once:true});ws.addEventListener('error',j,{once:true});});
   report.browser.version=await call('Browser.getVersion');
@@ -37,7 +39,7 @@ try {
     const directory=out+'/'+fixture+'-'+arm+'-'+gamma;mkdirSync(directory,{recursive:true});
     const url=new URL('fluid-core-discriminator.html',base+'/');url.search=new URLSearchParams({arm,fixture,gamma:String(gamma),harness:'1'});
     const {targetId}=await call('Target.createTarget',{url:'about:blank'}),{sessionId}=await call('Target.attachToTarget',{targetId,flatten:true});
-    try {
+    return withDiscriminatorCleanup(async()=>{
       await call('Page.enable',{},sessionId);await call('Runtime.enable',{},sessionId);
       const loaded=new Promise(resolve=>{const handler=e=>{const r=JSON.parse(e.data);if(r.sessionId===sessionId&&r.method==='Page.loadEventFired'){ws.removeEventListener('message',handler);resolve();}};ws.addEventListener('message',handler);});
       const nav=await call('Page.navigate',{url:url.href},sessionId);if(nav.errorText||nav.isDownload)throw Error('Navigation failed');await loaded;
@@ -50,12 +52,13 @@ try {
       for(const step of steps) {
         report.phase=fixture+'-'+arm+'-step-'+step;save();
         await evaluate('window.discriminator.advance('+String(step-previous)+')',sessionId);previous=step;
-        const snapshot=await evaluate('(async()=>{const diagnostics=await discriminator.snapshot(),d=discriminator.debug();return {adapter:d.adapterInfo,dynamics:d.diagnosticDynamics,pressure:d.ipbfSettings,surface:d.cohesionSettings,step:d.stepCount,words:diagnostics.particleSnapshot.words,diagnostics:{...diagnostics,particleSnapshot:undefined},stages:{density:d.densityIterationCount,surface:d.surfaceForcePassCount,vorticity:d.vorticityPassCount},errors:discriminator.errors};})()',sessionId);
-        const values=validateDiscriminatorState(snapshot,{arm,particleCount:config.particleCount,volume:BASE_VOLUME*config.diagnosticPopulation.particleVolumeScale,radius:.125,surfaceRadius:config.akinciSupportRadius,gamma,step});
+        const snapshot=await evaluate('(async()=>{const diagnostics=await discriminator.snapshot(),d=discriminator.debug();return {adapter:d.adapterInfo,dynamics:d.diagnosticDynamics,pressure:d.ipbfSettings,surface:d.cohesionSettings,step:d.stepCount,particleSnapshot:{...diagnostics.particleSnapshot,words:undefined},words:diagnostics.particleSnapshot.words,diagnostics:{...diagnostics,particleSnapshot:undefined},stages:{density:d.densityIterationCount,surface:d.surfaceForcePassCount,vorticity:d.vorticityPassCount},errors:discriminator.errors};})()',sessionId);
+        const values=validateDiscriminatorState(snapshot,{arm,particleCount:config.particleCount,volume:BASE_VOLUME*config.diagnosticPopulation.particleVolumeScale,radius:.125,surfaceRadius:config.akinciSupportRadius,gamma,step,dt:report.requested.dt});
         assert.equal(snapshot.errors.length,0,'GPU errors');assert.equal(snapshot.stages.density,4*step);assert.equal(snapshot.stages.surface,3*step);assert.equal(snapshot.stages.vorticity,arm==='assembled'?2*Math.ceil(step/3):0);
         if(step>0){const w=snapshot.diagnostics.pressureControlInputs;assert.ok(w?.pressureWords?.length===4&&w.simulationWords?.length===56,'Missing effective GPU input bytes');const pressure=new Float32Array(new Uint32Array(w.pressureWords).buffer),uniform=new Float32Array(new Uint32Array(w.simulationWords).buffer);assert.equal(pressure[0],Math.fround(.125));assert.equal(pressure[1],Math.fround(.0113));assert.equal(uniform[29],Math.fround(gamma));assert.equal(new Uint32Array(w.simulationWords)[1],config.particleCount);}
         const raw=Buffer.from(new Uint32Array(snapshot.words).buffer),stem=directory+'/step-'+step;writeFileSync(stem+'.u32',raw);
-        const capture={step,simulationSeconds:step/60,sha256:sha(raw),rawPath:stem+'.u32',state:summarizeParticleState(values),effective:{...snapshot,words:undefined},views:[]};
+        const effectiveTimestep=new Float32Array(new Uint32Array(snapshot.diagnostics.pressureControlInputs.simulationWords).buffer)[0];
+        const capture={step,simulationSeconds:step*effectiveTimestep,effectiveTimestep,requestedTimestep:report.requested.dt,sha256:sha(raw),rawPath:stem+'.u32',state:summarizeParticleState(values),effective:{...snapshot,words:undefined},views:[]};
         row.captures.push(capture);save();
         for(const mode of ['sphere_debug','screen_space_refraction']) {
           await evaluate('discriminator.render('+JSON.stringify(mode)+')',sessionId);
@@ -65,7 +68,7 @@ try {
         assert.equal(sha(Buffer.from(new Uint32Array(after).buffer)),capture.sha256,'Rendering changed the captured particle state');save();
       }
       await evaluate('discriminator.destroy()',sessionId);return row;
-    } finally {await call('Target.closeTarget',{targetId});}
+    },()=>call('Target.closeTarget',{targetId}),report);
   }
   // Test the finer arm early; a shader or admission defect cannot waste the whole run.
   for(const arm of ['fine','assembled','reduced'])await run(arm,'basin',.19,report.requested.basinSteps);
@@ -74,5 +77,5 @@ try {
   report.status='complete';report.phase='complete';report.lastTrustworthyEvidence='all-three-full-state-trajectories-and-four-drop-responses';
   report.claimLimit='Controlled finite pour; direct analytic renderer; collision-only pressure walls. Not a replay of the operator steady emitter, physical SI calibration, integrated authoring admission, or performance benchmark.';
 } catch(e) {report.status='failed';report.failurePhase=report.phase;report.error=e.stack;process.exitCode=1;}
-finally {save();ws?.close();if(browser&&browser.exitCode===null){const done=new Promise(r=>browser.once('exit',r));browser.kill('SIGTERM');await done;}}
+finally {save();ws?.close();if(browser&&browser.exitCode===null&&browser.signalCode===null){const done=new Promise(r=>browser.once('exit',r));browser.kill('SIGTERM');await done;}save();}
 console.log(JSON.stringify({status:report.status,phase:report.phase,path:out+'/report.json',error:report.error}));
