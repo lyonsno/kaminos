@@ -11060,7 +11060,7 @@ export function createKaminosVolumePrototype({
   let renderFlowCacheWriteLayout = null;
   let renderFlowCachePipelineLayout = null;
   let renderFlowCacheWriteGroup = null;
-  let debugRenderFlowCache = 'auto';
+  let debugRenderFlowCache = 'off';
   let productRaymarchPipeline = null;
   let leanStockProductRaymarchPipeline = null;
   let leanEmissiveProductRaymarchPipeline = null;

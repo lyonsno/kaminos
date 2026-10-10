@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { balancedWgslBlock } from './helpers/wgsl-guard-ownership.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+assert.match(core, /let debugRenderFlowCache = 'off';/,
+  'unprofitable full-grid cache is an explicit debug experiment, not the default camera route');
 const producer = balancedWgslBlock(core, 'fn cache_render_flow(');
 assert.match(producer, /gid\.x >= GRID \|\| gid\.y >= GRID_Y \|\| gid\.z >= GRID/);
 assert.match(producer, /length\(curlAtCell\(c\)\), abs\(divergenceAtCell\(c\)\)/,
