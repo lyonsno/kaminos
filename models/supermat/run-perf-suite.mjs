@@ -116,6 +116,7 @@ try {
       ['profile-product', { activations: 'f16', fuseNorm: true, profile: true }],
       ['profile-faithful', { activations: 'f32', fuseNorm: false, profile: true }],
       ['control-product', { activations: 'f16', fuseNorm: true }],
+      ['control-faithful', { activations: 'f32', fuseNorm: false }],
     ]) {
       run(id, witness, [...common, '--stage', 'route', '--fixture', `${state}/reference/ring-0000-512`, '--weights', `${state}/weights/f16`,
         ...image, '--options', JSON.stringify(options), '--run-options', JSON.stringify({ runs: 3 })]);
