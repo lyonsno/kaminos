@@ -2414,12 +2414,34 @@ export function immersedDirectionFromAngles(yawDeg, pitchDeg) {
 // Slab-local basis (slab inlet dynamics, report §33): e1 and e2 span the disc
 // plane; a disc facing up has u along +x and v along +z so the floor coverage
 // map and lattice read in their own orientation. e2 = e1 × n, as the shader forms it.
-export function immersedSlabBasis(n) {
+// Anchored on the aim's yaw so it is orthonormal and continuous at every
+// pitch, upright included (confirmation SID-02: a near-upright fallback to +x
+// was not orthogonal and the kernel's unnormalised cross disagreed with the
+// CPU). The horizontal perpendicular to the yaw direction, t = (−sin yaw, 0,
+// cos yaw), is orthogonal to n = (cos p cos y, sin p, cos p sin y) for every
+// pitch; e1 = n × t, e2 = e1 × n = t. Upright, yaw 0: u along +x, v along +z.
+export function immersedSlabBasis(n, yawDeg) {
   const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
   const norm = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
-  const e1 = Math.abs(n[1]) > 0.999 ? [1, 0, 0] : norm(cross([0, 1, 0], n));
-  // For the upright disc e1 × n = x × y = +z.
+  const horizontal = Math.hypot(n[0], n[2]);
+  const yaw = Number.isFinite(yawDeg) ? yawDeg * Math.PI / 180 : (horizontal > 1e-12 ? Math.atan2(n[2], n[0]) : 0);
+  const t = [-Math.sin(yaw), 0, Math.cos(yaw)];
+  // Guard a direction that is not exactly the yaw's own (callers passing a
+  // free vector): project t off n before forming the frame.
+  const tn = t[0] * n[0] + t[1] * n[1] + t[2] * n[2];
+  const tp = norm([t[0] - tn * n[0], t[1] - tn * n[1], t[2] - tn * n[2]]);
+  const e1 = norm(cross(n, tp));
   return { e1, e2: norm(cross(e1, n)) };
+}
+// The slab-local integer cell of the coverage map and the lattice for an
+// offset d (cells) from the disc centre: the one lookup both the kernel and
+// the CPU mirror make.
+export function immersedSlabLookup(d, basis, grid) {
+  const u = d[0] * basis.e1[0] + d[1] * basis.e1[1] + d[2] * basis.e1[2];
+  const v = d[0] * basis.e2[0] + d[1] * basis.e2[1] + d[2] * basis.e2[2];
+  const ix = Math.min(grid - 1, Math.max(0, Math.floor(grid * 0.5 + u)));
+  const iz = Math.min(grid - 1, Math.max(0, Math.floor(grid * 0.5 + v)));
+  return { ix, iz, index: iz * grid + ix };
 }
 // The slab's pattern as a floor-map spec in slab-local units (normalised: the
 // slab radius r in units of the half grid). 'shape' means the plain disc and
@@ -2462,14 +2484,7 @@ export function immersedSourceWeights(effective, { grid, gridHeight }) {
   // cell of the coverage map (the same lookup the kernel makes).
   const map = immersedCoverageMapForConfig({ effective: { ...effective, admitted: true } });
   const basis = effective.basis ?? immersedSlabBasis(n);
-  const coverageAt = d => {
-    if (!map) return 1;
-    const u = d[0] * basis.e1[0] + d[1] * basis.e1[1] + d[2] * basis.e1[2];
-    const v = d[0] * basis.e2[0] + d[1] * basis.e2[1] + d[2] * basis.e2[2];
-    const ix = Math.min(grid - 1, Math.max(0, Math.floor(grid * 0.5 + u)));
-    const iz = Math.min(grid - 1, Math.max(0, Math.floor(grid * 0.5 + v)));
-    return map.cells[iz * grid + ix];
-  };
+  const coverageAt = d => (map ? map.cells[immersedSlabLookup(d, basis, grid).index] : 1);
   for (let z = Math.max(0, Math.floor(c[2] - reach)); z <= Math.min(grid - 1, Math.ceil(c[2] + reach)); z += 1)
     for (let y = Math.max(0, Math.floor(c[1] - reach)); y <= Math.min(gridHeight - 1, Math.ceil(c[1] + reach)); y += 1)
       for (let x = Math.max(0, Math.floor(c[0] - reach)); x <= Math.min(grid - 1, Math.ceil(c[0] + reach)); x += 1) {
@@ -2551,7 +2566,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   // A cell cannot create more volume per step than its faces can carry out:
   // the cap is a fraction of one stored-velocity unit per step. Reported, never silent.
   const capPerCell = capFraction;
-  const effective = { admitted: true, reason: null, grid, centreCells, direction, basis: immersedSlabBasis(direction), radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS }, pattern, inletDynamics };
+  const effective = { admitted: true, reason: null, grid, centreCells, direction, basis: immersedSlabBasis(direction, yaw), radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS }, pattern, inletDynamics };
   // The normaliser is the discrete weight sum over the cells the kernel will
   // actually write (the scene-solid mask skips its cells before the target), so
   // Σ target over fluid cells = Q exactly on this grid; the analytic slab volume
@@ -2567,9 +2582,31 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   effective.normaliser = Math.max(1e-6, fluidSum);
   effective.analyticVolume = Math.PI * radiusCells * radiusCells * thickness;
   const normaliser = effective.normaliser;
-  let clipped = 0, fluxEffective = 0;
-  for (const cell of fluid) { const target = fluxRequested * cell.w / normaliser; if (target > capPerCell) clipped += 1; fluxEffective += Math.min(capPerCell, target); }
+  // The predicted supply follows the kernel's target law, this step's
+  // lattice included (review SID-01): target = min(cap, w × (1 + a × lattice)
+  // × Q/Σw). The normaliser stays unmodulated (the floor law's reading), so
+  // the modulated total is Q × (1 + a × weighted mean of the lattice over the
+  // slab), not Q; the receipt names both. Without a field this step the
+  // prediction is nominal and says so.
+  const amplitude = inletDynamics.turbulence;
+  const field = amplitude > 0 ? options.inletSignals?.turbulence?.field ?? null : null;
+  const basis = effective.basis;
+  let clipped = 0, fluxEffective = 0, modulatedWeight = 0;
+  for (const cell of fluid) {
+    let m = 1;
+    if (field) {
+      const d = [cell.x + 0.5 - centreCells[0], cell.y + 0.5 - centreCells[1], cell.z + 0.5 - centreCells[2]];
+      m = Math.max(0, 1 + amplitude * (field[immersedSlabLookup(d, basis, grid).index] ?? 0));
+    }
+    modulatedWeight += cell.w * m;
+    const target = fluxRequested * cell.w * m / normaliser;
+    if (target > capPerCell) clipped += 1;
+    fluxEffective += Math.min(capPerCell, target);
+  }
+  effective.fluxNominal = fluxRequested;
   effective.fluxEffectivePredicted = fluxEffective;
+  effective.turbulenceSupplyFactor = fluidSum > 0 ? modulatedWeight / fluidSum : 1;
+  effective.supplyPredictionAuthority = amplitude > 0 ? (field ? 'step-locked-lattice' : 'nominal-no-lattice-this-step') : 'exact-static';
   effective.clipPredicted = { cells: clipped, of: fluid.length };
   effective.footprint = { cells: fluid.length, weightSum: fluidSum };
   effective.masked = { cells: maskedCells, weight: maskedWeight, weightShare: weights.sum > 0 ? maskedWeight / weights.sum : 0 };
@@ -4585,7 +4622,7 @@ fn immersedPatternedWeight(cellCenter: vec3<f32>, slabWeight: f32) -> f32 {
   let d = cellCenter - u.immersed_source_a.yzw;
   let n = immersedDirection();
   let e1 = u.immersed_source_e.xyz;
-  let e2 = cross(e1, n);
+  let e2 = normalize(cross(e1, n));
   let slabCell = vec2<i32>(clamp(i32(floor(f32(GRID) * 0.5 + dot(d, e1))), 0, i32(GRID) - 1), clamp(i32(floor(f32(GRID) * 0.5 + dot(d, e2))), 0, i32(GRID) - 1));
   var coverage = 1.0;
   if (u.immersed_source_f.x > 0.5) { coverage = textureLoad(inflowCoverage, slabCell, 0).x; }
@@ -15488,7 +15525,7 @@ export function createKaminosVolumePrototype({
     };
     if (inletDynamicsRequested.turbulence > 0 && inletPerturbationField && inflowPerturbationTexture) {
       device.queue.writeTexture({ texture: inflowPerturbationTexture }, inletPerturbationField.sampleAt({ step: inletStep, tauSteps: inletDynamicsTauSteps(controlsSnapshot, INLET_TURBULENCE_CORRELATION_SECONDS), scaleCells: inletDynamicsRequested.turbulenceScaleCells }), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
-      inletSignals.turbulence = { rms: inletPerturbationField.rms };
+      inletSignals.turbulence = { rms: inletPerturbationField.rms, field: inletPerturbationField.cells };
     }
     const inflowBoundaryConfig = resolveInflowBoundaryConfig(controlsSnapshot, analyticEmitterDescriptor, { grid: gridSize, inletSignals });
     uniforms.set(inflowBoundaryUniformValues(inflowBoundaryConfig), INFLOW_UNIFORM_OFFSET);
