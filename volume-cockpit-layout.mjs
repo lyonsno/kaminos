@@ -188,8 +188,15 @@ export function reconcileVolumeCockpitLayoutDocument({ document: documentValue, 
     forceGroup.collapsed = false;
     forceGroup.controlIds = forceContributionIds;
   }
+  const cameraGroup = receipt.missingControlIds.includes('volume-tone-mapping')
+    ? reconciled.groups.find(group => group.controlIds.includes('volume-physical-exposure'))
+    : null;
+  if (cameraGroup) {
+    cameraGroup.controlIds.splice(cameraGroup.controlIds.indexOf('volume-physical-exposure'), 0, 'volume-tone-mapping');
+  }
   const ordinaryMissingControlIds = receipt.missingControlIds
-    .filter(controlId => !FORCE_CONTRIBUTION_CONTROL_IDS.includes(controlId));
+    .filter(controlId => !FORCE_CONTRIBUTION_CONTROL_IDS.includes(controlId)
+      && !(cameraGroup && controlId === 'volume-tone-mapping'));
   if (ordinaryMissingControlIds.length) {
     let newControls = reconciled.groups.find(group => group.id === 'new-controls');
     if (!newControls) {
@@ -383,7 +390,7 @@ function sourceGroupForControl(control, looseIndex) {
 // remain unchanged. Unknown controls keep their source grouping.
 const ORGANIZED_GROUPS = [
   ['renderer', 'Renderer & emission model', /^volume-(physical-mode|fire-render-mode|shell-inspect-mode|reaction-live-view)$/],
-  ['flame', 'Flame color & exposure', /^volume-(physical-(material-law|temperature|spread|thermal|clean|exposure|knee|white)|reaction-boundary-fire-(soot|clean-blue|yellow|warmth|luma|clean-color|soot-color)|reaction-boundary-(contrast|gamma|opacity)|exposure|radiance|glow)$/],
+  ['flame', 'Flame color & exposure', /^volume-(tone-mapping|physical-(material-law|temperature|spread|thermal|clean|exposure|knee|white)|reaction-boundary-fire-(soot|clean-blue|yellow|warmth|luma|clean-color|soot-color)|reaction-boundary-(contrast|gamma|opacity)|exposure|radiance|glow)$/],
   ['smoke', 'Smoke, light & material density', /^volume-(physical-(smoke-extinction|smoke-albedo|ambient)|density|smoke|absorption)$/],
   ['structure', 'Combustion-front structure', /^volume-(boundary-sidecar-source|boundary-sidecar-width|reaction-boundary-(gradient|cut|softness|core-reject|topology|curl|divergence)|reaction-boundary-fire-(ridge|ridge-cut|tip|erosion))$/],
   ['support', 'Support field & baked ridge', /^volume-(reaction-boundary-support-.+|boundary-sidecar-(blur|ridge))$/],
