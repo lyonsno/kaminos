@@ -2,6 +2,7 @@
 // Writes a terminal report on every path; served JS must match the exact
 // requested clean commit; fixture and weight roots are digest-bound.
 import fs from 'node:fs/promises';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -27,6 +28,18 @@ const persist = async () => {
 };
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 let server, browser;
+// A crash outside the awaited chain (event handlers, the CDP socket) must still
+// leave a report naming the phase it died in and the error.
+const crashed = kind => error => {
+  report.error = `${kind}: ${error?.stack ?? error}`;
+  browser?.child?.kill();
+  mkdirSync(path.dirname(output), { recursive: true });
+  writeFileSync(output, JSON.stringify(report, null, 2) + '\n');
+  console.error(report.error);
+  process.exit(1);
+};
+process.on('uncaughtException', crashed('uncaughtException'));
+process.on('unhandledRejection', crashed('unhandledRejection'));
 
 try {
   await persist();

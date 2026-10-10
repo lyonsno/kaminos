@@ -22,7 +22,8 @@ function run(id, script, args) {
   const started = Date.now();
   const child = spawnSync(process.execPath, [script, ...args, '--report', report], { cwd: values['repo-root'], encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024 });
-  const step = { id, exitCode: child.status, wallMs: Date.now() - started, report, stdoutTail: child.stdout?.slice(-400) };
+  const step = { id, exitCode: child.status, wallMs: Date.now() - started, report, stdoutTail: child.stdout?.slice(-400),
+    stderrTail: child.stderr?.slice(-2000), signal: child.signal };
   try { step.result = JSON.parse(execFileSync('cat', [report], { encoding: 'utf8' })); } catch (error) { step.reportError = String(error); }
   summary.steps.push(step);
   assertSource(values['repo-root'], summary.commit, `after step ${id}`);
