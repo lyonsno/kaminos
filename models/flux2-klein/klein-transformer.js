@@ -208,7 +208,7 @@ export class KleinTransformer {
   }
 
   allocate(imgTokens, txtTokens) {
-    for (const b of Object.values(this.act ?? {})) b.destroy();
+    this.release();
     const D = this.D, F = this.F, H = this.H, L = imgTokens + txtTokens;
     const f = n => this.buffer(n * 4);
     this.shape = { imgTokens, txtTokens, L };
@@ -222,6 +222,8 @@ export class KleinTransformer {
     };
     this.modOff = { doubleImg: 0, doubleTxt: 6 * D, single: 12 * D, out: 15 * D };
   }
+
+  release() { for (const b of Object.values(this.act ?? {})) b.destroy(); this.act = null; }
 
   // One transformer evaluation. `taps(name, buffer, rows, cols, byteOffset)` lets a witness read
   // boundaries; it receives the encoder state after the boundary's work was encoded.

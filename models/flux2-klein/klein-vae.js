@@ -326,9 +326,17 @@ export class KleinVaeDecoder {
     return s;
   }
 
-  // Sized per image shape; buffers from the previous shape are released.
+  // Decoder input [2h*2w][32], sized per image shape.
+  allocateInput(latH, latW) {
+    this.prepped?.destroy();
+    this.prepped = this.buffer(latH * 2 * latW * 2 * 32 * 4);
+    this.latH = latH; this.latW = latW;
+  }
+
+  // Working activations for decode(), allocated after the input (kept if the shape matches).
   allocate(latH, latW) {
-    for (const name of ['a', 'b', 't1', 't2', 'q', 'k', 'vt', 'scores', 'gnPart', 'gnStats', 'latents', 'prepped']) this[name]?.destroy();
+    if (!this.prepped || this.latH !== latH || this.latW !== latW) this.allocateInput(latH, latW);
+    this.releaseWork();
     // Largest activation: 256 channels at full resolution (up block 2 output).
     const H = latH * 16, W = latW * 16;
     const big = H * W * 256 * 4;
@@ -337,10 +345,14 @@ export class KleinVaeDecoder {
     this.q = this.buffer(Lm * 512 * 4); this.k = this.buffer(Lm * 512 * 4); this.vt = this.buffer(Lm * 512 * 4);
     this.scores = this.buffer(Lm * Lm * 4);
     this.gnPart = this.buffer(GROUPS * Math.ceil(H * W / 1024) * 4); this.gnStats = this.buffer(GROUPS * 2 * 4);
-    this.latents = this.buffer(latH * latW * 128 * 4);
-    this.prepped = this.buffer(Lm * 32 * 4);
-    this.latH = latH; this.latW = latW;
   }
+
+  // Free the working activations (including this.out), or everything with release().
+  releaseWork() {
+    for (const name of ['a', 'b', 't1', 't2', 'q', 'k', 'vt', 'scores', 'gnPart', 'gnStats']) { this[name]?.destroy(); this[name] = null; }
+    this.out = null;
+  }
+  release() { this.releaseWork(); this.prepped?.destroy(); this.prepped = null; }
 
   // Packed latents (GPU buffer [h*w][128]) -> decoder input [2h*2w][32] in this.prepped.
   prepLatents(enc, packed) {

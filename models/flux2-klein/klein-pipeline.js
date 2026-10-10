@@ -167,12 +167,11 @@ export class KleinPipeline {
     const latH = height / 16, latW = width / 16, imgTokens = latH * latW;
     const framed = this.tokenizer.kleinPromptIds(prompt);
     const txtTokens = framed.inputIds.length;
-    if (this.shapeKey !== `${imgTokens}:${txtTokens}`) {
-      this.transformer.allocate(imgTokens, txtTokens);
-      this.textEncoder.allocate(txtTokens);
-      this.vae.allocate(latH, latW);
-      this.shapeKey = `${imgTokens}:${txtTokens}`;
-    }
+    // Sequential residency: transformer activations exist from here until the decoder's input is
+    // prepared, decoder activations from then until the image is read back, so peak activation
+    // memory is the larger stage rather than the sum (about 3 GB plus 5 GB at 1024²).
+    this.transformer.allocate(imgTokens, txtTokens);
+    if (this.textEncoderTokens !== txtTokens) { this.textEncoder.allocate(txtTokens); this.textEncoderTokens = txtTokens; }
     const imgIds = new Float64Array(imgTokens * 4), txtIds = new Float64Array(txtTokens * 4);
     for (let h = 0; h < latH; h++) for (let w = 0; w < latW; w++) { const r = (h * latW + w) * 4; imgIds[r + 1] = h; imgIds[r + 2] = w; }
     for (let l = 0; l < txtTokens; l++) txtIds[l * 4 + 3] = l;
@@ -198,7 +197,11 @@ export class KleinPipeline {
     }
     t0 = performance.now();
     onPhase?.('decode');
+    this.vae.allocateInput(latH, latW);
     this.vae.prepLatents(this.vae.sched, this.transformer.act.latents);
+    await this.sched.flush('vae.input');
+    this.transformer.release();
+    this.vae.allocate(latH, latW);
     await this.vae.decode(this.vae.prepped);
     let enc;
     const bytes = width * height * 3 * 4;
@@ -206,7 +209,7 @@ export class KleinPipeline {
     enc = dev.createCommandEncoder(); enc.copyBufferToBuffer(this.vae.out, 0, rb, 0, bytes); dev.queue.submit([enc.finish()]);
     await rb.mapAsync(GPUMapMode.READ);
     const rgb = new Float32Array(rb.getMappedRange().slice(0)); rb.unmap(); rb.destroy();
-    this.vae.releaseUniforms();
+    this.vae.release();
     t.vaeDecodeMs = performance.now() - t0;
     const rgba = new Uint8ClampedArray(width * height * 4);
     for (let i = 0; i < width * height; i++) {
