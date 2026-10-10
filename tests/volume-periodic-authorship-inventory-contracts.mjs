@@ -35,6 +35,9 @@ const admitted = new Map([
     // Operator-authored immersed-source aim (yaw/pitch sliders) to a unit
     // direction, resolved once per uniform pack on the CPU; nothing animates.
     { class: 'operator-authored source aim to direction', line: /return \[Math\.cos\(pitch\) \* Math\.cos\(yaw\), Math\.sin\(pitch\), Math\.cos\(pitch\) \* Math\.sin\(yaw\)\];/, calls: 5 },
+    // The slab basis anchors the pattern's orientation on the same yaw slider
+    // (the horizontal perpendicular to the aim); resolved once per pack, static.
+    { class: 'operator-authored source aim to direction', line: /const t = \[-Math\.sin\(yaw\), 0, Math\.cos\(yaw\)\];/, calls: 2 },
   ]],
   ['volume-inflow-aperture.mjs', [
     // Static authored geometry of the inflow aperture coverage map: jets placed

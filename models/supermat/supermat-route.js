@@ -21,7 +21,7 @@ export const DEFAULT_TARGET_DUTY_MS = 12;
 const PACKAGE_SCHEMA = 'supermat.browser-weight-package.v0';
 
 // Optional device features SuperMat uses when present (subgroup-matrix GEMM).
-export const SUPERMAT_OPTIONAL_FEATURES = ['chromium-experimental-subgroup-matrix', 'subgroups', 'shader-f16'];
+export const SUPERMAT_OPTIONAL_FEATURES = ['chromium-experimental-subgroup-matrix', 'subgroups', 'shader-f16', 'timestamp-query'];
 
 // Device options for requestBrowserWebGpuDevice / createWebGpuInferenceSession
 // that request only the optional features this adapter actually exposes.
@@ -65,13 +65,18 @@ async function runCpuPhase(useWorker, operationId, payload, transfer, signal) {
 }
 
 const ADAPTER_OPTIONS = Object.freeze(['route', 'weightsUrl', 'signal', 'onProgress', 'cpuWorker', 'attention', 'gemmKernel',
-  'weightLoading', 'gemmPrecision', 'activations', 'fuseNorm']);
+  'weightLoading', 'gemmPrecision', 'activations', 'fuseNorm', 'targetDutyMs']);
 
 export async function createSuperMatAdapter(options = {}) {
   const unknown = Object.keys(options).filter(key => !ADAPTER_OPTIONS.includes(key));
   if (unknown.length) throw new Error(`unknown SuperMat adapter option: ${unknown.join(', ')}`);
   const { route, weightsUrl, signal, onProgress, cpuWorker = typeof Worker !== 'undefined',
-    attention = 'streaming', gemmKernel = 'tiled', weightLoading = 'auto', gemmPrecision = 'f32', activations = 'f32', fuseNorm = false } = options;
+    attention = 'streaming', gemmKernel = 'tiled', weightLoading = 'auto', gemmPrecision = 'f32', activations = 'f32', fuseNorm = false,
+    // Cooperative chunk target: ms of the GPU each duty may hold before foreground
+    // frames get their turn. Lower is smoother, higher finishes sooner; a run's
+    // schedule.targetDutyMs overrides it.
+    targetDutyMs = DEFAULT_TARGET_DUTY_MS } = options;
+  if (!(targetDutyMs > 0)) throw new Error(`targetDutyMs must be a positive number of milliseconds, got ${targetDutyMs}`);
   if (!['auto', 'chunks', 'bundle'].includes(weightLoading)) throw new Error(`unknown weight loading mode ${weightLoading}`);
   if (!route?.runtime?.device || typeof route.loadModelResourcesFromSource !== 'function') {
     throw new Error('SuperMat adapter requires a registered kit session route');
@@ -120,7 +125,7 @@ export async function createSuperMatAdapter(options = {}) {
   const identity = Object.freeze({
     routeId: SUPERMAT_ROUTE_ID, backend: 'webgpu-local', modelId: 'supermat.single-image',
     revision: weightPackage.revision, weightDtype: weightPackage.dtype ?? 'f32', defaultImageSize: SUPERMAT_IMAGE_SIZE, attention,
-    gemmKernel: ops.gemmKernel, gemmPrecision, activations, fuseNorm, weightLoading: [...loadedVia].join('+'),
+    gemmKernel: ops.gemmKernel, gemmPrecision, activations, fuseNorm, targetDutyMs, weightLoading: [...loadedVia].join('+'),
     provenance: weightPackage.provenance,
   });
   let runs = 0, released = false, busy = false;
@@ -159,17 +164,21 @@ export async function createSuperMatAdapter(options = {}) {
       timings[name] = performance.now() - start;
       onProgress?.({ phase: name });
     };
+    // schedule.withForeground (kit foreground run): CPU-only phases and waits on
+    // submitted GPU work keep servicing foreground frames.
+    const cpuWindow = (phase, work) => schedule?.withForeground ? schedule.withForeground(phase, work) : work();
     let t = performance.now();
     const source = new Uint8Array(image.data);
-    const prepared = await runCpuPhase(cpuWorker, 'supermat.preprocess', { width: image.width, height: image.height,
-      data: source.buffer, size: size }, [source.buffer], schedule?.signal);
+    const prepared = await cpuWindow('supermat-preprocess', () => runCpuPhase(cpuWorker, 'supermat.preprocess',
+      { width: image.width, height: image.height, data: source.buffer, size: size }, [source.buffer], schedule?.signal));
     const input = new Float32Array(prepared.planes);
     timings.preprocessMs = performance.now() - t;
     device.pushErrorScope('validation');
     device.pushErrorScope('out-of-memory');
     let error = null;
     try {
-      ops.setSchedule(schedule ? { dutyFlops: DEFAULT_DUTY_FLOPS, targetDutyMs: DEFAULT_TARGET_DUTY_MS, ...schedule, onDuty } : null);
+      ops.setSchedule(schedule ? { dutyFlops: DEFAULT_DUTY_FLOPS, targetDutyMs, ...schedule, onDuty,
+        waitWindow: schedule.withForeground ? work => schedule.withForeground('supermat-gpu-wait', work) : null } : null);
       enter('encode');
       t = performance.now();
       const pixels = ops.upload([3, size, size], input, 'input');
@@ -199,8 +208,8 @@ export async function createSuperMatAdapter(options = {}) {
       }
       enter('pack-maps');
       t = performance.now();
-      const packed = await runCpuPhase(cpuWorker, 'supermat.maps', { albedo: planes[0].slice().buffer,
-        orm: planes[1].slice().buffer, size: size }, [], schedule?.signal);
+      const packed = await cpuWindow('supermat-pack-maps', () => runCpuPhase(cpuWorker, 'supermat.maps',
+        { albedo: planes[0].slice().buffer, orm: planes[1].slice().buffer, size: size }, [], schedule?.signal));
       const maps = Object.fromEntries(Object.entries(packed).map(([name, buffer]) => [name,
         { width: size, height: size, data: new Uint8ClampedArray(buffer) }]));
       timings.packMapsMs = performance.now() - t;

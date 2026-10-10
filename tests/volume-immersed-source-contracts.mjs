@@ -36,18 +36,18 @@ test('the immersed source resolves from the controls and is admitted only under 
 
 test('the uniform block follows velocity staggering and packs the compiled source only when admitted', () => {
   assert.equal(core.IMMERSED_SOURCE_UNIFORM_OFFSET, core.VELOCITY_STAGGERING_UNIFORM_OFFSET + 4);
-  assert.equal(core.IMMERSED_SOURCE_UNIFORM_FLOATS, 16);
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.IMMERSED_SOURCE_UNIFORM_OFFSET + 16);
+  assert.equal(core.IMMERSED_SOURCE_UNIFORM_FLOATS, 24);
+  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.IMMERSED_SOURCE_UNIFORM_OFFSET + 24);
   const on = core.resolveImmersedSourceConfig(base, { grid: 64 });
   const u = core.immersedSourceUniformValues(on);
-  assert.equal(u.length, 16);
+  assert.equal(u.length, 24);
   assert.deepEqual(u.slice(0, 4).map(v => Number(v.toFixed(3))), [1, 32, 16, 32], 'enabled + centre in cells');
   assert.deepEqual(u.slice(4, 8).map(v => Number(v.toFixed(3))), [0, 1, 0, 6.4], 'direction + radius in cells');
   assert.deepEqual(u.slice(8, 12).map(v => Number(v.toFixed(3))), [1.5, 0.1, 0.56, 1.2], 'thickness, speed, fuel, temperature');
   assert.equal(Number(u[12].toFixed(3)), 1, 'momentum gain');
   assert.ok(Math.abs(u[13] - on.effective.capPerCell) < 1e-12, 'cap per cell');
   assert.ok(Math.abs(u[14] - on.effective.fluxRequested / on.effective.normaliser) < 1e-12, 'target per unit weight = Q / Σw');
-  assert.deepEqual(core.immersedSourceUniformValues(core.resolveImmersedSourceConfig({ ...base, pressureSolver: 'legacy' }, { grid: 64 })), new Array(16).fill(0));
+  assert.deepEqual(core.immersedSourceUniformValues(core.resolveImmersedSourceConfig({ ...base, pressureSolver: 'legacy' }, { grid: 64 })), new Array(24).fill(0));
   assert.match(source, /velocity_staggering: vec4<f32>,\n(?:\s*\/\/[^\n]*\n)*\s*immersed_source_a: vec4<f32>,\s*immersed_source_b: vec4<f32>,\s*immersed_source_c: vec4<f32>,\s*immersed_source_d: vec4<f32>,/);
 });
 
@@ -81,7 +81,7 @@ test('the shader derives target, momentum and scalar entry from one weight and o
   assert.match(weight, /\(1\.0 - smoothstep\(radius - 0\.5, radius \+ 0\.5, radial\)\)/);
   assert.doesNotMatch(weight, /smoothstep\([a-zA-Z]+ \+ 0\.5, [a-zA-Z]+ - 0\.5/, 'no reversed-edge smoothstep');
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
-  assert.match(main, /let immersedWeight = immersedSourceWeight\(cell\);/);
+  assert.match(main, /let immersedSlabWeight = immersedSourceWeight\(cell\);\n\s+let immersedWeight = immersedPatternedWeight\(cell, immersedSlabWeight\);/, 'one slab indicator, one patterned weight (slab inlet dynamics)');
   assert.match(main, /let immersedTarget = min\(u\.immersed_source_d\.y, immersedWeight \* u\.immersed_source_d\.z\);/, 'target per cell = min(cap, w × Q/Σw)');
   assert.match(main, /textureStore\(burnRate, cellI, vec4<f32>\(u\.heat_release\.x \* fuelBurned \/ max\(timeStep, 1e-6\) \+ immersedTarget, 0\.0, 0\.0, 0\.0\)\);/, 'stored beside heat release');
   assert.match(main, /let immersedEntry = clamp\(immersedTarget \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);/, 'scalar entry mirrors the floor law');
@@ -319,9 +319,9 @@ test('IS-03-C: the source uniforms are packed against the mask the same step dis
   assert.ok(eKiln.effective.masked.cells > 0 && Math.abs(targetSumOnMask(eKiln.effective, kiln) - eKiln.effective.fluxEffectivePredicted) < 1e-9);
   // Production ordering pin: inside updateUniforms the pose is resolved and published, the collision refreshed, then the supply packed against the installed mask.
   const pack = source.slice(source.indexOf('  function updateUniforms('), source.indexOf('IMMERSED_SOURCE_UNIFORM_OFFSET);', source.indexOf('  function updateUniforms(')));
-  const poseAt = pack.indexOf('state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor });');
+  const poseAt = pack.indexOf('state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals });');
   const refreshAt = pack.indexOf('refreshSceneCollision();');
-  const supplyAt = pack.indexOf('const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, solidCells: sceneSolidCellsCpu });');
+  const supplyAt = pack.indexOf('const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu });');
   assert.ok(poseAt > 0 && refreshAt > poseAt && supplyAt > refreshAt, `pose ${poseAt} → refresh ${refreshAt} → supply ${supplyAt}`);
 });
 
@@ -347,7 +347,7 @@ test('IS-04-C: the residual measurement names the capped per-cell law and keeps 
 test('the wall sponge leaves the immersed slab alone, like the inflow aperture', () => {
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
   const weightAt = main.indexOf('let immersedWeight = ');
-  const fadeAt = main.indexOf('let wallFade = max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedWeight, 0.0, 1.0));');
+  const fadeAt = main.indexOf('let wallFade = max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSlabWeight, 0.0, 1.0));');
   assert.ok(weightAt > 0 && fadeAt > weightAt, 'the fade is exempt wherever the slab has weight, after the weight is known');
   assert.ok(!main.includes('let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);'), 'the unexempted fade is gone');
 });

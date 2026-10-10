@@ -19,9 +19,14 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
     // refused state still carries the default pattern and zero values.
     const inflow = end.inflowBoundary?.effective;
     const inflowRefused = () => `the inflow is not admitted (${inflow?.reason ?? 'no receipt'})`;
+    // Under the immersed law the same inlet controls read on the slab (slab
+    // inlet dynamics): the receipt to compare against is the immersed source's.
+    const immersed = end.immersedSource?.effective;
+    const slab = inflow?.admitted !== true && immersed?.admitted === true ? immersed : null;
     if (cid === 'volume-emitter-aperture-pattern') {
-      if (inflow?.admitted !== true) mismatches.push(`aperture pattern requested ${value} but ${inflowRefused()}`);
-      else if (inflow.pattern?.kind !== value) mismatches.push(`aperture pattern requested ${value}, effective ${inflow.pattern?.kind}`);
+      const holder = slab ?? (inflow?.admitted === true ? inflow : null);
+      if (!holder) mismatches.push(`aperture pattern requested ${value} but ${inflowRefused()} and the immersed source is ${immersed?.admitted === true ? 'admitted' : `not admitted (${immersed?.reason ?? 'no receipt'})`}`);
+      else if (holder.pattern?.kind !== value) mismatches.push(`aperture pattern requested ${value}, effective ${holder.pattern?.kind}`);
     }
     if (cid === 'volume-emitter-swirl') {
       // An absent or nonfinite effective swirl can never satisfy a requested one.
@@ -50,8 +55,9 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
     // Slice-3 inlet controls: the receipt must carry the requested value as a finite number.
     const inletField = { 'volume-emitter-line-weight': ['pattern', 'lineWeight'], 'volume-emitter-jet-jitter': ['pattern', 'jetJitter'], 'volume-emitter-inlet-turbulence': ['inletDynamics', 'turbulence'], 'volume-emitter-inlet-turbulence-scale': ['inletDynamics', 'turbulenceScaleCells'], 'volume-emitter-puff': ['inletDynamics', 'puff'], 'volume-emitter-puff-period': ['inletDynamics', 'puffPeriod'] }[cid];
     if (inletField) {
-      const effective = inflow?.[inletField[0]]?.[inletField[1]];
-      if (inflow?.admitted !== true) mismatches.push(`${cid} requested ${value} but ${inflowRefused()}`);
+      const holder = slab ?? (inflow?.admitted === true ? inflow : null);
+      const effective = holder?.[inletField[0]]?.[inletField[1]];
+      if (!holder) mismatches.push(`${cid} requested ${value} but ${inflowRefused()} and no admitted immersed source holds it`);
       else if (!Number.isFinite(effective) || Math.abs(effective - Number(value)) > 1e-6) mismatches.push(`${cid} requested ${value}, effective ${effective}`);
     }
     if (cid === 'volume-emitter-source-law') {

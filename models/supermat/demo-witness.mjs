@@ -16,6 +16,13 @@ const persist = async () => {
   await fs.writeFile(output, JSON.stringify(report, null, 2) + '\n');
 };
 let browser;
+// An interrupted witness must not leave its owned browser running.
+for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, async () => {
+  report.error = `interrupted by ${signal}`;
+  browser?.child?.kill();
+  await persist().catch(() => {});
+  process.exit(1);
+});
 try {
   await persist();
   for (const name of ['url', 'chrome', 'report', 'screenshot']) if (!values[name]) throw new Error(`--${name} is required`);
