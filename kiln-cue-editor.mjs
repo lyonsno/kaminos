@@ -1,5 +1,5 @@
 import {normalizeKilnCues,KILN_LAYERED_CUE_SCHEMA,sampleKilnPhase,sampleKilnLook,activeKilnLookCue} from './kiln-cinematic-cues.mjs';
-import {tuneForCue, setCueTuneValue, checkCueDomain} from './kiln-cue-tunes.mjs';
+import {tuneForCue, setCueTuneValue, checkCueDomain, CUE_DOMAIN_FIELDS} from './kiln-cue-tunes.mjs';
 
 export function createCueTuneEditor({readCues,writeCues,readTune,applyTune,validateTune,loadTune,canBegin=()=>{},capturePresentation=()=>null,restorePresentation=()=>{}}) {
   let draft=null,loading=false;
@@ -106,13 +106,27 @@ export function createCueTuneEditor({readCues,writeCues,readTune,applyTune,valid
       return this.state();
     },
     preview,
+    audition() {
+      if(!draft)throw Error('Select a keyframe to tune');
+      return preview(draft.tune);
+    },
     async useBasin(id) {
       if(!draft)throw Error('Select a keyframe to tune');
       if(loading)throw Error('A basin is already loading');
       const owner=draft,prior=JSON.stringify([draft.tune,draft.cues]);loading=true;
       try {
-        const tune=await loadTune(id);
+        const loaded=await loadTune(id);
         if(draft!==owner || JSON.stringify([draft.tune,draft.cues])!==prior)throw Error('Keyframe changed while the basin loaded');
+        const tune=structuredClone(loaded),retainedFields=[];
+        // The host loader aliases these maps into source.preset; detach edits from provenance.
+        for(const axis of ['domControls','rendererControls','presentationControls'])tune[axis]=structuredClone(tune[axis]);
+        for(const field of CUE_DOMAIN_FIELDS) {
+          const baseline=draft.baseline.domControls[field],incoming=tune.domControls[field];
+          if(!baseline)continue;
+          if(String(incoming?.rawValue??incoming?.value)!==String(baseline.rawValue??baseline.value))retainedFields.push(field);
+          tune.domControls[field]=structuredClone(baseline);
+        }
+        if(tune.source)tune.source.cueSimulation={retainedFields};
         if(!layered())return preview(tune);
         const previous=look().tune;
         look().tune=checked(tune);

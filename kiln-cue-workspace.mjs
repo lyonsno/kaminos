@@ -17,15 +17,16 @@ export function installKilnCueWorkspace({host,preview,openCinema,onError}) {
     <div class="cue-key-heading"><span>Keyframes</span><div><button type="button" id="cue-add" title="Add a keyframe">+</button><button type="button" id="cue-duplicate" title="Duplicate selected keyframe">Duplicate</button><button type="button" id="cue-remove" title="Remove selected keyframe">Remove</button></div></div>
     <div id="cue-key-list" role="listbox" aria-label="Keyframes"></div>
     <div class="slider-row"><label class="slider-label" for="cue-key-time">Seconds</label><input class="transform-input" type="number" step="any" min="0" id="cue-key-time"></div>
+    <p id="cue-status" role="status" class="flame-scope"></p>
     <div id="cue-emitter-fields"></div><div class="cue-channel-keys"><label><input type="checkbox" id="cue-radius-keyed">Radius key</label><label><input type="checkbox" id="cue-flow-keyed">Flow key</label></div>
     <h3>Look</h3><div class="cue-look-row"><select id="cue-look-select" aria-label="Scene look"></select><button type="button" id="cue-look-unique">Make unique</button></div>
     <input id="cue-look-name" class="transform-input" aria-label="Look name">
     <label class="cue-look-key"><input type="checkbox" id="cue-look-keyed">Look cue</label>
     <div id="cue-tune-source" class="flame-scope"></div>
     <div class="cue-tune-actions"><button type="button" id="cue-accept">Accept tune</button><button type="button" id="cue-cancel">Cancel</button><button type="button" id="cue-audition">Audition key</button></div>
-    <details id="cue-basin-browser"><summary>Basin</summary><input type="search" placeholder="Find a basin" aria-label="Find cue basin" id="cue-basin-search"><select aria-label="Cue basin" id="cue-basin-select"></select><button type="button" id="cue-basin-apply">Use basin</button></details>
+    <details id="cue-basin-browser"><summary>Basin</summary><input type="search" placeholder="Find a basin" aria-label="Find cue basin" id="cue-basin-search"><select aria-label="Cue basin" id="cue-basin-select"></select><button type="button" id="cue-basin-apply">Use basin</button><p id="cue-basin-status" role="status" class="flame-scope"></p></details>
     <div id="cue-flame-fields"></div><details id="cue-sequence-settings"><summary>Sequence</summary><div id="cue-sequence-fields"></div></details>
-    <div class="cue-document-actions"><button type="button" id="cue-preview">Preview</button><button type="button" id="cue-save">Save scene</button><button type="button" id="cue-cinema">Cinema</button></div><p id="cue-status" role="status" class="flame-scope"></p>`;
+    <div class="cue-document-actions"><button type="button" id="cue-preview">Preview</button><button type="button" id="cue-save">Save scene</button><button type="button" id="cue-cinema">Cinema</button></div>`;
   const style=document.createElement('style');style.textContent=`
     .cue-phase-switch,.cue-tune-actions,.cue-document-actions {display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;}
     .cue-phase-switch button {flex:1;}
@@ -130,31 +131,53 @@ export function installKilnCueWorkspace({host,preview,openCinema,onError}) {
     field.addEventListener('change',()=>{try{changeRecipe(cues=>{cues[name]=Number(field.value);});}catch(error){field.value=previous;failure(error);}});
     field.addEventListener('pointercancel',()=>{field.value=previous;});
   }
-  byId('cue-accept').onclick=guard(()=>{accept();render();status('Keyframe tune accepted');});
+  byId('cue-accept').onclick=guard(()=>{accept();status('Keyframe tune accepted');});
   byId('cue-cancel').onclick=guard(()=>{editor.cancel();render();status('Tune cancelled');});
   const syncPanels=()=>{tunePanel.sync();emitterPanel.sync();syncState();};
-  byId('cue-audition').onclick=guard(()=>{ensure();syncPanels();status('Auditioning keyframe');});
+  byId('cue-audition').onclick=guard(()=>{
+    ensure();const tune=editor.audition();syncPanels();
+    const flow=Number(tune.domControls['volume-flow-rate'].rawValue??tune.domControls['volume-flow-rate'].value);
+    const radius=Number(tune.domControls['volume-input-radius'].rawValue??tune.domControls['volume-input-radius'].value);
+    status(`Audition: ${flow===0?'fuel off':`flow ${Number(flow.toFixed(3))}`} / radius ${Number(radius.toFixed(3))}`);
+  });
   byId('cue-look-select').onchange=guard(()=>{const id=byId('cue-look-select').value;ensure();editor.selectLook(id);syncPanels();});
   byId('cue-look-unique').onclick=guard(()=>{ensure();editor.makeUnique();syncPanels();});
   byId('cue-look-name').onchange=guard(()=>{const name=byId('cue-look-name').value;ensure();editor.renameLook(name);syncState();});
   byId('cue-look-keyed').onchange=guard(()=>{const enabled=byId('cue-look-keyed').checked;ensure();if(enabled)editor.selectLook(editor.state().lookId);else editor.inheritLook();syncPanels();});
   for(const channel of ['radius','flow'])byId(`cue-${channel}-keyed`).onchange=guard(()=>{const enabled=byId(`cue-${channel}-keyed`).checked;ensure();editor.inheritEmitter(channel,!enabled);syncPanels();});
+  let basinLoading=false;
   const showBasins=()=>{
     const select=byId('cue-basin-select'),old=select.value,q=byId('cue-basin-search').value.toLowerCase();select.replaceChildren();
     const source=api.readTune().source;
     const entries=cueBasinEntries(basins,source);
     for(const basin of entries.filter(item=>`${item.label} ${item.presetId}`.toLowerCase().includes(q))) {const option=document.createElement('option');option.value=basin.presetId;option.textContent=basin.label;select.append(option);}
     if([...select.options].some(item=>item.value===old))select.value=old;
-    byId('cue-basin-apply').disabled=!select.value;
+    byId('cue-basin-apply').disabled=basinLoading||!select.value;
   };
   byId('cue-basin-search').oninput=showBasins;
-  byId('cue-basin-apply').onclick=guard(async()=>{const id=byId('cue-basin-select').value;ensure();await editor.useBasin(id);syncPanels();status('Basin loaded into scene look draft');});
+  byId('cue-basin-apply').onclick=guard(async()=>{
+    if(basinLoading)return;
+    basinLoading=true;
+    const button=byId('cue-basin-apply'),id=byId('cue-basin-select').value;
+    button.disabled=true;button.textContent='Loading...';byId('cue-basin-status').textContent='Loading basin...';
+    try {
+      ensure();await editor.useBasin(id);syncPanels();
+      const retained=editor.state().tune.source?.cueSimulation?.retainedFields||[];
+      const message=retained.length
+        ? `Basin appearance loaded; scene simulation retained (${retained.map(id=>id.replace(/^volume-/, '')).join(', ')}).`
+        : 'Basin loaded into scene look draft';
+      status(message);byId('cue-basin-status').textContent=message;
+    } catch(error) {byId('cue-basin-status').textContent=error.message;throw error;}
+    finally {basinLoading=false;button.textContent='Use basin';button.disabled=!byId('cue-basin-select').value;}
+  });
   byId('cue-preview').onclick=guard(async()=>{accept();await preview();});
   byId('cue-save').onclick=guard(async()=>{accept();const result=await window.saveScene({result:true});if(!result?.ok)throw Error(result?.error||'Scene save failed');status(`Saved ${result.filename}`);render();});
   byId('cue-cinema').onclick=guard(()=>{accept();openCinema();});
   workspace.addContext({id:'cues',label:'Cues',node:panel,enter:()=>{render();},leave:()=>{editor.cancel();}});
   api.historyScope(panel);
-  window.kaminosSceneEdits.subscribe(()=>{if(workspace.state().context==='cues'&&!editor.active())render();});
+  window.kaminosSceneEdits.subscribe(state=>{
+    if(!state.active&&!state.replaying&&workspace.state().context==='cues'&&!editor.active())render();
+  });
   void api.listBasins().then(result=>{basins=result;showBasins();}).catch(failure);
-  return {open(){workspace.setMode('authoring');workspace.setContext('cues');render();panel.scrollTop=0;},state:()=>({phase,index,draft:editor.state()}),panel};
+  return {open(){workspace.setMode('authoring');workspace.setContext('cues');panel.scrollTop=0;},state:()=>({phase,index,draft:editor.state()}),panel};
 }
