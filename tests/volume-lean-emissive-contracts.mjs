@@ -60,5 +60,5 @@ assert.equal(leanInterpolate(...Array(8).fill(1), {x: 0.2, y: 0.7, z: 0.4}, mix)
 assert.match(RAYMARCH_NEIGHBORHOOD_WGSL, /max\(max\(support0, support1\), max\(support2, support3\)\)/);
 assert.match(core, /reconstructed = reconstructRaymarchNeighborhood\(neighborhood\);/);
 assert.match(core, /LEAN_EMISSIVE_RAYMARCH: selectEmissive/);
-assert.match(core, /const key=`\$\{multisampled\}:\$\{targetPipeline===readbackPipeline\}:\$\{gridSize\}:\$\{gridHeight\}:\$\{selectEmissive\}`/);
+assert.match(core, /const key=`\$\{multisampled\}:\$\{targetPipeline===readbackPipeline\}:\$\{gridSize\}:\$\{gridHeight\}:\$\{selectEmissive\}:\$\{selectCached\}`/);
 console.log('lean emissive admission and shared sampling contracts passed');
