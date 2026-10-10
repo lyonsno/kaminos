@@ -2207,7 +2207,7 @@ export function inflowGhostVelocityModel({ position, center = [0, 0], inletVeloc
 // and the shader is unchanged: strength = base x (1 + gust x s1), angle =
 // base + veer x s2.
 export const WIND_MODEL_IDENTITY = 'kaminos.volume.wind-model.v1';
-export const WIND_MODELS = Object.freeze(['steady', 'gusty']);
+export const WIND_MODELS = Object.freeze(['off', 'steady', 'gusty']);
 export const WIND_GUST_STEPS_PER_SECOND = 60;
 // The shader clamps the wind strength uniform to this ceiling (predictor and
 // main kernel); the effective receipt never claims more than the shader uses.
@@ -2272,6 +2272,11 @@ export function resolveWindConfig(controls = {}, gustSignal = { s1: 0, s2: 0, st
   const gust = clampFinite(controls.windGust, 0, 1, 0.6);
   const period = clampFinite(controls.windGustPeriod, 2, 30, 8);
   const veer = clampFinite(controls.windGustVeer, 0, 60, 25);
+  // Off is a model: no wind at all, whatever the strength slider holds (the
+  // request keeps the slider so turning the model back on restores it).
+  if (model === 'off') {
+    return { identity: WIND_MODEL_IDENTITY, requested: { model: requestedModel, ...base, gust, period, veer }, effective: { model: 'off', ...base, strength: 0, unsaturatedStrength: 0, saturated: false, gust: 0, period, veer, signal: [0, 0], step: Number.isFinite(gustSignal?.step) ? gustSignal.step : null } };
+  }
   if (model !== 'gusty') {
     return { identity: WIND_MODEL_IDENTITY, requested: { model: requestedModel, ...base, gust, period, veer }, effective: { model: 'steady', ...base, unsaturatedStrength: base.strength, saturated: false, gust: 0, period, veer: 0, signal: [0, 0], step: null } };
   }

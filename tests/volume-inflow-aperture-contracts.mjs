@@ -224,3 +224,23 @@ test('cockpit and schema carry the new controls', () => {
   const additive = schema.controls.filter(control => control.additiveSinceControlCount >= 219).map(control => control.additiveSinceControlCount);
   assert.deepEqual(additive, [219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248]);
 });
+
+// Noah 2026-10-09: "wind is turned off" meant the model select, which offered
+// only steady and gusty; the strength slider kept blowing. Off is a model.
+test('wind: the off model zeroes the effective wind whatever the strength slider holds, and the cockpit offers it', () => {
+  assert.deepEqual([...core.WIND_MODELS], ['off', 'steady', 'gusty']);
+  const off = core.resolveWindConfig({ windModel: 'off', windStrength: 0.7, windAngle: 180, windHeight: -0.8 });
+  assert.equal(off.effective.model, 'off');
+  assert.equal(off.effective.strength, 0);
+  assert.equal(off.effective.unsaturatedStrength, 0);
+  assert.equal(off.effective.saturated, false);
+  assert.equal(off.requested.model, 'off');
+  assert.equal(off.requested.strength, 0.7, 'the request keeps the slider so turning the model back on restores it');
+  assert.equal(off.effective.angleDeg, 180);
+  const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(index, /<select id="volume-wind-model"[^>]*>\s*<option value="off">Off<\/option>\s*<option value="steady"/);
+  assert.match(index, /Off: no wind at all, whatever Wind Strength holds/, 'the help says what off means');
+  // Unknown models still fall back to steady; steady and gusty are unchanged.
+  assert.equal(core.resolveWindConfig({ windModel: 'sideways', windStrength: 0.3 }).effective.model, 'steady');
+  assert.equal(core.resolveWindConfig({ windModel: 'steady', windStrength: 0.3 }).effective.strength, 0.3);
+});
