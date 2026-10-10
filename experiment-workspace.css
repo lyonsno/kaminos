@@ -1,0 +1,51 @@
+/* Experiment instruments use the same live controls as the other workspaces. */
+body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:310px minmax(0,1fr) 316px; }
+body.experiment-workspace #sidebar, body.experiment-workspace #volume-authored-mix-panel, body.experiment-workspace #viewport > #transform-bar, body.experiment-workspace #finger-fluid-bench-overlay { display:none !important; }
+#experiment-instruments { grid-row:2; grid-column:1; min-height:0; min-width:0; display:flex; flex-direction:column; background:#1b1c1e; border-right:1px solid #303134; }
+body.experiment-workspace.has-workbench-inspector #authoring-inspector { display:flex; flex-direction:column; grid-column:3; grid-row:2; border-left:1px solid #303134; }
+#experiment-instruments[hidden],#experiment-toolbar[hidden],#experiment-run-strip[hidden] { display:none; }
+.experiment-panel-heading { padding:17px 16px 13px; border-bottom:1px solid #303134; }
+.experiment-panel-heading h2 { margin:0; color:#e1e3e7; font-size:13px; text-transform:none; letter-spacing:0; }
+.experiment-panel-heading p { color:#92969e; font-size:11px; line-height:1.5; margin-top:6px; }
+.experiment-setup-body,.experiment-instruments-body { padding:16px; overflow:auto; min-height:0; }
+#experiment-tuning-title { font-size:12px; color:#a9d2d7; margin:22px 0 8px; }
+#experiment-tuning-help { color:#92999f; font-size:11px; line-height:1.5; margin-bottom:18px; }
+#experiment-setup-slot { margin-top:18px; }
+#experiment-setup-slot p { font-size:11px; line-height:1.6; color:#9499a2; }
+#experiment-setup-slot strong { display:block; font-size:12px; margin-bottom:5px; }
+#experiment-instruments details { margin-top:20px; padding-top:14px; border-top:1px solid #34363b; }
+#experiment-instruments summary { color:#c1c5cc; font-size:11px; cursor:pointer; margin-bottom:12px; }
+#experiment-instruments .panel { background:transparent; border:0; border-radius:0; padding:0; }
+#experiment-instrument-slot h3 { font-size:12px; color:#a9d2d7; margin:0 0 20px; }
+#experiment-instruments .ipbf-control { margin:0 0 19px; } #experiment-instruments .ipbf-control label { font-size:11px; color:#bcc0c8; }
+#experiment-instruments input[type=number] { background:#292b30; color:#e1e4e9; border:1px solid #43464e; border-radius:4px; padding:5px 7px; font-size:12px; font-variant-numeric:tabular-nums; }
+#experiment-instruments input[type=range] { accent-color:#9ebec7; } #experiment-instruments input[type=checkbox] { accent-color:#9ebec7; }
+#experiment-instruments .ipbf-help { font-size:10px; line-height:1.6; color:#9299a6; margin:8px 0 14px; }
+#experiment-instruments #ipbf-control-error { color:#f5a09d; margin:12px 0; font-size:11px; }
+#experiment-instruments .field-val { max-width:165px; } #experiment-details .finger-fluid-bench-downgrades { overflow-wrap:anywhere; }
+#experiment-toolbar { position:absolute; top:0; left:0; right:0; z-index:30; display:flex; align-items:center; gap:10px; padding:8px 12px; background:#191a1ded; border-bottom:1px solid #303134; color:#c7cbd3; font-size:11px; }
+#experiment-toolbar strong { font-size:11px; font-weight:500; } .experiment-toolbar-spacer { flex:1; }
+#experiment-toolbar button,#experiment-browser summary { background:transparent; color:#b8bcc5; border:1px solid #3b3f46; border-radius:4px; padding:6px 8px; font:11px -apple-system,sans-serif; cursor:pointer; }
+#experiment-toolbar button:hover { background:#333840; color:#fff; } #experiment-toolbar button:focus-visible { outline:2px solid #9ebec7; }
+#experiment-browser { position:relative; } #experiment-browser summary { list-style:none; }
+#experiment-browser>div { padding:10px 0; background:#24272c; border:1px solid #4c515b; border-radius:5px; box-shadow:0 8px 24px #0009; }
+#experiment-browser input { width:100%; padding:8px; background:#171a1e; border:1px solid #434952; color:#e2e7ed; border-radius:4px; font-size:11px; margin-bottom:8px; }
+.experiment-browser-list { display:flex; flex-direction:column; gap:3px; } #experiment-browser button { text-align:left; border:0; padding:7px 8px; background:transparent; color:#b8bcc5; font-size:11px; cursor:pointer; }
+#experiment-browser button:hover { background:#333840; color:#fff; }
+#experiment-browser button[hidden] { display:none; }
+#experiment-navigation-slot .navigation-input { margin:0; font-size:0; padding:0; background:transparent; border:0; }
+#experiment-navigation-slot select { font-size:10px; }
+#experiment-run-strip { position:absolute; bottom:0; left:0; right:0; z-index:30; min-height:45px; display:flex; align-items:center; gap:12px; padding:7px 12px; border-top:1px solid #343841; background:#191c22ed; font-size:10px; color:#a2adb9; }
+#experiment-run-controls { display:flex; align-items:center; gap:12px; flex:1; min-width:0; } #experiment-run-controls .ipbf-actions { display:flex; margin:0; gap:4px; }
+#experiment-run-strip .btn { margin:0; font-size:10px; padding:5px 9px; white-space:nowrap; }
+#experiment-run-strip #ipbf-control-status { font-size:10px; color:#aed7dd; line-height:1.5; }
+#experiment-clock { white-space:nowrap; font-variant-numeric:tabular-nums; }
+body.experiment-workspace #info-bar { bottom:91px; } body.experiment-workspace #navigation-hint { bottom:52px; } body.experiment-workspace #scene-edit-hud { bottom:70px; }
+@media(max-width:1150px) { body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:280px minmax(0,1fr) 284px; } }
+@media(max-width:800px) { body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:minmax(0,1fr) 270px; grid-template-rows:42px minmax(260px,1fr) 190px; } body.experiment-workspace #viewport { grid-column:1; grid-row:2; width:auto; } #experiment-instruments { grid-column:1; grid-row:3; } body.experiment-workspace.has-workbench-inspector #authoring-inspector { grid-column:2; grid-row:2/4; } #experiment-toolbar strong,#experiment-navigation-slot,#experiment-clock { display:none; } #experiment-source { width:100%; } #experiment-toolbar { gap:4px; padding:6px; } #experiment-run-strip { flex-wrap:wrap; } }
+@media(max-width:540px) { body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:minmax(0,1fr); grid-template-rows:42px minmax(280px,1fr) minmax(170px,25vh) minmax(170px,25vh); } #experiment-instruments { grid-column:1; grid-row:3; } body.experiment-workspace.has-workbench-inspector #authoring-inspector { grid-column:1; grid-row:4; } #experiment-run-controls { gap:6px; flex-wrap:wrap; } }
+
+#experiment-add-slot .scene-top-menu { position:relative; inset:auto; padding:0; background:transparent; border:0; box-shadow:none; }
+body.experiment-workspace #authoring-source-environment > h2 { display:none; }
+#authoring-inspector-tree-slot .scene-object-meta,#authoring-inspector-tree-slot .scene-object-chip,#authoring-inspector-tree-slot .scene-object-tools { display:none; }
+@media(max-width:800px) { body.experiment-workspace #navigation-hint { display:none; } }

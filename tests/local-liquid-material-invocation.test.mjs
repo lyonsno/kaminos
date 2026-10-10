@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFileSync} from 'node:fs';
+import {readMaterialControlsURL,MATERIAL_QUERY_KEYS} from '../finger-fluid-material-controls.mjs';
+import {normalizeLocalLiquidSetup,LOCAL_LIQUID_SCHEMA} from '../local-liquid-setup.mjs';
+const source=readFileSync(new URL('../local-liquid-host.mjs',import.meta.url),'utf8');
+let start=source.indexOf('  const tuningURL=');if(start<0)start=source.indexOf('  const material=');
+const end=source.indexOf('  const solver = await',start);assert.ok(start>=0&&end>start);
+const current={schema:LOCAL_LIQUID_SCHEMA,support:'retained_analytical_basin',particleCount:12288,densityIterations:1,materialControls:{particleRepulsionStrength:.25,capillaryStrength:.4,freeFlightViscosityBoost:.1}};
+const context={authored:current,globalThis:{location:{href:'http://localhost/?finger_fluid_density_iterations=2'}},readMaterialControlsURL,MATERIAL_QUERY_KEYS,normalizeLocalLiquidSetup};
+vm.runInNewContext(source.slice(start,end)+'\nresult=material;',context);
+assert.equal(context.result.densityIterations,1,'explicit current setup must beat stale invocation URL on remount');
+assert.equal(context.result.particleRepulsionStrength,.25);
+console.log('Host remount consumes explicit current controls rather than an old browser URL');

@@ -7,13 +7,15 @@ export function createControlSlots(document, entries) {
     node.before(marker);
     return { node, destination, marker };
   });
-  return {
-    showAuthoring() { for (const { node, destination } of slots) destination.append(node); },
-    showWorkbench() { for (const { node, marker } of slots) marker.after(node); },
+  const setActive = active => {
+    for (const { node, destination, marker } of slots) {
+      if (active) destination.append(node); else marker.after(node);
+    }
   };
+  return { setActive, showAuthoring: () => setActive(true), showWorkbench: () => setActive(false) };
 }
 
-export function installAuthoringWorkspace({ document, initialMode = 'workbench', beforeSwitch = () => true, openWorkbenchTab, edits }) {
+export function installAuthoringWorkspace({ document, initialMode = 'workbench', beforeSwitch = () => true, afterSwitch = () => {}, openWorkbenchTab, edits }) {
   const byId = id => document.getElementById(id);
   const header = document.createElement('header');
   header.id = 'authoring-header';
@@ -30,7 +32,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   inspector.id = 'authoring-inspector'; inspector.setAttribute('aria-label', 'Properties');
   inspector.innerHTML = `<nav class="inspector-switch" aria-label="Properties context"><button type="button" data-inspector-context="object" aria-pressed="true">Selection</button><button type="button" data-inspector-context="scene" aria-pressed="false">Scene</button></nav>
     <div id="authoring-object-properties" class="authoring-inspector-body"><div id="authoring-transform-slot"></div><div id="authoring-type-slot"></div><details id="authoring-object-tools"><summary>Object tools</summary></details></div>
-    <div id="authoring-scene-properties" class="authoring-inspector-body" hidden><h2>Composition</h2><div class="scene-data-choices"><button type="button" id="scene-fire-data">Fire & smoke data</button><button type="button" id="scene-water-data">Water simulation data</button></div><div id="authoring-composition-slot"></div><details open id="authoring-world-slot"><summary>Environment</summary></details><div id="authoring-water-slot"></div><details id="authoring-render-slot"><summary>Rendering</summary></details></div>`;
+    <div id="authoring-scene-properties" class="authoring-inspector-body" hidden><details id="authoring-inspector-scene-tree" hidden><summary>Scene objects</summary><div id="authoring-inspector-tree-slot"></div></details><h2>Composition</h2><div class="scene-data-choices"><button type="button" id="scene-fire-data">Fire & smoke data</button><button type="button" id="scene-water-data">Water simulation data</button></div><div id="authoring-composition-slot"></div><details open id="authoring-world-slot"><summary>Environment</summary></details><div id="authoring-water-slot"></div><details id="authoring-render-slot"><summary>Rendering</summary></details></div>`;
   const toolbar = document.createElement('div'); toolbar.id = 'authoring-viewport-tools';
   toolbar.innerHTML = `<div id="authoring-add-slot"></div><details id="authoring-presets"><summary>Presets</summary><div><button type="button" id="apply-burner-preset">Burner setup</button><p>Apply to the current fire field</p></div></details><div id="authoring-gizmo-slot" aria-label="Transform gizmo"></div><details id="authoring-viewport-settings"><summary>Viewport</summary><div><label><input id="viewport-show-gizmos" type="checkbox" checked> Transform gizmos</label><label><input id="viewport-show-hints" type="checkbox" checked> Navigation hints</label></div></details><div class="authoring-header-spacer"></div><button type="button" id="authoring-frame" title="Frame selected (F)">Frame</button><button type="button" id="authoring-undo" title="Undo (Cmd/Ctrl Z)">Undo</button><button type="button" id="authoring-redo" title="Redo (Cmd/Ctrl Shift Z)">Redo</button><div id="authoring-navigation-slot"></div>`;
   document.body.prepend(header);
@@ -51,6 +53,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('transform-inspector'), 'authoring-transform-slot');
   move(byId('selected-light-properties'), 'authoring-type-slot');
   move(byId('selected-flame-properties'), 'authoring-type-slot');
+  move(byId('selected-water-properties'), 'authoring-type-slot');
   move(byId('selected-bed-properties'), 'authoring-type-slot');
   move(byId('shared-flame-domain-properties'), 'authoring-type-slot');
   move(byId('selected-mesh-properties'), 'authoring-type-slot');
@@ -81,8 +84,30 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   if (exportButton) move(exportButton, 'authoring-document-actions');
   move(byId('composition-capture'), 'authoring-document-actions');
   move(byId('transform-bar'), 'authoring-object-tools');
-  const slots = createControlSlots(document, entries);
-  let mode = null;
+  const inspectorEntries = entries.filter(entry => inspector.contains(entry.destination));
+  const workspaceSlots = createControlSlots(document, entries.filter(entry => !inspector.contains(entry.destination)));
+  const inspectorSlots = createControlSlots(document, inspectorEntries);
+  const sceneTreeSlots = createControlSlots(document, [{node: byId('scene-object-list').closest('.panel'), destination: byId('authoring-inspector-tree-slot')}]);
+  let mode = null, inspectorActive = false;
+  // One inspector and one set of live property controls serve both modes.
+  function setInspectorActive(active) {
+    if (inspectorActive === active) return;
+    if (active) {
+      if(renderingPanel)workbenchRenderingHidden=renderingPanel.hidden;
+      inspectorSlots.setActive(true); if(renderingPanel)renderingPanel.hidden=false;
+    } else {
+      inspectorSlots.setActive(false); if(renderingPanel)renderingPanel.hidden=workbenchRenderingHidden;
+    }
+    inspectorActive = active;
+  }
+  function setWorkbenchInspector(active) {
+    if (mode !== 'workbench') return;
+    document.activeElement?.blur?.();
+    setInspectorActive(active); sceneTreeSlots.setActive(active);
+    if (active && byId('transform-inspector').hidden) setContext('scene');
+    byId('authoring-inspector-scene-tree').hidden=!active;
+    document.body.classList.toggle('has-workbench-inspector',active);
+  }
   function setContext(context) {
     const object = context === 'object';
     byId('authoring-object-properties').hidden = !object;
@@ -96,14 +121,14 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     // Blurring commits a normal field edit through its existing handler.
     document.activeElement?.blur?.();
     if (next === 'authoring') {
-      if(renderingPanel)workbenchRenderingHidden=renderingPanel.hidden;
-      slots.showAuthoring();if(renderingPanel)renderingPanel.hidden=false;
+      workspaceSlots.setActive(true);setInspectorActive(true);
     } else {
-      slots.showWorkbench();if(renderingPanel)renderingPanel.hidden=workbenchRenderingHidden;
+      workspaceSlots.setActive(false);setInspectorActive(false);
     }
     mode = next;
     document.body.dataset.workspace = mode;
     header.querySelectorAll('[data-workspace-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.workspaceMode === mode)));
+    afterSwitch(mode);
     return true;
   }
   header.querySelectorAll('[data-workspace-mode]').forEach(button => button.addEventListener('click', () => setMode(button.dataset.workspaceMode)));
@@ -157,5 +182,5 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   }
   document.body.classList.add('has-authoring-workspace');
   setMode(initialMode);
-  return { setMode, setContext, state: () => ({ mode, context: byId('authoring-object-properties').hidden ? 'scene' : 'object' }) };
+  return { setMode, setContext, setWorkbenchInspector, state: () => ({ mode, context: byId('authoring-object-properties').hidden ? 'scene' : 'object' }) };
 }

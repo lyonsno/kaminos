@@ -20,7 +20,7 @@ export function mergeAndValidateLocalLiquidEmitterPose(settings, currentPose, pa
 export function createLocalLiquidEmitterSceneRecord({
   id,
   transform,
-  settings = { schema: LOCAL_LIQUID_EMITTER_SCHEMA, baseRadius: 0.08, strength: 1.15, rate: 1200 },
+  settings = { schema: LOCAL_LIQUID_EMITTER_SCHEMA, baseRadius: 0.08, strength: 1.15, rate: null, inletProfile: 'plug' },
   label = 'Water emitter',
   fileName = label,
   groupId = null,
@@ -80,6 +80,7 @@ export function createLocalLiquidEmitterObject(THREE, input) {
   const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.052, 0.04, 18), nozzleMaterial);
   nozzle.rotation.x = Math.PI / 2;
   nozzle.position.z = 0.04;
+  for(const mesh of [body,nozzle])mesh.scale.set(record.localLiquidEmitter.baseRadius/.08,1,record.localLiquidEmitter.baseRadius/.08);
   object.add(body, nozzle);
   object.userData.kaminosSceneObject = {
     id: record.id,
