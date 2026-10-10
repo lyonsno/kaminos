@@ -9,7 +9,7 @@ import { assertSource } from './source-identity.mjs';
 import { parseArgs } from 'node:util';
 
 const { values } = parseArgs({ options: Object.fromEntries(
-  ['repo-root', 'expected-commit', 'state-root', 'chrome', 'server-port', 'out'].map(name => [name, { type: 'string' }])) });
+  ['repo-root', 'expected-commit', 'state-root', 'chrome', 'server-port', 'out', 'plan'].map(name => [name, { type: 'string' }])) });
 const out = path.resolve(values.out ?? 'supermat-perf-suite');
 const summary = { schema: 'supermat.perf-suite.v0', status: 'failed', phase: 'arguments', steps: [], startedAt: new Date().toISOString() };
 const persist = async () => {
@@ -78,27 +78,45 @@ try {
   summary.phase = 'kernel-bench';
   run('bench', witness, [...common, '--stage', 'bench', '--fixture', `${state}/reference/ring-0000-512`, '--weights', `${state}/weights/f16`]);
 
-  summary.phase = 'route-timing';
-  // Reference-faithful profile (F32 activations, unfused) vs the demo's product
-  // profile (F16 activations, fused GroupNorm+SiLU), both on F16 weights.
-  const routes = [
-    ['route-512-faithful', 'ring-0000-512', 'f16', { activations: 'f32', fuseNorm: false }],
-    ['route-512-f16act', 'ring-0000-512', 'f16', { activations: 'f16', fuseNorm: false }],
-    ['route-512-product', 'ring-0000-512', 'f16', { activations: 'f16', fuseNorm: true }],
-    ['route-1024-faithful', 'ring-0000-1024', 'f16', { activations: 'f32', fuseNorm: false }],
-    ['route-1024-product', 'ring-0000-1024', 'f16', { activations: 'f16', fuseNorm: true }],
-  ];
-  for (const [id, fixture, weights, options] of routes) {
-    run(id, witness, [...common, '--stage', 'route', '--fixture', `${state}/reference/${fixture}`, '--weights', `${state}/weights/${weights}`,
-      ...image, '--options', JSON.stringify(options)]);
-  }
+  const plan = values.plan ?? 'profiles';
+  summary.plan = plan;
+  if (!['profiles', 'coop-sweep'].includes(plan)) throw new Error(`unknown plan ${plan}`);
+  const page = (id, query) => run(id, demo, ['--url',
+    `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
+    '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
+  if (plan === 'profiles') {
+    summary.phase = 'route-timing';
+    // Reference-faithful profile (F32 activations, unfused) vs the demo's product
+    // profile (F16 activations, fused GroupNorm+SiLU), both on F16 weights.
+    const routes = [
+      ['route-512-faithful', 'ring-0000-512', 'f16', { activations: 'f32', fuseNorm: false }],
+      ['route-512-f16act', 'ring-0000-512', 'f16', { activations: 'f16', fuseNorm: false }],
+      ['route-512-product', 'ring-0000-512', 'f16', { activations: 'f16', fuseNorm: true }],
+      ['route-1024-faithful', 'ring-0000-1024', 'f16', { activations: 'f32', fuseNorm: false }],
+      ['route-1024-product', 'ring-0000-1024', 'f16', { activations: 'f16', fuseNorm: true }],
+    ];
+    for (const [id, fixture, weights, options] of routes) {
+      run(id, witness, [...common, '--stage', 'route', '--fixture', `${state}/reference/${fixture}`, '--weights', `${state}/weights/${weights}`,
+        ...image, '--options', JSON.stringify(options)]);
+    }
 
-  summary.phase = 'cooperative-run-frames';
-  const coop = [['coop-faithful', 'weights=/scratch/supermat-weights/f16/&activations=f32&fuseNorm=0'],
-    ['coop-product', 'weights=/scratch/supermat-weights/f16/']];
-  for (const [id, query] of coop) {
-    run(id, demo, ['--url', `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
-      '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
+    summary.phase = 'cooperative-run-frames';
+    const coop = [['coop-faithful', 'weights=/scratch/supermat-weights/f16/&activations=f32&fuseNorm=0'],
+      ['coop-product', 'weights=/scratch/supermat-weights/f16/']];
+    for (const [id, query] of coop) {
+      run(id, demo, ['--url', `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
+        '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
+    }
+  } else {
+    // Cooperative 512 throughput vs scene smoothness: duty target sweep for
+    // both profiles, with a blocking baseline per profile.
+    summary.phase = 'cooperative-sweep';
+    const profiles = [['faithful', 'activations=f32&fuseNorm=0'], ['product', '']];
+    // Profiles alternate within each setting so machine-load drift does not favor one.
+    for (const [name, query] of profiles) page(`blocking-${name}`, `cooperative=0&${query}`);
+    for (const dutyMs of [12, 20, 30]) {
+      for (const [name, query] of profiles) page(`coop-${name}-${dutyMs}ms`, `dutyMs=${dutyMs}&${query}`);
+    }
   }
 
   summary.phase = 'control-bench';

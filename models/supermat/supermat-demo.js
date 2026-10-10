@@ -23,6 +23,8 @@ const autopauseMs = params.has('autopause') ? Number(params.get('autopause')) : 
 const pauseForMs = Number(params.get('pausefor') ?? 1500);
 const autostopMs = params.has('autostop') ? Number(params.get('autostop')) : null;
 const repeat = Math.max(1, Number(params.get('repeat') ?? 1));
+// Cooperative duty target in ms of completed queue time (route default when absent).
+const dutyMs = params.has('dutyMs') ? Number(params.get('dutyMs')) : null;
 // URL-supplied images run only with ?autorun=1 (agent smokes); chosen or
 // dropped images wait for Infer materials.
 const autorun = params.get('autorun') === '1';
@@ -236,7 +238,8 @@ async function infer({ final = true } = {}) {
       active?.abort.abort(new Error('stopped by autostop'));
     }, autostopMs);
     const job = route.enqueue({ jobId: runId, execute: invocation => adapter.run({ image: current, size, onRunProgress: showProgress,
-      schedule: cooperative ? { runtime: route.runtime, invocation, control, signal: abort.signal } : null }) });
+      schedule: cooperative ? { runtime: route.runtime, invocation, control, signal: abort.signal,
+        ...(dutyMs ? { targetDutyMs: dutyMs } : {}) } : null }) });
     const completion = await job.completion;
     if (completion.status !== 'succeeded') {
       const failure = completion.failure;
@@ -249,7 +252,11 @@ async function infer({ final = true } = {}) {
     record.wallMs = wallMs;
     record.timings = lastResult.timings;
     record.dutyCount = lastResult.dutyCount;
+    record.targetDutyMs = lastResult.schedule?.targetDutyMs ?? null;
     record.longestDutyQueueMs = Math.max(0, ...lastResult.duties.map(duty => duty.queueMs ?? 0));
+    // Per-duty timeline (ms since run start) for scheduling diagnosis.
+    record.dutyTimeline = lastResult.duties.map(({ label, estimatedFlops, submittedAt, gateWaitMs, queueMs, dutyFlopsBudget }) =>
+      ({ label, gflops: estimatedFlops / 1e9, at: submittedAt - started, gateWaitMs, queueMs, budgetGflops: dutyFlopsBudget / 1e9 }));
     record.slowestDuties = [...lastResult.duties].sort((a, b) => (b.queueMs ?? 0) - (a.queueMs ?? 0)).slice(0, 6)
       .map(({ label, queueMs, estimatedFlops, gateWaitMs }) => ({ label, queueMs, gflops: estimatedFlops / 1e9, gateWaitMs }));
     render();
@@ -333,6 +340,7 @@ drop.addEventListener('drop', event => {
 });
 
 try {
+  if (dutyMs !== null && !(dutyMs > 0)) throw new Error(`dutyMs must be a positive number, got ${params.get('dutyMs')}`);
   if (!navigator.gpu) throw new Error('WebGPU is not available in this browser');
   const context = await requestBrowserWebGpuDevice(navigator.gpu, await superMatDeviceOptions(navigator.gpu, { adapterName: 'supermat-demo' }));
   device = context.device;
