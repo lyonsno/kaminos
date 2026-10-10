@@ -14,7 +14,7 @@ tags:
 
 # FLUX.2 [klein] 4B for WebGPU
 
-Quantized weights of [FLUX.2 [klein] 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B), packed for text-to-image generation entirely in the browser with the [Kaminos](https://github.com/lyonsno/kaminos) WebGPU inference kit. The page downloads about 3.9 GB once (everything except the embedding table, from which it fetches only the rows a prompt uses), caches it, and generates on the visitor's own GPU. No server-side compute is involved.
+Quantized weights of [FLUX.2 [klein] 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B), packed for text-to-image generation entirely in the browser with the [Kaminos](https://github.com/lyonsno/kaminos) WebGPU inference kit. The page downloads about 3.6 GB once (gzip copies of everything except the embedding table, from which it fetches only the rows a prompt uses), caches it, and generates on the visitor's own GPU. No server-side compute is involved.
 
 **[Try it in your browser](https://lyonsno.github.io/kaminos/inference-kit/klein/)** · [Source](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein)
 
@@ -30,7 +30,7 @@ In Chrome, a 512 × 512 image (4 steps) takes 6–7 seconds on an Apple M4 Max a
 | `dit/` | Rectified-flow transformer | block linears int4 (group 64, affine); embedders, modulation and output projections int8 (group 64); norms f16 | 2.27 GB |
 | `vae/` | VAE decoder and latent batch-norm statistics | f16; statistics f32 | 0.1 GB |
 
-Each folder has a `manifest.json` listing every tensor's shape, format, byte offset, and the SHA-256 of each file. Quantization is weight-only. Activations and the residual stream stay in floating point.
+Each folder has a `manifest.json` listing every tensor's shape, format, byte offset, and the SHA-256 of each file. Every bundle and the tokenizer also have a gzip copy (`.gz`, listed in the manifest), which is what the page downloads; the embedding table stays uncompressed for range requests. Quantization is weight-only. Activations and the residual stream stay in floating point.
 
 ## Changes from the original
 

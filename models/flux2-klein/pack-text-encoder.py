@@ -36,6 +36,7 @@ def main():
     ap.add_argument("--model-dir", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--format", default="f16", choices=["f16", "i8", "i4"])
+    ap.add_argument("--group", type=int, default=GROUP, help="quantization group (multiple of 8)")
     args = ap.parse_args()
     src = Path(args.model_dir) / "text_encoder"
     out = Path(args.out)
@@ -52,7 +53,7 @@ def main():
 
     layers_needed = max(TAPS)
     manifest = {"schema": "kaminos.flux2-klein.text-encoder-weights.v1", "source": source_identity(src), "config": config,
-                "taps": list(TAPS), "layers": layers_needed, "format": args.format, "group": GROUP, "bundles": {}}
+                "taps": list(TAPS), "layers": layers_needed, "format": args.format, "group": args.group, "bundles": {}}
 
     for i in range(layers_needed):
         p = f"model.layers.{i}."
@@ -81,7 +82,7 @@ def main():
 
         for name, w in tensors:
             w32 = w.numpy()
-            fmt = args.format if (w32.ndim == 2 and w32.shape[1] % GROUP == 0) else "f16"
+            fmt = args.format if (w32.ndim == 2 and w32.shape[1] % args.group == 0) else "f16"
             if fmt == "f16":
                 a = w32.astype(np.float16)
                 if not np.all(np.isfinite(a)):
@@ -89,10 +90,10 @@ def main():
                 data = a.tobytes()
                 entries.append({"name": name, "format": "f16", "shape": list(a.shape), "offset": put(data), "bytes": len(data)})
             else:
-                qdata, sdata, deq = quantize(w32, fmt)
+                qdata, sdata, deq = quantize(w32, fmt, args.group)
                 err = float(np.linalg.norm(deq - w32) / max(np.linalg.norm(w32), 1e-30))
-                entries.append({"name": name, "format": fmt, "shape": list(w32.shape), "offset": put(qdata), "bytes": len(qdata),
-                                "scale_offset": put(sdata), "scale_bytes": len(sdata), "weight_rel_l2": err})
+                entries.append({"name": name, "format": fmt, "group": args.group, "shape": list(w32.shape), "offset": put(qdata),
+                                "bytes": len(qdata), "scale_offset": put(sdata), "scale_bytes": len(sdata), "weight_rel_l2": err})
         blob = b"".join(parts)
         bname = f"layer{i:02d}"
         (out / f"te-{bname}.bin").write_bytes(blob)

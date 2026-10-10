@@ -102,7 +102,7 @@ export class KleinTransformer {
     const format = t.format ?? 'f16';
     const elemOff = format === 'f16' ? t.offset / 2 : t.offset / 4;
     return { buf: b.buf, format, elemOff, byteOff: t.offset, bytes: t.bytes, shape: t.shape,
-      scaleOff: t.scale_offset !== undefined ? t.scale_offset / 2 : 0 };
+      scaleOff: t.scale_offset !== undefined ? t.scale_offset / 2 : 0, group: t.group ?? this.manifest.group ?? 64 };
   }
 
   buffer(bytes, usage = 0) {
@@ -137,12 +137,12 @@ export class KleinTransformer {
   // Under a cooperative schedule a GEMM above the duty budget runs as tile-aligned column
   // ranges with a split point between them (GEMM v2 only; the v1 parity kernel never splits).
   async gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bType = 'f16', c, cOff = 0, cRs, cBs = 0,
-    M, N, K, batch = 1, alpha = 1, epilogue = 'store', gate = null, gateOff = 0, scaleOff = 0, bDiv = 1, label = 'gemm' }) {
+    M, N, K, batch = 1, alpha = 1, epilogue = 'store', gate = null, gateOff = 0, scaleOff = 0, group = 64, bDiv = 1, label = 'gemm' }) {
     // gemmVersion 2 (default) is the probe-derived kernel; 1 keeps the original parity kernel for A/B.
     const v2 = (this.gemmVersion ?? 2) === 2 && K % 4 === 0;
     const pipe = v2
-      ? this.pipeline(`gemm2-${bType}-${epilogue}-${this.sharedType ?? 'f32'}`, gemmShaderV2({ bType, epilogue, sType: this.sharedType ?? 'f32' }))
-      : this.pipeline(`gemm-${bType}-${epilogue}`, gemmShader({ bType, epilogue }));
+      ? this.pipeline(`gemm2-${bType}-g${group}-${epilogue}-${this.sharedType ?? 'f32'}`, gemmShaderV2({ bType, epilogue, sType: this.sharedType ?? 'f32', group }))
+      : this.pipeline(`gemm-${bType}-g${group}-${epilogue}`, gemmShader({ bType, epilogue, group }));
     const issue = (nBase, nCount) => {
       const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, gateOff, bDiv, scaleOff, nBase, 0, 0, 0]);
       const entries = [{ binding: 0, resource: { buffer: a } }, { binding: 1, resource: { buffer: b } },
@@ -164,7 +164,7 @@ export class KleinTransformer {
   linear(enc, x, rows, weight, out, opts = {}) {
     const [N, K] = weight.shape;
     return this.gemm(enc, { a: x, aOff: opts.aOff ?? 0, aRs: opts.aRs ?? K, b: weight.buf, bOff: weight.elemOff, bRs: K,
-      bType: weight.format, scaleOff: weight.scaleOff,
+      bType: weight.format, scaleOff: weight.scaleOff, group: weight.group,
       c: out, cOff: opts.cOff ?? 0, cRs: opts.cRs ?? N, M: rows, N, K, epilogue: opts.epilogue ?? 'store',
       gate: opts.gate, gateOff: opts.gateOff ?? 0, label: opts.label ?? 'linear' });
   }

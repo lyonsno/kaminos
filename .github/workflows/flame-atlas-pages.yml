@@ -9,6 +9,7 @@ on:
       - models/flux2-klein/index.html
       - models/flux2-klein/klein-*.js
       - models/flux2-klein/qwen-tokenizer.js
+      - models/flux2-klein/assets/**
       - webgpu-inference-kit/src/**
       - scripts/assemble-pages-site.mjs
       - .github/workflows/flame-atlas-pages.yml

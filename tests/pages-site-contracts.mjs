@@ -28,7 +28,7 @@ test("Pages site keeps the flame boutique at the root and adds only the Klein de
   }
   const extra = walk(site).filter(file => !fs.existsSync(path.join(atlas, file)));
   for (const file of extra) {
-    assert.match(file, /^(inference-kit\/klein\/[^/]+\.(html|js)|webgpu-inference-kit\/src\/.+\.js)$/, `${file} is outside the published set`);
+    assert.match(file, /^(inference-kit\/klein\/[^/]+\.(html|js)|inference-kit\/klein\/assets\/[^/]+\.(jpg|png)|webgpu-inference-kit\/src\/.+\.js)$/, `${file} is outside the published set`);
   }
   assert.ok(fs.existsSync(path.join(site, "inference-kit", "klein", "index.html")));
   assert.ok(!fs.existsSync(path.join(site, "serve.py")));
@@ -59,5 +59,16 @@ test("Pages workflow uploads the assembled site", () => {
   assert.match(workflow, /path:\s*_site\s*$/m);
   for (const trigger of ["models/flux2-klein/index.html", "models/flux2-klein/klein-*.js", "webgpu-inference-kit/src/**", "scripts/assemble-pages-site.mjs"]) {
     assert.ok(workflow.includes(`- ${trigger}`), `workflow does not trigger on ${trigger}`);
+  }
+});
+
+test("every relative src in the Klein demo page resolves inside the site", async () => {
+  const site = await assembled();
+  const page = path.join(site, "inference-kit", "klein", "index.html");
+  const sources = [...fs.readFileSync(page, "utf8").matchAll(/\ssrc="([^"]+)"/g)].map(match => match[1]).filter(src => !/^[a-z]+:/i.test(src));
+  assert.ok(sources.length > 0, "the demo page must reference its example image");
+  for (const src of sources) {
+    const target = path.resolve(path.dirname(page), src);
+    assert.ok(target.startsWith(site + path.sep) && fs.existsSync(target), `index.html src ${src} is missing from the site`);
   }
 });

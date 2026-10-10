@@ -62,15 +62,15 @@ export class KleinTextEncoder {
     const b = this.weights[`layer${String(layer).padStart(2, '0')}`]; const t = b.tensors[name];
     const format = t.format ?? 'f16';
     return { buf: b.buf, format, elemOff: format === 'f16' ? t.offset / 2 : t.offset / 4, shape: t.shape,
-      scaleOff: t.scale_offset !== undefined ? t.scale_offset / 2 : 0 };
+      scaleOff: t.scale_offset !== undefined ? t.scale_offset / 2 : 0, group: t.group ?? this.manifest.group ?? 64 };
   }
 
   // Same splitting contract as KleinTransformer.gemm: column ranges under a cooperative budget.
-  async gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bDiv = 1, bType = 'f16', c, cOff = 0, cRs, cBs = 0, M, N, K, batch = 1, alpha = 1, epilogue = 'store', scaleOff = 0, label = 'gemm' }) {
+  async gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bDiv = 1, bType = 'f16', c, cOff = 0, cRs, cBs = 0, M, N, K, batch = 1, alpha = 1, epilogue = 'store', scaleOff = 0, group = 64, label = 'gemm' }) {
     const v2 = (this.gemmVersion ?? 2) === 2 && K % 4 === 0;
     const st = this.sharedType ?? 'f32';
-    const pipe = v2 ? this.pipeline(`gemm2-${bType}-${epilogue}-${st}`, gemmShaderV2({ bType, epilogue, sType: st }))
-      : this.pipeline(`gemm-${bType}-${epilogue}`, gemmShader({ bType, epilogue }));
+    const pipe = v2 ? this.pipeline(`gemm2-${bType}-g${group}-${epilogue}-${st}`, gemmShaderV2({ bType, epilogue, sType: st, group }))
+      : this.pipeline(`gemm-${bType}-g${group}-${epilogue}`, gemmShader({ bType, epilogue, group }));
     const issue = (nBase, nCount) => {
       const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, 0, bDiv, scaleOff, nBase, 0, 0, 0]);
       const entries = [a, b, c, u].map((buffer, i) => ({ binding: i, resource: { buffer } }));
@@ -92,7 +92,7 @@ export class KleinTextEncoder {
 
   linear(enc, x, rows, weight, out, epilogue = 'store') {
     const [N, K] = weight.shape;
-    return this.gemm(enc, { a: x, aRs: K, b: weight.buf, bOff: weight.elemOff, bRs: K, bType: weight.format, scaleOff: weight.scaleOff,
+    return this.gemm(enc, { a: x, aRs: K, b: weight.buf, bOff: weight.elemOff, bRs: K, bType: weight.format, scaleOff: weight.scaleOff, group: weight.group,
       c: out, cRs: N, M: rows, N, K, epilogue, label: 'te.linear' });
   }
 

@@ -35,7 +35,9 @@ function frameStats(gaps) {
     over33ms: gaps.filter(g => g > 33.4).length, over100ms: gaps.filter(g => g > 100).length };
 }
 
-export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = () => {} }) {
+// load: false returns with the scene already drawing and no weights fetched; call demo.load()
+// to fetch them, so a page can animate through a long first download.
+export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = () => {}, load = true }) {
   const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter?.features.has('shader-f16')) throw new Error('WebGPU with shader-f16 is required');
   const features = ['shader-f16', ...(adapter.features.has('timestamp-query') ? ['timestamp-query'] : [])];
@@ -45,7 +47,6 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
   const session = await createWebGpuInferenceSession({ sessionId: `flux2-klein:${crypto.randomUUID()}`, device, adapterName: 'browser-primary-adapter' });
   const foreground = createWebGpuForegroundService({ routeId: KLEIN_ROUTE_ID, device });
   const pipeline = new KleinPipeline(device, { ...urls, ...kernels });
-  await pipeline.load((part, name, p) => onStatus({ phase: 'load', detail: `${part} ${name}`, ...p }));
 
   // Live scene through the foreground service.
   const surface = canvas.getContext('webgpu');
@@ -133,6 +134,11 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
   }
   function stop(reason = 'stopped by user') { active?.abort.abort(new Error(reason)); }
 
-  return { device, pipeline, generate, togglePause, stop, scene, residentBytes: pipeline.residentBytes,
-    loadMs: pipeline.timings.loadMs, kernels: pipeline.kernels };
+  async function loadWeights(status = onStatus) {
+    await pipeline.load((part, name, p) => status({ phase: 'load', part, detail: `${part} ${name}`, ...p }));
+  }
+  if (load) await loadWeights();
+
+  return { device, pipeline, generate, togglePause, stop, scene, load: loadWeights, residentBytes: pipeline.residentBytes,
+    get loadMs() { return pipeline.timings.loadMs; }, kernels: pipeline.kernels };
 }
