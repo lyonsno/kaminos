@@ -1,6 +1,6 @@
 # Flame system performance ledger
 
-Updated 2026-10-08. This is a working budget ledger, not a benchmark claim. Its purpose is to make room for larger fluid grids and composed scene features while protecting the accepted flame-driven light character. Keep measurements, structural work estimates, and missing measurements distinct.
+Updated 2026-10-10. This is a working budget ledger, not a benchmark claim. Its purpose is to make room for larger fluid grids and composed scene features while protecting the accepted flame-driven light character. Keep measurements, structural work estimates, and missing measurements distinct.
 
 ## Current budget model
 
@@ -100,6 +100,29 @@ These ratios describe packed receiver fields, not area-weighted physical power. 
 All12 lighting-only frames were inspected: the kiln and broad wall/door response persist, with no gross collapse at the captured view. This is not wall/opening fidelity or motion acceptance; global field errors and the17–19% original back-field energy deficit remain material. Presentation-frame identity is not independently recorded for these screenshots; raw GPU fields bear the numeric comparison.
 
 Budget interpretation: cheaper blockers demonstrably buy a2.4–2.8× refresh reduction, but13–15ms recurring visibility alone still crowds out fluid-grid and composition work. A60Hz frame is16.67ms; the candidate consumes78–89% of that budget before fluid simulation, source discovery/preparation, scene/GI or visible-volume rendering. This is budget arithmetic, not measured application FPS. Keep exact bounded queries as a useful lossless control; do not promote either occupancy setting as the live-lighting solution. The next architecture decision is how to avoid refreshing1.625million receiver-ray visibility queries whenever source guidance moves.
+
+## October 10: detailed near queries dominate the hybrid occupancy path
+
+Operator working allocation is provisionally2–3ms for the complete incremental recurring lighting pipeline around60Hz on this machine, preserving smoke→wall scattering and independent surface trim. This is a budget target, not a measured production total.
+
+Source4db9e082 / Greenroom e17a3650f03c / dataset `beaming-bounded-visibility-1008/occupancy-split-128-001`: native Apple metal-3/nonfallback, independent Chrome for Testing154.0.8037.92, same authored kiln/basin, guided8/.16/GI10, viewport1600×1200, 194,914surface+8,192smoke receivers,1,624,848 rays,412,879 triangles. Scene occupancy128×256×128, .27067523source-unit exact-near radius; original/displaced/split RGB replay holds extinction/visible flame/burner fixed and uses offline CPU-moment guidance. This is not production live-emission proposal generation. Named experiment stack/base020865d1, not current-main integration.
+
+| Same-run scope | Valid samples | Median GPU ms | Range ms |
+| --- | ---: | ---: | --- |
+| Fused hybrid visibility |32|26.941818|13.153216–35.522374|
+| Split exact-near triangles |31|25.312906|11.816236–33.674403|
+| Split gated-far occupancy |31|2.901081|1.314563–10.398757|
+| Per-record near+far sum |31|28.349527|13.170757–37.513969|
+| Fused full lighting command span |32|29.145326|13.634417–37.451637|
+| Split full lighting command span |31|30.001710|13.588792–43.840372|
+
+32alternating-order pairs complete. Full hit buffers and all front/back/smoke RGBA output bytes match between arms; original source/output restoration matches.63timestamp records valid,1invalid nonmonotonic record retained with null costs (pair18 split); final report is `parity-passed-timing-partial`. No browser/HTTP failures. Instrumentation/design reviews preceded native execution and do not independently endorse these measured numbers.
+
+Near dominates31/31valid split records, median within-record share89.7157%. Split-stage sum versus paired fused visibility has median ratio1.09617, so pass separation adds scheduling/compiler/dispatch effects rather than supplying exact fused internal attribution. Large timing variation and different run conditions mean the earlier12.95ms hybrid result and this26.94ms fused median are not a causal regression comparison. Do not sum separate stage medians.
+
+Only346,269of1,624,848 original-source rays reach far traversal after the near pass; displaced/split counts349,423/351,790. Far-pass timing includes all-ray dispatch/setup/gate reads, with traversal conditional on near rejection. A cheaper near replacement changes that gate and may change far work and occlusion. The static CPU occupancy build2963.2ms /1,660,176packed bytes is not a recurring GPU charge. Lighting spans exclude fluid, source preparation/live proposal building, visible-volume rendering, scene drawing and GI.
+
+Interpretation: expensive detailed local triangle tests are the main remaining hybrid cost, but the far pass alone has a2.901ms median, approximately the whole provisional lighting allocation. Replacing near alone has not demonstrated an affordable solution. This supports considering shared current-frame transport/reduced query work; it does not establish a universal occupancy lower bound or authorize an architecture change. Two original fused/split PNGs inspected with no meaningful visible delta; their presentation-frame identity is unverified, so raw field parity carries the equivalence claim. Prior occupancy approximation error remains.
 
 ## Updating this ledger
 
