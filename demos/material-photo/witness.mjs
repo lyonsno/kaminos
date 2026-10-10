@@ -52,8 +52,8 @@ try{
   for(const [sampleKey,label]of [['celebration','Celebration'],['bag','Backpack'],['orb','Metal & glow']].filter(([key])=>samples.includes(key)))for(const size of sizes){
     const key=`${sampleKey}-${size}`;
     report.phase=`inference-${key}`;await persist();
-    await evaluate(`(async()=>{await window.__materialPhotoActions.sample(${JSON.stringify(sampleKey)});document.getElementById('material-size').value=${JSON.stringify(String(size))}})()`);
     if(baselinePreset&&!await evaluate(`window.__materialPhotoActions.importPreset(${JSON.stringify(baselinePreset)})`))throw Error('Baseline preset rejected');
+    await evaluate(`(async()=>{await window.__materialPhotoActions.sample(${JSON.stringify(sampleKey)});document.getElementById('material-size').value=${JSON.stringify(String(size))}})()`);
     const bytes=await fs.readFile(path.join(root,`demos/material-photo/images/${({celebration:'celebration.png',bag:'bag.webp',orb:'evil-orb.png'})[sampleKey]}`));
     const episode={source:label,requestedSize:size,inputSha256:createHash('sha256').update(bytes).digest('hex')};
     report.episodes.push(episode);await persist();
