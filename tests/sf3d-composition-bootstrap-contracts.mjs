@@ -26,6 +26,14 @@ const window = {location: {hash: '#composition_module_url=./sf3d-live-flame-inje
 await execute(window, acquire, load, {warn() {}});
 assert.equal(events[0][0], 'import', 'composition requirements must load before host device acquisition');
 assert.equal(events[1][1].bufferRequirements, requirements);
+const instrumentedAcquisition = async () => {throw new Error('unused test hook');};
+events = [];
+await execute(window, acquire, async () => ({...module, acquireSharedGpuDevice: instrumentedAcquisition}), {warn() {}});
+assert.equal(events[0][0], 'acquire');
+assert.equal(events[0][1].acquireDevice, instrumentedAcquisition, 'actual bootstrap forwards pre-consumer instrumentation');
+await assert.rejects(execute(window, async () => {throw new Error('guard refused');},
+  async () => ({mountComposition() {}, acquireSharedGpuDevice: instrumentedAcquisition}), {warn() {}}), /guard refused/,
+  'an acquisition-only guard is strict; its refusal cannot launch a fallback device');
 events = [];
 await assert.rejects(execute(window, async () => {throw new Error('unsupported capacity');}, load, {warn() {}}), /unsupported capacity/);
 assert.equal(window.__kaminosCompositionSetup.phase, 'shared-device-acquisition');

@@ -1388,7 +1388,14 @@ export async function requestKaminosSharedWebGpuDevice({
   bufferRequirements = {},
   hostRequirements = null,
   adapter: suppliedAdapter = null,
+  acquireDevice,
 } = {}) {
+  // Hosts may install allocation accounting at acquisition, before Three or
+  // the volume can allocate. The caller owns that policy; device requirements
+  // and effective-capability validation stay here. Never bypass a refusal.
+  if (acquireDevice !== undefined && typeof acquireDevice !== 'function') {
+    throw new TypeError('shared-device acquireDevice must be a function');
+  }
   const gpu = globalThis.navigator?.gpu;
   if (!suppliedAdapter && !gpu) throw new Error('WebGPU unavailable');
   const adapter = suppliedAdapter || await gpu.requestAdapter({
@@ -1480,10 +1487,13 @@ export async function requestKaminosSharedWebGpuDevice({
     if (!adapter.features?.has?.(feature)) throw new Error(`WebGPU adapter feature ${feature} is unavailable`);
   }
   const requiredFeatures = [...features].sort();
-  const device = await adapter.requestDevice({
+  const descriptor = {
     requiredLimits,
     ...(requiredFeatures.length ? { requiredFeatures } : {}),
-  });
+  };
+  const device = await (acquireDevice
+    ? acquireDevice(adapter, descriptor)
+    : adapter.requestDevice(descriptor));
   for (const [name, required] of Object.entries(requiredLimits)) {
     const effective = Number(device.limits?.[name]);
     const satisfied = Number.isFinite(effective) && (name.startsWith('min') ? effective <= required : effective >= required);

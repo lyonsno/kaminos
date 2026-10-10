@@ -11294,11 +11294,14 @@ async function initScene() {
     Object.assign(window.__kaminosCompositionSetup, {status: 'failed', error: String(error?.message || error)});
     throw error;
   }
-  const requiresSharedDevice = compositionModule?.sharedGpuBufferRequirements !== undefined;
+  const hasCompositionBufferRequirements = compositionModule?.sharedGpuBufferRequirements !== undefined;
+  const hasCompositionDeviceAcquisition = compositionModule?.acquireSharedGpuDevice !== undefined;
+  const requiresSharedDevice = hasCompositionBufferRequirements || hasCompositionDeviceAcquisition;
   window.__kaminosCompositionSetup.phase = 'shared-device-acquisition';
   try {
     sharedGpu = await requestKaminosSharedWebGpuDevice({
-      bufferRequirements: requiresSharedDevice ? compositionModule.sharedGpuBufferRequirements : {},
+      bufferRequirements: hasCompositionBufferRequirements ? compositionModule.sharedGpuBufferRequirements : {},
+      ...(hasCompositionDeviceAcquisition ? {acquireDevice: compositionModule.acquireSharedGpuDevice} : {}),
       // A mounted SAM host borrows the same device, so its kit requirements
       // (all adapter features and limits) compose into the one acquisition.
       hostRequirements: samHostConfig?.mounted ? samHostDeviceRequirements : null,
