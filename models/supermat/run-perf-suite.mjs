@@ -81,7 +81,7 @@ try {
 
   const plan = values.plan ?? 'profiles';
   summary.plan = plan;
-  if (!['profiles', 'coop-sweep', 'coop-alternate', 'landing-check', 'profile'].includes(plan)) throw new Error(`unknown plan ${plan}`);
+  if (!['profiles', 'coop-sweep', 'coop-alternate', 'landing-check', 'profile', 'bench'].includes(plan)) throw new Error(`unknown plan ${plan}`);
   const page = (id, query) => run(id, demo, ['--url',
     `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
     '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
@@ -108,6 +108,9 @@ try {
       run(id, demo, ['--url', `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
         '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
     }
+  } else if (plan === 'bench') {
+    // Kernel bench only (the start and end bench steps): minimum over rounds.
+    summary.phase = 'bench-only';
   } else if (plan === 'profile') {
     // Per-dispatch GPU timings (own timestamped pass per dispatch) at 512, with
     // an unprofiled control to size the profiler's own overhead.

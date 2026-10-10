@@ -70,14 +70,14 @@ export const BENCH_VARIANTS = [
   { id: 'f16act-fused-f16tiles', f16: true, activations: 'f16', fuseNorm: true, normOnly: true, gemmPrecision: 'f16-tiles' },
 ];
 
-export async function runSuperMatBench({ iterations = 6, variants = BENCH_VARIANTS, cases = CASES } = {}) {
-  const result = { schema: 'supermat.kernel-bench.v0', status: 'failed', rows: [], iterations };
+export async function runSuperMatBench({ iterations = 6, rounds = 3, variants = BENCH_VARIANTS, cases = CASES } = {}) {
+  const result = { schema: 'supermat.kernel-bench.v0', status: 'failed', rows: [], iterations, rounds };
   const { device, backendIdentity } = await requestBrowserWebGpuDevice(navigator.gpu,
     await superMatDeviceOptions(navigator.gpu, { adapterName: 'supermat-bench' }));
   result.adapter = backendIdentity;
   try {
     device.pushErrorScope('validation');
-    for (const testCase of cases) {
+    for (let round = 0; round < rounds; round++) for (const testCase of cases) {
       let baseline = null;
       for (const variant of variants) {
         if (testCase.kind === 'attention' && variant.f16) continue;
@@ -138,11 +138,18 @@ export async function runSuperMatBench({ iterations = 6, variants = BENCH_VARIAN
         ops.release(output);
         for (let i = 0; i < 2; i++) { ops.release(await run()); }
         await ops.flush();
-        const start = performance.now();
-        for (let i = 0; i < iterations; i++) ops.release(await run());
-        await ops.flush();
-        const ms = (performance.now() - start) / iterations;
-        const row = { case: testCase.id, variant: variant.id, ms, gflops: flops / 1e9, tflops: flops / ms / 1e9 };
+        // Each iteration is timed alone: outside GPU load only adds time, so the
+        // minimum across iterations and rounds estimates the uncontended kernel.
+        const samples = [];
+        for (let i = 0; i < iterations; i++) {
+          const start = performance.now();
+          ops.release(await run());
+          await ops.flush();
+          samples.push(performance.now() - start);
+        }
+        const ms = samples.reduce((sum, value) => sum + value, 0) / samples.length;
+        const row = { case: testCase.id, variant: variant.id, round, ms, samples, minMs: Math.min(...samples), gflops: flops / 1e9,
+          tflops: flops / ms / 1e9 };
         if (!baseline) baseline = values;
         else {
           const m = compareWebGpuParityArrays(values, baseline).metrics;
@@ -155,6 +162,18 @@ export async function runSuperMatBench({ iterations = 6, variants = BENCH_VARIAN
     }
     const error = await device.popErrorScope();
     if (error) throw new Error(`WebGPU validation error: ${error.message}`);
+    // Per case and variant across rounds: minimum and median single-iteration time.
+    const groups = new Map();
+    for (const row of result.rows) {
+      const key = `${row.case}\u0000${row.variant}`;
+      if (!groups.has(key)) groups.set(key, { case: row.case, variant: row.variant, gflops: row.gflops, samples: [], versusBaseline: row.versusBaseline });
+      groups.get(key).samples.push(...row.samples);
+    }
+    result.summary = [...groups.values()].map(({ samples, ...group }) => {
+      const sorted = [...samples].sort((a, b) => a - b);
+      const minMs = sorted[0], medianMs = sorted[Math.floor(sorted.length / 2)];
+      return { ...group, minMs, medianMs, minTflops: group.gflops / minMs, samples: sorted.length };
+    });
     result.status = 'passed';
   } catch (error) {
     result.error = `${error?.name ?? 'Error'}: ${error?.message ?? String(error)}`;
