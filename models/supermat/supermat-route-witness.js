@@ -53,7 +53,7 @@ export async function runSuperMatRouteWitness({ fixtureSha256, weightsSha256, ru
     result.phase = 'weights';
     adapter = await createSuperMatAdapter({ route, weightsUrl: '/weights/', ...adapterOptions });
     result.identity = adapter.identity;
-    const tolerance = adapter.identity.gemmPrecision !== 'f32' ? ROUTE_TOLERANCE_F16_COMPUTE
+    const tolerance = adapter.identity.gemmPrecision !== 'f32' || adapter.identity.activations === 'f16' ? ROUTE_TOLERANCE_F16_COMPUTE
       : adapter.identity.weightDtype === 'f16' ? ROUTE_TOLERANCE_F16_WEIGHTS : ROUTE_TOLERANCE;
     result.tolerance = tolerance;
     result.weightLoadMs = adapter.weightLoadMs;

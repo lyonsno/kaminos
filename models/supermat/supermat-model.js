@@ -27,7 +27,8 @@ async function linear(ops, x, rows, weight, bias, { residual, name }) {
 
 function concatChannels(ops, a, b, name) {
   const [c1, h, w] = a.shape, [c2] = b.shape;
-  const out = ops.alloc([c1 + c2, h, w], name);
+  if (a.storage !== b.storage) throw new Error(`${name}: concat inputs must share storage`);
+  const out = ops.alloc([c1 + c2, h, w], name, { dtype: a.storage });
   ops.copy(a, out, { size: a.byteLength });
   ops.copy(b, out, { destinationOffset: a.byteLength, size: b.byteLength });
   return out;
@@ -83,7 +84,7 @@ async function attention(ops, w, prefix, xNorm, rows, channels, heads, { context
   } else {
     const scores = await ops.gemm({ a: q, b: k, M: rows, N: keys, K: dh, batch: heads, alpha: 1 / Math.sqrt(dh),
       aSM: channels, aSK: 1, aSB: dh, bSK: 1, bSN: channels, bSB: dh, cSM: keys, cSN: 1, cSB: rows * keys,
-      outShape: [heads, rows, keys], name: `${prefix}.scores` });
+      outShape: [heads, rows, keys], dtype: 'f32', name: `${prefix}.scores` });
     ops.release(q);
     ops.release(k);
     ops.softmax({ s: scores, rows: heads * rows, cols: keys });
@@ -147,7 +148,7 @@ async function vaeAttention(ops, w, prefix, x) {
   ops.release(normed);
   await ops.yieldPoint(`${prefix}.qkv`);
   const scores = await ops.gemm({ a: q, b: k, M: n, N: n, K: c, alpha: 1 / Math.sqrt(c), aSM: 1, aSK: n, bSK: n, bSN: 1,
-    cSM: n, cSN: 1, outShape: [n, n], name: `${prefix}.scores` });
+    cSM: n, cSN: 1, outShape: [n, n], dtype: 'f32', name: `${prefix}.scores` });
   ops.release(q); ops.release(k);
   ops.softmax({ s: scores, rows: n, cols: n });
   await ops.yieldPoint(`${prefix}.scores`);
@@ -200,7 +201,8 @@ export async function encodeImage(ops, w, image, { capture = () => {} } = {}) {
   ops.release(x);
   capture('vae.quant#0', moments);
   const [, h, wd] = moments.shape;
-  const mean = { buffer: moments.buffer, offset: 0, byteLength: 4 * h * wd * 4, shape: [4, h, wd] };
+  // First 4 of the 8 moment channels (the mean), in the moments' own storage type.
+  const mean = { buffer: moments.buffer, offset: 0, byteLength: moments.byteLength / 2, shape: [4, h, wd], storage: moments.storage };
   const latent = ops.affine({ x: mean, shape: [4, h, wd], scale: VAE_SCALING_FACTOR, name: 'latent' });
   ops.release(moments);
   return latent;
@@ -244,7 +246,7 @@ export async function decodeScaledLatent(ops, w, z, { capture = () => {}, call =
     bias: w('vae.decoder.conv_out.bias'), name: 'vae.decoder.out' }));
   capture(`vae.decoder.out#${call}`, x);
   await ops.yieldPoint('vae.decoder.out');
-  const image = ops.affine({ x, shape: x.shape, scale: 0.5, shift: 0.5, clamp01: true, name: 'vae.image' });
+  const image = ops.affine({ x, shape: x.shape, scale: 0.5, shift: 0.5, clamp01: true, name: 'vae.image', dtype: 'f32' });
   ops.release(x);
   return image;
 }

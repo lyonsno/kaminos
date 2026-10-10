@@ -23,6 +23,12 @@ export function bindingView(tensor, label = 'tensor') {
   return { buffer: tensor.buffer, offset, size };
 }
 
+// Storage kind of a tensor: op tensors carry `storage`; kit weight views with
+// dtype 'f16' hold checkpoint binary16 pairs packed in u32 words.
+export function storageKind(tensor) {
+  return tensor?.storage ?? (tensor?.dtype === 'f16' ? 'f16packed' : 'f32');
+}
+
 function dispatch1D(total, workgroupSize = 256, limit = 65535) {
   const groups = Math.ceil(total / workgroupSize);
   const x = Math.min(groups, limit);
@@ -45,7 +51,10 @@ export function subgroupMatrixUsable(device) {
 }
 
 export function createSuperMatOps(device, { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 },
-  attentionKernel = 'scalar', gemmKernel = 'tiled', gemmPrecision = 'f32' } = {}) {
+  attentionKernel = 'scalar', gemmKernel = 'tiled', gemmPrecision = 'f32', activations = 'f32' } = {}) {
+  // activations: storage of intermediate tensors ('f16' halves memory traffic; math stays F32).
+  if (!['f32', 'f16'].includes(activations)) throw new Error(`unknown activation storage ${activations}`);
+  if (activations === 'f16' && !device.features.has('shader-f16')) throw new Error('f16 activations need the shader-f16 feature');
   if (!['f32', 'f16-tiles', 'f16-partial'].includes(gemmPrecision)) throw new Error(`unknown gemm precision ${gemmPrecision}`);
   if (gemmPrecision !== 'f32' && !device.features.has('shader-f16')) throw new Error(`${gemmPrecision} GEMM needs the shader-f16 feature`);
   if (!['auto', 'tiled', 'subgroup-matrix'].includes(gemmKernel)) throw new Error(`unknown gemm kernel ${gemmKernel}`);
@@ -91,10 +100,10 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
 
   // `fresh` bypasses the pool: queue.writeBuffer runs before already-encoded
   // commands are submitted, so an upload must never land in a recycled buffer.
-  function alloc(shape, name = 'activation', { fresh = false } = {}) {
+  function alloc(shape, name = 'activation', { fresh = false, dtype = activations } = {}) {
     const count = elements(shape);
     if (!Number.isSafeInteger(count) || count <= 0) throw new Error(`${name}: positive shape required`);
-    const byteLength = count * 4;
+    const byteLength = Math.ceil((count * (dtype === 'f16' ? 2 : 4)) / 4) * 4;
     let buffer = fresh ? undefined : pool.get(byteLength)?.pop();
     if (!buffer) {
       buffer = device.createBuffer({ label: `${label}.${name}`, size: byteLength, usage: ACTIVATION_USAGE });
@@ -104,7 +113,7 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
     owned.add(buffer);
     stats.liveBytes += byteLength;
     stats.peakLiveBytes = Math.max(stats.peakLiveBytes, stats.liveBytes);
-    return { buffer, offset: 0, byteLength, shape: [...shape], name };
+    return { buffer, offset: 0, byteLength, shape: [...shape], name, storage: dtype };
   }
 
   function release(tensor) {
@@ -268,12 +277,14 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
     for (const [name, value] of Object.entries({ M, N, K, batch })) {
       if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`gemm ${name} must be positive`);
     }
-    const c = spec.c ?? alloc(spec.outShape ?? [batch, M, N], spec.name ?? 'gemm');
+    const c = spec.c ?? alloc(spec.outShape ?? [batch, M, N], spec.name ?? 'gemm', { dtype: spec.dtype ?? activations });
     const layout = {
       aKContiguous: spec.aSK === 1, bNContiguous: spec.bSN === 1,
       biasM: Boolean(spec.biasM), biasM2: Boolean(spec.biasM2), biasN: Boolean(spec.biasN),
       residual: Boolean(spec.residual), conv: spec.conv ?? null, tile: gemmTile, precision: gemmPrecision,
-      aF16: spec.a.dtype === 'f16', bF16: spec.b.dtype === 'f16',
+      types: { a: storageKind(spec.a), b: storageKind(spec.b), c: storageKind(c),
+        ...(spec.biasM ? { biasM: storageKind(spec.biasM) } : {}), ...(spec.biasM2 ? { biasM2: storageKind(spec.biasM2) } : {}),
+        ...(spec.biasN ? { biasN: storageKind(spec.biasN) } : {}), ...(spec.residual ? { residual: storageKind(spec.residual) } : {}) },
     };
     const views = [bindingView(spec.a, 'gemm a'), bindingView(spec.b, 'gemm b')];
     if (spec.biasM) views.push(bindingView(spec.biasM, 'gemm biasM'));
@@ -296,7 +307,7 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
   // Under a cooperative schedule, a GEMM larger than the current duty budget
   // is issued as tile-aligned output-column ranges with a yield between them.
   async function gemm(spec) {
-    const c = spec.c ?? alloc(spec.outShape ?? [spec.batch ?? 1, spec.M, spec.N], spec.name ?? 'gemm');
+    const c = spec.c ?? alloc(spec.outShape ?? [spec.batch ?? 1, spec.M, spec.N], spec.name ?? 'gemm', { dtype: spec.dtype ?? activations });
     const batch = spec.batch ?? 1;
     const flops = 2 * spec.M * spec.N * spec.K * batch;
     const budget = schedule ? currentDutyFlops() : 0;
@@ -349,7 +360,9 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
       const floats = new Float32Array(words.buffer);
       words.set([queries, keys, channels, channels, channels, rowBase], 0);
       floats[6] = scale;
-      dispatch(attentionKernel === 'vec4' ? flashAttentionVec4Shader() : flashAttentionShader(), [bindingView(q), bindingView(k), bindingView(v), bindingView(out), params(words)],
+      const types = { q: storageKind(q), k: storageKind(k), v: storageKind(v), o: storageKind(out) };
+      if (attentionKernel === 'vec4' && Object.values(types).some(type => type !== 'f32')) throw new Error('vec4 attention supports F32 storage only');
+      dispatch(attentionKernel === 'vec4' ? flashAttentionVec4Shader() : flashAttentionShader(types), [bindingView(q), bindingView(k), bindingView(v), bindingView(out), params(words)],
         [Math.ceil(count / FLASH_QUERY_TILE), heads, 1]);
       pendingFlops += 4 * count * keys * FLASH_HEAD_DIM * heads;
       if (rows < queries) await yieldPoint(`${name}[${rowBase}]`);
@@ -361,15 +374,15 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
     const groupSize = (channels / groups) * h * w;
     if (!Number.isSafeInteger(groupSize)) throw new Error(`${name}: channels must divide into groups`);
     const chunks = Math.ceil(groupSize / GROUPNORM_CHUNK);
-    const partial = alloc([groups * chunks * 3], `${name}.partial`);
-    const statsTensor = alloc([groups * 2], `${name}.stats`);
+    const partial = alloc([groups * chunks * 3], `${name}.partial`, { dtype: 'f32' });
+    const statsTensor = alloc([groups * 2], `${name}.stats`, { dtype: 'f32' });
     const groupWords = new Uint32Array([groupSize, chunks, groups, 0]);
-    dispatch(groupNormPartialShader(), [bindingView(x), bindingView(partial), params(groupWords)], [chunks, groups, 1]);
+    dispatch(groupNormPartialShader({ x: storageKind(x) }), [bindingView(x), bindingView(partial), params(groupWords)], [chunks, groups, 1]);
     dispatch(groupNormCombineShader(eps), [bindingView(partial), bindingView(statsTensor), params(groupWords)],
       [Math.ceil(groups / 64), 1, 1]);
     const total = channels * h * w;
     const y = alloc([channels, h, w], name);
-    dispatch(groupNormApplyShader({ silu }), [bindingView(x), bindingView(statsTensor), bindingView(gamma, `${name} gamma`),
+    dispatch(groupNormApplyShader({ silu, x: storageKind(x), y: storageKind(y) }), [bindingView(x), bindingView(statsTensor), bindingView(gamma, `${name} gamma`),
       bindingView(beta, `${name} beta`), bindingView(y), params(new Uint32Array([total, h * w, channels / groups, 0]))],
     dispatch1D(total));
     release(partial);
@@ -379,40 +392,42 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
 
   function layerNorm({ x, rows, channels, gamma, beta, eps, name = 'layernorm' }) {
     const y = alloc([rows, channels], name);
-    dispatch(layerNormShader(eps), [bindingView(x), bindingView(gamma), bindingView(beta), bindingView(y),
+    dispatch(layerNormShader(eps, { x: storageKind(x), y: storageKind(y) }), [bindingView(x), bindingView(gamma), bindingView(beta), bindingView(y),
       params(new Uint32Array([rows, channels, 0, 0]))], dispatch1D(rows, 1));
     return y;
   }
 
   function softmax({ s, rows, cols }) {
+    if (storageKind(s) !== 'f32') throw new Error('softmax scores must be F32');
     dispatch(softmaxShader(), [bindingView(s), params(new Uint32Array([rows, cols, 0, 0]))], dispatch1D(rows, 1));
     return s;
   }
 
   function geglu({ x, rows, inner, name = 'geglu' }) {
     const y = alloc([rows, inner], name);
-    dispatch(gegluShader(), [bindingView(x), bindingView(y), params(new Uint32Array([rows, inner, 0, 0]))],
+    dispatch(gegluShader({ x: storageKind(x), y: storageKind(y) }), [bindingView(x), bindingView(y), params(new Uint32Array([rows, inner, 0, 0]))],
       dispatch1D(rows * inner));
     return y;
   }
 
-  function affine({ x, shape, scale = 1, shift = 0, clamp01 = false, silu = false, name = 'affine' }) {
+  function affine({ x, shape, scale = 1, shift = 0, clamp01 = false, silu = false, name = 'affine', dtype = activations }) {
     const total = elements(shape);
-    const y = alloc(shape, name);
+    const y = alloc(shape, name, { dtype });
     const words = new Uint32Array(4);
     const floats = new Float32Array(words.buffer);
     words[0] = total; floats[1] = scale; floats[2] = shift;
-    dispatch(affineShader({ clamp01, silu }), [bindingView(x), bindingView(y), params(words)], dispatch1D(total));
+    dispatch(affineShader({ clamp01, silu, x: storageKind(x), y: storageKind(y) }), [bindingView(x), bindingView(y), params(words)], dispatch1D(total));
     return y;
   }
 
   function upload(shape, data, name = 'upload') {
-    const t = alloc(shape, name, { fresh: true });
+    const t = alloc(shape, name, { fresh: true, dtype: 'f32' });
     device.queue.writeBuffer(t.buffer, 0, data.buffer, data.byteOffset, data.byteLength);
     return t;
   }
 
   async function read(tensor) {
+    if (storageKind(tensor) !== 'f32') throw new Error('readback needs an F32 tensor');
     const view = bindingView(tensor, 'readback');
     const staging = device.createBuffer({ label: `${label}.readback`, size: view.size, usage: 0x0001 | COPY_DST });
     copy(tensor, { buffer: staging, offset: 0, byteLength: view.size }, { size: view.size });
@@ -433,5 +448,5 @@ export function createSuperMatOps(device, { label = 'supermat', attention = 'str
 
   return { alloc, release, gemm, conv2d, groupNorm, layerNorm, softmax, geglu, affine, copy, upload, read, flush, yieldPoint,
     setSchedule, scheduleState, discard, destroy, stats, flashAttention,
-    attentionMode: attention, gemmTile: tileShape, gemmPrecision, gemmKernel: subgroupMatrix ? 'subgroup-matrix' : 'tiled' };
+    attentionMode: attention, gemmTile: tileShape, gemmPrecision, activations, gemmKernel: subgroupMatrix ? 'subgroup-matrix' : 'tiled' };
 }
