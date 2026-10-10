@@ -10,12 +10,12 @@ export const LN_EPS = 1e-6;
 
 // C[b][m][n] = alpha * sum_k A[b][m][k] * B[b / b_div][n][k], A f32, B f16 or f32.
 // b_div (uniform z0, 0 meaning 1) lets grouped-query attention share K/V heads.
-// bType i8/i4 reads group-quantized weights (pack-transformer.py; group 64 or 128, a multiple of 8) with scales at
+// bType i8/i4/i3/i2 reads group-quantized weights (pack-transformer.py; group 64 or 128) with scales at
 // f16 element offset z1 of binding 5; b_off is then a u32 word offset.
 // Epilogues: 'store' writes C; 'gated-residual' does R[m][n] += gate[n] * value
 // in place (R is the C binding); 'add' does C += value.
 export function gemmShader({ bType = 'f16', epilogue = 'store', group = 64 } = {}) {
-  const quant = bType === 'i8' || bType === 'i4';
+  const quant = /^i\d$/.test(bType);
   const bArray = quant ? 'array<u32>' : bType === 'f16' ? 'array<f16>' : 'array<f32>';
   let loadB = 'bv = f32(b[p.b_off + bbat * p.b_bs + n * p.b_rs + k]);';
   if (bType === 'i8') {
@@ -25,6 +25,19 @@ export function gemmShader({ bType = 'f16', epilogue = 'store', group = 64 } = {
   } else if (bType === 'i4') {
     loadB = `let word = b[p.b_off + n * (p.K / 8u) + k / 8u];
         let q = (word >> (4u * (k % 8u))) & 15u;
+        let sb = p.z1 + (n * (p.K / ${group}u) + k / ${group}u) * 2u;
+        bv = f32(q) * f32(bs[sb]) + f32(bs[sb + 1u]);`;
+  } else if (bType === 'i2') {
+    loadB = `let word = b[p.b_off + n * (p.K / 16u) + k / 16u];
+        let q = (word >> (2u * (k % 16u))) & 3u;
+        let sb = p.z1 + (n * (p.K / ${group}u) + k / ${group}u) * 2u;
+        bv = f32(q) * f32(bs[sb]) + f32(bs[sb + 1u]);`;
+  } else if (bType === 'i3') {
+    loadB = `let base = p.b_off + n * (p.K / 32u * 3u) + (k / 32u) * 3u;
+        let bit = 3u * (k % 32u); let sh = bit % 32u;
+        var word = b[base + bit / 32u] >> sh;
+        if (sh > 29u) { word = word | (b[base + bit / 32u + 1u] << (32u - sh)); }
+        let q = word & 7u;
         let sb = p.z1 + (n * (p.K / ${group}u) + k / ${group}u) * 2u;
         bv = f32(q) * f32(bs[sb]) + f32(bs[sb + 1u]);`;
   }
@@ -348,7 +361,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 // type (f32 keeps activations exact; f16 halves shared traffic). Requires K, row strides
 // and offsets to be multiples of 4.
 export function gemmShaderV2({ bType = 'f16', epilogue = 'store', sType = 'f32', group = 64 } = {}) {
-  const quant = bType === 'i8' || bType === 'i4';
+  const quant = /^i\d$/.test(bType);
   const bArray = quant ? 'array<u32>' : bType === 'f16' ? 'array<vec4<f16>>' : 'array<vec4<f32>>';
   const gateBinding = epilogue === 'gated-residual' ? '@group(0) @binding(4) var<storage, read> gate: array<f32>;' : '';
   const scaleBinding = quant ? '@group(0) @binding(5) var<storage, read> bs: array<f16>;' : '';
@@ -374,15 +387,34 @@ export function gemmShaderV2({ bType = 'f16', epilogue = 'store', sType = 'f32',
       for (var c = 0u; c < 4u; c++) { tb[(c4 * 4u + c) * 64u + row] = ${sType}(v[c]); }
     }`;
   } else {
+    // Each thread decodes 8 consecutive codes (k .. k + 7) of one row into the B tile.
+    let codes;
+    if (bType === 'i4') {
+      codes = `let w = b[p.b_off + n * (p.K / 8u) + k / 8u];
+        let lq = vec4<u32>(w, w >> 4u, w >> 8u, w >> 12u) & vec4<u32>(15u);
+        let hq = vec4<u32>(w >> 16u, w >> 20u, w >> 24u, w >> 28u) & vec4<u32>(15u);`;
+    } else if (bType === 'i2') {
+      codes = `let w = b[p.b_off + n * (p.K / 16u) + k / 16u] >> (2u * (k % 16u));
+        let lq = vec4<u32>(w, w >> 2u, w >> 4u, w >> 6u) & vec4<u32>(3u);
+        let hq = vec4<u32>(w >> 8u, w >> 10u, w >> 12u, w >> 14u) & vec4<u32>(3u);`;
+    } else if (bType === 'i3') {
+      // 32 codes per 3 words: these 24 bits start at bit 0, 24, 48 or 72 of the triple.
+      codes = `let base = p.b_off + n * (p.K / 32u * 3u) + (k / 32u) * 3u;
+        let bit = 3u * (k % 32u); let wi = base + bit / 32u; let sh = bit % 32u;
+        var w = b[wi] >> sh;
+        if (sh > 8u) { w = w | (b[wi + 1u] << (32u - sh)); }
+        let lq = vec4<u32>(w, w >> 3u, w >> 6u, w >> 9u) & vec4<u32>(7u);
+        let hq = vec4<u32>(w >> 12u, w >> 15u, w >> 18u, w >> 21u) & vec4<u32>(7u);`;
+    } else throw new Error(`gemmShaderV2: unsupported bType ${bType}`);
     loadB = `{
       let row = tid / 4u; let c8 = tid % 4u; let n = n0 + row; let k = k0 + c8 * 8u;
       var lo = vec4<f32>(0.0); var hi = vec4<f32>(0.0);
       if (n < p.N && k < p.K) {
-        let w = b[p.b_off + n * (p.K / 8u) + k / 8u];
+        ${codes}
         let sb = p.z1 + (n * (p.K / ${group}u) + k / ${group}u) * 2u;
         let sc = f32(bs[sb]); let bi = f32(bs[sb + 1u]);
-        lo = vec4<f32>(vec4<u32>(w, w >> 4u, w >> 8u, w >> 12u) & vec4<u32>(15u)) * sc + bi;
-        hi = vec4<f32>(vec4<u32>(w >> 16u, w >> 20u, w >> 24u, w >> 28u) & vec4<u32>(15u)) * sc + bi;
+        lo = vec4<f32>(lq) * sc + bi;
+        hi = vec4<f32>(hq) * sc + bi;
       }
       for (var c = 0u; c < 4u; c++) {
         tb[(c8 * 8u + c) * 64u + row] = ${sType}(lo[c]);

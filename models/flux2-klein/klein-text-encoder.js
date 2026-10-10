@@ -74,7 +74,7 @@ export class KleinTextEncoder {
     const issue = (nBase, nCount) => {
       const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, 0, bDiv, scaleOff, nBase, 0, 0, 0]);
       const entries = [a, b, c, u].map((buffer, i) => ({ binding: i, resource: { buffer } }));
-      if (bType === 'i8' || bType === 'i4') entries.push({ binding: 5, resource: { buffer: b } });
+      if (/^i\d$/.test(bType)) entries.push({ binding: 5, resource: { buffer: b } });
       const bind = this.device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries });
       const e = enc?.encoder ? enc.encoder() : enc;
       const pass = e.beginComputePass(); pass.setPipeline(pipe); pass.setBindGroup(0, bind);

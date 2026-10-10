@@ -148,7 +148,7 @@ export class KleinTransformer {
       const entries = [{ binding: 0, resource: { buffer: a } }, { binding: 1, resource: { buffer: b } },
         { binding: 2, resource: { buffer: c } }, { binding: 3, resource: { buffer: u } }];
       if (epilogue === 'gated-residual') entries.push({ binding: 4, resource: { buffer: gate } });
-      if (bType === 'i8' || bType === 'i4') entries.push({ binding: 5, resource: { buffer: b } });
+      if (/^i\d$/.test(bType)) entries.push({ binding: 5, resource: { buffer: b } });
       this.dispatch(enc, pipe, entries, Math.ceil(nCount / 64), Math.ceil(M / 64), batch);
       this.sched.addFlops(2 * M * nCount * K * batch);
     };

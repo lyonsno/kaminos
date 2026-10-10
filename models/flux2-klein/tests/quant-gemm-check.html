@@ -1,0 +1,70 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Klein quantized GEMM decode check</title>
+<pre id="log"></pre>
+<script type="module">
+// Runs the production GEMM shaders (v1 and v2 with f32 tiles) on packed weights exported by
+// export-quant-gemm-fixture.py and compares C = A @ W^T against the fixture's CPU result.
+import { gemmShader, gemmShaderV2 } from '../klein-kernels.js';
+
+const fixture = new URLSearchParams(location.search).get('fixture') ?? '/fixture';
+const log = text => { document.getElementById('log').textContent += text + '\n'; };
+
+async function bytes(url) { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.arrayBuffer(); }
+
+window.quantGemmCheck = (async () => {
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+  const device = await adapter.requestDevice({ requiredFeatures: ['shader-f16'], requiredLimits: {
+    maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize, maxBufferSize: adapter.limits.maxBufferSize } });
+  const meta = await (await fetch(`${fixture}/meta.json`)).json();
+  const results = [];
+  for (const cs of meta.cases) {
+    const [w, a, c] = await Promise.all(['w', 'a', 'c'].map(x => bytes(`${fixture}/${cs.name}.${x}.bin`)));
+    const expected = new Float32Array(c);
+    const buf = (data, usage) => {
+      const b = device.createBuffer({ size: Math.ceil(data.byteLength / 16) * 16, usage: usage | GPUBufferUsage.COPY_DST });
+      device.queue.writeBuffer(b, 0, data); return b;
+    };
+    const aBuf = buf(a, GPUBufferUsage.STORAGE), wBuf = buf(w, GPUBufferUsage.STORAGE);
+    const cBytes = cs.M * cs.N * 4;
+    for (const version of [1, 2]) {
+      const code = version === 2 ? gemmShaderV2({ bType: cs.format, epilogue: 'store', sType: 'f32', group: cs.group })
+        : gemmShader({ bType: cs.format, epilogue: 'store', group: cs.group });
+      const module = device.createShaderModule({ code });
+      const info = await module.getCompilationInfo();
+      const errors = info.messages.filter(m => m.type === 'error');
+      if (errors.length) throw new Error(`${cs.name} v${version}: ${errors.map(e => e.message).join('; ')}`);
+      const pipe = device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'main' } });
+      const out = device.createBuffer({ size: cBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+      const u = new Uint32Array([cs.M, cs.N, cs.K, new Uint32Array(new Float32Array([1]).buffer)[0],
+        0, cs.K, 0, 0, cs.K, 0, 0, cs.N, 0, 0, 1, cs.scaleOffsetBytes / 2, 0, 0, 0, 0]);
+      const ub = buf(u.buffer, GPUBufferUsage.UNIFORM);
+      const bind = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [
+        { binding: 0, resource: { buffer: aBuf } }, { binding: 1, resource: { buffer: wBuf } },
+        { binding: 2, resource: { buffer: out } }, { binding: 3, resource: { buffer: ub } },
+        { binding: 5, resource: { buffer: wBuf } }] });
+      const read = device.createBuffer({ size: cBytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+      const enc = device.createCommandEncoder();
+      const pass = enc.beginComputePass(); pass.setPipeline(pipe); pass.setBindGroup(0, bind);
+      pass.dispatchWorkgroups(Math.ceil(cs.N / 64), Math.ceil(cs.M / 64), 1); pass.end();
+      enc.copyBufferToBuffer(out, 0, read, 0, cBytes);
+      device.queue.submit([enc.finish()]);
+      await read.mapAsync(GPUMapMode.READ);
+      const got = new Float32Array(read.getMappedRange().slice(0)); read.unmap();
+      let err2 = 0, ref2 = 0, maxAbs = 0, nonFinite = 0;
+      for (let i = 0; i < got.length; i++) {
+        if (!Number.isFinite(got[i])) { nonFinite++; continue; }
+        const d = got[i] - expected[i]; err2 += d * d; ref2 += expected[i] * expected[i]; maxAbs = Math.max(maxAbs, Math.abs(d));
+      }
+      const row = { case: cs.name, format: cs.format, group: cs.group, version, M: cs.M, N: cs.N, K: cs.K,
+        relL2: Math.sqrt(err2 / ref2), maxAbsErr: maxAbs, nonFinite };
+      results.push(row);
+      log(JSON.stringify(row));
+      out.destroy(); read.destroy(); ub.destroy();
+    }
+    aBuf.destroy(); wBuf.destroy();
+  }
+  return { adapter: adapter.info?.description ?? null, results };
+})();
+window.quantGemmPageReady = true;
+</script>
