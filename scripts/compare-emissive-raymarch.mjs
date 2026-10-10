@@ -35,6 +35,7 @@ try {
   report.phase='load';await save();await page.goto(report.url);
   await page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().active||window.__kaminosVolumePrototype?.debugState().error);
   assert.equal(await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().error),null);
+  await page.evaluate(()=>window.__kaminosVolumePrototype.setDebugRaymarchShaderSpecialization('force-full'));
   await page.waitForFunction(()=>window.kaminosSceneAuthoring?.read().objects.length>=3||/load failed/i.test(document.getElementById('info-bar')?.textContent||''));
   assert.equal(await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects.length),scene.objects.length);
   report.camera=await page.evaluate(factor=>{

@@ -156,7 +156,7 @@ const cubicCellExitMutation = directCellExitBody.replace('f32(GRID_Y) - 1.001', 
 assert.notEqual(cubicCellExitMutation, directCellExitBody, 'the cubic-height mutation changes the inspected traversal');
 assert.equal(directCellExitUsesRectangularBounds(cubicCellExitMutation), false, 'the traversal contract rejects a cubic-height bound');
 assert.doesNotMatch(core, /select\(directCellOpticalSupport\(p\), 1\.0, flowKernelReconstructionActive\)/, 'optional reconstruction does not globally defeat direct-cell empty-space traversal');
-assert.match(core, /let directSupport = directCellOpticalSupport\(p\);[\s\S]*directCellExitDistance\(p, rd\)[\s\S]*if \(flowKernelReconstructionActive\)/, 'native transported support gates optional reconstruction before any filter work');
+assert.match(core, /directSupport = directCellOpticalSupport\(p\);[\s\S]*directCellExitDistance\(p, rd\)[\s\S]*if \(flowKernelReconstructionActive\)/, 'native transported support gates optional reconstruction before any filter work');
 assert.match(core, /expensiveSamples\s*=\s*expensiveSamples\s*\+\s*1u/, 'occupied reconstruction spends the explicit expensive-sample budget');
 assert.match(core, /fn segmentOpacity\(opticalDepth:\s*f32,\s*maxOpacity:\s*f32\)/, 'variable segments preserve optical depth through exponential opacity');
 

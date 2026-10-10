@@ -30,24 +30,18 @@ fn sampleRaymarchNeighborhood(p: vec3<f32>) -> RaymarchNeighborhood {
   let c = vec3<i32>(floor(q));
   var result: RaymarchNeighborhood;
   result.fraction = fract(q);
-  for (var k = 0u; k < 8u; k++) {
-    let offset = vec3<i32>(i32(k & 1u), i32((k >> 1u) & 1u), i32(k >> 2u));
-    let idx = index3(clampCell(c + offset));
-    result.corners[k].velocityDensity = fluidSrc[idx * SLOTS_PER_CELL];
-    result.corners[k].material = fluidSrc[idx * SLOTS_PER_CELL + 1u];
-    result.corners[k].fireLayer = fluidSrc[idx * SLOTS_PER_CELL + 2u];
-    result.corners[k].microLayer = fluidSrc[idx * SLOTS_PER_CELL + 3u];
-    result.corners[k].frontTopology = f32(frontSrc[idx]) / 65536.0;
-  }
+  ${Array.from({length: 8}, (_, k) => `let idx${k} = index3(clampCell(c + vec3<i32>(${k & 1}, ${(k >> 1) & 1}, ${k >> 2})));
+  result.corners[${k}].velocityDensity = fluidSrc[idx${k} * SLOTS_PER_CELL];
+  result.corners[${k}].material = fluidSrc[idx${k} * SLOTS_PER_CELL + 1u];
+  result.corners[${k}].fireLayer = fluidSrc[idx${k} * SLOTS_PER_CELL + 2u];
+  result.corners[${k}].microLayer = fluidSrc[idx${k} * SLOTS_PER_CELL + 3u];
+  result.corners[${k}].frontTopology = f32(frontSrc[idx${k}]) / 65536.0;`).join('\n  ')}
   return result;
 }
 
 fn raymarchNeighborhoodSupport(n: RaymarchNeighborhood) -> f32 {
   var support: array<f32, 8>;
-  for (var k = 0u; k < 8u; k++) {
-    let s = n.corners[k];
-    support[k] = directCellOpticalSupportFromSlots(s.velocityDensity, s.material, s.fireLayer, s.microLayer, s.frontTopology);
-  }
+  ${Array.from({length: 8}, (_, k) => `support[${k}] = directCellOpticalSupportFromSlots(n.corners[${k}].velocityDensity, n.corners[${k}].material, n.corners[${k}].fireLayer, n.corners[${k}].microLayer, n.corners[${k}].frontTopology);`).join('\n  ')}
   let z0 = max(max(support[0], support[1]), max(support[2], support[3]));
   let z1 = max(max(support[4], support[5]), max(support[6], support[7]));
   return max(z0, z1);

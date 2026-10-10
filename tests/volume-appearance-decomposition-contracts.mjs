@@ -42,7 +42,7 @@ assert.match(core, /function recordAppearanceDecompositionApplication\([\s\S]*ra
 assert.match(core, /appearanceDecompositionReceipt[\s\S]*requestedPasses[\s\S]*application/, 'assay distinguishes requested passes from applied evidence');
 
 assert.match(core, /uniforms\[307\]\s*=\s*appearanceDecompositionUniformMode\(\)/, 'assay has a dedicated shader uniform');
-assert.match(core, /appearanceDecompositionMode\s*=\s*select\(u\.boundary_fire_display\.w,\s*0\.0,\s*LEAN_STOCK_RAYMARCH\)/, 'full shader reads the assay identity before tone mapping while lean stock removes the assay branch');
+assert.match(core, /appearanceDecompositionMode\s*=\s*select\(u\.boundary_fire_display\.w,\s*0\.0,\s*LEAN_STOCK_RAYMARCH \|\| LEAN_EMISSIVE_RAYMARCH\)/, 'full shader reads the assay identity before tone mapping while specializations remove the assay branch');
 assert.match(core, /appearanceAssayActive[\s\S]*effectiveRaymarchSmokeSuppressed/, 'every assay view suppresses rendered smoke');
 assert.match(core, /appearanceAssayActive[\s\S]*directFlameCandidateStructuralSignal/, 'A support is evaluated in every assay view');
 
