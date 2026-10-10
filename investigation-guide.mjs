@@ -23,21 +23,26 @@ export function createInvestigationGuide({document, question, tryThis, whyThisMa
   const status = document.createElement('output');
   status.setAttribute('aria-live', 'polite'); status.textContent = 'Recording';
   commands.append(capture, finish); node.append(note, commands, status);
-  let busy = false, stopped = false;
+  let busy = false, stopped = false, frozen = false;
   const run = async action => {
     if (busy || stopped) return;
     busy = true; capture.disabled = finish.disabled = true;
     try {
       const result = await action(note.value);
       status.textContent = result.message;
-    } catch (error) {status.textContent = `Capture/return failed: ${error.message || error}`;}
-    finally {busy = false; capture.disabled = finish.disabled = stopped;}
+    } catch (error) {status.textContent = `${frozen ? 'Recording stopped; save failed' : 'Capture/return failed'}: ${error.message || error}`;}
+    finally {busy = false; capture.disabled = stopped || frozen; finish.disabled = stopped;}
   };
   capture.onclick = () => run(onCapture);
   finish.onclick = () => run(async value => {
     const result = await onFinish(value); stopped = true; return result;
   });
-  return {node, disconnect(message = 'Recording disconnected') {
+  return {node, freeze(message) {
+    frozen = true; capture.disabled = true; status.textContent = message;
+  }, saveFailed(message) {
+    frozen = true; capture.disabled = true; finish.disabled = false;
+    finish.textContent = 'Retry Save'; status.textContent = message;
+  }, disconnect(message = 'Recording disconnected') {
     stopped = true; capture.disabled = finish.disabled = true; status.textContent = message;
   }};
 }

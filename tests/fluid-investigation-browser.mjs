@@ -7,7 +7,8 @@ import {fluidSourceIdentity} from '../fluid-session-browser.mjs';
 
 // Native interaction exercise, run by tools/fluid-session-run.mjs. The source
 // owner hooks must be composed before this can pass the operation assertions.
-export default async function ({page, inputs}) {
+export default async function ({page, fluid, inputs}) {
+  await fluid.advanceTo((await fluid.read()).clock.step + 30);
   const source = await fluidSourceIdentity(page.url(), inputs.repo, {
     additionalFiles: ['investigation-recording.mjs', 'investigation-guide.mjs', 'scene-navigation.mjs'],
   });
