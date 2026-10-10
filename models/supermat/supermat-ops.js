@@ -50,8 +50,14 @@ export function subgroupMatrixUsable(device) {
     && info?.subgroupMinSize === 32 && info?.subgroupMaxSize === 32;
 }
 
-export function createSuperMatOps(device, { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 }, fuseNorm = false,
-  attentionKernel = 'scalar', gemmKernel = 'tiled', gemmPrecision = 'f32', activations = 'f32' } = {}) {
+export const SUPERMAT_OPS_OPTIONS = Object.freeze(['label', 'attention', 'gemmTile', 'fuseNorm', 'attentionKernel', 'gemmKernel',
+  'gemmPrecision', 'activations']);
+
+export function createSuperMatOps(device, options = {}) {
+  const unknown = Object.keys(options).filter(key => !SUPERMAT_OPS_OPTIONS.includes(key));
+  if (unknown.length) throw new Error(`unknown SuperMat ops option: ${unknown.join(', ')}`);
+  const { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 }, fuseNorm = false,
+    attentionKernel = 'scalar', gemmKernel = 'tiled', gemmPrecision = 'f32', activations = 'f32' } = options;
   // activations: storage of intermediate tensors ('f16' halves memory traffic; math stays F32).
   if (!['f32', 'f16'].includes(activations)) throw new Error(`unknown activation storage ${activations}`);
   if (activations === 'f16' && !device.features.has('shader-f16')) throw new Error('f16 activations need the shader-f16 feature');

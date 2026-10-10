@@ -3,7 +3,7 @@
 import {
   compareWebGpuParityArrays, createWebGpuInferenceSession, defineWebGpuModelResourceManifest,
 } from '../../webgpu-inference-kit/src/core.js';
-import { createSuperMatOps } from './supermat-ops.js';
+import { createSuperMatOps, storageKind } from './supermat-ops.js';
 import {
   createWeightAccessor, decodeLatent, decodeScaledLatent, encodeImage, runUnet, timeEmbedding,
 } from './supermat-model.js';
@@ -48,9 +48,9 @@ function squeezeBatch(shape) {
   return shape[0] === 1 ? shape.slice(1) : shape;
 }
 
-export async function runSuperMatWitness({ stage, fixtureSha256, weightsSha256 }) {
+export async function runSuperMatWitness({ stage, fixtureSha256, weightsSha256, opsOptions = {} }) {
   const result = { schema: 'supermat.stage-witness.browser.v0', stage, status: 'failed', phase: 'admission',
-    fixtureSha256, weightsSha256, tolerances: STAGE_TOLERANCES[stage], comparisons: {}, timings: {} };
+    fixtureSha256, weightsSha256, requestedOpsOptions: opsOptions, tolerances: STAGE_TOLERANCES[stage], comparisons: {}, timings: {} };
   let session, route, ops;
   const leases = [];
   const captures = new Map();
@@ -87,11 +87,19 @@ export async function runSuperMatWitness({ stage, fixtureSha256, weightsSha256 }
     result.phase = 'execution';
     device.pushErrorScope('validation');
     device.pushErrorScope('out-of-memory');
-    ops = createSuperMatOps(device, { label: `supermat.${stage}` });
+    ops = createSuperMatOps(device, { ...opsOptions, label: `supermat.${stage}` });
+    result.effectiveOps = { activations: ops.activations, fuseNorm: ops.fuseNorm, gemmPrecision: ops.gemmPrecision,
+      gemmKernel: ops.gemmKernel, attention: ops.attentionMode };
+    // Captures compare in F32; reduced-precision storage is widened exactly first.
     const capture = (name, tensor) => {
-      const copy = device.createBuffer({ label: `capture.${name}`, size: tensor.byteLength, usage: 0x0004 | 0x0008 | 0x0080 });
-      ops.copy(tensor, { buffer: copy, offset: 0, byteLength: tensor.byteLength }, { size: tensor.byteLength });
-      captures.set(name, { buffer: copy, byteLength: tensor.byteLength });
+      const count = tensor.byteLength / (storageKind(tensor) === 'f32' ? 4 : 2);
+      const wide = storageKind(tensor) === 'f32' ? tensor
+        : ops.affine({ x: tensor, shape: [count], dtype: 'f32', name: `capture.${name}.f32` });
+      const byteLength = count * 4;
+      const copy = device.createBuffer({ label: `capture.${name}`, size: byteLength, usage: 0x0004 | 0x0008 | 0x0080 });
+      ops.copy(wide, { buffer: copy, offset: 0, byteLength }, { size: byteLength });
+      if (wide !== tensor) ops.release(wide);
+      captures.set(name, { buffer: copy, byteLength });
     };
     const outputs = {};
     const runStart = performance.now();

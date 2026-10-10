@@ -151,7 +151,8 @@ try {
         fixtureSha256: report.fixture.manifestSha256, weightsSha256: report.weights.packageSha256,
         adapterOptions: JSON.parse(values.options ?? '{}') })}))`
       : `import('/models/supermat/supermat-witness.js').then(m => m.runSuperMatWitness(${JSON.stringify({
-        stage: values.stage, fixtureSha256: report.fixture.manifestSha256, weightsSha256: report.weights.packageSha256 })}))`,
+        stage: values.stage, fixtureSha256: report.fixture.manifestSha256, weightsSha256: report.weights.packageSha256,
+        opsOptions: JSON.parse(values.options ?? '{}') })}))`,
     awaitPromise: true, returnByValue: true,
   }, sessionId);
   report.wallMs = Date.now() - started;

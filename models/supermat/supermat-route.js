@@ -64,8 +64,14 @@ async function runCpuPhase(useWorker, operationId, payload, transfer, signal) {
   return output;
 }
 
-export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgress, cpuWorker = typeof Worker !== 'undefined',
-  attention = 'streaming', gemmKernel = 'tiled', weightLoading = 'auto', gemmPrecision = 'f32', activations = 'f32', fuseNorm = false } = {}) {
+const ADAPTER_OPTIONS = Object.freeze(['route', 'weightsUrl', 'signal', 'onProgress', 'cpuWorker', 'attention', 'gemmKernel',
+  'weightLoading', 'gemmPrecision', 'activations', 'fuseNorm']);
+
+export async function createSuperMatAdapter(options = {}) {
+  const unknown = Object.keys(options).filter(key => !ADAPTER_OPTIONS.includes(key));
+  if (unknown.length) throw new Error(`unknown SuperMat adapter option: ${unknown.join(', ')}`);
+  const { route, weightsUrl, signal, onProgress, cpuWorker = typeof Worker !== 'undefined',
+    attention = 'streaming', gemmKernel = 'tiled', weightLoading = 'auto', gemmPrecision = 'f32', activations = 'f32', fuseNorm = false } = options;
   if (!['auto', 'chunks', 'bundle'].includes(weightLoading)) throw new Error(`unknown weight loading mode ${weightLoading}`);
   if (!route?.runtime?.device || typeof route.loadModelResourcesFromSource !== 'function') {
     throw new Error('SuperMat adapter requires a registered kit session route');
