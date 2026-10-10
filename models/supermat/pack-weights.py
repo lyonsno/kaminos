@@ -109,6 +109,28 @@ def write_bundle(out, resource_id, tensors, model_id, revision):
                          'allocations': manifest_allocations}}
 
 
+def write_chunks(out, row, chunk_bytes):
+    """Split each allocation of a written bundle into contiguous chunk files."""
+    folder = out / f"{row['resourceId']}.chunks"
+    folder.mkdir(exist_ok=True)
+    allocations, files = [], {}
+    with (out / row['file']).open('rb') as f:
+        for allocation in row['manifest']['allocations']:
+            chunks = []
+            for start in range(0, allocation['byteLength'], chunk_bytes):
+                length = min(chunk_bytes, allocation['byteLength'] - start)
+                f.seek(allocation['byteOffset'] + start)
+                data = f.read(length)
+                chunk_id = f"{allocation['allocationId']}.{len(chunks):04d}"
+                name = f'{chunk_id}.bin'
+                (folder / name).write_bytes(data)
+                chunks.append({'chunkId': chunk_id, 'byteOffset': start, 'byteLength': length,
+                               'sha256': hashlib.sha256(data).hexdigest()})
+                files[chunk_id] = f'{folder.name}/{name}'
+            allocations.append({'allocationId': allocation['allocationId'], 'chunks': chunks})
+    row['chunks'] = {'allocations': allocations, 'files': files}
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--checkpoint', type=Path, required=True)
@@ -118,6 +140,8 @@ def main():
     p.add_argument('--reference', type=Path, required=True,
                    help='export-reference.py output supplying the empty-prompt conditioning')
     p.add_argument('--out', type=Path, required=True)
+    p.add_argument('--chunk-bytes', type=int, default=0,
+                   help='also write each allocation as verified chunks of this many bytes for chunked browser loading')
     p.add_argument('--dtype', choices=('f32', 'f16'), default='f32',
                    help='f16 stores matrix and conv weights (2+ dims) as binary16; vectors and conditioning stay f32')
     args = p.parse_args()
@@ -191,6 +215,13 @@ def main():
         for resource_id in sorted(sections):
             report['resources'].append(write_bundle(args.out, resource_id, sections[resource_id],
                                                     'supermat.single-image', revision))
+        if args.chunk_bytes:
+            report['phase'] = 'chunk-write'
+            if args.chunk_bytes % 4:
+                raise ValueError('--chunk-bytes must be a multiple of 4')
+            report['chunkBytes'] = args.chunk_bytes
+            for row in report['resources']:
+                write_chunks(args.out, row, args.chunk_bytes)
         report['totalBytes'] = sum(r['manifest']['bundle']['byteLength'] for r in report['resources'])
         report['status'] = 'succeeded'
         report['phase'] = 'complete'

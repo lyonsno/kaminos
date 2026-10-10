@@ -339,8 +339,10 @@ try {
   session = await createWebGpuInferenceSession({ sessionId: crypto.randomUUID(), device, adapter: context.adapter,
     backendIdentity: context.backendIdentity });
   startScene();
+  state.scene.gaps = [];
   const weightsRoute = await session.registerRoute({ routeId: `${SUPERMAT_ROUTE_ID}.resident-weights` });
-  adapter = await createSuperMatAdapter({ route: weightsRoute, weightsUrl, attention, onProgress(event) {
+  adapter = await createSuperMatAdapter({ route: weightsRoute, weightsUrl, attention,
+    weightLoading: params.get('weightLoading') ?? 'auto', onProgress(event) {
     if (event.phase === 'weights') {
       const mb = value => (value / 1e6).toFixed(0);
       setStatus(`Loading weights ${event.resourceIndex + 1}/${event.resourceCount} (${event.resourceId}`
@@ -349,8 +351,12 @@ try {
   } });
   state.identity = adapter.identity;
   state.weightLoadMs = adapter.weightLoadMs;
+  state.loadFrames = frameStats(state.scene.gaps);
+  state.scene.gaps = null;
   state.status = 'ready';
-  setStatus(`Model resident (${(adapter.weightLoadMs / 1000).toFixed(1)} s load). Choose or drop an image.`);
+  const lf = state.loadFrames;
+  setStatus(`Model resident (${(adapter.weightLoadMs / 1000).toFixed(1)} s load via ${adapter.identity.weightLoading}`
+    + `${lf ? `; scene p95 ${lf.p95.toFixed(0)} ms, max ${lf.max.toFixed(0)} ms while loading` : ''}). Choose or drop an image.`);
   if (imageUrl) {
     const response = await fetch(imageUrl);
     if (!response.ok) throw new Error(`image ${imageUrl}: HTTP ${response.status}`);

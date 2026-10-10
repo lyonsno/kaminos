@@ -2,7 +2,9 @@
 // One adapter keeps the F32 weights, pipelines and activation pool resident on
 // a registered route; each run maps one RGBA image to albedo, roughness and
 // metallic maps at 512x512, following the pinned source pipeline.
-import { defineWebGpuModelResourceManifest, runWebGpuWorkerPhase } from '../../webgpu-inference-kit/src/core.js';
+import {
+  defineWebGpuModelResourceChunkPlan, defineWebGpuModelResourceManifest, runWebGpuWorkerPhase,
+} from '../../webgpu-inference-kit/src/core.js';
 import { createSuperMatOps } from './supermat-ops.js';
 import { createWeightAccessor, decodeLatent, encodeImage, runUnet, timeEmbedding } from './supermat-model.js';
 import { preprocessForSuperMat, resizeRgbaBilinear } from './supermat-preprocess.js';
@@ -63,7 +65,8 @@ async function runCpuPhase(useWorker, operationId, payload, transfer, signal) {
 }
 
 export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgress, cpuWorker = typeof Worker !== 'undefined',
-  attention = 'streaming', gemmKernel = 'tiled' } = {}) {
+  attention = 'streaming', gemmKernel = 'tiled', weightLoading = 'auto' } = {}) {
+  if (!['auto', 'chunks', 'bundle'].includes(weightLoading)) throw new Error(`unknown weight loading mode ${weightLoading}`);
   if (!route?.runtime?.device || typeof route.loadModelResourcesFromSource !== 'function') {
     throw new Error('SuperMat adapter requires a registered kit session route');
   }
@@ -77,17 +80,26 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
   const vScale = weightPackage.constants?.vScale;
   if (!Number.isFinite(vScale)) throw new Error('SuperMat weight package lacks the source scheduler vScale');
 
-  const leases = [], tensors = {};
+  const leases = [], tensors = {}, loadedVia = new Set();
   const loadStart = performance.now();
   try {
     for (const [index, row] of weightPackage.resources.entries()) {
-      const lease = await route.loadModelResourcesFromSource({
-        manifest: defineWebGpuModelResourceManifest(row.manifest),
-        source: new URL(row.file, base),
-        signal,
-        onProgress: event => onProgress?.({ phase: 'weights', resourceId: row.resourceId, resourceIndex: index,
-          resourceCount: weightPackage.resources.length, loadedBytes: event.loadedBytes, totalBytes: event.totalBytes }),
-      });
+      const manifest = defineWebGpuModelResourceManifest(row.manifest);
+      const report = event => onProgress?.({ phase: 'weights', resourceId: row.resourceId, resourceIndex: index,
+        resourceCount: weightPackage.resources.length, loadedBytes: event.loadedBytes ?? event.sourceEvent?.loadedBytes,
+        totalBytes: event.totalBytes ?? event.sourceEvent?.totalBytes, chunkIndex: event.chunkIndex, chunkCount: event.chunkCount });
+      const chunked = row.chunks && weightLoading !== 'bundle';
+      if (weightLoading === 'chunks' && !row.chunks) throw new Error(`weight resource ${row.resourceId} has no chunk plan`);
+      // Chunked loading verifies and uploads one small chunk at a time, so a
+      // renderer sharing the device keeps getting frames during the load.
+      const lease = chunked
+        ? await route.loadModelResourceChunksFromSources({
+          plan: defineWebGpuModelResourceChunkPlan({ planId: `${row.resourceId}:chunks`, manifest,
+            allocations: row.chunks.allocations }),
+          sources: Object.fromEntries(Object.entries(row.chunks.files).map(([chunkId, file]) => [chunkId, new URL(file, base)])),
+          signal, onProgress: report })
+        : await route.loadModelResourcesFromSource({ manifest, source: new URL(row.file, base), signal, onProgress: report });
+      loadedVia.add(chunked ? 'chunks' : 'bundle');
       leases.push(lease);
       Object.assign(tensors, lease.tensors);
     }
@@ -102,7 +114,7 @@ export async function createSuperMatAdapter({ route, weightsUrl, signal, onProgr
   const identity = Object.freeze({
     routeId: SUPERMAT_ROUTE_ID, backend: 'webgpu-local', modelId: 'supermat.single-image',
     revision: weightPackage.revision, weightDtype: weightPackage.dtype ?? 'f32', defaultImageSize: SUPERMAT_IMAGE_SIZE, attention,
-    gemmKernel: ops.gemmKernel,
+    gemmKernel: ops.gemmKernel, weightLoading: [...loadedVia].join('+'),
     provenance: weightPackage.provenance,
   });
   let runs = 0, released = false, busy = false;
