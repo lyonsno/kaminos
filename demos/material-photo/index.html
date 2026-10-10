@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Material Photograph | Kaminos</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">{"imports":{"three/webgpu":"../../lib/three.webgpu.js","three/tsl":"../../lib/three.tsl.js"}}</script>
+</head>
+<body>
+  <header><a class="brand" href="../../index.html">Kaminos</a><span>Material photograph</span><a href="https://github.com/lyonsno/kaminos/tree/main/webgpu-inference-kit">Inference Kit <span aria-hidden="true">&#8599;</span></a></header>
+  <main>
+    <section class="stage" aria-label="Photograph surface">
+      <div class="title"><h1>A photograph.<br>A different light.</h1><p id="stage-label">Original photograph</p></div>
+      <img id="preview" alt="Selected photograph">
+      <canvas id="scene" tabindex="0" aria-label="Interactive photograph surface" hidden></canvas>
+      <div class="stage-foot"><span id="name">Celebration</span><span id="resolution"></span></div>
+    </section>
+    <aside>
+      <section><h2><span>01</span> Photograph</h2>
+        <div class="samples" aria-label="Example photographs">
+          <button data-sample="celebration" class="selected"><img src="./images/celebration.png" alt=""><span>Celebration</span></button>
+          <button data-sample="bag"><img src="./images/bag.webp" alt=""><span>Leather &amp; metal</span></button>
+          <button data-sample="orb"><img src="./images/evil-orb.png" alt=""><span>Stone &amp; glow</span></button>
+        </div>
+        <label class="file">Choose photograph<input id="file" type="file" accept="image/*"></label>
+        <button id="run" class="primary">Reveal depth &amp; materials</button>
+        <div class="progress"><p id="status" role="status" aria-live="polite">Photograph loaded</p><progress id="progress" max="1" value="0"></progress><span id="elapsed"></span></div>
+      </section>
+      <section><h2><span>02</span> Explore</h2>
+        <div class="segmented" aria-label="Surface view"><button data-view="original" class="selected">Original</button><button data-view="photo" disabled>Depth</button><button data-view="materials" disabled>Materials</button></div>
+        <label>View<select id="map" disabled><option value="surface">Lit surface</option><option value="albedo">Albedo</option><option value="roughness">Roughness</option><option value="metallic">Metallic</option><option value="normals">Surface normals</option></select></label>
+        <label>Light direction<input id="light" type="range" min="-180" max="180" value="-35" disabled></label>
+        <label>Light height<input id="height" type="range" min="-60" max="80" value="35" disabled></label>
+        <label>Exposure<input id="exposure" type="range" min="0.25" max="2.5" step="0.05" value="1" disabled></label>
+        <label class="check"><input id="gi" type="checkbox" checked disabled>Screen-space GI</label>
+        <button id="reset" title="Reset view and light" disabled>Reset view &amp; light</button>
+      </section>
+      <div class="identity"><span id="identity">MoGe-2 + SuperMat</span><span>Local WebGPU inference</span><span id="timings"></span></div>
+    </aside>
+  </main>
+  <footer><span>Kaminos WebGPU Inference Kit</span><span>Depth, normals &amp; material maps from one image</span></footer>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
