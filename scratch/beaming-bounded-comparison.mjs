@@ -13,8 +13,10 @@ export function validateVisibilitySample(sample,{mode,generation,preparations}){
   for(const key of ['pipelines','rayBuffers'])assert.equal(sample.after[key],sample.before[key],'resource recreation');
   assert.equal(sample.profile.records.length,1,'missing primary timing record');
   const record=sample.profile.records[0];
-  assert.equal(record.passes.filter(p=>p.label==='static kiln visibility preparation').length,1);
-  if(record.valid){assert.deepEqual(sample.profile.errors,[]);assert(Number.isFinite(record.totalMs)&&record.totalMs>0);}
+  const labels=mode==='occupancy-split'?['exact near-receiver visibility','far occupancy visibility']:['static kiln visibility preparation'];
+  for(const label of labels)assert.equal(record.passes.filter(p=>p.label===label).length,1,'missing or repeated visibility stage '+label);
+  for(const label of ['static kiln visibility preparation','exact near-receiver visibility','far occupancy visibility'].filter(s=>!labels.includes(s)))assert.equal(record.passes.filter(p=>p.label===label).length,0,'unexpected visibility stage');
+  if(record.valid){assert.deepEqual(sample.profile.errors,[]);assert(Number.isFinite(record.totalMs)&&record.totalMs>0);assert(record.passes.every(p=>Number.isFinite(p.ms)&&p.ms>=0),'invalid stage duration');}
   else {assert.equal(record.totalMs,null);assert(record.passes.every(p=>p.ms===null),'invalid timestamps became costs');}
   return record.valid;
 }
@@ -35,10 +37,25 @@ export function replayMaterial(primary,dimensions,kind){
   return {source,guide,metadata:{kind,offsets,emissionSum:sum,center,variance,extinction:'held original',boundary:'periodic RGB translation',proposal:'all-cell CPU emission moments, full-volume mixture retained'}};
 }
 
+export function validateSplitRays(fused,hits,near,rayCount){
+  assert.equal(fused.length,rayCount);assert.equal(hits.length,rayCount);assert.equal(near.length,4*rayCount);assert(rayCount>0);
+  const counts={rays:rayCount,sourceMiss:0,nearBlocked:0,farEligible:0,farBlocked:0,farUnblocked:0};
+  for(let i=0;i<rayCount;i++){
+    assert(Number.isFinite(fused[i])&&Number.isFinite(hits[i]),'nonfinite ray distance');
+    assert.equal(hits[i],fused[i],'split changed first hit at ray '+i);
+    const j=4*i;for(let a=0;a<4;a++)assert(Number.isFinite(near[j+a]),'nonfinite near record');
+    const flag=near[j+3];assert([-1,0,1].includes(flag),'unwritten/invalid near gate');
+    if(flag===1){assert.equal(near[j],near[j+2],'far ray did not miss near query');counts.farEligible++;assert(hits[i]<=near[j+1]);counts[hits[i]<near[j+1]?'farBlocked':'farUnblocked']++;}
+    else {assert.equal(hits[i],near[j],'far pass changed rejected ray');counts[flag===-1?'sourceMiss':'nearBlocked']++;if(flag===0)assert(near[j]<near[j+2],'zero/stale near record');}
+  }
+  return counts;
+}
+
 export async function runVisibilityComparison({page,out,report,save,iterations,capture,broken,candidate='source-volume'}){
-  const occupancy=candidate==='occupancy';
+  const split=candidate==='occupancy-split',occupancy=candidate.startsWith('occupancy');
   report.claim=occupancy?'paired full-scene occupancy visibility experiment; fixed burner, offline displaced/split emission replay; visible flame held; no production source discovery or whole-frame claim':'paired source-volume-exit visibility cost and lighting parity; held material, prescribed guide; no live emission-discovery or whole-frame claim';
   report.phase='paired-visibility';report.pairs=[];report.timing={valid:0,invalid:0};await save();
+  if(split)report.claim='same-source same-ray fused hybrid versus separately timed exact-near and near-gated far occupancy; complete ray/field parity; held visible flame; no live proposal, cheap-near quality or whole-frame claim';
   let preparations=capture.lighting.frame.angularCache.visibilityPreparations;
   const replays=occupancy?['original','displaced','split'].map(kind=>replayMaterial(capture.primary,capture.sourceMetadata.dimensions,kind)):[];
   report.replays=replays.map(r=>({guide:r.guide,...r.metadata}));
@@ -70,30 +87,36 @@ export async function runVisibilityComparison({page,out,report,save,iterations,c
       preparations=report.replaySetup.metadata.angularCache.visibilityPreparations;await save();
     }
     const pair={index:i,guide,material:replay?.metadata.kind??'held',generation,arms:[],parity:null};report.pairs.push(pair);await save();
-    const fields=[];
-    for(const mode of ['unbounded',candidate]){
-      const sample=await Promise.race([page.evaluate(async({mode,guide,readFields})=>{
+    const fields=[],rays=new Map();
+    const modes=split?(i%2?['occupancy-split','occupancy']:['occupancy','occupancy-split']):['unbounded',candidate];
+    for(const mode of modes){
+      const sample=await Promise.race([page.evaluate(async({mode,guide,readFields,split})=>{
         const {api,options}=window.__beamingOriginalCapture,field=window.__beamingReplayField??window.__beamingOriginalCapture.field,device=window.__beamingGatherDevice;
         if(!device.features.has('timestamp-query'))throw Error('native timestamps unavailable');
         const counts=()=>({encodes:window.__beamingEncodeCount,pipelines:window.__beamingAllocations.pipelines.length,rayBuffers:window.__beamingAllocations.buffers.filter(b=>b.label==='cached first solid distance per receiver ray').length});
         const before=counts(),profile=window.__beamingGatherProfile={remaining:1,records:[],errors:[]},start=performance.now();
+        if(split)api.setVisibilityBounds('source-volume'); // Invalidate even at alternating pair boundaries.
         api.setVisibilityBounds(mode);api.setSourceGuide(guide);const metadata=api.encode(field,options),encodeMs=performance.now()-start;
         await device.queue.onSubmittedWorkDone();const submitAndCompleteMs=performance.now()-start;
         while(!profile.records.length&&!profile.errors.length)await new Promise(r=>setTimeout(r,1));
         const result={metadata,profile,before,after:counts(),encodeMs,submitAndCompleteMs};
         if(readFields)result.fields=Object.fromEntries(Object.entries(await api.readback()).map(([k,v])=>[k,{dimensions:v.dimensions,data:Array.from(v.data)}]));
+        if(split){const raw=await api.readVisibilitySplit();const pack=a=>{const bytes=new Uint8Array(new Float32Array(a).buffer);let binary='';for(let j=0;j<bytes.length;j+=32768)binary+=String.fromCharCode(...bytes.subarray(j,j+32768));return btoa(binary);};result.rays={rayCount:raw.rayCount,hits:pack(raw.hits),near:mode==='occupancy-split'?pack(raw.near):null};}
         return result;
-      },{mode,guide,readFields:i<8}),broken]);
+      },{mode,guide,readFields:split||i<8,split}),broken]);
+      const rawRays=sample.rays;delete sample.rays;
       fields.push(sample.fields);delete sample.fields;pair.arms.push({mode,...sample});await save();
       // Preserve observed bytes even if route/resource/timing admission rejects
       // this arm. The report retains the effective identity and failure phase.
       if(fields.at(-1))for(const [name,field] of Object.entries(fields.at(-1)))await fs.writeFile(`${out}/pair-${i}-${mode}-${name}.f32`,Buffer.from(new Float32Array(field.data).buffer));
+      if(rawRays){const decoded={rayCount:rawRays.rayCount};for(const name of ['hits','near'])if(rawRays[name]){const bytes=Buffer.from(rawRays[name],'base64');await fs.writeFile(`${out}/pair-${i}-${mode}-${name}.f32`,bytes);assert.equal(bytes.length%4,0);decoded[name]=new Float32Array(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength));}rays.set(mode,decoded);}
       const valid=validateVisibilitySample(sample,{mode,generation,preparations:++preparations});
       report.timing[valid?'valid':'invalid']++;
       if(occupancy&&i<3){await page.evaluate(async()=>{await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);});await page.screenshot({path:`${out}/lighting-only-${pair.material}-${mode}.png`});}
     }
     // Eight distinct guide states, each full surface-front/back and smoke field.
-    if(i<8){
+    if(split){const a=rays.get('occupancy'),b=rays.get('occupancy-split');assert.equal(a.rayCount,b.rayCount);assert.equal(b.rayCount,(capture.lighting.frame.surfaceReceivers+capture.lighting.frame.allocatedVolumeReceivers)*8);pair.rayParity=validateSplitRays(a.hits,b.hits,b.near,b.rayCount);await save();}
+    if(split||i<8){
       pair.parity={};
       for(const name of ['surface','surfaceBack','smoke']){
         assert.deepEqual(fields[0][name].dimensions,fields[1][name].dimensions);
@@ -102,6 +125,7 @@ export async function runVisibilityComparison({page,out,report,save,iterations,c
         for(let j=0;j<a.length;j++){assert(Number.isFinite(a[j])&&Number.isFinite(b[j]));if(j%4!==3){maxError=Math.max(maxError,Math.abs(a[j]-b[j]));scale=Math.max(scale,Math.abs(a[j]));if(a[j]!==0)nonzero++;squaredError+=(a[j]-b[j])**2;squaredReference+=a[j]**2;referenceSum+=a[j];candidateSum+=b[j];}}
         pair.parity[name]={maxError,scale,nonzero,values:a.length,relativeL2:Math.sqrt(squaredError/Math.max(squaredReference,1e-30)),energyRatio:candidateSum/Math.max(referenceSum,1e-30)};await save();
         if(!occupancy)assert(maxError<=2e-5*Math.max(1,scale),'bounded/unbounded field mismatch '+name);
+        if(split)assert.equal(maxError,0,'split changed field '+name);
         if(name!=='surfaceBack')assert(nonzero>0,'blank primary field '+name);
       }
     }

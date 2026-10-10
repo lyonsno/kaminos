@@ -6,7 +6,7 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {assertSourceGuideEvidence} from './beaming-surface-evidence.mjs';
 import {runVisibilityComparison} from './beaming-bounded-comparison.mjs';
-import {instrumentOccupancy} from './beaming-occupancy-visibility.mjs';
+import {instrumentOccupancy,instrumentOccupancySplit} from './beaming-occupancy-visibility.mjs';
 const [url,out,iterationsText='32',experiment='guide',gridText='64']=process.argv.slice(2),iterations=Number(iterationsText);
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'preflight',requestedUrl:url,iterations,claim:'held-source changing-guide visibility and gather cost only',source:{root:process.cwd(),revision:null,dirty:null},errors:[],httpFailures:[],arms:[]};
@@ -19,7 +19,7 @@ try{
  report.source.dirty=execFileSync('git',['status','--porcelain'],{encoding:'utf8'});
  report.phase='preflight';await save();
  assert(Number.isSafeInteger(iterations)&&iterations>0,'positive explicit sample count');
- assert(['guide','visibility','occupancy'].includes(experiment),'unknown experiment');report.experiment=experiment;
+ assert(['guide','visibility','occupancy','occupancy-split'].includes(experiment),'unknown experiment');report.experiment=experiment;
  for(const name of ['beaming-live-guide-budget.mjs','beaming-bounded-comparison.mjs','beaming-occupancy-visibility.mjs','beaming-source-aware-gpu.mjs','beaming-gather-profiler.mjs','beaming-surface-evidence.mjs'])await fs.copyFile(new URL(name,import.meta.url),out+'/'+name);
  report.runtime=await(await fetch(new URL('/api/runtime-config',url))).json();
  assert.equal(report.runtime.source.repoRoot,report.source.root);assert.equal(report.runtime.source.commit,report.source.revision);assert.equal(report.source.dirty,'');assert.equal(report.runtime.source.dirty,false);
@@ -52,6 +52,7 @@ try{
       window.__beamingCurrentGather={api:this,field,options:{gain,stepLength,smokeEnabled,sourceSoftness,surfaceReconstruction,surfaceScattering}};
 `+capture);
    if(experiment==='occupancy')body=instrumentOccupancy(body,Number(gridText));
+   if(experiment==='occupancy-split')body=instrumentOccupancySplit(body,Number(gridText));
    await fs.writeFile(out+'/scene-volume-gather.executed.mjs',body);await fs.writeFile(out+'/scene-volume-gather.original.mjs',original);
    await route.fulfill({response,body});
  });
@@ -72,8 +73,8 @@ try{
  assert.deepEqual(capture.lighting.frame.angularCache.counts,[8],'no hidden higher capacity');
  assert.equal(capture.lighting.frame.surfaceReceivers,194914,'accepted receiver population');assert.equal(capture.lighting.frame.allocatedVolumeReceivers,8192);
  await page.screenshot({path:out+'/accepted-held-kiln.png'});
- if(experiment==='occupancy'){report.occupancy=await page.evaluate(()=>window.__beamingOccupancy);await save();assert.equal(report.occupancy.grid,Number(gridText));assert(report.occupancy.nodeCount>0);}
- if(experiment!=='guide')await runVisibilityComparison({page,out,report,save,iterations,capture,broken,candidate:experiment==='occupancy'?'occupancy':'source-volume'});
+ if(experiment.startsWith('occupancy')){report.occupancy=await page.evaluate(()=>window.__beamingOccupancy);await save();assert.equal(report.occupancy.grid,Number(gridText));assert(report.occupancy.nodeCount>0);}
+ if(experiment!=='guide')await runVisibilityComparison({page,out,report,save,iterations,capture,broken,candidate:experiment.startsWith('occupancy')?experiment:'source-volume'});
  else {
  report.phase='sequential-lighting-only-budget';report.samples=[];await save();
  let expectedPreparation=capture.lighting.frame.angularCache.visibilityPreparations;

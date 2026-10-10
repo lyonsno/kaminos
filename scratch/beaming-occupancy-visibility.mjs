@@ -90,3 +90,60 @@ export function instrumentOccupancy(source,grid){
 }`);
   return source;
 }
+
+// Assay only: retain the fused entry point and add equivalent near/far entry
+// points. Far work consumes the near pass's decision, never an all-ray proxy
+// approximation. Persistent intermediate state is overwritten on every ray.
+export function instrumentOccupancySplit(source,grid){
+  source=instrumentOccupancy(source,grid);
+  const replace=(needle,replacement)=>{if(source.split(needle).length!==2)throw Error('occupancy split instrumentation seam mismatch: '+needle);source=source.replace(needle,replacement);};
+  replace("['unbounded','source-volume','occupancy']","['unbounded','source-volume','occupancy','occupancy-split']");
+  replace("visibilityBounds==='occupancy'?2:","visibilityBounds.startsWith('occupancy')?2:");
+  const start=source.indexOf('@compute @workgroup_size(64)\nfn cacheGeometry('),end=source.indexOf('\nfn integrateRay(',start);
+  if(start<0||end<0)throw Error('occupancy split cacheGeometry seam missing');
+  const fused=source.slice(start,end),farStart=fused.indexOf('  if(cacheRange.z==2u&&closest==localLimit){');
+  if(farStart<0)throw Error('occupancy split far seam missing');
+  const near=fused.slice(0,farStart).replace('fn cacheGeometry(','fn cacheNearGeometry(')
+    .replace('firstHits[address]=closest;return;','nearResults[address]=vec4<f32>(closest,closest,closest,-1.0);firstHits[address]=closest;return;')+
+    '  nearResults[address]=vec4<f32>(closest,sourceLimit,localLimit,select(0.0,1.0,closest==localLimit));\n  firstHits[address]=closest;\n}\n';
+  const prefix=fused.slice(0,fused.indexOf('  var closest=1e20;var n=0u;')).replace('fn cacheGeometry(','fn cacheFarGeometry(');
+  const far=prefix+`  let near=nearResults[address];
+  if(near.w!=1.0){firstHits[address]=near.x;return;}
+  var closest=near.y;var n=0u;
+  loop{
+    if(n>=OCCUPANCY_NODE_COUNT){break;}
+    let node=occupancyNodes[n];let span=interval(p,d,node.lo.xyz,node.hi.xyz,closest);
+    let entry=max(span.x,LOCAL_EXACT_RADIUS);
+    if(span.y<entry){n=node.range.x;continue;}
+    if(node.range.z==0u){n++;continue;}
+    closest=entry;n=node.range.x;
+  }
+  firstHits[address]=closest;
+}
+`;
+  replace(fused,fused+'\n'+near+far);
+  replace('@group(0) @binding(12) var<storage,read> occupancyNodes:array<Node>;', '@group(0) @binding(12) var<storage,read> occupancyNodes:array<Node>;\n@group(0) @binding(13) var<storage,read_write> nearResults:array<vec4<f32>>;');
+  replace("      const cacheRange=buffer('visibility refresh range'", "      const nearResults=buffer('split visibility intermediate',new Float32Array(total*directions*4),GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC,owned);\n      const cacheRange=buffer('visibility refresh range'");
+  replace("      const gather=device.createComputePipeline",`      const nearCache=device.createComputePipeline({label:'exact near-receiver visibility',layout:'auto',compute:{module,entryPoint:'cacheNearGeometry'}});
+      const farCache=device.createComputePipeline({label:'far occupancy visibility',layout:'auto',compute:{module,entryPoint:'cacheFarGeometry'}});
+      const nearGroup=device.createBindGroup({layout:nearCache.getBindGroupLayout(0),entries:[...([nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}}))),{binding:11,resource:{buffer:cacheRange}},{binding:13,resource:{buffer:nearResults}}]});
+      const farGroup=device.createBindGroup({layout:farCache.getBindGroupLayout(0),entries:[{binding:2,resource:{buffer:receiverBuffer}},{binding:3,resource:{buffer:directionBuffer}},{binding:4,resource:{buffer:distances}},{binding:11,resource:{buffer:cacheRange}},{binding:12,resource:{buffer:occupancyNodes}},{binding:13,resource:{buffer:nearResults}}]});
+      const gather=device.createComputePipeline`);
+  replace('const state={owned,directionBuffer,distances,cacheRange,cache,cacheGroup,','const state={owned,directionBuffer,distances,nearResults,nearCache,farCache,nearGroup,farGroup,cacheRange,cache,cacheGroup,');
+  replace("        const pass=encoder.beginComputePass({label:'static kiln visibility preparation'});",'');
+  replace('        pass.setPipeline(state.cache);pass.setBindGroup(0,state.cacheGroup);pass.dispatchWorkgroups(...receiverDispatch(total*lastPreparedDirections,dispatchLimit));pass.end();state.cacheBuilt=true;',`        const stages=visibilityBounds==='occupancy-split'?[
+          {label:'exact near-receiver visibility',pipeline:state.nearCache,group:state.nearGroup},
+          {label:'far occupancy visibility',pipeline:state.farCache,group:state.farGroup}
+        ]:[{label:'static kiln visibility preparation',pipeline:state.cache,group:state.cacheGroup}];
+        for(const stage of stages){const pass=encoder.beginComputePass({label:stage.label});pass.setPipeline(stage.pipeline);pass.setBindGroup(0,stage.group);pass.dispatchWorkgroups(...receiverDispatch(total*lastPreparedDirections,dispatchLimit));pass.end();}
+        state.cacheBuilt=true;`);
+  replace('    async inspectRayInputs(ids){',`    async readVisibilitySplit(){
+      const state=angularState(),buffers=[state.distances,state.nearResults],encoder=device.createCommandEncoder();
+      const targets=buffers.map(b=>{const target=device.createBuffer({size:b.size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});encoder.copyBufferToBuffer(b,0,target,0,b.size);return target;});
+      device.queue.submit([encoder.finish()]);
+      try{const values=await Promise.all(targets.map(async b=>{await b.mapAsync(GPUMapMode.READ);return Array.from(new Float32Array(b.getMappedRange()));}));return {hits:values[0],near:values[1],rayCount:total*state.capacity};}
+      finally{for(const b of targets)b.destroy();}
+    },
+    async inspectRayInputs(ids){`);
+  return source;
+}
