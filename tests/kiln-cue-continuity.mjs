@@ -15,7 +15,7 @@ test('leaving Authoring cancels the actual cue draft before hiding its context',
   editor.begin('work',1);editor.set('volume-physical-exposure',-3);
   const code=workspace.slice(workspace.indexOf('  function setMode(next)'),workspace.indexOf("  header.querySelectorAll('[data-workspace-mode]').forEach(button => button.addEventListener",workspace.indexOf('  function setMode(next)')));
   const switcher=new Function('contexts','document','slots','header',`
-    let mode='authoring',currentContext='cues';const beforeSwitch=()=>true;
+    let mode='authoring',currentContext='cues',workbenchRenderingHidden=false;const beforeSwitch=()=>true,renderingPanel=null;
     ${code};return setMode;
   `)(new Map([['cues',{leave:()=>editor.cancel()}]]),{activeElement:{blur(){}},body:{dataset:{}}},
     {showAuthoring(){},showWorkbench(){}},{querySelectorAll:()=>[]});
@@ -24,15 +24,15 @@ test('leaving Authoring cancels the actual cue draft before hiding its context',
 });
 
 test('actual flame validation admits legacy cue flow3 and4 without loosening other ranges',()=>{
-  const start=html.indexOf('function checkFlameSettingsState('),end=html.indexOf('function writeFlameSettingsState(',start);
+  const start=html.indexOf('function flameSettingsStateProblems('),end=html.indexOf('function writeFlameSettingsState(',start);
   const code=html.slice(start,end);
   const flowTag=html.match(/<input\b[^>]*id="volume-flow-rate"[^>]*>/)[0];
   const bounds={min:flowTag.match(/min="([^"]+)"/)[1],max:flowTag.match(/max="([^"]+)"/)[1]};
   const all={...baseline.domControls,...baseline.rendererControls};
-  const check=new Function('flameSettingsState','document','KILN_FLOW_RANGE',`${code};return checkFlameSettingsState;`)(()=>baseline,{
+  const check=new Function('flameSettingsState','document','KILN_FLOW_RANGE','VOLUME_RETIRED_APERTURE_PATTERNS',`${code};return checkFlameSettingsState;`)(()=>baseline,{
     getElementById:id=>({tagName:all[id]?.tagName||'INPUT',type:all[id]?.type||'range',
       options:[{value:all[id]?.value}],min:id==='volume-flow-rate'?bounds.min:'',max:id==='volume-flow-rate'?bounds.max:''}),
-  },{min:0,max:4});
+  },{min:0,max:4},[]);
   for(const flow of [3,4]) {
     const state=structuredClone(baseline);state.domControls['volume-flow-rate'].value=flow;
     assert.doesNotThrow(()=>check(state,{cue:true}),`legacy flow${flow} must remain editable`);

@@ -33,8 +33,8 @@ assert.equal(edits,0,'temporary replay adds no authored transform history');
 const showSource=source.slice(source.indexOf('async function showGLB('),source.indexOf('// --- OBJ Inspector ---'));
 let loaded,registered=0,disposed=0;
 const abort=new AbortController();
-const show=new Function('shouldClearSceneForImport','sceneMutationToken','GLTFLoader','disposeObjectTree','greenroomPreviewIsActive','modelSourceUrl','modelSourceType','glbFileName',
- `${showSource};return showGLB;`)(()=>false,1,class {load(url,callback){loaded=callback;}},()=>{disposed++;},()=>false,'','','');
+const show=new Function('shouldClearSceneForImport','sceneMutationToken','GLTFLoader','disposeObjectTree','greenroomPreviewIsActive','modelSourceUrl','modelSourceType','glbFileName','resolveAssetArrivalMode',
+ `${showSource};return showGLB;`)(()=>false,1,class {load(url,callback){loaded=callback;}},()=>{disposed++;},()=>false,'','','',()=>({}));
 const pending=show('asset.glb',{clear:false,signal:abort.signal});
 abort.abort();loaded({scene:{}});
 await assert.rejects(pending,/stale async GLB/);assert.equal(disposed,1);

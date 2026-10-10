@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
+import {sampleKilnPhase} from './kiln-cinematic-cues.mjs';
 
 const [url,out,executablePath]=process.argv.slice(2);
 const cuePhase=process.argv[5] || 'work';
@@ -28,6 +29,7 @@ const snapshot=()=>page.evaluate(async()=>({route:window.__kaminosCompositionSet
   tune:window.kaminosFlameAuthoring.read(),history:window.kaminosSceneEdits.state(),
   editor:window.kaminosCinematic.cueEditor?.state(),status:document.getElementById('cue-status')?.textContent,
   frame:window.__kaminosVolumePrototype.debugState().frameCount,objects:window.kaminosSceneObjectDebugState()}));
+const keyTune=(recipe,phase,index)=>sampleKilnPhase(recipe,phase,recipe[phase][index].time).tune;
 try {
   report.phase='configuration';
   if(!['ignition','work'].includes(cuePhase))throw Error('Unknown cue phase');
@@ -60,7 +62,7 @@ try {
   report.draft=await snapshot();assert.ok(Math.abs(Number(report.draft.tune.domControls['volume-physical-exposure'].value)-value)<1e-12);
   await screenshot('tuning-key.png');await page.click('#cue-accept');
   report.accepted=await snapshot();
-  assert.equal(Number(report.accepted.cues[cuePhase][1].tune.domControls['volume-physical-exposure'].value),value);
+  assert.equal(Number(keyTune(report.accepted.cues,cuePhase,1).domControls['volume-physical-exposure'].value),value);
   assert.deepEqual(report.accepted.tune,report.before.tune);
   assert.deepEqual(report.accepted.ranges,report.before.ranges);assert.equal(report.accepted.ordinaryFlowMaximum,report.before.ordinaryFlowMaximum);
   assert.equal(report.accepted.history.undoCount,report.before.history.undoCount+1);
@@ -82,8 +84,92 @@ try {
   await page.selectOption('#cue-basin-select',basin);await page.click('#cue-basin-apply');
   await page.waitForFunction(id=>window.kaminosCinematic.cueEditor.state()?.tune.source.presetId===id,basin);
   report.basinDraft=await snapshot();await page.click('#cue-cancel');assert.deepEqual((await snapshot()).cues,report.accepted.cues);
+  report.phase='layered-looks';
+  assert.equal(report.accepted.cues.schema,'kaminos.kiln-cues.v2');
+  const emitterBefore=structuredClone(report.accepted.cues[cuePhase]);
+  await page.locator('#cue-key-list button').nth(1).click();await page.click('#cue-look-unique');
+  await page.getByLabel('Look name',{exact:true}).fill('Hero variation');await page.getByLabel('Look name',{exact:true}).press('Tab');
+  await exposure.click();await exposure.fill(String(value+.3));await page.click('#cue-accept');
+  report.unique=await snapshot();
+  assert.deepEqual(report.unique.cues[cuePhase],emitterBefore);
+  assert.equal(report.unique.cues.looks.length,report.accepted.cues.looks.length+1);
+  assert.equal(Number(keyTune(report.unique.cues,cuePhase,0).domControls['volume-physical-exposure'].value),value);
+  assert.equal(Number(keyTune(report.unique.cues,cuePhase,1).domControls['volume-physical-exposure'].value),value+.3);
+  await page.locator('#cue-key-list button').nth(1).click();
+  await page.selectOption('#cue-basin-select',basin);await page.click('#cue-basin-apply');
+  await page.waitForFunction(id=>window.kaminosCinematic.cueEditor.state()?.tune.source.presetId===id,basin);
+  await page.click('#cue-accept');report.adopted=await snapshot();
+  assert.deepEqual(report.adopted.cues[cuePhase],emitterBefore,'adopting another basin must not rewrite the animation');
+  assert.equal(keyTune(report.adopted.cues,cuePhase,1).source.presetId,basin);
+  assert.equal(keyTune(report.adopted.cues,cuePhase,1).domControls['volume-physical-exposure'].value,
+    report.before.tune.domControls['volume-physical-exposure'].value);
+  await page.locator('#cue-key-list button').nth(1).click();
+  await page.locator('#cue-flow-keyed').uncheck();
+  assert.equal((await snapshot()).editor.key.flow,undefined);
+  await page.click('#cue-cancel');assert.deepEqual((await snapshot()).cues,report.adopted.cues);
+  await page.locator('#cue-key-list button').nth(1).click();await exposure.click();await exposure.fill(String(value));await page.click('#cue-accept');
+  report.accepted=await snapshot();await screenshot('layered-look-and-emitter.png');
+  report.library=await page.evaluate(async()=>({index:await (await fetch('/api/volume-settings-presets')).json(),
+    options:[...document.getElementById('cue-basin-select').options].map(option=>({id:option.value,label:option.textContent}))}));
+  for(const earlier of report.library.index.earlierVersions)
+    assert.ok(report.library.options.some(option=>option.id===earlier.presetId),'earlier immutable library version must be selectable');
   await page.click('#cue-duplicate');report.duplicated=await snapshot();assert.equal(report.duplicated.cues[cuePhase].length,report.before.cues[cuePhase].length+1);
   await page.click('#cue-remove');assert.deepEqual((await snapshot()).cues,report.accepted.cues);
+  report.phase='revision-preservation';
+  const authored=structuredClone(report.accepted.cues);
+  await page.evaluate(async()=>{
+    const {setCueTuneValue}=await import('./kiln-cue-tunes.mjs');
+    const cues=window.kaminosCinematic.read(),base=cues.looks[0].tune;
+    cues.looks=[{id:'left',name:'Blend left',tune:setCueTuneValue(base,'volume-physical-exposure',-4)},
+      {id:'right',name:'Blend right',tune:setCueTuneValue(base,'volume-physical-exposure',-2)}];
+    cues.work=[{time:0,radius:.2,flow:1},{time:2,radius:.5,flow:.8},{time:4,radius:.6,flow:3}];
+    cues.lookCues={ignition:[{time:0,lookId:'left'}],work:[{time:0,lookId:'left',blend:true},{time:4,lookId:'right'}]};
+    window.kaminosCinematic.write(cues);
+  });
+  await page.click('[data-cue-phase="work"]');await page.locator('#cue-key-list button').nth(1).click();
+  const blended=(await snapshot()).editor.tune;
+  await page.click('#cue-look-unique');assert.deepEqual((await snapshot()).editor.tune,blended);
+  await page.click('#cue-accept');report.blendFork=await snapshot();
+  assert.equal(report.blendFork.cues.looks.at(-1).tune.domControls['volume-input-radius'].value,
+    authored.looks[0].tune.domControls['volume-input-radius'].value);
+  const seconds=page.getByLabel('Seconds',{exact:true});
+  await seconds.click();await seconds.fill('3');await seconds.press('Tab');
+  report.retimed=await snapshot();
+  assert.equal(report.retimed.cues.lookCues.work.find(key=>key.lookId===report.blendFork.cues.looks.at(-1).id).time,3);
+  await page.locator('#cue-key-list button').nth(2).click();
+  await seconds.click();await seconds.fill('5');await seconds.press('Tab');
+  report.terminalRetimed=await snapshot();assert.equal(report.terminalRetimed.cues.lookCues.work.at(-1).time,5);
+  await seconds.click();await seconds.fill('3.5');await seconds.press('Tab');
+  report.terminalShortened=await snapshot();assert.equal(report.terminalShortened.cues.lookCues.work.at(-1).time,3.5);
+  await page.click('#cue-remove');report.terminalRemoved=await snapshot();
+  assert.ok(!report.terminalRemoved.cues.lookCues.work.some(key=>key.time===3.5));
+  await page.evaluate(()=>{
+    const cues=window.kaminosCinematic.read();cues.work=[{time:0},{time:2},{time:4,flow:3}];
+    cues.lookCues.work=[{time:0,lookId:'left'},{time:1,lookId:'right'}];window.kaminosCinematic.write(cues);
+  });
+  report.lookOnly=await snapshot();assert.deepEqual(report.lookOnly.cues.work[1],{time:1});
+  await page.locator('#cue-key-list button').nth(1).click();
+  assert.equal((await snapshot()).editor.lookId,'right');
+  await page.click('#cue-remove');assert.ok(!(await snapshot()).cues.lookCues.work.some(key=>key.time===1));
+  await page.locator('#cue-key-list button').nth(1).click();
+  const flow=page.getByLabel('Cue Flow',{exact:true});
+  const sparseBefore=await snapshot();assert.equal(sparseBefore.editor.key.flow,undefined);
+  await flow.click();await flow.fill('1');await flow.press('Escape');
+  assert.equal((await snapshot()).editor.key.flow,undefined);
+  await page.click('#cue-accept');report.sparseCancelled=await snapshot();
+  assert.deepEqual(report.sparseCancelled.cues,sparseBefore.cues);
+  await page.evaluate(()=>window.kaminosSceneEdits.undo());
+  await page.evaluate(()=>window.kaminosSceneEdits.redo());
+  assert.deepEqual((await snapshot()).cues,report.sparseCancelled.cues);
+  const revisionSave=await page.evaluate(()=>window.saveSceneAs({result:true}));
+  assert.equal(revisionSave.ok,true,revisionSave.error);report.revisionSave=revisionSave;
+  await page.goto(revisionSave.url,{waitUntil:'domcontentloaded'});
+  await page.waitForFunction(()=>window.kaminosCinematic?.state().armed);
+  assert.deepEqual((await snapshot()).cues,report.sparseCancelled.cues);
+  await page.click('#kiln-edit');
+  await page.evaluate(cues=>window.kaminosCinematic.write(cues),authored);
+  await page.click(`[data-cue-phase="${cuePhase}"]`);
+  report.accepted=await snapshot();assert.deepEqual(report.accepted.cues,authored);
   report.phase='save';report.saved=await page.evaluate(()=>window.saveSceneAs({result:true}));assert.equal(report.saved.ok,true,report.saved.error);
   assert.deepEqual(report.saved.document.cinematic,report.accepted.cues);await screenshot('accepted-keyframe.png');
   await page.goto(report.saved.url,{waitUntil:'domcontentloaded'});

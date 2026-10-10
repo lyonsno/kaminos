@@ -3689,6 +3689,7 @@ import { createFlameAuthoring, createFlameInspector } from './flame-authoring.mj
 import { normalizeKilnCues, defaultKilnCues } from './kiln-cinematic-cues.mjs';
 import {tuneForCue, checkCueDomain, CUE_CONTINUOUS_FIELDS, cueTuneValuesEqual, KILN_FLOW_RANGE, captureCueControlRanges, restoreCueControlRanges} from './kiln-cue-tunes.mjs';
 import {createCueTuneEditor} from './kiln-cue-editor.mjs';
+import {layerKilnCues,sampleKilnPhase} from './kiln-cinematic-cues.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
@@ -11964,7 +11965,11 @@ async function initScene() {
         if (scenePlacementTools?.edits.state().active || scenePlacementTools?.edits.state().replaying) throw new Error('Finish the current scene edit first');
         kilnCues ||= defaultKilnCues(readVolumeControls());
         const tune=window.kaminosFlameAuthoring?.read();
-        if(tune)for(const phase of ['ignition','work'])for(const key of readKilnCueRecipe()[phase])checkFlameSettingsState(checkCueDomain(key.tune,tune),{cue:true});
+        if(tune) {
+          const recipe=readKilnCueRecipe();
+          for(const look of recipe.looks)checkFlameSettingsState(checkCueDomain(look.tune,tune),{cue:true});
+          for(const phase of ['ignition','work'])for(const key of recipe[phase])checkFlameSettingsState(checkCueDomain(sampleKilnPhase(recipe,phase,key.time).tune,tune),{cue:true});
+        }
         kilnPerformanceSnapshot = { controls: readVolumeControls(), position: camera.position.toArray(),
           tune,
           ranges:captureCueControlRanges(document),
@@ -25672,10 +25677,9 @@ function writeFlameSettingsState(state,{refresh=true,cue=false,sourceEnabled=!fl
   if(refresh){syncBurnerControls();refreshVolumeReadout();flameInspector?.sync(true);}
 }
 function readKilnCueRecipe() {
-  const recipe=structuredClone(kilnCues || defaultKilnCues(readVolumeControls()));
   const baseline=kilnPerformanceSnapshot?.tune || flameSettingsState();
-  for(const phase of ['ignition','work'])for(const key of recipe[phase])key.tune=tuneForCue(key,baseline);
-  return recipe;
+  kilnCues=layerKilnCues(kilnCues || defaultKilnCues(readVolumeControls()),baseline);
+  return structuredClone(kilnCues);
 }
 async function loadFlameSettingsBasin(id) {
   const [artifactResponse,schemaResponse]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'})]);
