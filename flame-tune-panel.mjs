@@ -5,12 +5,14 @@ import {KILN_FLOW_RANGE} from './kiln-cue-tunes.mjs';
 const hero=['volume-input-radius','volume-flow-rate','volume-speed','volume-physical-temperature',
   'volume-physical-thermal','volume-physical-exposure','volume-physical-smoke-extinction'];
 
-export function createFlameTunePanel({document,host,read,set,onError}) {
+export function createFlameTunePanel({document,host,read,set,onError,only=null,exclude=[],capture=()=>null,cancel=(id,value)=>set(id,value)}) {
   const fields=[];
   const named=new Map(FLAME_PROPERTY_GROUPS.flatMap(group=>group.fields));
   const groups=[{name:'Flame tune',open:true,fields:hero.map(id=>[id,named.get(id)])},
     ...FLAME_PROPERTY_GROUPS.filter(group=>group.name!=='Simulation').map(group=>({...group,open:false,fields:group.fields.filter(([id])=>!hero.includes(id))}))];
-  for(const group of groups) {
+  for(const original of groups) {
+    const group={...original,fields:original.fields.filter(([id])=>(!only||only.includes(id))&&!exclude.includes(id))};
+    if(!group.fields.length)continue;
     const section=document.createElement('details');section.open=!!group.open;
     const title=document.createElement('summary');title.textContent=group.name;section.append(title);
     for(const [id,label] of group.fields) {
@@ -27,8 +29,8 @@ export function createFlameTunePanel({document,host,read,set,onError}) {
       }
       const value=()=>{const state=read();const control=state?.domControls[id]||state?.rendererControls[id];return control?.rawValue??control?.value;};
       const show=()=>{const current=value();input.disabled=current===undefined;if(input.type==='checkbox')input.checked=!!current;else input.value=current??'';};
-      let before;
-      const remember=()=>{before=value();};
+      let before,checkpoint;
+      const remember=()=>{before=value();checkpoint=capture(id);};
       const change=()=>{
         if(input.type==='number' && (!input.value.trim()||!input.validity.valid))return;
         try {set(id,input.type==='checkbox'?input.checked:input.type==='number'?Number(input.value):input.value);}
@@ -36,7 +38,7 @@ export function createFlameTunePanel({document,host,read,set,onError}) {
       };
       input.addEventListener('focus',remember);
       input.addEventListener(input.type==='checkbox'||input.tagName==='SELECT'?'change':'input',change);
-      input.addEventListener('pointercancel',()=>{if(before!==undefined){try{set(id,before);}catch(error){onError(error);}show();}});
+      input.addEventListener('pointercancel',()=>{if(before!==undefined){try{cancel(id,before,checkpoint);}catch(error){onError(error);}show();}});
       input.addEventListener('blur',show);
       fields.push({show});row.append(grip,input);section.append(row);
       if(input.type==='number')installRelativeNumberDrag({grip,input,step:Number.isFinite(Number(source.step))&&Number(source.step)>0?Number(source.step):.01,onStart:remember});
