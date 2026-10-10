@@ -17,9 +17,32 @@
  * weights.bin and tets/ are served from an SF3D checkout — see
  * serve-sf3d-elfinblue.sh).
  */
-import { createSf3dProducer } from './lib/sf3d/sf3d-producer.js';
+import { createSf3dProducer, createLoaderMemoryBudget } from './lib/sf3d/sf3d-producer.js';
 import { createSharedDeviceSf3dProducer, snapshotSf3dSharedDevice, connectSf3dForeground } from './sf3d-host-device.mjs';
 export { sharedGpuBufferRequirements } from './sf3d-host-device.mjs';
+
+const hostMemoryBudgets = new WeakMap();
+export async function acquireSharedGpuDevice(adapter, descriptor) {
+  // Reuse the producer's exact authority before any host allocator sees the
+  // device. These uncapped explicit counters buy a baseline, not physical-fit
+  // authority. No production RAM quota is guessed from them; the source hold
+  // below remains the M2 full-model launch boundary.
+  const budget = createLoaderMemoryBudget({
+    cpuBytes: Number.MAX_SAFE_INTEGER, gpuBytes: Number.MAX_SAFE_INTEGER,
+    totalBytes: Number.MAX_SAFE_INTEGER,
+  });
+  budget.setPhase('ordinary-host-acquisition');
+  const device = await budget.requestOwnedDevice(adapter, descriptor);
+  hostMemoryBudgets.set(device, budget);
+  return device;
+}
+
+export function snapshotSf3dHostMemory(device) {
+  const budget = hostMemoryBudgets.get(device);
+  return budget ? {authority: 'observation-only', budget: budget.snapshot(),
+    meaning: 'explicit host/producer reservations; no physical capacity inferred; textures/private backing excluded'} :
+    {authority: 'unverified', budget: null, meaning: 'device was not acquired through the composition ledger'};
+}
 
 const CANONICAL_DEMO_CHAIR_GLB_SHA256 = 'e1f70de3407df24d571bf68f70fac2b59373bdd948075a2387f1834e4faff8b7';
 const WEIGHTS_URL = './lib/sf3d/weights.bin';
@@ -230,6 +253,7 @@ export async function mountComposition({ prototype, params, sharedGpu, host } = 
     settingsPresetAuthority: params?.get('settings_preset_authority') || null,
     deviceTopology: 'unverified',
     deviceReceipt: null,
+    memoryObservation: snapshotSf3dHostMemory(sharedGpu?.device),
     foregroundScheduling: 'independent-render-loops',
     producer: 'sf3d.image-to-mesh.webgpu-local.v0',
   };
@@ -242,8 +266,51 @@ export async function mountComposition({ prototype, params, sharedGpu, host } = 
   // No producer-owned fallback device: this route requires the host context.
   let producer;
   try {
+    // Ask the actual source server before constructing a loader. This is the
+    // existing M2 full-route hold, not a weight-only positive memory estimate.
+    let sourceAdmission;
+    try {
+      const requestId = crypto.randomUUID();
+      const response = await fetch('/api/sf3d-source-admission?requestId='+encodeURIComponent(requestId), {cache: 'no-store'});
+      if (!response.ok) throw new Error(`source-host preflight HTTP ${response.status}`);
+      sourceAdmission = await response.json();
+      if (sourceAdmission?.schema !== 'kaminos.sf3d-source-admission.v0' ||
+          sourceAdmission.authority !== 'circuit-breaker-only' ||
+          !['refused', 'not-applicable'].includes(sourceAdmission.verdict)) {
+        throw new Error('unverified source-host admission contract');
+      }
+      if (sourceAdmission.requestId !== requestId) throw new Error('stale or mismatched source-host preflight');
+      if (sourceAdmission.verdict === 'not-applicable') {
+        const observation = sourceAdmission.observation;
+        if (typeof observation?.platform !== 'string' || !observation.platform ||
+            !Number.isSafeInteger(observation.atUnixMs) || observation.atUnixMs <= 0 ||
+            observation.source !== (observation.platform === 'darwin' ? 'live-macos-sysctl' : 'live-source-host')) {
+          throw new Error('unknown source identity is not an unmatched-host permission');
+        }
+        const weightSource = sourceAdmission.weightSource;
+        const weightUrl = new URL(WEIGHTS_URL, window.location.href);
+        if (weightSource?.source !== 'live-source-file-stat' ||
+            weightUrl.origin !== window.location.origin || weightSource.requestedPath !== weightUrl.pathname ||
+            typeof sourceAdmission.sourcePath !== 'string' || !sourceAdmission.sourcePath ||
+            weightSource.sourcePath !== sourceAdmission.sourcePath ||
+            !Number.isSafeInteger(weightSource.bytes) || weightSource.bytes < 16) {
+          throw new Error('unverified weight-source size or path provenance');
+        }
+      }
+      window.__compositionRoute.sourceAdmission = sourceAdmission;
+      if (sourceAdmission.verdict === 'refused') throw new Error(sourceAdmission.reason || 'full-model source held');
+    } catch (cause) {
+      const error = new Error(`SF3D source held: ${cause.message}`, {cause});
+      error.name = 'SF3DSourceHoldError';
+      error.sourceAdmission = sourceAdmission ?? {verdict: 'refused', authority: 'unverified', error: cause.message};
+      throw error;
+    }
+    const memoryBudget = hostMemoryBudgets.get(sharedGpu?.device);
+    if (!memoryBudget) throw new Error('SF3D requires acquisition instrumentation before producer construction');
     producer = await createSharedDeviceSf3dProducer(createSf3dProducer, sharedGpu, {
       weightsUrl: WEIGHTS_URL,
+      expectedWeightBytes: sourceAdmission.weightSource.bytes,
+      memoryBudget,
       onWeightsProgress: (received, total) => {
         if (total > 0) {
           const pct = Math.round(100 * received / total);
@@ -264,7 +331,7 @@ export async function mountComposition({ prototype, params, sharedGpu, host } = 
     window.__compositionRoute.renderer = 'ordinary-volume';
     hud('sf3d-topology').textContent = 'Ordinary flame + SF3D — shared host device; foreground frame service connected';
   } catch (error) {
-    state.lastError = { phase: 'producer-initialization', message: error?.message || String(error) };
+    state.lastError = { phase: 'producer-initialization', message: error?.message || String(error), sourceAdmission: error.sourceAdmission ?? null };
     hud('sf3d-weights').textContent = `error: ${error.message}`.slice(0, 60);
     hud('sf3d-weights').className = 'v bad';
     hud('sf3d-run').textContent = 'SF3D unavailable';
