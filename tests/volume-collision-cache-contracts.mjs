@@ -1,0 +1,66 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFileSync} from 'node:fs';
+import * as THREE from '../lib/three.core.js';
+import * as solid from '../volume-scene-solid.mjs';
+import * as core from '../volume-core.js';
+const source=readFileSync(process.env.KAMINOS_CACHE_SOURCE || new URL('../volume-core.js',import.meta.url),'utf8');
+const base={pressureSolver:'converged-open-top',projection:1,advectionScheme:'maccormack',commonGasTransport:true,emitterSourceLaw:'immersed-source',immersedRadius:.2,immersedCentreY:0,immersedBackWall:1};
+function collision(){
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(.25,.25,.25));mesh.position.set(.55,.5,.55);
+ const ctx={device:{},gridSize:32,gridHeight:64,state:{},controlsSnapshot:{...base},productTransform:{translate:[0,0,0],scale:1},sceneSolidRevisionKey:null,sceneSolidCellsCpu:null,sceneSolidSupportCache:null,sceneSolidGeometryCache:null,immersedWallCache:null,analyticEmitterDescriptor:null,analyticEmitterDescriptorSignature:'',analyticEmitterDispatch:{active:false,cellMin:[0,0,0],cellExtent:[0,0,0],cellCount:0},PRESSURE_SOLVER_CONVERGED:'converged',...solid,immersedBackWallCells:core.immersedBackWallCells,composeSolidField:core.composeSolidField,resolvePressureSolverConfig:core.resolvePressureSolverConfig,resolveTransportConfig:core.resolveTransportConfig,performance};
+ const counts={geometry:0,walls:0,uploads:0,bindings:0};
+ ctx.getSceneCollision=()=>({requested:true,id:'kiln',object:mesh});
+ ctx.voxelizeTriangleSolid=(...args)=>{counts.geometry++;return solid.voxelizeTriangleSolid(...args);};
+ ctx.immersedBackWallCells=(...args)=>{counts.walls++;return core.immersedBackWallCells(...args);};
+ ctx.installSceneSolidTexture=(field=null)=>{counts.uploads++;ctx.sceneSolidCellsCpu=field?.cells??null;return true;};
+ ctx.rebuildSceneSolidBindingViews=()=>{counts.bindings++;};
+ vm.createContext(ctx);const from=source.indexOf('  function immersedBackWallForState()');
+ vm.runInContext(source.slice(from,source.indexOf('  function fluidBindGroup(',from)),ctx);
+ const refresh=patch=>{Object.assign(ctx.controlsSnapshot,patch);ctx.state.immersedSource=core.resolveImmersedSourceConfig(ctx.controlsSnapshot,{grid:ctx.gridSize,gridHeight:ctx.gridHeight});vm.runInContext('refreshSceneCollision()',ctx);assert.equal(ctx.state.sceneCollision.reason,null);};
+ return {ctx,counts,mesh,refresh};
+}
+test('moving/resizing/aiming a back wall reuses the unchanged kiln voxels',()=>{
+ const {ctx,counts,refresh}=collision();refresh();const first=ctx.sceneSolidCellsCpu.slice();
+ refresh({immersedCentreX:.25});refresh({immersedRadius:.3});refresh({immersedPitch:20});
+ assert.equal(counts.geometry,1,'source/wall edits must not revoxelize the kiln');
+ assert.notDeepEqual(ctx.sceneSolidCellsCpu,first,'moving wall must still update the physical mask');assert.equal(counts.uploads,4);
+ const wallCount=counts.walls;refresh();refresh();assert.equal(counts.walls,wallCount,'unchanged wall must not enumerate its cells again');
+});
+test('source coefficients and compatible solver/transport changes do not rebuild static geometry or mask',()=>{
+ const {ctx,counts,refresh}=collision();refresh({immersedBackWall:0});
+ ctx.analyticEmitterDescriptorSignature='changed-source-coefficient';refresh({immersedFuel:.9,immersedTemperature:1.6});refresh({advectionScheme:'maccormack-velocity'});
+ assert.equal(counts.geometry,1);assert.equal(counts.uploads,1,'admission/control metadata must not rewrite the mask');
+});
+test('actual geometry, attribute replacement, domain transform and grid changes invalidate kiln voxels',()=>{
+ const {ctx,counts,mesh,refresh}=collision();refresh({immersedBackWall:0});mesh.position.x+=.03;refresh();assert.equal(counts.geometry,2);
+ const attr=mesh.geometry.getAttribute('position');mesh.geometry.setAttribute('position',attr.clone());refresh();assert.equal(counts.geometry,3,'replacement with same count/version must invalidate');
+ mesh.geometry.getAttribute('position').needsUpdate=true;refresh();assert.equal(counts.geometry,4);ctx.productTransform.translate[0]=.02;refresh();assert.equal(counts.geometry,5);
+ ctx.gridSize=48;ctx.gridHeight=96;refresh();assert.equal(counts.geometry,6);
+});
+test('wall key distinguishes small changes that cross the actual cell mask',()=>{
+ const {ctx,refresh}=collision();refresh({immersedCentreY:.03125+0.0001,immersedThickness:1});const first=ctx.sceneSolidCellsCpu.slice();refresh({immersedCentreY:.03125-0.0001});
+ assert.notDeepEqual(ctx.sceneSolidCellsCpu,first,'rounded pose key must not hide a mask change');
+});
+test('solid texture keeps its allocation and view for same-shaped occupancy changes',()=>{
+ let allocations=0,writes=0,destroyed=0;const device={createTexture(){allocations++;return{createView:()=>({allocation:allocations}),destroy(){destroyed++;}};},queue:{writeTexture(){writes++;}}};
+ const ctx={device,gridSize:16,gridHeight:32,state:{},sceneSolidTexture:null,sceneSolidTextureView:null,sceneSolidCellsCpu:null,sceneSolidSupportCache:null,sceneSolidTextureSizeKey:null,sceneSolidTextureDevice:null,GPUTextureUsage:{TEXTURE_BINDING:1,COPY_DST:2},gridShapeLabel:g=>`${g}x${2*g}x${g}`,packSolidTextureRows:solid.packSolidTextureRows,Uint8Array};
+ vm.createContext(ctx);const from=source.indexOf('  function installSceneSolidTexture(');const to=source.indexOf('\n  let transportPipelineLayout',from);vm.runInContext(source.slice(from,to),ctx);
+ ctx.field={cells:new Uint8Array(16*32*16)};vm.runInContext('installSceneSolidTexture(field)',ctx);const view=ctx.sceneSolidTextureView;
+ ctx.field={cells:new Uint8Array(16*32*16).fill(1)};vm.runInContext('installSceneSolidTexture(field)',ctx);
+ assert.equal(allocations,1,'same dimensions need only an occupancy upload');assert.equal(ctx.sceneSolidTextureView,view);assert.equal(writes,2);
+ ctx.gridSize=24;ctx.gridHeight=48;ctx.field={cells:new Uint8Array(24*48*24)};vm.runInContext('installSceneSolidTexture(field)',ctx);assert.equal(allocations,2);assert.equal(destroyed,1);
+});
+
+test('admission refusal clears the installed mask and readmission reuses legitimate geometry',()=>{
+ const {ctx,counts,refresh}=collision();refresh({immersedBackWall:0});
+ ctx.controlsSnapshot.pressureSolver='legacy';vm.runInContext('refreshSceneCollision()',ctx);assert.equal(ctx.state.sceneCollision.effective,'off');assert.equal(ctx.sceneSolidCellsCpu,null);
+ refresh({pressureSolver:'converged-open-top'});assert.equal(counts.geometry,1);assert.ok(ctx.sceneSolidCellsCpu);
+});
+test('support changes update admission receipts without rewriting identical occupancy',()=>{
+ const {ctx,counts,refresh}=collision();refresh({immersedBackWall:0});
+ ctx.analyticEmitterDispatch={active:true,cellMin:[0,0,0],cellExtent:[32,32,32],cellCount:32768};
+ ctx.analyticEmitterDescriptor={family:'ring',sourceLaw:'shallow-primary',origin:[0,0,0],axis:[0,1,0],supportAxis:[1,0,0],radius:.05,extent:.15,sourceDepth:.04,strength:1};ctx.analyticEmitterDescriptorSignature=JSON.stringify(ctx.analyticEmitterDescriptor);refresh();
+ assert.ok(ctx.state.sceneCollision.sourceSupport.fluidSupportCells>0);assert.equal(ctx.state.sceneCollision.sourceBoundsCellCount,32768);assert.equal(counts.uploads,1);assert.equal(counts.geometry,1);
+});
