@@ -4,6 +4,13 @@ import { compareOccupancyCoordinates } from './occupancy-coordinate-witness-chec
 import { validateNativePrefixBackend } from './sparse-prefix-witness-checks.js';
 export const SLAT_DECODER_REFERENCE_ROUTE = 'pinned-MLX-GPU-source-SLat-decoder/native-FP16-torso-F32-endpoints';
 const sha = v => /^[a-f0-9]{64}$/.test(v ?? '');
+export function validateDecoderActivationStorage(result,expected){
+  for(const [role,storage]of Object.entries(expected)){
+    if(!['f32','f16'].includes(storage)||result?.composition?.decoderActivationStorage?.[role]!==storage)
+      throw Error('effective decoder activation storage differs from requested '+role);
+    if(storage==='f16'&&!result.requiredFeatures?.includes('shader-f16'))throw Error('shader-f16 device feature receipt required');
+  }
+}
 export function slatDecoderObservationShapes(manifest) {
   const p = buildSLatDecoderPlan(manifest.config);
   return { features: [manifest.outputRows, p.outChannels], coordinates: [manifest.outputRows, 3], halfRoundTrip: [65536],
