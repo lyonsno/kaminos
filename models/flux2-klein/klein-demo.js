@@ -9,6 +9,8 @@ import { createWebGpuForegroundService, createWebGpuInferenceControl, createWebG
 
 export const KLEIN_ROUTE_ID = 'flux2-klein.text-to-image.webgpu-local.v0';
 
+// The live scene: a little blue engine with a grey face and two coaches running round a track,
+// puffing smoke. Cheap signed-distance shapes; its job is to show frames keep coming during inference.
 const SCENE_SHADER = `
 struct Scene { time: f32, aspect: f32, pad: vec2f };
 @group(0) @binding(0) var<uniform> scene: Scene;
@@ -17,13 +19,47 @@ struct V { @builtin(position) position: vec4f, @location(0) uv: vec2f };
   let p = array(vec2f(-1, -1), vec2f(3, -1), vec2f(-1, 3))[i];
   return V(vec4f(p, 0, 1), p * 0.5 + 0.5);
 }
+const R = 0.285;
+const AA = 0.006;
+fn box(p: vec2f, b: vec2f, r: f32) -> f32 {
+  let q = abs(p) - b + vec2f(r);
+  return length(max(q, vec2f(0.0))) + min(max(q.x, q.y), 0.0) - r;
+}
+fn fill(d: f32) -> f32 { return 1.0 - smoothstep(-AA, AA, d); }
+// Position c in the frame of a carriage at angle t on the track: x along the direction of travel.
+fn local(c: vec2f, t: f32) -> vec2f {
+  let d = c - R * vec2f(cos(t), sin(t));
+  return vec2f(dot(d, vec2f(-sin(t), cos(t))), dot(d, vec2f(cos(t), sin(t))));
+}
 @fragment fn fragment(v: V) -> @location(0) vec4f {
   let c = (v.uv - vec2f(0.5)) * vec2f(scene.aspect, 1.0);
-  var color = vec3f(0.08, 0.09, 0.1);
   let r = length(c);
-  if (r > 0.27 && r < 0.3) { color = vec3f(0.25, 0.28, 0.3); }
-  let a = scene.time * 2.4;
-  if (distance(c, vec2f(cos(a), sin(a)) * 0.285) < 0.06) { color = vec3f(0.95, 0.62, 0.18); }
+  var color = vec3f(0.07, 0.08, 0.09);
+  // Track: sleepers, then two rails.
+  let phi = atan2(c.y, c.x);
+  let sleeper = step(fract(phi / 6.2831853 * 44.0), 0.3) * fill(abs(r - R) - 0.03);
+  color = mix(color, vec3f(0.33, 0.22, 0.13), sleeper);
+  color = mix(color, vec3f(0.62, 0.65, 0.68), fill(abs(r - (R - 0.014)) - 0.0035) + fill(abs(r - (R + 0.014)) - 0.0035));
+  let a = scene.time * 1.4;
+  // Two coaches behind the engine.
+  for (var k = 1; k <= 2; k++) {
+    let p = local(c, a - 0.36 * f32(k));
+    color = mix(color, vec3f(0.80, 0.42, 0.18), fill(box(p, vec2f(0.05, 0.034), 0.012)));
+    color = mix(color, vec3f(0.95, 0.85, 0.55), fill(box(p - vec2f(0.0, 0.0), vec2f(0.032, 0.014), 0.004)));
+  }
+  // The engine: blue body, red buffer beam, grey face with eyes at the front.
+  let e = local(c, a);
+  color = mix(color, vec3f(0.12, 0.40, 0.86), fill(box(e, vec2f(0.062, 0.04), 0.012)));
+  color = mix(color, vec3f(0.82, 0.12, 0.10), fill(box(e - vec2f(0.066, 0.0), vec2f(0.008, 0.044), 0.003)));
+  color = mix(color, vec3f(0.72, 0.74, 0.76), fill(length(e - vec2f(0.05, 0.0)) - 0.03));
+  color = mix(color, vec3f(0.05, 0.05, 0.06), fill(length(e - vec2f(0.058, 0.011)) - 0.005) + fill(length(e - vec2f(0.058, -0.011)) - 0.005));
+  color = mix(color, vec3f(0.05, 0.05, 0.06), fill(abs(length(e - vec2f(0.05, 0.0)) - 0.016) - 0.002) * step(e.x, 0.044));
+  // Smoke drifting back from the funnel and fading.
+  for (var k = 0; k < 3; k++) {
+    let ph = fract(scene.time * 1.1 + f32(k) / 3.0);
+    let puff = e - vec2f(0.02 - ph * 0.14, 0.02 + ph * 0.06);
+    color = mix(color, vec3f(0.86, 0.88, 0.9), fill(length(puff) - (0.012 + ph * 0.03)) * (1.0 - ph) * 0.7);
+  }
   return vec4f(color, 1.0);
 }`;
 

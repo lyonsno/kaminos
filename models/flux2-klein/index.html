@@ -2,8 +2,9 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FLUX.2 [klein] in the browser</title>
-<meta name="description" content="Text-to-image with FLUX.2 [klein] 4B, running entirely on your own GPU through WebGPU.">
+<title>Thomas the Jank Engine</title>
+<meta name="description" content="FLUX.2 [klein] 4B text-to-image, chugging along entirely on your own GPU through WebGPU. Pick your jank level.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%9A%82%3C/text%3E%3C/svg%3E">
 <meta name="klein-weights" content="https://huggingface.co/BasinShapers/flux2-klein-4b-webgpu/resolve/main">
 <style>
   :root {
@@ -51,7 +52,7 @@
   figcaption { font-size: 14px; }
   canvas { display: block; width: 100%; height: auto; border-radius: 10px; background: var(--bg); }
   #out { aspect-ratio: 1; border: 1px solid var(--line); }
-  .scene { display: grid; grid-template-columns: 112px 1fr; gap: 12px; align-items: center; }
+  .scene { display: grid; grid-template-columns: 144px 1fr; gap: 12px; align-items: center; }
   .scene canvas { aspect-ratio: 1; border: 1px solid var(--line); }
   .scene p { font-size: 14px; }
   .hidden { display: none !important; }
@@ -66,9 +67,9 @@
 </style>
 <main>
   <header class="lede">
-    <h1>FLUX.2 [klein] 4B in the browser</h1>
-    <p>Text-to-image generation on your own GPU through WebGPU. The prompt, the model and the image stay on your machine; no server does any of the work.</p>
-    <p class="muted">The first visit downloads <span id="download-size">3.2 GB</span> of model weights, which the browser keeps for later visits. Tested in Chrome on Apple-silicon Macs with 16 GB of memory or more: a 512 × 512 image takes about 7 seconds on an M4 Max and about 20 seconds on an M2 Pro.</p>
+    <h1>Thomas the Jank Engine</h1>
+    <p><b>FLUX.2 [klein] 4B, chugging along on your own GPU through WebGPU.</b> The prompt, the model and the image stay on your machine; no server does any of the work.</p>
+    <p class="muted">The first visit downloads <span id="download-size">3.2 GB</span> of model weights, which the browser keeps for later visits. Tested in Chrome on Apple-silicon Macs with 16 GB of memory or more: a 512 × 512 image takes about 7 seconds on an M4 Max and about 20 seconds on an M2 Pro. Pick a jank level to trade quality for a smaller download.</p>
   </header>
 
   <div class="layout">
@@ -85,10 +86,10 @@
       <progress id="progress" class="hidden" max="1" value="0"></progress>
       <div id="controls" class="hidden" style="display:grid;gap:14px">
         <label>Prompt
-          <textarea id="prompt">A small brass toy steam locomotive, isolated on a plain white background, studio product photo</textarea>
+          <textarea id="prompt">Portrait of a bright blue steam tank engine with a round grey smiling face on the front of its black smokebox, a short black funnel, a red buffer beam with brass buffers, the number 1 painted in yellow with a red outline on its side tank, red lining on the blue paintwork and six small blue wheels, standing on a sunny country branch line, model railway photograph</textarea>
         </label>
         <div class="row">
-          <label>Seed <input id="seed" type="number" value="7006" min="0" step="1"></label>
+          <label>Seed <input id="seed" type="number" value="8001" min="0" step="1"></label>
           <button id="reseed" class="icon" title="New random seed" aria-label="New random seed">New seed</button>
           <label>Size
             <select id="size">
@@ -101,6 +102,7 @@
         <label class="check"><input id="cooperative" type="checkbox" checked> Keep the animation running while generating</label>
         <div class="row">
           <button id="go" class="primary">Generate</button>
+          <button id="surprise" title="A random jank scene with a new seed">Surprise me</button>
           <button id="pause" disabled>Pause</button>
           <button id="stop" disabled>Stop</button>
           <button id="save" disabled>Save image</button>
@@ -108,8 +110,8 @@
       </div>
       <div id="status" role="status" aria-live="polite"></div>
       <div class="scene">
-        <canvas id="scene" width="224" height="224" aria-label="Animation rendered on the same GPU"></canvas>
-        <p class="muted">This animation draws on the same GPU while an image generates. The inference kit submits the model's work in short pieces and lets each frame through between them.</p>
+        <canvas id="scene" width="288" height="288" aria-label="A little blue engine running round a track, rendered on the same GPU"></canvas>
+        <p class="muted">This little engine runs on the same GPU while the model works. The inference kit submits the model's work in short pieces and lets each frame through between them, so it never stops chugging.</p>
       </div>
     </section>
 
@@ -148,6 +150,26 @@ const gb = bytes => `${(bytes / 1e9).toFixed(1)} GB`;
 const seconds = ms => `${(ms / 1000).toFixed(1)} s`;
 const say = (text, warn = false) => { status.textContent = text; status.classList.toggle('warn', warn); };
 let demo = null, lastImage = null;
+// "Surprise me": the engine, described by looks alone, in one of these situations.
+const ENGINE = 'a bright blue steam tank engine with a round grey smiling face on the front of its black smokebox, a short black funnel, '
+  + 'a red buffer beam with brass buffers, the number 1 painted in yellow with a red outline on its side tank, red lining on the blue paintwork and six small blue wheels';
+const SCENES = [
+  e => `Portrait of ${e}, standing on a sunny country branch line, model railway photograph`,
+  e => `${e}, held together with duct tape and zip ties, one mismatched wheel, steam leaking from patched pipes, nervous expression, wobbling along a crooked track, model railway photograph`,
+  e => `${e}, straining up a very steep hill on a rickety wooden trestle bridge with a determined face, sparks and steam flying, golden hour, cinematic`,
+  e => `${e}, tipped over beside the rails in a heap of pastel jelly beans with an embarrassed face, toy photography, shallow depth of field`,
+  e => `A vintage railway travel poster with the title THOMAS THE JANK ENGINE in bold letters, showing ${e}, puffing through rolling green hills`,
+  e => `${e}, built out of circuit boards and graphics cards, chugging across a glowing circuit-board landscape, digital painting`,
+  e => `${e}, proudly pulling a long train of open wagons piled high with graphics cards through a snowy mountain pass at sunset, model railway photograph`,
+  e => `${e}, resting in a cosy engine shed at night, steam drifting, warm lantern light, a sleepy contented face, model railway photograph`,
+  e => `${e}, racing a herd of cows across a meadow, motion blur, children's book illustration`,
+  e => `${e}, wearing tiny sunglasses at a seaside railway station, bright summer holiday photo`,
+  e => `${e}, stuck in a giant bowl of spaghetti with a surprised face, food photography`,
+  e => `${e}, as a stained glass window in a cathedral, sunlight streaming through`,
+  e => `${e}, as a knitted wool toy sitting on a cosy armchair, soft window light`,
+  e => `${e}, sailing across a stormy sea on a raft of railway sleepers, dramatic oil painting`,
+];
+let lastScene = 0;
 const levelInputs = () => [...document.querySelectorAll('input[name="level"]')];
 for (const input of levelInputs()) input.checked = input.value === selected;
 
@@ -267,7 +289,7 @@ for (const input of levelInputs()) input.onchange = () => {
 
 function setRunning(running, { swapping = false } = {}) {
   const cooperative = $('cooperative').checked && !swapping;
-  for (const id of ['go', 'reseed', 'prompt', 'seed', 'size', 'cooperative']) $(id).disabled = running;
+  for (const id of ['go', 'surprise', 'reseed', 'prompt', 'seed', 'size', 'cooperative']) $(id).disabled = running;
   for (const input of levelInputs()) input.disabled = running || !levelStatus[input.value];
   $('pause').disabled = !running || !cooperative; $('stop').disabled = !running || !cooperative;
   $('pause').textContent = 'Pause';
@@ -296,6 +318,14 @@ $('go').onclick = async () => {
 $('pause').onclick = async () => { const state = await demo.togglePause(); if (state) $('pause').textContent = state === 'paused' ? 'Resume' : 'Pause'; };
 $('stop').onclick = () => demo.stop();
 $('reseed').onclick = () => { $('seed').value = Math.floor(Math.random() * 1e9); };
+$('surprise').onclick = () => {
+  let i; do { i = Math.floor(Math.random() * SCENES.length); } while (i === lastScene && SCENES.length > 1);
+  lastScene = i;
+  const text = SCENES[i](ENGINE);
+  $('prompt').value = text[0].toUpperCase() + text.slice(1);
+  $('seed').value = Math.floor(Math.random() * 1e9);
+  if (!$('go').disabled) $('go').click();
+};
 $('save').onclick = () => $('out').toBlob(blob => {
   const slug = lastImage.prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'image';
   const a = document.createElement('a');
