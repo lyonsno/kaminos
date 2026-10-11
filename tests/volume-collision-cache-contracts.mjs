@@ -77,3 +77,8 @@ test('source footprint cache reuses static weights while current mask, flux and 
  const moving={...base};for(const patch of [{immersedCentreX:.125},{immersedPitch:30},{immersedRadius:.3},{immersedThickness:2},{emitterAperturePattern:'bed'}]){Object.assign(moving,patch);core.resolveImmersedSourceConfig(moving,shape);}
  assert.equal(cache.builds,6,'pose/shape/pattern changes must invalidate exact weights');
 });
+
+test('coverage revision does not silently merge nearby but distinct aperture sizes',()=>{
+ const config=r=>({effective:{admitted:true,grid:32,radiusCells:r,pattern:{kind:'bed',count:8,lineWeight:.5,jetJitter:0,seed:1,ratio:.5}}});
+ assert.notEqual(core.immersedCoverageSignatureFor(config(3.200001)),core.immersedCoverageSignatureFor(config(3.200002)));
+});

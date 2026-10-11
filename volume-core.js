@@ -2472,7 +2472,7 @@ const immersedCoverageCache = new Map();
 export function immersedCoverageSignatureFor(config) {
   const e = config?.effective;
   if (!e?.admitted || !e.pattern || e.pattern.kind === 'shape') return '';
-  return JSON.stringify([e.grid, Number(e.radiusCells.toFixed(4)), e.pattern]);
+  return JSON.stringify([e.grid, e.radiusCells, e.pattern]);
 }
 export function immersedCoverageMapForConfig(config, options = {}) {
   const e = config?.effective;
