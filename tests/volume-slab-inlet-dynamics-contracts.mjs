@@ -202,3 +202,33 @@ test('a pattern supplies its covered fraction of the disc, not the whole disc co
   assert.ok(Math.abs(up[14] - uj[14]) < 1e-9, 'Q/Σw is the same uniform for plain and jets');
   assert.match(index, /coverage \$\{\(immersed\.effective\.coverageFraction \* 100\)\.toFixed\(0\)\}%/, 'the receipt names the covered fraction');
 });
+
+// SSA-01: the plain weight sum depends on geometry only (grid shape, centre,
+// direction, radius, thickness); it is reused between the pose and supply
+// resolves and across frames while the geometry holds, never recomputed per call.
+test('the plain weight sum is cached by geometry and invalidated when the geometry changes', () => {
+  core.immersedPlainWeightSumCache.clear();
+  const jets = { ...base, emitterAperturePattern: 'jets', emitterApertureCount: 6 };
+  const a = core.resolveImmersedSourceConfig(jets, shape);
+  const statsAfterFirst = core.immersedPlainWeightSumCache.stats();
+  assert.equal(statsAfterFirst.misses, 1); assert.equal(statsAfterFirst.hits, 0);
+  const b = core.resolveImmersedSourceConfig(jets, { ...shape, solidCells: new Uint8Array(64 * 128 * 64) });
+  const statsAfterSecond = core.immersedPlainWeightSumCache.stats();
+  assert.equal(statsAfterSecond.misses, 1, 'a mask or signal change does not recompute the plain sum'); assert.equal(statsAfterSecond.hits, 1);
+  assert.equal(a.effective.coverageFraction, b.effective.coverageFraction);
+  core.resolveImmersedSourceConfig({ ...jets, immersedRadius: 0.25 }, shape);
+  assert.equal(core.immersedPlainWeightSumCache.stats().misses, 2, 'a radius change recomputes');
+  core.resolveImmersedSourceConfig({ ...jets, immersedRadius: 0.25, immersedPitch: 45 }, shape);
+  core.resolveImmersedSourceConfig({ ...jets, immersedRadius: 0.25, immersedPitch: 45, immersedCentreX: 0.1 }, shape);
+  core.resolveImmersedSourceConfig({ ...jets, immersedRadius: 0.25, immersedPitch: 45, immersedCentreX: 0.1, immersedThickness: 2 }, shape);
+  core.resolveImmersedSourceConfig({ ...jets, immersedRadius: 0.25, immersedPitch: 45, immersedCentreX: 0.1, immersedThickness: 2 }, { grid: 64, gridHeight: 96 });
+  assert.equal(core.immersedPlainWeightSumCache.stats().misses, 6, 'direction, centre, thickness and grid shape each key the sum');
+  // The plain disc itself never pays twice: its own sum is the plain sum.
+  core.immersedPlainWeightSumCache.clear();
+  core.resolveImmersedSourceConfig(base, shape); core.resolveImmersedSourceConfig(base, shape);
+  assert.deepEqual(core.immersedPlainWeightSumCache.stats(), { hits: 0, misses: 0, size: 0 }, 'the shape pattern reuses its own weights without the cache');
+  // The cached value is the plain sum: a patterned resolve after a plain one gives the same fraction as a cold one.
+  const cold = core.resolveImmersedSourceConfig(jets, shape).effective.coverageFraction;
+  core.immersedPlainWeightSumCache.clear();
+  assert.equal(core.resolveImmersedSourceConfig(jets, shape).effective.coverageFraction, cold);
+});

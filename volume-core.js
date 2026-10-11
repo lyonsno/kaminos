@@ -2485,6 +2485,26 @@ export function immersedCoverageMapForConfig(config, options = {}) {
   }
   return immersedCoverageCache.get(key);
 }
+// The plain (unpatterned, unmasked) slab weight sum depends on geometry only;
+// it is cached by that geometry (review SSA-01: recomputing it per resolve cost
+// 8 ms per frame for a wide 128 source) and reused between the pose and
+// supply resolves and across frames while the geometry holds.
+const plainWeightSumEntries = new Map();
+let plainWeightSumHits = 0, plainWeightSumMisses = 0;
+export const immersedPlainWeightSumCache = {
+  clear() { plainWeightSumEntries.clear(); plainWeightSumHits = 0; plainWeightSumMisses = 0; },
+  stats() { return { hits: plainWeightSumHits, misses: plainWeightSumMisses, size: plainWeightSumEntries.size }; },
+};
+export function immersedPlainWeightSum(effective, { grid, gridHeight }) {
+  const key = JSON.stringify([grid, gridHeight, effective.centreCells, effective.direction, effective.radiusCells, effective.thickness]);
+  const hit = plainWeightSumEntries.get(key);
+  if (hit !== undefined) { plainWeightSumHits += 1; return hit; }
+  plainWeightSumMisses += 1;
+  if (plainWeightSumEntries.size > 32) plainWeightSumEntries.clear();
+  const sum = immersedSourceWeights({ ...effective, pattern: { ...(effective.pattern ?? {}), kind: 'shape' } }, { grid, gridHeight }).sum;
+  plainWeightSumEntries.set(key, sum);
+  return sum;
+}
 export function immersedSourceWeights(effective, { grid, gridHeight }) {
   const c = effective.centreCells, n = effective.direction, r = effective.radiusCells, h = effective.thickness / 2;
   const reach = Math.ceil(Math.max(r, h) + 1.5);
@@ -2589,7 +2609,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   // of the disc's weight it leaves, and the per-cell rate Q/Σw stays the plain
   // disc's. (Before this, a pattern concentrated the whole disc's supply into
   // its covered cells, several times the authored speed per cell.)
-  const plainWeightSum = Math.max(1e-6, (pattern.kind === 'shape' ? weights : immersedSourceWeights({ ...effective, pattern: { ...pattern, kind: 'shape' } }, { grid, gridHeight })).sum);
+  const plainWeightSum = Math.max(1e-6, pattern.kind === 'shape' ? weights.sum : immersedPlainWeightSum(effective, { grid, gridHeight }));
   const solidCells = options.solidCells ?? null;
   const fluid = []; let fluidSum = 0, maskedCells = 0, maskedWeight = 0;
   for (const cell of weights.cells) {
