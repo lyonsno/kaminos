@@ -52,7 +52,7 @@ test('the pattern lives inside the slab: jets, slot and bed cover fewer cells th
     const w = core.immersedSourceWeights(c.effective, shape);
     assert.ok(Math.abs(w.sum - c.effective.normaliser) < 1e-9, 'normaliser is the patterned fluid sum');
     assert.ok(Math.abs(c.effective.fluxEffectivePredicted - c.effective.fluxRequested) < 1e-9, 'Σ target = Q still');
-    assert.equal(c.effective.fluxRequested, shapeCfg.effective.fluxRequested, 'the pattern redistributes the supply, it does not change it');
+    assert.ok(Math.abs(c.effective.fluxRequested - shapeCfg.effective.fluxRequested * c.effective.coverageFraction) < 1e-9, 'the pattern supplies its covered fraction of the disc at the plain disc\'s per-cell rate');
   }
   // Every patterned weight sits inside the plain slab (the pattern can only remove).
   const plain = new Map(core.immersedSourceWeights(shapeCfg.effective, shape).cells.map(c => [`${c.x},${c.y},${c.z}`, c.w]));
@@ -172,4 +172,33 @@ test('capture: the inlet controls are checked against the immersed receipt when 
   assert.deepEqual(ok('volume-emitter-puff-period', '3'), []);
   // Neither law admitted: still refused.
   assert.equal(effectiveMismatches({ set: [['volume-emitter-puff', '0.4']] }, { inflowBoundary: { effective: { admitted: false } }, immersedSource: { effective: { admitted: false, reason: 'x' } } }, null).length, 1);
+});
+
+// Supply per covered area (2026-10-11, after the shear-vs-bed comparison):
+// a pattern supplies only what it covers, as the floor law does, so "speed"
+// means speed in every covered cell. The plain disc is unchanged.
+test('a pattern supplies its covered fraction of the disc, not the whole disc concentrated into it', () => {
+  const plain = core.resolveImmersedSourceConfig(base, shape);
+  assert.ok(Math.abs(plain.effective.fluxRequested - 0.1 * Math.PI * 6.4 * 6.4) < 1e-9, 'the plain disc keeps Q = v π r²');
+  assert.equal(plain.effective.coverageFraction, 1);
+  const jets = core.resolveImmersedSourceConfig({ ...base, emitterAperturePattern: 'jets', emitterApertureCount: 6 }, shape);
+  const plainW = core.immersedSourceWeights(plain.effective, shape).sum, jetsW = core.immersedSourceWeights(jets.effective, shape).sum;
+  assert.ok(Math.abs(jets.effective.coverageFraction - jetsW / plainW) < 1e-12);
+  assert.ok(jets.effective.coverageFraction > 0.1 && jets.effective.coverageFraction < 0.6, `six jets cover a fraction of the disc (${jets.effective.coverageFraction})`);
+  assert.ok(Math.abs(jets.effective.fluxRequested - plain.effective.fluxRequested * jets.effective.coverageFraction) < 1e-9, 'Q scales with the covered fraction');
+  // The per-cell rate is the plain disc's: target / w is the same number under both.
+  assert.ok(Math.abs(jets.effective.fluxRequested / jets.effective.normaliser - plain.effective.fluxRequested / plain.effective.normaliser) < 1e-9, 'speed means speed in every covered cell');
+  assert.equal(jets.effective.fluxNominal, jets.effective.fluxRequested);
+  assert.ok(Math.abs(jets.effective.fluxEffectivePredicted - jets.effective.fluxRequested) < 1e-9);
+  // A kiln covering part of the disc reduces the supply too (a buried bed supplies less), rather than concentrating it.
+  const solid = new Uint8Array(64 * 128 * 64);
+  for (const c of core.immersedSourceWeights(plain.effective, shape).cells) if (c.x + 0.5 < 32) solid[c.x + 64 * (c.y + 128 * c.z)] = 1;
+  const masked = core.resolveImmersedSourceConfig(base, { ...shape, solidCells: solid });
+  assert.ok(masked.effective.coverageFraction > 0.3 && masked.effective.coverageFraction < 0.7);
+  assert.ok(Math.abs(masked.effective.fluxRequested - plain.effective.fluxRequested * masked.effective.coverageFraction) < 1e-9);
+  assert.ok(Math.abs(masked.effective.fluxRequested / masked.effective.normaliser - plain.effective.fluxRequested / plain.effective.normaliser) < 1e-9);
+  // Uniform packing carries the per-cell rate unchanged by the pattern.
+  const up = core.immersedSourceUniformValues(plain), uj = core.immersedSourceUniformValues(jets);
+  assert.ok(Math.abs(up[14] - uj[14]) < 1e-9, 'Q/Σw is the same uniform for plain and jets');
+  assert.match(index, /coverage \$\{\(immersed\.effective\.coverageFraction \* 100\)\.toFixed\(0\)\}%/, 'the receipt names the covered fraction');
 });

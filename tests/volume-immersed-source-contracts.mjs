@@ -304,9 +304,10 @@ test('IS-03-C: the source uniforms are packed against the mask the same step dis
   const moved = { ...pose, immersedCentreY: -0.5625 };
   const defect = makeContext(); packLikeDefect(defect, pose);
   const eDefect = packLikeDefect(defect, moved);
-  assert.ok(targetSumOnMask(eDefect, defect.sceneSolidCellsCpu) > 100 * eDefect.fluxEffectivePredicted + 1, 'the replayed defect: the old wall covered the moved slab, the receipt predicted ~0, the dispatched mask received the cap everywhere');
   const fixed = makeContext(); packLikeProduction(fixed, pose);
   const e = packLikeProduction(fixed, moved);
+  // Under supply-per-covered-area (2026-10-11) the stale-mask sequence no longer pulses (the per-cell rate is the plain disc's whatever the mask); it drops the step's supply instead: the old wall covered the moved slab, so the pack saw zero coverage and packed zero, while the same step, resolved against the mask it dispatches, supplies the whole uncovered slab.
+  assert.ok(eDefect.fluxEffectivePredicted < 1e-6 && e.fluxEffectivePredicted > 1, `the replayed defect: stale-mask packing ${eDefect.fluxEffectivePredicted} vs same-step ${e.fluxEffectivePredicted}`);
   assert.ok(Math.abs(targetSumOnMask(e, fixed.sceneSolidCellsCpu) - e.fluxEffectivePredicted) < 1e-9, 'moved with the wall: the receipt predicts the target on the dispatched mask');
   assert.ok(Math.abs(e.fluxEffectivePredicted - e.fluxRequested) < 1e-9 && e.masked.cells === 0, 'the wall of the new pose masks nothing');
   // A kiln-style mask change under a fixed pose: the mask the solve runs on is the one the receipt saw.

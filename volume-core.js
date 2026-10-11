@@ -2561,7 +2561,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const pattern = { kind: patternNormalised.pattern, count: patternNormalised.count, ratio: patternNormalised.ratio, seed: patternNormalised.seed, lineWeight: patternNormalised.lineWeight, jetJitter: patternNormalised.jetJitter, patternFallback: patternNormalised.patternFallback };
   const inletDynamics = resolveInletDynamicsConfig(controls, options.inletSignals ?? {}).effective;
   const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness, speed, fuel, temperature, momentumGain, capFraction, puffFactor, backWall: backWallRequested, pattern: patternRequested, inletDynamics: { turbulence: inletDynamics.turbulence, turbulenceScaleCells: inletDynamics.turbulenceScaleCells, puff: inletDynamics.puff, puffPeriod: inletDynamics.puffPeriod } };
-  const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], basis: { e1: [1, 0, 0], e2: [0, 0, 1] }, radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, masked: { cells: 0, weight: 0, weightShare: 0 }, puffFactor, pattern, inletDynamics: { ...inletDynamics, turbulence: 0, turbulenceRms: 0, puff: 0, puffSignal: 0, puffFactor: 1, active: false } } });
+  const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], basis: { e1: [1, 0, 0], e2: [0, 0, 1] }, radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, coverageFraction: 0, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, masked: { cells: 0, weight: 0, weightShare: 0 }, puffFactor, pattern, inletDynamics: { ...inletDynamics, turbulence: 0, turbulenceRms: 0, puff: 0, puffSignal: 0, puffFactor: 1, active: false } } });
   if (sourceLaw !== IMMERSED_SOURCE_LAW) return off('source-law-is-not-immersed-source');
   if (pressure.solver !== PRESSURE_SOLVER_CONVERGED) return off('immersed-source-requires-converged-pressure-solver');
   // A positive supply needs a volume outlet: the closed box has none, so
@@ -2583,6 +2583,13 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   // π r² t is kept for reference (the antialiased skirt and the cell lattice
   // make the sum run a few percent over it). Masked cells are reported (IS-03).
   const weights = immersedSourceWeights(effective, { grid, gridHeight });
+  // Supply per covered area (2026-10-11): the authored speed is a per-area
+  // rate, as on the floor. The nominal supply v π r² puff belongs to the
+  // whole, unmasked disc; a pattern or a solid mask supplies only the fraction
+  // of the disc's weight it leaves, and the per-cell rate Q/Σw stays the plain
+  // disc's. (Before this, a pattern concentrated the whole disc's supply into
+  // its covered cells, several times the authored speed per cell.)
+  const plainWeightSum = Math.max(1e-6, (pattern.kind === 'shape' ? weights : immersedSourceWeights({ ...effective, pattern: { ...pattern, kind: 'shape' } }, { grid, gridHeight })).sum);
   const solidCells = options.solidCells ?? null;
   const fluid = []; let fluidSum = 0, maskedCells = 0, maskedWeight = 0;
   for (const cell of weights.cells) {
@@ -2591,6 +2598,8 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   }
   effective.normaliser = Math.max(1e-6, fluidSum);
   effective.analyticVolume = Math.PI * radiusCells * radiusCells * thickness;
+  effective.coverageFraction = Math.min(1, fluidSum / plainWeightSum);
+  effective.fluxRequested = fluxRequested * effective.coverageFraction;
   const normaliser = effective.normaliser;
   // The predicted supply follows the kernel's target law, this step's
   // lattice included (review SID-01): target = min(cap, w × (1 + a × lattice)
@@ -2609,11 +2618,11 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
       m = Math.max(0, 1 + amplitude * (field[immersedSlabLookup(d, basis, grid).index] ?? 0));
     }
     modulatedWeight += cell.w * m;
-    const target = fluxRequested * cell.w * m / normaliser;
+    const target = effective.fluxRequested * cell.w * m / normaliser;
     if (target > capPerCell) clipped += 1;
     fluxEffective += Math.min(capPerCell, target);
   }
-  effective.fluxNominal = fluxRequested;
+  effective.fluxNominal = effective.fluxRequested;
   effective.fluxEffectivePredicted = fluxEffective;
   effective.turbulenceSupplyFactor = fluidSum > 0 ? modulatedWeight / fluidSum : 1;
   effective.supplyPredictionAuthority = amplitude > 0 ? (field ? 'step-locked-lattice' : 'nominal-no-lattice-this-step') : 'exact-static';
