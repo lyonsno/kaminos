@@ -164,8 +164,9 @@ ${loaders.replaceAll('TILE(', '(')}
 }`;
 }
 
-function gemmShaderF16({ tile = {}, precision, ...layout }) {
+function gemmShaderF16({ tile = {}, precision, vectorShared = false, ...layout }) {
   const { tm, tn, bk, bm, bn } = gemmTileShape(tile);
+  if (vectorShared && precision === 'f16-tiles' && tn === 4 && tm % 4 === 0) return gemmShaderF16Vector({ tile, ...layout });
   const { header, loaders, epilogue, used, prologue } = gemmParts(layout, { bm, bn, bk, threads: 256 });
   const half = precision === 'f16-partial';
   return `${enables(used, true)}
@@ -198,6 +199,52 @@ ${loaders.replaceAll('TILE(', 'f16(').replace(/(tile_a\[[^\]]+\])=value;/, '$1=f
     if(m>=p.M){continue;}
     for(var j=0u;j<${tn}u;j++){
       let n=n0+lid.x+16u*j;
+      if(n>=p.N){continue;}
+      ${epilogue.replace('ACC', 'acc[i][j]')}
+    }
+  }
+}`;
+}
+
+// F16 operand tiles stored as vec4<f16>; each thread owns tm consecutive rows
+// and 4 consecutive columns, reading its operands as vec4 and accumulating
+// with vector FMAs in F32. Same per-output summation order as gemmShaderF16.
+function gemmShaderF16Vector({ tile = {}, ...layout }) {
+  const { tm, bk, bm, bn } = gemmTileShape(tile);
+  const { header, loaders, epilogue, used, prologue } = gemmParts(layout, { bm, bn, bk, threads: 256 });
+  const vectorStores = loaders.replaceAll('TILE(', 'f16(')
+    .replace(/(tile_a\[[^\]]+\])=value;/, '$1=f16(value);').replace(/(tile_b\[[^\]]+\])=value;/, '$1=f16(value);')
+    .replace(/(tile_[ab])\[([^\]]+)\]=/g, (match, name, index) => `${name}[(${index})/4u][(${index})%4u]=`);
+  return `${enables(used, true)}
+${header}
+var<workgroup> tile_a:array<vec4<f16>,${(bk * bm) / 4}>;
+var<workgroup> tile_b:array<vec4<f16>,${(bk * bn) / 4}>;
+@compute @workgroup_size(16,16)
+fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:vec3<u32>) {
+  let tid=lid.y*16u+lid.x;
+  let m0=wid.y*${bm}u;let n0=p.n_base+wid.x*${bn}u;let bat=wid.z;
+  var acc:array<vec4<f32>,${tm}>;
+  ${prologue}
+  for(var k0=0u;k0<p.K;k0+=${bk}u){
+${vectorStores}
+    workgroupBarrier();
+    for(var kk=0u;kk<${bk}u;kk++){
+      let bf=vec4<f32>(tile_b[(kk*${bn}u+lid.x*4u)/4u]);
+      for(var g=0u;g<${tm / 4}u;g++){
+        let af=vec4<f32>(tile_a[(kk*${bm}u+lid.y*${tm}u)/4u+g]);
+        acc[g*4u]=fma(vec4<f32>(af.x),bf,acc[g*4u]);
+        acc[g*4u+1u]=fma(vec4<f32>(af.y),bf,acc[g*4u+1u]);
+        acc[g*4u+2u]=fma(vec4<f32>(af.z),bf,acc[g*4u+2u]);
+        acc[g*4u+3u]=fma(vec4<f32>(af.w),bf,acc[g*4u+3u]);
+      }
+    }
+    workgroupBarrier();
+  }
+  for(var i=0u;i<${tm}u;i++){
+    let m=m0+lid.y*${tm}u+i;
+    if(m>=p.M){continue;}
+    for(var j=0u;j<4u;j++){
+      let n=n0+lid.x*4u+j;
       if(n>=p.N){continue;}
       ${epilogue.replace('ACC', 'acc[i][j]')}
     }
