@@ -182,6 +182,27 @@ export class KleinPipeline {
     this.timings.loadMs = performance.now() - t0;
   }
 
+  // Swap the transformer for the one at `url` (another quantization level); the text encoder,
+  // decoder and tokenizer stay. The old weights are freed first so two transformers are never
+  // resident together; if loading fails there is no transformer until a later swap succeeds.
+  // onProgress(part, name, { loadedBytes, totalBytes }) as for load(); returns the load stats.
+  async loadTransformer(url, onProgress = () => {}) {
+    const manifest = await getJson(`${url}/manifest.json`);
+    const totalBytes = Object.values(manifest.bundles).reduce((sum, b) => sum + transferBytes(b), 0);
+    const stats = { totalBytes, cachedBytes: 0, downloadedBytes: 0, cacheErrors: [] };
+    this.transformer?.destroy(); this.transformer = null; this.residentBytes.transformer = 0;
+    const next = new KleinTransformer(this.device, manifest);
+    Object.assign(next, this.kernels); next.sched = this.sched;
+    let loadedBytes = 0, bytes = 0;
+    try {
+      await next.loadBundles((file, bundle) => getWeightBytes(`${url}/${file}`, { sha256: bundle.sha256, bytes: bundle.bytes, gzip: bundle.gzip,
+        onBytes: n => { loadedBytes += n; onProgress('transformer', file, { loadedBytes, totalBytes }); } }, stats), (n, b) => { bytes += b; });
+    } catch (e) { next.destroy(); throw e; }
+    this.transformer = next; this.ditManifest = manifest; this.urls.transformerUrl = url;
+    this.residentBytes.transformer = bytes;
+    return stats;
+  }
+
   async fetchEmbeddingRows(ids) {
     const { textEncoderUrl: te } = this.urls; const { file, row_bytes: rb } = this.teManifest.embedding;
     return new Map(await Promise.all(ids.map(async id => {
@@ -209,6 +230,7 @@ export class KleinPipeline {
 
   async generateScheduled({ prompt, seed, width, height, steps, onStep, onPhase }) {
     if (width % 16 || height % 16) throw new Error('width and height must be multiples of 16');
+    if (!this.transformer) throw new Error('no transformer is loaded');
     const dev = this.device, t = {};
     const latH = height / 16, latW = width / 16, imgTokens = latH * latW;
     const framed = this.tokenizer.kleinPromptIds(prompt);

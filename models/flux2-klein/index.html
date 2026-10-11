@@ -55,6 +55,13 @@
   .scene canvas { aspect-ratio: 1; border: 1px solid var(--line); }
   .scene p { font-size: 14px; }
   .hidden { display: none !important; }
+  .levels { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 10px; margin: 0; display: grid; gap: 8px; }
+  .levels legend { color: var(--muted); font-size: 14px; padding: 0 4px; }
+  .level { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: baseline; color: var(--fg); font-size: 15px; cursor: pointer; }
+  .level input { width: auto; margin: 0; }
+  .level small { grid-column: 2; color: var(--muted); font-size: 13px; }
+  .level .size { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .level.unavailable { opacity: 0.45; cursor: default; }
   footer { font-size: 14px; color: var(--muted); display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 16px; }
 </style>
 <main>
@@ -66,6 +73,12 @@
 
   <div class="layout">
     <section class="panel" aria-label="Controls">
+      <fieldset class="levels" id="levels">
+        <legend>Jank level</legend>
+        <label class="level"><input type="radio" name="level" value="mint"><span><b>Mint</b> <span class="size" data-level="mint"></span></span><small>Full quality.</small></label>
+        <label class="level"><input type="radio" name="level" value="weathered"><span><b>Weathered</b> <span class="size" data-level="weathered"></span></span><small>3-bit transformer. Looks about the same, downloads less.</small></label>
+        <label class="level"><input type="radio" name="level" value="off-the-rails"><span><b>Off the Rails</b> <span class="size" data-level="off-the-rails"></span></span><small>2-bit transformer. Blurry, melted, still recognizable.</small></label>
+      </fieldset>
       <div id="setup" class="row">
         <button id="load" class="primary" disabled>Checking WebGPU…</button>
       </div>
@@ -121,12 +134,22 @@ import { kleinWeightStatus } from './klein-pipeline.js';
 const q = new URLSearchParams(location.search);
 const base = (q.get('weights') ?? document.querySelector('meta[name="klein-weights"]').content).replace(/\/$/, '');
 const urls = { textEncoderUrl: `${base}/te`, transformerUrl: `${base}/dit`, vaeUrl: `${base}/vae` };
+// Jank levels share the text encoder, decoder and tokenizer and differ in the transformer's weights.
+const LEVELS = { mint: { name: 'Mint', dit: 'dit' }, weathered: { name: 'Weathered', dit: 'dit-q3' },
+  'off-the-rails': { name: 'Off the Rails', dit: 'dit-q2' } };
+const levelUrls = id => ({ ...urls, transformerUrl: `${base}/${LEVELS[id].dit}` });
+const remembered = (() => { try { return localStorage.getItem('klein-level'); } catch { return null; } })();
+let selected = LEVELS[q.get('level')] ? q.get('level') : LEVELS[remembered] ? remembered : 'mint';
+let loadedLevel = null;
+const levelStatus = {};
 const $ = id => document.getElementById(id);
 const status = $('status'), loadButton = $('load'), progress = $('progress');
 const gb = bytes => `${(bytes / 1e9).toFixed(1)} GB`;
 const seconds = ms => `${(ms / 1000).toFixed(1)} s`;
 const say = (text, warn = false) => { status.textContent = text; status.classList.toggle('warn', warn); };
 let demo = null, lastImage = null;
+const levelInputs = () => [...document.querySelectorAll('input[name="level"]')];
+for (const input of levelInputs()) input.checked = input.value === selected;
 
 async function unsupportedReason() {
   if (!navigator.gpu) return 'This browser does not expose WebGPU. Try a recent Chrome or Edge on a desktop computer.';
@@ -152,6 +175,30 @@ function loadProgress({ loadedBytes, totalBytes }) {
   return text;
 }
 
+// Download size per level from its manifests: what is left to fetch, or "cached".
+async function refreshLevels() {
+  await Promise.all(Object.keys(LEVELS).map(async id => {
+    try { levelStatus[id] = await kleinWeightStatus(levelUrls(id)); } catch { levelStatus[id] = null; }
+  }));
+  for (const [id, st] of Object.entries(levelStatus)) {
+    const label = document.querySelector(`.size[data-level="${id}"]`);
+    label.textContent = !st ? 'unavailable' : st.complete ? 'cached' : st.cachedBytes > 0 ? `${gb(st.totalBytes - st.cachedBytes)} left` : gb(st.totalBytes);
+    const input = document.querySelector(`input[name="level"][value="${id}"]`);
+    input.disabled = !st; input.closest('.level').classList.toggle('unavailable', !st);
+  }
+}
+
+function describeSelection() {
+  const st = levelStatus[selected];
+  if (!st) return;
+  $('download-size').textContent = gb(st.totalBytes);
+  if (loadedLevel) return;
+  loadButton.textContent = st.complete ? `Load ${LEVELS[selected].name} (cached)` : `Download ${LEVELS[selected].name} (${gb(st.totalBytes - st.cachedBytes)})`;
+  say(st.complete ? 'This level is in the browser’s cache.'
+    : st.cachedBytes > 0 ? `${gb(st.cachedBytes)} is already cached; the rest downloads when you press the button.`
+    : 'Nothing downloads until you press the button.');
+}
+
 async function prepare() {
   const reason = await unsupportedReason();
   if (reason) { loadButton.textContent = 'WebGPU unavailable'; say(reason, true); return; }
@@ -160,41 +207,68 @@ async function prepare() {
     demo = await createKleinDemo({ canvas: $('scene'), urls, load: false });
     window.kleinDemo = demo;
   } catch (e) { loadButton.textContent = 'WebGPU unavailable'; say(`Could not start WebGPU: ${e.message ?? e}`, true); return; }
-  let weights;
-  try { weights = await kleinWeightStatus(urls); }
-  catch (e) { loadButton.textContent = 'Model unavailable'; say(`Could not reach the model files: ${e.message}`, true); return; }
-  const remaining = weights.totalBytes - weights.cachedBytes;
-  $('download-size').textContent = gb(weights.totalBytes);
-  loadButton.textContent = weights.complete ? 'Load model (cached)' : `Download model (${gb(remaining)})`;
+  await refreshLevels();
+  if (!levelStatus[selected]) selected = Object.keys(LEVELS).find(id => levelStatus[id]) ?? selected;
+  if (!levelStatus[selected]) { loadButton.textContent = 'Model unavailable'; say('Could not reach the model files.', true); return; }
+  for (const input of levelInputs()) input.checked = input.value === selected;
+  describeSelection();
   loadButton.disabled = false;
-  say(weights.complete ? 'The model is in this browser’s cache.'
-    : weights.cachedBytes > 0 ? `${gb(weights.cachedBytes)} is already cached from an earlier visit; the rest downloads when you press the button.`
-    : 'Nothing downloads until you press the button.');
+}
+
+const loadingNote = '\nKeep this tab open. If the download stops, finished parts are kept and the next try picks up the rest.';
+function showProgress(prefix) {
+  samples.length = 0; progress.value = 0; progress.classList.remove('hidden');
+  return s => { if (!s.totalBytes) return; progress.value = s.loadedBytes / s.totalBytes; say(`${prefix}${loadProgress(s)}${loadingNote}`); };
 }
 
 loadButton.onclick = async () => {
-  loadButton.disabled = true; loadButton.textContent = 'Downloading…'; progress.classList.remove('hidden');
+  loadButton.disabled = true; loadButton.textContent = 'Downloading…';
   navigator.storage?.persist?.().catch(() => {});
-  samples.length = 0;
+  demo.pipeline.urls.transformerUrl = levelUrls(selected).transformerUrl;
   try {
-    await demo.load(s => {
-      if (!s.totalBytes) return;
-      progress.value = s.loadedBytes / s.totalBytes;
-      say(`${loadProgress(s)}\nKeep this tab open. If the download stops, finished parts are kept and the next try picks up the rest.`);
-    });
+    await demo.load(showProgress(''));
   } catch (e) {
     progress.classList.add('hidden'); loadButton.disabled = false; loadButton.textContent = 'Try again';
     say(`Loading failed: ${e.message ?? e}`, true); return;
   }
+  loadedLevel = selected; window.kleinLevel = loadedLevel;
   const stats = demo.pipeline.loadStats;
   $('setup').classList.add('hidden'); progress.classList.add('hidden'); $('controls').classList.remove('hidden');
-  say(`Model ready in ${seconds(demo.loadMs)}${stats.downloadedBytes ? `, ${gb(stats.downloadedBytes)} downloaded` : ' from the cache'}${stats.cacheErrors.length ? '. The browser could not cache every file, so the next visit may download again.' : '.'}`,
+  say(`${LEVELS[loadedLevel].name} ready in ${seconds(demo.loadMs)}${stats.downloadedBytes ? `, ${gb(stats.downloadedBytes)} downloaded` : ' from the cache'}${stats.cacheErrors.length ? '. The browser could not cache every file, so the next visit may download again.' : '.'}`,
     stats.cacheErrors.length > 0);
+  refreshLevels();
 };
 
-function setRunning(running) {
-  const cooperative = $('cooperative').checked;
+// Changing level before loading only changes what will download; afterwards it swaps the transformer.
+async function chooseLevel(id) {
+  selected = id;
+  try { localStorage.setItem('klein-level', id); } catch { /* storage may be unavailable */ }
+  if (!loadedLevel) { describeSelection(); return; }
+  if (id === loadedLevel) return;
+  setRunning(true, { swapping: true });
+  try {
+    const stats = await demo.pipeline.loadTransformer(levelUrls(id).transformerUrl, (part, name, p) => showSwap(p));
+    loadedLevel = id; window.kleinLevel = id;
+    say(`${LEVELS[id].name} ready${stats.downloadedBytes ? `, ${gb(stats.downloadedBytes)} downloaded` : ' from the cache'}.`);
+  } catch (e) {
+    loadedLevel = demo.pipeline.transformer ? loadedLevel : null;
+    say(`Switching to ${LEVELS[id].name} failed: ${e.message ?? e}. Choose a level to try again.`, true);
+  }
+  progress.classList.add('hidden');
+  setRunning(false);
+  $('download-size').textContent = gb(levelStatus[selected]?.totalBytes ?? 0);
+  refreshLevels();
+}
+let showSwap = () => {};
+for (const input of levelInputs()) input.onchange = () => {
+  if (loadedLevel) showSwap = showProgress(`Switching to ${LEVELS[input.value].name}: `);
+  chooseLevel(input.value);
+};
+
+function setRunning(running, { swapping = false } = {}) {
+  const cooperative = $('cooperative').checked && !swapping;
   for (const id of ['go', 'reseed', 'prompt', 'seed', 'size', 'cooperative']) $(id).disabled = running;
+  for (const input of levelInputs()) input.disabled = running || !levelStatus[input.value];
   $('pause').disabled = !running || !cooperative; $('stop').disabled = !running || !cooperative;
   $('pause').textContent = 'Pause';
 }
@@ -209,11 +283,11 @@ $('go').onclick = async () => {
     const out = $('out'); out.width = r.width; out.height = r.height;
     $('examples').classList.add('hidden'); out.classList.remove('hidden');
     out.getContext('2d').putImageData(new ImageData(r.rgba, r.width, r.height), 0, 0);
-    lastImage = { prompt, seed, size };
+    lastImage = { prompt, seed, size, level: loadedLevel };
     $('save').disabled = false;
     const frames = r.frames ? `; the animation kept drawing at a median ${Math.round(1000 / r.frames.p50)} frames per second` : '';
-    say(`${r.width} × ${r.height} in ${seconds(r.wallMs)}${frames}.`);
-    window.kleinLast = { wallMs: r.wallMs, timings: r.timings, frames: r.frames, width: r.width, height: r.height };
+    say(`${r.width} × ${r.height} at ${LEVELS[loadedLevel].name} in ${seconds(r.wallMs)}${frames}.`);
+    window.kleinLast = { wallMs: r.wallMs, timings: r.timings, frames: r.frames, width: r.width, height: r.height, level: loadedLevel };
   } catch (e) {
     say(e?.name === 'AbortError' ? 'Stopped.' : `Generation failed: ${e.message ?? e}`, e?.name !== 'AbortError');
   }
@@ -225,7 +299,7 @@ $('reseed').onclick = () => { $('seed').value = Math.floor(Math.random() * 1e9);
 $('save').onclick = () => $('out').toBlob(blob => {
   const slug = lastImage.prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'image';
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = `klein-${slug}-${lastImage.seed}.png`; a.click();
+  a.href = URL.createObjectURL(blob); a.download = `klein-${lastImage.level}-${slug}-${lastImage.seed}.png`; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }, 'image/png');
 $('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !$('go').disabled) $('go').click(); });

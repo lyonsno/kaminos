@@ -225,6 +225,9 @@ export class KleinTransformer {
 
   release() { for (const b of Object.values(this.act ?? {})) b.destroy(); this.act = null; }
 
+  // Free the activations and the weights; the instance is unusable afterwards.
+  destroy() { this.release(); for (const w of Object.values(this.weights)) w.buf.destroy(); this.weights = {}; }
+
   // One transformer evaluation. `taps(name, buffer, rows, cols, byteOffset)` lets a witness read
   // boundaries; it receives the encoder state after the boundary's work was encoded.
   // Upload per-image inputs once: initial latents, prompt embeddings, RoPE table.

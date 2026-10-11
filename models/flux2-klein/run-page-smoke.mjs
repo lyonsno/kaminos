@@ -4,7 +4,8 @@
 // every size again in reverse order: each size must give identical pixels in both sessions, so
 // an output that depends on which sizes ran earlier (stale or undersized buffers) fails.
 // Usage: node run-page-smoke.mjs --chrome <exe> (--weights-url <base> | --weights-dir <dir>) --out <dir>
-//        [--sizes 512,768,1024] [--seed 7006] [--prompt "..."] [--origin <page origin> | --site-dir <dir>]
+//        [--sizes 512,768,1024 | --levels mint,weathered,off-the-rails [--size 512]] [--seed 7006] [--prompt "..."]
+//        [--origin <page origin> | --site-dir <dir>]
 // --site-dir serves an assembled Pages site (scripts/assemble-pages-site.mjs) under /kaminos/, as
 // project Pages does, and opens the demo at /kaminos/inference-kit/klein/.
 // --weights-dir serves a staged repository folder from a second, CORS-enabled origin.
@@ -84,7 +85,8 @@ try {
   browser = await launchChrome(opt('--chrome'), [], report, { profileDir: opt('--profile-dir') ?? null });
   const desktop = { width: 1280, height: 900 };
   await browser.send('Emulation.setDeviceMetricsOverride', { ...desktop, deviceScaleFactor: 1, mobile: false });
-  const pageUrl = `${report.origin}/index.html?weights=${encodeURIComponent(report.weightsUrl)}`;
+  const firstLevel = opt('--levels')?.split(',')[0];
+  const pageUrl = `${report.origin}/index.html?weights=${encodeURIComponent(report.weightsUrl)}${firstLevel ? `&level=${firstLevel}` : ''}`;
   report.pageUrl = pageUrl;
 
   report.phase = 'prepare';
@@ -122,6 +124,7 @@ try {
 
   report.phase = 'generate';
   report.generations = [];
+  if (opt('--levels')) { await levelsFlow(opt('--levels').split(',')); report.phase = 'done'; await finish(0); }
   const sizes = opt('--sizes', '512,768,1024').split(',').map(Number);
   await generateSizes(sizes, 1);
   await screenshot('after-generate-mobile', { width: 390, height: 844, mobile: true });
@@ -150,6 +153,47 @@ try {
 } catch (e) {
   report.error = String(e?.stack || e);
   await finish(1);
+}
+
+// --levels a,b,c: generate at the loaded level a, switch to each later level through the page's
+// selector and generate again, then reload fresh at the last level: the swap path and a fresh load
+// of that level must give identical pixels.
+async function levelsFlow(levels) {
+  const size = Number(opt('--size', '512'));
+  report.levels = [];
+  const generateOne = async (level, session) => {
+    await generateSizes([size], session);
+    const row = report.generations.at(-1);
+    row.level = await browser.evaluate('window.kleinLast.level');
+    if (row.level !== level) throw new Error(`generated at ${row.level}, expected ${level}`);
+    await fsp.rename(path.join(outDir, `image-${size}-session${session}.png`), path.join(outDir, `image-${level}-session${session}.png`));
+    report.levels.push({ level, session, pixelSha256: row.pixelSha256, wallMs: row.wallMs, status: row.status });
+  };
+  const loaded = await browser.evaluate('window.kleinLevel');
+  if (loaded !== levels[0]) throw new Error(`page loaded level ${loaded}, expected ${levels[0]}`);
+  await generateOne(levels[0], 1);
+  for (const level of levels.slice(1)) {
+    const started = Date.now();
+    await browser.evaluate(`document.querySelector('input[name="level"][value="${level}"]').click()`, false);
+    const done = await waitFor(`(() => { const s = ${pageState}; return window.kleinLevel === '${level}' && !document.getElementById('go').disabled
+      ? s : /failed/i.test(s.status) ? s : null; })()`, `switch to ${level}`);
+    if (/failed/i.test(done.status)) throw new Error(`switch to ${level} failed: ${done.status}`);
+    report.levels.push({ level, swapMs: Date.now() - started, swapStatus: done.status });
+    await generateOne(level, 1);
+  }
+  await screenshot('after-levels-desktop', { width: 1280, height: 900 });
+  report.phase = 'fresh-load';
+  const last = levels.at(-1);
+  const url = new URL(report.pageUrl); url.searchParams.set('level', last);
+  await browser.navigate(url.toString(), 'Boolean(window.kleinPrepared)');
+  await browser.evaluate('window.kleinPrepared');
+  await browser.evaluate(`document.getElementById('load').click()`, false);
+  const ready = await waitFor(`(() => { const s = ${pageState}; return s.controls || /failed/i.test(s.status) ? s : null; })()`, `fresh load of ${last}`);
+  if (!ready.controls) throw new Error(`fresh load of ${last} failed: ${ready.status}`);
+  await generateOne(last, 2);
+  const [swapped, fresh] = report.levels.filter(l => l.level === last && l.pixelSha256);
+  report.swapMatchesFreshLoad = swapped.pixelSha256 === fresh.pixelSha256;
+  if (!report.swapMatchesFreshLoad) throw new Error(`${last}: swapped ${swapped.pixelSha256} != fresh ${fresh.pixelSha256}`);
 }
 
 async function generateSizes(sizes, session) {
