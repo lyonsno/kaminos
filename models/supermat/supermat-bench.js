@@ -68,6 +68,10 @@ export const BENCH_VARIANTS = [
   { id: 'f32act-f16tiles', f16: true, gemmPrecision: 'f16-tiles' },
   { id: 'f32act-f16tiles-bk32', f16: true, gemmPrecision: 'f16-tiles', gemmTile: { tm: 4, tn: 4, bk: 32 } },
   { id: 'f16act-fused-f16tiles', f16: true, activations: 'f16', fuseNorm: true, normOnly: true, gemmPrecision: 'f16-tiles' },
+  { id: 'f32act-f16tiles-tm8', f16: true, gemmPrecision: 'f16-tiles', gemmTile: { tm: 8, tn: 4, bk: 16 } },
+  { id: 'f32act-f16tiles-tn8', f16: true, gemmPrecision: 'f16-tiles', gemmTile: { tm: 4, tn: 8, bk: 16 } },
+  { id: 'f32act-f16tiles-8x8', f16: true, gemmPrecision: 'f16-tiles', gemmTile: { tm: 8, tn: 8, bk: 16 } },
+  { id: 'f32act-f16tiles-8x8-bk8', f16: true, gemmPrecision: 'f16-tiles', gemmTile: { tm: 8, tn: 8, bk: 8 } },
 ];
 
 export async function runSuperMatBench({ iterations = 6, rounds = 3, variants = BENCH_VARIANTS, cases = CASES } = {}) {
