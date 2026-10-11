@@ -7,6 +7,7 @@ import {createTrellisAssetAdapter} from './trellis-material.js';
 import {observeDeviceMemory} from './device-memory.js';
 import {createTrellisSharedHost} from './shared-host.js';
 import {admitGenerationGpuBudget} from './generation-memory-policy.js';
+import {generationTensorStorage,readGenerationTensor} from './generation-storage.js';
 const hash=async data=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),v=>v.toString(16).padStart(2,'0')).join('');
 export async function runGenerationWitness(expectedSha,{memoryMonitor=false,sharedComposition,assetMode='raw-glb',gpuBufferBudgetBytes}={}){
   const report={status:'failed',phase:'input-manifest',requestedRoute:GENERATION_ROUTE,numericalStatus:'not-compared',
@@ -40,17 +41,16 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
     report.input={manifestSha256:expectedSha,producer:m.producer,references:m.references,image:m.image,modelIdentities:
       Object.fromEntries(Object.entries(m.models).map(([k,v])=>[k,v.identity])),dinoIdentity:m.dino.identity,seed:m.seed,
       meshResolution:m.meshResolution,pipelineType:generationPipelineType(m),samplingSteps:m.samplingSteps??12};
-    report.verifiedTensorCount=0;report.verifiedInputBytes=0;
+    report.verifiedTensorCount=0;report.verifiedInputBytes=0;report.verifiedDecodedBytes=0;
     report.verifiedInputMeaning='cumulative successful fetches/bytes, including repeated stage use; not resident memory';
     const fetchTensor=async name=>{
       const row=m.tensors[name];if(!row)throw Error('complete identified input required '+name);
-      report.inputLoading={tensor:name,file:row.file,byteLength:row.byteLength,sha256:row.sha256,
+      const storage=generationTensorStorage(row);
+      report.inputLoading={tensor:name,...storage,decodedByteLength:row.byteLength,decodedSha256:row.sha256,
         ...(report.loadingModelRole?{modelRole:report.loadingModelRole}:{}),phase:'fetch'};
-      const r=await fetch('/fixture/'+row.file,{cache:'no-store'});if(!r.ok)throw Error('checkpoint tensor unavailable '+name);
-      report.inputLoading.phase='response-body';const raw=await r.arrayBuffer();report.inputLoading.phase='sha256';
-      if(raw.byteLength!==row.byteLength||await hash(raw)!==row.sha256)throw Error('partial/changed checkpoint tensor '+name);
-      report.inputLoading.phase='typed-array';const values=new Float32Array(raw);report.inputLoading.phase='verified';
-      report.verifiedTensorCount++;report.verifiedInputBytes+=raw.byteLength;return values;
+      const values=await readGenerationTensor(row,{fetchFile:file=>fetch('/fixture/'+file,{cache:'no-store'}),hash,
+        onPhase:phase=>{report.inputLoading.phase=phase;}});
+      report.verifiedTensorCount++;report.verifiedInputBytes+=storage.byteLength;report.verifiedDecodedBytes+=values.byteLength;return values;
     };
     setPhase('native-device');const adapter=sharedComposition?sharedComposition.sharedGpu?.adapter:await navigator.gpu?.requestAdapter();if(!adapter)throw Error('WebGPU unavailable');
     report.backend={vendor:adapter.info.vendor,architecture:adapter.info.architecture,description:adapter.info.description,
