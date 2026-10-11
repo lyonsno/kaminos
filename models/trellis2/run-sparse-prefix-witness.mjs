@@ -315,7 +315,7 @@ try {
     if(value.result.assetMode!==(values['fields-only']?'retained-fields-only':'raw-glb'))
       throw Error('effective generation asset mode differs from requested mode');
     validateGenerationResult(value.result,generationManifest);
-    for(const name of ['models/trellis2/dinov3-serving.js','models/trellis2/trellis-generation.js','models/trellis2/generation-inputs.js',
+    for(const name of ['models/trellis2/dinov3-serving.js','models/trellis2/trellis-generation.js','models/trellis2/generation-inputs.js','models/trellis2/generation-storage.js',
       'models/trellis2/sparse-generation-witness.js','models/trellis2/sparse-flow.js','models/trellis2/slat-flow.js',
       'models/trellis2/slat-decoder.js','webgpu-inference-kit/src/inference-runtime.js'])
       if(!report.servedSources[name])throw Error('missing generation served-source attestation '+name);

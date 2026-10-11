@@ -1,6 +1,7 @@
 import {buildSparseBlockPlan,sparseBlockWeightShapes} from './sparse-block.js';
 import {buildSparseDecoderPlan,sparseDecoderWeightShapes} from './sparse-decoder.js';
 import {buildSLatDecoderPlan,slatDecoderWeightShapes} from './slat-decoder.js';
+import {generationTensorStorage} from './generation-storage.js';
 
 export const GENERATION_ROLES=Object.freeze(['sparseFlow','occupancyDecoder','lowResolutionShape','highResolutionShape','shapeDecoder','textureFlow','textureDecoder']);
 export function generationPipelineType(m){
@@ -48,7 +49,8 @@ export function validateGenerationInputs(m){
   const tensor=(key,shape)=>{
     const row=m.tensors?.[key];if(!row||row.dtype!=='float32'||JSON.stringify(row.shape)!==JSON.stringify(shape)||
       row.byteLength!==shape.reduce((n,x)=>n*x,4)||!/^[a-f0-9]{64}$/.test(row.sha256??''))throw TypeError('complete identified tensor required '+key);
-    if(!/^[\w.-]+$/.test(row.file??''))throw TypeError('safe tensor file required '+key);admitted.add(key);
+    if(!/^[\w.-]+$/.test(row.file??''))throw TypeError('safe tensor file required '+key);
+    generationTensorStorage(row);admitted.add(key);
   };
   tensor(m.image?.pixelTensor,shapes.image);
   if(!/^[a-f0-9]{64}$/.test(m.dino?.identity?.files?.['model.safetensors']?.sha256??'')||m.dino?.layers?.length!==24)
