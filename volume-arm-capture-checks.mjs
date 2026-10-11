@@ -80,6 +80,12 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
         if (!Number.isFinite(effective) || Math.abs(effective - Number(value)) > 1e-6) mismatches.push(`${cid} requested ${value}, receipt ${effective}`);
       }
     }
+    if (cid === 'volume-grid-height-cells') {
+      const requested = Number(value) || 0; const dims = end.gridDimensions; const height = end.gridHeight;
+      if (!Array.isArray(dims) || dims.length !== 3 || !height) mismatches.push(`grid height requested ${value}, no grid receipt`);
+      else if (requested === 0 && (height.mode !== 'auto-twice-width' || dims[1] !== dims[0] * 2)) mismatches.push(`grid height requested auto but effective ${dims[1]} (${height.mode})`);
+      else if (requested > 0 && (height.mode === 'auto-twice-width' || dims[1] !== height.heightCells || Math.abs(height.heightCells - requested) > 4)) mismatches.push(`grid height requested ${value}, effective ${dims[1]} (${height.mode})`);
+    }
     if (cid === 'volume-time-step' && end.timeStep?.mode !== value) mismatches.push(`time step requested ${value}, effective ${end.timeStep?.mode}${end.timeStep?.reason ? ` (${end.timeStep.reason})` : ''}`);
     if (cid === 'volume-confinement') {
       if (end.confinement?.mode !== value) mismatches.push(`confinement requested ${value}, effective ${end.confinement?.mode}`);

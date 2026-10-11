@@ -2371,6 +2371,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-resolution-val">96×192×96</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">Grid height (cells)</span>
+      <input type="number" id="volume-grid-height-cells" data-volume-settings-param="volume_grid_height_cells" min="0" max="640" step="4" value="0">
+      <span class="slider-val" id="volume-grid-height-cells-val">auto (2× width)</span>
+    </div>
+    <span class="slider-help">Grid height in cells. 0 keeps twice the width, which is what every saved basin was authored at. Any other value is clamped between the width and four times it and snapped to a multiple of 4; cells keep their size, the box grows rows, nothing is stretched. Changing it rebuilds the fluid state like a resolution change. Memory and time grow with the height.</span>
+    <div class="slider-row">
       <span class="slider-label">Grid Overlay</span>
       <input type="range" id="volume-grid-overlay" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-grid-overlay-val">0.00</span>
@@ -22324,6 +22330,7 @@ function readVolumeControls() {
     shellSoftClip: parseFloat(document.getElementById('volume-shell-soft-clip').value),
     shellSmoke: parseFloat(document.getElementById('volume-shell-smoke').value),
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
+    gridHeightCells: parseInt(document.getElementById('volume-grid-height-cells').value, 10) || 0,
     volumeResidualMode: document.getElementById('volume-residual-mode').value || 'off',
     volumeResidualModelUrl: document.getElementById('volume-residual-model-url').value || '',
     volumeResidualStrength: parseFloat(document.getElementById('volume-residual-strength').value),
@@ -22549,6 +22556,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-aperture-seed-val').textContent = String(Math.round(c.emitterApertureSeed));
   document.getElementById('volume-emitter-swirl-val').textContent = c.emitterSwirl.toFixed(2);
   document.getElementById('volume-heat-release-expansion-val').textContent = c.heatReleaseExpansion.toFixed(2);
+  document.getElementById('volume-grid-height-cells-val').textContent = c.gridHeightCells ? `${c.gridHeightCells} cells` : 'auto (2× width)';
   document.getElementById('volume-velocity-staggering-val').textContent = c.velocityStaggering;
   document.getElementById('volume-immersed-centre-x-val').textContent = Number(c.immersedCentreX).toFixed(2);
   document.getElementById('volume-immersed-centre-y-val').textContent = Number(c.immersedCentreY).toFixed(2);
@@ -22954,7 +22962,7 @@ function refreshVolumeReadout() {
   const simGridDimensions = Array.isArray(s.simGridDimensions) && s.simGridDimensions.length === 3
     ? s.simGridDimensions.join('×')
     : (s.simGrid ? `${s.simGrid} x/z resolution (dimensions unreported)` : 'unknown');
-  document.getElementById('volume-grid').textContent = simGridDimensions;
+  document.getElementById('volume-grid').textContent = `${simGridDimensions}${s.gridHeight?.mode === 'auto-twice-width' ? '' : ` · height ${s.gridHeight.mode}`}`;
   document.getElementById('volume-route-id').textContent = s.routeIdentity || 'native-3d-compute-fluid-raymarch-v0';
   document.getElementById('volume-canvas-state').textContent = s.active ? `${s.displayWidth || s.width}x${s.displayHeight || s.height} -> ${s.renderWidth || s.width}x${s.renderHeight || s.height}` : 'hidden';
   document.getElementById('volume-raf-fps').textContent = Number.isFinite(timing.rafFps) ? `${timing.rafFps.toFixed(0)} route RAF` : '-- route RAF';
@@ -23252,7 +23260,7 @@ async function initKaminosVolumeRoute() {
   // select shows the family shape the map falls back to, and the request is
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
-  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-cells', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
     if (!param || !params.has(param)) continue;
@@ -24135,6 +24143,7 @@ async function initKaminosVolumeRoute() {
     'volume-emitter-puff',
     'volume-emitter-puff-period',
     'volume-heat-release-expansion',
+    'volume-grid-height-cells',
     'volume-velocity-staggering',
     'volume-immersed-centre-x',
     'volume-immersed-centre-y',

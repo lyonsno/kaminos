@@ -114,8 +114,8 @@ test('cockpit: the source law option, eleven bench rows with help, snapshot, lis
     assert.equal(control.additiveSinceControlCount, e.additiveSinceControlCount);
     assert.ok('additiveDefault' in control);
   }
-  assert.equal(schema.controlCount, 248);
-  assert.equal(schema.controls.length, 248);
+  assert.equal(schema.controlCount, 249);
+  assert.equal(schema.controls.length, 249);
 });
 
 // Bounded A (report section 31, after the cold bench): a solid back disc one to
@@ -165,7 +165,7 @@ test('the back wall: resolved as a toggle, its cells lie strictly behind the sou
   assert.match(index, /immersedBackWall: parseFloat\(document\.getElementById\('volume-immersed-back-wall'\)\.value\)/);
   const control = schema.controls.find(c => c.key === 'volume-immersed-back-wall');
   assert.deepEqual(control, { key: 'volume-immersed-back-wall', param: 'volume_immersed_back_wall', tagName: 'INPUT', type: 'range', additiveDefault: 0, additiveSinceControlCount: 248 });
-  assert.equal(schema.controlCount, 248);
+  assert.equal(schema.controlCount, 249);
 });
 
 // Fresh review at 25431599 (IS-01..06).

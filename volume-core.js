@@ -414,6 +414,23 @@ const APPEARANCE_DECOMPOSITION_MODES = Object.freeze({
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 136, 140, 160];
 const VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER = 2;
+// Grid height as a control (2026-10-11): 0 keeps twice the width (every saved
+// basin returns unchanged); a request is clamped to [width, 4 × width] and
+// snapped to a multiple of 4 (the workgroup). Cells keep their size; the box
+// grows rows. The ratio is what the runtime carries, so the resample helper
+// and the irradiance lattice follow the same shape at their own widths.
+export function gridHeightForRatio(size, ratio) {
+  return Math.max(4, Math.round(size * ratio / 4) * 4);
+}
+export function resolveGridHeight(controls = {}, width = DEFAULT_GRID_SIZE) {
+  const requested = Number(controls.gridHeightCells);
+  const requestedCells = Number.isFinite(requested) && requested > 0 ? Math.round(requested) : 0;
+  if (requestedCells === 0) return { requestedCells: 0, heightCells: width * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER, ratio: VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER, mode: 'auto-twice-width' };
+  const clamped = Math.min(4 * width, Math.max(width, requestedCells));
+  const snapped = Math.round(clamped / 4) * 4;
+  const mode = clamped !== requestedCells ? 'requested-clamped' : (snapped !== requestedCells ? 'requested-snapped' : 'requested');
+  return { requestedCells, heightCells: snapped, ratio: snapped / width, mode };
+}
 const SELECTIVE_HEAD_LIVE_ROLES = new Set(['off', 'truthHigh', 'lowPhaseAligned', 'selectiveFullResidual']);
 const SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES = Object.freeze({
   off: 'off',
@@ -2563,7 +2580,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const pressure = resolvePressureSolverConfig(controls).effective;
   const sourceLaw = String(controls.emitterSourceLaw ?? 'legacy-volume');
   const puffFactor = Number.isFinite(options.puffFactor) ? options.puffFactor : 1;
-  const centre = [clampFinite(controls.immersedCentreX, -1, 1, 0), clampFinite(controls.immersedCentreY, -1, 3, -0.5), clampFinite(controls.immersedCentreZ, -1, 1, 0)];
+  const centre = [clampFinite(controls.immersedCentreX, -1, 1, 0), clampFinite(controls.immersedCentreY, -1, -1 + 2 * gridHeight / grid, -0.5), clampFinite(controls.immersedCentreZ, -1, 1, 0)];
   const yaw = clampFinite(controls.immersedYaw, 0, 360, 0), pitch = clampFinite(controls.immersedPitch, -90, 90, 90);
   const radius = clampFinite(controls.immersedRadius, 0.02, 0.5, 0.2);
   const thickness = clampFinite(controls.immersedThickness, 1, 4, 1.5);
@@ -10496,8 +10513,8 @@ export function createKaminosVolumePrototype({
   if (productFrameOwner === 'caller' && (!externalDevice || !externalColorFormat)) {
     throw new Error('caller-product-frame-requires-external-device-and-color-format');
   }
-  const VERTICAL_DOMAIN_EXTENT_MULTIPLIER = VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
-  const gridHeightForSize = size => size * VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
+  let verticalRatio = resolveGridHeight(controlsSnapshot, normalizeGridSize(controlsSnapshot.resolution)).ratio;
+  const gridHeightForSize = size => gridHeightForRatio(size, verticalRatio);
   const gridShapeLabel = size => `${size}x${gridHeightForSize(size)}x${size}`;
   function gridCellCount(size) {
     return size * gridHeightForSize(size) * size;
@@ -16682,7 +16699,7 @@ export function createKaminosVolumePrototype({
     const key = `${gridSize}x${gridHeight}:${irradianceGridSize}`;
     if (irradianceResourcesKey === key && irradianceSeedPipeline && irradianceAtlasTexture) return true;
     destroyFireIrradianceResources();
-    const irradianceGridHeight = irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
+    const irradianceGridHeight = gridHeightForSize(irradianceGridSize);
     const latticeBytes = irradianceLatticeBufferBytes(irradianceGridSize, irradianceGridHeight);
     irradianceLatticeBuffers = [0, 1].map(index => device.createBuffer({
       label: `kaminos ${FIRE_IRRADIANCE_LATTICE_IDENTITY} lattice ${index}`,
@@ -16778,7 +16795,7 @@ export function createKaminosVolumePrototype({
     }
     const readBindGroup = options.readBindGroup || boundarySidecarReadBindGroups[currentFluid];
     const latticeWorkgroups = Math.ceil(irradianceGridSize / 4);
-    const latticeWorkgroupsY = Math.ceil((irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER) / 4);
+    const latticeWorkgroupsY = Math.ceil((gridHeightForSize(irradianceGridSize)) / 4);
     const seedPass = encoder.beginComputePass({
       label: 'kaminos fire irradiance seed pass',
       ...(options.seedTimestampWrites ? { timestampWrites: options.seedTimestampWrites } : {}),
@@ -16812,7 +16829,7 @@ export function createKaminosVolumePrototype({
     const atlasTilesY = Math.ceil(irradianceGridSize / FIRE_IRRADIANCE_ATLAS_TILES_X);
     resolvePass.dispatchWorkgroups(
       Math.ceil((irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X) / 8),
-      Math.ceil((irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER * atlasTilesY) / 8),
+      Math.ceil((gridHeightForSize(irradianceGridSize) * atlasTilesY) / 8),
       1
     );
     resolvePass.end();
@@ -16847,8 +16864,8 @@ export function createKaminosVolumePrototype({
       tilesX: FIRE_IRRADIANCE_ATLAS_TILES_X,
       tilesY: atlasTilesY,
       atlasWidth: irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X,
-      atlasHeight: irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER * atlasTilesY,
-      gridY: irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER,
+      atlasHeight: gridHeightForSize(irradianceGridSize) * atlasTilesY,
+      gridY: gridHeightForSize(irradianceGridSize),
       worldMin: productTransform.translate.map(value => value - 1),
       worldMax: [productTransform.translate[0] + 1,
         productTransform.translate[1] - 1 + 2 * gridHeight / gridSize,
@@ -25992,12 +26009,17 @@ export function createKaminosVolumePrototype({
       }
       const nextCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       const requestedGrid = normalizeGridSize(controlsSnapshot.resolution);
+      const requestedHeight = resolveGridHeight(controlsSnapshot, requestedGrid);
+      const heightChanged = requestedHeight.heightCells !== gridHeight;
+      state.gridHeight = { ...requestedHeight, widthCells: requestedGrid };
       const sourceStateResetNeeded = device
         && requestedGrid === previousGrid
+        && !heightChanged
         && normalizeVolumeScene(controlsSnapshot.volumeScene) === 'canonical_plume'
         && previousCanonicalSourceControlSignature !== nextCanonicalSourceControlSignature;
-      if (device && requestedGrid !== previousGrid) {
-        rebuildFluidState(requestedGrid);
+      if (device && (requestedGrid !== previousGrid || heightChanged)) {
+        verticalRatio = requestedHeight.ratio;
+        rebuildFluidState(requestedGrid, heightChanged ? 'grid-height-change' : 'grid-rebuilt');
       } else if (sourceStateResetNeeded) {
         rebuildFluidState(requestedGrid, 'canonical-source-control-change');
       } else {
