@@ -68,7 +68,7 @@
 <main>
   <header class="lede">
     <h1>Thomas the Jank Engine</h1>
-    <p><b>FLUX.2 [klein] 4B, chugging along on your own GPU through WebGPU.</b> The prompt, the model and the image stay on your machine; no server does any of the work.</p>
+    <p><b>FLUX.2 [klein] 4B: a 4-billion-parameter image model crammed into a browser tab. It's a little janky. It runs anyway.</b> It all happens on your own GPU through WebGPU: the prompt, the model and the image stay on your machine, and no server does any of the work.</p>
     <p class="muted">The first visit downloads <span id="download-size">3.2 GB</span> of model weights, which the browser keeps for later visits. Tested in Chrome on Apple-silicon Macs with 16 GB of memory or more: a 512 × 512 image takes about 7 seconds on an M4 Max and about 20 seconds on an M2 Pro. Pick a jank level to trade quality for a smaller download.</p>
   </header>
 
@@ -189,7 +189,7 @@ function loadProgress({ loadedBytes, totalBytes }) {
   while (samples.length > 2 && now - samples[0][0] > 8000) samples.shift();
   const [t0, b0] = samples[0], span = (now - t0) / 1000;
   const rate = span > 1.5 ? (loadedBytes - b0) / span : 0;
-  let text = `Loading weights: ${gb(loadedBytes)} of ${gb(totalBytes)}`;
+  let text = `I think I can, I think I can · ${gb(loadedBytes)} of ${gb(totalBytes)}`;
   if (rate > 0) {
     const left = (totalBytes - loadedBytes) / rate;
     text += ` · ${(rate / 1e6).toFixed(1)} MB/s · ${left < 60 ? 'under a minute' : `about ${Math.round(left / 60)} min`} left`;
