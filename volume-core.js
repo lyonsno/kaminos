@@ -11168,32 +11168,44 @@ export function createKaminosVolumePrototype({
   let sceneSolidTextureView = null;
   let sceneSolidRevisionKey = null;
   let sceneSolidCellsCpu = null;
+  let sceneSolidGeometryCache = null;
+  let sceneSolidSupportCache = null;
+  let immersedWallCache = null;
+  let sceneSolidTextureSizeKey = null;
+  let sceneSolidTextureDevice = null;
 
   function installSceneSolidTexture(field = null) {
-    if (!device) return;
-    const oldTexture = sceneSolidTexture;
+    if (!device) return false;
     const size = field ? [gridSize, gridHeight, gridSize] : [1, 1, 1];
-    const texture = device.createTexture({
-      label: field ? `kaminos scene solid ${gridShapeLabel(gridSize)}` : 'kaminos scene solid disabled',
-      size,
-      dimension: '3d',
-      format: 'r8uint',
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-    });
+    const sizeKey = size.join('x');
+    const replaced = !sceneSolidTexture || sceneSolidTextureSizeKey !== sizeKey || sceneSolidTextureDevice !== device;
+    if (replaced) {
+      const oldTexture = sceneSolidTexture;
+      sceneSolidTexture = device.createTexture({
+        label: field ? `kaminos scene solid ${gridShapeLabel(gridSize)}` : 'kaminos scene solid disabled',
+        size, dimension: '3d', format: 'r8uint',
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+      sceneSolidTextureView = sceneSolidTexture.createView();
+      sceneSolidTextureSizeKey = sizeKey;
+      sceneSolidTextureDevice = device;
+      oldTexture?.destroy();
+      state.sceneSolidTextureAllocations = (state.sceneSolidTextureAllocations || 0) + 1;
+    }
     if (field) {
       const packed = packSolidTextureRows(field.cells, gridSize);
-      device.queue.writeTexture({texture}, packed.data,
+      device.queue.writeTexture({texture: sceneSolidTexture}, packed.data,
         {bytesPerRow: packed.bytesPerRow, rowsPerImage: packed.rowsPerImage},
         {width: gridSize, height: gridHeight, depthOrArrayLayers: gridSize});
     } else {
-      device.queue.writeTexture({texture}, new Uint8Array([0]),
+      device.queue.writeTexture({texture: sceneSolidTexture}, new Uint8Array([0]),
         {bytesPerRow: 1, rowsPerImage: 1}, {width: 1, height: 1, depthOrArrayLayers: 1});
     }
-    sceneSolidTexture = texture;
-    sceneSolidTextureView = texture.createView();
     sceneSolidCellsCpu = field?.cells ?? null;
-    oldTexture?.destroy();
+    state.sceneSolidMaskUploads = (state.sceneSolidMaskUploads || 0) + 1;
+    return replaced;
   }
+
   let transportPipelineLayout = null;
   let transportPredictBindGroup = null;
   let analyticEmitterInjectionPipeline = null;
@@ -12244,8 +12256,13 @@ export function createKaminosVolumePrototype({
   function immersedBackWallForState() {
     const e = state.immersedSource?.effective;
     if (!e?.admitted || !e.backWall?.requested) return { cells: [], key: 'none' };
-    const cells = immersedBackWallCells(e, { grid: gridSize, gridHeight });
-    return { cells, key: `${e.centreCells.map(v => v.toFixed(2)).join(',')}/${e.direction.map(v => v.toFixed(3)).join(',')}/${e.radiusCells.toFixed(2)}/${e.thickness}/${e.backWall.thicknessCells}` };
+    // Exact physical inputs: rounding can hide a cell-boundary crossing.
+    const key = JSON.stringify([gridSize, gridHeight, e.centreCells, e.direction,
+      e.radiusCells, e.thickness, e.backWall.thicknessCells]);
+    if (immersedWallCache?.key === key) return immersedWallCache;
+    immersedWallCache = { key, cells: immersedBackWallCells(e, { grid: gridSize, gridHeight }) };
+    state.immersedWallBuilds = (state.immersedWallBuilds || 0) + 1;
+    return immersedWallCache;
   }
   function refreshSceneCollision() {
     if (!device || typeof getSceneCollision !== 'function') return;
@@ -12263,87 +12280,80 @@ export function createKaminosVolumePrototype({
       : null;
     if (reason || !requested) {
       if (backWall.cells.length) {
-        // No kiln: the mask carries the emitter's back wall alone.
         const key = `wall:${backWall.key}`;
         if (sceneSolidRevisionKey !== key) {
           const composed = composeSolidField(null, backWall.cells, { grid: gridSize, gridHeight });
-          installSceneSolidTexture({ cells: composed.cells, surfaceCellCount: composed.addedCells, interiorCellCount: 0, blockedFaceCount: null });
-          rebuildSceneSolidBindingViews();
+          if (installSceneSolidTexture({ cells: composed.cells, surfaceCellCount: composed.addedCells, interiorCellCount: 0, blockedFaceCount: null })) rebuildSceneSolidBindingViews();
           sceneSolidRevisionKey = key;
         }
         state.sceneCollision = {requested, effective: 'emitter-back-wall', sourceId, reason, grid: gridSize, solidCellCount: backWall.cells.length, emitterBackWallCells: backWall.cells.length};
         return;
       }
-      const key = `${requested}:${sourceId}:${reason}`;
+      const key = `off:${gridSize}:${gridHeight}`;
       if (sceneSolidRevisionKey !== key) {
-        if (sceneSolidCellsCpu) {
-          installSceneSolidTexture();
-          rebuildSceneSolidBindingViews();
-        }
+        if (sceneSolidCellsCpu && installSceneSolidTexture()) rebuildSceneSolidBindingViews();
         sceneSolidRevisionKey = key;
       }
       state.sceneCollision = {requested, effective: 'off', sourceId, reason, grid: gridSize, solidCellCount: 0, emitterBackWallCells: 0};
       return;
     }
-    let key = null;
     try {
-      const revision = sceneSolidRevision(source.object, productTransform);
-      const emitterBoundsRevision = `${analyticEmitterDispatch.cellMin.join(',')}/${analyticEmitterDispatch.cellExtent.join(',')}`;
-      key = `${gridSize}:${sourceId}:${revision}:${solver.solver}:${solver.projection}:${transport.scheme}:${emitterBoundsRevision}:${analyticEmitterDescriptorSignature}:wall:${backWall.key}`;
-      if (key === sceneSolidRevisionKey) return;
       const started = performance.now();
-      const extraction = trianglesFromSceneObject(source.object, productTransform);
-      const field = voxelizeTriangleSolid(extraction.triangles, gridSize);
-      if (field.surfaceCellCount === 0) throw new Error('authored-solid-does-not-intersect-volume');
+      const revision = sceneSolidRevision(source.object, productTransform);
+      // The kiln mask depends on mesh/grid/domain only. Source support and its
+      // optional moving wall have separate revisions, not geometry authority.
+      const geometryKey = JSON.stringify([gridSize, gridHeight, sourceId, revision]);
+      if (sceneSolidGeometryCache?.key !== geometryKey) {
+        const extraction = trianglesFromSceneObject(source.object, productTransform);
+        const field = voxelizeTriangleSolid(extraction.triangles, gridSize);
+        if (field.surfaceCellCount === 0) throw new Error('authored-solid-does-not-intersect-volume');
+        sceneSolidGeometryCache = { key: geometryKey, field, triangleCount: extraction.triangles.length };
+        state.sceneSolidGeometryBuilds = (state.sceneSolidGeometryBuilds || 0) + 1;
+      }
+      const field = sceneSolidGeometryCache.field;
       const sourceBounds = analyticEmitterDispatch;
-      let sourceBoundsSolidCells = 0;
-      if (sourceBounds.active) {
-        for (let z = sourceBounds.cellMin[2]; z < sourceBounds.cellMin[2] + sourceBounds.cellExtent[2]; z++) {
-          for (let y = sourceBounds.cellMin[1]; y < sourceBounds.cellMin[1] + sourceBounds.cellExtent[1]; y++) {
-            for (let x = sourceBounds.cellMin[0]; x < sourceBounds.cellMin[0] + sourceBounds.cellExtent[0]; x++) {
-              sourceBoundsSolidCells += field.cells[x + gridSize * (y + gridHeight * z)] ? 1 : 0;
-            }
-          }
+      const supportKey = JSON.stringify([geometryKey, sourceBounds.active,
+        sourceBounds.cellMin, sourceBounds.cellExtent, analyticEmitterDescriptorSignature]);
+      const supportChanged = sceneSolidSupportCache?.key !== supportKey;
+      if (supportChanged) {
+        let sourceBoundsSolidCells = 0;
+        if (sourceBounds.active) {
+          for (let z = sourceBounds.cellMin[2]; z < sourceBounds.cellMin[2] + sourceBounds.cellExtent[2]; z++)
+            for (let y = sourceBounds.cellMin[1]; y < sourceBounds.cellMin[1] + sourceBounds.cellExtent[1]; y++)
+              for (let x = sourceBounds.cellMin[0]; x < sourceBounds.cellMin[0] + sourceBounds.cellExtent[0]; x++)
+                sourceBoundsSolidCells += field.cells[x + gridSize * (y + gridHeight * z)] ? 1 : 0;
         }
+        sceneSolidSupportCache = { key: supportKey, sourceBoundsSolidCells,
+          sourceSupport: countEmitterChemicalSupport(analyticEmitterDescriptor, sourceBounds, field.cells, gridSize) };
       }
-      // Match the shader's signed-distance chemistry gate at cell centers;
-      // open cells in the conservative dispatch box are not enough to fuel gas.
-      const sourceSupport = countEmitterChemicalSupport(
-        analyticEmitterDescriptor, sourceBounds, field.cells, gridSize);
-      if (sourceBounds.active && sourceSupport.fluidSupportCells === 0) {
-        throw new Error('authored-solid-occludes-emitter-source-support');
+      const {sourceBoundsSolidCells, sourceSupport} = sceneSolidSupportCache;
+      if (sourceBounds.active && sourceSupport.fluidSupportCells === 0) throw new Error('authored-solid-occludes-emitter-source-support');
+      const maskKey = JSON.stringify([geometryKey, backWall.key]);
+      if (sceneSolidRevisionKey === maskKey) {
+        if (supportChanged) state.sceneCollision = {...state.sceneCollision,
+          sourceBoundsSolidCells, sourceBoundsCellCount: sourceBounds.cellCount, sourceSupport};
+        return;
       }
-      const composedWall = composeSolidField(field.cells, backWall.cells, { grid: gridSize, gridHeight });
-      if (backWall.cells.length) field.cells = composedWall.cells;
-      installSceneSolidTexture(field);
-      rebuildSceneSolidBindingViews();
-      sceneSolidRevisionKey = key;
+      // Never mutate the cached kiln occupancy when composing a moving wall.
+      const composedWall = backWall.cells.length ? composeSolidField(field.cells, backWall.cells, { grid: gridSize, gridHeight }) : { cells: field.cells, addedCells: 0 };
+      if (installSceneSolidTexture({...field, cells: composedWall.cells})) rebuildSceneSolidBindingViews();
+      sceneSolidRevisionKey = maskKey;
       state.sceneCollision = {
         requested: true, effective: 'mesh-voxel-solid', sourceId, reason: null,
-        emitterBackWallCells: composedWall.addedCells,
-        geometryRevision: revision, grid: gridSize,
-        triangleCount: extraction.triangles.length,
-        surfaceCellCount: field.surfaceCellCount,
-        interiorCellCount: field.interiorCellCount,
+        emitterBackWallCells: composedWall.addedCells, geometryRevision: revision, grid: gridSize,
+        triangleCount: sceneSolidGeometryCache.triangleCount,
+        surfaceCellCount: field.surfaceCellCount, interiorCellCount: field.interiorCellCount,
         solidCellCount: field.surfaceCellCount + field.interiorCellCount + composedWall.addedCells,
-        blockedFaceCount: field.blockedFaceCount,
-        sourceBoundsSolidCells,
-        sourceBoundsCellCount: sourceBounds.cellCount,
-        sourceSupport,
-        residentBytes: field.cells.byteLength,
-        rebuildMs: Number((performance.now() - started).toFixed(3)),
+        blockedFaceCount: field.blockedFaceCount, sourceBoundsSolidCells,
+        sourceBoundsCellCount: sourceBounds.cellCount, sourceSupport,
+        residentBytes: field.cells.byteLength, rebuildMs: Number((performance.now() - started).toFixed(3)),
         rebuildStep: state.simStepCount,
       };
     } catch (error) {
-      if (sceneSolidCellsCpu) {
-        installSceneSolidTexture();
-        rebuildSceneSolidBindingViews();
-      }
-      sceneSolidRevisionKey = key;
-      state.sceneCollision = {
-        requested: true, effective: 'off', sourceId,
-        reason: error?.message || String(error), grid: gridSize, solidCellCount: 0,
-      };
+      if (sceneSolidCellsCpu && installSceneSolidTexture()) rebuildSceneSolidBindingViews();
+      sceneSolidRevisionKey = null;
+      state.sceneCollision = { requested: true, effective: 'off', sourceId,
+        reason: error?.message || String(error), grid: gridSize, solidCellCount: 0 };
     }
   }
 

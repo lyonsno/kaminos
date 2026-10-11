@@ -101,6 +101,17 @@ function visibleInScene(object) {
   return true;
 }
 
+const solidAttributeIds = new WeakMap();
+let nextSolidAttributeId = 1;
+function solidAttributeRevision(attribute) {
+  if (!attribute) return 'none';
+  if (!solidAttributeIds.has(attribute)) solidAttributeIds.set(attribute, nextSolidAttributeId++);
+  const buffer = attribute.isInterleavedBufferAttribute ? attribute.data : attribute;
+  if (!solidAttributeIds.has(buffer)) solidAttributeIds.set(buffer, nextSolidAttributeId++);
+  return [solidAttributeIds.get(attribute), solidAttributeIds.get(buffer),
+    attribute.count, buffer.version ?? 0].join('/');
+}
+
 export function sceneSolidRevision(object, productTransform = {translate: [0, 0, 0], scale: 1}) {
   if (!object?.traverse || !object?.updateWorldMatrix) throw new Error('scene solid requires a scene object');
   object.updateWorldMatrix(true, true);
@@ -108,8 +119,8 @@ export function sceneSolidRevision(object, productTransform = {translate: [0, 0,
   object.traverse(mesh => {
     if (!mesh.isMesh || !visibleInScene(mesh)) return;
     const position = mesh.geometry?.getAttribute?.('position');
-    parts.push([mesh.geometry?.uuid, position?.count, position?.version ?? 0,
-      mesh.geometry?.getIndex?.()?.version ?? 0, ...Array.from(mesh.matrixWorld?.elements || [])].join(','));
+    parts.push([mesh.geometry?.uuid, solidAttributeRevision(position),
+      solidAttributeRevision(mesh.geometry?.getIndex?.()), ...Array.from(mesh.matrixWorld?.elements || [])].join(','));
   });
   if (!parts.length) throw new Error('scene solid object has no visible mesh triangles');
   return `${parts.join('|')}@${productTransform.translate.join(',')}/${productTransform.scale}`;
