@@ -12,6 +12,7 @@ Generate images from a text prompt with [FLUX.2 [klein] 4B](https://huggingface.
 
 - **The whole model in the browser.** The Qwen3-4B text encoder (the 27 layers whose hidden states the model reads), the 4-step rectified-flow transformer and the VAE decoder all run as WGSL compute shaders.
 - **A 3.2 GB download, cached.** Weights are int4 (groups of 128, weight-only), packed per block, downloaded as gzip copies that the page inflates, and kept in the browser's Cache API after the first visit. The 0.8 GB token-embedding table is never downloaded whole: the page fetches only the rows a prompt uses, with HTTP range requests.
+- **Pick your jank level.** Mint is the int4 model (3.2 GB). Weathered uses a 3-bit transformer and looks about the same (3.0 GB). Off the Rails uses a 2-bit transformer: blurry, melted and still recognizable (2.5 GB). The levels share the text encoder and image decoder, so switching after the first download fetches only the other transformer.
 - **Room for the application to keep rendering.** Model work is submitted as inference-kit command duties sized to measured GPU throughput, so a renderer on the same device keeps its frame rate during generation. Generation can be paused, resumed and stopped between duties.
 - **Same output either way.** A generation that shares the GPU produces the same pixels as one that runs without yielding, and on a given machine and browser the same seed and prompt reproduce the same image.
 
