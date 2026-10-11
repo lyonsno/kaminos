@@ -16,9 +16,10 @@ import {validateGenerationInputs} from './generation-inputs.js';
 import {generationFields,validateGenerationResult,persistGenerationPhase,persistGenerationAsset} from './sparse-generation-witness-checks.js';
 import {startProcessMemory} from './process-memory.mjs';
 import {memoryBudgetBytes,admitGenerationGpuBudget} from './generation-memory-policy.js';
+import {validateDecoderActivationStorage} from './slat-decoder-witness-checks.js';
 
 const { values } = parseArgs({ options: { ...Object.fromEntries(
-  ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture', 'sampler-fixture', 'trajectory-fixture', 'memory-python', 'gpu-buffer-budget-mib', 'process-memory-budget-mib'].map(name => [name, { type: 'string' }])),
+  ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture', 'sampler-fixture', 'trajectory-fixture', 'memory-python', 'gpu-buffer-budget-mib', 'process-memory-budget-mib','decoder-activation-storage'].map(name => [name, { type: 'string' }])),
   'fields-only': { type: 'boolean', default: false },
   'mesh-output': { type: 'boolean', default: false } } });
 for (const name of ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver']) {
@@ -92,6 +93,11 @@ try {
   if (values['sampler-fixture'] && !isSampler) throw new Error('--sampler-fixture requires sampler witness');
   if (values['trajectory-fixture'] && witness !== 'sampler-full') throw new Error('--trajectory-fixture requires sampler-full witness');
   if (values['mesh-output'] && witness !== 'slat-decoder') throw Error('--mesh-output requires the learned shape decoder');
+  if(values['decoder-activation-storage']!==undefined){
+    if(!['generation','slat-decoder'].includes(witness)||!['f32','f16'].includes(values['decoder-activation-storage']))
+      throw Error('--decoder-activation-storage requires f32 or f16 on generation or slat-decoder');
+    report.requestedDecoderActivationStorage=values['decoder-activation-storage'];
+  }
   if (isSampler) {
     if (!values['sampler-fixture']) throw new Error('--sampler-fixture is required for sampler witness');
     samplerFixture=await fs.realpath(values['sampler-fixture']); report.samplerFixtureRoot=samplerFixture;
@@ -297,7 +303,7 @@ try {
   report.phase = `native-${witness}-execution`; await persist();
   const result = await cdp.call('Runtime.evaluate', { expression: `(async () => {
     const { ${witness==='generation' ? 'runGenerationWitness' : isSampler ? 'runSparseSamplerWitness' : witness === 'slat-convolution' ? 'runSLatConvolutionWitness' : witness === 'slat-projection' ? 'runSLatProjectionWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'} } = await import('/models/trellis2/sparse-${isSampler?'sampler':witness}-witness.js');
-    const result = await ${witness==='generation' ? 'runGenerationWitness' : isSampler ? 'runSparseSamplerWitness' : witness === 'slat-convolution' ? 'runSLatConvolutionWitness' : witness === 'slat-projection' ? 'runSLatProjectionWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${witness==='generation'?', '+JSON.stringify({memoryMonitor:true,assetMode:values['fields-only']?'retained-fields-only':'raw-glb',gpuBufferBudgetBytes}):isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : witness === 'slat-decoder' ? `, {meshOutput:${JSON.stringify(values['mesh-output'])}}` : ''});
+    const result = await ${witness==='generation' ? 'runGenerationWitness' : isSampler ? 'runSparseSamplerWitness' : witness === 'slat-convolution' ? 'runSLatConvolutionWitness' : witness === 'slat-projection' ? 'runSLatProjectionWitness' : witness === 'slat-decoder' ? 'runSLatDecoderWitness' : witness === 'slat' ? 'runSparseSLatWitness' : witness === 'coordinates' ? 'runSparseCoordinatesWitness' : witness === 'decoder' ? 'runSparseDecoderWitness' : witness === 'flow' ? 'runSparseFlowWitness' : witness === 'block' ? 'runSparseBlockWitness' : 'runSparsePrefixWitness'}(${JSON.stringify(report.fixtureSha256)}${witness==='generation'?', '+JSON.stringify({memoryMonitor:true,assetMode:values['fields-only']?'retained-fields-only':'raw-glb',gpuBufferBudgetBytes,decoderActivationStorage:values['decoder-activation-storage']}):isSampler ? `, ${JSON.stringify(report.samplerFixtureSha256)}, ${JSON.stringify(report.trajectoryFixtureSha256)}` : witness === 'block' ? `, ${JSON.stringify(report.prefixFixtureSha256)}, ${JSON.stringify(report.nextBlockFixtureSha256)}` : witness === 'slat-decoder' ? ', '+JSON.stringify({meshOutput:values['mesh-output'],activationStorage:values['decoder-activation-storage']}) : ''});
     const saved = await fetch('/witness-result', { method: 'POST', body: JSON.stringify(result) });
     if (!saved.ok) throw new Error('browser result was not durably saved');
     return { url: location.href, receipt: await saved.json() };
@@ -308,6 +314,9 @@ try {
   value.result = admitSparseWitnessResult(report, value.receipt);
   if (value.url !== report.requestedUrl) throw new Error('effective browser URL differs from requested route');
   if (value.result.status !== 'succeeded') throw new Error(value.result.error?.message || 'browser witness failed');
+  if(values['decoder-activation-storage']!==undefined)
+    validateDecoderActivationStorage(value.result,Object.fromEntries((witness==='generation'?['shape','texture']:[slatDecoderPlan.mode])
+      .map(role=>[role,values['decoder-activation-storage']])));
   if (report.serverErrors?.length) throw new Error(report.serverErrors.join('\n'));
   const requiredOutputs = generationManifest ? [...generationFields(generationManifest)] : convolutionPlan ? ['neighbors','convolution'] : projectionPlan ? ['f32','f16'] : slatDecoderPlan ? Object.keys(slatDecoderObservationShapes(slatDecoderManifest)) : coordinatePlan ? ['coordinates'] : isSampler ? [...SAMPLER_OBSERVATIONS] : decoderPlan ? Object.keys(decoderObservationShapes(decoderPlan)) : ['projected', 'modulation'];
   const observedOutputs={...value.result.outputs};

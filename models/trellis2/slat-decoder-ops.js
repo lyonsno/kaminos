@@ -1,11 +1,17 @@
-// Model-owned sparse decoder kernels. F16 values use F32 physical storage,
-// with explicit IEEE-half rounding at source operation boundaries. This is
-// not the occupancy decoder's F32 arithmetic and not a shared-kit extension.
+// Model-owned sparse decoder kernels. Intermediate storage can use native
+// half while arithmetic and source rounding boundaries remain explicit F32.
 import { WEBGPU_BUFFER_USAGE as U } from '../../webgpu-inference-kit/src/core.js';
 const round = 'fn round_f16(v:f32)->f32{return unpack2x16float(pack2x16float(vec2<f32>(v,0.0))).x;}';
 const index = 'let index=gid.x+gid.y*grid.x*256u;';
 const entry = '@compute @workgroup_size(256) fn main(@builtin(global_invocation_id) gid:vec3<u32>,@builtin(num_workgroups) grid:vec3<u32>)';
 const binding = (i, name, type = 'f32', write = false) => `@group(0) @binding(${i}) var<storage,${write ? 'read_write' : 'read'}> ${name}:array<${type}>;`;
+const featureType=(storage,name)=>storage[name]??'f32';
+const featureRead=(name,offset,storage)=>featureType(storage,name)==='f16'?`f32(${name}[${offset}])`:`${name}[${offset}]`;
+const featureWrite=(value,name,storage)=>featureType(storage,name)==='f16'?`f16(${value})`:value;
+const featureEnable=storage=>{
+  if(Object.values(storage).some(type=>!['f32','f16'].includes(type)))throw TypeError('f32 or f16 activation storage required');
+  return Object.values(storage).includes('f16')?'enable f16;\n':'';
+};
 
 export function decoderDispatch(groups, limit = 65535) {
   if (!Number.isSafeInteger(groups) || groups < 1 || !Number.isSafeInteger(limit) || limit < 1) throw RangeError('positive dispatch geometry required');
@@ -14,9 +20,9 @@ export function decoderDispatch(groups, limit = 65535) {
   return [x, y, 1];
 }
 
-export function slatDecoderLinearShader(rows, ci, co, half = true) {
-  return `${round}
-${binding(0, 'input')}${binding(1, 'weight')}${binding(2, 'bias')}${binding(3, 'output', 'f32', true)}
+export function slatDecoderLinearShader(rows, ci, co, half = true, storage = {}) {
+  return `${featureEnable(storage)}${round}
+${binding(0, 'input',featureType(storage,'input'))}${binding(1, 'weight')}${binding(2, 'bias')}${binding(3, 'output', featureType(storage,'output'), true)}
 var<workgroup> tile_a:array<f32,256>;var<workgroup> tile_b:array<f32,256>;
 @compute @workgroup_size(16,16)
 fn main(@builtin(local_invocation_id) lid:vec3<u32>,@builtin(workgroup_id) wid:vec3<u32>,@builtin(num_workgroups) grid:vec3<u32>){
@@ -24,18 +30,18 @@ fn main(@builtin(local_invocation_id) lid:vec3<u32>,@builtin(workgroup_id) wid:v
  let col=(tile%${Math.ceil(co / 16)}u)*16u+lid.x;var sum=0.0;
  for(var base=0u;base<${ci}u;base+=16u){
   var a=0.0;var b=0.0;
-  if(row<${rows}u&&base+lid.x<${ci}u){a=input[row*${ci}u+base+lid.x];}
+  if(row<${rows}u&&base+lid.x<${ci}u){a=${featureRead('input',`row*${ci}u+base+lid.x`,storage)};}
   if(col<${co}u&&base+lid.y<${ci}u){b=weight[col*${ci}u+base+lid.y];}
   tile_a[lid.y*16u+lid.x]=a;tile_b[lid.y*16u+lid.x]=b;workgroupBarrier();
   for(var k=0u;k<16u;k++){sum+=tile_a[lid.y*16u+k]*tile_b[k*16u+lid.x];}workgroupBarrier();
  }
- if(row<${rows}u&&col<${co}u){output[row*${co}u+col]=${half ? 'round_f16(sum+bias[col])' : 'sum+bias[col]'};}
+ if(row<${rows}u&&col<${co}u){output[row*${co}u+col]=${featureWrite(half ? 'round_f16(sum+bias[col])' : 'sum+bias[col]','output',storage)};}
 }`;
 }
 
-export function slatDecoderSparseConvShader(rows, ci, co) {
-  return `${round}
-${binding(0, 'input')}${binding(1, 'neighbors', 'i32')}${binding(2, 'weight')}${binding(3, 'bias')}${binding(4, 'output', 'f32', true)}
+export function slatDecoderSparseConvShader(rows, ci, co, storage = {}) {
+  return `${featureEnable(storage)}${round}
+${binding(0, 'input',featureType(storage,'input'))}${binding(1, 'neighbors', 'i32')}${binding(2, 'weight')}${binding(3, 'bias')}${binding(4, 'output', featureType(storage,'output'), true)}
 var<workgroup> tile_a:array<f32,256>;var<workgroup> tile_b:array<f32,256>;
 @compute @workgroup_size(16,16)
 fn main(@builtin(local_invocation_id) lid:vec3<u32>,@builtin(workgroup_id) wid:vec3<u32>,@builtin(num_workgroups) grid:vec3<u32>){
@@ -47,41 +53,41 @@ fn main(@builtin(local_invocation_id) lid:vec3<u32>,@builtin(workgroup_id) wid:v
   var source=-1;if(row<${rows}u){source=neighbors[row*27u+offset];}var sum=0.0;
   for(var base=0u;base<${ci}u;base+=16u){
    var a=0.0;var b=0.0;
-   if(source>=0&&base+lid.x<${ci}u){a=input[u32(source)*${ci}u+base+lid.x];}
+   if(source>=0&&base+lid.x<${ci}u){a=${featureRead('input',`u32(source)*${ci}u+base+lid.x`,storage)};}
    if(col<${co}u&&base+lid.y<${ci}u){b=weight[(col*27u+offset)*${ci}u+base+lid.y];}
    tile_a[lid.y*16u+lid.x]=a;tile_b[lid.y*16u+lid.x]=b;workgroupBarrier();
    for(var k=0u;k<16u;k++){sum+=tile_a[lid.y*16u+k]*tile_b[k*16u+lid.x];}workgroupBarrier();
   }
   if(source>=0){accumulated=round_f16(accumulated+round_f16(sum));}
  }
- if(row<${rows}u&&col<${co}u){output[row*${co}u+col]=round_f16(accumulated+bias[col]);}
+ if(row<${rows}u&&col<${co}u){output[row*${co}u+col]=${featureWrite('round_f16(accumulated+bias[col])','output',storage)};}
 }`;
 }
 
-export function slatDecoderNormShader(rows, channels, affine = true, half = true, eps = 1e-6) {
+export function slatDecoderNormShader(rows, channels, affine = true, half = true, eps = 1e-6, storage = {}) {
   const end = affine ? 3 : 1;
   // MLX0.32.3 layer_norm.metal casts normalized input to T before affine;
   // T is half for the decoder torso. F32 endpoints keep their F32 value.
-  return `${round}${binding(0, 'input')}${affine ? binding(1, 'weight') + binding(2, 'bias') : ''}${binding(end, 'output', 'f32', true)}
+  return `${featureEnable(storage)}${round}${binding(0, 'input',featureType(storage,'input'))}${affine ? binding(1, 'weight') + binding(2, 'bias') : ''}${binding(end, 'output', featureType(storage,'output'), true)}
 var<workgroup> partial:array<f32,256>;
 @compute @workgroup_size(256)
 fn main(@builtin(local_invocation_index) lane:u32,@builtin(workgroup_id) wid:vec3<u32>,@builtin(num_workgroups) grid:vec3<u32>){
  let row=wid.x+wid.y*grid.x;if(row>=${rows}u){return;}var sum=0.0;
- for(var c=lane;c<${channels}u;c+=256u){sum+=input[row*${channels}u+c];}partial[lane]=sum;workgroupBarrier();
+ for(var c=lane;c<${channels}u;c+=256u){sum+=${featureRead('input',`row*${channels}u+c`,storage)};}partial[lane]=sum;workgroupBarrier();
  for(var stride=128u;stride>0u;stride/=2u){if(lane<stride){partial[lane]+=partial[lane+stride];}workgroupBarrier();}
  let mean=partial[0]/${channels}.0;workgroupBarrier();sum=0.0;
- for(var c=lane;c<${channels}u;c+=256u){let d=input[row*${channels}u+c]-mean;sum+=d*d;}partial[lane]=sum;workgroupBarrier();
+ for(var c=lane;c<${channels}u;c+=256u){let d=${featureRead('input',`row*${channels}u+c`,storage)}-mean;sum+=d*d;}partial[lane]=sum;workgroupBarrier();
  for(var stride=128u;stride>0u;stride/=2u){if(lane<stride){partial[lane]+=partial[lane+stride];}workgroupBarrier();}
  let inverse=inverseSqrt(partial[0]/${channels}.0+${eps});
- for(var c=lane;c<${channels}u;c+=256u){var value=(input[row*${channels}u+c]-mean)*inverse;
-  ${affine ? `value=${half ? 'round_f16(value)' : 'value'}*weight[c]+bias[c];` : ''}output[row*${channels}u+c]=${half ? 'round_f16(value)' : 'value'};}
+ for(var c=lane;c<${channels}u;c+=256u){var value=(${featureRead('input',`row*${channels}u+c`,storage)}-mean)*inverse;
+  ${affine ? `value=${half ? 'round_f16(value)' : 'value'}*weight[c]+bias[c];` : ''}output[row*${channels}u+c]=${featureWrite(half ? 'round_f16(value)' : 'value','output',storage)};}
 }`;
 }
 
-export const slatDecoderSiluShader = (count, inPlace = false) => `${inPlace ? binding(0, 'table') + binding(1, 'input', 'f32', true) : binding(0, 'input') + binding(1, 'table') + binding(2, 'output', 'f32', true)}
-${entry}{${index}if(index<${count}u){let bits=pack2x16float(vec2<f32>(input[index],0.0))&65535u;${inPlace ? 'input' : 'output'}[index]=table[bits];}}`;
-export const slatDecoderResidualShader = count => `${round}${binding(0, 'skip')}${binding(1, 'output', 'f32', true)}
-${entry}{${index}if(index<${count}u){output[index]=round_f16(skip[index]+output[index]);}}`;
+export const slatDecoderSiluShader = (count, inPlace = false, storage = {}) => `${featureEnable(storage)}${inPlace ? binding(0, 'table') + binding(1, 'input', featureType(storage,'input'), true) : binding(0, 'input',featureType(storage,'input')) + binding(1, 'table') + binding(2, 'output', featureType(storage,'output'), true)}
+${entry}{${index}if(index<${count}u){let bits=pack2x16float(vec2<f32>(${featureRead('input','index',storage)},0.0))&65535u;${inPlace ? 'input' : 'output'}[index]=${featureWrite('table[bits]',inPlace?'input':'output',storage)};}}`;
+export const slatDecoderResidualShader = (count, storage = {}) => `${featureEnable(storage)}${round}${binding(0, 'skip',featureType(storage,'skip'))}${binding(1, 'output', featureType(storage,'output'), true)}
+${entry}{${index}if(index<${count}u){output[index]=${featureWrite(`round_f16(${featureRead('skip','index',storage)}+${featureRead('output','index',storage)})`,'output',storage)};}}`;
 
 const hashKey = resolution => `fn key_for(p:vec3<i32>)->u32{return 1u+(u32(p.x)*${resolution}u+u32(p.y))*${resolution}u+u32(p.z);}`;
 export function slatDecoderHashShaders(rows, resolution, capacity) {
@@ -128,18 +134,18 @@ fn main(@builtin(local_invocation_index) lane:u32,@builtin(workgroup_id) wid:vec
 export const slatDecoderScanAddShader = count => `${binding(0, 'parent', 'u32')}${binding(1, 'prefix', 'u32', true)}
 ${entry}{${index}if(index<${count}u){prefix[index]+=parent[index/256u];}}`;
 
-export function slatDecoderScatterShader(rows, ci, co) {
+export function slatDecoderScatterShader(rows, ci, co, storage = {}) {
   const perChild = ci / 8, repeat = co / perChild;
-  return `${binding(0, 'coordinates', 'i32')}${binding(1, 'parent')}${binding(2, 'convolved')}${binding(3, 'logits')}${binding(4, 'prefix', 'u32')}
-${binding(5, 'new_coordinates', 'i32', true)}${binding(6, 'features', 'f32', true)}${binding(7, 'skip', 'f32', true)}
+  return `${featureEnable(storage)}${binding(0, 'coordinates', 'i32')}${binding(1, 'parent',featureType(storage,'parent'))}${binding(2, 'convolved',featureType(storage,'convolved'))}${binding(3, 'logits')}${binding(4, 'prefix', 'u32')}
+${binding(5, 'new_coordinates', 'i32', true)}${binding(6, 'features', featureType(storage,'features'), true)}${binding(7, 'skip', featureType(storage,'skip'), true)}
 ${entry}{${index}if(index>=${rows * 8 * co}u){return;}let col=index%${co}u;let cell=index/${co}u;let child=cell%8u;let row=cell/8u;
  if(!(logits[row*8u+child]>0.0)){return;}var earlier=0u;for(var j=0u;j<child;j++){if(logits[row*8u+j]>0.0){earlier++;}}
  let destination=prefix[row]+earlier;
  if(col==0u){new_coordinates[destination*3u]=coordinates[row*3u]*2+i32(child%2u);
   new_coordinates[destination*3u+1u]=coordinates[row*3u+1u]*2+i32((child/2u)%2u);
   new_coordinates[destination*3u+2u]=coordinates[row*3u+2u]*2+i32(child/4u);}
- features[destination*${co}u+col]=convolved[(row*8u+child)*${co}u+col];
- skip[destination*${co}u+col]=parent[row*${ci}u+child*${perChild}u+col/${repeat}u];
+ features[destination*${co}u+col]=${featureWrite(featureRead('convolved',`(row*8u+child)*${co}u+col`,storage),'features',storage)};
+ skip[destination*${co}u+col]=${featureWrite(featureRead('parent',`row*${ci}u+child*${perChild}u+col/${repeat}u`,storage),'skip',storage)};
 }`;
 }
 
@@ -150,7 +156,8 @@ export function createSLatDecoderKernelOps(runtime) {
   let sequence = 0, metadataReadbackBytes = 0, convolutionsExecuted = 0;
   const allocate = (name, shape, dtype = 'f32') => {
     const count = shape.reduce((a, b) => a * b, 1);
-    if (!Number.isSafeInteger(count) || count < 1 || count > 0xffffffff || count * 4 > limit) throw RangeError('complete decoder tensor exceeds effective device binding capacity');
+    if(dtype==='f16'&&!runtime.device?.features?.has('shader-f16'))throw Error('shader-f16 device feature required for half activation storage');
+    if (!Number.isSafeInteger(count) || count < 1 || count > 0xffffffff || count * (dtype==='f16'?2:4) > limit) throw RangeError('complete decoder tensor exceeds effective device binding capacity');
     const t = runtime.createTensor({ name: `trellis.slat-decoder.${name}.${sequence++}`, shape, dtype, usage: U.storage | U.copyDst | U.copySrc });resources.add(t);return t;
   };
   const release = t => { if (resources.delete(t)) t.buffer?.destroy?.(); };
@@ -183,19 +190,19 @@ export function createSLatDecoderKernelOps(runtime) {
     },
     linear(input, weight, bias, output, half, invocation) {
       const [rows, ci] = input.shape, co = output.shape[1];
-      return dispatch('decoder-linear', slatDecoderLinearShader(rows, ci, co, half), [input, weight, bias, output], Math.ceil(rows / 16) * Math.ceil(co / 16), invocation);
+      return dispatch('decoder-linear', slatDecoderLinearShader(rows, ci, co, half,{input:input.dtype,output:output.dtype}), [input, weight, bias, output], Math.ceil(rows / 16) * Math.ceil(co / 16), invocation);
     },
     async conv(input, neighbors, weight, bias, output, invocation) {
       const [rows, ci] = input.shape, co = output.shape[1];
-      await dispatch('decoder-sparse-conv', slatDecoderSparseConvShader(rows, ci, co), [input, neighbors, weight, bias, output], Math.ceil(rows / 16) * Math.ceil(co / 16), invocation);
+      await dispatch('decoder-sparse-conv', slatDecoderSparseConvShader(rows, ci, co,{input:input.dtype,output:output.dtype}), [input, neighbors, weight, bias, output], Math.ceil(rows / 16) * Math.ceil(co / 16), invocation);
       convolutionsExecuted++;
     },
     norm(input, weight, bias, output, half, eps, invocation) {
       const [rows, channels] = input.shape, affine = !!weight;
-      return dispatch('decoder-layernorm', slatDecoderNormShader(rows, channels, affine, half, eps), affine ? [input, weight, bias, output] : [input, output], rows, invocation);
+      return dispatch('decoder-layernorm', slatDecoderNormShader(rows, channels, affine, half, eps,{input:input.dtype,output:output.dtype}), affine ? [input, weight, bias, output] : [input, output], rows, invocation);
     },
-    silu(input, table, output, invocation) { const same = input === output;return dispatch('decoder-silu', slatDecoderSiluShader(input.byteLength / 4, same), same ? [table, input] : [input, table, output], Math.ceil(input.byteLength / 1024), invocation); },
-    residual(skip, output, invocation) { return dispatch('decoder-residual', slatDecoderResidualShader(skip.byteLength / 4), [skip, output], Math.ceil(skip.byteLength / 1024), invocation); },
+    silu(input, table, output, invocation) { const same = input === output,count=input.shape.reduce((a,b)=>a*b,1);return dispatch('decoder-silu', slatDecoderSiluShader(count, same,{input:input.dtype,output:output.dtype}), same ? [table, input] : [input, table, output], Math.ceil(count / 256), invocation); },
+    residual(skip, output, invocation) { const count=skip.shape.reduce((a,b)=>a*b,1);return dispatch('decoder-residual', slatDecoderResidualShader(count,{skip:skip.dtype,output:output.dtype}), [skip, output], Math.ceil(count / 256), invocation); },
     async subdivision(logits, invocation) {
       const rows = logits.shape[0], counts = allocate('child-counts', [rows], 'u32'), levels = [];
       await dispatch('decoder-child-counts', slatDecoderChildCountsShader(rows), [logits, counts], Math.ceil(rows / 256), invocation);
@@ -217,7 +224,7 @@ export function createSLatDecoderKernelOps(runtime) {
     },
     scatter(coordinates, parent, convolved, logits, prefix, outputCoordinates, output, skip, invocation) {
       const [rows, ci] = parent.shape, co = output.shape[1];
-      return dispatch('decoder-subdivision-scatter', slatDecoderScatterShader(rows, ci, co),
+      return dispatch('decoder-subdivision-scatter', slatDecoderScatterShader(rows, ci, co,{parent:parent.dtype,convolved:convolved.dtype,features:output.dtype,skip:skip.dtype}),
         [coordinates, parent, convolved, logits, prefix, outputCoordinates, output, skip], Math.ceil(rows * 8 * co / 256), invocation, 5);
     },
     dispose() { for (const t of [...resources]) release(t); }
