@@ -10,6 +10,20 @@ export function validateEpisode(state, source, size) {
   if(size!==undefined&&(run.supermat?.size!==size||!run.output.materialSize.every(value=>value===size)))throw Error('Effective material resolution differs from selected resolution');
 }
 
+export function validateContrastArms(arms) {
+  const original=arms?.original?.presentation;
+  if(!original)throw Error('Missing original contrast arm');
+  for(const mode of ['original','manual','highlight']){
+    const current=arms[mode]?.presentation,settings=current?.contrast?.settings,gains=current?.contrast?.gains;
+    if(current?.mode!=='materials'||current.map!=='surface'||settings?.mode!==mode||settings.roughness!==.5||settings.metallic!==.5)throw Error('Stale or wrong contrast arm');
+    if(!gains||!Object.values(gains).every(value=>Number.isFinite(value)&&value>=0&&value<=1))throw Error('Missing effective contrast gains');
+    for(const key of ['light','camera','environment','gi'])if(JSON.stringify(current[key])!==JSON.stringify(original[key]))throw Error('Contrast arms changed illumination or camera');
+    if(current.physicalbaseline?.exposure!==original.physicalbaseline?.exposure||
+      current.physicalbaseline?.activeMaterial?.mapUUID!==original.physicalbaseline?.activeMaterial?.mapUUID)throw Error('Contrast changed exposure or albedo');
+    if(Object.values(gains).some(value=>value>0)&&current.physicalbaseline?.activeMaterial?.roughnessMapUUID===original.physicalbaseline?.activeMaterial?.roughnessMapUUID)throw Error('Applied contrast still uses raw maps');
+  }
+}
+
 export async function captureSurfaceFrame(evaluate, capture) {
   const selector='.stage .title, .stage .stage-foot, .stage .carousel, .stage .sun';
   const previous=await evaluate(`Array.from(document.querySelectorAll(${JSON.stringify(selector)}),element=>{const prior=element.style.visibility;element.style.visibility='hidden';return prior;})`);

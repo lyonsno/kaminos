@@ -53,11 +53,18 @@ function syncControls(){
   $('compare').disabled=!surface;$('compare').classList.toggle('selected',!!viewer?.comparison);
   for(const id of ['environment','environment-rotation','environment-intensity','direct-intensity'])$(id).disabled=!viewer;
   for(const id of tuningFields)$(id).disabled=!surface;
+  $('gi-view').disabled=!surface;
+  for(const id of ['contrast-mode','roughness-strength','metallic-strength'])$(id).disabled=!viewer?.maps;
   for(const option of $('map').options??[])option.disabled=!viewer?.maps&&!['surface','normals'].includes(option.value);
   if(viewer){
     const settings=viewer.getTuning();
     for(const id of tuningFields)if(typeof settings[id]==='boolean')$(id).checked=settings[id];else $(id).value=settings[id];
     $('gi').checked=viewer.useGI;$('glow').checked=!!viewer.glow;
+    $('gi-view').value=viewer.getDiagnostic();
+    const contrast=viewer.getMaterialContrast();$('contrast-mode').value=contrast.mode;
+    for(const name of ['roughness','metallic']){$(`${name}-strength`).value=contrast[name];$(`${name}-strength-value`).textContent=contrast[name].toFixed(2);}
+    const correction=viewer.primary.presentation().contrast;
+    $('contrast-readout').textContent=correction.analysis?`Highlight evidence ${(100*correction.analysis.highlightEvidence).toFixed(0)}% | Applied roughness ${(100*correction.gains.roughness).toFixed(0)}%, metallic ${(100*correction.gains.metallic).toFixed(0)}% | Raw ranges R ${correction.analysis.roughness.low}-${correction.analysis.roughness.high}, M ${correction.analysis.metallic.low}-${correction.analysis.metallic.high}`:'';
     const lighting=viewer.getLighting();
     $('environment').value=viewer.environment??'studio';
     $('environment-rotation').value=lighting.rotation;$('environment-intensity').value=lighting.intensity;$('direct-intensity').value=lighting.direct;
@@ -204,6 +211,10 @@ $('run').onclick=infer;
 $('map').onchange=()=>{if(viewer){const map=$('map').value;view('materials');viewer.map=map;$('map').value=map;}};
 $('gi').onchange=()=>{viewer.useGI=$('gi').checked;};
 $('glow').onchange=()=>{viewer.glow=$('glow').checked;};
+$('gi-view').onchange=()=>{viewer.setDiagnostic($('gi-view').value);viewer.useGI=true;$('gi').checked=true;};
+function setMaterialContrast(value){viewer.setMaterialContrast(value);syncControls();return viewer.primary.presentation().contrast;}
+$('contrast-mode').onchange=()=>setMaterialContrast({mode:$('contrast-mode').value});
+for(const name of ['roughness','metallic'])$(`${name}-strength`).oninput=()=>setMaterialContrast({[name]:Number($(`${name}-strength`).value)});
 $('reset').onclick=()=>{viewer.reset();syncControls();};
 for(const id of tuningFields)$(id).onchange=()=>{
   try{
@@ -262,7 +273,8 @@ $('environment').onchange=()=>changeEnvironment($('environment').value);
 for(const [id,key]of [['environment-rotation','rotation'],['environment-intensity','intensity'],['direct-intensity','direct']])$(id).oninput=()=>{
   try{viewer.setLighting({[key]:Number($(id).value)});$('preset-error').textContent='';}catch(error){$('preset-error').textContent=error.message;}
 };
-window.__materialPhotoActions={infer,sample,view,compare,changeEnvironment,exportPreset,importPreset,setLightPosition,presentation:()=>viewer?.presentation()??null,async pixels(presentedFrame){
+window.__materialPhotoActions={infer,sample,view,compare,changeEnvironment,exportPreset,importPreset,setLightPosition,setMaterialContrast,
+  materialEvidence:()=>({image,output:results.snapshot().materials}),presentation:()=>viewer?.presentation()??null,async pixels(presentedFrame){
   // Inspect the browser's presented canvas screenshot, not a discarded WebGPU drawing buffer.
   const response=await fetch(presentedFrame),bitmap=await createImageBitmap(await response.blob());
   const canvas=new OffscreenCanvas(bitmap.width,bitmap.height),context=canvas.getContext('2d');

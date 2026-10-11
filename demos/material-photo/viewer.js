@@ -4,6 +4,7 @@ import { createSceneGI } from '../../scene-gi.mjs';
 import { buildPhotoSurface } from './photo-surface.js';
 import { texturePixels } from './photo-contracts.js';
 import { inferEmission, emissionTexturePixels } from './emission.js';
+import { DEFAULT_CONTRAST, validateContrast, analyzeMaterialContrast, adjustMaterialMaps } from './material-contrast.js';
 
 const GI_KEYS = ['gain','radius','thickness','slices','steps','denoise'];
 const ESTIMATOR_KEYS = ['expFactor','screenSpaceSampling','linearThickness','backfaceLighting','depthPhi','normalPhi','lumaPhi'];
@@ -143,6 +144,9 @@ export class MaterialPhotoViewer {
 
   setMaterials(result) {
     if (!this.mesh) throw new Error('Materials require a depth surface');
+    this.releaseMaterialTextures();
+    this.rawMaterialMaps=result.maps;
+    this.contrastAnalysis=analyzeMaterialContrast(this.image,result.maps);
     this.maps = {};
     for (const name of ['albedo','roughness','metallic','orm']) this.maps[name] = this.texture(result.maps[name], name);
     this.physicalMaterial.map = this.maps.albedo;
@@ -159,8 +163,42 @@ export class MaterialPhotoViewer {
     this.emissionMap.needsUpdate = true;
     this.textures.push(this.emissionMap);
     this.maps.emission = this.emissionMap;
+    this.rawTextures={...this.maps};
     this.physicalMaterial.emissiveMap = this.emissionMap;
     this.physicalMaterial.needsUpdate = true;
+    this.setMaterialContrast(this.getMaterialContrast());
+  }
+
+  releaseTextures(textures) {
+    const owned=new Set(textures.filter(Boolean));
+    for(const texture of owned)texture.dispose();
+    this.textures=this.textures.filter(texture=>!owned.has(texture));
+  }
+  releaseMaterialTextures() {
+    this.releaseTextures([...Object.values(this.rawTextures??{}),...(this.derivedTextures??[])]);
+    this.rawTextures=null;this.derivedTextures=[];
+  }
+  getMaterialContrast(){return {...DEFAULT_CONTRAST,...this.contrastSettings};}
+  setMaterialContrast(value) {
+    const next=validateContrast({...this.getMaterialContrast(),...value});
+    if(this.rawMaterialMaps){
+      const corrected=adjustMaterialMaps(this.rawMaterialMaps,this.contrastAnalysis,next);
+      const derived=[];
+      const maps={...this.rawTextures};
+      if(corrected.maps!==this.rawMaterialMaps)for(const name of ['orm','roughness','metallic']){
+        maps[name]=this.texture(corrected.maps[name],name);derived.push(maps[name]);
+      }
+      this.releaseTextures(this.derivedTextures??[]);this.derivedTextures=derived;this.maps=maps;
+      this.physicalMaterial.roughnessMap=this.physicalMaterial.metalnessMap=maps.orm;
+      this.physicalMaterial.needsUpdate=true;this.contrastGains=corrected.gains;
+    }
+    this.contrastSettings=next;
+  }
+  getDiagnostic(){return this.diagnostic??'scene';}
+  setDiagnostic(view) {
+    if(!['scene','ao','incoming','gi'].includes(view))throw Error('Invalid GI diagnostic view');
+    this.gi.setSettings({mode:'combined',view,...pick(this.getTuning(),GI_KEYS)});
+    this.diagnostic=view;
   }
 
   getTuning() { return {...DEFAULT_TUNING,...this.settings}; }
@@ -181,7 +219,7 @@ export class MaterialPhotoViewer {
   }
   setTuning(value) {
     const next = validateTuning({...this.getTuning(),...value});
-    this.gi.setSettings({mode:'combined',view:'scene',...pick(next,GI_KEYS)});
+    this.gi.setSettings({mode:'combined',view:this.getDiagnostic(),...pick(next,GI_KEYS)});
     this.gi.setEstimatorSettings(pick(next,ESTIMATOR_KEYS));
     this.aoStrength.value = next.aoStrength;
     this.settings = next;
@@ -210,7 +248,7 @@ export class MaterialPhotoViewer {
   }
   exportPreset() {
     return {schema:'kaminos.material-photo-preset.v1',settings:this.getTuning(),light:this.getLightHandle(),
-      camera:{orbit:this.orbit.toArray()},gi:this.useGI,glow:this.glow??false,lighting:this.getLighting()};
+      camera:{orbit:this.orbit.toArray()},gi:this.useGI,glow:this.glow??false,lighting:this.getLighting(),contrast:this.getMaterialContrast(),diagnostic:this.getDiagnostic()};
   }
   presentation() {
     const materialState=material=>material?{uuid:material.uuid,roughness:material.roughness,metalness:material.metalness,
@@ -224,7 +262,8 @@ export class MaterialPhotoViewer {
       physicalbaseline:{geometryId:this.mesh?.geometry.uuid??null,exposure:this.renderer.toneMappingExposure,relit:materialState(this.relitMaterial),materials:materialState(this.physicalMaterial),
         activeMaterial:materialState(this.mesh?.material),environmentIntensity:this.scene.environmentIntensity},
       environment:{...this.environmentIdentity,...this.getLighting(),textureUUID:this.scene.environment?.uuid??null},
-      glow:this.glow,gi:{enabled:this.useGI,settings:this.getTuning(),debugState:this.gi.debugState()}};
+      contrast:{settings:this.getMaterialContrast(),analysis:this.contrastAnalysis??null,gains:this.contrastGains??null},
+      glow:this.glow,gi:{enabled:this.useGI,view:this.getDiagnostic(),settings:this.getTuning(),debugState:this.gi.debugState()}};
   }
   validatePreset(value) {
     if(value?.schema!=='kaminos.material-photo-preset.v1')throw new Error('Invalid preset schema');
@@ -232,15 +271,18 @@ export class MaterialPhotoViewer {
     if(!Array.isArray(orbit)||orbit.length!==2||!orbit.every(Number.isFinite)||Math.abs(orbit[0])>.5||Math.abs(orbit[1])>.35)throw new Error('Invalid preset camera orbit');
     if(typeof value.gi!=='boolean'||typeof value.glow!=='boolean')throw new Error('Invalid preset GI or glow');
     const lighting=validateLighting(value.lighting??this.getLighting());
-    return {tuning,light,orbit,lighting};
+    const contrast=validateContrast(value.contrast??DEFAULT_CONTRAST),diagnostic=value.diagnostic??'scene';
+    if(!['scene','ao','incoming','gi'].includes(diagnostic))throw Error('Invalid GI diagnostic view');
+    return {tuning,light,orbit,lighting,contrast,diagnostic};
   }
   applyPreset(value) {
-    const {tuning,light,orbit,lighting}=this.validatePreset(value);
+    const {tuning,light,orbit,lighting,contrast,diagnostic}=this.validatePreset(value);
     this.setTuning(tuning);
     this.setLighting(lighting);
     this.setLightHandle(light.x,light.y);
     this.orbit.fromArray(orbit);this.target.set(0,0);this.current.set(0,0);
     this.useGI=value.gi;this.glow=value.glow;
+    this.setMaterialContrast(contrast);this.setDiagnostic(diagnostic);
   }
   reset() { this.orbit?.set(0,0); this.target?.set(0,0); this.current?.set(0,0); this.setLight(); if (this.renderer) this.renderer.toneMappingExposure=1; }
   resize() {
@@ -275,6 +317,7 @@ export class MaterialPhotoViewer {
     for (const material of [this.original?.material,this.photoMaterial,this.relitMaterial,this.physicalMaterial,this.mapMaterial]) material?.dispose();
     for (const texture of this.textures??[]) texture.dispose();
     this.textures=[]; this.original=this.mesh=this.maps=this.surface=this.normalMap=this.emissionMap=this.emissionStats=this.image=null;
+    this.rawMaterialMaps=this.rawTextures=this.contrastAnalysis=this.contrastGains=null;this.derivedTextures=[];
     this.photoMaterial=this.relitMaterial=this.physicalMaterial=this.mapMaterial=null;
   }
   async dispose() {

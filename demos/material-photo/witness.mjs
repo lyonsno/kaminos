@@ -4,9 +4,9 @@ import { execFileSync, spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { createHash } from 'node:crypto';
 import { launchChrome, openPage } from '../../models/supermat/chrome-cdp.mjs';
-import { validateEpisode, captureSurfaceFrame, validateComparison } from './witness-checks.js';
+import { validateEpisode, captureSurfaceFrame, validateComparison, validateContrastArms } from './witness-checks.js';
 
-const {values}=parseArgs({options:Object.fromEntries(['repo-root','expected-commit','chrome','output','port','samples','sizes'].map(key=>[key,{type:'string'}]))});
+const {values}=parseArgs({options:{...Object.fromEntries(['repo-root','expected-commit','chrome','output','port','samples','sizes'].map(key=>[key,{type:'string'}])),contrast:{type:'boolean'}}});
 const output=path.resolve(values.output??'material-photo-witness');
 const report={status:'failed',phase:'arguments',requested:values,episodes:[],errors:[],command:process.argv};
 let browser,server;
@@ -63,6 +63,38 @@ try{
     baselinePreset??=await evaluate('window.__materialPhotoActions.exportPreset()');
     const settle=()=>evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     await settle();
+    if(values.contrast){
+      report.phase=`contrast-${key}`;await persist();
+      episode.rawEvidence={};
+      for(const name of ['image','albedo','roughness','metallic','orm','plane-albedo','plane-orm']){
+        const raw=await evaluate(`(()=>{const {image,output}=window.__materialPhotoActions.materialEvidence();const name=${JSON.stringify(name)};
+          const value=name==='image'?image:name.startsWith('plane-')?{width:output.width,height:output.height,data:output.planes[name.slice(6)]}:output.maps[name];
+          if(!value?.data)throw Error('Missing raw material evidence '+name);
+          const bytes=new Uint8Array(value.data.buffer,value.data.byteOffset,value.data.byteLength);let binary='';
+          for(let i=0;i<bytes.length;i+=4096)binary+=String.fromCharCode(...bytes.subarray(i,i+4096));
+          return {width:value.width,height:value.height,type:value.data.constructor.name,base64:btoa(binary)};})()`);
+        const bytes=Buffer.from(raw.base64,'base64'),file=path.join(output,`${key}-${name}.raw`);
+        await fs.writeFile(file,bytes);episode.rawEvidence[name]={width:raw.width,height:raw.height,type:raw.type,file,sha256:createHash('sha256').update(bytes).digest('hex')};
+      }
+      await evaluate("window.__materialPhotoActions.view('materials')");await settle();
+      episode.contrast={};
+      for(const mode of ['original','manual','highlight']){
+        const settings={mode,roughness:.5,metallic:.5};
+        await evaluate(`window.__materialPhotoActions.setMaterialContrast(${JSON.stringify(settings)})`);await settle();
+        const effective=await evaluate('window.__materialPhotoActions.presentation()');
+        if(JSON.stringify(effective.contrast.settings)!==JSON.stringify(settings))throw Error('Contrast silently replaced requested settings');
+        if(effective.mode!=='materials'||effective.map!=='surface')throw Error('Contrast captured the wrong presentation');
+        episode.contrast[mode]={presentation:effective,frame:await capture(`${key}-contrast-${mode}`)};
+        for(const role of ['roughness','metallic']){
+          await evaluate(`document.getElementById('map').value=${JSON.stringify(role)};document.getElementById('map').dispatchEvent(new Event('change'))`);await settle();
+          episode.contrast[mode][role]=await capture(`${key}-contrast-${mode}-${role}`);
+        }
+        await evaluate("window.__materialPhotoActions.view('materials')");
+      }
+      validateContrastArms(episode.contrast);
+      await evaluate("window.__materialPhotoActions.setMaterialContrast({mode:'original'});window.__materialPhotoActions.compare()");
+      await settle();await persist();
+    }
     episode.comparison=await evaluate('window.__materialPhotoActions.presentation().comparison');
     if(!episode.comparison.enabled)throw Error('Four-view comparison is not the default');
     validateComparison(episode.comparison.views);

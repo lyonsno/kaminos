@@ -54,6 +54,10 @@ export class MaterialPhotoViewer {
     this.layout();
   }
   setMaterials(output){this.primary.setMaterials(output);this.primary.available=true;delete this.primary.canvas.parentElement.dataset.pending;}
+  getMaterialContrast(){return this.primary.getMaterialContrast();}
+  setMaterialContrast(value){this.primary.setMaterialContrast(value);}
+  getDiagnostic(){return this.primary.getDiagnostic();}
+  setDiagnostic(value){for(const view of Object.values(this.views))view.setDiagnostic(value);}
   getTuning(){return this.primary.getTuning();}
   setTuning(value){for(const view of Object.values(this.views))view.setTuning(value);}
   getLighting(){return this.primary.getLighting();}

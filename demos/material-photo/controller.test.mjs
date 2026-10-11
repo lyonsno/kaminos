@@ -10,6 +10,7 @@ async function controller() {
     setPointerCapture(id) {this.captures.add(id);}, releasePointerCapture(id) {this.captures.delete(id);},hasPointerCapture(id){return this.captures.has(id);}, getBoundingClientRect: () => ({ left:0,top:0,width: 400, height: 400 }) });
   const ids=['status','preview','scene','stage-label','run','file','map','light','height','exposure','gi','reset','name','resolution','progress','elapsed','timings','identity',
     'view-prev','view-next','sun','glow','advanced','tuning','preset-export','preset-import','preset-file','preset-error','material-size','compare','light-ring','environment','environment-status','environment-rotation','environment-intensity','direct-intensity',
+    'gi-view','contrast-mode','roughness-strength','metallic-strength','roughness-strength-value','metallic-strength-value','contrast-readout',
     'gain','radius','thickness','slices','steps','denoise','aoStrength','expFactor','screenSpaceSampling','linearThickness','backfaceLighting','depthPhi','normalPhi','lumaPhi'];
   const elements = Object.fromEntries(ids.map(id => [id,node({})]));
   elements['material-size'].value='512';elements.environment.value='studio';
@@ -27,6 +28,12 @@ async function controller() {
   const session = { registerRoute: async () => route(), unregisterRoute() {}, async close() {} };
   const receipt = { schema: 'kaminos.webgpu-route-receipt.v0', status: 'succeeded', effectiveRouteId: 'moge.depth-normal.webgpu-local.v0' };
   class Viewer {
+    get primary(){return this;}
+    getDiagnostic(){return this.diagnostic??'scene';}
+    setDiagnostic(value){this.diagnostic=value;}
+    getMaterialContrast(){return {mode:'original',roughness:.5,metallic:.5,...this.contrast};}
+    setMaterialContrast(value){this.contrast={...this.getMaterialContrast(),...value};}
+    presentation(){return {contrast:{settings:this.getMaterialContrast(),analysis:null,gains:null}};}
     async init() { behavior.viewer = this;this.target={set(){}}; this.renderer = { backend: { device }, toneMappingExposure: 1 }; this.gi = { debugState: () => ({}) }; return this; }
     clear() { this.maps = this.surface = null; }
     reset() { this.setLight(); this.renderer.toneMappingExposure = 1; }

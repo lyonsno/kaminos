@@ -30,6 +30,37 @@ async function viewerFixture() {
   viewer.setImage(image,depth);viewer.setMaterials({maps:{albedo:image,roughness:image,metallic:image,orm:image}});
   return {viewer,calls,THREE,module};
 }
+test('material contrast is reversible, shares inspector and BRDF values, and releases derived textures',async()=>{
+  const {viewer}=await viewerFixture();
+  assert.equal(typeof viewer.setMaterialContrast,'function','retained materials must support contrast without inference');
+  const data=new Uint8Array([255,110,120,255,255,120,125,255,255,130,130,255,255,140,135,255]);
+  const orm={width:2,height:2,data};
+  viewer.setMaterials({maps:{albedo:viewer.image,roughness:orm,metallic:orm,orm}});
+  const raw=viewer.maps.orm,count=viewer.textures.length,copy=data.slice();
+  viewer.setMaterialContrast({mode:'manual',roughness:1,metallic:0});
+  const corrected=viewer.maps.orm;
+  assert.notEqual(corrected,raw);assert.equal(viewer.physicalMaterial.roughnessMap,corrected);
+  for(let i=0;i<4;i++){
+    assert.equal(viewer.maps.roughness.image.data[i*4],corrected.image.data[i*4+1]);
+    assert.equal(corrected.image.data[i*4+2],raw.image.data[i*4+2]);
+  }
+  assert.deepEqual(data,copy);
+  viewer.setMaterialContrast({roughness:.5});assert.equal(viewer.textures.length,count+3);
+  viewer.setMaterialContrast({mode:'original'});assert.equal(viewer.maps.orm,raw);assert.equal(viewer.textures.length,count);
+  const preset=JSON.parse(JSON.stringify(viewer.exportPreset()));
+  assert.throws(()=>viewer.applyPreset({...preset,contrast:{mode:'manual',roughness:2,metallic:0}}));
+  assert.equal(viewer.getMaterialContrast().mode,'original');
+  viewer.setMaterialContrast({mode:'manual',roughness:.7,metallic:.2});
+  const chosen=JSON.parse(JSON.stringify(viewer.exportPreset()));viewer.setMaterialContrast({mode:'original'});viewer.applyPreset(chosen);
+  assert.equal(viewer.getMaterialContrast().roughness,.7);
+  viewer.clear();assert.equal(viewer.contrastAnalysis,null);assert.equal(viewer.rawMaterialMaps,null);
+});
+test('GI diagnostics survive tuning changes and reject unsupported views atomically',async()=>{
+  const {viewer,calls}=await viewerFixture();
+  assert.equal(typeof viewer.setDiagnostic,'function');
+  viewer.setDiagnostic('incoming');viewer.setTuning({gain:2});assert.equal(calls.settings.at(-1).view,'incoming');
+  assert.throws(()=>viewer.setDiagnostic('imaginary'));assert.equal(viewer.getDiagnostic(),'incoming');
+});
 test('original remains DoubleSide and uses the same orbit as the depth surface',async()=>{
   const {viewer,THREE}=await viewerFixture();
   assert.equal(viewer.original.material.side,THREE.DoubleSide);

@@ -4,6 +4,21 @@ import { test } from 'node:test';
 import vm from 'node:vm';
 import { pixelSummary } from './photo-contracts.js';
 
+test('contrast witness rejects stale arms, unchanged applied maps and unequal lighting',async()=>{
+  const checks=await import('./witness-checks.js');
+  assert.equal(typeof checks.validateContrastArms,'function','contrast arms need effective-setting admission');
+  const make=mode=>({presentation:{mode:'materials',map:'surface',light:{intensity:1},camera:{orbit:[0,0]},environment:{textureUUID:'hdr',intensity:1},
+    gi:{enabled:true,view:'scene',settings:{gain:1}},physicalbaseline:{exposure:1,activeMaterial:{roughnessMapUUID:mode==='original'?'raw':mode,mapUUID:'same-albedo'}},
+    contrast:{settings:{mode,roughness:.5,metallic:.5},gains:{roughness:mode==='original'?0:.5,metallic:0}}}});
+  const good=Object.fromEntries(['original','manual','highlight'].map(mode=>[mode,make(mode)]));
+  assert.doesNotThrow(()=>checks.validateContrastArms(good));
+  for(const mutate of [arms=>{delete arms.manual;},arms=>{arms.manual.presentation.contrast.settings.mode='original';},
+    arms=>{arms.highlight.presentation.light.intensity=2;},arms=>{arms.manual.presentation.physicalbaseline.activeMaterial.roughnessMapUUID='raw';},
+    arms=>{arms.highlight.presentation.gi.view='ao';},arms=>{arms.manual.presentation.map='roughness';}]){
+    const bad=structuredClone(good);mutate(bad);assert.throws(()=>checks.validateContrastArms(bad));
+  }
+});
+
 test('surface capture excludes title-only false closure and restores overlays on failure', async()=>{
   const {captureSurfaceFrame}=await import('./witness-checks.js');
   assert.equal(typeof captureSurfaceFrame,'function','Surface-only capture isolation is missing');
