@@ -29,6 +29,8 @@ async function controller() {
   const receipt = { schema: 'kaminos.webgpu-route-receipt.v0', status: 'succeeded', effectiveRouteId: 'moge.depth-normal.webgpu-local.v0' };
   class Viewer {
     get primary(){return this;}
+    get mode(){return this.focus??(this.maps?'materials':this.surface?'photo':'original');}
+    set mode(value){this.focus=value;this.comparison=false;}
     getDiagnostic(){return this.diagnostic??'scene';}
     setDiagnostic(value){this.diagnostic=value;}
     getMaterialContrast(){return {mode:'original',roughness:.5,metallic:.5,...this.contrast};}
@@ -43,7 +45,7 @@ async function controller() {
     getLightHandle() { return this.lightHandle??{x:-.47,y:.57}; }
     getLightRing(){return {u:.3,v:.2};}
     getLighting(){return {rotation:0,intensity:1,direct:1};}
-    showComparison(){this.comparison=true;this.mode=this.maps?'materials':'photo';}
+    showComparison(){this.comparison=true;this.focus=null;}
     setTuning(value) { this.settings={...this.settings,...value}; }
     getTuning() { return {gain:1,radius:.15,thickness:.03,slices:6,steps:16,denoise:3,aoStrength:.5,expFactor:2,screenSpaceSampling:false,linearThickness:false,backfaceLighting:0,depthPhi:.1,normalPhi:5,lumaPhi:5,...this.settings}; }
     exportPreset() { return {schema:'kaminos.material-photo-preset.v1',settings:this.getTuning(),light:this.getLightHandle(),camera:{orbit:[.1,.2]},gi:this.useGI??true,glow:this.glow??false}; }
@@ -100,6 +102,27 @@ test('comparison restores surface perspectives after inspecting a map',async()=>
   c.elements.map.value='normals';c.elements.map.onchange();
   assert.equal(c.behavior.viewer.map,'normals');c.actions.compare();
   assert.equal(c.behavior.viewer.map,'surface');assert.equal(c.elements.map.value,'surface');
+});
+test('diagnostic selection from either unlit focus preserves its effective label',async()=>{
+  for(const mode of ['original','photo']){
+    const c=await controller();await c.actions.infer();c.actions.view(mode);
+    c.elements['gi-view'].value='incoming';c.elements['gi-view'].onchange();
+    assert.equal(c.behavior.viewer.mode,'materials');
+    assert.equal(c.behavior.viewer.getDiagnostic(),'incoming');
+    assert.equal(c.elements['gi-view'].value,'incoming');
+    assert.equal(c.elements.map.value,'surface');assert.equal(c.behavior.viewer.map,'surface');
+    assert.equal(c.behavior.viewer.useGI,true);assert.equal(c.elements.gi.checked,true);
+  }
+});
+test('depth-only diagnostic uses the available lit receiver after material failure',async()=>{
+  for(const mode of ['original','photo']){
+    const c=await controller();c.behavior.failMaterials=true;await c.actions.infer();c.actions.view(mode);
+    assert.equal(c.elements['gi-view'].disabled,false);
+    c.elements['gi-view'].value='ao';c.elements['gi-view'].onchange();
+    assert.equal(c.behavior.viewer.mode,'relit');
+    assert.equal(c.behavior.viewer.getDiagnostic(),'ao');assert.equal(c.elements['gi-view'].value,'ao');
+    assert.equal(c.behavior.viewer.useGI,true);assert.equal(c.elements.gi.checked,true);
+  }
 });
 test('transient device setup failure can be retried', async () => {
   const c=await controller(); c.behavior.failDevice=true; await c.actions.infer();

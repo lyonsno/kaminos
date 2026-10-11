@@ -213,8 +213,9 @@ $('gi').onchange=()=>{viewer.useGI=$('gi').checked;};
 $('glow').onchange=()=>{viewer.glow=$('glow').checked;};
 $('gi-view').onchange=()=>{
   const diagnostic=$('gi-view').value;
-  if(!viewer.comparison&&!['relit','materials'].includes(viewer.mode))view('materials');
+  if(!viewer.comparison&&!['relit','materials'].includes(viewer.mode))view(viewer.maps?'materials':'relit');
   viewer.map='surface';$('map').value='surface';viewer.setDiagnostic(diagnostic);viewer.useGI=true;$('gi').checked=true;
+  syncControls();
 };
 function setMaterialContrast(value){viewer.setMaterialContrast(value);syncControls();return viewer.primary.presentation().contrast;}
 $('contrast-mode').onchange=()=>setMaterialContrast({mode:$('contrast-mode').value});
