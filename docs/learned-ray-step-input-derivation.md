@@ -229,9 +229,12 @@ or whole-ray sequence model by default. Image-space arm B remains independent.
 
 - Freeze state, effective lighting generation/route, material uniforms,
   reconstruction mode, clipping, display, and ray phase.
-- Decouple reference integration subdivision from `dtBase` in the boundary
-  appearance law. `boundarySidecarStepFootprintWidth` depends on `dtBase`;
-  raising the ordinary steps slider alone is a confounded reference.
+- When boundary step-width is nonzero, decouple reference integration subdivision
+  from `dtBase` in the boundary appearance law: the footprint depends on both.
+  The selected saved kiln's native005 receipt has baked `stepWidth=0`, so this
+  particular coupling is inactive there. Increasing steps does not change its
+  material law through this term. A reference still needs observed convergence,
+  explicit sample phase/interval coverage, and effective sampling limits.
 - Compare converging subdivisions with the same coefficient law. A historical
   highest-step capture or a changed sample phase is not automatically truth.
 - Local fitting establishes prediction quality; held-out composed images and
@@ -263,3 +266,36 @@ An analytic comparator has precedent in
 [Accurate Volume Rendering Based on Adaptive Numerical Integration](https://lhf.impa.br/ftp/papers/sib2015.pdf).
 The bounds and Kaminos dependency analysis above are this lane's derivation,
 not claims that those papers prove this renderer's error or learned sufficiency.
+
+## October 11 Planning Recheck
+
+The selected consumer remains `cc/handy-lean-boundary-1010` at `6564c616`.
+The five-probe proposal leaves candidate interval lengths unspecified. For N
+adjacent accepted intervals with shared endpoints, three probes per interval
+require 2N+1 distinct evaluations and five require 4N+1. A five-probe parent
+bisected into two five-probe children needs four additional evaluations.
+In a uniform occupied region with ordinary sample spacing delta, an accepted
+five-probe interval h must span more than approximately 4*delta to reduce
+material evaluation count before inference cost. The corresponding three-probe
+threshold is approximately 2*delta. These counts exclude occupancy skipping,
+early termination, divergence and cache effects; they are not timing claims.
+
+Normalize interval coefficients using u=s/h: sigma_tilde=h*sigma and
+j_tilde=h*j on u in [0,1]. This preserves E/T and presents optical thickness
+and integrated source scale directly to the predictor. Retain h/grid pitch and
+other geometry context for the distribution of unobserved detail. This change
+does not establish that finite probes determine the interval.
+
+At `6564c616`, ordinary `steps` are clamped to [24,192], the expensive-sample
+budget is ceil(steps), and the adaptive scale is in [1,2.65]. Thus the current
+adaptive policy only enlarges the base step. A refined teacher must report its
+effective integration extent and subdivision, and must not silently inherit an
+inadequate ordinary sample budget. Its early-transmission cutoff also needs an
+explicit reference policy. The selected zero step-width case permits a narrow
+teacher implementation without first generalizing footprint controls.
+
+Source reads: `git show 6564c616:volume-core.js`, the parent's native005 report
+fields `state.controls.boundarySidecarControls`, and fetched branch containment.
+An inline constant-coefficient arithmetic check verified interval normalization
+at sigma=0, 0.8 and 90 to floating-point precision. This is mathematical/source
+inspection, not native image, GPU performance, or model evidence.
