@@ -64,3 +64,16 @@ test('support changes update admission receipts without rewriting identical occu
  ctx.analyticEmitterDescriptor={family:'ring',sourceLaw:'shallow-primary',origin:[0,0,0],axis:[0,1,0],supportAxis:[1,0,0],radius:.05,extent:.15,sourceDepth:.04,strength:1};ctx.analyticEmitterDescriptorSignature=JSON.stringify(ctx.analyticEmitterDescriptor);refresh();
  assert.ok(ctx.state.sceneCollision.sourceSupport.fluidSupportCells>0);assert.equal(ctx.state.sceneCollision.sourceBoundsCellCount,32768);assert.equal(counts.uploads,1);assert.equal(counts.geometry,1);
 });
+test('source footprint cache reuses static weights while current mask, flux and turbulence stay live',()=>{
+ assert.equal(typeof core.createImmersedSourceWeightCache,'function','source footprint geometry cache must exist');
+ const cache=core.createImmersedSourceWeightCache();const shape={grid:32,gridHeight:64,weightCache:cache};
+ const first=core.resolveImmersedSourceConfig(base,shape);assert.equal(cache.builds,1);
+ const controls={...base,immersedSpeed:.3,immersedFuel:.8,immersedCapFraction:.2};
+ const mask=new Uint8Array(32*64*32);for(const c of core.immersedSourceWeights(first.effective,shape).cells)if(c.x<16)mask[c.x+32*(c.y+64*c.z)]=1;
+ const cached=core.resolveImmersedSourceConfig(controls,{...shape,solidCells:mask,puffFactor:.7});
+ const uncached=core.resolveImmersedSourceConfig(controls,{grid:32,gridHeight:64,solidCells:mask,puffFactor:.7});
+ assert.deepEqual(cached,uncached);assert.equal(cache.builds,1,'changing supply or mask must not rescan the static footprint');assert.ok(cached.effective.masked.cells>0);
+ const field=new Float32Array(32*32).fill(.3);const windy={...controls,emitterInletTurbulence:.6};const signals={turbulence:{field,rms:.3}};assert.deepEqual(core.resolveImmersedSourceConfig(windy,{...shape,solidCells:mask,inletSignals:signals}),core.resolveImmersedSourceConfig(windy,{grid:32,gridHeight:64,solidCells:mask,inletSignals:signals}));assert.equal(cache.builds,1);
+ const moving={...base};for(const patch of [{immersedCentreX:.125},{immersedPitch:30},{immersedRadius:.3},{immersedThickness:2},{emitterAperturePattern:'bed'}]){Object.assign(moving,patch);core.resolveImmersedSourceConfig(moving,shape);}
+ assert.equal(cache.builds,6,'pose/shape/pattern changes must invalidate exact weights');
+});

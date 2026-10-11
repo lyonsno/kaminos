@@ -2506,6 +2506,25 @@ export function immersedSourceWeights(effective, { grid, gridHeight }) {
       }
   return { cells, sum };
 }
+// One retained footprint per live simulator; supply/mask/turbulence are still
+// resolved for the current step. No cross-simulator cache or result truncation.
+export function createImmersedSourceWeightCache() {
+  let previousKey = null, weights = null, builds = 0;
+  return {
+    read(effective, {grid, gridHeight}) {
+      const key = JSON.stringify([grid, gridHeight, effective.centreCells,
+        effective.direction, effective.radiusCells, effective.thickness,
+        effective.basis ?? null, effective.pattern ?? null]);
+      if (key !== previousKey) {
+        weights = immersedSourceWeights(effective, {grid, gridHeight});
+        previousKey = key;
+        builds += 1;
+      }
+      return weights;
+    },
+    get builds() { return builds; },
+  };
+}
 // Bounded A (section 31): the source's back wall is a solid disc of
 // IMMERSED_BACK_WALL_CELLS cells behind the source slab's antialias skirt
 // (along in [-(t/2 + ½ + wall), -(t/2 + ½)): the weight is zero at |along| ≥
@@ -2582,7 +2601,9 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   // Σ target over fluid cells = Q exactly on this grid; the analytic slab volume
   // π r² t is kept for reference (the antialiased skirt and the cell lattice
   // make the sum run a few percent over it). Masked cells are reported (IS-03).
-  const weights = immersedSourceWeights(effective, { grid, gridHeight });
+  const weights = options.weightCache
+    ? options.weightCache.read(effective, {grid, gridHeight})
+    : immersedSourceWeights(effective, { grid, gridHeight });
   const solidCells = options.solidCells ?? null;
   const fluid = []; let fluidSum = 0, maskedCells = 0, maskedWeight = 0;
   for (const cell of weights.cells) {
@@ -11171,6 +11192,7 @@ export function createKaminosVolumePrototype({
   let sceneSolidGeometryCache = null;
   let sceneSolidSupportCache = null;
   let immersedWallCache = null;
+  const immersedSourceWeightCache = createImmersedSourceWeightCache();
   let sceneSolidTextureSizeKey = null;
   let sceneSolidTextureDevice = null;
 
@@ -15562,11 +15584,12 @@ export function createKaminosVolumePrototype({
     // normalised against the mask the kernel will actually dispatch on. The
     // refresh in encodeSim is a no-op by key after this.
     const immersedPuffFactor = inflowBoundaryConfig.requested?.inletDynamics?.puffFactor ?? resolveInletDynamicsConfig(controlsSnapshot, inletSignals).effective.puffFactor;
-    state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals });
+    state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, weightCache: immersedSourceWeightCache });
     refreshSceneCollision();
-    const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu });
+    const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu, weightCache: immersedSourceWeightCache });
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
+    state.immersedSourceWeightBuilds = immersedSourceWeightCache.builds;
     if (inflowBoundaryConfig.effective.admitted && inflowCoverageTexture) {
       const coverageSignature = inflowCoverageSignatureFor(inflowBoundaryConfig);
       if (coverageSignature !== inflowCoverageSignature) {
