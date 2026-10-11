@@ -214,7 +214,7 @@ test('IS-03: supply accounting follows the composed fluid support: the wall sits
   assert.equal(masked.effective.masked.cells, covered.length);
   assert.ok(masked.effective.masked.weightShare > 0.3 && masked.effective.masked.weightShare < 0.7);
   assert.match(index, /masked \$\{\(immersed\.effective\.masked\.weightShare \* 100\)\.toFixed\(0\)\}%/, 'the receipt names the masked share');
-  assert.match(source, /resolveImmersedSourceConfig\(controlsSnapshot, \{ grid: gridSize, gridHeight, puffFactor: [^}]*, solidCells: sceneSolidCellsCpu \}\)/, 'the pack passes the current solid mask');
+  assert.match(source, /resolveImmersedSourceConfig\(controlsSnapshot, \{ grid: gridSize, gridHeight, puffFactor: [^}]*, solidCells: sceneSolidCellsCpu, weightCache: immersedSourceWeightCache \}\)/, 'the pack passes the current solid mask');
 });
 
 test('IS-04: the residual measurement names the combined target (heat release + immersed source), snapshotted at copy time', () => {
@@ -319,9 +319,9 @@ test('IS-03-C: the source uniforms are packed against the mask the same step dis
   assert.ok(eKiln.effective.masked.cells > 0 && Math.abs(targetSumOnMask(eKiln.effective, kiln) - eKiln.effective.fluxEffectivePredicted) < 1e-9);
   // Production ordering pin: inside updateUniforms the pose is resolved and published, the collision refreshed, then the supply packed against the installed mask.
   const pack = source.slice(source.indexOf('  function updateUniforms('), source.indexOf('IMMERSED_SOURCE_UNIFORM_OFFSET);', source.indexOf('  function updateUniforms(')));
-  const poseAt = pack.indexOf('state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor });');
+  const poseAt = pack.indexOf('state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, weightCache: immersedSourceWeightCache });');
   const refreshAt = pack.indexOf('refreshSceneCollision();');
-  const supplyAt = pack.indexOf('const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, solidCells: sceneSolidCellsCpu });');
+  const supplyAt = pack.indexOf('const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, solidCells: sceneSolidCellsCpu, weightCache: immersedSourceWeightCache });');
   assert.ok(poseAt > 0 && refreshAt > poseAt && supplyAt > refreshAt, `pose ${poseAt} → refresh ${refreshAt} → supply ${supplyAt}`);
 });
 
