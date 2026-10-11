@@ -1,0 +1,6966 @@
+{
+ "schema": "kaminos.tiled-gemm-shader-snapshot.v0",
+ "source": "models/supermat/supermat-kernels.js gemmShader (pre-extraction)",
+ "cases": [
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "3f27f9bffb6e40097833adc31865bbc96cd84915d796c8e6f1f94434e1ebd5e5"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "3f27f9bffb6e40097833adc31865bbc96cd84915d796c8e6f1f94434e1ebd5e5"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "e273619b6a1c1402908f2dd3ebfbd8b26a628a17e04a21ae4a465644269f1f26"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "e273619b6a1c1402908f2dd3ebfbd8b26a628a17e04a21ae4a465644269f1f26"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "76b10fd6613d52aa3b48b7af8e3f7615211c270be6590e5e30b42973283b0d0d"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "9d1c1a8ca235dd80b650aab78ab219073e65df81215addfed7d8fc9e78042cb7"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "c316435145f0a9b5da7632608cee7dbdec0b997adcf8cc192388a9fbe94ee054"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "cdaf223fa5751b1801c96cb62b4efd9a7b590059e1ea7ce632da38a3fb8761c8"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "4ba4395b1268a0027466a6eedd0e8cc65d4dca422e7d1eebbf15443d68e2e756"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "4ba4395b1268a0027466a6eedd0e8cc65d4dca422e7d1eebbf15443d68e2e756"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "c633687810e09974fd1108c6e5eb8734504cc931b637eb2fb0a4a9b9ff50669e"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "c633687810e09974fd1108c6e5eb8734504cc931b637eb2fb0a4a9b9ff50669e"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "c6b899ed235073e07928ea6982e964f10df5a60c3b272278d3f6013b6e100053"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "c6b899ed235073e07928ea6982e964f10df5a60c3b272278d3f6013b6e100053"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "8baebccc4d53cdc2d793fe86efd836fc323d443a373aa95384f8b851dfcce918"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "ab92135d26d6bfb598af9f44ba18a429f89023338dc08b0d7efaf09ce080bcf0"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "0b8d4ab87df40a23c4419e77cd4689d558843e8ffeeeb26136b6e7d34f29eade"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "01f76b98dda37be74ad0ea4083637a39718ef49af78517e1ab42a1f20a158255"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "92d5255723dddaab75471a8530f2238dca018ae5810bd43255d6719f7a00bda0"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "b45fbce991b7f45454727dbb937454a363330f61c20969fc25e5f73bb32e8c07"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "15f783114fa0137fc3ad5341d62d6032299257deb5d751b0a0d7d1059513cbe7"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "15f783114fa0137fc3ad5341d62d6032299257deb5d751b0a0d7d1059513cbe7"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "f6127a6aaaac0b843443eb733c2feecb15d8c2753a9d4a746cce16cfd16d4253"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "f6127a6aaaac0b843443eb733c2feecb15d8c2753a9d4a746cce16cfd16d4253"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "64a0b8eea9c80a015b93def0d9d219729fc3e15d07eeb8537a96a3d019c265fd"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "64a0b8eea9c80a015b93def0d9d219729fc3e15d07eeb8537a96a3d019c265fd"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "870b4c0ed9cf0e2273a5514352962d78a247cd5a3a74e772e7448ccd48798bae"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "90f4072fac8ab3fbd97bd368055a58bfbe9f9ae198d6084f4ea634d455b9c910"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "9795711e651e7fc351ee09c328859b8be74d5960fe0fc4b113bce01900c1c8f9"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "c0000b1c74eff8ca3711a3f68899196267c5e4d5be2cbcc808d0f243cc73bd85"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "b9a75c2a95dddeeb582f169b560930a5a7cf434865eca57635f0449c63a6893c"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "d9ff093951155bba2acaadd907b63e019239539e369b50dc500e73b08399ad40"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "9df9f699a4314261a9ebd1e869a33d525acf6a757af643761a4bc69ff0498a72"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "9df9f699a4314261a9ebd1e869a33d525acf6a757af643761a4bc69ff0498a72"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "10cefc1e5167198de58a2d75bcaef3cf714fe8b390ef71de1e5b6b857901bf8b"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "10cefc1e5167198de58a2d75bcaef3cf714fe8b390ef71de1e5b6b857901bf8b"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "7b29f07cd59a57d9b3ce4b5927fae6a85ef61ec1912b5899d1fb027edc858766"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "7b29f07cd59a57d9b3ce4b5927fae6a85ef61ec1912b5899d1fb027edc858766"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "baa89af876630bfdc0b0ead0fb7f0babb910dee8547069ae99de806e4b65b55a"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "b6abd3cdb45731c5d480765e9610faf4bebd3f6a4b720a0de5b5691586bd2bd3"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "54cd44052b86081e792a44bef14377768306c0b9e7602ea53a8a355c2ba47226"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "11d8952629cb344a26ea2781ef7b33c68cb897d295b8c18e9cfa2c870660e4a1"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "d47779b3b9efe6ca46755dd026b23b377502d0a8a683cf997f231cfab2d372de"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "9412a6750019cba71f8565c490c7a6a6437f34af3841751ecb8082234d184b01"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "e7a9f738a117ce6b62687ea6c573609f583587a2b9015cff1d4918f4095dfe30"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "e7a9f738a117ce6b62687ea6c573609f583587a2b9015cff1d4918f4095dfe30"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "1d7f817e1be693741248af3918785278a88e5042c42de6d8e3b72e7d6c5036c5"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "1d7f817e1be693741248af3918785278a88e5042c42de6d8e3b72e7d6c5036c5"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "9cc5514d321d23070eac62a04d2feee567ea84865147782c7cb13ec0b91258af"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "6b463c2ae47925e378cbed216a1dd8a64de23bead18724fb51c2ef34e5cb7eb4"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "539176d00c94f37aa362c22f5c4b29e7c1491ded931eb78cb598abd6fe413dbe"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "7d10dc7115ca77faa6c6dd52d82ae631927a757c12a75269543f9b41e741a20c"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "b0ccc909bd5300997d9f20499853d7ad7e290bae6a864098dc808dfe72d94c29"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "b0ccc909bd5300997d9f20499853d7ad7e290bae6a864098dc808dfe72d94c29"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "721d09df18e45bff0ef1e29f4419696c53ef645d893e2e026c071b9e9305c117"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "721d09df18e45bff0ef1e29f4419696c53ef645d893e2e026c071b9e9305c117"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "40421cc1066f9327ec5575e1897a501a5f6c4ddc93e7b3773a30afe04adfa222"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "40421cc1066f9327ec5575e1897a501a5f6c4ddc93e7b3773a30afe04adfa222"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "93f75f09be9f69bcfac522bd85c81d2bdafda278ee747bcc79993f437f58d644"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "7e20f8a646bcdb4d1024b0ecbd7629d1a6146d431823ad6aa503a558f65e3381"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "9d979bc06812c01ae47c95e8c2df99fa410d2872765dfefcc7b30ad237d0651f"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "42010caf5c795808f17ca4f436afe0aabaf20913232c09779775e2ab14d9ef1b"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "aa437a839dae256c86c98b1641eb6b5a6dc5a425e66b3d37d5ded7be5e666e26"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "dab49e48e8912a92e3cd45eecafc258635f3b9816491ccd6c44537514b6471f5"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "7b94f0613289072145fea6c76d4de2e5f70391fa0092f9fa6b18bcee25c96b3b"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "7b94f0613289072145fea6c76d4de2e5f70391fa0092f9fa6b18bcee25c96b3b"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "de8c86ddf5fa9b1606c382e73d5e46f0e2dd8275e6f239317f2aa667ee0c40a9"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "de8c86ddf5fa9b1606c382e73d5e46f0e2dd8275e6f239317f2aa667ee0c40a9"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "2af4244d0b6aebb073442d3948e2508d285c82b8c23a9dea64e51b341989946f"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "2af4244d0b6aebb073442d3948e2508d285c82b8c23a9dea64e51b341989946f"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "0235a9c3ab064eddaea48df994f5bd2163a9e0884be97e9dd7d528cab354608b"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "d3b7607b8835c57e2b3465f3086c22488f619f618316145c0e4eecc441db2b03"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "441d2097280875c1ca38e23f50cdf9b0afd8c53aeeaaf3e23803115625f30a1b"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "efe6ffbc35339bafc79bb45e4c19fae618de7a08e5c50e24193afacd6fa3b652"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "93024925dad9e4a07f9817739b85b828990d714fb3841290f299a82fc988c851"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "96ff9688553f3375cf20b14fd7511615ad5ba7a4487070830632d406cd8a5ef3"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "7dc0f4e1f43a1daadd1c9f72ea3c55c05bee9f72eb5219c701b3f1591ca77c7a"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "7dc0f4e1f43a1daadd1c9f72ea3c55c05bee9f72eb5219c701b3f1591ca77c7a"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "f4e8cbb53ea9ee426aef3a0e1d95a3e19761bc61cb5c419f0041c8a111dfb1ca"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "f4e8cbb53ea9ee426aef3a0e1d95a3e19761bc61cb5c419f0041c8a111dfb1ca"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "84b4bf96f506a02496578909c1d0b0ac57a368ae579debbc7dda333bfb52c527"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "84b4bf96f506a02496578909c1d0b0ac57a368ae579debbc7dda333bfb52c527"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "3803a33ae25e2e7c121411be545c9932970ee4518678e0e3c4e93ff485f02913"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "0d21f83686d58bf625b2b1c31e7a22075201737d4cc4cd0f9f9e14fabeea1569"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "e39cf159ff8b52ee30ac704c3186d49094d6d4542c4edbe23fde947b4d7be475"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "025c28c11b3b7c33dea412b14d17663628558266cb26d6fb950789549348770f"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "a2d72f3f07801ac491e3897fdaec9e63cc12a3e1832e2a8a9c56b5798ac2d7a6"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f32",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "4b8339c052d1fd528d2146de988cf07ffc4202cf2122f72d5de895dc14ebaefa"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "48d1196dbbd176cd8180d1877b5460b33058314b446e0c5571e0c4ac9649f301"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "48d1196dbbd176cd8180d1877b5460b33058314b446e0c5571e0c4ac9649f301"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "73fcca80eda77606d7266f3b9195ed6b330d2504ef3950add9828a269603e6ca"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "73fcca80eda77606d7266f3b9195ed6b330d2504ef3950add9828a269603e6ca"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "df654badc77271e5ff6d082cdd4796b3d3a2e4c9e48a095940e3393669eb1969"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "0ac51c753df887c85930010854797c359dacf945693c76d61e412b30bfa5ff69"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "9db3af10e29eb288dbf07887e3adfc9fb47aa3e68cc9426afd5d34fd401b4cbb"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "73343a67484e4348a416d161d0bd322281647556002ff969dfe4ad9dc4c7e79a"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "f4c9d1dc6f81f4a3913960d185cf47cbec718d67ff059d3ae2191f545bb99e60"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "f4c9d1dc6f81f4a3913960d185cf47cbec718d67ff059d3ae2191f545bb99e60"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "d965c89a72775cce655da4cb94077df1a09da36bbe74adc98de7ab21f8c0a9b7"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "d965c89a72775cce655da4cb94077df1a09da36bbe74adc98de7ab21f8c0a9b7"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "a3089f7eb27ff2a9a91ccb1daef04211eb28a5b5006681eaf3ede52c79c01a66"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "a3089f7eb27ff2a9a91ccb1daef04211eb28a5b5006681eaf3ede52c79c01a66"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "77cbac2699f6ce65ae62e90a5e4bf12fa7d55b09c1da32301f8aa3b45c16dbc7"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "48157e69546bde7d04ed094a1e9c0282b3fbf00ebbcedeca9be8cd705dfc85c4"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "d01d4c1b6347b5e3274ac64e19e0c6f00a2c379f0494470777d5518a87fb3e67"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "e6e8261e4805c52c16ae4a255ceb806a1ab1429b32d6b05c1b830fe8e0a4ec0a"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "0b2cf10a88f8c36d30477c204650274061b79188c0de925b802b68f57d7c5e90"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "060ff88bad0511c331c3878c45193e28533c7e163315b6c059fb4b4c66f9e471"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "e7cdf9b4013a1ec841fec8d69b34c773f259f635966fa2cad015fa5fb1409196"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "e7cdf9b4013a1ec841fec8d69b34c773f259f635966fa2cad015fa5fb1409196"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "c982f5dcde08de4f4dfed8ddc2f13416cfbb5beedcf7217b6f93c018b7644df2"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "c982f5dcde08de4f4dfed8ddc2f13416cfbb5beedcf7217b6f93c018b7644df2"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "4058d88e5bc3c07d49100f892b8637c2a6ffbf265f242cdd3af84693c02f3e9b"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "4058d88e5bc3c07d49100f892b8637c2a6ffbf265f242cdd3af84693c02f3e9b"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "0bb3d8485e1ea5b0b03d5ca4038286140e2b77f78e1d3f701184e6b6c85c5a1d"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "a1f60ee6a812e59d706bfa892ef615d84177ac90c548b55cdaac09e0e3b4bb04"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "700949d8bca1b53d81234f7cb77a9ef8a96686db5405d18e71f30553c8a30130"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "612c3497474e38997c839228f60869ddef366afcfabd449d8088b473c5eb8614"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "6023df35f2962c66975837e0adf1e819a90024e686d3478fca380bc62d5ca2bb"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "a0424a03067dbe49b6e707094daef1ccdc3401aa3bb5117dde37e3f530b37391"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "0ddbb97adeae17b98be572cb82e9c6aedb6fbf0c93de0be7e6e2692a3fc289d1"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "0ddbb97adeae17b98be572cb82e9c6aedb6fbf0c93de0be7e6e2692a3fc289d1"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "ec28c706f8e70400a242a02858194a02ac436884b5e81ecaaad3c8b61fbf0409"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "ec28c706f8e70400a242a02858194a02ac436884b5e81ecaaad3c8b61fbf0409"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "ce83118a8023f2dd5d3a353ebdb93fe12b6a43f891fede20a834771440a1d5a5"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "ce83118a8023f2dd5d3a353ebdb93fe12b6a43f891fede20a834771440a1d5a5"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "cfbdedae373ccb18f09cc62d33d57fda8073e0485ada8d6946657c9682e91beb"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "d51030ddf58256e81ebb97935b0b7f35be10ea6a98eb5d7dcb93f227663fc678"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "9018a860c1524e8677e454740afd32a4884252b246c9ff3abbb11b4d2564b399"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "8e6ee905dbb2cd1212f5810007c7819d88aa3ed05c9f044bcd89dc27bd027870"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "5f7886061c0177c8f0d3129b3f36e33537c1e7fd34b4340c230a3394f7e34356"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "4b0c399cdd6bad847551f9d30295764e863212875d3d3ae5aee9d3e2cb199774"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "dbe0016045fabcddba91f6b19cb788f5f3311fd18937bb12973b53dac87a1990"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "dbe0016045fabcddba91f6b19cb788f5f3311fd18937bb12973b53dac87a1990"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "cf5702cf6fb11ba08d6b14ed1cb0dcf2a52e66b6f7e954fcc1cb662411d6526e"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "cf5702cf6fb11ba08d6b14ed1cb0dcf2a52e66b6f7e954fcc1cb662411d6526e"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "2b4e3a33448b2cc742d6c64004e636bea089d26923ee90dd23dedbc34769f680"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "48377deca05c4a51d14d13305af5caa9275f076b1f84b1cb738964a4c4376a44"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "52dc67c41e84731eaa5323edd1388e8636a983dfa4fbf1767edad2a77fb9cd4c"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "902e9c907c69650b3641d4b1b9b20f05c96dbe42371df7647ddcf79864ebdf76"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "4ffbc4a09b7cb1f4e12ec0698d1455d3c00c8504b113710794b474f8180a50c3"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "4ffbc4a09b7cb1f4e12ec0698d1455d3c00c8504b113710794b474f8180a50c3"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "eda79e1bff16d635fb399f13b264520ecd1a9566099a9610a974d43e6d39d401"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "eda79e1bff16d635fb399f13b264520ecd1a9566099a9610a974d43e6d39d401"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "18f2f4cf60484d0f27008e94a01df34af5779fdbe2068c77cbb879cb424b8190"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "18f2f4cf60484d0f27008e94a01df34af5779fdbe2068c77cbb879cb424b8190"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "32e8b90570c897e531778f0ab6a69f910040b0129f056d1e319b8183bb242af4"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "1c4490911b1792c52ce2a31d04f7355c5eec95a2566044fd8817e381b524cb9a"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "d4c42a242548c27d1c80add356cf5918f7c0b9d5e3ec8952252804302d9e27c8"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "7436bd1eccd416a604391e7ac07ebf792903a4dd6d9288c7784e58b2f7f15f65"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "58d8aebeecc7c8594d8b4d7d125ef94760f78f10d1a6f825577281c1a0883ecf"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "11b1656ae3d3cacf2316c1e4bbef40bd873130ca9fdcdf22a5332644047ae9b8"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "e2049548e64c31f9a89845eb8f5098a5486c0a9f9a04fe9befc25765e4bdaee6"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "e2049548e64c31f9a89845eb8f5098a5486c0a9f9a04fe9befc25765e4bdaee6"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "b07736d0eec31ad39abebd2884ea79301dc8957776e253a97c0a42654659d98b"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "b07736d0eec31ad39abebd2884ea79301dc8957776e253a97c0a42654659d98b"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "e642714c227b1a69f3002baa12b769e5dc680ca4894b92c7850de8d664c834f2"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "e642714c227b1a69f3002baa12b769e5dc680ca4894b92c7850de8d664c834f2"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "2e8bb7165ba621e7ed95759df68be4efcac1632e860a889c561d87c70a01ebe6"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "0efaad2485438da2be1cc1b50e687839aecaabbae00e7f3c2277af4b81b1c238"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "0aa315a60d5d10425d786ccd4df57d97acc56283a3e167ccca2a46ecfceb159e"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "6e811f1a7f4d887777ac2fc59faf9649a8224a02373d88ac294714582130a492"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "2e674505385b369dba7ba305d5adfd760f5faa608ad37740fee05e264713f83e"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "e40af81638f24579bd171f445763317a1f1d49abe7fd843d216fb263752ec41f"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "2356c1926543f1d15be76b217873beb1ada66332e8a965cdddb41399b3cdcb29"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "2356c1926543f1d15be76b217873beb1ada66332e8a965cdddb41399b3cdcb29"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "bf0eee67a9d16b25d12de36dec5754af8f123b5cade39bb19180709485b084d6"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "bf0eee67a9d16b25d12de36dec5754af8f123b5cade39bb19180709485b084d6"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "83313ede6f92be04d18f1cc86ec985fdf074969ddae7c27d2a18987358463082"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "83313ede6f92be04d18f1cc86ec985fdf074969ddae7c27d2a18987358463082"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "36061845d141954d430be35ac5e51f52f7da28e4e13760289551efdd5f43f11c"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "59ba0ee2bf945f2e5a8da6995499629c8d5af8264f167942c091d5f11f2f12ee"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "198dd2daeacd178dc038bfd5cf5346eb03414992af4a97b3949568cfa3bec7a3"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "18b022a2106bba2aba6ae1cd1066507d21b10f94993952ac064251e99367e6e1"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "1ecb9726ae516377d193234b38a15779889df1faef67be88bfad619fde828263"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-tiles",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "b2f2a8bb07c923f4c95c27cd6da360f20e245e44552f1a0bde37c3e9b8e2d42f"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "333ed50b27c507f29798c41eba7d1f5adecc47022bf44dd4ad7d88d0ec713e0e"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "333ed50b27c507f29798c41eba7d1f5adecc47022bf44dd4ad7d88d0ec713e0e"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "0a91b6772529a524c79549e98999a87f325b28cc3c157e0cc1d203c84ef736ac"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "0a91b6772529a524c79549e98999a87f325b28cc3c157e0cc1d203c84ef736ac"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "5a87cd7abb74c91e4b9af9fe65d88113c964a494b0b4dc1c7c92c8e19dc16f18"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "7ad69aa766cb16a92c64721ad7c2f5f6d6589bb3d2bb96372137805976f9d916"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "e61e94c0d7bd28d8a00a5fbe2dc52b18e6195d9925b84e5cd0b45fca45b686b7"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "c2d03d59f8953ec29ca5c90e61574754ca88a3957a95519af5adb28a420edde1"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "e56f5686a5bcd1908a6a79653cf277c928140ac0b44c0728dde708596ffeabeb"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "e56f5686a5bcd1908a6a79653cf277c928140ac0b44c0728dde708596ffeabeb"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "d3e10ceb56fc46ddfe7c7e1c053253ba7ffbdecd0334d2fea20ea20ea4a8e614"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "d3e10ceb56fc46ddfe7c7e1c053253ba7ffbdecd0334d2fea20ea20ea4a8e614"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "994ca64a8b7a872efe183a97a2d8e82ba2141b19b8593fac971a35d850a81fe6"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "994ca64a8b7a872efe183a97a2d8e82ba2141b19b8593fac971a35d850a81fe6"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "2b772da069762188f04cd23900b670d667f22ae7ddde72729fda4eb8cbad74fc"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "6ea7a64b454a5e45387453c4e4da4a56458f13e4e0047aa1980bf4bc5ddada3f"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "9c9803afa6610e4fcf44c989b05407a1141c9aca97810a8c89c981a7f8c35148"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "dcf97015c9a514737efc3b7d691673ad789a9126fa2bcddd8f35bf108e63bbc7"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "58c0d5a08960b6e10ae3be9c28e303be6f874e16ed244c540205c1b7a7191dc0"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "85ae62b6c0bebd38a41e84a33b3ad87861737cfc1c6e0930d3ebc0346e324cb9"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "77b264880e0ad827142674df48c96634e020f91ca68126deae057dd825976c31"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "77b264880e0ad827142674df48c96634e020f91ca68126deae057dd825976c31"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "ac087526e737f87a87b3f038e079789d6a24c3c6f7bc255440a276db70806775"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "ac087526e737f87a87b3f038e079789d6a24c3c6f7bc255440a276db70806775"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "e14a0d1e61b399573ef0ebb294621fdcf4b7ad8f8a47f9e393033bc5fba48822"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "e14a0d1e61b399573ef0ebb294621fdcf4b7ad8f8a47f9e393033bc5fba48822"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "dd36f86ffc3075c90f6d6318f3a16b203d41ad69ab30c59295eed14d75e61793"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "e2b19eac1c4a7c5a549bf366aaa475f03ff1b5aa85067cacff8f438578704433"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "11775919adefd637dbbb019fec8ed802f7b1ccff5be7f4e46fa8742700f8fce0"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "b837d1c88c95a71cf09028330d70aa203d4fe9d8b95ef6691cf78d24b8ceafe3"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "783d89940e0694f67d54f6c25ec9130121a382726d6e140140180c885294bcf7"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "34bbbb997fe903b2cf22ef85170873d5b59ba1e731eeb9028ac3657300fdd588"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "0e201bc46aa46eaddf9e270840db33fc4f4e89eaf65fbcd4445a3dfe3d197426"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "0e201bc46aa46eaddf9e270840db33fc4f4e89eaf65fbcd4445a3dfe3d197426"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "f97bd8a23b97307908f1c71328c716c9b9e666ff5b844f34ebc25b417dde0986"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "f97bd8a23b97307908f1c71328c716c9b9e666ff5b844f34ebc25b417dde0986"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "9dd220a95000d07d14874a508388c6d3e2ae6d12ec50cb1c4c99ce74f2038c55"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "9dd220a95000d07d14874a508388c6d3e2ae6d12ec50cb1c4c99ce74f2038c55"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "816a912d2e0e64caeaab0683756e590d10c2cf1f3b58fdad4c3f12f2db8fa934"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "bf1ec04e41d518eff84d2ea41814e4aebfe3b54d3e91802c7035a74d8550505b"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "311c49c6ec148390d50ec09e04044cc5ac5b5c902b596ec5fd2d9ebf2ed9ee94"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "3864fc69ef0d18fdb8c9a03b0fa4c0fbe373f72b17eccd149a03f249a5692704"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "d598a7ad903a2d63dd6d4f7f04f9dcc1ee216ea4e8b35044808e56bd95af702f"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 4,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "cfdd5b86420bd63e3f541e9ef315a49ef5afbb3231499ff11d4d0739b42618b9"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "a0356b1761b1f71e8e07829660333f598936d8932a895f7a8926cce888cb3820"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "a0356b1761b1f71e8e07829660333f598936d8932a895f7a8926cce888cb3820"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "f9e245fb27fffb2f3d7b87c8598523f34f3cea3f13f57c08fc3ca59d0c7202b3"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "f9e245fb27fffb2f3d7b87c8598523f34f3cea3f13f57c08fc3ca59d0c7202b3"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "f7b0f791cd08d04bc0858e28721109e6eb6105c5e805fb8306bf6466cd0c3b19"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "0972f6b316b53c9779ad1865281ffd8eced4f9047d2740d74299b310d52a19aa"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "ccb0f458a24d26f49957c7245155f392b88d1cb619c046e44b0ef0eefb83b623"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": null,
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "4a2472d9ffbabc708e8a7f5c3d0aa19b20f4bef6b5533651b5b72c85f6289d64"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "650bb3dc46a3525511b4598b0824d6fab4da417eaf124eeed1ecf7dcd50aa6e8"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "650bb3dc46a3525511b4598b0824d6fab4da417eaf124eeed1ecf7dcd50aa6e8"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "a296149e737111477d7a99d19678850d6f8d397e5737a50d4df34531bbc084a3"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "a296149e737111477d7a99d19678850d6f8d397e5737a50d4df34531bbc084a3"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "6619bceb8d8e3b22281b69069d70603ed227ad628523189f4cd0f0dbe0cd8397"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "6619bceb8d8e3b22281b69069d70603ed227ad628523189f4cd0f0dbe0cd8397"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "38c885d70ec340785c19c2448de63efcb8059758cc232436977c0ca0b67d601a"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "973debef59c40ff50a9ad596f9855810d7956227a05b6fd6d286ba8caaf78768"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "ac5076686fab257fc80224c6ed5eb20225b40d02268fc5148ecacb0297059f83"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "17e91e0e456f4c6bb2ae6c1b6fbab83d8e2cbd03c9c770ed6c6713955b0e99fa"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "a00357a9df7e19594628bf01d469bdaa0ed30bf7a4a10c7cb8e274831843eb1d"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "cc1519c388c9adb8c5ca6464aaf80ecc8e956f38745ff4981f5f4404ca34bcd6"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "d1a0a45dd222779b5ea8847fa9aeded2904e31b5b6736f904441ab4db3fbcee1"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "d1a0a45dd222779b5ea8847fa9aeded2904e31b5b6736f904441ab4db3fbcee1"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "f741426b90f0526436519bb95fa16832fa7b2ec9bf8a89ef443eb304d100ecf5"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "f741426b90f0526436519bb95fa16832fa7b2ec9bf8a89ef443eb304d100ecf5"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "97486ae2700f1228bcbacdaa369c3993995985b4ea9c6722f90eefacebcbea93"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "97486ae2700f1228bcbacdaa369c3993995985b4ea9c6722f90eefacebcbea93"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "978603c779df605f595e693fd490d4df6bab9575bcae71dfc6564e4e7f01f7f6"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "9fc8d8224f4ec35ec9ada204e977f67a1bbc92cff195e3025f8bca0def272a9e"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "02f793d549b44d69a0154640b9a3840867c675fe9be8097480ab69803e06083b"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "80b1978e798e75258d8907a162a133661852fe408ea39f235c303c660291240e"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "bfe0cab618ba479a731102f1ed9710b66fca3075456d7269a457be94d1317d9b"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 2,
+     "upsample": false
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "61dc1e6163cf109f7783e99f5dbfff94cb33a255cb7cb1b9bd91de8321f95512"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "a10b79146435c1a8760bb2d84a4f0f4f3557abd54fc9bb773069b81472e14bde"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "a10b79146435c1a8760bb2d84a4f0f4f3557abd54fc9bb773069b81472e14bde"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "2d7cdfdf516b20b0ab830994600236954965c979d3d522de756f24d2c0ebced9"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32",
+     "biasM": "f32",
+     "residual": "f32"
+    }
+   },
+   "sha256": "2d7cdfdf516b20b0ab830994600236954965c979d3d522de756f24d2c0ebced9"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "ddc0272a4c046aa842c8ebd1a4a00f35f9d61a9bee6b54cc926092917893ec0f"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f32",
+     "b": "f32",
+     "c": "f32"
+    }
+   },
+   "sha256": "ddc0272a4c046aa842c8ebd1a4a00f35f9d61a9bee6b54cc926092917893ec0f"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "ebe58fa6e61d9eed6c51da6366046090932c9dd657fb7c6179e969055d2c7683"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "066ef4638a7f9a7443ce0b801445723daab97a1ea481281b2cf771033f0fa2bf"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "f630a9719c5935d1aa7f0dad1e5188026cb53b689664992897f9f5a63a227215"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "biasM": true,
+    "residual": true,
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16",
+     "biasM": "f32",
+     "residual": "f16"
+    }
+   },
+   "sha256": "644835d081865850a382f1a5ba63b97c409cf6a27ab13d5465b046640d21543f"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": false,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "20fd72891ba33291624c9c6443218bfe4c27669880097bd14d9a52a51a70d2f7"
+  },
+  {
+   "layout": {
+    "aKContiguous": true,
+    "bNContiguous": true,
+    "conv": {
+     "kh": 3,
+     "kw": 3,
+     "stride": 1,
+     "upsample": true
+    },
+    "precision": "f16-partial",
+    "tile": {
+     "tm": 8,
+     "tn": 4,
+     "bk": 16
+    },
+    "aPairs": true,
+    "normB": {
+     "silu": true
+    },
+    "types": {
+     "a": "f16packed",
+     "b": "f16",
+     "c": "f16"
+    }
+   },
+   "sha256": "75356d918d84b3169f3b9ab30c0d52e19c8892c50233f43c8b2b0047727c03b3"
+  }
+ ]
+}

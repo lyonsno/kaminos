@@ -61,6 +61,7 @@
     "test:live:sam31-two-image-tracker-webgpu": "node tools/sam31-two-image-tracker-browser-parity-smoke.mjs",
     "test:weight-representation": "node tests/weight-representation-contracts.mjs",
     "test:linear": "node tests/linear-kernel-contracts.mjs && node tests/linear-kernel-witness-contracts.mjs",
+    "test:tiled-gemm": "node tests/tiled-gemm-kernel-contracts.mjs",
     "test:linear-browser": "node tests/linear-kernel-browser-smoke.mjs"
   }
 }
