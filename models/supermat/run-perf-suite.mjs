@@ -124,7 +124,7 @@ try {
       ['control-faithful-1024', { activations: 'f32', fuseNorm: false }, 1024],
     ]) {
       run(id, witness, [...common, '--stage', 'route', '--fixture', `${state}/reference/ring-0000-${size}`, '--weights', `${state}/weights/f16`,
-        ...image, '--options', JSON.stringify(options), '--run-options', JSON.stringify({ runs: 3 })]);
+        ...image, '--options', JSON.stringify(options), '--run-options', JSON.stringify({ runs: 6 })]);
     }
   } else if (plan === 'landing-check') {
     // Correctness gate before landing: F32 route parity, the product profile,
