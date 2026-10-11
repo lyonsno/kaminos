@@ -65,7 +65,7 @@ export function adaptDutyFlops({ current, flops, ownMs, targetMs, bounds: [min, 
 }
 
 export const SUPERMAT_OPS_OPTIONS = Object.freeze(['label', 'attention', 'gemmTile', 'fuseNorm', 'attentionKernel', 'gemmKernel',
-  'gemmPrecision', 'activations', 'profile']);
+  'gemmPrecision', 'activations', 'profile', 'largeGemmTile']);
 
 export function createSuperMatOps(device, options = {}) {
   const unknown = Object.keys(options).filter(key => !SUPERMAT_OPS_OPTIONS.includes(key));
@@ -73,7 +73,11 @@ export function createSuperMatOps(device, options = {}) {
   const { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 }, fuseNorm = false,
     attentionKernel = 'scalar', gemmKernel = 'tiled', gemmPrecision = 'f32', activations = 'f32',
     // profile: per-dispatch GPU timestamps (own pass per dispatch) for unscheduled runs; diagnostic only.
-    profile = false } = options;
+    profile = false,
+    // Per-GEMM tile policy: GEMMs that still yield >= minWorkgroups workgroups
+    // with the larger per-thread tile use it (large decoder convs); smaller
+    // ones keep gemmTile. null disables. Summation order per output is unchanged.
+    largeGemmTile = { tm: 8, tn: 4, bk: 16, minWorkgroups: 1024 } } = options;
   if (profile && !device.features?.has?.('timestamp-query')) throw new Error('profile needs the timestamp-query feature');
   // activations: storage of intermediate tensors ('f16' halves memory traffic; math stays F32).
   if (!['f32', 'f16'].includes(activations)) throw new Error(`unknown activation storage ${activations}`);
@@ -84,6 +88,9 @@ export function createSuperMatOps(device, options = {}) {
   const subgroupMatrix = gemmKernel === 'subgroup-matrix' || (gemmKernel === 'auto' && subgroupMatrixUsable(device));
   if (subgroupMatrix && !subgroupMatrixUsable(device)) throw new Error('subgroup-matrix GEMM requested but unavailable on this device');
   const tileShape = subgroupMatrix ? { ...SUBGROUP_MATRIX_TILE } : gemmTileShape(gemmTile);
+  const largeTile = !subgroupMatrix && largeGemmTile ? gemmTileShape(largeGemmTile) : null;
+  if (largeTile && largeTile.bn !== tileShape.bn) throw new Error('largeGemmTile must keep the base tile column width');
+  const largeTileMinWorkgroups = largeGemmTile?.minWorkgroups ?? 1024;
   if (!['streaming', 'materialized'].includes(attention)) throw new Error(`unknown attention mode ${attention}`);
   const pipelines = new Map();
   const pool = new Map();
@@ -402,10 +409,13 @@ export function createSuperMatOps(device, options = {}) {
       if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`gemm ${name} must be positive`);
     }
     const c = spec.c ?? alloc(spec.outShape ?? [batch, M, N], spec.name ?? 'gemm', { dtype: spec.dtype ?? activations });
+    const nCountForTile = spec.nCount ?? N - (spec.nBase ?? 0);
+    const useLarge = largeTile && Math.ceil(nCountForTile / largeTile.bn) * Math.ceil(M / largeTile.bm) * batch >= largeTileMinWorkgroups;
+    const tile = useLarge ? largeTile : tileShape;
     const layout = {
       aKContiguous: spec.aSK === 1, bNContiguous: spec.bSN === 1,
       biasM: Boolean(spec.biasM), biasM2: Boolean(spec.biasM2), biasN: Boolean(spec.biasN),
-      residual: Boolean(spec.residual), conv: spec.conv ?? null, tile: gemmTile, precision: gemmPrecision,
+      residual: Boolean(spec.residual), conv: spec.conv ?? null, tile: useLarge ? largeGemmTile : gemmTile, precision: gemmPrecision,
       normB: spec.normB ? { silu: Boolean(spec.normB.silu) } : null,
       types: { a: storageKind(spec.a), b: storageKind(spec.b), c: storageKind(c),
         ...(spec.biasM ? { biasM: storageKind(spec.biasM) } : {}), ...(spec.biasM2 ? { biasM2: storageKind(spec.biasM2) } : {}),
@@ -420,8 +430,8 @@ export function createSuperMatOps(device, options = {}) {
     views.push(bindingView(c, 'gemm c'));
     views.push(params(gemmWords(spec)));
     const nBase = spec.nBase ?? 0, nCount = spec.nCount ?? N - nBase;
-    if (nBase % tileShape.bn || nBase < 0 || nCount <= 0 || nBase + nCount > N) throw new Error('gemm column range must be tile-aligned and inside N');
-    const groups = [Math.ceil(nCount / tileShape.bn), Math.ceil(M / tileShape.bm), batch];
+    if (nBase % tile.bn || nBase < 0 || nCount <= 0 || nBase + nCount > N) throw new Error('gemm column range must be tile-aligned and inside N');
+    const groups = [Math.ceil(nCount / tile.bn), Math.ceil(M / tile.bm), batch];
     if (groups.some(value => value > 65535)) throw new RangeError('gemm grid exceeds device workgroup limit');
     dispatch(subgroupMatrix ? gemmSubgroupMatrixShader(layout) : gemmShader(layout), views, groups,
       `${spec.conv ? (spec.normB ? 'conv+norm' : 'conv') : 'gemm'}:${spec.name ?? 'gemm'}`, 2 * M * nCount * K * batch);

@@ -64,14 +64,12 @@ export const BENCH_VARIANTS = [
   { id: 'f16act', f16: true, activations: 'f16' },
   { id: 'f16act-fused', f16: true, activations: 'f16', fuseNorm: true, normOnly: true },
   { id: 'f16act-f16partial', f16: true, activations: 'f16', gemmPrecision: 'f16-partial' },
-  { id: 'f32act-bk32', f16: true, gemmTile: { tm: 4, tn: 4, bk: 32 } },
   { id: 'f32act-f16tiles', f16: true, gemmPrecision: 'f16-tiles' },
-  { id: 'f32act-f16tiles-bk32', f16: true, gemmPrecision: 'f16-tiles', gemmTile: { tm: 4, tn: 4, bk: 32 } },
   { id: 'f16act-fused-f16tiles', f16: true, activations: 'f16', fuseNorm: true, normOnly: true, gemmPrecision: 'f16-tiles' },
-  { id: 'f32act-f16tiles-tm8', f16: true, gemmPrecision: 'f16-tiles', gemmTile: { tm: 8, tn: 4, bk: 16 } },
-  { id: 'f32act-f16tiles-tn8', f16: true, gemmPrecision: 'f16-tiles', gemmTile: { tm: 4, tn: 8, bk: 16 } },
-  { id: 'f32act-f16tiles-8x8', f16: true, gemmPrecision: 'f16-tiles', gemmTile: { tm: 8, tn: 8, bk: 16 } },
-  { id: 'f32act-f16tiles-8x8-bk8', f16: true, gemmPrecision: 'f16-tiles', gemmTile: { tm: 8, tn: 8, bk: 8 } },
+  { id: 'f32act-f16tiles-auto', f16: true, gemmPrecision: 'f16-tiles', largeGemmTile: { tm: 8, tn: 4, bk: 16, minWorkgroups: 1024 } },
+  { id: 'f32act-auto', f16: true, largeGemmTile: { tm: 8, tn: 4, bk: 16, minWorkgroups: 1024 } },
+  { id: 'f16act-fused-f16tiles-auto', f16: true, activations: 'f16', fuseNorm: true, normOnly: true, gemmPrecision: 'f16-tiles',
+    largeGemmTile: { tm: 8, tn: 4, bk: 16, minWorkgroups: 1024 } },
 ];
 
 export async function runSuperMatBench({ iterations = 6, rounds = 3, variants = BENCH_VARIANTS, cases = CASES } = {}) {
@@ -89,7 +87,8 @@ export async function runSuperMatBench({ iterations = 6, rounds = 3, variants = 
         if (variant.normOnly && testCase.kind !== 'normconv') continue;
         const ops = createSuperMatOps(device, { label: `bench.${variant.id}`, gemmKernel: variant.gemmKernel ?? 'tiled',
           gemmPrecision: variant.gemmPrecision ?? 'f32', activations: variant.activations ?? 'f32', fuseNorm: Boolean(variant.fuseNorm),
-          attentionKernel: variant.attentionKernel ?? 'scalar', ...(variant.gemmTile ? { gemmTile: variant.gemmTile } : {}) });
+          attentionKernel: variant.attentionKernel ?? 'scalar', ...(variant.gemmTile ? { gemmTile: variant.gemmTile } : {}),
+          largeGemmTile: variant.largeGemmTile ?? null });
         const inputs = [];
         let flops, run;
         if (testCase.kind === 'normconv') {
