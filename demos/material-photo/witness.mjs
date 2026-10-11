@@ -5,6 +5,7 @@ import { parseArgs } from 'node:util';
 import { createHash } from 'node:crypto';
 import { launchChrome, openPage } from '../../models/supermat/chrome-cdp.mjs';
 import { validateEpisode, captureSurfaceFrame, validateComparison, validateContrastArms } from './witness-checks.js';
+import { readRawEvidence } from './witness-raw.mjs';
 
 const {values}=parseArgs({options:{...Object.fromEntries(['repo-root','expected-commit','chrome','output','port','samples','sizes'].map(key=>[key,{type:'string'}])),contrast:{type:'boolean'}}});
 const output=path.resolve(values.output??'material-photo-witness');
@@ -30,8 +31,9 @@ try{
   const served=await(await fetch(`${base}/demos/material-photo/main.js`)).text();
   if(served!==await fs.readFile(path.join(root,'demos/material-photo/main.js'),'utf8'))throw Error('Wrong served checkout');
   report.phase='browser';await persist();
-  browser=await launchChrome({chrome:values.chrome,windowSize:'1440,1000'});
+  browser=await launchChrome({chrome:values.chrome,windowSize:'1440,1000',onExit:event=>{report.browserExit=event;}});
   report.browser={executable:browser.executable,product:browser.version.product,pid:browser.child.pid};
+  browser.child.stderr.on('data',bytes=>{report.browserStderr=(report.browserStderr??'')+bytes.toString();});
   const sessionId=await openPage(browser.cdp,`${base}/demos/material-photo/index.html`);
   const evaluate=async(expression)=>{
     const response=await browser.cdp.call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true},sessionId);
@@ -67,14 +69,9 @@ try{
       report.phase=`contrast-${key}`;await persist();
       episode.rawEvidence={};
       for(const name of ['image','albedo','roughness','metallic','orm','plane-albedo','plane-orm']){
-        const raw=await evaluate(`(()=>{const {image,output}=window.__materialPhotoActions.materialEvidence();const name=${JSON.stringify(name)};
-          const value=name==='image'?image:name.startsWith('plane-')?{width:output.width,height:output.height,data:output.planes[name.slice(6)]}:output.maps[name];
-          if(!value?.data)throw Error('Missing raw material evidence '+name);
-          const bytes=new Uint8Array(value.data.buffer,value.data.byteOffset,value.data.byteLength);let binary='';
-          for(let i=0;i<bytes.length;i+=4096)binary+=String.fromCharCode(...bytes.subarray(i,i+4096));
-          return {width:value.width,height:value.height,type:value.data.constructor.name,base64:btoa(binary)};})()`);
-        const bytes=Buffer.from(raw.base64,'base64'),file=path.join(output,`${key}-${name}.raw`);
-        await fs.writeFile(file,bytes);episode.rawEvidence[name]={width:raw.width,height:raw.height,type:raw.type,file,sha256:createHash('sha256').update(bytes).digest('hex')};
+        const raw=await readRawEvidence(evaluate,name),file=path.join(output,`${key}-${name}.raw`);
+        await fs.writeFile(file,raw.bytes);episode.rawEvidence[name]={width:raw.width,height:raw.height,type:raw.type,byteLength:raw.byteLength,file,sha256:createHash('sha256').update(raw.bytes).digest('hex')};
+        await persist();
       }
       await evaluate("window.__materialPhotoActions.view('materials')");await settle();
       const light=await evaluate('window.__materialPhotoActions.presentation().light');
@@ -211,4 +208,4 @@ try{
   if(git(['rev-parse','HEAD'])!==report.source.commit)throw Error('Source moved during witness');
   report.phase='complete';report.status='passed';
 }catch(error){report.error=error.stack??String(error);process.exitCode=1;}
-finally{await browser?.close();await stopServer();await persist();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error??null,report:path.join(output,'report.json')}));}
+finally{report.browserBeforeCleanup=browser?{exitCode:browser.child.exitCode,signalCode:browser.child.signalCode}:null;await browser?.close();await stopServer();await persist();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error??null,report:path.join(output,'report.json')}));}
