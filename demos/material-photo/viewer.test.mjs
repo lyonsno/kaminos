@@ -63,6 +63,22 @@ test('GI diagnostics survive tuning changes and reject unsupported views atomica
   viewer.setDiagnostic('incoming');viewer.setTuning({gain:2});assert.equal(calls.settings.at(-1).view,'incoming');
   assert.throws(()=>viewer.setDiagnostic('imaginary'));assert.equal(viewer.getDiagnostic(),'incoming');
 });
+test('real Three MRT construction forwards context-added light for both lit receivers',async()=>{
+  const {viewer,THREE}=await viewerFixture();
+  const {vec3,vec4,output,emissive,mrt}=THREE.TSL;
+  for(const material of [viewer.relitMaterial,viewer.physicalMaterial]) {
+    const renderer={getRenderTarget:()=>({depthBuffer:false}),getMRT:()=>mrt({output,emissive})};
+    material.setupVertex=()=>vec4(0,0,0,1);material.setupHardwareClipping=()=>{};material.setupClipping=()=>null;
+    material.setupDiffuseColor=()=>{};material.setupAmbientOcclusion=()=>{};material.setupVariants=()=>{};
+    material.setupLighting=()=>vec3(1);material.setupOutput=(builder,node)=>node;material.setupObserver=()=>({});
+    const builder=new THREE.NodeBuilder(new THREE.Mesh(undefined,material),renderer);
+    let received;builder.context.getOutput=node=>received=vec4(node.rgb.add(7),node.a);
+    material.setup(builder);
+    const fragment=builder.flowNodes.fragment[0];
+    assert.ok(fragment.nodes.some(node=>node.targetNode===output&&node.sourceNode===received),
+      `${material===viewer.relitMaterial?'relit':'inferred'} receiver lost the context result in the MRT`);
+  }
+});
 test('glow, bloom and exposure controls preserve raw maps and round-trip atomically',async()=>{
   const {viewer}=await viewerFixture();
   assert.equal(typeof viewer.setEffects,'function','emission and bloom need independent live controls');

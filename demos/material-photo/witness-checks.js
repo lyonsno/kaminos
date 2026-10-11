@@ -1,5 +1,6 @@
 export function validateEpisode(state, source, size) {
   const run=state?.runs?.at(-1);
+  if(state?.gpuErrors?.length)throw Error('Uncaptured GPU errors invalidate the output episode');
   if(state?.status!=='done'||run?.status!=='done')throw Error('Both models must complete');
   if(state.source!==source||run.source!==source)throw Error('Wrong photograph source');
   if(state.identity?.sharedDevice!==true||state.identity.backend?.kind!=='webgpu-local')throw Error('Actual shared WebGPU device required');

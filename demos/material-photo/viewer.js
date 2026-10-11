@@ -139,6 +139,8 @@ export class MaterialPhotoViewer {
       }
       this.photoMaterial = new THREE.MeshBasicNodeMaterial({ map: texture, side: THREE.DoubleSide, toneMapped: false });
       this.relitMaterial = new THREE.MeshStandardNodeMaterial({ map: texture, side: THREE.DoubleSide, roughness: .4, metalness: 0, emissiveIntensity: 0 });
+      // Three forwards context-modified output into MRT only for a custom output.
+      this.relitMaterial.outputNode=output;
       this.physicalMaterial = new THREE.MeshStandardNodeMaterial({ map: texture, side: THREE.DoubleSide, roughness: 1, metalness: 0, emissive: 0xffffff, emissiveIntensity: 0 });
       this.mesh = new THREE.Mesh(geometry, this.photoMaterial);
       this.mesh.frustumCulled = false;

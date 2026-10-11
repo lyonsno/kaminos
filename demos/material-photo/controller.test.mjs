@@ -23,7 +23,7 @@ async function controller() {
     querySelector: selector => views.find(n => selector === `[data-view=${n.dataset.view}]`),
     querySelectorAll: selector => selector === '[data-focus]'?[]:selector === '[data-sample]' ? samples : selector.includes(':not') ? views.slice(1) : views,
   };
-  const device = { features:new Set(['shader-f16']),queue: { async onSubmittedWorkDone() {} }, lost: new Promise(() => {}), destroy() {} };
+  const device = { features:new Set(['shader-f16']),addEventListener(){},queue: { async onSubmittedWorkDone() {} }, lost: new Promise(() => {}), destroy() {} };
   const route = () => ({ routeId: 'test', runtime: {}, async drain() {},
     enqueue({ execute }) { return { completion: Promise.resolve().then(() => execute({})).then(output => ({ status:'succeeded',output }), failure => ({ status:'failed',failure })) }; } });
   const session = { registerRoute: async () => route(), unregisterRoute() {}, async close() {} };

@@ -67,6 +67,14 @@ try{
     const settle=()=>evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     await evaluate("document.getElementById('glow').checked=false;document.getElementById('glow').dispatchEvent(new Event('change'))");
     await settle();
+    if(values.effects||values.contrast){
+      episode.rawEvidence={};
+      for(const name of ['image','albedo','roughness','metallic','orm','plane-albedo','plane-orm']){
+        const raw=await readRawEvidence(evaluate,name),file=path.join(output,`${key}-${name}.raw`);
+        await fs.writeFile(file,raw.bytes);episode.rawEvidence[name]={width:raw.width,height:raw.height,type:raw.type,byteLength:raw.byteLength,file,sha256:createHash('sha256').update(raw.bytes).digest('hex')};
+        await persist();
+      }
+    }
     if(values.effects){
       report.phase=`effects-${key}`;await persist();
       const identity=episode.state.identity.supermat;
@@ -91,15 +99,17 @@ try{
       }
       await evaluate(`window.__materialPhotoActions.setEffects(${JSON.stringify(baseline.effects)});window.__materialPhotoActions.compare();document.getElementById('glow').checked=false;document.getElementById('glow').dispatchEvent(new Event('change'))`);
       await settle();
+      episode.receivedDiagnostics={};
+      for(const mode of ['relit','materials']){
+        await evaluate(`window.__materialPhotoActions.view(${JSON.stringify(mode)});document.getElementById('gi-view').value='gi';document.getElementById('gi-view').dispatchEvent(new Event('change'))`);await settle();
+        const presentation=await evaluate('window.__materialPhotoActions.presentation()');
+        if(presentation.mode!==mode||presentation.gi.view!=='gi')throw Error('Wrong received-light diagnostic');
+        episode.receivedDiagnostics[mode]={presentation,frame:await capture(`${key}-received-${mode}`)};
+      }
+      await evaluate("document.getElementById('gi-view').value='scene';document.getElementById('gi-view').dispatchEvent(new Event('change'));window.__materialPhotoActions.compare()");await settle();
     }
     if(values.contrast){
       report.phase=`contrast-${key}`;await persist();
-      episode.rawEvidence={};
-      for(const name of ['image','albedo','roughness','metallic','orm','plane-albedo','plane-orm']){
-        const raw=await readRawEvidence(evaluate,name),file=path.join(output,`${key}-${name}.raw`);
-        await fs.writeFile(file,raw.bytes);episode.rawEvidence[name]={width:raw.width,height:raw.height,type:raw.type,byteLength:raw.byteLength,file,sha256:createHash('sha256').update(raw.bytes).digest('hex')};
-        await persist();
-      }
       await evaluate("window.__materialPhotoActions.view('materials')");await settle();
       const light=await evaluate('window.__materialPhotoActions.presentation().light');
       episode.contrast={};
@@ -231,6 +241,8 @@ try{
     await persist();
   }
   report.errors=await evaluate('window.__materialPhotoWitnessErrors');
+  report.gpuErrors=await evaluate('window.__materialPhoto.gpuErrors??[]');
+  if(report.gpuErrors.length)throw Error('Uncaptured GPU errors');
   if(report.errors.length)throw Error('Uncaught browser errors');
   if(git(['rev-parse','HEAD'])!==report.source.commit)throw Error('Source moved during witness');
   report.phase='complete';report.status='passed';

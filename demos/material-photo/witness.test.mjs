@@ -66,6 +66,7 @@ test('witness rejects false completion, stale source and wrong device', async()=
     x=>{x.identity.backend.kind='wasm';},x=>{x.runs[0].moge.weights='stub';},
     x=>{x.runs[0].output.triangles=0;},x=>{x.runs[0].output.materialSize=[0,0];},
     x=>{x.runs[0].source='Old photograph';},x=>{delete x.identity.supermat;},
+    x=>{x.gpuErrors=['Invalid rendered material pipeline'];},
   ]){const bad=structuredClone(good);mutate(bad);assert.throws(()=>validateEpisode(bad,'Celebration'));}
 });
 

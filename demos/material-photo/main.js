@@ -123,6 +123,9 @@ async function setup(){
     session=await createWebGpuInferenceSession({sessionId:crypto.randomUUID(),device:gpu.device,adapter:gpu.adapter,backendIdentity:gpu.backendIdentity});
     viewer=new MaterialPhotoViewer();await viewer.init($('scene'),gpu.device);
     await viewer.applyPreset(DEFAULT_PRESET);
+    gpu.device.addEventListener('uncapturederror',event=>{
+      (state.gpuErrors??=[]).push(event.error.message);fail(event.error);
+    });
     gpu.device.lost.then(info=>{if(info.reason!=='destroyed'){state.status='error';state.error=`WebGPU device lost: ${info.message}`;status(state.error,true);}});
     state.identity={backend:gpu.backendIdentity,renderer:'kaminos-three-webgpu',gi:viewer.gi.debugState().route??'three-ssilvb-scene-gi-v1',sharedDevice:viewer.renderer.backend.device===gpu.device};
   })().catch(async error=>{
