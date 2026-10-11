@@ -8,13 +8,17 @@ test('contrast witness rejects stale arms, unchanged applied maps and unequal li
   const checks=await import('./witness-checks.js');
   assert.equal(typeof checks.validateContrastArms,'function','contrast arms need effective-setting admission');
   const make=mode=>({presentation:{mode:'materials',map:'surface',light:{intensity:1},camera:{orbit:[0,0]},environment:{textureUUID:'hdr',intensity:1},
-    gi:{enabled:true,view:'scene',settings:{gain:1}},physicalbaseline:{exposure:1,activeMaterial:{roughnessMapUUID:mode==='original'?'raw':mode,mapUUID:'same-albedo'}},
+    gi:{enabled:true,view:'scene',settings:{gain:1},debugState:{identity:'three-ssilvb-scene-gi-v1',estimator:{expFactor:2},frames:10}},physicalbaseline:{exposure:1,activeMaterial:{roughnessMapUUID:mode==='original'?'raw':mode,mapUUID:'same-albedo'}},
     contrast:{settings:{mode,roughness:.5,metallic:.5},gains:{roughness:mode==='original'?0:.5,metallic:0}}}});
   const good=Object.fromEntries(['original','manual','highlight'].map(mode=>[mode,make(mode)]));
   assert.doesNotThrow(()=>checks.validateContrastArms(good));
+  const advancing=structuredClone(good);advancing.manual.presentation.gi.debugState.frames=20;advancing.highlight.presentation.gi.debugState.frames=30;
+  assert.doesNotThrow(()=>checks.validateContrastArms(advancing),'render progress is not illumination drift');
   for(const mutate of [arms=>{delete arms.manual;},arms=>{arms.manual.presentation.contrast.settings.mode='original';},
     arms=>{arms.highlight.presentation.light.intensity=2;},arms=>{arms.manual.presentation.physicalbaseline.activeMaterial.roughnessMapUUID='raw';},
-    arms=>{arms.highlight.presentation.gi.view='ao';},arms=>{arms.manual.presentation.map='roughness';}]){
+    arms=>{arms.highlight.presentation.gi.view='ao';},arms=>{arms.manual.presentation.map='roughness';},
+    arms=>{arms.manual.presentation.gi.enabled=false;},arms=>{arms.manual.presentation.gi.settings.gain=2;},
+    arms=>{arms.manual.presentation.gi.debugState.estimator.expFactor=3;},arms=>{arms.manual.presentation.gi.debugState.identity='other';}]){
     const bad=structuredClone(good);mutate(bad);assert.throws(()=>checks.validateContrastArms(bad));
   }
 });

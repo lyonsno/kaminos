@@ -211,7 +211,11 @@ $('run').onclick=infer;
 $('map').onchange=()=>{if(viewer){const map=$('map').value;view('materials');viewer.map=map;$('map').value=map;}};
 $('gi').onchange=()=>{viewer.useGI=$('gi').checked;};
 $('glow').onchange=()=>{viewer.glow=$('glow').checked;};
-$('gi-view').onchange=()=>{viewer.setDiagnostic($('gi-view').value);viewer.useGI=true;$('gi').checked=true;};
+$('gi-view').onchange=()=>{
+  const diagnostic=$('gi-view').value;
+  if(!viewer.comparison&&!['relit','materials'].includes(viewer.mode))view('materials');
+  viewer.map='surface';$('map').value='surface';viewer.setDiagnostic(diagnostic);viewer.useGI=true;$('gi').checked=true;
+};
 function setMaterialContrast(value){viewer.setMaterialContrast(value);syncControls();return viewer.primary.presentation().contrast;}
 $('contrast-mode').onchange=()=>setMaterialContrast({mode:$('contrast-mode').value});
 for(const name of ['roughness','metallic'])$(`${name}-strength`).oninput=()=>setMaterialContrast({[name]:Number($(`${name}-strength`).value)});
@@ -226,6 +230,7 @@ for(const id of tuningFields)$(id).onchange=()=>{
 };
 let sunPointer=null;
 function setLightPosition(u,v){viewer.setLightScreenPosition(u,v);syncSun();}
+function setLightHandle(x,y){viewer.setLightHandle(x,y);syncSun();}
 function dragSun(event){
   const bounds=$('light-ring').getBoundingClientRect();
   setLightPosition((event.clientX-bounds.left)/bounds.width,(event.clientY-bounds.top)/bounds.height);
@@ -273,7 +278,7 @@ $('environment').onchange=()=>changeEnvironment($('environment').value);
 for(const [id,key]of [['environment-rotation','rotation'],['environment-intensity','intensity'],['direct-intensity','direct']])$(id).oninput=()=>{
   try{viewer.setLighting({[key]:Number($(id).value)});$('preset-error').textContent='';}catch(error){$('preset-error').textContent=error.message;}
 };
-window.__materialPhotoActions={infer,sample,view,compare,changeEnvironment,exportPreset,importPreset,setLightPosition,setMaterialContrast,
+window.__materialPhotoActions={infer,sample,view,compare,changeEnvironment,exportPreset,importPreset,setLightPosition,setLightHandle,setMaterialContrast,
   materialEvidence:()=>({image,output:results.snapshot().materials}),presentation:()=>viewer?.presentation()??null,async pixels(presentedFrame){
   // Inspect the browser's presented canvas screenshot, not a discarded WebGPU drawing buffer.
   const response=await fetch(presentedFrame),bitmap=await createImageBitmap(await response.blob());

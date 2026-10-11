@@ -13,11 +13,15 @@ export function validateEpisode(state, source, size) {
 export function validateContrastArms(arms) {
   const original=arms?.original?.presentation;
   if(!original)throw Error('Missing original contrast arm');
+  const giConfiguration=gi=>({enabled:gi?.enabled,view:gi?.view,settings:gi?.settings,
+    route:gi?.debugState?.identity,estimator:gi?.debugState?.estimator,source:gi?.debugState?.source,
+    receiver:gi?.debugState?.receiver,format:gi?.debugState?.format,mode:gi?.debugState?.mode});
   for(const mode of ['original','manual','highlight']){
     const current=arms[mode]?.presentation,settings=current?.contrast?.settings,gains=current?.contrast?.gains;
     if(current?.mode!=='materials'||current.map!=='surface'||settings?.mode!==mode||settings.roughness!==.5||settings.metallic!==.5)throw Error('Stale or wrong contrast arm');
     if(!gains||!Object.values(gains).every(value=>Number.isFinite(value)&&value>=0&&value<=1))throw Error('Missing effective contrast gains');
-    for(const key of ['light','camera','environment','gi'])if(JSON.stringify(current[key])!==JSON.stringify(original[key]))throw Error('Contrast arms changed illumination or camera');
+    for(const key of ['light','camera','environment'])if(JSON.stringify(current[key])!==JSON.stringify(original[key]))throw Error('Contrast arms changed illumination or camera');
+    if(JSON.stringify(giConfiguration(current.gi))!==JSON.stringify(giConfiguration(original.gi)))throw Error('Contrast arms changed GI configuration');
     if(current.physicalbaseline?.exposure!==original.physicalbaseline?.exposure||
       current.physicalbaseline?.activeMaterial?.mapUUID!==original.physicalbaseline?.activeMaterial?.mapUUID)throw Error('Contrast changed exposure or albedo');
     if(Object.values(gains).some(value=>value>0)&&current.physicalbaseline?.activeMaterial?.roughnessMapUUID===original.physicalbaseline?.activeMaterial?.roughnessMapUUID)throw Error('Applied contrast still uses raw maps');

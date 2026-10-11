@@ -77,6 +77,7 @@ try{
         await fs.writeFile(file,bytes);episode.rawEvidence[name]={width:raw.width,height:raw.height,type:raw.type,file,sha256:createHash('sha256').update(bytes).digest('hex')};
       }
       await evaluate("window.__materialPhotoActions.view('materials')");await settle();
+      const light=await evaluate('window.__materialPhotoActions.presentation().light');
       episode.contrast={};
       for(const mode of ['original','manual','highlight']){
         const settings={mode,roughness:.5,metallic:.5};
@@ -85,6 +86,9 @@ try{
         if(JSON.stringify(effective.contrast.settings)!==JSON.stringify(settings))throw Error('Contrast silently replaced requested settings');
         if(effective.mode!=='materials'||effective.map!=='surface')throw Error('Contrast captured the wrong presentation');
         episode.contrast[mode]={presentation:effective,frame:await capture(`${key}-contrast-${mode}`)};
+        await evaluate('window.__materialPhotoActions.setLightHandle(.7,.25)');await settle();
+        episode.contrast[mode].otherLight={presentation:await evaluate('window.__materialPhotoActions.presentation()'),frame:await capture(`${key}-contrast-${mode}-other-light`)};
+        await evaluate(`window.__materialPhotoActions.setLightHandle(${light.x},${light.y})`);await settle();
         for(const role of ['roughness','metallic']){
           await evaluate(`document.getElementById('map').value=${JSON.stringify(role)};document.getElementById('map').dispatchEvent(new Event('change'))`);await settle();
           episode.contrast[mode][role]=await capture(`${key}-contrast-${mode}-${role}`);
@@ -92,7 +96,16 @@ try{
         await evaluate("window.__materialPhotoActions.view('materials')");
       }
       validateContrastArms(episode.contrast);
+      validateContrastArms(Object.fromEntries(Object.entries(episode.contrast).map(([mode,arm])=>[mode,arm.otherLight])));
       await evaluate("window.__materialPhotoActions.setMaterialContrast({mode:'original'});window.__materialPhotoActions.compare()");
+      episode.diagnostics={};
+      for(const diagnostic of ['incoming','gi','ao']){
+        await evaluate(`document.getElementById('gi-view').value=${JSON.stringify(diagnostic)};document.getElementById('gi-view').dispatchEvent(new Event('change'))`);await settle();
+        const effective=await evaluate('window.__materialPhotoActions.presentation()');
+        if(effective.gi.view!==diagnostic||effective.map!=='surface'||!effective.gi.enabled)throw Error('GI diagnostic did not reach surface');
+        episode.diagnostics[diagnostic]={presentation:effective,frame:await capture(`${key}-diagnostic-${diagnostic}`)};
+      }
+      await evaluate("document.getElementById('gi-view').value='scene';document.getElementById('gi-view').dispatchEvent(new Event('change'))");
       await settle();await persist();
     }
     episode.comparison=await evaluate('window.__materialPhotoActions.presentation().comparison');
