@@ -46,9 +46,11 @@ export class MaterialPhotoViewer {
   }
   showComparison(){this.focus=null;this.layout();}
   setImage(image,depth){
+    const preset=this.primary.exportPreset();
     this.primary.setImage(image,depth);
     const shared=depth?{surface:this.surface,geometry:this.primary.mesh.geometry}:null;
     for(const mode of modes.slice(0,3))this.views[mode].setImage(image,depth,shared);
+    for(const [mode,view]of Object.entries(this.views)){view.applyPreset(preset);view.glow=mode==='materials'&&preset.glow;}
     this.primary.canvas.parentElement.dataset.pending='Estimating materials';this.primary.available=false;
     const {x,y}=this.primary.getLightHandle();this.setLightHandle(x,y);
     this.layout();
@@ -61,6 +63,8 @@ export class MaterialPhotoViewer {
   getTuning(){return this.primary.getTuning();}
   setTuning(value){for(const view of Object.values(this.views))view.setTuning(value);}
   getLighting(){return this.primary.getLighting();}
+  getEffects(){return this.primary.getEffects();}
+  setEffects(value){for(const view of Object.values(this.views))view.setEffects(value);}
   setLighting(value){for(const view of Object.values(this.views))view.setLighting(value);}
   getLightHandle(){return this.primary.getLightHandle();}
   getLightRing(){return lightOnRing(this.getLightHandle());}
@@ -86,7 +90,7 @@ export class MaterialPhotoViewer {
     const name=value.environment??this.environment;
     if(!Object.hasOwn(ENVIRONMENTS,name))throw Error('Unknown HDR environment');
     if(!await this.loadEnvironment(name))throw Error('Preset superseded by another environment choice');
-    for(const view of Object.values(this.views))view.applyPreset(value);
+    for(const [mode,view]of Object.entries(this.views)){view.applyPreset(value);view.glow=mode==='materials'&&value.glow;}
   }
   presentation(){
     const views=Object.fromEntries(modes.map(mode=>[mode,this.views[mode].presentation()]));

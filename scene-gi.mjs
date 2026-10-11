@@ -4,7 +4,7 @@ import { ssgi } from './lib/addons/tsl/display/SSGINode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { resolveSceneGISettings, resolveSceneGIEstimatorSettings, sceneGIReceives } from './scene-gi-settings.mjs';
 
-export function createSceneGI(scene, camera, aoIntensity) {
+export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}={}) {
   // The screen-space field samples one depth/normal per pixel on both device routes.
   // Keep MSAA on the receiving beauty pass, not on the GI source attachments.
   const source = pass(scene, camera, { samples: 0 });
@@ -37,7 +37,7 @@ export function createSceneGI(scene, camera, aoIntensity) {
     getOutput(node,{material}) {
       // Match Three's diffuseContribution, including mapped/node metalness.
       const diffuseReceiver = diffuseColor.rgb.mul(metalness.oneMinus());
-      const received = sceneGIReceives(material) ? irradianceOverPi.mul(diffuseReceiver) : vec3(0);
+      const received = sceneGIReceives(material) ? irradianceOverPi.mul(diffuseReceiver).mul(receiveWeight(material)) : vec3(0);
       return mix(vec4(node.rgb.add(received),node.a),vec4(received,node.a),float(viewMode.equal(2)));
     },
   });

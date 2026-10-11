@@ -3,6 +3,7 @@ import { createSuperMatAdapter, SUPERMAT_ROUTE_ID, superMatDeviceOptions } from 
 import { MoGeInference } from './moge-producer.js';
 import { MaterialPhotoViewer } from './comparison-viewer.js';
 import { createPhotoRunState, pixelSummary } from './photo-contracts.js';
+import { DEFAULT_PRESET, superMatProductProfile } from './demo-defaults.js';
 
 const $=id=>document.getElementById(id), params=new URLSearchParams(location.search);
 const photos={celebration:['Celebration','./images/celebration.png'],bag:['Backpack','./images/bag.webp'],orb:['Metal & glow','./images/evil-orb.png']};
@@ -13,6 +14,7 @@ let imageTicket=0;
 let environmentTicket=0;
 const viewOrder=['original','photo','relit','materials'];
 const tuningFields=['gain','radius','thickness','slices','steps','denoise','aoStrength','expFactor','screenSpaceSampling','linearThickness','backfaceLighting','depthPhi','normalPhi','lumaPhi'];
+const effectFields=['glowIntensity','glowThreshold','emissionReflection','bloomIntensity','bloomRadius','bloomThreshold','exposure'];
 function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
 function view(mode){
   if(mode==='materials'&&!viewer?.maps)mode='photo';
@@ -48,7 +50,9 @@ function syncControls(){
   const surface=!!viewer?.surface,lit=surface&&(viewer.comparison||['relit','materials'].includes(viewer.mode));
   $('sun').hidden=!lit;$('sun').disabled=!lit;
   $('gi').disabled=!surface;$('reset').disabled=!viewer?.original&&!surface;
-  $('map').disabled=!surface;$('glow').disabled=!viewer?.maps||viewer.mode!=='materials';
+  $('map').disabled=!surface;$('glow').disabled=!viewer?.maps;
+  for(const id of effectFields)$(id).disabled=id==='exposure'?!surface:!viewer?.maps;
+  $('bloom').disabled=!viewer?.maps;
   $('preset-export').disabled=$('preset-import').disabled=!surface;
   $('compare').disabled=!surface;$('compare').classList.toggle('selected',!!viewer?.comparison);
   for(const id of ['environment','environment-rotation','environment-intensity','direct-intensity'])$(id).disabled=!viewer;
@@ -60,6 +64,8 @@ function syncControls(){
     const settings=viewer.getTuning();
     for(const id of tuningFields)if(typeof settings[id]==='boolean')$(id).checked=settings[id];else $(id).value=settings[id];
     $('gi').checked=viewer.useGI;$('glow').checked=!!viewer.glow;
+    const effects=viewer.getEffects();$('bloom').checked=effects.bloom;
+    for(const id of effectFields){if($(id).max&&effects[id]>Number($(id).max))$(id).max=effects[id];$(id).value=effects[id];$(`${id}-value`).textContent=effects[id].toFixed(2);}
     $('gi-view').value=viewer.getDiagnostic();
     const contrast=viewer.getMaterialContrast();$('contrast-mode').value=contrast.mode;
     for(const name of ['roughness','metallic']){$(`${name}-strength`).value=contrast[name];$(`${name}-strength-value`).textContent=contrast[name].toFixed(2);}
@@ -116,6 +122,7 @@ async function setup(){
     gpu=await requestBrowserWebGpuDevice(navigator.gpu,await superMatDeviceOptions(navigator.gpu,{adapterName:'material-photograph'}));
     session=await createWebGpuInferenceSession({sessionId:crypto.randomUUID(),device:gpu.device,adapter:gpu.adapter,backendIdentity:gpu.backendIdentity});
     viewer=new MaterialPhotoViewer();await viewer.init($('scene'),gpu.device);
+    await viewer.applyPreset(DEFAULT_PRESET);
     gpu.device.lost.then(info=>{if(info.reason!=='destroyed'){state.status='error';state.error=`WebGPU device lost: ${info.message}`;status(state.error,true);}});
     state.identity={backend:gpu.backendIdentity,renderer:'kaminos-three-webgpu',gi:viewer.gi.debugState().route??'three-ssilvb-scene-gi-v1',sharedDevice:viewer.renderer.backend.device===gpu.device};
   })().catch(async error=>{
@@ -160,7 +167,7 @@ async function infer(){
     if(!materials){
       weightRoute??=await session.registerRoute({routeId:`${SUPERMAT_ROUTE_ID}.material-photo-weights`});
       materials=await createSuperMatAdapter({route:weightRoute,weightsUrl:params.get('weights')??'/scratch/supermat-weights/f16/',
-        activations:'f32',fuseNorm:false,gemmPrecision:'f32',attention:'streaming',onProgress:event=>{
+        ...superMatProductProfile(gpu.device),onProgress:event=>{
           if(event.phase==='weights')status(`2/2 Materials: loading SuperMat ${event.resourceIndex+1}/${event.resourceCount} resources`);
         }});
     }
@@ -211,6 +218,12 @@ $('run').onclick=infer;
 $('map').onchange=()=>{if(viewer){const map=$('map').value;view('materials');viewer.map=map;$('map').value=map;}};
 $('gi').onchange=()=>{viewer.useGI=$('gi').checked;};
 $('glow').onchange=()=>{viewer.glow=$('glow').checked;};
+$('bloom').onchange=()=>{viewer.setEffects({bloom:$('bloom').checked});syncControls();};
+for(const id of effectFields)$(id).oninput=()=>{
+  try{viewer.setEffects({[id]:Number($(id).value)});$('preset-error').textContent='';}
+  catch(error){$('preset-error').textContent=error.message;}
+  syncControls();
+};
 $('gi-view').onchange=()=>{
   const diagnostic=$('gi-view').value;
   if(!viewer.comparison&&!['relit','materials'].includes(viewer.mode))view(viewer.maps?'materials':'relit');
@@ -280,6 +293,7 @@ for(const [id,key]of [['environment-rotation','rotation'],['environment-intensit
   try{viewer.setLighting({[key]:Number($(id).value)});$('preset-error').textContent='';}catch(error){$('preset-error').textContent=error.message;}
 };
 window.__materialPhotoActions={infer,sample,view,compare,changeEnvironment,exportPreset,importPreset,setLightPosition,setLightHandle,setMaterialContrast,
+  setEffects:value=>{viewer.setEffects(value);syncControls();return viewer.getEffects();},
   materialEvidence:()=>({image,output:results.snapshot().materials}),presentation:()=>viewer?.presentation()??null,async pixels(presentedFrame){
   // Inspect the browser's presented canvas screenshot, not a discarded WebGPU drawing buffer.
   const response=await fetch(presentedFrame),bitmap=await createImageBitmap(await response.blob());

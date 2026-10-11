@@ -10,7 +10,8 @@ async function controller() {
     setPointerCapture(id) {this.captures.add(id);}, releasePointerCapture(id) {this.captures.delete(id);},hasPointerCapture(id){return this.captures.has(id);}, getBoundingClientRect: () => ({ left:0,top:0,width: 400, height: 400 }) });
   const ids=['status','preview','scene','stage-label','run','file','map','light','height','exposure','gi','reset','name','resolution','progress','elapsed','timings','identity',
     'view-prev','view-next','sun','glow','advanced','tuning','preset-export','preset-import','preset-file','preset-error','material-size','compare','light-ring','environment','environment-status','environment-rotation','environment-intensity','direct-intensity',
-    'gi-view','contrast-mode','roughness-strength','metallic-strength','roughness-strength-value','metallic-strength-value','contrast-readout',
+    'gi-view','contrast-mode','roughness-strength','metallic-strength','roughness-strength-value','metallic-strength-value','contrast-readout','bloom',
+    ...['glowIntensity','glowThreshold','emissionReflection','bloomIntensity','bloomRadius','bloomThreshold','exposure'].flatMap(key=>[key,`${key}-value`]),
     'gain','radius','thickness','slices','steps','denoise','aoStrength','expFactor','screenSpaceSampling','linearThickness','backfaceLighting','depthPhi','normalPhi','lumaPhi'];
   const elements = Object.fromEntries(ids.map(id => [id,node({})]));
   elements['material-size'].value='512';elements.environment.value='studio';
@@ -22,7 +23,7 @@ async function controller() {
     querySelector: selector => views.find(n => selector === `[data-view=${n.dataset.view}]`),
     querySelectorAll: selector => selector === '[data-focus]'?[]:selector === '[data-sample]' ? samples : selector.includes(':not') ? views.slice(1) : views,
   };
-  const device = { queue: { async onSubmittedWorkDone() {} }, lost: new Promise(() => {}), destroy() {} };
+  const device = { features:new Set(['shader-f16']),queue: { async onSubmittedWorkDone() {} }, lost: new Promise(() => {}), destroy() {} };
   const route = () => ({ routeId: 'test', runtime: {}, async drain() {},
     enqueue({ execute }) { return { completion: Promise.resolve().then(() => execute({})).then(output => ({ status:'succeeded',output }), failure => ({ status:'failed',failure })) }; } });
   const session = { registerRoute: async () => route(), unregisterRoute() {}, async close() {} };
@@ -45,6 +46,8 @@ async function controller() {
     getLightHandle() { return this.lightHandle??{x:-.47,y:.57}; }
     getLightRing(){return {u:.3,v:.2};}
     getLighting(){return {rotation:0,intensity:1,direct:1};}
+    getEffects(){return {glowIntensity:1,glowThreshold:.05,emissionReflection:0,bloom:true,bloomIntensity:.5,bloomRadius:.4,bloomThreshold:.2,exposure:1,...this.effects};}
+    setEffects(value){this.effects={...this.getEffects(),...value};}
     showComparison(){this.comparison=true;this.focus=null;}
     setTuning(value) { this.settings={...this.settings,...value}; }
     getTuning() { return {gain:1,radius:.15,thickness:.03,slices:6,steps:16,denoise:3,aoStrength:.5,expFactor:2,screenSpaceSampling:false,linearThickness:false,backfaceLighting:0,depthPhi:.1,normalPhi:5,lumaPhi:5,...this.settings}; }
@@ -64,7 +67,7 @@ async function controller() {
     createWebGpuInferenceControl: () => ({ async close() {} }),
   };
   const supermat = { SUPERMAT_ROUTE_ID:'supermat.image-to-pbr.webgpu-local.v0', superMatDeviceOptions:async()=>({}),
-    createSuperMatAdapter: async () => ({ identity:{}, async run(input) { behavior.materialSize=input.size;if(behavior.failMaterials)throw Error('Material failure'); return { width:input.size,height:input.size,timings:{},dutyCount:1 }; } }) };
+    createSuperMatAdapter: async options => {behavior.profile=options;return { identity:{}, async run(input) { behavior.materialSize=input.size;if(behavior.failMaterials)throw Error('Material failure'); return { width:input.size,height:input.size,timings:{},dutyCount:1 }; } };} };
   class Canvas { constructor(width,height) { this.width=width;this.height=height; } getContext() { return { drawImage() {}, getImageData: () => ({ width:this.width,height:this.height,data:new Uint8ClampedArray(this.width*this.height*4) }) }; } }
   class BlobURL extends URL { static createObjectURL() { return 'blob:test'; } static revokeObjectURL() {} }
   const response = () => ({ ok:true, blob:async()=>({}) });
@@ -76,7 +79,7 @@ async function controller() {
   });
   const source = new vm.SourceTextModule(await readFile(new URL('./main.js',import.meta.url),'utf8'), { context });
   await source.link(async specifier => {
-    if (specifier === './photo-contracts.js') return new vm.SourceTextModule(await readFile(new URL(specifier,import.meta.url),'utf8'), { context });
+    if (['./photo-contracts.js','./demo-defaults.js'].includes(specifier)) return new vm.SourceTextModule(await readFile(new URL(specifier,import.meta.url),'utf8'), { context });
     const exports = specifier.includes('/core.js') ? kit : specifier.includes('supermat-route') ? supermat : specifier.includes('moge-producer') ? { MoGeInference:MoGe } : { MaterialPhotoViewer:Viewer };
     return new vm.SyntheticModule(Object.keys(exports), function() { for(const [name,value]of Object.entries(exports))this.setExport(name,value); }, { context });
   });
@@ -96,6 +99,17 @@ test('selected material resolution reaches the producer and survives the run rec
   assert.equal(c.behavior.materialSize,768);
   assert.equal(c.state.runs.at(-1).supermat.size,768);
   assert.deepEqual(Array.from(c.state.result.materialSize),[768,768]);
+});
+test('consumer selects the product profile and forwards glow and bloom controls without inference',async()=>{
+  const c=await controller();await c.actions.infer();
+  assert.equal(c.behavior.profile.activations,'f16');assert.equal(c.behavior.profile.fuseNorm,true);
+  assert.equal(c.behavior.profile.gemmPrecision,'f16-tiles');
+  const count=c.state.runs.length;
+  for(const [key,value]of Object.entries({glowIntensity:4,glowThreshold:.2,bloomIntensity:2,bloomRadius:.8,bloomThreshold:1,exposure:1.5})){
+    c.elements[key].value=value;c.elements[key].oninput();assert.equal(c.behavior.viewer.getEffects()[key],value);
+  }
+  assert.equal(c.state.runs.length,count);c.elements.bloom.checked=false;c.elements.bloom.onchange();
+  assert.equal(c.behavior.viewer.getEffects().bloom,false);
 });
 test('comparison restores surface perspectives after inspecting a map',async()=>{
   const c=await controller();await c.actions.infer();

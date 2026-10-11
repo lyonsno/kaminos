@@ -10,6 +10,14 @@ export function validateEpisode(state, source, size) {
   if(size!==undefined&&(run.supermat?.size!==size||!run.output.materialSize.every(value=>value===size)))throw Error('Effective material resolution differs from selected resolution');
 }
 
+export function validateEffectsPresentation(presentation,expected,retained) {
+  if(presentation?.mode!=='materials'||presentation.map!=='surface'||presentation.glow!==true||
+    presentation.emissiveIntensity!==expected.glowIntensity)throw Error('Wrong effective emission presentation');
+  for(const [key,value]of Object.entries(expected))if(presentation.effects?.[key]!==value)throw Error(`Stale effect ${key}`);
+  const active=presentation.physicalbaseline?.activeMaterial;
+  for(const key of ['mapUUID','roughnessMapUUID','metalnessMapUUID'])if(!retained?.[key]||active?.[key]!==retained[key])throw Error('Effects mutated retained materials');
+}
+
 export function validateContrastArms(arms) {
   const original=arms?.original?.presentation;
   if(!original)throw Error('Missing original contrast arm');

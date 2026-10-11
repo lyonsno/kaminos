@@ -4,6 +4,21 @@ import { test } from 'node:test';
 import vm from 'node:vm';
 import { pixelSummary } from './photo-contracts.js';
 
+test('effects witness rejects stale controls, wrong views and mutated retained materials',async()=>{
+  const {validateEffectsPresentation}=await import('./witness-checks.js');
+  assert.equal(typeof validateEffectsPresentation,'function','effects need effective controls and retained-output admission');
+  const effects={glowIntensity:4,glowThreshold:.1,bloom:true,bloomIntensity:1,bloomRadius:.5,bloomThreshold:.2,emissionReflection:0,exposure:1};
+  const p={mode:'materials',map:'surface',glow:true,effects,emissiveIntensity:4,
+    physicalbaseline:{activeMaterial:{mapUUID:'albedo',roughnessMapUUID:'orm',metalnessMapUUID:'orm'}}};
+  const raw=p.physicalbaseline.activeMaterial;
+  assert.doesNotThrow(()=>validateEffectsPresentation(p,effects,raw));
+  for(const mutate of [x=>{x.effects.bloomRadius=.1;},x=>{x.mode='photo';},x=>{x.map='metallic';},
+    x=>{x.glow=false;},x=>{x.emissiveIntensity=1;},x=>{x.physicalbaseline.activeMaterial.metalnessMapUUID='changed';},
+    x=>{delete x.effects;},x=>{x.physicalbaseline.activeMaterial.mapUUID='photograph';}]){
+    const bad=structuredClone(p);mutate(bad);assert.throws(()=>validateEffectsPresentation(bad,effects,raw));
+  }
+});
+
 test('contrast witness rejects stale arms, unchanged applied maps and unequal lighting',async()=>{
   const checks=await import('./witness-checks.js');
   assert.equal(typeof checks.validateContrastArms,'function','contrast arms need effective-setting admission');

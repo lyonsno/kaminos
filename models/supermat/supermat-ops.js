@@ -3,7 +3,7 @@
 // small uniform buffer per dispatch (destroyed after the flush completes).
 import {
   gemmShader, gemmTileShape, GEMM_PARAMS_WORDS, GROUPNORM_CHUNK, groupNormPartialShader,
-  groupNormCombineShader, groupNormApplyShader, layerNormShader, softmaxShader, gegluShader,
+  groupNormCombineShader, groupNormApplyShader, groupNormChannelAffineShader, layerNormShader, softmaxShader, gegluShader,
   affineShader, gemmSubgroupMatrixShader, SUBGROUP_MATRIX_TILE, flashAttentionShader, flashAttentionVec4Shader, FLASH_HEAD_DIM, FLASH_QUERY_TILE,
 } from './supermat-kernels.js';
 
@@ -50,14 +50,31 @@ export function subgroupMatrixUsable(device) {
     && info?.subgroupMinSize === 32 && info?.subgroupMaxSize === 32;
 }
 
+// A duty's own execution time: from when it can start (submitted, and the work
+// queued ahead of it has completed) to its fence.
+export function dutyExecutionMs({ submittedAt, precedingDoneAt, doneAt }) {
+  return doneAt - Math.max(submittedAt, precedingDoneAt ?? submittedAt);
+}
+
+// Next duty FLOP budget: geometric step toward the size that would take
+// targetMs at the observed rate, clamped to bounds. Unusable samples keep it.
+export function adaptDutyFlops({ current, flops, ownMs, targetMs, bounds: [min, max] }) {
+  if (!(ownMs > 0) || !(flops > 0) || !(targetMs > 0)) return current;
+  const ideal = flops * targetMs / ownMs;
+  return Math.min(max, Math.max(min, current * Math.sqrt(ideal / current)));
+}
+
 export const SUPERMAT_OPS_OPTIONS = Object.freeze(['label', 'attention', 'gemmTile', 'fuseNorm', 'attentionKernel', 'gemmKernel',
-  'gemmPrecision', 'activations']);
+  'gemmPrecision', 'activations', 'profile']);
 
 export function createSuperMatOps(device, options = {}) {
   const unknown = Object.keys(options).filter(key => !SUPERMAT_OPS_OPTIONS.includes(key));
   if (unknown.length) throw new Error(`unknown SuperMat ops option: ${unknown.join(', ')}`);
   const { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 }, fuseNorm = false,
-    attentionKernel = 'scalar', gemmKernel = 'tiled', gemmPrecision = 'f32', activations = 'f32' } = options;
+    attentionKernel = 'scalar', gemmKernel = 'tiled', gemmPrecision = 'f32', activations = 'f32',
+    // profile: per-dispatch GPU timestamps (own pass per dispatch) for unscheduled runs; diagnostic only.
+    profile = false } = options;
+  if (profile && !device.features?.has?.('timestamp-query')) throw new Error('profile needs the timestamp-query feature');
   // activations: storage of intermediate tensors ('f16' halves memory traffic; math stays F32).
   if (!['f32', 'f16'].includes(activations)) throw new Error(`unknown activation storage ${activations}`);
   if (activations === 'f16' && !device.features.has('shader-f16')) throw new Error('f16 activations need the shader-f16 feature');
@@ -75,23 +92,20 @@ export function createSuperMatOps(device, options = {}) {
   // Cooperative schedule for one run: { runtime, invocation, control, signal, dutyFlops }.
   // Without it every op lands in one submission at flush().
   let schedule = null, pendingFlops = 0, lastFence = Promise.resolve(), adaptiveFlops = null;
-  // Duty budget adapts toward schedule.targetDutyMs from completed queue time
-  // (one duty in flight, so a duty's fence time is its own GPU time plus any
-  // foreground frames admitted ahead of it). Bounds are caller-overridable.
+  // Duty budget adapts toward schedule.targetDutyMs from each duty's own
+  // execution time (see dutyExecutionMs). Bounds are caller-overridable.
   function currentDutyFlops() {
     if (!schedule) return 0;
     if (!schedule.targetDutyMs) return schedule.dutyFlops ?? 0;
     return adaptiveFlops ?? schedule.dutyFlops ?? 4e9;
   }
-  function observeDuty(flops, queueMs) {
-    if (!schedule?.targetDutyMs || !(queueMs > 0) || !(flops > 0)) return;
-    const [min, max] = schedule.dutyFlopsBounds ?? [5e8, 6.4e10];
-    const ideal = flops * schedule.targetDutyMs / queueMs;
-    const current = currentDutyFlops();
-    adaptiveFlops = Math.min(max, Math.max(min, current * Math.sqrt(ideal / current)));
+  function observeDuty(flops, ownMs) {
+    if (!schedule?.targetDutyMs) return;
+    adaptiveFlops = adaptDutyFlops({ current: currentDutyFlops(), flops, ownMs, targetMs: schedule.targetDutyMs,
+      bounds: schedule.dutyFlopsBounds ?? [5e8, 6.4e10] });
   }
   const stats = { dispatches: 0, pipelines: 0, createdBuffers: 0, createdBytes: 0, liveBytes: 0, peakLiveBytes: 0, flushes: 0,
-    duties: 0, dutyHistory: [] };
+    duties: 0, dutyHistory: [], profile: [] };
 
   function pipeline(code) {
     let entry = pipelines.get(code);
@@ -140,23 +154,102 @@ export function createSuperMatOps(device, options = {}) {
     return { buffer, offset: 0, size };
   }
 
+  // Under a schedule, every compute pass of a duty writes begin/end GPU
+  // timestamps (when the device has timestamp-query); the duty's GPU time is
+  // last end - first begin. Foreground frames are separate submissions and
+  // cannot interleave inside it.
+  const DUTY_QUERY_CAPACITY = 128;
+  const timestamps = device.features?.has?.('timestamp-query') ?? false;
+  let dutyQuery = null;
   function ensurePass() {
     encoder ??= device.createCommandEncoder({ label: `${label}.encoder` });
+    if (!pass && schedule && timestamps) {
+      dutyQuery ??= { set: device.createQuerySet({ type: 'timestamp', count: DUTY_QUERY_CAPACITY }), used: 0, incomplete: false };
+      if (dutyQuery.used + 2 <= DUTY_QUERY_CAPACITY) {
+        pass = encoder.beginComputePass({ label: `${label}.pass`, timestampWrites: { querySet: dutyQuery.set,
+          beginningOfPassWriteIndex: dutyQuery.used, endOfPassWriteIndex: dutyQuery.used + 1 } });
+        dutyQuery.used += 2;
+      } else dutyQuery.incomplete = true;
+    }
     pass ??= encoder.beginComputePass({ label: `${label}.pass` });
     return pass;
   }
 
-  function dispatch(code, views, groups) {
+  // Encode the resolve of the current duty's timestamps; returns a reader that
+  // yields the duty's GPU milliseconds (null when incomplete or unavailable).
+  function resolveDutyTimestamps() {
+    const query = dutyQuery;
+    dutyQuery = null;
+    if (!query?.used || !encoder) { query?.set.destroy(); return null; }
+    const bytes = query.used * 8;
+    const resolve = device.createBuffer({ size: bytes, usage: 0x0200 | 0x0004 }); // QUERY_RESOLVE | COPY_SRC
+    const readback = device.createBuffer({ size: bytes, usage: 0x0001 | 0x0008 }); // MAP_READ | COPY_DST
+    encoder.resolveQuerySet(query.set, 0, query.used, resolve, 0);
+    encoder.copyBufferToBuffer(resolve, 0, readback, 0, bytes);
+    return async () => {
+      try {
+        await readback.mapAsync(0x0001);
+        const values = new BigUint64Array(readback.getMappedRange().slice(0));
+        readback.unmap();
+        let begin = null, end = null;
+        for (let index = 0; index < values.length; index += 2) {
+          const b = values[index], e = values[index + 1];
+          if (!b || !e || e < b) return null;
+          if (begin === null || b < begin) begin = b;
+          if (end === null || e > end) end = e;
+        }
+        return query.incomplete || begin === null ? null : Number(end - begin) / 1e6;
+      } catch { return null; } finally { readback.destroy(); resolve.destroy(); query.set.destroy(); }
+    };
+  }
+
+  // Profile mode: each unscheduled dispatch runs in its own timestamped pass;
+  // rows ({ label, flops, ms }) resolve at flush into stats.profile.
+  const PROFILE_CAPACITY = 4096;
+  let profileQuery = null;
+  function profilePass(label, flops) {
+    if (pass) { pass.end(); pass = null; }
+    encoder ??= device.createCommandEncoder({ label: `${label}.encoder` });
+    profileQuery ??= { set: device.createQuerySet({ type: 'timestamp', count: PROFILE_CAPACITY }), rows: [] };
+    if (profileQuery.rows.length * 2 + 2 > PROFILE_CAPACITY) { stats.profileOverflow = true; return ensurePass(); }
+    const index = profileQuery.rows.length * 2;
+    profileQuery.rows.push({ label, flops });
+    pass = encoder.beginComputePass({ timestampWrites: { querySet: profileQuery.set,
+      beginningOfPassWriteIndex: index, endOfPassWriteIndex: index + 1 } });
+    return pass;
+  }
+  function resolveProfile() {
+    const query = profileQuery;
+    profileQuery = null;
+    if (!query?.rows.length || !encoder) { query?.set.destroy(); return null; }
+    const bytes = query.rows.length * 16;
+    const resolve = device.createBuffer({ size: bytes, usage: 0x0200 | 0x0004 });
+    const readback = device.createBuffer({ size: bytes, usage: 0x0001 | 0x0008 });
+    encoder.resolveQuerySet(query.set, 0, query.rows.length * 2, resolve, 0);
+    encoder.copyBufferToBuffer(resolve, 0, readback, 0, bytes);
+    return async () => {
+      await readback.mapAsync(0x0001);
+      const values = new BigUint64Array(readback.getMappedRange().slice(0));
+      readback.unmap(); readback.destroy(); resolve.destroy(); query.set.destroy();
+      query.rows.forEach((row, index) => {
+        const begin = values[index * 2], end = values[index * 2 + 1];
+        stats.profile.push({ ...row, ms: begin && end && end >= begin ? Number(end - begin) / 1e6 : null });
+      });
+    };
+  }
+
+  function dispatch(code, views, groups, label = 'dispatch', flops = 0) {
     const compute = pipeline(code);
     const bindGroup = device.createBindGroup({
       layout: compute.getBindGroupLayout(0),
       entries: views.map((view, binding) => ({ binding, resource: view })),
     });
-    const target = ensurePass();
+    const target = profile && !schedule ? profilePass(label, flops) : ensurePass();
     target.setPipeline(compute);
     target.setBindGroup(0, bindGroup);
     target.dispatchWorkgroups(...groups);
     stats.dispatches++;
+    if (profile && !schedule) { pass.end(); pass = null; }
   }
 
   function copy(source, destination, { sourceOffset = 0, destinationOffset = 0, size }) {
@@ -181,6 +274,7 @@ export function createSuperMatOps(device, options = {}) {
     if (pass) { pass.end(); pass = null; }
     throwIfStopped();
     if (!encoder) return;
+    const readGpuMs = resolveDutyTimestamps();
     const commands = encoder.finish();
     encoder = null;
     const buffers = transient;
@@ -195,8 +289,12 @@ export function createSuperMatOps(device, options = {}) {
         metadata: { model: 'supermat', estimatedFlops: flops } }, invocation);
       throwIfStopped();
       runtime.settleCommandDuty(descriptor, { status: 'encoded' });
+      // Resolves when the work queued ahead (foreground frames) completes,
+      // which is when this duty starts executing.
+      precedingDone = device.queue.onSubmittedWorkDone().then(() => performance.now());
       device.queue.submit([commands]);
     };
+    let precedingDone = null;
     const gateStart = performance.now();
     let submitted = null;
     const timed = async () => { await work(); submitted = performance.now(); };
@@ -205,12 +303,25 @@ export function createSuperMatOps(device, options = {}) {
     const row = { label, estimatedFlops: flops, submittedAt: submitted, gateWaitMs: submitted - gateStart };
     stats.dutyHistory.push(row);
     row.dutyFlopsBudget = currentDutyFlops();
-    lastFence = device.queue.onSubmittedWorkDone().then(() => {
-      row.queueMs = performance.now() - submitted;
-      observeDuty(flops, row.queueMs);
+    lastFence = device.queue.onSubmittedWorkDone().then(async () => {
+      const doneAt = performance.now();
+      const precedingDoneAt = await precedingDone;
+      row.queueMs = doneAt - submitted;
+      row.ownMs = dutyExecutionMs({ submittedAt: submitted, precedingDoneAt, doneAt });
+      row.gpuMs = readGpuMs ? await readGpuMs() : null;
+      // GPU timestamps when available; the fence-derived estimate otherwise
+      // (Chrome can deliver completion callbacks late and in batches).
+      observeDuty(flops, row.gpuMs ?? row.ownMs);
       try { schedule?.onDuty?.(row); } catch { /* telemetry must not fail inference */ }
       for (const buffer of buffers) buffer.destroy();
     });
+  }
+
+  // Before encoding work of `flops`, submit what is pending if adding it would
+  // carry the current duty past its budget, so duties stay near the budget.
+  async function admit(flops, label) {
+    if (!schedule || pendingFlops <= 0) return;
+    if (pendingFlops + flops > currentDutyFlops()) await submitDuty(`${label}:before`);
   }
 
   // Graph yield point: submit once the encoded block reaches the duty budget.
@@ -246,15 +357,21 @@ export function createSuperMatOps(device, options = {}) {
   }
   const scheduleState = () => ({ adaptiveFlops, currentDutyFlops: currentDutyFlops(), targetDutyMs: schedule?.targetDutyMs ?? null });
 
+  // CPU-side waits on already-submitted GPU work run inside the schedule's
+  // foreground window (schedule.waitWindow) so foreground frames keep being
+  // serviced; GPU boundaries never happen inside it.
+  const waitOutside = work => schedule?.waitWindow ? schedule.waitWindow(work) : work();
+
   async function flush() {
     if (schedule) {
       await submitDuty('flush');
-      await lastFence;
+      await waitOutside(() => lastFence);
       return;
     }
     if (pass) { pass.end(); pass = null; }
     const buffers = transient;
     transient = [];
+    const readProfile = resolveProfile();
     if (encoder) {
       device.queue.submit([encoder.finish()]);
       encoder = null;
@@ -262,6 +379,7 @@ export function createSuperMatOps(device, options = {}) {
     }
     await device.queue.onSubmittedWorkDone();
     for (const buffer of buffers) buffer.destroy();
+    await readProfile?.();
   }
 
   function gemmWords(spec) {
@@ -272,7 +390,7 @@ export function createSuperMatOps(device, options = {}) {
     words.set([spec.aOff ?? 0, spec.aSM, spec.aSK, spec.aSB ?? 0], 4);
     words.set([spec.bOff ?? 0, spec.bSK, spec.bSN, spec.bSB ?? 0], 8);
     words.set([spec.cOff ?? 0, spec.cSM, spec.cSN, spec.cSB ?? 0], 12);
-    words.set([spec.padTop ?? 0, spec.padLeft ?? 0, spec.nBase ?? 0, spec.normB?.channelsPerGroup ?? 0], 16);
+    words.set([spec.padTop ?? 0, spec.padLeft ?? 0, spec.nBase ?? 0, 0], 16);
     return words;
   }
 
@@ -298,15 +416,15 @@ export function createSuperMatOps(device, options = {}) {
     if (spec.biasM2) views.push(bindingView(spec.biasM2, 'gemm biasM2'));
     if (spec.biasN) views.push(bindingView(spec.biasN, 'gemm biasN'));
     if (spec.residual) views.push(bindingView(spec.residual, 'gemm residual'));
-    if (spec.normB) views.push(bindingView(spec.normB.stats, 'norm stats'), bindingView(spec.normB.gamma, 'norm gamma'),
-      bindingView(spec.normB.beta, 'norm beta'));
+    if (spec.normB) views.push(bindingView(spec.normB.ss, 'norm scale/shift'));
     views.push(bindingView(c, 'gemm c'));
     views.push(params(gemmWords(spec)));
     const nBase = spec.nBase ?? 0, nCount = spec.nCount ?? N - nBase;
     if (nBase % tileShape.bn || nBase < 0 || nCount <= 0 || nBase + nCount > N) throw new Error('gemm column range must be tile-aligned and inside N');
     const groups = [Math.ceil(nCount / tileShape.bn), Math.ceil(M / tileShape.bm), batch];
     if (groups.some(value => value > 65535)) throw new RangeError('gemm grid exceeds device workgroup limit');
-    dispatch(subgroupMatrix ? gemmSubgroupMatrixShader(layout) : gemmShader(layout), views, groups);
+    dispatch(subgroupMatrix ? gemmSubgroupMatrixShader(layout) : gemmShader(layout), views, groups,
+      `${spec.conv ? (spec.normB ? 'conv+norm' : 'conv') : 'gemm'}:${spec.name ?? 'gemm'}`, 2 * M * nCount * K * batch);
     pendingFlops += 2 * M * nCount * K * batch;
     return c;
   }
@@ -321,11 +439,13 @@ export function createSuperMatOps(device, options = {}) {
     const flops = 2 * spec.M * spec.N * spec.K * batch;
     const budget = schedule ? currentDutyFlops() : 0;
     if (!budget || flops <= budget) {
+      await admit(flops, spec.name ?? 'gemm');
       issueGemm({ ...spec, c });
     } else {
       const perColumn = 2 * spec.M * spec.K * batch;
       const columns = Math.max(tileShape.bn, Math.floor(budget / perColumn / tileShape.bn) * tileShape.bn);
       for (let nBase = 0; nBase < spec.N; nBase += columns) {
+        await admit(perColumn * Math.min(columns, spec.N - nBase), `${spec.name ?? 'gemm'}[${nBase}]`);
         issueGemm({ ...spec, c, nBase, nCount: Math.min(columns, spec.N - nBase) });
         await yieldPoint(`${spec.name ?? 'gemm'}[${nBase}]`);
       }
@@ -350,15 +470,20 @@ export function createSuperMatOps(device, options = {}) {
     let normB = null;
     if (norm) {
       const groups = norm.groups ?? 32;
-      normB = { stats: groupNormStats({ x, shape: [cin, h, w], groups, eps: norm.eps, name: `${name}.norm` }),
-        gamma: norm.gamma, beta: norm.beta, silu: norm.silu, channelsPerGroup: cin / groups };
+      const statsTensor = groupNormStats({ x, shape: [cin, h, w], groups, eps: norm.eps, name: `${name}.norm` });
+      const ss = alloc([cin * 2], `${name}.norm.ss`, { dtype: 'f32' });
+      dispatch(groupNormChannelAffineShader(), [bindingView(statsTensor), bindingView(norm.gamma, `${name} gamma`),
+        bindingView(norm.beta, `${name} beta`), bindingView(ss), params(new Uint32Array([cin, cin / groups, 0, 0]))],
+      [Math.ceil(cin / 64), 1, 1], `norm-affine:${name}`);
+      release(statsTensor);
+      normB = { ss, silu: norm.silu };
     }
     const spec = kh === 1 && stride === 1 && !upsample && top === 0 && left === 0 && !normB
       ? { a: weight, b: x, c, M: cout, N, K: cin, aSM: cin, aSK: 1, bSK: h * w, bSN: 1, cSM: N, cSN: 1, biasM: bias, biasM2, residual }
       : { a: weight, b: x, c, M: cout, N, K, aSM: K, aSK: 1, bSK: h, bSN: w, bSB: wout, cSM: N, cSN: 1,
         padTop: top, padLeft: left, biasM: bias, biasM2, residual, conv: { kh, kw, stride, upsample }, normB };
     await gemm({ ...spec, name });
-    if (normB) release(normB.stats);
+    if (normB) release(normB.ss);
     c.shape = [cout, hout, wout];
     return c;
   }
@@ -374,6 +499,7 @@ export function createSuperMatOps(device, options = {}) {
       : Math.max(FLASH_QUERY_TILE, Math.floor(budget / (4 * keys * FLASH_HEAD_DIM * heads) / FLASH_QUERY_TILE) * FLASH_QUERY_TILE);
     for (let rowBase = 0; rowBase < queries; rowBase += rows) {
       const count = Math.min(rows, queries - rowBase);
+      await admit(4 * count * keys * FLASH_HEAD_DIM * heads, `${name}[${rowBase}]`);
       const words = new Uint32Array(8);
       const floats = new Float32Array(words.buffer);
       words.set([queries, keys, channels, channels, channels, rowBase], 0);
@@ -381,7 +507,7 @@ export function createSuperMatOps(device, options = {}) {
       const types = { q: storageKind(q), k: storageKind(k), v: storageKind(v), o: storageKind(out) };
       if (attentionKernel === 'vec4' && Object.values(types).some(type => type !== 'f32')) throw new Error('vec4 attention supports F32 storage only');
       dispatch(attentionKernel === 'vec4' ? flashAttentionVec4Shader() : flashAttentionShader(types), [bindingView(q), bindingView(k), bindingView(v), bindingView(out), params(words)],
-        [Math.ceil(count / FLASH_QUERY_TILE), heads, 1]);
+        [Math.ceil(count / FLASH_QUERY_TILE), heads, 1], `attention:${name}`, 4 * count * keys * FLASH_HEAD_DIM * heads);
       pendingFlops += 4 * count * keys * FLASH_HEAD_DIM * heads;
       if (rows < queries) await yieldPoint(`${name}[${rowBase}]`);
     }
@@ -396,9 +522,10 @@ export function createSuperMatOps(device, options = {}) {
     const partial = alloc([groups * chunks * 3], `${name}.partial`, { dtype: 'f32' });
     const statsTensor = alloc([groups * 2], `${name}.stats`, { dtype: 'f32' });
     const groupWords = new Uint32Array([groupSize, chunks, groups, 0]);
-    dispatch(groupNormPartialShader({ x: storageKind(x) }), [bindingView(x), bindingView(partial), params(groupWords)], [chunks, groups, 1]);
+    dispatch(groupNormPartialShader({ x: storageKind(x) }), [bindingView(x), bindingView(partial), params(groupWords)], [chunks, groups, 1],
+      `norm-stats:${name}`);
     dispatch(groupNormCombineShader(eps), [bindingView(partial), bindingView(statsTensor), params(groupWords)],
-      [Math.ceil(groups / 64), 1, 1]);
+      [Math.ceil(groups / 64), 1, 1], `norm-combine:${name}`);
     release(partial);
     return statsTensor;
   }
@@ -409,7 +536,7 @@ export function createSuperMatOps(device, options = {}) {
     const y = alloc([channels, h, w], name);
     dispatch(groupNormApplyShader({ silu, x: storageKind(x), y: storageKind(y) }), [bindingView(x), bindingView(statsTensor), bindingView(gamma, `${name} gamma`),
       bindingView(beta, `${name} beta`), bindingView(y), params(new Uint32Array([total, h * w, channels / groups, 0]))],
-    dispatch1D(total));
+    dispatch1D(total), `norm-apply:${name}`);
     release(statsTensor);
     return y;
   }
@@ -417,20 +544,20 @@ export function createSuperMatOps(device, options = {}) {
   function layerNorm({ x, rows, channels, gamma, beta, eps, name = 'layernorm' }) {
     const y = alloc([rows, channels], name);
     dispatch(layerNormShader(eps, { x: storageKind(x), y: storageKind(y) }), [bindingView(x), bindingView(gamma), bindingView(beta), bindingView(y),
-      params(new Uint32Array([rows, channels, 0, 0]))], dispatch1D(rows, 1));
+      params(new Uint32Array([rows, channels, 0, 0]))], dispatch1D(rows, 1), `layernorm:${name}`);
     return y;
   }
 
   function softmax({ s, rows, cols }) {
     if (storageKind(s) !== 'f32') throw new Error('softmax scores must be F32');
-    dispatch(softmaxShader(), [bindingView(s), params(new Uint32Array([rows, cols, 0, 0]))], dispatch1D(rows, 1));
+    dispatch(softmaxShader(), [bindingView(s), params(new Uint32Array([rows, cols, 0, 0]))], dispatch1D(rows, 1), 'softmax');
     return s;
   }
 
   function geglu({ x, rows, inner, name = 'geglu' }) {
     const y = alloc([rows, inner], name);
     dispatch(gegluShader({ x: storageKind(x), y: storageKind(y) }), [bindingView(x), bindingView(y), params(new Uint32Array([rows, inner, 0, 0]))],
-      dispatch1D(rows * inner));
+      dispatch1D(rows * inner), `geglu:${name}`);
     return y;
   }
 
@@ -440,7 +567,7 @@ export function createSuperMatOps(device, options = {}) {
     const words = new Uint32Array(4);
     const floats = new Float32Array(words.buffer);
     words[0] = total; floats[1] = scale; floats[2] = shift;
-    dispatch(affineShader({ clamp01, silu, x: storageKind(x), y: storageKind(y) }), [bindingView(x), bindingView(y), params(words)], dispatch1D(total));
+    dispatch(affineShader({ clamp01, silu, x: storageKind(x), y: storageKind(y) }), [bindingView(x), bindingView(y), params(words)], dispatch1D(total), `affine:${name}`);
     return y;
   }
 
@@ -456,7 +583,7 @@ export function createSuperMatOps(device, options = {}) {
     const staging = device.createBuffer({ label: `${label}.readback`, size: view.size, usage: 0x0001 | COPY_DST });
     copy(tensor, { buffer: staging, offset: 0, byteLength: view.size }, { size: view.size });
     await flush();
-    await staging.mapAsync(0x0001);
+    await waitOutside(() => staging.mapAsync(0x0001));
     const values = new Float32Array(staging.getMappedRange().slice(0));
     staging.unmap();
     staging.destroy();

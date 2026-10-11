@@ -45,8 +45,16 @@
         <label>Movable light<input id="direct-intensity" type="number" min="0" step="0.1" value="1" disabled></label>
         <label class="check"><input id="gi" type="checkbox" checked disabled>Screen-space GI</label>
         <label class="check"><input id="glow" type="checkbox" disabled>Inferred glow</label>
+        <label>Glow intensity <output id="glowIntensity-value">1.00</output><input id="glowIntensity" type="range" min="0" max="20" step="0.05" value="1" disabled></label>
+        <label>Glow cutoff <output id="glowThreshold-value">0.05</output><input id="glowThreshold" type="range" min="0" max="1" step="0.005" value="0.05" disabled></label>
+        <label class="check"><input id="bloom" type="checkbox" checked disabled>Bloom</label>
+        <label>Bloom intensity <output id="bloomIntensity-value">0.50</output><input id="bloomIntensity" type="range" min="0" max="5" step="0.01" value="0.5" disabled></label>
+        <label>Bloom radius <output id="bloomRadius-value">0.40</output><input id="bloomRadius" type="range" min="0" max="1" step="0.01" value="0.4" disabled></label>
+        <label>Bloom threshold <output id="bloomThreshold-value">0.20</output><input id="bloomThreshold" type="range" min="0" max="5" step="0.01" value="0.2" disabled></label>
         <button id="reset" class="icon-button" aria-label="Reset view and light" title="Reset view and light" disabled><img src="./icons/rotate-ccw.svg" alt=""></button>
         <details id="advanced"><summary>Advanced</summary>
+          <label>Exposure <output id="exposure-value">1.00</output><input id="exposure" type="range" min="0" max="5" step="0.01" value="1" disabled></label>
+          <label>Emitter reflection <output id="emissionReflection-value">0.00</output><input id="emissionReflection" type="range" min="0" max="1" step="0.01" value="0" disabled></label>
           <label>Inspector<select id="map" disabled><option value="surface">Surface</option><option value="albedo">Albedo</option><option value="roughness">Roughness</option><option value="metallic">Metallic</option><option value="orm">Packed ORM</option><option value="normals">Surface normals</option><option value="emission">Emission</option></select></label>
           <label>GI diagnostic<select id="gi-view" disabled><option value="scene">Lit surface</option><option value="incoming">Incoming light</option><option value="gi">Received diffuse light</option><option value="ao">AO visibility</option></select></label>
           <label>Material contrast<select id="contrast-mode" disabled><option value="original">Original maps</option><option value="manual">Manual stretch</option><option value="highlight">Highlight-weighted stretch</option></select></label>

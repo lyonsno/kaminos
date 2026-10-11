@@ -4,10 +4,10 @@ import { execFileSync, spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { createHash } from 'node:crypto';
 import { launchChrome, openPage } from '../../models/supermat/chrome-cdp.mjs';
-import { validateEpisode, captureSurfaceFrame, validateComparison, validateContrastArms } from './witness-checks.js';
+import { validateEpisode, captureSurfaceFrame, validateComparison, validateContrastArms,validateEffectsPresentation } from './witness-checks.js';
 import { readRawEvidence } from './witness-raw.mjs';
 
-const {values}=parseArgs({options:{...Object.fromEntries(['repo-root','expected-commit','chrome','output','port','samples','sizes'].map(key=>[key,{type:'string'}])),contrast:{type:'boolean'}}});
+const {values}=parseArgs({options:{...Object.fromEntries(['repo-root','expected-commit','chrome','output','port','samples','sizes'].map(key=>[key,{type:'string'}])),contrast:{type:'boolean'},effects:{type:'boolean'}}});
 const output=path.resolve(values.output??'material-photo-witness');
 const report={status:'failed',phase:'arguments',requested:values,episodes:[],errors:[],command:process.argv};
 let browser,server;
@@ -63,8 +63,35 @@ try{
     episode.state=await evaluate('window.__materialPhoto');
     validateEpisode(episode.state,label,size);
     baselinePreset??=await evaluate('window.__materialPhotoActions.exportPreset()');
+    episode.defaultPreset=await evaluate('window.__materialPhotoActions.exportPreset()');
     const settle=()=>evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    await evaluate("document.getElementById('glow').checked=false;document.getElementById('glow').dispatchEvent(new Event('change'))");
     await settle();
+    if(values.effects){
+      report.phase=`effects-${key}`;await persist();
+      const identity=episode.state.identity.supermat;
+      if(identity.activations!=='f16'||identity.fuseNorm!==true||identity.gemmPrecision!=='f16-tiles')throw Error('Expected product profile did not execute');
+      await evaluate("window.__materialPhotoActions.view('materials');document.getElementById('glow').checked=true;document.getElementById('glow').dispatchEvent(new Event('change'))");
+      await settle();
+      const baseline=await evaluate('window.__materialPhotoActions.presentation()');
+      episode.effects={};
+      for(const [name,changes]of Object.entries({reflection:{bloom:false,emissionReflection:1},emitter:{bloom:false,emissionReflection:0},
+        bloom:{bloom:true,emissionReflection:0,bloomIntensity:1.5,glowIntensity:4},
+        'wide-bloom':{bloom:true,emissionReflection:0,bloomIntensity:1.5,bloomRadius:.9,glowIntensity:4},
+        cutoff:{bloom:true,emissionReflection:0,glowThreshold:1,glowIntensity:4},
+        'high-threshold':{bloom:true,emissionReflection:0,bloomThreshold:10,glowIntensity:4}})){
+        const requested={...baseline.effects,...changes};
+        await evaluate(`window.__materialPhotoActions.setEffects(${JSON.stringify(requested)})`);await settle();
+        const presentation=await evaluate('window.__materialPhotoActions.presentation()');
+        validateEffectsPresentation(presentation,requested,baseline.physicalbaseline.activeMaterial);
+        const clip=await evaluate("(()=>{const r=document.querySelector('[data-canvas=materials]').getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height,scale:1}})()");
+        const shot=await captureSurfaceFrame(evaluate,()=>browser.cdp.call('Page.captureScreenshot',{format:'png',clip,captureBeyondViewport:true},sessionId));
+        const frame=path.join(output,`${key}-effects-${name}.png`);await fs.writeFile(frame,Buffer.from(shot.data,'base64'));
+        episode.effects[name]={requested,presentation,frame};await persist();
+      }
+      await evaluate(`window.__materialPhotoActions.setEffects(${JSON.stringify(baseline.effects)});window.__materialPhotoActions.compare();document.getElementById('glow').checked=false;document.getElementById('glow').dispatchEvent(new Event('change'))`);
+      await settle();
+    }
     if(values.contrast){
       report.phase=`contrast-${key}`;await persist();
       episode.rawEvidence={};

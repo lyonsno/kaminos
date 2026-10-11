@@ -1,10 +1,12 @@
 import * as THREE from 'three/webgpu';
-import { uniform } from 'three/tsl';
+import { uniform, texture, output, emissive, vec4, mrt, pass, float } from 'three/tsl';
+import { bloom } from '../../lib/addons/tsl/display/BloomNode.js';
 import { createSceneGI } from '../../scene-gi.mjs';
 import { buildPhotoSurface } from './photo-surface.js';
 import { texturePixels } from './photo-contracts.js';
 import { inferEmission, emissionTexturePixels } from './emission.js';
 import { DEFAULT_CONTRAST, validateContrast, analyzeMaterialContrast, adjustMaterialMaps } from './material-contrast.js';
+import { DEFAULT_EFFECTS, validateEffects } from './effects.js';
 
 const GI_KEYS = ['gain','radius','thickness','slices','steps','denoise'];
 const ESTIMATOR_KEYS = ['expFactor','screenSpaceSampling','linearThickness','backfaceLighting','depthPhi','normalPhi','lumaPhi'];
@@ -52,10 +54,21 @@ export class MaterialPhotoViewer {
     this.scene.add(this.key, this.key.target);
     this.setLighting({rotation:0,intensity:1,direct:1});
     this.aoStrength = uniform(0.5);
-    this.gi = createSceneGI(this.scene, this.camera, this.aoStrength);
+    this.gi = createSceneGI(this.scene, this.camera, this.aoStrength, {
+      receiveWeight:material=>material===this.physicalMaterial?(this.reflectionWeight??float(1)):1,
+    });
     this.setTuning(DEFAULT_TUNING);
     this.pipeline = new THREE.RenderPipeline(this.renderer);
     this.pipeline.outputNode = this.gi.output();
+    this.gi.beauty.setMRT(mrt({output,emissive}));
+    this.directPass=pass(this.scene,this.camera);
+    this.directPass.setMRT(mrt({output,emissive}));
+    this.blooms=[this.gi.beauty,this.directPass].map(source=>bloom(source.getTextureNode('emissive')));
+    this.bloomPipelines=[this.gi.output(),this.directPass.getTextureNode('output')].map((source,index)=>{
+      const pipeline=new THREE.RenderPipeline(this.renderer);
+      pipeline.outputNode=source.add(this.blooms[index]);return pipeline;
+    });
+    this.setEffects(DEFAULT_EFFECTS);
     this.textures = [];
     this.mode = 'original'; this.map = 'surface'; this.useGI = true; this.glow = false;
     this.rig=rig;
@@ -165,8 +178,34 @@ export class MaterialPhotoViewer {
     this.maps.emission = this.emissionMap;
     this.rawTextures={...this.maps};
     this.physicalMaterial.emissiveMap = this.emissionMap;
+    this.installEmissionNodes();
     this.physicalMaterial.needsUpdate = true;
     this.setMaterialContrast(this.getMaterialContrast());
+  }
+
+  getEffects(){return {...DEFAULT_EFFECTS,...this.effects};}
+  setEffects(value) {
+    const next=validateEffects({...this.getEffects(),...value});
+    this.emissionUniforms??={intensity:uniform(1),threshold:uniform(.05),reflection:uniform(0),enabled:uniform(0)};
+    this.emissionUniforms.intensity.value=next.glowIntensity;
+    this.emissionUniforms.threshold.value=next.glowThreshold;
+    this.emissionUniforms.reflection.value=next.emissionReflection;
+    for(const effect of this.blooms??[]) {
+      effect.strength.value=next.bloomIntensity;effect.radius.value=next.bloomRadius;effect.threshold.value=next.bloomThreshold;
+    }
+    this.effects=next;
+  }
+  installEmissionNodes() {
+    this.setEffects(this.getEffects());
+    const raw=texture(this.emissionMap).rgb,u=this.emissionUniforms;
+    const peak=raw.r.max(raw.g).max(raw.b);
+    const gate=peak.smoothstep(u.threshold,u.threshold.add(.05));
+    this.reflectionWeight=float(1).sub(gate.mul(u.enabled).mul(u.reflection.oneMinus()));
+    this.emissionNode=raw.mul(gate).mul(u.intensity).mul(u.enabled);
+    this.physicalMaterial.emissiveNode=this.emissionNode;
+    // Partition the inferred emitting area from the reflecting surface. This is
+    // an artistic emitter mask, not a claim that real emitters cannot reflect.
+    this.physicalMaterial.outputNode=vec4(output.rgb.sub(emissive).mul(this.reflectionWeight).add(emissive),output.a);
   }
 
   releaseTextures(textures) {
@@ -248,7 +287,7 @@ export class MaterialPhotoViewer {
   }
   exportPreset() {
     return {schema:'kaminos.material-photo-preset.v1',settings:this.getTuning(),light:this.getLightHandle(),
-      camera:{orbit:this.orbit.toArray()},gi:this.useGI,glow:this.glow??false,lighting:this.getLighting(),contrast:this.getMaterialContrast(),diagnostic:this.getDiagnostic()};
+      camera:{orbit:this.orbit.toArray()},gi:this.useGI,glow:this.glow??false,lighting:this.getLighting(),contrast:this.getMaterialContrast(),diagnostic:this.getDiagnostic(),effects:this.getEffects()};
   }
   presentation() {
     const materialState=material=>material?{uuid:material.uuid,roughness:material.roughness,metalness:material.metalness,
@@ -263,7 +302,7 @@ export class MaterialPhotoViewer {
         activeMaterial:materialState(this.mesh?.material),environmentIntensity:this.scene.environmentIntensity},
       environment:{...this.environmentIdentity,...this.getLighting(),textureUUID:this.scene.environment?.uuid??null},
       contrast:{settings:this.getMaterialContrast(),analysis:this.contrastAnalysis??null,gains:this.contrastGains??null},
-      glow:this.glow,gi:{enabled:this.useGI,view:this.getDiagnostic(),settings:this.getTuning(),debugState:this.gi.debugState()}};
+      glow:this.glow,effects:this.getEffects(),gi:{enabled:this.useGI,view:this.getDiagnostic(),settings:this.getTuning(),debugState:this.gi.debugState()}};
   }
   validatePreset(value) {
     if(value?.schema!=='kaminos.material-photo-preset.v1')throw new Error('Invalid preset schema');
@@ -273,18 +312,19 @@ export class MaterialPhotoViewer {
     const lighting=validateLighting(value.lighting??this.getLighting());
     const contrast=validateContrast(value.contrast??DEFAULT_CONTRAST),diagnostic=value.diagnostic??'scene';
     if(!['scene','ao','incoming','gi'].includes(diagnostic))throw Error('Invalid GI diagnostic view');
-    return {tuning,light,orbit,lighting,contrast,diagnostic};
+    const effects=validateEffects(value.effects??DEFAULT_EFFECTS);
+    return {tuning,light,orbit,lighting,contrast,diagnostic,effects};
   }
   applyPreset(value) {
-    const {tuning,light,orbit,lighting,contrast,diagnostic}=this.validatePreset(value);
+    const {tuning,light,orbit,lighting,contrast,diagnostic,effects}=this.validatePreset(value);
     this.setTuning(tuning);
     this.setLighting(lighting);
     this.setLightHandle(light.x,light.y);
     this.orbit.fromArray(orbit);this.target.set(0,0);this.current.set(0,0);
     this.useGI=value.gi;this.glow=value.glow;
-    this.setMaterialContrast(contrast);this.setDiagnostic(diagnostic);
+    this.setMaterialContrast(contrast);this.setDiagnostic(diagnostic);this.setEffects(effects);
   }
-  reset() { this.orbit?.set(0,0); this.target?.set(0,0); this.current?.set(0,0); this.setLight(); if (this.renderer) this.renderer.toneMappingExposure=1; }
+  reset() { this.orbit?.set(0,0); this.target?.set(0,0); this.current?.set(0,0); this.setLight(); }
   resize() {
     const {width,height}=this.canvas.parentElement.getBoundingClientRect();
     if (!width || !height) return;
@@ -296,20 +336,30 @@ export class MaterialPhotoViewer {
   render(time) {
     if (!this.original || this.available===false || document.hidden || this.canvas?.parentElement.hidden || this.canvas?.closest?.('[data-tile]')?.hidden) return;
     const original=this.mode==='original';
+    const lit=!original&&['relit','materials'].includes(this.mode)&&this.map==='surface';
+    this.renderer.toneMappingExposure=lit?this.getEffects().exposure:1;
     this.original.visible=original;
     if (this.mesh) {
+      const previousColorNode=this.mapMaterial.colorNode;
       this.mesh.visible=!original;
+      this.mapMaterial.colorNode=null;
       if (this.map==='normals') { this.mapMaterial.map=this.normalMap; this.mesh.material=this.mapMaterial; }
       else if (this.map!=='surface' && this.maps?.[this.map]) {
         this.mapMaterial.map=this.maps[this.map]; this.mesh.material=this.mapMaterial;
+        if(this.map==='emission')this.mapMaterial.colorNode=this.emissionNode;
       } else this.mesh.material=this.mode==='materials'&&this.maps?this.physicalMaterial:this.mode==='relit'?this.relitMaterial:this.photoMaterial;
-      this.physicalMaterial.emissiveIntensity=this.mode==='materials'&&this.glow?1:0;
+      if(previousColorNode!==this.mapMaterial.colorNode)this.mapMaterial.needsUpdate=true;
+      const emitting=this.mode==='materials'&&this.glow;
+      this.physicalMaterial.emissiveIntensity=emitting?this.getEffects().glowIntensity:0;
+      if(this.emissionUniforms)this.emissionUniforms.enabled.value=emitting?1:0;
     }
     if(!this.rig||this.rig.time!==time){this.current.lerp(this.target,.08);if(this.rig)this.rig.time=time;}
     this.camera.position.set(this.orbit.x+this.current.x,-this.orbit.y-this.current.y,1);
     this.camera.lookAt(0,0,0);
     this.updateLight();
-    if (!original && ['relit','materials'].includes(this.mode) && this.map==='surface' && this.useGI) this.pipeline.render();
+    if(lit&&this.mode==='materials'&&this.glow&&this.getEffects().bloom&&this.getDiagnostic()==='scene'&&this.bloomPipelines) {
+      this.bloomPipelines[this.useGI?0:1].render();
+    } else if (lit && this.useGI) this.pipeline.render();
     else this.renderer.render(this.scene,this.camera);
   }
   clear() {
@@ -318,12 +368,13 @@ export class MaterialPhotoViewer {
     for (const texture of this.textures??[]) texture.dispose();
     this.textures=[]; this.original=this.mesh=this.maps=this.surface=this.normalMap=this.emissionMap=this.emissionStats=this.image=null;
     this.rawMaterialMaps=this.rawTextures=this.contrastAnalysis=this.contrastGains=null;this.derivedTextures=[];
+    this.reflectionWeight=this.emissionNode=null;
     this.photoMaterial=this.relitMaterial=this.physicalMaterial=this.mapMaterial=null;
   }
   async dispose() {
     this.renderer?.setAnimationLoop(null);this.resizeObserver?.disconnect();
     for(const [event,handler]of Object.entries(this.listeners??{}))this.interactionTarget.removeEventListener(event,handler);
     try{await this.renderer?.backend.device.queue.onSubmittedWorkDone();}
-    finally{this.clear();this.pipeline?.dispose();this.gi?.source.dispose();this.gi?.beauty.dispose();this.environment?.dispose();this.renderer?.dispose();}
+    finally{this.clear();for(const pipeline of this.bloomPipelines??[])pipeline.dispose();for(const effect of this.blooms??[])effect.dispose();this.directPass?.dispose();this.pipeline?.dispose();this.gi?.source.dispose();this.gi?.beauty.dispose();this.environment?.dispose();this.renderer?.dispose();}
   }
 }

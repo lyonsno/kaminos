@@ -5,11 +5,13 @@ import { test } from 'node:test';
 
 async function viewerFixture() {
   const THREE=await import('../../lib/three.webgpu.js');
+  const TSL=THREE.TSL;
   const calls={direct:0,gi:0,settings:[],estimator:[]};
   const context=vm.createContext({document:{hidden:false},Uint8Array,Uint16Array,Float32Array});
   const module=new vm.SourceTextModule(await readFile(new URL('./viewer.js',import.meta.url),'utf8'),{context});
   await module.link(async specifier=>{
-    const exports=specifier==='three/webgpu'?THREE:specifier==='three/tsl'?{uniform:value=>({value})}:
+    const exports=specifier==='three/webgpu'?THREE:specifier==='three/tsl'?TSL:
+      specifier.includes('BloomNode')?{bloom(){}}:
       specifier.includes('scene-gi')?{createSceneGI(){}}:await import(specifier);
     return new vm.SyntheticModule(Object.keys(exports),function(){for(const[name,value]of Object.entries(exports))this.setExport(name,value);},{context});
   });
@@ -60,6 +62,26 @@ test('GI diagnostics survive tuning changes and reject unsupported views atomica
   assert.equal(typeof viewer.setDiagnostic,'function');
   viewer.setDiagnostic('incoming');viewer.setTuning({gain:2});assert.equal(calls.settings.at(-1).view,'incoming');
   assert.throws(()=>viewer.setDiagnostic('imaginary'));assert.equal(viewer.getDiagnostic(),'incoming');
+});
+test('glow, bloom and exposure controls preserve raw maps and round-trip atomically',async()=>{
+  const {viewer}=await viewerFixture();
+  assert.equal(typeof viewer.setEffects,'function','emission and bloom need independent live controls');
+  const raw=viewer.maps.orm,albedo=viewer.maps.albedo;
+  viewer.setEffects({glowIntensity:4,glowThreshold:.2,emissionReflection:0,bloom:true,bloomIntensity:2,bloomRadius:.8,bloomThreshold:.4,exposure:1.5});
+  assert.equal(viewer.maps.orm,raw);assert.equal(viewer.maps.albedo,albedo);
+  assert.equal(viewer.getEffects().bloomRadius,.8);
+  viewer.mode='materials';viewer.glow=true;viewer.render();
+  assert.equal(viewer.physicalMaterial.emissiveIntensity,4);
+  assert.equal(viewer.renderer.toneMappingExposure,1.5);
+  viewer.mode='original';viewer.render();assert.equal(viewer.renderer.toneMappingExposure,1);
+  viewer.mode='photo';viewer.render();assert.equal(viewer.renderer.toneMappingExposure,1);
+  const preset=JSON.parse(JSON.stringify(viewer.exportPreset()));
+  for(const effects of [{bloomRadius:2},{glowThreshold:-1},{exposure:NaN},{bloom:'yes'}]){
+    assert.throws(()=>viewer.setEffects(effects));assert.equal(JSON.stringify(viewer.exportPreset()),JSON.stringify(preset));
+    assert.throws(()=>viewer.applyPreset({...preset,effects:{...preset.effects,...effects}}));assert.equal(JSON.stringify(viewer.exportPreset()),JSON.stringify(preset));
+  }
+  viewer.setEffects({glowIntensity:0});viewer.applyPreset(preset);assert.equal(viewer.getEffects().glowIntensity,4);
+  assert.ok(viewer.physicalMaterial.outputNode,'emitter mask must partition reflected output without rewriting ORM');
 });
 test('original remains DoubleSide and uses the same orbit as the depth surface',async()=>{
   const {viewer,THREE}=await viewerFixture();
