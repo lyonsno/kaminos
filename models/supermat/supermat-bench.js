@@ -67,9 +67,13 @@ export const BENCH_VARIANTS = [
   { id: 'f32act-f16tiles', f16: true, gemmPrecision: 'f16-tiles' },
   { id: 'f16act-fused-f16tiles', f16: true, activations: 'f16', fuseNorm: true, normOnly: true, gemmPrecision: 'f16-tiles' },
   { id: 'f32act-f16tiles-auto', f16: true, gemmPrecision: 'f16-tiles', largeGemmTile: { tm: 8, tn: 4, bk: 16, minWorkgroups: 1024 } },
+  { id: 'f32act-f16tiles-auto-pairs', f16: true, gemmPrecision: 'f16-tiles', largeGemmTile: { tm: 8, tn: 4, bk: 16, minWorkgroups: 1024 },
+    pairedWeightLoads: true },
   { id: 'f32act-auto', f16: true, largeGemmTile: { tm: 8, tn: 4, bk: 16, minWorkgroups: 1024 } },
   { id: 'f16act-fused-f16tiles-auto', f16: true, activations: 'f16', fuseNorm: true, normOnly: true, gemmPrecision: 'f16-tiles',
     largeGemmTile: { tm: 8, tn: 4, bk: 16, minWorkgroups: 1024 } },
+  { id: 'f16act-fused-f16tiles-auto-pairs', f16: true, activations: 'f16', fuseNorm: true, normOnly: true, gemmPrecision: 'f16-tiles',
+    largeGemmTile: { tm: 8, tn: 4, bk: 16, minWorkgroups: 1024 }, pairedWeightLoads: true },
 ];
 
 export async function runSuperMatBench({ iterations = 6, rounds = 3, variants = BENCH_VARIANTS, cases = CASES } = {}) {
@@ -88,7 +92,7 @@ export async function runSuperMatBench({ iterations = 6, rounds = 3, variants = 
         const ops = createSuperMatOps(device, { label: `bench.${variant.id}`, gemmKernel: variant.gemmKernel ?? 'tiled',
           gemmPrecision: variant.gemmPrecision ?? 'f32', activations: variant.activations ?? 'f32', fuseNorm: Boolean(variant.fuseNorm),
           attentionKernel: variant.attentionKernel ?? 'scalar', ...(variant.gemmTile ? { gemmTile: variant.gemmTile } : {}),
-          largeGemmTile: variant.largeGemmTile ?? null });
+          largeGemmTile: variant.largeGemmTile ?? null, pairedWeightLoads: variant.pairedWeightLoads ?? false });
         const inputs = [];
         let flops, run;
         if (testCase.kind === 'normconv') {

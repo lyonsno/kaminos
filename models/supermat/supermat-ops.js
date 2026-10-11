@@ -65,7 +65,7 @@ export function adaptDutyFlops({ current, flops, ownMs, targetMs, bounds: [min, 
 }
 
 export const SUPERMAT_OPS_OPTIONS = Object.freeze(['label', 'attention', 'gemmTile', 'fuseNorm', 'attentionKernel', 'gemmKernel',
-  'gemmPrecision', 'activations', 'profile', 'largeGemmTile']);
+  'gemmPrecision', 'activations', 'profile', 'largeGemmTile', 'pairedWeightLoads']);
 
 export function createSuperMatOps(device, options = {}) {
   const unknown = Object.keys(options).filter(key => !SUPERMAT_OPS_OPTIONS.includes(key));
@@ -77,7 +77,9 @@ export function createSuperMatOps(device, options = {}) {
     // Per-GEMM tile policy: GEMMs that still yield >= minWorkgroups workgroups
     // with the larger per-thread tile use it (large decoder convs); smaller
     // ones keep gemmTile. null disables. Summation order per output is unchanged.
-    largeGemmTile = { tm: 8, tn: 4, bk: 16, minWorkgroups: 1024 } } = options;
+    largeGemmTile = { tm: 8, tn: 4, bk: 16, minWorkgroups: 1024 },
+    // Packed-f16 weights load two consecutive k per u32 where layout allows.
+    pairedWeightLoads = true } = options;
   if (profile && !device.features?.has?.('timestamp-query')) throw new Error('profile needs the timestamp-query feature');
   // activations: storage of intermediate tensors ('f16' halves memory traffic; math stays F32).
   if (!['f32', 'f16'].includes(activations)) throw new Error(`unknown activation storage ${activations}`);
@@ -417,6 +419,8 @@ export function createSuperMatOps(device, options = {}) {
       biasM: Boolean(spec.biasM), biasM2: Boolean(spec.biasM2), biasN: Boolean(spec.biasN),
       residual: Boolean(spec.residual), conv: spec.conv ?? null, tile: useLarge ? largeGemmTile : gemmTile, precision: gemmPrecision,
       normB: spec.normB ? { silu: Boolean(spec.normB.silu) } : null,
+      aPairs: pairedWeightLoads && storageKind(spec.a) === 'f16packed' && spec.aSK === 1 && K % 2 === 0 && spec.aSM % 2 === 0
+        && (spec.aOff ?? 0) % 2 === 0 && (spec.aSB ?? 0) % 2 === 0,
       types: { a: storageKind(spec.a), b: storageKind(spec.b), c: storageKind(c),
         ...(spec.biasM ? { biasM: storageKind(spec.biasM) } : {}), ...(spec.biasM2 ? { biasM2: storageKind(spec.biasM2) } : {}),
         ...(spec.biasN ? { biasN: storageKind(spec.biasN) } : {}), ...(spec.residual ? { residual: storageKind(spec.residual) } : {}) },
