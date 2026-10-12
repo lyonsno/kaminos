@@ -19,6 +19,81 @@ async function workspace(t) {
 }
 const readReport = async out => JSON.parse(await fs.readFile(path.join(out, 'report.json'), 'utf8'));
 
+test('observation results reference the one saved state instead of serializing it twice', async t => {
+  const out = await workspace(t);
+  const state = { values: new Float64Array(32768).fill(0.125), run: 'reference-test' };
+  const session = await observationSession({ out, source, capture: async () => png,
+    exercise: ({ retain }) => experiment({ runtime: { ...runtime(), read: async () => state }, retain }).observe('one') });
+  const disk = await readReport(out);
+  assert.ok(disk.resultRef.bytes < 4096, `Result duplicated state: ${disk.resultRef.bytes} bytes`);
+  assert.deepEqual(session.result.observed, state, 'Live caller compatibility');
+  assert.equal(session.observations[0].effective, undefined, 'Aggregate must not keep full live state');
+  const loaded = await observationKit.readObservation(path.join(out, 'report.json'), 'one');
+  assert.deepEqual(loaded.effective, state);
+  assert.equal(loaded.status, 'verified');
+  assert.ok(disk.observations[0].cost.totalMs >= 0);
+  assert.equal(disk.observations[0].cost.stateBytes, disk.observations[0].state.bytes);
+});
+
+test('versioned resources acquire once across sessions and reconstruct complete typed data', async t => {
+  assert.equal(typeof observationKit.observationResources, 'function', 'Shared once-only resource acquisition missing');
+  const out = await workspace(t), geometry = { vertices: new Float32Array([1, 2, 3]), cells: [0, 1, 2] };
+  const store = await observationKit.observationResources({ out }); let reads = 0;
+  const acquire = () => store.retain({ key: 'stone-geometry', version: 'source-sha:7',
+    read: async () => { reads++; return geometry; } });
+  const [a, b] = await Promise.all([acquire(), acquire()]);
+  assert.equal(reads, 1); assert.deepEqual(a, b);
+  assert.deepEqual(await observationKit.readObservationResource(out, a), geometry);
+  const next = await store.retain({ key: 'stone-geometry', version: 'source-sha:8',
+    read: async () => ({ ...geometry, cells: [2, 1, 0] }) });
+  assert.notEqual(next.file, a.file);
+  await fs.writeFile(path.join(out, a.file), Buffer.from('partial'));
+  await assert.rejects(observationKit.readObservationResource(out, a), /size differs/);
+  await assert.rejects(store.retain({ key: 'missing-version', read: async () => geometry }), /version/);
+});
+
+test('failed resource acquisition can retry and preserves a failed session report', async t => {
+  assert.equal(typeof observationKit.observationResources, 'function', 'Shared once-only resource acquisition missing');
+  const out = await workspace(t), store = await observationKit.observationResources({ out });
+  await assert.rejects(observationSession({ out: path.join(out, 'session'), source, capture: async () => png,
+    exercise: () => store.retain({ key: 'geometry', version: '1', read: async () => { throw Error('geometry unavailable'); } }) }), /geometry unavailable/);
+  assert.equal((await readReport(path.join(out, 'session'))).status, 'failed');
+  const ref = await store.retain({ key: 'geometry', version: '1', read: async () => ({ recovered: true }) });
+  assert.deepEqual(await observationKit.readObservationResource(out, ref), { recovered: true });
+});
+
+test('selective observation reader does not acquire unrelated state and reads v2 reports', async t => {
+  const out = await workspace(t);
+  await observationSession({ out, source, capture: async () => png, exercise: async ({ retain }) => {
+    const work = experiment({ runtime: runtime(), retain });
+    await work.observe('first'); await work.observe('second');
+  } });
+  const report = await readReport(out), reportPath = path.join(out, 'report.json');
+  await fs.rename(path.join(out, report.observations[1].state.file), path.join(out, 'second.held'));
+  assert.equal((await observationKit.readObservation(reportPath, 'first')).effective.run, 'r1');
+  await assert.rejects(observationKit.readObservation(reportPath, 'second'), /ENOENT/);
+  await assert.rejects(observationKit.readObservation(reportPath, 'absent'), /not found/);
+  report.storageFormat = 'observation-session-v2';
+  await fs.writeFile(reportPath, JSON.stringify(report));
+  assert.equal((await observationKit.readObservation(reportPath, 'first')).effective.run, 'r1');
+});
+
+test('stamp failure retains actual captured state and pixels without a verified claim', async t => {
+  const out = await workspace(t); let revision = 0;
+  const adapter = { ...runtime(), stability: { read: async () => ({ revision, route: 'native' }),
+    validate: stamp => assert.equal(stamp.route, 'native'),
+    assertStable: (a, b) => assert.deepEqual(a, b) } };
+  await assert.rejects(observationSession({ out, source, capture: async () => { revision++; return png; },
+    exercise: ({ retain }) => experiment({ runtime: adapter, retain }).observe('changed') }));
+  const report = await readReport(out);
+  assert.equal(report.status, 'failed'); assert.equal(report.observations[0].status, 'unverified');
+  assert.equal(report.lastTrustworthyObservation, undefined);
+  assert.ok(report.observations[0].cost.verifyMs >= 0);
+  assert.ok(report.observations[0].cost.totalMs >= report.observations[0].cost.verifyMs);
+  assert.equal((await observationKit.readObservation(path.join(out, 'report.json'), 'changed')).effective.run, 'r1');
+  assert.deepEqual(await fs.readFile(path.join(out, 'changed.png')), png);
+});
+
 test('observation kit executes with only its decoder and pure pixel predicate deployed', async t => {
   const out = await workspace(t), root = new URL('../', import.meta.url);
   const modules = ['observation-session.mjs', 'screenshot-png-rgb.mjs', 'capture-pixels.mjs'];
@@ -107,11 +182,11 @@ test('disk index excludes dense observations and caller results while live retur
   } });
   assert.equal(session.result, returned);
   assert.deepEqual(session.result.first.observed, state);
-  assert.deepEqual(session.observations[0].effective, state);
+  assert.equal(session.observations[0].effective, undefined, 'Session aggregate retains references');
   const disk = await readReport(out);
   assert.equal(disk.observations[0].effective, undefined, 'Dense raw state must not enter the JSON index');
   assert.equal(disk.result, undefined, 'Dense caller return must not enter the JSON index');
-  assert.equal(disk.storageFormat, 'observation-session-v2');
+  assert.equal(disk.storageFormat, 'observation-session-v3');
   assert.equal(disk.observations[0].state.encoding, 'node-v8');
   assert.equal(disk.resultRef.encoding, 'node-v8');
   const restored = await observationKit.readObservationSession(path.join(out, 'report.json'));

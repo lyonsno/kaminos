@@ -31,3 +31,35 @@ test('runtime replacement during capture fails instead of returning a valid obse
 test('missing runtime consistency check fails before capture', () => {
   assert.throws(() => experiment({ runtime: { read: async () => ({}) }, retain: async () => {} }), /runtime.*settle|runtime.*assertStable/);
 });
+
+test('stamp mode brackets acquisition and capture with one full state read', async () => {
+  const events = [];
+  const runtime = { settle: async () => {}, camera: async () => {},
+    read: async () => { events.push('payload'); return { vertices: [1, 2, 3] }; },
+    assertStable: () => assert.fail('Full witness comparison should not run in stamp mode'),
+    stability: { read: async () => { events.push('stamp'); return { run: 'r1', revision: 7, camera: [1, 2, 3] }; },
+      validate: stamp => assert.equal(stamp.run, 'r1'), assertStable: (a, b) => assert.deepEqual(a, b) } };
+  const work = experiment({ runtime, retain: async ({ observe, verify }) => {
+    await observe(); events.push('capture'); await verify(); return {};
+  } });
+  await work.observe('one');
+  assert.deepEqual(events, ['stamp', 'payload', 'capture', 'stamp']);
+});
+
+test('stamp mode catches changes during acquisition and capture and rejects partial interfaces', async () => {
+  for (const phase of ['read', 'capture']) {
+    let revision = 0;
+    const runtime = { settle: async () => {}, camera: async () => {}, read: async () => {
+      if (phase === 'read') revision++; return { geometry: [1] };
+    }, assertStable: () => {}, stability: {
+      read: async () => ({ revision }), validate: s => assert.equal(typeof s.revision, 'number'),
+      assertStable: (a, b) => assert.equal(a.revision, b.revision, 'Revision changed'),
+    } };
+    const work = experiment({ runtime, retain: async ({ observe, verify }) => {
+      await observe(); if (phase === 'capture') revision++; await verify(); return {};
+    } });
+    await assert.rejects(work.observe('changed'), /Revision changed/);
+  }
+  assert.throws(() => experiment({ runtime: { settle() {}, read() {}, camera() {}, assertStable() {},
+    stability: { read() {} } }, retain() {} }), /stability.validate/);
+});

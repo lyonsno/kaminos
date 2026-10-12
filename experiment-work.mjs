@@ -35,7 +35,18 @@ export function workbenchRuntime(page) {
 }
 
 export function experiment({ page, retain, runtime = workbenchRuntime(page) }) {
-  for (const name of ['settle', 'read', 'camera', 'assertStable']) assert.equal(typeof runtime[name], 'function', `runtime.${name} required`);
+  for (const name of ['settle', 'read', 'camera']) assert.equal(typeof runtime[name], 'function', `runtime.${name} required`);
+  const stability = runtime.stability;
+  if (stability !== undefined) {
+    for (const name of ['read', 'validate', 'assertStable'])
+      assert.equal(typeof stability?.[name], 'function', `runtime.stability.${name} required`);
+  } else assert.equal(typeof runtime.assertStable, 'function', 'runtime.assertStable required');
+  const stamp = async options => {
+    const value = structuredClone(await stability.read());
+    assert.ok(value && typeof value === 'object', 'Runtime stability stamp missing');
+    await stability.validate(value, options);
+    return value;
+  };
   return {
     runtime,
     async pose(id, patch) {
@@ -51,21 +62,27 @@ export function experiment({ page, retain, runtime = workbenchRuntime(page) }) {
     },
     async observe(name, options = {}) {
       await runtime.settle();
-      let before, verified = false;
+      let before, beforeStamp, verified = false;
       const result = await retain({ name, observe: async () => {
+        if (stability) beforeStamp = await stamp(options);
         before = structuredClone(await runtime.read());
         assert.ok(before && typeof before === 'object', 'Runtime observation missing');
         await runtime.validate?.(before, options);
         return before;
       }, verify: async () => {
-        const after = await runtime.read();
-        assert.ok(after && typeof after === 'object', 'Runtime observation missing');
-        await runtime.validate?.(after, options);
-        await runtime.assertStable(before, after, options);
+        if (stability) await stability.assertStable(beforeStamp, await stamp(options), options);
+        else {
+          const after = await runtime.read();
+          assert.ok(after && typeof after === 'object', 'Runtime observation missing');
+          await runtime.validate?.(after, options);
+          await runtime.assertStable(before, after, options);
+        }
         verified = true;
       } });
       assert.ok(verified, 'Retention must verify the runtime after capture');
-      return { ...result, observed: before };
+      // Keep live callers compatible while persisted results carry only the
+      // retention reference. Explicit reads reconstruct the saved payload.
+      return Object.defineProperty({ ...result }, 'observed', { value: before, enumerable: false });
     },
   };
 }

@@ -137,3 +137,37 @@ Here `stone`, `runtime` and `verifiedSource` come from the consumer's existing f
 Choose a fresh output directory per session. `report.json` records source, each observation's full effective state, image path/hash/dimensions, failure phase and last verified observation. A failed or changing capture retains its raw output as unverified; a caught retention error still fails the session. Existing reports and repeated observation names are protected from overwrite. A runtime/setup failure inside `exercise` leaves its report even before the first image. Include route verification and startup inside `exercise` when those failures need the same report.
 
 An existing custom `retain` can also be used. It receives `{name, observe, verify}`: call `observe()` immediately before capture, then `verify()` afterward, and only then publish the observation as successful. The default workbench retention implements that sequence. `experiment` requires post-capture verification; incomplete retention fails explicitly. Water callers keep `experiment({page, retain})` and `{water:true}` unchanged.
+
+## Keep repeated observations cheap
+
+`observationSession` writes each complete state once. Its v3 report and returned aggregate contain observation references; returning an observation from `exercise` saves its reference in the result. The immediate `work.observe()` return still provides `.observed` for choosing the next action, and direct `retain()` returns `.effective`. These are non-enumerable, read-only live properties: spreading or serializing the return keeps its reference, while the full state remains in its checked sidecar. A caller that explicitly returns raw state under another field is choosing an additional export.
+
+Reopen just the needed observation with `readObservation(reportPath, name)`. It verifies size and checksum and returns `.effective`. `readObservationSession(reportPath)` explicitly loads every observation and the caller result; it also reads v2 and older inline reports. In v3, restored caller results carry observation references, so use the named reader for their state. Each observation records `cost` with read, persistence, capture, pixel-check and verification durations plus state bytes and total time, including completed phases of a failure.
+
+For large immutable geometry, create one resource store for the investigation and reuse it across observation sessions:
+
+```js
+import { observationResources, readObservationResource } from './observation-session.mjs';
+const resources = await observationResources({ out: resourceDirectory });
+const geometry = await resources.retain({
+  key: 'stone-geometry', version: effectiveGeometryRevision,
+  read: () => page.evaluate(() => window.stone.exportGeometry()),
+});
+// Include geometry and the resource-directory locator in retained state/source.
+// Subsequent retains with this key/version reuse the reference, even concurrently.
+const restoredGeometry = await readObservationResource(resourceDirectory, geometry);
+```
+
+The producer supplies an immutable version identity and changes it whenever that material changes. Acquisition runs once per key/version per store instance, so reuse saves browser transfer as well as disk writes. Files are content-addressed; a fresh store instance acquires again and verifies any existing content before reusing it. A reference preserves every returned value and typed buffer. The resource directory travels with the observations; its locator is caller-owned. Perform resource acquisition inside `exercise` when acquisition failure should be recorded in the session report.
+
+When a runtime exposes complete cheap change tracking, provide `runtime.stability`:
+
+```js
+runtime.stability = {
+  read: () => page.evaluate(() => window.stone.observationStamp()),
+  validate: stamp => assertHeldNativeStamp(stamp),
+  assertStable: (before, after) => assert.deepEqual(after, before),
+};
+```
+
+This mode reads and validates a detached stamp before full state acquisition and after PNG capture, then compares them. The full state is read once and still passes `runtime.validate`. Supply all three stamp methods together. The producer covers route/backend, run, configuration/geometry revisions, physical mutations, camera and relevant presentation state; exercise its actual mutating operations to establish that coverage. The shared layer does not infer completeness from a counter. Without the stamp interface, the existing two-full-read verification remains effective. The caller continues owning held-state preparation and browser/GPU lifetime; offline geometry analysis can consume retained data after that lifetime ends.
