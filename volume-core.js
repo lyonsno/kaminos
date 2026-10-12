@@ -7701,10 +7701,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
   let canonicalSmokeOnlyRender = minimalPlumeRenderScene * step(0.5, canonicalRenderMode);
   let startT = select(max(hit.x, 0.0), 0.0, fullGridCapture);
-  let endT = select(min(hit.y, sceneDepthEndT), 4.0, fullGridCapture);
+  let endT = select(min(hit.y, sceneDepthEndT), 2.0 * domainHalfY, fullGridCapture);
   // Keep ordinary sample positions stable; clipping removes hidden samples,
   // rather than resampling the visible fire at a different density.
-  let dtBase = (select(endT, select(hit.y, 4.0, fullGridCapture), preserveSamplePositions) - startT) / steps;
+  let dtBase = (select(endT, select(hit.y, 2.0 * domainHalfY, fullGridCapture), preserveSamplePositions) - startT) / steps;
   let jitter = dtBase * 0.5;
   var t = startT + jitter;
   var trans = 1.0;

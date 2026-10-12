@@ -89,8 +89,8 @@ test('GH-01: the camera samples the whole box: the raymarch box follows GRID_Y/G
   // The cockpit's flame-domain guide follows the effective top instead of y = 3.
   assert.ok(!index.includes('new THREE.Vector3(1, 3, 1).add(new THREE.Vector3(...flameDomainTranslation))'));
   assert.equal((index.match(/new THREE\.Vector3\(1, flameDomainTopY\(\), 1\)\.add\(new THREE\.Vector3\(\.\.\.flameDomainTranslation\)\)/g) || []).length, 2);
-  assert.match(index, /function flameDomainTopY\(\) \{\n\s+const dims = flameDomainGridDimensions;\n\s+return Array\.isArray\(dims\) && dims\.length === 3 && dims\[0\] > 0 \? -1 \+ 2 \* dims\[1\] \/ dims\[0\] : 3;/);
-  assert.match(index, /flameDomainGridDimensions = \[\.\.\.s\.simGridDimensions\];\n\s+refreshFlameDomainGuideBox\(\);/, 'the status writer refreshes the guide when the dimensions change');
+  assert.match(index, /function flameDomainTopY\(\) \{\n\s+const dims = window\.__kaminosVolumeGridDimensions;\n\s+return Array\.isArray\(dims\) && dims\.length === 3 && dims\[0\] > 0 \? -1 \+ 2 \* dims\[1\] \/ dims\[0\] : 3;/);
+  assert.match(index, /window\.__kaminosVolumeGridDimensions = \[\.\.\.s\.simGridDimensions\];\n\s+refreshFlameDomainGuideBox\(\);/, 'the status writer refreshes the guide when the dimensions change');
 });
 
 test('GH-03: a height edit before GPU initialization changes the effective dimensions and the receipt together', () => {

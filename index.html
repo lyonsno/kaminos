@@ -3709,20 +3709,6 @@ let authoredFlamePresent = true;
 const proceduralMeshes = new Map(), groupProxies = new Map(), groupEditTargets = new Set();
 let flameDomainGuide = null;
 let flameDomainTranslation = [0, 0, 0];
-// The simulation box spans x/z [-1, 1] and y [-1, -1 + 2 × height/width] in
-// its local frame (grid height control, report §34); the status writer keeps
-// the effective dimensions here so the guide follows a taller box.
-let flameDomainGridDimensions = null;
-function flameDomainTopY() {
-  const dims = flameDomainGridDimensions;
-  return Array.isArray(dims) && dims.length === 3 && dims[0] > 0 ? -1 + 2 * dims[1] / dims[0] : 3;
-}
-function refreshFlameDomainGuideBox() {
-  if (!flameDomainGuide) return;
-  flameDomainGuide.box.set(
-    new THREE.Vector3(-1, -1, -1).add(new THREE.Vector3(...flameDomainTranslation)),
-    new THREE.Vector3(1, flameDomainTopY(), 1).add(new THREE.Vector3(...flameDomainTranslation)));
-}
 import {
   VOLUME_EMITTER_INLET_PROFILES,
   VOLUME_EMITTER_SOURCE_LAWS,
@@ -5794,6 +5780,21 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
     window.__kaminosVolumeEmitterReceipt?.requested);
   if (entry) applySceneObjectTransformState(entry.object, flameEmitterPose);
   return entry?.object || null;
+}
+
+// The simulation box spans x/z [-1, 1] and y [-1, -1 + 2 × height/width] in
+// its local frame (grid height control, report §34). The status writer
+// publishes the effective dimensions on window so the guide follows a taller
+// box; until it has, the authored twice-the-width top is y = 3.
+function flameDomainTopY() {
+  const dims = window.__kaminosVolumeGridDimensions;
+  return Array.isArray(dims) && dims.length === 3 && dims[0] > 0 ? -1 + 2 * dims[1] / dims[0] : 3;
+}
+function refreshFlameDomainGuideBox() {
+  if (!flameDomainGuide) return;
+  flameDomainGuide.box.set(
+    new THREE.Vector3(-1, -1, -1).add(new THREE.Vector3(...flameDomainTranslation)),
+    new THREE.Vector3(1, flameDomainTopY(), 1).add(new THREE.Vector3(...flameDomainTranslation)));
 }
 
 function setFlameDomainTranslation(next) {
@@ -22974,8 +22975,8 @@ function refreshVolumeReadout() {
   const simGridDimensions = Array.isArray(s.simGridDimensions) && s.simGridDimensions.length === 3
     ? s.simGridDimensions.join('×')
     : (s.simGrid ? `${s.simGrid} x/z resolution (dimensions unreported)` : 'unknown');
-  if (Array.isArray(s.simGridDimensions) && s.simGridDimensions.length === 3 && String(s.simGridDimensions) !== String(flameDomainGridDimensions)) {
-    flameDomainGridDimensions = [...s.simGridDimensions];
+  if (Array.isArray(s.simGridDimensions) && s.simGridDimensions.length === 3 && String(s.simGridDimensions) !== String(window.__kaminosVolumeGridDimensions)) {
+    window.__kaminosVolumeGridDimensions = [...s.simGridDimensions];
     refreshFlameDomainGuideBox();
   }
   const gh = s.gridHeight;

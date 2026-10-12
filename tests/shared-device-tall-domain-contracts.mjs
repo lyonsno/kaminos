@@ -11,8 +11,10 @@ const TALL_FLUID_BYTES_AT_160 = 160 * 320 * 160 * 16 * 4; // 524,288,000
 const CUBIC_FLUID_BYTES_AT_160 = 160 * 160 * 160 * 16 * 4; // 262,144,000
 assert.equal(TALL_FLUID_BYTES_AT_160, 524288000);
 // Largest per-cell buffer the prototype sizes for itself: flow-kernel
-// descriptors at 100 floats per cell over the tallest supported domain.
-const PROTOTYPE_REQUESTED_BYTES = 160 * 320 * 160 * 100 * 4;
+// descriptors at 100 floats per cell over the tallest supported domain. Since
+// the grid height control (report §34) the tallest domain is 4 x the widest
+// width, so the request is clamped by the adapter.
+const PROTOTYPE_REQUESTED_BYTES = 160 * 640 * 160 * 100 * 4;
 
 let requests = [];
 let destroys = 0;
