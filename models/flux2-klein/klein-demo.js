@@ -63,12 +63,14 @@ fn local(c: vec2f, t: f32) -> vec2f {
   return vec4f(color, 1.0);
 }`;
 
-function frameStats(gaps) {
+function frameStats(gaps, marks = []) {
   if (!gaps.length) return null;
-  const sorted = [...gaps].sort((x, y) => x - y);
+  const sorted = gaps.map(g => g.ms).sort((x, y) => x - y);
   const q = p => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
   return { frames: gaps.length, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: sorted.at(-1),
-    over33ms: gaps.filter(g => g > 33.4).length, over100ms: gaps.filter(g => g > 100).length };
+    over33ms: sorted.filter(g => g > 33.4).length, over100ms: sorted.filter(g => g > 100).length,
+    // Gaps over 50 ms with when they ended (ms from the run's start) and the stage then running.
+    long: gaps.filter(g => g.ms > 50).map(g => ({ ms: g.ms, atMs: g.atMs, stage: marks.filter(m => m.atMs <= g.atMs).at(-1)?.stage ?? 'start' })) };
 }
 
 // load: false returns with the scene already drawing and no weights fetched; call demo.load()
@@ -110,7 +112,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
       const now = performance.now();
       if (receipt.status === 'completed') {
         scene.frames++;
-        if (scene.gaps && scene.lastFrameAt !== null) scene.gaps.push(now - scene.lastFrameAt);
+        if (scene.gaps && scene.lastFrameAt !== null) scene.gaps.push({ ms: now - scene.lastFrameAt, atMs: now - scene.started });
         scene.lastFrameAt = now;
       }
       requestAnimationFrame(requestFrame);
@@ -126,6 +128,11 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
     active = { abort, control: null, cooperative };
     scene.gaps = []; scene.lastFrameAt = null;
     const started = performance.now();
+    scene.started = started;
+    const marks = [];
+    const mark = stage => marks.push({ stage, atMs: performance.now() - started });
+    const phaseHook = phase => { mark(phase); onPhase?.(phase); };
+    const stepHook = (i, n) => { mark(`step${i}`); onStep?.(i, n); };
     let frameRun = null, route = null, result;
     try {
       if (cooperative) {
@@ -135,7 +142,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
         const control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground: frameRun.withForeground });
         active.control = control;
         const job = route.enqueue({ jobId: runId, execute: invocation => pipeline.generate({
-          prompt, seed, width: size, height: size, textLength, onStep, onPhase,
+          prompt, seed, width: size, height: size, textLength, onStep: stepHook, onPhase: phaseHook,
           schedule: { runtime: route.runtime, invocation, control, signal: abort.signal, targetDutyMs, maxInFlight } }) });
         const completion = await job.completion;
         if (completion.status !== 'succeeded') {
@@ -145,11 +152,13 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
         }
         result = completion.output;
       } else {
-        result = await pipeline.generate({ prompt, seed, width: size, height: size, textLength, onStep, onPhase });
+        result = await pipeline.generate({ prompt, seed, width: size, height: size, textLength, onStep: stepHook, onPhase: phaseHook });
       }
       result.wallMs = performance.now() - started;
+      result.startedAt = started;
       result.cooperative = cooperative;
-      result.frames = frameStats(scene.gaps);
+      mark('done');
+      result.frames = frameStats(scene.gaps, marks);
       result.dutyCount = result.duties.length;
       result.longestDutyMs = Math.max(0, ...result.duties.map(d => d.queueMs ?? 0));
       return result;

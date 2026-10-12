@@ -1,0 +1,238 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
+import { test } from 'node:test';
+
+async function viewerFixture() {
+  const THREE=await import('../../lib/three.webgpu.js');
+  const TSL=THREE.TSL;
+  const calls={direct:0,gi:0,settings:[],estimator:[]};
+  const context=vm.createContext({document:{hidden:false},Uint8Array,Uint16Array,Float32Array});
+  const module=new vm.SourceTextModule(await readFile(new URL('./viewer.js',import.meta.url),'utf8'),{context});
+  await module.link(async specifier=>{
+    const exports=specifier==='three/webgpu'?THREE:specifier==='three/tsl'?TSL:
+      specifier.includes('BloomNode')?{bloom(){}}:
+      specifier.includes('scene-gi')?{createSceneGI(){}}:await import(specifier);
+    return new vm.SyntheticModule(Object.keys(exports),function(){for(const[name,value]of Object.entries(exports))this.setExport(name,value);},{context});
+  });
+  await module.evaluate();
+  const viewer=new module.namespace.MaterialPhotoViewer();
+  viewer.scene=new THREE.Scene();viewer.camera=new THREE.PerspectiveCamera(53,1,.001,100);
+  viewer.key=new THREE.DirectionalLight();viewer.scene.add(viewer.key,viewer.key.target);
+  viewer.renderer={toneMapping:THREE.ACESFilmicToneMapping,toneMappingExposure:1,render(){calls.direct++;},setSize(){}};
+  viewer.pipeline={render(){calls.gi++;}};
+  viewer.gi={setSettings(value){calls.settings.push(value);},setEstimatorSettings(value){calls.estimator.push(value);},debugState:()=>({estimator:calls.estimator.at(-1)})};
+  viewer.canvas={parentElement:{getBoundingClientRect:()=>({width:400,height:400})}};
+  viewer.orbit=new THREE.Vector2();viewer.target=new THREE.Vector2();viewer.current=new THREE.Vector2();
+  viewer.textures=[];viewer.mode='original';viewer.map='surface';viewer.useGI=true;
+  viewer.aoStrength={value:.5};
+  const image={width:2,height:2,data:new Uint8Array(16).fill(255)};
+  const depth={width:2,height:2,depth:new Float32Array([1,1,1,1]),mask:new Uint8Array([1,1,1,1]),
+    points:new Float32Array([-.5,.5,1,.5,.5,1,-.5,-.5,1,.5,-.5,1]),normals:new Float32Array([0,0,-1,0,0,-1,0,0,-1,0,0,-1]),fovX:1,fovY:1};
+  viewer.setImage(image,depth);viewer.setMaterials({maps:{albedo:image,roughness:image,metallic:image,orm:image}});
+  return {viewer,calls,THREE,module};
+}
+test('material contrast is reversible, shares inspector and BRDF values, and releases derived textures',async()=>{
+  const {viewer}=await viewerFixture();
+  assert.equal(typeof viewer.setMaterialContrast,'function','retained materials must support contrast without inference');
+  const data=new Uint8Array([255,110,120,255,255,120,125,255,255,130,130,255,255,140,135,255]);
+  const orm={width:2,height:2,data};
+  viewer.setMaterials({maps:{albedo:viewer.image,roughness:orm,metallic:orm,orm}});
+  const raw=viewer.maps.orm,count=viewer.textures.length,copy=data.slice();
+  viewer.setMaterialContrast({mode:'manual',roughness:1,metallic:0});
+  const corrected=viewer.maps.orm;
+  assert.notEqual(corrected,raw);assert.equal(viewer.physicalMaterial.roughnessMap,corrected);
+  for(let i=0;i<4;i++){
+    assert.equal(viewer.maps.roughness.image.data[i*4],corrected.image.data[i*4+1]);
+    assert.equal(corrected.image.data[i*4+2],raw.image.data[i*4+2]);
+  }
+  assert.deepEqual(data,copy);
+  viewer.setMaterialContrast({roughness:.5});assert.equal(viewer.textures.length,count+3);
+  viewer.setMaterialContrast({mode:'original'});assert.equal(viewer.maps.orm,raw);assert.equal(viewer.textures.length,count);
+  const preset=JSON.parse(JSON.stringify(viewer.exportPreset()));
+  assert.throws(()=>viewer.applyPreset({...preset,contrast:{mode:'manual',roughness:2,metallic:0}}));
+  assert.equal(viewer.getMaterialContrast().mode,'original');
+  viewer.setMaterialContrast({mode:'manual',roughness:.7,metallic:.2});
+  const chosen=JSON.parse(JSON.stringify(viewer.exportPreset()));viewer.setMaterialContrast({mode:'original'});viewer.applyPreset(chosen);
+  assert.equal(viewer.getMaterialContrast().roughness,.7);
+  viewer.clear();assert.equal(viewer.contrastAnalysis,null);assert.equal(viewer.rawMaterialMaps,null);
+});
+test('GI diagnostics survive tuning changes and reject unsupported views atomically',async()=>{
+  const {viewer,calls}=await viewerFixture();
+  assert.equal(typeof viewer.setDiagnostic,'function');
+  viewer.setDiagnostic('incoming');viewer.setTuning({gain:2});assert.equal(calls.settings.at(-1).view,'incoming');
+  assert.throws(()=>viewer.setDiagnostic('imaginary'));assert.equal(viewer.getDiagnostic(),'incoming');
+});
+test('real Three MRT construction forwards context-added light for both lit receivers',async()=>{
+  const {viewer,THREE}=await viewerFixture();
+  const {vec3,vec4,output,emissive,mrt}=THREE.TSL;
+  for(const material of [viewer.relitMaterial,viewer.physicalMaterial]) {
+    const renderer={getRenderTarget:()=>({depthBuffer:false}),getMRT:()=>mrt({output,emissive})};
+    material.setupVertex=()=>vec4(0,0,0,1);material.setupHardwareClipping=()=>{};material.setupClipping=()=>null;
+    material.setupDiffuseColor=()=>{};material.setupAmbientOcclusion=()=>{};material.setupVariants=()=>{};
+    material.setupLighting=()=>vec3(1);material.setupOutput=(builder,node)=>node;material.setupObserver=()=>({});
+    const builder=new THREE.NodeBuilder(new THREE.Mesh(undefined,material),renderer);
+    let received;builder.context.getOutput=node=>received=vec4(node.rgb.add(7),node.a);
+    material.setup(builder);
+    const fragment=builder.flowNodes.fragment[0];
+    assert.ok(fragment.nodes.some(node=>node.targetNode===output&&node.sourceNode===received),
+      `${material===viewer.relitMaterial?'relit':'inferred'} receiver lost the context result in the MRT`);
+  }
+});
+test('glow, bloom and exposure controls preserve raw maps and round-trip atomically',async()=>{
+  const {viewer}=await viewerFixture();
+  assert.equal(typeof viewer.setEffects,'function','emission and bloom need independent live controls');
+  const raw=viewer.maps.orm,albedo=viewer.maps.albedo;
+  viewer.setEffects({glowIntensity:4,glowThreshold:.2,emissionReflection:0,bloom:true,bloomIntensity:2,bloomRadius:.8,bloomThreshold:.4,exposure:1.5});
+  assert.equal(viewer.maps.orm,raw);assert.equal(viewer.maps.albedo,albedo);
+  assert.equal(viewer.getEffects().bloomRadius,.8);
+  viewer.mode='materials';viewer.glow=true;viewer.render();
+  assert.equal(viewer.physicalMaterial.emissiveIntensity,4);
+  assert.equal(viewer.renderer.toneMappingExposure,1.5);
+  viewer.mode='original';viewer.render();assert.equal(viewer.renderer.toneMappingExposure,1);
+  viewer.mode='photo';viewer.render();assert.equal(viewer.renderer.toneMappingExposure,1);
+  const preset=JSON.parse(JSON.stringify(viewer.exportPreset()));
+  for(const effects of [{bloomRadius:2},{glowThreshold:-1},{exposure:NaN},{bloom:'yes'}]){
+    assert.throws(()=>viewer.setEffects(effects));assert.equal(JSON.stringify(viewer.exportPreset()),JSON.stringify(preset));
+    assert.throws(()=>viewer.applyPreset({...preset,effects:{...preset.effects,...effects}}));assert.equal(JSON.stringify(viewer.exportPreset()),JSON.stringify(preset));
+  }
+  viewer.setEffects({glowIntensity:0});viewer.applyPreset(preset);assert.equal(viewer.getEffects().glowIntensity,4);
+  assert.ok(viewer.physicalMaterial.outputNode,'emitter mask must partition reflected output without rewriting ORM');
+});
+test('original remains DoubleSide and uses the same orbit as the depth surface',async()=>{
+  const {viewer,THREE}=await viewerFixture();
+  assert.equal(viewer.original.material.side,THREE.DoubleSide);
+  viewer.orbit.set(.2,.1);viewer.mode='photo';viewer.render();const camera=viewer.camera.position.toArray();
+  viewer.mode='original';viewer.render();assert.deepEqual(viewer.camera.position.toArray(),camera);
+});
+test('photo framing uses the pane while keeping a rotation margin',async()=>{
+  const {viewer}=await viewerFixture();
+  assert.equal(viewer.camera.zoom,.9);
+});
+test('complete reference photograph stays in view at every supported orbit extreme',async()=>{
+  const {viewer,THREE}=await viewerFixture();
+  for(const imageAspect of [.5,1,2]){
+    const width=imageAspect*4,height=4;
+    viewer.setImage({width,height,data:new Uint8Array(width*height*4).fill(255)});
+    viewer.mode='original';
+    for(const paneAspect of [.5,1,2]){
+      viewer.canvas.parentElement.getBoundingClientRect=()=>({width:paneAspect*400,height:400});viewer.resize();
+      for(const x of [-.5,0,.5])for(const y of [-.35,0,.35]){
+        viewer.orbit.set(x,y);viewer.render();viewer.camera.updateMatrixWorld();
+        const corners=viewer.original.geometry.attributes.position;
+        for(let i=0;i<corners.count;i++){
+          const p=new THREE.Vector3().fromBufferAttribute(corners,i).project(viewer.camera);
+          assert.ok(Math.abs(p.x)<=1&&Math.abs(p.y)<=1,`Photo clipped: image ${imageAspect}, pane ${paneAspect}, orbit ${x}/${y}`);
+        }
+      }
+    }
+  }
+});
+test('unlit photographs bypass renderer tone mapping while lit views retain ACES',async()=>{
+  const {viewer,THREE}=await viewerFixture();
+  for(const mode of ['original','photo']){viewer.mode=mode;viewer.render();assert.equal(viewer.renderer.toneMapping,THREE.NoToneMapping);}
+  for(const mode of ['relit','materials']){viewer.mode=mode;viewer.render();assert.equal(viewer.renderer.toneMapping,THREE.ACESFilmicToneMapping);}
+});
+test('a hidden comparison article submits no rendering work',async()=>{
+  const {viewer,calls}=await viewerFixture();
+  const article={hidden:true};viewer.canvas.closest=()=>article;
+  viewer.mode='materials';viewer.render();assert.equal(calls.gi,0);
+  article.hidden=false;viewer.render();assert.equal(calls.gi,1);
+});
+test('photograph and material maps use mipmaps for small comparison panes',async()=>{
+  const {viewer,THREE}=await viewerFixture();
+  for(const texture of [viewer.original.material.map,viewer.maps.albedo,viewer.maps.orm]){
+    assert.equal(texture.generateMipmaps,true);
+    assert.equal(texture.minFilter,THREE.LinearMipmapLinearFilter);
+    assert.equal(texture.magFilter,THREE.LinearFilter);
+  }
+});
+test('orbit capture leaves focus buttons clickable and still captures canvas drags',async()=>{
+  const {viewer}=await viewerFixture();let captured=0;
+  viewer.interactionTarget={setPointerCapture(){captured++;}};
+  const event={button:0,pointerId:1,clientX:20,clientY:30,target:{closest:()=>({})}};
+  assert.equal(typeof viewer.beginOrbit,'function','orbit handler must distinguish interactive descendants');
+  viewer.beginOrbit(event);assert.equal(captured,0);assert.equal(viewer.drag,undefined);
+  viewer.beginOrbit({...event,target:{closest:()=>null}});assert.equal(captured,1);
+  assert.equal(viewer.drag.x,20);
+});
+test('relit and inferred share geometry, camera, light, exposure and GI but not image maps',async()=>{
+  const {viewer,calls}=await viewerFixture();
+  viewer.mode='relit';viewer.render();assert.equal(calls.gi,1);
+  assert.equal(viewer.mesh.material,viewer.relitMaterial);assert.equal(viewer.relitMaterial.roughness,.4);assert.equal(viewer.relitMaterial.metalness,0);
+  const geometry=viewer.mesh.geometry,camera=viewer.camera.position.toArray(),light=viewer.key.position.toArray();
+  viewer.mode='materials';viewer.render();assert.equal(calls.gi,2);
+  assert.equal(viewer.mesh.geometry,geometry);assert.deepEqual(viewer.camera.position.toArray(),camera);assert.deepEqual(viewer.key.position.toArray(),light);
+  assert.equal(viewer.renderer.toneMappingExposure,1);assert.notEqual(viewer.relitMaterial.map,viewer.physicalMaterial.map);
+  viewer.mode='photo';viewer.render();assert.equal(calls.direct,1);assert.equal(calls.gi,2);
+});
+test('viewer validates full presets atomically, accepts additive metadata and preserves settings on partial edits',async()=>{
+  const {viewer,calls}=await viewerFixture();
+  assert.equal(typeof viewer.exportPreset,'function');
+  viewer.setTuning({gain:2,steps:128,normalPhi:8});viewer.setTuning({radius:.3});
+  assert.equal(viewer.getTuning().gain,2);assert.equal(viewer.getTuning().normalPhi,8);
+  assert.equal(calls.settings.at(-1).steps,128);assert.equal(calls.estimator.at(-1).normalPhi,8);
+  const preset=JSON.parse(JSON.stringify(viewer.exportPreset()));
+  const before=JSON.stringify(viewer.exportPreset()),invalids=[
+    {...preset,settings:{...preset.settings,steps:1.5}},
+    {...preset,settings:{...preset.settings,depthPhi:'0.1'}},
+    {...preset,settings:{...preset.settings,screenSpaceSampling:1}},
+    {...preset,light:{x:2,y:0}},
+    {...preset,camera:{orbit:[NaN,0]}},
+  ];
+  for(const invalid of invalids){assert.throws(()=>viewer.applyPreset(invalid));assert.equal(JSON.stringify(viewer.exportPreset()),before);}
+  viewer.setLightHandle(.3,.4);const chosen=JSON.parse(JSON.stringify(viewer.exportPreset()));
+  viewer.setTuning({gain:1});viewer.setLightHandle(0,0);viewer.applyPreset({...chosen,metadata:{future:true}});
+  assert.equal(JSON.stringify(viewer.exportPreset()),JSON.stringify(chosen));
+});
+test('sun stays in the camera-relative front hemisphere and glow is inferred-only',async()=>{
+  const {viewer,THREE}=await viewerFixture();
+  assert.equal(typeof viewer.setLightHandle,'function');viewer.setLightHandle(.3,.4);
+  viewer.orbit.set(.3,.2);viewer.mode='materials';viewer.glow=true;viewer.render();
+  const offset=viewer.key.position.clone().sub(viewer.key.target.position).applyQuaternion(viewer.camera.quaternion.clone().invert());
+  assert.ok(offset.z>0);assert.equal(viewer.physicalMaterial.emissiveIntensity,1);
+  assert.equal(viewer.emissionMap.type,THREE.HalfFloatType);assert.equal(viewer.emissionMap.colorSpace,THREE.NoColorSpace);
+  assert.ok(viewer.emissionMap.image.data instanceof Uint16Array);
+  viewer.mode='relit';viewer.render();assert.equal(viewer.relitMaterial.emissiveIntensity,0);
+  viewer.glow=false;viewer.mode='materials';viewer.render();assert.equal(viewer.physicalMaterial.emissiveIntensity,0);
+});
+test('presentation records effective geometry, normals, material and light rather than fixed identity flags',async()=>{
+  const {viewer}=await viewerFixture();
+  viewer.mode='relit';viewer.render();const relit=viewer.presentation();
+  assert.equal(relit.physicalbaseline.geometryId,viewer.mesh.geometry.uuid);
+  assert.equal(relit.normalsMatchSurface,true);assert.equal(relit.physicalbaseline.relit.roughness,.4);
+  assert.equal(relit.physicalbaseline.relit.mapUUID,viewer.photoMaterial.map.uuid);
+  assert.ok(relit.light.direction.every(Number.isFinite));
+  viewer.mode='materials';viewer.render();const inferred=viewer.presentation();
+  assert.equal(inferred.physicalbaseline.geometryId,relit.physicalbaseline.geometryId);
+  assert.equal(inferred.physicalbaseline.activeMaterial.mapUUID,viewer.maps.albedo.uuid);
+  assert.equal(inferred.physicalbaseline.activeMaterial.roughnessMapUUID,viewer.maps.orm.uuid);
+  assert.equal(inferred.emissiveIntensity,0);
+  viewer.mesh.geometry.attributes.normal.array=new Float32Array(viewer.surface.normal);
+  assert.equal(viewer.presentation().normalsMatchSurface,false);
+});
+
+test('ordinary sun drags project roundoff-prone rim positions without rejecting them',async()=>{
+  const {viewer}=await viewerFixture();
+  for(const [u,v]of [[.88,.158],[.12,.842],[1,1],[0,0],[.3,.4]]) {
+    assert.doesNotThrow(()=>viewer.setLightScreenPosition(u,v));
+    const light=viewer.getLightHandle();assert.ok(Math.hypot(light.x,light.y)<=1);
+    const preset=JSON.parse(JSON.stringify(viewer.exportPreset()));assert.doesNotThrow(()=>viewer.applyPreset(preset));
+  }
+  const preset=JSON.parse(JSON.stringify(viewer.exportPreset()));preset.light={x:1.001,y:0};
+  assert.throws(()=>viewer.applyPreset(preset),/hemisphere/);
+});
+test('environment controls rotate background and material lighting together and persist in presets',async()=>{
+  const {viewer}=await viewerFixture();
+  assert.equal(typeof viewer.setLighting,'function','HDR lighting controls must reach the live scene');
+  viewer.setLighting({rotation:90,intensity:1.2,direct:0});
+  assert.equal(viewer.scene.environmentRotation.y,Math.PI/2);
+  assert.equal(viewer.scene.backgroundRotation.y,Math.PI/2);
+  assert.equal(viewer.scene.environmentIntensity,1.2);assert.equal(viewer.key.intensity,0);
+  const preset=JSON.parse(JSON.stringify(viewer.exportPreset()));
+  viewer.setLighting({rotation:0,intensity:.6,direct:3});viewer.applyPreset(preset);
+  assert.equal(viewer.scene.environmentRotation.y,Math.PI/2);assert.equal(viewer.key.intensity,0);
+  const before=JSON.stringify(viewer.exportPreset());
+  assert.throws(()=>viewer.applyPreset({...preset,lighting:{...preset.lighting,intensity:-1}}));
+  assert.equal(JSON.stringify(viewer.exportPreset()),before);
+});

@@ -18,7 +18,7 @@ Quantized weights of [FLUX.2 [klein] 4B](https://huggingface.co/black-forest-lab
 
 **[Try it in your browser](https://lyonsno.github.io/kaminos/inference-kit/klein/)** · [Source](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein)
 
-In Chrome, a 512 × 512 image (4 steps) takes 6–7 seconds on an Apple M4 Max and about 20 seconds on a 16 GB Apple M2 Pro. The page also offers 768 and 1024, and frees each stage's working memory before the next, so a 16 GB Mac generates at 1024 × 1024 without swapping.
+In Chrome, a 512 × 512 image (4 steps) takes 6–7 seconds on an Apple M4 Max and about 14 seconds on a 16 GB Apple M2 Pro. The page also offers 768 and 1024, and frees each stage's working memory before the next, so a 16 GB Mac generates at 1024 × 1024 without swapping.
 
 ## Contents
 

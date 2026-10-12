@@ -22,7 +22,7 @@ Times are for one image with 4 steps in Chrome, sharing the GPU with a continuou
 
 | Size | 16 GB Apple M2 Pro | Apple M4 Max |
 | --- | --- | --- |
-| 512 × 512 | 17–18 s (22–23 s with better lettering) | 6–7 s |
+| 512 × 512 | 14–15 s (about 5 s more with better lettering) | 6–7 s |
 | 768 × 768 | 40–46 s | about 12 s |
 | 1024 × 1024 | 67–69 s | about 23 s |
 

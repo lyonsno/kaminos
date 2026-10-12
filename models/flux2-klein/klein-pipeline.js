@@ -228,6 +228,13 @@ export class KleinPipeline {
       const p = await this.device.createComputePipelineAsync({ layout: 'auto', compute: { module: this.device.createShaderModule({ code }), entryPoint: 'main' } });
       p.label = key; owner.pipelines[key] = p;
     }));
+    // Run the same tiny generation once on the GPU, so each pipeline's first dispatch happens
+    // here rather than as a long stall at the start of the visitor's first image.
+    const t1 = performance.now();
+    await this.generateScheduled({ prompt: 'x', seed: 0, width: 64, height: 64, steps: 1, textLength: 'fit0', dry: true });
+    await this.sched.flush('warm');
+    this.sched.stats.history.length = 0;
+    this.timings.warmMs = performance.now() - t1;
     this.timings.precompileMs = performance.now() - t0; this.timings.precompiledPipelines = collected.size;
     return collected.size;
   }
