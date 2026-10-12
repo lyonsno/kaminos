@@ -23828,6 +23828,11 @@ async function initKaminosVolumeRoute() {
     if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
   }
   window.__kaminosVolumePrototype = volumePrototype;
+  if (fireLightFieldRouteParams().get('volume_light_field_optical_preview') === '1') {
+    import('./volume-optical-native.mjs').then(({installOpticalSteppingPreview}) => {
+      installOpticalSteppingPreview(volumePrototype, document);
+    });
+  }
   if (fireLightFieldRouteParams().get('volume_light_field_shared_source') === '1') {
     if (!isFireLightFieldRoute()) throw new Error('shared scene source requires ordinary fire light-field route');
     window.__kaminosSceneRadianceSetup = {status:'mounting'};

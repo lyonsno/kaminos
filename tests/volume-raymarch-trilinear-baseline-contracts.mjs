@@ -74,8 +74,11 @@ const supportAdmission = traversal.slice(
   traversal.indexOf('var directSupport:'),
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 );
+const baselineAdmission = supportAdmission.replace('!opticalStepping && !fullGridCapture && !opticalTrace', '!fullGridCapture');
+assert.match(supportAdmission, /if \(!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\)/,
+  'only explicit comparison/capture modes bypass production support admission');
 assert.match(
-  supportAdmission,
+  baselineAdmission,
   /^var directSupport: f32;\s*if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*neighborhood = sampleRaymarchNeighborhood\(p\);\s*directSupport = raymarchNeighborhoodSupport\(neighborhood\);\s*\} else \{\s*directSupport = directCellOpticalSupport\(p\);\s*\}\s*if \(!fullGridCapture && directSupport <= 0\.0001\) \{\s*let cellExit = directCellExitDistance\(p, rd\);\s*let emptyCellAdvance = mix\(\s*dtBase,\s*max\(dtBase, cellExit \+ 0\.0001\),\s*occupancySkipStrength\s*\);\s*t = t \+ min\(emptyCellAdvance, max\(0\.0001, endT - t\)\);\s*continue;\s*\}\s*$/,
   'one live direct-support skip must own admission before sampling',
 );
@@ -117,7 +120,7 @@ const falseClosureMutations = [
     source => source
       .replace('    var directSupport: f32;', '    /*\n    var directSupport: f32;')
       .replace('    var reconstructed: FlowReconstructionSample;', '    */\n    let directSupport = directCellOpticalSupport(p);\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
-    /one live direct-support skip must own admission before sampling/,
+    /only explicit comparison\/capture modes bypass production support admission|one live direct-support skip must own admission before sampling/,
   ],
   [
     'renamed first-sample hash helper',
@@ -136,7 +139,7 @@ const falseClosureMutations = [
   [
     'dead support skip with live global-occupancy alias',
     source => source
-      .replace('    if (!fullGridCapture && directSupport <= 0.0001) {', '    if (false) {\n    if (!fullGridCapture && directSupport <= 0.0001) {')
+      .replace('    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {', '    if (false) {\n    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {')
       .replace('    var reconstructed: FlowReconstructionSample;', '    }\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
     /one live direct-support skip must own admission before sampling/,
   ],
