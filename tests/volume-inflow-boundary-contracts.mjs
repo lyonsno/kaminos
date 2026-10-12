@@ -274,7 +274,11 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
   const extrema = wgslFunction('slotExtrema');
   assert.match(extrema, /inflowGhostState\(slot, lo, cellCenter\)/, 'the MacCormack limiter range admits the ghost state so the inflow is not reverted at the floor');
   const main = mainKernel();
-  assert.match(main, /let floorExempt = select\(0\.0, inflowApertureWeight\(cellI\), p\.y < -0\.8\);\s*\n\s*let verticalWall = max\(mix\(-p\.y, -1\.0, floorExempt\), p\.y - expandedTopY \+ 1\.0\);/, 'the wall sponge does not act on the floor inside the aperture (evaluated only in the floor band)');
+  // The fade lives in spongeWallFade, shared with the face pass (report §35).
+  const coreSource = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+  const fadeFn = coreSource.slice(coreSource.indexOf('\nfn spongeWallFade('), coreSource.indexOf('\n}\n', coreSource.indexOf('\nfn spongeWallFade(')));
+  assert.match(fadeFn, /let floorExempt = select\(0\.0, inflowApertureWeight\(cellI\), p\.y < -0\.8\);\s*\n\s*let verticalWall = max\(mix\(-p\.y, -1\.0, floorExempt\), p\.y - expandedTopY \+ 1\.0\);/, 'the wall sponge does not act on the floor inside the aperture (evaluated only in the floor band)');
+  assert.match(main, /let wallFade = spongeWallFade\(cellI\);/);
   assert.match(source, /inflow_aperture: vec4<f32>,\s*\n[\s\S]{0,400}inflow_state: vec4<f32>,\s*\n[\s\S]{0,400}inflow_shape: vec4<f32>,/, 'three inflow vec4s in the uniform struct');
   const project = wgslFunction('csProjectPressureConverged');
   assert.doesNotMatch(project, /inflow/, 'the projection needs no inflow branch: the floor face is never stored, so the prescribed flux survives by construction');

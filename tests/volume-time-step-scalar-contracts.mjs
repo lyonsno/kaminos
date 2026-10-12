@@ -156,7 +156,10 @@ test('review of 57b45f72: relaxation blends and the wall velocity sponge follow 
   assert.doesNotMatch(main, /vel = vel \* mix\(0\.55, 1\.0, wallFade\);/, 'no bare wall velocity sponge remains');
   // The remaining per-step operations are 0/1 selectors and floors.
   assert.match(main, /smoke = mix\(columnSmokeTransport, bonfireSmokeTransport, bonfireScene\);/, 'Bonfire scene selector stays a selector');
-  assert.match(main, /vel\.y = mix\(max\(vel\.y, -0\.015\), vel\.y, bonfireScene\);/, 'the vertical velocity floor stays a floor');
+  // The floor stays a floor; under the restored face-force ordering (an
+  // assay-only override, report §35) the face pass applies it after the
+  // centred increment instead.
+  assert.match(main, /vel\.y = mix\(max\(vel\.y, -0\.015\), vel\.y, max\(bonfireScene, select\(0\.0, 1\.0, faceForceOrderingRestored\(\)\)\)\);/, 'the vertical velocity floor stays a floor');
   assert.match(index, /as do the Bonfire scene's diffusion and symmetry blends and the wall velocity sponge; the emitter's per-component clamp and the max\(\) birth floors stay per step/, 'the help names the blends and the wall velocity sponge, and what stays per step');
 });
 

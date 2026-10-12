@@ -346,8 +346,10 @@ test('IS-04-C: the residual measurement names the capped per-cell law and keeps 
 // exempts its aperture; the immersed slab is a source too.
 test('the wall sponge leaves the immersed slab alone, like the inflow aperture', () => {
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
-  const weightAt = main.indexOf('let immersedWeight = ');
-  const fadeAt = main.indexOf('let wallFade = max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSlabWeight, 0.0, 1.0));');
-  assert.ok(weightAt > 0 && fadeAt > weightAt, 'the fade is exempt wherever the slab has weight, after the weight is known');
-  assert.ok(!main.includes('let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);'), 'the unexempted fade is gone');
+  // Since the face-force ordering isolation (report §35) the fade lives in one
+  // function shared by the main kernel and the face pass.
+  const fadeFn = source.slice(source.indexOf('\nfn spongeWallFade('), source.indexOf('\n}\n', source.indexOf('\nfn spongeWallFade(')));
+  assert.ok(fadeFn.includes('return max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSourceWeight(cell), 0.0, 1.0));'), 'the fade is exempt wherever the slab has weight');
+  assert.match(main, /let wallFade = spongeWallFade\(cellI\);/, 'the main kernel reads that fade');
+  assert.ok(!main.includes('let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);') && !fadeFn.includes('let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);'), 'the unexempted fade is gone');
 });

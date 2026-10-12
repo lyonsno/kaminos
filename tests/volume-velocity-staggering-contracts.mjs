@@ -35,7 +35,7 @@ test('the staggering uniform follows the heat-release block and packs 1 only whe
   assert.deepEqual(core.velocityStaggeringUniformValues(core.resolveVelocityStaggeringConfig({ velocityStaggering: 'staggered', pressureSolver: 'converged-open-top' })), [1, 1, 0, 0]);
   assert.deepEqual(core.velocityStaggeringUniformValues(core.resolveVelocityStaggeringConfig({ velocityStaggering: 'staggered', pressureSolver: 'legacy' })), [0, 0, 0, 0]);
   assert.match(source, /heat_release: vec4<f32>,\n(?:\s*\/\/[^\n]*\n)*\s*velocity_staggering: vec4<f32>,/, 'uniform struct field after heat_release');
-  assert.match(source, /uniforms\.set\(velocityStaggeringUniformValues\(velocityStaggeringConfig\), VELOCITY_STAGGERING_UNIFORM_OFFSET\);\s*state\.velocityStaggering = velocityStaggeringConfig;/);
+  assert.match(source, /uniforms\.set\(velocityStaggeringUniformValues\(velocityStaggeringConfig, \{ faceForceOrdering: faceForceOrderingOverride \?\? 'deferred' \}\), VELOCITY_STAGGERING_UNIFORM_OFFSET\);\s*state\.velocityStaggering = \{ \.\.\.velocityStaggeringConfig, faceForceOrdering:/);
 });
 
 test('the shader builds the characteristic from the two-face mean when staggered and samples the carried velocity at the plain foot', () => {
@@ -114,7 +114,10 @@ test('staggered: the main kernel separates the force increment and the face-forc
   const pass = source.slice(source.indexOf('fn csFaceForces('), source.indexOf('\n}\n', source.indexOf('fn csFaceForces(')));
   assert.match(pass, /let here = vec3<f32>\(forceDeltaLoad\(c, 0\), forceDeltaLoad\(c, 1\), forceDeltaLoad\(c, 2\)\);/);
   assert.match(pass, /let upX = select\(0\.0, forceDeltaLoad\(c \+ vec3<i32>\(1, 0, 0\), 0\), openX && !topRowX\)/);
-  assert.match(pass, /fluidDst\[base\] = vec4<f32>\(boundVelocity\(stored\.xyz \+ faceForce\), stored\.w\);/, 'the bound applies once, after the face force');
+  // The sponge factor is 1 under the landed (deferred) ordering; the restored
+  // ordering is an assay-only override (report §35).
+  assert.match(pass, /let sponge = select\(1\.0, stepRate\(mix\(0\.55, 1\.0, spongeWallFade\(c\)\)\), restoredOrdering\);\n\s+var completed = boundVelocity\(stored\.xyz \+ faceForce \* sponge\);/, 'the bound applies once, after the face force');
+  assert.match(pass, /fluidDst\[base\] = vec4<f32>\(completed, stored\.w\);/);
   // The pass runs after the sim pass, before the buffers flip, only when admitted.
   const step = source.slice(source.indexOf("label: 'kaminos fluid sim pass'"), source.indexOf('encodeAnalyticEmitterInjection(encoder);', source.indexOf("label: 'kaminos fluid sim pass'")));
   assert.match(step, /if \(state\.velocityStaggering\?\.effective\?\.faceForces && faceForcesPipeline\) \{[\s\S]*label: 'kaminos face force pass'[\s\S]*\}\s*currentFluid = 1 - currentFluid;/);

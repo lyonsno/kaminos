@@ -139,7 +139,11 @@ test('the kernel samples the coverage map and the lattice at the slab-local cell
   assert.match(fn, /textureLoad\(inflowPerturbation, slabCell, 0\)\.x/);
   assert.match(fn, /max\(0\.0, 1\.0 \+ u\.immersed_source_e\.w \* perturbation\)/);
   assert.match(main, /let immersedSlabWeight = immersedSourceWeight\(cell\);\n\s+let immersedWeight = immersedPatternedWeight\(cell, immersedSlabWeight\);/);
-  assert.match(main, /let wallFade = max\(1\.0 - smoothstep\(0\.86, 1\.0, wall\), clamp\(immersedSlabWeight, 0\.0, 1\.0\)\);/, 'the whole disc stays exempt, gaps between jets included');
+  // The fade lives in spongeWallFade (report §35); it reads the plain slab
+  // weight, so the whole disc stays exempt, gaps between jets included.
+  const fadeFn = kernel.slice(kernel.indexOf('\nfn spongeWallFade('), kernel.indexOf('\n}\n', kernel.indexOf('\nfn spongeWallFade(')));
+  assert.ok(fadeFn.includes('clamp(immersedSourceWeight(cell), 0.0, 1.0)') && !fadeFn.includes('immersedPatternedWeight'), 'the whole disc stays exempt, gaps between jets included');
+  assert.match(main, /let wallFade = spongeWallFade\(cellI\);/);
 });
 
 test('the pack builds the slab\'s coverage map when the immersed law is admitted, keyed by pattern and pose, and the receipt carries it', () => {
