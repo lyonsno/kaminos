@@ -8,7 +8,11 @@ export const FIRE_DOMAIN_SOURCE='kaminos:fire-domain';
 const clone=value=>structuredClone(value);
 const sourceIds=new Set(['emitter-assay-family','volume-input-radius','volume-flow-rate','volume-fixed-source-dephase']);
 const materialIds=new Set(['volume-exposure','volume-density','volume-fire','volume-radiance','volume-absorption','volume-glow','volume-smoke','volume-fire-scale','volume-detail-scale','volume-microdetail','volume-interface-shred','volume-fire-licks']);
+const sceneIds=new Set(['volume-steps','volume-adaptive-rays','volume-occupancy-skip','volume-render-scale',
+ 'volume-grid-overlay','volume-flow-debug','volume-pyro-compare','volume-shell-inspect-mode',
+ 'volume-reaction-live-view','volume-boundary-sidecar-view','volume-pyro-carrier-view','volume-pressure-tier-overlay']);
 export function fireControlOwner(id){
+ if(sceneIds.has(id)||id.startsWith('volume-residual-'))return 'scene';
  if(sourceIds.has(id)||id.startsWith('volume-immersed-')||id.startsWith('volume-emitter-'))return 'source';
  if(materialIds.has(id)||/^volume-(physical-|reaction-|boundary-|shell-|pyro-)/.test(id)&&!['volume-pyro-detail','volume-pyro-compare'].includes(id))return 'material';
  return 'domain';
@@ -18,8 +22,12 @@ function controls(value,name){
  for(const [id,entry] of Object.entries(value))if(!entry||typeof entry!=='object'||!Object.hasOwn(entry,'value'))throw Error(`Invalid fire ${name} control ${id}`);
  return clone(value);
 }
+export function fireRenderingSettings(settings){
+ return {domControls:Object.fromEntries(Object.entries(controls(settings.domControls,'settings')).filter(([id])=>fireControlOwner(id)==='scene')),
+ rendererControls:controls(settings.rendererControls,'renderer settings'),presentationControls:controls(settings.presentationControls,'presentation settings')};
+}
 export function createFireDomainRecord({settings,translation=[0,0,0],scale=1,followSource=true,label='Fire & smoke',collision=false}){
- const buckets={source:{},domain:{},material:{}};
+ const buckets={source:{},domain:{},material:{},scene:{}};
  for(const [id,value] of Object.entries(controls(settings.domControls,'settings')))buckets[fireControlOwner(id)][id]=value;
  const t=normalizeFlameDomainTranslation(translation),s=normalizeFlameDomainScale(scale);
  return checkedFireDomainRecord({id:FIRE_DOMAIN_ID,type:FIRE_DOMAIN_TYPE,source:FIRE_DOMAIN_SOURCE,label,fileName:'Fire simulation',
@@ -58,5 +66,7 @@ export function readFireObjects(objects,renderSettings){
  const supply=sources.length?controls(sources[0].emission.settings,'source settings'):domain.simulation.sourceTemplate;
  if(sources.length&&Object.keys(domain.simulation.sourceTemplate).length)throw Error('Active source has conflicting template authority');
  for(const id of Object.keys(supply))if(fireControlOwner(id)!=='source')throw Error(`Fire control ${id} conflicts with source owner`);
- return {domain,frame:fireDomainFrame(domain),settings:{domControls:{...clone(domain.simulation.settings),...clone(domain.volumeMaterial.settings),...clone(supply)},rendererControls:controls(renderSettings?.rendererControls,'renderer settings'),presentationControls:controls(renderSettings?.presentationControls,'presentation settings')}};
+ const rendering=controls(renderSettings?.domControls??{},'scene rendering settings');
+ for(const id of Object.keys(rendering))if(fireControlOwner(id)!=='scene')throw Error(`Fire control ${id} conflicts with scene rendering owner`);
+ return {domain,frame:fireDomainFrame(domain),settings:{domControls:{...rendering,...clone(domain.simulation.settings),...clone(domain.volumeMaterial.settings),...clone(supply)},rendererControls:controls(renderSettings?.rendererControls,'renderer settings'),presentationControls:controls(renderSettings?.presentationControls,'presentation settings')}};
 }

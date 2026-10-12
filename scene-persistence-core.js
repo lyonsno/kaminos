@@ -1,4 +1,4 @@
-import {FIRE_DOMAIN_TYPE,checkedFireDomainRecord,authorFireObjects,readFireObjects} from './scene-fire-domain.mjs';
+import {FIRE_DOMAIN_TYPE,checkedFireDomainRecord,authorFireObjects,readFireObjects,fireRenderingSettings} from './scene-fire-domain.mjs';
 import {RIM_LIGHT_ID,checkedRimRecipe,rimRecipePose,checkedSceneLightRecord} from './scene-rim-light.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh} from './scene-geometry.mjs';
 import {GROUP_TYPE,identityGroupPose,checkedGroupPose} from './scene-group.mjs';
@@ -248,7 +248,7 @@ export function buildSceneDocument({
     version: fireSettings ? SCENE_VERSION : 8,
     timestamp,
     objects: fireSettings ? authorFireObjects(sceneObjects,fireSettings,{translation:authoredFlameDomain,scale:flameDomainScale,followSource:flameDomainFollowSource,collision:composition?.route?.volume_collision==='kiln'}) : sceneObjects,
-    ...(fireSettings?{fireRendering:{rendererControls:cloneJson(fireSettings.rendererControls),presentationControls:cloneJson(fireSettings.presentationControls)}}:{}),
+    ...(fireSettings?{fireRendering:fireRenderingSettings(fireSettings)}:{}),
     groups: sceneGroups,
     activeObjectId: activeObject?.id || activeObjectId || null,
     activeGroupId: activeGroup?.id || null,

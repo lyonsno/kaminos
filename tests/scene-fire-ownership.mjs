@@ -33,3 +33,10 @@ test('conflicting domain identity and unsupported multiplicity fail before resto
  const bad=save();bad.objects.find(o=>o.id===source.id).emission.domainId='missing';
  assert.throws(()=>planSceneRestore(bad),/domain.*reference/i);
 });
+test('ray budget and render scale are scene rendering data rather than simulation coefficients',()=>{
+ const values=structuredClone(settings);values.domControls['volume-steps']=descriptor(24);values.domControls['volume-render-scale']=descriptor(.5);
+ const doc=buildSceneDocument({objects:[source],composition,fireSettings:values});
+ assert.equal(doc.fireRendering.domControls?.['volume-steps']?.value,24);
+ assert.equal(doc.objects.find(o=>o.type==='simulation-domain').simulation.settings['volume-steps'],undefined);
+ assert.deepEqual(planSceneRestore(doc).fireSettings,values);
+});

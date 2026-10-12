@@ -25927,8 +25927,9 @@ export function createKaminosVolumePrototype({
   return {
     sampleSharedTransmittanceContributions,
     readSceneCollisionMask(knownRevision = undefined) {
-      if(knownRevision === sceneSolidRevisionKey)return null;
-      return {revision:sceneSolidRevisionKey,cells:sceneSolidCellsCpu?.slice()??null,
+      const revision=JSON.stringify([sceneSolidRevisionKey,gridSize,gridHeight,productTransform.translate,productTransform.scale]);
+      if(knownRevision === revision)return null;
+      return {revision,cells:sceneSolidCellsCpu?.slice()??null,
         dimensions:[gridSize,gridHeight,gridSize],transform:structuredClone(productTransform),
         runtime:structuredClone(state.sceneCollision)};
     },
