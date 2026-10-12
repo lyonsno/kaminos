@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {compositionRestoreUrl} from '../scene-authoring.mjs';
 import {validateTraceSpecialization,compareOpticalTraces} from '../volume-optical-trace.mjs';
+import {VOLUME_UNIFORM_FLOATS} from '../volume-core.js';
 
 const [root,input,out,portText,subdivisionText]=process.argv.slice(2);
 await fs.mkdir(out,{recursive:true});
@@ -63,6 +64,8 @@ try {
   await guard(page.waitForFunction(()=>window.kaminosSceneAuthoring?.read().objects.length>=3||/load failed/i.test(document.getElementById('info-bar')?.textContent||'')));
   assert.equal(await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects.length),scene.objects.length);
   report.hold=await guard(page.evaluate(()=>window.opticalTraceHold));assert.equal(report.hold.ok,true,JSON.stringify(report.hold));
+  assert.equal(report.hold.paused,true);assert.equal(report.hold.gpuComplete,true);
+  assert.equal(report.hold.effectiveSimStepCount,151);
   report.phase='baseline';await save();
   const baseline=await page.evaluate(async()=>{
     const r=window.__kaminosVolumePrototype;
@@ -71,6 +74,7 @@ try {
     return {state:r.debugState(),image:sample.image};
   });
   report.state=baseline.state;
+  assert.equal(report.state.effectiveRoute,'native-3d-compute-fluid-raymarch-v0');
   assert.equal(report.state.backend,'WebGPU:apple');
   assert.equal(report.state.simStepCount,151);
   assert.equal(report.state.physicalColor.effective,'emissive-transport-v2');
@@ -97,6 +101,34 @@ try {
       assert.equal(chunk.ok,true,`optical capture failed at ${chunk.phase}: ${chunk.reason}`);
       assert.ok(bytes,'missing optical readback');
       validateTraceSpecialization(specialization,chunk.effective.specialization);
+      // Pair equality alone admits two equally wrong captures. Bind each one
+      // to the held native baseline before comparing its optical values.
+      const effective=chunk.effective;
+      for(const [key,expected] of Object.entries({route:report.state.effectiveRoute,
+        backend:report.state.backend,simStepCount:report.state.simStepCount})) {
+        assert.equal(effective[key],expected,`capture ${key} differs from baseline`);
+      }
+      assert.ok(Array.isArray(effective.uniforms)&&effective.uniforms.length===VOLUME_UNIFORM_FLOATS
+        &&Array.from(effective.uniforms).every(Number.isFinite),'invalid capture uniforms');
+      for(const [index,value] of [[368,2],[310,0],[305,0],[307,0]]) {
+        assert.equal(effective.uniforms[index],value,`capture uniform ${index} violates optical material admission`);
+      }
+      assert.ok(effective.controls&&typeof effective.controls==='object'&&!Array.isArray(effective.controls),'missing capture controls');
+      for(const [key,value] of Object.entries(report.state.controls)) {
+        assert.ok(Object.hasOwn(effective.controls,key),`missing capture control ${key}`);
+        assert.deepEqual(effective.controls[key],value,`capture control ${key} differs from baseline`);
+      }
+      const incident=effective.incidentLight;
+      assert.ok(incident&&typeof incident==='object','missing capture incident lighting');
+      for(const [key,value] of Object.entries({model:'distributed-volume-direct-radiance-v0',
+        source:'same-generation-raw-emission-extinction',support:'full-height-geometry-visible-receivers',
+        frame:report.state.simStepCount,receivers:report.state.physicalColor.incidentLight.receivers,
+        directions:report.state.physicalColor.incidentLight.directions,legacyDispatched:false})) {
+        assert.equal(incident[key],value,`capture incident ${key} differs from native baseline`);
+      }
+      for(const key of ['receivers','directions','generation']) {
+        assert.ok(Number.isSafeInteger(incident[key])&&incident[key]>0,`invalid incident ${key}`);
+      }
       if(reference) {
         assert.deepEqual(chunk.plan,reference.chunk.plan,'trace plan changed');
         for(const key of ['route','backend','simStepCount','uniforms','controls']) {

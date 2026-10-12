@@ -89,6 +89,7 @@ export function validateTraceRows(values, plan) {
     if(values[at+3]!==1)throw new Error(`unwritten optical trace row ${r}:${s}`);
     if(values[at]!==plan.firstRay+r||values[at+1]!==plan.sampleOffset+s)throw new Error('unordered optical trace');
     for(let i=0;i<OPTICAL_TRACE_STRIDE;i++)if(!Number.isFinite(values[at+i]))throw new Error('nonfinite optical trace');
+    if(values[at+2]!==values[r*plan.sampleCount*OPTICAL_TRACE_STRIDE+2])throw new Error('mixed hit/miss optical ray');
     if(values[at+2]===0){misses++;continue;}
     if(values[at+2]!==1||values[at+4]<values[at+5]||values[at+4]>values[at+6])throw new Error('invalid clipped optical trace position');
     finiteNonnegative(values[at+16],`ray ${values[at]} sample ${values[at+1]} sigma=${values[at+16]}`);
