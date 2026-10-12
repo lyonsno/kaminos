@@ -7,7 +7,7 @@ const requireState = (condition, message) => { if (!condition) throw new Error(m
 export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, restoreScene, setBurner,
   onChange = () => {}, onOperation, createAttemptId = () => globalThis.crypto.randomUUID()}) {
   let state = {phase: 'loading', running: false, busy: false, paused: true, simStepCount: null,
-    attemptId: null, generation: 0, operationIssues: [], error: null, receipts: []};
+    attemptId: null, resources: null, generation: 0, operationIssues: [], error: null, receipts: []};
   const observers = new Set(onOperation ? [onOperation] : []);
   const attemptIds = new Set();
   const status = () => structuredClone(state);
@@ -29,6 +29,10 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, r
     requireState(live.simGrid === 48 && equal(live.simGridDimensions, [48, 96, 48]), 'Expected the local48 domain');
     requireState(basin() === TIMBER_IGNITION_BASIN, 'Unexpected saved fire basin');
     const assembly = live.gpuStructuralCombustionAssembly;
+    if (state.attemptId && state.resources) {
+      requireState(state.resources.fluidAllocationId === (live.fluidAllocationId ?? null)
+        && state.resources.materialAssemblyId === (assembly?.assemblyId ?? null), 'Physical timber resources were replaced');
+    }
     requireState(assembly?.structureCount === 2 && assembly.meshTriangleCount === 1728 && assembly.dispatchCount >= 0,
       'The two timber structures must be mounted');
     requireState(assembly.presentationDebugMode === 'off', 'Expected the ordinary wood view');
@@ -71,13 +75,13 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, r
     return shutdown;
   };
   const prepare = async () => {
+    publish({attemptId: null, resources: null});
+    observe('timber.attempt', 'restoring', 'timber-experiment', {available: false});
     validate();
     presentPausedSimulation();
     // Finish prior GPU work before replacing the scene's resident resources.
     await advance(0);
     burnerOff();
-    publish({attemptId: null});
-    observe('timber.attempt', 'restoring', 'timber-experiment', {available: false});
     const restored = await restoreScene();
     requireState(restored?.freshFluid === true && restored.freshMaterial === true, 'Scene restoration did not establish fresh fluid and material');
     burnerOff();
@@ -93,6 +97,7 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, r
     requireState(typeof attemptId === 'string' && attemptId.length > 0 && !attemptIds.has(attemptId), 'A unique physical attempt id is required');
     attemptIds.add(attemptId);
     publish({phase: 'cold', running: false, paused: true, simStepCount: 0, attemptId,
+      resources: {fluidAllocationId: live.fluidAllocationId ?? null, materialAssemblyId: live.gpuStructuralCombustionAssembly.assemblyId ?? null},
       generation: state.generation + 1, error: null, receipts: [{restored}]});
     observe('timber.attempt', 'restored', 'timber-experiment', {attemptId, generation: state.generation,
       startingConditions: 'fresh-saved-timber-scene', restored, objects: objects(), basin: basin()});
@@ -122,6 +127,7 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, r
       publish({busy: true});
       try {
         if (state.phase === 'live') { publish({phase: 'restoring', running: false, paused: true}); await prepare(); }
+        validate();
         setBurner(true);
         const priming = validate();
         requireState(priming.controls.flowRate > 0 && priming.analyticEmitterDispatchActive === true, 'Original burner restoration failed');
@@ -149,6 +155,7 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, r
     },
     togglePause() {
       requireState(state.running, 'Pause is available while the preview is live');
+      validate();
       const paused = !state.paused;
       const receipt = volume.setSimulationPaused(paused);
       requireState(receipt.paused === paused, 'Simulation pause failed');

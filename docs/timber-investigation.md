@@ -34,6 +34,10 @@ The read is one passive sample, not proof that a subsequently captured frame
 represents exactly that simulation step. Shared capture must bracket changes.
 
 Controller `status()` carries `attemptId`, `generation` and `operationIssues`.
+Its `resources` name the actual fluid allocation and material assembly. The
+passive join lowers availability when those identities are absent or replaced,
+even if authored object IDs are unchanged. Continuation rejects replaced
+resources; explicit Reset can establish a fresh cold attempt instead.
 Successful fresh scene/resource restoration assigns a new physical attempt;
 Run and Pause preserve it, Repeat and Reset replace it, and failed restoration
 cannot advertise the old resources as the current attempt. Delivered operations

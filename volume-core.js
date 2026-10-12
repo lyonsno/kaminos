@@ -11470,6 +11470,7 @@ export function createKaminosVolumePrototype({
   let boundarySplatControlGeneration = 0;
   let boundarySplatTelemetryCopyGeneration = 0;
   let fluidBuffers = [];
+  state.fluidAllocationId = null;
   // Inflow aperture coverage map (one f32 per floor cell), rebuilt with the grid
   // and rewritten when the admitted aperture or pattern changes.
   let inflowCoverageTexture = null;
@@ -12130,6 +12131,7 @@ export function createKaminosVolumePrototype({
     boundarySplatTelemetryCopyPending = false;
     oracleActivityCueBuffer = null;
     fluidBuffers = [];
+    state.fluidAllocationId = null;
     frontBuffers = [];
     quenchBuffers = [];
     pressureBuffers = [];
@@ -13258,6 +13260,7 @@ export function createKaminosVolumePrototype({
       device.queue.writeBuffer(buffer, 0, initialFluid);
       return buffer;
     });
+    state.fluidAllocationId = globalThis.crypto.randomUUID();
     frontBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
         label: `kaminos ${FRONT_FIELD_IDENTITY} ${gridSize}x${gridHeight}x${gridSize} ${i}`,

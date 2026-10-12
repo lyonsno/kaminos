@@ -3,15 +3,15 @@ import {readFileSync} from 'node:fs';
 import {createTimberIgnitionSmoke, TIMBER_IGNITION_BASIN} from '../timber-ignition-smoke.mjs';
 
 const scene = JSON.parse(readFileSync(new URL('../scenes/sinter-timber-ignition-operator.kaminos.json', import.meta.url)));
-let objects = structuredClone(scene.objects), nextId = 0, failRestore = false;
+let objects = structuredClone(scene.objects), nextId = 0, resourceId = 0, failRestore = false, pauseCalls = 0;
 const events = [];
 const state = {active:true, backend:'WebGPU:apple', effectiveRoute:'native-3d-compute-fluid-raymarch-v0',
-  simGrid:48, simGridDimensions:[48,96,48], simStepCount:0, controls:{flowRate:0}, analyticEmitterDispatchActive:false,
-  gpuStructuralCombustionAssembly:{structureCount:2,meshTriangleCount:1728,dispatchCount:0,presentationDebugMode:'off',runtimeReadbackCount:0,hostCausalFeedbackCount:0},
+  simGrid:48, simGridDimensions:[48,96,48], simStepCount:0, fluidAllocationId:'fluid-0', controls:{flowRate:0}, analyticEmitterDispatchActive:false,
+  gpuStructuralCombustionAssembly:{assemblyId:'material-0',structureCount:2,meshTriangleCount:1728,dispatchCount:0,presentationDebugMode:'off',runtimeReadbackCount:0,hostCausalFeedbackCount:0},
   combustibleObjectSource:{sameDevice:true}};
 const volume = {
   debugState:()=>structuredClone(state),
-  setSimulationPaused:paused=>({paused}),
+  setSimulationPaused:paused=>{pauseCalls++;return {paused};},
   setSelectiveHeadLiveCapturePaused:paused=>({paused}),
   pauseSelectiveHeadLiveAtSimStep:async target=>{
     state.simStepCount=target;return {ok:true,gpuComplete:true,paused:true,effectiveSimStepCount:target};
@@ -22,7 +22,7 @@ const controller=createTimberIgnitionSmoke({volume,basin:()=>TIMBER_IGNITION_BAS
   createAttemptId:()=>`attempt-${++nextId}`, onOperation:event=>events.push(event),
   setBurner:enabled=>{state.controls.flowRate=enabled?1.95:0;state.analyticEmitterDispatchActive=enabled;},
   moveObject:(id,patch)=>{const object=objects.find(o=>o.id===id);Object.assign(object.transform,patch);return structuredClone(object);},
-  restoreScene:async()=>{if(failRestore)throw Error('restore interrupted');objects=structuredClone(scene.objects);state.simStepCount=0;state.gpuStructuralCombustionAssembly.dispatchCount=0;return {freshFluid:true,freshMaterial:true};},
+  restoreScene:async()=>{if(failRestore)throw Error('restore interrupted');objects=structuredClone(scene.objects);state.simStepCount=0;state.gpuStructuralCombustionAssembly.dispatchCount=0;state.fluidAllocationId=`fluid-${++resourceId}`;state.gpuStructuralCombustionAssembly.assemblyId=`material-${resourceId}`;return {freshFluid:true,freshMaterial:true};},
 });
 await controller.initialize();
 assert.equal(controller.status().attemptId,'attempt-1','successful fresh resources need a physical attempt identity');
@@ -33,6 +33,7 @@ await controller.run();
 assert.equal(controller.status().attemptId,'attempt-1','starting and advancing does not replace the cold attempt');
 controller.togglePause();controller.togglePause();
 assert.equal(controller.status().attemptId,'attempt-1','inspection pause retains the actual evolved material');
+assert.deepEqual(controller.status().resources,{fluidAllocationId:'fluid-1',materialAssemblyId:'material-1'});
 const shutdown=events.findLast(e=>e.kind==='timber.burner'&&e.phase==='off');
 assert.equal(shutdown.effective.flowRate,0);assert.equal(shutdown.effective.analyticEmitterDispatchActive,false);
 const placement=events.filter(e=>e.kind==='timber.placement');
@@ -49,6 +50,15 @@ const stopBadObserver=controller.subscribeOperations(()=>{throw Error('retention
 await controller.reset();assert.equal(controller.status().phase,'cold','observer failure must not break the physical reset');
 assert.equal(controller.status().operationIssues.at(-1).error,'retention unavailable');
 stopBadObserver();
+await controller.run();
+const oldAttempt=controller.status().attemptId;
+state.gpuStructuralCombustionAssembly.assemblyId='external-material';
+const oldPauseCalls=pauseCalls;
+assert.throws(()=>controller.togglePause(),/Physical timber resources were replaced/,'a same-ID scene reload cannot continue the old physical attempt');
+assert.equal(pauseCalls,oldPauseCalls,'reject continuity before mutating replacement resources');
+await controller.reset();
+assert.notEqual(controller.status().attemptId,oldAttempt,'explicit Reset can establish a new attempt after resource replacement');
+assert.equal(controller.status().phase,'cold');
 failRestore=true;await assert.rejects(controller.reset(),/restore interrupted/);
 assert.equal(controller.status().attemptId,null,'failed partial resource replacement must not advertise the old live attempt');
 assert.equal(controller.status().phase,'failed');

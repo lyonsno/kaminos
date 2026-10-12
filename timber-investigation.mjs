@@ -17,6 +17,9 @@ export function bindTimberInvestigation({controller, volume, basin, readObjects,
       if (disposed) throw Error('Timber investigation adapter is disposed');
       const timber = controller.status(), live = volume.debugState(), objects = readObjects(), preset = basin();
       const reasons = [];
+      if (typeof timber.resources?.fluidAllocationId !== 'string' || typeof timber.resources?.materialAssemblyId !== 'string') reasons.push('physical-resources-unverified');
+      else if (timber.resources.fluidAllocationId !== live.fluidAllocationId
+        || timber.resources.materialAssemblyId !== live.gpuStructuralCombustionAssembly?.assemblyId) reasons.push('physical-resources-replaced');
       if (!timber.attemptId || ['loading', 'restoring', 'failed'].includes(timber.phase)) reasons.push('physical-attempt-unavailable');
       if (live.error || !live.active || !/^WebGPU:/.test(live.backend)
         || live.effectiveRoute !== 'native-3d-compute-fluid-raymarch-v0') reasons.push('volume-route-unavailable');

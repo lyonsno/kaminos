@@ -1508,6 +1508,7 @@ export async function createGpuStructuralCombustionAssembly({
   if (!format) throw new Error('GPU structural combustion requires a presentation format');
   if (!Array.isArray(structures) || structures.length < 1) throw new Error('GPU structural combustion requires structural sockets');
   const presentationDebugCode = structuralCombustionPresentationDebugCode(presentationDebugMode);
+  const assemblyId = globalThis.crypto.randomUUID();
 
   const sockets = structures.map(structure => {
     const descriptor = structure.sidecar?.residentDescriptor?.();
@@ -2363,6 +2364,7 @@ export async function createGpuStructuralCombustionAssembly({
   function debugState() {
     return {
       schema: STRUCTURAL_COMBUSTION_SCHEMA,
+      assemblyId,
       authority: STRUCTURAL_COMBUSTION_AUTHORITY,
       presentationDebugMode,
       mode,
