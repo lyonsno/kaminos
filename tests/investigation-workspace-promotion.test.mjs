@@ -16,7 +16,8 @@ function harness(){
  const installed=[],promotions=[];let mounted=null;
  const context=vm.createContext({document,URLSearchParams,location:{search:'?investigation=water'},
   window:{__kaminosActiveTab:()=> 'finger-fluid-bench'},fluidViewportReady:Promise.resolve(),
-  fingerFluidPressureCockpit:null,fingerFluidBenchSolver:null,fluidWorkbench:null,
+  fingerFluidPressureCockpit:null,fingerFluidBenchSolver:null,fluidWorkbench:null,fluidReflectionCockpit:null,
+  mountReflectionCockpit:()=>({read(){},select(){},configureB(){}}),
   authoringWorkspace:{state:()=>({mode:'workbench'})},
   installExperimentWorkspace(options){installed.push(options);mounted=options.investigation;return {state:()=>({active:true}),setActive(){},setInvestigation(node){mounted=node;},update(){},setControls(options){promotions.push(options);}};},
   createInvestigationEntry:()=>({node:{draft:'retained thought'}}),setActiveTab(){},updateFingerFluidBenchReadout(){},
