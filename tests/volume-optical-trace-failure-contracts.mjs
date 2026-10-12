@@ -38,6 +38,15 @@ const script=readFileSync(new URL('../scripts/capture-optical-trace.mjs',import.
 const start=script.indexOf('      const chunk=await page.evaluate');
 const end=script.indexOf('      validateTraceSpecialization',start);
 const driver=script.slice(start,end);
+const callback=script.slice(start).match(/page.evaluate\((async options=>\{[\s\S]*?)\n      \},\{firstRay/)[1]+'\n      }';
+const backing=new Uint8Array(0x10020);
+for(let i=0;i<backing.length;i++)backing[i]=i%256;
+const offsetView=new Float32Array(backing.buffer,12,0x10000/4);
+const wire=await new Function('window','options',`return (${callback})(options);`)(
+  {__kaminosVolumePrototype:{sampleOpticalTraceChunk:async()=>({values:offsetView})}},{});
+assert.equal(typeof wire.readbackBase64,'string','binary readback must cross Playwright as one encoded string, not a per-byte JS array');
+assert.equal(wire.readbackBytes,undefined);
+assert.ok(Buffer.from(JSON.parse(JSON.stringify(wire)).readbackBase64,'base64').equals(Buffer.from(backing.buffer,12,0x10000)));
 for(const word of [0xbf000000,0x7f800001,0xff800001,0x7fc12345,0x80000000]) {
   const sample=raw.slice();new Uint32Array(sample.buffer)[19]=word;
   const writes=[];let saved=0;
