@@ -37,6 +37,17 @@ for (const [queries, domains] of [[1, 1], [65, 4], [256, 9], [576, 9], [5184, 1]
   assert.equal(end, queries);
 }
 assert.throws(() => partitionSamFlashAttentionPhase({ kernel: 'attention', dispatch: [10, 2, 1] }, { headDim: 128 }, { createUniformBuffer: spec => spec }, { attention: template }), /headDim/);
+// Flash keeps every head dim the online kernels accepted (1..64), including SAM 3.1's 16 and odd sizes.
+for (const headDim of [1, 2, 7, 16, 24, 32, 64]) {
+  const kernels = { attention: template };
+  const [phase] = partitionSamFlashAttentionPhase({ kernel: 'attention', dispatch: [1, 1, 1] }, { headDim }, { createUniformBuffer: spec => spec }, kernels);
+  assert.equal(kernels[phase.kernel].code, samFlashAttentionShader(headDim));
+}
+// Programs construct the flash shader only when flash is selected, so explicit 'online' never depends on it.
+for (const file of ['sam-image-vit-block-stack-phase-program.js', 'sam-detr-encoder-phase-program.js']) {
+  const program = readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8');
+  assert.match(program, /attentionKernel === 'flash' \? \[samFlashAttentionShader\(/, `${file}: flash shader registered only for flash`);
+}
 
 // DETR encoder self-attention: head dim 32, 8 heads, one 5184-token domain; ranges sized by the caller.
 {
@@ -76,6 +87,6 @@ const source = readFileSync(new URL('../src/sam-image-vit-block-stack-phase-prog
 assert.match(source, /input\.attentionKernel/);
 assert.match(source, /partitionSamFlashAttentionPhase\(/);
 assert.match(source, /partitionSamAttentionPhase\(phase, kernels, runtime, 128\)/, 'online attention remains selectable');
-assert.match(source, /samFlashAttentionShader\(\)/, 'flash shader is registered with the range runtime');
+assert.match(source, /samFlashAttentionShader\(shape\.headDim\)/, 'flash shader is registered with the range runtime when selected');
 
 console.log('sam flash attention contracts passed');

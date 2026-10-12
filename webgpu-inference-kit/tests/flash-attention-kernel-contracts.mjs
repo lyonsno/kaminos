@@ -24,9 +24,20 @@ import {
   assert.match(small, /array<vec4<f32>, 128>/);
 }
 
+// Every head dim the original online kernels accept (1..64): multiples of 4 use vec4 registers and tiles,
+// others fall back to unrolled scalars with the same online-softmax structure.
+{
+  const odd = createWebGpuFlashAttentionShader({ headDim: 7 });
+  assert.match(odd, /var<storage, read> q_values: array<f32>/);
+  assert.match(odd, /var<workgroup> key_tile: array<f32, 224>/);
+  assert.match(odd, /var q6: f32/);
+  assert.doesNotMatch(odd, /var q7:/);
+  assert.doesNotMatch(odd, /vec4/);
+  for (const headDim of [1, 2, 16, 24, 63, 64]) assert.equal(typeof createWebGpuFlashAttentionShader({ headDim }), 'string');
+  assert.match(createWebGpuFlashAttentionShader({ headDim: 24 }), /var q5: vec4<f32>/);
+}
 // Invalid geometry fails loudly instead of compiling a kernel that reads past a head.
-assert.throws(() => createWebGpuFlashAttentionShader({ headDim: 66 }), /headDim must be a multiple of 4/);
-assert.throws(() => createWebGpuFlashAttentionShader({ headDim: 128 }), /headDim must be at most 64/);
+for (const headDim of [0, 65, 128, 2.5]) assert.throws(() => createWebGpuFlashAttentionShader({ headDim }), /headDim must be an integer from 1 to 64/);
 assert.throws(() => createWebGpuFlashAttentionShader({ headDim: 64, blockKeys: 64 }), /workgroup storage/);
 
 // Params: 12 words; counts, channel strides, grouped KV heads, query range and the softmax scale.

@@ -105,7 +105,12 @@ const admits = mutate => admitSamNativeReport(report(mutate), dir).passed;
 // C1: execution identity must agree with the packet; receipts must be the complete live composition.
 assert.equal(admits(r => { r.visualEvidence.output.receiptChain = ['demo.fallback']; }), false, 'fallback receipt chain fails');
 assert.equal(admits(r => { r.visualEvidence.output.receiptChain = RECEIPTS.filter(id => !id.includes('vit-block-stack')); }), false, 'chain without the ViT block stack fails');
-assert.equal(admits(r => { r.visualEvidence.output.receiptChain = [...RECEIPTS.slice(0, 9), 'sam3.mask-tail.cache.v0']; }), false, 'non-live receipt fails');
+// C1-R (Sammy 2026-10-12): completeness is required-stage membership, not a count or a name pattern.
+assert.equal(admits(r => { r.visualEvidence.output.receiptChain = RECEIPTS.filter(id => !/(scoring|selection-postprocess|mask-tail)\./.test(id)); }), false, 'chain missing real stages fails');
+assert.equal(admits(r => { r.visualEvidence.output.receiptChain = [RECEIPTS[3], ...Array.from({ length: 9 }, (_, i) => `sam3.not-a-stage-${i}.phase-program.webgpu-local.v0`)]; }), false, 'invented stage names fail');
+assert.equal(admits(r => { r.visualEvidence.output.receiptChain = [...RECEIPTS, 'sam3.image-features.cache-reuse.v0']; }), true, 'additive stages and cache reuse are accepted');
+assert.equal(admits(r => { r.visualEvidence.output.receiptChain = [...RECEIPTS, 'sam3.mask-tail.demo-fallback.v0']; }), false, 'a fallback entry fails even beside a complete chain');
+assert.equal(admits(r => { r.visualEvidence.output.receiptChain = [...RECEIPTS, RECEIPTS[0]]; }), false, 'duplicate receipts fail');
 assert.equal(admits(r => { r.visualEvidence.output.imageCache.resources.activeModelPackageId = 'sam3-model-package:sha256:wrong'; }), false, 'conflicting active package fails');
 assert.equal(admits(r => { r.warmPositive.visualEvidence.output.imageCache.resources.modelSession.packageId = 'sam3-model-package:sha256:wrong'; }), false, 'conflicting session package fails');
 assert.equal(admits(r => { r.visualEvidence.output.imageCache.resources.modelSession.commit = 'wrong'; }), false, 'conflicting execution commit fails');

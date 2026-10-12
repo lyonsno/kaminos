@@ -634,7 +634,7 @@ export async function runSam3DetrEncoderPhaseProgramRoute(input = {}) {
     }
     phases.push({ name: 'readback-encoder-hidden-states', readbacks: [{ name: 'encoderHiddenStates', tensor: currentHidden }] });
 
-    const program = createSamRangePhaseRuntime(runtime, [SAM_QUERY_RANGE_ONLINE_ATTENTION_WGSL, samFlashAttentionShader(shape.headDim)]).defineProgram({
+    const program = createSamRangePhaseRuntime(runtime, [SAM_QUERY_RANGE_ONLINE_ATTENTION_WGSL, ...(attentionKernel === 'flash' ? [samFlashAttentionShader(shape.headDim)] : [])]).defineProgram({
       name: 'sam3.detr-encoder-phase-program',
       tensors: programTensors,
       uniforms: {

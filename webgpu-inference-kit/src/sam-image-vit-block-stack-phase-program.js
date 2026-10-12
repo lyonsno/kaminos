@@ -1172,7 +1172,7 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
         }
         return expanded;
       });
-      return createSamRangePhaseRuntime(runtime, [SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL, samFlashAttentionShader(), SAM_VECTOR_LINEAR_RANGE_WGSL, SAM_VECTOR_LINEAR_GELU_RANGE_WGSL, ...samTiledLinearShaders()]).defineProgram({
+      return createSamRangePhaseRuntime(runtime, [SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL, ...(attentionKernel === 'flash' ? [samFlashAttentionShader(shape.headDim)] : []), SAM_VECTOR_LINEAR_RANGE_WGSL, SAM_VECTOR_LINEAR_GELU_RANGE_WGSL, ...samTiledLinearShaders()]).defineProgram({
         name: `sam3.image-vit-block-stack-layer-${layerShape.layerIndex}-phase-program`,
         tensors: programTensors,
         uniforms: { blockDims: tensors.blockDims, lnDims: tensors.lnDims, windowLinearDims: tensors.windowLinearDims, fc1Dims: tensors.fc1Dims, fc2Dims: tensors.fc2Dims },

@@ -26,10 +26,10 @@ export function samFlashAttentionShader(headDim = 64) {
 }
 
 // Replace one SAM attention phase (dispatch [queries, heads, domains], template bindings [q, k, v, output,
-// dims]; ViT head dim 64, DETR encoder and SAM 3.1 memory attention head dim 32) with query ranges of the
+// dims]; any head dim 1..64 the online kernels accept) with query ranges of the
 // flash kernel. keyTokens defaults to the query count (self-attention).
 export function partitionSamFlashAttentionPhase(phase, { headDim, keyTokens, queriesPerPhase = SAM_FLASH_ATTENTION_QUERIES_PER_PHASE }, runtime, kernels) {
-  if (headDim !== 32 && headDim !== 64) throw new Error('SAM flash attention supports headDim 32 or 64');
+  if (!Number.isInteger(headDim) || headDim < 1 || headDim > 64) throw new Error('SAM flash attention supports headDim 1 to 64, like the online kernels');
   if (!Number.isInteger(queriesPerPhase) || queriesPerPhase < 64 || queriesPerPhase % 64 !== 0) {
     throw new Error('queriesPerPhase must be a positive multiple of 64');
   }
