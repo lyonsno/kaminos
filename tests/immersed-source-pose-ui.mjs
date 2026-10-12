@@ -1,9 +1,9 @@
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import{readFileSync}from'node:fs';
 import{flamePoseToDomain,defaultFlameEmitterPose}from'../scene-flame-emitter.mjs';
 import{applyVolumeEmitterFamilyRuntime,resolveVolumeCoreEmitterSource}from'../volume-emitter-runtime.mjs';
-const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const html=readFileSync(process.env.KAMINOS_POSE_UI_SOURCE || new URL('../index.html',import.meta.url),'utf8');
 test('moving the immersed source refreshes only its centre/aim labels',()=>{
- const elements=new Map([['emitter-assay-family',{value:'ring'}]]);for(const suffix of ['centre-x','centre-y','centre-z','yaw','pitch']){elements.set('volume-immersed-'+suffix,{value:'0'});elements.set('volume-immersed-'+suffix+'-val',{textContent:'old'});}
+ const elements=new Map([['emitter-assay-family',{value:'ring'}]]);for(const suffix of ['centre-x','centre-y','centre-z','yaw','pitch']){elements.set('volume-immersed-'+suffix,{id:'volume-immersed-'+suffix,value:'0'});elements.set('volume-immersed-'+suffix+'-val',{textContent:'old'});}
  let broadRefreshes=0,applied;
  const ctx={window:{},document:{getElementById:id=>elements.get(id)},routeExternalEmitters:null,volumeEmitterRuntimeFrame:0,flameEmitterPose:defaultFlameEmitterPose(),flameDomainTranslation:[0,0,0],flameEmitterInjectionSuspended:false,authoredFlamePresent:true,performance,structuredClone,flamePoseToDomain,applyVolumeEmitterFamilyRuntime,emitterCompilerControls:c=>c,
  volumePrototype:{debugState:()=>({frameCount:1}),setControls:c=>applied=c,setAnalyticEmitterDescriptor:()=>({mode:'off',count:0}),setCoreEmitterSourceMode:mode=>resolveVolumeCoreEmitterSource({mode,controlFlowRate:applied.flowRate})},setVolumeControlValue:(id,v)=>elements.get(id).value=String(v),updateVolumeControlLabels:()=>broadRefreshes++,renderVolumeEmitterReceipt(){},ensureAuthoredFlameEmitter(){}};
