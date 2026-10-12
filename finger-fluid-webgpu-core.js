@@ -7603,7 +7603,10 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
               neighborIndex,
               length(position - particles[neighborIndex].predicted.xyz),
             );
-            neighborVelocity = neighborVelocity + particles[neighborIndex].velocity.xyz * weight;
+            // Smooth the same post-projection field used by this particle.
+            // position/predicted stay immutable until this dispatch completes;
+            // delta is the output, so neighboring invocations cannot race it.
+            neighborVelocity = neighborVelocity + ((particles[neighborIndex].predicted.xyz - particles[neighborIndex].position.xyz) / max(params.dt, 0.00001)) * weight;
             neighborWeight = neighborWeight + weight;
           }
           current = particleNext[neighborIndex];
