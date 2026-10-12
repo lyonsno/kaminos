@@ -9,11 +9,11 @@ export function validateFingerFluidDiagnosticPopulation(p,count=p?.particleCount
   return p;
 }
 /** Finite box: refinement changes spacing, sample volume, surface support and
- * collision size. Pressure support is an independent world-space distance. */
-export function createFingerFluidBoxReference({scene='block_drop',resolution=24,pressureRadius=1/12}={}) {
+ * collision size. PBF kernel support follows the volume-derived particle scale. */
+export function createFingerFluidBoxReference({scene='block_drop',resolution=24,pressureRadius}={}) {
   if(!['block_drop','block_flop','dam_break'].includes(scene))throw new RangeError('Unknown box reference scene');
   if(!Number.isSafeInteger(resolution)||resolution<16||resolution%8!==0)throw new RangeError('Box resolution must be an integer multiple of eight, at least sixteen');
-  if(!Number.isFinite(pressureRadius)||pressureRadius<=0)throw new RangeError('World pressure radius must be finite and positive');
+  if(pressureRadius!==undefined)throw new RangeError('Independent pressure radius unsupported in this PBF fixture');
   const spacing=1/resolution,volume=spacing**3,baseVolume=(64*Math.PI/315)*.185**3/24.3;
   const bounds={min:[-1.5,-1,-.65],max:[1.5,2,.65]};
   const regions=[{size:[resolution,resolution,resolution],origin:scene==='dam_break'?[-1.5,-1,-.5]:[-.5,.4,-.5]}];
@@ -31,8 +31,8 @@ export function createFingerFluidBoxReference({scene='block_drop',resolution=24,
     planes.push({normal,offset:normal[k]*bounds[side][k]});
   }
   const box={schema:'kaminos.fluid-reference-box.v1',bounds,planes,collisionRadius:.5*spacing};
-  const population={schema:'kaminos.fluid-discriminator-population.v1',fixture:scene,refinement:resolution/24,particleCount,particleData:data,particleVolumeScale:volume/baseVolume,source:'regular_lattice_finite_water_at_rest_no_recycling'};
-  return {scene,resolution,spacing,particleCount,particleVolume:volume,representedVolume:particleCount*volume,pressureRadius,surfaceRadius:2*spacing,box,population};
+  const population={schema:'kaminos.fluid-discriminator-population.v1',fixture:scene,refinement:resolution/24,particleCount,particleData:data,particleVolumeScale:volume/baseVolume,representedVolume:particleCount*volume/baseVolume,worldVolume:particleCount*volume,source:'regular_lattice_finite_water_at_rest_no_recycling'};
+  return {scene,resolution,spacing,particleCount,particleVolume:volume,representedVolume:particleCount*volume,volumeUnits:'world_units_cubed',supportMode:'PBF_volume_scaled',box,population};
 }
 
 export function validateFingerFluidReferenceBox(box) {
@@ -62,7 +62,7 @@ export function boxBoundaryDensitySource(box){
  const b=validateFingerFluidReferenceBox(box);
  return `fn analytic_boundary_density_support(position:vec3<f32>,radiusScale:f32)->vec4<f32>{
  let h=params.fluid.x*radiusScale;var fraction=0.0;var gradient=vec3<f32>(0);
- ${b.planes.map((p,i)=>`let n${i}=vec3<f32>(${p.normal.join(',')});let d${i}=max(0.0,dot(position,n${i})-${p.offset}-${b.collisionRadius});let f${i}=boundary_missing_fraction(d${i},h);let g${i}=n${i}*boundary_missing_fraction_derivative(d${i},h);gradient=gradient*(1.0-f${i})+g${i}*(1.0-fraction);fraction=fraction+f${i}-fraction*f${i};`).join('\n')}
+ ${b.planes.map((p,i)=>`let n${i}=vec3<f32>(${p.normal.join(',')});let d${i}=max(0.0,dot(position,n${i})-(${p.offset})-${b.collisionRadius});let f${i}=boundary_missing_fraction(d${i},h);let g${i}=n${i}*boundary_missing_fraction_derivative(d${i},h);gradient=gradient*(1.0-f${i})+g${i}*(1.0-fraction);fraction=fraction+f${i}-fraction*f${i};`).join('\n')}
  let rho=max(params.fluid.y-1.0,0.0);return vec4<f32>(gradient*rho/max(params.fluid.y,.001),rho*fraction);
 }`;
 }
