@@ -59,7 +59,7 @@ try {
   }
   report.phase = 'generate';
   const batchOptions = { cooperative: !args.includes('--blocking'), targetDutyMs: Number(opt('--target-duty-ms', '12')), maxInFlight: Number(opt('--max-in-flight', '1')),
-    textLength: /^fit/.test(opt('--text-length', '512')) ? opt('--text-length') : Number(opt('--text-length', '512')) };
+    textLength: /^fit/.test(opt('--text-length', '512')) ? opt('--text-length') : Number(opt('--text-length', '512')), dutyLog: args.includes('--duty-log') };
   report.batchOptions = batchOptions;
   // One job per call, each PNG written as it arrives, and a wait that fails (with the page's status and
   // any unfinished fetches) when the status line stops changing, instead of hanging on a wedged batch.
