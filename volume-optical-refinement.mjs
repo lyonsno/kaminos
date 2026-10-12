@@ -1,4 +1,5 @@
-import {composeTransfers,integrateProbes,estimateProbeError} from './volume-optical-trace.mjs';
+import {composeTransfers,constantTransfer,integrateProbes,estimateProbeError} from './volume-optical-trace.mjs';
+import {validateOpticalRegion} from './volume-optical-region.mjs';
 
 const difference=(a,b)=>a.map((v,i)=>Math.abs(v-b[i]));
 const identity=()=>[0,0,0,1];
@@ -36,31 +37,65 @@ export function buildOpticalHierarchy(probes,{length,rootSpan,probeCount}) {
     teacher:roots.reduce((t,n)=>composeTransfers(t,n.teacher),identity())};
 }
 
-export function refineOpticalHierarchy(hierarchy,{policy,tolerances,calibration=[1,1,1,1],predictError}) {
-  if(!['numerical','teacher-informed','predicted'].includes(policy))throw new Error('unknown refinement policy');
+export function refineOpticalHierarchy(hierarchy,{policy,tolerances,calibration=[1,1,1,1],predictError,
+  regionBounds,suffixRadianceBound=[0,0,0]}) {
+  if(!['numerical','teacher-informed','predicted','regional'].includes(policy))throw new Error('unknown refinement policy');
   if(!nonnegativeFour(tolerances)||!nonnegativeFour(calibration))throw new Error('four finite nonnegative tolerances/calibration values required');
   if(policy==='predicted'&&typeof predictError!=='function')throw new Error('prediction function required');
+  if(policy==='regional'&&typeof regionBounds!=='function')throw new Error('region bounds function required');
+  if(!Array.isArray(suffixRadianceBound)||suffixRadianceBound.length!==3||
+    ![0,1,2].every(i=>Number.isFinite(suffixRadianceBound[i])&&suffixRadianceBound[i]>=0)) {
+    throw new Error('three finite nonnegative suffix radiance bounds required');
+  }
   let transfer=identity(),unresolvedLeafCount=0,unresolvedReferenceCount=0;
+  let metadataQueryCount=0;
+  const regionAuthorities=new Set();
   const seen=new Set(),accepted=[];
   const visit=node=>{
-    node.indices.forEach(i=>seen.add(i));
+    const midpoint=Math.floor(node.indices.length/2);
+    const indices=policy==='regional'?[node.indices[midpoint]]:node.indices;
+    indices.forEach(i=>seen.add(i));
+    let candidate=policy==='regional'?constantTransfer(node.probes[midpoint],node.h):node.candidate;
+    let region;
     // The prediction callback receives observations, never refined labels or a suffix teacher.
-    const error=policy==='predicted'?predictError({probes:node.probes,h:node.h,start:node.start}):
+    let error=policy==='predicted'?predictError({probes:node.probes,h:node.h,start:node.start}):
       policy==='teacher-informed'?node.teacherError:node.numericalError.map((v,i)=>v*calibration[i]);
+    if(policy==='regional') {
+      // No teacher values enter this callback. Metadata creation/refresh cost
+      // is external to this replay and must be charged by a native comparison.
+      region=regionBounds({start:node.start,end:node.end,h:node.h});
+      metadataQueryCount++;
+      error=validateOpticalRegion(region,{...node,probes:[node.probes[midpoint]]});
+      regionAuthorities.add(region.authority);
+    }
     if(!nonnegativeFour(error))throw new Error('invalid error prediction');
     const incoming=transfer[3];
-    const needsRefinement=error.some((v,i)=>incoming*v>tolerances[i]);
+    const weightedError=error.map((v,i)=>incoming*(v+(i<3?error[3]*suffixRadianceBound[i]:0)));
+    const needsRefinement=weightedError.some((v,i)=>v>tolerances[i]);
     if(needsRefinement&&node.children.length) {node.children.forEach(visit);return;}
-    if(needsRefinement)unresolvedLeafCount++;
-    const referenceUnresolved=node.teacherDisagreement.some((v,i)=>incoming*v>tolerances[i]);
+    if(needsRefinement) {
+      unresolvedLeafCount++;
+      // At the retained hierarchy's floor use all available candidate probes,
+      // rather than silently accepting a midpoint that can miss the sheet.
+      if(policy==='regional') {
+        node.indices.forEach(i=>seen.add(i));
+        validateOpticalRegion(region,node);
+        candidate=node.candidate;
+      }
+    }
+    const referenceUnresolved=node.teacherDisagreement.some((v,i)=>
+      incoming*(v+(i<3?node.teacherDisagreement[3]*suffixRadianceBound[i]:0))>tolerances[i]);
     if(referenceUnresolved)unresolvedReferenceCount++;
-    accepted.push({start:node.start,end:node.end,h:node.h,incoming,error:[...error],
+    accepted.push({start:node.start,end:node.end,h:node.h,incoming,error:[...error],weightedError,
       referenceDisagreement:[...node.teacherDisagreement],referenceUnresolved,needsRefinement});
-    transfer=composeTransfers(transfer,node.candidate);
+    transfer=composeTransfers(transfer,candidate);
   };
   hierarchy.roots.forEach(visit);
   return {identity:'optical-refinement-replay-v0',policy,tolerances:[...tolerances],calibration:[...calibration],
-    toleranceSemantics:'per-segment absolute E_RGB/T disagreement weighted by incoming transmission; not a global bound',
+    toleranceSemantics:'per-segment E_RGB plus T error times supplied suffix radiance bound, and T error, weighted by incoming transmission; not a global tolerance',
+    suffixRadianceBound:[...suffixRadianceBound],metadataQueryCount,regionAuthorities:[...regionAuthorities],
+    regionalAuthority:policy==='regional'?'conditional on supplied continuous coefficient envelopes; observations only check contradictions':null,
+    costAuthority:'unique retained probes and metadata query counts only; excludes metadata construction, refresh and GPU execution',
     teacherAuthority:'finite retained trace; successive disagreement is not a convergence certificate',
     transfer,error:difference(transfer,hierarchy.teacher),uniqueProbeCount:seen.size,
     observedIndices:[...seen].sort((a,b)=>a-b),accepted,unresolvedLeafCount,unresolvedReferenceCount};
