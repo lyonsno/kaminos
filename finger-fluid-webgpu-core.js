@@ -11278,6 +11278,7 @@ export function validateFingerFluidMovingHillHostFrame(
       colorSpace: 'linear_hdr',
     },
   );
+  const compositeDepth=hostFrame.compositeDepth?validateFingerFluidMovingHillHostAttachment(hostFrame.compositeDepth,{...attachmentOptions,label:'water composite depth',formats:['depth24plus'],encoding:'webgpu_ndc_depth'}):null;
   if (
     target.attachmentId === sceneColor.attachmentId
     || target.view === sceneColor.view
@@ -11328,6 +11329,7 @@ export function validateFingerFluidMovingHillHostFrame(
     sceneDepth,
     environment,
     target,
+    compositeDepth,
   });
 }
 
@@ -15632,7 +15634,7 @@ export async function createWebGPUFingerFluidSolver({
           storeOp: 'store',
         },...(rayCountCapture?[rayCountCapture.attachment]:[])],
         depthStencilAttachment: {
-          view: depthTexture.createView(),
+          view: validatedHostFrame?.compositeDepth?.view ?? depthTexture.createView(),
           depthClearValue: 1,
           depthLoadOp: validatedHostFrame ? 'clear' : 'load',
           depthStoreOp: 'store',

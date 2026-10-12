@@ -47,7 +47,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
   const colorTarget = new THREE.RenderTarget(1,1,targetOptions);
   const outputTarget = new THREE.RenderTarget(1,1,targetOptions);
   const lowColorTarget=new THREE.RenderTarget(1,1,targetOptions);
-  const lowWaterTarget=new THREE.RenderTarget(1,1,targetOptions);
+  const lowWaterTarget=new THREE.RenderTarget(1,1,{...targetOptions,depthBuffer:true,depthTexture:new THREE.DepthTexture(1,1,THREE.UnsignedIntType)});
   const lowDepthTarget=new THREE.RenderTarget(1,1,{type:THREE.FloatType,format:THREE.RedFormat,depthBuffer:false,minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter});
   const quad=fragment=>{const material=new THREE.NodeMaterial();material.toneMapped=false;material.fragmentNode=fragment;return new THREE.QuadMesh(material);};
   const downColor=quad(texture(colorTarget.texture));
@@ -57,7 +57,12 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
   downDepth=quad(vec4(texture(depthTarget.texture).r,0,0,1));
   const startLowWater=quad(vec4(texture(lowColorTarget.texture).rgb,0));
   const lowAlpha=texture(lowWaterTarget.texture).a.clamp(0,1);
-  const resolveWater=quad(vec4(texture(colorTarget.texture).rgb.mul(lowAlpha.oneMinus()).add(texture(lowWaterTarget.texture).rgb).sub(texture(lowColorTarget.texture).rgb.mul(lowAlpha.oneMinus())),1));
+  const depthProjection=uniform(new THREE.Vector4());
+  const waterNdc=texture(lowWaterTarget.depthTexture).r;
+  const waterViewDepth=depthProjection.y.sub(waterNdc.mul(depthProjection.w)).div(depthProjection.x.sub(waterNdc.mul(depthProjection.z)));
+  const highSceneDepth=texture(depthTarget.texture).r;
+  const resolvedWaterColor=texture(colorTarget.texture).rgb.mul(lowAlpha.oneMinus()).add(texture(lowWaterTarget.texture).rgb).sub(texture(lowColorTarget.texture).rgb.mul(lowAlpha.oneMinus()));
+  const resolveWater=quad(vec4(highSceneDepth.greaterThan(0).and(highSceneDepth.lessThan(waterViewDepth.sub(.002))).select(texture(colorTarget.texture).rgb,resolvedWaterColor),1));
   const timing=createFluidFrameTiming(device);
   let renderScale=1;
   const setRenderScale=value=>{if(!Number.isFinite(value)||value<=0||value>1)throw Error('Water render scale must be above zero and at most 100%');renderScale=value;return renderScale;};
@@ -137,6 +142,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
       const waterWidth=Math.max(1,Math.floor(width*renderScale)),waterHeight=Math.max(1,Math.floor(height*renderScale));
       const scaled=renderScale!==1;
       if(scaled){
+        const p=camera.projectionMatrix.elements;depthProjection.value.set(p[10],p[14],p[11],p[15]);
         for(const target of [lowColorTarget,lowDepthTarget,lowWaterTarget])target.setSize(waterWidth,waterHeight);
         timing.scope('host',()=>{renderer.setRenderTarget(lowColorTarget);downColor.render(renderer);renderer.setRenderTarget(lowDepthTarget);downDepth.render(renderer);renderer.setRenderTarget(lowWaterTarget);startLowWater.render(renderer);});
       }
@@ -154,7 +160,8 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
         sceneColor:attachment('host-color',frameColor,{format:'rgba16float',colorSpace:'linear_hdr'}),
         sceneDepth:attachment('host-depth',frameDepth,{format:'r32float',encoding:'linear_view_depth_meters'}),
         environment:attachment('host-environment',environmentTarget,{format:'rgba16float',mapping:'equirectangular_world_radiance'}),
-        target:attachment('host-liquid-output',frameOutput,{format:'rgba16float',colorSpace:'linear_hdr'})};
+        target:attachment('host-liquid-output',frameOutput,{format:'rgba16float',colorSpace:'linear_hdr'}),
+        ...(scaled?{compositeDepth:{...attachment('host-water-depth',lowWaterTarget,{format:'depth24plus',encoding:'webgpu_ndc_depth'}),view:nativeTexture(lowWaterTarget.depthTexture?{texture:lowWaterTarget.depthTexture}:lowWaterTarget).createView()}}:{})};
       timing.scope('water',()=>solver.render({...renderOptions,hostFrame,externalCamera:cameraSnapshot,opticalDebugMode,suppressRayCounting:timing.active}));
       device.queue.submit([commandEncoder.finish()]);
       if(scaled)timing.scope('host',()=>{renderer.setRenderTarget(outputTarget);resolveWater.render(renderer);});
