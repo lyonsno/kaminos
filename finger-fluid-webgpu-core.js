@@ -13129,7 +13129,7 @@ export async function createWebGPUFingerFluidSolver({
   presentationMode = KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE,
   movingHillSupportContactProviderFactory = null,
   composedRevision = null,
-  diagnosticPopulation = null, diagnosticBox = null, viscosityScaling = 'legacy',
+  diagnosticPopulation = null, diagnosticBox = null, viscosityScaling = 'legacy', simulationStepSeconds = 1/60,
 } = {}) {
   const initialMaterialControls = validateMaterialControls({particleRepulsionStrength,
     densityIterations:Math.max(1,Math.floor(finite(densityIterations,3))),
@@ -13178,7 +13178,8 @@ export async function createWebGPUFingerFluidSolver({
   if (Boolean(diagnosticPopulation) !== Boolean(safeDiagnosticBox)) throw new Error('Finite box requires both geometry and population');
   if (safeDiagnosticBox && (adaptiveDensity || truthScene !== 'multi_regime_playground' || hostFrameComposition || supportContactRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE)) throw new Error('Finite box requires uniform standalone PBF');
   if (viscosityScaling !== 'legacy' && adaptiveDensity) throw new Error('Nominal viscosity scaling requires uniform particle volume');
-  viscosityScale(viscosityScaling, 1/60, .185);
+  if(!Number.isFinite(simulationStepSeconds)||simulationStepSeconds<1/240||simulationStepSeconds>1/30)throw new RangeError('Explicit simulation timestep outside solver range');
+  viscosityScale(viscosityScaling, simulationStepSeconds, .185);
   const supportShaderSource = safeDiagnosticBox
     ? {bindings:'',functions:fingerFluidReferenceBoxSupport(safeDiagnosticBox)}
     : supportShaderSourceForRoute(supportContactRoute);
@@ -13352,6 +13353,7 @@ export async function createWebGPUFingerFluidSolver({
       waterfallOraclePreset: safeWaterfallOraclePreset,
       referenceParticleCount: safeFixedVolumeReferenceParticleCount,
     });
+  const expectedPopulationVolume = diagnosticPopulation ? safeBaseParticleCount*population.particleVolumeScale : (population?.representedVolume ?? safeBaseParticleCount);
   const safeUniformParticleVolumeScale = Math.fround(population?.particleVolumeScale ?? 1);
   const safeUniformParticleRadiusScale = Math.fround(
     Math.pow(Math.max(safeUniformParticleVolumeScale, 0.000001), 1 / 3),
@@ -14090,7 +14092,7 @@ export async function createWebGPUFingerFluidSolver({
   let runtimeApi = null;
   let frameIndex = 0;
   let stepCount = 0;
-  let simulatedTimeSeconds = 0, lastStepSeconds = null, lastViscosityScale = 1;
+  let simulatedTimeSeconds = 0, lastStepSeconds = null, lastViscosityScale = 1, parameterStepSeconds = simulationStepSeconds/safeSubsteps;
   let solverGpuTimestampCapture = null;
   let solverStageGpuTimestampCapture = null;
   let rendererGpuTimestampCapture = null;
@@ -14770,7 +14772,7 @@ export async function createWebGPUFingerFluidSolver({
     if(runtimeLifecycle.stopped)throw new Error('Cannot tune a stopped fluid solver');
     if([solverGpuTimestampCapture,solverStageGpuTimestampCapture,rendererGpuTimestampCapture].some(c=>c&&c.writtenPairs<c.pairCount))throw new Error('Finish the active timing capture before tuning fluid');
     materialControlState.request(patch);
-    writeSimulationParams(1/60/safeSubsteps);
+    writeSimulationParams(parameterStepSeconds);
     return getMaterialControls();
   }
   async function readMaterialInputs() {
@@ -14786,14 +14788,14 @@ export async function createWebGPUFingerFluidSolver({
     } finally {if(readback.mapState==='mapped')readback.unmap();readback.destroy();}
   }
 
-  function step(dt = 1 / 60) {
+  function step(dt = simulationStepSeconds) {
     if (runtimeLifecycle.stopped) return;
     const startedAt = performance.now();
     if ((safeDiagnosticBox || viscosityScaling !== 'legacy') && (!Number.isFinite(dt) || dt<1/240 || dt>1/30)) throw new RangeError('Explicit comparison timestep must be within solver range [1/240,1/30] seconds');
     const frameDt = clamp(finite(dt, 1 / 60), 1 / 240, 1 / 30);
     const substepDt = frameDt / safeSubsteps;
     for (let substep = 0; substep < safeSubsteps; substep += 1) {
-      writeSimulationParams(substepDt);
+      writeSimulationParams(substepDt); parameterStepSeconds=substepDt;
       const encoder = device.createCommandEncoder({ label: 'kaminos-finger-fluid-simulation-step' });
       const stageCapture = solverStageGpuTimestampCapture
         && solverStageGpuTimestampCapture.writtenPairs < solverStageGpuTimestampCapture.pairCount
@@ -15660,7 +15662,7 @@ export async function createWebGPUFingerFluidSolver({
         chemistryMass: Number(chemistryMass.toFixed(6)),
         splitCount: interfaceCounters[3],
         mergeCount: interfaceCounters[4],
-        accountingValid: Math.abs(representedVolume - safeBaseParticleCount) <= Math.max(0.001, safeBaseParticleCount * 0.000001),
+        accountingValid: Math.abs(representedVolume - expectedPopulationVolume) <= Math.max(0.001, expectedPopulationVolume * 0.000001),
       };
       const diffusionMassDrift = chemistryMass - initialChemistryMass - sourceResetMassAdjustment;
       const chemistryMassTolerance = Math.max(0.02, safeParticleCount * 0.000002);
@@ -16358,7 +16360,8 @@ export async function createWebGPUFingerFluidSolver({
       simulationCapacity: safeParticleCount,
       fixedVolumeReferenceParticleCount: safeFixedVolumeReferenceParticleCount,
       particleVolumeScale: population?.particleVolumeScale ?? 1,
-      representedPopulationVolume: population?.representedVolume ?? safeBaseParticleCount,
+      representedPopulationVolume: expectedPopulationVolume,
+      representedWorldVolume: diagnosticPopulation?.worldVolume ?? null,
       particleAllocationCapacity,
       particleAllocationPreflight,
       diagnosticBox: safeDiagnosticBox,
@@ -16873,7 +16876,7 @@ export async function createWebGPUFingerFluidSolver({
     deferredLinearDepthObjectTexture?.destroy();
   }
 
-  writeSimulationParams(1/60/safeSubsteps);
+  writeSimulationParams(parameterStepSeconds);
 
   runtimeApi = {
     available: true,
