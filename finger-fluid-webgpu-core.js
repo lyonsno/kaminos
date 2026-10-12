@@ -15735,7 +15735,7 @@ export async function createWebGPUFingerFluidSolver({
     const diagnosticsStartedAtMs = performance.now();
     const diagnosticsPressureControls=pressureControlState?.read()??null;
     const capturePressureInputs=captureParticleState&&!!ipbfControlBuffer;
-    const captureEnergyDiagnostics = energyDiagnosticsEnabled && energyDiagnosticsPassCount > 0;
+    const captureEnergyDiagnostics = energyDiagnosticsEnabled && lastEnergyMeasurementStep === stepCount;
     const readbackBuffers = [diagnosticsBuffer, ...(captureEnergyDiagnostics ? [energyDiagnosticsReadbackBuffer] : []), interfaceCountersReadbackBuffer, interfaceRecordsReadbackBuffer, restStateReadbackBuffer, neighborTopologyReadbackBuffer, materialTracerReadbackBuffer, liquidFireContactHeaderReadbackBuffer,...(capturePressureInputs?[ipbfControlReadback,liveSimulationParamsReadback]:[])];
     try {
       const diagnosticsStepCount = stepCount;

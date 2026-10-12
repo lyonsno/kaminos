@@ -1,6 +1,7 @@
-// WebGPU query sets allow at most 8192 entries. Use that system capacity;
+// Effective Chrome for Testing 153 native query-set limit observed: 4096.
+// The rejected 8192 request is retained in the owning native evidence.
 // overflowing a sampled frame reports failure, without dropping render work.
-const QUERY_COUNT=8192;
+const QUERY_COUNT=4096;
 export function createFluidFrameTiming(device) {
   let enabled=false,active=false,pending=false,disposed=false,lastRequest=-Infinity,stage='other';
   let sample=null,failure=null,querySet=null,resolveBuffer=null,readback=null;

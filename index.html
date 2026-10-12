@@ -14147,7 +14147,7 @@ function renderFingerFluidBenchCurrentStateForWitness(
   if(fingerFluidBenchViewport){
     fingerFluidBenchScene.update(fingerFluidBenchSolver.getDebugState().stepCount);
     fingerFluidBenchViewport.setOpticalDebugForWitness(effectiveOpticalDebugMode);
-    fingerFluidBenchViewport.render({advance:false,renderOptions:options});
+    fingerFluidBenchViewport.render({advance:false,renderOptions:options,simulationState:{paused:fingerFluidBenchSimulationPaused,advanced:false}});
   } else fingerFluidBenchSolver.render(options);
   const runtime = applyFingerFluidAnalyticCarrierRuntimeEvidence(
     fingerFluidBenchSolver.getDebugState(),
@@ -14353,8 +14353,10 @@ function drawFingerFluidBenchFrame(now = performance.now(),{fromHost=false}={}) 
     if(!fingerFluidUsesSharedViewport())fingerFluidBenchAnimationFrame = requestAnimationFrame(drawFingerFluidBenchFrame);
     return;
   }
-  if (!fingerFluidBenchSimulationPaused) {
-    fingerFluidBenchSolver.step(KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS);
+  fingerFluidBenchViewport?.beginFrameTiming();
+  const simulationAdvanced=!fingerFluidBenchSimulationPaused;
+  if (simulationAdvanced) {
+    if(fingerFluidBenchViewport)fingerFluidBenchViewport.stepSimulation(KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS);else fingerFluidBenchSolver.step(KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS);
     const submittedState = fingerFluidBenchSolver.getDebugState();
     const autoPauseStep = fingerFluidBenchConfig.effectiveWitnessStartStep
       ?? fingerFluidBenchConfig.effectiveWitnessTargetStep;
@@ -14379,7 +14381,7 @@ function drawFingerFluidBenchFrame(now = performance.now(),{fromHost=false}={}) 
   if(fingerFluidBenchViewport){
     fingerFluidBenchScene.update(fingerFluidBenchSolver.getDebugState().stepCount);
     fingerFluidBenchViewport.setOpticalDebugForWitness(fingerFluidBenchConfig.effectiveOpticalDebugMode);
-    fingerFluidBenchViewport.render({advance:false,renderOptions});
+    fingerFluidBenchViewport.render({advance:false,renderOptions,simulationState:{paused:fingerFluidBenchSimulationPaused,advanced:simulationAdvanced}});
   } else fingerFluidBenchSolver.render(renderOptions);
   const gpuState = applyFingerFluidAnalyticCarrierRuntimeEvidence(
     fingerFluidBenchSolver.getDebugState(),

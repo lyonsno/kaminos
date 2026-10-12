@@ -101,7 +101,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
 
   function render(options) {return withLocalLiquidHelperGround(helperGround,()=>renderFrame(options));}
 
-  function renderFrame({advance=true,renderOptions={}}={}) {
+  function renderFrame({advance=true,renderOptions={},simulationState=null}={}) {
     if (disposed) throw Error('Local liquid host disposed');
     if (failure) throw Error(failure);
     const previousTarget=renderer.getRenderTarget(), previousOverride=scene.overrideMaterial, previousBackground=scene.background;
@@ -141,6 +141,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
         timing.scope('host',()=>{renderer.setRenderTarget(lowColorTarget);downColor.render(renderer);renderer.setRenderTarget(lowDepthTarget);downDepth.render(renderer);renderer.setRenderTarget(lowWaterTarget);startLowWater.render(renderer);});
       }
       const frameColor=scaled?lowColorTarget:colorTarget,frameDepth=scaled?lowDepthTarget:depthTarget,frameOutput=scaled?lowWaterTarget:outputTarget;
+      const simulationPaused=simulationState?.paused??paused,simulationAdvanced=simulationState?.advanced??(advance&&!paused);
       const generation=frameCount+1, frameId=`${framePrefix}-${generation}`;
       const cameraSnapshot=fluidViewportCameraFrame(camera,waterWidth,waterHeight,generation);
       const attachment=(id,target,extra)=>({authority:'host_live_frame',attachmentId:id,frameId,
@@ -165,7 +166,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
         route:ROUTE,opticalDebugMode,submittedByHost:true,presentedByHost:true,captureColorSpace:'linear_hdr',displayTransform:cameraState.effective?cameraState.transform:'host-render-pipeline',exposure:renderer.toneMappingExposure,environmentIntensity:scene.environmentIntensity,
         simulationTimePolicy:advance?'one-fixed-1/60-step-per-rendered-frame':'caller-owned-step',simulationRewind:false,
         helperGroundPresentation:{policy:'retained-basin-suppresses-editor-helper',effectiveVisible:helperGround?.visible??null}};
-      timing.finish({hostFrameId:frameId,step:solver.getFrameBudgetState().step,paused,simulationAdvanced:advance&&!paused,waterResolution:lastFrame.waterResolution,reflection:solver.getReflectionBudgetControls().effective,energy:solver.getFrameBudgetState().energy.mode,camera:cameraSnapshot,environmentSource:environmentSource.uuid,environmentGeneration});
+      timing.finish({hostFrameId:frameId,step:solver.getFrameBudgetState().step,paused:simulationPaused,simulationAdvanced,waterResolution:lastFrame.waterResolution,reflection:solver.getReflectionBudgetControls().effective,energy:solver.getFrameBudgetState().energy.mode,camera:cameraSnapshot,environmentSource:environmentSource.uuid,environmentGeneration});
     } catch(error) { timing.abort(error);failure=error.message || String(error); throw error; }
     finally {
       restoreDisplay?.();
@@ -176,6 +177,9 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
   }
 
   return {render,
+    beginFrameTiming:timing.begin,
+    stepSimulation:dt=>timing.scope('simulation',()=>solver.step(dt)),
+    abortFrameTiming:timing.abort,
     setPaused(value){paused=Boolean(value);return paused;},
     get paused(){return paused;},
     state:()=>({frameCount,paused,failure,lastFrame,renderScale,timing:timing.read()}),
@@ -189,7 +193,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
     dispose(){
       disposed=true;device.removeEventListener('uncapturederror',onGpuError);
       timing.destroy();for(const target of [colorTarget,depthTarget,outputTarget,environmentTarget,lowColorTarget,lowDepthTarget,lowWaterTarget])target?.dispose();
-      for(const q of [downColor,downDepth,startLowWater,resolveWater]){q.material.dispose();q.dispose();}
+      for(const q of [downColor,downDepth,startLowWater,resolveWater]){q.material.dispose();}
       depthMaterial.dispose();environmentQuad?.material.dispose();presentation.dispose();
 
     }
