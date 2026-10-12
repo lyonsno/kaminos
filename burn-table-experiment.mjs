@@ -90,7 +90,7 @@ export function installBurnTable({document,ready,renderer,load,clone,register,ob
   }
   byId('burn-table-experiment').onchange=()=>{
     if(byId('burn-table-experiment').value==='burn-table')void open().catch(console.error);
-    else{generation++;active=false;status='idle';for(const record of liveRecords())record.object.visible=false;labels.hidden=true;byId('burn-table-controls').hidden=true;dirty();}
+    else{generation++;active=false;status='idle';for(const record of liveRecords())record.object.visible=false;labels.hidden=true;document.body?.classList.remove('burn-table-active');byId('burn-table-controls').hidden=true;dirty();}
   };
   byId('burn-table-sample').onchange=()=>{sync();const index=states.findIndex(s=>s.id===byId('burn-table-sample').value);const entry=objects().find(e=>e.object===records[index]?.object);if(entry)select(entry.id);};
   for(const key of ['heat','char','reaction','profile'])byId('burn-table-'+key).oninput=()=>setSample(byId('burn-table-sample').value,{[key]:key==='profile'?byId('burn-table-profile').value:Number(byId('burn-table-'+key).value)});
@@ -103,7 +103,7 @@ export function installBurnTable({document,ready,renderer,load,clone,register,ob
     simulation:false,states:states.map(s=>({...s})),objects:records.flatMap((r,index)=>r?[{id:objects().find(e=>e.object===r.object)?.id,stage:states[index].id,materials:r.materials.map(m=>m.read())}]:[])};},
     update(seconds,camera,viewport){
       reconcile();
-      if(!active||status!=='mounted')return false;
+      if(!active||status!=='mounted'){document.body?.classList.remove('burn-table-active');return false;}
       labels.hidden=document.body.dataset.workspace!=='workbench'||document.querySelector('.tab.active')?.dataset.tab!=='assets';
       document.body.classList.toggle('burn-table-active',!labels.hidden);
       const rect=viewport.getBoundingClientRect();
