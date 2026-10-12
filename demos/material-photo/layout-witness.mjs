@@ -76,8 +76,15 @@ try{
         return{mode:tile.dataset.tile,bottom:r.bottom,surface:{width:s.width,height:s.height,right:s.right,bottom:s.bottom},label:{top:l.top,bottom:l.bottom}};})};
       });
       validateLayoutFrame(frame);
-      const image=path.join(out,`comparison-${width}-${open?'tuning':'full'}.png`);await page.screenshot({path:image});
-      report.frames.push({...frame,open,image});await save();
+      const image=path.join(out,`comparison-${width}-${open?'tuning':'full'}.png`),bytes=await page.screenshot({path:image});
+      const pixels=await page.evaluate(async({uri,tiles})=>{
+        const bitmap=await createImageBitmap(await(await fetch(uri)).blob()),canvas=new OffscreenCanvas(bitmap.width,bitmap.height),ctx=canvas.getContext('2d');
+        ctx.drawImage(bitmap,0,0);bitmap.close();
+        return tiles.map(tile=>{const data=ctx.getImageData(Math.floor(tile.left),Math.floor(tile.top),Math.floor(tile.width),Math.floor(tile.height)).data;let low=255,high=0;
+        for(let i=0;i<data.length;i++)if(i%4!==3){low=Math.min(low,data[i]);high=Math.max(high,data[i]);}return{low,high,range:high-low};});
+      },{uri:'data:image/png;base64,'+bytes.toString('base64'),tiles:await page.locator('.view-surface').evaluateAll(elements=>elements.map(e=>{const r=e.getBoundingClientRect();return{left:r.left,top:r.top,width:r.width,height:r.height};}))});
+      if(pixels.some(pixel=>pixel.range<=12))throw Error('Blank rendered pane');
+      report.frames.push({...frame,open,image,pixels});await save();
     }
   }
   await page.setViewportSize({width:1440,height:857});await settle();
@@ -87,6 +94,13 @@ try{
   const center=await page.evaluate(()=>window.__materialPhotoActions.presentation());
   if(Math.hypot(center.light.x,center.light.y)>.02||JSON.stringify(center.camera.orbit)!==JSON.stringify(orbit))throw Error('Light center restricted or changed orbit');
   report.centerLight=center.light;
+  const canvas=await page.locator('[data-canvas=original]').boundingBox();
+  await page.mouse.move(canvas.x+canvas.width/2,canvas.y+canvas.height/2);await page.mouse.down();
+  await page.mouse.move(canvas.x+canvas.width/2+40,canvas.y+canvas.height/2+20);await page.mouse.up();await settle();
+  report.rotated=await page.evaluate(()=>window.__materialPhotoActions.presentation().comparison);
+  const orbits=Object.values(report.rotated.views).map(view=>view.camera.orbit);
+  if(JSON.stringify(orbits[0])===JSON.stringify(orbit)||orbits.some(value=>JSON.stringify(value)!==JSON.stringify(orbits[0])))throw Error('Orbit did not move all views together');
+  await page.screenshot({path:path.join(out,'rotated-comparison.png')});
   await page.locator('[data-focus=materials]').click();await settle();
   if(await page.locator('[data-tile]:visible').count()!==1)throw Error('Focus did not enlarge one view');
   await page.screenshot({path:path.join(out,'focused-materials.png')});
