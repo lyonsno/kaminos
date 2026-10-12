@@ -38,16 +38,19 @@ const script=readFileSync(new URL('../scripts/capture-optical-trace.mjs',import.
 const start=script.indexOf('      const chunk=await page.evaluate');
 const end=script.indexOf('      validateTraceSpecialization',start);
 const driver=script.slice(start,end);
-const writes=[];let saved=0;
-const report={chunks:[]};
-const window={__kaminosVolumePrototype:{sampleOpticalTraceChunk:async()=>result}};
-const page={evaluate:async(fn,options)=>new Function('window','options',`return (${fn})(options);`)(window,options)};
-await assert.rejects(new AsyncFunction('page','height','width','fraction','specialization','subdivisions','fs','out','createHash','report','save','assert',driver)(
-  page,1,1,.25,'force-full',1,{writeFile:async(path,bytes)=>writes.push({path,bytes})},'/synthetic',createHash,report,async()=>{saved++;},assert));
-assert.equal(writes.length,1,'driver must persist rejected readback before reporting validation failure');
-assert.ok(writes[0].bytes.equals(Buffer.from(raw.buffer)));
-assert.equal(report.chunks[0].ok,false);
-assert.equal(report.chunks[0].phase,'validation');
-assert.equal(report.chunks[0].sha256,createHash('sha256').update(Buffer.from(raw.buffer)).digest('hex'));
-assert.equal(saved,1);
+for(const word of [0xbf000000,0x7f800001,0xff800001,0x7fc12345,0x80000000]) {
+  const sample=raw.slice();new Uint32Array(sample.buffer)[19]=word;
+  const writes=[];let saved=0;
+  const report={chunks:[]};
+  const window={__kaminosVolumePrototype:{sampleOpticalTraceChunk:async()=>({...result,values:sample})}};
+  const page={evaluate:async(fn,options)=>new Function('window','options',`return (${fn})(options);`)(window,options)};
+  await assert.rejects(new AsyncFunction('page','height','width','fraction','specialization','subdivisions','fs','out','createHash','report','save','assert',driver)(
+    page,1,1,.25,'force-full',1,{writeFile:async(path,bytes)=>writes.push({path,bytes})},'/synthetic',createHash,report,async()=>{saved++;},assert));
+  assert.equal(writes.length,1,'driver must persist rejected readback before reporting validation failure');
+  assert.ok(writes[0].bytes.equals(Buffer.from(sample.buffer)),`readback word ${word.toString(16)} changed`);
+  assert.equal(report.chunks[0].ok,false);
+  assert.equal(report.chunks[0].phase,'validation');
+  assert.equal(report.chunks[0].sha256,createHash('sha256').update(Buffer.from(sample.buffer)).digest('hex'));
+  assert.equal(saved,1);
+}
 console.log('failed optical readbacks remain retained, attributed, and rejected');

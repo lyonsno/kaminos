@@ -85,13 +85,15 @@ try {
       report.phase=`trace-${fraction}-${specialization}`;await save();
       const chunk=await page.evaluate(async options=>{
         const result=await window.__kaminosVolumePrototype.sampleOpticalTraceChunk(options);
-        return {...result,values:result.values ? Array.from(result.values) : null};
+        const values=result.values;
+        return {...result,values:undefined,readbackBytes:values ?
+          Array.from(new Uint8Array(values.buffer,values.byteOffset,values.byteLength)) : null};
       },{firstRay:Math.floor(height*fraction)*width,rayCount:width,sampleOffset:0,sampleCount:subdivisions+1,subdivisions,now:4000,specialization});
-      const bytes=chunk.values ? Buffer.from(new Float32Array(chunk.values).buffer) : null;
+      const bytes=chunk.readbackBytes ? Buffer.from(chunk.readbackBytes) : null;
       const path=`trace-${fraction}-${specialization}.f32`;
       if(bytes)await fs.writeFile(out+'/'+path,bytes);
       const sha256=bytes ? createHash('sha256').update(bytes).digest('hex') : null;
-      report.chunks.push({...chunk,values:undefined,path:bytes ? path : null,sha256});await save();
+      report.chunks.push({...chunk,readbackBytes:undefined,path:bytes ? path : null,sha256});await save();
       assert.equal(chunk.ok,true,`optical capture failed at ${chunk.phase}: ${chunk.reason}`);
       assert.ok(bytes,'missing optical readback');
       validateTraceSpecialization(specialization,chunk.effective.specialization);
