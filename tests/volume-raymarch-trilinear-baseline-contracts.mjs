@@ -74,8 +74,13 @@ const supportAdmission = traversal.slice(
   traversal.indexOf('var directSupport:'),
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 );
+const materialAdmission = balancedWgslBlock(supportAdmission, 'if (materialTraversal)');
+assert.match(materialAdmission, /materialSkip && raymarchMaterialEmpty\(bounds.x, bounds.y, bounds.z\)/);
+assert.match(traversal, /let materialTraversal = LEAN_EMISSIVE_RAYMARCH && u.emissive_material.w > 0.5\s*&& !flowKernelReconstructionActive/);
+const legacyAdmission = supportAdmission.replace(materialAdmission + ' else ', '')
+  .replace('sampleRaymarchNeighborhoodDirected(p, select(vec3<f32>(0.0), rd, materialSkip))', 'sampleRaymarchNeighborhood(p)');
 assert.match(
-  supportAdmission,
+  legacyAdmission,
   /^var directSupport: f32;\s*if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*neighborhood = sampleRaymarchNeighborhood\(p\);\s*directSupport = raymarchNeighborhoodSupport\(neighborhood\);\s*\} else \{\s*directSupport = directCellOpticalSupport\(p\);\s*\}\s*if \(!fullGridCapture && directSupport <= 0\.0001\) \{\s*let cellExit = directCellExitDistance\(p, rd\);\s*let emptyCellAdvance = mix\(\s*dtBase,\s*max\(dtBase, cellExit \+ 0\.0001\),\s*occupancySkipStrength\s*\);\s*t = t \+ min\(emptyCellAdvance, max\(0\.0001, endT - t\)\);\s*continue;\s*\}\s*$/,
   'one live direct-support skip must own admission before sampling',
 );
@@ -117,7 +122,7 @@ const falseClosureMutations = [
     source => source
       .replace('    var directSupport: f32;', '    /*\n    var directSupport: f32;')
       .replace('    var reconstructed: FlowReconstructionSample;', '    */\n    let directSupport = directCellOpticalSupport(p);\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
-    /one live direct-support skip must own admission before sampling/,
+    /missing if \(materialTraversal\) marker|one live direct-support skip must own admission before sampling/,
   ],
   [
     'renamed first-sample hash helper',
@@ -136,7 +141,7 @@ const falseClosureMutations = [
   [
     'dead support skip with live global-occupancy alias',
     source => source
-      .replace('    if (!fullGridCapture && directSupport <= 0.0001) {', '    if (false) {\n    if (!fullGridCapture && directSupport <= 0.0001) {')
+      .replace('    } else if (!fullGridCapture && directSupport <= 0.0001) {', '    } else if (false) {\n    if (!fullGridCapture && directSupport <= 0.0001) {')
       .replace('    var reconstructed: FlowReconstructionSample;', '    }\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
     /one live direct-support skip must own admission before sampling/,
   ],

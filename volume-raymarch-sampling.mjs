@@ -61,7 +61,7 @@ fn materialEmptyAdvance(dtBase: f32, cellExit: f32, occupancySkipStrength: f32) 
 
 fn sampleRaymarchNeighborhoodDirected(p: vec3<f32>, direction: vec3<f32>) -> RaymarchNeighborhood {
   let q = clamp(worldToCell(p) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
-  let c = vec3<i32>(raymarchCellOriginAxis(q.x, direction.x, f32(GRID)), raymarchCellOriginAxis(q.y, direction.y, f32(GRID_Y)), raymarchCellOriginAxis(q.z, direction.z, f32(GRID)));
+  let c = vec3<i32>(vec3<f32>(raymarchCellOriginAxis(q.x, direction.x, f32(GRID)), raymarchCellOriginAxis(q.y, direction.y, f32(GRID_Y)), raymarchCellOriginAxis(q.z, direction.z, f32(GRID))));
   let f = q - vec3<f32>(c);
   ${Array.from({length: 8}, (_, k) => `let idx${k} = index3(clampCell(c + vec3<i32>(${k & 1}, ${(k >> 1) & 1}, ${k >> 2})));
   let velocityDensity${k} = fluidSrc[idx${k} * SLOTS_PER_CELL];
