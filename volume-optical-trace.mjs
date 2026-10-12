@@ -28,7 +28,8 @@ export function constantTransfer(probe, h) {
   finiteNonnegative(h, 'h');
   finiteNonnegative(probe.sigma, 'sigma');
   const source = probe.emission.map((v,i) => v + probe.scattered[i]);
-  source.forEach(v => finiteNonnegative(v, 'source'));
+  // Thermal spectra retain signed linear-sRGB coordinates until display mapping.
+  source.forEach(v => { if (!Number.isFinite(v)) throw new Error('source must be finite'); });
   const tau = probe.sigma*h;
   const integral = probe.sigma === 0 ? h : -Math.expm1(-tau)/probe.sigma;
   return [...source.map(v => v*integral), Math.exp(-tau)];
@@ -90,7 +91,7 @@ export function validateTraceRows(values, plan) {
     for(let i=0;i<OPTICAL_TRACE_STRIDE;i++)if(!Number.isFinite(values[at+i]))throw new Error('nonfinite optical trace');
     if(values[at+2]===0){misses++;continue;}
     if(values[at+2]!==1||values[at+4]<values[at+5]||values[at+4]>values[at+6])throw new Error('invalid clipped optical trace position');
-    for(let i=16;i<23;i++)finiteNonnegative(values[at+i],'optical coefficient');
+    finiteNonnegative(values[at+16],`ray ${values[at]} sample ${values[at+1]} sigma=${values[at+16]}`);
     if(values[at+17]>0||values[at+18]>0||values[at+19]>0)emittingRows++;
   }
   return {rowCount:plan.rowCount,misses,validRows:plan.rowCount-misses,emittingRows};

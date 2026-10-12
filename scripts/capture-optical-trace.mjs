@@ -85,14 +85,15 @@ try {
       report.phase=`trace-${fraction}-${specialization}`;await save();
       const chunk=await page.evaluate(async options=>{
         const result=await window.__kaminosVolumePrototype.sampleOpticalTraceChunk(options);
-        if(!result.ok)throw new Error(JSON.stringify(result));
-        return {...result,values:Array.from(result.values)};
+        return {...result,values:result.values ? Array.from(result.values) : null};
       },{firstRay:Math.floor(height*fraction)*width,rayCount:width,sampleOffset:0,sampleCount:subdivisions+1,subdivisions,now:4000,specialization});
-      const bytes=Buffer.from(new Float32Array(chunk.values).buffer);
+      const bytes=chunk.values ? Buffer.from(new Float32Array(chunk.values).buffer) : null;
       const path=`trace-${fraction}-${specialization}.f32`;
-      await fs.writeFile(out+'/'+path,bytes);
-      const sha256=createHash('sha256').update(bytes).digest('hex');
-      report.chunks.push({...chunk,values:undefined,path,sha256});await save();
+      if(bytes)await fs.writeFile(out+'/'+path,bytes);
+      const sha256=bytes ? createHash('sha256').update(bytes).digest('hex') : null;
+      report.chunks.push({...chunk,values:undefined,path:bytes ? path : null,sha256});await save();
+      assert.equal(chunk.ok,true,`optical capture failed at ${chunk.phase}: ${chunk.reason}`);
+      assert.ok(bytes,'missing optical readback');
       validateTraceSpecialization(specialization,chunk.effective.specialization);
       if(reference)assert.ok(bytes.equals(reference),'full and lean optical coefficients differ');
       else reference=bytes;

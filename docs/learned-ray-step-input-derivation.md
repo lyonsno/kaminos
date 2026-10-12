@@ -55,6 +55,12 @@ current shader approximates coefficients as constant over each sample's step.
 Its `emissionIntegral` implements the constant-coefficient solution with a
 small-optical-depth numerical expansion.
 
+Extinction is nonnegative, but RGB source coordinates are signed. The renderer's
+`thermalLinearRGB` retains out-of-gamut linear-sRGB values (for example, a
+negative blue channel at 1500 K). Preserve these through optical capture and
+integration; clamping them would change the active material law. Absolute RGB
+error targets remain nonnegative. Source magnitude bounds use absolute norms.
+
 With unchanged prefix/suffix and linear optical composition:
 
 ```
@@ -157,7 +163,8 @@ error_C_scatter <= T_prefix * epsilon_L * (1 - T_segment)
 
 This follows from dT/ds = -sigma*T. It bounds the isolated lighting
 approximation; it does not bound errors in density, extinction, or coverage.
-The assumptions include nonnegative optical coefficients and albedo in [0,1].
+The assumptions include nonnegative extinction/scattering and albedo in [0,1];
+incident RGB coordinates need not be nonnegative.
 Do not infer epsilon_L from two matching endpoints without a variation bound.
 Masks invalidate a smooth-region assumption across their switch boundaries.
 No exact whole-ray lighting history is required for local transfer prediction.

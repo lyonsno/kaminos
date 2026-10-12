@@ -19666,6 +19666,7 @@ export function createKaminosVolumePrototype({
     }
     opticalTraceCaptureActive=true;
     let phase='admission', rows=null, readback=null, scopeOpen=false;
+    let plan=null, effective=null, values=null;
     const idleRows=nonRidgeOpticalCaptureRowBuffer;
     const specialization=debugRaymarchShaderSpecialization;
     const step=state.simStepCount;
@@ -19676,7 +19677,7 @@ export function createKaminosVolumePrototype({
       }
       if (boundarySplatRequested() || browserResidualCanApply() || productFrameOwner!=='prototype') throw new Error('trace requires native camera raymarch');
       ensureFrameTexture();
-      const plan=traceChunkPlan({...options,width:frameTexture.width,height:frameTexture.height,
+      plan=traceChunkPlan({...options,width:frameTexture.width,height:frameTexture.height,
         maxBytes:Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize)});
       phase='allocation';
       rows=device.createBuffer({label:OPTICAL_TRACE_IDENTITY,size:plan.byteLength,
@@ -19697,13 +19698,13 @@ export function createKaminosVolumePrototype({
       if (!distributedGroup) throw new Error('optical trace currently requires distributed incident lighting');
       encodeBoundarySidecar(encoder);
       encodeDraw(encoder,frameTexture.createView(),OPTICAL_TRACE_IDENTITY,readbackPipeline,{opticalTrace:true});
-      const effective={route:state.effectiveRoute,backend:state.backend,simStepCount:step,
+      effective={route:state.effectiveRoute,backend:state.backend,simStepCount:step,
         specialization:{...state.raymarchShaderSpecialization},incidentLight:{...state.physicalColor.incidentLight},
         uniforms:Array.from(uniforms),controls:structuredClone(controlsSnapshot)};
       encoder.copyBufferToBuffer(rows,0,readback,0,plan.byteLength);
       device.queue.submit([encoder.finish()]);
       await readback.mapAsync(GPUMapMode.READ);
-      const values=new Float32Array(readback.getMappedRange().slice(0));
+      values=new Float32Array(readback.getMappedRange().slice(0));
       readback.unmap();
       const error=await device.popErrorScope();scopeOpen=false;
       if(error)throw new Error(error.message);
@@ -19713,7 +19714,8 @@ export function createKaminosVolumePrototype({
       return {ok:true,identity:OPTICAL_TRACE_IDENTITY,phase:'complete',plan,counts,effective,
         interval:'authored-jitter-start-to-scene-depth-clipped-exit',values};
     } catch(error) {
-      return {ok:false,identity:OPTICAL_TRACE_IDENTITY,phase,reason:String(error),simStepCount:step};
+      return {ok:false,identity:OPTICAL_TRACE_IDENTITY,phase,reason:String(error),simStepCount:step,
+        plan,effective,values};
     } finally {
       if(scopeOpen)await device.popErrorScope();
       debugRaymarchShaderSpecialization=specialization;
