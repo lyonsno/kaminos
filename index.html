@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="./sam-image-tools.css">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+/* Horizontal trackpad gestures belong to the editor, never browser history. */
+html, body { overscroll-behavior-x: none; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
 
 /* Sidebar */
