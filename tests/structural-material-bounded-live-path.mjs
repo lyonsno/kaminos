@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const text=fs.readFileSync(new URL('../structural-material-shard-view.js',import.meta.url),'utf8');
+const source=text.slice(text.indexOf('async function advanceBounded('),text.indexOf('function ray('));
+const calls=[],state={model:{points:4,elements:1,bonds:6},state:Array(64).fill(0),bonds:Array(24).fill(0),steps:0};
+const ctx={gesture:{phase:'active',cellAnchor:1,displacement:[0,.1,0],baselineDisplacement:[0,0,0]},observed:state,resident:{async movePatch(){},async step(){calls.push('step');return{totalMilliseconds:0};},async fractureStress(){calls.push('fracture');},async readFrame(){throw new Error('Frame waited for GPU readback');},async read(){throw new Error('Frame requested diagnosis');},submittedState:()=>({steps:1,runId:'run'})},residentGrip:{update:()=>calls.push('grip')},configuration:{},materialComponents(){throw new Error('CPU connectivity on frame path');},components:[],events:[],timings:[],performance,present(){calls.push('present');},$:()=>({value:180,textContent:''})};
+vm.runInNewContext(source+';task=advanceBounded({fracture:true,evidence:false});',ctx);
+await ctx.task;
+assert.deepEqual(calls,['step','fracture','grip','present']);
+assert.equal(ctx.observed.observation.kind,'submitted','A submitted frame is not a read-back observation');
+console.log('Actual bounded frame submits mechanics, fracture, resident grip and presentation without host state or topology reads');

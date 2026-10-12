@@ -6,7 +6,7 @@ const source=fs.readFileSync(new URL('../structural-material-shard-view.js',impo
 const start=source.indexOf('  witness('),end=source.indexOf('\n  pixels()',start);
 assert.ok(start>0&&end>start);
 const piece={id:0,geometry:{properties:[0,0,0],indices:[0]},binding:{route:'fixed'},mesh:{geometry:{attributes:{position:{array:[0,0,0]}}}}};
-const ctx={synchronizePicking(){},route:'bounded',failure:null,adapter:{info:{}},affineComparison:false,surfaceObservation:null,observed:{runId:'run',steps:0},manifest:{},materialRegime:null,configuration:{},$:()=>({value:180}),interiorSplit:false,interiorState:null,cameraState:()=>({}),gesture:null,lastPick:null,events:[],pieces:[piece],inputs:[],timings:[],frames:1,paused:true,structuredClone};
+const ctx={synchronizePicking(){},route:'bounded',failure:null,adapter:{info:{}},affineComparison:false,surfaceObservation:null,interactionObservation:null,observed:{runId:'run',steps:0},manifest:{},materialRegime:null,configuration:{},$:()=>({value:180}),interiorSplit:false,interiorState:null,cameraState:()=>({}),gesture:null,lastPick:null,events:[],pieces:[piece],inputs:[],timings:[],frames:1,paused:true,structuredClone};
 vm.runInNewContext('api={'+source.slice(start,end)+'};result=api.witness({resources:false});',ctx);
 assert.equal('geometry' in ctx.result.pieces[0],false,'Dynamic acquisition must not transfer unchanged geometry');
 assert.equal('binding' in ctx.result.pieces[0],false,'Dynamic acquisition must not transfer unchanged ownership');
