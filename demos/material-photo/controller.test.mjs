@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { test } from 'node:test';
 
-async function controller({examples=false,search='?sample=celebration'}={}) {
+async function controller({examples=false,exampleFailure=false,search='?sample=celebration'}={}) {
   const behavior = { failDevice: false, failMaterials: false, deviceRequests: 0, geometryRuns:0, materialRuns:0, cache:new Map(), gates: new Map() };
   const node = dataset => ({ dataset, style: {}, value: '', disabled: false, hidden: false, checked: false, textContent: '', captures:new Set(),
     classList: { toggle() {},add(){},remove(){} }, removeAttribute() {}, setAttribute() {}, addEventListener() {},
@@ -83,6 +83,7 @@ async function controller({examples=false,search='?sample=celebration'}={}) {
     if(specifier==='./included-examples.js')return new vm.SyntheticModule(['loadIncludedExample'],function(){
       this.setExport('loadIncludedExample',async(key,inputKey,size)=>{
         if(!examples)return null;
+        if(exampleFailure)throw Error('Included example HTTP 404');
         behavior.onExample?.();if(behavior.exampleGate)await behavior.exampleGate;
         return {depth:{width:4,height:4},output:{width:512,height:512},provenance:{source:'included-example',inputKey,size:512,modelRevision:'test'}};
       });
@@ -138,6 +139,20 @@ test('a displayed included material stays playable during its regeneration',asyn
   const before=c.behavior.viewer.maps,job=c.actions.infer();await loading;
   assert.equal(c.behavior.viewer.maps,before);assert.match(c.elements.provenance.textContent,/Included/);
   release();await job;assert.equal(c.state.status,'done');assert.match(c.elements.provenance.textContent,/Newly/);
+});
+
+for(const revisit of [false,true])test(`missing example preserves cached depth after ${revisit?'revisiting':'changing resolution'}`,async()=>{
+  const c=await controller({examples:true,exampleFailure:true});await c.actions.infer();
+  assert.equal(c.state.status,'done');assert.ok(c.behavior.viewer.maps);
+  c.elements['material-size'].value='1024';
+  if(revisit){await c.actions.sample('orb');await c.actions.sample('celebration');}
+  else await c.elements['material-size'].onchange();
+  assert.equal(c.state.cache?.geometry,true);assert.equal(c.state.cache?.materials,false);
+  assert.equal(c.behavior.viewer.maps,null);assert.ok(c.behavior.viewer.surface);
+  assert.equal(c.views.find(v=>v.dataset.view==='materials').disabled,true);
+  assert.match(c.elements.provenance.textContent,/cached depth/);
+  assert.match(c.elements.status.textContent,/Example unavailable.*depth restored/);
+  assert.equal(c.behavior.materialRuns,1);assert.equal(c.elements.run.disabled,false);
 });
 
 for(const phase of ['load','run'])test(`browsing during material ${phase} preserves the captured request and offers its result`,async()=>{
