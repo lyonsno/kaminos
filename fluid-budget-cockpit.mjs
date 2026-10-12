@@ -27,8 +27,9 @@ export function mountFluidBudgetCockpit(root,{read,apply,requestFrame}) {
   if(!t?.enabled)gpuText.textContent='GPU timings off';
   else if(t.status==='failed')gpuText.textContent=`GPU timings unavailable: ${t.failure}`;
   else if(sample && matching){
-   const ms=key=>(sample.stages[key]??0).toFixed(2);
-   gpuText.textContent=`Simulation       ${sample.simulationAdvanced?`${ms('simulation')} ms`:sample.paused?'0.00 ms (paused)':'not advanced in sample'}\nParticle drawing ${ms('accumulation')} ms\nOptical shading  ${ms('optical')} ms\nHost / resolve   ${ms('host')} ms\nOther GPU passes ${(sample.passSumMs-(sample.stages.simulation??0)-(sample.stages.accumulation??0)-(sample.stages.optical??0)-(sample.stages.host??0)).toFixed(2)} ms\nStage overlap    ${sample.overlapMs.toFixed(2)} ms\nUnassigned gaps  ${sample.gapMs.toFixed(2)} ms\nFirst–last span  ${sample.frameSpanMs.toFixed(2)} ms\nFrame ${sample.hostFrameId} · step ${sample.step} · ${Math.max(0,(performance.now()-sample.measuredAt)/1000).toFixed(1)}s ago\nRows are exclusive timestamp intervals; overlap is separate. Ray counting skips timing frames.`;
+   const ms=key=>(sample.stageCoverage[key]??0).toFixed(2);
+   const alone=key=>(sample.stages[key]??0).toFixed(2);
+   gpuText.textContent=`GPU timestamp spans (overlap)\nSimulation       ${sample.simulationAdvanced?`${ms('simulation')} ms`:sample.paused?'0.00 ms (paused)':'not advanced in sample'}\nParticle drawing ${ms('accumulation')} ms\nOptical shading  ${ms('optical')} ms\nHost / resolve   ${ms('host')} ms\nExclusive sim / draw / optics\n${alone('simulation')} / ${alone('accumulation')} / ${alone('optical')} ms\nStage overlap    ${sample.overlapMs.toFixed(2)} ms\nUnassigned gaps  ${sample.gapMs.toFixed(2)} ms\nFirst–last span  ${sample.frameSpanMs.toFixed(2)} ms\nFrame ${sample.hostFrameId} · step ${sample.step} · ${Math.max(0,(performance.now()-sample.measuredAt)/1000).toFixed(1)}s ago\nStage spans may overlap; they are not additive execution costs. Use first–last span for the frame interval. Ray counting skips timing frames.`;
   }else gpuText.textContent=sample?'Previous settings · awaiting GPU timing frame':'Awaiting actual GPU timestamps';
   errorText.textContent=error??'';
  }
