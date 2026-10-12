@@ -124,11 +124,20 @@ export function createIPBFConformanceShader(planes=[]){
  return IPBF_CONFORMANCE_WGSL.replace('@compute @workgroup_size(64)\nfn density',helper+'@compute @workgroup_size(64)\nfn density').replace('states[i].density=vec4<f32>(rho,','let boundary=ipbf_conformance_boundary(particles[i].x.xyz);rho+=params.restDensity*boundary.value;gradient+=boundary.gradient;D+=boundary.hessian;\n states[i].density=vec4<f32>(rho,');
 }
 
-export function createIPBFGridShader({radius,volume,compliance=0,alternativeCompliance=.001,damping=true,beta=60,boundaryMode='collision_only',obstacleCenter=null,obstacleRadius=null,dynamicControls=false}){
+export function createIPBFGridShader({radius,volume,compliance=0,alternativeCompliance=.001,damping=true,beta=60,boundaryMode='collision_only',obstacleCenter=null,obstacleRadius=null,dynamicControls=false,boundaryPlanes=null,dampingDiagnostics=false}){
  for(const [name,value] of Object.entries({radius,volume,compliance,alternativeCompliance}))if(!Number.isFinite(value)||value<0||(['radius','volume'].includes(name)&&value===0))throw new RangeError(`IPBF ${name} invalid`);
  if(!['collision_only','tangent_plane'].includes(boundaryMode))throw new RangeError(`IPBF boundary mode invalid: ${boundaryMode}`);
- if(boundaryMode==='tangent_plane'&&(!Array.isArray(obstacleCenter)||obstacleCenter.length!==3||obstacleCenter.some(v=>!Number.isFinite(v))||!Number.isFinite(obstacleRadius)||obstacleRadius<=0))throw new RangeError('IPBF wall support requires the host obstacle geometry');
- const wall=boundaryMode==='tangent_plane'?`
+ if(boundaryPlanes!==null){
+  if(boundaryMode!=='tangent_plane')throw new RangeError('Explicit boundary planes require tangent_plane pressure');
+  createIPBFConformanceShader(boundaryPlanes); // shared finite unit-normal validation
+  if(!boundaryPlanes.length)throw new RangeError('Explicit boundary planes cannot be empty');
+ }
+ if(boundaryMode==='tangent_plane'&&boundaryPlanes===null&&(!Array.isArray(obstacleCenter)||obstacleCenter.length!==3||obstacleCenter.some(v=>!Number.isFinite(v))||!Number.isFinite(obstacleRadius)||obstacleRadius<=0))throw new RangeError('IPBF wall support requires the host obstacle geometry');
+ const wall=boundaryPlanes!==null?`fn ipbf_host_boundary(position:vec3<f32>)->IPBFBoundary {
+ var boundary=IPBFBoundary(0.0,vec3<f32>(0),ipbf_zero_matrix());
+ ${boundaryPlanes.map(p=>`boundary=ipbf_union_boundary(boundary,ipbf_plane_boundary(vec4<f32>(vec3<f32>(${p.normal.join(',')}),dot(vec3<f32>(${p.normal.join(',')}),position)-(${p.offset})),ipbfRadius));`).join('\n')}
+ return boundary;
+ }`:boundaryMode==='tangent_plane'?`
  fn ipbf_host_boundary(position:vec3<f32>) -> IPBFBoundary {
   // Physical wall, before collision-radius expansion. Curvature is frozen as
   // a tangent plane for this local pressure solve, not an exact solid integral.
@@ -152,14 +161,28 @@ export function createIPBFGridShader({radius,volume,compliance=0,alternativeComp
  const ipbfAlpha:f32=${compliance};const ipbfAlternativeAlpha:f32=${alternativeCompliance};
  const ipbfDampingEnabled:bool=${damping};const ipbfBeta:f32=${beta};
  ${wall}
- struct IPBFState { inertial:vec4<f32>, gradient:vec4<f32>, h0:vec4<f32>, h1:vec4<f32>, h2:vec4<f32>, alternative:vec4<f32> }
+ ${dampingDiagnostics?'struct IPBFDampingRecord { normal:vec4<f32>, alternate:vec4<f32>, damped:vec4<f32>, context:vec4<f32> }':''}
+ struct IPBFState { inertial:vec4<f32>, gradient:vec4<f32>, h0:vec4<f32>, h1:vec4<f32>, h2:vec4<f32>, alternative:vec4<f32>${dampingDiagnostics?', dampingRecord:IPBFDampingRecord':''} }
  @group(1) @binding(0) var<storage,read_write> ipbfStates:array<IPBFState>;
  @compute @workgroup_size(64)
  fn ipbf_velocity(@builtin(global_invocation_id) gid:vec3<u32>){
   let i=gid.x;if(i>=params.particleCount){return;}
   let position=particles[i].predicted.xyz;
   var velocity=(position-particles[i].position.xyz)/params.dt;
+  ${dampingDiagnostics?'let diagnosticNormal=velocity;':''}
   if(ipbfDampingEnabled){let alternate=ipbfStates[i].alternative.xyz;velocity=ipbf_damp(velocity,(alternate-particles[i].position.xyz)/params.dt,distance(position,alternate),ipbfRadius,ipbfBeta);}
+  ${dampingDiagnostics?`let diagnosticAlternate=(ipbfStates[i].alternative.xyz-particles[i].position.xyz)/params.dt;
+  let diagnosticSeparation=distance(position,ipbfStates[i].alternative.xyz);
+  let diagnosticK=dot(diagnosticNormal,diagnosticNormal);let diagnosticA=dot(diagnosticAlternate,diagnosticAlternate);
+  var diagnosticWeight=0.0;
+  if(ipbfDampingEnabled&&diagnosticK>0.0&&diagnosticA<diagnosticK&&diagnosticSeparation<ipbfRadius*ipbfBeta){diagnosticWeight=1.0-diagnosticSeparation/(ipbfRadius*ipbfBeta);}
+  ipbfStates[i].dampingRecord.normal=vec4<f32>(diagnosticNormal,particles[i].velocity.w);
+  ipbfStates[i].dampingRecord.alternate=vec4<f32>(diagnosticAlternate,diagnosticSeparation);
+  ipbfStates[i].dampingRecord.damped=vec4<f32>(velocity,diagnosticWeight);
+  ipbfStates[i].dampingRecord.context.x=ipbfRadius;ipbfStates[i].dampingRecord.context.y=ipbfBeta;`:''}
+  // Publish one reconstructed, paper-damped field before viscosity reads
+  // neighbors. Viscosity writes delta only, leaving this input immutable.
+  particles[i].velocity=vec4<f32>(velocity,particles[i].velocity.w);
   particles[i].delta=vec4<f32>(velocity,particles[i].delta.w);
  }
  @compute @workgroup_size(64)
@@ -184,6 +207,7 @@ export function createIPBFGridShader({radius,volume,compliance=0,alternativeComp
   let delta=ipbf_solve(H+ipbf_diagonal(vec3<f32>(inertia)),force-inertia*displacement);
   particles[i].delta=vec4<f32>(0.5*delta,particles[i].delta.w);
   let altInertia=ipbfAlternativeAlpha*ipbfVolume/(params.dt*params.dt);
+  ${dampingDiagnostics?'ipbfStates[i].dampingRecord.context.z=altInertia;ipbfStates[i].dampingRecord.context.w=H[0][0]+H[1][1]+H[2][2];':''}
   ipbfStates[i].alternative=vec4<f32>(pressure_candidate_position(i,position,0.5*ipbf_solve(H+ipbf_diagonal(vec3<f32>(altInertia)),force-altInertia*displacement)),0);
  }
  `;

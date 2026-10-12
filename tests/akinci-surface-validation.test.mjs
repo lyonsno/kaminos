@@ -1,0 +1,22 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as reference from '../finger-fluid-akinci.mjs';
+import * as validation from '../tools/akinci-surface-validation.mjs';
+const spec={name:'asymmetric',dt:.01,strength:.05,positions:[[0,1,0],[.04,1,0],[.067,1.017,0]]};
+test('surface evidence refuses missing backend, partial output and an inert dispatch',()=>{
+ assert.equal(typeof validation.validateNativeSurface,'function','Surface evidence validator missing');
+ const volume=.055**3;
+ const oracle=reference.evaluateAkinciSurface({positions:spec.positions.map(p=>p.map(Math.fround)),volume,coefficient:Math.fround(spec.strength)});
+ const input=new Float32Array(48),output=new Float32Array(48),fields=new Float32Array(24),packet=new Uint32Array(56),floats=new Float32Array(packet.buffer);
+ floats[0]=spec.dt;packet[1]=3;floats[29]=spec.strength;
+ spec.positions.forEach((p,i)=>{input.set([...p,1,...p.map(x=>x+1),1,0,0,0,.08,0,0,0,4.86],16*i);output.set(input.slice(16*i,16*i+16),16*i);output.set(oracle.accelerations[i].map(x=>x*Math.fround(spec.dt)),16*i+8);fields.set([...oracle.normals[i],0,oracle.densityRatios[i],.08,0,0],8*i);});
+ const row={...spec,input:Array.from(input),output:Array.from(output),fields:Array.from(fields),simulationWords:Array.from(packet)};
+ const raw={route:'actual-factory-akinci-surface',adapter:{vendor:'apple',fallback:false},effective:{pressureSolver:'ipbf',cohesionModel:'akinci_2013',surface:{particleVolume:volume,neighborhoodRadius:.11,referenceDensity:1000}},cases:[row]};
+ assert.doesNotThrow(()=>validation.validateNativeSurface(structuredClone(raw),[spec]));
+ assert.throws(()=>validation.validateNativeSurface({...raw,adapter:{vendor:'apple'}},[spec]),/backend/);
+ assert.throws(()=>validation.validateNativeSurface({...raw,cases:[]},[spec]),/partial/);
+ assert.throws(()=>validation.validateNativeSurface({...raw,cases:[{...row,output:row.input}]},[spec]),/velocity/);
+ const wrong=packet.slice();new Float32Array(wrong.buffer)[29]=0;
+ assert.throws(()=>validation.validateNativeSurface({...raw,cases:[{...row,simulationWords:Array.from(wrong)}]},[spec]),/configuration/);
+ assert.throws(()=>validation.validateNativeSurface({...raw,cases:[{...row,fields:[]}]},[spec]),/fields/);
+});

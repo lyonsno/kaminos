@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fluid assembly comparison</title>
+<style>
+body{margin:0;background:#191d20;color:#e1e9ea;font:15px system-ui}header{padding:14px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}a{color:#8ed5df}button,select{padding:8px;background:#283034;color:inherit;border:1px solid #617278;border-radius:5px}canvas{display:block;width:100%;height:calc(100vh - 155px)}#status{padding:10px 20px;white-space:pre-wrap;font:13px monospace}#error{color:#ffb8b8}h1{font-size:18px;margin:0}
+</style>
+<header><h1>Finite pour · assembly comparison</h1>
+<a href="?arm=assembled">Assembled · 12,288</a><a href="?arm=reduced">Pressure + surface · 12,288</a><a href="?arm=fine">Pressure + surface · 98,304</a>
+<button id="play" disabled>Play</button><button id="reset">Restart</button>
+<label>View <select id="view"><option value="screen_space_refraction">Water surface</option><option value="sphere_debug">Particles</option></select></label></header>
+<canvas id="water"></canvas><div id="status">Loading actual IPBF solver…</div><div id="error" role="alert"></div>
+<script type="module" src="./fluid-core-discriminator-view.mjs"></script></html>
