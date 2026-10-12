@@ -181,7 +181,7 @@ test('cockpit: a width-multiplier height row with help, snapshot, debounced list
   assert.match(index, /<input type="number" id="volume-grid-height-ratio" data-volume-settings-param="volume_grid_height_ratio" min="1" max="4" step="0\.125" value="2">/);
   assert.match(index, /slider-help">Grid height as a multiple of the width\. 2 is what every saved basin was authored at\./);
   assert.match(index, /snapped to the nearest height that keeps the light lattices aligned \(steps of 4 cells at 32 and 64, 12 at 48 and 96\)/);
-  assert.match(index, /gridHeightRatio: parseFloat\(document\.getElementById\('volume-grid-height-ratio'\)\.value\) \|\| 2,/);
+  assert.match(index, /gridHeightRatio: parseFloat\(volumeRebuildControlValue\('volume-grid-height-ratio'\)\) \|\| 2,/);
   assert.match(index, /getElementById\('volume-grid-height-ratio-val'\)\.textContent = /);
   assert.ok(!index.includes('volume-grid-height-cells'), 'the cells control is gone');
   const listenerList = index.slice(index.indexOf("'volume-emitter-source-law',"), index.indexOf("'volume-wind-gust-veer',") + 1200);
@@ -197,16 +197,60 @@ test('cockpit: a width-multiplier height row with help, snapshot, debounced list
 });
 
 // Noah 2026-10-12: anything that rebuilds the sim must not rebuild on every
-// keystroke or spinner click. Rebuilding controls apply after the entry has
-// been idle for VOLUME_REBUILD_DEBOUNCE_MS; the value label follows at once.
-test('cockpit: rebuilding controls are debounced; the label updates immediately', () => {
-  assert.match(index, /const VOLUME_REBUILD_DEBOUNCE_MS = 700;/);
-  assert.match(index, /const VOLUME_REBUILD_CONTROL_IDS = \['volume-grid-height-ratio'\];/);
-  const wiring = index.slice(index.indexOf('for (const id of VOLUME_REBUILD_CONTROL_IDS) {'), index.indexOf('for (const id of VOLUME_REBUILD_CONTROL_IDS) {') + 900);
-  assert.match(wiring, /let timer = 0;/);
-  assert.match(wiring, /clearTimeout\(timer\);\n\s+timer = setTimeout\(syncControls, VOLUME_REBUILD_DEBOUNCE_MS\);/);
-  assert.match(wiring, /control\.addEventListener\('input', schedule\);\n\s+control\.addEventListener\('change', schedule\);/);
-  assert.match(wiring, /updateVolumeRebuildControlLabel\(id\);/);
+// keystroke or spinner click. Review GH-R3-02: delaying only the edited
+// control's own listener was not enough, because every other control's
+// immediate sync read the pending value from the DOM. While an edit waits out
+// the debounce, every sync reads the value the sim already uses; the value
+// applies when the edit has been idle for VOLUME_REBUILD_DEBOUNCE_MS.
+test('cockpit: rebuild controls are held out of every sync until idle (fake clock, the page code)', () => {
+  const start = index.indexOf('// Controls that rebuild the fluid state (Noah 2026-10-12; review GH-R3-02)');
+  const end = index.indexOf('\n}\n', index.indexOf('function releaseVolumeRebuildControl(')) + 3;
+  assert.ok(start > 0 && end > start, 'the shared rebuild helpers exist');
+  const helpers = index.slice(start, end);
+  const wiringStart = index.indexOf('  for (const id of VOLUME_REBUILD_CONTROL_IDS) {');
+  const wiringEnd = index.indexOf('\n  }\n', wiringStart) + 4;
+  assert.ok(wiringStart > 0, 'the wiring exists');
+  const wiring = index.slice(wiringStart, wiringEnd);
+  assert.match(helpers, /const VOLUME_REBUILD_DEBOUNCE_MS = 700;/);
+  assert.match(helpers, /const VOLUME_REBUILD_CONTROL_IDS = \['volume-grid-height-ratio', 'volume-resolution'\];/);
+  assert.match(index, /gridHeightRatio: parseFloat\(volumeRebuildControlValue\('volume-grid-height-ratio'\)\) \|\| 2,/);
+  assert.match(index, /resolution: parseInt\(volumeRebuildControlValue\('volume-resolution'\), 10\),/);
+  const immediate = index.slice(index.indexOf("for (const id of ['volume-scene', 'emitter-assay-family',"), index.indexOf("for (const id of ['volume-scene', 'emitter-assay-family',") + 2000);
+  assert.ok(!immediate.split(']) {')[0].includes("'volume-resolution'"), 'resolution leaves the immediate list');
+
+  let now = 0; const timers = [];
+  const elements = {};
+  const element = (id, value) => (elements[id] = { value, listeners: {}, addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); } });
+  element('volume-grid-height-ratio', '2'); element('volume-resolution', '48');
+  const document = { getElementById: id => elements[id] };
+  const setTimeout = (fn, ms) => { const t = { at: now + ms, fn, live: true }; timers.push(t); return t; };
+  const clearTimeout = t => { if (t) t.live = false; };
+  const applied = [];
+  const run = new Function('document', 'setTimeout', 'clearTimeout', 'record', `
+    ${helpers}
+    const syncControls = () => record({ ratio: volumeRebuildControlValue('volume-grid-height-ratio'), resolution: volumeRebuildControlValue('volume-resolution') });
+    const updateVolumeRebuildControlLabel = () => {};
+    ${wiring}
+    return syncControls;`);
+  const syncControls = run(document, setTimeout, clearTimeout, reading => applied.push({ t: now, ...reading }));
+  const advance = to => { for (;;) { const due = timers.filter(t => t.live && t.at <= to).sort((a, b) => a.at - b.at)[0]; if (!due) break; now = due.at; due.live = false; due.fn(); } now = to; };
+  const edit = (id, value) => { elements[id].value = value; for (const fn of elements[id].listeners.input || []) fn({ target: elements[id] }); };
+  syncControls(); // initial sync seats the applied values
+  advance(0); edit('volume-grid-height-ratio', '3');
+  advance(100); syncControls(); // an unrelated immediate control
+  advance(200); edit('volume-grid-height-ratio', '4');
+  advance(300); syncControls();
+  advance(899);
+  assert.deepEqual(applied.map(a => a.ratio), ['2', '2', '2'], 'nothing applies the pending height before it has been idle');
+  advance(900);
+  assert.deepEqual(applied.at(-1), { t: 900, ratio: '4', resolution: '48' }, 'the last edit applies once, 700 ms after it');
+  advance(1000); syncControls();
+  assert.equal(applied.at(-1).ratio, '4', 'later syncs read the applied value');
+  edit('volume-resolution', '64'); advance(1100); syncControls();
+  assert.equal(applied.at(-1).resolution, '48', 'resolution is held the same way');
+  advance(1700);
+  assert.equal(applied.at(-1).resolution, '64');
+  assert.deepEqual(applied.filter(a => a.t >= 200 && a.t <= 900).map(a => a.t), [300, 900], 'one held sync from the other control, one sync from the timer, none from the edits');
 });
 
 test('the runtime derives every height from the seated shape: fluid grid, resample, irradiance lattice; the immersed centre range follows the top', () => {

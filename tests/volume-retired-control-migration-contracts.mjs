@@ -254,3 +254,31 @@ assert.throws(
 );
 
 console.log('volume retired-control migration contracts passed');
+
+// Grid height (report §34, review GH-R3-01): the height control was a cell
+// count (`volume-grid-height-cells`) on the unlanded branch before it became a
+// width multiplier. A 249-control basin saved with the cells control retires
+// it and gains the multiplier at its default 2, the saved-basin height (Noah
+// 2026-10-12: retire it; no stored basin carries the cells control).
+{
+  const ratioControl = schema.controls.find(control => control.key === 'volume-grid-height-ratio');
+  const cellsRetired = schema.retiredControls.find(control => control.key === 'volume-grid-height-cells');
+  assert.deepEqual(cellsRetired, { axis: 'domControls', key: 'volume-grid-height-cells', param: 'volume_grid_height_cells', tagName: 'INPUT', type: 'number' });
+  for (const cells of [0, 144]) {
+    const artifact = currentPresetArtifact();
+    delete artifact.preset.domControls[ratioControl.key];
+    artifact.preset.domControls[cellsRetired.key] = { id: cellsRetired.key, param: cellsRetired.param, tagName: 'INPUT', type: 'number', value: cells };
+    const route = new URL(artifact.preset.route);
+    route.searchParams.delete(ratioControl.param);
+    route.searchParams.set(cellsRetired.param, String(cells));
+    artifact.preset.route = route.href;
+    const receipt = validateVolumeSettingsPresetDocument(artifact, artifact.presetId, schema);
+    assert.deepEqual(receipt.retirementMigration?.removedControlIds, [cellsRetired.key], `cells ${cells}: the cells control is retired`);
+    assert.deepEqual(receipt.retirementMigration?.addedControlIds, [ratioControl.key], `cells ${cells}: the multiplier is added`);
+    assert.equal(receipt.preset.domControls[ratioControl.key].value, 2, `cells ${cells}: the multiplier takes the saved-basin height`);
+    assert.equal(receipt.presetRoute.searchParams.get(ratioControl.param), '2');
+    assert.equal(receipt.presetRoute.searchParams.has(cellsRetired.param), false);
+    assert.equal(receipt.preset.controlCount, schema.controlCount);
+  }
+}
+console.log('grid height cells control retirement contracts passed');

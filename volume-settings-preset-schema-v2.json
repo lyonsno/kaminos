@@ -1639,6 +1639,13 @@
   "retiredControls": [
     {
       "axis": "domControls",
+      "key": "volume-grid-height-cells",
+      "param": "volume_grid_height_cells",
+      "tagName": "INPUT",
+      "type": "number"
+    },
+    {
+      "axis": "domControls",
       "key": "volume-procedural-transport-slip",
       "param": "volume_procedural_transport_slip",
       "tagName": "INPUT",
