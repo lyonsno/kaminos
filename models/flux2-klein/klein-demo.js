@@ -119,7 +119,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
   requestAnimationFrame(requestFrame);
 
   let active = null;
-  async function generate({ prompt, seed, size, textLength = 512, cooperative = true, targetDutyMs = 12, maxInFlight = 1, onStep, onPhase }) {
+  async function generate({ prompt, seed, size, textLength = 512, cooperative = true, targetDutyMs = 12, maxInFlight = 2, onStep, onPhase }) {
     if (active) throw new Error('a generation is already running');
     const runId = `flux2-klein:${crypto.randomUUID()}`;
     const abort = new AbortController();

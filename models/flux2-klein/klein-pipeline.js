@@ -179,6 +179,7 @@ export class KleinPipeline {
     this.vae.sharedType = this.kernels.sharedType; this.vae.sched = this.sched;
     const vb = await fetchBundle(vae, 'vae')(this.vaeManifest.bundle.file, this.vaeManifest.bundle);
     await this.vae.load(vb); this.residentBytes.vae = vb.byteLength;
+    await this.precompile();
     this.timings.loadMs = performance.now() - t0;
   }
 
@@ -200,7 +201,35 @@ export class KleinPipeline {
     } catch (e) { next.destroy(); throw e; }
     this.transformer = next; this.ditManifest = manifest; this.urls.transformerUrl = url;
     this.residentBytes.transformer = bytes;
+    await this.precompile();
     return stats;
+  }
+
+  // Compile every GPU pipeline a generation uses before the first one runs. A tiny dry generation
+  // (64x64, one step, zero embeddings, nothing dispatched) records each pipeline the code would
+  // create; they are then compiled with createComputePipelineAsync, off the GPU process's main
+  // thread, so a page's rendering does not stall the way it does when pipelines are compiled
+  // synchronously at first use. Returns the number of pipelines compiled.
+  async precompile() {
+    const t0 = performance.now();
+    const collected = new Map(), models = [this.textEncoder, this.transformer, this.vae];
+    for (const m of models) m.pipelineCollector = collected;
+    try {
+      await this.generateScheduled({ prompt: 'x', seed: 0, width: 64, height: 64, steps: 1, textLength: 'fit0', dry: true });
+    } finally {
+      for (const m of models) m.pipelineCollector = null;
+      // The dry run tracked uniforms without encoding any dispatch; drop them so the next
+      // generation starts with a clean scheduler.
+      await this.sched.discard();
+    }
+    // Keyed by model and pipeline name: the models reuse some names (softmax, swiglu, GEMM keys) for
+    // their own caches, and each cache needs its own entry.
+    await Promise.all([...collected.values()].map(async ({ owner, key, code }) => {
+      const p = await this.device.createComputePipelineAsync({ layout: 'auto', compute: { module: this.device.createShaderModule({ code }), entryPoint: 'main' } });
+      p.label = key; owner.pipelines[key] = p;
+    }));
+    this.timings.precompileMs = performance.now() - t0; this.timings.precompiledPipelines = collected.size;
+    return collected.size;
   }
 
   async fetchEmbeddingRows(ids) {
@@ -230,7 +259,7 @@ export class KleinPipeline {
     }
   }
 
-  async generateScheduled({ prompt, seed, width, height, steps, textLength = 512, onStep, onPhase }) {
+  async generateScheduled({ prompt, seed, width, height, steps, textLength = 512, onStep, onPhase, dry = false }) {
     if (width % 16 || height % 16) throw new Error('width and height must be multiples of 16');
     if (!this.transformer) throw new Error('no transformer is loaded');
     const dev = this.device, t = {};
@@ -255,7 +284,9 @@ export class KleinPipeline {
     const promptKey = `${maxLength}\u0000${prompt}`;
     const embedBytes = txtTokens * this.transformer.cfg.joint_attention_dim * 4;
     onPhase?.('text');
-    if (this.promptCache?.key === promptKey) {
+    if (dry) {
+      await this.textEncoder.encode(new Float32Array(txtTokens * this.teManifest.config.hidden_size), framed.attentionMask, this.transformer.act.promptEmbeds);
+    } else if (this.promptCache?.key === promptKey) {
       this.sched.encoder().copyBufferToBuffer(this.promptCache.buffer, 0, this.transformer.act.promptEmbeds, 0, embedBytes);
       t.embeddingFetchMs = 0; t.textEncodeMs = 0; t.textCached = true;
     } else {
@@ -292,6 +323,7 @@ export class KleinPipeline {
     this.transformer.release();
     this.vae.allocate(latH, latW);
     await this.vae.decode(this.vae.prepped);
+    if (dry) { this.vae.release(); return null; }
     let enc;
     const bytes = width * height * 3 * 4;
     const rb = dev.createBuffer({ size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });

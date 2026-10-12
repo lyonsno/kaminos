@@ -52,8 +52,12 @@ export class KleinTransformer {
     this.sched = new KleinDutyScheduler(device, { label: 'klein.dit' });
   }
 
+  // With a pipelineCollector set (KleinPipeline.precompile's dry run), an uncompiled pipeline is
+  // recorded instead of compiled synchronously, and its dispatch is skipped.
   pipeline(key, code) {
+    if (!this.pipelines[key] && this.pipelineCollector) { this.pipelineCollector.set(`${this.constructor.name}:${key}`, { owner: this, key, code }); return null; }
     if (!this.pipelines[key]) {
+      this.syncCompiles = (this.syncCompiles ?? 0) + 1; (this.syncCompiledKeys ??= []).push(key);
       const module = this.device.createShaderModule({ code });
       this.pipelines[key] = this.device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'main' } });
       this.pipelines[key].label = key;
@@ -120,6 +124,7 @@ export class KleinTransformer {
   f32bits(x) { return new Uint32Array(new Float32Array([x]).buffer)[0]; }
 
   dispatch(enc, pipeline, entries, x, y = 1, z = 1) {
+    if (!pipeline) return;
     const bind = this.device.createBindGroup({ layout: pipeline.getBindGroupLayout(0),
       entries: entries.map((e, i) => ({ binding: e.binding ?? i, resource: e.resource ?? { buffer: e } })) });
     let desc = {};
