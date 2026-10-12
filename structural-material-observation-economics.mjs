@@ -1,7 +1,7 @@
 export async function stoneObservationStamp(data){
  const bytes=new TextEncoder().encode(JSON.stringify(data));
  const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
- return {schema:'stone-observation-stamp-v2',current:data.state?.observation?.kind!=='submitted',route:data.route,runId:data.state?.runId,steps:data.state?.steps,
+ return {schema:'stone-observation-stamp-v2',current:data.state?.observation?.kind!=='submitted',grip:data.state?.grip?structuredClone(data.state.grip):null,route:data.route,runId:data.state?.runId,steps:data.state?.steps,
   paused:data.paused,busy:data.busy,pendingPick:data.pendingPick,finishing:data.finishing,failure:data.failure,
   resourceVersion:data.resourceVersion,digest};
 }

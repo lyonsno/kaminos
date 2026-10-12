@@ -13,7 +13,7 @@ const nearest=current.map(p=>Math.hypot(...p.map((v,k)=>v-hit.point.toArray()[k]
 const source=fs.readFileSync(new URL('../structural-material-shard-view.js',import.meta.url),'utf8'),code=source.slice(source.indexOf('async function beginPick('),source.indexOf('async function finishGesture('));
 function context(gate=Promise.resolve()){
  const captures=[];
- return {captures,failure:null,bounded:true,pieces:[{...shell,mesh}],boundedCellAnchor,configuration:{patchRadius:.28,gripStiffness:200000},residentGrip:{route:'resident',async begin(...args){captures.push(args);}},gestureGeneration:0,pendingPick:false,controls:{enabled:true},marker:{position:{fromArray(){}},visible:false},settle:()=>gate,stamp(){},positions(){throw new Error('Contact must not use CPU positions');},contactPatch(){throw new Error('Contact must not use CPU connectivity');}};
+ return {captures,failure:null,bounded:true,invalidateMaterialObservation(){},pieces:[{...shell,mesh}],boundedCellAnchor,configuration:{patchRadius:.28,gripStiffness:200000},residentGrip:{route:'resident',async begin(...args){captures.push(args);}},gestureGeneration:0,pendingPick:false,controls:{enabled:true},marker:{position:{fromArray(){}},visible:false},settle:()=>gate,stamp(){},positions(){throw new Error('Contact must not use CPU positions');},contactPatch(){throw new Error('Contact must not use CPU connectivity');}};
 }
 const ctx=context();vm.runInNewContext(code+';task=beginPick(0,'+JSON.stringify(hit.point.toArray())+','+hit.faceIndex+');',ctx);await ctx.task;
 assert.equal(ctx.captures[0][0],1,'Actual clicked cell, not nearest mechanical point, owns resident grip');assert.equal(ctx.gesture.cellAnchor,1);assert.equal(ctx.gesture.phase,'active');assert.equal(ctx.pendingPick,false);
