@@ -5,7 +5,32 @@ const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8')
 assert.match(core, /async function sampleOpticalTraceChunk\(/,
   'mode-2 camera coefficients need an explicit held-state trace API');
 const { constantTransfer, composeTransfers, integrateProbes, estimateProbeError,
-  opticalProbeFeatures, traceChunkPlan, validateTraceRows, validateTraceSpecialization } = await import('../volume-optical-trace.mjs');
+  opticalProbeFeatures, traceChunkPlan, validateTraceRows, validateTraceSpecialization, createOpticalCaptureOwner } = await import('../volume-optical-trace.mjs');
+assert.equal(typeof createOpticalCaptureOwner,'function','all optical producers need shared asynchronous ownership');
+const owner=createOpticalCaptureOwner();
+for(const name of ['sampleOpticalTraceChunk','materializeLiveCompleteFlameOpticalCoefficients','beginDebugNonRidgeOpticalCapture','beginDebugNonRidgeSourceBasisCapture']) {
+  const wrapper=core.match(new RegExp(`async function ${name}\\(options = \\{\\}\\) \\{([\\s\\S]*?)\\n  \\}`));
+  assert.ok(wrapper,`${name} wrapper missing`);
+  let entered=false,release;
+  const held=owner.run('other',()=>new Promise(resolve=>{release=resolve;}));
+  const invoke=new Function('opticalCaptureOwner',`${name}Owned`,'options',wrapper[1]);
+  assert.equal((await invoke(owner,()=>{entered=true;},{})).ok,false);
+  assert.equal(entered,false,`${name} bypassed shared ownership`);
+  release();await held;
+  assert.equal(await invoke(owner,()=>42,{}),42);
+}
+for(const first of ['trace','optical','source-basis','complete']) {
+  let release;
+  const held=owner.run(first,()=>new Promise(resolve=>{release=resolve;}));
+  for(const next of ['trace','optical','source-basis','complete']) {
+    let entered=false;
+    const rejected=await owner.run(next,()=>{entered=true;});
+    assert.equal(rejected.ok,false);assert.equal(entered,false);assert.equal(rejected.owner,first);
+  }
+  release('restored');assert.equal(await held,'restored');assert.equal(owner.active(),null);
+  await assert.rejects(owner.run(first,async()=>{throw new Error('readback failure');}),/readback failure/);
+  assert.equal(owner.active(),null);
+}
 assert.equal(typeof validateTraceSpecialization,'function','conformance must reject auto falling back to full');
 assert.throws(()=>validateTraceSpecialization('auto',{effective:'full-authored-raymarch-v0'}),/specialization/);
 assert.throws(()=>validateTraceSpecialization('force-full',{effective:'lean-emissive-raymarch-v0'}),/specialization/);
@@ -46,6 +71,11 @@ for(let r=0;r<4;r++)for(let s=0;s<3;s++){
   values[at]=r;values[at+1]=s+2;values[at+2]=0;values[at+3]=1;
 }
 assert.equal(validateTraceRows(values,plan).misses,12);
+const emptyHit=values.slice();
+for(let i=0;i<plan.rowCount;i++)emptyHit[i*32+2]=1;
+assert.equal(validateTraceRows(emptyHit,plan).emittingRows,0);
+emptyHit[17]=0.5;
+assert.equal(validateTraceRows(emptyHit,plan).emittingRows,1);
 values[3]=0;
 assert.throws(()=>validateTraceRows(values,plan), /unwritten/);
 assert.match(core, /override OPTICAL_TRACE_CAPTURE: bool = false;/);

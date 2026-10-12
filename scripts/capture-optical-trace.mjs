@@ -107,6 +107,7 @@ try {
   assert.ok(Buffer.from(after.rgba).equals(Buffer.from(rgba)),'capture changed ordinary held pixels');
   assert.equal(report.errors.length,0,report.errors.join('\n'));
   assert.ok(report.chunks.some(c=>c.counts.validRows>0),'all captured rays missed');
+  assert.ok(report.chunks.some(c=>c.counts.emittingRows>0),'no flame emission in captured optical field');
   report.status='observed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;await page?.screenshot({path:out+'/failure.png'}).catch(()=>{});}
 finally{

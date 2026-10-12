@@ -2,7 +2,7 @@ import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMA
 import { AGX_WGSL } from './volume-agx.mjs';
 import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
 import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL } from './volume-raymarch-sampling.mjs';
-import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows } from './volume-optical-trace.mjs';
+import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { buildInflowCoverageMap, normalizeInflowApertureSpec, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
 import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
 import {
@@ -11485,6 +11485,7 @@ export function createKaminosVolumePrototype({
   let nonRidgeOpticalCaptureRowBuffer = null;
   let nonRidgeOpticalCaptureSession = null;
   let opticalTraceCaptureActive = false;
+  const opticalCaptureOwner = createOpticalCaptureOwner();
   let nonRidgeSourceBasisCaptureSession = null;
   let nonRidgeSourceBasisControlsActive = false;
   let nonRidgeSourceBasisControlApplication = null;
@@ -19653,6 +19654,10 @@ export function createKaminosVolumePrototype({
   }
 
   async function sampleOpticalTraceChunk(options = {}) {
+    return opticalCaptureOwner.run('camera-trace', () => sampleOpticalTraceChunkOwned(options));
+  }
+
+  async function sampleOpticalTraceChunkOwned(options = {}) {
     if (!state.active || !device || !selectiveHeadLiveCapturePaused) {
       return {ok:false,phase:'admission',reason:'optical-trace-requires-held-capture'};
     }
@@ -21177,6 +21182,10 @@ export function createKaminosVolumePrototype({
   }
 
   async function materializeLiveCompleteFlameOpticalCoefficients(options = {}) {
+    return opticalCaptureOwner.run('complete-flame', () => materializeLiveCompleteFlameOpticalCoefficientsOwned(options));
+  }
+
+  async function materializeLiveCompleteFlameOpticalCoefficientsOwned(options = {}) {
     const failed = (failurePhase, reason, lastTrustworthyEvidence = null) => {
       state.liveCompleteFlameOpticalCoefficientReceipt = {
         ok: false,
@@ -21338,6 +21347,10 @@ export function createKaminosVolumePrototype({
   }
 
   async function beginDebugNonRidgeOpticalCapture(options = {}) {
+    return opticalCaptureOwner.run('nonridge-optical', () => beginDebugNonRidgeOpticalCaptureOwned(options));
+  }
+
+  async function beginDebugNonRidgeOpticalCaptureOwned(options = {}) {
     const failed = (failurePhase, reason, lastTrustworthyEvidence = null) => {
       nonRidgeOpticalCaptureSession = {
         status: 'failed',
@@ -21508,6 +21521,7 @@ export function createKaminosVolumePrototype({
   }
 
   function releaseDebugNonRidgeOpticalCapture(options = {}) {
+    if (opticalCaptureOwner.active()) return {ok:false,reason:'another-optical-capture-active'};
     const session = nonRidgeOpticalCaptureSession;
     const requestedSessionId = String(options.sessionId || '');
     if (!session || (requestedSessionId && requestedSessionId !== session.sessionId)) {
@@ -21570,6 +21584,7 @@ export function createKaminosVolumePrototype({
   }
 
   function applyDebugNonRidgeCausalControls(requested = {}) {
+    if (opticalCaptureOwner.active()) return {ok:false,reason:'another-optical-capture-active'};
     if (!device) throw new Error('nonridge-source-basis-controls-require-active-gpu');
     if (state.active && !selectiveHeadLiveCapturePaused) {
       throw new Error('nonridge-source-basis-controls-require-frozen-renderer');
@@ -21717,6 +21732,10 @@ export function createKaminosVolumePrototype({
   }
 
   async function beginDebugNonRidgeSourceBasisCapture(options = {}) {
+    return opticalCaptureOwner.run('source-basis', () => beginDebugNonRidgeSourceBasisCaptureOwned(options));
+  }
+
+  async function beginDebugNonRidgeSourceBasisCaptureOwned(options = {}) {
     const failed = (failurePhase, reason, lastTrustworthyEvidence = null) => {
       nonRidgeSourceBasisCaptureSession = { status: 'failed', failurePhase, reason, lastTrustworthyEvidence };
       const receipt = { ok: false, ...nonRidgeSourceBasisPublicSession(nonRidgeSourceBasisCaptureSession), lastTrustworthyEvidence };
@@ -21869,6 +21888,7 @@ export function createKaminosVolumePrototype({
   }
 
   function releaseDebugNonRidgeSourceBasisCapture(options = {}) {
+    if (opticalCaptureOwner.active()) return {ok:false,reason:'another-optical-capture-active'};
     const session = nonRidgeSourceBasisCaptureSession;
     const requestedSessionId = String(options.sessionId || '');
     if (!session || (requestedSessionId && requestedSessionId !== session.sessionId)) {

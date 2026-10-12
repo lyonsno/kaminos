@@ -1,6 +1,18 @@
 export const OPTICAL_TRACE_IDENTITY = 'camera-mode2-ordered-optical-trace-v0';
 export const OPTICAL_TRACE_STRIDE = 32;
 
+export function createOpticalCaptureOwner() {
+  let owner=null;
+  return {
+    active:()=>owner,
+    async run(name, capture) {
+      if(owner!==null)return {ok:false,phase:'admission',failurePhase:'session-custody',reason:'another-optical-capture-active',owner};
+      owner=name;
+      try { return await capture(); } finally { owner=null; }
+    },
+  };
+}
+
 export function validateTraceSpecialization(requested, receipt) {
   const expected = {auto:'lean-emissive-raymarch-v0','force-full':'full-authored-raymarch-v0'}[requested];
   if (!expected || receipt?.effective !== expected) {
@@ -70,7 +82,7 @@ export function traceChunkPlan({firstRay,rayCount,sampleOffset,sampleCount,subdi
 
 export function validateTraceRows(values, plan) {
   if(!(values instanceof Float32Array)||values.length!==plan.rowCount*OPTICAL_TRACE_STRIDE)throw new Error('partial optical trace');
-  let misses=0;
+  let misses=0,emittingRows=0;
   for(let r=0;r<plan.rayCount;r++)for(let s=0;s<plan.sampleCount;s++) {
     const at=(r*plan.sampleCount+s)*OPTICAL_TRACE_STRIDE;
     if(values[at+3]!==1)throw new Error(`unwritten optical trace row ${r}:${s}`);
@@ -79,6 +91,7 @@ export function validateTraceRows(values, plan) {
     if(values[at+2]===0){misses++;continue;}
     if(values[at+2]!==1||values[at+4]<values[at+5]||values[at+4]>values[at+6])throw new Error('invalid clipped optical trace position');
     for(let i=16;i<23;i++)finiteNonnegative(values[at+i],'optical coefficient');
+    if(values[at+17]>0||values[at+18]>0||values[at+19]>0)emittingRows++;
   }
-  return {rowCount:plan.rowCount,misses,validRows:plan.rowCount-misses};
+  return {rowCount:plan.rowCount,misses,validRows:plan.rowCount-misses,emittingRows};
 }
