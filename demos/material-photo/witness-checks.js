@@ -17,6 +17,10 @@ export function validateCachedRestoration(state,source,size,runCount) {
   if(state.cache?.source!=='browser-result-storage'||state.cache.geometry!==true||state.cache.materials!==true||state.cache.size!==size)throw Error('Wrong cache restoration');
   if(!(state.result?.surfaceVertices>0&&state.result.triangles>0)||state.result.materialSize?.length!==2||!state.result.materialSize.every(value=>value===size))throw Error('Stale cached output');
 }
+export function validateRestoredHashes(actual,expected) {
+  for(const name of ['image','albedo','roughness','metallic','orm','plane-albedo','plane-orm'])
+    if(!expected?.[name]?.sha256||actual?.[name]!==expected[name].sha256)throw Error(`Restored ${name} bytes changed or are missing`);
+}
 
 export function validateEffectsPresentation(presentation,expected,retained) {
   if(presentation?.mode!=='materials'||presentation.map!=='surface'||presentation.glow!==true||

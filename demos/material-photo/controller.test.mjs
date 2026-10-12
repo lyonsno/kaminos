@@ -73,7 +73,7 @@ async function controller() {
   const response = (url='') => ({ ok:true, blob:async()=>({pixel:url.includes('bag')?2:url.includes('evil-orb')?3:1}) });
   const context = vm.createContext({ document, navigator:{gpu:{}}, location:{search:''}, window:{}, URL:BlobURL, URLSearchParams,
     OffscreenCanvas:Canvas, Uint8ClampedArray, Uint8Array, performance, crypto, Blob,
-    createImageBitmap:async blob=>({width:4,height:4,pixel:blob.pixel,close(){}}),
+    createImageBitmap:async blob=>{if(behavior.bitmapGate)await behavior.bitmapGate;return {width:4,height:4,pixel:blob.pixel,close(){}};},
     fetch:async url => behavior.gates.has(url) ? behavior.gates.get(url).promise : response(url),
     setInterval:()=>0, clearInterval(){}, requestAnimationFrame:callback=>queueMicrotask(()=>callback(0)),
   });
@@ -176,6 +176,15 @@ test('switching back restores completed results and resolution changes reuse geo
   await c.actions.sample('orb');assert.equal(c.state.status,'loaded');assert.equal(c.views[3].disabled,true);
   await c.actions.sample('celebration');assert.equal(c.state.status,'cached');assert.equal(c.behavior.geometryRuns,1);
   assert.equal(c.behavior.materialRuns,2);assert.equal(c.views[3].disabled,false);
+});
+test('resolution events during upload decoding preserve the newly selected photograph',async()=>{
+  const c=await controller();let release;
+  c.behavior.bitmapGate=new Promise(resolve=>{release=resolve;});
+  c.elements.file.files=[{name:'selected-photo.png',pixel:8}];c.elements.file.onchange();
+  c.elements['material-size'].value='1024';await c.elements['material-size'].onchange();
+  release();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(c.state.source,'selected-photo.png');assert.equal(c.elements['material-size'].value,'1024');
+  assert.equal(c.state.status,'loaded');assert.equal(c.elements.run.disabled,false);
 });
 test('carousel traverses all four views without resetting light or orbit',async()=>{
   const c=await controller();await c.actions.infer();

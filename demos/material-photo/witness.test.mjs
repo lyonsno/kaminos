@@ -15,6 +15,16 @@ test('cache witness rejects a rerun, stale resolution, mislabeled source and inc
     const bad=structuredClone(state);change(bad);assert.throws(()=>validateCachedRestoration(bad,'orb',512,1));
   }
 });
+test('reload byte admission rejects changed or missing channels with otherwise valid metadata',async()=>{
+  const {validateRestoredHashes}=await import('./witness-checks.js');
+  assert.equal(typeof validateRestoredHashes,'function','reload needs actual raw-byte continuity');
+  const names=['image','albedo','roughness','metallic','orm','plane-albedo','plane-orm'];
+  const expected=Object.fromEntries(names.map(name=>[name,{sha256:`${name}-digest`}]));
+  const actual=Object.fromEntries(names.map(name=>[name,`${name}-digest`]));
+  assert.doesNotThrow(()=>validateRestoredHashes(actual,expected));
+  for(const name of names){assert.throws(()=>validateRestoredHashes({...actual,[name]:'changed'},expected));
+    const missing={...actual};delete missing[name];assert.throws(()=>validateRestoredHashes(missing,expected));}
+});
 
 test('effects witness rejects stale controls, wrong views and mutated retained materials',async()=>{
   const {validateEffectsPresentation}=await import('./witness-checks.js');

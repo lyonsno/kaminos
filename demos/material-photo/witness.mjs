@@ -4,7 +4,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { createHash } from 'node:crypto';
 import { launchChrome, openPage } from '../../models/supermat/chrome-cdp.mjs';
-import { validateEpisode, captureSurfaceFrame, validateComparison, validateContrastArms,validateEffectsPresentation,validateCachedRestoration } from './witness-checks.js';
+import { validateEpisode, captureSurfaceFrame, validateComparison, validateContrastArms,validateEffectsPresentation,validateCachedRestoration,validateRestoredHashes } from './witness-checks.js';
 import { readRawEvidence } from './witness-raw.mjs';
 
 const {values}=parseArgs({options:{...Object.fromEntries(['repo-root','expected-commit','chrome','output','port','samples','sizes'].map(key=>[key,{type:'string'}])),contrast:{type:'boolean'},effects:{type:'boolean'},cache:{type:'boolean'}}});
@@ -254,8 +254,8 @@ try{
       const original=report.episodes.find(row=>row.source===episode.source&&row.requestedSize===size),hashes={};
       for(const name of ['image','albedo','roughness','metallic','orm','plane-albedo','plane-orm']){
         const raw=await readRawEvidence(evaluate,name);hashes[name]=createHash('sha256').update(raw.bytes).digest('hex');
-        if(hashes[name]!==original.rawEvidence[name].sha256)throw Error(`Cached ${name} bytes changed at ${size}`);
       }
+      validateRestoredHashes(hashes,original.rawEvidence);
       report.cacheRestorations.push({size,state:{status:state.status,cache:state.cache.source,runCount:state.runs.length},hashes,frame:await capture(`cached-${size}`)});
     }
     // Reload the same independent profile, not a second inference invocation.
@@ -264,7 +264,12 @@ try{
     await browser.cdp.call('Page.navigate',{url:`${base}/demos/material-photo/index.html?sample=${sampleKey}`},sessionId);
     await evaluate(`new Promise(resolve=>{const check=()=>{const s=window.__materialPhoto;if(s&&(['cached','error'].includes(s.status)||(s.status==='loaded'&&!document.getElementById('run').disabled)))resolve();else setTimeout(check,100)};check()})`);
     const reloaded=await evaluate('window.__materialPhoto');validateCachedRestoration(reloaded,episode.source,512,0);
-    report.cacheReload={status:reloaded.status,runCount:reloaded.runs.length,frame:await capture('cache-reload')};
+    const reloadHashes={};
+    for(const name of ['image','albedo','roughness','metallic','orm','plane-albedo','plane-orm']){
+      const raw=await readRawEvidence(evaluate,name);reloadHashes[name]=createHash('sha256').update(raw.bytes).digest('hex');
+    }
+    validateRestoredHashes(reloadHashes,report.episodes.find(row=>row.source===episode.source&&row.requestedSize===512).rawEvidence);
+    report.cacheReload={status:reloaded.status,runCount:reloaded.runs.length,hashes:reloadHashes,frame:await capture('cache-reload')};
     report.phase='source-photo-color';await persist();
     const points=await evaluate(`(async()=>{
       const THREE=await import('../../lib/three.webgpu.js');

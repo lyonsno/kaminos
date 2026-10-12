@@ -260,7 +260,7 @@ $('compare').onclick=compare;
 for(const button of document.querySelectorAll('[data-focus]'))button.onclick=()=>view(button.dataset.focus);
 $('file').onchange=()=>{const file=$('file').files[0];if(file)load(file,file.name).catch(fail);};
 $('run').onclick=infer;
-$('material-size').onchange=async()=>{if(active)return;try{$('run').disabled=true;await restoreCached();}catch(error){fail(error);}finally{$('run').disabled=false;}};
+$('material-size').onchange=async()=>{if(active||state.status==='loading-image')return;try{$('run').disabled=true;await restoreCached();}catch(error){fail(error);}finally{$('run').disabled=false;}};
 $('map').onchange=()=>{if(viewer){const map=$('map').value;view('materials');viewer.map=map;$('map').value=map;}};
 $('gi').onchange=()=>{viewer.useGI=$('gi').checked;};
 $('glow').onchange=()=>{viewer.glow=$('glow').checked;};
