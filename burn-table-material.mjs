@@ -6,54 +6,84 @@ const HASH_WGSL=`
 fn burnHash(p: vec2<f32>) -> vec2<f32> {
   return fract(sin(vec2<f32>(dot(p,vec2<f32>(127.1,311.7)),dot(p,vec2<f32>(269.5,183.3))))*43758.5453);
 }`;
-const CELLS_WGSL=`fn burnCells(p: vec2<f32>) -> f32 {
+const CELLS_WGSL=`fn burnCells(p: vec2<f32>) -> vec4<f32> {
   let cell=floor(p); let f=fract(p);
-  var first=10.0; var second=10.0;
+  var first=10.0; var second=10.0; var owner=vec2<f32>(0.0);
   for(var y=-1;y<=1;y++){for(var x=-1;x<=1;x++){
     let g=vec2<f32>(f32(x),f32(y));
     let r=g+burnHash(cell+g)-f; let d=dot(r,r);
-    if(d<first){second=first;first=d;}else if(d<second){second=d;}
+    if(d<first){second=first;first=d;owner=cell+g;}else if(d<second){second=d;}
   }}
-  return 1.0-smoothstep(0.025,0.11,sqrt(second)-sqrt(first));
+  let edge=1.0-smoothstep(0.025,0.11,sqrt(second)-sqrt(first));
+  let identity=burnHash(owner);
+  return vec4<f32>(edge,identity,identity.x*6.2831853+identity.y*2.7);
 }`;
-export const BURN_SURFACE_WGSL=`fn burnSurface(p: vec3<f32>, n: vec3<f32>, controls: vec3<f32>, metal: f32, metalProfile: f32, clock: f32) -> vec4<f32> {
+const FACETS_WGSL=`fn burnFacets(p: vec3<f32>, n: vec3<f32>) -> vec4<f32> {
   let normal=abs(n);
   var plane=p.xy;
   if(normal.x>normal.y && normal.x>normal.z){plane=p.zy;}
   else if(normal.y>normal.z){plane=p.xz;}
   let warp=vec2<f32>(sin(plane.y*13.0),sin(plane.x*11.0))*0.12;
-  let crack=burnCells(plane*vec2<f32>(8.0,13.0)+warp);
+  return burnCells(plane*vec2<f32>(8.0,13.0)+warp);
+}`;
+export const BURN_SURFACE_WGSL=`fn burnSurface(p: vec3<f32>, facets: vec4<f32>, controls: vec3<f32>, metalProfile: f32, clock: f32) -> vec4<f32> {
   let irregular=sin(p.y*15.0+p.z*10.0)*0.035+sin(p.z*27.0)*0.012;
   let exposure=smoothstep(0.31,0.61,p.x+irregular);
   let heat=controls.x*exposure;
-  let damage=controls.y*exposure*(1.0-metal);
-  let reaction=controls.z*exposure*(1.0-metal);
+  let damage=controls.y*exposure*(1.0-metalProfile);
+  let reaction=controls.z*exposure*(1.0-metalProfile);
   let hot=max(0.0,(heat-0.55)/0.45);
-  let breathing=0.76+0.16*sin(clock*2.1+p.z*8.0)+0.08*sin(clock*3.7+p.y*13.0);
-  let ember=hot*mix(crack*controls.y*exposure,1.0,metalProfile)*breathing;
+  let pulse=0.5+0.5*sin(clock*2.1+facets.w);
+  let patches=smoothstep(0.25,0.8,pulse);
+  let activity=mix(0.62,mix(0.12,1.25,patches),reaction);
+  let ember=hot*hot*mix(facets.x*damage,1.0,metalProfile)*activity;
   return vec4<f32>(heat,damage,ember,reaction);
+}`;
+const ROTATE_WGSL=`fn burnRotate(n: vec3<f32>, axis: vec3<f32>, angle: f32) -> vec3<f32> {
+  return n*cos(angle)+cross(axis,n)*sin(angle)+axis*dot(axis,n)*(1.0-cos(angle));
+}`;
+const NORMAL_WGSL=`fn burnFacetNormal(n: vec3<f32>, facets: vec4<f32>, damage: f32) -> vec3<f32> {
+  let base=normalize(n);
+  var reference=vec3<f32>(0.0,0.0,1.0);
+  if(abs(base.z)>0.8){reference=vec3<f32>(0.0,1.0,0.0);}
+  let tangent=normalize(cross(reference,base));let bitangent=cross(base,tangent);
+  let strength=damage*(1.0-facets.x);
+  let angles=(facets.yz*2.0-vec2<f32>(1.0))*0.04*strength;
+  return normalize(burnRotate(burnRotate(base,tangent,angles.x),bitangent,angles.y));
 }`;
 const hashNode=THREE.TSL.wgslFn(HASH_WGSL);
 const cellsNode=THREE.TSL.wgslFn(CELLS_WGSL,[hashNode]);
-const surfaceNode=THREE.TSL.wgslFn(BURN_SURFACE_WGSL,[cellsNode]);
+const facetsNode=THREE.TSL.wgslFn(FACETS_WGSL,[cellsNode]);
+const surfaceNode=THREE.TSL.wgslFn(BURN_SURFACE_WGSL);
+const rotateNode=THREE.TSL.wgslFn(ROTATE_WGSL);
+const facetNormalNode=THREE.TSL.wgslFn(NORMAL_WGSL,[rotateNode]);
 
 export function createBurnMaterial({renderer,original,bounds,settings}) {
-  const {uniform,vec3,positionLocal,normalLocal,materialColor,materialRoughness,materialMetalness,mix}=THREE.TSL;
+  const {uniform,vec3,positionLocal,normalLocal,materialNormal,materialColor,materialRoughness,materialMetalness,mix,transformNormalToView,smoothstep}=THREE.TSL;
   const config=checkedBurnControls(settings);
   const controls=uniform(new THREE.Vector3(config.heat,config.char,config.reaction));
   const clock=uniform(0), profile=uniform(config.profile==='metal'?1:0);
   const size=bounds.getSize(new THREE.Vector3());
   if(Math.min(size.x,size.y,size.z)<=0)throw new Error('Burn material requires volumetric local bounds');
   const p=positionLocal.sub(vec3(...bounds.min.toArray())).div(vec3(...size.toArray()));
-  const sample=surfaceNode({p,n:normalLocal,controls,metal:materialMetalness.max(profile),metalProfile:profile,clock});
+  const facets=facetsNode({p,n:normalLocal}).toVar('burnFacetData');
+  const sample=surfaceNode({p,facets,controls,metalProfile:profile,clock}).toVar('burnSurfaceData');
   const material=cloneSceneRadianceMaterial(renderer.library,original);
-  const charColor=vec3(.035,.029,.024);
-  const scorch=sample.x.mul(.6).mul(materialMetalness.max(profile).oneMinus());
-  const base=materialColor.rgb.mul(mix(vec3(1),vec3(.38,.22,.14),scorch));
-  material.colorNode=mix(base,charColor,sample.y.mul(.92));
-  material.roughnessNode=mix(materialRoughness,uniform(.96),sample.y);
+  // Char alters reflection and local shading normals; it never moves geometry.
+  const darkening=sample.y.oneMinus().pow(3).mul(.985).add(.015);
+  const recess=facets.x.mul(sample.y).mul(.7).oneMinus();
+  material.colorNode=materialColor.rgb.mul(darkening).mul(recess);
+  material.roughnessNode=mix(materialRoughness,mix(uniform(.24),uniform(.94),facets.x),sample.y);
+  const tilted=facetNormalNode({n:normalLocal,facets,damage:sample.y});
+  const delta=transformNormalToView(tilted).normalize().sub(transformNormalToView(normalLocal).normalize());
+  material.normalNode=materialNormal.add(delta).normalize();
   material.metalnessNode=materialMetalness.mul(sample.y.oneMinus()).max(profile);
-  material.emissiveNode=vec3(1,.16,.015).mul(sample.z.mul(sample.w.mul(.8).add(1.6)));
+  const redToOrange=mix(vec3(.7,.008,.001),vec3(1,.12,.008),smoothstep(.55,.88,sample.x));
+  const hotColor=mix(redToOrange,vec3(1,.42,.055),smoothstep(.88,1,sample.x));
+  material.emissiveNode=hotColor.mul(sample.z.mul(5));
   return {material,update(seconds){clock.value=seconds;},set(next){const c=checkedBurnControls(next);controls.value.set(c.heat,c.char,c.reaction);profile.value=c.profile==='metal'?1:0;},
-    read:()=>({sourceMaterial:original.uuid,maps:{baseColor:original.map?.uuid||null,metalness:original.metalnessMap?.uuid||null,roughness:original.roughnessMap?.uuid||null}}),dispose:()=>material.dispose()};
+    read:()=>({appearanceModel:'char-facet-crust-v1',sourceMaterial:original.uuid,
+      controls:{heat:controls.value.x,char:controls.value.y,reaction:controls.value.z,profile:profile.value===1?'metal':'wood'},
+      appearanceSeconds:clock.value,facetRotationPerAxisRadians:.04,
+      maps:{baseColor:original.map?.uuid||null,normal:original.normalMap?.uuid||null,metalness:original.metalnessMap?.uuid||null,roughness:original.roughnessMap?.uuid||null}}),dispose:()=>material.dispose()};
 }

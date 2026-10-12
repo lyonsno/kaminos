@@ -49,6 +49,26 @@ try {
   await page.locator('#burn-table-reset').click();
   assert.equal((await page.evaluate(()=>window.kaminosBurnTable.state())).states[2].heat,1);
   await page.screenshot({path:path.join(out,'restored.png')});
+  if(process.env.BURN_TABLE_MATERIAL_VIEWS==='1'){
+    report.phase='material-views';report.materialViews=[];
+    const shot=async name=>{
+      await page.evaluate(()=>window.__kaminosRenderSceneForInspection());
+      const state=await page.evaluate(()=>({material:window.kaminosBurnTable.state(),camera:window.kaminosCameraDebugState()}));
+      await page.screenshot({path:path.join(out,name+'.png')});report.materialViews.push({name,...state});
+    };
+    const pose=await page.evaluate(()=>window.kaminosCameraDebugState());
+    await page.evaluate(()=>window.kaminosBurnTable.setSample('active',{heat:0,char:1,reaction:0}));await shot('cold-crust');
+    const dx=pose.position[0]-pose.target[0],dz=pose.position[2]-pose.target[2],angle=.24;
+    await page.evaluate(next=>window.kaminosSetCameraDebugPose(next),{position:[pose.target[0]+dx*Math.cos(angle)-dz*Math.sin(angle),pose.position[1],pose.target[2]+dx*Math.sin(angle)+dz*Math.cos(angle)],target:pose.target});
+    await shot('cold-crust-orbit');await page.evaluate(next=>window.kaminosSetCameraDebugPose(next),pose);
+    await page.evaluate(()=>window.kaminosBurnTable.setSample('active',{heat:.72,char:1,reaction:0}));await shot('low-heat-steady');
+    await page.evaluate(()=>window.kaminosBurnTable.setSample('active',{heat:1,char:1,reaction:0}));await shot('high-heat-steady');
+    await page.evaluate(()=>window.kaminosBurnTable.setSample('active',{heat:1,char:1,reaction:1}));await shot('high-heat-active');
+    await page.locator('#burn-table-animation').check();await page.waitForTimeout(600);await page.locator('#burn-table-animation').uncheck();await shot('high-heat-active-later');
+    assert.ok(report.materialViews.every(v=>v.material.objects[2].materials[0].appearanceModel==='char-facet-crust-v1'));
+    assert.ok(report.materialViews[5].material.objects[2].materials[0].appearanceSeconds>report.materialViews[4].material.objects[2].materials[0].appearanceSeconds);
+    await page.locator('#burn-table-reset').click();
+  }
   report.phase='pixels';
   report.pixels=await page.evaluate(async()=>{
     window.__kaminosRenderSceneForInspection();
