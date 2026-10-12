@@ -45,13 +45,23 @@ test('comparison borrows one device, shares geometry and orbit, and can focus wi
   const {viewer,calls,device,canvases}=await fixture();
   assert.equal(viewer.comparison,true);assert.ok(calls.devices.every(value=>value===device));
   viewer.setImage({},{});const views=Object.values(viewer.views);
-  assert.equal(viewer.primary.available,false);viewer.setMaterials({});assert.equal(viewer.primary.available,true);
+  assert.equal(viewer.primary.available,true);viewer.setMaterials({});assert.equal(viewer.primary.available,true);
   assert.ok(views.every(v=>v.mesh.geometry===viewer.primary.mesh.geometry));
   assert.ok(views.every(v=>v.orbit===viewer.orbit));assert.equal(views.filter(v=>v.interactive).length,1);
   viewer.orbit.set(.2,.1);viewer.setLightHandle(.3,.4);viewer.setTuning({gain:2});
   assert.ok(views.every(v=>v.light.x===.3&&v.settings.gain===2));
   viewer.mode='relit';assert.ok(Object.entries(canvases).every(([mode,c])=>c.closest('[data-tile]').hidden===(mode!=='relit')));
   viewer.showComparison();assert.ok(Object.values(canvases).every(c=>!c.closest('[data-tile]').hidden));assert.deepEqual(viewer.orbit.toArray(),[.2,.1]);
+});
+test('a depth-only material pane keeps its photograph visible without claiming inference is running',async()=>{
+  const {viewer}=await fixture();viewer.setImage({},{});
+  const surface=viewer.primary.canvas.parentElement;
+  assert.equal(viewer.primary.available,true);
+  assert.equal(surface.dataset.pending,'Materials not generated');
+  viewer.setMaterialStatus('Inferring materials');
+  assert.equal(surface.dataset.pending,'Inferring materials');
+  viewer.setMaterials({});assert.equal(surface.dataset.pending,undefined);
+  viewer.setImage({},{});assert.equal(surface.dataset.pending,'Materials not generated');
 });
 test('comparison chooses pane arrangement from available width and height',async()=>{
   const {viewer,container}=await fixture();

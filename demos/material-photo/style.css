@@ -47,8 +47,7 @@ main[data-controls=open]{grid-template-columns:minmax(0,1fr) 300px}
 .comparison article{min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .view-surface{position:relative;min-height:0;min-width:0;width:100%;flex:1;overflow:hidden;background:#111718}
 .view-surface canvas{display:block;width:100%;height:100%;touch-action:none}
-.view-surface[data-pending] canvas{visibility:hidden}
-.view-surface[data-pending]:after{content:attr(data-pending);position:absolute;inset:0;display:grid;place-items:center;color:#9fb0a4;font-size:12px;padding:12px;text-align:center}
+.view-surface[data-pending]:after{content:attr(data-pending);position:absolute;bottom:12px;left:12px;right:12px;width:fit-content;max-width:calc(100% - 24px);margin:auto;background:#101817e6;color:#d2ded5;font-size:12px;padding:8px 12px;text-align:center;pointer-events:none}
 .comparison article>button{width:100%;height:32px;flex-shrink:0;border:0;background:none;border-radius:0;padding:5px 2px;color:#c5d4ca;font-size:12px;text-align:center;white-space:normal;overflow-wrap:anywhere}
 .comparison[data-focus]:not([data-focus=""]){grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
 .comparison[data-focus]:not([data-focus=""]) article{width:100%;height:100%}
