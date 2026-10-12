@@ -4,10 +4,23 @@ const receiverId = 'sinter-receiver-timber';
 const equal = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const requireState = (condition, message) => { if (!condition) throw new Error(message); };
 
-export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, restoreScene, setBurner, onChange = () => {}}) {
-  let state = {phase: 'loading', running: false, busy: false, paused: true, simStepCount: null, error: null, receipts: []};
+export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, restoreScene, setBurner,
+  onChange = () => {}, onOperation, createAttemptId = () => globalThis.crypto.randomUUID()}) {
+  let state = {phase: 'loading', running: false, busy: false, paused: true, simStepCount: null,
+    attemptId: null, generation: 0, operationIssues: [], error: null, receipts: []};
+  const observers = new Set(onOperation ? [onOperation] : []);
+  const attemptIds = new Set();
   const status = () => structuredClone(state);
   const publish = changes => { state = {...state, ...changes}; onChange(status()); };
+  const observe = (kind, phase, target, effective, requested) => {
+    if (!observers.size) return;
+    const operation = {kind, phase, target, effective, requested,
+      clock: {attemptId: state.attemptId, generation: state.generation, simStepCount: volume.debugState().simStepCount}};
+    for (const listener of observers) {
+      try { listener(structuredClone(operation)); }
+      catch (error) { state.operationIssues.push({kind, phase, error: String(error.message || error)}); }
+    }
+  };
   const validate = () => {
     const live = volume.debugState();
     requireState(!live.error, live.error || 'Volume failed');
@@ -34,6 +47,7 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, r
     validate();
     state.receipts.push(receipt);
     publish({simStepCount: target});
+    observe('timber.advance', 'completed', 'timber-experiment', receipt, {target});
   };
   const presentPausedSimulation = () => {
     requireState(volume.setSimulationPaused(true).paused === true, 'Simulation inspection pause failed');
@@ -43,6 +57,7 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, r
     volume.setSimulationPaused(true);
     volume.setSelectiveHeadLiveCapturePaused(false);
     publish({phase: 'failed', running: false, busy: false, paused: true, error: String(error.message || error)});
+    observe('timber.failure', 'failed', 'timber-experiment', {error: state.error});
     throw error;
   };
   const burnerOff = () => {
@@ -51,6 +66,8 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, r
     const live = validate();
     requireState(shutdown?.mode === 'off' && shutdown.count === 0 && shutdown.sourceLaw === 'inactive'
       && live.controls.flowRate === 0 && live.analyticEmitterDispatchActive === false, 'Original burner shutdown failed');
+    observe('timber.burner', 'off', 'original-burner', {shutdown, flowRate: live.controls.flowRate,
+      analyticEmitterDispatchActive: live.analyticEmitterDispatchActive});
     return shutdown;
   };
   const prepare = async () => {
@@ -59,6 +76,8 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, r
     // Finish prior GPU work before replacing the scene's resident resources.
     await advance(0);
     burnerOff();
+    publish({attemptId: null});
+    observe('timber.attempt', 'restoring', 'timber-experiment', {available: false});
     const restored = await restoreScene();
     requireState(restored?.freshFluid === true && restored.freshMaterial === true, 'Scene restoration did not establish fresh fluid and material');
     burnerOff();
@@ -70,10 +89,21 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, r
       && equal(source.transform.scale, [0.8, 0.8, 0.8]) && equal(receiver.transform.position, [2.5, 0.1, 0])
       && equal(receiver.transform.scale, [0.35, 0.35, 0.35]), 'Unexpected initial timber pose');
     presentPausedSimulation();
-    publish({phase: 'cold', running: false, paused: true, simStepCount: 0, error: null, receipts: [{restored}]});
+    const attemptId = createAttemptId();
+    requireState(typeof attemptId === 'string' && attemptId.length > 0 && !attemptIds.has(attemptId), 'A unique physical attempt id is required');
+    attemptIds.add(attemptId);
+    publish({phase: 'cold', running: false, paused: true, simStepCount: 0, attemptId,
+      generation: state.generation + 1, error: null, receipts: [{restored}]});
+    observe('timber.attempt', 'restored', 'timber-experiment', {attemptId, generation: state.generation,
+      startingConditions: 'fresh-saved-timber-scene', restored, objects: objects(), basin: basin()});
   };
   return {
     status,
+    subscribeOperations(listener) {
+      requireState(typeof listener === 'function', 'Operation observer must be a function');
+      observers.add(listener);
+      return () => observers.delete(listener);
+    },
     async initialize() {
       try {
         publish({busy: true});
@@ -97,6 +127,8 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, r
         requireState(priming.controls.flowRate > 0 && priming.analyticEmitterDispatchActive === true, 'Original burner restoration failed');
         volume.setSimulationPaused(false);
         publish({phase: 'burner-on', running: true, paused: false});
+        observe('timber.burner', 'on', 'original-burner', {flowRate: priming.controls.flowRate,
+          analyticEmitterDispatchActive: priming.analyticEmitterDispatchActive});
         await advance(240);
         const shutdown = burnerOff();
         const live = validate();
@@ -104,6 +136,7 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, r
         for (const [id, position] of [[sourceId, [0.4, -0.55, 0]], [receiverId, [0.4, 0.6, 0]]]) {
           const moved = moveObject(id, {position});
           requireState(moved?.id === id && equal(moved.transform.position, position), `Timber placement failed: ${id}`);
+          observe('timber.placement', 'applied', id, moved, {position});
         }
         publish({phase: 'burner-off-transfer'});
         await advance(360);
@@ -111,6 +144,7 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, r
         requireState(volume.setSimulationPaused(paused).paused === paused, 'Live simulation continuation failed');
         requireState(volume.setSelectiveHeadLiveCapturePaused(false).paused === false, 'Live camera presentation failed');
         publish({phase: 'live', running: true, busy: false, paused});
+        observe('timber.run', 'live', 'timber-experiment', status());
       } catch (error) { fail(error); }
     },
     togglePause() {
@@ -119,6 +153,7 @@ export function createTimberIgnitionSmoke({volume, basin, objects, moveObject, r
       const receipt = volume.setSimulationPaused(paused);
       requireState(receipt.paused === paused, 'Simulation pause failed');
       publish({paused, simStepCount: volume.debugState().simStepCount});
+      observe('timber.pause', 'applied', 'timber-experiment', receipt, {paused});
     },
   };
 }
