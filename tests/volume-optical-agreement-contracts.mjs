@@ -17,7 +17,19 @@ for(const hits of [[0,1,1],[1,0,0]]) {
 }
 const small=a.slice();small[17]+=1e-7;small[29]+=4e-6;
 assert.equal(optical.compareOpticalTraces(a,small,plan).ok,true);
-for(const field of [0,1,2,3,4,5,6,7,8,11,12,15,23,24,25,27,31]) {
+const support=a.slice();support[25]=.23440712690353394;
+const supportOther=support.slice();supportOther[25]=.2646870017051697;
+const supported=optical.compareOpticalTraces(support,supportOther,plan);
+assert.equal(supported.ok,true,'equal consumed support predicates must admit diagnostic magnitude differences');
+assert.equal(supported.fields[25].differences,1);
+assert.ok(supported.fields[25].maxAbsolute>.03,'retain raw support difference');
+assert.equal(supported.fields[25].violations,0);
+const threshold=Math.fround(.0001);
+for(const [left,right,ok] of [[0,threshold,true],[threshold,threshold+1e-10,false],[0,.2,false],[.2,0,false]]) {
+  const x=a.slice(),y=a.slice();x[25]=left;y[25]=right;
+  assert.equal(optical.compareOpticalTraces(x,y,plan).ok,ok,`support predicate ${left}:${right}`);
+}
+for(const field of [0,1,2,3,4,5,6,7,8,11,12,15,23,24,27,31]) {
   const b=a.slice();b[field]+=field<4?1:1e-5;
   try {assert.equal(optical.compareOpticalTraces(a,b,plan).ok,false,`strict field ${field}`);}
   catch(error){if(error.code==='ERR_ASSERTION')throw error;}

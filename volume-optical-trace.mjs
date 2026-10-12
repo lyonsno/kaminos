@@ -101,8 +101,9 @@ export function validateTraceRows(values, plan) {
 export function compareOpticalTraces(full, lean, plan) {
   if(plan.sampleOffset!==0||plan.sampleCount!==plan.subdivisions+1)throw new Error('agreement requires complete rays');
   validateTraceRows(full,plan);validateTraceRows(lean,plan);
-  const criteria={identity:'optical-numerical-agreement-v1',coefficientAbsolute:1e-7,
+  const criteria={identity:'optical-numerical-agreement-v2',coefficientAbsolute:1e-7,
     coefficientRelative:1e-5,cellFractionAbsolute:8e-6,transferAbsolute:1e-6,
+    supportActiveThreshold:Math.fround(0.0001),supportAgreement:'consumed-predicate',
     authority:'numerical agreement on retained samples, not bitwise equality or teacher convergence'};
   const fields=Array.from({length:32},(_,index)=>({index,differences:0,violations:0,maxAbsolute:0}));
   for(let at=0;at<full.length;at++) {
@@ -112,7 +113,8 @@ export function compareOpticalTraces(full, lean, plan) {
       field>=28&&field<=30 ? criteria.cellFractionAbsolute : 0;
     const stats=fields[field];
     if(delta>0)stats.differences++;
-    if(delta>tolerance)stats.violations++;
+    // The shader consumes support as a threshold test, not a magnitude.
+    if(field===25 ? (a>criteria.supportActiveThreshold)!==(b>criteria.supportActiveThreshold) : delta>tolerance)stats.violations++;
     stats.maxAbsolute=Math.max(stats.maxAbsolute,delta);
   }
   const transferMaxAbsolute=[0,0,0,0];
