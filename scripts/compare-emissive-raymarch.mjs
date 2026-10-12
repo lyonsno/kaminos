@@ -16,6 +16,7 @@ process.on('SIGUSR2',async()=>{
 try {
   assert.ok(['parity', 'timing', 'material', 'material-timing'].includes(experiment), 'unknown comparison experiment');
   const materialExperiment = experiment.startsWith('material');
+  const timingExperiment = experiment.endsWith('timing');
   report.runtime = await (await fetch(base+'/api/runtime-config')).json();
   assert.equal(report.runtime.source.repoRoot,root);
   const scene = JSON.parse(await fs.readFile(input+'/scene.kaminos.json'));
@@ -46,11 +47,11 @@ try {
     return {original,effective:window.kaminosSetCameraDebugPose({position,target:original.target}),zoom:factor};
   },Number(zoom));
   report.phase='scene-camera';await save();
-  await page.screenshot({path:out+'/before-match-scene.png'});
+  if (!timingExperiment) await page.screenshot({path:out+'/before-match-scene.png'});
   await page.evaluate(()=>{const el=document.getElementById('rendering-match-flame-camera');el.checked=true;el.dispatchEvent(new Event('change',{bubbles:true}));});
   await page.waitForFunction(()=>window.kaminosSceneEmissiveCameraDebugState?.().effective);
   report.sceneCamera=await page.evaluate(()=>window.kaminosSceneEmissiveCameraDebugState());
-  await page.screenshot({path:out+'/matched-agx-scene.png'});
+  if (!timingExperiment) await page.screenshot({path:out+'/matched-agx-scene.png'});
   report.phase='settling';
   report.beforeSettle=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState());await save();
   await page.waitForFunction(()=>window.__kaminosVolumePrototype.debugState().simStepCount>150);
@@ -90,7 +91,7 @@ try {
     const bytes=Buffer.from(arm.rgba);
     await fs.writeFile(out+'/'+label+'.rgba',bytes);
     await fs.writeFile(out+'/'+label+'.png',Buffer.from(arm.png.split(',')[1],'base64'));
-    await page.screenshot({path:out+'/'+label+'-scene.png'});
+    if (!timingExperiment) await page.screenshot({path:out+'/'+label+'-scene.png'});
     report.arms.push({label,...arm,rgba:undefined,png:undefined,sha256:createHash('sha256').update(bytes).digest('hex')});await save();
   }
   if(materialExperiment) {

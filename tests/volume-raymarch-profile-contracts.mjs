@@ -3,6 +3,12 @@ import { readFileSync } from 'node:fs';
 import { balancedWgslBlock } from './helpers/wgsl-guard-ownership.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+const comparison = readFileSync(new URL('../scripts/compare-emissive-raymarch.mjs', import.meta.url), 'utf8');
+assert.match(comparison, /const timingExperiment = experiment\.endsWith\('timing'\);/);
+for (const line of comparison.split('\n').filter(line => line.includes('await page.screenshot('))) {
+  assert.match(line, /if \(!timingExperiment\)/,
+    'timing runs retain raw render captures without waiting on whole-page screenshots');
+}
 assert.match(core, /async function sampleEmissiveRaymarchProfile\(/,
   'ordinary emissive camera raster has a held-state timing entry point');
 const body = balancedWgslBlock(core.replace('sampleEmissiveRaymarchProfile(options = {})', 'sampleEmissiveRaymarchProfile(options)'), 'async function sampleEmissiveRaymarchProfile(');
