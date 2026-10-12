@@ -1,5 +1,18 @@
 import * as THREE from './lib/three.webgpu.js';
+import {uv,If} from './lib/three.tsl.js';
 import {LineSegmentsGeometry} from './lib/addons/lines/LineSegmentsGeometry.js';
+
+// Editor overlays blend against the current destination once. This vendored
+// Line2NodeMaterial normally preblends against an opaque snapshot; keep its
+// vertex expansion, but use straight color/alpha and its screen-space round caps.
+class EditorOverlayLineMaterial extends THREE.Line2NodeMaterial {
+ static get type(){return 'EditorOverlayLineMaterial';}
+ setupDiffuseColor(builder) {
+  THREE.NodeMaterial.prototype.setupDiffuseColor.call(this,builder);
+  const v=uv();
+  If(v.y.abs().greaterThan(1),()=>{const a=v.x,b=v.y.greaterThan(0).select(v.y.sub(1),v.y.add(1));a.mul(a).add(b.mul(b)).greaterThan(1).discard();});
+ }
+}
 
 // Fat triangle-backed lines use the renderer's existing Line2NodeMaterial.
 // Original helper geometry remains the picking authority; visual proxies never raycast.
@@ -17,7 +30,7 @@ export function styleHelperLines(root,{width,opacity}) {
    if(source.isLine&&!source.isLineSegments){for(let i=1;i<count;i++){put(index?index.getX(i-1):i-1);put(index?index.getX(i):i);}}
    else for(let i=0;i<count;i++)put(index?index.getX(i):i);
    temporary?.dispose();
-   const material=new THREE.Line2NodeMaterial({color:source.material.color,linewidth:width,transparent:true,opacity,depthTest:false,depthWrite:false,toneMapped:false,blending:THREE.NormalBlending,alphaToCoverage:false});
+   const material=new EditorOverlayLineMaterial({color:source.material.color,linewidth:width,transparent:true,opacity,depthTest:false,depthWrite:false,toneMapped:false,blending:THREE.NormalBlending,alphaToCoverage:false});
    proxy=new THREE.Mesh(new LineSegmentsGeometry().setPositions(segments),material);proxy.userData.kaminosWideLineProxy=true;proxy.userData.kaminosEditorOnly=true;proxy.renderOrder=1001;proxy.frustumCulled=false;proxy.raycast=()=>{};
    proxy.userData.sourceGeometry=source.geometry;
    proxy.userData.sourcePositions=Array.from(source.geometry.getAttribute('position').array);
