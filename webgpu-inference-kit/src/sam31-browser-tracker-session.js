@@ -35,7 +35,8 @@ async function acquireExecutionContext(gpu) {
   if (!gpu || typeof gpu.requestAdapter !== 'function') throw new Error('WebGPU request surface is required');
   const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) throw new Error('WebGPU adapter unavailable');
-  const device = await adapter.requestDevice();
+  // Opt into timestamp-query when offered so the kit runtime records per-kernel GPU time; limits stay default.
+  const device = await adapter.requestDevice(adapter.features?.has?.('timestamp-query') ? { requiredFeatures: ['timestamp-query'] } : undefined);
   return { adapter, device, errors: [] };
 }
 
