@@ -28,7 +28,7 @@ export function mountFluidBudgetCockpit(root,{read,apply,requestFrame}) {
   else if(t.status==='failed')gpuText.textContent=`GPU timings unavailable: ${t.failure}`;
   else if(sample && matching){
    const ms=key=>(sample.stages[key]??0).toFixed(2);
-   gpuText.textContent=`Simulation       ${sample.simulationAdvanced?`${ms('simulation')} ms`:sample.paused?'0.00 ms (paused)':'not advanced in sample'}\nParticle drawing ${ms('accumulation')} ms\nOptical shading  ${ms('optical')} ms\nHost / resolve   ${ms('host')} ms\nOther GPU passes ${(sample.passSumMs-(sample.stages.simulation??0)-(sample.stages.accumulation??0)-(sample.stages.optical??0)-(sample.stages.host??0)).toFixed(2)} ms\nTimed pass sum   ${sample.passSumMs.toFixed(2)} ms\nFirst–last span  ${sample.frameSpanMs.toFixed(2)} ms\nFrame ${sample.hostFrameId} · step ${sample.step} · ${Math.max(0,(performance.now()-sample.measuredAt)/1000).toFixed(1)}s ago\nCopies/gaps are in the span, not assigned to rows. Ray counting skips timing frames.`;
+   gpuText.textContent=`Simulation       ${sample.simulationAdvanced?`${ms('simulation')} ms`:sample.paused?'0.00 ms (paused)':'not advanced in sample'}\nParticle drawing ${ms('accumulation')} ms\nOptical shading  ${ms('optical')} ms\nHost / resolve   ${ms('host')} ms\nOther GPU passes ${(sample.passSumMs-(sample.stages.simulation??0)-(sample.stages.accumulation??0)-(sample.stages.optical??0)-(sample.stages.host??0)).toFixed(2)} ms\nStage overlap    ${sample.overlapMs.toFixed(2)} ms\nUnassigned gaps  ${sample.gapMs.toFixed(2)} ms\nFirst–last span  ${sample.frameSpanMs.toFixed(2)} ms\nFrame ${sample.hostFrameId} · step ${sample.step} · ${Math.max(0,(performance.now()-sample.measuredAt)/1000).toFixed(1)}s ago\nRows are exclusive timestamp intervals; overlap is separate. Ray counting skips timing frames.`;
   }else gpuText.textContent=sample?'Previous settings · awaiting GPU timing frame':'Awaiting actual GPU timestamps';
   errorText.textContent=error??'';
  }
@@ -38,6 +38,7 @@ export function mountFluidBudgetCockpit(root,{read,apply,requestFrame}) {
  number.addEventListener('focus',()=>{start=read().viewport.renderScale;});number.addEventListener('input',setNumber);number.addEventListener('change',setNumber);number.addEventListener('pointercancel',()=>{act({renderScale:start});number.value=String(start*100);});number.addEventListener('keydown',e=>{if(e.key==='Enter'){setNumber();number.blur();}});number.addEventListener('blur',()=>{number.value=String(read().viewport.renderScale*100);});
  const scrub=installRelativeNumberDrag({input:number,step:1,onStart:()=>{start=read().viewport.renderScale;}});
  energy.addEventListener('change',()=>act({energyDiagnosticsMode:energy.checked?'every_step':'disabled'}));timing.addEventListener('change',()=>act({timingEnabled:timing.checked}));
- const timer=setInterval(()=>{update();if(read().viewport?.timing.enabled)requestFrame();},1000);
- root.prepend(panel);update();return {update,read,apply:act,destroy(){clearInterval(timer);scrub.stop();panel.remove();}};
+ let live=true;
+ const timer=setInterval(()=>{update();if(read().viewport?.timing.enabled){requestFrame();if(read().clock.paused)requestAnimationFrame(()=>requestAnimationFrame(()=>{if(live&&read().clock.paused&&read().viewport?.timing.enabled)requestFrame();}));}},1000);
+ root.prepend(panel);update();return {update,read,apply:act,destroy(){live=false;clearInterval(timer);scrub.stop();panel.remove();}};
 }

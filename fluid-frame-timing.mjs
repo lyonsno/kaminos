@@ -2,6 +2,19 @@
 // The rejected 8192 request is retained in the owning native evidence.
 // overflowing a sampled frame reports failure, without dropping render work.
 const QUERY_COUNT=4096;
+export function partitionGpuPassIntervals(passes) {
+  const intervals=passes.map(p=>({...p,start:BigInt(p.startNs),end:BigInt(p.endNs)}));
+  const edges=[...new Set(intervals.flatMap(p=>[p.start,p.end]))].sort((a,b)=>a<b?-1:a>b?1:0);
+  const exclusive={},coverage={};let overlapMs=0,gapMs=0;
+  for(let i=1;i<edges.length;i++){
+    const start=edges[i-1],end=edges[i],ms=Number(end-start)/1e6;
+    const categories=new Set(intervals.filter(p=>p.start<=start && p.end>=end && p.end>p.start).map(p=>p.category));
+    for(const category of categories)coverage[category]=(coverage[category]??0)+ms;
+    if(categories.size===1){const category=[...categories][0];exclusive[category]=(exclusive[category]??0)+ms;}
+    else if(categories.size>1)overlapMs+=ms;else gapMs+=ms;
+  }
+  return {exclusive,coverage,overlapMs,gapMs};
+}
 export function createFluidFrameTiming(device) {
   let enabled=false,active=false,pending=false,disposed=false,lastRequest=-Infinity,stage='other';
   let sample=null,failure=null,querySet=null,resolveBuffer=null,readback=null;
@@ -49,9 +62,9 @@ export function createFluidFrameTiming(device) {
     readback.mapAsync(GPUMapMode.READ).then(()=>{
       const values=new BigUint64Array(readback.getMappedRange(0,count*8).slice(0));
       const passes=frameEntries.map(e=>{const start=values[e.index],end=values[e.index+1];if(end<start || (start===0n&&end===0n))throw Error('Missing or unordered GPU pass timestamps');return {...e,startNs:String(start),endNs:String(end),ms:Number(end-start)/1e6};});
-      const stages={};for(const p of passes)stages[p.category]=(stages[p.category]??0)+p.ms;
+      const timeline=partitionGpuPassIntervals(passes);
       const first=values.reduce((a,v)=>v<a?v:a,values[0]),last=values.reduce((a,v)=>v>a?v:a,values[0]);
-      if(!disposed){sample={...source,stages,passes,passSumMs:passes.reduce((n,p)=>n+p.ms,0),frameSpanMs:Number(last-first)/1e6,measuredAt:performance.now(),unit:'gpu_timestamp_ms',scope:'owned_frame_passes_and_first_to_last_pass_span',copies:'inside_span_not_individually_attributed',rayCountInstrumentation:false};failure=null;}
+      if(!disposed){sample={...source,stages:timeline.exclusive,stageCoverage:timeline.coverage,overlapMs:timeline.overlapMs,gapMs:timeline.gapMs,passes,passSumMs:passes.reduce((n,p)=>n+p.ms,0),frameSpanMs:Number(last-first)/1e6,measuredAt:performance.now(),unit:'gpu_timestamp_ms',scope:'owned_frame_timestamp_intervals_partitioned_without_overlap_double_count',copies:'inside_span_not_individually_attributed',rayCountInstrumentation:false};failure=null;}
     }).catch(error=>{if(!disposed)failure=String(error);}).finally(()=>{if(readback.mapState==='mapped')readback.unmap();pending=false;});
   }
   function abort(error){restore?.();restore=null;active=false;failure=String(error);}
