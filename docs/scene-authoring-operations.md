@@ -24,6 +24,19 @@ await window.saveSceneAs();
 
 Selecting a flame emitter presents its Emission controls. Selecting **Fire & smoke** in the scene hierarchy presents the field's preset, Appearance, Motion, Simulation and Legacy appearance controls. The runtime retains its existing singleton analytic source and whole-settings preset backing; selecting an emitter does not imply that it owns field-wide appearance. Selecting Water simulation opens the existing local-liquid field controls. Field selection does not pretend to be a mesh transform and survives save/reopen. Workbench retains the original controls on the same working state.
 
+Selecting **Fire & smoke** also exposes the simulation box's world centre and uniform world scale. G moves the box; S changes its world size about its centre. Its axes remain world-aligned and its aspect is fixed at 2 × 4 × 2 in local coordinates. The bounds preview while dragging; Escape cancels without restarting the field. Acceptance restarts the field once. Existing cell counts stay fixed, so larger world bounds mean larger world cells and can change the dynamics. The emitter retains its world pose and aperture. Moving it outside an explicitly placed box pauses injection instead of moving the box. Older scenes retain automatic source-follow until the box is explicitly authored.
+
+`window.kaminosFlameDomain.read()` returns `{translation, scale, followSource}`; `translation` is the engine frame origin, one scaled local unit below the box centre. `set(posePatch)` accepts a **world centre** `position` triple and a positive uniform `scale` triple, through the shared `@flame-domain` edit target. Rotation and nonuniform scale are refused. For example:
+
+```js
+window.kaminosFlameDomain.set({position: [0, 1, 0], scale: [1.5, 1.5, 1.5]});
+await window.kaminosSceneEdits.undo();
+const saved = await window.saveSceneAs({result: true, name: 'Kiln domain study'});
+// Reopen saved.url: it names both the saved scene and its exact immutable basin.
+```
+
+Save/reopen retains the domain even if its source was removed. Domain undo restores its authored transform and source-follow policy; it does not restore evolved gas. Existing kiln collision, light bounds and field-to-bed/contact mappings consume the same accepted world transform. This operation does not create another independent simulation domain or change grid resolution.
+
 Drag numeric field bodies or labels relatively, or click to type an exact value. Shift makes subsequent movement finer, and Escape cancels. Transform and data controls use the same field gesture and chronological ledger. Undo restores authored settings, not earlier fluid fields.
 
 `window.kaminosFlameAuthoring.read()` returns a copy of the complete working settings and source recipe receipt. `apply(snapshot, label)` applies a complete validated snapshot as one history entry. `await applyBasin(presetId)` loads an existing immutable recipe and applies it through the same operation as the inspector. It rejects an overlapping load or an intervening scene edit; retry explicitly after resolving that edit. Finish or cancel an active gesture first.
