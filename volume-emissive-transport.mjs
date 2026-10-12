@@ -1,10 +1,13 @@
 import { blackbodyXYZ, thermalLinearRGB, linearLuminance } from './volume-physical-color.mjs';
 import { CIE_1931_2DEG } from './cie-1931-observer.mjs';
+import { displayAgXRGB } from './volume-agx.mjs';
 
 const referenceY = blackbodyXYZ(1900)[1];
 // Independent sensor-channel saturation; no exposure-dependent white is added.
-export function displayEmissiveRGB(rgb, ev = 0, knee = .6, white = [[1,0,0],[0,1,0],[0,0,1]]) {
-  return white.map(row => row.reduce((sum,v,i)=>sum+v*rgb[i],0)).map(v => {
+export function displayEmissiveRGB(rgb, ev = 0, knee = .6, white = [[1,0,0],[0,1,0],[0,0,1]], toneMapping = 'agx') {
+  const balanced = white.map(row => row.reduce((sum,v,i)=>sum+v*rgb[i],0));
+  if (toneMapping === 'agx') return displayAgXRGB(balanced, ev);
+  return balanced.map(v => {
     let x = Math.max(0, v * 2 ** ev);
     if (x > knee) x = 1 - (1-knee)**2 / (x+1-2*knee);
     return x <= .0031308 ? x*12.92 : 1.055*x**(1/2.4)-.055;
@@ -147,6 +150,7 @@ fn sceneEmissiveMaterialAt(p: vec3<f32>) -> EmissiveMaterial {
 }
 fn emissiveCamera(rgb: vec3<f32>) -> vec3<f32> {
   let balanced = vec3<f32>(dot(u.emissive_white_r.xyz,rgb),dot(u.emissive_white_g.xyz,rgb),dot(u.emissive_white_b.xyz,rgb));
+  if (u.reserved_render_controls.z > 0.5) { return agxDisplay(balanced, u.physical_display.y); }
   let exposed = max(vec3<f32>(0.0), balanced*exp2(u.physical_display.y));
   let knee = u.physical_display.z;
   let d = 1.0-knee;

@@ -76,7 +76,7 @@ assert.match(core, /uniforms\[306\]\s*=\s*raymarchSmokePresentationEffectiveMode
 assert.doesNotMatch(core, /encodeHistoryCopy|historyTexture|temporalAccumulationForPresentation/, 'presentation switching has no retired temporal history to contaminate');
 assert.match(setMode, /requestedMode[\s\S]*effectiveMode[\s\S]*fallbackReason[\s\S]*targetIdentity[\s\S]*effectiveRayQuality/, 'mode switch returns an honest effective receipt');
 
-assert.match(core, /supervisionFireOnlyTarget\s*=\s*select\(clamp\(u\.boundary_fire_display\.y[^;]+LEAN_STOCK_RAYMARCH\)/, 'full raymarch shader reads the exact intrinsic target gate while lean stock refuses the assay path');
+assert.match(core, /supervisionFireOnlyTarget\s*=\s*select\(clamp\(u\.boundary_fire_display\.y[^;]+LEAN_STOCK_RAYMARCH \|\| LEAN_EMISSIVE_RAYMARCH\)/, 'full raymarch shader reads the exact intrinsic target gate while specializations refuse the assay path');
 assert.match(core, /visibleSmokeAlpha\s*=\s*smokeAlpha\s*\*\s*\(1\.0\s*-\s*raymarchSmokeSuppressed\)\s*\*\s*\(1\.0\s*-\s*supervisionFireOnlyTarget\)/, 'Intrinsic suppresses smoke contribution through the shared presentation carrier');
 assert.match(core, /directFlameUnitEmission\s*=\s*fireRadianceEmission\([^;]+1\.0,\s*0\.0\)/s, 'Intrinsic uses unit-gain direct-flame emission');
 assert.match(core, /directFlameCandidateStructuralSignal[\s\S]*directFlameCandidateSupport[\s\S]*step\(0\.11,\s*directFlameCandidateStructuralSignal\)/, 'Intrinsic uses the candidate-support gate');

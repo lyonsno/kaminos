@@ -27,6 +27,7 @@ assert.match(rayOrigin, /var t = startT \+ jitter;/, 'every scene starts at the 
 const rawSampler = balancedWgslBlock(executableCore, 'fn sampleWorldFlowReconstructionRaw(', {
   label: 'direct trilinear semantic sampler',
 });
+const referenceRawSampler = rawSampler.replace(/\s*if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*return reconstructRaymarchNeighborhood\(sampleRaymarchNeighborhood\(p\)\);\s*\}/, '');
 const rawMaterialCallee = balancedWgslBlock(executableCore, 'fn sampleWorldMaterial(', {
   label: 'direct trilinear material callee',
 });
@@ -36,7 +37,7 @@ assert.match(
   'raw material callee must preserve direct trilinear field sampling',
 );
 assert.match(
-  rawSampler,
+  referenceRawSampler,
   /^fn sampleWorldFlowReconstructionRaw\(p: vec3<f32>\) -> FlowReconstructionSample \{\s*var sample: FlowReconstructionSample;\s*sample\.velocityDensity = sampleWorldVelocity\(p\);\s*sample\.material = sampleWorldMaterial\(p\);\s*sample\.fireLayer = sampleWorldFireLayer\(p\);\s*sample\.microLayer = sampleWorldMicrodetail\(p\);\s*sample\.kernelTangentRadius = vec4<f32>\(0\.0\);\s*sample\.frontTopology = sampleWorldFrontField\(p\);\s*return sample;\s*\}$/,
   'raw sampler must preserve direct trilinear fields without hidden filtering',
 );
@@ -70,12 +71,12 @@ assert.equal(
   'reconstruction-off evaluates the trilinear semantic bundle exactly once per admitted occupied point',
 );
 const supportAdmission = traversal.slice(
-  traversal.indexOf('let directSupport ='),
+  traversal.indexOf('var directSupport:'),
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 );
 assert.match(
   supportAdmission,
-  /^let directSupport = directCellOpticalSupport\(p\);\s*if \(!fullGridCapture && directSupport <= 0\.0001\) \{\s*let cellExit = directCellExitDistance\(p, rd\);\s*let emptyCellAdvance = mix\(\s*dtBase,\s*max\(dtBase, cellExit \+ 0\.0001\),\s*occupancySkipStrength\s*\);\s*t = t \+ min\(emptyCellAdvance, max\(0\.0001, endT - t\)\);\s*continue;\s*\}\s*$/,
+  /^var directSupport: f32;\s*if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*neighborhood = sampleRaymarchNeighborhood\(p\);\s*directSupport = raymarchNeighborhoodSupport\(neighborhood\);\s*\} else \{\s*directSupport = directCellOpticalSupport\(p\);\s*\}\s*if \(!fullGridCapture && directSupport <= 0\.0001\) \{\s*let cellExit = directCellExitDistance\(p, rd\);\s*let emptyCellAdvance = mix\(\s*dtBase,\s*max\(dtBase, cellExit \+ 0\.0001\),\s*occupancySkipStrength\s*\);\s*t = t \+ min\(emptyCellAdvance, max\(0\.0001, endT - t\)\);\s*continue;\s*\}\s*$/,
   'one live direct-support skip must own admission before sampling',
 );
 const sampleBranch = traversal.slice(
@@ -83,7 +84,7 @@ const sampleBranch = traversal.slice(
 );
 assert.match(
   sampleBranch,
-  /^var reconstructed: FlowReconstructionSample;\s*if \(flowKernelReconstructionActive\) \{\s*reconstructed = sampleWorldFlowReconstruction\(p\);\s*\} else \{\s*reconstructed = sampleWorldFlowReconstructionRaw\(p\);\s*\}\s*expensiveSamples = expensiveSamples \+ 1u;\s*$/,
+  /^var reconstructed: FlowReconstructionSample;\s*if \(flowKernelReconstructionActive\) \{\s*reconstructed = sampleWorldFlowReconstruction\(p\);\s*\} else if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*reconstructed = reconstructRaymarchNeighborhood\(neighborhood\);\s*\} else \{\s*reconstructed = sampleWorldFlowReconstructionRaw\(p\);\s*\}\s*expensiveSamples = expensiveSamples \+ 1u;\s*$/,
   'raw zero route must contain one direct trilinear assignment and no filtering',
 );
 }
@@ -114,7 +115,7 @@ const falseClosureMutations = [
   [
     'commented decoy skip followed by global support alias',
     source => source
-      .replace('    let directSupport = directCellOpticalSupport(p);', '    /*\n    let directSupport = directCellOpticalSupport(p);')
+      .replace('    var directSupport: f32;', '    /*\n    var directSupport: f32;')
       .replace('    var reconstructed: FlowReconstructionSample;', '    */\n    let directSupport = directCellOpticalSupport(p);\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
     /one live direct-support skip must own admission before sampling/,
   ],
