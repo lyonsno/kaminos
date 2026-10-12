@@ -22,7 +22,7 @@ export function mountFluidBudgetCockpit(root,{read,apply,requestFrame}) {
   scaleText.textContent=effective?`${effective.width} × ${effective.height} water · ${effective.fullWidth} × ${effective.fullHeight} scene · ${(effective.pixelFraction*100).toFixed(1)}% of water pixels`: 'Awaiting rendered extent';
   energyText.textContent=energy.checked?`Four energy-recording passes per simulation step · last measured step ${current.solver.energy.measuredStep??'none yet'}`:'Energy recording off · motion unchanged';
   const t=current.viewport?.timing,sample=t?.sample,reflection=current.reflection?.effective;
-  const cameraKey=c=>c?JSON.stringify([c.identity,c.projectionType,c.viewport,c.viewProjection]):null;
+  const cameraKey=c=>c?JSON.stringify([c.identity,c.projectionType,c.viewport,Array.from(c.viewProjection,v=>Math.fround(v))]):null;
   const matching=sample && sample.paused===current.clock.paused && cameraKey(sample.camera)===cameraKey(current.viewport.lastFrame?.camera) && effective && sample.waterResolution.requestedScale===scale && sample.energy===current.solver.energy.mode && sample.reflection?.mode===reflection?.mode && sample.reflection?.fresnelCutoff===reflection?.fresnelCutoff;
   if(!t?.enabled)gpuText.textContent='GPU timings off';
   else if(t.status==='failed')gpuText.textContent=`GPU timings unavailable: ${t.failure}`;
