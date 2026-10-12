@@ -210,6 +210,15 @@ async function generateSizes(sizes, session) {
     report.generations.push(row);
     if (!done.last) throw new Error(`generation at ${size} failed: ${done.status}`);
     row.pixelSha256 = await browser.evaluate(imageHash);
+    // Every pipeline should have been compiled asynchronously at load (KleinPipeline.precompile);
+    // one compiled synchronously during a generation stalls the page's rendering.
+    row.syncCompiles = await browser.evaluate(`(() => { const p = window.kleinDemo.pipeline;
+      return [p.textEncoder, p.transformer, p.vae].reduce((n, m) => n + (m?.syncCompiles ?? 0), 0); })()`);
+    if (row.syncCompiles) {
+      row.syncCompiledKeys = await browser.evaluate(`(() => { const p = window.kleinDemo.pipeline;
+        return [p.textEncoder, p.transformer, p.vae].flatMap(m => m?.syncCompiledKeys ?? []); })()`);
+      throw new Error(`${row.syncCompiles} pipelines were compiled synchronously during generation: ${row.syncCompiledKeys.join(', ')}`);
+    }
     const png = await browser.evaluate(`document.getElementById('out').toDataURL('image/png')`);
     await fsp.writeFile(path.join(outDir, `image-${size}-session${session}.png`), Buffer.from(png.split(',')[1], 'base64'));
     if (session === 1 && size === sizes[0]) await screenshot('after-generate-desktop', desktop);
