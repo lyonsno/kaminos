@@ -1,10 +1,25 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {surfaceReceiverLayout,interpolateReceiverValues,validateReceiverSpacing} from '../scene-surface-receivers.mjs';
 function grid(n=16,z=0){const vertices=[],triangles=[];
  for(let y=0;y<=n;y++)for(let x=0;x<=n;x++)vertices.push({position:[x/n,y/n,z],normal:[0,0,1],twoSided:true});
  for(let y=0;y<n;y++)for(let x=0;x<n;x++){const a=x+(n+1)*y,b=a+1,c=a+n+1,d=c+1;triangles.push(a,b,c,b,d,c);}
  return {vertices,triangles};}
 const f=grid();
+// Operator-facing coarse choices extend to five times the original .16 ceiling.
+const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const spacingSelect=html.match(/<select\b[^>]*id="rendering-receiver-spacing"[^>]*>([\s\S]*?)<\/select>/)?.[1];
+assert(spacingSelect,'receiver spacing control exists');
+const options=[...spacingSelect.matchAll(/<option\b([^>]*)value="([^"]+)"([^>]*)>/g)];
+for(const value of [.32,.48,.64,.8])assert(options.some(o=>Number(o[2])===value),`receiver spacing ${value} is selectable`);
+assert.equal(Number(options.find(o=>/\bselected\b/.test(o[1]+o[3]))?.[2]),0,'per-vertex default stays unchanged');
+for(const spacing of [.32,.48,.64,.8]){
+ const layout=surfaceReceiverLayout(f.vertices,f.triangles,{spacing});
+ assert.equal(layout.metadata.spacing,spacing,'coarse request is not clamped');
+ assert(layout.receivers.length<f.vertices.length);
+ const field=interpolateReceiverValues(layout,new Float32Array(layout.receivers.length*4).fill(3));
+ assert(field.every(x=>Math.abs(x-3)<1e-6),'extended coarse choices preserve a constant field');
+}
 const dense=surfaceReceiverLayout(f.vertices,f.triangles);
 assert.equal(dense.receivers.length,f.vertices.length);
 assert.deepEqual([...dense.triangles],f.triangles);
