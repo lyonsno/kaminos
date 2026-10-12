@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Muscle support → skin transport · Kaminos experiment</title>
+<style>
+body{margin:0;background:#101722;color:#e3eaf4;font:15px system-ui}canvas{display:block;width:100%;height:100%}
+header{padding:18px 24px;background:#182331}h1{font-size:21px;margin:0 0 8px}p{margin:5px 0;color:#b9c8dc;max-width:1100px}
+button,label{font:inherit;margin:10px 14px 0 0}button{background:#31435a;border:1px solid #6b829c;border-radius:5px;color:white;padding:8px 12px;cursor:pointer}
+#views{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:14px 24px 0}#views strong{display:block}small{display:block;color:#b5c3d4;margin-top:5px}
+#viewport{height:62vh;min-height:380px}#stats{white-space:pre-wrap;font:13px ui-monospace;padding:12px 24px;color:#cbd7e5}#status{color:#f1cb7a}
+</style>
+<script type="importmap">{"imports":{"three":"./lib/three.webgpu.js","three/webgpu":"./lib/three.webgpu.js","three/tsl":"./lib/three.tsl.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"}}</script>
+</head><body>
+<header><h1>Moving muscle support → skin transport</h1>
+<p>Procedural hinge, prescribed spindle muscle, asymmetric skin sleeve. A geometry experiment; animal anatomy and muscle packing are not established.</p>
+<p>Drag the rotation rings on the left joint. The same pose drives all three views. Colored bands and white dots are fixed to skin vertices.</p>
+<button id="cycle">Play bend / twist / return</button><button id="bulge">Prescribed muscle bulge</button><button id="reset">Reset fixture</button>
+<label><input id="supports" type="checkbox" checked>Show bones and muscle</label><span id="status">Loading renderer…</span>
+</header>
+<div id="views"><div><strong style="color:#70ded9">Transport + support field</strong><small>Coarse bone motion, iso-value projection, tangential edge relaxation.</small></div>
+<div><strong style="color:#ffd398">Automatic bone blend</strong><small>Same coarse longitudinal weights; no response to muscle shape.</small></div>
+<div><strong style="color:#dcb0ff">Support field only</strong><small>Projection without a rule carrying skin details along the bone.</small></div></div>
+<div id="viewport"></div><div id="stats"></div>
+<script type="module" src="./muscle-support-assay-view.mjs"></script>
+</body></html>

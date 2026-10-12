@@ -5967,7 +5967,11 @@ try {
   effectiveServerRoots = await fetchServerRoots(effectiveHref);
   assertExpectedServerRoot(effectiveServerRoots);
 
-  if (scenario === 'startup-empty') {
+  if (scenario === 'muscle-support-assay') {
+    phase = 'scenario-muscle-support-assay';
+    const { runSupportAssayWitness } = await import('./muscle-support-assay-witness.mjs');
+    lastEvidence.supportAssay = await runSupportAssayWitness({evaluate,capture:capturePngScreenshot,ws,out,delay});
+  } else if (scenario === 'startup-empty') {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
