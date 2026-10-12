@@ -19,6 +19,13 @@ export async function withGpuErrorScope(device, fn) {
   return result;
 }
 
+// A readback that is entirely zero means the evaluation never ran (a failed
+// dispatch leaves the output buffer untouched); a real drift is never all zero.
+export function assertEvaluated(out) {
+  for (let i = 0; i < out.length; i++) if (out[i] !== 0) return;
+  throw new Error('UniMate drift evaluation produced an all-zero output: the GPU work did not run');
+}
+
 export function createCfgDrift(device, denoiser, { prompts, cfgScale = 3 }) {
   const n = prompts * denoiser.J * denoiser.Fe * denoiser.T;
   if (denoiser.B !== 2 * prompts) throw new Error(`denoiser has ${denoiser.B} rows, expected ${2 * prompts}`);
@@ -40,6 +47,7 @@ export function createCfgDrift(device, denoiser, { prompts, cfgScale = 3 }) {
       await staging.mapAsync(GPUMapMode.READ);
     });
     const out = new Float32Array(staging.getMappedRange());
+    try { assertEvaluated(out); } catch (e) { staging.unmap(); throw e; }
     const v = new Float32Array(n);
     for (let i = 0; i < n; i++) {
       const c = out[i], u = out[n + i];

@@ -30,10 +30,13 @@ export class UniMateDenoiser {
     this.HD = 64;
     // The kernels assume this checkpoint's shape: fail loudly on any other.
     const m = manifest.model ?? {};
-    for (const [k, want] of [['latent_dim', 512], ['num_heads', 8], ['attention', 'graph'], ['text_cond', 'adaln']]) {
-      if (m[k] !== undefined && m[k] !== want) throw new Error(`unsupported model ${k}=${m[k]} (port supports ${want})`);
+    for (const [k, want] of [['latent_dim', 512], ['num_heads', 8], ['ff_size', 2048], ['attention', 'graph'], ['text_cond', 'adaln']]) {
+      if (m[k] !== want) throw new Error(`unsupported or missing model ${k}=${m[k]} (port supports ${want})`);
     }
-    this.maxDepth = manifest.dataset?.max_depth ?? 20;
+    // Clamp depth to the embedding table actually packed: rows 0..max_depth.
+    const depthRows = manifest.tensors.find(t => t.name === 'depth_embedding.weight')?.shape?.[0];
+    if (!depthRows) throw new Error('manifest has no depth_embedding.weight');
+    this.maxDepth = depthRows - 1;
     this.layers = manifest.model?.num_layers ?? 10;
     this.ffHidden = Math.floor((2 / 3) * (manifest.model?.ff_size ?? 2048));
     this.Fe = manifest.dataset?.feature_len ?? 12;

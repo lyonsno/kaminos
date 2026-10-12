@@ -3,9 +3,9 @@
 // Modes (?modes=vector-field,forced,free):
 // - vector-field: every reference drift evaluation's input through the browser
 //   network. Gate: median relative L2 <= ?vfMedianGate (1e-5) and max <= ?vfGate
-//   (5.1e-5 = 1.25 x PyTorch FP32's own distance from a float64 run at the worst
-//   traced evaluation, 4.11e-5; the browser cannot be held tighter than the
-//   reference's own FP32 rounding).
+//   (5.1e-5 = 1.25 x 4.11e-5, PyTorch FP32's own distance from a float64 run at
+//   Go2 trace evaluation 130, the worst browser-vs-PyTorch evaluation; float64 was
+//   run at evaluations 0 and 130 only, so recalibrate for other skeletons' traces).
 // - forced: the JS dopri5 replays the reference's first step, step sizes and
 //   accept/reject decisions. Gate: every evaluation time matches except the
 //   initial-step probe (its time comes from the controller's error norm, which
@@ -50,8 +50,10 @@ async function run() {
     interval: trIndex.interval };
   if (fxIndex.n_joints !== trIndex.n_joints) throw new Error('fixture and trace joint counts differ');
   // Fixture and trace must describe the same capture: same prompts, seed and checkpoint.
-  const same = k => JSON.stringify(fxIndex.capture_inputs?.[k]) === JSON.stringify(trIndex.capture_inputs?.[k]);
-  const mismatched = ['prompts', 'seed', 'model_sha256'].filter(k => !same(k));
+  if (!fxIndex.capture_inputs || !trIndex.capture_inputs) throw new Error('fixture or trace lacks capture_inputs');
+  const same = k => JSON.stringify(fxIndex.capture_inputs[k]) === JSON.stringify(trIndex.capture_inputs[k]);
+  const mismatched = ['prompts', 'seed', 'model_sha256', 'asset', 'asset_cond_sha256', 'cond_sha256', 'cond_path',
+    'config_sha256', 'stats_sha256'].filter(k => !same(k));
   if (mismatched.length) throw new Error(`fixture and trace come from different captures: ${mismatched.join(', ')}`);
 
   const J = trIndex.n_joints, prompts = 2, per = J * 12 * 60;

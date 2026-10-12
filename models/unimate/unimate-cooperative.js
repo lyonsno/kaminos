@@ -12,7 +12,7 @@
 
 import { UniMateDenoiser } from './unimate-denoiser.js';
 import { KleinDutyScheduler } from '../flux2-klein/klein-duties.js';
-import { withGpuErrorScope } from './unimate-drift.js';
+import { assertEvaluated } from './unimate-drift.js';
 
 const SU = GPUBufferUsage;
 const STORAGE = SU.STORAGE | SU.COPY_SRC | SU.COPY_DST;
@@ -79,13 +79,15 @@ export function createCooperativeCfgDrift(device, denoiser, scheduler, { prompts
     x.set(y, n);
     denoiser.writeMotion(x);
     denoiser.writeTimesteps(ts.fill(t));
-    await withGpuErrorScope(device, async () => {
-      await denoiser.encodeProgramCooperative(denoiser.forwardProgram, scheduler);
-      scheduler.encoder().copyBufferToBuffer(denoiser.io.out, 0, staging, 0, 2 * n * 4);
-      await scheduler.flush('unimate.drift.readback');
-      await staging.mapAsync(GPUMapMode.READ);
-    });
+    // No error scope here: it would stay open across the duty boundaries where the
+    // host's frames submit on the same device, and would capture (or mispair with)
+    // the host's errors. An all-zero readback is the evidence that GPU work failed.
+    await denoiser.encodeProgramCooperative(denoiser.forwardProgram, scheduler);
+    scheduler.encoder().copyBufferToBuffer(denoiser.io.out, 0, staging, 0, 2 * n * 4);
+    await scheduler.flush('unimate.drift.readback');
+    await staging.mapAsync(GPUMapMode.READ);
     const out = new Float32Array(staging.getMappedRange());
+    try { assertEvaluated(out); } catch (e) { staging.unmap(); throw e; }
     const v = new Float32Array(n);
     for (let i = 0; i < n; i++) v[i] = Math.fround(out[n + i] + Math.fround(scale * Math.fround(out[i] - out[n + i])));
     staging.unmap();
