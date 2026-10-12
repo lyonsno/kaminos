@@ -14690,6 +14690,7 @@ async function startFingerFluidBench() {
       chemistryDiffusion: fingerFluidBenchConfig.effectiveChemistryDiffusion,
       capillaryStrength: fingerFluidBenchConfig.effectiveCapillaryStrength,
       thinSheetVorticityAttenuation: fingerFluidBenchConfig.effectiveThinSheetVorticityAttenuation,
+      viscosityScaling: new URLSearchParams(location.search).get('finger_fluid_viscosity_scaling') ?? 'legacy',
       freeFlightViscosityBoost: fingerFluidBenchConfig.effectiveFreeFlightViscosityBoost,
       unsupportedSheetStrength: fingerFluidBenchConfig.effectiveUnsupportedSheetStrength,
       maxFluidSpeed: fingerFluidBenchConfig.effectiveMaxFluidSpeed,

@@ -1,3 +1,5 @@
+import {validateFingerFluidDiagnosticPopulation,validateFingerFluidReferenceBox,fingerFluidReferenceBoxSupport,boxBoundaryDensitySource} from './finger-fluid-box-fixtures.mjs';
+import {viscosityScale} from './finger-fluid-viscosity-scale.mjs';
 import {createMaterialControlState, validateMaterialControls, decodeMaterialInputs, PBF_REPULSION_COEFFICIENT} from './finger-fluid-material-controls.mjs';
 import { LOCAL_LIQUID_TRANSPORT_WGSL } from './local-liquid-transport.mjs';
 import { localLiquidOpticalQueryControls, localLiquidHostOpticalInputs, LOCAL_LIQUID_HOST_OPTICAL_QUERY_ROUTE } from './local-liquid-optical-query.mjs';
@@ -7618,7 +7620,7 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.24,
   );
   if (neighborWeight > 0.0001) {
-    velocity = mix(velocity, neighborVelocity / neighborWeight, restViscosityBlend);
+    velocity = mix(velocity, neighborVelocity / neighborWeight, restViscosityBlend * bitcast<f32>(params.liveInletControl.w));
   }
   velocity = velocity * params.forces.y;
   restStates[index].z = supportRestWeight;
@@ -13284,6 +13286,7 @@ export async function createWebGPUFingerFluidSolver({
   presentationMode = KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE,
   movingHillSupportContactProviderFactory = null,
   composedRevision = null,
+  diagnosticPopulation = null, diagnosticBox = null, viscosityScaling = 'legacy',
 } = {}) {
   const safePressureSolver = resolveFingerFluidPressureSolver(pressureSolver);
   const useIPBF = safePressureSolver === 'ipbf';
@@ -13349,7 +13352,14 @@ export async function createWebGPUFingerFluidSolver({
   if (!webgpuDevice && !globalThis.navigator?.gpu) {
     return createUnavailableSolver('navigator.gpu unavailable');
   }
-  const supportShaderSource = supportShaderSourceForRoute(supportContactRoute);
+  const safeDiagnosticBox = diagnosticBox ? validateFingerFluidReferenceBox(diagnosticBox) : null;
+  if (Boolean(diagnosticPopulation) !== Boolean(safeDiagnosticBox)) throw new Error('Finite box requires both geometry and population');
+  if (safeDiagnosticBox && (adaptiveDensity || truthScene !== 'multi_regime_playground' || hostFrameComposition || supportContactRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE)) throw new Error('Finite box requires uniform standalone PBF');
+  if (viscosityScaling !== 'legacy' && adaptiveDensity) throw new Error('Nominal viscosity scaling requires uniform particle volume');
+  viscosityScale(viscosityScaling, 1/60, .185);
+  const supportShaderSource = safeDiagnosticBox
+    ? {bindings:'',functions:fingerFluidReferenceBoxSupport(safeDiagnosticBox)}
+    : supportShaderSourceForRoute(supportContactRoute);
   const safeComposedRevision = typeof composedRevision === 'string' && /^[0-9a-f]{40}$/.test(composedRevision)
     ? composedRevision
     : null;
@@ -13513,7 +13523,7 @@ export async function createWebGPUFingerFluidSolver({
   const liquidFireContactAllocationGeneration = nextLiquidFireContactAllocationGeneration;
   nextLiquidFireContactAllocationGeneration = (nextLiquidFireContactAllocationGeneration % 0x00fffffe) + 1;
   const liquidFireContactEpoch = 1;
-  const population = safeTruthScene === 'live_hand_inlets'
+  const population = diagnosticPopulation ? validateFingerFluidDiagnosticPopulation(diagnosticPopulation,safeBaseParticleCount) : safeTruthScene === 'live_hand_inlets'
     ? null
     : createFingerFluidTruthScenePopulation(safeBaseParticleCount, safeTruthScene, {
       waterfallOraclePreset: safeWaterfallOraclePreset,
@@ -13529,6 +13539,9 @@ export async function createWebGPUFingerFluidSolver({
       0.000001,
     ),
   );
+  const simulationBounds = safeDiagnosticBox?.bounds ?? {min:BOUNDS_MIN,max:BOUNDS_MAX};
+  // Every ±1-cell neighbor traversal must cover its complete support.
+  const simulationGrid = safeDiagnosticBox ? GRID_DIMS.map((n,k)=>Math.max(1,Math.min(n,Math.floor((simulationBounds.max[k]-simulationBounds.min[k])/(safeKernelRadius*Math.max(1,safeUniformParticleRadiusScale)))))) : GRID_DIMS;
   const baseParticleData = population?.particleData
     ?? createFingerFluidLiveInletParticles(safeBaseParticleCount, liveInletPacket);
   const particleData = new Float32Array(safeParticleCount * PARTICLE_FLOATS);
@@ -13725,6 +13738,18 @@ export async function createWebGPUFingerFluidSolver({
     )
     .replace(KAMINOS_FINGER_FLUID_SUPPORT_BINDINGS_TOKEN, supportShaderSource.bindings)
     .replace(KAMINOS_FINGER_FLUID_SUPPORT_FUNCTIONS_TOKEN, supportShaderSource.functions);
+  const createSceneShaderModule = descriptor => device.createShaderModule({
+    ...descriptor,
+    code: descriptor.code
+      .replaceAll('const riverPlaygroundEnabled: bool = false;', `const riverPlaygroundEnabled: bool = ${safeTruthScene === 'river_playground'};`)
+      .replaceAll('const pressurePlaygroundEnabled: bool = false;', `const pressurePlaygroundEnabled: bool = ${safeTruthScene === 'pressure_playground'};`)
+      .replaceAll('const analyticObstacleSupportEnabled: bool = true;', `const analyticObstacleSupportEnabled: bool = ${!safeDiagnosticBox && safeTruthScene !== 'pressure_playground'};`),
+  });
+  computeShader = computeShader.replaceAll('const riverPlaygroundEnabled: bool = false;', `const riverPlaygroundEnabled: bool = ${safeTruthScene === 'river_playground'};`);
+  if (safeTruthScene === 'pressure_playground') computeShader = computeShader.replaceAll('const pressurePlaygroundEnabled: bool = false;', 'const pressurePlaygroundEnabled: bool = true;').replaceAll('const analyticObstacleSupportEnabled: bool = true;', 'const analyticObstacleSupportEnabled: bool = false;');
+  if(safeDiagnosticBox) computeShader = computeShader.replaceAll('params.fluid.x * 0.22', String(safeDiagnosticBox.collisionRadius))
+    .replace('let particleRadius = kernelRadius * 0.22;', `let particleRadius = ${safeDiagnosticBox.collisionRadius};`);
+  if(safeDiagnosticBox) computeShader=computeShader.replace(/fn analytic_boundary_density_support[\s\S]*?\n}\n/,boxBoundaryDensitySource(safeDiagnosticBox)+'\n');
   computeShader=applyFingerFluidCohesionProfile(computeShader,{pressureSolver:safePressureSolver,cohesionModel:safeCohesionModel});
   const ipbfSampling=resolveFingerFluidIPBFSampling({
     kernelRadius:safeKernelRadius,restDensity:safeRestDensity,
@@ -13751,7 +13776,7 @@ export async function createWebGPUFingerFluidSolver({
     computeShader = computeShader.replace(velocityAnchor,'  var velocity = particle.delta.xyz;');
     computeShader = computeShader.replace('  velocity = velocity * params.forces.y;', '  // IPBF paper damping replaces the legacy uniform velocity damping.');
   }
-  const computeModule = device.createShaderModule({ label: useIPBF ? 'webgpu-ipbf-cubic-spline-v0' : KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: computeShader });
+  const computeModule = createSceneShaderModule({ label: useIPBF ? 'webgpu-ipbf-cubic-spline-v0' : KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: computeShader });
   const movingHillComputeLayoutEntries = movingHillSupportProvider
     ? [
       {
@@ -14263,6 +14288,7 @@ export async function createWebGPUFingerFluidSolver({
   let runtimeApi = null;
   let frameIndex = 0;
   let stepCount = 0;
+  let simulatedTimeSeconds = 0, lastStepSeconds = null, lastViscosityScale = 1;
   let solverGpuTimestampCapture = null;
   let solverStageGpuTimestampCapture = null;
   let rendererGpuTimestampCapture = null;
@@ -14719,12 +14745,12 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(4, safeParticleCount, true);
     view.setUint32(8, frameIndex, true);
     view.setUint32(12, GRID_CELL_COUNT, true);
-    view.setUint32(16, GRID_DIMS[0], true);
-    view.setUint32(20, GRID_DIMS[1], true);
-    view.setUint32(24, GRID_DIMS[2], true);
+    view.setUint32(16, simulationGrid[0], true);
+    view.setUint32(20, simulationGrid[1], true);
+    view.setUint32(24, simulationGrid[2], true);
     view.setUint32(28, GRID_CELL_COUNT, true);
-    BOUNDS_MIN.forEach((value, index) => view.setFloat32(32 + index * 4, value, true));
-    BOUNDS_MAX.forEach((value, index) => view.setFloat32(48 + index * 4, value, true));
+    simulationBounds.min.forEach((value, index) => view.setFloat32(32 + index * 4, value, true));
+    simulationBounds.max.forEach((value, index) => view.setFloat32(48 + index * 4, value, true));
     view.setFloat32(64, safeKernelRadius, true);
     view.setFloat32(68, safeRestDensity, true);
     view.setFloat32(72, 0.012, true);
@@ -14765,7 +14791,8 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(196, liveInletReleaseEpochFrame, true);
     // Reserved ABI word .z carries the numerical coefficient, read via WGSL bitcast.
     view.setFloat32(200, PBF_REPULSION_COEFFICIENT * (live?.particleRepulsionStrength ?? 0), true);
-    view.setUint32(204, 0, true);
+    lastViscosityScale = viscosityScale(viscosityScaling,dt,safeKernelRadius*safeUniformParticleRadiusScale);
+    view.setFloat32(204, lastViscosityScale, true);
     view.setFloat32(208, safeUniformParticleVolumeScale, true);
     view.setFloat32(212, safeUniformParticleRadiusScale, true);
     view.setFloat32(216, safeUniformVolumeKernelNormalization, true);
@@ -14991,6 +15018,7 @@ export async function createWebGPUFingerFluidSolver({
   function step(dt = 1 / 60) {
     if (runtimeLifecycle.stopped) return;
     const startedAt = performance.now();
+    if ((safeDiagnosticBox || viscosityScaling !== 'legacy') && (!Number.isFinite(dt) || dt<1/240 || dt>1/30)) throw new RangeError('Explicit comparison timestep must be within solver range [1/240,1/30] seconds');
     const frameDt = clamp(finite(dt, 1 / 60), 1 / 240, 1 / 30);
     const substepDt = frameDt / safeSubsteps;
     for (let substep = 0; substep < safeSubsteps; substep += 1) {
@@ -15117,6 +15145,7 @@ export async function createWebGPUFingerFluidSolver({
       if (timestampQueryIndex !== null) solverGpuTimestampCapture.writtenPairs += 1;
       if (stageQueryBase !== null) solverStageGpuTimestampCapture.writtenPairs += 1;
       stepCount += 1;
+      simulatedTimeSeconds += substepDt; lastStepSeconds = substepDt;
       frameIndex += 1;
     }
     lastFrameCpuMs = performance.now() - startedAt;
@@ -15366,7 +15395,7 @@ export async function createWebGPUFingerFluidSolver({
       })
       : screenSpaceRefractionCompositeBindGroup;
     const liquidSupportDiagnostic = effectiveOpticalDebugMode === 'liquid_support';
-    const drawAnalyticSupport = safePresentationMode === KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE;
+    const drawAnalyticSupport = !safeDiagnosticBox && safePresentationMode === KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE;
     if (!validatedHostFrame) {
     const hdrWorldBackgroundPass = encoder.beginRenderPass({
       label: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
@@ -15963,7 +15992,8 @@ export async function createWebGPUFingerFluidSolver({
         const sampleIndex = Math.floor(index * (activeInterfaceCount - 1) / Math.max(1, sampleRecordCount - 1));
         sampleRecords.push(readInterfaceRecord(sampleIndex));
       }
-      const fluidTruthSnapshot = measureFingerFluidTruthSnapshot(values, safeParticleCount, {
+      const fluidTruthSnapshot = safeDiagnosticBox ? {schema:'kaminos.finite-box-truth-unmeasured.v1', scene:diagnosticPopulation.fixture, status:'use_raw_particle_state',regimeWitnesses:[]} : measureFingerFluidTruthSnapshot(values, safeParticleCount, {
+        stepCount: diagnosticsStepCount,
         scene: safeTruthScene,
         restDensity: safeRestDensity,
         kernelRadius: safeKernelRadius,
@@ -16011,6 +16041,7 @@ export async function createWebGPUFingerFluidSolver({
         }:null,
         readbackMode: captureParticleState?'explicit_full_particle_gpu_diagnostics_v1':'explicit_sparse_gpu_diagnostics_v0',
         particleSnapshot:captureParticleState?captureFingerFluidParticleWordsForWitness(values,safeParticleCount,{stepCount:diagnosticsStepCount,pressureSolver:safePressureSolver,boundaryPressureContract:pressureBoundary.boundaryPressureContract}):null,
+        ...(captureParticleState ? {particleState:{schema:'kaminos.particle-state.f32.v1',stride:16,count:safeParticleCount,values:Array.from(values)}} : {}),
         stepCount: diagnosticsStepCount,
         capturedAtMs: Number(diagnosticsCapturedAtMs.toFixed(1)),
         activeExtent3d: {
@@ -16577,7 +16608,11 @@ export async function createWebGPUFingerFluidSolver({
       representedPopulationVolume: population?.representedVolume ?? safeBaseParticleCount,
       particleAllocationCapacity,
       particleAllocationPreflight,
-      gridDimensions: [...GRID_DIMS],
+      diagnosticBox: safeDiagnosticBox,
+      diagnosticFixture: diagnosticPopulation?.fixture ?? null,
+      simulatedTimeSeconds,lastStepSeconds,
+      viscosityScaling: {mode:viscosityScaling,factor:lastViscosityScale,effectiveSupportRadius:safeKernelRadius*safeUniformParticleRadiusScale,referenceDt:1/60,referenceRadius:.185},
+      gridDimensions: [...simulationGrid],
       gridCellCount: GRID_CELL_COUNT,
       densityIterationsPerStep: effectivePressureControls?.densityIterations??safeDensityIterations,
       restDensity: 24.3,
