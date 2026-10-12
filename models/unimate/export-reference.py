@@ -66,7 +66,8 @@ def main():
     ap.add_argument("--unimate-root", required=True, help="UniMate source checkout (also on PYTHONPATH)")
     ap.add_argument("--exp-dir", required=True, help="experiment dir holding config.json and dataset_stats.npy")
     ap.add_argument("--model-path", required=True)
-    ap.add_argument("--asset", required=True)
+    ap.add_argument("--asset", required=True, help="asset directory, or a skeleton name resolved through --cond-path")
+    ap.add_argument("--cond-path", action="append", default=[], help="conditioning file for named assets (repeatable)")
     ap.add_argument("--prompt", nargs="+", required=True)
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--out", required=True, help="fresh output directory")
@@ -88,7 +89,8 @@ def main():
         "python": sys.version,
         "platform": platform.platform(),
         "unimate_source": _git_rev(args.unimate_root),
-        "inputs": {"model_path": os.path.abspath(args.model_path), "asset": os.path.abspath(args.asset),
+        "inputs": {"model_path": os.path.abspath(args.model_path), "asset": os.path.abspath(args.asset) if os.path.isdir(args.asset) else args.asset,
+                   "cond_path": [os.path.abspath(p) for p in args.cond_path],
                    "exp_dir": os.path.abspath(args.exp_dir), "prompts": args.prompt, "seed": args.seed},
         "artifacts": {},
     }
@@ -105,7 +107,9 @@ def main():
         report["inputs"]["model_sha256"] = _sha256(args.model_path)
         report["inputs"]["config_sha256"] = _sha256(os.path.join(args.exp_dir, "config.json"))
         report["inputs"]["stats_sha256"] = _sha256(os.path.join(args.exp_dir, "dataset_stats.npy"))
-        report["inputs"]["asset_cond_sha256"] = _sha256(os.path.join(args.asset, "cond.npy"))
+        asset_cond = os.path.join(args.asset, "cond.npy") if os.path.isdir(args.asset) else None
+        for path in ([asset_cond] if asset_cond else []) + args.cond_path:
+            report["inputs"].setdefault("cond_sha256", {})[os.path.abspath(path)] = _sha256(path)
         write_report()
 
         report["phase"] = "import"
@@ -310,6 +314,7 @@ def main():
         inf_args = S.InferenceArgs(
             exp_dir=args.exp_dir, model_path=args.model_path, seed=args.seed,
             output_dir=os.path.join(args.out, "upstream"), asset=(args.asset,), prompt=tuple(args.prompt),
+        cond_path=tuple(args.cond_path),
         )
         try:
             S.main(inf_args)

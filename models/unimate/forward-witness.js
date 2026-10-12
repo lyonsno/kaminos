@@ -1,6 +1,6 @@
 // Forward-parity witness: one UniMate denoiser evaluation on WebGPU against
 // the PyTorch forward-mode capture (export-reference.py → export-browser-fixture.py).
-// Rows run as one batch of four: [cond 0, cond 1, uncond 0, uncond 1].
+// Rows run as one batch: [conditional rows..., unconditional rows...] for the capture's prompts.
 // Publishes window.__unimateForwardWitness = { phase, report }.
 import { UniMateDenoiser, readTap } from './unimate-denoiser.js';
 import { compareWebGpuParityArrays } from '../../webgpu-inference-kit/src/parity-primitives.js';
@@ -72,7 +72,8 @@ async function run() {
   report.weights = { sha256: manifest.sha256, parameterCount: manifest.parameterCount, source: manifest.source };
   report.fixture = { sha256: index.sha256, capture: index.capture, captureInputs: index.capture_inputs, captureRoute: index.capture_route };
 
-  const J = index.n_joints, rows = [0, 1, 0, 1], B = rows.length;
+  const J = index.n_joints, P = fx['cond/n_joints'].data.length;            // prompts in the capture
+  const prompts = Array.from({ length: P }, (_, i) => i), rows = [...prompts, ...prompts], B = rows.length;
   const den = await UniMateDenoiser.create(device, manifest, weightBytes);
   den.configure({ B, J });
   report.dispatches = den.dispatchCounts;
@@ -80,7 +81,7 @@ async function run() {
   state.phase = 'inputs';
   const g = name => fx[`cond/${name}`];
   const caption = new Float32Array(B * 768);
-  caption.set(pickRows(g('caption_emb'), NEGATIVE_CONTROL === 'swap-captions' ? [1, 0] : [0, 1]), 0); // rows 2, 3 stay zero: CFG-masked caption
+  caption.set(pickRows(g('caption_emb'), NEGATIVE_CONTROL === 'swap-captions' ? [...prompts].reverse() : prompts), 0); // unconditional rows stay zero: CFG-masked caption
   report.negativeControl = NEGATIVE_CONTROL;
   den.writeConditioning({
     tpos: pickRows(g('tpos_first_frame'), rows), tposParents: pickRows(g('tpos_first_frame_parents'), rows),
@@ -90,7 +91,7 @@ async function run() {
   });
   const t = fx['forward/t'].data;
   den.writeTimesteps(rows.map(r => t[r]));
-  const noise = { data: sliceJoints(fx['forward/noise'], J), shape: [2, J, 12, 60] };
+  const noise = { data: sliceJoints(fx['forward/noise'], J), shape: [P, J, 12, 60] };
   den.writeMotion(pickRows(noise, rows));
 
   state.phase = 'run';
@@ -111,15 +112,15 @@ async function run() {
   for (const [name, buf] of taps) tapData.set(name, await readTap(buf));
   const rowSlice = (arr, r0, r1) => arr.subarray(r0 * arr.length / B, r1 * arr.length / B);
   const act = name => fx[`act/${name}`].data;
-  const both = (tapName, actName, rowsPerPass = 2) => {
+  const both = (tapName, actName, rowsPerPass = P) => {
     const a = tapData.get(tapName);
     report.stages.push(compare(`cond/${actName}`, rowSlice(a, 0, rowsPerPass), act(`cond/${actName}`)));
     report.stages.push(compare(`uncond/${actName}`, rowSlice(a, rowsPerPass, 2 * rowsPerPass), act(`uncond/${actName}`)));
   };
-  report.stages.push(compare('cond/input_layer/1 (tpos_emb)', rowSlice(tapData.get('tpos_emb'), 0, 2), act('cond/input_layer/1')));
-  report.stages.push(compare('cond/tpos_pool', rowSlice(tapData.get('tpos_pool'), 0, 2), act('cond/tpos_pool/0')));
-  report.stages.push(compare('cond/depth_embedding', rowSlice(tapData.get('depth_embedding'), 0, 2), act('cond/depth_embedding/0')));
-  report.stages.push(compare('cond/joint_name_embedder', rowSlice(tapData.get('joint_name_embedder'), 0, 2), act('cond/joint_name_embedder/0')));
+  report.stages.push(compare('cond/input_layer/1 (tpos_emb)', rowSlice(tapData.get('tpos_emb'), 0, P), act('cond/input_layer/1')));
+  report.stages.push(compare('cond/tpos_pool', rowSlice(tapData.get('tpos_pool'), 0, P), act('cond/tpos_pool/0')));
+  report.stages.push(compare('cond/depth_embedding', rowSlice(tapData.get('depth_embedding'), 0, P), act('cond/depth_embedding/0')));
+  report.stages.push(compare('cond/joint_name_embedder', rowSlice(tapData.get('joint_name_embedder'), 0, P), act('cond/joint_name_embedder/0')));
   both('cond_embedder', 'cond_embedder/0');
   both('time_embedder', 'time_embedder/0');
   both('input_layer', 'input_layer/0');
@@ -128,7 +129,7 @@ async function run() {
   await outRead.mapAsync(GPUMapMode.READ);
   const out = new Float32Array(outRead.getMappedRange().slice(0));
   outRead.unmap();
-  const outC = rowSlice(out, 0, 2), outU = rowSlice(out, 2, 4);
+  const outC = rowSlice(out, 0, P), outU = rowSlice(out, P, 2 * P);
   const refC = sliceJoints(fx['forward/out_cond'], J), refU = sliceJoints(fx['forward/out_uncond'], J), refCfg = sliceJoints(fx['forward/out_cfg'], J);
   const cfg = new Float32Array(outC.length);
   for (let i = 0; i < cfg.length; i++) cfg[i] = Math.fround(outU[i] + Math.fround(3 * Math.fround(outC[i] - outU[i])));
@@ -155,7 +156,7 @@ async function run() {
     times.push(performance.now() - s);
   }
   report.forwardMs = times;
-  report.note = 'forwardMs is one denoiser evaluation for 4 rows (2 prompts x cond/uncond), unshared device, no cooperative scheduling.';
+  report.note = `forwardMs is one denoiser evaluation for ${B} rows (${P} prompts x cond/uncond), unshared device, no cooperative scheduling.`;
   state.phase = 'done';
 }
 

@@ -122,12 +122,19 @@ function invert(m) {
   return inv.map(x => x / det);
 }
 
-// Limb colour by joint name: front legs cyan, hind legs green, body and head gold.
-function limbClass(name) {
-  const n = name.toLowerCase();
-  if (/^(fr|fl)_|front|fore|arm|hand/.test(n)) return 1;
-  if (/^(rr|rl)_|rear|hind|back_?leg|foot_?b/.test(n)) return 2;
-  return 0;
+// Limb colour: front legs cyan (1), hind legs green (2), body, head and tail gold (0).
+// Names cover the Unitree-style (FR_/RL_ ...) and Truebones/Biped (Clavicle/UpperArm
+// vs Thigh/Calf/Foot) conventions; a joint with no match inherits its parent's limb.
+function limbClasses(names, parents) {
+  const own = name => {
+    const n = name.toLowerCase();
+    if (/(^|_)(fr|fl)_|front|fore|clavicle|upperarm|forearm|hand|finger|wing/.test(n)) return 1;
+    if (/(^|_)(rr|rl)_|rear|hind|thigh|calf|horselink|foot|toe|knee/.test(n)) return 2;
+    return 0;
+  };
+  const out = [];
+  names.forEach((name, j) => { out[j] = own(name) || (parents[j] >= 0 ? out[parents[j]] : 0); });
+  return out;
 }
 
 function frameStats(gaps) {
@@ -179,7 +186,8 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
   surface.configure({ device, format, alphaMode: 'opaque' });
   const camBuf = device.createBuffer({ size: 144, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const jointBuf = device.createBuffer({ size: J * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-  const boneList = parents.map((p, j) => (p < 0 ? null : [j, p, limbClass(jointNames[j]), 0])).filter(Boolean);
+  const limbs = limbClasses(jointNames, parents);
+  const boneList = parents.map((p, j) => (p < 0 ? null : [j, p, limbs[j], 0])).filter(Boolean);
   const boneBuf = device.createBuffer({ size: boneList.length * 16, usage: GPUBufferUsage.STORAGE, mappedAtCreation: true });
   new Uint32Array(boneBuf.getMappedRange()).set(boneList.flat());
   boneBuf.unmap();
@@ -198,7 +206,7 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
   const bind = device.createBindGroup({ layout, entries: [camBuf, jointBuf, boneBuf, paletteBuf].map((buffer, binding) => ({ binding, resource: { buffer } })) });
 
   const jointFrame = new Float32Array(J * 4);
-  const restFrame = () => { for (let j = 0; j < J; j++) jointFrame.set([rest[j][0], rest[j][1] - minY, rest[j][2], limbClass(jointNames[j])], j * 4); };
+  const restFrame = () => { for (let j = 0; j < J; j++) jointFrame.set([rest[j][0], rest[j][1] - minY, rest[j][2], limbs[j]], j * 4); };
   restFrame();
   const view = { motion: null, startedAt: performance.now(), target: [jointFrame[0], 0.25, jointFrame[2]] };
   const scene = { frames: 0, lastFrameAt: null, gaps: null, running: true, frameIndex: -1 };
@@ -210,7 +218,7 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
       const f = ((Math.floor((Math.max(0, time - view.startedAt) / 1000) * fps) % T) + T) % T;
       scene.frameIndex = f;
       const p = view.motion.positions;
-      for (let j = 0; j < J; j++) jointFrame.set([p[(f * J + j) * 3], p[(f * J + j) * 3 + 1], p[(f * J + j) * 3 + 2], limbClass(jointNames[j])], j * 4);
+      for (let j = 0; j < J; j++) jointFrame.set([p[(f * J + j) * 3], p[(f * J + j) * 3 + 1], p[(f * J + j) * 3 + 2], limbs[j]], j * 4);
     }
     const root = [jointFrame[0], Math.max(0.25, 0.8 * jointFrame[1]), jointFrame[2]];   // follow the body up when it rears
     // A non-finite root must never enter the smoothed target: it would stick there.

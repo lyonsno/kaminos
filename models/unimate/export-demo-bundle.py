@@ -24,6 +24,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--capture", required=True)
     ap.add_argument("--asset-cond", required=True)
+    ap.add_argument("--asset-key", help="skeleton name inside a multi-skeleton cond.npy (default: its first entry)")
     ap.add_argument("--exp-dir", required=True, help="experiment dir with the sampler's config.json")
     ap.add_argument("--reference-positions", nargs="*", default=[],
                     help="accepted world positions (T, J, 3) .npy per prompt, in capture prompt order")
@@ -45,7 +46,7 @@ def main():
     report = json.load(open(os.path.join(args.capture, "report.json")))
     J = int(cond["n_joints"][0])
     raw = np.load(args.asset_cond, allow_pickle=True).item()
-    key = next(iter(raw))
+    key = args.asset_key or next(iter(raw))
     skel = raw[key]
     if len(skel["parents"]) != J:
         raise ValueError(f"asset has {len(skel['parents'])} joints, capture has {J}")
