@@ -14894,6 +14894,7 @@ function installFingerFluidPressureCockpit() {
         fingerFluidBenchConfig={...fingerFluidBenchConfig,requestedPressureIterations:r.densityIterations,
           requestedCapillaryStrength:r.capillaryStrength,ipbfPressureRadiusScale:r.pressureRadiusScale,ipbfDampingBeta:r.beta,
           ipbfAlternativeCompliance:r.alternativeCompliance};
+        fingerFluidBenchState.config=fingerFluidBenchConfig;
       }
       if(investigationOperations.active)investigationOperations.emit({kind:'fluid.controls',phase:'requested',target:'fluid',
         requested:receipt.requested,effective:receipt.effective,controlState:receipt,
