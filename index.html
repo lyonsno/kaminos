@@ -23959,9 +23959,12 @@ async function initKaminosVolumeRoute() {
         const mapped=receipt.requested.immersedControls;
         for(const [suffix,key] of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']]) {
           const control=document.getElementById(`volume-immersed-${suffix}`);
-          control.step='any';setVolumeControlValue(control.id,mapped[key]);
+          control.step='any';
+          if (control.value !== String(mapped[key])) setVolumeControlValue(control.id,mapped[key]);
+          const label=document.getElementById(`volume-immersed-${suffix}-val`);
+          const text=Number(mapped[key]).toFixed(2);
+          if (label.textContent !== text) label.textContent=text;
         }
-        updateVolumeControlLabels();
       }
     }
     renderVolumeEmitterReceipt(receipt);
