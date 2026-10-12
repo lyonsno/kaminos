@@ -103,7 +103,7 @@ export function installBurnTable({document,ready,renderer,load,clone,register,ob
     simulation:false,states:states.map(s=>({...s})),objects:records.flatMap((r,index)=>r?[{id:objects().find(e=>e.object===r.object)?.id,stage:states[index].id,materials:r.materials.map(m=>m.read())}]:[])};},
     update(seconds,camera,viewport){
       reconcile();
-      if(!active||status!=='mounted'){document.body?.classList.remove('burn-table-active');return false;}
+      if(!active||status!=='mounted'){labels.hidden=true;document.body?.classList.remove('burn-table-active');return false;}
       labels.hidden=document.body.dataset.workspace!=='workbench'||document.querySelector('.tab.active')?.dataset.tab!=='assets';
       document.body.classList.toggle('burn-table-active',!labels.hidden);
       const rect=viewport.getBoundingClientRect();

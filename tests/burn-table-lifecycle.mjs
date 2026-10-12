@@ -40,3 +40,10 @@ test('reopening replaces only the removed sample and retains surviving IDs',asyn
   const old=f.experiment.state().objects.map(o=>o.id);f.removeOne();pending=f.experiment.open();await settled();assert.equal(f.read().loads,2);f.resolve();await pending;
   assert.equal(f.read().registry.length,4);const ids=f.experiment.state().objects.map(o=>o.id);assert.equal(ids[0],old[0]);assert.equal(ids[1],old[1]);assert.equal(ids[3],old[3]);assert.notEqual(ids[2],old[2]);
 });
+test('partial removal retires comparison labels before leaving the experiment',async()=>{
+  const f=fixture();const pending=f.experiment.open();await settled();f.resolve();await pending;
+  assert.equal(f.elements.get('burn-table-labels').hidden,false);f.removeOne();
+  f.experiment.update(0,null,null);
+  assert.equal(f.experiment.state().status,'unavailable');assert.equal(f.experiment.state().objects.length,3);
+  assert.equal(f.elements.get('burn-table-labels').hidden,true);
+});
