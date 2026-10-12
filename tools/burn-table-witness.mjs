@@ -65,6 +65,18 @@ try {
   assert.equal(report.mobile.width,report.mobile.client);
   report.phase='mode-return';await page.getByRole('button',{name:'Authoring',exact:true}).click();await page.getByRole('button',{name:'Workbench',exact:true}).click();
   assert.equal((await page.evaluate(()=>window.kaminosBurnTable.state())).objects.length,4);
+  report.phase='partial-removal';
+  const oldIds=await page.evaluate(()=>window.kaminosBurnTable.state().objects.map(o=>o.id));
+  await page.evaluate(id=>window.removeSceneObject(id),oldIds[2]);
+  await page.getByRole('button',{name:'Authoring',exact:true}).click();
+  await page.waitForFunction(()=>document.getElementById('burn-table-labels').hidden);
+  report.partial=await page.evaluate(()=>({state:window.kaminosBurnTable.state(),labelsHidden:document.getElementById('burn-table-labels').hidden}));
+  assert.equal(report.partial.state.status,'unavailable');assert.equal(report.partial.state.objects.length,3);
+  await page.screenshot({path:path.join(out,'partial-authoring.png')});
+  await page.getByRole('button',{name:'Workbench',exact:true}).click();
+  await page.evaluate(()=>window.kaminosBurnTable.open());
+  const newIds=await page.evaluate(()=>window.kaminosBurnTable.state().objects.map(o=>o.id));
+  assert.equal(newIds[0],oldIds[0]);assert.equal(newIds[1],oldIds[1]);assert.equal(newIds[3],oldIds[3]);assert.notEqual(newIds[2],oldIds[2]);
   report.phase='shared-removal';
   await page.evaluate(async()=>{for(const object of window.kaminosBurnTable.state().objects)await window.removeSceneObject(object.id);});
   assert.equal((await page.evaluate(()=>window.kaminosBurnTable.state())).status,'unavailable');
