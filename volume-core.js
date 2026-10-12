@@ -2846,6 +2846,38 @@ function normalizePressureStrategy(value, scene) {
   return PRESSURE_STRATEGY_GLOBAL;
 }
 
+// Sim-step GPU profile (Noah 2026-10-10: measure where the time goes before
+// making the solver adaptive). `timestamps` are N+1 end-of-pressure-projection
+// GPU timestamps in ns from consecutive sim steps; consecutive differences are
+// whole-step GPU times. Unwritten (zero) or non-monotonic timestamps are
+// refused rather than reported as times; differences are taken as BigInt so
+// large absolute timestamps keep their precision.
+export function simStepGpuProfileFromTimestamps(timestamps, meta = {}) {
+  const values = Array.from(timestamps, value => BigInt(value));
+  if (values.length < 3) return { status: 'invalid', reason: 'too-few-endpoints' };
+  if (values.some(value => value <= 0n)) return { status: 'invalid', reason: 'unwritten-timestamp' };
+  const stepMs = [];
+  for (let i = 1; i < values.length; i += 1) {
+    const delta = values[i] - values[i - 1];
+    if (delta <= 0n) return { status: 'invalid', reason: 'non-monotonic-timestamps' };
+    stepMs.push(Number(delta) / 1e6);
+  }
+  const sorted = [...stepMs].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  const medianMs = sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+  return {
+    status: 'sampled',
+    timestampAuthority: 'gpu-timestamp-query:end-of-pressure-projection',
+    ...meta,
+    steps: stepMs.length,
+    stepMs,
+    medianMs,
+    meanMs: stepMs.reduce((sum, value) => sum + value, 0) / stepMs.length,
+    minMs: sorted[0],
+    maxMs: sorted[sorted.length - 1],
+  };
+}
+
 function normalizePressureSolverSweeps(value) {
   const requested = Math.round(Number(value));
   if (!Number.isFinite(requested)) return PRESSURE_SOLVER_DEFAULT_SWEEPS;
@@ -26477,6 +26509,43 @@ export function createKaminosVolumePrototype({
     setForegroundOpportunityRequester,
     foregroundGpuContext() {
       return {device, queue: device?.queue, active: state.active, renderer: boundarySplatRequested() || browserResidualCanApply() ? 'alternate-volume' : 'ordinary-volume', productFrameOwner};
+    },
+    async sampleSimStepGpuProfile(steps = 8) {
+      // GPU time of whole sim steps (report §36): N+1 steps in one encoder,
+      // a timestamp at the end of each step's pressure projection. Advances
+      // the simulation by N+1 steps.
+      const n = Math.max(2, Math.min(64, Math.floor(Number(steps) || 8)));
+      const meta = {
+        requestedSteps: n,
+        grid: [gridSize, gridHeight, gridSize],
+        solver: state.pressureSolver?.effective ? { solver: state.pressureSolver.effective.solver, iterations: state.pressureSolver?.effective?.iterations ?? null, projection: state.pressureSolver.effective.projection } : null,
+        faceForces: Boolean(state.velocityStaggering?.effective?.faceForces),
+        transportScheme: state.transport?.effective?.scheme ?? null,
+        simStepCountBefore: state.simStepCount,
+      };
+      if (!gpuInitialized || !device) return { status: 'unsupported', reason: 'gpu-not-initialized', ...meta };
+      if (!timestampQueriesAvailable()) return { status: 'unsupported', reason: device.features?.has?.('timestamp-query') ? 'timestamp-query-write-api-unavailable' : 'timestamp-query-not-supported', ...meta };
+      const count = n + 1;
+      const querySet = device.createQuerySet({ type: 'timestamp', count });
+      const resolveBuffer = device.createBuffer({ label: 'kaminos sim step gpu profile resolve', size: count * 8, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+      const readbackBuffer = device.createBuffer({ label: 'kaminos sim step gpu profile readback', size: count * 8, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      try {
+        const encoder = device.createCommandEncoder({ label: 'kaminos sim step gpu profile' });
+        for (let i = 0; i < count; i += 1) {
+          if (!encodeSim(encoder, { finalTimestampWrites: { querySet, endOfPassWriteIndex: i } })) throw new Error('simulation-final-timestamp-unavailable');
+        }
+        encoder.resolveQuerySet(querySet, 0, count, resolveBuffer, 0);
+        encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, count * 8);
+        device.queue.submit([encoder.finish()]);
+        await readbackBuffer.mapAsync(GPUMapMode.READ);
+        const timestamps = Array.from(new BigUint64Array(readbackBuffer.getMappedRange().slice(0)));
+        readbackBuffer.unmap();
+        return simStepGpuProfileFromTimestamps(timestamps, meta);
+      } catch (error) {
+        return { status: 'failed', reason: error?.message || String(error), ...meta };
+      } finally {
+        querySet.destroy(); resolveBuffer.destroy(); readbackBuffer.destroy();
+      }
     },
     setConfinementEpsilonOverride(value) {
       const next = value !== null && value !== undefined && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;

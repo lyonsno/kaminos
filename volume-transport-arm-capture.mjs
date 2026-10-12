@@ -13,7 +13,9 @@
 // calls setConfinementEpsilonOverride so a calibration sweep can vary the
 // calibrated epsilon without a persisted knob; the receipt names the override;
 // `@savePreset=<label>` saves the arm's controls as a basin through the
-// cockpit's Save button and records the preset id the cockpit reports.
+// cockpit's Save button and records the preset id the cockpit reports;
+// `@simGpuProfile=<N>` records the GPU time of N whole sim steps and fails the
+// arm unless it is a complete timestamp sample.
 // During each settle the capture samples the renderer receipt every 2 s
 // (steps, enstrophy, divergence) so a trend is visible, not just an endpoint.
 // Frames are admission and attribution evidence for the implementer; the
@@ -35,7 +37,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { effectiveMismatches, parseArms, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
+import { effectiveMismatches, parseArms, resolveHeadlessBrowser, simGpuProfileMismatch } from './volume-arm-capture-checks.mjs';
 
 const CAPTURE_IDENTITY = 'kaminos.volume.transport-arm-capture.v1';
 const positional = [];
@@ -215,6 +217,18 @@ try {
         applied.push([cid, value, presetId]);
         continue;
       }
+      if (cid === '@simGpuProfile') {
+        // GPU time of N whole sim steps (report §36); a profile that is not a
+        // complete GPU timestamp sample fails the arm.
+        const steps = Number(value);
+        if (!Number.isInteger(steps) || steps < 2 || steps > 64) fail(report.failurePhase, `@simGpuProfile needs an integer 2..64, got ${value}`);
+        const profile = await evaluate(op(`(async () => { const p = w.__kaminosVolumePrototype; if (!p?.sampleSimStepGpuProfile) return { status: 'missing-api' }; return await p.sampleSimStepGpuProfile(${steps}); })()`));
+        (arm.simGpuProfiles ||= []).push(profile);
+        applied.push([cid, value, profile?.status ?? null]);
+        const mismatch = simGpuProfileMismatch(profile, steps);
+        if (mismatch) { report.lastTrustworthyEvidence.applied = applied; fail(report.failurePhase, mismatch); }
+        continue;
+      }
       if (cid.startsWith('@')) fail(report.failurePhase, `unknown debug-API control ${cid}`);
       if (cid === 'volume-confinement') expectedMode = value;
       const domValue = await setControl(cid, value);
@@ -239,7 +253,7 @@ try {
     let end = await evaluate(stateExpr);
     if (!end) fail(report.failurePhase, 'renderer state unavailable after settle');
     if (fault === 'arm-error' && report.arms.length === 0) end = { ...end, error: 'synthetic-fault:arm-error' };
-    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
+    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], simGpuProfiles: arm.simGpuProfiles || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
     report.arms.push(entry);
     report.lastTrustworthyEvidence.lastArm = arm.name;
     writeReport();

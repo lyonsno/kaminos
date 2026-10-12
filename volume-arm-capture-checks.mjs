@@ -156,6 +156,16 @@ export function resolveHeadlessBrowser({ env = process.env, playwrightRoot = joi
 // Arm grammar: `name[,controlId=value,...]` joined by `;`. Fails loud on a name
 // that carries controls (a ':' or '=' in the name) or a control without '=', so
 // a mistyped arm cannot run the saved basin under a misleading label.
+// A sim-step GPU profile counts as evidence only when it is a complete GPU
+// timestamp sample of the requested length with finite positive step times.
+export function simGpuProfileMismatch(profile, requestedSteps) {
+  if (!profile || profile.status !== 'sampled') return `sim GPU profile ${profile?.status ?? 'missing'}${profile?.reason ? ` (${profile.reason})` : ''}`;
+  if (profile.steps !== requestedSteps || !Array.isArray(profile.stepMs) || profile.stepMs.length !== requestedSteps) return `sim GPU profile has ${profile.stepMs?.length ?? 0} steps, requested ${requestedSteps}`;
+  if (profile.stepMs.some(v => !(Number.isFinite(v) && v > 0))) return 'sim GPU profile has a non-positive or non-finite step';
+  if (profile.timestampAuthority !== 'gpu-timestamp-query:end-of-pressure-projection') return `sim GPU profile authority ${profile.timestampAuthority}`;
+  return null;
+}
+
 export function parseArms(armsArg) {
   return String(armsArg ?? '').split(';').map(a => {
     const [name, ...pairs] = a.split(',');
