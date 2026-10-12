@@ -4051,6 +4051,7 @@ let authoringWorkspace = null;
 let fluidWorkbench = null;
 let fluidReflectionCockpit = null;
 let fluidBudgetCockpit = null;
+const fluidBudgetPreferences={renderScale:1,timingEnabled:false,energyDiagnosticsMode:null};
 let restoringSceneLight=false;
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -14678,7 +14679,7 @@ async function startFingerFluidBench() {
       ipbfDampingBeta: fingerFluidBenchConfig.ipbfDampingBeta,
       densityCellRejection: fingerFluidBenchConfig.effectiveDensityCellRejection,
       uniformVolumeDensityKernel: fingerFluidBenchConfig.effectiveUniformVolumeDensityKernel,
-      energyDiagnosticsMode: fingerFluidBenchConfig.effectiveEnergyDiagnosticsMode,
+      energyDiagnosticsMode: fluidBudgetPreferences.energyDiagnosticsMode ?? fingerFluidBenchConfig.effectiveEnergyDiagnosticsMode,
       substeps: 1,
       truthScene: fingerFluidBenchConfig.effectiveTruthScene,
       colorMode: fingerFluidBenchConfig.effectiveColorMode,
@@ -14769,6 +14770,8 @@ async function startFingerFluidBench() {
   if(sharedViewport&&!fingerFluidBenchViewport){
     fingerFluidBenchScene=createFluidBenchScene({scene,truthScene:fingerFluidBenchConfig.effectiveTruthScene});
     fingerFluidBenchViewport=createFluidViewportHost({renderer,scene,camera,pipeline:renderPipeline,device:renderer.backend.device,solver:fingerFluidBenchSolver,group:fingerFluidBenchScene.group,helperGround:groundPlane,getDisplayPolicy:()=>getFluidDisplayPolicy?.(),pipelineIdentity:FINGER_FLUID_BENCH_VIEWPORT_PIPELINE,framePrefix:'fluid-bench'});
+    fingerFluidBenchViewport.setRenderScale(fluidBudgetPreferences.renderScale);
+    fingerFluidBenchViewport.setTimingEnabled(fluidBudgetPreferences.timingEnabled);
     syncFingerFluidCompositionCamera({initial:true});
   }
   if(typeof installFingerFluidPressureCockpit==='function')installFingerFluidPressureCockpit();
@@ -14862,12 +14865,17 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
     const read=()=>({clock:window.kaminosFingerFluidBenchSessionState(),solver:fingerFluidBenchSolver?.getFrameBudgetState(),viewport:fingerFluidBenchViewport?.state(),reflection:fingerFluidBenchSolver?.getReflectionBudgetControls()});
     const apply=patch=>{
       const before=window.kaminosFingerFluidBenchSessionState();if(!before.available||!fingerFluidBenchViewport)throw Error('Shared fluid viewport unavailable');
+      if(!patch||typeof patch!=='object'||Array.isArray(patch))throw Error('Budget edit must be an object');
+      if('renderScale' in patch && (!Number.isFinite(patch.renderScale)||patch.renderScale<=0||patch.renderScale>1))throw Error('Water render scale must be above zero and at most 100%');
+      if('energyDiagnosticsMode' in patch)resolveFingerFluidEnergyDiagnosticsMode(patch.energyDiagnosticsMode);
+      if('timingEnabled' in patch && typeof patch.timingEnabled!=='boolean')throw Error('Timing enabled must be boolean');
       if('renderScale' in patch)fingerFluidBenchViewport.setRenderScale(patch.renderScale);
       if('energyDiagnosticsMode' in patch)fingerFluidBenchSolver.setEnergyDiagnosticsMode(patch.energyDiagnosticsMode);
       if('timingEnabled' in patch)fingerFluidBenchViewport.setTimingEnabled(patch.timingEnabled);
       try {renderFingerFluidBenchCurrentStateForWitness(fingerFluidBenchConfig.effectiveRendererMode,fingerFluidBenchConfig.effectiveOpticalDebugMode);}
       finally {if(before.running)resumeFingerFluidBenchAfterWitness();}
       const after=window.kaminosFingerFluidBenchSessionState();if(['generation','step','paused','running'].some(key=>before[key]!==after[key]))throw Error('Water playback changed during budget edit');
+      for(const key of ['renderScale','energyDiagnosticsMode','timingEnabled'])if(key in patch)fluidBudgetPreferences[key]=patch[key];
       const result=read();if(investigationOperations.active)investigationOperations.emit({kind:'fluid.frame-budget',phase:'applied',target:'fluid',requested:patch,effective:result,clock:after});return result;
     };
     fluidBudgetCockpit=mountFluidBudgetCockpit(root,{read,apply,requestFrame:()=>window._kaminosDirty?.()});

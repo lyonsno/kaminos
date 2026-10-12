@@ -20,7 +20,7 @@ export function createFluidFrameTiming(device) {
   let sample=null,failure=null,querySet=null,resolveBuffer=null,readback=null;
   let entries=[],restore=null,invalid=null;
   const read=()=>structuredClone({enabled,available:device.features.has('timestamp-query'),status:failure?'failed':pending?'reading':active?'encoding':enabled?(sample?'measured':'awaiting_frame'):'disabled',failure,sample});
-  function setEnabled(value){enabled=Boolean(value);failure=null;return read();}
+  function setEnabled(value){if(typeof value!=='boolean')throw Error('Timing enabled must be boolean');enabled=value;failure=null;return read();}
   function begin(){
     if(!enabled||active||pending||disposed||performance.now()-lastRequest<1000)return false;
     if(!device.features.has('timestamp-query')){failure='This shared GPU device does not support timestamp queries';return false;}

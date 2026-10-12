@@ -161,7 +161,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
         sceneDepth:attachment('host-depth',frameDepth,{format:'r32float',encoding:'linear_view_depth_meters'}),
         environment:attachment('host-environment',environmentTarget,{format:'rgba16float',mapping:'equirectangular_world_radiance'}),
         target:attachment('host-liquid-output',frameOutput,{format:'rgba16float',colorSpace:'linear_hdr'}),
-        ...(scaled?{compositeDepth:{...attachment('host-water-depth',lowWaterTarget,{format:'depth24plus',encoding:'webgpu_ndc_depth'}),view:nativeTexture(lowWaterTarget.depthTexture?{texture:lowWaterTarget.depthTexture}:lowWaterTarget).createView()}}:{})};
+        ...(scaled?{compositeDepth:{...attachment('host-water-depth',lowWaterTarget,{format:'depth24plus',encoding:'webgpu_ndc_depth'}),view:nativeTexture({texture:lowWaterTarget.depthTexture}).createView()}}:{})};
       timing.scope('water',()=>solver.render({...renderOptions,hostFrame,externalCamera:cameraSnapshot,opticalDebugMode,suppressRayCounting:timing.active}));
       device.queue.submit([commandEncoder.finish()]);
       if(scaled)timing.scope('host',()=>{renderer.setRenderTarget(outputTarget);resolveWater.render(renderer);});
@@ -169,7 +169,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
       frameCount=generation;
       lastFrame={camera:cameraSnapshot,frameId,cameraIdentity:cameraSnapshot.identity,cameraGeneration:generation,width,height,
         environmentSource:environmentSource.uuid,environmentGeneration,
-        waterResolution:{requestedScale:renderScale,width:waterWidth,height:waterHeight,fullWidth:width,fullHeight:height,pixelFraction:waterWidth*waterHeight/(width*height),resolve:scaled?'alpha_water_layer_over_full_resolution_scene':'native_full_resolution'},
+        waterResolution:{requestedScale:renderScale,width:waterWidth,height:waterHeight,fullWidth:width,fullHeight:height,pixelFraction:waterWidth*waterHeight/(width*height),resolve:scaled?'depth_tested_alpha_water_layer_over_full_resolution_scene':'native_full_resolution'},
         route:ROUTE,opticalDebugMode,submittedByHost:true,presentedByHost:true,captureColorSpace:'linear_hdr',displayTransform:cameraState.effective?cameraState.transform:'host-render-pipeline',exposure:renderer.toneMappingExposure,environmentIntensity:scene.environmentIntensity,
         simulationTimePolicy:advance?'one-fixed-1/60-step-per-rendered-frame':'caller-owned-step',simulationRewind:false,
         helperGroundPresentation:{policy:'retained-basin-suppresses-editor-helper',effectiveVisible:helperGround?.visible??null}};
