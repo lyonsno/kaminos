@@ -40,6 +40,14 @@ for(const step of [151,173,197,229])for(const yaw of [0,-15,15]) {
 }
 fs.writeFileSync(manifest,JSON.stringify({identity:'optical-state-view-pilot-v0',source,status:'observed',phase:'complete',cases}));
 function build(name){const out=base+'/'+name;const result=spawnSync(process.execPath,['scripts/build-optical-dataset.mjs',manifest,out],{cwd:root,encoding:'utf8'});return {result,report:JSON.parse(fs.readFileSync(out+'/report.json')),out};}
+fs.mkdirSync(base+'/output-error/probes3.jsonl',{recursive:true});
+const outputError=build('output-error');
+assert.equal(outputError.result.status,1);
+assert.equal(outputError.report.status,'failed','output-open failure must publish a terminal report');
+assert.match(outputError.report.error,/EISDIR.*probes3\.jsonl/);
+assert.equal(outputError.report.phase,'outputs');
+assert.equal(outputError.report.inputSha256,createHash('sha256').update(fs.readFileSync(manifest)).digest('hex'));
+assert.ok(fs.statSync(base+'/output-error/probes3.jsonl').isDirectory(),'failed output retained');
 const good=build('good');assert.equal(good.result.status,0,good.report.error);
 for(const n of [3,5]) {
   const rows=fs.readFileSync(good.out+`/probes${n}.jsonl`,'utf8').trim().split('\n').map(JSON.parse);

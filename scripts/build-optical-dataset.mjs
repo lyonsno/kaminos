@@ -1,6 +1,4 @@
 import fs from 'node:fs/promises';
-import {createWriteStream} from 'node:fs';
-import {once} from 'node:events';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -15,7 +13,7 @@ const report={identity:'optical-probe-dataset-v0',status:'running',phase:'manife
   sources:[],counts:{},files:[]};
 const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
 const sha=b=>createHash('sha256').update(b).digest('hex');
-await save();let streams=[];
+await save();const outputs=[];
 try {
   const raw=await fs.readFile(input),pilot=JSON.parse(raw);report.inputSha256=sha(raw);
   assert.ok(pilot.identity==='optical-state-view-pilot-v0'&&pilot.status==='observed'&&pilot.phase==='complete','complete pilot required');
@@ -27,7 +25,8 @@ try {
     const split=c.step===229?'test':c.step===197?'validation':c.yaw===15?'view-test':'train';
     assert.equal(c.split,split,'state/view split violation');assert.equal(c.status,'observed');
   }
-  streams=[3,5].map(n=>createWriteStream(out+`/probes${n}.jsonl`));
+  report.phase='outputs';await save();
+  for(const n of [3,5])outputs.push(await fs.open(out+`/probes${n}.jsonl`,'w'));
   for(const entry of pilot.cases) {
     report.phase=`capture-${entry.step}-${entry.yaw}`;await save();
     const reportPath=path.join(entry.path,'report.json'),raw=await fs.readFile(reportPath),capture=JSON.parse(raw);
@@ -59,7 +58,7 @@ try {
         });
         for(const [arm,probeCount] of [3,5].entries()) {
           const tree=buildOpticalHierarchy(probes,{length,rootSpan:256,probeCount});
-          const pending=[...tree.roots];
+          const pending=[...tree.roots],records=[];
           while(pending.length) {
             const node=pending.pop(),at=base+node.start*32;
             const features=opticalProbeFeatures(node.probes,{h:node.h,gridPitch:values[at+15],
@@ -68,17 +67,17 @@ try {
             const record={case:`${entry.step}:${entry.yaw}`,split:entry.split,chunk:chunk.path,ray:chunk.plan.firstRay+ray,
               start:node.start,end:node.end,features,label:node.teacherError,numerical:node.numericalError,
               uncertainty:node.teacherDisagreement,resolved,bright:node.teacher.slice(0,3).some(v=>Math.abs(v)>.001)};
-            if(!streams[arm].write(JSON.stringify(record)+'\n'))await once(streams[arm],'drain');
+            records.push(JSON.stringify(record)+'\n');
             const key=`${probeCount}:${entry.split}`,count=report.counts[key]??={total:0,resolved:0,bright:0};
             count.total++;count.resolved+=Number(resolved);count.bright+=Number(record.bright);
             pending.push(...node.children);
           }
+          await outputs[arm].writeFile(records.join(''));
         }
       }
     }
     await save();
   }
-  for(const stream of streams){stream.end();await once(stream,'finish');}streams=[];
   for(const probeCount of [3,5]) {
     for(const split of ['train','validation','test','view-test'])assert.ok(report.counts[`${probeCount}:${split}`]?.resolved>0,'empty resolved split');
     const file=out+`/probes${probeCount}.jsonl`,bytes=await fs.readFile(file);
@@ -86,4 +85,9 @@ try {
   }
   report.status='observed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
-finally{for(const stream of streams)stream.destroy();await save();}
+finally{
+  for(const output of outputs)try{await output.close();}catch(error){
+    report.status='failed';report.error??=String(error.stack||error);process.exitCode=1;
+  }
+  await save();
+}
