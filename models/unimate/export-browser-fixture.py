@@ -49,8 +49,9 @@ def main():
         arrays[f"cond/{key}"] = a
     for key in SCALAR_KEYS:
         arrays[f"cond/{key}"] = cond[key]
-    for key in ["noise", "t", "out_cond", "out_uncond", "out_cfg"]:
-        arrays[f"forward/{key}"] = fwd[key]
+    for key in ["noise", "t", "out_cond", "out_uncond", "out_cfg", "out_cond_f64", "out_uncond_f64", "out_cfg_f64"]:
+        if key in fwd.files:
+            arrays[f"forward/{key}"] = fwd[key]  # float64 truth, when present, is stored as float32
     for key in acts.files:
         arrays[f"act/{key}"] = acts[key]
 

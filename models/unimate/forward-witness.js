@@ -135,6 +135,14 @@ async function run() {
   const finals = [compare('out_cond', outC, refC), compare('out_uncond', outU, refU), compare('out_cfg', cfg, refCfg)];
   report.stages.push(...finals);
   report.pass = !report.gpuErrors && finals.every(s => s.relativeL2Error != null && s.relativeL2Error <= GATE_RELATIVE_L2);
+  // When the capture carries a float64 run, judge both FP32 implementations against it.
+  if (fx['forward/out_cfg_f64']) {
+    const t64 = name => sliceJoints(fx[`forward/${name}_f64`], J);
+    report.againstFloat64 = {
+      webgpu: [compare('out_cond', outC, t64('out_cond')), compare('out_uncond', outU, t64('out_uncond')), compare('out_cfg', cfg, t64('out_cfg'))],
+      torchFp32: [compare('out_cond', refC, t64('out_cond')), compare('out_uncond', refU, t64('out_uncond')), compare('out_cfg', refCfg, t64('out_cfg'))],
+    };
+  }
 
   state.phase = 'timing';
   const times = [];
