@@ -3,6 +3,7 @@ import * as attention from '../src/sam-online-attention-wgsl.js';
 import { readFileSync } from 'node:fs';
 import * as linear from '../src/sam-vector-linear-wgsl.js';
 import * as tiled from '../src/sam-tiled-linear.js';
+import * as flash from '../src/sam-flash-attention.js';
 import { defineComputeKernel } from '../src/runtime-primitives.js';
 import { defineWebGpuPhaseProgram } from '../src/phase-program.js';
 import { createSamRangePhaseRuntime } from '../src/sam-range-phase-program.js';
@@ -37,7 +38,7 @@ assert.ok(partition);
 const calls = [];
 const layerShape = { paddedTotalValues: 72 * 72 * 1024 };
 const shape = { tokenCount: 72 * 72, hiddenSize: 1024, intermediateSize: 4736 };
-const phasePartition = new Function('shape', 'layerShape', 'kernels', 'runtime', 'partitionSamAttentionPhase', 'partitionSamTiledLinearPhase', `${partition[0]} return partitionPhase;`)(shape, layerShape, {}, {}, () => [], (phase, dims) => { calls.push({ phase, dims }); return [phase]; });
+const phasePartition = new Function('shape', 'layerShape', 'kernels', 'runtime', 'attentionKernel', 'partitionSamAttentionPhase', 'partitionSamFlashAttentionPhase', 'partitionSamTiledLinearPhase', `${partition[0]} return partitionPhase;`)(shape, layerShape, {}, {}, 'flash', () => [], () => [], (phase, dims) => { calls.push({ phase, dims }); return [phase]; });
 for (const kernel of ['qProjection', 'kProjection', 'vProjection', 'outputProjection', 'mlpFc1', 'mlpFc2']) phasePartition({ kernel });
 assert.equal(calls.length, 6, 'all dense backbone operations must cooperate');
 for (const { phase, dims } of calls) {
@@ -68,7 +69,7 @@ for (const diagnostic of [false, true]) {
     assert.deepEqual(checkpoints[1].readback, { name: 'attention', tensor: 'tensor:attention' });
   }
 }
-function productionHostConstruction(facade) {
+function productionHostConstruction(facade, attentionKernel = 'online') {
   let pipelines = 0, bindGroups = 0;
   const device = {
     createBindGroupLayout: descriptor => ({ descriptor }),
@@ -97,18 +98,25 @@ function productionHostConstruction(facade) {
     assert.ok(descriptor, `${name}: production kernel descriptor`);
     kernels[name] = new Function(...Object.keys(bindings), `return (${descriptor[1]});`)(...Object.values(bindings));
   }
-  const partitionPhase = new Function('shape', 'layerShape', 'kernels', 'runtime', 'partitionSamAttentionPhase', 'partitionSamTiledLinearPhase',
-    `${partition[0]} return partitionPhase;`)(shape, layerShape, kernels, runtime, attention.partitionSamAttentionPhase, tiled.partitionSamTiledLinearPhase);
+  const partitionPhase = new Function('shape', 'layerShape', 'kernels', 'runtime', 'attentionKernel', 'partitionSamAttentionPhase', 'partitionSamFlashAttentionPhase', 'partitionSamTiledLinearPhase',
+    `${partition[0]} return partitionPhase;`)({ ...shape, headDim: 64 }, layerShape, kernels, runtime, attentionKernel, attention.partitionSamAttentionPhase, flash.partitionSamFlashAttentionPhase, tiled.partitionSamTiledLinearPhase);
   const phases = names.flatMap(kernel => partitionPhase({ name: `native-global-${kernel}`, kernel, dispatch: kernel === 'attention' ? [5184, 16, 1] : [1], yieldAfter: true }));
-  // 41 attention query ranges + q/k/v/o one tiled range each + fc1/fc2 three token-row ranges each.
-  assert.equal(phases.length, 51, 'actual native global layer partition definitions');
-  const codes = [attention.SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL, linear.SAM_VECTOR_LINEAR_RANGE_WGSL, linear.SAM_VECTOR_LINEAR_GELU_RANGE_WGSL, ...tiled.samTiledLinearShaders()];
+  // Attention query ranges (41 online at 128 queries, 21 flash at 256) + q/k/v/o one tiled range each
+  // + fc1/fc2 three token-row ranges each.
+  const expectedPhases = attentionKernel === 'flash' ? 31 : 51;
+  assert.equal(phases.length, expectedPhases, 'actual native global layer partition definitions');
+  const codes = [attention.SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL, flash.samFlashAttentionShader(), linear.SAM_VECTOR_LINEAR_RANGE_WGSL, linear.SAM_VECTOR_LINEAR_GELU_RANGE_WGSL, ...tiled.samTiledLinearShaders()];
   const program = facade(runtime, codes).defineProgram({ name: 'native-global-ranges', kernels, phases });
-  assert.equal(new Set(program.phases.map(phase => phase.kernel.bindGroup)).size, 51);
+  assert.equal(new Set(program.phases.map(phase => phase.kernel.bindGroup)).size, expectedPhases);
   const ends = Object.fromEntries(names.map(name => [name, 0]));
   for (const [index, phase] of program.phases.entries()) {
     const name = names.find(name => phases[index].name === `native-global-${name}` || phases[index].name.startsWith(`native-global-${name}-`));
-    if (name === 'attention') {
+    if (name === 'attention' && attentionKernel === 'flash') {
+      const params = phase.kernel.bindGroup.descriptor.entries[4].resource.buffer.values;
+      assert.equal(params.query_offset, ends[name]);
+      assert.equal(phase.dispatch[0], Math.ceil(params.query_count / 64));
+      ends[name] += params.query_count;
+    } else if (name === 'attention') {
       const range = phase.kernel.bindGroup.descriptor.entries[5].resource.buffer.values;
       assert.equal(range.query_offset, ends[name]);
       ends[name] += phase.dispatch[0];
@@ -127,4 +135,5 @@ function productionHostConstruction(facade) {
 assert.deepEqual(productionHostConstruction(runtime => runtime), { pipelines: 51, bindGroups: 51, executableBodies: 51 }, 'ordinary route exposes repeated native-global setup');
 // Attention ranges, tiled linear (q/k/v/o/fc2: base tile), tiled GELU linear (fc1: large tile).
 assert.deepEqual(productionHostConstruction(createSamRangePhaseRuntime), { pipelines: 3, bindGroups: 51, executableBodies: 3 }, 'native-global ranges share three production shader bodies');
+assert.deepEqual(productionHostConstruction(createSamRangePhaseRuntime, 'flash'), { pipelines: 3, bindGroups: 31, executableBodies: 3 }, 'flash attention ranges share one production shader body');
 console.log('SAM ViT cooperative attention ranges and production 51-to-3 pipeline setup passed');

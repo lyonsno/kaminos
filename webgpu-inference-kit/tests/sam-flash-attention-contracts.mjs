@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+import { createWebGpuFlashAttentionShader } from '../src/flash-attention-kernel.js';
+import { SAM_FLASH_ATTENTION_QUERIES_PER_PHASE, partitionSamFlashAttentionPhase, samFlashAttentionShader } from '../src/sam-flash-attention.js';
+
+assert.equal(samFlashAttentionShader(), createWebGpuFlashAttentionShader({ headDim: 64 }), 'SAM ViT uses the kit kernel at head dim 64');
+assert.equal(SAM_FLASH_ATTENTION_QUERIES_PER_PHASE % 64, 0, 'ranges align to 64-query workgroups');
+
+// Ranges cover every query of every window and head exactly once, tails included; each range keeps the
+// template's q, k, v and output bindings and replaces its dims uniform with flash params.
+const template = { code: 'online', bindings: ['q', 'k', 'v', 'out', 'dims'] };
+for (const [queries, domains] of [[1, 1], [65, 4], [256, 9], [576, 9], [5184, 1]]) {
+  const kernels = { attention: template };
+  const phases = partitionSamFlashAttentionPhase({ name: 'vit-attention', kernel: 'attention', dispatch: [queries, 16, domains], yieldAfter: true },
+    { headDim: 64 }, { createUniformBuffer: spec => spec }, kernels);
+  assert.equal(phases.length, Math.ceil(queries / SAM_FLASH_ATTENTION_QUERIES_PER_PHASE));
+  let end = 0;
+  for (const [index, phase] of phases.entries()) {
+    const kernel = kernels[phase.kernel];
+    assert.equal(kernel.code, samFlashAttentionShader());
+    assert.deepEqual(kernel.bindings.slice(0, 4), ['q', 'k', 'v', 'out']);
+    assert.equal(kernel.bindings.length, 5);
+    const params = kernel.bindings[4].resource;
+    assert.deepEqual(params.schema.map(field => field.name), ['query_tokens', 'key_tokens', 'q_channels', 'kv_channels', 'heads', 'kv_heads',
+      'query_offset', 'query_count', 'scale', '_pad0', '_pad1', '_pad2'], 'uniform layout matches the WGSL Params struct');
+    assert.equal(params.schema[8].type, 'f32');
+    const count = Math.min(SAM_FLASH_ATTENTION_QUERIES_PER_PHASE, queries - end);
+    const { query_tokens, key_tokens, q_channels, kv_channels, heads, kv_heads, query_offset, query_count, scale } = params.values;
+    assert.deepEqual([query_tokens, key_tokens, q_channels, kv_channels, heads, kv_heads, query_offset, query_count], [queries, queries, 1024, 1024, 16, 16, end, count]);
+    assert.equal(scale, 1 / 8);
+    assert.deepEqual(phase.dispatch, [Math.ceil(count / 64), 16, domains]);
+    assert.equal(phase.yieldAfter, true);
+    assert.equal(phase.name, index === 0 ? 'vit-attention' : `vit-attention-query-${end}`);
+    end += count;
+  }
+  assert.equal(end, queries);
+}
+assert.throws(() => partitionSamFlashAttentionPhase({ kernel: 'attention', dispatch: [10, 2, 1] }, { headDim: 128 }, { createUniformBuffer: spec => spec }, { attention: template }), /headDim/);
+
+// The ViT block stack selects the kernel per invocation and keeps the online kernel as the A/B baseline.
+const source = readFileSync(new URL('../src/sam-image-vit-block-stack-phase-program.js', import.meta.url), 'utf8');
+assert.match(source, /input\.attentionKernel/);
+assert.match(source, /partitionSamFlashAttentionPhase\(/);
+assert.match(source, /partitionSamAttentionPhase\(phase, kernels, runtime, 128\)/, 'online attention remains selectable');
+assert.match(source, /samFlashAttentionShader\(\)/, 'flash shader is registered with the range runtime');
+
+console.log('sam flash attention contracts passed');
