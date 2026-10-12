@@ -204,7 +204,7 @@ test('cockpit: a width-multiplier height row with help, snapshot, debounced list
 // applies when the edit has been idle for VOLUME_REBUILD_DEBOUNCE_MS.
 test('cockpit: rebuild controls are held out of every sync until idle (fake clock, the page code)', () => {
   const start = index.indexOf('// Controls that rebuild the fluid state (Noah 2026-10-12; review GH-R3-02)');
-  const end = index.indexOf('\n}\n', index.indexOf('function releaseVolumeRebuildControl(')) + 3;
+  const end = index.indexOf('\n}\n', index.indexOf('function supersedeVolumeRebuildHolds(')) + 3;
   assert.ok(start > 0 && end > start, 'the shared rebuild helpers exist');
   const helpers = index.slice(start, end);
   const wiringStart = index.indexOf('  for (const id of VOLUME_REBUILD_CONTROL_IDS) {');
@@ -231,8 +231,8 @@ test('cockpit: rebuild controls are held out of every sync until idle (fake cloc
     const syncControls = () => record({ ratio: volumeRebuildControlValue('volume-grid-height-ratio'), resolution: volumeRebuildControlValue('volume-resolution') });
     const updateVolumeRebuildControlLabel = () => {};
     ${wiring}
-    return syncControls;`);
-  const syncControls = run(document, setTimeout, clearTimeout, reading => applied.push({ t: now, ...reading }));
+    return [syncControls, supersedeVolumeRebuildHolds];`);
+  const [syncControls, supersede] = run(document, setTimeout, clearTimeout, reading => applied.push({ t: now, ...reading }));
   const advance = to => { for (;;) { const due = timers.filter(t => t.live && t.at <= to).sort((a, b) => a.at - b.at)[0]; if (!due) break; now = due.at; due.live = false; due.fn(); } now = to; };
   const edit = (id, value) => { elements[id].value = value; for (const fn of elements[id].listeners.input || []) fn({ target: elements[id] }); };
   syncControls(); // initial sync seats the applied values
@@ -251,6 +251,20 @@ test('cockpit: rebuild controls are held out of every sync until idle (fake cloc
   advance(1700);
   assert.equal(applied.at(-1).resolution, '64');
   assert.deepEqual(applied.filter(a => a.t >= 200 && a.t <= 900).map(a => a.t), [300, 900], 'one held sync from the other control, one sync from the timer, none from the edits');
+  // Review GH-R4-01: a complete programmatic restore (basin apply, undo, scene
+  // preset) supersedes pending edits: their timers are cancelled, the holds
+  // cleared, and the restored snapshot reaches the runtime in one sync.
+  advance(2000); edit('volume-resolution', '96');
+  advance(2100);
+  supersede();
+  elements['volume-resolution'].value = '128'; elements['volume-grid-height-ratio'].value = '3';
+  syncControls();
+  assert.deepEqual(applied.at(-1), { t: 2100, ratio: '3', resolution: '128' }, 'the restore applies its complete snapshot at once');
+  const count = applied.length;
+  advance(3000);
+  assert.equal(applied.length, count, 'the superseded edit timer never fires');
+  assert.match(index, /function writeFlameSettingsState\(state\) \{\n  supersedeVolumeRebuildHolds\(\);/);
+  assert.match(index, /function applyVolumeScenePreset\(scene, options = \{\}\) \{\n  supersedeVolumeRebuildHolds\(\);/);
 });
 
 test('the runtime derives every height from the seated shape: fluid grid, resample, irradiance lattice; the immersed centre range follows the top', () => {

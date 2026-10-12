@@ -16719,6 +16719,7 @@ function volumeSceneControlId(key) {
 }
 
 function applyVolumeScenePreset(scene, options = {}) {
+  supersedeVolumeRebuildHolds();
   const normalizedScene = Object.hasOwn(VOLUME_SCENE_PRESETS, scene) ? scene : DEFAULT_VOLUME_SCENE;
   const preset = VOLUME_SCENE_PRESETS[normalizedScene];
   setVolumeControlValue('volume-scene', normalizedScene);
@@ -22515,6 +22516,7 @@ const VOLUME_REBUILD_DEBOUNCE_MS = 700;
 const VOLUME_REBUILD_CONTROL_IDS = ['volume-grid-height-ratio', 'volume-resolution'];
 const volumeRebuildApplied = new Map();
 const volumeRebuildPending = new Map();
+const volumeRebuildTimers = new Map();
 function volumeRebuildControlValue(id) {
   if (volumeRebuildPending.has(id)) return volumeRebuildPending.get(id);
   const value = document.getElementById(id).value;
@@ -22526,6 +22528,15 @@ function holdVolumeRebuildControl(id) {
 }
 function releaseVolumeRebuildControl(id) {
   volumeRebuildPending.delete(id);
+  volumeRebuildTimers.delete(id);
+}
+// A complete programmatic restore (basin apply, undo, scene preset)
+// supersedes pending edits: their timers are cancelled and the holds cleared,
+// so the restored snapshot reaches the runtime in one sync (review GH-R4-01).
+function supersedeVolumeRebuildHolds() {
+  for (const timer of volumeRebuildTimers.values()) clearTimeout(timer);
+  volumeRebuildTimers.clear();
+  volumeRebuildPending.clear();
 }
 
 function updateVolumeControlLabels() {
@@ -24223,12 +24234,11 @@ async function initKaminosVolumeRoute() {
   }
   for (const id of VOLUME_REBUILD_CONTROL_IDS) {
     const control = document.getElementById(id);
-    let timer = 0;
     const schedule = () => {
       holdVolumeRebuildControl(id);
       updateVolumeRebuildControlLabel(id);
-      clearTimeout(timer);
-      timer = setTimeout(() => { releaseVolumeRebuildControl(id); syncControls(); }, VOLUME_REBUILD_DEBOUNCE_MS);
+      clearTimeout(volumeRebuildTimers.get(id));
+      volumeRebuildTimers.set(id, setTimeout(() => { releaseVolumeRebuildControl(id); syncControls(); }, VOLUME_REBUILD_DEBOUNCE_MS));
     };
     control.addEventListener('input', schedule);
     control.addEventListener('change', schedule);
@@ -25576,6 +25586,7 @@ function checkFlameSettingsState(state) {
   return state;
 }
 function writeFlameSettingsState(state) {
+  supersedeVolumeRebuildHolds();
   for(const axis of ['domControls','rendererControls'])for(const [id,descriptor] of Object.entries(state[axis]))setVolumeControlValue(id,descriptor.rawValue??descriptor.value);
   activeCanonicalVolumeMacroPreset='';activeVolumeRayBudgetPreset='';routedVolumeRayBudgetPreset='';
   updateVolumeControlLabels();
