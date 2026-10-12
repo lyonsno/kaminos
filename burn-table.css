@@ -10,3 +10,5 @@
 #burn-table-labels { position:absolute; inset:0; pointer-events:none; z-index:10; }
 #burn-table-labels[hidden] { display:none; }
 #burn-table-labels span { position:absolute; transform:translate(-50%,0); padding:4px 7px; color:#e5e7e8; background:#181b1fda; font-size:11px; white-space:nowrap; border-left:2px solid #dba459; }
+body.burn-table-active #info-bar { display:none; }
+body.burn-table-active #scene-edit-hud:not([data-active="true"]):not([data-alert="true"]) { display:none; }

@@ -105,6 +105,7 @@ export function installBurnTable({document,ready,renderer,load,clone,register,ob
       reconcile();
       if(!active||status!=='mounted')return false;
       labels.hidden=document.body.dataset.workspace!=='workbench'||document.querySelector('.tab.active')?.dataset.tab!=='assets';
+      document.body.classList.toggle('burn-table-active',!labels.hidden);
       const rect=viewport.getBoundingClientRect();
       liveRecords().forEach(record=>{const point=new THREE.Vector3();record.object.getWorldPosition(point);point.y-=.36;point.project(camera);
         record.label.style.left=`${(point.x+1)*rect.width/2}px`;record.label.style.top=`${(1-point.y)*rect.height/2}px`;
