@@ -75,7 +75,7 @@ async function controller({examples=false,search='?sample=celebration'}={}) {
   const context = vm.createContext({ document, navigator:{gpu:{}}, location:{search}, window:{}, URL:BlobURL, URLSearchParams,
     OffscreenCanvas:Canvas, Uint8ClampedArray, Uint8Array, performance, crypto, Blob,
     createImageBitmap:async blob=>{if(behavior.bitmapGate)await behavior.bitmapGate;return {width:4,height:4,pixel:blob.pixel,close(){}};},
-    fetch:async url => behavior.gates.has(url) ? behavior.gates.get(url).promise : response(url),
+    fetch:async url => behavior.failImage?{ok:false,status:404}:behavior.gates.has(url) ? behavior.gates.get(url).promise : response(url),
     setInterval:()=>0, clearInterval(){}, requestAnimationFrame:callback=>queueMicrotask(()=>callback(0)),
   });
   const source = new vm.SourceTextModule(await readFile(new URL('./main.js',import.meta.url),'utf8'), { context });
@@ -83,7 +83,7 @@ async function controller({examples=false,search='?sample=celebration'}={}) {
     if(specifier==='./included-examples.js')return new vm.SyntheticModule(['loadIncludedExample'],function(){
       this.setExport('loadIncludedExample',async(key,inputKey,size)=>{
         if(!examples)return null;
-        if(behavior.exampleGate)await behavior.exampleGate;
+        behavior.onExample?.();if(behavior.exampleGate)await behavior.exampleGate;
         return {depth:{width:4,height:4},output:{width:512,height:512},provenance:{source:'included-example',inputKey,size:512,modelRevision:'test'}};
       });
     },{context});
@@ -98,7 +98,7 @@ async function controller({examples=false,search='?sample=celebration'}={}) {
   });
   await source.evaluate();
   const defer = key => { let resolve; const promise=new Promise(r=>{resolve=r;}); behavior.gates.set(`./images/${key}`,{promise}); return () => resolve(response()); };
-  return { behavior, elements, views, actions:context.window.__materialPhotoActions, state:context.window.__materialPhoto, receipt, defer };
+  return { behavior, elements, views, samples, actions:context.window.__materialPhotoActions, state:context.window.__materialPhoto, receipt, defer };
 }
 
 test('latest requested photograph wins even when fetches complete out of order', async () => {
@@ -115,6 +115,29 @@ test('arrival opens an included orb with no model loading or inference',async()=
   assert.equal(c.behavior.geometryRuns,0);assert.equal(c.behavior.materialRuns,0);
   assert.equal(c.behavior.profile,undefined);assert.ok(c.behavior.viewer.maps);
   assert.match(c.elements.provenance.textContent,/Included example/);
+});
+
+test('late included restoration cannot admit generation when a different job completes',async()=>{
+  const c=await controller({examples:true});let releaseRun,releaseExample,enteredRun,enteredExample;
+  c.behavior.runGate=new Promise(r=>{releaseRun=r;});const running=new Promise(r=>{enteredRun=r;});c.behavior.onRun=enteredRun;
+  const job=c.actions.infer();await running;
+  c.behavior.exampleGate=new Promise(r=>{releaseExample=r;});const loading=new Promise(r=>{enteredExample=r;});c.behavior.onExample=enteredExample;
+  const browse=c.actions.sample('orb');await loading;releaseRun();await job;
+  assert.equal(c.elements.run.disabled,true);assert.equal(c.state.status,'restoring');
+  await c.actions.infer();assert.equal(c.behavior.materialRuns,1);
+  releaseExample();await browse;assert.equal(c.elements.run.disabled,false);assert.equal(c.state.status,'included');
+});
+test('failed sample fetch allows retry on the retained photograph',async()=>{
+  const c=await controller();c.behavior.failImage=true;
+  await c.samples[1].onclick();
+  assert.equal(c.state.status,'error');assert.equal(c.state.source,'Celebration');assert.equal(c.elements.run.disabled,false);
+});
+test('a displayed included material stays playable during its regeneration',async()=>{
+  const c=await controller({examples:true});let release,entered;
+  c.behavior.loadGate=new Promise(r=>{release=r;});const loading=new Promise(r=>{entered=r;});c.behavior.onLoad=entered;
+  const before=c.behavior.viewer.maps,job=c.actions.infer();await loading;
+  assert.equal(c.behavior.viewer.maps,before);assert.match(c.elements.provenance.textContent,/Included/);
+  release();await job;assert.equal(c.state.status,'done');assert.match(c.elements.provenance.textContent,/Newly/);
 });
 
 for(const phase of ['load','run'])test(`browsing during material ${phase} preserves the captured request and offers its result`,async()=>{
@@ -198,10 +221,10 @@ test('reset synchronizes the sun handle and fixes exposure at one', async () => 
   assert.equal(c.behavior.viewer.renderer.toneMappingExposure,1);
   assert.equal(c.elements.sun.hidden,false);
 });
-test('failed material rerun cannot advertise old material maps', async () => {
+test('failed material rerun preserves playable previous output with an explicit label', async () => {
   const c=await controller(); await c.actions.infer(); c.behavior.failMaterials=true; await c.actions.infer();
-  assert.equal(c.state.status,'error'); assert.equal(c.views[3].disabled,true);
-  assert.equal(c.behavior.viewer.materialStatus,'Materials unavailable');
+  assert.equal(c.state.status,'error'); assert.equal(c.views[3].disabled,false);
+  assert.match(c.elements.provenance.textContent,/Previous result/);assert.ok(c.behavior.viewer.maps);
   assert.equal(c.views[2].disabled,false);c.actions.view('relit');
   assert.equal(c.behavior.viewer.mode,'relit');assert.equal(c.elements.sun.hidden,false);
 });

@@ -111,7 +111,7 @@ async function load(blob,label,key=null,ticket=++imageTicket){
   context.drawImage(bitmap,0,0);bitmap.close();
   const input=context.getImageData(0,0,canvas.width,canvas.height),keyHash=await photoCacheKey(input);
   if(ticket!==imageTicket)return;
-  image=input;imageKey=keyHash;sampleKey=key;imageBlob=blob;selection=results.select(label);state.source=label;state.status='loaded';state.error=null;state.result=null;state.cache=null;
+  image=input;imageKey=keyHash;sampleKey=key;imageBlob=blob;selection=results.select(label);state.source=label;state.status='loaded';state.error=null;state.result=null;state.cache=null;state.example=null;
   provenance('Original photograph');
   const old=$('preview').dataset.blob;
   const url=URL.createObjectURL(blob);$('preview').src=url;$('preview').dataset.blob=url;
@@ -172,9 +172,11 @@ async function restoreCached(ticket=++imageTicket){
   const geometry=await cache.get(geometryKey(key));
   if(ticket!==imageTicket)return;
   // Never leave the previous resolution's material maps advertised as this one.
-  state.result=null;state.cache=null;state.status='loaded';$('timings').textContent='';provenance('Original photograph');
+  state.result=null;state.cache=null;state.example=null;$('timings').textContent='';provenance('Original photograph');
   if(!active){$('elapsed').textContent='';$('progress').value=0;}
-  if(!geometry&&sample){
+  let material=null;
+  if(geometry){await setup();if(ticket!==imageTicket)return;material=await cache.get(materialKey(key,size));if(ticket!==imageTicket)return;}
+  if(!material&&sample){
     try{
       const included=await loadIncludedExample(sample,key,size);
       if(ticket!==imageTicket)return;
@@ -187,14 +189,14 @@ async function restoreCached(ticket=++imageTicket){
         provenance(`Included example | ${included.output.width} x ${included.output.height}`);
         status('Explore the included result');return;
       }
-    }catch(error){if(ticket!==imageTicket)return;(state.exampleErrors??=[]).push(String(error));
+    }catch(error){if(ticket!==imageTicket)return;(state.exampleErrors??=[]).push(String(error));state.status='loaded';
       status('Example unavailable; photograph loaded',true);runButton();return;}
   }
+  state.status='loaded';
   if(!geometry){viewer?.clear();$('preview').hidden=false;$('scene').hidden=true;view('original');
     for(const button of document.querySelectorAll('[data-view]:not([data-view=original])'))button.disabled=true;
     syncControls();status('Photograph loaded');return;}
   await setup();if(ticket!==imageTicket)return;
-  const material=await cache.get(materialKey(key,size));if(ticket!==imageTicket)return;
   results.publish(token,'geometry',geometry.depth);presentDepth(input,geometry.depth);
   state.cache={geometry:true,materials:!!material,size,source:'browser-result-storage',originalRun:material?.record??geometry.record};
   if(material){
@@ -210,6 +212,7 @@ async function infer(){
   if(active||!image||['loading-image','restoring'].includes(state.status))return;
   active=true;state.status='running';state.error=null;
   const token=selection,ticket=imageTicket,input=image,key=imageKey,blob=imageBlob,sample=sampleKey,size=Number($('material-size').value),started=performance.now(),record={source:state.source,status:'running',phases:{}};
+  const retainDisplay=!!viewer?.maps;
   const visible=()=>ticket===imageTicket&&size===Number($('material-size').value);
   const progressStatus=text=>{state.job={source:record.source,size,status:'running',message:text};$('job-status').textContent=`${record.source} | ${text}`;if(visible())status(text);};
   state.cache=null;
@@ -234,11 +237,11 @@ async function infer(){
     const depth=retained?.depth??await moge.run(input,{scheduler:{mode:'cooperative',splitVitBlocks:true,splitDecoderResBlocks:true,pacing:'bounded-prefix'}});
     record.phases.geometryMs=performance.now()-phase;
     record.moge=retained?{...retained.record.moge,cached:true}:{weights:moge.weightsSource,width:depth.width,height:depth.height,route:depth.routeResult?.receipt??null};
-    if(visible()){results.publish(token,'geometry',depth);presentDepth(input,depth);provenance('Generating materials');}
+    if(visible()&&!retainDisplay){results.publish(token,'geometry',depth);presentDepth(input,depth);provenance('Generating materials');}
     if(!retained)await cache.put(geometryKey(key),{depth:retainedGeometry(depth),record:{moge:record.moge}});
     await new Promise(requestAnimationFrame);
     if(!materials){
-      if(visible())viewer.setMaterialStatus('Loading materials');
+      if(visible()&&!retainDisplay)viewer.setMaterialStatus('Loading materials');
       weightRoute??=await session.registerRoute({routeId:`${SUPERMAT_ROUTE_ID}.material-photo-weights`});
       materials=await createSuperMatAdapter({route:weightRoute,weightsUrl:params.get('weights')??'/scratch/supermat-weights/f16/',
         ...superMatProductProfile(gpu.device),onProgress:event=>{
@@ -250,7 +253,7 @@ async function infer(){
     phase=performance.now();
     let output;
     try{
-      if(visible())viewer.setMaterialStatus('Inferring materials');
+      if(visible()&&!retainDisplay)viewer.setMaterialStatus('Inferring materials');
       const job=route.enqueue({jobId:crypto.randomUUID(),execute:invocation=>materials.run({image:input,size,
         schedule:{runtime:route.runtime,invocation,control},onRunProgress:progress=>{
           const names={preprocess:'Preparing image',encode:'Image encoder',unet:'Material inference','decode-albedo':'Albedo decoder','decode-orm':'Finish decoder','pack-maps':'Material maps'};
@@ -265,7 +268,7 @@ async function infer(){
     if(output.width!==size||output.height!==size)throw Error('Material output resolution differs from selected resolution');
     record.supermat={identity:materials.identity,size,timings:output.timings,dutyCount:output.dutyCount};
     record.wallMs=performance.now()-started;record.status='done';
-    const surface=visible()?viewer.surface:buildPhotoSurface(depth,input.width/input.height);
+    const surface=visible()&&!retainDisplay?viewer.surface:buildPhotoSurface(depth,input.width/input.height);
     record.output={surfaceVertices:surface.position.length/3,triangles:surface.indices.length/3,materialSize:[output.width,output.height]};
     record.cached=await cache.put(materialKey(key,size),{output,record});
     completed={input,key,blob,sample,size,depth,output,record};
@@ -275,7 +278,7 @@ async function infer(){
   }catch(error){
     record.status='error';record.error=String(error.stack??error);state.job={source:record.source,size,status:'error',error:error.message};
     $('job-status').textContent=`${record.source} | ${error.message}`;
-    if(visible()){if(viewer?.surface&&!viewer.maps)viewer.setMaterialStatus('Materials unavailable');state.status='error';state.error=error.message;status(error.message,true);}
+    if(visible()){if(viewer?.surface&&!viewer.maps)viewer.setMaterialStatus('Materials unavailable');if(retainDisplay)provenance('Previous result | Generation failed');state.status='error';state.error=error.message;status(error.message,true);}
     $('progress').removeAttribute('value');
   }
   finally{clearInterval(clock);record.elapsedMs=performance.now()-started;state.runs.push(record);active=false;
@@ -378,7 +381,7 @@ $('preset-file').onchange=async()=>{
   try{if(file)await importPreset(await file.text());}catch(error){$('preset-error').textContent=error.message;}
   $('preset-file').value='';
 };
-function fail(error){state.status='error';state.error=error.message;status(error.message,true);}
+function fail(error){state.status='error';state.error=error.message;status(error.message,true);runButton();}
 async function changeEnvironment(name){
   if(!viewer)return false;
   const ticket=++environmentTicket;
