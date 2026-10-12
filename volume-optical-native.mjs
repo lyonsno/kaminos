@@ -105,6 +105,7 @@ export function installOpticalSteppingPreview(renderer, document) {
   label.htmlFor = 'optical-stepping-preview';
   label.textContent = 'Stepping preview';
   const select = document.createElement('select');
+  select.className = 'select-input';
   select.id = label.htmlFor;
   for (const [value, text] of [['current','Current'],['fixed','Fixed reference'],['fixed-dense','Fixed reference 2x'],
     ['numerical:0.01','Numerical 0.01'],['numerical:0.001','Numerical 0.001'],['numerical:0.0001','Numerical 0.0001']]) {
