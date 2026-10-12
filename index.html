@@ -4053,7 +4053,7 @@ import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
-import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,createSelectionTransformTarget} from './scene-selection.mjs';
+import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
 
 let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
@@ -5814,7 +5814,7 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
     if (previous && previous !== FLAME_EMITTER_ID) setActiveSceneObject(previous);
   }
   refreshFlameDomainPreview();
-  if (flameDomainGuide) flameDomainGuide.visible = viewportHelpersVisible&&(sceneSelectionMembers().includes(FLAME_EMITTER_ID)||activeSceneFieldId==='flame-field');
+  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible;
   if (entry) updateFlameEmitterSupportOutline(THREE, entry.object,
     window.__kaminosVolumeEmitterReceipt?.requested);
   if (entry) applySceneObjectTransformState(entry.object, flameEmitterPose);
@@ -5850,7 +5850,7 @@ function refreshFlameDomainPreview() {
     flameDomainGuide.renderOrder = 1000;
     scene.add(flameDomainGuide);
   }
-  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible && (sceneSelectionMembers().includes(FLAME_EMITTER_ID) || activeSceneFieldId === 'flame-field');
+  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible;
   const pose=flameDomainDraft||acceptedFlameDomainPose(),{translation,scale}=domainTransformForPose(pose);
   if(flameDomainGuide)flameDomainGuide.box.set(new THREE.Vector3(-scale,-scale,-scale).add(new THREE.Vector3(...translation)),new THREE.Vector3(scale,3*scale,scale).add(new THREE.Vector3(...translation)));
   if(flameDomainProxy&&!transformControls?.dragging)applySceneObjectTransformState(flameDomainProxy,pose);
@@ -6863,7 +6863,7 @@ async function resetSelectedSplatCorrection() {
 
 function updateTransformInspector() {
   syncLevelingButton();
-  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended&&viewportHelpersVisible&&(sceneSelectionMembers().includes(FLAME_EMITTER_ID)||activeSceneFieldId==='flame-field');
+  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible;
   const inspector = document.getElementById('transform-inspector');
   const empty = document.getElementById('transform-inspector-empty');
   const fields = document.getElementById('transform-inspector-fields');
@@ -7151,6 +7151,11 @@ function sceneObjectRecordForDescendant(object) {
   return null;
 }
 
+function pickFlameDomainFromViewportPointer(event) {
+  if (!activeSceneComposition || !flameDomainGuide?.visible || selectionCaptureSuspended || !viewportHelpersVisible || !renderer || !camera) return false;
+  return pointerHitsBoxOutline(flameDomainGuide.box, camera, {x:event.clientX,y:event.clientY}, renderer.domElement.getBoundingClientRect());
+}
+
 function pickSceneObjectFromViewportPointer(event) {
   if (!sceneRaycaster || !scenePointerNdc || !renderer || !camera || !sceneObjects.length) return null;
   const rect = renderer.domElement.getBoundingClientRect();
@@ -7226,6 +7231,12 @@ function handleViewportSelectionClick(event) {
     return;
   }
 
+  if (pickFlameDomainFromViewportPointer(event)) {
+    window.selectSceneField('flame-field');
+    setInfo('Selected: Fire & smoke domain');
+    window._kaminosDirty?.();
+    return;
+  }
   const record = pickSceneObjectFromViewportPointer(event);
   if (record) {
     setActiveSceneObject(record.id,{extend:!!event.shiftKey});
@@ -7523,6 +7534,7 @@ window.selectSceneField=function(id) {
   if(!['flame-field','water-field'].includes(id)||!(id==='flame-field'?activeSceneComposition:localLiquidSetup))throw Error('This simulation field is not present');
   if(!burnerGraphWriting)scenePlacementTools?.selectionChanged();sceneSelection={ids:[],activeId:null};updateSelectionFeedback();activeSceneFieldId=id;activeSceneObjectId=null;activeSceneGroupId=null;currentMesh=null;
   transformControls?.detach();if(id==='flame-field'){currentMesh=flameDomainEditObject();if(transformControls){attachViewportGizmo(currentMesh);transformControls.setMode('translate');}}document.getElementById('transform-bar').classList.remove('visible');renderSceneObjectList();updateTransformInspector();
+  refreshFlameDomainPreview();authoringWorkspace?.setContext('object');setInfo(id==='flame-field'?'Selected: Fire & smoke domain':'Selected: Water simulation');
 };
 
 window.selectSceneObject = function(id,options={}) {
@@ -29424,7 +29436,7 @@ function updateSelectionFeedback(){
 function syncEditorHelperVisibility(){
   for(const entry of sceneObjects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE)entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible;}
   for(const {marker,light} of sceneSpotLights.values())marker.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&light.visible;
-  if(flameDomainGuide)flameDomainGuide.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&(sceneSelectionMembers().includes(FLAME_EMITTER_ID)||activeSceneFieldId==='flame-field');
+  if(flameDomainGuide)flameDomainGuide.visible= !selectionCaptureSuspended && viewportHelpersVisible;
   for(const entry of sceneObjects)if(entry.type===CAMERA_TYPE)entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&!(sceneCameras?.state().mode==='camera'&&sceneCameras.state().activeId===entry.id);
   updateSelectionFeedback();window._kaminosDirty?.();
 }

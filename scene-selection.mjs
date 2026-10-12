@@ -52,6 +52,39 @@ export function objectsInScreenBox(entries,camera,rect,viewport) {
   }).map(entry=>entry.id);
 }
 
+// Pick the drawn outline in CSS pixels, never the empty volume it encloses.
+export function pointerHitsBoxOutline(box, camera, pointer, viewport, radius = 6) {
+  if (!box || box.isEmpty() || viewport.width <= 0 || viewport.height <= 0) return false;
+  if (pointer.x < viewport.left || pointer.x > viewport.left + viewport.width || pointer.y < viewport.top || pointer.y > viewport.top + viewport.height) return false;
+  camera.updateMatrixWorld(true);
+  const corners = [];
+  for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
+    corners.push(new Vector3(x, y, z).applyMatrix4(camera.matrixWorldInverse));
+  }
+  for (let i = 0; i < 8; i++) for (const bit of [1, 2, 4]) {
+    const j = i ^ bit;
+    if (j <= i) continue;
+    const a = corners[i].clone(), b = corners[j].clone();
+    // Clip before projection so edges crossing the eye cannot become phantom lines.
+    let lo = 0, hi = 1;
+    const dz = b.z - a.z;
+    if (dz === 0) { if (a.z > -camera.near || a.z < -camera.far) continue; }
+    else {
+      const near = (-camera.near - a.z) / dz, far = (-camera.far - a.z) / dz;
+      lo = Math.max(lo, Math.min(near, far)); hi = Math.min(hi, Math.max(near, far));
+      if (lo > hi) continue;
+    }
+    const end = a.clone().lerp(b, hi).applyMatrix4(camera.projectionMatrix);
+    a.lerp(b, lo).applyMatrix4(camera.projectionMatrix);
+    const ax = viewport.left + (a.x + 1) * viewport.width / 2, ay = viewport.top + (1 - a.y) * viewport.height / 2;
+    const bx = viewport.left + (end.x + 1) * viewport.width / 2, by = viewport.top + (1 - end.y) * viewport.height / 2;
+    const dx = bx - ax, dy = by - ay;
+    const t = Math.max(0, Math.min(1, ((pointer.x - ax) * dx + (pointer.y - ay) * dy) / (dx * dx + dy * dy || 1)));
+    if (Math.hypot(pointer.x - ax - t * dx, pointer.y - ay - t * dy) <= radius) return true;
+  }
+  return false;
+}
+
 // The target stores ordinary root snapshots. History replay therefore restores
 // the chosen roots even after the current UI selection has changed.
 export function createSelectionTransformTarget({edits,selection,groups,preferences,read,write,check,changed=()=>{}}) {
