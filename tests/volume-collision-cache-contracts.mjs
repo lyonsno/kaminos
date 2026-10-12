@@ -74,6 +74,11 @@ test('source footprint cache reuses static weights while current mask, flux and 
  const uncached=core.resolveImmersedSourceConfig(controls,{grid:32,gridHeight:64,solidCells:mask,puffFactor:.7});
  assert.deepEqual(cached,uncached);assert.equal(cache.builds,1,'changing supply or mask must not rescan the static footprint');assert.ok(cached.effective.masked.cells>0);
  const field=new Float32Array(32*32).fill(.3);const windy={...controls,emitterInletTurbulence:.6};const signals={turbulence:{field,rms:.3}};assert.deepEqual(core.resolveImmersedSourceConfig(windy,{...shape,solidCells:mask,inletSignals:signals}),core.resolveImmersedSourceConfig(windy,{grid:32,gridHeight:64,solidCells:mask,inletSignals:signals}));assert.equal(cache.builds,1);
- const moving={...base};for(const patch of [{immersedCentreX:.125},{immersedPitch:30},{immersedRadius:.3},{immersedThickness:2},{emitterAperturePattern:'bed'}]){Object.assign(moving,patch);core.resolveImmersedSourceConfig(moving,shape);}
- assert.equal(cache.builds,6,'pose/shape/pattern changes must invalidate exact weights');
+ const moving={...base};for(const patch of [{immersedCentreX:.125},{immersedPitch:30},{immersedRadius:.3},{immersedThickness:2}]){Object.assign(moving,patch);core.resolveImmersedSourceConfig(moving,shape);}
+ assert.equal(cache.builds,5,'pose/shape changes must invalidate exact weights; this inherited engine predates slab patterns');
+});
+
+test('a subcell wall move that leaves occupancy identical does not upload another mask',()=>{
+ const {ctx,counts,refresh}=collision();refresh({immersedCentreY:.03,immersedThickness:1});const first=ctx.sceneSolidCellsCpu.slice();
+ refresh({immersedCentreY:.03001});assert.deepEqual(ctx.sceneSolidCellsCpu,first);assert.equal(counts.uploads,1,'GPU mask key follows actual occupied cells, not pose metadata');
 });
