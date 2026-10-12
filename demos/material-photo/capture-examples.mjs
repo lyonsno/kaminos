@@ -31,8 +31,8 @@ try{
   for(const [sample,label]of [['orb','Metal & glow'],['celebration','Celebration'],['bag','Backpack']]){
     report.phase=`generate-${sample}`;await persist();
     await evaluate(`(async()=>{document.getElementById('material-size').value='512';await window.__materialPhotoActions.sample(${JSON.stringify(sample)});await window.__materialPhotoActions.infer()})()`);
-    const state=await evaluate('window.__materialPhoto');validateEpisode(state,label,512);
-    const row={sample,state};report.examples.push(row);await persist();
+    const state=await evaluate('window.__materialPhoto');
+    const row={sample,state};report.examples.push(row);await persist();validateEpisode(state,label,512);
     report.phase=`export-${sample}`;
     const length=await evaluate(`(async()=>{const {encodeExample}=await import('./included-examples.js');const e=window.__materialPhotoActions.exampleEvidence();
       if(e.sample!==${JSON.stringify(sample)}||e.record.source!==e.source)throw Error('Wrong example source');
