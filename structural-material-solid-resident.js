@@ -1,12 +1,13 @@
 export const SOLID_RESIDENT_ROUTE='kaminos.deformable-material.colored-vbd.webgpu.v0';
 export const solidResidentWgsl=`
 override isotropicIntact:bool=false;
+override scalarDegradation:bool=false;
 struct Point{rest:vec4f,position:vec4f,velocity:vec4f,predicted:vec4f};
 struct Settings{counts:vec4u,time:vec4f,grip:vec4f,destination:vec4f,plane:vec4f,topology:vec4u};
 struct Local{gradient:vec3f,energy:f32,hessian:mat3x3f,invalid:u32};
 @group(0) @binding(0) var<storage,read_write> points:array<Point>;
 @group(0) @binding(1) var<storage,read> elements:array<vec4u>;
-@group(0) @binding(2) var<storage,read> parameters:array<f32>;
+@group(0) @binding(2) var<storage,read_write> parameters:array<f32>;
 @group(0) @binding(3) var<storage,read> coefficients:array<f32>;
 @group(0) @binding(4) var<storage,read> incidence:array<u32>;
 @group(0) @binding(5) var<storage,read_write> bonds:array<vec4u>;
@@ -19,6 +20,7 @@ fn position(index:u32,node:u32,trial:vec3f)->vec3f{if(index==node){return trial;
 fn shape(element:u32,local:u32)->vec3f{let i=element*16u+local*4u;return vec3f(parameters[i],parameters[i+1u],parameters[i+2u]);}
 fn graph(element:u32,local:u32,node:u32,trial:vec3f,needHessian:bool)->Local{
  var result:Local;var mask=0u;
+ if(scalarDegradation&&parameters[element*16u+11u]==0.0){return result;}
  if(!isotropicIntact){for(var k=0u;k<6u;k++){let ids=elementBonds[element*2u+k/4u];if(bonds[ids[k%4u]].z==0u){mask|=1u<<k;}}}
  let matrix=select((element*64u+mask)*36u,element*36u,settings.topology.z==1u);var live=isotropicIntact;if(!isotropicIntact){for(var k=0u;k<36u;k++){live=live||(coefficients[matrix+k]!=0.0);}}
  if(!live){return result;}
@@ -30,11 +32,11 @@ fn graph(element:u32,local:u32,node:u32,trial:vec3f,needHessian:bool)->Local{
  else{for(var row=0u;row<6u;row++){for(var col=0u;col<6u;col++){s[row]+=coefficients[matrix+row*6u+col]*e[col];}}}
  for(var row=0u;row<6u;row++){result.energy+=e[row]*s[row];}
  let S=mat3x3f(vec3f(s[0],s[3],s[4]),vec3f(s[3],s[1],s[5]),vec3f(s[4],s[5],s[2]));var g=shape(element,local);if(local==0u){g=-(shape(element,1u)+shape(element,2u)+shape(element,3u));}let V=parameters[element*16u+3u];let beta=select(0.0,parameters[element*16u+7u],settings.topology.w==1u);
- result.energy*=V*0.5;if(beta>0.0){result.energy+=V*beta*(J-1.0-log(J));}if(!needHessian){return result;}let cofactor=mat3x3f(cross(F[1],F[2]),cross(F[2],F[0]),cross(F[0],F[1]));let q=cofactor*g;result.gradient=V*(F*S*g);if(beta>0.0){result.gradient+=V*beta*(1.0-1.0/J)*q;result.hessian=outer(q,q)*(V*beta/(J*J));}
+ result.energy*=V*0.5;if(beta>0.0){result.energy+=V*beta*(J-1.0-log(J));}if(scalarDegradation){result.energy*=parameters[element*16u+11u];}if(!needHessian){return result;}let cofactor=mat3x3f(cross(F[1],F[2]),cross(F[2],F[0]),cross(F[0],F[1]));let q=cofactor*g;result.gradient=V*(F*S*g);if(beta>0.0){result.gradient+=V*beta*(1.0-1.0/J)*q;result.hessian=outer(q,q)*(V*beta/(J*J));}if(scalarDegradation){result.gradient*=parameters[element*16u+11u];}
  var A=array<vec3f,6>(F[0]*g.x,F[1]*g.y,F[2]*g.z,F[1]*g.x+F[0]*g.y,F[2]*g.x+F[0]*g.z,F[2]*g.y+F[1]*g.z);
  if(isotropicIntact){let lambda=coefficients[matrix+1u];let mu=coefficients[matrix+21u];let v=A[0]+A[1]+A[2];result.hessian+=outer(v,v)*(V*lambda);for(var row=0u;row<3u;row++){result.hessian+=outer(A[row],A[row])*(V*2.0*mu);}for(var row=3u;row<6u;row++){result.hessian+=outer(A[row],A[row])*(V*mu);}}
  else{for(var row=0u;row<6u;row++){for(var col=0u;col<6u;col++){result.hessian+=outer(A[row],A[col])*(V*coefficients[matrix+row*6u+col]);}}}
- result.hessian+=eye()*max(0.0,V*dot(g,S*g));return result;
+ result.hessian+=eye()*max(0.0,V*dot(g,S*g));if(scalarDegradation){result.hessian*=parameters[element*16u+11u];}return result;
 }
 fn pmb(element:u32,local:u32,node:u32,trial:vec3f,needHessian:bool)->Local{
  var result:Local;if(bonds[element].z==0u){return result;}
@@ -91,7 +93,7 @@ fn evaluate(node:u32,trial:vec3f,needHessian:bool)->Local{
  let i=id.x;if(i>=arrayLength(&elements)||settings.counts.z!=0u){return;}let base=settings.counts.x*6u+i*7u;var mask=0u;
  if(!isotropicIntact){for(var k=0u;k<6u;k++){let ids=elementBonds[i*2u+k/4u];if(bonds[ids[k%4u]].z==0u){mask|=1u<<k;}}}
  let matrix=select((i*64u+mask)*36u,i*36u,settings.topology.z==1u);var live=isotropicIntact;if(!isotropicIntact){for(var k=0u;k<36u;k++){live=live||(coefficients[matrix+k]!=0.0);}}
- for(var k=0u;k<7u;k++){diagnostics[base+k]=vec4f(0);}if(!live){return;}
+ for(var k=0u;k<7u;k++){diagnostics[base+k]=vec4f(0);}if(!live||(scalarDegradation&&parameters[i*16u+11u]==0.0)){return;}
  let ids=elements[i];var F=mat3x3f(vec3f(0),vec3f(0),vec3f(0));for(var k=1u;k<4u;k++){F+=outer(points[ids[k]].position.xyz-points[ids[0]].position.xyz,shape(i,k));}
  let J=dot(F[0],cross(F[1],F[2]));if(J<=0.0){diagnostics[base+6u]=vec4f(0,0,1,1);return;}
  let C=transpose(F)*F;let e=array<f32,6>((C[0][0]-1.0)*0.5,(C[1][1]-1.0)*0.5,(C[2][2]-1.0)*0.5,C[1][0],C[2][0],C[2][1]);var s=array<f32,6>();var energy=0.0;
@@ -99,12 +101,30 @@ fn evaluate(node:u32,trial:vec3f,needHessian:bool)->Local{
  else{for(var row=0u;row<6u;row++){for(var col=0u;col<6u;col++){s[row]+=coefficients[matrix+row*6u+col]*e[col];}}}
  for(var row=0u;row<6u;row++){energy+=e[row]*s[row];}
  let S=mat3x3f(vec3f(s[0],s[3],s[4]),vec3f(s[3],s[1],s[5]),vec3f(s[4],s[5],s[2]));let beta=select(0.0,parameters[i*16u+7u],settings.topology.w==1u);var sigma=F*S*transpose(F)*(1.0/J);if(beta>0.0){sigma+=eye()*(beta*(1.0-1.0/J));energy+=2.0*beta*(J-1.0-log(J));}
+ if(scalarDegradation){let alpha=parameters[i*16u+11u];sigma*=alpha;energy*=alpha;}
  for(var k=0u;k<3u;k++){diagnostics[base+k]=vec4f(sigma[k],0);diagnostics[base+3u+k]=vec4f(F[k],0);}
  diagnostics[base+6u]=vec4f(parameters[i*16u+3u],energy*parameters[i*16u+3u]*0.5,1,0);
 }
 @compute @workgroup_size(64) fn damage(@builtin(global_invocation_id) id:vec3u){
  let i=id.x;if(i>=arrayLength(&bonds)){return;}let b=bonds[i];let a=dot(settings.plane.xyz,points[b.x].rest.xyz)-settings.plane.w;let c=dot(settings.plane.xyz,points[b.y].rest.xyz)-settings.plane.w;
  if(a*c<0.0&&(settings.topology.y==0u||(diagnostics[b.x*6u+4u].z==1.0&&diagnostics[b.y*6u+4u].z==1.0))){bonds[i].z=0u;}
+}
+fn edgePair(k:u32)->vec2u{let pairs=array<vec2u,6>(vec2u(0,1),vec2u(0,2),vec2u(0,3),vec2u(1,2),vec2u(1,3),vec2u(2,3));return pairs[k];}
+@compute @workgroup_size(64) fn fractureStress(@builtin(global_invocation_id) id:vec3u){
+ let i=id.x;if(i>=arrayLength(&bonds)||!scalarDegradation){return;}let b=bonds[i];if(b.z==0u){return;}
+ let delta=points[b.y].position.xyz-points[b.x].position.xyz;if(length(delta)==0.0){return;}let direction=normalize(delta);var stressSum=0.0;var volumeSum=0.0;let start=settings.counts.x+1u;
+ for(var j=incidence[b.x];j<incidence[b.x+1u];j++){let t=incidence[start+j*2u];let ids=elements[t];if(all(ids!=vec4u(b.y))){continue;}let base=settings.counts.x*6u+t*7u;let flags=diagnostics[base+6u];if(flags.z!=1.0||flags.w!=0.0){continue;}let sigma=mat3x3f(diagnostics[base].xyz,diagnostics[base+1u].xyz,diagnostics[base+2u].xyz);stressSum+=flags.x*dot(direction,sigma*direction);volumeSum+=flags.x;}
+ if(volumeSum>0.0&&stressSum/volumeSum>settings.plane.w){bonds[i].z=0u;}
+}
+@compute @workgroup_size(64) fn degrade(@builtin(global_invocation_id) id:vec3u){
+ let i=id.x;if(i>=arrayLength(&elements)||!scalarDegradation){return;}var mask=0u;
+ for(var k=0u;k<6u;k++){let edge=elementBonds[i*2u+k/4u][k%4u];if(bonds[edge].z==0u){mask|=1u<<k;}}
+ if(mask==u32(parameters[i*16u+15u])){return;}parameters[i*16u+15u]=f32(mask);var reached=1u;
+ for(var sweep=0u;sweep<4u;sweep++){for(var k=0u;k<6u;k++){let p=edgePair(k);if((mask&(1u<<k))==0u&&((reached&(1u<<p.x))!=0u||(reached&(1u<<p.y))!=0u)){reached|=(1u<<p.x)|(1u<<p.y);}}}
+ if(reached!=15u){parameters[i*16u+11u]=0.0;return;}
+ let base=settings.counts.x*6u+i*7u;let sigma=mat3x3f(diagnostics[base].xyz,diagnostics[base+1u].xyz,diagnostics[base+2u].xyz);let ids=elements[i];var total=0.0;var kept=0.0;
+ for(var k=0u;k<6u;k++){let p=edgePair(k);let delta=points[ids[p.y]].position.xyz-points[ids[p.x]].position.xyz;if(length(delta)==0.0){continue;}let direction=normalize(delta);let value=abs(dot(direction,sigma*direction));total+=value;if((mask&(1u<<k))==0u){kept+=value;}}
+ if(total>0.0){parameters[i*16u+11u]=min(parameters[i*16u+11u],kept/total);}
 }`;
 
 const devicePrograms=new WeakMap();
@@ -114,8 +134,8 @@ async function materialProgram(device,onProgress,energyKernel){
  if(!programs.has(energyKernel)){
   const pending=(async()=>{
    onProgress('shader-compilation');const shader=device.createShaderModule({label:'Resident graph/PMB local energy minimization',code:solidResidentWgsl}),info=await shader.getCompilationInfo();if(info.messages.some(m=>m.type==='error'))throw new Error(JSON.stringify(info.messages.map(m=>({message:m.message,line:m.lineNum}))));
-   const layout=device.createBindGroupLayout({entries:Array.from({length:9},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===8?'uniform':[0,5,7].includes(binding)?'storage':'read-only-storage'}}))}),pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]}),pipelines={};
-   for(const entryPoint of ['predict','solve','finish','diagnose','damage','capturePatch','stress']){onProgress(`pipeline-${entryPoint}`);pipelines[entryPoint]=await device.createComputePipelineAsync({layout:pipelineLayout,compute:{module:shader,entryPoint,constants:{isotropicIntact:energyKernel==='isotropic-intact-v1'}}});}return{layout,pipelines};
+   const layout=device.createBindGroupLayout({entries:Array.from({length:9},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===8?'uniform':[0,2,5,7].includes(binding)?'storage':'read-only-storage'}}))}),pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]}),pipelines={};
+   for(const entryPoint of ['predict','solve','finish','diagnose','damage','capturePatch','stress',...(energyKernel==='isotropic-degradation-v1'?['fractureStress','degrade']:[])]){onProgress(`pipeline-${entryPoint}`);pipelines[entryPoint]=await device.createComputePipelineAsync({layout:pipelineLayout,compute:{module:shader,entryPoint,constants:{isotropicIntact:energyKernel==='isotropic-intact-v1'||energyKernel==='isotropic-degradation-v1',scalarDegradation:energyKernel==='isotropic-degradation-v1'}}});}return{layout,pipelines};
   })();programs.set(energyKernel,pending);pending.catch(()=>{if(programs.get(energyKernel)===pending)programs.delete(energyKernel);});
  }else onProgress('pipelines-reused');
  return programs.get(energyKernel);
@@ -123,27 +143,29 @@ async function materialProgram(device,onProgress,energyKernel){
 
 export function selectSolidEnergyKernel(descriptor,arrays,requested='auto'){
  if(!['auto','dense-reference'].includes(requested))throw new Error('Unknown solid energy kernel');
- if(requested==='dense-reference'||descriptor.kind!=='graph'||descriptor.constitutiveLayout!=='separated-intact-tetrahedra-v1')return 'dense-reference';
+ const compact=descriptor.constitutiveLayout==='event-frozen-isotropic-degradation-v1',refuse=()=>{if(compact)throw new Error('Compact degradation requires complete isotropic coefficients');return 'dense-reference';};
+ if(compact&&requested==='dense-reference')throw new Error('Compact degradation requires its explicit isotropic kernel');
+ if(requested==='dense-reference'||descriptor.kind!=='graph'||!compact&&descriptor.constitutiveLayout!=='separated-intact-tetrahedra-v1')return 'dense-reference';
  const c=arrays.coefficients;
- if(!(c instanceof Float32Array)||c.length!==descriptor.elements*36)return 'dense-reference';
+ if(!(c instanceof Float32Array)||c.length!==descriptor.elements*36)return refuse();
  for(let t=0;t<descriptor.elements;t++){
   const base=t*36,lambda=c[base+1],mu=c[base+21],diagonal=Math.fround(lambda+2*mu);
-  if(!(Number.isFinite(lambda)&&Number.isFinite(mu)&&mu>0&&lambda+2*mu/3>0))return 'dense-reference';
+  if(!(Number.isFinite(lambda)&&Number.isFinite(mu)&&mu>0&&lambda+2*mu/3>0))return refuse();
   for(let row=0;row<6;row++)for(let col=0;col<6;col++){
    const expected=row<3&&col<3?(row===col?diagonal:lambda):(row===col?mu:0);
-   if(c[base+row*6+col]!==expected)return 'dense-reference';
+   if(c[base+row*6+col]!==expected)return refuse();
   }
  }
- return 'isotropic-intact-v1';
+ return compact?'isotropic-degradation-v1':'isotropic-intact-v1';
 }
 
 export async function createSolidResident(device,descriptor,arrays,{onProgress=()=>{},energyKernel:requestedKernel='auto'}={}){
  if(!['graph','pmb'].includes(descriptor?.kind)||!['points','elements','bonds','colorCount'].every(k=>Number.isInteger(descriptor[k])&&descriptor[k]>0))throw new Error('Complete explicit material descriptor required');
  if(descriptor.bufferLayout!=='compact-color-incidence-v1')throw new Error('Explicit compact material buffer layout required; reprepare legacy buffers');
  const n=descriptor.points,count=descriptor.elements,bondCount=descriptor.bonds;
- const separated=descriptor.constitutiveLayout==='separated-intact-tetrahedra-v1';if(descriptor.constitutiveLayout!==undefined&&!separated)throw new Error('Unknown constitutive layout');if(separated&&descriptor.kind!=='graph')throw new Error('Separated tetrahedral layout requires graph material');
+ const separated=descriptor.constitutiveLayout==='separated-intact-tetrahedra-v1',compact=descriptor.constitutiveLayout==='event-frozen-isotropic-degradation-v1';if(descriptor.constitutiveLayout!==undefined&&!separated&&!compact)throw new Error('Unknown constitutive layout');if((separated||compact)&&descriptor.kind!=='graph')throw new Error('Tetrahedral layout requires graph material');
  const barrier=Math.fround(descriptor.volumeBarrier??0);if(!(Number.isFinite(barrier)&&barrier>=0)||barrier>0&&descriptor.kind!=='graph')throw new Error('Explicit nonnegative graph volume barrier required');
- const expected={state:n*16,elements:count*4,bonds:bondCount*4,parameters:count*(descriptor.kind==='graph'?16:4),coefficients:descriptor.kind==='graph'?count*(separated?1:64)*36:1,elementBonds:descriptor.kind==='graph'?count*8:4};
+ const expected={state:n*16,elements:count*4,bonds:bondCount*4,parameters:count*(descriptor.kind==='graph'?16:4),coefficients:descriptor.kind==='graph'?count*(separated||compact?1:64)*36:1,elementBonds:descriptor.kind==='graph'?count*8:4};
  for(const [name,length] of Object.entries(expected)){const Type=['state','parameters','coefficients'].includes(name)?Float32Array:Uint32Array;if(!(arrays[name] instanceof Type)||arrays[name].length!==length||!arrays[name].every(Number.isFinite))throw new Error(`Complete finite resident ${name} required`);}
  const energyKernel=selectSolidEnergyKernel(descriptor,arrays,requestedKernel);
  if(barrier>0&&Array.from({length:count},(_,i)=>arrays.parameters[i*16+7]).some(v=>v!==barrier))throw new Error('Resident volume barrier coefficients disagree with descriptor');
@@ -187,7 +209,7 @@ export async function createSolidResident(device,descriptor,arrays,{onProgress=(
   const {layout,pipelines}=await materialProgram(device,onProgress,energyKernel);onProgress('pipelines-compiled');
   const resources=['state','elements','parameters','coefficients','incidence','bonds','elementBonds','diagnostics'].map(name=>buffers[name]);
   const groups=Array.from({length:descriptor.colorCount},(_,color)=>device.createBindGroup({layout,entries:[...resources.map((buffer,binding)=>({binding,resource:{buffer}})),{binding:8,resource:{buffer:uniform,offset:color*alignment,size:96}}]}));
-  const configure=(plane,restricted=false)=>{const bytes=new ArrayBuffer(descriptor.colorCount*alignment);for(let color=0;color<descriptor.colorCount;color++){const u=new Uint32Array(bytes,color*alignment,4),f=new Float32Array(bytes,color*alignment+16,16);u.set([n,color,descriptor.kind==='graph'?0:1,settings.lineSearchTrials]);f.set([settings.timeStep,settings.gravity,settings.damping,settings.floor,grip?.index??-1,grip?.stiffness??0,0,0,...(grip?.target??[0,0,0]),0,...(plane??[0,0,0,0])]);new Uint32Array(bytes,color*alignment+80,4).set([descriptor.colorCount,restricted?1:0,separated?1:0,barrier>0?1:0]);}device.queue.writeBuffer(uniform,0,bytes);};
+  const configure=(plane,restricted=false)=>{const bytes=new ArrayBuffer(descriptor.colorCount*alignment);for(let color=0;color<descriptor.colorCount;color++){const u=new Uint32Array(bytes,color*alignment,4),f=new Float32Array(bytes,color*alignment+16,16);u.set([n,color,descriptor.kind==='graph'?0:1,settings.lineSearchTrials]);f.set([settings.timeStep,settings.gravity,settings.damping,settings.floor,grip?.index??-1,grip?.stiffness??0,0,0,...(grip?.target??[0,0,0]),0,...(plane??[0,0,0,0])]);new Uint32Array(bytes,color*alignment+80,4).set([descriptor.colorCount,restricted?1:0,separated||compact?1:0,barrier>0?1:0]);}device.queue.writeBuffer(uniform,0,bytes);};
   const dispatch=(encoder,name,color=0,count=n)=>{const pass=encoder.beginComputePass();pass.setPipeline(pipelines[name]);pass.setBindGroup(0,groups[color]);pass.dispatchWorkgroups(Math.ceil(count/64));pass.end();};
   let mirroredBonds=Array.from(arrays.bonds),bondMirrorEpoch=0;
   async function readNow({full=true,stress=true}={}){configure();const encoder=device.createCommandEncoder();if(full)dispatch(encoder,'diagnose');if(stress&&descriptor.kind==='graph')dispatch(encoder,'stress',0,count);
@@ -196,12 +218,13 @@ export async function createSolidResident(device,descriptor,arrays,{onProgress=(
    try{onProgress('readback-await');await Promise.all(readbacks.map(b=>b.mapAsync(GPUMapMode.READ)));const mapped=Object.fromEntries(ranges.map(({name},i)=>[name,readbacks[i].getMappedRange()])),state=Array.from(new Float32Array(mapped.state));if(mapped.bonds){mirroredBonds=Array.from(new Uint32Array(mapped.bonds));bondMirrorEpoch=damageEpoch;}const raw=mapped.diagnostics?new Float32Array(mapped.diagnostics):null,diagnostics=full?Array.from(raw.slice(0,n*24)):null;const stresses=stress&&descriptor.kind==='graph'?Array.from({length:count},(_,i)=>{const b=(full?n*24:0)+i*28,matrix=start=>Array.from({length:3},(_,r)=>Array.from({length:3},(_,c)=>raw[b+start+c*4+r]));return{stress:matrix(0),F:matrix(12),volume:raw[b+24],energy:raw[b+25],active:raw[b+26]===1,invalid:raw[b+27]!==0};}):null;onProgress('readback-complete');return{route:SOLID_RESIDENT_ROUTE,runId,kind:descriptor.kind,model:{kind:descriptor.kind,points:n,elements:count,bonds:bondCount},steps,damageEpoch,settings:{...settings},grip:grip&&structuredClone(grip),state,bonds:[...mirroredBonds],diagnostics,stresses,observation:{kind:full?'full-diagnostic':'frame',stressCurrent:stress&&descriptor.kind==='graph',readbackBytes:ranges.reduce((sum,r)=>sum+r.size,0)},claim:'Resident colored local-energy dynamics and live graph Cauchy stress; selected plane release and point-floor contact remain provisional'};}finally{for(const b of readbacks){b.destroy();owned.splice(owned.indexOf(b),1);}}
   }
   return{route:SOLID_RESIDENT_ROUTE,
-   device,stateBuffer(){if(failure)throw new Error(failure);return buffers.state;},
+   device,stateBuffer(){if(failure)throw new Error(failure);return buffers.state;},bondBuffer(){if(failure)throw new Error(failure);return buffers.bonds;},
    pin(indices){return serial(()=>{valid(Array.isArray(indices)&&indices.every(i=>Number.isInteger(i)&&i>=0&&i<n),'Valid support point indices required');for(const index of indices)device.queue.writeBuffer(buffers.state,(index*16+11)*4,new Float32Array([1]));});},
    grip(index,target,stiffness){return serial(()=>{valid(Number.isInteger(index)&&index>=0&&index<n&&Array.isArray(target)&&target.length===3&&target.every(v=>Number.isFinite(Math.fround(v)))&&Number.isFinite(Math.fround(stiffness))&&Math.fround(stiffness)>0,'Valid resident grip required');grip={index,target:target.map(Math.fround),stiffness:Math.fround(stiffness)};});},
    capturePatch(patch,stiffness){return serial(async()=>{valid(Array.isArray(patch)&&patch.length&&new Set(patch.map(p=>p.index)).size===patch.length&&patch.every(p=>Number.isInteger(p.index)&&p.index>=0&&p.index<n&&Number.isFinite(p.weight)&&p.weight>0)&&Math.abs(patch.reduce((s,p)=>s+p.weight,0)-1)<1e-6&&Number.isFinite(Math.fround(stiffness))&&stiffness>0,'Normalized finite resident patch required');const weights=new Float32Array(n*24);for(const p of patch)weights[p.index*24+23]=p.weight;device.queue.writeBuffer(buffers.diagnostics,0,weights);grip={index:-2,target:[0,0,0],stiffness:Math.fround(stiffness),patch:structuredClone(patch)};configure();const encoder=device.createCommandEncoder();dispatch(encoder,'capturePatch');device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();});},
    movePatch(displacement){return serial(()=>{valid(grip?.index===-2&&Array.isArray(displacement)&&displacement.length===3&&displacement.every(v=>Number.isFinite(Math.fround(v))),'Active resident patch and finite displacement required');grip.target=displacement.map(Math.fround);});},
    release(){return serial(()=>{grip=null;});},
+   fractureStress(threshold){return serial(()=>{valid(compact&&Number.isFinite(Math.fround(threshold))&&threshold>0,'Compact graph and positive tensile threshold required');configure([0,0,0,threshold]);const encoder=device.createCommandEncoder();dispatch(encoder,'stress',0,count);dispatch(encoder,'fractureStress',0,bondCount);dispatch(encoder,'degrade',0,count);device.queue.submit([encoder.finish()]);damageEpoch++;});},
    step(request,{wait=true}={}){return serial(async()=>{valid(typeof wait==='boolean','Explicit boolean completion policy required');valid(request&&typeof request==='object','Explicit solver settings required');const {iterations,...next}=request;valid(Number.isInteger(iterations)&&iterations>0&&Number.isInteger(next.lineSearchTrials)&&next.lineSearchTrials>0&&next.lineSearchTrials<=0xffffffff&&['timeStep','gravity','damping','floor'].every(k=>Number.isFinite(next[k])&&Number.isFinite(Math.fround(next[k])))&&next.timeStep>0&&Math.fround(Math.fround(next.timeStep)**2)>0&&next.damping>=0&&next.damping<=1,'Explicit valid solver timestep, iterations, trial count, gravity, damping and floor required');settings={...Object.fromEntries(Object.entries(next).map(([key,value])=>[key,key==='lineSearchTrials'?value:Math.fround(value)])),iterations};const start=performance.now();configure();const encoder=device.createCommandEncoder(),pass=encoder.beginComputePass(),run=(name,color=0,size=n)=>{pass.setPipeline(pipelines[name]);pass.setBindGroup(0,groups[color]);pass.dispatchWorkgroups(Math.ceil(size/64));};run('predict');for(let iteration=0;iteration<iterations;iteration++)for(let color=0;color<descriptor.colorCount;color++)run('solve',color,colorSizes[color]);run('finish');pass.end();const command=encoder.finish(),encoded=performance.now();device.queue.submit([command]);const submitted=performance.now();if(wait)await device.queue.onSubmittedWorkDone();const completed=performance.now();steps++;return{encodingMilliseconds:encoded-start,submitMilliseconds:submitted-encoded,completionWaitMilliseconds:wait?completed-submitted:null,totalMilliseconds:completed-start,completion:wait?'completed':'submitted',iterations,colorCount:descriptor.colorCount,solveDispatches:iterations*descriptor.colorCount,solveWorkgroups:iterations*colorSizes.reduce((sum,count)=>sum+Math.ceil(count/64),0)};});},
    damagePlane(normal,offset,nodes){return serial(async()=>{valid(!separated,'Separated material requires an interior cut, not edge removal');valid(Array.isArray(normal)&&normal.length===3&&normal.every(Number.isFinite)&&Math.abs(Math.hypot(...normal)-1)<=1e-6&&Number.isFinite(Math.fround(offset)),'Explicit unit damage plane required');if(nodes!==undefined){valid(Array.isArray(nodes)&&nodes.length&&new Set(nodes).size===nodes.length&&nodes.every(i=>Number.isInteger(i)&&i>=0&&i<n),'Explicit material component nodes required');for(let i=0;i<n;i++)device.queue.writeBuffer(buffers.diagnostics,(i*24+18)*4,new Float32Array([0]));for(const i of nodes)device.queue.writeBuffer(buffers.diagnostics,(i*24+18)*4,new Float32Array([1]));}configure([...normal,offset],nodes!==undefined);const encoder=device.createCommandEncoder();dispatch(encoder,'damage',0,bondCount);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();damageEpoch++;});},
    read(){return serial(async()=>({...await readNow(),energyKernel,volumeBarrier:barrier,constitutiveLayout:descriptor.constitutiveLayout??'directional-edge-release-64-v0'}));},

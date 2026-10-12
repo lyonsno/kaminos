@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {prepareSolidTopology} from '../structural-material-solid-topology.mjs';
+const mesh={status:'passed',route:'ftetwild-cpu-wildmeshing-0.4.1',positions:[[0,0,0],[1,0,0],[0,1,0],[0,0,1]],tetrahedra:[[0,1,2,3]],volume:1/6};
+const compact=prepareSolidTopology(mesh,{kind:'graph',damageLaw:'event-frozen-isotropic-degradation-v1'});
+assert.equal(compact.constitutiveLayout,'event-frozen-isotropic-degradation-v1','Compact degradation must be explicitly identified');
+assert.equal(compact.coefficients.length,36);assert.equal(compact.parameters[11],1);assert.equal(compact.parameters[15],0);
+assert.throws(()=>prepareSolidTopology(mesh,{kind:'graph',damageLaw:'unknown'}),/damage law/i);
+const reference=await import('../structural-material-solid-reference.mjs');assert.ok(reference.graphDegradation,'Event-frozen monotonic degradation reference required');
+assert.equal(reference.graphDegradation([true,true,true,true,true,true],[1,2,3,4,5,6],1),1);
+assert.equal(reference.graphDegradation([false,true,true,true,true,true],[1,2,3,4,5,6],1),20/21);
+assert.equal(reference.graphDegradation([false,true,true,true,true,true],[1,2,3,4,5,6],.5),.5);
+assert.equal(reference.graphDegradation([false,false,false,true,true,true],[1,2,3,4,5,6],1),0);
+assert.equal(reference.graphDegradation([false,true,true,true,true,true],[0,0,0,0,0,0],1),1);
+assert.throws(()=>reference.graphDegradation([true],[1],1),/six/i);
+console.log('Compact named degradation has fixed linear storage and monotonic event energy');

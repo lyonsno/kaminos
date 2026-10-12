@@ -11,13 +11,14 @@ export function packSolidTopology(model){
 }
 export function prepareSolidTopology(mesh,settings={}){if(mesh.status!=='passed'||mesh.route!=='ftetwild-cpu-wildmeshing-0.4.1')throw new Error('An admitted exterior-derived tetrahedral interior is required');return buildTopology(mesh,settings);}
 export function prepareSeparatedTopology(mesh,settings={}){if(mesh.status!=='passed'||mesh.route!==INTERIOR_CUT_ROUTE)throw new Error('A conservative split interior is required');return buildTopology(mesh,{...settings,kind:'graph'},true);}
-function buildTopology(mesh,{kind,young=1000,poisson=.25,density=1000,horizon,volumeBarrier=0}={},separated=false){
+function buildTopology(mesh,{kind,young=1000,poisson=.25,density=1000,horizon,volumeBarrier=0,damageLaw}={},separated=false){
+  const compact=damageLaw==='event-frozen-isotropic-degradation-v1';if(damageLaw!==undefined&&!compact)throw new Error('Unknown graph damage law');if(compact&&(kind!=='graph'||separated))throw new Error('Compact damage law requires fixed graph topology');
   if(!(Number.isFinite(volumeBarrier)&&volumeBarrier>=0)||volumeBarrier>0&&!separated)throw new Error('Explicit nonnegative barrier requires intact separated material');
   if(!['graph','pmb'].includes(kind)||!(Number.isFinite(density)&&density>0))throw new Error('Explicit material kind and positive density required');
   const {positions,tetrahedra}=mesh;
   if(!Array.isArray(positions)||!positions.length||!positions.every(p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite)))throw new Error('Finite material points required');
   if(!Array.isArray(tetrahedra)||!tetrahedra.length||!tetrahedra.every(ids=>Array.isArray(ids)&&ids.length===4&&new Set(ids).size===4&&ids.every(i=>Number.isInteger(i)&&i>=0&&i<positions.length)))throw new Error('Complete valid tetrahedral indices required');
-  const volumes=Array(positions.length).fill(0),references=tetrahedra.map(ids=>(separated?intactTetrahedron:graphTetrahedron)(ids.map(i=>positions[i]),{young,poisson,volumeBarrier}));
+  const volumes=Array(positions.length).fill(0),references=tetrahedra.map(ids=>(separated||compact?intactTetrahedron:graphTetrahedron)(ids.map(i=>positions[i]),{young,poisson,volumeBarrier}));
   references.forEach((tet,i)=>tetrahedra[i].forEach(node=>volumes[node]+=tet.volume/4));
   if(volumes.some(v=>!(v>0)))throw new Error('Unreferenced material points require explicit compaction before topology preparation');
   const totalVolume=volumes.reduce((a,b)=>a+b,0);if(!(mesh.volume>0)||Math.abs(totalVolume-mesh.volume)>mesh.volume*1e-6)throw new Error('Material topology must conserve admitted interior volume');
@@ -29,8 +30,9 @@ function buildTopology(mesh,{kind,young=1000,poisson=.25,density=1000,horizon,vo
     for(const ids of elements)elementBonds.push(edgePairs.map(([a,b])=>bond(ids[a],ids[b])));
     parameters=Float32Array.from(references.flatMap(tet=>tet.gradients.flatMap((g,i)=>[...g,i===0?tet.volume:i===1?volumeBarrier:0])));
     // Six binary edge states give exactly 64 possible local damage matrices.
-    coefficients=new Float32Array(elements.length*(separated?1:64)*36);
-    references.forEach((tet,index)=>{if(separated)coefficients.set(tet.stiffness.flat(),index*36);else for(let mask=0;mask<64;mask++)coefficients.set(tet.stiffnessForEdges(edgePairs.map((_,i)=>!(mask&(1<<i)))).flat(),(index*64+mask)*36);});
+    coefficients=new Float32Array(elements.length*(separated||compact?1:64)*36);
+    references.forEach((tet,index)=>{if(separated||compact)coefficients.set(tet.stiffness.flat(),index*36);else for(let mask=0;mask<64;mask++)coefficients.set(tet.stiffnessForEdges(edgePairs.map((_,i)=>!(mask&(1<<i)))).flat(),(index*64+mask)*36);});
+    if(compact)for(let i=0;i<elements.length;i++)parameters[i*16+11]=1;
   }else{
     if(!(Number.isFinite(horizon)&&horizon>0))throw new Error('Explicit positive peridynamic horizon required');
     for(let a=0;a<positions.length;a++)for(let b=a+1;b<positions.length;b++)if(Math.hypot(...positions[a].map((v,i)=>v-positions[b][i]))<=horizon)bond(a,b);
@@ -49,5 +51,5 @@ function buildTopology(mesh,{kind,young=1000,poisson=.25,density=1000,horizon,vo
   const colorCount=Math.max(...colors)+1,colorOffsets=[0],colorNodes=[];for(let color=0;color<colorCount;color++){colors.forEach((value,node)=>{if(value===color)colorNodes.push(node);});colorOffsets.push(colorNodes.length);}
   return{route:'kaminos.exterior-derived.material-topology.v0',bufferLayout:'compact-color-incidence-v1',kind,material:{young,poisson,density,horizon,volumeBarrier},positions:structuredClone(positions),volumes,masses:volumes.map(v=>v*density),volume:totalVolume,
     elements,bonds,elementBonds,parameters,coefficients,colors,colorCount,colorOffsets,colorNodes,incidence:incidence.flat(),incidenceOffsets:offsets,
-    ...(separated?{constitutiveLayout:'separated-intact-tetrahedra-v1'}:{}),claim:'Prepared material topology and coefficients only; no dynamic or fracture-surface admission'};
+    ...(separated?{constitutiveLayout:'separated-intact-tetrahedra-v1'}:compact?{constitutiveLayout:damageLaw}:{}),claim:'Prepared material topology and coefficients only; no dynamic or fracture-surface admission'};
 }

@@ -38,6 +38,12 @@ function deformationResult(F,S,energy,forces,extra={}){
   return{active:true,energy,forces,deformationGradient:F,stress:S,stressMeasure:'second-piola',cauchyStress:cauchy,firstPiola:P,...extra};
 }
 function connectedTetrahedron(alive){const reached=new Set([0]);for(let pass=0;pass<4;pass++)pairs.forEach(([a,b],i)=>{if(alive[i]&&(reached.has(a)||reached.has(b))){reached.add(a);reached.add(b);}});return reached.size===4;}
+export function graphDegradation(alive,normalStress,previous=1){
+ if(!Array.isArray(alive)||alive.length!==6||!alive.every(v=>typeof v==='boolean')||!Array.isArray(normalStress)||normalStress.length!==6||!normalStress.every(Number.isFinite)||!Number.isFinite(previous)||previous<0||previous>1)throw new Error('Six finite edge stresses, boolean states and prior degradation required');
+ if(!connectedTetrahedron(alive))return 0;
+ const total=normalStress.reduce((sum,s)=>sum+Math.abs(s),0),kept=normalStress.reduce((sum,s,i)=>sum+(alive[i]?Math.abs(s):0),0);
+ return total>0?Math.min(previous,kept/total):previous;
+}
 export function intactTetrahedron(rest,material){
   points(rest,4);rest=structuredClone(rest);const elastic=elasticity(material),Dm=columns(rest.slice(1).map(p=>sub(p,rest[0]))),invDm=inverse(Dm),volume=Math.abs(determinant(Dm))/6;
   const volumeBarrier=material.volumeBarrier??0;if(!(Number.isFinite(volumeBarrier)&&volumeBarrier>=0))throw new Error('Nonnegative explicit volume barrier required');

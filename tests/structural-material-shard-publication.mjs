@@ -13,7 +13,7 @@ const fixture=reject=>{
   createShardGeometry:()=>({attributes:{position:{values:[0,0,0,1,0,0,0,1,0],setXYZ(i,...p){this.values.splice(i*3,3,...p);}}},computeVertexNormals(){},computeBoundingSphere(){},computeBoundingBox(){},dispose(){this.disposed=true;}}),
   THREE:{Mesh:class{constructor(geometry){this.geometry=geometry;this.userData={};}}},
   scene:{add(mesh){published.push([...mesh.geometry.attributes.position.values]);},remove(mesh){removed.push(mesh);}},$:()=>({textContent:''})};
- context.interiorSplit=false;context.interiorState=null;return{context,old,published,removed};
+ context.bounded=false;context.BOUNDED_FRAGMENT_ROUTE='bounded-fixture';context.interiorSplit=false;context.interiorState=null;return{context,old,published,removed};
 };
 const success=fixture(false);vm.runInNewContext(source+';makeMeshes()',success.context);
 assert.deepEqual(success.published,[[2,0,0,3,0,0,2,1,0]],'A shard must be deformed before its first visible publication, with no rest-pose flash');

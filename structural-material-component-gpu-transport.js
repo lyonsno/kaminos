@@ -1,9 +1,10 @@
 import {StorageBufferAttribute,MeshStandardNodeMaterial,Vector4} from 'three/webgpu';
 import {Fn,Loop,storage,uniform,uint,vec3,vec4,vertexIndex,instanceIndex,cross} from 'three/tsl';
 import {COMPONENT_TRANSPORT_ROUTE} from './structural-material-component-transport.mjs';
+import {BOUNDED_FRAGMENT_ROUTE} from './structural-material-bounded-fragments.mjs';
 
 export function packGpuTransport(binding,indices){
- if(binding?.route!==COMPONENT_TRANSPORT_ROUTE||!Array.isArray(indices)||!indices.length||!indices.every(i=>Number.isInteger(i)&&binding.entries[i]))throw new Error('Complete transport vertex correspondence required');
+ if(![COMPONENT_TRANSPORT_ROUTE,BOUNDED_FRAGMENT_ROUTE].includes(binding?.route)||!Array.isArray(indices)||!indices.length||!indices.every(i=>Number.isInteger(i)&&binding.entries[i]))throw new Error('Complete transport vertex correspondence required');
  const ranges=[],offsets=[],ids=[],weights=[];
  for(const i of indices){const e=binding.entries[i];if(!Array.isArray(e.ids)||!e.ids.length||e.ids.length!==e.weights?.length||new Set(e.ids).size!==e.ids.length||!e.ids.every(id=>Number.isInteger(id)&&id>=0&&id<binding.points)||!e.weights.every(w=>Number.isFinite(w)&&w>0)||Math.abs(e.weights.reduce((a,b)=>a+b,0)-1)>1e-10||!Array.isArray(e.offset)||e.offset.length!==3||!e.offset.every(Number.isFinite))throw new Error('Complete positive surface support required');
   ranges.push(ids.length,ids.length+e.ids.length);ids.push(...e.ids);weights.push(...e.weights);offsets.push(...e.offset,0);
