@@ -56,6 +56,18 @@ export function createDistributedSmokeBindings(device) {
 export const DISTRIBUTED_SMOKE_WGSL=`
 @group(2) @binding(0) var distributedIncident:texture_3d<f32>;
 @group(2) @binding(1) var<storage,read> smokeBoundaryMasks:array<u32>;
+fn distributedIncidentMaskFlags(p:vec3<f32>)->vec2<f32> {
+  let dims=textureDimensions(distributedIncident);let pitch=2.0/f32(dims.x);
+  let lo=vec3<f32>(-1.0);let hi=lo+vec3<f32>(dims)*pitch;
+  if(any(p<lo)||any(p>hi)){return vec2<f32>(1,0);}
+  let base=vec3<i32>(floor((p-lo)/pitch-vec3<f32>(0.5)));
+  let nearest=vec3<u32>(clamp(vec3<i32>(floor((p-lo)/pitch)),vec3<i32>(0),vec3<i32>(dims)-vec3<i32>(1)));
+  let nearestId=nearest.x+dims.x*(nearest.y+dims.y*nearest.z);
+  if(smokeBoundaryMasks[nearestId]!=0u){return vec2<f32>(1,0);}
+  let bin=vec3<u32>(clamp(base+vec3<i32>(1),vec3<i32>(0),vec3<i32>(dims)));
+  let binDims=dims+vec3<u32>(1u);let id=bin.x+binDims.x*(bin.y+binDims.y*bin.z);
+  return vec2<f32>(0,select(0.0,1.0,smokeBoundaryMasks[dims.x*dims.y*dims.z+id]!=0u));
+}
 fn distributedMeanIncident(p:vec3<f32>)->vec3<f32> {
   let dims=textureDimensions(distributedIncident);let pitch=2.0/f32(dims.x);
   let lo=vec3<f32>(-1.0);let hi=lo+vec3<f32>(dims)*pitch;

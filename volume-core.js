@@ -2,6 +2,7 @@ import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMA
 import { AGX_WGSL } from './volume-agx.mjs';
 import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
 import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL } from './volume-raymarch-sampling.mjs';
+import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows } from './volume-optical-trace.mjs';
 import { buildInflowCoverageMap, normalizeInflowApertureSpec, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
 import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
 import {
@@ -3581,6 +3582,11 @@ struct NonRidgeOpticalCaptureHeader {
   capacity: u32,
   mode: u32,
   overflowCount: atomic<u32>,
+  firstRay: u32,
+  rayCount: u32,
+  sampleOffset: u32,
+  sampleCount: u32,
+  subdivisions: u32,
 };
 
 struct NonRidgeOpticalCaptureRow {
@@ -7513,10 +7519,27 @@ fn ordinarySceneDepthEndT(in: VSOut) -> f32 {
   return max(0.0, dot(world.xyz / world.w - ro, rd));
 }
 
+fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return vec2<f32>(0.0); }
+
+fn writeOpticalTraceMiss(ray: u32) {
+  for (var s=0u; s<nonRidgeOpticalCaptureHeader.sampleCount; s++) {
+    let base = ((ray-nonRidgeOpticalCaptureHeader.firstRay)*nonRidgeOpticalCaptureHeader.sampleCount+s)*32u;
+    nonRidgeOpticalCaptureRows[base] = f32(ray);
+    nonRidgeOpticalCaptureRows[base+1u] = f32(nonRidgeOpticalCaptureHeader.sampleOffset+s);
+    nonRidgeOpticalCaptureRows[base+3u] = 1.0;
+    atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);
+  }
+}
+
 fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool) -> RaymarchResult {
   let physicalColorMode = select(u.physical_fire.x, 2.0, LEAN_EMISSIVE_RAYMARCH);
-  let opticalCaptureMode = select(nonRidgeOpticalCaptureHeader.mode, 0u, LEAN_EMISSIVE_RAYMARCH);
-  let fullGridCapture = !LEAN_STOCK_RAYMARCH && opticalCaptureMode >= 3u;
+  let opticalCaptureMode = select(nonRidgeOpticalCaptureHeader.mode, 0u, LEAN_EMISSIVE_RAYMARCH && nonRidgeOpticalCaptureHeader.mode != 5u);
+  let fullGridCapture = !LEAN_STOCK_RAYMARCH && opticalCaptureMode >= 3u && opticalCaptureMode <= 4u;
+  let opticalTrace = opticalCaptureMode == 5u;
+  let traceRay = u32(in.pos.x) + u32(in.pos.y) * u32(u.viewport_steps_density.x);
+  if (opticalTrace && (traceRay < nonRidgeOpticalCaptureHeader.firstRay || traceRay >= nonRidgeOpticalCaptureHeader.firstRay + nonRidgeOpticalCaptureHeader.rayCount)) {
+    return makeRaymarchResult(vec4<f32>(0), 1.0, vec4<f32>(0), vec4<f32>(0), vec4<f32>(0), vec4<f32>(0));
+  }
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearClip = vec4<f32>(ndc, -1.0, 1.0);
   let farClip = vec4<f32>(ndc, 1.0, 1.0);
@@ -7528,6 +7551,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let rd = normalize(farWorld - nearWorld);
   let hit = boxHit(ro - vec3<f32>(0.0, 1.0, 0.0), rd, vec3<f32>(1.0, 2.0, 1.0));
   if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, 0.0)) {
+    if (opticalTrace) { writeOpticalTraceMiss(traceRay); }
     let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);
     return makeRaymarchResult(
       vec4<f32>(vec3<f32>(0.004, 0.005, 0.006) * missAlpha, missAlpha),
@@ -7665,6 +7689,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   // rather than resampling the visible fire at a different density.
   let dtBase = (select(endT, select(hit.y, 4.0, fullGridCapture), preserveSamplePositions) - startT) / steps;
   let jitter = dtBase * rayStartPhase(in.pos.xy, u.reserved_render_controls.w, fullGridCapture);
+  let traceStart = min(startT + jitter, endT);
   var t = startT + jitter;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
@@ -7696,15 +7721,19 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let entryP = ro + rd * startT;
   let exitP = ro + rd * endT;
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
-  let expensiveSampleBudget = u32(ceil(steps));
+  let expensiveSampleBudget = select(u32(ceil(steps)), nonRidgeOpticalCaptureHeader.sampleCount, opticalTrace);
   let maxTraversalSteps = GRID_Y * 3u + expensiveSampleBudget + 3u;
   var expensiveSamples = 0u;
   var traversalSteps = 0u;
   loop {
     if (expensiveSamples >= expensiveSampleBudget || traversalSteps >= maxTraversalSteps) { break; }
-    if (!fullGridCapture && (raymarchEarlyTermination(trans) || t > endT)) { break; }
+    if (!fullGridCapture && !opticalTrace && (raymarchEarlyTermination(trans) || t > endT)) { break; }
     traversalSteps = traversalSteps + 1u;
     let sampleIndex = expensiveSamples;
+    if (opticalTrace) {
+      let fraction = f32(nonRidgeOpticalCaptureHeader.sampleOffset + sampleIndex) / f32(nonRidgeOpticalCaptureHeader.subdivisions);
+      t = clamp(mix(traceStart, endT, fraction), traceStart, endT);
+    }
     let fullGridX = min(u32(floor(in.uv.x * f32(GRID))), GRID - 1u);
     let fullGridY = min(u32(floor(in.uv.y * f32(GRID_Y))), GRID_Y - 1u);
     let fullGridP = cellToWorld(vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5));
@@ -7719,7 +7748,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     } else {
       directSupport = directCellOpticalSupport(p);
     }
-    if (!fullGridCapture && directSupport <= 0.0001) {
+    if (!fullGridCapture && !opticalTrace && directSupport <= 0.0001) {
       let cellExit = directCellExitDistance(p, rd);
       let emptyCellAdvance = mix(
         dtBase,
@@ -8633,7 +8662,44 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       let coverage = boundaryMaterialSupport * selectiveRaymarchFireAuthority;
       let medium = emissiveMaterial(reconstructed, coverage, visibleSmokeAuthority);
       let sigma = medium.absorption + medium.scattering;
-      let emission = medium.emission + medium.scattering * incidentAt(p);
+      let scatteredSource = medium.scattering * incidentAt(p);
+      let emission = medium.emission + scatteredSource;
+      if (opticalTrace) {
+        let row = (traceRay - nonRidgeOpticalCaptureHeader.firstRay) * nonRidgeOpticalCaptureHeader.sampleCount + sampleIndex;
+        let base = row * 32u;
+        nonRidgeOpticalCaptureRows[base] = f32(traceRay);
+        nonRidgeOpticalCaptureRows[base+1u] = f32(nonRidgeOpticalCaptureHeader.sampleOffset + sampleIndex);
+        nonRidgeOpticalCaptureRows[base+2u] = 1.0;
+        nonRidgeOpticalCaptureRows[base+3u] = 1.0;
+        nonRidgeOpticalCaptureRows[base+4u] = t;
+        nonRidgeOpticalCaptureRows[base+5u] = traceStart;
+        nonRidgeOpticalCaptureRows[base+6u] = endT;
+        nonRidgeOpticalCaptureRows[base+7u] = dtBase;
+        nonRidgeOpticalCaptureRows[base+8u] = p.x;
+        nonRidgeOpticalCaptureRows[base+9u] = p.y;
+        nonRidgeOpticalCaptureRows[base+10u] = p.z;
+        nonRidgeOpticalCaptureRows[base+11u] = jitter;
+        nonRidgeOpticalCaptureRows[base+12u] = rd.x;
+        nonRidgeOpticalCaptureRows[base+13u] = rd.y;
+        nonRidgeOpticalCaptureRows[base+14u] = rd.z;
+        nonRidgeOpticalCaptureRows[base+15u] = 2.0 / f32(GRID);
+        let supported = directSupport > 0.0001;
+        nonRidgeOpticalCaptureRows[base+16u] = select(0.0, sigma, supported);
+        for (var channel=0u; channel<3u; channel++) {
+          nonRidgeOpticalCaptureRows[base+17u+channel] = select(0.0, medium.emission[channel], supported);
+          nonRidgeOpticalCaptureRows[base+20u+channel] = select(0.0, scatteredSource[channel], supported);
+          nonRidgeOpticalCaptureRows[base+28u+channel] = fract(worldToCell(p))[channel];
+        }
+        let flags = opticalIncidentMaskFlags(p);
+        nonRidgeOpticalCaptureRows[base+23u] = flags.x;
+        nonRidgeOpticalCaptureRows[base+24u] = flags.y;
+        nonRidgeOpticalCaptureRows[base+25u] = directSupport;
+        nonRidgeOpticalCaptureRows[base+26u] = localDt;
+        nonRidgeOpticalCaptureRows[base+27u] = startT;
+        nonRidgeOpticalCaptureRows[base+31u] = hit.y;
+        atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);
+        continue;
+      }
       standardRadianceContribution = emission * emissionIntegral(sigma, localDt);
       standardExtinctionStep = sigma * localDt;
     } else if (physicalColorMode > 0.5) {
@@ -11793,7 +11859,7 @@ export function createKaminosVolumePrototype({
     if (!nonRidgeOpticalCaptureHeaderBuffer) {
       nonRidgeOpticalCaptureHeaderBuffer = device.createBuffer({
         label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} header`,
-        size: 16,
+        size: 36,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       });
       device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer, 0, new Uint32Array(4));
@@ -19536,7 +19602,9 @@ export function createKaminosVolumePrototype({
       if(!distributedPipelines.has(key)) {
         // Replace internal flame incident lighting so this emission is counted
         // once. Direct camera emission and material scattering stay intact.
-        let code=WGSL.replace('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')+DISTRIBUTED_SMOKE_WGSL;
+        let code=WGSL.replace('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')
+          .replace('fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return vec2<f32>(0.0); }',
+            'fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return distributedIncidentMaskFlags(p); }')+DISTRIBUTED_SMOKE_WGSL;
         if(multisampled)code=code.replace('var productSceneDepth: texture_depth_2d;','var productSceneDepth: texture_depth_multisampled_2d;')
           .replace('let depth = textureLoad(productSceneDepth, pixel, 0);',`var depth=textureLoad(productSceneDepth,pixel,0);
           for(var sample=1u;sample<textureNumSamples(productSceneDepth);sample++){depth=min(depth,textureLoad(productSceneDepth,pixel,sample));}`);
@@ -19579,6 +19647,71 @@ export function createKaminosVolumePrototype({
     if (distributedGroup) pass.setBindGroup(2,distributedGroup);
     pass.draw(3);
     pass.end();
+  }
+
+  async function sampleOpticalTraceChunk(options = {}) {
+    if (!state.active || !device || !selectiveHeadLiveCapturePaused) {
+      return {ok:false,phase:'admission',reason:'optical-trace-requires-held-capture'};
+    }
+    if (nonRidgeOpticalCaptureSession || nonRidgeSourceBasisCaptureSession) {
+      return {ok:false,phase:'admission',reason:'another-optical-capture-active'};
+    }
+    let phase='admission', rows=null, readback=null, scopeOpen=false;
+    const idleRows=nonRidgeOpticalCaptureRowBuffer;
+    const specialization=debugRaymarchShaderSpecialization;
+    const step=state.simStepCount;
+    try {
+      updateUniforms(options.now);
+      if (!Number.isFinite(options.now) || uniforms[368]!==2 || uniforms[310]!==0 || uniforms[305]!==0 || uniforms[307]!==0) {
+        throw new Error('trace requires explicit phase, mode 2 beauty and zero boundary step-width');
+      }
+      if (boundarySplatRequested() || browserResidualCanApply() || productFrameOwner!=='prototype') throw new Error('trace requires native camera raymarch');
+      ensureFrameTexture();
+      const plan=traceChunkPlan({...options,width:frameTexture.width,height:frameTexture.height,
+        maxBytes:Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize)});
+      phase='allocation';
+      rows=device.createBuffer({label:OPTICAL_TRACE_IDENTITY,size:plan.byteLength,
+        usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
+      readback=device.createBuffer({label:`${OPTICAL_TRACE_IDENTITY} readback`,size:plan.byteLength,
+        usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+      nonRidgeOpticalCaptureRowBuffer=rows;
+      rebuildNonRidgeOpticalCaptureBindGroups();
+      if (!['auto','force-full'].includes(options.specialization)) throw new Error('explicit trace specialization required');
+      debugRaymarchShaderSpecialization=options.specialization;
+      device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer,0,new Uint32Array([
+        0,plan.rowCount,5,0,plan.firstRay,plan.rayCount,plan.sampleOffset,plan.sampleCount,plan.subdivisions,
+      ]));
+      phase='gpu-capture';
+      device.pushErrorScope('validation'); scopeOpen=true;
+      let encoder=device.createCommandEncoder({label:OPTICAL_TRACE_IDENTITY});
+      encoder=prepareSharedSceneConsumers(encoder);
+      encodeBoundarySidecar(encoder);
+      encodeDraw(encoder,frameTexture.createView(),OPTICAL_TRACE_IDENTITY,readbackPipeline);
+      const effective={route:state.effectiveRoute,backend:state.backend,simStepCount:step,
+        specialization:{...state.raymarchShaderSpecialization},incidentLight:{...state.physicalColor.incidentLight},
+        uniforms:Array.from(uniforms),controls:structuredClone(controlsSnapshot)};
+      encoder.copyBufferToBuffer(rows,0,readback,0,plan.byteLength);
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const values=new Float32Array(readback.getMappedRange().slice(0));
+      readback.unmap();
+      const error=await device.popErrorScope();scopeOpen=false;
+      if(error)throw new Error(error.message);
+      phase='validation';
+      if(state.simStepCount!==step)throw new Error('state advanced during optical capture');
+      const counts=validateTraceRows(values,plan);
+      return {ok:true,identity:OPTICAL_TRACE_IDENTITY,phase:'complete',plan,counts,effective,
+        interval:'authored-jitter-start-to-scene-depth-clipped-exit',values};
+    } catch(error) {
+      return {ok:false,identity:OPTICAL_TRACE_IDENTITY,phase,reason:String(error),simStepCount:step};
+    } finally {
+      if(scopeOpen)await device.popErrorScope();
+      debugRaymarchShaderSpecialization=specialization;
+      nonRidgeOpticalCaptureRowBuffer=idleRows;
+      rebuildNonRidgeOpticalCaptureBindGroups();
+      device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer,0,new Uint32Array(9));
+      rows?.destroy();readback?.destroy();
+    }
   }
 
   async function sampleEmissiveRaymarchProfile(options = {}) {
@@ -26898,6 +27031,7 @@ export function createKaminosVolumePrototype({
     captureSelectiveHeadLiveFrame,
     sampleEmissiveLightProfile,
     sampleEmissiveRaymarchProfile,
+    sampleOpticalTraceChunk,
     renderFrozenScaleToCanvas,
     readFlowKernelDescriptorCaptureChunk,
     releaseFlowKernelDescriptorCapture,
