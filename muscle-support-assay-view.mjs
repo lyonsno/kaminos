@@ -69,7 +69,7 @@ function applyPose(next,{record=true}={}){
   const start=performance.now();syncing=true;
   trackers.forEach(tracker=>tracker.step(next));pose=structuredClone(next);updateGeometry();lastSolveMs=performance.now()-start;syncing=false;
   const state=snapshot({includeSamples:false});
-  if(record)samples.push({pose:structuredClone(pose),solveMs:lastSolveMs,metrics:state.metrics,
+  if(record)samples.push({cycleId:replay?.id??null,pose:structuredClone(pose),solveMs:lastSolveMs,metrics:state.metrics,
     positions:trackers.map(tracker=>Array.from(tracker.positions))});
   document.querySelector('#stats').textContent=state.metrics.map(m=>`${m.mode.padEnd(17)}  field error ${m.fieldErrorMax.toExponential(2)}  edge ratio ${m.edgeRatioMin.toFixed(2)}–${m.edgeRatioMax.toFixed(2)}  rest RMS ${m.displacementRms.toFixed(4)}`).join('\n')+
     `\nCPU skin solve: ${lastSolveMs.toFixed(1)} ms / update · ${fixture.weights.length} vertices per view · all samples retained`;
@@ -88,16 +88,18 @@ try {
   gizmo.addEventListener('objectChange',()=>{if(!syncing)applyPose({quaternion:views[0].joint.quaternion.toArray(),bulge:pose.bulge});});
   const resize=()=>{const width=container.clientWidth,height=container.clientHeight;renderer.setSize(width,height);camera.aspect=width/height;camera.updateProjectionMatrix();};
   addEventListener('resize',resize);resize();reset();
-  document.querySelector('#cycle').onclick=()=>{replay={step:0,steps:36};events.push({type:'cycle-start',sampleIndex:samples.length});};
+  document.querySelector('#cycle').onclick=()=>{replay={id:crypto.randomUUID(),step:0,steps:36,startSampleIndex:samples.length};events.push({type:'cycle-start',cycleId:replay.id,sampleIndex:samples.length,inputSteps:37});};
   document.querySelector('#bulge').onclick=()=>{replay=null;applyPose({quaternion:[...IDENTITY],bulge:pose.bulge>0?0:0.35});};
   document.querySelector('#reset').onclick=reset;
   document.querySelector('#supports').onchange=event=>views.forEach(view=>view.supports.visible=event.target.checked);
   window.kaminosSupportAssay={snapshot,applyPose,reset,cyclePose,
     sequence:steps=>{for(let i=0;i<=steps;i++)applyPose(cyclePose(i/steps));return snapshot();},
+    exportHeader:()=>({snapshot:snapshot({includeSamples:false}),restPositions:Array.from(fixture.positions),indices:fixture.indices,restValues:fixture.restValues,weights:fixture.weights}),
+    exportSample:index=>{if(!Number.isInteger(index)||index<0||index>=samples.length)throw Error('invalid retained sample index');return structuredClone(samples[index]);},
     exportEvidence:()=>({snapshot:snapshot(),restPositions:Array.from(fixture.positions),indices:fixture.indices,restValues:fixture.restValues,weights:fixture.weights})};
   document.querySelector('#status').textContent=`Live ${renderer.backend.constructor.name} · rotate selected hinge`;
   renderer.setAnimationLoop(()=>{
-    if(replay){applyPose(cyclePose(replay.step/replay.steps));if(++replay.step>replay.steps){events.push({type:'cycle-end',sampleIndex:samples.length});replay=null;}}
+    if(replay){applyPose(cyclePose(replay.step/replay.steps));if(++replay.step>replay.steps){events.push({type:'cycle-end',cycleId:replay.id,startSampleIndex:replay.startSampleIndex,endSampleIndex:samples.length});replay=null;}}
     renderer.render(scene,camera);
   });
 }catch(error){document.querySelector('#status').textContent=`Failed: ${error.message}`;window.kaminosSupportAssayFailure={message:error.message,stack:error.stack};throw error;}
