@@ -214,9 +214,11 @@ export function createIPBFGridShader({radius,volume,compliance=0,alternativeComp
  if(!dynamicControls)return source;
  const live=source.replace(`const ipbfRadius:f32=${radius};`,'')
   .replace(`const ipbfBeta:f32=${beta};`,'')
+  .replace(`const ipbfAlternativeAlpha:f32=${alternativeCompliance};`,'')
   .replace(/\bipbfRadius\b/g,'ipbfControls.radius')
-  .replace(/\bipbfBeta\b/g,'ipbfControls.beta');
- return `struct IPBFControlUniforms { radius:f32, beta:f32, padding:vec2<f32> }
+  .replace(/\bipbfBeta\b/g,'ipbfControls.beta')
+  .replace(/\bipbfAlternativeAlpha\b/g,'ipbfControls.alternativeCompliance');
+ return `struct IPBFControlUniforms { radius:f32, beta:f32, alternativeCompliance:f32, padding:f32 }
  @group(1) @binding(1) var<uniform> ipbfControls:IPBFControlUniforms;
  `+live;
 }

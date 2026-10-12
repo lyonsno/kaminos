@@ -1,3 +1,4 @@
+import {deriveIPBFSoftnessReference} from './finger-fluid-ipbf-calibration.mjs';
 import {ipbfBetaForRadius,ipbfPressureReplayURL} from './finger-fluid-pressure-controls.mjs';
 
 /** A small bench consumer; the solver owns parameter application and water. */
@@ -17,6 +18,12 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
       <input id="ipbf-passes-number" type="number" min="1" step="1" aria-label="Pressure passes value"></div></div>
     <label class="ipbf-link"><input id="ipbf-link-damping" type="checkbox"> Link damping to radius</label>
     <p class="ipbf-help">Linked keeps the damping threshold constant as radius changes.</p>
+    <div class="ipbf-control"><label for="ipbf-alternative">Alternate compliance</label><div>
+      <input id="ipbf-alternative" type="range" step=".01" min="-3" max="4" aria-label="Alternate compliance logarithmic sweep">
+      <input id="ipbf-alternative-number" type="number" min="0" step="any" aria-label="Alternate compliance value"></div></div>
+    <p class="ipbf-help">Logarithmic sweep. Higher values soften the comparison solve; beta controls how much of its lower energy can be removed. Radius, population and timestep stay independent.</p>
+    <button type="button" class="btn" id="ipbf-derive-softness">Derive range for current settings</button>
+    <div id="ipbf-softness-reference" class="ipbf-help"></div>
     <details><summary>Damping</summary><label for="ipbf-beta">Beta</label>
       <input id="ipbf-beta" type="number" min="0" step="1">
       <div id="ipbf-damping-readout" class="ipbf-help"></div></details>
@@ -35,7 +42,7 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
   for(const id of ['ipbf-pause','ipbf-reset','ipbf-control-status'])find(id);
   const linked=find('ipbf-link-damping');
   linked.checked=new URL(location.href).searchParams.get('finger_fluid_pressure_cockpit_linked')!=='0';
-  let baseRadius=null,resetting=false,error='';
+  let baseRadius=null,resetting=false,error='',reference=null;
   const numberText=value=>Number(value.toPrecision(10)).toString();
   function source() {
     const solver=getSolver(),state=solver?.getPressureControls?.();
@@ -60,6 +67,14 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
         if(el!==root.ownerDocument.activeElement)el.value=numberText(value);
       }
     }
+    const alpha=values.alternativeCompliance;
+    const range=find('ipbf-alternative'),number=find('ipbf-alternative-number');
+    if(alpha>0){const logarithm=Math.log10(alpha);range.min=String(Math.min(Number(range.min),logarithm));range.max=String(Math.max(Number(range.max),logarithm));if(range!==root.ownerDocument.activeElement)range.value=String(logarithm);}
+    if(number!==root.ownerDocument.activeElement)number.value=numberText(alpha);
+    const matches=reference&&reference.radius===values.radius&&reference.particleVolume===state.particleVolume&&reference.dt===state.dt;
+    find('ipbf-softness-reference').textContent=reference
+      ?(matches?'Current reference':'Earlier reference; derive again after radius, timestep or population edits')+' · '+reference.brackets.map(b=>`${numberText(b.alternativeCompliance)}: ${Math.round(b.updateFraction*100)}% of hard correction`).join(' · ')+' · finite compressed lattice, not a water preset.'
+      :'Derive a local pressure-response range after the first simulation step. No settings change.';
     if(find('ipbf-beta')!==root.ownerDocument.activeElement)find('ipbf-beta').value=numberText(values.beta);
     if(state.cohesionModel!=='legacy')find('ipbf-cohesion-number').removeAttribute('max');
     root.querySelector('label[for=ipbf-cohesion]').textContent=state.cohesionModel==='akinci_2013'?'Surface coefficient':'Cohesion';
@@ -98,7 +113,7 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
       if(name==='radius'){
         const old=current.state.requested;
         patch={pressureRadiusScale:value/baseRadius,beta:ipbfBetaForRadius({radius:value,previousRadius:old.radius,beta:old.beta,linked:linked.checked})};
-      } else patch={[{cohesion:'capillaryStrength',passes:'densityIterations',beta:'beta'}[name]]:value};
+      } else patch={[{cohesion:'capillaryStrength',passes:'densityIterations',beta:'beta',alternative:'alternativeCompliance'}[name]]:value};
       apply(patch,persist);
     }catch(e){error=e.message||String(e);update();}
   }
@@ -107,6 +122,15 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
     find('ipbf-'+name).addEventListener('change',()=>{const current=source();if(current)persistURL(current.state.requested);});
     find('ipbf-'+name+'-number').addEventListener('change',e=>change(name,e.target.valueAsNumber));
   }
+  find('ipbf-alternative').addEventListener('input',e=>change('alternative',10**Number(e.target.value),false));
+  find('ipbf-alternative').addEventListener('change',()=>{const current=source();if(current)persistURL(current.state.requested);});
+  find('ipbf-alternative-number').addEventListener('change',e=>change('alternative',e.target.valueAsNumber));
+  find('ipbf-derive-softness').addEventListener('click',()=>{
+    try{const current=source();if(!current)throw Error('Fluid is still loading');const {state}=current;
+      reference=deriveIPBFSoftnessReference({particleVolume:state.particleVolume,radius:state.requested.radius,dt:state.dt});
+      const highest=reference.brackets.at(-1).alternativeCompliance;find('ipbf-alternative').max=String(Math.log10(Math.max(highest,state.requested.alternativeCompliance,.001)));error='';update();
+    }catch(e){reference=null;error=e.message;update();}
+  });
   find('ipbf-beta').addEventListener('change',e=>change('beta',e.target.valueAsNumber));
   linked.addEventListener('change',()=>{try{apply({});}catch{}});
   find('ipbf-pause').addEventListener('click',()=>{setPaused(!isPaused());update();});

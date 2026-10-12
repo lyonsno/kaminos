@@ -16,7 +16,7 @@ test('the installed radius callback reports zero without throwing or changing co
       return nodes.get(id);
     };
     const root={hidden:true,innerHTML:'',ownerDocument:{activeElement:null},querySelector:s=>node(s.slice(1)),querySelectorAll:()=>[...nodes.values()]};
-    createIPBFPressureCockpit({root,getSolver:()=>({available:true,getPressureControls:()=>({available:true,...model.read(),particleCount:12288,damping:true}),setPressureControls:patch=>model.request(patch)}),isPaused:()=>false,setPaused(){},restart(){}});
+    createIPBFPressureCockpit({root,getSolver:()=>({available:true,getPressureControls:()=>({available:true,...model.read(),particleCount:12288,damping:true,cohesionModel:'legacy',particleVolume:.0001663,dt:1/60}),setPressureControls:patch=>model.request(patch)}),isPaused:()=>false,setPaused(){},restart(){}});
     const before=model.read();
     assert.doesNotThrow(()=>node('ipbf-radius-number').listeners.change({target:{valueAsNumber:0}}));
     assert.match(node('ipbf-control-error').textContent,/positive/);
@@ -52,11 +52,37 @@ test('run controls keep their handlers and disabled state when mounted outside t
     const nodes=new Map(),detached=new Set();let paused=false,finishReset;
     const node=id=>{if(!nodes.has(id))nodes.set(id,{type:id.endsWith('-number')?'number':'range',min:'0',max:'8',value:'',checked:false,listeners:{},addEventListener(type,callback){this.listeners[type]=callback;}});return nodes.get(id);};
     const root={hidden:true,innerHTML:'',ownerDocument:{activeElement:null},querySelector:s=>detached.has(s.slice(1))?null:node(s.slice(1)),querySelectorAll:()=>[...nodes].filter(([id])=>!detached.has(id)).map(([,node])=>node)};
-    const cockpit=createIPBFPressureCockpit({root,getSolver:()=>({available:true,getPressureControls:()=>({available:true,...model.read(),particleCount:12288,damping:true}),setPressureControls:patch=>model.request(patch)}),isPaused:()=>paused,setPaused:v=>{paused=v;},restart:()=>new Promise(resolve=>{finishReset=resolve;})});
+    const cockpit=createIPBFPressureCockpit({root,getSolver:()=>({available:true,getPressureControls:()=>({available:true,...model.read(),particleCount:12288,damping:true,cohesionModel:'legacy',particleVolume:.0001663,dt:1/60}),setPressureControls:patch=>model.request(patch)}),isPaused:()=>paused,setPaused:v=>{paused=v;},restart:()=>new Promise(resolve=>{finishReset=resolve;})});
     for(const id of ['ipbf-pause','ipbf-reset','ipbf-control-status'])detached.add(id);
     assert.doesNotThrow(()=>cockpit.update());
     node('ipbf-pause').listeners.click();assert.equal(paused,true);assert.equal(node('ipbf-pause').textContent,'Resume');
     const reset=node('ipbf-reset').listeners.click();assert.equal(node('ipbf-pause').disabled,true);assert.equal(node('ipbf-reset').disabled,true);
     finishReset();await reset;assert.equal(node('ipbf-pause').disabled,false);assert.match(node('ipbf-control-status').textContent,/Paused/);
   }finally{globalThis.location=oldLocation;globalThis.history=oldHistory;}
+});
+
+test('alternate compliance sweeps, derives a reference without edits, and survives the replay URL',()=>{
+ const oldLocation=globalThis.location,oldHistory=globalThis.history;
+ globalThis.location={href:'http://localhost/index.html?finger_fluid_pressure_solver=ipbf&finger_fluid_truth_scene=river_playground&finger_fluid_particle_count=36864'};
+ let url=location.href;globalThis.history={state:null,replaceState(_state,_title,next){url=next;}};
+ try {
+  const model=createIPBFPressureControlState({baseRadius:.185,pressureRadiusScale:1,beta:60,densityIterations:3,capillaryStrength:0});
+  const nodes=new Map(),node=id=>{if(!nodes.has(id))nodes.set(id,{type:id.endsWith('-number')?'number':'range',min:id==='ipbf-alternative'?'-3':'0',max:id==='ipbf-alternative'?'4':'8',value:'',checked:false,listeners:{},removeAttribute(){},addEventListener(type,callback){this.listeners[type]=callback;}});return nodes.get(id);};
+  const root={hidden:true,innerHTML:'',ownerDocument:{activeElement:null},querySelector:s=>node(s.slice(1)),querySelectorAll:()=>[...nodes.values()]};
+  const cockpit=createIPBFPressureCockpit({root,getSolver:()=>({available:true,getPressureControls:()=>({available:true,...model.read(),particleCount:36864,damping:true,cohesionModel:'legacy',particleVolume:.00016631376856205766,dt:Math.fround(1/60)}),setPressureControls:patch=>model.request(patch)}),isPaused:()=>true,setPaused(){},restart(){}});
+  node('ipbf-alternative').listeners.input({target:{value:'2'}});
+  assert.equal(model.read().requested.alternativeCompliance,100);
+  assert.equal(model.read().effective.alternativeCompliance,.001,'displayed request cannot masquerade as GPU-applied');
+  node('ipbf-alternative').listeners.change();
+  assert.equal(new URL(url).searchParams.get('finger_fluid_ipbf_alternative_compliance'),'100');
+  assert.equal(new URL(url).searchParams.get('finger_fluid_truth_scene'),'river_playground');
+  const before=model.read();node('ipbf-derive-softness').listeners.click();
+  assert.deepEqual(model.read(),before,'reference calculation changes no simulation setting');
+  assert.match(node('ipbf-softness-reference').textContent,/Current reference.*50% of hard correction/);
+  cockpit.apply({pressureRadiusScale:1.01});
+  assert.match(node('ipbf-softness-reference').textContent,/Earlier reference/);
+  node('ipbf-alternative-number').listeners.change({target:{valueAsNumber:0}});
+  assert.equal(model.read().requested.alternativeCompliance,0);
+  assert.equal(new URL(node('ipbf-replay').href).searchParams.get('finger_fluid_ipbf_alternative_compliance'),'0');
+ }finally{globalThis.location=oldLocation;globalThis.history=oldHistory;}
 });

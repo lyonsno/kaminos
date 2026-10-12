@@ -1,5 +1,5 @@
 import {resolveFingerFluidCohesionStrength} from './finger-fluid-cohesion.mjs';
-const editable = new Set(['pressureRadiusScale', 'beta', 'densityIterations', 'capillaryStrength']);
+const editable = new Set(['pressureRadiusScale', 'beta', 'densityIterations', 'capillaryStrength', 'alternativeCompliance']);
 
 function positive(value, label) {
   if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${label} must be finite and positive`);
@@ -17,18 +17,21 @@ export function ipbfPressureReplayURL(url, values, linked) {
     finger_fluid_pressure_solver:'ipbf',
     finger_fluid_pressure_cockpit:1,finger_fluid_pressure_cockpit_linked:linked?1:0,
     finger_fluid_ipbf_pressure_radius_scale:values.pressureRadiusScale,
+    ...(values.alternativeCompliance===undefined?{}:{finger_fluid_ipbf_alternative_compliance:values.alternativeCompliance}),
     finger_fluid_ipbf_beta:values.beta,finger_fluid_density_iterations:values.densityIterations,
     finger_fluid_capillary_strength:values.capillaryStrength,
   }))next.searchParams.set(key,String(value));
   return next.href;
 }
 
-export function createIPBFPressureControlState({baseRadius, cohesionModel='legacy', ...initial}) {
+export function createIPBFPressureControlState({baseRadius, cohesionModel='legacy', alternativeCompliance=.001, ...initial}) {
   positive(baseRadius, 'Base pressure radius');
   function validate(values) {
     for (const key of Object.keys(values)) if (!editable.has(key)) throw new RangeError(`Unsupported live pressure control: ${key}`);
     const pressureRadiusScale=positive(values.pressureRadiusScale, 'Pressure radius scale');
     const beta=positive(values.beta, 'Damping beta');
+    const alternativeCompliance=values.alternativeCompliance;
+    if(!Number.isFinite(alternativeCompliance)||alternativeCompliance<0||!Number.isFinite(Math.fround(alternativeCompliance)))throw new RangeError('Alternate compliance must be nonnegative WebGPU f32');
     const radius=baseRadius*pressureRadiusScale;
     // These are the actual f32 kernel/parameter capacities, not a tuning range.
     if (![radius,beta,8/(Math.PI*radius**3)].every(v=>Number.isFinite(Math.fround(v))&&Math.fround(v)>0)) throw new RangeError('Live pressure kernel cannot be represented in WebGPU f32');
@@ -36,7 +39,7 @@ export function createIPBFPressureControlState({baseRadius, cohesionModel='legac
     resolveFingerFluidCohesionStrength(values.capillaryStrength,cohesionModel);
     return {...values, radius};
   }
-  let requested=validate(initial), effective={...requested};
+  let requested=validate({...initial,alternativeCompliance}), effective={...requested};
   let generation=0, effectiveGeneration=0, submittedStep=0;
   const read=()=>({requested:{...requested},effective:{...effective},generation,effectiveGeneration,submittedStep});
   return {
@@ -51,7 +54,7 @@ export function createIPBFPressureControlState({baseRadius, cohesionModel='legac
     submit(step) {
       if (!Number.isSafeInteger(step)||step<submittedStep) throw new RangeError('Control submission step must not regress');
       effective={...requested};effectiveGeneration=generation;submittedStep=step;
-      return new Float32Array([effective.radius,effective.beta,0,0]);
+      return new Float32Array([effective.radius,effective.beta,effective.alternativeCompliance,0]);
     },
   };
 }

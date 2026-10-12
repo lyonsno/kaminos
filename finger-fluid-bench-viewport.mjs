@@ -7,7 +7,7 @@ export const FINGER_FLUID_BENCH_VIEWPORT_PIPELINE='kaminos/finger-fluid-bench-vi
 /** Render the existing numerical fixtures with the ordinary scene materials. */
 export function createFluidBenchScene({scene,truthScene}) {
   const gold=new THREE.MeshStandardMaterial({color:0xb58b37,metalness:1,roughness:.12});
-  const group=createFluidAnalyticalSupport({obstacleMaterial:gold});group.name='Fluid bench analytical fixtures';
+  const group=createFluidAnalyticalSupport({obstacleMaterial:gold,truthScene});group.name='Fluid bench analytical fixtures';
   const data=createDynamicReflectionMeshData();
   const xyz=values=>Float32Array.from(Array.from({length:values.length/4},(_,i)=>Array.from(values.slice(i*4,i*4+3))).flat());
   const geometry=new THREE.BufferGeometry();
@@ -16,7 +16,7 @@ export function createFluidBenchScene({scene,truthScene}) {
   geometry.setIndex(new THREE.BufferAttribute(data.indices,1));
   const box=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0xa42b21,roughness:.26,metalness:.12}));
   box.name='Fluid bench optical block';box.matrixAutoUpdate=false;
-  if(truthScene==='multi_regime_playground')group.add(box);
+  if(['multi_regime_playground','river_playground'].includes(truthScene))group.add(box);
   scene.add(group);
   let phaseOverride=null;
   return {group,

@@ -4382,7 +4382,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     );
   }
   if (requestedFixedVolumeReferenceParticleCount !== null
-    && effectiveTruthScene !== 'multi_regime_playground') {
+    && !['multi_regime_playground', 'river_playground'].includes(effectiveTruthScene)) {
     throw new RangeError(
       `Fixed-volume population comparison requires multi_regime_playground, not ${effectiveTruthScene}`,
     );
@@ -14572,6 +14572,9 @@ async function startFingerFluidBench() {
       if (fingerFluidBenchConfig.effectiveTruthScene === 'laminar_inlets') {
         fingerFluidBenchCamera = { yaw: -0.46, pitch: 0.38, distance: 5.35, target: [0, -0.28, -0.72] };
       }
+      if (fingerFluidBenchConfig.effectiveTruthScene === 'river_playground') {
+        fingerFluidBenchCamera = {yaw: -0.46, pitch: 0.62, distance: 7.5, target: [-0.5, -0.35, 0]};
+      }
       if (fingerFluidBenchConfig.effectiveTruthScene === 'waterfall_resolution_oracle') {
         const camera = fingerFluidBenchConfig.waterfallOracleConfig.camera;
         fingerFluidBenchCamera = { ...camera, target: [...camera.target] };
@@ -14889,7 +14892,8 @@ function installFingerFluidPressureCockpit() {
       if(fingerFluidBenchConfig){
         const r=receipt.requested;
         fingerFluidBenchConfig={...fingerFluidBenchConfig,requestedPressureIterations:r.densityIterations,
-          requestedCapillaryStrength:r.capillaryStrength,ipbfPressureRadiusScale:r.pressureRadiusScale,ipbfDampingBeta:r.beta};
+          requestedCapillaryStrength:r.capillaryStrength,ipbfPressureRadiusScale:r.pressureRadiusScale,ipbfDampingBeta:r.beta,
+          ipbfAlternativeCompliance:r.alternativeCompliance};
       }
       if(investigationOperations.active)investigationOperations.emit({kind:'fluid.controls',phase:'requested',target:'fluid',
         requested:receipt.requested,effective:receipt.effective,controlState:receipt,
