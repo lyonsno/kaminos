@@ -9,7 +9,7 @@ import bpy
 from mathutils import Matrix, Vector
 
 sys.path.insert(0,str(Path(__file__).parent))
-from creature_joint_plan import build_plan
+from creature_joint_plan import build_plan, verify_probe_sources
 
 
 def digest(path):
@@ -56,6 +56,8 @@ def main():
     report = {'status':'failed','phase':'input','source':str(Path(args.source).resolve())}
     try:
         probe = json.loads(Path(args.probe).read_text())
+        report['phase'] = 'source-identity'
+        report['effective_sources'] = verify_probe_sources(probe)
         plan = build_plan(probe)
         source_hash = digest(args.source)
         if probe['source'].get(str(Path(args.source).resolve())) != source_hash:
@@ -125,6 +127,8 @@ def main():
         previous = set(bpy.data.objects)
         anatomy_path = next(path for path,sha in probe['source'].items() if sha==
                             '533e4a6a63e658d86e841e0294bbecb4cd3f9be52b253c063282aa15b3596eb7')
+        report['phase'] = 'anatomy-import'
+        report['effective_sources'] = verify_probe_sources(probe)
         bpy.ops.import_scene.gltf(filepath=anatomy_path)
         for o in set(bpy.data.objects)-previous:
             if o.type=='MESH':
@@ -150,7 +154,9 @@ def main():
         plan['rest_rotation_for_gltf'] = 'none (upright display transform baked in exported object frame)'
         (output/'joint-plan.json').write_text(json.dumps(plan,indent=2)+'\n')
         bpy.ops.wm.save_as_mainfile(filepath=str(output/'complete-joints-derived.blend'))
+        final_sources = verify_probe_sources(probe)
         report.update({'status':'completed','phase':'complete','joint_count':len(plan['joints']),
+                       'effective_sources':final_sources,'all_sources_unchanged':True,
                        'retained_rear_frames_unchanged':all([list(r) for r in rig.data.bones[name].matrix_local]==mat for name,mat in old_frames.items()),
                        'painted_weights_unchanged':all(weights_digest(o)==before_weights[o.name] for o in casts),
                        'original_rear_frames_unchanged':all([list(r) for r in old.data.bones[name].matrix_local]==mat for name,mat in old_frames.items()),

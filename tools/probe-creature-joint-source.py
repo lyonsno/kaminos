@@ -5,9 +5,11 @@ import json
 import sys
 from pathlib import Path
 import numpy as np
+sys.path.insert(0,str(Path(__file__).parent))
+from creature_joint_plan import validate_probe_paths
 
 args = sys.argv[sys.argv.index('--') + 1:]
-source, anatomy, output = map(Path, args)
+source, anatomy, output = validate_probe_paths(*args)
 hashes = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in (source, anatomy)}
 bpy.ops.wm.open_mainfile(filepath=str(source))
 bpy.context.view_layer.update()

@@ -1,6 +1,29 @@
 """Source-derived joint plan; the seven accepted rear controls are the base."""
 import copy
 import math
+from pathlib import Path
+import hashlib
+
+
+def validate_probe_paths(source, anatomy, output):
+    source, anatomy, output = (Path(p).resolve() for p in (source,anatomy,output))
+    for input_path in (source,anatomy):
+        if output == input_path or (output.exists() and input_path.exists() and output.samefile(input_path)):
+            raise ValueError('probe output aliases an input')
+    if output.exists():
+        raise ValueError('probe output already exists; preserve prior evidence')
+    return source,anatomy,output
+
+
+def verify_probe_sources(probe):
+    observed = {}
+    for raw,expected in probe['source'].items():
+        path = Path(raw).resolve()
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != expected:
+            raise ValueError(f'source hash mismatch: {path}; expected {expected}, effective {actual}')
+        observed[str(path)] = actual
+    return observed
 
 SOURCE_ANATOMY_SHA = '533e4a6a63e658d86e841e0294bbecb4cd3f9be52b253c063282aa15b3596eb7'
 # August10 source hierarchy receipt: hierarchy-to-frozen anatomy translation,

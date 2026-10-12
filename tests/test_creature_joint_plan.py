@@ -3,6 +3,8 @@ import json
 import os
 import unittest
 import copy
+import hashlib
+import tempfile
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location('joint_plan', Path(__file__).parents[1]/'tools/creature_joint_plan.py')
@@ -55,6 +57,37 @@ class CreaturePlan(unittest.TestCase):
         plan['joints'][-1]['head'][0] = float('nan')
         with self.assertRaisesRegex(ValueError,'nonfinite'):
             module.validate_plan(plan)
+
+
+class SourceProtection(unittest.TestCase):
+    def test_aliases_and_prior_output_refused_without_writing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source,anatomy = Path(folder)/'source.blend',Path(folder)/'anatomy.glb'
+            source.write_bytes(b'original blend')
+            anatomy.write_bytes(b'original anatomy')
+            for original in (source,anatomy):
+                link = Path(folder)/(original.name+'.link')
+                os.link(original,link)
+                symlink = Path(folder)/(original.name+'.symlink')
+                symlink.symlink_to(original)
+                for target in (original,link,symlink):
+                    with self.assertRaisesRegex(ValueError,'aliases an input'):
+                        module.validate_probe_paths(source,anatomy,target)
+                self.assertEqual(original.read_bytes(),b'original blend' if original==source else b'original anatomy')
+            old_output = Path(folder)/'prior.json'
+            old_output.write_bytes(b'prior evidence')
+            with self.assertRaisesRegex(ValueError,'already exists'):
+                module.validate_probe_paths(source,anatomy,old_output)
+            self.assertEqual(old_output.read_bytes(),b'prior evidence')
+
+    def test_stale_anatomy_hash_refused(self):
+        with tempfile.TemporaryDirectory() as folder:
+            anatomy = Path(folder)/'anatomy.glb'
+            anatomy.write_bytes(b'probed geometry')
+            probe = {'source':{str(anatomy):hashlib.sha256(anatomy.read_bytes()).hexdigest()}}
+            anatomy.write_bytes(b'changed geometry')
+            with self.assertRaisesRegex(ValueError,'source hash mismatch'):
+                module.verify_probe_sources(probe)
 
 
 if __name__ == '__main__':
