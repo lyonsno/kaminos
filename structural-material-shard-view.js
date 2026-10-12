@@ -74,7 +74,8 @@ async function reset(){pendingPick=true;pointerContact=null;gestureGeneration++;
  }finally{busy=false;pendingPick=false;}}
 async function beginPick(pieceId,point,faceIndex){
  if(failure)throw new Error('Material is unavailable for a new grip');const original=pieces.find(p=>p.id===pieceId);if(!original)throw new Error('Picked piece no longer exists');
- if(bounded&&typeof residentGrip!=='undefined'&&residentGrip){
+ if(bounded){
+  if(!residentGrip)throw new Error('Resident bounded contact unavailable during reset');
   const cellAnchor=boundedCellAnchor(original.binding,original.geometry.indices,faceIndex),generation=++gestureGeneration;
   const held={generation,phase:'capturing',pieceId,faceIndex,cellAnchor,point:[...point],displacement:[0,0,0],baselineDisplacement:[0,0,0],patchOwner:'resident-connectivity'};
   gesture=held;pendingPick=true;controls.enabled=false;marker.position.fromArray(point);marker.visible=true;await settle();if(generation!==gestureGeneration)return;busy=true;
