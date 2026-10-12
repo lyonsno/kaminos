@@ -61,11 +61,18 @@ async function main() {
     const raw=await fs.readFile(training.dataset.path);assert.equal(sha(raw),training.dataset.sha256,'dataset report hash mismatch');
     const dataset=JSON.parse(raw);report.dataset=training.dataset;
     assert.ok(dataset.identity==='optical-probe-dataset-v0'&&dataset.status==='observed'&&dataset.phase==='complete','complete dataset required');
+    assert.ok(Array.isArray(dataset.sources)&&dataset.sources.length>0&&
+      dataset.sources.every(s=>Number.isSafeInteger(s.rays)&&s.rays>=0)&&
+      dataset.sources.reduce((sum,s)=>sum+s.rays,0)>0,'nonempty source population required');
     report.phase='outputs';await save();output=await fs.open(path.join(out,'rays.jsonl'),'w');
     const groups=new Map();
     for(const model of training.models) {
       const n=model.probeCount,source=dataset.files.find(f=>f.probeCount===n);
       report.phase=`predictions-${n}`;await save();
+      const factors=model.numericalCalibration?.factors;
+      assert.ok(Array.isArray(factors)&&factors.length===4&&
+        [0,1,2,3].every(c=>Number.isFinite(factors[c])&&factors[c]>=0),'explicit numerical calibration requires four finite nonnegative factors');
+      assert.ok(Number.isSafeInteger(model.predictions.rows)&&model.predictions.rows>0,'positive prediction row count required');
       assert.ok(source&&source.sha256===model.dataset.sha256,'prediction dataset identity mismatch');
       assert.equal(await fileHash(source.path),source.sha256,'dataset bytes changed');
       const binary=await fs.readFile(model.predictions.path);
@@ -127,6 +134,7 @@ async function main() {
         batch.push(row);lastKey=key;arm.rows++;
       }
       await replay();assert.equal(arm.rows,model.predictions.rows,'fewer dataset rows than predictions');
+      assert.ok(arm.rows>0&&arm.rays>0,'nonempty replay required');
       assert.equal(arm.rays,dataset.sources.reduce((sum,s)=>sum+s.rays,0),'incomplete ray coverage');
     }
     for(const [key,g] of groups) {

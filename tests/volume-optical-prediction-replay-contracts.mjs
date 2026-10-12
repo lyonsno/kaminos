@@ -71,6 +71,24 @@ assert.equal(Object.keys(good.report.summaries).length,6);
 assert.equal(good.report.arms[0].rays,1);
 assert.equal(good.report.summaries['5:test:predicted:0.001'].meanProbes,9);
 assert.equal(good.report.summaries['5:test:predicted:0.001'].rgb.max,0);
+const missingCalibration=structuredClone(training);missingCalibration.models[0].numericalCalibration={};
+const noCalibration=run('missing-calibration',missingCalibration);
+const emptyDataset=structuredClone(dataset);emptyDataset.sources=[];
+const emptyTraining=structuredClone(training);
+for(const source of emptyDataset.files) {
+  source.path=base+`/empty-rows${source.probeCount}.jsonl`;fs.writeFileSync(source.path,'');source.sha256=sha('');
+  const model=emptyTraining.models.find(m=>m.probeCount===source.probeCount);model.dataset=source;
+  const file=base+`/empty-predictions${source.probeCount}.f32`;fs.writeFileSync(file,'');
+  model.predictions={path:file,rows:0,sha256:sha('')};
+}
+const emptyPath=base+'/empty-dataset.json';fs.writeFileSync(emptyPath,JSON.stringify(emptyDataset));
+emptyTraining.dataset={path:emptyPath,sha256:sha(fs.readFileSync(emptyPath))};
+const empty=run('empty',emptyTraining);
+assert.deepEqual([noCalibration.process.status,empty.process.status],[1,1],'missing calibration and empty evidence must both fail');
+assert.equal(noCalibration.report.status,'failed');assert.equal(noCalibration.report.phase,'predictions-3');
+assert.match(noCalibration.report.error,/explicit numerical calibration/);
+assert.equal(empty.report.status,'failed');assert.equal(empty.report.phase,'dataset');
+assert.match(empty.report.error,/nonempty source population/);
 const wrongRoute=run('fallback',{...training,backend:{name:'mlx',device:'Device(cpu, 0)'}});
 assert.equal(wrongRoute.process.status,1);assert.equal(wrongRoute.report.status,'failed');
 const incomplete=structuredClone(training);incomplete.models[0].predictions.rows--;
