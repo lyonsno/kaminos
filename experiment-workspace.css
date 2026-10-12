@@ -1,6 +1,6 @@
 /* Experiment instruments use the same live controls as the other workspaces. */
 body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:310px minmax(0,1fr) 316px; }
-body.experiment-workspace #sidebar, body.experiment-workspace #volume-authored-mix-panel, body.experiment-workspace #viewport > #transform-bar, body.experiment-workspace #finger-fluid-bench-overlay { display:none !important; }
+body.experiment-workspace #sidebar, body.experiment-workspace #viewport > #transform-bar, body.experiment-workspace #finger-fluid-bench-overlay { display:none !important; }
 #experiment-instruments { grid-row:2; grid-column:1; min-height:0; min-width:0; display:flex; flex-direction:column; background:#1b1c1e; border-right:1px solid #303134; }
 body.experiment-workspace.has-workbench-inspector #authoring-inspector { display:flex; flex-direction:column; grid-column:3; grid-row:2; border-left:1px solid #303134; }
 #experiment-instruments[hidden],#experiment-toolbar[hidden],#experiment-run-strip[hidden] { display:none; }
@@ -67,3 +67,28 @@ body.experiment-workspace #authoring-source-environment > h2 { display:none; }
 #experiment-investigation-slot .investigation-entry a { color:#a9d2d7; font-size:12px; }
 #experiment-investigation-slot .investigation-entry textarea { box-sizing:border-box; width:100%; min-height:80px; resize:vertical; }
 #experiment-investigation-slot .investigation-entry-actions { display:flex; flex-wrap:wrap; gap:6px; }
+
+/* Existing feature panels inhabit the same left tool surface. */
+#experiment-tool-slot .tab-content { padding:0; }
+#experiment-tool-slot .tab-content > h1 { display:none; }
+#experiment-tool-slot #volume-authored-mix-panel { position:relative; inset:auto; width:100%; min-width:0; height:auto; max-height:none; border:0; }
+body.experiment-workspace #experiment-tool-slot #volume-authored-mix-panel:not([hidden]) { display:flex; }
+#experiment-tool-slot #volume-authored-mix-body { max-height:none; overflow:visible; }
+#experiment-tool-slot .slider-row { flex-wrap:wrap; }
+#experiment-tool-slot input:not([type=checkbox]):not([type=radio]), #experiment-tool-slot select { max-width:100%; box-sizing:border-box; }
+#experiment-tool-slot .panel { margin-bottom:18px; }
+#experiment-browser button[aria-current=true] { background:#354047; color:#d4f1f3; }
+
+#experiment-instruments .ipbf-control:has(.authoring-number) input[type=range] { display:none; }
+#experiment-instruments .authoring-number-wrap { display:inline-flex; width:100%; }
+#experiment-instruments .authoring-number { width:100%; box-sizing:border-box; }
+#experiment-instruments .ipbf-control > div:has(.authoring-number) { display:block; }
+#experiment-instruments .ipbf-control label { display:block; margin-bottom:6px; }
+
+body.experiment-workspace #sam-image-viewport, body.experiment-workspace #pipeline-main-browser { top:45px; }
+body.experiment-workspace #tab-assets > h2 { display:none; }
+#experiment-browser { margin-top:0 !important; padding-top:0 !important; border-top:0 !important; }
+
+/* Rendering lives in the shared Scene inspector; Volume retains its own mix. */
+body.experiment-workspace #volume-authored-mix-panel .right-render-tabs { display:none; }
+body.experiment-workspace #authored-mix-panel-content { display:block; }

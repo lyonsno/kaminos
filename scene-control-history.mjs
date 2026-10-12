@@ -51,26 +51,26 @@ export function formatAuthoringNumber(value) {
 // Formatting is an overlay: the actual input value, editing and saved precision
 // remain untouched. Observe native value assignment so undo/selection refreshes
 // the presentation without another model or polling loop.
-function installNumberPresentation(input) {
+function installNumberPresentation(input,format) {
   const doc=input.ownerDocument;
   const descriptor=doc?.defaultView?.HTMLInputElement && Object.getOwnPropertyDescriptor(doc.defaultView.HTMLInputElement.prototype,'value');
   if(!descriptor || !input.parentNode)return;
   const wrapper=doc.createElement('span');wrapper.className='authoring-number-wrap';
   const display=doc.createElement('span');display.className='authoring-number-display';display.setAttribute('aria-hidden','true');
   input.before(wrapper);wrapper.append(input,display);
-  const update=()=>{display.textContent=formatAuthoringNumber(descriptor.get.call(input));};
+  const update=()=>{display.textContent=format(descriptor.get.call(input));};
   Object.defineProperty(input,'value',{configurable:true,get(){return descriptor.get.call(this);},set(value){descriptor.set.call(this,value);update();}});
   input.addEventListener('input',update);input.addEventListener('change',update);update();
 }
 
 /** One field: relative dragging while idle, ordinary text editing after a click. */
-export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=()=>{}}) {
+export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=()=>{},format=formatAuthoringNumber}) {
   let gesture=null, suppressClick=false;
   const doc=input.ownerDocument || document;
   const targets=[...new Set([grip,input].filter(Boolean))];
   input.readOnly=true;
   input.classList?.add('authoring-number');
-  installNumberPresentation(input);
+  installNumberPresentation(input,format);
   input.title='Drag to adjust · Click to type · Shift for fine · Esc to cancel';
   input.addEventListener('focus',()=>{if(!gesture)input.readOnly=false;}); // Tab preserves normal keyboard editing.
   input.addEventListener('blur',()=>{if(gesture)finish(true);input.readOnly=true;});

@@ -1,7 +1,7 @@
 import {ipbfBetaForRadius,ipbfPressureReplayURL} from './finger-fluid-pressure-controls.mjs';
 
 /** A small bench consumer; the solver owns parameter application and water. */
-export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,setPaused,restart,restartParticles,onRequest=()=>{}}) {
+export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,setPaused,restart,restartParticles,installNumberDrag=null,onRequest=()=>{}}) {
   root.hidden=false;
   root.innerHTML=`
     <h3>Fluid envelope</h3>
@@ -40,6 +40,7 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
   const linked=find('ipbf-link-damping');
   linked.checked=new URL(location.href).searchParams.get('finger_fluid_pressure_cockpit_linked')!=='0';
   let baseRadius=null,resetting=false,error='',lastParticleCount=null;
+  const editing=new Set();
   const numberText=value=>Number(value.toPrecision(10)).toString();
   function source() {
     const solver=getSolver(),state=solver?.getPressureControls?.();
@@ -67,13 +68,13 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
       for(const suffix of ['','-number']){
         const el=find('ipbf-'+name+suffix);
         if(el.type==='range'){el.min=String(Math.min(Number(el.min),value));el.max=String(Math.max(Number(el.max),value));}
-        if(el!==root.ownerDocument.activeElement)el.value=numberText(value);
+        if(el!==root.ownerDocument.activeElement&&!editing.has(el))el.value=numberText(value);
       }
     }
-    if(find('ipbf-beta')!==root.ownerDocument.activeElement)find('ipbf-beta').value=numberText(values.beta);
+    if(find('ipbf-beta')!==root.ownerDocument.activeElement&&!editing.has(find('ipbf-beta')))find('ipbf-beta').value=numberText(values.beta);
     if(state.cohesionModel==='ipbf_free_surface')find('ipbf-cohesion-number').removeAttribute('max');
     find('ipbf-cohesion-help').textContent=state.cohesionModel==='ipbf_free_surface'
-      ?'Recovered attraction · strength is a fraction of gravity. Higher numeric values expand the slider.'
+      ?'Recovered attraction · strength is a fraction of gravity.'
       :'Legacy attraction · density weighted · acceleration capped at 0.42';
     find('ipbf-damping-readout').textContent=runtime.ipbfSettings.damping
       ?'Threshold '+(values.beta*values.radius).toPrecision(3)
@@ -130,6 +131,24 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
     try {await restart();error='';}catch(e){error=e.message||String(e);}
     finally{resetting=false;update();}
   });
+  if(installNumberDrag){
+    for(const [id,name,step] of [['ipbf-radius-number','radius',.001],['ipbf-cohesion-number','cohesion',.01],['ipbf-passes-number','passes',1],['ipbf-beta','beta',.001],['ipbf-particles',null,128]]){
+      const input=find(id);let before=null;
+      const begin=()=>{if(before)return;before={value:input.value,requested:source()?.state.requested};editing.add(input);};
+      const end=()=>{editing.delete(input);before=null;};
+      input.addEventListener('focusin',begin);
+      input.addEventListener('beforeinput',begin);
+      input.addEventListener('input',()=>{if(name&&input.readOnly)change(name,Number(input.value),false);});
+      input.addEventListener('pointercancel',()=>{
+        if(!before)return;
+        const saved=before;end();input.value=saved.value;
+        if(name&&saved.requested){const {pressureRadiusScale,beta,capillaryStrength,densityIterations}=saved.requested;try{apply({pressureRadiusScale,beta,capillaryStrength,densityIterations});}catch{}}
+      });
+      input.addEventListener('change',end);input.addEventListener('blur',end);
+      input.addEventListener('keydown',event=>{if(event.key==='Enter')input.blur();});
+      installNumberDrag({input,step,onStart:begin,...(!name?{format:value=>value}:{})});
+    }
+  }
   update();
   return {update,apply,read:()=>source()?.state??null};
 }

@@ -11920,7 +11920,7 @@ async function initScene() {
       const preserveFluid = next === 'authoring' && fluidWorkbench?.state().active && fingerFluidBenchSolver?.available && fingerFluidBenchViewport;
       fluidWorkbench?.setActive(false);
       if (next === 'authoring' && !['assets', 'volume'].includes(window.__kaminosActiveTab())) {
-        setActiveTab('assets', { reveal: false, preserveFluid });
+        setActiveTab('assets', { reveal: false, preserveFluid, workspaceTransition: true });
       }
       return true;
     },
@@ -11928,7 +11928,8 @@ async function initScene() {
       installFluidWorkbench();
       if(mode === 'authoring' && fingerFluidBenchSolver?.available && fingerFluidBenchViewport && !document.getElementById('finger-fluid-bench-operator-panel').hidden)resumeFingerFluidBenchAfterWitness();
       if(mode === 'workbench' && fluidWorkbench && fingerFluidBenchSolver?.available && fingerFluidBenchViewport && !document.getElementById('finger-fluid-bench-operator-panel').hidden)setActiveTab('finger-fluid-bench');
-      fluidWorkbench?.setActive(mode === 'workbench' && window.__kaminosActiveTab() === 'finger-fluid-bench');
+      fluidWorkbench?.setTool(window.__kaminosActiveTab());
+      fluidWorkbench?.setActive(mode === 'workbench');
     },
     openWorkbenchTab: tab => setActiveTab(tab),
   });
@@ -12829,7 +12830,7 @@ function ensureFingerJuiceTabFrameLoaded() {
   fingerJuiceFrame.src = fingerJuiceFrame.dataset.src || FINGER_JUICE_STANDALONE_ROUTE;
 }
 
-function setActiveTab(tabName, { reveal = tabName !== 'assets', preserveFluid = false } = {}) {
+function setActiveTab(tabName, { reveal = tabName !== 'assets', preserveFluid = false, workspaceTransition = false } = {}) {
   if (reveal && authoringWorkspace?.state().mode === 'authoring' && !authoringWorkspace.setMode('workbench')) return;
   document.body.classList.toggle('sam-image-active', tabName === 'masks');
   document.getElementById('sam-image-viewport').hidden = tabName !== 'masks';
@@ -12837,7 +12838,8 @@ function setActiveTab(tabName, { reveal = tabName !== 'assets', preserveFluid = 
   if (tabName === 'masks') void ensureSamImageTools().catch(error => console.error(error));
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tabName}`));
-  fluidWorkbench?.setActive(tabName === 'finger-fluid-bench' && authoringWorkspace?.state().mode === 'workbench');
+  fluidWorkbench?.setTool(tabName);
+  if (!workspaceTransition) fluidWorkbench?.setActive(authoringWorkspace?.state().mode === 'workbench');
   const volumeCockpitPanel = document.getElementById('volume-authored-mix-panel');
   if (volumeCockpitPanel) volumeCockpitPanel.hidden = tabName !== 'volume' && !isFireLightFieldRoute();
   const transformBar = document.getElementById('transform-bar');
@@ -12873,8 +12875,10 @@ function setRightPanelTab(name) {
   const panel = document.getElementById('volume-authored-mix-panel');
   panel.dataset.rightTab = name;
   panel.dataset.renderingRoute = String(isFireLightFieldRoute());
-  document.getElementById('rendering-panel-content').hidden = name !== 'rendering';
-  document.getElementById('authored-mix-panel-content').hidden = name !== 'mix';
+  const rendering = document.getElementById('rendering-panel-content');
+  const sharedInspector = !!rendering.closest('#authoring-render-slot');
+  rendering.hidden = !sharedInspector && name !== 'rendering';
+  document.getElementById('authored-mix-panel-content').hidden = !sharedInspector && name !== 'mix';
   for (const tabName of ['rendering', 'mix']) {
     document.getElementById(`right-tab-${tabName}`).setAttribute('aria-selected', String(name === tabName));
   }
@@ -14816,19 +14820,21 @@ async function resetFingerFluidPressureCockpitWater() {
 
 
 function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
-  const promote=fluidWorkbench && !entryOnly && window.__kaminosInvestigationEntryOnly && fingerFluidBenchSolver?.available && fingerFluidPressureCockpit;
-  if((fluidWorkbench && !promote) || !authoringWorkspace || authoringWorkspace.state().mode!=='workbench' || (!entryOnly && !fingerFluidPressureCockpit)) return;
+  const promote=fluidWorkbench && !fluidWorkbench.hasControls() && !entryOnly && fingerFluidBenchSolver?.available && fingerFluidPressureCockpit;
+  if((fluidWorkbench && !promote) || !authoringWorkspace || authoringWorkspace.state().mode!=='workbench') return;
   // The first consumer is the shared-viewport pressure bench. Explicit producer
   // routes keep their own presentation; layout does not relabel their renderer.
   if(new URLSearchParams(location.search).get('finger_fluid_viewport') === 'producer') return;
+  entryOnly=entryOnly||!fingerFluidPressureCockpit;
   const byId=id=>document.getElementById(id),root=byId('ipbf-pressure-cockpit');
-  const setup=promote?byId('fluid-workbench-setup'):document.createElement('section');setup.id='fluid-workbench-setup';
+  const setup=promote?byId('fluid-workbench-setup'):document.createElement('section');setup.id='fluid-workbench-setup';setup.hidden=entryOnly;
   if(!promote){
   const name=document.createElement('strong');name.id='fluid-workbench-fixture';name.textContent='Resolving fixture…';setup.append(name);
   const note=document.createElement('p');note.textContent='Numerical fixture · reset water to replay these settings. Fixture geometry is fixed for this experiment.';setup.append(note);
   byId('tab-finger-fluid-bench').append(setup);
   }
   if(promote){
+    setup.hidden=false;
     fluidWorkbench.setControls({instruments:root,setup,
       instrumentTitle:'Fluid tuning',instrumentHelp:'Simulation controls stay here while you inspect the scene.',
       detailNodes:[...byId('tab-finger-fluid-bench').querySelectorAll(':scope > .panel')].filter(node=>node!==root),
@@ -14844,12 +14850,15 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
     sceneActions:byId('scene-add-menu').closest('nav'),
     navigation:byId('navigation-input-mode').closest('label'),
     tools:[...document.querySelectorAll('.tab[data-tab]')].map(node=>({id:node.dataset.tab,label:node.textContent.trim()})),
+    toolPanels:[...document.querySelectorAll('.tab-content')],
+    extraPanels:[{node:byId('volume-authored-mix-panel'),destination:byId('tab-volume')}],
     openTool:tab=>setActiveTab(tab),
     frame:()=>{const objects=sceneObjectsForFraming(sceneObjects);if(fingerFluidBenchScene?.group)objects.push(fingerFluidBenchScene.group);const framed=frameObjects(objects,camera,controls);if(framed)window._kaminosDirty?.();return framed;},
   });
   window.kaminosFluidWorkbenchState=fluidWorkbench.state;
   window.kaminosFluidWorkbenchSetInvestigation=fluidWorkbench.setInvestigation;
-  fluidWorkbench.setActive(authoringWorkspace.state().mode==='workbench' && window.__kaminosActiveTab()==='finger-fluid-bench');
+  fluidWorkbench.setTool(window.__kaminosActiveTab());
+  fluidWorkbench.setActive(authoringWorkspace.state().mode==='workbench');
   updateFingerFluidBenchReadout();
 }
 
@@ -14875,6 +14884,7 @@ function installFingerFluidPressureCockpit() {
   const root=document.getElementById('ipbf-pressure-cockpit');
   if(!root||fingerFluidPressureCockpit||new URLSearchParams(location.search).get('finger_fluid_pressure_cockpit')!=='1')return;
   fingerFluidPressureCockpit=createIPBFPressureCockpit({
+    installNumberDrag:installRelativeNumberDrag,
     root,getSolver:()=>fingerFluidBenchSolver,getStatus:()=>fingerFluidBenchState,
     isPaused:()=>fingerFluidBenchSimulationPaused,
     setPaused:value=>{
