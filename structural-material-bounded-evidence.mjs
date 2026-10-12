@@ -10,3 +10,10 @@ export function inspectBoundedWitness(w,expected){
  if(s?.stresses?.some(v=>v.active&&v.invalid))errors.push('Active material inversion');
  return errors;
 }
+
+export function maximumBoundedSurfaceError(samples){
+ if(!Array.isArray(samples)||!samples.length)throw new Error('Complete native surface samples required');let maximum=0;
+ for(const sample of samples){if(!Array.isArray(sample.gpu)||!sample.gpu.length||!Array.isArray(sample.reference)||sample.reference.length!==sample.gpu.length*3)throw new Error('Complete native surface and reference required');
+  for(let i=0;i<sample.gpu.length;i++){const point=sample.gpu[i];if(!Array.isArray(point)||point.length!==3)throw new Error('Complete native surface coordinates required');for(let k=0;k<3;k++){const value=point[k],reference=sample.reference[i*3+k];if(!Number.isFinite(value)||!Number.isFinite(reference))throw new Error('Finite native surface coordinates required');maximum=Math.max(maximum,Math.abs(value-reference));}}
+ }return maximum;
+}
