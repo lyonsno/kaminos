@@ -25607,7 +25607,13 @@ function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolum
   if(arguments.length && state.domControls['volume-emitter-source-law']?.value==='immersed-source') {
     const mapped=immersedControlsForFlamePose({immersedRadius:Number(state.domControls['volume-immersed-radius'].value)},flamePoseToDomain(state.sourcePose,flameDomainTranslation),false);
     for(const [suffix,key] of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']]) {
-      const descriptor=state.domControls[`volume-immersed-${suffix}`];descriptor.value=mapped[key];descriptor.rawValue=String(mapped[key]);
+      const id=`volume-immersed-${suffix}`;
+      // Pose-derived doubles have not passed through a browser range input,
+      // unlike saved basin values. Use the same DOM representation as runtime
+      // readback without touching the live control or rounding any feed data.
+      const range=document.getElementById(id).cloneNode();
+      range.step='any';range.value=String(mapped[key]);
+      const descriptor=state.domControls[id];descriptor.value=Number(range.value);descriptor.rawValue=range.value;
     }
   }
   return state;
