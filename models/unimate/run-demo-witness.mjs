@@ -15,8 +15,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
 const chrome = opt('--chrome'), outDir = path.resolve(opt('--out', ''));
-const roots = { weights: path.resolve(opt('--weights', '')), bundle: path.resolve(opt('--bundle', '')) };
-const prompt = Number(opt('--prompt', '0')), seed = opt('--seed', null);
+const roots = { weights: path.resolve(opt('--weights', '')), bundle: path.resolve(opt('--bundle', '')), t5: opt('--t5') ? path.resolve(opt('--t5')) : null };
+const promptArg = opt('--prompt', '0'), prompt = /^\d+$/.test(promptArg) ? Number(promptArg) : promptArg, seed = opt('--seed', null);
 const timeoutS = Number(opt('--timeout-s', '900')), stallS = Number(opt('--stall-s', '180'));
 const report = { schema: 'kaminos.unimate.demo-witness.v0', requestedChrome: chrome, roots, prompt, seed, host: os.hostname(),
   startedAt: new Date().toISOString(), source: sourceIdentity(here), phase: 'launch', captures: [] };
@@ -37,7 +37,7 @@ async function finish(code) {
 try {
   if (!chrome || !opt('--out')) throw new Error('need --chrome and --out');
   await fsp.mkdir(outDir, { recursive: true });
-  const started = await startServer({ '/weights/': roots.weights, '/demo/': roots.bundle, '/': path.resolve(here, '../..') });
+  const started = await startServer({ '/weights/': roots.weights, '/demo/': roots.bundle, ...(roots.t5 ? { '/t5/': roots.t5 } : {}), '/': path.resolve(here, '../..') });
   server = started.server;
   report.pageUrl = `${started.origin}/models/unimate/index.html`;
   browser = await launchChrome(chrome, ['--window-size=1280,800'], report);
@@ -59,7 +59,7 @@ try {
   await new Promise(r => setTimeout(r, 800));
   await capture('01-ready-rest-pose');
   report.phase = 'generate';
-  await browser.evaluate(`window.__unimateGenerate(${prompt}, ${seed === null ? 'null' : Number(seed)}).catch(() => {}), true`, false);
+  await browser.evaluate(`window.__unimateGenerate(${JSON.stringify(prompt)}, ${seed === null ? 'null' : Number(seed)}).catch(() => {}), true`, false);
   let last = null, lastChange = Date.now(), midShot = false;
   const g0 = Date.now();
   for (;;) {

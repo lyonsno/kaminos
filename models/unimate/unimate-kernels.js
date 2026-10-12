@@ -557,3 +557,22 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let g = i / (p.C * p.J);
   if (j == 0u) { O[i] = R[g * p.C + c]; } else { O[i] = Jt[(g * (p.J - 1u) + j - 1u) * p.C + c]; }
 }`;
+
+// T5 gated GELU: O[r, c] = gelu_tanh(U[r, c]) * U[r, Hd + c]. The tanh argument is
+// clamped to [-10, 10] (tanh is +-1 there in f32): Metal returns NaN for tanh of
+// large arguments.
+export const GEGLU_TANH = /* wgsl */`
+struct P { rows: u32, Hd: u32, pad0: u32, pad1: u32 };
+@group(0) @binding(0) var<storage, read> U: array<f32>;
+@group(0) @binding(1) var<storage, read_write> O: array<f32>;
+@group(0) @binding(2) var<uniform> p: P;
+@compute @workgroup_size(256)
+fn main(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x + gid.y * 65535u * 256u;
+  if (i >= p.rows * p.Hd) { return; }
+  let r = i / p.Hd;
+  let c = i % p.Hd;
+  let x = U[r * 2u * p.Hd + c];
+  let inner = clamp(0.7978845608028654 * (x + 0.044715 * x * x * x), -10.0, 10.0);
+  O[i] = 0.5 * x * (1.0 + tanh(inner)) * U[r * 2u * p.Hd + p.Hd + c];
+}`;

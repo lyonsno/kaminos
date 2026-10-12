@@ -14,6 +14,7 @@ import { CooperativeUniMateDenoiser, UniMateDutyScheduler, createCooperativeCfgD
 import { dopri5Solve } from './unimate-dopri5.js';
 import { decodeUniMateMotion, groundedOffsets } from './unimate-decode.js';
 import { requestUniMateDevice } from './unimate-denoiser.js';
+import { T5Encoder } from './unimate-t5.js';
 import { createWebGpuForegroundService, createWebGpuInferenceControl, createWebGpuInferenceSession }
   from '../../webgpu-inference-kit/src/core.js';
 
@@ -165,7 +166,7 @@ function bundleArrays(index, bytes) {
   return out;
 }
 
-export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bundleBase = '/demo/', onStatus = () => {} }) {
+export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bundleBase = '/demo/', t5Base = '/t5/', onStatus = () => {} }) {
   const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) throw new Error('WebGPU is not available in this browser');
   const device = await requestUniMateDevice(adapter);
@@ -273,13 +274,20 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
       spectral: two(arrays.spectral), graphDist: two(arrays.graphDist), jointRelations: two(arrays.jointRelations), caption: cap,
       motionLength: [bundle.motionLength, bundle.motionLength] };
   };
-  onStatus({ phase: 'ready', detail: `${manifest.parameterCount.toLocaleString()} parameters` });
+  // Browser text encoder (Flan-T5-base). Without it, only the bundle's captured prompts work.
+  let t5 = null;
+  try {
+    const t5Manifest = await (await fetch(`${t5Base}t5-manifest.json`)).json();
+    onStatus({ phase: 'load', detail: 'text encoder' });
+    t5 = await T5Encoder.create(device, t5Manifest, await (await fetch(`${t5Base}${t5Manifest.file}`)).arrayBuffer(),
+      await (await fetch(`${t5Base}t5-tokenizer.json`)).json());
+  } catch (e) { console.warn('text encoder unavailable; captured prompts only', e); }
+  onStatus({ phase: 'ready', detail: `${manifest.parameterCount.toLocaleString()} parameters${t5 ? ' · type any prompt' : ''}` });
 
   let active = null;
-  async function solve({ promptIndex, noise, schedule, onEvaluation, onStep }) {
-    const prompt = bundle.prompts[promptIndex];
+  async function solve({ caption, noise, schedule, onEvaluation, onStep }) {
     scheduler.setSchedule(schedule);
-    den.writeConditioning(conditioningFor(arrays[prompt.caption]));
+    den.writeConditioning(conditioningFor(caption));
     den.encodePrepare(scheduler.encoder());
     await scheduler.flush('unimate.prepare');
     const drift = createCooperativeCfgDrift(device, den, scheduler, { prompts: 1, onEvaluation });
@@ -299,9 +307,20 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
     }
   }
 
-  async function generate({ promptIndex = 0, seed = null, cooperative = true, targetDutyMs = 12, maxInFlight = 1, onEvaluation, onStep } = {}) {
+  // text: any prompt (browser T5), or promptIndex: a captured bundle prompt. seed null replays
+  // the accepted run's noise, which exists only for captured prompts.
+  async function generate({ text = null, promptIndex = null, seed = null, cooperative = true, targetDutyMs = 12, maxInFlight = 1,
+    onEvaluation, onStep } = {}) {
+    if (text === null) text = bundle.prompts[promptIndex ?? 0].text;
+    const match = bundle.prompts.findIndex(p => p.text === text);
+    if (seed === null && match < 0) throw new Error('the accepted run\'s noise exists only for captured prompts; choose a browser seed');
+    if (!t5 && match < 0) throw new Error('no text encoder loaded: choose one of the captured prompts');
+    promptIndex = match;
+    const encodeStart = performance.now();
+    const caption = t5 ? (await t5.encode(text)).pooled : arrays[bundle.prompts[match].caption];
+    const encodeMs = performance.now() - encodeStart;
     if (active) throw new Error('a generation is already running');
-    const prompt = bundle.prompts[promptIndex];
+    const prompt = match >= 0 ? bundle.prompts[match] : { text };
     const noise = seed === null ? Float32Array.from(arrays[prompt.referenceNoise]) : gaussianNoise(seed, J * Fe * T);
     const runId = `unimate:${crypto.randomUUID()}`;
     const abort = new AbortController();
@@ -316,7 +335,7 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
         route = await session.registerRoute({ routeId: UNIMATE_ROUTE_ID, runtimeOptions: { runtimeLabel: 'unimate', foregroundOpportunities: frameRun.foregroundOpportunities } });
         const control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground: frameRun.withForeground });
         active.control = control;
-        const job = route.enqueue({ jobId: runId, execute: invocation => solve({ promptIndex, noise, onEvaluation, onStep,
+        const job = route.enqueue({ jobId: runId, execute: invocation => solve({ caption, noise, onEvaluation, onStep,
           schedule: { runtime: route.runtime, invocation, control, signal: abort.signal, targetDutyMs, maxInFlight } }) });
         const completion = await job.completion;
         if (completion.status !== 'succeeded') {
@@ -326,9 +345,11 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
         }
         result = completion.output;
       } else {
-        result = await solve({ promptIndex, noise, schedule: null, onEvaluation, onStep });
+        result = await solve({ caption, noise, schedule: null, onEvaluation, onStep });
       }
-      result.prompt = prompt.text;
+      result.prompt = text;
+      result.textEncoder = t5 ? 'browser T5' : 'captured embedding';
+      result.encodeMs = encodeMs;
       result.noise = seed === null ? 'reference (accepted CPU run)' : `browser seed ${seed}`;
       result.wallMs = performance.now() - started;
       result.cooperative = cooperative;
@@ -364,5 +385,5 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
   function stop(reason = 'stopped by user') { active?.abort.abort(new Error(reason)); }
   function showRest() { view.motion = null; restFrame(); }
 
-  return { device, bundle, generate, togglePause, stop, showRest, scene, forwardFlops: den.forwardFlops, parameterCount: manifest.parameterCount };
+  return { device, bundle, hasTextEncoder: () => Boolean(t5), generate, togglePause, stop, showRest, scene, forwardFlops: den.forwardFlops, parameterCount: manifest.parameterCount };
 }
