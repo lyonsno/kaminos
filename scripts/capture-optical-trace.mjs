@@ -8,8 +8,9 @@ import {createHash} from 'node:crypto';
 import {compositionRestoreUrl} from '../scene-authoring.mjs';
 import {validateTraceSpecialization,compareOpticalTraces} from '../volume-optical-trace.mjs';
 import {VOLUME_UNIFORM_FLOATS} from '../volume-core.js';
+import {Vector3} from 'three';
 
-const [root,input,out,portText,subdivisionText]=process.argv.slice(2);
+const [root,input,out,portText,subdivisionText,stepText='151',yawText='0']=process.argv.slice(2);
 await fs.mkdir(out,{recursive:true});
 const report={identity:'ordered-optical-capture-conformance-v0',status:'running',phase:'inputs',root,input,
   claim:'three scanline implementation witness; not the training corpus or an image-quality result',errors:[],chunks:[],comparisons:[]};
@@ -22,16 +23,27 @@ failure.catch(()=>{});
 const guard=promise=>Promise.race([promise,failure]);
 try {
   const port=Number(portText),subdivisions=Number(subdivisionText);
+  const heldStep=Number(stepText),yaw=Number(yawText);
+  assert.ok(Number.isSafeInteger(heldStep)&&heldStep>0,'invalid held step');
+  assert.ok(Number.isFinite(yaw),'invalid camera yaw');
+  report.requested={heldStep,yaw,subdivisions};
   assert.ok(Number.isInteger(port)&&port>0&&Number.isInteger(subdivisions)&&subdivisions>0);
   report.source=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
   report.diff=execFileSync('git',['diff','HEAD'],{cwd:root,encoding:'utf8'});
   await fs.access(root+'/node_modules/three-mesh-bvh/build/index.module.js');
   const basin=JSON.parse(await fs.readFile(input+'/basin.json','utf8'));
   const scene=JSON.parse(await fs.readFile(input+'/scene.kaminos.json','utf8'));
+  report.sourceCamera=structuredClone(scene.camera);
+  const axis=new Vector3(0,1,0),target=new Vector3().fromArray(scene.camera.target);
+  scene.camera.position=new Vector3().fromArray(scene.camera.position).sub(target)
+    .applyAxisAngle(axis,yaw*Math.PI/180).add(target).toArray();
+  scene.camera.up=new Vector3().fromArray(scene.camera.up??[0,1,0])
+    .applyAxisAngle(axis,yaw*Math.PI/180).toArray();
+  report.requestedCamera=structuredClone(scene.camera);
   await fs.mkdir(out+'/settings/presets',{recursive:true});
   await fs.mkdir(out+'/scenes',{recursive:true});
   await fs.copyFile(input+'/basin.json',out+`/settings/presets/${basin.presetId}.json`);
-  await fs.copyFile(input+'/scene.kaminos.json',out+'/scenes/optical-trace.kaminos.json');
+  await fs.writeFile(out+'/scenes/optical-trace.kaminos.json',JSON.stringify(scene));
   await fs.copyFile(input+'/basin.json',out+'/source-basin.json');
   await fs.copyFile(input+'/scene.kaminos.json',out+'/source-scene.json');
   report.executable=process.env.CHROMIUM_EXECUTABLE;
@@ -60,12 +72,17 @@ try {
   await guard(page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().active||window.__kaminosVolumePrototype?.debugState().error));
   assert.equal(await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().error),null);
   // Arm the internal exact-step hold before asynchronous scene settling can pass it.
-  await page.evaluate(()=>{window.opticalTraceHold=window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(151);});
+  await page.evaluate(step=>{window.opticalTraceHold=window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(step);},heldStep);
   await guard(page.waitForFunction(()=>window.kaminosSceneAuthoring?.read().objects.length>=3||/load failed/i.test(document.getElementById('info-bar')?.textContent||'')));
   assert.equal(await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects.length),scene.objects.length);
   report.hold=await guard(page.evaluate(()=>window.opticalTraceHold));assert.equal(report.hold.ok,true,JSON.stringify(report.hold));
   assert.equal(report.hold.paused,true);assert.equal(report.hold.gpuComplete,true);
-  assert.equal(report.hold.effectiveSimStepCount,151);
+  assert.equal(report.hold.effectiveSimStepCount,heldStep);
+  await guard(page.waitForFunction(()=>/scene loaded:|load failed/i.test(document.getElementById('info-bar')?.textContent||'')));
+  report.effectiveCamera=await page.evaluate(()=>window.kaminosNavigationState());
+  for(const key of ['position','target','up']) {
+    assert.ok(report.requestedCamera[key].every((v,i)=>Math.abs(v-report.effectiveCamera[key][i])<1e-5),`camera ${key} differs from request`);
+  }
   report.phase='baseline';await save();
   const baseline=await page.evaluate(async()=>{
     const r=window.__kaminosVolumePrototype;
@@ -76,7 +93,7 @@ try {
   report.state=baseline.state;
   assert.equal(report.state.effectiveRoute,'native-3d-compute-fluid-raymarch-v0');
   assert.equal(report.state.backend,'WebGPU:apple');
-  assert.equal(report.state.simStepCount,151);
+  assert.equal(report.state.simStepCount,heldStep);
   assert.equal(report.state.physicalColor.effective,'emissive-transport-v2');
   assert.equal(report.state.controls.toneMapping,'agx');
   const {width,height,rgba}=baseline.image;
