@@ -1618,11 +1618,11 @@ const expectedMicrodetail = routeParams.has('volume_microdetail') && Number.isFi
   : scenePreset.microdetail ?? 2.50;
 const requestedInterfaceShred = Number(routeParams.get('volume_interface_shred'));
 const expectedInterfaceShred = routeParams.has('volume_interface_shred') && Number.isFinite(requestedInterfaceShred)
-  ? Math.max(0, Math.min(5, requestedInterfaceShred))
+  ? Math.max(0, Math.min(10, requestedInterfaceShred))
   : scenePreset.interfaceShred ?? 2.50;
 const requestedFireLicks = Number(routeParams.get('volume_fire_licks'));
 const expectedFireLicks = routeParams.has('volume_fire_licks') && Number.isFinite(requestedFireLicks)
-  ? Math.max(0, Math.min(5, requestedFireLicks))
+  ? Math.max(0, Math.min(10, requestedFireLicks))
   : scenePreset.fireLicks ?? 1.65;
 const requestedWindStrength = Number(routeParams.get('volume_wind_strength'));
 const expectedWindStrength = routeParams.has('volume_wind_strength') && Number.isFinite(requestedWindStrength)
