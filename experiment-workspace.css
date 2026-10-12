@@ -60,3 +60,10 @@ body.experiment-workspace #authoring-source-environment > h2 { display:none; }
 #experiment-investigation-slot button:disabled { opacity:.55; cursor:default; }
 #experiment-investigation-slot textarea:focus-visible,#experiment-investigation-slot button:focus-visible { outline:2px solid #9ebec7; outline-offset:2px; }
 #experiment-investigation-slot output { color:#a9d2d7; font-size:11px; }
+
+#experiment-investigation-slot .investigation-entry { display:grid; gap:10px; }
+#experiment-investigation-slot .investigation-entry h3 { font-size:14px; margin:0; line-height:1.4; }
+#experiment-investigation-slot .investigation-entry h4 { font-size:12px; margin:8px 0 0; color:#a9d2d7; }
+#experiment-investigation-slot .investigation-entry a { color:#a9d2d7; font-size:12px; }
+#experiment-investigation-slot .investigation-entry textarea { box-sizing:border-box; width:100%; min-height:80px; resize:vertical; }
+#experiment-investigation-slot .investigation-entry-actions { display:flex; flex-wrap:wrap; gap:6px; }

@@ -22,6 +22,9 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
   byId('experiment-tuning-title').textContent=instrumentTitle;byId('experiment-tuning-help').textContent=instrumentHelp;
   mount([setup],'experiment-setup-slot');
   mount([instruments],'experiment-instrument-slot');mount(detailNodes,'experiment-detail-slot');mount(runNodes,'experiment-run-controls');
+  let instrumentSlots=createControlSlots(document,entries);
+  let controlsMounted=!!instruments;
+  entries.length=0;
   mount([navigation],'experiment-navigation-slot');mount([sceneActions],'experiment-add-slot');
   const slots=createControlSlots(document,entries);
   for(const {label,id} of tools){
@@ -48,10 +51,24 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
   setInvestigation(investigation);
   const api={
     setInvestigation,
+    setControls({instruments,setup,detailNodes=[],runNodes=[],instrumentTitle='',instrumentHelp=''}){
+      // Entry-only presentation can acquire its actual live controls once.
+      // The investigation node and its draft are outside these control slots.
+      if(controlsMounted)return;
+      const controls=[];
+      const add=(nodes,id)=>{for(const node of nodes.filter(Boolean))controls.push({node,destination:byId(id)});};
+      add([setup],'experiment-setup-slot');add([instruments],'experiment-instrument-slot');
+      add(detailNodes,'experiment-detail-slot');add(runNodes,'experiment-run-controls');
+      instrumentSlots=createControlSlots(document,controls);controlsMounted=true;
+      byId('experiment-tuning-title').textContent=instrumentTitle;
+      byId('experiment-tuning-help').textContent=instrumentHelp;
+      instrumentSlots.setActive(active);
+      document.defaultView._kaminosDirty?.();
+    },
     setActive(value){
       if(active===value)return;
       // Existing focus/blur handlers own commit semantics.
-      document.activeElement?.blur?.();slots.setActive(value);inspector.setWorkbenchInspector(value);active=value;
+      document.activeElement?.blur?.();slots.setActive(value);instrumentSlots.setActive(value);inspector.setWorkbenchInspector(value);active=value;
       document.body.classList.toggle('experiment-workspace',value);
       for(const node of [left,toolbar,run])node.hidden=!value;
       document.defaultView._kaminosDirty?.();

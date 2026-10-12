@@ -10846,11 +10846,11 @@ function fingerFluidCameraFailure(message) {
   throw new Error(`Finger fluid external camera ${message}`);
 }
 
-function finiteCameraArray(value, length, label) {
+function finiteCameraArray(value, length, label, ArrayType = Float32Array) {
   if ((!Array.isArray(value) && !ArrayBuffer.isView(value)) || value.length !== length) {
     fingerFluidCameraFailure(`${label} must contain ${length} finite components`);
   }
-  const snapshot = new Float32Array(length);
+  const snapshot = new ArrayType(length);
   for (let index = 0; index < length; index += 1) {
     if (!Number.isFinite(value[index])) {
       fingerFluidCameraFailure(`${label}[${index}] is invalid`);
@@ -10923,13 +10923,16 @@ export function validateFingerFluidExternalCamera(camera, extent) {
   if (!Number.isFinite(camera.far) || camera.far <= camera.near) {
     fingerFluidCameraFailure(`far is invalid: ${camera.far}`);
   }
-  const view = finiteCameraArray(camera.view, 16, 'view');
-  const projection = finiteCameraArray(camera.projection, 16, 'projection');
-  const viewProjection = finiteCameraArray(camera.viewProjection, 16, 'viewProjection');
+  // Validate the host's matrices before quantizing them for GPU upload.
+  // Inverting an already-rounded distant camera amplifies cancellation error.
+  const view = finiteCameraArray(camera.view, 16, 'view', Float64Array);
+  const projection = finiteCameraArray(camera.projection, 16, 'projection', Float64Array);
+  const viewProjection = finiteCameraArray(camera.viewProjection, 16, 'viewProjection', Float64Array);
   const inverseViewProjection = finiteCameraArray(
     camera.inverseViewProjection,
     16,
     'inverseViewProjection',
+    Float64Array,
   );
   const expectedViewProjection = multiplyMatrices(projection, view);
   if (!matricesApproximatelyEqual(viewProjection, expectedViewProjection)) {
@@ -10971,10 +10974,10 @@ export function validateFingerFluidExternalCamera(camera, extent) {
     identity: camera.identity,
     generation: camera.generation,
     projectionType: camera.projectionType,
-    view,
-    projection,
-    viewProjection,
-    inverseViewProjection,
+    view: Float32Array.from(view),
+    projection: Float32Array.from(projection),
+    viewProjection: Float32Array.from(viewProjection),
+    inverseViewProjection: Float32Array.from(inverseViewProjection),
     position,
     right,
     up,

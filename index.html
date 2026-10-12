@@ -4020,6 +4020,7 @@ import {
 } from './finger-fluid-webgpu-core.js';
 import {createIPBFPressureCockpit} from './finger-fluid-pressure-cockpit.mjs';
 import {investigationOperations} from './investigation-recording.mjs';
+import {createInvestigationEntry} from './investigation-entry.mjs';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -4370,7 +4371,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   const requestedParticleCount = Number(params.get('finger_fluid_particle_count')
     ?? oracleCockpitRequested?.particleCount
     ?? waterfallOracleConfig?.defaultParticleCount
-    ?? KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT);
+    ?? 12288);
   const fixedVolumeReferenceParticleCountValue = params.get('finger_fluid_fixed_volume_reference_count');
   const requestedFixedVolumeReferenceParticleCount = fixedVolumeReferenceParticleCountValue === null
     ? null
@@ -12851,11 +12852,11 @@ function setActiveTab(tabName, { reveal = tabName !== 'assets', preserveFluid = 
   const fingerFluidBenchPanel = document.getElementById('finger-fluid-bench-operator-panel');
   if (fingerFluidBenchPanel) {
     fingerFluidBenchPanel.hidden = tabName !== 'finger-fluid-bench' && !preserveFluid;
-    if (tabName === 'finger-fluid-bench') {
+    if (tabName === 'finger-fluid-bench' && !window.__kaminosInvestigationEntryOnly) {
       if(fingerFluidBenchSolver?.available && fingerFluidBenchViewport)resumeFingerFluidBenchAfterWitness();
       else startFingerFluidBench();
     }
-    else if(!preserveFluid) stopFingerFluidBench();
+    else if(tabName !== 'finger-fluid-bench' && !preserveFluid) stopFingerFluidBench();
   }
   const fingerJuicePanel = document.getElementById('finger-juice-operator-panel');
   if (fingerJuicePanel) {
@@ -14765,6 +14766,8 @@ async function startFingerFluidBench() {
     fingerFluidBenchViewport=createFluidViewportHost({renderer,scene,camera,pipeline:renderPipeline,device:renderer.backend.device,solver:fingerFluidBenchSolver,group:fingerFluidBenchScene.group,helperGround:groundPlane,getDisplayPolicy:()=>getFluidDisplayPolicy?.(),pipelineIdentity:FINGER_FLUID_BENCH_VIEWPORT_PIPELINE,framePrefix:'fluid-bench'});
     syncFingerFluidCompositionCamera({initial:true});
   }
+  if(typeof installFingerFluidPressureCockpit==='function')installFingerFluidPressureCockpit();
+  if(typeof installFluidWorkbench==='function')installFluidWorkbench();
   await activateFingerFluidPyroComposition();
   if(!isCurrent())return;
   if(sharedViewport){window._kaminosDirty?.();return;}
@@ -14815,13 +14818,14 @@ async function resetFingerFluidPressureCockpitWater() {
 }
 
 
-function installFluidWorkbench() {
-  if(fluidWorkbench || !authoringWorkspace || authoringWorkspace.state().mode!=='workbench' || !fingerFluidPressureCockpit) return;
+function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
+  const promote=fluidWorkbench && !entryOnly && window.__kaminosInvestigationEntryOnly && fingerFluidBenchSolver?.available && fingerFluidPressureCockpit;
+  if((fluidWorkbench && !promote) || !authoringWorkspace || authoringWorkspace.state().mode!=='workbench' || (!entryOnly && !fingerFluidPressureCockpit)) return;
   // The first consumer is the shared-viewport pressure bench. Explicit producer
   // routes keep their own presentation; layout does not relabel their renderer.
   if(new URLSearchParams(location.search).get('finger_fluid_viewport') === 'producer') return;
   const byId=id=>document.getElementById(id),root=byId('ipbf-pressure-cockpit');
-  if(!fluidReflectionCockpit){
+  if(!entryOnly && !fluidReflectionCockpit){
     const read=()=>({clock:window.kaminosFingerFluidBenchSessionState?.()??{available:false,paused:false,step:null},
       reflection:fingerFluidBenchSolver?.getReflectionBudgetControls?.()??null});
     const setPaused=value=>{
@@ -14846,15 +14850,25 @@ function installFluidWorkbench() {
       select:fluidReflectionCockpit.select,configureB:fluidReflectionCockpit.configureB,
       effective:read};
   }
-  const setup=document.createElement('section');setup.id='fluid-workbench-setup';
+  const setup=promote?byId('fluid-workbench-setup'):document.createElement('section');setup.id='fluid-workbench-setup';
+  if(!promote){
   const name=document.createElement('strong');name.id='fluid-workbench-fixture';name.textContent='Resolving fixture…';setup.append(name);
   const note=document.createElement('p');note.textContent='Numerical fixture · reset water to replay these settings. Fixture geometry is fixed for this experiment.';setup.append(note);
   byId('tab-finger-fluid-bench').append(setup);
+  }
+  if(promote){
+    fluidWorkbench.setControls({instruments:root,setup,
+      instrumentTitle:'Fluid tuning',instrumentHelp:'Simulation controls stay here while you inspect the scene.',
+      detailNodes:[...byId('tab-finger-fluid-bench').querySelectorAll(':scope > .panel')].filter(node=>node!==root),
+      runNodes:[root.querySelector('.ipbf-actions'),byId('ipbf-control-status')]});
+    window.__kaminosInvestigationEntryOnly=false;
+    updateFingerFluidBenchReadout();return;
+  }
   fluidWorkbench=installExperimentWorkspace({document,title:'Fluid',subtitle:'Tune water in the shared scene',
-    instrumentTitle:'Fluid tuning',instrumentHelp:'Simulation controls stay here while you inspect the scene.',instruments:root,setup,
+    instrumentTitle:entryOnly?'':'Fluid tuning',instrumentHelp:entryOnly?'':'Simulation controls stay here while you inspect the scene.',instruments:entryOnly?null:root,setup:entryOnly?null:setup,investigation,
     inspector:authoringWorkspace,
-    detailNodes:[...byId('tab-finger-fluid-bench').querySelectorAll(':scope > .panel')].filter(node=>node!==root),
-    runNodes:[root.querySelector('.ipbf-actions'),byId('ipbf-control-status')],
+    detailNodes:entryOnly?[]:[...byId('tab-finger-fluid-bench').querySelectorAll(':scope > .panel')].filter(node=>node!==root),
+    runNodes:entryOnly?[]:[root.querySelector('.ipbf-actions'),byId('ipbf-control-status')],
     sceneActions:byId('scene-add-menu').closest('nav'),
     navigation:byId('navigation-input-mode').closest('label'),
     tools:[...document.querySelectorAll('.tab[data-tab]')].map(node=>({id:node.dataset.tab,label:node.textContent.trim()})),
@@ -14866,6 +14880,24 @@ function installFluidWorkbench() {
   fluidWorkbench.setActive(authoringWorkspace.state().mode==='workbench' && window.__kaminosActiveTab()==='finger-fluid-bench');
   updateFingerFluidBenchReadout();
 }
+
+
+// The shared investigation service supplies the loaded document and operations.
+// Merely entering its address must not create another simulation attempt.
+window.kaminosMountInvestigationEntry=async options=>{
+  await fluidViewportReady;
+  if(!authoringWorkspace)throw Error('Shared Kaminos workspace unavailable');
+  if(authoringWorkspace.state().mode!=='workbench' && !authoringWorkspace.setMode('workbench'))throw Error('Finish the current scene edit before opening the investigation');
+  const component=createInvestigationEntry({document,...options});
+  const entryOnly=!fingerFluidBenchSolver?.available;
+  window.__kaminosInvestigationEntryOnly=entryOnly;
+  installFluidWorkbench({entryOnly,investigation:component.node});
+  if(!fluidWorkbench)throw Error('Shared Fluid workspace unavailable');
+  fluidWorkbench.setInvestigation(component.node);
+  setActiveTab('finger-fluid-bench');
+  if(entryOnly)fluidWorkbench.update({source:'Investigation',status:'retained',clock:''});
+  return component;
+};
 
 function installFingerFluidPressureCockpit() {
   const root=document.getElementById('ipbf-pressure-cockpit');
@@ -14879,6 +14911,15 @@ function installFingerFluidPressureCockpit() {
         effective:{paused:fingerFluidBenchSimulationPaused},clock:window.kaminosFingerFluidBenchSessionState?.()});
     },
     restart:resetFingerFluidPressureCockpitWater,
+    restartParticles:async count=>{
+      const url=new URL(location.href);
+      const reference=url.searchParams.get('finger_fluid_fixed_volume_reference_count');
+      if(reference!==null&&count>Number(reference))throw new RangeError('Particle count exceeds the fixed-volume reference population');
+      url.searchParams.set('finger_fluid_particle_count',String(count));
+      history.replaceState(history.state,'',url);
+      await resetFingerFluidPressureCockpitWater();
+      if(!fingerFluidBenchSolver?.available)throw new Error(fingerFluidBenchState.runtime?.reason||'Water restart failed');
+    },
     onRequest:receipt=>{
       window._kaminosDirty?.();
       if(fingerFluidBenchConfig){

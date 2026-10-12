@@ -45,3 +45,15 @@ test('capture stays linear and matched camera transforms the complete image once
   restore();assert.equal(pipeline.outputNode,ordinaryMatched);assert.equal(pipeline.outputColorTransform,true);
  }
 });
+
+test('zoomed-out host cameras validate before GPU precision conversion and reject a wrong inverse',async()=>{
+ const {fluidViewportCameraFrame}=await load();
+ for(const distance of [500,1000,5000]){
+  const camera=new PerspectiveCamera(40,4/3,.01,20000);camera.coordinateSystem=WebGPUCoordinateSystem;
+  camera.position.set(distance*.5,distance*.4,distance*.8);camera.lookAt(0,0,0);camera.updateProjectionMatrix();
+  const frame=fluidViewportCameraFrame(camera,640,480,1);
+  assert.doesNotThrow(()=>validateFingerFluidExternalCamera(frame,{width:640,height:480}));
+  const bad={...frame,inverseViewProjection:[...frame.inverseViewProjection]};bad.inverseViewProjection[12]*=1.1;
+  assert.throws(()=>validateFingerFluidExternalCamera(bad,{width:640,height:480}),/does not invert/);
+ }
+});
