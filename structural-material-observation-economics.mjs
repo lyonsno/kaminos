@@ -1,13 +1,13 @@
 export async function stoneObservationStamp(data){
  const bytes=new TextEncoder().encode(JSON.stringify(data));
  const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
- return {schema:'stone-observation-stamp-v1',route:data.route,runId:data.state?.runId,steps:data.state?.steps,
+ return {schema:'stone-observation-stamp-v2',current:data.state?.observation?.kind!=='submitted',route:data.route,runId:data.state?.runId,steps:data.state?.steps,
   paused:data.paused,busy:data.busy,pendingPick:data.pendingPick,finishing:data.finishing,failure:data.failure,
   resourceVersion:data.resourceVersion,digest};
 }
 
 export function validateStoneObservationStamp(s){
- if(s?.schema!=='stone-observation-stamp-v1'||s.route!=='kaminos.picked-stone.bounded-shards.webgpu.v0'
+ if(s?.schema!=='stone-observation-stamp-v2'||s.current!==true||s.route!=='kaminos.picked-stone.bounded-shards.webgpu.v0'
   ||!s.runId||!Number.isInteger(s.steps)||!s.paused||s.busy||s.pendingPick||s.finishing||s.failure
   ||s.resourceVersion!==s.runId||! /^[a-f0-9]{64}$/.test(s.digest??''))throw new Error('Held bounded stone stamp required');
 }

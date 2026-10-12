@@ -6,7 +6,7 @@ export function createStoneObservationRuntime({call,resources,resourceDirectory}
  let acquisitions=0;
  const readStamp=()=>call('window.__stoneShards.observationStamp()');
  return {
-  settle:()=>call('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))'),
+  settle:()=>call('(async()=>{await window.__stoneShards.settle({surface:false});await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));})()'),
   camera:view=>call(`window.__stoneShards.camera(${JSON.stringify(view)})`),
   stability:{read:readStamp,validate:validateStoneObservationStamp,assertStable:(a,b)=>assert.deepEqual(a,b,'Stone changed across capture')},
   async read(){

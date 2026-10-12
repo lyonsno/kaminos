@@ -20,7 +20,7 @@ assert.deepEqual(await stoneObservationStamp(structuredClone(data)),first);
 for(const mutate of [d=>d.state.state[0]=.1,d=>d.state.bonds[2]=0,d=>d.state.steps++,d=>d.state.damageEpoch++,d=>d.camera.position[0]++,d=>d.viewport.width++,d=>d.configuration.iterations++,d=>d.gesture.displacement[0]++,d=>d.gesture=null,d=>d.inputs.push({kind:'release'}),d=>d.events.push({id:'cut'}),d=>d.timings.push({total:1}),d=>d.threshold++,d=>d.paused=false,d=>d.busy=true,d=>d.pendingPick=true,d=>d.finishing=true,d=>d.failure={message:'lost'},d=>d.state.runId='reset']){
  const changed=structuredClone(data);mutate(changed);assert.notEqual((await stoneObservationStamp(changed)).digest,first.digest,'Relevant dynamic mutation must invalidate stamp');
 }
-for(const patch of [{paused:false},{busy:true},{pendingPick:true},{finishing:true},{failure:{}},{route:'fallback'},{resourceVersion:'old'},{digest:''}])assert.throws(()=>validateStoneObservationStamp({...first,...patch}),/stamp/);
+for(const patch of [{current:false},{paused:false},{busy:true},{pendingPick:true},{finishing:true},{failure:{}},{route:'fallback'},{resourceVersion:'old'},{digest:''}])assert.throws(()=>validateStoneObservationStamp({...first,...patch}),/stamp/);
 const dynamic={runId:'run',pieces:[{id:0,renderedPositions:[1,2,3]}]},resource={schema:'stone-observation-resource-v1',version:'run',pieces:[{id:0,geometry:piece.geometry,binding:piece.binding}]};
 assert.deepEqual(reconstructStoneObservation(dynamic,resource).pieces[0],{...dynamic.pieces[0],geometry:piece.geometry,binding:piece.binding});
 for(const bad of [undefined,{...resource,version:'old'},{...resource,pieces:[]},{...resource,pieces:[{id:1}]}])assert.throws(()=>reconstructStoneObservation(dynamic,bad),/resource/);
