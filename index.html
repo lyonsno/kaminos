@@ -5793,11 +5793,6 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
   const analytic = authoredFlamePresent && !!scene && isFireLightFieldRoute() && !!applyFlameEmitterPose
     && window.__kaminosVolumeEmitterReceipt?.effective?.family !== 'cluster';
   if (entry && !analytic) {
-    if (flameDomainGuide) {
-      scene.remove(flameDomainGuide);
-      disposeObjectTree(flameDomainGuide);
-      flameDomainGuide = null;
-    }
     if (authoredFlamePresent) { scenePlacementTools?.finish(false); scenePlacementTools?.edits.discard(edit => edit.id === FLAME_EMITTER_ID); }
     if (activeSceneObjectId === FLAME_EMITTER_ID) clearActiveSceneObjectSelection();
     scene.remove(entry.object);
@@ -5805,6 +5800,7 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
     sceneObjects = sceneObjects.filter(record => record.id !== FLAME_EMITTER_ID);
     pruneSceneGroups();pruneSceneSelection();
     renderSceneObjectList();
+    refreshFlameDomainPreview();
     return null;
   }
   if (!entry && analytic) {
@@ -5816,20 +5812,6 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
       type: FLAME_EMITTER_TYPE, source: FLAME_EMITTER_SOURCE,
       fileName: 'Flame source', label: metadata.label || 'Flame source' });
     if (previous && previous !== FLAME_EMITTER_ID) setActiveSceneObject(previous);
-  }
-  if (entry && !flameDomainGuide) {
-    // The local grid spans x/z [-1, 1] and y [-1, 3].
-    // This guide follows its authored world translation.
-    flameDomainGuide = new THREE.Box3Helper(new THREE.Box3(
-      new THREE.Vector3(-1, -1, -1).add(new THREE.Vector3(...flameDomainTranslation)),
-      new THREE.Vector3(1, 3, 1).add(new THREE.Vector3(...flameDomainTranslation))), 0x5bd8f5);
-    flameDomainGuide.name = 'Flame simulation bounds';
-    flameDomainGuide.userData.kaminosEditorHelper = true;
-    flameDomainGuide.material.transparent = true;
-    flameDomainGuide.material.opacity = 0.82;
-    flameDomainGuide.material.depthTest = false;
-    flameDomainGuide.renderOrder = 1000;
-    scene.add(flameDomainGuide);
   }
   refreshFlameDomainPreview();
   if (flameDomainGuide) flameDomainGuide.visible = viewportHelpersVisible&&(sceneSelectionMembers().includes(FLAME_EMITTER_ID)||activeSceneFieldId==='flame-field');
@@ -5857,6 +5839,18 @@ function flameDomainEditObject() {
   return flameDomainProxy;
 }
 function refreshFlameDomainPreview() {
+  // Bounds belong to the simulation field, including a field with no emitter.
+  if (!flameDomainGuide && scene && activeSceneComposition) {
+    flameDomainGuide = new THREE.Box3Helper(new THREE.Box3(), 0x5bd8f5);
+    flameDomainGuide.name = 'Flame simulation bounds';
+    flameDomainGuide.userData.kaminosEditorHelper = true;
+    flameDomainGuide.material.transparent = true;
+    flameDomainGuide.material.opacity = 0.82;
+    flameDomainGuide.material.depthTest = false;
+    flameDomainGuide.renderOrder = 1000;
+    scene.add(flameDomainGuide);
+  }
+  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible && (sceneSelectionMembers().includes(FLAME_EMITTER_ID) || activeSceneFieldId === 'flame-field');
   const pose=flameDomainDraft||acceptedFlameDomainPose(),{translation,scale}=domainTransformForPose(pose);
   if(flameDomainGuide)flameDomainGuide.box.set(new THREE.Vector3(-scale,-scale,-scale).add(new THREE.Vector3(...translation)),new THREE.Vector3(scale,3*scale,scale).add(new THREE.Vector3(...translation)));
   if(flameDomainProxy&&!transformControls?.dragging)applySceneObjectTransformState(flameDomainProxy,pose);
@@ -5886,8 +5880,9 @@ function settleAuthoredFlameDomain(event) {
   const next=domainTransformForPose(event.after),previous=[...flameDomainTranslation],previousScale=flameDomainScale;
   if(!volumePrototype?.relocateOrdinaryDomain || !applyFlameEmitterPose)throw Error('The flame simulation is not mounted');
   if(authoredFlamePresent&&window.__kaminosVolumeEmitterReceipt?.requested?.sourceLaw==='immersed-source')immersedControlsForFlamePose(window.__kaminosVolumeEmitterReceipt.requested,flamePoseToDomain(flameEmitterPose,next.translation,next.scale),false);
-  try {setFlameDomainTranslation(next.translation,next.scale);writeAuthoredFlameEmitterPose(flameEmitterPose);}
-  catch(error){setFlameDomainTranslation(previous,previousScale);writeAuthoredFlameEmitterPose(flameEmitterPose);throw error;}
+  const analytic = window.__kaminosVolumeEmitterReceipt?.effective?.family !== 'cluster';
+  try {setFlameDomainTranslation(next.translation,next.scale);if(analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);}
+  catch(error){setFlameDomainTranslation(previous,previousScale);if(analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);throw error;}
   flameDomainFollowSource=event.operation==='commit'?false:event.afterContext;
   flameDomainDraft=null;refreshFlameDomainPreview();
   setInfo(flameEmitterInjectionSuspended?'Simulation box changed; field restarted · emitter outside box, injection paused':'Simulation box changed; field restarted · emitter stays in place');
@@ -29471,7 +29466,7 @@ async function writeSelectionMembershipUnchecked(value){
   }
   sceneObjects=value.objects.map(record=>sceneObjects.find(entry=>entry.id===record.id));
   sceneGroups=structuredClone(value.groups);for(const group of sceneGroups)ensureGroupTarget(group);
-  setFlameDomainTranslation(value.domain,value.domainScale??1);flameDomainFollowSource=value.domainFollowSource??true;if(authoredFlamePresent&&applyFlameEmitterPose)writeAuthoredFlameEmitterPose(flameEmitterPose);
+  setFlameDomainTranslation(value.domain,value.domainScale??1);flameDomainFollowSource=value.domainFollowSource??true;if(authoredFlamePresent&&applyFlameEmitterPose&&window.__kaminosVolumeEmitterReceipt?.effective?.family!=='cluster')writeAuthoredFlameEmitterPose(flameEmitterPose);
   sceneCameras?.membershipChanged(value.activeCameraId??null);
   if(value.field)window.selectSceneField(value.field);else setSceneSelection(value.selection.ids,value.selection.activeId);
   renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();

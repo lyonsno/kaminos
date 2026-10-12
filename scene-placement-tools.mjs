@@ -311,7 +311,7 @@ export function installScenePlacementTools({
         } else { modal.axis = key; modal.plane = event.shiftKey; modal.frame = transformSettings().explicit?transformSettings().orientation:modal.operation === 'scale' ? 'local' : 'world'; }
       } else if (event.key === 'Backspace') modal.numeric = modal.numeric.slice(0, -1);
       else if (/^[0-9.\-]$/.test(event.key)) modal.numeric += event.key;
-      modal.snap = event.ctrlKey; modal.precise = event.shiftKey; preview(); return;
+      modal.snap = event.ctrlKey; modal.precise = event.shiftKey; try { preview(); } catch (error) { finish(false); hud.textContent = error.message; } return;
     }
     // Selecting an object from the scene list leaves focus on the document
     // body. Its transform keys should work without a second viewport hover;
@@ -332,7 +332,7 @@ export function installScenePlacementTools({
     if (key === 'f' || event.code === 'NumpadDecimal') { steal(event); frameSelected(); draw(); return; }
     if (['g', 'r', 's'].includes(key)) { steal(event); start({ g: 'translate', r: 'rotate', s: 'scale' }[key]); }
   }, true);
-  document.addEventListener('keyup', event => { if (modal && ['Control', 'Shift'].includes(event.key)) { modal.snap = event.ctrlKey; modal.precise = event.shiftKey; preview(); } }, true);
+  document.addEventListener('keyup', event => { if (modal && ['Control', 'Shift'].includes(event.key)) { modal.snap = event.ctrlKey; modal.precise = event.shiftKey; try { preview(); } catch (error) { finish(false); hud.textContent = error.message; } } }, true);
   window.addEventListener('blur', () => { if (edits.state().active) finish(false); });
 
   function fieldInput(input) {
