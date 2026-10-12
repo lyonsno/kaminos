@@ -50,13 +50,16 @@ export function mountReflectionCockpit(root,{read,apply,setPaused,requestRayStat
     const policy=effective?.mode==='full'?'Full scene reflections':effective?.mode==='single'?'One scene reflection ray':effective?.mode==='adaptive'?`Environment below ${(effective.fresnelCutoff*100).toFixed(1)}%; full scene reflections above`:'Comparison requires shaded refracted water';
     status.textContent=error||`${current.clock?.paused?`Frozen at step ${current.clock.step}`:'Live water'} · ${policy}`;status.classList.toggle('error',Boolean(error));
     const counts=current.rayStats,sample=counts?.sample;
-    const matching=sample && effective && sample.policy.mode===effective.mode && sample.policy.fresnelCutoff===effective.fresnelCutoff;
+    const cameraKey=c=>c?JSON.stringify([c.identity,c.projectionType,c.viewport,Array.from(c.viewProjection)]):null;
+    const viewMatches=sample && cameraKey(sample.camera)===cameraKey(counts.current?.camera);
+    const matching=viewMatches && effective && sample.policy.mode===effective.mode && sample.policy.fresnelCutoff===effective.fresnelCutoff;
     if(!comparisonAvailable)rayText.textContent='Counts require shaded refracted water';
     else if(sample?.waterPixels && matching){
       const line=(label,c)=>`${label} P50 ${c.p50} · P95 ${c.p95} · P99 ${c.p99} · avg ${c.mean.toFixed(2)}`;
       const age=Math.max(0,(performance.now()-sample.measuredAt)/1000).toFixed(1);
       rayText.textContent=`${line('Reflection',sample.reflection)}\n${line('All scene queries',sample.total)}\n${(sample.skippedReflectionFraction*100).toFixed(1)}% skip reflection · ${sample.waterPixels.toLocaleString()} water pixels\nSampled frame ${sample.frameId}, step ${sample.step} · ${age}s ago${counts.status==='failed'?` · count failed: ${counts.failure}`:counting?' · sampled frame':' · counts held'}`;
     }else if(counts?.status==='failed')rayText.textContent=`Ray count failed: ${counts.failure}`;
+    else if(sample && !viewMatches)rayText.textContent='Previous camera/view · awaiting current ray count';
     else if(sample && !matching)rayText.textContent='Previous reflection setting · awaiting current ray count';
     else if(sample?.waterPixels===0)rayText.textContent='No visible shaded water pixels in measured frame';
     else rayText.textContent=counts?.status==='unsupported_view'?'Counts require shaded refracted water':'Awaiting a measured water frame';

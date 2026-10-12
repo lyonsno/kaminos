@@ -14401,6 +14401,7 @@ export async function createWebGPUFingerFluidSolver({
     requested:{...reflectionBudgetRequested},
     ...reflectionBudgetExecution({rendererMode:lastEffectiveRendererMode,opticalDebugMode:lastOpticalDebugMode,frameId:lastRenderFrameId},reflectionBudgetEncoded),
     rendererRoute:rendererRouteForMode(lastEffectiveRendererMode),executionAuthority:'completed-render-call'});
+  const getReflectionRayStats=()=>({...reflectionRayCounter.read(),current:{camera:lastCameraSnapshot,rendererMode:lastEffectiveRendererMode,opticalDebugMode:lastOpticalDebugMode,frameId:lastRenderFrameId}});
   let lastFrameCpuMs = 0;
   let lastRenderCpuMs = 0;
   let diagnosticsPending = false;
@@ -16581,7 +16582,7 @@ export async function createWebGPUFingerFluidSolver({
       renderRoute: rendererRouteForMode(lastEffectiveRendererMode),
       opticalDebugMode: lastOpticalDebugMode,
       reflectionBudget: getReflectionBudgetControls(),
-      reflectionRayStats: reflectionRayCounter.read(),
+      reflectionRayStats: getReflectionRayStats(),
       requestedOpticalLightingMode: lastRequestedOpticalLightingMode,
       effectiveOpticalLightingMode: lastEffectiveOpticalLightingMode,
       requestedOpticalLightingRoute: opticalLightingRouteForMode(lastRequestedOpticalLightingMode),
@@ -17175,7 +17176,7 @@ export async function createWebGPUFingerFluidSolver({
     getReflectionBudgetControls,
     setReflectionBudgetControls,
     requestReflectionRayStats:reflectionRayCounter.request,
-    getReflectionRayStats:reflectionRayCounter.read,
+    getReflectionRayStats,
     armSolverGpuTimestampCaptureForWitness,
     finishSolverGpuTimestampCaptureForWitness,
     armSolverStageGpuTimestampCaptureForWitness,
