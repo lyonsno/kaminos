@@ -2259,11 +2259,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Wind model</span>
       <select id="volume-wind-model" data-volume-settings-param="volume_wind_model" class="select-input">
+        <option value="off">Off</option>
         <option value="steady">Steady</option>
         <option value="gusty">Gusty</option>
       </select>
       <span class="slider-val" id="volume-wind-model-val">steady</span>
-      <span class="slider-help">Steady is the authored wind: one constant strength and angle, applied where there is smoke or heat. Gusty drives the same wind with a slow deterministic signal from the simulation clock (the gust period is simulated seconds under the uniform time step, so there it follows Speed; the legacy time step counts steps): strength breathes between (1 − gust) and (1 + gust) times the slider, never above the wind ceiling of 1.5 (the receipt says when it saturates), and the direction veers by up to the veer angle, over the gust period. No per-cell noise; saved basins are unchanged on Steady.</span>
+      <span class="slider-help">Off: no wind at all, whatever Wind Strength holds. Steady is the authored wind: one constant strength and angle, applied where there is smoke or heat. Gusty drives the same wind with a slow deterministic signal from the simulation clock (the gust period is simulated seconds under the uniform time step, so there it follows Speed; the legacy time step counts steps): strength breathes between (1 − gust) and (1 + gust) times the slider, never above the wind ceiling of 1.5 (the receipt says when it saturates), and the direction veers by up to the veer angle, over the gust period. No per-cell noise; saved basins are unchanged on Steady.</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Gust</span>
@@ -11336,7 +11337,9 @@ async function initScene() {
     Object.assign(window.__kaminosCompositionSetup, {status: 'failed', error: String(error?.message || error)});
     throw error;
   }
-  const requiresSharedDevice = compositionModule?.sharedGpuBufferRequirements !== undefined;
+  const hasCompositionBufferRequirements = compositionModule?.sharedGpuBufferRequirements !== undefined;
+  const hasCompositionDeviceAcquisition = compositionModule?.acquireSharedGpuDevice !== undefined;
+  const requiresSharedDevice = hasCompositionBufferRequirements || hasCompositionDeviceAcquisition;
   let generationAdapter=null,generationRequirements={};
   if(new URLSearchParams(location.hash.slice(1)).get('authoring')==='1'){
     generationAdapter=await navigator.gpu?.requestAdapter({powerPreference:'high-performance'});
@@ -11349,6 +11352,7 @@ async function initScene() {
     sharedGpu = await requestKaminosSharedWebGpuDevice({
       bufferRequirements: combinedRequirements,
       adapter:generationAdapter,
+      ...(hasCompositionDeviceAcquisition ? {acquireDevice: compositionModule.acquireSharedGpuDevice} : {}),
       // A mounted SAM host borrows the same device, so its kit requirements
       // (all adapter features and limits) compose into the one acquisition.
       hostRequirements: samHostConfig?.mounted ? samHostDeviceRequirements : null,
@@ -23020,7 +23024,7 @@ function refreshVolumeReadout() {
   document.getElementById('volume-immersed-source-state').textContent = !immersed || immersed.requested.sourceLaw !== 'immersed-source'
     ? 'off'
     : (immersed.effective.admitted
-      ? `requested ${immersed.effective.fluxRequested.toFixed(2)} · effective ${immersed.effective.fluxEffectivePredicted.toFixed(2)} cells³/step · ${immersed.effective.footprint.cells} cells${immersed.effective.clipPredicted.cells ? ` · CAP CLIPPING ${immersed.effective.clipPredicted.cells}` : ''}${immersed.effective.masked?.cells ? ` · masked ${(immersed.effective.masked.weightShare * 100).toFixed(0)}% (${immersed.effective.masked.cells} solid cells)` : ''} · aim ${immersed.requested.yaw.toFixed(0)}°/${immersed.requested.pitch.toFixed(0)}° · wall ${immersed.effective.backWall.requested ? `${s.sceneCollision?.emitterBackWallCells ?? 0} cells` : 'off'}`
+      ? `requested ${immersed.effective.fluxRequested.toFixed(2)} · effective ${immersed.effective.fluxEffectivePredicted.toFixed(2)} cells³/step · ${immersed.effective.footprint.cells} cells${immersed.effective.clipPredicted.cells ? ` · CAP CLIPPING ${immersed.effective.clipPredicted.cells}` : ''}${immersed.effective.masked?.cells ? ` · masked ${(immersed.effective.masked.weightShare * 100).toFixed(0)}% (${immersed.effective.masked.cells} solid cells)` : ''}${immersed.effective.pattern.kind !== 'shape' ? ` · pattern ${immersed.effective.pattern.kind}${immersed.effective.coverage?.coveredCells != null ? ` (${immersed.effective.coverage.coveredCells} map cells)` : ''}` : ''}${immersed.effective.inletDynamics.turbulence > 0 ? ` · turbulence ${immersed.effective.inletDynamics.turbulence.toFixed(2)} (field rms ${immersed.effective.inletDynamics.turbulenceRms.toFixed(2)}, supply ×${immersed.effective.turbulenceSupplyFactor.toFixed(3)}${immersed.effective.supplyPredictionAuthority === 'nominal-no-lattice-this-step' ? ', NOMINAL' : ''})` : ''}${immersed.effective.inletDynamics.puff > 0 ? ` · puff ×${immersed.effective.inletDynamics.puffFactor.toFixed(2)}` : ''} · aim ${immersed.requested.yaw.toFixed(0)}°/${immersed.requested.pitch.toFixed(0)}° · wall ${immersed.effective.backWall.requested ? `${s.sceneCollision?.emitterBackWallCells ?? 0} cells` : 'off'}`
       : `immersed — NOT ADMITTED (${immersed.effective.reason}); set Pressure solver to converged open top and Projection above 0`);
   document.getElementById('volume-inflow-boundary-state').textContent = !inflow
     ? 'off'

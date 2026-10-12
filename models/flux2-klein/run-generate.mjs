@@ -1,0 +1,100 @@
+// Batch text-to-image through generate.html in an independent Chrome for Testing.
+// Usage: node run-generate.mjs --chrome <exe> (--te <dir> --dit <dir> --vae <dir> | --weights-url <base> | --weights-dir <dir>)
+//        --prompts <dir of .txt> --out <dir> [--seed-base 7000] [--size 512] [--only name,name]
+// Prompt files are taken in sorted order; seed = seed-base + 1-based index. Writes <name>.png and report.json.
+import fsp from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { startServer, launchChrome, sourceIdentity } from './cdp-harness.mjs';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const args = process.argv.slice(2);
+const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
+const outDir = path.resolve(opt('--out'));
+const report = { schema: 'kaminos.flux2-klein.generate-run.v0', host: os.hostname(), startedAt: new Date().toISOString(), source: sourceIdentity(here), phase: 'setup',
+  roots: opt('--te') ? { te: path.resolve(opt('--te')), dit: path.resolve(opt('--dit')), vae: path.resolve(opt('--vae')) } : null };
+let browser, server, weightServer;
+async function finish(code) {
+  await browser?.close(); server?.close(); weightServer?.close();
+  report.finishedAt = new Date().toISOString();
+  await fsp.mkdir(outDir, { recursive: true });
+  await fsp.writeFile(path.join(outDir, 'report.json'), JSON.stringify(report, null, 2));
+  process.exit(code);
+}
+try {
+  const promptDir = path.resolve(opt('--prompts'));
+  const only = opt('--only') ? opt('--only').split(',') : null;
+  const files = (await fsp.readdir(promptDir)).filter(f => f.endsWith('.txt')).sort();
+  const seedBase = Number(opt('--seed-base', '7000')), size = Number(opt('--size', '512'));
+  const jobs = [];
+  for (const [i, f] of files.entries()) {
+    const name = f.replace(/\.txt$/, '');
+    if (only && !only.includes(name)) continue;
+    jobs.push({ name, prompt: (await fsp.readFile(path.join(promptDir, f), 'utf8')).trim(), seed: seedBase + i + 1, size });
+  }
+  report.jobs = jobs.map(({ name, seed, size: s, prompt }) => ({ name, seed, size: s, prompt }));
+  // Weights from one base URL (--weights-url, e.g. a Hugging Face resolve URL), or --weights-dir served from a
+  // second, CORS-enabled origin; otherwise --te/--dit/--vae served beside the page.
+  if (opt('--weights-dir')) {
+    report.weightsDir = path.resolve(opt('--weights-dir'));
+    const s = await startServer({ '/': report.weightsDir }, 0, { cors: true });
+    weightServer = s.server; report.weightsUrl = s.origin;
+  } else if (opt('--weights-url')) report.weightsUrl = opt('--weights-url');
+  const pageRoots = report.roots ? { '/te/': report.roots.te, '/dit/': report.roots.dit, '/vae/': report.roots.vae } : {};
+  if (opt('--origin')) report.origin = opt('--origin');
+  else ({ server } = await startServer({ ...pageRoots,
+    '/webgpu-inference-kit/': path.resolve(opt('--kit', path.join(here, '../../webgpu-inference-kit'))), '/': here }).then(s => { report.origin = s.origin; return s; }));
+  const weightQuery = report.weightsUrl ? `weights=${encodeURIComponent(report.weightsUrl)}` : 'te=/te&dit=/dit&vae=/vae';
+  browser = await launchChrome(opt('--chrome'), [], report);
+  report.phase = 'load';
+  const kq = `&gemm=${opt('--gemm-version', '2')}&shared=${opt('--shared-type', 'f16')}`;
+  report.requestedKernels = { gemmVersion: Number(opt('--gemm-version', '2')), sharedType: opt('--shared-type', 'f16') };
+  // --loads N reloads the page N times in one browser profile (cache-hit evidence); the batch runs on the last load.
+  report.loads = [];
+  for (let n = 0; n < Number(opt('--loads', '1')); n++) {
+    await browser.navigate(`${report.origin}/generate.html?${weightQuery}${kq}`, 'window.kleinPageReady === true');
+    await browser.evaluate('window.kleinReady');
+    report.loads.push(await browser.evaluate('({ loadMs: window.kleinLoadMs?.(), stats: window.kleinLoadStats?.() })'));
+  }
+  report.phase = 'generate';
+  const batchOptions = { cooperative: !args.includes('--blocking'), targetDutyMs: Number(opt('--target-duty-ms', '12')), maxInFlight: Number(opt('--max-in-flight', '1')),
+    textLength: /^fit/.test(opt('--text-length', '512')) ? opt('--text-length') : Number(opt('--text-length', '512')) };
+  report.batchOptions = batchOptions;
+  // One job per call, each PNG written as it arrives, and a wait that fails (with the page's status and
+  // any unfinished fetches) when the status line stops changing, instead of hanging on a wedged batch.
+  await fsp.mkdir(outDir, { recursive: true });
+  report.results = [];
+  const stallMs = Number(opt('--stall-ms', String(5 * 60e3)));
+  for (const job of jobs) {
+    const res = await evaluateWatched(`window.kleinBatch(${JSON.stringify([job])}, ${JSON.stringify(batchOptions)})`, job.name, stallMs);
+    const r = res.results[0];
+    await fsp.writeFile(path.join(outDir, `${r.name}.png`), Buffer.from(r.png, 'base64')); delete r.png;
+    report.results.push(r);
+    Object.assign(report, { residentBytes: res.residentBytes, loadMs: res.loadMs, effectiveKernels: res.kernels, loadStats: res.loadStats });
+    await fsp.writeFile(path.join(outDir, 'report.json'), JSON.stringify(report, null, 2));
+  }
+  report.phase = 'done';
+  await finish(0);
+} catch (e) {
+  report.error = String(e?.stack || e);
+  await finish(1);
+}
+
+async function evaluateWatched(expression, label, stallMs) {
+  let settled = false;
+  const result = browser.evaluate(expression).finally(() => { settled = true; });
+  let last = null, lastChange = Date.now();
+  while (!settled) {
+    await Promise.race([result.catch(() => {}), new Promise(r => setTimeout(r, 2000))]);
+    if (settled) break;
+    const status = await browser.evaluate(`document.getElementById('status').textContent`, false).catch(() => null);
+    if (status !== last) { last = status; lastChange = Date.now(); }
+    if (Date.now() - lastChange > stallMs) {
+      report.stall = { job: label, status, pageTimeMs: await browser.evaluate('Math.round(performance.now())', false).catch(() => null),
+        lastResources: await browser.evaluate(`performance.getEntriesByType('resource').slice(-5).map(e => [e.name, Math.round(e.startTime), Math.round(e.responseEnd)])`, false).catch(() => null) };
+      throw new Error(`${label}: no progress for ${Math.round(stallMs / 1000)} s; last status: ${status}`);
+    }
+  }
+  return result;
+}

@@ -76,6 +76,7 @@ The same runtime supports several kinds of model:
 | [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Skeletal motion from a text prompt | Browser diffusion and motion decoding with rendering opportunities between transformer passes |
 | [SAM 3](webgpu-inference-kit/docs/sam-semantic-demo.md) | Visible instance masks from an image and text prompt | Complete browser WebGPU route, 3.32 GB persistent model package, cached image features, queued prompts, and same-device foreground submissions |
 | [TRELLIS 2](models/trellis2/README.md) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and GPU sharing with the application renderer |
+| [FLUX.2 [klein] 4B](models/flux2-klein/README.md) | Images from a text prompt ([try it in your browser](https://lyonsno.github.io/kaminos/inference-kit/klein/)) | Text encoder, 4-step transformer and image decoder in the browser, with cached int4 weights and throughput-sized command duties that leave room for rendering |
 
 TRELLIS 2 turns an image into a textured 3D mesh. Its neural networks run on
 WebGPU, with 512-resolution previews and a higher-detail 1024-resolution mode.

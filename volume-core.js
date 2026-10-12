@@ -1,5 +1,5 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
-import { buildInflowCoverageMap, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
+import { buildInflowCoverageMap, normalizeInflowApertureSpec, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
 import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
 import {
   detailForceContributionMask,
@@ -1388,7 +1388,14 @@ export async function requestKaminosSharedWebGpuDevice({
   bufferRequirements = {},
   hostRequirements = null,
   adapter: suppliedAdapter = null,
+  acquireDevice,
 } = {}) {
+  // Hosts may install allocation accounting at acquisition, before Three or
+  // the volume can allocate. The caller owns that policy; device requirements
+  // and effective-capability validation stay here. Never bypass a refusal.
+  if (acquireDevice !== undefined && typeof acquireDevice !== 'function') {
+    throw new TypeError('shared-device acquireDevice must be a function');
+  }
   const gpu = globalThis.navigator?.gpu;
   if (!suppliedAdapter && !gpu) throw new Error('WebGPU unavailable');
   const adapter = suppliedAdapter || await gpu.requestAdapter({
@@ -1480,10 +1487,13 @@ export async function requestKaminosSharedWebGpuDevice({
     if (!adapter.features?.has?.(feature)) throw new Error(`WebGPU adapter feature ${feature} is unavailable`);
   }
   const requiredFeatures = [...features].sort();
-  const device = await adapter.requestDevice({
+  const descriptor = {
     requiredLimits,
     ...(requiredFeatures.length ? { requiredFeatures } : {}),
-  });
+  };
+  const device = await (acquireDevice
+    ? acquireDevice(adapter, descriptor)
+    : adapter.requestDevice(descriptor));
   for (const [name, required] of Object.entries(requiredLimits)) {
     const effective = Number(device.limits?.[name]);
     const satisfied = Number.isFinite(effective) && (name.startsWith('min') ? effective <= required : effective >= required);
@@ -2076,7 +2086,7 @@ export const HEAT_RELEASE_UNIFORM_FLOATS = 4;
 export const VELOCITY_STAGGERING_UNIFORM_OFFSET = HEAT_RELEASE_UNIFORM_OFFSET + HEAT_RELEASE_UNIFORM_FLOATS;
 export const VELOCITY_STAGGERING_UNIFORM_FLOATS = 4;
 export const IMMERSED_SOURCE_UNIFORM_OFFSET = VELOCITY_STAGGERING_UNIFORM_OFFSET + VELOCITY_STAGGERING_UNIFORM_FLOATS;
-export const IMMERSED_SOURCE_UNIFORM_FLOATS = 16;
+export const IMMERSED_SOURCE_UNIFORM_FLOATS = 24;
 export const VOLUME_UNIFORM_FLOATS = IMMERSED_SOURCE_UNIFORM_OFFSET + IMMERSED_SOURCE_UNIFORM_FLOATS;
 
 // The aperture pattern (slice 2): which coverage pattern the floor map is built
@@ -2207,7 +2217,7 @@ export function inflowGhostVelocityModel({ position, center = [0, 0], inletVeloc
 // and the shader is unchanged: strength = base x (1 + gust x s1), angle =
 // base + veer x s2.
 export const WIND_MODEL_IDENTITY = 'kaminos.volume.wind-model.v1';
-export const WIND_MODELS = Object.freeze(['steady', 'gusty']);
+export const WIND_MODELS = Object.freeze(['off', 'steady', 'gusty']);
 export const WIND_GUST_STEPS_PER_SECOND = 60;
 // The shader clamps the wind strength uniform to this ceiling (predictor and
 // main kernel); the effective receipt never claims more than the shader uses.
@@ -2272,6 +2282,11 @@ export function resolveWindConfig(controls = {}, gustSignal = { s1: 0, s2: 0, st
   const gust = clampFinite(controls.windGust, 0, 1, 0.6);
   const period = clampFinite(controls.windGustPeriod, 2, 30, 8);
   const veer = clampFinite(controls.windGustVeer, 0, 60, 25);
+  // Off is a model: no wind at all, whatever the strength slider holds (the
+  // request keeps the slider so turning the model back on restores it).
+  if (model === 'off') {
+    return { identity: WIND_MODEL_IDENTITY, requested: { model: requestedModel, ...base, gust, period, veer }, effective: { model: 'off', ...base, strength: 0, unsaturatedStrength: 0, saturated: false, gust: 0, period, veer, signal: [0, 0], step: Number.isFinite(gustSignal?.step) ? gustSignal.step : null } };
+  }
   if (model !== 'gusty') {
     return { identity: WIND_MODEL_IDENTITY, requested: { model: requestedModel, ...base, gust, period, veer }, effective: { model: 'steady', ...base, unsaturatedStrength: base.strength, saturated: false, gust: 0, period, veer: 0, signal: [0, 0], step: null } };
   }
@@ -2399,25 +2414,94 @@ export function faceForceFoldModel({ solid = false, transported, localIncrement,
 // Source Law select; the floor law and the legacy laws are untouched.
 export const IMMERSED_SOURCE_IDENTITY = 'kaminos.volume.immersed-source.v1';
 export const IMMERSED_SOURCE_LAW = 'immersed-source';
-function immersedDirectionFromAngles(yawDeg, pitchDeg) {
+export function immersedDirectionFromAngles(yawDeg, pitchDeg) {
   const yaw = yawDeg * Math.PI / 180, pitch = pitchDeg * Math.PI / 180;
   return [Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw)];
 }
 // CPU mirror of the shader's immersedSourceWeight over the cells that can be
 // inside the slab: an antialiased indicator of |along| ≤ t/2 and radial ≤ r,
 // in cell units, cell centres at integer + 0.5.
+// Slab-local basis (slab inlet dynamics, report §33): e1 and e2 span the disc
+// plane; a disc facing up has u along +x and v along +z so the floor coverage
+// map and lattice read in their own orientation. e2 = e1 × n, as the shader forms it.
+// Anchored on the aim's yaw so it is orthonormal and continuous at every
+// pitch, upright included (confirmation SID-02: a near-upright fallback to +x
+// was not orthogonal and the kernel's unnormalised cross disagreed with the
+// CPU). The horizontal perpendicular to the yaw direction, t = (−sin yaw, 0,
+// cos yaw), is orthogonal to n = (cos p cos y, sin p, cos p sin y) for every
+// pitch; e1 = n × t, e2 = e1 × n = t. Upright, yaw 0: u along +x, v along +z.
+export function immersedSlabBasis(n, yawDeg) {
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+  const horizontal = Math.hypot(n[0], n[2]);
+  const yaw = Number.isFinite(yawDeg) ? yawDeg * Math.PI / 180 : (horizontal > 1e-12 ? Math.atan2(n[2], n[0]) : 0);
+  const t = [-Math.sin(yaw), 0, Math.cos(yaw)];
+  // Guard a direction that is not exactly the yaw's own (callers passing a
+  // free vector): project t off n before forming the frame.
+  const tn = t[0] * n[0] + t[1] * n[1] + t[2] * n[2];
+  const tp = norm([t[0] - tn * n[0], t[1] - tn * n[1], t[2] - tn * n[2]]);
+  const e1 = norm(cross(n, tp));
+  return { e1, e2: norm(cross(e1, n)) };
+}
+// The slab-local integer cell of the coverage map and the lattice for an
+// offset d (cells) from the disc centre: the one lookup both the kernel and
+// the CPU mirror make.
+export function immersedSlabLookup(d, basis, grid) {
+  const u = d[0] * basis.e1[0] + d[1] * basis.e1[1] + d[2] * basis.e1[2];
+  const v = d[0] * basis.e2[0] + d[1] * basis.e2[1] + d[2] * basis.e2[2];
+  const ix = Math.min(grid - 1, Math.max(0, Math.floor(grid * 0.5 + u)));
+  const iz = Math.min(grid - 1, Math.max(0, Math.floor(grid * 0.5 + v)));
+  return { ix, iz, index: iz * grid + ix };
+}
+// The slab's pattern as a floor-map spec in slab-local units (normalised: the
+// slab radius r in units of the half grid). 'shape' means the plain disc and
+// builds no map. Jets ride a ring at 0.62 r with a band of 0.22 r × line
+// weight (inside the disc); slot and bed reach the full radius.
+export function immersedPatternSpec(effective) {
+  const pattern = effective?.pattern;
+  if (!pattern || pattern.kind === 'shape') return null;
+  const r = effective.radiusCells * 2 / effective.grid;
+  return {
+    kind: 'annulus', pattern: pattern.kind, center: [0, 0],
+    ringRadius: pattern.kind === 'jets' ? 0.62 * r : r,
+    bandHalfWidth: 0.22 * r, lineWeight: pattern.lineWeight, jetJitter: pattern.jetJitter,
+    count: pattern.count, ratio: pattern.ratio, seed: pattern.seed, antialias: 2 / effective.grid,
+  };
+}
+const immersedCoverageCache = new Map();
+export function immersedCoverageSignatureFor(config) {
+  const e = config?.effective;
+  if (!e?.admitted || !e.pattern || e.pattern.kind === 'shape') return '';
+  return JSON.stringify([e.grid, Number(e.radiusCells.toFixed(4)), e.pattern]);
+}
+export function immersedCoverageMapForConfig(config, options = {}) {
+  const e = config?.effective;
+  const spec = e?.admitted ? immersedPatternSpec(e) : null;
+  if (!spec) return null;
+  const key = immersedCoverageSignatureFor(config) + `|${options.supersample ?? 4}`;
+  if (!immersedCoverageCache.has(key)) {
+    if (immersedCoverageCache.size > 16) immersedCoverageCache.clear();
+    immersedCoverageCache.set(key, buildInflowCoverageMap({ grid: e.grid, supersample: options.supersample ?? 4, spec }));
+  }
+  return immersedCoverageCache.get(key);
+}
 export function immersedSourceWeights(effective, { grid, gridHeight }) {
   const c = effective.centreCells, n = effective.direction, r = effective.radiusCells, h = effective.thickness / 2;
   const reach = Math.ceil(Math.max(r, h) + 1.5);
   const cells = []; let sum = 0;
   const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  // The pattern, if any, multiplies the slab indicator through the slab-local
+  // cell of the coverage map (the same lookup the kernel makes).
+  const map = immersedCoverageMapForConfig({ effective: { ...effective, admitted: true } });
+  const basis = effective.basis ?? immersedSlabBasis(n);
+  const coverageAt = d => (map ? map.cells[immersedSlabLookup(d, basis, grid).index] : 1);
   for (let z = Math.max(0, Math.floor(c[2] - reach)); z <= Math.min(grid - 1, Math.ceil(c[2] + reach)); z += 1)
     for (let y = Math.max(0, Math.floor(c[1] - reach)); y <= Math.min(gridHeight - 1, Math.ceil(c[1] + reach)); y += 1)
       for (let x = Math.max(0, Math.floor(c[0] - reach)); x <= Math.min(grid - 1, Math.ceil(c[0] + reach)); x += 1) {
         const d = [x + 0.5 - c[0], y + 0.5 - c[1], z + 0.5 - c[2]];
         const along = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
         const radial = Math.hypot(d[0] - along * n[0], d[1] - along * n[1], d[2] - along * n[2]);
-        const w = smooth(h + 0.5, h - 0.5, Math.abs(along)) * smooth(r + 0.5, r - 0.5, radial);
+        const w = smooth(h + 0.5, h - 0.5, Math.abs(along)) * smooth(r + 0.5, r - 0.5, radial) * coverageAt(d);
         if (w > 0) { cells.push({ x, y, z, w }); sum += w; }
       }
   return { cells, sum };
@@ -2488,8 +2572,15 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const momentumGain = clampFinite(controls.immersedMomentumGain, 0, 2, 1);
   const capFraction = clampFinite(controls.immersedCapFraction, 0.1, 1, 0.5);
   const backWallRequested = clampFinite(controls.immersedBackWall, 0, 1, 0) >= 0.5;
-  const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness, speed, fuel, temperature, momentumGain, capFraction, puffFactor, backWall: backWallRequested };
-  const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, masked: { cells: 0, weight: 0, weightShare: 0 }, puffFactor } });
+  // Slab inlet dynamics (report §33): the floor law's pattern, turbulence and
+  // puff controls read on the slab too. The pattern spec is normalised the
+  // way the floor map normalises it (retired patterns fall back to the shape).
+  const patternRequested = resolveInflowAperturePattern(controls);
+  const patternNormalised = normalizeInflowApertureSpec({ kind: 'disc', pattern: patternRequested.kind, lineWeight: patternRequested.lineWeight, jetJitter: patternRequested.jetJitter, count: patternRequested.count, ratio: patternRequested.ratio, seed: patternRequested.seed });
+  const pattern = { kind: patternNormalised.pattern, count: patternNormalised.count, ratio: patternNormalised.ratio, seed: patternNormalised.seed, lineWeight: patternNormalised.lineWeight, jetJitter: patternNormalised.jetJitter, patternFallback: patternNormalised.patternFallback };
+  const inletDynamics = resolveInletDynamicsConfig(controls, options.inletSignals ?? {}).effective;
+  const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness, speed, fuel, temperature, momentumGain, capFraction, puffFactor, backWall: backWallRequested, pattern: patternRequested, inletDynamics: { turbulence: inletDynamics.turbulence, turbulenceScaleCells: inletDynamics.turbulenceScaleCells, puff: inletDynamics.puff, puffPeriod: inletDynamics.puffPeriod } };
+  const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], basis: { e1: [1, 0, 0], e2: [0, 0, 1] }, radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, masked: { cells: 0, weight: 0, weightShare: 0 }, puffFactor, pattern, inletDynamics: { ...inletDynamics, turbulence: 0, turbulenceRms: 0, puff: 0, puffSignal: 0, puffFactor: 1, active: false } } });
   if (sourceLaw !== IMMERSED_SOURCE_LAW) return off('source-law-is-not-immersed-source');
   if (controls.immersedSourceEnabled === false) return off('source-disabled');
   if (pressure.solver !== PRESSURE_SOLVER_CONVERGED) return off('immersed-source-requires-converged-pressure-solver');
@@ -2505,7 +2596,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   // A cell cannot create more volume per step than its faces can carry out:
   // the cap is a fraction of one stored-velocity unit per step. Reported, never silent.
   const capPerCell = capFraction;
-  const effective = { admitted: true, reason: null, grid, centreCells, direction, radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS } };
+  const effective = { admitted: true, reason: null, grid, centreCells, direction, basis: immersedSlabBasis(direction, yaw), radiusCells, thickness, speed, fuel, temperature, momentumGain, capPerCell, fluxRequested, puffFactor, backWall: { requested: backWallRequested, thicknessCells: IMMERSED_BACK_WALL_CELLS }, pattern, inletDynamics };
   // The normaliser is the discrete weight sum over the cells the kernel will
   // actually write (the scene-solid mask skips its cells before the target), so
   // Σ target over fluid cells = Q exactly on this grid; the analytic slab volume
@@ -2523,9 +2614,31 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   effective.normaliser = Math.max(1e-6, fluidSum);
   effective.analyticVolume = Math.PI * radiusCells * radiusCells * thickness;
   const normaliser = effective.normaliser;
-  let clipped = 0, fluxEffective = 0;
-  for (const cell of fluid) { const target = fluxRequested * cell.w / normaliser; if (target > capPerCell) clipped += 1; fluxEffective += Math.min(capPerCell, target); }
+  // The predicted supply follows the kernel's target law, this step's
+  // lattice included (review SID-01): target = min(cap, w × (1 + a × lattice)
+  // × Q/Σw). The normaliser stays unmodulated (the floor law's reading), so
+  // the modulated total is Q × (1 + a × weighted mean of the lattice over the
+  // slab), not Q; the receipt names both. Without a field this step the
+  // prediction is nominal and says so.
+  const amplitude = inletDynamics.turbulence;
+  const field = amplitude > 0 ? options.inletSignals?.turbulence?.field ?? null : null;
+  const basis = effective.basis;
+  let clipped = 0, fluxEffective = 0, modulatedWeight = 0;
+  for (const cell of fluid) {
+    let m = 1;
+    if (field) {
+      const d = [cell.x + 0.5 - centreCells[0], cell.y + 0.5 - centreCells[1], cell.z + 0.5 - centreCells[2]];
+      m = Math.max(0, 1 + amplitude * (field[immersedSlabLookup(d, basis, grid).index] ?? 0));
+    }
+    modulatedWeight += cell.w * m;
+    const target = fluxRequested * cell.w * m / normaliser;
+    if (target > capPerCell) clipped += 1;
+    fluxEffective += Math.min(capPerCell, target);
+  }
+  effective.fluxNominal = fluxRequested;
   effective.fluxEffectivePredicted = fluxEffective;
+  effective.turbulenceSupplyFactor = fluidSum > 0 ? modulatedWeight / fluidSum : 1;
+  effective.supplyPredictionAuthority = amplitude > 0 ? (field ? 'step-locked-lattice' : 'nominal-no-lattice-this-step') : 'exact-static';
   effective.clipPredicted = { cells: clipped, of: fluid.length };
   effective.footprint = { cells: fluid.length, weightSum: fluidSum };
   effective.masked = { cells: maskedCells, weight: maskedWeight, weightShare: weights.sum > 0 ? maskedWeight / weights.sum : 0 };
@@ -2539,6 +2652,8 @@ export function immersedSourceUniformValues(config) {
     e.direction[0], e.direction[1], e.direction[2], e.radiusCells,
     e.thickness, e.speed, e.fuel, e.temperature,
     e.momentumGain, e.capPerCell, e.fluxRequested / e.normaliser, 0,
+    e.basis.e1[0], e.basis.e1[1], e.basis.e1[2], e.inletDynamics?.turbulence ?? 0,
+    e.pattern && e.pattern.kind !== 'shape' ? 1 : 0, 0, 0, 0,
   ];
 }
 // CPU model of the immersed momentum relaxation as the kernel completes it
@@ -3298,6 +3413,62 @@ function normalizeExternalEmitters(payload = {}, nowMs = externalEmitterNowMs())
   };
 }
 
+// Passive material law (emitter report §30; the return to Sexy Fireman's
+// outer grid). The fine kernel's plain cooling of the two transported
+// scalars it shares with any outer consumer: heat survives
+// heatSurvivalPerStep^dt, smoke survives smokeSurvivalPerStep^dt, and smoke
+// is born from cooling heat at heatToSmokeConversion per step. These are the
+// material; the bonfire / tall-plume / canonical scene shaping and the fine
+// box's wall and ceiling fades are authored fine-only terms and are not part
+// of it. Height frame: the fine kernel's normalised y (−1 at the fine floor,
+// +1 one fine edge above it, 3 at the top of the tall grid); the upper-air
+// term saturates at 1 above y = 0.72, so outside and above the fine box the
+// law no longer depends on height. The kernel compiles its own
+// heatToSmokeConversion from this block, so producer and consumer cannot
+// drift apart.
+export const PASSIVE_MATERIAL_LAW = Object.freeze({
+  identity: 'kaminos.volume.passive-material-law.v1',
+  heatSurvivalPerStep: 0.982,
+  smokeSurvivalPerStep: 0.990,
+  heatToSmoke: Object.freeze({ coolingBandRise: [0.16, 1.05], coolingBandFall: [1.18, 1.85], upperAir: [-0.55, 0.72], rate: 0.064, fuelGate: [0.06, 0.86], fuelRate: 0.072 }),
+  heightFrame: 'fine-normalised: -1 at the fine floor, +1 one fine edge above it; upper-air saturates at 1 above y = 0.72, so outside and above the fine box the law is height-independent',
+});
+const passiveSmoothstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+// Smoke born per step from heat at fine-normalised height yFine; fuel is the
+// fine-only term (no fuel is transferred outside, so an outer consumer passes 0).
+export function passiveHeatToSmokeRate(heat, yFine, fuel = 0) {
+  const h = PASSIVE_MATERIAL_LAW.heatToSmoke;
+  const coolingBand = passiveSmoothstep(h.coolingBandRise[0], h.coolingBandRise[1], heat) * (1 - passiveSmoothstep(h.coolingBandFall[0], h.coolingBandFall[1], heat));
+  const upperAir = passiveSmoothstep(h.upperAir[0], h.upperAir[1], yFine);
+  return coolingBand * upperAir * h.rate + fuel * passiveSmoothstep(h.fuelGate[0], h.fuelGate[1], heat) * h.fuelRate;
+}
+// Survival of heat and smoke over a step of dt reference steps (rate^dt, the
+// uniform-step law; legacy is dt = 1).
+export function passiveMaterialSurvival(dt = 1) {
+  return { heat: Math.pow(PASSIVE_MATERIAL_LAW.heatSurvivalPerStep, dt), smoke: Math.pow(PASSIVE_MATERIAL_LAW.smokeSurvivalPerStep, dt) };
+}
+// World height → the fine kernel's normalised height, given where the fine
+// box's floor sits in world units and the world length of one fine edge.
+export function fineNormalisedHeight(yWorld, { fineFloorWorld, fineEdgeWorld }) {
+  return -1 + 2 * (yWorld - fineFloorWorld) / fineEdgeWorld;
+}
+const passiveWgslNumber = v => (Number.isInteger(v) ? `${v}.0` : `${v}`);
+export const PASSIVE_MATERIAL_WGSL = (() => {
+  const h = PASSIVE_MATERIAL_LAW.heatToSmoke, n = passiveWgslNumber;
+  return `// Passive material law (shared with any outer consumer; see PASSIVE_MATERIAL_LAW).
+fn heatToSmokeConversion(heat: f32, fuel: f32, y: f32) -> f32 {
+  let coolingBand = smoothstep(${n(h.coolingBandRise[0])}, ${n(h.coolingBandRise[1])}, heat) * (1.0 - smoothstep(${n(h.coolingBandFall[0])}, ${n(h.coolingBandFall[1])}, heat));
+  let upperAir = smoothstep(${n(h.upperAir[0])}, ${n(h.upperAir[1])}, y);
+  let fuelSmoke = fuel * smoothstep(${n(h.fuelGate[0])}, ${n(h.fuelGate[1])}, heat) * ${n(h.fuelRate)};
+  return coolingBand * upperAir * ${n(h.rate)} + fuelSmoke;
+}
+// The fuel-free outer form: yFine is the fine-normalised height of the cell.
+fn passiveHeatToSmokeRate(heat: f32, yFine: f32) -> f32 {
+  return heatToSmokeConversion(heat, 0.0, yFine);
+}
+`;
+})();
+
 const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
 override GRID_Y: u32 = 128u;
@@ -3402,6 +3573,10 @@ struct Uniforms {
   immersed_source_b: vec4<f32>,
   immersed_source_c: vec4<f32>,
   immersed_source_d: vec4<f32>,
+  // e = slab basis e1 (cells), inlet turbulence amplitude; f = pattern on
+  // (the coverage map holds the slab's pattern), unused ×3.
+  immersed_source_e: vec4<f32>,
+  immersed_source_f: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -4469,6 +4644,25 @@ fn immersedSourceWeight(cellCenter: vec3<f32>) -> f32 {
   return (1.0 - smoothstep(halfThickness - 0.5, halfThickness + 0.5, abs(along))) * (1.0 - smoothstep(radius - 0.5, radius + 0.5, radial));
 }
 
+// The slab's pattern and inlet turbulence (slab inlet dynamics, report §33):
+// the slab-local cell (u, v) of the disc plane indexes the floor coverage map
+// (built for the slab's pattern, centred at GRID/2) and the inlet turbulence
+// lattice, exactly as the CPU mirror indexes them. slabWeight is the plain
+// disc indicator; the pattern can only remove, the turbulence modulates.
+fn immersedPatternedWeight(cellCenter: vec3<f32>, slabWeight: f32) -> f32 {
+  if (slabWeight <= 0.0) { return 0.0; }
+  let d = cellCenter - u.immersed_source_a.yzw;
+  let n = immersedDirection();
+  let e1 = u.immersed_source_e.xyz;
+  let e2 = normalize(cross(e1, n));
+  let slabCell = vec2<i32>(clamp(i32(floor(f32(GRID) * 0.5 + dot(d, e1))), 0, i32(GRID) - 1), clamp(i32(floor(f32(GRID) * 0.5 + dot(d, e2))), 0, i32(GRID) - 1));
+  var coverage = 1.0;
+  if (u.immersed_source_f.x > 0.5) { coverage = textureLoad(inflowCoverage, slabCell, 0).x; }
+  var perturbation = 0.0;
+  if (u.immersed_source_e.w > 0.0) { perturbation = textureLoad(inflowPerturbation, slabCell, 0).x; }
+  return slabWeight * coverage * max(0.0, 1.0 + u.immersed_source_e.w * perturbation);
+}
+
 fn blockedSceneFaceFluxAtCell(c: vec3<i32>) -> vec2<f32> {
   if (!sceneSolidEnabled()) { return vec2<f32>(0.0); }
   let solidHere = sceneSolidAt(c);
@@ -5409,12 +5603,7 @@ fn thermalExpansionForce(c: vec3<i32>, heat: f32, amount: f32) -> vec3<f32> {
   return -grad * smoothstep(0.08, 1.35, heat) * amount;
 }
 
-fn heatToSmokeConversion(heat: f32, fuel: f32, y: f32) -> f32 {
-  let coolingBand = smoothstep(0.16, 1.05, heat) * (1.0 - smoothstep(1.18, 1.85, heat));
-  let upperAir = smoothstep(-0.55, 0.72, y);
-  let fuelSmoke = fuel * smoothstep(0.06, 0.86, heat) * 0.072;
-  return coolingBand * upperAir * 0.064 + fuelSmoke;
-}
+${PASSIVE_MATERIAL_WGSL}
 
 fn fireLayerAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, fireLayerRiseDirection: f32) -> vec4<f32> {
   let fastLift = vec3<f32>(0.0, clamp(heat, 0.0, 1.9) * (0.40 + speed * 0.13) * fireLayerRiseDirection, 0.0);
@@ -5853,7 +6042,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let prev = fluidSrc[base];
   // Immersed source: one weight, one capped target; momentum and scalar entry
   // below derive from the same two numbers (report section 31).
-  let immersedWeight = immersedSourceWeight(cell);
+  let immersedSlabWeight = immersedSourceWeight(cell);
+  let immersedWeight = immersedPatternedWeight(cell, immersedSlabWeight);
   let immersedTarget = min(u.immersed_source_d.y, immersedWeight * u.immersed_source_d.z);
   let requestedSpeed = u.fire_smoke_curl_speed.w;
   let speed = dynamicsSpeed();
@@ -7170,7 +7360,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let floorExempt = select(0.0, inflowApertureWeight(cellI), p.y < -0.8);
   let verticalWall = max(mix(-p.y, -1.0, floorExempt), p.y - expandedTopY + 1.0);
   let wall = max(max(abs(p.x), verticalWall), abs(p.z));
-  let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);
+  // The immersed slab is a source wherever it sits (floor, side, or in the
+  // open): the sponge leaves it alone, as it leaves the inflow aperture.
+  let wallFade = max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSlabWeight, 0.0, 1.0));
   let smokeTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.66, 0.84, plumeHeight01)), expandedTopY - 0.005, p.y);
   let legacyHeatTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.42, 0.62, plumeHeight01)), expandedTopY - 0.040, p.y);
   let tallPlumeHeatTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.62, 0.84, plumeHeight01)), expandedTopY - 0.010, p.y);
@@ -15379,7 +15571,7 @@ export function createKaminosVolumePrototype({
     };
     if (inletDynamicsRequested.turbulence > 0 && inletPerturbationField && inflowPerturbationTexture) {
       device.queue.writeTexture({ texture: inflowPerturbationTexture }, inletPerturbationField.sampleAt({ step: inletStep, tauSteps: inletDynamicsTauSteps(controlsSnapshot, INLET_TURBULENCE_CORRELATION_SECONDS), scaleCells: inletDynamicsRequested.turbulenceScaleCells }), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
-      inletSignals.turbulence = { rms: inletPerturbationField.rms };
+      inletSignals.turbulence = { rms: inletPerturbationField.rms, field: inletPerturbationField.cells };
     }
     const inflowBoundaryConfig = resolveInflowBoundaryConfig(controlsSnapshot, analyticEmitterDescriptor, { grid: gridSize, inletSignals });
     uniforms.set(inflowBoundaryUniformValues(inflowBoundaryConfig), INFLOW_UNIFORM_OFFSET);
@@ -15396,9 +15588,9 @@ export function createKaminosVolumePrototype({
     // normalised against the mask the kernel will actually dispatch on. The
     // refresh in encodeSim is a no-op by key after this.
     const immersedPuffFactor = inflowBoundaryConfig.requested?.inletDynamics?.puffFactor ?? resolveInletDynamicsConfig(controlsSnapshot, inletSignals).effective.puffFactor;
-    state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, weightCache: immersedSourceWeightCache });
+    state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, weightCache: immersedSourceWeightCache });
     refreshSceneCollision();
-    const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, solidCells: sceneSolidCellsCpu, weightCache: immersedSourceWeightCache });
+    const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu, weightCache: immersedSourceWeightCache });
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
     state.immersedSourceWeightBuilds = immersedSourceWeightCache.builds;
@@ -15410,6 +15602,19 @@ export function createKaminosVolumePrototype({
         inflowCoverageSignature = coverageSignature;
       }
       state.inflowBoundary.effective.coverage = { pattern: inflowCoverageMap.pattern, patternFallback: inflowCoverageMap.patternFallback, coveredCells: inflowCoverageMap.coveredCells, totalCoverage: inflowCoverageMap.totalCoverage, peak: inflowCoverageMap.peak };
+    } else if (immersedSourceConfig.effective.admitted && inflowCoverageTexture) {
+      const coverageSignature = immersedCoverageSignatureFor(immersedSourceConfig);
+      // The floor law is inactive under the immersed law, so the coverage
+      // texture holds the slab's pattern (empty signature: plain disc, no map).
+      if (coverageSignature !== inflowCoverageSignature) {
+        inflowCoverageMap = immersedCoverageMapForConfig(immersedSourceConfig);
+        if (inflowCoverageMap) device.queue.writeTexture({ texture: inflowCoverageTexture }, inflowCoverageMap.cells, { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
+        inflowCoverageSignature = coverageSignature;
+      }
+      state.immersedSource.effective.coverage = {
+        pattern: inflowCoverageMap?.pattern ?? 'shape', patternFallback: inflowCoverageMap?.patternFallback ?? immersedSourceConfig.effective.pattern.patternFallback,
+        coveredCells: inflowCoverageMap?.coveredCells ?? null, totalCoverage: inflowCoverageMap?.totalCoverage ?? null, peak: inflowCoverageMap?.peak ?? null,
+      };
     }
     writeAnalyticEmitterInjectionUniform(
       analyticEmitterInjectionUniformFloats,

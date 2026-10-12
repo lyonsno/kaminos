@@ -144,7 +144,8 @@ test("flame boutique deploys as the narrow Kaminos Pages artifact", () => {
 
   assert.match(workflow, /actions\/upload-pages-artifact@v3/);
   assert.match(workflow, /actions\/deploy-pages@v4/);
-  assert.match(workflow, /path:\s*docs\/flame-atlas/);
+  assert.match(workflow, /node scripts\/assemble-pages-site\.mjs _site/);
+  assert.match(workflow, /path:\s*_site\s*$/m);
   assert.doesNotMatch(workflow, /path:\s*["']?\.["']?\s*$/m);
   assert.match(rootReadme, /https:\/\/lyonsno\.github\.io\/kaminos\//);
   assert.match(atlasReadme, /https:\/\/lyonsno\.github\.io\/kaminos\//);
