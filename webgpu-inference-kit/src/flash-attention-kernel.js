@@ -46,7 +46,7 @@ fn main(@builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) group
   let domain = group.z;
   let kv_head = head / (params.heads / params.kv_heads);
   let local_query = group.x * ${FLASH_ATTENTION_BLOCK_QUERIES}u + lane;
-  let active = local_query < params.query_count;
+  let in_range = local_query < params.query_count;
   let query = params.query_offset + min(local_query, params.query_count - 1u);
   let q_base = ((domain * params.query_tokens + query) * params.q_channels + head * ${headDim}u) / 4u;
 ${range(d4).map(d => `  var q${d}: vec4<f32> = q_values[q_base + ${d}u] * params.scale;`).join('\n')}
@@ -80,7 +80,7 @@ ${range(d4).map(d => `      a${d} = a${d} + w * value_tile[${j * d4 + d}u];`).jo
     running_max = tile_max;
     workgroupBarrier();
   }
-  if (active) {
+  if (in_range) {
     let inverse = 1.0 / running_sum;
 ${range(d4).map(d => `    out_values[q_base + ${d}u] = a${d} * inverse;`).join('\n')}
   }
