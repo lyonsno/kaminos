@@ -19,7 +19,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   const material={particleRepulsionStrength:1,capillaryStrength:.72,freeFlightViscosityBoost:.17,...authored.materialControls,densityIterations:authored.densityIterations};
   const solver = await createWebGPUFingerFluidSolver({webgpuDevice:device, hostFrameComposition:true,
     hostFramePipelineIdentity:PIPELINE, presentationMode:'local_analytic_consumer', truthScene:'live_hand_inlets',
-    particleCount:authored.particleCount, ...material,
+    particleCount:authored.particleCount, energyDiagnosticsMode:'disabled', ...material,
     rendererMode:'screen_space_refraction', bodyTransportMode:'robust_dense_body', interfaceFrequencyMode:'macro_micro_separated',
     liveInletPacket:initialPacket, liquidFireContactCoverage:'active-liquid-particles'});
   if (!isCurrent()) {
@@ -64,6 +64,10 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       authored=next;
     },
     getMaterialControls:()=>solver.getMaterialControls(),
+    setEnergyDiagnosticsMode:value=>solver.setEnergyDiagnosticsMode(value),
+    getFrameBudgetState:()=>solver.getFrameBudgetState(),
+    setWaterRenderScale:value=>viewport.setRenderScale(value),
+    setTimingEnabled:value=>viewport.setTimingEnabled(value),
     getReflectionBudgetControls:()=>solver.getReflectionBudgetControls(),
     getReflectionRayStats:()=>solver.getReflectionRayStats(),
     requestReflectionRayStats:()=>solver.requestReflectionRayStats(),

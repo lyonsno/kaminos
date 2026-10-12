@@ -13348,8 +13348,8 @@ export async function createWebGPUFingerFluidSolver({
     throw new TypeError(`Finger Fluid uniform volume density kernel must be a boolean: ${String(uniformVolumeDensityKernel)}`);
   }
   const effectiveLiquidFireContactCoverage = resolveFingerFluidLiquidFireContactCoverage(liquidFireContactCoverage);
-  const effectiveEnergyDiagnosticsMode = resolveFingerFluidEnergyDiagnosticsMode(energyDiagnosticsMode);
-  const energyDiagnosticsEnabled = effectiveEnergyDiagnosticsMode === 'every_step';
+  let effectiveEnergyDiagnosticsMode = resolveFingerFluidEnergyDiagnosticsMode(energyDiagnosticsMode);
+  let energyDiagnosticsEnabled = effectiveEnergyDiagnosticsMode === 'every_step';
   const safePresentationMode = resolveFingerFluidPresentationMode(presentationMode);
   const localAnalyticHostComposition = safePresentationMode === KAMINOS_FINGER_FLUID_LOCAL_PRESENTATION_MODE;
   const safeHostFrameComposition = Boolean(hostFrameComposition);
@@ -14310,6 +14310,7 @@ export async function createWebGPUFingerFluidSolver({
   let linkedCellGridBuildCount = 0;
   let densityIterationCount = 0;
   let energyDiagnosticsPassCount = 0;
+  let lastEnergyMeasurementStep=null;
   let vorticityPassCount = 0;
   let postProjectionGridRefreshCount = 0;
   let freeSurfaceClassificationPassCount = 0;
@@ -14401,6 +14402,8 @@ export async function createWebGPUFingerFluidSolver({
     requested:{...reflectionBudgetRequested},
     ...reflectionBudgetExecution({rendererMode:lastEffectiveRendererMode,opticalDebugMode:lastOpticalDebugMode,frameId:lastRenderFrameId},reflectionBudgetEncoded),
     rendererRoute:rendererRouteForMode(lastEffectiveRendererMode),executionAuthority:'completed-render-call'});
+  const setEnergyDiagnosticsMode=value=>{if(runtimeLifecycle.stopped)throw Error('Energy diagnostics require a live solver');energyDiagnosticsMode=resolveFingerFluidEnergyDiagnosticsMode(value);effectiveEnergyDiagnosticsMode=energyDiagnosticsMode;energyDiagnosticsEnabled=energyDiagnosticsMode==='every_step';return {mode:effectiveEnergyDiagnosticsMode,enabled:energyDiagnosticsEnabled};};
+  const getFrameBudgetState=()=>({available:!runtimeLifecycle.stopped,step:stepCount,particleCount:safeParticleCount,energy:{mode:effectiveEnergyDiagnosticsMode,enabled:energyDiagnosticsEnabled,passCount:energyDiagnosticsPassCount,measuredStep:energyDiagnosticsEnabled?lastEnergyMeasurementStep:null}});
   const getReflectionRayStats=()=>({...reflectionRayCounter.read(),current:{camera:lastCameraSnapshot,rendererMode:lastEffectiveRendererMode,opticalDebugMode:lastOpticalDebugMode,frameId:lastRenderFrameId}});
   let lastFrameCpuMs = 0;
   let lastRenderCpuMs = 0;
@@ -14892,6 +14895,7 @@ export async function createWebGPUFingerFluidSolver({
     pass.dispatchWorkgroups(Math.ceil(safeParticleCount / WORKGROUP_SIZE));
     pass.setBindGroup(0, computeBindGroup);
     energyDiagnosticsPassCount += 1;
+    lastEnergyMeasurementStep=stepCount+1;
   }
 
   function armSolverGpuTimestampCaptureForWitness(querySet, firstQueryIndex, pairCount) {
@@ -15191,6 +15195,7 @@ export async function createWebGPUFingerFluidSolver({
     externalCamera = null,
     hostFrame = null,
     particleVisibility = 'visible',
+    suppressRayCounting = false,
   } = {}) {
     if (runtimeLifecycle.stopped) return;
     const renderStartedAt = performance.now();
@@ -15607,7 +15612,7 @@ export async function createWebGPUFingerFluidSolver({
       screenSpaceSurfaceAccumulationPassCount += 1;
       screenSpaceOpticalSlabGeometryPassCount += 1;
 
-      const rayCountCapture=refractionEnabled?reflectionRayCounter.begin({width:extent.width,height:extent.height,rendererMode:effectiveRendererMode,opticalDebugMode:effectiveOpticalDebugMode}):null;
+      const rayCountCapture=refractionEnabled && !suppressRayCounting?reflectionRayCounter.begin({width:extent.width,height:extent.height,rendererMode:effectiveRendererMode,opticalDebugMode:effectiveOpticalDebugMode}):null;
       const compositePass = encoder.beginRenderPass({
         label: refractionEnabled
           ? `${KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE}:two-interface-optical-slab-composite`
@@ -16338,7 +16343,7 @@ export async function createWebGPUFingerFluidSolver({
         requestedMode: energyDiagnosticsMode,
         effectiveMode: effectiveEnergyDiagnosticsMode,
         passCount: energyDiagnosticsPassCount,
-        measuredStep: energyDiagnosticsPassCount > 0 ? stepCount : null,
+        measuredStep: energyDiagnosticsEnabled ? lastEnergyMeasurementStep : null,
         readbackStep: diagnostics?.energyLedger?.stepCount ?? null,
       },
       vorticityConfinementContract: KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT,
@@ -16560,7 +16565,7 @@ export async function createWebGPUFingerFluidSolver({
       laminarInletDiagnostics: diagnostics?.laminarInletDiagnostics || null,
       waterfallContinuityDiagnostics: diagnostics?.waterfallContinuityDiagnostics || null,
       fluidTruthSnapshot: diagnostics?.fluidTruthSnapshot || null,
-      energyLedger: diagnostics?.energyLedger || null,
+      energyLedger: energyDiagnosticsEnabled?(diagnostics?.energyLedger || null):null,
       sourceRecirculationMode: safeTruthScene === 'multi_regime_playground'
         ? 'material_tagged_finite_particle_loop_v0'
         : safeTruthScene === 'live_hand_inlets'
@@ -17175,6 +17180,8 @@ export async function createWebGPUFingerFluidSolver({
     getPressureControls,
     getReflectionBudgetControls,
     setReflectionBudgetControls,
+    setEnergyDiagnosticsMode,
+    getFrameBudgetState,
     requestReflectionRayStats:reflectionRayCounter.request,
     getReflectionRayStats,
     armSolverGpuTimestampCaptureForWitness,
