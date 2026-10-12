@@ -174,7 +174,7 @@ async function restoreCached(ticket=++imageTicket){
   // Never leave the previous resolution's material maps advertised as this one.
   state.result=null;state.cache=null;state.example=null;$('timings').textContent='';provenance('Original photograph');
   if(!active){$('elapsed').textContent='';$('progress').value=0;}
-  let material=null;
+  let material=null,exampleError=false;
   if(geometry){await setup();if(ticket!==imageTicket)return;material=await cache.get(materialKey(key,size));if(ticket!==imageTicket)return;}
   if(!material&&sample){
     try{
@@ -189,13 +189,12 @@ async function restoreCached(ticket=++imageTicket){
         provenance(`Included example | ${included.output.width} x ${included.output.height}`);
         status('Explore the included result');return;
       }
-    }catch(error){if(ticket!==imageTicket)return;(state.exampleErrors??=[]).push(String(error));state.status='loaded';
-      status('Example unavailable; photograph loaded',true);runButton();return;}
+    }catch(error){if(ticket!==imageTicket)return;(state.exampleErrors??=[]).push(String(error));exampleError=true;}
   }
   state.status='loaded';
   if(!geometry){viewer?.clear();$('preview').hidden=false;$('scene').hidden=true;view('original');
     for(const button of document.querySelectorAll('[data-view]:not([data-view=original])'))button.disabled=true;
-    syncControls();status('Photograph loaded');return;}
+    syncControls();status(exampleError?'Example unavailable; photograph loaded':'Photograph loaded',exampleError);return;}
   await setup();if(ticket!==imageTicket)return;
   results.publish(token,'geometry',geometry.depth);presentDepth(input,geometry.depth);
   state.cache={geometry:true,materials:!!material,size,source:'browser-result-storage',originalRun:material?.record??geometry.record};
@@ -206,7 +205,7 @@ async function restoreCached(ticket=++imageTicket){
     provenance('Your cached result');
     $('identity').textContent='MoGe-2 + SuperMat | cached outputs';$('progress').value=1;
     $('timings').textContent=`Restored materials ${size} x ${size}`;status('Depth & materials restored');
-  }else{status('Depth restored; materials not yet computed at this resolution');}
+  }else{provenance('Your cached depth');status(exampleError?'Example unavailable; depth restored; materials not yet computed at this resolution':'Depth restored; materials not yet computed at this resolution',exampleError);}
 }
 async function infer(){
   if(active||!image||['loading-image','restoring'].includes(state.status))return;
