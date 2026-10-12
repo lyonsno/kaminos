@@ -28,6 +28,12 @@ export class UniMateDenoiser {
     this.D = 512;
     this.H = 8;
     this.HD = 64;
+    // The kernels assume this checkpoint's shape: fail loudly on any other.
+    const m = manifest.model ?? {};
+    for (const [k, want] of [['latent_dim', 512], ['num_heads', 8], ['attention', 'graph'], ['text_cond', 'adaln']]) {
+      if (m[k] !== undefined && m[k] !== want) throw new Error(`unsupported model ${k}=${m[k]} (port supports ${want})`);
+    }
+    this.maxDepth = manifest.dataset?.max_depth ?? 20;
     this.layers = manifest.model?.num_layers ?? 10;
     this.ffHidden = Math.floor((2 / 3) * (manifest.model?.ff_size ?? 2048));
     this.Fe = manifest.dataset?.feature_len ?? 12;
@@ -58,6 +64,18 @@ export class UniMateDenoiser {
       this.pipelines.set(name, this.device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'main' }, label: name }));
     }
     return this.pipelines.get(name);
+  }
+
+  // Every allocated buffer must fit one storage binding, or its dispatches would
+  // fail validation and leave zeros behind.
+  assertWithinLimits() {
+    const limit = Math.min(this.device.limits.maxStorageBufferBindingSize, this.device.limits.maxBufferSize);
+    const all = [...Object.values(this.io), ...Object.values(this.st).flat(), ...this.tmp, ...Object.values(this.f).flat()];
+    const largest = Math.max(...all.map(b => b.size));
+    if (largest > limit) {
+      throw new RangeError(`B=${this.B}, J=${this.J} needs a ${largest}-byte storage binding; device allows ${limit}. `
+        + 'Request the adapter limits (requestUniMateDevice) or reduce the batch.');
+    }
   }
 
   buf(floats, label) {
@@ -155,6 +173,7 @@ export class UniMateDenoiser {
       Q: b(B * F1 * D), Kk: b(B * F1 * (J - 1) * D), V: b(B * F1 * (J - 1) * D), agg: b(B * F1 * D), ao: b(B * F1 * D),
       rootH: b(B * F1 * D), jointH: b(B * F1 * (J - 1) * D), rootO: b(B * F1 * Fe), jointO: b(B * F1 * (J - 1) * Fe),
     };
+    this.assertWithinLimits();
     this.prepProgram = this.buildPrepare();
     this.forwardProgram = this.buildForward();
     return this;
@@ -268,7 +287,7 @@ export class UniMateDenoiser {
       this.rmsnorm(p, f.X, `${pre}.norm_s.weight`, f.N, R, D, { buffer: mod, rowsPerBatch, stride: ms, shiftOff: 0, scaleOff: D });
       this.linear(p, f.N, `${pre}.s_attn.qkv.weight`, `${pre}.s_attn.qkv.bias`, f.QKV, R, 3 * D, D);
       p.push(this.op('QK_PREP', [f.QKV, this.weight(`${pre}.s_attn.q_norm.weight`).buffer, this.weight(`${pre}.s_attn.k_norm.weight`).buffer, st.cosS, st.sinS],
-        [['u', R], ['u', H], ['u', HD], ['u', 0], ['u', F1], ['u', J], ['f', 1e-6]], [H, R]));
+        [['u', R], ['u', H], ['u', HD], ['u', 0], ['u', F1], ['u', J], ['f', 1e-6]], [H, Math.min(R, 65535), Math.ceil(R / 65535)]));
       p.push(this.op('ATTN_SPATIAL', [f.QKV, st.bias[l], f.A], [['u', B], ['u', F1], ['u', J], ['u', H], ['u', HD], ['f', HD ** -0.5]], UniMateDenoiser.grid(R * H, 64)));
       this.linear(p, f.A, `${pre}.s_attn.proj.weight`, `${pre}.s_attn.proj.bias`, f.P, R, D, D);
       residual(f.P, mod, 2 * D);
@@ -276,7 +295,7 @@ export class UniMateDenoiser {
       this.rmsnorm(p, f.X, `${pre}.norm_t.weight`, f.N, R, D, { buffer: mod, rowsPerBatch, stride: ms, shiftOff: 3 * D, scaleOff: 4 * D });
       this.linear(p, f.N, `${pre}.t_attn.qkv.weight`, `${pre}.t_attn.qkv.bias`, f.QKV, R, 3 * D, D);
       p.push(this.op('QK_PREP', [f.QKV, this.weight(`${pre}.t_attn.q_norm.weight`).buffer, this.weight(`${pre}.t_attn.k_norm.weight`).buffer, io.cosT, io.sinT],
-        [['u', R], ['u', H], ['u', HD], ['u', 1], ['u', F1], ['u', J], ['f', 1e-6]], [H, R]));
+        [['u', R], ['u', H], ['u', HD], ['u', 1], ['u', F1], ['u', J], ['f', 1e-6]], [H, Math.min(R, 65535), Math.ceil(R / 65535)]));
       p.push(this.op('ATTN_TEMPORAL', [f.QKV, io.length, f.A], [['u', B], ['u', F1], ['u', J], ['u', H], ['u', HD], ['f', HD ** -0.5]], UniMateDenoiser.grid(R * H, 64)));
       this.linear(p, f.A, `${pre}.t_attn.proj.weight`, `${pre}.t_attn.proj.bias`, f.P, R, D, D);
       residual(f.P, mod, 5 * D);
@@ -331,7 +350,8 @@ export class UniMateDenoiser {
     q.writeBuffer(io.tposRoot, 0, tposRoot);
     q.writeBuffer(io.tposJoint, 0, tposJoint);
     q.writeBuffer(io.tposParJoint, 0, tposPar);
-    q.writeBuffer(io.depthIdx, 0, new Uint32Array(cond.depths));
+    // Upstream clamps depth to max_depth: deeper joints share the last embedding row.
+    q.writeBuffer(io.depthIdx, 0, new Uint32Array(Array.from(cond.depths, d => Math.min(Math.max(d, 0), this.maxDepth))));
     q.writeBuffer(io.namesEmb, 0, f32(cond.jointNamesEmb));
     const spec = f32(cond.spectral);
     q.writeBuffer(io.specPos, 0, spec);
@@ -402,6 +422,15 @@ export class UniMateDenoiser {
     const n = prog => prog.filter(s => s.kind === 'op').length;
     return { prepare: n(this.prepProgram), forward: n(this.forwardProgram) };
   }
+}
+
+// A device with the adapter's storage limits: large skeletons at two prompts need
+// bindings above WebGPU's 128 MiB default.
+export async function requestUniMateDevice(adapter) {
+  const l = adapter.limits;
+  return adapter.requestDevice({ requiredLimits: {
+    maxBufferSize: l.maxBufferSize, maxStorageBufferBindingSize: l.maxStorageBufferBindingSize,
+    maxStorageBuffersPerShaderStage: Math.min(l.maxStorageBuffersPerShaderStage, 10) } });
 }
 
 export async function readTap(buffer) {

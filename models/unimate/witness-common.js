@@ -1,4 +1,5 @@
 // Shared helpers for the UniMate browser witnesses.
+import { requestUniMateDevice } from './unimate-denoiser.js';
 import { compareWebGpuParityArrays } from '../../webgpu-inference-kit/src/parity-primitives.js';
 
 export async function fetchBytes(url) {
@@ -67,7 +68,7 @@ export async function createDevice(report) {
   const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) throw new Error('no WebGPU adapter');
   report.adapter = adapter.info ? { vendor: adapter.info.vendor, architecture: adapter.info.architecture, description: adapter.info.description } : null;
-  const device = await adapter.requestDevice();
+  const device = await requestUniMateDevice(adapter);
   device.addEventListener('uncapturederror', e => { (report.gpuErrors ??= []).push(String(e.error?.message ?? e.error)); });
   return device;
 }

@@ -4,6 +4,21 @@
 // v = uncond + cfgScale * (cond - uncond) in float32, as upstream's
 // ClassifierFreeSampleModel computes it.
 
+// A GPU validation or out-of-memory error during an evaluation must fail the
+// evaluation; otherwise the readback is zeros and the solver integrates nothing.
+export async function withGpuErrorScope(device, fn) {
+  device.pushErrorScope('out-of-memory');
+  device.pushErrorScope('validation');
+  let result;
+  try { result = await fn(); } finally {
+    const validation = await device.popErrorScope();
+    const oom = await device.popErrorScope();
+    const err = validation ?? oom;
+    if (err) throw new Error(`UniMate drift evaluation failed on the GPU: ${err.message}`);
+  }
+  return result;
+}
+
 export function createCfgDrift(device, denoiser, { prompts, cfgScale = 3 }) {
   const n = prompts * denoiser.J * denoiser.Fe * denoiser.T;
   if (denoiser.B !== 2 * prompts) throw new Error(`denoiser has ${denoiser.B} rows, expected ${2 * prompts}`);
@@ -17,11 +32,13 @@ export function createCfgDrift(device, denoiser, { prompts, cfgScale = 3 }) {
     x.set(y, n);
     denoiser.writeMotion(x);
     denoiser.writeTimesteps(ts.fill(t));
-    const enc = device.createCommandEncoder();
-    denoiser.encodeForward(enc);
-    enc.copyBufferToBuffer(denoiser.io.out, 0, staging, 0, 2 * n * 4);
-    device.queue.submit([enc.finish()]);
-    await staging.mapAsync(GPUMapMode.READ);
+    await withGpuErrorScope(device, async () => {
+      const enc = device.createCommandEncoder();
+      denoiser.encodeForward(enc);
+      enc.copyBufferToBuffer(denoiser.io.out, 0, staging, 0, 2 * n * 4);
+      device.queue.submit([enc.finish()]);
+      await staging.mapAsync(GPUMapMode.READ);
+    });
     const out = new Float32Array(staging.getMappedRange());
     const v = new Float32Array(n);
     for (let i = 0; i < n; i++) {

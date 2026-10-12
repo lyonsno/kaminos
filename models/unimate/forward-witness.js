@@ -2,7 +2,8 @@
 // the PyTorch forward-mode capture (export-reference.py → export-browser-fixture.py).
 // Rows run as one batch: [conditional rows..., unconditional rows...] for the capture's prompts.
 // Publishes window.__unimateForwardWitness = { phase, report }.
-import { UniMateDenoiser, readTap } from './unimate-denoiser.js';
+import { UniMateDenoiser, readTap, requestUniMateDevice } from './unimate-denoiser.js';
+import { conditioningFor } from './witness-common.js';
 import { compareWebGpuParityArrays } from '../../webgpu-inference-kit/src/parity-primitives.js';
 
 const state = { phase: 'start', report: null };
@@ -61,7 +62,7 @@ async function run() {
   const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) throw new Error('no WebGPU adapter');
   report.adapter = adapter.info ? { vendor: adapter.info.vendor, architecture: adapter.info.architecture, description: adapter.info.description } : null;
-  const device = await adapter.requestDevice();
+  const device = await requestUniMateDevice(adapter);
   device.addEventListener('uncapturederror', e => { (report.gpuErrors ??= []).push(String(e.error?.message ?? e.error)); });
 
   state.phase = 'load';
@@ -143,6 +144,28 @@ async function run() {
       webgpu: [compare('out_cond', outC, t64('out_cond')), compare('out_uncond', outU, t64('out_uncond')), compare('out_cfg', cfg, t64('out_cfg'))],
       torchFp32: [compare('out_cond', refC, t64('out_cond')), compare('out_uncond', refU, t64('out_uncond')), compare('out_cfg', refCfg, t64('out_cfg'))],
     };
+  }
+
+  // Depth-clamp probe (review F3): upstream clamps joint depth to max_depth, so a joint
+  // at max_depth and one deeper must give identical output.
+  if (params.get('depthProbe')) {
+    state.phase = 'depth-probe';
+    const runAt = async depth => {
+      const c = conditioningFor(fx, rows, [...prompts, ...prompts.map(() => -1)]);
+      c.depths = Int32Array.from(c.depths); for (let r = 0; r < B; r++) c.depths[r * J + 5] = depth;
+      den.writeConditioning(c);
+      den.writeMotion(pickRows(noise, rows));
+      den.writeTimesteps(rows.map(r => t[r]));
+      const e = device.createCommandEncoder(); den.encodePrepare(e); den.encodeForward(e);
+      const rb = device.createBuffer({ size: B * J * 12 * 60 * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      e.copyBufferToBuffer(den.io.out, 0, rb, 0, B * J * 12 * 60 * 4);
+      device.queue.submit([e.finish()]);
+      return readTap(rb);
+    };
+    const maxDepth = den.maxDepth, a = await runAt(maxDepth), b = await runAt(maxDepth + 5);
+    let maxAbs = 0; for (let i = 0; i < a.length; i++) maxAbs = Math.max(maxAbs, Math.abs(a[i] - b[i]));
+    report.depthClampProbe = { joint: 5, depths: [maxDepth, maxDepth + 5], maxAbsDiff: maxAbs, pass: maxAbs === 0 };
+    report.pass = report.pass && maxAbs === 0;
   }
 
   state.phase = 'timing';

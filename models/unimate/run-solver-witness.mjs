@@ -1,6 +1,6 @@
 // Run the UniMate solver witness in an independent Chrome for Testing.
 // Usage: node run-solver-witness.mjs --chrome <exe> --weights <dir> --fixture <dir> --trace <dir> --out <report.json>
-//        [--modes vector-field,forced,free] [--vf-gate 1e-5] [--forced-gate 1e-4]
+//        [--modes vector-field,forced,free] [--vf-gate 5.1e-5] [--forced-gate 1e-4]
 //        [--timeout-s 3600] [--stall-s 180] [--free-sample <path.f32>]
 // The stall detector watches both the page phase and its evaluation counter, so a
 // long but progressing solve is distinguished from a wedged one. Writes the report
@@ -17,7 +17,7 @@ const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
 const chrome = opt('--chrome'), outPath = opt('--out'), freeSamplePath = opt('--free-sample');
 const roots = { weights: path.resolve(opt('--weights', '')), fixture: path.resolve(opt('--fixture', '')), trace: path.resolve(opt('--trace', '')) };
-const modes = opt('--modes', 'vector-field,forced,free'), vfGate = opt('--vf-gate', '1e-5'), forcedGate = opt('--forced-gate', '1e-4');
+const modes = opt('--modes', 'vector-field,forced,free'), vfGate = opt('--vf-gate', '5.1e-5'), forcedGate = opt('--forced-gate', '1e-4');
 const timeoutS = Number(opt('--timeout-s', '3600')), stallS = Number(opt('--stall-s', '180'));
 
 const report = { schema: 'kaminos.unimate.solver-witness-run.v0', requestedChrome: chrome, roots, modes, host: os.hostname(),

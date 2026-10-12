@@ -14,7 +14,7 @@ const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
 const chrome = opt('--chrome'), outPath = opt('--out');
 const weights = path.resolve(opt('--weights', '')), fixture = path.resolve(opt('--fixture', ''));
-const negativeControl = opt('--negative-control', '');
+const negativeControl = opt('--negative-control', ''), depthProbe = args.includes('--depth-probe');
 const gate = opt('--gate', '1e-5'), timeoutS = Number(opt('--timeout-s', '300')), stallS = Number(opt('--stall-s', '120'));
 
 const report = { schema: 'kaminos.unimate.forward-witness-run.v0', requestedChrome: chrome, weights, fixture, gate,
@@ -33,7 +33,7 @@ try {
   for (const f of [path.join(weights, 'manifest.json'), path.join(fixture, 'fixture.json')]) await fsp.access(f);
   const started = await startServer({ '/weights/': weights, '/fixture/': fixture, '/': repoRoot });
   server = started.server;
-  report.pageUrl = `${started.origin}/models/unimate/forward-witness.html?gate=${gate}${negativeControl ? `&negativeControl=${negativeControl}` : ''}`;
+  report.pageUrl = `${started.origin}/models/unimate/forward-witness.html?gate=${gate}${negativeControl ? `&negativeControl=${negativeControl}` : ''}${depthProbe ? '&depthProbe=1' : ''}`;
   report.negativeControl = negativeControl || null;
   browser = await launchChrome(chrome, [], report);
   report.phase = 'navigate';

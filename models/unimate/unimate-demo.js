@@ -13,6 +13,7 @@
 import { CooperativeUniMateDenoiser, UniMateDutyScheduler, createCooperativeCfgDrift } from './unimate-cooperative.js';
 import { dopri5Solve } from './unimate-dopri5.js';
 import { decodeUniMateMotion, groundedOffsets } from './unimate-decode.js';
+import { requestUniMateDevice } from './unimate-denoiser.js';
 import { createWebGpuForegroundService, createWebGpuInferenceControl, createWebGpuInferenceSession }
   from '../../webgpu-inference-kit/src/core.js';
 
@@ -167,7 +168,7 @@ function bundleArrays(index, bytes) {
 export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bundleBase = '/demo/', onStatus = () => {} }) {
   const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) throw new Error('WebGPU is not available in this browser');
-  const device = await adapter.requestDevice();
+  const device = await requestUniMateDevice(adapter);
   const session = await createWebGpuInferenceSession({ sessionId: `unimate:${crypto.randomUUID()}`, device, adapterName: 'browser-primary-adapter' });
   const foreground = createWebGpuForegroundService({ routeId: UNIMATE_ROUTE_ID, device });
 

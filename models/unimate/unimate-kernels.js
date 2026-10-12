@@ -114,7 +114,7 @@ fn main(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_id) l: vec3u
 // In place on a [rows, 3*H*D] qkv buffer: RMSNorm each head of q and k over D
 // (weights qn, kn), then rotate with a cos/sin table row. mode 0 (spatial):
 // table row = b * J + j; mode 1 (temporal): table row = f. Rows are ordered
-// (b, f, j). One workgroup of D threads per (row, head).
+// (b, f, j). One workgroup of 64 threads per (row, head); rows span grid y and z.
 export const QK_PREP = /* wgsl */`
 struct P { rows: u32, H: u32, D: u32, mode: u32, F1: u32, J: u32, eps: f32, pad: u32 };
 @group(0) @binding(0) var<storage, read_write> QKV: array<f32>;
@@ -127,7 +127,7 @@ var<workgroup> v: array<f32, 128>;
 var<workgroup> red: array<f32, 128>;
 @compute @workgroup_size(64)
 fn main(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_id) l: vec3u) {
-  let row = wg.y;
+  let row = wg.y + wg.z * 65535u;
   let h = wg.x;
   if (row >= p.rows) { return; }
   let D = p.D;
