@@ -53,10 +53,15 @@ try {
   assert.equal(report.frozen.controls.toneMapping,'agx');
   assert.equal(report.frozen.physicalColor.effective,'emissive-transport-v2');
   report.phase='gpu-arithmetic';await save();report.gpuArithmetic=await checkOpticalStepGpu(page);await save();
-  for(const [label,value] of [['current','current'],['fixed','fixed'],['numerical','numerical:0.001'],['numerical-loose','numerical:0.01'],['fixed-dense','fixed-dense'],['current-repeat','current']]) {
+  report.frozenCamera=await page.evaluate(()=>window.kaminosCameraDebugState());
+  for(const [label,value,orbit=0] of [['current','current'],['fixed','fixed'],['numerical','numerical:0.001'],['numerical-loose','numerical:0.01'],['fixed-dense','fixed-dense'],['orbit-fixed','fixed',0.15],['orbit-numerical','numerical:0.001',0.15],['current-repeat','current']]) {
     report.phase=label;await save();
-    const arm=await page.evaluate(async({value,step})=>{
+    const arm=await page.evaluate(async({value,step,camera,orbit})=>{
       const r=window.__kaminosVolumePrototype;
+      const d=camera.position.map((x,i)=>x-camera.target[i]);
+      const position=[camera.target[0]+d[0]*Math.cos(orbit)+d[2]*Math.sin(orbit),camera.position[1],camera.target[2]+d[2]*Math.cos(orbit)-d[0]*Math.sin(orbit)];
+      window.kaminosSetCameraDebugPose({position,target:camera.target});
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
       const el=document.getElementById('optical-stepping-preview');
       el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));
       if(!el.checkValidity()||el.value!==value)throw Error('comparison selector refused requested arm');
@@ -67,12 +72,12 @@ try {
       const canvas=document.createElement('canvas');canvas.width=frame.width;canvas.height=frame.height;
       canvas.getContext('2d').putImageData(new ImageData(Uint8ClampedArray.from(frame.rgba),frame.width,frame.height),0,0);
       return {state,width:frame.width,height:frame.height,rgba:frame.rgba,png:canvas.toDataURL('image/png')};
-    },{value,step:report.frozen.simStepCount});
+    },{value,step:report.frozen.simStepCount,camera:report.frozenCamera,orbit});
     const bytes=Buffer.from(arm.rgba);
     await fs.writeFile(out+'/'+label+'.rgba',bytes);
     await fs.writeFile(out+'/'+label+'.png',Buffer.from(arm.png.split(',')[1],'base64'));
     await page.screenshot({path:out+'/'+label+'-scene.png'});
-    report.arms.push({label,...arm,rgba:undefined,png:undefined,sha256:createHash('sha256').update(bytes).digest('hex')});await save();
+    report.arms.push({label,orbit,...arm,rgba:undefined,png:undefined,sha256:createHash('sha256').update(bytes).digest('hex')});await save();
   }
   assert.equal(report.arms.at(-1).sha256,report.arms[0].sha256,'return to current must reproduce held pixels');
   assert.notEqual(report.arms[1].sha256,report.arms[0].sha256,'reference must not silently return current pixels');
