@@ -1430,6 +1430,12 @@ Receipts answer: did this output actually come from the route, backend, model, a
 
 This layer matters because composition without identity is how a browser pipeline lies to itself. It should protect runtime work, not replace it.
 
+### Per-kernel GPU time
+
+When the device has `timestamp-query`, the inference runtime records each `runKernel` pass's GPU time with no caller changes; `requestBrowserWebGpuDevice` requests the feature by default when the adapter offers it. Stage records gain `gpuMs` and `gpuStatus` (`pending`, `resolved`, or `invalid`), and `runtime.profile.gpuTiming` summarizes resolved, pending, invalid, and untimed kernels with `totalGpuMs`. Results are read back without blocking: ahead of each tensor readback, when timing slots run low, or on `await runtime.settleGpuTiming()`. Phase programs that read back settle before returning, so receipts built afterwards carry resolved values. Wall-clock stays the profile's `timingSource`; GPU time is additional evidence, and an invalid timestamp never reports as a short kernel. Pass `gpuTiming: false` to switch it off or `{ capacity }` to size the slot ring (max 2048). Browsers may quantize timestamps (Chrome rounds to 100 µs without developer flags), so sub-millisecond kernels read coarse.
+
+Ports that encode their own passes can use the same timer: `createWebGpuGpuTimer({ device, queue })` returns `begin()` (a token whose `timestampWrites` go on the pass, or `null` when timing is unavailable), `encodeResolve(encoder, token)` after the pass, `markSubmitted(token)` after `queue.submit`, `abandon(token)` if the command buffer is never submitted, and `settle()`; `token.ms` and `token.status` fill in when the batch resolves.
+
 ## Current Direction
 
 1. Make this package the first import a new browser WebGPU model port reaches for.
