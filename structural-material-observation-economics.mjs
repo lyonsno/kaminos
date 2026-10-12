@@ -1,0 +1,25 @@
+export async function stoneObservationStamp(data){
+ const bytes=new TextEncoder().encode(JSON.stringify(data));
+ const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
+ return {schema:'stone-observation-stamp-v1',route:data.route,runId:data.state?.runId,steps:data.state?.steps,
+  paused:data.paused,busy:data.busy,pendingPick:data.pendingPick,finishing:data.finishing,failure:data.failure,
+  resourceVersion:data.resourceVersion,digest};
+}
+
+export function validateStoneObservationStamp(s){
+ if(s?.schema!=='stone-observation-stamp-v1'||s.route!=='kaminos.picked-stone.bounded-shards.webgpu.v0'
+  ||!s.runId||!Number.isInteger(s.steps)||!s.paused||s.busy||s.pendingPick||s.finishing||s.failure
+  ||s.resourceVersion!==s.runId||! /^[a-f0-9]{64}$/.test(s.digest??''))throw new Error('Held bounded stone stamp required');
+}
+
+export function reconstructStoneObservation(dynamic,resource){
+ if(resource?.schema!=='stone-observation-resource-v1'||resource.version!==dynamic.runId
+  ||!Array.isArray(resource.pieces)||!Array.isArray(dynamic.pieces)||resource.pieces.length!==dynamic.pieces.length)
+  throw new Error('Exact stone resource identity required');
+ const ids=new Set();
+ return {...dynamic,pieces:dynamic.pieces.map(p=>{
+  const matches=resource.pieces.filter(r=>r.id===p.id);
+  if(matches.length!==1||ids.has(p.id)||!matches[0].geometry||!matches[0].binding)throw new Error('Complete unique stone resource required');
+  ids.add(p.id);return {...p,geometry:matches[0].geometry,binding:matches[0].binding};
+ })};
+}
