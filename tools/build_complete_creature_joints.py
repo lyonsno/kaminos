@@ -101,7 +101,7 @@ def main():
             o = bpy.context.object
             o.name = j['name']+' joint marker'
             o.data.materials.append(colors['retained' if j['retained'] else 'new'])
-            o.matrix_world = rig.matrix_world @ o.matrix_world
+            o.matrix_world = rig.matrix_world @ Matrix.Translation(Vector(j['head']))
             group = o.vertex_groups.new(name=j['name'])
             group.add(list(range(len(o.data.vertices))),1.,'REPLACE')
             modifier = o.modifiers.new('Complete joint marker skin','ARMATURE')
@@ -117,9 +117,8 @@ def main():
             bpy.ops.mesh.primitive_cylinder_add(vertices=10,radius=.16,depth=delta.length,location=(a+b)/2)
             o = bpy.context.object
             o.name = j['name']+' hierarchy link'
-            o.rotation_euler = delta.to_track_quat('Z','Y').to_euler()
             o.data.materials.append(colors['retained' if j['retained'] else 'new'])
-            o.matrix_world = rig.matrix_world @ o.matrix_world
+            o.matrix_world = rig.matrix_world @ Matrix.Translation((a+b)/2) @ delta.to_track_quat('Z','Y').to_matrix().to_4x4()
             rods.append(o)
         # Source anatomy is put into precisely the same local frame as the rear adapter.
         anatomy = []
