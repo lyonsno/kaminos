@@ -86,6 +86,14 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
       const packedMode = { 'curl-slider': 0, calibrated: 1, off: 2 }[value];
       if (end.confinementUniform?.mode !== packedMode) mismatches.push(`confinement ${value} requested but uniform slot 345 holds mode ${end.confinementUniform?.mode}`);
     }
+    if (cid === '@faceForceOrdering') {
+      // Assay-only override (report §35): the receipt must show the requested
+      // ordering on a route that has a face pass to order.
+      const requested = value === 'null' ? 'deferred' : value;
+      const receipt = end.velocityStaggering?.faceForceOrdering;
+      if (!receipt) mismatches.push(`face-force ordering requested ${value}, no ordering receipt`);
+      else if (receipt.effective !== requested) mismatches.push(`face-force ordering requested ${value}, effective ${receipt.effective}`);
+    }
     if (cid === '@confinementEpsilon') {
       // The shader reads uniform slot 346 (a Float32Array element), so the packed
       // value must equal the float32 rounding of the request, not just the

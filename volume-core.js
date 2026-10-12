@@ -2643,9 +2643,29 @@ export function immersedMomentumModel({ transported, target, weight, gain, dt = 
   const blend = 1 - Math.pow(1 - b, dt);
   return transported + (target - transported) * blend;
 }
-export function velocityStaggeringUniformValues(config) {
+// Face-force ordering (report §35): `deferred` is the pass as landed (the
+// centred increment bypasses the main kernel's wall sponge and its non-bonfire
+// downward floor); `restored` sponges the increment in the pass and applies
+// the floor once, after it, so the pass changes placement only. Assay-only.
+const FACE_FORCE_ORDERINGS = Object.freeze(['deferred', 'restored']);
+function validFaceForceOrdering(ordering) {
+  if (!FACE_FORCE_ORDERINGS.includes(ordering)) throw new Error(`face-force ordering must be deferred or restored: ${ordering}`);
+  return ordering;
+}
+export function velocityStaggeringUniformValues(config, { faceForceOrdering = 'deferred' } = {}) {
   const admitted = config?.effective?.admitted ? 1 : 0;
-  return [admitted, config?.effective?.faceForces ? admitted : 0, 0, 0];
+  const faceForces = config?.effective?.faceForces ? admitted : 0;
+  const restored = validFaceForceOrdering(faceForceOrdering) === 'restored' && faceForces ? 1 : 0;
+  return [admitted, faceForces, restored, 0];
+}
+// CPU model of the face pass's completion under each ordering: `stored` is
+// what the main kernel wrote (under restored it skipped its floor), `faceForce`
+// the averaged increment, `sponge` this cell's wall-sponge survival factor.
+export function faceForceOrderingModel({ ordering, stored, faceForce, sponge, floorActive }) {
+  if (validFaceForceOrdering(ordering) === 'deferred') return stored.map((v, i) => v + faceForce[i]);
+  const completed = stored.map((v, i) => v + faceForce[i] * sponge);
+  if (floorActive) completed[1] = Math.max(completed[1], -0.015);
+  return completed;
 }
 export function heatReleaseUniformValues(config) {
   const e = config?.effective;
@@ -4545,6 +4565,35 @@ fn faceForcesOn() -> bool {
   return u.velocity_staggering.y > 0.5;
 }
 
+// Face-force ordering (report §35): restored carries the wall sponge and the
+// non-bonfire downward floor into the face pass, so the pass changes only
+// where the centred forces land.
+fn faceForceOrderingRestored() -> bool {
+  return faceForcesOn() && u.velocity_staggering.z > 0.5;
+}
+
+// The main kernel's bonfireScene, from the scene uniform alone.
+fn sceneBonfireWeight() -> f32 {
+  let sceneMode = clamp(u.scene_controls.x, 0.0, 3.0);
+  return step(1.5, sceneMode) * (1.0 - step(2.5, sceneMode));
+}
+
+// The wall-sponge fade of a cell: 1 inside, falling to 0 within the outer
+// fraction of the box; the inflow aperture and the immersed slab are exempt.
+// One function for the main kernel and the face pass, so both read one sponge.
+fn spongeWallFade(cellI: vec3<i32>) -> f32 {
+  let cell = vec3<f32>(cellI) + vec3<f32>(0.5);
+  let p = cellToWorld(cell);
+  // Every added row above y = 1 belongs to the box (the expanded top).
+  let expandedTopY = -1.0 + 2.0 * f32(GRID_Y) / f32(GRID);
+  // Inside an inflow aperture the floor is an inlet, not a wall.
+  let floorExempt = select(0.0, inflowApertureWeight(cellI), p.y < -0.8);
+  let verticalWall = max(mix(-p.y, -1.0, floorExempt), p.y - expandedTopY + 1.0);
+  let wall = max(max(abs(p.x), verticalWall), abs(p.z));
+  // The immersed slab is a source wherever it sits: the sponge leaves it alone.
+  return max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSourceWeight(cell), 0.0, 1.0));
+}
+
 // Face-force pass: forces are evaluated at cell centres, but the stored
 // component is the upper face of its axis, so each component takes the mean of
 // this cell's and the upper neighbour's increment (the last cell keeps its own:
@@ -4578,7 +4627,14 @@ fn csFaceForces(@builtin(global_invocation_id) gid: vec3<u32>) {
     select(0.0, 0.5 * (here.y + upY), openY),
     select(0.0, 0.5 * (here.z + upZ), openZ));
   let stored = fluidDst[base];
-  fluidDst[base] = vec4<f32>(boundVelocity(stored.xyz + faceForce), stored.w);
+  // Restored ordering (report §35): the increment is sponged like the stored
+  // part and the non-bonfire downward floor bounds the sum, as both acted on
+  // the forced velocity before the pass existed.
+  let restoredOrdering = faceForceOrderingRestored();
+  let sponge = select(1.0, stepRate(mix(0.55, 1.0, spongeWallFade(c))), restoredOrdering);
+  var completed = boundVelocity(stored.xyz + faceForce * sponge);
+  if (restoredOrdering && sceneBonfireWeight() < 0.5) { completed.y = max(completed.y, -0.015); }
+  fluidDst[base] = vec4<f32>(completed, stored.w);
 }
 
 // The velocity at a cell centre for the characteristic. Collocated: the stored
@@ -7333,14 +7389,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // expanded domain ceiling. The old symmetric abs(y) wall would suppress
   // every added cell above y=1 and silently recreate the old clip.
   let expandedTopY = -1.0 + 2.0 * f32(GRID_Y) / f32(GRID);
-  // Inside an inflow aperture the floor is an inlet, not a wall: the sponge
-  // leaves it alone (the converged solve enforces the walls themselves).
-  let floorExempt = select(0.0, inflowApertureWeight(cellI), p.y < -0.8);
-  let verticalWall = max(mix(-p.y, -1.0, floorExempt), p.y - expandedTopY + 1.0);
-  let wall = max(max(abs(p.x), verticalWall), abs(p.z));
-  // The immersed slab is a source wherever it sits (floor, side, or in the
-  // open): the sponge leaves it alone, as it leaves the inflow aperture.
-  let wallFade = max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSlabWeight, 0.0, 1.0));
+  // The wall sponge (inflow aperture and immersed slab exempt): one function
+  // shared with the face pass (report §35).
+  let wallFade = spongeWallFade(cellI);
   let smokeTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.66, 0.84, plumeHeight01)), expandedTopY - 0.005, p.y);
   let legacyHeatTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.42, 0.62, plumeHeight01)), expandedTopY - 0.040, p.y);
   let tallPlumeHeatTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.62, 0.84, plumeHeight01)), expandedTopY - 0.010, p.y);
@@ -7429,7 +7480,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // The wall sponge on velocity is a per-step survival written after the
   // increment law's line, so it takes the rate law directly.
   vel = vel * stepRate(mix(0.55, 1.0, wallFade));
-  vel.y = mix(max(vel.y, -0.015), vel.y, bonfireScene);
+  // Under the restored face-force ordering the face pass applies this floor
+  // once, after the centred increment (report §35).
+  vel.y = mix(max(vel.y, -0.015), vel.y, max(bonfireScene, select(0.0, 1.0, faceForceOrderingRestored())));
   fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), density);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
   fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
@@ -11420,6 +11473,8 @@ export function createKaminosVolumePrototype({
   // Evidence route only: a calibrated-mode epsilon set through the debug API,
   // never persisted, always named in the receipt.
   let confinementEpsilonOverride = null;
+  // Assay-only face-force ordering override (report §35): null = deferred.
+  let faceForceOrderingOverride = null;
   let frontBuffers = [];
   let quenchBuffers = [];
   let pressureBuffers = [];
@@ -15544,8 +15599,8 @@ export function createKaminosVolumePrototype({
     uniforms.set(heatReleaseUniformValues(heatReleaseConfig), HEAT_RELEASE_UNIFORM_OFFSET);
     state.heatRelease = heatReleaseConfig;
     const velocityStaggeringConfig = resolveVelocityStaggeringConfig(controlsSnapshot);
-    uniforms.set(velocityStaggeringUniformValues(velocityStaggeringConfig), VELOCITY_STAGGERING_UNIFORM_OFFSET);
-    state.velocityStaggering = velocityStaggeringConfig;
+    uniforms.set(velocityStaggeringUniformValues(velocityStaggeringConfig, { faceForceOrdering: faceForceOrderingOverride ?? 'deferred' }), VELOCITY_STAGGERING_UNIFORM_OFFSET);
+    state.velocityStaggering = { ...velocityStaggeringConfig, faceForceOrdering: { requested: faceForceOrderingOverride ?? 'deferred', effective: velocityStaggeringConfig.effective.faceForces ? (faceForceOrderingOverride ?? 'deferred') : 'no-face-pass' } };
     // Pose → mask → supply (confirmation IS-03-C): the pose is resolved and
     // published first so the collision refresh composes and installs this
     // step's mask (the wall follows the pose only); the supply is then
@@ -26477,6 +26532,11 @@ export function createKaminosVolumePrototype({
     setForegroundOpportunityRequester,
     foregroundGpuContext() {
       return {device, queue: device?.queue, active: state.active, renderer: boundarySplatRequested() || browserResidualCanApply() ? 'alternate-volume' : 'ordinary-volume', productFrameOwner};
+    },
+    setFaceForceOrderingOverride(value) {
+      // Assay-only (report §35): null clears to the landed deferred ordering.
+      faceForceOrderingOverride = value === null || value === undefined ? null : validFaceForceOrdering(String(value));
+      return { faceForceOrdering: faceForceOrderingOverride ?? 'deferred', appliesOn: 'next-frame', previous: state.velocityStaggering?.faceForceOrdering ?? null };
     },
     setConfinementEpsilonOverride(value) {
       const next = value !== null && value !== undefined && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
