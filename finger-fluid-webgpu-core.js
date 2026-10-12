@@ -7126,7 +7126,7 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
       let interval = max(1.0, round(0.055 / 0.3 / params.dt));
       let tick = u32(floor(f32(params.frameIndex) / interval));
       let previousTick = u32(floor(f32(params.frameIndex - min(params.frameIndex, 1u)) / interval));
-      if (tick == previousTick || (tick - 1u) % 101u != u32(riverState.w)) {
+      if (tick == previousTick || (tick - 1u) % 101u != u32(-riverState.w - 1.0)) {
         particle.predicted = vec4<f32>(particle.position.xyz, 0.0);
         particle.delta = vec4<f32>(0.0);
         particles[index] = particle;
