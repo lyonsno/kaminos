@@ -16,16 +16,18 @@ async function environmentModule(){
   });
   await source.evaluate();return source.namespace;
 }
-test('annular light handle round trips frontal, middle and grazing directions without covering the center',async()=>{
+test('full disk light handle continuously round trips frontal, middle and grazing directions',async()=>{
   const {lightOnRing,lightFromRing}=await environmentModule();
   for(const length of [0,.2,.7,1])for(let angle=0;angle<Math.PI*2;angle+=.2){
     const light={x:Math.cos(angle)*length,y:Math.sin(angle)*length};
     const {u,v}=lightOnRing(light),r=Math.hypot(u-.5,v-.5);
-    assert.ok(r>=.3-1e-12&&r<=.43+1e-12);
+    assert.ok(Math.abs(r-.35*length)<1e-12);
     const actual=lightFromRing(u,v);
     assert.ok(Math.hypot(actual.x-light.x,actual.y-light.y)<1e-12);
   }
   assert.equal(lightFromRing(.5,.5).x,0);
+  assert.equal(lightOnRing({x:0,y:0}).v,.5);
+  assert.ok(lightFromRing(.55,.5).x>0,'Near-center positions must not be a dead zone');
   assert.ok(Math.hypot(...Object.values(lightFromRing(5,-5)))<=1);
   assert.throws(()=>lightFromRing(NaN,0),/Invalid/);
 });

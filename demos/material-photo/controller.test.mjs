@@ -8,7 +8,7 @@ async function controller() {
   const node = dataset => ({ dataset, style: {}, value: '', disabled: false, hidden: false, checked: false, textContent: '', captures:new Set(),
     classList: { toggle() {},add(){},remove(){} }, removeAttribute() {}, setAttribute() {}, addEventListener() {},
     setPointerCapture(id) {this.captures.add(id);}, releasePointerCapture(id) {this.captures.delete(id);},hasPointerCapture(id){return this.captures.has(id);}, getBoundingClientRect: () => ({ left:0,top:0,width: 400, height: 400 }) });
-  const ids=['status','preview','scene','stage-label','run','file','map','light','height','exposure','gi','reset','name','resolution','progress','elapsed','timings','identity',
+  const ids=['workspace','controls','tuning-toggle','status','preview','scene','stage-label','run','file','map','light','height','exposure','gi','reset','name','resolution','progress','elapsed','timings','identity',
     'view-prev','view-next','sun','glow','advanced','tuning','preset-export','preset-import','preset-file','preset-error','material-size','compare','light-ring','environment','environment-status','environment-rotation','environment-intensity','direct-intensity',
     'gi-view','contrast-mode','roughness-strength','metallic-strength','roughness-strength-value','metallic-strength-value','contrast-readout','bloom',
     ...['glowIntensity','glowThreshold','emissionReflection','bloomIntensity','bloomRadius','bloomThreshold','exposure'].flatMap(key=>[key,`${key}-value`]),
@@ -121,6 +121,15 @@ test('comparison restores surface perspectives after inspecting a map',async()=>
   c.elements.map.value='normals';c.elements.map.onchange();
   assert.equal(c.behavior.viewer.map,'normals');c.actions.compare();
   assert.equal(c.behavior.viewer.map,'surface');assert.equal(c.elements.map.value,'surface');
+});
+test('tuning dock opens and closes without changing inference or material settings',async()=>{
+  const c=await controller();await c.actions.infer();const count=c.state.runs.length;
+  assert.equal(c.elements.controls.hidden,true);
+  assert.equal(typeof c.elements['tuning-toggle'].onclick,'function');
+  c.elements['tuning-toggle'].onclick();assert.equal(c.elements.controls.hidden,false);
+  assert.equal(c.elements.workspace.dataset.controls,'open');
+  c.elements['tuning-toggle'].onclick();assert.equal(c.elements.controls.hidden,true);
+  assert.equal(c.state.runs.length,count);
 });
 test('diagnostic selection from either unlit focus preserves its effective label',async()=>{
   for(const mode of ['original','photo']){

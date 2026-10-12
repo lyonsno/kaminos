@@ -1,6 +1,7 @@
 import { Vector2 } from 'three/webgpu';
 import { MaterialPhotoViewer as PhotoViewer } from './viewer.js';
 import { ENVIRONMENTS,loadEnvironmentTexture,lightFromRing,lightOnRing } from './environment.js';
+import { chooseComparisonLayout } from './layout.js';
 
 const modes=['original','photo','relit','materials'];
 
@@ -16,6 +17,7 @@ export class MaterialPhotoViewer {
     }
     this.orbit=rig.orbit;this.target=rig.target;
     await this.loadEnvironment('studio');
+    this.resizeObserver=new ResizeObserver(()=>this.layout());this.resizeObserver.observe(container);
     this.showComparison();return this;
   }
   get primary(){return this.views.materials;}
@@ -38,6 +40,8 @@ export class MaterialPhotoViewer {
   get glow(){return this.primary.glow;}
   set glow(value){this.primary.glow=value;}
   layout(){
+    const bounds=this.container.getBoundingClientRect();
+    this.container.dataset.layout=chooseComparisonLayout(bounds.width,bounds.height,this.primary.aspect??1);
     this.container.dataset.focus=this.focus??'';
     for(const mode of modes){
       const view=this.views[mode];view.canvas.closest('[data-tile]').hidden=!!this.focus&&this.focus!==mode;
@@ -98,6 +102,7 @@ export class MaterialPhotoViewer {
   }
   clear(){for(const mode of ['original','photo','relit','materials'])this.views[mode].clear();}
   async dispose(){
+    this.resizeObserver?.disconnect();
     this.environmentTicket++;
     const errors=[];
     for(const view of Object.values(this.views))try{await view.dispose();}catch(error){errors.push(error);}

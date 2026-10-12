@@ -332,7 +332,7 @@ export class MaterialPhotoViewer {
     if (!width || !height) return;
     this.renderer.setSize(width,height,false);
     this.camera.aspect=width/height;
-    this.camera.zoom=Math.min(1,this.camera.aspect/(this.aspect||1))*.79;
+    this.camera.zoom=Math.min(1,this.camera.aspect/(this.aspect||1))*.9;
     this.camera.updateProjectionMatrix();
   }
   render(time) {

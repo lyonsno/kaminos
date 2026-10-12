@@ -9,7 +9,7 @@ async function fixture(){
   const tile=()=>({hidden:false,dataset:{}}),canvases=Object.fromEntries(['original','photo','relit','materials'].map(mode=>{
     const article=tile();return [mode,{parentElement:tile(),closest:()=>article}];
   }));
-  const container={dataset:{},querySelector:s=>canvases[s.match(/=(\w+)/)[1]]};
+  const container={dataset:{},getBoundingClientRect:()=>({width:1400,height:900}),querySelector:s=>canvases[s.match(/=(\w+)/)[1]]};
   class Viewer{
     async init(canvas,device,{rig,interactive}){this.canvas=canvas;this.renderer={backend:{device}};this.orbit=rig.orbit;this.target=rig.target;this.current=rig.current;this.interactive=interactive;calls.devices.push(device);this.settings={gain:1};this.lighting={rotation:0,intensity:1,direct:1};}
     resize(){}
@@ -28,9 +28,10 @@ async function fixture(){
     async dispose(){}
   }
   const texture=name=>({name,dispose(){calls.disposed.push(name);}});
-  const context=vm.createContext({console,Error,AggregateError,Map});
+  const context=vm.createContext({console,Error,AggregateError,Map,ResizeObserver:class{observe(){}disconnect(){}}});
   const source=new vm.SourceTextModule(await readFile(new URL('./comparison-viewer.js',import.meta.url),'utf8'),{context});
   await source.link(async specifier=>{
+    if(specifier==='./layout.js')return new vm.SourceTextModule(await readFile(new URL(specifier,import.meta.url),'utf8'),{context});
     const exports=specifier==='three/webgpu'?{Vector2}:specifier==='./viewer.js'?{MaterialPhotoViewer:Viewer}:{
       ENVIRONMENTS:{studio:{},warehouse:{},sunset:{}},loadEnvironmentTexture:async name=>{calls.loads.push(name);return calls.gates[name]?await calls.gates[name]:texture(name);},
       lightFromRing:()=>({x:0,y:0}),lightOnRing:()=>({u:0,v:0}),
@@ -51,6 +52,13 @@ test('comparison borrows one device, shares geometry and orbit, and can focus wi
   assert.ok(views.every(v=>v.light.x===.3&&v.settings.gain===2));
   viewer.mode='relit';assert.ok(Object.entries(canvases).every(([mode,c])=>c.closest('[data-tile]').hidden===(mode!=='relit')));
   viewer.showComparison();assert.ok(Object.values(canvases).every(c=>!c.closest('[data-tile]').hidden));assert.deepEqual(viewer.orbit.toArray(),[.2,.1]);
+});
+test('comparison chooses pane arrangement from available width and height',async()=>{
+  const {viewer,container}=await fixture();
+  assert.equal(container.dataset.layout,'grid');
+  container.getBoundingClientRect=()=>({width:1800,height:600});viewer.layout();
+  assert.equal(container.dataset.layout,'strip');
+  viewer.mode='original';assert.equal(container.dataset.focus,'original');
 });
 test('environment selection is latest-wins; failures preserve the effective environment and can retry',async()=>{
   const {viewer,calls,texture}=await fixture();let release;

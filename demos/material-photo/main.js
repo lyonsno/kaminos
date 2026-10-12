@@ -24,6 +24,13 @@ const viewOrder=['original','photo','relit','materials'];
 const tuningFields=['gain','radius','thickness','slices','steps','denoise','aoStrength','expFactor','screenSpaceSampling','linearThickness','backfaceLighting','depthPhi','normalPhi','lumaPhi'];
 const effectFields=['glowIntensity','glowThreshold','emissionReflection','bloomIntensity','bloomRadius','bloomThreshold','exposure'];
 function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
+function showControls(open){
+  $('controls').hidden=!open;$('workspace').dataset.controls=open?'open':'closed';
+  $('tuning-toggle').setAttribute('aria-expanded',String(open));
+  $('tuning-toggle').title=open?'Close tuning':'Open tuning';
+}
+$('tuning-toggle').onclick=()=>showControls($('controls').hidden);
+showControls(false);
 function view(mode){
   if(mode==='materials'&&!viewer?.maps)mode='photo';
   if(['photo','relit'].includes(mode)&&!viewer?.surface)mode='original';
@@ -41,7 +48,7 @@ function compare(){
   if(viewer)viewer.map='surface';
   $('map').value='surface';
   viewer?.showComparison();
-  $('stage-label').textContent='One photograph. Four perspectives.';
+  $('stage-label').textContent='Four-way comparison';
   $('compare').classList.add('selected');
   for(const button of document.querySelectorAll('[data-view]')){button.classList.remove('selected');button.setAttribute('aria-pressed','false');}
   syncControls();
@@ -300,6 +307,7 @@ $('sun').onpointerdown=event=>{
   event.preventDefault();event.stopPropagation();sunPointer=event.pointerId;
   viewer.target.set(0,0);$('sun').setPointerCapture(event.pointerId);dragSun(event);
 };
+$('light-ring').onpointerdown=event=>{if(!$('sun').hidden)$('sun').onpointerdown(event);};
 $('sun').onpointermove=event=>{if(event.pointerId===sunPointer){event.preventDefault();event.stopPropagation();dragSun(event);}};
 function releaseSun(event){if(event.pointerId===sunPointer){sunPointer=null;if($('sun').hasPointerCapture(event.pointerId))$('sun').releasePointerCapture(event.pointerId);}}
 $('sun').onpointerup=$('sun').onpointercancel=$('sun').onlostpointercapture=releaseSun;
@@ -311,7 +319,7 @@ $('sun').onkeydown=event=>{
 function exportPreset(){if(!viewer?.surface)throw Error('Preset requires a depth surface');return viewer.exportPreset();}
 async function importPreset(json){
   try{if(!viewer?.surface)throw Error('Preset requires a depth surface');await viewer.applyPreset(typeof json==='string'?JSON.parse(json):json);syncControls();$('preset-error').textContent='';return true;}
-  catch(error){$('preset-error').textContent=error.message;$('advanced').open=true;return false;}
+  catch(error){$('preset-error').textContent=error.message;$('advanced').open=true;showControls(true);return false;}
 }
 $('preset-export').onclick=()=>{
   const url=URL.createObjectURL(new Blob([JSON.stringify(exportPreset(),null,2)],{type:'application/json'}));

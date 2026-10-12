@@ -105,6 +105,10 @@ test('original remains DoubleSide and uses the same orbit as the depth surface',
   viewer.orbit.set(.2,.1);viewer.mode='photo';viewer.render();const camera=viewer.camera.position.toArray();
   viewer.mode='original';viewer.render();assert.deepEqual(viewer.camera.position.toArray(),camera);
 });
+test('photo framing uses the pane while keeping a rotation margin',async()=>{
+  const {viewer}=await viewerFixture();
+  assert.equal(viewer.camera.zoom,.9);
+});
 test('unlit photographs bypass renderer tone mapping while lit views retain ACES',async()=>{
   const {viewer,THREE}=await viewerFixture();
   for(const mode of ['original','photo']){viewer.mode=mode;viewer.render();assert.equal(viewer.renderer.toneMapping,THREE.NoToneMapping);}

@@ -31,13 +31,11 @@ export async function loadEnvironmentTexture(name) {
 
 export function lightFromRing(u,v) {
   if(![u,v].every(Number.isFinite))throw Error('Invalid light ring position');
-  const x=u-.5,y=.5-v,r=Math.hypot(x,y);
-  const distance=Math.min(1,Math.max(0,(r-.3)/.13));
-  const scale=r?distance*(1-4*Number.EPSILON)/r:0;
+  const x=(u-.5)/.35,y=(.5-v)/.35,r=Math.hypot(x,y);
+  const scale=r>1?(1-4*Number.EPSILON)/r:1;
   return {x:x*scale,y:y*scale};
 }
 
 export function lightOnRing({x,y}) {
-  const length=Math.hypot(x,y),r=.3+.13*length;
-  return {u:.5+(length?x/length:0)*r,v:.5-(length?y/length:1)*r};
+  return {u:.5+x*.35,v:.5-y*.35};
 }
