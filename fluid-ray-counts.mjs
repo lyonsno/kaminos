@@ -62,9 +62,10 @@ export function createOpticalRayCounter({device,shaderCode,pipelineDescriptor}) 
       state={status:'preparing',sample:state.sample};
       compiling??=(async()=>{
         const module=device.createShaderModule({label:'fluid-optical-ray-counter',code:instrumentOpticalRayQueries(shaderCode)});
-        renderPipeline=await device.createRenderPipelineAsync({...pipelineDescriptor,label:'fluid-optical-ray-counted-composite',
+        const nextRenderPipeline=await device.createRenderPipelineAsync({...pipelineDescriptor,label:'fluid-optical-ray-counted-composite',
           vertex:{...pipelineDescriptor.vertex,module},fragment:{...pipelineDescriptor.fragment,module,targets:[...pipelineDescriptor.fragment.targets,{format:'rgba8uint'}]}});
-        computePipeline=await device.createComputePipelineAsync({label:'fluid-optical-ray-histogram',layout:'auto',compute:{module:device.createShaderModule({code:HISTOGRAM_SHADER}),entryPoint:'main'}});
+        const nextComputePipeline=await device.createComputePipelineAsync({label:'fluid-optical-ray-histogram',layout:'auto',compute:{module:device.createShaderModule({code:HISTOGRAM_SHADER}),entryPoint:'main'}});
+        if(!disposed){renderPipeline=nextRenderPipeline;computePipeline=nextComputePipeline;}
       })();
       try{await compiling;}catch(error){state={status:'failed',failure:String(error),sample:state.sample};throw error;}
     }
