@@ -202,7 +202,7 @@ async function generateSizes(sizes, session) {
   for (const size of sizes) {
     await browser.evaluate(`(() => { window.kleinLast = null;
       document.getElementById('size').value = '${size}'; document.getElementById('seed').value = '${seed}';
-      ${opt('--prompt') ? `document.getElementById('prompt').value = ${JSON.stringify(opt('--prompt'))};` : ''}
+      ${opt('--prompt') ? `{ const el = document.getElementById('prompt'); el.value = ${JSON.stringify(opt('--prompt'))}; el.dispatchEvent(new Event('input')); }` : ''}
       document.getElementById('go').click(); })()`, false);
     const done = await waitFor(`(() => { const s = ${pageState}; const go = document.getElementById('go');
       return !go.disabled && (window.kleinLast || s.warn || /stopped/i.test(s.status)) ? { ...s, last: window.kleinLast } : null; })()`, `generate ${size}`);

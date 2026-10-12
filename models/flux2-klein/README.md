@@ -22,11 +22,13 @@ Times are for one image with 4 steps in Chrome, sharing the GPU with a continuou
 
 | Size | 16 GB Apple M2 Pro | Apple M4 Max |
 | --- | --- | --- |
-| 512 × 512 | 19–22 s | 6–7 s |
+| 512 × 512 | 17–18 s (22–23 s with better lettering) | 6–7 s |
 | 768 × 768 | 40–46 s | about 12 s |
 | 1024 × 1024 | 67–69 s | about 23 s |
 
 During generation the scene kept a median frame time of about 20 ms on the M2 Pro.
+
+Prompts are padded with filler tokens before the transformer reads them. The page pads to the prompt's own length plus a few tokens, which is about a quarter faster than the reference pipeline's 512, unless the prompt asks for lettering (quoted text, words in capitals, or words like sign, poster or title). Then it pads to 512, which spells words in the image noticeably better. A checkbox shows which mode will run and can be flipped. Generating again with the same prompt reuses its text encoding.
 
 ## Memory
 

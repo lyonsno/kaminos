@@ -69,7 +69,7 @@
   <header class="lede">
     <h1>Thomas the Jank Engine</h1>
     <p><b>FLUX.2 [klein] 4B: a 4-billion-parameter image model crammed into a browser tab. It's a little janky. It runs anyway.</b> It all happens on your own GPU through WebGPU: the prompt, the model and the image stay on your machine, and no server does any of the work.</p>
-    <p class="muted">The first visit downloads <span id="download-size">3.2 GB</span> of model weights, which the browser keeps for later visits. Tested in Chrome on Apple-silicon Macs with 16 GB of memory or more: a 512 × 512 image takes about 7 seconds on an M4 Max and about 20 seconds on an M2 Pro. Pick a jank level to trade quality for a smaller download.</p>
+    <p class="muted">The first visit downloads <span id="download-size">3.2 GB</span> of model weights, which the browser keeps for later visits. Tested in Chrome on Apple-silicon Macs with 16 GB of memory or more: a 512 × 512 image takes about 7 seconds on an M4 Max and about 17 seconds on an M2 Pro (a few more with better lettering). Pick a jank level to trade quality for a smaller download.</p>
   </header>
 
   <div class="layout">
@@ -99,6 +99,7 @@
             </select>
           </label>
         </div>
+        <label class="check"><input id="lettering" type="checkbox"> Better lettering (slower) <small id="lettering-why" class="muted"></small></label>
         <label class="check"><input id="cooperative" type="checkbox" checked> Keep the animation running while generating</label>
         <div class="row">
           <button id="go" class="primary">Generate</button>
@@ -170,6 +171,28 @@ const SCENES = [
   e => `${e}, sailing across a stormy sea on a raft of railway sleepers, dramatic oil painting`,
 ];
 let lastScene = 0;
+
+// Prompts are padded with filler tokens before the transformer sees them. Padding to the prompt's
+// own length (plus a few) is about a quarter faster; full padding (512 tokens, as in the reference
+// pipeline) spells words in the image noticeably better. The checkbox follows the prompt: it ticks
+// itself when the prompt asks for lettering, and can be flipped by hand before generating.
+const LETTERING_WORDS = /\b(signs?|signage|posters?|titled?|captions?|labels?|logos?|banners?|headlines?|lettering|typography|text|words|reads|says|saying|written|spelled|font)\b/i;
+const COMMON_ACRONYMS = new Set(['DSLR', 'NASA', 'HDRI', 'RGBA', 'JPEG', 'UNESCO']);
+function letteringReason(prompt) {
+  if (/["\u201c\u201d][^"\u201c\u201d]{2,}["\u201c\u201d]/.test(prompt)) return 'the prompt quotes some text';
+  const caps = (prompt.match(/\b[A-Z][A-Z0-9]{3,}\b/g) ?? []).filter(w => !COMMON_ACRONYMS.has(w));
+  if (caps.length) return `the prompt has ${caps[0]} in capitals`;
+  const word = prompt.match(LETTERING_WORDS);
+  return word ? `the prompt mentions "${word[0].toLowerCase()}"` : null;
+}
+function updateLettering() {
+  const reason = letteringReason($('prompt').value);
+  $('lettering').checked = Boolean(reason);
+  $('lettering-why').textContent = reason ? `(on: ${reason})` : '';
+}
+$('prompt').addEventListener('input', updateLettering);
+$('lettering').addEventListener('change', () => { $('lettering-why').textContent = $('lettering').checked ? '(on)' : '(off)'; });
+updateLettering();
 const levelInputs = () => [...document.querySelectorAll('input[name="level"]')];
 for (const input of levelInputs()) input.checked = input.value === selected;
 
@@ -289,7 +312,7 @@ for (const input of levelInputs()) input.onchange = () => {
 
 function setRunning(running, { swapping = false } = {}) {
   const cooperative = $('cooperative').checked && !swapping;
-  for (const id of ['go', 'surprise', 'reseed', 'prompt', 'seed', 'size', 'cooperative']) $(id).disabled = running;
+  for (const id of ['go', 'surprise', 'reseed', 'prompt', 'seed', 'size', 'lettering', 'cooperative']) $(id).disabled = running;
   for (const input of levelInputs()) input.disabled = running || !levelStatus[input.value];
   $('pause').disabled = !running || !cooperative; $('stop').disabled = !running || !cooperative;
   $('pause').textContent = 'Pause';
@@ -299,7 +322,8 @@ $('go').onclick = async () => {
   setRunning(true);
   const prompt = $('prompt').value.trim(), seed = Math.max(0, Math.floor(Number($('seed').value) || 0)), size = Number($('size').value);
   try {
-    const r = await demo.generate({ prompt, seed, size, cooperative: $('cooperative').checked,
+    const lettering = $('lettering').checked;
+    const r = await demo.generate({ prompt, seed, size, textLength: lettering ? 512 : 'fit16', cooperative: $('cooperative').checked,
       onPhase: phase => say(phase === 'text' ? 'Reading the prompt…' : phase === 'decode' ? 'Decoding the image…' : 'Denoising…'),
       onStep: (i, n) => say(`Denoising, step ${i} of ${n}…`) });
     const out = $('out'); out.width = r.width; out.height = r.height;
@@ -308,8 +332,9 @@ $('go').onclick = async () => {
     lastImage = { prompt, seed, size, level: loadedLevel };
     $('save').disabled = false;
     const frames = r.frames ? `; the animation kept drawing at a median ${Math.round(1000 / r.frames.p50)} frames per second` : '';
-    say(`${r.width} × ${r.height} at ${LEVELS[loadedLevel].name} in ${seconds(r.wallMs)}${frames}.`);
-    window.kleinLast = { wallMs: r.wallMs, timings: r.timings, frames: r.frames, width: r.width, height: r.height, level: loadedLevel };
+    say(`${r.width} × ${r.height} at ${LEVELS[loadedLevel].name}${lettering ? ' with better lettering' : ''} in ${seconds(r.wallMs)}${frames}.`);
+    window.kleinLast = { wallMs: r.wallMs, timings: r.timings, frames: r.frames, width: r.width, height: r.height, level: loadedLevel,
+      lettering, textTokens: r.textTokens };
   } catch (e) {
     say(e?.name === 'AbortError' ? 'Stopped.' : `Generation failed: ${e.message ?? e}`, e?.name !== 'AbortError');
   }
@@ -323,6 +348,7 @@ $('surprise').onclick = () => {
   lastScene = i;
   const text = SCENES[i](ENGINE);
   $('prompt').value = text[0].toUpperCase() + text.slice(1);
+  updateLettering();
   $('seed').value = Math.floor(Math.random() * 1e9);
   if (!$('go').disabled) $('go').click();
 };
