@@ -14827,6 +14827,7 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
   const byId=id=>document.getElementById(id),root=byId('ipbf-pressure-cockpit');
   if(!entryOnly && !fluidReflectionCockpit){
     const read=()=>({clock:window.kaminosFingerFluidBenchSessionState?.()??{available:false,paused:false,step:null},
+      rayStats:fingerFluidBenchSolver?.getReflectionRayStats?.()??null,
       reflection:fingerFluidBenchSolver?.getReflectionBudgetControls?.()??null});
     const setPaused=value=>{
       window.kaminosFingerFluidBenchSetSimulationPausedForWitness(Boolean(value));
@@ -14846,6 +14847,7 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
       return effective;
     };
     fluidReflectionCockpit=mountReflectionCockpit(root,{read,apply,setPaused,
+      requestRayStats:()=>fingerFluidBenchSolver?.requestReflectionRayStats?.().then(()=>{window._kaminosDirty?.();}),
       onOperation:event=>{if(investigationOperations.active)investigationOperations.emit(event);}});
     window.kaminosFluidReflectionComparison={read:fluidReflectionCockpit.read,
       select:fluidReflectionCockpit.select,configureB:fluidReflectionCockpit.configureB,

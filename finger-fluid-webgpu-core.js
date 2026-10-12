@@ -1,3 +1,4 @@
+import {createOpticalRayCounter} from './fluid-ray-counts.mjs';
 import {createMaterialControlState, validateMaterialControls, decodeMaterialInputs, PBF_REPULSION_COEFFICIENT} from './finger-fluid-material-controls.mjs';
 import { LOCAL_LIQUID_TRANSPORT_WGSL } from './local-liquid-transport.mjs';
 import {resolveReflectionBudget,reflectionBudgetExecution,REFLECTION_BUDGET_MODES} from './fluid-reflection-budget.mjs';
@@ -14080,6 +14081,7 @@ export async function createWebGPUFingerFluidSolver({
   let screenSpaceSurfaceCompositePipeline;
   let analyticSupportPresentationPipeline;
   let screenSpaceRefractionCompositePipeline;
+  let refractionPipelineDescriptor;
   let dynamicIndexedMeshPipeline;
   let hdrWorldBackgroundPipeline;
   let finalPresentationPipeline;
@@ -14194,7 +14196,7 @@ export async function createWebGPUFingerFluidSolver({
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
     });
-    screenSpaceRefractionCompositePipeline = await device.createRenderPipelineAsync({
+    refractionPipelineDescriptor = {
       label: `${KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE}:snell-fresnel-absorption-composite`,
       layout: screenSpaceRefractionCompositePipelineLayout,
       vertex: { module: screenSpaceModule, entryPoint: 'vs_fullscreen' },
@@ -14211,7 +14213,8 @@ export async function createWebGPUFingerFluidSolver({
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' },
-    });
+    };
+    screenSpaceRefractionCompositePipeline = await device.createRenderPipelineAsync(refractionPipelineDescriptor);
     hdrWorldBackgroundPipeline = await device.createRenderPipelineAsync({
       label: KAMINOS_FINGER_FLUID_HDR_WORLD_BACKGROUND_ROUTE,
       layout: hdrWorldBackgroundPipelineLayout,
@@ -14237,6 +14240,7 @@ export async function createWebGPUFingerFluidSolver({
   } catch (error) {
     return failFingerFluidInitialization(`WebGPU render pipeline validation failed: ${error.message || String(error)}`);
   }
+  const reflectionRayCounter=createOpticalRayCounter({device,shaderCode:SCREEN_SPACE_SURFACE_SHADER,pipelineDescriptor:refractionPipelineDescriptor});
   const renderBindGroup = device.createBindGroup({
     label: 'kaminos-finger-fluid-render-bind-group',
     layout: renderPipeline.getBindGroupLayout(0),
@@ -15602,6 +15606,7 @@ export async function createWebGPUFingerFluidSolver({
       screenSpaceSurfaceAccumulationPassCount += 1;
       screenSpaceOpticalSlabGeometryPassCount += 1;
 
+      const rayCountCapture=refractionEnabled?reflectionRayCounter.begin({width:extent.width,height:extent.height,rendererMode:effectiveRendererMode,opticalDebugMode:effectiveOpticalDebugMode}):null;
       const compositePass = encoder.beginRenderPass({
         label: refractionEnabled
           ? `${KAMINOS_FINGER_FLUID_REFRACTION_RENDERER_ROUTE}:two-interface-optical-slab-composite`
@@ -15619,7 +15624,7 @@ export async function createWebGPUFingerFluidSolver({
             ? 'clear'
             : 'load',
           storeOp: 'store',
-        }],
+        },...(rayCountCapture?[rayCountCapture.attachment]:[])],
         depthStencilAttachment: {
           view: depthTexture.createView(),
           depthClearValue: 1,
@@ -15627,7 +15632,7 @@ export async function createWebGPUFingerFluidSolver({
           depthStoreOp: 'store',
         },
       });
-      compositePass.setPipeline(refractionEnabled ? screenSpaceRefractionCompositePipeline : screenSpaceSurfaceCompositePipeline);
+      compositePass.setPipeline(rayCountCapture?.pipeline ?? (refractionEnabled ? screenSpaceRefractionCompositePipeline : screenSpaceSurfaceCompositePipeline));
       compositePass.setBindGroup(
         0,
         refractionEnabled
@@ -15636,6 +15641,7 @@ export async function createWebGPUFingerFluidSolver({
       );
       compositePass.draw(3);
       compositePass.end();
+      if(rayCountCapture)reflectionRayCounter.finish(encoder,{frameId:renderFrameId,hostFrameId:validatedHostFrame?.frameId??null,step:stepCount,width:extent.width,height:extent.height,rendererMode:effectiveRendererMode,opticalDebugMode:effectiveOpticalDebugMode,policy:frameReflectionBudget,camera:cameraSnapshot,sourceRoute:rendererRouteForMode(effectiveRendererMode)});
       if (refractionEnabled) {
         screenSpaceRefractionCompositePassCount += 1;
         screenSpaceRefractionRenderFrameCount += 1;
@@ -16575,6 +16581,7 @@ export async function createWebGPUFingerFluidSolver({
       renderRoute: rendererRouteForMode(lastEffectiveRendererMode),
       opticalDebugMode: lastOpticalDebugMode,
       reflectionBudget: getReflectionBudgetControls(),
+      reflectionRayStats: reflectionRayCounter.read(),
       requestedOpticalLightingMode: lastRequestedOpticalLightingMode,
       effectiveOpticalLightingMode: lastEffectiveOpticalLightingMode,
       requestedOpticalLightingRoute: opticalLightingRouteForMode(lastRequestedOpticalLightingMode),
@@ -17133,6 +17140,7 @@ export async function createWebGPUFingerFluidSolver({
     neighborTopologyReadbackBuffer.destroy();
     materialTracerReadbackBuffer.destroy();
     liquidFireContactHeaderReadbackBuffer.destroy();
+    reflectionRayCounter.destroy();
     renderParamsBuffer.destroy();
     depthTexture?.destroy();
     screenSpaceSurfaceAccumulationTexture?.destroy();
@@ -17166,6 +17174,8 @@ export async function createWebGPUFingerFluidSolver({
     getPressureControls,
     getReflectionBudgetControls,
     setReflectionBudgetControls,
+    requestReflectionRayStats:reflectionRayCounter.request,
+    getReflectionRayStats:reflectionRayCounter.read,
     armSolverGpuTimestampCaptureForWitness,
     finishSolverGpuTimestampCaptureForWitness,
     armSolverStageGpuTimestampCaptureForWitness,
