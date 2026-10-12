@@ -4,8 +4,9 @@ import {execFileSync} from 'node:child_process';
 import {parseArgs} from 'node:util';
 import {createHash} from 'node:crypto';
 import {validateLayoutFrame} from './layout-checks.js';
+import {validateEpisode} from './witness-checks.js';
 
-const {values}=parseArgs({options:Object.fromEntries(['repo-root','expected-commit','chrome','playwright-module','url','output'].map(key=>[key,{type:'string'}]))});
+const {values}=parseArgs({options:{...Object.fromEntries(['repo-root','expected-commit','chrome','playwright-module','url','output'].map(key=>[key,{type:'string'}])),generate:{type:'boolean',default:false}}});
 const out=path.resolve(values.output??'example-display-witness');
 const report={status:'failed',phase:'arguments',requested:values,route:'real included outputs; native WebGPU display; no inference',frames:[],requests:[],errors:[]};
 const save=async()=>{await fs.mkdir(out,{recursive:true});await fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));};
@@ -64,6 +65,31 @@ try{
   if(JSON.stringify(report.interaction.before)===JSON.stringify(report.interaction.after))throw Error('Included output cannot relight');
   const weights=report.requests.filter(url=>/weights|\.bin(?:\?|$)|\.safetensors/.test(url));
   if(weights.length)throw Error(`Browsing loaded model weights: ${JSON.stringify(weights)}`);
+  if(values.generate){
+    report.route='real included outputs during fresh live WebGPU generation';report.phase='generation-loading';await save();
+    const materialBefore=await page.evaluate(()=>window.__materialPhotoActions.presentation().physicalbaseline.activeMaterial.mapUUID);
+    await page.locator('#run').click();
+    await page.waitForFunction(()=>window.__materialPhoto.job?.message?.includes('loading')||window.__materialPhoto.job?.status==='error');
+    report.loading=await page.evaluate(()=>({state:window.__materialPhoto,presentation:window.__materialPhotoActions.presentation()}));
+    if(report.loading.state.job.status!=='running'||report.loading.presentation.physicalbaseline.activeMaterial.mapUUID!==materialBefore)throw Error('Loading did not preserve the displayed material');
+    await page.screenshot({path:path.join(out,'during-loading.png')});
+    await page.locator('[data-sample=orb]').click();
+    await page.waitForFunction(()=>window.__materialPhoto.status==='included'&&window.__materialPhoto.example?.sample==='orb');
+    const orbitBox=await page.locator('[data-canvas=materials]').boundingBox();
+    const orbitBefore=await page.evaluate(()=>window.__materialPhotoActions.presentation().camera.orbit);
+    await page.mouse.move(orbitBox.x+orbitBox.width/2,orbitBox.y+orbitBox.height/2);await page.mouse.down();
+    await page.mouse.move(orbitBox.x+orbitBox.width/2+40,orbitBox.y+orbitBox.height/2+15);await page.mouse.up();await settle();
+    report.during=await page.evaluate(()=>({state:window.__materialPhoto,presentation:window.__materialPhotoActions.presentation()}));
+    if(report.during.state.job?.status!=='running'||report.during.state.job.source!=='Backpack'||JSON.stringify(orbitBefore)===JSON.stringify(report.during.presentation.camera.orbit))throw Error('No live generation/browsing overlap');
+    await page.screenshot({path:path.join(out,'during-browsing.png')});await save();
+    report.phase='generation-completion';await save();
+    await page.waitForFunction(()=>window.__materialPhoto.runs.length===1);
+    report.completion=await page.evaluate(()=>window.__materialPhoto);await save();
+    if(report.completion.job?.status!=='done'||report.completion.source!=='Metal & glow'||report.completion.status!=='included')throw Error('Generation failed or stole displayed example');
+    await page.locator('#view-result').click();await page.waitForFunction(()=>window.__materialPhoto.status==='done');
+    report.generated=await page.evaluate(()=>window.__materialPhoto);validateEpisode(report.generated,'Backpack',512);
+    await page.screenshot({path:path.join(out,'generated-result.png')});
+  }
   report.finalState=await page.evaluate(()=>window.__materialPhoto);
   if(report.errors.length||report.finalState.gpuErrors?.length)throw Error('Browser errors');
   if(git(['rev-parse','HEAD'])!==report.source.commit)throw Error('Source moved');
