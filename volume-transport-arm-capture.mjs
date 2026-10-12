@@ -13,7 +13,9 @@
 // calls setConfinementEpsilonOverride so a calibration sweep can vary the
 // calibrated epsilon without a persisted knob; the receipt names the override;
 // `@savePreset=<label>` saves the arm's controls as a basin through the
-// cockpit's Save button and records the preset id the cockpit reports.
+// cockpit's Save button and records the preset id the cockpit reports;
+// `@cameraFrame=x:y:z:tx:ty:tz` frames the scene camera and fails the arm
+// unless the effective frame matches.
 // During each settle the capture samples the renderer receipt every 2 s
 // (steps, enstrophy, divergence) so a trend is visible, not just an endpoint.
 // Frames are admission and attribution evidence for the implementer; the
@@ -35,7 +37,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { effectiveMismatches, parseArms, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
+import { cameraFrameMismatch, effectiveMismatches, parseArms, parseCameraFrame, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
 
 const CAPTURE_IDENTITY = 'kaminos.volume.transport-arm-capture.v1';
 const positional = [];
@@ -213,6 +215,15 @@ try {
         if (!presetId) fail(report.failurePhase, `@savePreset ${value} did not produce a saved preset id (status: ${JSON.stringify(status)})`);
         (arm.presetSaves ||= []).push({ label, presetId, status });
         applied.push([cid, value, presetId]);
+        continue;
+      }
+      if (cid === '@cameraFrame') {
+        const frame = parseCameraFrame(value);
+        if (!frame) fail(report.failurePhase, `@cameraFrame needs x:y:z:tx:ty:tz, got ${value}`);
+        const effective = await evaluate(op(`(() => { const f = w.__kaminosSetSceneCameraFrame; return typeof f === 'function' ? f(${JSON.stringify(frame.position)}, ${JSON.stringify(frame.target)}) : null; })()`));
+        const mismatch = cameraFrameMismatch(frame, effective);
+        applied.push([cid, value, effective]);
+        if (mismatch) { report.lastTrustworthyEvidence.applied = applied; fail(report.failurePhase, mismatch); }
         continue;
       }
       if (cid.startsWith('@')) fail(report.failurePhase, `unknown debug-API control ${cid}`);

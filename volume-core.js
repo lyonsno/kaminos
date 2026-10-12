@@ -11,6 +11,8 @@ import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid } from './volume-scene-solid.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
+import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
+export { GRID_HEIGHT_AUTO_RATIO, GRID_HEIGHT_MIN_RATIO, GRID_HEIGHT_MAX_RATIO, GRID_HEIGHT_DERIVED_LATTICE_WIDTHS, resolveGridHeight, gridHeightStep, gridHeightForShape, raymarchDomainBox, raymarchBoxHitModel } from './volume-grid-shape.mjs';
 import { SCENE_POINT_SMOKE_WGSL, createScenePointBindings } from './scene-point-light.mjs';
 import { DISTRIBUTED_SMOKE_WGSL } from './scene-volume-gather.mjs';
 import { createDistributedSmokeBindings } from './scene-smoke-reconstruction.mjs';
@@ -414,23 +416,6 @@ const APPEARANCE_DECOMPOSITION_MODES = Object.freeze({
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 136, 140, 160];
 const VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER = 2;
-// Grid height as a control (2026-10-11): 0 keeps twice the width (every saved
-// basin returns unchanged); a request is clamped to [width, 4 × width] and
-// snapped to a multiple of 4 (the workgroup). Cells keep their size; the box
-// grows rows. The ratio is what the runtime carries, so the resample helper
-// and the irradiance lattice follow the same shape at their own widths.
-export function gridHeightForRatio(size, ratio) {
-  return Math.max(4, Math.round(size * ratio / 4) * 4);
-}
-export function resolveGridHeight(controls = {}, width = DEFAULT_GRID_SIZE) {
-  const requested = Number(controls.gridHeightCells);
-  const requestedCells = Number.isFinite(requested) && requested > 0 ? Math.round(requested) : 0;
-  if (requestedCells === 0) return { requestedCells: 0, heightCells: width * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER, ratio: VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER, mode: 'auto-twice-width' };
-  const clamped = Math.min(4 * width, Math.max(width, requestedCells));
-  const snapped = Math.round(clamped / 4) * 4;
-  const mode = clamped !== requestedCells ? 'requested-clamped' : (snapped !== requestedCells ? 'requested-snapped' : 'requested');
-  return { requestedCells, heightCells: snapped, ratio: snapped / width, mode };
-}
 const SELECTIVE_HEAD_LIVE_ROLES = new Set(['off', 'truthHigh', 'lowPhaseAligned', 'selectiveFullResidual']);
 const SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES = Object.freeze({
   off: 'off',
@@ -523,7 +508,7 @@ const FIRE_IRRADIANCE_ATLAS_IDENTITY = 'gpu-fire-irradiance-lattice-atlas-v0';
 const FIRE_IRRADIANCE_PROPAGATION_IDENTITY = 'irradiance-lattice-axis-diffusion-4-round-v0';
 const FIRE_LIGHT_FIELD_GPU_PROFILE_IDENTITY = 'fire-light-field-gpu-timestamp-profile-v0';
 const DEFAULT_FIRE_IRRADIANCE_GRID_SIZE = 32;
-const SUPPORTED_FIRE_IRRADIANCE_GRID_SIZES = [32, 48];
+export const SUPPORTED_FIRE_IRRADIANCE_GRID_SIZES = [32, 48];
 const FIRE_IRRADIANCE_ATLAS_TILES_X = 8;
 const FIRE_IRRADIANCE_PROPAGATION_ROUNDS = 4;
 const KAMINOS_SHARED_WEBGPU_DEVICE_IDENTITY = 'kaminos-three-volume-shared-webgpu-device-v0';
@@ -1352,6 +1337,25 @@ function gridCellCount(gridSize, gridHeight = gridSize, gridDepth = gridSize) {
   return gridSize * gridHeight * gridDepth;
 }
 
+// Admission of a fluid box shape against a device's limits (report §34,
+// review GH-04): the largest per-binding buffer is the fluid buffer
+// (FLUID_COMPONENTS floats per cell); the largest 3-D texture extents are the
+// height (burn-rate and force textures) and three widths (the force texture
+// stacks its three components along depth). Checked before an existing field
+// is destroyed, so a shape the device cannot hold is refused, not attempted.
+// Unknown limits do not refuse.
+export function gridShapeAdmission({ widthCells, heightCells }, limits = {}) {
+  const finiteLimit = value => (Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : Infinity);
+  const fluidBytes = widthCells * heightCells * widthCells * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
+  const storageLimit = Math.min(finiteLimit(limits?.maxStorageBufferBindingSize), finiteLimit(limits?.maxBufferSize));
+  const textureDimension = Math.max(heightCells, 3 * widthCells);
+  const textureLimit = finiteLimit(limits?.maxTextureDimension3D);
+  const receipt = { fluidBytes, storageLimit, textureDimension, textureLimit };
+  if (fluidBytes > storageLimit) return { admitted: false, reason: `grid-shape-exceeds-device-storage-binding:${fluidBytes}>${storageLimit}`, ...receipt };
+  if (textureDimension > textureLimit) return { admitted: false, reason: `grid-shape-exceeds-device-3d-texture-dimension:${textureDimension}>${textureLimit}`, ...receipt };
+  return { admitted: true, reason: null, ...receipt };
+}
+
 function nextPowerOfTwo(value) {
   const finiteValue = Math.max(1, Math.ceil(Number(value) || 1));
   return 2 ** Math.ceil(Math.log2(finiteValue));
@@ -1370,8 +1374,7 @@ function fluidBufferBytes(gridSize, gridHeight = gridSize, gridDepth = gridSize)
 // over the tall domain, or a per-cell flow-kernel / boundary-splat buffer.
 // The prototype's own device request and the shared host device both use it,
 // so an adopted shared device is never smaller than the one the prototype owns.
-function volumeStorageBufferRequestBytes(gridSize, cellCapacity = null) {
-  const gridHeight = gridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
+function volumeStorageBufferRequestBytes(gridSize, cellCapacity = null, gridHeight = gridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER) {
   const maxRequestedCellCapacity = cellCapacity ?? gridCellCount(gridSize, gridHeight, gridSize);
   const maxRequestedFluidBufferBytes = fluidBufferBytes(gridSize, gridHeight, gridSize);
   const maxRequestedFlowKernelDescriptorBytes = maxRequestedCellCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES;
@@ -1426,7 +1429,9 @@ export async function requestKaminosSharedWebGpuDevice({
 
   const supportedStorageBytes = Math.min(adapterLimit('maxBufferSize'), adapterLimit('maxStorageBufferBindingSize'));
   if (supportedStorageBytes > 0) {
-    const volumeStorageBytes = Math.min(supportedStorageBytes, volumeStorageBufferRequestBytes(Math.max(...SUPPORTED_GRID_SIZES)));
+    // The tallest admissible shape at the widest grid (report §34): the device
+    // is created once and the height can grow later without re-creating it.
+    const volumeStorageBytes = Math.min(supportedStorageBytes, volumeStorageBufferRequestBytes(Math.max(...SUPPORTED_GRID_SIZES), null, Math.max(...SUPPORTED_GRID_SIZES) * GRID_HEIGHT_MAX_RATIO));
     raise('maxBufferSize', volumeStorageBytes);
     raise('maxStorageBufferBindingSize', volumeStorageBytes);
   }
@@ -7559,7 +7564,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let farWorld = farWorldRaw.xyz / farWorldRaw.w;
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
-  let hit = boxHit(ro - vec3<f32>(0.0, 1.0, 0.0), rd, vec3<f32>(1.0, 2.0, 1.0));
+  // The box spans x/z [-1, 1] and y [-1, -1 + 2 GRID_Y/GRID] at equal pitch
+  // (grid height control, report §34; raymarchDomainBox is the CPU mirror).
+  let domainHalfY = f32(GRID_Y) / f32(GRID);
+  let hit = boxHit(ro - vec3<f32>(0.0, domainHalfY - 1.0, 0.0), rd, vec3<f32>(1.0, domainHalfY, 1.0));
   if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, 0.0)) {
     let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);
     return makeRaymarchResult(
@@ -10513,10 +10521,10 @@ export function createKaminosVolumePrototype({
   if (productFrameOwner === 'caller' && (!externalDevice || !externalColorFormat)) {
     throw new Error('caller-product-frame-requires-external-device-and-color-format');
   }
-  // The vertical ratio is seated from the controls once they exist (below);
-  // until then the helper reads the authored default.
-  let verticalRatio = VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
-  const gridHeightForSize = size => gridHeightForRatio(size, verticalRatio);
+  // The box shape (report §34) is seated from the controls once they exist
+  // (below); until then the helper reads the authored twice-the-width.
+  let gridShape = null;
+  const gridHeightForSize = size => gridHeightForShape(size, gridShape);
   const gridShapeLabel = size => `${size}x${gridHeightForSize(size)}x${size}`;
   function gridCellCount(size) {
     return size * gridHeightForSize(size) * size;
@@ -10580,7 +10588,7 @@ export function createKaminosVolumePrototype({
   let persistentSparseCohortGpuState = null;
   let fourArmHeldStateRuntimeState = null;
   let fourArmHeldStateResidualGrid = null;
-  verticalRatio = resolveGridHeight(controlsSnapshot, normalizeGridSize(controlsSnapshot.resolution)).ratio;
+  gridShape = resolveGridHeight(controlsSnapshot, normalizeGridSize(controlsSnapshot.resolution));
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let gridHeight = gridHeightForSize(gridSize);
   let boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
@@ -10727,6 +10735,8 @@ export function createKaminosVolumePrototype({
     simGrid: gridSize,
     simGridLabel: `${gridSize}x${gridHeight}x${gridSize} velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`,
     simGridDimensions: [gridSize, gridHeight, gridSize],
+    // The requested box shape and whether this device admitted it (report §34).
+    gridHeight: { ...gridShape, admitted: true, admissionReason: null, admissionChecked: false },
     gridOverlay: 0,
     adaptiveRaymarch: 0.65,
     occupancySkip: 0.35,
@@ -13892,7 +13902,7 @@ export function createKaminosVolumePrototype({
     if (!adapter) throw new Error('WebGPU adapter unavailable');
     const maxRequestedStorageBufferBytes = productFrameOwner === 'caller'
       ? volumeStorageBufferRequestBytes(gridSize, boundarySplatCapacity)
-      : volumeStorageBufferRequestBytes(Math.max(...SUPPORTED_GRID_SIZES));
+      : volumeStorageBufferRequestBytes(Math.max(...SUPPORTED_GRID_SIZES), null, Math.max(...SUPPORTED_GRID_SIZES) * GRID_HEIGHT_MAX_RATIO);
     const requiredLimits = {};
     const maxSupportedStorageBufferBytes = Math.min(
       adapter.limits?.maxBufferSize ?? 0,
@@ -14397,6 +14407,17 @@ export function createKaminosVolumePrototype({
     });
     device.pushErrorScope('validation');
     state.gpuInitStage = 'fluid-rebuild';
+    // Admission of the requested box shape against this device (report §34,
+    // review GH-04): a shape the device cannot hold falls back to twice the
+    // width, receipted, before anything is allocated.
+    {
+      const initialAdmission = gridShapeAdmission(gridShape, device.limits);
+      state.gridHeight = { ...gridShape, admitted: initialAdmission.admitted, admissionReason: initialAdmission.reason, admissionChecked: true };
+      if (!initialAdmission.admitted) {
+        gridShape = resolveGridHeight({}, gridShape.widthCells);
+        state.gridHeight.fallback = { ...gridShape };
+      }
+    }
     rebuildFluidState(controlsSnapshot.resolution);
     if (gridSize === 160) {
       selectiveHeadLiveRuntime = await createSelectiveHeadLiveRuntime({
@@ -16856,6 +16877,8 @@ export function createKaminosVolumePrototype({
   function fireIrradianceLightField() {
     const requested = fireLightFieldRequested();
     const atlasTilesY = Math.ceil(irradianceGridSize / FIRE_IRRADIANCE_ATLAS_TILES_X);
+    // The bounds the camera actually samples (the raymarch box, report §34).
+    const domainBox = raymarchDomainBox(gridSize, gridHeight);
     const base = {
       identity: FIRE_IRRADIANCE_ATLAS_IDENTITY,
       latticeIdentity: FIRE_IRRADIANCE_LATTICE_IDENTITY,
@@ -16869,14 +16892,10 @@ export function createKaminosVolumePrototype({
       atlasWidth: irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X,
       atlasHeight: gridHeightForSize(irradianceGridSize) * atlasTilesY,
       gridY: gridHeightForSize(irradianceGridSize),
-      worldMin: productTransform.translate.map(value => value - 1),
-      worldMax: [productTransform.translate[0] + 1,
-        productTransform.translate[1] - 1 + 2 * gridHeight / gridSize,
-        productTransform.translate[2] + 1],
+      worldMin: domainBox.min.map((value, axis) => value + productTransform.translate[axis]),
+      worldMax: domainBox.max.map((value, axis) => value + productTransform.translate[axis]),
       worldBoundsAuthority: 'full-volume-domain-equal-cell-pitch-v1',
-      raymarchWorldMax: [productTransform.translate[0] + 1,
-        productTransform.translate[1] - 1 + 2 * gridHeight / gridSize,
-        productTransform.translate[2] + 1],
+      raymarchWorldMax: domainBox.max.map((value, axis) => value + productTransform.translate[axis]),
       generation: irradianceAtlasGeneration,
       builtFrame: state.fireLightFieldLastBuiltFrame ?? null,
       frameCount: state.fireLightFieldFrameCount || 0,
@@ -26012,16 +26031,24 @@ export function createKaminosVolumePrototype({
       }
       const nextCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       const requestedGrid = normalizeGridSize(controlsSnapshot.resolution);
-      const requestedHeight = resolveGridHeight(controlsSnapshot, requestedGrid);
-      const heightChanged = requestedHeight.heightCells !== gridHeight;
-      state.gridHeight = { ...requestedHeight, widthCells: requestedGrid };
+      const requestedShape = resolveGridHeight(controlsSnapshot, requestedGrid);
+      const shapeChanged = requestedGrid !== previousGrid || requestedShape.heightCells !== gridHeight;
+      // Admission before anything is replaced (review GH-04); without a device
+      // the shape is seated now and admitted when the device appears (GH-03).
+      const admission = device && shapeChanged ? gridShapeAdmission(requestedShape, device.limits) : { admitted: true, reason: null };
+      state.gridHeight = { ...requestedShape, admitted: admission.admitted, admissionReason: admission.reason, admissionChecked: Boolean(device && shapeChanged) };
+      if (admission.admitted) gridShape = requestedShape;
+      const heightChanged = admission.admitted && requestedShape.heightCells !== gridHeight;
       const sourceStateResetNeeded = device
+        && admission.admitted
         && requestedGrid === previousGrid
         && !heightChanged
         && normalizeVolumeScene(controlsSnapshot.volumeScene) === 'canonical_plume'
         && previousCanonicalSourceControlSignature !== nextCanonicalSourceControlSignature;
-      if (device && (requestedGrid !== previousGrid || heightChanged)) {
-        verticalRatio = requestedHeight.ratio;
+      if (!admission.admitted) {
+        // Refused: the field, its shape and its dimensions stay as they were.
+        // The receipt names the request and the limit it exceeds.
+      } else if (device && (requestedGrid !== previousGrid || heightChanged)) {
         rebuildFluidState(requestedGrid, heightChanged ? 'grid-height-change' : 'grid-rebuilt');
       } else if (sourceStateResetNeeded) {
         rebuildFluidState(requestedGrid, 'canonical-source-control-change');
