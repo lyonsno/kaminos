@@ -1961,8 +1961,11 @@ export async function createGpuStructuralCombustionAssembly({
     pass.end();
   }
 
+  const socketIsActive = socket => !socket.activeProvider || socket.activeProvider() !== false;
+
   function refreshSpatialTransforms() {
     sockets.forEach(socket => {
+      if (!socketIsActive(socket)) return;
       if (!socket.spatialTransformProvider) return;
       const next = socket.spatialTransformProvider();
       for (const field of ['nodeToPyro', 'displayTransform', 'normalTransform']) {
@@ -1986,6 +1989,7 @@ export async function createGpuStructuralCombustionAssembly({
     const targetGroup = groups[sockets.indexOf(targetSocket)];
     encodePass(encoder, 'structural combustion clear source', clearPipeline, targetGroup, 1);
     sockets.forEach((socket, index) => {
+      if (!socketIsActive(socket)) return;
       encodePass(
         encoder,
         `structural combustion heat and conduct ${socket.id}`,
@@ -1995,6 +1999,7 @@ export async function createGpuStructuralCombustionAssembly({
       );
     });
     sockets.forEach((socket, index) => {
+      if (!socketIsActive(socket)) return;
       encodePass(
         encoder,
         `structural combustion weaken ${socket.id}`,
@@ -2005,6 +2010,7 @@ export async function createGpuStructuralCombustionAssembly({
       socket.sidecar.encodeResidentInteraction(encoder, socket.load || load);
     });
     sockets.forEach((socket, index) => {
+      if (!socketIsActive(socket)) return;
       encodePass(
         encoder,
         `structural combustion component motion ${socket.id}`,
@@ -2013,7 +2019,7 @@ export async function createGpuStructuralCombustionAssembly({
         Math.ceil(socket.descriptor.nodeCount / WORKGROUP_SIZE),
       );
     });
-    emittingSockets.forEach(socket => encodePass(
+    emittingSockets.filter(socketIsActive).forEach(socket => encodePass(
       encoder,
       `structural combustion emit carried sources ${socket.id}`,
       emitPipeline,
@@ -2021,7 +2027,7 @@ export async function createGpuStructuralCombustionAssembly({
       Math.ceil(socket.descriptor.nodeCount / WORKGROUP_SIZE),
     ));
     encodePass(encoder, 'structural combustion finalize source', finalizePipeline, targetGroup, 1);
-    sockets.forEach(socket => { socket.materialIndex = 1 - socket.materialIndex; });
+    sockets.filter(socketIsActive).forEach(socket => { socket.materialIndex = 1 - socket.materialIndex; });
     dispatchCount += 1;
     return {
       status: 'encoded',
@@ -2075,6 +2081,7 @@ export async function createGpuStructuralCombustionAssembly({
     }
     refreshSpatialTransforms();
     sockets.forEach(socket => {
+      if (!socketIsActive(socket)) return;
       const bytes = new ArrayBuffer(PRESENTATION_BYTES);
       const values = new Float32Array(bytes);
       const integers = new Uint32Array(bytes);
@@ -2097,6 +2104,7 @@ export async function createGpuStructuralCombustionAssembly({
       },
     });
     sockets.forEach(socket => {
+      if (!socketIsActive(socket)) return;
       if (socket.meshSkin) {
         pass.setBindGroup(0, socket.meshPresentationBindGroups[socket.materialIndex]);
         pass.setPipeline(meshPresentationPipeline);
@@ -2366,6 +2374,7 @@ export async function createGpuStructuralCombustionAssembly({
       terminalReadbackCount: runtimeReadbackCount,
       hostCausalFeedbackCount: 0,
       structureCount: sockets.length,
+      activeStructureCount: sockets.filter(socketIsActive).length,
       gridDimensions: [...gridDimensions],
       spatialTransforms: sockets.map(socket => ({ id: socket.id, ...socket.spatialState })),
       surfaceCellCount: sockets.reduce((sum, socket) => sum + socket.surfaceCellCount, 0),
@@ -2374,8 +2383,8 @@ export async function createGpuStructuralCombustionAssembly({
       presentationMode: sockets.some(socket => socket.meshSkin)
         ? 'indexed-mesh-skin-resident-structural-proxy-v0'
         : 'solid-cell-surface-with-structural-overlay-v0',
-      emittingObjectId: emittingSockets.length === 1 ? target.objectId : null,
-      emittingObjectIds: emittingSockets.map(socket => socket.objectId),
+      emittingObjectId: emittingSockets.filter(socketIsActive).length === 1 ? emittingSockets.find(socketIsActive).objectId : null,
+      emittingObjectIds: emittingSockets.filter(socketIsActive).map(socket => socket.objectId),
       sourceCapacity,
       deviceOwnership: 'borrowed',
       lastTerminalReceipt,

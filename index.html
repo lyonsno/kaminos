@@ -12130,6 +12130,11 @@ function applyEnvMap(envMap, intensity) {
 // --- File Loading ---
 function clearScene({loadRequestId = null} = {}) {
   if (loadRequestId === null || !sceneLoadRequests.isCurrent(loadRequestId)) sceneLoadRequests.invalidate();
+  if (savedMeshCombustionRuntime) {
+    volumePrototype?.clearGpuStructuralCombustionAssembly?.();
+    savedMeshCombustionRuntime.runtime.dispose();
+    savedMeshCombustionRuntime = null;
+  }
   authoringControlSessions.forEach(session => session.cancel());
   sceneControlHistory?.cancel();
   scenePlacementTools?.clear();
@@ -28561,7 +28566,8 @@ async function syncSavedSceneCombustionBinding(loadRequestId = null) {
   if (!isCurrent()) return false;
   const presentationDebugMode = new URLSearchParams(window.location.search)
     .get('volume_structural_combustion_view') || 'off';
-  const runtime = await createSavedMeshCombustionAssembly({ THREE, entries: boundEntries, gpuContext, presentationDebugMode });
+  const runtime = await createSavedMeshCombustionAssembly({ THREE, entries: boundEntries, gpuContext, presentationDebugMode,
+    isEntryActive: entry => sceneObjects.some(current => current.id === entry.id && current.object === entry.object) });
   if (!isCurrent()) { runtime.dispose(); return false; }
   try {
     const bound = await volumePrototype.setGpuStructuralCombustionAssembly(runtime.assembly, {isCurrent});

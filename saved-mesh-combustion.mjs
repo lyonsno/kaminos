@@ -116,7 +116,7 @@ export function buildSavedMeshStructuralSurface({ THREE, object, assetIdentity }
   };
 }
 
-async function createSavedMeshCombustionStructure({ THREE, entry, gpuContext }) {
+async function createSavedMeshCombustionStructure({ THREE, entry, gpuContext, isEntryActive }) {
   const binding = entry?.combustionBinding;
   if (!binding || binding.schema !== 'kaminos.object-combustion-binding.v0' || binding.objectId !== entry.id) {
     throw new Error('saved mesh combustion binding identity does not match the scene object');
@@ -171,18 +171,19 @@ async function createSavedMeshCombustionStructure({ THREE, entry, gpuContext }) 
     worldOffset: surface.worldOffset,
     displayScale: surface.displayScale,
     spatialTransformProvider,
+    activeProvider: () => isEntryActive(entry),
     spatialState,
     burnRate: binding.burnRate,
   };
 }
 
-export async function createSavedMeshCombustionAssembly({ THREE, entry, entries = entry ? [entry] : [], gpuContext, presentationDebugMode = 'off' } = {}) {
+export async function createSavedMeshCombustionAssembly({ THREE, entry, entries = entry ? [entry] : [], gpuContext, presentationDebugMode = 'off', isEntryActive = () => true } = {}) {
   if (!Array.isArray(entries) || !entries.length) throw new Error('saved mesh combustion requires bound objects');
   if (new Set(entries.map(value => value.id)).size !== entries.length) throw new Error('saved mesh combustion object identities must be unique');
   const structures = [];
   try {
     for (const boundEntry of entries) {
-      structures.push(await createSavedMeshCombustionStructure({THREE, entry: boundEntry, gpuContext}));
+      structures.push(await createSavedMeshCombustionStructure({THREE, entry: boundEntry, gpuContext, isEntryActive}));
     }
     const assembly = await createGpuStructuralCombustionAssembly({
       device: gpuContext.device,

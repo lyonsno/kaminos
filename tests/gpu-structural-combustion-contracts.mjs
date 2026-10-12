@@ -541,8 +541,9 @@ try {
   assert.throws(() => assembly.encode(encoder, {}), /frozen/i);
   assembly.destroy();
 
+  let firstPresent = true;
   const pairStructures = [
-    {id: 'first-timber', objectId: 31, state: targetState, sidecar: targetSidecar, load: {magnitude: 0.74}},
+    {id: 'first-timber', objectId: 31, state: targetState, sidecar: targetSidecar, load: {magnitude: 0.74}, activeProvider: () => firstPresent},
     {id: 'second-timber', objectId: 32, state: controlState, sidecar: controlSidecar, load: {magnitude: 0.74}},
   ];
   const pair = await createGpuStructuralCombustionAssembly({
@@ -560,6 +561,18 @@ try {
   assert.equal(passes.filter(label => label === 'structural combustion finalize source').length, 1);
   assert.equal(pair.debugState().runtimeReadbackCount, 0);
   assert.deepEqual(pair.debugState().emittingObjectIds, [31, 32]);
+  const residentBuffers = buffers.length;
+  firstPresent = false; passes.length = 0;
+  pair.encode(encoder, {});
+  assert.ok(!passes.some(label => label.includes('first-timber')),'removed timber must not heat, weaken, move or emit');
+  assert.ok(passes.some(label => label.includes('second-timber')),'surviving timber keeps simulating');
+  assert.deepEqual(pair.debugState().emittingObjectIds,[32]);
+  rendered.length=0;
+  pair.encodePresentation(presentationEncoder,{},identityMatrix,{width:640,height:360});
+  assert.equal(rendered.length,3,'removed timber must not retain an independently rendered skin/overlay');
+  assert.equal(buffers.length,residentBuffers,'membership change must preserve surviving GPU material history');
+  firstPresent=true; passes.length=0; pair.encode(encoder,{});
+  assert.ok(passes.some(label=>label.includes('first-timber')),'undo membership can reactivate the retained timber without resetting it');
   pair.destroy();
   const quietPair = await createGpuStructuralCombustionAssembly({
     device, gridSize: 32, format: 'rgba8unorm',
