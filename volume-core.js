@@ -16838,7 +16838,10 @@ export function createKaminosVolumePrototype({
       1
     );
     resolvePass.end();
-    const analyticPass = encoder.beginComputePass({ label: 'kaminos fire irradiance far-field reduce pass' });
+    const analyticPass = encoder.beginComputePass({
+      label: 'kaminos fire irradiance far-field reduce pass',
+      ...(options.analyticTimestampWrites ? { timestampWrites: options.analyticTimestampWrites } : {}),
+    });
     analyticPass.setPipeline(irradianceAnalyticPipeline);
     analyticPass.setBindGroup(0, readBindGroup);
     analyticPass.setBindGroup(1, resolveReadGroup);
@@ -26545,8 +26548,8 @@ export function createKaminosVolumePrototype({
       if (!gpuInitialized || !device) return { status: 'unsupported', reason: 'gpu-not-initialized', ...meta };
       if (!timestampQueriesAvailable()) return { status: 'unsupported', reason: device.features?.has?.('timestamp-query') ? 'timestamp-query-write-api-unavailable' : 'timestamp-query-not-supported', ...meta };
       const count = n + 1;
-      // Then the frame's field passes once, closed by a marker timestamp, and
-      // K raymarch draws into the offscreen frame texture, all timed end to
+      // Then the frame's field passes once, closed by the light field's own
+      // last-pass timestamp, and K raymarch draws into the offscreen frame texture, all timed end to
       // end on one GPU clock.
       const draws = 4;
       const querySet = device.createQuerySet({ type: 'timestamp', count: count + 1 + draws });
@@ -26557,8 +26560,10 @@ export function createKaminosVolumePrototype({
         for (let i = 0; i < count; i += 1) {
           if (!encodeSim(encoder, { finalTimestampWrites: { querySet, endOfPassWriteIndex: i } })) throw new Error('simulation-final-timestamp-unavailable');
         }
-        const fieldPasses = { fireIrradianceLightField: encodeFireIrradianceLightField(encoder), liquidFireContactTransfer: encodeLiquidFireContactTransfer(encoder), selectiveHeadLiveFields: encodeSelectiveHeadLiveFields(encoder) };
-        encodeBoundarySplatTimestampMarker(encoder, querySet, count, 'kaminos sim gpu profile frame fields marker');
+        // The light field's last pass reads the lattice built from the fluid,
+        // so its end timestamp cannot land before the last projection's; an
+        // independent marker pass could (capture 6c0fbc9f, arm p12).
+        const fieldPasses = { fireIrradianceLightField: encodeFireIrradianceLightField(encoder, { analyticTimestampWrites: { querySet, endOfPassWriteIndex: count } }), liquidFireContactTransfer: encodeLiquidFireContactTransfer(encoder), selectiveHeadLiveFields: encodeSelectiveHeadLiveFields(encoder) };
         const drawsAvailable = Boolean(readbackPipeline);
         if (drawsAvailable) {
           ensureFrameTexture();
@@ -26573,10 +26578,14 @@ export function createKaminosVolumePrototype({
         const timestamps = Array.from(new BigUint64Array(readbackBuffer.getMappedRange().slice(0)));
         readbackBuffer.unmap();
         const profile = simStepGpuProfileFromTimestamps(timestamps.slice(0, count), meta);
-        return { ...profile,
-          fields: { ...gpuPassDurationsFromEndTimestamps(timestamps[count - 1], [timestamps[count]]), passes: fieldPasses, opticalCoefficientsExcluded: Boolean(liveCompleteFlameOpticalCoefficientsEnabled) },
+        const fields = fieldPasses.liquidFireContactTransfer || fieldPasses.selectiveHeadLiveFields
+          ? { status: 'invalid', reason: 'untimed-field-passes' }
+          : fieldPasses.fireIrradianceLightField ? gpuPassDurationsFromEndTimestamps(timestamps[count - 1], [timestamps[count]]) : { status: 'not-encoded', passMs: [] };
+        const drawStart = fieldPasses.fireIrradianceLightField ? timestamps[count] : timestamps[count - 1];
+        return { ...profile, timestampsNs: timestamps.map(String),
+          fields: { ...fields, passes: fieldPasses, opticalCoefficientsExcluded: Boolean(liveCompleteFlameOpticalCoefficientsEnabled) },
           render: drawsAvailable
-          ? { ...gpuPassDurationsFromEndTimestamps(timestamps[count], timestamps.slice(count + 1, count + 1 + draws)), size: [state.width, state.height], renderScale: state.renderScale ?? null, raymarchSteps: controlsSnapshot.raySteps ?? null, pipeline: 'readback-rgba8unorm' }
+          ? { ...gpuPassDurationsFromEndTimestamps(drawStart, timestamps.slice(count + 1, count + 1 + draws)), size: [state.width, state.height], renderScale: state.renderScale ?? null, raymarchSteps: controlsSnapshot.raySteps ?? null, pipeline: 'readback-rgba8unorm' }
           : { status: 'unsupported', reason: 'readback-pipeline-unavailable' } };
       } catch (error) {
         return { status: 'failed', reason: error?.message || String(error), ...meta };

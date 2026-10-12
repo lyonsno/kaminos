@@ -226,7 +226,7 @@ try {
         (arm.simGpuProfiles ||= []).push(profile);
         applied.push([cid, value, profile?.status ?? null]);
         const mismatch = simGpuProfileMismatch(profile, steps);
-        if (mismatch) { report.lastTrustworthyEvidence.applied = applied; fail(report.failurePhase, mismatch); }
+        if (mismatch) { report.lastTrustworthyEvidence.applied = applied; report.lastTrustworthyEvidence.simGpuProfile = profile; fail(report.failurePhase, mismatch); }
         continue;
       }
       if (cid.startsWith('@')) fail(report.failurePhase, `unknown debug-API control ${cid}`);

@@ -71,7 +71,8 @@ test('capture: @simGpuProfile=N samples the profile and the arm fails unless it 
 
 // The frame also pays for the raymarch draw: the profile times K draws into the
 // offscreen frame texture with end-of-pass timestamps only, each draw's time
-// the gap from the previous end (the frame-fields marker for the first draw).
+// the gap from the previous end (the light field's end, or the last step's end when no field pass ran, for
+// the first draw).
 // Begin-of-render-pass timestamps read back implausibly on the Apple route
 // (each draw's begin-to-end grew by the previous draws' duration), so the
 // profile does not use them.
@@ -85,20 +86,36 @@ test('draw timing: end-to-end differences after the last sim step; the API times
   assert.match(api, /const querySet = device\.createQuerySet\(\{ type: 'timestamp', count: count \+ 1 \+ draws \}\);/);
   assert.match(api, /encodeDraw\(encoder, frameTexture\.createView\(\), 'kaminos sim gpu profile raymarch', readbackPipeline, \{ timestampWrites: \{ querySet, endOfPassWriteIndex: count \+ 1 \+ j \} \}\);/);
   assert.ok(!api.includes('beginningOfPassWriteIndex'), 'no begin-of-pass timestamps');
-  assert.match(api, /render: drawsAvailable\n\s+\? \{ \.\.\.gpuPassDurationsFromEndTimestamps\(timestamps\[count\], timestamps\.slice\(count \+ 1, count \+ 1 \+ draws\)\), size: \[state\.width, state\.height\], renderScale: state\.renderScale \?\? null, raymarchSteps: controlsSnapshot\.raySteps \?\? null, pipeline: 'readback-rgba8unorm' \}\n\s+: \{ status: 'unsupported', reason: 'readback-pipeline-unavailable' \}/);
+  assert.match(api, /render: drawsAvailable\n\s+\? \{ \.\.\.gpuPassDurationsFromEndTimestamps\(drawStart, timestamps\.slice\(count \+ 1, count \+ 1 \+ draws\)\), size: \[state\.width, state\.height\], renderScale: state\.renderScale \?\? null, raymarchSteps: controlsSnapshot\.raySteps \?\? null, pipeline: 'readback-rgba8unorm' \}\n\s+: \{ status: 'unsupported', reason: 'readback-pipeline-unavailable' \}/);
 });
 
 // A live frame also encodes the field passes that follow the sim step (fire
 // irradiance light field, liquid contact transfer, selective head fields). The
-// profile encodes them once after the steps, closes them with a marker
-// timestamp, and times the draws from that marker, so step + fields + draw
-// cover the ordinary frame's GPU work. The optical-coefficient pass is not
-// re-encoded (it checks its producer step); the receipt says when it is on.
-test('frame fields: encoded once after the steps, timed to a marker; the draws start from the marker', () => {
+// profile encodes them once after the steps. The light field's last pass (the
+// far-field reduce, which reads the lattice built from the fluid) carries the
+// closing timestamp: an independent marker pass touching no shared data could
+// finish before the last projection on the Apple route and read back earlier
+// than the step end (capture 6c0fbc9f, arm p12). With no field pass encoded
+// the section is 'not-encoded' and the draws start from the last step end; a
+// field pass with no timestamp of its own fails the profile. The
+// optical-coefficient pass is not re-encoded; the receipt says when it is on.
+test('frame fields: the light field closes the section with its own last-pass timestamp; nothing encoded is named; raw timestamps are kept', () => {
   const api = closure.slice(closure.indexOf('    async sampleSimStepGpuProfile(steps = 8) {'), closure.indexOf('    setConfinementEpsilonOverride(value) {'));
-  assert.match(api, /const fieldPasses = \{ fireIrradianceLightField: encodeFireIrradianceLightField\(encoder\), liquidFireContactTransfer: encodeLiquidFireContactTransfer\(encoder\), selectiveHeadLiveFields: encodeSelectiveHeadLiveFields\(encoder\) \};/);
-  assert.match(api, /encodeBoundarySplatTimestampMarker\(encoder, querySet, count, 'kaminos sim gpu profile frame fields marker'\);/);
+  assert.match(api, /const fieldPasses = \{ fireIrradianceLightField: encodeFireIrradianceLightField\(encoder, \{ analyticTimestampWrites: \{ querySet, endOfPassWriteIndex: count \} \}\), liquidFireContactTransfer: encodeLiquidFireContactTransfer\(encoder\), selectiveHeadLiveFields: encodeSelectiveHeadLiveFields\(encoder\) \};/);
+  assert.ok(!api.includes('encodeBoundarySplatTimestampMarker'), 'no independent marker pass');
   assert.ok(api.indexOf('const fieldPasses') > api.indexOf('simulation-final-timestamp-unavailable'), 'fields follow the steps');
   assert.ok(api.indexOf('const fieldPasses') < api.indexOf("'kaminos sim gpu profile raymarch'"), 'fields precede the draws');
-  assert.match(api, /fields: \{ \.\.\.gpuPassDurationsFromEndTimestamps\(timestamps\[count - 1\], \[timestamps\[count\]\]\), passes: fieldPasses, opticalCoefficientsExcluded: Boolean\(liveCompleteFlameOpticalCoefficientsEnabled\) \}/);
+  assert.match(api, /const fields = fieldPasses\.liquidFireContactTransfer \|\| fieldPasses\.selectiveHeadLiveFields\n\s+\? \{ status: 'invalid', reason: 'untimed-field-passes' \}\n\s+: fieldPasses\.fireIrradianceLightField \? gpuPassDurationsFromEndTimestamps\(timestamps\[count - 1\], \[timestamps\[count\]\]\) : \{ status: 'not-encoded', passMs: \[\] \};/);
+  assert.match(api, /const drawStart = fieldPasses\.fireIrradianceLightField \? timestamps\[count\] : timestamps\[count - 1\];/);
+  assert.match(api, /fields: \{ \.\.\.fields, passes: fieldPasses, opticalCoefficientsExcluded: Boolean\(liveCompleteFlameOpticalCoefficientsEnabled\) \}/);
+  assert.match(api, /timestampsNs: timestamps\.map\(String\)/);
+  assert.match(source, /const analyticPass = encoder\.beginComputePass\(\{\n\s+label: 'kaminos fire irradiance far-field reduce pass',\n\s+\.\.\.\(options\.analyticTimestampWrites \? \{ timestampWrites: options\.analyticTimestampWrites \} : \{\}\),\n\s+\}\);/);
+  const sampled = core.gpuPassDurationsFromEndTimestamps(6001000n, [7001000n]);
+  const good = { ...core.simStepGpuProfileFromTimestamps([1000n, 3001000n, 6001000n], { requestedSteps: 2 }), fields: sampled, render: sampled };
+  assert.equal(simGpuProfileMismatch({ ...good, fields: { status: 'not-encoded', passMs: [] } }, 2), null, 'no field pass is a named state');
+  assert.match(simGpuProfileMismatch({ ...good, fields: { status: 'invalid', reason: 'untimed-field-passes' } }, 2), /frame fields invalid \(untimed-field-passes\)/);
+});
+
+test('capture: a profile that fails its check is kept in the failure report', () => {
+  assert.match(capture, /if \(mismatch\) \{ report\.lastTrustworthyEvidence\.applied = applied; report\.lastTrustworthyEvidence\.simGpuProfile = profile; fail\(report\.failurePhase, mismatch\); \}/);
 });

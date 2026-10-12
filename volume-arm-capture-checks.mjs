@@ -165,6 +165,7 @@ export function simGpuProfileMismatch(profile, requestedSteps) {
   if (profile.timestampAuthority !== 'gpu-timestamp-query:end-of-pressure-projection') return `sim GPU profile authority ${profile.timestampAuthority}`;
   const passMismatch = (label, pass, unsupportedAdmitted) => {
     if (!pass) return `sim GPU profile ${label} missing`;
+    if (label === 'frame fields' && pass.status === 'not-encoded') return null;
     if (pass.status === 'sampled') return pass.passMs?.length && pass.passMs.every(v => Number.isFinite(v) && v > 0) ? null : `sim GPU profile ${label} has a non-positive or non-finite pass`;
     if (unsupportedAdmitted && pass.status === 'unsupported') return null;
     return `sim GPU profile ${label} ${pass.status}${pass.reason ? ` (${pass.reason})` : ''}`;
