@@ -4,7 +4,7 @@
 // weights f16 from pack-text-encoder.py. Token embeddings are gathered on the
 // host from rows fetched by the caller (HTTP range requests in the browser).
 import { KleinDutyScheduler } from './klein-duties.js';
-import { gemmShader, gemmShaderV2, rmsNormShader, qwenQkvPrepShader, maskedSoftmaxShader, swigluShader, copyColumnsShader,
+import { gemmShader, gemmShaderV2, gemmShaderV3, gemmVersionFor, rmsNormShader, qwenQkvPrepShader, maskedSoftmaxShader, swigluShader, copyColumnsShader,
   headsToRowsShader } from './klein-kernels.js';
 
 const HEAD = 128;
@@ -67,9 +67,10 @@ export class KleinTextEncoder {
 
   // Same splitting contract as KleinTransformer.gemm: column ranges under a cooperative budget.
   async gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bDiv = 1, bType = 'f16', c, cOff = 0, cRs, cBs = 0, M, N, K, batch = 1, alpha = 1, epilogue = 'store', scaleOff = 0, group = 64, label = 'gemm' }) {
-    const v2 = (this.gemmVersion ?? 2) === 2 && K % 4 === 0;
     const st = this.sharedType ?? 'f32';
-    const pipe = v2 ? this.pipeline(`gemm2-${bType}-g${group}-${epilogue}-${st}`, gemmShaderV2({ bType, epilogue, sType: st, group }))
+    const version = gemmVersionFor(this.gemmVersion, bType, st, K), tile = version === 3 ? 128 : 64;
+    const pipe = version === 3 ? this.pipeline(`gemm3-${bType}-g${group}-${epilogue}-${st}`, gemmShaderV3({ bType, epilogue, sType: st, group, tm: 8, tn: 8 }))
+      : version === 2 ? this.pipeline(`gemm2-${bType}-g${group}-${epilogue}-${st}`, gemmShaderV2({ bType, epilogue, sType: st, group }))
       : this.pipeline(`gemm-${bType}-g${group}-${epilogue}`, gemmShader({ bType, epilogue, group }));
     const issue = (nBase, nCount) => {
       const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, 0, bDiv, scaleOff, nBase, 0, 0, 0]);
@@ -78,12 +79,12 @@ export class KleinTextEncoder {
       const bind = this.device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries });
       const e = enc?.encoder ? enc.encoder() : enc;
       const pass = e.beginComputePass(); pass.setPipeline(pipe); pass.setBindGroup(0, bind);
-      pass.dispatchWorkgroups(Math.ceil(nCount / 64), Math.ceil(M / 64), batch); pass.end();
+      pass.dispatchWorkgroups(Math.ceil(nCount / tile), Math.ceil(M / tile), batch); pass.end();
       this.sched.addFlops(2 * M * nCount * K * batch);
     };
     const flops = 2 * M * N * K * batch, budget = this.sched.budget();
-    if (!v2 || flops <= budget) { issue(0, N); return; }
-    const columns = Math.max(64, Math.floor(budget / (2 * M * K * batch) / 64) * 64);
+    if (version === 1 || flops <= budget) { issue(0, N); return; }
+    const columns = Math.max(tile, Math.floor(budget / (2 * M * K * batch) / tile) * tile);
     for (let nBase = 0; nBase < N; nBase += columns) {
       issue(nBase, Math.min(columns, N - nBase));
       await this.sched.boundary(`${label}[${nBase}]`);

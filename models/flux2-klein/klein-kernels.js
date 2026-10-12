@@ -588,3 +588,11 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
   ${stores}
 }`;
 }
+
+// Which GEMM a call uses: v3 (128x128 tiles) only for quantized weights with f16 shared tiles (8x8
+// f32 tiles exceed 32 KB of workgroup storage) and K a multiple of the 32-wide K tile; v2 when K is
+// a multiple of 4; else the v1 parity kernel.
+export function gemmVersionFor(requested = 2, bType, sType, K) {
+  if (requested >= 3 && /^i\d$/.test(bType) && sType === 'f16' && K % 32 === 0) return 3;
+  return requested >= 2 && K % 4 === 0 ? 2 : 1;
+}

@@ -79,7 +79,8 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
   const features = ['shader-f16', ...(adapter.features.has('timestamp-query') ? ['timestamp-query'] : [])];
   const device = await adapter.requestDevice({ requiredFeatures: features, requiredLimits: {
     maxBufferSize: adapter.limits.maxBufferSize, maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
-    maxStorageBuffersPerShaderStage: adapter.limits.maxStorageBuffersPerShaderStage } });
+    maxStorageBuffersPerShaderStage: adapter.limits.maxStorageBuffersPerShaderStage,
+    maxComputeWorkgroupStorageSize: adapter.limits.maxComputeWorkgroupStorageSize } });
   const session = await createWebGpuInferenceSession({ sessionId: `flux2-klein:${crypto.randomUUID()}`, device, adapterName: 'browser-primary-adapter' });
   const foreground = createWebGpuForegroundService({ routeId: KLEIN_ROUTE_ID, device });
   const pipeline = new KleinPipeline(device, { ...urls, ...kernels });
@@ -118,7 +119,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
   requestAnimationFrame(requestFrame);
 
   let active = null;
-  async function generate({ prompt, seed, size, cooperative = true, targetDutyMs = 12, maxInFlight = 1, onStep, onPhase }) {
+  async function generate({ prompt, seed, size, textLength = 512, cooperative = true, targetDutyMs = 12, maxInFlight = 1, onStep, onPhase }) {
     if (active) throw new Error('a generation is already running');
     const runId = `flux2-klein:${crypto.randomUUID()}`;
     const abort = new AbortController();
@@ -134,7 +135,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
         const control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground: frameRun.withForeground });
         active.control = control;
         const job = route.enqueue({ jobId: runId, execute: invocation => pipeline.generate({
-          prompt, seed, width: size, height: size, onStep, onPhase,
+          prompt, seed, width: size, height: size, textLength, onStep, onPhase,
           schedule: { runtime: route.runtime, invocation, control, signal: abort.signal, targetDutyMs, maxInFlight } }) });
         const completion = await job.completion;
         if (completion.status !== 'succeeded') {
@@ -144,7 +145,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
         }
         result = completion.output;
       } else {
-        result = await pipeline.generate({ prompt, seed, width: size, height: size, onStep, onPhase });
+        result = await pipeline.generate({ prompt, seed, width: size, height: size, textLength, onStep, onPhase });
       }
       result.wallMs = performance.now() - started;
       result.cooperative = cooperative;

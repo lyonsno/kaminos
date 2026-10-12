@@ -4,7 +4,7 @@
 // projection. Weights come from pack-transformer.py bundles (f16 [out, in]).
 import { KleinDutyScheduler } from './klein-duties.js';
 import { LN_EPS, gemmShader, layerNormModulateShader, qkvPrepShader, softmaxShader, swigluShader,
-  headsToRowsShader, siluShader, axpyShader, gemmShaderV2 } from './klein-kernels.js';
+  headsToRowsShader, siluShader, axpyShader, gemmShaderV2, gemmShaderV3, gemmVersionFor } from './klein-kernels.js';
 
 const HEAD = 128;
 
@@ -138,10 +138,12 @@ export class KleinTransformer {
   // ranges with a split point between them (GEMM v2 only; the v1 parity kernel never splits).
   async gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bType = 'f16', c, cOff = 0, cRs, cBs = 0,
     M, N, K, batch = 1, alpha = 1, epilogue = 'store', gate = null, gateOff = 0, scaleOff = 0, group = 64, bDiv = 1, label = 'gemm' }) {
-    // gemmVersion 2 (default) is the probe-derived kernel; 1 keeps the original parity kernel for A/B.
-    const v2 = (this.gemmVersion ?? 2) === 2 && K % 4 === 0;
-    const pipe = v2
-      ? this.pipeline(`gemm2-${bType}-g${group}-${epilogue}-${this.sharedType ?? 'f32'}`, gemmShaderV2({ bType, epilogue, sType: this.sharedType ?? 'f32', group }))
+    // gemmVersion 2 (default) is the probe-derived kernel; 1 keeps the original parity kernel for A/B;
+    // 3 uses the 128x128 dot-product kernel for quantized weights with f16 tiles (v2 elsewhere).
+    const version = gemmVersionFor(this.gemmVersion, bType, this.sharedType ?? 'f32', K), tile = version === 3 ? 128 : 64;
+    const st = this.sharedType ?? 'f32';
+    const pipe = version === 3 ? this.pipeline(`gemm3-${bType}-g${group}-${epilogue}-${st}`, gemmShaderV3({ bType, epilogue, sType: st, group, tm: 8, tn: 8 }))
+      : version === 2 ? this.pipeline(`gemm2-${bType}-g${group}-${epilogue}-${st}`, gemmShaderV2({ bType, epilogue, sType: st, group }))
       : this.pipeline(`gemm-${bType}-g${group}-${epilogue}`, gemmShader({ bType, epilogue, group }));
     const issue = (nBase, nCount) => {
       const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, gateOff, bDiv, scaleOff, nBase, 0, 0, 0]);
@@ -149,12 +151,13 @@ export class KleinTransformer {
         { binding: 2, resource: { buffer: c } }, { binding: 3, resource: { buffer: u } }];
       if (epilogue === 'gated-residual') entries.push({ binding: 4, resource: { buffer: gate } });
       if (/^i\d$/.test(bType)) entries.push({ binding: 5, resource: { buffer: b } });
-      this.dispatch(enc, pipe, entries, Math.ceil(nCount / 64), Math.ceil(M / 64), batch);
+      this.dispatch(enc, pipe, entries, Math.ceil(nCount / tile), Math.ceil(M / tile), batch);
       this.sched.addFlops(2 * M * nCount * K * batch);
     };
     const flops = 2 * M * N * K * batch, budget = this.sched.budget();
-    if (!v2 || flops <= budget) { issue(0, N); return; }
-    const columns = Math.max(64, Math.floor(budget / (2 * M * K * batch) / 64) * 64);
+    if (version === 1 || flops <= budget) { issue(0, N); return; }
+    // Column ranges are whole tiles: a partial tile would also write the next range's columns.
+    const columns = Math.max(tile, Math.floor(budget / (2 * M * K * batch) / tile) * tile);
     for (let nBase = 0; nBase < N; nBase += columns) {
       issue(nBase, Math.min(columns, N - nBase));
       await this.sched.boundary(`${label}[${nBase}]`);

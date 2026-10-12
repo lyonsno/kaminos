@@ -216,10 +216,12 @@ export class KleinPipeline {
   // Returns { rgba: Uint8ClampedArray, width, height, timings, duties }.
   // `schedule` (optional) runs the image as kit command duties: { runtime, invocation, control,
   // signal, targetDutyMs, onDuty }. Without it the run is uncooperative but still submits per block.
-  async generate({ prompt, seed = 0, width = 512, height = 512, steps = 4, onStep = null, onPhase = null, schedule = null }) {
+  // textLength: the number of text tokens the prompt is padded to; 512 as in the reference pipeline,
+  // or 'fitN' for the prompt's own length plus N padding tokens (fewer tokens for the transformer).
+  async generate({ prompt, seed = 0, width = 512, height = 512, steps = 4, textLength = 512, onStep = null, onPhase = null, schedule = null }) {
     this.sched.setSchedule(schedule);
     try {
-      return await this.generateScheduled({ prompt, seed, width, height, steps, onStep, onPhase });
+      return await this.generateScheduled({ prompt, seed, width, height, steps, textLength, onStep, onPhase });
     } catch (error) {
       await this.sched.discard();
       throw error;
@@ -228,12 +230,14 @@ export class KleinPipeline {
     }
   }
 
-  async generateScheduled({ prompt, seed, width, height, steps, onStep, onPhase }) {
+  async generateScheduled({ prompt, seed, width, height, steps, textLength = 512, onStep, onPhase }) {
     if (width % 16 || height % 16) throw new Error('width and height must be multiples of 16');
     if (!this.transformer) throw new Error('no transformer is loaded');
     const dev = this.device, t = {};
     const latH = height / 16, latW = width / 16, imgTokens = latH * latW;
-    const framed = this.tokenizer.kleinPromptIds(prompt);
+    const fit = /^fit\d*$/.test(String(textLength));
+    const maxLength = fit ? Math.min(512, this.tokenizer.kleinPromptIds(prompt).length + Number(String(textLength).slice(3) || 0)) : Number(textLength);
+    const framed = this.tokenizer.kleinPromptIds(prompt, maxLength);
     const txtTokens = framed.inputIds.length;
     // Sequential residency: transformer activations exist from here until the decoder's input is
     // prepared, decoder activations from then until the image is read back, so peak activation
@@ -245,13 +249,30 @@ export class KleinPipeline {
     for (let l = 0; l < txtTokens; l++) txtIds[l * 4 + 3] = l;
     this.transformer.prepare({ latents: gaussianNoise(imgTokens * 128, seed), promptEmbeds: null, imgIds, txtIds });
 
+    // The text encoding depends only on the prompt and its padding, so a re-roll with a new seed reuses
+    // it from the last generation instead of running the text encoder again.
     let t0 = performance.now();
-    const emb = await gatherEmbeddings([...framed.inputIds], this.teManifest.config.hidden_size, ids => this.fetchEmbeddingRows(ids));
-    t.embeddingFetchMs = performance.now() - t0;
+    const promptKey = `${maxLength}\u0000${prompt}`;
+    const embedBytes = txtTokens * this.transformer.cfg.joint_attention_dim * 4;
     onPhase?.('text');
-    t0 = performance.now();
-    await this.textEncoder.encode(emb, framed.attentionMask, this.transformer.act.promptEmbeds);
-    t.textEncodeMs = performance.now() - t0;
+    if (this.promptCache?.key === promptKey) {
+      this.sched.encoder().copyBufferToBuffer(this.promptCache.buffer, 0, this.transformer.act.promptEmbeds, 0, embedBytes);
+      t.embeddingFetchMs = 0; t.textEncodeMs = 0; t.textCached = true;
+    } else {
+      const emb = await gatherEmbeddings([...framed.inputIds], this.teManifest.config.hidden_size, ids => this.fetchEmbeddingRows(ids));
+      t.embeddingFetchMs = performance.now() - t0;
+      t0 = performance.now();
+      await this.textEncoder.encode(emb, framed.attentionMask, this.transformer.act.promptEmbeds);
+      t.textEncodeMs = performance.now() - t0;
+      if (this.promptCache?.buffer.size !== embedBytes) {
+        this.promptCache?.buffer.destroy();
+        this.promptCache = { key: null, buffer: dev.createBuffer({ size: embedBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST }) };
+      }
+      // The key is set only when this generation completes, so a failed run never leaves a key
+      // pointing at a copy that was not submitted.
+      this.promptCache.key = null;
+      this.sched.encoder().copyBufferToBuffer(this.transformer.act.promptEmbeds, 0, this.promptCache.buffer, 0, embedBytes);
+    }
 
     const sched = kleinSchedule(imgTokens, steps);
     onPhase?.('denoise');
@@ -286,6 +307,7 @@ export class KleinPipeline {
     }
     t.totalMs = t.embeddingFetchMs + t.textEncodeMs + t.stepMs.reduce((a, b) => a + b, 0) + t.vaeDecodeMs;
     const duties = this.sched.stats.history.splice(0);
-    return { rgba, width, height, timings: t, promptTokens: framed.length, duties };
+    this.promptCache.key = promptKey;
+    return { rgba, width, height, timings: t, promptTokens: framed.length, textTokens: txtTokens, duties };
   }
 }
