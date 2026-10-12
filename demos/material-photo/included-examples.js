@@ -42,14 +42,14 @@ export function decodeExample(pack,inputKey){
   return {depth,output:{width:mw,height:mh,maps},provenance:pack.provenance};
 }
 const pending=new Map();
-export async function loadIncludedExample(sample,inputKey,size){
-  if(!['orb','celebration','bag'].includes(sample)||size!==512)return null;
+export async function loadIncludedExample(sample,inputKey){
+  if(!['orb','celebration','bag'].includes(sample))return null;
   if(!pending.has(sample))pending.set(sample,(async()=>{
     const response=await fetch(new URL(`./examples/${sample}.json.gz`,import.meta.url));
     if(!response.ok)throw Error(`Included example HTTP ${response.status}`);
     return new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
   })().catch(error=>{pending.delete(sample);throw error;}));
   const pack=await pending.get(sample);
-  if(pack.provenance?.sample!==sample||pack.provenance?.size!==size)throw Error('Wrong included example');
+  if(pack.provenance?.sample!==sample||pack.provenance?.size!==512)throw Error('Wrong included example');
   return decodeExample(pack,inputKey);
 }
