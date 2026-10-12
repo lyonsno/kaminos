@@ -5,6 +5,8 @@ import { MaterialPhotoViewer } from './comparison-viewer.js';
 import { createPhotoRunState, pixelSummary } from './photo-contracts.js';
 import { DEFAULT_PRESET, superMatProductProfile } from './demo-defaults.js';
 import { createInferenceCache,photoCacheKey,retainedGeometry } from './inference-cache.js';
+import { loadIncludedExample } from './included-examples.js';
+import { buildPhotoSurface } from './photo-surface.js';
 
 const $=id=>document.getElementById(id), params=new URLSearchParams(location.search);
 const photos={celebration:['Celebration','./images/celebration.png'],bag:['Backpack','./images/bag.webp'],orb:['Metal & glow','./images/evil-orb.png']};
@@ -14,7 +16,7 @@ const cache=createInferenceCache({onError:error=>{(state.cacheErrors??=[]).push(
 // Bump these when producer/preparation semantics change. Custom weight URLs are
 // deliberately session-local: their contents may change without changing the URL.
 const cacheRevision=params.has('weights')?crypto.randomUUID():'moge-vendored-38539be0-supermat-f368906c.v1';
-let imageKey;
+let imageKey,sampleKey,imageBlob,completed;
 const geometryKey=key=>`${cacheRevision}:geometry:${key}`;
 const materialKey=(key,size)=>`${cacheRevision}:materials:${key}:${size}:${JSON.stringify(superMatProductProfile(gpu.device))}`;
 let image,selection,active=false,viewer,gpu,session,moge,materials,weightRoute,setupPromise;
@@ -24,6 +26,8 @@ const viewOrder=['original','photo','relit','materials'];
 const tuningFields=['gain','radius','thickness','slices','steps','denoise','aoStrength','expFactor','screenSpaceSampling','linearThickness','backfaceLighting','depthPhi','normalPhi','lumaPhi'];
 const effectFields=['glowIntensity','glowThreshold','emissionReflection','bloomIntensity','bloomRadius','bloomThreshold','exposure'];
 function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
+function provenance(text){$('provenance').textContent=text;}
+function runButton(){ $('run').disabled=active||!image||['loading-image','restoring'].includes(state.status); }
 function showControls(open){
   $('controls').hidden=!open;$('workspace').dataset.controls=open?'open':'closed';
   $('tuning-toggle').setAttribute('aria-expanded',String(open));
@@ -99,8 +103,12 @@ function disableMaterials(){
   document.querySelector('[data-view=materials]').disabled=true;
   $('glow').disabled=true;
 }
+function applyImageGlow(){
+  if(!viewer)return;
+  viewer.glow=sampleKey==='orb';
+  if(viewer.glow)viewer.setEffects({glowIntensity:4.85});
+}
 async function load(blob,label,key=null,ticket=++imageTicket){
-  if(active)return;
   state.status='loading-image';$('run').disabled=true;
   const bitmap=await createImageBitmap(blob);
   if(ticket!==imageTicket){bitmap.close();return;}
@@ -108,23 +116,23 @@ async function load(blob,label,key=null,ticket=++imageTicket){
   context.drawImage(bitmap,0,0);bitmap.close();
   const input=context.getImageData(0,0,canvas.width,canvas.height),keyHash=await photoCacheKey(input);
   if(ticket!==imageTicket)return;
-  image=input;imageKey=keyHash;selection=results.select(label);state.source=label;state.status='loaded';state.error=null;state.result=null;state.cache=null;
+  image=input;imageKey=keyHash;sampleKey=key;imageBlob=blob;selection=results.select(label);state.source=label;state.status='loaded';state.error=null;state.result=null;state.cache=null;state.example=null;
+  provenance('Original photograph');
   const old=$('preview').dataset.blob;
   const url=URL.createObjectURL(blob);$('preview').src=url;$('preview').dataset.blob=url;
   if(old)URL.revokeObjectURL(old);
   $('preview').hidden=false;$('scene').hidden=true;
-  viewer?.clear();view('original');
+  viewer?.clear();applyImageGlow();view('original');
   for(const button of document.querySelectorAll('[data-view]:not([data-view=original])'))button.disabled=true;
   syncControls();
   for(const button of document.querySelectorAll('[data-sample]'))button.classList.toggle('selected',button.dataset.sample===key);
   $('name').textContent=label;$('resolution').textContent=`${image.width} x ${image.height}`;
-  $('progress').value=0;$('elapsed').textContent='';$('timings').textContent='';$('run').disabled=false;
+  if(!active){$('progress').value=0;$('elapsed').textContent='';}$('timings').textContent='';
   status('Photograph loaded');$('run').disabled=true;
   await restoreCached(ticket);
-  if(ticket===imageTicket)$('run').disabled=false;
+  if(ticket===imageTicket)runButton();
 }
 async function sample(key){
-  if(active)return;
   const ticket=++imageTicket;
   state.status='loading-image';$('run').disabled=true;$('material-size').disabled=true;
   try{
@@ -133,7 +141,7 @@ async function sample(key){
     if(!response.ok)throw Error(`Image HTTP ${response.status}`);
     await load(await response.blob(),photos[key][0],key,ticket);
   }catch(error){if(ticket===imageTicket)throw error;}
-  finally{if(ticket===imageTicket){$('material-size').disabled=false;$('run').disabled=!image;}}
+  finally{if(ticket===imageTicket){$('material-size').disabled=false;runButton();}}
 }
 
 async function setup(){
@@ -144,6 +152,7 @@ async function setup(){
     session=await createWebGpuInferenceSession({sessionId:crypto.randomUUID(),device:gpu.device,adapter:gpu.adapter,backendIdentity:gpu.backendIdentity});
     viewer=new MaterialPhotoViewer();await viewer.init($('scene'),gpu.device);
     await viewer.applyPreset(DEFAULT_PRESET);
+    applyImageGlow();
     gpu.device.addEventListener('uncapturederror',event=>{
       (state.gpuErrors??=[]).push(event.error.message);fail(event.error);
     });
@@ -164,34 +173,56 @@ function presentDepth(input,depth){
   document.querySelector('[data-view=photo]').disabled=false;document.querySelector('[data-view=relit]').disabled=false;compare();
 }
 async function restoreCached(ticket=++imageTicket){
-  const input=image,key=imageKey,token=selection,size=Number($('material-size').value);
+  const input=image,key=imageKey,token=selection,sample=sampleKey,size=Number($('material-size').value);
   state.status='restoring';
   const geometry=await cache.get(geometryKey(key));
   if(ticket!==imageTicket)return;
   // Never leave the previous resolution's material maps advertised as this one.
-  state.result=null;state.cache=null;state.status='loaded';$('timings').textContent='';$('elapsed').textContent='';$('progress').value=0;
+  state.result=null;state.cache=null;state.example=null;$('timings').textContent='';provenance('Original photograph');
+  if(!active){$('elapsed').textContent='';$('progress').value=0;}
+  let material=null,exampleError=false;
+  if(geometry){await setup();if(ticket!==imageTicket)return;material=await cache.get(materialKey(key,size));if(ticket!==imageTicket)return;}
+  if(!material&&sample){
+    try{
+      const included=await loadIncludedExample(sample,key,size);
+      if(ticket!==imageTicket)return;
+      if(included){
+        await setup();if(ticket!==imageTicket)return;
+        results.publish(token,'geometry',included.depth);presentDepth(input,included.depth);
+        results.publish(token,'materials',included.output);viewer.setMaterials(included.output);
+        document.querySelector('[data-view=materials]').disabled=false;compare();
+        state.status='included';state.example=included.provenance;
+        provenance(`Included example | ${included.output.width} x ${included.output.height}`);
+        status('Explore the included result');return;
+      }
+    }catch(error){if(ticket!==imageTicket)return;(state.exampleErrors??=[]).push(String(error));exampleError=true;}
+  }
+  state.status='loaded';
   if(!geometry){viewer?.clear();$('preview').hidden=false;$('scene').hidden=true;view('original');
     for(const button of document.querySelectorAll('[data-view]:not([data-view=original])'))button.disabled=true;
-    syncControls();status('Photograph loaded');return;}
+    syncControls();status(exampleError?'Example unavailable; photograph loaded':'Photograph loaded',exampleError);return;}
   await setup();if(ticket!==imageTicket)return;
-  const material=await cache.get(materialKey(key,size));if(ticket!==imageTicket)return;
   results.publish(token,'geometry',geometry.depth);presentDepth(input,geometry.depth);
   state.cache={geometry:true,materials:!!material,size,source:'browser-result-storage',originalRun:material?.record??geometry.record};
   if(material){
     results.publish(token,'materials',material.output);viewer.setMaterials(material.output);
     document.querySelector('[data-view=materials]').disabled=false;compare();
     state.status='cached';state.result=material.record.output;state.identity.supermat=material.record.supermat.identity;
+    provenance('Your cached result');
     $('identity').textContent='MoGe-2 + SuperMat | cached outputs';$('progress').value=1;
     $('timings').textContent=`Restored materials ${size} x ${size}`;status('Depth & materials restored');
-  }else{status('Depth restored; materials not yet computed at this resolution');}
+  }else{provenance('Your cached depth');status(exampleError?'Example unavailable; depth restored; materials not yet computed at this resolution':'Depth restored; materials not yet computed at this resolution',exampleError);}
 }
 async function infer(){
   if(active||!image||['loading-image','restoring'].includes(state.status))return;
   active=true;state.status='running';state.error=null;
-  const token=selection,input=image,key=imageKey,size=Number($('material-size').value),started=performance.now(),record={source:state.source,status:'running',phases:{}};
+  const token=selection,ticket=imageTicket,input=image,key=imageKey,blob=imageBlob,sample=sampleKey,size=Number($('material-size').value),started=performance.now(),record={source:state.source,status:'running',phases:{}};
+  const retainDisplay=!!viewer?.maps;
+  const visible=()=>ticket===imageTicket&&size===Number($('material-size').value);
+  const progressStatus=text=>{state.job={source:record.source,size,status:'running',message:text};$('job-status').textContent=`${record.source} | ${text}`;if(visible())status(text);};
   state.cache=null;
-  for(const button of document.querySelectorAll('[data-sample]'))button.disabled=true;
-  $('file').disabled=$('run').disabled=$('material-size').disabled=true;
+  completed=null;$('view-result').hidden=true;$('run').disabled=true;
+  progressStatus('Starting generation');
   const clock=setInterval(()=>{$('elapsed').textContent=`${((performance.now()-started)/1000).toFixed(1)} s elapsed`;},100);
   $('progress').removeAttribute('value');
   try{
@@ -201,26 +232,25 @@ async function infer(){
     if(!retained&&!moge){
       const candidate=new MoGeInference(gpu);
       try{
-        await candidate.init((received,total)=>status(`1/2 Geometry: loading MoGe ${Math.round(received/1e6)}${total?` / ${Math.round(total/1e6)}`:''} MB`));
+        await candidate.init((received,total)=>progressStatus(`1/2 Geometry: loading MoGe ${Math.round(received/1e6)}${total?` / ${Math.round(total/1e6)}`:''} MB`));
         if(!candidate.useRealWeights)throw Error('MoGe real weights did not load; preview refuses stub inference');
         moge=candidate;
       }catch(error){await candidate.dispose();throw error;}
     }
-    status('1/2 Geometry: inferring depth & normals');
+    progressStatus('1/2 Geometry: inferring depth & normals');
     let phase=performance.now();
     const depth=retained?.depth??await moge.run(input,{scheduler:{mode:'cooperative',splitVitBlocks:true,splitDecoderResBlocks:true,pacing:'bounded-prefix'}});
     record.phases.geometryMs=performance.now()-phase;
     record.moge=retained?{...retained.record.moge,cached:true}:{weights:moge.weightsSource,width:depth.width,height:depth.height,route:depth.routeResult?.receipt??null};
-    results.publish(token,'geometry',depth);
-    presentDepth(input,depth);
+    if(visible()&&!retainDisplay){results.publish(token,'geometry',depth);presentDepth(input,depth);provenance('Generating materials');}
     if(!retained)await cache.put(geometryKey(key),{depth:retainedGeometry(depth),record:{moge:record.moge}});
     await new Promise(requestAnimationFrame);
     if(!materials){
-      viewer.setMaterialStatus('Loading materials');
+      if(visible()&&!retainDisplay)viewer.setMaterialStatus('Loading materials');
       weightRoute??=await session.registerRoute({routeId:`${SUPERMAT_ROUTE_ID}.material-photo-weights`});
       materials=await createSuperMatAdapter({route:weightRoute,weightsUrl:params.get('weights')??'/scratch/supermat-weights/f16/',
         ...superMatProductProfile(gpu.device),onProgress:event=>{
-          if(event.phase==='weights')status(`2/2 Materials: loading SuperMat ${event.resourceIndex+1}/${event.resourceCount} resources`);
+          if(event.phase==='weights')progressStatus(`2/2 Materials: loading SuperMat ${event.resourceIndex+1}/${event.resourceCount} resources`);
         }});
     }
     const route=await session.registerRoute({routeId:SUPERMAT_ROUTE_ID});
@@ -228,11 +258,11 @@ async function infer(){
     phase=performance.now();
     let output;
     try{
-      viewer.setMaterialStatus('Inferring materials');
+      if(visible()&&!retainDisplay)viewer.setMaterialStatus('Inferring materials');
       const job=route.enqueue({jobId:crypto.randomUUID(),execute:invocation=>materials.run({image:input,size,
         schedule:{runtime:route.runtime,invocation,control},onRunProgress:progress=>{
           const names={preprocess:'Preparing image',encode:'Image encoder',unet:'Material inference','decode-albedo':'Albedo decoder','decode-orm':'Finish decoder','pack-maps':'Material maps'};
-          status(`2/2 Materials: ${names[progress.phase]??progress.phase} (${progress.phaseIndex+1}/${progress.phaseCount})`);
+          progressStatus(`2/2 Materials: ${names[progress.phase]??progress.phase} (${progress.phaseIndex+1}/${progress.phaseCount})`);
           if(progress.totalFlops)$('progress').value=progress.completedFlops/progress.totalFlops;else $('progress').removeAttribute('value');
         }})});
       const completion=await job.completion;
@@ -242,21 +272,44 @@ async function infer(){
     record.phases.materialsMs=performance.now()-phase;
     if(output.width!==size||output.height!==size)throw Error('Material output resolution differs from selected resolution');
     record.supermat={identity:materials.identity,size,timings:output.timings,dutyCount:output.dutyCount};
-    results.publish(token,'materials',output);viewer.setMaterials(output);
-    document.querySelector('[data-view=materials]').disabled=false;
-    compare();
     record.wallMs=performance.now()-started;record.status='done';
-    record.output={surfaceVertices:viewer.surface.position.length/3,triangles:viewer.surface.indices.length/3,materialSize:[output.width,output.height]};
+    const surface=visible()&&!retainDisplay?viewer.surface:buildPhotoSurface(depth,input.width/input.height);
+    record.output={surfaceVertices:surface.position.length/3,triangles:surface.indices.length/3,materialSize:[output.width,output.height]};
     record.cached=await cache.put(materialKey(key,size),{output,record});
-    state.status='done';state.result=record.output;state.identity.supermat=materials.identity;
-    $('identity').textContent='MoGe-2 + SuperMat | same GPUDevice';
-    $('timings').textContent=`Depth ${(record.phases.geometryMs/1000).toFixed(2)} s | Materials ${size} x ${size}: ${(record.phases.materialsMs/1000).toFixed(2)} s`;
-    $('progress').value=1;status(record.cached?'Depth & materials complete':'Depth & materials complete; browser could not retain this result');
-  }catch(error){if(viewer?.surface&&!viewer.maps)viewer.setMaterialStatus('Materials unavailable');record.status='error';record.error=String(error.stack??error);state.status='error';state.error=error.message;status(error.message,true);$('progress').removeAttribute('value');}
+    completed={input,key,blob,sample,size,depth,output,record};
+    state.job={source:record.source,size,status:'done'};
+    $('job-status').textContent=`${record.source} | Generation complete`;$('progress').value=1;
+    if(visible())presentCompleted();else $('view-result').hidden=false;
+  }catch(error){
+    record.status='error';record.error=String(error.stack??error);state.job={source:record.source,size,status:'error',error:error.message};
+    $('job-status').textContent=`${record.source} | ${error.message}`;
+    if(visible()){if(viewer?.surface&&!viewer.maps)viewer.setMaterialStatus('Materials unavailable');if(retainDisplay)provenance('Previous result | Generation failed');state.status='error';state.error=error.message;status(error.message,true);}
+    $('progress').removeAttribute('value');
+  }
   finally{clearInterval(clock);record.elapsedMs=performance.now()-started;state.runs.push(record);active=false;
-    $('run').disabled=$('file').disabled=$('material-size').disabled=false;for(const button of document.querySelectorAll('[data-sample]'))button.disabled=false;
+    runButton();
   }
 }
+function presentCompleted(){
+  const {input,depth,output,record}=completed;
+  results.publish(selection,'geometry',depth);presentDepth(input,depth);
+  results.publish(selection,'materials',output);viewer.setMaterials(output);
+  document.querySelector('[data-view=materials]').disabled=false;compare();
+  state.status='done';state.result=record.output;state.identity.supermat=record.supermat.identity;
+  provenance('Newly generated');$('identity').textContent='MoGe-2 + SuperMat | same GPUDevice';
+  $('timings').textContent=`Depth ${(record.phases.geometryMs/1000).toFixed(2)} s | Materials ${output.width} x ${output.height}: ${(record.phases.materialsMs/1000).toFixed(2)} s`;
+  status(record.cached?'Depth & materials complete':'Depth & materials complete; browser could not retain this result');
+  $('view-result').hidden=true;
+}
+async function viewResult(){
+  if(!completed)return;
+  const result=completed;
+  $('material-size').value=String(result.size);
+  const ticket=++imageTicket;
+  await load(result.blob,result.record.source,result.sample,ticket);
+  if(ticket===imageTicket&&completed===result)presentCompleted();
+}
+$('view-result').onclick=()=>viewResult().catch(fail);
 for(const button of document.querySelectorAll('[data-sample]'))button.onclick=()=>sample(button.dataset.sample).catch(fail);
 for(const button of document.querySelectorAll('[data-view]'))button.onclick=()=>view(button.dataset.view);
 function cycleView(delta){
@@ -269,7 +322,7 @@ $('compare').onclick=compare;
 for(const button of document.querySelectorAll('[data-focus]'))button.onclick=()=>view(button.dataset.focus);
 $('file').onchange=()=>{const file=$('file').files[0];if(file)load(file,file.name).catch(fail);};
 $('run').onclick=infer;
-$('material-size').onchange=async()=>{if(active||state.status==='loading-image')return;try{$('run').disabled=true;await restoreCached();}catch(error){fail(error);}finally{$('run').disabled=false;}};
+$('material-size').onchange=async()=>{if(state.status==='loading-image')return;try{$('run').disabled=true;await restoreCached();}catch(error){fail(error);}finally{runButton();}};
 $('map').onchange=()=>{if(viewer){const map=$('map').value;view('materials');viewer.map=map;$('map').value=map;}};
 $('gi').onchange=()=>{viewer.useGI=$('gi').checked;};
 $('glow').onchange=()=>{viewer.glow=$('glow').checked;};
@@ -333,7 +386,7 @@ $('preset-file').onchange=async()=>{
   try{if(file)await importPreset(await file.text());}catch(error){$('preset-error').textContent=error.message;}
   $('preset-file').value='';
 };
-function fail(error){state.status='error';state.error=error.message;status(error.message,true);}
+function fail(error){state.status='error';state.error=error.message;status(error.message,true);runButton();}
 async function changeEnvironment(name){
   if(!viewer)return false;
   const ticket=++environmentTicket;
@@ -348,7 +401,8 @@ $('environment').onchange=()=>changeEnvironment($('environment').value);
 for(const [id,key]of [['environment-rotation','rotation'],['environment-intensity','intensity'],['direct-intensity','direct']])$(id).oninput=()=>{
   try{viewer.setLighting({[key]:Number($(id).value)});$('preset-error').textContent='';}catch(error){$('preset-error').textContent=error.message;}
 };
-window.__materialPhotoActions={infer,sample,view,compare,changeEnvironment,exportPreset,importPreset,setLightPosition,setLightHandle,setMaterialContrast,restoreCached,
+window.__materialPhotoActions={infer,sample,view,compare,changeEnvironment,exportPreset,importPreset,setLightPosition,setLightHandle,setMaterialContrast,restoreCached,viewResult,
+  exampleEvidence:()=>({imageKey,source:state.source,sample:sampleKey,...results.snapshot(),record:state.runs.at(-1),identity:state.identity}),
   setEffects:value=>{viewer.setEffects(value);syncControls();return viewer.getEffects();},
   materialEvidence:()=>({image,output:results.snapshot().materials}),presentation:()=>viewer?.presentation()??null,async pixels(presentedFrame){
   // Inspect the browser's presented canvas screenshot, not a discarded WebGPU drawing buffer.
@@ -357,4 +411,4 @@ window.__materialPhotoActions={infer,sample,view,compare,changeEnvironment,expor
   context.drawImage(bitmap,0,0);bitmap.close();
   return pixelSummary(context.getImageData(0,0,canvas.width,canvas.height).data,canvas.width,canvas.height);
 }};
-try{await sample(params.get('sample') in photos?params.get('sample'):'celebration');if(params.get('autorun')==='1')await infer();}catch(error){fail(error);}
+try{await sample(params.get('sample') in photos?params.get('sample'):'orb');if(params.get('autorun')==='1')await infer();}catch(error){fail(error);}

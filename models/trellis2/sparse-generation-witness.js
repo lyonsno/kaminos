@@ -7,8 +7,9 @@ import {createTrellisAssetAdapter} from './trellis-material.js';
 import {observeDeviceMemory} from './device-memory.js';
 import {createTrellisSharedHost} from './shared-host.js';
 import {admitGenerationGpuBudget} from './generation-memory-policy.js';
+import {generationTensorStorage,readGenerationTensor} from './generation-storage.js';
 const hash=async data=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',data)),v=>v.toString(16).padStart(2,'0')).join('');
-export async function runGenerationWitness(expectedSha,{memoryMonitor=false,sharedComposition,assetMode='raw-glb',gpuBufferBudgetBytes}={}){
+export async function runGenerationWitness(expectedSha,{memoryMonitor=false,sharedComposition,assetMode='raw-glb',gpuBufferBudgetBytes,decoderActivationStorage}={}){
   const report={status:'failed',phase:'input-manifest',requestedRoute:GENERATION_ROUTE,numericalStatus:'not-compared',
     comparison:'actual WebGPU image generation with retained prepared pixels and browser noise; no matched MLX fidelity claim',outputs:{}},errors=[];
   let session,device,implementation,assetConsumer,runtime,scope=false,invocationOwner,serving=false,currentPhase='new',memory,bridge,sharedRun;
@@ -36,21 +37,26 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
     const fetched=await fetch('/fixture/manifest.json',{cache:'no-store'});if(!fetched.ok)throw Error('generation inputs unavailable');
     const bytes=await fetched.arrayBuffer();if(await hash(bytes)!==expectedSha)throw Error('changed generation manifest');
     const m=JSON.parse(new TextDecoder().decode(bytes));validateGenerationInputs(m);
+    report.referenceDecoderStorage=Object.fromEntries(['shapeDecoder','textureDecoder'].map(role=>[role,m.models[role].config.activationStorage??'f32']));
+    if(decoderActivationStorage!==undefined){
+      if(!['f32','f16'].includes(decoderActivationStorage))throw Error('f32 or f16 decoder activation storage required');
+      for(const role of ['shapeDecoder','textureDecoder'])m.models[role].config.activationStorage=decoderActivationStorage;
+      validateGenerationInputs(m);
+    }
     setPhase('memory-budget-admission');report.memory.admission=admitGenerationGpuBudget(m,gpuBufferBudgetBytes);
     report.input={manifestSha256:expectedSha,producer:m.producer,references:m.references,image:m.image,modelIdentities:
       Object.fromEntries(Object.entries(m.models).map(([k,v])=>[k,v.identity])),dinoIdentity:m.dino.identity,seed:m.seed,
       meshResolution:m.meshResolution,pipelineType:generationPipelineType(m),samplingSteps:m.samplingSteps??12};
-    report.verifiedTensorCount=0;report.verifiedInputBytes=0;
+    report.verifiedTensorCount=0;report.verifiedInputBytes=0;report.verifiedDecodedBytes=0;
     report.verifiedInputMeaning='cumulative successful fetches/bytes, including repeated stage use; not resident memory';
     const fetchTensor=async name=>{
       const row=m.tensors[name];if(!row)throw Error('complete identified input required '+name);
-      report.inputLoading={tensor:name,file:row.file,byteLength:row.byteLength,sha256:row.sha256,
+      const storage=generationTensorStorage(row);
+      report.inputLoading={tensor:name,...storage,decodedByteLength:row.byteLength,decodedSha256:row.sha256,
         ...(report.loadingModelRole?{modelRole:report.loadingModelRole}:{}),phase:'fetch'};
-      const r=await fetch('/fixture/'+row.file,{cache:'no-store'});if(!r.ok)throw Error('checkpoint tensor unavailable '+name);
-      report.inputLoading.phase='response-body';const raw=await r.arrayBuffer();report.inputLoading.phase='sha256';
-      if(raw.byteLength!==row.byteLength||await hash(raw)!==row.sha256)throw Error('partial/changed checkpoint tensor '+name);
-      report.inputLoading.phase='typed-array';const values=new Float32Array(raw);report.inputLoading.phase='verified';
-      report.verifiedTensorCount++;report.verifiedInputBytes+=raw.byteLength;return values;
+      const values=await readGenerationTensor(row,{fetchFile:file=>fetch('/fixture/'+file,{cache:'no-store'}),hash,
+        onPhase:phase=>{report.inputLoading.phase=phase;}});
+      report.verifiedTensorCount++;report.verifiedInputBytes+=storage.byteLength;report.verifiedDecodedBytes+=values.byteLength;return values;
     };
     setPhase('native-device');const adapter=sharedComposition?sharedComposition.sharedGpu?.adapter:await navigator.gpu?.requestAdapter();if(!adapter)throw Error('WebGPU unavailable');
     report.backend={vendor:adapter.info.vendor,architecture:adapter.info.architecture,description:adapter.info.description,
@@ -59,7 +65,10 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
     const limits=sharedComposition?.sharedGpu?.device?.limits??adapter.limits;
     report.requiredLimits={maxStorageBufferBindingSize:limits.maxStorageBufferBindingSize,maxBufferSize:limits.maxBufferSize,
       maxComputeWorkgroupsPerDimension:limits.maxComputeWorkgroupsPerDimension};
-    device=sharedComposition?sharedComposition.sharedGpu.device:await adapter.requestDevice({requiredLimits:report.requiredLimits});
+    report.requiredFeatures=['shapeDecoder','textureDecoder'].some(role=>m.models[role].config.activationStorage==='f16')?['shader-f16']:[];
+    if(report.requiredFeatures.some(feature=>!(sharedComposition?.sharedGpu?.device?.features??adapter.features).has(feature)))
+      throw Error('requested decoder activation storage requires shader-f16');
+    device=sharedComposition?sharedComposition.sharedGpu.device:await adapter.requestDevice({requiredLimits:report.requiredLimits,requiredFeatures:report.requiredFeatures});
     report.deviceTopology=sharedComposition?'same-device':'isolated-device';
     if(memoryMonitor||gpuBufferBudgetBytes!==undefined)memory=observeDeviceMemory(device,{maxLiveBytes:gpuBufferBudgetBytes});
     setPhase('native-device');
@@ -87,7 +96,7 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
         return actual.runtime.readTensor(t,options);}};
     setPhase('cached-checkpoint-input-loading');
     const inputs=await loadGenerationInputs(m,fetchTensor);
-    report.checkpointLoading='per-role uncached complete weights; shared identity-checked activation tables';
+    report.checkpointLoading='per-role uncached complete weights; flow blocks fetched/uploaded sequentially with queue drains; shared identity-checked activation tables';
     const onPhase=async e=>{
       currentPhase=e.phase;setPhase(e.phase,e.modelRole);
       report.loadingModelRole=e.modelRole??null;
@@ -114,7 +123,8 @@ export async function runGenerationWitness(expectedSha,{memoryMonitor=false,shar
       phases:out.phases.map(p=>p.phase),sameInvocation:true,featureBytesToCPUDuringServing:out.featureBytesToCPUDuringServing,
       coordinateBytesToCPUDuringServing:out.coordinateBytesToCPUDuringServing,stageCounts,sessionId:session.snapshot().sessionId,
       geometryResolution:out.geometry.resolution,materialResolution:out.material.resolution,pipelineType:out.pipelineType,
-      geometryLevels:out.geometry.levels,materialLevels:out.material.levels};
+      geometryLevels:out.geometry.levels,materialLevels:out.material.levels,
+      decoderActivationStorage:{shape:out.geometry.activationStorage,texture:out.material.activationStorage}};
     setPhase('post-model-observation-retention');
     const fields={conditioning:out.conditioning,'geometry.features':out.geometry.features,'geometry.coordinates':out.geometry.coordinates,
       'material.features':out.material.features,'material.coordinates':out.material.coordinates,shapeCodes:out.shapeCodes,textureCodes:out.textureCodes};

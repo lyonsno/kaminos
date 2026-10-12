@@ -5,7 +5,7 @@
 // an output that depends on which sizes ran earlier (stale or undersized buffers) fails.
 // Usage: node run-page-smoke.mjs --chrome <exe> (--weights-url <base> | --weights-dir <dir>) --out <dir>
 //        [--sizes 512,768,1024 | --levels mint,weathered,off-the-rails [--size 512]] [--seed 7006] [--prompt "..."]
-//        [--origin <page origin> | --site-dir <dir>]
+//        [--origin <page origin> | --site-dir <dir>] [--memory lean|all]
 // --site-dir serves an assembled Pages site (scripts/assemble-pages-site.mjs) under /kaminos/, as
 // project Pages does, and opens the demo at /kaminos/inference-kit/klein/.
 // --weights-dir serves a staged repository folder from a second, CORS-enabled origin.
@@ -86,7 +86,8 @@ try {
   const desktop = { width: 1280, height: 900 };
   await browser.send('Emulation.setDeviceMetricsOverride', { ...desktop, deviceScaleFactor: 1, mobile: false });
   const firstLevel = opt('--levels')?.split(',')[0];
-  const pageUrl = `${report.origin}/index.html?weights=${encodeURIComponent(report.weightsUrl)}${firstLevel ? `&level=${firstLevel}` : ''}`;
+  const pageUrl = `${report.origin}/index.html?weights=${encodeURIComponent(report.weightsUrl)}${firstLevel ? `&level=${firstLevel}` : ''}`
+    + (opt('--memory') ? `&memory=${opt('--memory')}` : '');
   report.pageUrl = pageUrl;
 
   report.phase = 'prepare';

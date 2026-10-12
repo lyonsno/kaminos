@@ -3,12 +3,12 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { test } from 'node:test';
 
-async function controller() {
+async function controller({examples=false,exampleFailure=false,search='?sample=celebration'}={}) {
   const behavior = { failDevice: false, failMaterials: false, deviceRequests: 0, geometryRuns:0, materialRuns:0, cache:new Map(), gates: new Map() };
   const node = dataset => ({ dataset, style: {}, value: '', disabled: false, hidden: false, checked: false, textContent: '', captures:new Set(),
     classList: { toggle() {},add(){},remove(){} }, removeAttribute() {}, setAttribute() {}, addEventListener() {},
     setPointerCapture(id) {this.captures.add(id);}, releasePointerCapture(id) {this.captures.delete(id);},hasPointerCapture(id){return this.captures.has(id);}, getBoundingClientRect: () => ({ left:0,top:0,width: 400, height: 400 }) });
-  const ids=['workspace','controls','tuning-toggle','status','preview','scene','stage-label','run','file','map','light','height','exposure','gi','reset','name','resolution','progress','elapsed','timings','identity',
+  const ids=['provenance','job-status','view-result','workspace','controls','tuning-toggle','status','preview','scene','stage-label','run','file','map','light','height','exposure','gi','reset','name','resolution','progress','elapsed','timings','identity',
     'view-prev','view-next','sun','glow','advanced','tuning','preset-export','preset-import','preset-file','preset-error','material-size','compare','light-ring','environment','environment-status','environment-rotation','environment-intensity','direct-intensity',
     'gi-view','contrast-mode','roughness-strength','metallic-strength','roughness-strength-value','metallic-strength-value','contrast-readout','bloom',
     ...['glowIntensity','glowThreshold','emissionReflection','bloomIntensity','bloomRadius','bloomThreshold','exposure'].flatMap(key=>[key,`${key}-value`]),
@@ -61,37 +61,45 @@ async function controller() {
     setMaterialStatus(value) { this.materialStatus=value; }
     async dispose() {}
   }
-  class MoGe { async init() { this.useRealWeights = true; this.weightsSource = 'local'; } async dispose() {} async run() { behavior.geometryRuns++;return { width:4,height:4,routeResult:{ receipt } }; } }
+  class MoGe { async init() { this.useRealWeights = true; this.weightsSource = 'local'; } async dispose() {} async run() { behavior.geometryRuns++;return { width:4,height:4,depth:new Float32Array(16).fill(1),normals:new Float32Array(48).fill(1),routeResult:{ receipt } }; } }
   const kit = {
     requestBrowserWebGpuDevice: async () => { behavior.deviceRequests++; if (behavior.failDevice) throw Error('Transient setup failure'); return { device, adapter:{}, backendIdentity:{ kind:'webgpu-local' } }; },
     createWebGpuInferenceSession: async () => session,
     createWebGpuInferenceControl: () => ({ async close() {} }),
   };
   const supermat = { SUPERMAT_ROUTE_ID:'supermat.image-to-pbr.webgpu-local.v0', superMatDeviceOptions:async()=>({}),
-    createSuperMatAdapter: async options => {behavior.profile=options;return { identity:{}, async run(input) { behavior.materialRuns++;behavior.materialSize=input.size;if(behavior.failMaterials)throw Error('Material failure'); return { width:input.size,height:input.size,timings:{},dutyCount:1 }; } };} };
+    createSuperMatAdapter: async options => {behavior.profile=options;behavior.onLoad?.();if(behavior.loadGate)await behavior.loadGate;return { identity:{}, async run(input) { behavior.materialRuns++;behavior.materialSize=input.size;behavior.inputPixel=input.image.data[0];behavior.onRun?.();if(behavior.runGate)await behavior.runGate;if(behavior.failMaterials)throw Error('Material failure'); return { width:input.size,height:input.size,timings:{},dutyCount:1 }; } };} };
   class Canvas { constructor(width,height) { this.width=width;this.height=height; } getContext() { return { drawImage:bitmap=>{this.pixel=bitmap.pixel;}, getImageData: () => ({ width:this.width,height:this.height,data:new Uint8ClampedArray(this.width*this.height*4).fill(this.pixel) }) }; } }
   class BlobURL extends URL { static createObjectURL() { return 'blob:test'; } static revokeObjectURL() {} }
   const response = (url='') => ({ ok:true, blob:async()=>({pixel:url.includes('bag')?2:url.includes('evil-orb')?3:1}) });
-  const context = vm.createContext({ document, navigator:{gpu:{}}, location:{search:''}, window:{}, URL:BlobURL, URLSearchParams,
+  const context = vm.createContext({ document, navigator:{gpu:{}}, location:{search}, window:{}, URL:BlobURL, URLSearchParams,
     OffscreenCanvas:Canvas, Uint8ClampedArray, Uint8Array, performance, crypto, Blob,
     createImageBitmap:async blob=>{if(behavior.bitmapGate)await behavior.bitmapGate;return {width:4,height:4,pixel:blob.pixel,close(){}};},
-    fetch:async url => behavior.gates.has(url) ? behavior.gates.get(url).promise : response(url),
+    fetch:async url => behavior.failImage?{ok:false,status:404}:behavior.gates.has(url) ? behavior.gates.get(url).promise : response(url),
     setInterval:()=>0, clearInterval(){}, requestAnimationFrame:callback=>queueMicrotask(()=>callback(0)),
   });
   const source = new vm.SourceTextModule(await readFile(new URL('./main.js',import.meta.url),'utf8'), { context });
   await source.link(async specifier => {
+    if(specifier==='./included-examples.js')return new vm.SyntheticModule(['loadIncludedExample'],function(){
+      this.setExport('loadIncludedExample',async(key,inputKey,size)=>{
+        if(!examples)return null;
+        if(exampleFailure)throw Error('Included example HTTP 404');
+        behavior.onExample?.();if(behavior.exampleGate)await behavior.exampleGate;
+        return {depth:{width:4,height:4},output:{width:512,height:512},provenance:{source:'included-example',inputKey,size:512,modelRevision:'test'}};
+      });
+    },{context});
     if(specifier==='./inference-cache.js')return new vm.SyntheticModule(['createInferenceCache','photoCacheKey','retainedGeometry'],function(){
       this.setExport('retainedGeometry',value=>value);
       this.setExport('photoCacheKey',async image=>`pixels:${image.data[0]}`);
       this.setExport('createInferenceCache',()=>({async get(key){return structuredClone(behavior.cache.get(key)??null);},async put(key,value){behavior.cache.set(key,structuredClone(value));return true;}}));
     },{context});
-    if (['./photo-contracts.js','./demo-defaults.js'].includes(specifier)) return new vm.SourceTextModule(await readFile(new URL(specifier,import.meta.url),'utf8'), { context });
+    if (['./photo-contracts.js','./photo-surface.js','./demo-defaults.js'].includes(specifier)) return new vm.SourceTextModule(await readFile(new URL(specifier,import.meta.url),'utf8'), { context });
     const exports = specifier.includes('/core.js') ? kit : specifier.includes('supermat-route') ? supermat : specifier.includes('moge-producer') ? { MoGeInference:MoGe } : { MaterialPhotoViewer:Viewer };
     return new vm.SyntheticModule(Object.keys(exports), function() { for(const [name,value]of Object.entries(exports))this.setExport(name,value); }, { context });
   });
   await source.evaluate();
   const defer = key => { let resolve; const promise=new Promise(r=>{resolve=r;}); behavior.gates.set(`./images/${key}`,{promise}); return () => resolve(response()); };
-  return { behavior, elements, views, actions:context.window.__materialPhotoActions, state:context.window.__materialPhoto, receipt, defer };
+  return { behavior, elements, views, samples, actions:context.window.__materialPhotoActions, state:context.window.__materialPhoto, receipt, defer };
 }
 
 test('latest requested photograph wins even when fetches complete out of order', async () => {
@@ -99,6 +107,70 @@ test('latest requested photograph wins even when fetches complete out of order',
   const bag=c.actions.sample('bag'), orb=c.actions.sample('orb');
   releaseOrb(); await orb; releaseBag(); await bag;
   assert.equal(c.state.source, 'Metal & glow');
+});
+
+test('arrival opens an included orb with no model loading or inference',async()=>{
+  const c=await controller({examples:true,search:''});
+  assert.equal(c.state.source,'Metal & glow');
+  assert.equal(c.state.status,'included');
+  assert.equal(c.behavior.geometryRuns,0);assert.equal(c.behavior.materialRuns,0);
+  assert.equal(c.behavior.profile,undefined);assert.ok(c.behavior.viewer.maps);
+  assert.match(c.elements.provenance.textContent,/Included example/);
+});
+
+test('late included restoration cannot admit generation when a different job completes',async()=>{
+  const c=await controller({examples:true});let releaseRun,releaseExample,enteredRun,enteredExample;
+  c.behavior.runGate=new Promise(r=>{releaseRun=r;});const running=new Promise(r=>{enteredRun=r;});c.behavior.onRun=enteredRun;
+  const job=c.actions.infer();await running;
+  c.behavior.exampleGate=new Promise(r=>{releaseExample=r;});const loading=new Promise(r=>{enteredExample=r;});c.behavior.onExample=enteredExample;
+  const browse=c.actions.sample('orb');await loading;releaseRun();await job;
+  assert.equal(c.elements.run.disabled,true);assert.equal(c.state.status,'restoring');
+  await c.actions.infer();assert.equal(c.behavior.materialRuns,1);
+  releaseExample();await browse;assert.equal(c.elements.run.disabled,false);assert.equal(c.state.status,'included');
+});
+test('failed sample fetch allows retry on the retained photograph',async()=>{
+  const c=await controller();c.behavior.failImage=true;
+  await c.samples[1].onclick();
+  assert.equal(c.state.status,'error');assert.equal(c.state.source,'Celebration');assert.equal(c.elements.run.disabled,false);
+});
+test('a displayed included material stays playable during its regeneration',async()=>{
+  const c=await controller({examples:true});let release,entered;
+  c.behavior.loadGate=new Promise(r=>{release=r;});const loading=new Promise(r=>{entered=r;});c.behavior.onLoad=entered;
+  const before=c.behavior.viewer.maps,job=c.actions.infer();await loading;
+  assert.equal(c.behavior.viewer.maps,before);assert.match(c.elements.provenance.textContent,/Included/);
+  release();await job;assert.equal(c.state.status,'done');assert.match(c.elements.provenance.textContent,/Newly/);
+});
+
+for(const revisit of [false,true])test(`missing example preserves cached depth after ${revisit?'revisiting':'changing resolution'}`,async()=>{
+  const c=await controller({examples:true,exampleFailure:true});await c.actions.infer();
+  assert.equal(c.state.status,'done');assert.ok(c.behavior.viewer.maps);
+  c.elements['material-size'].value='1024';
+  if(revisit){await c.actions.sample('orb');await c.actions.sample('celebration');}
+  else await c.elements['material-size'].onchange();
+  assert.equal(c.state.cache?.geometry,true);assert.equal(c.state.cache?.materials,false);
+  assert.equal(c.behavior.viewer.maps,null);assert.ok(c.behavior.viewer.surface);
+  assert.equal(c.views.find(v=>v.dataset.view==='materials').disabled,true);
+  assert.match(c.elements.provenance.textContent,/cached depth/);
+  assert.match(c.elements.status.textContent,/Example unavailable.*depth restored/);
+  assert.equal(c.behavior.materialRuns,1);assert.equal(c.elements.run.disabled,false);
+});
+
+for(const phase of ['load','run'])test(`browsing during material ${phase} preserves the captured request and offers its result`,async()=>{
+  const c=await controller();let release,started;
+  c.behavior[`${phase}Gate`]=new Promise(resolve=>{release=resolve;});
+  const entered=new Promise(resolve=>{started=resolve;});c.behavior[phase==='load'?'onLoad':'onRun']=started;
+  const run=c.actions.infer();await entered;
+  assert.equal(c.elements.file.disabled,false);
+  await c.actions.sample('orb');
+  assert.equal(c.state.source,'Metal & glow');
+  c.elements['material-size'].value='1024';await c.elements['material-size'].onchange();
+  release();await run;
+  assert.equal(c.state.source,'Metal & glow');assert.equal(c.state.status,'loaded');
+  assert.equal(c.behavior.inputPixel,1);assert.equal(c.behavior.materialSize,512);
+  assert.equal(c.state.runs.at(-1).status,'done');assert.equal(c.elements['view-result'].hidden,false);
+  await c.elements['view-result'].onclick();
+  assert.equal(c.state.source,'Celebration');assert.equal(c.elements['material-size'].value,'512');
+  assert.ok(c.behavior.viewer.maps);assert.match(c.elements.provenance.textContent,/Newly generated/);
 });
 test('selected material resolution reaches the producer and survives the run record',async()=>{
   const c=await controller();c.elements['material-size'].value='768';await c.actions.infer();
@@ -164,10 +236,10 @@ test('reset synchronizes the sun handle and fixes exposure at one', async () => 
   assert.equal(c.behavior.viewer.renderer.toneMappingExposure,1);
   assert.equal(c.elements.sun.hidden,false);
 });
-test('failed material rerun cannot advertise old material maps', async () => {
+test('failed material rerun preserves playable previous output with an explicit label', async () => {
   const c=await controller(); await c.actions.infer(); c.behavior.failMaterials=true; await c.actions.infer();
-  assert.equal(c.state.status,'error'); assert.equal(c.views[3].disabled,true);
-  assert.equal(c.behavior.viewer.materialStatus,'Materials unavailable');
+  assert.equal(c.state.status,'error'); assert.equal(c.views[3].disabled,false);
+  assert.match(c.elements.provenance.textContent,/Previous result/);assert.ok(c.behavior.viewer.maps);
   assert.equal(c.views[2].disabled,false);c.actions.view('relit');
   assert.equal(c.behavior.viewer.mode,'relit');assert.equal(c.elements.sun.hidden,false);
 });

@@ -83,6 +83,17 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
     maxBufferSize: adapter.limits.maxBufferSize, maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
     maxStorageBuffersPerShaderStage: adapter.limits.maxStorageBuffersPerShaderStage,
     maxComputeWorkgroupStorageSize: adapter.limits.maxComputeWorkgroupStorageSize } });
+  // Count the bytes of every live WebGPU buffer, with the peak since the last reset, so a page or
+  // smoke can report exactly how much GPU memory the model holds.
+  const gpuBytes = { live: 0, peak: 0 };
+  const createBuffer = device.createBuffer.bind(device);
+  device.createBuffer = descriptor => {
+    const buffer = createBuffer(descriptor), size = descriptor.size;
+    gpuBytes.live += size; gpuBytes.peak = Math.max(gpuBytes.peak, gpuBytes.live);
+    const destroy = buffer.destroy.bind(buffer); let alive = true;
+    buffer.destroy = () => { if (alive) { alive = false; gpuBytes.live -= size; } destroy(); };
+    return buffer;
+  };
   const session = await createWebGpuInferenceSession({ sessionId: `flux2-klein:${crypto.randomUUID()}`, device, adapterName: 'browser-primary-adapter' });
   const foreground = createWebGpuForegroundService({ routeId: KLEIN_ROUTE_ID, device });
   const pipeline = new KleinPipeline(device, { ...urls, ...kernels });
@@ -127,6 +138,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
     const abort = new AbortController();
     active = { abort, control: null, cooperative };
     scene.gaps = []; scene.lastFrameAt = null;
+    gpuBytes.peak = gpuBytes.live;
     const started = performance.now();
     scene.started = started;
     const marks = [];
@@ -143,7 +155,8 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
         active.control = control;
         const job = route.enqueue({ jobId: runId, execute: invocation => pipeline.generate({
           prompt, seed, width: size, height: size, textLength, onStep: stepHook, onPhase: phaseHook,
-          schedule: { runtime: route.runtime, invocation, control, signal: abort.signal, targetDutyMs, maxInFlight } }) });
+          schedule: { runtime: route.runtime, invocation, control, signal: abort.signal, targetDutyMs, maxInFlight,
+            withForeground: frameRun.withForeground } }) });
         const completion = await job.completion;
         if (completion.status !== 'succeeded') {
           const error = new Error(completion.failure?.message ?? completion.status);
@@ -155,6 +168,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
         result = await pipeline.generate({ prompt, seed, width: size, height: size, textLength, onStep: stepHook, onPhase: phaseHook });
       }
       result.wallMs = performance.now() - started;
+      result.gpuBytes = { peak: gpuBytes.peak, live: gpuBytes.live };
       result.startedAt = started;
       result.cooperative = cooperative;
       mark('done');
@@ -180,11 +194,14 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
   }
   function stop(reason = 'stopped by user') { active?.abort.abort(new Error(reason)); }
 
+  let gpuBytesAfterLoad = null;
   async function loadWeights(status = onStatus) {
+    gpuBytes.peak = gpuBytes.live;
     await pipeline.load((part, name, p) => status({ phase: 'load', part, detail: `${part} ${name}`, ...p }));
+    gpuBytesAfterLoad = { peak: gpuBytes.peak, live: gpuBytes.live };
   }
   if (load) await loadWeights();
 
-  return { device, pipeline, generate, togglePause, stop, scene, load: loadWeights, residentBytes: pipeline.residentBytes,
-    get loadMs() { return pipeline.timings.loadMs; }, kernels: pipeline.kernels };
+  return { device, pipeline, generate, togglePause, stop, scene, load: loadWeights, residentBytes: pipeline.residentBytes, gpuBytes,
+    get gpuBytesAfterLoad() { return gpuBytesAfterLoad; }, get loadMs() { return pipeline.timings.loadMs; }, kernels: pipeline.kernels };
 }

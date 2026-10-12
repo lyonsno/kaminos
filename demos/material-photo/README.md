@@ -10,7 +10,9 @@ Orbit the views together, enlarge one, move the light, or change the HDR environ
 
 ## Run Locally
 
-This example currently requires a local Kaminos checkout and a prepared SuperMat WebGPU weight package. MoGe weights download automatically; SuperMat weights are separate from the repository and npm package.
+From a local Kaminos checkout, run `python3 serve.py 8095` and open [Material Photograph](http://127.0.0.1:8095/demos/material-photo/index.html) in a WebGPU-capable Chromium browser. The included examples are playable without model weights: orbit, relight and browse the three saved results immediately. They are labeled separately from your cached and newly generated results.
+
+Generating a new result requires a prepared SuperMat WebGPU weight package. MoGe weights download after you select **Reveal depth & materials**; SuperMat weights are separate from the repository and npm package.
 
 1. Prepare the SuperMat package with [pack-weights.py](../../models/supermat/pack-weights.py). Its inputs are the SuperMat checkpoint, the Stable Diffusion 2.1 VAE and conditioning exported by [export-reference.py](../../models/supermat/export-reference.py). Use the packer's `--dtype f16` and `--chunk-bytes 16777216` options for the chunked FP16 route.
 2. Make that package directory available as `scratch/supermat-weights/f16/` in the checkout. It must contain `package.json` and all referenced bundle and chunk files. A symlink to an existing package directory works.
@@ -20,7 +22,7 @@ This example currently requires a local Kaminos checkout and a prepared SuperMat
 python3 serve.py 8095
 ```
 
-Open [Material Photograph](http://127.0.0.1:8095/demos/material-photo/index.html?sample=orb) in a WebGPU-capable Chromium browser. Choose a sample or upload an image, then select **Reveal depth & materials**. Initial model loading is separate from inference and can take substantially longer.
+Choose a sample or upload an image, then select **Reveal depth & materials**. Initial model loading is separate from inference and can take substantially longer. You can keep exploring included results during loading and generation. If you browse to another photograph, completion offers **View your result** without replacing the photograph you are exploring. **Generate at** selects the next run's material resolution; included results are labeled with their saved resolution.
 
 To use a separately served package, append a URL-encoded `weights` query parameter containing the package directory URL, with a trailing slash. The server must permit browser access from the demo's origin.
 

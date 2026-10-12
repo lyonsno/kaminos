@@ -3,7 +3,7 @@
 // modulation, double-stream blocks, single-stream blocks, AdaLN output norm and
 // projection. Weights come from pack-transformer.py bundles (f16 [out, in]).
 import { KleinDutyScheduler } from './klein-duties.js';
-import { LN_EPS, gemmShader, layerNormModulateShader, qkvPrepShader, softmaxShader, swigluShader,
+import { LN_EPS, scoreHeads, gemmShader, layerNormModulateShader, qkvPrepShader, softmaxShader, swigluShader,
   headsToRowsShader, siluShader, axpyShader, gemmShaderV2, gemmShaderV3, gemmVersionFor } from './klein-kernels.js';
 
 const HEAD = 128;
@@ -183,22 +183,23 @@ export class KleinTransformer {
     this.dispatch(enc, pipe, [x, mod, y, u], rows);
   }
 
-  // Materialized-score attention. Under a cooperative schedule it runs in head groups sized
-  // to the duty budget (scores, softmax and the value product for each group), with a split
-  // point after each group.
+  // Materialized-score attention in head groups: each group computes its scores, softmax and
+  // value product, and the groups reuse one scores buffer of at most SCORE_BYTES (so at 1024²
+  // it holds one head, 71 MB, rather than all 24, 1.7 GB). Under a cooperative schedule groups
+  // are also sized to the duty budget, with a split point after each.
   async attention(enc, L) {
     const a = this.act, H = this.H;
     this.profileTag = 'attention';
     const sm = this.pipeline('softmax', softmaxShader());
     const perHead = 4 * L * L * HEAD;
-    const group = Math.max(1, Math.min(H, Math.floor(this.sched.budget() / perHead)));
+    const group = Math.max(1, Math.min(H, scoreHeads(L), Math.floor(this.sched.budget() / perHead)));
     for (let h0 = 0; h0 < H; h0 += group) {
       const hn = Math.min(group, H - h0);
       await this.gemm(enc, { a: a.q, aOff: h0 * L * HEAD, aRs: HEAD, aBs: L * HEAD, b: a.k, bOff: h0 * L * HEAD, bType: 'f32', bRs: HEAD, bBs: L * HEAD,
-        c: a.scores, cOff: h0 * L * L, cRs: L, cBs: L * L, M: L, N: L, K: HEAD, batch: hn, alpha: 1 / Math.sqrt(HEAD), label: 'attn.scores' });
+        c: a.scores, cOff: 0, cRs: L, cBs: L * L, M: L, N: L, K: HEAD, batch: hn, alpha: 1 / Math.sqrt(HEAD), label: 'attn.scores' });
       const rows = hn * L;
-      this.dispatch(enc, sm, [a.scores, this.uniform([rows, L, h0 * L, 0])], Math.min(rows, 65535), Math.ceil(rows / 65535));
-      await this.gemm(enc, { a: a.scores, aOff: h0 * L * L, aRs: L, aBs: L * L, b: a.vt, bOff: h0 * HEAD * L, bType: 'f32', bRs: L, bBs: HEAD * L,
+      this.dispatch(enc, sm, [a.scores, this.uniform([rows, L, 0, 0])], Math.min(rows, 65535), Math.ceil(rows / 65535));
+      await this.gemm(enc, { a: a.scores, aOff: 0, aRs: L, aBs: L * L, b: a.vt, bOff: h0 * HEAD * L, bType: 'f32', bRs: L, bBs: HEAD * L,
         c: a.o, cOff: h0 * L * HEAD, cRs: HEAD, cBs: L * HEAD, M: L, N: HEAD, K: L, batch: hn, label: 'attn.values' });
       if (hn < H) await this.sched.boundary(`attention[${h0}]`);
     }
@@ -225,7 +226,7 @@ export class KleinTransformer {
       tproj: f(256), temb: f(D), tmp: f(D), siluTemb: f(D),
       mods: f(2 * 6 * D + 3 * D + 2 * D), // double img | double txt | single | norm_out
       hs: f(L * D), norm: f(L * D), proj: f(L * (3 * D + 2 * F)), rope: f(L * HEAD * 2),
-      q: f(H * L * HEAD), k: f(H * L * HEAD), vt: f(H * L * HEAD), o: f(H * L * HEAD), scores: f(H * L * L),
+      q: f(H * L * HEAD), k: f(H * L * HEAD), vt: f(H * L * HEAD), o: f(H * L * HEAD), scores: f(Math.min(H, scoreHeads(L)) * L * L),
       attn: f(L * D), cat: f(L * (D + F)), ffAct: f(L * F), outNorm: f(imgTokens * D), velocity: f(imgTokens * 128),
     };
     this.modOff = { doubleImg: 0, doubleTxt: 6 * D, single: 12 * D, out: 15 * D };
@@ -234,7 +235,14 @@ export class KleinTransformer {
   release() { for (const b of Object.values(this.act ?? {})) b.destroy(); this.act = null; }
 
   // Free the activations and the weights; the instance is unusable afterwards.
-  destroy() { this.release(); for (const w of Object.values(this.weights)) w.buf.destroy(); this.weights = {}; }
+  destroy() { this.release(); this.unloadWeights(); }
+  // Free the weights but keep the compiled pipelines, so loadBundles can bring them back.
+  unloadWeights() { for (const w of Object.values(this.weights)) w.buf?.destroy(); this.weights = {}; }
+  get weightsResident() { return Object.values(this.weights).some(w => w.buf); }
+  // Tensor layouts without GPU buffers, for recording pipelines while the weights are not resident.
+  stubWeights() {
+    for (const [name, bundle] of Object.entries(this.manifest.bundles)) this.weights[name] = { buf: null, tensors: Object.fromEntries(bundle.tensors.map(t => [t.name, t])) };
+  }
 
   // One transformer evaluation. `taps(name, buffer, rows, cols, byteOffset)` lets a witness read
   // boundaries; it receives the encoder state after the boundary's work was encoded.
