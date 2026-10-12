@@ -133,7 +133,7 @@ test('a source-free analytic family retains the flame handle for editing and sav
   const context={refreshFlameDomainPreview:()=>{},authoredFlamePresent:true,scene:{remove:()=>removed++},isFireLightFieldRoute:()=>true,
     applyFlameEmitterPose:()=>{},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring',sourceMode:'off'}}},
     sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:'flame-emitter',flameDomainGuide:{visible:false,box:{set:()=>{}}},
-    flameDomainTranslation:[0,0,0],flameDomainScale:1,viewportHelpersVisible:true,sceneSelectionMembers:()=>['flame-emitter'],activeSceneFieldId:null,
+    flameDomainTranslation:[0,0,0],flameDomainScale:1,viewportHelpersVisible:true,selectionCaptureSuspended:false,sceneSelectionMembers:()=>['flame-emitter'],activeSceneFieldId:null,
     flameEmitterPose:{position:[2,0,0],rotation:[0,0,0],scale:[1,1,1]},
     applySceneObjectTransformState:()=>updated++,updateFlameEmitterSupportOutline:()=>{},
     THREE:{Vector3:class {add(){return this;}}}};

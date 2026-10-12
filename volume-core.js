@@ -25926,6 +25926,12 @@ export function createKaminosVolumePrototype({
 
   return {
     sampleSharedTransmittanceContributions,
+    readSceneCollisionMask(knownRevision = undefined) {
+      if(knownRevision === sceneSolidRevisionKey)return null;
+      return {revision:sceneSolidRevisionKey,cells:sceneSolidCellsCpu?.slice()??null,
+        dimensions:[gridSize,gridHeight,gridSize],transform:structuredClone(productTransform),
+        runtime:structuredClone(state.sceneCollision)};
+    },
     relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives, scale = productTransform.scale) {
       if (productFrameOwner !== 'prototype') throw new Error('Only the ordinary prototype owns its domain translation');
       if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {

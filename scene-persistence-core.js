@@ -1,3 +1,4 @@
+import {FIRE_DOMAIN_TYPE,checkedFireDomainRecord,authorFireObjects,readFireObjects} from './scene-fire-domain.mjs';
 import {RIM_LIGHT_ID,checkedRimRecipe,rimRecipePose,checkedSceneLightRecord} from './scene-rim-light.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh} from './scene-geometry.mjs';
 import {GROUP_TYPE,identityGroupPose,checkedGroupPose} from './scene-group.mjs';
@@ -10,7 +11,7 @@ import {normalizeCameraViews} from './scene-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,normalizeSceneCamera,normalizeCameraViewport} from './scene-camera.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 8;
+export const SCENE_VERSION = 9;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -19,6 +20,7 @@ function cloneJson(value) {
 
 function normalizeSceneObjectRecord(record) {
   if (!record || typeof record !== 'object') throw new Error('Scene object record must be an object');
+  if(record.type===FIRE_DOMAIN_TYPE)return checkedFireDomainRecord(record);
   if(record.type===CAMERA_TYPE)record=checkedCameraRecord(record);
   if(record.type==='light')record=checkedSceneLightRecord(record);
   const id = String(record.id || record.fileName || record.source || 'object');
@@ -31,6 +33,7 @@ function normalizeSceneObjectRecord(record) {
     ...(record.type===CAMERA_TYPE?{camera:cloneJson(record.camera)}:{}),
     ...(record.type==='light'?{light:cloneJson(record.light)}:{}),
     ...(record.type === PROCEDURAL_MESH_TYPE ? {geometry:cloneJson(record.geometry),surface:cloneJson(record.surface)} : {}),
+    ...(record.emission?{emission:cloneJson(record.emission)}:{}),
     source: record.source ?? null,
     type: record.type ?? 'glb',
     fileName: record.fileName ?? 'object.glb',
@@ -148,7 +151,11 @@ export function isReloadableSceneObjectRecord(record) {
 
 export function planSceneRestore(data) {
   if (!sceneDocumentIsLoadable(data)) throw new Error('Invalid scene format');
-  const objects = getSceneObjectRecords(data);
+  const authoredObjects = getSceneObjectRecords(data);
+  const fire = authoredObjects.some(o=>o.type===FIRE_DOMAIN_TYPE)?readFireObjects(authoredObjects,data.fireRendering):null;
+  if(data.version>=9 && data.composition && !fire)throw Error('Saved fire domain is missing');
+  if(fire)data={...data,flameDomainTranslation:fire.frame.translation,flameDomainScale:fire.frame.scale,flameDomainFollowSource:fire.frame.followSource};
+  const objects = authoredObjects.filter(o=>o.type!==FIRE_DOMAIN_TYPE);
   const flameSources = objects.filter(record => record.type === FLAME_EMITTER_TYPE);
   if (flameSources.length > 1) throw new Error('The current flame domain supports one authored source');
   if (flameSources.length && !normalizeComposition(data.composition)) throw new Error('Flame source requires its saved flame composition');
@@ -178,6 +185,7 @@ export function planSceneRestore(data) {
     sceneCamera:normalizeSceneCamera(data.sceneCamera,objects),
     viewport:normalizeCameraViewport(data.viewport,normalizeSceneCamera(data.sceneCamera,objects)),
     version: data.version,
+    authoredObjects,fireSettings:fire?.settings??null,fireDomain:fire?.domain??null,
     objects,
     groups,
     activeObjectId,
@@ -201,6 +209,7 @@ export function buildSceneDocument({
   volumePrimitives = { schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] },
   provenance = null,
   composition = null,
+  fireSettings = null,
   flameDomainTranslation = undefined,
   flameDomainScale = 1,
   flameDomainFollowSource = true,
@@ -236,9 +245,10 @@ export function buildSceneDocument({
   }
   const document = {
     schema: SCENE_SCHEMA,
-    version: SCENE_VERSION,
+    version: fireSettings ? SCENE_VERSION : 8,
     timestamp,
-    objects: sceneObjects,
+    objects: fireSettings ? authorFireObjects(sceneObjects,fireSettings,{translation:authoredFlameDomain,scale:flameDomainScale,followSource:flameDomainFollowSource,collision:composition?.route?.volume_collision==='kiln'}) : sceneObjects,
+    ...(fireSettings?{fireRendering:{rendererControls:cloneJson(fireSettings.rendererControls),presentationControls:cloneJson(fireSettings.presentationControls)}}:{}),
     groups: sceneGroups,
     activeObjectId: activeObject?.id || activeObjectId || null,
     activeGroupId: activeGroup?.id || null,
@@ -251,7 +261,7 @@ export function buildSceneDocument({
     } : null,
     provenance: cloneJson(provenance),
     composition: normalizeComposition(composition),
-    ...(authoredFlameDomain ? { flameDomainTranslation: authoredFlameDomain, flameDomainScale, flameDomainFollowSource } : {}),
+    ...(!fireSettings && authoredFlameDomain ? { flameDomainTranslation: authoredFlameDomain, flameDomainScale, flameDomainFollowSource } : {}),
     localLiquid: liquidSetup,
     capture: normalizeSceneCapture(capture),
     transform: cloneJson(activeObject?.transform ?? null),

@@ -95,7 +95,7 @@ export function authoredFlameShapeOptions(options) {
   return [...options].filter(option=>option.value!=='cluster');
 }
 
-export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, readSourceRuntime = () => null, openWorkbench, onError }) {
+export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, readSourceRuntime = () => null, readControlBounds = () => null, openWorkbench, onError }) {
   const basin = document.createElement('details'); basin.id='flame-basin-browser'; basin.open=true;
   basin.innerHTML='<summary>Preset</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a preset…" aria-label="Find a preset"><select id="flame-basin-select" aria-label="Fire preset"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
   sharedHost.append(basin);
@@ -140,8 +140,12 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       field.setAttribute('aria-label',`Flame ${label}`);
       field.dataset.authoringDragStep=source.step==='any'?'.01':source.step||'.01';
       function syncField(force=false) {
+        const bounds=readControlBounds(id);
+        for(const key of ['min','max']) {
+          if(bounds) source[key]=String(bounds[key]);
+          if(source[key])field[key]=source[key];
+        }
         if(force!==true&&document.activeElement===field)return;
-        for(const key of ['min','max'])if(source[key])field[key]=source[key];
         if(field.type==='checkbox')field.checked=source.checked;else field.value=source.value;
       }
       if(id==='emitter-assay-family')field.title='Placeable flame shapes. Cluster bowl is available in Workbench.';

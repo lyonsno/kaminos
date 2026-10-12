@@ -151,3 +151,11 @@ the workspace header; its status button returns to the Authoring generation pane
 Workspace switching changes presentation without starting, stopping or restarting
 inference. Catalog loading shows a small spinner beside the loading text and sets
 `aria-busy`; reduced-motion preferences retain the indicator without animation.
+
+### Fire ownership and collision inspection
+
+Version 9 fire scenes store one `simulation-domain` object (`flame-field`): its transform and `simulation.settings` own the box and evolution; `volumeMaterial.settings` owns optical interpretation. The existing flame source owns `emission.settings` and references that domain through `emission.domainId`. Scene `fireRendering` owns renderer/presentation settings. A source-free domain retains a source template for re-add. The pinned basin remains a mount/bootstrap dependency; v9 scene records replace its coefficients on restore. Older documents retain their existing migration behavior. This does not add multiple sources, independent domains, or evolved-fluid checkpoints.
+
+`kaminosSceneAuthoring.read().objects` exposes these records. `setFireSettings(objectId, 'emission' | 'simulation' | 'volumeMaterial', {controlId: value})` validates ownership and uses the shared reversible flame edit. Domain placement remains available through `kaminosFlameDomain`; collision uses `kaminosSceneCollision.set(boolean)`. The runtime still adapts this single authored domain to its existing control backing and allocation.
+
+Collision and simulation resolution share the same grid. The inspector exposes the runtime's existing choices; changing one restarts the fluid. `kaminosSceneCollision.showVoxels(boolean)` is a viewport diagnostic, excluded from captures and authored scene records. `readMask()` returns the actual installed CPU mask uploaded to the solver, with its revision, dimensions, domain transform and effective collision receipt. Cyan boundary cells include the enabled source backing wall; unavailable geometry is reported rather than substituted with a second voxelization.
