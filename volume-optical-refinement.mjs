@@ -2,7 +2,7 @@ import {composeTransfers,integrateProbes,estimateProbeError} from './volume-opti
 
 const difference=(a,b)=>a.map((v,i)=>Math.abs(v-b[i]));
 const identity=()=>[0,0,0,1];
-const nonnegativeFour=v=>Array.isArray(v)&&v.length===4&&v.every(x=>Number.isFinite(x)&&x>=0);
+const nonnegativeFour=v=>Array.isArray(v)&&v.length===4&&[0,1,2,3].every(i=>Number.isFinite(v[i])&&v[i]>=0);
 
 // All indices refer to retained, evenly spaced observations. No synthesized teacher probes.
 export function buildOpticalHierarchy(probes,{length,rootSpan,probeCount}) {

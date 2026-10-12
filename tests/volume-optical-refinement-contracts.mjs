@@ -34,6 +34,11 @@ assert.equal(split.uniqueProbeCount,new Set(split.observedIndices).size);
 assert.equal(split.uniqueProbeCount,33); // eight leaves, four panels each, shared endpoints
 assert.ok(split.unresolvedLeafCount>0);
 assert.throws(()=>refineOpticalHierarchy(tree,{policy:'predicted',tolerances:loose,predictError:()=>[NaN,0,0,0]}),/prediction/);
+for(const sparse of [new Array(4),[0,,0,0]]) {
+  assert.throws(()=>refineOpticalHierarchy(tree,{policy:'predicted',tolerances:loose,predictError:()=>sparse}),/prediction/);
+  assert.throws(()=>refineOpticalHierarchy(tree,{policy:'numerical',tolerances:sparse}),/tolerances/);
+  assert.throws(()=>refineOpticalHierarchy(tree,{policy:'numerical',tolerances:loose,calibration:sparse}),/calibration/);
+}
 const clipped=buildOpticalHierarchy(flat.slice(0,49),{length:0.75,rootSpan:32,probeCount:5});
 const clippedResult=refineOpticalHierarchy(clipped,{policy:'numerical',tolerances:loose});
 assert.deepEqual(clippedResult.accepted.map(n=>[n.start,n.end]),[[0,32],[32,48]]);
