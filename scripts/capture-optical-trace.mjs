@@ -90,14 +90,21 @@ try {
       const chunk=await page.evaluate(async options=>{
         const result=await window.__kaminosVolumePrototype.sampleOpticalTraceChunk(options);
         const values=result.values;
-        return {...result,values:undefined,readbackBytes:values ?
-          Array.from(new Uint8Array(values.buffer,values.byteOffset,values.byteLength)) : null};
+        let readbackBase64=null;
+        if(values) {
+          const bytes=new Uint8Array(values.buffer,values.byteOffset,values.byteLength);
+          let binary='';
+          // Match the renderer's binary exports without per-byte protocol objects.
+          for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
+          readbackBase64=btoa(binary);
+        }
+        return {...result,values:undefined,readbackBase64};
       },{firstRay:Math.floor(height*fraction)*width,rayCount:width,sampleOffset:0,sampleCount:subdivisions+1,subdivisions,now:4000,specialization});
-      const bytes=chunk.readbackBytes ? Buffer.from(chunk.readbackBytes) : null;
+      const bytes=chunk.readbackBase64!==null ? Buffer.from(chunk.readbackBase64,'base64') : null;
       const path=`trace-${fraction}-${specialization}.f32`;
       if(bytes)await fs.writeFile(out+'/'+path,bytes);
       const sha256=bytes ? createHash('sha256').update(bytes).digest('hex') : null;
-      report.chunks.push({...chunk,readbackBytes:undefined,path:bytes ? path : null,sha256});await save();
+      report.chunks.push({...chunk,readbackBase64:undefined,path:bytes ? path : null,sha256});await save();
       assert.equal(chunk.ok,true,`optical capture failed at ${chunk.phase}: ${chunk.reason}`);
       assert.ok(bytes,'missing optical readback');
       validateTraceSpecialization(specialization,chunk.effective.specialization);
