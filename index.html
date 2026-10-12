@@ -25637,7 +25637,7 @@ function updateAuthoringPropertySelection() {
 let flameInspector = null;
 function installFlameDomainControls(host) {
   const panel=document.createElement('section');panel.className='flame-domain-controls';
-  panel.innerHTML='<h4>Simulation box</h4><p class="flame-scope">Move with G · Resize with S. Preview the box, then confirm to restart the field. The emitter stays in world space.</p>'+['x','y','z','scale'].map(key=>`<label class="flame-quick-row">${key==='scale'?'World scale':'Center '+key.toUpperCase()}<input id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></label>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p><p class="flame-scope">Resizing changes world cell size; simulation speeds remain in solver units. Move the emitter separately to place it inside the box.</p>';
+  panel.innerHTML='<h4>Simulation box</h4><p class="flame-scope">Move with G · Resize with S. Preview the box, then confirm to restart the field. The emitter stays in world space.</p>'+['x','y','z','scale'].map(key=>`<div class="slider-row"><label class="slider-label" for="flame-domain-${key}">${key==='scale'?'World scale':'Center '+key.toUpperCase()}</label><input class="transform-input" id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></div>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p><p class="flame-scope">Resizing changes world cell size; simulation speeds remain in solver units. Move the emitter separately to place it inside the box.</p>';
   host.append(panel);
   const inputs=[...panel.querySelectorAll('input')];
   for(const input of inputs)input.addEventListener('input',()=>{
