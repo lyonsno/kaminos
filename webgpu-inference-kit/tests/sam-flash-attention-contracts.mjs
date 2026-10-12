@@ -52,6 +52,20 @@ assert.throws(() => partitionSamFlashAttentionPhase({ kernel: 'attention', dispa
     assert.equal(values.scale, 1 / Math.sqrt(32));
   }
 }
+// Cross-attention (SAM 3.1 memory attention): keys come from a different token set than queries.
+{
+  const kernels = { attention: template };
+  const phases = partitionSamFlashAttentionPhase({ name: 'memory-cross', kernel: 'attention', dispatch: [5184, 8, 1], yieldAfter: true },
+    { headDim: 32, keyTokens: 5200, queriesPerPhase: 5184 + 64 - (5184 % 64 || 64) }, { createUniformBuffer: spec => spec }, kernels);
+  assert.equal(phases.length, 1);
+  const { values } = kernels[phases[0].kernel].bindings[4].resource;
+  assert.deepEqual([values.query_tokens, values.key_tokens, values.query_offset, values.query_count], [5184, 5200, 0, 5184]);
+  assert.deepEqual(phases[0].dispatch, [81, 8, 1]);
+}
+const memory = readFileSync(new URL('../src/sam31-memory-attention-phase-program.js', import.meta.url), 'utf8');
+assert.match(memory, /input\.attentionKernel/);
+assert.match(memory, /partitionSamFlashAttentionPhase\(/);
+assert.match(memory, /keyTokens: cross \? shape\.memoryTokens : shape\.queryTokens/, 'cross-attention reads the memory token count');
 const detr = readFileSync(new URL('../src/sam-detr-encoder-phase-program.js', import.meta.url), 'utf8');
 assert.match(detr, /input\.attentionKernel/);
 assert.match(detr, /partitionSamFlashAttentionPhase\(/);

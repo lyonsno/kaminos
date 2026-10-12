@@ -25,14 +25,17 @@ export function samFlashAttentionShader(headDim = 64) {
   return shaders.get(headDim);
 }
 
-// Replace one SAM self-attention phase (dispatch [queries, heads, domains], template bindings
-// [q, k, v, output, dims]; ViT head dim 64, DETR encoder head dim 32) with query ranges of the flash kernel.
-export function partitionSamFlashAttentionPhase(phase, { headDim, queriesPerPhase = SAM_FLASH_ATTENTION_QUERIES_PER_PHASE }, runtime, kernels) {
+// Replace one SAM attention phase (dispatch [queries, heads, domains], template bindings [q, k, v, output,
+// dims]; ViT head dim 64, DETR encoder and SAM 3.1 memory attention head dim 32) with query ranges of the
+// flash kernel. keyTokens defaults to the query count (self-attention).
+export function partitionSamFlashAttentionPhase(phase, { headDim, keyTokens, queriesPerPhase = SAM_FLASH_ATTENTION_QUERIES_PER_PHASE }, runtime, kernels) {
   if (headDim !== 32 && headDim !== 64) throw new Error('SAM flash attention supports headDim 32 or 64');
   if (!Number.isInteger(queriesPerPhase) || queriesPerPhase < 64 || queriesPerPhase % 64 !== 0) {
     throw new Error('queriesPerPhase must be a positive multiple of 64');
   }
   const [queries, heads, domains] = phase.dispatch;
+  const keys = keyTokens ?? queries;
+  if (!Number.isInteger(keys) || keys < 1) throw new Error('keyTokens must be a positive integer');
   const template = kernels[phase.kernel];
   const chunks = [];
   for (let offset = 0; offset < queries; offset += queriesPerPhase) {
@@ -42,7 +45,7 @@ export function partitionSamFlashAttentionPhase(phase, { headDim, queriesPerPhas
       label: `${kernel}.params`,
       schema: PARAM_SCHEMA,
       values: {
-        query_tokens: queries, key_tokens: queries, q_channels: heads * headDim, kv_channels: heads * headDim,
+        query_tokens: queries, key_tokens: keys, q_channels: heads * headDim, kv_channels: heads * headDim,
         heads, kv_heads: heads, query_offset: offset, query_count: count, scale: 1 / Math.sqrt(headDim),
         _pad0: 0, _pad1: 0, _pad2: 0,
       },

@@ -1,3 +1,4 @@
+import { partitionSamFlashAttentionPhase } from './sam-flash-attention.js';
 import {
   assertAuthoritativeRouteWorkerResult,
   createRouteWorkerResult,
@@ -699,6 +700,9 @@ function layerWeightArrays(layer) {
 }
 
 export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
+  // 'flash' (kit tiled flash attention, default) or 'online' (the original per-query kernel, A/B baseline).
+  const attentionKernel = input.attentionKernel ?? 'flash';
+  if (attentionKernel !== 'flash' && attentionKernel !== 'online') throw new RangeError(`unsupported SAM 3.1 memory attention kernel ${attentionKernel}`);
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   const projection = validateInputs(input.tensors || {});
   const { shape, current, bank, layers, finalNorm } = projection;
@@ -908,15 +912,25 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
     { name: 'memory-attention-final-layernorm', kernel: 'finalLayerNorm', dispatch: [workgroups(queryRows)], yieldAfter: true },
     { name: 'memory-attention-readback', readbacks: [{ name: 'memory', tensor: 'finalOutput' }] },
   );
+  // Flash attention takes ~27 ms per self or cross attention at 5184 queries (8 heads x 32), so each stays one
+  // phase like the original kernel (~340 ms) did.
+  const flashPhases = attentionKernel === 'online' ? phases : phases.flatMap(phase => {
+    const cross = /CrossAttention$/.test(phase.kernel ?? '');
+    if (!cross && !/SelfAttention$/.test(phase.kernel ?? '')) return [phase];
+    return partitionSamFlashAttentionPhase(phase, {
+      headDim: shape.headDim, keyTokens: cross ? shape.memoryTokens : shape.queryTokens, queriesPerPhase: Math.ceil(shape.queryTokens / 64) * 64,
+    }, runtime, kernels);
+  });
 
   const program = runtime.defineProgram({
     name: 'sam31.memory-attention-phase-program',
     tensors: programTensors,
     uniforms: tensors.uniforms,
     kernels,
-    phases,
+    phases: flashPhases,
     metadata: {
       routeId: SAM31_MEMORY_ATTENTION_PHASE_PROGRAM_ROUTE_ID,
+      attentionKernel,
       sourceBoundary: 'Meta TransformerEncoderDecoupledCrossAttention',
       numObjPtrTokens: shape.numObjPtrTokens,
       attentionMemory: 'online-softmax-without-logits-tensor',
