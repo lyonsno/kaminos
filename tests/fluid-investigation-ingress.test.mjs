@@ -76,7 +76,7 @@ test('ordinary controls change retains the complete shared navigation pose only 
 });
 
 test('reset records a new runtime generation and retains superseded or failed outcomes',async()=>{
-  const start=source.indexOf('async function resetFingerFluidPressureCockpitWater() {'),end=source.indexOf('\n\nfunction installFluidWorkbench()',start);
+  const start=source.indexOf('async function resetFingerFluidPressureCockpitWater() {'),end=source.indexOf('\n\nfunction installFluidWorkbench(',start);
   for(const outcome of ['applied','superseded','failed','startup-failed','unavailable']){
     const clock={generation:1,step:47,available:true,paused:true};
     const context=vm.createContext({investigationOperations,window:{_kaminosDirty(){},kaminosFingerFluidBenchSessionState:()=>({...clock})},

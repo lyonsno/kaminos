@@ -4,14 +4,14 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-function fixture({running=false,available=true}={}) {
+function fixture({running=false,available=true,entryOnly=false}={}) {
   const nodes=new Map();
   const node=id=>{if(!nodes.has(id))nodes.set(id,{hidden:false,classList:{toggle(){}},dataset:{}});return nodes.get(id);};
   let tab='finger-fluid-bench',active=true,mode='workbench',generation=1,starts=0,stops=0,resumes=0;
   const water={available},viewport={};
   const context=vm.createContext({
     document:{body:node('body'),getElementById:node,querySelectorAll:()=>[]},
-    window:{__kaminosActiveTab:()=>tab},
+    window:{__kaminosActiveTab:()=>tab,__kaminosInvestigationEntryOnly:entryOnly},
     authoringControlSessions:[],scenePlacementTools:{edits:{state:()=>({})}},setInfo(){},
     fingerFluidBenchRunning:running,fingerFluidBenchSolver:water,fingerFluidBenchViewport:viewport,
     fluidWorkbench:{state:()=>({active}),setActive:v=>{active=v;}},
@@ -49,4 +49,11 @@ test('leaving Fluid for another experiment still stops its presentation',()=>{
 
 test('an unavailable solver is not preserved as live water',()=>{
   const f=fixture({available:false});f.switchMode('authoring');assert.equal(f.read().stops,1);
+});
+
+
+test('opening an investigation entry selects the Fluid workspace without starting or replacing water',()=>{
+ const f=fixture({available:false,entryOnly:true});f.context.setActiveTab('finger-fluid-bench');
+ assert.equal(f.read().starts,0,'a link entry must not launch a new solver before explicit Start');
+ assert.equal(f.read().stops,0);assert.equal(f.read().generation,1);
 });
