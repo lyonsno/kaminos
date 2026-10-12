@@ -13,7 +13,7 @@
 // route and actual WebGPU readback authority. Every output (cold, warm,
 // negative) must carry execution identity matching the packet: the verified
 // model package, the registered commit, and the source image recorded in its
-// image-feature cache key, plus a complete live composition receipt chain.
+// image-feature cache key, plus a receipt chain containing every SAM 3 composition stage.
 // Cold and warm positives are gated numerically; the negative control must be
 // the workbench's different-prompt invocation, keep nothing, and report a
 // truthful empty selection.
@@ -37,10 +37,15 @@ export const SAM_NATIVE_TOLERANCE_GATE = Object.freeze({
 
 // The workbench's fixed negative-control prompt (smokes/sam-semantic-mask-workbench.js runMask).
 export const SAM_WORKBENCH_NEGATIVE_PROMPT = 'a purple submarine with zebra stripes';
-// The native witness's own floor for a complete composition (tools/sam-semantic-mask-workbench-witness.mjs).
-const MIN_COMPOSITION_RECEIPTS = 10;
-const LIVE_RECEIPT = /^sam3\.[a-z0-9-]+\.phase-program\.webgpu-local\.v0$/;
-const VIT_BLOCK_STACK_RECEIPT = 'sam3.image-vit-block-stack.phase-program.webgpu-local.v0';
+// Every stage of the SAM 3 image-to-mask composition (observed identically on cold, cached-warm and negative
+// native runs). Completeness is membership of all of them; additive stages and cache-reuse receipts may
+// appear beside them, fallback or demo routes may not.
+export const SAM3_REQUIRED_COMPOSITION_RECEIPTS = Object.freeze([
+  'image-preprocess', 'image-patch-embed', 'image-vit-prefix', 'image-vit-block-stack', 'image-fpn-neck',
+  'prompt-text-ingress', 'detr-encoder', 'prompt-fpn', 'pixel-decoder', 'detr-decoder', 'scoring',
+  'selection-postprocess', 'mask-tail',
+].map(stage => `sam3.${stage}.phase-program.webgpu-local.v0`));
+const NON_LIVE_RECEIPT = /fallback|demo/i;
 const IMAGE_CACHE_KEY_PREFIX = 'sam3-image-features:';
 
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -185,8 +190,8 @@ function checkAuthority(output, reference, registration, label) {
   return {
     [`${label}.authority`]: output?.outputAuthority === 'actual-webgpu-readback',
     [`${label}.route`]: output?.effectiveRouteId === reference.manifest.routeId,
-    [`${label}.receipts`]: Array.isArray(chain) && chain.length >= MIN_COMPOSITION_RECEIPTS && new Set(chain).size === chain.length
-      && chain.every(id => typeof id === 'string' && LIVE_RECEIPT.test(id)) && chain.includes(VIT_BLOCK_STACK_RECEIPT),
+    [`${label}.receipts`]: Array.isArray(chain) && chain.every(id => typeof id === 'string' && !NON_LIVE_RECEIPT.test(id))
+      && new Set(chain).size === chain.length && SAM3_REQUIRED_COMPOSITION_RECEIPTS.every(id => chain.includes(id)),
     [`${label}.invocation`]: typeof output?.invocationId === 'string' && output.invocationId.length > 0,
     [`${label}.modelPackage`]: typeof packageId === 'string' && packageId.length > 0
       && resources?.activeModelPackageId === packageId && resources?.modelSession?.packageId === packageId,
