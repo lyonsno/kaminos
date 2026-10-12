@@ -5,6 +5,16 @@ const plan=optical.traceChunkPlan({firstRay:0,rayCount:1,sampleOffset:0,sampleCo
 const a=new Float32Array(96);
 for(let s=0;s<3;s++)a.set([0,s,1,1,s/2,0,1,.1,0,0,0,.5,0,0,1,.04,1,1,-.002,2,0,0,0,0,0,1,.1,0,.5,.5,.5,1],s*32);
 assert.equal(optical.compareOpticalTraces(a,a,plan).ok,true);
+const miss=a.slice();for(let s=0;s<3;s++)miss[s*32+2]=0;
+assert.equal(optical.compareOpticalTraces(miss,miss,plan).comparedRays,0);
+const zero=a.slice();for(let s=0;s<3;s++){zero[s*32+4]=0;zero[s*32+6]=0;}
+assert.equal(optical.compareOpticalTraces(zero,zero,plan).comparedRays,1);
+for(const hits of [[0,1,1],[1,0,0]]) {
+  const mixed=a.slice();hits.forEach((hit,s)=>{mixed[s*32+2]=hit;});
+  assert.throws(()=>optical.validateTraceRows(mixed,plan),/mixed hit\/miss/);
+  assert.throws(()=>optical.compareOpticalTraces(mixed,mixed,plan),/mixed hit\/miss/);
+  assert.throws(()=>optical.compareOpticalTraces(a,mixed,plan),/mixed hit\/miss/);
+}
 const small=a.slice();small[17]+=1e-7;small[29]+=4e-6;
 assert.equal(optical.compareOpticalTraces(a,small,plan).ok,true);
 for(const field of [0,1,2,3,4,5,6,7,8,11,12,15,23,24,25,27,31]) {
