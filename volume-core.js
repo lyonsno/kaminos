@@ -7563,7 +7563,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let exitP = ro + rd * endT;
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
   let expensiveSampleBudget = u32(ceil(steps));
-  let maxTraversalSteps = GRID_Y * 3u + expensiveSampleBudget + 3u;
+  // Each axis has at most count-1 faces. Allow a roundoff revisit per face,
+  // plus base-size empty steps and the occupied-sample budget.
+  let maxTraversalSteps = 2u * (2u * GRID + GRID_Y + expensiveSampleBudget) + 3u;
   var expensiveSamples = 0u;
   var traversalSteps = 0u;
   loop {
@@ -7577,15 +7579,29 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     let p = select(ro + rd * t, fullGridP, fullGridCapture);
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
     let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
+    let materialTraversal = LEAN_EMISSIVE_RAYMARCH && u.emissive_material.w > 0.5
+      && !flowKernelReconstructionActive && u.reserved_render_controls.y > 0.5;
+    let materialSkip = materialTraversal && u.reserved_render_controls.y < 1.5 && occupancySkipStrength > 0.0;
     var neighborhood: RaymarchNeighborhood;
     var directSupport: f32;
     if (LEAN_EMISSIVE_RAYMARCH) {
-      neighborhood = sampleRaymarchNeighborhood(p);
+      neighborhood = sampleRaymarchNeighborhoodDirected(p, select(vec3<f32>(0.0), rd, materialSkip));
       directSupport = raymarchNeighborhoodSupport(neighborhood);
     } else {
       directSupport = directCellOpticalSupport(p);
     }
-    if (!fullGridCapture && directSupport <= 0.0001) {
+    if (materialTraversal) {
+      if (t >= endT) { break; }
+      let bounds = neighborhood.materialBounds;
+      if (materialSkip && raymarchMaterialEmpty(bounds.x, bounds.y, bounds.z)) {
+        let cellExit = raymarchMaterialCellExit(p, rd);
+        let advance = materialEmptyAdvance(dtBase, cellExit, occupancySkipStrength);
+        let nextT = t + min(advance, endT - t);
+        // One f32 ULP crosses a rounded face without the old fixed-size nudge.
+        t = min(endT, bitcast<f32>(bitcast<u32>(max(0.0, nextT)) + 1u));
+        continue;
+      }
+    } else if (!fullGridCapture && directSupport <= 0.0001) {
       let cellExit = directCellExitDistance(p, rd);
       let emptyCellAdvance = mix(
         dtBase,
@@ -11041,6 +11057,7 @@ export function createKaminosVolumePrototype({
   let leanStockProductRaymarchPipeline = null;
   let leanEmissiveProductRaymarchPipeline = null;
   let debugRaymarchShaderSpecialization = 'auto';
+  let debugMaterialTraversal = 'legacy';
   let opticalTransportContributionPipeline = null;
   let browserResidualPipeline = null;
   let browserResidualSourcePipeline = null;
@@ -15092,6 +15109,7 @@ export function createKaminosVolumePrototype({
     uniforms.fill(0, 41, 47);
     // Reuse a retired history slot; presentation flags retain their own lanes.
     uniforms[44] = controlsSnapshot.flowDebug || 0;
+    uniforms[45] = debugMaterialTraversal === 'legacy' ? 0 : debugMaterialTraversal === 'none' ? 2 : 1;
     uniforms[46] = controlsSnapshot.toneMapping === 'custom' ? 0 : 1;
     const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
     uniforms[47] = controlsSnapshot.rayStartNoise === false ? 0 : 1;
@@ -19228,6 +19246,12 @@ export function createKaminosVolumePrototype({
       eligible: admission.eligible,
       refusalReasons: admission.refusalReasons,
       debugOverride: debugRaymarchShaderSpecialization,
+      materialTraversal: {
+        requested: debugMaterialTraversal,
+        effective: effective === 'lean-emissive-raymarch-v0' && uniforms[EMISSIVE_UNIFORM_OFFSET + 3] > 0.5 && uniforms[328] <= 0.0001
+          ? (debugMaterialTraversal === 'legacy' ? 'legacy' : debugMaterialTraversal === 'none' || uniforms[40] <= 0 ? 'none' : 'material')
+          : 'legacy',
+      },
       fallbackReason: debugForcedFull && admission.eligible
         ? 'debug-force-full'
         : ((requested || controlsSnapshot.legacyPyroBackedOff === true) && !admission.eligible
@@ -25898,6 +25922,11 @@ export function createKaminosVolumePrototype({
         identity: 'debug-raymarch-shader-specialization-override-v0',
         effective: debugRaymarchShaderSpecialization,
       };
+    },
+    setDebugMaterialTraversal(mode = 'material') {
+      if (!['material', 'legacy', 'none'].includes(mode)) throw new Error(`unsupported-material-traversal:${mode}`);
+      debugMaterialTraversal = mode;
+      return { requested: mode };
     },
     applyPersistentSparseCohortGpuState,
     applyFourArmHeldStateApplication,
