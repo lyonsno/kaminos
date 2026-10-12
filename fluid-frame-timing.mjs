@@ -17,17 +17,29 @@ export function partitionGpuPassIntervals(passes) {
 }
 export function createFluidFrameTiming(device) {
   let enabled=false,active=false,pending=false,disposed=false,lastRequest=-Infinity,stage='other';
-  let sample=null,failure=null,querySet=null,resolveBuffer=null,readback=null;
+  let sample=null,failure=null,querySet=null,resolveBuffer=null,readback=null,preparation=null,prepared=false;
   let entries=[],restore=null,invalid=null;
-  const read=()=>structuredClone({enabled,available:device.features.has('timestamp-query'),status:failure?'failed':pending?'reading':active?'encoding':enabled?(sample?'measured':'awaiting_frame'):'disabled',failure,sample});
-  function setEnabled(value){if(typeof value!=='boolean')throw Error('Timing enabled must be boolean');enabled=value;failure=null;return read();}
+  const read=()=>structuredClone({enabled,available:device.features.has('timestamp-query'),status:failure?'failed':preparation&&!prepared?'preparing':pending?'reading':active?'encoding':enabled?(sample?'measured':'awaiting_frame'):'disabled',failure,sample});
+  function setEnabled(value){if(typeof value!=='boolean')throw Error('Timing enabled must be boolean');enabled=value;if(value&&failure&&!pending){querySet?.destroy();resolveBuffer?.destroy();readback?.destroy();querySet=resolveBuffer=readback=null;failure=null;preparation=null;prepared=false;}return read();}
+  async function prepare(){
+    let q,r,b;
+    device.pushErrorScope('out-of-memory');device.pushErrorScope('validation');
+    let thrown=null;
+    try{
+      q=device.createQuerySet({label:'fluid-budget-timestamps',type:'timestamp',count:QUERY_COUNT});
+      r=device.createBuffer({label:'fluid-budget-resolve',size:QUERY_COUNT*8,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
+      b=device.createBuffer({label:'fluid-budget-readback',size:QUERY_COUNT*8,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+    }catch(error){thrown=error;}
+    const validation=await device.popErrorScope(),memory=await device.popErrorScope();
+    if(disposed||thrown||validation||memory){q?.destroy();r?.destroy();b?.destroy();if(!disposed)failure=String(thrown??validation?.message??memory?.message);return;}
+    querySet=q;resolveBuffer=r;readback=b;prepared=true;
+  }
   function begin(){
     if(!enabled||active||pending||disposed||performance.now()-lastRequest<1000)return false;
     if(!device.features.has('timestamp-query')){failure='This shared GPU device does not support timestamp queries';return false;}
     try{
-      querySet??=device.createQuerySet({label:'fluid-budget-timestamps',type:'timestamp',count:QUERY_COUNT});
-      resolveBuffer??=device.createBuffer({label:'fluid-budget-resolve',size:QUERY_COUNT*8,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
-      readback??=device.createBuffer({label:'fluid-budget-readback',size:QUERY_COUNT*8,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+      if(!prepared){preparation??=prepare().catch(error=>{if(!disposed)failure=String(error);});return false;}
+      if(failure)return false;
       entries=[];invalid=null;active=true;stage='other';lastRequest=performance.now();
       const original=device.createCommandEncoder,owned=Object.hasOwn(device,'createCommandEncoder');
       const replacement=function(...args){
