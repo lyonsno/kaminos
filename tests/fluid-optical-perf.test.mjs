@@ -24,9 +24,9 @@ test('scene-ray march projects its constant origin and direction once, retaining
 test('performance evidence rejects partial/zero timing, substituted renderer, and unbound shader',()=>{
   validateOpticalTiming([1,2],2);
   for(const [values,count] of [[[1],2],[[0],1],[[-1],1],[[NaN],1]])assert.throws(()=>validateOpticalTiming(values,count));
-  const valid={clock:{paused:true},bench:{runtime:{solver_backend:'webgpu_compute',effectiveRendererMode:'screen_space_refraction'}},viewport:{effective:'shared',failure:null,lastFrame:{presentedByHost:true}}};
+  const valid={clock:{paused:true},bench:{runtime:{solver_backend:'webgpu_compute',effectiveRendererMode:'screen_space_refraction',opticalDebugMode:'shaded'}},viewport:{effective:'shared',failure:null,lastFrame:{presentedByHost:true,opticalDebugMode:'shaded'}}};
   validateOpticalRuntime(valid);
-  for(const change of [s=>s.clock.paused=false,s=>s.bench.runtime.effectiveRendererMode='sphere_debug',s=>s.viewport.lastFrame.presentedByHost=false,s=>s.viewport.failure='lost']){
+  for(const change of [s=>s.clock.paused=false,s=>s.bench.runtime.effectiveRendererMode='sphere_debug',s=>s.viewport.lastFrame.presentedByHost=false,s=>s.viewport.failure='lost',s=>s.bench.runtime.opticalDebugMode='liquid_support',s=>s.viewport.lastFrame.opticalDebugMode='depth']){
     const s=structuredClone(valid);change(s);assert.throws(()=>validateOpticalRuntime(s));
   }
   assert.equal(substituteBaseline('abc',[{candidate:'b',baseline:'x'}]),'axc');

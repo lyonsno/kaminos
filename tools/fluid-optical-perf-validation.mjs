@@ -9,7 +9,9 @@ export function validateOpticalRuntime(state) {
   assert.equal(state.bench.runtime.solver_backend,'webgpu_compute','Wrong effective solver');
   assert.equal(state.viewport.effective,'shared','Wrong effective viewport');
   assert.equal(state.bench.runtime.effectiveRendererMode,'screen_space_refraction','Wrong effective renderer');
+  assert.equal(state.bench.runtime.opticalDebugMode,'shaded','Optical diagnostic bypasses the shaded comparison');
   assert.equal(state.viewport.lastFrame?.presentedByHost,true,'Host frame was not presented');
+  assert.equal(state.viewport.lastFrame?.opticalDebugMode,'shaded','Presented frame is a stale or diagnostic mode');
   assert.equal(state.viewport.failure,null,'Host render failed');
 }
 
