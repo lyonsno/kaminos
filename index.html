@@ -3833,6 +3833,41 @@ function isAuthoredKilnCollisionRoute(params = new URLSearchParams(window.locati
   return params.get('volume_collision') === 'kiln';
 }
 
+function writeKilnCollisionState({enabled}) {
+  if(typeof enabled!=='boolean')throw Error('Kiln collision requires a boolean');
+  if(!isFireLightFieldRoute())throw Error('Kiln collision requires the authored flame scene');
+  const url=new URL(location.href),hash=new URLSearchParams(url.hash.slice(1));
+  hash.set('volume_collision',enabled?'kiln':'off');url.hash=hash.toString();
+  history.replaceState(history.state,'',url);
+  if(activeSceneComposition)activeSceneComposition.route.volume_collision=enabled?'kiln':'off';
+  syncKilnCollisionControl();window._kaminosDirty?.();
+}
+
+function syncKilnCollisionControl(collision=volumePrototype?.debugState?.().sceneCollision) {
+  const input=document.getElementById('kiln-collision-enabled'),status=document.getElementById('kiln-collision-status');
+  if(!input||!status)return;
+  const enabled=isAuthoredKilnCollisionRoute();input.checked=enabled;
+  const text=!enabled?'Kiln collision off'
+    : !collision?.requested?'Updating collision…'
+    : collision.effective==='mesh-voxel-solid'?`Active · ${collision.solidCellCount.toLocaleString()} solid cells`
+    : `Unavailable · ${collision.reason||'waiting for the kiln mesh'}`;
+  if(status.textContent!==text)status.textContent=text;
+}
+
+function installKilnCollisionControl(host) {
+  const panel=document.createElement('section');panel.innerHTML='<h3>Collision</h3><label class="slider-row"><span class="slider-label">Kiln collision</span><input type="checkbox" id="kiln-collision-enabled"></label><p id="kiln-collision-status" class="flame-scope" aria-live="polite"></p>';
+  host.append(panel);
+  const edits=scenePlacementTools.edits;
+  edits.register('@kiln-collision',{read:()=>({enabled:isAuthoredKilnCollisionRoute()}),write:writeKilnCollisionState,
+    check:value=>{if(typeof value.enabled!=='boolean')throw Error('Kiln collision requires a boolean');return {enabled:value.enabled};}});
+  window.kaminosSceneCollision={read:()=>({enabled:isAuthoredKilnCollisionRoute(),runtime:volumePrototype?.debugState?.().sceneCollision??null}),
+    set:enabled=>edits.apply('@kiln-collision',{enabled},'Set kiln collision')};
+  document.getElementById('kiln-collision-enabled').addEventListener('change',event=>{
+    try {window.kaminosSceneCollision.set(event.target.checked);}catch(error){syncKilnCollisionControl();setInfo(error.message);}
+  });
+  syncKilnCollisionControl();
+}
+
 function isFireLightFieldIsolateRoute(params = fireLightFieldRouteParams()) {
   return params.get('volume_light_field_isolate') === '1';
 }
@@ -7710,7 +7745,8 @@ function applyAuthoredScenePose(id, transform = {}) {
   updateTransformInspector();
   window._kaminosDirty?.();
   updateSelectionFeedback();
-  return window.kaminosSceneObjectDebugState().find(record => record.id === id);
+  // Interactive previews do not consume debug bounds. The public setter
+  // gathers its requested receipt after the edit completes.
 }
 
 function validateLiveLocalLiquidEmitterPose(entry) {
@@ -17182,6 +17218,12 @@ function buildVolumeAgentCaptureRoute(
   return url.toString();
 }
 
+// Live inspector/history reads need values, not serialization of a capture URL.
+function readVolumeSettingsValues() {
+  return {domControls:readVolumeDomControls(), rendererControls:readVolumeRendererControls(),
+    presentationControls:readVolumeSettingsPresentationControls()};
+}
+
 function buildVolumeSettingsPreset() {
   const domControls = readVolumeDomControls();
   const rendererControls = readVolumeRendererControls();
@@ -22938,6 +22980,7 @@ function renderVolumeEmitterReceipt(receipt) {
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
+  syncKilnCollisionControl(s.sceneCollision);
   flameInspector?.sync();
   syncVolumeCockpitModeAvailability(document, readVolumeControls(), s.physicalColor);
   if (s.physicalColor?.requested === 'emissive-transport-v2') {
@@ -25543,17 +25586,18 @@ function updateAuthoringPropertySelection() {
 let flameInspector = null;
 function createFlameQuickFields() {
   const shared=document.createElement('section');shared.id='shared-flame-domain-properties';shared.innerHTML='<h3>Fire & smoke</h3><p class="flame-scope">Appearance and simulation data for this field.</p><button type="button" class="btn" id="field-source-action">Select emitter</button>';document.getElementById('selected-flame-properties').after(shared);scenePlacementTools.addHistoryScope(shared);
+  installKilnCollisionControl(shared);
   document.getElementById('field-source-action').onclick=()=>{try{if(authoredFlamePresent)setActiveSceneObject(FLAME_EMITTER_ID);else window.kaminosBurnerAuthoring.add('flame-source');}catch(error){setInfo(error.message);}};
   flameInspector=createFlameInspector({document,host:document.getElementById('selected-flame-fields'),sharedHost:shared,
     listBasins:async()=>{await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
     applyBasin:id=>window.kaminosFlameAuthoring.applyBasin(id),
     readSource:()=>activeVolumeSettingsPresetReceipt ? {label:activeVolumeSettingsPresetReceipt.label,
-      modified:!volumeSettingsPresetControlValuesEqual(buildVolumeSettingsPreset(),activeVolumeSettingsPresetReceipt.preset)} : null,
+      modified:!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),activeVolumeSettingsPresetReceipt.preset)} : null,
     readSourceRuntime:()=>volumePrototype?.debugState?.().immersedSource,
     openWorkbench:()=>setActiveTab('volume'),onError:error=>setInfo(error.message)});
 }
 
-function flameSettingsState(preset=buildVolumeSettingsPreset(),source=activeVolumeSettingsPresetReceipt) {
+function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolumeSettingsPresetReceipt) {
   const state=structuredClone({domControls:preset.domControls,rendererControls:preset.rendererControls,
     presentationControls:preset.presentationControls,
     sourcePose:flameEmitterPose,
@@ -28793,7 +28837,7 @@ async function collectSceneComposition() {
     value.domControls, value.rendererControls, value.presentationControls, value.route,
     document.getElementById('fire-light-gain-stops').value,
     document.getElementById('fire-light-test-scene-toggle').checked,
-    burnerRecipe,
+    burnerRecipe, isAuthoredKilnCollisionRoute(),
   ]);
   const savedFingerprint = fingerprint(preset);
   const assertUnchanged = () => {
@@ -28818,6 +28862,7 @@ async function collectSceneComposition() {
   const moduleUrl = new URLSearchParams(location.hash.slice(1)).get('composition_module_url');
   if (moduleUrl) route.composition_module_url = moduleUrl;
   route.volume_light_field_test_scene = document.getElementById('fire-light-test-scene-toggle').checked ? '1' : '0';
+  route.volume_collision = isAuthoredKilnCollisionRoute() ? 'kiln' : 'off';
   activeSceneComposition = {
     schema: COMPOSITION_SCHEMA,
     flame: { presetId: basin.presetId, label: basin.label, stationary: true },
@@ -29985,6 +30030,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     return;
   }
   activeSceneComposition = restorePlan.composition;
+  if(activeSceneComposition?.route.volume_collision!==undefined)writeKilnCollisionState({enabled:activeSceneComposition.route.volume_collision==='kiln'});
   authoredFlamePresent=restorePlan.flameSourcePresent;
   if (activeSceneComposition && !objectRecords.some(record => record.type === FLAME_EMITTER_TYPE)) {
     flameEmitterPose = defaultFlameEmitterPose();

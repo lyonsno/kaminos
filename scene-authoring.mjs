@@ -11,10 +11,11 @@ export function normalizeComposition(value) {
   if (!value.route || typeof value.route !== 'object' || Array.isArray(value.route)) throw new Error('Composition route is required');
   if (value.route.volume_light_field !== '1') throw new Error('Stationary composition requires the ordinary light-field route');
   for (const [key, item] of Object.entries(value.route)) {
-    if (!(key.startsWith('volume_light_field') || key === 'composition_module_url') || typeof item !== 'string') {
+    if (!(key.startsWith('volume_light_field') || key === 'composition_module_url' || key === 'volume_collision') || typeof item !== 'string') {
       throw new Error(`Unsupported composition route field: ${key}`);
     }
   }
+  if (value.route.volume_collision !== undefined && !['kiln', 'off'].includes(value.route.volume_collision)) throw new Error('Unsupported kiln collision setting');
   const result = clone(value);
   if (value.burner != null) result.burner = normalizeBurner(value.burner);
   return result;
