@@ -3699,7 +3699,7 @@ import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
   defaultFlameEmitterPose, normalizeFlameEmitterPose, createFlameEmitterHandle,
   updateFlameEmitterSupportOutline, flameDomainTranslationForAcceptedPose,
-  flamePoseInDomain, flamePoseToDomain, normalizeFlameDomainTranslation,
+  flamePoseInDomain, flamePoseToDomain, normalizeFlameDomainTranslation, normalizeFlameDomainScale,
   flamePoseFromImmersedControls, immersedControlsForFlamePose } from './scene-flame-emitter.mjs';
 let flameEmitterPose = defaultFlameEmitterPose(), applyFlameEmitterPose = null;
 let flameEmitterInjectionSuspended = false;
@@ -3707,6 +3707,8 @@ let authoredFlamePresent = true;
 const proceduralMeshes = new Map(), groupProxies = new Map(), groupEditTargets = new Set();
 let flameDomainGuide = null;
 let flameDomainTranslation = [0, 0, 0];
+let flameDomainScale = 1, flameDomainFollowSource = true;
+let flameDomainDraft = null, flameDomainProxy = null;
 import {
   VOLUME_EMITTER_INLET_PROFILES,
   VOLUME_EMITTER_SOURCE_LAWS,
@@ -5556,7 +5558,8 @@ function getVolumePrimitiveState() {
 function volumePrimitivesInFlameDomain() {
   return volumePrimitives.map(primitive => {
     const local = cloneVolumePrimitive(primitive);
-    local.transform.position = local.transform.position.map((value, index) => value - flameDomainTranslation[index]);
+    local.transform.position = local.transform.position.map((value, index) => (value - flameDomainTranslation[index]) / flameDomainScale);
+    local.transform.scale = local.transform.scale.map(value => value / flameDomainScale);
     return local;
   });
 }
@@ -5828,9 +5831,7 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
     flameDomainGuide.renderOrder = 1000;
     scene.add(flameDomainGuide);
   }
-  if (flameDomainGuide) flameDomainGuide.box.set(
-    new THREE.Vector3(-1, -1, -1).add(new THREE.Vector3(...flameDomainTranslation)),
-    new THREE.Vector3(1, 3, 1).add(new THREE.Vector3(...flameDomainTranslation)));
+  refreshFlameDomainPreview();
   if (flameDomainGuide) flameDomainGuide.visible = viewportHelpersVisible&&(sceneSelectionMembers().includes(FLAME_EMITTER_ID)||activeSceneFieldId==='flame-field');
   if (entry) updateFlameEmitterSupportOutline(THREE, entry.object,
     window.__kaminosVolumeEmitterReceipt?.requested);
@@ -5838,23 +5839,64 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
   return entry?.object || null;
 }
 
-function setFlameDomainTranslation(next) {
-  if (next.every((value, index) => value === flameDomainTranslation[index])) return false;
-  const previous = flameDomainTranslation;
-  flameDomainTranslation = next;
+function acceptedFlameDomainPose() {
+  return {position:[flameDomainTranslation[0],flameDomainTranslation[1]+flameDomainScale,flameDomainTranslation[2]],rotation:[0,0,0],scale:[flameDomainScale,flameDomainScale,flameDomainScale]};
+}
+function checkedFlameDomainPose(value) {
+  const pose=normalizeFlameEmitterPose(value);
+  if(pose.rotation.some(value=>value!==0))throw Error('The simulation box stays aligned with world axes; use Move or uniform Scale');
+  return pose;
+}
+function domainTransformForPose(value) {
+  const pose=checkedFlameDomainPose(value),scale=pose.scale[0];
+  return {translation:[pose.position[0],pose.position[1]-scale,pose.position[2]],scale};
+}
+function flameDomainEditObject() {
+  if(!flameDomainProxy){flameDomainProxy=new THREE.Object3D();flameDomainProxy.userData.kaminosEditorHelper=true;flameDomainProxy.userData.kaminosSceneObject={label:'Fire & smoke domain'};scene.add(flameDomainProxy);}
+  applySceneObjectTransformState(flameDomainProxy,flameDomainDraft||acceptedFlameDomainPose());
+  return flameDomainProxy;
+}
+function refreshFlameDomainPreview() {
+  const pose=flameDomainDraft||acceptedFlameDomainPose(),{translation,scale}=domainTransformForPose(pose);
+  if(flameDomainGuide)flameDomainGuide.box.set(new THREE.Vector3(-scale,-scale,-scale).add(new THREE.Vector3(...translation)),new THREE.Vector3(scale,3*scale,scale).add(new THREE.Vector3(...translation)));
+  if(flameDomainProxy&&!transformControls?.dragging)applySceneObjectTransformState(flameDomainProxy,pose);
+  for(const [key,value] of [['x',pose.position[0]],['y',pose.position[1]],['z',pose.position[2]],['scale',pose.scale[0]]]){const input=document.getElementById('flame-domain-'+key);if(input&&document.activeElement!==input)input.value=String(value);}
+  const size=document.getElementById('flame-domain-size');if(size)size.textContent=`World size ${[2,4,2].map(n=>Number((n*pose.scale[0]).toPrecision(3))).join(' × ')} · cell count unchanged`;
+  window._kaminosDirty?.();
+}
+function writeFlameDomainPreview(value) {
+  flameDomainDraft=checkedFlameDomainPose(value);refreshFlameDomainPreview();
+}
+function setFlameDomainTranslation(next, scale = flameDomainScale) {
+  next=normalizeFlameDomainTranslation(next);scale=normalizeFlameDomainScale(scale);
+  if (scale===flameDomainScale && next.every((value, index) => value === flameDomainTranslation[index])) return false;
+  const previous = flameDomainTranslation, previousScale=flameDomainScale;
+  flameDomainTranslation = next;flameDomainScale=scale;
   try {
-    volumePrototype?.relocateOrdinaryDomain?.(next, volumePrimitivesInFlameDomain());
+    volumePrototype?.relocateOrdinaryDomain?.(next, volumePrimitivesInFlameDomain(), scale);
   } catch (error) {
-    flameDomainTranslation = previous;
-    volumePrototype?.relocateOrdinaryDomain?.(previous, volumePrimitivesInFlameDomain());
+    flameDomainTranslation = previous;flameDomainScale=previousScale;
+    volumePrototype?.relocateOrdinaryDomain?.(previous, volumePrimitivesInFlameDomain(), previousScale);
     throw error;
   }
+  flameDomainDraft=null;refreshFlameDomainPreview();
   return true;
+}
+function settleAuthoredFlameDomain(event) {
+  const next=domainTransformForPose(event.after),previous=[...flameDomainTranslation],previousScale=flameDomainScale;
+  if(!volumePrototype?.relocateOrdinaryDomain || !applyFlameEmitterPose)throw Error('The flame simulation is not mounted');
+  if(authoredFlamePresent&&window.__kaminosVolumeEmitterReceipt?.requested?.sourceLaw==='immersed-source')immersedControlsForFlamePose(window.__kaminosVolumeEmitterReceipt.requested,flamePoseToDomain(flameEmitterPose,next.translation,next.scale),false);
+  try {setFlameDomainTranslation(next.translation,next.scale);writeAuthoredFlameEmitterPose(flameEmitterPose);}
+  catch(error){setFlameDomainTranslation(previous,previousScale);writeAuthoredFlameEmitterPose(flameEmitterPose);throw error;}
+  flameDomainFollowSource=event.operation==='commit'?false:event.afterContext;
+  flameDomainDraft=null;refreshFlameDomainPreview();
+  setInfo(flameEmitterInjectionSuspended?'Simulation box changed; field restarted · emitter outside box, injection paused':'Simulation box changed; field restarted · emitter stays in place');
 }
 
 function settleFlameDomainForPose(pose, targetDomain = null) {
-  const next = targetDomain || flameDomainTranslationForAcceptedPose(pose, flameDomainTranslation,
-    { injectionSuspended: flameEmitterInjectionSuspended });
+  if(!targetDomain&&!flameDomainFollowSource)return false;
+  const next = targetDomain || (flameDomainScale===1 ? flameDomainTranslationForAcceptedPose(pose, flameDomainTranslation,
+    { injectionSuspended: flameEmitterInjectionSuspended }) : flamePoseInDomain(pose,flameDomainTranslation,flameDomainScale)&&!flameEmitterInjectionSuspended ? [...flameDomainTranslation] : [pose.position[0],pose.position[1]+.76*flameDomainScale,pose.position[2]]);
   const previous = [...flameDomainTranslation];
   if (!setFlameDomainTranslation(next)) {
     setInfo(flameEmitterInjectionSuspended
@@ -5881,7 +5923,7 @@ function writeAuthoredFlameEmitterPose(value) {
   if (window.__kaminosVolumeEmitterReceipt?.effective?.family === 'cluster') {
     throw new Error('Choose an analytic flame emitter before placing its source');
   }
-  const originInsideGrid = authoredFlamePresent && flamePoseInDomain(next, flameDomainTranslation);
+  const originInsideGrid = authoredFlamePresent && flamePoseInDomain(next, flameDomainTranslation, flameDomainScale);
   if (originInsideGrid) {
     try {
       applyFlameEmitterPose(next, { sourceEnabled: true });
@@ -5911,6 +5953,7 @@ window.kaminosFlameEmitterState = () => ({
   pose: structuredClone(flameEmitterPose),
   domain: 'translated-world-aligned-volume',
   domainTranslation: [...flameDomainTranslation],
+  domainScale: flameDomainScale, followSource: flameDomainFollowSource,
   source: window.__kaminosVolumeEmitterReceipt?.compilerReceipt?.descriptor || null,
   effectiveMode: window.__kaminosVolumeEmitterReceipt?.effective?.sourceMode || null,
   injectionSuspended: flameEmitterInjectionSuspended,
@@ -7484,7 +7527,7 @@ function registerSceneObject(object, metadata = {}) {
 window.selectSceneField=function(id) {
   if(!['flame-field','water-field'].includes(id)||!(id==='flame-field'?activeSceneComposition:localLiquidSetup))throw Error('This simulation field is not present');
   if(!burnerGraphWriting)scenePlacementTools?.selectionChanged();sceneSelection={ids:[],activeId:null};updateSelectionFeedback();activeSceneFieldId=id;activeSceneObjectId=null;activeSceneGroupId=null;currentMesh=null;
-  transformControls?.detach();document.getElementById('transform-bar').classList.remove('visible');renderSceneObjectList();updateTransformInspector();
+  transformControls?.detach();if(id==='flame-field'){currentMesh=flameDomainEditObject();if(transformControls){attachViewportGizmo(currentMesh);transformControls.setMode('translate');}}document.getElementById('transform-bar').classList.remove('visible');renderSceneObjectList();updateTransformInspector();
 };
 
 window.selectSceneObject = function(id,options={}) {
@@ -11743,6 +11786,7 @@ async function initScene() {
     if (splatCorrectionTransformTarget()) {
       syncSplatCorrectionDraftFromActiveTarget();
     } else {
+      if(activeSceneFieldId==='flame-field'&&transformControls.object===flameDomainProxy&&transformControls.dragging){if(!scenePlacementTools?.state().gizmoEditing)return;try{scenePlacementTools.edits.preview(sceneObjectTransformState(flameDomainProxy));}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}return;}
       if(transformControls.object===selectionProxy&&transformControls.dragging){if(!scenePlacementTools?.state().gizmoEditing||!scenePlacementTools.edits.state().active)return;try{selectionTransforms.write({...selectionTransforms.read(),...sceneObjectTransformState(selectionProxy)});}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}updateTransformInspector();return;}
       const assembly=selectedSceneGroupEntry();
       if (assembly?.type===GROUP_TYPE && transformControls.dragging) {
@@ -11839,19 +11883,21 @@ async function initScene() {
     transformSettings:()=>transformPreferences,
     localOrientation:()=>sceneSelection.activeId?selectionRootState(sceneSelection.activeId).rotation:[0,0,0],
     read: id => {
+      if(id==='@flame-domain')return structuredClone(flameDomainDraft||acceptedFlameDomainPose());
       if(id==='@selection-transform')return selectionTransforms.pose();
       if (id?.startsWith('@group:')) return structuredClone(sceneGroups.find(group=>`@group:${group.id}`===id)?.transform || null);
       const entry = sceneObjects.find(item => item.id === id);
       return !entry ? null : entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(entry.object);
     },
     write: applyAuthoredScenePose,
-    object: id => id==='@selection-transform'?selectionTransformProxy():id?.startsWith('@group:') ? groupProxy(sceneGroups.find(group=>`@group:${group.id}`===id)) : sceneObjects.find(item => item.id === id)?.object,
+    object: id => id==='@flame-domain'?flameDomainEditObject():id==='@selection-transform'?selectionTransformProxy():id?.startsWith('@group:') ? groupProxy(sceneGroups.find(group=>`@group:${group.id}`===id)) : sceneObjects.find(item => item.id === id)?.object,
     refresh: () => { updateTransformInspector(); markDirty(); },
     allowed: () => !viewPie?.state() && !greenroomPreviewIsActive() && !splatCorrectionMode,
     busy: () => authoringBusy,
     frameSelected: window.kaminosFrameSelected,
-    captureContext: id => id==='@selection-transform'||id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
+    captureContext: id => id==='@flame-domain'?flameDomainFollowSource:id==='@selection-transform'||id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
     settled: event => {
+      if(event.id==='@flame-domain'){settleAuthoredFlameDomain(event);return;}
       if(event.id==='@selection-transform'&&Object.keys(event.after.roots).some(id=>id===FLAME_EMITTER_ID||sceneGroups.find(g=>'@group:'+g.id===id)?.objectIds.includes(FLAME_EMITTER_ID)))settleFlameDomainForPose(flameEmitterPose,event.operation==='commit'?null:event.afterContext);
       if (sceneGroups.find(group=>[`@group:${group.id}`,`@assembly:${group.id}`].includes(event.id))?.objectIds.includes(FLAME_EMITTER_ID)) settleFlameDomainForPose(flameEmitterPose,event.operation==='commit'?null:event.afterContext);
       if (event.id === FLAME_EMITTER_ID) settleFlameDomainForPose(event.after,
@@ -11859,6 +11905,9 @@ async function initScene() {
     },
     historyScopes: [document.getElementById('tab-assets'), document.getElementById('transform-inspector'), document.getElementById('selected-light-properties'), document.getElementById('selected-flame-properties'), document.getElementById('authoring-source-burner'), document.getElementById('authoring-source-environment'), document.getElementById('authoring-source-render'), document.getElementById('authoring-source-fire-light'), document.getElementById('tab-assets'), document.getElementById('tab-volume'), document.getElementById('volume-authored-mix-panel')],
   });
+  scenePlacementTools.edits.register('@flame-domain',{read:()=>structuredClone(flameDomainDraft||acceptedFlameDomainPose()),write:writeFlameDomainPreview,check:checkedFlameDomainPose});
+  scenePlacementTools.edits.subscribe(state=>{if(!state.active){flameDomainDraft=null;refreshFlameDomainPreview();}});
+  window.kaminosFlameDomain={read:()=>({translation:[...flameDomainTranslation],scale:flameDomainScale,followSource:flameDomainFollowSource}),set:patch=>{if(scenePlacementTools.edits.state().active)throw Error('Finish the active edit first');try{return scenePlacementTools.edits.apply('@flame-domain',patch,'Edit simulation box');}catch(error){scenePlacementTools.edits.cancel();throw error;}}};
   scenePlacementTools.edits.register('@burner-controls', {
     read: readBurnerControlHistoryState,
     write: restoreBurnerControlHistoryState,
@@ -23994,7 +24043,7 @@ async function initKaminosVolumeRoute() {
       timestampMs,
       frameId,
       externalRequest,
-      ...(family !== 'cluster' ? { emitterPose: flamePoseToDomain(pose, flameDomainTranslation) } : {}),
+      ...(family !== 'cluster' ? { emitterPose: flamePoseToDomain(pose, flameDomainTranslation, flameDomainScale) } : {}),
       ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && sourceEnabled } : {}),
     });
     window.__kaminosVolumeEmitterReceipt = receipt;
@@ -24002,6 +24051,7 @@ async function initKaminosVolumeRoute() {
       receipt.requested.worldEmitterPose = structuredClone(pose);
       receipt.effective.worldEmitterPose = structuredClone(pose);
       receipt.effective.domainTranslation = [...flameDomainTranslation];
+      receipt.effective.domainScale = flameDomainScale;
       if (controlsSnapshot.emitterSourceLaw === 'immersed-source') {
         // Keep the Workbench representation of centre/aim in agreement with
         // the authored object. Radius remains source data; S scales the object.
@@ -24164,7 +24214,7 @@ async function initKaminosVolumeRoute() {
   }
 
   if (readVolumeControls().emitterSourceLaw === 'immersed-source') {
-    flameEmitterPose=flamePoseFromImmersedControls(readVolumeControls(),flameDomainTranslation,flameEmitterPose);
+    flameEmitterPose=flamePoseFromImmersedControls(readVolumeControls(),flameDomainTranslation,flameEmitterPose,flameDomainScale);
   }
   applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls());
   void activateFingerFluidPyroComposition().catch(error => {
@@ -24224,7 +24274,7 @@ async function initKaminosVolumeRoute() {
     const selectedEmitterFamily = document.getElementById('emitter-assay-family').value;
     if (controlsSnapshot.emitterSourceLaw === 'immersed-source') {
       if (/^volume-immersed-(centre-[xyz]|yaw|pitch)$/.test(event?.target?.id||'')) {
-        flameEmitterPose=flamePoseFromImmersedControls(controlsSnapshot,flameDomainTranslation,flameEmitterPose);
+        flameEmitterPose=flamePoseFromImmersedControls(controlsSnapshot,flameDomainTranslation,flameEmitterPose,flameDomainScale);
       }
       applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot);
     } else if (emitterMorphologyControls.has(event?.target?.id)) {
@@ -25590,8 +25640,25 @@ function updateAuthoringPropertySelection() {
   });
 }
 let flameInspector = null;
+function installFlameDomainControls(host) {
+  const panel=document.createElement('section');panel.className='flame-domain-controls';
+  panel.innerHTML='<h4>Simulation box</h4><p class="flame-scope">Move with G · Resize with S. Preview the box, then confirm to restart the field. The emitter stays in world space.</p>'+['x','y','z','scale'].map(key=>`<label class="flame-quick-row">${key==='scale'?'World scale':'Center '+key.toUpperCase()}<input id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></label>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p><p class="flame-scope">Resizing changes world cell size; simulation speeds remain in solver units. Move the emitter separately to place it inside the box.</p>';
+  host.append(panel);
+  const inputs=[...panel.querySelectorAll('input')];
+  for(const input of inputs)input.addEventListener('input',()=>{
+    if(!Number.isFinite(input.valueAsNumber))return;
+    const pose=structuredClone(flameDomainDraft||acceptedFlameDomainPose());
+    const key=input.id.slice('flame-domain-'.length);
+    if(key==='scale')pose.scale.fill(input.valueAsNumber);else pose.position['xyz'.indexOf(key)]=input.valueAsNumber;
+    try{scenePlacementTools.edits.preview(pose);}catch(error){setInfo(error.message);}
+  });
+  authoringControlSessions.push(installSceneControlHistory({controls:inputs,edits:scenePlacementTools.edits,id:'@flame-domain',label:'Edit simulation box',onError:error=>setInfo(error.message)}));
+  for(const input of inputs){const scrub=installRelativeNumberDrag({input,grip:input,step:.01,onStart:()=>authoringControlSessions.forEach(session=>session.commit())});scenePlacementTools.edits.subscribe(state=>{if(!state.active)scrub.stop();});}
+  refreshFlameDomainPreview();
+}
 function createFlameQuickFields() {
   const shared=document.createElement('section');shared.id='shared-flame-domain-properties';shared.innerHTML='<h3>Fire & smoke</h3><p class="flame-scope">Appearance and simulation data for this field.</p><button type="button" class="btn" id="field-source-action">Select emitter</button>';document.getElementById('selected-flame-properties').after(shared);scenePlacementTools.addHistoryScope(shared);
+  installFlameDomainControls(shared);
   installKilnCollisionControl(shared);
   document.getElementById('field-source-action').onclick=()=>{try{if(authoredFlamePresent)setActiveSceneObject(FLAME_EMITTER_ID);else window.kaminosBurnerAuthoring.add('flame-source');}catch(error){setInfo(error.message);}};
   flameInspector=createFlameInspector({document,host:document.getElementById('selected-flame-fields'),sharedHost:shared,
@@ -25611,7 +25678,7 @@ function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolum
   // Applying a look preset keeps the source where the author put it. Its feed
   // coefficients are replaced; preset centre/aim are only startup defaults.
   if(arguments.length && state.domControls['volume-emitter-source-law']?.value==='immersed-source') {
-    const mapped=immersedControlsForFlamePose({immersedRadius:Number(state.domControls['volume-immersed-radius'].value)},flamePoseToDomain(state.sourcePose,flameDomainTranslation),false);
+    const mapped=immersedControlsForFlamePose({immersedRadius:Number(state.domControls['volume-immersed-radius'].value)},flamePoseToDomain(state.sourcePose,flameDomainTranslation,flameDomainScale),false);
     for(const [suffix,key] of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']]) {
       const id=`volume-immersed-${suffix}`;
       // Pose-derived doubles have not passed through a browser range input,
@@ -25654,7 +25721,7 @@ function flameSettingsStateProblems(state) {
     try {
       const radius=state.domControls['volume-immersed-radius'];
       immersedControlsForFlamePose({immersedRadius:Number(radius?.rawValue??radius?.value)},
-        flamePoseToDomain(state.sourcePose||flameEmitterPose,flameDomainTranslation),false);
+        flamePoseToDomain(state.sourcePose||flameEmitterPose,flameDomainTranslation,flameDomainScale),false);
     } catch(error) {problems.push({id:'volume-immersed-radius',message:error.message});}
   }
   return problems;
@@ -28798,7 +28865,7 @@ function buildSceneData(capture = null) {
         color:'#'+groundPlane.material.color.getHexString(),roughness:groundPlane.material.roughness },
     },
     volumePrimitives: getVolumePrimitiveState(),
-    flameDomainTranslation: [...flameDomainTranslation],
+    flameDomainTranslation: [...flameDomainTranslation], flameDomainScale, flameDomainFollowSource,
     postprocessing: {
       sceneGI: {...sceneGISettings},
       ao: {
@@ -29376,12 +29443,12 @@ function setupSelectionTransforms(){
     transform:patch=>selectionTransforms.apply(patch),settings:patch=>{scenePlacementTools.finish(false);const next={...transformPreferences,...patch};selectionFrame({test:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}},'test',next);transformPreferences=next;if(sceneSelection.ids.length)setSceneSelection(sceneSelection.ids,sceneSelection.activeId);return {...next};}};
 }
 
-function readSelectionMembership(){return {objects:sceneObjects.map(serializeSceneObject),groups:serializeSceneGroups(),selection:structuredClone(sceneSelection),field:activeSceneFieldId,domain:[...flameDomainTranslation],activeCameraId:sceneCameras?.read().settings.activeId??null};}
+function readSelectionMembership(){return {objects:sceneObjects.map(serializeSceneObject),groups:serializeSceneGroups(),selection:structuredClone(sceneSelection),field:activeSceneFieldId,domain:[...flameDomainTranslation],domainScale:flameDomainScale,domainFollowSource:flameDomainFollowSource,activeCameraId:sceneCameras?.read().settings.activeId??null};}
 function checkSelectionMembership(raw){
   const value=structuredClone(raw);if(!Array.isArray(value.objects)||!Array.isArray(value.groups))throw Error('Scene membership records are required');
   const ids=new Set();for(const record of value.objects){if(!record.id||ids.has(record.id)||!isReloadableSceneObjectRecord(record))throw Error('Scene member has no retained source');ids.add(record.id);checkedPose(record.transform);}
   for(const group of value.groups){checkedGroupPose(group.transform);if(group.objectIds.some(id=>!ids.has(id)))throw Error('Group refers to an absent scene member');}
-  checkedSelection(value.selection.ids,value.selection.activeId);normalizeFlameDomainTranslation(value.domain);return value;
+  checkedSelection(value.selection.ids,value.selection.activeId);normalizeFlameDomainTranslation(value.domain);normalizeFlameDomainScale(value.domainScale??1);if(value.domainFollowSource!==undefined&&typeof value.domainFollowSource!=='boolean')throw Error('Domain follow-source must be Boolean');return value;
 }
 function detachSelectionMember(id){
   if(id===FLAME_EMITTER_ID){authoredFlamePresent=false;applyFlameEmitterPose?.(flameEmitterPose,{sourceEnabled:false});ensureAuthoredFlameEmitter();for(const group of sceneGroups)group.objectIds=group.objectIds.filter(member=>member!==id);pruneSceneGroups();return;}
@@ -29404,7 +29471,7 @@ async function writeSelectionMembershipUnchecked(value){
   }
   sceneObjects=value.objects.map(record=>sceneObjects.find(entry=>entry.id===record.id));
   sceneGroups=structuredClone(value.groups);for(const group of sceneGroups)ensureGroupTarget(group);
-  setFlameDomainTranslation(value.domain);
+  setFlameDomainTranslation(value.domain,value.domainScale??1);flameDomainFollowSource=value.domainFollowSource??true;if(authoredFlamePresent&&applyFlameEmitterPose)writeAuthoredFlameEmitterPose(flameEmitterPose);
   sceneCameras?.membershipChanged(value.activeCameraId??null);
   if(value.field)window.selectSceneField(value.field);else setSceneSelection(value.selection.ids,value.selection.activeId);
   renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();
@@ -29484,6 +29551,7 @@ function installSelectionInput(){
 }
 
 function selectedPlacementEntry() {
+  if(activeSceneFieldId==='flame-field')return {id:'@flame-domain',type:'simulation-domain',label:'Fire & smoke domain',object:flameDomainEditObject()};
   if(sceneSelection.ids.length>1)return {id:'@selection-transform',type:'selection',label:`${sceneSelection.ids.length} selected · ${selectedSceneObjectEntry()?.label||selectedSceneGroupEntry()?.label||''}`,object:selectionTransformProxy()};
   const group=selectedSceneGroupEntry();
   return group?.type===GROUP_TYPE
@@ -29544,11 +29612,11 @@ function mountProceduralMesh(raw) {
 function readBurnerGraph() {
   return {objects:sceneObjects.filter(entry=>[PROCEDURAL_MESH_TYPE,FLAME_EMITTER_TYPE].includes(entry.type)).map(serializeSceneObject),
     groups:serializeSceneGroups(),
-    domain:[...flameDomainTranslation]};
+    domain:[...flameDomainTranslation],domainScale:flameDomainScale,domainFollowSource:flameDomainFollowSource};
 }
 function checkBurnerGraph(value) {
   const result=structuredClone(value),ids=new Set();
-  result.domain=normalizeFlameDomainTranslation(result.domain);
+  result.domain=normalizeFlameDomainTranslation(result.domain);result.domainScale=normalizeFlameDomainScale(result.domainScale??1);if(result.domainFollowSource!==undefined&&typeof result.domainFollowSource!=='boolean')throw Error('Domain follow-source must be Boolean');
   if(!Array.isArray(result.objects)||!Array.isArray(result.groups))throw Error('Burner scene records are required');
   for(const record of result.objects){
     if(ids.has(record.id))throw Error('Duplicate burner object');ids.add(record.id);
@@ -29585,7 +29653,7 @@ function writeBurnerGraphUnchecked(next) {
     Object.assign(entry,{label:record.label,createdAt:record.createdAt??entry.createdAt});
     Object.assign(entry.object.userData.kaminosSceneObject,{label:entry.label,createdAt:entry.createdAt});
   }
-  setFlameDomainTranslation(next.domain);
+  setFlameDomainTranslation(next.domain,next.domainScale??1);flameDomainFollowSource=next.domainFollowSource??true;
   if(authoredFlamePresent)writeAuthoredFlameEmitterPose(flameEmitterPose);
   sceneGroups=structuredClone(next.groups);
   for(const entry of sceneObjects)setSceneObjectGroupId(entry,next.groups.find(group=>group.objectIds.includes(entry.id))?.id||null);
@@ -29788,10 +29856,10 @@ function restoreBurnerControlHistoryState(value) {
 }
 
 function updateAnnularBurnerFrame(now) {
-  for(const [id,mesh] of proceduralMeshes){const entry=sceneObjects.find(o=>o.id===id);if(!entry)continue;const bound=entry.surface?.fieldBinding==='flame-field';mesh.update(bound&&authoredFlamePresent?window.__kaminosVolumeEmitterReceipt:null,bound&&authoredFlamePresent&&!flameEmitterInjectionSuspended&&!!volumePrototype?.debugState?.().active,now,flameDomainTranslation,{authored:true});}
+  for(const [id,mesh] of proceduralMeshes){const entry=sceneObjects.find(o=>o.id===id);if(!entry)continue;const bound=entry.surface?.fieldBinding==='flame-field';mesh.update(bound&&authoredFlamePresent?window.__kaminosVolumeEmitterReceipt:null,bound&&authoredFlamePresent&&!flameEmitterInjectionSuspended&&!!volumePrototype?.debugState?.().active,now,flameDomainTranslation,{authored:true,domainScale:flameDomainScale});}
   if (!annularBurner) return;
   const state = annularBurner.update(window.__kaminosVolumeEmitterReceipt,
-    !!volumePrototype?.debugState?.().active, now, flameDomainTranslation);
+    !!volumePrototype?.debugState?.().active, now, flameDomainTranslation,{domainScale:flameDomainScale});
   const status = document.getElementById('burner-status');
   const message = burnerError || (state.reason === 'ring-emitter-unavailable' ? 'No compatible ring emitter' : state.reason === 'emitter-outside-bed' ? 'Flame footprint extends beyond the bed' : '');
   if (status.textContent !== message && !document.activeElement?.id?.startsWith('burner-')) status.textContent = message;
@@ -29999,7 +30067,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   const loadRequestId = sceneLoadRequests.begin();
   const previousSceneFile = currentSceneFile;
   const previousVolumePrimitiveState = getVolumePrimitiveState();
-  const previousFlameDomainTranslation = [...flameDomainTranslation];
+  const previousFlameDomainTranslation = [...flameDomainTranslation],previousFlameDomainScale=flameDomainScale,previousFlameDomainFollowSource=flameDomainFollowSource;
   sceneSaveBlockedByFailedRestore = true;
   const text = await file.text();
   if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
@@ -30105,15 +30173,15 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   setRimLight(data.environment?.rimLight);
 
   const restoredFlame = objectRecords.find(record => record.type === FLAME_EMITTER_TYPE);
-  setFlameDomainTranslation(restoredFlame
-    ? restorePlan.flameDomainTranslation : [0, 0, 0]);
+  setFlameDomainTranslation(restorePlan.flameDomainTranslation || [0, 0, 0],restorePlan.flameDomainScale);
+  flameDomainFollowSource=restorePlan.flameDomainFollowSource;
   if (objectRecords.length > 0) {
     try {
       const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId));
       if (!loadStage.current || !loadStage.value || !sceneLoadRequests.isCurrent(loadRequestId)) return;
     } catch (e) {
       if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
-      setFlameDomainTranslation(previousFlameDomainTranslation);
+      setFlameDomainTranslation(previousFlameDomainTranslation,previousFlameDomainScale);flameDomainFollowSource=previousFlameDomainFollowSource;
       setVolumePrimitivesState(previousVolumePrimitiveState);
       sceneSaveBlockedByFailedRestore = true;
       currentSceneFile = null;

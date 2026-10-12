@@ -4,7 +4,7 @@ import {GROUP_TYPE,identityGroupPose,checkedGroupPose} from './scene-group.mjs';
 import {BURNER_BED_TYPE,BURNER_BED_SOURCE,BURNER_ASSEMBLY_TYPE,checkedBurnerBed,checkedAssemblyPose} from './burner-assembly.mjs';
 import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFlameEmitterPose,
-  flameDomainTranslationForPose, normalizeFlameDomainTranslation, flamePoseInDomain } from './scene-flame-emitter.mjs';
+  flameDomainTranslationForPose, normalizeFlameDomainTranslation, normalizeFlameDomainScale, flamePoseInDomain } from './scene-flame-emitter.mjs';
 import { LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';
 import {normalizeCameraViews} from './scene-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,normalizeSceneCamera,normalizeCameraViewport} from './scene-camera.mjs';
@@ -152,12 +152,15 @@ export function planSceneRestore(data) {
   const flameSources = objects.filter(record => record.type === FLAME_EMITTER_TYPE);
   if (flameSources.length > 1) throw new Error('The current flame domain supports one authored source');
   if (flameSources.length && !normalizeComposition(data.composition)) throw new Error('Flame source requires its saved flame composition');
-  const flameDomainTranslation = flameSources.length
+  const flameDomainTranslation = (flameSources.length || normalizeComposition(data.composition))
     ? (data.flameDomainTranslation === undefined
-      ? flameDomainTranslationForPose(flameSources[0].transform)
+      ? (flameSources.length ? flameDomainTranslationForPose(flameSources[0].transform) : [0,0,0])
       : normalizeFlameDomainTranslation(data.flameDomainTranslation))
     : null;
-  if (flameSources.length && !flamePoseInDomain(flameSources[0].transform, flameDomainTranslation)) {
+  const flameDomainScale = normalizeFlameDomainScale(data.flameDomainScale);
+  const flameDomainFollowSource = data.flameDomainFollowSource ?? true;
+  if (typeof flameDomainFollowSource !== 'boolean') throw new Error('Flame domain follow-source must be Boolean');
+  if (flameSources.length && flameDomainFollowSource && !flamePoseInDomain(flameSources[0].transform, flameDomainTranslation, flameDomainScale)) {
     throw new Error('Saved flame source lies outside its authored simulation domain');
   }
   const localLiquid = normalizeLocalLiquidSetup(data.localLiquid);
@@ -182,7 +185,7 @@ export function planSceneRestore(data) {
     volumePrimitives: normalizeVolumePrimitiveState(data.volumePrimitives),
     hasVolumePrimitiveScene: hasVolumePrimitives(data),
     composition: normalizeComposition(data.composition),
-    flameDomainTranslation,
+    flameDomainTranslation, flameDomainScale, flameDomainFollowSource,
     flameSourcePresent: flameSources.length > 0 || (data.version < 6 && !!data.composition),
     localLiquid,
   };
@@ -199,6 +202,8 @@ export function buildSceneDocument({
   provenance = null,
   composition = null,
   flameDomainTranslation = undefined,
+  flameDomainScale = 1,
+  flameDomainFollowSource = true,
   localLiquid = null,
   capture = null,
   camera = null,
@@ -219,12 +224,14 @@ export function buildSceneDocument({
   const activeObject = sceneObjects.find(obj => obj.id === activeObjectId) || (Array.isArray(selectionIds)?null:sceneObjects[0] || null);
   const activeGroup = sceneGroups.find(group => group.id === activeGroupId) || null;
   const flameSource = sceneObjects.find(object => object.type === FLAME_EMITTER_TYPE);
-  const authoredFlameDomain = flameSource
+  const authoredFlameDomain = (flameSource || normalizeComposition(composition))
     ? (flameDomainTranslation === undefined
-      ? flameDomainTranslationForPose(flameSource.transform)
+      ? (flameSource ? flameDomainTranslationForPose(flameSource.transform) : [0,0,0])
       : normalizeFlameDomainTranslation(flameDomainTranslation))
     : null;
-  if (flameSource && !flamePoseInDomain(flameSource.transform, authoredFlameDomain)) {
+  flameDomainScale = normalizeFlameDomainScale(flameDomainScale);
+  if (typeof flameDomainFollowSource !== 'boolean') throw new Error('Flame domain follow-source must be Boolean');
+  if (flameSource && flameDomainFollowSource && !flamePoseInDomain(flameSource.transform, authoredFlameDomain, flameDomainScale)) {
     throw new Error('Flame source lies outside its authored simulation domain');
   }
   const document = {
@@ -244,7 +251,7 @@ export function buildSceneDocument({
     } : null,
     provenance: cloneJson(provenance),
     composition: normalizeComposition(composition),
-    ...(flameSource ? { flameDomainTranslation: authoredFlameDomain } : {}),
+    ...(authoredFlameDomain ? { flameDomainTranslation: authoredFlameDomain, flameDomainScale, flameDomainFollowSource } : {}),
     localLiquid: liquidSetup,
     capture: normalizeSceneCapture(capture),
     transform: cloneJson(activeObject?.transform ?? null),

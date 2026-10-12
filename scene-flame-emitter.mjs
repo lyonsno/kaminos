@@ -35,12 +35,13 @@ export function flameDomainTranslationForAcceptedPose(value, currentTranslation,
     : flameDomainTranslationForPose(value);
 }
 
-export function flamePoseInDomain(value, translation) {
+export function flamePoseInDomain(value, translation, scale = 1) {
+  scale = normalizeFlameDomainScale(scale);
   const pose = normalizeFlameEmitterPose(value);
   if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
     throw new Error('Flame domain translation requires three finite coordinates');
   }
-  const [x, y, z] = pose.position.map((component, index) => component - translation[index]);
+  const [x, y, z] = pose.position.map((component, index) => (component - translation[index]) / scale);
   return Math.abs(x) <= 1 && y >= -1 && y <= 3 && Math.abs(z) <= 1;
 }
 
@@ -51,12 +52,19 @@ export function normalizeFlameDomainTranslation(translation) {
   return [...translation];
 }
 
-export function flamePoseToDomain(value, translation) {
+export function normalizeFlameDomainScale(scale = 1) {
+  if (!Number.isFinite(scale) || scale <= 0) throw new Error('Flame domain scale must be positive and finite');
+  return scale;
+}
+
+export function flamePoseToDomain(value, translation, scale = 1) {
+  scale = normalizeFlameDomainScale(scale);
   const pose = normalizeFlameEmitterPose(value);
   if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
     throw new Error('Flame domain translation requires three finite coordinates');
   }
-  return { ...pose, position: pose.position.map((component, index) => component - translation[index]) };
+  return { ...pose, position: pose.position.map((component, index) => (component - translation[index]) / scale),
+    scale: pose.scale.map(value => value / scale) };
 }
 
 // The current ordinary flame has one fixed world-aligned simulation domain.
@@ -91,7 +99,8 @@ export function immersedControlsForFlamePose(controls, value, sourceEnabled = tr
     immersedRadius: radius, immersedSourceEnabled: sourceEnabled };
 }
 
-export function flamePoseFromImmersedControls(controls, translation = [0, 0, 0], previous = defaultFlameEmitterPose()) {
+export function flamePoseFromImmersedControls(controls, translation = [0, 0, 0], previous = defaultFlameEmitterPose(), scale = 1) {
+  scale = normalizeFlameDomainScale(scale);
   const pose = normalizeFlameEmitterPose(previous);
   const yaw = Number(controls.immersedYaw ?? 0) * Math.PI / 180;
   const pitch = Number(controls.immersedPitch ?? 90) * Math.PI / 180;
@@ -101,7 +110,7 @@ export function flamePoseFromImmersedControls(controls, translation = [0, 0, 0],
     pose.rotation = new Euler().setFromQuaternion(new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), direction)).toArray().slice(0, 3);
   }
   const domain = normalizeFlameDomainTranslation(translation);
-  pose.position = [Number(controls.immersedCentreX ?? 0), Number(controls.immersedCentreY ?? -0.5), Number(controls.immersedCentreZ ?? 0)].map((v, i) => v + domain[i]);
+  pose.position = [Number(controls.immersedCentreX ?? 0), Number(controls.immersedCentreY ?? -0.5), Number(controls.immersedCentreZ ?? 0)].map((v, i) => v * scale + domain[i]);
   return normalizeFlameEmitterPose(pose);
 }
 

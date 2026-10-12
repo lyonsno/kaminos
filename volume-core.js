@@ -12748,7 +12748,8 @@ export function createKaminosVolumePrototype({
       sourceFrameHash: liquidFireContactDescriptor.sourceFrameHash,
       sourceQuenchCenter: sourcePrimitive.position.map(value => value * 0.5 + 0.5),
       sourceQuenchRadius: sourceContactRadius,
-      receiverOffset: productTransform.translate.map(value => 0.5 - value * 0.5),
+      receiverOffset: productTransform.translate.map(value => 0.5 - value * 0.5 / productTransform.scale),
+      receiverScale: [0.5, 0.5, 0.5].map(value => value / productTransform.scale),
     }));
     state.liquidFireSourceContactRadius = sourceContactRadius;
     return true;
@@ -12839,8 +12840,8 @@ export function createKaminosVolumePrototype({
       sourcePilotEnabled,
       sourceFrameId: liquidFireContactDescriptor?.sourceFrameId || null,
       receiverTransformId: LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID,
-      receiverScale: [0.5, 0.5, 0.5],
-      receiverOffset: [0.5, 0.5, 0.5],
+      receiverScale: [0.5, 0.5, 0.5].map(value => value / productTransform.scale),
+      receiverOffset: productTransform.translate.map(value => 0.5 - value * 0.5 / productTransform.scale),
       dispatchCount: state.liquidFireContactDispatchCount,
       transferEnabled: liquidFireContactTransferEnabled,
       transferGateReason: state.liquidFireContactTransferGateReason,
@@ -16857,14 +16858,14 @@ export function createKaminosVolumePrototype({
       atlasWidth: irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X,
       atlasHeight: irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER * atlasTilesY,
       gridY: irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER,
-      worldMin: productTransform.translate.map(value => value - 1),
-      worldMax: [productTransform.translate[0] + 1,
-        productTransform.translate[1] - 1 + 2 * gridHeight / gridSize,
-        productTransform.translate[2] + 1],
+      worldMin: productTransform.translate.map(value => value - productTransform.scale),
+      worldMax: [productTransform.translate[0] + productTransform.scale,
+        productTransform.translate[1] + productTransform.scale * (-1 + 2 * gridHeight / gridSize),
+        productTransform.translate[2] + productTransform.scale],
       worldBoundsAuthority: 'full-volume-domain-equal-cell-pitch-v1',
-      raymarchWorldMax: [productTransform.translate[0] + 1,
-        productTransform.translate[1] - 1 + 2 * gridHeight / gridSize,
-        productTransform.translate[2] + 1],
+      raymarchWorldMax: [productTransform.translate[0] + productTransform.scale,
+        productTransform.translate[1] + productTransform.scale * (-1 + 2 * gridHeight / gridSize),
+        productTransform.translate[2] + productTransform.scale],
       generation: irradianceAtlasGeneration,
       builtFrame: state.fireLightFieldLastBuiltFrame ?? null,
       frameCount: state.fireLightFieldFrameCount || 0,
@@ -25925,16 +25926,18 @@ export function createKaminosVolumePrototype({
 
   return {
     sampleSharedTransmittanceContributions,
-    relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives) {
+    relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives, scale = productTransform.scale) {
       if (productFrameOwner !== 'prototype') throw new Error('Only the ordinary prototype owns its domain translation');
       if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
         throw new Error('Domain translation requires three finite coordinates');
       }
+      if (!Number.isFinite(scale) || scale <= 0) throw new Error('Domain scale must be positive and finite');
       if (!Array.isArray(localPrimitives)) throw new Error('Local domain primitives must be an array');
       const next = [...translation];
-      if (next.every((value, index) => value === productTransform.translate[index])) return false;
+      if (scale === productTransform.scale && next.every((value, index) => value === productTransform.translate[index])) return false;
       const normalizedPrimitives = localPrimitives.map(normalizePrimitiveRecord);
       productTransform.translate = next;
+      productTransform.scale = scale;
       volumePrimitives = normalizedPrimitives;
       publishVolumePrimitiveState();
       getPrimitiveSource();
@@ -26527,6 +26530,7 @@ export function createKaminosVolumePrototype({
       return {
         ...state,
         ordinaryDomainTranslation: [...productTransform.translate],
+        ordinaryDomainScale: productTransform.scale,
         coreEmitterSourceReceipt: state.coreEmitterSourceReceipt ? { ...state.coreEmitterSourceReceipt } : null,
         cameraSignature: cameraSignature(),
         boundarySplatInstanceConsumerReceipt: boundarySplatInstanceConsumerReceipt(),

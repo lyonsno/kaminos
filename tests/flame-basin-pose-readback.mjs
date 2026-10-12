@@ -13,7 +13,7 @@ test('basin pose projection uses browser-representable values without changing f
  const before=structuredClone(preset);let clones=0;
  // Replay the observed browser range contract, not a general floating-point
  // tolerance. Native conformance exercises this same projection with real DOM.
- const context=vm.createContext({structuredClone,flameEmitterPose:observed.sourcePose,flameDomainTranslation:[0,0,0],activeVolumeSettingsPresetReceipt:null,flamePoseToDomain,immersedControlsForFlamePose,
+ const context=vm.createContext({structuredClone,flameEmitterPose:observed.sourcePose,flameDomainTranslation:[0,0,0],flameDomainScale:1,activeVolumeSettingsPresetReceipt:null,flamePoseToDomain,immersedControlsForFlamePose,
   document:{getElementById:id=>({cloneNode(){clones++;return{step:'any',set value(value){assert.equal(Number(value),observed.expected[id].value);},get value(){return String(observed.observed[id].value);}};}})}});
  vm.runInContext(code,context);const state=context.flameSettingsState(preset);
  for(const [id,descriptor] of Object.entries(observed.observed)){

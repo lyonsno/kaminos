@@ -80,7 +80,7 @@ test('whole-settings validation rejects apertures outside the scaled source cont
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const grab=name=>html.slice(html.indexOf(`function ${name}(`)).split('\n}')[0]+'\n}';
   let current;const controls={'volume-emitter-source-law':{tagName:'SELECT',options:[{value:'immersed-source'}]},'volume-immersed-radius':{tagName:'INPUT',type:'range',min:'.02',max:'.5'}};
-  const context=vm.createContext({document:{getElementById:id=>controls[id]},flameSettingsState:()=>current,normalizeFlameEmitterPose,immersedControlsForFlamePose,flamePoseToDomain,flameDomainTranslation:[0,0,0],flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},authoredFlamePresent:true,VOLUME_RETIRED_APERTURE_PATTERNS:[]});
+  const context=vm.createContext({document:{getElementById:id=>controls[id]},flameSettingsState:()=>current,normalizeFlameEmitterPose,immersedControlsForFlamePose,flamePoseToDomain,flameDomainTranslation:[0,0,0],flameDomainScale:1,flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},authoredFlamePresent:true,VOLUME_RETIRED_APERTURE_PATTERNS:[]});
   vm.runInContext(grab('flameSettingsStateProblems')+'\n'+grab('checkFlameSettingsState')+'\nthis.check=checkFlameSettingsState;',context);
   for(const [scale,valid,invalid] of [[.8,.5,.02],[2,.2,.3]]){
     current={domControls:{'volume-emitter-source-law':{value:'immersed-source'},'volume-immersed-radius':{value:valid}},rendererControls:{},presentationControls:{},sourcePose:{position:[0,0,0],rotation:[0,0,0],scale:[scale,scale,scale]}};
