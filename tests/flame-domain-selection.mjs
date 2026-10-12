@@ -17,7 +17,7 @@ test('visible domain edge click selects field after emitter editing',()=>{
 });
 test('domain outline remains visible after unrelated selection, but respects helper hiding',()=>{
  const ctx={THREE,scene:{},activeSceneComposition:{},flameDomainGuide:{box:new THREE.Box3()},selectionCaptureSuspended:false,viewportHelpersVisible:true,
- sceneSelectionMembers:()=>[],FLAME_EMITTER_ID:'flame-emitter',activeSceneFieldId:null,flameDomainDraft:null,flameDomainProxy:null,
+ viewportDisplay:{domains:true,domainOpacity:.82},styleHelperLines(){},sceneSelectionMembers:()=>[],FLAME_EMITTER_ID:'flame-emitter',activeSceneFieldId:null,flameDomainDraft:null,flameDomainProxy:null,
  acceptedFlameDomainPose:()=>({position:[0,1,0],scale:[1,1,1]}),domainTransformForPose:()=>({translation:[0,0,0],scale:1}),document:{getElementById:()=>null},window:{}};
  vm.createContext(ctx);vm.runInContext(grab('refreshFlameDomainPreview'),ctx);ctx.refreshFlameDomainPreview();
  assert.equal(ctx.flameDomainGuide.visible,true);

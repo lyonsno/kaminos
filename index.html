@@ -745,6 +745,11 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
   body.composition-authoring #transform-bar { left: 8px; transform: none; width: calc(100% - 16px); max-width: none; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; }
   body.composition-authoring #transform-bar > * { flex-shrink: 0; }
 }
+#authoring-viewport-settings > div { min-width:250px; max-height:calc(100vh - 120px); overflow-y:auto; }
+.viewport-display-group { border:1px solid #364044; border-radius:4px; margin:8px 0; padding:5px 8px; }
+.viewport-display-group label { display:flex; align-items:center; gap:8px; }
+.viewport-display-group input[type="range"] { width:135px; margin-left:auto; }
+#authoring-viewport-settings small { color:#8f9b9f; margin-left:auto; }
 </style>
 <link rel="stylesheet" href="./authoring-workspace.css">
 </head>
@@ -4082,6 +4087,8 @@ import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.m
 import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
+import {checkedViewportDisplay,viewportShortcut} from './viewport-display-settings.mjs';
+import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
 
@@ -4132,6 +4139,7 @@ function escapeHtml(s) {
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let viewportGizmosVisible=true;
+let viewportDisplay=checkedViewportDisplay();
 let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null;
 function attachViewportGizmo(target) {
   if(selectionTransforms&&sceneSelection.ids.length&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat')target=selectionTransformProxy();
@@ -4139,20 +4147,22 @@ function attachViewportGizmo(target) {
   transformControls.getHelper().visible=viewportGizmosVisible;
   transformControls.enabled=viewportGizmosVisible;
 }
+function syncViewportDisplayControls() {
+ for(const key of ['overlays','gizmos','outlines','bounds','helpers','domains','emitters','hints']){const input=document.getElementById('viewport-show-'+key);if(input)input.checked=viewportDisplay[key];}
+ for(const key of ['outlineWidth','outlineOpacity','domainWidth','domainOpacity','emitterWidth','emitterOpacity']){const input=document.getElementById('viewport-'+key);if(input&&document.activeElement!==input)input.value=String(viewportDisplay[key]);}
+}
 window.kaminosViewportSettings={
-  read:()=>({gizmos:viewportGizmosVisible,bounds:viewportBoundsVisible,helpers:viewportHelpersVisible,hints:!document.getElementById('navigation-hint').hidden}),
-  set({gizmos=viewportGizmosVisible,hints,helpers,bounds}={}) {
-    if(bounds!==undefined){viewportBoundsVisible=!!bounds;updateSelectionFeedback();window._kaminosDirty?.();}
-    if(helpers!==undefined){viewportHelpersVisible=!!helpers;syncEditorHelperVisibility();}
-    if(gizmos!==viewportGizmosVisible)scenePlacementTools?.finish(false);
-    viewportGizmosVisible=!!gizmos;
-    if(transformControls){transformControls.enabled=viewportGizmosVisible;transformControls.getHelper().visible=viewportGizmosVisible && !!transformControls.object;}
-    if(hints!==undefined)document.getElementById('navigation-hint').hidden=!hints;
-    document.getElementById('viewport-show-gizmos')?.toggleAttribute('checked',viewportGizmosVisible);
-    const checkbox=document.getElementById('viewport-show-gizmos');if(checkbox)checkbox.checked=viewportGizmosVisible;
-    return this.read();
-  },
+ read:()=>({...viewportDisplay}),
+ set(patch={}) {
+  const next=checkedViewportDisplay({...viewportDisplay,...patch});
+  if(next.gizmos!==viewportGizmosVisible)scenePlacementTools?.finish(false);
+  viewportDisplay=next;viewportGizmosVisible=next.gizmos;viewportBoundsVisible=next.overlays&&next.bounds;viewportHelpersVisible=next.overlays&&next.helpers;
+  if(transformControls){transformControls.enabled=viewportGizmosVisible;transformControls.getHelper().visible=viewportGizmosVisible&&!!transformControls.object;}
+  document.getElementById('navigation-hint').hidden=!(next.overlays&&next.hints);
+  syncEditorHelperVisibility();syncViewportDisplayControls();window._kaminosDirty?.();return this.read();
+ },
 };
+
 let scenePlacementTools = null;
 let sceneControlHistory = null;
 const authoringControlSessions = [];
@@ -5844,10 +5854,10 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
     if (previous && previous !== FLAME_EMITTER_ID) setActiveSceneObject(previous);
   }
   refreshFlameDomainPreview();
-  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible;
+  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   if (entry) updateFlameEmitterSupportOutline(THREE, entry.object,
     window.__kaminosVolumeEmitterReceipt?.requested);
-  if (entry) applySceneObjectTransformState(entry.object, flameEmitterPose);
+  if (entry) {applySceneObjectTransformState(entry.object, flameEmitterPose);styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});entry.object.visible=!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;}
   return entry?.object || null;
 }
 
@@ -5880,9 +5890,10 @@ function refreshFlameDomainPreview() {
     flameDomainGuide.renderOrder = 1000;
     scene.add(flameDomainGuide);
   }
-  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible;
+  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   const pose=flameDomainDraft||acceptedFlameDomainPose(),{translation,scale}=domainTransformForPose(pose);
   if(flameDomainGuide)flameDomainGuide.box.set(new THREE.Vector3(-scale,-scale,-scale).add(new THREE.Vector3(...translation)),new THREE.Vector3(scale,3*scale,scale).add(new THREE.Vector3(...translation)));
+  if(flameDomainGuide)styleHelperLines(flameDomainGuide,{width:viewportDisplay.domainWidth,opacity:viewportDisplay.domainOpacity});
   if(flameDomainProxy&&!transformControls?.dragging)applySceneObjectTransformState(flameDomainProxy,pose);
   for(const [key,value] of [['x',pose.position[0]],['y',pose.position[1]],['z',pose.position[2]],['scale',pose.scale[0]]]){const input=document.getElementById('flame-domain-'+key);if(input&&document.activeElement!==input)input.value=String(value);}
   const size=document.getElementById('flame-domain-size');if(size)size.textContent=`World size ${[2,4,2].map(n=>Number((n*pose.scale[0]).toPrecision(3))).join(' × ')} · cell count unchanged`;
@@ -6893,7 +6904,7 @@ async function resetSelectedSplatCorrection() {
 
 function updateTransformInspector() {
   syncLevelingButton();
-  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible;
+  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   const inspector = document.getElementById('transform-inspector');
   const empty = document.getElementById('transform-inspector-empty');
   const fields = document.getElementById('transform-inspector-fields');
@@ -7182,7 +7193,7 @@ function sceneObjectRecordForDescendant(object) {
 }
 
 function pickFlameDomainFromViewportPointer(event) {
-  if (!activeSceneComposition || !flameDomainGuide?.visible || selectionCaptureSuspended || !viewportHelpersVisible || !renderer || !camera) return false;
+  if (!activeSceneComposition || !flameDomainGuide?.visible || selectionCaptureSuspended || !viewportHelpersVisible || !viewportDisplay.domains || viewportDisplay.domainOpacity===0 || !renderer || !camera) return false;
   return pointerHitsBoxOutline(flameDomainGuide.box, camera, {x:event.clientX,y:event.clientY}, renderer.domElement.getBoundingClientRect());
 }
 
@@ -7199,6 +7210,8 @@ function pickSceneObjectFromViewportPointer(event) {
   sceneRaycaster.setFromCamera(scenePointerNdc, camera);
   sceneRaycaster.params.Points.threshold = SCENE_OBJECT_POINT_PICK_THRESHOLD;
   const hits = sceneRaycaster.intersectObjects(sceneObjects.filter(record=>record.object.visible).map(record => record.object), true);
+  // Emitter symbols are drawn through geometry. Pick that same visible layer first.
+  for(const hit of hits){const record=sceneObjectRecordForDescendant(hit.object);if(record?.object.visible&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type))return record;}
   for (const hit of hits) {
     const record = sceneObjectRecordForDescendant(hit.object);
     if (record) return record;
@@ -28902,6 +28915,7 @@ function buildSceneData(capture = null) {
     capture,
     cameraViews:cameraViews?.read(),
     sceneCamera:sceneCameras?.read().settings,
+    editorDisplay:viewportDisplay,
     viewport:sceneCameras?.viewportState(),
     camera: {
       position: camera.position.toArray(),
@@ -29477,6 +29491,8 @@ function setSceneSelection(ids,activeId=ids.at(-1)??null){
   updateSelectionFeedback();window._kaminosDirty?.();return structuredClone(sceneSelection);
 }
 function updateSelectionFeedback(){
+  selectionFeedback?.setStyle({width:viewportDisplay.outlineWidth*(renderer?.getPixelRatio?.()??1),opacity:viewportDisplay.outlineOpacity});
+  selectionFeedback?.suspend(selectionCaptureSuspended||!viewportDisplay.overlays||!viewportDisplay.outlines);
   const ids=new Set(sceneSelectionMembers());
   const activeIds=activeSceneGroupId?sceneGroups.find(g=>g.id===activeSceneGroupId)?.objectIds||[]:[activeSceneObjectId];
   selectionFeedback?.update(sceneObjects.filter(entry=>ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==CAMERA_TYPE&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE),activeIds);
@@ -29484,13 +29500,14 @@ function updateSelectionFeedback(){
   for(const id of ids){const entry=sceneObjects.find(o=>o.id===id);if(!entry)continue;
     let box=selectionBoxes.get(id);if(!box){box=new THREE.BoxHelper(entry.object);box.userData.kaminosEditorHelper=true;box.userData.kaminosEditorOnly=true;box.material.depthTest=false;box.renderOrder=1001;scene.add(box);selectionBoxes.set(id,box);}
     box.object=entry.object;box.update();box.material.color.set(id===activeSceneObjectId||activeSceneGroupId&&sceneGroups.find(g=>g.id===activeSceneGroupId)?.objectIds.includes(id)?0xffc66d:0xe78932);
+    styleHelperLines(box,{width:viewportDisplay.outlineWidth,opacity:viewportDisplay.outlineOpacity});
     box.visible=!selectionCaptureSuspended&&viewportBoundsVisible&&entry.object.visible;
   }
 }
 function syncEditorHelperVisibility(){
-  for(const entry of sceneObjects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE)entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible;}
+  for(const entry of sceneObjects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE){entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});}}
   for(const {marker,light} of sceneSpotLights.values())marker.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&light.visible;
-  if(flameDomainGuide)flameDomainGuide.visible= !selectionCaptureSuspended && viewportHelpersVisible;
+  if(flameDomainGuide){flameDomainGuide.visible= !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleHelperLines(flameDomainGuide,{width:viewportDisplay.domainWidth,opacity:viewportDisplay.domainOpacity});}
   for(const entry of sceneObjects)if(entry.type===CAMERA_TYPE)entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&!(sceneCameras?.state().mode==='camera'&&sceneCameras.state().activeId===entry.id);
   updateSelectionFeedback();window._kaminosDirty?.();
 }
@@ -30170,6 +30187,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     location.assign(compositionRestoreUrl(restorePlan.composition, sceneFile, location.origin));
     return;
   }
+  if(restorePlan.editorDisplay)window.kaminosViewportSettings.set(restorePlan.editorDisplay);
   activeSceneComposition = restorePlan.composition;
   if(restorePlan.fireDomain)writeKilnCollisionState({enabled:restorePlan.fireDomain.simulation.collision});
   else if(activeSceneComposition?.route.volume_collision!==undefined)writeKilnCollisionState({enabled:activeSceneComposition.route.volume_collision==='kiln'});

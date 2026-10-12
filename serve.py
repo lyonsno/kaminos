@@ -2188,6 +2188,7 @@ SCENES_DIR = Path(os.environ.get("KAMINOS_SCENES_DIR", ROOT / "scenes")).expandu
 # KAMINOS_SCENE_LIBRARY_GLOBS (os.pathsep-separated) replaces the defaults.
 SCENE_LIBRARY_DEFAULT_GLOBS = (
     "~/.local/state/kaminos/*/scenes",
+    "~/.local/state/kaminos/*/consumer/scenes",
     "~/.local/share/kaminos/*/scenes",
     str(ROOT.parent / "*" / "scenes"),
 )
@@ -2230,6 +2231,28 @@ def scene_library_import_dependency(source, store):
                 os.replace(staging, root_path / path)
                 return {"source": source, "status": "imported", "from": str(candidate)}
     return {"source": source, "status": "missing"}
+
+
+def scene_library_import_basin(document, scene_store):
+    preset_id = ((document.get('composition') or {}).get('flame') or {}).get('presetId')
+    if not preset_id:
+        return None
+    if not re.fullmatch(r'vsp-[0-9a-f]{64}', str(preset_id)):
+        raise ValueError('Scene references an invalid fire basin')
+    try:
+        read_volume_settings_preset_layered(volume_settings_store_layers(VOLUME_SETTINGS_STORE, SHARED_BASIN_STORE), preset_id)
+        return {'kind': 'basin', 'presetId': preset_id, 'status': 'present'}
+    except FileNotFoundError:
+        pass
+    # The consumer store is the observed scenes/basins sibling layout. Copy
+    # only its verified immutable artifact, leaving aliases and source untouched.
+    source_store = Path(scene_store).parent / 'basins'
+    read_volume_settings_preset(source_store, preset_id)
+    source = source_store / 'presets' / f'{preset_id}.json'
+    destination = VOLUME_SETTINGS_STORE / 'presets' / source.name
+    _atomic_write_json(destination, json.loads(source.read_text()))
+    read_volume_settings_preset(VOLUME_SETTINGS_STORE, preset_id)
+    return {'kind': 'basin', 'presetId': preset_id, 'status': 'imported'}
 
 
 def scene_library_stores():
@@ -4225,11 +4248,16 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         except (OSError, ValueError) as error:
             self.send_json({"error": f"Scene unreadable: {error}"}, 400)
             return
+        try:
+            basin = scene_library_import_basin(document, store)
+        except (OSError, ValueError) as error:
+            self.send_json({'error': f'Could not retain the scene fire basin: {error}'}, 400)
+            return
         dependencies = [scene_library_import_dependency(obj.get("source"), store)
                         for obj in document.get("objects") or [] if isinstance(obj, dict) and str(obj.get("source") or "").startswith("/api/read?")]
         filename = f"{scene_path.name[: -len('.kaminos.json')]}_{uuid.uuid4().hex}.kaminos.json"
         _atomic_write_json(SCENES_DIR / filename, document)
-        self.send_json({"saved": filename, "document": document, "dependencies": dependencies, "from": str(store.parent.name)})
+        self.send_json({"saved": filename, "document": document, "dependencies": dependencies, "basin": basin, "from": str(store.parent.name)})
 
     def handle_scene_library(self, params):
         """List scenes saved by other Kaminos servers on this machine (read-only)."""
@@ -4248,7 +4276,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     entry["error"] = str(error)
                 scenes.append(entry)
             if scenes:
-                stores.append({"id": store_id, "label": path.parent.name, "path": str(path), "scenes": scenes})
+                stores.append({"id": store_id, "label": path.parent.parent.name if path.parent.name == "consumer" else path.parent.name, "path": str(path), "scenes": scenes})
         self.send_json({"stores": stores})
 
     def handle_scene_library_read(self, params):

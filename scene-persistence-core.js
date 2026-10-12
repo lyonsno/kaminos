@@ -1,3 +1,4 @@
+import {checkedViewportDisplay} from './viewport-display-settings.mjs';
 import {FIRE_DOMAIN_TYPE,checkedFireDomainRecord,authorFireObjects,readFireObjects,fireRenderingSettings} from './scene-fire-domain.mjs';
 import {RIM_LIGHT_ID,checkedRimRecipe,rimRecipePose,checkedSceneLightRecord} from './scene-rim-light.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh} from './scene-geometry.mjs';
@@ -183,6 +184,7 @@ export function planSceneRestore(data) {
     schema: data.schema || null,
     cameraViews: normalizeCameraViews(data.cameraViews),
     sceneCamera:normalizeSceneCamera(data.sceneCamera,objects),
+    editorDisplay:data.editorDisplay==null?null:checkedViewportDisplay(data.editorDisplay),
     viewport:normalizeCameraViewport(data.viewport,normalizeSceneCamera(data.sceneCamera,objects)),
     version: data.version,
     authoredObjects,fireSettings:fire?.settings??null,fireDomain:fire?.domain??null,
@@ -219,6 +221,7 @@ export function buildSceneDocument({
   cameraViews = null,
   sceneCamera = null,
   viewport = null,
+  editorDisplay = null,
   environment = null,
   postprocessing = null,
   backdrop = false,
@@ -268,6 +271,7 @@ export function buildSceneDocument({
     camera: cloneJson(camera),
     cameraViews: normalizeCameraViews(cameraViews),
     sceneCamera:normalizeSceneCamera(sceneCamera,sceneObjects),
+    ...(editorDisplay==null?{}:{editorDisplay:checkedViewportDisplay(editorDisplay)}),
     viewport:normalizeCameraViewport(viewport,normalizeSceneCamera(sceneCamera,sceneObjects)),
     environment: cloneJson(environment),
     volumePrimitives: normalizeVolumePrimitiveState(volumePrimitives),

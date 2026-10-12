@@ -146,8 +146,7 @@ export function updateFlameEmitterSupportOutline(THREE, group, { family, inputRa
   const previous = group.userData.supportOutline;
   if (previous) {
     group.remove(previous);
-    previous.geometry.dispose();
-    previous.material.dispose();
+    previous.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat())material?.dispose();});
   }
   group.userData.supportOutline = null;
   group.userData.supportSignature = signature;

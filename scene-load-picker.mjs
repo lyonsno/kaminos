@@ -7,6 +7,8 @@
 // other servers' scan) fills in after the list opens. Resolves
 // { name, store }, 'browse', or null.
 
+export function scenePickerTitle(scene) {return scene.name.replace(/\.kaminos\.json$/, '');}
+
 export function sortScenesNewestFirst(scenes) {
   return [...scenes].sort((a, b) => Number(!!a.store) - Number(!!b.store)
     || String(b.timestamp || '').localeCompare(String(a.timestamp || '')) || a.name.localeCompare(b.name));
@@ -49,10 +51,10 @@ export function pickSavedScene({ scenes, more = null, host = document.body } = {
       if (scene.store) row.dataset.sceneStore = scene.store.id;
       row.setAttribute('role', 'option');
       const title = document.createElement('span');
-      title.textContent = scene.label || scene.name.replace(/\.kaminos\.json$/, '');
+      title.textContent = scenePickerTitle(scene);
       const meta = document.createElement('span');
       meta.className = 'scene-load-picker-meta';
-      meta.textContent = [scene.store ? `from ${scene.store.label}` : '', scene.name.replace(/\.kaminos\.json$/, ''), savedWhen(scene.timestamp)].filter(Boolean).join(' · ');
+      meta.textContent = [scene.store ? `from ${scene.store.label}` : '', scene.label || '', savedWhen(scene.timestamp)].filter(Boolean).join(' · ');
       row.append(title, meta);
       row.addEventListener('click', () => finish({ name: scene.name, store: scene.store || null }));
       return row;
