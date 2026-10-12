@@ -8,10 +8,15 @@
 // the selected output's logits within the envelope; selected output mask and
 // score consistent with the selected instance; scores and boxes within bounds.
 // admitSamNativeReport: binds a witness report to the authenticated packet
-// chain (tensor-manifest -> reference observations / invocation hashes), the
-// invocation's prompt and source image, the manifest route, actual WebGPU
-// readback authority and a non-empty receipt chain; gates cold and warm
-// positives and requires the negative control to keep nothing.
+// chain (tensor-manifest -> reference observations / invocation / model
+// package hashes), the invocation's prompt and source image, the manifest
+// route and actual WebGPU readback authority. Every output (cold, warm,
+// negative) must carry execution identity matching the packet: the verified
+// model package, the registered commit, and the source image recorded in its
+// image-feature cache key, plus a complete live composition receipt chain.
+// Cold and warm positives are gated numerically; the negative control must be
+// the workbench's different-prompt invocation, keep nothing, and report a
+// truthful empty selection.
 //
 // Envelope: the exact selected-logit error of the last accepted native run
 // (~/.local/state/sammy-sam31-return-0915/native1008-tiled-linear-r3/
@@ -29,6 +34,14 @@ export const SAM_NATIVE_TOLERANCE_GATE = Object.freeze({
   logitMaxAbs: 0.03934288024902344, logitRelativeL2: 0.0013340627487153753, scoreAbs: 1e-4, boxAbs: 1e-3,
   source: 'sammy-sam31-return-0915/native1008-tiled-linear-r3/numerical-comparison.json selected.logits (accepted 2026-09-20)',
 });
+
+// The workbench's fixed negative-control prompt (smokes/sam-semantic-mask-workbench.js runMask).
+export const SAM_WORKBENCH_NEGATIVE_PROMPT = 'a purple submarine with zebra stripes';
+// The native witness's own floor for a complete composition (tools/sam-semantic-mask-workbench-witness.mjs).
+const MIN_COMPOSITION_RECEIPTS = 10;
+const LIVE_RECEIPT = /^sam3\.[a-z0-9-]+\.phase-program\.webgpu-local\.v0$/;
+const VIT_BLOCK_STACK_RECEIPT = 'sam3.image-vit-block-stack.phase-program.webgpu-local.v0';
+const IMAGE_CACHE_KEY_PREFIX = 'sam3-image-features:';
 
 const sha = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 
@@ -50,6 +63,7 @@ export function loadSamReferencePacket(packetDir) {
   };
   const observations = pinned(manifest.referenceObservations, 'observations');
   const invocation = manifest.invocation ? pinned(manifest.invocation, 'invocation') : null;
+  const modelPackage = manifest.modelPackage ? pinned(manifest.modelPackage, 'model package') : null;
   const tensor = file => {
     const row = observations.tensors.find(item => item.file === file);
     if (!row) throw new Error(`reference tensor ${file} missing from packet`);
@@ -60,7 +74,7 @@ export function loadSamReferencePacket(packetDir) {
     if (view.length !== row.shape.reduce((a, b) => a * b, 1)) throw new Error(`reference tensor ${file} length does not match its shape`);
     return { view, shape: row.shape };
   };
-  return { manifest, manifestSha256: sha(manifestFile.bytes), observations, invocation, tensor };
+  return { manifest, manifestSha256: sha(manifestFile.bytes), observations, invocation, modelPackage, tensor };
 }
 
 // Arrays or index-keyed objects (serialized typed arrays) of exactly `length` finite values.
@@ -139,14 +153,18 @@ export function compareSamNativeOutput(output, packet, gate = SAM_NATIVE_TOLERAN
   return result;
 }
 
-// Negative control: same geometry, nothing kept, empty mask, finite logits.
+// Negative control: the workbench's different-prompt invocation, same geometry,
+// nothing kept, a truthful empty selection, empty mask, finite logits.
 function checkNegative(output, reference) {
   const result = { checks: {}, passed: false };
   try {
     const [, , height, width] = reference.tensor('expected-mask-logits.f32.bin').shape;
     const area = width * height;
+    result.checks.prompt = output.promptText === SAM_WORKBENCH_NEGATIVE_PROMPT && output.promptText !== reference.invocation?.prompt?.text;
     result.checks.geometry = output.width === width && output.height === height;
     result.checks.nothingKept = Array.isArray(output.instances) && output.instances.length === 0;
+    result.checks.emptySelection = output.selectedMaskIndex === null && output.selectedCandidateCount === 0
+      && output.foregroundPixelCount === 0 && output.selectedScore === 0;
     result.checks.emptyMask = plane(output.mask, area, 'negative mask').every(value => value === 0);
     plane(output.logits, area, 'negative logits');
   } catch (error) { result.error = String(error?.message ?? error); }
@@ -154,12 +172,26 @@ function checkNegative(output, reference) {
   return result;
 }
 
-function checkAuthority(output, reference, label) {
+function cacheSourceImage(output) {
+  const key = output?.imageCache?.key;
+  if (typeof key !== 'string' || !key.startsWith(IMAGE_CACHE_KEY_PREFIX)) return null;
+  try { return JSON.parse(key.slice(IMAGE_CACHE_KEY_PREFIX.length)).sourceImageSha256 ?? null; } catch { return null; }
+}
+
+function checkAuthority(output, reference, registration, label) {
+  const chain = output?.receiptChain;
+  const resources = output?.imageCache?.resources;
+  const packageId = reference.observations.verifiedPackageId;
   return {
     [`${label}.authority`]: output?.outputAuthority === 'actual-webgpu-readback',
     [`${label}.route`]: output?.effectiveRouteId === reference.manifest.routeId,
-    [`${label}.receipts`]: Array.isArray(output?.receiptChain) && output.receiptChain.length > 0,
+    [`${label}.receipts`]: Array.isArray(chain) && chain.length >= MIN_COMPOSITION_RECEIPTS && new Set(chain).size === chain.length
+      && chain.every(id => typeof id === 'string' && LIVE_RECEIPT.test(id)) && chain.includes(VIT_BLOCK_STACK_RECEIPT),
     [`${label}.invocation`]: typeof output?.invocationId === 'string' && output.invocationId.length > 0,
+    [`${label}.modelPackage`]: typeof packageId === 'string' && packageId.length > 0
+      && resources?.activeModelPackageId === packageId && resources?.modelSession?.packageId === packageId,
+    [`${label}.executionCommit`]: typeof registration.commit === 'string' && resources?.modelSession?.commit === registration.commit,
+    [`${label}.sourceImage`]: Boolean(reference.invocation?.sourceImage?.sha256) && cacheSourceImage(output) === reference.invocation.sourceImage.sha256,
   };
 }
 
@@ -177,7 +209,9 @@ export function admitSamNativeReport(report, packetDir, gate = SAM_NATIVE_TOLERA
       && (registration.requestedCommit == null || registration.requestedCommit === registration.commit),
     promptBound: typeof prompt === 'string' && report.requestedPrompt === prompt && cold?.promptText === prompt && warm?.promptText === prompt,
     imageBound: Boolean(reference.invocation?.sourceImage?.sha256) && registration.samples?.['truck.jpg'] === reference.invocation.sourceImage.sha256,
-    ...checkAuthority(cold, reference, 'cold'), ...checkAuthority(warm, reference, 'warm'), ...checkAuthority(negative, reference, 'negative'),
+    modelPackageBound: Boolean(reference.modelPackage),
+    ...checkAuthority(cold, reference, registration, 'cold'), ...checkAuthority(warm, reference, registration, 'warm'),
+    ...checkAuthority(negative, reference, registration, 'negative'),
   };
   const result = {
     gate, identity,

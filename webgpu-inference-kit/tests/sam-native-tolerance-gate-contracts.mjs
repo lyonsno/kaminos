@@ -2,7 +2,10 @@
 // (Sammy's 2026-10-11 counterexamples included): wrong or empty geometry,
 // non-finite or surplus values, an unchecked selected mask or non-selected
 // instance logits, logits outside the exact sourced envelope, unbound
-// report/reference identity, and a tampered reference chain.
+// report/reference identity, and a tampered reference chain. Sammy's 2026-10-12
+// residuals: fallback or incomplete receipt chains, conflicting execution package,
+// commit or cache-source identity, a tampered model package, a positive prompt
+// posing as the negative control, and contradictory negative selection metadata.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -31,20 +34,28 @@ write('expected-selection-scores.f32.bin', new Float32Array([0.9, 0.2, 0.8]), 'f
 write('expected-selection-boxes.f32.bin', new Float32Array(candidates * 4).fill(0.5), 'float32', [1, candidates, 4]);
 write('expected-selection-keep.u32.bin', new Uint32Array([1, 0, 1]), 'uint32', [1, candidates]);
 write('expected-selected-index.u32.bin', new Uint32Array([0]), 'uint32', [1]);
-const observations = Buffer.from(JSON.stringify({ tensors }));
+const PKG = 'sam3-model-package:sha256:pkg';
+const observations = Buffer.from(JSON.stringify({ tensors, verifiedPackageId: PKG }));
+const modelPackage = Buffer.from(JSON.stringify({ model: { id: 'checkpoint' } }));
+fs.writeFileSync(path.join(dir, 'sam3-model-package.json'), modelPackage);
 fs.writeFileSync(path.join(dir, 'sam3-reference-observations.json'), observations);
 const invocation = Buffer.from(JSON.stringify({ prompt: { text: 'wheel' }, sourceImage: { sha256: 'sha256:truck' } }));
 fs.writeFileSync(path.join(dir, 'sam3-invocation.json'), invocation);
 const manifest = Buffer.from(JSON.stringify({ routeId: 'sam3.route', referenceObservations: { file: 'sam3-reference-observations.json', sha256: sha(observations) },
-  invocation: { file: 'sam3-invocation.json', sha256: sha(invocation) } }));
+  invocation: { file: 'sam3-invocation.json', sha256: sha(invocation) }, modelPackage: { file: 'sam3-model-package.json', sha256: sha(modelPackage) } }));
 fs.writeFileSync(path.join(dir, 'tensor-manifest.json'), manifest);
 
+const RECEIPTS = ['preprocess', 'patch-embed', 'vit-prefix', 'vit-block-stack', 'fpn-neck', 'prompt-text-ingress', 'detr-encoder',
+  'prompt-fpn', 'pixel-decoder', 'detr-decoder', 'scoring', 'selection-postprocess', 'mask-tail']
+  .map(stage => `sam3.${stage.startsWith('vit') || stage.startsWith('patch') || stage.startsWith('fpn') || stage === 'preprocess' ? `image-${stage}` : stage}.phase-program.webgpu-local.v0`);
 const plane0 = index => [...logits.subarray(index * plane, (index + 1) * plane)].map(v => v + 0.001);
 const instance = index => ({ index, score: [0.9, 0.2, 0.8][index], box: [0.5, 0.5, 0.5, 0.5],
   mask: [...masks.subarray(index * plane, (index + 1) * plane)], logits: Object.fromEntries(plane0(index).map((v, i) => [String(i), v])) });
 const output = () => ({ width: W, height: H, selectedMaskIndex: 0, selectedScore: 0.9, instances: [instance(0), instance(2)],
   logits: plane0(0), mask: [...masks.subarray(0, plane)], promptText: 'wheel', outputAuthority: 'actual-webgpu-readback',
-  effectiveRouteId: 'sam3.route', receiptChain: ['a'], invocationId: 'inv' });
+  effectiveRouteId: 'sam3.route', receiptChain: [...RECEIPTS], invocationId: 'inv', selectedCandidateCount: 2, foregroundPixelCount: 3,
+  imageCache: { key: `sam3-image-features:${JSON.stringify({ sourceImageSha256: 'sha256:truck' })}`,
+    resources: { activeModelPackageId: PKG, modelSession: { packageId: PKG, commit: 'c' } } } });
 const passes = out => compareSamNativeOutput(out, dir).passed;
 assert.equal(passes(output()), true, 'good output passes');
 
@@ -77,7 +88,8 @@ const report = mutate => {
   const base = { status: 'passed', requestedPrompt: 'wheel', routeRegistration: { commit: 'c', requestedCommit: 'c', manifestSha256: manifestSha, samples: { 'truck.jpg': 'sha256:truck' } },
     coldWallMilliseconds: 1, visualEvidence: { output: positive },
     warmPositive: { wallMilliseconds: 1, visualEvidence: { output: output() } },
-    negativeControl: { visualEvidence: { output: { ...output(), promptText: 'none', instances: [], selectedMaskIndex: -1, mask: new Array(plane).fill(0), logits: new Array(plane).fill(-5) } } } };
+    negativeControl: { visualEvidence: { output: { ...output(), promptText: 'a purple submarine with zebra stripes', instances: [], selectedMaskIndex: null,
+      selectedCandidateCount: 0, foregroundPixelCount: 0, selectedScore: 0, mask: new Array(plane).fill(0), logits: new Array(plane).fill(-5) } } } };
   mutate?.(base);
   return base;
 };
@@ -89,6 +101,25 @@ assert.equal(admitSamNativeReport(report(r => { r.routeRegistration.manifestSha2
 assert.equal(admitSamNativeReport(report(r => { r.routeRegistration.samples['truck.jpg'] = 'sha256:other'; }), dir).passed, false, 'different source image fails');
 assert.equal(admitSamNativeReport(report(r => { r.warmPositive.visualEvidence.output.instances[1].mask[0] ^= 1; }), dir).passed, false, 'warm output is gated too');
 assert.equal(admitSamNativeReport(report(r => { r.negativeControl.visualEvidence.output.instances = [instance(0)]; }), dir).passed, false, 'negative control must keep nothing');
+const admits = mutate => admitSamNativeReport(report(mutate), dir).passed;
+// C1: execution identity must agree with the packet; receipts must be the complete live composition.
+assert.equal(admits(r => { r.visualEvidence.output.receiptChain = ['demo.fallback']; }), false, 'fallback receipt chain fails');
+assert.equal(admits(r => { r.visualEvidence.output.receiptChain = RECEIPTS.filter(id => !id.includes('vit-block-stack')); }), false, 'chain without the ViT block stack fails');
+assert.equal(admits(r => { r.visualEvidence.output.receiptChain = [...RECEIPTS.slice(0, 9), 'sam3.mask-tail.cache.v0']; }), false, 'non-live receipt fails');
+assert.equal(admits(r => { r.visualEvidence.output.imageCache.resources.activeModelPackageId = 'sam3-model-package:sha256:wrong'; }), false, 'conflicting active package fails');
+assert.equal(admits(r => { r.warmPositive.visualEvidence.output.imageCache.resources.modelSession.packageId = 'sam3-model-package:sha256:wrong'; }), false, 'conflicting session package fails');
+assert.equal(admits(r => { r.visualEvidence.output.imageCache.resources.modelSession.commit = 'wrong'; }), false, 'conflicting execution commit fails');
+assert.equal(admits(r => { r.visualEvidence.output.imageCache.key = `sam3-image-features:${JSON.stringify({ sourceImageSha256: 'sha256:other' })}`; }), false, 'conflicting cache source fails');
+assert.equal(admits(r => { r.negativeControl.visualEvidence.output.imageCache.resources.activeModelPackageId = 'sam3-model-package:sha256:wrong'; }), false, 'negative execution identity is bound too');
+assert.equal(admits(r => { delete r.visualEvidence.output.imageCache; }), false, 'missing execution identity fails');
+// C2: the negative control is the actual different-prompt invocation and reports a truthful empty selection.
+assert.equal(admits(r => { r.negativeControl.visualEvidence.output.promptText = 'wheel'; }), false, 'positive prompt cannot pose as the negative control');
+assert.equal(admits(r => { Object.assign(r.negativeControl.visualEvidence.output, { selectedMaskIndex: 44, selectedCandidateCount: 4, foregroundPixelCount: 3480 }); }), false, 'contradictory negative selection metadata fails');
+assert.equal(admits(r => { r.negativeControl.visualEvidence.output.selectedScore = 0.7; }), false, 'negative selected score must be zero');
+// A model package changed after the manifest was written breaks the chain.
+fs.writeFileSync(path.join(dir, 'sam3-model-package.json'), Buffer.from(JSON.stringify({ model: { id: 'wrong-checkpoint' } })));
+assert.throws(() => admitSamNativeReport(report(), dir), /model package hash/, 'tampered model package rejected through the manifest');
+fs.writeFileSync(path.join(dir, 'sam3-model-package.json'), modelPackage);
 fs.writeFileSync(path.join(dir, 'sam3-reference-observations.json'), Buffer.from(JSON.stringify({ tensors: tensors.slice(1) })));
 assert.throws(() => compareSamNativeOutput(output(), dir), /reference observations hash/, 'tampered observations rejected through the manifest');
 fs.rmSync(dir, { recursive: true, force: true });
