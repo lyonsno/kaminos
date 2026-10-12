@@ -48,8 +48,8 @@ try {
   const weightQuery = report.weightsUrl ? `weights=${encodeURIComponent(report.weightsUrl)}` : 'te=/te&dit=/dit&vae=/vae';
   browser = await launchChrome(opt('--chrome'), [], report);
   report.phase = 'load';
-  const kq = `&gemm=${opt('--gemm-version', '2')}&shared=${opt('--shared-type', 'f16')}`;
-  report.requestedKernels = { gemmVersion: Number(opt('--gemm-version', '2')), sharedType: opt('--shared-type', 'f16') };
+  const kq = `&gemm=${opt('--gemm-version', '2')}&shared=${opt('--shared-type', 'f16')}&vaeAct=${opt('--vae-act', 'f16')}&memory=${opt('--memory', 'all')}`;
+  report.requestedKernels = { gemmVersion: Number(opt('--gemm-version', '2')), sharedType: opt('--shared-type', 'f16'), vaeActType: opt('--vae-act', 'f16'), residency: opt('--memory', 'all') };
   // --loads N reloads the page N times in one browser profile (cache-hit evidence); the batch runs on the last load.
   report.loads = [];
   for (let n = 0; n < Number(opt('--loads', '1')); n++) {
@@ -71,7 +71,7 @@ try {
     const r = res.results[0];
     await fsp.writeFile(path.join(outDir, `${r.name}.png`), Buffer.from(r.png, 'base64')); delete r.png;
     report.results.push(r);
-    Object.assign(report, { residentBytes: res.residentBytes, loadMs: res.loadMs, effectiveKernels: res.kernels, loadStats: res.loadStats });
+    Object.assign(report, { residentBytes: res.residentBytes, gpuBytesAfterLoad: res.gpuBytesAfterLoad, loadMs: res.loadMs, effectiveKernels: res.kernels, loadStats: res.loadStats });
     await fsp.writeFile(path.join(outDir, 'report.json'), JSON.stringify(report, null, 2));
   }
   report.phase = 'done';

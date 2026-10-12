@@ -596,3 +596,7 @@ export function gemmVersionFor(requested = 2, bType, sType, K) {
   if (requested >= 3 && /^i\d$/.test(bType) && sType === 'f16' && K % 32 === 0) return 3;
   return requested >= 2 && K % 4 === 0 ? 2 : 1;
 }
+
+// Largest scores buffer attention keeps (several heads' L x L f32 scores, at least one head).
+export const SCORE_BYTES = 64 * 1024 * 1024;
+export const scoreHeads = (L, multiple = 1) => Math.max(multiple, Math.floor(SCORE_BYTES / (L * L * 4) / multiple) * multiple);

@@ -4,7 +4,7 @@
 // weights f16 from pack-text-encoder.py. Token embeddings are gathered on the
 // host from rows fetched by the caller (HTTP range requests in the browser).
 import { KleinDutyScheduler } from './klein-duties.js';
-import { gemmShader, gemmShaderV2, gemmShaderV3, gemmVersionFor, rmsNormShader, qwenQkvPrepShader, maskedSoftmaxShader, swigluShader, copyColumnsShader,
+import { scoreHeads, gemmShader, gemmShaderV2, gemmShaderV3, gemmVersionFor, rmsNormShader, qwenQkvPrepShader, maskedSoftmaxShader, swigluShader, copyColumnsShader,
   headsToRowsShader } from './klein-kernels.js';
 
 const HEAD = 128;
@@ -61,6 +61,14 @@ export class KleinTextEncoder {
     }
   }
 
+  // Free the weights but keep the compiled pipelines, so loadBundles can bring them back.
+  unloadWeights() { for (const w of Object.values(this.weights)) w.buf?.destroy(); this.weights = {}; }
+  get weightsResident() { return Object.values(this.weights).some(w => w.buf); }
+  // Tensor layouts without GPU buffers, for recording pipelines while the weights are not resident.
+  stubWeights() {
+    for (const [name, bundle] of Object.entries(this.manifest.bundles)) this.weights[name] = { buf: null, tensors: Object.fromEntries(bundle.tensors.map(t => [t.name, t])) };
+  }
+
   w(layer, name) {
     const b = this.weights[`layer${String(layer).padStart(2, '0')}`]; const t = b.tensors[name];
     const format = t.format ?? 'f16';
@@ -108,7 +116,7 @@ export class KleinTextEncoder {
     this.L = L;
     this.act = {
       hidden: f(L * D), norm: f(L * D), proj: f(L * Math.max((QH + 2 * KVH) * HEAD, 2 * F)), ffAct: f(L * F),
-      q: f(QH * L * HEAD), k: f(KVH * L * HEAD), vt: f(KVH * L * HEAD), o: f(QH * L * HEAD), scores: f(QH * L * L),
+      q: f(QH * L * HEAD), k: f(KVH * L * HEAD), vt: f(KVH * L * HEAD), o: f(QH * L * HEAD), scores: f(Math.min(QH, scoreHeads(L, QH / KVH)) * L * L),
       attn: f(L * QH * HEAD), rope: f(L * HEAD * 2), mask: this.buffer(L * 4),
     };
     this.device.queue.writeBuffer(this.act.rope, 0, qwenRopeTable(L, this.cfg.rope_theta));
@@ -125,9 +133,10 @@ export class KleinTextEncoder {
     const enc = this.sched;
     const group = (() => {
       const budget = this.sched.budget(), rep = QH / KVH;
-      if (!Number.isFinite(budget)) return QH;
+      const cap = Math.min(QH, scoreHeads(L, rep));
+      if (!Number.isFinite(budget)) return cap;
       const g = Math.floor(budget / (4 * L * L * HEAD));
-      return Math.max(rep, Math.min(QH, g - (g % rep)));
+      return Math.max(rep, Math.min(cap, g - (g % rep)));
     })();
     for (let i = 0; i < this.layers; i++) {
       const lw = name => this.w(i, name);
@@ -140,10 +149,10 @@ export class KleinTextEncoder {
       for (let h0 = 0; h0 < QH; h0 += group) {
         const hn = Math.min(group, QH - h0);
         await this.gemm(enc, { a: a.q, aOff: h0 * L * HEAD, aRs: HEAD, aBs: L * HEAD, b: a.k, bOff: (h0 / (QH / KVH)) * L * HEAD, bType: 'f32', bRs: HEAD, bBs: L * HEAD,
-          bDiv: QH / KVH, c: a.scores, cOff: h0 * L * L, cRs: L, cBs: L * L, M: L, N: L, K: HEAD, batch: hn, alpha: 1 / Math.sqrt(HEAD), label: 'te.scores' });
+          bDiv: QH / KVH, c: a.scores, cOff: 0, cRs: L, cBs: L * L, M: L, N: L, K: HEAD, batch: hn, alpha: 1 / Math.sqrt(HEAD), label: 'te.scores' });
         const rows = hn * L;
-        this.dispatch(enc, this.pipeline('masked-softmax', maskedSoftmaxShader()), [a.scores, a.mask, this.uniform([rows, L, h0 * L, 0])], Math.min(rows, 65535), Math.ceil(rows / 65535));
-        await this.gemm(enc, { a: a.scores, aOff: h0 * L * L, aRs: L, aBs: L * L, b: a.vt, bOff: (h0 / (QH / KVH)) * HEAD * L, bType: 'f32', bRs: L, bBs: HEAD * L,
+        this.dispatch(enc, this.pipeline('masked-softmax', maskedSoftmaxShader()), [a.scores, a.mask, this.uniform([rows, L, 0, 0])], Math.min(rows, 65535), Math.ceil(rows / 65535));
+        await this.gemm(enc, { a: a.scores, aOff: 0, aRs: L, aBs: L * L, b: a.vt, bOff: (h0 / (QH / KVH)) * HEAD * L, bType: 'f32', bRs: L, bBs: HEAD * L,
           bDiv: QH / KVH, c: a.o, cOff: h0 * L * HEAD, cRs: HEAD, cBs: L * HEAD, M: L, N: HEAD, K: L, batch: hn, label: 'te.values' });
         if (hn < QH) await this.sched.boundary(`te.layer${i}.attention[${h0}]`);
       }
