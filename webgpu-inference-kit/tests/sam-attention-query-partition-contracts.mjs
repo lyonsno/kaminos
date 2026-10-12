@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import * as flash from '../src/sam-flash-attention.js';
 import * as attention from '../src/sam-online-attention-wgsl.js';
 import { readFileSync } from 'node:fs';
 import { defineWebGpuPhaseProgram } from '../src/phase-program.js';
@@ -43,11 +44,22 @@ assert.equal(attention.SAM_QUERY_RANGE_ONLINE_ATTENTION_WGSL.replace('\nstruct Q
 const source = readFileSync(new URL('../src/sam-detr-encoder-phase-program.js', import.meta.url), 'utf8');
 assert.match(source, /partitionSamAttentionPhase\(/);
 assert.match(source, /addLinearKernel\('SelfAttention', SAM_QUERY_RANGE_ONLINE_ATTENTION_WGSL/);
-assert.match(source, /phases\.splice\(attentionIndex, 1, \.\.\.partitionSamAttentionPhase\(phases\[attentionIndex\], kernels, runtime\)\)/);
+assert.match(source, /: partitionSamAttentionPhase\(phases\[attentionIndex\], kernels, runtime\)\)\);/, 'online DETR self-attention partition unchanged');
 const expansion = source.match(/const attentionIndex = [^]*?\n      phases\.splice\([^]*?\);/)[0];
+const expand = (attentionKernel, phases, kernels) => new Function('phases', 'kernels', 'runtime', 'layerIndex', 'shape', 'attentionKernel', 'partitionSamAttentionPhase', 'partitionSamFlashAttentionPhase', expansion)(
+  phases, kernels, { createUniformBuffer: spec => spec }, 3, { headDim: 32 }, attentionKernel, attention.partitionSamAttentionPhase, flash.partitionSamFlashAttentionPhase);
+{
+  // Flash: 2048-query ranges of the head-dim-32 kernel.
+  const phases = [{ name: 'before' }, { name: 'detr-encoder-self-attention-softmax-3', kernel: 'self', dispatch: [5184, 8, 2], yieldAfter: true }, { name: 'after' }];
+  const kernels = { self: { bindings: ['q', 'k', 'v', 'out', 'dims'] } };
+  expand('flash', phases, kernels);
+  assert.deepEqual(phases.slice(1, -1).map(phase => phase.dispatch), [[32, 8, 2], [32, 8, 2], [17, 8, 2]]);
+  assert.deepEqual(phases.slice(1, -1).map(phase => kernels[phase.kernel].bindings[4].resource.values.query_offset), [0, 2048, 4096]);
+  assert.equal(kernels[phases[1].kernel].code, flash.samFlashAttentionShader(32));
+}
 const phases = [{ name: 'before' }, { name: 'detr-encoder-self-attention-softmax-3', kernel: 'self', dispatch: [5184, 8, 2], yieldAfter: true }, { name: 'after' }];
 const kernels = { self: { bindings: [] } };
-new Function('phases', 'kernels', 'runtime', 'layerIndex', 'partitionSamAttentionPhase', expansion)(phases, kernels, { createUniformBuffer: spec => spec }, 3, attention.partitionSamAttentionPhase);
+expand('online', phases, kernels);
 assert.equal(phases.length, 23);
 assert.equal(phases[0].name, 'before');
 assert.equal(phases[1].name, 'detr-encoder-self-attention-softmax-3');

@@ -74,7 +74,7 @@ bypass.defineProgram({ name: 'not-admitted', kernels: { a: spec('a'), b: spec('b
 assert.equal(setups - previousSetups, 2, 'unlisted shaders retain original setup');
 for (const [file, codes] of [
   ['sam-image-vit-block-stack-phase-program.js', ['SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL', 'samFlashAttentionShader()', 'SAM_VECTOR_LINEAR_RANGE_WGSL', 'SAM_VECTOR_LINEAR_GELU_RANGE_WGSL', '...samTiledLinearShaders()']],
-  ['sam-detr-encoder-phase-program.js', ['SAM_QUERY_RANGE_ONLINE_ATTENTION_WGSL']],
+  ['sam-detr-encoder-phase-program.js', ['SAM_QUERY_RANGE_ONLINE_ATTENTION_WGSL', 'samFlashAttentionShader(shape.headDim)']],
   ['sam-pixel-decoder-phase-program.js', ['CONV3X3_WGSL']],
   ['sam-image-fpn-neck-phase-program.js', ['CONV2D_RANGE_WGSL']],
 ]) {

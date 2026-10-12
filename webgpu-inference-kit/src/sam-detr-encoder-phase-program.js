@@ -1,5 +1,6 @@
 import { withSamPhaseCleanup } from './sam-phase-cleanup.js';
 import { createSamRangePhaseRuntime } from './sam-range-phase-program.js';
+import { partitionSamFlashAttentionPhase, samFlashAttentionShader } from './sam-flash-attention.js';
 import { sam3Readback } from './sam-readback.js';
 import {
   assertAuthoritativeRouteWorkerResult,
@@ -405,6 +406,10 @@ function layerTensorName(layer, name) {
 }
 
 export async function runSam3DetrEncoderPhaseProgramRoute(input = {}) {
+  // 'flash' (kit tiled flash attention, default) or 'online' (original per-query kernel, A/B baseline) for
+  // spatial self-attention; prompt cross-attention keeps its masked online kernel.
+  const attentionKernel = input.attentionKernel ?? 'flash';
+  if (attentionKernel !== 'flash' && attentionKernel !== 'online') throw new RangeError(`unsupported SAM DETR attention kernel ${attentionKernel}`);
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   const projection = validateDetrEncoderInputs(input.tensors || {});
   const { shape, encoderSrc, encoderPos, promptFeatures, promptMask, layers } = projection;
@@ -620,12 +625,16 @@ export async function runSam3DetrEncoderPhaseProgramRoute(input = {}) {
         { name: `detr-encoder-mlp-fc2-residual-${layerIndex}`, kernel: `${kernelBase}MlpResidual`, dispatch: workgroups(totalEncoder, input.device), yieldAfter: true },
       );
       const attentionIndex = phases.findIndex(phase => phase.name === `detr-encoder-self-attention-softmax-${layerIndex}`);
-      phases.splice(attentionIndex, 1, ...partitionSamAttentionPhase(phases[attentionIndex], kernels, runtime));
+      // Flash self-attention takes ~31 ms per layer at 5184 tokens (8 heads x 32), so 2048-query ranges stay
+      // near a 12 ms duty; 'online' keeps the original per-query kernel as the A/B baseline.
+      phases.splice(attentionIndex, 1, ...(attentionKernel === 'flash'
+        ? partitionSamFlashAttentionPhase(phases[attentionIndex], { headDim: shape.headDim, queriesPerPhase: 2048 }, runtime, kernels)
+        : partitionSamAttentionPhase(phases[attentionIndex], kernels, runtime)));
       currentHidden = layerKeys.output;
     }
     phases.push({ name: 'readback-encoder-hidden-states', readbacks: [{ name: 'encoderHiddenStates', tensor: currentHidden }] });
 
-    const program = createSamRangePhaseRuntime(runtime, [SAM_QUERY_RANGE_ONLINE_ATTENTION_WGSL]).defineProgram({
+    const program = createSamRangePhaseRuntime(runtime, [SAM_QUERY_RANGE_ONLINE_ATTENTION_WGSL, samFlashAttentionShader(shape.headDim)]).defineProgram({
       name: 'sam3.detr-encoder-phase-program',
       tensors: programTensors,
       uniforms: {
@@ -640,7 +649,7 @@ export async function runSam3DetrEncoderPhaseProgramRoute(input = {}) {
       },
       kernels,
       phases,
-      metadata: { routeId: SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID },
+      metadata: { routeId: SAM3_DETR_ENCODER_PHASE_PROGRAM_ROUTE_ID, attentionKernel },
     });
 
     const run = await runtime.runProgram(program);

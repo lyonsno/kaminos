@@ -1,4 +1,4 @@
-// SAM ViT attention through the kit tiled flash attention kernel. Same math as the online kernel in
+// SAM self-attention (image ViT, DETR encoder) through the kit tiled flash attention kernel. Same math as the online kernel in
 // sam-online-attention-wgsl.js (scaled dot product, softmax over the window's or the global grid's keys)
 // with a different reduction order: per-tile online softmax over 32-key tiles instead of per-key. On SAM
 // 1008 shapes it matches the online kernel to ~1e-6 and an f64 oracle to ~2e-6, like the online kernel.
@@ -19,16 +19,16 @@ const PARAM_SCHEMA = Object.freeze([
   ...['_pad0', '_pad1', '_pad2'].map(name => Object.freeze({ name, type: 'u32' })),
 ]));
 
-let shader = null;
-export function samFlashAttentionShader() {
-  shader ??= createWebGpuFlashAttentionShader({ headDim: 64 });
-  return shader;
+const shaders = new Map();
+export function samFlashAttentionShader(headDim = 64) {
+  if (!shaders.has(headDim)) shaders.set(headDim, createWebGpuFlashAttentionShader({ headDim }));
+  return shaders.get(headDim);
 }
 
-// Replace one SAM ViT attention phase (dispatch [queries, heads, domains], template bindings
-// [q, k, v, output, dims]) with query ranges of the flash kernel.
+// Replace one SAM self-attention phase (dispatch [queries, heads, domains], template bindings
+// [q, k, v, output, dims]; ViT head dim 64, DETR encoder head dim 32) with query ranges of the flash kernel.
 export function partitionSamFlashAttentionPhase(phase, { headDim, queriesPerPhase = SAM_FLASH_ATTENTION_QUERIES_PER_PHASE }, runtime, kernels) {
-  if (headDim !== 64) throw new Error('SAM flash attention supports headDim 64');
+  if (headDim !== 32 && headDim !== 64) throw new Error('SAM flash attention supports headDim 32 or 64');
   if (!Number.isInteger(queriesPerPhase) || queriesPerPhase < 64 || queriesPerPhase % 64 !== 0) {
     throw new Error('queriesPerPhase must be a positive multiple of 64');
   }
@@ -49,7 +49,7 @@ export function partitionSamFlashAttentionPhase(phase, { headDim, queriesPerPhas
     });
     kernels[kernel] = {
       ...template,
-      code: samFlashAttentionShader(),
+      code: samFlashAttentionShader(headDim),
       bindings: [...template.bindings.slice(0, 4), { name: 'params', resource: params, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' }],
     };
     chunks.push({

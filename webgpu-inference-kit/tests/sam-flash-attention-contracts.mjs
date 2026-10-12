@@ -38,6 +38,25 @@ for (const [queries, domains] of [[1, 1], [65, 4], [256, 9], [576, 9], [5184, 1]
 }
 assert.throws(() => partitionSamFlashAttentionPhase({ kernel: 'attention', dispatch: [10, 2, 1] }, { headDim: 128 }, { createUniformBuffer: spec => spec }, { attention: template }), /headDim/);
 
+// DETR encoder self-attention: head dim 32, 8 heads, one 5184-token domain; ranges sized by the caller.
+{
+  assert.equal(samFlashAttentionShader(32), createWebGpuFlashAttentionShader({ headDim: 32 }));
+  const kernels = { attention: template };
+  const phases = partitionSamFlashAttentionPhase({ name: 'detr-self', kernel: 'attention', dispatch: [5184, 8, 1], yieldAfter: true },
+    { headDim: 32, queriesPerPhase: 2048 }, { createUniformBuffer: spec => spec }, kernels);
+  assert.deepEqual(phases.map(phase => phase.dispatch), [[32, 8, 1], [32, 8, 1], [17, 8, 1]]);
+  for (const phase of phases) {
+    const { values } = kernels[phase.kernel].bindings[4].resource;
+    assert.equal(kernels[phase.kernel].code, samFlashAttentionShader(32));
+    assert.deepEqual([values.q_channels, values.kv_channels, values.heads], [256, 256, 8]);
+    assert.equal(values.scale, 1 / Math.sqrt(32));
+  }
+}
+const detr = readFileSync(new URL('../src/sam-detr-encoder-phase-program.js', import.meta.url), 'utf8');
+assert.match(detr, /input\.attentionKernel/);
+assert.match(detr, /partitionSamFlashAttentionPhase\(/);
+assert.match(detr, /partitionSamAttentionPhase\(phases\[attentionIndex\], kernels, runtime\)/, 'online DETR self-attention remains selectable');
+
 // The ViT block stack selects the kernel per invocation and keeps the online kernel as the A/B baseline.
 const source = readFileSync(new URL('../src/sam-image-vit-block-stack-phase-program.js', import.meta.url), 'utf8');
 assert.match(source, /input\.attentionKernel/);
