@@ -83,3 +83,16 @@ input[type=number]{width:100%;min-width:0;display:block;margin-top:5px;padding:6
 footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:7px 20px;border-top:1px solid #343e38;font-size:11px;color:#a8baad;background:#1b2220}
 @media(max-width:1000px){.toolbar{gap:0 12px;padding-inline:12px}.source-tools{gap:8px}.brand-block>span{max-width:105px}.samples button{width:36px;height:36px}.primary{font-size:12px;padding:9px 10px}.run-state progress{left:-12px;width:calc(100% + 24px)}}
 @media(max-width:760px){.toolbar{grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;padding-top:8px}.brand-block{grid-column:1;grid-row:1}.brand-block>span{max-width:none}.toolbar-controls{grid-column:2;grid-row:1;gap:8px}.light-ring{width:60px;height:60px}.source-tools{grid-column:1/-1;grid-row:2;justify-content:start;gap:8px}.samples button{width:32px;height:32px}.resolution-choice{min-width:98px}.primary{flex:1;min-width:145px}.run-state{grid-row:3;gap:8px}.comparison{inset:6px 8px 42px;gap:12px}.comparison article>button{font-size:11px}.stage-foot{left:12px;right:12px;font-size:10px}.stage-foot #stage-label{display:none}footer{padding-inline:12px;font-size:10px;gap:8px}main[data-controls=open]{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(180px,1fr) minmax(0,45%)}aside{border-left:0;border-top:1px solid #343e38}#controls{padding:18px}.tuning{gap:12px 16px}}
+@media(max-width:760px) and (max-height:600px){
+  .toolbar{grid-template-columns:auto minmax(0,1fr) auto;gap:0 8px;padding-top:6px}
+  .brand-block{grid-column:1;grid-row:1}.brand-block>span{display:none}.brand{font-size:16px}
+  .source-tools{grid-column:2;grid-row:1;gap:6px;justify-content:center}
+  .source-tools .primary{min-width:0;font-size:11px;padding:6px;flex:1}
+  .samples button{width:28px;height:28px}.file{font-size:11px}
+  .resolution-choice{min-width:90px;width:90px}.resolution-choice select{font-size:11px}
+  .toolbar-controls{grid-column:3;grid-row:1;gap:4px}.light-ring{width:44px;height:44px}
+  .sun{width:18px;height:18px;min-width:18px;padding:1px}.sun img{width:14px;height:14px}
+  .run-state{grid-row:2}
+  main[data-controls=open]{grid-template-columns:minmax(0,1fr) minmax(160px,45%);grid-template-rows:minmax(0,1fr)}
+  aside{border-top:0;border-left:1px solid #343e38}
+}

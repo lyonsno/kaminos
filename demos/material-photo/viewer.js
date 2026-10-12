@@ -332,7 +332,8 @@ export class MaterialPhotoViewer {
     if (!width || !height) return;
     this.renderer.setSize(width,height,false);
     this.camera.aspect=width/height;
-    this.camera.zoom=Math.min(1,this.camera.aspect/(this.aspect||1))*.9;
+    this.baseZoom=Math.min(1,this.camera.aspect/(this.aspect||1))*.9;
+    this.camera.zoom=this.baseZoom;
     this.camera.updateProjectionMatrix();
   }
   render(time) {
@@ -360,6 +361,17 @@ export class MaterialPhotoViewer {
     if(!this.rig||this.rig.time!==time){this.current.lerp(this.target,.08);if(this.rig)this.rig.time=time;}
     this.camera.position.set(this.orbit.x+this.current.x,-this.orbit.y-this.current.y,1);
     this.camera.lookAt(0,0,0);
+    // Retain the larger home framing, pulling back only when an orbit would
+    // crop the reference photograph. All four views fit the same four corners.
+    this.camera.zoom=this.baseZoom;
+    this.camera.updateProjectionMatrix();this.camera.updateMatrixWorld();
+    this.fitPoint??=new THREE.Vector3();
+    const corners=this.original.geometry.attributes.position;let extent=0;
+    for(let i=0;i<corners.count;i++){
+      this.fitPoint.fromBufferAttribute(corners,i).project(this.camera);
+      extent=Math.max(extent,Math.abs(this.fitPoint.x),Math.abs(this.fitPoint.y));
+    }
+    if(extent>.98){this.camera.zoom*=.98/extent;this.camera.updateProjectionMatrix();}
     this.updateLight();
     if(lit&&this.mode==='materials'&&this.glow&&this.getEffects().bloom&&this.getDiagnostic()==='scene'&&this.bloomPipelines) {
       this.bloomPipelines[this.useGI?0:1].render();

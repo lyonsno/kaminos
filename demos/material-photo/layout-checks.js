@@ -6,4 +6,8 @@ export function validateLayoutFrame(frame) {
     if(tile.surface.width<=0||tile.surface.height<=0||tile.label.top<tile.surface.bottom-1||tile.label.bottom>tile.bottom+1||tile.surface.right>frame.width+1)throw Error('Clipped comparison pane or label');
   }
   if(frame.tuningHit!==true||frame.runHit!==true)throw Error('Toolbar control occluded');
+  if(frame.open&&frame.giHit!==true)throw Error('Open tuning control inaccessible');
+}
+export function validateBrowserSources(actual,expected){
+  for(const [name,hash]of Object.entries(expected))if(actual[name]!==hash)throw Error(`Browser source drift: ${name}`);
 }

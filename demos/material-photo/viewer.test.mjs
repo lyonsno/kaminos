@@ -109,6 +109,25 @@ test('photo framing uses the pane while keeping a rotation margin',async()=>{
   const {viewer}=await viewerFixture();
   assert.equal(viewer.camera.zoom,.9);
 });
+test('complete reference photograph stays in view at every supported orbit extreme',async()=>{
+  const {viewer,THREE}=await viewerFixture();
+  for(const imageAspect of [.5,1,2]){
+    const width=imageAspect*4,height=4;
+    viewer.setImage({width,height,data:new Uint8Array(width*height*4).fill(255)});
+    viewer.mode='original';
+    for(const paneAspect of [.5,1,2]){
+      viewer.canvas.parentElement.getBoundingClientRect=()=>({width:paneAspect*400,height:400});viewer.resize();
+      for(const x of [-.5,0,.5])for(const y of [-.35,0,.35]){
+        viewer.orbit.set(x,y);viewer.render();viewer.camera.updateMatrixWorld();
+        const corners=viewer.original.geometry.attributes.position;
+        for(let i=0;i<corners.count;i++){
+          const p=new THREE.Vector3().fromBufferAttribute(corners,i).project(viewer.camera);
+          assert.ok(Math.abs(p.x)<=1&&Math.abs(p.y)<=1,`Photo clipped: image ${imageAspect}, pane ${paneAspect}, orbit ${x}/${y}`);
+        }
+      }
+    }
+  }
+});
 test('unlit photographs bypass renderer tone mapping while lit views retain ACES',async()=>{
   const {viewer,THREE}=await viewerFixture();
   for(const mode of ['original','photo']){viewer.mode=mode;viewer.render();assert.equal(viewer.renderer.toneMapping,THREE.NoToneMapping);}

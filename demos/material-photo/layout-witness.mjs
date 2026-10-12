@@ -3,9 +3,9 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {parseArgs} from 'node:util';
-import {validateLayoutFrame} from './layout-checks.js';
+import {validateLayoutFrame,validateBrowserSources} from './layout-checks.js';
 
-const {values}=parseArgs({options:Object.fromEntries(['repo-root','expected-commit','output','chrome','playwright-module','reference','url'].map(name=>[name,{type:'string'}]))});
+const {values}=parseArgs({options:{...Object.fromEntries(['repo-root','expected-commit','output','chrome','playwright-module','reference','url'].map(name=>[name,{type:'string'}])), 'counter-source':{type:'boolean'},'counter-blank':{type:'boolean'}}});
 const out=path.resolve(values.output??'material-layout-witness');
 const report={status:'failed',phase:'arguments',requested:values,frames:[],errors:[],route:'native WebGPU UI; retained SuperMat maps and synthetic depth; no inference timing or numerical claim'};
 let browser;
@@ -34,6 +34,15 @@ try{
   const page=await browser.newPage({viewport:{width:1440,height:857}});
   page.setDefaultTimeout(0);page.setDefaultNavigationTimeout(0);
   page.on('pageerror',error=>report.errors.push(String(error)));
+  const expectedSources={},observedSources={},sourceReads=[];
+  for(const name of ['index.html','style.css','main.js','viewer.js','comparison-viewer.js','layout.js','environment.js','photo-contracts.js'])
+    expectedSources[name]=createHash('sha256').update(await fs.readFile(path.join(root,'demos/material-photo',name))).digest('hex');
+  page.on('response',response=>{
+    const url=new URL(response.url()),base=new URL(values.url),name=path.basename(url.pathname);
+    if(url.origin===base.origin&&url.pathname===new URL(name,base).pathname&&Object.hasOwn(expectedSources,name))
+      sourceReads.push(response.body().then(bytes=>{observedSources[name]=createHash('sha256').update(bytes).digest('hex');}).catch(error=>{report.errors.push(String(error));}));
+  });
+  if(values['counter-source'])await page.route('**/viewer.js',async route=>route.fulfill({contentType:'text/javascript',body:(await fs.readFile(path.join(root,'demos/material-photo/viewer.js'),'utf8')).replace('*.9','*.79')}));
   const identity={...episode.state.identity.supermat,layoutReplay:true};
   // Interception is confined to this isolated browser. Operator server serves
   // unmodified producers; the report names the replay rather than fresh inference.
@@ -59,19 +68,30 @@ try{
   const source=await(await fetch(new URL('main.js',values.url))).text();
   if(source!==await fs.readFile(path.join(root,'demos/material-photo/main.js'),'utf8'))throw Error('Wrong served source');
   await page.waitForFunction(()=>window.__materialPhoto?.status==='loaded');
+  report.phase='browser-sources';await Promise.all(sourceReads);
+  report.browserSources={expected:expectedSources,observed:observedSources};validateBrowserSources(observedSources,expectedSources);
+  report.phase='presentation';
   await page.evaluate(()=>window.__materialPhotoActions.infer());
   if(await page.evaluate(()=>window.__materialPhoto.status)!=='done')throw Error('Display replay failed');
   const settle=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-  for(const width of [1440,2048,1000,390]){
-    await page.setViewportSize({width,height:width===390?844:width===2048?1280:857});await settle();
+  if(values['counter-blank'])await page.addStyleTag({content:'.view-surface{background:red!important}.view-surface canvas{opacity:0!important}'});
+  for(const [width,height] of [[1440,857],[2048,1280],[1000,857],[390,844],[667,375]]){
+    await page.setViewportSize({width,height});await settle();
     for(const open of [false,true]){
+      report.phase=`layout-${width}-${height}-${open?'tuning':'full'}`;await save();
       if(await page.locator('#controls').isVisible()!==open)await page.locator('#tuning-toggle').click();
       await settle();
+      if(open){
+        const before=await page.evaluate(()=>window.__materialPhotoActions.presentation().gi.enabled);
+        await page.locator('#gi').scrollIntoViewIfNeeded();await page.locator('#gi').click();
+        if(await page.evaluate(()=>window.__materialPhotoActions.presentation().gi.enabled)===before)throw Error('Tuning checkbox did not affect the displayed surface');
+        await page.locator('#gi').click();await settle();
+      }
       const frame=await page.evaluate(()=>{
         const hit=id=>{const e=document.getElementById(id),r=e.getBoundingClientRect(),at=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return e===at||e.contains(at);};
         const stage=document.querySelector('.stage').getBoundingClientRect();
         return {width:innerWidth,height:innerHeight,layout:document.getElementById('scene').dataset.layout,overflow:document.documentElement.scrollWidth>innerWidth,
-        tuningHit:hit('tuning-toggle'),runHit:hit('run'),stage:{width:stage.width,height:stage.height},
+        tuningHit:hit('tuning-toggle'),runHit:hit('run'),open:!document.getElementById('controls').hidden,giHit:document.getElementById('controls').hidden?null:hit('gi'),stage:{width:stage.width,height:stage.height},
         tiles:[...document.querySelectorAll('[data-tile]')].filter(tile=>!tile.hidden).map(tile=>{const s=tile.querySelector('.view-surface').getBoundingClientRect(),l=tile.querySelector('button').getBoundingClientRect(),r=tile.getBoundingClientRect();
         return{mode:tile.dataset.tile,bottom:r.bottom,surface:{width:s.width,height:s.height,right:s.right,bottom:s.bottom},label:{top:l.top,bottom:l.bottom}};})};
       });
@@ -80,10 +100,11 @@ try{
       const pixels=await page.evaluate(async({uri,tiles})=>{
         const bitmap=await createImageBitmap(await(await fetch(uri)).blob()),canvas=new OffscreenCanvas(bitmap.width,bitmap.height),ctx=canvas.getContext('2d');
         ctx.drawImage(bitmap,0,0);bitmap.close();
-        return tiles.map(tile=>{const data=ctx.getImageData(Math.floor(tile.left),Math.floor(tile.top),Math.floor(tile.width),Math.floor(tile.height)).data;let low=255,high=0;
-        for(let i=0;i<data.length;i++)if(i%4!==3){low=Math.min(low,data[i]);high=Math.max(high,data[i]);}return{low,high,range:high-low};});
+        const {pixelSummary}=await import('./photo-contracts.js');
+        return tiles.map(tile=>{const width=Math.floor(tile.width),height=Math.floor(tile.height),data=ctx.getImageData(Math.floor(tile.left),Math.floor(tile.top),width,height).data;
+        return pixelSummary(data,width,height);});
       },{uri:'data:image/png;base64,'+bytes.toString('base64'),tiles:await page.locator('.view-surface').evaluateAll(elements=>elements.map(e=>{const r=e.getBoundingClientRect();return{left:r.left,top:r.top,width:r.width,height:r.height};}))});
-      if(pixels.some(pixel=>pixel.range<=12))throw Error('Blank rendered pane');
+      if(pixels.some(pixel=>pixel.range<=12)){report.failureFrame={width,height,open,image,pixels};throw Error('Blank rendered pane');}
       report.frames.push({...frame,open,image,pixels});await save();
     }
   }

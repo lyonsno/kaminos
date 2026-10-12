@@ -11,6 +11,12 @@ test('presented-frame pixels distinguish real content from blank capture', async
   assert.equal(live.nonBackground, 1);
   assert.throws(() => pixelSummary(new Uint8Array(4), 2, 2), /dimensions/);
 });
+test('uniform colored pixels are spatially blank, not rendered photograph evidence',async()=>{
+  const {pixelSummary}=await import('./photo-contracts.js');
+  const red=new Uint8Array([255,0,0,255,255,0,0,255]);
+  assert.equal(pixelSummary(red,2,1).range,0);
+  assert.equal(pixelSummary(new Uint8Array([255,0,0,255,128,0,0,255]),2,1).range,127);
+});
 
 test('material photograph exposes aligned map and selection contracts', async () => {
   const url = new URL('./photo-contracts.js', import.meta.url);

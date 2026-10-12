@@ -30,11 +30,11 @@ export function createPhotoRunState() {
 
 export function pixelSummary(rgba, width, height) {
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || rgba.length !== width * height * 4) throw new Error('Invalid frame dimensions');
-  let min = 255, max = 0, nonBackground = 0;
+  const min=[255,255,255],max=[0,0,0];let nonBackground=0;
   for (let i = 0; i < rgba.length; i += 4) {
     const low = Math.min(rgba[i], rgba[i+1], rgba[i+2]), high = Math.max(rgba[i], rgba[i+1], rgba[i+2]);
-    min = Math.min(min, low); max = Math.max(max, high);
+    for(let channel=0;channel<3;channel++){min[channel]=Math.min(min[channel],rgba[i+channel]);max[channel]=Math.max(max[channel],rgba[i+channel]);}
     if (high - low > 20 || rgba[i] > 45) nonBackground++;
   }
-  return { width, height, range: max-min, nonBackground };
+  return { width, height, range: Math.max(...max.map((value,channel)=>value-min[channel])), nonBackground };
 }
