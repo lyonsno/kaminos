@@ -7,6 +7,7 @@ import {parseArgs} from 'node:util';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {fluidSourceIdentity} from '../fluid-session-browser.mjs';
+import {fluidBrowserLaunch} from '../finger-fluid-browser-launch.mjs';
 import {bindFluidWorkingSession} from '../fluid-working-session.mjs';
 import {observationSession} from '../observation-session.mjs';
 import {decodeScreenshotPngRgb} from '../screenshot-png-rgb.mjs';
@@ -30,9 +31,12 @@ try {
   report.harnessSha=sha(await fs.readFile(new URL(import.meta.url)));
   report.replacementsSha=sha(await fs.readFile(a.replacements));
   const {chromium}=await import(pathToFileURL(path.resolve(a.playwright)));
-  report.browserExecutable=await fs.realpath(a.browser);
+  // Playwright owns the temporary profile; reuse the shared executable
+  // admission before launch, including realpath and operator-Chrome rejection.
+  const admittedBrowser=fluidBrowserLaunch({executable:a.browser,debugPort:0,userDataDir:out,width:1440,height:900}).executable;
+  report.browserExecutable=admittedBrowser;
   report.phase='browser';await save();
-  browser=await chromium.launch({executablePath:a.browser,headless:true,timeout:0,args:['--enable-unsafe-webgpu','--use-angle=metal']});
+  browser=await chromium.launch({executablePath:admittedBrowser,headless:true,timeout:0,args:['--enable-unsafe-webgpu','--use-angle=metal']});
   report.browserVersion=browser.version();
   const page=await browser.newPage({viewport:{width:1440,height:900}});page.setDefaultTimeout(0);page.setDefaultNavigationTimeout(0);
   await page.addInitScript(({replacements})=>{

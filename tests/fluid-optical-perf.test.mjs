@@ -5,6 +5,11 @@ import {validateOpticalTiming,validateOpticalRuntime,substituteBaseline} from '.
 
 const core=readFileSync(new URL('../finger-fluid-webgpu-core.js',import.meta.url),'utf8');
 const transport=readFileSync(new URL('../local-liquid-transport.mjs',import.meta.url),'utf8');
+test('the benchmark launches the admitted independent executable instead of the unchecked caller path',()=>{
+  const source=readFileSync(new URL('../tools/fluid-optical-perf.mjs',import.meta.url),'utf8');
+  assert.doesNotMatch(source,/executablePath:a\.browser/,'benchmark bypasses the shop browser admission check');
+  assert.match(source,/fluidBrowserLaunch/);
+});
 
 test('scene-ray march projects its constant origin and direction once, retaining the 24-step search',()=>{
   const body=core.slice(core.indexOf('fn traceDeferredSceneInterval('),core.indexOf('fn intersectTriangle('));
