@@ -40,7 +40,7 @@ test('the API: refuses without a device or timestamp queries; encodes N+1 steps 
   assert.match(api, /if \(!gpuInitialized \|\| !device\) return \{ status: 'unsupported', reason: 'gpu-not-initialized', \.\.\.meta \};/);
   assert.match(api, /if \(!timestampQueriesAvailable\(\)\) return \{ status: 'unsupported', reason: device\.features\?\.has\?\.\('timestamp-query'\) \? 'timestamp-query-write-api-unavailable' : 'timestamp-query-not-supported', \.\.\.meta \};/);
   assert.match(api, /for \(let i = 0; i < count; i \+= 1\) \{\n\s+if \(!encodeSim\(encoder, \{ finalTimestampWrites: \{ querySet, endOfPassWriteIndex: i \} \}\)\) throw new Error\('simulation-final-timestamp-unavailable'\);\n\s+\}/);
-  assert.match(api, /encoder\.resolveQuerySet\(querySet, 0, count \+ draws, resolveBuffer, 0\);/);
+  assert.match(api, /encoder\.resolveQuerySet\(querySet, 0, count \+ 1 \+ draws, resolveBuffer, 0\);/);
   assert.match(api, /const timestamps = Array\.from\(new BigUint64Array\(readbackBuffer\.getMappedRange\(\)\.slice\(0\)\)\);/);
   assert.match(api, /const profile = simStepGpuProfileFromTimestamps\(timestamps\.slice\(0, count\), meta\);/);
   assert.match(api, /querySet\.destroy\(\); resolveBuffer\.destroy\(\); readbackBuffer\.destroy\(\);/, 'resources released on every path');
@@ -51,8 +51,16 @@ test('capture: @simGpuProfile=N samples the profile and the arm fails unless it 
   assert.match(capture, /if \(cid === '@simGpuProfile'\) \{/);
   assert.match(capture, /const mismatch = simGpuProfileMismatch\(profile, steps\);/);
   assert.match(capture, /simGpuProfiles: arm\.simGpuProfiles \|\| \[\]/, 'the report keeps every profile');
-  const good = core.simStepGpuProfileFromTimestamps([1000n, 3001000n, 6001000n], { requestedSteps: 2 });
+  const sampled = core.gpuPassDurationsFromEndTimestamps(6001000n, [7001000n]);
+  const good = { ...core.simStepGpuProfileFromTimestamps([1000n, 3001000n, 6001000n], { requestedSteps: 2 }), fields: sampled, render: sampled };
   assert.equal(simGpuProfileMismatch(good, 2), null);
+  // The time table needs the fields and the draw too: an invalid or missing
+  // one fails the arm; an unsupported draw is a named degrade.
+  assert.equal(simGpuProfileMismatch({ ...good, render: { status: 'unsupported', reason: 'readback-pipeline-unavailable' } }, 2), null);
+  assert.match(simGpuProfileMismatch({ ...good, fields: { status: 'invalid', reason: 'unwritten-timestamp' } }, 2), /frame fields invalid \(unwritten-timestamp\)/);
+  assert.match(simGpuProfileMismatch({ ...good, render: { status: 'invalid', reason: 'non-monotonic-timestamps' } }, 2), /draw invalid \(non-monotonic-timestamps\)/);
+  assert.match(simGpuProfileMismatch({ ...good, fields: undefined }, 2), /frame fields missing/);
+  assert.match(simGpuProfileMismatch({ ...good, render: undefined }, 2), /draw missing/);
   assert.match(simGpuProfileMismatch({ status: 'unsupported', reason: 'timestamp-query-not-supported' }, 2), /unsupported \(timestamp-query-not-supported\)/);
   assert.match(simGpuProfileMismatch(null, 2), /missing/);
   assert.match(simGpuProfileMismatch(good, 3), /has 2 steps, requested 3/);
@@ -63,7 +71,7 @@ test('capture: @simGpuProfile=N samples the profile and the arm fails unless it 
 
 // The frame also pays for the raymarch draw: the profile times K draws into the
 // offscreen frame texture with end-of-pass timestamps only, each draw's time
-// the gap from the previous end (the last sim step's end for the first draw).
+// the gap from the previous end (the frame-fields marker for the first draw).
 // Begin-of-render-pass timestamps read back implausibly on the Apple route
 // (each draw's begin-to-end grew by the previous draws' duration), so the
 // profile does not use them.
@@ -74,8 +82,23 @@ test('draw timing: end-to-end differences after the last sim step; the API times
   assert.deepEqual(core.gpuPassDurationsFromEndTimestamps(10n, []), { status: 'invalid', reason: 'no-passes' });
   const api = closure.slice(closure.indexOf('    async sampleSimStepGpuProfile(steps = 8) {'), closure.indexOf('    setConfinementEpsilonOverride(value) {'));
   assert.match(api, /const draws = 4;/);
-  assert.match(api, /const querySet = device\.createQuerySet\(\{ type: 'timestamp', count: count \+ draws \}\);/);
-  assert.match(api, /encodeDraw\(encoder, frameTexture\.createView\(\), 'kaminos sim gpu profile raymarch', readbackPipeline, \{ timestampWrites: \{ querySet, endOfPassWriteIndex: count \+ j \} \}\);/);
+  assert.match(api, /const querySet = device\.createQuerySet\(\{ type: 'timestamp', count: count \+ 1 \+ draws \}\);/);
+  assert.match(api, /encodeDraw\(encoder, frameTexture\.createView\(\), 'kaminos sim gpu profile raymarch', readbackPipeline, \{ timestampWrites: \{ querySet, endOfPassWriteIndex: count \+ 1 \+ j \} \}\);/);
   assert.ok(!api.includes('beginningOfPassWriteIndex'), 'no begin-of-pass timestamps');
-  assert.match(api, /render: drawsAvailable\n\s+\? \{ \.\.\.gpuPassDurationsFromEndTimestamps\(timestamps\[count - 1\], timestamps\.slice\(count, count \+ draws\)\), size: \[state\.width, state\.height\], renderScale: state\.renderScale \?\? null, raymarchSteps: controlsSnapshot\.raySteps \?\? null, pipeline: 'readback-rgba8unorm' \}\n\s+: \{ status: 'unsupported', reason: 'readback-pipeline-unavailable' \}/);
+  assert.match(api, /render: drawsAvailable\n\s+\? \{ \.\.\.gpuPassDurationsFromEndTimestamps\(timestamps\[count\], timestamps\.slice\(count \+ 1, count \+ 1 \+ draws\)\), size: \[state\.width, state\.height\], renderScale: state\.renderScale \?\? null, raymarchSteps: controlsSnapshot\.raySteps \?\? null, pipeline: 'readback-rgba8unorm' \}\n\s+: \{ status: 'unsupported', reason: 'readback-pipeline-unavailable' \}/);
+});
+
+// A live frame also encodes the field passes that follow the sim step (fire
+// irradiance light field, liquid contact transfer, selective head fields). The
+// profile encodes them once after the steps, closes them with a marker
+// timestamp, and times the draws from that marker, so step + fields + draw
+// cover the ordinary frame's GPU work. The optical-coefficient pass is not
+// re-encoded (it checks its producer step); the receipt says when it is on.
+test('frame fields: encoded once after the steps, timed to a marker; the draws start from the marker', () => {
+  const api = closure.slice(closure.indexOf('    async sampleSimStepGpuProfile(steps = 8) {'), closure.indexOf('    setConfinementEpsilonOverride(value) {'));
+  assert.match(api, /const fieldPasses = \{ fireIrradianceLightField: encodeFireIrradianceLightField\(encoder\), liquidFireContactTransfer: encodeLiquidFireContactTransfer\(encoder\), selectiveHeadLiveFields: encodeSelectiveHeadLiveFields\(encoder\) \};/);
+  assert.match(api, /encodeBoundarySplatTimestampMarker\(encoder, querySet, count, 'kaminos sim gpu profile frame fields marker'\);/);
+  assert.ok(api.indexOf('const fieldPasses') > api.indexOf('simulation-final-timestamp-unavailable'), 'fields follow the steps');
+  assert.ok(api.indexOf('const fieldPasses') < api.indexOf("'kaminos sim gpu profile raymarch'"), 'fields precede the draws');
+  assert.match(api, /fields: \{ \.\.\.gpuPassDurationsFromEndTimestamps\(timestamps\[count - 1\], \[timestamps\[count\]\]\), passes: fieldPasses, opticalCoefficientsExcluded: Boolean\(liveCompleteFlameOpticalCoefficientsEnabled\) \}/);
 });

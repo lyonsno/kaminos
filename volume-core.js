@@ -26545,33 +26545,38 @@ export function createKaminosVolumePrototype({
       if (!gpuInitialized || !device) return { status: 'unsupported', reason: 'gpu-not-initialized', ...meta };
       if (!timestampQueriesAvailable()) return { status: 'unsupported', reason: device.features?.has?.('timestamp-query') ? 'timestamp-query-write-api-unavailable' : 'timestamp-query-not-supported', ...meta };
       const count = n + 1;
-      // Then K raymarch draws into the offscreen frame texture, timed begin to
-      // end, so the step and the draw share one GPU clock.
+      // Then the frame's field passes once, closed by a marker timestamp, and
+      // K raymarch draws into the offscreen frame texture, all timed end to
+      // end on one GPU clock.
       const draws = 4;
-      const querySet = device.createQuerySet({ type: 'timestamp', count: count + draws });
-      const resolveBuffer = device.createBuffer({ label: 'kaminos sim step gpu profile resolve', size: (count + draws) * 8, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
-      const readbackBuffer = device.createBuffer({ label: 'kaminos sim step gpu profile readback', size: (count + draws) * 8, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      const querySet = device.createQuerySet({ type: 'timestamp', count: count + 1 + draws });
+      const resolveBuffer = device.createBuffer({ label: 'kaminos sim step gpu profile resolve', size: (count + 1 + draws) * 8, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+      const readbackBuffer = device.createBuffer({ label: 'kaminos sim step gpu profile readback', size: (count + 1 + draws) * 8, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
       try {
         const encoder = device.createCommandEncoder({ label: 'kaminos sim step gpu profile' });
         for (let i = 0; i < count; i += 1) {
           if (!encodeSim(encoder, { finalTimestampWrites: { querySet, endOfPassWriteIndex: i } })) throw new Error('simulation-final-timestamp-unavailable');
         }
+        const fieldPasses = { fireIrradianceLightField: encodeFireIrradianceLightField(encoder), liquidFireContactTransfer: encodeLiquidFireContactTransfer(encoder), selectiveHeadLiveFields: encodeSelectiveHeadLiveFields(encoder) };
+        encodeBoundarySplatTimestampMarker(encoder, querySet, count, 'kaminos sim gpu profile frame fields marker');
         const drawsAvailable = Boolean(readbackPipeline);
         if (drawsAvailable) {
           ensureFrameTexture();
           for (let j = 0; j < draws; j += 1) {
-            encodeDraw(encoder, frameTexture.createView(), 'kaminos sim gpu profile raymarch', readbackPipeline, { timestampWrites: { querySet, endOfPassWriteIndex: count + j } });
+            encodeDraw(encoder, frameTexture.createView(), 'kaminos sim gpu profile raymarch', readbackPipeline, { timestampWrites: { querySet, endOfPassWriteIndex: count + 1 + j } });
           }
         }
-        encoder.resolveQuerySet(querySet, 0, count + draws, resolveBuffer, 0);
-        encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, (count + draws) * 8);
+        encoder.resolveQuerySet(querySet, 0, count + 1 + draws, resolveBuffer, 0);
+        encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, (count + 1 + draws) * 8);
         device.queue.submit([encoder.finish()]);
         await readbackBuffer.mapAsync(GPUMapMode.READ);
         const timestamps = Array.from(new BigUint64Array(readbackBuffer.getMappedRange().slice(0)));
         readbackBuffer.unmap();
         const profile = simStepGpuProfileFromTimestamps(timestamps.slice(0, count), meta);
-        return { ...profile, render: drawsAvailable
-          ? { ...gpuPassDurationsFromEndTimestamps(timestamps[count - 1], timestamps.slice(count, count + draws)), size: [state.width, state.height], renderScale: state.renderScale ?? null, raymarchSteps: controlsSnapshot.raySteps ?? null, pipeline: 'readback-rgba8unorm' }
+        return { ...profile,
+          fields: { ...gpuPassDurationsFromEndTimestamps(timestamps[count - 1], [timestamps[count]]), passes: fieldPasses, opticalCoefficientsExcluded: Boolean(liveCompleteFlameOpticalCoefficientsEnabled) },
+          render: drawsAvailable
+          ? { ...gpuPassDurationsFromEndTimestamps(timestamps[count], timestamps.slice(count + 1, count + 1 + draws)), size: [state.width, state.height], renderScale: state.renderScale ?? null, raymarchSteps: controlsSnapshot.raySteps ?? null, pipeline: 'readback-rgba8unorm' }
           : { status: 'unsupported', reason: 'readback-pipeline-unavailable' } };
       } catch (error) {
         return { status: 'failed', reason: error?.message || String(error), ...meta };

@@ -163,7 +163,13 @@ export function simGpuProfileMismatch(profile, requestedSteps) {
   if (profile.steps !== requestedSteps || !Array.isArray(profile.stepMs) || profile.stepMs.length !== requestedSteps) return `sim GPU profile has ${profile.stepMs?.length ?? 0} steps, requested ${requestedSteps}`;
   if (profile.stepMs.some(v => !(Number.isFinite(v) && v > 0))) return 'sim GPU profile has a non-positive or non-finite step';
   if (profile.timestampAuthority !== 'gpu-timestamp-query:end-of-pressure-projection') return `sim GPU profile authority ${profile.timestampAuthority}`;
-  return null;
+  const passMismatch = (label, pass, unsupportedAdmitted) => {
+    if (!pass) return `sim GPU profile ${label} missing`;
+    if (pass.status === 'sampled') return pass.passMs?.length && pass.passMs.every(v => Number.isFinite(v) && v > 0) ? null : `sim GPU profile ${label} has a non-positive or non-finite pass`;
+    if (unsupportedAdmitted && pass.status === 'unsupported') return null;
+    return `sim GPU profile ${label} ${pass.status}${pass.reason ? ` (${pass.reason})` : ''}`;
+  };
+  return passMismatch('frame fields', profile.fields, false) ?? passMismatch('draw', profile.render, true);
 }
 
 export function parseArms(armsArg) {
