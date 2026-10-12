@@ -1,6 +1,6 @@
 import {createMaterialControlState, validateMaterialControls, decodeMaterialInputs, PBF_REPULSION_COEFFICIENT} from './finger-fluid-material-controls.mjs';
 import { LOCAL_LIQUID_TRANSPORT_WGSL } from './local-liquid-transport.mjs';
-import {resolveReflectionBudget,REFLECTION_BUDGET_MODES} from './fluid-reflection-budget.mjs';
+import {resolveReflectionBudget,reflectionBudgetExecution,REFLECTION_BUDGET_MODES} from './fluid-reflection-budget.mjs';
 import { localLiquidOpticalQueryControls, localLiquidHostOpticalInputs, LOCAL_LIQUID_HOST_OPTICAL_QUERY_ROUTE } from './local-liquid-optical-query.mjs';
 import { canPreserveLiquidReleaseEpoch, LIVE_LIQUID_INLET_FLOATS } from './local-liquid-inlet-continuity.mjs';
 import {resolveFingerFluidCohesionModel,resolveFingerFluidCohesionStrength,applyFingerFluidCohesionProfile} from './finger-fluid-cohesion.mjs';
@@ -14394,8 +14394,9 @@ export async function createWebGPUFingerFluidSolver({
     return getReflectionBudgetControls();
   };
   const getReflectionBudgetControls = () => ({available:!runtimeLifecycle.stopped,
-    requested:{...reflectionBudgetRequested},effective:reflectionBudgetEncoded?{...reflectionBudgetEncoded}:null,
-    executionAuthority:'shader-policy-encoded',frameId:lastRenderFrameId});
+    requested:{...reflectionBudgetRequested},
+    ...reflectionBudgetExecution({rendererMode:lastEffectiveRendererMode,opticalDebugMode:lastOpticalDebugMode,frameId:lastRenderFrameId},reflectionBudgetEncoded),
+    rendererRoute:rendererRouteForMode(lastEffectiveRendererMode),executionAuthority:'completed-render-call'});
   let lastFrameCpuMs = 0;
   let lastRenderCpuMs = 0;
   let diagnosticsPending = false;
@@ -15359,7 +15360,7 @@ export async function createWebGPUFingerFluidSolver({
     lastFrameDynamicToyMeshDrawCount = 0;
     lastFrameParticleDrawCount = 0;
     device.queue.writeBuffer(renderParamsBuffer, 0, renderData);
-    reflectionBudgetEncoded={mode:reflectionBudgetRequested.mode,fresnelCutoff:renderData[65]};
+    const frameReflectionBudget={mode:reflectionBudgetRequested.mode,fresnelCutoff:renderData[65]};
     writeDynamicReflectionSceneParams();
 
     const refractionEnabled = effectiveRendererMode === 'screen_space_refraction';
@@ -15707,6 +15708,7 @@ export async function createWebGPUFingerFluidSolver({
     }
     directRenderFrameCount += 1;
     lastRenderFrameId = renderFrameId;
+    reflectionBudgetEncoded=frameReflectionBudget;
     lastRenderCpuMs = performance.now() - renderStartedAt;
     return lastHostFrameCompositionEvidence;
   }

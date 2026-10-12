@@ -14835,6 +14835,7 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
     const apply=policy=>{
       const before=window.kaminosFingerFluidBenchSessionState();
       if(!before.available||!before.paused)throw Error('Freeze the current water before comparing reflections');
+      if(fingerFluidBenchSolver.getReflectionBudgetControls().status!=='executed_shaded')throw Error('Reflection comparison requires shaded refracted water');
       fingerFluidBenchSolver.setReflectionBudgetControls(policy);
       renderFingerFluidBenchCurrentStateForWitness(fingerFluidBenchConfig.effectiveRendererMode,'shaded');
       resumeFingerFluidBenchAfterWitness();

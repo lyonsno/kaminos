@@ -26,6 +26,7 @@ export function mountReflectionCockpit(root,{read,apply,setPaused,onOperation=()
   const status=document.createElement('div');status.className='status';status.setAttribute('role','status');panel.append(status);
   let error=null,generation=null;
   const comparison=createReflectionComparison({apply:policy=>{
+    if(read().reflection?.status!=='executed_shaded')throw Error('Reflection comparison requires shaded refracted water');
     setPaused(true);
     const receipt=apply(policy);
     onOperation({kind:'fluid.reflection-budget',phase:'applied',target:'fluid',requested:policy,effective:receipt,clock:read().clock});
@@ -35,12 +36,14 @@ export function mountReflectionCockpit(root,{read,apply,setPaused,onOperation=()
     const current=read();
     if(current.clock?.available && generation!==current.clock.generation){comparison.reset();generation=current.clock.generation;error=null;}
     const state=comparison.read();
-    for(const control of [a,b,mode,cutoff,freeze])control.disabled=!current.clock?.available;
+    const comparisonAvailable=current.clock?.available && current.reflection?.status==='executed_shaded';
+    for(const control of [a,b,mode,cutoff])control.disabled=!comparisonAvailable;
+    freeze.disabled=!current.clock?.available;
     const effective=current.reflection?.effective;
     a.setAttribute('aria-pressed',String(effective?.mode==='full'));b.setAttribute('aria-pressed',String(effective?.mode===state.candidate.mode && effective?.fresnelCutoff===Math.fround(state.candidate.fresnelCutoff)));
-    mode.value=state.candidate.mode;cutoff.disabled=!current.clock?.available||mode.value!=='adaptive';cutoff.value=String(state.candidate.fresnelCutoff*100);
+    mode.value=state.candidate.mode;cutoff.disabled=!comparisonAvailable||mode.value!=='adaptive';cutoff.value=String(state.candidate.fresnelCutoff*100);
     freeze.textContent=current.clock?.paused?'Resume water':'Freeze water';
-    const policy=effective?.mode==='full'?'Full scene reflections':effective?.mode==='single'?'One scene reflection ray':effective?.mode==='adaptive'?`Environment below ${(effective.fresnelCutoff*100).toFixed(1)}%; full scene reflections above`:'Waiting for a rendered reflection policy';
+    const policy=effective?.mode==='full'?'Full scene reflections':effective?.mode==='single'?'One scene reflection ray':effective?.mode==='adaptive'?`Environment below ${(effective.fresnelCutoff*100).toFixed(1)}%; full scene reflections above`:'Comparison requires shaded refracted water';
     status.textContent=error||`${current.clock?.paused?`Frozen at step ${current.clock.step}`:'Live water'} · ${policy}`;status.classList.toggle('error',Boolean(error));
   }
   const act=fn=>{try{fn();error=null;}catch(e){error=e.message;}update();};

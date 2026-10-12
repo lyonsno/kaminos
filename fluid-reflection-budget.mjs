@@ -28,3 +28,9 @@ export function createReflectionComparison({apply,candidate={mode:'adaptive',fre
   function reset(){selected='A';effective=null;return read();}
   return {select,configureB,read,reset};
 }
+
+export function reflectionBudgetExecution({rendererMode,opticalDebugMode,frameId},encoded) {
+  const executed=rendererMode==='screen_space_refraction' && opticalDebugMode==='shaded' && frameId>0 && Boolean(encoded);
+  return {rendererMode,opticalDebugMode,frameId,status:executed?'executed_shaded':'not_executed',
+    encoded:encoded?{...encoded}:null,effective:executed?{...encoded}:null};
+}

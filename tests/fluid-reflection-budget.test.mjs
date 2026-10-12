@@ -45,3 +45,12 @@ test('an apply failure does not claim the failed choice as effective',async()=>{
   assert.throws(()=>c.select('B'),/render failed/);
   assert.equal(c.read().selected,'A');assert.equal(c.read().effective,null);
 });
+test('effective reflection policy requires an actually completed shaded refraction frame',async()=>{
+ const m=await load();assert.equal(typeof m.reflectionBudgetExecution,'function');
+ const encoded={mode:'single',fresnelCutoff:.04};
+ for(const rendererMode of ['sphere_debug','screen_space_surface'])assert.equal(m.reflectionBudgetExecution({rendererMode,opticalDebugMode:'shaded',frameId:8},encoded).effective,null);
+ assert.equal(m.reflectionBudgetExecution({rendererMode:'screen_space_refraction',opticalDebugMode:'normal',frameId:8},encoded).effective,null);
+ assert.equal(m.reflectionBudgetExecution({rendererMode:'screen_space_refraction',opticalDebugMode:'shaded',frameId:0},encoded).effective,null);
+ const actual=m.reflectionBudgetExecution({rendererMode:'screen_space_refraction',opticalDebugMode:'shaded',frameId:8},encoded);
+ assert.deepEqual(actual.effective,encoded);assert.equal(actual.rendererMode,'screen_space_refraction');assert.equal(actual.status,'executed_shaded');
+});
