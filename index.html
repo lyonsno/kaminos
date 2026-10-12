@@ -14834,13 +14834,13 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
     };
     const apply=policy=>{
       const before=window.kaminosFingerFluidBenchSessionState();
-      if(!before.available||!before.paused)throw Error('Freeze the current water before comparing reflections');
+      if(!before.available)throw Error('Current water is unavailable for reflection comparison');
       if(fingerFluidBenchSolver.getReflectionBudgetControls().status!=='executed_shaded')throw Error('Reflection comparison requires shaded refracted water');
       fingerFluidBenchSolver.setReflectionBudgetControls(policy);
-      renderFingerFluidBenchCurrentStateForWitness(fingerFluidBenchConfig.effectiveRendererMode,'shaded');
-      resumeFingerFluidBenchAfterWitness();
+      try {renderFingerFluidBenchCurrentStateForWitness(fingerFluidBenchConfig.effectiveRendererMode,'shaded');}
+      finally {if(before.running)resumeFingerFluidBenchAfterWitness();}
       const after=window.kaminosFingerFluidBenchSessionState();
-      if(before.generation!==after.generation||before.step!==after.step||!after.paused)throw Error('Water changed during reflection comparison');
+      if(before.generation!==after.generation||before.step!==after.step||before.paused!==after.paused||before.running!==after.running)throw Error('Water playback changed during reflection comparison');
       const effective=fingerFluidBenchSolver.getReflectionBudgetControls();
       if(effective.effective?.mode!==policy.mode||effective.effective?.fresnelCutoff!==Math.fround(policy.fresnelCutoff))throw Error('Reflection policy did not reach the rendered frame');
       return effective;
