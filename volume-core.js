@@ -12277,12 +12277,15 @@ export function createKaminosVolumePrototype({
   // uniform pack just resolved (empty when the law is off or the wall toggled off).
   function immersedBackWallForState() {
     const e = state.immersedSource?.effective;
-    if (!e?.admitted || !e.backWall?.requested) return { cells: [], key: 'none' };
+    if (!e?.admitted || !e.backWall?.requested) return { cells: [], key: 'none', maskKey: 'none' };
     // Exact physical inputs: rounding can hide a cell-boundary crossing.
     const key = JSON.stringify([gridSize, gridHeight, e.centreCells, e.direction,
       e.radiusCells, e.thickness, e.backWall.thicknessCells]);
     if (immersedWallCache?.key === key) return immersedWallCache;
-    immersedWallCache = { key, cells: immersedBackWallCells(e, { grid: gridSize, gridHeight }) };
+    const cells = immersedBackWallCells(e, {grid: gridSize, gridHeight});
+    // A fractional pose change may leave rasterized occupancy unchanged.
+    const maskKey = JSON.stringify([gridSize, gridHeight, cells.map(c => c.x + gridSize * (c.y + gridHeight * c.z))]);
+    immersedWallCache = {key, cells, maskKey};
     state.immersedWallBuilds = (state.immersedWallBuilds || 0) + 1;
     return immersedWallCache;
   }
@@ -12302,7 +12305,7 @@ export function createKaminosVolumePrototype({
       : null;
     if (reason || !requested) {
       if (backWall.cells.length) {
-        const key = `wall:${backWall.key}`;
+        const key = `wall:${backWall.maskKey}`;
         if (sceneSolidRevisionKey !== key) {
           const composed = composeSolidField(null, backWall.cells, { grid: gridSize, gridHeight });
           if (installSceneSolidTexture({ cells: composed.cells, surfaceCellCount: composed.addedCells, interiorCellCount: 0, blockedFaceCount: null })) rebuildSceneSolidBindingViews();
@@ -12350,7 +12353,7 @@ export function createKaminosVolumePrototype({
       }
       const {sourceBoundsSolidCells, sourceSupport} = sceneSolidSupportCache;
       if (sourceBounds.active && sourceSupport.fluidSupportCells === 0) throw new Error('authored-solid-occludes-emitter-source-support');
-      const maskKey = JSON.stringify([geometryKey, backWall.key]);
+      const maskKey = JSON.stringify([geometryKey, backWall.maskKey]);
       if (sceneSolidRevisionKey === maskKey) {
         if (supportChanged) state.sceneCollision = {...state.sceneCollision,
           sourceBoundsSolidCells, sourceBoundsCellCount: sourceBounds.cellCount, sourceSupport};

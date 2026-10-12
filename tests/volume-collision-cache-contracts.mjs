@@ -82,3 +82,7 @@ test('coverage revision does not silently merge nearby but distinct aperture siz
  const config=r=>({effective:{admitted:true,grid:32,radiusCells:r,pattern:{kind:'bed',count:8,lineWeight:.5,jetJitter:0,seed:1,ratio:.5}}});
  assert.notEqual(core.immersedCoverageSignatureFor(config(3.200001)),core.immersedCoverageSignatureFor(config(3.200002)));
 });
+test('a subcell wall move that leaves occupancy identical does not upload another mask',()=>{
+ const {ctx,counts,refresh}=collision();refresh({immersedCentreY:.03,immersedThickness:1});const first=ctx.sceneSolidCellsCpu.slice();
+ refresh({immersedCentreY:.03001});assert.deepEqual(ctx.sceneSolidCellsCpu,first);assert.equal(counts.uploads,1,'GPU mask key follows actual occupied cells, not pose metadata');
+});
