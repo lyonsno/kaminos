@@ -64,6 +64,8 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       authored=next;
     },
     getMaterialControls:()=>solver.getMaterialControls(),
+    getReflectionBudgetControls:()=>solver.getReflectionBudgetControls(),
+    setReflectionBudgetControls:patch=>solver.setReflectionBudgetControls(patch),
     readMaterialInputs:()=>solver.readMaterialInputs(),
     setMaterialControls(patch){
       const receipt=solver.setMaterialControls(patch);

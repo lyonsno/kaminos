@@ -1,5 +1,6 @@
 import {createMaterialControlState, validateMaterialControls, decodeMaterialInputs, PBF_REPULSION_COEFFICIENT} from './finger-fluid-material-controls.mjs';
 import { LOCAL_LIQUID_TRANSPORT_WGSL } from './local-liquid-transport.mjs';
+import {resolveReflectionBudget,REFLECTION_BUDGET_MODES} from './fluid-reflection-budget.mjs';
 import { localLiquidOpticalQueryControls, localLiquidHostOpticalInputs, LOCAL_LIQUID_HOST_OPTICAL_QUERY_ROUTE } from './local-liquid-optical-query.mjs';
 import { canPreserveLiquidReleaseEpoch, LIVE_LIQUID_INLET_FLOATS } from './local-liquid-inlet-continuity.mjs';
 import {resolveFingerFluidCohesionModel,resolveFingerFluidCohesionStrength,applyFingerFluidCohesionProfile} from './finger-fluid-cohesion.mjs';
@@ -9306,6 +9307,7 @@ struct RenderParams {
   opticalModes: vec4<f32>,
   analyticCarrierControls: vec4<f32>,
   hostFrameControls: vec4<f32>,
+  reflectionBudgetControls: vec4<f32>,
 }
 
 @group(0) @binding(0) var<storage, read> particles: array<Particle>;
@@ -9899,7 +9901,11 @@ fn reflectionSampleFromOpticalQuery(query: OpticalQuerySample) -> ReflectionSamp
   return sample;
 }
 
-fn sampleWorldReflection(rayOrigin: vec3<f32>, rayDirection: vec3<f32>) -> ReflectionSample {
+fn sampleWorldReflection(rayOrigin: vec3<f32>, rayDirection: vec3<f32>, sceneQueries: bool) -> ReflectionSample {
+  if (!sceneQueries) {
+    let environment = sampleEnvironment(rayDirection);
+    return ReflectionSample(environment, environment);
+  }
   if (params.hostFrameControls.x > 0.5) {
     return reflectionSampleFromOpticalQuery(sampleHybridOpticalQuery(rayOrigin, rayDirection));
   }
@@ -9916,18 +9922,32 @@ fn integrateWorldReflectionQuadrature(
   worldNormal: vec3<f32>,
   coneRadius: f32,
   opticalFootprintMode: i32,
+  fresnel: f32,
 ) -> ReflectionQuadrature {
   let centerDirection = normalize(reflect(cameraRay, worldNormal));
   let helperAxis = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(centerDirection.y) > 0.92);
   let tangent = normalize(cross(helperAxis, centerDirection));
   let bitangent = normalize(cross(centerDirection, tangent));
   let rayOrigin = reflectionQueryOrigin(worldPosition, worldNormal);
-  let center = reflectionSampleFromOpticalQuery(sampleHybridOpticalQuery(rayOrigin, centerDirection));
-  let tangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * coneRadius));
-  let tangentNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * -coneRadius));
-  let bitangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + bitangent * coneRadius));
-  let bitangentNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + bitangent * -coneRadius));
+  let reflectionBudgetMode = i32(round(params.reflectionBudgetControls.x));
+  let sceneQueries = !(reflectionBudgetMode == 2 && fresnel <= params.reflectionBudgetControls.y);
+  var center: ReflectionSample;
+  if (sceneQueries) {
+    center = reflectionSampleFromOpticalQuery(sampleHybridOpticalQuery(rayOrigin, centerDirection));
+  } else {
+    let environment = sampleEnvironment(centerDirection);
+    center = ReflectionSample(environment, environment);
+  }
   var quadrature: ReflectionQuadrature;
+  if (reflectionBudgetMode == 1) {
+    quadrature.radiance = center.radiance;
+    quadrature.environmentRadiance = center.environmentRadiance;
+    return quadrature;
+  }
+  let tangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * coneRadius), sceneQueries);
+  let tangentNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + tangent * -coneRadius), sceneQueries);
+  let bitangentPositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + bitangent * coneRadius), sceneQueries);
+  let bitangentNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + bitangent * -coneRadius), sceneQueries);
   if (opticalFootprintMode == 0) {
     quadrature.radiance = center.radiance * 0.36
       + (tangentPositive.radiance + tangentNegative.radiance + bitangentPositive.radiance + bitangentNegative.radiance) * 0.16;
@@ -9936,10 +9956,10 @@ fn integrateWorldReflectionQuadrature(
     return quadrature;
   }
   let diagonalRadius = coneRadius * 0.70710678;
-  let diagonalPositivePositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + (tangent + bitangent) * diagonalRadius));
-  let diagonalPositiveNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + (tangent - bitangent) * diagonalRadius));
-  let diagonalNegativePositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + (-tangent + bitangent) * diagonalRadius));
-  let diagonalNegativeNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + (-tangent - bitangent) * diagonalRadius));
+  let diagonalPositivePositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + (tangent + bitangent) * diagonalRadius), sceneQueries);
+  let diagonalPositiveNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + (tangent - bitangent) * diagonalRadius), sceneQueries);
+  let diagonalNegativePositive = sampleWorldReflection(rayOrigin, normalize(centerDirection + (-tangent + bitangent) * diagonalRadius), sceneQueries);
+  let diagonalNegativeNegative = sampleWorldReflection(rayOrigin, normalize(centerDirection + (-tangent - bitangent) * diagonalRadius), sceneQueries);
   var samples: array<ReflectionSample, 9>;
   samples[0] = center;
   samples[1] = tangentPositive;
@@ -10573,6 +10593,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
     reflectionSurfaceNormal,
     reflectionConeRadius,
     effectiveFootprintQuadratureMode,
+    fresnel,
   );
   let reflectionRadiance = reflectionQuadrature.radiance;
   if (opticalDebugMode == 12) {
@@ -13956,7 +13977,7 @@ export async function createWebGPUFingerFluidSolver({
   );
   const renderParamsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-render-params',
-    size: 256,
+    size: 272,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   const renderModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE, code: RENDER_SHADER });
@@ -14362,6 +14383,16 @@ export async function createWebGPUFingerFluidSolver({
     : 'not_executed';
   let lastInterfaceFrequencyFallbackReason = null;
   let lastRendererFallbackReason = null;
+  let reflectionBudgetRequested = resolveReflectionBudget();
+  let reflectionBudgetEncoded = null;
+  const setReflectionBudgetControls = patch => {
+    if (runtimeLifecycle.stopped) throw new Error('Reflection controls require live water');
+    reflectionBudgetRequested = resolveReflectionBudget({...reflectionBudgetRequested,...patch});
+    return getReflectionBudgetControls();
+  };
+  const getReflectionBudgetControls = () => ({available:!runtimeLifecycle.stopped,
+    requested:{...reflectionBudgetRequested},effective:reflectionBudgetEncoded?{...reflectionBudgetEncoded}:null,
+    executionAuthority:'shader-policy-encoded',frameId:lastRenderFrameId});
   let lastFrameCpuMs = 0;
   let lastRenderCpuMs = 0;
   let diagnosticsPending = false;
@@ -15296,7 +15327,7 @@ export async function createWebGPUFingerFluidSolver({
       viewProjection,
       inverseViewProjection,
     } = cameraSnapshot;
-    const renderData = new Float32Array(64);
+    const renderData = new Float32Array(68);
     const effectiveColorMode = resolveFingerFluidColorMode(colorMode);
     const colorModeIndex = KAMINOS_FINGER_FLUID_COLOR_MODES.indexOf(effectiveColorMode);
     renderData.set(viewProjection, 0);
@@ -15317,6 +15348,7 @@ export async function createWebGPUFingerFluidSolver({
       56,
     );
     renderData.set(localLiquidOpticalQueryControls(cameraSnapshot,Boolean(validatedHostFrame)), 60);
+    renderData.set([REFLECTION_BUDGET_MODES.indexOf(reflectionBudgetRequested.mode),reflectionBudgetRequested.fresnelCutoff,0,0],64);
     lastExternalCamera = externalCameraSnapshot;
     lastCameraSnapshot = cameraSnapshot;
     lastParticleVisibility = particleVisibility;
@@ -15324,6 +15356,7 @@ export async function createWebGPUFingerFluidSolver({
     lastFrameDynamicToyMeshDrawCount = 0;
     lastFrameParticleDrawCount = 0;
     device.queue.writeBuffer(renderParamsBuffer, 0, renderData);
+    reflectionBudgetEncoded={mode:reflectionBudgetRequested.mode,fresnelCutoff:renderData[65]};
     writeDynamicReflectionSceneParams();
 
     const refractionEnabled = effectiveRendererMode === 'screen_space_refraction';
@@ -16536,6 +16569,7 @@ export async function createWebGPUFingerFluidSolver({
       fallbackReason: lastRendererFallbackReason,
       renderRoute: rendererRouteForMode(lastEffectiveRendererMode),
       opticalDebugMode: lastOpticalDebugMode,
+      reflectionBudget: getReflectionBudgetControls(),
       requestedOpticalLightingMode: lastRequestedOpticalLightingMode,
       effectiveOpticalLightingMode: lastEffectiveOpticalLightingMode,
       requestedOpticalLightingRoute: opticalLightingRouteForMode(lastRequestedOpticalLightingMode),
@@ -17125,6 +17159,8 @@ export async function createWebGPUFingerFluidSolver({
     readMaterialInputs,
     setPressureControls,
     getPressureControls,
+    getReflectionBudgetControls,
+    setReflectionBudgetControls,
     armSolverGpuTimestampCaptureForWitness,
     finishSolverGpuTimestampCaptureForWitness,
     armSolverStageGpuTimestampCaptureForWitness,

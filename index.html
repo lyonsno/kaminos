@@ -3703,6 +3703,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
 <script type="module">
 import {mountMaterialCockpit} from './finger-fluid-material-cockpit.mjs';
+import {mountReflectionCockpit} from './fluid-reflection-cockpit.mjs';
 import {readMaterialControlsURL,materialControlsURL} from './finger-fluid-material-controls.mjs';
 
 import {createFluidViewportHost,resolveFluidViewportRenderer,resolveFluidViewportMode} from './fluid-viewport-host.mjs';
@@ -4046,6 +4047,7 @@ import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, check
 
 let authoringWorkspace = null;
 let fluidWorkbench = null;
+let fluidReflectionCockpit = null;
 let restoringSceneLight=false;
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -13381,6 +13383,7 @@ function reloadFingerJuiceTabFrame() {
 
 function updateFingerFluidBenchReadout() {
   fingerFluidPressureCockpit?.update();
+  fluidReflectionCockpit?.update();
   const state = fingerFluidBenchState;
   fluidWorkbench?.update({source:'Synthetic fluid',status:state.status === 'running' ? (fingerFluidBenchSimulationPaused ? 'paused' : 'live') : state.status || 'loading',clock:`Step ${state.runtime?.stepCount ?? 0}`});
   const fixtureLabel=document.getElementById('fluid-workbench-fixture');
@@ -14818,6 +14821,31 @@ function installFluidWorkbench() {
   // routes keep their own presentation; layout does not relabel their renderer.
   if(new URLSearchParams(location.search).get('finger_fluid_viewport') === 'producer') return;
   const byId=id=>document.getElementById(id),root=byId('ipbf-pressure-cockpit');
+  if(!fluidReflectionCockpit){
+    const read=()=>({clock:window.kaminosFingerFluidBenchSessionState?.()??{available:false,paused:false,step:null},
+      reflection:fingerFluidBenchSolver?.getReflectionBudgetControls?.()??null});
+    const setPaused=value=>{
+      window.kaminosFingerFluidBenchSetSimulationPausedForWitness(Boolean(value));
+      resumeFingerFluidBenchAfterWitness();window._kaminosDirty?.();
+    };
+    const apply=policy=>{
+      const before=window.kaminosFingerFluidBenchSessionState();
+      if(!before.available||!before.paused)throw Error('Freeze the current water before comparing reflections');
+      fingerFluidBenchSolver.setReflectionBudgetControls(policy);
+      renderFingerFluidBenchCurrentStateForWitness(fingerFluidBenchConfig.effectiveRendererMode,'shaded');
+      resumeFingerFluidBenchAfterWitness();
+      const after=window.kaminosFingerFluidBenchSessionState();
+      if(before.generation!==after.generation||before.step!==after.step||!after.paused)throw Error('Water changed during reflection comparison');
+      const effective=fingerFluidBenchSolver.getReflectionBudgetControls();
+      if(effective.effective?.mode!==policy.mode||effective.effective?.fresnelCutoff!==Math.fround(policy.fresnelCutoff))throw Error('Reflection policy did not reach the rendered frame');
+      return effective;
+    };
+    fluidReflectionCockpit=mountReflectionCockpit(root,{read,apply,setPaused,
+      onOperation:event=>{if(investigationOperations.active)investigationOperations.emit(event);}});
+    window.kaminosFluidReflectionComparison={read:fluidReflectionCockpit.read,
+      select:fluidReflectionCockpit.select,configureB:fluidReflectionCockpit.configureB,
+      effective:read};
+  }
   const setup=document.createElement('section');setup.id='fluid-workbench-setup';
   const name=document.createElement('strong');name.id='fluid-workbench-fixture';name.textContent='Resolving fixture…';setup.append(name);
   const note=document.createElement('p');note.textContent='Numerical fixture · reset water to replay these settings. Fixture geometry is fixed for this experiment.';setup.append(note);
