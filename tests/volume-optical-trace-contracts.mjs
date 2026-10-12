@@ -5,7 +5,12 @@ const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8')
 assert.match(core, /async function sampleOpticalTraceChunk\(/,
   'mode-2 camera coefficients need an explicit held-state trace API');
 const { constantTransfer, composeTransfers, integrateProbes, estimateProbeError,
-  opticalProbeFeatures, traceChunkPlan, validateTraceRows } = await import('../volume-optical-trace.mjs');
+  opticalProbeFeatures, traceChunkPlan, validateTraceRows, validateTraceSpecialization } = await import('../volume-optical-trace.mjs');
+assert.equal(typeof validateTraceSpecialization,'function','conformance must reject auto falling back to full');
+assert.throws(()=>validateTraceSpecialization('auto',{effective:'full-authored-raymarch-v0'}),/specialization/);
+assert.throws(()=>validateTraceSpecialization('force-full',{effective:'lean-emissive-raymarch-v0'}),/specialization/);
+validateTraceSpecialization('auto',{effective:'lean-emissive-raymarch-v0'});
+validateTraceSpecialization('force-full',{effective:'full-authored-raymarch-v0'});
 const close = (a, b) => assert.ok(Math.abs(a-b) < 1e-11, `${a} != ${b}`);
 const p = (sigma, emission, scattered = [0,0,0]) => ({sigma, emission, scattered, flags:[0,0]});
 for (const sigma of [0, 1e-12, 0.8, 90]) {

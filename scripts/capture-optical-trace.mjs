@@ -6,6 +6,7 @@ import {pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {compositionRestoreUrl} from '../scene-authoring.mjs';
+import {validateTraceSpecialization} from '../volume-optical-trace.mjs';
 
 const [root,input,out,portText,subdivisionText]=process.argv.slice(2);
 await fs.mkdir(out,{recursive:true});
@@ -14,11 +15,16 @@ const report={identity:'ordered-optical-capture-conformance-v0',status:'running'
 const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
 await save();
 let server,browser,page;
+let abort;
+const failure=new Promise((_,reject)=>{abort=reject;});
+failure.catch(()=>{});
+const guard=promise=>Promise.race([promise,failure]);
 try {
   const port=Number(portText),subdivisions=Number(subdivisionText);
   assert.ok(Number.isInteger(port)&&port>0&&Number.isInteger(subdivisions)&&subdivisions>0);
   report.source=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
   report.diff=execFileSync('git',['diff','HEAD'],{cwd:root,encoding:'utf8'});
+  await fs.access(root+'/node_modules/three-mesh-bvh/build/index.module.js');
   const basin=JSON.parse(await fs.readFile(input+'/basin.json','utf8'));
   const scene=JSON.parse(await fs.readFile(input+'/scene.kaminos.json','utf8'));
   await fs.mkdir(out+'/settings/presets',{recursive:true});
@@ -34,27 +40,29 @@ try {
   report.phase='server';await save();
   server=spawn('python3',['-u','serve.py',String(port),'--no-shared-basin-store','--volume-settings-store',out+'/settings'],
     {cwd:root,env:{...process.env,KAMINOS_SCENES_DIR:out+'/scenes'}});
+  server.on('error',abort);
   server.stdout.pipe(createWriteStream(out+'/server.stdout.log'));
   server.stderr.pipe(createWriteStream(out+'/server.stderr.log'));
   const base=`http://127.0.0.1:${port}`;
   for(;;){
     if(server.exitCode!==null)throw new Error(`server exited ${server.exitCode}`);
-    try{report.runtime=await (await fetch(base+'/api/runtime-config')).json();break;}catch{await new Promise(r=>setTimeout(r,100));}
+    try{report.runtime=await (await fetch(base+'/api/runtime-config')).json();break;}catch{await guard(new Promise(r=>setTimeout(r,100)));}
   }
   assert.equal(report.runtime.source.repoRoot,root,'wrong served checkout');
   browser=await chromium.launch({headless:true,executablePath:report.executable,args:['--enable-unsafe-webgpu','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   page=await browser.newPage({viewport:{width:1300,height:950}});page.setDefaultTimeout(0);
-  page.on('pageerror',e=>report.errors.push(String(e)));
-  page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
+  const recordError=e=>{report.errors.push(String(e));abort(new Error(String(e)));};
+  page.on('pageerror',recordError);
+  page.on('console',m=>{if(m.type()==='error')recordError(m.text());});
   report.url=compositionRestoreUrl(scene.composition,'optical-trace.kaminos.json',base);
-  report.phase='load';await save();await page.goto(report.url);
-  await page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().active||window.__kaminosVolumePrototype?.debugState().error);
+  report.phase='load';await save();await guard(page.goto(report.url));
+  await guard(page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().active||window.__kaminosVolumePrototype?.debugState().error));
   assert.equal(await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().error),null);
   // Arm the internal exact-step hold before asynchronous scene settling can pass it.
   await page.evaluate(()=>{window.opticalTraceHold=window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(151);});
-  await page.waitForFunction(()=>window.kaminosSceneAuthoring?.read().objects.length>=3||/load failed/i.test(document.getElementById('info-bar')?.textContent||''));
+  await guard(page.waitForFunction(()=>window.kaminosSceneAuthoring?.read().objects.length>=3||/load failed/i.test(document.getElementById('info-bar')?.textContent||'')));
   assert.equal(await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects.length),scene.objects.length);
-  report.hold=await page.evaluate(()=>window.opticalTraceHold);assert.equal(report.hold.ok,true,JSON.stringify(report.hold));
+  report.hold=await guard(page.evaluate(()=>window.opticalTraceHold));assert.equal(report.hold.ok,true,JSON.stringify(report.hold));
   report.phase='baseline';await save();
   const baseline=await page.evaluate(async()=>{
     const r=window.__kaminosVolumePrototype;
@@ -85,6 +93,7 @@ try {
       await fs.writeFile(out+'/'+path,bytes);
       const sha256=createHash('sha256').update(bytes).digest('hex');
       report.chunks.push({...chunk,values:undefined,path,sha256});await save();
+      validateTraceSpecialization(specialization,chunk.effective.specialization);
       if(reference)assert.ok(bytes.equals(reference),'full and lean optical coefficients differ');
       else reference=bytes;
     }
@@ -102,5 +111,5 @@ try {
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;await page?.screenshot({path:out+'/failure.png'}).catch(()=>{});}
 finally{
   await save();await browser?.close();
-  if(server&&server.exitCode===null){server.kill('SIGTERM');await once(server,'exit');}
+  if(server?.pid&&server.exitCode===null){server.kill('SIGTERM');await once(server,'exit');}
 }

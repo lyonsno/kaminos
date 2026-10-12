@@ -1,6 +1,13 @@
 export const OPTICAL_TRACE_IDENTITY = 'camera-mode2-ordered-optical-trace-v0';
 export const OPTICAL_TRACE_STRIDE = 32;
 
+export function validateTraceSpecialization(requested, receipt) {
+  const expected = {auto:'lean-emissive-raymarch-v0','force-full':'full-authored-raymarch-v0'}[requested];
+  if (!expected || receipt?.effective !== expected) {
+    throw new Error(`unexpected trace specialization: ${requested} -> ${JSON.stringify(receipt)}`);
+  }
+}
+
 function finiteNonnegative(value, name) {
   if (!Number.isFinite(value) || value < 0) throw new Error(`${name} must be finite nonnegative`);
 }
