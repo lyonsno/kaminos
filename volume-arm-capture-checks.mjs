@@ -92,7 +92,9 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
       try { expected = Number.isInteger(width) ? resolveGridHeight({ gridHeightCells: Number(value) || 0 }, width) : null; } catch { expected = null; }
       const modes = ['auto-twice-width', 'requested', 'requested-snapped', 'requested-clamped'];
       if (!expected || !height) mismatches.push(`grid height requested ${value}, no valid grid receipt (dimensions ${JSON.stringify(dims ?? null)})`);
-      else if (height.admitted === false) mismatches.push(`grid height requested ${value} was refused by the device (${height.admissionReason ?? 'no reason'})`);
+      else if (height.admitted !== true) mismatches.push(height.admitted === false
+        ? `grid height requested ${value} was refused by the device (${height.admissionReason ?? 'no reason'})`
+        : `grid height requested ${value}: the receipt carries no affirmative admission (admitted ${JSON.stringify(height.admitted ?? null)})`);
       else if (!modes.includes(height.mode) || height.widthCells !== width || height.heightCells !== expected.heightCells || height.mode !== expected.mode || dims[1] !== expected.heightCells) {
         mismatches.push(`grid height requested ${value}: expected ${expected.heightCells} (${expected.mode}) at width ${width}, receipt ${height.heightCells} (${height.mode ?? 'no mode'}, width ${height.widthCells ?? 'none'}), effective ${dims[1]}`);
       }

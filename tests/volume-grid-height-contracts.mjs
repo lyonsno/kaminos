@@ -162,6 +162,13 @@ test('GH-05: the capture gate compares a height arm with the resolver at the eff
   assert.equal(check('144', end([48, 96, 48], receipt(144, 48, { admitted: false, admissionReason: 'grid-shape-exceeds-device-storage-binding:1>0' }))).length, 1, 'a refused shape fails the arm');
   assert.equal(check('144', end(null, receipt(144, 48))).length, 1, 'no dimensions');
   assert.equal(check('0', end([48, 144, 48], receipt(144, 48))).length, 1, 'auto requested but a height still applied');
+  // Confirmation 1 (GH-05-C): success needs affirmative admission, a Boolean true.
+  const { admitted, ...withoutAdmission } = receipt(144, 48);
+  assert.equal(check('144', end([48, 144, 48], withoutAdmission)).length, 1, 'omitted admission fails');
+  assert.equal(check('144', end([48, 144, 48], receipt(144, 48, { admitted: null }))).length, 1, 'null admission fails');
+  assert.equal(check('144', end([48, 144, 48], receipt(144, 48, { admitted: 'false' }))).length, 1, 'a retyped admission fails');
+  assert.equal(check('144', end([48, 144, 48], receipt(144, 48, { admitted: 'true' }))).length, 1, 'a string true is not a Boolean true');
+  assert.equal(check('144', end([48, 144, 48], receipt(144, 48, { admitted: 1 }))).length, 1, 'nor is 1');
   assert.match(capture, /gridDimensions: s\.simGridDimensions \?\? null, gridHeight: s\.gridHeight \?\? null/);
 });
 
