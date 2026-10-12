@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.saved-mesh-combustion-diagnostic-public-receipt.v1",
+  "jobId": "5288bc11c616",
+  "queue": "/Users/noahlyons/.local/state/gpu-greenroom",
+  "queueStateAtSubmission": "pending",
+  "queueTerminalState": {
+    "status": "failed",
+    "failurePhase": "execution",
+    "exitCode": 1,
+    "finishedAtEpochSeconds": 1790252843.026804,
+    "effectiveArgv": "/opt/homebrew/bin/node artifacts/sinter-authored-mesh-smoke-0923/diagnostic-capture-r2.mjs --repo-root /private/tmp/kaminos-sinter-authored-mesh-burn-0923 --scene /private/tmp/kaminos-sinter-authored-mesh-burn-0923/scenes/sinter-forked-timber-combustion.kaminos.json --origin http://127.0.0.1:8094 --out-dir /private/tmp/kaminos-sinter-authored-mesh-burn-0923/artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r2",
+    "workerPid": 89531,
+    "workerCommit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d"
+  },
+  "publicAgentAlias": "sinter-object-combustion",
+  "receiverAlias": "sinter-object-combustion",
+  "privateIdentityNote": "Greenroom's canonical request/receipt retains the exact submitted runtime identity; it is intentionally omitted from this public copy.",
+  "requestedRouteIdentity": "kaminos-saved-timber-trestle-gpu-diagnostic-v0-r2",
+  "repoRoot": "/private/tmp/kaminos-sinter-authored-mesh-burn-0923",
+  "sourceBranch": "cc/sinter-authored-mesh-burn-0923",
+  "scenePath": "/private/tmp/kaminos-sinter-authored-mesh-burn-0923/scenes/sinter-forked-timber-combustion.kaminos.json",
+  "sceneSha256": "45e31211bfd35d6f6db5e67eae1b135f355c4c0c36352923130ba59d4bb91fbc",
+  "publicCaptureCommandManifest": "/private/tmp/kaminos-sinter-authored-mesh-burn-0923/artifacts/sinter-authored-mesh-smoke-0923/diagnostic-command-r2.public.json",
+  "submittedManifestSha256": "be72cb90bff54fbd0cb510d055394c495ab4b208f1a0dce9098b4cb33bc4bf0d",
+  "captureScript": "/private/tmp/kaminos-sinter-authored-mesh-burn-0923/artifacts/sinter-authored-mesh-smoke-0923/diagnostic-capture-r2.mjs",
+  "captureScriptSha256": "26173df9fc7b157293365cd0f8ca802278f826ea4c0fcca60288ae0234cef6a8",
+  "terminalEvidence": {
+    "report": "/private/tmp/kaminos-sinter-authored-mesh-burn-0923/artifacts/sinter-authored-mesh-smoke-0923/diagnostic-r2/report.json",
+    "exposureScreenshot": null,
+    "materialScreenshot": null,
+    "greenroomReceiptDirectory": "/Users/noahlyons/.local/state/gpu-greenroom/failed/5288bc11c616"
+  },
+  "priorAttempt": {
+    "jobId": "e37c445caacc",
+    "status": "failed before visual capture",
+    "failure": "capture injected a module-local loader function that was not globally exposed",
+    "report": "/private/tmp/kaminos-sinter-authored-mesh-burn-0923/artifacts/sinter-authored-mesh-smoke-0923/diagnostic/report.json"
+  },
+  "submissionAuthority": "operator authorized the approved saved-trestle diagnostic in this conversation on 2026-09-24",
+  "gpuReadbackPolicy": "GPU diagnostic rendering only; report must retain runtimeReadbackCount=0",
+  "attempt2Outcome": "The browser selected the exact saved scene file and recorded its route and hash, but no captured GPU assembly matched before timeout. No screenshots were produced. This is witness-setup failure, not evidence for or against exposure, temperature, fuel, or char."
+}

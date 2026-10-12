@@ -1,0 +1,18 @@
+{
+  "status": "failed",
+  "scope": "spatial-assay-inspection-required",
+  "phase": "preflight",
+  "sourceCommit": "e9f43e23d758a1d8a75be4f2b4e7da8efe33bdc4",
+  "gitStatus": "?? artifacts/sinter-authored-mesh-smoke-0923/local48-0930/off-canvas.png\n?? artifacts/sinter-authored-mesh-smoke-0923/local48-0930/off.png\n?? artifacts/sinter-authored-mesh-smoke-0923/local48-0930/server.log\n?? artifacts/sinter-authored-mesh-smoke-0923/spatial48-beauty-0930/",
+  "repoRoot": "/private/tmp/kaminos-sinter-local48-0930",
+  "requestedMode": "invalid",
+  "browser": {
+    "executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "headless": false,
+    "pid": 1631
+  },
+  "frames": [],
+  "errors": [],
+  "error": "AssertionError [ERR_ASSERTION]: unsupported spatial assay view\n    at file:///private/tmp/kaminos-sinter-local48-0930/artifacts/sinter-authored-mesh-smoke-0923/spatial-capture.mjs:33:10\n    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:639:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)",
+  "finishedAt": "2026-09-30T15:37:38.974Z"
+}

@@ -445,6 +445,8 @@ assert.match(index, /if \(sceneIsEmpty\(\)\) return;/, 'keyboard save uses the s
 assert.match(index, /setInfo\(localLiquidFailure \? `Scene loaded; water host unavailable: \$\{localLiquidFailure\}` : 'Volume scene loaded'\)/, 'volume-only loads succeed while surfacing a missing liquid host');
 assert.match(index, /if \(objectRecords\.length > 0\) \{[\s\S]*\} else \{\s*clearScene\(\{loadRequestId\}\);[\s\S]*\}/, 'volume-only scene loads clear stale object state under their current request');
 assert.match(index, /setVolumePrimitivesState\(restorePlan\.volumePrimitives\);[\s\S]*if \(hasVolumePrimitiveScene \|\| activeSceneComposition \|\|/, 'object-only scene loads clear stale volume primitive state even when a diagnostic smoke route is requested');
+assert.match(index, /if \(!activeSceneComposition \|\| JSON\.stringify\(previousVolumePrimitiveState\) !== JSON\.stringify\(restorePlan\.volumePrimitives\)\) \{\s*setVolumePrimitivesState\(restorePlan\.volumePrimitives\);\s*\}[\s\S]*if \(hasVolumePrimitiveScene \|\| activeSceneComposition \|\| hasSavedMeshCombustion(?: \|\| [^\n]+)?\)/,
+  'scene restore preserves the mounted composition basin and activates the shared consumer for bound mesh scenes');
 assert.match(index, /const previousSceneFile = currentSceneFile/, 'scene load preserves previous save target until restore succeeds');
 assert.match(index, /const previousVolumePrimitiveState = getVolumePrimitiveState\(\)/, 'scene load snapshots previous volume state before restore mutations');
 assert.match(index, /claimLoadedSceneFile\(file\)/, 'scene load claims current scene file only after successful restore');

@@ -1,0 +1,19 @@
+
+DevTools listening on ws://127.0.0.1:52431/devtools/browser/9eb4c75a-0fea-49aa-bda9-f31eaf624d68
+2026-10-01 13:41:52.898 Google Chrome for Testing Helper[48615:203486812] XPC error for connection com.apple.backupd.sandbox.xpc: Connection invalid
+2026-10-01 13:41:52.929 Google Chrome for Testing Helper[48615:203486812] XPC error for connection com.apple.backupd.sandbox.xpc: Connection invalid
+[48612:203486827:1001/134152.998884:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[48612:203486826:1001/134152.999301:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[48612:203486827:1001/134152.999462:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[48612:203486826:1001/134152.999515:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[48612:203486827:1001/134152.999609:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[48612:203486826:1001/134152.999638:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[48612:203486827:1001/134152.999722:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[48612:203486826:1001/134152.999745:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[48612:203486827:1001/134152.999811:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[48612:203486826:1001/134152.999838:ERROR:ui/display/mac/cv_display_link_mac.mm:195] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[48604:203486737:1001/134156.785274:ERROR:components/os_crypt/common/keychain_password_mac.mm:102] Keychain lookup failed: Error Domain=NSOSStatusErrorDomain Code=-128 "userCanceledErr" (-128)
+[48604:203486736:1001/134156.792798:ERROR:components/password_manager/core/browser/password_store/login_database_async_helper.cc:99] Encryption is not available.
+[48604:203486737:1001/134156.793006:ERROR:components/password_manager/core/browser/password_store/login_database_async_helper.cc:99] Encryption is not available.
+[48604:203486760:1001/134159.495833:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[48604:203486760:1001/134223.619310:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT

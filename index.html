@@ -106,7 +106,7 @@ body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !import
 .navigation-input select { border:0; background:transparent; color:#bbb; font:inherit; }
 #navigation-hint { position:absolute; bottom:10px; left:280px; max-width:calc(100% - 420px); z-index:10; color:#888; text-shadow:0 1px 3px #000; pointer-events:none; font:10px 'SF Mono',monospace; }
 #navigation-hint[data-active="true"] { color:#f4c176; }
-@media (max-width: 760px) { #navigation-hint { left:12px; bottom:70px; max-width:calc(100% - 24px); } }
+@media (max-width: 760px) { #navigation-hint { left:12px; bottom:70px; max-width:calc(100% - 24px); } #viewport { --timber-controls-bottom:110px; } }
 canvas { display: block; }
 #volume-stage-b-producer-media { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; background: #000; }
 #volume-stage-b-producer-media[hidden] { display: none; }
@@ -3692,6 +3692,7 @@ import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-l
 import { createSceneLoadRequests } from './scene-load-generation.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-inlet-1006';
+import { createSavedMeshCombustionAssembly } from './saved-mesh-combustion.mjs';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs?v=flame-doctor-inlet-1006';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
   defaultFlameEmitterPose, normalizeFlameEmitterPose, createFlameEmitterHandle,
@@ -4096,6 +4097,7 @@ let annularBurner = null;
 let burnerRecipe = null;
 let burnerError = null;
 let volumeBridge = null;
+let savedMeshCombustionRuntime = null;
 let motionAgencyState = null;
 let motionDecisionState = null;
 let motionPhraseControlState = null;
@@ -7414,6 +7416,7 @@ function registerSceneObject(object, metadata = {}) {
     label: metadata.label ?? metadata.fileName ?? id,
     groupId: metadata.groupId ?? null,
     createdAt: metadata.createdAt ?? new Date().toISOString(),
+    combustionBinding: metadata.combustionBinding ?? null,
     splat: metadata.splat ?? null,
     image: metadata.image ?? null,
     renderRoute: metadata.renderRoute ?? null,
@@ -7430,6 +7433,7 @@ function registerSceneObject(object, metadata = {}) {
     label: record.label,
     groupId: record.groupId,
     createdAt: record.createdAt,
+    combustionBinding: record.combustionBinding,
     splat: record.splat,
     image: record.image,
     renderRoute: record.renderRoute,
@@ -7525,6 +7529,7 @@ window.kaminosSceneObjectDebugState = function() {
     worldBounds: sceneObjectWorldBoundsState(record.object),
     arrival: record.object?.userData?.kaminosAssetArrival ? { ...record.object.userData.kaminosAssetArrival } : null,
     sceneTransform: record.sceneTransform ? cloneTransformState(record.sceneTransform) : null,
+    combustionBinding: record.combustionBinding ? structuredClone(record.combustionBinding) : null,
     splat: record.splat || null,
     image: record.image || null,
     renderRoute: record.renderRoute || null,
@@ -28413,6 +28418,7 @@ function serializeSceneObject(entry) {
     transform: entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(object),
     sceneTransform: entry.type === 'splat' ? splatSceneTransformState(entry) : null,
     materials: getMaterialStateForObject(object),
+    combustionBinding: metadata.combustionBinding ?? entry.combustionBinding ?? null,
     splat: metadata.splat ?? entry.splat ?? null,
     image: metadata.image ?? entry.image ?? null,
     renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
@@ -28537,6 +28543,35 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
     setActiveSceneObject(activeId && loaded.includes(activeId) ? activeId : loaded[loaded.length - 1]);
   }
   return true;
+}
+
+async function syncSavedSceneCombustionBinding(loadRequestId = null) {
+  const isCurrent = () => loadRequestId === null || sceneLoadRequests.isCurrent(loadRequestId);
+  if (!isCurrent()) return false;
+  const boundEntries = sceneObjects.filter(entry => entry.combustionBinding);
+  if (savedMeshCombustionRuntime?.entries.length === boundEntries.length &&
+      boundEntries.every((entry, index) => savedMeshCombustionRuntime.entries[index] === entry)) return !!boundEntries.length;
+  if (savedMeshCombustionRuntime) {
+    volumePrototype?.clearGpuStructuralCombustionAssembly?.();
+    savedMeshCombustionRuntime.runtime.dispose();
+    savedMeshCombustionRuntime = null;
+  }
+  if (!boundEntries.length) return false;
+  const gpuContext = await volumePrototype.borrowStructuralCombustionGpuContext();
+  if (!isCurrent()) return false;
+  const presentationDebugMode = new URLSearchParams(window.location.search)
+    .get('volume_structural_combustion_view') || 'off';
+  const runtime = await createSavedMeshCombustionAssembly({ THREE, entries: boundEntries, gpuContext, presentationDebugMode });
+  if (!isCurrent()) { runtime.dispose(); return false; }
+  try {
+    const bound = await volumePrototype.setGpuStructuralCombustionAssembly(runtime.assembly, {isCurrent});
+    if (!isCurrent() || bound === false) { runtime.dispose(); return false; }
+    savedMeshCombustionRuntime = { entries: boundEntries, runtime };
+    return true;
+  } catch (error) {
+    runtime.dispose();
+    throw error;
+  }
 }
 
 function buildSceneData(capture = null) {
@@ -29601,6 +29636,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   }
   const objectRecords = restorePlan.objects;
   const hasVolumePrimitiveScene = restorePlan.hasVolumePrimitiveScene;
+  let hasSavedMeshCombustion = false;
 
   try {
     assertSceneObjectsReloadable(objectRecords);
@@ -29690,6 +29726,8 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     try {
       const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId));
       if (!loadStage.current || !loadStage.value || !sceneLoadRequests.isCurrent(loadRequestId)) return;
+      hasSavedMeshCombustion = await syncSavedSceneCombustionBinding(loadRequestId);
+      if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
     } catch (e) {
       if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
       setFlameDomainTranslation(previousFlameDomainTranslation);
@@ -29707,6 +29745,8 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
       if (!hostStage.current) return;
     }
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
+    hasSavedMeshCombustion = await syncSavedSceneCombustionBinding(loadRequestId);
+    if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   }
   if (activeSceneComposition && window.__kaminosVolumeEmitterReceipt?.effective?.family !== 'cluster') {
     ensureAuthoredFlameEmitter();
@@ -29721,7 +29761,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   if (!activeSceneComposition || JSON.stringify(previousVolumePrimitiveState) !== JSON.stringify(restorePlan.volumePrimitives)) {
     setVolumePrimitivesState(restorePlan.volumePrimitives);
   }
-  if (hasVolumePrimitiveScene || activeSceneComposition || new URLSearchParams(location.search).get('kaminos_volume_smoke') === '1') {
+  if (hasVolumePrimitiveScene || activeSceneComposition || hasSavedMeshCombustion || new URLSearchParams(location.search).get('kaminos_volume_smoke') === '1') {
     setActiveTab(activeSceneComposition ? 'assets' : 'volume', { reveal: false });
     await volumePrototype?.setActive?.(true);
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
@@ -29977,7 +30017,35 @@ sceneInitialization.then(() => {
       const preset = new URLSearchParams(location.search).get('settings_preset');
       if (preset !== plan.composition.flame.presetId) throw new Error('Mounted basin does not match the saved scene');
     }
+    const timberExperiment = new URLSearchParams(location.search).get('timber_ignition_smoke') === '1';
+    if (timberExperiment) volumePrototype.setSimulationPaused(true);
     await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
+    if (timberExperiment) {
+      const { mountTimberIgnitionSmoke } = await import('./timber-ignition-smoke.mjs');
+      const burnerFlow = readVolumeControls().flowRate;
+      const burnerPose = structuredClone(flameEmitterPose);
+      await mountTimberIgnitionSmoke({
+        setBurner(enabled) {
+          setVolumeControlValue(volumeSceneControlId('flowRate'), enabled ? burnerFlow : 0);
+          volumePrototype.setControls(readVolumeControls());
+          flameEmitterInjectionSuspended = !enabled;
+          applyFlameEmitterPose(burnerPose, { sourceEnabled: enabled });
+          updateVolumeControlLabels();
+          return { enabled, flowRate: volumePrototype.debugState().controls.flowRate };
+        },
+        async restoreScene() {
+          const previous = savedMeshCombustionRuntime?.runtime.assembly;
+          await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
+          if (sceneSaveBlockedByFailedRestore || !savedMeshCombustionRuntime
+            || savedMeshCombustionRuntime.runtime.assembly === previous) {
+            throw new Error('Fresh timber scene restoration failed');
+          }
+          // The ordinary saved-scene loader rebuilds the fluid through its
+          // primitive restore, while the new mesh assembly owns fresh material.
+          return { freshFluid: volumePrototype.debugState().simStepCount === 0, freshMaterial: true };
+        },
+      });
+    }
   }).catch(error => {
     // Only an authored composition restore blocks saving; ordinary routes keep
     // their own failure reporting (the volume route reports separately).
