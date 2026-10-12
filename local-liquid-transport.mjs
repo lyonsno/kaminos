@@ -71,6 +71,8 @@ fn liquidWorldNormalAtRadius(pixel: vec2<i32>, requestedRadius: i32, backSurface
   let radii = array<i32, 3>(requestedRadius, min(requestedRadius, 3), 1);
   for (var index = 0u; index < 3u; index = index + 1u) {
     let radius = radii[index];
+    // Repeating a failed stencil cannot change either tangent in this frame.
+    if (index > 0u && radius == radii[index - 1u]) { continue; }
     if (!hasX) {
       let left = liquidDepthPoint(pixel + vec2<i32>(-radius, 0), depth, backSurface);
       let right = liquidDepthPoint(pixel + vec2<i32>(radius, 0), depth, backSurface);

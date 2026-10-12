@@ -9592,13 +9592,26 @@ fn traceDeferredSceneInterval(rayOrigin: vec3<f32>, rayDirection: vec3<f32>, min
   let dims = vec2<i32>(textureDimensions(deferredLinearDepthObject));
   let dimsFloat = vec2<f32>(dims);
   var distance = select(0.055, minimumDistance, hostScene);
+  // Projection is linear before the perspective divide. Transform this ray
+  // once rather than applying the camera matrix at every search sample.
+  let rayClipOrigin = params.viewProjection * vec4<f32>(rayOrigin, 1.0);
+  let rayClipDirection = params.viewProjection * vec4<f32>(rayDirection, 0.0);
+  let rayViewOrigin = dot(rayOrigin - params.cameraPosition.xyz, params.cameraForward.xyz);
+  let rayViewRate = dot(rayDirection, params.cameraForward.xyz);
   for (var stepIndex = 0u; stepIndex < 24u; stepIndex = stepIndex + 1u) {
     if (waterSegment) {
       distance = minimumDistance + (maximumDistance - minimumDistance) * f32(stepIndex) / 23.0;
     }
     if (distance > maximumDistance) { break; }
-    let samplePosition = rayOrigin + rayDirection * distance;
-    let projected = projectWorldToDeferred(samplePosition);
+    let clip = rayClipOrigin + rayClipDirection * distance;
+    if (abs(clip.w) <= 0.001) {
+      distance = distance + 0.05 + distance * 0.105;
+      continue;
+    }
+    let ndc = clip.xy / clip.w;
+    let viewDepth = rayViewOrigin + rayViewRate * distance;
+    let projected = vec4<f32>(ndc.x * 0.5 + 0.5, -ndc.y * 0.5 + 0.5,
+      viewDepth, select(0.0, 1.0, viewDepth > 0.001));
     if (projected.w < 0.5 || any(projected.xy <= vec2<f32>(0.001)) || any(projected.xy >= vec2<f32>(0.999))) {
       distance = distance + 0.05 + distance * 0.105;
       continue;
