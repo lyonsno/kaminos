@@ -20,7 +20,7 @@ export function createFluidFrameTiming(device) {
   let sample=null,failure=null,querySet=null,resolveBuffer=null,readback=null,preparation=null,prepared=false;
   let entries=[],restore=null,invalid=null;
   const read=()=>structuredClone({enabled,available:device.features.has('timestamp-query'),status:failure?'failed':preparation&&!prepared?'preparing':pending?'reading':active?'encoding':enabled?(sample?'measured':'awaiting_frame'):'disabled',failure,sample});
-  function setEnabled(value){if(typeof value!=='boolean')throw Error('Timing enabled must be boolean');enabled=value;if(value&&failure&&!pending){querySet?.destroy();resolveBuffer?.destroy();readback?.destroy();querySet=resolveBuffer=readback=null;failure=null;preparation=null;prepared=false;}return read();}
+  function setEnabled(value){if(disposed)throw Error('Timing viewport is disposed');if(typeof value!=='boolean')throw Error('Timing enabled must be boolean');enabled=value;if(value&&failure&&!pending){querySet?.destroy();resolveBuffer?.destroy();readback?.destroy();querySet=resolveBuffer=readback=null;failure=null;preparation=null;prepared=false;}return read();}
   async function prepare(){
     let q,r,b;
     device.pushErrorScope('out-of-memory');device.pushErrorScope('validation');
@@ -30,7 +30,8 @@ export function createFluidFrameTiming(device) {
       r=device.createBuffer({label:'fluid-budget-resolve',size:QUERY_COUNT*8,usage:GPUBufferUsage.QUERY_RESOLVE|GPUBufferUsage.COPY_SRC});
       b=device.createBuffer({label:'fluid-budget-readback',size:QUERY_COUNT*8,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
     }catch(error){thrown=error;}
-    const validation=await device.popErrorScope(),memory=await device.popErrorScope();
+    const validationResult=device.popErrorScope(),memoryResult=device.popErrorScope();
+    const [validation,memory]=await Promise.all([validationResult,memoryResult]);
     if(disposed||thrown||validation||memory){q?.destroy();r?.destroy();b?.destroy();if(!disposed)failure=String(thrown??validation?.message??memory?.message);return;}
     querySet=q;resolveBuffer=r;readback=b;prepared=true;
   }

@@ -65,7 +65,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
   const resolveWater=quad(vec4(highSceneDepth.greaterThan(0).and(highSceneDepth.lessThan(waterViewDepth.sub(.002))).select(texture(colorTarget.texture).rgb,resolvedWaterColor),1));
   const timing=createFluidFrameTiming(device);
   let renderScale=1;
-  const setRenderScale=value=>{if(!Number.isFinite(value)||value<=0||value>1)throw Error('Water render scale must be above zero and at most 100%');renderScale=value;return renderScale;};
+  const setRenderScale=value=>{if(disposed)throw Error('Fluid viewport disposed');if(!Number.isFinite(value)||value<=0||value>1)throw Error('Water render scale must be above zero and at most 100%');renderScale=value;return renderScale;};
   colorTarget.texture.name='Local liquid host color'; outputTarget.texture.name='Local liquid composed color';
   depthTarget.texture.name='Local liquid host linear depth';
   const depthMaterial = new THREE.NodeMaterial(); depthMaterial.fragmentNode=vec4(positionView.z.negate(),0,0,1);
