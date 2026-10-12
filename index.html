@@ -2317,8 +2317,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div class="slider-row">
       <span class="slider-label">Render Scale</span>
-      <input type="range" id="volume-render-scale" min="0.1" max="0.3" step="0.001" value="0.3" data-effective-value="0.3" data-render-scale-mode="low">
-      <button type="button" class="btn" id="volume-render-scale-full" aria-pressed="false">Full</button>
+      <input type="range" id="volume-render-scale" min="0.1" max="1" step="any" value="0.3" data-effective-value="0.3" data-render-scale-mode="low">
       <span class="slider-val" id="volume-render-scale-val">30.0%</span>
     </div>
     <div class="slider-row">
@@ -3696,7 +3695,7 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances} from './scene-collision-debug.mjs';
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID} from './scene-fire-domain.mjs';
-import { createFlameAuthoring, createFlameInspector } from './flame-authoring.mjs';
+import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue } from './flame-authoring.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
@@ -3884,17 +3883,14 @@ function syncKilnCollisionControl(collision=volumePrototype?.debugState?.().scen
     : collision.effective==='mesh-voxel-solid'?`Active · ${collision.solidCellCount.toLocaleString()} solid cells`
     : `Unavailable · ${collision.reason||'waiting for the kiln mesh'}`;
   if(status.textContent!==text)status.textContent=text;
-  const resolution=document.getElementById('kiln-collision-resolution');
-  if(resolution)resolution.value=document.getElementById('volume-resolution').value;
+  const voxelResolution=document.getElementById('kiln-voxel-resolution');
+  if(voxelResolution){const grid=Number(document.getElementById('volume-resolution').value);voxelResolution.textContent=`${grid}×${grid*2}×${grid} · tied to simulation`;}
   syncCollisionVoxelView();
 }
 
 function installKilnCollisionControl(host) {
-  const panel=document.createElement('section');panel.innerHTML='<h3>Collision</h3><label class="slider-row"><span class="slider-label">Kiln collision</span><input type="checkbox" id="kiln-collision-enabled"></label><p id="kiln-collision-status" class="flame-scope" aria-live="polite"></p><label class="slider-row"><span class="slider-label">Show solid voxels</span><input type="checkbox" id="kiln-collision-voxels"></label><label class="slider-row"><span class="slider-label">Collision / simulation resolution</span><select class="transform-input" id="kiln-collision-resolution" data-authoring-alias="volume-resolution"></select></label><p class="flame-scope">One shared grid. Changing resolution restarts the fluid. Cyan voxels show the installed solid mask, including the source backing wall when enabled.</p>';
+  const panel=document.createElement('section');panel.innerHTML='<h3>Collision</h3><label class="slider-row"><span class="slider-label">Kiln collision</span><input type="checkbox" id="kiln-collision-enabled"></label><p id="kiln-collision-status" class="flame-scope" aria-live="polite"></p><label class="slider-row"><span class="slider-label">Show solid voxels</span><input type="checkbox" id="kiln-collision-voxels"></label><label class="slider-row"><span class="slider-label">Voxel resolution</span><output id="kiln-voxel-resolution" class="flame-scope"></output></label><p class="flame-scope">This fire solver uses the simulation grid for collisions. Cyan voxels show the installed solid mask, including the source backing wall when enabled.</p>';
   host.append(panel);
-  const resolution=document.getElementById('kiln-collision-resolution'),source=document.getElementById('volume-resolution');
-  for(const option of source.options)resolution.append(option.cloneNode(true));
-  resolution.onchange=()=>{source.value=resolution.value;source.dispatchEvent(new Event('change',{bubbles:true}));};
   document.getElementById('kiln-collision-voxels').onchange=event=>{collisionVoxelVisible=event.target.checked;syncCollisionVoxelView();window._kaminosDirty?.();};
   const edits=scenePlacementTools.edits;
   edits.register('@kiln-collision',{read:()=>({enabled:isAuthoredKilnCollisionRoute()}),write:writeKilnCollisionState,
@@ -16613,34 +16609,17 @@ function effectivePressureModeLabel(mode, effectiveIterations) {
 }
 
 function readVolumeRenderScaleControlValue() {
-  const control = document.getElementById('volume-render-scale');
-  if (!control) return 0.3;
-  const effective = Number(control.dataset.effectiveValue);
-  if (Number.isFinite(effective)) return Math.max(0.1, Math.min(1, effective));
-  const visible = Number(control.value);
-  return Number.isFinite(visible) ? Math.max(0.1, Math.min(0.3, visible)) : 0.3;
+  const control=document.getElementById('volume-render-scale');
+  const value=Number(control?.value);
+  return Number.isFinite(value)?Math.max(.1,Math.min(1,value)):.3;
 }
 
 function setVolumeRenderScaleControlValue(value) {
-  const control = document.getElementById('volume-render-scale');
-  if (!control) return;
-  const requested = Number(value);
-  const effective = Number.isFinite(requested) ? Math.max(0.1, Math.min(1, requested)) : 0.3;
-  const mode = Math.abs(effective - 1) < 1e-9 ? 'full' : (effective <= 0.3 ? 'low' : 'legacy');
-  control.dataset.effectiveValue = String(effective);
-  control.dataset.renderScaleMode = mode;
-  control.value = String(Math.max(0.1, Math.min(0.3, effective)));
-  const full = document.getElementById('volume-render-scale-full');
-  if (full) {
-    const fullActive = mode === 'full';
-    full.classList.toggle('active', fullActive);
-    full.setAttribute('aria-pressed', fullActive ? 'true' : 'false');
-    full.title = mode === 'legacy'
-      ? `Loaded legacy render scale ${(effective * 100).toFixed(1)}%; move the slider for 10.0–30.0% or select Full`
-      : 'Render at full resolution';
-  }
-  const label = document.getElementById('volume-render-scale-val');
-  if (label) label.textContent = `${(effective * 100).toFixed(1)}%`;
+  const control=document.getElementById('volume-render-scale');if(!control)return;
+  const requested=Number(value),effective=Number.isFinite(requested)?Math.max(.1,Math.min(1,requested)):.3;
+  control.value=String(effective);
+  control.dataset.effectiveValue=String(effective); // compatibility projection; value is authoritative.
+  const label=document.getElementById('volume-render-scale-val');if(label)label.textContent=`${(effective*100).toFixed(1)}%`;
 }
 
 function adoptVolumeRenderScaleSliderValue() {
@@ -24339,12 +24318,6 @@ async function initKaminosVolumeRoute() {
   };
   await volumeCockpitLayoutReady;
   hideVolumeLegacyPyroSurfaceForTopologyBranch();
-  document.getElementById('volume-render-scale-full')?.addEventListener('click', () => {
-    const lowBandValue = Number(document.getElementById('volume-render-scale').value);
-    const nextValue = readVolumeRenderScaleControlValue() === 1 ? lowBandValue : 1;
-    setVolumeRenderScaleControlValue(nextValue);
-    syncControls({ target: document.getElementById('volume-render-scale-full') });
-  });
   // Authoring a pattern clears a retired request kept from a saved route.
   document.getElementById('volume-emitter-aperture-pattern').addEventListener('change', () => { delete document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest; });
   for (const id of [
@@ -25843,7 +25816,7 @@ function installAuthoringParameterEditing() {
       setVolumeControlValue(control.id,state.value);
       control.dispatchEvent(new Event('input',{bubbles:true}));
       control.dispatchEvent(new Event('change',{bubbles:true}));
-      document.querySelectorAll(`[data-authoring-alias="${control.id}"]`).forEach(alias=>{if(alias.type==='checkbox')alias.checked=control.checked;else alias.value=control.value;});
+      document.querySelectorAll(`[data-authoring-alias="${control.id}"]`).forEach(alias=>{if(alias.type==='checkbox')alias.checked=control.checked;else alias.value=String(flameControlDisplayValue(control.id,control.value));});
     };
     const check=state=>{
       if(control.id==='emitter-assay-family'&&state.value==='cluster')throw Error('Cluster bowl is not a placeable flame; use Workbench');
@@ -25913,7 +25886,7 @@ function installAuthoringParameterEditing() {
   }
   edits.subscribe(()=>{
     flameInspector?.sync();
-    document.querySelectorAll('[data-authoring-alias]').forEach(alias=>{if(document.activeElement!==alias){const source=document.getElementById(alias.dataset.authoringAlias);if(alias.type==='checkbox')alias.checked=source.checked;else alias.value=source.value;}});
+    document.querySelectorAll('[data-authoring-alias]').forEach(alias=>{if(document.activeElement!==alias){const source=document.getElementById(alias.dataset.authoringAlias);if(alias.type==='checkbox')alias.checked=source.checked;else alias.value=String(flameControlDisplayValue(source.id,source.value));}});
   });
   syncRimAuthoringHandle();
 }

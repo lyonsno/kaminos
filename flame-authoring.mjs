@@ -48,7 +48,13 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
 
 // UI grouping describes the current singleton flame and its shared domain. It
 // does not assign simulator-wide coefficients to independent scene emitters.
+export function flameControlDisplayValue(id,value) {return id==='volume-render-scale'?Number(value)*100:value;}
+export function flameControlSourceValue(id,value) {return id==='volume-render-scale'?Number(value)/100:value;}
 export const FLAME_PROPERTY_GROUPS = [
+  { name:'Quality', open:true, scope:'Grid changes restart the fluid. Raymarch controls tune the viewport.', fields:[
+    ['volume-resolution','Simulation resolution'], ['volume-steps','Ray count'],
+    ['volume-adaptive-rays','Adaptive rays'], ['volume-render-scale','Screen resolution (%)'],
+  ] },
   { name:'Appearance', open:true, scope:'Shared flame and smoke appearance', fields:[
     ['volume-physical-temperature','Temperature'], ['volume-physical-spread','Temperature spread'],
     ['volume-physical-thermal','Thermal response'], ['volume-physical-clean','Clean flame'],
@@ -74,7 +80,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-wind-angle','Wind direction'], ['volume-wind-height','Wind height'],
   ] },
   { name:'Simulation', scope:'Shared domain · resolution changes restart the fluid', fields:[
-    ['volume-resolution','Resolution'], ['volume-pressure-solver','Pressure solver'],
+    ['volume-pressure-solver','Pressure solver'],
     ['volume-pressure-solver-iterations','Iterations'], ['volume-advection-scheme','Advection'],
     ['volume-confinement','Confinement'], ['volume-time-step','Time stepping'],
     ['volume-common-gas-transport','Common gas transport'],
@@ -139,21 +145,22 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       field.className='transform-input';field.dataset.authoringAlias=id;field.id=`selected-${id}`;grip.htmlFor=field.id;
       field.setAttribute('aria-label',`Flame ${label}`);
       field.dataset.authoringDragStep=source.step==='any'?'.01':source.step||'.01';
+      if(id==='volume-render-scale')field.title='Raymarch width and height as a percentage of the viewport';
       function syncField(force=false) {
         const bounds=readControlBounds(id);
         for(const key of ['min','max']) {
           if(bounds) source[key]=String(bounds[key]);
-          if(source[key])field[key]=source[key];
+          if(source[key])field[key]=String(flameControlDisplayValue(id,source[key]));
         }
         if(force!==true&&document.activeElement===field)return;
-        if(field.type==='checkbox')field.checked=source.checked;else field.value=source.value;
+        if(field.type==='checkbox')field.checked=source.checked;else field.value=String(flameControlDisplayValue(id,source.value));
       }
       if(id==='emitter-assay-family')field.title='Placeable flame shapes. Cluster bowl is available in Workbench.';
       const eventName=source.tagName==='SELECT'||source.type==='checkbox'?'change':'input';
       field.addEventListener(eventName,()=>{
         if(id==='emitter-assay-family'&&!authoredFlameShapeOptions(source.options).some(option=>option.value===field.value)){syncField(true);onError(Error('Cluster bowl is not a placeable flame; use Workbench'));return;}
         if(field.type==='number'&&(!field.value.trim()||!field.validity.valid))return;
-        if(field.type==='checkbox')source.checked=field.checked;else source.value=field.value;
+        if(field.type==='checkbox')source.checked=field.checked;else source.value=String(flameControlSourceValue(id,field.value));
         source.dispatchEvent(new Event(eventName,{bubbles:true}));
       });
       source.addEventListener('input',syncField);source.addEventListener('change',syncField);
@@ -161,7 +168,8 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       if(group.name==='Emission')emissionRows.push({id,row});
     }
     if(group.name==='Emission')section.append(runtimeStatus);
-    (group.name==='Emission'?host:sharedHost).append(section);
+    if(group.name==='Quality')sharedHost.insertBefore(section,sharedHost.querySelector('.flame-domain-controls')||basin);
+    else (group.name==='Emission'?host:sharedHost).append(section);
   }
   const more=document.createElement('button');more.type='button';more.className='btn';more.textContent='All controls in Workbench';more.onclick=openWorkbench;sharedHost.append(more);
   function sync(force=false) {
