@@ -40,9 +40,9 @@ test('the API: refuses without a device or timestamp queries; encodes N+1 steps 
   assert.match(api, /if \(!gpuInitialized \|\| !device\) return \{ status: 'unsupported', reason: 'gpu-not-initialized', \.\.\.meta \};/);
   assert.match(api, /if \(!timestampQueriesAvailable\(\)\) return \{ status: 'unsupported', reason: device\.features\?\.has\?\.\('timestamp-query'\) \? 'timestamp-query-write-api-unavailable' : 'timestamp-query-not-supported', \.\.\.meta \};/);
   assert.match(api, /for \(let i = 0; i < count; i \+= 1\) \{\n\s+if \(!encodeSim\(encoder, \{ finalTimestampWrites: \{ querySet, endOfPassWriteIndex: i \} \}\)\) throw new Error\('simulation-final-timestamp-unavailable'\);\n\s+\}/);
-  assert.match(api, /encoder\.resolveQuerySet\(querySet, 0, count, resolveBuffer, 0\);/);
+  assert.match(api, /encoder\.resolveQuerySet\(querySet, 0, count \+ 2 \* draws, resolveBuffer, 0\);/);
   assert.match(api, /const timestamps = Array\.from\(new BigUint64Array\(readbackBuffer\.getMappedRange\(\)\.slice\(0\)\)\);/);
-  assert.match(api, /return simStepGpuProfileFromTimestamps\(timestamps, meta\);/);
+  assert.match(api, /const profile = simStepGpuProfileFromTimestamps\(timestamps\.slice\(0, count\), meta\);/);
   assert.match(api, /querySet\.destroy\(\); resolveBuffer\.destroy\(\); readbackBuffer\.destroy\(\);/, 'resources released on every path');
   assert.match(api, /iterations: state\.pressureSolver\?\.effective\?\.iterations \?\? null/, 'the receipt names the sweep count it measured');
 });
@@ -59,4 +59,19 @@ test('capture: @simGpuProfile=N samples the profile and the arm fails unless it 
   assert.match(simGpuProfileMismatch({ ...good, stepMs: [3, Number.NaN] }, 2), /non-positive or non-finite/);
   assert.match(simGpuProfileMismatch({ ...good, stepMs: [3, 0] }, 2), /non-positive or non-finite/);
   assert.match(simGpuProfileMismatch({ ...good, timestampAuthority: 'cpu-clock' }, 2), /authority cpu-clock/);
+});
+
+// The frame also pays for the raymarch draw: the profile times K draws into the
+// offscreen frame texture (begin and end timestamps per draw), so the step and
+// the draw can be compared on one GPU clock.
+test('draw timing: begin/end pairs to draw times; the API times K raymarch draws after the steps', () => {
+  assert.deepEqual(core.gpuPassDurationsFromTimestampPairs([100n, 2000100n], [1500100n, 4000100n]), { status: 'sampled', passMs: [1.5, 2], medianMs: 1.75 });
+  assert.deepEqual(core.gpuPassDurationsFromTimestampPairs([0n], [10n]), { status: 'invalid', reason: 'unwritten-timestamp' });
+  assert.deepEqual(core.gpuPassDurationsFromTimestampPairs([10n], [5n]), { status: 'invalid', reason: 'end-before-begin' });
+  assert.deepEqual(core.gpuPassDurationsFromTimestampPairs([], []), { status: 'invalid', reason: 'no-passes' });
+  const api = closure.slice(closure.indexOf('    async sampleSimStepGpuProfile(steps = 8) {'), closure.indexOf('    setConfinementEpsilonOverride(value) {'));
+  assert.match(api, /const draws = 4;/);
+  assert.match(api, /const querySet = device\.createQuerySet\(\{ type: 'timestamp', count: count \+ 2 \* draws \}\);/);
+  assert.match(api, /encodeDraw\(encoder, frameTexture\.createView\(\), 'kaminos sim gpu profile raymarch', readbackPipeline, \{ timestampWrites: \{ querySet, beginningOfPassWriteIndex: count \+ 2 \* j, endOfPassWriteIndex: count \+ 2 \* j \+ 1 \} \}\);/);
+  assert.match(api, /render: drawsAvailable\n\s+\? \{ \.\.\.gpuPassDurationsFromTimestampPairs\(drawBegins, drawEnds\), size: \[state\.width, state\.height\], renderScale: state\.renderScale \?\? null, pipeline: 'readback-rgba8unorm' \}\n\s+: \{ status: 'unsupported', reason: 'readback-pipeline-unavailable' \}/);
 });

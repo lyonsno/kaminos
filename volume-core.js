@@ -2878,6 +2878,21 @@ export function simStepGpuProfileFromTimestamps(timestamps, meta = {}) {
   };
 }
 
+// Durations of passes timed with a begin and an end timestamp each (ns), in
+// ms; unwritten or reversed pairs are refused.
+export function gpuPassDurationsFromTimestampPairs(begins, ends) {
+  const b = Array.from(begins, value => BigInt(value)), e = Array.from(ends, value => BigInt(value));
+  if (!b.length || b.length !== e.length) return { status: 'invalid', reason: 'no-passes' };
+  if ([...b, ...e].some(value => value <= 0n)) return { status: 'invalid', reason: 'unwritten-timestamp' };
+  const passMs = [];
+  for (let i = 0; i < b.length; i += 1) {
+    if (e[i] < b[i]) return { status: 'invalid', reason: 'end-before-begin' };
+    passMs.push(Number(e[i] - b[i]) / 1e6);
+  }
+  const sorted = [...passMs].sort((x, y) => x - y), middle = Math.floor(sorted.length / 2);
+  return { status: 'sampled', passMs, medianMs: sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2 };
+}
+
 function normalizePressureSolverSweeps(value) {
   const requested = Math.round(Number(value));
   if (!Number.isFinite(requested)) return PRESSURE_SOLVER_DEFAULT_SWEEPS;
@@ -26526,21 +26541,36 @@ export function createKaminosVolumePrototype({
       if (!gpuInitialized || !device) return { status: 'unsupported', reason: 'gpu-not-initialized', ...meta };
       if (!timestampQueriesAvailable()) return { status: 'unsupported', reason: device.features?.has?.('timestamp-query') ? 'timestamp-query-write-api-unavailable' : 'timestamp-query-not-supported', ...meta };
       const count = n + 1;
-      const querySet = device.createQuerySet({ type: 'timestamp', count });
-      const resolveBuffer = device.createBuffer({ label: 'kaminos sim step gpu profile resolve', size: count * 8, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
-      const readbackBuffer = device.createBuffer({ label: 'kaminos sim step gpu profile readback', size: count * 8, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      // Then K raymarch draws into the offscreen frame texture, timed begin to
+      // end, so the step and the draw share one GPU clock.
+      const draws = 4;
+      const querySet = device.createQuerySet({ type: 'timestamp', count: count + 2 * draws });
+      const resolveBuffer = device.createBuffer({ label: 'kaminos sim step gpu profile resolve', size: (count + 2 * draws) * 8, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+      const readbackBuffer = device.createBuffer({ label: 'kaminos sim step gpu profile readback', size: (count + 2 * draws) * 8, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
       try {
         const encoder = device.createCommandEncoder({ label: 'kaminos sim step gpu profile' });
         for (let i = 0; i < count; i += 1) {
           if (!encodeSim(encoder, { finalTimestampWrites: { querySet, endOfPassWriteIndex: i } })) throw new Error('simulation-final-timestamp-unavailable');
         }
-        encoder.resolveQuerySet(querySet, 0, count, resolveBuffer, 0);
-        encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, count * 8);
+        const drawsAvailable = Boolean(readbackPipeline);
+        if (drawsAvailable) {
+          ensureFrameTexture();
+          for (let j = 0; j < draws; j += 1) {
+            encodeDraw(encoder, frameTexture.createView(), 'kaminos sim gpu profile raymarch', readbackPipeline, { timestampWrites: { querySet, beginningOfPassWriteIndex: count + 2 * j, endOfPassWriteIndex: count + 2 * j + 1 } });
+          }
+        }
+        encoder.resolveQuerySet(querySet, 0, count + 2 * draws, resolveBuffer, 0);
+        encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, (count + 2 * draws) * 8);
         device.queue.submit([encoder.finish()]);
         await readbackBuffer.mapAsync(GPUMapMode.READ);
         const timestamps = Array.from(new BigUint64Array(readbackBuffer.getMappedRange().slice(0)));
         readbackBuffer.unmap();
-        return simStepGpuProfileFromTimestamps(timestamps, meta);
+        const profile = simStepGpuProfileFromTimestamps(timestamps.slice(0, count), meta);
+        const drawBegins = [], drawEnds = [];
+        for (let j = 0; j < draws; j += 1) { drawBegins.push(timestamps[count + 2 * j]); drawEnds.push(timestamps[count + 2 * j + 1]); }
+        return { ...profile, render: drawsAvailable
+          ? { ...gpuPassDurationsFromTimestampPairs(drawBegins, drawEnds), size: [state.width, state.height], renderScale: state.renderScale ?? null, pipeline: 'readback-rgba8unorm' }
+          : { status: 'unsupported', reason: 'readback-pipeline-unavailable' } };
       } catch (error) {
         return { status: 'failed', reason: error?.message || String(error), ...meta };
       } finally {
