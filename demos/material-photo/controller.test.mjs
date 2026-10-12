@@ -3,12 +3,12 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { test } from 'node:test';
 
-async function controller() {
+async function controller({examples=false,search='?sample=celebration'}={}) {
   const behavior = { failDevice: false, failMaterials: false, deviceRequests: 0, geometryRuns:0, materialRuns:0, cache:new Map(), gates: new Map() };
   const node = dataset => ({ dataset, style: {}, value: '', disabled: false, hidden: false, checked: false, textContent: '', captures:new Set(),
     classList: { toggle() {},add(){},remove(){} }, removeAttribute() {}, setAttribute() {}, addEventListener() {},
     setPointerCapture(id) {this.captures.add(id);}, releasePointerCapture(id) {this.captures.delete(id);},hasPointerCapture(id){return this.captures.has(id);}, getBoundingClientRect: () => ({ left:0,top:0,width: 400, height: 400 }) });
-  const ids=['workspace','controls','tuning-toggle','status','preview','scene','stage-label','run','file','map','light','height','exposure','gi','reset','name','resolution','progress','elapsed','timings','identity',
+  const ids=['provenance','job-status','view-result','workspace','controls','tuning-toggle','status','preview','scene','stage-label','run','file','map','light','height','exposure','gi','reset','name','resolution','progress','elapsed','timings','identity',
     'view-prev','view-next','sun','glow','advanced','tuning','preset-export','preset-import','preset-file','preset-error','material-size','compare','light-ring','environment','environment-status','environment-rotation','environment-intensity','direct-intensity',
     'gi-view','contrast-mode','roughness-strength','metallic-strength','roughness-strength-value','metallic-strength-value','contrast-readout','bloom',
     ...['glowIntensity','glowThreshold','emissionReflection','bloomIntensity','bloomRadius','bloomThreshold','exposure'].flatMap(key=>[key,`${key}-value`]),
@@ -61,18 +61,18 @@ async function controller() {
     setMaterialStatus(value) { this.materialStatus=value; }
     async dispose() {}
   }
-  class MoGe { async init() { this.useRealWeights = true; this.weightsSource = 'local'; } async dispose() {} async run() { behavior.geometryRuns++;return { width:4,height:4,routeResult:{ receipt } }; } }
+  class MoGe { async init() { this.useRealWeights = true; this.weightsSource = 'local'; } async dispose() {} async run() { behavior.geometryRuns++;return { width:4,height:4,depth:new Float32Array(16).fill(1),normals:new Float32Array(48).fill(1),routeResult:{ receipt } }; } }
   const kit = {
     requestBrowserWebGpuDevice: async () => { behavior.deviceRequests++; if (behavior.failDevice) throw Error('Transient setup failure'); return { device, adapter:{}, backendIdentity:{ kind:'webgpu-local' } }; },
     createWebGpuInferenceSession: async () => session,
     createWebGpuInferenceControl: () => ({ async close() {} }),
   };
   const supermat = { SUPERMAT_ROUTE_ID:'supermat.image-to-pbr.webgpu-local.v0', superMatDeviceOptions:async()=>({}),
-    createSuperMatAdapter: async options => {behavior.profile=options;return { identity:{}, async run(input) { behavior.materialRuns++;behavior.materialSize=input.size;if(behavior.failMaterials)throw Error('Material failure'); return { width:input.size,height:input.size,timings:{},dutyCount:1 }; } };} };
+    createSuperMatAdapter: async options => {behavior.profile=options;behavior.onLoad?.();if(behavior.loadGate)await behavior.loadGate;return { identity:{}, async run(input) { behavior.materialRuns++;behavior.materialSize=input.size;behavior.inputPixel=input.image.data[0];behavior.onRun?.();if(behavior.runGate)await behavior.runGate;if(behavior.failMaterials)throw Error('Material failure'); return { width:input.size,height:input.size,timings:{},dutyCount:1 }; } };} };
   class Canvas { constructor(width,height) { this.width=width;this.height=height; } getContext() { return { drawImage:bitmap=>{this.pixel=bitmap.pixel;}, getImageData: () => ({ width:this.width,height:this.height,data:new Uint8ClampedArray(this.width*this.height*4).fill(this.pixel) }) }; } }
   class BlobURL extends URL { static createObjectURL() { return 'blob:test'; } static revokeObjectURL() {} }
   const response = (url='') => ({ ok:true, blob:async()=>({pixel:url.includes('bag')?2:url.includes('evil-orb')?3:1}) });
-  const context = vm.createContext({ document, navigator:{gpu:{}}, location:{search:''}, window:{}, URL:BlobURL, URLSearchParams,
+  const context = vm.createContext({ document, navigator:{gpu:{}}, location:{search}, window:{}, URL:BlobURL, URLSearchParams,
     OffscreenCanvas:Canvas, Uint8ClampedArray, Uint8Array, performance, crypto, Blob,
     createImageBitmap:async blob=>{if(behavior.bitmapGate)await behavior.bitmapGate;return {width:4,height:4,pixel:blob.pixel,close(){}};},
     fetch:async url => behavior.gates.has(url) ? behavior.gates.get(url).promise : response(url),
@@ -80,12 +80,19 @@ async function controller() {
   });
   const source = new vm.SourceTextModule(await readFile(new URL('./main.js',import.meta.url),'utf8'), { context });
   await source.link(async specifier => {
+    if(specifier==='./included-examples.js')return new vm.SyntheticModule(['loadIncludedExample'],function(){
+      this.setExport('loadIncludedExample',async(key,inputKey,size)=>{
+        if(!examples)return null;
+        if(behavior.exampleGate)await behavior.exampleGate;
+        return {depth:{width:4,height:4},output:{width:512,height:512},provenance:{source:'included-example',inputKey,size:512,modelRevision:'test'}};
+      });
+    },{context});
     if(specifier==='./inference-cache.js')return new vm.SyntheticModule(['createInferenceCache','photoCacheKey','retainedGeometry'],function(){
       this.setExport('retainedGeometry',value=>value);
       this.setExport('photoCacheKey',async image=>`pixels:${image.data[0]}`);
       this.setExport('createInferenceCache',()=>({async get(key){return structuredClone(behavior.cache.get(key)??null);},async put(key,value){behavior.cache.set(key,structuredClone(value));return true;}}));
     },{context});
-    if (['./photo-contracts.js','./demo-defaults.js'].includes(specifier)) return new vm.SourceTextModule(await readFile(new URL(specifier,import.meta.url),'utf8'), { context });
+    if (['./photo-contracts.js','./photo-surface.js','./demo-defaults.js'].includes(specifier)) return new vm.SourceTextModule(await readFile(new URL(specifier,import.meta.url),'utf8'), { context });
     const exports = specifier.includes('/core.js') ? kit : specifier.includes('supermat-route') ? supermat : specifier.includes('moge-producer') ? { MoGeInference:MoGe } : { MaterialPhotoViewer:Viewer };
     return new vm.SyntheticModule(Object.keys(exports), function() { for(const [name,value]of Object.entries(exports))this.setExport(name,value); }, { context });
   });
@@ -99,6 +106,33 @@ test('latest requested photograph wins even when fetches complete out of order',
   const bag=c.actions.sample('bag'), orb=c.actions.sample('orb');
   releaseOrb(); await orb; releaseBag(); await bag;
   assert.equal(c.state.source, 'Metal & glow');
+});
+
+test('arrival opens an included orb with no model loading or inference',async()=>{
+  const c=await controller({examples:true,search:''});
+  assert.equal(c.state.source,'Metal & glow');
+  assert.equal(c.state.status,'included');
+  assert.equal(c.behavior.geometryRuns,0);assert.equal(c.behavior.materialRuns,0);
+  assert.equal(c.behavior.profile,undefined);assert.ok(c.behavior.viewer.maps);
+  assert.match(c.elements.provenance.textContent,/Included example/);
+});
+
+for(const phase of ['load','run'])test(`browsing during material ${phase} preserves the captured request and offers its result`,async()=>{
+  const c=await controller();let release,started;
+  c.behavior[`${phase}Gate`]=new Promise(resolve=>{release=resolve;});
+  const entered=new Promise(resolve=>{started=resolve;});c.behavior[phase==='load'?'onLoad':'onRun']=started;
+  const run=c.actions.infer();await entered;
+  assert.equal(c.elements.file.disabled,false);
+  await c.actions.sample('orb');
+  assert.equal(c.state.source,'Metal & glow');
+  c.elements['material-size'].value='1024';await c.elements['material-size'].onchange();
+  release();await run;
+  assert.equal(c.state.source,'Metal & glow');assert.equal(c.state.status,'loaded');
+  assert.equal(c.behavior.inputPixel,1);assert.equal(c.behavior.materialSize,512);
+  assert.equal(c.state.runs.at(-1).status,'done');assert.equal(c.elements['view-result'].hidden,false);
+  await c.elements['view-result'].onclick();
+  assert.equal(c.state.source,'Celebration');assert.equal(c.elements['material-size'].value,'512');
+  assert.ok(c.behavior.viewer.maps);assert.match(c.elements.provenance.textContent,/Newly generated/);
 });
 test('selected material resolution reaches the producer and survives the run record',async()=>{
   const c=await controller();c.elements['material-size'].value='768';await c.actions.infer();
