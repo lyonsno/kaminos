@@ -103,6 +103,11 @@ function disableMaterials(){
   document.querySelector('[data-view=materials]').disabled=true;
   $('glow').disabled=true;
 }
+function applyImageGlow(){
+  if(!viewer)return;
+  viewer.glow=sampleKey==='orb';
+  if(viewer.glow)viewer.setEffects({glowIntensity:4.85});
+}
 async function load(blob,label,key=null,ticket=++imageTicket){
   state.status='loading-image';$('run').disabled=true;
   const bitmap=await createImageBitmap(blob);
@@ -117,7 +122,7 @@ async function load(blob,label,key=null,ticket=++imageTicket){
   const url=URL.createObjectURL(blob);$('preview').src=url;$('preview').dataset.blob=url;
   if(old)URL.revokeObjectURL(old);
   $('preview').hidden=false;$('scene').hidden=true;
-  viewer?.clear();view('original');
+  viewer?.clear();applyImageGlow();view('original');
   for(const button of document.querySelectorAll('[data-view]:not([data-view=original])'))button.disabled=true;
   syncControls();
   for(const button of document.querySelectorAll('[data-sample]'))button.classList.toggle('selected',button.dataset.sample===key);
@@ -147,6 +152,7 @@ async function setup(){
     session=await createWebGpuInferenceSession({sessionId:crypto.randomUUID(),device:gpu.device,adapter:gpu.adapter,backendIdentity:gpu.backendIdentity});
     viewer=new MaterialPhotoViewer();await viewer.init($('scene'),gpu.device);
     await viewer.applyPreset(DEFAULT_PRESET);
+    applyImageGlow();
     gpu.device.addEventListener('uncapturederror',event=>{
       (state.gpuErrors??=[]).push(event.error.message);fail(event.error);
     });

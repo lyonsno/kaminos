@@ -5,7 +5,7 @@ export const DEFAULT_PRESET={
     expFactor:1,screenSpaceSampling:true,linearThickness:false,backfaceLighting:1,depthPhi:.5,normalPhi:5,lumaPhi:5},
   light:{x:.9997602257733113,y:.02189728206183767},
   camera:{orbit:[-.018604133702531615,.0029375503220611795]},
-  gi:true,glow:true,lighting:{rotation:146,intensity:2,direct:3},
+  gi:true,glow:false,lighting:{rotation:146,intensity:2,direct:3},
   contrast:{mode:'manual',roughness:.49,metallic:.83},diagnostic:'scene',environment:'warehouse',
 };
 

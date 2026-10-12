@@ -8,5 +8,5 @@ test('product profile degrades explicitly without shader-f16',()=>{
 test('operator look preserves the chosen HDR, GI and manual contrast',()=>{
   assert.equal(DEFAULT_PRESET.environment,'warehouse');assert.equal(DEFAULT_PRESET.settings.gain,50);
   assert.equal(DEFAULT_PRESET.settings.screenSpaceSampling,true);assert.equal(DEFAULT_PRESET.lighting.rotation,146);
-  assert.deepEqual(DEFAULT_PRESET.contrast,{mode:'manual',roughness:.49,metallic:.83});assert.equal(DEFAULT_PRESET.glow,true);
+  assert.deepEqual(DEFAULT_PRESET.contrast,{mode:'manual',roughness:.49,metallic:.83});assert.equal(DEFAULT_PRESET.glow,false);
 });
