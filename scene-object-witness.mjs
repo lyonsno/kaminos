@@ -5970,7 +5970,8 @@ try {
   if (scenario === 'muscle-support-assay') {
     phase = 'scenario-muscle-support-assay';
     const { runSupportAssayWitness } = await import('./muscle-support-assay-witness.mjs');
-    lastEvidence.supportAssay = await runSupportAssayWitness({evaluate,capture:capturePngScreenshot,ws,out,delay});
+    lastEvidence.supportAssay = await runSupportAssayWitness({evaluate,capture:capturePngScreenshot,ws,out,delay,
+      progress:state=>{lastEvidence.supportAssayProgress=state;}});
   } else if (scenario === 'startup-empty') {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
