@@ -6,12 +6,12 @@ import {pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {compositionRestoreUrl} from '../scene-authoring.mjs';
-import {validateTraceSpecialization} from '../volume-optical-trace.mjs';
+import {validateTraceSpecialization,compareOpticalTraces} from '../volume-optical-trace.mjs';
 
 const [root,input,out,portText,subdivisionText]=process.argv.slice(2);
 await fs.mkdir(out,{recursive:true});
 const report={identity:'ordered-optical-capture-conformance-v0',status:'running',phase:'inputs',root,input,
-  claim:'three scanline implementation witness; not the training corpus or an image-quality result',errors:[],chunks:[]};
+  claim:'three scanline implementation witness; not the training corpus or an image-quality result',errors:[],chunks:[],comparisons:[]};
 const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
 await save();
 let server,browser,page;
@@ -97,8 +97,19 @@ try {
       assert.equal(chunk.ok,true,`optical capture failed at ${chunk.phase}: ${chunk.reason}`);
       assert.ok(bytes,'missing optical readback');
       validateTraceSpecialization(specialization,chunk.effective.specialization);
-      if(reference)assert.ok(bytes.equals(reference),'full and lean optical coefficients differ');
-      else reference=bytes;
+      if(reference) {
+        assert.deepEqual(chunk.plan,reference.chunk.plan,'trace plan changed');
+        for(const key of ['route','backend','simStepCount','uniforms','controls']) {
+          assert.deepEqual(chunk.effective[key],reference.chunk.effective[key],`trace ${key} changed`);
+        }
+        for(const key of ['model','source','support','frame','receivers','directions','legacyDispatched']) {
+          assert.deepEqual(chunk.effective.incidentLight[key],reference.chunk.effective.incidentLight[key],`incident ${key} changed`);
+        }
+        const decode=b=>new Float32Array(b.buffer,b.byteOffset,b.byteLength/4);
+        const agreement=compareOpticalTraces(decode(reference.bytes),decode(bytes),chunk.plan);
+        report.comparisons.push({fraction,...agreement});await save();
+        assert.ok(agreement.ok,'full and lean traces exceed numerical agreement criteria');
+      } else reference={bytes,chunk};
     }
   }
   const after=await page.evaluate(async()=>{
