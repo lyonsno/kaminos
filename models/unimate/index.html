@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UniMate Motion</title>
+<style>
+  :root { color-scheme: dark; --panel: rgba(18, 20, 24, 0.86); --text: #e6e8eb; --muted: #9aa3ad; --accent: #4fd1e8; --line: rgba(255, 255, 255, 0.08); }
+  html, body { margin: 0; height: 100%; background: #111316; color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .panel { position: fixed; top: 16px; left: 16px; width: min(340px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 16px; backdrop-filter: blur(8px); box-sizing: border-box; }
+  h1 { font-size: 16px; margin: 0 0 2px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  label { display: block; color: var(--muted); font-size: 12px; margin: 10px 0 4px; }
+  select, input, button { font: inherit; color: var(--text); background: #1c2026; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; box-sizing: border-box; }
+  select, input[type=number] { width: 100%; }
+  .row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  button { cursor: pointer; }
+  button.primary { background: #1f6f80; border-color: #2b8ea3; }
+  button:disabled { opacity: 0.45; cursor: default; }
+  .status { margin-top: 12px; font-size: 13px; min-height: 1.4em; }
+  .stats { margin-top: 8px; font-size: 12px; color: var(--muted); white-space: pre-line; }
+  .legend { position: fixed; bottom: 16px; left: 16px; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 4px 0 10px; }
+  .dot:first-child { margin-left: 0; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="panel">
+  <h1>UniMate motion</h1>
+  <div class="sub">Text-to-motion on a supplied skeleton, generated on this GPU while the scene keeps drawing.</div>
+  <label for="prompt">Prompt</label>
+  <select id="prompt" disabled></select>
+  <label for="noise">Starting noise</label>
+  <select id="noise">
+    <option value="reference">Accepted CPU run's noise</option>
+    <option value="seed">Browser seed</option>
+  </select>
+  <input id="seed" type="number" value="1" min="0" step="1" hidden>
+  <div class="row">
+    <button id="generate" class="primary" disabled>Generate</button>
+    <button id="pause" disabled>Pause</button>
+    <button id="stop" disabled>Stop</button>
+    <button id="rest" disabled>Rest pose</button>
+  </div>
+  <div class="status" id="status">Loading…</div>
+  <div class="stats" id="stats"></div>
+</div>
+<div class="legend"><span class="dot" style="background:#4fd4f2"></span>front legs<span class="dot" style="background:#6be073"></span>hind legs<span class="dot" style="background:#f2bd47"></span>body and head</div>
+<script type="module">
+import { createUniMateDemo } from './unimate-demo.js';
+
+const $ = id => document.getElementById(id);
+const state = { phase: 'load', progress: null, result: null, error: null };
+window.__unimateDemo = state;
+const canvas = $('scene');
+const resize = () => { canvas.width = Math.round(innerWidth * devicePixelRatio); canvas.height = Math.round(innerHeight * devicePixelRatio); };
+resize();
+addEventListener('resize', resize);
+const setStatus = text => { $('status').textContent = text; };
+$('noise').addEventListener('change', () => { $('seed').hidden = $('noise').value !== 'seed'; });
+
+let demo;
+try {
+  demo = await createUniMateDemo({ canvas, onStatus: s => { state.phase = s.phase; setStatus(s.phase === 'ready' ? `Ready · ${s.detail}` : `Loading ${s.detail}…`); } });
+  window.__unimateDemoInstance = demo;
+  demo.bundle.prompts.forEach((p, i) => $('prompt').add(new Option(p.text, String(i))));
+  for (const id of ['prompt', 'generate', 'rest']) $(id).disabled = false;
+  state.phase = 'ready';
+} catch (e) {
+  state.error = String(e?.stack ?? e); state.phase = 'failed'; setStatus(`Could not start: ${e.message ?? e}`);
+}
+
+async function generate() {
+  for (const id of ['generate', 'prompt', 'noise', 'seed', 'rest']) $(id).disabled = true;
+  for (const id of ['pause', 'stop']) $(id).disabled = false;
+  $('pause').textContent = 'Pause';
+  $('stats').textContent = '';
+  state.phase = 'generating'; state.result = null; state.error = null;
+  const seed = $('noise').value === 'seed' ? Number($('seed').value) >>> 0 : null;
+  const started = performance.now();
+  try {
+    const result = await demo.generate({
+      promptIndex: Number($('prompt').value), seed,
+      onEvaluation: e => { state.progress = { evaluations: e.evaluations, t: e.t };
+        setStatus(`Generating · ${e.evaluations} evaluations · t = ${Math.min(e.t, 1).toFixed(3)} · ${((performance.now() - started) / 1000).toFixed(1)} s`); },
+    });
+    const f = result.frameStats;
+    state.result = { prompt: result.prompt, noise: result.noise, wallMs: result.wallMs, evaluations: result.evaluations,
+      steps: result.steps.length, accepted: result.steps.filter(s => s.accepted).length, dutyCount: result.dutyCount,
+      longestDutyMs: result.longestDutyMs, frameStats: f, referenceMaxJointDeviation: result.referenceMaxJointDeviation ?? null };
+    state.phase = 'done';
+    setStatus(`Done in ${(result.wallMs / 1000).toFixed(1)} s · playing`);
+    $('stats').textContent = [
+      `${result.evaluations} evaluations · ${result.steps.length} steps (${state.result.accepted} accepted) · ${result.dutyCount} GPU duties`,
+      f ? `Scene during generation: ${f.frames} frames, p95 ${f.p95.toFixed(1)} ms, max ${f.max.toFixed(1)} ms` : '',
+      result.referenceMaxJointDeviation != null ? `Largest joint difference from the accepted CPU clip: ${result.referenceMaxJointDeviation.toExponential(2)} units` : `Noise: ${result.noise}`,
+    ].filter(Boolean).join('\n');
+  } catch (e) {
+    state.error = String(e?.message ?? e); state.phase = e?.name === 'AbortError' ? 'stopped' : 'failed';
+    setStatus(state.phase === 'stopped' ? 'Stopped' : `Failed: ${state.error}`);
+  } finally {
+    for (const id of ['generate', 'prompt', 'noise', 'seed', 'rest']) $(id).disabled = false;
+    for (const id of ['pause', 'stop']) $(id).disabled = true;
+  }
+}
+$('generate').addEventListener('click', generate);
+$('pause').addEventListener('click', async () => { const s = await demo.togglePause(); if (s) $('pause').textContent = s === 'paused' ? 'Resume' : 'Pause'; });
+$('stop').addEventListener('click', () => demo.stop());
+$('rest').addEventListener('click', () => demo.showRest());
+window.__unimateGenerate = (promptIndex, seed = null) => { $('prompt').value = String(promptIndex); $('noise').value = seed === null ? 'reference' : 'seed'; if (seed !== null) $('seed').value = String(seed); return generate(); };
+</script>
+</body>
+</html>
