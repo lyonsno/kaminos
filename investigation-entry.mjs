@@ -17,8 +17,8 @@ export function createInvestigationEntry({document,investigation,url,actions={}}
   const note=make('textarea');note.setAttribute('aria-label','Your observation');note.placeholder='Your observation';note.value=investigation.note||'';
   const saveNote=make('button','Save note'),capture=make('button','Capture'),finish=make('button','Finish');
   for(const button of [start,returnToLive,saveNote,capture,finish])button.type='button';
-  const commands=make('div');commands.append(start,returnToLive);
-  const recordCommands=make('div');recordCommands.append(saveNote,capture,finish);
+  const commands=make('div');commands.className='investigation-entry-actions';commands.append(start,returnToLive);
+  const recordCommands=make('div');recordCommands.className='investigation-entry-actions';recordCommands.append(saveNote,capture,finish);
   const history=make('div');history.setAttribute('aria-label','Retained observations');
   node.append(status,commands,note,recordCommands,make('h4','Retained observations'),history);
   let attempt=null,busy=false,finished=false;
