@@ -48,15 +48,18 @@ export function gridHeightStep(width, derivedWidths = GRID_HEIGHT_DERIVED_LATTIC
 export function resolveGridHeight(controls = {}, width, derivedWidths = GRID_HEIGHT_DERIVED_LATTICE_WIDTHS) {
   const w = validWidth(width);
   const step = gridHeightStep(w, derivedWidths);
-  const requested = Number(controls?.gridHeightCells);
-  const requestedCells = Number.isFinite(requested) && requested > 0 ? Math.round(requested) : 0;
-  if (requestedCells === 0) {
-    return { requestedCells: 0, widthCells: w, heightCells: w * GRID_HEIGHT_AUTO_RATIO, ratio: GRID_HEIGHT_AUTO_RATIO, step, mode: 'auto-twice-width' };
+  // The control is a multiplier on the width (Noah 2026-10-12); no value, a
+  // non-positive one, or exactly the auto ratio keeps the saved-basin height.
+  const requested = Number(controls?.gridHeightRatio);
+  const requestedRatio = Number.isFinite(requested) && requested > 0 && requested !== GRID_HEIGHT_AUTO_RATIO ? requested : null;
+  if (requestedRatio === null) {
+    return { requestedRatio: null, requestedCells: 0, widthCells: w, heightCells: w * GRID_HEIGHT_AUTO_RATIO, ratio: GRID_HEIGHT_AUTO_RATIO, step, mode: 'auto-twice-width' };
   }
+  const requestedCells = Math.round(requestedRatio * w);
   const clamped = Math.min(GRID_HEIGHT_MAX_RATIO * w, Math.max(GRID_HEIGHT_MIN_RATIO * w, requestedCells));
   const heightCells = Math.round(clamped / step) * step;
   const mode = clamped !== requestedCells ? 'requested-clamped' : (heightCells !== requestedCells ? 'requested-snapped' : 'requested');
-  return { requestedCells, widthCells: w, heightCells, ratio: heightCells / w, step, mode };
+  return { requestedRatio, requestedCells, widthCells: w, heightCells, ratio: heightCells / w, step, mode };
 }
 
 // Height of a lattice `size` wide derived from the box at equal pitch. Exact

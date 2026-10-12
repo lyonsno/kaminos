@@ -11240,7 +11240,7 @@ export function createKaminosVolumePrototype({
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
     });
     if (field) {
-      const packed = packSolidTextureRows(field.cells, gridSize);
+      const packed = packSolidTextureRows(field.cells, gridSize, gridHeight);
       device.queue.writeTexture({texture}, packed.data,
         {bytesPerRow: packed.bytesPerRow, rowsPerImage: packed.rowsPerImage},
         {width: gridSize, height: gridHeight, depthOrArrayLayers: gridSize});
@@ -12348,11 +12348,11 @@ export function createKaminosVolumePrototype({
     try {
       const revision = sceneSolidRevision(source.object, productTransform);
       const emitterBoundsRevision = `${analyticEmitterDispatch.cellMin.join(',')}/${analyticEmitterDispatch.cellExtent.join(',')}`;
-      key = `${gridSize}:${sourceId}:${revision}:${solver.solver}:${solver.projection}:${transport.scheme}:${emitterBoundsRevision}:${analyticEmitterDescriptorSignature}:wall:${backWall.key}`;
+      key = `${gridSize}x${gridHeight}:${sourceId}:${revision}:${solver.solver}:${solver.projection}:${transport.scheme}:${emitterBoundsRevision}:${analyticEmitterDescriptorSignature}:wall:${backWall.key}`;
       if (key === sceneSolidRevisionKey) return;
       const started = performance.now();
       const extraction = trianglesFromSceneObject(source.object, productTransform);
-      const field = voxelizeTriangleSolid(extraction.triangles, gridSize);
+      const field = voxelizeTriangleSolid(extraction.triangles, gridSize, gridHeight);
       if (field.surfaceCellCount === 0) throw new Error('authored-solid-does-not-intersect-volume');
       const sourceBounds = analyticEmitterDispatch;
       let sourceBoundsSolidCells = 0;
@@ -12368,7 +12368,7 @@ export function createKaminosVolumePrototype({
       // Match the shader's signed-distance chemistry gate at cell centers;
       // open cells in the conservative dispatch box are not enough to fuel gas.
       const sourceSupport = countEmitterChemicalSupport(
-        analyticEmitterDescriptor, sourceBounds, field.cells, gridSize);
+        analyticEmitterDescriptor, sourceBounds, field.cells, gridSize, gridHeight);
       if (sourceBounds.active && sourceSupport.fluidSupportCells === 0) {
         throw new Error('authored-solid-occludes-emitter-source-support');
       }

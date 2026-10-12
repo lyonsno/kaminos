@@ -81,7 +81,7 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
         if (!Number.isFinite(effective) || Math.abs(effective - Number(value)) > 1e-6) mismatches.push(`${cid} requested ${value}, receipt ${effective}`);
       }
     }
-    if (cid === 'volume-grid-height-cells') {
+    if (cid === 'volume-grid-height-ratio') {
       // The resolver at the effective width is the expectation (review GH-05):
       // a clamped or snapped request passes at its resolved height and mode; a
       // receipt missing an authority-bearing field, for another width, or
@@ -89,7 +89,7 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
       const dims = end.gridDimensions; const height = end.gridHeight;
       const width = Array.isArray(dims) && dims.length === 3 ? dims[0] : null;
       let expected = null;
-      try { expected = Number.isInteger(width) ? resolveGridHeight({ gridHeightCells: Number(value) || 0 }, width) : null; } catch { expected = null; }
+      try { expected = Number.isInteger(width) ? resolveGridHeight({ gridHeightRatio: Number(value) || 2 }, width) : null; } catch { expected = null; }
       const modes = ['auto-twice-width', 'requested', 'requested-snapped', 'requested-clamped'];
       if (!expected || !height) mismatches.push(`grid height requested ${value}, no valid grid receipt (dimensions ${JSON.stringify(dims ?? null)})`);
       else if (height.admitted !== true) mismatches.push(height.admitted === false

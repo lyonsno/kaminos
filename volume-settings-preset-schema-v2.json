@@ -1628,11 +1628,11 @@
       "type": "range"
     },
     {
-      "key": "volume-grid-height-cells",
-      "param": "volume_grid_height_cells",
+      "key": "volume-grid-height-ratio",
+      "param": "volume_grid_height_ratio",
       "tagName": "INPUT",
       "type": "number",
-      "additiveDefault": 0,
+      "additiveDefault": 2,
       "additiveSinceControlCount": 249
     }
   ],

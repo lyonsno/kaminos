@@ -16,10 +16,11 @@ const SUPPORTED_WIDTHS = [32, 48, 64, 96, 128, 136, 140, 160];
 
 // Grid height (Noah 2026-10-10; report §34): the vertical extent was a fixed
 // twice the width and flames that fit the box's physics were cut off at the
-// top. The height is a control in cells: 0 keeps twice the width (every saved
-// basin returns unchanged); a request is clamped to [width, 4 x width] and
-// snapped to the nearest admissible height. Cells keep their size; the box
-// grows rows. Nothing is stretched.
+// top. The height is a multiplier on the width (Noah 2026-10-12: a multiplier,
+// not raw cells): 2 (or no value) keeps twice the width, so every saved basin
+// returns unchanged; a request is clamped to [1, 4] x width and snapped to the
+// nearest admissible height. Cells keep their size; the box grows rows.
+// Nothing is stretched.
 
 test('admissible heights: a multiple of the workgroup that gives every derived lattice an integral height (GH-02)', () => {
   assert.deepEqual(Object.fromEntries(SUPPORTED_WIDTHS.map(w => [w, shape.gridHeightStep(w)])),
@@ -28,7 +29,7 @@ test('admissible heights: a multiple of the workgroup that gives every derived l
   assert.deepEqual([...shape.GRID_HEIGHT_DERIVED_LATTICE_WIDTHS].sort((a, b) => a - b), [...new Set([EMISSIVE_LIGHT_GRID, ...core.SUPPORTED_FIRE_IRRADIANCE_GRID_SIZES])].sort((a, b) => a - b));
   for (const w of SUPPORTED_WIDTHS) {
     for (let request = 1; request <= 5 * w; request += 1) {
-      const resolved = shape.resolveGridHeight({ gridHeightCells: request }, w);
+      const resolved = shape.resolveGridHeight({ gridHeightRatio: request / w }, w);
       const h = resolved.heightCells;
       assert.ok(h >= w && h <= 4 * w, `${w}: ${request} → ${h} inside [w, 4w]`);
       assert.equal(h % 4, 0, `${w}: ${h} is a workgroup multiple`);
@@ -41,13 +42,16 @@ test('admissible heights: a multiple of the workgroup that gives every derived l
   }
 });
 
-test('resolveGridHeight: auto is twice the width; a request is clamped and snapped, and the receipt says which', () => {
-  assert.deepEqual(shape.resolveGridHeight({}, 64), { requestedCells: 0, widthCells: 64, heightCells: 128, ratio: 2, step: 4, mode: 'auto-twice-width' });
-  assert.deepEqual(shape.resolveGridHeight({ gridHeightCells: 144 }, 48), { requestedCells: 144, widthCells: 48, heightCells: 144, ratio: 3, step: 12, mode: 'requested' });
-  assert.deepEqual(shape.resolveGridHeight({ gridHeightCells: 150 }, 48), { requestedCells: 150, widthCells: 48, heightCells: 156, ratio: 156 / 48, step: 12, mode: 'requested-snapped' });
-  assert.deepEqual(shape.resolveGridHeight({ gridHeightCells: 20 }, 48), { requestedCells: 20, widthCells: 48, heightCells: 48, ratio: 1, step: 12, mode: 'requested-clamped' });
-  assert.deepEqual(shape.resolveGridHeight({ gridHeightCells: 640 }, 48), { requestedCells: 640, widthCells: 48, heightCells: 192, ratio: 4, step: 12, mode: 'requested-clamped' });
-  assert.equal(shape.resolveGridHeight({ gridHeightCells: 'abc' }, 64).mode, 'auto-twice-width', 'nonfinite reads as auto');
+test('resolveGridHeight: no value or 2 is twice the width; a multiplier is clamped and snapped, and the receipt says which', () => {
+  assert.deepEqual(shape.resolveGridHeight({}, 64), { requestedRatio: null, requestedCells: 0, widthCells: 64, heightCells: 128, ratio: 2, step: 4, mode: 'auto-twice-width' });
+  assert.deepEqual(shape.resolveGridHeight({ gridHeightRatio: 2 }, 64), { requestedRatio: null, requestedCells: 0, widthCells: 64, heightCells: 128, ratio: 2, step: 4, mode: 'auto-twice-width' }, '2 is the saved-basin height');
+  assert.deepEqual(shape.resolveGridHeight({ gridHeightRatio: 3 }, 48), { requestedRatio: 3, requestedCells: 144, widthCells: 48, heightCells: 144, ratio: 3, step: 12, mode: 'requested' });
+  assert.deepEqual(shape.resolveGridHeight({ gridHeightRatio: 3.125 }, 48), { requestedRatio: 3.125, requestedCells: 150, widthCells: 48, heightCells: 156, ratio: 156 / 48, step: 12, mode: 'requested-snapped' });
+  assert.deepEqual(shape.resolveGridHeight({ gridHeightRatio: 0.5 }, 48), { requestedRatio: 0.5, requestedCells: 24, widthCells: 48, heightCells: 48, ratio: 1, step: 12, mode: 'requested-clamped' });
+  assert.deepEqual(shape.resolveGridHeight({ gridHeightRatio: 9 }, 48), { requestedRatio: 9, requestedCells: 432, widthCells: 48, heightCells: 192, ratio: 4, step: 12, mode: 'requested-clamped' });
+  assert.equal(shape.resolveGridHeight({ gridHeightRatio: 2.5 }, 32).heightCells, 80, 'the same multiplier at another width');
+  assert.equal(shape.resolveGridHeight({ gridHeightRatio: 'abc' }, 64).mode, 'auto-twice-width', 'nonfinite reads as auto');
+  assert.equal(shape.resolveGridHeight({ gridHeightRatio: 0 }, 64).mode, 'auto-twice-width', 'zero reads as auto');
   assert.throws(() => shape.resolveGridHeight({}, 0), /positive multiple of 4/);
   assert.throws(() => shape.resolveGridHeight({}, 50), /positive multiple of 4/);
   // The core re-exports the one law.
@@ -64,7 +68,7 @@ test('GH-02: the shared scene-source lattice accepts every height the resolver a
   const device = stub();
   const build = (w, h) => createSceneVolumeSource({ device, module: {}, uniformBuffer: {}, fluidBuffers: [{}, {}], frontBuffers: [{}, {}],
     grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * h / w, fluidGrid: w, fluidGridY: h });
-  const was152 = shape.resolveGridHeight({ gridHeightCells: 150 }, 48);
+  const was152 = shape.resolveGridHeight({ gridHeightRatio: 150 / 48 }, 48);
   assert.equal(was152.heightCells, 156);
   assert.doesNotThrow(() => build(48, 156));
   assert.doesNotThrow(() => build(48, 144));
@@ -112,13 +116,13 @@ test('GH-03: a height edit before GPU initialization changes the effective dimen
   const prototype = make({ resolution: 48 });
   assert.deepEqual(prototype.debugState().simGridDimensions, [48, 96, 48]);
   assert.equal(prototype.debugState().gridHeight.mode, 'auto-twice-width', 'the receipt exists from construction');
-  prototype.setControls({ gridHeightCells: 144 });
+  prototype.setControls({ gridHeightRatio: 3 });
   assert.deepEqual(prototype.debugState().simGridDimensions, [48, 144, 48], 'the edit takes effect without a device');
-  assert.deepEqual({ ...prototype.debugState().gridHeight }, { requestedCells: 144, widthCells: 48, heightCells: 144, ratio: 3, step: 12, mode: 'requested', admitted: true, admissionReason: null, admissionChecked: false });
+  assert.deepEqual({ ...prototype.debugState().gridHeight }, { requestedRatio: 3, requestedCells: 144, widthCells: 48, heightCells: 144, ratio: 3, step: 12, mode: 'requested', admitted: true, admissionReason: null, admissionChecked: false });
   assert.deepEqual(prototype.fireIrradianceLightField().raymarchWorldMax, [1, 5, 1], 'the published raymarch top follows');
-  prototype.setControls({ gridHeightCells: 0 });
+  prototype.setControls({ gridHeightRatio: 2 });
   assert.deepEqual(prototype.debugState().simGridDimensions, [48, 96, 48], 'and back');
-  const constructedTall = make({ resolution: 48, gridHeightCells: 150 });
+  const constructedTall = make({ resolution: 48, gridHeightRatio: 3.125 });
   assert.deepEqual(constructedTall.debugState().simGridDimensions, [48, 156, 48], 'a saved tall basin is tall from construction, at its admissible height');
 });
 
@@ -149,44 +153,60 @@ test('GH-04: a shape the device cannot hold is refused before the field is repla
 
 test('GH-05: the capture gate compares a height arm with the resolver at the effective width and requires a complete receipt', () => {
   const end = (dims, gridHeight) => ({ gridDimensions: dims, gridHeight });
-  const check = (value, e) => effectiveMismatches({ set: [['volume-grid-height-cells', value]] }, e, null);
-  const receipt = (request, w, extra = {}) => ({ ...shape.resolveGridHeight({ gridHeightCells: request }, w), admitted: true, admissionReason: null, admissionChecked: true, ...extra });
-  assert.deepEqual(check('640', end([48, 192, 48], receipt(640, 48))), [], 'a correctly clamped request passes');
-  assert.deepEqual(check('150', end([48, 156, 48], receipt(150, 48))), [], 'a snapped request passes at its snapped height');
-  assert.deepEqual(check('144', end([48, 144, 48], receipt(144, 48))), []);
-  assert.deepEqual(check('0', end([48, 96, 48], receipt(0, 48))), [], 'auto');
-  assert.equal(check('144', end([48, 144, 48], { heightCells: 144 })).length, 1, 'a receipt without a mode fails');
-  assert.equal(check('144', end([48, 144, 48], receipt(144, 48, { mode: 'requested-snapped' }))).length, 1, 'a wrong mode fails');
-  assert.equal(check('144', end([48, 144, 48], receipt(144, 48, { widthCells: 64 }))).length, 1, 'a receipt for another width fails');
-  assert.equal(check('144', end([48, 96, 48], receipt(144, 48))).length, 1, 'height not applied');
-  assert.equal(check('144', end([48, 96, 48], receipt(144, 48, { admitted: false, admissionReason: 'grid-shape-exceeds-device-storage-binding:1>0' }))).length, 1, 'a refused shape fails the arm');
-  assert.equal(check('144', end(null, receipt(144, 48))).length, 1, 'no dimensions');
-  assert.equal(check('0', end([48, 144, 48], receipt(144, 48))).length, 1, 'auto requested but a height still applied');
+  const check = (value, e) => effectiveMismatches({ set: [['volume-grid-height-ratio', value]] }, e, null);
+  const receipt = (request, w, extra = {}) => ({ ...shape.resolveGridHeight({ gridHeightRatio: request / w }, w), admitted: true, admissionReason: null, admissionChecked: true, ...extra });
+  const checkCells = (cells, e) => check(String(cells / 48), e);
+  assert.deepEqual(checkCells(432, end([48, 192, 48], receipt(432, 48))), [], 'a correctly clamped request passes');
+  assert.deepEqual(checkCells(150, end([48, 156, 48], receipt(150, 48))), [], 'a snapped request passes at its snapped height');
+  assert.deepEqual(checkCells(144, end([48, 144, 48], receipt(144, 48))), []);
+  assert.deepEqual(check('2', end([48, 96, 48], receipt(96, 48))), [], 'auto');
+  assert.equal(checkCells(144, end([48, 144, 48], { heightCells: 144 })).length, 1, 'a receipt without a mode fails');
+  assert.equal(checkCells(144, end([48, 144, 48], receipt(144, 48, { mode: 'requested-snapped' }))).length, 1, 'a wrong mode fails');
+  assert.equal(checkCells(144, end([48, 144, 48], receipt(144, 48, { widthCells: 64 }))).length, 1, 'a receipt for another width fails');
+  assert.equal(checkCells(144, end([48, 96, 48], receipt(144, 48))).length, 1, 'height not applied');
+  assert.equal(checkCells(144, end([48, 96, 48], receipt(144, 48, { admitted: false, admissionReason: 'grid-shape-exceeds-device-storage-binding:1>0' }))).length, 1, 'a refused shape fails the arm');
+  assert.equal(checkCells(144, end(null, receipt(144, 48))).length, 1, 'no dimensions');
+  assert.equal(check('2', end([48, 144, 48], receipt(144, 48))).length, 1, 'auto requested but a height still applied');
   // Confirmation 1 (GH-05-C): success needs affirmative admission, a Boolean true.
   const { admitted, ...withoutAdmission } = receipt(144, 48);
-  assert.equal(check('144', end([48, 144, 48], withoutAdmission)).length, 1, 'omitted admission fails');
-  assert.equal(check('144', end([48, 144, 48], receipt(144, 48, { admitted: null }))).length, 1, 'null admission fails');
-  assert.equal(check('144', end([48, 144, 48], receipt(144, 48, { admitted: 'false' }))).length, 1, 'a retyped admission fails');
-  assert.equal(check('144', end([48, 144, 48], receipt(144, 48, { admitted: 'true' }))).length, 1, 'a string true is not a Boolean true');
-  assert.equal(check('144', end([48, 144, 48], receipt(144, 48, { admitted: 1 }))).length, 1, 'nor is 1');
+  assert.equal(checkCells(144, end([48, 144, 48], withoutAdmission)).length, 1, 'omitted admission fails');
+  assert.equal(checkCells(144, end([48, 144, 48], receipt(144, 48, { admitted: null }))).length, 1, 'null admission fails');
+  assert.equal(checkCells(144, end([48, 144, 48], receipt(144, 48, { admitted: 'false' }))).length, 1, 'a retyped admission fails');
+  assert.equal(checkCells(144, end([48, 144, 48], receipt(144, 48, { admitted: 'true' }))).length, 1, 'a string true is not a Boolean true');
+  assert.equal(checkCells(144, end([48, 144, 48], receipt(144, 48, { admitted: 1 }))).length, 1, 'nor is 1');
   assert.match(capture, /gridDimensions: s\.simGridDimensions \?\? null, gridHeight: s\.gridHeight \?\? null/);
 });
 
-test('cockpit: a numeric height row with help, snapshot, listener, route restore, receipt; schema 249', () => {
-  assert.match(index, /<input type="number" id="volume-grid-height-cells" data-volume-settings-param="volume_grid_height_cells" min="0" max="640" step="4" value="0">/);
-  assert.match(index, /slider-help">Grid height in cells\. 0 keeps twice the width/);
+test('cockpit: a width-multiplier height row with help, snapshot, debounced listener, route restore, receipt; schema 249', () => {
+  assert.match(index, /<input type="number" id="volume-grid-height-ratio" data-volume-settings-param="volume_grid_height_ratio" min="1" max="4" step="0\.125" value="2">/);
+  assert.match(index, /slider-help">Grid height as a multiple of the width\. 2 is what every saved basin was authored at\./);
   assert.match(index, /snapped to the nearest height that keeps the light lattices aligned \(steps of 4 cells at 32 and 64, 12 at 48 and 96\)/);
-  assert.match(index, /gridHeightCells: parseInt\(document\.getElementById\('volume-grid-height-cells'\)\.value, 10\) \|\| 0,/);
-  assert.match(index, /getElementById\('volume-grid-height-cells-val'\)\.textContent = /);
+  assert.match(index, /gridHeightRatio: parseFloat\(document\.getElementById\('volume-grid-height-ratio'\)\.value\) \|\| 2,/);
+  assert.match(index, /getElementById\('volume-grid-height-ratio-val'\)\.textContent = /);
+  assert.ok(!index.includes('volume-grid-height-cells'), 'the cells control is gone');
   const listenerList = index.slice(index.indexOf("'volume-emitter-source-law',"), index.indexOf("'volume-wind-gust-veer',") + 1200);
-  assert.ok(listenerList.includes("'volume-grid-height-cells',"), 'change listener');
+  assert.ok(!listenerList.includes("'volume-grid-height-ratio',"), 'not on the immediate listener list');
   const restored = index.slice(index.indexOf('const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['), index.indexOf('];', index.indexOf('const VOLUME_ROUTE_RESTORED_CONTROL_IDS = [')));
-  assert.ok(restored.includes("'volume-grid-height-cells'"), 'restored from saved routes');
+  assert.ok(restored.includes("'volume-grid-height-ratio'"), 'restored from saved routes');
   assert.match(index, /gh\.admitted === false \? ` · height \$\{gh\.heightCells\} REFUSED \(\$\{gh\.admissionReason\}\)/, 'a refused height is named');
   assert.match(index, /gh\.mode === 'auto-twice-width' \? '' : ` · height \$\{gh\.heightCells\} \(\$\{gh\.ratio\.toFixed\(2\)\}× width, \$\{gh\.mode\}\)`/);
-  const control = schema.controls.find(c => c.key === 'volume-grid-height-cells');
-  assert.deepEqual(control, { key: 'volume-grid-height-cells', param: 'volume_grid_height_cells', tagName: 'INPUT', type: 'number', additiveDefault: 0, additiveSinceControlCount: 249 });
+  const control = schema.controls.find(c => c.key === 'volume-grid-height-ratio');
+  assert.deepEqual(control, { key: 'volume-grid-height-ratio', param: 'volume_grid_height_ratio', tagName: 'INPUT', type: 'number', additiveDefault: 2, additiveSinceControlCount: 249 });
+  assert.ok(!schema.controls.some(c => c.key === 'volume-grid-height-cells'));
   assert.equal(schema.controlCount, 249); assert.equal(schema.controls.length, 249);
+});
+
+// Noah 2026-10-12: anything that rebuilds the sim must not rebuild on every
+// keystroke or spinner click. Rebuilding controls apply after the entry has
+// been idle for VOLUME_REBUILD_DEBOUNCE_MS; the value label follows at once.
+test('cockpit: rebuilding controls are debounced; the label updates immediately', () => {
+  assert.match(index, /const VOLUME_REBUILD_DEBOUNCE_MS = 700;/);
+  assert.match(index, /const VOLUME_REBUILD_CONTROL_IDS = \['volume-grid-height-ratio'\];/);
+  const wiring = index.slice(index.indexOf('for (const id of VOLUME_REBUILD_CONTROL_IDS) {'), index.indexOf('for (const id of VOLUME_REBUILD_CONTROL_IDS) {') + 900);
+  assert.match(wiring, /let timer = 0;/);
+  assert.match(wiring, /clearTimeout\(timer\);\n\s+timer = setTimeout\(syncControls, VOLUME_REBUILD_DEBOUNCE_MS\);/);
+  assert.match(wiring, /control\.addEventListener\('input', schedule\);\n\s+control\.addEventListener\('change', schedule\);/);
+  assert.match(wiring, /updateVolumeRebuildControlLabel\(id\);/);
 });
 
 test('the runtime derives every height from the seated shape: fluid grid, resample, irradiance lattice; the immersed centre range follows the top', () => {
@@ -216,11 +236,11 @@ test('the admission receipt stays with the shape it describes until the request 
   globalThis.document = stub(); globalThis.window = globalThis.window || stub();
   globalThis.requestAnimationFrame = () => 0; globalThis.ResizeObserver = class { observe() {} disconnect() {} };
   const prototype = core.createKaminosVolumePrototype({ THREE: stub(), viewport: stub(), camera: stub(), controls: stub(), getControls: () => ({ resolution: 48 }), onStatus: () => {} });
-  prototype.setControls({ gridHeightCells: 144 });
+  prototype.setControls({ gridHeightRatio: 3 });
   const receipt = prototype.debugState().gridHeight;
   prototype.setControls({ gridOverlay: 0.5 });
   assert.equal(prototype.debugState().gridHeight, receipt, 'same receipt after an unrelated change');
-  prototype.setControls({ gridHeightCells: 156 });
+  prototype.setControls({ gridHeightRatio: 3.25 });
   assert.notEqual(prototype.debugState().gridHeight, receipt, 'a new request writes a new receipt');
   assert.equal(prototype.debugState().gridHeight.heightCells, 156);
 });
