@@ -58,6 +58,7 @@ async function controller() {
     }
     setImage() { this.clear(); this.reset(); this.surface = { position: new Float32Array(12), indices: new Uint32Array(6) }; }
     setMaterials() { this.maps = {}; }
+    setMaterialStatus(value) { this.materialStatus=value; }
     async dispose() {}
   }
   class MoGe { async init() { this.useRealWeights = true; this.weightsSource = 'local'; } async dispose() {} async run() { behavior.geometryRuns++;return { width:4,height:4,routeResult:{ receipt } }; } }
@@ -166,6 +167,7 @@ test('reset synchronizes the sun handle and fixes exposure at one', async () => 
 test('failed material rerun cannot advertise old material maps', async () => {
   const c=await controller(); await c.actions.infer(); c.behavior.failMaterials=true; await c.actions.infer();
   assert.equal(c.state.status,'error'); assert.equal(c.views[3].disabled,true);
+  assert.equal(c.behavior.viewer.materialStatus,'Materials unavailable');
   assert.equal(c.views[2].disabled,false);c.actions.view('relit');
   assert.equal(c.behavior.viewer.mode,'relit');assert.equal(c.elements.sun.hidden,false);
 });

@@ -55,11 +55,15 @@ export class MaterialPhotoViewer {
     const shared=depth?{surface:this.surface,geometry:this.primary.mesh.geometry}:null;
     for(const mode of modes.slice(0,3))this.views[mode].setImage(image,depth,shared);
     for(const [mode,view]of Object.entries(this.views)){view.applyPreset(preset);view.glow=mode==='materials'&&preset.glow;}
-    this.primary.canvas.parentElement.dataset.pending='Estimating materials';this.primary.available=false;
+    this.primary.available=true;this.setMaterialStatus('Materials not generated');
     const {x,y}=this.primary.getLightHandle();this.setLightHandle(x,y);
     this.layout();
   }
-  setMaterials(output){this.primary.setMaterials(output);this.primary.available=true;delete this.primary.canvas.parentElement.dataset.pending;}
+  setMaterialStatus(message){
+    const surface=this.primary.canvas.parentElement;
+    if(message)surface.dataset.pending=message;else delete surface.dataset.pending;
+  }
+  setMaterials(output){this.primary.setMaterials(output);this.primary.available=true;this.setMaterialStatus(null);}
   getMaterialContrast(){return this.primary.getMaterialContrast();}
   setMaterialContrast(value){this.primary.setMaterialContrast(value);}
   getDiagnostic(){return this.primary.getDiagnostic();}

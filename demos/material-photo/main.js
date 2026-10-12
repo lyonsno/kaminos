@@ -216,6 +216,7 @@ async function infer(){
     if(!retained)await cache.put(geometryKey(key),{depth:retainedGeometry(depth),record:{moge:record.moge}});
     await new Promise(requestAnimationFrame);
     if(!materials){
+      viewer.setMaterialStatus('Loading materials');
       weightRoute??=await session.registerRoute({routeId:`${SUPERMAT_ROUTE_ID}.material-photo-weights`});
       materials=await createSuperMatAdapter({route:weightRoute,weightsUrl:params.get('weights')??'/scratch/supermat-weights/f16/',
         ...superMatProductProfile(gpu.device),onProgress:event=>{
@@ -227,6 +228,7 @@ async function infer(){
     phase=performance.now();
     let output;
     try{
+      viewer.setMaterialStatus('Inferring materials');
       const job=route.enqueue({jobId:crypto.randomUUID(),execute:invocation=>materials.run({image:input,size,
         schedule:{runtime:route.runtime,invocation,control},onRunProgress:progress=>{
           const names={preprocess:'Preparing image',encode:'Image encoder',unet:'Material inference','decode-albedo':'Albedo decoder','decode-orm':'Finish decoder','pack-maps':'Material maps'};
@@ -250,7 +252,7 @@ async function infer(){
     $('identity').textContent='MoGe-2 + SuperMat | same GPUDevice';
     $('timings').textContent=`Depth ${(record.phases.geometryMs/1000).toFixed(2)} s | Materials ${size} x ${size}: ${(record.phases.materialsMs/1000).toFixed(2)} s`;
     $('progress').value=1;status(record.cached?'Depth & materials complete':'Depth & materials complete; browser could not retain this result');
-  }catch(error){record.status='error';record.error=String(error.stack??error);state.status='error';state.error=error.message;status(error.message,true);$('progress').removeAttribute('value');}
+  }catch(error){if(viewer?.surface&&!viewer.maps)viewer.setMaterialStatus('Materials unavailable');record.status='error';record.error=String(error.stack??error);state.status='error';state.error=error.message;status(error.message,true);$('progress').removeAttribute('value');}
   finally{clearInterval(clock);record.elapsedMs=performance.now()-started;state.runs.push(record);active=false;
     $('run').disabled=$('file').disabled=$('material-size').disabled=false;for(const button of document.querySelectorAll('[data-sample]'))button.disabled=false;
   }
