@@ -1,10 +1,14 @@
 import {ipbfBetaForRadius,ipbfPressureReplayURL} from './finger-fluid-pressure-controls.mjs';
 
 /** A small bench consumer; the solver owns parameter application and water. */
-export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,setPaused,restart,onRequest=()=>{}}) {
+export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,setPaused,restart,restartParticles,onRequest=()=>{}}) {
   root.hidden=false;
   root.innerHTML=`
     <h3>Fluid envelope</h3>
+    <div class="ipbf-control"><label for="ipbf-particles">Particles</label>
+      <input id="ipbf-particles" type="number" min="1024" step="1" aria-label="Particle count">
+      <button type="button" class="btn" id="ipbf-particles-apply">Apply and reset water</button></div>
+    <p class="ipbf-help">Changing particle count starts new water. Camera and tuning settings are retained.</p>
     <div class="ipbf-control"><label for="ipbf-radius">Pressure radius</label><div>
       <input id="ipbf-radius" type="range" min=".06" max=".25" step=".001" aria-label="Pressure radius">
       <input id="ipbf-radius-number" type="number" min="0" step=".001" aria-label="Pressure radius value"></div></div>
@@ -26,7 +30,7 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
     </div>
     <div id="ipbf-control-status" role="status"></div>
     <div id="ipbf-control-error" role="alert"></div>
-    <p class="ipbf-help">Particle count and represented volume stay fixed. Edits apply on the next step.</p>
+    <p class="ipbf-help">Pressure, cohesion and damping edits apply on the next step.</p>
     <a id="ipbf-replay" target="_blank" rel="noopener">Open these settings in a fresh tab</a>
   `;
   // Retain node identity when the workspace mounts run controls elsewhere.
@@ -35,7 +39,7 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
   for(const id of ['ipbf-pause','ipbf-reset','ipbf-control-status'])find(id);
   const linked=find('ipbf-link-damping');
   linked.checked=new URL(location.href).searchParams.get('finger_fluid_pressure_cockpit_linked')!=='0';
-  let baseRadius=null,resetting=false,error='';
+  let baseRadius=null,resetting=false,error='',lastParticleCount=null;
   const numberText=value=>Number(value.toPrecision(10)).toString();
   function source() {
     const solver=getSolver(),state=solver?.getPressureControls?.();
@@ -44,6 +48,10 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
   function update() {
     const current=source();
     for(const el of [...root.querySelectorAll('input,button'),find('ipbf-pause'),find('ipbf-reset')])el.disabled=!current||resetting;
+    // Population correction remains usable if replacement allocation failed.
+    find('ipbf-particles').disabled=resetting||!restartParticles;
+    find('ipbf-particles-apply').disabled=resetting||!restartParticles;
+    find('ipbf-control-error').textContent=error;
     if(!current){
       const status=getStatus?.();
       find('ipbf-control-status').textContent=resetting?'Resetting water…':status?.status==='error'
@@ -52,6 +60,8 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
       return;
     }
     const {runtime,state}=current,values=state.requested;
+    if(lastParticleCount!==runtime.particleCount){find('ipbf-particles').value=String(runtime.particleCount);lastParticleCount=runtime.particleCount;}
+    find('ipbf-particles-apply').disabled=resetting||!restartParticles;
     baseRadius=values.radius/values.pressureRadiusScale;
     for(const [name,value] of [['radius',values.radius],['cohesion',values.capillaryStrength],['passes',values.densityIterations]]) {
       for(const suffix of ['','-number']){
@@ -107,6 +117,14 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
   find('ipbf-beta').addEventListener('change',e=>change('beta',e.target.valueAsNumber));
   linked.addEventListener('change',()=>{try{apply({});}catch{}});
   find('ipbf-pause').addEventListener('click',()=>{setPaused(!isPaused());update();});
+  find('ipbf-particles-apply').addEventListener('click',async()=>{
+    if(resetting||!restartParticles)return;
+    const count=Number(find('ipbf-particles').value);
+    if(!Number.isSafeInteger(count)||count<1024){error='Particle count must be a whole number of at least 1024';update();return;}
+    resetting=true;update();
+    try{await restartParticles(count);error='';}catch(e){error=e.message||String(e);}
+    finally{resetting=false;update();}
+  });
   find('ipbf-reset').addEventListener('click',async()=>{
     if(resetting)return;resetting=true;update();
     try {await restart();error='';}catch(e){error=e.message||String(e);}

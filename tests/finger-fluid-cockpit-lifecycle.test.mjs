@@ -60,3 +60,20 @@ test('run controls keep their handlers and disabled state when mounted outside t
     finishReset();await reset;assert.equal(node('ipbf-pause').disabled,false);assert.match(node('ipbf-control-status').textContent,/Paused/);
   }finally{globalThis.location=oldLocation;globalThis.history=oldHistory;}
 });
+
+test('particle count is a draft until an explicit restart and invalid counts do not restart',async()=>{
+ const oldLocation=globalThis.location,oldHistory=globalThis.history;
+ globalThis.location={href:'http://localhost/index.html?finger_fluid_pressure_solver=ipbf'};globalThis.history={state:null,replaceState(){}};
+ try{
+  const model=createIPBFPressureControlState({baseRadius:.185,pressureRadiusScale:1,beta:60,densityIterations:2,capillaryStrength:.72});
+  const nodes=new Map();const node=id=>{if(!nodes.has(id))nodes.set(id,{type:'number',min:'0',max:'8',value:'',listeners:{},addEventListener(t,f){this.listeners[t]=f;}});return nodes.get(id);};
+  const root={ownerDocument:{activeElement:null},querySelector:s=>node(s.slice(1)),querySelectorAll:()=>[...nodes.values()]};let count=12288,available=true;const requests=[];
+  const cockpit=createIPBFPressureCockpit({root,getSolver:()=>({getPressureControls:()=>({available,...model.read(),particleCount:count,damping:true})}),isPaused:()=>false,setPaused(){},restart(){},restartParticles:async n=>{requests.push(n);if(n===999999999){available=false;throw Error("device capacity exceeded");}available=true;count=n;}});
+  assert.equal(Number(node('ipbf-particles').value),12288);
+  node('ipbf-particles').value='16384';cockpit.update();assert.equal(node('ipbf-particles').value,'16384');assert.deepEqual(requests,[]);
+  await node('ipbf-particles-apply').listeners.click();assert.deepEqual(requests,[16384]);assert.match(node('ipbf-control-status').textContent,/16,384/);
+  node('ipbf-particles').value='1.5';await node('ipbf-particles-apply').listeners.click();assert.deepEqual(requests,[16384]);assert.match(node('ipbf-control-error').textContent,/1024/);
+  node('ipbf-particles').value='999999999';await node('ipbf-particles-apply').listeners.click();assert.equal(node('ipbf-particles').disabled,false);assert.equal(node('ipbf-particles-apply').disabled,false);assert.match(node('ipbf-control-error').textContent,/device capacity/);
+  node('ipbf-particles').value='12288';await node('ipbf-particles-apply').listeners.click();assert.equal(count,12288);assert.match(node('ipbf-control-status').textContent,/12,288/);
+ }finally{globalThis.location=oldLocation;globalThis.history=oldHistory;}
+});

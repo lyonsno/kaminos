@@ -4369,7 +4369,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
   const requestedParticleCount = Number(params.get('finger_fluid_particle_count')
     ?? oracleCockpitRequested?.particleCount
     ?? waterfallOracleConfig?.defaultParticleCount
-    ?? KAMINOS_FINGER_FLUID_DEFAULT_PARTICLE_COUNT);
+    ?? 12288);
   const fixedVolumeReferenceParticleCountValue = params.get('finger_fluid_fixed_volume_reference_count');
   const requestedFixedVolumeReferenceParticleCount = fixedVolumeReferenceParticleCountValue === null
     ? null
@@ -14883,6 +14883,15 @@ function installFingerFluidPressureCockpit() {
         effective:{paused:fingerFluidBenchSimulationPaused},clock:window.kaminosFingerFluidBenchSessionState?.()});
     },
     restart:resetFingerFluidPressureCockpitWater,
+    restartParticles:async count=>{
+      const url=new URL(location.href);
+      const reference=url.searchParams.get('finger_fluid_fixed_volume_reference_count');
+      if(reference!==null&&count>Number(reference))throw new RangeError('Particle count exceeds the fixed-volume reference population');
+      url.searchParams.set('finger_fluid_particle_count',String(count));
+      history.replaceState(history.state,'',url);
+      await resetFingerFluidPressureCockpitWater();
+      if(!fingerFluidBenchSolver?.available)throw new Error(fingerFluidBenchState.runtime?.reason||'Water restart failed');
+    },
     onRequest:receipt=>{
       window._kaminosDirty?.();
       if(fingerFluidBenchConfig){
