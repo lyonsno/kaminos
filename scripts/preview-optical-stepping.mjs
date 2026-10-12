@@ -52,7 +52,7 @@ try {
   assert.equal(report.frozen.backend,'WebGPU:apple');
   assert.equal(report.frozen.controls.toneMapping,'agx');
   assert.equal(report.frozen.physicalColor.effective,'emissive-transport-v2');
-  report.phase='gpu-arithmetic';await save();report.gpuArithmetic=await checkOpticalStepGpu(page);await save();
+  report.phase='gpu-arithmetic';await save();await checkOpticalStepGpu(page,async values=>{report.gpuArithmetic=values;await save();});
   report.frozenCamera=await page.evaluate(()=>window.kaminosCameraDebugState());
   for(const [label,value,orbit=0] of [['current','current'],['fixed','fixed'],['numerical','numerical:0.001'],['numerical-loose','numerical:0.01'],['fixed-dense','fixed-dense'],['orbit-fixed','fixed',0.15],['orbit-numerical','numerical:0.001',0.15],['current-repeat','current']]) {
     report.phase=label;await save();

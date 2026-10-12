@@ -27,6 +27,7 @@ override OPTICAL_STEP_TOLERANCE: f32 = 0.001;
 struct OpticalStepState {
   probes: array<vec4<f32>, 5>,
   mask: u32,
+  origin: f32,
   cursor: f32,
   end: f32,
   width: f32,
@@ -37,11 +38,14 @@ struct OpticalStepState {
 }
 fn opticalStepInit(start: f32, end: f32, base: f32) -> OpticalStepState {
   var s: OpticalStepState;
-  s.cursor = start;
-  s.end = max(start, end);
+  // March in distance from entry: a grazing interval can be smaller than one
+  // ULP of the absolute camera-ray parameter, even with a valid positive step.
+  s.origin = start;
+  s.cursor = 0.0;
+  s.end = max(0.0, end - start);
   s.minimum = base * select(1.0, 0.5, OPTICAL_STEP_MODE == 3u);
   s.maximum = s.minimum * select(1.0, 4.0, OPTICAL_STEP_MODE == 2u);
-  s.width = min(s.maximum, s.end - start);
+  s.width = min(s.maximum, s.end);
   s.transfer = vec4<f32>(0.0, 0.0, 0.0, 1.0);
   return s;
 }
@@ -50,7 +54,7 @@ fn opticalStepIndex(mask: u32) -> u32 {
   return 4u;
 }
 fn opticalStepPosition(s: OpticalStepState) -> f32 {
-  return min(s.end, s.cursor + s.width * f32(opticalStepIndex(s.mask)) * 0.25);
+  return s.origin + min(s.end, s.cursor + s.width * f32(opticalStepIndex(s.mask)) * 0.25);
 }
 fn opticalCompose(a: vec4<f32>, b: vec4<f32>) -> vec4<f32> {
   return vec4<f32>(a.xyz + a.w * b.xyz, a.w * b.w);
