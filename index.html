@@ -14763,6 +14763,8 @@ async function startFingerFluidBench() {
     fingerFluidBenchViewport=createFluidViewportHost({renderer,scene,camera,pipeline:renderPipeline,device:renderer.backend.device,solver:fingerFluidBenchSolver,group:fingerFluidBenchScene.group,helperGround:groundPlane,getDisplayPolicy:()=>getFluidDisplayPolicy?.(),pipelineIdentity:FINGER_FLUID_BENCH_VIEWPORT_PIPELINE,framePrefix:'fluid-bench'});
     syncFingerFluidCompositionCamera({initial:true});
   }
+  if(typeof installFingerFluidPressureCockpit==='function')installFingerFluidPressureCockpit();
+  if(typeof installFluidWorkbench==='function')installFluidWorkbench();
   await activateFingerFluidPyroComposition();
   if(!isCurrent())return;
   if(sharedViewport){window._kaminosDirty?.();return;}
@@ -14814,15 +14816,26 @@ async function resetFingerFluidPressureCockpitWater() {
 
 
 function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
-  if(fluidWorkbench || !authoringWorkspace || authoringWorkspace.state().mode!=='workbench' || (!entryOnly && !fingerFluidPressureCockpit)) return;
+  const promote=fluidWorkbench && !entryOnly && window.__kaminosInvestigationEntryOnly && fingerFluidBenchSolver?.available && fingerFluidPressureCockpit;
+  if((fluidWorkbench && !promote) || !authoringWorkspace || authoringWorkspace.state().mode!=='workbench' || (!entryOnly && !fingerFluidPressureCockpit)) return;
   // The first consumer is the shared-viewport pressure bench. Explicit producer
   // routes keep their own presentation; layout does not relabel their renderer.
   if(new URLSearchParams(location.search).get('finger_fluid_viewport') === 'producer') return;
   const byId=id=>document.getElementById(id),root=byId('ipbf-pressure-cockpit');
-  const setup=document.createElement('section');setup.id='fluid-workbench-setup';
+  const setup=promote?byId('fluid-workbench-setup'):document.createElement('section');setup.id='fluid-workbench-setup';
+  if(!promote){
   const name=document.createElement('strong');name.id='fluid-workbench-fixture';name.textContent='Resolving fixture…';setup.append(name);
   const note=document.createElement('p');note.textContent='Numerical fixture · reset water to replay these settings. Fixture geometry is fixed for this experiment.';setup.append(note);
   byId('tab-finger-fluid-bench').append(setup);
+  }
+  if(promote){
+    fluidWorkbench.setControls({instruments:root,setup,
+      instrumentTitle:'Fluid tuning',instrumentHelp:'Simulation controls stay here while you inspect the scene.',
+      detailNodes:[...byId('tab-finger-fluid-bench').querySelectorAll(':scope > .panel')].filter(node=>node!==root),
+      runNodes:[root.querySelector('.ipbf-actions'),byId('ipbf-control-status')]});
+    window.__kaminosInvestigationEntryOnly=false;
+    updateFingerFluidBenchReadout();return;
+  }
   fluidWorkbench=installExperimentWorkspace({document,title:'Fluid',subtitle:'Tune water in the shared scene',
     instrumentTitle:entryOnly?'':'Fluid tuning',instrumentHelp:entryOnly?'':'Simulation controls stay here while you inspect the scene.',instruments:entryOnly?null:root,setup:entryOnly?null:setup,investigation,
     inspector:authoringWorkspace,
