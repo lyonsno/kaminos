@@ -30,7 +30,8 @@ test('resolveGridHeight: auto is twice the width; a request is clamped to [1, 4]
 
 test('the runtime derives every height from the resolved ratio: fluid grid, resample helper, irradiance lattice, and rebuilds on a height change', () => {
   const closure = source.slice(source.indexOf('export function createKaminosVolumePrototype('));
-  assert.match(closure, /let verticalRatio = resolveGridHeight\(controlsSnapshot, normalizeGridSize\(controlsSnapshot\.resolution\)\)\.ratio;/);
+  assert.match(closure, /let verticalRatio = VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;/);
+  assert.match(closure, /verticalRatio = resolveGridHeight\(controlsSnapshot, normalizeGridSize\(controlsSnapshot\.resolution\)\)\.ratio;\n\s+let gridSize = normalizeGridSize\(controlsSnapshot\.resolution\);/, 'seated from the controls before the grid is sized');
   assert.match(closure, /const gridHeightForSize = size => gridHeightForRatio\(size, verticalRatio\);/);
   assert.ok(!closure.includes('irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER'), 'the irradiance lattice no longer hard-codes ×2');
   assert.match(closure, /const irradianceGridHeight = gridHeightForSize\(irradianceGridSize\);/);
@@ -55,7 +56,7 @@ test('cockpit: a numeric height row with help, snapshot, listener, route restore
   assert.ok(restored.includes("'volume-grid-height-cells'"), 'restored from saved routes');
   assert.match(index, /s\.gridHeight\?\.mode === 'auto-twice-width' \? '' : ` · height \$\{s\.gridHeight\.mode\}`/, 'the Grid receipt names a requested height');
   const control = schema.controls.find(c => c.key === 'volume-grid-height-cells');
-  assert.deepEqual(control, { key: 'volume-grid-height-cells', param: 'volume_grid_height_cells', tagName: 'INPUT', type: 'number', additiveDefault: 0, additiveSinceControlCount: 248 });
+  assert.deepEqual(control, { key: 'volume-grid-height-cells', param: 'volume_grid_height_cells', tagName: 'INPUT', type: 'number', additiveDefault: 0, additiveSinceControlCount: 249 });
   assert.equal(schema.controlCount, 249); assert.equal(schema.controls.length, 249);
 });
 

@@ -10513,7 +10513,9 @@ export function createKaminosVolumePrototype({
   if (productFrameOwner === 'caller' && (!externalDevice || !externalColorFormat)) {
     throw new Error('caller-product-frame-requires-external-device-and-color-format');
   }
-  let verticalRatio = resolveGridHeight(controlsSnapshot, normalizeGridSize(controlsSnapshot.resolution)).ratio;
+  // The vertical ratio is seated from the controls once they exist (below);
+  // until then the helper reads the authored default.
+  let verticalRatio = VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
   const gridHeightForSize = size => gridHeightForRatio(size, verticalRatio);
   const gridShapeLabel = size => `${size}x${gridHeightForSize(size)}x${size}`;
   function gridCellCount(size) {
@@ -10578,6 +10580,7 @@ export function createKaminosVolumePrototype({
   let persistentSparseCohortGpuState = null;
   let fourArmHeldStateRuntimeState = null;
   let fourArmHeldStateResidualGrid = null;
+  verticalRatio = resolveGridHeight(controlsSnapshot, normalizeGridSize(controlsSnapshot.resolution)).ratio;
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let gridHeight = gridHeightForSize(gridSize);
   let boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));

@@ -24,7 +24,7 @@ const worldMax = new Function('productTransform', 'gridHeight', 'gridSize', `ret
 assert.deepEqual(worldMax({ translate: [0, 0, 0] }, 128, 64), [1, 3, 1]);
 assert.deepEqual(worldMax({ translate: [2.3, -0.5, 4] }, 128, 64), [3.3, 2.5, 5],
   'full-height lighting follows the relocated simulation domain');
-assert.match(field, /gridY:\s*irradianceGridSize\s*\*\s*VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER/);
+assert.match(field, /gridY:\s*gridHeightForSize\(irradianceGridSize\)/);
 assert.match(resources, /const atlasWidth = irradianceGridSize \* FIRE_IRRADIANCE_ATLAS_TILES_X;/);
 assert.match(resources, /const atlasHeight = irradianceGridHeight \* atlasTilesY;/);
 assert.match(resources, /size:\s*\{\s*width: atlasWidth,\s*height: atlasHeight,/,
