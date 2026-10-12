@@ -16,7 +16,8 @@
 // load with implicit im2col over NCHW input (b_sk/b_sn/b_sb = input H, input W,
 // output W). normB: { silu } applies a per-channel [scale, shift] (+SiLU) to B
 // while loading (conv only). aPairs: packed-f16 A, K-contiguous, even K and
-// strides: one u32 load yields two consecutive k.
+// strides: one u32 load yields two consecutive k. activation: { expression,
+// helpers } is trusted caller WGSL over `value`, applied after bias/residual.
 
 const ELEMENT = { f32: 'f32', f16: 'f16', f16packed: 'u32' };
 const binding = (index, name, type = 'f32', write = false) =>
@@ -46,7 +47,7 @@ export function tiledGemmTileShape({ tm = 4, tn = 4, bk = 16 } = {}) {
 // tile loaders (for `threads` threads filling bk x bm / bk x bn tiles) and the
 // epilogue that turns accumulator value ACC into the stored output.
 export function tiledGemmParts({ aKContiguous = true, bNContiguous = true, biasM = false, biasM2 = false, biasN = false,
-  residual = false, conv = null, aF16 = false, bF16 = false, types = {}, normB = null, aPairs = false },
+  residual = false, conv = null, aF16 = false, bF16 = false, types = {}, normB = null, aPairs = false, activation = null },
   { bm, bn, bk, threads, aLayout = 'k-major' }) {
   const t = { a: types.a ?? (aF16 ? 'f16packed' : 'f32'), b: types.b ?? (bF16 ? 'f16packed' : 'f32'),
     biasM: types.biasM ?? 'f32', biasM2: types.biasM2 ?? 'f32', biasN: types.biasN ?? 'f32',
@@ -74,7 +75,9 @@ export function tiledGemmParts({ aKContiguous = true, bNContiguous = true, biasM
   c_off:u32, c_sm:u32, c_sn:u32, c_sb:u32,
   pad_top:u32, pad_left:u32, n_base:u32, z1:u32,
 };
-${bindings.join('\n')}`;
+${bindings.join('\n')}${activation ? `
+${activation.helpers ?? ''}
+fn tiled_gemm_activate(value:f32)->f32{return ${activation.expression};}` : ''}`;
   const orderA = aKContiguous ? `let kk=idx%${bk}u;let mm=idx/${bk}u;` : `let mm=idx%${bm}u;let kk=idx/${bm}u;`;
   const orderB = bNContiguous || conv ? `let nn=idx%${bn}u;let kk=idx/${bn}u;` : `let kk=idx%${bk}u;let nn=idx/${bk}u;`;
   let valueB, prologue = '';
@@ -127,12 +130,16 @@ ${bindings.join('\n')}`;
       if(n<p.N&&k<p.K){ ${valueB} }
       tile_b[kk*${bn}u+nn]=value;
     }`;
+  if (activation && (typeof activation.expression !== 'string' || !activation.expression.trim())) {
+    throw new TypeError('activation expression must be nonempty WGSL over `value`');
+  }
   let epilogue = 'var v=p.alpha*(ACC);';
   if (biasM) epilogue += `v+=${load('bias_m', t.biasM, 'm')};`;
   if (biasM2) epilogue += `v+=${load('bias_m2', t.biasM2, 'm')};`;
   if (biasN) epilogue += `v+=${load('bias_n', t.biasN, 'n')};`;
   const cIndex = 'p.c_off+bat*p.c_sb+m*p.c_sm+n*p.c_sn';
   if (residual) epilogue += `v+=${load('res', t.residual, cIndex)};`;
+  if (activation) epilogue += 'v=tiled_gemm_activate(v);';
   epilogue += store('c', t.c, cIndex, 'v');
   return { header, loaders, epilogue, used, prologue };
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import * as attention from '../src/sam-online-attention-wgsl.js';
 import { readFileSync } from 'node:fs';
 import * as linear from '../src/sam-vector-linear-wgsl.js';
+import * as tiled from '../src/sam-tiled-linear.js';
 import { defineComputeKernel } from '../src/runtime-primitives.js';
 import { defineWebGpuPhaseProgram } from '../src/phase-program.js';
 import { createSamRangePhaseRuntime } from '../src/sam-range-phase-program.js';
@@ -30,13 +31,13 @@ for (const invalid of [0, -1, 0.5, NaN, Infinity, 65536]) {
 const source = readFileSync(new URL('../src/sam-image-vit-block-stack-phase-program.js', import.meta.url), 'utf8');
 assert.match(source, /attention: \{ code: SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL/);
 assert.match(source, /partitionSamAttentionPhase\(phase, kernels, runtime, 128\)/);
-assert.match(source, /partitionSamLinearPhase\(\{ \.\.\.phase, yieldAfter: true \}/);
+assert.match(source, /partitionSamTiledLinearPhase\(\{ \.\.\.phase, yieldAfter: true \}/);
 const partition = source.match(/const partitionPhase = phase => \{[^]*?\n      \};/);
 assert.ok(partition);
 const calls = [];
 const layerShape = { paddedTotalValues: 72 * 72 * 1024 };
 const shape = { tokenCount: 72 * 72, hiddenSize: 1024, intermediateSize: 4736 };
-const phasePartition = new Function('shape', 'layerShape', 'kernels', 'runtime', 'partitionSamAttentionPhase', 'partitionSamLinearPhase', `${partition[0]} return partitionPhase;`)(shape, layerShape, {}, {}, () => [], (phase, dims) => { calls.push({ phase, dims }); return [phase]; });
+const phasePartition = new Function('shape', 'layerShape', 'kernels', 'runtime', 'partitionSamAttentionPhase', 'partitionSamTiledLinearPhase', `${partition[0]} return partitionPhase;`)(shape, layerShape, {}, {}, () => [], (phase, dims) => { calls.push({ phase, dims }); return [phase]; });
 for (const kernel of ['qProjection', 'kProjection', 'vProjection', 'outputProjection', 'mlpFc1', 'mlpFc2']) phasePartition({ kernel });
 assert.equal(calls.length, 6, 'all dense backbone operations must cooperate');
 for (const { phase, dims } of calls) {
@@ -45,7 +46,9 @@ for (const { phase, dims } of calls) {
   assert.equal(dims.inputChannels, phase.kernel === 'mlpFc2' ? 4736 : 1024);
   assert.equal(dims.outputChannels, phase.kernel === 'mlpFc1' ? 4736 : 1024);
   assert.ok(dims.maxOutputsPerPhase >= 64);
-  assert.ok(dims.maxOutputsPerPhase * dims.inputChannels <= 2 ** 30);
+  // Tiled GEMM ranges are 8x the scalar 2^30 bound (~10x faster kernel).
+  assert.ok(dims.maxOutputsPerPhase * dims.inputChannels <= 2 ** 33);
+  assert.equal(dims.activation, phase.kernel === 'mlpFc1' ? 'gelu' : 'none');
 }
 const instrument = source.match(/const instrumentedPhases = phases\.flatMap\(phase => \{[^]*?\n      \}\);/);
 assert.ok(instrument, 'production phase expansion must precede one diagnostic readback per complete operation');
@@ -94,29 +97,34 @@ function productionHostConstruction(facade) {
     assert.ok(descriptor, `${name}: production kernel descriptor`);
     kernels[name] = new Function(...Object.keys(bindings), `return (${descriptor[1]});`)(...Object.values(bindings));
   }
-  const partitionPhase = new Function('shape', 'layerShape', 'kernels', 'runtime', 'partitionSamAttentionPhase', 'partitionSamLinearPhase',
-    `${partition[0]} return partitionPhase;`)(shape, layerShape, kernels, runtime, attention.partitionSamAttentionPhase, linear.partitionSamLinearPhase);
+  const partitionPhase = new Function('shape', 'layerShape', 'kernels', 'runtime', 'partitionSamAttentionPhase', 'partitionSamTiledLinearPhase',
+    `${partition[0]} return partitionPhase;`)(shape, layerShape, kernels, runtime, attention.partitionSamAttentionPhase, tiled.partitionSamTiledLinearPhase);
   const phases = names.flatMap(kernel => partitionPhase({ name: `native-global-${kernel}`, kernel, dispatch: kernel === 'attention' ? [5184, 16, 1] : [1], yieldAfter: true }));
-  assert.equal(phases.length, 113, 'actual native global layer partition definitions');
-  const codes = [attention.SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL, linear.SAM_VECTOR_LINEAR_RANGE_WGSL, linear.SAM_VECTOR_LINEAR_GELU_RANGE_WGSL];
+  // 41 attention query ranges + q/k/v/o one tiled range each + fc1/fc2 three token-row ranges each.
+  assert.equal(phases.length, 51, 'actual native global layer partition definitions');
+  const codes = [attention.SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL, linear.SAM_VECTOR_LINEAR_RANGE_WGSL, linear.SAM_VECTOR_LINEAR_GELU_RANGE_WGSL, ...tiled.samTiledLinearShaders()];
   const program = facade(runtime, codes).defineProgram({ name: 'native-global-ranges', kernels, phases });
-  assert.equal(new Set(program.phases.map(phase => phase.kernel.bindGroup)).size, 113);
+  assert.equal(new Set(program.phases.map(phase => phase.kernel.bindGroup)).size, 51);
   const ends = Object.fromEntries(names.map(name => [name, 0]));
   for (const [index, phase] of program.phases.entries()) {
     const name = names.find(name => phases[index].name === `native-global-${name}` || phases[index].name.startsWith(`native-global-${name}-`));
-    const range = phase.kernel.bindGroup.descriptor.entries[5].resource.buffer.values;
     if (name === 'attention') {
+      const range = phase.kernel.bindGroup.descriptor.entries[5].resource.buffer.values;
       assert.equal(range.query_offset, ends[name]);
       ends[name] += phase.dispatch[0];
     } else {
-      assert.equal(range.output_start, ends[name]);
-      ends[name] += range.output_count;
+      const params = phase.kernel.bindGroup.descriptor.entries[4].resource.buffer.values;
+      const inputChannels = name === 'mlpFc2' ? 4736 : 1024, outputChannels = name === 'mlpFc1' ? 4736 : 1024;
+      assert.equal(params.a_off, ends[name] * inputChannels);
+      assert.equal(params.c_off, ends[name] * outputChannels);
+      ends[name] += params.M;
     }
     assert.equal(phase.yieldAfter, true);
   }
-  for (const name of names) assert.equal(ends[name], name === 'attention' ? 5184 : 5184 * (name === 'mlpFc1' ? 4736 : 1024));
+  for (const name of names) assert.equal(ends[name], 5184, `${name} covers every token once`);
   return { pipelines, bindGroups, executableBodies: new Set(program.phases.map(phase => phase.kernel.pipeline)).size };
 }
-assert.deepEqual(productionHostConstruction(runtime => runtime), { pipelines: 113, bindGroups: 113, executableBodies: 113 }, 'ordinary route exposes repeated native-global setup');
-assert.deepEqual(productionHostConstruction(createSamRangePhaseRuntime), { pipelines: 3, bindGroups: 113, executableBodies: 3 }, 'native-global ranges share three production shader bodies');
-console.log('SAM ViT cooperative attention ranges and production 113-to-3 pipeline setup passed');
+assert.deepEqual(productionHostConstruction(runtime => runtime), { pipelines: 51, bindGroups: 51, executableBodies: 51 }, 'ordinary route exposes repeated native-global setup');
+// Attention ranges, tiled linear (q/k/v/o/fc2: base tile), tiled GELU linear (fc1: large tile).
+assert.deepEqual(productionHostConstruction(createSamRangePhaseRuntime), { pipelines: 3, bindGroups: 51, executableBodies: 3 }, 'native-global ranges share three production shader bodies');
+console.log('SAM ViT cooperative attention ranges and production 51-to-3 pipeline setup passed');
