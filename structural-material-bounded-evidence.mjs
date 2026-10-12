@@ -8,6 +8,11 @@ export function inspectBoundedWitness(w,expected){
  if(expected&&['points','elements','bonds'].some(k=>m?.[k]!==expected[k]))errors.push('Mechanical counts changed');
  if(!Array.isArray(w?.pieces)||!w.pieces.length||w.pieces.some(p=>p.binding?.route!=='kaminos.deformable-surface.node-associated-four-split.v0'||!Array.isArray(p.renderedPositions)||p.renderedPositions.length<9||p.renderedPositions.length%9||!p.renderedPositions.every(Number.isFinite)||new Set(p.renderedPositions).size<2))errors.push('Nonempty finite bounded surfaces required');
  if(s?.stresses?.some(v=>v.active&&v.invalid))errors.push('Active material inversion');
+ const native=w?.surfaceObservation,route='kaminos.deformable-surface.resident-four-split.webgpu.v0';
+ if(!native||native.source!=='native-webgpu-transport-compute-readback'||native.runId!==w?.runId||native.steps!==s?.steps||!Array.isArray(native.pieces)||native.pieces.length!==w?.pieces?.length)errors.push('Current native bounded surface observation required');
+ else{const ids=new Set();for(const sample of native.pieces){const piece=w.pieces.find(p=>p.id===sample.pieceId);if(!piece||ids.has(sample.pieceId)||piece.surfaceRoute!==route||sample.route!==route||sample.runId!==w.runId||sample.step!==s.steps||!Array.isArray(sample.reference)||sample.reference.length!==piece.renderedPositions.length||sample.reference.some((v,i)=>v!==piece.renderedPositions[i]))errors.push('Native surface identity or picking reference changed');ids.add(sample.pieceId);}
+  try{if(maximumBoundedSurfaceError(native.pieces)>3e-6)errors.push('Native surface differs from current picking geometry');}catch(e){errors.push(e.message);}
+ }
  return errors;
 }
 

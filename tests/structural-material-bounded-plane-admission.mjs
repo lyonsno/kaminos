@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {prepareSolidTopology,packSolidTopology} from '../structural-material-solid-topology.mjs';
+import {createSolidResident} from '../structural-material-solid-resident.js';
+globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,COPY_SRC:4,UNIFORM:8,MAP_READ:16};
+globalThis.GPUShaderStage={COMPUTE:1};
+const dispatches=[],device={limits:{maxStorageBufferBindingSize:1e9,minUniformBufferOffsetAlignment:256},queue:{writeBuffer(){},submit(){},async onSubmittedWorkDone(){}},createBuffer({size}){return{size,destroy(){}};},createShaderModule(){return{async getCompilationInfo(){return{messages:[]};}};},createBindGroupLayout(){return{};},createPipelineLayout(){return{};},async createComputePipelineAsync({compute}){return{entry:compute.entryPoint};},createBindGroup(){return{};},createCommandEncoder(){return{beginComputePass(){return{setPipeline(p){dispatches.push(p.entry);},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return{};}};}};
+const mesh={status:'passed',route:'ftetwild-cpu-wildmeshing-0.4.1',positions:[[0,0,0],[1,0,0],[0,1,0],[0,0,1]],tetrahedra:[[0,1,2,3]],volume:1/6};
+for(const kind of ['compact','graph','pmb']){const model=prepareSolidTopology(mesh,{kind:kind==='pmb'?'pmb':'graph',horizon:2,...(kind==='compact'?{damageLaw:'event-frozen-isotropic-degradation-v1'}:{})}),arrays=packSolidTopology(model),resident=await createSolidResident(device,{kind:model.kind,bufferLayout:model.bufferLayout,constitutiveLayout:model.constitutiveLayout,points:4,elements:model.elements.length,bonds:model.bonds.length,colorCount:model.colorCount},arrays);dispatches.length=0;
+ if(kind==='compact'){await assert.rejects(resident.damagePlane([1,0,0],.5),/compact.*stress/i);assert.deepEqual(dispatches,[]);await resident.fractureStress(100);assert.deepEqual(dispatches,['stress','fractureStress','degrade']);}else{await resident.damagePlane([1,0,0],.5);assert.deepEqual(dispatches,['damage']);}resident.dispose();}
+console.log('Compact plane damage is rejected without poisoning stress release; original graph and PMB remain admitted');

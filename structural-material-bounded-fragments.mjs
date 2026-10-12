@@ -65,6 +65,13 @@ export function buildFixedCellShell(input){
  return{id:0,component:0,nodes:input.positions.map((_,i)=>i),volume:split.pieces.reduce((s,p)=>s+p.volume,0),binding:{route:BOUNDED_FRAGMENT_ROUTE,fixedCellShell:true,points:input.positions.length,rest:input.positions,entries},geometry:{numProp:12,properties,indices:triangles.flatMap(t=>t.indices),exterior:triangles.map(t=>t.exterior)},cellCount:split.cellCount};
 }
 
+export function boundedCellAnchor(binding,indices,faceIndex){
+ if(!binding?.fixedCellShell||!Number.isInteger(faceIndex)||faceIndex<0||faceIndex*3+2>=indices.length)throw new Error('Explicit fixed cell face required');
+ const anchors=indices.slice(faceIndex*3,faceIndex*3+3).map(i=>binding.entries[i]?.anchor);
+ if(anchors.length!==3||!anchors.every(i=>Number.isInteger(i)&&i>=0&&i<binding.points&&i===anchors[0]))throw new Error('Picked face must have one material cell owner');
+ return anchors[0];
+}
+
 export function applyFixedCellShell(binding,current,bonds){
  if(!binding?.fixedCellShell||current.length!==binding.points||!current.every(p=>p.length===3&&p.every(Number.isFinite))||!Array.isArray(bonds)||bonds.length%4)throw new Error('Complete fixed shell material pose and bonds required');
  return binding.entries.map(e=>{const reached=new Set([e.anchor]);let changed=true;while(changed){changed=false;for(let k=0;k<6;k++){const [a,b]=pairs[k],edge=e.edgeIds[k];if(edge===0xffffffff)continue;const x=e.subset[a],y=e.subset[b];if(bonds[edge*4+2]===1&&(reached.has(x)||reached.has(y))&&(!reached.has(x)||!reached.has(y))){reached.add(x);reached.add(y);changed=true;}}}const ids=[...reached];return e.rest.map((v,k)=>v+ids.reduce((sum,i)=>sum+current[i][k]-binding.rest[i][k],0)/ids.length);});
