@@ -26036,7 +26036,10 @@ export function createKaminosVolumePrototype({
       // Admission before anything is replaced (review GH-04); without a device
       // the shape is seated now and admitted when the device appears (GH-03).
       const admission = device && shapeChanged ? gridShapeAdmission(requestedShape, device.limits) : { admitted: true, reason: null };
-      state.gridHeight = { ...requestedShape, admitted: admission.admitted, admissionReason: admission.reason, admissionChecked: Boolean(device && shapeChanged) };
+      // The receipt changes only when the request changes or a check runs, so a
+      // shape the device admitted stays receipted as checked while it holds.
+      const receiptStale = !state.gridHeight || state.gridHeight.widthCells !== requestedShape.widthCells || state.gridHeight.requestedCells !== requestedShape.requestedCells || state.gridHeight.heightCells !== requestedShape.heightCells;
+      if (receiptStale || (device && shapeChanged)) state.gridHeight = { ...requestedShape, admitted: admission.admitted, admissionReason: admission.reason, admissionChecked: Boolean(device && shapeChanged) };
       if (admission.admitted) gridShape = requestedShape;
       const heightChanged = admission.admitted && requestedShape.heightCells !== gridHeight;
       const sourceStateResetNeeded = device

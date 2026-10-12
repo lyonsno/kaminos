@@ -191,3 +191,29 @@ test('the runtime derives every height from the seated shape: fluid grid, resamp
   const tall = core.resolveImmersedSourceConfig({ emitterSourceLaw: 'immersed-source', pressureSolver: 'converged-open-top', immersedCentreY: 4.5 }, { grid: 32, gridHeight: 96 });
   assert.equal(tall.requested.centre[1], 4.5, 'a 3× box reaches y = 5');
 });
+
+// Found by the live witness of revision 1: the receipt was rewritten by every
+// later setControls (shape unchanged, nothing checked), so a shape the device
+// had admitted read `admissionChecked: false` by the end of the arm. The
+// receipt now changes only when the request changes or a check runs.
+test('the admission receipt stays with the shape it describes until the request changes or a check runs', () => {
+  const edit = closure.slice(closure.indexOf('    setControls(next) {'), closure.indexOf('      state.gridOverlay = controlsSnapshot.gridOverlay || 0;'));
+  assert.match(edit, /const receiptStale = !state\.gridHeight \|\| state\.gridHeight\.widthCells !== requestedShape\.widthCells \|\| state\.gridHeight\.requestedCells !== requestedShape\.requestedCells \|\| state\.gridHeight\.heightCells !== requestedShape\.heightCells;/);
+  assert.match(edit, /if \(receiptStale \|\| \(device && shapeChanged\)\) state\.gridHeight = \{ \.\.\.requestedShape, admitted: admission\.admitted, admissionReason: admission\.reason, admissionChecked: Boolean\(device && shapeChanged\) \};/);
+  // Behaviour without a device: an unrelated control change keeps the receipt object.
+  const stub = () => new Proxy(function () {}, {
+    get(target, prop) { if (prop === Symbol.toPrimitive) return () => 0; if (prop === 'then') return undefined; return target[prop] ?? (target[prop] = stub()); },
+    set(target, prop, value) { target[prop] = value; return true; },
+    apply() { return stub(); }, construct() { return stub(); },
+  });
+  globalThis.document = stub(); globalThis.window = globalThis.window || stub();
+  globalThis.requestAnimationFrame = () => 0; globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+  const prototype = core.createKaminosVolumePrototype({ THREE: stub(), viewport: stub(), camera: stub(), controls: stub(), getControls: () => ({ resolution: 48 }), onStatus: () => {} });
+  prototype.setControls({ gridHeightCells: 144 });
+  const receipt = prototype.debugState().gridHeight;
+  prototype.setControls({ gridOverlay: 0.5 });
+  assert.equal(prototype.debugState().gridHeight, receipt, 'same receipt after an unrelated change');
+  prototype.setControls({ gridHeightCells: 156 });
+  assert.notEqual(prototype.debugState().gridHeight, receipt, 'a new request writes a new receipt');
+  assert.equal(prototype.debugState().gridHeight.heightCells, 156);
+});
