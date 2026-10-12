@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {BURN_TABLE_ASSET} from '../burn-table-core.mjs';
 const out=process.argv[2];
 if(!out||!process.env.KAMINOS_URL||!process.env.CHROME_EXECUTABLE||!process.env.PLAYWRIGHT_MODULE)throw Error('Supply output path, KAMINOS_URL, CHROME_EXECUTABLE and PLAYWRIGHT_MODULE');
@@ -25,7 +26,15 @@ try {
   assert.equal(new Set(report.state.objects.map(o=>o.id)).size,4);
   assert.ok(report.state.objects.every(o=>o.id));
   const resource=await page.request.get(new URL(report.state.source,report.url).href);
-  report.assetBytes=(await resource.body()).length;assert.equal(report.assetBytes,41969408);
+  const assetBody=await resource.body();report.assetBytes=assetBody.length;assert.equal(report.assetBytes,41969408);
+  report.assetSha256=createHash('sha256').update(assetBody).digest('hex');assert.equal(report.assetSha256,BURN_TABLE_ASSET.sha256);
+  report.sources=[];
+  for(const name of ['index.html','burn-table-core.mjs','burn-table-experiment.mjs','burn-table-material.mjs','burn-table.css']){
+    const response=await page.request.get(new URL(name,report.url).href);assert.equal(response.status(),200);
+    const actual=createHash('sha256').update(await response.body()).digest('hex');
+    const local=createHash('sha256').update(await fs.readFile(path.join(report.repoRoot,name))).digest('hex');
+    assert.equal(actual,local,'Served source differs from owned checkout: '+name);report.sources.push({name,sha256:actual});
+  }
   report.shell=await page.evaluate(()=>({active:document.body.classList.contains('experiment-workspace'),tool:window.kaminosFluidWorkbenchState().tool,
     inspector:document.getElementById('authoring-inspector').checkVisibility(),simulation:window.kaminosFingerFluidBenchSessionState?.()}));
   assert.equal(report.shell.active,true);assert.equal(report.shell.tool,'assets');assert.equal(report.shell.inspector,true);
@@ -56,6 +65,23 @@ try {
   assert.equal(report.mobile.width,report.mobile.client);
   report.phase='mode-return';await page.getByRole('button',{name:'Authoring',exact:true}).click();await page.getByRole('button',{name:'Workbench',exact:true}).click();
   assert.equal((await page.evaluate(()=>window.kaminosBurnTable.state())).objects.length,4);
+  report.phase='shared-removal';
+  await page.evaluate(async()=>{for(const object of window.kaminosBurnTable.state().objects)await window.removeSceneObject(object.id);});
+  assert.equal((await page.evaluate(()=>window.kaminosBurnTable.state())).status,'unavailable');
+  await page.evaluate(()=>window.kaminosBurnTable.open());
+  report.rebuilt=await page.evaluate(()=>window.kaminosBurnTable.state());assert.equal(report.rebuilt.objects.length,4);assert.ok(report.rebuilt.objects.every(o=>o.id));
+  report.phase='abandon-pending';
+  await page.evaluate(async()=>{for(const object of window.kaminosBurnTable.state().objects)await window.removeSceneObject(object.id);});
+  let release,intercepted;
+  const gate=new Promise(resolve=>release=resolve),seen=new Promise(resolve=>intercepted=resolve);
+  const match=url=>url.pathname==='/api/read'&&url.searchParams.get('path')===BURN_TABLE_ASSET.path;
+  await page.route(match,async route=>{intercepted();await gate;await route.continue();});
+  await page.evaluate(()=>{window.__burnTablePending=window.kaminosBurnTable.open();});await seen;
+  await page.locator('#burn-table-experiment').selectOption('none');release();
+  await page.evaluate(()=>window.__burnTablePending);
+  report.abandoned=await page.evaluate(()=>({state:window.kaminosBurnTable.state(),labelsHidden:document.getElementById('burn-table-labels').hidden}));
+  assert.equal(report.abandoned.state.active,false);assert.equal(report.abandoned.state.objects.length,0);assert.equal(report.abandoned.labelsHidden,true);
+  await page.unroute(match);await page.evaluate(()=>window.kaminosBurnTable.open());
   assert.equal(report.errors.length,0,report.errors.join('\n'));
   report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);if(page)await page.screenshot({path:path.join(out,'failure.png')}).catch(()=>{});process.exitCode=1;}
