@@ -179,7 +179,57 @@ export class KleinPipeline {
     this.vae.sharedType = this.kernels.sharedType; this.vae.sched = this.sched;
     const vb = await fetchBundle(vae, 'vae')(this.vaeManifest.bundle.file, this.vaeManifest.bundle);
     await this.vae.load(vb); this.residentBytes.vae = vb.byteLength;
+    await this.precompile();
     this.timings.loadMs = performance.now() - t0;
+  }
+
+  // Swap the transformer for the one at `url` (another quantization level); the text encoder,
+  // decoder and tokenizer stay. The old weights are freed first so two transformers are never
+  // resident together; if loading fails there is no transformer until a later swap succeeds.
+  // onProgress(part, name, { loadedBytes, totalBytes }) as for load(); returns the load stats.
+  async loadTransformer(url, onProgress = () => {}) {
+    const manifest = await getJson(`${url}/manifest.json`);
+    const totalBytes = Object.values(manifest.bundles).reduce((sum, b) => sum + transferBytes(b), 0);
+    const stats = { totalBytes, cachedBytes: 0, downloadedBytes: 0, cacheErrors: [] };
+    this.transformer?.destroy(); this.transformer = null; this.residentBytes.transformer = 0;
+    const next = new KleinTransformer(this.device, manifest);
+    Object.assign(next, this.kernels); next.sched = this.sched;
+    let loadedBytes = 0, bytes = 0;
+    try {
+      await next.loadBundles((file, bundle) => getWeightBytes(`${url}/${file}`, { sha256: bundle.sha256, bytes: bundle.bytes, gzip: bundle.gzip,
+        onBytes: n => { loadedBytes += n; onProgress('transformer', file, { loadedBytes, totalBytes }); } }, stats), (n, b) => { bytes += b; });
+    } catch (e) { next.destroy(); throw e; }
+    this.transformer = next; this.ditManifest = manifest; this.urls.transformerUrl = url;
+    this.residentBytes.transformer = bytes;
+    await this.precompile();
+    return stats;
+  }
+
+  // Compile every GPU pipeline a generation uses before the first one runs. A tiny dry generation
+  // (64x64, one step, zero embeddings, nothing dispatched) records each pipeline the code would
+  // create; they are then compiled with createComputePipelineAsync, off the GPU process's main
+  // thread, so a page's rendering does not stall the way it does when pipelines are compiled
+  // synchronously at first use. Returns the number of pipelines compiled.
+  async precompile() {
+    const t0 = performance.now();
+    const collected = new Map(), models = [this.textEncoder, this.transformer, this.vae];
+    for (const m of models) m.pipelineCollector = collected;
+    try {
+      await this.generateScheduled({ prompt: 'x', seed: 0, width: 64, height: 64, steps: 1, textLength: 'fit0', dry: true });
+    } finally {
+      for (const m of models) m.pipelineCollector = null;
+      // The dry run tracked uniforms without encoding any dispatch; drop them so the next
+      // generation starts with a clean scheduler.
+      await this.sched.discard();
+    }
+    // Keyed by model and pipeline name: the models reuse some names (softmax, swiglu, GEMM keys) for
+    // their own caches, and each cache needs its own entry.
+    await Promise.all([...collected.values()].map(async ({ owner, key, code }) => {
+      const p = await this.device.createComputePipelineAsync({ layout: 'auto', compute: { module: this.device.createShaderModule({ code }), entryPoint: 'main' } });
+      p.label = key; owner.pipelines[key] = p;
+    }));
+    this.timings.precompileMs = performance.now() - t0; this.timings.precompiledPipelines = collected.size;
+    return collected.size;
   }
 
   async fetchEmbeddingRows(ids) {
@@ -195,10 +245,12 @@ export class KleinPipeline {
   // Returns { rgba: Uint8ClampedArray, width, height, timings, duties }.
   // `schedule` (optional) runs the image as kit command duties: { runtime, invocation, control,
   // signal, targetDutyMs, onDuty }. Without it the run is uncooperative but still submits per block.
-  async generate({ prompt, seed = 0, width = 512, height = 512, steps = 4, onStep = null, onPhase = null, schedule = null }) {
+  // textLength: the number of text tokens the prompt is padded to; 512 as in the reference pipeline,
+  // or 'fitN' for the prompt's own length plus N padding tokens (fewer tokens for the transformer).
+  async generate({ prompt, seed = 0, width = 512, height = 512, steps = 4, textLength = 512, onStep = null, onPhase = null, schedule = null }) {
     this.sched.setSchedule(schedule);
     try {
-      return await this.generateScheduled({ prompt, seed, width, height, steps, onStep, onPhase });
+      return await this.generateScheduled({ prompt, seed, width, height, steps, textLength, onStep, onPhase });
     } catch (error) {
       await this.sched.discard();
       throw error;
@@ -207,11 +259,14 @@ export class KleinPipeline {
     }
   }
 
-  async generateScheduled({ prompt, seed, width, height, steps, onStep, onPhase }) {
+  async generateScheduled({ prompt, seed, width, height, steps, textLength = 512, onStep, onPhase, dry = false }) {
     if (width % 16 || height % 16) throw new Error('width and height must be multiples of 16');
+    if (!this.transformer) throw new Error('no transformer is loaded');
     const dev = this.device, t = {};
     const latH = height / 16, latW = width / 16, imgTokens = latH * latW;
-    const framed = this.tokenizer.kleinPromptIds(prompt);
+    const fit = /^fit\d*$/.test(String(textLength));
+    const maxLength = fit ? Math.min(512, this.tokenizer.kleinPromptIds(prompt).length + Number(String(textLength).slice(3) || 0)) : Number(textLength);
+    const framed = this.tokenizer.kleinPromptIds(prompt, maxLength);
     const txtTokens = framed.inputIds.length;
     // Sequential residency: transformer activations exist from here until the decoder's input is
     // prepared, decoder activations from then until the image is read back, so peak activation
@@ -223,13 +278,32 @@ export class KleinPipeline {
     for (let l = 0; l < txtTokens; l++) txtIds[l * 4 + 3] = l;
     this.transformer.prepare({ latents: gaussianNoise(imgTokens * 128, seed), promptEmbeds: null, imgIds, txtIds });
 
+    // The text encoding depends only on the prompt and its padding, so a re-roll with a new seed reuses
+    // it from the last generation instead of running the text encoder again.
     let t0 = performance.now();
-    const emb = await gatherEmbeddings([...framed.inputIds], this.teManifest.config.hidden_size, ids => this.fetchEmbeddingRows(ids));
-    t.embeddingFetchMs = performance.now() - t0;
+    const promptKey = `${maxLength}\u0000${prompt}`;
+    const embedBytes = txtTokens * this.transformer.cfg.joint_attention_dim * 4;
     onPhase?.('text');
-    t0 = performance.now();
-    await this.textEncoder.encode(emb, framed.attentionMask, this.transformer.act.promptEmbeds);
-    t.textEncodeMs = performance.now() - t0;
+    if (dry) {
+      await this.textEncoder.encode(new Float32Array(txtTokens * this.teManifest.config.hidden_size), framed.attentionMask, this.transformer.act.promptEmbeds);
+    } else if (this.promptCache?.key === promptKey) {
+      this.sched.encoder().copyBufferToBuffer(this.promptCache.buffer, 0, this.transformer.act.promptEmbeds, 0, embedBytes);
+      t.embeddingFetchMs = 0; t.textEncodeMs = 0; t.textCached = true;
+    } else {
+      const emb = await gatherEmbeddings([...framed.inputIds], this.teManifest.config.hidden_size, ids => this.fetchEmbeddingRows(ids));
+      t.embeddingFetchMs = performance.now() - t0;
+      t0 = performance.now();
+      await this.textEncoder.encode(emb, framed.attentionMask, this.transformer.act.promptEmbeds);
+      t.textEncodeMs = performance.now() - t0;
+      if (this.promptCache?.buffer.size !== embedBytes) {
+        this.promptCache?.buffer.destroy();
+        this.promptCache = { key: null, buffer: dev.createBuffer({ size: embedBytes, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST }) };
+      }
+      // The key is set only when this generation completes, so a failed run never leaves a key
+      // pointing at a copy that was not submitted.
+      this.promptCache.key = null;
+      this.sched.encoder().copyBufferToBuffer(this.transformer.act.promptEmbeds, 0, this.promptCache.buffer, 0, embedBytes);
+    }
 
     const sched = kleinSchedule(imgTokens, steps);
     onPhase?.('denoise');
@@ -249,6 +323,7 @@ export class KleinPipeline {
     this.transformer.release();
     this.vae.allocate(latH, latW);
     await this.vae.decode(this.vae.prepped);
+    if (dry) { this.vae.release(); return null; }
     let enc;
     const bytes = width * height * 3 * 4;
     const rb = dev.createBuffer({ size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
@@ -264,6 +339,7 @@ export class KleinPipeline {
     }
     t.totalMs = t.embeddingFetchMs + t.textEncodeMs + t.stepMs.reduce((a, b) => a + b, 0) + t.vaeDecodeMs;
     const duties = this.sched.stats.history.splice(0);
-    return { rgba, width, height, timings: t, promptTokens: framed.length, duties };
+    this.promptCache.key = promptKey;
+    return { rgba, width, height, timings: t, promptTokens: framed.length, textTokens: txtTokens, duties };
   }
 }

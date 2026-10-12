@@ -42,17 +42,18 @@ ALIGN = 256
 GROUP = 64
 
 
-def quantize(w, fmt):
+def quantize(w, fmt, group=None):
     """Return (data bytes, scales bytes, dequantized f32) for a 2-D weight [N, K]."""
+    group = group or GROUP
     N, K = w.shape
-    g = w.reshape(N, K // GROUP, GROUP).astype(np.float32)
+    g = w.reshape(N, K // group, group).astype(np.float32)
     if fmt == "i8":
         scale = np.abs(g).max(axis=2, keepdims=True) / 127.0
         scale = scale.astype(np.float16).astype(np.float32)
         safe = np.where(scale == 0, 1, scale)
         q = np.clip(np.rint(g / safe), -127, 127).astype(np.int8)
         deq = q.astype(np.float32) * scale
-        return q.reshape(N, K).tobytes(), scale.astype(np.float16).reshape(N, K // GROUP).tobytes(), deq.reshape(N, K)
+        return q.reshape(N, K).tobytes(), scale.astype(np.float16).reshape(N, K // group).tobytes(), deq.reshape(N, K)
     if fmt == "i4":
         lo, hi = g.min(axis=2, keepdims=True), g.max(axis=2, keepdims=True)
         scale = ((hi - lo) / 15.0).astype(np.float16).astype(np.float32)
@@ -64,9 +65,63 @@ def quantize(w, fmt):
         packed = np.zeros((N, K // 8), dtype=np.uint32)
         for c in range(8):
             packed |= q[:, :, c] << np.uint32(4 * c)
-        sb = np.concatenate([scale, bias], axis=2).astype(np.float16).reshape(N, K // GROUP * 2)
+        sb = np.concatenate([scale, bias], axis=2).astype(np.float16).reshape(N, K // group * 2)
         return packed.tobytes(), sb.tobytes(), deq.reshape(N, K)
+    if fmt in ("i3", "i2"):
+        bits = int(fmt[1])
+        scale, bias = mse_range(g, bits)
+        safe = np.where(scale == 0, 1, scale)
+        q = np.clip(np.rint((g - bias) / safe), 0, 2 ** bits - 1).astype(np.uint32)
+        deq = q.astype(np.float32) * scale + bias
+        sb = np.concatenate([scale, bias], axis=2).astype(np.float16).reshape(N, K // group * 2)
+        return pack_bits(q.reshape(N, K), bits).tobytes(), sb.tobytes(), deq.reshape(N, K)
     raise ValueError(fmt)
+
+
+def mse_range(g, bits, candidates=np.linspace(0.4, 1.0, 10)):
+    """Per-group affine range for low-bit weights: shrink the min/max range by the candidate factor
+    that minimizes the group's squared error after f16 rounding of scale and bias (as quant-assay.py's
+    "mse" scheme). g is [N, groups, group] f32; returns f16-representable f32 (scale, bias)."""
+    t = torch.from_numpy(g)
+    levels = 2 ** bits - 1
+    lo, hi = t.amin(dim=2, keepdim=True), t.amax(dim=2, keepdim=True)
+    best_scale = best_bias = best_err = None
+    for r in candidates.tolist():
+        scale, bias = ((hi - lo) * r / levels).half().float(), (lo * r).half().float()
+        safe = torch.where(scale == 0, torch.ones_like(scale), scale)
+        err = ((torch.clamp(torch.round((t - bias) / safe), 0, levels) * scale + bias - t) ** 2).sum(dim=2, keepdim=True)
+        if best_err is None:
+            best_scale, best_bias, best_err = scale, bias, err
+        else:
+            better = err < best_err
+            best_scale, best_bias = torch.where(better, scale, best_scale), torch.where(better, bias, best_bias)
+            best_err = torch.minimum(err, best_err)
+    return best_scale.numpy(), best_bias.numpy()
+
+
+def pack_bits(q, bits):
+    """Pack unsigned codes q [N, K] row-major into u32 words. 2-bit: 16 codes per word, code c at bit
+    2c. 3-bit: 32 codes per 3 words, code j at bit 3j of the 96-bit little-endian triple (codes 10
+    and 21 straddle words), so a 32-wide K tile is exactly 3 words."""
+    N, K = q.shape
+    q = q.astype(np.uint64)
+    if bits == 2:
+        q = q.reshape(N, K // 16, 16)
+        packed = np.zeros((N, K // 16), dtype=np.uint64)
+        for c in range(16):
+            packed |= q[:, :, c] << np.uint64(2 * c)
+        return packed.astype(np.uint32)
+    if bits == 3:
+        assert K % 32 == 0, "3-bit packing needs K divisible by 32"
+        q = q.reshape(N, K // 32, 32)
+        words = np.zeros((N, K // 32, 3), dtype=np.uint64)
+        for j in range(32):
+            w, sh = divmod(3 * j, 32)
+            words[:, :, w] |= (q[:, :, j] << np.uint64(sh)) & np.uint64(0xFFFFFFFF)
+            if sh > 29:
+                words[:, :, w + 1] |= q[:, :, j] >> np.uint64(32 - sh)
+        return words.astype(np.uint32).reshape(N, K // 32 * 3)
+    raise ValueError(bits)
 F16_MAX = 65504.0
 F16_MIN_NORMAL = 6.103515625e-05
 
@@ -75,10 +130,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model-dir", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--format", default="f16", choices=["f16", "i8", "i4"])
-    ap.add_argument("--globals-format", default=None, choices=["f16", "i8", "i4"])
+    ap.add_argument("--format", default="f16", choices=["f16", "i8", "i4", "i3", "i2"])
+    ap.add_argument("--globals-format", default=None, choices=["f16", "i8", "i4", "i3", "i2"])
+    ap.add_argument("--group", type=int, default=GROUP, help="quantization group for block weights (multiple of 8)")
+    ap.add_argument("--globals-group", type=int, default=None, help="quantization group for globals (default: --group)")
     args = ap.parse_args()
     globals_format = args.globals_format or args.format
+    globals_group = args.globals_group or args.group
     src = Path(args.model_dir) / "transformer"
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -123,11 +181,12 @@ def main():
         ]
 
     manifest = {"schema": "kaminos.flux2-klein.transformer-weights.v1", "format": args.format,
-                "globals_format": globals_format, "group": GROUP, "layout": "row-major [out, in]",
+                "globals_format": globals_format, "group": args.group, "globals_group": globals_group, "layout": "row-major [out, in]",
                 "source": source_identity(src), "config": config, "bundles": {}, "conversion": {}}
     total_overflow = total_subnormal = 0
     for bname, tensors in bundles.items():
         fmt_for = globals_format if bname == "globals" else args.format
+        group_for = globals_group if bname == "globals" else args.group
         parts, entries, offset = [], [], 0
 
         def put(data):
@@ -143,7 +202,7 @@ def main():
 
         for name, w in tensors:
             w32 = w.to(torch.float32).numpy()
-            fmt = fmt_for if (w32.ndim == 2 and w32.shape[1] % GROUP == 0) else "f16"
+            fmt = fmt_for if (w32.ndim == 2 and w32.shape[1] % group_for == 0) else "f16"
             if fmt == "f16":
                 a = w32.astype(np.float16)
                 overflow = int(np.count_nonzero(np.abs(w32) > F16_MAX))
@@ -154,10 +213,10 @@ def main():
                 entries.append({"name": name, "format": "f16", "shape": list(a.shape), "offset": put(data), "bytes": len(data),
                                 "overflow": overflow, "subnormal": subnormal})
             else:
-                qdata, sdata, deq = quantize(w32, fmt)
+                qdata, sdata, deq = quantize(w32, fmt, group_for)
                 err = float(np.linalg.norm(deq - w32) / max(np.linalg.norm(w32), 1e-30))
-                entries.append({"name": name, "format": fmt, "shape": list(w32.shape), "offset": put(qdata), "bytes": len(qdata),
-                                "scale_offset": put(sdata), "scale_bytes": len(sdata), "weight_rel_l2": err})
+                entries.append({"name": name, "format": fmt, "group": group_for, "shape": list(w32.shape), "offset": put(qdata),
+                                "bytes": len(qdata), "scale_offset": put(sdata), "scale_bytes": len(sdata), "weight_rel_l2": err})
         blob = b"".join(parts)
         (out / f"{bname}.bin").write_bytes(blob)
         manifest["bundles"][bname] = {"file": f"{bname}.bin", "bytes": len(blob),

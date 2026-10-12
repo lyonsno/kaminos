@@ -4,6 +4,7 @@
 // on every path, naming the step that failed.
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { assertSource } from './source-identity.mjs';
 import { parseArgs } from 'node:util';
@@ -35,7 +36,7 @@ function run(id, script, args) {
     maxBuffer: 64 * 1024 * 1024 });
   const step = { id, exitCode: child.status, wallMs: Date.now() - started, report, gpuBefore, stdoutTail: child.stdout?.slice(-400),
     stderrTail: child.stderr?.slice(-2000), signal: child.signal };
-  try { step.result = JSON.parse(execFileSync('cat', [report], { encoding: 'utf8' })); } catch (error) { step.reportError = String(error); }
+  try { step.result = JSON.parse(readFileSync(report, 'utf8')); } catch (error) { step.reportError = String(error); }
   summary.steps.push(step);
   assertSource(values['repo-root'], summary.commit, `after step ${id}`);
   return step;
@@ -80,7 +81,7 @@ try {
 
   const plan = values.plan ?? 'profiles';
   summary.plan = plan;
-  if (!['profiles', 'coop-sweep'].includes(plan)) throw new Error(`unknown plan ${plan}`);
+  if (!['profiles', 'coop-sweep', 'coop-alternate', 'landing-check', 'profile', 'bench'].includes(plan)) throw new Error(`unknown plan ${plan}`);
   const page = (id, query) => run(id, demo, ['--url',
     `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
     '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
@@ -107,6 +108,46 @@ try {
       run(id, demo, ['--url', `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
         '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
     }
+  } else if (plan === 'bench') {
+    // Kernel bench only (the start and end bench steps): minimum over rounds.
+    summary.phase = 'bench-only';
+  } else if (plan === 'profile') {
+    // Per-dispatch GPU timings (own timestamped pass per dispatch) at 512, with
+    // an unprofiled control to size the profiler's own overhead.
+    summary.phase = 'dispatch-profile';
+    for (const [id, options, size] of [
+      ['profile-product', { activations: 'f16', fuseNorm: true, gemmPrecision: 'f16-tiles', profile: true }, 512],
+      ['profile-faithful', { activations: 'f32', fuseNorm: false, profile: true }, 512],
+      ['control-product', { activations: 'f16', fuseNorm: true, gemmPrecision: 'f16-tiles' }, 512],
+      ['control-faithful', { activations: 'f32', fuseNorm: false }, 512],
+      ['control-product-1024', { activations: 'f16', fuseNorm: true, gemmPrecision: 'f16-tiles' }, 1024],
+      ['control-faithful-1024', { activations: 'f32', fuseNorm: false }, 1024],
+    ]) {
+      run(id, witness, [...common, '--stage', 'route', '--fixture', `${state}/reference/ring-0000-${size}`, '--weights', `${state}/weights/f16`,
+        ...image, '--options', JSON.stringify(options), '--run-options', JSON.stringify({ runs: 6 })]);
+    }
+  } else if (plan === 'landing-check') {
+    // Correctness gate before landing: F32 route parity, the product profile,
+    // and F32 parity through fenced cooperative duties.
+    summary.phase = 'landing-check';
+    for (const [id, weights, options, runOptions] of [
+      ['parity-f32', 'f32', {}, {}],
+      ['product-f16', 'f16', { activations: 'f16', fuseNorm: true, gemmPrecision: 'f16-tiles' }, {}],
+      ['parity-f32-fenced-duties', 'f32', {}, { runs: 2, fencedDuties: { targetDutyMs: 12 } }],
+    ]) {
+      run(id, witness, [...common, '--stage', 'route', '--fixture', `${state}/reference/ring-0000-512`, '--weights', `${state}/weights/${weights}`,
+        ...image, '--options', JSON.stringify(options), '--run-options', JSON.stringify(runOptions)]);
+    }
+  } else if (plan === 'coop-alternate') {
+    // Paired blocking/cooperative alternation inside one page session (17 runs:
+    // a cold blocking run, then 8 cooperative/blocking pairs) per profile.
+    summary.phase = 'cooperative-alternate';
+    for (const [name, query] of [['product-12ms', 'dutyMs=12'], ['product-16ms', 'dutyMs=16'], ['product-20ms', 'dutyMs=20'],
+      ['product-12ms-repeat', 'dutyMs=12']]) {
+      run(`alternate-${name}`, demo, ['--url',
+        `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=17&alternate=1&${query}`,
+        '--chrome', values.chrome, '--screenshot', path.join(out, `alternate-${name}`, 'screen.png')]);
+    }
   } else {
     // Cooperative 512 throughput vs scene smoothness: duty target sweep for
     // both profiles, with a blocking baseline per profile.
@@ -123,7 +164,8 @@ try {
   run('bench-end', witness, [...common, '--stage', 'bench', '--fixture', `${state}/reference/ring-0000-512`, '--weights', `${state}/weights/f16`]);
 
   summary.phase = 'complete';
-  summary.status = summary.steps.every(step => step.exitCode === 0) ? 'passed' : 'completed-with-failures';
+  // A step passes only if it exited cleanly and its report was read back.
+  summary.status = summary.steps.every(step => step.exitCode === 0 && step.result && !step.reportError) ? 'passed' : 'completed-with-failures';
 } catch (error) {
   summary.error = `${error?.name ?? 'Error'}: ${error?.message ?? String(error)}`;
   process.exitCode = 1;

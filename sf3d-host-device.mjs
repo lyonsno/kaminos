@@ -4,7 +4,7 @@ export const sharedGpuBufferRequirements = Object.freeze({
   maxBufferSize: 3 * 96 * 96 * 2 * 4096 * 4,
   maxStorageBufferBindingSize: 3 * 96 * 96 * 2 * 4096 * 4,
 });
-export const SF3D_PRODUCER_COMMIT = 'e4ec909cbbd896e04b221bb9aed9c910fd03ec6d';
+export const SF3D_PRODUCER_COMMIT = '8527c03f5a4afb298341059f4aca2e56309acc34';
 
 export function judgeSf3dSmoke(result, {expectedScene = null, expectedReopen = null} = {}) {
   const errors = [];

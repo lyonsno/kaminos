@@ -23,6 +23,75 @@ from urllib.parse import urlparse, parse_qs, parse_qsl, urlencode
 
 PORT = 8090
 ROOT = Path(__file__).parent.resolve()
+
+
+def observe_sf3d_source_host():
+    """Fresh source-machine identity; no browser/physical-capacity inference."""
+    observation = {"source": "live-source-host", "platform": sys.platform,
+                   "atUnixMs": time.time_ns() // 1000000}
+    if sys.platform != "darwin":
+        return observation
+    command = ["/usr/sbin/sysctl", "-n", "hw.model", "hw.memsize", "machdep.cpu.brand_string"]
+    result = subprocess.run(command, capture_output=True, text=True, check=True)
+    rows = result.stdout.strip().splitlines()
+    if len(rows) != 3:
+        raise ValueError("incomplete source-machine sysctl observation")
+    observation.update(source="live-macos-sysctl", effectiveRoute="/usr/sbin/sysctl",
+                       machine=rows[0], hostTotalBytes=int(rows[1]), cpu=rows[2])
+    if not observation["machine"] or not observation["cpu"] or observation["hostTotalBytes"] <= 0:
+        raise ValueError("invalid source-machine identity")
+    return observation
+
+
+def sf3d_source_admission():
+    """Carry the unadmitted M2 full-route hold; never grant positive fit authority."""
+    report = {"schema": "kaminos.sf3d-source-admission.v0",
+              "authority": "circuit-breaker-only", "repoRoot": str(ROOT),
+              "sourcePath": str((ROOT / "lib/sf3d/weights.bin").resolve()),
+              "modelPayloadBytesServed": 0,
+              "meaning": "source-host full-model hold, not browser capacity or positive model admission"}
+    try:
+        observation = observe_sf3d_source_host()
+        report["observation"] = observation
+        if not isinstance(observation, dict) or not isinstance(observation.get("platform"), str):
+            raise ValueError("live source platform required")
+        if observation["platform"] != "darwin" and observation.get("source") != "live-source-host":
+            raise ValueError("unverified source identity cannot release the source hold")
+        if observation.get("platform") == "darwin":
+            if (observation.get("source") != "live-macos-sysctl" or
+                    not isinstance(observation.get("machine"), str) or
+                    not isinstance(observation.get("cpu"), str) or
+                    type(observation.get("hostTotalBytes")) is not int or observation["hostTotalBytes"] <= 0):
+                raise ValueError("unverified live Mac identity cannot release the source hold")
+            # The recorded machine, CPU and RAM join identify this box. RAM
+            # alone is never used to infer model admission or another machine.
+            exact = (observation["machine"] == "Mac14,9" and observation["cpu"] == "Apple M2 Pro" and
+                     observation["hostTotalBytes"] == 17179869184)
+            conflicting = observation["machine"] == "Mac14,9" or observation["cpu"] == "Apple M2 Pro"
+            if exact or conflicting:
+                report.update(verdict="refused", reason="M2 Pro full-model admission remains unresolved")
+                return report
+        report.update(verdict="not-applicable", reason="this source-host hold does not identify the observed machine; no positive fit claim")
+    except Exception as error:
+        report.update(verdict="refused", reason="source-machine identity unavailable",
+                      failurePhase="source-host-observation", error=str(error))
+        return report
+    try:
+        source = Path(report["sourcePath"])
+        if not source.is_file():
+            raise ValueError("SF3D source must be an observed regular file")
+        size = source.stat().st_size
+        if not 16 <= size <= 9007199254740991:
+            raise ValueError("SF3D source size is outside the loader's exact integer contract")
+        report["weightSource"] = {"source": "live-source-file-stat",
+                                 "requestedPath": "/lib/sf3d/weights.bin",
+                                 "sourcePath": str(source), "bytes": size}
+    except Exception as error:
+        report.update(verdict="refused", reason="source weight metadata unavailable",
+                      failurePhase="weight-source-metadata", error=str(error))
+    return report
+
+
 VOLUME_CAPTURE_DIR = ROOT / "artifacts" / "volume-captures"
 VOLUME_SETTINGS_PRESET_SCHEMA_PATH = ROOT / "volume-settings-preset-schema-v2.json"
 VOLUME_SETTINGS_STORE_DEFAULT = Path(os.environ.get(
@@ -3144,6 +3213,30 @@ def record_job_output_event(event):
 
 
 class KaminosHandler(http.server.SimpleHTTPRequestHandler):
+    def refuse_sf3d_source(self, target):
+        if Path(target).resolve() != (ROOT / "lib/sf3d/weights.bin").resolve():
+            return False
+        report = sf3d_source_admission()
+        if report["verdict"] != "refused":
+            return False
+        report["requestedPath"] = self.path
+        body = json.dumps(report).encode("utf-8")
+        self.send_response(503)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-SF3D-Memory-Authority", report["authority"])
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+        return True
+
+    def send_head(self):
+        # This is shared by actual static GET and HEAD, including decoded
+        # aliases and symlinks; refuse before SimpleHTTP opens the source.
+        if self.refuse_sf3d_source(self.translate_path(self.path)):
+            return None
+        return super().send_head()
+
     def translate_path(self, path):
         parsed = urlparse(path)
         if parsed.path.startswith('/sam3-packet/') and SAM3_PACKET_ROOT:
@@ -3160,7 +3253,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/runtime-config":
+        if parsed.path == "/api/sf3d-source-admission":
+            report = sf3d_source_admission()
+            report["requestId"] = parse_qs(parsed.query).get("requestId", [None])[0]
+            self.send_json(report)
+        elif parsed.path == "/api/runtime-config":
             self.handle_runtime_config()
         elif parsed.path == "/api/pipeline-manifest":
             self.handle_pipeline_manifest()
@@ -4192,6 +4289,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "Not a file"}, 404)
             return
 
+        if self.refuse_sf3d_source(target):
+            return
+
         # For images, serve directly
         ext = target.suffix.lower()
         if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz"):
@@ -4318,6 +4418,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         delay_seconds = greenroom_job_output_delay_seconds(job_id, filename)
+        if self.refuse_sf3d_source(target):
+            return
         delay_ms = int(delay_seconds * 1000)
         started_at_ms = int(time.time() * 1000)
         body = target.read_bytes()

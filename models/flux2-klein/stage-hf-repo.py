@@ -2,7 +2,7 @@
 
 Layout (what the browser page reads from a weights base URL):
   te/   text-encoder bundles, token-embedding table, tokenizer.json, manifest.json
-  dit/  transformer bundles and manifest.json
+  dit/  transformer bundles and manifest.json (dit-NAME/ for each --dit-level NAME=DIR)
   vae/  VAE decoder bundle and manifest.json
   LICENSE, README.md, staged-files.json
 
@@ -55,14 +55,20 @@ def main():
     ap.add_argument('--repo-id', required=True)
     ap.add_argument('--out', required=True)
     ap.add_argument('--gzip', action='store_true', help='also publish gzip copies of the bundles and tokenizer')
+    ap.add_argument('--dit-level', action='append', default=[], metavar='NAME=DIR',
+                    help='another transformer weight set, staged as dit-NAME/ (the page\'s other jank levels)')
     args = ap.parse_args()
+    components = [(name, getattr(args, name)) for name in ('te', 'dit', 'vae')]
+    for level in args.dit_level:
+        name, _, path = level.partition('=')
+        components.append((f'dit-{name}', path))
     out = Path(args.out)
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
 
-    for name in ('te', 'dit', 'vae'):
-        src, dst = Path(getattr(args, name)), out / name
+    for name, path in components:
+        src, dst = Path(path), out / name
         dst.mkdir()
         manifest = json.loads((src / 'manifest.json').read_text())
         source = manifest.get('source')
@@ -94,8 +100,11 @@ def main():
                                                        'total_bytes': sum(r['bytes'] for r in rows)}, indent=1))
     print(len(rows), 'files', sum(r['bytes'] for r in rows), 'bytes')
     if args.gzip:
-        page = sum(r['bytes'] for r in rows if r['path'].endswith('.gz'))
-        print('page download with gzip copies:', page, 'bytes')
+        gz = lambda prefix: sum(r['bytes'] for r in rows if r['path'].endswith('.gz') and r['path'].startswith(prefix + '/'))
+        shared = gz('te') + gz('vae')
+        for name, _ in components:
+            if name.startswith('dit'):
+                print(f'page download with {name}/:', shared + gz(name), 'bytes')
 
 
 if __name__ == '__main__':

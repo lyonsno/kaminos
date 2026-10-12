@@ -4,7 +4,7 @@
 // projection. Weights come from pack-transformer.py bundles (f16 [out, in]).
 import { KleinDutyScheduler } from './klein-duties.js';
 import { LN_EPS, gemmShader, layerNormModulateShader, qkvPrepShader, softmaxShader, swigluShader,
-  headsToRowsShader, siluShader, axpyShader, gemmShaderV2 } from './klein-kernels.js';
+  headsToRowsShader, siluShader, axpyShader, gemmShaderV2, gemmShaderV3, gemmVersionFor } from './klein-kernels.js';
 
 const HEAD = 128;
 
@@ -52,8 +52,12 @@ export class KleinTransformer {
     this.sched = new KleinDutyScheduler(device, { label: 'klein.dit' });
   }
 
+  // With a pipelineCollector set (KleinPipeline.precompile's dry run), an uncompiled pipeline is
+  // recorded instead of compiled synchronously, and its dispatch is skipped.
   pipeline(key, code) {
+    if (!this.pipelines[key] && this.pipelineCollector) { this.pipelineCollector.set(`${this.constructor.name}:${key}`, { owner: this, key, code }); return null; }
     if (!this.pipelines[key]) {
+      this.syncCompiles = (this.syncCompiles ?? 0) + 1; (this.syncCompiledKeys ??= []).push(key);
       const module = this.device.createShaderModule({ code });
       this.pipelines[key] = this.device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'main' } });
       this.pipelines[key].label = key;
@@ -102,7 +106,7 @@ export class KleinTransformer {
     const format = t.format ?? 'f16';
     const elemOff = format === 'f16' ? t.offset / 2 : t.offset / 4;
     return { buf: b.buf, format, elemOff, byteOff: t.offset, bytes: t.bytes, shape: t.shape,
-      scaleOff: t.scale_offset !== undefined ? t.scale_offset / 2 : 0 };
+      scaleOff: t.scale_offset !== undefined ? t.scale_offset / 2 : 0, group: t.group ?? this.manifest.group ?? 64 };
   }
 
   buffer(bytes, usage = 0) {
@@ -120,6 +124,7 @@ export class KleinTransformer {
   f32bits(x) { return new Uint32Array(new Float32Array([x]).buffer)[0]; }
 
   dispatch(enc, pipeline, entries, x, y = 1, z = 1) {
+    if (!pipeline) return;
     const bind = this.device.createBindGroup({ layout: pipeline.getBindGroupLayout(0),
       entries: entries.map((e, i) => ({ binding: e.binding ?? i, resource: e.resource ?? { buffer: e } })) });
     let desc = {};
@@ -137,24 +142,27 @@ export class KleinTransformer {
   // Under a cooperative schedule a GEMM above the duty budget runs as tile-aligned column
   // ranges with a split point between them (GEMM v2 only; the v1 parity kernel never splits).
   async gemm(enc, { a, aOff = 0, aRs, aBs = 0, b, bOff = 0, bRs, bBs = 0, bType = 'f16', c, cOff = 0, cRs, cBs = 0,
-    M, N, K, batch = 1, alpha = 1, epilogue = 'store', gate = null, gateOff = 0, scaleOff = 0, bDiv = 1, label = 'gemm' }) {
-    // gemmVersion 2 (default) is the probe-derived kernel; 1 keeps the original parity kernel for A/B.
-    const v2 = (this.gemmVersion ?? 2) === 2 && K % 4 === 0;
-    const pipe = v2
-      ? this.pipeline(`gemm2-${bType}-${epilogue}-${this.sharedType ?? 'f32'}`, gemmShaderV2({ bType, epilogue, sType: this.sharedType ?? 'f32' }))
-      : this.pipeline(`gemm-${bType}-${epilogue}`, gemmShader({ bType, epilogue }));
+    M, N, K, batch = 1, alpha = 1, epilogue = 'store', gate = null, gateOff = 0, scaleOff = 0, group = 64, bDiv = 1, label = 'gemm' }) {
+    // gemmVersion 2 (default) is the probe-derived kernel; 1 keeps the original parity kernel for A/B;
+    // 3 uses the 128x128 dot-product kernel for quantized weights with f16 tiles (v2 elsewhere).
+    const version = gemmVersionFor(this.gemmVersion, bType, this.sharedType ?? 'f32', K), tile = version === 3 ? 128 : 64;
+    const st = this.sharedType ?? 'f32';
+    const pipe = version === 3 ? this.pipeline(`gemm3-${bType}-g${group}-${epilogue}-${st}`, gemmShaderV3({ bType, epilogue, sType: st, group, tm: 8, tn: 8 }))
+      : version === 2 ? this.pipeline(`gemm2-${bType}-g${group}-${epilogue}-${st}`, gemmShaderV2({ bType, epilogue, sType: st, group }))
+      : this.pipeline(`gemm-${bType}-g${group}-${epilogue}`, gemmShader({ bType, epilogue, group }));
     const issue = (nBase, nCount) => {
       const u = this.uniform([M, N, K, this.f32bits(alpha), aOff, aRs, aBs, bOff, bRs, bBs, cOff, cRs, cBs, gateOff, bDiv, scaleOff, nBase, 0, 0, 0]);
       const entries = [{ binding: 0, resource: { buffer: a } }, { binding: 1, resource: { buffer: b } },
         { binding: 2, resource: { buffer: c } }, { binding: 3, resource: { buffer: u } }];
       if (epilogue === 'gated-residual') entries.push({ binding: 4, resource: { buffer: gate } });
-      if (bType === 'i8' || bType === 'i4') entries.push({ binding: 5, resource: { buffer: b } });
-      this.dispatch(enc, pipe, entries, Math.ceil(nCount / 64), Math.ceil(M / 64), batch);
+      if (/^i\d$/.test(bType)) entries.push({ binding: 5, resource: { buffer: b } });
+      this.dispatch(enc, pipe, entries, Math.ceil(nCount / tile), Math.ceil(M / tile), batch);
       this.sched.addFlops(2 * M * nCount * K * batch);
     };
     const flops = 2 * M * N * K * batch, budget = this.sched.budget();
-    if (!v2 || flops <= budget) { issue(0, N); return; }
-    const columns = Math.max(64, Math.floor(budget / (2 * M * K * batch) / 64) * 64);
+    if (version === 1 || flops <= budget) { issue(0, N); return; }
+    // Column ranges are whole tiles: a partial tile would also write the next range's columns.
+    const columns = Math.max(tile, Math.floor(budget / (2 * M * K * batch) / tile) * tile);
     for (let nBase = 0; nBase < N; nBase += columns) {
       issue(nBase, Math.min(columns, N - nBase));
       await this.sched.boundary(`${label}[${nBase}]`);
@@ -164,7 +172,7 @@ export class KleinTransformer {
   linear(enc, x, rows, weight, out, opts = {}) {
     const [N, K] = weight.shape;
     return this.gemm(enc, { a: x, aOff: opts.aOff ?? 0, aRs: opts.aRs ?? K, b: weight.buf, bOff: weight.elemOff, bRs: K,
-      bType: weight.format, scaleOff: weight.scaleOff,
+      bType: weight.format, scaleOff: weight.scaleOff, group: weight.group,
       c: out, cOff: opts.cOff ?? 0, cRs: opts.cRs ?? N, M: rows, N, K, epilogue: opts.epilogue ?? 'store',
       gate: opts.gate, gateOff: opts.gateOff ?? 0, label: opts.label ?? 'linear' });
   }
@@ -224,6 +232,9 @@ export class KleinTransformer {
   }
 
   release() { for (const b of Object.values(this.act ?? {})) b.destroy(); this.act = null; }
+
+  // Free the activations and the weights; the instance is unusable afterwards.
+  destroy() { this.release(); for (const w of Object.values(this.weights)) w.buf.destroy(); this.weights = {}; }
 
   // One transformer evaluation. `taps(name, buffer, rows, cols, byteOffset)` lets a witness read
   // boundaries; it receives the encoder state after the boundary's work was encoded.

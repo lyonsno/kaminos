@@ -13,14 +13,15 @@ import { launchChrome, openPage } from './chrome-cdp.mjs';
 const STAGES = ['vae-encoder', 'vae-decoder', 'unet', 'full', 'route', 'bench'];
 const { values } = parseArgs({ options: Object.fromEntries(
   ['repo-root', 'expected-commit', 'fixture', 'weights', 'chrome', 'report', 'stage', 'receiver', 'image',
-    'decoded-reference', 'options'].map(name => [name, { type: 'string' }])) });
+    'decoded-reference', 'options', 'run-options'].map(name => [name, { type: 'string' }])) });
 const output = path.resolve(values.report ?? 'supermat-witness-report.json');
 const rawRoot = path.join(path.dirname(output), 'raw');
 const report = { schema: 'supermat.stage-witness.runner.v0', status: 'failed', phase: 'arguments',
   receiver: values.receiver ?? null, terminalEvidence: output, command: process.argv,
   requested: { repoRoot: values['repo-root'], fixture: values.fixture, weights: values.weights,
     stage: values.stage, expectedCommit: values['expected-commit'], chrome: values.chrome, image: values.image ?? null,
-    decodedReference: values['decoded-reference'] ?? null, options: values.options ?? null },
+    decodedReference: values['decoded-reference'] ?? null, options: values.options ?? null,
+    runOptions: values['run-options'] ?? null },
   servedSources: {}, rawOutputs: {} };
 const persist = async () => {
   await fs.mkdir(path.dirname(output), { recursive: true });
@@ -162,7 +163,7 @@ try {
       : values.stage === 'route'
       ? `import('/models/supermat/supermat-route-witness.js').then(m => m.runSuperMatRouteWitness(${JSON.stringify({
         fixtureSha256: report.fixture.manifestSha256, weightsSha256: report.weights.packageSha256,
-        adapterOptions: JSON.parse(values.options ?? '{}') })}))`
+        adapterOptions: JSON.parse(values.options ?? '{}'), runOptions: JSON.parse(values['run-options'] ?? '{}') })}))`
       : `import('/models/supermat/supermat-witness.js').then(m => m.runSuperMatWitness(${JSON.stringify({
         stage: values.stage, fixtureSha256: report.fixture.manifestSha256, weightsSha256: report.weights.packageSha256,
         opsOptions: JSON.parse(values.options ?? '{}') })}))`,

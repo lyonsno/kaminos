@@ -2,8 +2,9 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FLUX.2 [klein] in the browser</title>
-<meta name="description" content="Text-to-image with FLUX.2 [klein] 4B, running entirely on your own GPU through WebGPU.">
+<title>Thomas the Jank Engine</title>
+<meta name="description" content="FLUX.2 [klein] 4B text-to-image, chugging along entirely on your own GPU through WebGPU. Pick your jank level.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%9A%82%3C/text%3E%3C/svg%3E">
 <meta name="klein-weights" content="https://huggingface.co/BasinShapers/flux2-klein-4b-webgpu/resolve/main">
 <style>
   :root {
@@ -51,31 +52,44 @@
   figcaption { font-size: 14px; }
   canvas { display: block; width: 100%; height: auto; border-radius: 10px; background: var(--bg); }
   #out { aspect-ratio: 1; border: 1px solid var(--line); }
-  .scene { display: grid; grid-template-columns: 112px 1fr; gap: 12px; align-items: center; }
+  .scene { display: grid; grid-template-columns: 144px 1fr; gap: 12px; align-items: center; }
   .scene canvas { aspect-ratio: 1; border: 1px solid var(--line); }
   .scene p { font-size: 14px; }
   .hidden { display: none !important; }
+  .levels { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 10px; margin: 0; display: grid; gap: 8px; }
+  .levels legend { color: var(--muted); font-size: 14px; padding: 0 4px; }
+  .level { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: baseline; color: var(--fg); font-size: 15px; cursor: pointer; }
+  .level input { width: auto; margin: 0; }
+  .level small { grid-column: 2; color: var(--muted); font-size: 13px; }
+  .level .size { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .level.unavailable { opacity: 0.45; cursor: default; }
   footer { font-size: 14px; color: var(--muted); display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 16px; }
 </style>
 <main>
   <header class="lede">
-    <h1>FLUX.2 [klein] 4B in the browser</h1>
-    <p>Text-to-image generation on your own GPU through WebGPU. The prompt, the model and the image stay on your machine; no server does any of the work.</p>
-    <p class="muted">The first visit downloads <span id="download-size">3.6 GB</span> of model weights, which the browser keeps for later visits. Tested in Chrome on Apple-silicon Macs with 16 GB of memory or more: a 512 × 512 image takes about 7 seconds on an M4 Max and about 20 seconds on an M2 Pro.</p>
+    <h1>Thomas the Jank Engine</h1>
+    <p><b>FLUX.2 [klein] 4B: a 4-billion-parameter image model crammed into a browser tab. It's a little janky. It runs anyway.</b> It all happens on your own GPU through WebGPU: the prompt, the model and the image stay on your machine, and no server does any of the work.</p>
+    <p class="muted">The first visit downloads <span id="download-size">3.2 GB</span> of model weights, which the browser keeps for later visits. Tested in Chrome on Apple-silicon Macs with 16 GB of memory or more: a 512 × 512 image takes about 7 seconds on an M4 Max and about 17 seconds on an M2 Pro (a few more with better lettering). Pick a jank level to trade quality for a smaller download.</p>
   </header>
 
   <div class="layout">
     <section class="panel" aria-label="Controls">
+      <fieldset class="levels" id="levels">
+        <legend>Jank level</legend>
+        <label class="level"><input type="radio" name="level" value="mint"><span><b>Mint</b> <span class="size" data-level="mint"></span></span><small>Full quality.</small></label>
+        <label class="level"><input type="radio" name="level" value="weathered"><span><b>Weathered</b> <span class="size" data-level="weathered"></span></span><small>3-bit transformer. Looks about the same, downloads less.</small></label>
+        <label class="level"><input type="radio" name="level" value="off-the-rails"><span><b>Off the Rails</b> <span class="size" data-level="off-the-rails"></span></span><small>2-bit transformer. Blurry, melted, still recognizable.</small></label>
+      </fieldset>
       <div id="setup" class="row">
         <button id="load" class="primary" disabled>Checking WebGPU…</button>
       </div>
       <progress id="progress" class="hidden" max="1" value="0"></progress>
       <div id="controls" class="hidden" style="display:grid;gap:14px">
         <label>Prompt
-          <textarea id="prompt">A small brass toy steam locomotive, isolated on a plain white background, studio product photo</textarea>
+          <textarea id="prompt">Portrait of a bright blue steam tank engine with a round grey smiling face on the front of its black smokebox, a short black funnel, a red buffer beam with brass buffers, the number 1 painted in yellow with a red outline on its side tank, red lining on the blue paintwork and six small blue wheels, standing on a sunny country branch line, model railway photograph</textarea>
         </label>
         <div class="row">
-          <label>Seed <input id="seed" type="number" value="7006" min="0" step="1"></label>
+          <label>Seed <input id="seed" type="number" value="8001" min="0" step="1"></label>
           <button id="reseed" class="icon" title="New random seed" aria-label="New random seed">New seed</button>
           <label>Size
             <select id="size">
@@ -85,9 +99,11 @@
             </select>
           </label>
         </div>
+        <label class="check"><input id="lettering" type="checkbox"> Better lettering (slower) <small id="lettering-why" class="muted"></small></label>
         <label class="check"><input id="cooperative" type="checkbox" checked> Keep the animation running while generating</label>
         <div class="row">
           <button id="go" class="primary">Generate</button>
+          <button id="surprise" title="A random jank scene with a new seed">Surprise me</button>
           <button id="pause" disabled>Pause</button>
           <button id="stop" disabled>Stop</button>
           <button id="save" disabled>Save image</button>
@@ -95,15 +111,15 @@
       </div>
       <div id="status" role="status" aria-live="polite"></div>
       <div class="scene">
-        <canvas id="scene" width="224" height="224" aria-label="Animation rendered on the same GPU"></canvas>
-        <p class="muted">This animation draws on the same GPU while an image generates. The inference kit submits the model's work in short pieces and lets each frame through between them.</p>
+        <canvas id="scene" width="288" height="288" aria-label="A little blue engine running round a track, rendered on the same GPU"></canvas>
+        <p class="muted">This little engine runs on the same GPU while the model works. The inference kit submits the model's work in short pieces and lets each frame through between them, so it never stops chugging.</p>
       </div>
     </section>
 
     <section class="image" aria-label="Generated image">
       <figure id="examples">
-        <img src="assets/examples.jpg" width="1168" height="776" alt="Six images generated with this page: a fisherman portrait, a celadon teapot, a misty forest valley, a watercolor fox under a mushroom, a neon OPEN ALL NIGHT sign, and a brass toy locomotive">
-        <figcaption class="muted">Made with this page at 512 × 512. Your images appear here.</figcaption>
+        <img src="assets/jank-engine.jpg" width="1168" height="1168" alt="Nine images generated in the browser of a bright blue tank engine with a round grey face: on a sunny branch line, held together with duct tape, climbing a trestle bridge at golden hour, beside a pile of worried jelly beans, on a poster titled THOMAS THE JANK ENGINT, built from circuit boards, pulling wagons of graphics cards through snowy mountains, asleep in a lantern-lit engine shed, and the first portrait again at the Off the Rails jank level, blurry and melted">
+        <figcaption class="muted">Made with this page at 512 × 512. Bottom right: the top-left prompt and seed at Off the Rails. Your images appear here.</figcaption>
       </figure>
       <canvas id="out" class="hidden" width="512" height="512"></canvas>
     </section>
@@ -121,12 +137,64 @@ import { kleinWeightStatus } from './klein-pipeline.js';
 const q = new URLSearchParams(location.search);
 const base = (q.get('weights') ?? document.querySelector('meta[name="klein-weights"]').content).replace(/\/$/, '');
 const urls = { textEncoderUrl: `${base}/te`, transformerUrl: `${base}/dit`, vaeUrl: `${base}/vae` };
+// Jank levels share the text encoder, decoder and tokenizer and differ in the transformer's weights.
+const LEVELS = { mint: { name: 'Mint', dit: 'dit' }, weathered: { name: 'Weathered', dit: 'dit-q3' },
+  'off-the-rails': { name: 'Off the Rails', dit: 'dit-q2' } };
+const levelUrls = id => ({ ...urls, transformerUrl: `${base}/${LEVELS[id].dit}` });
+const remembered = (() => { try { return localStorage.getItem('klein-level'); } catch { return null; } })();
+let selected = LEVELS[q.get('level')] ? q.get('level') : LEVELS[remembered] ? remembered : 'mint';
+let loadedLevel = null;
+const levelStatus = {};
 const $ = id => document.getElementById(id);
 const status = $('status'), loadButton = $('load'), progress = $('progress');
 const gb = bytes => `${(bytes / 1e9).toFixed(1)} GB`;
 const seconds = ms => `${(ms / 1000).toFixed(1)} s`;
 const say = (text, warn = false) => { status.textContent = text; status.classList.toggle('warn', warn); };
 let demo = null, lastImage = null;
+// "Surprise me": the engine, described by looks alone, in one of these situations.
+const ENGINE = 'a bright blue steam tank engine with a round grey smiling face on the front of its black smokebox, a short black funnel, '
+  + 'a red buffer beam with brass buffers, the number 1 painted in yellow with a red outline on its side tank, red lining on the blue paintwork and six small blue wheels';
+const SCENES = [
+  e => `Portrait of ${e}, standing on a sunny country branch line, model railway photograph`,
+  e => `${e}, held together with duct tape and zip ties, one mismatched wheel, steam leaking from patched pipes, nervous expression, wobbling along a crooked track, model railway photograph`,
+  e => `${e}, straining up a very steep hill on a rickety wooden trestle bridge with a determined face, sparks and steam flying, golden hour, cinematic`,
+  e => `${e}, tipped over beside the rails in a heap of pastel jelly beans with an embarrassed face, toy photography, shallow depth of field`,
+  e => `A vintage railway travel poster with the title THOMAS THE JANK ENGINE in bold letters, showing ${e}, puffing through rolling green hills`,
+  e => `${e}, built out of circuit boards and graphics cards, chugging across a glowing circuit-board landscape, digital painting`,
+  e => `${e}, proudly pulling a long train of open wagons piled high with graphics cards through a snowy mountain pass at sunset, model railway photograph`,
+  e => `${e}, resting in a cosy engine shed at night, steam drifting, warm lantern light, a sleepy contented face, model railway photograph`,
+  e => `${e}, racing a herd of cows across a meadow, motion blur, children's book illustration`,
+  e => `${e}, wearing tiny sunglasses at a seaside railway station, bright summer holiday photo`,
+  e => `${e}, stuck in a giant bowl of spaghetti with a surprised face, food photography`,
+  e => `${e}, as a stained glass window in a cathedral, sunlight streaming through`,
+  e => `${e}, as a knitted wool toy sitting on a cosy armchair, soft window light`,
+  e => `${e}, sailing across a stormy sea on a raft of railway sleepers, dramatic oil painting`,
+];
+let lastScene = 0;
+
+// Prompts are padded with filler tokens before the transformer sees them. Padding to the prompt's
+// own length (plus a few) is about a quarter faster; full padding (512 tokens, as in the reference
+// pipeline) spells words in the image noticeably better. The checkbox follows the prompt: it ticks
+// itself when the prompt asks for lettering, and can be flipped by hand before generating.
+const LETTERING_WORDS = /\b(signs?|signage|posters?|titled?|captions?|labels?|logos?|banners?|headlines?|lettering|typography|text|words|reads|says|saying|written|spelled|font)\b/i;
+const COMMON_ACRONYMS = new Set(['DSLR', 'NASA', 'HDRI', 'RGBA', 'JPEG', 'UNESCO']);
+function letteringReason(prompt) {
+  if (/["\u201c\u201d][^"\u201c\u201d]{2,}["\u201c\u201d]/.test(prompt)) return 'the prompt quotes some text';
+  const caps = (prompt.match(/\b[A-Z][A-Z0-9]{3,}\b/g) ?? []).filter(w => !COMMON_ACRONYMS.has(w));
+  if (caps.length) return `the prompt has ${caps[0]} in capitals`;
+  const word = prompt.match(LETTERING_WORDS);
+  return word ? `the prompt mentions "${word[0].toLowerCase()}"` : null;
+}
+function updateLettering() {
+  const reason = letteringReason($('prompt').value);
+  $('lettering').checked = Boolean(reason);
+  $('lettering-why').textContent = reason ? `(on: ${reason})` : '';
+}
+$('prompt').addEventListener('input', updateLettering);
+$('lettering').addEventListener('change', () => { $('lettering-why').textContent = $('lettering').checked ? '(on)' : '(off)'; });
+updateLettering();
+const levelInputs = () => [...document.querySelectorAll('input[name="level"]')];
+for (const input of levelInputs()) input.checked = input.value === selected;
 
 async function unsupportedReason() {
   if (!navigator.gpu) return 'This browser does not expose WebGPU. Try a recent Chrome or Edge on a desktop computer.';
@@ -144,12 +212,36 @@ function loadProgress({ loadedBytes, totalBytes }) {
   while (samples.length > 2 && now - samples[0][0] > 8000) samples.shift();
   const [t0, b0] = samples[0], span = (now - t0) / 1000;
   const rate = span > 1.5 ? (loadedBytes - b0) / span : 0;
-  let text = `Loading weights: ${gb(loadedBytes)} of ${gb(totalBytes)}`;
+  let text = `I think I can, I think I can · ${gb(loadedBytes)} of ${gb(totalBytes)}`;
   if (rate > 0) {
     const left = (totalBytes - loadedBytes) / rate;
     text += ` · ${(rate / 1e6).toFixed(1)} MB/s · ${left < 60 ? 'under a minute' : `about ${Math.round(left / 60)} min`} left`;
   }
   return text;
+}
+
+// Download size per level from its manifests: what is left to fetch, or "cached".
+async function refreshLevels() {
+  await Promise.all(Object.keys(LEVELS).map(async id => {
+    try { levelStatus[id] = await kleinWeightStatus(levelUrls(id)); } catch { levelStatus[id] = null; }
+  }));
+  for (const [id, st] of Object.entries(levelStatus)) {
+    const label = document.querySelector(`.size[data-level="${id}"]`);
+    label.textContent = !st ? 'unavailable' : st.complete ? 'cached' : st.cachedBytes > 0 ? `${gb(st.totalBytes - st.cachedBytes)} left` : gb(st.totalBytes);
+    const input = document.querySelector(`input[name="level"][value="${id}"]`);
+    input.disabled = !st; input.closest('.level').classList.toggle('unavailable', !st);
+  }
+}
+
+function describeSelection() {
+  const st = levelStatus[selected];
+  if (!st) return;
+  $('download-size').textContent = gb(st.totalBytes);
+  if (loadedLevel) return;
+  loadButton.textContent = st.complete ? `Load ${LEVELS[selected].name} (cached)` : `Download ${LEVELS[selected].name} (${gb(st.totalBytes - st.cachedBytes)})`;
+  say(st.complete ? 'This level is in the browser’s cache.'
+    : st.cachedBytes > 0 ? `${gb(st.cachedBytes)} is already cached; the rest downloads when you press the button.`
+    : 'Nothing downloads until you press the button.');
 }
 
 async function prepare() {
@@ -160,41 +252,68 @@ async function prepare() {
     demo = await createKleinDemo({ canvas: $('scene'), urls, load: false });
     window.kleinDemo = demo;
   } catch (e) { loadButton.textContent = 'WebGPU unavailable'; say(`Could not start WebGPU: ${e.message ?? e}`, true); return; }
-  let weights;
-  try { weights = await kleinWeightStatus(urls); }
-  catch (e) { loadButton.textContent = 'Model unavailable'; say(`Could not reach the model files: ${e.message}`, true); return; }
-  const remaining = weights.totalBytes - weights.cachedBytes;
-  $('download-size').textContent = gb(weights.totalBytes);
-  loadButton.textContent = weights.complete ? 'Load model (cached)' : `Download model (${gb(remaining)})`;
+  await refreshLevels();
+  if (!levelStatus[selected]) selected = Object.keys(LEVELS).find(id => levelStatus[id]) ?? selected;
+  if (!levelStatus[selected]) { loadButton.textContent = 'Model unavailable'; say('Could not reach the model files.', true); return; }
+  for (const input of levelInputs()) input.checked = input.value === selected;
+  describeSelection();
   loadButton.disabled = false;
-  say(weights.complete ? 'The model is in this browser’s cache.'
-    : weights.cachedBytes > 0 ? `${gb(weights.cachedBytes)} is already cached from an earlier visit; the rest downloads when you press the button.`
-    : 'Nothing downloads until you press the button.');
+}
+
+const loadingNote = '\nKeep this tab open. If the download stops, finished parts are kept and the next try picks up the rest.';
+function showProgress(prefix) {
+  samples.length = 0; progress.value = 0; progress.classList.remove('hidden');
+  return s => { if (!s.totalBytes) return; progress.value = s.loadedBytes / s.totalBytes; say(`${prefix}${loadProgress(s)}${loadingNote}`); };
 }
 
 loadButton.onclick = async () => {
-  loadButton.disabled = true; loadButton.textContent = 'Downloading…'; progress.classList.remove('hidden');
+  loadButton.disabled = true; loadButton.textContent = 'Downloading…';
   navigator.storage?.persist?.().catch(() => {});
-  samples.length = 0;
+  demo.pipeline.urls.transformerUrl = levelUrls(selected).transformerUrl;
   try {
-    await demo.load(s => {
-      if (!s.totalBytes) return;
-      progress.value = s.loadedBytes / s.totalBytes;
-      say(`${loadProgress(s)}\nKeep this tab open. If the download stops, finished parts are kept and the next try picks up the rest.`);
-    });
+    await demo.load(showProgress(''));
   } catch (e) {
     progress.classList.add('hidden'); loadButton.disabled = false; loadButton.textContent = 'Try again';
     say(`Loading failed: ${e.message ?? e}`, true); return;
   }
+  loadedLevel = selected; window.kleinLevel = loadedLevel;
   const stats = demo.pipeline.loadStats;
   $('setup').classList.add('hidden'); progress.classList.add('hidden'); $('controls').classList.remove('hidden');
-  say(`Model ready in ${seconds(demo.loadMs)}${stats.downloadedBytes ? `, ${gb(stats.downloadedBytes)} downloaded` : ' from the cache'}${stats.cacheErrors.length ? '. The browser could not cache every file, so the next visit may download again.' : '.'}`,
+  say(`${LEVELS[loadedLevel].name} ready in ${seconds(demo.loadMs)}${stats.downloadedBytes ? `, ${gb(stats.downloadedBytes)} downloaded` : ' from the cache'}${stats.cacheErrors.length ? '. The browser could not cache every file, so the next visit may download again.' : '.'}`,
     stats.cacheErrors.length > 0);
+  refreshLevels();
 };
 
-function setRunning(running) {
-  const cooperative = $('cooperative').checked;
-  for (const id of ['go', 'reseed', 'prompt', 'seed', 'size', 'cooperative']) $(id).disabled = running;
+// Changing level before loading only changes what will download; afterwards it swaps the transformer.
+async function chooseLevel(id) {
+  selected = id;
+  try { localStorage.setItem('klein-level', id); } catch { /* storage may be unavailable */ }
+  if (!loadedLevel) { describeSelection(); return; }
+  if (id === loadedLevel) return;
+  setRunning(true, { swapping: true });
+  try {
+    const stats = await demo.pipeline.loadTransformer(levelUrls(id).transformerUrl, (part, name, p) => showSwap(p));
+    loadedLevel = id; window.kleinLevel = id;
+    say(`${LEVELS[id].name} ready${stats.downloadedBytes ? `, ${gb(stats.downloadedBytes)} downloaded` : ' from the cache'}.`);
+  } catch (e) {
+    loadedLevel = demo.pipeline.transformer ? loadedLevel : null;
+    say(`Switching to ${LEVELS[id].name} failed: ${e.message ?? e}. Choose a level to try again.`, true);
+  }
+  progress.classList.add('hidden');
+  setRunning(false);
+  $('download-size').textContent = gb(levelStatus[selected]?.totalBytes ?? 0);
+  refreshLevels();
+}
+let showSwap = () => {};
+for (const input of levelInputs()) input.onchange = () => {
+  if (loadedLevel) showSwap = showProgress(`Switching to ${LEVELS[input.value].name}: `);
+  chooseLevel(input.value);
+};
+
+function setRunning(running, { swapping = false } = {}) {
+  const cooperative = $('cooperative').checked && !swapping;
+  for (const id of ['go', 'surprise', 'reseed', 'prompt', 'seed', 'size', 'lettering', 'cooperative']) $(id).disabled = running;
+  for (const input of levelInputs()) input.disabled = running || !levelStatus[input.value];
   $('pause').disabled = !running || !cooperative; $('stop').disabled = !running || !cooperative;
   $('pause').textContent = 'Pause';
 }
@@ -203,17 +322,19 @@ $('go').onclick = async () => {
   setRunning(true);
   const prompt = $('prompt').value.trim(), seed = Math.max(0, Math.floor(Number($('seed').value) || 0)), size = Number($('size').value);
   try {
-    const r = await demo.generate({ prompt, seed, size, cooperative: $('cooperative').checked,
+    const lettering = $('lettering').checked;
+    const r = await demo.generate({ prompt, seed, size, textLength: lettering ? 512 : 'fit16', cooperative: $('cooperative').checked,
       onPhase: phase => say(phase === 'text' ? 'Reading the prompt…' : phase === 'decode' ? 'Decoding the image…' : 'Denoising…'),
       onStep: (i, n) => say(`Denoising, step ${i} of ${n}…`) });
     const out = $('out'); out.width = r.width; out.height = r.height;
     $('examples').classList.add('hidden'); out.classList.remove('hidden');
     out.getContext('2d').putImageData(new ImageData(r.rgba, r.width, r.height), 0, 0);
-    lastImage = { prompt, seed, size };
+    lastImage = { prompt, seed, size, level: loadedLevel };
     $('save').disabled = false;
     const frames = r.frames ? `; the animation kept drawing at a median ${Math.round(1000 / r.frames.p50)} frames per second` : '';
-    say(`${r.width} × ${r.height} in ${seconds(r.wallMs)}${frames}.`);
-    window.kleinLast = { wallMs: r.wallMs, timings: r.timings, frames: r.frames, width: r.width, height: r.height };
+    say(`${r.width} × ${r.height} at ${LEVELS[loadedLevel].name}${lettering ? ' with better lettering' : ''} in ${seconds(r.wallMs)}${frames}.`);
+    window.kleinLast = { wallMs: r.wallMs, timings: r.timings, frames: r.frames, width: r.width, height: r.height, level: loadedLevel,
+      lettering, textTokens: r.textTokens };
   } catch (e) {
     say(e?.name === 'AbortError' ? 'Stopped.' : `Generation failed: ${e.message ?? e}`, e?.name !== 'AbortError');
   }
@@ -222,10 +343,19 @@ $('go').onclick = async () => {
 $('pause').onclick = async () => { const state = await demo.togglePause(); if (state) $('pause').textContent = state === 'paused' ? 'Resume' : 'Pause'; };
 $('stop').onclick = () => demo.stop();
 $('reseed').onclick = () => { $('seed').value = Math.floor(Math.random() * 1e9); };
+$('surprise').onclick = () => {
+  let i; do { i = Math.floor(Math.random() * SCENES.length); } while (i === lastScene && SCENES.length > 1);
+  lastScene = i;
+  const text = SCENES[i](ENGINE);
+  $('prompt').value = text[0].toUpperCase() + text.slice(1);
+  updateLettering();
+  $('seed').value = Math.floor(Math.random() * 1e9);
+  if (!$('go').disabled) $('go').click();
+};
 $('save').onclick = () => $('out').toBlob(blob => {
   const slug = lastImage.prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'image';
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = `klein-${slug}-${lastImage.seed}.png`; a.click();
+  a.href = URL.createObjectURL(blob); a.download = `klein-${lastImage.level}-${slug}-${lastImage.seed}.png`; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }, 'image/png');
 $('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !$('go').disabled) $('go').click(); });

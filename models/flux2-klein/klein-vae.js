@@ -229,7 +229,9 @@ export class KleinVaeDecoder {
   }
 
   pipeline(key, code) {
+    if (!this.pipelines[key] && this.pipelineCollector) { this.pipelineCollector.set(`${this.constructor.name}:${key}`, { owner: this, key, code }); return null; }
     if (!this.pipelines[key]) {
+      this.syncCompiles = (this.syncCompiles ?? 0) + 1; (this.syncCompiledKeys ??= []).push(key);
       this.pipelines[key] = this.device.createComputePipeline({ layout: 'auto', compute: { module: this.device.createShaderModule({ code }), entryPoint: 'main' } });
     }
     return this.pipelines[key];
@@ -241,6 +243,7 @@ export class KleinVaeDecoder {
   }
   f32bits(x) { return new Uint32Array(new Float32Array([x]).buffer)[0]; }
   dispatch(enc, pipe, buffers, x, y = 1, z = 1) {
+    if (!pipe) return;
     const bind = this.device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: buffers.map((b, i) => ({ binding: i, resource: { buffer: b } })) });
     const e = enc?.encoder ? enc.encoder() : enc;
     const pass = e.beginComputePass(); pass.setPipeline(pipe); pass.setBindGroup(0, bind); pass.dispatchWorkgroups(x, y, z); pass.end();

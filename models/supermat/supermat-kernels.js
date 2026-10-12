@@ -32,7 +32,7 @@ export function gemmTileShape({ tm = 4, tn = 4, bk = 16 } = {}) {
 // tile loaders (for `threads` threads filling bk x bm / bk x bn tiles) and the
 // epilogue that turns accumulator value ACC into the stored output.
 function gemmParts({ aKContiguous = true, bNContiguous = true, biasM = false, biasM2 = false, biasN = false,
-  residual = false, conv = null, aF16 = false, bF16 = false, types = {}, normB = null },
+  residual = false, conv = null, aF16 = false, bF16 = false, types = {}, normB = null, aPairs = false },
   { bm, bn, bk, threads, aLayout = 'k-major' }) {
   const t = { a: types.a ?? (aF16 ? 'f16packed' : 'f32'), b: types.b ?? (bF16 ? 'f16packed' : 'f32'),
     biasM: types.biasM ?? 'f32', biasM2: types.biasM2 ?? 'f32', biasN: types.biasN ?? 'f32',
@@ -89,13 +89,23 @@ ${bindings.join('\n')}`;
     valueB = `value=${load('b', t.b, 'p.b_off+bat*p.b_sb+k*p.b_sk+n*p.b_sn')};`;
   }
   const storeA = aLayout === 'k-major' ? `tile_a[kk*${bm}u+mm]=value;` : `tile_a[mm*${bk}u+kk]=value;`;
-  const loaders = `    for(var q=0u;q<${(bk * bm) / threads}u;q++){
+  // aPairs: packed-f16 A, K-contiguous, even K/strides/offset, k-major tile:
+  // each u32 load yields two consecutive k (TILE() is the tile-precision cast).
+  const pairs = aPairs && t.a === 'f16packed' && aLayout === 'k-major' && bk % 2 === 0 && (bk * bm) % (2 * threads) === 0;
+  const loadA = pairs ? `    for(var q=0u;q<${(bk * bm) / (2 * threads)}u;q++){
+      let idx=tid+q*${threads}u;
+      let kp=idx%${bk / 2}u;let mm=idx/${bk / 2}u;
+      let m=m0+mm;let k=k0+2u*kp;var v=vec2<f32>(0.0);
+      if(m<p.M&&k<p.K){v=unpack2x16float(a[(p.a_off+bat*p.a_sb+m*p.a_sm+k)>>1u]);}
+      tile_a[(2u*kp)*${bm}u+mm]=TILE(v.x);tile_a[(2u*kp+1u)*${bm}u+mm]=TILE(v.y);
+    }` : `    for(var q=0u;q<${(bk * bm) / threads}u;q++){
       let idx=tid+q*${threads}u;
       ${orderA}
       let m=m0+mm;let k=k0+kk;var value=0.0;
       if(m<p.M&&k<p.K){value=${load('a', t.a, 'p.a_off+bat*p.a_sb+m*p.a_sm+k*p.a_sk')};}
       ${storeA}
-    }
+    }`;
+  const loaders = `${loadA}
     for(var q=0u;q<${(bk * bn) / threads}u;q++){
       let idx=tid+q*${threads}u;
       ${orderB}
@@ -132,7 +142,7 @@ fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:
   var acc:array<array<f32,${tn}>,${tm}>;
   ${prologue}
   for(var k0=0u;k0<p.K;k0+=${bk}u){
-${loaders}
+${loaders.replaceAll('TILE(', '(')}
     workgroupBarrier();
     for(var kk=0u;kk<${bk}u;kk++){
       var av:array<f32,${tm}>;var bv:array<f32,${tn}>;
@@ -169,7 +179,7 @@ fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:
   var acc:array<array<f32,${tn}>,${tm}>;
   ${prologue}
   for(var k0=0u;k0<p.K;k0+=${bk}u){
-${loaders.replaceAll('tile_a[kk*', 'tile_a[kk*').replace(/(tile_a\[[^\]]+\])=value;/, '$1=f16(value);').replace(/(tile_b\[[^\]]+\])=value;/, '$1=f16(value);')}
+${loaders.replaceAll('TILE(', 'f16(').replace(/(tile_a\[[^\]]+\])=value;/, '$1=f16(value);').replace(/(tile_b\[[^\]]+\])=value;/, '$1=f16(value);')}
     workgroupBarrier();
     ${half ? `var part:array<array<f16,${tn}>,${tm}>;` : ''}
     for(var kk=0u;kk<${bk}u;kk++){

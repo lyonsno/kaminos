@@ -58,15 +58,43 @@ try {
     report.loads.push(await browser.evaluate('({ loadMs: window.kleinLoadMs?.(), stats: window.kleinLoadStats?.() })'));
   }
   report.phase = 'generate';
-  const batchOptions = { cooperative: !args.includes('--blocking'), targetDutyMs: Number(opt('--target-duty-ms', '12')), maxInFlight: Number(opt('--max-in-flight', '1')) };
+  const batchOptions = { cooperative: !args.includes('--blocking'), targetDutyMs: Number(opt('--target-duty-ms', '12')), maxInFlight: Number(opt('--max-in-flight', '1')),
+    textLength: /^fit/.test(opt('--text-length', '512')) ? opt('--text-length') : Number(opt('--text-length', '512')) };
   report.batchOptions = batchOptions;
-  const res = await browser.evaluate(`window.kleinBatch(${JSON.stringify(jobs)}, ${JSON.stringify(batchOptions)})`);
+  // One job per call, each PNG written as it arrives, and a wait that fails (with the page's status and
+  // any unfinished fetches) when the status line stops changing, instead of hanging on a wedged batch.
   await fsp.mkdir(outDir, { recursive: true });
-  for (const r of res.results) { await fsp.writeFile(path.join(outDir, `${r.name}.png`), Buffer.from(r.png, 'base64')); delete r.png; }
-  report.results = res.results; report.residentBytes = res.residentBytes; report.loadMs = res.loadMs; report.effectiveKernels = res.kernels; report.loadStats = res.loadStats;
+  report.results = [];
+  const stallMs = Number(opt('--stall-ms', String(5 * 60e3)));
+  for (const job of jobs) {
+    const res = await evaluateWatched(`window.kleinBatch(${JSON.stringify([job])}, ${JSON.stringify(batchOptions)})`, job.name, stallMs);
+    const r = res.results[0];
+    await fsp.writeFile(path.join(outDir, `${r.name}.png`), Buffer.from(r.png, 'base64')); delete r.png;
+    report.results.push(r);
+    Object.assign(report, { residentBytes: res.residentBytes, loadMs: res.loadMs, effectiveKernels: res.kernels, loadStats: res.loadStats });
+    await fsp.writeFile(path.join(outDir, 'report.json'), JSON.stringify(report, null, 2));
+  }
   report.phase = 'done';
   await finish(0);
 } catch (e) {
   report.error = String(e?.stack || e);
   await finish(1);
+}
+
+async function evaluateWatched(expression, label, stallMs) {
+  let settled = false;
+  const result = browser.evaluate(expression).finally(() => { settled = true; });
+  let last = null, lastChange = Date.now();
+  while (!settled) {
+    await Promise.race([result.catch(() => {}), new Promise(r => setTimeout(r, 2000))]);
+    if (settled) break;
+    const status = await browser.evaluate(`document.getElementById('status').textContent`, false).catch(() => null);
+    if (status !== last) { last = status; lastChange = Date.now(); }
+    if (Date.now() - lastChange > stallMs) {
+      report.stall = { job: label, status, pageTimeMs: await browser.evaluate('Math.round(performance.now())', false).catch(() => null),
+        lastResources: await browser.evaluate(`performance.getEntriesByType('resource').slice(-5).map(e => [e.name, Math.round(e.startTime), Math.round(e.responseEnd)])`, false).catch(() => null) };
+      throw new Error(`${label}: no progress for ${Math.round(stallMs / 1000)} s; last status: ${status}`);
+    }
+  }
+  return result;
 }
