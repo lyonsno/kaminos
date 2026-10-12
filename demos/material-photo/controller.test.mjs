@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { test } from 'node:test';
 
 async function controller() {
-  const behavior = { failDevice: false, failMaterials: false, deviceRequests: 0, gates: new Map() };
+  const behavior = { failDevice: false, failMaterials: false, deviceRequests: 0, geometryRuns:0, materialRuns:0, cache:new Map(), gates: new Map() };
   const node = dataset => ({ dataset, style: {}, value: '', disabled: false, hidden: false, checked: false, textContent: '', captures:new Set(),
     classList: { toggle() {},add(){},remove(){} }, removeAttribute() {}, setAttribute() {}, addEventListener() {},
     setPointerCapture(id) {this.captures.add(id);}, releasePointerCapture(id) {this.captures.delete(id);},hasPointerCapture(id){return this.captures.has(id);}, getBoundingClientRect: () => ({ left:0,top:0,width: 400, height: 400 }) });
@@ -60,25 +60,30 @@ async function controller() {
     setMaterials() { this.maps = {}; }
     async dispose() {}
   }
-  class MoGe { async init() { this.useRealWeights = true; this.weightsSource = 'local'; } async dispose() {} async run() { return { width:4,height:4,routeResult:{ receipt } }; } }
+  class MoGe { async init() { this.useRealWeights = true; this.weightsSource = 'local'; } async dispose() {} async run() { behavior.geometryRuns++;return { width:4,height:4,routeResult:{ receipt } }; } }
   const kit = {
     requestBrowserWebGpuDevice: async () => { behavior.deviceRequests++; if (behavior.failDevice) throw Error('Transient setup failure'); return { device, adapter:{}, backendIdentity:{ kind:'webgpu-local' } }; },
     createWebGpuInferenceSession: async () => session,
     createWebGpuInferenceControl: () => ({ async close() {} }),
   };
   const supermat = { SUPERMAT_ROUTE_ID:'supermat.image-to-pbr.webgpu-local.v0', superMatDeviceOptions:async()=>({}),
-    createSuperMatAdapter: async options => {behavior.profile=options;return { identity:{}, async run(input) { behavior.materialSize=input.size;if(behavior.failMaterials)throw Error('Material failure'); return { width:input.size,height:input.size,timings:{},dutyCount:1 }; } };} };
-  class Canvas { constructor(width,height) { this.width=width;this.height=height; } getContext() { return { drawImage() {}, getImageData: () => ({ width:this.width,height:this.height,data:new Uint8ClampedArray(this.width*this.height*4) }) }; } }
+    createSuperMatAdapter: async options => {behavior.profile=options;return { identity:{}, async run(input) { behavior.materialRuns++;behavior.materialSize=input.size;if(behavior.failMaterials)throw Error('Material failure'); return { width:input.size,height:input.size,timings:{},dutyCount:1 }; } };} };
+  class Canvas { constructor(width,height) { this.width=width;this.height=height; } getContext() { return { drawImage:bitmap=>{this.pixel=bitmap.pixel;}, getImageData: () => ({ width:this.width,height:this.height,data:new Uint8ClampedArray(this.width*this.height*4).fill(this.pixel) }) }; } }
   class BlobURL extends URL { static createObjectURL() { return 'blob:test'; } static revokeObjectURL() {} }
-  const response = () => ({ ok:true, blob:async()=>({}) });
+  const response = (url='') => ({ ok:true, blob:async()=>({pixel:url.includes('bag')?2:url.includes('evil-orb')?3:1}) });
   const context = vm.createContext({ document, navigator:{gpu:{}}, location:{search:''}, window:{}, URL:BlobURL, URLSearchParams,
     OffscreenCanvas:Canvas, Uint8ClampedArray, Uint8Array, performance, crypto, Blob,
-    createImageBitmap:async()=>({width:4,height:4,close(){}}),
-    fetch:async url => behavior.gates.has(url) ? behavior.gates.get(url).promise : response(),
+    createImageBitmap:async blob=>({width:4,height:4,pixel:blob.pixel,close(){}}),
+    fetch:async url => behavior.gates.has(url) ? behavior.gates.get(url).promise : response(url),
     setInterval:()=>0, clearInterval(){}, requestAnimationFrame:callback=>queueMicrotask(()=>callback(0)),
   });
   const source = new vm.SourceTextModule(await readFile(new URL('./main.js',import.meta.url),'utf8'), { context });
   await source.link(async specifier => {
+    if(specifier==='./inference-cache.js')return new vm.SyntheticModule(['createInferenceCache','photoCacheKey','retainedGeometry'],function(){
+      this.setExport('retainedGeometry',value=>value);
+      this.setExport('photoCacheKey',async image=>`pixels:${image.data[0]}`);
+      this.setExport('createInferenceCache',()=>({async get(key){return structuredClone(behavior.cache.get(key)??null);},async put(key,value){behavior.cache.set(key,structuredClone(value));return true;}}));
+    },{context});
     if (['./photo-contracts.js','./demo-defaults.js'].includes(specifier)) return new vm.SourceTextModule(await readFile(new URL(specifier,import.meta.url),'utf8'), { context });
     const exports = specifier.includes('/core.js') ? kit : specifier.includes('supermat-route') ? supermat : specifier.includes('moge-producer') ? { MoGeInference:MoGe } : { MaterialPhotoViewer:Viewer };
     return new vm.SyntheticModule(Object.keys(exports), function() { for(const [name,value]of Object.entries(exports))this.setExport(name,value); }, { context });
@@ -158,6 +163,19 @@ test('failed material rerun cannot advertise old material maps', async () => {
 test('observed MoGe routeResult receipt survives consumer reporting', async () => {
   const c=await controller(); await c.actions.infer();
   assert.deepEqual(c.state.runs.at(-1).moge.route,c.receipt);
+});
+test('switching back restores completed results and resolution changes reuse geometry',async()=>{
+  const c=await controller();await c.actions.infer();
+  assert.equal(c.behavior.geometryRuns,1);assert.equal(c.behavior.materialRuns,1);
+  c.elements['material-size'].value='1024';await c.elements['material-size'].onchange();
+  assert.equal(c.views[3].disabled,true);assert.equal(c.views[2].disabled,false);
+  await c.actions.infer();assert.equal(c.behavior.geometryRuns,1);assert.equal(c.behavior.materialRuns,2);
+  c.elements['material-size'].value='512';await c.elements['material-size'].onchange();
+  assert.equal(c.state.status,'cached');assert.deepEqual(Array.from(c.state.result.materialSize),[512,512]);
+  assert.equal(c.behavior.materialRuns,2);
+  await c.actions.sample('orb');assert.equal(c.state.status,'loaded');assert.equal(c.views[3].disabled,true);
+  await c.actions.sample('celebration');assert.equal(c.state.status,'cached');assert.equal(c.behavior.geometryRuns,1);
+  assert.equal(c.behavior.materialRuns,2);assert.equal(c.views[3].disabled,false);
 });
 test('carousel traverses all four views without resetting light or orbit',async()=>{
   const c=await controller();await c.actions.infer();

@@ -4,11 +4,19 @@ import { MoGeInference } from './moge-producer.js';
 import { MaterialPhotoViewer } from './comparison-viewer.js';
 import { createPhotoRunState, pixelSummary } from './photo-contracts.js';
 import { DEFAULT_PRESET, superMatProductProfile } from './demo-defaults.js';
+import { createInferenceCache,photoCacheKey,retainedGeometry } from './inference-cache.js';
 
 const $=id=>document.getElementById(id), params=new URLSearchParams(location.search);
 const photos={celebration:['Celebration','./images/celebration.png'],bag:['Backpack','./images/bag.webp'],orb:['Metal & glow','./images/evil-orb.png']};
 const results=createPhotoRunState();
 const state=window.__materialPhoto={status:'loading-image',error:null,source:null,runs:[],identity:null};
+const cache=createInferenceCache({onError:error=>{(state.cacheErrors??=[]).push(String(error));}});
+// Bump these when producer/preparation semantics change. Custom weight URLs are
+// deliberately session-local: their contents may change without changing the URL.
+const cacheRevision=params.has('weights')?crypto.randomUUID():'moge-vendored-38539be0-supermat-f368906c.v1';
+let imageKey;
+const geometryKey=key=>`${cacheRevision}:geometry:${key}`;
+const materialKey=(key,size)=>`${cacheRevision}:materials:${key}:${size}:${JSON.stringify(superMatProductProfile(gpu.device))}`;
 let image,selection,active=false,viewer,gpu,session,moge,materials,weightRoute,setupPromise;
 let imageTicket=0;
 let environmentTicket=0;
@@ -86,12 +94,14 @@ function disableMaterials(){
 }
 async function load(blob,label,key=null,ticket=++imageTicket){
   if(active)return;
+  state.status='loading-image';$('run').disabled=true;
   const bitmap=await createImageBitmap(blob);
   if(ticket!==imageTicket){bitmap.close();return;}
   const canvas=new OffscreenCanvas(bitmap.width,bitmap.height),context=canvas.getContext('2d');
   context.drawImage(bitmap,0,0);bitmap.close();
-  image=context.getImageData(0,0,canvas.width,canvas.height);
-  selection=results.select(label);state.source=label;state.status='loaded';state.error=null;
+  const input=context.getImageData(0,0,canvas.width,canvas.height),keyHash=await photoCacheKey(input);
+  if(ticket!==imageTicket)return;
+  image=input;imageKey=keyHash;selection=results.select(label);state.source=label;state.status='loaded';state.error=null;state.result=null;state.cache=null;
   const old=$('preview').dataset.blob;
   const url=URL.createObjectURL(blob);$('preview').src=url;$('preview').dataset.blob=url;
   if(old)URL.revokeObjectURL(old);
@@ -102,17 +112,21 @@ async function load(blob,label,key=null,ticket=++imageTicket){
   for(const button of document.querySelectorAll('[data-sample]'))button.classList.toggle('selected',button.dataset.sample===key);
   $('name').textContent=label;$('resolution').textContent=`${image.width} x ${image.height}`;
   $('progress').value=0;$('elapsed').textContent='';$('timings').textContent='';$('run').disabled=false;
-  status('Photograph loaded');
+  status('Photograph loaded');$('run').disabled=true;
+  await restoreCached(ticket);
+  if(ticket===imageTicket)$('run').disabled=false;
 }
 async function sample(key){
   if(active)return;
   const ticket=++imageTicket;
+  state.status='loading-image';$('run').disabled=true;$('material-size').disabled=true;
   try{
     const response=await fetch(photos[key][1]);
     if(ticket!==imageTicket)return;
     if(!response.ok)throw Error(`Image HTTP ${response.status}`);
     await load(await response.blob(),photos[key][0],key,ticket);
   }catch(error){if(ticket===imageTicket)throw error;}
+  finally{if(ticket===imageTicket){$('material-size').disabled=false;$('run').disabled=!image;}}
 }
 
 async function setup(){
@@ -137,10 +151,38 @@ async function setup(){
   });
   return setupPromise;
 }
+function presentDepth(input,depth){
+  disableMaterials();viewer.setImage(input,depth);viewer.map='surface';$('map').value='surface';
+  $('preview').hidden=true;$('scene').hidden=false;
+  document.querySelector('[data-view=photo]').disabled=false;document.querySelector('[data-view=relit]').disabled=false;compare();
+}
+async function restoreCached(ticket=++imageTicket){
+  const input=image,key=imageKey,token=selection,size=Number($('material-size').value);
+  state.status='restoring';
+  const geometry=await cache.get(geometryKey(key));
+  if(ticket!==imageTicket)return;
+  // Never leave the previous resolution's material maps advertised as this one.
+  state.result=null;state.cache=null;state.status='loaded';$('timings').textContent='';$('elapsed').textContent='';$('progress').value=0;
+  if(!geometry){viewer?.clear();$('preview').hidden=false;$('scene').hidden=true;view('original');
+    for(const button of document.querySelectorAll('[data-view]:not([data-view=original])'))button.disabled=true;
+    syncControls();status('Photograph loaded');return;}
+  await setup();if(ticket!==imageTicket)return;
+  const material=await cache.get(materialKey(key,size));if(ticket!==imageTicket)return;
+  results.publish(token,'geometry',geometry.depth);presentDepth(input,geometry.depth);
+  state.cache={geometry:true,materials:!!material,size,source:'browser-result-storage',originalRun:material?.record??geometry.record};
+  if(material){
+    results.publish(token,'materials',material.output);viewer.setMaterials(material.output);
+    document.querySelector('[data-view=materials]').disabled=false;compare();
+    state.status='cached';state.result=material.record.output;state.identity.supermat=material.record.supermat.identity;
+    $('identity').textContent='MoGe-2 + SuperMat | cached outputs';$('progress').value=1;
+    $('timings').textContent=`Restored materials ${size} x ${size}`;status('Depth & materials restored');
+  }else{status('Depth restored; materials not yet computed at this resolution');}
+}
 async function infer(){
-  if(active||!image)return;
+  if(active||!image||['loading-image','restoring'].includes(state.status))return;
   active=true;state.status='running';state.error=null;
-  const token=selection,input=image,size=Number($('material-size').value),started=performance.now(),record={source:state.source,status:'running',phases:{}};
+  const token=selection,input=image,key=imageKey,size=Number($('material-size').value),started=performance.now(),record={source:state.source,status:'running',phases:{}};
+  state.cache=null;
   for(const button of document.querySelectorAll('[data-sample]'))button.disabled=true;
   $('file').disabled=$('run').disabled=$('material-size').disabled=true;
   const clock=setInterval(()=>{$('elapsed').textContent=`${((performance.now()-started)/1000).toFixed(1)} s elapsed`;},100);
@@ -148,7 +190,8 @@ async function infer(){
   try{
     if(![512,768,1024].includes(size))throw Error('Choose a supported material resolution');
     await setup();
-    if(!moge){
+    const retained=await cache.get(geometryKey(key));
+    if(!retained&&!moge){
       const candidate=new MoGeInference(gpu);
       try{
         await candidate.init((received,total)=>status(`1/2 Geometry: loading MoGe ${Math.round(received/1e6)}${total?` / ${Math.round(total/1e6)}`:''} MB`));
@@ -158,14 +201,12 @@ async function infer(){
     }
     status('1/2 Geometry: inferring depth & normals');
     let phase=performance.now();
-    const depth=await moge.run(input,{scheduler:{mode:'cooperative',splitVitBlocks:true,splitDecoderResBlocks:true,pacing:'bounded-prefix'}});
+    const depth=retained?.depth??await moge.run(input,{scheduler:{mode:'cooperative',splitVitBlocks:true,splitDecoderResBlocks:true,pacing:'bounded-prefix'}});
     record.phases.geometryMs=performance.now()-phase;
-    record.moge={weights:moge.weightsSource,width:depth.width,height:depth.height,route:depth.routeResult?.receipt??null};
+    record.moge=retained?{...retained.record.moge,cached:true}:{weights:moge.weightsSource,width:depth.width,height:depth.height,route:depth.routeResult?.receipt??null};
     results.publish(token,'geometry',depth);
-    disableMaterials();
-    viewer.setImage(input,depth);viewer.map='surface';$('map').value='surface';
-    $('preview').hidden=true;$('scene').hidden=false;
-    document.querySelector('[data-view=photo]').disabled=false;document.querySelector('[data-view=relit]').disabled=false;compare();
+    presentDepth(input,depth);
+    if(!retained)await cache.put(geometryKey(key),{depth:retainedGeometry(depth),record:{moge:record.moge}});
     await new Promise(requestAnimationFrame);
     if(!materials){
       weightRoute??=await session.registerRoute({routeId:`${SUPERMAT_ROUTE_ID}.material-photo-weights`});
@@ -197,10 +238,11 @@ async function infer(){
     compare();
     record.wallMs=performance.now()-started;record.status='done';
     record.output={surfaceVertices:viewer.surface.position.length/3,triangles:viewer.surface.indices.length/3,materialSize:[output.width,output.height]};
+    record.cached=await cache.put(materialKey(key,size),{output,record});
     state.status='done';state.result=record.output;state.identity.supermat=materials.identity;
     $('identity').textContent='MoGe-2 + SuperMat | same GPUDevice';
     $('timings').textContent=`Depth ${(record.phases.geometryMs/1000).toFixed(2)} s | Materials ${size} x ${size}: ${(record.phases.materialsMs/1000).toFixed(2)} s`;
-    $('progress').value=1;status('Depth & materials complete');
+    $('progress').value=1;status(record.cached?'Depth & materials complete':'Depth & materials complete; browser could not retain this result');
   }catch(error){record.status='error';record.error=String(error.stack??error);state.status='error';state.error=error.message;status(error.message,true);$('progress').removeAttribute('value');}
   finally{clearInterval(clock);record.elapsedMs=performance.now()-started;state.runs.push(record);active=false;
     $('run').disabled=$('file').disabled=$('material-size').disabled=false;for(const button of document.querySelectorAll('[data-sample]'))button.disabled=false;
@@ -218,6 +260,7 @@ $('compare').onclick=compare;
 for(const button of document.querySelectorAll('[data-focus]'))button.onclick=()=>view(button.dataset.focus);
 $('file').onchange=()=>{const file=$('file').files[0];if(file)load(file,file.name).catch(fail);};
 $('run').onclick=infer;
+$('material-size').onchange=async()=>{if(active)return;try{$('run').disabled=true;await restoreCached();}catch(error){fail(error);}finally{$('run').disabled=false;}};
 $('map').onchange=()=>{if(viewer){const map=$('map').value;view('materials');viewer.map=map;$('map').value=map;}};
 $('gi').onchange=()=>{viewer.useGI=$('gi').checked;};
 $('glow').onchange=()=>{viewer.glow=$('glow').checked;};
@@ -295,7 +338,7 @@ $('environment').onchange=()=>changeEnvironment($('environment').value);
 for(const [id,key]of [['environment-rotation','rotation'],['environment-intensity','intensity'],['direct-intensity','direct']])$(id).oninput=()=>{
   try{viewer.setLighting({[key]:Number($(id).value)});$('preset-error').textContent='';}catch(error){$('preset-error').textContent=error.message;}
 };
-window.__materialPhotoActions={infer,sample,view,compare,changeEnvironment,exportPreset,importPreset,setLightPosition,setLightHandle,setMaterialContrast,
+window.__materialPhotoActions={infer,sample,view,compare,changeEnvironment,exportPreset,importPreset,setLightPosition,setLightHandle,setMaterialContrast,restoreCached,
   setEffects:value=>{viewer.setEffects(value);syncControls();return viewer.getEffects();},
   materialEvidence:()=>({image,output:results.snapshot().materials}),presentation:()=>viewer?.presentation()??null,async pixels(presentedFrame){
   // Inspect the browser's presented canvas screenshot, not a discarded WebGPU drawing buffer.

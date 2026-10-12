@@ -4,6 +4,18 @@ import { test } from 'node:test';
 import vm from 'node:vm';
 import { pixelSummary } from './photo-contracts.js';
 
+test('cache witness rejects a rerun, stale resolution, mislabeled source and incomplete restore',async()=>{
+  const {validateCachedRestoration}=await import('./witness-checks.js');
+  assert.equal(typeof validateCachedRestoration,'function','cached display requires distinct restoration admission');
+  const state={status:'cached',source:'orb',runs:[{}],identity:{sharedDevice:true,backend:{kind:'webgpu-local'}},
+    cache:{geometry:true,materials:true,size:512,source:'browser-result-storage'},result:{surfaceVertices:4,triangles:2,materialSize:[512,512]}};
+  assert.doesNotThrow(()=>validateCachedRestoration(state,'orb',512,1));
+  for(const change of [x=>x.runs.push({}),x=>{x.cache.size=1024;},x=>{x.result.materialSize=[1024,1024];},x=>{x.source='bag';},
+    x=>{x.status='done';},x=>{x.cache.materials=false;},x=>{x.identity.sharedDevice=false;},x=>{x.gpuErrors=['validation'];}]){
+    const bad=structuredClone(state);change(bad);assert.throws(()=>validateCachedRestoration(bad,'orb',512,1));
+  }
+});
+
 test('effects witness rejects stale controls, wrong views and mutated retained materials',async()=>{
   const {validateEffectsPresentation}=await import('./witness-checks.js');
   assert.equal(typeof validateEffectsPresentation,'function','effects need effective controls and retained-output admission');

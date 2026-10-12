@@ -11,6 +11,13 @@ export function validateEpisode(state, source, size) {
   if(size!==undefined&&(run.supermat?.size!==size||!run.output.materialSize.every(value=>value===size)))throw Error('Effective material resolution differs from selected resolution');
 }
 
+export function validateCachedRestoration(state,source,size,runCount) {
+  if(state?.status!=='cached'||state.source!==source||state.runs?.length!==runCount||state.gpuErrors?.length)throw Error('Cache restoration reran inference or failed');
+  if(state.identity?.sharedDevice!==true||state.identity.backend?.kind!=='webgpu-local')throw Error('Cached display requires actual WebGPU');
+  if(state.cache?.source!=='browser-result-storage'||state.cache.geometry!==true||state.cache.materials!==true||state.cache.size!==size)throw Error('Wrong cache restoration');
+  if(!(state.result?.surfaceVertices>0&&state.result.triangles>0)||state.result.materialSize?.length!==2||!state.result.materialSize.every(value=>value===size))throw Error('Stale cached output');
+}
+
 export function validateEffectsPresentation(presentation,expected,retained) {
   if(presentation?.mode!=='materials'||presentation.map!=='surface'||presentation.glow!==true||
     presentation.emissiveIntensity!==expected.glowIntensity)throw Error('Wrong effective emission presentation');

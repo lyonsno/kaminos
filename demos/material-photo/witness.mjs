@@ -4,10 +4,10 @@ import { execFileSync, spawn } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { createHash } from 'node:crypto';
 import { launchChrome, openPage } from '../../models/supermat/chrome-cdp.mjs';
-import { validateEpisode, captureSurfaceFrame, validateComparison, validateContrastArms,validateEffectsPresentation } from './witness-checks.js';
+import { validateEpisode, captureSurfaceFrame, validateComparison, validateContrastArms,validateEffectsPresentation,validateCachedRestoration } from './witness-checks.js';
 import { readRawEvidence } from './witness-raw.mjs';
 
-const {values}=parseArgs({options:{...Object.fromEntries(['repo-root','expected-commit','chrome','output','port','samples','sizes'].map(key=>[key,{type:'string'}])),contrast:{type:'boolean'},effects:{type:'boolean'}}});
+const {values}=parseArgs({options:{...Object.fromEntries(['repo-root','expected-commit','chrome','output','port','samples','sizes'].map(key=>[key,{type:'string'}])),contrast:{type:'boolean'},effects:{type:'boolean'},cache:{type:'boolean'}}});
 const output=path.resolve(values.output??'material-photo-witness');
 const report={status:'failed',phase:'arguments',requested:values,episodes:[],errors:[],command:process.argv};
 let browser,server;
@@ -49,6 +49,7 @@ try{
   await evaluate("window.__materialPhotoWitnessErrors=[];addEventListener('error',e=>window.__materialPhotoWitnessErrors.push(e.message));addEventListener('unhandledrejection',e=>window.__materialPhotoWitnessErrors.push(String(e.reason)))");
   const samples=(values.samples??'celebration,bag,orb').split(','),sizes=(values.sizes??'512').split(',').map(Number);
   if(!samples.length||samples.some(key=>!['celebration','bag','orb'].includes(key))||!sizes.length||sizes.some(size=>![512,768,1024].includes(size)))throw Error('Invalid samples or sizes');
+  if(values.cache&&!sizes.includes(512))throw Error('Cache reload exercise requires the default 512 resolution');
   report.plan={samples,sizes};
   let baselinePreset;
   for(const [sampleKey,label]of [['celebration','Celebration'],['bag','Backpack'],['orb','Metal & glow']].filter(([key])=>samples.includes(key)))for(const size of sizes){
@@ -67,7 +68,7 @@ try{
     const settle=()=>evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     await evaluate("document.getElementById('glow').checked=false;document.getElementById('glow').dispatchEvent(new Event('change'))");
     await settle();
-    if(values.effects||values.contrast){
+    if(values.effects||values.contrast||values.cache){
       episode.rawEvidence={};
       for(const name of ['image','albedo','roughness','metallic','orm','plane-albedo','plane-orm']){
         const raw=await readRawEvidence(evaluate,name),file=path.join(output,`${key}-${name}.raw`);
@@ -240,8 +241,52 @@ try{
     await browser.cdp.call('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false},sessionId);
     await persist();
   }
-  report.errors=await evaluate('window.__materialPhotoWitnessErrors');
-  report.gpuErrors=await evaluate('window.__materialPhoto.gpuErrors??[]');
+  if(values.cache){
+    report.phase='cache-restoration';await persist();
+    report.cacheRestorations=[];
+    const episode=report.episodes[0],sampleKey=samples[0],runCount=await evaluate('window.__materialPhoto.runs.length');
+    const preset=await evaluate('window.__materialPhotoActions.exportPreset()');
+    await evaluate(`window.__materialPhotoActions.sample(${JSON.stringify(sampleKey==='bag'?'orb':'bag')})`);
+    for(const size of sizes){
+      await evaluate(`(async()=>{document.getElementById('material-size').value=${JSON.stringify(String(size))};await window.__materialPhotoActions.sample(${JSON.stringify(sampleKey)})})()`);
+      const state=await evaluate('window.__materialPhoto');validateCachedRestoration(state,episode.source,size,runCount);
+      if(JSON.stringify(await evaluate('window.__materialPhotoActions.exportPreset()'))!==JSON.stringify(preset))throw Error('Restoring output reset tuning');
+      const original=report.episodes.find(row=>row.source===episode.source&&row.requestedSize===size),hashes={};
+      for(const name of ['image','albedo','roughness','metallic','orm','plane-albedo','plane-orm']){
+        const raw=await readRawEvidence(evaluate,name);hashes[name]=createHash('sha256').update(raw.bytes).digest('hex');
+        if(hashes[name]!==original.rawEvidence[name].sha256)throw Error(`Cached ${name} bytes changed at ${size}`);
+      }
+      report.cacheRestorations.push({size,state:{status:state.status,cache:state.cache.source,runCount:state.runs.length},hashes,frame:await capture(`cached-${size}`)});
+    }
+    // Reload the same independent profile, not a second inference invocation.
+    report.preReloadErrors=await evaluate('window.__materialPhotoWitnessErrors');
+    report.preReloadGpuErrors=await evaluate('window.__materialPhoto.gpuErrors??[]');
+    await browser.cdp.call('Page.navigate',{url:`${base}/demos/material-photo/index.html?sample=${sampleKey}`},sessionId);
+    await evaluate(`new Promise(resolve=>{const check=()=>{const s=window.__materialPhoto;if(s&&(['cached','error'].includes(s.status)||(s.status==='loaded'&&!document.getElementById('run').disabled)))resolve();else setTimeout(check,100)};check()})`);
+    const reloaded=await evaluate('window.__materialPhoto');validateCachedRestoration(reloaded,episode.source,512,0);
+    report.cacheReload={status:reloaded.status,runCount:reloaded.runs.length,frame:await capture('cache-reload')};
+    report.phase='source-photo-color';await persist();
+    const points=await evaluate(`(async()=>{
+      const THREE=await import('../../lib/three.webgpu.js');
+      const {MaterialPhotoViewer}=await import('./viewer.js');
+      const host=document.createElement('div');host.style.cssText='position:fixed;left:0;top:0;width:256px;height:256px;z-index:9999';
+      const canvas=document.createElement('canvas');host.append(canvas);document.body.append(host);
+      const gpu=await navigator.gpu.requestAdapter(),device=await gpu.requestDevice();
+      const v=new MaterialPhotoViewer();await v.init(canvas,device,{interactive:false});
+      const data=new Uint8Array(256*256*4),levels=[32,96,160,224];
+      for(let y=0;y<256;y++)for(let x=0;x<256;x++){const p=(y*256+x)*4;data.set([levels[Math.floor(x/64)],levels[Math.floor(x/64)],levels[Math.floor(x/64)],255],p);}
+      v.setImage({width:256,height:256,data});v.orbit.set(0,0);v.target.set(0,0);v.current.set(0,0);v.render();
+      window.__photoColorProbe={v,device,host};await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      return levels.map((expected,i)=>{const p=new THREE.Vector3((i+.5)/4-.5,0,0).project(v.camera);return {expected,x:Math.round((p.x+1)*128),y:Math.round((1-p.y)*128)}});
+    })()`);
+    const shot=await browser.cdp.call('Page.captureScreenshot',{format:'png',clip:{x:0,y:0,width:256,height:256,scale:1}},sessionId);
+    report.colorProbe={points,frame:path.join(output,'source-photo-gray.png')};await fs.writeFile(report.colorProbe.frame,Buffer.from(shot.data,'base64'));
+    report.colorProbe.pixels=await evaluate(`(async()=>{const b=await createImageBitmap(await(await fetch(${JSON.stringify('data:image/png;base64,'+shot.data)})).blob()),c=new OffscreenCanvas(256,256),ctx=c.getContext('2d');ctx.drawImage(b,0,0);b.close();return ${JSON.stringify(points)}.map(p=>({...p,actual:Array.from(ctx.getImageData(p.x,p.y,1,1).data)}))})()`);
+    if(report.colorProbe.pixels.some(p=>p.actual.slice(0,3).some(value=>Math.abs(value-p.expected)>2)))throw Error('Original photograph changes source gray levels');
+    await evaluate('(async()=>{const {v,device,host}=window.__photoColorProbe;await v.dispose();device.destroy();host.remove()})()');
+  }
+  report.errors=[...(report.preReloadErrors??[]),...await evaluate('window.__materialPhotoWitnessErrors??[]')];
+  report.gpuErrors=[...(report.preReloadGpuErrors??[]),...await evaluate('window.__materialPhoto.gpuErrors??[]')];
   if(report.gpuErrors.length)throw Error('Uncaptured GPU errors');
   if(report.errors.length)throw Error('Uncaught browser errors');
   if(git(['rev-parse','HEAD'])!==report.source.commit)throw Error('Source moved during witness');

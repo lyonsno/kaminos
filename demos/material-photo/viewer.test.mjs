@@ -19,7 +19,7 @@ async function viewerFixture() {
   const viewer=new module.namespace.MaterialPhotoViewer();
   viewer.scene=new THREE.Scene();viewer.camera=new THREE.PerspectiveCamera(53,1,.001,100);
   viewer.key=new THREE.DirectionalLight();viewer.scene.add(viewer.key,viewer.key.target);
-  viewer.renderer={toneMappingExposure:1,render(){calls.direct++;},setSize(){}};
+  viewer.renderer={toneMapping:THREE.ACESFilmicToneMapping,toneMappingExposure:1,render(){calls.direct++;},setSize(){}};
   viewer.pipeline={render(){calls.gi++;}};
   viewer.gi={setSettings(value){calls.settings.push(value);},setEstimatorSettings(value){calls.estimator.push(value);},debugState:()=>({estimator:calls.estimator.at(-1)})};
   viewer.canvas={parentElement:{getBoundingClientRect:()=>({width:400,height:400})}};
@@ -104,6 +104,11 @@ test('original remains DoubleSide and uses the same orbit as the depth surface',
   assert.equal(viewer.original.material.side,THREE.DoubleSide);
   viewer.orbit.set(.2,.1);viewer.mode='photo';viewer.render();const camera=viewer.camera.position.toArray();
   viewer.mode='original';viewer.render();assert.deepEqual(viewer.camera.position.toArray(),camera);
+});
+test('unlit photographs bypass renderer tone mapping while lit views retain ACES',async()=>{
+  const {viewer,THREE}=await viewerFixture();
+  for(const mode of ['original','photo']){viewer.mode=mode;viewer.render();assert.equal(viewer.renderer.toneMapping,THREE.NoToneMapping);}
+  for(const mode of ['relit','materials']){viewer.mode=mode;viewer.render();assert.equal(viewer.renderer.toneMapping,THREE.ACESFilmicToneMapping);}
 });
 test('a hidden comparison article submits no rendering work',async()=>{
   const {viewer,calls}=await viewerFixture();

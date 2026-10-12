@@ -339,6 +339,8 @@ export class MaterialPhotoViewer {
     if (!this.original || this.available===false || document.hidden || this.canvas?.parentElement.hidden || this.canvas?.closest?.('[data-tile]')?.hidden) return;
     const original=this.mode==='original';
     const lit=!original&&['relit','materials'].includes(this.mode)&&this.map==='surface';
+    // WebGPU's output target applies renderer tone mapping even to basic materials.
+    this.renderer.toneMapping=lit?THREE.ACESFilmicToneMapping:THREE.NoToneMapping;
     this.renderer.toneMappingExposure=lit?this.getEffects().exposure:1;
     this.original.visible=original;
     if (this.mesh) {
