@@ -43,4 +43,7 @@ for(let r=0;r<4;r++)for(let s=0;s<3;s++){
 assert.equal(validateTraceRows(values,plan).misses,12);
 values[3]=0;
 assert.throws(()=>validateTraceRows(values,plan), /unwritten/);
+assert.match(core, /override OPTICAL_TRACE_CAPTURE: bool = false;/);
+assert.match(core, /OPTICAL_TRACE_CAPTURE:Boolean\(options.opticalTrace\)/);
+assert.match(core, /opticalTraceCaptureActive/,'capture must reject overlapping asynchronous calls');
 console.log('optical transfer, input normalization, allocation and trace completeness contracts passed');

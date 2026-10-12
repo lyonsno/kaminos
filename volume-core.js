@@ -3458,6 +3458,7 @@ override TRANSPARENT_CANVAS: f32 = 0.0;
 override IRRADIANCE_GRID: u32 = 32u;
 override LEAN_STOCK_RAYMARCH: bool = false;
 override LEAN_EMISSIVE_RAYMARCH: bool = false;
+override OPTICAL_TRACE_CAPTURE: bool = false;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 
@@ -7533,7 +7534,7 @@ fn writeOpticalTraceMiss(ray: u32) {
 
 fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool) -> RaymarchResult {
   let physicalColorMode = select(u.physical_fire.x, 2.0, LEAN_EMISSIVE_RAYMARCH);
-  let opticalCaptureMode = select(nonRidgeOpticalCaptureHeader.mode, 0u, LEAN_EMISSIVE_RAYMARCH && nonRidgeOpticalCaptureHeader.mode != 5u);
+  let opticalCaptureMode = select(select(nonRidgeOpticalCaptureHeader.mode, 0u, LEAN_EMISSIVE_RAYMARCH), 5u, OPTICAL_TRACE_CAPTURE);
   let fullGridCapture = !LEAN_STOCK_RAYMARCH && opticalCaptureMode >= 3u && opticalCaptureMode <= 4u;
   let opticalTrace = opticalCaptureMode == 5u;
   let traceRay = u32(in.pos.x) + u32(in.pos.y) * u32(u.viewport_steps_density.x);
@@ -11483,6 +11484,7 @@ export function createKaminosVolumePrototype({
   let nonRidgeOpticalCaptureHeaderBuffer = null;
   let nonRidgeOpticalCaptureRowBuffer = null;
   let nonRidgeOpticalCaptureSession = null;
+  let opticalTraceCaptureActive = false;
   let nonRidgeSourceBasisCaptureSession = null;
   let nonRidgeSourceBasisControlsActive = false;
   let nonRidgeSourceBasisControlApplication = null;
@@ -19598,20 +19600,21 @@ export function createKaminosVolumePrototype({
     }
     if(distributedGroup) {
       if(distributedFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('distributed flame lighting is stale');
-      const key=`${multisampled}:${targetPipeline===readbackPipeline}:${gridSize}:${gridHeight}:${selectEmissive}`;
+      const key=`${multisampled}:${targetPipeline===readbackPipeline}:${gridSize}:${gridHeight}:${selectEmissive}`
+        + (options.opticalTrace ? ':optical-trace' : '');
       if(!distributedPipelines.has(key)) {
         // Replace internal flame incident lighting so this emission is counted
         // once. Direct camera emission and material scattering stay intact.
         let code=WGSL.replace('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')
           .replace('fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return vec2<f32>(0.0); }',
-            'fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return distributedIncidentMaskFlags(p); }')+DISTRIBUTED_SMOKE_WGSL;
+            'fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return distributedLastMaskFlags; }')+DISTRIBUTED_SMOKE_WGSL;
         if(multisampled)code=code.replace('var productSceneDepth: texture_depth_2d;','var productSceneDepth: texture_depth_multisampled_2d;')
           .replace('let depth = textureLoad(productSceneDepth, pixel, 0);',`var depth=textureLoad(productSceneDepth,pixel,0);
           for(var sample=1u;sample<textureNumSamples(productSceneDepth);sample++){depth=min(depth,textureLoad(productSceneDepth,pixel,sample));}`);
         const module=device.createShaderModule({label:'distributed flame smoke consumer',code});
         const layout=device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,multisampled?ordinaryMultisampleDepthLayout:productRaymarchDepthBindGroupLayout,distributedLayout]});
         distributedPipelines.set(key,device.createRenderPipeline({label:'distributed flame scene smoke',layout,
-          vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',constants:{GRID:gridSize,GRID_Y:gridHeight,TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false,LEAN_EMISSIVE_RAYMARCH: selectEmissive},
+          vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',constants:{GRID:gridSize,GRID_Y:gridHeight,TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false,LEAN_EMISSIVE_RAYMARCH: selectEmissive,OPTICAL_TRACE_CAPTURE:Boolean(options.opticalTrace)},
           targets:[{format:targetPipeline===readbackPipeline?'rgba8unorm':format}]},primitive:{topology:'triangle-list'}}));
       }
       drawPipeline=distributedPipelines.get(key);
@@ -19653,9 +19656,10 @@ export function createKaminosVolumePrototype({
     if (!state.active || !device || !selectiveHeadLiveCapturePaused) {
       return {ok:false,phase:'admission',reason:'optical-trace-requires-held-capture'};
     }
-    if (nonRidgeOpticalCaptureSession || nonRidgeSourceBasisCaptureSession) {
+    if (opticalTraceCaptureActive || nonRidgeOpticalCaptureSession || nonRidgeSourceBasisCaptureSession) {
       return {ok:false,phase:'admission',reason:'another-optical-capture-active'};
     }
+    opticalTraceCaptureActive=true;
     let phase='admission', rows=null, readback=null, scopeOpen=false;
     const idleRows=nonRidgeOpticalCaptureRowBuffer;
     const specialization=debugRaymarchShaderSpecialization;
@@ -19685,8 +19689,9 @@ export function createKaminosVolumePrototype({
       device.pushErrorScope('validation'); scopeOpen=true;
       let encoder=device.createCommandEncoder({label:OPTICAL_TRACE_IDENTITY});
       encoder=prepareSharedSceneConsumers(encoder);
+      if (!distributedGroup) throw new Error('optical trace currently requires distributed incident lighting');
       encodeBoundarySidecar(encoder);
-      encodeDraw(encoder,frameTexture.createView(),OPTICAL_TRACE_IDENTITY,readbackPipeline);
+      encodeDraw(encoder,frameTexture.createView(),OPTICAL_TRACE_IDENTITY,readbackPipeline,{opticalTrace:true});
       const effective={route:state.effectiveRoute,backend:state.backend,simStepCount:step,
         specialization:{...state.raymarchShaderSpecialization},incidentLight:{...state.physicalColor.incidentLight},
         uniforms:Array.from(uniforms),controls:structuredClone(controlsSnapshot)};
@@ -19711,6 +19716,7 @@ export function createKaminosVolumePrototype({
       rebuildNonRidgeOpticalCaptureBindGroups();
       device.queue.writeBuffer(nonRidgeOpticalCaptureHeaderBuffer,0,new Uint32Array(9));
       rows?.destroy();readback?.destroy();
+      opticalTraceCaptureActive=false;
     }
   }
 
