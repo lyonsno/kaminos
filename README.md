@@ -23,22 +23,28 @@ The repository spans four connected capabilities:
 
 ## Turn A Photograph Into A Surface You Can Relight
 
-[![Four synchronized views of a metallic sculpture: the original photograph, recovered depth, the image under new lighting, and inferred materials with glow](demos/material-photo/comparison.png)](demos/material-photo/README.md)
+[![Four synchronized views of a metallic sculpture: the original photograph, recovered depth, the image under new lighting, and inferred materials with glow](demos/material-photo/comparison.png)](https://lyonsno.github.io/kaminos/inference-kit/material-photo/)
 
 **Material Photograph** combines MoGe geometry with SuperMat material estimation in the browser. Rotate all four views together, move the light, and switch HDR environments to see what depth and materials each contribute. Inspect the recovered albedo, roughness and metalness, or tune the optional inferred glow and bloom.
 
-Both models and the interactive renderer share one WebGPU device through the inference kit. [Run the example locally](demos/material-photo/README.md#run-locally) or [explore its implementation](demos/material-photo/main.js).
+**[Explore the photograph in your browser](https://lyonsno.github.io/kaminos/inference-kit/material-photo/)** with three included model results and no weight download. Both models and the interactive renderer share one WebGPU device through the inference kit. [Use your photograph locally](demos/material-photo/README.md#run-locally) or [explore the implementation](demos/material-photo/main.js).
 
 [![Golden flames illuminate the chamber of an open kiln in the Kaminos browser workbench](docs/flame-atlas/assets/kiln-authoring-hero.png)](https://lyonsno.github.io/kaminos/)
 
 ## Start Here
 
+**[Try the browser models](https://lyonsno.github.io/kaminos/inference-kit/)**:
+[relight a photograph](https://lyonsno.github.io/kaminos/inference-kit/material-photo/),
+[generate an image with FLUX](https://lyonsno.github.io/kaminos/inference-kit/klein/),
+or [explore a photograph's depth with MoGe](https://lyonsno.github.io/moge-webgpu/).
+The generation demos run inference locally on your GPU.
+
 | Surface | What it demonstrates | Entry point |
 | --- | --- | --- |
-| Material Photograph | One photograph becomes a relightable surface, with synchronized original, depth, image-as-albedo and inferred-material views | [Example and local setup](demos/material-photo/README.md) |
+| Material Photograph | One photograph becomes a relightable surface, with synchronized original, depth, image-as-albedo and inferred-material views | [Explore in your browser](https://lyonsno.github.io/kaminos/inference-kit/material-photo/) or [use your photograph locally](demos/material-photo/README.md) |
 | Browser combustion films | A stateful WebGPU fire material captured while being driven through ignition, contraction, chromatic change, extinction, and rebirth | [Watch the captured studies](https://lyonsno.github.io/kaminos/) |
 | WebGPU inference kit | Shared-device lifecycle, persistent model routes, queues, cooperative scheduling, resource residency, progress, and runtime telemetry | [Read the package guide](webgpu-inference-kit/README.md) or [open npm](https://www.npmjs.com/package/@kaminos/webgpu-inference-kit) |
-| Spatial model ports | MoGe depth and normals, SHARP Gaussian reconstruction, SF3D and TRELLIS 2 textured meshes, Kimodo motion diffusion, and SAM segmentation | [Inspect the port family](webgpu-inference-kit/README.md#one-runtime-different-models) |
+| Generative and vision model ports | Image generation, depth and normals, Gaussian reconstruction, textured meshes, skeletal motion, segmentation, and material maps | [Inspect the port family](webgpu-inference-kit/README.md#one-runtime-different-models) |
 | Spatial Asset Kiln | The workbench architecture for generated assets, live routes, World Chambers, Preview Benches, and Smoke Offers | [Read the architecture](docs/spatial-asset-kiln.md) |
 
 ## One Browser, One GPU
@@ -87,6 +93,7 @@ The same runtime supports several kinds of model:
 | [SAM 3](webgpu-inference-kit/docs/sam-semantic-demo.md) | Visible instance masks from an image and text prompt | Complete browser WebGPU route, 3.32 GB persistent model package, cached image features, queued prompts, and same-device foreground submissions |
 | [TRELLIS 2](models/trellis2/README.md) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and GPU sharing with the application renderer |
 | [FLUX.2 [klein] 4B](models/flux2-klein/README.md) | Images from a text prompt ([try it in your browser](https://lyonsno.github.io/kaminos/inference-kit/klein/)) | Text encoder, 4-step transformer and image decoder in the browser, with cached int4 weights and throughput-sized command duties that leave room for rendering |
+| [UniMate](models/unimate/README.md) | Skeletal motion from a text prompt for different rigged skeletons | Browser text encoder, motion transformer, adaptive ODE sampling and joint-rotation decoding through the inference kit |
 
 TRELLIS 2 turns an image into a textured 3D mesh. Its neural networks run on
 WebGPU, with 512-resolution previews and a higher-detail 1024-resolution mode.
