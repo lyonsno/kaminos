@@ -21,13 +21,15 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install numpy
       - run: npm ci
-      - name: Allow local server connections
-        # The runner's application firewall holds the first connection to a
-        # newly listening Python server for about 75 s, past the HTTP tests' wait.
-        run: sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate off
+      - name: Resolve the runner's own hostname locally
+        # http.server looks up the machine's fully qualified name while binding.
+        # On the macOS runner that lookup stalls past the HTTP tests' wait.
+        run: |
+          echo "127.0.0.1 $(hostname) $(hostname -s)" | sudo tee -a /etc/hosts
+          time python3 -c "import socket; print(socket.getfqdn(''))"
       - name: serve.py answers within 10 s
         run: |
-          python3 serve.py 18499 > serve-startup.log 2>&1 &
+          python3 -u serve.py 18499 > serve-startup.log 2>&1 &
           pid=$!
           up=0
           for i in $(seq 1 20); do
