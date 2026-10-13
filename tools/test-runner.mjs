@@ -31,7 +31,7 @@ export const REPORT_SCHEMA = 'kaminos.test-run-report.v1';
 export const KNOWN_KINDS = new Set(['node', 'python', 'browser', 'helper', 'manual']);
 export const EXECUTED_KINDS = new Set(['node', 'python']);
 export const QUARANTINE_CLASSES = new Set(['untriaged', 'regression', 'stale-pin', 'environment', 'harness-defect']);
-export const BLOCKED_BROWSER_PATH = '/nonexistent/kaminos-test-runner-blocks-browser';
+export const BROWSER_STUB_PATH = fileURLToPath(new URL('./browser-launch-stub.sh', import.meta.url));
 const DEFAULT_TIMEOUT_MS = 600000;
 const DECLARATION = /^\s*(?:\/\/|#)\s*kaminos-test:\s*([a-z]+)\s*(?:[—–-]+\s*(.+?))?\s*$/;
 const SKIP_DIRS = new Set(['node_modules', '.git', 'artifacts', 'lib', 'scratch', 'scenes', 'fixtures']);
@@ -100,12 +100,27 @@ function executableVersion(executable, args) {
 
 async function checkDependencies(root) {
   const manifestPath = path.join(root, 'package.json');
-  if (!existsSync(manifestPath)) return { declared: [], missing: [], lockfileSha256: null };
+  if (!existsSync(manifestPath)) return { declared: [], missing: [], mismatched: [], installed: {}, lockfileSha256: null };
   const pkg = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
   const declared = Object.keys({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) }).sort();
   const missing = declared.filter(name => !existsSync(path.join(root, 'node_modules', name, 'package.json')));
-  const lock = path.join(root, 'package-lock.json');
-  return { declared, missing, lockfileSha256: existsSync(lock) ? sha256(await fs.readFile(lock)) : null };
+  const lockPath = path.join(root, 'package-lock.json');
+  const lock = existsSync(lockPath) ? JSON.parse(await fs.readFile(lockPath, 'utf8')) : null;
+  const hiddenPath = path.join(root, 'node_modules', '.package-lock.json');
+  const hidden = existsSync(hiddenPath) ? JSON.parse(await fs.readFile(hiddenPath, 'utf8')) : null;
+  const installed = {};
+  const mismatched = [];
+  for (const name of declared.filter(n => !missing.includes(n))) {
+    const version = JSON.parse(await fs.readFile(path.join(root, 'node_modules', name, 'package.json'), 'utf8')).version;
+    installed[name] = version;
+    const locked = lock?.packages?.[`node_modules/${name}`];
+    if (locked?.version && locked.version !== version) { mismatched.push({ name, locked: locked.version, installed: version }); continue; }
+    const placed = hidden?.packages?.[`node_modules/${name}`];
+    for (const field of ['resolved', 'integrity']) {
+      if (locked?.[field] && placed?.[field] && locked[field] !== placed[field]) mismatched.push({ name, field, locked: locked[field], installed: placed[field] });
+    }
+  }
+  return { declared, missing, mismatched, installed, lockfileSha256: existsSync(lockPath) ? sha256(await fs.readFile(lockPath)) : null };
 }
 
 // The failure signature: the first error-shaped line for Node, the last for
@@ -117,6 +132,16 @@ export function failureSignature(output, { root, kind, exitCode }) {
   if (root) text = text.split(root).join('<root>');
   text = text.split(os.homedir()).join('~');
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  // node:test files keep running after a failure; sign the set of failing
+  // subtests so a new failing subtest changes the signature.
+  if (lines.some(l => /^ℹ fail [1-9]/.test(l))) {
+    const names = new Set();
+    for (const l of lines) {
+      const m = l.match(/^✖ (.+?) \(\d+(?:\.\d+)?ms\)$/);
+      if (m) names.add(m[1]);
+    }
+    if (names.size) return `node:test failing: ${[...names].sort().join(' | ')}`;
+  }
   const isError = l => /^(?:[A-Za-z_.]*(?:Error|Exception))(?:\s*\[[A-Z_]+\])?:/.test(l) || /^FAIL\b/.test(l);
   const indexes = lines.map((l, i) => (isError(l) ? i : -1)).filter(i => i >= 0);
   if (!indexes.length) return lines.length ? lines.at(-1) : `exit ${exitCode}`;
@@ -132,7 +157,8 @@ export function failureSignature(output, { root, kind, exitCode }) {
   return [lines[at], ...detail].join(' | ');
 }
 
-function runOne({ root, file, kind, executable, timeoutMs, logsDir, env, track }) {
+function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv, track }) {
+  const env = { ...baseEnv, KAMINOS_TEST_RUNNER_TEST: file };
   const started = Date.now();
   const logPath = path.join(logsDir, `${file.replace(/[\/]/g, '__')}.log`);
   return new Promise(resolve => {
@@ -205,19 +231,23 @@ export async function runSuite({
   if (!reportPath) throw new Error('reportPath is required');
   logsDir = logsDir || path.join(path.dirname(reportPath), 'logs');
   const resolvedExecutables = { node: process.execPath, python: 'python3', ...executables };
-  const childEnv = { ...process.env, KAMINOS_CHROME: BLOCKED_BROWSER_PATH, CHROME_BIN: BLOCKED_BROWSER_PATH };
+  const browserLog = path.join(logsDir, 'browser-launch-attempts.tsv');
+  // NODE_TEST_CONTEXT would switch child node:test files to the binary
+  // protocol used between a parent `node --test` and its children.
+  const { NODE_TEST_CONTEXT: _parentTestContext, ...inheritedEnv } = process.env;
+  const childEnv = { ...inheritedEnv, KAMINOS_CHROME: BROWSER_STUB_PATH, CHROME_BIN: BROWSER_STUB_PATH, KAMINOS_TEST_RUNNER_BROWSER_LOG: browserLog };
   const report = {
     schema: REPORT_SCHEMA, ok: false, failurePhase: null, error: null,
     startedAt: new Date().toISOString(), finishedAt: null,
     effective: { root, manifestPath, quarantinePath, parallel, timeoutMs, kinds, only,
       executables: resolvedExecutables, node: process.version, python: null,
       platform: `${process.platform}-${process.arch}`, git: gitIdentity(root),
-      blockedBrowserEnv: { KAMINOS_CHROME: BLOCKED_BROWSER_PATH, CHROME_BIN: BLOCKED_BROWSER_PATH },
+      browserStub: { path: BROWSER_STUB_PATH, overrides: ['KAMINOS_CHROME', 'CHROME_BIN'], log: browserLog },
       manifestSha256: null, quarantineSha256: null, dependencies: null },
     counts: { discovered: 0, executed: 0, passed: 0, knownFailures: 0, newFailures: 0, notRun: 0 },
     newFailures: [], knownFailures: [], signatureChanged: [], staleQuarantine: [],
     unclassified: [], invalid: [], invalidQuarantine: [], unmatchedSelectors: [],
-    uncoveredTestRoots: [], excludedRoots: [],
+    uncoveredTestRoots: [], excludedRoots: [], browserLaunchAttempts: [],
     orphans: { manifest: [], quarantine: [] }, notRun: [], results: [],
   };
   const running = new Set();
@@ -233,6 +263,9 @@ export async function runSuite({
     return { ok: report.ok, report, reportPath };
   };
   try {
+    report.failurePhase = 'arguments';
+    if (!Number.isInteger(parallel) || parallel < 1) throw Object.assign(new Error(`parallel must be a positive integer, got ${parallel}`), { phase: 'arguments' });
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw Object.assign(new Error(`timeoutMs must be positive, got ${timeoutMs}`), { phase: 'arguments' });
     report.failurePhase = 'load-manifest';
     const manifest = await readJson(manifestPath, SUITE_MANIFEST_SCHEMA, 'load-manifest');
     report.effective.manifestSha256 = manifest.sha256;
@@ -242,8 +275,9 @@ export async function runSuite({
 
     report.failurePhase = 'dependencies';
     report.effective.dependencies = await checkDependencies(root);
-    if (report.effective.dependencies.missing.length) {
-      throw Object.assign(new Error(`declared dependencies are not installed: ${report.effective.dependencies.missing.join(', ')}. Run npm ci.`), { phase: 'dependencies' });
+    const { missing, mismatched } = report.effective.dependencies;
+    if (missing.length || mismatched.length) {
+      throw Object.assign(new Error(`installed dependencies do not match package-lock.json (missing: ${missing.join(', ') || 'none'}; mismatched: ${mismatched.map(m => m.name).join(', ') || 'none'}). Run npm ci.`), { phase: 'dependencies' });
     }
 
     report.failurePhase = 'discover';
@@ -299,11 +333,17 @@ export async function runSuite({
 
     report.failurePhase = 'execute';
     await fs.mkdir(logsDir, { recursive: true });
+    await fs.rm(browserLog, { force: true });
     report.results = await pool(planned, parallel,
       item => runOne({ root, ...item, timeoutMs, logsDir, env: childEnv, track }), () => interrupted);
     if (interrupted) throw Object.assign(new Error('run interrupted'), { phase: 'interrupted' });
 
     report.counts.executed = report.results.length;
+    if (report.results.length !== planned.length) throw Object.assign(new Error(`planned ${planned.length} tests but ran ${report.results.length}`), { phase: 'execute' });
+    if (existsSync(browserLog)) {
+      report.browserLaunchAttempts = (await fs.readFile(browserLog, 'utf8')).trim().split('\n').filter(Boolean)
+        .map(line => { const [file, pid, args] = line.split('\t'); return { file, pid: Number(pid), args }; });
+    }
     const invalidQuarantine = new Set(report.invalidQuarantine);
     for (const result of report.results) {
       const entry = quarantined[result.file];
@@ -325,6 +365,7 @@ export async function runSuite({
     report.ok = report.newFailures.length === 0 && report.staleQuarantine.length === 0
       && report.unclassified.length === 0 && report.invalid.length === 0 && report.invalidQuarantine.length === 0
       && report.unmatchedSelectors.length === 0 && report.uncoveredTestRoots.length === 0
+      && report.browserLaunchAttempts.length === 0
       && report.orphans.manifest.length === 0 && (onlySet ? true : report.orphans.quarantine.length === 0);
   } catch (error) {
     report.ok = false;
@@ -370,6 +411,7 @@ function summarize({ report, reportPath }) {
   list('invalid classifications', report.invalid, 'unknown kind, a non-executed kind without a reason, or a declaration that disagrees with tests/suite.json');
   list('invalid quarantine entries', report.invalidQuarantine, 'each needs class, owner, reason and signature');
   list('selectors that matched nothing', report.unmatchedSelectors);
+  list('browser launches reached by tests', report.browserLaunchAttempts.map(a => `${a.file}: ${a.args}`), 'classify these tests as browser');
   list('test roots that are neither run nor excluded', report.uncoveredTestRoots, 'add them to excludedRoots in tests/suite.json with a reason');
   list('manifest entries for missing files', report.orphans.manifest);
   list('quarantine entries for missing files', report.orphans.quarantine);

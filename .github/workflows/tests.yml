@@ -8,6 +8,10 @@ on:
 jobs:
   suite:
     runs-on: macos-latest
+    env:
+      # The macOS runner holds connections to new servers listening on all
+      # interfaces; loopback-only listeners are not intercepted.
+      KAMINOS_BIND_HOST: 127.0.0.1
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -21,12 +25,6 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install numpy
       - run: npm ci
-      - name: Resolve the runner's own hostname locally
-        # http.server looks up the machine's fully qualified name while binding.
-        # On the macOS runner that lookup stalls past the HTTP tests' wait.
-        run: |
-          echo "127.0.0.1 $(hostname) $(hostname -s)" | sudo tee -a /etc/hosts
-          time python3 -c "import socket; print(socket.getfqdn(''))"
       - name: serve.py answers within 10 s
         run: |
           python3 -u serve.py 18499 > serve-startup.log 2>&1 &

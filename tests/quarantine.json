@@ -123,7 +123,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "failing on main 954f622e when the runner was introduced",
-      "signature": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /const entry = sceneObjects\\.find\\(item => item\\.id === activeSceneObjectId\\);\\s*const changed = frameSceneObjectRecord\\(entry, camera, controls\\)/. Input: | '<!DOCTYPE html>\\n' + | '<html lang=\"en\">\\n' + | '<head>\\n' + | '<meta charset=\"UTF-8\">\\n' +",
+      "signature": "node:test failing: Burner control commits share scene undo and restore through the live flame setters | F frames the selected authored object through generic geometry bounds | clearing resets scene history while typed water objects join chronological membership history | selection feedback hides untrustworthy offscreen pivots and names the recovery cue",
       "testLastChanged": "2026-10-01 e372f2eb"
     },
     "tests/scene-authoring-polish-contracts.mjs": {
@@ -163,7 +163,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "failing on main 954f622e when the runner was introduced",
-      "signature": "ReferenceError: groupProxies is not defined",
+      "signature": "node:test failing: clearing a scene removes its old flame member before the next scene saves",
       "testLastChanged": "2026-10-04 c08d9e30"
     },
     "tests/scene-floor-receivers-contracts.mjs": {
@@ -179,7 +179,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "failing on main 954f622e when the runner was introduced",
-      "signature": "TypeError: Cannot set properties of undefined (setting 'authoringDragStep')",
+      "signature": "node:test failing: AO is attached to material indirect lighting, not multiplied over lit output | rim off/on preserves its aim and fine-valued recipe | two startups without edits retain stored map recipes, selection, and rim settings",
       "testLastChanged": "2026-09-18 9ec0b9a3"
     },
     "tests/scene-navigation-contracts.mjs": {
@@ -187,7 +187,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "failing on main 25ebacb0; previously misclassified as a browser test and not run",
-      "signature": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value: | assert.ok(roots.includes('sceneObjects.filter(entry => entry.type !== \\'splat\\' && entry.id !== RIM_LIGHT_ID)'))",
+      "signature": "node:test failing: ground is visible but cannot set authored-mesh navigation depth",
       "testLastChanged": "2026-10-01 e372f2eb"
     },
     "tests/scene-roundtrip.mjs": {
@@ -227,7 +227,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "failing on main 954f622e when the runner was introduced",
-      "signature": "ReferenceError: sceneClipCharacteristic is not defined",
+      "signature": "node:test failing: common transport samples all gas state and front at the velocity backtrace | hot stationary gas has no per-layer kinematic rise in common mode | legacy mode preserves the original distinct backtraces and lift",
       "testLastChanged": "2026-10-06 5b887704"
     },
     "tests/volume-confinement-mode-contracts.mjs": {
@@ -235,7 +235,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "failing on main 954f622e when the runner was introduced",
-      "signature": "AssertionError [ERR_ASSERTION]: enstrophy is reported per cell",
+      "signature": "node:test failing: the residual probe also reduces enstrophy so confinement can be calibrated against a measurement",
       "testLastChanged": "2026-10-06 0740886f"
     },
     "tests/volume-dead-render-clock-retirement-contracts.mjs": {
@@ -307,7 +307,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "failing on main 954f622e when the runner was introduced",
-      "signature": "AssertionError [ERR_ASSERTION]: predictor must not be added to the shared fluid bind group layout",
+      "signature": "node:test failing: WGSL carries the predictor buffer, the MacCormack corrector with an extremum limiter, and one velocity bound helper",
       "testLastChanged": "2026-10-06 5b887704"
     },
     "tests/volume-transported-detail-force-periodicity-contracts.mjs": {

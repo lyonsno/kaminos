@@ -236,7 +236,7 @@ test('an interrupted run kills running tests and still writes a report', async t
 });
 
 test('child tests cannot reach an installed GUI Chrome through the usual overrides', async t => {
-  const probe = "const v=[process.env.KAMINOS_CHROME,process.env.CHROME_BIN];process.exit(v.every(x=>x&&x.includes('kaminos-test-runner-blocks-browser'))?0:1);\n";
+  const probe = "const v=[process.env.KAMINOS_CHROME,process.env.CHROME_BIN];process.exit(v.every(x=>x&&x.endsWith('browser-launch-stub.sh'))?0:1);\n";
   const f = await fixture(t, { files: { 'e.mjs': probe }, manifest: manifestOf({ 'tests/e.mjs': { kind: 'node' } }) });
   assert.equal((await run(f)).ok, true);
 });
@@ -268,4 +268,61 @@ test('failure signatures keep the detail that distinguishes generic assertion me
     'AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: | + actual - expected | + 8421504 | - 1118481');
   const custom = 'PASS first\nFAIL burner visibility: selectedBedRecipe is not defined\nPASS later\n';
   assert.equal(failureSignature(custom, { kind: 'node', exitCode: 1 }), 'FAIL burner visibility: selectedBedRecipe is not defined');
+});
+
+// Revision 2: findings from the confirmation review.
+
+test('a witness that falls through to an installed Chrome reaches the runner stub, and the attempt fails the run', async t => {
+  const fakeGui = path.join(os.tmpdir(), `kaminos-fake-gui-chrome-${process.pid}`);
+  await fs.writeFile(fakeGui, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  t.after(() => fs.rm(fakeGui, { force: true }));
+  const witness = `import { existsSync } from 'node:fs'; import { spawnSync } from 'node:child_process';
+const chrome = [process.env.KAMINOS_CHROME, ${JSON.stringify(fakeGui)}].filter(Boolean).find(existsSync);
+const res = spawnSync(chrome, ['--headless'], { stdio: 'ignore' });
+process.exit(res.status === 0 ? 0 : 3);
+`;
+  const f = await fixture(t, { files: { 'w.mjs': witness }, manifest: manifestOf({ 'tests/w.mjs': { kind: 'node' } }) });
+  assert.equal((await run(f)).ok, false);
+  const report = await readReport(f);
+  assert.deepEqual(report.browserLaunchAttempts.map(a => a.file), ['tests/w.mjs']);
+});
+
+test('a non-numeric or non-positive parallel or timeout is an argument error', async t => {
+  const f = await fixture(t, { files: { 'a.mjs': PASS }, manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' } }) });
+  for (const extra of [{ parallel: Number('abc') }, { parallel: 0 }, { timeoutMs: -1 }]) {
+    assert.equal((await run(f, extra)).ok, false);
+    assert.equal((await readReport(f)).failurePhase, 'arguments');
+  }
+});
+
+test('a new failing subtest in a quarantined node:test file is a new failure', async t => {
+  const body = name => `import test from 'node:test';
+test('known broken', () => { throw new Error('known'); });
+test('still fine', () => {});
+${name ? `test(${JSON.stringify(name)}, () => { throw new TypeError('new'); });` : ''}
+`;
+  const f = await fixture(t, { files: { 'm.mjs': body(null) }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  await run(f);
+  const signature = (await readReport(f)).results[0].signature;
+  assert.equal(signature, 'node:test failing: known broken');
+  await fs.writeFile(f.quarantinePath, JSON.stringify({ schema: 'kaminos.test-quarantine.v1', entries: { 'tests/m.mjs': quarantined(signature) } }));
+  assert.equal((await run(f)).ok, true);
+  await fs.writeFile(path.join(f.root, 'tests', 'm.mjs'), body('injected regression'));
+  assert.equal((await run(f)).ok, false);
+  assert.deepEqual((await readReport(f)).signatureChanged.map(e => e.actual), ['node:test failing: injected regression | known broken']);
+});
+
+test('installed dependency versions must match the lockfile', async t => {
+  const f = await fixture(t, { files: { 'a.mjs': PASS }, manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' } }) });
+  await fs.writeFile(path.join(f.root, 'package.json'), JSON.stringify({ dependencies: { foo: '1.0.0' } }));
+  await fs.writeFile(path.join(f.root, 'package-lock.json'), JSON.stringify({ lockfileVersion: 3,
+    packages: { '': {}, 'node_modules/foo': { version: '1.0.0', integrity: 'sha512-a' } } }));
+  await fs.mkdir(path.join(f.root, 'node_modules', 'foo'), { recursive: true });
+  await fs.writeFile(path.join(f.root, 'node_modules', 'foo', 'package.json'), JSON.stringify({ name: 'foo', version: '9.9.9' }));
+  assert.equal((await run(f)).ok, false);
+  const report = await readReport(f);
+  assert.equal(report.failurePhase, 'dependencies');
+  assert.deepEqual(report.effective.dependencies.mismatched, [{ name: 'foo', locked: '1.0.0', installed: '9.9.9' }]);
+  await fs.writeFile(path.join(f.root, 'node_modules', 'foo', 'package.json'), JSON.stringify({ name: 'foo', version: '1.0.0' }));
+  assert.equal((await run(f)).ok, true);
 });

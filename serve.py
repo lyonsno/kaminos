@@ -4494,7 +4494,11 @@ if __name__ == "__main__":
     print(f"  Shared basin library: {SHARED_BASIN_STORE or 'disabled'}")
     print(f"  Volume basin session store: {VOLUME_BASIN_SESSION_STORE}")
     print(f"  Volume cockpit layout store: {VOLUME_COCKPIT_LAYOUT_STORE}")
-    server = http.server.ThreadingHTTPServer(("", PORT), KaminosHandler)
+    # KAMINOS_BIND_HOST narrows the listening interface, for example to
+    # 127.0.0.1 on CI runners that intercept servers listening on all
+    # interfaces. The default stays all interfaces for LAN access.
+    bind_host = os.environ.get("KAMINOS_BIND_HOST", "")
+    server = http.server.ThreadingHTTPServer((bind_host, PORT), KaminosHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
