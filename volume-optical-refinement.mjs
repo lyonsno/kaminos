@@ -4,6 +4,39 @@ const difference=(a,b)=>a.map((v,i)=>Math.abs(v-b[i]));
 const identity=()=>[0,0,0,1];
 const nonnegativeFour=v=>Array.isArray(v)&&v.length===4&&[0,1,2,3].every(i=>Number.isFinite(v[i])&&v[i]>=0);
 
+// Offline saved-weight evaluation. Float32 layer boundaries, double dot-product
+// accumulation: requires comparison with MLX, not claimed bit-identical to it.
+export function frozenOpticalPredictor(artifact) {
+  const model=structuredClone(artifact),n=model.probeCount,width=9*n+8;
+  const finiteVector=(v,size)=>Array.isArray(v)&&v.length===size&&Array.from(v).every(Number.isFinite);
+  if(model.identity!=='optical-error-mlp-v0'||![3,5].includes(n)||
+    JSON.stringify(model.architecture)!==JSON.stringify([width,32,32,4])||
+    JSON.stringify(model.activations)!==JSON.stringify(['relu','relu','softplus'])||
+    !finiteVector(model.mean,width)||!finiteVector(model.scale,width)||!model.scale.every(v=>v>0)||
+    !finiteVector(model.targetScale,4)||!model.targetScale.every(v=>v>0)||model.layers?.length!==3) {
+    throw new Error('invalid frozen optical model');
+  }
+  model.layers.forEach((layer,i)=>{
+    const input=model.architecture[i],output=model.architecture[i+1];
+    if(!finiteVector(layer.bias,output)||!Array.isArray(layer.weights)||layer.weights.length!==output||
+      !Array.from(layer.weights).every(row=>finiteVector(row,input)))throw new Error('invalid frozen layer');
+  });
+  return features=>{
+    if(!finiteVector(features,width))throw new Error('invalid optical features');
+    let x=features.map((v,i)=>Math.fround(Math.fround(Math.fround(v)-model.mean[i])/model.scale[i]));
+    model.layers.forEach((layer,i)=>{
+      x=layer.weights.map((weights,j)=>{
+        let sum=0;for(let k=0;k<weights.length;k++)sum+=weights[k]*x[k];
+        const z=Math.fround(Math.fround(sum)+layer.bias[j]);
+        return i<2?Math.max(0,z):Math.fround(Math.max(z,0)+Math.log1p(Math.exp(-Math.abs(z))));
+      });
+    });
+    const result=x.map((v,i)=>Math.fround(v*model.targetScale[i]));
+    if(!nonnegativeFour(result))throw new Error('nonfinite frozen optical prediction');
+    return result;
+  };
+}
+
 // All indices refer to retained, evenly spaced observations. No synthesized teacher probes.
 export function buildOpticalHierarchy(probes,{length,rootSpan,probeCount}) {
   if(![3,5].includes(probeCount))throw new Error('three or five probes required');
