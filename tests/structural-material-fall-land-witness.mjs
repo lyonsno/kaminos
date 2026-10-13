@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+const module=await import('../tools/stone-fall-land.mjs').catch(error=>{if(error.code==='ERR_MODULE_NOT_FOUND')return null;throw error;});
+assert.ok(module?.finiteLandingSummary,'Fall-and-land witness needs physical, current finite-surface evidence');
+const state={runId:'run',steps:30,observation:{kind:'full-diagnostic'},model:{points:2},state:[0,1,0,1,0,1,0,0,0,0,0,1,0,1,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0]},witness={state,configuration:{gravity:9.81},residentInteraction:{components:[0,1]},surfaceObservation:{runId:'run',steps:30,source:'native-webgpu-transport-compute-readback',pieces:[{gpu:[[0,0,0],[0,1,0]]}]}};
+const initial={...witness,state:{...state,steps:0,state:state.state.map((v,i)=>i===21?1:v)}};
+const summary=module.finiteLandingSummary(initial,witness,0,0);
+assert.equal(summary.detached,1);assert.equal(summary.maxFall,1);assert.equal(summary.minWorldGap,0);assert.equal(summary.maxPinnedTravel,0);
+assert.throws(()=>module.finiteLandingSummary(initial,{...witness,surfaceObservation:null},1,0),/surface/i);
+assert.throws(()=>module.finiteLandingSummary(initial,{...witness,surfaceObservation:{...witness.surfaceObservation,steps:0}},1,0),/current|surface/i);
+assert.throws(()=>module.finiteLandingSummary(initial,{...witness,state:{...state,runId:'other'}},1,0),/run|identity/i);
+assert.throws(()=>module.finiteLandingSummary(initial,{...witness,state:{...state,observation:{kind:'submitted'}}},1,0),/acquired|physical/i);
+assert.throws(()=>module.finiteLandingSummary(initial,{...witness,surfaceObservation:{...witness.surfaceObservation,pieces:[{gpu:[]}] }},1,0),/surface/i);
+assert.throws(()=>module.finiteLandingSummary(initial,{...witness,configuration:{gravity:0}},1,0),/gravity/i);
+console.log('Fall-and-land witness rejects absent, stale, blank, submitted-only, reset and disabled-gravity evidence');

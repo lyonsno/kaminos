@@ -1,4 +1,6 @@
 import fs from 'node:fs';import path from 'node:path';import {pathToFileURL} from 'node:url';import {createHash} from 'node:crypto';
+import {finiteLandingSummary} from './stone-fall-land.mjs';
+import {validateStoneObservationStamp} from '../structural-material-observation-economics.mjs';
 const [url,out,playwrightPath,executable,kitRoot,compositionPath]=process.argv.slice(2);if(!out)throw Error('Output directory required');fs.mkdirSync(out,{recursive:true});
 const report={status:'running',phase:'setup',url,checks:[],errors:[],inputs:[],observations:[]},save=()=>fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));
 const check=(name,passed,detail)=>{report.checks.push({name,passed,detail});save();if(!passed)throw Error(name);};let browser,page;save();
@@ -15,6 +17,9 @@ try{
  await page.waitForFunction(()=>window.kaminosWorkbenchExperiments&&window.__stoneSharedHost);
  report.phase='open';save();const listed=await page.evaluate(()=>window.kaminosWorkbenchExperiments.list());check('shared chooser discovers stone',listed.some(item=>item.id==='stone/fracture'),listed);
  await page.evaluate(()=>window.kaminosWorkbenchExperiments.open('stone/fracture',{paused:true}));
+ if(process.env.STONE_FALL_LAND==='1'){
+  report.phase='native-plane-conformance';save();report.contactConformance=await page.evaluate(async()=>{const {finitePlaneNativeConformance}=await import('/__stone/tests/structural-material-finite-plane-native.mjs');return finitePlaneNativeConformance();});check('native finite plane conformance',report.contactConformance.status==='passed',report.contactConformance);
+ }
  const identity=await page.evaluate(()=>window.__stoneSharedHost.identity());check('shared native canvas/device',identity.deviceMatches&&identity.canvas==='kaminos-host-renderer-canvas'&&identity.callbacks===1,identity);
  const root=await page.evaluate(()=>window.__stoneSharedHost.runtime().object.parent?.uuid);check('material belongs to shared scene',root===identity.scene);
  const roundTrip=async()=>{const before=await page.evaluate(()=>window.__stoneSharedHost.runtime().experimentStatus().runId);await page.locator('[data-workspace-mode="authoring"]').click();await page.locator('[data-workspace-mode="workbench"]').click();const state=await page.evaluate(()=>({owner:window.kaminosWorkbenchExperiments.state().id,runId:window.__stoneSharedHost.runtime().experimentStatus().runId,callbacks:window.__stoneSharedHost.identity().callbacks,heading:document.querySelector('#experiment-instruments h2').textContent,toolbar:document.querySelector('#experiment-toolbar strong').textContent,toolsHidden:document.getElementById('experiment-tool-slot').hidden}));check('workspace round trip retains live Stone '+await page.evaluate(()=>innerWidth),state.owner==='stone/fracture'&&state.runId===before&&state.callbacks===1&&state.heading==='Stone fracture'&&state.toolbar==='Stone fracture'&&state.toolsHidden,state);};
@@ -29,6 +34,21 @@ try{
   const work=experiment({runtime,retain});await work.observe('shared-initial');report.observations.push('shared-initial');save();
   const contact=await page.evaluate(()=>window.__stoneSharedHost.runtime().contacts()[0]);await page.mouse.move(contact.screen.x,contact.screen.y);await page.mouse.down();await page.waitForFunction(()=>window.__stoneSharedHost.runtime().experimentStatus().gripping==='active');await page.mouse.move(contact.screen.x+160,contact.screen.y-120,{steps:3});await call('step',8);await page.mouse.up();
   await work.observe('shared-injury');report.observations.push('shared-injury');save();
+  if(process.env.STONE_FALL_LAND==='1'){
+   report.phase='fall-and-land';save();
+   const readPhysical=async()=>JSON.parse(await page.evaluate(()=>JSON.stringify(window.__stoneSharedHost.runtime().witness({resources:false}))));
+   const acquire=async()=>{await page.evaluate(()=>window.__stoneSharedHost.runtime().settle());return readPhysical();};
+   const injury=await acquire();fs.writeFileSync(path.join(out,'injury-material.json'),JSON.stringify(injury));
+   const physicalRuntime={...runtime,settle:async()=>{await runtime.settle();await page.evaluate(()=>window.__stoneSharedHost.runtime().settle());},read:readPhysical,validate(state){if(state.phase!=='interactive'||state.failure||!state.paused||!state.surfaceObservation)throw Error('Held acquired native physical state required');},stability:{read:()=>page.evaluate(()=>window.__stoneSharedHost.runtime().observationStamp()),validate:validateStoneObservationStamp,assertStable(a,b){if(JSON.stringify(a)!==JSON.stringify(b))throw Error('Physical material changed during capture');}}};
+   const physics=experiment({runtime:physicalRuntime,retain});
+   const world=await page.evaluate(()=>{const api=window.__stoneSharedHost.runtime();api.object.updateWorldMatrix(true,false);return{worldY:api.object.matrixWorld.elements[13],floor:api.experimentStatus().contact?.worldPlane.offset,contact:api.experimentStatus().contact};});
+   check('effective finite cell contact and gravity',world.contact?.route==='kaminos.stone.finite-cell-plane.webgpu.v1'&&injury.configuration.gravity>0,world);
+   await call('step',30);const falling=await physics.observe('stone-falling');report.observations.push('stone-falling');report.falling=finiteLandingSummary(injury,falling.observed,world.worldY,world.floor);save();
+   check('released material falls while mount stays fixed',report.falling.detached>0&&report.falling.maxFall>.01&&report.falling.maxPinnedTravel<1e-6,report.falling);
+   await call('step',270);const landed=await physics.observe('stone-landed');report.observations.push('stone-landed');report.landed=finiteLandingSummary(injury,landed.observed,world.worldY,world.floor);save();
+   check('finite drawn material stays above floor',report.landed.minWorldGap>=-2e-5,report.landed);
+   check('detached material settles without moving supports',report.landed.maxDetachedSpeed<.1&&report.landed.maxPinnedTravel<1e-6,report.landed);
+  }
   const recorded=await page.evaluate(()=>window.__stoneSharedRecording.finish());fs.writeFileSync(path.join(out,'recording.json'),JSON.stringify(recorded));check('ordinary material input reaches shared recording',recorded.operations.some(row=>row.kind==='stone.input.pick')&&recorded.operations.some(row=>row.kind==='stone.input.move')&&recorded.operations.some(row=>row.kind==='stone.input.release'));
  }});
  report.phase='close';save();await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());const closed=await page.evaluate(()=>window.__stoneSharedHost.identity());check('owned material frame subscription removed',closed.callbacks===0);
