@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -75,6 +75,15 @@ await writeFile(inputPath, `${JSON.stringify({
   roles,
 })}\n`);
 
+// Validation never launches a browser, so it must not create a browser
+// profile directory either. The bridge used to create one at startup, under
+// /tmp and never removed, leaving two behind on every run of this test.
+const profilePrefix = 'kaminos-dense-cue-splat-bridge-profile-';
+const profileRoots = [...new Set([tmpdir(), '/tmp'])];
+const listProfiles = async () => (await Promise.all(profileRoots.map(async dir =>
+  (await readdir(dir).catch(() => [])).filter(name => name.startsWith(profilePrefix)).map(name => join(dir, name))))).flat();
+const profilesBefore = await listProfiles();
+
 const validate = spawnSync(process.execPath, [bridgeUrl.pathname, '--input', inputPath, '--out', outputPath, '--validate-only'], { encoding: 'utf8' });
 assert.equal(validate.status, 0, validate.stderr || validate.stdout);
 const report = JSON.parse(await readFile(outputPath, 'utf8'));
@@ -92,5 +101,6 @@ const failedReport = JSON.parse(await readFile(failedOutputPath, 'utf8'));
 assert.equal(failedReport.status, 'failed');
 assert.equal(failedReport.failurePhase, 'input-validation');
 assert.match(failedReport.error, /sha256 mismatch/);
+assert.deepEqual((await listProfiles()).filter(dir => !profilesBefore.includes(dir)), [], 'validation must not create a browser profile directory');
 
 console.log('dense cue splat bridge contracts passed');

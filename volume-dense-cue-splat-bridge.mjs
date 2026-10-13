@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createHash, randomInt } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -45,7 +46,11 @@ const learnedSplatRadius = Number(args.get('--learned-splat-radius') || 1);
 const learnedSplatSharpness = Number(args.get('--learned-splat-sharpness') || 3.4);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const userDataDir = String(args.get('--user-data-dir') || mkdtempSync('/tmp/kaminos-dense-cue-splat-bridge-profile-'));
+// The Chrome profile is created only when a browser is launched, under the
+// temp root, and removed once the browser has exited unless --user-data-dir
+// named it or KAMINOS_KEEP_BROWSER_PROFILE is set.
+const KEEP_PROFILE_ENV = 'KAMINOS_KEEP_BROWSER_PROFILE';
+const requestedUserDataDir = args.get('--user-data-dir') ? String(args.get('--user-data-dir')) : null;
 
 function utcNow() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -231,7 +236,7 @@ function routeWithBridgeControls(route, grid) {
   return url.toString();
 }
 
-function launchBrowser(route) {
+function launchBrowser(route, userDataDir) {
   return spawn(chrome, [
     `--remote-debugging-port=${debugPort}`,
     `--user-data-dir=${userDataDir}`,
@@ -247,7 +252,13 @@ async function closeBrowser(browser) {
   try {
     await fetch(`http://127.0.0.1:${debugPort}/json/close`);
   } catch {}
-  browser?.kill('SIGTERM');
+  if (browser.exitCode !== null || browser.signalCode !== null) return;
+  // Wait for Chrome to exit so its profile can be removed behind it.
+  const exited = new Promise(resolveExit => browser.once('exit', resolveExit));
+  browser.kill('SIGTERM');
+  const forceKill = setTimeout(() => browser.kill('SIGKILL'), 5000);
+  await exited;
+  clearTimeout(forceKill);
 }
 
 function waitForWebSocketOpen(ws) {
@@ -394,11 +405,12 @@ code { color: #ffd184; }
 
 async function runCapture(input, validated) {
   const route = routeWithBridgeControls(input.frozenState.requestedRoute, input.frozenState.grid);
+  const userDataDir = requestedUserDataDir || mkdtempSync(join(tmpdir(), 'kaminos-dense-cue-splat-bridge-profile-'));
   let browser = null;
   let ws = null;
   const captures = [];
   try {
-    browser = launchBrowser(route);
+    browser = launchBrowser(route, userDataDir);
     await waitForCdp();
     ws = await connectPage(route);
     const initialState = await waitForVolume(ws);
@@ -481,6 +493,10 @@ async function runCapture(input, validated) {
   } finally {
     ws?.close();
     if (browser) await closeBrowser(browser);
+    if (!requestedUserDataDir) {
+      if (process.env[KEEP_PROFILE_ENV]) console.error(`keeping browser profile ${userDataDir} because ${KEEP_PROFILE_ENV} is set`);
+      else rmSync(userDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    }
   }
 }
 
