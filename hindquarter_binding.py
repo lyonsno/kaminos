@@ -156,13 +156,103 @@ def bind_geometry(positions,triangles,control):
     rest_values,_=field(positions,specs,np.eye(4),contributors=contributors)
     rest_edges=positions[edges[:,1]]-positions[edges[:,0]]
     degree=np.bincount(edges.ravel(),minlength=len(positions))
-    return {'positions':positions.copy(),'triangles':triangles.copy(),'specs':specs,'weights':weights,
+    result={'positions':positions.copy(),'triangles':triangles.copy(),'specs':specs,'weights':weights,
             'restValues':rest_values,'edges':edges,'restEdges':rest_edges,'degree':degree,
             'contributors':contributors,'domain':domain,'domainRule':domain_rule}
+    if control.get('articulated'):result.update(articulated_weights(result,control))
+    return result
+
+JOINT_CHANNELS=['fixed','pelvis']+[f'hindlimb-{side}-{joint}' for side in ['left','right'] for joint in ['hip','stifle','hock']]
+
+def articulated_weights(binding,control):
+    """Refine the accepted left influence; independently bind reflected right geometry."""
+    points=binding['positions'];edges=binding['edges']
+    reflected=points.copy();reflected[:,0]*=-1
+    mirrored={**control,'articulated':False}
+    mirrored['joints']={}
+    for name,point in control['joints'].items():
+        swapped=name.replace('-left-','-SIDE-').replace('-right-','-left-').replace('-SIDE-','-right-')
+        value=np.asarray(point,dtype=float).copy();value[0]*=-1;mirrored['joints'][swapped]=value.tolist()
+    mirrored['bounds']={'min':reflected.min(axis=0).tolist(),'max':reflected.max(axis=0).tolist()}
+    right=bind_geometry(reflected,binding['triangles'],mirrored)
+    adjacency=[[] for _ in points]
+    for (a,b),length in zip(edges,np.linalg.norm(points[edges[:,1]]-points[edges[:,0]],axis=1)):
+        adjacency[a].append((int(b),float(length)));adjacency[b].append((int(a),float(length)))
+    def partition(side_control,side_points):
+        j={k:np.asarray(v,dtype=float) for k,v in side_control['joints'].items()}
+        h,k,a=(j['hindlimb-left-'+name] for name in ['hip','stifle','hock'])
+        targets=[h+.55*(k-h)+[-.14,0,0],k+.5*(a-k)+[-.10,0,0],
+                 np.array([a[0]-.06,side_control['bounds']['min'][1]+.08,a[2]])]
+        seeds=[int(np.argmin(np.sum((side_points-target)**2,axis=1))) for target in targets]
+        distances=[]
+        for seed in seeds:
+            distance=np.full(len(points),np.inf);distance[seed]=0;queue=[(0,seed)]
+            while queue:
+                value,index=heapq.heappop(queue)
+                if value!=distance[index]:continue
+                for neighbor,length in adjacency[index]:
+                    proposed=value+length
+                    if proposed<distance[neighbor]:distance[neighbor]=proposed;heapq.heappush(queue,(proposed,neighbor))
+            distances.append(distance)
+        distances=np.asarray(distances).T;known=np.isfinite(distances).any(axis=1)
+        result=np.zeros((len(points),3));minimum=np.min(distances[known],axis=1)
+        affinities=np.exp(-(distances[known]-minimum[:,None])/.18)
+        result[known]=affinities/affinities.sum(axis=1)[:,None]
+        return result,seeds
+    left_partition,left_seeds=partition(control,points)
+    right_partition,right_seeds=partition(mirrored,reflected)
+    left=binding['weights'];raw_right=right['weights']
+    # Preserve accepted left movement exactly. Any overlapping right influence
+    # receives the remaining fixed fraction, with the competition reported.
+    right_weight=np.minimum(raw_right,1-left)
+    weights=np.zeros((len(points),8));weights[:,0]=1-left-right_weight
+    weights[:,2:5]=left[:,None]*left_partition;weights[:,5:8]=right_weight[:,None]*right_partition
+    unknown=np.flatnonzero((left_partition.sum(axis=1)==0)&(right_partition.sum(axis=1)==0))
+    weights[unknown]=0;weights[unknown,0]=1
+    if not np.allclose(weights.sum(axis=1),1,atol=1e-10):raise ValueError('incomplete joint partition')
+    return {'jointWeights':weights,'jointChannels':JOINT_CHANNELS,
+            'articulatedRule':{'kind':'rest-geodesic-chain-partition','blendFemurs':.18,
+                'leftSeeds':left_seeds,'rightSeeds':right_seeds,'unknownVertices':unknown.tolist(),
+                'rightCompetitionVertices':np.flatnonzero(raw_right>1-left+1e-10).tolist(),
+                'leftTotalPreserved':True,'rightRule':'same recipe on reflected actual geometry, not transferred painted fields',
+                'pelvisChannel':'fixed in this rear-only exercise'}}
+
+def quaternion_product(a,b):
+    return np.concatenate([(a[...,0]*b[...,0]-np.sum(a[...,1:]*b[...,1:],axis=-1))[...,None],
+        a[...,0,None]*b[...,1:]+b[...,0,None]*a[...,1:]+np.cross(a[...,1:],b[...,1:])],axis=-1)
+
+def matrix_quaternion(matrix):
+    r=matrix[:3,:3]
+    if not np.allclose(r.T@r,np.eye(3),atol=1e-5) or np.linalg.det(r)<0:raise ValueError('non-rigid bone transform')
+    candidates=[1+np.trace(r),1+r[0,0]-r[1,1]-r[2,2],1-r[0,0]+r[1,1]-r[2,2],1-r[0,0]-r[1,1]+r[2,2]]
+    index=int(np.argmax(candidates));value=np.sqrt(max(candidates[index],0))*.5;denominator=4*value
+    if index==0:q=np.array([value,(r[2,1]-r[1,2])/denominator,(r[0,2]-r[2,0])/denominator,(r[1,0]-r[0,1])/denominator])
+    elif index==1:q=np.array([(r[2,1]-r[1,2])/denominator,value,(r[0,1]+r[1,0])/denominator,(r[0,2]+r[2,0])/denominator])
+    elif index==2:q=np.array([(r[0,2]-r[2,0])/denominator,(r[0,1]+r[1,0])/denominator,value,(r[1,2]+r[2,1])/denominator])
+    else:q=np.array([(r[1,0]-r[0,1])/denominator,(r[0,2]+r[2,0])/denominator,(r[1,2]+r[2,1])/denominator,value])
+    return q/np.linalg.norm(q)
+
+def palette_rotation(points,matrices,weights):
+    if matrices.ndim!=3 or matrices.shape[1:]!=(4,4) or weights.shape!=(len(points),len(matrices)):
+        raise ValueError('invalid articulated palette shape')
+    if not np.isfinite(matrices).all() or not np.isfinite(weights).all() or (weights<0).any() or not np.allclose(weights.sum(axis=1),1,atol=1e-5):
+        raise ValueError('invalid articulated influences')
+    real=np.asarray([matrix_quaternion(m) for m in matrices])
+    dual=.5*quaternion_product(np.column_stack([np.zeros(len(matrices)),matrices[:,:3,3]]),real)
+    anchor=real[np.argmax(weights,axis=1)]
+    sign=np.where(anchor@real.T<0,-1.,1.)
+    blended=(weights*sign)@real;d=(weights*sign)@dual
+    length=np.linalg.norm(blended,axis=1);q=blended/length[:,None]
+    d/=length[:,None];d-=q*np.sum(q*d,axis=1)[:,None]
+    cross=2*np.cross(q[:,1:],points)
+    rotated=points+q[:,0,None]*cross+np.cross(q[:,1:],cross)
+    conjugate=q.copy();conjugate[:,1:]*=-1
+    return rotated+2*quaternion_product(d,conjugate)[:,1:]
 
 def partial_rotation(points,matrix,weights):
     # One active joint at the normalized origin. Normalized quaternion blending
     # supplies a coarse rigid transport; no painted fields enter this operation.
+    if matrix.ndim==3:return palette_rotation(points,matrix,weights)
     r=matrix[:3,:3];u,_,vt=np.linalg.svd(r);r=u@vt
     angle=np.arccos(np.clip((np.trace(r)-1)/2,-1,1))
     if angle<1e-10:return points.copy()+weights[:,None]*matrix[:3,3]

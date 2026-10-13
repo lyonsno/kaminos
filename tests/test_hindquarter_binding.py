@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from hindquarter_binding import bind_geometry, solve_pose
+from hindquarter_binding import bind_geometry, solve_pose, partial_rotation
 
 class IndependentBindingTests(unittest.TestCase):
     def setUp(self):
@@ -67,5 +67,29 @@ class IndependentBindingTests(unittest.TestCase):
         binding=bind_geometry(positions,triangles,{**self.control,'domainMethod':'surface'})
         np.testing.assert_array_equal(binding['domain'][:3],np.ones(3))
         np.testing.assert_array_equal(binding['domain'][3:],np.zeros(9))
+
+    def test_articulated_binding_preserves_accepted_left_influence(self):
+        original=bind_geometry(self.positions,self.triangles,self.control)
+        extended=bind_geometry(self.positions,self.triangles,{**self.control,'articulated':True})
+        self.assertIn('jointWeights',extended,'independent joint influences are not implemented')
+        weights=extended['jointWeights']
+        self.assertEqual(weights.shape,(len(self.positions),8))
+        np.testing.assert_allclose(weights.sum(axis=1),1,atol=1e-12)
+        np.testing.assert_allclose(weights[:,2:5].sum(axis=1),original['weights'],atol=1e-12)
+        self.assertTrue(np.all(weights>=0))
+
+    def test_palette_rotation_moves_about_the_actual_joint_pivot(self):
+        # Identity plus a 90-degree rigid rotation about (1, 0, 0).
+        matrix=np.eye(4);matrix[:2,:2]=[[0,-1],[1,0]];matrix[:3,3]=[1,-1,0]
+        result=partial_rotation(np.array([[2.,0,0]]),np.array([np.eye(4),matrix]),np.array([[0.,1.]]))
+        np.testing.assert_allclose(result,[[1,1,0]],atol=1e-12)
+
+    def test_palette_is_the_accepted_hip_rotation_when_children_share_it(self):
+        angle=.7;matrix=np.eye(4);matrix[1:3,1:3]=[[np.cos(angle),-np.sin(angle)],[np.sin(angle),np.cos(angle)]]
+        influence=np.array([.2,.8,.5,.0,.1])
+        expected=partial_rotation(self.positions,matrix,influence)
+        split=np.column_stack([1-influence,influence*.2,influence*.3,influence*.5])
+        actual=partial_rotation(self.positions,np.array([np.eye(4),matrix,matrix,matrix]),split)
+        np.testing.assert_allclose(actual,expected,atol=1e-12)
 
 if __name__=='__main__':unittest.main()

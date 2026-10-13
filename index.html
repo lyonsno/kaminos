@@ -4051,6 +4051,7 @@ function escapeHtml(s) {
 
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
+let liveTransportRuntime = null;
 let viewportGizmosVisible=true;
 function attachViewportGizmo(target) {
   transformControls.attach(target);
@@ -7070,6 +7071,7 @@ function setActiveSceneObject(id) {
     attachViewportGizmo(currentMesh);
     transformControls.visible = true;
     document.getElementById('transform-bar').classList.add('visible');
+    if (entry.type === 'rig-bone') window.setGizmoMode('rotate');
   }
 }
 
@@ -7118,6 +7120,10 @@ function pickSceneObjectFromViewportPointer(event) {
     -(((event.clientY - rect.top) / rect.height) * 2 - 1),
   );
   sceneRaycaster.setFromCamera(scenePointerNdc, camera);
+  if (liveTransportRuntime) {
+    const bone = liveTransportRuntime.pick(sceneRaycaster);
+    if (bone) return sceneObjects.find(record => record.object === bone) || null;
+  }
   sceneRaycaster.params.Points.threshold = SCENE_OBJECT_POINT_PICK_THRESHOLD;
   const hits = sceneRaycaster.intersectObjects(sceneObjects.map(record => record.object), true);
   for (const hit of hits) {
@@ -11702,6 +11708,10 @@ async function initScene() {
   controls.addEventListener('change', markDirty);
   transformControls.addEventListener('change', () => {
     markDirty();
+    if (liveTransportRuntime) {
+      try { liveTransportRuntime.update(); }
+      catch (error) { setInfo(`Rig pose rejected: ${error.message}`); }
+    }
     if (splatCorrectionTransformTarget()) {
       syncSplatCorrectionDraftFromActiveTarget();
     } else {
@@ -30016,6 +30026,15 @@ sceneInitialization.then(() => {
   // Load HDR environment first, then auto-load deep-linked splat if present
   const environmentLoaded = loadEnvironment(initialEnvironment || 'studio').then(async () => {
     const params = new URLSearchParams(window.location.search);
+    if (params.has('transport_case')) {
+      const { mountLiveTransport } = await import('./hindquarter-live-scene.mjs');
+      liveTransportRuntime = await mountLiveTransport({
+        casePath: params.get('transport_case'), expected: params.get('transport_sha256'),
+        scene, camera, renderer, controls, gizmo: transformControls,
+        register: registerSceneObject, setInfo,
+      });
+      window.selectSceneObject('live-bone:hindlimb-left-hip');
+    }
     const loadSplat = params.get('load');
     if (loadSplat) {
       // Deep-link: ?load=splat-inbox/evil_orb_trimmed_050.ply
