@@ -29,12 +29,15 @@ try {
  const prior=loads;
  await assert.rejects(definition.create({host:{scene:{open:()=>session}},inputs:{...inputs,body_sha256:'b'.repeat(64)}}),/body.*(content|digest|identity)/i);
  assert.equal(loads,prior,'wrong byte identity must reject before scene registration');
- let opens=0;
+ let opens=0,durableInputs;
  const recipe={id:'marionette/retained-creature',inputs};
  const entry={async open(id,next){opens++;globalThis.fetch=async()=>new Response(new Uint8Array([9,9,9,9]));
-  const owner=await definition.create({host:{scene:{open:()=>session}},inputs:next});try{return owner.read();}finally{await owner.dispose();}}};
+  const owner=await definition.create({host:{scene:{open:()=>session}},inputs:next});try{durableInputs=JSON.parse(JSON.stringify(next));return owner.read();}finally{await owner.dispose();}}};
  const reconstructed=await reopenVerifiedCreature(entry,recipe);assert.equal(opens,1);assert.equal(reconstructed.asset.bodySha256,sha);
+ assert.equal(Object.hasOwn(durableInputs,'_bodyToken'),false,'shared entry URL must never persist one-use body token');
  await assert.rejects(reopenVerifiedCreature(entry,recipe),/body content digest/);assert.equal(opens,1,'changed source must reject before closing the current owner');
+ globalThis.fetch=async()=>new Response(bytes);
+ const fresh=await definition.create({host:{scene:{open:()=>session}},inputs:durableInputs});try{assert.equal(fresh.read().asset.bodySha256,sha);assert.deepEqual(fresh.read().transform,transform);}finally{await fresh.dispose();}
  assert.equal(unrelated.parent,scene);
 }finally{globalThis.fetch=nativeFetch;}
 console.log('Actual creature byte admission, transformed reconstruction and pre-replacement rejection pass; immutable Blob defeats source-fetch race');
