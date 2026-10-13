@@ -24,7 +24,7 @@ export function exportLiveFluidSequence({window,transport,request,signal,onProgr
  if(typeof window.showDirectoryPicker!=='function')throw Error('Folder export is unavailable in this browser; use the scripted sequence exporter');
  const chosen=window.showDirectoryPicker({mode:'readwrite',id:'kaminos-sequences'});
  return transport.exclusive(async()=>{
-  const parent=await chosen;if(signal.aborted)return 'Export cancelled before changing water';
+  await hold();const parent=await chosen;if(signal.aborted)return 'Export cancelled before changing water';
   const name='sequence-'+new Date().toISOString().replace(/[:.]/g,'-')+'-'+window.crypto.randomUUID(),directory=await parent.getDirectoryHandle(name,{create:true});
   const sink=await createBrowserSequenceSink(directory);
   let dispatched=false;
