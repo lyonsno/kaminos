@@ -125,7 +125,8 @@ async function main() {
     }
 
     async function capture(name) {
-      const pixels = await checked(page.evaluate(() => {
+      const pixels = await checked(page.evaluate(async () => {
+        const { samControlIsFullyVisible } = await import('./sam-image-witness-checks.js');
         window.kaminosSamImageTools.setActive(true);
         const source = document.getElementById('sam-image-canvas');
         const copy = document.createElement('canvas'); copy.width = source.width; copy.height = source.height;
@@ -136,7 +137,7 @@ async function main() {
         const rect = source.getBoundingClientRect();
         const occlusions = [...document.querySelectorAll('#tab-masks button:not(:disabled), [data-sam-image-view]')].filter(button => {
           const r = button.getBoundingClientRect();
-          return r.width && r.height && r.top >= 0 && r.bottom <= innerHeight && !button.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+          return samControlIsFullyVisible(button) && !button.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
         }).map(button => button.id || button.textContent);
         const overflowingElements = [...document.querySelectorAll('*')].filter(element => {
           const elementRect = element.getBoundingClientRect();
