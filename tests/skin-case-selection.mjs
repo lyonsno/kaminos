@@ -48,6 +48,31 @@ assert.ok(cast&&attachment,'native selectors must be usable by the shared room')
 cast.value='lean';await cast.onchange();assert.deepEqual(calls.at(-1),{name:'skin',input:{cast:'lean',attachment:'distributed'}});
 assert.equal(selection.read().current.cast,'lean');assert.equal(attachment.value,'distributed');
 mounted.dispose();assert.equal(root.children[0].removed,true);
+
+// The frozen live-authoring mount invokes operations directly, so completions
+// may overlap. A failed old choice must not label a successfully applied one.
+const raceRuntime=createFullBodyRuntime({THREE,...fixture(choices[0].case_sha256)});
+let rejectOlder;
+const raceSelection=module.createSkinCaseSelection({runtime:raceRuntime,choices,currentCaseSha256:choices[0].case_sha256,
+ loadCase:input=>input.case_sha256==='b'.repeat(64)?new Promise((resolve,reject)=>{rejectOlder=reject;}):Promise.resolve(fixture(input.case_sha256))});
+const raceRoot=new Element('root'),raceMount=raceSelection.mount({document,root:raceRoot,invoke:(_name,input)=>raceSelection.select(input)});
+const raceNodes=nodes(raceRoot),raceCast=raceNodes.find(n=>n['aria-label']==='Creature cast'),raceAttachment=raceNodes.find(n=>n['aria-label']==='Skin attachment'),raceWarning=raceNodes.find(n=>n.role==='alert');
+raceAttachment.value='distributed';const older= raceAttachment.onchange();
+raceCast.value='lean';await raceCast.onchange();
+rejectOlder(Error('old cast fetch failed'));await older;
+assert.equal(raceSelection.read().current.cast,'lean');assert.equal(raceSelection.read().error,null);
+assert.equal(raceWarning.textContent,'','a superseded fetch error cannot contradict the effective selected skin');
+
+raceCast.value='strong';const currentRequest=raceCast.onchange();
+rejectOlder(Error('current cast fetch failed'));await currentRequest;
+assert.equal(raceSelection.read().current.cast,'lean');
+assert.equal(raceWarning.textContent,'current cast fetch failed','the effective request failure must remain visible');
+
+raceCast.value='strong';const releasedRequest=raceCast.onchange();
+raceMount.dispose();const releasedWarning=raceWarning.textContent;
+rejectOlder(Error('released control fetch failed'));await releasedRequest;
+assert.equal(raceWarning.textContent,releasedWarning,'a disposed control cannot publish a late warning');
+raceSelection.dispose();raceRuntime.dispose();
 nextLoad=input=>new Promise(resolve=>{resolveSlow=()=>resolve(fixture(input.case_sha256));});
 saved=unchanged();const pending=selection.select({cast:'lean',attachment:'distributed'});selection.dispose();resolveSlow();
 assert.equal((await pending).status,'disposed');assert.deepEqual(unchanged(),saved,'late fetch completion cannot mutate a released selector');

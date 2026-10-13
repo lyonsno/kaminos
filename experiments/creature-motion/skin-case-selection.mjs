@@ -52,11 +52,17 @@ export function createSkinCaseSelection({runtime,choices,currentCaseSha256,loadC
    status.textContent=pending?`Loading ${pending.label} · ${pending.attachmentLabel??pending.attachment}`:`${current.label} · ${current.attachmentLabel??current.attachment}`;
    failure.textContent=error??runtime.read().cleanupFailure?.message??'';
   }
-  const call=async input=>{try{failure.textContent='';await invoke(operation,input);}catch(e){failure.textContent=e.message;refresh();if(!error)failure.textContent=e.message;}};
+  let mounted=true,mountRequest=0;
+  const call=async input=>{
+   if(!mounted||disposed)return;
+   const request=++mountRequest;
+   try{failure.textContent='';await invoke(operation,input);}
+   catch(e){if(!mounted||disposed||request!==mountRequest)return;refresh();if(!error)failure.textContent=e.message;}
+  };
   cast.onchange=()=>{const candidates=entries.filter(c=>c.cast===cast.value),choice=candidates.find(c=>c.attachment===current.attachment)??candidates[0];return call({cast:cast.value,attachment:choice?.attachment});};
   attachment.onchange=()=>call({cast:cast.value,attachment:attachment.value});
   listeners.add(refresh);refresh();
-  return {dispose(){listeners.delete(refresh);panel.remove();}};
+  return {dispose(){mounted=false;mountRequest++;listeners.delete(refresh);panel.remove();}};
  }
  return {read,select,mount,dispose(){if(disposed)return;disposed=true;generation++;pending=null;notify();listeners.clear();}};
 }
