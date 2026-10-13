@@ -7,7 +7,7 @@ const fields=[
   ['freeFlightViscosityBoost','Flight smoothing boost',0,.3,.01,.3],
 ];
 
-export function mountMaterialCockpit(root,{id,read,apply,getPaused,setPaused,captureCamera,restoreCamera,onReplay}={}) {
+export function mountMaterialCockpit(root,{id,read,apply,getPaused,setPaused,captureCamera,restoreCamera,onReplay,installNumberDrag=null}={}) {
   if(!root)return null;
   const document=root.ownerDocument;
   if(!document.getElementById('fluid-material-cockpit-style')){
@@ -28,6 +28,7 @@ export function mountMaterialCockpit(root,{id,read,apply,getPaused,setPaused,cap
     const number=document.createElement('input');number.type='number';number.min=min;number.step=step;
     if(limit!==null)number.max=limit;number.id=text.htmlFor;number.setAttribute('aria-label',`${label} value`);
     row.append(text,slider,number);panel.append(row);controls.set(key,{slider,number,max});
+    if(installNumberDrag){slider.hidden=true;row.style.gridTemplateColumns='1fr 100px';installNumberDrag({input:number,grip:text,step});}
     for(const input of [slider,number])input.addEventListener('input',()=>{
       if(input.value.trim()==='')return;
       try{

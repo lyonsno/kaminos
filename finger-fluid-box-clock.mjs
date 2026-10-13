@@ -14,3 +14,22 @@ export function createBoxFramePump({submit,completed,schedule,onError}){
   try{submit();await completed();}catch(e){enabled=false;onError(e);}finally{inFlight=false;next();}};
  return {start:()=>{enabled=true;next();},stop:()=>{enabled=false;}};
 }
+
+// Playback changes how many fixed steps are shown per wall second, never dt.
+export function createFixedStepPlayback({dt,rate=1}) {
+ if(!Number.isFinite(dt)||dt<=0)throw new RangeError('Positive finite physics timestep required');
+ let last=null,credit=0;
+ const setRate=value=>{if(!Number.isFinite(value)||value<=0)throw new RangeError('Playback rate must be finite and positive');rate=value;};
+ setRate(rate);
+ return {setRate,reset(){last=null;credit=0;},state:()=>({dt,rate,credit}),
+  advance(now,{paused=false}={}) {
+   if(!Number.isFinite(now))throw new RangeError('Finite playback clock required');
+   const elapsed=last===null?0:Math.max(0,(now-last)/1000);last=now;
+   if(paused){credit=0;return {steps:0,dt};}
+   credit+=elapsed*rate;
+   const steps=Math.floor((credit+1e-12)/dt);credit-=steps*dt;
+   if(!Number.isSafeInteger(steps))throw new RangeError('Playback step count is not representable');
+   return {steps,dt};
+  }
+ };
+}

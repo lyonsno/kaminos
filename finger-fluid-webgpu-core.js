@@ -7601,7 +7601,7 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
               neighborIndex,
               length(position - particles[neighborIndex].predicted.xyz),
             );
-            neighborVelocity = neighborVelocity + particles[neighborIndex].velocity.xyz * weight;
+            neighborVelocity = neighborVelocity + ((particles[neighborIndex].predicted.xyz - particles[neighborIndex].position.xyz) / max(params.dt, 0.00001)) * weight;
             neighborWeight = neighborWeight + weight;
           }
           current = particleNext[neighborIndex];
@@ -13354,7 +13354,7 @@ export async function createWebGPUFingerFluidSolver({
   }
   const safeDiagnosticBox = diagnosticBox ? validateFingerFluidReferenceBox(diagnosticBox) : null;
   if (Boolean(diagnosticPopulation) !== Boolean(safeDiagnosticBox)) throw new Error('Finite box requires both geometry and population');
-  if (safeDiagnosticBox && (adaptiveDensity || truthScene !== 'multi_regime_playground' || hostFrameComposition || supportContactRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE)) throw new Error('Finite box requires uniform standalone PBF');
+  if (safeDiagnosticBox && (adaptiveDensity || truthScene !== 'multi_regime_playground' || supportContactRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE)) throw new Error('Finite box requires uniform PBF and analytic support');
   if (viscosityScaling !== 'legacy' && adaptiveDensity) throw new Error('Nominal viscosity scaling requires uniform particle volume');
   if(!Number.isFinite(simulationStepSeconds)||simulationStepSeconds<1/240||simulationStepSeconds>1/30)throw new RangeError('Explicit simulation timestep outside solver range');
   viscosityScale(viscosityScaling, simulationStepSeconds, .185);
@@ -13776,6 +13776,7 @@ export async function createWebGPUFingerFluidSolver({
     const velocityAnchor = '  var velocity = (position - particle.position.xyz) / max(params.dt, 0.00001);';
     if (!computeShader.includes(velocityAnchor)) throw new Error('IPBF velocity integration anchor missing');
     computeShader = computeShader.replace(velocityAnchor,'  var velocity = particle.delta.xyz;');
+    computeShader = computeShader.replace('((particles[neighborIndex].predicted.xyz - particles[neighborIndex].position.xyz) / max(params.dt, 0.00001)) * weight','particles[neighborIndex].velocity.xyz * weight');
     computeShader = computeShader.replace('  velocity = velocity * params.forces.y;', '  // IPBF paper damping replaces the legacy uniform velocity damping.');
   }
   const computeModule = createSceneShaderModule({ label: useIPBF ? 'webgpu-ipbf-cubic-spline-v0' : KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: computeShader });
