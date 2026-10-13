@@ -3706,7 +3706,7 @@ import {mountMaterialCockpit} from './finger-fluid-material-cockpit.mjs';
 import {readMaterialControlsURL,materialControlsURL} from './finger-fluid-material-controls.mjs';
 
 import {createFluidViewportHost,resolveFluidViewportRenderer,resolveFluidViewportMode} from './fluid-viewport-host.mjs';
-import {applyFluidOwnerSetup,createOwnerWaterCapability} from './fluid-owner-host.mjs';
+import {applyFluidOwnerSetup,createOwnerWaterCapability,restoreOwnerFluidReplay,ownerFluidRouteParams} from './fluid-owner-host.mjs';
 import {loadExperimentContributions,openExperiment} from './workbench-experiments.mjs';
 import {installOwnerExperimentEntry} from './owner-experiment-entry.mjs';
 import {createFluidBenchScene,FINGER_FLUID_BENCH_VIEWPORT_PIPELINE} from './finger-fluid-bench-viewport.mjs';
@@ -4050,8 +4050,9 @@ import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, check
 
 let authoringWorkspace = null;
 let fluidWorkbench = null;
-let ownerExperimentEntry=null, fingerFluidOwnerSetup=null, fingerFluidOwnerIdentity=0;
+let ownerExperimentEntry=null, fingerFluidOwnerSetup=null, fingerFluidOwnerIdentity=0,fingerFluidOwnerDefinition=null;
 const fluidStepSeconds=()=>fingerFluidBenchConfig?.simulationStepSeconds??KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS;
+const fluidClockStepSeconds=()=>fluidStepSeconds()/(fingerFluidBenchSolver?.getDebugState?.().substeps??1);
 let restoringSceneLight=false;
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -4523,7 +4524,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     requestedInletCutoffStep,
     effectiveInletCutoffStep: resolveFingerFluidInletCutoffStep(requestedInletCutoffStep),
     timeIntegrationContract: KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT,
-    fixedTimeStepSeconds: fluidStepSeconds(),
+    fixedTimeStepSeconds: fluidClockStepSeconds(),
   };
 }
 let fingerFluidBenchState = createFingerFluidBenchState({
@@ -14295,6 +14296,8 @@ function advanceFingerFluidBenchToStepForWitness(targetStep) {
       + `${targetStep} <= ${startStep}`,
     );
   }
+  const substeps=fingerFluidBenchSolver.getDebugState().substeps??1;
+  if((targetStep-startStep)%substeps!==0)throw new RangeError('Exact target must end on a complete solver frame ('+substeps+' substeps)');
   let endStep = startStep;
   while (endStep < targetStep) {
     fingerFluidBenchSolver.step(fluidStepSeconds());
@@ -14338,7 +14341,7 @@ function advanceFingerFluidBenchToStepForWitness(targetStep) {
     endStep,
     targetStep,
     exact: endStep === targetStep,
-    fixedTimeStepSeconds: fluidStepSeconds(),
+    fixedTimeStepSeconds: fluidClockStepSeconds(),
   };
 }
 
@@ -14453,13 +14456,13 @@ function drawFingerFluidBenchFrame(now = performance.now(),{fromHost=false}={}) 
   if (fingerFluidBenchConfig.oracleCockpitRequested) {
     gpuState.requestedOracleCockpitConfig = fingerFluidBenchConfig.oracleCockpitRequested;
   }
-  gpuState.timeIntegrationContract = KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT;
-  gpuState.fixedTimeStepSeconds = fluidStepSeconds();
+  gpuState.timeIntegrationContract = fingerFluidOwnerSetup?'owner-configured-frame-and-substep-clock-v1':KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT;
+  gpuState.fixedTimeStepSeconds = fluidClockStepSeconds();
   fingerFluidBenchLastFrameMs = performance.now() - frameStart;
   fingerFluidBenchState = createFingerFluidBenchState({
     status: 'running',
     viewport: { width, height },
-    timeSeconds: gpuState.stepCount * fluidStepSeconds(),
+    timeSeconds: gpuState.stepCount * fluidClockStepSeconds(),
     basinFillRatio: 0.44,
     activeRatio: 0.34,
     frameTimeMsEstimate: fingerFluidBenchLastFrameMs,
@@ -14578,7 +14581,7 @@ async function startFingerFluidBench() {
   if (!fingerFluidBenchSolverPromise) {
     const canvas = document.getElementById('finger-fluid-bench-canvas');
     try {
-      fingerFluidBenchConfig = fingerFluidBenchConfigFromRoute();
+      fingerFluidBenchConfig = fingerFluidBenchConfigFromRoute(fingerFluidOwnerSetup?ownerFluidRouteParams(fingerFluidOwnerSetup,new URLSearchParams(location.search)):undefined);
       if(fingerFluidOwnerSetup)fingerFluidBenchConfig=applyFluidOwnerSetup(fingerFluidBenchConfig,fingerFluidOwnerSetup);
       if (fingerFluidBenchConfig.effectiveTruthScene === 'laminar_inlets') {
         fingerFluidBenchCamera = { yaw: -0.46, pitch: 0.38, distance: 5.35, target: [0, -0.28, -0.72] };
@@ -14883,6 +14886,7 @@ async function installOwnerWorkbenchEntry() {
   const root=document.getElementById('experiment-owner-slot');
   const host={controls:{document,installNumberDrag:installRelativeNumberDrag},fluid:{rendererModes:['screen_space_refraction'],
     async open(setup){
+      if(fingerFluidOwnerDefinition)setup=restoreOwnerFluidReplay(setup,new URLSearchParams(location.search),fingerFluidOwnerDefinition);
       // Validate before replacing the active water; the producer owns numerical inputs.
       applyFluidOwnerSetup({},setup);
       stopFingerFluidBench();fingerFluidBenchSolver?.destroy?.();
@@ -14906,8 +14910,9 @@ async function installOwnerWorkbenchEntry() {
     }
   }};
   ownerExperimentEntry=await installOwnerExperimentEntry({document,root,host,
+    onOpen:(definition,inputs)=>{fingerFluidOwnerDefinition={id:definition.id,inputs};},
     discover:async()=>{const response=await fetch('/api/workbench-experiments',{cache:'no-store'});if(!response.ok)throw Error('Experiment discovery HTTP '+response.status);return (await response.json()).modules;},
-    onChange:({id,inputs})=>{const url=new URL(location.href);if(id){url.searchParams.set('experiment',id);url.searchParams.set('experiment_inputs',JSON.stringify(inputs));}else{url.searchParams.delete('experiment');url.searchParams.delete('experiment_inputs');}history.replaceState(history.state,'',url);}});
+    onChange:({id,inputs})=>{const url=new URL(location.href);if(id){url.searchParams.set('experiment',id);url.searchParams.set('experiment_inputs',JSON.stringify(inputs));if(fingerFluidOwnerSetup)url.search=ownerFluidRouteParams(fingerFluidOwnerSetup,url.searchParams).toString();}else{url.searchParams.delete('experiment');url.searchParams.delete('experiment_inputs');}history.replaceState(history.state,'',url);}});
   window.kaminosWorkbenchExperiments=ownerExperimentEntry;
   const params=new URLSearchParams(location.search),id=params.get('experiment');
   if(id)await ownerExperimentEntry.open(id,JSON.parse(params.get('experiment_inputs')||'{}'));
@@ -14988,8 +14993,9 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.kaminosFingerFluidBenchSessionState = () => ({
     generation: fingerFluidBenchStartGeneration,
-    fixedTimeStepSeconds:fluidStepSeconds(),
-    timeSeconds:(fingerFluidBenchSolver?.getDebugState?.().stepCount??0)*fluidStepSeconds(),
+    fixedTimeStepSeconds:fluidClockStepSeconds(),
+    frameTimeStepSeconds:fluidStepSeconds(),
+    timeSeconds:(fingerFluidBenchSolver?.getDebugState?.().stepCount??0)*fluidClockStepSeconds(),
     paused: fingerFluidBenchSimulationPaused,
     running: fingerFluidBenchRunning,
     available: fingerFluidBenchSolver?.available === true,

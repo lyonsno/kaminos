@@ -19,9 +19,10 @@ export function applyFluidOwnerSetup(base,setup) {
 }
 
 /** Only the active generation can mutate water; restart explicitly renews it. */
-export function createOwnerWaterCapability({state,debug,pressure,apply,pause,advance,restart,dispose,identity=()=>state().generation}) {
- let generation=identity(),closed=false;
- const current=()=>{if(closed)throw Error('Owner water is disposed');const value=state();if(!value.available||identity()!==generation)throw Error('Owner water generation changed');return value;};
+export function createOwnerWaterCapability({state,debug,pressure,apply,pause,advance,restart,dispose,identity=null}) {
+ const ownerIdentity=identity??(()=>state().generation);
+ let generation=ownerIdentity(),closed=false;
+ const current=()=>{if(closed)throw Error('Owner water is disposed');const value=state();if(!value.available||ownerIdentity()!==generation)throw Error('Owner water generation changed');return value;};
  const read=()=>({clock:current(),controls:pressure(),runtime:debug()});
  const facade={get available(){try{return !!current().available;}catch{return false;}},getDebugState:()=>{current();return debug();},getPressureControls:()=>{current();return pressure();}};
  return Object.freeze({
@@ -30,7 +31,26 @@ export function createOwnerWaterCapability({state,debug,pressure,apply,pause,adv
   applyPressure(patch){current();return apply(patch);},
   setPaused(value){current();return pause(value);},
   advanceTo(step){current();return advance(step);},
-  async restart(){current();await restart();generation=identity();return read();},
-  async dispose(){if(closed)return;closed=true;if(identity()===generation)await dispose();},
+  async restart(){current();const owner=ownerIdentity(),receipt=await restart();if(closed||(identity&&ownerIdentity()!==owner))throw Error('Owner changed during restart');if(!identity&&state().generation!==generation&&receipt?.generation!==state().generation)throw Error('Restart changed generation without an owned renewal receipt');generation=ownerIdentity();return read();},
+  async dispose(){if(closed)return;closed=true;if(ownerIdentity()===generation)await dispose();},
  });
+}
+
+// Reopening the same definition/inputs honors its existing cockpit settings URL.
+// A new definition or new inputs starts with that owner's chosen configuration.
+export function restoreOwnerFluidReplay(setup,params,{id,inputs}) {
+ if(params.get('experiment')!==id||(params.get('experiment_inputs')??'{}')!==JSON.stringify(inputs))return setup;
+ const solver={...setup.solver};
+ const fields={finger_fluid_ipbf_pressure_radius_scale:'ipbfPressureRadiusScale',finger_fluid_ipbf_beta:'ipbfDampingBeta',finger_fluid_density_iterations:'densityIterations',finger_fluid_capillary_strength:'capillaryStrength',finger_fluid_ipbf_alternative_compliance:'ipbfAlternativeCompliance'};
+ for(const [query,key]of Object.entries(fields))if(params.has(query)){const value=Number(params.get(query));if(!Number.isFinite(value))throw Error('Invalid owner replay '+query);solver[key]=value;}
+ if(!solver.diagnosticPopulation&&params.has('finger_fluid_particle_count'))solver.particleCount=Number(params.get('finger_fluid_particle_count'));
+ return {...setup,solver};
+}
+
+export function ownerFluidRouteParams(setup,params) {
+ const next=new URLSearchParams(params),solver=setup.solver;
+ const fields={particleCount:'finger_fluid_particle_count',fixedVolumeReferenceParticleCount:'finger_fluid_fixed_volume_reference_count',pressureSolver:'finger_fluid_pressure_solver',cohesionModel:'finger_fluid_cohesion_model',capillaryStrength:'finger_fluid_capillary_strength',densityIterations:'finger_fluid_density_iterations',ipbfPressureRadiusScale:'finger_fluid_ipbf_pressure_radius_scale',ipbfAlternativeCompliance:'finger_fluid_ipbf_alternative_compliance',ipbfDampingBeta:'finger_fluid_ipbf_beta',ipbfBoundaryMode:'finger_fluid_ipbf_boundary',truthScene:'finger_fluid_truth_scene',rendererMode:'finger_fluid_renderer',opticalDebugMode:'finger_fluid_optical_debug'};
+ for(const [key,query]of Object.entries(fields))if(solver[key]!==undefined&&solver[key]!==null)next.set(query,String(solver[key]));
+ if(solver.fixedVolumeReferenceParticleCount==null)next.delete('finger_fluid_fixed_volume_reference_count');
+ next.set('finger_fluid_pressure_cockpit',solver.livePressureControls?'1':'0');return next;
 }

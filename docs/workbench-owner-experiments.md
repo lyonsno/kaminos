@@ -131,3 +131,12 @@ The application API also exposes `list`, `refresh`, `open`, `read`, `state`
 and `close`. Import/open errors appear in the selector status; startup errors
 retain the last host error. The current generic entry does not itself implement
 persistent investigation documents or live cross-page return.
+
+Reopening the same definition and input JSON reconstructs the existing cockpit
+pressure settings URL, including a general river population edit. Changing the
+definition or inputs starts from that owner's new setup. The capability keeps
+ownership fixed across an asynchronous restart; the optional allocation-generation
+variant needs an explicit renewal receipt if its generation changes. The host
+reports both configured frame dt and effective substep dt, using the actual
+backend substep count; exact advances reject incomplete-frame targets before
+stepping. This preserves configuration, not an evolved-water checkpoint.
