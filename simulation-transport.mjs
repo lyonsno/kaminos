@@ -45,7 +45,7 @@ export function mountSimulationTransport({document,root,transport,exportSequence
  const $=q=>node.querySelector(q),error=$('[role=alert]');
  const controls=[...node.querySelectorAll('button,select,input')];
  const lock=()=>{for(const c of controls)c.disabled=transport.state().busy||exporting;$('[data-action=cancel]').disabled=!exporting;if(!exportSequence)$('[data-action=export]').disabled=true;};
- const update=()=>{if(disposed||reading)return;reading=true;try{const s=transport.read();$('[data-action=play]').textContent=s.paused?'▶ Play':'Ⅱ Pause';$('output').textContent=`${(s.step*s.dt).toFixed(4)} s · tick ${s.step}`;if(document.activeElement!==$('[data-time]'))$('[data-time]').value=String(s.step*s.dt);$('select').value=String(s.rate);lock();}catch(e){error.textContent=e.message;}finally{reading=false;}};
+ const update=()=>{if(disposed||reading)return;if(transport.state().busy){lock();return;}reading=true;try{const s=transport.read();$('[data-action=play]').textContent=s.paused?'▶ Play':'Ⅱ Pause';$('output').textContent=`${(s.step*s.dt).toFixed(4)} s · tick ${s.step}`;if(document.activeElement!==$('[data-time]'))$('[data-time]').value=String(s.step*s.dt);$('select').value=String(s.rate);lock();}catch(e){error.textContent=e.message;}finally{reading=false;}};
  const call=action=>{error.textContent='';const p=action();lock();Promise.resolve(p).catch(e=>{error.textContent=e.message;}).finally(update);};
  for(const [name,action]of Object.entries({replay:()=>transport.replay(),back:()=>transport.step(-1),play:()=>transport.toggle(),step:()=>transport.step(1),seek:()=>transport.seek(Number($('[data-time]').value))}))$(`[data-action=${name}]`).onclick=()=>call(action);
  $('select').onchange=()=>call(()=>transport.rate(Number($('select').value)));
