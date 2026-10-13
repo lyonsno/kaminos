@@ -9,7 +9,7 @@ import {
 } from './sam31-browser-tracker-caller-invocation.js';
 import { createWebGpuInferenceSession } from './inference-session.js';
 import { createSam31ResidentModelResources } from './sam31-resident-model-resources.js';
-import { runSam31BrowserTrackerPackageInvocation } from './sam31-browser-tracker-session-driver.js';
+import { runSam31BrowserTrackerPackageInvocation, validateSam31BrowserTrackerRunOptions } from './sam31-browser-tracker-session-driver.js';
 
 export const SAM31_BROWSER_TRACKER_SESSION_SCHEMA = 'kaminos.sam31-browser-tracker-session.v0';
 export const SAM31_BROWSER_TRACKER_RESIDENT_SESSION_SCHEMA = 'kaminos.sam31-browser-tracker-resident-session.v0';
@@ -39,7 +39,7 @@ async function acquireExecutionContext(gpu) {
   return { adapter, device, errors: [] };
 }
 
-function createSession({ runtime, execution, driver, userAgent, commit, onProgress }) {
+function createSession({ runtime, execution, driver, userAgent, commit, onProgress, runOptions, setupMs = 0 }) {
   if (!execution?.adapter || !execution?.device) throw new Error('execution context requires an adapter and device');
   if (!Array.isArray(execution.errors)) execution.errors = [];
   const { adapter, device } = execution;
@@ -65,12 +65,14 @@ function createSession({ runtime, execution, driver, userAgent, commit, onProgre
       if (status === 'closed') throw new Error('tracker session is closed');
       if (status !== 'open') throw new Error('tracker session already executed');
       status = 'running';
+      const runStarted = performance.now();
       try {
-        const result = await driver({ packageRuntime: runtime, adapter, device, errors: execution.errors, adapterInfo, userAgent, commit, onProgress });
+        const result = await driver({ packageRuntime: runtime, adapter, device, errors: execution.errors, adapterInfo, userAgent, commit, onProgress, ...runOptions });
         const completeRouteEvidence = result?.evidence?.passed === true
           && ['receipts', 'requestIds', 'requestedRouteIds', 'effectiveRouteIds']
             .every(name => Array.isArray(result[name]) && result[name].length === 19);
         if (!completeRouteEvidence) throw new Error('tracker session driver did not return complete 19-route evidence');
+        if (result.timing) result.timing = { ...result.timing, sessionSetupMs: setupMs, callerInvocationMs: 0, sessionRunWallMs: performance.now() - runStarted };
         status = 'completed';
         return result;
       } catch (error) {
@@ -133,6 +135,8 @@ function createResidentSession({
   userAgent,
   commit,
   onProgress,
+  runOptions,
+  setupMs = 0,
 }) {
   if (!modelPackageRuntime || typeof modelPackageRuntime.loadFloat32 !== 'function') throw new Error('resident tracker session requires a model package runtime');
   if (!inferenceSession?.adapter || !inferenceSession?.device) throw new Error('resident tracker session requires an inference session');
@@ -185,12 +189,18 @@ function createResidentSession({
     async run(input = {}) {
       if (status === 'closed') throw new Error('resident tracker session is closed');
       if (status === 'running') throw new Error('resident tracker session is already running');
+      const effectiveOptions = validateSam31BrowserTrackerRunOptions({
+        memoryAttentionKernel: input.memoryAttentionKernel === undefined ? runOptions.memoryAttentionKernel : input.memoryAttentionKernel,
+        captureOutputs: input.captureOutputs === undefined ? runOptions.captureOutputs : input.captureOutputs,
+      });
+      const runStarted = performance.now();
       status = 'running';
       const invocationIndex = attemptCount;
       attemptCount += 1;
       const before = residentEvidenceSummary(residentResources.evidence());
       try {
         assertInferenceSessionActive('resident-invocation-preflight');
+        const callerStarted = performance.now();
         const packageRuntime = await createCallerRuntime({
           modelPackageRuntime: residentModelPackageRuntime,
           sourceImages: input.sourceImages,
@@ -198,6 +208,7 @@ function createResidentSession({
           session: input.session,
           decodeImage,
         });
+        const callerInvocationMs = performance.now() - callerStarted;
         const result = await driver({
           packageRuntime,
           adapter: inferenceSession.adapter,
@@ -207,6 +218,7 @@ function createResidentSession({
           userAgent,
           commit,
           onProgress: input.onProgress || onProgress,
+          ...effectiveOptions,
         });
         assertInferenceSessionActive('resident-invocation-postflight');
         if (!completeTrackerRouteEvidence(result)) throw new Error('resident tracker driver did not return complete 19-route evidence');
@@ -241,7 +253,11 @@ function createResidentSession({
         }));
         invocationCount += 1;
         status = 'open';
-        return Object.freeze({ ...result, residentRuntime });
+        return Object.freeze({
+          ...result,
+          ...(result.timing ? { timing: { ...result.timing, sessionSetupMs: setupMs, callerInvocationMs, sessionRunWallMs: performance.now() - runStarted } } : {}),
+          residentRuntime,
+        });
       } catch (error) {
         invocationEvidence.push(Object.freeze({
           invocationIndex,
@@ -304,6 +320,8 @@ export async function createSam31BrowserTrackerSession(options = {}) {
   for (const name of ['packageRuntime', 'executionContext', 'executeInvocation', 'modelPackageRuntime', 'callerInvocationRuntime', 'decodeImage']) {
     if (Object.hasOwn(options, name)) throw new Error(`public tracker session does not accept ${name}`);
   }
+  const runOptions = validateSam31BrowserTrackerRunOptions(options);
+  const setupStarted = performance.now();
   const {
     packageRoot = null,
     modelPackageRoot = null,
@@ -337,13 +355,15 @@ export async function createSam31BrowserTrackerSession(options = {}) {
     runtime = await loadSam31BrowserTrackerPackageRuntime({ rootUrl: packageRoot, pageUrl, cache });
   }
   const execution = await acquireExecutionContext(gpu);
-  return createSession({ runtime, execution, driver: runSam31BrowserTrackerPackageInvocation, userAgent, commit, onProgress });
+  return createSession({ runtime, execution, driver: runSam31BrowserTrackerPackageInvocation, userAgent, commit, onProgress, runOptions, setupMs: performance.now() - setupStarted });
 }
 
 export async function createSam31BrowserTrackerResidentSession(options = {}) {
   for (const name of ['modelPackageRuntime', 'inferenceSession', 'ownerRoute', 'residentResources', 'createCallerRuntime', 'executeInvocation', 'decodeImage']) {
     if (Object.hasOwn(options, name)) throw new Error(`public resident tracker session does not accept ${name}`);
   }
+  const runOptions = validateSam31BrowserTrackerRunOptions(options);
+  const setupStarted = performance.now();
   const {
     modelPackageRoot = null,
     pageUrl = globalThis.location?.href,
@@ -385,6 +405,8 @@ export async function createSam31BrowserTrackerResidentSession(options = {}) {
       userAgent,
       commit,
       onProgress,
+      runOptions,
+      setupMs: performance.now() - setupStarted,
     });
   } catch (error) {
     residentResources?.release?.();
@@ -402,10 +424,12 @@ export function createSam31BrowserTrackerSessionForTest({
   userAgent = 'test-browser',
   commit = null,
   onProgress = () => {},
+  memoryAttentionKernel = 'online',
+  captureOutputs = false,
 } = {}) {
   if (!packageRuntime) throw new Error('test tracker session requires a package runtime');
   if (typeof executeInvocation !== 'function') throw new Error('test tracker session requires an invocation driver');
-  return createSession({ runtime: packageRuntime, execution: executionContext, driver: executeInvocation, userAgent, commit, onProgress });
+  return createSession({ runtime: packageRuntime, execution: executionContext, driver: executeInvocation, userAgent, commit, onProgress, runOptions: validateSam31BrowserTrackerRunOptions({ memoryAttentionKernel, captureOutputs }) });
 }
 
 export function createSam31BrowserTrackerResidentSessionForTest({
@@ -419,6 +443,8 @@ export function createSam31BrowserTrackerResidentSessionForTest({
   userAgent = 'test-browser',
   commit = null,
   onProgress = () => {},
+  memoryAttentionKernel = 'online',
+  captureOutputs = false,
 } = {}) {
   return createResidentSession({
     modelPackageRuntime,
@@ -431,5 +457,6 @@ export function createSam31BrowserTrackerResidentSessionForTest({
     userAgent,
     commit,
     onProgress,
+    runOptions: validateSam31BrowserTrackerRunOptions({ memoryAttentionKernel, captureOutputs }),
   });
 }

@@ -2,6 +2,21 @@ function check(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+export function samControlIsFullyVisible(button) {
+  const rect = button.getBoundingClientRect();
+  if (!rect.width || !rect.height || rect.left < 0 || rect.top < 0 || rect.right > innerWidth || rect.bottom > innerHeight) return false;
+  for (let parent = button.parentElement; parent; parent = parent.parentElement) {
+    const style = getComputedStyle(parent);
+    const bounds = parent.getBoundingClientRect();
+    const left = bounds.left + parent.clientLeft, top = bounds.top + parent.clientTop;
+    if (/^(auto|scroll|hidden|clip)$/.test(style.overflowX)
+      && (rect.left < left || rect.right > left + parent.clientWidth)) return false;
+    if (/^(auto|scroll|hidden|clip)$/.test(style.overflowY)
+      && (rect.top < top || rect.bottom > top + parent.clientHeight)) return false;
+  }
+  return true;
+}
+
 export function validateSamConsumerInteraction(evidence, invocationId) {
   check(evidence.sameDevice === true, 'inference did not use the host device');
   check(evidence.sameRendererDevice === true, 'Three.js did not use the host device');

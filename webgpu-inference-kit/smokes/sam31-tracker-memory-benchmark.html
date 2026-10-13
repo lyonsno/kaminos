@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAM3.1 Tracker Memory Benchmark</title>
+<style>body{font:14px monospace;margin:24px;color:#222;background:#fff}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style>
+<pre id="status">Loading</pre>
+<script type="module">
+import { createSam31BrowserTrackerPackageCache, createSam31BrowserTrackerResidentSession } from '../src/index.js';
+
+const status = document.querySelector('#status');
+let plan;
+let resident;
+let cache;
+let sourceImages;
+let initialMask;
+let latest;
+let transportId;
+let payload;
+let closeEvidence;
+const names = ['conditionedFeatures', 'selectedMasks', 'objectScores', 'objectPointers'];
+const hash = async array => {
+  const bytes = new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+};
+async function fetchBytes(path) {
+  const response = await fetch(path, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`input fetch ${path} failed ${response.status}`);
+  return response.arrayBuffer();
+}
+window.sam31TrackerMemoryBenchmark = {
+  async setup() {
+    if (resident) throw new Error('benchmark resident session already exists');
+    if (new Uint8Array(new Uint32Array([1]).buffer)[0] !== 1) throw new Error('benchmark requires little-endian f32 transport');
+    const response = await fetch('/api/benchmark-plan', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`benchmark plan fetch failed ${response.status}`);
+    plan = await response.json();
+    sourceImages = [];
+    for (const path of plan.sourceImages) sourceImages.push(new Uint8Array(await fetchBytes(path)));
+    initialMask = new Float32Array(await fetchBytes(plan.initialMask.file));
+    const length = plan.initialMask.shape.reduce((product, dimension) => product * dimension, 1);
+    if (initialMask.length !== length) throw new Error('initial mask length differs from requested source geometry');
+    status.textContent = 'Loading resident model';
+    cache = createSam31BrowserTrackerPackageCache({ persistentStaticBacking: true });
+    if (cache.evidence().backingStore?.kind !== 'browser-opfs') throw new Error('requested OPFS static backing is unavailable; refusing retained-memory fallback');
+    resident = await createSam31BrowserTrackerResidentSession({
+      modelPackageRoot: plan.modelPackageRoot, cache, commit: plan.commit,
+      residentSessionId: `sam31-memory-benchmark:${plan.runId}`, captureOutputs: true,
+      onProgress: phase => { status.textContent = phase; },
+    });
+    return { packageId: resident.packageId, adapterInfo: resident.adapterInfo, requestedStaticBacking: 'opfs', cacheEvidence: cache.evidence() };
+  },
+  async run({ index, mode, warmup, sessionId }) {
+    if (!resident) throw new Error('benchmark resident session does not exist');
+    const requested = plan.runs[index];
+    if (requested?.mode !== mode || requested?.warmup !== warmup) throw new Error('run differs from benchmark plan');
+    const result = await resident.run({
+      sourceImages, initialMask, memoryAttentionKernel: mode, captureOutputs: true,
+      session: { sessionId, conditioningFrameIndex: 0, propagationFrameIndices: [1], conditioningObjects: Array.from({ length: plan.expectedGeometry.multiplexCount }, (_, object) => object), maskVariant: 0 },
+    });
+    if (!result.outputs?.frame1) throw new Error('tracker result is missing captured outputs');
+    const outputMetadata = {};
+    for (const name of names) {
+      const array = result.outputs.frame1[name];
+      const shape = result.outputs.shapes?.frame1?.[name];
+      if (!(array instanceof Float32Array) || !Array.isArray(shape)) throw new Error(`${name} captured f32/geometry is missing`);
+      const sha256 = await hash(array);
+      const response = await fetch(`/api/output/${index}/${name}`, { method: 'POST', body: new Uint8Array(array.buffer, array.byteOffset, array.byteLength) });
+      if (!response.ok) throw new Error(`${name} output upload failed ${response.status}: ${await response.text()}`);
+      const uploaded = await response.json();
+      if (uploaded.sha256 !== sha256 || uploaded.byteLength !== array.byteLength) throw new Error(`${name} output upload identity differs from readback`);
+      outputMetadata[name] = { sha256, byteLength: array.byteLength, shape, dtype: 'float32-le' };
+    }
+    const { outputs, ...metadata } = result;
+    latest = { result: metadata, index, mode, warmup, sessionId, outputs: outputMetadata };
+    payload = null;
+    status.textContent = `${index}: ${mode} ${warmup ? 'warmup' : 'measured'} completed`;
+    return { index, mode, warmup, sessionId };
+  },
+  metadata(id) {
+    if (!latest || typeof id !== 'string' || !id) throw new Error('benchmark metadata is unavailable');
+    transportId = id;
+    payload = JSON.stringify(latest);
+    return { transportId, totalCharacters: payload.length };
+  },
+  chunk({ offset, length }) {
+    if (!payload || !Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(length) || length <= 0) throw new Error('invalid benchmark evidence chunk');
+    return { transportId, offset, totalCharacters: payload.length, payload: payload.slice(offset, offset + length) };
+  },
+  async close() {
+    if (!resident) return null;
+    if (!closeEvidence) closeEvidence = await resident.close();
+    status.textContent = 'Closed';
+    return closeEvidence;
+  },
+};
+</script>
+</html>

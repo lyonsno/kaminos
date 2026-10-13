@@ -11,6 +11,8 @@ const promotedBackboneSource = readFileSync(new URL('src/sam31-two-image-backbon
 const trackerDriverSource = readFileSync(new URL('tools/sam31-two-frame-tracker-browser-parity-smoke.mjs', root), 'utf8');
 const trackerSmokeSource = readFileSync(new URL('smokes/sam31-two-frame-tracker-parity.js', root), 'utf8');
 const ingressExporterSource = readFileSync(new URL('tools/sam31-two-image-ingress-meta-packet.py', root), 'utf8');
+assert.match(promotedBackboneSource, /expectedLayerCheckpoints,/, 'promoted tracker must forward authenticated selected ViT checkpoints to the actual block stack');
+assert.match(promotedBackboneSource, /layerDiagnostics: backbones\[0\]\.layerDiagnostics/, 'selected layer distributions stay outside the numeric maximum aggregate');
 
 assert.doesNotMatch(backboneSource, /JSON\.stringify\(maximums\)\.match/, 'two-image parity aggregation must inspect numeric values rather than digits embedded in field names');
 assert.match(trackerDriverSource, /kaminos\.sam31-two-image-tracker\.browser-parity-smoke\.v0/, 'two-image browser evidence must emit a schema that names the raw-image tracker boundary');
@@ -34,6 +36,8 @@ assert.match(backboneSource, /parity\.vitLayers = Object\.fromEntries/, 'browser
 assert.match(backboneSource, /parity\.vitLayerDiagnostics = Object\.fromEntries/, 'browser evidence must preserve selected-layer error distributions beside the numeric tolerance map');
 assert.match(backboneSource, /diagnostics: layerDiagnostics/, 'failed browser evidence must durably expose selected-layer error distributions');
 for (const source of [backboneSource, promotedBackboneSource]) {
+  assert.match(source, /const prefixShape = \{[^\n]*layerNormEps: 0\.00001/, 'SAM3.1 prefix must request Meta LayerNorm epsilon');
+  assert.match(source, /const blockShape = \{[^\n]*layerNormEps: 0\.00001/, 'SAM3.1 all 32 ViT blocks must request Meta LayerNorm epsilon');
   assert.match(source, /summarizeSam3LayerParityCheckpoint/, 'two-image backbone must measure final ViT error distribution against the official tensor');
   assert.match(source, /passesSam3LayerParityCheckpoint/, 'two-image backbone must apply the compound FP32 parity contract');
   assert.match(source, /passesVitPrefixParity/, 'two-image backbone must apply the measured compound prefix contract');
