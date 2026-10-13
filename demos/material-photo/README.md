@@ -8,6 +8,8 @@ Turn a photograph into a surface you can relight.
 
 MoGe-2 recovers depth and normals. SuperMat estimates albedo, roughness and metalness. The four synchronized views separate what each contributes: an unchanged photograph on a flat plane, the photograph on recovered geometry, that geometry lit with the photograph as albedo, and the surface lit with inferred materials.
 
+The orb and backpack use hand-authored display cutouts in all four views. Their original images and model outputs remain intact.
+
 Orbit the views together, enlarge one, move the light, or change the HDR environment. The tuning panel exposes material contrast, screen-space GI and AO, and optional heuristic glow extraction with bloom. Material inference supports 512, 768 and 1024 pixel square outputs. Completed results are retained in browser storage when available, so returning to an image and resolution can restore them without another run.
 
 ## Run Locally
