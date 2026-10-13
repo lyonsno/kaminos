@@ -76,11 +76,21 @@ export async function createOwnedBrowserReveal({page,browser,browserPid,binding,
       serial=serial.then(()=>handle(request)).then(receipt=>{socket.end(JSON.stringify(receipt)+'\n');}).catch(error=>{socket.end(JSON.stringify({schema:'gpu-greenroom.application-reveal-receipt.v1',error:String(error)})+'\n');});
     });
   });
+  let inode=null;
   try{
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(socketPath,resolve);});
+    inode=(await fs.lstat(socketPath)).ino;
     await fs.chmod(socketPath,0o600);
-  }catch(error){await cdp.detach();if(directory)await fs.rmdir(directory);throw error;}
-  const inode=(await fs.lstat(socketPath)).ino;
+  }catch(error){
+    closed=true;const cleanup=[];
+    for(const socket of sockets)socket.destroy();
+    try{if(server.listening)await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}catch(failure){cleanup.push(failure);}
+    try{await cdp.detach();}catch(failure){cleanup.push(failure);}
+    try{if(inode!==null&&(await fs.lstat(socketPath)).ino===inode)await fs.unlink(socketPath);}catch(failure){if(failure.code!=='ENOENT')cleanup.push(failure);}
+    try{if(directory)await fs.rmdir(directory);}catch(failure){cleanup.push(failure);}
+    if(cleanup.length)throw new AggregateError([error,...cleanup],`Reveal construction failed: ${error.message}`);
+    throw error;
+  }
   return {identity,handle,
     async dispose(){if(closed)return;closed=true;for(const socket of sockets)socket.destroy();await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));await serial;
       await cdp.detach().catch(()=>{});

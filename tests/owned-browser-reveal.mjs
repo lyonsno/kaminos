@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import fs from 'node:fs/promises';
 import net from 'node:net';
+import {pathToFileURL} from 'node:url';
+import os from 'node:os';
+import path from 'node:path';
 import {createOwnedBrowserReveal} from '../tools/owned-browser-reveal.mjs';
 
 test('owner reveal preserves its page, refuses substitutions and requires native foreground',async()=>{
@@ -31,4 +34,35 @@ test('owner reveal preserves its page, refuses substitutions and requires native
     });assert.match(malformed.error,/Invalid reveal JSON/);
   }finally{await service.dispose();}
   await assert.rejects(fs.lstat(service.identity.socket_path),{code:'ENOENT'});
+});
+
+for(const phase of ['permissions','metadata'])test(`failed socket ${phase} closes its owned server and preserves the cause`,async()=>{
+  const originalChmod=fs.chmod,originalLstat=fs.lstat,originalCreate=net.createServer;
+  let server,address,detached=0;
+  net.createServer=(...args)=>{server=originalCreate(...args);server.on('listening',()=>{address=server.address();});return server;};
+  if(phase==='permissions')fs.chmod=async()=>{throw Error('simulated socket construction failure');};
+  else {let first=true;fs.lstat=async(...args)=>{if(first){first=false;throw Error('simulated socket construction failure');}return originalLstat(...args);};}
+  const page={isClosed:()=>false,url:()=> 'http://scene',context:()=>({newCDPSession:async()=>({send:async()=>({targetInfo:{targetId:'page',url:'http://scene'}}),detach:async()=>{detached++;}})})};
+  try{
+    await assert.rejects(createOwnedBrowserReveal({page,browser:{isConnected:()=>true},browserPid:process.pid,
+      binding:{url:'http://scene'},readStarts:async()=>['owner','browser']}),/simulated socket construction failure/);
+    assert.equal(server.listening,false,'a rejected constructor must not retain a listening server');
+    await assert.rejects(originalLstat(address),{code:'ENOENT'});assert.equal(detached,1);
+  }finally{
+    fs.chmod=originalChmod;fs.lstat=originalLstat;net.createServer=originalCreate;
+    if(server?.listening)await new Promise(resolve=>server.close(resolve));
+    if(address){await fs.unlink(address).catch(error=>{if(error.code!=='ENOENT')throw error;});await fs.rmdir(new URL('.',pathToFileURL(address))).catch(error=>{if(error.code!=='ENOENT')throw error;});}
+  }
+});
+
+test('a pre-listen failure does not remove another live socket',async()=>{
+  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'kbr-peer-')),socketPath=path.join(directory,'p.sock');
+  const peer=net.createServer();await new Promise(resolve=>peer.listen(socketPath,resolve));
+  const inode=(await fs.lstat(socketPath)).ino;let detached=0;
+  const page={isClosed:()=>false,url:()=> 'http://scene',context:()=>({newCDPSession:async()=>({send:async()=>({targetInfo:{targetId:'page',url:'http://scene'}}),detach:async()=>{detached++;}})})};
+  try{
+    await assert.rejects(createOwnedBrowserReveal({page,browser:{isConnected:()=>true},browserPid:process.pid,socketPath,
+      binding:{url:'http://scene'},readStarts:async()=>['owner','browser']}),{code:'EADDRINUSE'});
+    assert.equal(peer.listening,true);assert.equal((await fs.lstat(socketPath)).ino,inode);assert.equal(detached,1);
+  }finally{await new Promise(resolve=>peer.close(resolve));await fs.rmdir(directory);}
 });
