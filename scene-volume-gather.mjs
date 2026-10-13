@@ -154,14 +154,14 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       const lightingTexture=softening?softening.encode(encoder,field.texture,sourceSoftness):field.texture;
       device.queue.writeBuffer(params,0,new Float32Array([gain,stepLength,smokeEnabled||surfaceScattering?total:receivers.length,directions]));
       if(state.sourceTexture!==lightingTexture) {
-        state.sourceTexture=lightingTexture;
         const entries=[
           {binding:2,resource:{buffer:receiverBuffer}},{binding:3,resource:{buffer:state.directionBuffer}},
           {binding:4,resource:{buffer:state.distances}},{binding:5,resource:lightingTexture.createView()},
           {binding:6,resource:surface.createView()},{binding:7,resource:smoke.createView()},
           {binding:8,resource:{buffer:params}},{binding:9,resource:surfaceBack.createView()},...guideEntries()];
-        state.gatherGroup=device.createBindGroup({layout:state.gather.getBindGroupLayout(0),entries});
-        state.volumeGroup=device.createBindGroup({layout:state.gatherVolume.getBindGroupLayout(0),entries});
+        const gatherGroup=device.createBindGroup({layout:state.gather.getBindGroupLayout(0),entries});
+        const volumeGroup=device.createBindGroup({layout:state.gatherVolume.getBindGroupLayout(0),entries});
+        Object.assign(state,{sourceTexture:lightingTexture,gatherGroup,volumeGroup});
       }
       if(!state.cacheBuilt) {
         if(state.prefix)encoder.copyBufferToBuffer(state.prefix.distances,0,state.distances,0,total*state.prefix.capacity*4);
