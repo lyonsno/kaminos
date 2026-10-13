@@ -15,7 +15,7 @@ export function validateLiveState(state,expected){
   assert.equal(new Set(state.controls.map(b=>b.uuid)).size,6,'duplicate bone objects');
   return state;
 }
-export async function runLiveTransportWitness({evaluate,capture,ws,out,delay,expected,click,drag,progress}){
+export async function runLiveTransportWitness({evaluate,capture,ws,out,delay,expected,click,drag,key,progress}){
   let state;
   for(let i=0;i<240;i++){state=await evaluate(ws,'window.kaminosLiveTransport?.snapshot()??null');if(state?.status==='loaded')break;if(state?.status==='failed')throw Error(state.failurePhase+': '+state.error);await delay(125);}
   validateLiveState(state,expected);progress({stage:'loaded',state});
@@ -32,6 +32,7 @@ export async function runLiveTransportWitness({evaluate,capture,ws,out,delay,exp
   const name='hindlimb-left-stifle',point=await evaluate(ws,`window.kaminosLiveTransport.point(${JSON.stringify(name)})`);
   await click(ws,point);await delay(150);
   const selected=validateLiveState(await evaluate(ws,'window.kaminosLiveTransport.snapshot()'),expected);
+  const restDigests=await evaluate(ws,'window.kaminosLiveTransport.digests()');
   assert.equal(selected.gizmo.bone,name,'click did not attach gizmo to actual selected bone');
   assert.equal(selected.gizmo.objectUuid,selected.controls.find(b=>b.name===name).uuid,'gizmo target is a proxy');
   assert.equal(selected.gizmo.mode,'rotate','ordinary rotation control not active');
@@ -42,9 +43,16 @@ export async function runLiveTransportWitness({evaluate,capture,ws,out,delay,exp
   assert.ok(Math.hypot(...after.map((x,i)=>x-before[i]))>1e-4,'visible rotation-ring drag did not rotate selected bone');
   assert.ok(dragged.updateCount>selected.updateCount,'gizmo drag did not update live deformation');
   const dragShot=await capture(ws,out.replace(/\.png$/,'-gizmo-drag.png'));
+  await key(ws);await delay(200);
+  const undo=validateLiveState(await evaluate(ws,'window.kaminosLiveTransport.snapshot()'),expected);
+  const undoDigests=await evaluate(ws,'window.kaminosLiveTransport.digests()');
+  progress({stage:'ordinary-undo',point,ring,selected,dragged,undo,restDigests,undoDigests});
+  const undoQuaternion=undo.controls.find(b=>b.name===name).quaternion;
+  assert.ok(Math.hypot(...undoQuaternion.map((x,i)=>x-before[i]))<1e-7,'ordinary Undo did not restore actual bone pose');
+  assert.deepEqual(undoDigests,restDigests,'ordinary Undo restored bones but left stale live skin');
   await evaluate(ws,'window.kaminosLiveTransport.restore();true');
   const restored=validateLiveState(await evaluate(ws,'window.kaminosLiveTransport.snapshot()'),expected);
   assert.deepEqual(restored.controls.map(b=>b.quaternion),selected.controls.map(b=>b.quaternion),'restoration changed rest rig');
-  const rawPath=out.replace(/\.png$/,'-inputs.json');writeFileSync(rawPath,JSON.stringify({expected,conformance,point,ring,selected,dragged,restored,peaks},null,2));
-  return {conformance,neutral,peaks,dragShot,rawPath,selected,dragged,restored,qualityVerdict:'live transport exercised; deformation quality requires inspection'};
+  const rawPath=out.replace(/\.png$/,'-inputs.json');writeFileSync(rawPath,JSON.stringify({expected,conformance,point,ring,selected,dragged,undo,restDigests,undoDigests,restored,peaks},null,2));
+  return {conformance,neutral,peaks,dragShot,rawPath,selected,dragged,undo,restored,qualityVerdict:'live transport exercised; deformation quality requires inspection'};
 }

@@ -67,6 +67,9 @@ class IndependentBindingTests(unittest.TestCase):
         binding=bind_geometry(positions,triangles,{**self.control,'domainMethod':'surface'})
         np.testing.assert_array_equal(binding['domain'][:3],np.ones(3))
         np.testing.assert_array_equal(binding['domain'][3:],np.zeros(9))
+        extended=bind_geometry(positions,triangles,{**self.control,'domainMethod':'surface','articulated':True})
+        self.assertTrue(set(range(6,12)).isdisjoint(extended['articulatedRule']['unknownVertices']),
+                        'known fixed components must not be called unbound attachment unknowns')
 
     def test_articulated_binding_preserves_accepted_left_influence(self):
         original=bind_geometry(self.positions,self.triangles,self.control)

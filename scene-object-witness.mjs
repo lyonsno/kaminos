@@ -5984,7 +5984,9 @@ try {
     const { runLiveTransportWitness } = await import('./hindquarter-live-witness.mjs');
     lastEvidence.liveTransport = await runLiveTransportWitness({evaluate,capture:capturePngScreenshot,ws,out,delay,
       expected:{manifest:args.get('--expected-case-sha256'),source:args.get('--expected-source-sha256')},
-      click:dispatchMouseClick,drag:dispatchMouseDrag,progress:state=>{lastEvidence.liveTransportProgress=state;}});
+      click:dispatchMouseClick,drag:dispatchMouseDrag,
+      key:async socket=>{await wsRequest(socket,'Input.dispatchKeyEvent',{type:'keyDown',key:'z',code:'KeyZ',modifiers:2});await wsRequest(socket,'Input.dispatchKeyEvent',{type:'keyUp',key:'z',code:'KeyZ',modifiers:0});},
+      progress:state=>{lastEvidence.liveTransportProgress=state;}});
   } else if (scenario === 'hindquarter-binding-assay') {
     phase = 'scenario-hindquarter-binding-assay';
     const { runHindquarterWitness } = await import('./hindquarter-binding-witness.mjs');

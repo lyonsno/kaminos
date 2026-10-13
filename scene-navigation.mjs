@@ -69,7 +69,7 @@ function restoreRaycast(mesh) {
 export function prepareNavigationGeometry(root) {
   const pending = [];
   root.traverse(object => {
-    if (!object.isMesh || object.isSkinnedMesh || object.morphTargetInfluences?.length) return;
+    if (!object.isMesh || object.isSkinnedMesh || object.morphTargetInfluences?.length || object.userData.kaminosDynamicGeometry) return;
     const geometry = object.geometry;
     if (!geometry?.getAttribute('position') || geometry.getAttribute('position').isInterleavedBufferAttribute) return;
     let entry = depthIndexes.get(geometry);

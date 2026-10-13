@@ -207,12 +207,14 @@ def articulated_weights(binding,control):
     right_weight=np.minimum(raw_right,1-left)
     weights=np.zeros((len(points),8));weights[:,0]=1-left-right_weight
     weights[:,2:5]=left[:,None]*left_partition;weights[:,5:8]=right_weight[:,None]*right_partition
-    unknown=np.flatnonzero((left_partition.sum(axis=1)==0)&(right_partition.sum(axis=1)==0))
-    weights[unknown]=0;weights[unknown,0]=1
+    unreached=np.flatnonzero((left_partition.sum(axis=1)==0)&(right_partition.sum(axis=1)==0))
+    weights[unreached]=0;weights[unreached,0]=1
+    unknown=sorted(set(binding['domainRule'].get('unseededVertices',[]))&set(right['domainRule'].get('unseededVertices',[])))
     if not np.allclose(weights.sum(axis=1),1,atol=1e-10):raise ValueError('incomplete joint partition')
     return {'jointWeights':weights,'jointChannels':JOINT_CHANNELS,
             'articulatedRule':{'kind':'rest-geodesic-chain-partition','blendFemurs':.18,
-                'leftSeeds':left_seeds,'rightSeeds':right_seeds,'unknownVertices':unknown.tolist(),
+                'leftSeeds':left_seeds,'rightSeeds':right_seeds,'unknownVertices':unknown,
+                'unreachedChainVertices':unreached.tolist(),
                 'rightCompetitionVertices':np.flatnonzero(raw_right>1-left+1e-10).tolist(),
                 'leftTotalPreserved':True,'rightRule':'same recipe on reflected actual geometry, not transferred painted fields',
                 'pelvisChannel':'fixed in this rear-only exercise'}}
