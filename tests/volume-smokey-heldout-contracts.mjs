@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const driver=readFileSync(new URL('../scripts/capture-optical-trace.mjs',import.meta.url),'utf8');
+assert.ok(driver.includes('validateSmokeyControls'), 'capture must reject stale/default sweep controls');
+const {smokeyVariants,validateSmokeyControls,SMOKEY_SCANLINES}=await import('../volume-smokey-heldout.mjs');
+const base={'volume-immersed-radius':{value:.04},'volume-immersed-fuel':{value:.4},'volume-immersed-temperature':{value:.5}};
+const variants=smokeyVariants({domControls:base});
+assert.equal(variants.length,9);
+assert.equal(new Set(variants.map(v=>v.name)).size,9);
+assert.deepEqual(base['volume-immersed-radius'],{value:.04});
+assert.equal(variants.find(v=>v.name==='radius-double').preset.domControls['volume-immersed-radius'].value,.08);
+assert.equal(variants.find(v=>v.name==='all-half').preset.domControls['volume-immersed-temperature'].value,.25);
+assert.deepEqual(SMOKEY_SCANLINES,[.1,.2,.3,.4,.5,.6,.7,.8,.9]);
+validateSmokeyControls({a:{value:2},b:{value:'on'}},{a:2,b:'on'});
+assert.throws(()=>validateSmokeyControls({a:{value:2}},{a:1}),/a/);
+assert.throws(()=>validateSmokeyControls({a:{value:2}},{}),/a/);
+assert.throws(()=>validateSmokeyControls({a:{value:2}},{a:NaN}),/a/);
+console.log('approved sweep and effective control admission passed');
