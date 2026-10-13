@@ -41,7 +41,7 @@ export async function run({argv=process.argv.slice(2),launch=launchChrome,serve=
    try {
    await browser.evaluate(`(()=>{window.__marionetteBatch={phase:'running',raw:null,error:null};window.__unimateDemoInstance.generate(${JSON.stringify(task)}).then(r=>{window.__marionetteBatch={phase:'done',raw:{status:'completed',frames:r.motion.frames,joints:r.motion.joints,
     positions:Array.from(r.motion.positions),localRotations:Array.from(r.motion.localRotations),rootTranslation:Array.from(r.motion.rootTranslation),rootFacing:Array.from(r.motion.rootFacing),offsets:Array.from(r.motion.offsets),features:Array.from(r.features),
-    prompt:r.prompt,seed:${task.seed},textEncoder:r.textEncoder,route:'unimate.text-to-motion.webgpu-local.v0',controllerNorm:'valid-joints',cooperative:r.cooperative,
+    prompt:r.prompt,seed:r.seed,requestedSeed:${task.seed},textEncoder:r.textEncoder,route:'unimate.text-to-motion.webgpu-local.v0',controllerNorm:'valid-joints',cooperative:r.cooperative,
     cfgScale:r.cfgScale,sampling:r.sampling,wallMs:r.wallMs,frameStats:r.frameStats,evaluations:r.evaluations,dutyCount:r.dutyCount,longestDutyMs:r.longestDutyMs,steps:r.steps},error:null};}).catch(e=>{window.__marionetteBatch.phase='failed';window.__marionetteBatch.error=String(e.stack??e);});return true;})()`,false);
    for(;;){const s=await browser.evaluate('({phase:window.__marionetteBatch.phase,error:window.__marionetteBatch.error})',false);if(s.phase==='done')break;if(s.phase==='failed')throw new Error(s.error);await pause(500);}
    const raw=await browser.evaluate('window.__marionetteBatch.raw');raw.assetCondSha256=index.assetCondSha256;raw.skeleton=index.skeleton;raw.source=report.source;
