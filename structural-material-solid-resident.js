@@ -219,6 +219,7 @@ try{onProgress('readback-await');await Promise.all(readbacks.map(b=>b.mapAsync(G
   }
   return{route:SOLID_RESIDENT_ROUTE,
    device,stateBuffer(){if(failure)throw new Error(failure);return buffers.state;},bondBuffer(){if(failure)throw new Error(failure);return buffers.bonds;},diagnosticsBuffer(){if(failure)throw new Error(failure);return buffers.diagnostics;},
+   elasticSupportBuffers(){if(failure)throw new Error(failure);valid(compact,'Elastic support requires compact degradation');return{elements:buffers.elements,parameters:buffers.parameters,incidence:buffers.incidence};},
    submittedState(){return{route:SOLID_RESIDENT_ROUTE,runId,model:{kind:descriptor.kind,points:n,elements:count,bonds:bondCount},steps,damageEpoch,grip:grip&&structuredClone(grip),settings:{...settings}};},
    captureResidentPatch(anchor,stiffness){return serial(()=>{valid(compact&&Number.isInteger(anchor)&&anchor>=0&&anchor<n&&Number.isFinite(Math.fround(stiffness))&&stiffness>0,'Compact resident cell contact required');grip={index:-3,anchor,target:[0,0,0],stiffness:Math.fround(stiffness)};});},
    pin(indices){return serial(()=>{valid(Array.isArray(indices)&&indices.every(i=>Number.isInteger(i)&&i>=0&&i<n),'Valid support point indices required');for(const index of indices)device.queue.writeBuffer(buffers.state,(index*16+11)*4,new Float32Array([1]));});},

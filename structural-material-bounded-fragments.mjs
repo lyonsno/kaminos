@@ -10,6 +10,13 @@ const determinant=p=>{const [a,b,c]=p.slice(1).map(v=>subtract(v,p[0]));return a
 const permutations=ids=>ids.length===1?[ids]:ids.flatMap((id,i)=>permutations(ids.filter((_,j)=>j!==i)).map(tail=>[id,...tail]));
 const orders=permutations([0,1,2,3]);
 
+export function elasticSupportBonds(tetrahedra,bonds,stresses){
+ if(!Array.isArray(tetrahedra)||!Array.isArray(stresses)||stresses.length!==tetrahedra.length||stresses.some(s=>typeof s?.active!=='boolean')||!Array.isArray(bonds)||bonds.length%4)throw new Error('Complete acquired elastic support required');
+ const supported=new Set();
+ tetrahedra.forEach((ids,i)=>{if(stresses[i].active)for(const [a,b] of pairs)supported.add(key([ids[a],ids[b]]));});
+ return bonds.map((v,i)=>i%4===2?Number(v===1&&supported.has(key(bonds.slice(i-2,i)))):i%4===3?bonds[i-1]:v);
+}
+
 function sourceSampler(geometry){
  if(!geometry)return point=>[...point,0,1,0,point[0],point[1],1,0,0,1];
  if(geometry.numProp<12||!Array.isArray(geometry.properties)||geometry.properties.length%geometry.numProp||!geometry.properties.every(Number.isFinite)||!Array.isArray(geometry.indices)||geometry.indices.length%3||geometry.indices.some(i=>!Number.isInteger(i)||i<0||i>=geometry.properties.length/geometry.numProp))throw new Error('Complete attributed exterior geometry required');

@@ -1,4 +1,5 @@
 export const boundedGripWgsl=`
+override supportAware:bool=false;
 struct Point{rest:vec4f,position:vec4f,velocity:vec4f,predicted:vec4f};
 struct Input{counts:vec4u,center:vec4f,travel:vec4f,time:vec4u};
 @group(0) @binding(0) var<storage,read> points:array<Point>;
@@ -13,7 +14,7 @@ struct Input{counts:vec4u,center:vec4f,travel:vec4f,time:vec4u};
 fn changed()->bool{return input.counts.w!=0u||atomicLoad(&control[0])!=0u;}
 fn root(node:u32)->u32{var i=node;loop{let next=atomicLoad(&parents[i]);if(next==i){return i;}i=next;}}
 @compute @workgroup_size(64) fn clear(@builtin(global_invocation_id) id:vec3u){if(id.x==0u){atomicStore(&control[0],0u);}}
-@compute @workgroup_size(64) fn changes(@builtin(global_invocation_id) id:vec3u){let i=id.x;if(i>=input.counts.y){return;}let alive=bonds[i].z;if(alive!=previous[i]){atomicAdd(&control[0],1u);previous[i]=alive;if(alive==0u){transitions[i]=vec2u(input.time.x+1u,bitcast<u32>(input.travel.w));}else{transitions[i]=vec2u(0);}}}
+@compute @workgroup_size(64) fn changes(@builtin(global_invocation_id) id:vec3u){let i=id.x;if(i>=input.counts.y){return;}let alive=select(bonds[i].z,bonds[i].w,supportAware);let signature=select(alive,bonds[i].z|(alive<<1u),supportAware);let old=previous[i];if(signature!=old){atomicAdd(&control[0],1u);previous[i]=signature;let oldAlive=select(old,old>>1u,supportAware);if(alive!=oldAlive){if(alive==0u){transitions[i]=vec2u(input.time.x+1u,bitcast<u32>(input.travel.w));}else{transitions[i]=vec2u(0);}}}}
 @compute @workgroup_size(64) fn initialize(@builtin(global_invocation_id) id:vec3u){let i=id.x;if(i<input.counts.x&&changed()){atomicStore(&parents[i],i);}}
 @compute @workgroup_size(64) fn unite(@builtin(global_invocation_id) id:vec3u){
  let i=id.x;if(i>=input.counts.y||!changed()||bonds[i].z!=1u){return;}let edge=bonds[i];
@@ -41,16 +42,16 @@ var<workgroup> sums:array<f32,256>;
 }
 `;
 
-export async function createBoundedResidentGrip(resident,initialBonds){
+export async function createBoundedResidentGrip(resident,initialBonds,{connectionBuffer=resident.bondBuffer(),supportAware=false}={}){
  const device=resident.device,model=resident.submittedState().model,n=model.points,b=model.bonds,owned=[];
  const allocate=(label,size,usage)=>{const buffer=device.createBuffer({label,size,usage});owned.push(buffer);return buffer;};
  try{
   const parents=allocate('Resident grip components',n*4,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC),previous=allocate('Resident grip previous edges',b*4,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST),weights=allocate('Resident grip weights',n*4,GPUBufferUsage.STORAGE),control=allocate('Resident grip changes',4,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC),transitions=allocate('Resident fracture transitions',b*8,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC),uniform=allocate('Resident grip input',64,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
-  device.queue.writeBuffer(previous,0,Uint32Array.from({length:b},(_,i)=>initialBonds[i*4+2]));
+  device.queue.writeBuffer(previous,0,Uint32Array.from({length:b},(_,i)=>initialBonds[i*4+2]*(supportAware?3:1)));
   const shader=device.createShaderModule({code:boundedGripWgsl}),info=await shader.getCompilationInfo();if(info.messages.some(m=>m.type==='error'))throw new Error(JSON.stringify(info.messages));
   const layout=device.createBindGroupLayout({entries:Array.from({length:9},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===8?'uniform':binding<2?'read-only-storage':'storage'}}))}),pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]}),pipelines={};
-  for(const entryPoint of ['clear','changes','initialize','unite','compress','selectWeights','sumWeights','capture'])pipelines[entryPoint]=await device.createComputePipelineAsync({layout:pipelineLayout,compute:{module:shader,entryPoint}});
-  const buffers=[resident.stateBuffer(),resident.bondBuffer(),resident.diagnosticsBuffer(),parents,previous,weights,control,transitions,uniform],group=device.createBindGroup({layout,entries:buffers.map((buffer,binding)=>({binding,resource:{buffer}}))});
+  for(const entryPoint of ['clear','changes','initialize','unite','compress','selectWeights','sumWeights','capture'])pipelines[entryPoint]=await device.createComputePipelineAsync({layout:pipelineLayout,compute:{module:shader,entryPoint,constants:{supportAware}}});
+  const buffers=[resident.stateBuffer(),connectionBuffer,resident.diagnosticsBuffer(),parents,previous,weights,control,transitions,uniform],group=device.createBindGroup({layout,entries:buffers.map((buffer,binding)=>({binding,resource:{buffer}}))});
   let anchor=0,center=[0,0,0],radius=1;
   const submit=(mode,travel,threshold=0)=>{
    const bytes=new ArrayBuffer(64);new Uint32Array(bytes,0,4).set([n,b,anchor,mode]);new Float32Array(bytes,16,8).set([...center,radius,...travel,threshold]);new Uint32Array(bytes,48,4).set([resident.submittedState().steps,0,0,0]);device.queue.writeBuffer(uniform,0,bytes);

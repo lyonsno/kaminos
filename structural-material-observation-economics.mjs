@@ -17,7 +17,9 @@ export function reconstructStoneObservation(dynamic,resource){
   ||!Array.isArray(resource.pieces)||!Array.isArray(dynamic.pieces)||resource.pieces.length!==dynamic.pieces.length)
   throw new Error('Exact stone resource identity required');
  const ids=new Set();
- return {...dynamic,pieces:dynamic.pieces.map(p=>{
+ const support=resource.elasticSupport;
+ if(dynamic.materialRegime?.connectivity==='kaminos.bounded-connectivity.elastic-support.v1'&&(support?.route!==dynamic.materialRegime.connectivity||!Array.isArray(support.elements)||support.elements.length!==dynamic.state?.model?.elements||support.elements.some(e=>!Array.isArray(e)||e.length!==4||new Set(e).size!==4||e.some(i=>!Number.isInteger(i)||i<0||i>=dynamic.state.model.points))))throw new Error('Complete exact elastic support resource required');
+ return {...dynamic,...(support?{elasticSupport:support}:{}),pieces:dynamic.pieces.map(p=>{
   const matches=resource.pieces.filter(r=>r.id===p.id);
   if(matches.length!==1||ids.has(p.id)||!matches[0].geometry||!matches[0].binding)throw new Error('Complete unique stone resource required');
   ids.add(p.id);return {...p,geometry:matches[0].geometry,binding:matches[0].binding};

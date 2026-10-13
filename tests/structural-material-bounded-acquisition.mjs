@@ -10,6 +10,7 @@ const pairs=[[0,1],[0,2],[0,3],[1,2],[1,3],[2,3]],state={runId:'run',steps:1,mod
 const settleCode=source.slice(source.indexOf(' window.__stoneShards.settle='),source.indexOf(" if(new URLSearchParams",source.indexOf(' window.__stoneShards.settle=')));
 test('actual explicit settle publishes acquired topology',async()=>{
 const acquired={window:{__stoneShards:{}},observed:{...state,bonds:pairs.flatMap(p=>[...p,1,0])},components:[0,0,0,0],busy:false,settle:async()=>{},resident:{read:async()=>state},materialComponents,observeSurface:async()=>{},observeInteraction:async()=>{},shown:[],present(){acquired.shown.push([...acquired.components]);}};
+acquired.elasticSupport=false;vm.runInNewContext(source.slice(source.indexOf('function acquiredConnections('),source.indexOf('\nfunction deformPiece(')),acquired);
 vm.runInNewContext(settleCode+';task=window.__stoneShards.settle({surface:false});',acquired);await acquired.task;
 assert.deepEqual(acquired.shown[0],[0,1,2,3],'Acquired display must publish acquired, not cached, topology');
 });

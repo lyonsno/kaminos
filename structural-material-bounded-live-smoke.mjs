@@ -8,7 +8,8 @@ import {createShardObservationWork} from './structural-material-shard-observatio
 import {createStoneObservationRuntime} from './structural-material-observation-runtime.mjs';
 import {inspectBoundedWitness} from './structural-material-bounded-evidence.mjs';
 import {materialComponents} from './structural-material-solid-surface.mjs';
-const [out,executable,modulePath,sharedRoot,sharedRevision,url]=process.argv.slice(2);
+import {elasticSupportBonds} from './structural-material-bounded-fragments.mjs';
+const [out,executable,modulePath,sharedRoot,sharedRevision,url,strokeScaleArgument='1']=process.argv.slice(2);
 if(!out)throw new Error('Explicit output required');fs.mkdirSync(path.dirname(out),{recursive:true});
 const report={status:'running',phase:'setup',checks:[],inputs:[],errors:[],observations:[],claim:'Ordinary native mouse/input and resident-state composition, not isolated performance or material-quality closure'},save=()=>fs.writeFileSync(out,JSON.stringify(report,null,2)),hash=b=>createHash('sha256').update(b).digest('hex');save();let browser,page,view;
 const check=(name,pass,data)=>{report.checks.push({name,pass,data});save();assert.ok(pass,name);};
@@ -23,9 +24,10 @@ async function retainPointerInput(){
  save();
 }
 try{
+ const strokeScale=Number(strokeScaleArgument);if(!Number.isFinite(strokeScale)||strokeScale<=0)throw new Error('Positive stroke scale required');report.strokeScale=strokeScale;report.requestedConnectivity=new URL(url).searchParams.get('connectivity')??'literal-edge';
  const effective=fs.realpathSync(executable);if(effective.includes('/Google Chrome.app/'))throw new Error('Independent browser required');report.sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.shared={root:sharedRoot,requestedRevision:sharedRevision,effectiveRevision:execFileSync('git',['rev-parse','HEAD'],{cwd:sharedRoot,encoding:'utf8'}).trim()};check('exact shared kit',report.shared.effectiveRevision===sharedRevision);
  const {chromium}=await import(pathToFileURL(modulePath)),{experiment}=await import(pathToFileURL(path.join(sharedRoot,'experiment-work.mjs'))),{observationSession,observationResources}=await import(pathToFileURL(path.join(sharedRoot,'observation-session.mjs')));
- report.sources=Object.fromEntries(['structural-material-shard.html','structural-material-shard-view.js','structural-material-solid-resident.js','structural-material-bounded-grip.js','structural-material-bounded-gpu.js','structural-material-observation-economics.mjs'].map(name=>[name,hash(fs.readFileSync(name))]));
+ report.sources=Object.fromEntries(['structural-material-shard.html','structural-material-shard-view.js','structural-material-solid-resident.js','structural-material-bounded-grip.js','structural-material-bounded-gpu.js','structural-material-bounded-support.js','structural-material-bounded-fragments.mjs','structural-material-observation-economics.mjs'].map(name=>[name,hash(fs.readFileSync(name))]));
  browser=await chromium.launch({executablePath:effective,headless:true,args:['--enable-automation','--enable-unsafe-webgpu','--use-gl=angle','--use-angle=metal']});report.browser={executable:effective,version:browser.version()};
  async function open(viewport,name){
   view=name;page=await browser.newPage({viewport});page.on('pageerror',e=>{report.errors.push({message:e.message,stack:e.stack,view:name});save();});const loaded=[];
@@ -38,7 +40,7 @@ try{
   const fetched=await Promise.all(loaded);check(`${name}: source hashes`,Object.keys(report.sources).every(key=>fetched.some(r=>r.key===key&&r.status===200&&r.sha256===report.sources[key])),fetched);
   const call=async expression=>{report.inputs.push({view:name,expression,at:new Date().toISOString()});save();return page.evaluate(expression);},resourceDirectory=path.join(path.dirname(out),name,'resources'),runtime=createStoneObservationRuntime({call,resources:await observationResources({out:resourceDirectory}),resourceDirectory});
   const work=createShardObservationWork({out:path.join(path.dirname(out),name,'observations'),source:{revision:report.sourceRevision,sources:report.sources,shared:report.shared,browser:report.browser,url,viewport,initialPause:'declared mount pause'},experiment,observationSession,runtime,capture:()=>page.screenshot(),record:r=>{const key=name+':'+r.name,index=report.observations.findIndex(x=>x.key===key);if(index<0)report.observations.push({...r,key});else report.observations[index]={...r,key};save();}});
-  const observe=async id=>{const result=await work.observe(id),w=runtime.reconstruct(result.observed);check(`${name}:${id}: native bounded integrity`,inspectBoundedWitness(w).length===0,inspectBoundedWitness(w));check(`${name}:${id}: resident components`,JSON.stringify(w.residentInteraction.components)===JSON.stringify(materialComponents(w.state.model.points,w.state.bonds)));const componentCount=new Set(w.residentInteraction.components).size;check(`${name}:${id}: acquired topology displayed`,(await page.locator('#stats').textContent()).startsWith(`${componentCount} components |`));return{runId:w.runId,steps:w.state.steps,camera:w.camera,broken:w.state.bonds.reduce((n,v,i)=>n+Number(i%4===2&&v===0),0),events:w.events.map(e=>({id:e.id,steps:e.steps,released:e.released.length})),lastPick:w.lastPick};};
+  const observe=async id=>{const result=await work.observe(id),w=runtime.reconstruct(result.observed),supported=w.materialRegime?.connectivity==='kaminos.bounded-connectivity.elastic-support.v1';check(`${name}:${id}: effective connectivity`,supported===(report.requestedConnectivity==='elastic-support'),w.materialRegime);const bonds=supported?elasticSupportBonds(w.elasticSupport.elements,w.state.bonds,w.state.stresses):w.state.bonds;check(`${name}:${id}: native bounded integrity`,inspectBoundedWitness(w).length===0,inspectBoundedWitness(w));check(`${name}:${id}: resident components`,JSON.stringify(w.residentInteraction.components)===JSON.stringify(materialComponents(w.state.model.points,bonds)));const componentCount=new Set(w.residentInteraction.components).size;check(`${name}:${id}: acquired topology displayed`,(await page.locator('#stats').textContent()).startsWith(`${componentCount} components |`));return{runId:w.runId,steps:w.state.steps,camera:w.camera,broken:w.state.bonds.reduce((n,v,i)=>n+Number(i%4===2&&v===0),0),events:w.events.map(e=>({id:e.id,steps:e.steps,released:e.released.length})),lastPick:w.lastPick};};
   return {call,observe,runtime};
  }
  let work=await open({width:1280,height:820},'desktop');const initial=await work.observe('initial');report.phase='paused-grip-acquisition';save();
@@ -49,6 +51,7 @@ try{
  const acquiredRelease=await work.call('(async()=>{await window.__stoneShards.surfacePositions();return window.__stoneShards.observationStamp();})()');check('paused acquisition matches release',acquiredRelease.current===true&&acquiredRelease.grip===null,acquiredRelease);
  report.phase='mouse';save();
  async function stroke(label,dx,dy){
+  dx*=strokeScale;dy*=strokeScale;
   const contact=(await work.call('window.__stoneShards.contacts()'))[0];report.inputs.push({view:'desktop',mouse:{from:contact.screen,delta:[dx,dy],label,route:'ordinary mouse down/move/up'}});save();
   await work.call('window.__stoneShards.pause(false)');await page.mouse.move(contact.screen.x,contact.screen.y);await page.mouse.down();await page.mouse.move(contact.screen.x+dx,contact.screen.y+dy,{steps:8});await page.mouse.up();await work.call('window.__stoneShards.pause(true)');await work.call('window.__stoneShards.settle({surface:false})');return work.observe(label);
  }
