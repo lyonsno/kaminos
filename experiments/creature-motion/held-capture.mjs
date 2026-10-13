@@ -1,0 +1,42 @@
+// Creature-side observation manipulation. The injected capture owns existing
+// image/recording retention; this module neither renders nor writes another store.
+const expect=(condition,message)=>{if(!condition)throw Error(message);};
+const viewKeys=['position','target','up','fov','zoom','near','far'];
+const viewIdentity=view=>JSON.stringify(viewKeys.map(key=>view?.[key]));
+function sameBody(a,b){return a.rootUuid===b.rootUuid&&a.asset?.id===b.asset?.id
+ &&a.source?.source_sha256===b.source?.source_sha256&&a.clipName===b.clipName;}
+function sameHeld(a,b){return sameBody(a,b)&&a.frame===b.frame&&a.status===b.status&&viewIdentity(a.view)===viewIdentity(b.view);}
+
+export async function withHeldCreatureFrame({entry,frame,present,capture}) {
+ expect(typeof entry?.read==='function'&&typeof entry?.invoke==='function'&&typeof entry?.state==='function','Creature observation requires the actual experiment entry');
+ expect(typeof present==='function'&&typeof capture==='function','Creature observation requires presentation and existing retention callbacks');
+ const id=entry.state().id;
+ expect(id==='marionette/retained-creature','Creature experiment is not open');
+ const before=await entry.read();
+ expect(typeof before.rootUuid==='string'&&typeof before.asset?.id==='string','Creature observation requires actual root and registration identity');
+ expect(frame===undefined||(Number.isInteger(frame)&&frame>=0&&frame<before.source.frames),'Creature capture frame is outside the source');
+ let held,retained,failure,restore={status:'not-needed'};
+ try {
+  held=await entry.invoke('hold',frame===undefined?undefined:{frame});
+  expect(sameBody(before,held.state),'Creature body changed before hold');
+  expect(held.inputs?.frame===held.state.frame&&held.inputs?.source_sha256===before.source.source_sha256,'Creature held recipe differs from the observed source');
+  if(frame!==undefined)expect(held.state.frame===frame,'Creature held frame differs from the chosen source frame');
+  await present(held);
+  expect(entry.state().id===id&&sameHeld(held.state,await entry.read()),'Creature held state changed before capture');
+  retained=await capture(held);
+  expect(typeof retained?.report==='string'&&retained.report.length>0,'Creature retention did not return its report path');
+  expect(entry.state().id===id&&sameHeld(held.state,await entry.read()),'Creature held state changed during capture');
+ } catch(error){failure=error instanceof Error?error:Error(String(error),{cause:error});}
+ finally {
+  if(held?.priorStatus==='playing'){
+   try {
+    let current;
+    if(entry.state().id===id){try{current=await entry.read();}catch{}}
+    if(!sameBody(before,held.state)||!current||!sameHeld(held.state,current))restore={status:'skipped-changed'};
+    else {await entry.invoke('resume');restore={status:'resumed'};}
+   }catch(error){restore={status:'failed',error:String(error?.message||error)};}
+  }
+ }
+ if(failure){failure.held=held;failure.retained=retained;failure.restore=restore;throw failure;}
+ return {held,retained,restore};
+}

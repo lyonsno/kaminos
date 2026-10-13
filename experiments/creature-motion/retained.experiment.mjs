@@ -1,5 +1,6 @@
 import {createCreatureMotionPlayback} from './playback.mjs';
 import * as THREE from '../../lib/three.core.js';
+export {withHeldCreatureFrame} from './held-capture.mjs';
 
 // Owner contribution. Scene-session spelling follows the current shared join
 // proposal; native host conformance must be exercised after that join lands.
