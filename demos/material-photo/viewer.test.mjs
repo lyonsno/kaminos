@@ -105,6 +105,23 @@ test('original remains DoubleSide and uses the same orbit as the depth surface',
   viewer.orbit.set(.2,.1);viewer.mode='photo';viewer.render();const camera=viewer.camera.position.toArray();
   viewer.mode='original';viewer.render();assert.deepEqual(viewer.camera.position.toArray(),camera);
 });
+test('display cutouts clip every material without changing source pixels or model maps',async()=>{
+  const {viewer,THREE}=await viewerFixture();
+  const image=viewer.image,copy=image.data.slice(),depth={width:2,height:2,depth:new Float32Array(4).fill(1),normals:new Float32Array(12).fill(1)};
+  const mask={width:2,height:2,data:new Uint8Array([0,0,0,0,255,255,255,255,255,255,255,255,0,0,0,0]),sample:'orb'};
+  viewer.setImage(image,depth,null,mask);
+  const alpha=viewer.original.material.alphaMap;
+  assert.ok(alpha,'the cutout must reach the flat photograph too');
+  assert.equal(alpha.colorSpace,THREE.NoColorSpace);
+  assert.deepEqual([...alpha.image.data], [...mask.data.slice(8),...mask.data.slice(0,8)]);
+  for(const material of [viewer.original.material,viewer.photoMaterial,viewer.relitMaterial,viewer.physicalMaterial,viewer.mapMaterial]){
+    assert.equal(material.alphaMap,alpha);assert.equal(material.alphaTest,.5);
+  }
+  viewer.setMaterials({maps:{albedo:image,roughness:image,metallic:image,orm:image}});
+  assert.equal(viewer.physicalMaterial.alphaMap,alpha);assert.deepEqual(image.data,copy);
+  viewer.setImage(image,depth);
+  assert.equal(viewer.original.material.alphaMap,null);assert.equal(viewer.physicalMaterial.alphaTest,0);
+});
 test('photo framing uses the pane while keeping a rotation margin',async()=>{
   const {viewer}=await viewerFixture();
   assert.equal(viewer.camera.zoom,.9);
