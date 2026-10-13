@@ -4,6 +4,7 @@ import {chromium} from '/Users/noahlyons/.local/state/kaminos/beaming-browser-de
 import {visualWork,assertMountedScene} from '../visual-work.mjs';
 import {compositionRestoreUrl} from '../scene-authoring.mjs';
 const out=process.argv[2],origin=process.argv[3]||'http://127.0.0.1:18586';
+const smokeRefinement=Number(process.argv[4]??4);
 if(!out)throw Error('explicit output directory required');
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'start',repoRoot:process.cwd(),origin,errors:[],claim:'prototype conformance and visual exercise, not performance benchmark'};
@@ -12,7 +13,14 @@ try {
  const executablePath='/Users/noahlyons/.local/state/kaminos/browsers/chrome-for-testing-154.0.8037.92/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';report.browser=executablePath;
  browser=await chromium.launch({executablePath,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal']});
  const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1});page.setDefaultTimeout(0);page.on('pageerror',e=>report.errors.push(e.message));
- report.consoleErrors=[];page.on('console',message=>{if(message.type()==='error'){report.consoleErrors.push({text:message.text(),location:message.location()});report.errors.push(message.text());}});
+ report.consoleErrors=[];report.ancillaryErrors=[];page.on('console',message=>{if(message.type()==='error'){
+   const row={text:message.text(),location:message.location()};report.consoleErrors.push(row);
+   // Observed non-rendering failures: absent favicon and an existing retired
+   // cockpit-layout control in the shared store. Preserve, don't call them GPU failures.
+   const path=row.location.url?new URL(row.location.url).pathname:'';
+   if(row.text.startsWith('Failed to load resource:')&&['/favicon.ico','/api/volume-cockpit-layouts'].includes(path))report.ancillaryErrors.push(row);
+   else report.errors.push(row.text);
+ }});
  // Exercise Three's handled-error channel: shader validation can log without
  // throwing a pageerror. Such a draw failure must make the witness fail.
  await page.evaluate(()=>console.error('hybrid witness deliberate renderer-error channel probe'));
@@ -80,7 +88,7 @@ try {
   const error=await device.popErrorScope();if(error)throw Error(error.message);device.destroy();
   return {adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,device:adapter.info.device,description:adapter.info.description},actual,expected,triangle,transformedForest,validationErrors:0};
  });await write();
- const route=url=>{const u=new URL(url),h=new URLSearchParams(u.hash.slice(1));for(const[k,v]of Object.entries({volume_light_field_hybrid:'1',rendering_angular_pattern:'guided',rendering_directions:'8',rendering_match_camera:'1'}))h.set(k,v);u.hash=h.toString();return u.href;};
+ const route=url=>{const u=new URL(url),h=new URLSearchParams(u.hash.slice(1));for(const[k,v]of Object.entries({volume_light_field_hybrid:'1',hybrid_smoke_refinement:String(smokeRefinement),rendering_angular_pattern:'guided',rendering_directions:'8',rendering_match_camera:'1'}))h.set(k,v);u.hash=h.toString();return u.href;};
  report.phase='scene-consumer';await write();
  const result=await visualWork({page,origin,repoRoot:process.cwd(),sceneFile:'input.kaminos.json',out,exercise:async({document,retain})=>{
   const url=route(compositionRestoreUrl(document.composition,'input.kaminos.json',origin));await page.goto('about:blank');await page.goto(url);
@@ -93,6 +101,7 @@ try {
   await page.evaluate(()=>window.setGizmoMode(null));
   const observe=()=>page.evaluate(()=>({url:location.href,lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),objects:window.kaminosSceneObjectDebugState()}));
   const before=await observe();assert.equal(before.lighting.surfaceReceivers,0);assert.equal(before.lighting.pointCount,4);
+  assert.equal(before.lighting.frame.smokeReconstruction.refinement,smokeRefinement,'requested smoke refinement must actually apply');
   const shot=await retain({name:'hybrid',observe});report.phase='source-movement';await write();
   const flame=document.objects.find(o=>o.id==='flame-emitter'),position=[...flame.transform.position];position[0]+=.04;
   await page.evaluate(({id,position})=>window.kaminosSetSceneObjectTransform(id,{position}),{id:flame.id,position});
@@ -123,6 +132,6 @@ try {
   const reopened=await observe();assert.equal(reopened.lighting.surfaceReceivers,0);
   return {url:handoff,filename:shot.filename,before,moved,solidMoves,reopened};
  }});
- assert.deepEqual(report.errors,[]);report.result=result.result;report.status='passed';report.phase='complete';
+ report.result=result.result;assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
 finally{await browser?.close();report.finishedAt=new Date().toISOString();await write();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,url:report.result?.url}));}
