@@ -26,11 +26,15 @@ class Library:
 
 def sample(error, state, code=0):
     Library.proc_pid_rusage.error = error
+    info=module.BSDShortInfo();info.pid=101;info.status=5 if state=='Z' else 2
+    evidence={'route':'libproc-pid-status','pid':101,'observedPid':101 if code==0 else None,
+              'bytesReturned':64 if code==0 else 0,'expectedBytes':64,
+              'statusCode':info.status if code==0 else None,'errno':errno.ESRCH if code==1 else errno.EPERM if code==2 else 0}
     with patch.object(module.sys, 'platform', 'darwin'), \
          patch.object(module.ctypes, 'CDLL', return_value=Library()), \
-         patch.object(module.subprocess, 'check_output', return_value='100 1 /runner\n101 100 /git\n'), \
-         patch.object(module.subprocess, 'run', return_value=subprocess.CompletedProcess(
-             ['/bin/ps', '-p', '101', '-o', 'stat='], code, stdout=state, stderr='')):
+         patch.object(module, 'owned_process_rows', return_value={100:{'pid':100,'parentPid':1,'executable':'/runner'},
+             101:{'pid':101,'parentPid':100,'executable':'/git'}}), \
+         patch.object(module, 'process_status', return_value=(info,evidence)):
         return module.sample_owned_processes(100, 'exit-replay')
 
 for error, state, code in [(error, state, code) for error in [errno.ESRCH, errno.EPERM]
@@ -43,7 +47,7 @@ for error, state, code in [(error, state, code) for error in [errno.ESRCH, errno
     missing = result['unavailableProcesses'][0]
     assert missing.get('exitedBeforeMeasurement') is True, \
         'confirmed exited descendant must not masquerade as live missing coverage'
-    assert missing['exitEvidence']['route'] == 'ps-pid-status'
+    assert missing['exitEvidence']['route'] == 'libproc-pid-status'
     assert result['sampledAggregatePhysicalFootprintBytes'] == 4096
     assert [p['pid'] for p in result['processes']] == [100], 'do not fabricate zero-byte child rows'
 
