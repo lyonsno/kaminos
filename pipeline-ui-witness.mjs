@@ -3,6 +3,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
+import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -13,7 +14,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   args.set(key, value);
 }
 
-const chrome = args.get('chrome') || process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const chrome = args.get('chrome') || process.env.KAMINOS_CHROME;
 const appUrl = args.get('url') || `http://localhost:60105/?pipeline_ui_witness=${Date.now()}`;
 const port = Number(args.get('port') || process.env.KAMINOS_UI_WITNESS_CDP_PORT || 63112);
 const assetNeedle = args.get('asset') || 'evil_orb_outer_shell_source_image';
@@ -22,7 +23,8 @@ const scenario = args.get('scenario') || 'image-import';
 const generatorId = args.get('generator-id') || 'sharp';
 const pipelineId = args.get('pipeline-id') || 'sharp-image-to-splat-live-v0';
 const expectedArtifactRole = args.get('artifact-role') || (pipelineId === 'sharp-image-to-splat-live-v0' ? 'splat-candidate' : 'splat');
-const expectsLoadableArtifact = expectedArtifactRole.includes('splat');
+const expectsMeshArtifact = expectedArtifactRole.includes('mesh');
+const expectsLoadableArtifact = expectedArtifactRole.includes('splat') || expectsMeshArtifact;
 const expectsFixture = args.get('expect-fixture') === '1' || pipelineId.includes('fixture');
 const graphExecuteTimeoutMs = Number(args.get('graph-execute-timeout-ms') || (pipelineId === 'sharp-image-to-splat-live-v0' ? 240000 : 90000));
 const mockSharpProgressEnv = 'KAMINOS_MOCK_SHARP_PROGRESS';
@@ -31,6 +33,21 @@ const afterPath = args.get('after') || '/tmp/kaminos-pipeline-ui-witness-after.p
 const historyPath = args.get('history') || '/tmp/kaminos-pipeline-ui-witness-history.png';
 const userDataDir = await mkdtemp(join(tmpdir(), 'kaminos-pipeline-ui-witness-'));
 let stderr = '';
+
+function meshWitnessSource(outputRoot,artifactPath) {
+  if (!outputRoot || !artifactPath?.startsWith(outputRoot+'/')) return null;
+  const run=outputRoot.split('/').filter(Boolean).at(-1),relative=artifactPath.slice(outputRoot.length).replace(/^\/+/, '');
+  return '/api/read?root=pipeline-runs&path='+encodeURIComponent(run+'/'+relative);
+}
+
+async function publishWitness(record,failed=false) {
+  const result={...record,browser,requestedBrowser:chrome||null,pipelineId,expectedArtifactRole};
+  if(args.has('report')) {
+    try {await writeFile(args.get('report'),JSON.stringify(result,null,2)+'\n');}
+    catch(error) {result.ok=false;result.reportWriteError=error.message;process.exitCode=1;}
+  }
+  console[failed?'error':'log'](JSON.stringify(result,null,2));
+}
 
 async function wait(ms) {
   await new Promise(resolve => setTimeout(resolve, ms));
@@ -264,20 +281,15 @@ async function waitFor(cdp, expression, label, timeoutMs = 90000) {
   throw new Error(`${label} timed out: ${JSON.stringify(last)}`);
 }
 
-const chromeProcess = spawn(chrome, [
-  `--remote-debugging-port=${port}`,
-  `--user-data-dir=${userDataDir}`,
-  '--headless=new',
-  '--disable-gpu-sandbox',
-  '--window-size=2048,1180',
-  'about:blank',
-], { stdio: ['ignore', 'ignore', 'pipe'] });
-chromeProcess.stderr.on('data', chunk => {
-  stderr += chunk.toString();
-});
-
+let chromeProcess = null;
+let browser = null;
 let cdp = null;
 try {
+  browser = fluidBrowserLaunch({executable:chrome,debugPort:port,userDataDir,width:2048,height:1180});
+  chromeProcess = spawn(browser.executable, [...browser.args.slice(0,-1),'--headless=new','--disable-gpu-sandbox','about:blank'],
+    {stdio:['ignore','ignore','pipe']});
+  chromeProcess.stderr.on('data', chunk => { stderr += chunk.toString(); });
+  chromeProcess.on('error', error => { stderr += error.message; });
   await waitForCdp();
   const targets = await cdpFetch('/json/list');
   const target = targets.find(item => item.type === 'page') || targets[0];
@@ -536,7 +548,17 @@ try {
         ? (runUsesFixture ? 'fixture / normal-map artifact' : 'real normal-map artifact')
         : primaryArtifactRole === 'pbr-material-bundle'
           ? (runUsesFixture ? 'fixture / PBR material bundle' : 'real PBR material bundle')
+          : ${JSON.stringify(expectsMeshArtifact)} ? (${JSON.stringify(expectsFixture)} ? 'fixture / textured mesh output' : 'generated / textured mesh output')
           : adapterFixture ? 'adapter fixture / point-cloud preview' : ${JSON.stringify(expectsFixture)} ? 'fixture / point-cloud preview' : 'real SHARP / point-cloud preview';
+      // This queued mesh route does not claim composition with the page's GPU
+      // device. Keep scheduler evidence visible without importing SHARP's
+      // separate kit-breathability acceptance into a mesh-import smoke.
+      const schedulerContractOk = ${JSON.stringify(expectsMeshArtifact)}
+        ? schedulerEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0'
+        : schedulerEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0' && Boolean(schedulerState)
+          && breathabilityState === 'kit-backed-breathability' && breathability?.spans?.length > 0
+          && breathability?.checkpoints?.length > 0 && Boolean(routeSchedulerState)
+          && routeBreathabilityState === 'kit-backed-breathability';
       const artifactTruthOk = primaryArtifactRole === expectedRole
         && (primaryLoadable
           ? (adapterFixture
@@ -544,7 +566,7 @@ try {
               : (${JSON.stringify(expectsFixture)} ? primaryArtifact?.fixtureSource : primaryArtifact?.status === 'real' && !primaryArtifact?.fixtureSource))
           : Boolean(primaryArtifact?.path && primaryArtifact?.status));
       return {
-        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)} && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === outputRecord?.id && primaryArtifact?.path && outputNode && outputNode.innerText.includes(expectedTruth) && outputActionButton && outputContainer && outputStatus === 'complete' && outputRecord?.status === 'complete' && outputRecord?.artifactRole === expectedRole && outputRecord?.runTimeline?.length >= 3 && outputRecord?.routeSnapshot?.schema === 'kaminos.pipeline-route-snapshot.v0' && outputRecord?.graphSnapshot?.schema === 'kaminos.pipeline-graph-run-snapshot.v0' && schedulerEvidence?.schema === 'kaminos.pipeline-scheduler-composition.v0' && Boolean(schedulerState) && breathabilityState === 'kit-backed-breathability' && breathability?.spans?.length > 0 && breathability?.checkpoints?.length > 0 && routeLiveStatus === 'complete' && routeLivePhase === 'complete' && Boolean(routeSchedulerState) && routeBreathabilityState === 'kit-backed-breathability' && artifactTruthOk),
+        ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)} && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === outputRecord?.id && primaryArtifact?.path && outputNode && outputNode.innerText.includes(expectedTruth) && outputActionButton && outputContainer && outputStatus === 'complete' && outputRecord?.status === 'complete' && outputRecord?.artifactRole === expectedRole && outputRecord?.runTimeline?.length >= 3 && outputRecord?.routeSnapshot?.schema === 'kaminos.pipeline-route-snapshot.v0' && outputRecord?.graphSnapshot?.schema === 'kaminos.pipeline-graph-run-snapshot.v0' && schedulerContractOk && routeLiveStatus === 'complete' && routeLivePhase === 'complete' && artifactTruthOk),
         selectedGraphNodeId: state?.selectedGraphNodeId || null,
         runId: run?.runId || null,
         pipelineId: run?.pipelineId || null,
@@ -612,6 +634,25 @@ try {
       })()`);
       assertWitness(!loadOutputButton.disabled, 'Load Output button was disabled', loadOutputButton);
       await click(cdp, loadOutputButton.point);
+      if (expectsMeshArtifact) {
+        after = await waitFor(cdp, `(() => {
+          const state=window.kaminosPipelineDockDebugState?.(), path=${JSON.stringify(executed.primaryArtifact.path)},
+            receipt=state?.loadedPipelineArtifactPaths?.[path],
+            loaded=(window.kaminosSceneObjectDebugState?.()||[]).find(row=>row.id===receipt?.sceneObjectId),
+            expectedSource=(${meshWitnessSource.toString()})(state?.lastRun?.bundle?.document?.outputRoot,path),
+            row=loaded ? document.querySelector('[data-scene-object-id="'+CSS.escape(loaded.id)+'"]') : null,
+            bounds=loaded?.worldBounds,viewport=document.querySelector('#viewport')?.getBoundingClientRect();
+          return {ok:receipt?.previewRoute==='glb-pbr' && loaded?.type==='glb' && loaded?.source===expectedSource
+              && Boolean(row?.getBoundingClientRect().height) && bounds?.min?.every(Number.isFinite)
+              && bounds?.max?.every(Number.isFinite) && bounds?.max?.some((value,i)=>value>bounds.min[i]),
+            loaded,receipt,expectedSource,loadedArtifactPath:path,sceneRowText:row?.innerText||'',
+            viewportRect:viewport?{x:viewport.x,y:viewport.y,width:viewport.width,height:viewport.height}:null};
+        })()`, 'Graph Execute mesh Load Output');
+        await wait(1500);
+        await capture(cdp, afterPath);
+        screenshotProbe = await screenshotVisibleProbe(afterPath, after.viewportRect);
+        assertWitness(screenshotProbe.visiblePixels>0, 'Loaded mesh viewport is blank', {after,screenshotProbe});
+      } else {
       const expectsPipelineFixture = expectsFixture || Boolean(executed.adapterFixture);
       after = await waitFor(cdp, `(() => {
         const scene = window.kaminosSceneObjectDebugState?.() || [];
@@ -650,6 +691,7 @@ try {
         screenshotProbe,
         minimumSaturatedPixels,
       });
+      }
     } else {
       const openArtifactButton = await evalJson(cdp, `(() => {
         const state = window.kaminosPipelineDockDebugState?.();
@@ -853,7 +895,7 @@ try {
       };
     }
 
-    console.log(JSON.stringify({
+    await publishWitness({
       ok: true,
       schema: 'kaminos.pipeline-ui-witness.v0',
       scenario,
@@ -872,7 +914,7 @@ try {
       repeated,
       historySelection,
       screenshotProbe,
-    }, null, 2));
+    });
   } else {
   const dragPoints = await evalJson(cdp, `(() => {
     const cards = [...document.querySelectorAll('.pipeline-asset-card')];
@@ -933,7 +975,7 @@ try {
   assertWitness(after.objectRows.some(row => row.includes('reloadable')), 'Reloadable image scene row was not visible after import', after);
   assertWitness(after.debug?.phase === 'visible-scene-row', 'Import did not record visible-scene-row phase', after);
 
-  console.log(JSON.stringify({
+  await publishWitness({
     ok: true,
     schema: 'kaminos.pipeline-ui-witness.v0',
     url: appUrl,
@@ -946,10 +988,10 @@ try {
     },
     before,
     after,
-  }, null, 2));
+  });
   }
 } catch (error) {
-  console.error(JSON.stringify({
+  await publishWitness({
     ok: false,
     schema: 'kaminos.pipeline-ui-witness.v0',
     url: appUrl,
@@ -957,14 +999,15 @@ try {
     afterPath,
     historyPath: scenario === 'graph-execute-sharp-repeat' ? historyPath : null,
     error: error.message,
+    browser,
     detail: error.detail || null,
-  }, null, 2));
+  },true);
   process.exitCode = 1;
 } finally {
   cdp?.close();
-  if (chromeProcess.exitCode === null && chromeProcess.signalCode === null) chromeProcess.kill('SIGTERM');
+  if (chromeProcess && chromeProcess.exitCode === null && chromeProcess.signalCode === null) chromeProcess.kill('SIGTERM');
   await new Promise(resolve => {
-    if (chromeProcess.exitCode !== null || chromeProcess.signalCode !== null) {
+    if (!chromeProcess || chromeProcess.exitCode !== null || chromeProcess.signalCode !== null) {
       resolve();
       return;
     }
