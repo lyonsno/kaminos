@@ -2146,6 +2146,17 @@ export function joinedGhostCoarsePoint(fineCell, geometry) {
 export function joinedGhostSiteIndex(site, dims) {
   return site[0] + (dims[0] + 1) * (site[1] + (dims[1] + 1) * site[2]);
 }
+// Mean heat (slot 1 .y) in the boundary band (cells within `band` of any face)
+// and in the interior, from a 16-float-per-cell fine field readback.
+export function fluidBandHeatStats(values, dims, band = 2) {
+  let bandSum = 0, bandCells = 0, interiorSum = 0, interiorCells = 0;
+  for (let z = 0; z < dims[2]; z++) for (let y = 0; y < dims[1]; y++) for (let x = 0; x < dims[0]; x++) {
+    const heat = values[16 * (x + dims[0] * (y + dims[1] * z)) + 5];
+    const inBand = x < band || y < band || z < band || x >= dims[0] - band || y >= dims[1] - band || z >= dims[2] - band;
+    if (inBand) { bandSum += heat; bandCells++; } else { interiorSum += heat; interiorCells++; }
+  }
+  return { bandCells, interiorCells, bandHeatMean: bandCells ? bandSum / bandCells : 0, interiorHeatMean: interiorCells ? interiorSum / interiorCells : 0 };
+}
 export function joinedGhostTextureSize(dims) {
   return dims.map(n => n + 1);
 }
@@ -27372,6 +27383,22 @@ export function createKaminosVolumePrototype({
       joinedGhostTextures.forEach((texture, index) => device.queue.writeTexture({ texture }, index === 0 ? a : b, { bytesPerRow: size[0] * 16, rowsPerImage: size[1] }, size));
       joinedGhostSynthetic = { heat, soot, fuel, velocityLocal: [...velocityLocal] };
       return { status: 'filled', synthetic: { ...joinedGhostSynthetic } };
+    },
+    // Witness readout: the fine field's mean heat in the boundary band and the
+    // interior (the residual probe's profile is stale while joined).
+    async debugFluidBandStats() {
+      if (!device || !fluidBuffers) return { status: 'unsupported', reason: 'gpu-not-initialized' };
+      const bytes = fluidBuffers[currentFluid].size;
+      const staging = device.createBuffer({ label: 'kaminos fluid band stats readback', size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      try {
+        const encoder = device.createCommandEncoder({ label: 'kaminos fluid band stats' });
+        encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, staging, 0, bytes);
+        device.queue.submit([encoder.finish()]);
+        await staging.mapAsync(GPUMapMode.READ);
+        const values = new Float32Array(staging.getMappedRange().slice(0));
+        staging.unmap();
+        return { status: 'sampled', dims: [gridSize, gridHeight, gridSize], simStepCount: state.simStepCount, joined: Boolean(state.joinedBoundary?.admitted), ghosts: { bound: Boolean(state.joinedGhosts?.bound), synthetic: joinedGhostSynthetic }, ...fluidBandHeatStats(values, [gridSize, gridHeight, gridSize], 2) };
+      } finally { staging.destroy(); }
     },
     // The step the bound ghost snapshots were written for.
     bindJoinedGhostGeneration(generation) {

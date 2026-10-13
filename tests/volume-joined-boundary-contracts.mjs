@@ -212,3 +212,26 @@ test('synthetic ghosts: a constant exterior for witnesses, receipted as syntheti
   assert.equal(parseSyntheticGhosts('x:1'), null);
 });
 
+
+// Joined witness readout: the residual probe runs inside the fine projection,
+// which joined mode skips, so its height profile goes stale. A direct readback
+// of the fine field reports mean heat (slot 1 .y) in the boundary band (the
+// outer cells of every face, two deep in the witness) and in the interior.
+test('fluid band stats: a direct readback for joined witnesses; a read-only capture arm', async () => {
+  const stats = core.fluidBandHeatStats(new Float32Array(16 * 4 * 4 * 4).map((_, i) => ((i % 16) === 5 ? 1 : 0)), [4, 4, 4], 1);
+  assert.deepEqual({ ...stats }, { bandCells: 56, interiorCells: 8, bandHeatMean: 1, interiorHeatMean: 1 });
+  assert.match(source, /    async debugFluidBandStats\(\) \{/);
+  const { NON_CONFIGURING_CAPTURE_CONTROLS } = await import('../volume-arm-capture-checks.mjs');
+  assert.ok(NON_CONFIGURING_CAPTURE_CONTROLS.has('@fluidBandStats'));
+  const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
+  assert.match(capture, /if \(cid === '@fluidBandStats'\) \{/);
+});
+
+// A joined arm has no fine projection and so no residual of its own; the
+// capture records that explicitly instead of failing (or passing) the
+// freshness check.
+test('capture: a joined arm records an unmeasured residual instead of the freshness check', () => {
+  const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
+  assert.match(capture, /joinedAdmitted: Boolean\(w\.__kaminosVolumePrototype\?\.joinedProducerState\?\.\(\)\?\.joined\?\.admitted\)/);
+  assert.match(capture, /if \(end\.joinedAdmitted\) \{ entry\.residualSkipped = 'joined-boundary-no-fine-projection'; \} else if \(!\(end\.residual\?\.step > freshnessFloor\)\)/);
+});
