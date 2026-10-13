@@ -55,9 +55,9 @@ export const pressureLaunchExperiment={id:'paper/pressure-launch',title:'IPBF pr
   const read=()=>({...water.read(),setup,runWindow:run.state()});
   const frame=()=>{const operation=win.kaminosFingerFluidBenchSetCameraForWitness;if(typeof operation!=='function')throw Error('Shared camera operation unavailable');return operation({yaw:-.55,pitch:.3,distance:5.5,target:[-1.4,.8,.45]});};
   return {read,operations:{
-   run({seconds=2,maxWallSeconds=30}={}){if(!Number.isFinite(seconds)||seconds<=0)throw Error('Positive simulated interval required');return run.run({steps:Math.ceil(seconds/setup.dt),maxWallSeconds});},
+   run({seconds=2,maxWallSeconds=30}={}){if(!Number.isFinite(seconds)||seconds<=0)throw Error('Positive simulated interval required');win.kaminosFingerFluidBenchResumeAfterWitness();return run.run({steps:Math.ceil(seconds/setup.dt),maxWallSeconds});},
    pause(){return run.stop('manual-pause');},
-   advance(steps=1){run.stop('manual-step');const clock=water.read().clock;if(!Number.isSafeInteger(steps)||steps<=0)throw Error('Positive frame count required');const result=water.advanceTo(clock.step+steps);record({kind:'paper.pressure-preview.advance',phase:'applied',target:'water',requested:steps,effective:result,clock:water.read().clock});return result;},
+   advance(steps=1){run.stop('manual-step');const clock=water.read().clock;if(!Number.isSafeInteger(steps)||steps<=0)throw Error('Positive frame count required');const result=water.advanceTo(clock.step+steps);win.kaminosFingerFluidBenchResumeAfterWitness();record({kind:'paper.pressure-preview.advance',phase:'applied',target:'water',requested:steps,effective:result,clock:water.read().clock});return result;},
    async restart(){run.stop('reset');const result=await water.restart();record({kind:'paper.pressure-preview.restart',phase:'applied',target:'water',effective:result});return result;},frame,
   },async mount({root,document,invoke}){
    const node=document.createElement('section');node.className='paper-pressure-preview';
