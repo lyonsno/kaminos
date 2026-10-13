@@ -87,6 +87,39 @@ export async function runWithKilnHandoff({service,input,handoff,owner}){
   return service.run(input);
 }
 
+// Generation provenance travels inside the PNG as an iTXt chunk (keyword below), so the
+// image keeps its prompt, seed, model and route wherever it is stored or copied.
+export const PNG_PROVENANCE_KEYWORD='kaminos:image-generation';
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xedb88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+const crc32=bytes=>{let c=0xffffffff;for(const b of bytes)c=CRC_TABLE[(c^b)&255]^(c>>>8);return (c^0xffffffff)>>>0;};
+export async function withPngProvenance(blob,provenance){
+  const png=new Uint8Array(await blob.arrayBuffer()),enc=new TextEncoder();
+  const data=new Uint8Array([...enc.encode(PNG_PROVENANCE_KEYWORD),0,0,0,0,0,...enc.encode(JSON.stringify(provenance))]);
+  const chunk=new Uint8Array(12+data.length),view=new DataView(chunk.buffer);
+  view.setUint32(0,data.length);chunk.set(enc.encode('iTXt'),4);chunk.set(data,8);view.setUint32(8+data.length,crc32(chunk.subarray(4,8+data.length)));
+  const iend=png.length-12;
+  if(new TextDecoder().decode(png.subarray(iend+4,iend+8))!=='IEND')throw Error('PNG does not end with IEND');
+  return new Blob([png.subarray(0,iend),chunk,png.subarray(iend)],{type:'image/png'});
+}
+export function readPngProvenance(bytes){
+  const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),dec=new TextDecoder();
+  for(let at=8;at+12<=bytes.length;){
+    const length=view.getUint32(at),type=dec.decode(bytes.subarray(at+4,at+8));
+    if(at+12+length>bytes.length)return null;
+    if(type==='iTXt'){
+      const body=bytes.subarray(at+8,at+8+length),key=dec.decode(body.subarray(0,body.indexOf(0)));
+      if(key===PNG_PROVENANCE_KEYWORD){
+        if(crc32(bytes.subarray(at+4,at+8+length))!==view.getUint32(at+8+length))return null;
+        let i=key.length+3;i=body.indexOf(0,i)+1;i=body.indexOf(0,i)+1;
+        try{return JSON.parse(dec.decode(body.subarray(i)));}catch{return null;}
+      }
+    }
+    if(type==='IEND')return null;
+    at+=12+length;
+  }
+  return null;
+}
+
 async function encodeCanvasPng(rgba,width,height){
   const canvas=new OffscreenCanvas(width,height);
   canvas.getContext('2d').putImageData(new ImageData(rgba,width,height),0,0);
@@ -165,9 +198,9 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         const image=completion.output;
         // Completed pixels win a stop race; they are saved like any other result.
         phase='persistence';set({status:'saving',canStop:false,stage:'Saving image',percent:null,progress:'Saving the image to Source images…'});
-        const blob=await encodePng(image.rgba,image.width,image.height);
-        const file=new File([blob],kleinImageName(text,seed),{type:'image/png'});
         const provenance={schema:'kaminos.image-generation.v1',route:KLEIN_AUTHORING_ROUTE_ID,model:'FLUX.2 [klein] 4B',prompt:text,seed,width:image.width,height:image.height,weights:base,timings:image.timings};
+        const blob=await withPngProvenance(await encodePng(image.rgba,image.width,image.height),provenance);
+        const file=new File([blob],kleinImageName(text,seed),{type:'image/png'});
         const entry=await deliver(file,provenance);
         state.results.push({...entry,provenance});
         set({status:'complete',error:null,stage:'Complete',percent:100,progress:'Image saved and selected. Generate a mesh from it below.'});
