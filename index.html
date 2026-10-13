@@ -753,6 +753,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 #authoring-viewport-settings small { color:#8f9b9f; margin-left:auto; }
 </style>
 <link rel="stylesheet" href="./authoring-workspace.css">
+<link rel="stylesheet" href="./experiment-workspace.css">
 </head>
 <body>
 
@@ -4117,6 +4118,10 @@ import {installCameraViewsPanel} from './authoring-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,createSceneCameras} from './scene-camera.mjs';
 import {installCameraAuthoring} from './authoring-cameras.mjs';
 import {installViewPie} from './view-navigation-pie.mjs';
+import {installExperimentWorkspace} from './experiment-workspace.mjs';
+import {installOwnerExperimentEntry} from './owner-experiment-entry.mjs';
+import {createInvestigationEntry} from './investigation-entry.mjs';
+import {createWorkbenchFrameService,createWorkbenchSceneHost,disposeOwnedSceneTree} from './workbench-scene-host.mjs';
 import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, checkedSceneLightRecord, sceneLightRuntimeRecipe } from './scene-rim-light.mjs';
 
 import {checkedPose} from './scene-edit-session.mjs';
@@ -4132,6 +4137,11 @@ import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,
 let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
 let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null,viewPie=null;
+let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null;
+let resolveWorkbenchViewerReady,rejectWorkbenchViewerReady;
+const workbenchViewerReady=new Promise((resolve,reject)=>{resolveWorkbenchViewerReady=resolve;rejectWorkbenchViewerReady=reject;});
+workbenchViewerReady.catch(()=>{});
+const workbenchSceneFrames=createWorkbenchFrameService({onError:error=>{window.kaminosWorkbenchSceneFrameError=error.message;setInfo('Experiment frame failed: '+error.message);}});
 let restoringSceneLight=false;
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -6994,6 +7004,18 @@ function updateTransformInspector() {
   if(selectionProxy&&sceneSelection.ids.length&&!transformControls?.dragging)selectionTransformProxy();
   scenePlacementTools?.draw();
 }
+
+// Explicit owner restoration refresh; no edit, selection change or frame polling.
+function refreshWorkbenchAssetPresentation(handle) {
+  const row=sceneObjects.find(entry=>entry.id===handle?.id);
+  if(!row||row.object!==handle?.root)throw Error('Scene asset registration is no longer current');
+  row.object.updateMatrixWorld(true);
+  const selected=selectedPlacementEntry(),selectionMatched=selected?.id===row.id&&selected.object===row.object;
+  if(selectionMatched)updateTransformInspector();
+  window._kaminosDirty?.();
+  return {id:row.id,transform:sceneObjectTransformState(row.object),selectionMatched};
+}
+window.kaminosWorkbenchRefreshPresentation=refreshWorkbenchAssetPresentation;
 
 function applyTransformInspectorField(input) {
   const entry = selectedSceneObjectEntry();
@@ -10848,7 +10870,7 @@ function pruneSceneSelection() {
   activeSceneObjectId=activeSceneGroupId?null:sceneSelection.activeId;
 }
 
-function removeSceneObjectInternal(id, { recordHistory = true, preserveForMembershipHistory = false } = {}) {
+function removeSceneObjectInternal(id, { recordHistory = true, preserveForMembershipHistory = false, disposeTree = disposeObjectTree } = {}) {
   if (id === FLAME_EMITTER_ID) return window.kaminosBurnerAuthoring.remove(id);
   if (recordHistory && scenePlacementTools?.edits.state().replaying) {
     setInfo('Wait for the current scene history action to finish');
@@ -10892,7 +10914,7 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
     && (preserveForMembershipHistory || scenePlacementTools.edits.state().replaying)
   ));
   if (retainForMembershipHistory) sceneMembershipRetainedObjects.set(id, entry);
-  else {if(entry.type===PROCEDURAL_MESH_TYPE){proceduralMeshes.get(id)?.dispose();proceduralMeshes.delete(id);}else if(entry.type==='light')disposeSceneSpotLight(id);else disposeObjectTree(entry.object);}
+  else {if(entry.type===PROCEDURAL_MESH_TYPE){proceduralMeshes.get(id)?.dispose();proceduralMeshes.delete(id);}else if(entry.type==='light')disposeSceneSpotLight(id);else disposeTree(entry.object);}
   const fallback = wasActive ? (sceneObjects[index] || sceneObjects[index - 1] || null) : sceneObjects.find(obj => obj.id === activeSceneObjectId);
   if(sceneSelection.ids.length){setSceneSelection(sceneSelection.ids,sceneSelection.activeId);}
   else if (activeGroupSurvives) {
@@ -12050,6 +12072,7 @@ async function initScene() {
       }
       return true;
     },
+    afterSwitch: mode => sharedWorkbench?.setActive(mode==='workbench'),
     openWorkbenchTab: tab => setActiveTab(tab),
   });
   window.kaminosWorkspace = authoringWorkspace;
@@ -12078,6 +12101,25 @@ async function initScene() {
   controls.addEventListener('change',()=>cameraViewsPanel.refresh());
   window.kaminosCameraViews={...cameraViews,open:()=>{authoringWorkspace.setMode('authoring');authoringWorkspace.setContext('camera');cameraViewsPanel.refresh();}};
   installSelectionInput();
+  workbenchSceneHost=createWorkbenchSceneHost({scene,camera,controls,
+    loadAsset:(file,options)=>window.kaminosWorkbenchLoadAsset(file,options),
+    registerObject:registerSceneObject,findObject:root=>sceneObjects.find(row=>row.object===root),
+    removeObject:handle=>{
+      const row=sceneObjects.find(row=>row.id===handle.id);
+      if(!row||row.object!==handle.root)return false;
+      return removeSceneObjectInternal(handle.id,{recordHistory:false,preserveForMembershipHistory:true,
+        disposeTree:root=>disposeOwnedSceneTree(root,[scene,...[...sceneMembershipRetainedObjects.values()].map(row=>row.object)],[scene.environment,scene.background])});
+    },
+    redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame,
+  });
+  window.kaminosWorkbenchSceneState=()=>{
+    const info=renderer.backend.adapter?.info;
+    return {...workbenchSceneFrames.state(),
+      rendererBackend:renderer.backend.isWebGPUBackend===true?'webgpu':renderer.backend.isWebGLBackend===true?'webgl':'unknown',
+      adapter:info?Object.fromEntries(['vendor','architecture','device','description'].map(key=>[key,info[key]??null])):null,
+    };
+  };
+  installSharedWorkbench();
 
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1'
     || isAuthoredKilnCollisionRoute();
@@ -12155,6 +12197,7 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
+    workbenchSceneFrames.tick(performance.now());
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
     const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute() || liquidFireCompositionActive;
     updateHybridSplatOverlayFrame();
@@ -12725,6 +12768,9 @@ async function showGLB(file, options = {}) {
   const loadToken = sceneMutationToken;
   const isBlob = typeof file !== 'string';
   const url = isBlob ? URL.createObjectURL(file) : file;
+  const assetMetadata = {...(options.metadata || {})};
+  const assetSource = assetMetadata.source ?? (isBlob ? file.name : file);
+  const assetFileName = assetMetadata.fileName ?? file?.name ?? (isBlob ? 'object.glb' : String(file).split('/').pop());
   if (file && file.name) glbFileName = file.name;
   modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
@@ -12753,13 +12799,14 @@ async function showGLB(file, options = {}) {
         }
       });
       scene.add(model);
+      let registeredAsset = null;
       if (options.register === false) {
-        const metadata = options.metadata || {};
+        const metadata = assetMetadata;
         model.userData.kaminosSceneObject = {
-          source: metadata.source ?? modelSourceUrl,
+          source: assetSource,
           type: metadata.type ?? 'glb',
-          fileName: metadata.fileName ?? glbFileName,
-          label: metadata.label ?? metadata.fileName ?? glbFileName,
+          fileName: assetFileName,
+          label: metadata.label ?? assetFileName,
         };
         currentMesh = model;
         sceneNavigation?.prepare(model);
@@ -12768,17 +12815,24 @@ async function showGLB(file, options = {}) {
           transformControls.visible = true;
         }
       } else {
-        registerSceneObject(model, {
-          ...(options.metadata || {}),
-          source: options.metadata?.source ?? modelSourceUrl,
-          type: options.metadata?.type ?? 'glb',
-          fileName: options.metadata?.fileName ?? glbFileName,
+        registeredAsset = registerSceneObject(model, {
+          ...assetMetadata,
+          source: assetSource,
+          type: assetMetadata.type ?? 'glb',
+          fileName: assetFileName,
         });
       }
       document.getElementById('transform-bar').classList.add('visible');
       if (arrival === 'fresh' && arrivalPlacement) frameAssetArrival(model);
       setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
-      resolve(model);
+      resolve(options.returnAsset ? {
+        id: registeredAsset?.id ?? null,
+        root: model,
+        clips: gltf.animations || [],
+        source: assetSource,
+        fileName: assetFileName,
+        arrival,
+      } : model);
     }, undefined, (err) => {
       if (isBlob) URL.revokeObjectURL(url);
       setInfo('Failed to load GLB: ' + (err.message || 'unknown error'));
@@ -12786,6 +12840,49 @@ async function showGLB(file, options = {}) {
     });
   });
 }
+
+// Scene-session owners borrow this loader; membership, placement and stale-load
+// admission remain the ordinary application's operations. Existing imports keep
+// their root-only result. The caller supplies its own lifetime via isCurrent.
+window.kaminosWorkbenchLoadAsset = async (file, options = {}) => {
+  await workbenchViewerReady;
+  return showGLB(file, {...options, clear: false, register: true, returnAsset: true});
+};
+
+function installSharedWorkbench() {
+  if(sharedWorkbench)return;
+  const byId=id=>document.getElementById(id);
+  sharedWorkbench=installExperimentWorkspace({document,title:'Workbench',subtitle:'Experiments in the shared scene',instruments:null,setup:null,
+    inspector:authoringWorkspace,sceneActions:byId('scene-add-menu').closest('nav'),navigation:byId('navigation-input-mode').closest('label'),
+    tools:[...document.querySelectorAll('.tab[data-tab]')].map(node=>({id:node.dataset.tab,label:node.textContent.trim()})),
+    toolPanels:[...document.querySelectorAll('.tab-content')],extraPanels:[{node:byId('volume-authored-mix-panel'),destination:byId('tab-volume')}],
+    openTool:tab=>setActiveTab(tab),frame:()=>window.kaminosFrameSelected(),
+  });
+  window.kaminosWorkbenchState=sharedWorkbench.state;
+  window.kaminosWorkbenchSetInvestigation=sharedWorkbench.setInvestigation;
+  sharedWorkbench.setTool(window.__kaminosActiveTab());sharedWorkbench.setActive(authoringWorkspace.state().mode==='workbench');
+}
+async function installOwnerWorkbenchEntry() {
+  if(ownerExperimentEntry)return;
+  const host={controls:{document,installNumberDrag:installRelativeNumberDrag},scene:{
+    async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
+    refreshPresentation:refreshWorkbenchAssetPresentation,
+  }};
+  ownerExperimentEntry=await installOwnerExperimentEntry({document,root:document.getElementById('experiment-owner-slot'),host,
+    discover:async()=>{const response=await fetch('/api/workbench-experiments',{cache:'no-store'});if(!response.ok)throw Error('Experiment discovery HTTP '+response.status);return (await response.json()).modules;},
+    onChange:({id,inputs})=>{const url=new URL(location.href);if(id){url.searchParams.set('experiment',id);url.searchParams.set('experiment_inputs',JSON.stringify(inputs));}else{url.searchParams.delete('experiment');url.searchParams.delete('experiment_inputs');}history.replaceState(history.state,'',url);},
+  });
+  window.kaminosWorkbenchExperiments=ownerExperimentEntry;
+  const params=new URLSearchParams(location.search),id=params.get('experiment');if(id)await ownerExperimentEntry.open(id,JSON.parse(params.get('experiment_inputs')||'{}'));
+}
+window.kaminosMountInvestigationEntry=async(options={})=>{
+  await workbenchViewerReady;const tool=options.tool||'assets';
+  if(![...document.querySelectorAll('.tab[data-tab]')].some(node=>node.dataset.tab===tool))throw Error('Unknown Workbench tool: '+tool);
+  if(!authoringWorkspace)throw Error('Shared Kaminos workspace unavailable');
+  if(authoringWorkspace.state().mode!=='workbench'&&!authoringWorkspace.setMode('workbench'))throw Error('Finish the current scene edit before opening the investigation');
+  const component=createInvestigationEntry({document,...options,subject:options.subject||'experiment'});
+  sharedWorkbench.setInvestigation(component.node,{tool});setActiveTab(tool);return component;
+};
 
 // --- OBJ Inspector ---
 async function showOBJ(objFile, mtlFile, options = {}) {
@@ -12972,6 +13069,7 @@ function ensureFingerJuiceTabFrameLoaded() {
 
 function setActiveTab(tabName, { reveal = tabName !== 'assets' } = {}) {
   if (reveal && authoringWorkspace?.state().mode === 'authoring' && !authoringWorkspace.setMode('workbench')) return;
+  sharedWorkbench?.setTool(tabName);
   document.body.classList.toggle('sam-image-active', tabName === 'masks');
   document.getElementById('sam-image-viewport').hidden = tabName !== 'masks';
   samImageTools?.setActive(tabName === 'masks');
@@ -30752,6 +30850,7 @@ sceneInitialization.then(() => {
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
+  environmentLoaded.then(()=>{resolveWorkbenchViewerReady();void installOwnerWorkbenchEntry().catch(error=>{window.kaminosWorkbenchExperimentError=error.message;setInfo('Experiments unavailable: '+error.message);});},rejectWorkbenchViewerReady);
   const volumeLoaded = initKaminosVolumeRoute();
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
   Promise.all([environmentLoaded, volumeLoaded]).then(async () => {
@@ -30788,6 +30887,7 @@ sceneInitialization.then(() => {
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 }).catch(err => {
+  rejectWorkbenchViewerReady(err);
   console.error('initScene failed:', err);
   // Still init non-3D parts
   initEnvButtons();
