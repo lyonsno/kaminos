@@ -1,3 +1,4 @@
+# kaminos-test: python
 """Execute the actual server functions with deterministic local stand-ins."""
 import ast
 import json

@@ -1,3 +1,4 @@
+# kaminos-test: python
 """Actual handle_read over HTTP preserves complete bytes and explicit framing."""
 import ast, json, tempfile, threading, unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer

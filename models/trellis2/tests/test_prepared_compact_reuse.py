@@ -1,3 +1,4 @@
+# kaminos-test: python
 """Small deterministic checks of the production package-reuse blocks.
 
 AST extraction skips command/source admission only; it executes the actual

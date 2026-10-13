@@ -1,3 +1,4 @@
+# kaminos-test: python
 """Real Git status fixtures; no preprocessing/model execution or guard stand-in."""
 import ast
 from pathlib import Path

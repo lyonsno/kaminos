@@ -1,3 +1,4 @@
+# kaminos-test: python
 """Real Darwin sampling must not create a ps child inside a nested observer tree."""
 import importlib.util
 import os

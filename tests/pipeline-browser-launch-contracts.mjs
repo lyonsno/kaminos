@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 const url = new URL('../pipeline-ui-browser-launch.mjs', import.meta.url);
