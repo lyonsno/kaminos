@@ -5,6 +5,8 @@
 
 export const KLEIN_AUTHORING_ROUTE_ID='flux2-klein.text-to-image.authoring-shared-device.v0';
 export const KLEIN_PUBLISHED_WEIGHTS='https://huggingface.co/BasinShapers/flux2-klein-4b-webgpu/resolve/main';
+// The sizes klein's own demo offers and its README times.
+export const KLEIN_IMAGE_SIZES=[512,768,1024];
 const KLEIN_LIMITS=['maxBufferSize','maxStorageBufferBindingSize','maxStorageBuffersPerShaderStage','maxComputeWorkgroupStorageSize'];
 
 // Klein's kernels need f16 and the adapter's own buffer and workgroup limits (as its demo
@@ -123,6 +125,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     async run({prompt,seed,size=512}){
       if(active)throw Error('Image generation is already running');
       const text=String(prompt||'').trim();if(!text)throw Error('Describe the image to generate');
+      if(!KLEIN_IMAGE_SIZES.includes(size))throw Error('Image size must be 512, 768 or 1024');
       const reason=unavailable();if(reason)throw Error(reason);
       const scene=context();if(!scene.prototype?.foregroundGpuContext||!scene.host||!scene.handoff)throw Error('Load a Fire & smoke scene to generate images beside the kiln.');
       active=true;abort=new AbortController();let phase='weights',previous=null,handoff=null,frameRun=null,route=null,control=null,session=null;
@@ -176,7 +179,7 @@ export function installKleinImageGeneration({document,controller,assets}){
   const container=document.getElementById('asset-generate');if(!container)throw Error('Generate panel is missing');
   const section=document.createElement('section');section.id='asset-text-image';
   section.innerHTML=`<p>Text → image · FLUX.2 klein</p><textarea id="asset-prompt" rows="2" spellcheck="true" placeholder="One object, e.g. a weathered bronze lantern" aria-label="Image prompt"></textarea>
-    <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-stop" hidden>Stop</button></div>
+    <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-stop" hidden>Stop</button></div>
     <div id="asset-text-status" role="status"></div><progress id="asset-text-progress" max="100" aria-label="Image generation progress" hidden></progress>`;
   container.prepend(section);
   const byId=id=>section.querySelector('#'+id),seedInput=byId('asset-seed');
@@ -194,7 +197,7 @@ export function installKleinImageGeneration({document,controller,assets}){
   byId('asset-text-stop').onclick=()=>controller.stop();
   const run=()=>{
     const seed=Math.max(0,Math.floor(Number(seedInput.value)||0));
-    controller.run({prompt:byId('asset-prompt').value,seed,size:512}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
+    controller.run({prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value)}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
   };
   byId('asset-text-run').onclick=run;
   byId('asset-prompt').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();if(!byId('asset-text-run').disabled)run();}});
