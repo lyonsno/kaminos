@@ -8,6 +8,7 @@ const document={createElement:()=>new Element()},mountRoot=new Element(),scene=n
 let clock=0,updates=0;const original=()=>{updates++;},runtime={group,bones:new Map([['pelvis',bone]]),update:original};
 const I=new THREE.Matrix4().toArray(),adapter={frames:3,fps:30,jointNames:['pelvis'],frame(index){const actor=new THREE.Matrix4().makeTranslation(index,0,0).toArray();return {frame:index,actorMatrix:actor,bones:[{name:'pelvis',parent:null,localMatrix:I,worldMatrix:actor,skinMatrix:I}]};}};
 const source={motionSha256:'a'.repeat(64),frameSha256:'b'.repeat(64),caseSha256:'c'.repeat(64)};
+bone.position.y=.4; // Starting pose deliberately differs from source frame zero.
 const player=module.attachGivenPalettePlayback({THREE,runtime,adapter,source,document,mountRoot,now:()=>clock,dirty:()=>{}});
 player.play();clock=34;player.tick(clock);assert.equal(player.read().frame,1);assert.equal(group.position.x,1);assert.equal(bone.position.x,0,'actor travel must not duplicate into the Bone');
 player.pause();clock=1000;player.tick(clock);assert.equal(player.read().frame,1);assert.equal(group.position.x,1);
@@ -15,7 +16,10 @@ player.seek(2);assert.equal(player.read().status,'held');assert.equal(group.posi
 player.replay();clock+=34;player.tick(clock);assert.equal(player.read().frame,1);
 player.pause();bone.position.y=.2;runtime.update();assert.equal(player.read().editedSinceSourcePose,true,'gizmo edits must not impersonate exact source pose');
 assert.equal(typeof player.restore,'function','source playback must retain the editable pre-motion actor and Bone pose');
-player.restore();assert.equal(group.position.x,0);assert.equal(bone.position.y,0);assert.equal(player.read().status,'restored');assert.equal(player.read().frame,null,'starting pose is not a generated source frame');
+player.restore();assert.equal(group.position.x,0);assert.equal(bone.position.y,.4);assert.equal(player.read().status,'restored');assert.equal(player.read().frame,null,'starting pose is not a generated source frame');
+player.pause();assert.equal(player.read().frame,null,'Pause must not label the different starting pose as source frame zero');assert.equal(player.read().time,null);
+assert.match(mountRoot.children[0].children[2].textContent,/not a generated frame/);
+player.play();assert.equal(player.read().frame,0);assert.equal(bone.position.y,0,'Play after restored Pause must apply actual source frame zero');player.restore();
 assert.throws(()=>player.seek(3),/frame/);assert.equal(player.read().frame,null);assert.equal(player.read().status,'restored');
 player.dispose();assert.equal(runtime.update,original);assert.equal(group.parent,scene,'motion disposal must preserve skin owner root');assert.equal(mountRoot.children[0].removed,true);assert.ok(updates>0);
 console.log('Existing host update drives source playback once; pause/hold/edit identity/dispose remain explicit');

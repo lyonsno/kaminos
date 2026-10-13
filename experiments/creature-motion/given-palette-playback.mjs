@@ -33,7 +33,7 @@ export function attachGivenPalettePlayback({THREE,runtime,adapter,source,documen
   editedSinceSourcePose:edited(),actualLocalPose:matrices(),error,seamlessLoop:false};}
  function seek(index){active();if(!Number.isInteger(index)||index<0||index>=adapter.frames)throw RangeError('Source frame is outside retained motion');status=index===adapter.frames-1?'held':'paused';startedAt=null;return apply(index);}
  function play(){active();if(status==='restored')seek(0);if(status==='held')return read();if(status!=='playing'){startedAt=now();startedFrame=frame;status='playing';refresh();dirty();}return read();}
- function pause(){active();status=frame===adapter.frames-1?'held':'paused';startedAt=null;refresh();dirty();return read();}
+ function pause(){active();if(status==='restored')return read();status=frame===adapter.frames-1?'held':'paused';startedAt=null;refresh();dirty();return read();}
  function replay(){seek(0);return play();}
  function restore(){active();assign(group,initial.actor);for(const b of initial.bones)assign(runtime.bones.get(b.name),b.matrix);group.updateMatrixWorld(true);original.call(runtime);status='restored';frame=0;startedAt=null;expected=matrices();error=null;refresh();dirty();return read();}
  function tick(timestamp=now()){

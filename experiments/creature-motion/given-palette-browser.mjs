@@ -30,5 +30,12 @@ export async function mountGivenPaletteMotion({THREE,runtime,motionUrl,motionSha
   window.kaminosGivenMotion={read:player.read,snapshot:()=>({...structuredClone(state),playback:player.read(),skin:window.kaminosLiveTransport.snapshot()}),
    play:player.play,pause:player.pause,replay:player.replay,restore:player.restore,seek:player.seek,dispose:player.dispose};
   return player;
- }catch(error){state.status='failed';state.error=error.message;throw error;}
+ }catch(error){
+  state.status='failed';state.error=error.message;
+  const alert=document.createElement('p');alert.setAttribute('role','alert');alert.className='given-motion-failure';
+  alert.textContent=`Motion did not mount · ${state.phase} · ${state.error}`;
+  alert.style.color='#ffaaa0';alert.style.padding='8px';
+  mountRoot.prepend?mountRoot.prepend(alert):mountRoot.append(alert);
+  throw error;
+ }
 }
