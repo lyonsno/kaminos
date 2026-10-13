@@ -98,8 +98,8 @@ async function beginPick(pieceId,point,faceIndex){
   if(!residentGrip)throw new Error('Resident bounded contact unavailable during reset');
   const cellAnchor=boundedCellAnchor(original.binding,original.geometry.indices,faceIndex),generation=++gestureGeneration;
   const held={generation,phase:'capturing',pieceId,faceIndex,cellAnchor,point:[...point],displacement:[0,0,0],baselineDisplacement:[0,0,0],patchOwner:'resident-connectivity'};
-  gesture=held;pendingPick=true;controls.enabled=false;marker.position.fromArray(point);marker.visible=true;await settle();if(generation!==gestureGeneration)return;busy=true;
-  try{invalidateMaterialObservation('resident-grip-capture');await residentGrip.begin(cellAnchor,point,configuration.patchRadius,configuration.gripStiffness);if(generation!==gestureGeneration)return;held.phase='active';lastPick={requestedPieceId:pieceId,pieceId,cellAnchor,point:[...point],patchOwner:residentGrip.route};stamp('pick',lastPick);}finally{busy=false;if(generation===gestureGeneration)pendingPick=false;}return;
+  gesture=held;pendingPick=true;controls.enabled=false;marker.position.fromArray(point);marker.visible=true;await settle();if(generation!==gestureGeneration)return{status:'cancelled',generation};busy=true;
+  try{invalidateMaterialObservation('resident-grip-capture');await residentGrip.begin(cellAnchor,point,configuration.patchRadius,configuration.gripStiffness);if(generation!==gestureGeneration)return{status:'cancelled',generation};held.phase='active';lastPick={requestedPieceId:pieceId,pieceId,cellAnchor,point:[...point],patchOwner:residentGrip.route};stamp('pick',lastPick);}finally{busy=false;if(generation===gestureGeneration)pendingPick=false;}return{status:'applied',generation,cellAnchor};
  }
  const cellAnchor=bounded?boundedCellAnchor(original.binding,original.geometry.indices,faceIndex):null;if(bounded)original.component=components[cellAnchor];
  let patchAtDown=contactPatch(positions(observed),point,{components,component:original.component,radius:configuration.patchRadius,pinned:body.positions.map((_,i)=>observed.state[i*16+11]===1)});const downEpoch=interiorSplit?interiorState.epoch:0;

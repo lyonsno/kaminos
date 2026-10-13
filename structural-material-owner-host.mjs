@@ -12,19 +12,20 @@ export function createStoneOwnerHost(api,{mountStone}={}){
   requireNativeStone(api.experimentStatus());leased=true;
   if(inputs.threshold!==undefined)api.threshold(inputs.threshold);
   if(inputs.paused!==undefined)api.pause(inputs.paused);
-  let disposed=false;
-  const active=()=>{if(disposed)throw Error('Stone owner handle is disposed');};
+  let disposed=false,closing=false,disposal;const pending=new Set();
+  const active=()=>{if(disposed||closing)throw Error('Stone owner handle is disposed');};
+  const run=work=>{active();const task=Promise.resolve().then(work);pending.add(task);task.then(()=>pending.delete(task),()=>pending.delete(task));return task;};
   return {
-   read(){active();return api.experimentStatus();},
-   async hold(){active();api.pause(true);await api.waitSubmitted();},
-   resume(){active();api.pause(false);},
-   reset(){active();return api.reset();},tension(value){active();api.threshold(value);},
-   grip({pieceId,point,faceIndex}){active();return api.pick(pieceId,point,faceIndex);},
-   move(value){active();api.move(value);},release(){active();return api.release();},
-   async step(count){active();const before=api.experimentStatus();await api.waitSubmitted({gpu:false});for(let i=0;i<count;i++)await api.advance({evidence:false});const after=api.experimentStatus();if(after.runId!==before.runId||after.submittedSteps!==before.submittedSteps+count)throw Error('Stone did not submit the requested steps');},
-   view(value){active();return api.camera(value);},
-   async observe(){active();await api.settle();return api.witness();},
-   async dispose(){if(disposed)return;disposed=true;try{await api.release();}finally{leased=false;}},
+   read(){if(disposed)throw Error('Stone owner handle is disposed');return api.experimentStatus();},
+   hold:()=>run(async()=>{api.pause(true);await api.waitSubmitted();}),
+   resume:()=>run(()=>api.pause(false)),
+   reset:()=>run(()=>api.reset()),tension:value=>run(()=>api.threshold(value)),
+   grip:({pieceId,point,faceIndex})=>run(async()=>{const receipt=await api.pick(pieceId,point,faceIndex);if(receipt?.status==='cancelled'){const error=Error('Stone grip was superseded or cancelled');error.code='STONE_OPERATION_CANCELLED';throw error;}if(receipt?.status!=='applied')throw Error('Native grip application receipt required');return receipt;}),
+   move:value=>run(()=>api.move(value)),release:()=>run(()=>api.release()),
+   step:count=>run(async()=>{const before=api.experimentStatus();await api.waitSubmitted({gpu:false});for(let i=0;i<count;i++)await api.advance({evidence:false});const after=api.experimentStatus();if(after.runId!==before.runId||after.submittedSteps!==before.submittedSteps+count)throw Error('Stone did not submit the requested steps');}),
+   view:value=>run(()=>api.camera(value)),
+   observe:()=>run(async()=>{await api.settle();return api.witness();}),
+   dispose(){if(!disposal){closing=true;disposal=(async()=>{await Promise.allSettled([...pending]);try{await api.release();}finally{disposed=true;leased=false;}})();}return disposal;},
   };
  }}};
 }
