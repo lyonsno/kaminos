@@ -1,9 +1,11 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import * as THREE from 'three';
 import {createWalkingCreature} from '../experiments/creature-motion/walking.experiment.mjs';
 import {openExperiment} from '../workbench-experiments.mjs';
-class Element{constructor(){this.children=[];this.style={};this.value='';}append(...x){this.children.push(...x);}prepend(...x){this.children.unshift(...x);}setAttribute(){}remove(){this.removed=true;}}
+import {installOwnerExperimentEntry} from '../owner-experiment-entry.mjs';
+class Element{constructor(){this.children=[];this.style={};this.value='';this.attributes={};}append(...x){this.children.push(...x);}prepend(...x){this.children.unshift(...x);}setAttribute(k,v){this.attributes[k]=v;}remove(){this.removed=true;}}
 const document={createElement:()=>new Element(),getElementById:()=>null},scene=new THREE.Scene();
 let tick=null,refreshes=0;
 const session={async attach(root){scene.add(root);return {id:'body',root};},onFrame(fn){assert.equal(tick,null);tick=fn;return ()=>{tick=null;};},redraw(){},readView:()=>({}),setView(){},async dispose(){scene.clear();tick=null;}};
@@ -65,4 +67,44 @@ fileInput.files=[{text:async()=>JSON.stringify(recipe)}];await fileInput.onchang
 imported=null;fileInput.files=[{text:async()=>'{not json'}];await fileInput.onchange();assert.equal(imported,null,'invalid JSON must not replace the live creature');assert.equal(importer.read().motion.id,'walk');
 fileInput.files=[{text:async()=>JSON.stringify({...recipe,motion:'bad'})}];await fileInput.onchange();assert.equal(imported,null,'invalid saved source must not replace the live creature');
 fileInput.files=[{text:async()=>JSON.stringify({...recipe,transform:{position:[0,0,0],quaternion:[0,0,0,1],scale:[1,0,1]}})}];await fileInput.onchange();assert.equal(imported,null,'invalid placement must not replace the live creature');await importer.dispose();
+if(!process.argv.includes('--import-refusal-only')){
+ const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const refreshCode=html.slice(html.indexOf('function refreshWorkbenchAssetPresentation(handle) {'),html.indexOf('window.kaminosWorkbenchRefreshPresentation='));
+ assert.ok(refreshCode.startsWith('function refreshWorkbenchAssetPresentation'),'exercise the actual application refresh contract');
+ const actualRefresh=new Function('sceneObjects',refreshCode+'return refreshWorkbenchAssetPresentation;')([]);
+ for(const mode of ['source','cycle','path']){
+  const events=[],removed=await createWalkingCreature({host,inputs,record:e=>events.push(e)},{loadSources});
+  const root=new Element();removed.mount({root,invoke:(name,input)=>removed.operations[name](input)});
+  removed.operations.mode({mode});removed.operations.play();const before=removed.read(),callback=tick;
+  scene.remove(scene.children[0]);host.scene.refreshPresentation=actualRefresh;
+  assert.doesNotThrow(()=>callback({deltaSeconds:1/30}),'normal removal must not refresh an unregistered scene row');
+  assert.equal(removed.read().playback.status,'removed');assert.equal(tick,null);assert.equal(removed.read().skin.updates,before.skin.updates);assert.equal(removed.read().cycle,before.cycle);
+  assert.ok(nodes(root).some(n=>n.textContent?.includes('removed')),'visible instruments must report terminal removal');
+  assert.equal(events.some(e=>e.kind==='walking.frame'&&e.phase==='failed'),false);
+  host.scene.refreshPresentation=()=>{refreshes++;};await removed.dispose();
+ }
+}
+// The real owner entry closes before creating a replacement; a callback stub
+// cannot establish that an invalid imported recipe preserves the current owner.
+Element.prototype.addEventListener=function(){};
+Element.prototype.replaceChildren=function(...xs){this.children=xs;};
+Object.defineProperty(Element.prototype,'innerHTML',{set(){this.parts={select:new Element(),button:new Element(),'[role=status]':new Element(),'.owner-experiment-content':new Element()};this.append(...Object.values(this.parts));}});
+Element.prototype.querySelector=function(selector){return this.parts[selector];};
+globalThis.Option=class extends Element{constructor(text,value){super();this.textContent=text;this.value=value;}};
+globalThis._authoringTestCreate=args=>createWalkingCreature(args,{loadSources});
+const definition='data:text/javascript,'+encodeURIComponent("export default {id:'marionette/walking-creature',title:'Creature',create:globalThis._authoringTestCreate}");
+const ownerRoot=new Element(),owner=await installOwnerExperimentEntry({document,root:ownerRoot,host,discover:async()=>[definition]});
+globalThis.window={kaminosWorkbenchExperiments:owner};
+await owner.open('marionette/walking-creature',inputs);await owner.invoke('play');
+const importRecipe=JSON.parse(JSON.stringify((await owner.read()).recipe));
+for(const patch of [{play:'yes'},{mode:'bogus'},{cycle:-1},{motions:[choices[0],choices[0]]},{motions:'bad'},{gizmos:'yes'},{ground:'source-start',floor_size:0},{sample:99},{radius:0},{blend_frames:3},{view:{zoom:0}},{view:{position:[0,0,0],target:[0,0,0]}},{view:{near:10,far:1}}]){
+ const before=await owner.read(),root=scene.children[0],subscription=tick,file=nodes(ownerRoot).find(n=>n.type==='file');
+ file.files=[{text:async()=>JSON.stringify({...importRecipe,...patch})}];await file.onchange();
+ assert.equal(owner.state().id,'marionette/walking-creature','invalid saved recipe must preserve actual owner');
+ assert.equal(scene.children[0],root,'invalid saved recipe must not detach the current body');assert.equal(tick,subscription,'invalid saved recipe must preserve the current playback subscription');
+ const after=await owner.read();assert.deepEqual(after.source,before.source);assert.deepEqual(after.transform,before.transform);assert.deepEqual(after.playback,before.playback);
+ assert.ok(nodes(ownerRoot).some(n=>n.attributes.role==='alert'&&n.textContent),'refusal remains presented in the existing instrument');
+}
+const validFile=nodes(ownerRoot).find(n=>n.type==='file');validFile.files=[{text:async()=>JSON.stringify(importRecipe)}];await validFile.onchange();assert.equal(owner.state().id,'marionette/walking-creature');assert.deepEqual((await owner.read()).transform,importRecipe.transform);assert.equal((await owner.read()).playback.status,'playing');
+await owner.close();delete globalThis.window;delete globalThis.Option;delete globalThis._authoringTestCreate;
 console.log('Authored placement, live selection/refusal/removal and saved setup controls preserve the actual creature');

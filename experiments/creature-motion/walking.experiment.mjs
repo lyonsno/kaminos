@@ -5,23 +5,41 @@ import {createGivenPaletteMotion} from './given-palette-motion.mjs';
 import {attachGivenPalettePlayback} from './given-palette-playback.mjs';
 import {givenSourceSoleHeight} from './given-motion-source.mjs';
 import {createWalkingPoseAdapter} from './walking-pose.mjs';
+import {createWorkbenchSceneHost} from '../../workbench-scene-host.mjs';
 
 function checkAuthoredTransform(t){
  if(t!==undefined&&(t?.position?.length!==3||t?.quaternion?.length!==4||t?.scale?.length!==3||![...t.position,...t.quaternion,...t.scale].every(Number.isFinite)||t.scale.some(v=>v<=0)||Math.abs(Math.hypot(...t.quaternion)-1)>1e-5))throw Error('Invalid authored creature transform or scale');
 }
-
-export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources}={}) {
- if(typeof host?.scene?.open!=='function'||!host.controls?.document)throw Error('Walking creature requires the actual shared Workbench host');
- const data=await loadSources(inputs),document=host.controls.document;
- let adapter=createGivenPaletteMotion({THREE,motion:data.motion,rigFrame:data.frame});
- let walking=createWalkingPoseAdapter({THREE,adapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
- const source={...data.source,prompt:data.motion.prompt??null,seed:data.motion.seed??null,presentation:{mode:'source',...walking.identity}};
- const choices=inputs.motions??[];
- if(!Array.isArray(choices))throw Error('Motion choices must be an array');
+function checkRecipeInputs(inputs){
+ checkAuthoredTransform(inputs.transform);
+ if(inputs.mode!==undefined&&!['source','cycle','path'].includes(inputs.mode))throw Error('Unknown walking mode');
+ if(inputs.cycle!==undefined&&(!Number.isSafeInteger(inputs.cycle)||inputs.cycle<0))throw Error('Invalid authored repeat cycle');
+ if(inputs.play!==undefined&&typeof inputs.play!=='boolean')throw Error('Initial playback must be boolean');
+ if(inputs.gizmos!==undefined&&typeof inputs.gizmos!=='boolean')throw Error('Gizmo visibility must be boolean');
+ if(inputs.ground==='source-start'){const size=inputs.floor_size??5*(inputs.radius??10);if(!Number.isFinite(size)||size<=0)throw Error('Reference floor size must be positive');}
+ const choices=inputs.motions??[];if(!Array.isArray(choices))throw Error('Motion choices must be an array');
  const ids=new Set();for(const choice of choices){
   if(typeof choice?.id!=='string'||!choice.id.trim()||typeof choice.label!=='string'||!choice.label.trim()||typeof choice.motion!=='string'||!choice.motion.trim()||!/^[a-f0-9]{64}$/i.test(choice.motion_sha256??''))throw Error('Motion choice requires id, label, source URL and digest');
   if(ids.has(choice.id))throw Error('Duplicate motion choice id');ids.add(choice.id);
  }
+ return choices;
+}
+async function checkRecipeView(view,current){
+ if(!view)return;
+ // Exercise the shared view validator on an isolated camera, never the current
+ // authored camera. This keeps host projection rules authoritative at preflight.
+ const camera=new THREE.PerspectiveCamera(),controls={target:new THREE.Vector3(),update(){}};camera.position.z=1;
+ const checker=createWorkbenchSceneHost({camera,controls,removeObject(){},redraw(){},onFrame:()=>()=>{}}).open();
+ try{if(current&&Object.keys(current).length)checker.setView(current);checker.setView(view);}finally{await checker.dispose();}
+}
+
+export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources}={}) {
+ if(typeof host?.scene?.open!=='function'||!host.controls?.document)throw Error('Walking creature requires the actual shared Workbench host');
+ const choices=checkRecipeInputs(inputs);
+ const data=await loadSources(inputs),document=host.controls.document;
+ let adapter=createGivenPaletteMotion({THREE,motion:data.motion,rigFrame:data.frame});
+ let walking=createWalkingPoseAdapter({THREE,adapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
+ const source={...data.source,prompt:data.motion.prompt??null,seed:data.motion.seed??null,presentation:{mode:'source',...walking.identity}};
  let chosen=choices.find(c=>c.motion===inputs.motion&&c.motion_sha256===data.source.motionSha256)??null,chosenInputs={...inputs};
  const placement=new THREE.Group();placement.name='Creature · authored placement';
  if(inputs.transform!==undefined){
@@ -46,7 +64,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    try{
     player.tick(clock);
     if(player.read().status==='held'&&mode!=='source'){cycle++;source.presentation.cycle=cycle;player.replay();}
-    else if(player.read().status!=='playing'){unsubscribe();host.scene.refreshPresentation?.(asset);}
+    else if(player.read().status!=='playing'){unsubscribe();if(player.read().status!=='removed')host.scene.refreshPresentation?.(asset);}
     refresh();
    }catch(error){unsubscribe();try{player.pause();}catch{}record({kind:'walking.frame',phase:'failed',error:error.message});throw error;}
   });
@@ -152,7 +170,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const save=document.createElement('button');save.type='button';save.textContent='Save creature setup';save.onclick=()=>{const blob=new Blob([JSON.stringify(read().recipe,null,2)+'\n'],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='creature.setup.json';link.click();URL.revokeObjectURL(url);};panel.append(save);
    const fileLabel=document.createElement('label');fileLabel.textContent='Open creature setup ';const fileInput=document.createElement('input');fileInput.type='file';fileInput.accept='.json,application/json';fileInput.setAttribute('aria-label','Open creature setup');
    fileInput.onchange=async()=>{const file=fileInput.files?.[0];if(!file)return;
-    try{error.textContent='';const recipe=JSON.parse(await file.text());checkAuthoredTransform(recipe.transform);
+    try{error.textContent='';const recipe=JSON.parse(await file.text());checkRecipeInputs(recipe);await checkRecipeView(recipe.view,session.readView());
      // Verify the saved motion/body before the existing entry replaces this instance.
      const loaded=await loadSources(recipe),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6});if(recipe.sample!==undefined)check.frame(recipe.sample);
      active();await reopen(recipe);
