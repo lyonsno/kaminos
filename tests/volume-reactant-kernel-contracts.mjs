@@ -115,6 +115,7 @@ test('the cockpit carries the Reaction Law select and the two candidate controls
   assert.equal(schema.controlCount, schema.controls.length);
   assert.equal(byKey['volume-reaction-law'].additiveDefault, 'authored-tall-plume', 'a basin saved before the candidate loads on the authored law');
   assert.deepEqual(byKey['volume-reaction-law'].allowedValues, ['authored-tall-plume', 'reactant-v0']);
-  assert.equal(byKey['volume-reactant-mixing-time'].additiveDefault, 4);
+  assert.equal(byKey['volume-reactant-mixing-time'].additiveDefault, 3, 'the slider default is the module default');
+  assert.match(index, /id="volume-reactant-mixing-time"[^>]*value="3">/);
   assert.equal(byKey['volume-reactant-cooling-time'].additiveDefault, 55.06);
 });

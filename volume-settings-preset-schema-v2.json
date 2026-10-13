@@ -1644,7 +1644,7 @@
       "param": "volume_reactant_mixing_time",
       "tagName": "INPUT",
       "type": "range",
-      "additiveDefault": 4,
+      "additiveDefault": 3,
       "additiveSinceControlCount": 250
     },
     {

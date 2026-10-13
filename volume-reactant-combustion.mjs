@@ -49,11 +49,16 @@ export const REACTANT_MODEL = Object.freeze({
   }),
   ambientOxidizer: 1,
   // s: oxidizer consumed per unit fuel burned. A Fuel Fraction f jet into air
-  // is stoichiometric at mixture fraction Z_st = 1 / (1 + s f).
-  oxidizerRequirement: 4,
+  // is stoichiometric at mixture fraction Z_st = 1 / (1 + s f). Provisional
+  // calibration (2026-10-13 sweeps on the saved fine32 basin): s 3 burns the
+  // jet out within the lower half of the fine box; s 4 carried ~5x more fuel
+  // above it.
+  oxidizerRequirement: 3,
   // Q: rise of the thermal state per unit fuel burned. A stoichiometric parcel
-  // of an f = 1 jet burns Z_st = 0.2 of fuel and rises by Q Z_st = 1.0.
-  heatOfCombustion: 5,
+  // of an f = 1 jet burns Z_st = 0.25 of fuel and rises by Q Z_st = 1.5.
+  // Provisional calibration: Q 6 puts the peak heat (1.44) in the authored
+  // range (1.3-1.5); Q 5 ran cool (0.85) and Q 10 blew out.
+  heatOfCombustion: 6,
   // Thermal state over which colocated reactants become able to burn
   // (smoothstep). The authored inlet temperature 0.264 sits inside it, so a
   // hot inlet still pilots where it meets air; cold ambient air does not burn.
@@ -77,7 +82,8 @@ export const REACTANT_MODEL = Object.freeze({
 
 export const REACTANT_CONTROL_DEFAULTS = Object.freeze({
   // How quickly colocated, ignited reactants burn (e-folding, reference steps).
-  mixingTimeSteps: 4,
+  // Provisional calibration: 3 (1 is vigorous, 12 smoulders).
+  mixingTimeSteps: 3,
   // How quickly the thermal state decays (e-folding, reference steps); the
   // default is the authored heat survival 0.982 per step.
   coolingTimeSteps: -1 / Math.log(0.982),
