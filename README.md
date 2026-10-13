@@ -1,25 +1,20 @@
 # Kaminos
 
-> Browser-native WebGPU inference, realtime simulation, and generated spatial systems in one inspectable workbench.
+> A browser workshop for generated scenes and living materials.
 
-Kaminos is the browser-based authoring workbench where several independently
-useful systems meet. It keeps a spatial scene alive while local models run,
-receives their outputs as editable world matter, and turns runtime machinery
-that survives the workbench into reusable packages and focused model ports.
+Kaminos brings local AI, scene authoring, and realtime simulation into the
+browser. Its model ports produce images, meshes, splats, material maps, and
+motion. The workbench gives those results a place: arrange objects, change
+their lighting, tune fire and smoke, and save a scene you can keep working on.
 
-The repository spans four connected capabilities:
+The scene stays alive while models run. The
+[`@kaminos/webgpu-inference-kit`](webgpu-inference-kit/README.md) carries that
+shared-device execution into other browser applications, with reusable model
+routes and cooperative scheduling.
 
-- **Browser-native intelligence**. A published WebGPU inference runtime and a
-  growing family of spatial and generative model ports run as components of an
-  interactive browser application.
-- **Live materials**. Stateful fire, smoke, fluids, particles, and rendering
-  processes remain visible and authorable while compute continues.
-- **Generated beings**. Separate experiments connect authored morphology to
-  generated form, reconstructed casts to mechanical control, and generated
-  creatures to terrain-relative motion.
-- **A world kiln**. Images, meshes, splats, motion, material fields, simulation
-  state, and generated environments can be inspected, corrected, staged, and
-  composed in one WebGPU workbench.
+Start with a photograph, a generated ingredient, or an authored material.
+The examples below let you explore the results; the model guides and kit show
+how to build with the same components.
 
 ## Turn A Photograph Into A Surface You Can Relight
 

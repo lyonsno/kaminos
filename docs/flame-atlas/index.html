@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
     <meta name="theme-color" content="#080808">
-    <title>Browser Combustion Films | Kaminos</title>
+    <title>Kaminos | Generated Scenes And Living Materials</title>
+    <meta name="description" content="A browser workshop for generated scenes and living materials. Explore relightable photographs, generate images locally, and watch authored WebGPU combustion.">
     <link rel="canonical" href="https://lyonsno.github.io/kaminos/">
     <style>
       :root {
@@ -47,10 +48,9 @@
       }
 
       .masthead {
-        min-height: 34vh;
         display: grid;
         align-content: end;
-        padding: 72px 0 38px;
+        padding: 36px 0 30px;
         border-bottom: 1px solid var(--line);
       }
 
@@ -59,7 +59,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 20px;
-        margin-bottom: 56px;
+        margin-bottom: 30px;
         color: var(--muted);
         font-size: 0.82rem;
         font-weight: 650;
@@ -68,6 +68,7 @@
 
       .nav-links {
         display: flex;
+        flex-wrap: wrap;
         gap: 24px;
       }
 
@@ -92,7 +93,7 @@
         max-width: 920px;
         margin: 0;
         font-family: Georgia, "Times New Roman", serif;
-        font-size: 6.8rem;
+        font-size: 5.6rem;
         font-weight: 400;
         line-height: 0.93;
         letter-spacing: 0;
@@ -108,6 +109,57 @@
 
       .screening-room {
         padding: 30px 0 80px;
+      }
+
+      .entrances {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 24px;
+        padding: 30px 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .entrance {
+        display: block;
+        min-width: 0;
+        text-decoration: none;
+      }
+
+      .entrance img {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        object-fit: contain;
+        background: #000;
+      }
+
+      .entrance h2 {
+        margin: 16px 0 8px;
+        font-size: 1.2rem;
+        font-weight: 600;
+      }
+
+      .entrance p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.92rem;
+        line-height: 1.5;
+      }
+
+      .entrance:hover h2,
+      .entrance:focus-visible h2 {
+        text-decoration: underline;
+        text-underline-offset: 4px;
+      }
+
+      .builder-path {
+        margin: 22px 0 42px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .builder-path a {
+        color: var(--text);
       }
 
       .hero-still {
@@ -264,16 +316,19 @@
         }
 
         .masthead {
-          min-height: 28vh;
-          padding-top: 36px;
+          padding-top: 28px;
         }
 
         .nav {
-          margin-bottom: 44px;
+          margin-bottom: 26px;
         }
 
         h1 {
           font-size: 4.4rem;
+        }
+
+        .entrances {
+          gap: 18px;
         }
 
         .feature-copy,
@@ -301,6 +356,11 @@
           flex-direction: column;
           align-items: flex-end;
           gap: 8px;
+        }
+
+        .entrances {
+          grid-template-columns: 1fr;
+          gap: 26px;
         }
 
         h1 {
@@ -342,30 +402,46 @@
     </style>
   </head>
   <body>
-    <header class="masthead">
+    <header class="masthead" id="top">
       <div class="shell">
-        <nav class="nav" aria-label="Screening room navigation">
-          <a href="https://github.com/lyonsno/kaminos">Kaminos</a>
+        <nav class="nav" aria-label="Kaminos navigation">
+          <a href="#top">Kaminos</a>
           <div class="nav-links">
-            <a href="#compositions">Compositions</a>
-            <a href="#studies">Studies</a>
+            <a href="#explore">Explore</a>
+            <a href="#films">Films</a>
+            <a href="https://github.com/lyonsno/kaminos">Source</a>
           </div>
         </nav>
-        <p class="eyebrow">Browser-native WebGPU material</p>
-        <h1>Browser <span>Combustion</span></h1>
-        <p class="lede">Complete compositions and material studies captured directly from the browser while one stateful WebGPU process was being computed and authored.</p>
+        <p class="eyebrow">Generate. Arrange. Bring to life.</p>
+        <h1>Kaminos</h1>
+        <p class="lede">A browser workshop for generated scenes and living materials. Explore a photograph under changing light, generate an image on your own GPU, or watch a live material being shaped.</p>
       </div>
     </header>
 
     <main class="shell screening-room">
-      <figure class="hero-still">
-        <img src="assets/conventional-fire-hero.png" alt="An orange WebGPU flame with a luminous crown and rooted filament structure">
-      </figure>
+      <section class="entrances" id="explore" aria-label="Explore Kaminos">
+        <a class="entrance" href="inference-kit/material-photo/">
+          <img src="inference-kit/material-photo/comparison.png" alt="One metallic sculpture compared as a photograph, recovered geometry, and relit material">
+          <h2>Relight a photograph</h2>
+          <p>Orbit a recovered surface and move the light. Three finished examples open without model weights.</p>
+        </a>
+        <a class="entrance" href="inference-kit/klein/">
+          <img src="inference-kit/klein/assets/jank-engine.jpg" alt="Images generated in the browser with Thomas the Jank Engine">
+          <h2>Generate an image</h2>
+          <p>Thomas the Jank Engine runs FLUX.2 locally, with finished examples to explore before the download.</p>
+        </a>
+        <a class="entrance" href="#films">
+          <img src="assets/kiln-authoring-hero.png" alt="An open kiln with a glowing WebGPU flame in its chamber">
+          <h2>Watch the material move</h2>
+          <p>Fire and smoke carry their momentum through ignition, contraction, and changing form.</p>
+        </a>
+      </section>
+      <p class="builder-path">Building a browser application? <a href="inference-kit/">Explore the model ports and inference kit.</a></p>
 
-      <section class="feature" aria-labelledby="lead-composition">
+      <section class="feature" id="films" aria-labelledby="lead-composition">
         <div class="section-label">
-          <h2 id="lead-composition">Composition 01</h2>
-          <span>Complete sequence</span>
+          <h2 id="lead-composition">Browser combustion films</h2>
+          <span>Authored in the live workbench</span>
         </div>
         <div class="feature-media">
           <video src="assets/composition-ooh-baby.mp4" poster="assets/composition-ooh-baby.png" playsinline controls preload="metadata"></video>
@@ -502,9 +578,9 @@
         </div>
       </section>
 
-      <section class="provenance" aria-labelledby="capture-boundary">
-        <h2 id="capture-boundary">Capture boundary</h2>
-        <p>These films were captured directly from the browser while the simulation was running and being authored. Their source timing is preserved without retiming, interpolation, optical flow, cadence repair, or frame synthesis. This presentation makes no simulator frame-rate, universal device-performance, or final quality-tier claim.</p>
+      <section class="provenance" aria-labelledby="browser-material">
+        <h2 id="browser-material">Made in the browser</h2>
+        <p>These films show a live WebGPU simulation being authored in Kaminos. The material retains its state as the source and controls change. <a href="https://github.com/lyonsno/kaminos">Explore the workbench and its model ports.</a></p>
       </section>
     </main>
 
