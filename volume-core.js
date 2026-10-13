@@ -11334,6 +11334,8 @@ export function createKaminosVolumePrototype({
   let pressureResidualAfterPipeline = null;
   let boundarySidecarBuildPipeline = null;
   let emissiveLightField = null;
+  // The draw that last dispatched the emissive seed (review GR-02).
+  let emissiveSeedProducer = null;
   let sceneVolumeSource = null;
   let sceneVolumeSourceRequested = false;
   let scenePointBindings = null;
@@ -13802,6 +13804,7 @@ export function createKaminosVolumePrototype({
     ensureNonRidgeOpticalCaptureBuffers();
     installSceneSolidTexture();
     emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers);
+    emissiveSeedProducer = null;
     rebuildFluidBindGroups();
     analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
       label: `kaminos bounded analytic emitter injection ${gridShapeLabel(gridSize)} ${index}`,
@@ -19624,6 +19627,7 @@ export function createKaminosVolumePrototype({
           receivers:distributedFrame.volumeReceivers,directions:distributedFrame.directions,legacyDispatched:false};
       } else {
         emissiveLightField.encode(encoder, currentFluid, options.emissiveTimestampWrites);
+        emissiveSeedProducer = { frameCount: state.frameCount, simStepCount: state.simStepCount, grid: [gridSize, gridHeight, gridSize] };
         state.physicalColor.incidentLight = { model: 'six-direction-single-scattering-v1', grid: EMISSIVE_LIGHT_GRID, source: 'same-fluid-and-material-uniforms', support: 'eight-samples-per-light-cell-coarse-boundary-support', sourceIndex: currentFluid, updates: 'each-draw-including-frozen-edits',legacyDispatched:true };
       }
     }
@@ -26648,8 +26652,10 @@ export function createKaminosVolumePrototype({
     // latest frame, summarised with the grid shape that produced them.
     async sampleEmissiveSeedCoefficients() {
       if (!emissiveLightField?.readCoefficients) return { status: 'unsupported', reason: 'emissive-light-field-inactive', grid: [gridSize, gridHeight, gridSize] };
+      if (!emissiveSeedProducer) return { status: 'unsupported', reason: 'emissive-seed-not-dispatched', grid: [gridSize, gridHeight, gridSize] };
+      const producer = { ...emissiveSeedProducer, frameLag: state.frameCount - emissiveSeedProducer.frameCount };
       const values = await emissiveLightField.readCoefficients();
-      return { status: 'sampled', grid: [gridSize, gridHeight, gridSize], simStepCount: state.simStepCount, ...emissiveCoefficientStats(values) };
+      return { status: 'sampled', grid: [gridSize, gridHeight, gridSize], producer, ...emissiveCoefficientStats(values) };
     },
     previewGridShape(request = {}) {
       const width = normalizeGridSize(request.resolution ?? controlsSnapshot.resolution);

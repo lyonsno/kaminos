@@ -213,6 +213,10 @@ export function parseArms(armsArg) {
 // readback is a complete, finite, nonzero and spatially varying field.
 export function emissiveCoefficientsMismatch(sample) {
   if (!sample || sample.status !== 'sampled') return `emissive coefficients ${sample?.status ?? 'missing'}${sample?.reason ? ` (${sample.reason})` : ''}`;
+  const p = sample.producer;
+  if (!p) return 'emissive coefficients have no producer (no seed dispatch recorded)';
+  if (String(p.grid) !== String(sample.grid)) return `emissive coefficients produced at grid ${p.grid}, current ${sample.grid}`;
+  if (!(p.frameLag <= 2)) return `emissive coefficients stale: produced ${p.frameLag} frames ago`;
   if (sample.finiteCells !== sample.cells) return `emissive coefficients have non-finite cells (${sample.cells - sample.finiteCells})`;
   if (!(sample.nonzeroCells > 0)) return 'emissive coefficients have no nonzero cell';
   if (!(sample.extinctionStdDev > 0)) return 'emissive coefficients are spatially flat';

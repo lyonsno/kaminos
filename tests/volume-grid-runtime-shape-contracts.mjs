@@ -139,13 +139,31 @@ test('emissive seed readback: stats helper, field readback, capture check', asyn
   assert.match(field, /const coefficients = device\.createBuffer\(\{ label: 'emissive material coefficients', size: cells\*16, usage: GPUBufferUsage\.STORAGE \| GPUBufferUsage\.COPY_SRC \}\);/);
   assert.match(field, /    async readCoefficients\(\) \{/);
   assert.match(source, /    async sampleEmissiveSeedCoefficients\(\) \{/);
-  assert.equal(emissiveCoefficientsMismatch({ status: 'sampled', ...stats }), null);
+  const producer = { grid: [48, 96, 48], frameLag: 0 };
+  assert.equal(emissiveCoefficientsMismatch({ status: 'sampled', grid: [48, 96, 48], producer, ...stats }), null);
   assert.match(emissiveCoefficientsMismatch(null), /missing/);
   assert.match(emissiveCoefficientsMismatch({ status: 'unsupported', reason: 'emissive-light-field-inactive' }), /unsupported \(emissive-light-field-inactive\)/);
-  assert.match(emissiveCoefficientsMismatch({ status: 'sampled', ...stats, finiteCells: 3 }), /non-finite/);
-  assert.match(emissiveCoefficientsMismatch({ status: 'sampled', ...stats, nonzeroCells: 0 }), /no nonzero/);
-  assert.match(emissiveCoefficientsMismatch({ status: 'sampled', ...stats, extinctionStdDev: 0 }), /spatially flat/);
+  assert.match(emissiveCoefficientsMismatch({ status: 'sampled', grid: [48, 96, 48], producer, ...stats, finiteCells: 3 }), /non-finite/);
+  assert.match(emissiveCoefficientsMismatch({ status: 'sampled', grid: [48, 96, 48], producer, ...stats, nonzeroCells: 0 }), /no nonzero/);
+  assert.match(emissiveCoefficientsMismatch({ status: 'sampled', grid: [48, 96, 48], producer, ...stats, extinctionStdDev: 0 }), /spatially flat/);
   const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
   assert.match(capture, /if \(cid === '@emissiveCoefficients'\) \{/);
   assert.match(capture, /emissiveCoefficients: arm\.emissiveCoefficients \|\| \[\]/);
+});
+
+// Review GR-02: the readback accepted coefficients retained from an earlier
+// draw after the route stopped dispatching the seed. The seed dispatch records
+// its producer (frame, step, grid); a rebuild clears it; the witness carries
+// it and the capture check fails a missing, stale or other-shape producer.
+test('emissive seed witness is bound to its producer: frame, step and grid of the dispatch that wrote it', async () => {
+  const { emissiveCoefficientsMismatch } = await import('../volume-arm-capture-checks.mjs');
+  assert.match(source, /emissiveLightField\.encode\(encoder, currentFluid, options\.emissiveTimestampWrites\);\n\s+emissiveSeedProducer = \{ frameCount: state\.frameCount, simStepCount: state\.simStepCount, grid: \[gridSize, gridHeight, gridSize\] \};/);
+  assert.match(source, /emissiveLightField = createEmissiveLightField\(device, shader, uniformBuffer, fluidBuffers, frontBuffers\);\n\s+emissiveSeedProducer = null;/);
+  assert.match(source, /if \(!emissiveSeedProducer\) return \{ status: 'unsupported', reason: 'emissive-seed-not-dispatched', grid: \[gridSize, gridHeight, gridSize\] \};/);
+  const base = { status: 'sampled', grid: [48, 96, 48], cells: 4, finiteCells: 4, nonzeroCells: 2, extinctionStdDev: 0.5 };
+  assert.equal(emissiveCoefficientsMismatch({ ...base, producer: { grid: [48, 96, 48], frameLag: 1 } }), null);
+  assert.match(emissiveCoefficientsMismatch({ ...base }), /no producer/);
+  assert.match(emissiveCoefficientsMismatch({ ...base, producer: { grid: [48, 144, 48], frameLag: 0 } }), /produced at grid 48,144,48, current 48,96,48/);
+  assert.match(emissiveCoefficientsMismatch({ ...base, producer: { grid: [48, 96, 48], frameLag: 9 } }), /stale: produced 9 frames ago/);
+  assert.match(emissiveCoefficientsMismatch({ status: 'unsupported', reason: 'emissive-seed-not-dispatched' }), /unsupported \(emissive-seed-not-dispatched\)/);
 });
