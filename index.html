@@ -3705,7 +3705,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 import {mountMaterialCockpit} from './finger-fluid-material-cockpit.mjs';
 import {readMaterialControlsURL,materialControlsURL} from './finger-fluid-material-controls.mjs';
 
-import {createPairedFluidHost} from './paired-fluid-host.mjs';
+import {createPairedFluidHost,installPairedViewportPresentation} from './paired-fluid-host.mjs';
 import {createFluidViewportHost,resolveFluidViewportRenderer,resolveFluidViewportMode} from './fluid-viewport-host.mjs';
 import {applyFluidOwnerSetup,createOwnerWaterCapability,restoreOwnerFluidReplay,ownerFluidRouteParams} from './fluid-owner-host.mjs';
 import {loadExperimentContributions,openExperiment} from './workbench-experiments.mjs';
@@ -14952,9 +14952,10 @@ async function installOwnerWorkbenchEntry() {
       if(fingerFluidOwnerPair)await fingerFluidOwnerPair.dispose();
       stopFingerFluidBench();fingerFluidBenchSolver?.destroy?.();fingerFluidBenchSolver=null;fingerFluidBenchSolverPromise=null;fingerFluidOwnerSetup=null;
       window.__kaminosInvestigationEntryOnly=true;try{setActiveTab('finger-fluid-bench');}finally{window.__kaminosInvestigationEntryOnly=false;}
-      const pair=await createPairedFluidHost({setups,renderer,scene,camera,pipeline:renderPipeline,helperGround:groundPlane,getDisplayPolicy:()=>getFluidDisplayPolicy?.(),redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame});
+      const releasePresentation=installPairedViewportPresentation(document.getElementById('finger-fluid-bench-operator-panel'),document.getElementById('finger-fluid-bench-overlay'));
+      let pair;try{pair=await createPairedFluidHost({setups,renderer,scene,camera,pipeline:renderPipeline,helperGround:groundPlane,getDisplayPolicy:()=>getFluidDisplayPolicy?.(),redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame});}catch(error){releasePresentation();throw error;}
       fingerFluidOwnerPair=pair;window._kaminosDirty?.();
-      const dispose=pair.dispose.bind(pair);pair.dispose=async()=>{await dispose();if(fingerFluidOwnerPair===pair)fingerFluidOwnerPair=null;};return pair;
+      const dispose=pair.dispose.bind(pair);pair.dispose=async()=>{await dispose();if(fingerFluidOwnerPair===pair){fingerFluidOwnerPair=null;releasePresentation();}};return pair;
     },
     async open(setup){
       if(fingerFluidOwnerPair)await fingerFluidOwnerPair.dispose();

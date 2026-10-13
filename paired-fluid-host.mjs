@@ -9,6 +9,11 @@ import {createSceneEmissiveCamera} from './scene-emissive-camera.mjs';
 import {vec3,vec4,float} from './lib/three.tsl.js';
 
 let nextGeneration=1;
+export function installPairedViewportPresentation(panel,overlay){
+ const viewport=panel.dataset.viewport,hidden=overlay.hidden;
+ panel.dataset.viewport='shared';overlay.hidden=true;
+ return ()=>{if(viewport===undefined)delete panel.dataset.viewport;else panel.dataset.viewport=viewport;overlay.hidden=hidden;};
+}
 export function readPairedFluidArm(setup,{runtime,pressure},identity){
  assertPressureLaunchState(setup,{runtime,clock:{fixedTimeStepSeconds:setup.dt}});
  if(pressure?.dt!==Math.fround(setup.dt)&&pressure?.dt!==setup.dt)throw Error('Native pair timestep does not match the declared fixed clock');

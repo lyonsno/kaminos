@@ -12,3 +12,10 @@ test('pair labels come from validated effective solver settings and retain the n
  const fallback=observed();fallback.runtime.adapterInfo.isFallbackAdapter=true;assert.throws(()=>host.readPairedFluidArm(setup,fallback,{}),/native/);
  const wrong=observed();wrong.pressure.dt=.02;assert.throws(()=>host.readPairedFluidArm(setup,wrong,{}),/timestep/);
 });
+test('the pair seats the shared canvas instead of an opaque legacy producer canvas',()=>{
+ assert.equal(typeof host.installPairedViewportPresentation,'function');
+ const panel={dataset:{viewport:'producer'}},overlay={hidden:false};
+ const release=host.installPairedViewportPresentation(panel,overlay);
+ assert.equal(panel.dataset.viewport,'shared');assert.equal(overlay.hidden,true);
+ release();assert.equal(panel.dataset.viewport,'producer');assert.equal(overlay.hidden,false);
+});
