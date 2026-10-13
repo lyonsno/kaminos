@@ -3,12 +3,12 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { test } from 'node:test';
 
-async function controller({examples=false,exampleFailure=false,search='?sample=celebration'}={}) {
+async function controller({examples=false,exampleFailure=false,generationAvailable=true,search='?sample=celebration'}={}) {
   const behavior = { failDevice: false, failMaterials: false, deviceRequests: 0, geometryRuns:0, materialRuns:0, cache:new Map(), gates: new Map() };
   const node = dataset => ({ dataset, style: {}, value: '', disabled: false, hidden: false, checked: false, textContent: '', captures:new Set(),
     classList: { toggle() {},add(){},remove(){} }, removeAttribute() {}, setAttribute() {}, addEventListener() {},
     setPointerCapture(id) {this.captures.add(id);}, releasePointerCapture(id) {this.captures.delete(id);},hasPointerCapture(id){return this.captures.has(id);}, getBoundingClientRect: () => ({ left:0,top:0,width: 400, height: 400 }) });
-  const ids=['provenance','job-status','view-result','workspace','controls','tuning-toggle','status','preview','scene','stage-label','run','file','map','light','height','exposure','gi','reset','name','resolution','progress','elapsed','timings','identity',
+  const ids=['execution-kind','generation-controls','local-generation','provenance','job-status','view-result','workspace','controls','tuning-toggle','status','preview','scene','stage-label','run','file','map','light','height','exposure','gi','reset','name','resolution','progress','elapsed','timings','identity',
     'view-prev','view-next','sun','glow','advanced','tuning','preset-export','preset-import','preset-file','preset-error','material-size','compare','light-ring','environment','environment-status','environment-rotation','environment-intensity','direct-intensity',
     'gi-view','contrast-mode','roughness-strength','metallic-strength','roughness-strength-value','metallic-strength-value','contrast-readout','bloom',
     ...['glowIntensity','glowThreshold','emissionReflection','bloomIntensity','bloomRadius','bloomThreshold','exposure'].flatMap(key=>[key,`${key}-value`]),
@@ -80,6 +80,7 @@ async function controller({examples=false,exampleFailure=false,search='?sample=c
   });
   const source = new vm.SourceTextModule(await readFile(new URL('./main.js',import.meta.url),'utf8'), { context });
   await source.link(async specifier => {
+    if(specifier==='./deployment.js')return new vm.SyntheticModule(['GENERATION_AVAILABLE'],function(){this.setExport('GENERATION_AVAILABLE',generationAvailable);},{context});
     if(specifier==='./included-examples.js')return new vm.SyntheticModule(['loadIncludedExample'],function(){
       this.setExport('loadIncludedExample',async(key,inputKey,size)=>{
         if(!examples)return null;
@@ -116,6 +117,17 @@ test('arrival opens an included orb with no model loading or inference',async()=
   assert.equal(c.behavior.geometryRuns,0);assert.equal(c.behavior.materialRuns,0);
   assert.equal(c.behavior.profile,undefined);assert.ok(c.behavior.viewer.maps);
   assert.match(c.elements.provenance.textContent,/Included example/);
+});
+
+test('public explorer keeps saved results playable without offering unavailable inference',async()=>{
+  const c=await controller({examples:true,generationAvailable:false});
+  await c.actions.infer();
+  assert.equal(c.state.runs.length,0);
+  assert.equal(c.state.status,'included');assert.ok(c.behavior.viewer.maps);
+  assert.equal(c.elements['generation-controls'].hidden,true);
+  assert.equal(c.elements['local-generation'].hidden,false);
+  assert.equal(c.elements.run.disabled,true);assert.equal(c.elements.file.disabled,true);
+  await c.actions.sample('orb');assert.equal(c.state.status,'included');
 });
 
 test('late included restoration cannot admit generation when a different job completes',async()=>{
