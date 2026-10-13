@@ -4,7 +4,9 @@ export async function replacementSolve({noise,known,mask,drift,steps=50,t0=0,t1=
  if(!noise?.length||known?.length!==noise.length||mask?.length!==noise.length)throw new RangeError('constraint shape mismatch');
  if(!noise.every(Number.isFinite)||!known.every(Number.isFinite)||!mask.every(v=>v===0||v===1))throw new Error('nonfinite or invalid constraint');
  let x=Float32Array.from(noise);
- const ts=times??Array.from({length:steps+1},(_,i)=>Math.fround(t0+(t1-t0)*i/steps));
+ // torch.linspace uses a float32 step and fills from opposite ends.
+ const step=Math.fround((Math.fround(t1)-Math.fround(t0))/steps);
+ const ts=times??Array.from({length:steps+1},(_,i)=>Math.fround(i<=(steps+1)/2?Math.fround(t0)+step*i:Math.fround(t1)-step*(steps-i)));
  if(ts.length!==steps+1||ts[0]!==Math.fround(t0)||ts.at(-1)!==Math.fround(t1)||ts.some((t,i)=>!Number.isFinite(t)||(i>0&&t<=ts[i-1])))throw new RangeError('invalid integration times');
  const pin=t=>{for(let i=0;i<x.length;i++)if(mask[i])x[i]=Math.fround(Math.fround(Math.fround(1-t)*noise[i])+Math.fround(t*known[i]));};
  pin(ts[0]);
