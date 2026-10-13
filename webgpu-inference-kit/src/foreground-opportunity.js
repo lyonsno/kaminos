@@ -454,6 +454,9 @@ export const WEBGPU_FOREGROUND_SERVICE_SCHEMA = 'kaminos.webgpu-foreground-servi
 
 /**
  * One foreground requester across sequential model runs on a borrowed device.
+ * beginRun(runId, { routeId }) identifies the model for that run; omitting
+ * routeId preserves the service's default. Idle frames use the service route.
+ * device and queue expose the exact borrowed objects for consumer validation.
  * Await beginRun before model work, use the returned foregroundOpportunities
  * at cooperative GPU boundaries, and wrap CPU/worker-only waits in
  * withForeground(phase, work). That scope settles foreground callbacks before
@@ -519,11 +522,13 @@ export function createWebGpuForegroundService(input = {}) {
     return handle;
   }
 
-  function beginRun(runId) {
+  function beginRun(runId, runOptions = {}) {
     assertOpen();
     if (current) throw new Error(`foreground service already has an active run (${current.runId})`);
-    const interlock = createInterlock({ ...options, runId });
-    const run = { runId, interlock, window: null, finishing: null, tail: Promise.resolve() };
+    if (!isPlainObject(runOptions)) throw new Error('foreground run options must be an object');
+    const routeId = Object.hasOwn(runOptions, 'routeId') ? runOptions.routeId : options.routeId;
+    const interlock = createInterlock({ ...options, routeId, runId });
+    const run = { runId, routeId, interlock, window: null, finishing: null, tail: Promise.resolve() };
     current = run;
     runCount += 1;
 
@@ -585,7 +590,7 @@ export function createWebGpuForegroundService(input = {}) {
     });
     // Reservation occurs before awaiting idle work: newly arriving frames join
     // the new run instead of prolonging startup indefinitely.
-    return idleTail.then(() => Object.freeze({ runId, foregroundOpportunities, withForeground, finish }));
+    return idleTail.then(() => Object.freeze({ runId, routeId, foregroundOpportunities, withForeground, finish }));
   }
 
   function snapshot() {
@@ -596,6 +601,7 @@ export function createWebGpuForegroundService(input = {}) {
       runCount,
       activeRun: current ? Object.freeze({
         runId: current.runId,
+        routeId: current.routeId,
         finishing: current.finishing !== null,
         foregroundPhase: current.window?.phase ?? null,
         pressure: current.interlock.pressureSnapshot(),
@@ -614,5 +620,9 @@ export function createWebGpuForegroundService(input = {}) {
     return disposal;
   }
 
-  return Object.freeze({ schema: WEBGPU_FOREGROUND_SERVICE_SCHEMA, routeId: options.routeId, request, beginRun, snapshot, dispose });
+  return Object.freeze({
+    schema: WEBGPU_FOREGROUND_SERVICE_SCHEMA, routeId: options.routeId,
+    device: options.device, queue: options.queue,
+    request, beginRun, snapshot, dispose,
+  });
 }
