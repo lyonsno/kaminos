@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import * as THREE from '../lib/three.core.js';
+const definition=(await import('../experiments/creature-motion/retained.experiment.mjs').catch(()=>({}))).default;
+assert.equal(typeof definition?.create,'function','the creature requires an owner-authored experiment definition');
+const scene=new THREE.Scene(),root=new THREE.Group(),bone=new THREE.Object3D();bone.name='pelvis';root.add(bone);scene.add(root);
+const source={frames:31,fps:30,source_sha256:'a'.repeat(64),retargeted:false,front_surface:'rigid root carry; unpainted'};
+root.userData.native_motion=source;
+const clip=new THREE.AnimationClip('retained creature',1,[new THREE.VectorKeyframeTrack('pelvis.position',[0,.5,1],[0,0,0,0,0,.3,0,0,.6])]);
+let opens=0,closed=0,redraws=0;const subscribers=new Set(),records=[];
+let view={position:[1,2,3],target:[0,0,0]};
+const session={THREE,loadAsset:async asset=>({root,clips:[clip],source:asset,id:'fixture-body'}),
+ onFrame:callback=>(subscribers.add(callback),()=>subscribers.delete(callback)),redraw:()=>redraws++,
+ readView:()=>structuredClone(view),setView:value=>{view=structuredClone(value);},dispose:()=>{closed++;}};
+const host={scene:{open:async()=>{opens++;return session;}}};
+const inputs={asset:'/retained/creature.glb',source_sha256:source.source_sha256,frame:15};
+await assert.rejects(()=>definition.create({host,inputs:{},record:()=>{}}),/asset|source/i);assert.equal(opens,0);
+const experiment=await definition.create({host,inputs,record:r=>records.push(r)});
+assert.equal(experiment.read().frame,15);assert.ok(Math.abs(bone.position.z-.3)<1e-6);assert.equal(subscribers.size,0);
+experiment.operations.resume();assert.equal(subscribers.size,1);
+for(const time of [0,250])for(const callback of [...subscribers])callback(time);
+assert.ok(Math.abs(bone.position.z-.45)<1e-6);
+const held=experiment.operations.hold();assert.equal(held.priorStatus,'playing');assert.equal(held.inputs.frame,22);
+assert.equal(subscribers.size,0);assert.equal(held.inputs.asset,inputs.asset);assert.equal(held.inputs.source_sha256,inputs.source_sha256);
+assert.deepEqual(held.inputs.view,view);assert.equal(held.state.status,'paused');
+const prior=experiment.read().frame;
+assert.throws(()=>experiment.operations.seek({frame:31}),/frame/);assert.equal(experiment.read().frame,prior);
+assert.equal(records.at(-1).phase,'failed');assert.ok(records.some(r=>r.kind==='creature.hold'&&r.phase==='applied'));
+assert.ok(records.every(r=>!r.kind.includes('tick')),'autonomous animation ticks are not recorded interventions');
+await experiment.dispose();await experiment.dispose();assert.equal(closed,1);assert.equal(subscribers.size,0);assert.equal(root.parent,scene);
+assert.ok(redraws>0);
+await assert.rejects(()=>definition.create({host,inputs:{...inputs,source_sha256:'b'.repeat(64)},record:()=>{}}),/source.*identity/i);
+assert.equal(closed,2,'failed create releases the allocated session');
+const reopened=await definition.create({host,inputs:held.inputs,record:()=>{}});
+assert.equal(reopened.read().frame,22);assert.equal(reopened.read().status,'paused');await reopened.dispose();
+console.log('Creature owner definition: local operations, source binding, hold/reopen and owned cleanup pass (injected session; not native host conformance)');
