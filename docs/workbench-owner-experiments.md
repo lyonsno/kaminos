@@ -5,9 +5,9 @@ and their own domain modules. A contribution file ends in `.experiment.mjs` and
 lives under `workbench-experiments/` by default. It is trusted local executable
 code. The application and agent callers consume the same definition.
 
-The initial common modules are `workbench-experiments.mjs` and
-`workbench_experiments.py`. Application discovery, chooser placement and host
-capability wiring are the current integration step. The example below describes
+The common modules are `workbench-experiments.mjs` and
+`workbench_experiments.py`. The application composition below supplies discovery,
+the chooser and actual Fluid capabilities. The example below describes
 the callable interface; its `host.water` methods are illustrative capability
 injection, to be bound to the actual fluid owner's operations.
 
@@ -140,3 +140,22 @@ variant needs an explicit renewal receipt if its generation changes. The host
 reports both configured frame dt and effective substep dt, using the actual
 backend substep count; exact advances reject incomplete-frame targets before
 stepping. This preserves configuration, not an evolved-water checkpoint.
+
+## Shared mesh loader join
+
+The application exposes `await window.kaminosWorkbenchLoadAsset(file, options)`
+for the shared scene-session adapter. It waits for the existing viewport to
+initialize, appends through the ordinary GLB loader, and registers the actual
+object for selection and inspection. Its result is
+`{id, root, clips, source, fileName, arrival}`. `root` and `clips` are the objects
+returned by the GLTF loader; owner playback binds to those same objects.
+Ordinary imports retain their existing root-only result.
+
+The adapter forces append and registration even if callers supply clear or
+preview options. Existing arrival placement remains available; `normalize:false`
+or `arrival:null` preserves source coordinates when the producer needs them.
+An owner supplies `isCurrent()` to reject a late load after its session closes.
+The existing stale-load path disposes that loaded object before registration.
+This loader join does not supply experiment frame subscriptions, removal or
+capture/replay lifetime. Those belong to the shared scene-session composition,
+which consumes this hook rather than creating another scene or renderer.
