@@ -28,7 +28,7 @@ const $=id=>document.getElementById(id),route=bounded?'kaminos.picked-stone.boun
 const configuration={timeStep:1/60,iterations:12,lineSearchTrials:8,gravity:0,damping:.98,floor:-10,patchRadius:.28,stressRadius:.16,reconstructionRadius:.45,gripStiffness:200000,volumeBarrier:0};
 const affineComparison=new URLSearchParams(location.search).get('surface')==='affine';
 let device,resident,surface,body,manifest,arrays,observed,components,volumes,pieces=[],gesture=null,paused=false,busy=false,pendingPick=false,finishing=false,pickTask=null,gestureGeneration=0,failure=null,lastPick=null,latestSelection=null,frames=0;
-let initialBody,interiorState,materialRegime,surfaceObservation=null,lastPresentation=null,residentGrip=null,residentSupport=null,pointerContact=null,interactionObservation=null;
+let initialBody,interiorState,materialRegime,surfaceObservation=null,lastPresentation=null,residentGrip=null,residentSupport=null,pointerContact=null,interactionObservation=null,ownerExperiment=null;
 const scene=new THREE.Scene();scene.background=new THREE.Color('#111718');
 const camera=new THREE.PerspectiveCamera(36,innerWidth/innerHeight,.01,100);camera.position.set(2.3,1.25,3.6).multiplyScalar(Math.max(1,1.2/camera.aspect));
 const renderer=new THREE.WebGPURenderer({antialias:true});renderer.setPixelRatio(devicePixelRatio);renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;$('viewport').append(renderer.domElement);
@@ -40,12 +40,20 @@ const arrow=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.V
 const capMaterial=new THREE.MeshStandardMaterial({color:'#d3b999',roughness:1,side:THREE.DoubleSide});
 const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),normal=new THREE.Vector3(),plane=new THREE.Plane();let skinMaterial;
 const icon=(id,shape)=>{$(id).replaceChildren(createElement(shape));};icon('reset',RotateCcw);icon('pause',Pause);icon('release',Hand);
-const stamp=(kind,data)=>inputs.push({kind,data,at:performance.now(),steps:observed?.steps,epoch:observed?.damageEpoch});
+const stamp=(kind,data)=>{inputs.push({kind,data,at:performance.now(),steps:observed?.steps,epoch:observed?.damageEpoch});ownerExperiment?.recordInput(kind,data,experimentStatus());};
 const positions=state=>Array.from({length:state.model.points},(_,i)=>state.state.slice(i*16+4,i*16+7));
 const cameraState=()=>{camera.updateMatrixWorld(true);return{position:camera.position.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),near:camera.near,far:camera.far,fov:camera.fov};};
 const fail=e=>{failure={message:e.message,stack:e.stack};$('failure').textContent=e.message;gesture=null;controls.enabled=true;};
 const settle=async(includeInput=false)=>{while(busy||includeInput&&(pendingPick||finishing)){if(failure)throw new Error(failure.message);await new Promise(r=>setTimeout(r,5));}};
 function invalidateMaterialObservation(reason){if(!bounded||!observed)return;observed={...observed,observation:{kind:'submitted',stressCurrent:false,readbackBytes:0,reason}};surfaceObservation=null;interactionObservation=null;}
+function experimentStatus(){
+ const submitted=resident?.submittedState();
+ return {route,backend:'webgpu',adapterFallback:false,connectivity:bounded?connectivity:null,runId:submitted?.runId,submittedSteps:submitted?.steps,
+  observation:'submission-metadata-not-physical-observation',paused,busy,pendingPick,finishing,gripping:gesture?.phase??null,failure:failure&&{message:failure.message},
+  threshold:Number($('threshold').value),configuration:{...configuration},materialRegime:materialRegime&&{name:materialRegime.name},
+  sourceSha256:manifest?.sourceSha256,preparationSha256:manifest?.preparationSha256,model:observed?.model&&{...observed.model},camera:cameraState()};
+}
+async function waitSubmitted({gpu=true}={}){if(typeof gpu!=='boolean')throw Error('Explicit GPU completion policy required');await settle(true);if(gpu)await device.queue.onSubmittedWorkDone();}
 function inside(piece,p){return piece.halfspaces.every(h=>h.side*(h.normal.reduce((s,v,k)=>s+v*Math.fround(p[k]),0)-h.offset)>=0);}
 function makeMeshes(sourcePieces=surface.witness().pieces,surfaceResident=resident){
  const staged=[],current=positions(observed);
@@ -183,6 +191,7 @@ try{
  initialBody=body;const assets=await loadStoneAssets('500-normal');skinMaterial=assets[0].material;skinMaterial.side=THREE.DoubleSide;await reset();if(interiorSplit||bounded){$('threshold').max=String(Math.max(Number($('threshold').max),materialRegime.threshold*4));$('threshold').value=String(materialRegime.threshold);$('thresholdValue').value=String(materialRegime.threshold);}$('route').textContent=`WebGPU ${adapter.info.description||adapter.info.vendor} | ${interiorSplit||bounded?materialRegime.name:'live graph'}`;
  window.__stoneShards={
   route,reset,release,advance,
+  experimentStatus,waitSubmitted,reportFailure:fail,
   pause(value=true){if(typeof value!=='boolean')throw new Error('Explicit boolean pause required');paused=value;$('pause').setAttribute('aria-pressed',String(paused));icon('pause',paused?Play:Pause);},
   pick:beginPick,
   move(displacement){if(!gesture)throw new Error('No active picked patch');if(gesture.inputClosed)throw new Error('Picked patch input is closed');gesture.displacement=[...displacement];stamp('move',{displacement,generation:gesture.generation});},
@@ -199,5 +208,12 @@ try{
  };
  window.__stoneShards.settle=async({surface:includeSurface=true}={})=>{if(typeof includeSurface!=='boolean')throw new Error('Explicit surface acquisition policy required');await settle(true);busy=true;try{observed=await resident.read();components=materialComponents(observed.model.points,acquiredConnections());present();if(includeSurface)await observeSurface();else await observeInteraction();}finally{busy=false;}};
  if(new URLSearchParams(location.search).get('smoke')==='1')window.__stoneShards.diagnoseFailure=message=>{stamp('diagnostic-failure-fixture',{message});fail(new Error(message));};
+ const experimentId=new URLSearchParams(location.search).get('experiment');
+ if(experimentId){
+  if(experimentId!=='stone/fracture')throw Error(`Unsupported stone experiment ${experimentId}`);
+  const {openStoneOwnerExperiment}=await import('./structural-material-owner-entry.mjs');
+  ownerExperiment=await openStoneOwnerExperiment(window.__stoneShards,{document,source:{route,url:location.href,entry:'owner-contribution',mount:'existing-stone-producer-not-shared-workbench',sharedEntryRevision:'8ccad75147dc9cd226953c07c2a65d62fc45024b'},inputs:{}});
+  window.__stoneExperiment=ownerExperiment;$('route').textContent+=` | ${ownerExperiment.id}`;
+ }
  draw();
 }catch(e){fail(e);}
