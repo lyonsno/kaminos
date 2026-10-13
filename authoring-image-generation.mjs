@@ -75,6 +75,18 @@ export function createForegroundHandoff({prototype,host,waitFrame=()=>new Promis
   };
 }
 
+// A mesh run takes the kiln's foreground requester only once its own admission would
+// pass, so a refused request cannot strand a running image without kiln frames.
+export async function runWithKilnHandoff({service,input,handoff,owner}){
+  const state=service.read();
+  if(state.status==='unavailable')throw Error(state.error||'Generation is unavailable');
+  if(['input','loading','running','stopping','saving'].includes(state.status))throw Error('Generation is already running');
+  if(state.pending)throw Error('Save the retained generated output before another run');
+  if(!input?.source)throw Error('Choose a source image');
+  if(handoff?.has(owner))await handoff.activate(owner);else await handoff?.release();
+  return service.run(input);
+}
+
 async function encodeCanvasPng(rgba,width,height){
   const canvas=new OffscreenCanvas(width,height);
   canvas.getContext('2d').putImageData(new ImageData(rgba,width,height),0,0);

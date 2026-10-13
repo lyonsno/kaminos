@@ -143,3 +143,24 @@ test('image size is one of the tested klein sizes and reaches the pipeline',asyn
  await assert.rejects(h.service.run({prompt:'lantern',seed:1,size:640}),/512, 768 or 1024/);
  assert.equal(h.generations.length,1,'an unsupported size is refused before GPU work');
 });
+
+test('a mesh request the model would refuse does not take the kiln from a running image',async()=>{
+ const {runWithKilnHandoff}=module;assert.equal(typeof runWithKilnHandoff,'function');
+ const prototype=prototypeDouble(),host={setForegroundServiceActive(){},runForegroundFrame:run=>run()};
+ const handoff=createForegroundHandoff({prototype,host,waitFrame:tick});
+ const klein=()=>({completion:Promise.resolve()}),sf3d=()=>({completion:Promise.resolve()});
+ handoff.recording('sf3d').setForegroundOpportunityRequester(sf3d);handoff.install('klein',klein);await handoff.activate('klein');
+ const refusals=[
+  [{status:'unavailable',error:'An image is generating. Generate the mesh when it is saved.'},{source:'x'},/image is generating/],
+  [{status:'running'},{source:'x'},/already running/],
+  [{status:'complete',pending:{}},{source:'x'},/Save the retained/],
+  [{status:'idle'},{},/Choose a source image/],
+ ];
+ for(const [state,input,message] of refusals){
+  let ran=false;const service={read:()=>state,run:async()=>{ran=true;}};
+  await assert.rejects(runWithKilnHandoff({service,input,handoff,owner:'sf3d'}),message);
+  assert.equal(ran,false);assert.equal(handoff.owner(),'klein','the running image keeps the kiln');assert.equal(prototype.installs.at(-1),klein);
+ }
+ let ran=false;await runWithKilnHandoff({service:{read:()=>({status:'idle'}),run:async()=>{ran=true;}},input:{source:'x'},handoff,owner:'sf3d'});
+ assert.equal(ran,true);assert.equal(handoff.owner(),'sf3d');
+});

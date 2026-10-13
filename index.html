@@ -3841,7 +3841,7 @@ import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.m
 import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createTrellisAuthoringGeneration,installMeshModelChoice} from './authoring-trellis-generation.mjs';
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
-import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,kleinDeviceRequirements,composeDeviceRequirements,KLEIN_PUBLISHED_WEIGHTS} from './authoring-image-generation.mjs';
+import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,kleinDeviceRequirements,composeDeviceRequirements,KLEIN_PUBLISHED_WEIGHTS} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
 import {checkedViewportDisplay,viewportShortcut} from './viewport-display-settings.mjs';
@@ -26736,11 +26736,7 @@ function setupAuthoringAssets(){
         if(meshBusy('trellis'))return 'TRELLIS is generating.';
         return null;
       }});
-      authoringGenerator={...sf3d,run:tracked('sf3d',async input=>{
-        const handoff=foregroundHandoff();
-        if(handoff?.has('sf3d'))await handoff.activate('sf3d');else await handoff?.release();
-        return sf3d.run(input);
-      })};
+      authoringGenerator={...sf3d,run:tracked('sf3d',input=>runWithKilnHandoff({service:sf3d,input,handoff:foregroundHandoff(),owner:'sf3d'}))};
     }
     return authoringGenerator;
   };
