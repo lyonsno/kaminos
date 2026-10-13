@@ -87,9 +87,10 @@ try {
   for (const tolerance of TOLERANCES) {
     const solvers = {
       pcg: { make: () => createCompositePCGGPU(device, grid, { tolerance }), budgets: [32, 256] },
-      'fast-diagonal': { make: () => mark(createCompositeFastPCGGPU(device, grid, { tolerance, method: 'pcg', preconditioner: 'diagonal' })), budgets: [32, 256] },
-      'fast-mgpcg': { make: () => mark(createCompositeFastPCGGPU(device, grid, { tolerance, method: 'pcg', preconditioner: 'multigrid' })), budgets: [8, 32] },
-      'fast-mgpcg-s2': { make: () => mark(createCompositeFastPCGGPU(device, grid, { tolerance, method: 'pcg', preconditioner: 'multigrid', smoothing: 2 })), budgets: [8, 32] },
+      'fast-diagonal': { make: () => mark(createCompositeFastPCGGPU(device, grid, { tolerance, preconditioner: 'diagonal' })), budgets: [32, 256] },
+      'fast-mgpcg': { make: () => mark(createCompositeFastPCGGPU(device, grid, { tolerance, preconditioner: 'multigrid' })), budgets: [8, 32] },
+      'fast-mgpcg-s2': { make: () => mark(createCompositeFastPCGGPU(device, grid, { tolerance, preconditioner: 'multigrid', smoothing: 2 })), budgets: [8, 32] },
+      'fast-mgpcg-oc1.6': { make: () => mark(createCompositeFastPCGGPU(device, grid, { tolerance, preconditioner: 'multigrid', overcorrect: 1.6 })), budgets: [8, 32] },
     };
     for (const [name, { make, budgets }] of Object.entries(solvers)) {
       const solver = make();

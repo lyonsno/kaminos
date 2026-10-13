@@ -128,28 +128,43 @@ export function buildCompositeHierarchy(grid) {
 }
 
 const WG = 64;
+const FUSED_WG = 256;
+// Partial-sum regions (each `groups` vec4s): d.q, max|r|/vol, r.z (red or
+// diagonal), r.z (black).
+const REGIONS = { DQ: 0, MAX: 1, RZ: 2, RZB: 3 };
 const COMMON = /* wgsl */`
 fn finite(x: f32) -> bool { return abs(x) <= 3.402823466e38; }
 fn combine(a: vec4<f32>, b: vec4<f32>) -> vec4<f32> { return vec4<f32>(a.x + b.x, 0.0, max(a.z, b.z), max(a.w, b.w)); }
 var<workgroup> scratch: array<vec4<f32>, ${WG}>;
-fn emit(value: vec4<f32>, lane: u32, group: u32) {
-  scratch[lane] = value; workgroupBarrier();
+fn emit(value: vec4<f32>, lane: u32, group: u32, region: u32) {
+  workgroupBarrier(); scratch[lane] = value; workgroupBarrier();
   for (var stride = ${WG / 2}u; stride > 0u; stride /= 2u) { if (lane < stride) { scratch[lane] = combine(scratch[lane], scratch[lane + stride]); } workgroupBarrier(); }
-  if (lane == 0u) { partial[group] = scratch[0]; }
+  if (lane == 0u) { partial[region * GROUPS + group] = scratch[0]; }
+}
+// Every workgroup folds a region itself (uniform control flow; call before any
+// early return), so a scalar decision needs no dispatch of its own.
+fn total(region: u32, lane: u32) -> vec4<f32> {
+  var acc = vec4<f32>(0.0);
+  for (var i = lane; i < GROUPS; i += ${WG}u) { acc = combine(acc, partial[region * GROUPS + i]); }
+  workgroupBarrier(); scratch[lane] = acc; workgroupBarrier();
+  for (var stride = ${WG / 2}u; stride > 0u; stride /= 2u) { if (lane < stride) { scratch[lane] = combine(scratch[lane], scratch[lane + stride]); } workgroupBarrier(); }
+  let v = scratch[0]; workgroupBarrier(); return v;
 }
 `;
 
 // Level-0 kernels. ctrl: 0 rho, 1 alpha, 2 beta, 3 active, 4 max residual,
-// 5 iterations, 6 failure, 7 true residual.
-function level0Source(n, m) {
+// 5 iterations, 6 failure, 7 true residual, 8 verify requested.
+function level0Source(n, m, groups) {
   return /* wgsl */`
-const N: u32 = ${n}u; const M: u32 = ${m}u;
+const N: u32 = ${n}u; const M: u32 = ${m}u; const GROUPS: u32 = ${groups}u;
 override COLOR: u32 = 0u;
+override EMIT_RZ: u32 = 0u;            // post-smooth sweeps emit r.z for their colour
 override DIAG_PRECONDITION: u32 = 0u;
 override OMEGA: f32 = 1.0;
+override OVERCORRECT: f32 = 1.0;
 @group(0) @binding(0) var<storage, read> slots: array<vec2<f32>>;       // (index bits, coefficient) x6 per cell
 @group(0) @binding(1) var<storage, read> tails: array<vec2<f32>>;       // (index bits, coefficient)
-@group(0) @binding(2) var<storage, read> cellMeta: array<vec4<f32>>;        // 2i: diag, vol, tailStart, tailCount; 2i+1: faceStart, faceCount, color, parent
+@group(0) @binding(2) var<storage, read> cellMeta: array<vec4<f32>>;    // 2i: diag, vol, tailStart, tailCount; 2i+1: faceStart, faceCount, color, parent
 @group(0) @binding(3) var<storage, read_write> state: array<vec4<f32>>; // p, r, d, z
 @group(0) @binding(4) var<storage, read_write> qb: array<vec4<f32>>;    // q (scratch), b, target, 0
 @group(0) @binding(5) var<storage, read_write> partial: array<vec4<f32>>;
@@ -157,6 +172,7 @@ override OMEGA: f32 = 1.0;
 @group(1) @binding(0) var<storage, read_write> flux: array<f32>;
 @group(1) @binding(1) var<storage, read> cellFace: array<i32>;          // face*2 + (1 if the cell is b)
 @group(1) @binding(2) var<storage, read> faces: array<vec4<f32>>;       // a, b, k, 0
+@group(1) @binding(3) var<storage, read> lv1: array<vec4<f32>>;         // first structured level (prolongation source)
 ${COMMON}
 fn isActive() -> bool { return ctrl[3] > 0.0; }
 fn slotOf(i: u32, k: u32) -> vec2<f32> { return slots[i * 6u + k]; }
@@ -174,9 +190,10 @@ fn gather(i: u32, field: u32) -> f32 {
 }
 fn applyField(i: u32, field: u32) -> f32 { return cellMeta[i * 2u].x * state[i][field] - gather(i, field); }
 
-// b = target * vol - sum of signed fluxes (target was copied into qb.z by intake); r = b - A p; z = 0 (or r / diag); partial max|r|/vol.
+// b = target * vol - sum of signed fluxes (target was copied into qb.z by intake);
+// r = b - A p; z = 0 (or r / diag); partial max|r|/vol and, diagonal mode, r.z.
 @compute @workgroup_size(${WG}) fn init(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) group: vec3<u32>) {
-  let i = id.x; var value = vec4<f32>(0.0);
+  let i = id.x; var value = vec4<f32>(0.0); var rz = vec4<f32>(0.0);
   if (i < N) {
     let m0 = cellMeta[i * 2u]; let m1 = cellMeta[i * 2u + 1u];
     var sum = 0.0; var bad = 0.0;
@@ -192,54 +209,77 @@ fn applyField(i: u32, field: u32) -> f32 { return cellMeta[i * 2u].x * state[i][
     qb[i] = vec4<f32>(0.0, b, tgt, 0.0); state[i].y = r; state[i].w = z; state[i].z = 0.0;
     if (!finite(b) || !finite(r) || !finite(tgt) || !finite(state[i].x)) { bad = 1.0; }
     value = vec4<f32>(0.0, 0.0, abs(r) / m0.y, bad);
+    rz = vec4<f32>(r * z, 0.0, 0.0, select(1.0, 0.0, finite(r * z)));
   }
-  emit(value, lane, group.x);
+  emit(value, lane, group.x, ${REGIONS.MAX}u);
+  if (DIAG_PRECONDITION == 1u) { emit(rz, lane, group.x, ${REGIONS.RZ}u); }
 }
 // q = A d; partial d.q
 @compute @workgroup_size(${WG}) fn matvec(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) group: vec3<u32>) {
   let i = id.x; var value = vec4<f32>(0.0);
   if (i < N && isActive()) { let q = applyField(i, 2u); qb[i].x = q; let v = state[i].z * q; value = vec4<f32>(v, 0.0, 0.0, select(1.0, 0.0, finite(v))); }
-  emit(value, lane, group.x);
+  emit(value, lane, group.x, ${REGIONS.DQ}u);
 }
-// p += alpha d; r -= alpha q; z = 0 (or r / diag); partial max|r|/vol
+// alpha = rho / d.q (folded from the matvec partials); p += alpha d; r -= alpha q;
+// z = 0 (or r / diag); partial max|r|/vol and, diagonal mode, r.z.
 @compute @workgroup_size(${WG}) fn update(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) group: vec3<u32>) {
-  let i = id.x; var value = vec4<f32>(0.0);
-  if (i < N && isActive()) {
-    let a = ctrl[1]; var s = state[i];
+  let dq = total(${REGIONS.DQ}u, lane);
+  let i = id.x; var value = vec4<f32>(0.0); var rz = vec4<f32>(0.0);
+  let rho = ctrl[0];
+  let ok = dq.w == 0.0 && finite(dq.x) && dq.x > 0.0 && rho > 0.0;
+  let a = select(0.0, rho / dq.x, ok);
+  if (group.x == 0u && lane == 0u) {
+    if (isActive()) { if (ok && finite(a)) { ctrl[1] = a; } else { ctrl[6] = 1.0; ctrl[3] = 0.0; } }
+  }
+  if (i < N && isActive() && ok && finite(a)) {
+    var s = state[i];
     s.x += a * s.z; s.y -= a * qb[i].x;
     let m0 = cellMeta[i * 2u];
     s.w = 0.0; if (DIAG_PRECONDITION == 1u) { s.w = s.y / max(m0.x, 1e-30); }
     state[i] = s;
     value = vec4<f32>(0.0, 0.0, abs(s.y) / m0.y, select(1.0, 0.0, finite(s.x) && finite(s.y)));
+    rz = vec4<f32>(s.y * s.w, 0.0, 0.0, select(1.0, 0.0, finite(s.y * s.w)));
   }
-  emit(value, lane, group.x);
+  emit(value, lane, group.x, ${REGIONS.MAX}u);
+  if (DIAG_PRECONDITION == 1u) { emit(rz, lane, group.x, ${REGIONS.RZ}u); }
 }
-// Red-black Gauss-Seidel on A z = r, one colour per dispatch.
-@compute @workgroup_size(${WG}) fn smoothRB(@builtin(global_invocation_id) id: vec3<u32>) {
-  let i = id.x;
+// Red-black Gauss-Seidel on A z = r, one colour per dispatch; the post-smooth
+// sweeps also emit r.z over their colour.
+@compute @workgroup_size(${WG}) fn smoothRB(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) group: vec3<u32>) {
+  let i = id.x; var rz = vec4<f32>(0.0);
   if (i < N && isActive() && u32(cellMeta[i * 2u + 1u].z) == COLOR) {
     let m0 = cellMeta[i * 2u];
     let gs = (state[i].y + gather(i, 3u)) / max(m0.x, 1e-30);
-    state[i].w = mix(state[i].w, gs, OMEGA);
+    let z = mix(state[i].w, gs, OMEGA);
+    state[i].w = z;
+    rz = vec4<f32>(state[i].y * z, 0.0, 0.0, select(1.0, 0.0, finite(z)));
   }
+  if (EMIT_RZ == 1u) { emit(rz, lane, group.x, ${REGIONS.RZ}u + COLOR); }
 }
 // q = r - A z (level-0 residual of the preconditioner solve)
 @compute @workgroup_size(${WG}) fn residual(@builtin(global_invocation_id) id: vec3<u32>) {
   let i = id.x; if (i < N && isActive()) { qb[i].x = state[i].y - applyField(i, 3u); }
 }
-// partial r.z
-@compute @workgroup_size(${WG}) fn dotrz(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) group: vec3<u32>) {
-  let i = id.x; var value = vec4<f32>(0.0);
-  if (i < N && isActive()) { let v = state[i].y * state[i].w; value = vec4<f32>(v, 0.0, 0.0, select(1.0, 0.0, finite(v))); }
-  emit(value, lane, group.x);
+// z += overcorrect * z1[parent]
+@compute @workgroup_size(${WG}) fn prolong0(@builtin(global_invocation_id) id: vec3<u32>) {
+  let i = id.x; if (i < N && isActive()) { state[i].w += OVERCORRECT * lv1[u32(cellMeta[i * 2u + 1u].w)].y; }
 }
-// d = z + beta d
-@compute @workgroup_size(${WG}) fn direction(@builtin(global_invocation_id) id: vec3<u32>) {
-  let i = id.x; if (i < N && isActive()) { state[i].z = state[i].w + ctrl[2] * state[i].z; }
+// beta = rho' / rho from the r.z partials; rho = rho'; d = z + beta d
+@compute @workgroup_size(${WG}) fn direction(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) group: vec3<u32>) {
+  var rz = total(${REGIONS.RZ}u, lane);
+  if (DIAG_PRECONDITION == 0u) { rz = combine(rz, total(${REGIONS.RZB}u, lane)); }
+  let i = id.x;
+  let rho = ctrl[0];
+  let ok = rz.w == 0.0 && finite(rz.x) && rz.x > 0.0;
+  let beta = select(0.0, rz.x / rho, ok && rho > 0.0);
+  if (group.x == 0u && lane == 0u) {
+    if (isActive()) { if (ok && finite(beta)) { ctrl[2] = beta; ctrl[0] = rz.x; } else { ctrl[6] = 1.0; ctrl[3] = 0.0; } }
+  }
+  if (i < N && isActive() && ok && finite(beta)) { state[i].z = state[i].w + beta * state[i].z; }
 }
 // Residual replacement: r = b - A p from the current pressure, z reset; partial
-// max|r|/vol. Runs whether or not the recursive test has stopped the loop, so a
-// drifted recursive residual cannot close the solve (reduce MODE 5 restarts it).
+// max|r|/vol. Gated by the verify request, so a drifted recursive residual
+// cannot close the solve (reduce MODE 5 decides).
 @compute @workgroup_size(${WG}) fn refresh(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) group: vec3<u32>) {
   let i = id.x; var value = vec4<f32>(0.0);
   if (i < N && ctrl[6] == 0.0) {
@@ -248,17 +288,13 @@ fn applyField(i: u32, field: u32) -> f32 { return cellMeta[i * 2u].x * state[i][
     state[i].y = r; state[i].w = z;
     value = vec4<f32>(0.0, 0.0, abs(r) / m0.y, select(1.0, 0.0, finite(r)));
   }
-  emit(value, lane, group.x);
-}
-// p += z (plain multigrid iteration)
-@compute @workgroup_size(${WG}) fn correct(@builtin(global_invocation_id) id: vec3<u32>) {
-  let i = id.x; if (i < N && isActive()) { state[i].x += state[i].w; }
+  emit(value, lane, group.x, ${REGIONS.MAX}u);
 }
 // partial max|b - A p|/vol (end-of-solve measurement; ignores active)
 @compute @workgroup_size(${WG}) fn trueResidual(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) group: vec3<u32>) {
   let i = id.x; var value = vec4<f32>(0.0);
   if (i < N) { let m0 = cellMeta[i * 2u]; let t = qb[i].y - applyField(i, 0u); value = vec4<f32>(0.0, 0.0, abs(t) / m0.y, select(1.0, 0.0, finite(t))); }
-  emit(value, lane, group.x);
+  emit(value, lane, group.x, ${REGIONS.MAX}u);
 }
 // flux += k (p_a - p_b) unless the solve failed
 @compute @workgroup_size(${WG}) fn project(@builtin(global_invocation_id) id: vec3<u32>) {
@@ -271,31 +307,24 @@ fn applyField(i: u32, field: u32) -> f32 { return cellMeta[i * 2u].x * state[i][
 `;
 }
 
-// One workgroup folds the partials and takes the scalar decision. It also
-// writes the indirect dispatch arguments every gated kernel reads, so a
-// converged or failed solve encodes zero workgroups for the rest of its
-// budget (the fixed cost of an empty dispatch remains).
+// One workgroup folds the max-residual partials and takes the decision that
+// changes the gate. It writes the indirect dispatch arguments every gated
+// kernel reads, so a converged or failed solve encodes zero workgroups for the
+// rest of its budget (the fixed cost of an empty dispatch remains).
 // MODE 0 start: max residual -> active; failure on bad.
-// MODE 1 alpha: alpha = rho / (d.q).
-// MODE 2 converge: iterations += 1; the recursive residual decides whether a
-//   verification (true residual) is scheduled: when it is below TOL, or every
-//   REFRESH iterations.
-// MODE 3 beta: beta = rho' / rho (0 when rho = 0); rho = rho'.
+// MODE 2 converge: iterations += 1; schedule a verification (true residual)
+//   when the recursive residual is below TOL or every REFRESH iterations.
 // MODE 4 true residual -> ctrl[7].
-// MODE 5 refresh: the true residual replaces the recursive one (residual
-//   replacement; the search direction is kept); active follows it.
-// ctrl: 0 rho, 1 alpha, 2 beta, 3 active, 4 max residual, 5 iterations,
-// 6 failure, 7 true residual, 8 verify requested.
-// Indirect entries (vec4<u32>, x = workgroups): 0 level 0, 1.. per structured
-// level, then ONE (single workgroup), then VERIFY (level 0, only when a
-// verification is requested) and VERIFY_ONE.
+// MODE 5 verify: the true residual has replaced the recursive one; stop when
+//   it meets TOL, otherwise clear the request.
+// Indirect entries (vec4<u32>, x = workgroups): 0 level 0, 1 first level,
+// 2 ONE, 3 VERIFY (level 0, only when requested), 4 VERIFY_ONE.
 function reduceSource(groups, tolerance, counts, refreshEvery) {
   const K = counts.length;
   return /* wgsl */`
 override MODE: u32 = 0u;
-override ALWAYS_VERIFY: u32 = 0u;
 const GROUPS: u32 = ${groups}u; const TOL: f32 = ${Math.fround(tolerance)}; const REFRESH: f32 = ${refreshEvery}.0;
-const K: u32 = ${K}u;
+const K: u32 = ${K}u; const REGION_MAX: u32 = ${REGIONS.MAX}u;
 var<private> COUNTS: array<u32, ${K}> = array<u32, ${K}>(${counts.map(c => `${c}u`).join(', ')});
 @group(0) @binding(0) var<storage, read> partial: array<vec4<f32>>;
 @group(0) @binding(1) var<storage, read_write> ctrl: array<f32>;
@@ -309,34 +338,26 @@ fn fail() { ctrl[6] = 1.0; ctrl[3] = 0.0; gate(false); verify(false); }
 fn stop() { ctrl[3] = 0.0; gate(false); verify(false); }
 @compute @workgroup_size(256) fn reduce(@builtin(local_invocation_index) lane: u32) {
   var acc = vec4<f32>(0.0);
-  for (var i = lane; i < GROUPS; i += 256u) { acc = combine(acc, partial[i]); }
+  for (var i = lane; i < GROUPS; i += 256u) { acc = combine(acc, partial[REGION_MAX * GROUPS + i]); }
   scratch[lane] = acc; workgroupBarrier();
   for (var stride = 128u; stride > 0u; stride /= 2u) { if (lane < stride) { scratch[lane] = combine(scratch[lane], scratch[lane + stride]); } workgroupBarrier(); }
   if (lane != 0u) { return; }
   let v = scratch[0];
   if (MODE == 0u) {
     ctrl[0] = 0.0; ctrl[2] = 0.0; ctrl[5] = 0.0; ctrl[6] = 0.0; ctrl[4] = v.z;
-    let on = v.z > TOL; ctrl[3] = select(0.0, 1.0, on); gate(on); verify(on && ALWAYS_VERIFY == 1u);
+    let on = v.z > TOL; ctrl[3] = select(0.0, 1.0, on); gate(on); verify(false);
     if (v.w > 0.0 || !finite(v.z)) { fail(); }
-  } else if (MODE == 1u) {
-    if (ctrl[3] == 0.0) { return; }
-    if (v.w > 0.0 || !finite(v.x) || v.x <= 0.0 || ctrl[0] <= 0.0) { fail(); return; }
-    ctrl[1] = ctrl[0] / v.x; if (!finite(ctrl[1])) { fail(); }
   } else if (MODE == 2u) {
+    if (ctrl[6] != 0.0) { fail(); return; }
     if (ctrl[3] == 0.0) { return; }
     ctrl[5] += 1.0; ctrl[4] = v.z;
     if (v.w > 0.0 || !finite(v.z)) { fail(); return; }
     verify(v.z <= TOL || (ctrl[5] - REFRESH * floor(ctrl[5] / REFRESH)) == 0.0);
-  } else if (MODE == 3u) {
-    if (ctrl[3] == 0.0) { return; }
-    if (v.w > 0.0 || !finite(v.x) || v.x <= 0.0) { fail(); return; }
-    if (ctrl[0] > 0.0) { ctrl[2] = v.x / ctrl[0]; } else { ctrl[2] = 0.0; }
-    ctrl[0] = v.x; if (!finite(ctrl[2])) { fail(); }
   } else if (MODE == 5u) {
     if (ctrl[6] != 0.0 || ctrl[8] == 0.0) { return; }
     if (v.w > 0.0 || !finite(v.z)) { fail(); return; }
-    ctrl[4] = v.z; if (ALWAYS_VERIFY == 1u) { ctrl[5] += 1.0; }
-    if (v.z <= TOL) { stop(); } else { verify(ALWAYS_VERIFY == 1u); }
+    ctrl[4] = v.z;
+    if (v.z <= TOL) { stop(); } else { verify(false); }
   } else {
     ctrl[7] = v.z; if (v.w > 0.0) { ctrl[6] = 1.0; }
   }
@@ -344,11 +365,11 @@ fn stop() { ctrl[3] = 0.0; gate(false); verify(false); }
 `;
 }
 
-// Structured level kernels for the first structured level (the all-coarse
-// grid), which is too large for one workgroup. lv: b, z, res, pad per cell.
-// lmeta: bit 0 fluid, bits 1..6 open faces (axis*2+side). Rediscretised
-// Poisson: same-width neighbour k = w, open face k = 2w, wall/solid nothing.
-// The next level lives at offset 0 of the fused buffer (or is absent).
+// The first structured level (the all-coarse grid), too large for one
+// workgroup. lv: b, z, res, pad per cell. lcoef per cell: k[axis*2+side] x6,
+// openSum, fluid (Galerkin sums of the finer level). Its restriction to the
+// next level is done by the fused kernel; the prolongation from it reads the
+// fused buffer at offset 0.
 function levelSource(level, next) {
   const [X, Y, Z] = level.shape;
   const nextShape = next ? next.shape : [1, 1, 1];
@@ -356,10 +377,11 @@ function levelSource(level, next) {
 const X: u32 = ${X}u; const Y: u32 = ${Y}u; const Z: u32 = ${Z}u; const COUNT: u32 = ${X * Y * Z}u;
 const NX: u32 = ${nextShape[0]}u; const NY: u32 = ${nextShape[1]}u; const NZ: u32 = ${nextShape[2]}u;
 override COLOR: u32 = 0u;
+override OVERCORRECT: f32 = 1.0;
 @group(0) @binding(0) var<storage, read_write> lv: array<vec4<f32>>;
-@group(0) @binding(1) var<storage, read> lcoef: array<vec4<f32>>;   // 2c: k0..k3; 2c+1: k4, k5, openSum, fluid
+@group(0) @binding(1) var<storage, read> lcoef: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read> ctrl: array<f32>;
-@group(0) @binding(3) var<storage, read_write> nextLv: array<vec4<f32>>;
+@group(0) @binding(3) var<storage, read> nextLv: array<vec4<f32>>;
 fn isActive() -> bool { return ctrl[3] > 0.0; }
 fn lin(x: u32, y: u32, z: u32) -> u32 { return x + X * (y + Y * z); }
 fn fluid(c: u32) -> bool { return lcoef[c * 2u + 1u].w > 0.5; }
@@ -391,31 +413,21 @@ fn coords(c: u32) -> vec3<u32> { return vec3<u32>(c % X, (c / X) % Y, c / (X * Y
   let p = coords(c); let r = row(p.x, p.y, p.z, c);
   lv[c].z = lv[c].x - (r.diag * lv[c].y - r.sum);
 }
-@compute @workgroup_size(${WG}) fn restrictNext(@builtin(global_invocation_id) id: vec3<u32>) {
-  let C = id.x; if (C >= NX * NY * NZ || !isActive()) { return; }
-  let cx = C % NX; let cy = (C / NX) % NY; let cz = C / (NX * NY);
-  var sum = 0.0;
-  for (var dz = 0u; dz < 2u; dz++) { for (var dy = 0u; dy < 2u; dy++) { for (var dx = 0u; dx < 2u; dx++) {
-    let x = cx * 2u + dx; let y = cy * 2u + dy; let z = cz * 2u + dz;
-    if (x < X && y < Y && z < Z) { sum += lv[lin(x, y, z)].z; }
-  } } }
-  nextLv[C] = vec4<f32>(sum, 0.0, 0.0, 0.0);
-}
 @compute @workgroup_size(${WG}) fn prolongFromNext(@builtin(global_invocation_id) id: vec3<u32>) {
   let c = id.x; if (c >= COUNT || !isActive() || !fluid(c)) { return; }
   let p = coords(c);
-  lv[c].y += nextLv[(p.x / 2u) + NX * ((p.y / 2u) + NY * (p.z / 2u))].y;
+  lv[c].y += OVERCORRECT * nextLv[(p.x / 2u) + NX * ((p.y / 2u) + NY * (p.z / 2u))].y;
 }
 `;
 }
 
 // All structured levels after the first, fused into one single-workgroup
-// kernel: the whole lower part of the V-cycle (smooth, residual, restrict,
-// ..., coarsest sweeps, ..., prolong, smooth) in one dispatch with barriers
-// between phases. The levels share one vector buffer and one meta buffer at
-// the given offsets; the first fused level sits at offset 0.
-const FUSED_WG = 256;
-function fusedSource(levels, { smoothing, coarsestSweeps }) {
+// kernel: restriction from the first level, then the lower part of the
+// V-cycle (smooth, residual, restrict, ..., coarsest sweeps, ..., prolong,
+// smooth), with barriers between phases. The levels share one vector buffer
+// and one coefficient buffer at the given offsets; the first fused level sits
+// at offset 0.
+function fusedSource(first, levels, { smoothing, coarsestSweeps }) {
   const per = levels.map((L, j) => {
     const [X, Y, Z] = L.shape, count = X * Y * Z;
     return /* wgsl */`
@@ -468,14 +480,15 @@ fn prolong${j}(lane: u32) {
   for (var c = lane; c < COUNT${j}; c += ${FUSED_WG}u) {
     if (!fluid${j}(c)) { continue; }
     let x = c % X${j}; let y = (c / X${j}) % Y${j}; let z = c / (X${j} * Y${j});
-    lv[OFF${j} + c].y += lv[OFF${j + 1} + (x / 2u) + X${j + 1} * ((y / 2u) + Y${j + 1} * (z / 2u))].y;
+    lv[OFF${j} + c].y += OVERCORRECT * lv[OFF${j + 1} + (x / 2u) + X${j + 1} * ((y / 2u) + Y${j + 1} * (z / 2u))].y;
   }
   sync();
 }` : ''}
 `;
   });
+  const [FX, FY, FZ] = first.shape;
   const last = levels.length - 1;
-  const body = [];
+  const body = ['restrictFirst(lane);'];
   for (let j = 0; j < last; j++) {
     for (let s = 0; s < smoothing; s++) body.push(`smooth${j}(lane, 0u); smooth${j}(lane, 1u);`);
     body.push(`residual${j}(lane); restrict${j}(lane);`);
@@ -486,11 +499,27 @@ fn prolong${j}(lane: u32) {
     for (let s = 0; s < smoothing; s++) body.push(`smooth${j}(lane, 0u); smooth${j}(lane, 1u);`);
   }
   return /* wgsl */`
+const FX: u32 = ${FX}u; const FY: u32 = ${FY}u; const FZ: u32 = ${FZ}u;
+override OVERCORRECT: f32 = 1.0;
 @group(0) @binding(0) var<storage, read_write> lv: array<vec4<f32>>;
 @group(0) @binding(1) var<storage, read> lcoef: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read> ctrl: array<f32>;
+@group(0) @binding(3) var<storage, read> firstLv: array<vec4<f32>>;
 struct Row { diag: f32, sum: f32 }
 fn sync() { storageBarrier(); workgroupBarrier(); }
+// Fused level 0 (offset 0): b = sum of the first level's residual over the children; z = 0.
+fn restrictFirst(lane: u32) {
+  for (var C = lane; C < COUNT0; C += ${FUSED_WG}u) {
+    let cx = C % X0; let cy = (C / X0) % Y0; let cz = C / (X0 * Y0);
+    var sum = 0.0;
+    for (var dz = 0u; dz < 2u; dz++) { for (var dy = 0u; dy < 2u; dy++) { for (var dx = 0u; dx < 2u; dx++) {
+      let x = cx * 2u + dx; let y = cy * 2u + dy; let z = cz * 2u + dz;
+      if (x < FX && y < FY && z < FZ) { sum += firstLv[x + FX * (y + FY * z)].z; }
+    } } }
+    lv[C] = vec4<f32>(sum, 0.0, 0.0, 0.0);
+  }
+  sync();
+}
 ${per.join('\n')}
 @compute @workgroup_size(${FUSED_WG}) fn coarseCycle(@builtin(local_invocation_index) lane: u32) {
   if (ctrl[3] == 0.0) { return; }
@@ -499,40 +528,33 @@ ${per.join('\n')}
 `;
 }
 
-// Level 0 <-> first structured level transfers.
+// Level 0 -> first structured level restriction.
 function transferSource(n, coarseCount) {
   return /* wgsl */`
 const N: u32 = ${n}u; const C1: u32 = ${coarseCount}u;
-@group(0) @binding(0) var<storage, read_write> state: array<vec4<f32>>;
-@group(0) @binding(1) var<storage, read> qb: array<vec4<f32>>;
-@group(0) @binding(2) var<storage, read> cellMeta: array<vec4<f32>>;
-@group(0) @binding(3) var<storage, read_write> lv1: array<vec4<f32>>;
-@group(0) @binding(4) var<storage, read> childStart: array<u32>;
-@group(0) @binding(5) var<storage, read> child: array<i32>;
-@group(0) @binding(6) var<storage, read> ctrl: array<f32>;
-fn isActive() -> bool { return ctrl[3] > 0.0; }
+@group(0) @binding(0) var<storage, read> qb: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read_write> lv1: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read> childStart: array<u32>;
+@group(0) @binding(3) var<storage, read> child: array<i32>;
+@group(0) @binding(4) var<storage, read> ctrl: array<f32>;
 @compute @workgroup_size(${WG}) fn restrict0(@builtin(global_invocation_id) id: vec3<u32>) {
-  let c = id.x; if (c >= C1 || !isActive()) { return; }
+  let c = id.x; if (c >= C1 || ctrl[3] == 0.0) { return; }
   var sum = 0.0;
   for (var t = childStart[c]; t < childStart[c + 1u]; t++) { sum += qb[u32(child[t])].x; }
   lv1[c] = vec4<f32>(sum, 0.0, 0.0, 0.0);
 }
-@compute @workgroup_size(${WG}) fn prolong0(@builtin(global_invocation_id) id: vec3<u32>) {
-  let i = id.x; if (i >= N || !isActive()) { return; }
-  state[i].w += lv1[u32(cellMeta[i * 2u + 1u].w)].y;
-}
 `;
 }
 
-// method 'pcg': conjugate gradients preconditioned by `preconditioner`
-// ('diagonal' or 'multigrid'). method 'multigrid': plain V-cycle iteration
-// (p += V(r)), verified by the true residual each cycle.
-export function createCompositeFastPCGGPU(device, grid, { tolerance = 1e-5, method = 'pcg', preconditioner = 'multigrid', smoothing = 1, coarsestSweeps = 8, omega = 1.0, refreshEvery = 8 } = {}) {
+// Conjugate gradients preconditioned by `preconditioner`: 'diagonal' (like for
+// like with the PCG candidate) or 'multigrid' (one V-cycle; `overcorrect`
+// scales the prolonged corrections, the usual remedy for aggregation levels).
+export function createCompositeFastPCGGPU(device, grid, { tolerance = 1e-5, preconditioner = 'multigrid', smoothing = 1, coarsestSweeps = 8, omega = 1.0, overcorrect = 1.0, refreshEvery = 8 } = {}) {
   if (!Number.isFinite(tolerance) || tolerance <= 0 || Math.fround(tolerance) === 0) throw new Error('positive float32 tolerance required');
-  if (!['pcg', 'multigrid'].includes(method)) throw new Error('method must be pcg or multigrid');
   if (!['diagonal', 'multigrid'].includes(preconditioner)) throw new Error('preconditioner must be diagonal or multigrid');
   if (!Number.isInteger(refreshEvery) || refreshEvery < 1) throw new Error('refreshEvery must be a positive integer');
-  const usesHierarchy = method === 'multigrid' || preconditioner === 'multigrid';
+  if (!(overcorrect > 0) || !(omega > 0)) throw new Error('positive overcorrect and omega required');
+  const multigrid = preconditioner === 'multigrid';
   const structure = buildCompositeStructure(grid);
   const n = structure.cells, m = grid.faces.length, groups = Math.ceil(n / WG);
   if (!n || !m) throw new Error('solve requires nonempty cells and faces');
@@ -544,15 +566,14 @@ export function createCompositeFastPCGGPU(device, grid, { tolerance = 1e-5, meth
   let offset = 0; for (const L of fused) { L.offset = offset; offset += L.shape[0] * L.shape[1] * L.shape[2]; }
   const firstCount = first.shape[0] * first.shape[1] * first.shape[2];
   const owned = [], shaders = [];
-  const alloc = (label, size, data, extraUsage = 0) => {
+  const alloc = (label, size, data) => {
     if (size > Math.min(device.limits.maxBufferSize, device.limits.maxStorageBufferBindingSize)) throw new Error(`${label} exceeds device capacity`);
-    const b = device.createBuffer({ label, size: Math.max(16, size), usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST | extraUsage });
+    const b = device.createBuffer({ label, size: Math.max(16, size), usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
     owned.push(b); if (data) device.queue.writeBuffer(b, 0, data); return b;
   };
   const shader = (label, code) => { const s = device.createShaderModule({ label, code }); shaders.push(s); return s; };
   const f32bits = i => new Float32Array(new Int32Array([i]).buffer)[0];
   const coefOf = L => Float32Array.from(L.coef);
-  // Indirect entries: level 0, first structured level, ONE, VERIFY, VERIFY_ONE.
   const counts = [groups, Math.ceil(firstCount / WG), 1];
   const IND = { L0: 0, L1: 1, ONE: 2, VERIFY: 3, VERIFY_ONE: 4 };
   let buffers;
@@ -576,7 +597,7 @@ export function createCompositeFastPCGGPU(device, grid, { tolerance = 1e-5, meth
       meta: alloc('fast PCG cell meta', meta.byteLength, meta),
       state: alloc('fast PCG state', n * 16),
       qb: alloc('fast PCG q/b/target', n * 16),
-      partial: alloc('fast PCG partials', groups * 16),
+      partial: alloc('fast PCG partials', 4 * groups * 16),
       ctrl: alloc('fast PCG control', 48),
       indirectSrc: alloc('fast PCG indirect dispatch source', (counts.length + 2) * 16),
       indirect: (() => { const b = device.createBuffer({ label: 'fast PCG indirect dispatch', size: (counts.length + 2) * 16, usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST }); owned.push(b); return b; })(),
@@ -587,9 +608,9 @@ export function createCompositeFastPCGGPU(device, grid, { tolerance = 1e-5, meth
       childStart: alloc('fast PCG parent child start', hierarchy.parentChildStart.byteLength, hierarchy.parentChildStart),
       child: alloc('fast PCG parent child', hierarchy.parentChild.byteLength, hierarchy.parentChild),
       firstLv: alloc('fast PCG first level vectors', firstCount * 16),
-      firstMeta: alloc('fast PCG first level coefficients', firstCount * 32, coefOf(first)),
+      firstCoef: alloc('fast PCG first level coefficients', firstCount * 32, coefOf(first)),
       fusedLv: alloc('fast PCG fused level vectors', Math.max(1, offset) * 16),
-      fusedMeta: alloc('fast PCG fused level coefficients', fusedCoef.byteLength, fusedCoef),
+      fusedCoef: alloc('fast PCG fused level coefficients', fusedCoef.byteLength, fusedCoef),
     };
   } catch (e) { for (const b of owned) b.destroy(); throw e; }
 
@@ -598,8 +619,8 @@ export function createCompositeFastPCGGPU(device, grid, { tolerance = 1e-5, meth
   const entry = (binding, type) => ({ binding, visibility: GPUShaderStage.COMPUTE, buffer: { type } });
   const coreTypes = ['read-only-storage', 'read-only-storage', 'read-only-storage', 'storage', 'storage', 'storage', 'storage'];
   const coreBuffers = ['slots', 'tails', 'meta', 'state', 'qb', 'partial', 'ctrl'].map(k => buffers[k]);
-  const ioTypes = ['storage', 'read-only-storage', 'read-only-storage'];
-  const ioBuffers = [buffers.flux, buffers.cellFace, buffers.faces];
+  const ioTypes = ['storage', 'read-only-storage', 'read-only-storage', 'read-only-storage'];
+  const ioBuffers = [buffers.flux, buffers.cellFace, buffers.faces, buffers.firstLv];
   const subset = (types, bufs, bindings) => {
     const layout = device.createBindGroupLayout({ entries: bindings.map(b => entry(b, types[b])) });
     return { layout, group: device.createBindGroup({ layout, entries: bindings.map(b => ({ binding: b, resource: { buffer: bufs[b] } })) }) };
@@ -609,16 +630,20 @@ export function createCompositeFastPCGGPU(device, grid, { tolerance = 1e-5, meth
   const ioInit = subset(ioTypes, ioBuffers, [0, 1]);
   const coreProject = subset(coreTypes, coreBuffers, [3, 6]);
   const ioProject = subset(ioTypes, ioBuffers, [0, 2]);
-  const level0Module = shader('fast composite PCG level 0', level0Source(n, m));
-  const diag = preconditioner === 'diagonal' && method === 'pcg' ? 1 : 0;
+  const coreProlong = subset(coreTypes, coreBuffers, [2, 3, 6]);
+  const ioProlong = subset(ioTypes, ioBuffers, [3]);
+  const level0Module = shader('fast composite PCG level 0', level0Source(n, m, groups));
+  const diag = multigrid ? 0 : 1;
   const mkPipeline = (entryPoint, layouts, constants = {}) => device.createComputePipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: layouts.map(l => l.layout) }), compute: { module: level0Module, entryPoint, constants: { DIAG_PRECONDITION: diag, ...constants } } });
   const iter = (entryPoint, constants) => ({ pipeline: mkPipeline(entryPoint, [coreAll], constants), groups: [coreAll.group], indirect: IND.L0 });
   const pipelines = {
     init: { pipeline: mkPipeline('init', [coreInit, ioInit]), groups: [coreInit.group, ioInit.group] },
     project: { pipeline: mkPipeline('project', [coreProject, ioProject]), groups: [coreProject.group, ioProject.group] },
-    matvec: iter('matvec'), update: iter('update'), dotrz: iter('dotrz'), direction: iter('direction'), trueResidual: iter('trueResidual'), residual: iter('residual'), correct: iter('correct'),
+    prolong0: { pipeline: mkPipeline('prolong0', [coreProlong, ioProlong], { OVERCORRECT: overcorrect }), groups: [coreProlong.group, ioProlong.group], indirect: IND.L0 },
+    matvec: iter('matvec'), update: iter('update'), direction: iter('direction'), trueResidual: iter('trueResidual'), residual: iter('residual'),
     refresh: { ...iter('refresh'), indirect: IND.VERIFY },
     smooth: [iter('smoothRB', { COLOR: 0, OMEGA: omega }), iter('smoothRB', { COLOR: 1, OMEGA: omega })],
+    smoothRZ: [iter('smoothRB', { COLOR: 0, OMEGA: omega, EMIT_RZ: 1 }), iter('smoothRB', { COLOR: 1, OMEGA: omega, EMIT_RZ: 1 })],
   };
   const intakeModule = shader('fast composite PCG intake', /* wgsl */`
 const N: u32 = ${n}u;
@@ -629,31 +654,32 @@ const N: u32 = ${n}u;
   const intakePipeline = device.createComputePipeline({ layout: 'auto', compute: { module: intakeModule, entryPoint: 'intake' } });
   const intakeGroup = targetBuffer => device.createBindGroup({ layout: intakePipeline.getBindGroupLayout(0), entries: [targetBuffer, buffers.qb].map((buffer, binding) => ({ binding, resource: { buffer } })) });
   const reduceModule = shader('fast composite PCG reduce', reduceSource(groups, tolerance, counts, refreshEvery));
-  const reducePipelines = [0, 1, 2, 3, 4, 5].map(MODE => device.createComputePipeline({ layout: 'auto', compute: { module: reduceModule, entryPoint: 'reduce', constants: { MODE, ALWAYS_VERIFY: method === 'multigrid' ? 1 : 0 } } }));
-  const reduceGroups = reducePipelines.map(p => device.createBindGroup({ layout: p.getBindGroupLayout(0), entries: [buffers.partial, buffers.ctrl, buffers.indirectSrc].map((buffer, binding) => ({ binding, resource: { buffer } })) }));
+  const reducePipelines = Object.fromEntries([0, 2, 4, 5].map(MODE => [MODE, device.createComputePipeline({ layout: 'auto', compute: { module: reduceModule, entryPoint: 'reduce', constants: { MODE } } })]));
+  const reduceGroups = Object.fromEntries(Object.entries(reducePipelines).map(([MODE, p]) => [MODE, device.createBindGroup({ layout: p.getBindGroupLayout(0), entries: [buffers.partial, buffers.ctrl, buffers.indirectSrc].map((buffer, binding) => ({ binding, resource: { buffer } })) })]));
   // Hierarchy pipelines.
   let transfer = null, firstLevel = null, coarse = null;
-  if (usesHierarchy) {
+  if (multigrid) {
     const tModule = shader('fast composite PCG transfer', transferSource(n, firstCount));
-    const tTypes = ['storage', 'read-only-storage', 'read-only-storage', 'storage', 'read-only-storage', 'read-only-storage', 'read-only-storage'];
+    const tTypes = ['read-only-storage', 'storage', 'read-only-storage', 'read-only-storage', 'read-only-storage'];
     const tLayout = device.createBindGroupLayout({ entries: tTypes.map((type, binding) => entry(binding, type)) });
-    const tPipe = entryPoint => device.createComputePipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [tLayout] }), compute: { module: tModule, entryPoint } });
-    const tGroup = device.createBindGroup({ layout: tLayout, entries: [buffers.state, buffers.qb, buffers.meta, buffers.firstLv, buffers.childStart, buffers.child, buffers.ctrl].map((buffer, binding) => ({ binding, resource: { buffer } })) });
-    transfer = { restrict0: { pipeline: tPipe('restrict0'), group: tGroup }, prolong0: { pipeline: tPipe('prolong0'), group: tGroup } };
+    transfer = {
+      pipeline: device.createComputePipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [tLayout] }), compute: { module: tModule, entryPoint: 'restrict0' } }),
+      group: device.createBindGroup({ layout: tLayout, entries: [buffers.qb, buffers.firstLv, buffers.childStart, buffers.child, buffers.ctrl].map((buffer, binding) => ({ binding, resource: { buffer } })) }),
+    };
     const lModule = shader('fast composite PCG first level', levelSource(first, fused[0] ?? null));
-    const lLayout = device.createBindGroupLayout({ entries: [entry(0, 'storage'), entry(1, 'read-only-storage'), entry(2, 'read-only-storage'), entry(3, 'storage')] });
+    const lLayout = device.createBindGroupLayout({ entries: [entry(0, 'storage'), entry(1, 'read-only-storage'), entry(2, 'read-only-storage'), entry(3, 'read-only-storage')] });
     const lPl = device.createPipelineLayout({ bindGroupLayouts: [lLayout] });
     const lmk = (entryPoint, constants = {}) => device.createComputePipeline({ layout: lPl, compute: { module: lModule, entryPoint, constants } });
     firstLevel = {
-      group: device.createBindGroup({ layout: lLayout, entries: [buffers.firstLv, buffers.firstMeta, buffers.ctrl, buffers.fusedLv].map((buffer, binding) => ({ binding, resource: { buffer } })) }),
-      smooth: [lmk('smoothRB', { COLOR: 0 }), lmk('smoothRB', { COLOR: 1 })], residual: lmk('residual'), restrictNext: fused.length ? lmk('restrictNext') : null, prolongFromNext: fused.length ? lmk('prolongFromNext') : null,
+      group: device.createBindGroup({ layout: lLayout, entries: [buffers.firstLv, buffers.firstCoef, buffers.ctrl, buffers.fusedLv].map((buffer, binding) => ({ binding, resource: { buffer } })) }),
+      smooth: [lmk('smoothRB', { COLOR: 0 }), lmk('smoothRB', { COLOR: 1 })], residual: lmk('residual'), prolongFromNext: fused.length ? lmk('prolongFromNext', { OVERCORRECT: overcorrect }) : null,
     };
     if (fused.length) {
-      const cModule = shader('fast composite PCG fused coarse levels', fusedSource(fused, { smoothing, coarsestSweeps }));
-      const cLayout = device.createBindGroupLayout({ entries: [entry(0, 'storage'), entry(1, 'read-only-storage'), entry(2, 'read-only-storage')] });
+      const cModule = shader('fast composite PCG fused coarse levels', fusedSource(first, fused, { smoothing, coarsestSweeps }));
+      const cLayout = device.createBindGroupLayout({ entries: [entry(0, 'storage'), entry(1, 'read-only-storage'), entry(2, 'read-only-storage'), entry(3, 'read-only-storage')] });
       coarse = {
-        pipeline: device.createComputePipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [cLayout] }), compute: { module: cModule, entryPoint: 'coarseCycle' } }),
-        group: device.createBindGroup({ layout: cLayout, entries: [buffers.fusedLv, buffers.fusedMeta, buffers.ctrl].map((buffer, binding) => ({ binding, resource: { buffer } })) }),
+        pipeline: device.createComputePipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [cLayout] }), compute: { module: cModule, entryPoint: 'coarseCycle', constants: { OVERCORRECT: overcorrect } } }),
+        group: device.createBindGroup({ layout: cLayout, entries: [buffers.fusedLv, buffers.fusedCoef, buffers.ctrl, buffers.firstLv].map((buffer, binding) => ({ binding, resource: { buffer } })) }),
       };
     }
   }
@@ -670,8 +696,6 @@ const N: u32 = ${n}u;
   const encode = (encoder, targetBuffer, iterations, reset, timestampWrites = null) => {
     if (reset) { encoder.clearBuffer(buffers.state); encoder.clearBuffer(buffers.ctrl); }
     let pass = null, passes = 0, dispatches = 0;
-    // Timestamps are only ordered within one pass on this route, so each pass
-    // gets its own begin/end pair: indices base + 2*pass, base + 2*pass + 1.
     const begin = () => {
       const descriptor = { label: 'fast composite PCG' };
       if (timestampWrites) descriptor.timestampWrites = { querySet: timestampWrites.querySet, beginningOfPassWriteIndex: (timestampWrites.base ?? 0) + passes * 2, endOfPassWriteIndex: (timestampWrites.base ?? 0) + passes * 2 + 1 };
@@ -683,48 +707,38 @@ const N: u32 = ${n}u;
     const gated = (pipeline, groupsList, slot) => { pass.setPipeline(pipeline); groupsList.forEach((g, i) => pass.setBindGroup(i, g)); pass.dispatchWorkgroupsIndirect(buffers.indirect, slot * 16); dispatches++; };
     const l0 = e => gated(e.pipeline, e.groups, e.indirect);
     const reduce = mode => gated(reducePipelines[mode], [reduceGroups[mode]], mode === 5 ? IND.VERIFY_ONE : IND.ONE);
+    // One V-cycle on A z = r; the final two sweeps emit r.z for the direction.
     const vcycle = () => {
       for (let s = 0; s < smoothing; s++) { l0(pipelines.smooth[0]); l0(pipelines.smooth[1]); }
       l0(pipelines.residual);
-      gated(transfer.restrict0.pipeline, [transfer.restrict0.group], IND.L1);
+      gated(transfer.pipeline, [transfer.group], IND.L1);
       const F = firstLevel;
-      if (!F.restrictNext) {
+      if (!coarse) {
         for (let s = 0; s < coarsestSweeps; s++) { gated(F.smooth[0], [F.group], IND.L1); gated(F.smooth[1], [F.group], IND.L1); }
       } else {
         for (let s = 0; s < smoothing; s++) { gated(F.smooth[0], [F.group], IND.L1); gated(F.smooth[1], [F.group], IND.L1); }
         gated(F.residual, [F.group], IND.L1);
-        // restrictNext runs over the next level's cells: a direct dispatch of its
-        // group count would do; it is gated through L1 (a superset of workgroups
-        // whose extra threads exit on the bound) so the converged path stays empty.
-        gated(F.restrictNext, [F.group], IND.L1);
         gated(coarse.pipeline, [coarse.group], IND.ONE);
         gated(F.prolongFromNext, [F.group], IND.L1);
         for (let s = 0; s < smoothing; s++) { gated(F.smooth[0], [F.group], IND.L1); gated(F.smooth[1], [F.group], IND.L1); }
       }
-      gated(transfer.prolong0.pipeline, [transfer.prolong0.group], IND.L0);
-      for (let s = 0; s < smoothing; s++) { l0(pipelines.smooth[0]); l0(pipelines.smooth[1]); }
+      l0(pipelines.prolong0);
+      for (let s = 0; s < smoothing - 1; s++) { l0(pipelines.smooth[0]); l0(pipelines.smooth[1]); }
+      l0(pipelines.smoothRZ[0]); l0(pipelines.smoothRZ[1]);
     };
     direct(intakePipeline, [intakeGroup(targetBuffer)], groups);
     direct(pipelines.init.pipeline, pipelines.init.groups, groups); direct(reducePipelines[0], [reduceGroups[0]], 1);
     flushGate();
-    if (method === 'pcg') {
-      if (preconditioner === 'multigrid') vcycle();
-      l0(pipelines.dotrz); reduce(3); l0(pipelines.direction);
-      for (let i = 0; i < iterations; i++) {
-        l0(pipelines.matvec); reduce(1);
-        l0(pipelines.update); reduce(2);
-        flushGate();
-        l0(pipelines.refresh); reduce(5);
-        flushGate();
-        if (preconditioner === 'multigrid') vcycle();
-        l0(pipelines.dotrz); reduce(3); l0(pipelines.direction);
-      }
-    } else {
-      // Plain V-cycles: z = V(r); p += z; r = b - A p (verified every cycle).
-      for (let i = 0; i < iterations; i++) {
-        vcycle(); l0(pipelines.correct); l0(pipelines.refresh); reduce(5);
-        flushGate();
-      }
+    if (multigrid) vcycle();
+    l0(pipelines.direction);
+    for (let i = 0; i < iterations; i++) {
+      l0(pipelines.matvec);
+      l0(pipelines.update); reduce(2);
+      flushGate();
+      l0(pipelines.refresh); reduce(5);
+      flushGate();
+      if (multigrid) vcycle();
+      l0(pipelines.direction);
     }
     flushGate();
     direct(pipelines.trueResidual.pipeline, pipelines.trueResidual.groups, groups); direct(reducePipelines[4], [reduceGroups[4]], 1);
@@ -738,7 +752,7 @@ const N: u32 = ${n}u;
     shaders, fluxBuffer: buffers.flux, structure, hierarchy,
     get dispatches() { return lastDispatches; },
     get passes() { return lastPasses; },
-    passesFor(iterations) { return method === 'pcg' ? 3 + 2 * iterations : 2 + iterations; },
+    passesFor(iterations) { return 3 + 2 * iterations; },
     setInput(flux, target = new Float32Array(n)) {
       alive(); if (flux.length !== m || target.length !== n || !flux.every(Number.isFinite) || !target.every(Number.isFinite)) throw new Error('finite complete flux/target arrays required');
       const q = Float32Array.from(flux), t = Float32Array.from(target); if (!q.every(Number.isFinite) || !t.every(Number.isFinite)) throw new Error('input exceeds float32 range');
@@ -765,7 +779,7 @@ const N: u32 = ${n}u;
         const target = Float32Array.from({ length: n }, (_, i) => qb[i * 4 + 2]);
         const d = compositeDivergence(grid, flux), maxDivergenceError = d.reduce((s, v, i) => Math.max(s, Math.abs(v - target[i])), 0), targetFinite = target.every(Number.isFinite);
         const converged = c[6] === 0 && targetFinite && pressure.every(Number.isFinite) && Number.isFinite(maxDivergenceError) && maxDivergenceError <= tolerance;
-        return { flux, pressure, target, divergence: d, converged, receipt: { identity: COMPOSITE_GRID_ID, route: FAST_PCG_ROUTE, method, preconditioner: method === 'pcg' ? preconditioner : 'none', smoothing, coarsestSweeps, inputRoute, generation: captured, iterations: c[5], iterationBudget: budget, warmStartRequested: warm, tolerance, maxDivergenceError, gpuTrueResidual: c[7], recursiveResidual: c[4], breakdown: c[6] !== 0, converged, targetFinite, cells: n, faces: m, levels: hierarchy.levels.map(L => L.shape), dispatches: lastDispatches, passes: lastPasses, innerFeedback: true, liveFlame: false } };
+        return { flux, pressure, target, divergence: d, converged, receipt: { identity: COMPOSITE_GRID_ID, route: FAST_PCG_ROUTE, preconditioner, smoothing, coarsestSweeps, overcorrect, inputRoute, generation: captured, iterations: c[5], iterationBudget: budget, warmStartRequested: warm, tolerance, maxDivergenceError, gpuTrueResidual: c[7], recursiveResidual: c[4], breakdown: c[6] !== 0, converged, targetFinite, cells: n, faces: m, levels: hierarchy.levels.map(L => L.shape), dispatches: lastDispatches, passes: lastPasses, innerFeedback: true, liveFlame: false } };
       } finally { b.destroy(); }
     },
     destroy() { if (!destroyed) { owned.forEach(b => b.destroy()); destroyed = true; } },

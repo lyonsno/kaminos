@@ -41,7 +41,7 @@ try {
     const theirs = await runCandidate(1024);
     const row = { fixture: fixture.name, tolerance: fixture.tolerance, cells: grid.cells.length, faces: grid.faces.length, candidate: { converged: theirs.converged, iterations: theirs.receipt.iterations, error: theirs.flux.reduce((s, v, i) => Math.max(s, Math.abs(v - ref.flux[i])), 0) }, modes: {} };
     candidate.destroy();
-    for (const [mode, options, budget] of [['diagonal', { method: 'pcg', preconditioner: 'diagonal' }, 1024], ['multigrid', { method: 'pcg', preconditioner: 'multigrid' }, 64]]) {
+    for (const [mode, options, budget] of [['diagonal', { preconditioner: 'diagonal' }, 1024], ['multigrid', { preconditioner: 'multigrid' }, 64], ['multigrid-oc1.6', { preconditioner: 'multigrid', overcorrect: 1.6 }, 64]]) {
       const preconditioner = mode;
       report.phase = `${fixture.name}-${preconditioner}`;
       const solver = createCompositeFastPCGGPU(device, grid, { tolerance: fixture.tolerance, ...options });
