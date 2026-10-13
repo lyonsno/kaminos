@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { rmSync } from 'node:fs';
-import { chmod, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const bridgeUrl = new URL('../volume-dense-cue-splat-bridge.mjs', import.meta.url);
 const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8');
@@ -39,7 +39,16 @@ assert.match(core, /boundarySplatRendererIdentity:\s*state\.boundarySplatRendere
 assert.match(core, /boundarySplatAttributeModelIdentity:\s*state\.boundarySplatAttributeModelIdentity/, 'frozen canvas receipt exposes the effective learned attribute model');
 
 const root = await mkdtemp(join(tmpdir(), 'kaminos-dense-cue-splat-bridge-contract-'));
-process.on('exit', () => { try { rmSync(root, { recursive: true, force: true }); } catch {} });
+// The shared temp root has other producers, including a concurrent copy of
+// this contract: a decoy profile directory appearing there mid-run must not
+// fail this one, which only ever looks at its own private TMPDIR.
+const decoy = join(tmpdir(), `kaminos-dense-cue-splat-bridge-profile-decoy-${process.pid}`);
+spawn('sh', ['-c', 'sleep 3; mkdir -p "$1"', 'sh', decoy], { detached: true, stdio: 'ignore' }).unref();
+process.on('exit', code => {
+  try { rmSync(decoy, { recursive: true, force: true }); } catch {}
+  if (code === 0) { try { rmSync(root, { recursive: true, force: true }); } catch {} }
+  else console.error(`keeping fixture root ${root}: the failure reports are there`);
+});
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const roleNames = ['truthHigh', 'low160to144', 'learned160to144', 'low160to112', 'learned160to112'];
 const roles = {};
@@ -77,16 +86,20 @@ await writeFile(inputPath, `${JSON.stringify({
   roles,
 })}\n`);
 
+// Every bridge spawn gets a private TMPDIR under the fixture root, and only
+// that directory is inspected for profile directories, so nothing another
+// process does in the shared temp root can fail this contract.
+const privateTmp = join(root, 'tmp');
+await mkdir(privateTmp);
+const bridgeEnv = (extra = {}) => ({ ...process.env, TMPDIR: privateTmp, ...extra });
+const profilePrefix = 'kaminos-dense-cue-splat-bridge-profile-';
+const listProfiles = async () => (await readdir(privateTmp)).filter(name => name.startsWith(profilePrefix)).map(name => join(privateTmp, name));
+const profilesBefore = await listProfiles();
+
 // Validation never launches a browser, so it must not create a browser
 // profile directory either. The bridge used to create one at startup, under
 // /tmp and never removed, leaving two behind on every run of this test.
-const profilePrefix = 'kaminos-dense-cue-splat-bridge-profile-';
-const profileRoots = [...new Set([tmpdir(), '/tmp'])];
-const listProfiles = async () => (await Promise.all(profileRoots.map(async dir =>
-  (await readdir(dir).catch(() => [])).filter(name => name.startsWith(profilePrefix)).map(name => join(dir, name))))).flat();
-const profilesBefore = await listProfiles();
-
-const validate = spawnSync(process.execPath, [bridgeUrl.pathname, '--input', inputPath, '--out', outputPath, '--validate-only'], { encoding: 'utf8' });
+const validate = spawnSync(process.execPath, [bridgeUrl.pathname, '--input', inputPath, '--out', outputPath, '--validate-only'], { encoding: 'utf8', env: bridgeEnv() });
 assert.equal(validate.status, 0, validate.stderr || validate.stdout);
 const report = JSON.parse(await readFile(outputPath, 'utf8'));
 assert.equal(report.status, 'validated');
@@ -99,7 +112,7 @@ assert.equal(report.falseClosureChecks.sourceSubstitution, false);
 // with a written report, not an unhandled error event, and leaves no profile.
 const missingOut = join(root, 'missing-browser-report.json');
 const missing = spawnSync(process.execPath, [bridgeUrl.pathname, '--input', inputPath, '--out', missingOut],
-  { encoding: 'utf8', env: { ...process.env, KAMINOS_CHROME: join(root, 'no-such-browser') } });
+  { encoding: 'utf8', env: bridgeEnv({ KAMINOS_CHROME: join(root, 'no-such-browser') }) });
 assert.equal(missing.status, 2, missing.stderr || missing.stdout);
 const missingReport = JSON.parse(await readFile(missingOut, 'utf8'));
 assert.equal(missingReport.failurePhase, 'browser-capture');
@@ -120,7 +133,7 @@ exit 0
 `, { mode: 0o755 });
 const launchOut = join(root, 'launch-failure-report.json');
 const launch = spawnSync(process.execPath, [bridgeUrl.pathname, '--input', inputPath, '--out', launchOut],
-  { encoding: 'utf8', env: { ...process.env, KAMINOS_CHROME: stubBrowser, KAMINOS_BRIDGE_STUB_RECORD: stubRecord } });
+  { encoding: 'utf8', env: bridgeEnv({ KAMINOS_CHROME: stubBrowser, KAMINOS_BRIDGE_STUB_RECORD: stubRecord }) });
 const stubProfile = await readFile(stubRecord, 'utf8');
 await chmod(join(stubProfile, 'locked'), 0o700);
 await rm(stubProfile, { recursive: true, force: true });
@@ -128,12 +141,12 @@ assert.equal(launch.status, 2, launch.stderr || launch.stdout);
 const launchReport = JSON.parse(await readFile(launchOut, 'utf8'));
 assert.equal(launchReport.failurePhase, 'browser-capture');
 assert.match(launchReport.error, /Chrome DevTools endpoint did not open/, 'the bridge error survives a failed profile removal');
-assert.ok(stubProfile.startsWith(tmpdir()), `the profile is created under the temp root, got ${stubProfile}`);
+assert.ok(stubProfile.startsWith(privateTmp), `the profile is created under the temp root, got ${stubProfile}`);
 assert.match(launch.stderr, /could not remove browser profile/, 'a failed removal is reported with its path');
 
 await writeFile(roles.learned160to112.boundarySidecar.path, Buffer.alloc(16, 0xff));
 const failedOutputPath = join(root, 'failed-report.json');
-const reject = spawnSync(process.execPath, [bridgeUrl.pathname, '--input', inputPath, '--out', failedOutputPath, '--validate-only'], { encoding: 'utf8' });
+const reject = spawnSync(process.execPath, [bridgeUrl.pathname, '--input', inputPath, '--out', failedOutputPath, '--validate-only'], { encoding: 'utf8', env: bridgeEnv() });
 assert.equal(reject.status, 2, 'checksum substitution must fail validation');
 const failedReport = JSON.parse(await readFile(failedOutputPath, 'utf8'));
 assert.equal(failedReport.status, 'failed');

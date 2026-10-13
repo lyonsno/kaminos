@@ -139,13 +139,29 @@ async function checkDependencies(root) {
     lockfileSha256: existsSync(lockPath) ? sha256(await fs.readFile(lockPath)) : null };
 }
 
+// Which python the runner uses, in order: an explicit executables.python
+// from a programmatic caller, KAMINOS_PYTHON, <root>/.venv/bin/python3 (the
+// declared packages live in a repo-local venv), then the python3 on PATH.
+// With the venv, its bin goes first on the PATH of every child test, so Node
+// tests that spawn a bare python3 get the interpreter the probe checked.
+function resolvePython(root, explicit, env) {
+  if (explicit) return { requested: explicit, resolved: explicit, source: 'executables', pathPrefixed: false, pathPrefix: null };
+  if (env.KAMINOS_PYTHON) return { requested: 'KAMINOS_PYTHON', resolved: env.KAMINOS_PYTHON, source: 'KAMINOS_PYTHON', pathPrefixed: false, pathPrefix: null };
+  const venvBin = path.join(root, '.venv', 'bin');
+  const venvPython = path.join(venvBin, 'python3');
+  if (existsSync(venvPython)) return { requested: 'python3', resolved: venvPython, source: 'venv', pathPrefixed: true, pathPrefix: venvBin };
+  return { requested: 'python3', resolved: 'python3', source: 'path', pathPrefixed: false, pathPrefix: null };
+}
+
+const PYTHON_REMEDY = 'uv venv .venv && uv pip install -r requirements.txt (or python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt); the runner prefers <root>/.venv when present';
+
 // Python distributions the suite needs, from requirements.txt at the root:
-// one bare distribution name per line, comments after #, nothing else.
-// Whenever the file exists they are checked before anything runs, whatever
-// tests are selected, in the runner's python3 with one importlib.metadata
-// call by distribution name (pillow, not PIL): Node tests spawn python3 too,
-// so a narrowed run must refuse as well. Installed means the package
-// metadata is recorded, not that the package imports.
+// one bare distribution name per line, comments and blank lines allowed,
+// nothing else. Whenever the file declares anything they are checked before
+// anything runs, whatever tests are selected, in the runner's python with
+// one importlib.metadata call by distribution name (pillow, not PIL): Node
+// tests spawn python3 too, so a narrowed run must refuse as well. Installed
+// means the package metadata is recorded, not that the package imports.
 const DISTRIBUTION_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
 const PYTHON_DEPENDENCY_PROBE = [
   'import importlib.metadata as m, json, sys',
@@ -157,8 +173,8 @@ const PYTHON_DEPENDENCY_PROBE = [
 ].join('\n');
 const PYTHON_PROBE_TIMEOUT_MS = 60000;
 
-async function readRequirements(root, executable) {
-  const result = { checked: false, skipped: null, requirementsPath: null, requirementsSha256: null, executable, resolvedExecutable: null, python: null, declared: [], invalidLines: [], installed: {}, missing: [] };
+async function readRequirements(root, python) {
+  const result = { checked: false, skipped: null, requirementsPath: null, requirementsSha256: null, executable: python.resolved, source: python.source, pathPrefixed: python.pathPrefixed, resolvedExecutable: null, python: null, declared: [], invalidLines: [], installed: {}, missing: [], stderrTail: null };
   const requirementsPath = path.join(root, 'requirements.txt');
   if (!existsSync(requirementsPath)) { result.skipped = 'no requirements.txt'; return result; }
   const text = await fs.readFile(requirementsPath, 'utf8');
@@ -180,7 +196,11 @@ function probePythonDependencies(result) {
   try {
     probe = JSON.parse(execFileSync(result.executable, ['-c', PYTHON_DEPENDENCY_PROBE, ...result.declared], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: PYTHON_PROBE_TIMEOUT_MS }));
   } catch (error) {
-    const detail = [error?.code, firstLine(error?.stderr || '') || firstLine(error?.message || error)].filter(Boolean).join(': ');
+    // The last stderr line is the raised exception; the first is only
+    // "Traceback (most recent call last):".
+    const stderrLines = String(error?.stderr || '').split('\n').map(line => line.trimEnd()).filter(line => line.trim());
+    result.stderrTail = stderrLines.length ? stderrLines.slice(-20).join('\n') : null;
+    const detail = [error?.code, stderrLines.at(-1) || firstLine(error?.message || error)].filter(Boolean).join(': ');
     throw Object.assign(new Error(`could not check requirements.txt with ${result.executable} (${detail})`), { phase: 'python-dependencies' });
   }
   Object.assign(result, { checked: true, resolvedExecutable: probe.executable, python: probe.python, installed: probe.installed, missing: probe.missing });
@@ -395,20 +415,23 @@ export async function runSuite({
   quarantinePath ||= path.join(root, 'tests', 'quarantine.json');
   if (!reportPath) throw new Error('reportPath is required');
   logsDir = logsDir || path.join(path.dirname(reportPath), 'logs');
-  const resolvedExecutables = { node: process.execPath, python: 'python3', ...executables };
-  const browserLog = path.join(logsDir, 'browser-launch-attempts.tsv');
   // NODE_TEST_CONTEXT would switch child node:test files to the binary
   // protocol used between a parent `node --test` and its children.
   const { NODE_TEST_CONTEXT: _parentTestContext, ...inheritedEnv } = process.env;
+  const pythonExecutable = resolvePython(root, executables.python, inheritedEnv);
+  const resolvedExecutables = { node: process.execPath, ...executables, python: pythonExecutable.resolved };
+  const browserLog = path.join(logsDir, 'browser-launch-attempts.tsv');
   // A per-run stub with the log path baked in, so a child that scrubs its
   // environment still records the attempt when it reaches the stub.
   const browserStub = path.join(logsDir, 'browser-launch-stub.sh');
-  const childEnv = { ...inheritedEnv, ...Object.fromEntries(BROWSER_OVERRIDES.map(k => [k, browserStub])), KAMINOS_TEST_RUNNER_BROWSER_LOG: browserLog };
+  const childPath = pythonExecutable.pathPrefixed ? [pythonExecutable.pathPrefix, inheritedEnv.PATH].filter(Boolean).join(path.delimiter) : inheritedEnv.PATH;
+  const childEnv = { ...inheritedEnv, ...(childPath === undefined ? {} : { PATH: childPath }), ...Object.fromEntries(BROWSER_OVERRIDES.map(k => [k, browserStub])), KAMINOS_TEST_RUNNER_BROWSER_LOG: browserLog };
   const report = {
     schema: REPORT_SCHEMA, ok: false, failurePhase: null, error: null,
     startedAt: new Date().toISOString(), finishedAt: null,
     effective: { root, manifestPath, quarantinePath, parallel, timeoutMs, kinds, only,
       executables: resolvedExecutables, nodeFlags: [...nodeFlags], node: process.version, python: null,
+      pythonExecutable: { requested: pythonExecutable.requested, resolved: pythonExecutable.resolved, source: pythonExecutable.source, pathPrefixed: pythonExecutable.pathPrefixed, pathPrefix: pythonExecutable.pathPrefix },
       platform: `${process.platform}-${process.arch}`, git: gitIdentity(root),
       browserStub: { path: browserStub, overrides: BROWSER_OVERRIDES, log: browserLog },
       manifestSha256: null, quarantineSha256: null, dependencies: null, pythonDependencies: null },
@@ -449,16 +472,19 @@ export async function runSuite({
     }
 
     report.failurePhase = 'python-dependencies';
-    const pythonDependencies = await readRequirements(root, resolvedExecutables.python);
+    const pythonDependencies = await readRequirements(root, pythonExecutable);
     report.effective.pythonDependencies = pythonDependencies;
     if (pythonDependencies.requirementsPath) {
       if (pythonDependencies.invalidLines.length) {
         const lines = pythonDependencies.invalidLines.map(l => `line ${l.line}: ${l.text}`).join('; ');
-        throw Object.assign(new Error(`requirements.txt must hold bare distribution names, one per line, and nothing else; not ${lines}`), { phase: 'python-dependencies' });
+        throw Object.assign(new Error(`requirements.txt must hold bare distribution names, one per line, with comments and blank lines, and nothing else; not ${lines}`), { phase: 'python-dependencies' });
       }
-      probePythonDependencies(pythonDependencies);
-      if (pythonDependencies.missing.length) {
-        throw Object.assign(new Error(`python distributions listed in requirements.txt are not installed in ${resolvedExecutables.python}${pythonDependencies.resolvedExecutable ? ` (${pythonDependencies.resolvedExecutable})` : ''}: ${pythonDependencies.missing.join(', ')}. Run ${resolvedExecutables.python} -m pip install -r requirements.txt.`), { phase: 'python-dependencies' });
+      if (!pythonDependencies.declared.length) pythonDependencies.skipped = 'requirements.txt declares nothing';
+      else {
+        probePythonDependencies(pythonDependencies);
+        if (pythonDependencies.missing.length) {
+          throw Object.assign(new Error(`python distributions listed in requirements.txt are not installed in ${resolvedExecutables.python}${pythonDependencies.resolvedExecutable && pythonDependencies.resolvedExecutable !== resolvedExecutables.python ? ` (${pythonDependencies.resolvedExecutable})` : ''}: ${pythonDependencies.missing.join(', ')}. Install them in a repo-local venv: ${PYTHON_REMEDY}.`), { phase: 'python-dependencies' });
+        }
       }
     }
 

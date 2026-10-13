@@ -850,4 +850,83 @@ test('a requirements.txt whose distributions are installed lets the python test 
   assert.deepEqual(deps.missing, []);
   assert.match(deps.installed.numpy, /^\d+\./);
   assert.match(deps.python, /^\d+\.\d+/);
+  assert.equal(deps.executable, 'python3', 'without a venv or KAMINOS_PYTHON the python3 on the path is used');
+  assert.equal(deps.source, 'path');
+  assert.equal(deps.pathPrefixed, false);
+});
+
+// The declared packages live in a repo-local venv: when <root>/.venv/bin/python3
+// exists the runner probes with it and puts its bin first on the PATH of every
+// child test, so a node test that spawns a bare python3 gets the same one.
+// KAMINOS_PYTHON names an interpreter that wins over the venv.
+
+const FAKE_DIST = 'kaminos-fake-dist';
+const stubPython = async (file, { executable = file, installed = { [FAKE_DIST]: '1.0' } } = {}) => {
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const probeAnswer = JSON.stringify({ python: '9.9.9', executable, installed, missing: [] });
+  await fs.writeFile(file, `#!/bin/sh\ncase "$2" in *print\\(sys.executable\\)*) echo ${JSON.stringify(executable)};; *) printf '%s\\n' ${JSON.stringify(probeAnswer)};; esac\n`, { mode: 0o755 });
+  return file;
+};
+const PRINTS_EXECUTABLE = `import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+const out = spawnSync('python3', ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' });
+const expected = join(process.env.KAMINOS_TEST_RUNNER_ROOT, '.venv', 'bin', 'python3');
+if (out.stdout.trim() !== expected) { console.error(\`python3 resolved to \${JSON.stringify(out.stdout)} not \${expected}\`); process.exit(1); }
+`;
+
+test('a repo-local .venv is used for the probe and reaches node tests that spawn python3', async t => {
+  const f = await fixture(t, { files: { 's.mjs': PRINTS_EXECUTABLE }, manifest: manifestOf({ 'tests/s.mjs': { kind: 'node' } }) });
+  const venvPython = await stubPython(path.join(f.root, '.venv', 'bin', 'python3'));
+  await fs.writeFile(path.join(f.root, 'requirements.txt'), `${FAKE_DIST}\n`);
+  const result = await run(f);
+  const report = await readReport(f);
+  assert.equal(result.ok, true, report.error || JSON.stringify(report.newFailures));
+  assert.equal(report.counts.executed, 1);
+  assert.equal(report.results[0].outcome, 'pass');
+  const deps = report.effective.pythonDependencies;
+  assert.equal(deps.executable, venvPython);
+  assert.equal(deps.resolvedExecutable, venvPython);
+  assert.equal(deps.source, 'venv');
+  assert.equal(deps.pathPrefixed, true);
+  assert.deepEqual(deps.installed, { [FAKE_DIST]: '1.0' });
+  assert.equal(report.effective.pythonExecutable.resolved, venvPython);
+  assert.equal(report.effective.pythonExecutable.pathPrefixed, true);
+  assert.equal(report.effective.executables.python, venvPython);
+});
+
+test('KAMINOS_PYTHON wins over the repo-local .venv and is recorded', async t => {
+  const f = await fixture(t, { files: { 'a.mjs': PASS }, manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' } }) });
+  await stubPython(path.join(f.root, '.venv', 'bin', 'python3'));
+  const other = await stubPython(path.join(f.root, 'other', 'python3'));
+  await fs.writeFile(path.join(f.root, 'requirements.txt'), `${FAKE_DIST}\n`);
+  process.env.KAMINOS_PYTHON = other;
+  t.after(() => { delete process.env.KAMINOS_PYTHON; });
+  assert.equal((await run(f)).ok, true);
+  const deps = (await readReport(f)).effective.pythonDependencies;
+  assert.equal(deps.executable, other);
+  assert.equal(deps.resolvedExecutable, other);
+  assert.equal(deps.source, 'KAMINOS_PYTHON');
+  assert.equal(deps.pathPrefixed, false);
+});
+
+test('a probe that raises is reported by its exception line, with the stderr tail kept', async t => {
+  const f = await fixture(t, { files: { 'a.mjs': PASS }, manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' } }) });
+  const raising = path.join(f.root, 'raising-python3');
+  await fs.writeFile(raising, "#!/bin/sh\nprintf 'Traceback (most recent call last):\\n  File \"<string>\", line 1, in <module>\\nModuleNotFoundError: No module named importlib.metadata\\n' >&2\nexit 1\n", { mode: 0o755 });
+  await fs.writeFile(path.join(f.root, 'requirements.txt'), 'numpy\n');
+  assert.equal((await run(f, { executables: { python: raising } })).ok, false);
+  const report = await readReport(f);
+  assert.equal(report.failurePhase, 'python-dependencies');
+  assert.match(report.error, /ModuleNotFoundError: No module named importlib\.metadata/);
+  assert.match(report.effective.pythonDependencies.stderrTail, /^Traceback \(most recent call last\):/);
+});
+
+test('a requirements.txt that declares nothing skips the probe instead of spawning python', async t => {
+  const f = await fixture(t, { files: { 'a.mjs': PASS }, manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' } }) });
+  await fs.writeFile(path.join(f.root, 'requirements.txt'), '# nothing yet\n\n');
+  assert.equal((await run(f, { executables: { python: '/nonexistent/python3' } })).ok, true);
+  const deps = (await readReport(f)).effective.pythonDependencies;
+  assert.equal(deps.checked, false);
+  assert.match(deps.skipped, /declares nothing/);
+  assert.deepEqual(deps.declared, []);
 });
