@@ -46,7 +46,11 @@ export function generationInputShapes(m){
     dinoLayer:{norm1Weight:[c],norm1Bias:[c],qWeight:[c,c],qBias:[c],kWeight:[c,c],vWeight:[c,c],vBias:[c],oWeight:[c,c],oBias:[c],
       layerScale1:[c],norm2Weight:[c],norm2Bias:[c],mlpUpWeight:[h,c],mlpUpBias:[h],mlpDownWeight:[c,h],mlpDownBias:[c],layerScale2:[c]}};
 }
-export function validateGenerationInputs(m){
+export function validateGenerationInputs(m){return validateGenerationPackage(m,true);}
+// The page supplies its selected image independently of the checkpoint pack.
+// Keep the same complete model, storage, architecture and schedule admission.
+export function validateGenerationCheckpoints(m){return validateGenerationPackage(m,false);}
+function validateGenerationPackage(m,includeImage){
   if(m?.schema!=='trellis2.generation-inputs.v0'||m.status!=='succeeded'||m.modelCalls!==0)throw TypeError('successful model-free checkpoint package required');
   const type=generationPipelineType(m),steps=m.samplingSteps??12;
   if(m.meshResolution!==(type==='512'?512:1024)||!Number.isSafeInteger(steps)||steps<1||
@@ -65,7 +69,7 @@ export function validateGenerationInputs(m){
     if(!/^[\w.-]+$/.test(row.file??''))throw TypeError('safe tensor file required '+key);
     generationTensorStorage(row);admitted.add(key);
   };
-  tensor(m.image?.pixelTensor,shapes.image);
+  if(includeImage)tensor(m.image?.pixelTensor,shapes.image);
   if(!/^[a-f0-9]{64}$/.test(m.dino?.identity?.files?.['model.safetensors']?.sha256??'')||m.dino?.layers?.length!==24)
     throw TypeError('identified complete24layer DINO checkpoint required');
   for(const [key,shape]of Object.entries(shapes.dinoPrefix))tensor(m.dino.prefix?.[key],shape);
@@ -97,8 +101,24 @@ export function validateGenerationInputs(m){
   return Object.freeze({tensorCount:admitted.size,tensorKeys:Object.freeze([...admitted]),shapes});
 }
 
-export async function loadGenerationInputs(m,fetchTensor){
-  const plan=validateGenerationInputs(m),roles=generationRoles(m);
+export async function loadGenerationInputs(m,fetchTensor,input){
+  if(input!==undefined){
+    const pixels=input?.pixelValues;
+    if(!(pixels instanceof Float32Array)||pixels.length!==512*512*3||!pixels.every(Number.isFinite))
+      throw TypeError('complete finite prepared 512x512 RGB pixel values required');
+    return {...await loadGenerationCheckpoints(m,fetchTensor),pixelValues:pixels};
+  }
+  const plan=validateGenerationInputs(m);
+  const checkpoints=await loadGenerationCheckpointPlan(m,fetchTensor,plan);
+  return {...checkpoints,pixelValues:await fetchTensor(m.image.pixelTensor)};
+}
+
+export async function loadGenerationCheckpoints(m,fetchTensor){
+  return loadGenerationCheckpointPlan(m,fetchTensor,validateGenerationCheckpoints(m));
+}
+
+async function loadGenerationCheckpointPlan(m,fetchTensor,plan){
+  const roles=generationRoles(m);
   let gelu,silu;
   // Cache only small, identity-checked activation tables. Full checkpoints
   // belong to their consuming stage and are never cached across model roles.
@@ -134,7 +154,7 @@ export async function loadGenerationInputs(m,fetchTensor){
   const prefixWeights={};for(const [key,name]of Object.entries(m.dino.prefix))prefixWeights[key]=await fetchTensor(name);
   return{loadModel,modelInputs:Object.fromEntries(roles.map(role=>[role,
     {config:m.models[role].config,identity:m.models[role].identity}])),
-    prefixWeights,pixelValues:await fetchTensor(m.image.pixelTensor),dinoIdentity:m.dino.identity,
+    prefixWeights,dinoIdentity:m.dino.identity,
     meshResolution:m.meshResolution,seed:m.seed,pipelineType:generationPipelineType(m),
     async loadLayerWeights(i){if(!Number.isInteger(i)||i<0||i>23)throw RangeError('actual DINO layer index required');
       const weights={};for(const [key,name]of Object.entries(m.dino.layers[i]))weights[key]=await fetchTensor(name);return weights;}};
