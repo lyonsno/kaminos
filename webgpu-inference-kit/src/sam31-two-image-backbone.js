@@ -264,6 +264,15 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
   receipts.push(prefixResult.receipt); routes.push(prefixRoute.routeId);
   const prefixOutput = routeOutput(prefixResult, 'vit-prefix-hidden-states');
 
+  const expectedLayerCheckpoints = verificationAttached && manifest.diagnosticVitLayers?.length
+    ? await Promise.all(manifest.diagnosticVitLayers.map(async layerIndex => {
+        const role = `frame-${frameIndex}-vit-layer-${layerIndex}-hidden-states`;
+        const entry = tensorsByRole.get(role);
+        if (!entry) throw new Error(`selected ViT checkpoint tensor missing: ${role}`);
+        return { layerIndex, hiddenStates: await loadFloat32(entry) };
+      }))
+    : null;
+
   update(`frame-${frameIndex}-vit-block-stack`);
   const stackRoute = createSam3ImageVitBlockStackPhaseProgramRouteDefinition({ model, kernel: kernel('sam3-image-vit-block-stack-phase-program-v0', commit) });
   const stackStarted = performance.now();
@@ -273,7 +282,7 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
       'sam3-image-vit-block-stack-weights': { artifactId: 'sam31-two-image:block-stack-weights', sha256: blockWeightsHash },
     }, { 'vit-block-stack-hidden-states': { artifactId: scopedArtifactId(`sam31-two-image:frame-${frameIndex}:vit-backbone`, invocationTag), shape: [1, manifest.shape.patchHeight, manifest.shape.patchWidth, manifest.shape.visionHiddenSize] } }, {}, requestIds),
     route: stackRoute, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
-    model: { ...model, weightsHash: blockWeightsHash }, kernel: stackRoute.kernel, tensors: { hiddenStates: prefixHiddenStates, weights: blockWeights, shape: blockShape }, residentTensorResolver, includeReadback: true, validateFiniteCheckpoints: true,
+    model: { ...model, weightsHash: blockWeightsHash }, kernel: stackRoute.kernel, tensors: { hiddenStates: prefixHiddenStates, weights: blockWeights, shape: blockShape }, residentTensorResolver, expectedLayerCheckpoints, includeReadback: true, validateFiniteCheckpoints: true,
   });
   timing.vitBlockStackMs = performance.now() - stackStarted;
   timing.totalMs = timing.preprocessMs + timing.patchEmbedMs + timing.vitPrefixMs + timing.vitBlockStackMs;
@@ -283,7 +292,10 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
     : null;
   parity.vitBackbone = parity.vitBackboneDiagnostics?.maxAbsDiff ?? null;
   receipts.push(stackResult.receipt); routes.push(stackRoute.routeId);
-  return { backboneHiddenStates, backboneOutput: routeOutput(stackResult, 'vit-block-stack-hidden-states'), receipts, routes, parity, source, timing };
+  const layerDiagnostics = verificationAttached
+    ? stackResult.finiteCheckpoints.filter(checkpoint => checkpoint.maxAbsDiff != null)
+    : null;
+  return { backboneHiddenStates, backboneOutput: routeOutput(stackResult, 'vit-block-stack-hidden-states'), receipts, routes, parity, layerDiagnostics, source, timing };
 }
 
 async function runNeck({ branch, frameIndex, manifest, tensorsByRole, weightsByRole, weights, backbone, adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent }) {
@@ -439,8 +451,8 @@ export async function runSam31TwoImageBackbone({
   const { vitBackboneDiagnostics: frame0BackboneDiagnostics, vitPrefixDiagnostics: frame0PrefixDiagnostics, ...frame0Parity } = backbones[0].parity;
   const { vitBackboneDiagnostics: frame1BackboneDiagnostics, vitPrefixDiagnostics: frame1PrefixDiagnostics, ...frame1Parity } = backbones[1].parity;
   const backboneDiagnostics = {
-    frame0: { vitPrefix: frame0PrefixDiagnostics, vitBackbone: frame0BackboneDiagnostics },
-    frame1: { vitPrefix: frame1PrefixDiagnostics, vitBackbone: frame1BackboneDiagnostics },
+    frame0: { vitPrefix: frame0PrefixDiagnostics, vitBackbone: frame0BackboneDiagnostics, layerDiagnostics: backbones[0].layerDiagnostics },
+    frame1: { vitPrefix: frame1PrefixDiagnostics, vitBackbone: frame1BackboneDiagnostics, layerDiagnostics: backbones[1].layerDiagnostics },
   };
   const maximums = {
     frame0: { ...frame0Parity, interactive: interactive.parity, propagation: propagation[0].parity, highResolution: frame0High.parity },
