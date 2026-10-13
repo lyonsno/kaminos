@@ -54,4 +54,18 @@ class IndependentBindingTests(unittest.TestCase):
         binding=bind_geometry(positions,triangles,self.control)
         self.assertEqual(binding['domain'][-1],1)
 
+    def test_unknown_domain_method_must_not_silently_fall_back(self):
+        with self.assertRaisesRegex(ValueError,'domain method'):
+            bind_geometry(self.positions,self.triangles,{**self.control,'domainMethod':'unknown'})
+
+    def test_surface_domain_follows_seeded_limb_component(self):
+        positions=np.array([[-.14,-2.31,-.14],[-.2,-1.2,-.3],[-.24,-.45,-.3],
+                            [.51,-2.31,-.14],[.63,-1.2,-.3],[.67,-.45,-.3],
+                            [.3,-1.5,-2.8],[.1,-1.2,-2.9],[.4,-1.,-3.],
+                            [.18,.58,-.7],[.3,.6,-.6],[.4,.5,-.5]])
+        triangles=np.array([[0,1,2],[3,4,5],[6,7,8],[9,10,11]])
+        binding=bind_geometry(positions,triangles,{**self.control,'domainMethod':'surface'})
+        np.testing.assert_array_equal(binding['domain'][:3],np.ones(3))
+        np.testing.assert_array_equal(binding['domain'][3:],np.zeros(9))
+
 if __name__=='__main__':unittest.main()
