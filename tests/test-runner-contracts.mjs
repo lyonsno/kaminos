@@ -462,7 +462,8 @@ test('known broken', () => { throw new Error('known'); });
   assert.equal((await run(f)).ok, true);
   assert.equal((await run(f, { executables: { node: `${process.execPath}` }, nodeFlags: [] })).ok, false);
   const report = await readReport(f);
-  assert.equal(report.results[0].outcome, 'harness-defect');
+  assert.notEqual(report.results[0].outcome, 'pass');
+  assert.deepEqual(report.knownFailures, []);
   assert.deepEqual(report.newFailures, ['tests/m.mjs']);
 });
 
@@ -490,4 +491,114 @@ test('a logs path containing a dollar sign still records browser launch attempts
   const logsDir = path.join(f.root, 'out', 'logs $HOME `x`');
   assert.equal((await run(f, { logsDir })).ok, false);
   assert.deepEqual((await readReport(f)).browserLaunchAttempts.map(a => a.file), ['tests/e.mjs']);
+});
+
+// Structured events, revision 1: findings from the slice's first review.
+
+test('generic assertion messages are signed with the assertion itself, so a different assertion in the same test is a new failure', async t => {
+  const body = `import test from 'node:test';
+import assert from 'node:assert/strict';
+test('counts frames', () => {
+  if (process.env.EARLY) assert.equal(0, 99);
+  assert.equal(2, 3);
+});
+test('checks source', () => {
+  if (process.env.OTHER_OK) assert.ok(String('x').includes('y')); else assert.ok([].length);
+});
+test('matches', () => { assert.match('a'.repeat(5000), /never-there/); });
+`;
+  const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  await run(f);
+  const base = (await readReport(f)).results[0].signature;
+  assert.match(base, /counts frames :: AssertionError: Expected values to be strictly equal: \[strictEqual actual=2 expected=3\]/);
+  assert.match(base, /checks source :: AssertionError: The expression evaluated to a falsy value: \[== assert\.ok\(\[\]\.length\)\]/);
+  assert.match(base, /matches :: AssertionError: The input did not match the regular expression \/never-there\/\. Input: \[match expected=\/never-there\/\]/);
+  assert.ok(base.length < 600, 'match assertions must not embed their input');
+  await fs.writeFile(f.quarantinePath, JSON.stringify({ schema: 'kaminos.test-quarantine.v1', entries: { 'tests/m.mjs': quarantined(base) } }));
+  assert.equal((await run(f)).ok, true);
+  for (const [key, value] of [['EARLY', '1'], ['OTHER_OK', '1']]) {
+    process.env[key] = value;
+    t.after(() => { delete process.env[key]; });
+    assert.equal((await run(f)).ok, false, `${key} must change the signature`);
+    const changed = (await readReport(f)).signatureChanged[0];
+    assert.ok(changed.added.length === 1 && changed.removed.length === 1, 'the change is reported as one entry added and one removed');
+    delete process.env[key];
+  }
+});
+
+test('a forked or worker node:test run cannot stand in for the parent file, and the file is never known', async t => {
+  const child = `import test from 'node:test';\ntest('child passes', () => {});\n`;
+  const body = `import test, { describe } from 'node:test';
+import { fork } from 'node:child_process';
+describe('S', () => {
+  test('candidate', () => { if (process.env.BREAK) throw new Error('NEW BREAKAGE'); });
+  test('forks', async () => { await new Promise((res, rej) => fork('./tests/child.mjs').on('exit', c => (c === 0 ? res() : rej(new Error('child ' + c))))); });
+});
+test('parent known', () => { throw new Error('known'); });
+`;
+  const f = await fixture(t, { files: { 'm.mjs': body, 'child.mjs': child },
+    manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' }, 'tests/child.mjs': { kind: 'helper', reason: 'forked by m.mjs' } }) });
+  await run(f);
+  const r = (await readReport(f)).results.find(x => x.file === 'tests/m.mjs');
+  assert.equal(r.outcome, 'unsigned-failure', 'a second writer in the events file must not produce a signature');
+  await fs.writeFile(f.quarantinePath, JSON.stringify({ schema: 'kaminos.test-quarantine.v1', entries: { 'tests/m.mjs': quarantined('node:test failing: parent known :: Error: known') } }));
+  process.env.BREAK = '1'; t.after(() => { delete process.env.BREAK; });
+  assert.equal((await run(f)).ok, false);
+});
+
+test('a thrown non-error does not break the reporter, and later failures survive', async t => {
+  const body = `import test from 'node:test';
+test('throws a null-prototype object', () => { throw Object.create(null); });
+test('later failure', () => { throw new Error('later'); });
+`;
+  const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  await run(f);
+  const r = (await readReport(f)).results[0];
+  assert.equal(r.outcome, 'fail');
+  assert.match(r.signature, /later failure :: Error: later/);
+  assert.match(r.signature, /throws a null-prototype object :: /);
+});
+
+test('a plain script that relays a node:test child is signed from its own output, not misclassified', async t => {
+  const child = `import test from 'node:test';\ntest('child passes', () => {});\n`;
+  const body = `import { spawnSync } from 'node:child_process';
+spawnSync(process.execPath, ['./tests/child.mjs'], { stdio: 'inherit' });
+console.error('Error: relay then fail');
+process.exit(1);
+`;
+  const f = await fixture(t, { files: { 'p.mjs': body, 'child.mjs': child },
+    manifest: manifestOf({ 'tests/p.mjs': { kind: 'node' }, 'tests/child.mjs': { kind: 'helper', reason: 'spawned by p.mjs' } }) });
+  await run(f);
+  const r = (await readReport(f)).results.find(x => x.file === 'tests/p.mjs');
+  assert.equal(r.outcome, 'fail');
+  assert.equal(r.signature, 'Error: relay then fail');
+});
+
+test('a node:test file whose tests all pass but exits nonzero gets an honest, quarantinable signature', async t => {
+  const body = `import test from 'node:test';\ntest('passes', () => {});\nprocess.exitCode = 3;\n`;
+  const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  await run(f);
+  const r = (await readReport(f)).results[0];
+  assert.equal(r.outcome, 'fail');
+  assert.equal(r.signature, 'node:test passed; exit 3');
+});
+
+test('a node:test file that dies before its summary is unsigned, never known', async t => {
+  const body = `import test from 'node:test';\ntest('known broken', () => { throw new Error('known'); });\ntest('exits', () => { process.exit(1); });\n`;
+  const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }),
+    quarantine: { 'tests/m.mjs': quarantined('node:test failing: known broken :: Error: known') } });
+  assert.equal((await run(f)).ok, false);
+  assert.equal((await readReport(f)).results[0].outcome, 'unsigned-failure');
+});
+
+test('a failing root-level after hook is signed with a root-relative path, and failing todo tests are excluded', async t => {
+  const body = `import test, { after } from 'node:test';
+after(() => { throw new Error('root after broke'); });
+test('known broken', () => { throw new Error('known'); });
+test('wip', { todo: true }, () => { throw new Error('todo failure'); });
+`;
+  const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  await run(f);
+  const s = (await readReport(f)).results[0].signature;
+  assert.equal(s, 'node:test failing: <root>/tests/m.mjs :: hook failed :: Error: root after broke | known broken :: Error: known');
 });
