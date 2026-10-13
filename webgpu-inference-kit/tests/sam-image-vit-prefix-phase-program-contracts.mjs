@@ -95,4 +95,19 @@ assert.deepEqual(Array.from(oracle.tiledPositionEmbeddings), [10, 20, 10, 20, 10
 assert.deepEqual(Array.from(oracle.patchPlusPosition), [11, 23, 15, 27, 12, 24, 16, 28]);
 assert.deepEqual(Array.from(oracle.vitPrefixHiddenStates), [-1.5, 2.5, -1.5, 2.5, -1.5, 2.5, -1.5, 2.5]);
 
+// Pinned Meta SAM3.1 ViT constructs string LayerNorm with eps=1e-5
+// (sam3/model/vitdet.py at 5dd401d1); legacy SAM3/MLX keeps its default.
+const sensitivePrefix = epsilon => createSam3ImageVitPrefixPhaseProgramCpuOracle({
+  patchEmbeddings: new Float32Array([0, 0.002]),
+  weights: { positionEmbeddings: new Float32Array(2), layerNormWeight: new Float32Array([1, 1]), layerNormBias: new Float32Array(2) },
+  shape: { batch: 1, patchHeight: 1, patchWidth: 1, hiddenSize: 2, pretrainGridSize: 1, ...(epsilon === undefined ? {} : { layerNormEps: epsilon }) },
+});
+const metaPrefix = sensitivePrefix(0.00001);
+assert.ok(Math.abs(metaPrefix.vitPrefixHiddenStates[1] - 0.30151134729385376) < 1e-7, 'SAM3.1 prefix must use requested Meta epsilon rather than silently retaining 1e-6');
+assert.equal(metaPrefix.shape.layerNormEps, 0.00001);
+assert.ok(Math.abs(sensitivePrefix().vitPrefixHiddenStates[1] - 0.7071067690849304) < 1e-7, 'legacy SAM3 prefix epsilon stays 1e-6');
+for (const epsilon of [0, -1, NaN, Infinity, '0.00001']) assert.throws(() => sensitivePrefix(epsilon), /layerNormEps/, 'invalid epsilon must fail before normalization');
+assert.match(routeSource, /variance \+ dims\.layer_norm_eps/, 'GPU prefix normalization must consume the same epsilon as the CPU oracle');
+assert.match(routeSource, /name: 'layer_norm_eps', type: 'f32'/, 'epsilon must retain f32 uniform semantics');
+
 console.log('sam image ViT-prefix phase-program contracts passed');
