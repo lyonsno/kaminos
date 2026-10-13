@@ -18,10 +18,11 @@ const prototype={setSceneMediumSource(){},setSceneSourceFrameConsumer(fn){consum
 const renderer={library:new THREE.StandardNodeLibrary(),backend:{get(){return {};}}},scene=new THREE.Scene();
 const geometry=new THREE.BoxGeometry(),material=new THREE.MeshStandardMaterial({color:0xaaff88});
 const mesh=new THREE.Mesh(geometry,material);mesh.castShadow=true;scene.add(mesh);
-const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,pointCount:2,createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({fixture:true}),dispose(){}})});
+const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,pointCount:2,createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({fixture:true}),dispose(){}})});
 consume(field);assert.equal(mount.canRender(),true);assert.equal(mesh.geometry,geometry,'hybrid must not clone/build surface receivers');
 assert.equal(geometry.hasAttribute('sceneReceiverIndex'),false);assert.equal(mount.debugState().surfaceReceivers,0);assert.equal(hostFrame.volumeReceivers,16);
 const first=mount.debugState();mount.setReceiverSpacing(.8);mount.setSurfaceReconstruction(8);field.source.generation++;field.source.frame++;consume(field);
+assert.deepEqual(first.frame.smokeReconstruction.dimensions,[2,4,2],'explicit cheap smoke reconstruction must be effective');
 assert.equal(mount.debugState().geometryBuilds,first.geometryBuilds,'surface spacing controls must not construct an unused cache');
 field.source.worldTransform={translate:[2,-1,4],scale:2};field.source.generation++;consume(field);
 assert.equal(mount.debugState().geometryBuilds,1,'source movement reuses world BVH');
