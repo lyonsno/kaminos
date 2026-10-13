@@ -48,4 +48,10 @@ class IndependentBindingTests(unittest.TestCase):
         np.testing.assert_allclose(result['candidate'][-1],positions[-1],atol=1e-10)
         self.assertEqual(binding['domain'][-1],0)
 
+    def test_regional_domain_does_not_end_halfway_through_distal_foot(self):
+        positions=np.vstack([self.positions,[-.15,-2.34,-.14]])
+        triangles=np.vstack([self.triangles,[1,2,5]])
+        binding=bind_geometry(positions,triangles,self.control)
+        self.assertEqual(binding['domain'][-1],1)
+
 if __name__=='__main__':unittest.main()
