@@ -58,7 +58,10 @@ test('source enabled uses the shared Undo ledger and leaves its pose intact',()=
   const context={edits,sceneObjects:[entry],FLAME_EMITTER_ID:'flame-emitter',flameEmitterPose:pose,
     writeAuthoredFlameEmitterPose:next=>{assert.equal(next,pose);actual=entry.emissionEnabled;},window:{_kaminosDirty(){}}};
   vm.runInNewContext(html.slice(start,end),context);
-  context.window.kaminosSetFlameSourceEnabled(false);assert.equal(actual,false);
+  const setterStart=html.indexOf('function setFlameSourceEnabled(value)');
+  const setterEnd=html.indexOf('\n',setterStart);
+  context.scenePlacementTools={edits};vm.runInNewContext(html.slice(setterStart,setterEnd),context);
+  context.setFlameSourceEnabled(false);assert.equal(actual,false);
   edits.undo();assert.equal(actual,true);edits.redo();assert.equal(actual,false);
   assert.equal(entry.object.userData.kaminosSceneObject.emissionEnabled,false);
 });

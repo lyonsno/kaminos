@@ -25943,9 +25943,10 @@ async function loadFlameBasinState(id) {
   return flameSettingsState(receipt.preset,receipt);
 }
 
+let activeBasinFireFixture=null;
 async function createWorkbenchBasinFireFixture(presetId,record,options={}) {
   if(!volumePrototype||!window.kaminosFlameAuthoring)throw Error('The authored fire host is not initialized');
-  if(window.kaminosBasinFireFixture?.read().status==='mounted')throw Error('This fire domain already has its fixture; select it or apply another basin');
+  if(activeBasinFireFixture?.read().status==='mounted')throw Error('This fire domain already has its fixture; select it or apply another basin');
   let fixture;
   const syncComposition=()=>{
     const state=window.kaminosFlameAuthoring.read();
@@ -25963,17 +25964,17 @@ async function createWorkbenchBasinFireFixture(presetId,record,options={}) {
       openLibrary:()=>openBasinFireLibrary(fixture,{document})},
     source:{read:()=>({...window.kaminosFlameEmitterState(),registrationId:sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.object.uuid??null}),
       ensure:()=>window.kaminosBurnerAuthoring.add('flame-source'),select:setActiveSceneObject,
-      setEnabled:value=>window.kaminosSetFlameSourceEnabled(value),
+      setEnabled:setFlameSourceEnabled,
       remove:id=>window.kaminosBurnerAuthoring.remove(id)},
     presentation:{read:()=>volumePrototype.canvasElement().style.opacity!=='0',set:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
   },{presetId,...options});
   const controls=mountBasinFireInspector(fixture,{document,container:document.getElementById('selected-flame-properties')});
   const unsubscribe=scenePlacementTools.edits.subscribe(()=>controls.sync());
-  const dispose=fixture.dispose;fixture.dispose=()=>{unsubscribe();controls.dispose();dispose();if(window.kaminosBasinFireFixture===fixture)window.kaminosBasinFireFixture=null;};
-  window.kaminosBasinFireFixture=fixture;
+  const dispose=fixture.dispose;fixture.dispose=()=>{unsubscribe();controls.dispose();dispose();if(activeBasinFireFixture===fixture)activeBasinFireFixture=null;};
+  activeBasinFireFixture=fixture;
   return fixture;
 }
-window.kaminosCreateBasinFireFixture=createWorkbenchBasinFireFixture;
+function setFlameSourceEnabled(value){return scenePlacementTools.edits.apply('@flame-source-enabled',{enabled:value},value?'Enable fire source':'Disable fire source');}
 
 function installFlameAuthoring() {
   window.kaminosFlameAuthoring=createFlameAuthoring({edits:scenePlacementTools.edits,
@@ -26000,7 +26001,6 @@ function installAuthoringParameterEditing() {
       writeAuthoredFlameEmitterPose(flameEmitterPose);window._kaminosDirty?.();
     },
   });
-  window.kaminosSetFlameSourceEnabled=value=>edits.apply('@flame-source-enabled',{enabled:value},value?'Enable fire source':'Disable fire source');
   installWaterAuthoring();
   const bind=(id,definition)=>{
     edits.register(id,definition);
@@ -29738,6 +29738,7 @@ function installBurnerAuthoring() {
   panel.after(assembly);
   scenePlacementTools.addHistoryScope(assembly);
   window.kaminosBurnerAuthoring={
+    createFireFixture:createWorkbenchBasinFireFixture,setSourceEnabled:setFlameSourceEnabled,
     read:()=>structuredClone(readBurnerGraph()),add:addBurnerObject,
     setBed:(id,patch)=>{assertSceneConstructionAvailable();const bed=serializeSceneObject(sceneObjects.find(o=>o.id===id));if(bed.geometry?.kind!=='annular')throw Error('Choose annular geometry');const next=checkedProceduralMesh({...bed,geometry:{kind:'annular',parameters:{...bed.geometry.parameters,...patch}},surface:{...bed.surface,...Object.fromEntries(Object.entries(patch).filter(([key])=>key in bed.surface))}});return scenePlacementTools.edits.apply(ensureMeshDataTarget(id),next,'Edit geometry');},
     remove:id=>burnerEdit(next=>{const group=next.groups.find(group=>group.id===id);const ids=group?group.objectIds:[id];if(!next.objects.some(record=>ids.includes(record.id)))throw Error('Burner object is absent');next.objects=next.objects.filter(record=>!ids.includes(record.id));next.groups=next.groups.map(group=>({...group,objectIds:group.objectIds.filter(id=>!ids.includes(id))})).filter(group=>group.objectIds.length);},'Remove burner object'),
@@ -30441,7 +30442,7 @@ sceneInitialization.then(() => {
     Promise.all([fluidViewportReady,volumeLoaded]).then(async()=>{
       const {loadExperimentContributions,openExperiment}=await import('./workbench-experiments.mjs');
       const [definition]=await loadExperimentContributions([window.kaminosLiveLogEntry.module]);
-      const presetId=new URLSearchParams(location.search).get('live_log_basin')||'vsp-3a7101af93e643b79e9f255c8bc21386afbf66ae857464254284d45f5f75cf70';
+      const presetId='vsp-3a7101af93e643b79e9f255c8bc21386afbf66ae857464254284d45f5f75cf70';
       const fire=await createWorkbenchBasinFireFixture(presetId,operation=>investigationOperations.emit(operation),{allowedGrids:[32,48],pauseOnCreate:true,enabled:false});
       const current=await openExperiment(definition,{host:{
         scene:{ready:fluidViewportReady,renderer:()=>renderer,load:showGLB,objects:()=>sceneObjects,
