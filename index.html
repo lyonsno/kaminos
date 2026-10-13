@@ -2189,6 +2189,24 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <span class="slider-help">Grid height as a multiple of the width. 2 is what every saved basin was authored at. Any other value is clamped between 1 and 4 and snapped to the nearest height that keeps the light lattices aligned (steps of 4 cells at 32 and 64, 12 at 48 and 96); cells keep their size, the box grows rows, nothing is stretched. A height the GPU cannot hold is refused and the field is kept; the Grid field says so. Changing it rebuilds the fluid state like a resolution change, so while you edit it only the box outline follows; press Enter or leave the field to apply, Escape to cancel. Memory and time grow with the height.</span>
     <div class="slider-row">
+      <span class="slider-label">Joined boundary</span>
+      <select id="volume-joined-boundary"><option value="off">off</option><option value="on">on</option></select>
+      <span class="slider-val" id="volume-joined-boundary-val">off</span>
+    </div>
+    <span class="slider-help">Provisional smoke control, not saved with the basin. Joins the fine box to an exterior at the pressure level: the fine projection stops and the exterior's shared solve sets the boundary faces. Needs the immersed source and the converged solver; the field says why when refused.</span>
+    <div class="slider-row">
+      <span class="slider-label">Exterior extent</span>
+      <select id="volume-joined-exterior-extent"><option value="0">none</option><option value="16">16</option><option value="20">20</option><option value="24">24</option><option value="32">32</option><option value="40">40</option></select>
+      <span class="slider-val" id="volume-joined-exterior-extent-val">none</span>
+    </div>
+    <span class="slider-help">Provisional quiescent exterior: a coarse box this many cells across (cells four fine cells wide) with the fine box centred one cell above its floor, open at top and bottom. Pressure coupling only; the exterior has no transport of its own. Changing it rebuilds the exterior (a moment). The field reports the composite size and the last solve.</span>
+    <div class="slider-row">
+      <span class="slider-label">Exterior wall</span>
+      <select id="volume-joined-exterior-wall"><option value="none">none</option><option value="+x">+x</option><option value="-x">−x</option><option value="+z">+z</option><option value="-z">−z</option></select>
+      <span class="slider-val" id="volume-joined-exterior-wall-val">none</span>
+    </div>
+    <span class="slider-help">A synthetic solid slab in the exterior, two coarse cells thick, two cells off the named side of the fine box, spanning the exterior. For seeing whether the exterior redirects the plume; not a scene object.</span>
+    <div class="slider-row">
       <span class="slider-label">Grid Overlay</span>
       <input type="range" id="volume-grid-overlay" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-grid-overlay-val">0.00</span>
@@ -18253,6 +18271,36 @@ function linkedVolumeEmitterInletVelocity() {
   }).linkedInletVelocity;
 }
 
+// Provisional joined-boundary and exterior controls (Noah 2026-10-13: tune fine
+// and coarse live and independently). They drive the prototype's joined API
+// directly and are not part of the saved basin.
+function wireJoinedProvisionalControls(prototype) {
+  const boundary = document.getElementById('volume-joined-boundary'), extent = document.getElementById('volume-joined-exterior-extent'), wall = document.getElementById('volume-joined-exterior-wall');
+  if (!boundary || !extent || !wall || !prototype?.setJoinedBoundary) return;
+  const text = (id, value) => { document.getElementById(id).textContent = value; };
+  const applyExterior = () => {
+    const n = parseInt(extent.value, 10);
+    const side = wall.value === 'none' ? null : { side: wall.value.replace('−', '-'), gap: 2, thickness: 2 };
+    const r = prototype.setJoinedExterior(n > 0 ? { enabled: true, extent: n, wall: side } : null);
+    const receipt = r?.receipt;
+    text('volume-joined-exterior-extent-val', n > 0 ? (receipt?.admitted ? `${receipt.shape.join('×')} coarse, ${receipt.cells} cells` : `refused: ${receipt?.reason ?? 'unknown'}`) : 'none');
+    text('volume-joined-exterior-wall-val', side ? (receipt?.solids?.wall ? `axis ${receipt.solids.wall.axis} at ${receipt.solids.wall.at}, ${receipt.solids.wall.thickness} thick` : 'pending exterior') : 'none');
+  };
+  boundary.addEventListener('change', () => {
+    const r = prototype.setJoinedBoundary({ enabled: boundary.value === 'on' });
+    text('volume-joined-boundary-val', boundary.value === 'on' ? (r?.admitted ? 'admitted' : `refused: ${r?.reason ?? 'unknown'}`) : 'off');
+    if (extent.value !== '0') applyExterior();
+  });
+  extent.addEventListener('change', applyExterior);
+  wall.addEventListener('change', applyExterior);
+  // Live readout of the exterior step and the fine side's admission.
+  setInterval(() => {
+    const s = prototype.debugState?.(); if (!s) return;
+    if (boundary.value === 'on') text('volume-joined-boundary-val', s.joinedBoundary?.admitted ? `admitted · ghosts ${s.joinedGhosts?.bound ? 'bound' : 'unbound'}` : `refused: ${s.joinedBoundary?.reason ?? 'unknown'}`);
+    const x = s.joinedExterior; if (!x || extent.value === '0') return;
+    if (x.admitted) text('volume-joined-exterior-extent-val', `${x.shape.join('×')} coarse, ${x.cells} cells · ${x.lastStep?.stepped ? `step ${x.steps}, budget ${x.budget}` : `idle: ${x.lastStep?.reason ?? 'not stepped'}`}`);
+  }, 1000);
+}
 function readVolumeControls() {
   const volumeScene = document.getElementById('volume-scene').value;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
@@ -20016,6 +20064,7 @@ async function initKaminosVolumeRoute() {
     if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
   }
   window.__kaminosVolumePrototype = volumePrototype;
+  wireJoinedProvisionalControls(volumePrototype);
   if (fireLightFieldRouteParams().get('volume_light_field_optical_preview') === '1') {
     import('./volume-optical-native.mjs').then(({installOpticalSteppingPreview}) => {
       installOpticalSteppingPreview(volumePrototype, document);

@@ -44,6 +44,18 @@ export function resolveJoinedExteriorGeometry({ fineDims, pitch, ratio, extent }
 
 // Synthetic exterior solids: an axis-aligned slab `wall` = { axis, at, thickness }
 // in coarse cells, spanning the other two axes; null means no exterior solids.
+// A wall may also be given relative to the fine box: { side: '+x'|'-x'|'+z'|'-z',
+// gap, thickness } in coarse cells, resolved against the exterior geometry.
+export function resolveJoinedExteriorWall(wall, g) {
+  if (!wall) return null;
+  if (wall.side) {
+    const axis = wall.side.endsWith('x') ? 0 : 2, positive = wall.side.startsWith('+'), gap = wall.gap ?? 2, thickness = wall.thickness ?? 2;
+    const at = positive ? g.origin[axis] + g.fineCoarse[axis] + gap : g.origin[axis] - gap - thickness;
+    if (at < 0 || at + thickness > g.shape[axis]) return { axis, at, thickness, outside: true };
+    return { axis, at, thickness, side: wall.side, gap };
+  }
+  return { axis: wall.axis, at: wall.at, thickness: wall.thickness ?? 1 };
+}
 export function joinedExteriorSolids(shape, wall) {
   const count = shape[0] * shape[1] * shape[2];
   const cells = new Uint8Array(count);
@@ -82,7 +94,9 @@ export function createJoinedExterior(device, { extent, ratio = 4, wall = null, b
     const fineSolids = producer.solidMask
       ? { shape: producer.dims.slice(), cells: Uint8Array.from(producer.solidMask.cells, v => (v ? 1 : 0)), revision: `fine:${producer.solidMask.revision}` }
       : { shape: producer.dims.slice(), cells: new Uint8Array(fineCount), revision: 'fine:disabled' };
-    const coarseSolids = joinedExteriorSolids(g.shape, wall);
+    const slab = resolveJoinedExteriorWall(wall, g);
+    if (slab?.outside) { built = { key: k, owned: [], refused: 'wall-outside-exterior', summary: { admitted: false, reason: `wall-outside-exterior:${JSON.stringify(slab)}` } }; return { rebuilt: true, admitted: false, reason: 'wall-outside-exterior' }; }
+    const coarseSolids = joinedExteriorSolids(g.shape, slab);
     const owned = [];
     try {
       const layout = createCompositeProducerLayout({ geometry: g.geometry, fineSolids, coarseSolids });
@@ -113,7 +127,7 @@ const SITES: u32 = ${sites}u; const SX: u32 = ${g.shape[0] + 1}u; const SY: u32 
 }` });
       const ghostPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: ghostModule, entryPoint: 'fill' } });
       const ghostGroup = textures => device.createBindGroup({ layout: ghostPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: coarse } }, { binding: 1, resource: textures.a.createView() }, { binding: 2, resource: textures.b.createView() }] });
-      const summary = { admitted: true, reason: null, route: JOINED_EXTERIOR_ROUTE, shape: g.shape, origin: g.origin, fineCoarse: g.fineCoarse, cellWidth: g.cellWidth, ratio, extent, cells: grid.cells.length, faces: grid.faces.length, budget, tolerance, solids: { fine: fineSolids.revision, coarse: coarseSolids.revision, exteriorSolidCells: coarseSolids.cells.reduce((s, v) => s + v, 0) }, solver: 'gpu-composite-pcg-candidate' };
+      const summary = { admitted: true, reason: null, route: JOINED_EXTERIOR_ROUTE, shape: g.shape, origin: g.origin, fineCoarse: g.fineCoarse, cellWidth: g.cellWidth, ratio, extent, cells: grid.cells.length, faces: grid.faces.length, budget, tolerance, solids: { fine: fineSolids.revision, coarse: coarseSolids.revision, wall: slab, exteriorSolidCells: coarseSolids.cells.reduce((s, v) => s + v, 0) }, solver: 'gpu-composite-pcg-candidate' };
       built = { key: k, owned, layout, storage, grid, solver, intake, bridges, lowerExport, ghostPipeline, ghostGroup, sites, ghosts: g.ghosts, solidRevisions: { fine: fineSolids.revision, coarse: coarseSolids.revision }, summary, steps: 0 };
       return { rebuilt: true, ...summary, ghosts: g.ghosts };
     } catch (e) { for (const r of owned) r.destroy?.(); built = { key: k, owned: [], refused: e.message, summary: { admitted: false, reason: e.message } }; return { rebuilt: true, admitted: false, reason: e.message }; }
