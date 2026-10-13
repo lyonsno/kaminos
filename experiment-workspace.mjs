@@ -44,11 +44,13 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
   let active=false;
   const text=(id,value)=>{const node=byId(id);if(node.textContent!==value)node.textContent=value;};
   const investigationSlot=byId('experiment-investigation-slot');
-  const setInvestigation=node=>{
+  let investigationTool='finger-fluid-bench';
+  const setInvestigation=(node,{tool='finger-fluid-bench'}={})=>{
     // The investigation owner supplies one live component. Moving that node
     // preserves its handlers, drafts and session binding through layout changes.
     investigationSlot.replaceChildren(...(node ? [node] : []));
-    investigationSlot.hidden=!node||selectedTool!=="finger-fluid-bench";
+    investigationTool=tool;
+    investigationSlot.hidden=!node||selectedTool!==investigationTool;
     document.defaultView._kaminosDirty?.();
   };
   setInvestigation(investigation);
@@ -62,7 +64,7 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
       toolbar.querySelector('strong').textContent=label;
       byId('experiment-browser').querySelector('summary').textContent='Tools · '+label;
       for(const name of ['setup-slot','tuning-title','tuning-help','instrument-slot','details'])byId('experiment-'+name).hidden=!(fluid&&controlsMounted);
-      investigationSlot.hidden=!fluid||!investigationSlot.firstChild;
+      investigationSlot.hidden=selectedTool!==investigationTool||!investigationSlot.firstChild;
       byId('experiment-tool-slot').hidden=fluid&&controlsMounted;
       run.hidden=!active||!fluid;
       left.querySelectorAll('[data-workbench]').forEach(button=>button.setAttribute('aria-current',String(button.dataset.workbench===id)));
