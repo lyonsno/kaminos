@@ -1,6 +1,8 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
+import './creature-body-fixture.mjs';
 import * as contribution from '../experiments/creature-motion/retained.experiment.mjs';
+import * as THREE from '../lib/three.core.js';
 assert.equal(typeof contribution.withHeldCreatureFrame,'function','Creature contribution lacks the explicit hold/present/capture/restore operation');
 const {withHeldCreatureFrame}=contribution;
 function fixture(){
@@ -62,3 +64,20 @@ function fixture(){
  assert.equal(f.state().status,'playing');
 }
 console.log('Explicit creature hold/present/capture/restore preserves evidence, prior pause and replacement-owner custody');
+
+// Review F3: the real controller deliberately does not resume an exhausted clip.
+{
+ const scene=new THREE.Scene(),root=new THREE.Group(),bone=new THREE.Object3D();bone.name='pelvis';root.add(bone);scene.add(root);
+ root.userData.native_motion={source_sha256:'a'.repeat(64),frames:60,fps:30,retargeted:false};
+ const clip=new THREE.AnimationClip('trot',59/30,[new THREE.VectorKeyframeTrack('pelvis.position',[0,59/30],[0,0,0,0,0,1])]);
+ const session={loadAsset:async()=>({id:'endpoint',root,clips:[clip],source:'/body.glb'}),onFrame:()=>()=>{},redraw:()=>{},readView:()=>({}),setView:()=>{},dispose:async()=>scene.remove(root)};
+ const owner=await contribution.default.create({host:{scene:{open:()=>session}},inputs:{asset:'/body.glb',source_sha256:'a'.repeat(64)}});
+ try {
+  owner.operations.seek({frame:30});owner.operations.resume();
+  const entry={state:()=>({id:'marionette/retained-creature'}),read:owner.read,invoke:(name,input)=>owner.operations[name](input)};
+  const result=await withHeldCreatureFrame({entry,frame:59,present:async()=>{},capture:async()=>({report:'endpoint-retained'})});
+  assert.equal(owner.read().status,'held');
+  assert.equal(result.restore.status,'endpoint-held','exhausted source is not resumed playback');
+  assert.equal(result.restore.effective.status,'held');assert.equal(result.restore.effective.frame,59);
+ }finally{await owner.dispose();}
+}

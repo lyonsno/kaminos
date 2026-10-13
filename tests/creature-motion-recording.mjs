@@ -1,5 +1,6 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
+import './creature-body-fixture.mjs';
 import * as THREE from '../lib/three.core.js';
 import definition from '../experiments/creature-motion/retained.experiment.mjs';
 import {createOwnerSceneSession} from '../owner-scene-session.mjs';
