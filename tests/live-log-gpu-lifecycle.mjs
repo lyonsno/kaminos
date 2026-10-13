@@ -2,6 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.webgpu.js';
 import {createLiveLogHeatGpu} from '../live-log-heat-gpu.mjs';
+globalThis.GPUBufferUsage={STORAGE:128,COPY_DST:8};
+globalThis.GPUTextureUsage={STORAGE_BINDING:8,TEXTURE_BINDING:4,COPY_DST:2};
 
 test('resident texture survives reset, transforms follow the mesh and disposal never owns the device',async()=>{
   let deviceDestroyed=0;const resources=[],writes=[];
