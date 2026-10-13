@@ -19,7 +19,7 @@ Generate images from a text prompt with [FLUX.2 [klein] 4B](https://huggingface.
 
 ## Speed
 
-Times are for one image with 4 steps in Chrome, sharing the GPU with a continuously rendering scene.
+Times are for one image with 4 steps (the page's Full button) in Chrome, sharing the GPU with a continuously rendering scene.
 
 | Size | 16 GB Apple M2 Pro | Apple M4 Max |
 | --- | --- | --- |
@@ -28,6 +28,15 @@ Times are for one image with 4 steps in Chrome, sharing the GPU with a continuou
 | 1024 × 1024 | about 57 s | about 23 s |
 
 During generation the scene kept a median frame time of about 20 ms on the M2 Pro.
+
+The page has four generate buttons that trade steps for time. The model is distilled for 4 steps, but 3 look nearly the same, 2 are smoother and simpler, and 1 gives a blurry, melted impression of the scene. At 512 × 512 on the M2 Pro:
+
+| Button | Steps | Time |
+| --- | --- | --- |
+| Full | 4 | about 13 s |
+| Fast (the default) | 3 | about 10 s |
+| Express | 2 | about 7.5 s |
+| JANK | 1 | about 4.5 s |
 
 Prompts are padded with filler tokens before the transformer reads them. The page pads to the prompt's own length plus a few tokens, which is about a quarter faster than the reference pipeline's 512, unless the prompt asks for lettering (quoted text, words in capitals, or words like sign, poster or title). Then it pads to 512, which spells words in the image noticeably better. A checkbox shows which mode will run and can be flipped. Generating again with the same prompt reuses its text encoding.
 

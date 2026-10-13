@@ -138,7 +138,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
   requestAnimationFrame(requestFrame);
 
   let active = null;
-  async function generate({ prompt, seed, size, textLength = 512, cooperative = true, targetDutyMs = 12, maxInFlight = 2, onStep, onPhase, onPreview = null }) {
+  async function generate({ prompt, seed, size, steps = 4, textLength = 512, cooperative = true, targetDutyMs = 12, maxInFlight = 2, onStep, onPhase, onPreview = null }) {
     if (active) throw new Error('a generation is already running');
     const runId = `flux2-klein:${crypto.randomUUID()}`;
     const abort = new AbortController();
@@ -160,7 +160,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
         const control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground: frameRun.withForeground });
         active.control = control;
         const job = route.enqueue({ jobId: runId, execute: invocation => pipeline.generate({
-          prompt, seed, width: size, height: size, textLength, onStep: stepHook, onPhase: phaseHook, onPreview,
+          prompt, seed, width: size, height: size, steps, textLength, onStep: stepHook, onPhase: phaseHook, onPreview,
           schedule: { runtime: route.runtime, invocation, control, signal: abort.signal, targetDutyMs, maxInFlight,
             withForeground: frameRun.withForeground } }) });
         const completion = await job.completion;
@@ -171,7 +171,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
         }
         result = completion.output;
       } else {
-        result = await pipeline.generate({ prompt, seed, width: size, height: size, textLength, onStep: stepHook, onPhase: phaseHook, onPreview });
+        result = await pipeline.generate({ prompt, seed, width: size, height: size, steps, textLength, onStep: stepHook, onPhase: phaseHook, onPreview });
       }
       result.wallMs = performance.now() - started;
       result.gpuBytes = { peak: gpuBytes.peak, live: gpuBytes.live };

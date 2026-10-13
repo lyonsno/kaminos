@@ -95,7 +95,7 @@ const pngBase64 = async (rgba, width, height) => {
   let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(bin);
 };
-window.kleinBatch = async (jobs, { cooperative = true, targetDutyMs = 12, maxInFlight = 1, textLength = 512, dutyLog = false, previews = false } = {}) => {
+window.kleinBatch = async (jobs, { cooperative = true, targetDutyMs = 12, maxInFlight = 1, textLength = 512, dutyLog = false, previews = false, steps = 4 } = {}) => {
   await window.kleinReady;
   const results = [];
   for (const job of jobs) {
@@ -103,7 +103,7 @@ window.kleinBatch = async (jobs, { cooperative = true, targetDutyMs = 12, maxInF
     const shots = [], started = performance.now();
     const onPreview = previews ? image => shots.push(pngBase64(image.rgba, image.width, image.height)
       .then(png => ({ step: image.step, width: image.width, height: image.height, png, atMs: performance.now() - started }))) : null;
-    const r = await generate({ textLength, ...job, cooperative, targetDutyMs, maxInFlight, onPreview });
+    const r = await generate({ textLength, steps, ...job, cooperative, targetDutyMs, maxInFlight, onPreview });
     const canvas = new OffscreenCanvas(r.width, r.height);
     canvas.getContext('2d').putImageData(new ImageData(r.rgba, r.width, r.height), 0, 0);
     const bytes = new Uint8Array(await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer());
