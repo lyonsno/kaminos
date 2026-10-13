@@ -42,7 +42,7 @@ export function createDistributedSmokeBindings(device) {
   let last=null,group=null;
   return {layout, update(frame) {
     const r=frame.smokeReconstruction;
-    if(!frame.texture || r?.identity!=='prepared-geometry-visible-v1' || !r.texture || !r.masks || r.staticPreparations!==1 || r.updates<1) throw new Error('distributed smoke requires current prepared reconstruction resources');
+    if(!frame.texture || r?.identity!=='prepared-geometry-visible-v1' || !r.texture || !r.masks || !Number.isInteger(r.staticPreparations) || r.staticPreparations<1 || !Number.isInteger(r.updates) || r.updates<1) throw new Error('distributed smoke requires current prepared reconstruction resources');
     const handles=[r.texture,r.masks];
     if(!last || handles.some((h,i)=>h!==last[i])) {
       group=device.createBindGroup({layout,entries:[{binding:0,resource:r.texture.createView()},

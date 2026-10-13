@@ -26,7 +26,7 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,Ren
   }
 }
 
-export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512}) {
+export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11)}) {
   if(!Number.isInteger(resolution)||resolution<=0) throw new Error('fire-shadow-resolution-must-be-positive-integer');
   const enabled=uniform(requested?1:0),effective=uniform(0);
   const target=new THREE.CubeRenderTarget(resolution,{
@@ -93,7 +93,8 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
           Math.max(Math.abs(bounds.min.x),Math.abs(bounds.max.x)),
           Math.max(Math.abs(bounds.min.y),Math.abs(bounds.max.y)),
           Math.max(Math.abs(bounds.min.z),Math.abs(bounds.max.z)));
-        const far=extent.length()+Math.sqrt(11)+.01;
+        const radius=sourceRadius();if(!Number.isFinite(radius)||radius<0)throw new Error('finite source radius required');
+        const far=extent.length()+radius+.01;
         for(const camera of cubeCamera.children) {camera.far=far;camera.updateProjectionMatrix();}
         renderFireShadowCube({renderer,scene,cubeCamera,material,far});
         effective.value=1;status.effective=true;status.reason=null;

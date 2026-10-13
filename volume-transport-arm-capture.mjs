@@ -37,7 +37,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { cameraFrameMismatch, effectiveMismatches, emissiveCoefficientsMismatch, parseArms, parseCameraFrame, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
+import { armSetsConfiguration, cameraFrameMismatch, effectiveMismatches, emissiveCoefficientsMismatch, parseArms, parseCameraFrame, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
 
 const CAPTURE_IDENTITY = 'kaminos.volume.transport-arm-capture.v1';
 const positional = [];
@@ -229,7 +229,7 @@ try {
         continue;
       }
       if (cid === '@emissiveCoefficients') {
-        if (arm.set.some(([id]) => !id.startsWith('@'))) fail(report.failurePhase, '@emissiveCoefficients must be its own arm, after the configuration arm has settled');
+        if (armSetsConfiguration(arm.set)) fail(report.failurePhase, '@emissiveCoefficients must be its own arm, after the configuration arm has settled');
         // Emissive seed readback (review GR-01); the arm fails unless finite,
         // nonzero and spatially varying.
         const sample = await evaluate(op(`(async () => { const p = w.__kaminosVolumePrototype; if (!p?.sampleEmissiveSeedCoefficients) return { status: 'missing-api' }; return await p.sampleEmissiveSeedCoefficients(); })()`));
@@ -248,7 +248,7 @@ try {
     await sleep(1500);
     const after = await evaluate(stateExpr);
     if (!after) fail(report.failurePhase, 'renderer state unavailable after switch');
-    if (arm.set.some(([id]) => !id.startsWith('@'))) lastConfigStep = after.simStepCount;
+    if (armSetsConfiguration(arm.set)) lastConfigStep = after.simStepCount;
     report.failurePhase = `arm-${arm.name}-settle`;
     const t0 = Date.now(); const s0 = after.simStepCount;
     const samples = [];

@@ -182,7 +182,7 @@ test('the producer is cleared on any frame that skips the seed; the capture requ
   assert.match(emissiveCoefficientsMismatch(base, { minProducerStep: 121 }), /produced at step 120, before the configuration took effect at step 121/);
   const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
   assert.match(capture, /const mismatch = emissiveCoefficientsMismatch\(sample, \{ minProducerStep: lastConfigStep \}\);/);
-  assert.match(capture, /if \(arm\.set\.some\(\(\[id\]\) => !id\.startsWith\('@'\)\)\) lastConfigStep = after\.simStepCount;/);
+  assert.match(capture, /if \(armSetsConfiguration\(arm\.set\)\) lastConfigStep = after\.simStepCount;/);
 });
 
 // GR-02 last residual (confirmation of 5f14b52b): a sample taken in the same
@@ -191,7 +191,19 @@ test('the producer is cleared on any frame that skips the seed; the capture requ
 // must be its own arm, after a configuration arm has settled.
 test('capture: @emissiveCoefficients is refused in an arm that also sets controls', () => {
   const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
-  assert.match(capture, /if \(arm\.set\.some\(\(\[id\]\) => !id\.startsWith\('@'\)\)\) fail\(report\.failurePhase, '@emissiveCoefficients must be its own arm, after the configuration arm has settled'\);/);
+  assert.match(capture, /if \(armSetsConfiguration\(arm\.set\)\) fail\(report\.failurePhase, '@emissiveCoefficients must be its own arm, after the configuration arm has settled'\);/);
   const handler = capture.slice(capture.indexOf("if (cid === '@emissiveCoefficients') {"), capture.indexOf("if (cid === '@emissiveCoefficients') {") + 600);
   assert.ok(handler.indexOf('must be its own arm') < handler.indexOf('sampleEmissiveSeedCoefficients'), 'refused before any sampling');
+});
+
+// Post-landing review of 2eef9ccdd: the guard exempted every debug control,
+// but @confinementEpsilon changes the simulation. Only controls that read or
+// frame without changing the simulation are non-configuring.
+test('capture: every control except the read-only debug controls counts as configuration', async () => {
+  const { armSetsConfiguration, NON_CONFIGURING_CAPTURE_CONTROLS } = await import('../volume-arm-capture-checks.mjs');
+  assert.deepEqual([...NON_CONFIGURING_CAPTURE_CONTROLS].sort(), ['@cameraFrame', '@emissiveCoefficients', '@savePreset', '@simGpuProfile']);
+  assert.equal(armSetsConfiguration([['@confinementEpsilon', '0.1']]), true, 'an epsilon override is configuration');
+  assert.equal(armSetsConfiguration([['volume-grid-height-ratio', '3']]), true);
+  assert.equal(armSetsConfiguration([['@cameraFrame', '0:1:3:0:0:0'], ['@emissiveCoefficients', '1']]), false);
+  assert.equal(armSetsConfiguration([['@someFutureControl', '1']]), true, 'an unknown debug control is configuration until declared otherwise');
 });
