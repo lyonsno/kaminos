@@ -11,8 +11,9 @@ Generate skeletal animation from a text prompt with [UniMate](https://github.com
 - **The whole sampler in the browser.** The 10-layer spatio-temporal transformer (74M parameters) runs in FP32 as WGSL compute shaders. Classifier-free guidance and a Dormand–Prince (dopri5) adaptive solver integrate the flow from noise to motion.
 - **Room for the application to keep rendering.** Each network evaluation is submitted as inference-kit command duties sized to measured GPU throughput. A scene on the same device keeps its frame rate during generation, and generation can be paused, resumed and stopped between duties.
 - **A complete animation.** Output includes world joint positions, local joint rotations in the skeleton's own hierarchy, the root trajectory and facing, plus the model's raw motion features.
+- **Your own rig.** Choose "Your own rig (.glb)…" or drop a rigged .glb on the page. The page prepares the skeleton the way UniMate's own preprocessing does and generates for it. You can review the joint labels and the facing pair and apply changes.
 - **Eight bodies to animate.** The published page offers the Go2 robot dog and seven Truebones animals: cat, dog, horse, T-rex, spider, eagle and parrot. Switching body takes a moment; the model stays loaded.
-- **Something to watch while it downloads.** The model is about 740 MB (UniMate plus the text encoder), downloaded once and then kept in the browser's cache. While it downloads, the page plays a gallery of clips that this port generated in the browser: a dog, a cat, the Go2 robot dog, a parrot, a horse, an eagle, a spider and a T-rex. Drag to orbit, scroll or pinch to zoom, and scrub through any clip.
+- **Something to watch while it downloads.** The model is about 370 MB (UniMate plus the text encoder), downloaded once and then kept in the browser's cache. While it downloads, the page plays a gallery of clips that this port generated in the browser: a dog, a cat, the Go2 robot dog, a parrot, a horse, an eagle, a spider and a T-rex. Drag to orbit, scroll or pinch to zoom, and scrub through any clip.
 
 ## Accuracy
 
@@ -24,6 +25,19 @@ The port is checked against the reference PyTorch implementation:
 - **End to end.** A complete browser generation from the same starting noise reproduces the reference animation. The largest joint deviation is about 0.03% of body height when run as the reference's batch of two prompts, and 0.3–0.7% of body height for a single prompt.
 
 The browser's step-size controller measures error over the skeleton's real joints only. The reference implementation pads every skeleton to 71 joints and includes the padding in its error estimate. The browser therefore reaches the same motion with about a quarter fewer network evaluations.
+
+## Download size
+
+The published page loads both models with float16 storage, which halves the download to about 370 MB. `pack-half.py` writes these copies. Biases, norms and other small tensors stay float32. At load, [`unimate-weights.js`](unimate-weights.js) widens every weight back to float32, so the kernels and their arithmetic are unchanged; only the stored values are rounded.
+
+The effect on the motion is negligible:
+
+- **One network evaluation:** about 2–4 × 10⁻⁴ relative error against PyTorch, against 1.5 × 10⁻⁶ with float32 weights.
+- **Text encoder:** caption embeddings within about 3.5 × 10⁻⁴.
+- **Go2 reference clips:** a whole generation takes the same adaptive steps and lands as close to the accepted CPU clips as the float32 run: 2.9 × 10⁻³ against 3.0 × 10⁻³, and 4.5 × 10⁻⁴ against 4.2 × 10⁻⁴.
+- **Gallery clips:** the dog and cat clips regenerate within 0.07% of body size.
+
+`?precision=fp32` loads the float32 copies.
 
 ## Speed
 
@@ -56,6 +70,30 @@ Then open the printed `index.html` address. A page on `localhost` or `127.0.0.1`
 
 The gallery clips in `clips/` were made with `generate-clips.mjs`, which drives this page in a headless Chrome for Testing and saves each generation as a clip file. Given a list of skeleton bundles, prompts and seeds, it writes one clip per run plus a report; `clips/index.json` lists the clips the page shows, in order.
 
+## Bring your own rig
+
+The page prepares a rigged .glb the way UniMate's [`rig_preprocess`](https://github.com/Friedrich-M/UniMate) does for an unanimated asset, entirely in the browser:
+
+1. **Skeleton** ([`unimate-rig-glb.js`](unimate-rig-glb.js)). It reads the skin's joints, the nodes between them and the armature, and the rest pose, following Blender's glTF import (bind pose from the inverse bind matrices where Blender takes it). It then prunes helper bones as UniMate's export does.
+2. **Joint labels and facing** ([`unimate-rig-labels.js`](unimate-rig-labels.js)). UniMate's own offline rule labeller, unchanged, runs in [Pyodide](https://pyodide.org) (Python in WebAssembly), loaded on first use. `pack-labeler.py` builds its bundle from a UniMate checkout.
+3. **Conditioning** ([`unimate-rig-features.js`](unimate-rig-features.js)). It computes:
+   - the canonical rest pose (facing +Z, centred, scaled to tree diameter 2, grounded);
+   - joint depths, pairwise relations and graph distances;
+   - the Laplacian spectral features;
+   - the normalized rest-pose features.
+
+   The page's own T5 encoder embeds the labels.
+
+Upstream recommends reviewing the labels and facing pair before generating, and the page lets you edit both. The tests check the importer against UniMate's own preprocessing:
+
+- **Skeleton features:** on the eight published skeletons, `tests/rig-features-contracts.mjs` reproduces the exported model inputs.
+- **Import and labels:** on four Khronos sample rigs and a custom creature, `tests/rig-import-contracts.mjs` reproduces upstream's exported joints, rest pose, joint order, canonical pose, topology and spectral features. The fixtures come from UniMate's pipeline run in Blender (`tests/export-rig-fixtures.py`). The labeller's labels and facing pairs are identical to upstream's.
+- **Model inputs:** on the creature, the conditioning the page builds matches the inputs PyTorch fed the model to within 3 × 10⁻⁷.
+
+One known difference: where the graph Laplacian has a repeated eigenvalue, the basis of that eigenspace is arbitrary. The page's eigensolver picks a different basis than NumPy's, and NumPy's pick is not reproducible across machines either.
+
+Only the rest pose is used. An animated .glb is treated like an unanimated one, so UniMate's motion-based pruning of animated assets is not applied.
+
 ## Using it in an application
 
 - [`CooperativeUniMateDenoiser`](unimate-cooperative.js) is the network. `configure({ B, J })` allocates it for a batch and skeleton size. `writeConditioning(...)` and `encodePrepare(...)` set up a skeleton and caption once. Each evaluation is then encoded as command duties through a duty scheduler.
@@ -79,6 +117,7 @@ The browser witnesses compare against reference captures from the PyTorch implem
 - `run-t5-witness.mjs`: the text encoder.
 - `run-demo-witness.mjs`: the demo page, driven the way a person uses it.
 - `run-gallery-witness.mjs`: the clip gallery, captured while the model downloads and at chosen frames of every clip.
+- `run-rig-witness.mjs`: imports a rigged .glb through the page, optionally applies reviewed labels, writes the conditioning the page built, then generates on the rig.
 - `run-site-witness.mjs`: the published page as assembled for GitHub Pages, with weights from Hugging Face: first load, generation on two skeletons, and a reload from the browser cache.
 
 ## Credits and licenses

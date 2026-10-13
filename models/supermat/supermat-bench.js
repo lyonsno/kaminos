@@ -74,6 +74,11 @@ export const BENCH_VARIANTS = [
     largeGemmTile: { tm: 8, tn: 4, bk: 16, minWorkgroups: 1024 } },
   { id: 'f16act-fused-f16tiles-auto-pairs', f16: true, activations: 'f16', fuseNorm: true, normOnly: true, gemmPrecision: 'f16-tiles',
     largeGemmTile: { tm: 8, tn: 4, bk: 16, minWorkgroups: 1024 }, pairedWeightLoads: true },
+  // Streaming attention: model-owned scalar kernel vs the kit's register-tiled kernel, F32 and F16 activations.
+  { id: 'attn-scalar', attentionOnly: true },
+  { id: 'attn-kit-tiled', attentionOnly: true, attentionKernel: 'kit-tiled' },
+  { id: 'attn-scalar-f16act', attentionOnly: true, activations: 'f16' },
+  { id: 'attn-kit-tiled-f16act', attentionOnly: true, attentionKernel: 'kit-tiled', activations: 'f16' },
 ];
 
 export async function runSuperMatBench({ iterations = 6, rounds = 3, variants = BENCH_VARIANTS, cases = CASES } = {}) {

@@ -81,7 +81,7 @@ try {
 
   const plan = values.plan ?? 'profiles';
   summary.plan = plan;
-  if (!['profiles', 'coop-sweep', 'coop-alternate', 'landing-check', 'profile', 'bench'].includes(plan)) throw new Error(`unknown plan ${plan}`);
+  if (!['profiles', 'coop-sweep', 'coop-alternate', 'landing-check', 'profile', 'bench', 'kit-attention', 'kit-attention-fenced'].includes(plan)) throw new Error(`unknown plan ${plan}`);
   const page = (id, query) => run(id, demo, ['--url',
     `${server.url}/models/supermat/supermat-demo.html?image_root=image-inbox&image_path=evil-orb.png&autorun=1&repeat=3&${query}`,
     '--chrome', values.chrome, '--screenshot', path.join(out, id, 'screen.png')]);
@@ -125,6 +125,32 @@ try {
     ]) {
       run(id, witness, [...common, '--stage', 'route', '--fixture', `${state}/reference/ring-0000-${size}`, '--weights', `${state}/weights/f16`,
         ...image, '--options', JSON.stringify(options), '--run-options', JSON.stringify({ runs: 6 })]);
+    }
+  } else if (plan === 'kit-attention') {
+    // Model-owned scalar attention vs the kit's tiled kernel on the whole route: the reference-faithful
+    // profile (F32 activations) and the product profile on F16 weights, at 512 and 1024, kernels
+    // alternating so machine-load drift favors neither.
+    summary.phase = 'kit-attention';
+    const product = { activations: 'f16', fuseNorm: true, gemmPrecision: 'f16-tiles' };
+    for (const [name, weights, options, size] of [
+      ['faithful-512', 'f16', {}, 512], ['product-512', 'f16', product, 512], ['product-1024', 'f16', product, 1024]]) {
+      for (const attentionKernel of ['scalar', 'kit-tiled']) {
+        run(`${name}-${attentionKernel}`, witness, [...common, '--stage', 'route', '--fixture', `${state}/reference/ring-0000-${size}`,
+          '--weights', `${state}/weights/${weights}`, ...image, '--options', JSON.stringify({ ...options, attentionKernel }),
+          '--run-options', JSON.stringify({ runs: 3 })]);
+      }
+    }
+  } else if (plan === 'kit-attention-fenced') {
+    // Same comparison through fenced cooperative duties, where long attention layers split into query
+    // ranges (the path a run beside a live scene takes).
+    summary.phase = 'kit-attention-fenced';
+    const product = { activations: 'f16', fuseNorm: true, gemmPrecision: 'f16-tiles' };
+    for (const [name, options] of [['faithful-512-fenced', {}], ['product-512-fenced', product]]) {
+      for (const attentionKernel of ['scalar', 'kit-tiled']) {
+        run(`${name}-${attentionKernel}`, witness, [...common, '--stage', 'route', '--fixture', `${state}/reference/ring-0000-512`,
+          '--weights', `${state}/weights/f16`, ...image, '--options', JSON.stringify({ ...options, attentionKernel }),
+          '--run-options', JSON.stringify({ runs: 2, fencedDuties: { targetDutyMs: 12 } })]);
+      }
     }
   } else if (plan === 'landing-check') {
     // Correctness gate before landing: F32 route parity, the product profile,

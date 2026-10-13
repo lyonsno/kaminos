@@ -65,7 +65,7 @@ async function runCpuPhase(useWorker, operationId, payload, transfer, signal) {
 }
 
 const ADAPTER_OPTIONS = Object.freeze(['route', 'weightsUrl', 'signal', 'onProgress', 'cpuWorker', 'attention', 'gemmKernel',
-  'weightLoading', 'gemmPrecision', 'activations', 'fuseNorm', 'targetDutyMs', 'profile']);
+  'weightLoading', 'gemmPrecision', 'activations', 'fuseNorm', 'targetDutyMs', 'profile', 'attentionKernel']);
 
 export async function createSuperMatAdapter(options = {}) {
   const unknown = Object.keys(options).filter(key => !ADAPTER_OPTIONS.includes(key));
@@ -77,7 +77,9 @@ export async function createSuperMatAdapter(options = {}) {
     // schedule.targetDutyMs overrides it.
     targetDutyMs = DEFAULT_TARGET_DUTY_MS,
     // Diagnostic: per-dispatch GPU timings on blocking runs (returned as run.profile).
-    profile = false } = options;
+    profile = false,
+    // Streaming attention implementation (see createSuperMatOps).
+    attentionKernel = 'kit-tiled' } = options;
   if (!(targetDutyMs > 0)) throw new Error(`targetDutyMs must be a positive number of milliseconds, got ${targetDutyMs}`);
   if (!['auto', 'chunks', 'bundle'].includes(weightLoading)) throw new Error(`unknown weight loading mode ${weightLoading}`);
   if (!route?.runtime?.device || typeof route.loadModelResourcesFromSource !== 'function') {
@@ -123,10 +125,10 @@ export async function createSuperMatAdapter(options = {}) {
   const weightLoadMs = performance.now() - loadStart;
   const w = createWeightAccessor(tensors);
   const device = route.runtime.device;
-  const ops = createSuperMatOps(device, { label: 'supermat', attention, gemmKernel, gemmPrecision, activations, fuseNorm, profile });
+  const ops = createSuperMatOps(device, { label: 'supermat', attention, attentionKernel, gemmKernel, gemmPrecision, activations, fuseNorm, profile });
   const identity = Object.freeze({
     routeId: SUPERMAT_ROUTE_ID, backend: 'webgpu-local', modelId: 'supermat.single-image',
-    revision: weightPackage.revision, weightDtype: weightPackage.dtype ?? 'f32', defaultImageSize: SUPERMAT_IMAGE_SIZE, attention,
+    revision: weightPackage.revision, weightDtype: weightPackage.dtype ?? 'f32', defaultImageSize: SUPERMAT_IMAGE_SIZE, attention, attentionKernel,
     gemmKernel: ops.gemmKernel, gemmPrecision, activations, fuseNorm, targetDutyMs, profile, weightLoading: [...loadedVia].join('+'),
     provenance: weightPackage.provenance,
   });

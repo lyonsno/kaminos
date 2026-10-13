@@ -164,4 +164,22 @@ for (const headDim of [8, 72, 130, 272]) assert.throws(() => createWebGpuTiledFl
   assert.equal(flashAttentionParams({ queryTokens: 8, keyTokens: 8, heads: 1, headDim: 64 })[9], 0);
 }
 
+// Storage types: per-tensor 'f32' (default, shader unchanged above) or 'f16' (native binary16 storage, needs
+// shader-f16; widened on load and rounded on store, math stays F32).
+{
+  const half = createWebGpuTiledFlashAttentionShader({ headDim: 64, storage: { q: 'f16', k: 'f16', v: 'f16', out: 'f16' } });
+  assert.match(half, /^enable f16;/);
+  for (const name of ['q', 'k', 'v']) assert.match(half, new RegExp(`var<storage, read> ${name}_values: array<f16>`));
+  assert.match(half, /var<storage, read_write> out_values: array<f16>/);
+  assert.match(half, /f32\(q_values\[/);
+  assert.match(half, /out_values\[base \+ 0u\] = f16\(/);
+  assert.match(half, /var<workgroup> stage: array<f32,/, 'staging and math stay F32');
+  const mixed = createWebGpuTiledFlashAttentionShader({ headDim: 64, storage: { q: 'f16' } });
+  assert.match(mixed, /k_values: array<f32>/);
+  assert.match(mixed, /out_values: array<f32>/);
+  assert.doesNotMatch(createWebGpuTiledFlashAttentionShader({ headDim: 64 }), /f16/);
+  assert.throws(() => createWebGpuTiledFlashAttentionShader({ headDim: 64, storage: { q: 'bf16' } }), /storage/);
+  assert.throws(() => createWebGpuTiledFlashAttentionShader({ headDim: 64, storage: { w: 'f16' } }), /storage/);
+}
+
 console.log('flash attention kernel contracts passed');

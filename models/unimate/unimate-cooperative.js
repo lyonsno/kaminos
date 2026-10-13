@@ -10,6 +10,7 @@
 // createCooperativeCfgDrift returns the classifier-free-guided drift
 // (uncond + scale * (cond - uncond), float32) the dopri5 solver calls.
 
+import { tensorFloat32Bytes } from './unimate-weights.js';
 import { UniMateDenoiser } from './unimate-denoiser.js';
 import { KleinDutyScheduler } from '../flux2-klein/klein-duties.js';
 import { assertEvaluated } from './unimate-drift.js';
@@ -34,11 +35,12 @@ export class CooperativeUniMateDenoiser extends UniMateDenoiser {
   static async create(device, manifest, bytes) {
     const weights = new Map();
     for (const t of manifest.tensors) {
-      const size = Math.max(256, Math.ceil(t.byteLength / 256) * 256);
+      const data = tensorFloat32Bytes(bytes, t);
+      const size = Math.max(256, Math.ceil(data.byteLength / 256) * 256);
       const buffer = device.createBuffer({ size, usage: STORAGE, mappedAtCreation: true });
-      new Uint8Array(buffer.getMappedRange()).set(new Uint8Array(bytes, t.offset, t.byteLength));
+      new Uint8Array(buffer.getMappedRange()).set(data);
       buffer.unmap();
-      weights.set(t.name, { buffer, shape: t.shape, byteLength: t.byteLength });
+      weights.set(t.name, { buffer, shape: t.shape, byteLength: data.byteLength });
     }
     return new CooperativeUniMateDenoiser(device, manifest, weights);
   }

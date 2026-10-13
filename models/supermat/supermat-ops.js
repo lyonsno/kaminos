@@ -7,6 +7,9 @@ import {
   affineShader, gemmSubgroupMatrixShader, SUBGROUP_MATRIX_TILE, flashAttentionShader, flashAttentionVec4Shader, FLASH_HEAD_DIM, FLASH_QUERY_TILE,
 } from './supermat-kernels.js';
 import { chooseTiledGemmTile } from '../../webgpu-inference-kit/src/tiled-gemm-kernel.js';
+import {
+  createWebGpuTiledFlashAttentionShader, flashAttentionParams, flashAttentionDispatch, FLASH_ATTENTION_BLOCK_QUERIES,
+} from '../../webgpu-inference-kit/src/flash-attention-kernel.js';
 
 const STORAGE = 0x0080, COPY_SRC = 0x0004, COPY_DST = 0x0008, UNIFORM = 0x0040;
 const ACTIVATION_USAGE = STORAGE | COPY_SRC | COPY_DST;
@@ -40,7 +43,9 @@ function dispatch1D(total, workgroupSize = 256, limit = 65535) {
 
 // attention: 'streaming' (online softmax, no score matrix) or 'materialized'.
 // gemmTile: { tm, tn, bk } per-thread outputs and K step (16x16 threads per workgroup).
-// attentionKernel: 'scalar' or 'vec4' streaming implementation.
+// attentionKernel: 'kit-tiled' (default; the inference kit's register-tiled flash attention, head dims a
+// multiple of 16 up to 256; 1.9x the scalar kernel on the 4096-token UNet layer, 2026-10-13 bench) or the
+// model-owned 'scalar' / 'vec4' streaming kernels (head dim 64), kept as baselines.
 // gemmKernel: 'tiled' (default), 'subgroup-matrix' (experimental Apple
 // simdgroup matrices; correct but ~2x slower than tiled in the 2026-10-09
 // bench with one subgroup per workgroup), or 'auto' (subgroup matrices when
@@ -72,7 +77,7 @@ export function createSuperMatOps(device, options = {}) {
   const unknown = Object.keys(options).filter(key => !SUPERMAT_OPS_OPTIONS.includes(key));
   if (unknown.length) throw new Error(`unknown SuperMat ops option: ${unknown.join(', ')}`);
   const { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 }, fuseNorm = false,
-    attentionKernel = 'scalar', gemmKernel = 'tiled', gemmPrecision = 'f32', activations = 'f32',
+    attentionKernel = 'kit-tiled', gemmKernel = 'tiled', gemmPrecision = 'f32', activations = 'f32',
     // profile: per-dispatch GPU timestamps (own pass per dispatch) for unscheduled runs; diagnostic only.
     profile = false,
     // Per-GEMM tile policy: GEMMs that still yield >= minWorkgroups workgroups
@@ -95,6 +100,10 @@ export function createSuperMatOps(device, options = {}) {
   if (largeTile && largeTile.bn !== tileShape.bn) throw new Error('largeGemmTile must keep the base tile column width');
   const largeTileMinWorkgroups = largeGemmTile?.minWorkgroups ?? 1024;
   if (!['streaming', 'materialized'].includes(attention)) throw new Error(`unknown attention mode ${attention}`);
+  if (!['scalar', 'vec4', 'kit-tiled'].includes(attentionKernel)) throw new Error(`unknown attention kernel ${attentionKernel}`);
+  const kitAttention = attentionKernel === 'kit-tiled';
+  const attentionHeadDimSupported = headDim => kitAttention
+    ? Number.isInteger(headDim) && headDim >= 16 && headDim <= 256 && headDim % 16 === 0 : headDim === FLASH_HEAD_DIM;
   const pipelines = new Map();
   const pool = new Map();
   const owned = new Set();
@@ -504,18 +513,33 @@ export function createSuperMatOps(device, options = {}) {
     return c;
   }
 
-  // Multi-head self/cross attention over token-major Q [queries, heads*64] and
-  // K/V [keys, heads*64]; splits query ranges to the duty budget.
-  async function flashAttention({ q, k, v, queries, keys, heads, scale, name = 'attention' }) {
-    const channels = heads * FLASH_HEAD_DIM;
+  // Multi-head self/cross attention over token-major Q [queries, heads*headDim] and
+  // K/V [keys, heads*headDim]; splits query ranges to the duty budget.
+  async function flashAttention({ q, k, v, queries, keys, heads, headDim = FLASH_HEAD_DIM, scale, name = 'attention' }) {
+    if (!attentionHeadDimSupported(headDim)) throw new Error(`${name}: ${attentionKernel} attention does not support head dim ${headDim}`);
+    const channels = heads * headDim;
     const out = alloc([queries, channels], name);
-    const flops = 4 * queries * keys * FLASH_HEAD_DIM * heads;
+    const flops = 4 * queries * keys * headDim * heads;
     const budget = schedule ? currentDutyFlops() : 0;
+    const tile = kitAttention ? FLASH_ATTENTION_BLOCK_QUERIES : FLASH_QUERY_TILE;
     const rows = !budget || flops <= budget ? queries
-      : Math.max(FLASH_QUERY_TILE, Math.floor(budget / (4 * keys * FLASH_HEAD_DIM * heads) / FLASH_QUERY_TILE) * FLASH_QUERY_TILE);
+      : Math.max(tile, Math.floor(budget / (4 * keys * headDim * heads) / tile) * tile);
     for (let rowBase = 0; rowBase < queries; rowBase += rows) {
       const count = Math.min(rows, queries - rowBase);
-      await admit(4 * count * keys * FLASH_HEAD_DIM * heads, `${name}[${rowBase}]`);
+      await admit(4 * count * keys * headDim * heads, `${name}[${rowBase}]`);
+      if (kitAttention) {
+        const storage = Object.fromEntries([['q', q], ['k', k], ['v', v], ['out', out]].map(([key, t]) => [key, storageKind(t)]));
+        if (Object.values(storage).some(type => type !== 'f32' && type !== 'f16')) throw new Error(`${name}: kit attention needs f32 or f16 activations`);
+        if (!(Math.abs(scale - 1 / Math.sqrt(headDim)) <= 1e-7 / Math.sqrt(headDim))) throw new Error(`${name}: kit attention scale is 1/sqrt(headDim)`);
+        const half = Object.fromEntries(Object.entries(storage).filter(([, type]) => type === 'f16'));
+        dispatch(createWebGpuTiledFlashAttentionShader({ headDim, storage: half }),
+          [bindingView(q), bindingView(k), bindingView(v), bindingView(out),
+            params(flashAttentionParams({ queryTokens: queries, keyTokens: keys, heads, headDim, queryOffset: rowBase, queryCount: count }))],
+          flashAttentionDispatch({ queryCount: count, heads }), `attention:${name}`, 4 * count * keys * headDim * heads);
+        pendingFlops += 4 * count * keys * headDim * heads;
+        if (rows < queries) await yieldPoint(`${name}[${rowBase}]`);
+        continue;
+      }
       const words = new Uint32Array(8);
       const floats = new Float32Array(words.buffer);
       words.set([queries, keys, channels, channels, channels, rowBase], 0);
@@ -614,6 +638,6 @@ export function createSuperMatOps(device, options = {}) {
   }
 
   return { alloc, release, gemm, conv2d, groupNorm, layerNorm, softmax, geglu, affine, copy, upload, read, flush, yieldPoint,
-    setSchedule, scheduleState, discard, destroy, stats, flashAttention,
+    setSchedule, scheduleState, discard, destroy, stats, flashAttention, attentionHeadDimSupported, attentionKernel,
     attentionMode: attention, gemmTile: tileShape, gemmPrecision, activations, fuseNorm, gemmKernel: subgroupMatrix ? 'subgroup-matrix' : 'tiled' };
 }
