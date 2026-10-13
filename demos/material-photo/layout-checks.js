@@ -8,6 +8,9 @@ export function validateLayoutFrame(frame) {
   if(frame.tuningHit!==true||frame.runHit!==true)throw Error('Toolbar control occluded');
   if(frame.open&&frame.giHit!==true)throw Error('Open tuning control inaccessible');
 }
-export function validateBrowserSources(actual,expected){
-  for(const [name,hash]of Object.entries(expected))if(actual[name]!==hash)throw Error(`Browser source drift: ${name}`);
+export function validateBrowserSources(actual,expected,source=expected){
+  for(const [name,hash]of Object.entries(source)){
+    if(expected[name]!==hash)throw Error(`Mounted source drift: ${name}`);
+    if(actual[name]!==hash)throw Error(`Browser source drift: ${name}`);
+  }
 }
