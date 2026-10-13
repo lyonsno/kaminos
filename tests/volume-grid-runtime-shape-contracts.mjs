@@ -204,7 +204,7 @@ test('capture: @emissiveCoefficients is refused in an arm that also sets control
 // frame without changing the simulation are non-configuring.
 test('capture: every control except the read-only debug controls counts as configuration', async () => {
   const { armSetsConfiguration, NON_CONFIGURING_CAPTURE_CONTROLS } = await import('../volume-arm-capture-checks.mjs');
-  assert.deepEqual([...NON_CONFIGURING_CAPTURE_CONTROLS].sort(), ['@cameraFrame', '@emissiveCoefficients', '@savePreset', '@simGpuProfile']);
+  assert.deepEqual([...NON_CONFIGURING_CAPTURE_CONTROLS].sort(), ['@cameraFrame', '@emissiveCoefficients', '@fluidBandStats', '@savePreset', '@simGpuProfile']);
   assert.equal(armSetsConfiguration([['@confinementEpsilon', '0.1']]), true, 'an epsilon override is configuration');
   assert.equal(armSetsConfiguration([['volume-grid-height-ratio', '3']]), true);
   assert.equal(armSetsConfiguration([['@cameraFrame', '0:1:3:0:0:0'], ['@emissiveCoefficients', '1']]), false);
