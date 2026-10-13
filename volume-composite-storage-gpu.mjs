@@ -1,6 +1,36 @@
 // GPU-only velocity exchange for the stationary composite candidate. Caller
 // owns all state buffers and the ordering of gather -> project -> scatter.
 // No readback, material update, inlet policy or simulation hook is implied.
+// Consumer: volume-core joinedProducerState().lowerFaceTexture, introduced by
+// fine-producer 2f7b38ae7. Recreate this binding after the producer rebuilds.
+// Caller owns buffer/texture; encode after shared scatter and before fine use.
+export function createCompositeLowerFaceGPU(device,{dims,lowerBuffer,lowerFaceTexture}){
+  if(!Array.isArray(dims)||dims.length!==3||!dims.every(n=>Number.isSafeInteger(n)&&n>0))throw new Error('positive integer XYZ dimensions required');
+  const width=Math.max(...dims),length=dims[1]*dims[2]+dims[2]*dims[0]+dims[0]*dims[1];
+  if(!lowerBuffer||lowerBuffer.size!==length*4||!(lowerBuffer.usage&GPUBufferUsage.STORAGE))throw new Error('complete lower-face buffer required');
+  const t=lowerFaceTexture,usage=GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING;
+  if(!t||t.width!==width||t.height!==width||t.depthOrArrayLayers!==3||t.dimension!=='2d'||t.format!=='r32float'||t.mipLevelCount!==1||t.sampleCount!==1||(t.usage&usage)!==usage)throw new Error('lower-face texture must match producer XYZ: r32float max-dimension square, three layers, sampled/storage usage');
+  if(Math.ceil(width/8)>device.limits.maxComputeWorkgroupsPerDimension||3>device.limits.maxComputeWorkgroupsPerDimension)throw new Error('lower-face texture dispatch exceeds device capacity');
+  const shader=device.createShaderModule({label:'joined lower-face texture export',code:/* wgsl */`
+@group(0) @binding(0) var<storage,read> lower:array<f32>;
+@group(0) @binding(1) var planes:texture_storage_2d_array<r32float,write>;
+@compute @workgroup_size(8,8,1) fn main(@builtin(global_invocation_id) q:vec3<u32>){
+  if(q.x>=${width}u||q.y>=${width}u||q.z>=3u){return;}
+  let dims=vec3<u32>(${dims.map(n=>`${n}u`).join(',')});
+  let offsets=vec3<u32>(0u,${dims[1]*dims[2]}u,${dims[1]*dims[2]+dims[2]*dims[0]}u);
+  let b=(q.z+1u)%3u;let d=(q.z+2u)%3u;
+  var value=0.0;
+  if(q.x<dims[b]&&q.y<dims[d]){value=lower[offsets[q.z]+q.x+dims[b]*q.y];}
+  textureStore(planes,vec2<i32>(q.xy),i32(q.z),vec4<f32>(value,0.0,0.0,0.0));
+}`});
+  const pipeline=device.createComputePipeline({layout:'auto',compute:{module:shader,entryPoint:'main'}});
+  const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[
+    {binding:0,resource:{buffer:lowerBuffer}},
+    {binding:1,resource:t.createView({dimension:'2d-array'})},
+  ]});
+  return {shader,encode(encoder){const pass=encoder.beginComputePass({label:'joined lower-face texture export'});pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(width/8),Math.ceil(width/8),3);pass.end();}};
+}
+
 export function createCompositeStorageGPU(device,layout,buffers){
   const lengths={fine:layout.fineLength,coarse:layout.coarseLength,lower:layout.lowerLength,flux:layout.faces.length};
   if(new Set(Object.values(buffers)).size!==4)throw new Error('distinct fine/coarse/lower/flux buffers required');

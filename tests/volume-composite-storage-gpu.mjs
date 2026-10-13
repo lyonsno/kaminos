@@ -15,7 +15,7 @@ const hash=b=>createHash('sha256').update(b).digest('hex');
 try{
   const url=new URL('../volume-composite-storage-gpu.mjs',import.meta.url);
   assert.ok(existsSync(url),'shared pressure has no native fine/coarse storage bridge');
-  const {createCompositeStorageGPU}=await import(url);
+  const {createCompositeStorageGPU,createCompositeLowerFaceGPU}=await import(url);
   report.source={root:resolve(new URL('..',import.meta.url).pathname),revision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),
     files:Object.fromEntries(['volume-composite-grid.mjs','volume-composite-storage.mjs','volume-composite-storage-gpu.mjs','tests/volume-composite-storage-gpu.mjs'].map(f=>[f,hash(readFileSync(new URL('../'+f,import.meta.url)))]))};
   report.phase='adapter';const {create,globals}=await import(pathToFileURL(resolve(dawnPath)));Object.assign(globalThis,globals);
@@ -62,10 +62,38 @@ try{
       const output={fine:await read(buffers.fine,layout.fineLength),coarse:await read(buffers.coarse,layout.coarseLength),lower:await read(buffers.lower,layout.lowerLength)};
       const expected=scatterCompositeFlux(layout,flux,{fine,coarse}),scatterErrors={};
       for(const k of ['fine','coarse','lower']){scatterErrors[k]=compare(output[k],expected[k],k);writeFileSync(resolve(out,`${c.name}-${k}.f32`),new Uint8Array(output[k].buffer));}
+      // Match fine producer 2f7b38ae7 binding25: no COPY_SRC on the texture.
+      // Read through the actual sampled-texture contract after same-encoder scatter.
+      const dims=layout.fineShape,width=Math.max(...dims);
+      const planes=device.createTexture({size:[width,width,3],format:'r32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_DST});
+      try{
+        const exportLower=createCompositeLowerFaceGPU(device,{dims,lowerBuffer:buffers.lower,lowerFaceTexture:planes});
+        const observed=alloc('sampled lower texture',new Float32Array(width*width*3));
+        const module=device.createShaderModule({code:`
+@group(0) @binding(0) var planes:texture_2d_array<f32>;
+@group(0) @binding(1) var<storage,read_write> values:array<f32>;
+@compute @workgroup_size(8,8,1) fn main(@builtin(global_invocation_id) q:vec3<u32>){
+if(q.x>=${width}u||q.y>=${width}u||q.z>=3u){return;}
+values[q.x+${width}u*(q.y+${width}u*q.z)]=textureLoad(planes,vec2<i32>(q.xy),i32(q.z),0).x;
+}`});
+        const pipeline=device.createComputePipeline({layout:'auto',compute:{module,entryPoint:'main'}});
+        const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:planes.createView({dimension:'2d-array'})},{binding:1,resource:{buffer:observed}}]});
+        for(const s of [exportLower.shader,module])assert.deepEqual([...(await s.getCompilationInfo()).messages].filter(m=>m.type==='error'),[]);
+        for(const scale of [1,-2]){
+          const next=Float32Array.from(flux,v=>v*scale);device.queue.writeBuffer(buffers.flux,0,next);
+          const e=device.createCommandEncoder();bridge.encodeScatter(e);exportLower.encode(e);
+          const pass=e.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(width/8),Math.ceil(width/8),3);pass.end();device.queue.submit([e.finish()]);
+          const actual=await read(observed,width*width*3),expectedLower=scatterCompositeFlux(layout,next,{fine,coarse}).lower;
+          const padded=new Float32Array(width*width*3);let offset=0;
+          for(let a=0;a<3;a++){const b=(a+1)%3,d=(a+2)%3;for(let y=0;y<dims[d];y++)for(let x=0;x<dims[b];x++)padded[x+width*(y+width*a)]=expectedLower[offset++];}
+          compare(actual,padded,'fine sampled lower-face texture');
+          writeFileSync(resolve(out,`${c.name}-lower-texture-${scale}.f32`),new Uint8Array(actual.buffer));
+        }
+      }finally{planes.destroy();}
       for(let i=0;i<fine.length;i++)if(i%16>=3)assert.equal(output.fine[i],fine[i],'fine scalar/appearance fields unchanged');
       for(let i=0;i<coarse.length;i++)if(i%8>=3)assert.equal(output.coarse[i],coarse[i],'coarse scalar/padding fields unchanged');
       assert.deepEqual(errors,[]);
-      report.cases.push({name:c.name,cells:c.grid.cells.length,faces:c.grid.faces.length,gatherErrors,scatterErrors,nonVelocityFieldsExact:true});
+      report.cases.push({name:c.name,cells:c.grid.cells.length,faces:c.grid.faces.length,gatherErrors,scatterErrors,nonVelocityFieldsExact:true,lowerTexture:{dims,size:[width,width,3],format:'r32float',sourceContract:'fine producer 2f7b38ae7 binding25',scales:[1,-2],allTexelsChecked:true}});
     }finally{bridge.destroy();assert.throws(()=>bridge.encodeScatter(device.createCommandEncoder()),/destroyed/);for(const b of owned)b.destroy();}
   }
   report.phase='complete';report.passed=true;
