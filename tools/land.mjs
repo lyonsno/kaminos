@@ -12,15 +12,21 @@
 //   fetch       <remote>'s main is fetched into refs/remotes/<remote>/main;
 //   rebased     merge-base of <remote>/main and the commit is <remote>/main,
 //               so the branch contains main and the push is a fast-forward;
-//   ci          gh reports a run of .github/workflows/tests.yml for the exact
-//               commit; the latest completed one must have concluded success.
-//               A run for any other commit never counts. When no run exists,
-//               the commit is pushed to a tool-owned ref, land/<sha> (never
-//               the lane's branch, never main), the workflow is dispatched
-//               once from that ref, and the run whose head SHA is the commit
-//               is awaited; the ref is deleted once the attempt concludes. A
-//               run already pending is awaited instead of dispatching; a
-//               failed run is refused and never re-dispatched.
+//   ci          gh reports a push-event run of .github/workflows/tests.yml for
+//               the exact commit; the latest completed one must have concluded
+//               success. Only push runs count: main's required status check
+//               is satisfied by them alone, so a workflow_dispatch run (or a
+//               run for any other commit) is listed in the receipt and never
+//               counted or awaited. When no push run exists, the commit is
+//               pushed to a tool-owned ref, land/<sha> (never the lane's
+//               branch, never main), and that push is the trigger: the
+//               workflow runs on pushes to land/**. A land/<sha> ref already
+//               at the commit is deleted and pushed again, since an unchanged
+//               ref fires no push. The push run for the commit is awaited and
+//               the ref is deleted once the attempt concludes. A push run
+//               already pending is awaited instead; a failed run is refused
+//               and the ref is never pushed again for it. The tool never
+//               calls gh workflow run.
 //   push        git push <remote> <commit>:refs/heads/main. git itself rejects
 //               the push when main moved between the check and the push; that
 //               is reported as its own outcome and not retried.
@@ -28,7 +34,7 @@
 // Modes: --dry-run runs the checks against existing runs and changes nothing
 // on the remote (it implies --no-dispatch); --ci-only gets the commit's run
 // green through the land/ ref, reports, and never pushes main; --no-dispatch
-// refuses instead of dispatching. A receipt with every check and its result
+// (alias --no-trigger) refuses instead of pushing the land/ ref. A receipt with every check and its result
 // is written whenever it can be. git and gh are injectable, as a command
 // runner passed to land() or as --git and --gh paths on the command line, and
 // so are the wait loop's clock, sleep, abort signal and progress sink, so the
@@ -40,24 +46,25 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const RECEIPT_SCHEMA = 'kaminos.landing-receipt.v1';
+export const RECEIPT_SCHEMA = 'kaminos.landing-receipt.v2';
 export const WORKFLOW_FILE = 'tests.yml';
 export const CHECKS = Object.freeze(['clean-tree', 'fetch', 'rebased', 'ci', 'push']);
 export const RUN_FIELDS = 'databaseId,status,conclusion,workflowName,headSha,event,headBranch,url,createdAt,attempt';
 export const RUN_LIST_LIMIT = 100;
 export const POLL_MS = 30000;
 export const LAND_REF_PREFIX = 'land/';
-// The wait is bounded per state. A dispatched run that gh has not listed yet
-// gets the tool's own bound. GitHub fails a job queued longer than 24 hours.
+// The wait is bounded per state. A push run that gh has not listed yet gets
+// the tool's own bound. GitHub fails a job queued longer than 24 hours.
 // A running job ends at the workflow's job-level timeout-minutes (GitHub's
 // default when the file sets none), plus a margin for the run to be marked
 // completed.
-export const DISPATCHED_LIMIT_MINUTES = 10;
+export const PUSHED_LIMIT_MINUTES = 10;
+// The only event whose runs satisfy main's required status check.
+export const COUNTED_EVENT = 'push';
 const QUEUE_LIMIT_MS = 24 * 60 * 60 * 1000;
 const GITHUB_DEFAULT_TIMEOUT_MINUTES = 360;
 const RUNNING_MARGIN_MS = 10 * 60 * 1000;
 const NON_FAST_FORWARD = /\[rejected\]|non-fast-forward|fetch first/;
-const RUN_URL = /https:\/\/github\.com\/[^\s/]+\/[^\s/]+\/actions\/runs\/(\d+)/;
 
 // The default command runner. It resolves with the exit code and both
 // streams; a nonzero exit is a result, not an exception. A command that could
@@ -126,10 +133,14 @@ const defaultSleep = (ms, signal) => new Promise(resolve => {
 const defaultLog = line => { process.stderr.write(`${line}\n`); };
 const byNewest = (a, b) => (Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0)) || ((b.id || 0) - (a.id || 0));
 const isPending = run => run.status !== 'completed';
-const normalizeRun = (r, commit) => ({
-  id: r.databaseId, status: r.status, conclusion: r.conclusion, workflow: r.workflowName, headSha: r.headSha,
-  event: r.event, headBranch: r.headBranch, url: r.url, createdAt: r.createdAt, attempt: r.attempt, counted: r.headSha === commit,
-});
+const NOT_PUSH = 'not a push run; the required check ignores it';
+const normalizeRun = (r, commit) => {
+  const reason = r.headSha !== commit ? 'another commit' : r.event !== COUNTED_EVENT ? NOT_PUSH : null;
+  return {
+    id: r.databaseId, status: r.status, conclusion: r.conclusion, workflow: r.workflowName, headSha: r.headSha,
+    event: r.event, headBranch: r.headBranch, url: r.url, createdAt: r.createdAt, attempt: r.attempt, counted: reason === null, reason,
+  };
+};
 
 export async function land({
   root = process.cwd(),
@@ -150,7 +161,7 @@ export async function land({
 } = {}) {
   root = path.resolve(root);
   if (receiptPath) receiptPath = path.resolve(receiptPath);
-  // A dry run changes nothing on the remote, so it never dispatches.
+  // A dry run changes nothing on the remote, so it never pushes the land ref.
   if (dryRun) { noDispatch = true; ciOnly = false; }
   const receipt = {
     schema: RECEIPT_SCHEMA, outcome: null, ok: false, reason: null, message: null, failurePhase: null, error: null,
@@ -158,7 +169,7 @@ export async function land({
     root, branch: null, sha: null,
     remote: { name: remote, url: null, repo: repo || null, repoSource: repo ? 'argument' : null },
     main: { before: null, after: null, afterContainsSha: null, afterError: null },
-    ci: { workflowFile: WORKFLOW_FILE, query: null, listings: 0, limit: RUN_LIST_LIMIT, limitReached: false, runs: [], run: null, main: null, dispatch: null, wait: null },
+    ci: { workflowFile: WORKFLOW_FILE, query: null, listings: 0, limit: RUN_LIST_LIMIT, limitReached: false, runs: [], run: null, main: null, trigger: null, wait: null },
     checks: CHECKS.map(name => ({ name, result: 'skipped', detail: null })),
     push: null,
     effective: { git, gh, pollMs, node: process.version, platform: `${process.platform}-${process.arch}` },
@@ -212,23 +223,6 @@ export async function land({
     if (error) fail('ci', 'ci-query-failed', error);
     return runs;
   };
-  // One run by id, for a dispatched run whose URL gh printed. Its head SHA
-  // must be the commit; anything else is refused at once.
-  const viewRun = async id => {
-    const query = ['run', 'view', String(id), '-R', receipt.remote.repo, '--json', RUN_FIELDS];
-    receipt.ci.listings += 1;
-    const result = await run(gh, query, { cwd: root });
-    if (result.code !== 0) fail('ci', 'ci-query-failed', `gh run view ${id} ${exitOf(result)}: ${describe(result)}`);
-    let parsed;
-    try { parsed = JSON.parse(result.stdout); } catch (error) { fail('ci', 'ci-query-failed', `gh run view ${id} output is not JSON (${error.message}): ${result.stdout.trim().slice(0, 200)}`); }
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) fail('ci', 'ci-query-failed', `gh run view ${id} output is not a JSON object: ${result.stdout.trim().slice(0, 200)}`);
-    const found = normalizeRun(parsed, receipt.sha);
-    if (!found.counted) {
-      receipt.ci.run = found;
-      refuse('ci', 'ci-wrong-commit', `the dispatched run ${found.id}${found.url ? ` (${found.url})` : ''} is for ${found.headSha}, not ${receipt.sha}; not waiting for it. The ${LAND_REF_PREFIX}${receipt.sha} ref was moved by something else`);
-    }
-    return [found];
-  };
   const latestCompleted = runs => runs.filter(r => r.counted && !isPending(r)).sort(byNewest)[0] || null;
   const pendingOf = runs => runs.filter(r => r.counted && isPending(r)).sort(byNewest);
 
@@ -240,12 +234,12 @@ export async function land({
       if (minutes !== null) { timeoutMinutes = minutes; timeoutSource = `.github/workflows/${WORKFLOW_FILE}`; }
     } catch { /* no workflow file at this root: GitHub's default applies */ }
     return {
-      dispatchedMs: DISPATCHED_LIMIT_MINUTES * 60 * 1000, queuedMs: QUEUE_LIMIT_MS, runningMs: timeoutMinutes * 60 * 1000 + RUNNING_MARGIN_MS,
+      pushedMs: PUSHED_LIMIT_MINUTES * 60 * 1000, queuedMs: QUEUE_LIMIT_MS, runningMs: timeoutMinutes * 60 * 1000 + RUNNING_MARGIN_MS,
       timeoutMinutes, timeoutSource,
     };
   };
   const boundText = (state, bounds) => {
-    if (state === 'dispatched') return `not listed within ${DISPATCHED_LIMIT_MINUTES} minutes of the dispatch (the tool's own bound for a dispatched run to appear)`;
+    if (state === 'pushed') return `not listed within ${PUSHED_LIMIT_MINUTES} minutes of the land ref push (the tool's own bound for a push run to appear)`;
     if (state === 'queued') return `queued for longer than GitHub's 24-hour queue limit`;
     const source = bounds.timeoutSource === 'github-default' ? `GitHub's default job timeout of ${bounds.timeoutMinutes} minutes` : `timeout-minutes ${bounds.timeoutMinutes} from ${bounds.timeoutSource}`;
     return `running for longer than the job can (${Math.round(bounds.runningMs / 60000)} minutes: ${source} plus ${RUNNING_MARGIN_MS / 60000} for completion)`;
@@ -254,9 +248,9 @@ export async function land({
   // Poll until no counted run is pending and one has completed; the latest
   // completed run is the decision. One line is logged per state change, and
   // the bound is the workflow's own lifecycle, measured per state.
-  const awaitDecision = async ({ initialRuns, followId = null }) => {
+  const awaitDecision = async ({ initialRuns }) => {
     const bounds = await waitBounds();
-    const wait = { pollMs, polls: 0, startedAt: new Date().toISOString(), endedAt: null, elapsedMs: 0, bounds, followedRunId: followId, states: [] };
+    const wait = { pollMs, polls: 0, startedAt: new Date().toISOString(), endedAt: null, elapsedMs: 0, bounds, states: [] };
     receipt.ci.wait = wait;
     const started = now();
     let state = null;
@@ -283,47 +277,48 @@ export async function land({
         return decider;
       }
       receipt.ci.run = pending[0] || null;
-      if (!pending.length) transition('dispatched', `waiting for the dispatched run of ${short(receipt.sha)} to be listed`);
+      if (!pending.length) transition('pushed', `waiting for the push run of ${short(receipt.sha)} on ${LAND_REF_PREFIX}${receipt.sha} to be listed`);
       else if (pending.some(r => r.status === 'in_progress')) transition('running', `run ${pending[0].id} in progress for ${short(receipt.sha)}${pending[0].url ? ` (${pending[0].url})` : ''}`);
       else transition('queued', `run ${pending[0].id} queued (${pending[0].status}) for ${short(receipt.sha)}${pending[0].url ? ` (${pending[0].url})` : ''}`);
-      const bound = state === 'running' ? bounds.runningMs : state === 'queued' ? bounds.queuedMs : bounds.dispatchedMs;
+      const bound = state === 'running' ? bounds.runningMs : state === 'queued' ? bounds.queuedMs : bounds.pushedMs;
       if (now() - stateStart > bound) {
-        fail('ci', 'ci-wait-exceeded', `run ${receipt.ci.run ? receipt.ci.run.id : '(not yet listed)'} of the tests workflow for ${receipt.sha} ${boundText(state, bounds)}; not dispatching again. Inspect with gh run list -R ${receipt.remote.repo} --commit ${receipt.sha}`);
+        fail('ci', 'ci-wait-exceeded', `run ${receipt.ci.run ? receipt.ci.run.id : '(not yet listed)'} of the tests workflow for ${receipt.sha} ${boundText(state, bounds)}; not pushing the land ref again. Inspect with gh run list -R ${receipt.remote.repo} --workflow ${WORKFLOW_FILE} --commit ${receipt.sha}`);
       }
       await sleep(pollMs, signal);
       checkSignal();
-      runs = followId ? await viewRun(followId) : await listRuns(receipt.sha);
+      runs = await listRuns(receipt.sha);
     }
   };
 
-  // Put the commit on the tool-owned ref unless it is there already, then
-  // dispatch the workflow for that ref once. The ref is deleted by cleanup
-  // once the attempt concludes.
-  const dispatch = async () => {
+  // The trigger: push the commit to the tool-owned ref. The tests workflow runs
+  // on pushes to land/**, and a push run is the only kind main's required
+  // check accepts. A ref already at the commit fires nothing when pushed
+  // again, so it is deleted first; a ref at any other commit is replaced by
+  // the forced push. The ref is deleted by cleanup once the attempt concludes.
+  const trigger = async () => {
     const ref = `${LAND_REF_PREFIX}${receipt.sha}`;
-    const info = { ref, refExisted: false, refPushed: false, refDeleted: null, refDeleteError: null, performed: false, command: null, runUrl: null, runId: null };
-    receipt.ci.dispatch = info;
+    const info = { ref, refExisted: false, previousSha: null, refRepushed: false, refPushed: false, pushedAt: null, refDeleted: null, refDeleteError: null };
+    receipt.ci.trigger = info;
     const tip = await lsRemote(`refs/heads/${ref}`);
-    if (tip.error) fail('ci', 'dispatch-failed', tip.error);
+    if (tip.error) fail('ci', 'trigger-failed', tip.error);
     if (tip.sha === receipt.sha) {
       info.refExisted = true;
-    } else {
-      const push = await g('push', '--quiet', remote, `+${receipt.sha}:refs/heads/${ref}`);
-      if (push.code !== 0) fail('ci', 'dispatch-failed', `git push ${remote} ${receipt.sha}:refs/heads/${ref} failed (${exitOf(push)}): ${describe(push)}`);
-      info.refPushed = true;
+      const removed = await g('push', '--quiet', remote, `:refs/heads/${ref}`);
+      if (removed.code !== 0) fail('ci', 'trigger-failed', `deleting ${ref} before pushing it again failed: git push ${remote} :refs/heads/${ref} (${exitOf(removed)}): ${describe(removed)}`);
+      info.refRepushed = true;
+    } else if (tip.sha) {
+      info.previousSha = tip.sha;
     }
-    const command = ['workflow', 'run', WORKFLOW_FILE, '-R', receipt.remote.repo, '--ref', ref];
-    info.command = [gh, ...command];
-    const result = await run(gh, command, { cwd: root });
-    if (result.code !== 0) fail('ci', 'dispatch-failed', `gh workflow run ${WORKFLOW_FILE} --ref ${ref} ${exitOf(result)}: ${describe(result)}`);
-    info.performed = true;
-    const url = `${result.stdout}\n${result.stderr}`.match(RUN_URL);
-    if (url) { info.runUrl = url[0]; info.runId = Number(url[1]); }
-    log(`landing: dispatched ${WORKFLOW_FILE} from ${ref} for ${short(receipt.sha)}${info.runId ? ` as run ${info.runId} (${info.runUrl})` : '; waiting for its run to be listed'}`);
+    const push = await g('push', '--quiet', remote, `+${receipt.sha}:refs/heads/${ref}`);
+    if (push.code !== 0) fail('ci', 'trigger-failed', `git push ${remote} +${receipt.sha}:refs/heads/${ref} failed (${exitOf(push)}): ${describe(push)}`);
+    info.refPushed = true;
+    info.pushedAt = new Date().toISOString();
+    log(`landing: pushed ${ref} for ${short(receipt.sha)}${info.refRepushed ? ' (deleted and pushed again: it was already at the commit)' : ''}; the tests workflow runs on that push`);
   };
   const cleanupRef = async () => {
-    const info = receipt.ci.dispatch;
-    if (!info || !info.ref || info.refDeleted !== null) return;
+    const info = receipt.ci.trigger;
+    // Only a ref this run pushed is its to delete.
+    if (!info || !info.ref || info.refDeleted !== null || !info.refPushed) return;
     const result = await g('push', '--quiet', remote, `:refs/heads/${info.ref}`);
     info.refDeleted = result.code === 0;
     info.refDeleteError = result.code === 0 ? null : `git push ${remote} :refs/heads/${info.ref} failed (${exitOf(result)}): ${describe(result)}`;
@@ -404,25 +399,27 @@ export async function land({
       if (noDispatch) {
         refuse('ci', 'ci-in-progress', `run ${pending[0].id} of the tests workflow for ${receipt.sha} is still ${pending[0].status}${pending[0].url ? ` (${pending[0].url})` : ''}; wait for it (gh run watch ${pending[0].id}) and land again${decider ? `; its latest completed run ${decider.id} concluded ${decider.conclusion}` : ''}`);
       }
-      log(`landing: awaiting the pending run ${pending[0].id} (${pending[0].status}) for ${short(receipt.sha)}; not dispatching`);
+      log(`landing: awaiting the pending push run ${pending[0].id} (${pending[0].status}) for ${short(receipt.sha)}; not pushing the land ref`);
       decider = await awaitDecision({ initialRuns: runs });
     } else if (!decider) {
-      const none = `no run of the tests workflow for ${receipt.sha}${limitNote()}`;
+      const ignored = runs.filter(r => r.reason === NOT_PUSH);
+      const ignoredNote = ignored.length ? ` (${ignored.length} other run(s) for it, such as ${ignored[0].id} (${ignored[0].event}), do not count: ${NOT_PUSH})` : '';
+      const none = `no push run of the tests workflow for ${receipt.sha}${ignoredNote}${limitNote()}`;
       if (noDispatch) {
-        refuse('ci', 'ci-no-run', `${none}; get one with node tools/land.mjs --ci-only (it dispatches from a ${LAND_REF_PREFIX}<sha> ref and waits), or by hand with: gh workflow run ${WORKFLOW_FILE} -R ${receipt.remote.repo} --ref ${receipt.branch || '<branch>'} once that branch is at this commit on ${remote}, then wait with gh run watch <run id> and land again`);
+        const how = `the tool pushes a ${LAND_REF_PREFIX}<sha> ref, the tests workflow runs on that push, and the tool waits for it`;
+        const hint = ciOnly ? `drop --no-dispatch: ${how}` : dryRun ? `get one with node tools/land.mjs --ci-only: ${how}` : `drop --no-dispatch, or run node tools/land.mjs --ci-only: ${how}`;
+        refuse('ci', 'ci-no-run', `${none}; ${hint}; then land again`);
       }
-      await dispatch();
-      // A run gh named is read at once, so a wrong commit is refused before
-      // any wait; otherwise the listing is polled until the run appears.
-      const followId = receipt.ci.dispatch.runId;
-      decider = await awaitDecision({ initialRuns: followId ? await viewRun(followId) : [], followId });
+      if (ignored.length) log(`landing: ${ignored.length} run(s) for ${short(receipt.sha)} are not push runs and do not count (${NOT_PUSH})`);
+      await trigger();
+      decider = await awaitDecision({ initialRuns: [] });
     }
     receipt.ci.run = decider;
     if (decider.conclusion === 'success') {
-      pass('ci', `run ${decider.id} of the tests workflow concluded success for ${receipt.sha}${receipt.ci.dispatch?.performed ? ' after one dispatch' : ''}${limitNote()}`);
+      pass('ci', `run ${decider.id} of the tests workflow concluded success for ${receipt.sha}${receipt.ci.trigger?.refPushed ? ` after one push of ${receipt.ci.trigger.ref}` : ''}${limitNote()}`);
     } else {
       const note = await mainStatusNote();
-      refuse('ci', 'ci-failed', `run ${decider.id} of the tests workflow for ${receipt.sha} concluded ${decider.conclusion}${decider.url ? ` (${decider.url})` : ''}${note}; not dispatching again`);
+      refuse('ci', 'ci-failed', `run ${decider.id} of the tests workflow for ${receipt.sha} concluded ${decider.conclusion}${decider.url ? ` (${decider.url})` : ''}${note}; not pushing the land ref again`);
     }
 
     receipt.failurePhase = 'push';
@@ -488,7 +485,14 @@ export async function land({
       receipt.outcome = 'interrupted';
       receipt.reason = 'interrupted';
       const awaited = receipt.ci.run;
-      receipt.message = `interrupted while ${awaited ? `awaiting run ${awaited.id} (${awaited.status}${awaited.url ? `, ${awaited.url}` : ''})` : `waiting for a run to be listed`} for ${receipt.sha}; the run continues on GitHub, and running the tool again awaits it rather than dispatching another`;
+      const pushed = receipt.ci.trigger?.refPushed ? receipt.ci.trigger : null;
+      if (awaited) {
+        receipt.message = `interrupted while awaiting run ${awaited.id} (${awaited.status}${awaited.url ? `, ${awaited.url}` : ''}) for ${receipt.sha}; the run continues on GitHub, and running the tool again awaits it rather than pushing the land ref again`;
+      } else if (pushed) {
+        receipt.message = `interrupted after pushing ${pushed.ref} for ${receipt.sha}, before gh listed its push run; that run continues on GitHub. A re-run awaits it once gh lists it; a re-run before then pushes the ref again and starts a second run, so check gh run list -R ${receipt.remote.repo} --workflow ${WORKFLOW_FILE} --commit ${receipt.sha} first`;
+      } else {
+        receipt.message = `interrupted during ${receipt.failurePhase} for ${receipt.sha || '(commit not yet read)'}; no land ref was pushed`;
+      }
     } else if (error instanceof Failure) {
       receipt.outcome = 'error';
       receipt.reason = error.reason;
@@ -502,9 +506,9 @@ export async function land({
   }
   // The attempt has concluded one way or another: the tool-owned ref goes.
   try { await cleanupRef(); } catch (error) {
-    if (receipt.ci.dispatch) { receipt.ci.dispatch.refDeleted = false; receipt.ci.dispatch.refDeleteError = String(error?.message || error); }
+    if (receipt.ci.trigger) { receipt.ci.trigger.refDeleted = false; receipt.ci.trigger.refDeleteError = String(error?.message || error); }
   }
-  if (receipt.ci.dispatch?.refDeleted === false) receipt.message += `; the ${receipt.ci.dispatch.ref} ref could not be deleted (${receipt.ci.dispatch.refDeleteError})`;
+  if (receipt.ci.trigger?.refDeleted === false) receipt.message += `; the ${receipt.ci.trigger.ref} ref could not be deleted (${receipt.ci.trigger.refDeleteError})`;
   return write();
 }
 
@@ -519,7 +523,7 @@ export function parseArgs(argv) {
     const executable = () => { const v = value(); return v.includes('/') ? path.resolve(v) : v; };
     if (flag === '--dry-run') args.dryRun = true;
     else if (flag === '--ci-only') args.ciOnly = true;
-    else if (flag === '--no-dispatch') args.noDispatch = true;
+    else if (flag === '--no-dispatch' || flag === '--no-trigger') args.noDispatch = true;
     else if (flag === '--receipt') args.receiptPath = path.resolve(value());
     else if (flag === '--remote') args.remote = value();
     else if (flag === '--repo') args.repo = value();
@@ -532,7 +536,7 @@ export function parseArgs(argv) {
   return args;
 }
 
-const USAGE = 'usage: node tools/land.mjs [--dry-run | --ci-only] [--no-dispatch] [--receipt <path>] [--remote <name>] [--repo <owner/name>] [--root <path>] [--gh <path>] [--git <path>]';
+const USAGE = 'usage: node tools/land.mjs [--dry-run | --ci-only] [--no-dispatch | --no-trigger] [--receipt <path>] [--remote <name>] [--repo <owner/name>] [--root <path>] [--gh <path>] [--git <path>]';
 
 const invokedAsMain = (() => { try { return Boolean(process.argv[1]) && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(path.resolve(process.argv[1])); } catch { return false; } })();
 if (invokedAsMain) {
