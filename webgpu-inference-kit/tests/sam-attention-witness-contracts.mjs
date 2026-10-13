@@ -61,3 +61,5 @@ for (const corrupt of [
 assert.throws(() => validateAttentionBrowser('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'), /independent/);
 assert.throws(() => validateAttentionBrowser('/private/tmp/chrome'), /independent/);
 validateAttentionBrowser('/Users/test/Library/Caches/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell');
+validateAttentionBrowser('/Users/noahlyons/.local/state/kaminos/browsers/chrome-for-testing-154.0.8037.92/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
+assert.throws(() => validateAttentionBrowser('/Users/test/chrome-for-testing-154/Google Chrome.app/Contents/MacOS/Google Chrome'), /independent/);

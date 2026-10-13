@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { attentionCases, compareAttention } from './sam-attention-browser-cases.mjs';
 
 export function validateAttentionBrowser(executable) {
-  assert.ok(/\/(?:ms-playwright|chrome-for-testing)\//i.test(executable), 'an independent Playwright or Chrome for Testing executable is required');
+  assert.ok(/\/(?:ms-playwright|chrome-for-testing(?:-\d+(?:\.\d+)*)?)\//i.test(executable), 'an independent Playwright or Chrome for Testing executable is required');
   assert.doesNotMatch(executable, /Google Chrome\.app\//, 'installed GUI Chrome is not an independent browser');
 }
 
