@@ -62,8 +62,9 @@ test('reaction, conversion and consumption increments carry dt; max() births sta
   assert.match(main, /smoke = smoke \+ tallPlumeReactionSmokeBirth \* timeStep;/, 'reaction smoke is a rate');
   assert.match(main, /heat = heat \+ \(tallPlumeFuelHeatReaction \* mix\(0\.0, 0\.16, tallPlumeScene\) \+ tallPlumePilotReaction \* 0\.030\) \* timeStep;/, 'reaction heat release is a rate');
   assert.match(main, /let fuelBurned = min\(fuel, fuelBurnRate \* timeStep\);\s*\n\s*fuel = fuel - fuelBurned;/, 'fuel consumption is a rate (the burned amount is rate x dt, capped by the fuel present; slice 4 stores it as the expansion source)');
-  assert.match(main, /heat = max\(heat, mix\(mix\(mix\(columnHeatBirth, tallPlumeHeatBirth, tallPlumeScene\), canonicalHeatBirth, canonicalPlumeScene\), bonfireHeatBirth, bonfireScene\)\);/, 'heat birth remains a floor');
-  assert.match(main, /fuel = max\(fuel, mix\(tallPlumeFuelInjection, bonfireInjectedFuel, bonfireScene\)\);/, 'fuel injection remains a floor');
+  // The reactant candidate gates these births off with select(..., 0.0, reactantOn); under the authored law they remain floors.
+  assert.match(main, /heat = max\(heat, (?:select\()?mix\(mix\(mix\(columnHeatBirth, tallPlumeHeatBirth, tallPlumeScene\), canonicalHeatBirth, canonicalPlumeScene\), bonfireHeatBirth, bonfireScene\)(?:, 0\.0, reactantOn\))?\);/, 'heat birth remains a floor');
+  assert.match(main, /fuel = max\(fuel, (?:select\()?mix\(tallPlumeFuelInjection, bonfireInjectedFuel, bonfireScene\)(?:, 0\.0, reactantOn\))?\);/, 'fuel injection remains a floor');
 });
 
 test('boundary sponges, height survival and quench attenuations are per-step survivals and follow stepRate', () => {

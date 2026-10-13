@@ -5732,6 +5732,31 @@ fn reactantExchangeLaplacian(c: vec3<i32>) -> vec3<f32> {
     + reactantExchangeDelta(c + vec3<i32>(0, 0, -1), selfMaterial, selfOxidizer);
 }
 
+// The exchange Laplacian sampled trilinearly at a cell-centred point (the
+// transport's departure point), solid corners excluded like the fluid slots'
+// masked sample. (fuel, heat, oxidizer) as reactantExchangeLaplacian.
+fn sampleReactantExchangeLaplacian(cellCenter: vec3<f32>) -> vec3<f32> {
+  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(pc));
+  let f = fract(pc);
+  var weighted = vec3<f32>(0.0);
+  var weightSum = 0.0;
+  for (var dz = 0; dz < 2; dz = dz + 1) {
+    for (var dy = 0; dy < 2; dy = dy + 1) {
+      for (var dx = 0; dx < 2; dx = dx + 1) {
+        let sampleCell = i0 + vec3<i32>(dx, dy, dz);
+        if (sceneSolidAt(sampleCell)) { continue; }
+        let weight = select(1.0 - f.x, f.x, dx == 1)
+          * select(1.0 - f.y, f.y, dy == 1)
+          * select(1.0 - f.z, f.z, dz == 1);
+        weighted = weighted + reactantExchangeLaplacian(sampleCell) * weight;
+        weightSum = weightSum + weight;
+      }
+    }
+  }
+  return select(vec3<f32>(0.0), weighted / max(weightSum, 1e-12), weightSum > 0.0);
+}
+
 fn fireLayerAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, fireLayerRiseDirection: f32) -> vec4<f32> {
   let fastLift = vec3<f32>(0.0, clamp(heat, 0.0, 1.9) * (0.40 + speed * 0.13) * fireLayerRiseDirection, 0.0);
   let backCell = cell - (velocity + fastLift) * (1.82 + speed * 0.34);
@@ -6339,7 +6364,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     let reactantForwardCell = sceneClipCharacteristic(cell, cell + advectVelocity * backtraceScale);
     oxidizer = transportReactantOxidizer(cellI, backCell, reactantForwardCell, macCormackScalars);
     let exchangeWeight = reactantExchangeWeightFor(timeStep);
-    let exchange = reactantExchangeLaplacian(cellI);
+    // Exchange then advect (Lie splitting): the exchange is evaluated where the
+    // material came from (the departure point the transport samples), so the
+    // sum is the transport of the exchanged field, not a lagged correction at
+    // the arrival cell. The clamp only absorbs the MacCormack correction.
+    let exchange = sampleReactantExchangeLaplacian(backCell);
     material = vec4<f32>(material.x, max(0.0, material.y + exchangeWeight * exchange.y), max(0.0, material.z + exchangeWeight * exchange.x), material.w);
     oxidizer = max(0.0, oxidizer + exchangeWeight * exchange.z);
   }
@@ -7139,7 +7168,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let tallPlumeDirectSmokeBirthGain = mix(1.0, 0.18, tallPlumeScene);
   let tallPlumeSourceCarrierFloor = source * 0.060 * tallPlumeScene;
   let tallPlumeSmokeBirth = columnSmokeBirth * tallPlumeDirectSmokeBirthGain + tallPlumeSourceCarrierFloor;
-  let columnSmokeBirthForScene = mix(columnSmokeBirth, tallPlumeSmokeBirth, tallPlumeScene);
+  // Reactant law: soot comes only from the burned amount (smokeFromHeat), not the emitter.
+  let columnSmokeBirthForScene = select(mix(columnSmokeBirth, tallPlumeSmokeBirth, tallPlumeScene), 0.0, reactantOn);
   let canonicalSmokeBirth = source * 1.28 + heat * 0.10;
   let bonfireAdvectedSmokeBirth = (bonfireSmokeSource * 0.060 + bonfireBroadSupportSmokeSource * 0.028) * bonfireLayeredSmokeBreakup + bonfireSootBirth * 0.20 + bonfireInterfaceBirth * 0.050 + bonfireCombustion.z * 0.010 + smokeFromHeat * bonfireInterfaceSmokeBand * 0.060;
   let canonicalScalarRadial = max(length(p.xz), 0.025);
@@ -7184,13 +7214,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let tallPlumeHeatBirth = tallPlumeCombustionSource * 0.74 + tallPlumeEmitterFireBirth * 0.10 + emberRing * 0.12;
   let canonicalHeatBirth = source * 1.16 * canonicalBuoyancyLift + canonicalMinimalFireHeat;
   let bonfireHeatBirth = bonfireCoreHeat * 0.78 + bonfireReactionFront * inputFlow * sourceScaleCompensation * 0.20 + bonfireEmberRing * 0.08;
-  heat = max(heat, mix(mix(mix(columnHeatBirth, tallPlumeHeatBirth, tallPlumeScene), canonicalHeatBirth, canonicalPlumeScene), bonfireHeatBirth, bonfireScene));
+  // Reactant law: supply enters only through the inflow and immersed entries,
+  // which carry the oxidizer accounting; the volumetric emitter's births are off.
+  heat = max(heat, select(mix(mix(mix(columnHeatBirth, tallPlumeHeatBirth, tallPlumeScene), canonicalHeatBirth, canonicalPlumeScene), bonfireHeatBirth, bonfireScene), 0.0, reactantOn));
   heat = max(heat, externalInjection.material.y * 0.92);
   let bonfireFuelMask = smoothstep(bonfireSourceY - 0.34, bonfireSourceY - 0.04, p.y);
   let sourceFuelMask = mix(1.0 - smoothstep(-0.74, -0.18, p.y), bonfireFuelMask, bonfireScene);
   let columnFuelInjection = source * 0.88 * sourceFuelMask;
   let tallPlumeFuelInjection = mix(columnFuelInjection, tallPlumeCombustionSource * 0.88 * reactionFuelScale, tallPlumeScene);
-  fuel = max(fuel, mix(tallPlumeFuelInjection, bonfireInjectedFuel, bonfireScene));
+  fuel = max(fuel, select(mix(tallPlumeFuelInjection, bonfireInjectedFuel, bonfireScene), 0.0, reactantOn));
   fuel = max(fuel, externalInjection.material.z * 0.72);
   let tallPlumeReactionMemory = tallPlumeScene * clamp(
     flame * 0.34
@@ -15820,6 +15852,7 @@ export function createKaminosVolumePrototype({
     const reactantCombustionConfig = resolveReactantCombustionConfig(controlsSnapshot, {
       grid: gridSize,
       transportCommonCharacteristic: resolveTransportConfig(controlsSnapshot).effective.commonCharacteristic,
+      dt: resolveTimeStepConfig(controlsSnapshot).effective.dtScale,
     });
     uniforms.set(reactantCombustionUniformValues(reactantCombustionConfig), REACTANT_COMBUSTION_UNIFORM_OFFSET);
     state.reactantCombustion = reactantCombustionConfig;

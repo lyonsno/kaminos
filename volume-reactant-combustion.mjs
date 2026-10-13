@@ -92,7 +92,7 @@ export const REACTANT_CONTROL_RANGES = Object.freeze({
   mixingTimeSteps: Object.freeze([0.25, 30]),
   coolingTimeSteps: Object.freeze([5, 300]),
 });
-export const REACTANT_DIAGNOSTIC_CLASSES = Object.freeze(['ambient', 'no-contact', 'too-cold', 'burning', 'depleted']);
+export const REACTANT_DIAGNOSTIC_CLASSES = Object.freeze(['ambient', 'no-contact', 'air-starved', 'too-cold', 'burning', 'depleted']);
 // Burning means at least 1e-3 fuel per reference step (on the saved basin the cells
 // above it hold about 90% of all burning); 'no contact' and 'too cold' use the same
 // scale for fuel and for what oxidizer allows to burn.
@@ -180,23 +180,73 @@ export function reactantExchangeStep(field, { dims, weight, solid = null }) {
   return out;
 }
 
-// Why a cell is or is not burning: burning; colocated but too cold; hot with a
-// reactant used up (depleted); cold fuel that has not met oxidizer (no
-// contact); or nothing to burn (ambient). "Burning but rendering poorly" is a
-// render-side judgement made against these classes, not a material class.
+// CPU emulation of the kernel's order: exchange first (on the source field),
+// then advect by sampling the exchanged field trilinearly at each cell's
+// departure point (cell - shift). Because the sample is a convex blend of
+// exchanged values, which are non-negative while weight <= 1/6, the result
+// needs no zero clamp to stay non-negative. Departures outside the grid clamp
+// to the edge, as the kernel's samplers do.
+export function reactantExchangeThenAdvect(field, { dims, weight, shift, solid = null }) {
+  const [nx, ny, nz] = dims;
+  const exchanged = weight > 0 ? reactantExchangeStep(field, { dims, weight, solid }) : Float64Array.from(field);
+  const at = (x, y, z) => x + nx * (y + ny * z);
+  const out = new Float64Array(field.length);
+  const clampTo = (v, hi) => Math.min(Math.max(v, 0), hi);
+  for (let z = 0; z < nz; z += 1) for (let y = 0; y < ny; y += 1) for (let x = 0; x < nx; x += 1) {
+    const px = clampTo(x - shift[0], nx - 1), py = clampTo(y - shift[1], ny - 1), pz = clampTo(z - shift[2], nz - 1);
+    const x0 = Math.min(Math.floor(px), nx - 2), y0 = Math.min(Math.floor(py), ny - 2), z0 = Math.min(Math.floor(pz), nz - 2);
+    const fx = px - x0, fy = py - y0, fz = pz - z0;
+    let v = 0;
+    for (let dz = 0; dz < 2; dz += 1) for (let dy = 0; dy < 2; dy += 1) for (let dx = 0; dx < 2; dx += 1) {
+      const w = (dx ? fx : 1 - fx) * (dy ? fy : 1 - fy) * (dz ? fz : 1 - fz);
+      v += w * exchanged[at(x0 + dx, y0 + dy, z0 + dz)];
+    }
+    out[at(x, y, z)] = v;
+  }
+  return out;
+}
+
+// Mixture fraction Z: the share of a cell's material that came from the inlet
+// stream (1) rather than ambient air (0). Burning removes fuel and oxidizer/s
+// equally, and transport and the exchange act alike on both, so
+// beta = fuel - oxidizer/s is untouched by burning; Z is beta normalised between
+// air (beta = -ambient/s) and the stream (beta = streamFuel - inletOxidizer/s).
+// Sponges relax oxidizer and fuel at different rates, so Z is approximate there.
+export function reactantMixtureFraction({ fuel, oxidizer }, model = REACTANT_MODEL, { streamFuel = 1 } = {}) {
+  const s = model.oxidizerRequirement;
+  const air = -model.ambientOxidizer / s;
+  const stream = streamFuel - model.inletOxidizer / s;
+  return (fuel - oxidizer / s - air) / Math.max(stream - air, 1e-12);
+}
+
+// A cell holding at least this share of inlet stream has not met air.
+export const REACTANT_NO_CONTACT_STREAM_SHARE = 0.9;
+
+// Why a cell is or is not burning: burning; colocated but too cold; burned
+// here, air used up, fuel left (air-starved: contact-limited); burned out
+// (depleted); inlet stream that has not met
+// air (no contact, however hot: a hot inlet does not make contact); or nothing
+// to burn (ambient). "Burning but rendering poorly" is a render-side judgement
+// made against these classes, not a material class.
 export function reactantDiagnostic(state, controls, dt) {
   const burn = reactantBurnStep({ fuel: state.fuel, oxidizer: state.oxidizer, heat: state.heat, smoke: 0 }, controls, dt);
-  return reactantDiagnosticFromField({ fuel: state.fuel, oxidizer: state.oxidizer, heat: state.heat, freshBurnRate: burn.freshBurnRate }, modelOf(controls));
+  return reactantDiagnosticFromField({ fuel: state.fuel, oxidizer: state.oxidizer, heat: state.heat, freshBurnRate: burn.freshBurnRate }, modelOf(controls), { streamFuel: controls?.streamFuel ?? 1 });
 }
 
 // The same classes for a stored cell, using its recorded fresh burn rate (the
 // sidecar's second component) instead of recomputing a burn.
-export function reactantDiagnosticFromField({ fuel, oxidizer, heat, freshBurnRate }, model = REACTANT_MODEL) {
+export function reactantDiagnosticFromField({ fuel, oxidizer, heat, freshBurnRate }, model = REACTANT_MODEL, { streamFuel = 1 } = {}) {
   const t = REACTANT_DIAGNOSTIC_THRESHOLDS;
   if (freshBurnRate > t.burnRate) return 'burning';
+  const z = reactantMixtureFraction({ fuel, oxidizer }, model, { streamFuel });
+  if (fuel > t.fuel && z >= REACTANT_NO_CONTACT_STREAM_SHARE) return 'no-contact';
   const available = Math.max(0, Math.min(fuel, oxidizer / model.oxidizerRequirement));
   if (available > t.available) return 'too-cold';
-  if (heat >= model.ignitionBand[0]) return 'depleted';
+  // Fuel the stream would have brought at this Z, less what is left: burned here.
+  const burnedHere = Math.max(0, z) * streamFuel - fuel;
+  // Burned here and fuel is left: it met air and used it all (rich side,
+  // contact-limited: more mixing would burn more). Otherwise burned out.
+  if (burnedHere > t.fuel) return fuel > t.fuel ? 'air-starved' : 'depleted';
   if (fuel > t.fuel) return 'no-contact';
   return 'ambient';
 }
@@ -245,11 +295,14 @@ export function resolveReactantCombustionConfig(controls = {}, options = {}) {
   // common-gas (or MacCormack) transport; legacy per-layer lifts would carry
   // fuel and oxidizer apart and manufacture or destroy contact.
   if (options.transportCommonCharacteristic === false) return off('reactant-law-requires-common-gas-transport');
-  const exchange = reactantExchangeWeight({ diffusivity: model.exchangeDiffusivity, grid, dt: 1 });
+  // Receipt at the effective dt (the kernel applies min(weight x timeStep, cap)).
+  const dt = Number.isFinite(options.dt) && options.dt > 0 ? options.dt : 1;
+  const exchange = reactantExchangeWeight({ diffusivity: model.exchangeDiffusivity, grid, dt });
+  const exchangeWeightPerUnitDt = model.exchangeDiffusivity / ((2 / grid) ** 2);
   return {
     identity: REACTANT_COMBUSTION_IDENTITY,
     requested,
-    effective: { admitted: true, reason: null, law: REACTION_LAW_REACTANT, grid, mixingTimeSteps, coolingTimeSteps, model, modelOverridden: overridden, exchange },
+    effective: { admitted: true, reason: null, law: REACTION_LAW_REACTANT, grid, mixingTimeSteps, coolingTimeSteps, model, modelOverridden: overridden, exchange, exchangeWeightPerUnitDt },
   };
 }
 
@@ -258,7 +311,7 @@ export function reactantCombustionUniformValues(config) {
   if (!e?.admitted) return new Array(REACTANT_COMBUSTION_UNIFORM_FLOATS).fill(0);
   const m = e.model;
   return [
-    1, e.mixingTimeSteps, e.coolingTimeSteps, e.exchange.requested,
+    1, e.mixingTimeSteps, e.coolingTimeSteps, e.exchangeWeightPerUnitDt,
     m.oxidizerRequirement, m.heatOfCombustion, m.sootYield, m.sootRetirementSteps,
     m.ignitionBand[0], m.ignitionBand[1], m.ambientOxidizer, m.inletOxidizer,
     m.appearanceBurnReference, REACTANT_EXCHANGE_STABLE_WEIGHT, 0, 0,

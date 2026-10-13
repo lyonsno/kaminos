@@ -65,7 +65,8 @@ test('every projection kernel that carries the front carries the sidecar', () =>
 test('the main kernel burns once, locally, through the module law', () => {
   assert.match(mainKernel, /let burn = reactantBurn\(fuel, oxidizer, heat, timeStep\);/);
   assert.match(mainKernel, /oxidizer = transportReactantOxidizer\(cellI, backCell, reactantForwardCell, macCormackScalars\);/, 'oxidizer rides the fuel characteristic and scheme');
-  assert.match(mainKernel, /let exchange = reactantExchangeLaplacian\(cellI\);/);
+  assert.match(mainKernel, /let exchange = sampleReactantExchangeLaplacian\(backCell\);/, 'exchange then advect: the exchange is sampled at the departure point, not added at the arrival cell (lagged)');
+  assert.doesNotMatch(mainKernel, /reactantExchangeLaplacian\(cellI\)/);
   assert.ok(reactantBlocks.length >= 5, `found ${reactantBlocks.length} reactant blocks`);
   for (const block of reactantBlocks) {
     assert.doesNotMatch(block, /fireLick|flame|Flame|ember|memory|Memory|shred|Shred|detail|Detail|front|Front|fleck|NormalizedFlameHeight|AboveSource|p\.y/, `no appearance field or box position in a reactant block:\n${block}`);
@@ -85,6 +86,12 @@ test('under the reactant law the authored reaction terms yield to the single bur
   assert.match(mainKernel, /oxidizer = mix\(oxidizer, u\.reactant_combustion_c\.w, immersedEntry\);/);
   assert.match(mainKernel, /oxidizer = u\.reactant_combustion_c\.z - \(u\.reactant_combustion_c\.z - oxidizer\) \* stepRate\(mix\(0\.20, 1\.0, wallFade\) \* mix\(0\.58, 1\.0, heatTopFade\)\);/, 'sponges relax oxidizer toward ambient air');
   assert.match(mainKernel, /if \(reactantOn\) \{\n\s*textureStore\(reactantDst, cellI, vec4<f32>\(clamp\(oxidizer, 0\.0, 2\.0\), reactantFreshBurnRate, 0\.0, 0\.0\)\);\n\s*\}/);
+});
+
+test('under the reactant law the volumetric emitter births no heat or fuel: supply enters only through the inflow and immersed entries', () => {
+  assert.match(mainKernel, /heat = max\(heat, select\(mix\(mix\(mix\(columnHeatBirth, tallPlumeHeatBirth, tallPlumeScene\), canonicalHeatBirth, canonicalPlumeScene\), bonfireHeatBirth, bonfireScene\), 0\.0, reactantOn\)\);/, 'no height-masked, oxidizer-free heat birth');
+  assert.match(mainKernel, /fuel = max\(fuel, select\(mix\(tallPlumeFuelInjection, bonfireInjectedFuel, bonfireScene\), 0\.0, reactantOn\)\);/, 'no height-masked fuel injection without oxidizer accounting');
+  assert.match(mainKernel, /let columnSmokeBirthForScene = select\(mix\(columnSmokeBirth, tallPlumeSmokeBirth, tallPlumeScene\), 0\.0, reactantOn\);/, 'soot only from the burned amount');
 });
 
 test('the authored law is untouched when the candidate is not admitted', () => {

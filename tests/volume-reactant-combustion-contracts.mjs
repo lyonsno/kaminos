@@ -136,6 +136,30 @@ test('the exchange conserves material and spreads it at the documented rate on a
   }
 });
 
+test('kernel order: exchange then advect, sampling the exchanged field at the departure point, stays non-negative and conserves', () => {
+  const dims = [24, 8, 8];
+  const n = dims[0] * dims[1] * dims[2];
+  const at = (x, y, z) => x + dims[0] * (y + dims[1] * z);
+  const step = new Float64Array(n);
+  for (let z = 2; z < 6; z += 1) for (let y = 2; y < 6; y += 1) for (let x = 8; x < 12; x += 1) step[at(x, y, z)] = 1;
+  const weight = 0.16;
+  for (const shift of [[2, 0, 0], [3, 1, 0], [1.6, 0.4, 0.3]]) {
+    const out = rc.reactantExchangeThenAdvect(step, { dims, weight, shift });
+    let total = 0;
+    for (let i = 0; i < n; i += 1) { assert.ok(out[i] >= -1e-12, `non-negative before any clamp, shift ${shift}`); total += out[i]; }
+    close(total, 64, 1e-9, `material is conserved away from the edges, shift ${shift}`);
+  }
+  // The rejected lagged order (advected value + w x Laplacian of the source at the arrival cell) goes negative:
+  const advected = rc.reactantExchangeThenAdvect(step, { dims, weight: 0, shift: [2, 0, 0] });
+  const lagLap = rc.reactantExchangeStep(step, { dims, weight: 1 });
+  let lagMin = Infinity;
+  for (let i = 0; i < n; i += 1) lagMin = Math.min(lagMin, advected[i] + weight * (lagLap[i] - step[i]));
+  assert.ok(lagMin < -0.1, `the lagged order creates negative material (${lagMin}) that a zero clamp would turn into new material`);
+  const exact = rc.reactantExchangeThenAdvect(step, { dims, weight, shift: [2, 0, 0] });
+  const exchanged = rc.reactantExchangeStep(step, { dims, weight });
+  close(exact[at(12, 3, 3)], exchanged[at(10, 3, 3)], 1e-12, 'a whole-cell shift carries the exchanged field exactly');
+});
+
 test('the exchange moves nothing into solid cells or across them', () => {
   const dims = [5, 1, 1];
   const solid = new Uint8Array([0, 0, 1, 0, 0]);
@@ -152,11 +176,23 @@ test('the diagnostic separates burning, too cold, no contact, depleted and ambie
   const d = s => rc.reactantDiagnostic(s, controls, 1);
   assert.equal(d({ fuel: 0.3, oxidizer: 0.8, heat: hi * 2 }), 'burning');
   assert.equal(d({ fuel: 0.3, oxidizer: 0.8, heat: lo * 0.5 }), 'too-cold', 'colocated reactants below ignition');
-  assert.equal(d({ fuel: 0.6, oxidizer: 0, heat: lo * 0.5 }), 'no-contact', 'cold fuel that has not met oxidizer');
-  assert.equal(d({ fuel: 0.6, oxidizer: 0, heat: hi * 2 }), 'depleted', 'hot fuel whose oxidizer is used up');
+  assert.equal(d({ fuel: 1, oxidizer: 0, heat: lo * 0.5 }), 'no-contact', 'cold inlet stream that has not met oxidizer');
+  assert.equal(d({ fuel: 0.97, oxidizer: 0, heat: hi * 2 }), 'no-contact', 'a HOT inlet stream that has not met air is no-contact, not depleted (the hot-inlet basin)');
+  assert.equal(d({ fuel: 0.6, oxidizer: 0, heat: hi * 2 }), 'air-starved', 'a rich mixture that met air and burned it all: fuel left, contact-limited');
   assert.equal(d({ fuel: 0, oxidizer: 0.4, heat: hi * 2 }), 'depleted', 'hot products whose fuel is used up');
+  assert.equal(d({ fuel: 0.0005, oxidizer: 0, heat: hi * 2 }), 'depleted', 'stoichiometric products: both reactants used up');
   assert.equal(d({ fuel: 0, oxidizer: 1, heat: 0 }), 'ambient');
-  assert.deepEqual(rc.REACTANT_DIAGNOSTIC_CLASSES, ['ambient', 'no-contact', 'too-cold', 'burning', 'depleted']);
+  assert.equal(d({ fuel: 0, oxidizer: 1, heat: hi * 2 }), 'ambient', 'air warmed by its neighbours has burned nothing');
+  // The mixture fraction comes from fuel - oxidizer/s, which burning does not change.
+  const s = M.oxidizerRequirement;
+  const unburned = { fuel: 0.2, oxidizer: 0.8, heat: hi * 2, smoke: 0 };
+  const after = rc.reactantBurnStep(unburned, controls, 1);
+  close(rc.reactantMixtureFraction(after), rc.reactantMixtureFraction(unburned), 1e-12, 'burning conserves the mixture fraction');
+  close(rc.reactantMixtureFraction({ fuel: 1, oxidizer: 0 }), 1, 1e-12, 'the inlet stream is Z = 1');
+  close(rc.reactantMixtureFraction({ fuel: 0, oxidizer: 1 }), 0, 1e-12, 'ambient air is Z = 0');
+  close(rc.reactantMixtureFraction({ fuel: 0.5, oxidizer: 0 }, M, { streamFuel: 0.5 }), 1, 1e-12, 'a Fuel Fraction 0.5 stream is Z = 1 for its own stream');
+  assert.ok(s > 0);
+  assert.deepEqual(rc.REACTANT_DIAGNOSTIC_CLASSES, ['ambient', 'no-contact', 'air-starved', 'too-cold', 'burning', 'depleted']);
   assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.3, oxidizer: 0.8, heat: lo * 0.5, freshBurnRate: 0.01 }), 'burning', 'a stored cell that burned this step is burning whatever its post-burn state');
   assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.3, oxidizer: 0.8, heat: lo * 0.5, freshBurnRate: 0 }), 'too-cold');
 });
@@ -192,12 +228,19 @@ test('the uniform block packs the admitted law and zeros otherwise', () => {
   const values = rc.reactantCombustionUniformValues(on);
   assert.equal(values.length, 16);
   assert.deepEqual(values, [
-    1, on.effective.mixingTimeSteps, on.effective.coolingTimeSteps, on.effective.exchange.requested,
+    1, on.effective.mixingTimeSteps, on.effective.coolingTimeSteps, M.exchangeDiffusivity / (2 / 32) ** 2,
     M.oxidizerRequirement, M.heatOfCombustion, M.sootYield, M.sootRetirementSteps,
     M.ignitionBand[0], M.ignitionBand[1], M.ambientOxidizer, M.inletOxidizer,
     M.appearanceBurnReference, rc.REACTANT_EXCHANGE_STABLE_WEIGHT, 0, 0,
   ]);
   assert.deepEqual(rc.reactantCombustionUniformValues(rc.resolveReactantCombustionConfig({})), new Array(16).fill(0));
+  // The kernel multiplies the packed per-unit-dt weight by its own timeStep; the receipt reports the weight at the effective dt.
+  const half = rc.resolveReactantCombustionConfig({ reactionLaw: rc.REACTION_LAW_REACTANT, volumeScene: 'tall_plume', emitterSourceLaw: 'inflow-boundary' }, { grid: 32, dt: 0.5 });
+  assert.equal(rc.reactantCombustionUniformValues(half)[3], values[3], 'the packed weight does not depend on dt');
+  close(half.effective.exchange.requested, values[3] * 0.5, 1e-15, 'the receipt weight is at the effective dt');
+  assert.equal(half.effective.exchange.dt, 0.5);
+  const big = rc.resolveReactantCombustionConfig({ reactionLaw: rc.REACTION_LAW_REACTANT, volumeScene: 'tall_plume', emitterSourceLaw: 'inflow-boundary', reactantModelOverrides: { exchangeDiffusivity: 1e-2 } }, { grid: 32, dt: 2 });
+  assert.equal(big.effective.exchange.capped, true, 'the cap is judged at the effective dt, as the kernel applies it');
 });
 
 test('the WGSL burn reads only local material, thermal state, dt and the mixing time', () => {
