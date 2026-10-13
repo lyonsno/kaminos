@@ -121,6 +121,9 @@ for (const headDim of [64, 128, 256]) {
     const shared = Number(code.match(/var<workgroup> stage: array<f32, (\d+)>/)[1]);
     assert.ok((2048 + shared) * 4 <= 16384, `head dim ${headDim}: workgroup storage`);
     if (layout === 'strided') assert.match(code, /q_token_stride/);
+    // V chunks must tile the 32-key score row exactly, or the last chunk reads the next row's probabilities.
+    const step = Number(code.match(/key_chunk = key_chunk \+ (\d+)u/)[1]);
+    assert.equal(32 % step, 0, `head dim ${headDim}: V chunk of ${step} keys does not divide the 32-key tile`);
   }
 }
 for (const headDim of [8, 72, 130, 272]) assert.throws(() => createWebGpuTiledFlashAttentionShader({ headDim }), /multiple of 16 from 16 to 256/);
