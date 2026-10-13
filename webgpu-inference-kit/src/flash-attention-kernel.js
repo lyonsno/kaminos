@@ -237,11 +237,20 @@ const TILED_QUERIES = 64;
 const TILED_KEYS = 32;
 const TILED_DIM_CHUNK = 16;
 
-export function createWebGpuTiledFlashAttentionShader({ headDim, layout = 'packed' } = {}) {
+// Masking options (compile time; without them the shader is unchanged):
+// - keyMask 'exclude' | 'penalty': key_mask [domain, key] at binding 5, a key is masked when its value <= 0.
+//   'exclude' drops masked keys (a row with no visible key outputs zero); 'penalty' subtracts 1e9 from the
+//   scaled score, matching SAM's masked online kernels (an all-masked row averages V like theirs).
+// - causal: key k is visible to query q only when k <= q + causal_offset (params word, 0 for self-attention).
+// - bias: score_bias [domain, head, query, key] at binding 6, added to the scaled score before masking.
+export function createWebGpuTiledFlashAttentionShader({ headDim, layout = 'packed', keyMask = null, causal = false, bias = false } = {}) {
   if (!Number.isInteger(headDim) || headDim < 16 || headDim > MAX_SPLIT_HEAD_DIM || headDim % 16 !== 0) {
     throw new Error('tiled flash attention needs a head dim that is a multiple of 16 from 16 to 256');
   }
   if (layout !== 'packed' && layout !== 'strided') throw new Error(`unsupported flash attention layout ${layout}`);
+  if (keyMask !== null && keyMask !== 'exclude' && keyMask !== 'penalty') throw new Error("keyMask must be null, 'exclude' or 'penalty'");
+  const excludes = keyMask === 'exclude' || causal === true;
+  const masked = keyMask !== null || causal === true || bias === true;
   const rowsPerThread = TILED_QUERIES / 16;
   const keysPerThread = TILED_KEYS / 16;
   const dimsPerThread = headDim / 16;
@@ -260,13 +269,13 @@ export function createWebGpuTiledFlashAttentionShader({ headDim, layout = 'packe
   const params = layout === 'strided'
     ? `struct Params {
   query_tokens: u32, key_tokens: u32, heads: u32, kv_heads: u32,
-  query_offset: u32, query_count: u32, scale: f32, _pad0: u32,
+  query_offset: u32, query_count: u32, scale: f32, ${causal ? 'causal_offset' : '_pad0'}: u32,
 ${STRIDED_TENSORS.map(t => `  ${t}_offset: u32, ${t}_token_stride: u32, ${t}_head_stride: u32, ${t}_domain_stride: u32,`).join('\n')}
 };`
     : `struct Params {
   query_tokens: u32, key_tokens: u32, q_channels: u32, kv_channels: u32,
   heads: u32, kv_heads: u32, query_offset: u32, query_count: u32,
-  scale: f32, _pad0: u32, _pad1: u32, _pad2: u32,
+  scale: f32, ${causal ? 'causal_offset' : '_pad0'}: u32, _pad1: u32, _pad2: u32,
 };`;
   const queryOf = local => `params.query_offset + min(group.x * ${TILED_QUERIES}u + ${local}, params.query_count - 1u)`;
   return `${params}
@@ -275,7 +284,7 @@ ${STRIDED_TENSORS.map(t => `  ${t}_offset: u32, ${t}_token_stride: u32, ${t}_hea
 @group(0) @binding(2) var<storage, read> v_values: array<f32>;
 @group(0) @binding(3) var<storage, read_write> out_values: array<f32>;
 @group(0) @binding(4) var<uniform> params: Params;
-
+${keyMask ? '@group(0) @binding(5) var<storage, read> key_mask: array<f32>;\n' : ''}${bias ? '@group(0) @binding(6) var<storage, read> score_bias: array<f32>;\n' : ''}
 var<workgroup> score_tile: array<f32, ${TILED_QUERIES * TILED_KEYS}>;
 var<workgroup> stage: array<f32, ${stageFloats}>;
 
@@ -310,7 +319,16 @@ ${R.map(r => J.map(j => `        s${r}_${j} = s${r}_${j} + a${r} * b${j};`).join
       workgroupBarrier();
     }
     let tile_keys = min(${TILED_KEYS}u, params.key_tokens - tile_start);
-${R.map(r => J.map(j => `    if (tx * ${keysPerThread}u + ${j}u < tile_keys) { s${r}_${j} = s${r}_${j} * params.scale; } else { s${r}_${j} = -3.402823e38; }
+${R.map(r => J.map(j => masked ? `    {
+      let key = tile_start + tx * ${keysPerThread}u + ${j}u;
+      let query = ${queryOf(`ty * ${rowsPerThread}u + ${r}u`)};
+      var visible = tx * ${keysPerThread}u + ${j}u < tile_keys;
+      var score = s${r}_${j} * params.scale;
+      if (visible) {
+${bias ? `        score = score + score_bias[((domain * params.heads + head) * params.query_tokens + query) * params.key_tokens + key];\n` : ''}${keyMask === 'exclude' ? `        if (key_mask[domain * params.key_tokens + key] <= 0.0) { visible = false; }\n` : ''}${keyMask === 'penalty' ? `        if (key_mask[domain * params.key_tokens + key] <= 0.0) { score = score - 1000000000.0; }\n` : ''}${causal ? `        if (key > query + params.causal_offset) { visible = false; }\n` : ''}      }
+      if (visible) { s${r}_${j} = score; } else { s${r}_${j} = -3.402823e38; }
+      score_tile[(ty * ${rowsPerThread}u + ${r}u) * ${TILED_KEYS}u + tx * ${keysPerThread}u + ${j}u] = s${r}_${j};
+    }` : `    if (tx * ${keysPerThread}u + ${j}u < tile_keys) { s${r}_${j} = s${r}_${j} * params.scale; } else { s${r}_${j} = -3.402823e38; }
     score_tile[(ty * ${rowsPerThread}u + ${r}u) * ${TILED_KEYS}u + tx * ${keysPerThread}u + ${j}u] = s${r}_${j};`).join('\n')).join('\n')}
     workgroupBarrier();
 ${R.map(r => `    var tile_max${r} = m${r};
@@ -320,7 +338,7 @@ ${R.map(r => `    {
       let correction = exp(m${r} - tile_max${r});
       l${r} = l${r} * correction;
 ${E.map(e => `      o${r}_${e} = o${r}_${e} * correction;`).join('\n')}
-${J.map(j => `      let p${j} = exp(s${r}_${j} - tile_max${r});
+${J.map(j => `      let p${j} = ${excludes ? `select(exp(s${r}_${j} - tile_max${r}), 0.0, s${r}_${j} <= -3.0e38)` : `exp(s${r}_${j} - tile_max${r})`};
       l${r} = l${r} + p${j};
       score_tile[(ty * ${rowsPerThread}u + ${r}u) * ${TILED_KEYS}u + tx * ${keysPerThread}u + ${j}u] = p${j};`).join('\n')}
       m${r} = tile_max${r};
@@ -350,7 +368,7 @@ ${R.map(r => `  {
     for (var c = 0u; c < 16u; c = c + 1u) { total = total + score_tile[(ty * ${rowsPerThread}u + ${r}u) * 16u + c]; }
     if (local_query < params.query_count) {
       let base = ${row('o', 'params.query_offset + local_query', 'head')} + tx * ${dimsPerThread}u;
-      let inverse = 1.0 / total;
+      let inverse = ${excludes ? 'select(0.0, 1.0 / total, total > 0.0)' : '1.0 / total'};
 ${E.map(e => `      out_values[base + ${e}u] = o${r}_${e} * inverse;`).join('\n')}
     }
   }`).join('\n')}
@@ -363,8 +381,9 @@ ${E.map(e => `      out_values[base + ${e}u] = o${r}_${e} * inverse;`).join('\n'
 // whole tensor domain. Vec4 head dims (multiples of 4) need every offset and stride to be a multiple of 4.
 export function flashAttentionStridedParams({
   queryTokens, keyTokens, heads, kvHeads = heads, headDim, queryOffset = 0, queryCount = queryTokens - queryOffset,
-  q = {}, k = {}, v = {}, out = {},
+  q = {}, k = {}, v = {}, out = {}, causalOffset = 0,
 }) {
+  if (!Number.isSafeInteger(causalOffset) || causalOffset < 0) throw new Error('causalOffset must be a non-negative integer');
   if (heads % kvHeads !== 0) throw new Error('heads must be a multiple of kvHeads');
   if (!Number.isInteger(queryOffset) || !Number.isInteger(queryCount) || queryOffset < 0 || queryCount < 1 || queryOffset + queryCount > queryTokens) {
     throw new Error('query range must lie within queryTokens');
@@ -379,13 +398,14 @@ export function flashAttentionStridedParams({
   if (headDim % 4 === 0 && fields.some(value => value % 4 !== 0)) throw new Error('vec4 head dims need offsets and strides that are multiples of 4');
   if (fields.some(value => !Number.isInteger(value) || value < 0 || value > 0xffff_ffff)) throw new Error('offsets and strides must be u32 integers');
   const words = new Uint32Array(24);
-  words.set([queryTokens, keyTokens, heads, kvHeads, queryOffset, queryCount, 0, 0]);
+  words.set([queryTokens, keyTokens, heads, kvHeads, queryOffset, queryCount, 0, causalOffset]);
   new Float32Array(words.buffer)[6] = 1 / Math.sqrt(headDim);
   words.set(fields, 8);
   return words;
 }
 
-export function flashAttentionParams({ queryTokens, keyTokens, heads, kvHeads = heads, headDim, queryOffset = 0, queryCount = queryTokens - queryOffset }) {
+export function flashAttentionParams({ queryTokens, keyTokens, heads, kvHeads = heads, headDim, queryOffset = 0, queryCount = queryTokens - queryOffset, causalOffset = 0 }) {
+  if (!Number.isSafeInteger(causalOffset) || causalOffset < 0) throw new Error('causalOffset must be a non-negative integer');
   if (heads % kvHeads !== 0) throw new Error('heads must be a multiple of kvHeads');
   if (!Number.isInteger(queryOffset) || !Number.isInteger(queryCount) || queryOffset < 0 || queryCount < 1 || queryOffset + queryCount > queryTokens) {
     throw new Error('query range must lie within queryTokens');
@@ -393,6 +413,7 @@ export function flashAttentionParams({ queryTokens, keyTokens, heads, kvHeads = 
   const words = new Uint32Array(FLASH_ATTENTION_PARAMS_WORDS);
   words.set([queryTokens, keyTokens, heads * headDim, kvHeads * headDim, heads, kvHeads, queryOffset, queryCount]);
   new Float32Array(words.buffer)[8] = 1 / Math.sqrt(headDim);
+  words[9] = causalOffset;
   return words;
 }
 

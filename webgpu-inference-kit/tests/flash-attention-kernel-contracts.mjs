@@ -128,4 +128,40 @@ for (const headDim of [64, 128, 256]) {
 }
 for (const headDim of [8, 72, 130, 272]) assert.throws(() => createWebGpuTiledFlashAttentionShader({ headDim }), /multiple of 16 from 16 to 256/);
 
+// Masks on the tiled kernel are compile-time options; without them the shader is byte-identical to the
+// landed one (hash-guarded), so existing users are unaffected.
+{
+  const landed = {
+    '32-packed': 'sha256:5e829fb503ec1f45aadd65e45ee3819308eb029c846804bbbf787fffb13a01df',
+    '64-packed': 'sha256:ce7a45fd50b969aefcdc5c5b2f5b29c3e6d7b891604a3eb57442b60b8c18a634',
+    '64-strided': 'sha256:56e0f744d9a653e538ac523b9a03c8c7442fd0f017beb967187b0fab5f19c4ef',
+    '128-strided': 'sha256:01a1e9350b125fadf6fe7537c2e7ef3f2f33e36628762f28cdf184b790e71ecc',
+  };
+  for (const [key, hash] of Object.entries(landed)) {
+    const [headDim, layout] = key.split('-');
+    assert.equal(`sha256:${createHash('sha256').update(createWebGpuTiledFlashAttentionShader({ headDim: Number(headDim), layout })).digest('hex')}`, hash, `tiled ${key} changed`);
+  }
+  // keyMask: per-(domain, key) mask at binding 5; 'exclude' drops masked keys (fully masked rows -> 0),
+  // 'penalty' subtracts 1e9 from masked scores like SAM's masked online kernels.
+  const exclude = createWebGpuTiledFlashAttentionShader({ headDim: 64, keyMask: 'exclude' });
+  assert.match(exclude, /@group\(0\) @binding\(5\) var<storage, read> key_mask: array<f32>/);
+  assert.match(exclude, /select\(0\.0, 1\.0 \/ total, total > 0\.0\)/, 'fully excluded rows output zero');
+  const penalty = createWebGpuTiledFlashAttentionShader({ headDim: 32, keyMask: 'penalty' });
+  assert.match(penalty, /1000000000\.0/);
+  // causal: key visible iff key <= query + causal_offset (a params word that is padding otherwise).
+  const causal = createWebGpuTiledFlashAttentionShader({ headDim: 128, layout: 'strided', causal: true });
+  assert.match(causal, /causal_offset/);
+  assert.doesNotMatch(causal, /key_mask/);
+  // bias: additive [domain, head, query, key] scores at binding 6.
+  const bias = createWebGpuTiledFlashAttentionShader({ headDim: 32, bias: true, keyMask: 'penalty' });
+  assert.match(bias, /@group\(0\) @binding\(6\) var<storage, read> score_bias: array<f32>/);
+  assert.throws(() => createWebGpuTiledFlashAttentionShader({ headDim: 64, keyMask: 'drop' }), /keyMask must be/);
+  // The causal offset is written into the params word the shader reads.
+  const packedWords = flashAttentionParams({ queryTokens: 8, keyTokens: 20, heads: 2, headDim: 64, causalOffset: 12 });
+  assert.equal(packedWords[9], 12);
+  const stridedWords = flashAttentionStridedParams({ queryTokens: 8, keyTokens: 20, heads: 2, headDim: 64, causalOffset: 12 });
+  assert.equal(stridedWords[7], 12);
+  assert.equal(flashAttentionParams({ queryTokens: 8, keyTokens: 8, heads: 1, headDim: 64 })[9], 0);
+}
+
 console.log('flash attention kernel contracts passed');
