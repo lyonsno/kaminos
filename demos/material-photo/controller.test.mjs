@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { test } from 'node:test';
 
-async function controller({examples=false,exampleFailure=false,generationAvailable=true,search='?sample=celebration'}={}) {
+async function controller({examples=false,exampleFailure=false,generationAvailable=true,weightsUrl='/scratch/supermat-weights/f16/',search='?sample=celebration'}={}) {
   const behavior = { failDevice: false, failMaterials: false, deviceRequests: 0, geometryRuns:0, materialRuns:0, cache:new Map(), gates: new Map() };
   const node = dataset => ({ dataset, style: {}, value: '', disabled: false, hidden: false, checked: false, textContent: '', captures:new Set(),
     classList: { toggle() {},add(){},remove(){} }, removeAttribute() {}, setAttribute() {}, addEventListener() {},
@@ -81,7 +81,7 @@ async function controller({examples=false,exampleFailure=false,generationAvailab
   const source = new vm.SourceTextModule(await readFile(new URL('./main.js',import.meta.url),'utf8'), { context });
   await source.link(async specifier => {
     if(specifier==='./sample-cutouts.js')return new vm.SyntheticModule(['createSampleCutout'],function(){this.setExport('createSampleCutout',(sample,width,height)=>['orb','bag'].includes(sample)?{sample,width,height,source:'hand-authored-example-cutout'}:null);},{context});
-    if(specifier==='./deployment.js')return new vm.SyntheticModule(['GENERATION_AVAILABLE'],function(){this.setExport('GENERATION_AVAILABLE',generationAvailable);},{context});
+    if(specifier==='./deployment.js')return new vm.SyntheticModule(['GENERATION_AVAILABLE','SUPERMAT_WEIGHTS_URL'],function(){this.setExport('GENERATION_AVAILABLE',generationAvailable);this.setExport('SUPERMAT_WEIGHTS_URL',weightsUrl);},{context});
     if(specifier==='./included-examples.js')return new vm.SyntheticModule(['loadIncludedExample'],function(){
       this.setExport('loadIncludedExample',async(key,inputKey,size)=>{
         if(!examples)return null;
@@ -136,6 +136,22 @@ test('public explorer keeps saved results playable without offering unavailable 
   assert.equal(c.elements['local-generation'].hidden,false);
   assert.equal(c.elements.run.disabled,true);assert.equal(c.elements.file.disabled,true);
   await c.actions.sample('orb');assert.equal(c.state.status,'included');
+});
+
+test('hosted own-photo generation uses the configured package, never local scratch weights',async()=>{
+  const weightsUrl='https://huggingface.co/BasinShapers/supermat-webgpu-weights/resolve/'+ 'a'.repeat(40)+'/f16/';
+  const c=await controller({examples:true,weightsUrl});
+  c.elements.file.files=[{name:'my-photograph.png',pixel:9}];c.elements.file.onchange();
+  await new Promise(resolve=>setImmediate(resolve));await c.actions.infer();
+  assert.equal(c.behavior.profile.weightsUrl,weightsUrl);
+  assert.equal(c.behavior.profile.weightLoading,'chunks');
+  assert.equal(c.behavior.inputPixel,9);assert.equal(c.state.runs.at(-1).status,'done');
+  assert.equal(c.elements.file.disabled,false);assert.match(c.elements.provenance.textContent,/Newly generated/);
+});
+
+test('an explicit local weight override remains usable for owner smokes',async()=>{
+  const c=await controller({weightsUrl:'https://huggingface.co/owner/model/resolve/'+ 'a'.repeat(40)+'/',search:'?weights=/test-weights/'});
+  await c.actions.infer();assert.equal(c.behavior.profile.weightsUrl,'/test-weights/');
 });
 
 test('late included restoration cannot admit generation when a different job completes',async()=>{

@@ -51,7 +51,9 @@ jobs:
           enablement: true
 
       - name: Assemble site (flame boutique and browser model experiences)
-        run: node scripts/assemble-pages-site.mjs _site
+        env:
+          SUPERMAT_WEIGHTS_URL: ${{ vars.SUPERMAT_WEIGHTS_URL }}
+        run: node scripts/assemble-pages-site.mjs _site --supermat-weights "$SUPERMAT_WEIGHTS_URL"
 
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
