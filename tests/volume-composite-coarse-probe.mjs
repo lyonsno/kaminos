@@ -19,7 +19,10 @@ try{
    for(const [a,b,k]of l.edges)assert.ok(Number.isInteger(a)&&Number.isInteger(b)&&a>=0&&b>=0&&a<l.size&&b<l.size&&a!==b&&Number.isFinite(k)&&k>0);
    if(j<all.length-1){assert.equal(l.map.length,l.size);assert.ok(l.map.every(v=>Number.isInteger(v)&&v>=0&&v<all[j+1].size));}}
  report.phase='adapter';persist();const {create,globals}=await import(pathToFileURL(resolve(dawnPath)));Object.assign(globalThis,globals);
- const gpu=create(['backend=metal']),adapter=await gpu.requestAdapter();assert.ok(adapter?.features.has('timestamp-query'),'Metal timestamp-query required');
+ // dawn.node owns its native instance through this JS object, not the device.
+ // Keep it alive across the CPU hierarchy preparation and all pending work.
+ const gpu=create(['backend=metal']);globalThis.__coarseProbeGPU=gpu;
+ const adapter=await gpu.requestAdapter();assert.ok(adapter?.features.has('timestamp-query'),'Metal timestamp-query required');
  device=await adapter.requestDevice({requiredFeatures:['timestamp-query']});const errors=[];device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
  report.route={backend:'metal',vendor:adapter.info.vendor,architecture:adapter.info.architecture,timestampQuery:true,dawnPath:resolve(dawnPath)};
  // Use the effective workgroup capacity to choose a provisional small dense
@@ -54,4 +57,4 @@ try{
  for(let i=0;i<4;i++){const encoder=device.createCommandEncoder();encoder.clearBuffer(buffers[0].x[0]);const scope=pressureTimestampScope(device,encoder),t=performance.now(),pass=scope.encoder.beginComputePass();cycle(pass);pass.end();scope.resolve();device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();const wallMs=performance.now()-t;let timing;try{timing=await scope.read();}finally{scope.destroy();}report.cases.push({label:i?'repeat':'first-use',wallMs,timing});persist();}
  const read=device.createBuffer({size:expected.length*4,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});owned.push(read);const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(buffers[0].x[0],0,read,0,expected.length*4);device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);const actual=new Float32Array(read.getMappedRange().slice(0));writeFileSync(resolve(out,'actual.f32'),new Uint8Array(actual.buffer));
  assert.deepEqual(errors,[]);assert.ok(actual.every(Number.isFinite));report.maxAbsoluteError=expected.reduce((m,v,i)=>Math.max(m,Math.abs(v-actual[i])),0);report.maxExpected=expected.reduce((m,v)=>Math.max(m,Math.abs(v)),0);assert.ok(report.maxAbsoluteError<1e-6,'GPU correction differs from CPU oracle');report.phase='complete';report.passed=true;
-}catch(e){report.error=e.stack;process.exitCode=1;}finally{owned.forEach(b=>b.destroy());device?.destroy();persist();console.log(JSON.stringify(report));}
+}catch(e){report.error=e.stack;process.exitCode=1;}finally{owned.forEach(b=>b.destroy());device?.destroy();persist();console.log(JSON.stringify(report));delete globalThis.__coarseProbeGPU;}
