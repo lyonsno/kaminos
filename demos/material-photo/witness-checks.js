@@ -1,4 +1,4 @@
-export function validateEpisode(state, source, size) {
+export function validateEpisode(state, source, size, hosted = null) {
   const run=state?.runs?.at(-1);
   if(state?.gpuErrors?.length)throw Error('Uncaptured GPU errors invalidate the output episode');
   if(state?.status!=='done'||run?.status!=='done')throw Error('Both models must complete');
@@ -9,6 +9,15 @@ export function validateEpisode(state, source, size) {
   if(!(run.output?.triangles>0&&run.output?.surfaceVertices>0))throw Error('Nonempty depth surface required');
   if(!run.output.materialSize?.every(x=>Number.isInteger(x)&&x>0)||run.output.materialSize.length!==2)throw Error('Material output required');
   if(size!==undefined&&(run.supermat?.size!==size||!run.output.materialSize.every(value=>value===size)))throw Error('Effective material resolution differs from selected resolution');
+  if(hosted){
+    if(state.runs.length!==1||run.moge.weights!=='hosted'||run.moge.cached===true||!hosted.revision||
+      state.identity.supermat.revision!==hosted.revision||run.supermat?.identity?.revision!==hosted.revision)
+      throw Error('Fresh hosted model generation required');
+    const requests=hosted.requests?.filter(row=>row.url?.startsWith(hosted.base));
+    if(!hosted.files?.length||!requests?.length||requests.some(row=>row.credentials!==false)||
+      !['package.json',...hosted.files].every(file=>requests.some(row=>row.url===new URL(file,hosted.base).href)))
+      throw Error('Anonymous manifest and every hosted weight chunk must be observed');
+  }
 }
 
 export function validateCachedRestoration(state,source,size,runCount) {
