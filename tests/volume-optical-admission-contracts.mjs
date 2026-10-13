@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {VOLUME_UNIFORM_FLOATS} from '../volume-core.js';
+import {getSceneObjectRecords} from '../scene-persistence-core.js';
+import {FIRE_DOMAIN_ID,FIRE_DOMAIN_TYPE,FIRE_DOMAIN_SOURCE} from '../scene-fire-domain.mjs';
 import {OPTICAL_TRACE_IDENTITY,traceChunkPlan,validateTraceSpecialization,compareOpticalTraces} from '../volume-optical-trace.mjs';
 
 // Execute the driver's capture loop and actual terminal/failure handling. Browser
@@ -9,6 +11,28 @@ import {OPTICAL_TRACE_IDENTITY,traceChunkPlan,validateTraceSpecialization,compar
 const script=readFileSync(new URL('../scripts/capture-optical-trace.mjs',import.meta.url),'utf8');
 const body='try {\n'+script.slice(script.indexOf('  for(const fraction of'));
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
+// Exercise the actual load admission, including legacy burner migration.
+const scene={objects:[{id:'kiln',type:'glb',source:'/kiln.glb'},
+  {id:'flame-emitter',type:'flame-emitter',source:'kaminos:analytic-flame'},
+  {id:'burner',type:'burner-bed',source:'kaminos:annular-bed',burner:{schema:'kaminos.annular-burner.v1'},
+    transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}}]};
+const identity=({id,type,source})=>({id,type,source});
+const migrated=getSceneObjectRecords(scene).map(identity);
+assert.equal(migrated.find(o=>o.id==='burner').type,'procedural-mesh');
+const domain={id:FIRE_DOMAIN_ID,type:FIRE_DOMAIN_TYPE,source:FIRE_DOMAIN_SOURCE};
+const loadBody=script.slice(script.indexOf('  await guard(page.waitForFunction(()=>window.kaminosSceneAuthoring'),script.indexOf('  report.hold='));
+async function admit(objects) {
+  const window={kaminosSceneAuthoring:{read:()=>({objects})}};
+  const env={scene,report:{},assert,getSceneObjectRecords,FIRE_DOMAIN_ID,FIRE_DOMAIN_TYPE,FIRE_DOMAIN_SOURCE,
+    guard:p=>p,page:{waitForFunction:async()=>{},evaluate:async fn=>new Function('window',`return (${fn})();`)(window)}};
+  await new AsyncFunction(...Object.keys(env),loadBody)(...Object.values(env));
+}
+await admit([...migrated,domain]);
+await admit(migrated);
+for(const invalid of [migrated.slice(1),[...migrated,{...domain,id:'unrelated'}],
+  [...migrated,domain,domain],migrated.map(o=>o.id==='kiln'?{...o,source:'/wrong.glb'}:o)]) {
+  await assert.rejects(admit(invalid),assert.AssertionError);
+}
 const controls={physicalColorMode:2,toneMapping:'agx',boundarySidecarWidth:0,raySteps:36};
 const light={model:'distributed-volume-direct-radiance-v0',source:'same-generation-raw-emission-extinction',
   support:'full-height-geometry-visible-receivers',generation:152,frame:151,receivers:8192,directions:24,legacyDispatched:false};

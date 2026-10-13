@@ -6,6 +6,8 @@ import {pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {compositionRestoreUrl} from '../scene-authoring.mjs';
+import {getSceneObjectRecords} from '../scene-persistence-core.js';
+import {FIRE_DOMAIN_ID,FIRE_DOMAIN_TYPE,FIRE_DOMAIN_SOURCE} from '../scene-fire-domain.mjs';
 import {validateTraceSpecialization,compareOpticalTraces} from '../volume-optical-trace.mjs';
 import {VOLUME_UNIFORM_FLOATS} from '../volume-core.js';
 
@@ -62,7 +64,13 @@ try {
   // Arm the internal exact-step hold before asynchronous scene settling can pass it.
   await page.evaluate(()=>{window.opticalTraceHold=window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(151);});
   await guard(page.waitForFunction(()=>window.kaminosSceneAuthoring?.read().objects.length>=3||/load failed/i.test(document.getElementById('info-bar')?.textContent||'')));
-  assert.equal(await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects.length),scene.objects.length);
+  report.loadedObjects=await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects.map(({id,type,source})=>({id,type,source})));
+  const savedObjects=getSceneObjectRecords(scene);
+  const savedIds=new Set(savedObjects.map(o=>o.id));
+  const migratedDomain=report.loadedObjects.filter(o=>!savedIds.has(o.id));
+  if(migratedDomain.length)assert.deepEqual(migratedDomain,[{id:FIRE_DOMAIN_ID,type:FIRE_DOMAIN_TYPE,source:FIRE_DOMAIN_SOURCE}]);
+  assert.deepEqual(report.loadedObjects.filter(o=>savedIds.has(o.id)).sort((a,b)=>a.id.localeCompare(b.id)),
+    savedObjects.map(({id,type,source})=>({id,type,source})).sort((a,b)=>a.id.localeCompare(b.id)));
   report.hold=await guard(page.evaluate(()=>window.opticalTraceHold));assert.equal(report.hold.ok,true,JSON.stringify(report.hold));
   assert.equal(report.hold.paused,true);assert.equal(report.hold.gpuComplete,true);
   assert.equal(report.hold.effectiveSimStepCount,151);
