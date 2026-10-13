@@ -2,7 +2,7 @@
 // Synthetic local error handling only; this does not establish browser/GPU behavior.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -28,6 +28,6 @@ Server.prototype.listen=function(){queueMicrotask(()=>this.emit('error',Object.a
   assert.match(report.error,/synthetic listener denied/);
   assert.ok(report.finishedAt);
   assert.equal(report.sources.fine.root,source);
-  assert.equal(report.browser.executable,browser);
+  assert.equal(report.browser.executable,realpathSync(browser));
   assert.equal(report.browser.pid,undefined,'no browser may launch after rejected listener');
 });
