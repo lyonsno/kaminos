@@ -2,7 +2,7 @@ export const FINITE_PLANE_ROUTE='kaminos.stone.finite-cell-plane.webgpu.v1';
 const pairs=[[0,1],[0,2],[0,3],[1,2],[1,3],[2,3]],dot=(a,b)=>a.reduce((sum,v,k)=>sum+v*b[k],0);
 export function validateFinitePlane({normal,offset,friction,restitution}){
  if(!Array.isArray(normal)||normal.length!==3||!normal.every(Number.isFinite)||Math.abs(Math.hypot(...normal)-1)>1e-6)throw Error('Finite unit plane normal required');
- if(!Number.isFinite(offset)||!Number.isFinite(friction)||friction<0||!Number.isFinite(restitution)||restitution<0||restitution>1)throw Error('Finite plane offset, nonnegative friction and restitution in [0,1] required');
+ if(![offset,friction,restitution].every(v=>Number.isFinite(v)&&Number.isFinite(Math.fround(v)))||friction<0||restitution<0||restitution>1)throw Error('Finite GPU plane offset, nonnegative friction and restitution in [0,1] required');
 }
 export function packFiniteCellOwnership(binding){
  if(!binding?.fixedCellShell||!Number.isSafeInteger(binding.points)||binding.points<=0||!binding.entries?.length)throw Error('Complete fixed-cell ownership required');

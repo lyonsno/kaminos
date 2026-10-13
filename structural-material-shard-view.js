@@ -82,7 +82,7 @@ async function makeBoundedMesh(){
  const piece=buildFixedCellShell({...body,bonds:observed.bonds}),geometry=createShardGeometry(piece.geometry),mesh=new THREE.Mesh(geometry,[skinMaterial,capMaterial]),candidate={...piece,mesh};mesh.userData.pieceId=0;mesh.frustumCulled=false;
  try{deformPiece(candidate,positions(observed));candidate.gpu=await createGpuBoundedSurface(renderer,resident,piece.binding,piece.geometry.indices,[skinMaterial,capMaterial],residentSupport?{connectionBuffer:residentSupport.buffer}:{});mesh.material=candidate.gpu.materials;candidate.gpu.captureState();}catch(e){candidate.gpu?.dispose();geometry.dispose();throw e;}
  for(const p of pieces){scene.remove(p.mesh);p.gpu?.dispose();p.mesh.geometry.dispose();}pieces=[candidate];scene.add(mesh);
- if(fallAndLand)residentContact=await createFinitePlaneContact(resident,piece.binding,{ownershipBuffer:candidate.gpu.ownershipBuffer,connectionBuffer:residentSupport?.buffer??resident.bondBuffer()});
+ if(fallAndLand){residentContact=await createFinitePlaneContact(resident,piece.binding,{ownershipBuffer:candidate.gpu.ownershipBuffer,connectionBuffer:residentSupport?.buffer??resident.bondBuffer()});applyFloorContact();await resident.enableFiniteFloor(true);}
 }
 function applyFloorContact(){
  if(!residentContact)return;scene.updateWorldMatrix(true,false);
