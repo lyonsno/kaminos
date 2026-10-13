@@ -745,3 +745,19 @@ test('trusted events that record a failing test outrank a zero exit code', async
   assert.equal(r.outcome, 'fail');
   assert.match(r.signature, /^node:test failing: fails :: Error: hidden$/);
 });
+
+test('a passing file whose diagnostic begins with Error stays a pass; only failing tests outrank a zero exit', async t => {
+  const body = "import test from 'node:test';\ntest('ok', t => { t.diagnostic('Error budget within limits'); });\n";
+  const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  assert.equal((await run(f)).ok, true);
+  assert.equal((await readReport(f)).results[0].outcome, 'pass');
+});
+
+test('a compared string holding a machine-local path is displayed normalized, not cut before normalization', async t => {
+  const body = "import test from 'node:test';\nimport assert from 'node:assert/strict';\ntest('path', () => { assert.equal(process.cwd() + '/tests/fixtures/deep/er/still/deeper/file.json', 'elsewhere'); });\n";
+  const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  await run(f);
+  const s = (await readReport(f)).results[0].signature;
+  assert.match(s, /actual='<root>\/tests\/fixtures\/deep\/er\/still\/deeper\/file\.json'/);
+  assert.doesNotMatch(s, /\/private\/|\/var\/folders|\/tmp\/|\/Users\//);
+});

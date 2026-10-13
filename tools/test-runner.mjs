@@ -278,10 +278,12 @@ function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv
       } else if (outcome === 'pass' && testsStarted) {
         // Exiting zero before the summary is not a pass; nothing says the
         // tests finished. Trusted events that record a failing test outrank
-        // the exit code too: an exit handler can reset it.
+        // the exit code too: an exit handler can reset it. Diagnostics the
+        // reporter took for uncaught errors do not, on their own: a test may
+        // emit a diagnostic that begins with Error and still pass.
         const check = nodeTestSignature(events ?? '', { root, childPid: child?.pid, exitCode: fields.exitCode });
         if (events === null || check.unsigned) { outcome = 'unsigned-failure'; unsigned = events === null ? 'tests started, the process exited zero, and no events were written' : check.unsigned; }
-        else if (signatureEntries(check.signature)) { outcome = 'fail'; signature = check.signature; }
+        else if (signatureEntries(check.signature)?.some(e => !e.startsWith('uncaught :: '))) { outcome = 'fail'; signature = check.signature; }
       }
       resolve({ file, kind, executable, durationMs: Date.now() - started, log: logPath, events: events !== null ? eventsPath : null, signature, ...fields, outcome,
         ...(unsigned ? { unsigned } : {}) });

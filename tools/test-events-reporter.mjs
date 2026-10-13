@@ -94,7 +94,7 @@ function describeError(cause) {
 // rendered by util.inspect as they are, whatever realm or class they come
 // from; stack frames are removed from the rendering, so Error values read as
 // name and message wherever they sit, and machine-local paths are normalized
-// before anything is cut, so the detail reads the same on every machine.
+// before the display is cut, so the detail reads the same on every machine.
 function assertionDetail(cause) {
   if (cause.code !== 'ERR_ASSERTION' || !cause.generatedMessage) return null;
   const operator = String(cause.operator || 'assert');
@@ -117,7 +117,7 @@ function assertionLocation(cause) {
 }
 
 function short(value) {
-  const text = render(value, { depth: 1, breakLength: Infinity, compact: true, maxStringLength: 60, maxArrayLength: 4, sorted: true });
+  const text = render(value, { depth: 1, breakLength: Infinity, compact: true, maxStringLength: 20000, maxArrayLength: 4, sorted: true });
   return text.length > 100 ? `${text.slice(0, 97)}...` : text;
 }
 
