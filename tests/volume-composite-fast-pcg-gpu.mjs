@@ -1,3 +1,4 @@
+// kaminos-test: manual — native Dawn WebGPU script; takes the webgpu module path and an output directory
 // Small native numerical conformance for the fast composite solve, in both
 // preconditioner modes, against the CPU reference and against the PCG
 // candidate on the same inputs. Not a benchmark or a live flame witness.

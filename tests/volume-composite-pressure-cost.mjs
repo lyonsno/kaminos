@@ -1,3 +1,4 @@
+// kaminos-test: manual — native Dawn WebGPU script; takes the webgpu module path and an output directory
 // Explicit provisional pressure-only cost comparison. Run via Greenroom.
 // Wall timings include JS encoding, submission and queue completion, not readback.
 import assert from 'node:assert/strict';

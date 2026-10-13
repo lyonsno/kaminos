@@ -1,3 +1,4 @@
+// kaminos-test: manual — native Dawn WebGPU script; takes the webgpu module path and an output directory
 // Small native numerical conformance; not a benchmark or live flame witness.
 import assert from 'node:assert/strict';
 import {mkdirSync,existsSync,readFileSync,writeFileSync} from 'node:fs';
