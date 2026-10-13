@@ -15,7 +15,7 @@ function source(start, end) {
 function context() {
   const scene = new THREE.Scene();
   const state = vm.createContext({
-    THREE, checkedSceneLightRecord, sceneLightRuntimeRecipe, structuredClone,
+    THREE, checkedSceneLightRecord, sceneLightRuntimeRecipe, structuredClone,viewportHelpersVisible:true,sceneSelection:{ids:[],activeId:null},
     scene, sceneObjects: [], sceneGroups: [], rimLight: new THREE.SpotLight(), RIM_LIGHT_ID: '@rim-light',
     window: { _kaminosDirty() {} }, document: { getElementById: () => ({ checked: false, classList: { remove() {} } }) },
     sceneMutationToken: 0, greenroomPreviewGeneration: 0, greenroomPreviewState: null,

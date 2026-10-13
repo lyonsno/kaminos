@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="./sam-image-tools.css">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
+/* Horizontal trackpad gestures belong to the editor, never browser history. */
+html, body { overscroll-behavior-x: none; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
 
 /* Sidebar */
@@ -743,6 +745,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
   body.composition-authoring #transform-bar { left: 8px; transform: none; width: calc(100% - 16px); max-width: none; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; }
   body.composition-authoring #transform-bar > * { flex-shrink: 0; }
 }
+#authoring-viewport-settings > div { min-width:250px; max-height:calc(100vh - 120px); overflow-y:auto; }
+.viewport-display-group { border:1px solid #364044; border-radius:4px; margin:8px 0; padding:5px 8px; }
+.viewport-display-group label { display:flex; align-items:center; gap:8px; }
+.viewport-display-group .authoring-number-wrap { width:110px; margin-left:auto; }
+.viewport-display-group input[type="number"] { width:100%; }
+#authoring-viewport-settings small { color:#8f9b9f; margin-left:auto; }
 </style>
 <link rel="stylesheet" href="./authoring-workspace.css">
 </head>
@@ -2309,8 +2317,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div class="slider-row">
       <span class="slider-label">Render Scale</span>
-      <input type="range" id="volume-render-scale" min="0.1" max="0.3" step="0.001" value="0.3" data-effective-value="0.3" data-render-scale-mode="low">
-      <button type="button" class="btn" id="volume-render-scale-full" aria-pressed="false">Full</button>
+      <input type="range" id="volume-render-scale" min="0.1" max="1" step="any" value="0.3" data-effective-value="0.3" data-render-scale-mode="low">
       <span class="slider-val" id="volume-render-scale-val">30.0%</span>
     </div>
     <div class="slider-row">
@@ -2359,14 +2366,14 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row">
       <span class="slider-label">Grid</span>
       <select id="volume-resolution" class="select-input">
-        <option value="32">32×64×32</option>
-        <option value="48">48×96×48</option>
-        <option value="64">64×128×64</option>
-        <option value="96" selected>96×192×96</option>
-        <option value="128">128×256×128</option>
-        <option value="136">136×272×136</option>
-        <option value="140">140×280×140</option>
-        <option value="160">160×320×160</option>
+        <option value="32">32</option>
+        <option value="48">48</option>
+        <option value="64">64</option>
+        <option value="96" selected>96</option>
+        <option value="128">128</option>
+        <option value="136">136</option>
+        <option value="140">140</option>
+        <option value="160">160</option>
       </select>
       <span class="slider-val" id="volume-resolution-val">96×192×96</span>
     </div>
@@ -3277,6 +3284,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button type="button" role="menuitem" data-scene-add="sphere">Sphere</button>
         <button type="button" role="menuitem" data-scene-add="cylinder">Cylinder</button>
         <button type="button" role="menuitem" data-scene-add="annular">Annular plate</button>
+        <button type="button" role="menuitem" data-scene-add="camera">Camera</button>
         <div class="scene-menu-heading">Light</div>
         <button type="button" role="menuitem" data-scene-add="spot-light">Spot</button>
         <div class="scene-menu-heading">Emitter</div>
@@ -3691,7 +3699,9 @@ import { createSceneGI } from './scene-gi.mjs';
 import { resolveSceneGISettings } from './scene-gi-settings.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createFlameAuthoring, createFlameInspector } from './flame-authoring.mjs';
+import {collisionVoxelInstances} from './scene-collision-debug.mjs';
+import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID} from './scene-fire-domain.mjs';
+import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue } from './flame-authoring.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
@@ -3702,13 +3712,16 @@ import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
   defaultFlameEmitterPose, normalizeFlameEmitterPose, createFlameEmitterHandle,
   updateFlameEmitterSupportOutline, flameDomainTranslationForAcceptedPose,
-  flamePoseInDomain, flamePoseToDomain, normalizeFlameDomainTranslation } from './scene-flame-emitter.mjs';
+  flamePoseInDomain, flamePoseToDomain, normalizeFlameDomainTranslation, normalizeFlameDomainScale,
+  flamePoseFromImmersedControls, immersedControlsForFlamePose, immersedRadiusBounds,effectiveFlameDomainControls } from './scene-flame-emitter.mjs';
 let flameEmitterPose = defaultFlameEmitterPose(), applyFlameEmitterPose = null;
 let flameEmitterInjectionSuspended = false;
 let authoredFlamePresent = true;
 const proceduralMeshes = new Map(), groupProxies = new Map(), groupEditTargets = new Set();
 let flameDomainGuide = null;
 let flameDomainTranslation = [0, 0, 0];
+let flameDomainScale = 1, flameDomainFollowSource = true;
+let flameDomainDraft = null, flameDomainProxy = null;
 import {
   VOLUME_EMITTER_INLET_PROFILES,
   VOLUME_EMITTER_SOURCE_LAWS,
@@ -3838,6 +3851,68 @@ function isAuthoredKilnCollisionRoute(params = new URLSearchParams(window.locati
   return params.get('volume_collision') === 'kiln';
 }
 
+function writeKilnCollisionState({enabled}) {
+  if(typeof enabled!=='boolean')throw Error('Kiln collision requires a boolean');
+  if(!isFireLightFieldRoute())throw Error('Kiln collision requires the authored flame scene');
+  const url=new URL(location.href),hash=new URLSearchParams(url.hash.slice(1));
+  hash.set('volume_collision',enabled?'kiln':'off');url.hash=hash.toString();
+  history.replaceState(history.state,'',url);
+  if(activeSceneComposition)activeSceneComposition.route.volume_collision=enabled?'kiln':'off';
+  syncKilnCollisionControl();window._kaminosDirty?.();
+}
+
+let collisionVoxelMesh=null,collisionVoxelRevision=undefined,collisionVoxelVisible=false;
+const sceneColliderCollection=createSceneColliderCollection(THREE);
+function syncCollisionVoxelView() {
+  if(!collisionVoxelVisible) {if(collisionVoxelMesh)collisionVoxelMesh.visible=false;return;}
+  const snapshot=volumePrototype?.readSceneCollisionMask?.(collisionVoxelRevision);
+  if(snapshot) {
+    collisionVoxelRevision=snapshot.revision;
+    if(collisionVoxelMesh){scene.remove(collisionVoxelMesh);collisionVoxelMesh.geometry.dispose();collisionVoxelMesh.material.dispose();collisionVoxelMesh=null;}
+    if(snapshot.cells) {
+      const {centres,size}=collisionVoxelInstances(snapshot);
+      collisionVoxelMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(size*.94,size*.94,size*.94),new THREE.MeshBasicMaterial({color:0x46d7dd,transparent:true,opacity:.35,depthWrite:false,depthTest:false}),centres.length);
+      const matrix=new THREE.Matrix4();centres.forEach((p,i)=>collisionVoxelMesh.setMatrixAt(i,matrix.makeTranslation(...p)));
+      collisionVoxelMesh.instanceMatrix.needsUpdate=true;collisionVoxelMesh.frustumCulled=false;
+      collisionVoxelMesh.userData.kaminosEditorOnly=true;collisionVoxelMesh.renderOrder=999;
+      scene.add(collisionVoxelMesh);
+    }
+    window._kaminosDirty?.();
+  }
+  if(collisionVoxelMesh)collisionVoxelMesh.visible=!selectionCaptureSuspended;
+}
+function syncKilnCollisionControl(collision=volumePrototype?.debugState?.().sceneCollision) {
+  const input=document.getElementById('kiln-collision-enabled'),status=document.getElementById('kiln-collision-status');
+  if(!input||!status)return;
+  const enabled=isAuthoredKilnCollisionRoute();input.checked=enabled;
+  const text=!enabled?'Scene collisions off'
+    : !sceneObjects.some(record=>record.collision?.enabled)?'No objects marked as obstacles'
+    : !collision?.requested?'Updating collision…'
+    : collision.effective==='mesh-voxel-solid'?`Active · ${collision.solidCellCount.toLocaleString()} solid cells`
+    : `Unavailable · ${collision.reason||'waiting for obstacle geometry'}`;
+  if(status.textContent!==text)status.textContent=text;
+  const voxelResolution=document.getElementById('kiln-voxel-resolution');
+  if(voxelResolution){const dims=volumePrototype?.debugState?.().simGridDimensions;voxelResolution.textContent=Array.isArray(dims)&&dims.length===3&&dims.every(n=>Number.isInteger(n)&&n>0)?`${dims.join('×')} · tied to simulation`:'Awaiting simulation grid';}
+  syncCollisionVoxelView();
+}
+
+function installKilnCollisionControl(host) {
+  const panel=document.createElement('section');panel.innerHTML='<h3>Collision</h3><label class="slider-row"><span class="slider-label">Scene collisions</span><input type="checkbox" id="kiln-collision-enabled"></label><p id="kiln-collision-status" class="flame-scope" aria-live="polite"></p><label class="slider-row"><span class="slider-label">Show solid voxels</span><input type="checkbox" id="kiln-collision-voxels"></label><label class="slider-row"><span class="slider-label">Voxel resolution</span><output id="kiln-voxel-resolution" class="flame-scope"></output></label><p class="flame-scope">This fire solver uses the simulation grid for collisions. Cyan voxels show the installed solid mask, including the source backing wall when enabled.</p>';
+  host.append(panel);
+  document.getElementById('kiln-collision-voxels').onchange=event=>{collisionVoxelVisible=event.target.checked;syncCollisionVoxelView();window._kaminosDirty?.();};
+  const edits=scenePlacementTools.edits;
+  edits.register('@kiln-collision',{read:()=>({enabled:isAuthoredKilnCollisionRoute()}),write:writeKilnCollisionState,
+    check:value=>{if(typeof value.enabled!=='boolean')throw Error('Kiln collision requires a boolean');return {enabled:value.enabled};}});
+  window.kaminosSceneCollision={read:()=>({enabled:isAuthoredKilnCollisionRoute(),runtime:volumePrototype?.debugState?.().sceneCollision??null}),
+    set:enabled=>edits.apply('@kiln-collision',{enabled},'Set scene collisions'),
+    showVoxels:enabled=>{collisionVoxelVisible=!!enabled;document.getElementById('kiln-collision-voxels').checked=collisionVoxelVisible;syncCollisionVoxelView();window._kaminosDirty?.();},
+    readMask:()=>volumePrototype?.readSceneCollisionMask?.()??null};
+  document.getElementById('kiln-collision-enabled').addEventListener('change',event=>{
+    try {window.kaminosSceneCollision.set(event.target.checked);}catch(error){syncKilnCollisionControl();setInfo(error.message);}
+  });
+  syncKilnCollisionControl();
+}
+
 function isFireLightFieldIsolateRoute(params = fireLightFieldRouteParams()) {
   return params.get('volume_light_field_isolate') === '1';
 }
@@ -3885,6 +3960,7 @@ import {
 } from './scene-persistence-core.js';
 import { COMPOSITION_SCHEMA, compositionRestoreUrl, captureComposedCanvases } from './scene-authoring.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,checkedGeometry,createProceduralMesh,GEOMETRY_DEFAULTS} from './scene-geometry.mjs';
+import {canCollideWithFire,checkedObjectCollision,createSceneColliderCollection} from './scene-collider.mjs';
 import {GROUP_TYPE,checkedGroupPose,checkedGroupEdit,moveGroupMembers,identityGroupPose} from './scene-group.mjs';
 import { BURNER_DEFAULTS, normalizeBurner, burnerSource, createAnnularBurner } from './annular-burner.mjs';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -4005,9 +4081,26 @@ import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './sce
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
+import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-camera-views.mjs';
+import {installCameraViewsPanel} from './authoring-camera-views.mjs';
+import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,createSceneCameras} from './scene-camera.mjs';
+import {installCameraAuthoring} from './authoring-cameras.mjs';
+import {installViewPie} from './view-navigation-pie.mjs';
 import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, checkedSceneLightRecord, sceneLightRuntimeRecipe } from './scene-rim-light.mjs';
 
+import {checkedPose} from './scene-edit-session.mjs';
+import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.mjs';
+import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
+import {createImagePreparation} from './authoring-image-preparation.mjs';
+import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
+import {checkedViewportDisplay,viewportShortcut} from './viewport-display-settings.mjs';
+import {styleHelperLines} from './scene-helper-lines.mjs';
+import {createSelectionFeedback} from './scene-selection-feedback.mjs';
+import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
+
 let authoringWorkspace = null;
+let cameraViews=null,cameraViewsPanel=null;
+let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null,viewPie=null;
 let restoringSceneLight=false;
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -4052,23 +4145,30 @@ function escapeHtml(s) {
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let viewportGizmosVisible=true;
+let viewportDisplay=checkedViewportDisplay();
+let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null;
 function attachViewportGizmo(target) {
+  if(selectionTransforms&&sceneSelection.ids.length&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat')target=selectionTransformProxy();
   transformControls.attach(target);
   transformControls.getHelper().visible=viewportGizmosVisible;
   transformControls.enabled=viewportGizmosVisible;
 }
+function syncViewportDisplayControls() {
+ for(const key of ['overlays','gizmos','outlines','bounds','helpers','domains','emitters','hints']){const input=document.getElementById('viewport-show-'+key);if(input)input.checked=viewportDisplay[key];}
+ for(const key of ['outlineWidth','outlineOpacity','domainWidth','domainOpacity','emitterWidth','emitterOpacity']){const input=document.getElementById('viewport-'+key);if(input&&document.activeElement!==input)input.value=String(viewportDisplay[key]);}
+}
 window.kaminosViewportSettings={
-  read:()=>({gizmos:viewportGizmosVisible,hints:!document.getElementById('navigation-hint').hidden}),
-  set({gizmos=viewportGizmosVisible,hints}={}) {
-    if(gizmos!==viewportGizmosVisible)scenePlacementTools?.finish(false);
-    viewportGizmosVisible=!!gizmos;
-    if(transformControls){transformControls.enabled=viewportGizmosVisible;transformControls.getHelper().visible=viewportGizmosVisible && !!transformControls.object;}
-    if(hints!==undefined)document.getElementById('navigation-hint').hidden=!hints;
-    document.getElementById('viewport-show-gizmos')?.toggleAttribute('checked',viewportGizmosVisible);
-    const checkbox=document.getElementById('viewport-show-gizmos');if(checkbox)checkbox.checked=viewportGizmosVisible;
-    return this.read();
-  },
+ read:()=>({...viewportDisplay}),
+ set(patch={}) {
+  const next=checkedViewportDisplay({...viewportDisplay,...patch});
+  if(next.gizmos!==viewportGizmosVisible)scenePlacementTools?.finish(false);
+  viewportDisplay=next;viewportGizmosVisible=next.gizmos;viewportBoundsVisible=next.overlays&&next.bounds;viewportHelpersVisible=next.overlays&&next.helpers;
+  if(transformControls){transformControls.enabled=viewportGizmosVisible;transformControls.getHelper().visible=viewportGizmosVisible&&!!transformControls.object;}
+  document.getElementById('navigation-hint').hidden=!(next.overlays&&next.hints);
+  syncEditorHelperVisibility();syncViewportDisplayControls();scenePlacementTools?.draw();window._kaminosDirty?.();return this.read();
+ },
 };
+
 let scenePlacementTools = null;
 let sceneControlHistory = null;
 const authoringControlSessions = [];
@@ -5504,7 +5604,8 @@ function getVolumePrimitiveState() {
 function volumePrimitivesInFlameDomain() {
   return volumePrimitives.map(primitive => {
     const local = cloneVolumePrimitive(primitive);
-    local.transform.position = local.transform.position.map((value, index) => value - flameDomainTranslation[index]);
+    local.transform.position = local.transform.position.map((value, index) => (value - flameDomainTranslation[index]) / flameDomainScale);
+    local.transform.scale = local.transform.scale.map(value => value / flameDomainScale);
     return local;
   });
 }
@@ -5648,6 +5749,7 @@ function captureAuthoredSceneStateForPreview() {
     activeSceneObjectId,
     activeSceneGroupId,
     activeSceneFieldId,
+    sceneSelection:structuredClone(sceneSelection),
     currentMesh,
     currentSceneFile,
     sceneSaveBlockedByFailedRestore,
@@ -5670,7 +5772,7 @@ function setSceneObjectMounted(entry, mounted) {
 function detachAuthoredSceneForPreview(authored) {
   sceneMutationToken++;
   for (const entry of authored.sceneObjects) setSceneObjectMounted(entry, false);
-  sceneObjects = [];
+  sceneObjects = [];sceneSelection={ids:[],activeId:null};
   if(rimLight){document.getElementById('rim-enabled').checked=false;updateRimLight();}
   sceneGroups = [];
   activeSceneObjectId = null;
@@ -5737,17 +5839,14 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
   const analytic = authoredFlamePresent && !!scene && isFireLightFieldRoute() && !!applyFlameEmitterPose
     && window.__kaminosVolumeEmitterReceipt?.effective?.family !== 'cluster';
   if (entry && !analytic) {
-    if (flameDomainGuide) {
-      scene.remove(flameDomainGuide);
-      disposeObjectTree(flameDomainGuide);
-      flameDomainGuide = null;
-    }
     if (authoredFlamePresent) { scenePlacementTools?.finish(false); scenePlacementTools?.edits.discard(edit => edit.id === FLAME_EMITTER_ID); }
     if (activeSceneObjectId === FLAME_EMITTER_ID) clearActiveSceneObjectSelection();
     scene.remove(entry.object);
     disposeObjectTree(entry.object);
     sceneObjects = sceneObjects.filter(record => record.id !== FLAME_EMITTER_ID);
+    pruneSceneGroups();pruneSceneSelection();
     renderSceneObjectList();
+    refreshFlameDomainPreview();
     return null;
   }
   if (!entry && analytic) {
@@ -5760,12 +5859,35 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
       fileName: 'Flame source', label: metadata.label || 'Flame source' });
     if (previous && previous !== FLAME_EMITTER_ID) setActiveSceneObject(previous);
   }
-  if (entry && !flameDomainGuide) {
-    // The local grid spans x/z [-1, 1] and y [-1, flameDomainTopY()].
-    // This guide follows its authored world translation.
-    flameDomainGuide = new THREE.Box3Helper(new THREE.Box3(
-      new THREE.Vector3(-1, -1, -1).add(new THREE.Vector3(...flameDomainTranslation)),
-      new THREE.Vector3(1, flameDomainTopY(), 1).add(new THREE.Vector3(...flameDomainTranslation))), 0x5bd8f5);
+  refreshFlameDomainPreview();
+  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
+  if (entry) updateFlameEmitterSupportOutline(THREE, entry.object,
+    window.__kaminosVolumeEmitterReceipt?.requested);
+  if (entry) {applySceneObjectTransformState(entry.object, flameEmitterPose);styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});entry.object.visible=!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;}
+  return entry?.object || null;
+}
+
+function acceptedFlameDomainPose() {
+  return {position:[flameDomainTranslation[0],flameDomainTranslation[1]+flameDomainScale,flameDomainTranslation[2]],rotation:[0,0,0],scale:[flameDomainScale,flameDomainScale,flameDomainScale]};
+}
+function checkedFlameDomainPose(value) {
+  const pose=normalizeFlameEmitterPose(value);
+  if(pose.rotation.some(value=>value!==0))throw Error('The simulation box stays aligned with world axes; use Move or uniform Scale');
+  return pose;
+}
+function domainTransformForPose(value) {
+  const pose=checkedFlameDomainPose(value),scale=pose.scale[0];
+  return {translation:[pose.position[0],pose.position[1]-scale,pose.position[2]],scale};
+}
+function flameDomainEditObject() {
+  if(!flameDomainProxy){flameDomainProxy=new THREE.Object3D();flameDomainProxy.userData.kaminosEditorHelper=true;flameDomainProxy.userData.kaminosSceneObject={label:'Fire & smoke domain'};scene.add(flameDomainProxy);}
+  applySceneObjectTransformState(flameDomainProxy,flameDomainDraft||acceptedFlameDomainPose());
+  return flameDomainProxy;
+}
+function refreshFlameDomainPreview() {
+  // Bounds belong to the simulation field, including a field with no emitter.
+  if (!flameDomainGuide && scene && activeSceneComposition) {
+    flameDomainGuide = new THREE.Box3Helper(new THREE.Box3(), 0x5bd8f5);
     flameDomainGuide.name = 'Flame simulation bounds';
     flameDomainGuide.userData.kaminosEditorHelper = true;
     flameDomainGuide.material.transparent = true;
@@ -5774,46 +5896,55 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
     flameDomainGuide.renderOrder = 1000;
     scene.add(flameDomainGuide);
   }
-  refreshFlameDomainGuideBox();
-  if (flameDomainGuide) flameDomainGuide.visible = activeSceneObjectId === FLAME_EMITTER_ID || activeSceneFieldId==='flame-field';
-  if (entry) updateFlameEmitterSupportOutline(THREE, entry.object,
-    window.__kaminosVolumeEmitterReceipt?.requested);
-  if (entry) applySceneObjectTransformState(entry.object, flameEmitterPose);
-  return entry?.object || null;
+  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
+  const pose=flameDomainDraft||acceptedFlameDomainPose(),{translation,scale}=domainTransformForPose(pose);
+  if(flameDomainGuide)flameDomainGuide.box.set(new THREE.Vector3(-scale,-scale,-scale).add(new THREE.Vector3(...translation)),new THREE.Vector3(scale,flameDomainTopY()*scale,scale).add(new THREE.Vector3(...translation)));
+  if(flameDomainGuide)styleHelperLines(flameDomainGuide,{width:viewportDisplay.domainWidth,opacity:viewportDisplay.domainOpacity});
+  if(flameDomainProxy&&!transformControls?.dragging)applySceneObjectTransformState(flameDomainProxy,pose);
+  for(const [key,value] of [['x',pose.position[0]],['y',pose.position[1]],['z',pose.position[2]],['scale',pose.scale[0]]]){const input=document.getElementById('flame-domain-'+key);if(input&&document.activeElement!==input)input.value=String(value);}
+  const size=document.getElementById('flame-domain-size');if(size)size.textContent=`World size ${[2,flameDomainTopY()+1,2].map(n=>Number((n*pose.scale[0]).toPrecision(3))).join(' × ')} · cell count unchanged`;
+  window._kaminosDirty?.();
 }
-
-// The simulation box spans x/z [-1, 1] and y [-1, -1 + 2 × height/width] in
-// its local frame (grid height control, report §34). The status writer
-// publishes the effective dimensions on window so the guide follows a taller
-// box; until it has, the authored twice-the-width top is y = 3.
+function writeFlameDomainPreview(value) {
+  flameDomainDraft=checkedFlameDomainPose(value);refreshFlameDomainPreview();
+}
 function flameDomainTopY() {
   const dims = window.__kaminosVolumeGridPreview?.dimensions ?? window.__kaminosVolumeGridDimensions;
   return Array.isArray(dims) && dims.length === 3 && dims[0] > 0 ? -1 + 2 * dims[1] / dims[0] : 3;
 }
-function refreshFlameDomainGuideBox() {
-  if (!flameDomainGuide) return;
-  flameDomainGuide.box.set(
-    new THREE.Vector3(-1, -1, -1).add(new THREE.Vector3(...flameDomainTranslation)),
-    new THREE.Vector3(1, flameDomainTopY(), 1).add(new THREE.Vector3(...flameDomainTranslation)));
-}
+function refreshFlameDomainGuideBox(){refreshFlameDomainPreview();}
 
-function setFlameDomainTranslation(next) {
-  if (next.every((value, index) => value === flameDomainTranslation[index])) return false;
-  const previous = flameDomainTranslation;
-  flameDomainTranslation = next;
+function setFlameDomainTranslation(next, scale = flameDomainScale) {
+  next=normalizeFlameDomainTranslation(next);scale=normalizeFlameDomainScale(scale);
+  if (scale===flameDomainScale && next.every((value, index) => value === flameDomainTranslation[index])) return false;
+  const previous = flameDomainTranslation, previousScale=flameDomainScale;
+  flameDomainTranslation = next;flameDomainScale=scale;
   try {
-    volumePrototype?.relocateOrdinaryDomain?.(next, volumePrimitivesInFlameDomain());
+    volumePrototype?.relocateOrdinaryDomain?.(next, volumePrimitivesInFlameDomain(), scale);
   } catch (error) {
-    flameDomainTranslation = previous;
-    volumePrototype?.relocateOrdinaryDomain?.(previous, volumePrimitivesInFlameDomain());
+    flameDomainTranslation = previous;flameDomainScale=previousScale;
+    volumePrototype?.relocateOrdinaryDomain?.(previous, volumePrimitivesInFlameDomain(), previousScale);
     throw error;
   }
+  flameDomainDraft=null;refreshFlameDomainPreview();
   return true;
+}
+function settleAuthoredFlameDomain(event) {
+  const next=domainTransformForPose(event.after),previous=[...flameDomainTranslation],previousScale=flameDomainScale;
+  if(!volumePrototype?.relocateOrdinaryDomain || !applyFlameEmitterPose)throw Error('The flame simulation is not mounted');
+  if(authoredFlamePresent&&window.__kaminosVolumeEmitterReceipt?.requested?.sourceLaw==='immersed-source')immersedControlsForFlamePose(window.__kaminosVolumeEmitterReceipt.requested,flamePoseToDomain(flameEmitterPose,next.translation,next.scale),false);
+  const analytic = window.__kaminosVolumeEmitterReceipt?.effective?.family !== 'cluster';
+  try {setFlameDomainTranslation(next.translation,next.scale);if(analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);}
+  catch(error){setFlameDomainTranslation(previous,previousScale);if(analytic)writeAuthoredFlameEmitterPose(flameEmitterPose);throw error;}
+  flameDomainFollowSource=event.operation==='commit'?false:event.afterContext;
+  flameDomainDraft=null;refreshFlameDomainPreview();
+  setInfo(flameEmitterInjectionSuspended?'Simulation box changed; field restarted · emitter outside box, injection paused':'Simulation box changed; field restarted · emitter stays in place');
 }
 
 function settleFlameDomainForPose(pose, targetDomain = null) {
+  if(!targetDomain&&!flameDomainFollowSource)return false;
   const next = targetDomain || flameDomainTranslationForAcceptedPose(pose, flameDomainTranslation,
-    { injectionSuspended: flameEmitterInjectionSuspended });
+    { injectionSuspended: flameEmitterInjectionSuspended,scale:flameDomainScale,shape:effectiveFlameDomainControls(readVolumeControls(),volumePrototype) });
   const previous = [...flameDomainTranslation];
   if (!setFlameDomainTranslation(next)) {
     setInfo(flameEmitterInjectionSuspended
@@ -5840,7 +5971,7 @@ function writeAuthoredFlameEmitterPose(value) {
   if (window.__kaminosVolumeEmitterReceipt?.effective?.family === 'cluster') {
     throw new Error('Choose an analytic flame emitter before placing its source');
   }
-  const originInsideGrid = authoredFlamePresent && flamePoseInDomain(next, flameDomainTranslation);
+  const originInsideGrid = authoredFlamePresent && flamePoseInDomain(next, flameDomainTranslation, flameDomainScale,effectiveFlameDomainControls(readVolumeControls(),volumePrototype));
   if (originInsideGrid) {
     try {
       applyFlameEmitterPose(next, { sourceEnabled: true });
@@ -5870,6 +6001,7 @@ window.kaminosFlameEmitterState = () => ({
   pose: structuredClone(flameEmitterPose),
   domain: 'translated-world-aligned-volume',
   domainTranslation: [...flameDomainTranslation],
+  domainScale: flameDomainScale, followSource: flameDomainFollowSource,
   source: window.__kaminosVolumeEmitterReceipt?.compilerReceipt?.descriptor || null,
   effectiveMode: window.__kaminosVolumeEmitterReceipt?.effective?.sourceMode || null,
   injectionSuspended: flameEmitterInjectionSuspended,
@@ -6461,7 +6593,8 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
   modelSourceType = authored.modelSourceType;
   glbFileName = authored.glbFileName;
   setVolumePrimitivesState(authored.volumePrimitives);
-  if (authored.activeSceneFieldId) window.selectSceneField(authored.activeSceneFieldId);
+  if(authored.sceneSelection?.ids.length)setSceneSelection(authored.sceneSelection.ids,authored.sceneSelection.activeId);
+  else if (authored.activeSceneFieldId) window.selectSceneField(authored.activeSceneFieldId);
   else if (activeSceneGroupId) setActiveSceneGroup(activeSceneGroupId);
   else setActiveSceneObject(activeSceneObjectId);
   if (!sceneObjects.length) {
@@ -6783,7 +6916,7 @@ async function resetSelectedSplatCorrection() {
 
 function updateTransformInspector() {
   syncLevelingButton();
-  if (flameDomainGuide) flameDomainGuide.visible = activeSceneObjectId === FLAME_EMITTER_ID || activeSceneFieldId==='flame-field';
+  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   const inspector = document.getElementById('transform-inspector');
   const empty = document.getElementById('transform-inspector-empty');
   const fields = document.getElementById('transform-inspector-fields');
@@ -6791,12 +6924,14 @@ function updateTransformInspector() {
   const entry = selectedPlacementEntry();
   inspector.dataset.selectedObjectId = entry?.id || '';
   inspector.dataset.selectedGroupId = activeSceneGroupId || '';
+  inspector.dataset.selectionCount=String(sceneSelection.ids.length);
   inspector.dataset.selectedFieldId=activeSceneFieldId||'';
   inspector.hidden=!!activeSceneFieldId;
   empty.hidden = !!entry;
   fields.hidden = !entry;
   setTransformInspectorFieldsDisabled(!entry);
   updateSplatCorrectionPanel(entry);
+  syncEditorHelperVisibility();syncSelectionInspector();
   if (!entry && activeSceneGroupId) {
     empty.textContent = `Group selected: ${sceneGroupDisplayLabel(selectedSceneGroupEntry())}`;
   } else if (!entry) {
@@ -6825,6 +6960,7 @@ function updateTransformInspector() {
       input.value = String(value);
     }
   }
+  if(selectionProxy&&sceneSelection.ids.length&&!transformControls?.dragging)selectionTransformProxy();
   scenePlacementTools?.draw();
 }
 
@@ -6946,7 +7082,7 @@ window.kaminosSetCameraDebugPose = function(pose = {}) {
 function renderSceneObjectRow(record, options = {}) {
   const active = record.id === activeSceneObjectId;
   const grouped = options.grouped ? ' grouped' : '';
-  const rowClass = active ? `scene-object-row active${grouped}` : `scene-object-row${grouped}`;
+  const rowClass = active ? `scene-object-row active${grouped}` : `scene-object-row${sceneSelectionMembers().includes(record.id)?' selected':''}${grouped}`;
   const label = sceneObjectDisplayLabel(record);
   const typeLabel = record.type || 'object';
   const reloadability = sceneObjectReloadabilityLabel(record);
@@ -6969,7 +7105,7 @@ function renderSceneObjectRow(record, options = {}) {
 
 function renderSceneGroupRow(group) {
   const active = group.id === activeSceneGroupId;
-  const rowClass = active ? 'scene-group-row active' : 'scene-group-row';
+  const rowClass = `scene-group-row ${active?'active':sceneSelection.ids.includes('@group:'+group.id)?'selected':''}`;
   const label = sceneGroupDisplayLabel(group);
   return `
     <div class="${rowClass}" data-scene-group-id="${escapeHtml(group.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
@@ -7031,6 +7167,7 @@ function renderSceneObjectList() {
 }
 
 function clearActiveSceneObjectSelection() {
+  sceneSelection={ids:[],activeId:null};updateSelectionFeedback();
   if (!burnerGraphWriting) scenePlacementTools?.selectionChanged();
   if (splatCorrectionMode) exitSplatCorrectionMode({ revert: false, silent: true });
   activeSceneObjectId = null;
@@ -7046,54 +7183,14 @@ function clearActiveSceneObjectSelection() {
   document.getElementById('transform-bar').classList.remove('visible');
 }
 
-function setActiveSceneObject(id) {
-  if (id !== activeSceneObjectId && !burnerGraphWriting) scenePlacementTools?.selectionChanged();
-  const entry = sceneObjects.find(obj => obj.id === id);
-  if (!entry) {
-    clearActiveSceneObjectSelection();
-    return;
-  }
-  if (splatCorrectionMode && splatCorrectionMode.objectId !== entry.id) {
-    exitSplatCorrectionMode({ revert: false, silent: true });
-  }
-  activeSceneObjectId = entry.id;
-  activeSceneFieldId=null;
-  activeSceneGroupId = null;
-  currentMesh = entry.object;
-  renderSceneObjectList();
-  updateTransformInspector();
-  renderPipelineDock();
-  if (!transformControls) return;
-  transformControls.detach();
-  transformControls.visible = false;
-  if (currentMesh) {
-    attachViewportGizmo(currentMesh);
-    transformControls.visible = true;
-    document.getElementById('transform-bar').classList.add('visible');
-  }
+function setActiveSceneObject(id,options={}) {
+  if(!sceneObjects.some(o=>o.id===id)){clearActiveSceneObjectSelection();return;}
+  if(splatCorrectionMode&&splatCorrectionMode.objectId!==id)exitSplatCorrectionMode({revert:false,silent:true});
+  const next=changeSelection(sceneSelection,id,options);return setSceneSelection(next.ids,next.activeId);
 }
-
-function setActiveSceneGroup(id) {
-  if (!burnerGraphWriting) scenePlacementTools?.selectionChanged();
-  if (splatCorrectionMode) exitSplatCorrectionMode({ revert: false, silent: true });
-  const group = sceneGroups.find(entry => entry.id === id);
-  if (!group) {
-    clearActiveSceneObjectSelection();
-    return;
-  }
-  activeSceneGroupId = group.id;
-  activeSceneFieldId=null;
-  activeSceneObjectId = null;
-  currentMesh = null;
-  renderSceneObjectList();
-  updateTransformInspector();
-  renderPipelineDock();
-  if (transformControls) {
-    transformControls.detach();
-    transformControls.visible = false;
-  }
-  document.getElementById('transform-bar').classList.remove('visible');
-  if (group.type === GROUP_TYPE) { const proxy=groupProxy(group); currentMesh=proxy; if(transformControls)attachViewportGizmo(proxy); if(transformControls)transformControls.visible=true; document.getElementById('transform-bar').classList.add('visible'); }
+function setActiveSceneGroup(id,options={}) {
+  if(!sceneGroups.some(g=>g.id===id)){clearActiveSceneObjectSelection();return;}
+  const next=changeSelection(sceneSelection,'@group:'+id,options);return setSceneSelection(next.ids,next.activeId);
 }
 
 function sceneObjectRecordForDescendant(object) {
@@ -7105,6 +7202,11 @@ function sceneObjectRecordForDescendant(object) {
     }
   }
   return null;
+}
+
+function pickFlameDomainFromViewportPointer(event) {
+  if (!activeSceneComposition || !flameDomainGuide?.visible || selectionCaptureSuspended || !viewportHelpersVisible || !viewportDisplay.domains || viewportDisplay.domainOpacity===0 || !renderer || !camera) return false;
+  return pointerHitsBoxOutline(flameDomainGuide.box, camera, {x:event.clientX,y:event.clientY}, renderer.domElement.getBoundingClientRect());
 }
 
 function pickSceneObjectFromViewportPointer(event) {
@@ -7119,7 +7221,9 @@ function pickSceneObjectFromViewportPointer(event) {
   );
   sceneRaycaster.setFromCamera(scenePointerNdc, camera);
   sceneRaycaster.params.Points.threshold = SCENE_OBJECT_POINT_PICK_THRESHOLD;
-  const hits = sceneRaycaster.intersectObjects(sceneObjects.map(record => record.object), true);
+  const hits = sceneRaycaster.intersectObjects(sceneObjects.filter(record=>record.object.visible).map(record => record.object), true);
+  // Emitter symbols are drawn through geometry. Pick that same visible layer first.
+  for(const hit of hits){const record=sceneObjectRecordForDescendant(hit.object);if(record?.object.visible&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type))return record;}
   for (const hit of hits) {
     const record = sceneObjectRecordForDescendant(hit.object);
     if (record) return record;
@@ -7128,7 +7232,7 @@ function pickSceneObjectFromViewportPointer(event) {
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
-  return !!event.target.closest?.('#authoring-viewport-tools, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu');
+  return !!event.target.closest?.('#authoring-viewport-tools, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie');
 }
 
 function viewportEventIsInsideCanvas(event) {
@@ -7182,11 +7286,17 @@ function handleViewportSelectionClick(event) {
     return;
   }
 
+  if (pickFlameDomainFromViewportPointer(event)) {
+    window.selectSceneField('flame-field');
+    setInfo('Selected: Fire & smoke domain');
+    window._kaminosDirty?.();
+    return;
+  }
   const record = pickSceneObjectFromViewportPointer(event);
   if (record) {
-    setActiveSceneObject(record.id);
+    setActiveSceneObject(record.id,{extend:!!event.shiftKey});
     setInfo(`Selected: ${record.label || record.fileName || record.id}`);
-  } else {
+  } else if(!event.shiftKey) {
     clearActiveSceneObjectSelection();
     setInfo('Selection cleared');
   }
@@ -7388,6 +7498,7 @@ sceneAddMenuPopup.addEventListener('click', event => {
   if ([...Object.keys(GEOMETRY_DEFAULTS),'annular'].includes(action.dataset.sceneAdd)) {
     try{addProceduralMesh(action.dataset.sceneAdd);document.activeElement?.blur?.();}catch(error){setInfo(error.message);}
   }
+  if(action.dataset.sceneAdd==='camera'){try{addAuthoredCamera();}catch(error){setInfo(error.message);}}
   if(action.dataset.sceneAdd==='spot-light'){try{addSceneSpotLight();}catch(error){setInfo(error.message);}}
   if(action.dataset.sceneAdd==='import-mesh')document.getElementById('scene-mesh-file').click();
   if (action.dataset.sceneAdd === 'water-emitter') {
@@ -7439,6 +7550,9 @@ function registerSceneObject(object, metadata = {}) {
     renderCapabilities: metadata.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? null,
     sceneTransform,
+    generation:metadata.generation?structuredClone(metadata.generation):null,
+    assetOrigin:metadata.assetOrigin?structuredClone(metadata.assetOrigin):null,
+    collision:checkedObjectCollision(metadata,Object.hasOwn(metadata,'collision')?metadata.collision:metadata.id==='kiln'&&canCollideWithFire(metadata)?{domainId:'flame-field',enabled:true}:null),
     localLiquidEmitter: metadata.type === LOCAL_LIQUID_EMITTER_TYPE ? structuredClone(metadata.localLiquidEmitter) : null,
   };
   object.userData.kaminosSceneObject = {
@@ -7451,6 +7565,8 @@ function registerSceneObject(object, metadata = {}) {
     createdAt: record.createdAt,
     splat: record.splat,
     image: record.image,
+    generation:record.generation,
+    collision:record.collision,
     renderRoute: record.renderRoute,
     renderCapabilities: record.renderCapabilities,
     renderHandoffSchema: record.renderHandoffSchema,
@@ -7473,12 +7589,13 @@ function registerSceneObject(object, metadata = {}) {
 
 window.selectSceneField=function(id) {
   if(!['flame-field','water-field'].includes(id)||!(id==='flame-field'?activeSceneComposition:localLiquidSetup))throw Error('This simulation field is not present');
-  scenePlacementTools?.selectionChanged();activeSceneFieldId=id;activeSceneObjectId=null;activeSceneGroupId=null;currentMesh=null;
-  transformControls?.detach();document.getElementById('transform-bar').classList.remove('visible');renderSceneObjectList();updateTransformInspector();
+  if(!burnerGraphWriting)scenePlacementTools?.selectionChanged();sceneSelection={ids:[],activeId:null};updateSelectionFeedback();activeSceneFieldId=id;activeSceneObjectId=null;activeSceneGroupId=null;currentMesh=null;
+  transformControls?.detach();if(id==='flame-field'){currentMesh=flameDomainEditObject();if(transformControls){attachViewportGizmo(currentMesh);transformControls.setMode('translate');}}document.getElementById('transform-bar').classList.remove('visible');renderSceneObjectList();updateTransformInspector();
+  refreshFlameDomainPreview();authoringWorkspace?.setContext('object');setInfo(id==='flame-field'?'Selected: Fire & smoke domain':'Selected: Water simulation');
 };
 
-window.selectSceneObject = function(id) {
-  setActiveSceneObject(id);
+window.selectSceneObject = function(id,options={}) {
+  setActiveSceneObject(id,options);
   if (currentMesh) {
     const entry = sceneObjects.find(obj => obj.id === activeSceneObjectId);
     setInfo(`Selected: ${entry?.label || entry?.fileName || activeSceneObjectId}`);
@@ -7486,8 +7603,8 @@ window.selectSceneObject = function(id) {
   }
 };
 
-window.selectSceneGroup = function(id) {
-  setActiveSceneGroup(id);
+window.selectSceneGroup = function(id,options={}) {
+  setActiveSceneGroup(id,options);
   const group = selectedSceneGroupEntry();
   if (group) {
     setInfo(`Selected group: ${sceneGroupDisplayLabel(group)}`);
@@ -7540,6 +7657,8 @@ window.kaminosSceneObjectDebugState = function() {
     surface:record.surface?structuredClone(record.surface):null,
     groupId: record.groupId || null,
     active: record.id === activeSceneObjectId,
+    selected:sceneSelectionMembers().includes(record.id),
+    objectVisible:record.object.visible,
     transform: sceneObjectTransformState(record.object),
     worldBounds: sceneObjectWorldBoundsState(record.object),
     arrival: record.object?.userData?.kaminosAssetArrival ? { ...record.object.userData.kaminosAssetArrival } : null,
@@ -7709,15 +7828,17 @@ window.renameSceneGroup = renameSceneGroup;
 window.createSceneGroupForObjects = createSceneGroupForObjects;
 
 document.querySelector('[data-scene-group-create]')?.addEventListener('click', () => {
-  window.createSceneGroupFromAllObjects();
+  try{groupSelectedObjects();}catch(error){setInfo(error.message);}
 });
 
 function applyAuthoredScenePose(id, transform = {}) {
+  if(id==='@selection-transform')return selectionTransforms.write(transform);
   if(id.startsWith('@assembly:'))id='@group:'+id.slice(10);
   if (id.startsWith('@group:')) return writeGroupPose(id.slice(7), transform);
   const entry = sceneObjects.find(obj => obj.id === id);
   if (!entry) throw new Error(`Scene object "${id}" was not found`);
-  if (entry.type==='light') {
+  if(entry.type===CAMERA_TYPE){mountAuthoredCamera({...serializeSceneObject(entry),transform});}
+  else if (entry.type==='light') {
     if(id===RIM_LIGHT_ID){restoringSceneLight=true;try{setRimLight(sceneLightRuntimeRecipe({...serializeSceneObject(entry),transform}));}finally{restoringSceneLight=false;}}
     mountSceneSpotLight({...serializeSceneObject(entry),transform});
   } else if (entry.type === FLAME_EMITTER_TYPE) {
@@ -7733,7 +7854,9 @@ function applyAuthoredScenePose(id, transform = {}) {
   if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) syncLocalLiquidHostEmitters();
   updateTransformInspector();
   window._kaminosDirty?.();
-  return window.kaminosSceneObjectDebugState().find(record => record.id === id);
+  updateSelectionFeedback();
+  // Interactive previews do not consume debug bounds. The public setter
+  // gathers its requested receipt after the edit completes.
 }
 
 function validateLiveLocalLiquidEmitterPose(entry) {
@@ -10563,7 +10686,7 @@ function releaseUnreferencedSceneMembershipObjects() {
     if (scenePlacementTools?.edits?.hasHistoryEntry(editId)||scenePlacementTools?.edits?.hasHistoryEntry(compoundRetentionTargets.get(id))) continue;
     sceneMembershipRetainedObjects.delete(id);
     if (!sceneObjects.some(record => record.id === id && record.object === entry.object)) {
-      disposeObjectTree(entry.object);
+      if(entry.type==='light')disposeSceneSpotLight(id);else disposeObjectTree(entry.object);
     }
   }
 }
@@ -10581,6 +10704,7 @@ function sceneObjectMembershipSnapshot(id) {
       ? [{ ...group, groupIndex, objectIds: [...group.objectIds] }]
       : []),
     selection: { objectId: activeSceneObjectId, groupId: activeSceneGroupId },
+    activeCameraId:sceneCameras?.read().settings.activeId??null,
   };
 }
 
@@ -10602,6 +10726,7 @@ function checkedSceneObjectMembership(value, id) {
     index: value.index,
     groups: value.groups.map(group => ({ ...structuredClone(group), objectIds: [...group.objectIds] })),
     selection: structuredClone(value.selection),
+    activeCameraId:value.activeCameraId??null,
   };
 }
 
@@ -10626,8 +10751,10 @@ async function restoreSceneObjectMembership(snapshot) {
   let object;
   if (retainedEntry) {
     object = retainedEntry.object;
-    scene.add(object);
     sceneObjects.push(retainedEntry);
+    setSceneObjectMounted(retainedEntry,true);
+    if(retainedEntry.type==='light')mountSceneSpotLight(snapshot.record);
+    if(retainedEntry.type===CAMERA_TYPE)mountAuthoredCamera(snapshot.record);
     sceneNavigation?.prepare(object);
     sceneSaveBlockedByFailedRestore = false;
   } else {
@@ -10637,9 +10764,11 @@ async function restoreSceneObjectMembership(snapshot) {
   if (!entry || object !== entry.object) throw new Error(`Scene object "${record.id}" did not restore its retained identity`);
   applySceneObjectTransformState(object, record.transform);
   applyMaterialStateToObject(object, record.materials);
+  if(canCollideWithFire(entry))writeObjectCollision(entry.id,record.collision);
   sceneObjects.splice(sceneObjects.indexOf(entry), 1);
   sceneObjects.splice(Math.min(index, sceneObjects.length), 0, entry);
   restoreSceneObjectGroups(entry, groups);
+  if(entry.type===CAMERA_TYPE)sceneCameras?.membershipChanged(snapshot.activeCameraId);
   if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) syncLocalLiquidHostEmitters();
   if (selection.groupId && sceneGroups.some(group => group.id === selection.groupId)) {
     setActiveSceneGroup(selection.groupId);
@@ -10680,6 +10809,14 @@ async function recordSceneObjectInsertion(id) {
 
 window.kaminosRecordSceneObjectInsertion = recordSceneObjectInsertion;
 
+function pruneSceneSelection() {
+  const valid=new Set([...sceneObjects.map(o=>o.id),...sceneGroups.map(g=>'@group:'+g.id)]);
+  const ids=sceneSelection.ids.filter(id=>valid.has(id));
+  sceneSelection={ids,activeId:ids.includes(sceneSelection.activeId)?sceneSelection.activeId:ids.at(-1)??null};
+  activeSceneGroupId=sceneSelection.activeId?.startsWith('@group:')?sceneSelection.activeId.slice(7):null;
+  activeSceneObjectId=activeSceneGroupId?null:sceneSelection.activeId;
+}
+
 function removeSceneObjectInternal(id, { recordHistory = true, preserveForMembershipHistory = false } = {}) {
   if (id === FLAME_EMITTER_ID) return window.kaminosBurnerAuthoring.remove(id);
   if (recordHistory && scenePlacementTools?.edits.state().replaying) {
@@ -10696,8 +10833,12 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
     catch (error) { setInfo(error.message); return false; }
   }
   if (recordHistory && !editId) scenePlacementTools?.edits.discard(entry => entry.id === id);
+  const previousActiveGroupId = activeSceneGroupId;
+  const wasActive = activeSceneObjectId === id;
   const [entry] = sceneObjects.splice(index, 1);
-  if(entry.type==='light'){disposeSceneSpotLight(id);if(id===RIM_LIGHT_ID)setRimLight({...readRimLightSettings(),enabled:false});}
+  for (const group of sceneGroups) group.objectIds = group.objectIds.filter(objectId => objectId !== id);
+  pruneSceneGroups();pruneSceneSelection();
+  if(entry.type==='light'){setSceneObjectMounted(entry,false);if(id===RIM_LIGHT_ID)bindingRimHideForRemoval();}
   if (entry.type === LOCAL_LIQUID_EMITTER_TYPE) syncLocalLiquidHostEmitters();
   if (hybridSplatOverlayState.objectId === entry.id) {
     stopHybridSplatOverlay({ silent: true });
@@ -10705,10 +10846,6 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
   if (splatCorrectionMode?.objectId === entry.id) {
     exitSplatCorrectionMode({ revert: false, silent: true });
   }
-  const previousActiveGroupId = activeSceneGroupId;
-  for (const group of sceneGroups) group.objectIds = group.objectIds.filter(objectId => objectId !== id);
-  pruneSceneGroups();
-  const wasActive = activeSceneObjectId === entry.id;
   const activeGroupSurvives = !wasActive
     && previousActiveGroupId
     && sceneGroups.some(group => group.id === previousActiveGroupId);
@@ -10717,15 +10854,17 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
     transformControls.visible = false;
   }
   scene.remove(entry.object);
-  const retainForMembershipHistory = ['glb',PROCEDURAL_MESH_TYPE].includes(entry.type) && (Boolean(editId) || (
+  if(entry.type===CAMERA_TYPE)sceneCameras?.membershipChanged();
+  const retainForMembershipHistory = ['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE].includes(entry.type) && (Boolean(editId) || preserveForMembershipHistory || (
     !recordHistory
     && (scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(id))||scenePlacementTools?.edits.hasHistoryEntry(compoundRetentionTargets.get(id)))
     && (preserveForMembershipHistory || scenePlacementTools.edits.state().replaying)
   ));
   if (retainForMembershipHistory) sceneMembershipRetainedObjects.set(id, entry);
-  else {if(entry.type===PROCEDURAL_MESH_TYPE){proceduralMeshes.get(id)?.dispose();proceduralMeshes.delete(id);}else if(entry.type!=='light')disposeObjectTree(entry.object);}
+  else {if(entry.type===PROCEDURAL_MESH_TYPE){proceduralMeshes.get(id)?.dispose();proceduralMeshes.delete(id);}else if(entry.type==='light')disposeSceneSpotLight(id);else disposeObjectTree(entry.object);}
   const fallback = wasActive ? (sceneObjects[index] || sceneObjects[index - 1] || null) : sceneObjects.find(obj => obj.id === activeSceneObjectId);
-  if (activeGroupSurvives) {
+  if(sceneSelection.ids.length){setSceneSelection(sceneSelection.ids,sceneSelection.activeId);}
+  else if (activeGroupSurvives) {
     setActiveSceneGroup(previousActiveGroupId);
   } else if (wasActive || !fallback) {
     setActiveSceneObject(fallback?.id || null);
@@ -10753,21 +10892,12 @@ function shouldIgnoreSceneObjectDeleteShortcut(e) {
   if (e.metaKey || e.ctrlKey || e.altKey) return true;
   if (!(e.key === 'Delete' || e.key === 'Backspace')) return true;
   if (greenroomPreviewIsActive() || splatCorrectionMode) return true;
-  return !activeSceneObjectId;
+  return !sceneSelection.ids.length;
 }
 
 function removeActiveSceneObjectWithConfirmation() {
-  const entry = sceneObjects.find(obj => obj.id === activeSceneObjectId);
-  if (!entry) return false;
-  const label = entry.label || entry.fileName || entry.id;
-  if (!window.confirm(`Delete "${label}" from the scene?`)) {
-    setInfo('Delete cancelled');
-    return false;
-  }
-  window.removeSceneObject(entry.id);
-  return true;
+  try{return removeSelectedSceneObjects();}catch(error){setInfo(error.message);return false;}
 }
-
 window.addEventListener('keydown', e => {
   if (shouldIgnoreSceneObjectDeleteShortcut(e)) return;
   e.preventDefault();
@@ -11290,6 +11420,8 @@ async function initScene() {
 
   camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
   camera.position.set(0, 0.6, 3);
+  cameraProjectionBase=camera.updateProjectionMatrix.bind(camera);
+  camera.updateProjectionMatrix=()=>{const state=sceneCameras?.state();if(state?.mode!=='camera')camera.aspect=document.getElementById('viewport').clientWidth/document.getElementById('viewport').clientHeight;if(state?.mode==='camera'){camera.aspect=sceneCameras.read().settings.aspect[0]/sceneCameras.read().settings.aspect[1];}cameraProjectionBase();if(state?.mode==='camera'){const vp=document.getElementById('viewport'),frame=state.frame;const clip=new THREE.Matrix4().set(frame.width/vp.clientWidth,0,0,2*(frame.x+frame.width/2)/vp.clientWidth-1,0,frame.height/vp.clientHeight,0,1-2*(frame.y+frame.height/2)/vp.clientHeight,0,0,1,0,0,0,0,1);camera.projectionMatrix.premultiply(clip);camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();}};
 
   try {
     const response = await fetch('/api/runtime-config', { cache: 'no-store' });
@@ -11316,10 +11448,18 @@ async function initScene() {
   const hasCompositionBufferRequirements = compositionModule?.sharedGpuBufferRequirements !== undefined;
   const hasCompositionDeviceAcquisition = compositionModule?.acquireSharedGpuDevice !== undefined;
   const requiresSharedDevice = hasCompositionBufferRequirements || hasCompositionDeviceAcquisition;
+  let generationAdapter=null,generationRequirements={};
+  if(new URLSearchParams(location.hash.slice(1)).get('authoring')==='1'){
+    generationAdapter=await navigator.gpu?.requestAdapter({powerPreference:'high-performance'});
+    if(generationAdapter && Object.entries(assetGenerationBufferRequirements).every(([name,value])=>generationAdapter.limits[name]>=value))generationRequirements=assetGenerationBufferRequirements;
+  }
+  const combinedRequirements={...generationRequirements};
+  for(const [name,value] of Object.entries(compositionModule?.sharedGpuBufferRequirements||{}))combinedRequirements[name]=Math.max(value,combinedRequirements[name]||0);
   window.__kaminosCompositionSetup.phase = 'shared-device-acquisition';
   try {
     sharedGpu = await requestKaminosSharedWebGpuDevice({
-      bufferRequirements: hasCompositionBufferRequirements ? compositionModule.sharedGpuBufferRequirements : {},
+      bufferRequirements: combinedRequirements,
+      adapter:generationAdapter,
       ...(hasCompositionDeviceAcquisition ? {acquireDevice: compositionModule.acquireSharedGpuDevice} : {}),
       // A mounted SAM host borrows the same device, so its kit requirements
       // (all adapter features and limits) compose into the one acquisition.
@@ -11549,7 +11689,9 @@ async function initScene() {
   scenePass.contextNode = builtinAOContext(aoOutput);
   const sceneGI = createSceneGI(scene,camera,aoIntensity);
   let activeSceneDepth = prePassDepth;
-  let rawSceneOutput, sceneEmissiveCamera = null;
+  selectionFeedback=createSelectionFeedback(camera);
+  window.kaminosSelectionFeedbackState=()=>selectionFeedback.state();
+  let rawSceneOutput, outlinedSceneOutput, outlinedCameraOutput, sceneEmissiveCamera = null;
   const giOutputGraphs = new Map();
   function rebuildSceneGIOutput() {
     const combined = sceneGISettings.mode === 'combined';
@@ -11560,8 +11702,8 @@ async function initScene() {
     const graphKey = sceneGISettings.mode;
     const cached = giOutputGraphs.get(graphKey);
     if (cached) {
-      ({rawSceneOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
-      renderPipeline.outputNode = rawSceneOutput;
+      ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
+      renderPipeline.outputNode = outlinedSceneOutput;
       renderPipeline.outputColorTransform = true;
       renderPipeline.needsUpdate = true;
       refreshRenderingControls();
@@ -11583,7 +11725,10 @@ async function initScene() {
   if(fireLightFieldRouteParams().get('volume_light_field_distributed')==='1') {
     sceneEmissiveCamera=createSceneEmissiveCamera(rawSceneOutput,{TSL:{uniform,vec3,vec4,float},THREE});
   }
-    giOutputGraphs.set(graphKey,{rawSceneOutput,sceneEmissiveCamera,fireLightFieldPass});
+    outlinedSceneOutput=selectionFeedback.output(rawSceneOutput);
+    outlinedCameraOutput=sceneEmissiveCamera?selectionFeedback.output(sceneEmissiveCamera.outputNode):null;
+    renderPipeline.outputNode=outlinedSceneOutput;
+    giOutputGraphs.set(graphKey,{rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass});
     renderPipeline.outputColorTransform = true;
     renderPipeline.needsUpdate = true;
   }
@@ -11680,6 +11825,7 @@ async function initScene() {
     depthRT.setSize(Math.round(size.x * aoResScale), Math.round(size.y * aoResScale));
     needsRender = true;
     idleFrames = 0;
+    cameraAuthoring?.refresh();
   }
   window.addEventListener('resize', syncViewportRendererSize);
   const viewportResizeObserver = new ResizeObserver(syncViewportRendererSize);
@@ -11705,6 +11851,8 @@ async function initScene() {
     if (splatCorrectionTransformTarget()) {
       syncSplatCorrectionDraftFromActiveTarget();
     } else {
+      if(activeSceneFieldId==='flame-field'&&transformControls.object===flameDomainProxy&&transformControls.dragging){if(!scenePlacementTools?.state().gizmoEditing)return;try{scenePlacementTools.edits.preview(sceneObjectTransformState(flameDomainProxy));}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}return;}
+      if(transformControls.object===selectionProxy&&transformControls.dragging){if(!scenePlacementTools?.state().gizmoEditing||!scenePlacementTools.edits.state().active)return;try{selectionTransforms.write({...selectionTransforms.read(),...sceneObjectTransformState(selectionProxy)});}catch(error){scenePlacementTools.finish(false);setInfo(error.message);}updateTransformInspector();return;}
       const assembly=selectedSceneGroupEntry();
       if (assembly?.type===GROUP_TYPE && transformControls.dragging) {
         try {writeGroupPose(assembly.id,sceneObjectTransformState(groupProxies.get(assembly.id)));}
@@ -11726,7 +11874,7 @@ async function initScene() {
       }
       if(entry?.type==='light'&&entry.id!==RIM_LIGHT_ID&&transformControls.dragging){try{mountSceneSpotLight({...serializeSceneObject(entry),transform:sceneObjectTransformState(entry.object)});}catch(error){scenePlacementTools?.finish(false);setInfo(error.message);}}
       if (entry?.id === RIM_LIGHT_ID && transformControls.dragging) {
-        try { writeAuthoredRimPose(sceneObjectTransformState(entry.object)); }
+        try { applyAuthoredScenePose(RIM_LIGHT_ID,sceneObjectTransformState(entry.object)); }
         catch(error) { scenePlacementTools?.finish(false); setInfo(error.message); }
       }
       if (entry?.type === LOCAL_LIQUID_EMITTER_TYPE && validateLiveLocalLiquidEmitterPose(entry)) syncLocalLiquidHostEmitters();
@@ -11748,7 +11896,8 @@ async function initScene() {
   viewportEl.addEventListener('dblclick', handleViewportDoubleClick);
   renderer.domElement.addEventListener('pointerdown', markDirty);
   renderer.domElement.addEventListener('wheel', markDirty);
-  window._kaminosDirty = markDirty;
+  let cameraSyncing=false;
+  window._kaminosDirty = ()=>{if(sceneCameras&&sceneCameras.state().mode==='camera'&&!sceneCameras.state().writing&&!cameraSyncing){cameraSyncing=true;try{sceneCameras.sync();}finally{cameraSyncing=false;}}markDirty();};
   const navigationInput = document.getElementById('navigation-input-mode');
   let savedNavigationInput;
   try { savedNavigationInput = localStorage.getItem('kaminos.navigationInput'); } catch {}
@@ -11765,12 +11914,13 @@ async function initScene() {
     camera,
     controls,
     gizmo: transformControls,
-    roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat' && entry.type!=='light').map(entry => entry.object),
+    roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat' && entry.type!=='light' && entry.type!==CAMERA_TYPE).map(entry => entry.object),
       ...(currentMesh && !sceneObjects.some(entry => entry.object === currentMesh) ? [currentMesh] : [])],
     occluders: () => groundPlane ? [groundPlane] : [],
+    navigationHook:{viewChange:()=>sceneCameras?.leave({continueFromCamera:true}),frameBounds:()=>sceneCameras?.frameBounds(),begin:mode=>sceneCameras?.beginNavigation(mode)??false,changed:()=>sceneCameras?.navigationChanged(),end:cancel=>sceneCameras?.endNavigation(cancel),wheelEnd:()=>sceneCameras?.wheelEnd(),frameLayout:()=>sceneCameras?.frameLayout(),restoreFrameLayout:value=>sceneCameras?.restoreFrameLayout(value),pan:(dx,dy)=>sceneCameras?.panFrame(dx,dy),zoom:factor=>sceneCameras?.zoomFrame(factor)},
     frameAll: () => { const framed = frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); if (framed) markDirty(); return framed; },
     frameSelected: () => { const framed = frameAuthoredSelection(); if (framed) markDirty(); return framed; },
-    blocked: () => transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
+    blocked: () => !!viewPie?.state() || authoringBusy || scenePlacementTools?.edits.state().active?.id==='@viewport-lens' || transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
     inputMode: () => navigationInput.value,
     status: updateNavigationHint,
   });
@@ -11793,31 +11943,46 @@ async function initScene() {
     controls,
     gizmo: transformControls,
     selected: () => selectedPlacementEntry()?.id || null,
+    prepare:()=>{if(sceneSelection.ids.length)selectionTransforms?.prepare();},
+    overlaysVisible:()=>viewportDisplay.overlays&&!selectionCaptureSuspended,
+    viewReference:id=>{const state=sceneCameras?.state();return state?.mode==='camera'&&id===state.activeId?{point:controls.target.toArray(),screen:[state.frame.x+state.frame.width/2,state.frame.y+state.frame.height/2]}:null;},
+    transformSettings:()=>transformPreferences,
+    localOrientation:()=>sceneSelection.activeId?selectionRootState(sceneSelection.activeId).rotation:[0,0,0],
     read: id => {
+      if(id==='@flame-domain')return structuredClone(flameDomainDraft||acceptedFlameDomainPose());
+      if(id==='@selection-transform')return selectionTransforms.pose();
       if (id?.startsWith('@group:')) return structuredClone(sceneGroups.find(group=>`@group:${group.id}`===id)?.transform || null);
       const entry = sceneObjects.find(item => item.id === id);
       return !entry ? null : entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(entry.object);
     },
     write: applyAuthoredScenePose,
-    object: id => id?.startsWith('@group:') ? groupProxy(sceneGroups.find(group=>`@group:${group.id}`===id)) : sceneObjects.find(item => item.id === id)?.object,
+    object: id => id==='@flame-domain'?flameDomainEditObject():id==='@selection-transform'?selectionTransformProxy():id?.startsWith('@group:') ? groupProxy(sceneGroups.find(group=>`@group:${group.id}`===id)) : sceneObjects.find(item => item.id === id)?.object,
     refresh: () => { updateTransformInspector(); markDirty(); },
-    allowed: () => !greenroomPreviewIsActive() && !splatCorrectionMode,
+    allowed: () => !viewPie?.state() && !greenroomPreviewIsActive() && !splatCorrectionMode,
+    busy: () => authoringBusy,
     frameSelected: window.kaminosFrameSelected,
-    captureContext: id => id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
+    captureContext: id => id==='@flame-domain'?flameDomainFollowSource:id==='@selection-transform'||id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
     settled: event => {
+      if(event.id==='@flame-domain'){settleAuthoredFlameDomain(event);return;}
+      if(event.id==='@selection-transform'&&Object.keys(event.after.roots).some(id=>id===FLAME_EMITTER_ID||sceneGroups.find(g=>'@group:'+g.id===id)?.objectIds.includes(FLAME_EMITTER_ID)))settleFlameDomainForPose(flameEmitterPose,event.operation==='commit'?null:event.afterContext);
       if (sceneGroups.find(group=>[`@group:${group.id}`,`@assembly:${group.id}`].includes(event.id))?.objectIds.includes(FLAME_EMITTER_ID)) settleFlameDomainForPose(flameEmitterPose,event.operation==='commit'?null:event.afterContext);
       if (event.id === FLAME_EMITTER_ID) settleFlameDomainForPose(event.after,
         event.operation === 'commit' ? null : event.afterContext);
     },
     historyScopes: [document.getElementById('tab-assets'), document.getElementById('transform-inspector'), document.getElementById('selected-light-properties'), document.getElementById('selected-flame-properties'), document.getElementById('authoring-source-burner'), document.getElementById('authoring-source-environment'), document.getElementById('authoring-source-render'), document.getElementById('authoring-source-fire-light'), document.getElementById('tab-assets'), document.getElementById('tab-volume'), document.getElementById('volume-authored-mix-panel')],
   });
+  scenePlacementTools.edits.register('@flame-domain',{read:()=>structuredClone(flameDomainDraft||acceptedFlameDomainPose()),write:writeFlameDomainPreview,check:checkedFlameDomainPose});
+  scenePlacementTools.edits.subscribe(state=>{if(!state.active){flameDomainDraft=null;refreshFlameDomainPreview();}});
+  window.kaminosFlameDomain={read:()=>({translation:[...flameDomainTranslation],scale:flameDomainScale,followSource:flameDomainFollowSource}),set:patch=>{if(scenePlacementTools.edits.state().active)throw Error('Finish the active edit first');try{return scenePlacementTools.edits.apply('@flame-domain',patch,'Edit simulation box');}catch(error){scenePlacementTools.edits.cancel();throw error;}}};
   scenePlacementTools.edits.register('@burner-controls', {
     read: readBurnerControlHistoryState,
     write: restoreBurnerControlHistoryState,
     check: checkedBurnerControlHistoryState,
   });
+  setupSelectionTransforms();
   installBurnerAuthoring();
   createFlameQuickFields();
+  setupAuthoringAssets();
   sceneControlHistory = installSceneControlHistory({
     controls: document.querySelectorAll('#burner-enabled, #burner-controls input, #volume-input-radius, #volume-flow-rate, [data-authoring-alias="volume-flow-rate"], [data-authoring-alias="volume-input-radius"]'),
     edits: scenePlacementTools.edits,
@@ -11851,6 +12016,31 @@ async function initScene() {
     openWorkbenchTab: tab => setActiveTab(tab),
   });
   window.kaminosWorkspace = authoringWorkspace;
+  cameraViews=createCameraViews({
+    edits:scenePlacementTools.edits,
+    readCamera:readAuthoredCameraView,
+    readLens:()=>({fov:sceneCameras?.readNavigationView().fov??camera.fov}),
+    writeLens:value=>sceneCameras.setNavigationLens(value.fov),
+    writeCamera:view=>{sceneCameras?.leave();sceneNavigation.cancel();camera.position.fromArray(view.position);controls.target.fromArray(view.target);camera.up.fromArray(view.up);camera.fov=view.fov;camera.near=view.near;camera.far=view.far;camera.updateProjectionMatrix();sceneNavigation.resetView();window._kaminosDirty?.();},
+    admit:()=>{assertSceneConstructionAvailable();if(!controls.enabled||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current camera or preview operation');},
+    changed:()=>{cameraViewsPanel?.refresh();window._kaminosDirty?.();},
+    capture:item=>window.captureComposition({result:true,cameraView:item}),
+  });
+  sceneCameras=createSceneCameras({edits:scenePlacementTools.edits,supportsProjection:projection=>projection==='perspective',readObjects:()=>sceneObjects.filter(o=>o.type===CAMERA_TYPE).map(serializeSceneObject),writeCameras:writeAuthoredCameras,readViewport:readAuthoredCameraView,writeViewport:writeAuthoredCameraView,size:()=>({width:viewportEl.clientWidth,height:viewportEl.clientHeight}),changed:()=>{cameraAuthoring?.refresh();cameraViewsPanel?.refresh();syncEditorHelperVisibility();markDirty();},admit:()=>{if(authoringBusy||sceneSaveBlockedByFailedRestore||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current document or preview action');},capture:(item,frame,original)=>window.captureComposition({result:true,cameraObject:item,cameraFrame:frame,cameraOriginal:original})});
+  cameraViewsPanel=installCameraViewsPanel({document,views:cameraViews,edits:scenePlacementTools.edits,onError:error=>setInfo(error.message)});
+  authoringControlSessions.push(cameraViewsPanel.session);
+  cameraAuthoring=installCameraAuthoring({document,service:sceneCameras,bookmarks:cameraViews,edits:scenePlacementTools.edits,selected:()=>selectedSceneObjectEntry(),select:id=>setActiveSceneObject(id),onError:error=>setInfo(error.message)});
+  authoringControlSessions.push(...cameraAuthoring.sessions);
+  scenePlacementTools.addHistoryScope(document.getElementById('selected-camera-properties'));
+  window.kaminosSceneCameras=sceneCameras;
+  const cameraViewAction=id=>{if(id==='camera'){sceneCameras.toggle();return;}if(id==='selected'){sceneCameras.leave();window.kaminosFrameSelected();return;}sceneCameras.leave();navigation.axis(id);};
+  viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
+  document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
+  scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
+  scenePlacementTools.addHistoryScope(document.getElementById('authoring-viewport-settings'));
+  controls.addEventListener('change',()=>cameraViewsPanel.refresh());
+  window.kaminosCameraViews={...cameraViews,open:()=>{authoringWorkspace.setMode('authoring');authoringWorkspace.setContext('camera');cameraViewsPanel.refresh();}};
+  installSelectionInput();
 
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1'
     || isAuthoredKilnCollisionRoute();
@@ -11888,16 +12078,17 @@ async function initScene() {
     // current inputs; do not submit retired medium resources or unlit fill.
     if (window.__kaminosSceneRadiance && !window.__kaminosSceneRadiance.canRender()) return false;
     const t0 = performance.now();
+    updateSelectionFeedback();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
     if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {
       const requested=document.getElementById('rendering-match-flame-camera').checked;
       const state=sceneEmissiveCamera.update(requested,window.__kaminosVolumePrototype?.emissiveCameraState());
-      applySceneEmissiveCamera(renderPipeline,rawSceneOutput,sceneEmissiveCamera.outputNode,state.effective);
+      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,state.effective);
       const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)} · shoulder ${state.highlightKnee.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
       if(text!==sceneCameraStatusText){document.getElementById('rendering-camera-status').textContent=text;sceneCameraStatusText=text;}
     } else if(sceneEmissiveCamera) {
-      applySceneEmissiveCamera(renderPipeline,rawSceneOutput,rawSceneOutput,false);
+      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false);
     }
     if (localLiquidHost) {
       try { localLiquidHost.render(); }
@@ -12147,9 +12338,11 @@ function clearScene({loadRequestId = null} = {}) {
   authoringControlSessions.forEach(session => session.cancel());
   sceneControlHistory?.cancel();
   scenePlacementTools?.clear();
+  sceneCameras?.clear();
   for(const proxy of groupProxies.values())proxy.removeFromParent();
   groupProxies.clear();
   for(const id of meshDataTargets)scenePlacementTools?.edits.unregister(id);meshDataTargets.clear();
+  for(const id of colliderEditTargets)scenePlacementTools?.edits.unregister(id);colliderEditTargets.clear();sceneColliderCollection.clear();
   for(const id of groupEditTargets)scenePlacementTools?.edits.unregister(id);
   groupEditTargets.clear();
   proceduralMeshes.clear();
@@ -12183,7 +12376,7 @@ function clearScene({loadRequestId = null} = {}) {
     scene.remove(currentMesh);
     disposeObjectTree(currentMesh);
   }
-  sceneObjects = [];
+  sceneObjects = [];sceneSelection={ids:[],activeId:null};
   if(rimLight){document.getElementById('rim-enabled').checked=false;updateRimLight();}
   sceneGroups = [];
   activeSceneObjectId = null;
@@ -16436,34 +16629,17 @@ function effectivePressureModeLabel(mode, effectiveIterations) {
 }
 
 function readVolumeRenderScaleControlValue() {
-  const control = document.getElementById('volume-render-scale');
-  if (!control) return 0.3;
-  const effective = Number(control.dataset.effectiveValue);
-  if (Number.isFinite(effective)) return Math.max(0.1, Math.min(1, effective));
-  const visible = Number(control.value);
-  return Number.isFinite(visible) ? Math.max(0.1, Math.min(0.3, visible)) : 0.3;
+  const control=document.getElementById('volume-render-scale');
+  const value=Number(control?.value);
+  return Number.isFinite(value)?Math.max(.1,Math.min(1,value)):.3;
 }
 
 function setVolumeRenderScaleControlValue(value) {
-  const control = document.getElementById('volume-render-scale');
-  if (!control) return;
-  const requested = Number(value);
-  const effective = Number.isFinite(requested) ? Math.max(0.1, Math.min(1, requested)) : 0.3;
-  const mode = Math.abs(effective - 1) < 1e-9 ? 'full' : (effective <= 0.3 ? 'low' : 'legacy');
-  control.dataset.effectiveValue = String(effective);
-  control.dataset.renderScaleMode = mode;
-  control.value = String(Math.max(0.1, Math.min(0.3, effective)));
-  const full = document.getElementById('volume-render-scale-full');
-  if (full) {
-    const fullActive = mode === 'full';
-    full.classList.toggle('active', fullActive);
-    full.setAttribute('aria-pressed', fullActive ? 'true' : 'false');
-    full.title = mode === 'legacy'
-      ? `Loaded legacy render scale ${(effective * 100).toFixed(1)}%; move the slider for 10.0–30.0% or select Full`
-      : 'Render at full resolution';
-  }
-  const label = document.getElementById('volume-render-scale-val');
-  if (label) label.textContent = `${(effective * 100).toFixed(1)}%`;
+  const control=document.getElementById('volume-render-scale');if(!control)return;
+  const requested=Number(value),effective=Number.isFinite(requested)?Math.max(.1,Math.min(1,requested)):.3;
+  control.value=String(effective);
+  control.dataset.effectiveValue=String(effective); // compatibility projection; value is authoritative.
+  const label=document.getElementById('volume-render-scale-val');if(label)label.textContent=`${(effective*100).toFixed(1)}%`;
 }
 
 function adoptVolumeRenderScaleSliderValue() {
@@ -17146,6 +17322,12 @@ function buildVolumeAgentCaptureRoute(
   }
   url.searchParams.set('volume_quality_reason', sourceQualityReason);
   return url.toString();
+}
+
+// Live inspector/history reads need values, not serialization of a capture URL.
+function readVolumeSettingsValues() {
+  return {domControls:readVolumeDomControls(), rendererControls:readVolumeRendererControls(),
+    presentationControls:readVolumeSettingsPresentationControls()};
 }
 
 function buildVolumeSettingsPreset() {
@@ -22917,6 +23099,13 @@ for (const button of document.querySelectorAll('[data-raymarch-smoke-presentatio
 
 function renderVolumeEmitterReceipt(receipt) {
   if (!receipt) return;
+  if(receipt.requested.sourceLaw==='immersed-source') {
+    const c=receipt.requested.immersedControls;
+    document.getElementById('volume-emitter-requested').textContent=`immersed disc · centre ${[c.immersedCentreX,c.immersedCentreY,c.immersedCentreZ].map(v=>Number(v).toPrecision(3)).join(', ')} · speed ${Number(c.immersedSpeed).toPrecision(3)}`;
+    document.getElementById('volume-emitter-effective').textContent=receipt.requested.sourceEnabled?'Configured · simulation admission below':'Source disabled';
+    document.getElementById('volume-emitter-carrier').textContent='Immersed gas supply · analytic and floor injectors off';
+    document.getElementById('volume-emitter-fallback').textContent='no';return;
+  }
   const formatVolumeEmitterInletVelocity = value => Number(value).toFixed(4);
   const requestedMomentum = receipt.requested.momentumLinked
     ? `linked ${formatVolumeEmitterInletVelocity(receipt.effective.effectiveInletVelocity)}`
@@ -22933,6 +23122,8 @@ function renderVolumeEmitterReceipt(receipt) {
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
+  syncKilnCollisionControl(s.sceneCollision);
+  flameInspector?.sync();
   syncVolumeCockpitModeAvailability(document, readVolumeControls(), s.physicalColor);
   if (s.physicalColor?.requested === 'emissive-transport-v2') {
     document.getElementById('volume-physical-mode-val').textContent = s.physicalColor.effective === 'emissive-transport-v2'
@@ -23836,6 +24027,7 @@ async function initKaminosVolumeRoute() {
     if (params.has(param)) setVolumeControlValue(id, params.get(param));
   }
   updateVolumeControlLabels();
+  flameInspector?.sync(true);
   volumePrototype = createKaminosVolumePrototype({
     THREE,
     viewport: document.getElementById('viewport'),
@@ -23857,9 +24049,8 @@ async function initKaminosVolumeRoute() {
     // mesh and world transform, not its bounding box or camera depth, feed the
     // volume solver when the scene route requests volume_collision=kiln.
     getSceneCollision: () => {
-      if (!isAuthoredKilnCollisionRoute()) return null;
-      const entry = sceneObjects.find(record => record.id === 'kiln' && record.type === 'glb');
-      return { requested: true, id: 'kiln', object: entry?.object ?? null };
+      if (!isAuthoredKilnCollisionRoute()) {sceneColliderCollection.clear();return null;}
+      return sceneColliderCollection.update(sceneObjects);
     },
   });
   if (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute()) {
@@ -23922,7 +24113,8 @@ async function initKaminosVolumeRoute() {
     }
   }
   let volumeEmitterRuntimeFrame = 0;
-  function applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot, pose = flameEmitterPose, { sourceEnabled = !flameEmitterInjectionSuspended } = {}) {
+  function applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot, pose = flameEmitterPose, { sourceEnabled = controlsSnapshot.emitterSourceLaw==='immersed-source'?flamePoseInDomain(pose,flameDomainTranslation,flameDomainScale,effectiveFlameDomainControls(controlsSnapshot,volumePrototype)):!flameEmitterInjectionSuspended } = {}) {
+    if(controlsSnapshot.emitterSourceLaw==='immersed-source')sourceEnabled=sourceEnabled&&flamePoseInDomain(pose,flameDomainTranslation,flameDomainScale,effectiveFlameDomainControls(controlsSnapshot,volumePrototype));
     const family = document.getElementById('emitter-assay-family').value;
     if (routeExternalEmitters && family !== 'cluster') {
       throw new Error(`volume emitter source conflict: volume_external_emitters=${routeExternalEmitters} cannot compose with volume_emitter_family=${family}`);
@@ -23945,14 +24137,29 @@ async function initKaminosVolumeRoute() {
       timestampMs,
       frameId,
       externalRequest,
-      ...(family !== 'cluster' ? { emitterPose: flamePoseToDomain(pose, flameDomainTranslation) } : {}),
+      ...(family !== 'cluster' ? { emitterPose: flamePoseToDomain(pose, flameDomainTranslation, flameDomainScale) } : {}),
       ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && sourceEnabled } : {}),
     });
     window.__kaminosVolumeEmitterReceipt = receipt;
     if (family !== 'cluster') {
+      if(controlsSnapshot.emitterSourceLaw==='immersed-source')flameEmitterInjectionSuspended=authoredFlamePresent&&!sourceEnabled;
       receipt.requested.worldEmitterPose = structuredClone(pose);
       receipt.effective.worldEmitterPose = structuredClone(pose);
       receipt.effective.domainTranslation = [...flameDomainTranslation];
+      receipt.effective.domainScale = flameDomainScale;
+      if (controlsSnapshot.emitterSourceLaw === 'immersed-source') {
+        // Keep the Workbench representation of centre/aim in agreement with
+        // the authored object. Radius remains source data; S scales the object.
+        const mapped=receipt.requested.immersedControls;
+        for(const [suffix,key] of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']]) {
+          const control=document.getElementById(`volume-immersed-${suffix}`);
+          control.step='any';
+          if (control.value !== String(mapped[key])) setVolumeControlValue(control.id,mapped[key]);
+          const label=document.getElementById(`volume-immersed-${suffix}-val`);
+          const text=Number(mapped[key]).toFixed(2);
+          if (label.textContent !== text) label.textContent=text;
+        }
+      }
     }
     renderVolumeEmitterReceipt(receipt);
     if (receipt.effective.worldEmitterPose) flameEmitterPose = structuredClone(receipt.effective.worldEmitterPose);
@@ -24101,6 +24308,9 @@ async function initKaminosVolumeRoute() {
     seedVolumePrimitiveFixture(params.get('volume_primitive_fixture'));
   }
 
+  if (readVolumeControls().emitterSourceLaw === 'immersed-source') {
+    flameEmitterPose=flamePoseFromImmersedControls(readVolumeControls(),flameDomainTranslation,flameEmitterPose,flameDomainScale);
+  }
   applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls());
   void activateFingerFluidPyroComposition().catch(error => {
     fingerFluidPyroCompositionState = {
@@ -24157,7 +24367,12 @@ async function initKaminosVolumeRoute() {
     updateVolumeControlLabels();
     const controlsSnapshot = readVolumeControls();
     const selectedEmitterFamily = document.getElementById('emitter-assay-family').value;
-    if (emitterMorphologyControls.has(event?.target?.id)) {
+    if (controlsSnapshot.emitterSourceLaw === 'immersed-source') {
+      if (/^volume-immersed-(centre-[xyz]|yaw|pitch)$/.test(event?.target?.id||'')) {
+        flameEmitterPose=flamePoseFromImmersedControls(controlsSnapshot,flameDomainTranslation,flameEmitterPose,flameDomainScale);
+      }
+      applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot);
+    } else if (emitterMorphologyControls.has(event?.target?.id)) {
       applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot);
     } else if (event?.target?.id === 'volume-scene' && selectedEmitterFamily !== 'cluster') {
       applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot);
@@ -24168,12 +24383,6 @@ async function initKaminosVolumeRoute() {
   };
   await volumeCockpitLayoutReady;
   hideVolumeLegacyPyroSurfaceForTopologyBranch();
-  document.getElementById('volume-render-scale-full')?.addEventListener('click', () => {
-    const lowBandValue = Number(document.getElementById('volume-render-scale').value);
-    const nextValue = readVolumeRenderScaleControlValue() === 1 ? lowBandValue : 1;
-    setVolumeRenderScaleControlValue(nextValue);
-    syncControls({ target: document.getElementById('volume-render-scale-full') });
-  });
   // Authoring a pattern clears a retired request kept from a saved route.
   document.getElementById('volume-emitter-aperture-pattern').addEventListener('change', () => { delete document.getElementById('volume-emitter-aperture-pattern').dataset.volumeRetiredPatternRequest; });
   for (const id of [
@@ -25555,25 +25764,61 @@ function updateAuthoringPropertySelection() {
   syncBurnerInspector();
   syncSceneDataInspector();
   document.querySelectorAll('#transform-bar button[onclick]').forEach(button=>{
-    if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround/.test(button.getAttribute('onclick'))) button.hidden=activeSceneObjectId===RIM_LIGHT_ID;
+    if(/reverseWinding|flipNormals|cullSmallFaces|flipAxis|rotateAxis|resetTransform|exportGLB|toggleDoubleSided|toggleBackface|forceOpaque|snapToGround/.test(button.getAttribute('onclick'))) button.hidden=sceneSelection.ids.length>1||!!activeSceneGroupId||['light',CAMERA_TYPE].includes(selectedSceneObjectEntry()?.type);
   });
 }
 let flameInspector = null;
+function installFlameDomainControls(host) {
+  const panel=document.createElement('section');panel.className='flame-domain-controls';
+  panel.innerHTML='<h4>Simulation box</h4><p class="flame-scope">Move with G · Resize with S. Preview the box, then confirm to restart the field. The emitter stays in world space.</p>'+['x','y','z','scale'].map(key=>`<div class="slider-row"><label class="slider-label" for="flame-domain-${key}">${key==='scale'?'World scale':'Center '+key.toUpperCase()}</label><input class="transform-input" id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></div>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p><p class="flame-scope">Resizing changes world cell size; simulation speeds remain in solver units. Move the emitter separately to place it inside the box.</p>';
+  host.append(panel);
+  const inputs=[...panel.querySelectorAll('input')];
+  for(const input of inputs)input.addEventListener('input',()=>{
+    if(!Number.isFinite(input.valueAsNumber))return;
+    const pose=structuredClone(flameDomainDraft||acceptedFlameDomainPose());
+    const key=input.id.slice('flame-domain-'.length);
+    if(key==='scale')pose.scale.fill(input.valueAsNumber);else pose.position['xyz'.indexOf(key)]=input.valueAsNumber;
+    try{scenePlacementTools.edits.preview(pose);}catch(error){setInfo(error.message);}
+  });
+  authoringControlSessions.push(installSceneControlHistory({controls:inputs,edits:scenePlacementTools.edits,id:'@flame-domain',label:'Edit simulation box',onError:error=>setInfo(error.message)}));
+  for(const input of inputs){const scrub=installRelativeNumberDrag({input,grip:input,step:.01,onStart:()=>authoringControlSessions.forEach(session=>session.commit())});scenePlacementTools.edits.subscribe(state=>{if(!state.active)scrub.stop();});}
+  refreshFlameDomainPreview();
+}
 function createFlameQuickFields() {
   const shared=document.createElement('section');shared.id='shared-flame-domain-properties';shared.innerHTML='<h3>Fire & smoke</h3><p class="flame-scope">Appearance and simulation data for this field.</p><button type="button" class="btn" id="field-source-action">Select emitter</button>';document.getElementById('selected-flame-properties').after(shared);scenePlacementTools.addHistoryScope(shared);
+  installFlameDomainControls(shared);
+  installKilnCollisionControl(shared);
   document.getElementById('field-source-action').onclick=()=>{try{if(authoredFlamePresent)setActiveSceneObject(FLAME_EMITTER_ID);else window.kaminosBurnerAuthoring.add('flame-source');}catch(error){setInfo(error.message);}};
   flameInspector=createFlameInspector({document,host:document.getElementById('selected-flame-fields'),sharedHost:shared,
     listBasins:async()=>{await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
     applyBasin:id=>window.kaminosFlameAuthoring.applyBasin(id),
     readSource:()=>activeVolumeSettingsPresetReceipt ? {label:activeVolumeSettingsPresetReceipt.label,
-      modified:!volumeSettingsPresetControlValuesEqual(buildVolumeSettingsPreset(),activeVolumeSettingsPresetReceipt.preset)} : null,
+      modified:!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),activeVolumeSettingsPresetReceipt.preset)} : null,
+    readSourceRuntime:()=>volumePrototype?.debugState?.().immersedSource,
+    readControlBounds:id=>id==='volume-immersed-radius'?immersedRadiusBounds(flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale)):null,
     openWorkbench:()=>setActiveTab('volume'),onError:error=>setInfo(error.message)});
 }
 
-function flameSettingsState(preset=buildVolumeSettingsPreset(),source=activeVolumeSettingsPresetReceipt) {
-  return structuredClone({domControls:preset.domControls,rendererControls:preset.rendererControls,
+function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolumeSettingsPresetReceipt) {
+  const state=structuredClone({domControls:preset.domControls,rendererControls:preset.rendererControls,
     presentationControls:preset.presentationControls,
+    sourcePose:flameEmitterPose,
     source:source ? {presetId:source.presetId,label:source.label,preset:source.preset} : null});
+  // Applying a look preset keeps the source where the author put it. Its feed
+  // coefficients are replaced; preset centre/aim are only startup defaults.
+  if(arguments.length && state.domControls['volume-emitter-source-law']?.value==='immersed-source') {
+    const mapped=immersedControlsForFlamePose({immersedRadius:Number(state.domControls['volume-immersed-radius'].value)},flamePoseToDomain(state.sourcePose,flameDomainTranslation,flameDomainScale),false);
+    for(const [suffix,key] of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']]) {
+      const id=`volume-immersed-${suffix}`;
+      // Pose-derived doubles have not passed through a browser range input,
+      // unlike saved basin values. Use the same DOM representation as runtime
+      // readback without touching the live control or rounding any feed data.
+      const range=document.getElementById(id).cloneNode();
+      range.step='any';range.value=String(mapped[key]);
+      const descriptor=state.domControls[id];descriptor.value=Number(range.value);descriptor.rawValue=range.value;
+    }
+  }
+  return state;
 }
 // Every reason the flame settings edit would be refused, in the order the
 // check meets them. The edit session refuses a press on any flame control
@@ -25601,20 +25846,32 @@ function flameSettingsStateProblems(state) {
       } else if(source.type==='color'&&!/^#[0-9a-f]{6}$/i.test(value))problem(`Invalid color ${id}`);
     }
   }
+  if(state.domControls?.['volume-emitter-source-law']?.value==='immersed-source') {
+    try {
+      const radius=state.domControls['volume-immersed-radius'];
+      immersedControlsForFlamePose({immersedRadius:Number(radius?.rawValue??radius?.value)},
+        flamePoseToDomain(state.sourcePose||flameEmitterPose,flameDomainTranslation,flameDomainScale),false);
+    } catch(error) {problems.push({id:'volume-immersed-radius',message:error.message});}
+  }
   return problems;
 }
 function checkFlameSettingsState(state) {
   const problems=flameSettingsStateProblems(state);
   if(problems.length)throw Error(problems[0].message);
+  if(state.sourcePose)normalizeFlameEmitterPose(state.sourcePose);
   return state;
 }
 function writeFlameSettingsState(state) {
   supersedeVolumeRebuildHolds();
-  for(const axis of ['domControls','rendererControls'])for(const [id,descriptor] of Object.entries(state[axis]))setVolumeControlValue(id,descriptor.rawValue??descriptor.value);
+  for(const axis of ['domControls','rendererControls'])for(const [id,descriptor] of Object.entries(state[axis])) {
+    const control=document.getElementById(id);
+    if(control?.type==='range')applyVolumeRangeSavedValue(control,Number(descriptor.rawValue??descriptor.value));
+    else setVolumeControlValue(id,descriptor.rawValue??descriptor.value);
+  }
   activeCanonicalVolumeMacroPreset='';activeVolumeRayBudgetPreset='';routedVolumeRayBudgetPreset='';
   updateVolumeControlLabels();
   // One complete source update, preserving its authored world pose and domain.
-  applyFlameEmitterPose(flameEmitterPose);
+  applyFlameEmitterPose(state.sourcePose||flameEmitterPose);
   const smoke=state.presentationControls['raymarch-smoke-presentation'].value;
   const receipt=volumePrototype.setRaymarchSmokePresentationMode(smoke);
   if(receipt?.fallbackReason || receipt?.effectiveMode!==smoke)throw Error('Smoke presentation did not apply');
@@ -25665,7 +25922,7 @@ function installAuthoringParameterEditing() {
       control.dispatchEvent(new Event('input',{bubbles:true}));
       control.dispatchEvent(new Event('change',{bubbles:true}));
       if(control.dataset.volumeCommit==='confirm')control.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
-      document.querySelectorAll(`[data-authoring-alias="${control.id}"]`).forEach(alias=>{if(alias.type==='checkbox')alias.checked=control.checked;else alias.value=control.value;});
+      document.querySelectorAll(`[data-authoring-alias="${control.id}"]`).forEach(alias=>{if(alias.type==='checkbox')alias.checked=control.checked;else alias.value=String(flameControlDisplayValue(control.id,control.value));});
     };
     const check=state=>{
       if(control.id==='emitter-assay-family'&&state.value==='cluster')throw Error('Cluster bowl is not a placeable flame; use Workbench');
@@ -25673,6 +25930,11 @@ function installAuthoringParameterEditing() {
       else if(control.type==='checkbox'){if(typeof state.value!=='boolean')throw Error('Expected an enabled/disabled value');}
       else if(control.type==='color'){if(!/^#[\da-f]{6}$/i.test(state.value))throw Error('Expected a hex color');}
       else if(!Number.isFinite(state.value)||(control.min!==''&&state.value<Number(control.min))||(control.max!==''&&state.value>Number(control.max)))throw Error('Parameter is outside its supported range');
+      if(['volume-immersed-radius','volume-emitter-source-law'].includes(control.id)) {
+        const next=flameSettingsState();
+        next.domControls[control.id]={...next.domControls[control.id],value:state.value,rawValue:String(state.value)};
+        checkFlameSettingsState(next);
+      }
       return {value:state.value};
     };
     const id=`@parameter:${control.id}`,label=`Adjust ${control.id.replace(/^volume-/,'').replaceAll('-',' ')}`;
@@ -25680,6 +25942,23 @@ function installAuthoringParameterEditing() {
     edits.register(id,definition);authoringParameterTargets.set(id,definition);
     authoringControlSessions.push(installSceneControlHistory({edits,id:'@flame-settings',
       controls:[control,...document.querySelectorAll(`[data-authoring-alias="${control.id}"]`)],label,onError:error=>showFlameEditRefused(error)}));
+    if(['volume-immersed-radius','volume-emitter-source-law'].includes(control.id)) {
+      // DOM listener exceptions cannot reject dispatchEvent in the caller.
+      // Refuse an invalid aperture before the live runtime handlers see it.
+      const validatePreview=event=>{
+        const active=edits.state().active;
+        if(active?.id!=='@flame-settings')return;
+        try {checkFlameSettingsState(flameSettingsState());}
+        catch(error) {
+          event.stopImmediatePropagation();
+          writeFlameSettingsState(active.before);
+          edits.cancel();
+          showFlameEditRefused(error);
+        }
+      };
+      control.addEventListener('input',validatePreview,true);
+      control.addEventListener('change',validatePreview,true);
+    }
   }
   for(const id of ['fire-light-gain-stops','exposure-slider','env-intensity-slider','env-rotation-slider','env-bg-brightness','env-bg-contrast']) {
     const control=document.getElementById(id);if(!control)continue;
@@ -25707,12 +25986,13 @@ function installAuthoringParameterEditing() {
       const source=row.querySelector('input[type=range]');
       // Number edits preview through the same preexisting setter used on commit.
       const step=Number(input.dataset.authoringDragStep) || (source?.step && source.step!=='any'?Number(source.step):.01);
-      installRelativeNumberDrag({grip,input,step,onStart:()=>authoringControlSessions.forEach(session=>session.commit())});
+      const scrub=installRelativeNumberDrag({grip,input,step,onStart:()=>authoringControlSessions.forEach(session=>session.commit())});
+      edits.subscribe(state=>{if(!state.active)scrub.stop();});
     }
   }
   edits.subscribe(()=>{
     flameInspector?.sync();
-    document.querySelectorAll('[data-authoring-alias]').forEach(alias=>{if(document.activeElement!==alias){const source=document.getElementById(alias.dataset.authoringAlias);if(alias.type==='checkbox')alias.checked=source.checked;else alias.value=source.value;}});
+    document.querySelectorAll('[data-authoring-alias]').forEach(alias=>{if(document.activeElement!==alias){const source=document.getElementById(alias.dataset.authoringAlias);if(alias.type==='checkbox')alias.checked=source.checked;else alias.value=String(flameControlDisplayValue(source.id,source.value));}});
   });
   syncRimAuthoringHandle();
 }
@@ -26587,8 +26867,9 @@ window.snapToGround = function() {
 
 // Export the selection (one object, or every member of a selected group) as a
 // binary GLB, keeping each object's place in the scene. Editor helpers and
-// objects GLB cannot carry (splats, lights, flame and water emitters) stay out.
-const GLB_EXPORT_SKIPPED_TYPES = new Set(['splat', 'light', FLAME_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_TYPE]);
+// object types this exporter does not yet support stay out. Camera editor
+// wires are not camera data and must never be exported as authored geometry.
+const GLB_EXPORT_SKIPPED_TYPES = new Set(['splat', 'light', CAMERA_TYPE, FLAME_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_TYPE]);
 
 function selectionForExport() {
   const group = selectedSceneGroupEntry();
@@ -26620,7 +26901,7 @@ window.exportGLB = async function({ name = null } = {}) {
     link.download = `${stem}.glb`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setInfo(`Exported ${entries.length} object${entries.length === 1 ? '' : 's'} to ${stem}.glb${skipped ? ` (skipped ${skipped} that GLB cannot carry)` : ''}`);
+    setInfo(`Exported ${entries.length} object${entries.length === 1 ? '' : 's'} to ${stem}.glb${skipped ? ` (skipped ${skipped} unsupported object${skipped === 1 ? '' : 's'})` : ''}`);
     return true;
   } catch (error) {
     setInfo(`Export failed: ${error.message || error}`);
@@ -28519,13 +28800,18 @@ function serializeSceneObject(entry) {
     materials: getMaterialStateForObject(object),
     splat: metadata.splat ?? entry.splat ?? null,
     image: metadata.image ?? entry.image ?? null,
+    ...((metadata.generation ?? entry.generation)?{generation:structuredClone(metadata.generation ?? entry.generation)}:{}),
+    ...((metadata.assetOrigin ?? entry.assetOrigin)?{assetOrigin:structuredClone(metadata.assetOrigin ?? entry.assetOrigin)}:{}),
     renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
     localLiquidEmitter: metadata.localLiquidEmitter ?? entry.localLiquidEmitter ?? null,
+    ...(entry.type===CAMERA_TYPE?{camera:structuredClone(entry.camera)}:{}),
     ...(object?.userData?.kaminosLeveling ? { arrivalLeveling: structuredClone(object.userData.kaminosLeveling) } : {}),
+
     ...(entry.type==='light'?{light:structuredClone(entry.light)}:{}),
     ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface)} : {}),
+    ...(canCollideWithFire(entry)?{collision:checkedObjectCollision(entry)}:{}),
   };
 }
 
@@ -28537,6 +28823,7 @@ function readNumberControl(id, fallback = 0) {
 
 async function addSceneObjectFromSource(record, loadRequestId = null) {
   if (!record?.source) throw new Error('Scene object missing source');
+  if(record.type===CAMERA_TYPE)return mountAuthoredCamera(record).object;
   if(record.type==='light'){if(record.id===RIM_LIGHT_ID){restoringSceneLight=true;try{setRimLight(sceneLightRuntimeRecipe(record));}finally{restoringSceneLight=false;}}return mountSceneSpotLight(record).object;}
   if (record.type === PROCEDURAL_MESH_TYPE) return mountProceduralMesh(record).object;
   if (record.type === FLAME_EMITTER_TYPE) {
@@ -28643,6 +28930,51 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
   return true;
 }
 
+function writeAuthoredCameraView(view){
+  const navigating=!!sceneNavigation?.state().gesture;
+  if(!navigating)sceneNavigation?.cancel();camera.position.fromArray(view.position);controls.target.fromArray(view.target);camera.up.fromArray(view.up);camera.fov=view.fov;camera.near=view.near;camera.far=view.far;camera.updateProjectionMatrix();if(!navigating)sceneNavigation?.resetView();else controls.update();
+}
+function mountAuthoredCamera(raw){
+  const record=checkedCameraRecord(raw);let entry=sceneObjects.find(o=>o.id===record.id);
+  if(!entry){const object=new THREE.LineSegments(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xa2acb9}));object.userData.kaminosEditorOnly=true;entry={...record,object};sceneObjects.push(entry);scene.add(object);}else Object.assign(entry,{...record,object:entry.object});
+  const aspect=sceneCameras?sceneCameras.read().settings.aspect[0]/sceneCameras.read().settings.aspect[1]:16/9;
+  const spec=cameraViewFromRecord(record,aspect),h=record.camera.projection==='orthographic'?spec.orthoScale/2:.65*Math.tan(spec.fov*Math.PI/360),w=h*aspect,z=-.65;
+  const corners=[[-w,-h,z],[w,-h,z],[w,h,z],[-w,h,z]],points=[];
+  for(let i=0;i<4;i++){points.push(0,0,0,...corners[i],...corners[i],...corners[(i+1)%4]);}
+  points.push(-w*.3,h,z,0,h*1.5,z,0,h*1.5,z,w*.3,h,z);
+  const old=entry.object.geometry;entry.object.geometry=new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(points,3));old.dispose();
+  applySceneObjectTransformState(entry.object,record.transform);entry.object.userData.kaminosSceneObject={...record};return entry;
+}
+function writeAuthoredCameras(records){
+  const ids=new Set(records.map(o=>o.id));for(const entry of [...sceneObjects])if(entry.type===CAMERA_TYPE&&!ids.has(entry.id))removeSceneObjectInternal(entry.id,{recordHistory:false});
+  for(const record of records)mountAuthoredCamera(record);renderSceneObjectList();updateTransformInspector();
+}
+function addAuthoredCamera(label='Camera'){const id=sceneCameras.create(label);setActiveSceneObject(id);return id;}
+
+function readAuthoredCameraView(){return {position:camera.position.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),near:camera.near,far:camera.far,fov:camera.fov};}
+
+function readAuthoredFireObjects() {
+  const objects=sceneObjects.map(serializeSceneObject);
+  return activeSceneComposition?authorFireObjects(objects,readVolumeSettingsValues(),{
+    translation:flameDomainTranslation,scale:flameDomainScale,followSource:flameDomainFollowSource,
+    collision:isAuthoredKilnCollisionRoute()}):objects;
+}
+function editOwnedFireSettings(ownerId,kind,patch) {
+  if(!activeSceneComposition)throw Error('Fire domain is absent');
+  const owner=kind==='emission'?'source':kind==='simulation'?'domain':kind==='volumeMaterial'?'material':null;
+  if(!owner || ownerId!==(owner==='source'?FLAME_EMITTER_ID:FIRE_DOMAIN_ID))throw Error('Invalid fire settings owner');
+  if(owner==='source'&&!authoredFlamePresent)throw Error('Fire source is absent');
+  const next=flameSettingsState();
+  for(const [id,value] of Object.entries(patch)) {
+    if(!Object.hasOwn(next.domControls,id)||fireControlOwner(id)!==owner)throw Error(`Control ${id} does not belong to ${kind}`);
+    const descriptor=next.domControls[id];
+    descriptor.value=value;
+    if(Object.hasOwn(descriptor,'rawValue'))descriptor.rawValue=typeof value==='boolean'?value:String(value);
+  }
+  window.kaminosFlameAuthoring.apply(next,`Edit fire ${kind}`);
+  return readAuthoredFireObjects().find(object=>object.id===ownerId);
+}
+
 function buildSceneData(capture = null) {
   rememberEnvironmentRecipe();
   const objects = sceneObjects.map(serializeSceneObject);
@@ -28656,10 +28988,16 @@ function buildSceneData(capture = null) {
     activeObjectId: activeSceneObjectId,
     activeGroupId: activeSceneGroupId,
     activeFieldId:activeSceneFieldId,
+    selectionIds:[...sceneSelection.ids],
     provenance,
     composition: activeSceneComposition,
+    fireSettings: activeSceneComposition ? readVolumeSettingsValues() : null,
     localLiquid: localLiquidSetup,
     capture,
+    cameraViews:cameraViews?.read(),
+    sceneCamera:sceneCameras?.read().settings,
+    editorDisplay:viewportDisplay,
+    viewport:sceneCameras?.viewportState(),
     camera: {
       position: camera.position.toArray(),
       target: controls.target.toArray(),
@@ -28683,7 +29021,7 @@ function buildSceneData(capture = null) {
         color:'#'+groundPlane.material.color.getHexString(),roughness:groundPlane.material.roughness },
     },
     volumePrimitives: getVolumePrimitiveState(),
-    flameDomainTranslation: [...flameDomainTranslation],
+    flameDomainTranslation: [...flameDomainTranslation], flameDomainScale, flameDomainFollowSource,
     postprocessing: {
       sceneGI: {...sceneGISettings},
       ao: {
@@ -28734,7 +29072,7 @@ async function collectSceneComposition() {
     value.domControls, value.rendererControls, value.presentationControls, value.route,
     document.getElementById('fire-light-gain-stops').value,
     document.getElementById('fire-light-test-scene-toggle').checked,
-    burnerRecipe,
+    burnerRecipe, isAuthoredKilnCollisionRoute(),
   ]);
   const savedFingerprint = fingerprint(preset);
   const assertUnchanged = () => {
@@ -28759,6 +29097,7 @@ async function collectSceneComposition() {
   const moduleUrl = new URLSearchParams(location.hash.slice(1)).get('composition_module_url');
   if (moduleUrl) route.composition_module_url = moduleUrl;
   route.volume_light_field_test_scene = document.getElementById('fire-light-test-scene-toggle').checked ? '1' : '0';
+  route.volume_collision = isAuthoredKilnCollisionRoute() ? 'kiln' : 'off';
   activeSceneComposition = {
     schema: COMPOSITION_SCHEMA,
     flame: { presetId: basin.presetId, label: basin.label, stationary: true },
@@ -28790,7 +29129,9 @@ async function changeCompositionBasin(entry) {
   return window.kaminosFlameAuthoring.applyBasin(entry.presetId);
 }
 
-window.captureComposition = ({ result = false } = {}) => withAuthoringAction(async () => {
+window.captureComposition = ({ result = false, cameraView = null, cameraObject=null, cameraFrame=null, cameraOriginal=null, viewportCapture=false } = {}) => {
+  if(!cameraView&&!cameraObject&&!viewportCapture&&sceneCameras?.active())return sceneCameras.capture();
+  return withAuthoringAction(async () => {
   if (sceneSaveIsBlocked() || sceneIsEmpty()) return false;
   if (volumePrototype?.debugState?.()?.active && !isFireLightFieldRoute()) {
     throw new Error('Capture supports the ordinary flame light-field composition, not this volume route');
@@ -28800,36 +29141,48 @@ window.captureComposition = ({ result = false } = {}) => withAuthoringAction(asy
   }
   const label = document.getElementById('composition-label').value.trim();
   if (!label) throw new Error('Give this shot a label');
+  const expectedView=cameraView?checkedCameraView(cameraView.view):checkedCameraView(readAuthoredCameraView());
+  if(!cameraViewsMatch(readAuthoredCameraView(),expectedView))throw Error('Recall the saved camera view before capture');
   compositionStatus('Capturing...');
   const assertUnchanged = await collectSceneComposition();
   const helper = transformControls?.getHelper();
   const visible = helper?.visible;
-  const emitterHandle = sceneObjects.find(entry => entry.id === FLAME_EMITTER_ID)?.object;
-  const emitterVisible = emitterHandle?.visible;
-  const rimHandle = sceneObjects.find(entry => entry.id === RIM_LIGHT_ID)?.object;
-  const rimVisible = rimHandle?.visible;
+  const captureHelpers=[];
+  scene.traverse(object=>{if(object.userData.kaminosEditorHelper||object.userData.kaminosEditorOnly)captureHelpers.push([object,object.visible]);});
+  for(const entry of sceneObjects)if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type)||entry.id===RIM_LIGHT_ID)captureHelpers.push([entry.object,entry.object.visible]);
+  const controlsEnabled=controls.enabled;
   let data;
   try {
     if (helper) helper.visible = false;
-    if (emitterHandle) emitterHandle.visible = false;
-    if (rimHandle) rimHandle.visible = false;
+    selectionCaptureSuspended=true;selectionFeedback?.suspend(true);
+    for(const box of selectionBoxes.values())box.visible=false;
+    for(const [object] of captureHelpers)object.visible=false;
+    controls.enabled=false;
     window._kaminosDirty?.();
     // The second callback samples after both render loops have had a turn.
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const state = volumePrototype?.debugState?.();
     assertUnchanged?.();
+    if(!cameraViewsMatch(readAuthoredCameraView(),expectedView))throw Error('Camera changed before capture; no shot was saved');
     if (activeSceneComposition && (!state?.active || state.error)) throw new Error(state?.error || 'Flame stopped before capture');
+    let crop=null;if(cameraObject){if(sceneCameras.state().activeId!==cameraObject.id||sceneCameras.state().mode!=='camera'||JSON.stringify(serializeSceneObject(sceneObjects.find(o=>o.id===cameraObject.id)).transform)!==JSON.stringify(cameraObject.transform))throw Error('Active camera changed before capture');const frame=sceneCameras.state().frame,bounds=renderer.domElement.getBoundingClientRect(),sx=renderer.domElement.width/bounds.width,sy=renderer.domElement.height/bounds.height;const x=Math.round(frame.x*sx),y=Math.round(frame.y*sy),width=Math.floor(frame.width*sx),height=Math.floor(frame.height*sy);crop={x,y,width,height};}
     const capture = captureComposedCanvases({
+      crop,
       host: renderer.domElement,
       volume: activeSceneComposition ? volumePrototype.canvasElement() : null,
       document, label,
       simulation: activeSceneComposition ? { frameCount: state.frameCount, simStepCount: state.simStepCount, effectiveRoute: state.effectiveRoute, backend: state.backend } : null,
     });
+    if(cameraView)capture.cameraView={id:cameraView.id,label:cameraView.label,view:expectedView};
+    if(cameraObject)capture.cameraObject={id:cameraObject.id,label:cameraObject.label,transform:cameraObject.transform,camera:cameraObject.camera,aspect:sceneCameras.read().settings.aspect,crop};
     data = buildSceneData(capture);
+    if(cameraOriginal){data.camera=cameraOriginal.camera;data.viewport=cameraOriginal.viewport;}
   } finally {
     if (helper) helper.visible = visible;
-    if (emitterHandle) emitterHandle.visible = emitterVisible;
-    if (rimHandle) rimHandle.visible = rimVisible;
+    selectionCaptureSuspended=false;selectionFeedback?.suspend(false);
+    updateSelectionFeedback();
+    for(const [object,wasVisible] of captureHelpers)object.visible=wasVisible;
+    controls.enabled=controlsEnabled;
     window._kaminosDirty?.();
   }
   const saved = await saveToServer(data, null, { result });
@@ -28837,6 +29190,7 @@ window.captureComposition = ({ result = false } = {}) => withAuthoringAction(asy
   compositionStatus(`${label} | ${activeSceneComposition?.flame.label || 'Mesh scene'}`);
   return saved;
 }, { result });
+};
 
 document.getElementById('composition-capture').onclick = window.captureComposition;
 document.getElementById('composition-ground-visible').onchange = event => {
@@ -28924,7 +29278,7 @@ function mountSceneSpotLight(raw) {
     marker.userData.kaminosEditorOnly=true;binding={light,marker};sceneSpotLights.set(record.id,binding);scene.add(light,light.target,marker);
   }
   const {light,marker}=binding;
-  applySceneObjectTransformState(marker,record.transform);marker.visible=record.light.enabled;
+  applySceneObjectTransformState(marker,record.transform);marker.visible=record.light.enabled&&viewportHelpersVisible;
   light.visible=record.light.enabled;light.color.set(record.light.color);light.intensity=record.light.intensity;light.angle=THREE.MathUtils.degToRad(record.light.angle);light.penumbra=record.light.penumbra;
   light.position.fromArray(record.transform.position);
   const direction=new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(...record.transform.rotation));light.target.position.copy(light.position).addScaledVector(direction,record.light.aimDistance*record.transform.scale[2]);
@@ -28932,6 +29286,7 @@ function mountSceneSpotLight(raw) {
   if(!entry){entry={...record,object:marker};sceneObjects.push(entry);}else Object.assign(entry,{...record,object:marker});
   marker.userData.kaminosSceneObject={...record};window._kaminosDirty?.();return entry;
 }
+function bindingRimHideForRemoval(){if(rimLight)rimLight.visible=false;document.getElementById('rim-enabled').checked=false;}
 function disposeSceneSpotLight(id) {
   const binding=sceneSpotLights.get(id);if(!binding)return;
   binding.marker.removeFromParent();binding.marker.geometry.dispose();binding.marker.material.dispose();
@@ -28955,12 +29310,16 @@ function checkedSceneGroups(groups) {
   });
 }
 function writeSceneGroups(groups) {
-  const beforeObject=activeSceneObjectId,beforeGroup=activeSceneGroupId;
-  setSceneGroupsFromRecords(checkedSceneGroups(groups),beforeGroup);
-  for(const [id,proxy] of groupProxies)if(!sceneGroups.some(g=>g.id===id)){proxy.removeFromParent();groupProxies.delete(id);}
-  if(sceneGroups.some(g=>g.id===beforeGroup))setActiveSceneGroup(beforeGroup);
-  else if(sceneObjects.some(o=>o.id===beforeObject))setActiveSceneObject(beforeObject);
-  else clearActiveSceneObjectSelection();
+  const previous=structuredClone(sceneSelection),expanded=sceneSelectionMembers(),field=activeSceneFieldId,wasWriting=burnerGraphWriting;
+  burnerGraphWriting=true;
+  try {
+    sceneSelection={ids:[],activeId:null};activeSceneObjectId=null;activeSceneGroupId=null;
+    setSceneGroupsFromRecords(checkedSceneGroups(groups));
+    for(const [id,proxy] of groupProxies)if(!sceneGroups.some(g=>g.id===id)){proxy.removeFromParent();groupProxies.delete(id);}
+    const valid=new Set([...sceneObjects.map(o=>o.id),...sceneGroups.map(g=>'@group:'+g.id)]);
+    const ids=previous.ids.every(id=>valid.has(id))?previous.ids:expanded.filter(id=>valid.has(id));
+    if(field)window.selectSceneField(field);else setSceneSelection(ids,ids.includes(previous.activeId)?previous.activeId:ids.at(-1)??null);
+  }finally{burnerGraphWriting=wasWriting;}
 }
 function editSceneGroups(change,label) {
   assertSceneConstructionAvailable();const next=serializeSceneGroups();const result=change(next);
@@ -29011,14 +29370,15 @@ function addSceneSpotLight() {
     light:{kind:'spot',enabled:true,color:'#ffffff',intensity:30,angle:30,penumbra:.3,aimDistance:3}});
   recordSceneObjectInsertion(id);setActiveSceneObject(id);return id;
 }
-function canDuplicateObject(entry){return !!entry&&['glb','light',PROCEDURAL_MESH_TYPE].includes(entry.type);}
+function canDuplicateObject(entry){return !!entry&&['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE].includes(entry.type);}
 function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   assertSceneConstructionAvailable();const entry=sceneObjects.find(o=>o.id===id);
   if(!canDuplicateObject(entry))throw Error('Duplicate currently supports mesh objects; simulation sources retain their own creation rules');
   const copyId=makeSceneObjectId('mesh'),record={...serializeSceneObject(entry),id:copyId,label:`${sceneObjectDisplayLabel(entry)} copy`,groupId:null,createdAt:new Date().toISOString()};
   const target=ensureSceneObjectMembershipTarget(copyId);scenePlacementTools.edits.assertCanRecordApplied(target);
   if(entry.type===PROCEDURAL_MESH_TYPE)mountProceduralMesh(record);
-  else if(entry.type==='light')mountSceneSpotLight(record);
+  else if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);
+  else if(entry.type==='light'){if(entry.id===RIM_LIGHT_ID)setRimLight(sceneLightRuntimeRecipe(record));mountSceneSpotLight(record);}
   else {
     const copy=cloneSceneObjectHierarchy(entry.object);copy.traverse(child=>{if(child.geometry)child.geometry=child.geometry.clone();if(child.material)child.material=Array.isArray(child.material)?child.material.map(cloneSceneMaterial):cloneSceneMaterial(child.material);});
     scene.add(copy);registerSceneObject(copy,record);
@@ -29073,9 +29433,9 @@ function duplicateSceneGroup(id,{interactive=false}={}) {
   else scenePlacementTools.edits.recordApplied(target,null,snapshot(),'Duplicate group');
   return groupId;
 }
-function duplicateSceneSelection(id,options={}){return sceneGroups.some(g=>g.id===id)?duplicateSceneGroup(id,{interactive:options.interactive===true}):duplicateSceneObject(id,{interactive:options.interactive===true});}
+function duplicateSceneSelection(id,options={}){if(sceneSelection.ids.length>1)return duplicateSelectedSceneObjects(options);return sceneGroups.some(g=>g.id===id)?duplicateSceneGroup(id,{interactive:options.interactive===true}):duplicateSceneObject(id,{interactive:options.interactive===true});}
 
-async function importSceneMesh(file) {
+async function importSceneMesh(file,{generation:origin=null,label=null,assetOrigin=null}={}) {
   assertSceneConstructionAvailable();if(!file?.name?.toLowerCase().endsWith('.glb'))throw Error('Choose a binary GLB mesh');
   const generation=sceneMutationToken,bytes=await file.arrayBuffer();
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -29084,11 +29444,30 @@ async function importSceneMesh(file) {
   if(receipt.schema!=='kaminos.generated-mesh.v0'||receipt.sha256!==digest||receipt.bytes!==bytes.byteLength||receipt.source!==`/api/read?root=generated-meshes&path=${digest}.glb`)throw Error('Mesh storage returned a different source');
   if(generation!==sceneMutationToken)throw Error('Scene changed while importing');assertSceneConstructionAvailable();
   const id=makeSceneObjectId('mesh'),target=ensureSceneObjectMembershipTarget(id);scenePlacementTools.edits.assertCanRecordApplied(target);
-  await showGLB(receipt.source,{clear:false,arrival:'append',isCurrent:()=>generation===sceneMutationToken&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:file.name.replace(/\.glb$/i,'')}});
+  await showGLB(receipt.source,{clear:false,arrival:'append',isCurrent:()=>generation===sceneMutationToken&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying&&!authoringBusy,metadata:{id,type:'glb',source:receipt.source,fileName:file.name,label:label||file.name.replace(/\.glb$/i,''),generation:origin,assetOrigin:assetOrigin?{...assetOrigin,sha256:digest}:null}});
   try{await recordSceneObjectInsertion(id);}catch(error){removeSceneObjectInternal(id,{recordHistory:false});throw error;}
   setInfo(`Imported ${file.name}`);return id;
 }
 const meshDataTargets=new Set();
+const colliderEditTargets=new Set();
+function writeObjectCollision(id,value) {
+  const entry=sceneObjects.find(record=>record.id===id)||sceneMembershipRetainedObjects.get(id);
+  if(!entry)throw Error('Collision object is absent');
+  entry.collision=checkedObjectCollision(entry,value);
+  if(entry.object.userData.kaminosSceneObject)entry.object.userData.kaminosSceneObject.collision=structuredClone(entry.collision);
+  syncSceneDataInspector();window._kaminosDirty?.();
+}
+function ensureObjectCollisionTarget(id) {
+  const entry=sceneObjects.find(record=>record.id===id);
+  if(!canCollideWithFire(entry))throw Error('Choose a mesh object for collision');
+  const target=`@object-collision:${id}`;
+  if(!colliderEditTargets.has(target)) {
+    scenePlacementTools.edits.register(target,{allowMissing:true,read:()=>checkedObjectCollision(sceneObjects.find(record=>record.id===id)||sceneMembershipRetainedObjects.get(id)),
+      check:value=>checkedObjectCollision(entry,value),write:value=>writeObjectCollision(id,value)});
+    colliderEditTargets.add(target);
+  }
+  return target;
+}
 function syncSceneDataInspector() {
   const entry=selectedSceneObjectEntry(),group=selectedSceneGroupEntry();
   const primitive=document.getElementById('selected-mesh-properties');if(!primitive)return;
@@ -29096,6 +29475,8 @@ function syncSceneDataInspector() {
   primitive.hidden=entry?.type!==PROCEDURAL_MESH_TYPE||entry.geometry?.kind==='annular';
   const relations=document.getElementById('selected-object-relations');relations.hidden=!entry;
   const duplicate=document.getElementById('object-duplicate');duplicate.disabled=!canDuplicateObject(entry);
+  const collisionPanel=document.getElementById('selected-collision-properties');
+  if(collisionPanel){collisionPanel.hidden=!canCollideWithFire(entry)||!activeSceneComposition;document.getElementById('object-fire-collision').checked=entry?.collision?.enabled===true;document.getElementById('object-fire-collision-status').textContent=!entry?.collision?.enabled?'Enable to use this object as an obstacle.':isAuthoredKilnCollisionRoute()?'Collision updates on the next simulation step.':'Scene collisions are off in Fire & smoke.';}
   const choice=document.getElementById('object-parent');choice.replaceChildren(...[['','None'],...sceneGroups.map(g=>[g.id,g.label])].map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option;}));choice.value=entry?.groupId||'';
   if(!primitive.hidden){
     document.getElementById('geometry-kind').textContent=entry.geometry.kind;
@@ -29138,10 +29519,17 @@ function installSceneConstruction() {
   const relations=document.createElement('section');relations.id='selected-object-relations';relations.hidden=true;
   relations.innerHTML='<h3>Relations</h3><label>Parent group<select id="object-parent"></select></label><button type="button" class="btn" id="object-duplicate">Duplicate · Shift D</button>';
   panel.after(relations);
+  const collisionPanel=document.createElement('section');collisionPanel.id='selected-collision-properties';collisionPanel.hidden=true;
+  collisionPanel.innerHTML='<h3>Physics</h3><label class="slider-row"><span class="slider-label">Fire & smoke obstacle</span><input id="object-fire-collision" type="checkbox"></label><p id="object-fire-collision-status" class="flame-scope"></p>';
+  panel.after(collisionPanel);scenePlacementTools.addHistoryScope(collisionPanel);
+  const collisionInput=document.getElementById('object-fire-collision');
+  collisionInput.addEventListener('change',()=>{try{const target=ensureObjectCollisionTarget(activeSceneObjectId);if(edits.state().active?.id===target)edits.preview({domainId:'flame-field',enabled:collisionInput.checked});}catch(error){setInfo(error.message);syncSceneDataInspector();}});
+  authoringControlSessions.push(installSceneControlHistory({controls:[collisionInput],edits,id:()=>ensureObjectCollisionTarget(activeSceneObjectId),label:'Set Fire & smoke obstacle',onError:error=>setInfo(error.message)}));
   const groupPanel=document.createElement('section');groupPanel.id='selected-group-properties';groupPanel.hidden=true;
   groupPanel.innerHTML='<h3>Group</h3><p>Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
-  window.kaminosSceneAuthoring={addLight:addSceneSpotLight,read:()=>({objects:sceneObjects.map(serializeSceneObject),groups:serializeSceneGroups(),activeFieldId:activeSceneFieldId}),addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+  window.kaminosSceneAuthoring={addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:activeSceneFieldId}),setFireSettings:editOwnedFireSettings,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+    setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
     ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),
     setGeometry:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.geometry=checkedGeometry({kind:patch.kind||record.geometry.kind,parameters:{...(patch.kind&&patch.kind!==record.geometry.kind?{}:record.geometry.parameters),...patch.parameters}});edits.apply(ensureMeshDataTarget(id),record,'Edit geometry');return record;},
     setLight:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.light={...record.light,...patch};edits.apply(ensureMeshDataTarget(id),checkedSceneLightRecord(record),'Edit light');return record;},
@@ -29169,7 +29557,189 @@ function groupProxy(group) {
   proxy.updateMatrixWorld(true);
   return proxy;
 }
+let sceneSelection={ids:[],activeId:null};
+let selectionTransforms=null,selectionProxy=null;
+let transformPreferences={orientation:'world',pivot:'median',explicit:true};
+let viewportHelpersVisible=true;
+const selectionBoxes=new Map();
+function sceneSelectionMembers(ids=sceneSelection.ids){return [...new Set(ids.flatMap(id=>id.startsWith('@group:')?sceneGroups.find(g=>g.id===id.slice(7))?.objectIds||[]:[id]))];}
+function selectionRootState(id){
+  if(id.startsWith('@group:')){const group=sceneGroups.find(g=>g.id===id.slice(7));if(!group)throw Error('Selected group is absent');return groupEditState(group);}
+  const entry=sceneObjects.find(o=>o.id===id);if(!entry)throw Error(`Selected object ${id} is absent`);
+  return entry.type==='splat'?splatSceneTransformState(entry):sceneObjectTransformState(entry.object);
+}
+function checkSelectionRoot(id,state){
+  if(id.startsWith('@group:')){
+    const group=sceneGroups.find(g=>g.id===id.slice(7));if(!group)throw Error('Selected group is absent');
+    const members=moveGroupMembers(state.frame,state,state.members);
+    if(Object.keys(members).sort().join()!==[...group.objectIds].sort().join())throw Error('Selected group membership changed');
+    for(const [member,pose] of Object.entries(members))checkSelectionRoot(member,pose);return;
+  }
+  const entry=sceneObjects.find(o=>o.id===id);if(!entry)throw Error('Selected object is absent');
+  checkedGroupPose(state);
+  if(entry.type==='light')checkedSceneLightRecord({...serializeSceneObject(entry),transform:state});
+  if(entry.type===FLAME_EMITTER_TYPE)normalizeFlameEmitterPose(state);
+  if(entry.type===LOCAL_LIQUID_EMITTER_TYPE)normalizeLocalLiquidEmitter(entry.localLiquidEmitter,state);
+}
+function selectionTransformProxy(){
+  if(!selectionProxy){selectionProxy=new THREE.Group();selectionProxy.userData.kaminosEditorHelper=true;scene.add(selectionProxy);}
+  if(selectionTransforms&&!transformControls?.dragging){const pose=selectionTransforms.pose();if(pose)applySceneObjectTransformState(selectionProxy,pose);}
+  selectionProxy.userData.kaminosSceneObject={label:`${sceneSelection.ids.length} selected`};selectionProxy.updateMatrixWorld(true);return selectionProxy;
+}
+function setSceneSelection(ids,activeId=ids.at(-1)??null){
+  const valid=new Set([...sceneObjects.map(o=>o.id),...sceneGroups.map(g=>'@group:'+g.id)]);
+  if(ids.some(id=>!valid.has(id)))throw Error('Selection contains an absent scene item');
+  const next=checkedSelection(ids,activeId);
+  if(JSON.stringify(next)!==JSON.stringify(sceneSelection)&&!burnerGraphWriting)scenePlacementTools?.selectionChanged();
+  sceneSelection=next;activeSceneFieldId=null;
+  activeSceneGroupId=next.activeId?.startsWith('@group:')?next.activeId.slice(7):null;
+  activeSceneObjectId=activeSceneGroupId?null:next.activeId;
+  currentMesh=next.ids.length>1?selectionTransformProxy():activeSceneGroupId?groupProxy(selectedSceneGroupEntry()):selectedSceneObjectEntry()?.object||null;
+  renderSceneObjectList();updateTransformInspector();renderPipelineDock();authoringWorkspace?.setContext('object');
+  if(transformControls){transformControls.detach();if(currentMesh){attachViewportGizmo(currentMesh);transformControls.setSpace(transformPreferences.orientation);}transformControls.visible=!!currentMesh;}
+  updateSelectionFeedback();window._kaminosDirty?.();return structuredClone(sceneSelection);
+}
+function updateSelectionFeedback(){
+  selectionFeedback?.setStyle({width:viewportDisplay.outlineWidth*(renderer?.getPixelRatio?.()??1),opacity:viewportDisplay.outlineOpacity});
+  selectionFeedback?.suspend(selectionCaptureSuspended||!viewportDisplay.overlays||!viewportDisplay.outlines);
+  const ids=new Set(sceneSelectionMembers());
+  const activeIds=activeSceneGroupId?sceneGroups.find(g=>g.id===activeSceneGroupId)?.objectIds||[]:[activeSceneObjectId];
+  selectionFeedback?.update(sceneObjects.filter(entry=>ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==CAMERA_TYPE&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE),activeIds);
+  for(const [id,box] of selectionBoxes)if(!ids.has(id)){box.removeFromParent();box.geometry.dispose();box.material.dispose();selectionBoxes.delete(id);}
+  for(const id of ids){const entry=sceneObjects.find(o=>o.id===id);if(!entry)continue;
+    let box=selectionBoxes.get(id);if(!box){box=new THREE.BoxHelper(entry.object);box.userData.kaminosEditorHelper=true;box.userData.kaminosEditorOnly=true;box.material.depthTest=false;box.renderOrder=1001;scene.add(box);selectionBoxes.set(id,box);}
+    box.object=entry.object;box.update();box.material.color.set(id===activeSceneObjectId||activeSceneGroupId&&sceneGroups.find(g=>g.id===activeSceneGroupId)?.objectIds.includes(id)?0xffc66d:0xe78932);
+    styleHelperLines(box,{width:viewportDisplay.outlineWidth,opacity:viewportDisplay.outlineOpacity});
+    box.visible=!selectionCaptureSuspended&&viewportBoundsVisible&&entry.object.visible;
+  }
+}
+function syncEditorHelperVisibility(){
+  for(const entry of sceneObjects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE){entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});}}
+  for(const {marker,light} of sceneSpotLights.values())marker.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&light.visible;
+  if(flameDomainGuide){flameDomainGuide.visible= !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleHelperLines(flameDomainGuide,{width:viewportDisplay.domainWidth,opacity:viewportDisplay.domainOpacity});}
+  for(const entry of sceneObjects)if(entry.type===CAMERA_TYPE)entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&!(sceneCameras?.state().mode==='camera'&&sceneCameras.state().activeId===entry.id);
+  updateSelectionFeedback();window._kaminosDirty?.();
+}
+function selectedRootIds(){return selectionTransformRoots(sceneSelection.ids,sceneGroups);}
+function setupSelectionTransforms(){
+  selectionTransforms=createSelectionTransformTarget({edits:scenePlacementTools.edits,selection:()=>sceneSelection,groups:()=>sceneGroups,preferences:()=>transformPreferences,
+    read:selectionRootState,write:applyAuthoredScenePose,check:checkSelectionRoot,changed:pose=>{if(selectionProxy)applySceneObjectTransformState(selectionProxy,pose);updateSelectionFeedback();}});
+  scenePlacementTools.edits.register('@selection-membership',{read:readSelectionMembership,check:checkSelectionMembership,write:writeSelectionMembership});
+  window.kaminosSelection={duplicate:duplicateSelectedSceneObjects,remove:removeSelectedSceneObjects,group:groupSelectedObjects,ungroup:ungroupSelectedObjects,read:()=>structuredClone({...sceneSelection,memberIds:sceneSelectionMembers(),preferences:transformPreferences}),
+    set:(ids,activeId)=>setSceneSelection(ids,activeId),all:()=>setSceneSelection([...sceneGroups.map(g=>'@group:'+g.id),...sceneObjects.map(o=>o.id)]),clear:()=>clearActiveSceneObjectSelection(),
+    transform:patch=>selectionTransforms.apply(patch),settings:patch=>{scenePlacementTools.finish(false);const next={...transformPreferences,...patch};selectionFrame({test:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}},'test',next);transformPreferences=next;if(sceneSelection.ids.length)setSceneSelection(sceneSelection.ids,sceneSelection.activeId);return {...next};}};
+}
+
+function readSelectionMembership(){return {objects:sceneObjects.map(serializeSceneObject),groups:serializeSceneGroups(),selection:structuredClone(sceneSelection),field:activeSceneFieldId,domain:[...flameDomainTranslation],domainScale:flameDomainScale,domainFollowSource:flameDomainFollowSource,activeCameraId:sceneCameras?.read().settings.activeId??null};}
+function checkSelectionMembership(raw){
+  const value=structuredClone(raw);if(!Array.isArray(value.objects)||!Array.isArray(value.groups))throw Error('Scene membership records are required');
+  const ids=new Set();for(const record of value.objects){if(!record.id||ids.has(record.id)||!isReloadableSceneObjectRecord(record))throw Error('Scene member has no retained source');ids.add(record.id);checkedPose(record.transform);}
+  for(const group of value.groups){checkedGroupPose(group.transform);if(group.objectIds.some(id=>!ids.has(id)))throw Error('Group refers to an absent scene member');}
+  checkedSelection(value.selection.ids,value.selection.activeId);normalizeFlameDomainTranslation(value.domain);normalizeFlameDomainScale(value.domainScale??1);if(value.domainFollowSource!==undefined&&typeof value.domainFollowSource!=='boolean')throw Error('Domain follow-source must be Boolean');return value;
+}
+function detachSelectionMember(id){
+  if(id===FLAME_EMITTER_ID){authoredFlamePresent=false;applyFlameEmitterPose?.(flameEmitterPose,{sourceEnabled:false});ensureAuthoredFlameEmitter();for(const group of sceneGroups)group.objectIds=group.objectIds.filter(member=>member!==id);pruneSceneGroups();return;}
+  removeSceneObjectInternal(id,{recordHistory:false,preserveForMembershipHistory:true});
+}
+async function writeSelectionMembershipUnchecked(value){
+  const ids=new Set(value.objects.map(o=>o.id));
+  for(const entry of [...sceneObjects])if(!ids.has(entry.id))detachSelectionMember(entry.id);
+  for(const record of value.objects){
+    let entry=sceneObjects.find(o=>o.id===record.id);
+    if(!entry){
+      const retained=sceneMembershipRetainedObjects.get(record.id);
+      if(retained){entry=retained;sceneObjects.push(entry);setSceneObjectMounted(entry,true);if(entry.type==='light')mountSceneSpotLight(record);if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);}
+      else {await addSceneObjectFromSource(record);entry=sceneObjects.find(o=>o.id===record.id);}
+    }
+    const existing=serializeSceneObject(entry);
+    if(JSON.stringify(existing.transform)!==JSON.stringify(record.transform))applyAuthoredScenePose(record.id,record.transform);
+    if(entry.type==='light'&&JSON.stringify(entry.light)!==JSON.stringify(record.light))mountSceneSpotLight(record);
+    entry.label=record.label;entry.groupId=record.groupId;entry.object.userData.kaminosSceneObject={...entry.object.userData.kaminosSceneObject,label:record.label,groupId:record.groupId};
+  }
+  sceneObjects=value.objects.map(record=>sceneObjects.find(entry=>entry.id===record.id));
+  sceneGroups=structuredClone(value.groups);for(const group of sceneGroups)ensureGroupTarget(group);
+  setFlameDomainTranslation(value.domain,value.domainScale??1);flameDomainFollowSource=value.domainFollowSource??true;if(authoredFlamePresent&&applyFlameEmitterPose&&window.__kaminosVolumeEmitterReceipt?.effective?.family!=='cluster')writeAuthoredFlameEmitterPose(flameEmitterPose);
+  sceneCameras?.membershipChanged(value.activeCameraId??null);
+  if(value.field)window.selectSceneField(value.field);else setSceneSelection(value.selection.ids,value.selection.activeId);
+  renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();
+}
+async function writeSelectionMembership(raw){const value=checkSelectionMembership(raw),before=readSelectionMembership();try{await writeSelectionMembershipUnchecked(value);}catch(error){await writeSelectionMembershipUnchecked(before);throw error;}}
+function removeSelectedSceneObjects(){
+  assertSceneConstructionAvailable();const ids=sceneSelectionMembers();if(!ids.length)return false;
+  const before=checkSelectionMembership(readSelectionMembership());
+  for(const id of ids)compoundRetentionTargets.set(id,'@selection-membership');
+  for(const id of ids)detachSelectionMember(id);
+  clearActiveSceneObjectSelection();
+  scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`Remove ${ids.length} selected`);
+  setInfo(`Removed ${ids.length} selected · Undo restores`);return true;
+}
+function duplicateSelectedSceneObjects({interactive=false}={}){
+  assertSceneConstructionAvailable();const roots=selectedRootIds(),members=sceneSelectionMembers(roots);
+  if(members.some(id=>!canDuplicateObject(sceneObjects.find(o=>o.id===id))))throw Error('This selection contains a source whose independent duplication is unsupported');
+  const before=checkSelectionMembership(readSelectionMembership()),copies=new Map(),newRoots=[];
+  try{
+    for(const id of members){const copy=duplicateSceneObject(id,{deferRecord:true});copies.set(id,copy);compoundRetentionTargets.set(copy,'@selection-membership');}
+    for(const id of roots){
+      if(id.startsWith('@group:')){const group=sceneGroups.find(g=>g.id===id.slice(7));const copyId=makeSceneObjectId('group');createSceneGroupForObjects(group.objectIds.filter(id=>copies.has(id)).map(id=>copies.get(id)),`${group.label} copy`,{id:copyId,transform:structuredClone(group.transform)});newRoots.push('@group:'+copyId);}
+      else newRoots.push(copies.get(id));
+    }
+    setSceneSelection(newRoots,newRoots.at(-1));
+  }catch(error){for(const id of copies.values())detachSelectionMember(id);sceneGroups=structuredClone(before.groups);setSceneSelection(before.selection.ids,before.selection.activeId);throw error;}
+  const complete=({commit})=>{
+    scenePlacementTools.edits.discard(entry=>entry.id==='@selection-transform'&&Object.keys(entry.after?.roots||{}).some(id=>newRoots.includes(id)||[...copies.values()].includes(id))||[...copies.values()].includes(entry.id));
+    if(commit)scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`Duplicate ${members.length} selected`);
+    else{for(const id of copies.values())detachSelectionMember(id);sceneGroups=structuredClone(before.groups);setSceneSelection(before.selection.ids,before.selection.activeId);releaseUnreferencedSceneMembershipObjects();}
+  };
+  if(interactive){if(!scenePlacementTools.start('translate',complete)){complete({commit:false});throw Error('Could not start duplicate placement');}}
+  else complete({commit:true});return newRoots;
+}
+function groupSelectedObjects(label='Group'){
+  const ids=sceneSelectionMembers();if(!ids.length)throw Error('Choose objects to group');setSceneSelection(ids,ids.at(-1));return groupSceneObjects(ids,label);
+}
+function ungroupSelectedObjects(){
+  const ids=sceneSelectionMembers();setSceneSelection(ids,ids.at(-1));
+  editSceneGroups(groups=>{for(const group of groups)group.objectIds=group.objectIds.filter(id=>!ids.includes(id));groups.splice(0,groups.length,...groups.filter(g=>g.objectIds.length));},'Unparent selected');
+  setSceneSelection(ids,ids.at(-1));
+}
+function syncSelectionInspector(){
+  let summary=document.getElementById('selection-properties-summary');if(!summary){summary=document.createElement('p');summary.id='selection-properties-summary';summary.className='selection-summary';document.getElementById('transform-inspector').prepend(summary);}
+  const slot=document.getElementById('authoring-type-slot');if(slot&&summary.parentElement!==slot)slot.prepend(summary);
+  summary.hidden=sceneSelection.ids.length<2;if(summary.hidden)return;
+  const active=selectedSceneObjectEntry()||selectedSceneGroupEntry(),poses=selectedRootIds().map(selectionRootState);
+  const mixed=['position','rotation','scale'].filter(key=>mixedSelectionValue(poses.map(p=>p[key])).mixed);
+  summary.textContent=`${sceneSelection.ids.length} selected · Active: ${active?.label||sceneSelection.activeId}. Transform fields edit the selection frame; data below edits the active item. ${mixed.length?`Mixed ${mixed.join(', ')}.`:''}`;
+}
+function installSelectionInput(){
+  let box=null,suppressBoxClick=false;const rect=document.createElement('div');rect.id='scene-selection-box';rect.hidden=true;document.getElementById('viewport').append(rect);
+  function stopBox(){if(!box)return;controls.enabled=box.prior;box=null;rect.hidden=true;}
+  function beginBox(){if(scenePlacementTools.edits.state().active)return;if(box)return;box={start:null,prior:controls.enabled};setInfo('Box selection · LMB adds · MMB removes · Escape cancels');}
+  window.kaminosSelection.box=beginBox;
+  document.addEventListener('keydown',event=>{
+    if(viewPie?.state()||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||event.ctrlKey||event.metaKey||(event.altKey&&event.key.toLowerCase()!=='a')||greenroomPreviewIsActive()||scenePlacementTools.state().modal)return;
+    if(box&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();stopBox();return;}
+    if(event.key.toLowerCase()==='b'){event.preventDefault();beginBox();}
+    if(event.key.toLowerCase()==='a'){event.preventDefault();event.altKey?window.kaminosSelection.clear():window.kaminosSelection.all();}
+  },true);
+  document.addEventListener('pointerdown',event=>{
+    if(!box||viewportEventHitsInteractiveOverlay(event)||!viewportEventIsInsideCanvas(event))return;
+    event.preventDefault();event.stopImmediatePropagation();if(event.button===2){stopBox();return;}controls.enabled=false;box.start={x:event.clientX,y:event.clientY};box.subtract=event.button===1;rect.hidden=false;
+  },true);
+  document.addEventListener('pointermove',event=>{
+    if(!box?.start)return;const vp=document.getElementById('viewport').getBoundingClientRect();
+    Object.assign(rect.style,{left:Math.min(box.start.x,event.clientX)-vp.left+'px',top:Math.min(box.start.y,event.clientY)-vp.top+'px',width:Math.abs(event.clientX-box.start.x)+'px',height:Math.abs(event.clientY-box.start.y)+'px'});
+  },true);
+  document.addEventListener('pointerup',event=>{
+    if(!box?.start)return;event.preventDefault();event.stopImmediatePropagation();
+    const ids=objectsInScreenBox(sceneObjects,camera,{x0:box.start.x,y0:box.start.y,x1:event.clientX,y1:event.clientY},renderer.domElement.getBoundingClientRect());
+    const next=box.subtract?sceneSelection.ids.filter(id=>!ids.includes(id)):[...new Set([...sceneSelection.ids,...ids])];stopBox();setSceneSelection(next,next.at(-1));suppressBoxClick=true;
+  },true);
+  document.addEventListener('click',event=>{if(suppressBoxClick){event.preventDefault();event.stopImmediatePropagation();suppressBoxClick=false;}},true);
+  window.addEventListener('blur',stopBox);
+}
+
 function selectedPlacementEntry() {
+  if(activeSceneFieldId==='flame-field')return {id:'@flame-domain',type:'simulation-domain',label:'Fire & smoke domain',object:flameDomainEditObject()};
+  if(sceneSelection.ids.length>1)return {id:'@selection-transform',type:'selection',label:`${sceneSelection.ids.length} selected · ${selectedSceneObjectEntry()?.label||selectedSceneGroupEntry()?.label||''}`,object:selectionTransformProxy()};
   const group=selectedSceneGroupEntry();
   return group?.type===GROUP_TYPE
     ? {id:`@group:${group.id}`,type:GROUP_TYPE,label:group.label,object:groupProxy(group)}
@@ -29177,6 +29747,7 @@ function selectedPlacementEntry() {
 }
 function frameAuthoredSelection() {
   if(activeSceneFieldId==='flame-field'&&flameDomainGuide)return frameObjects([flameDomainGuide],camera,controls);
+  if(sceneSelection.ids.length>1)return frameObjects(sceneObjects.filter(o=>sceneSelectionMembers().includes(o.id)).map(o=>o.object),camera,controls);
   const group=selectedSceneGroupEntry();
   return group ? frameObjects(sceneObjects.filter(entry=>group.objectIds.includes(entry.id)).map(entry=>entry.object),camera,controls)
     : frameSceneObjectRecord(selectedSceneObjectEntry(),camera,controls);
@@ -29214,9 +29785,11 @@ function writeGroupPose(id,value) {
 }
 function mountProceduralMesh(raw) {
   const record=checkedProceduralMesh(raw),previous=sceneObjects.find(entry=>entry.id===record.id);
-  const bed=createProceduralMesh(THREE,mergeGeometries,record.geometry,record.surface);
+  const existing=proceduralMeshes.get(record.id),reuse=existing?.updateSurface&&JSON.stringify(previous.geometry)===JSON.stringify(record.geometry);
+  const bed=reuse?existing:createProceduralMesh(THREE,mergeGeometries,record.geometry,record.surface);
+  if(reuse)bed.updateSurface(record.surface);
   applySceneObjectTransformState(bed.group,record.transform);
-  proceduralMeshes.get(record.id)?.dispose();
+  if(!reuse)existing?.dispose();
   proceduralMeshes.set(record.id,bed);
   const entry={...record,object:bed.group};
   bed.group.userData.kaminosSceneObject={...record};
@@ -29228,11 +29801,11 @@ function mountProceduralMesh(raw) {
 function readBurnerGraph() {
   return {objects:sceneObjects.filter(entry=>[PROCEDURAL_MESH_TYPE,FLAME_EMITTER_TYPE].includes(entry.type)).map(serializeSceneObject),
     groups:serializeSceneGroups(),
-    domain:[...flameDomainTranslation]};
+    domain:[...flameDomainTranslation],domainScale:flameDomainScale,domainFollowSource:flameDomainFollowSource};
 }
 function checkBurnerGraph(value) {
   const result=structuredClone(value),ids=new Set();
-  result.domain=normalizeFlameDomainTranslation(result.domain);
+  result.domain=normalizeFlameDomainTranslation(result.domain);result.domainScale=normalizeFlameDomainScale(result.domainScale??1);if(result.domainFollowSource!==undefined&&typeof result.domainFollowSource!=='boolean')throw Error('Domain follow-source must be Boolean');
   if(!Array.isArray(result.objects)||!Array.isArray(result.groups))throw Error('Burner scene records are required');
   for(const record of result.objects){
     if(ids.has(record.id))throw Error('Duplicate burner object');ids.add(record.id);
@@ -29269,7 +29842,7 @@ function writeBurnerGraphUnchecked(next) {
     Object.assign(entry,{label:record.label,createdAt:record.createdAt??entry.createdAt});
     Object.assign(entry.object.userData.kaminosSceneObject,{label:entry.label,createdAt:entry.createdAt});
   }
-  setFlameDomainTranslation(next.domain);
+  setFlameDomainTranslation(next.domain,next.domainScale??1);flameDomainFollowSource=next.domainFollowSource??true;
   if(authoredFlamePresent)writeAuthoredFlameEmitterPose(flameEmitterPose);
   sceneGroups=structuredClone(next.groups);
   for(const entry of sceneObjects)setSceneObjectGroupId(entry,next.groups.find(group=>group.objectIds.includes(entry.id))?.id||null);
@@ -29472,10 +30045,10 @@ function restoreBurnerControlHistoryState(value) {
 }
 
 function updateAnnularBurnerFrame(now) {
-  for(const [id,mesh] of proceduralMeshes){const entry=sceneObjects.find(o=>o.id===id);if(!entry)continue;const bound=entry.surface?.fieldBinding==='flame-field';mesh.update(bound&&authoredFlamePresent?window.__kaminosVolumeEmitterReceipt:null,bound&&authoredFlamePresent&&!flameEmitterInjectionSuspended&&!!volumePrototype?.debugState?.().active,now,flameDomainTranslation,{authored:true});}
+  for(const [id,mesh] of proceduralMeshes){const entry=sceneObjects.find(o=>o.id===id);if(!entry)continue;const bound=entry.surface?.fieldBinding==='flame-field';mesh.update(bound&&authoredFlamePresent?window.__kaminosVolumeEmitterReceipt:null,bound&&authoredFlamePresent&&!flameEmitterInjectionSuspended&&!!volumePrototype?.debugState?.().active,now,flameDomainTranslation,{authored:true,domainScale:flameDomainScale});}
   if (!annularBurner) return;
   const state = annularBurner.update(window.__kaminosVolumeEmitterReceipt,
-    !!volumePrototype?.debugState?.().active, now, flameDomainTranslation);
+    !!volumePrototype?.debugState?.().active, now, flameDomainTranslation,{domainScale:flameDomainScale});
   const status = document.getElementById('burner-status');
   const message = burnerError || (state.reason === 'ring-emitter-unavailable' ? 'No compatible ring emitter' : state.reason === 'emitter-outside-bed' ? 'Flame footprint extends beyond the bed' : '');
   if (status.textContent !== message && !document.activeElement?.id?.startsWith('burner-')) status.textContent = message;
@@ -29577,6 +30150,7 @@ function sceneSaveIsBlocked() {
     setInfo('Wait for the current scene history action to finish');
     return true;
   }
+  if((activeSceneComposition||isFireLightFieldRoute())&&volumePrototype?.debugState?.().gridHeight?.admitted===false){setInfo('Requested simulation grid was refused; Undo or choose supported dimensions before saving');return true;}
   if (greenroomPreviewIsActive()) {
     setInfo('Greenroom preview is temporary; import or go back before saving');
     return true;
@@ -29683,7 +30257,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   const loadRequestId = sceneLoadRequests.begin();
   const previousSceneFile = currentSceneFile;
   const previousVolumePrimitiveState = getVolumePrimitiveState();
-  const previousFlameDomainTranslation = [...flameDomainTranslation];
+  const previousFlameDomainTranslation = [...flameDomainTranslation],previousFlameDomainScale=flameDomainScale,previousFlameDomainFollowSource=flameDomainFollowSource;
   sceneSaveBlockedByFailedRestore = true;
   const text = await file.text();
   if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
@@ -29725,7 +30299,10 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     location.assign(compositionRestoreUrl(restorePlan.composition, sceneFile, location.origin));
     return;
   }
+  if(restorePlan.editorDisplay)window.kaminosViewportSettings.set(restorePlan.editorDisplay);
   activeSceneComposition = restorePlan.composition;
+  if(restorePlan.fireDomain)writeKilnCollisionState({enabled:restorePlan.fireDomain.simulation.collision});
+  else if(activeSceneComposition?.route.volume_collision!==undefined)writeKilnCollisionState({enabled:activeSceneComposition.route.volume_collision==='kiln'});
   authoredFlamePresent=restorePlan.flameSourcePresent;
   if (activeSceneComposition && !objectRecords.some(record => record.type === FLAME_EMITTER_TYPE)) {
     flameEmitterPose = defaultFlameEmitterPose();
@@ -29788,15 +30365,15 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   setRimLight(data.environment?.rimLight);
 
   const restoredFlame = objectRecords.find(record => record.type === FLAME_EMITTER_TYPE);
-  setFlameDomainTranslation(restoredFlame
-    ? restorePlan.flameDomainTranslation : [0, 0, 0]);
+  setFlameDomainTranslation(restorePlan.flameDomainTranslation || [0, 0, 0],restorePlan.flameDomainScale);
+  flameDomainFollowSource=restorePlan.flameDomainFollowSource;
   if (objectRecords.length > 0) {
     try {
       const loadStage = await sceneLoadRequests.awaitStage(loadRequestId, loadSceneObjects(objectRecords, restorePlan.activeObjectId, restorePlan.groups, restorePlan.activeGroupId, restorePlan.localLiquid, loadRequestId));
       if (!loadStage.current || !loadStage.value || !sceneLoadRequests.isCurrent(loadRequestId)) return;
     } catch (e) {
       if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
-      setFlameDomainTranslation(previousFlameDomainTranslation);
+      setFlameDomainTranslation(previousFlameDomainTranslation,previousFlameDomainScale);flameDomainFollowSource=previousFlameDomainFollowSource;
       setVolumePrimitivesState(previousVolumePrimitiveState);
       sceneSaveBlockedByFailedRestore = true;
       currentSceneFile = null;
@@ -29816,8 +30393,15 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     ensureAuthoredFlameEmitter();
   }
 
+  if(restorePlan.fireSettings) {
+    // The basin is a boot/migration dependency. Authored records own the saved
+    // coefficients; a changed page default or basin cannot replace them.
+    writeFlameSettingsState({...restorePlan.fireSettings,sourcePose:flameEmitterPose,source:activeVolumeSettingsPresetReceipt});
+  }
+
   if (legacyBurner?.enabled !== false && legacyBurner && !objectRecords.some(record=>record.type===PROCEDURAL_MESH_TYPE)) migrateLegacyBurner(legacyBurner);
   if (!authoredFlamePresent) applyFlameEmitterPose?.(flameEmitterPose,{sourceEnabled:false});
+  if(Array.isArray(data.selectionIds)){const valid=data.selectionIds.filter(id=>sceneObjects.some(o=>o.id===id)||sceneGroups.some(g=>'@group:'+g.id===id));setSceneSelection(valid,valid.includes(data.activeGroupId?'@group:'+data.activeGroupId:data.activeObjectId)?(data.activeGroupId?'@group:'+data.activeGroupId:data.activeObjectId):valid.at(-1)??null);}
   if(data.activeFieldId && (data.activeFieldId==='flame-field'?activeSceneComposition:localLiquidSetup))window.selectSceneField(data.activeFieldId);
 
   // The pinned basin is already mounted. Reapplying identical primitives would
@@ -29835,7 +30419,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   }
 
   syncRimAuthoringHandle();
-  if (data.activeObjectId === RIM_LIGHT_ID) setActiveSceneObject(RIM_LIGHT_ID);
+  if (!Array.isArray(data.selectionIds) && data.activeObjectId === RIM_LIGHT_ID) setActiveSceneObject(RIM_LIGHT_ID);
 
   // Apply camera
   if (data.camera) {
@@ -29933,6 +30517,11 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     gain.dispatchEvent(new Event('input'));
     compositionStatus(`${data.label || 'Composition'} | ${activeSceneComposition.flame.label}`);
   }
+  sceneCameras?.restore(restorePlan.sceneCamera);
+  sceneCameras?.restoreViewport(restorePlan.viewport);
+  cameraViews?.restore(restorePlan.cameraViews);
+  sceneNavigation?.resetView();
+  cameraAuthoring?.refresh();
   sceneSaveBlockedByFailedRestore = false;
   if (objectRecords.length > 0) {
     setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}${localLiquidFailure ? `; water host unavailable: ${localLiquidFailure}` : ''}`);
@@ -30110,6 +30699,31 @@ sceneInitialization.then(() => {
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 });
+
+function setupAuthoringAssets(){
+  let redraw=()=>{};
+  const request=async url=>{const response=await fetch(url,{cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error||`Assets HTTP ${response.status}`);return data;};
+  const generation=()=>{
+    if(!authoringGenerator)authoringGenerator=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:volumePrototype,host:compositionHost}),changed:()=>redraw(),blocked:()=>{
+      if(compositionModule)return 'This scene has another inference/performance host. Use its existing generation controls.';
+      return null;
+    }});
+    return authoringGenerator;
+  };
+  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>sceneObjects.find(entry=>entry.source===source)?.label,changed:state=>authoringAssetsUI?.render(state),
+    uploadImage:async file=>{
+      const response=await fetch('/api/ingest-image?'+new URLSearchParams({name:file.name}),{method:'POST',body:await file.arrayBuffer()});const value=await response.json();
+      if(!response.ok||value.schema!=='kaminos.asset-ingest.v0'||value.kind!=='image'||!value.entry?.source)throw Error(value.error||'Image storage failed');return value.entry;
+    },
+    addMesh:async entry=>{
+      if(entry.file)return importSceneMesh(entry.file);
+      const response=await fetch(entry.source);if(!response.ok)throw Error(`Mesh source HTTP ${response.status}`);
+      return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
+    }});
+  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>authoringAssetsUI.render(authoringAssets.read());
+  window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state()};
+}
+
 </script>
 <script>
 // Help text lives behind a small info mark on each control row: the

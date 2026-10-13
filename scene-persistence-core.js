@@ -1,14 +1,19 @@
+import {checkedViewportDisplay} from './viewport-display-settings.mjs';
+import {checkedObjectCollision,canCollideWithFire,checkSceneCollisionReferences} from './scene-collider.mjs';
+import {FIRE_DOMAIN_TYPE,checkedFireDomainRecord,authorFireObjects,readFireObjects,fireRenderingSettings} from './scene-fire-domain.mjs';
 import {RIM_LIGHT_ID,checkedRimRecipe,rimRecipePose,checkedSceneLightRecord} from './scene-rim-light.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh} from './scene-geometry.mjs';
 import {GROUP_TYPE,identityGroupPose,checkedGroupPose} from './scene-group.mjs';
 import {BURNER_BED_TYPE,BURNER_BED_SOURCE,BURNER_ASSEMBLY_TYPE,checkedBurnerBed,checkedAssemblyPose} from './burner-assembly.mjs';
 import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFlameEmitterPose,
-  flameDomainTranslationForPose, normalizeFlameDomainTranslation, flamePoseInDomain } from './scene-flame-emitter.mjs';
+  flameDomainTranslationForPose, normalizeFlameDomainTranslation, normalizeFlameDomainScale, flamePoseInDomain,flameDomainControlsFromSettings } from './scene-flame-emitter.mjs';
 import { LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';
+import {normalizeCameraViews} from './scene-camera-views.mjs';
+import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,normalizeSceneCamera,normalizeCameraViewport} from './scene-camera.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 7;
+export const SCENE_VERSION = 10;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -17,6 +22,8 @@ function cloneJson(value) {
 
 function normalizeSceneObjectRecord(record) {
   if (!record || typeof record !== 'object') throw new Error('Scene object record must be an object');
+  if(record.type===FIRE_DOMAIN_TYPE)return checkedFireDomainRecord(record);
+  if(record.type===CAMERA_TYPE)record=checkedCameraRecord(record);
   if(record.type==='light')record=checkedSceneLightRecord(record);
   const id = String(record.id || record.fileName || record.source || 'object');
   if (record.type === FLAME_EMITTER_TYPE && (id !== FLAME_EMITTER_ID || record.source !== FLAME_EMITTER_SOURCE)) {
@@ -25,8 +32,11 @@ function normalizeSceneObjectRecord(record) {
   if (record.type === BURNER_BED_TYPE || record.type==='burner-bed' || record.type===PROCEDURAL_MESH_TYPE) record=checkedProceduralMesh(record);
   return {
     id,
+    ...(record.type===CAMERA_TYPE?{camera:cloneJson(record.camera)}:{}),
     ...(record.type==='light'?{light:cloneJson(record.light)}:{}),
     ...(record.type === PROCEDURAL_MESH_TYPE ? {geometry:cloneJson(record.geometry),surface:cloneJson(record.surface)} : {}),
+    ...(record.emission?{emission:cloneJson(record.emission)}:{}),
+    ...((canCollideWithFire(record)||record.collision!=null)?{collision:checkedObjectCollision(record)}:{}),
     source: record.source ?? null,
     type: record.type ?? 'glb',
     fileName: record.fileName ?? 'object.glb',
@@ -41,6 +51,8 @@ function normalizeSceneObjectRecord(record) {
     materials: cloneJson(record.materials ?? null),
     splat: cloneJson(record.splat ?? null),
     image: cloneJson(record.image ?? null),
+    ...(record.generation?{generation:cloneJson(record.generation)}:{}),
+    ...(record.assetOrigin?{assetOrigin:cloneJson(record.assetOrigin)}:{}),
     renderRoute: record.renderRoute ?? null,
     renderCapabilities: cloneJson(record.renderCapabilities ?? null),
     renderHandoffSchema: record.renderHandoffSchema ?? null,
@@ -98,6 +110,11 @@ export function getSceneObjectRecords(data) {
     const light={...checkedRimRecipe(data.environment.rimLight),kind:'spot',role:'rim'};
     records.push(normalizeSceneObjectRecord({id:RIM_LIGHT_ID,type:'light',source:'kaminos:scene-spot-light',label:'Rim light',fileName:'Spot light',light,transform:rimRecipePose(light)}));
   }
+  if(data?.version<10 && (data.composition || records.some(record=>record.type===FIRE_DOMAIN_TYPE))) {
+    const kiln=records.find(record=>record.id==='kiln'&&canCollideWithFire(record));
+    const raw=data.objects?.find(record=>record.id==='kiln');
+    if(kiln && !Object.hasOwn(raw??{},'collision'))kiln.collision={domainId:'flame-field',enabled:true};
+  }
   return records;
 }
 
@@ -124,6 +141,7 @@ export function sceneDocumentIsLoadable(data) {
 }
 
 export function isReloadableSceneObjectRecord(record) {
+  if(record?.type===CAMERA_TYPE&&record.source===CAMERA_SOURCE){try{checkedCameraRecord(record);return true;}catch{return false;}}
   if(record?.type==='light' && record.source==='kaminos:scene-spot-light'){try{if(record.light?.kind!=='spot')return false;checkedSceneLightRecord(record);return true;}catch{return false;}}
   if(record?.type===PROCEDURAL_MESH_TYPE && record.source===PROCEDURAL_MESH_SOURCE){try{checkedProceduralMesh(record);return true;}catch{return false;}}
 
@@ -140,17 +158,26 @@ export function isReloadableSceneObjectRecord(record) {
 }
 
 export function planSceneRestore(data) {
+  if(Number(data?.version)>SCENE_VERSION)throw Error('Scene version requires a newer authoring client');
   if (!sceneDocumentIsLoadable(data)) throw new Error('Invalid scene format');
-  const objects = getSceneObjectRecords(data);
+  const authoredObjects = getSceneObjectRecords(data);
+  checkSceneCollisionReferences(authoredObjects,{implicitFireDomain:data.version<9&&!!normalizeComposition(data.composition)});
+  const fire = authoredObjects.some(o=>o.type===FIRE_DOMAIN_TYPE)?readFireObjects(authoredObjects,data.fireRendering):null;
+  if(data.version>=9 && data.composition && !fire)throw Error('Saved fire domain is missing');
+  if(fire)data={...data,flameDomainTranslation:fire.frame.translation,flameDomainScale:fire.frame.scale,flameDomainFollowSource:fire.frame.followSource};
+  const objects = authoredObjects.filter(o=>o.type!==FIRE_DOMAIN_TYPE);
   const flameSources = objects.filter(record => record.type === FLAME_EMITTER_TYPE);
   if (flameSources.length > 1) throw new Error('The current flame domain supports one authored source');
   if (flameSources.length && !normalizeComposition(data.composition)) throw new Error('Flame source requires its saved flame composition');
-  const flameDomainTranslation = flameSources.length
+  const flameDomainTranslation = (flameSources.length || normalizeComposition(data.composition))
     ? (data.flameDomainTranslation === undefined
-      ? flameDomainTranslationForPose(flameSources[0].transform)
+      ? (flameSources.length ? flameDomainTranslationForPose(flameSources[0].transform,flameDomainControlsFromSettings(fire?.settings)) : [0,0,0])
       : normalizeFlameDomainTranslation(data.flameDomainTranslation))
     : null;
-  if (flameSources.length && !flamePoseInDomain(flameSources[0].transform, flameDomainTranslation)) {
+  const flameDomainScale = normalizeFlameDomainScale(data.flameDomainScale);
+  const flameDomainFollowSource = data.flameDomainFollowSource ?? true;
+  if (typeof flameDomainFollowSource !== 'boolean') throw new Error('Flame domain follow-source must be Boolean');
+  if (flameSources.length && flameDomainFollowSource && !flamePoseInDomain(flameSources[0].transform, flameDomainTranslation, flameDomainScale,flameDomainControlsFromSettings(fire?.settings))) {
     throw new Error('Saved flame source lies outside its authored simulation domain');
   }
   const localLiquid = normalizeLocalLiquidSetup(data.localLiquid);
@@ -161,10 +188,15 @@ export function planSceneRestore(data) {
   const loadedIds = new Set(objects.map(record => record.id));
   const requestedActiveId = data.activeObjectId && loadedIds.has(data.activeObjectId) ? data.activeObjectId : null;
   const requestedActiveGroupId = data.activeGroupId && groups.some(group => group.id === data.activeGroupId) ? data.activeGroupId : null;
-  const activeObjectId = requestedActiveId || objects.at(-1)?.id || null;
+  const activeObjectId = requestedActiveId || (Array.isArray(data.selectionIds)?null:objects.at(-1)?.id || null);
   return {
     schema: data.schema || null,
+    cameraViews: normalizeCameraViews(data.cameraViews),
+    sceneCamera:normalizeSceneCamera(data.sceneCamera,objects),
+    editorDisplay:data.editorDisplay==null?null:checkedViewportDisplay(data.editorDisplay),
+    viewport:normalizeCameraViewport(data.viewport,normalizeSceneCamera(data.sceneCamera,objects)),
     version: data.version,
+    authoredObjects,fireSettings:fire?.settings??null,fireDomain:fire?.domain??null,
     objects,
     groups,
     activeObjectId,
@@ -172,7 +204,7 @@ export function planSceneRestore(data) {
     volumePrimitives: normalizeVolumePrimitiveState(data.volumePrimitives),
     hasVolumePrimitiveScene: hasVolumePrimitives(data),
     composition: normalizeComposition(data.composition),
-    flameDomainTranslation,
+    flameDomainTranslation, flameDomainScale, flameDomainFollowSource,
     flameSourcePresent: flameSources.length > 0 || (data.version < 6 && !!data.composition),
     localLiquid,
   };
@@ -184,14 +216,21 @@ export function buildSceneDocument({
   groups = [],
   activeObjectId = null,
   activeGroupId = null,
-  activeFieldId = null,
+  activeFieldId = null, selectionIds = null,
   volumePrimitives = { schema: VOLUME_PRIMITIVE_SCHEMA, primitives: [] },
   provenance = null,
   composition = null,
+  fireSettings = null,
   flameDomainTranslation = undefined,
+  flameDomainScale = 1,
+  flameDomainFollowSource = true,
   localLiquid = null,
   capture = null,
   camera = null,
+  cameraViews = null,
+  sceneCamera = null,
+  viewport = null,
+  editorDisplay = null,
   environment = null,
   postprocessing = null,
   backdrop = false,
@@ -203,26 +242,30 @@ export function buildSceneDocument({
     throw new Error('Authored water emitters require a saved local liquid domain');
   }
   const sceneGroups = getSceneGroupRecords({ groups }, sceneObjects);
-  const activeObject = sceneObjects.find(obj => obj.id === activeObjectId) || sceneObjects[0] || null;
+  const activeObject = sceneObjects.find(obj => obj.id === activeObjectId) || (Array.isArray(selectionIds)?null:sceneObjects[0] || null);
   const activeGroup = sceneGroups.find(group => group.id === activeGroupId) || null;
   const flameSource = sceneObjects.find(object => object.type === FLAME_EMITTER_TYPE);
-  const authoredFlameDomain = flameSource
+  const authoredFlameDomain = (flameSource || normalizeComposition(composition))
     ? (flameDomainTranslation === undefined
-      ? flameDomainTranslationForPose(flameSource.transform)
+      ? (flameSource ? flameDomainTranslationForPose(flameSource.transform,flameDomainControlsFromSettings(fireSettings)) : [0,0,0])
       : normalizeFlameDomainTranslation(flameDomainTranslation))
     : null;
-  if (flameSource && !flamePoseInDomain(flameSource.transform, authoredFlameDomain)) {
+  flameDomainScale = normalizeFlameDomainScale(flameDomainScale);
+  if (typeof flameDomainFollowSource !== 'boolean') throw new Error('Flame domain follow-source must be Boolean');
+  if (flameSource && flameDomainFollowSource && !flamePoseInDomain(flameSource.transform, authoredFlameDomain, flameDomainScale,flameDomainControlsFromSettings(fireSettings))) {
     throw new Error('Flame source lies outside its authored simulation domain');
   }
   const document = {
     schema: SCENE_SCHEMA,
-    version: SCENE_VERSION,
+    version: fireSettings ? SCENE_VERSION : 8,
     timestamp,
-    objects: sceneObjects,
+    objects: fireSettings ? authorFireObjects(sceneObjects,fireSettings,{translation:authoredFlameDomain,scale:flameDomainScale,followSource:flameDomainFollowSource,collision:composition?.route?.volume_collision==='kiln'}) : sceneObjects,
+    ...(fireSettings?{fireRendering:fireRenderingSettings(fireSettings)}:{}),
     groups: sceneGroups,
     activeObjectId: activeObject?.id || activeObjectId || null,
     activeGroupId: activeGroup?.id || null,
     activeFieldId: ['flame-field','water-field'].includes(activeFieldId)?activeFieldId:null,
+    ...(Array.isArray(selectionIds)?{selectionIds:[...selectionIds]}:{}),
     model: activeObject ? {
       source: activeObject.source,
       type: activeObject.type,
@@ -230,11 +273,15 @@ export function buildSceneDocument({
     } : null,
     provenance: cloneJson(provenance),
     composition: normalizeComposition(composition),
-    ...(flameSource ? { flameDomainTranslation: authoredFlameDomain } : {}),
+    ...(!fireSettings && authoredFlameDomain ? { flameDomainTranslation: authoredFlameDomain, flameDomainScale, flameDomainFollowSource } : {}),
     localLiquid: liquidSetup,
     capture: normalizeSceneCapture(capture),
     transform: cloneJson(activeObject?.transform ?? null),
     camera: cloneJson(camera),
+    cameraViews: normalizeCameraViews(cameraViews),
+    sceneCamera:normalizeSceneCamera(sceneCamera,sceneObjects),
+    ...(editorDisplay==null?{}:{editorDisplay:checkedViewportDisplay(editorDisplay)}),
+    viewport:normalizeCameraViewport(viewport,normalizeSceneCamera(sceneCamera,sceneObjects)),
     environment: cloneJson(environment),
     volumePrimitives: normalizeVolumePrimitiveState(volumePrimitives),
     materials: cloneJson(activeObject?.materials ?? null),
@@ -242,5 +289,6 @@ export function buildSceneDocument({
     backdrop: !!backdrop,
   };
   if (backdropBrightness !== undefined) document.backdropBrightness = backdropBrightness;
+  checkSceneCollisionReferences(document.objects);
   return document;
 }
