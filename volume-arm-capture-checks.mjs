@@ -255,3 +255,19 @@ export function parseSyntheticGhosts(value) {
   if (parts.length !== 2 || !parts.every(Number.isFinite)) return null;
   return { heat: parts[0], velocityY: parts[1] };
 }
+
+// At settlement a synthetic-ghost arm must still be consuming the requested
+// fill (review JG-02-C): the shader reads the ghosts only while the join is
+// admitted, `bound` alone is geometry eligibility, and a rebuild clears the fill.
+export function syntheticGhostSettlementMismatch(requestedValue, end) {
+  if (requestedValue === undefined) return null;
+  const requested = parseSyntheticGhosts(requestedValue);
+  if (!requested) return `@joinedGhostsSynthetic needs heat:velocityY, got ${requestedValue}`;
+  if (!end?.joinedAdmitted) return 'ended with the joined boundary no longer admitted';
+  if (!end.joinedGhostsBound) return 'ended with the synthetic ghosts no longer bound';
+  const fill = end.joinedGhostsSynthetic;
+  if (!fill) return 'ended with the synthetic fill gone';
+  const v = fill.velocityLocal ?? [];
+  const matches = fill.heat === requested.heat && v[1] === requested.velocityY && v[0] === 0 && v[2] === 0 && fill.soot === 0 && fill.fuel === 0;
+  return matches ? null : `ended with synthetic fill ${JSON.stringify(fill)}, requested heat ${requested.heat}, velocityY ${requested.velocityY}`;
+}

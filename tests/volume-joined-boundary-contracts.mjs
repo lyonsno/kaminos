@@ -249,7 +249,23 @@ test('JG-02: the synthetic arm fails unless the ghost route is admitted after re
   assert.match(capture, /const route = await waitForJoinedGhostRoute\(\);/);
   assert.match(capture, /if \(!route\?\.bound \|\| !route\?\.joined\) \{ report\.lastTrustworthyEvidence\.joinedGhosts = \{ \.\.\.sample, route \}; fail\(report\.failurePhase, `synthetic ghosts filled but not consumed \(\$\{route\?\.reason \?\? \(route\?\.joined \? 'ghosts not bound' : 'joined boundary not admitted'\)\}\)`\); \}/);
   assert.match(capture, /joinedGhostsBound: Boolean\(w\.__kaminosVolumePrototype\?\.joinedProducerState\?\.\(\)\?\.ghosts\?\.bound\)/);
-  assert.match(capture, /if \(arm\.set\.some\(\(\[id\]\) => id === '@joinedGhostsSynthetic'\) && !end\.joinedGhostsBound\) fail\(report\.failurePhase, `arm \$\{arm\.name\} ended with the synthetic ghosts no longer bound`\);/);
+  assert.match(capture, /joinedGhostsSynthetic: w\.__kaminosVolumePrototype\?\.joinedProducerState\?\.\(\)\?\.ghosts\?\.synthetic \?\? null/);
+  assert.match(capture, /const ghostSettlement = syntheticGhostSettlementMismatch\(arm\.set\.find\(\(\[id\]\) => id === '@joinedGhostsSynthetic'\)\?\.\[1\], end\);\n    if \(ghostSettlement\) \{ report\.lastTrustworthyEvidence\.joinedGhostSettlement = \{ joined: end\.joinedAdmitted, bound: end\.joinedGhostsBound, synthetic: end\.joinedGhostsSynthetic \}; fail\(report\.failurePhase, `arm \$\{arm\.name\}: \$\{ghostSettlement\}`\); \}/);
+});
+
+// Review JG-02-C: geometry eligibility (`bound`) is not consumption; the shader
+// reads the ghosts only while the join is admitted, and a rebuilt fill must
+// still be the requested one.
+test('JG-02-C: settlement requires the join admitted, the ghosts bound and the requested synthetic fill', async () => {
+  const { syntheticGhostSettlementMismatch } = await import('../volume-arm-capture-checks.mjs');
+  const fill = { heat: 2, soot: 0, fuel: 0, velocityLocal: [0, 0.5, 0] };
+  assert.equal(syntheticGhostSettlementMismatch(undefined, { joinedAdmitted: false }), null);
+  assert.equal(syntheticGhostSettlementMismatch('2:0.5', { joinedAdmitted: true, joinedGhostsBound: true, joinedGhostsSynthetic: fill }), null);
+  assert.match(syntheticGhostSettlementMismatch('2:0.5', { joinedAdmitted: false, joinedGhostsBound: true, joinedGhostsSynthetic: fill }), /joined boundary no longer admitted/);
+  assert.match(syntheticGhostSettlementMismatch('2:0.5', { joinedAdmitted: true, joinedGhostsBound: false, joinedGhostsSynthetic: fill }), /ghosts no longer bound/);
+  assert.match(syntheticGhostSettlementMismatch('2:0.5', { joinedAdmitted: true, joinedGhostsBound: true, joinedGhostsSynthetic: null }), /synthetic fill gone/);
+  assert.match(syntheticGhostSettlementMismatch('2:0.5', { joinedAdmitted: true, joinedGhostsBound: true, joinedGhostsSynthetic: { ...fill, heat: 0 } }), /synthetic fill .* requested/);
+  assert.match(syntheticGhostSettlementMismatch('2:0.5', { joinedAdmitted: true, joinedGhostsBound: true, joinedGhostsSynthetic: { ...fill, velocityLocal: [0.1, 0.5, 0] } }), /synthetic fill .* requested/);
 });
 
 test('JG-03: the front-topology field blends to the exterior appearance (0) beyond the box like the appearance slots', () => {
