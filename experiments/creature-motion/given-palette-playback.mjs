@@ -1,5 +1,5 @@
 export function attachGivenPalettePlayback({THREE,runtime,adapter,source,document,mountRoot,
- now=()=>performance.now(),dirty=()=>globalThis.window?._kaminosDirty?.()}) {
+ now=()=>performance.now(),dirty=()=>globalThis.window?._kaminosDirty?.(),isMounted=()=>Boolean(runtime?.group?.parent)}) {
  if(!runtime?.group?.isObject3D||!(runtime.bones instanceof Map)||typeof runtime.update!=='function'||!mountRoot||!document)throw Error('Given motion requires the actual live Bone/deformer runtime and controls mount');
  for(const name of ['motionSha256','frameSha256','caseSha256'])if(!/^[a-f0-9]{64}$/i.test(source?.[name]??''))throw Error('Given motion source identity is incomplete');
  if(source.prefixFrames!=null&&(!Number.isInteger(source.prefixFrames)||source.prefixFrames<1||source.prefixFrames>=adapter.frames))throw Error('Invalid continuation prefix frame marker');
@@ -12,7 +12,8 @@ export function attachGivenPalettePlayback({THREE,runtime,adapter,source,documen
  const output=document.createElement('output'),failure=document.createElement('output');failure.setAttribute('role','alert');
  const range=document.createElement('input');range.type='range';range.min='0';range.max=String(adapter.frames-1);range.step='1';range.setAttribute('aria-label','Whole-body source frame');
  panel.append(title,note,output);
- const active=()=>{if(disposed||!group.parent)throw Error('Whole-body motion runtime is no longer mounted');};
+ const mounted=()=>Boolean(group.parent)&&isMounted();
+ const active=()=>{if(disposed||!mounted())throw Error('Whole-body motion runtime is no longer mounted');};
  const matrices=()=>{group.updateMatrix();return {actor:group.matrix.toArray(),bones:adapter.jointNames.map(name=>{const bone=runtime.bones.get(name);bone.updateMatrix();return {name,matrix:bone.matrix.toArray()};})};};
  const initial=matrices();
  const assign=(object,matrix)=>new THREE.Matrix4().fromArray(matrix).decompose(object.position,object.quaternion,object.scale);
@@ -30,7 +31,7 @@ export function attachGivenPalettePlayback({THREE,runtime,adapter,source,documen
   }catch(failure){assign(group,before.actor);for(const b of before.bones)assign(runtime.bones.get(b.name),b.matrix);group.updateMatrixWorld(true);try{original.call(runtime);}catch{}error=failure.message;status='failed';throw failure;}
   refresh();dirty();return read();
  }
- function read(){return {status,frame:status==='restored'?null:frame,time:status==='restored'?null:frame/adapter.fps,frames:adapter.frames,fps:adapter.fps,source:structuredClone(source),
+ function read(){if(!disposed&&!mounted()){status='removed';startedAt=null;}return {status,frame:status==='restored'?null:frame,time:status==='restored'?null:frame/adapter.fps,frames:adapter.frames,fps:adapter.fps,source:structuredClone(source),
   editedSinceSourcePose:edited(),actualLocalPose:matrices(),error,seamlessLoop:false};}
  function seek(index){active();if(!Number.isInteger(index)||index<0||index>=adapter.frames)throw RangeError('Source frame is outside retained motion');status=index===adapter.frames-1?'held':'paused';startedAt=null;return apply(index);}
  function play(){active();if(status==='restored')seek(0);if(status==='held')return read();if(status!=='playing'){startedAt=now();startedFrame=frame;status='playing';refresh();dirty();}return read();}
@@ -39,7 +40,7 @@ export function attachGivenPalettePlayback({THREE,runtime,adapter,source,documen
  function restore(){active();assign(group,initial.actor);for(const b of initial.bones)assign(runtime.bones.get(b.name),b.matrix);group.updateMatrixWorld(true);original.call(runtime);status='restored';frame=0;startedAt=null;expected=matrices();error=null;refresh();dirty();return read();}
  function tick(timestamp=now()){
   if(disposed)return false;
-  if(!group.parent){status='removed';startedAt=null;return false;}
+  if(!mounted()){status='removed';startedAt=null;return false;}
   if(status==='playing'){
    if(!Number.isFinite(timestamp))throw Error('Source playback requires a finite host timestamp');
    const next=Math.min(adapter.frames-1,startedFrame+Math.floor(Math.max(0,timestamp-startedAt)*adapter.fps/1000+1e-6));
@@ -60,5 +61,5 @@ export function attachGivenPalettePlayback({THREE,runtime,adapter,source,documen
   }
  }
  try{apply(0);}catch(failure){panel.remove();throw failure;}
- return Object.freeze({read,seek,play,pause,replay,restore,tick,dispose(){if(disposed)return;let restored=false;try{if(group.parent&&!edited()){restore();restored=true;}}finally{disposed=true;status='disposed';startedAt=null;panel.remove();}return {restored};}});
+ return Object.freeze({read,seek,play,pause,replay,restore,tick,dispose(){if(disposed)return;let restored=false;try{if(mounted()&&!edited()){restore();restored=true;}}finally{disposed=true;status='disposed';startedAt=null;panel.remove();}return {restored};}});
 }

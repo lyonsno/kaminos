@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {createWalkingCreature} from '../experiments/creature-motion/walking.experiment.mjs';
+import {openExperiment} from '../workbench-experiments.mjs';
 class Element{constructor(){this.children=[];this.style={};this.value='';}append(...x){this.children.push(...x);}prepend(...x){this.children.unshift(...x);}setAttribute(){}remove(){this.removed=true;}}
 const document={createElement:()=>new Element(),getElementById:()=>null},scene=new THREE.Scene();
 let tick=null,refreshes=0;
@@ -38,4 +39,23 @@ await assert.rejects(createWalkingCreature({host,inputs:{...inputs,motions:[choi
 const wrongBody=structuredClone(b);wrongBody.source.caseSha256='0'.repeat(64);
 const sameBody=await createWalkingCreature({host,inputs},{loadSources:async request=>request.motion==='trot'?wrongBody:a});
 await assert.rejects(sameBody.operations.motion({id:'trot'}),/body|bind/i);assert.equal(sameBody.read().source.motionSha256,a.source.motionSha256);await sameBody.dispose();
-console.log('Authored placement, live motion selection, refusal and recipe roundtrip preserve the actual creature');
+if(!process.argv.includes('--removal-only')){
+ let initial=true;const pending=new Map();
+ const delayed=request=>{if(initial){initial=false;return Promise.resolve(a);}return new Promise((resolve,reject)=>pending.set(request.motion,{resolve,reject}));};
+ const mounted=await openExperiment({id:'creature-authoring-test',title:'Creature authoring',create:args=>createWalkingCreature(args,{loadSources:delayed})},{host,inputs});
+ const mount=new Element();await mounted.mount({root:mount,document});const select=nodes(mount).find(n=>n.children.some(o=>o.value==='trot'));
+ select.value='trot';const older=select.onchange();select.value='walk';const newer=select.onchange();
+ pending.get('walk').resolve(a);await newer;pending.get('trot').resolve(b);await older;
+ assert.equal((await mounted.read()).motion.id,'walk','visible selector must retain the later choice when older loading completes last');assert.equal(select.value,'walk');assert.equal((await mounted.read()).recipe.motion,'walk');
+ select.value='trot';const stale=select.onchange();select.value='bad';const refusal=select.onchange();pending.get('bad').reject(Error('Source digest mismatch'));await refusal;pending.get('trot').resolve(b);await stale;
+ assert.equal((await mounted.read()).motion.id,'walk','refusal retains previous usable choice, not an older pending completion');assert.equal(select.value,'walk');
+ select.value='trot';const afterClose=select.onchange();await mounted.dispose();pending.get('trot').resolve(b);await afterClose;
+ assert.equal(scene.children.length,0);assert.equal(tick,null);await assert.rejects(mounted.read(),/disposed/);
+}
+for(const mode of ['source','cycle','path']){
+ const removed=await createWalkingCreature({host,inputs},{loadSources});removed.operations.mode({mode});removed.operations.play();
+ tick({deltaSeconds:1/30});const beforeRemoval=removed.read(),callback=tick;scene.remove(scene.children[0]);callback({deltaSeconds:1/30});
+ assert.equal(removed.read().playback.status,'removed','registered placement removal must stop the nested animated actor');assert.equal(tick,null,'removed creature releases the shared clock');assert.equal(removed.read().skin.updates,beforeRemoval.skin.updates);assert.equal(removed.read().cycle,beforeRemoval.cycle);
+ assert.throws(()=>removed.operations.play(),/removed|mounted/i);assert.throws(()=>removed.operations.seek({frame:0}),/removed|mounted/i);await removed.dispose();
+}
+console.log('Authored placement, live selection/refusal/removal and recipe recovery preserve the actual creature');
