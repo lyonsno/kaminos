@@ -11,3 +11,5 @@ const packed=fragments.packFixedCellFaces(shell);assert.equal(packed.faces.byteL
 assert.equal(fragments.visibleFixedCellFaces(shell,bonds(0)).length,24);
 assert.ok(fragments.visibleFixedCellFaces(shell,bonds(63)).length>24);
 console.log('GPU exposure descriptors preserve exactly the reference shell under all 64 local damage masks');
+const decimal=fragments.buildFixedCellShell({positions:[[.1,.2,.3],[.2,.3,.4],[-.1,.5,.3],[.1,.5,-.2]],tetrahedra:[[0,1,2,3]],bonds:bonds(0)});
+assert.doesNotThrow(()=>fragments.packFixedCellFaces(decimal),'Opposed faces match material identity, not floating-coordinate summation order');

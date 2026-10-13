@@ -84,7 +84,7 @@ export function packFixedCellFaces(shell){
  const {entries}=shell.binding,{indices,exterior}=shell.geometry,partners=new Map(),descriptors=exterior.map((outside,i)=>({indices:indices.slice(i*3,i*3+3),outside,partner:0xffffffff}));
  for(let i=0;i<descriptors.length;i++){
   const face=descriptors[i];if(face.outside)continue;
-  const signature=face.indices.map(j=>entries[j].rest.join(',')).sort().join('/');
+  const signature=face.indices.map(j=>entries[j].subset.join(':')).sort().join('/');
   if(partners.has(signature)){const other=partners.get(signature);if(descriptors[other].partner!==0xffffffff)throw Error('Nonmanifold fixed cell face');face.partner=other;descriptors[other].partner=i;}else partners.set(signature,i);
  }
  const faces=new Uint32Array(descriptors.length*8);

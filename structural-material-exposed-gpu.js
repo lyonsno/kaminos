@@ -22,12 +22,12 @@ fn dirty()->bool{return atomicLoad(&draws[10])!=0u||changes[0]!=0u;}
 @compute @workgroup_size(64) fn finish(@builtin(global_invocation_id) id:vec3u){if(id.x==0u){atomicStore(&draws[10],0u);}}
 `;
 
-export async function createGpuExposedFaces(renderer,shell,geometry,{ownershipBuffer,connectionBuffer,changeBuffer}){
+export async function createGpuExposedFaces(renderer,shell,geometry,{ownershipBuffer,connectionBuffer,changeBuffer,faceBuffer=null}){
  const device=renderer.backend.device,packed=packFixedCellFaces(shell),owned=[],allocate=(label,size,usage)=>{if(size>device.limits.maxStorageBufferBindingSize)throw Error(`${label} exceeds effective storage capacity`);const b=device.createBuffer({label,size,usage});owned.push(b);return b;};
  let indexAttribute,indirect;
  try{
-  const faces=allocate('Stone opposed faces',packed.faces.byteLength,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST),indices=allocate('Stone exposed indices',shell.geometry.indices.length*4,GPUBufferUsage.STORAGE|GPUBufferUsage.INDEX|GPUBufferUsage.COPY_SRC),draws=allocate('Stone exposed draws',44,GPUBufferUsage.STORAGE|GPUBufferUsage.INDIRECT|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC);
-  device.queue.writeBuffer(faces,0,packed.faces);device.queue.writeBuffer(draws,0,new Uint32Array([0,1,0,0,0,0,1,packed.exteriorTriangles*3,0,0,1]));
+  const faces=faceBuffer??allocate('Stone opposed faces',packed.faces.byteLength,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST),indices=allocate('Stone exposed indices',shell.geometry.indices.length*4,GPUBufferUsage.STORAGE|GPUBufferUsage.INDEX|GPUBufferUsage.COPY_SRC),draws=allocate('Stone exposed draws',44,GPUBufferUsage.STORAGE|GPUBufferUsage.INDIRECT|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC);
+  if(!faceBuffer)device.queue.writeBuffer(faces,0,packed.faces);device.queue.writeBuffer(draws,0,new Uint32Array([0,1,0,0,0,0,1,packed.exteriorTriangles*3,0,0,1]));
   const module=device.createShaderModule({code:exposedFacesWgsl}),info=await module.getCompilationInfo();if(info.messages.some(m=>m.type==='error'))throw Error(JSON.stringify(info.messages));
   const layout=device.createBindGroupLayout({entries:Array.from({length:6},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===3||binding===4?'storage':'read-only-storage'}}))}),pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]}),pipelines={};
   for(const entryPoint of ['clear','expose','finish'])pipelines[entryPoint]=await device.createComputePipelineAsync({layout:pipelineLayout,compute:{module,entryPoint}});
