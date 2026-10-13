@@ -28,15 +28,17 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     if(player.read().status==='held'&&mode!=='source'){cycle++;source.presentation.cycle=cycle;player.replay();}
     else if(player.read().status!=='playing')unsubscribe();
     refresh();
-   }catch(error){unsubscribe();record({kind:'walking.frame',phase:'failed',error:error.message});throw error;}
+   }catch(error){unsubscribe();try{player.pause();}catch{}record({kind:'walking.frame',phase:'failed',error:error.message});throw error;}
   });
  }
  async function dispose(){
   if(disposal)return disposal;disposed=true;
   disposal=Promise.resolve().then(async()=>{
-   unsubscribe();refresh=()=>{};player?.dispose();instruments.remove();restoreGround();restoreGizmos();
-   if(session)await session.dispose();if(runtime&&!asset)runtime.dispose();if(floor&&!floorAsset){floor.geometry.dispose();floor.material.dispose();}
+   const errors=[],attempt=action=>{try{action();}catch(e){errors.push(e);}};
+   attempt(unsubscribe);refresh=()=>{};attempt(()=>player?.dispose());attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
+   try{if(session)await session.dispose();}catch(e){errors.push(e);}attempt(()=>{if(runtime&&!asset)runtime.dispose();});attempt(()=>{if(floor&&!floorAsset){floor.geometry.dispose();floor.material.dispose();}});
    if(globalThis.window?.kaminosWalkingCreature===inspect)delete globalThis.window.kaminosWalkingCreature;
+   if(errors.length)throw new AggregateError(errors,'Walking creature cleanup failed');
   });return disposal;
  }
  function inspect(){runtime.group.updateMatrixWorld(true);return {...read(),rootMatrix:runtime.group.matrixWorld.toArray(),vertices:Array.from(runtime.mesh.geometry.attributes.position.array),boneWorld:[...runtime.bones].map(([name,bone])=>({name,matrix:bone.matrixWorld.toArray()}))};}
