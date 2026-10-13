@@ -7,7 +7,7 @@ import { DEFAULT_PRESET, superMatProductProfile } from './demo-defaults.js';
 import { createInferenceCache,photoCacheKey,retainedGeometry } from './inference-cache.js';
 import { loadIncludedExample } from './included-examples.js';
 import { buildPhotoSurface } from './photo-surface.js';
-import { GENERATION_AVAILABLE } from './deployment.js';
+import { GENERATION_AVAILABLE, SUPERMAT_WEIGHTS_URL } from './deployment.js';
 import { createSampleCutout } from './sample-cutouts.js';
 
 const $=id=>document.getElementById(id), params=new URLSearchParams(location.search);
@@ -18,7 +18,8 @@ const state=window.__materialPhoto={status:'loading-image',error:null,source:nul
 const cache=createInferenceCache({onError:error=>{(state.cacheErrors??=[]).push(String(error));}});
 // Bump these when producer/preparation semantics change. Custom weight URLs are
 // deliberately session-local: their contents may change without changing the URL.
-const cacheRevision=params.has('weights')?crypto.randomUUID():'moge-vendored-38539be0-supermat-f368906c.v1';
+const weightsUrl=params.get('weights')??SUPERMAT_WEIGHTS_URL;
+const cacheRevision=params.has('weights')?crypto.randomUUID():`moge-vendored-38539be0-supermat-f368906c.v1:${weightsUrl}`;
 let imageKey,sampleKey,imageBlob,completed;
 const geometryKey=key=>`${cacheRevision}:geometry:${key}`;
 const materialKey=(key,size)=>`${cacheRevision}:materials:${key}:${size}:${JSON.stringify(superMatProductProfile(gpu.device))}`;
@@ -256,7 +257,7 @@ async function infer(){
     if(!materials){
       if(visible()&&!retainDisplay)viewer.setMaterialStatus('Loading materials');
       weightRoute??=await session.registerRoute({routeId:`${SUPERMAT_ROUTE_ID}.material-photo-weights`});
-      materials=await createSuperMatAdapter({route:weightRoute,weightsUrl:params.get('weights')??'/scratch/supermat-weights/f16/',
+      materials=await createSuperMatAdapter({route:weightRoute,weightsUrl,weightLoading:'chunks',
         ...superMatProductProfile(gpu.device),onProgress:event=>{
           if(event.phase==='weights')progressStatus(`2/2 Materials: loading SuperMat ${event.resourceIndex+1}/${event.resourceCount} resources`);
         }});
