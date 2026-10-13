@@ -3836,7 +3836,7 @@ import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,creat
 import {installCameraAuthoring} from './authoring-cameras.mjs';
 import {installViewPie} from './view-navigation-pie.mjs';
 import {installExperimentWorkspace} from './experiment-workspace.mjs';
-import {installOwnerExperimentEntry} from './owner-experiment-entry.mjs';
+import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperimentAddress} from './owner-experiment-entry.mjs';
 import {createInvestigationEntry} from './investigation-entry.mjs';
 import {createWorkbenchFrameService,createWorkbenchSceneHost,disposeOwnedSceneTree} from './workbench-scene-host.mjs';
 import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, checkedSceneLightRecord, sceneLightRuntimeRecipe } from './scene-rim-light.mjs';
@@ -12578,10 +12578,10 @@ async function installOwnerWorkbenchEntry() {
   }};
   ownerExperimentEntry=await installOwnerExperimentEntry({document,root:document.getElementById('experiment-owner-slot'),host,
     discover:async()=>{const response=await fetch('/api/workbench-experiments',{cache:'no-store'});if(!response.ok)throw Error('Experiment discovery HTTP '+response.status);return (await response.json()).modules;},
-    onChange:({id,inputs})=>{const url=new URL(location.href);if(id){url.searchParams.set('experiment',id);url.searchParams.set('experiment_inputs',JSON.stringify(inputs));}else{url.searchParams.delete('experiment');url.searchParams.delete('experiment_inputs');}history.replaceState(history.state,'',url);},
+    onChange:({id,inputs})=>history.replaceState(history.state,'',writeOwnerExperimentAddress(location.href,{id,inputs})),
   });
   window.kaminosWorkbenchExperiments=ownerExperimentEntry;
-  const params=new URLSearchParams(location.search),id=params.get('experiment');if(id)await ownerExperimentEntry.open(id,JSON.parse(params.get('experiment_inputs')||'{}'));
+  const {id,inputsText}=readOwnerExperimentAddress(location);if(id)await ownerExperimentEntry.open(id,JSON.parse(inputsText));
 }
 window.kaminosMountInvestigationEntry=async(options={})=>{
   await workbenchViewerReady;const tool=options.tool||'assets';
@@ -26187,7 +26187,7 @@ async function saveToServer(sceneData, filename, { result: detailed = false, sav
       delete document._filename;
       delete document._saveAsName;
       delete document._overwrite;
-      const url = compositionRestoreUrl(document.composition, result.saved, location.origin);
+      const url = compositionRestoreUrl(document.composition, result.saved, location.origin,authoringWorkspace?.state().mode??null,readOwnerExperimentAddress(location));
       currentSceneFile = result.saved;
       history.replaceState(history.state,'',savedSceneLocation(location.href,result.saved));
       setInfo(`Scene saved: ${result.saved}`);
@@ -26365,7 +26365,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
       if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
       sceneFile = currentSceneFile;
     }
-    location.assign(compositionRestoreUrl(restorePlan.composition, sceneFile, location.origin));
+    location.assign(compositionRestoreUrl(restorePlan.composition, sceneFile, location.origin,authoringWorkspace?.state().mode??null,readOwnerExperimentAddress(location)));
     return;
   }
   if(restorePlan.editorDisplay)window.kaminosViewportSettings.set(restorePlan.editorDisplay);
@@ -26731,6 +26731,7 @@ sceneInitialization.then(() => {
 
   const volumeLoaded = initKaminosVolumeRoute();
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
+  const startupSceneRedirect = Symbol('saved-scene-recovery-redirect');
   const startupSceneHash = new URLSearchParams(location.hash.slice(1));
   const startupRestoreRequested = !!startupSceneHash.get('scene');
   const startupSceneRestore = Promise.all([environmentLoaded, volumeLoaded]).then(async () => {
@@ -26751,8 +26752,8 @@ sceneInitialization.then(() => {
       const preset = new URLSearchParams(location.search).get('settings_preset');
       if(preset!==plan.composition.flame.presetId){
         setInfo('Opening the saved flame recipe…');
-        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,new URLSearchParams(location.search).get('workspace') ?? hash.get('workspace')));
-        return;
+        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,new URLSearchParams(location.search).get('workspace') ?? hash.get('workspace'),readOwnerExperimentAddress(location)));
+        return startupSceneRedirect;
       }
     }
     await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
@@ -26775,7 +26776,8 @@ sceneInitialization.then(() => {
   // An owner enters the effective authored starting scene, never one that a
   // pending restore will clear. Ordinary routes keep environment-only startup.
   const ownerSceneReady = startupRestoreRequested ? startupSceneRestore : environmentLoaded;
-  ownerSceneReady.then(() => {
+  ownerSceneReady.then(result => {
+    if(result===startupSceneRedirect){rejectWorkbenchViewerReady(new Error('Saved scene recovery is navigating'));return;}
     resolveWorkbenchViewerReady();
     void installOwnerWorkbenchEntry().catch(error => {
       window.kaminosWorkbenchExperimentError=error.message;setInfo('Experiments unavailable: '+error.message);
