@@ -32,7 +32,7 @@ Declare the kind on the first line of a new test file:
 | `python` | A self-contained Python script that exits 0 on success. |
 | `browser` | Launches or drives a browser. Needs a reason. Not run by `npm test`. |
 | `manual` | Needs arguments, a live page, or a private environment. Needs a reason. |
-| `helper` | Imported by other tests. Needs a reason. |
+| `helper` | Imported or executed by other tests, never run on its own. Needs a reason. |
 
 Files that existed when the runner was introduced are classified in `tests/suite.json`. A declaration that disagrees with that manifest is an error. An unclassified file fails the run, so a test can't silently go unexecuted.
 
