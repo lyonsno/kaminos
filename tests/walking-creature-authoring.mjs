@@ -61,6 +61,8 @@ for(const mode of ['source','cycle','path']){
 const importer=await createWalkingCreature({host,inputs},{loadSources});const importRoot=new Element();let imported=null;
 importer.mount({root:importRoot,invoke:(name,input)=>importer.operations[name](input),reopen:async recipe=>{imported=recipe;}});
 const fileInput=nodes(importRoot).find(n=>n.type==='file');assert.ok(fileInput,'saved setups must reopen through an actual file control, not a custom URL');
-fileInput.files=[{text:async()=>JSON.stringify(recipe)}];await fileInput.onchange();assert.deepEqual(imported,recipe);
-imported=null;fileInput.files=[{text:async()=>'{not json'}];await fileInput.onchange();assert.equal(imported,null,'invalid JSON must not replace the live creature');assert.equal(importer.read().motion.id,'walk');await importer.dispose();
+fileInput.files=[{text:async()=>JSON.stringify(recipe)}];await fileInput.onchange();assert.deepEqual(imported,JSON.parse(JSON.stringify(recipe)));
+imported=null;fileInput.files=[{text:async()=>'{not json'}];await fileInput.onchange();assert.equal(imported,null,'invalid JSON must not replace the live creature');assert.equal(importer.read().motion.id,'walk');
+fileInput.files=[{text:async()=>JSON.stringify({...recipe,motion:'bad'})}];await fileInput.onchange();assert.equal(imported,null,'invalid saved source must not replace the live creature');
+fileInput.files=[{text:async()=>JSON.stringify({...recipe,transform:{position:[0,0,0],quaternion:[0,0,0,1],scale:[1,0,1]}})}];await fileInput.onchange();assert.equal(imported,null,'invalid placement must not replace the live creature');await importer.dispose();
 console.log('Authored placement, live selection/refusal/removal and saved setup controls preserve the actual creature');
