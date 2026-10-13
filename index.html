@@ -4051,7 +4051,7 @@ import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, check
 
 let authoringWorkspace = null;
 let fluidWorkbench = null;
-let ownerFluidPlayback=null;
+let ownerFluidPlayback=null,fingerFluidResetPolicy=null;
 let ownerExperimentEntry=null, fingerFluidOwnerSetup=null, fingerFluidOwnerIdentity=0,fingerFluidOwnerDefinition=null;
 const fluidStepSeconds=()=>fingerFluidBenchConfig?.simulationStepSeconds??KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS;
 const fluidClockStepSeconds=()=>fluidStepSeconds()/(fingerFluidBenchSolver?.getDebugState?.().substeps??1);
@@ -14823,7 +14823,8 @@ async function resetFingerFluidPressureCockpitWater() {
       effective:window.kaminosFingerFluidBenchSessionState?.(),clock:window.kaminosFingerFluidBenchSessionState?.()});
   };
   recordReset('started');
-  const wasPaused=fingerFluidBenchSimulationPaused;
+  const pausePolicy=fingerFluidResetPolicy??{paused:fingerFluidBenchSimulationPaused};
+  fingerFluidResetPolicy=pausePolicy;
   fingerFluidBenchSimulationPaused=true;ownerFluidPlayback?.reset();
   const camera=fingerFluidCompositionCameraState();
   stopFingerFluidBench();
@@ -14836,7 +14837,8 @@ async function resetFingerFluidPressureCockpitWater() {
   if(outcome==='failed'){recordReset('failed');return;}
   if(resetGeneration!==fingerFluidBenchStartGeneration){recordReset('superseded');return;}
   if(!fingerFluidBenchRunning||!fingerFluidBenchSolver?.available){recordReset('failed');return;}
-  ownerFluidPlayback?.reset();fingerFluidBenchSimulationPaused=wasPaused;
+  ownerFluidPlayback?.reset();fingerFluidBenchSimulationPaused=pausePolicy.paused;
+  if(fingerFluidResetPolicy===pausePolicy)fingerFluidResetPolicy=null;
   fingerFluidBenchCamera=camera;syncFingerFluidCompositionCamera({initial:true});window._kaminosDirty?.();
   fingerFluidPressureCockpit?.update();
   recordReset('applied');
@@ -14907,7 +14909,7 @@ async function installOwnerWorkbenchEntry() {
       applyFluidOwnerSetup({},setup);
       stopFingerFluidBench();fingerFluidBenchSolver?.destroy?.();
       fingerFluidBenchSolver=null;fingerFluidBenchSolverPromise=null;fingerFluidBenchConfig=null;
-      fingerFluidOwnerSetup=setup;ownerFluidPlayback=setup.playbackRate===undefined?null:createFixedStepPlayback({dt:setup.dt,rate:setup.playbackRate});++fingerFluidOwnerIdentity;fingerFluidBenchSimulationPaused=true;
+      fingerFluidResetPolicy=null;fingerFluidOwnerSetup=setup;ownerFluidPlayback=setup.playbackRate===undefined?null:createFixedStepPlayback({dt:setup.dt,rate:setup.playbackRate});++fingerFluidOwnerIdentity;fingerFluidBenchSimulationPaused=true;
       window.__kaminosInvestigationEntryOnly=true;
       setActiveTab('finger-fluid-bench');window.__kaminosInvestigationEntryOnly=false;
       const outcome=await startFingerFluidBench();
@@ -15060,6 +15062,7 @@ function initKaminosFingerFluidBenchRoute() {
     advanceFingerFluidBenchToStepForWitness;
   window.kaminosFingerFluidBenchSetSimulationPausedForWitness = paused => {
     fingerFluidBenchSimulationPaused = paused === true;
+    if(fingerFluidResetPolicy)fingerFluidResetPolicy.paused=fingerFluidBenchSimulationPaused;
     const runtime = fingerFluidBenchSolver?.getDebugState?.() || null;
     if (runtime && fingerFluidBenchState?.runtime) {
       fingerFluidBenchState.runtime.pulseControlReadout = fingerFluidBenchConfig.effectiveInletCutoffStep !== null

@@ -3,7 +3,7 @@ import {targetStep} from '../../finger-fluid-box-clock.mjs';
 export default {
  id:'lazarus/finite-pbf',title:'PBF · drop, dam break and puddle',
  async create({host,inputs,record}){
-  let setup=lazarusFiniteSetup(inputs),water=await host.fluid.open(setup,{restoreReplay:false}),node=null,timer=null;
+  let setup=lazarusFiniteSetup(inputs),water=await host.fluid.open(setup,{restoreReplay:false}),node=null,timer=null,scrubs=[];
   const read=()=>{const state=water.read(),v=state.controls?.effective;if(v){const keys=['particleRepulsionStrength','densityIterations','capillaryStrength','freeFlightViscosityBoost'];if(keys.some(k=>v[k]!==setup.inputs[k]))setup=lazarusFiniteSetup({...setup.inputs,...Object.fromEntries(keys.map(k=>[k,v[k]]))});}return {settings:{...setup.inputs},sampling:setup.sampling,water:state};};
   const recorded=async(name,input,action)=>{record({kind:'lazarus.'+name,phase:'requested',target:'fluid',requested:input});try{const result=await action();record({kind:'lazarus.'+name,phase:'applied',target:'fluid',requested:input,effective:read()});return result;}catch(e){record({kind:'lazarus.'+name,phase:'failed',target:'fluid',requested:input,error:e.message});throw e;}};
   const operations={
@@ -29,10 +29,18 @@ export default {
     const $=key=>node.querySelector(`[data-setting="${key}"]`),error=node.querySelector('[role=alert]');
     const call=(name,arg)=>Promise.resolve(invoke(name,arg)).then(()=>{error.textContent='';update();}).catch(e=>{error.textContent=e.message;});
     for(const key of ['scene','resolution','scaling','dt','rate'])$(key).value=setup.inputs[key];
+    const wireNumber=(input,key,step,operation=null)=>{
+      let active=false,before=null;
+      const begin=()=>{if(!active){before=operation==='material'?read().settings[key]:operation==='playback'?water.read().clock.playbackRate:input.value;active=true;}};
+      input.addEventListener('focusin',begin);input.addEventListener('beforeinput',begin);
+      input.addEventListener('pointercancel',()=>{if(!active)return;active=false;input.value=before;if(operation)call(operation,operation==='material'?{[key]:Number(before)}:Number(before));});
+      input.addEventListener('change',()=>{active=false;});input.addEventListener('blur',()=>{active=false;});
+      scrubs.push(host.controls.installNumberDrag({input,step,onStart:begin,onEnd:()=>{active=false;}}));
+    };
     const fields=[['particleRepulsionStrength','Particle repulsion',.01],['densityIterations','Density passes',1],['capillaryStrength','Surface cohesion',.01],['freeFlightViscosityBoost','Flight smoothing boost',.01]];
-    for(const [key,label,step]of fields){const row=document.createElement('label');row.textContent=label;const input=document.createElement('input');input.type='number';input.step=step;input.min=key==='densityIterations'?1:0;input.dataset.setting=key;input.value=setup.inputs[key];row.append(input);node.querySelector('[data-material]').append(row);input.addEventListener('input',()=>call('material',{[key]:Number(input.value)}));host.controls.installNumberDrag({input,step});}
+    for(const [key,label,step]of fields){const row=document.createElement('label');row.textContent=label;const input=document.createElement('input');input.type='number';input.step=step;input.min=key==='densityIterations'?1:0;input.dataset.setting=key;input.value=setup.inputs[key];row.append(input);node.querySelector('[data-material]').append(row);input.addEventListener('input',()=>call('material',{[key]:Number(input.value)}));wireNumber(input,key,step,'material');}
     $('rate').addEventListener('input',()=>call('playback',Number($('rate').value)));
-    for(const key of ['resolution','rate','time'])host.controls.installNumberDrag({input:$(key),step:key==='resolution'?8:.01});
+    for(const key of ['resolution','rate','time'])wireNumber($(key),key,key==='resolution'?8:.01,key==='rate'?'playback':null);
     node.querySelector('[data-action=setup]').onclick=()=>call('reset',Object.fromEntries(['scene','resolution','scaling','dt'].map(k=>[k,['resolution','dt'].includes(k)?Number($(k).value):$(k).value])));
     node.querySelector('[data-action=pause]').onclick=()=>call('paused',!water.read().clock.paused);
     node.querySelector('[data-action=reset]').onclick=()=>call('reset');
@@ -41,7 +49,7 @@ export default {
     const update=()=>{try{const current=read();for(const [key,value]of Object.entries(setup.inputs)){if(publishedSettings[key]!==value){const input=$(key);if(input&&document.activeElement!==input)input.value=value;publishedSettings[key]=value;}}const r=current.water;node.querySelector('[data-status]').textContent=`${r.clock.paused?'Paused':'Playing'} · ${r.clock.playbackRate}× playback\nStep ${r.clock.step} · ${r.clock.timeSeconds.toFixed(6)} simulated s\nPhysics dt ${r.clock.frameTimeStepSeconds} s\n${r.runtime.particleCount.toLocaleString()} particles · volume ${setup.sampling.worldVolume.toPrecision(5)}\nPBF support ${r.runtime.viscosityScaling.supportRadius.toPrecision(5)}`;node.querySelector('[data-action=pause]').textContent=r.clock.paused?'Play':'Pause';node.querySelector('[data-share]').href=lazarusFiniteReplayURL(location.href,setup.inputs);}catch(e){error.textContent=e.message;}};
     update();timer=setInterval(update,250);
    },
-   async dispose(){clearInterval(timer);node?.remove();await water.dispose();}
+   async dispose(){clearInterval(timer);for(const scrub of scrubs)scrub?.stop?.();node?.remove();await water.dispose();}
   };
  }
 };
