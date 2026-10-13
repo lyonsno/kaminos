@@ -200,6 +200,7 @@ export function importRig(gltf, { skinIndex = null, minJoints = 4 } = {}) {
   const { max: jointWeight, sum: jointWeightSum, meshes } = skinWeights(gltf, skin, jointNodes.length);
   const jointSlot = new Map(jointNodes.map((n, j) => [n, j]));
   let roots = [...boneSet].filter(b => !boneSet.has(parentOf.get(b)));
+  const fullSet = new Set(boneSet), fullRoots = roots.slice();   // before secondary roots go: the mesh binds to all of them
   const secondary = [];
   if (roots.length > 1) {
     const subtree = r => { const out = []; for (const st = [r]; st.length;) { const b = st.pop(); out.push(b); st.push(...(json.nodes[b].children ?? []).filter(c => boneSet.has(c))); } return out; };
@@ -230,16 +231,30 @@ export function importRig(gltf, { skinIndex = null, minJoints = 4 } = {}) {
     jointNodes.forEach((n, j) => ibm.set(n, Array.from(ibmData.subarray(j * 16, j * 16 + 16))));
   }
   const armatureWorld = armature === undefined ? identity() : ancestors(armature).reduce((m, n) => multiply(m, nodeMatrix(json.nodes[n])), identity());
+  const arm = decomposeRigid(armatureWorld), armScale = Math.hypot(armatureWorld[0], armatureWorld[1], armatureWorld[2]) || 1;
+  const localFor = (b, underBone) => {
+    const pKey = underBone ? parentOf.get(b) : (armature ?? 'root');
+    return decomposeRigid(ibmData && ibm.has(b) && ibm.has(pKey) ? multiply(ibm.get(pKey), invert(ibm.get(b))) : nodeMatrix(json.nodes[b]));
+  };
+  // A root bone also takes the armature's world rotation; its position is in armature units.
+  const asRoot = local => ({ r: compose(arm, local).r,
+    t: [0, 1, 2].map(i => (multiply(armatureWorld, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, ...local.t, 1])[12 + i]) / armScale) });
   let bones = order.map(b => {
-    const p = parentOf.get(b), pKey = boneSet.has(p) ? p : (armature ?? 'root');
-    const local = ibmData && ibm.has(b) && ibm.has(pKey) ? multiply(ibm.get(pKey), invert(ibm.get(b))) : nodeMatrix(json.nodes[b]);
+    const p = parentOf.get(b), under = boneSet.has(p);
     // An unnamed node gets Blender's name for it, Node_<index>.
-    return { node: b, name: json.nodes[b].name ?? `Node_${b}`, parent: boneSet.has(p) ? slot.get(p) : -1, local: decomposeRigid(local),
+    return { node: b, name: json.nodes[b].name ?? `Node_${b}`, parent: under ? slot.get(p) : -1, local: under ? localFor(b, true) : asRoot(localFor(b, false)),
       weight: jointSlot.has(b) ? jointWeight[jointSlot.get(b)] : 0 };
   });
-  const arm = decomposeRigid(armatureWorld), armScale = Math.hypot(armatureWorld[0], armatureWorld[1], armatureWorld[2]) || 1;
-  const rootWorld = compose(arm, bones[0].local);
-  bones[0].local = { r: rootWorld.r, t: [0, 1, 2].map(i => (multiply(armatureWorld, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, ...bones[0].local.t, 1])[12 + i]) / armScale) };
+  // Rest world of every bone before pruning (secondary roots included), for binding the mesh.
+  const fullWorld = new Map();
+  for (const r of fullRoots) {
+    for (const stack = [[r, null]]; stack.length;) {
+      const [b, parentWorld] = stack.pop();
+      const w = parentWorld ? compose(parentWorld, localFor(b, true)) : asRoot(localFor(b, false));
+      fullWorld.set(b, w);
+      for (const c of json.nodes[b].children ?? []) if (fullSet.has(c)) stack.push([c, w]);
+    }
+  }
 
   // Pruning.
   const pruned = [...secondary];
@@ -296,7 +311,16 @@ export function importRig(gltf, { skinIndex = null, minJoints = 4 } = {}) {
   bones = reorder(bones);
   const world = [];
   bones.forEach((b, j) => { world[j] = b.parent < 0 ? b.local : compose(world[b.parent], b.local); });
+  // Each skin joint follows the nearest kept bone at or above it; a joint of a dropped secondary
+  // root follows the kept root (UniMate's export merges such bones' weights into the kept one).
+  const keptByNode = new Map(bones.map((b, i) => [b.node, i]));
+  const skinBind = jointNodes.map((n, g) => {
+    let kept = 0;
+    for (let p = n; p !== undefined && p !== armature; p = parentOf.get(p)) if (keptByNode.has(p)) { kept = keptByNode.get(p); break; }
+    const w = fullWorld.get(n);
+    return { node: n, kept, restWorld: w ? { r: w.r, t: w.t } : null, inverseBind: ibmData ? Array.from(ibmData.subarray(g * 16, g * 16 + 16)) : null };
+  });
   return { names: bones.map(b => b.name), parents: bones.map(b => b.parent), positions: world.map(w => w.t),
     restLocalPos: bones.map(b => b.local.t), restLocalRot: bones.map(b => quatFromRot(b.local.r)),
-    weights: bones.map(b => b.weight), pruned, skinnedMeshes: meshes, armature: armature ?? null };
+    weights: bones.map(b => b.weight), pruned, skinnedMeshes: meshes, armature: armature ?? null, skin, skinBind };
 }
