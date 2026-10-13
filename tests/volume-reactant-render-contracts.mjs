@@ -32,9 +32,9 @@ test('the renderer: reaction light from the burn rate and raw soot under the rea
   assert.match(body, /let reactant = u\.reactant_combustion_a\.x > 0\.5;/);
   assert.match(body, /let smokeAmount = select\(m\.x\+d\.x\*0\.50\+m\.w\*0\.08, m\.x, reactant\) \* max\(0\.0, u\.viewport_steps_density\.w\);/, 'raw soot under the candidate (what crosses to the exterior), the folded amount under the authored law');
   assert.match(body, /let burnLight = reactionLightFromBurn\(r\.freshBurn, u\.reactant_combustion_d\.x\);/, 'the reaction signal is the fresh burn normalised by the appearance burn reference');
-  assert.match(body, /let reactionDrive = select\(front\*freshFuel, burnLight, reactant\);/, 'fuel presence and front memory drive reaction light only under the authored law');
+  assert.match(body, /let reactionDrive = select\(front\*freshFuel, burnLight, reactant\);/, 'the reaction drive is fuel presence x front memory under the authored law and the burn under the candidate (coverage, carrier-built, still multiplies both)');
   assert.match(body, /let clean = max\(0\.0,coverage\)\*reactionDrive\*exp\(-sootYield\*smokeAmount\*4\.0-hotSoot\*2\.0\);/, 'soot still suppresses reaction light locally');
-  assert.match(body, /let energy = emissiveHeatSource\(m, f, d, transported\);/, 'thermal glow is unchanged: temperature from transported heat');
+  assert.match(body, /let energy = emissiveHeatSource\(m, f, d, transported\);/, 'the temperature mapping is unchanged (transported heat); the hot-soot population follows the drawn soot amount, so it is raw smoke under the candidate');
   // The scalar law, executed from production source (the emission test's own method).
   const scalar = EMISSIVE_TRANSPORT_WGSL.split('fn reactionLightFromBurn(')[1].split('\n}')[0].split('-> f32 {')[1];
   const lightAt = new Function('freshBurn', 'reference', 'max', 'exp', scalar);

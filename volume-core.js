@@ -12442,6 +12442,10 @@ export function createKaminosVolumePrototype({
     uniformsBuffer = uniformBuffer,
     quenchRead = quenchBuffers[0],
     quenchWrite = quenchBuffers[1],
+    // Groups are built once per rebuild, so a consumer that is not rebuilt per
+    // frame (selective-head-live at 160) reads slot 0's burn whichever slot the
+    // fluid is on: a one-step parity lag of the reaction light there, not a
+    // crash. The main raymarch groups are built per fluid index.
     reactantRead = reactantTextures[0],
     reactantWrite = reactantTextures[1],
   }) {
@@ -12761,8 +12765,8 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluid } },
           { binding: 7, resource: { buffer: front } },
           { binding: 16, resource: sceneSolidTextureView },
-          // The selective-head-live roles read derived fluid buffers that have no
-          // derived sidecar: they see the source grid's current sidecar.
+          // Only the sidecar build kernel runs under this group and it does not
+          // read the reactant sidecar; the binding satisfies the shared layout.
           { binding: 23, resource: reactantTextureView(0) },
         ],
       }),
