@@ -57,10 +57,11 @@ export default {
    if(inputs.view!==undefined)await session.setView(inputs.view);
    const read=()=>({...player.read(),asset:{requested:inputs.asset,effective:asset.source,id:asset.id},view:session.readView()});
    const active=()=>{if(disposed)throw Error('Creature experiment is disposed');};
+   const observed=()=>{try{return {effective:read()};}catch(error){return {effective:null,effectiveError:error.message};}};
    const operation=(name,apply)=>input=>{
-    active();record({kind:`creature.${name}`,phase:'requested',target:asset.id,requested:input??null});
+    active();record({kind:`creature.${name}`,phase:'requested',target:asset.id,requested:input??null,...observed()});
     try{const result=apply(input);record({kind:`creature.${name}`,phase:'applied',target:asset.id,effective:result});return result;}
-    catch(error){record({kind:`creature.${name}`,phase:'failed',target:asset.id,error:error.message});throw error;}
+    catch(error){record({kind:`creature.${name}`,phase:'failed',target:asset.id,error:error.message,...observed()});throw error;}
    };
    const operations={
     replay:operation('replay',()=>player.replay()),pause:operation('pause',()=>player.pause()),
