@@ -37,7 +37,8 @@ test('the immersed source resolves from the controls and is admitted only under 
 test('the uniform block follows velocity staggering and packs the compiled source only when admitted', () => {
   assert.equal(core.IMMERSED_SOURCE_UNIFORM_OFFSET, core.VELOCITY_STAGGERING_UNIFORM_OFFSET + 4);
   assert.equal(core.IMMERSED_SOURCE_UNIFORM_FLOATS, 24);
-  assert.equal(core.REACTANT_COMBUSTION_UNIFORM_OFFSET, core.IMMERSED_SOURCE_UNIFORM_OFFSET + 24, 'the reactant combustion block follows the immersed source');
+  assert.equal(core.GRID_SHAPE_UNIFORM_OFFSET, core.IMMERSED_SOURCE_UNIFORM_OFFSET + 24, 'the grid shape block follows the immersed source');
+  assert.equal(core.REACTANT_COMBUSTION_UNIFORM_OFFSET, core.GRID_SHAPE_UNIFORM_OFFSET + 8, 'the reactant combustion block follows the grid shape');
   const on = core.resolveImmersedSourceConfig(base, { grid: 64 });
   const u = core.immersedSourceUniformValues(on);
   assert.equal(u.length, 24);
@@ -114,8 +115,8 @@ test('cockpit: the source law option, eleven bench rows with help, snapshot, lis
     assert.equal(control.additiveSinceControlCount, e.additiveSinceControlCount);
     assert.ok('additiveDefault' in control);
   }
-  assert.equal(schema.controlCount, 251); // + the reaction law select and the two reactant controls
-  assert.equal(schema.controls.length, 251);
+  assert.equal(schema.controlCount, 252);
+  assert.equal(schema.controls.length, 252);
 });
 
 // Bounded A (report section 31, after the cold bench): a solid back disc one to
@@ -165,7 +166,7 @@ test('the back wall: resolved as a toggle, its cells lie strictly behind the sou
   assert.match(index, /immersedBackWall: parseFloat\(document\.getElementById\('volume-immersed-back-wall'\)\.value\)/);
   const control = schema.controls.find(c => c.key === 'volume-immersed-back-wall');
   assert.deepEqual(control, { key: 'volume-immersed-back-wall', param: 'volume_immersed_back_wall', tagName: 'INPUT', type: 'range', additiveDefault: 0, additiveSinceControlCount: 248 });
-  assert.equal(schema.controlCount, 251); // + the reaction law select and the two reactant controls
+  assert.equal(schema.controlCount, 252);
 });
 
 // Fresh review at 25431599 (IS-01..06).
@@ -305,9 +306,10 @@ test('IS-03-C: the source uniforms are packed against the mask the same step dis
   const moved = { ...pose, immersedCentreY: -0.5625 };
   const defect = makeContext(); packLikeDefect(defect, pose);
   const eDefect = packLikeDefect(defect, moved);
-  assert.ok(targetSumOnMask(eDefect, defect.sceneSolidCellsCpu) > 100 * eDefect.fluxEffectivePredicted + 1, 'the replayed defect: the old wall covered the moved slab, the receipt predicted ~0, the dispatched mask received the cap everywhere');
   const fixed = makeContext(); packLikeProduction(fixed, pose);
   const e = packLikeProduction(fixed, moved);
+  // Under supply-per-covered-area (2026-10-11) the stale-mask sequence no longer pulses (the per-cell rate is the plain disc's whatever the mask); it drops the step's supply instead: the old wall covered the moved slab, so the pack saw zero coverage and packed zero, while the same step, resolved against the mask it dispatches, supplies the whole uncovered slab.
+  assert.ok(eDefect.fluxEffectivePredicted < 1e-6 && e.fluxEffectivePredicted > 1, `the replayed defect: stale-mask packing ${eDefect.fluxEffectivePredicted} vs same-step ${e.fluxEffectivePredicted}`);
   assert.ok(Math.abs(targetSumOnMask(e, fixed.sceneSolidCellsCpu) - e.fluxEffectivePredicted) < 1e-9, 'moved with the wall: the receipt predicts the target on the dispatched mask');
   assert.ok(Math.abs(e.fluxEffectivePredicted - e.fluxRequested) < 1e-9 && e.masked.cells === 0, 'the wall of the new pose masks nothing');
   // A kiln-style mask change under a fixed pose: the mask the solve runs on is the one the receipt saw.

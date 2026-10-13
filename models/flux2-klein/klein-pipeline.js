@@ -10,6 +10,8 @@ import { KleinVaeDecoder } from './klein-vae.js';
 import { QwenTokenizer } from './qwen-tokenizer.js';
 import { kleinSchedule, transformerTime } from './klein-schedule.js';
 import { KleinDutyScheduler } from './klein-duties.js';
+import { createWebGpuLatentPreview } from '../../webgpu-inference-kit/src/core.js';
+import { LATENT_PREVIEW_FIT, LATENT_PREVIEW_WEIGHTS, LATENT_PREVIEW_BIAS } from './klein-latent-preview.js';
 
 async function getJson(url) { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); }
 
@@ -187,6 +189,9 @@ export class KleinPipeline {
     this.vae.sharedType = this.kernels.sharedType; this.vae.actType = this.kernels.vaeActType; this.vae.sched = this.sched;
     const vb = await fetchBundle(vae, 'vae')(this.vaeManifest.bundle.file, this.vaeManifest.bundle);
     await this.vae.load(vb); this.residentBytes.vae = vb.byteLength;
+    // Live previews: decoder-space latents to RGB, up to 1024 x 1024 (128 x 128 latent pixels).
+    this.preview = await createWebGpuLatentPreview({ device: this.device, channels: 32, weights: LATENT_PREVIEW_WEIGHTS,
+      bias: LATENT_PREVIEW_BIAS, kernel: LATENT_PREVIEW_FIT.kernel ?? 1, maxPixels: 128 * 128 });
     await this.precompile();
     // Lean: the first generation needs the text encoder, so it takes the transformer's place now
     // (downloading it on a first visit).
@@ -227,8 +232,28 @@ export class KleinPipeline {
     const { D, F } = this.transformer, imgTokens = (width / 16) * (height / 16);
     const maxTextTokens = Math.min(512, Math.floor(cap / ((3 * D + 2 * F) * 4)) - imgTokens);
     const vaeAct = this.kernels.vaeActType === 'f16' ? 2 : 4, latentPixels = (width / 8) * (height / 8);
-    const decoderFits = width * height * 256 * vaeAct <= cap && latentPixels * latentPixels * 4 <= cap;
+    // The decoder's attention scores are chunked by query rows (at least 64 at a time).
+    const decoderFits = width * height * 256 * vaeAct <= cap && 64 * latentPixels * 4 <= cap;
     return { maxTextTokens, fits: decoderFits && maxTextTokens >= 32, cap };
+  }
+
+  // Encode a live preview of the current step (before the Euler update, which overwrites the
+  // latents), submit it, and hand the image to onPreview when its readback lands; the run does not
+  // wait for it. Dry runs record and warm the pipeline without a readback.
+  async encodePreview(sigma, latH, latW, step, steps, onPreview) {
+    const pixels = latH * 2 * latW * 2;
+    if (this.previewInput?.size !== pixels * 32 * 4) {
+      this.previewInput?.destroy();
+      this.previewInput = this.device.createBuffer({ size: pixels * 32 * 4, usage: GPUBufferUsage.STORAGE });
+    }
+    const a = this.transformer.act;
+    this.vae.prepPreview(this.sched, a.latents, a.velocity, sigma, latH, latW, this.previewInput);
+    if (this.collecting) return;
+    const take = this.preview.encode(this.sched.encoder(), this.previewInput, { width: latW * 2, height: latH * 2 });
+    await this.sched.boundary(`preview[${step}]`, { force: true });
+    const read = take?.();
+    if (onPreview) read?.then(image => onPreview({ ...image, step, steps }), () => {});
+    else await read; // the warm-up generation: dispatch once, then free the slot
   }
 
   // Lean residency: make `which` ('textEncoder' or 'transformer') the resident model, freeing the
@@ -307,10 +332,12 @@ export class KleinPipeline {
   // signal, targetDutyMs, onDuty }. Without it the run is uncooperative but still submits per block.
   // textLength: the number of text tokens the prompt is padded to; 512 as in the reference pipeline,
   // or 'fitN' for the prompt's own length plus N padding tokens (fewer tokens for the transformer).
-  async generate({ prompt, seed = 0, width = 512, height = 512, steps = 4, textLength = 512, onStep = null, onPhase = null, schedule = null }) {
+  // onPreview({ width, height, rgba, step, steps }), if given, receives a rough image after each step:
+  // the clean-image estimate at latent resolution (an eighth of the output), mapped linearly to RGB.
+  async generate({ prompt, seed = 0, width = 512, height = 512, steps = 4, textLength = 512, onStep = null, onPhase = null, onPreview = null, schedule = null }) {
     this.sched.setSchedule(schedule);
     try {
-      return await this.generateScheduled({ prompt, seed, width, height, steps, textLength, onStep, onPhase });
+      return await this.generateScheduled({ prompt, seed, width, height, steps, textLength, onStep, onPhase, onPreview });
     } catch (error) {
       await this.sched.discard();
       throw error;
@@ -319,7 +346,7 @@ export class KleinPipeline {
     }
   }
 
-  async generateScheduled({ prompt, seed, width, height, steps, textLength = 512, onStep, onPhase, dry = false }) {
+  async generateScheduled({ prompt, seed, width, height, steps, textLength = 512, onStep, onPhase, onPreview = null, dry = false }) {
     if (width % 16 || height % 16) throw new Error('width and height must be multiples of 16');
     if (!this.transformer) throw new Error('no transformer is loaded');
     const dev = this.device, t = {};
@@ -383,6 +410,7 @@ export class KleinPipeline {
     for (let i = 0; i < steps; i++) {
       t0 = performance.now();
       await this.transformer.forward({ tModel: transformerTime(sched.timesteps[i]) });
+      if (onPreview || dry) await this.encodePreview(sched.sigmas[i], latH, latW, i + 1, steps, onPreview);
       await this.transformer.eulerStep(Math.fround(sched.sigmas[i + 1] - sched.sigmas[i]));
       t.stepMs.push(performance.now() - t0);
       onStep?.(i + 1, steps);

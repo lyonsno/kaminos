@@ -13,12 +13,13 @@ Generate images from a text prompt with [FLUX.2 [klein] 4B](https://huggingface.
 - **The whole model in the browser.** The Qwen3-4B text encoder (the 27 layers whose hidden states the model reads), the 4-step rectified-flow transformer and the VAE decoder all run as WGSL compute shaders.
 - **A 3.2 GB download, cached.** Weights are int4 (groups of 128, weight-only), packed per block, downloaded as gzip copies that the page inflates, and kept in the browser's Cache API after the first visit. The 0.8 GB token-embedding table is never downloaded whole: the page fetches only the rows a prompt uses, with HTTP range requests.
 - **Pick your jank level.** Mint is the int4 model (3.2 GB). Weathered uses a 3-bit transformer and looks about the same (3.0 GB). Off the Rails uses a 2-bit transformer: blurry, melted and still recognizable (2.5 GB). The levels share the text encoder and image decoder, so switching after the first download fetches only the other transformer.
+- **Watch it form.** After each of the four steps the page shows a rough preview: the model's current estimate of the finished image, mapped to colour by a small linear fit of the VAE decoder ([`fit-latent-preview.py`](fit-latent-preview.py)) and drawn at an eighth of the output size. On the M2 Pro the first preview appears about 3 seconds into a 13-second image. The preview machinery is the inference kit's `createWebGpuLatentPreview`, usable by other latent models.
 - **Room for the application to keep rendering.** Model work is submitted as inference-kit command duties sized to measured GPU throughput, so a renderer on the same device keeps its frame rate during generation. Generation can be paused, resumed and stopped between duties.
 - **Same output either way.** A generation that shares the GPU produces the same pixels as one that runs without yielding, and on a given machine and browser the same seed and prompt reproduce the same image.
 
 ## Speed
 
-Times are for one image with 4 steps in Chrome, sharing the GPU with a continuously rendering scene.
+Times are for one image with 4 steps (the page's Full button) in Chrome, sharing the GPU with a continuously rendering scene.
 
 | Size | 16 GB Apple M2 Pro | Apple M4 Max |
 | --- | --- | --- |
@@ -28,11 +29,20 @@ Times are for one image with 4 steps in Chrome, sharing the GPU with a continuou
 
 During generation the scene kept a median frame time of about 20 ms on the M2 Pro.
 
+The page has four generate buttons that trade steps for time. The model is distilled for 4 steps, but 3 look nearly the same, 2 are smoother and simpler, and 1 gives a blurry, melted impression of the scene. At 512 × 512 on the M2 Pro:
+
+| Button | Steps | Time |
+| --- | --- | --- |
+| Full | 4 | about 13 s |
+| Fast (the default) | 3 | about 10 s |
+| Express | 2 | about 7.5 s |
+| JANK | 1 | about 4.5 s |
+
 Prompts are padded with filler tokens before the transformer reads them. The page pads to the prompt's own length plus a few tokens, which is about a quarter faster than the reference pipeline's 512, unless the prompt asks for lettering (quoted text, words in capitals, or words like sign, poster or title). Then it pads to 512, which spells words in the image noticeably better. A checkbox shows which mode will run and can be flipped. Generating again with the same prompt reuses its text encoding.
 
 ## Memory
 
-The weights take 3.6 GB of GPU memory. Working memory grows with image size, so the transformer's buffers are released before the image decoder allocates its own, and the decoder's are released once the image is read back. The decoder stores its activations in 16 bits, and attention keeps scores for only a few heads at a time.
+The weights take 3.6 GB of GPU memory. Working memory grows with image size, so the transformer's buffers are released before the image decoder allocates its own, and the decoder's are released once the image is read back. The decoder stores its activations in 16 bits, and attention in both the transformer and the decoder keeps at most 64 MiB of scores at a time (a few heads, or a block of query rows).
 
 **Low-memory mode** (a checkbox on the page, ticked by default on phones and devices reporting less than 8 GB) never holds the text encoder and the transformer at the same time. A new prompt reloads the text encoder from the browser cache in place of the transformer, encodes, and swaps back; generating again with the same prompt swaps nothing. Images are identical in both modes.
 
@@ -41,7 +51,7 @@ Peak GPU memory measured by the page on the 16 GB M2 Pro:
 | Size | Normal | Low-memory mode |
 | --- | --- | --- |
 | 512 × 512 | 4.2 GB | 2.8 GB (a new prompt takes about 2 s longer) |
-| 1024 × 1024 | 6.8 GB | 5.3 GB |
+| 1024 × 1024 | 5.8 GB | 4.3 GB |
 
 With about 6 GB of memory left to the browser and macOS (the rest held by a test process), low-memory mode ran without the system swapping, while normal mode pushed it to swap about 3 GB. Neither figure comes from a real 8 GB Mac or a phone yet.
 

@@ -4,10 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>UniMate Motion</title>
+<meta name="unimate-weights" content="https://huggingface.co/BasinShapers/unimate-webgpu/resolve/main">
 <style>
   :root { color-scheme: dark; --panel: rgba(18, 20, 24, 0.86); --text: #e6e8eb; --muted: #9aa3ad; --accent: #4fd1e8; --line: rgba(255, 255, 255, 0.08); }
-  html, body { margin: 0; height: 100%; background: #111316; color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  html, body { margin: 0; height: 100%; background: #111316; color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+  canvas:active { cursor: grabbing; }
   .panel { position: fixed; top: 16px; left: 16px; width: min(340px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line);
     border-radius: 12px; padding: 14px 16px; backdrop-filter: blur(8px); box-sizing: border-box; }
   h1 { font-size: 16px; margin: 0 0 2px; font-weight: 600; }
@@ -20,63 +22,198 @@
   button.primary { background: #1f6f80; border-color: #2b8ea3; }
   button:disabled { opacity: 0.45; cursor: default; }
   .status { margin-top: 12px; font-size: 13px; min-height: 1.4em; }
+  .bar { height: 4px; border-radius: 2px; background: #1c2026; margin-top: 6px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
   .stats { margin-top: 8px; font-size: 12px; color: var(--muted); white-space: pre-line; }
-  .legend { position: fixed; bottom: 16px; left: 16px; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  .dock { position: fixed; left: 16px; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+  .dock > * { pointer-events: auto; }
+  .now { align-self: flex-start; max-width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+    font-size: 12px; color: var(--muted); display: flex; gap: 10px; align-items: center; box-sizing: border-box; }
+  .now b { color: var(--text); font-weight: 600; }
+  .now button { padding: 2px 9px; }
+  .now input[type=range] { width: 120px; accent-color: var(--accent); }
+  .strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+  .chip { flex: 0 0 auto; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 11px; max-width: 220px; }
+  .chip .a { font-weight: 600; font-size: 13px; }
+  .chip .p { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip[aria-pressed=true] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .legend { color: var(--muted); font-size: 12px; }
   .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 4px 0 10px; }
   .dot:first-child { margin-left: 0; }
+  @media (max-width: 640px) {
+    .panel { top: 8px; left: 8px; width: calc(100vw - 16px); padding: 10px 12px; }
+    .sub, .legend { display: none; }
+    .dock { left: 8px; right: 8px; bottom: 8px; }
+  }
 </style>
 </head>
 <body>
 <canvas id="scene"></canvas>
 <div class="panel">
   <h1>UniMate motion</h1>
-  <div class="sub">Text-to-motion on a supplied skeleton, generated on this GPU while the scene keeps drawing.</div>
-  <label for="prompt">Prompt</label>
+  <div class="sub">Text-to-motion for a given skeleton, generated on this GPU while the scene keeps drawing. Drag to orbit, scroll to zoom.</div>
+  <div id="skeleton-row" hidden>
+    <label for="skeleton">Skeleton</label>
+    <select id="skeleton" disabled></select>
+  </div>
+  <label for="prompt">Prompt for the <span id="skeleton-name">skeleton</span></label>
   <input id="prompt" type="text" list="prompt-suggestions" placeholder="e.g. A cat walks forward." disabled>
   <datalist id="prompt-suggestions"></datalist>
   <label for="noise">Starting noise</label>
   <select id="noise">
-    <option value="reference">Accepted CPU run's noise</option>
     <option value="seed">Browser seed</option>
+    <option value="reference">Accepted CPU run's noise</option>
   </select>
-  <input id="seed" type="number" value="1" min="0" step="1" hidden>
+  <input id="seed" type="number" value="1" min="0" step="1">
   <div class="row">
     <button id="generate" class="primary" disabled>Generate</button>
     <button id="pause" disabled>Pause</button>
     <button id="stop" disabled>Stop</button>
     <button id="rest" disabled>Rest pose</button>
   </div>
-  <div class="status" id="status">Loading…</div>
+  <div class="status" id="status">Starting…</div>
+  <div class="bar" id="bar" hidden><div></div></div>
   <div class="stats" id="stats"></div>
 </div>
-<div class="legend"><span class="dot" style="background:#4fd4f2"></span>front legs<span class="dot" style="background:#6be073"></span>hind legs<span class="dot" style="background:#f2bd47"></span>body and head</div>
+<div class="dock">
+  <div class="now" id="now" hidden>
+    <button id="play" aria-label="Pause playback">❚❚</button>
+    <input id="scrub" type="range" min="0" max="59" value="0" aria-label="Frame">
+    <span id="now-text"></span>
+  </div>
+  <div class="strip" id="strip" role="group" aria-label="Generated clips"></div>
+  <div class="legend"><span class="dot" style="background:#4fd4f2"></span>front legs and wings<span class="dot" style="background:#6be073"></span>hind legs<span class="dot" style="background:#f2bd47"></span>body, head and tail</div>
+</div>
 <script type="module">
-import { createUniMateDemo } from './unimate-demo.js';
+import { createUniMateDemo, decodeClip } from './unimate-demo.js';
 
 const $ = id => document.getElementById(id);
-const state = { phase: 'load', progress: null, result: null, error: null };
+const state = { phase: 'load', progress: null, result: null, error: null, clip: null };
 window.__unimateDemo = state;
 const canvas = $('scene');
 const resize = () => { canvas.width = Math.round(innerWidth * devicePixelRatio); canvas.height = Math.round(innerHeight * devicePixelRatio); };
 resize();
 addEventListener('resize', resize);
 const setStatus = text => { $('status').textContent = text; };
+const setBar = frac => { $('bar').hidden = frac === null; if (frac !== null) $('bar').firstElementChild.style.width = `${(100 * frac).toFixed(1)}%`; };
 $('noise').addEventListener('change', () => { $('seed').hidden = $('noise').value !== 'seed'; });
+const mb = n => (n / 1e6).toFixed(0);
 
-let demo;
-try {
-  demo = await createUniMateDemo({ canvas, onStatus: s => { state.phase = s.phase; setStatus(s.phase === 'ready' ? `Ready · ${s.detail}` : `Loading ${s.detail}…`); } });
-  window.__unimateDemoInstance = demo;
-  demo.bundle.prompts.forEach(p => $('prompt-suggestions').append(new Option(p.text)));
-  $('prompt').value = demo.bundle.prompts[0]?.text ?? '';
-  for (const id of ['prompt', 'generate', 'rest']) $(id).disabled = false;
-  state.phase = 'ready';
-} catch (e) {
-  state.error = String(e?.stack ?? e); state.phase = 'failed'; setStatus(`Could not start: ${e.message ?? e}`);
+let demo, current = null;
+const clips = [];     // { meta, clip (decoded, lazily), chip }
+
+const displayName = n => String(n).replace(/^unitree_go2$/i, 'Go2');
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
+function describe(c) {
+  const g = c.generated;
+  return `<b>${esc(c.animal)}</b> · “${esc(c.prompt)}” · seed ${esc(c.seed)} · ${g?.own ? `generated here in ${(g.wallMs / 1000).toFixed(1)} s` : 'generated by this page on WebGPU'}`;
+}
+async function play(entry) {
+  if (!entry.clip) entry.clip = decodeClip(await (await fetch(`clips/${entry.meta.file}`)).json());
+  current = entry;
+  demo.showClip(entry.clip);
+  state.clip = entry.clip.id;
+  for (const e of clips) e.chip.setAttribute('aria-pressed', String(e === entry));
+  $('now').hidden = false;
+  $('now-text').innerHTML = describe(entry.clip);
+  $('scrub').max = String(entry.clip.frames - 1);
+  $('play').textContent = '❚❚';
+}
+window.__unimatePlayClip = i => play(clips[i]);
+function addChip(meta, clip = null, { prepend = false } = {}) {
+  const chip = document.createElement('button');
+  chip.className = 'chip';
+  chip.innerHTML = `<div class="a"></div><div class="p"></div>`;
+  chip.querySelector('.a').textContent = meta.animal;
+  chip.querySelector('.p').textContent = meta.prompt;
+  chip.title = `${meta.animal}: ${meta.prompt}`;
+  const entry = { meta, clip, chip };
+  chip.addEventListener('click', () => play(entry));
+  prepend ? $('strip').prepend(chip) : $('strip').append(chip);
+  prepend ? clips.unshift(entry) : clips.push(entry);
+  return entry;
 }
 
+$('play').addEventListener('click', () => {
+  const playing = demo.view.playing;
+  demo.setPlaying(!playing);
+  $('play').textContent = playing ? '▶' : '❚❚';
+});
+$('scrub').addEventListener('input', () => { demo.seek(Number($('scrub').value)); $('play').textContent = '▶'; });
+setInterval(() => { if (demo?.view.playing && demo.view.motion && document.activeElement !== $('scrub')) $('scrub').value = String(Math.max(0, demo.scene.frameIndex)); }, 100);
+
+// Weights: the local server's /weights/, /t5/ and /demo/ (serve-unimate.mjs), or the published
+// copies on Hugging Face with a choice of skeletons. ?weights=hub or ?weights=local overrides.
+const params = new URLSearchParams(location.search);
+const hub = document.querySelector('meta[name="unimate-weights"]').content;
+const useHub = params.get('weights') === 'hub' || (params.get('weights') !== 'local' && !['127.0.0.1', 'localhost'].includes(location.hostname));
+let skeletons = null, skeletonKey = null;
+const skeletonBase = key => `${hub}/skeletons/${key}/`;
+const source = { weightsBase: '/weights/', t5Base: '/t5/', bundleBase: '/demo/' };
+if (useHub) {
+  Object.assign(source, { weightsBase: `${hub}/unimate/`, t5Base: `${hub}/t5/` });
+  try {
+    skeletons = (await (await fetch(`${hub}/skeletons/index.json`)).json()).skeletons;
+    skeletonKey = skeletons.some(k => k.key === params.get('skeleton')) ? params.get('skeleton') : (skeletons.find(k => k.key === 'dog') ?? skeletons[0]).key;
+    source.bundleBase = skeletonBase(skeletonKey);
+  } catch (e) { console.warn('skeleton list unavailable', e); }
+}
+const skeletonLabel = () => skeletons?.find(k => k.key === skeletonKey)?.label ?? (displayName(demo.skeletonName) === 'Go2' ? 'Go2 robot dog' : displayName(demo.skeletonName));
+
+// Prompt suggestions and noise choices for the current generation skeleton. Replaying a captured
+// run's noise is offered only where that run has an accepted reference clip.
+function showSkeletonPrompts() {
+  $('skeleton-name').textContent = skeletonLabel();
+  const listed = skeletons?.find(k => k.key === skeletonKey)?.suggestions ?? demo.bundle.prompts.map(p => p.text);
+  $('prompt-suggestions').replaceChildren(...listed.map(t => new Option(t)));
+  $('prompt').value = listed[0] ?? '';
+  const replay = demo.bundle.prompts.some(p => p.referencePositions);
+  $('noise').querySelector('option[value=reference]').hidden = !replay;
+  if (!replay) { $('noise').value = 'seed'; $('seed').hidden = false; }
+}
+
+try {
+  demo = await createUniMateDemo({ canvas, ...source });
+  window.__unimateDemoInstance = demo;
+} catch (e) {
+  state.error = String(e?.stack ?? e); state.phase = 'failed'; setStatus(`Could not start: ${e.message ?? e}`);
+  throw e;
+}
+
+// Gallery first: clips play while the model downloads.
+try {
+  const index = await (await fetch('clips/index.json')).json();
+  for (const meta of index.clips) addChip(meta);
+  if (clips.length) await play(clips[0]);
+} catch (e) { console.warn('no clip gallery', e); }
+
+try {
+  setStatus('Downloading the model…');
+  await demo.loadModel({
+    onStatus: s => { if (s.phase !== 'ready') { state.phase = 'load'; if (s.detail !== 'model weights') setStatus(`Loading ${s.detail}…`); } },
+    onBytes: (loaded, total) => {
+      setStatus(total ? `Downloading the model · ${mb(loaded)} of ${mb(total)} MB` : `Downloading the model · ${mb(loaded)} MB`);
+      setBar(total ? loaded / total : null);
+    },
+  });
+  setBar(null);
+  if (skeletons) {
+    $('skeleton').replaceChildren(...skeletons.map(k => new Option(`${k.label} · ${k.joints} joints`, k.key)));
+    $('skeleton').value = skeletonKey;
+    $('skeleton-row').hidden = false;
+  }
+  showSkeletonPrompts();
+  for (const id of ['prompt', 'generate', 'rest', 'skeleton']) $(id).disabled = false;
+  state.phase = 'ready';
+  setStatus(`Ready · ${demo.parameterCount.toLocaleString()} parameters${demo.hasTextEncoder() ? ' · type any prompt' : ''}`);
+} catch (e) {
+  setBar(null);
+  state.error = String(e?.stack ?? e); state.phase = 'failed'; setStatus(`Could not load the model: ${e.message ?? e}`);
+}
+
+let own = 0;
 async function generate() {
-  for (const id of ['generate', 'prompt', 'noise', 'seed', 'rest']) $(id).disabled = true;
+  for (const id of ['generate', 'prompt', 'noise', 'seed', 'rest', 'skeleton']) $(id).disabled = true;
   for (const id of ['pause', 'stop']) $(id).disabled = false;
   $('pause').textContent = 'Pause';
   $('stats').textContent = '';
@@ -104,18 +241,46 @@ async function generate() {
       result.referenceMaxJointDeviation != null ? `Largest joint difference from the accepted CPU clip: ${result.referenceMaxJointDeviation.toExponential(2)} units` : `Noise: ${result.noise}`,
       `Text: ${result.textEncoder}${result.encodeMs ? ` (${result.encodeMs.toFixed(0)} ms)` : ''}`,
     ].filter(Boolean).join('\n');
+    // Keep it in the gallery, beside the pre-generated clips.
+    const sk = demo.bundle.skeleton;
+    const clip = { id: `own-${++own}`, animal: skeletonLabel(), prompt: text, seed: seed ?? 'reference', fps: sk.fps, frames: result.motion.frames,
+      skeleton: { name: sk.name, parents: sk.parents, jointNames: sk.jointNames }, positions: result.motion.positions,
+      generated: { wallMs: result.wallMs, own: true } };
+    const entry = addChip({ animal: `${skeletonLabel()} (yours)`, prompt: text }, clip, { prepend: true });
+    current = entry;
+    for (const e of clips) e.chip.setAttribute('aria-pressed', String(e === entry));
+    $('now').hidden = false; $('now-text').innerHTML = describe(clip); $('scrub').max = String(clip.frames - 1); $('play').textContent = '❚❚';
+    $('strip').scrollLeft = 0;
   } catch (e) {
     state.error = String(e?.message ?? e); state.phase = e?.name === 'AbortError' ? 'stopped' : 'failed';
     setStatus(state.phase === 'stopped' ? 'Stopped' : `Failed: ${state.error}`);
   } finally {
-    for (const id of ['generate', 'prompt', 'noise', 'seed', 'rest']) $(id).disabled = false;
+    for (const id of ['generate', 'prompt', 'noise', 'seed', 'rest', 'skeleton']) $(id).disabled = false;
     for (const id of ['pause', 'stop']) $(id).disabled = true;
   }
 }
 $('generate').addEventListener('click', generate);
+$('skeleton').addEventListener('change', async () => {
+  const key = $('skeleton').value, controls = ['generate', 'prompt', 'noise', 'seed', 'rest', 'skeleton'];
+  controls.forEach(id => { $(id).disabled = true; });
+  setStatus(`Loading the ${skeletons.find(k => k.key === key).label} skeleton…`);
+  try {
+    await demo.useSkeleton(skeletonBase(key));
+    skeletonKey = key;
+    showSkeletonPrompts();
+    demo.showGenerationSkeleton();
+    $('now').hidden = true;
+    for (const e of clips) e.chip.setAttribute('aria-pressed', 'false');
+    setStatus(`Ready · ${skeletonLabel()} · type any prompt`);
+  } catch (e) {
+    $('skeleton').value = skeletonKey;
+    setStatus(`Could not load that skeleton: ${e.message ?? e}`);
+  } finally { controls.forEach(id => { $(id).disabled = false; }); }
+});
+window.__unimateUseSkeleton = key => { $('skeleton').value = key; $('skeleton').dispatchEvent(new Event('change')); };
 $('pause').addEventListener('click', async () => { const s = await demo.togglePause(); if (s) $('pause').textContent = s === 'paused' ? 'Resume' : 'Pause'; });
 $('stop').addEventListener('click', () => demo.stop());
-$('rest').addEventListener('click', () => demo.showRest());
+$('rest').addEventListener('click', () => { demo.showGenerationSkeleton(); demo.showRest(); $('now').hidden = true; for (const e of clips) e.chip.setAttribute('aria-pressed', 'false'); });
 window.__unimateGenerate = (prompt, seed = null) => {
   $('prompt').value = typeof prompt === 'number' ? demo.bundle.prompts[prompt].text : prompt;
   $('noise').value = seed === null ? 'reference' : 'seed'; $('seed').hidden = seed === null;

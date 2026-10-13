@@ -61,8 +61,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
   const scatteringTexture=device.createTexture({label:'raw live smoke scattering coefficient',dimension:'3d',size:[grid,gridY,grid],format:'r32float',
     usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
   const pipeline = device.createComputePipeline({label: 'raw scene volume source seed', layout: 'auto',
-    compute: {module, entryPoint: 'seedSceneVolumeSource', constants: {
-      GRID: fluidGrid, GRID_Y: fluidGridY, SCENE_SOURCE_GRID: grid, SCENE_SOURCE_GRID_Y: gridY}}});
+    compute: {module, entryPoint: 'seedSceneVolumeSource'}});
   // The seed reaches sceneEmissiveMaterialAt, which reads the reactant sidecar
   // (fresh burn); the sidecar is reallocated when the reaction law changes.
   let boundTextures = null;
@@ -161,12 +160,11 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
 }
 
 export const SCENE_VOLUME_SOURCE_WGSL = /* wgsl */`
-override SCENE_SOURCE_GRID: u32 = 32u;
-override SCENE_SOURCE_GRID_Y: u32 = 64u;
 @group(3) @binding(4) var sceneSourceOut: texture_storage_3d<rgba32float, write>;
 @group(3) @binding(5) var sceneScatteringOut: texture_storage_3d<r32float, write>;
 @compute @workgroup_size(4,4,4)
 fn seedSceneVolumeSource(@builtin(global_invocation_id) c: vec3<u32>) {
+  seatGridShape();
   if (any(c >= vec3<u32>(SCENE_SOURCE_GRID, SCENE_SOURCE_GRID_Y, SCENE_SOURCE_GRID))) { return; }
   var coefficients = vec4<f32>(0.0);
   var scattering=0.0;

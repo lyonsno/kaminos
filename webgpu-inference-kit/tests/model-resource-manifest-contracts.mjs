@@ -737,4 +737,24 @@ await lossSession.resourceFactory.drain();
 assert.equal(lossSession.resourceFactory.snapshot().flights[0].status, 'invalidated');
 assert.equal(lossBufferDestroyCount, 1, 'managed model buffer rejected by invalidation must be destroyed exactly once');
 
+// The disposer handed to residency lives as long as the resident buffer. It must not close over the
+// loader's per-load scope, or every resource keeps its full uploaded host bytes alive (SAM: ~3.1 GB).
+{
+  const disposers = [];
+  const retentionResidency = createWebGpuResourceResidency({ sessionId: 'dispose-retention' });
+  const retentionFactory = createWebGpuResourceFactory({ sessionId: 'dispose-retention', residency: retentionResidency });
+  const retentionRuntime = runtimeFixture();
+  const route = routeFixture({ routeId: 'dispose-retention-route', runtime: retentionRuntime, residency: retentionResidency, factory: retentionFactory });
+  const capturing = { ...route, residency: { ...route.residency, acquireOrCreate(input) { disposers.push(input.dispose); return route.residency.acquireOrCreate(input); } } };
+  for (const seed of [1, 2]) {
+    const bytes = Uint8Array.from({ length: 32 }, (_, index) => (index * seed) & 255);
+    await loadWebGpuModelResources({ manifest: manifestFor(bytes), bundle: bytes, route: capturing });
+  }
+  assert.equal(disposers.length, 4, 'two allocations per load');
+  assert.equal(new Set(disposers).size, 1, 'one shared disposer: it captures no per-load bytes');
+  const probe = { destroyed: 0, destroy() { this.destroyed += 1; } };
+  disposers[0](probe);
+  assert.equal(probe.destroyed, 1, 'the shared disposer still destroys the buffer');
+}
+
 console.log('model resource manifest contracts passed');

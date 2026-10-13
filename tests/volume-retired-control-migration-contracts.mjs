@@ -135,10 +135,10 @@ assert.equal(legacyFineBreakupReceipt.preset.domControls[commonGasTransport.key]
   'both 209- and 210-control basins retain the legacy gas transport law');
 assert.equal(validateVolumeSettingsPresetDocument(currentPresetArtifact(), parentArtifact.presetId, schema)
   .preset.domControls[commonGasTransport.key].value, false);
-const flameDoctorControls = ['volume-pressure-solver', 'volume-pressure-solver-iterations', 'volume-advection-scheme', 'volume-confinement', 'volume-time-step', 'volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time']
+const flameDoctorControls = ['volume-pressure-solver', 'volume-pressure-solver-iterations', 'volume-advection-scheme', 'volume-confinement', 'volume-time-step', 'volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time']
   .map(key => schema.controls.find(control => control.key === key));
-assert.deepEqual(flameDoctorControls.map(control => control?.additiveSinceControlCount), [212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251],
-  'the pressure solver, solver sweeps, advection scheme, confinement mode, time-step mode, the inflow-boundary emitter controls (fuel fraction, inlet temperature), the aperture pattern controls and swirl, the wind model controls and the reaction-law controls declare successive additive counts after common gas transport');
+assert.deepEqual(flameDoctorControls.map(control => control?.additiveSinceControlCount), [212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252],
+  'the pressure solver, solver sweeps, advection scheme, confinement mode, time-step mode, the inflow-boundary emitter controls (fuel fraction, inlet temperature), the aperture pattern controls and swirl, the wind model controls, the grid height ratio and the reaction-law controls declare successive additive counts after common gas transport');
 const legacySolverArtifact = currentPresetArtifact();
 const legacySolverRoute = new URL(legacySolverArtifact.preset.route);
 for (const control of schema.controls.filter(control => control.additiveSinceControlCount >= 212)) {
@@ -254,3 +254,36 @@ assert.throws(
 );
 
 console.log('volume retired-control migration contracts passed');
+
+// Grid height (report §34, review GH-R3-01): the height control was a cell
+// count (`volume-grid-height-cells`) on the unlanded branch before it became a
+// width multiplier. A 249-control basin saved with the cells control retires
+// it and gains the multiplier at its default 2, the saved-basin height (Noah
+// 2026-10-12: retire it; no stored basin carries the cells control).
+{
+  const ratioControl = schema.controls.find(control => control.key === 'volume-grid-height-ratio');
+  const cellsRetired = schema.retiredControls.find(control => control.key === 'volume-grid-height-cells');
+  assert.deepEqual(cellsRetired, { axis: 'domControls', key: 'volume-grid-height-cells', param: 'volume_grid_height_cells', tagName: 'INPUT', type: 'number' });
+  for (const cells of [0, 144]) {
+    const artifact = currentPresetArtifact();
+    delete artifact.preset.domControls[ratioControl.key];
+    artifact.preset.domControls[cellsRetired.key] = { id: cellsRetired.key, param: cellsRetired.param, tagName: 'INPUT', type: 'number', value: cells };
+    const route = new URL(artifact.preset.route);
+    route.searchParams.delete(ratioControl.param);
+    // A basin of that era predates the reaction-law controls (additive 250-252) too.
+    const laterControls = schema.controls.filter(control => control.additiveSinceControlCount > ratioControl.additiveSinceControlCount);
+    for (const control of laterControls) { delete artifact.preset.domControls[control.key]; route.searchParams.delete(control.param); }
+    artifact.controlCount = Object.keys(artifact.preset.domControls).length;
+    artifact.preset.controlCount = artifact.controlCount;
+    route.searchParams.set(cellsRetired.param, String(cells));
+    artifact.preset.route = route.href;
+    const receipt = validateVolumeSettingsPresetDocument(artifact, artifact.presetId, schema);
+    assert.deepEqual(receipt.retirementMigration?.removedControlIds, [cellsRetired.key], `cells ${cells}: the cells control is retired`);
+    assert.deepEqual(receipt.retirementMigration?.addedControlIds, [ratioControl.key, ...laterControls.map(control => control.key)], `cells ${cells}: the multiplier is added, then the later additive controls`);
+    assert.equal(receipt.preset.domControls[ratioControl.key].value, 2, `cells ${cells}: the multiplier takes the saved-basin height`);
+    assert.equal(receipt.presetRoute.searchParams.get(ratioControl.param), '2');
+    assert.equal(receipt.presetRoute.searchParams.has(cellsRetired.param), false);
+    assert.equal(receipt.preset.controlCount, schema.controlCount);
+  }
+}
+console.log('grid height cells control retirement contracts passed');

@@ -20,7 +20,7 @@ function walk(root, dir = root) {
   });
 }
 
-test("Pages site keeps the flame boutique at the root and adds only the Klein demo and kit source", async () => {
+test("Pages site keeps the flame boutique at the root and adds only the Klein and UniMate demos and kit source", async () => {
   const site = await assembled();
   const atlas = path.join(repoRoot, "docs", "flame-atlas");
   for (const file of walk(atlas)) {
@@ -28,15 +28,16 @@ test("Pages site keeps the flame boutique at the root and adds only the Klein de
   }
   const extra = walk(site).filter(file => !fs.existsSync(path.join(atlas, file)));
   for (const file of extra) {
-    assert.match(file, /^(inference-kit\/klein\/[^/]+\.(html|js)|inference-kit\/klein\/assets\/[^/]+\.(jpg|png)|webgpu-inference-kit\/src\/.+\.js)$/, `${file} is outside the published set`);
+    assert.match(file, /^(inference-kit\/klein\/[^/]+\.(html|js)|inference-kit\/klein\/assets\/[^/]+\.(jpg|png)|inference-kit\/unimate\/(index\.html|unimate-[\w-]+\.js|clips\/[\w-]+\.json)|inference-kit\/flux2-klein\/klein-duties\.js|webgpu-inference-kit\/src\/.+\.js)$/, `${file} is outside the published set`);
   }
   assert.ok(fs.existsSync(path.join(site, "inference-kit", "klein", "index.html")));
+  assert.ok(fs.existsSync(path.join(site, "inference-kit", "unimate", "index.html")));
   assert.ok(!fs.existsSync(path.join(site, "serve.py")));
 });
 
-test("every relative module import in the Klein demo resolves inside the site", async () => {
+for (const demo of ["klein", "unimate"]) test(`every relative module import in the ${demo} demo resolves inside the site`, async () => {
   const site = await assembled();
-  const pending = [path.join(site, "inference-kit", "klein", "index.html")];
+  const pending = [path.join(site, "inference-kit", demo, "index.html")];
   const seen = new Set();
   while (pending.length) {
     const file = pending.pop();
@@ -57,7 +58,8 @@ test("Pages workflow uploads the assembled site", () => {
   const workflow = fs.readFileSync(path.join(repoRoot, ".github", "workflows", "flame-atlas-pages.yml"), "utf8");
   assert.match(workflow, /node scripts\/assemble-pages-site\.mjs _site/);
   assert.match(workflow, /path:\s*_site\s*$/m);
-  for (const trigger of ["models/flux2-klein/index.html", "models/flux2-klein/klein-*.js", "webgpu-inference-kit/src/**", "scripts/assemble-pages-site.mjs"]) {
+  for (const trigger of ["models/flux2-klein/index.html", "models/flux2-klein/klein-*.js", "models/unimate/index.html", "models/unimate/unimate-*.js",
+    "models/unimate/clips/**", "webgpu-inference-kit/src/**", "scripts/assemble-pages-site.mjs"]) {
     assert.ok(workflow.includes(`- ${trigger}`), `workflow does not trigger on ${trigger}`);
   }
 });
@@ -71,4 +73,12 @@ test("every relative src in the Klein demo page resolves inside the site", async
     const target = path.resolve(path.dirname(page), src);
     assert.ok(target.startsWith(site + path.sep) && fs.existsSync(target), `index.html src ${src} is missing from the site`);
   }
+});
+
+test("the UniMate demo's clip gallery is published with every clip it lists", async () => {
+  const site = await assembled();
+  const clips = path.join(site, "inference-kit", "unimate", "clips");
+  const index = JSON.parse(fs.readFileSync(path.join(clips, "index.json"), "utf8"));
+  assert.ok(index.clips.length > 0);
+  for (const clip of index.clips) assert.ok(fs.existsSync(path.join(clips, clip.file)), `clip ${clip.file} is missing from the site`);
 });

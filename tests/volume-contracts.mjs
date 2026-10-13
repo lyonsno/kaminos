@@ -2275,7 +2275,7 @@ assert.match(index, /new THREE\.WebGPURenderer\(\{[^}]*device:\s*sharedGpu\.devi
 assert.match(index, /sharedGpuContext:\s*fingerFluidPyroCompositionRequested\(\) \? null : sharedGpu/, 'volume prototype is seated on the same shared GPU context, except the liquid-contact route that adopts the fluid solver device');
 
 // Same-state, same-law irradiance lattice seed.
-assert.match(core, /override IRRADIANCE_GRID/, 'irradiance lattice grid size is a shader override, not a hardcoded constant');
+assert.match(core, /IRRADIANCE_GRID = u32\(u\.grid_shape\.z\);/, 'irradiance lattice grid size is a runtime value seated from the uniforms, not a hardcoded constant');
 assert.match(core, /fn csIrradianceSeed/, 'irradiance lattice is seeded by a dedicated GPU compute entry point');
 assert.match(core, /fn csIrradiancePropagate/, 'irradiance lattice has a dedicated GPU propagation entry point');
 assert.match(core, /fn csIrradianceResolve/, 'irradiance lattice resolves into a sampleable atlas by a dedicated GPU entry point');

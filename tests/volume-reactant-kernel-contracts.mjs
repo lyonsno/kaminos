@@ -26,11 +26,11 @@ const reactantBlocks = (() => {
 })();
 
 test('the reactant uniform block follows the immersed source and is packed and receipted every frame', () => {
-  assert.equal(core.REACTANT_COMBUSTION_UNIFORM_OFFSET, core.IMMERSED_SOURCE_UNIFORM_OFFSET + core.IMMERSED_SOURCE_UNIFORM_FLOATS);
+  assert.equal(core.REACTANT_COMBUSTION_UNIFORM_OFFSET, core.GRID_SHAPE_UNIFORM_OFFSET + core.GRID_SHAPE_UNIFORM_FLOATS, 'after the grid shape block');
   assert.equal(core.REACTANT_COMBUSTION_UNIFORM_FLOATS, 16);
   assert.equal(core.VOLUME_UNIFORM_FLOATS, core.REACTANT_COMBUSTION_UNIFORM_OFFSET + 16);
   assert.equal(core.VOLUME_UNIFORM_FLOATS % 4, 0);
-  assert.match(source, /immersed_source_f: vec4<f32>,\n(?:\s*\/\/.*\n)*\s*reactant_combustion_a: vec4<f32>,\n\s*reactant_combustion_b: vec4<f32>,\n\s*reactant_combustion_c: vec4<f32>,\n\s*reactant_combustion_d: vec4<f32>,\n\};/, 'the struct carries the block right after the immersed source');
+  assert.match(source, /grid_shape_b: vec4<f32>,\n(?:\s*\/\/.*\n)*\s*reactant_combustion_a: vec4<f32>,\n\s*reactant_combustion_b: vec4<f32>,\n\s*reactant_combustion_c: vec4<f32>,\n\s*reactant_combustion_d: vec4<f32>,\n\};/, 'the struct carries the block right after the grid shape');
   assert.match(source, /uniforms\.set\(reactantCombustionUniformValues\(reactantCombustionConfig\), REACTANT_COMBUSTION_UNIFORM_OFFSET\);\s*\n\s*state\.reactantCombustion = reactantCombustionConfig;/);
   assert.match(source, /resolveReactantCombustionConfig\(controlsSnapshot, \{\s*grid: gridSize,\s*transportCommonCharacteristic: resolveTransportConfig\(controlsSnapshot\)\.effective\.commonCharacteristic,/, 'admission sees the effective transport');
 });

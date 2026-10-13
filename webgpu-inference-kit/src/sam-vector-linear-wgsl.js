@@ -65,6 +65,9 @@ fn gelu_exact_approx(x: f32) -> f32 {
 }
 `;
 
+// MLX-exact GELU helpers shared with the tiled SAM linears.
+export const SAM_GELU_WGSL_HELPERS = GELU_HELPERS;
+
 function shader({ activation, helpers = '', variant = 'sequential4' }) {
   return createWebGpuLinearShader({
     variant, activationExpression: activation, activationHelpers: helpers,

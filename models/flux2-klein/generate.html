@@ -88,11 +88,22 @@ $('pause').onclick = async () => { const s = await demo.togglePause(); if (s) $(
 $('stop').onclick = () => demo.stop();
 
 // Headless batch entry point: PNG base64 plus timings, duties and scene frame stats per job.
-window.kleinBatch = async (jobs, { cooperative = true, targetDutyMs = 12, maxInFlight = 1, textLength = 512, dutyLog = false } = {}) => {
+const pngBase64 = async (rgba, width, height) => {
+  const canvas = new OffscreenCanvas(width, height);
+  canvas.getContext('2d').putImageData(new ImageData(rgba, width, height), 0, 0);
+  const bytes = new Uint8Array(await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer());
+  let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+};
+window.kleinBatch = async (jobs, { cooperative = true, targetDutyMs = 12, maxInFlight = 1, textLength = 512, dutyLog = false, previews = false, steps = 4 } = {}) => {
   await window.kleinReady;
   const results = [];
   for (const job of jobs) {
-    const r = await generate({ textLength, ...job, cooperative, targetDutyMs, maxInFlight });
+    // With previews, each step's preview image arrives as { step, width, height, png, atMs }.
+    const shots = [], started = performance.now();
+    const onPreview = previews ? image => shots.push(pngBase64(image.rgba, image.width, image.height)
+      .then(png => ({ step: image.step, width: image.width, height: image.height, png, atMs: performance.now() - started }))) : null;
+    const r = await generate({ textLength, steps, ...job, cooperative, targetDutyMs, maxInFlight, onPreview });
     const canvas = new OffscreenCanvas(r.width, r.height);
     canvas.getContext('2d').putImageData(new ImageData(r.rgba, r.width, r.height), 0, 0);
     const bytes = new Uint8Array(await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer());
@@ -100,6 +111,7 @@ window.kleinBatch = async (jobs, { cooperative = true, targetDutyMs = 12, maxInF
     const longest = [...r.duties].sort((a, b) => (b.queueMs ?? 0) - (a.queueMs ?? 0)).slice(0, 5)
       .map(({ label, queueMs, estimatedFlops }) => ({ label, queueMs, gflops: estimatedFlops / 1e9 }));
     results.push({ name: job.name, seed: job.seed, size: job.size, cooperative: r.cooperative, wallMs: r.wallMs, timings: r.timings,
+      previews: previews ? await Promise.all(shots) : undefined,
       promptTokens: r.promptTokens, gpuBytes: r.gpuBytes, gpuErrors: r.gpuErrors, frames: r.frames, dutyCount: r.dutyCount, longestDutyMs: r.longestDutyMs, longestDuties: longest, png: btoa(bin),
       // Every duty in submit order, timed from the run's start, when asked for.
       duties: dutyLog ? r.duties.map(({ label, estimatedFlops, dutyFlopsBudget, inFlightAtSubmit, gateWaitMs, queueMs, submittedAt }) =>

@@ -222,6 +222,8 @@ test('the reactant law is admitted only for the tall plume with an inflow or imm
   assert.equal(rc.resolveReactantCombustionConfig({ ...base, emitterSourceLaw: 'legacy-volume' }, { grid: 32 }).effective.reason, 'reactant-law-requires-inflow-or-immersed-source');
   assert.equal(rc.resolveReactantCombustionConfig(base, { grid: 32, transportCommonCharacteristic: false }).effective.reason, 'reactant-law-requires-common-gas-transport', 'the oxidizer must ride the fuel characteristic');
   assert.equal(rc.resolveReactantCombustionConfig(base, { grid: 32, transportCommonCharacteristic: true }).effective.admitted, true);
+  assert.equal(rc.resolveReactantCombustionConfig(base, { grid: 32, sourceAdmitted: false }).effective.reason, 'reactant-law-requires-an-admitted-source', 'a requested but refused source (e.g. a Cluster emitter family under inflow-boundary) admits no fuel, so the law is not admitted either');
+  assert.equal(rc.resolveReactantCombustionConfig(base, { grid: 32, sourceAdmitted: true }).effective.admitted, true);
   const tuned = rc.resolveReactantCombustionConfig({ ...base, reactantMixingTime: 9, reactantCoolingTime: 120 }, { grid: 32 });
   assert.equal(tuned.effective.mixingTimeSteps, 9);
   assert.equal(tuned.effective.coolingTimeSteps, 120);

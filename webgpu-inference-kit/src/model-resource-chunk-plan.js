@@ -506,6 +506,12 @@ function errorWithChunkReport(cause, report) {
   return wrapped;
 }
 
+// Residency keeps a resource's disposer for its lifetime; defined beside create() it would share create()'s
+// closure context (plan, sources, input) and keep them alive, so it lives at module scope.
+function destroyResidentChunkBuffer(buffer) {
+  if (typeof buffer.destroy === 'function') buffer.destroy();
+}
+
 export async function loadWebGpuModelResourceChunksFromSources(input = {}) {
   const fetchOptionsSnapshot = snapshotWebGpuModelFetchOptions(input.fetchOptions, {
     label: 'model resource chunk',
@@ -673,9 +679,7 @@ export async function loadWebGpuModelResourceChunksFromSources(input = {}) {
               throw error;
             }
           },
-          dispose(buffer) {
-            if (typeof buffer.destroy === 'function') buffer.destroy();
-          },
+          dispose: destroyResidentChunkBuffer,
         });
       } catch (error) {
         const cleanup = releaseLeases(leases);

@@ -308,6 +308,10 @@ export function resolveReactantCombustionConfig(controls = {}, options = {}) {
   // common-gas (or MacCormack) transport; legacy per-layer lifts would carry
   // fuel and oxidizer apart and manufacture or destroy contact.
   if (options.transportCommonCharacteristic === false) return off('reactant-law-requires-common-gas-transport');
+  // The source that carries the fuel must itself be admitted (the inflow
+  // boundary refuses a non-analytic emitter family; the immersed source has its
+  // own refusals): a requested-but-refused source admits no fuel.
+  if (options.sourceAdmitted === false) return off('reactant-law-requires-an-admitted-source');
   // Receipt at the effective dt (the kernel applies min(weight x timeStep, cap)).
   const dt = Number.isFinite(options.dt) && options.dt > 0 ? options.dt : 1;
   const exchange = reactantExchangeWeight({ diffusivity: model.exchangeDiffusivity, grid, dt });

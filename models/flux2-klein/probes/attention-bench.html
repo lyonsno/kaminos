@@ -1,0 +1,76 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Klein attention bench</title>
+<pre id="log"></pre>
+<script type="module">
+// Times one transformer attention (24 heads, head dim 128, joint image + text tokens) two ways on the
+// same random q, k, v: Klein's materialized-score path (KleinTransformer.attention: GEMM v2 scores,
+// softmax, GEMM v2 values, head groups sharing a capped scores buffer) and the kit's register-tiled flash
+// kernel with strided head-major tensors. Each is submitted alone and timed to GPU completion (median of
+// `reps` after a warm-up); the outputs are compared (relative L2).
+// Query: ?tokens=1128,4200&reps=5   (1128 = 512² with fit16 padding; 4200 = 1024²)
+import { KleinTransformer } from '../klein-transformer.js';
+import { createWebGpuTiledFlashAttentionShader, flashAttentionStridedParams, flashAttentionDispatch }
+  from '../../../webgpu-inference-kit/src/core.js';
+
+const q = new URLSearchParams(location.search);
+const tokenList = (q.get('tokens') ?? '1128,4200').split(',').map(Number), reps = Number(q.get('reps') ?? 5);
+const H = 24, HEAD = 128;
+const log = text => { document.getElementById('log').textContent += text + '\n'; };
+
+window.attentionBench = (async () => {
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+  const device = await adapter.requestDevice({ requiredFeatures: ['shader-f16'], requiredLimits: {
+    maxBufferSize: adapter.limits.maxBufferSize, maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
+    maxStorageBuffersPerShaderStage: adapter.limits.maxStorageBuffersPerShaderStage,
+    maxComputeWorkgroupStorageSize: adapter.limits.maxComputeWorkgroupStorageSize } });
+  const errors = []; device.addEventListener('uncapturederror', e => errors.push(e.error.message));
+  const t = new KleinTransformer(device, { config: { num_attention_heads: H, attention_head_dim: HEAD, mlp_ratio: 3, joint_attention_dim: 7680 } });
+  Object.assign(t, { gemmVersion: 2, sharedType: 'f16' });
+  const flashPipe = await device.createComputePipelineAsync({ layout: 'auto', compute: {
+    module: device.createShaderModule({ code: createWebGpuTiledFlashAttentionShader({ headDim: HEAD, layout: 'strided' }) }), entryPoint: 'main' } });
+  let seed = 7;
+  const rand = n => Float32Array.from({ length: n }, () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296 - 0.5) * 2);
+  const read = async (buf, bytes) => {
+    const rb = device.createBuffer({ size: bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    const enc = device.createCommandEncoder(); enc.copyBufferToBuffer(buf, 0, rb, 0, bytes); device.queue.submit([enc.finish()]);
+    await rb.mapAsync(GPUMapMode.READ); const out = new Float32Array(rb.getMappedRange().slice(0)); rb.unmap(); rb.destroy(); return out;
+  };
+  const median = xs => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+  const rows = [];
+  for (const L of tokenList) {
+    const n = H * L * HEAD;
+    const qv = rand(n), kv = rand(n), vv = rand(n);
+    const vt = new Float32Array(n);                  // [H][HEAD][L] for the materialized path
+    for (let h = 0; h < H; h++) for (let l = 0; l < L; l++) for (let d = 0; d < HEAD; d++) vt[(h * HEAD + d) * L + l] = vv[(h * L + l) * HEAD + d];
+    const buf = data => { const b = t.buffer(data.byteLength); device.queue.writeBuffer(b, 0, data); return b; };
+    t.release();
+    t.allocate(L - 104, 104);                        // sizes q, k, vt, o and the capped scores buffer for L tokens
+    device.queue.writeBuffer(t.act.q, 0, qv); device.queue.writeBuffer(t.act.k, 0, kv); device.queue.writeBuffer(t.act.vt, 0, vt);
+    const vHead = buf(vv), flashOut = t.buffer(n * 4);
+    const materialized = async () => { await t.attention(t.sched, L); await t.sched.flush('bench'); };
+    const params = flashAttentionStridedParams({ queryTokens: L, keyTokens: L, heads: H, headDim: HEAD,
+      q: { tokenStride: HEAD, headStride: L * HEAD }, k: { tokenStride: HEAD, headStride: L * HEAD },
+      v: { tokenStride: HEAD, headStride: L * HEAD }, out: { tokenStride: HEAD, headStride: L * HEAD } });
+    const uniform = device.createBuffer({ size: params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    device.queue.writeBuffer(uniform, 0, params);
+    const bind = device.createBindGroup({ layout: flashPipe.getBindGroupLayout(0), entries: [t.act.q, t.act.k, vHead, flashOut, uniform]
+      .map((b, i) => ({ binding: i, resource: { buffer: b } })) });
+    const flash = async () => {
+      const enc = device.createCommandEncoder(); const pass = enc.beginComputePass();
+      pass.setPipeline(flashPipe); pass.setBindGroup(0, bind); pass.dispatchWorkgroups(...flashAttentionDispatch({ queryCount: L, heads: H })); pass.end();
+      device.queue.submit([enc.finish()]); await device.queue.onSubmittedWorkDone();
+    };
+    const time = async fn => { await fn(); const ms = []; for (let r = 0; r < reps; r++) { const t0 = performance.now(); await fn(); ms.push(performance.now() - t0); } return { median: median(ms), min: Math.min(...ms) }; };
+    const a = await time(materialized), b = await time(flash);
+    const oa = await read(t.act.o, n * 4), ob = await read(flashOut, n * 4);
+    let e = 0, r2 = 0, bad = 0; for (let i = 0; i < n; i++) { if (!Number.isFinite(ob[i])) bad++; const d = oa[i] - ob[i]; e += d * d; r2 += oa[i] * oa[i]; }
+    const row = { tokens: L, gflop: 4 * H * L * L * HEAD / 1e9, materializedMs: a, flashMs: b, speedup: a.median / b.median,
+      relL2: Math.sqrt(e / r2), nonFinite: bad, scoresBufferMB: t.act.scores.size / 1e6, errors: errors.splice(0) };
+    rows.push(row); log(JSON.stringify(row));
+    vHead.destroy(); flashOut.destroy(); uniform.destroy();
+  }
+  return { adapter: adapter.info?.architecture, rows };
+})();
+window.attentionBenchReady = true;
+</script>

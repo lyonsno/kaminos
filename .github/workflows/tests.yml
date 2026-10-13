@@ -1,0 +1,43 @@
+name: tests
+
+on:
+  push:
+    branches: [main, 'cc/operlocutor-*']
+  workflow_dispatch:
+
+jobs:
+  suite:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '25'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install numpy
+      - run: npm ci
+      - name: serve.py answers within 10 s
+        run: |
+          python3 -u serve.py 18499 > serve-startup.log 2>&1 &
+          pid=$!
+          up=0
+          for i in $(seq 1 20); do
+            if curl -fsS --max-time 2 http://127.0.0.1:18499/api/runtime-config > /dev/null; then up=1; echo "serve.py up after $i polls"; break; fi
+            sleep 0.5
+          done
+          kill $pid || true
+          cat serve-startup.log
+          test "$up" = 1
+      - run: node tools/test-runner.mjs --report test-results/report.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            test-results/
+            serve-startup.log

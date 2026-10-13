@@ -52,7 +52,7 @@ test('the pattern lives inside the slab: jets, slot and bed cover fewer cells th
     const w = core.immersedSourceWeights(c.effective, shape);
     assert.ok(Math.abs(w.sum - c.effective.normaliser) < 1e-9, 'normaliser is the patterned fluid sum');
     assert.ok(Math.abs(c.effective.fluxEffectivePredicted - c.effective.fluxRequested) < 1e-9, 'Σ target = Q still');
-    assert.equal(c.effective.fluxRequested, shapeCfg.effective.fluxRequested, 'the pattern redistributes the supply, it does not change it');
+    assert.ok(Math.abs(c.effective.fluxRequested - shapeCfg.effective.fluxRequested * c.effective.coverageFraction) < 1e-9, 'the pattern supplies its covered fraction of the disc at the plain disc\'s per-cell rate');
   }
   // Every patterned weight sits inside the plain slab (the pattern can only remove).
   const plain = new Map(core.immersedSourceWeights(shapeCfg.effective, shape).cells.map(c => [`${c.x},${c.y},${c.z}`, c.w]));
@@ -118,7 +118,8 @@ test('with the step\'s lattice the predicted supply is the modulated, capped tot
 
 test('uniforms: the slab basis, turbulence and the pattern flag ride a fifth and sixth vec4', () => {
   assert.equal(core.IMMERSED_SOURCE_UNIFORM_FLOATS, 24);
-  assert.equal(core.REACTANT_COMBUSTION_UNIFORM_OFFSET, core.IMMERSED_SOURCE_UNIFORM_OFFSET + 24, 'the reactant combustion block follows the immersed source');
+  assert.equal(core.GRID_SHAPE_UNIFORM_OFFSET, core.IMMERSED_SOURCE_UNIFORM_OFFSET + 24);
+  assert.equal(core.REACTANT_COMBUSTION_UNIFORM_OFFSET, core.GRID_SHAPE_UNIFORM_OFFSET + 8, 'the reactant combustion block follows the grid shape');
   assert.equal(core.VOLUME_UNIFORM_FLOATS % 4, 0);
   const on = core.resolveImmersedSourceConfig({ ...base, emitterAperturePattern: 'jets', emitterInletTurbulence: 0.6 }, shape);
   const u = core.immersedSourceUniformValues(on);
@@ -127,7 +128,7 @@ test('uniforms: the slab basis, turbulence and the pattern flag ride a fifth and
   assert.deepEqual(u.slice(20, 24), [1, 0, 0, 0], 'pattern on');
   assert.deepEqual(core.immersedSourceUniformValues(core.resolveImmersedSourceConfig(base, shape)).slice(20, 24), [0, 0, 0, 0], 'the plain shape samples no coverage');
   assert.equal(core.immersedSourceUniformValues(core.resolveImmersedSourceConfig({ ...base, pressureSolver: 'legacy' }, shape)).length, 24);
-  assert.match(kernel, /immersed_source_e: vec4<f32>,\n  immersed_source_f: vec4<f32>,\n(?:\s*\/\/.*\n)*\s*reactant_combustion_a: vec4<f32>,/, 'the reactant combustion block follows the slab vec4s');
+  assert.match(kernel, /immersed_source_e: vec4<f32>,\n  immersed_source_f: vec4<f32>,\n  grid_shape: vec4<f32>,\n  grid_shape_b: vec4<f32>,\n(?:\s*\/\/.*\n)*\s*reactant_combustion_a: vec4<f32>,/, 'the grid shape then the reactant combustion block follow the slab vec4s');
 });
 
 test('the kernel samples the coverage map and the lattice at the slab-local cell, and keeps the plain slab for the sponge exemption', () => {
@@ -172,4 +173,63 @@ test('capture: the inlet controls are checked against the immersed receipt when 
   assert.deepEqual(ok('volume-emitter-puff-period', '3'), []);
   // Neither law admitted: still refused.
   assert.equal(effectiveMismatches({ set: [['volume-emitter-puff', '0.4']] }, { inflowBoundary: { effective: { admitted: false } }, immersedSource: { effective: { admitted: false, reason: 'x' } } }, null).length, 1);
+});
+
+// Supply per covered area (2026-10-11, after the shear-vs-bed comparison):
+// a pattern supplies only what it covers, as the floor law does, so "speed"
+// means speed in every covered cell. The plain disc is unchanged.
+test('a pattern supplies its covered fraction of the disc, not the whole disc concentrated into it', () => {
+  const plain = core.resolveImmersedSourceConfig(base, shape);
+  assert.ok(Math.abs(plain.effective.fluxRequested - 0.1 * Math.PI * 6.4 * 6.4) < 1e-9, 'the plain disc keeps Q = v π r²');
+  assert.equal(plain.effective.coverageFraction, 1);
+  const jets = core.resolveImmersedSourceConfig({ ...base, emitterAperturePattern: 'jets', emitterApertureCount: 6 }, shape);
+  const plainW = core.immersedSourceWeights(plain.effective, shape).sum, jetsW = core.immersedSourceWeights(jets.effective, shape).sum;
+  assert.ok(Math.abs(jets.effective.coverageFraction - jetsW / plainW) < 1e-12);
+  assert.ok(jets.effective.coverageFraction > 0.1 && jets.effective.coverageFraction < 0.6, `six jets cover a fraction of the disc (${jets.effective.coverageFraction})`);
+  assert.ok(Math.abs(jets.effective.fluxRequested - plain.effective.fluxRequested * jets.effective.coverageFraction) < 1e-9, 'Q scales with the covered fraction');
+  // The per-cell rate is the plain disc's: target / w is the same number under both.
+  assert.ok(Math.abs(jets.effective.fluxRequested / jets.effective.normaliser - plain.effective.fluxRequested / plain.effective.normaliser) < 1e-9, 'speed means speed in every covered cell');
+  assert.equal(jets.effective.fluxNominal, jets.effective.fluxRequested);
+  assert.ok(Math.abs(jets.effective.fluxEffectivePredicted - jets.effective.fluxRequested) < 1e-9);
+  // A kiln covering part of the disc reduces the supply too (a buried bed supplies less), rather than concentrating it.
+  const solid = new Uint8Array(64 * 128 * 64);
+  for (const c of core.immersedSourceWeights(plain.effective, shape).cells) if (c.x + 0.5 < 32) solid[c.x + 64 * (c.y + 128 * c.z)] = 1;
+  const masked = core.resolveImmersedSourceConfig(base, { ...shape, solidCells: solid });
+  assert.ok(masked.effective.coverageFraction > 0.3 && masked.effective.coverageFraction < 0.7);
+  assert.ok(Math.abs(masked.effective.fluxRequested - plain.effective.fluxRequested * masked.effective.coverageFraction) < 1e-9);
+  assert.ok(Math.abs(masked.effective.fluxRequested / masked.effective.normaliser - plain.effective.fluxRequested / plain.effective.normaliser) < 1e-9);
+  // Uniform packing carries the per-cell rate unchanged by the pattern.
+  const up = core.immersedSourceUniformValues(plain), uj = core.immersedSourceUniformValues(jets);
+  assert.ok(Math.abs(up[14] - uj[14]) < 1e-9, 'Q/Σw is the same uniform for plain and jets');
+  assert.match(index, /coverage \$\{\(immersed\.effective\.coverageFraction \* 100\)\.toFixed\(0\)\}%/, 'the receipt names the covered fraction');
+});
+
+// SSA-01: the plain weight sum depends on geometry only (grid shape, centre,
+// direction, radius, thickness); it is reused between the pose and supply
+// resolves and across frames while the geometry holds, never recomputed per call.
+test('the plain weight sum is cached by geometry and invalidated when the geometry changes', () => {
+  core.immersedPlainWeightSumCache.clear();
+  const jets = { ...base, emitterAperturePattern: 'jets', emitterApertureCount: 6 };
+  const a = core.resolveImmersedSourceConfig(jets, shape);
+  const statsAfterFirst = core.immersedPlainWeightSumCache.stats();
+  assert.equal(statsAfterFirst.misses, 1); assert.equal(statsAfterFirst.hits, 0);
+  const b = core.resolveImmersedSourceConfig(jets, { ...shape, solidCells: new Uint8Array(64 * 128 * 64) });
+  const statsAfterSecond = core.immersedPlainWeightSumCache.stats();
+  assert.equal(statsAfterSecond.misses, 1, 'a mask or signal change does not recompute the plain sum'); assert.equal(statsAfterSecond.hits, 1);
+  assert.equal(a.effective.coverageFraction, b.effective.coverageFraction);
+  core.resolveImmersedSourceConfig({ ...jets, immersedRadius: 0.25 }, shape);
+  assert.equal(core.immersedPlainWeightSumCache.stats().misses, 2, 'a radius change recomputes');
+  core.resolveImmersedSourceConfig({ ...jets, immersedRadius: 0.25, immersedPitch: 45 }, shape);
+  core.resolveImmersedSourceConfig({ ...jets, immersedRadius: 0.25, immersedPitch: 45, immersedCentreX: 0.1 }, shape);
+  core.resolveImmersedSourceConfig({ ...jets, immersedRadius: 0.25, immersedPitch: 45, immersedCentreX: 0.1, immersedThickness: 2 }, shape);
+  core.resolveImmersedSourceConfig({ ...jets, immersedRadius: 0.25, immersedPitch: 45, immersedCentreX: 0.1, immersedThickness: 2 }, { grid: 64, gridHeight: 96 });
+  assert.equal(core.immersedPlainWeightSumCache.stats().misses, 6, 'direction, centre, thickness and grid shape each key the sum');
+  // The plain disc itself never pays twice: its own sum is the plain sum.
+  core.immersedPlainWeightSumCache.clear();
+  core.resolveImmersedSourceConfig(base, shape); core.resolveImmersedSourceConfig(base, shape);
+  assert.deepEqual(core.immersedPlainWeightSumCache.stats(), { hits: 0, misses: 0, size: 0 }, 'the shape pattern reuses its own weights without the cache');
+  // The cached value is the plain sum: a patterned resolve after a plain one gives the same fraction as a cold one.
+  const cold = core.resolveImmersedSourceConfig(jets, shape).effective.coverageFraction;
+  core.immersedPlainWeightSumCache.clear();
+  assert.equal(core.resolveImmersedSourceConfig(jets, shape).effective.coverageFraction, cold);
 });

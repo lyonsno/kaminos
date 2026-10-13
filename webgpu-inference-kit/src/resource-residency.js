@@ -412,6 +412,8 @@ export function createWebGpuResourceResidency(input = {}) {
       }
       return false;
     },
+    // Direct lookup for callers that only need one resource's state (O(1), unlike snapshot()).
+    isResident(resourceId) { return state.resources.get(resourceId)?.status === 'resident'; },
     routeSnapshot(routeId) { return deepFreeze(routeSnapshot(routeId)); },
     snapshot() { return deepFreeze(snapshot()); },
   });

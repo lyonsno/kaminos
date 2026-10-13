@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 251,
+  "controlCount": 252,
   "controls": [
     {
       "key": "volume-physical-material-law",
@@ -1628,6 +1628,14 @@
       "type": "range"
     },
     {
+      "key": "volume-grid-height-ratio",
+      "param": "volume_grid_height_ratio",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 2,
+      "additiveSinceControlCount": 249
+    },
+    {
       "key": "volume-reaction-law",
       "param": "volume_reaction_law",
       "tagName": "SELECT",
@@ -1637,7 +1645,7 @@
         "authored-tall-plume",
         "reactant-v0"
       ],
-      "additiveSinceControlCount": 249
+      "additiveSinceControlCount": 250
     },
     {
       "key": "volume-reactant-mixing-time",
@@ -1645,7 +1653,7 @@
       "tagName": "INPUT",
       "type": "range",
       "additiveDefault": 3,
-      "additiveSinceControlCount": 250
+      "additiveSinceControlCount": 251
     },
     {
       "key": "volume-reactant-cooling-time",
@@ -1653,10 +1661,17 @@
       "tagName": "INPUT",
       "type": "range",
       "additiveDefault": 55.06,
-      "additiveSinceControlCount": 251
+      "additiveSinceControlCount": 252
     }
   ],
   "retiredControls": [
+    {
+      "axis": "domControls",
+      "key": "volume-grid-height-cells",
+      "param": "volume_grid_height_cells",
+      "tagName": "INPUT",
+      "type": "number"
+    },
     {
       "axis": "domControls",
       "key": "volume-procedural-transport-slip",
