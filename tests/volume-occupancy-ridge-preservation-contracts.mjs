@@ -1,19 +1,30 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { balancedWgslBlock } from './helpers/wgsl-guard-ownership.mjs';
 
 const root = join(import.meta.dirname, '..');
 const core = readFileSync(join(root, 'volume-core.js'), 'utf8');
 
 function assertOccupancyRidgeContract(source) {
-  const raymarchStart = source.indexOf('let expensiveSampleBudget = u32(ceil(steps));');
+  const raymarchStart = source.indexOf('let expensiveSampleBudget =');
   const raymarchEnd = source.indexOf('t = t + localDt;', raymarchStart);
   assert.ok(raymarchStart >= 0 && raymarchEnd > raymarchStart, 'production raymarch loop is discoverable');
-  const raymarch = source.slice(raymarchStart, raymarchEnd + 't = t + localDt;'.length);
+  let raymarch = source.slice(raymarchStart, raymarchEnd + 't = t + localDt;'.length);
+  // These two modes consume the optical sample themselves before continuing.
+  // Remove only their validated blocks when checking ordinary composition.
+  const numerical = balancedWgslBlock(raymarch, 'if (opticalStepping) {\n        opticalStepObserve');
+  assert.match(numerical, /^if \(opticalStepping\) \{\s*opticalStepObserve\(&opticalStep, vec4<f32>\(emission, sigma\)\);\s*color = opticalStep.transfer.xyz;\s*trans = opticalStep.transfer.w;\s*continue;\s*\}$/,
+    'numerical continuation must accumulate its optical sample');
+  const trace = balancedWgslBlock(raymarch, 'if (opticalTrace) {\n        let row');
+  assert.equal((trace.match(/\bcontinue\s*;/g) || []).length, 1, 'trace has one continuation after recording');
+  assert.match(trace, /atomicAdd\(&nonRidgeOpticalCaptureHeader.rowCount, 1u\);\s*continue;\s*\}$/,
+    'trace continuation must record its sample');
+  raymarch = raymarch.replace(numerical, '').replace(trace, '');
   const reconstructionStart = raymarch.indexOf('var reconstructed: FlowReconstructionSample;');
   assert.ok(reconstructionStart >= 0, 'supported-sample reconstruction boundary is discoverable');
   const emptyCellBranch = raymarch.match(
-    /if \(!fullGridCapture && directSupport <= 0\.0001\) \{([^{}]*)\}/,
+    /if \(!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\) \{([^{}]*)\}/,
   );
   assert.ok(emptyCellBranch, 'conservative empty-cell branch has a stable non-nested boundary');
   const branchStart = emptyCellBranch.index;
@@ -22,7 +33,7 @@ function assertOccupancyRidgeContract(source) {
 
   assert.match(
     raymarch,
-    /let occupancySkipStrength = clamp\(u\.occupancy_controls\.x,[\s\S]*let directSupport = directCellOpticalSupport\(p\);/,
+    /let occupancySkipStrength = clamp\(u\.occupancy_controls\.x,[\s\S]*directSupport = directCellOpticalSupport\(p\);/,
     'occupancy strength is available at the conservative empty-cell decision',
   );
   assert.match(
@@ -58,6 +69,13 @@ function assertOccupancyRidgeContract(source) {
 }
 
 assertOccupancyRidgeContract(core);
+
+assert.throws(() => assertOccupancyRidgeContract(core.replace(
+  'opticalStepObserve(&opticalStep, vec4<f32>(emission, sigma));', '/* dropped optical sample */')),
+  /numerical continuation|missing/, 'numerical continuation cannot silently discard the sample');
+assert.throws(() => assertOccupancyRidgeContract(core.replace(
+  'atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);\n        continue;', 'continue;')),
+  /trace continuation/, 'trace continuation cannot bypass its completion record');
 
 const reconstructionAdvance = '    expensiveSamples = expensiveSamples + 1u;';
 const renamedHelperMutation = core.replace(

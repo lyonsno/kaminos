@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { RAY_START_WGSL } from '../volume-ray-start.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const cockpit = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -23,6 +24,7 @@ const helper = core.match(/  function createFluidRenderBindGroup\([\s\S]*?\n  }\
 assert.ok(helper, 'one shared fluid binding constructor');
 const buffer = label => ({ label });
 const quenchBuffers = [buffer('quench A'), buffer('quench B')];
+const rayStartNoiseView = { label: 'ray-start noise view' };
 const resources = {
   device: { createBindGroup: descriptor => descriptor }, bindGroupLayout: {},
   uniformBuffer: buffer('uniform'), externalEmitterBuffer: buffer('emitter'),
@@ -37,6 +39,7 @@ const resources = {
   forceDeltaTexture: { createView: () => ({ label: 'force increment view' }) },
   // The reactant sidecar textures (bindings 23/24) live in the same closure.
   reactantTextures: [{ createView: () => ({ label: 'reactant A view' }) }, { createView: () => ({ label: 'reactant B view' }) }],
+  rayStartNoiseTexture: { createView: () => rayStartNoiseView },
 };
 const makeGroup = new Function(...Object.keys(resources), `${helper}; return createFluidRenderBindGroup;`)(...Object.values(resources));
 for (let q = 0; q < 2; q++) {
@@ -50,6 +53,11 @@ for (let q = 0; q < 2; q++) {
   assert.equal(entry('nonRidgeOpticalCaptureRows'), captureRows);
   assert.equal(entry('nonRidgeOpticalCaptureHeader'), resources.nonRidgeOpticalCaptureHeaderBuffer);
   assert.equal(group.entries.find(e => e.binding === 16)?.resource, resources.sceneSolidTextureView);
+  const noiseBinding = Number(RAY_START_WGSL.match(/@binding\((\d+)\) var rayStartNoise:/)?.[1]);
+  assert.ok(Number.isInteger(noiseBinding), 'noise texture has a shader binding');
+  assert.equal(group.entries.find(e => e.binding === noiseBinding)?.resource, rayStartNoiseView);
+  assert.equal(new Set(group.entries.map(e => e.binding)).size, group.entries.length,
+    'all fluid render resources have distinct bindings');
 }
 assert.match(core, /function fluidBindGroup\([\s\S]*?return bindGroups\[fluidIndex \* 2 \+ quenchIndex\]/,
   'simulation consumes both independent ping-pong indices');

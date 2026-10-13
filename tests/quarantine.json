@@ -142,14 +142,6 @@
       "signature": "AssertionError [ERR_ASSERTION]: row keyboard selection must ignore events from child remove controls",
       "testLastChanged": "2026-10-01 fd742f0e"
     },
-    "tests/scene-floor-receivers-contracts.mjs": {
-      "class": "regression",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-10-06 2f6b0751 Default bounce gain to ten and expose mid-gray floor appearance; same failure then as now; the owner decides whether the source or the test is wrong",
-      "signature": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: | + actual - expected | + 8421504 | - 1118481",
-      "testLastChanged": "2026-10-01 ccc0808b"
-    },
     "tests/scene-navigation-contracts.mjs": {
       "class": "regression",
       "owner": "operlocutor",
@@ -205,14 +197,6 @@
       "reason": "already failing at the commit that last changed it (2026-10-06 0740886f residual probe reports per-slab heat and smoke centroids); its assertions never matched main",
       "signature": "node:test failing: the residual probe also reduces enstrophy so confinement can be calibrated against a measurement :: AssertionError: enstrophy is reported per cell",
       "testLastChanged": "2026-10-06 0740886f"
-    },
-    "tests/volume-dead-render-clock-retirement-contracts.mjs": {
-      "class": "regression",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-09-04 9af30876 Fix inlet velocity authority split; same failure then as now; the owner decides whether the source or the test is wrong",
-      "signature": "AssertionError [ERR_ASSERTION]: explicit analytic-emitter temporal descriptors retain their isolated render-time input",
-      "testLastChanged": "2026-09-01 c88608ef"
     },
     "tests/volume-device-layout-capacity.mjs": {
       "class": "regression",

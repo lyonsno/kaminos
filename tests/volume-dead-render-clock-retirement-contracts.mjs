@@ -22,8 +22,8 @@ function assertDeadRenderClockRetired(source) {
   );
   assert.match(
     updateUniforms,
-    /uniforms\[47\]\s*=\s*0\s*;/,
-    'the reserved render-control component must upload explicit zero authority',
+    /uniforms\[47\]\s*=\s*controlsSnapshot\.rayStartNoise === false \? 0 : 1\s*;/,
+    'the repurposed component carries only the stable authored noise toggle',
   );
   assert.doesNotMatch(
     updateUniforms,
@@ -32,7 +32,7 @@ function assertDeadRenderClockRetired(source) {
   );
   assert.match(
     updateUniforms,
-    /writeAnalyticEmitterInjectionUniform\([\s\S]*?renderPhaseTimeMs \* 0\.001,[\s\S]*?controlsSnapshot\.speed,[\s\S]*?\);/,
+    /writeAnalyticEmitterInjectionUniform\([\s\S]*?renderPhaseTimeMs \* 0\.001,\s*\{ incrementScale: timeStepConfig\.effective\.incrementScale, gridHeight \},\s*\);/,
     'explicit analytic-emitter temporal descriptors retain their isolated render-time input',
   );
 }
@@ -63,12 +63,12 @@ assert.throws(
 );
 
 const restoredFrameSawtooth = core.replace(
-  'uniforms[47] = 0;',
+  'uniforms[47] = controlsSnapshot.rayStartNoise === false ? 0 : 1;',
   'uniforms[47] = renderPhaseFrame % 4096;',
 );
 assert.throws(
   () => assertDeadRenderClockRetired(restoredFrameSawtooth),
-  /must upload explicit zero authority|must not retain an unused repeating frame sawtooth/,
+  /carries only the stable authored noise toggle|must not retain an unused repeating frame sawtooth/,
   'the retirement barrier rejects restoration of the unused repeating frame sawtooth',
 );
 

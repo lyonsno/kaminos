@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { balancedWgslBlock } from './helpers/wgsl-guard-ownership.mjs';
