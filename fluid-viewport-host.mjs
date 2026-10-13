@@ -1,5 +1,4 @@
 import {createFluidFrameTiming} from './fluid-frame-timing.mjs';
-import {sceneWaterDepthReuseReason} from './scene-water-depth-reuse.mjs';
 import {createSceneEmissiveCamera} from './scene-emissive-camera.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import {texture,vec4,positionView,pmremTexture,equirectDirection,uv,uniform,vec3,float} from './lib/three.tsl.js';
@@ -65,9 +64,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
   const resolvedWaterColor=texture(colorTarget.texture).rgb.mul(lowAlpha.oneMinus()).add(texture(lowWaterTarget.texture).rgb).sub(texture(lowColorTarget.texture).rgb.mul(lowAlpha.oneMinus()));
   const resolveWater=quad(vec4(highSceneDepth.greaterThan(0).and(highSceneDepth.lessThan(waterViewDepth.sub(.002))).select(texture(colorTarget.texture).rgb,resolvedWaterColor),1));
   const timing=createFluidFrameTiming(device);
-  let renderScale=1,sceneDepthMode='separate',sceneDepthQuad=null,sceneDepthTexture=null;
-  const sceneDepthQuads=new Map(),sceneFarDepth=uniform(camera.far);
-  const setSceneDepthMode=value=>{if(disposed)throw Error('Fluid viewport disposed');if(!['auto','separate'].includes(value))throw Error('Scene depth mode must be auto or separate');sceneDepthMode=value;return value;};
+  let renderScale=1;
   const setRenderScale=value=>{if(disposed)throw Error('Fluid viewport disposed');if(!Number.isFinite(value)||value<=0||value>1)throw Error('Water render scale must be above zero and at most 100%');renderScale=value;return renderScale;};
   colorTarget.texture.name='Local liquid host color'; outputTarget.texture.name='Local liquid composed color';
   depthTarget.texture.name='Local liquid host linear depth';
@@ -118,7 +115,6 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
     let restoreDisplay=null;
     try {
       const policy=getDisplayPolicy?.()??{rawOutput:pipeline.outputNode,cameraState:{effective:false}};
-      const beforeDepthCapture=policy.sceneDepthSource?.()?.capture?.count??0;
       const cameraState=policy.cameraState??{effective:false};
       finalCamera.update(cameraState.effective,{...cameraState,effective:'emissive-transport-v2'});
       restoreDisplay=applyFluidViewportDisplayPolicy({pipeline,presentation,rawOutput:policy.rawOutput,composedOutput,matchedOutput:finalCamera.outputNode,effective:cameraState.effective});
@@ -132,27 +128,13 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
       // The retained liquid pass overlays/discards; every destination pixel
       // must begin with this frame's host image, including no-water pixels.
       if(renderScale===1)renderer.copyTextureToTexture(colorTarget.texture,outputTarget.texture);
-      const sourceDepth=policy.sceneDepthSource?.();
-      const reuseReason=sceneDepthMode==='separate'?'separate_requested':sceneWaterDepthReuseReason({scene,camera,source:sourceDepth,beforeCapture:beforeDepthCapture,width,height,device,renderer});
-      const reuse=sceneDepthMode==='auto'&&!reuseReason;
-      const depthFrame={frameId:`${framePrefix}-${frameCount+1}`,cameraFar:camera.far,supportVisible:group?.visible??false,source:reuse?'scene_beauty_depth_linearized':'separate_scene_geometry',fallbackReason:reuse?null:reuseReason};
-      if(reuse){
-        if(sceneDepthTexture!==sourceDepth.texture){
-          sceneDepthTexture=sourceDepth.texture;sceneDepthQuad=sceneDepthQuads.get(sceneDepthTexture);
-          if(!sceneDepthQuad){const ndc=texture(sceneDepthTexture).r;
-            const viewDepth=ndc.greaterThanEqual(1).select(sceneFarDepth,depthProjection.y.sub(ndc.mul(depthProjection.w)).div(depthProjection.x.sub(ndc.mul(depthProjection.z))));
-            sceneDepthQuad=quad(vec4(viewDepth,0,0,1));sceneDepthQuads.set(sceneDepthTexture,sceneDepthQuad);
-          }
-        }
-        sceneFarDepth.value=camera.far;
-        const p=camera.projectionMatrix.elements;depthProjection.value.set(p[10],p[14],p[11],p[15]);
-        renderer.setRenderTarget(depthTarget);timing.scope('host',()=>sceneDepthQuad.render(renderer));
-      }else{
-        scene.overrideMaterial=depthMaterial; scene.background=null;
-        renderer.setRenderObjectFunction((...args)=>{depthMaterial.side=args[4].side;renderer.renderObject(...args);});
-        renderer.setClearColor(new THREE.Color(depthFrame.cameraFar,0,0),1);
-        renderer.setRenderTarget(depthTarget);withLocalLiquidDepthBackground(scene,()=>timing.scope('host',()=>renderer.render(scene,camera)));
-      }
+      scene.overrideMaterial=depthMaterial; scene.background=null;
+      renderer.setRenderObjectFunction((...args)=>{
+        depthMaterial.side=args[4].side; renderer.renderObject(...args);
+      });
+      const depthFrame={frameId:`${framePrefix}-${frameCount+1}`,cameraFar:camera.far,supportVisible:group?.visible??false};
+      renderer.setClearColor(new THREE.Color(depthFrame.cameraFar,0,0),1);
+      renderer.setRenderTarget(depthTarget); withLocalLiquidDepthBackground(scene,()=>timing.scope('host',()=>renderer.render(scene,camera)));
       lastDepthFrame=depthFrame;
       scene.overrideMaterial=previousOverride; scene.background=previousBackground;
       renderer.setRenderObjectFunction(previousRenderObject);
@@ -188,7 +170,6 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
       lastFrame={camera:cameraSnapshot,frameId,cameraIdentity:cameraSnapshot.identity,cameraGeneration:generation,width,height,
         environmentSource:environmentSource.uuid,environmentGeneration,
         waterResolution:{requestedScale:renderScale,width:waterWidth,height:waterHeight,fullWidth:width,fullHeight:height,pixelFraction:waterWidth*waterHeight/(width*height),resolve:scaled?'depth_tested_alpha_water_layer_over_full_resolution_scene':'native_full_resolution'},
-        sceneDepth:{requested:sceneDepthMode,effective:depthFrame.source,fallbackReason:depthFrame.fallbackReason},
         route:ROUTE,opticalDebugMode,submittedByHost:true,presentedByHost:true,captureColorSpace:'linear_hdr',displayTransform:cameraState.effective?cameraState.transform:'host-render-pipeline',exposure:renderer.toneMappingExposure,environmentIntensity:scene.environmentIntensity,
         simulationTimePolicy:advance?'one-fixed-1/60-step-per-rendered-frame':'caller-owned-step',simulationRewind:false,
         helperGroundPresentation:{policy:'retained-basin-suppresses-editor-helper',effectiveVisible:helperGround?.visible??null}};
@@ -203,34 +184,25 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
   }
 
   return {render,
-    frameIdentity:()=>failure?null:lastFrame&&({frameId:lastFrame.frameId,route:lastFrame.route,waterResolution:{...lastFrame.waterResolution},sceneDepth:lastFrame.sceneDepth,camera:lastFrame.camera,opticalDebugMode:lastFrame.opticalDebugMode,environmentSource:lastFrame.environmentSource,environmentGeneration:lastFrame.environmentGeneration,exposure:lastFrame.exposure}),
+    frameIdentity:()=>failure?null:lastFrame&&({frameId:lastFrame.frameId,route:lastFrame.route,waterResolution:{...lastFrame.waterResolution},camera:lastFrame.camera,opticalDebugMode:lastFrame.opticalDebugMode,environmentSource:lastFrame.environmentSource,environmentGeneration:lastFrame.environmentGeneration,exposure:lastFrame.exposure}),
     beginFrameTiming:timing.begin,
     stepSimulation:dt=>timing.scope('simulation',()=>solver.step(dt)),
     abortFrameTiming:timing.abort,
     setPaused(value){paused=Boolean(value);return paused;},
     get paused(){return paused;},
-    state:()=>({frameCount,paused,failure,lastFrame,renderScale,sceneDepthMode,timing:timing.read()}),
+    state:()=>({frameCount,paused,failure,lastFrame,renderScale,timing:timing.read()}),
     setRenderScale,
-    setSceneDepthMode,
     setTimingEnabled:timing.setEnabled,
     setOpticalDebugForWitness(value){opticalDebugMode=resolveFingerFluidOpticalDebugMode(value);return opticalDebugMode;},
     async readBackgroundDepthForWitness(){
       if(disposed||failure)throw Error('Fluid viewport depth draw is unavailable');
       return readLocalLiquidDepthFrame(renderer,depthTarget,lastDepthFrame);
     },
-    async readSceneDepthForWitness(){
-      if(disposed||failure||!lastDepthFrame)throw Error('No current scene depth');
-      const identity={...lastDepthFrame,width:depthTarget.width,height:depthTarget.height};
-      const data=await renderer.readRenderTargetPixelsAsync(depthTarget,0,0,depthTarget.width,depthTarget.height);
-      const bytes=new Uint8Array(data.buffer,data.byteOffset,data.byteLength),chunks=[];
-      for(let i=0;i<bytes.length;i+=16384)chunks.push(String.fromCharCode(...bytes.subarray(i,i+16384)));
-      return {...identity,format:'r32float-little-endian',base64:btoa(chunks.join(''))};
-    },
     dispose(){
       disposed=true;device.removeEventListener('uncapturederror',onGpuError);
       timing.destroy();for(const target of [colorTarget,depthTarget,outputTarget,environmentTarget,lowColorTarget,lowDepthTarget,lowWaterTarget])target?.dispose();
       for(const q of [downColor,downDepth,startLowWater,resolveWater]){q.material.dispose();}
-      for(const q of sceneDepthQuads.values())q.material.dispose();sceneDepthQuads.clear();depthMaterial.dispose();environmentQuad?.material.dispose();presentation.dispose();
+      depthMaterial.dispose();environmentQuad?.material.dispose();presentation.dispose();
 
     }
   };
