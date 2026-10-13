@@ -16,7 +16,9 @@ export async function installCreatureInvestigation({id,source,request,
   const state=await entry.state(),domain=await entry.read();
   if(state.id!=='marionette/retained-creature'||domain.rootUuid!==rootUuid||mountRoot.isConnected===false)throw Error('Creature investigation instance changed');
   const inputs={asset:domain.asset.requested,source_sha256:domain.source.source_sha256,clip:domain.clipName,frame:domain.frame,view:structuredClone(domain.view)};
-  const value={entry:state,domain,recipe:{id:state.id,inputs},scene:await readScene(),viewport:viewport()};
+  const scene=await readScene();
+  if(!scene?.objects?.some(object=>object.id===domain.asset.id&&object.source===(domain.asset.effective??domain.asset.requested)))throw Error('Creature body is no longer registered in the shared scene');
+  const value={entry:state,domain,recipe:{id:state.id,inputs},scene,viewport:viewport()};
   lastObserved=structuredClone(value);return value;
  };
  const initial=await context();

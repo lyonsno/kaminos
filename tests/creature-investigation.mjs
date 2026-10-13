@@ -11,7 +11,7 @@ const entry={state:()=>({id:'marionette/retained-creature',moduleUrl:'/experimen
 const registry=new Map(),root=new Element(),requests=[];
 const source={route:'actual-adapter/local-policy-fixture',rawMotionSha256:'a'.repeat(64)};
 const adapter=await installCreatureInvestigation({id:'recording-one',source,entry,document,mountRoot:root,
- registry,request:async value=>(requests.push(value),{message:'retained'}),readScene:()=>({objects:[{id:'unrelated'}]}),viewport:()=>({width:800,height:600})});
+ registry,request:async value=>(requests.push(value),{message:'retained'}),readScene:()=>({objects:[{id:'unrelated'},{id:'one',source:'/body.glb'}]}),viewport:()=>({width:800,height:600})});
 try {
  let observed=await adapter.read();
  assert.equal(observed.recording.complete,true);assert.equal(observed.context.recipe.inputs.frame,30);
@@ -32,4 +32,5 @@ try {
  assert.equal(finished.recording.operations.length,1,'finish preserves the full prefix after replacement');
 } finally {await adapter.disconnect('test complete');}
 await assert.rejects(installCreatureInvestigation({id:'wrong-source',source:{...source,rawMotionSha256:'b'.repeat(64)},entry,document,mountRoot:root,registry:new Map(),request:async()=>{},readScene:()=>({})}),/source/);
+await assert.rejects(installCreatureInvestigation({id:'missing-registration',source,entry,document,mountRoot:root,registry:new Map(),request:async()=>{},readScene:()=>({objects:[{id:'unrelated'}]}),viewport:()=>({width:800,height:600})}),/registered/);
 console.log('Creature guide/recorder retains source-frame recipe and full prefix, exposes replacement honestly and preserves unrelated scene context');
