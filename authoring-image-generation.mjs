@@ -141,7 +141,9 @@ const errorIdentity=value=>({name:typeof value?.name==='string'?value.name:'Erro
 export function createKleinAuthoringImageGeneration({context,deliver,weights,
   kit=()=>import('./webgpu-inference-kit/src/core.js'),
   createPipeline=async(device,urls)=>{const {KleinPipeline}=await import('./models/flux2-klein/klein-pipeline.js');return new KleinPipeline(device,urls);},
-  encodePng=encodeCanvasPng,changed=()=>{},blocked=()=>null}){
+  encodePng=encodeCanvasPng,changed=()=>{},blocked=()=>null,appHost=null}){
+  // appHost (app-gpu-host.mjs): borrow the page's session and run on its one foreground
+  // service. Without it, klein keeps its own session and service (the earlier route).
   let loaded=null,active=false,abort=null;
   let state={status:'idle',progress:'Weights load the first time you generate an image.',stage:null,percent:null,canStop:false,error:null,results:[],pending:null};
   // A computed image is kept until it is saved; a failed save retries these exact pixels.
@@ -167,14 +169,15 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   async function load(){
     const {sharedGpu}=context();
     const core=await kit(),device=sharedGpu.device,base=String(await weights()).replace(/\/$/,'');
-    const session=await core.createWebGpuInferenceSession({sessionId:`kaminos-klein:${crypto.randomUUID()}`,device,adapterName:sharedGpu.adapter?.info?.description||'kaminos-shared-device',deviceOwnership:'borrowed'});
-    const foreground=core.createWebGpuForegroundService({routeId:KLEIN_AUTHORING_ROUTE_ID,device});
+    const app=appHost?await appHost():null;
+    const session=app?await app.session():await core.createWebGpuInferenceSession({sessionId:`kaminos-klein:${crypto.randomUUID()}`,device,adapterName:sharedGpu.adapter?.info?.description||'kaminos-shared-device',deviceOwnership:'borrowed'});
+    const foreground=app?null:core.createWebGpuForegroundService({routeId:KLEIN_AUTHORING_ROUTE_ID,device});
     const pipeline=await createPipeline(device,{textEncoderUrl:`${base}/te`,transformerUrl:`${base}/dit`,vaeUrl:`${base}/vae`});
     await pipeline.load((part,name,{loadedBytes,totalBytes})=>{
       if(abort?.signal.aborted)return;
       set({stage:'Loading weights',percent:totalBytes?Math.min(100,loadedBytes/totalBytes*100):null,progress:`Loading FLUX.2 klein weights (${part})`});
     });
-    return {core,session,foreground,pipeline,base};
+    return {core,session,foreground,pipeline,base,app};
   }
   return {
     read(){
@@ -209,15 +212,18 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       try{
         if(!loaded)loaded=await load();
         if(abort.signal.aborted)throw abort.signal.reason;
-        ({session}=loaded);const {core,foreground,pipeline,base}=loaded;
+        ({session}=loaded);const {core,foreground,pipeline,base,app}=loaded;
         // The kiln of the scene loaded now; a reloaded scene has a new prototype and handoff.
         const current=context();handoff=current.handoff;const host=current.host;
         if(!current.prototype?.foregroundGpuContext||!host||!handoff)throw Error('Image generation needs the Kaminos shared GPU device and its frame owner.');
-        if(!handoff.has('klein'))handoff.install('klein',request=>foreground.request({...request,run:service=>host.runForegroundFrame(()=>request.run(service))}));
-        previous=handoff.owner();await handoff.activate('klein');
+        previous=handoff.owner();
+        if(!app){
+          if(!handoff.has('klein'))handoff.install('klein',request=>foreground.request({...request,run:service=>host.runForegroundFrame(()=>request.run(service))}));
+          await handoff.activate('klein');
+        }
         phase='inference';set({status:'running',stage:'Reading prompt',percent:null,progress:'Reading the prompt…'});
         const runId=`kaminos-klein:${crypto.randomUUID()}`;
-        frameRun=await foreground.beginRun(runId);
+        frameRun=app?await app.beginRun(runId,{routeId:KLEIN_AUTHORING_ROUTE_ID}):await foreground.beginRun(runId);
         route=await session.registerRoute({routeId:KLEIN_AUTHORING_ROUTE_ID,runtimeOptions:{runtimeLabel:'flux2-klein',foregroundOpportunities:frameRun.foregroundOpportunities}});
         control=core.createWebGpuInferenceControl({queue:context().sharedGpu.device.queue,signal:abort.signal,withForeground:frameRun.withForeground});
         const job=route.enqueue({jobId:runId,execute:invocation=>pipeline.generate({prompt:text,seed,width:size,height:size,textLength:'fit16',
@@ -240,7 +246,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         try{await control?.close();}catch{/* the control reports its own close failure */}
         if(route){await route.drain();session.unregisterRoute(route.routeId);}
         if(frameRun)await frameRun.finish();
-        if(previous&&previous!=='klein'&&handoff?.has(previous))await handoff.activate(previous);
+        if(previous&&previous!=='klein'&&previous!=='app'&&handoff?.has(previous))await handoff.activate(previous);
         active=false;state.canStop=false;abort=null;publish();
       }
     },

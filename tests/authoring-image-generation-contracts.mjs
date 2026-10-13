@@ -214,3 +214,22 @@ test('KMA-04: a finished image survives a failed save and retries without anothe
  assert.equal(h.generations.length,1,'no second inference');assert.equal(saved.name,'klein-lantern-s3.png');
  assert.equal(h.delivered[0].provenance.seed,3);assert.equal(h.service.read().status,'complete');assert.equal(h.service.read().pending,null);
 });
+
+test('with the app GPU host, klein borrows its session and runs as a klein route on the one app service',async()=>{
+ const log=[],prototype=prototypeDouble(),host={setForegroundServiceActive(){},runForegroundFrame:run=>run()};
+ const handoff=createForegroundHandoff({prototype,host,waitFrame:tick});
+ const device={features:new Set(['shader-f16']),queue:{submit(){}}};
+ const session={registerRoute:async({routeId})=>({routeId,runtime:{},enqueue:({jobId,execute})=>({completion:(async()=>({status:'succeeded',output:await execute({jobId})}))()}),drain:async()=>log.push('drain')}),unregisterRoute:()=>{}};
+ const appHost={session:async()=>{log.push('host-session');return session;},beginRun:async(runId,{routeId})=>{log.push(`begin:${routeId}`);return {foregroundOpportunities:{},withForeground:fn=>fn(),finish:async()=>log.push('finish')};}};
+ const service=createKleinAuthoringImageGeneration({
+  context:()=>({sharedGpu:{device,queue:device.queue},prototype,host,handoff}),appHost:async()=>appHost,
+  kit:async()=>({createWebGpuInferenceSession:async()=>{throw Error('no private session with an app host');},createWebGpuForegroundService:()=>{throw Error('no private foreground service with an app host');},createWebGpuInferenceControl:()=>({close:async()=>{}})}),
+  weights:async()=>'/klein-weights',
+  createPipeline:()=>({load:async()=>{},generate:async r=>({rgba:new Uint8ClampedArray(r.width*r.height*4),width:r.width,height:r.height,timings:{}})}),
+  encodePng:async()=>new Blob([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0))],{type:'image/png'}),
+  deliver:async file=>({name:file.name,source:'/s'}),
+ });
+ await service.run({prompt:'lantern',seed:1,size:512});
+ assert.deepEqual(log,['host-session','begin:flux2-klein.text-to-image.authoring-shared-device.v0','drain','finish']);
+ assert.equal(handoff.has('klein'),false,'no private klein requester when the app owns the frames');
+});

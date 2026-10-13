@@ -3843,6 +3843,7 @@ import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnaps
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
+import {createAppGpuHost} from './app-gpu-host.mjs';
 import {fireAtBoot} from './fire-boot.mjs';
 import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,KLEIN_PUBLISHED_WEIGHTS} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
@@ -26733,6 +26734,18 @@ function setupAuthoringAssets(){
     if(authoringForegroundHandoff?.prototype!==owner)authoringForegroundHandoff={prototype:owner,handoff:createForegroundHandoff({prototype:owner,host:compositionHost})};
     return authoringForegroundHandoff.handoff;
   };
+  // One GPU host for the page (app-gpu-host.mjs): models borrow its session and run
+  // through its foreground service. SAM, UniMate and SuperMat consumers take it too.
+  let appGpu=null;
+  const appGpuHost=async()=>{
+    if(appGpu)return appGpu;
+    if(!sharedGpu?.device||!compositionHost)return null;
+    const kit=await import('./webgpu-inference-kit/src/core.js');
+    appGpu=createAppGpuHost({sharedGpu,host:compositionHost,kit,frameOwner,
+      install:async requester=>{const handoff=foregroundHandoff();if(!handoff)throw Error('no frame owner');if(!handoff.has('app'))handoff.install('app',requester);await handoff.activate('app');}});
+    return appGpu;
+  };
+  window.kaminosAppGpu=appGpuHost;
   const request=async url=>{const response=await fetch(url,{cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error||`Assets HTTP ${response.status}`);return data;};
   // Which mesh model is running, kept here: the services' own read() consults these
   // blocked() checks, so asking each other for status would recurse.
@@ -26798,6 +26811,7 @@ function setupAuthoringAssets(){
   authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis'),changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});
   authoringImageGenerator=createKleinAuthoringImageGeneration({
     context:()=>({sharedGpu,prototype:frameOwner(),host:compositionHost,handoff:foregroundHandoff()}),
+    appHost:appGpuHost,
     // A locally mounted weight package (KAMINOS_KLEIN_WEIGHTS_ROOT) spares each port's
     // browser cache a 3 GB download; otherwise the published package is used.
     weights:async()=>{const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};return config.klein?.mounted?config.klein.weightsUrl:KLEIN_PUBLISHED_WEIGHTS;},
