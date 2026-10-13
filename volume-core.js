@@ -8,7 +8,7 @@ import {
   normalizeFineBreakupLocalization,
 } from './volume-detail-force-isolation.mjs';
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
-import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid } from './volume-scene-solid.mjs';
+import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid, createSceneSolidGeometryCache } from './volume-scene-solid.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
 import { SCENE_POINT_SMOKE_WGSL, createScenePointBindings } from './scene-point-light.mjs';
@@ -12325,18 +12325,12 @@ export function createKaminosVolumePrototype({
     }
     try {
       const started = performance.now();
-      const revision = sceneSolidRevision(source.object, productTransform);
-      // The kiln mask depends on mesh/grid/domain only. Source support and its
-      // optional moving wall have separate revisions, not geometry authority.
-      const geometryKey = JSON.stringify([gridSize, gridHeight, sourceId, revision]);
-      if (sceneSolidGeometryCache?.key !== geometryKey) {
-        const extraction = trianglesFromSceneObject(source.object, productTransform);
-        const field = voxelizeTriangleSolid(extraction.triangles, gridSize);
-        if (field.surfaceCellCount === 0) throw new Error('authored-solid-does-not-intersect-volume');
-        sceneSolidGeometryCache = { key: geometryKey, field, triangleCount: extraction.triangles.length };
-        state.sceneSolidGeometryBuilds = (state.sceneSolidGeometryBuilds || 0) + 1;
-      }
-      const field = sceneSolidGeometryCache.field;
+      sceneSolidGeometryCache ||= createSceneSolidGeometryCache({voxelize:voxelizeTriangleSolid});
+      const geometry = sceneSolidGeometryCache.update(source.objects || [{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight});
+      const {revision,field}=geometry;
+      const geometryKey = JSON.stringify([sourceId,geometry.key]);
+      state.sceneSolidGeometryBuilds = (state.sceneSolidGeometryBuilds || 0) + geometry.builds;
+      if (field.surfaceCellCount === 0) throw new Error('authored-solid-does-not-intersect-volume');
       const sourceBounds = analyticEmitterDispatch;
       const supportKey = JSON.stringify([geometryKey, sourceBounds.active,
         sourceBounds.cellMin, sourceBounds.cellExtent, analyticEmitterDescriptorSignature]);
@@ -12367,7 +12361,7 @@ export function createKaminosVolumePrototype({
       state.sceneCollision = {
         requested: true, effective: 'mesh-voxel-solid', sourceId, reason: null,
         emitterBackWallCells: composedWall.addedCells, geometryRevision: revision, grid: gridSize,
-        triangleCount: sceneSolidGeometryCache.triangleCount,
+        triangleCount: geometry.triangleCount, members:geometry.members,
         surfaceCellCount: field.surfaceCellCount, interiorCellCount: field.interiorCellCount,
         solidCellCount: field.surfaceCellCount + field.interiorCellCount + composedWall.addedCells,
         blockedFaceCount: field.blockedFaceCount, sourceBoundsSolidCells,

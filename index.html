@@ -3856,6 +3856,7 @@ function writeKilnCollisionState({enabled}) {
 }
 
 let collisionVoxelMesh=null,collisionVoxelRevision=undefined,collisionVoxelVisible=false;
+const sceneColliderCollection=createSceneColliderCollection(THREE);
 function syncCollisionVoxelView() {
   if(!collisionVoxelVisible) {if(collisionVoxelMesh)collisionVoxelMesh.visible=false;return;}
   const snapshot=volumePrototype?.readSceneCollisionMask?.(collisionVoxelRevision);
@@ -3878,10 +3879,11 @@ function syncKilnCollisionControl(collision=volumePrototype?.debugState?.().scen
   const input=document.getElementById('kiln-collision-enabled'),status=document.getElementById('kiln-collision-status');
   if(!input||!status)return;
   const enabled=isAuthoredKilnCollisionRoute();input.checked=enabled;
-  const text=!enabled?'Kiln collision off'
+  const text=!enabled?'Scene collisions off'
+    : !sceneObjects.some(record=>record.collision?.enabled)?'No objects marked as obstacles'
     : !collision?.requested?'Updating collision…'
     : collision.effective==='mesh-voxel-solid'?`Active · ${collision.solidCellCount.toLocaleString()} solid cells`
-    : `Unavailable · ${collision.reason||'waiting for the kiln mesh'}`;
+    : `Unavailable · ${collision.reason||'waiting for obstacle geometry'}`;
   if(status.textContent!==text)status.textContent=text;
   const voxelResolution=document.getElementById('kiln-voxel-resolution');
   if(voxelResolution){const grid=Number(document.getElementById('volume-resolution').value);voxelResolution.textContent=`${grid}×${grid*2}×${grid} · tied to simulation`;}
@@ -3889,14 +3891,14 @@ function syncKilnCollisionControl(collision=volumePrototype?.debugState?.().scen
 }
 
 function installKilnCollisionControl(host) {
-  const panel=document.createElement('section');panel.innerHTML='<h3>Collision</h3><label class="slider-row"><span class="slider-label">Kiln collision</span><input type="checkbox" id="kiln-collision-enabled"></label><p id="kiln-collision-status" class="flame-scope" aria-live="polite"></p><label class="slider-row"><span class="slider-label">Show solid voxels</span><input type="checkbox" id="kiln-collision-voxels"></label><label class="slider-row"><span class="slider-label">Voxel resolution</span><output id="kiln-voxel-resolution" class="flame-scope"></output></label><p class="flame-scope">This fire solver uses the simulation grid for collisions. Cyan voxels show the installed solid mask, including the source backing wall when enabled.</p>';
+  const panel=document.createElement('section');panel.innerHTML='<h3>Collision</h3><label class="slider-row"><span class="slider-label">Scene collisions</span><input type="checkbox" id="kiln-collision-enabled"></label><p id="kiln-collision-status" class="flame-scope" aria-live="polite"></p><label class="slider-row"><span class="slider-label">Show solid voxels</span><input type="checkbox" id="kiln-collision-voxels"></label><label class="slider-row"><span class="slider-label">Voxel resolution</span><output id="kiln-voxel-resolution" class="flame-scope"></output></label><p class="flame-scope">This fire solver uses the simulation grid for collisions. Cyan voxels show the installed solid mask, including the source backing wall when enabled.</p>';
   host.append(panel);
   document.getElementById('kiln-collision-voxels').onchange=event=>{collisionVoxelVisible=event.target.checked;syncCollisionVoxelView();window._kaminosDirty?.();};
   const edits=scenePlacementTools.edits;
   edits.register('@kiln-collision',{read:()=>({enabled:isAuthoredKilnCollisionRoute()}),write:writeKilnCollisionState,
     check:value=>{if(typeof value.enabled!=='boolean')throw Error('Kiln collision requires a boolean');return {enabled:value.enabled};}});
   window.kaminosSceneCollision={read:()=>({enabled:isAuthoredKilnCollisionRoute(),runtime:volumePrototype?.debugState?.().sceneCollision??null}),
-    set:enabled=>edits.apply('@kiln-collision',{enabled},'Set kiln collision'),
+    set:enabled=>edits.apply('@kiln-collision',{enabled},'Set scene collisions'),
     showVoxels:enabled=>{collisionVoxelVisible=!!enabled;document.getElementById('kiln-collision-voxels').checked=collisionVoxelVisible;syncCollisionVoxelView();window._kaminosDirty?.();},
     readMask:()=>volumePrototype?.readSceneCollisionMask?.()??null};
   document.getElementById('kiln-collision-enabled').addEventListener('change',event=>{
@@ -3952,6 +3954,7 @@ import {
 } from './scene-persistence-core.js';
 import { COMPOSITION_SCHEMA, compositionRestoreUrl, captureComposedCanvases } from './scene-authoring.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,checkedGeometry,createProceduralMesh,GEOMETRY_DEFAULTS} from './scene-geometry.mjs';
+import {canCollideWithFire,checkedObjectCollision,createSceneColliderCollection} from './scene-collider.mjs';
 import {GROUP_TYPE,checkedGroupPose,checkedGroupEdit,moveGroupMembers,identityGroupPose} from './scene-group.mjs';
 import { BURNER_DEFAULTS, normalizeBurner, burnerSource, createAnnularBurner } from './annular-burner.mjs';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -7537,6 +7540,7 @@ function registerSceneObject(object, metadata = {}) {
     sceneTransform,
     generation:metadata.generation?structuredClone(metadata.generation):null,
     assetOrigin:metadata.assetOrigin?structuredClone(metadata.assetOrigin):null,
+    collision:checkedObjectCollision(metadata,Object.hasOwn(metadata,'collision')?metadata.collision:metadata.id==='kiln'&&canCollideWithFire(metadata)?{domainId:'flame-field',enabled:true}:null),
     localLiquidEmitter: metadata.type === LOCAL_LIQUID_EMITTER_TYPE ? structuredClone(metadata.localLiquidEmitter) : null,
   };
   object.userData.kaminosSceneObject = {
@@ -7550,6 +7554,7 @@ function registerSceneObject(object, metadata = {}) {
     splat: record.splat,
     image: record.image,
     generation:record.generation,
+    collision:record.collision,
     renderRoute: record.renderRoute,
     renderCapabilities: record.renderCapabilities,
     renderHandoffSchema: record.renderHandoffSchema,
@@ -10747,6 +10752,7 @@ async function restoreSceneObjectMembership(snapshot) {
   if (!entry || object !== entry.object) throw new Error(`Scene object "${record.id}" did not restore its retained identity`);
   applySceneObjectTransformState(object, record.transform);
   applyMaterialStateToObject(object, record.materials);
+  if(canCollideWithFire(entry))writeObjectCollision(entry.id,record.collision);
   sceneObjects.splice(sceneObjects.indexOf(entry), 1);
   sceneObjects.splice(Math.min(index, sceneObjects.length), 0, entry);
   restoreSceneObjectGroups(entry, groups);
@@ -12324,6 +12330,7 @@ function clearScene({loadRequestId = null} = {}) {
   for(const proxy of groupProxies.values())proxy.removeFromParent();
   groupProxies.clear();
   for(const id of meshDataTargets)scenePlacementTools?.edits.unregister(id);meshDataTargets.clear();
+  for(const id of colliderEditTargets)scenePlacementTools?.edits.unregister(id);colliderEditTargets.clear();sceneColliderCollection.clear();
   for(const id of groupEditTargets)scenePlacementTools?.edits.unregister(id);
   groupEditTargets.clear();
   proceduralMeshes.clear();
@@ -23986,9 +23993,8 @@ async function initKaminosVolumeRoute() {
     // mesh and world transform, not its bounding box or camera depth, feed the
     // volume solver when the scene route requests volume_collision=kiln.
     getSceneCollision: () => {
-      if (!isAuthoredKilnCollisionRoute()) return null;
-      const entry = sceneObjects.find(record => record.id === 'kiln' && record.type === 'glb');
-      return { requested: true, id: 'kiln', object: entry?.object ?? null };
+      if (!isAuthoredKilnCollisionRoute()) {sceneColliderCollection.clear();return null;}
+      return sceneColliderCollection.update(sceneObjects);
     },
   });
   if (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute()) {
@@ -28706,6 +28712,7 @@ function serializeSceneObject(entry) {
 
     ...(entry.type==='light'?{light:structuredClone(entry.light)}:{}),
     ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface)} : {}),
+    ...(canCollideWithFire(entry)?{collision:checkedObjectCollision(entry)}:{}),
   };
 }
 
@@ -29343,6 +29350,25 @@ async function importSceneMesh(file,{generation:origin=null,label=null,assetOrig
   setInfo(`Imported ${file.name}`);return id;
 }
 const meshDataTargets=new Set();
+const colliderEditTargets=new Set();
+function writeObjectCollision(id,value) {
+  const entry=sceneObjects.find(record=>record.id===id)||sceneMembershipRetainedObjects.get(id);
+  if(!entry)throw Error('Collision object is absent');
+  entry.collision=checkedObjectCollision(entry,value);
+  if(entry.object.userData.kaminosSceneObject)entry.object.userData.kaminosSceneObject.collision=structuredClone(entry.collision);
+  syncSceneDataInspector();window._kaminosDirty?.();
+}
+function ensureObjectCollisionTarget(id) {
+  const entry=sceneObjects.find(record=>record.id===id);
+  if(!canCollideWithFire(entry))throw Error('Choose a mesh object for collision');
+  const target=`@object-collision:${id}`;
+  if(!colliderEditTargets.has(target)) {
+    scenePlacementTools.edits.register(target,{read:()=>checkedObjectCollision(sceneObjects.find(record=>record.id===id)||sceneMembershipRetainedObjects.get(id)),
+      check:value=>checkedObjectCollision(entry,value),write:value=>writeObjectCollision(id,value)});
+    colliderEditTargets.add(target);
+  }
+  return target;
+}
 function syncSceneDataInspector() {
   const entry=selectedSceneObjectEntry(),group=selectedSceneGroupEntry();
   const primitive=document.getElementById('selected-mesh-properties');if(!primitive)return;
@@ -29350,6 +29376,8 @@ function syncSceneDataInspector() {
   primitive.hidden=entry?.type!==PROCEDURAL_MESH_TYPE||entry.geometry?.kind==='annular';
   const relations=document.getElementById('selected-object-relations');relations.hidden=!entry;
   const duplicate=document.getElementById('object-duplicate');duplicate.disabled=!canDuplicateObject(entry);
+  const collisionPanel=document.getElementById('selected-collision-properties');
+  if(collisionPanel){collisionPanel.hidden=!canCollideWithFire(entry)||!activeSceneComposition;document.getElementById('object-fire-collision').checked=entry?.collision?.enabled===true;document.getElementById('object-fire-collision-status').textContent=!entry?.collision?.enabled?'Enable to use this object as an obstacle.':isAuthoredKilnCollisionRoute()?'Collision updates on the next simulation step.':'Scene collisions are off in Fire & smoke.';}
   const choice=document.getElementById('object-parent');choice.replaceChildren(...[['','None'],...sceneGroups.map(g=>[g.id,g.label])].map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option;}));choice.value=entry?.groupId||'';
   if(!primitive.hidden){
     document.getElementById('geometry-kind').textContent=entry.geometry.kind;
@@ -29392,10 +29420,17 @@ function installSceneConstruction() {
   const relations=document.createElement('section');relations.id='selected-object-relations';relations.hidden=true;
   relations.innerHTML='<h3>Relations</h3><label>Parent group<select id="object-parent"></select></label><button type="button" class="btn" id="object-duplicate">Duplicate · Shift D</button>';
   panel.after(relations);
+  const collisionPanel=document.createElement('section');collisionPanel.id='selected-collision-properties';collisionPanel.hidden=true;
+  collisionPanel.innerHTML='<h3>Physics</h3><label class="slider-row"><span class="slider-label">Fire & smoke obstacle</span><input id="object-fire-collision" type="checkbox"></label><p id="object-fire-collision-status" class="flame-scope"></p>';
+  panel.after(collisionPanel);scenePlacementTools.addHistoryScope(collisionPanel);
+  const collisionInput=document.getElementById('object-fire-collision');
+  collisionInput.addEventListener('change',()=>{try{const target=ensureObjectCollisionTarget(activeSceneObjectId);if(edits.state().active?.id===target)edits.preview({domainId:'flame-field',enabled:collisionInput.checked});}catch(error){setInfo(error.message);syncSceneDataInspector();}});
+  authoringControlSessions.push(installSceneControlHistory({controls:[collisionInput],edits,id:()=>ensureObjectCollisionTarget(activeSceneObjectId),label:'Set Fire & smoke obstacle',onError:error=>setInfo(error.message)}));
   const groupPanel=document.createElement('section');groupPanel.id='selected-group-properties';groupPanel.hidden=true;
   groupPanel.innerHTML='<h3>Group</h3><p>Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
   window.kaminosSceneAuthoring={addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:activeSceneFieldId}),setFireSettings:editOwnedFireSettings,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+    setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
     ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),
     setGeometry:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.geometry=checkedGeometry({kind:patch.kind||record.geometry.kind,parameters:{...(patch.kind&&patch.kind!==record.geometry.kind?{}:record.geometry.parameters),...patch.parameters}});edits.apply(ensureMeshDataTarget(id),record,'Edit geometry');return record;},
     setLight:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.light={...record.light,...patch};edits.apply(ensureMeshDataTarget(id),checkedSceneLightRecord(record),'Edit light');return record;},

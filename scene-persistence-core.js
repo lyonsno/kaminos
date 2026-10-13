@@ -1,4 +1,5 @@
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
+import {checkedObjectCollision,canCollideWithFire,checkSceneCollisionReferences} from './scene-collider.mjs';
 import {FIRE_DOMAIN_TYPE,checkedFireDomainRecord,authorFireObjects,readFireObjects,fireRenderingSettings} from './scene-fire-domain.mjs';
 import {RIM_LIGHT_ID,checkedRimRecipe,rimRecipePose,checkedSceneLightRecord} from './scene-rim-light.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh} from './scene-geometry.mjs';
@@ -12,7 +13,7 @@ import {normalizeCameraViews} from './scene-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,normalizeSceneCamera,normalizeCameraViewport} from './scene-camera.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 9;
+export const SCENE_VERSION = 10;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -35,6 +36,7 @@ function normalizeSceneObjectRecord(record) {
     ...(record.type==='light'?{light:cloneJson(record.light)}:{}),
     ...(record.type === PROCEDURAL_MESH_TYPE ? {geometry:cloneJson(record.geometry),surface:cloneJson(record.surface)} : {}),
     ...(record.emission?{emission:cloneJson(record.emission)}:{}),
+    ...((canCollideWithFire(record)||record.collision!=null)?{collision:checkedObjectCollision(record)}:{}),
     source: record.source ?? null,
     type: record.type ?? 'glb',
     fileName: record.fileName ?? 'object.glb',
@@ -108,6 +110,11 @@ export function getSceneObjectRecords(data) {
     const light={...checkedRimRecipe(data.environment.rimLight),kind:'spot',role:'rim'};
     records.push(normalizeSceneObjectRecord({id:RIM_LIGHT_ID,type:'light',source:'kaminos:scene-spot-light',label:'Rim light',fileName:'Spot light',light,transform:rimRecipePose(light)}));
   }
+  if(data?.version<10 && (data.composition || records.some(record=>record.type===FIRE_DOMAIN_TYPE))) {
+    const kiln=records.find(record=>record.id==='kiln'&&canCollideWithFire(record));
+    const raw=data.objects?.find(record=>record.id==='kiln');
+    if(kiln && !Object.hasOwn(raw??{},'collision'))kiln.collision={domainId:'flame-field',enabled:true};
+  }
   return records;
 }
 
@@ -151,8 +158,10 @@ export function isReloadableSceneObjectRecord(record) {
 }
 
 export function planSceneRestore(data) {
+  if(Number(data?.version)>SCENE_VERSION)throw Error('Scene version requires a newer authoring client');
   if (!sceneDocumentIsLoadable(data)) throw new Error('Invalid scene format');
   const authoredObjects = getSceneObjectRecords(data);
+  checkSceneCollisionReferences(authoredObjects);
   const fire = authoredObjects.some(o=>o.type===FIRE_DOMAIN_TYPE)?readFireObjects(authoredObjects,data.fireRendering):null;
   if(data.version>=9 && data.composition && !fire)throw Error('Saved fire domain is missing');
   if(fire)data={...data,flameDomainTranslation:fire.frame.translation,flameDomainScale:fire.frame.scale,flameDomainFollowSource:fire.frame.followSource};
@@ -280,5 +289,6 @@ export function buildSceneDocument({
     backdrop: !!backdrop,
   };
   if (backdropBrightness !== undefined) document.backdropBrightness = backdropBrightness;
+  checkSceneCollisionReferences(document.objects);
   return document;
 }

@@ -28,6 +28,16 @@ test('moving/resizing/aiming a back wall reuses the unchanged kiln voxels',()=>{
  assert.notDeepEqual(ctx.sceneSolidCellsCpu,first,'moving wall must still update the physical mask');assert.equal(counts.uploads,4);
  const wallCount=counts.walls;refresh();refresh();assert.equal(counts.walls,wallCount,'unchanged wall must not enumerate its cells again');
 });
+test('moving one authored obstacle reuses the other object and unions their independent solids',()=>{
+ const {ctx,counts,mesh,refresh}=collision();const other=new THREE.Mesh(new THREE.BoxGeometry(.3,.3,.3));other.position.set(-.55,.5,.55);
+ const group=new THREE.Group();group.add(mesh,other);
+ ctx.getSceneCollision=()=>({requested:true,id:'authored-fire-solids',object:group,objects:[{id:'kiln',object:mesh},{id:'baffle',object:other}]});
+ const triangles=[];ctx.voxelizeTriangleSolid=(faces,...args)=>{counts.geometry++;triangles.push(faces.length);return solid.voxelizeTriangleSolid(faces,...args);};
+ refresh({immersedBackWall:0});assert.deepEqual(triangles,[12,12],'each object must be filled independently, rather than closing the space between objects');
+ const first=ctx.sceneSolidCellsCpu.slice();other.position.x+=.2;refresh();assert.equal(counts.geometry,3,'moving the baffle must reuse the unchanged kiln');assert.notDeepEqual(ctx.sceneSolidCellsCpu,first);
+ ctx.getSceneCollision=()=>({requested:true,id:'authored-fire-solids',object:mesh,objects:[{id:'kiln',object:mesh}]});refresh();assert.equal(counts.geometry,3,'removing an obstacle reuses the remaining mask');
+ assert.deepEqual(ctx.sceneSolidCellsCpu,solid.voxelizeTriangleSolid(solid.trianglesFromSceneObject(mesh).triangles,32).cells);
+});
 test('source coefficients and compatible solver/transport changes do not rebuild static geometry or mask',()=>{
  const {ctx,counts,refresh}=collision();refresh({immersedBackWall:0});
  ctx.analyticEmitterDescriptorSignature='changed-source-coefficient';refresh({immersedFuel:.9,immersedTemperature:1.6});refresh({advectionScheme:'maccormack-velocity'});

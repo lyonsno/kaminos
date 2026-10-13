@@ -243,6 +243,7 @@ export function voxelizeTriangleSolid(triangles, grid) {
       }
     }
   }
+  const surfaceCells = cells.slice();
   // Flood only cells connected to the simulation-domain exterior. This fills
   // truly enclosed mesh interiors while preserving an open kiln chamber/flue.
   const exterior = new Uint8Array(cells.length);
@@ -299,5 +300,51 @@ export function voxelizeTriangleSolid(triangles, grid) {
     if (z + 1 < grid && !cells[index + plane]) blockedFaceCount++;
     if (z > 0 && !cells[index - plane]) blockedFaceCount++;
   }
-  return { cells, surfaceCellCount, interiorCellCount, blockedFaceCount };
+  return { cells, surfaceCells, surfaceCellCount, interiorCellCount, blockedFaceCount };
+}
+
+// Fill each authored object independently, then union occupancy. This preserves
+// object interiors without treating a space between separate meshes as solid.
+// Mesh edits invalidate only their own field; domain/grid edits invalidate all.
+export function createSceneSolidGeometryCache({voxelize=voxelizeTriangleSolid}={}) {
+  const members=new Map();let combined=null;
+  return {update(objects,transform,{grid,gridHeight=2*grid}) {
+    const ids=new Set(),fields=[];let builds=0;
+    for(const {id,object} of [...objects].sort((a,b)=>a.id.localeCompare(b.id))) {
+      if(!id || ids.has(id))throw Error('Invalid scene collider object identity');ids.add(id);
+      const revision=sceneSolidRevision(object,transform),key=JSON.stringify([grid,gridHeight,revision]);
+      let cached=members.get(id);
+      if(cached?.key!==key) {
+        const extraction=trianglesFromSceneObject(object,transform);
+        cached={id,key,revision,field:voxelize(extraction.triangles,grid,gridHeight),triangleCount:extraction.triangles.length};
+        members.set(id,cached);builds++;
+      }
+      fields.push(cached);
+    }
+    for(const id of members.keys())if(!ids.has(id))members.delete(id);
+    if(!fields.length)throw Error('scene solid requires authored objects');
+    const key=JSON.stringify(fields.map(({id,key})=>[id,key]));
+    if(combined?.key!==key) {
+      let field=fields[0].field;
+      if(fields.length>1) {
+        const cells=new Uint8Array(grid*gridHeight*grid),surfaceCells=new Uint8Array(cells.length);
+        for(const member of fields)for(let i=0;i<cells.length;i++) {
+          cells[i]|=member.field.cells[i];surfaceCells[i]|=member.field.surfaceCells[i];
+        }
+        let surfaceCellCount=0,interiorCellCount=0,blockedFaceCount=0;const plane=grid*gridHeight;
+        for(let z=0;z<grid;z++)for(let y=0;y<gridHeight;y++)for(let x=0;x<grid;x++) {
+          const i=x+grid*(y+gridHeight*z);if(!cells[i])continue;
+          if(surfaceCells[i])surfaceCellCount++;else interiorCellCount++;
+          if(x>0&&!cells[i-1])blockedFaceCount++;if(x+1<grid&&!cells[i+1])blockedFaceCount++;
+          if(y>0&&!cells[i-grid])blockedFaceCount++;if(y+1<gridHeight&&!cells[i+grid])blockedFaceCount++;
+          if(z>0&&!cells[i-plane])blockedFaceCount++;if(z+1<grid&&!cells[i+plane])blockedFaceCount++;
+        }
+        field={cells,surfaceCells,surfaceCellCount,interiorCellCount,blockedFaceCount};
+      }
+      combined={key,field,triangleCount:fields.reduce((n,f)=>n+f.triangleCount,0),
+        revision:fields.map(f=>`${f.id}:${f.revision}`).join('|'),
+        members:fields.map(f=>({id:f.id,triangleCount:f.triangleCount,solidCellCount:f.field.surfaceCellCount+f.field.interiorCellCount}))};
+    }
+    return {...combined,builds};
+  }};
 }

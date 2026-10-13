@@ -9,7 +9,7 @@ function save(objects=[source]){return buildSceneDocument({objects,composition,f
 test('saved fire has explicit source, domain, material and scene-render ownership, preserving exact descriptors',()=>{
  const doc=save(),domain=doc.objects.find(o=>o.type==='simulation-domain');
  assert.ok(domain,'fire domain must be an authored object');
- assert.equal(doc.version,9);
+ assert.equal(doc.version,10);
  assert.equal(doc.objects.find(o=>o.id===source.id).emission.domainId,domain.id);
  assert.deepEqual(domain.transform.position,[.2,1,0]);
  assert.equal(doc.flameDomainTranslation,undefined,'no competing top-level domain authority');
