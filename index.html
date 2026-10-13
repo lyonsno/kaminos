@@ -101,6 +101,9 @@ body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !import
 .scene-load-picker-meta { color:#8a9a9e; font-size:10px; }
 #scene-add-menu-popup button { display:flex; width:100%; justify-content:space-between; gap:20px; padding:9px 10px; text-align:left; white-space:nowrap; }
 #scene-add-menu-popup small { color:#8fa1a6; font:10px 'SF Mono',monospace; }
+#scene-first-flame-dialog { color:#d4e0e2; background:#192023; border:1px solid #435159; border-radius:8px; max-width:440px; }
+#scene-first-flame-dialog select { width:100%; margin:10px 0; }
+#scene-first-flame-dialog::backdrop { background:#0008; }
 #local-liquid-performance .hint { margin:8px 0 0; color:#96a3a8; font:11px/1.5 'SF Mono',monospace; }
 #local-liquid-performance .slider-label { flex:0 0 105px; }
 #local-liquid-performance-status { color:#add4d6 !important; }
@@ -847,6 +850,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <section id="local-liquid-performance" hidden>
       <h2>Water Simulation</h2>
       <div class="panel">
+        <label class="slider-row"><span class="slider-label">Show support</span><input id="local-liquid-support-visible" type="checkbox"></label>
+        <p class="hint">Water collides with the fixed analytical basin and rock. Show support reveals that geometry; hiding it keeps the same collision surface.</p>
         <div class="scene-object-tools">
           <button type="button" class="btn" data-water-budget="12288,1">Draft</button>
           <button type="button" class="btn" data-water-budget="24576,2">Balanced</button>
@@ -3320,6 +3325,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button type="button" role="menuitem" data-scene-add="spot-light">Spot</button>
         <div class="scene-menu-heading">Emitter</div>
         <button type="button" role="menuitem" data-scene-add="water-emitter">Water</button>
+        <button type="button" role="menuitem" data-scene-add="flame-emitter">Flame</button>
       </div>
     </div>
   </nav>
@@ -7423,6 +7429,7 @@ function refreshLocalLiquidPerformance() {
   if (panel.dataset.setup !== signature) {
     document.getElementById('local-liquid-particles').value = localLiquidSetup.particleCount;
     document.getElementById('local-liquid-iterations').value = localLiquidSetup.densityIterations;
+    document.getElementById('local-liquid-support-visible').checked = localLiquidSetup.showSupportGeometry;
     panel.dataset.setup = signature;
   }
   const loading = localLiquidHostMount.isLoading();
@@ -7440,6 +7447,15 @@ function refreshLocalLiquidPerformance() {
 }
 
 window.kaminosSetLocalLiquidPerformance = applyLocalLiquidPerformance;
+window.kaminosSetLocalLiquidSupportVisible = value => {
+  assertSceneConstructionAvailable();
+  if(!localLiquidSetup)throw Error('Add a Water Emitter first');
+  return scenePlacementTools.edits.apply('@local-liquid-support-display',value,'Show water support');
+};
+document.getElementById('local-liquid-support-visible').addEventListener('change',event=>{
+  try{window.kaminosSetLocalLiquidSupportVisible(event.target.checked);}
+  catch(error){refreshLocalLiquidPerformance();setInfo(error.message);}
+});
 window.kaminosPauseLocalLiquid = paused => {
   localLiquidPaused = Boolean(paused);
   localLiquidHost?.setPaused(localLiquidPaused);
@@ -7473,6 +7489,8 @@ window.kaminosLocalLiquidState = () => {
   frameCount: hostState?.frameCount ?? 0,
   failure: localLiquidFailure,
   setup: localLiquidSetup ? structuredClone(localLiquidSetup) : null,
+  supportGeometryVisible: hostState?.supportGeometryVisible ?? null,
+  sourceGeneration: hostState?.sourceGeneration ?? null,
   emitters: localLiquidEmitterRecords(),
   lastFrame: hostState?.lastFrame || null,
   solver: hostState?.solver || null,
@@ -7536,6 +7554,7 @@ sceneAddMenuPopup.addEventListener('click', event => {
     setActiveTab('assets');
     addLocalLiquidEmitter().catch(error => setInfo(`Could not add Water Emitter: ${error.message}`));
   }
+  if(action.dataset.sceneAdd==='flame-emitter')openFirstFlameFieldDialog().catch(error=>setInfo(error.message));
 });
 document.getElementById('scene-mesh-file').onchange=async event=>{
   const file=event.target.files[0];event.target.value='';if(!file)return;
@@ -11736,7 +11755,7 @@ async function initScene() {
     document.body.dataset.sceneGiDiagnostic = String(diagnostic);
     const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;
     activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
-    const graphKey = sceneGISettings.mode;
+    const graphKey = `${sceneGISettings.mode}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}`;
     const cached = giOutputGraphs.get(graphKey);
     if (cached) {
       ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
@@ -11781,6 +11800,7 @@ async function initScene() {
   };
   sceneGI.setSettings(sceneGISettings);
   rebuildSceneGIOutput();
+  window.kaminosRefreshSceneGIOutput=rebuildSceneGIOutput;
   window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),sceneFrames:sceneFrameCount,effectiveMode:sceneGISettings.mode,view:sceneGISettings.mode==='gtao'?'scene':sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
   window.kaminosSceneGIReadback = kind => sceneGI.readback(renderer,kind);
   window.kaminosGroundDebugState = () => ({visible:groundPlane.visible,height:groundPlane.position.y,
@@ -12017,6 +12037,17 @@ async function initScene() {
     check: checkedBurnerControlHistoryState,
   });
   setupSelectionTransforms();
+  scenePlacementTools.edits.register('@local-liquid-support-display',{
+    read:()=>localLiquidSetup?.showSupportGeometry??false,
+    check:value=>{if(typeof value!=='boolean')throw Error('Water support visibility must be Boolean');return value;},
+    write:value=>{
+      if(!localLiquidSetup)throw Error('Water field is absent');
+      localLiquidSetup=normalizeLocalLiquidSetup({...localLiquidSetup,showSupportGeometry:value});
+      localLiquidHost?.setSetup(localLiquidSetup);
+      refreshLocalLiquidPerformance();window._kaminosDirty?.();
+    },
+  });
+  scenePlacementTools.addHistoryScope(document.getElementById('local-liquid-performance'));
   installBurnerAuthoring();
   createFlameQuickFields();
   setupAuthoringAssets();
@@ -24125,9 +24156,7 @@ async function initKaminosVolumeRoute() {
     // The finger-fluid liquid-contact route adopts the fluid solver's device
     // through its descriptor; seating the host device here would refuse it.
     sharedGpuContext: fingerFluidPyroCompositionRequested() ? null : sharedGpu,
-    getSceneDepth: (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute())
-      ? () => ordinarySceneDepthProvider?.() ?? null
-      : null,
+    getSceneDepth: () => ordinarySceneDepthProvider?.() ?? null,
     // The kiln is an explicit authored-solid experiment. Its exact registered
     // mesh and world transform, not its bounding box or camera depth, feed the
     // volume solver when the scene route requests volume_collision=kiln.
@@ -25979,19 +26008,102 @@ function installFlameAuthoring() {
     read:()=>flameSettingsState(),write:writeFlameSettingsState,check:checkFlameSettingsState,
     canApply:()=>{if(!volumePrototype?.debugState?.().active || !applyFlameEmitterPose)throw Error('Flame runtime is not active');},
     changed:()=>flameInspector?.sync(),
-    load:async id=>{
-      const [artifactResponse,schemaResponse]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'})]);
-      const [artifact,schema]=await Promise.all([artifactResponse.json(),schemaResponse.json()]);
-      if(!artifactResponse.ok||!schemaResponse.ok)throw Error(artifact.error||'Basin lookup failed');
-      const receipt=validateVolumeSettingsPresetDocument(artifact,id,schema);
-      if(receipt.preset.domControls['emitter-assay-family'].value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
-      return flameSettingsState(receipt.preset,receipt);
-    }});
+    load:loadAuthoredFlameBasin});
+}
+
+async function loadAuthoredFlameBasin(id) {
+  const [artifactResponse,schemaResponse]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'})]);
+  const [artifact,schema]=await Promise.all([artifactResponse.json(),schemaResponse.json()]);
+  if(!artifactResponse.ok||!schemaResponse.ok)throw Error(artifact.error||'Basin lookup failed');
+  const receipt=validateVolumeSettingsPresetDocument(artifact,id,schema);
+  if(receipt.preset.domControls['emitter-assay-family'].value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
+  return flameSettingsState(receipt.preset,receipt);
+}
+
+function firstFlameFieldState() {
+  return {composition:activeSceneComposition?structuredClone(activeSceneComposition):null,
+    settings:flameSettingsState(),sourcePresent:!!activeSceneComposition&&authoredFlamePresent,
+    route:Object.fromEntries([...new URLSearchParams(location.hash.slice(1))].filter(([key])=>key.startsWith('volume_light_field')||key==='volume_collision'))};
+}
+function checkFirstFlameFieldState(value) {
+  if(!value||typeof value.sourcePresent!=='boolean'||!value.route||typeof value.route!=='object')throw Error('Invalid first flame field state');
+  if(value.composition) {
+    if(value.composition.schema!==COMPOSITION_SCHEMA||value.route.volume_light_field!=='1')throw Error('Flame composition route is incomplete');
+    checkFlameSettingsState(value.settings);
+  }
+  return structuredClone(value);
+}
+function writeFirstFlameFieldState(value) {
+  volumePrototype.setActive(false);
+  const url=new URL(location.href),hash=new URLSearchParams(url.hash.slice(1));
+  for(const key of [...hash.keys()])if(key.startsWith('volume_light_field')||key==='volume_collision')hash.delete(key);
+  for(const [key,entry] of Object.entries(value.route))hash.set(key,entry);
+  url.hash=hash.toString();history.replaceState(history.state,'',url);
+  activeSceneComposition=value.composition?structuredClone(value.composition):null;
+  authoredFlamePresent=value.sourcePresent;
+  writeFlameSettingsState(value.settings);
+  volumePrototype.setSceneCompositionPresentation(Boolean(value.composition));
+  window.kaminosOrdinaryDepthSetEnabled?.(value.route.volume_light_field_scene_depth==='1');
+  ensureAuthoredFlameEmitter();
+  window.kaminosRefreshSceneGIOutput?.();
+  if(!value.composition&&activeSceneFieldId==='flame-field')activeSceneFieldId=null;
+  renderSceneObjectList();refreshRenderingControls();flameInspector?.sync(true);window._kaminosDirty?.();
+  if(value.composition) {
+    const wanted=JSON.stringify(value.composition);
+    const mounting=volumePrototype.setActive(true).then(()=>{
+      if(JSON.stringify(activeSceneComposition)!==wanted)volumePrototype.setActive(false);
+    });
+    window.__kaminosFirstFlameMount=mounting;
+    mounting.catch(error=>setInfo(`Flame field unavailable: ${error.message}`));
+  }
+}
+async function addFirstFlameField(presetId) {
+  assertSceneConstructionAvailable();
+  if(activeSceneComposition)return addBurnerObject('flame-source');
+  if(!presetId)throw Error('Choose a saved immersed-source basin for the first flame');
+  const before=JSON.stringify(firstFlameFieldState()),ledger=JSON.stringify(scenePlacementTools.edits.state());
+  authoringBusy=true;
+  let settings;
+  try{settings=await loadAuthoredFlameBasin(presetId);}finally{authoringBusy=false;}
+  if(JSON.stringify(firstFlameFieldState())!==before||JSON.stringify(scenePlacementTools.edits.state())!==ledger)throw Error('Scene changed while loading the flame basin; add it again');
+  if(settings.domControls['volume-emitter-source-law'].value!=='immersed-source')throw Error('Choose an immersed-source basin for a placeable scene emitter');
+  if(settings.domControls['volume-pressure-solver'].value!=='converged-open-top')throw Error('Scene flame requires a converged open-top basin');
+  if(settings.domControls['volume-advection-scheme'].value!=='maccormack'||settings.domControls['volume-time-step'].value!=='uniform')throw Error('Scene flame requires a MacCormack basin with uniform time stepping');
+  const route={volume_light_field:'1',volume_light_field_scene_depth:'1',volume_light_field_test_scene:'0',volume_light_field_shadows:'1',volume_collision:'off'};
+  const composition={schema:COMPOSITION_SCHEMA,flame:{presetId:settings.source.presetId,label:settings.source.label||presetId,stationary:true},route,lightGainStops:0};
+  scenePlacementTools.edits.apply('@first-flame-field',{composition,settings,sourcePresent:true,route},'Add flame field and source');
+  await window.__kaminosFirstFlameMount;
+  setActiveSceneObject(FLAME_EMITTER_ID);
+  setInfo('Added flame from the saved basin. Move its source; Undo removes the field.');
+  return FLAME_EMITTER_ID;
+}
+async function openFirstFlameFieldDialog() {
+  if(activeSceneComposition)return addFirstFlameField();
+  assertSceneConstructionAvailable();
+  const response=await fetch('/api/volume-settings-presets',{cache:'no-store'}),index=await response.json();
+  if(!response.ok)throw Error(index.error||'Basin library unavailable');
+  validateVolumeSettingsPresetIndex(index);
+  const dialog=document.createElement('dialog');
+  dialog.id='scene-first-flame-dialog';
+  dialog.innerHTML='<form method="dialog"><h2>Add Flame</h2><p>Choose a saved immersed-source basin. Its settings initialize the fire; the current scene and camera stay in place.</p><label>Fire basin <select id="scene-first-flame-basin"></select></label><p role="status"></p><button type="button" class="btn">Add Flame</button><button value="cancel" class="btn">Cancel</button></form>';
+  const select=dialog.querySelector('select');
+  const prompt=document.createElement('option');prompt.value='';prompt.textContent='Choose an immersed-source basin…';select.append(prompt);
+  for(const entry of index.entries){const option=document.createElement('option');option.value=entry.presetId;option.textContent=entry.label||entry.presetId;select.append(option);}
+  dialog.querySelector('[type="button"]').disabled=!select.value;
+  select.onchange=()=>{dialog.querySelector('[type="button"]').disabled=!select.value;};
+  dialog.querySelector('[type="button"]').onclick=async event=>{
+    event.target.disabled=true;
+    try{await addFirstFlameField(select.value);dialog.close();}
+    catch(error){dialog.querySelector('[role="status"]').textContent=error.message;}
+    finally{event.target.disabled=!select.value;}
+  };
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
 }
 
 function installAuthoringParameterEditing() {
   const edits=scenePlacementTools.edits;
   authoringControlSessions.push(sceneControlHistory);
+  edits.register('@first-flame-field',{read:firstFlameFieldState,write:writeFirstFlameFieldState,check:checkFirstFlameFieldState});
   // Finish a field before another control's pointerdown can begin a new target.
   document.addEventListener('pointerdown',event=>{
     if(event.target.closest?.('input,select,label,button,summary'))authoringControlSessions.forEach(session=>session.commit());
@@ -29621,7 +29733,7 @@ function installSceneConstruction() {
   const groupPanel=document.createElement('section');groupPanel.id='selected-group-properties';groupPanel.hidden=true;
   groupPanel.innerHTML='<h3>Group</h3><p>Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
-  window.kaminosSceneAuthoring={addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:activeSceneFieldId}),setFireSettings:editOwnedFireSettings,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+  window.kaminosSceneAuthoring={addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:activeSceneFieldId}),setFireSettings:editOwnedFireSettings,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
     ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),
     setGeometry:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.geometry=checkedGeometry({kind:patch.kind||record.geometry.kind,parameters:{...(patch.kind&&patch.kind!==record.geometry.kind?{}:record.geometry.parameters),...patch.parameters}});edits.apply(ensureMeshDataTarget(id),record,'Edit geometry');return record;},

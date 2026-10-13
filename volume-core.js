@@ -27355,6 +27355,18 @@ export function createKaminosVolumePrototype({
     writeDebugBoundarySidecarOverrideChunk,
     finishDebugBoundarySidecarOverride,
     syntheticHandTrailEmitters,
+    setSceneCompositionPresentation(value) {
+      if(typeof value!=='boolean')throw new Error('Scene composition presentation must be Boolean');
+      if(state.active)throw new Error('Pause the volume before changing scene presentation');
+      if(transparentCanvas!==value) {
+        transparentCanvas=value;
+        if(context)context.configure({device,format,colorSpace:'srgb',alphaMode:value?'premultiplied':'opaque',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});
+        if(device)rebuildFluidState(gridSize,'scene-composition-presentation');
+      }
+      state.sceneCompositionPresentation={transparentCanvas:value};
+      canvas.style.background=value?'transparent':'';
+      return {...state.sceneCompositionPresentation};
+    },
     async setActive(active) {
       if (active) {
         if (state.fullFieldImportReceipt?.status === 'applied'

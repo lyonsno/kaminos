@@ -10,7 +10,7 @@ export const LOCAL_LIQUID_EMITTER_CAPACITY = 5;
 const clone = value => structuredClone(value);
 
 export function defaultLocalLiquidSetup() {
-  return {schema:LOCAL_LIQUID_SCHEMA,support:'retained_analytical_basin',particleCount:49152,densityIterations:3};
+  return {schema:LOCAL_LIQUID_SCHEMA,support:'retained_analytical_basin',particleCount:49152,densityIterations:3,showSupportGeometry:false};
 }
 
 function checkedTriplet(value, name) {
@@ -63,10 +63,12 @@ function normalizeLegacySetup(value) {
 
 function normalizeLocalLiquidSetupCore(value) {
   if(value.support!=='retained_analytical_basin')throw Error('Unsupported local liquid support');
+  if(Object.hasOwn(value,'showSupportGeometry') && typeof value.showSupportGeometry!=='boolean')throw Error('Local liquid support visibility must be Boolean');
   for(const key of ['particleCount','densityIterations']) {
     if(!Number.isSafeInteger(value[key]) || value[key]<1)throw Error(`Invalid local liquid ${key}`);
   }
-  return {schema:LOCAL_LIQUID_SCHEMA,support:value.support,particleCount:value.particleCount,densityIterations:value.densityIterations};
+  return {schema:LOCAL_LIQUID_SCHEMA,support:value.support,particleCount:value.particleCount,densityIterations:value.densityIterations,
+    showSupportGeometry:value.showSupportGeometry??true};
 }
 
 export function normalizeLocalLiquidSetup(value) {
