@@ -1,0 +1,290 @@
+{
+  "schema": "kaminos.test-quarantine.v1",
+  "note": "Known failures. A listed test that fails with exactly its recorded signature does not fail the run. Any other failure, a timeout, a test that cannot start, or a listed test that now passes fails the run. Classes: untriaged, regression, stale-pin, environment, harness-defect. Every entry needs class, owner, reason and signature. Known limit: entries whose signature begins with 'node:test failing:' are built from reporter text and may not change when a known subtest fails for a new reason at the same line; see docs/testing.md.",
+  "baseline": {
+    "mainCommit": "954f622e",
+    "date": "2026-10-12"
+  },
+  "entries": {
+    "tests/boundary-splat-feature-capture-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-07-18 a8f53c6f Add full-support sparse instance consumer; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: witness readback uses the exact accepted instance count without a hidden row cap",
+      "testLastChanged": "2026-07-12 c9817cd5"
+    },
+    "tests/boundary-splat-renderer-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-09-23 dfc13f7a Expand smoke volume upward; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: capacity growth is bounded by physical grid cells and otherwise rounds up to avoid repeated reallocations",
+      "testLastChanged": "2026-09-15 bef9d69f"
+    },
+    "tests/boundary-splat-support-covariance-composition-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-07-18 62ea1154 Adjudicate Stage B optical recurrence; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: tuned heat, reaction, front, and interface support must remain upstream of baked sidecar structure",
+      "testLastChanged": "2026-07-17 db060b42"
+    },
+    "tests/finger-fluid-analytic-carrier-optics-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at 2a6404cd and first fails at the merge 2026-07-25 570f1bd7 hydro: compose spatial ownership, which brought in 4dad7121 publish spatial particle impact ownership; the merged side could not be tested alone; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "Error: support maximum spatial Lipschitz bound must be finite",
+      "testLastChanged": "2026-07-25 79bc04fe"
+    },
+    "tests/finger-fluid-bench-contracts.mjs": {
+      "class": "stale-pin",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "already failing at the commit that last changed it (2026-09-23 58ea38c6 compare fluid populations at fixed volume); its assertions never matched main",
+      "signature": "AssertionError [ERR_ASSERTION]: refraction can capture the exact same-camera support presentation from the current canvas texture",
+      "testLastChanged": "2026-09-23 58ea38c6"
+    },
+    "tests/finger-fluid-waterfall-continuity-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-09-23 58ea38c6 compare fluid populations at fixed volume; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: particle allocation preflight must run before proportional CPU truth-scene arrays are created",
+      "testLastChanged": "2026-07-20 2460360d"
+    },
+    "tests/finger-fluid-waterfall-resolution-oracle-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-07-27 5941fe7d finger fluid: compose canonical moving Hill support; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /COMPUTE_SHADER\\.replaceAll\\(\\s*KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN/. Input: | \"export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';\\n\" + | \"export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';\\n\" + | \"export const KAMINOS_FINGER_FLUID_DENSITY_CONTRACT = 'wgsl-pbf-density-constraint-v0';\\n\" + | \"export const KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT = 'wgsl-analytic-boundary-density-support-v0';\\n\" +",
+      "testLastChanged": "2026-07-25 79bc04fe"
+    },
+    "tests/fire-shadow-burner-frame-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at 8dd3c04a on the first-parent side of its last change and first fails at the merge fa19156b, which joined 060a7631 Hold shared-source host draws while producer resources are unavailable; the owner decides whether the source or the test is wrong",
+      "signature": "ReferenceError: exclusiveInspectionRender is not defined",
+      "testLastChanged": "2026-09-26 89aa0bec"
+    },
+    "tests/liquid-fire-contact-consumer-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-09-27 d748c4f9 Put the scalar rates on the uniform time step and add a height profile to the probe; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: persistent wetness suppresses flame only in locally wetted cells",
+      "testLastChanged": "2026-09-27 0ae47036"
+    },
+    "tests/residual-boundary-sidecar-aux-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-08-31 232944e4 perf: specialize production volume raymarch; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: instrumented runtime must carry the source-owned RGB-upscale replay preset before paired capture",
+      "testLastChanged": "2026-07-11 ebf04eba"
+    },
+    "tests/residual-upscale-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-07-11 3ab32810 kaminos: align neural fit crop witnesses; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: residual trainer must expose explicit full-frame preview mode instead of relying on oversized crop accidents",
+      "testLastChanged": "2026-07-10 1769320f"
+    },
+    "tests/scene-ao-depth-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-10-07 b5ed0f98 Use Noah's viewing defaults; hide Fire Light and demo assets; live toolbar poses; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "ReferenceError: document is not defined",
+      "testLastChanged": "2026-09-17 3512d1d0"
+    },
+    "tests/scene-authoring-integration-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-10-02 e85891a7 Build an authoring workspace over the shared scene controls; the failure has changed since then; the owner decides whether the source or the test is wrong",
+      "signature": "node:test failing: Burner control commits share scene undo and restore through the live flame setters :: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /historyScopes: \\[document\\.getElementById\\('tab-assets'\\), document\\.getElementById\\('tab-volume'\\)/. Input: | F frames the selected authored object through generic geometry bounds :: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /const entry = sceneObjects\\.find\\(item => item\\.id === activeSceneObjectId\\);\\s*const changed = frameSceneObjectRecord\\(entry, camera, controls\\)/. Input: | clearing resets scene history while typed water objects join chronological membership history :: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /if \\(id !== activeSceneObjectId\\) scenePlacementTools\\?\\.selectionChanged\\(\\);/. Input: | selection feedback hides untrustworthy offscreen pivots and names the recovery cue :: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /const baseSceneOutput = scenePass;[\\s\\S]*?renderPipeline\\.outputNode = baseSceneOutput;/. Input:",
+      "testLastChanged": "2026-10-01 e372f2eb"
+    },
+    "tests/scene-authoring-polish-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-10-04 c08d9e30 Author burner beds and flame assemblies through scene history; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "FAIL burner visibility preserves the authored recipe and its disabled scene roundtrip: selectedBedRecipe is not defined",
+      "testLastChanged": "2026-09-18 9ec0b9a3"
+    },
+    "tests/scene-authoring-review-regressions.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at 358759bf on the main side of its last change and first fails at the merge 3480c13f Compose retained water Add action with current authoring history, which joined the water branch at 644fc398 Integrate authored water emitters with scene history and persistence; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: a changed basin must not be linked to pixels under the earlier immutable preset",
+      "testLastChanged": "2026-09-29 9a71cce7"
+    },
+    "tests/scene-composition-basin-identity-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-10-03 4010ed52 Author flame settings and basins in the shared scene inspector; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: a preset is written only when the loaded basin changed",
+      "testLastChanged": "2026-09-25 cc87e283"
+    },
+    "tests/scene-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-10-04 ba65fe33 Polish scene selection, numeric presentation and continuous dragging; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: row keyboard selection must ignore events from child remove controls",
+      "testLastChanged": "2026-10-01 fd742f0e"
+    },
+    "tests/scene-floor-receivers-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-10-06 2f6b0751 Default bounce gain to ten and expose mid-gray floor appearance; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: | + actual - expected | + 8421504 | - 1118481",
+      "testLastChanged": "2026-10-01 ccc0808b"
+    },
+    "tests/scene-navigation-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-10-06 d472ee51 Author ordinary scene geometry, groups, lights and retained imports; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "node:test failing: ground is visible but cannot set authored-mesh navigation depth :: AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:",
+      "testLastChanged": "2026-10-01 e372f2eb"
+    },
+    "tests/scene-roundtrip.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-10-06 d472ee51 Author ordinary scene geometry, groups, lights and retained imports; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: round-trip scene document saves authored object groups",
+      "testLastChanged": "2026-09-17 d1a5c7b2"
+    },
+    "tests/serve-contracts.py": {
+      "class": "environment",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "reads artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json, which git ignores, so it fails in any clean checkout",
+      "signature": "FileNotFoundError: [Errno 2] No such file or directory: '<root>/artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json'",
+      "testLastChanged": "2026-07-15 e7f06af9"
+    },
+    "tests/volume-bonfire-macro-force-periodicity-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-09-25 799886ed Add an opt-in confinement mode that retires Curl as the confinement driver; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: transported vorticity confinement remains active",
+      "testLastChanged": "2026-09-24 c85749c5"
+    },
+    "tests/volume-cockpit-polish-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-10-02 e85891a7 Build an authoring workspace over the shared scene controls; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: the unused transform toolbar is suppressed in the Volume cockpit",
+      "testLastChanged": "2026-09-24 db3b7f58"
+    },
+    "tests/volume-common-gas-transport.mjs": {
+      "class": "stale-pin",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "already failing at the commit that last changed it (2026-10-06 5b887704 Inflow aperture: only the transport sampler reaches the coverage texture); its assertions never matched main",
+      "signature": "node:test failing: common transport samples all gas state and front at the velocity backtrace :: ReferenceError: sceneClipCharacteristic is not defined | hot stationary gas has no per-layer kinematic rise in common mode :: ReferenceError: sceneClipCharacteristic is not defined | legacy mode preserves the original distinct backtraces and lift :: ReferenceError: sceneClipCharacteristic is not defined",
+      "testLastChanged": "2026-10-06 5b887704"
+    },
+    "tests/volume-confinement-mode-contracts.mjs": {
+      "class": "stale-pin",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "already failing at the commit that last changed it (2026-10-06 0740886f residual probe reports per-slab heat and smoke centroids); its assertions never matched main",
+      "signature": "node:test failing: the residual probe also reduces enstrophy so confinement can be calibrated against a measurement :: AssertionError [ERR_ASSERTION]: enstrophy is reported per cell",
+      "testLastChanged": "2026-10-06 0740886f"
+    },
+    "tests/volume-dead-render-clock-retirement-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-09-04 9af30876 Fix inlet velocity authority split; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: explicit analytic-emitter temporal descriptors retain their isolated render-time input",
+      "testLastChanged": "2026-09-01 c88608ef"
+    },
+    "tests/volume-device-layout-capacity.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-09-25 3bbb1809 Add converged pressure solver and low-dissipation transport to the tall domain; the failure has changed since then; the owner decides whether the source or the test is wrong",
+      "signature": "ReferenceError: state is not defined",
+      "testLastChanged": "2026-09-24 3c536cce"
+    },
+    "tests/volume-dynamic-texture-proof-retirement-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-09-26 6cadd704 Accelerate scene navigation depth on dense meshes; the failure has changed since then; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: live executable synthetic texture producer scene-volume-gather.mjs must not restore unclassified periodic authorship",
+      "testLastChanged": "2026-09-24 299c20c9"
+    },
+    "tests/volume-frozen-composition-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-07-18 f0b9a49a renderer: match splat HDR presentation to raymarch; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: frozen render composites requested splats over any requested raymarch pass",
+      "testLastChanged": "2026-07-15 304a1c4e"
+    },
+    "tests/volume-periodic-excitation-controls-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-09-25 799886ed Add an opt-in confinement mode that retires Curl as the confinement driver; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: field-derived vorticity confinement remains independent",
+      "testLastChanged": "2026-09-05 cd7484a4"
+    },
+    "tests/volume-scalar-advection-periodicity-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-09-26 55666ca9 Keep kiln mask out of optical shader sampling; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: thermal material advection must not hide analytic slip behind helper calls: sampleFluidSlotMasked",
+      "testLastChanged": "2026-09-05 cd7484a4"
+    },
+    "tests/volume-settings-preset-contracts.mjs": {
+      "class": "environment",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "reads artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json, which git ignores, so it fails in any clean checkout",
+      "signature": "Error: ENOENT: no such file or directory, open '<root>/artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json'",
+      "testLastChanged": "2026-09-01 2e6832fb"
+    },
+    "tests/volume-settings-store-contracts.py": {
+      "class": "environment",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "reads artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json, which git ignores, so it fails in any clean checkout",
+      "signature": "FileNotFoundError: [Errno 2] No such file or directory: '<root>/artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json'",
+      "testLastChanged": "2026-08-30 88a7dada"
+    },
+    "tests/volume-transport-scheme-contracts.mjs": {
+      "class": "stale-pin",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "already failing at the commit that last changed it (2026-10-06 5b887704 Inflow aperture: only the transport sampler reaches the coverage texture); its assertions never matched main",
+      "signature": "node:test failing: WGSL carries the predictor buffer, the MacCormack corrector with an extremum limiter, and one velocity bound helper :: AssertionError [ERR_ASSERTION]: predictor must not be added to the shared fluid bind group layout",
+      "testLastChanged": "2026-10-06 5b887704"
+    },
+    "tests/volume-transported-detail-force-periodicity-contracts.mjs": {
+      "class": "regression",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "passed at its last change and first fails at 2026-09-25 799886ed Add an opt-in confinement mode that retires Curl as the confinement driver; same failure then as now; the owner decides whether the source or the test is wrong",
+      "signature": "AssertionError [ERR_ASSERTION]: missing source marker:   let confinement =",
+      "testLastChanged": "2026-09-05 cd7484a4"
+    }
+  }
+}

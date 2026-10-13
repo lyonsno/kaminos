@@ -823,6 +823,13 @@ export async function loadResidentWebGpuModelResources(input = {}) {
   });
 }
 
+// Residency keeps a resource's disposer for the resource's lifetime. A disposer defined beside create() would
+// share its closure context and keep the loader's full host copy of the bundle alive with every resident
+// buffer, so it lives at module scope and captures nothing.
+function destroyResidentModelBuffer(buffer) {
+  if (typeof buffer.destroy === 'function') buffer.destroy();
+}
+
 export async function loadWebGpuModelResources(input = {}) {
   const { manifest, route, signal } = input;
   assertRoute(route);
@@ -888,9 +895,7 @@ export async function loadWebGpuModelResources(input = {}) {
               throw error;
             }
           },
-          dispose(buffer) {
-            if (typeof buffer.destroy === 'function') buffer.destroy();
-          },
+          dispose: destroyResidentModelBuffer,
         });
       } catch (cause) {
         const error = new Error(`failed to load model allocation ${allocation.allocationId}: ${String(cause?.message || cause)}`);

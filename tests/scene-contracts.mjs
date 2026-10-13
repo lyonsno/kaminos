@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
 
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
@@ -34,7 +35,7 @@ assert.doesNotMatch(index, /loadEnvironment\('studio'\)[\s\S]{0,240}loadDemo\(DE
 assert.match(index, /function shouldIgnoreSceneObjectDeleteShortcut\(/, 'selected-object deletion has a focused shortcut guard');
 assert.match(index, /function removeActiveSceneObjectWithConfirmation\(/, 'selected-object deletion uses an explicit confirmation helper');
 assert.match(index, /e\.key === 'Delete' \|\| e\.key === 'Backspace'/, 'selected-object deletion listens for Delete and Backspace');
-assert.match(index, /window\.confirm\(/, 'selected-object deletion asks before removing the active object');
+assert.match(index, /function removeActiveSceneObjectWithConfirmation\(\)\s*\{[\s\S]*?removeSelectedSceneObjects\(\);/, 'selected-object deletion delegates to reversible selection membership instead of a dialog');
 assert.match(index, /id="scene-object-list"/, 'Assets tab exposes a scene object list');
 assert.match(index, /data-tab="forge"/, 'Kaminos exposes a Forge Host tab for embodied station smoke offers');
 assert.match(index, /id="forge-host-station-list"/, 'Forge Host tab exposes station list rows');
@@ -96,7 +97,14 @@ assert.match(index, /function placePipelineGeneratorRouteNode\(/, 'Dropped gener
 assert.match(index, /pipelineDockState\.graphNodePositions\[routeId\]/, 'Dropped generator cards update the unique graph route node position');
 assert.match(index, /function isPipelineInternalDrag\(/, 'Pipeline internal graph drags must not masquerade as viewport file drops');
 assert.match(index, /Ideogram 4/, 'Pipeline generator library reserves a visible future card for Ideogram 4');
-assert.match(index, /Trellis/, 'Pipeline generator library reserves a visible future card for Trellis');
+const generatorStart = index.indexOf('const pipelineGeneratorDefinitions =');
+const generatorEnd = index.indexOf('\n];', generatorStart);
+assert.ok(generatorStart >= 0 && generatorEnd > generatorStart, 'actual generator definitions are present');
+const trellisGenerator = runInNewContext(index.slice(generatorStart, generatorEnd + 3)
+  + '\npipelineGeneratorDefinitions.find(generator => generator.id === "trellis");');
+assert.ok(trellisGenerator, 'Pipeline generator library exposes the TRELLIS generator');
+assert.equal(trellisGenerator.available, true, 'TRELLIS is a callable generator rather than a future placeholder');
+assert.equal(trellisGenerator.defaultPipelineId, 'trellis-image-to-mesh-webgpu-v0', 'TRELLIS card selects its actual queued model route');
 assert.match(index, /Kimodo Motion/, 'Pipeline generator library reserves a visible future card for motion generators');
 assert.match(index, /SHARP Image -> Splat/, 'Pipeline graph route node uses generic SHARP operation labeling');
 assert.match(index, /backendPipelineId/, 'Pipeline graph route node preserves effective backend route identity separately from generator identity');

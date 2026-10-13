@@ -31,9 +31,14 @@ import {
   SAM_VECTOR_LINEAR_GELU_RANGE_WGSL,
   SAM_VECTOR_LINEAR_RANGE_WGSL,
   SAM_VECTOR_LINEAR_WGSL,
-  partitionSamLinearPhase,
-  vectorLinearDispatch,
 } from './sam-vector-linear-wgsl.js';
+import { partitionSamTiledLinearPhase, samTiledLinearShaders, SAM_TILED_LINEAR_TILE_POLICY } from './sam-tiled-linear.js';
+import { partitionSamFlashAttentionPhase, samFlashAttentionShader } from './sam-flash-attention.js';
+
+// 'flash' (kit tiled flash attention, default) or 'online' (the original per-query online kernel, kept as
+// the A/B baseline).
+const SAM_VIT_ATTENTION_KERNELS = Object.freeze(['flash', 'online']);
+import { chooseTiledGemmTile, tiledGemmTileShape } from './tiled-gemm-kernel.js';
 
 export const SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID = 'sam3.image-vit-block-stack.phase-program.webgpu-local.v0';
 
@@ -421,10 +426,13 @@ export function createSam3ImageVitBlockStackDispatchPlan(input = {}) {
   const padded = () => entry(layerShape.paddedTotalValues);
   const total = () => entry(shape.totalValues);
   const paddedTokens = shape.batch * layerShape.windowCount * layerShape.windowTokens;
-  const linear = (tokens, inputChannels, outputChannels) => ({
-    logicalInvocations: tokens * outputChannels,
-    dispatch: vectorLinearDispatch(tokens, inputChannels, outputChannels, { maxWorkgroupsPerDimension }),
-  });
+  // Dense projections run through the kit tiled GEMM (one output tile per workgroup).
+  const linear = (tokens, inputChannels, outputChannels) => {
+    const tile = tiledGemmTileShape(chooseTiledGemmTile({ M: tokens, N: outputChannels }, SAM_TILED_LINEAR_TILE_POLICY));
+    const dispatch = [Math.ceil(outputChannels / tile.bn), Math.ceil(tokens / tile.bm)];
+    if (dispatch.some(value => value > maxWorkgroupsPerDimension)) throw new Error('tiled linear dispatch exceeds device workgroup limit');
+    return { logicalInvocations: tokens * outputChannels, dispatch, outputsPerWorkgroup: tile.bm * tile.bn };
+  };
   return {
     layerNorm1: entry(shape.tokenCount),
     windowPartition: padded(),
@@ -917,6 +925,8 @@ export function normalizeSam3ExpectedLayerCheckpoints(checkpoints, executedLayer
 }
 
 export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
+  const attentionKernel = input.attentionKernel ?? 'flash';
+  if (!SAM_VIT_ATTENTION_KERNELS.includes(attentionKernel)) throw new RangeError(`unsupported SAM ViT attention kernel ${attentionKernel}`);
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   const route = input.route || createSam3ImageVitBlockStackPhaseProgramRouteDefinition({ kernel: input.kernel });
   const sourceImage = roleArtifact(input.request.inputs, 'source-image');
@@ -1134,16 +1144,19 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
       };
       const partitionPhase = phase => {
         // Native global attention: 517 ms / 5184 queries, about 13 ms per range.
+        if (phase.kernel === 'attention' && attentionKernel === 'flash') return partitionSamFlashAttentionPhase(phase, { headDim: shape.headDim }, runtime, kernels);
         if (phase.kernel === 'attention') return partitionSamAttentionPhase(phase, kernels, runtime, 128);
         if (['qProjection', 'kProjection', 'vProjection', 'outputProjection', 'mlpFc1', 'mlpFc2'].includes(phase.kernel)) {
           const mlp = phase.kernel === 'mlpFc1' || phase.kernel === 'mlpFc2';
           const inputChannels = phase.kernel === 'mlpFc2' ? shape.intermediateSize : shape.hiddenSize;
           const outputChannels = phase.kernel === 'mlpFc1' ? shape.intermediateSize : shape.hiddenSize;
-          // Native MLP: 210-233 ms for 25 billion products; about 10 ms per range.
-          const maxOutputsPerPhase = Math.max(64, Math.floor(2 ** 30 / inputChannels / 64) * 64);
-          return partitionSamLinearPhase({ ...phase, yieldAfter: true }, {
+          // Scalar MLP took 210-233 ms for 25 billion products at about 10 ms per
+          // range of 2^30/in outputs; the tiled GEMM is ~6-11x faster on these
+          // shapes, so ranges are 8x larger to stay near that duty size.
+          const maxOutputsPerPhase = Math.max(64, Math.floor(2 ** 33 / inputChannels / 64) * 64);
+          return partitionSamTiledLinearPhase({ ...phase, yieldAfter: true }, {
             tokens: mlp ? shape.tokenCount : layerShape.paddedTotalValues / shape.hiddenSize,
-            inputChannels, outputChannels, maxOutputsPerPhase,
+            inputChannels, outputChannels, maxOutputsPerPhase, activation: phase.kernel === 'mlpFc1' ? 'gelu' : 'none',
           }, runtime, kernels);
         }
         return [phase];
@@ -1159,13 +1172,13 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
         }
         return expanded;
       });
-      return createSamRangePhaseRuntime(runtime, [SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL, SAM_VECTOR_LINEAR_RANGE_WGSL, SAM_VECTOR_LINEAR_GELU_RANGE_WGSL]).defineProgram({
+      return createSamRangePhaseRuntime(runtime, [SAM_VIT_QUERY_RANGE_ONLINE_ATTENTION_WGSL, ...(attentionKernel === 'flash' ? [samFlashAttentionShader(shape.headDim)] : []), SAM_VECTOR_LINEAR_RANGE_WGSL, SAM_VECTOR_LINEAR_GELU_RANGE_WGSL, ...samTiledLinearShaders()]).defineProgram({
         name: `sam3.image-vit-block-stack-layer-${layerShape.layerIndex}-phase-program`,
         tensors: programTensors,
         uniforms: { blockDims: tensors.blockDims, lnDims: tensors.lnDims, windowLinearDims: tensors.windowLinearDims, fc1Dims: tensors.fc1Dims, fc2Dims: tensors.fc2Dims },
         kernels,
         phases: instrumentedPhases,
-        metadata: { routeId: SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', referenceBoundary: shape.fullBackbone ? 'SAM3 image ViT contiguous full backbone' : 'SAM3 image ViT contiguous block stack through first global attention' },
+        metadata: { routeId: SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', attentionKernel, referenceBoundary: shape.fullBackbone ? 'SAM3 image ViT contiguous full backbone' : 'SAM3 image ViT contiguous block stack through first global attention' },
       });
     };
 

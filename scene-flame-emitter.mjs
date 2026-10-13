@@ -1,5 +1,6 @@
-import { Euler, Vector3 } from './lib/three.core.js';
+import { Euler, Quaternion, Vector3 } from './lib/three.core.js';
 import { checkedPose } from './scene-edit-session.mjs';
+import {resolveGridHeight} from './volume-grid-shape.mjs';
 
 export const FLAME_EMITTER_ID = 'flame-emitter';
 export const FLAME_EMITTER_TYPE = 'flame-emitter';
@@ -18,30 +19,47 @@ export function normalizeFlameEmitterPose(value = defaultFlameEmitterPose()) {
   return pose;
 }
 
-export function flameDomainTranslationForPose(value) {
+export function flameDomainTranslationForPose(value, controls = {}) {
   const pose = normalizeFlameEmitterPose(value);
   const [x, y, z] = pose.position;
-  if (Math.abs(x) <= 1 && y >= -1 && y <= 3 && Math.abs(z) <= 1) return [0, 0, 0];
+  if (flamePoseInDomain(pose,[0,0,0],1,controls)) return [0, 0, 0];
   return [x, y - defaultFlameEmitterPose().position[1], z];
 }
 
-export function flameDomainTranslationForAcceptedPose(value, currentTranslation, { injectionSuspended = false } = {}) {
+export function flameDomainTranslationForAcceptedPose(value, currentTranslation, { injectionSuspended = false, scale = 1, shape = {} } = {}) {
   if (injectionSuspended) {
     const pose = normalizeFlameEmitterPose(value);
-    return [pose.position[0], pose.position[1] - defaultFlameEmitterPose().position[1], pose.position[2]];
+    return [pose.position[0], pose.position[1] - defaultFlameEmitterPose().position[1]*scale, pose.position[2]];
   }
-  return flamePoseInDomain(value, currentTranslation)
+  return flamePoseInDomain(value, currentTranslation, scale, shape)
     ? [...currentTranslation]
-    : flameDomainTranslationForPose(value);
+    : scale===1?flameDomainTranslationForPose(value,shape):[value.position[0],value.position[1]+.76*scale,value.position[2]];
 }
 
-export function flamePoseInDomain(value, translation) {
+export function flamePoseInDomain(value, translation, scale = 1, controls = {}) {
+  scale = normalizeFlameDomainScale(scale);
   const pose = normalizeFlameEmitterPose(value);
   if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
     throw new Error('Flame domain translation requires three finite coordinates');
   }
-  const [x, y, z] = pose.position.map((component, index) => component - translation[index]);
-  return Math.abs(x) <= 1 && y >= -1 && y <= 3 && Math.abs(z) <= 1;
+  const [x, y, z] = pose.position.map((component, index) => (component - translation[index]) / scale);
+  const width=Number(controls.resolution??64),height=resolveGridHeight(controls,width).heightCells;
+  return Math.abs(x) <= 1 && y >= -1 && y <= -1+2*height/width && Math.abs(z) <= 1;
+}
+
+export function flameDomainControlsFromSettings(settings) {
+  return {resolution:Number(settings?.domControls?.['volume-resolution']?.value??64),
+    gridHeightRatio:Number(settings?.domControls?.['volume-grid-height-ratio']?.value??2)};
+}
+
+// A confirmed request may still exceed device limits. Preview is the core's
+// admission law; refused requests use the retained grid only for source bounds,
+// while the original requested controls and refusal receipt remain intact.
+export function effectiveFlameDomainControls(controls,prototype) {
+  const preview=prototype?.previewGridShape?.(controls);if(!preview)return controls;
+  const refused=preview.admitted===false,runtime=refused?prototype?.debugState?.():null,dims=refused?runtime?.simGridDimensions:preview.dimensions;
+  if((refused&&runtime?.active!==true)||typeof preview.admitted!=='boolean'||!Array.isArray(dims)||dims.length!==3||!dims.every(n=>Number.isInteger(n)&&n>0))throw Error('Grid has no effective source bounds');
+  return {...controls,resolution:dims[0],gridHeightRatio:dims[1]/dims[0]};
 }
 
 export function normalizeFlameDomainTranslation(translation) {
@@ -51,12 +69,19 @@ export function normalizeFlameDomainTranslation(translation) {
   return [...translation];
 }
 
-export function flamePoseToDomain(value, translation) {
+export function normalizeFlameDomainScale(scale = 1) {
+  if (!Number.isFinite(scale) || scale <= 0) throw new Error('Flame domain scale must be positive and finite');
+  return scale;
+}
+
+export function flamePoseToDomain(value, translation, scale = 1) {
+  scale = normalizeFlameDomainScale(scale);
   const pose = normalizeFlameEmitterPose(value);
   if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
     throw new Error('Flame domain translation requires three finite coordinates');
   }
-  return { ...pose, position: pose.position.map((component, index) => component - translation[index]) };
+  return { ...pose, position: pose.position.map((component, index) => (component - translation[index]) / scale),
+    scale: pose.scale.map(value => value / scale) };
 }
 
 // The current ordinary flame has one fixed world-aligned simulation domain.
@@ -68,6 +93,47 @@ export function flameEmitterFrame(value) {
     direction: new Vector3(0, 1, 0).applyEuler(rotation).toArray(),
     supportAxis: new Vector3(1, 0, 0).applyEuler(rotation).toArray(),
     scale: pose.scale[0] };
+}
+
+export function immersedRadiusBounds(value) {
+  const scale = flameEmitterFrame(value).scale;
+  return { min: 0.02 / scale, max: 0.5 / scale };
+}
+
+// Doctor's engine uses a disc centre and yaw/pitch in domain coordinates.
+// The authored object's local +Y is its nozzle axis; roll remains authored
+// even though the circular supply does not depend on it.
+export function immersedControlsForFlamePose(controls, value, sourceEnabled = true,domainControls=controls) {
+  const frame = flameEmitterFrame(value);
+  if (sourceEnabled && !flamePoseInDomain(frame.pose, [0, 0, 0],1,domainControls)) {
+    throw new Error('Immersed source centre is outside the current domain');
+  }
+  const radius = Number(controls.immersedRadius ?? 0.2) * frame.scale;
+  if (!Number.isFinite(radius) || radius < 0.02 - 1e-12 || radius > 0.5 + 1e-12) {
+    throw new Error('Scaled immersed source radius must be within [0.02, 0.5]');
+  }
+  const [x, y, z] = frame.direction;
+  const yaw = Math.hypot(x, z) < 1e-12 ? Number(controls.immersedYaw ?? 0)
+    : (Math.atan2(z, x) * 180 / Math.PI + 360) % 360;
+  return { ...controls, immersedCentreX: frame.origin[0], immersedCentreY: frame.origin[1],
+    immersedCentreZ: frame.origin[2], immersedYaw: yaw,
+    immersedPitch: Math.asin(Math.max(-1, Math.min(1, y))) * 180 / Math.PI,
+    immersedRadius: Math.max(0.02, Math.min(0.5, radius)), immersedSourceEnabled: sourceEnabled };
+}
+
+export function flamePoseFromImmersedControls(controls, translation = [0, 0, 0], previous = defaultFlameEmitterPose(), scale = 1) {
+  scale = normalizeFlameDomainScale(scale);
+  const pose = normalizeFlameEmitterPose(previous);
+  const yaw = Number(controls.immersedYaw ?? 0) * Math.PI / 180;
+  const pitch = Number(controls.immersedPitch ?? 90) * Math.PI / 180;
+  const direction = new Vector3(Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw));
+  // Preserve the existing roll when the controls describe the same direction.
+  if (new Vector3(...flameEmitterFrame(pose).direction).distanceTo(direction) > 1e-10) {
+    pose.rotation = new Euler().setFromQuaternion(new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), direction)).toArray().slice(0, 3);
+  }
+  const domain = normalizeFlameDomainTranslation(translation);
+  pose.position = [Number(controls.immersedCentreX ?? 0), Number(controls.immersedCentreY ?? -0.5), Number(controls.immersedCentreZ ?? 0)].map((v, i) => v * scale + domain[i]);
+  return normalizeFlameEmitterPose(pose);
 }
 
 export function createFlameEmitterHandle(THREE) {
@@ -88,22 +154,24 @@ export function createFlameEmitterHandle(THREE) {
   return group;
 }
 
-export function updateFlameEmitterSupportOutline(THREE, group, { family, inputRadius } = {}) {
+export function updateFlameEmitterSupportOutline(THREE, group, { family, inputRadius, sourceLaw, immersedRadius } = {}) {
   if (!group) return;
-  const signature = `${family}:${inputRadius}`;
+  const immersed = sourceLaw === 'immersed-source';
+  const radius = immersed ? immersedRadius : inputRadius;
+  const signature = `${family}:${sourceLaw}:${radius}`;
   if (group.userData.supportSignature === signature) return;
   const previous = group.userData.supportOutline;
   if (previous) {
     group.remove(previous);
-    previous.geometry.dispose();
-    previous.material.dispose();
+    previous.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat())material?.dispose();});
   }
   group.userData.supportOutline = null;
   group.userData.supportSignature = signature;
-  if (family !== 'ring' || !Number.isFinite(inputRadius) || inputRadius <= 0) return;
+  if ((!immersed && family !== 'ring') || !Number.isFinite(radius) || radius <= 0) return;
   const material = new THREE.MeshBasicMaterial({ color: 0xffbf66, wireframe: true,
     transparent: true, opacity: 0.55, depthTest: false, depthWrite: false, toneMapped: false });
-  const outline = new THREE.Mesh(new THREE.TorusGeometry(inputRadius, inputRadius * 0.2, 6, 48), material);
+  const outline = new THREE.Mesh(immersed ? new THREE.CircleGeometry(radius, 48)
+    : new THREE.TorusGeometry(radius, radius * 0.2, 6, 48), material);
   outline.rotation.x = -Math.PI / 2;
   outline.renderOrder = 1001;
   outline.userData.kaminosEditorHelper = true;

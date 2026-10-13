@@ -10,6 +10,9 @@ on:
       - models/flux2-klein/klein-*.js
       - models/flux2-klein/qwen-tokenizer.js
       - models/flux2-klein/assets/**
+      - models/unimate/index.html
+      - models/unimate/unimate-*.js
+      - models/unimate/clips/**
       - webgpu-inference-kit/src/**
       - scripts/assemble-pages-site.mjs
       - .github/workflows/flame-atlas-pages.yml
@@ -39,7 +42,7 @@ jobs:
         with:
           enablement: true
 
-      - name: Assemble site (flame boutique at the root, Klein demo at inference-kit/klein/)
+      - name: Assemble site (flame boutique at the root, demos at inference-kit/klein/ and inference-kit/unimate/)
         run: node scripts/assemble-pages-site.mjs _site
 
       - name: Upload site

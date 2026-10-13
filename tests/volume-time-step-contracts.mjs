@@ -102,7 +102,8 @@ test('the shader reads coefficients at the dynamics speed and scales transport, 
   assert.match(main, /vel = velTransported \+ forceIncrement;/, 'and is folded back once (or handed to the face-force pass under the staggered reading)');
   const foldAt = main.indexOf('let forceIncrement = (vel - velTransported) * timeStep;');
   const lastAdditiveAt = main.indexOf('vel = vel - projectionCorrection');
-  const spongeAt = main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));');
+  // The reactant candidate opens the top through materialWallFade (equal to wallFade under the authored law).
+  const spongeAt = Math.max(main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));'), main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));'));
   assert.ok(foldAt >= 0 && lastAdditiveAt >= 0 && spongeAt >= 0, 'fold, last additive increment and wall sponge all present');
   assert.ok(foldAt > lastAdditiveAt, 'the scaling follows the last additive increment');
   assert.ok(foldAt < spongeAt, 'the scaling precedes the wall damping');
@@ -133,7 +134,7 @@ test('the emitter is an additive per-step source: its increments carry dt at pac
   const injection = source.slice(source.indexOf('struct AnalyticEmitterInjectionUniforms'), source.indexOf('material.x = max(material.x, chemistry.x * chemistryWeight * 0.76);'));
   assert.doesNotMatch(injection, /time_step_controls/, 'the emitter kernel has no time-step member');
   assert.match(injection, /let injectedVelocity = clamp\(\s*previousVelocityDensity\.xyz \+ axialVelocity \+ entrainmentVelocity,\s*vec3<f32>\(-0\.34\),\s*vec3<f32>\(0\.52\)\s*\);/, 'the additive update and the authored clamp are untouched, so Speed 1 is identical in both modes');
-  assert.match(source, /writeAnalyticEmitterInjectionUniform\([^;]*\{ incrementScale: timeStepConfig\.effective\.incrementScale \}/, 'the frame packer passes the dt factor to the emitter increments');
+  assert.match(source, /writeAnalyticEmitterInjectionUniform\([^;]*\{ incrementScale: timeStepConfig\.effective\.incrementScale, gridHeight \}/, 'the frame packer passes the dt factor to the emitter increments');
   assert.match(source, /state\.timeStep = \{\s*\.\.\.timeStepConfig,\s*uniform: \{ mode: uniforms\[354\], referenceSpeed: uniforms\[355\] \},[^]*?emitterPacked: analyticEmitterDispatch\?\.active\s*\?\s*\{\s*inletIncrement: analyticEmitterInjectionUniformFloats\[26\],\s*edgeEntrainment: analyticEmitterInjectionUniformFloats\[23\],/, 'runtime receipt records what the emitter kernel received');
   assert.equal((source.match(/^\s*timeStep: state\.timeStep,$/gm) || []).length, 2, 'debugState exports the receipt on both routes');
 });
@@ -187,8 +188,8 @@ test('cockpit, schema and layout carry the time-step mode', () => {
   assert.deepEqual(control.allowedValues, ['legacy', 'uniform']);
   assert.equal(control.additiveSinceControlCount, 216);
   // 217 and 218 are the inflow-boundary emitter controls (fuel fraction, inlet temperature); 219–227 the aperture pattern, swirl and wind model controls; 228–233 line weight, jet jitter, inlet turbulence (+ scale), puffing (+ period).
-  assert.equal(schema.controlCount, 248);
-  assert.equal(schema.controls.length, 248);
+  assert.equal(schema.controlCount, 252);
+  assert.equal(schema.controls.length, 252);
 });
 
 test('the arm capture records and checks the time-step mode', () => {

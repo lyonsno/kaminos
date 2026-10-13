@@ -37,7 +37,8 @@ test('the immersed source resolves from the controls and is admitted only under 
 test('the uniform block follows velocity staggering and packs the compiled source only when admitted', () => {
   assert.equal(core.IMMERSED_SOURCE_UNIFORM_OFFSET, core.VELOCITY_STAGGERING_UNIFORM_OFFSET + 4);
   assert.equal(core.IMMERSED_SOURCE_UNIFORM_FLOATS, 24);
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.IMMERSED_SOURCE_UNIFORM_OFFSET + 24);
+  assert.equal(core.GRID_SHAPE_UNIFORM_OFFSET, core.IMMERSED_SOURCE_UNIFORM_OFFSET + 24, 'the grid shape block follows the immersed source');
+  assert.equal(core.REACTANT_COMBUSTION_UNIFORM_OFFSET, core.GRID_SHAPE_UNIFORM_OFFSET + 8, 'the reactant combustion block follows the grid shape');
   const on = core.resolveImmersedSourceConfig(base, { grid: 64 });
   const u = core.immersedSourceUniformValues(on);
   assert.equal(u.length, 24);
@@ -114,8 +115,8 @@ test('cockpit: the source law option, eleven bench rows with help, snapshot, lis
     assert.equal(control.additiveSinceControlCount, e.additiveSinceControlCount);
     assert.ok('additiveDefault' in control);
   }
-  assert.equal(schema.controlCount, 248);
-  assert.equal(schema.controls.length, 248);
+  assert.equal(schema.controlCount, 252);
+  assert.equal(schema.controls.length, 252);
 });
 
 // Bounded A (report section 31, after the cold bench): a solid back disc one to
@@ -165,7 +166,7 @@ test('the back wall: resolved as a toggle, its cells lie strictly behind the sou
   assert.match(index, /immersedBackWall: parseFloat\(document\.getElementById\('volume-immersed-back-wall'\)\.value\)/);
   const control = schema.controls.find(c => c.key === 'volume-immersed-back-wall');
   assert.deepEqual(control, { key: 'volume-immersed-back-wall', param: 'volume_immersed_back_wall', tagName: 'INPUT', type: 'range', additiveDefault: 0, additiveSinceControlCount: 248 });
-  assert.equal(schema.controlCount, 248);
+  assert.equal(schema.controlCount, 252);
 });
 
 // Fresh review at 25431599 (IS-01..06).
@@ -179,7 +180,8 @@ test('IS-01: the momentum relaxation carries the time step once, after the fold'
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
   const foldAt = main.indexOf('let forceIncrement = (vel - velTransported) * timeStep;');
   const relaxAt = main.indexOf('vel = mix(vel, u.immersed_source_c.y * immersedDirection(), stepBlend(min(1.0, immersedWeight * u.immersed_source_d.x)));');
-  const spongeAt = main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));');
+  // The reactant candidate opens the top through materialWallFade (equal to wallFade under the authored law).
+  const spongeAt = Math.max(main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));'), main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));'));
   assert.ok(foldAt > 0 && relaxAt > 0 && spongeAt > 0);
   assert.ok(relaxAt > foldAt && relaxAt < spongeAt, 'the relaxation follows the fold (its stepBlend is the only time dependence) and precedes the sponge');
 });
@@ -214,7 +216,7 @@ test('IS-03: supply accounting follows the composed fluid support: the wall sits
   assert.equal(masked.effective.masked.cells, covered.length);
   assert.ok(masked.effective.masked.weightShare > 0.3 && masked.effective.masked.weightShare < 0.7);
   assert.match(index, /masked \$\{\(immersed\.effective\.masked\.weightShare \* 100\)\.toFixed\(0\)\}%/, 'the receipt names the masked share');
-  assert.match(source, /resolveImmersedSourceConfig\(controlsSnapshot, \{ grid: gridSize, gridHeight, puffFactor: [^}]*, solidCells: sceneSolidCellsCpu \}\)/, 'the pack passes the current solid mask');
+  assert.match(source, /resolveImmersedSourceConfig\(controlsSnapshot, \{ grid: gridSize, gridHeight, puffFactor: [^}]*, solidCells: sceneSolidCellsCpu, weightCache: immersedSourceWeightCache \}\)/, 'the pack passes the current solid mask');
 });
 
 test('IS-04: the residual measurement names the combined target (heat release + immersed source), snapshotted at copy time', () => {
@@ -274,7 +276,7 @@ test('IS-03-C: the source uniforms are packed against the mask the same step dis
   const shape = { grid: 64, gridHeight: 128 };
   const pose = { ...base, immersedSpeed: 0.01, immersedCapFraction: 1, immersedBackWall: 1 };
   const makeContext = () => {
-    const ctx = { device: {}, getSceneCollision: () => ({ requested: false }), gridSize: 64, gridHeight: 128, state: {}, controlsSnapshot: pose, sceneSolidRevisionKey: null, sceneSolidCellsCpu: null, immersedBackWallCells: core.immersedBackWallCells, composeSolidField: core.composeSolidField, resolvePressureSolverConfig: core.resolvePressureSolverConfig, resolveTransportConfig: core.resolveTransportConfig, rebuildSceneSolidBindingViews() {} };
+    const ctx = { device: {}, getSceneCollision: () => ({ requested: false }), gridSize: 64, gridHeight: 128, state: {}, controlsSnapshot: pose, sceneSolidRevisionKey: null, sceneSolidCellsCpu: null, sceneSolidGeometryCache: null, sceneSolidSupportCache: null, immersedWallCache: null, immersedBackWallCells: core.immersedBackWallCells, composeSolidField: core.composeSolidField, resolvePressureSolverConfig: core.resolvePressureSolverConfig, resolveTransportConfig: core.resolveTransportConfig, rebuildSceneSolidBindingViews() {} };
     ctx.installSceneSolidTexture = (field = null) => { ctx.sceneSolidCellsCpu = field?.cells ?? null; };
     vm.createContext(ctx);
     const from = source.indexOf('  function immersedBackWallForState()');
@@ -304,9 +306,10 @@ test('IS-03-C: the source uniforms are packed against the mask the same step dis
   const moved = { ...pose, immersedCentreY: -0.5625 };
   const defect = makeContext(); packLikeDefect(defect, pose);
   const eDefect = packLikeDefect(defect, moved);
-  assert.ok(targetSumOnMask(eDefect, defect.sceneSolidCellsCpu) > 100 * eDefect.fluxEffectivePredicted + 1, 'the replayed defect: the old wall covered the moved slab, the receipt predicted ~0, the dispatched mask received the cap everywhere');
   const fixed = makeContext(); packLikeProduction(fixed, pose);
   const e = packLikeProduction(fixed, moved);
+  // Under supply-per-covered-area (2026-10-11) the stale-mask sequence no longer pulses (the per-cell rate is the plain disc's whatever the mask); it drops the step's supply instead: the old wall covered the moved slab, so the pack saw zero coverage and packed zero, while the same step, resolved against the mask it dispatches, supplies the whole uncovered slab.
+  assert.ok(eDefect.fluxEffectivePredicted < 1e-6 && e.fluxEffectivePredicted > 1, `the replayed defect: stale-mask packing ${eDefect.fluxEffectivePredicted} vs same-step ${e.fluxEffectivePredicted}`);
   assert.ok(Math.abs(targetSumOnMask(e, fixed.sceneSolidCellsCpu) - e.fluxEffectivePredicted) < 1e-9, 'moved with the wall: the receipt predicts the target on the dispatched mask');
   assert.ok(Math.abs(e.fluxEffectivePredicted - e.fluxRequested) < 1e-9 && e.masked.cells === 0, 'the wall of the new pose masks nothing');
   // A kiln-style mask change under a fixed pose: the mask the solve runs on is the one the receipt saw.
@@ -319,9 +322,9 @@ test('IS-03-C: the source uniforms are packed against the mask the same step dis
   assert.ok(eKiln.effective.masked.cells > 0 && Math.abs(targetSumOnMask(eKiln.effective, kiln) - eKiln.effective.fluxEffectivePredicted) < 1e-9);
   // Production ordering pin: inside updateUniforms the pose is resolved and published, the collision refreshed, then the supply packed against the installed mask.
   const pack = source.slice(source.indexOf('  function updateUniforms('), source.indexOf('IMMERSED_SOURCE_UNIFORM_OFFSET);', source.indexOf('  function updateUniforms(')));
-  const poseAt = pack.indexOf('state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals });');
+  const poseAt = pack.indexOf('state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, weightCache: immersedSourceWeightCache });');
   const refreshAt = pack.indexOf('refreshSceneCollision();');
-  const supplyAt = pack.indexOf('const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu });');
+  const supplyAt = pack.indexOf('const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu, weightCache: immersedSourceWeightCache });');
   assert.ok(poseAt > 0 && refreshAt > poseAt && supplyAt > refreshAt, `pose ${poseAt} → refresh ${refreshAt} → supply ${supplyAt}`);
 });
 

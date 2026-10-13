@@ -1,5 +1,5 @@
-export function solidFieldIndex(grid, x, y, z) {
-  return x + grid * (y + 2 * grid * z);
+export function solidFieldIndex(grid, x, y, z, height = 2 * grid) {
+  return x + grid * (y + height * z);
 }
 
 export function assertEffectiveSceneCollision(receipt, expectedSourceId) {
@@ -18,9 +18,9 @@ export function assertEffectiveSceneCollision(receipt, expectedSourceId) {
 
 // Mirror the emitter shader's signed-distance chemistry gate at cell centers.
 // The dispatch box alone is deliberately wider than the actual fuel source.
-export function countEmitterChemicalSupport(descriptor, dispatch, solidCells, grid) {
+export function countEmitterChemicalSupport(descriptor, dispatch, solidCells, grid, height = 2 * grid) {
   if (!dispatch?.active || !descriptor || !(solidCells instanceof Uint8Array)
-    || solidCells.length !== 2 * grid * grid * grid) {
+    || solidCells.length !== grid * height * grid) {
     return {boundsFluidCells: 0, sourceSupportCells: 0, fluidSupportCells: 0, solidSupportCells: 0};
   }
   const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -46,7 +46,7 @@ export function countEmitterChemicalSupport(descriptor, dispatch, solidCells, gr
   for (let z = dispatch.cellMin[2]; z < dispatch.cellMin[2] + dispatch.cellExtent[2]; z++) {
     for (let y = dispatch.cellMin[1]; y < dispatch.cellMin[1] + dispatch.cellExtent[1]; y++) {
       for (let x = dispatch.cellMin[0]; x < dispatch.cellMin[0] + dispatch.cellExtent[0]; x++) {
-        const solid = solidCells[solidFieldIndex(grid, x, y, z)] !== 0;
+        const solid = solidCells[solidFieldIndex(grid, x, y, z, height)] !== 0;
         if (!solid) boundsFluidCells++;
         const p = [(x + .5) * 2 / grid - 1, (y + .5) * 2 / grid - 1, (z + .5) * 2 / grid - 1];
         const relative = sub(p, origin);
@@ -101,6 +101,17 @@ function visibleInScene(object) {
   return true;
 }
 
+const solidAttributeIds = new WeakMap();
+let nextSolidAttributeId = 1;
+function solidAttributeRevision(attribute) {
+  if (!attribute) return 'none';
+  if (!solidAttributeIds.has(attribute)) solidAttributeIds.set(attribute, nextSolidAttributeId++);
+  const buffer = attribute.isInterleavedBufferAttribute ? attribute.data : attribute;
+  if (!solidAttributeIds.has(buffer)) solidAttributeIds.set(buffer, nextSolidAttributeId++);
+  return [solidAttributeIds.get(attribute), solidAttributeIds.get(buffer),
+    attribute.count, buffer.version ?? 0].join('/');
+}
+
 export function sceneSolidRevision(object, productTransform = {translate: [0, 0, 0], scale: 1}) {
   if (!object?.traverse || !object?.updateWorldMatrix) throw new Error('scene solid requires a scene object');
   object.updateWorldMatrix(true, true);
@@ -108,22 +119,21 @@ export function sceneSolidRevision(object, productTransform = {translate: [0, 0,
   object.traverse(mesh => {
     if (!mesh.isMesh || !visibleInScene(mesh)) return;
     const position = mesh.geometry?.getAttribute?.('position');
-    parts.push([mesh.geometry?.uuid, position?.count, position?.version ?? 0,
-      mesh.geometry?.getIndex?.()?.version ?? 0, ...Array.from(mesh.matrixWorld?.elements || [])].join(','));
+    parts.push([mesh.geometry?.uuid, solidAttributeRevision(position),
+      solidAttributeRevision(mesh.geometry?.getIndex?.()), ...Array.from(mesh.matrixWorld?.elements || [])].join(','));
   });
   if (!parts.length) throw new Error('scene solid object has no visible mesh triangles');
   return `${parts.join('|')}@${productTransform.translate.join(',')}/${productTransform.scale}`;
 }
 
-export function packSolidTextureRows(cells, grid) {
-  if (!(cells instanceof Uint8Array) || cells.length !== 2 * grid * grid * grid) {
+export function packSolidTextureRows(cells, grid, height = 2 * grid) {
+  if (!(cells instanceof Uint8Array) || cells.length !== grid * height * grid) {
     throw new Error('scene solid field dimensions mismatch');
   }
   const bytesPerRow = Math.ceil(grid / 256) * 256;
-  const height = 2 * grid;
   const packed = new Uint8Array(bytesPerRow * height * grid);
   for (let z = 0; z < grid; z++) for (let y = 0; y < height; y++) {
-    const source = solidFieldIndex(grid, 0, y, z);
+    const source = solidFieldIndex(grid, 0, y, z, height);
     const target = bytesPerRow * (y + height * z);
     packed.set(cells.subarray(source, source + grid), target);
   }
@@ -209,10 +219,10 @@ function gridPoint(point, grid) {
  * Coordinates are volume-local: x/z [-1,1], y [-1,3]. Open meshes retain only
  * their surface voxels; an aperture is not replaced by a bounding solid.
  */
-export function voxelizeTriangleSolid(triangles, grid) {
+export function voxelizeTriangleSolid(triangles, grid, height = 2 * grid) {
   if (!Number.isInteger(grid) || grid < 2) throw new Error('scene solid grid must be an integer >= 2');
   if (!Array.isArray(triangles) || triangles.length === 0) throw new Error('scene solid requires triangles');
-  const height = grid * 2;
+  if (!Number.isInteger(height) || height < 2) throw new Error('scene solid height must be an integer >= 2');
   const cells = new Uint8Array(grid * height * grid);
   let surfaceCellCount = 0;
   for (const triangle of triangles) {
@@ -224,7 +234,7 @@ export function voxelizeTriangleSolid(triangles, grid) {
       for (let y = lo[1]; y <= hi[1]; y++) {
         for (let x = lo[0]; x <= hi[0]; x++) {
           if (!triangleTouchesCell(a, b, c, x, y, z)) continue;
-          const index = solidFieldIndex(grid, x, y, z);
+          const index = solidFieldIndex(grid, x, y, z, height);
           if (cells[index]) continue;
           cells[index] = 1;
           surfaceCellCount++;
@@ -232,6 +242,7 @@ export function voxelizeTriangleSolid(triangles, grid) {
       }
     }
   }
+  const surfaceCells = cells.slice();
   // Flood only cells connected to the simulation-domain exterior. This fills
   // truly enclosed mesh interiors while preserving an open kiln chamber/flue.
   const exterior = new Uint8Array(cells.length);
@@ -244,16 +255,16 @@ export function voxelizeTriangleSolid(triangles, grid) {
     queue[tail++] = index;
   };
   for (let z = 0; z < grid; z++) for (let y = 0; y < height; y++) {
-    enqueue(solidFieldIndex(grid, 0, y, z));
-    enqueue(solidFieldIndex(grid, grid - 1, y, z));
+    enqueue(solidFieldIndex(grid, 0, y, z, height));
+    enqueue(solidFieldIndex(grid, grid - 1, y, z, height));
   }
   for (let z = 0; z < grid; z++) for (let x = 0; x < grid; x++) {
-    enqueue(solidFieldIndex(grid, x, 0, z));
-    enqueue(solidFieldIndex(grid, x, height - 1, z));
+    enqueue(solidFieldIndex(grid, x, 0, z, height));
+    enqueue(solidFieldIndex(grid, x, height - 1, z, height));
   }
   for (let y = 0; y < height; y++) for (let x = 0; x < grid; x++) {
-    enqueue(solidFieldIndex(grid, x, y, 0));
-    enqueue(solidFieldIndex(grid, x, y, grid - 1));
+    enqueue(solidFieldIndex(grid, x, y, 0, height));
+    enqueue(solidFieldIndex(grid, x, y, grid - 1, height));
   }
   const plane = grid * height;
   while (head < tail) {
@@ -279,7 +290,7 @@ export function voxelizeTriangleSolid(triangles, grid) {
   // enclosed neighbours must not be mistaken for fluid.
   let blockedFaceCount = 0;
   for (let z = 0; z < grid; z++) for (let y = 0; y < height; y++) for (let x = 0; x < grid; x++) {
-    const index = solidFieldIndex(grid, x, y, z);
+    const index = solidFieldIndex(grid, x, y, z, height);
     if (!cells[index]) continue;
     if (x + 1 < grid && !cells[index + 1]) blockedFaceCount++;
     if (x > 0 && !cells[index - 1]) blockedFaceCount++;
@@ -288,5 +299,51 @@ export function voxelizeTriangleSolid(triangles, grid) {
     if (z + 1 < grid && !cells[index + plane]) blockedFaceCount++;
     if (z > 0 && !cells[index - plane]) blockedFaceCount++;
   }
-  return { cells, surfaceCellCount, interiorCellCount, blockedFaceCount };
+  return { cells, surfaceCells, surfaceCellCount, interiorCellCount, blockedFaceCount };
+}
+
+// Fill each authored object independently, then union occupancy. This preserves
+// object interiors without treating a space between separate meshes as solid.
+// Mesh edits invalidate only their own field; domain/grid edits invalidate all.
+export function createSceneSolidGeometryCache({voxelize=voxelizeTriangleSolid}={}) {
+  const members=new Map();let combined=null;
+  return {update(objects,transform,{grid,gridHeight=2*grid}) {
+    const ids=new Set(),fields=[];let builds=0;
+    for(const {id,object} of [...objects].sort((a,b)=>a.id.localeCompare(b.id))) {
+      if(!id || ids.has(id))throw Error('Invalid scene collider object identity');ids.add(id);
+      const revision=sceneSolidRevision(object,transform),key=JSON.stringify([grid,gridHeight,revision]);
+      let cached=members.get(id);
+      if(cached?.key!==key) {
+        const extraction=trianglesFromSceneObject(object,transform);
+        cached={id,key,revision,field:voxelize(extraction.triangles,grid,gridHeight),triangleCount:extraction.triangles.length};
+        members.set(id,cached);builds++;
+      }
+      fields.push(cached);
+    }
+    for(const id of members.keys())if(!ids.has(id))members.delete(id);
+    if(!fields.length)throw Error('scene solid requires authored objects');
+    const key=JSON.stringify(fields.map(({id,key})=>[id,key]));
+    if(combined?.key!==key) {
+      let field=fields[0].field;
+      if(fields.length>1) {
+        const cells=new Uint8Array(grid*gridHeight*grid),surfaceCells=new Uint8Array(cells.length);
+        for(const member of fields)for(let i=0;i<cells.length;i++) {
+          cells[i]|=member.field.cells[i];surfaceCells[i]|=member.field.surfaceCells[i];
+        }
+        let surfaceCellCount=0,interiorCellCount=0,blockedFaceCount=0;const plane=grid*gridHeight;
+        for(let z=0;z<grid;z++)for(let y=0;y<gridHeight;y++)for(let x=0;x<grid;x++) {
+          const i=x+grid*(y+gridHeight*z);if(!cells[i])continue;
+          if(surfaceCells[i])surfaceCellCount++;else interiorCellCount++;
+          if(x>0&&!cells[i-1])blockedFaceCount++;if(x+1<grid&&!cells[i+1])blockedFaceCount++;
+          if(y>0&&!cells[i-grid])blockedFaceCount++;if(y+1<gridHeight&&!cells[i+grid])blockedFaceCount++;
+          if(z>0&&!cells[i-plane])blockedFaceCount++;if(z+1<grid&&!cells[i+plane])blockedFaceCount++;
+        }
+        field={cells,surfaceCells,surfaceCellCount,interiorCellCount,blockedFaceCount};
+      }
+      combined={key,field,triangleCount:fields.reduce((n,f)=>n+f.triangleCount,0),
+        revision:fields.map(f=>`${f.id}:${f.revision}`).join('|'),
+        members:fields.map(f=>({id:f.id,triangleCount:f.triangleCount,solidCellCount:f.field.surfaceCellCount+f.field.interiorCellCount}))};
+    }
+    return {...combined,builds};
+  }};
 }

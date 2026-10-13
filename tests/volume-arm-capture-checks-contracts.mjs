@@ -210,3 +210,24 @@ test('inflow-dependent arms require an admitted inflow, not just a matching fiel
   assert.deepEqual(effectiveMismatches(turbulence, admitted, null), []);
   assert.equal(effectiveMismatches(turbulence, refused, null).length, 1, 'a matching zero turbulence on a refused inflow is not evidence');
 });
+
+// `@cameraFrame=x:y:z:tx:ty:tz` frames the scene camera for an arm: the basins'
+// saved cameras are zoomed, and a grid-height witness has to see the top of
+// the box (review of the grid height control, GH-01). The arm fails on a
+// malformed value or when the effective camera differs from the request.
+test('camera-frame arm: parsed strictly, and the effective frame must match the request', async () => {
+  const { parseCameraFrame, cameraFrameMismatch } = await import('../volume-arm-capture-checks.mjs');
+  assert.deepEqual(parseCameraFrame('0:2:9:0:2:0'), { position: [0, 2, 9], target: [0, 2, 0] });
+  assert.equal(parseCameraFrame('0:2:9:0:2'), null, 'five numbers');
+  assert.equal(parseCameraFrame('0:2:9:0:x:0'), null, 'a non-number');
+  assert.equal(parseCameraFrame(''), null);
+  const requested = parseCameraFrame('0:2:9:0:2:0');
+  assert.equal(cameraFrameMismatch(requested, { position: [0, 2, 9], target: [0, 2, 0] }), null);
+  assert.match(cameraFrameMismatch(requested, { position: [0, 2, 8], target: [0, 2, 0] }), /camera frame requested/);
+  assert.match(cameraFrameMismatch(requested, null), /no effective camera frame/);
+  assert.match(cameraFrameMismatch(requested, { position: [0, 2, 9] }), /no effective camera frame/);
+  const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
+  assert.match(capture, /if \(cid === '@cameraFrame'\) \{\n\s+const frame = parseCameraFrame\(value\);/);
+  assert.match(capture, /const mismatch = cameraFrameMismatch\(frame, effective\);/);
+  assert.match(capture, /if \(mismatch\) \{ report\.lastTrustworthyEvidence\.applied = applied; fail\(report\.failurePhase, mismatch\); \}/);
+});

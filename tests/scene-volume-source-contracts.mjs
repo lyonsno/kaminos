@@ -32,7 +32,12 @@ const device = {
   createBindGroup(spec) {return spec;},
 };
 const encoder = {beginComputePass() {return {setPipeline() {}, setBindGroup() {}, dispatchWorkgroups(...n) {dispatches.push(n);}, end() {}};}};
-const field = createSceneVolumeSource({device, module: {}, uniformBuffer: {}, fluidBuffers: [{}, {}], frontBuffers: [{}, {}], grid: 32, gridY: 64});
+const reactant = [{createView: () => ({})}, {createView: () => ({})}];
+const reactantArrays = [reactant];
+let bindGroupsMade = 0;
+const bindGroupCount = () => bindGroupsMade;
+const countingDevice = {...device, createBindGroup(spec) { bindGroupsMade += 1; return spec; }};
+const field = createSceneVolumeSource({device: countingDevice, module: {}, uniformBuffer: {}, fluidBuffers: [{}, {}], frontBuffers: [{}, {}], getReactantTextures: () => reactantArrays.at(-1), grid: 32, gridY: 64});
 assert.equal(typeof field.encodeOpticalDepth, 'function', 'live source must support per-source medium integration');
 assert.equal(field.describe().status, 'unbuilt');
 assert.equal(field.describe().texture, null, 'allocated does not imply current evidence');
@@ -75,3 +80,19 @@ assert.throws(() => field.encode(encoder, 0, 20), /destroyed/);
 assert.match(SCENE_VOLUME_SOURCE_WGSL, /medium\.emission, medium\.absorption \+ medium\.scattering/);
 assert.doesNotMatch(SCENE_VOLUME_SOURCE_WGSL, /emissiveCamera|white_[rgb]|physical_display|irradianceSrc/);
 console.log('raw scene volume source lifecycle and sampling contracts pass (mock dispatch, not native GPU evidence)');
+
+// The seed rebinds when the reactant sidecar is reallocated (a new array from the getter), and only then.
+// A fresh field: the one above has been destroyed by its own lifecycle check.
+{
+  const rebinding = createSceneVolumeSource({device: countingDevice, module: {}, uniformBuffer: {}, fluidBuffers: [{}, {}], frontBuffers: [{}, {}], getReactantTextures: () => reactantArrays.at(-1), grid: 32, gridY: 64});
+  const groupsBefore = bindGroupCount();
+  rebinding.encode(encoder, 0, 18);
+  assert.equal(bindGroupCount(), groupsBefore, 'same sidecar array: no rebind');
+  reactant.splice(0, 2, {createView: () => ({})}, {createView: () => ({})});
+  rebinding.encode(encoder, 0, 19);
+  assert.equal(bindGroupCount(), groupsBefore, 'in-place mutation of the same array is not a reallocation (the host assigns a new array)');
+  reactantArrays.push([{createView: () => ({})}, {createView: () => ({})}]);
+  rebinding.encode(encoder, 0, 20);
+  assert.equal(bindGroupCount(), groupsBefore + 2, 'a new array from the getter rebinds one group per fluid buffer');
+  rebinding.destroy();
+}

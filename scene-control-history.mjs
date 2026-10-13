@@ -48,6 +48,12 @@ export function formatAuthoringNumber(value) {
   return value!=='' && Number.isFinite(number) ? String(Number(number.toPrecision(3))) : String(value);
 }
 
+export function authoringRangeFraction(value,min,max) {
+  const finite=number=>number!==undefined && number!==null && number!=='' && Number.isFinite(Number(number));
+  if(!finite(value) || !finite(min) || !finite(max) || Number(max)<=Number(min))return null;
+  return Math.max(0,Math.min(1,(Number(value)-Number(min))/(Number(max)-Number(min))));
+}
+
 // Formatting is an overlay: the actual input value, editing and saved precision
 // remain untouched. Observe native value assignment so undo/selection refreshes
 // the presentation without another model or polling loop.
@@ -56,10 +62,24 @@ function installNumberPresentation(input) {
   const descriptor=doc?.defaultView?.HTMLInputElement && Object.getOwnPropertyDescriptor(doc.defaultView.HTMLInputElement.prototype,'value');
   if(!descriptor || !input.parentNode)return;
   const wrapper=doc.createElement('span');wrapper.className='authoring-number-wrap';
+  const fill=doc.createElement('span');fill.className='authoring-number-fill';fill.setAttribute('aria-hidden','true');
   const display=doc.createElement('span');display.className='authoring-number-display';display.setAttribute('aria-hidden','true');
-  input.before(wrapper);wrapper.append(input,display);
-  const update=()=>{display.textContent=formatAuthoringNumber(descriptor.get.call(input));};
+  input.before(wrapper);wrapper.append(input,fill,display);
+  let shownText,shownFraction;
+  const update=()=>{
+    const value=descriptor.get.call(input),text=formatAuthoringNumber(value);
+    const fraction=input.disabled?null:authoringRangeFraction(value,input.min,input.max);
+    if(text!==shownText){display.textContent=text;shownText=text;}
+    if(fraction!==shownFraction){
+      wrapper.classList.toggle('has-range',fraction!==null);
+      wrapper.style.setProperty('--authoring-range-fraction',fraction??0);
+      shownFraction=fraction;
+    }
+  };
   Object.defineProperty(input,'value',{configurable:true,get(){return descriptor.get.call(this);},set(value){descriptor.set.call(this,value);update();}});
+  // Radius and other dependent ranges can change without changing their value.
+  // Attribute observation catches both native property setters and setAttribute.
+  new doc.defaultView.MutationObserver(update).observe(input,{attributes:true,attributeFilter:['min','max','disabled']});
   input.addEventListener('input',update);input.addEventListener('change',update);update();
 }
 
@@ -90,10 +110,15 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
   }
   function adjust(dx,fine) {
     if(!gesture)return;
-    gesture.moved=true;gesture.value+=dx*step*(fine?.1:1);
-    let value=step>=1?Math.round(gesture.value):gesture.value;
-    if(input.min!==undefined && input.min!=='')value=Math.max(Number(input.min),value);
-    if(input.max!==undefined && input.max!=='')value=Math.min(Number(input.max),value);
+    gesture.moved=true;gesture.value+=dx*gesture.rate*(fine?.1:1);
+    // Clamp the accumulated value, not just its presentation. Continuing to
+    // drag outward at a limit must not create motion to repay on reversal.
+    if(gesture.min!==null)gesture.value=Math.max(gesture.min,gesture.value);
+    if(gesture.max!==null)gesture.value=Math.min(gesture.max,gesture.value);
+    const atLimit=gesture.value===gesture.min||gesture.value===gesture.max;
+    let value=step>=1&&!atLimit?Math.round(gesture.value):gesture.value;
+    if(gesture.min!==null)value=Math.max(gesture.min,value);
+    if(gesture.max!==null)value=Math.min(gesture.max,value);
     input.classList?.add('scrubbing');input.value=String(value);
     input.dispatchEvent(new Event('input',{bubbles:true}));
   }
@@ -109,7 +134,12 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
       if(target===input && doc.activeElement===input && !input.readOnly)return;
       event.preventDefault();onStart();suppressClick=false;
       input.dispatchEvent(new Event('focusin'));
-      gesture={target,x:event.clientX,lastX:event.clientX,startValue:Number(input.value),value:Number(input.value),pointerId:event.pointerId,moved:false};
+      const bound=value=>value!==undefined&&value!==''&&Number.isFinite(Number(value))?Number(value):null;
+      const min=bound(input.min),max=bound(input.max);
+      // A finite interval has one consistent travel distance, independent of
+      // the source's keyboard step. Unbounded fields retain their unit scale.
+      const rate=min!==null&&max!==null&&max>min?(max-min)/300:step;
+      gesture={target,x:event.clientX,lastX:event.clientX,startValue:Number(input.value),value:Number(input.value),min,max,rate,pointerId:event.pointerId,moved:false};
       target.setPointerCapture(event.pointerId);
       gesture.continuous=beginContinuousPointer(target,{x:event.clientX,y:event.clientY},{move:({dx,event})=>adjust(dx,event.shiftKey),lost:()=>finish(true),unavailable:()=>{input.title='Continuous pointer unavailable · Drag to adjust · Click to type';}});
     });

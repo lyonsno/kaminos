@@ -236,10 +236,18 @@ export function createWebGpuResourceFactory(input = {}) {
       });
   }
 
+  // A full residency snapshot clones every resident resource; once per acquisition it made package loads and
+  // warm re-acquisition O(N^2) in resources. Residencies without the direct lookup keep the snapshot path.
+  function isResident(resourceId) {
+    return typeof input.residency.isResident === 'function'
+      ? input.residency.isResident(resourceId)
+      : input.residency.snapshot().resources.some(resource => resource.resourceId === resourceId && resource.status === 'resident');
+  }
+
   function acquireOrCreate(request = {}) {
     if (invalidation) return Promise.reject(new Error(`resource factory invalidated: ${invalidation.reason}`));
     const normalized = descriptor(request);
-    const resident = input.residency.snapshot().resources.find(resource => resource.resourceId === normalized.resourceId && resource.status === 'resident');
+    const resident = isResident(normalized.resourceId);
     if (resident) {
       return Promise.resolve(input.residency.acquire({
         ...normalized,
@@ -290,9 +298,7 @@ export function createWebGpuResourceFactory(input = {}) {
   function acquireExisting(request = {}) {
     if (invalidation) return Promise.reject(new Error(`resource factory invalidated: ${invalidation.reason}`));
     const normalized = descriptor(request);
-    const resident = input.residency.snapshot().resources.find(
-      resource => resource.resourceId === normalized.resourceId && resource.status === 'resident',
-    );
+    const resident = isResident(normalized.resourceId);
     if (resident) {
       return Promise.resolve(input.residency.acquire({
         ...normalized,

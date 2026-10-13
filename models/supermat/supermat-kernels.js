@@ -15,175 +15,11 @@ const store = (name, type, index, value) => type === 'f16' ? `${name}[${index}]=
 const enables = (types, extra = false) => (extra || Object.values(types).includes('f16') ? 'enable f16;\n' : '');
 const uniform = (index, type) => `@group(0) @binding(${index}) var<uniform> p:${type};`;
 
-export const GEMM_PARAMS_WORDS = 20;
-
-// C[b,m,n] = alpha * sum_k A[b,m,k] * B[b,k,n] (+ biasM[m]) (+ biasM2[m]) (+ biasN[n]) (+ R[b,m,n])
-// Element offsets/strides are uniforms. `aKContiguous` and `bNContiguous`
-// choose the coalesced tile-load order; they do not change the arithmetic.
-// `conv` replaces the B load with implicit im2col over an NCHW input.
-// Tile shape: a 16x16 thread grid computes a (16*tm) x (16*tn) output tile,
-// stepping K by bk. `aF16`/`bF16` read that operand as packed binary16 pairs
-// (u32 words) and widen to F32; accumulation stays F32.
-export function gemmTileShape({ tm = 4, tn = 4, bk = 16 } = {}) {
-  return { tm, tn, bk, bm: 16 * tm, bn: 16 * tn };
-}
-
-// Shared pieces of the GEMM kernels: bindings, params struct, operand fetches,
-// tile loaders (for `threads` threads filling bk x bm / bk x bn tiles) and the
-// epilogue that turns accumulator value ACC into the stored output.
-function gemmParts({ aKContiguous = true, bNContiguous = true, biasM = false, biasM2 = false, biasN = false,
-  residual = false, conv = null, aF16 = false, bF16 = false, types = {}, normB = null },
-  { bm, bn, bk, threads, aLayout = 'k-major' }) {
-  const t = { a: types.a ?? (aF16 ? 'f16packed' : 'f32'), b: types.b ?? (bF16 ? 'f16packed' : 'f32'),
-    biasM: types.biasM ?? 'f32', biasM2: types.biasM2 ?? 'f32', biasN: types.biasN ?? 'f32',
-    residual: types.residual ?? 'f32', c: types.c ?? 'f32' };
-  const bindings = [binding(0, 'a', t.a), binding(1, 'b', t.b)];
-  let next = 2;
-  if (biasM) bindings.push(binding(next++, 'bias_m', t.biasM));
-  if (biasM2) bindings.push(binding(next++, 'bias_m2', t.biasM2));
-  if (biasN) bindings.push(binding(next++, 'bias_n', t.biasN));
-  if (residual) bindings.push(binding(next++, 'res', t.residual));
-  // normB: GroupNorm (+SiLU) of the conv input applied while loading B tiles,
-  // from precomputed per-group [mean, rstd]; p.z1 = channels per group.
-  if (normB) {
-    if (!conv) throw new Error('fused input normalization requires a conv GEMM');
-    bindings.push(storage(next++, 'norm_stats'), storage(next++, 'norm_gamma'), storage(next++, 'norm_beta'));
-  }
-  bindings.push(binding(next++, 'c', t.c, true));
-  bindings.push(uniform(next++, 'Params'));
-  const used = { a: t.a, b: t.b, c: t.c, ...(biasM ? { biasM: t.biasM } : {}), ...(biasM2 ? { biasM2: t.biasM2 } : {}),
-    ...(biasN ? { biasN: t.biasN } : {}), ...(residual ? { residual: t.residual } : {}) };
-  const header = `struct Params {
-  M:u32, N:u32, K:u32, alpha:f32,
-  a_off:u32, a_sm:u32, a_sk:u32, a_sb:u32,
-  b_off:u32, b_sk:u32, b_sn:u32, b_sb:u32,
-  c_off:u32, c_sm:u32, c_sn:u32, c_sb:u32,
-  pad_top:u32, pad_left:u32, n_base:u32, z1:u32,
-};
-${bindings.join('\n')}`;
-  const orderA = aKContiguous ? `let kk=idx%${bk}u;let mm=idx/${bk}u;` : `let mm=idx%${bm}u;let kk=idx/${bm}u;`;
-  const orderB = bNContiguous || conv ? `let nn=idx%${bn}u;let kk=idx/${bn}u;` : `let kk=idx%${bk}u;let nn=idx/${bk}u;`;
-  let valueB;
-  if (conv) {
-    const { kh, kw, stride, upsample } = conv;
-    // p.b_sk/p.b_sn/p.b_sb are reused as input H, input W and output W.
-    valueB = `let ci=k/${kh * kw}u;let r=k%${kh * kw}u;let ky=r/${kw}u;let kx=r%${kw}u;
-      let oy=n/p.b_sb;let ox=n%p.b_sb;
-      let iy=i32(oy*${stride}u+ky)-i32(p.pad_top);let ix=i32(ox*${stride}u+kx)-i32(p.pad_left);
-      let eh=i32(p.b_sk${upsample ? '*2u' : ''});let ew=i32(p.b_sn${upsample ? '*2u' : ''});
-      if(iy>=0&&ix>=0&&iy<eh&&ix<ew){
-        let sy=u32(iy)${upsample ? '/2u' : ''};let sx=u32(ix)${upsample ? '/2u' : ''};
-        value=${load('b', t.b, 'p.b_off+ci*p.b_sk*p.b_sn+sy*p.b_sn+sx')};
-        ${normB ? `let g=ci/p.z1;value=(value-norm_stats[g*2u])*norm_stats[g*2u+1u]*norm_gamma[ci]+norm_beta[ci];
-        ${normB.silu ? 'value=value/(1.0+exp(-value));' : ''}` : ''}
-      }`;
-  } else {
-    valueB = `value=${load('b', t.b, 'p.b_off+bat*p.b_sb+k*p.b_sk+n*p.b_sn')};`;
-  }
-  const storeA = aLayout === 'k-major' ? `tile_a[kk*${bm}u+mm]=value;` : `tile_a[mm*${bk}u+kk]=value;`;
-  const loaders = `    for(var q=0u;q<${(bk * bm) / threads}u;q++){
-      let idx=tid+q*${threads}u;
-      ${orderA}
-      let m=m0+mm;let k=k0+kk;var value=0.0;
-      if(m<p.M&&k<p.K){value=${load('a', t.a, 'p.a_off+bat*p.a_sb+m*p.a_sm+k*p.a_sk')};}
-      ${storeA}
-    }
-    for(var q=0u;q<${(bk * bn) / threads}u;q++){
-      let idx=tid+q*${threads}u;
-      ${orderB}
-      let n=n0+nn;let k=k0+kk;var value=0.0;
-      if(n<p.N&&k<p.K){ ${valueB} }
-      tile_b[kk*${bn}u+nn]=value;
-    }`;
-  let epilogue = 'var v=p.alpha*(ACC);';
-  if (biasM) epilogue += `v+=${load('bias_m', t.biasM, 'm')};`;
-  if (biasM2) epilogue += `v+=${load('bias_m2', t.biasM2, 'm')};`;
-  if (biasN) epilogue += `v+=${load('bias_n', t.biasN, 'n')};`;
-  const cIndex = 'p.c_off+bat*p.c_sb+m*p.c_sm+n*p.c_sn';
-  if (residual) epilogue += `v+=${load('res', t.residual, cIndex)};`;
-  epilogue += store('c', t.c, cIndex, 'v');
-  return { header, loaders, epilogue, used };
-}
-
-// precision: 'f32' (default); 'f16-tiles' rounds both operand tiles to f16 in
-// workgroup memory and multiplies in F32; 'f16-partial' also multiplies and
-// accumulates each bk-wide K step in f16, adding the partial into F32 per step.
-// Both f16 modes require the shader-f16 feature.
-export function gemmShader({ tile = {}, precision = 'f32', ...layout } = {}) {
-  if (precision !== 'f32') return gemmShaderF16({ tile, precision, ...layout });
-  const { tm, tn, bk, bm, bn } = gemmTileShape(tile);
-  const { header, loaders, epilogue, used } = gemmParts(layout, { bm, bn, bk, threads: 256 });
-  return `${enables(used)}
-${header}
-var<workgroup> tile_a:array<f32,${bk * bm}>;
-var<workgroup> tile_b:array<f32,${bk * bn}>;
-@compute @workgroup_size(16,16)
-fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:vec3<u32>) {
-  let tid=lid.y*16u+lid.x;
-  let m0=wid.y*${bm}u;let n0=p.n_base+wid.x*${bn}u;let bat=wid.z;
-  var acc:array<array<f32,${tn}>,${tm}>;
-  for(var k0=0u;k0<p.K;k0+=${bk}u){
-${loaders}
-    workgroupBarrier();
-    for(var kk=0u;kk<${bk}u;kk++){
-      var av:array<f32,${tm}>;var bv:array<f32,${tn}>;
-      for(var i=0u;i<${tm}u;i++){av[i]=tile_a[kk*${bm}u+lid.y+16u*i];}
-      for(var j=0u;j<${tn}u;j++){bv[j]=tile_b[kk*${bn}u+lid.x+16u*j];}
-      for(var i=0u;i<${tm}u;i++){for(var j=0u;j<${tn}u;j++){acc[i][j]=fma(av[i],bv[j],acc[i][j]);}}
-    }
-    workgroupBarrier();
-  }
-  for(var i=0u;i<${tm}u;i++){
-    let m=m0+lid.y+16u*i;
-    if(m>=p.M){continue;}
-    for(var j=0u;j<${tn}u;j++){
-      let n=n0+lid.x+16u*j;
-      if(n>=p.N){continue;}
-      ${epilogue.replace('ACC', 'acc[i][j]')}
-    }
-  }
-}`;
-}
-
-function gemmShaderF16({ tile = {}, precision, ...layout }) {
-  const { tm, tn, bk, bm, bn } = gemmTileShape(tile);
-  const { header, loaders, epilogue, used } = gemmParts(layout, { bm, bn, bk, threads: 256 });
-  const half = precision === 'f16-partial';
-  return `${enables(used, true)}
-${header}
-var<workgroup> tile_a:array<f16,${bk * bm}>;
-var<workgroup> tile_b:array<f16,${bk * bn}>;
-@compute @workgroup_size(16,16)
-fn main(@builtin(local_invocation_id) lid:vec3<u32>, @builtin(workgroup_id) wid:vec3<u32>) {
-  let tid=lid.y*16u+lid.x;
-  let m0=wid.y*${bm}u;let n0=p.n_base+wid.x*${bn}u;let bat=wid.z;
-  var acc:array<array<f32,${tn}>,${tm}>;
-  for(var k0=0u;k0<p.K;k0+=${bk}u){
-${loaders.replaceAll('tile_a[kk*', 'tile_a[kk*').replace(/(tile_a\[[^\]]+\])=value;/, '$1=f16(value);').replace(/(tile_b\[[^\]]+\])=value;/, '$1=f16(value);')}
-    workgroupBarrier();
-    ${half ? `var part:array<array<f16,${tn}>,${tm}>;` : ''}
-    for(var kk=0u;kk<${bk}u;kk++){
-      var av:array<f16,${tm}>;var bv:array<f16,${tn}>;
-      for(var i=0u;i<${tm}u;i++){av[i]=tile_a[kk*${bm}u+lid.y+16u*i];}
-      for(var j=0u;j<${tn}u;j++){bv[j]=tile_b[kk*${bn}u+lid.x+16u*j];}
-      for(var i=0u;i<${tm}u;i++){for(var j=0u;j<${tn}u;j++){
-        ${half ? 'part[i][j]=fma(av[i],bv[j],part[i][j]);' : 'acc[i][j]=fma(f32(av[i]),f32(bv[j]),acc[i][j]);'}
-      }}
-    }
-    ${half ? `for(var i=0u;i<${tm}u;i++){for(var j=0u;j<${tn}u;j++){acc[i][j]+=f32(part[i][j]);}}` : ''}
-    workgroupBarrier();
-  }
-  for(var i=0u;i<${tm}u;i++){
-    let m=m0+lid.y+16u*i;
-    if(m>=p.M){continue;}
-    for(var j=0u;j<${tn}u;j++){
-      let n=n0+lid.x+16u*j;
-      if(n>=p.N){continue;}
-      ${epilogue.replace('ACC', 'acc[i][j]')}
-    }
-  }
-}`;
-}
+// GEMM / implicit-GEMM conv shaders live in the inference kit (extracted from
+// this file byte-identically); re-exported under SuperMat's names.
+export { TILED_GEMM_PARAMS_WORDS as GEMM_PARAMS_WORDS, tiledGemmTileShape as gemmTileShape,
+  createWebGpuTiledGemmShader as gemmShader } from '../../webgpu-inference-kit/src/tiled-gemm-kernel.js';
+import { tiledGemmParts as gemmParts } from '../../webgpu-inference-kit/src/tiled-gemm-kernel.js';
 
 // Subgroup-matrix GEMM (chromium-experimental-subgroup-matrix, Apple
 // simdgroup matrices). One 32-lane subgroup per workgroup so every matrix
@@ -193,7 +29,7 @@ export const SUBGROUP_MATRIX_TILE = Object.freeze({ bm: 32, bn: 64, bk: 16 });
 
 export function gemmSubgroupMatrixShader(layout = {}) {
   const { bm, bn, bk } = SUBGROUP_MATRIX_TILE;
-  const { header, loaders, epilogue, used } = gemmParts(layout, { bm, bn, bk, threads: 32, aLayout: 'm-major' });
+  const { header, loaders, epilogue, used, prologue } = gemmParts(layout, { bm, bn, bk, threads: 32, aLayout: 'm-major' });
   const rows = bm / 8, cols = bn / 8;
   const name = (i, j) => `acc${i}_${j}`;
   let declare = '', mma = '', store = '';
@@ -213,6 +49,7 @@ var<workgroup> outt:array<f32,${bm * bn}>;
 @compute @workgroup_size(32)
 fn main(@builtin(local_invocation_index) tid:u32, @builtin(workgroup_id) wid:vec3<u32>) {
   let m0=wid.y*${bm}u;let n0=p.n_base+wid.x*${bn}u;let bat=wid.z;
+  ${prologue}
   ${declare}
   for(var k0=0u;k0<p.K;k0+=${bk}u){
 ${loaders}
@@ -274,6 +111,21 @@ fn main(@builtin(global_invocation_id) gid:vec3<u32>) {
     mean=mean+delta*nb/n;m2=m2+m2b+delta*delta*count*nb/n;count=n;
   }
   stats[group*2u]=mean;stats[group*2u+1u]=inverseSqrt(m2/count+${formatFloat(eps)});
+}`;
+}
+
+// Per-channel affine form of GroupNorm for fused conv loaders:
+// ss[c] = [rstd[g]*gamma[c], beta[c] - mean[g]*rstd[g]*gamma[c]].
+export function groupNormChannelAffineShader() {
+  return `
+struct Params { channels:u32, channels_per_group:u32, z0:u32, z1:u32 };
+${storage(0, 'stats')}${storage(1, 'gamma')}${storage(2, 'beta')}${storage(3, 'ss', true)}${uniform(4, 'Params')}
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid:vec3<u32>) {
+  let c=gid.x;if(c>=p.channels){return;}
+  let g=c/p.channels_per_group;
+  let scale=stats[g*2u+1u]*gamma[c];
+  ss[c*2u]=scale;ss[c*2u+1u]=beta[c]-stats[g*2u]*scale;
 }`;
 }
 

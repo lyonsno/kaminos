@@ -49,3 +49,20 @@ with TemporaryDirectory() as directory:
         assert status in (400, 404), (bad, reply, status)
     assert (other / "tuned-kiln.kaminos.json").read_text().startswith("{"), "reading never writes to another server's store"
 print("scene library contracts passed")
+
+# Exercise the shop's actual nested consumer-store topology using defaults.
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    nested = root / '.local' / 'state' / 'kaminos' / 'modal-domain-selection-1012' / 'consumer' / 'scenes'
+    nested.mkdir(parents=True)
+    (nested / 'dj-with-a-kiln-pretty.kaminos.json').write_text('{"label":"Immersed source authoring"}')
+    prior_home = os.environ.get('HOME')
+    prior_globs = os.environ.pop('KAMINOS_SCENE_LIBRARY_GLOBS', None)
+    os.environ['HOME'] = str(root)
+    serve.SCENES_DIR = root / 'own-scenes'
+    try:
+        assert nested.resolve() in serve.scene_library_stores().values(), 'default discovery must include lane/consumer/scenes'
+    finally:
+        if prior_home is not None: os.environ['HOME'] = prior_home
+        else: os.environ.pop('HOME', None)
+        if prior_globs is not None: os.environ['KAMINOS_SCENE_LIBRARY_GLOBS'] = prior_globs

@@ -8,11 +8,19 @@ Kaminos WebGPU Inference Kit gives model ports a shared session and device lifec
 npm install @kaminos/webgpu-inference-kit
 ```
 
+## Turn A Photograph Into A Surface You Can Relight
+
+[![Four synchronized views compare the original photograph, recovered depth, image-based relighting and inferred materials with glow](https://raw.githubusercontent.com/lyonsno/kaminos/main/demos/material-photo/comparison.png)](https://github.com/lyonsno/kaminos/tree/main/demos/material-photo)
+
+**Material Photograph** brings two model ports and an interactive renderer together on one WebGPU device. MoGe recovers depth and normals; SuperMat estimates albedo, roughness and metalness. Rotate the four views together, move the light, and change the HDR environment to see what each model adds.
+
+The example keeps model resources resident, queues material inference through the kit, and restores completed outputs when you return to an image and resolution. Optional glow extraction and bloom complete the relighting experiment. [Run it locally and explore the composition](https://github.com/lyonsno/kaminos/tree/main/demos/material-photo).
+
 ## Generate Images In Your Browser
 
-[![Six images generated in the browser with FLUX.2 [klein] 4B on WebGPU: a fisherman portrait, a celadon teapot, a misty forest valley, a watercolor fox under a mushroom, a neon OPEN ALL NIGHT sign, and a brass toy locomotive](https://raw.githubusercontent.com/lyonsno/kaminos/main/models/flux2-klein/assets/examples.jpg)](https://lyonsno.github.io/kaminos/inference-kit/klein/)
+[![Nine images generated in the browser of a bright blue tank engine with a round grey face: on a sunny branch line, held together with duct tape, climbing a trestle bridge at golden hour, beside a pile of worried jelly beans, on a poster titled THOMAS THE JANK ENGINT, built from circuit boards, pulling wagons of graphics cards through snowy mountains, asleep in a lantern-lit engine shed, and the first portrait again at the Off the Rails jank level, blurry and melted](https://raw.githubusercontent.com/lyonsno/kaminos/main/models/flux2-klein/assets/jank-engine.jpg)](https://lyonsno.github.io/kaminos/inference-kit/klein/)
 
-**[Try FLUX.2 [klein] 4B in your browser](https://lyonsno.github.io/kaminos/inference-kit/klein/)**: type a prompt and get an image generated entirely on your own GPU. The Qwen3-4B text encoder, the 4-step diffusion transformer and the image decoder all run as WebGPU compute shaders, and nothing is sent to a server. A 512 × 512 image takes about 7 seconds on an Apple M4 Max and about 20 seconds on a 16 GB M2 Pro, while an animation on the same GPU keeps drawing at about 50 frames per second. The int4 weights download once (3.2 GB) and stay in the browser's cache.
+**[Ride Thomas the Jank Engine](https://lyonsno.github.io/kaminos/inference-kit/klein/)**: FLUX.2 [klein] 4B in your browser. Type a prompt and get an image generated entirely on your own GPU, at the jank level of your choosing. The Qwen3-4B text encoder, the 4-step diffusion transformer and the image decoder all run as WebGPU compute shaders, and nothing is sent to a server. A 512 × 512 image takes about 7 seconds on an Apple M4 Max and about 13 seconds on a 16 GB M2 Pro, while an animation on the same GPU keeps drawing at about 50 frames per second. The int4 weights download once (3.2 GB) and stay in the browser's cache.
 
 The port is built on this kit: generation runs as a queued route invocation, its GPU work is submitted in command duties sized to measured throughput so the application's frames get through between them, and the inference control pauses, resumes or stops a run. The [port's guide](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein) covers speed, memory and how to embed it.
 
@@ -101,12 +109,14 @@ The kit connects a growing family of browser model ports: generate an image from
 | Model Port | What You Can Build | Integration |
 | --- | --- | --- |
 | [MoGe](https://github.com/lyonsno/moge-webgpu) | Depth maps, surface normals, and interactive point clouds from a single image | Shared device helpers, cooperative encoder and decoder work, bounded in-flight submissions, reusable GPU buffers, and a library build for embedding in a host application. |
+| [SuperMat](https://github.com/lyonsno/kaminos/tree/main/demos/material-photo) | Albedo, roughness and metalness for relighting a photograph | Shared-device material inference with reusable resources and queued invocations, composed with MoGe geometry and a live renderer. |
 | [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | Textured, UV-unwrapped GLB meshes from a single image | Cooperative reconstruction and baking, bounded in-flight submissions, reusable scratch memory, worker offload, and a callable producer that can use the application's GPU device. |
 | [SHARP](https://github.com/lyonsno/sharp-webgpu) | Gaussian splat scenes from a single image | Adaptive cooperative scheduling, shared-device foreground rendering, staged output construction, and shared tensor-comparison helpers for port development. |
 | [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Animated skeletal motion from a text prompt | Browser diffusion and motion decoding, bounded GPU submissions, reusable model resources, and a host-callable producer with rendering opportunities between transformer passes. Text embeddings come from an external server. |
 | [SAM 3](./docs/sam-semantic-demo.md) | Instance masks from an image and text prompt | A complete browser WebGPU route with authenticated persistent model resources, cached image features, queued semantic requests, and same-device foreground submissions at phase boundaries. |
 | [TRELLIS 2](https://github.com/lyonsno/kaminos/tree/main/models/trellis2) | Textured 3D meshes from an image, exported as a GLB | Browser image-to-3D generation, stage-by-stage model loading, and a shared GPU device with the application renderer. |
 | [FLUX.2 [klein] 4B](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein) | Images from a text prompt, generated on the visitor's GPU ([live demo](https://lyonsno.github.io/kaminos/inference-kit/klein/)) | The text encoder, 4-step transformer and image decoder all run in the browser, with int4 weights cached after the first download. GPU work is submitted in duties sized to measured throughput, so the application keeps rendering, and the inference control can pause, resume or stop a run. |
+| [UniMate](https://github.com/lyonsno/kaminos/tree/main/models/unimate) | Skeletal animation from a text prompt, generated for any rigged skeleton (a robot dog, a cat, a parrot, your own creature) | The Flan-T5 text encoder, the motion transformer, an adaptive ODE sampler and the decode to joint rotations all run in the browser. Each network evaluation is submitted as duties sized to measured throughput, so the application keeps rendering, and a run can be paused, resumed or stopped. |
 
 These ports provide different starting points for application integration. MoGe exposes an existing feed-forward pipeline as an embeddable library. SF3D combines GPU computation with worker-based geometry and texture processing. Kimodo exposes repeated diffusion passes where a host can interleave rendering. SHARP demonstrates the complete result: substantial inference running alongside a continuously rendering application.
 

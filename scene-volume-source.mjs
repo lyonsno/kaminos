@@ -50,7 +50,7 @@ export function integrateSceneMediumSegment(field, source, receiver, stepLength)
   return tau;
 }
 
-export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuffers, frontBuffers, grid, gridY, fluidGrid = grid, fluidGridY = gridY}) {
+export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures, grid, gridY, fluidGrid = grid, fluidGridY = gridY}) {
   for (const n of [grid, gridY, fluidGrid, fluidGridY]) {
     if (!Number.isInteger(n) || n <= 0) throw new Error('positive integer source dimensions required');
   }
@@ -61,10 +61,18 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
   const scatteringTexture=device.createTexture({label:'raw live smoke scattering coefficient',dimension:'3d',size:[grid,gridY,grid],format:'r32float',
     usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
   const pipeline = device.createComputePipeline({label: 'raw scene volume source seed', layout: 'auto',
-    compute: {module, entryPoint: 'seedSceneVolumeSource', constants: {
-      GRID: fluidGrid, GRID_Y: fluidGridY, SCENE_SOURCE_GRID: grid, SCENE_SOURCE_GRID_Y: gridY}}});
-  const inputs = fluidBuffers.map((buffer, i) => device.createBindGroup({layout: pipeline.getBindGroupLayout(0),
-    entries: [[0, uniformBuffer], [1, buffer], [7, frontBuffers[i]]].map(([binding, buffer]) => ({binding, resource: {buffer}}))}));
+    compute: {module, entryPoint: 'seedSceneVolumeSource'}});
+  // The seed reaches sceneEmissiveMaterialAt, which reads the reactant sidecar
+  // (fresh burn); the sidecar is reallocated when the reaction law changes.
+  let boundTextures = null;
+  const buildInputs = () => {
+    const textures = getReactantTextures();
+    boundTextures = textures;
+    return fluidBuffers.map((buffer, i) => device.createBindGroup({layout: pipeline.getBindGroupLayout(0),
+      entries: [...[[0, uniformBuffer], [1, buffer], [7, frontBuffers[i]]].map(([binding, buffer]) => ({binding, resource: {buffer}})),
+        {binding: 23, resource: textures[i].createView({dimension: '3d'})}]}));
+  };
+  let inputs = buildInputs();
   const output = device.createBindGroup({layout: pipeline.getBindGroupLayout(3), entries: [{binding: 4, resource: texture.createView()},{binding:5,resource:scatteringTexture.createView()}]});
   let status = 'unbuilt', reason = 'not-encoded', frame = null, sourceIndex = null, generation = 0;
   let worldTransform=validateSceneSourceTransform();
@@ -73,6 +81,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
   return {
     encode(encoder, index, currentFrame,transform) {
       if (status === 'destroyed') throw new Error('scene source destroyed');
+      if (getReactantTextures() !== boundTextures) inputs = buildInputs();
       if (!Number.isInteger(index) || !inputs[index]) throw new Error('invalid scene source index');
       worldTransform=validateSceneSourceTransform(transform);
       status = 'unbuilt'; reason = 'encoding';
@@ -151,12 +160,11 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
 }
 
 export const SCENE_VOLUME_SOURCE_WGSL = /* wgsl */`
-override SCENE_SOURCE_GRID: u32 = 32u;
-override SCENE_SOURCE_GRID_Y: u32 = 64u;
 @group(3) @binding(4) var sceneSourceOut: texture_storage_3d<rgba32float, write>;
 @group(3) @binding(5) var sceneScatteringOut: texture_storage_3d<r32float, write>;
 @compute @workgroup_size(4,4,4)
 fn seedSceneVolumeSource(@builtin(global_invocation_id) c: vec3<u32>) {
+  seatGridShape();
   if (any(c >= vec3<u32>(SCENE_SOURCE_GRID, SCENE_SOURCE_GRID_Y, SCENE_SOURCE_GRID))) { return; }
   var coefficients = vec4<f32>(0.0);
   var scattering=0.0;

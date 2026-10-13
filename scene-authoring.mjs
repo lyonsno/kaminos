@@ -11,10 +11,11 @@ export function normalizeComposition(value) {
   if (!value.route || typeof value.route !== 'object' || Array.isArray(value.route)) throw new Error('Composition route is required');
   if (value.route.volume_light_field !== '1') throw new Error('Stationary composition requires the ordinary light-field route');
   for (const [key, item] of Object.entries(value.route)) {
-    if (!(key.startsWith('volume_light_field') || key === 'composition_module_url') || typeof item !== 'string') {
+    if (!(key.startsWith('volume_light_field') || key === 'composition_module_url' || key === 'volume_collision') || typeof item !== 'string') {
       throw new Error(`Unsupported composition route field: ${key}`);
     }
   }
+  if (value.route.volume_collision !== undefined && !['kiln', 'off'].includes(value.route.volume_collision)) throw new Error('Unsupported kiln collision setting');
   const result = clone(value);
   if (value.burner != null) result.burner = normalizeBurner(value.burner);
   return result;
@@ -55,7 +56,7 @@ export function forwardCompositionHash(target, sourceHash) {
 
 // Both canvases are sampled synchronously in one animation callback. This is a
 // picture of the visible composition, not a checkpoint of the fluid solver.
-export function captureComposedCanvases({ host, volume, document, label, simulation, capturedAt = new Date().toISOString() }) {
+export function captureComposedCanvases({ host, volume, document, label, simulation, crop=null, capturedAt = new Date().toISOString() }) {
   if (!host || !host.width || !host.height) throw new Error('Host canvas is unavailable');
   const bounds = host.getBoundingClientRect();
   if (!(bounds.width > 0 && bounds.height > 0)) throw new Error('Host canvas has no visible area');
@@ -74,7 +75,9 @@ export function captureComposedCanvases({ host, volume, document, label, simulat
       rect.width * canvas.width / bounds.width,
       rect.height * canvas.height / bounds.height);
   }
-  return normalizeSceneCapture({ label, capturedAt, width: canvas.width, height: canvas.height,
-    image: canvas.toDataURL('image/png'), simulation: simulation || null,
+  let output=canvas;
+  if(crop){const {x,y,width,height}=crop;if(![x,y,width,height].every(Number.isInteger)||x<0||y<0||width<=0||height<=0||x+width>canvas.width||y+height>canvas.height)throw Error('Camera frame is clipped or invalid');output=document.createElement('canvas');output.width=width;output.height=height;output.getContext('2d').drawImage(canvas,x,y,width,height,0,0,width,height);}
+  return normalizeSceneCapture({ label, capturedAt, width: output.width, height: output.height,
+    image: output.toDataURL('image/png'), simulation: simulation || null,
     layers: volume ? ['mesh', 'ordinary-emissive-volume'] : ['mesh'] });
 }

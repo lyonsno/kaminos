@@ -2,25 +2,21 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 // The volume shader indexes fluid cells as x + y*GRID + z*GRID*GRID_Y over the
-// tall 1x2x1 domain. GRID_Y is a pipeline-overridable constant with a fixed
-// default, so any pipeline that passes GRID without GRID_Y silently indexes the
-// wrong rows at every grid size except the default. Pipelines composed in from
-// older cubic-domain branches (fire irradiance light field, MSAA scene-depth
-// clipping) must carry it too.
+// tall domain. GRID_Y used to be a pipeline-overridable constant, and any
+// pipeline that passed GRID without GRID_Y silently indexed the wrong rows.
+// Since grid dimensions became runtime values (Noah 2026-10-12) every entry
+// point seats GRID and GRID_Y together from its uniforms and no pipeline
+// carries a shape constant, so that failure cannot recur.
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
-assert.match(source, /override GRID_Y: u32/, 'volume shader declares the tall-domain height override');
-
+assert.ok(!/override GRID_Y: u32/.test(source), 'no tall-domain height override remains');
+assert.match(source, /  GRID = u32\(u\.grid_shape\.x\);\n  GRID_Y = u32\(u\.grid_shape\.y\);/, 'GRID and GRID_Y are seated together');
 const constantObjects = [...source.matchAll(/(?:constants\s*:\s*|Constants\s*=\s*)\{([^{}]*)\}/g)]
   .map(match => ({ body: match[1], line: source.slice(0, match.index).split('\n').length }))
-  .filter(({ body }) => /(^|[\s,{])GRID\s*:/.test(body));
-assert.ok(constantObjects.length >= 5, `found ${constantObjects.length} GRID pipeline constant objects`);
-for (const { body, line } of constantObjects) {
-  assert.match(body, /GRID_Y\s*:\s*gridHeight/, `volume-core.js:${line} passes GRID without GRID_Y`);
-}
-
+  .filter(({ body }) => /(^|[\s,{])GRID(_Y)?\s*:/.test(body));
+assert.deepEqual(constantObjects, [], 'no pipeline constant object carries a grid shape');
 const irradiance = source.slice(source.indexOf('function ensureFireIrradianceResources'));
 assert.match(irradiance.slice(0, irradiance.indexOf('irradianceSeedPipeline = device.createComputePipeline')),
-  /irradiancePipelineConstants = \{[^}]*GRID_Y: gridHeight/, 'fire irradiance seed reads the tall fluid grid');
+  /irradiancePipelineConstants = \{\};/, 'fire irradiance pipelines carry no shape constant');
 
 // Raymarch merge resolution: main's tall box and full-grid span together with
 // the kiln branch's scene-depth clipping and preserved sample positions.
@@ -28,10 +24,11 @@ const multiplier = Number(source.match(/const VOLUME_VERTICAL_DOMAIN_EXTENT_MULT
 assert.equal(multiplier, 2, 'tall domain is 1x2x1');
 const raymarch = source.slice(source.indexOf('fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)'));
 for (const [expression, meaning] of [
-  ['let hit = boxHit(ro - vec3<f32>(0.0, 1.0, 0.0), rd, vec3<f32>(1.0, 2.0, 1.0));', 'raymarch box spans world y [-1, 3]'],
+  ['let domainHalfY = f32(GRID_Y) / f32(GRID);', 'the raymarch box half-height follows the grid shape (grid height control)'],
+  ['let hit = boxHit(ro - vec3<f32>(0.0, domainHalfY - 1.0, 0.0), rd, vec3<f32>(1.0, domainHalfY, 1.0));', 'raymarch box spans world y [-1, -1 + 2 GRID_Y/GRID] (y [-1, 3] at the auto height)'],
   ['if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, 0.0)) {', 'scene depth in front of the box is a miss'],
-  ['let endT = select(min(hit.y, sceneDepthEndT), 4.0, fullGridCapture);', 'full-grid capture spans the tall box'],
-  ['let dtBase = (select(endT, select(hit.y, 4.0, fullGridCapture), preserveSamplePositions) - startT) / steps;',
+  ['let endT = select(min(hit.y, sceneDepthEndT), 2.0 * domainHalfY, fullGridCapture);', 'full-grid capture spans the tall box (4.0 at the auto height)'],
+  ['let dtBase = (select(endT, select(hit.y, 2.0 * domainHalfY, fullGridCapture), preserveSamplePositions) - startT) / steps;',
     'depth clipping keeps ordinary sample positions stable'],
 ]) {
   assert.ok(raymarch.includes(expression), `raymarch resolution lost: ${meaning}`);
@@ -39,6 +36,11 @@ for (const [expression, meaning] of [
 
 // The fire light field publishes the coverage it actually has inside the tall box.
 const lightField = source.slice(source.indexOf('function fireIrradianceLightField()'));
-assert.match(lightField, /worldMax: \[productTransform\.translate\[0\] \+ 1,\s*productTransform\.translate\[1\] - 1 \+ 2 \* gridHeight \/ gridSize,\s*productTransform\.translate\[2\] \+ 1\],\s*worldBoundsAuthority: 'full-volume-domain-equal-cell-pitch-v1'/,
+// Since the grid height control (report §34) the bounds come from the raymarch
+// domain box the camera samples, which spans y [-1, -1 + 2 gridHeight/gridSize].
+assert.match(lightField, /const domainBox = raymarchDomainBox\(gridSize, gridHeight\);/, 'light-field bounds derive from the raymarch domain box');
+assert.match(lightField, /worldMax: domainBox\.max\.map\(\(value, axis\) => value \* productTransform\.scale \+ productTransform\.translate\[axis\]\),\s*worldBoundsAuthority: 'full-volume-domain-equal-cell-pitch-v1'/,
   'light-field bounds cover the full tall volume');
+const { raymarchDomainBox } = await import('../volume-grid-shape.mjs');
+assert.deepEqual(raymarchDomainBox(64, 128).max, [1, 3, 1], 'the auto box reaches y = 3');
 console.log('volume tall-domain pipeline constants contracts passed');

@@ -11,7 +11,7 @@ const TOP_LEVEL_PERIODIC_INVENTORY_SOURCE = /^volume.*\.(?:html|cjs|js|mjs|py|ts
 
 function separatelyInventoriedExecutablePath(path) {
   return !path.includes('/')
-    && (TOP_LEVEL_PERIODIC_INVENTORY_SOURCE.test(path) || path === 'selective-head-live-runtime.mjs');
+    && (TOP_LEVEL_PERIODIC_INVENTORY_SOURCE.test(path) || path === 'selective-head-live-runtime.mjs' || path === 'scene-flame-emitter.mjs');
 }
 
 function executableSourceMap() {
@@ -77,7 +77,7 @@ function liveExecutablePaths({ packageSource: packageText, executableSources }) 
   const pending = [];
   for (const path of executableSources.keys()) {
     const isTopLevelVolumeEntry = !path.includes('/')
-      && (/^volume.*\.(?:js|mjs|py|ts|tsx)$/.test(path) || path === 'selective-head-live-runtime.mjs');
+      && (/^volume.*\.(?:js|mjs|py|ts|tsx)$/.test(path) || path === 'selective-head-live-runtime.mjs' || path === 'scene-flame-emitter.mjs');
     if (isTopLevelVolumeEntry || packageText.includes(path)) pending.push(path);
   }
   const live = new Set();
@@ -105,6 +105,10 @@ function assertDynamicTextureProofRetired({ exactHarnessExists, contractSource, 
     'broad contracts must not require or advertise the retired synthetic proof identity',
   );
   for (const path of liveExecutablePaths({ packageSource: packageText, executableSources })) {
+    if (path === 'scene-flame-emitter.mjs') {
+      assert.doesNotMatch(executableSources.get(path), /\b(?:Date\.now|performance\.now|requestAnimationFrame|setInterval|createTexture|writeTexture)\b|device\s*\.\s*(?:queue|create)/,
+        'the separately tested authored pose mapper must not author a GPU field or run a periodic clock');
+    }
     if (separatelyInventoriedExecutablePath(path)) continue;
     assert.doesNotMatch(
       executableSources.get(path),
@@ -114,12 +118,18 @@ function assertDynamicTextureProofRetired({ exactHarnessExists, contractSource, 
   }
 }
 
+assert.throws(()=>assertDynamicTextureProofRetired({exactHarnessExists:false,contractSource:broadContracts,packageSource:'{}',executableSources:new Map([
+ ['volume-proof-wrapper.mjs',"import './scene-flame-emitter.mjs';"],
+ ['scene-flame-emitter.mjs','device.queue.writeTexture(target, Math.sin(y));'],
+])}),/pose mapper/, 'authored-pose classification cannot hide GPU texture authorship');
+
 assertDynamicTextureProofRetired({
   exactHarnessExists: existsSync(retiredHarnessUrl),
   contractSource: broadContracts,
   packageSource,
   executableSources: executableSourceMap(),
 });
+
 
 assert.throws(
   () => assertDynamicTextureProofRetired({

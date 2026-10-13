@@ -40,7 +40,7 @@ assert.match(vectorLinearSource, /0\.927734375/, 'ViT MLP GELU shader must prese
 assert.doesNotMatch(vectorLinearSource, /0\.044715/, 'ViT block-stack GPU and CPU GELU paths must not retain the tanh approximation');
 assert.match(routeSource, /const RESIDUAL_ADD_WGSL = `[\s\S]*let index = gid\.x \+ gid\.y \* dispatch_grid\.x \* 64u;[\s\S]*if \(index >= dims\.total_values\) \{ return; \}/, 'block-stack residual add must linearize packed dispatch and guard rounded-up tail writes');
 assert.match(routeSource, /createLinearDispatch/, 'ViT block-stack must use the shared device-limit-aware linear dispatch contract');
-assert.match(routeSource, /vectorLinearDispatch/, 'ViT dense projections must use the shared vector-linear dispatch contract');
+assert.match(routeSource, /partitionSamTiledLinearPhase/, 'ViT dense projections must use the shared kit tiled GEMM (operator decision 2026-10-11)');
 assert.match(routeSource, /maxComputeWorkgroupsPerDimension/, 'ViT block-stack must route against the effective adapter workgroup-dimension limit');
 assert.match(routeSource, /gid\.x \+ gid\.y \* dispatch_grid\.x \* 64u/, 'ViT block-stack shaders must reconstruct a linear invocation index from a two-dimensional dispatch');
 assert.ok(
@@ -163,8 +163,10 @@ const dispatch448 = createSam3ImageVitBlockStackDispatchPlan({
 });
 assert.deepEqual(dispatch448.layerNorm1, { logicalInvocations: 1_024, dispatch: [16] });
 assert.deepEqual(dispatch448.windowPartition, { logicalInvocations: 2_359_296, dispatch: [36_864] });
-assert.deepEqual(dispatch448.mlpFc1, { logicalInvocations: 4_849_664, dispatch: [276, 275] });
-assert.deepEqual(dispatch448.mlpFc2, { logicalInvocations: 1_048_576, dispatch: [16_384] });
+// Dense projections: tiled GEMM grid [ceil(out/64), ceil(tokens/bm)]; 8x4 per-thread tiles (bm 128) only
+// when the grid stays >= 1024 workgroups.
+assert.deepEqual(dispatch448.mlpFc1, { logicalInvocations: 4_849_664, dispatch: [74, 16], outputsPerWorkgroup: 4_096 });
+assert.deepEqual(dispatch448.mlpFc2, { logicalInvocations: 1_048_576, dispatch: [16, 16], outputsPerWorkgroup: 4_096 });
 assert.deepEqual(dispatch448.residualMlp, { logicalInvocations: 1_048_576, dispatch: [16_384] });
 
 const dispatch1008Local = createSam3ImageVitBlockStackDispatchPlan({
@@ -173,9 +175,9 @@ const dispatch1008Local = createSam3ImageVitBlockStackDispatchPlan({
   maxWorkgroupsPerDimension: 65_535,
 });
 assert.deepEqual(dispatch1008Local.windowPartition, { logicalInvocations: 5_308_416, dispatch: [288, 288] });
-assert.deepEqual(dispatch1008Local.qProjection, { logicalInvocations: 5_308_416, dispatch: [288, 288] });
+assert.deepEqual(dispatch1008Local.qProjection, { logicalInvocations: 5_308_416, dispatch: [16, 81], outputsPerWorkgroup: 4_096 });
 assert.deepEqual(dispatch1008Local.attention, { logicalInvocations: 82_944, dispatch: [576, 16, 9] });
-assert.deepEqual(dispatch1008Local.mlpFc1, { logicalInvocations: 24_551_424, dispatch: [620, 619] });
+assert.deepEqual(dispatch1008Local.mlpFc1, { logicalInvocations: 24_551_424, dispatch: [74, 41], outputsPerWorkgroup: 8_192 });
 assert.deepEqual(dispatch1008Local.windowUnpartition, { logicalInvocations: 5_308_416, dispatch: [288, 288] });
 
 const dispatch1008Global = createSam3ImageVitBlockStackDispatchPlan({
@@ -188,7 +190,7 @@ assert.deepEqual(dispatch1008Global.windowPartition, { logicalInvocations: 5_308
 assert.deepEqual(dispatch1008Global.attention, { logicalInvocations: 82_944, dispatch: [5_184, 16, 1] });
 for (const [phase, entry] of Object.entries(dispatch1008Global)) {
   assert.ok(entry.dispatch.every(dimension => dimension <= 65_535), `${phase} must respect the effective device limit`);
-  assert.ok(entry.dispatch.reduce((product, dimension) => product * dimension, 1) * 64 >= entry.logicalInvocations, `${phase} must cover its logical invocation domain`);
+  assert.ok(entry.dispatch.reduce((product, dimension) => product * dimension, 1) * (entry.outputsPerWorkgroup ?? 64) >= entry.logicalInvocations, `${phase} must cover its logical invocation domain`);
 }
 
 assert.deepEqual(

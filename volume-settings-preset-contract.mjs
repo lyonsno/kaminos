@@ -92,7 +92,7 @@ function validateAppearanceDecompositionTarget(params, prefix = '') {
   }
 }
 
-function validatePresetSchema(schema) {
+export function validatePresetSchema(schema) {
   if (!schema || schema.identity !== VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY) {
     throw new Error('settings preset canonical control schema is missing or invalid');
   }

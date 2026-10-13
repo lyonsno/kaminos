@@ -1,7 +1,7 @@
 export const BLUE_NOISE_SIZE = 64;
 export const BLUE_NOISE_URL = new URL('./assets/blue-noise/64-LDR-L0.png', import.meta.url);
 export const RAY_START_WGSL = /* wgsl */`
-@group(0) @binding(23) var rayStartNoise: texture_2d<f32>;
+@group(0) @binding(25) var rayStartNoise: texture_2d<f32>;
 fn rayStartPhase(pixel: vec2<f32>, enabled: f32, fullGridCapture: bool) -> f32 {
   if (enabled < 0.5 || fullGridCapture) { return 0.5; }
   let texel = vec2<i32>(vec2<u32>(pixel) % vec2<u32>(64u));

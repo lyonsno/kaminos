@@ -11,6 +11,7 @@ import math
 import os
 import queue
 import re
+import socketserver
 import subprocess
 import sys
 import tempfile
@@ -2188,6 +2189,7 @@ SCENES_DIR = Path(os.environ.get("KAMINOS_SCENES_DIR", ROOT / "scenes")).expandu
 # KAMINOS_SCENE_LIBRARY_GLOBS (os.pathsep-separated) replaces the defaults.
 SCENE_LIBRARY_DEFAULT_GLOBS = (
     "~/.local/state/kaminos/*/scenes",
+    "~/.local/state/kaminos/*/consumer/scenes",
     "~/.local/share/kaminos/*/scenes",
     str(ROOT.parent / "*" / "scenes"),
 )
@@ -2232,6 +2234,28 @@ def scene_library_import_dependency(source, store):
     return {"source": source, "status": "missing"}
 
 
+def scene_library_import_basin(document, scene_store):
+    preset_id = ((document.get('composition') or {}).get('flame') or {}).get('presetId')
+    if not preset_id:
+        return None
+    if not re.fullmatch(r'vsp-[0-9a-f]{64}', str(preset_id)):
+        raise ValueError('Scene references an invalid fire basin')
+    try:
+        read_volume_settings_preset_layered(volume_settings_store_layers(VOLUME_SETTINGS_STORE, SHARED_BASIN_STORE), preset_id)
+        return {'kind': 'basin', 'presetId': preset_id, 'status': 'present'}
+    except FileNotFoundError:
+        pass
+    # The consumer store is the observed scenes/basins sibling layout. Copy
+    # only its verified immutable artifact, leaving aliases and source untouched.
+    source_store = Path(scene_store).parent / 'basins'
+    read_volume_settings_preset(source_store, preset_id)
+    source = source_store / 'presets' / f'{preset_id}.json'
+    destination = VOLUME_SETTINGS_STORE / 'presets' / source.name
+    _atomic_write_json(destination, json.loads(source.read_text()))
+    read_volume_settings_preset(VOLUME_SETTINGS_STORE, preset_id)
+    return {'kind': 'basin', 'presetId': preset_id, 'status': 'imported'}
+
+
 def scene_library_stores():
     configured = os.environ.get("KAMINOS_SCENE_LIBRARY_GLOBS")
     patterns = configured.split(os.pathsep) if configured else SCENE_LIBRARY_DEFAULT_GLOBS
@@ -2265,6 +2289,8 @@ KAMINOS_IMAGE_INBOX_DIR = Path(os.environ.get(
     "KAMINOS_IMAGE_INBOX_DIR",
     str(KAMINOS_ASSETS_DIR / "images" / "inbox"),
 )).expanduser()
+KAMINOS_IMAGE_PREPARATION_DIR = Path(os.environ.get('KAMINOS_IMAGE_PREPARATION_DIR',
+    str(KAMINOS_ASSETS_DIR / 'images' / 'prepared'))).expanduser().resolve()
 SAM3_PACKET_ROOT = Path(os.environ['KAMINOS_SAM3_PACKET_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_SAM3_PACKET_ROOT') else None
 
 BROWSE_ROOTS = {
@@ -2274,6 +2300,7 @@ BROWSE_ROOTS = {
     "splat-inbox": KAMINOS_SPLAT_INBOX_DIR,
     "splat-production": KAMINOS_SPLAT_PRODUCTION_DIR,
     "image-inbox": KAMINOS_IMAGE_INBOX_DIR,
+    "image-preparations": KAMINOS_IMAGE_PREPARATION_DIR,
     "pipeline-runs": KAMINOS_PIPELINE_RUNS_DIR,
     "greenroom": Path(os.environ.get(
         "GPU_GREENROOM_DIR",
@@ -2471,13 +2498,104 @@ def _sha256_file(path):
     return digest.hexdigest()
 
 
+def read_mesh_generation_origins(sha256):
+    root = Path(BROWSE_ROOTS['generated-meshes']).resolve()
+    path = root / ('.' + sha256 + '.glb.origins.json')
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text())
+    if data.get('schema') != 'kaminos.mesh-generation-origins.v1' or data.get('sha256') != sha256 or not isinstance(data.get('origins'), dict):
+        raise ValueError('Invalid generated mesh origin record')
+    return data
+
+
+def save_mesh_generation_origin(result):
+    sha = result.get('sha256', '')
+    if not isinstance(sha, str) or not re.fullmatch(r'[a-f0-9]{64}', sha):
+        raise ValueError('Generated mesh requires a content digest')
+    root = Path(BROWSE_ROOTS['generated-meshes']).resolve()
+    artifact = root / (sha + '.glb')
+    if not artifact.is_file():
+        raise ValueError('Generated mesh bytes are not stored')
+    generation = result.get('generation')
+    source = '/api/read?' + urlencode({'root': 'generated-meshes', 'path': sha + '.glb'})
+    if result.get('source') != source or not isinstance(generation, dict) or generation.get('schema') != 'kaminos.asset-generation.v1' or generation.get('sha256') != sha or generation.get('bytes') != artifact.stat().st_size:
+        raise ValueError('Generation origin does not match the stored mesh')
+    run_id = generation.get('runId')
+    image = generation.get('input')
+    if not isinstance(run_id, str) or not run_id or not isinstance(image, dict) or not isinstance(image.get('sha256'), str) or not re.fullmatch(r'[a-f0-9]{64}', image['sha256']) or not generation.get('route') or generation.get('receiptValidation', {}).get('ok') is not True:
+        raise ValueError('Generation input, run and validated route required')
+    name = result.get('name')
+    if not isinstance(name, str) or not name:
+        raise ValueError('Generated asset name required')
+    origin = {'name': name, 'generation': generation}
+    path = root / ('.' + sha + '.glb.origins.json')
+    with (root / ('.' + sha + '.origin.lock')).open('a+b') as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        data = read_mesh_generation_origins(sha) or {'schema': 'kaminos.mesh-generation-origins.v1', 'sha256': sha, 'origins': {}}
+        previous = data['origins'].get(run_id)
+        if previous is not None and previous != origin:
+            raise ValueError('Existing generation run origin is immutable')
+        if previous is None:
+            data['origins'][run_id] = origin
+            data['latestRunId'] = run_id
+            with tempfile.NamedTemporaryFile(mode='w', dir=root, prefix='.mesh-origin-', delete=False) as handle:
+                temporary = Path(handle.name)
+                json.dump(data, handle)
+            try:
+                os.replace(temporary, path)
+            finally:
+                temporary.unlink(missing_ok=True)
+    return {'schema': 'kaminos.mesh-generation-origin.v1', 'result': result}
+
+
 def pipeline_manifest_payload():
     document = json.loads(PIPELINE_MANIFEST_PATH.read_text())
+    for pipeline in document.get("pipelines", []):
+        if pipeline.get("id") == "trellis-image-to-mesh-webgpu-v0":
+            pipeline["availability"] = trellis_generation_availability()
     return {
         **document,
         "manifestPath": str(PIPELINE_MANIFEST_PATH),
         "manifestSha256": _sha256_file(PIPELINE_MANIFEST_PATH),
     }
+
+
+def trellis_generation_availability():
+    config_path = os.environ.get("KAMINOS_TRELLIS_CONFIG")
+    if not config_path:
+        return {"status": "unconfigured", "message": "Local TRELLIS setup required"}
+    try:
+        config = json.loads(Path(config_path).read_text())
+        if config.get("schema") != "trellis2.local-generation-config.v0":
+            raise ValueError("Choose a TRELLIS local generation configuration")
+        for key in ["repoRoot", "checkpointBase", "sourceRoot", "queueDir"]:
+            value = config.get(key)
+            if not isinstance(value, str) or not Path(value).is_absolute() or not Path(value).is_dir():
+                raise ValueError(f"TRELLIS setup needs {key}")
+        for key in ["python", "memoryPython", "chrome", "greenroomBin"]:
+            value = config.get(key)
+            if not isinstance(value, str) or not Path(value).is_absolute() or not Path(value).is_file():
+                raise ValueError(f"TRELLIS setup needs {key}")
+        if not (Path(config["checkpointBase"]) / "manifest.json").is_file():
+            raise ValueError("TRELLIS setup needs a prepared checkpoint package")
+        if not (Path(config["repoRoot"]) / "models/trellis2/generate-image.mjs").is_file():
+            raise ValueError("TRELLIS generation tools are missing from the configured checkout")
+        for key in ["steps", "targetFaces", "gpuBufferBudgetMiB", "processMemoryBudgetMiB"]:
+            if type(config.get(key)) is not int or config[key] < 1:
+                raise ValueError(f"TRELLIS setup needs an explicit {key}")
+        if config.get("pipelineType") not in ["512", "1024_cascade"] or config.get("decoderActivationStorage") not in ["f32", "f16"]:
+            raise ValueError("TRELLIS setup needs a supported profile and storage selection")
+        for key in ["expectedCommit", "expectedSourceCommit"]:
+            if not re.fullmatch(r"[a-f0-9]{40}", config.get(key, "")):
+                raise ValueError(f"TRELLIS setup needs {key}")
+        if type(config.get("seed")) is not int or not 0 <= config["seed"] <= 0xffffffff:
+            raise ValueError("TRELLIS setup needs an unsigned32 seed")
+        if config.get("textureSize", 1024) != 1024:
+            raise ValueError("This TRELLIS finishing route uses 1K textures")
+        return {"status": "available", "message": "Queued WebGPU with local mesh finishing"}
+    except (OSError, ValueError, TypeError) as error:
+        return {"status": "unavailable", "message": str(error)}
 
 
 def _declared_read_roots():
@@ -2553,7 +2671,7 @@ def resolve_pipeline_source(payload):
 def _default_pipeline_out_dir(pipeline_id):
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", pipeline_id or "pipeline").strip("-") or "pipeline"
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    return (KAMINOS_PIPELINE_RUNS_DIR / f"{stamp}-{os.getpid()}-{safe}").resolve()
+    return (KAMINOS_PIPELINE_RUNS_DIR / f"{stamp}-{os.getpid()}-{safe}-{uuid.uuid4().hex}").resolve()
 
 
 def run_pipeline_witness(payload):
@@ -2574,7 +2692,11 @@ def run_pipeline_witness(payload):
         "--out-dir", str(out_dir),
         "--report", str(report_path),
     ]
-    timeout = int(os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT", "360"))
+    # TRELLIS has exercised ten-minute previews. Explicit operator timeouts
+    # still apply; the legacy six-minute default cannot silently stop this route.
+    timeout_value = os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT")
+    timeout = int(timeout_value) if timeout_value is not None else (
+        None if pipeline_id == "trellis-image-to-mesh-webgpu-v0" else 360)
     proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
     report = json.loads(report_path.read_text()) if report_path.exists() else None
     bundle_path = Path(report["bundleIndex"]["path"]) if report and report.get("bundleIndex") else None
@@ -2641,7 +2763,10 @@ def run_pipeline_witness_stream(handler, payload):
         "--out-dir", str(out_dir),
         "--report", str(report_path),
     ]
-    timeout = int(os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT", "360"))
+    timeout_raw = os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT")
+    timeout = int(timeout_raw) if timeout_raw is not None else (
+        None if pipeline_id == "trellis-image-to-mesh-webgpu-v0" else 360
+    )
     proc = subprocess.Popen(
         command,
         cwd=ROOT,
@@ -2673,7 +2798,7 @@ def run_pipeline_witness_stream(handler, payload):
         thread.start()
     started = time.monotonic()
     while proc.poll() is None:
-        if time.monotonic() - started > timeout:
+        if timeout is not None and time.monotonic() - started > timeout:
             proc.kill()
             raise subprocess.TimeoutExpired(command, timeout)
         try:
@@ -3146,6 +3271,37 @@ def ingest_image_asset(filename, content):
     return entry
 
 
+def prepare_authoring_image(content, *, source, name, expected_sha256):
+    parsed=urlparse(source);params=parse_qs(parsed.query)
+    if parsed.scheme or parsed.netloc or not ((parsed.path=='/api/read' and params.get('root') and params.get('path')) or (parsed.path=='/api/job-output' and params.get('job_id') and params.get('file'))):
+        raise ValueError('Preparation source must be a mounted image asset')
+    if hashlib.sha256(content).hexdigest()!=expected_sha256:
+        raise ValueError('Original image digest does not match the requested input')
+    original=ingest_image_asset(name,content)
+    executable=os.environ.get('KAMINOS_IMAGE_PREPARATION_PYTHON',sys.executable)
+    model=Path(os.environ.get('KAMINOS_BACKGROUND_MODEL_PATH','~/.u2net/u2net.onnx')).expanduser().resolve()
+    completed=subprocess.run([executable,str(ROOT/'authoring_image_preparation.py'),'--store',str(KAMINOS_IMAGE_PREPARATION_DIR),'--model',str(model)],input=content,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    try: value=json.loads(completed.stdout)
+    except (ValueError,UnicodeDecodeError) as error:
+        raise RuntimeError('Image preparation runtime did not return a report: '+completed.stderr.decode(errors='replace')) from error
+    if completed.returncode or value.get('status')!='complete':
+        raise RuntimeError(value.get('error','Image preparation failed'))
+    prepared=value.get('prepared',{});target=(KAMINOS_IMAGE_PREPARATION_DIR/prepared.get('path','')).resolve()
+    if not target.is_relative_to(KAMINOS_IMAGE_PREPARATION_DIR) or not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest()!=prepared.get('sha256') or value.get('original',{}).get('sha256')!=expected_sha256:
+        raise RuntimeError('Prepared image identity does not match retained bytes')
+    value['original'].update(source=source,retainedSource=original['source'],name=name)
+    value['prepared']['source']='/api/read?'+urlencode({'root':'image-preparations','path':prepared['path']})
+    return value
+
+
+def authoring_asset_catalog(collection):
+    from authoring_asset_catalog import read_catalog
+    return read_catalog(collection, roots=BROWSE_ROOTS,
+        image_entries=lambda: list_asset_entries(kind='image'),
+        origins=read_mesh_generation_origins,
+        output_resolver=resolve_greenroom_output_dir, label=_clean_label)
+
+
 def greenroom_output_roots():
     """Roots that can lawfully serve receipt output_dir files."""
     roots = [Path.home().resolve()]
@@ -3263,6 +3419,13 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_pipeline_manifest()
         elif parsed.path == "/api/browse":
             self.handle_browse(parse_qs(parsed.query))
+        elif parsed.path == "/api/authoring-assets":
+            try:
+                self.send_json(authoring_asset_catalog(parse_qs(parsed.query).get("collection", ["generated-meshes"])[0]))
+            except ValueError as error:
+                self.send_json({"error": str(error)}, 400)
+            except FileNotFoundError as error:
+                self.send_json({"error": str(error)}, 404)
         elif parsed.path == "/api/scene-library":
             self.handle_scene_library(parse_qs(parsed.query))
         elif parsed.path == "/api/scene-library-read":
@@ -3306,7 +3469,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/ingest-mesh":
+        if parsed.path == '/api/prepare-image':
+            self.handle_prepare_image(parse_qs(parsed.query))
+        elif parsed.path == "/api/mesh-generation-origin":
+            self.handle_mesh_generation_origin()
+        elif parsed.path == "/api/ingest-mesh":
             self.handle_ingest_mesh()
         elif parsed.path == "/api/scene-library-import":
             self.handle_scene_library_import()
@@ -3889,6 +4056,23 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         _atomic_write_json(scene_path, data)
         self.send_json({"saved": filename, "path": str(scene_path)})
 
+    def handle_mesh_generation_origin(self):
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+            if length <= 0:
+                raise ValueError('Generation origin body required')
+            body = self.rfile.read(length)
+            if len(body) != length:
+                raise ValueError('Incomplete generation origin body')
+            payload = json.loads(body)
+            if not isinstance(payload, dict):
+                raise ValueError('Generation origin must be an object')
+            self.send_json(save_mesh_generation_origin(payload))
+        except (ValueError, KeyError, TypeError) as error:
+            self.send_json({'error': str(error), 'phase': 'origin-persistence'}, 400)
+        except OSError as error:
+            self.send_json({'error': str(error), 'phase': 'origin-persistence'}, 500)
+
     def handle_ingest_mesh(self):
         """Persist a generated GLB by content hash for the existing scene loader."""
         try:
@@ -3963,6 +4147,19 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "kind": "splat",
             "entry": entry,
         })
+
+    def handle_prepare_image(self,params):
+        try:
+            length=int(self.headers.get('Content-Length',0))
+            if length<=0:raise ValueError('non-empty image body required')
+            content=self.rfile.read(length)
+            if len(content)!=length:raise ValueError('incomplete image body')
+            result=prepare_authoring_image(content,source=params.get('source',[''])[0],name=params.get('name',[''])[0],expected_sha256=params.get('sha256',[''])[0])
+        except (ValueError,PermissionError) as error:
+            self.send_json({'error':str(error),'phase':'image-preparation'},400);return
+        except (OSError,RuntimeError) as error:
+            self.send_json({'error':str(error),'phase':'image-preparation'},503);return
+        self.send_json(result)
 
     def handle_ingest_image(self, params):
         try:
@@ -4099,11 +4296,16 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         except (OSError, ValueError) as error:
             self.send_json({"error": f"Scene unreadable: {error}"}, 400)
             return
+        try:
+            basin = scene_library_import_basin(document, store)
+        except (OSError, ValueError) as error:
+            self.send_json({'error': f'Could not retain the scene fire basin: {error}'}, 400)
+            return
         dependencies = [scene_library_import_dependency(obj.get("source"), store)
                         for obj in document.get("objects") or [] if isinstance(obj, dict) and str(obj.get("source") or "").startswith("/api/read?")]
         filename = f"{scene_path.name[: -len('.kaminos.json')]}_{uuid.uuid4().hex}.kaminos.json"
         _atomic_write_json(SCENES_DIR / filename, document)
-        self.send_json({"saved": filename, "document": document, "dependencies": dependencies, "from": str(store.parent.name)})
+        self.send_json({"saved": filename, "document": document, "dependencies": dependencies, "basin": basin, "from": str(store.parent.name)})
 
     def handle_scene_library(self, params):
         """List scenes saved by other Kaminos servers on this machine (read-only)."""
@@ -4122,7 +4324,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     entry["error"] = str(error)
                 scenes.append(entry)
             if scenes:
-                stores.append({"id": store_id, "label": path.parent.name, "path": str(path), "scenes": scenes})
+                stores.append({"id": store_id, "label": path.parent.parent.name if path.parent.name == "consumer" else path.parent.name, "path": str(path), "scenes": scenes})
         self.send_json({"stores": stores})
 
     def handle_scene_library_read(self, params):
@@ -4232,6 +4434,16 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     receipt=status_receipt,
                     size=info["size"],
                 )
+            if root_name == 'generated-meshes' and entry.is_file() and re.fullmatch(r'[a-f0-9]{64}\.glb', entry.name):
+                try:
+                    origins = read_mesh_generation_origins(entry.stem)
+                    if origins:
+                        origin = origins['origins'][origins['latestRunId']]
+                        info['generation'] = origin['generation']
+                        info['generationOriginCount'] = len(origins['origins'])
+                        info['display']['title'] = origin['name']
+                except (ValueError, KeyError, OSError) as error:
+                    info['originError'] = str(error)
             entries.append(info)
 
         self.send_json({
@@ -4295,6 +4507,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         # For images, serve directly
         ext = target.suffix.lower()
         if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz"):
+            body = target.read_bytes()
             self.send_response(200)
             content_types = {
                 ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
@@ -4303,9 +4516,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 ".exr": "application/octet-stream", ".ply": "application/octet-stream", ".spz": "application/octet-stream",
             }
             self.send_header("Content-Type", content_types.get(ext, "application/octet-stream"))
+            self.send_header("Content-Length", str(len(body)))
 
             self.end_headers()
-            self.wfile.write(target.read_bytes())
+            self.wfile.write(body)
             return
 
         # For text/json, return as JSON-wrapped text
@@ -4473,6 +4687,19 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         super().log_message(format, *args)
 
 
+class KaminosServer(http.server.ThreadingHTTPServer):
+    """ThreadingHTTPServer without the fully qualified hostname lookup that
+    http.server performs while binding. On macOS that lookup goes to multicast
+    DNS and can stall for tens of seconds per process. Nothing here reads
+    server_name, so the bound host stands in for it."""
+
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = host or "localhost"
+        self.server_port = port
+
+
 if __name__ == "__main__":
     try:
         if SHARED_BASIN_STORE_ERROR and "--no-shared-basin-store" not in sys.argv and "--shared-basin-store" not in sys.argv:
@@ -4494,7 +4721,11 @@ if __name__ == "__main__":
     print(f"  Shared basin library: {SHARED_BASIN_STORE or 'disabled'}")
     print(f"  Volume basin session store: {VOLUME_BASIN_SESSION_STORE}")
     print(f"  Volume cockpit layout store: {VOLUME_COCKPIT_LAYOUT_STORE}")
-    server = http.server.ThreadingHTTPServer(("", PORT), KaminosHandler)
+    # KAMINOS_BIND_HOST narrows the listening interface, for example to
+    # 127.0.0.1 on CI runners that intercept servers listening on all
+    # interfaces. The default stays all interfaces for LAN access.
+    bind_host = os.environ.get("KAMINOS_BIND_HOST", "")
+    server = KaminosServer((bind_host, PORT), KaminosHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -1,11 +1,22 @@
 // The source cascade's low-resolution sampled codes become the support for
 // a separate high-resolution flow. These are actual serving adapters, not
 // reference-result callbacks; only learned count/status words cross CPU.
-import {buildSLatDecoderPlan,createTrellisSLatDecoderAdapter} from './slat-decoder.js';
+import {buildSLatDecoderPlan,createTrellisSLatDecoderAdapter,createTrellisSLatDecoderAdapterAsync} from './slat-decoder.js';
 import {createTrellisSLatScaleAdapter} from './slat-scale.js';
 import {buildSLatRegridPlan,createTrellisSLatRegridAdapter} from './slat-regrid.js';
-export function createTrellisSLatCascadeSupportAdapter({route,config={},weights,siluTable,sampleTensor,
-  coordinateTensor,meshResolution=1024}={}){
+export function createTrellisSLatCascadeSupportAdapter(options={}){
+  return constructCascadeSupport(options).next().value;
+}
+export async function createTrellisSLatCascadeSupportAdapterAsync(options={}){
+  const construction=constructCascadeSupport(options,true);let step=construction.next();
+  try{
+    const decoder=await createTrellisSLatDecoderAdapterAsync({...step.value,loadWeight:options.loadWeight});
+    try{step=construction.next(decoder);}catch(error){decoder.dispose();throw error;}
+    return step.value;
+  }catch(error){if(!step.done)construction.throw(error);throw error;}
+}
+function* constructCascadeSupport({route,config={},weights,siluTable,sampleTensor,
+  coordinateTensor,meshResolution=1024}={},streaming=false){
   if(config.mode!==undefined&&config.mode!=='shape')throw TypeError('cascade support uses the learned shape decoder');
   const decoderConfig={...config,mode:'shape',structureOnly:true},plan=buildSLatDecoderPlan(decoderConfig);
   if(plan.latentChannels!==32)throw TypeError('source cascade requires 32-channel sampled shape codes');
@@ -15,8 +26,8 @@ export function createTrellisSLatCascadeSupportAdapter({route,config={},weights,
   Object.defineProperty(outputs,'coordinates',{enumerable:true,get:()=>output?.coordinates});
   try{
     scale=createTrellisSLatScaleAdapter({route,tokenRows:plan.tokenRows,sampleTensor});
-    decoder=createTrellisSLatDecoderAdapter({route,config:decoderConfig,weights,siluTable,
-      sampleTensor:scale.outputs.sample,coordinateTensor});
+    const decoderOptions={route,config:decoderConfig,weights,siluTable,sampleTensor:scale.outputs.sample,coordinateTensor};
+    decoder=streaming?(yield decoderOptions):createTrellisSLatDecoderAdapter(decoderOptions);
     return Object.freeze({plan,runtime:route.runtime,routeId:route.routeId,
       inputs:Object.freeze({sample:sampleTensor,coordinates:coordinateTensor}),outputs:Object.freeze(outputs),
       async run(invocation){

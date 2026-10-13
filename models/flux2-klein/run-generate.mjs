@@ -48,8 +48,8 @@ try {
   const weightQuery = report.weightsUrl ? `weights=${encodeURIComponent(report.weightsUrl)}` : 'te=/te&dit=/dit&vae=/vae';
   browser = await launchChrome(opt('--chrome'), [], report);
   report.phase = 'load';
-  const kq = `&gemm=${opt('--gemm-version', '2')}&shared=${opt('--shared-type', 'f16')}`;
-  report.requestedKernels = { gemmVersion: Number(opt('--gemm-version', '2')), sharedType: opt('--shared-type', 'f16') };
+  const kq = `&gemm=${opt('--gemm-version', '2')}&shared=${opt('--shared-type', 'f16')}&vaeAct=${opt('--vae-act', 'f16')}&memory=${opt('--memory', 'all')}&limits=${opt('--limits', 'adapter')}`;
+  report.requestedKernels = { gemmVersion: Number(opt('--gemm-version', '2')), sharedType: opt('--shared-type', 'f16'), vaeActType: opt('--vae-act', 'f16'), residency: opt('--memory', 'all'), limits: opt('--limits', 'adapter') };
   // --loads N reloads the page N times in one browser profile (cache-hit evidence); the batch runs on the last load.
   report.loads = [];
   for (let n = 0; n < Number(opt('--loads', '1')); n++) {
@@ -58,15 +58,47 @@ try {
     report.loads.push(await browser.evaluate('({ loadMs: window.kleinLoadMs?.(), stats: window.kleinLoadStats?.() })'));
   }
   report.phase = 'generate';
-  const batchOptions = { cooperative: !args.includes('--blocking'), targetDutyMs: Number(opt('--target-duty-ms', '12')), maxInFlight: Number(opt('--max-in-flight', '1')) };
+  const batchOptions = { cooperative: !args.includes('--blocking'), targetDutyMs: Number(opt('--target-duty-ms', '12')), maxInFlight: Number(opt('--max-in-flight', '1')),
+    textLength: /^fit/.test(opt('--text-length', '512')) ? opt('--text-length') : Number(opt('--text-length', '512')), dutyLog: args.includes('--duty-log'), previews: args.includes('--previews'), steps: Number(opt('--steps', '4')) };
   report.batchOptions = batchOptions;
-  const res = await browser.evaluate(`window.kleinBatch(${JSON.stringify(jobs)}, ${JSON.stringify(batchOptions)})`);
+  // One job per call, each PNG written as it arrives, and a wait that fails (with the page's status and
+  // any unfinished fetches) when the status line stops changing, instead of hanging on a wedged batch.
   await fsp.mkdir(outDir, { recursive: true });
-  for (const r of res.results) { await fsp.writeFile(path.join(outDir, `${r.name}.png`), Buffer.from(r.png, 'base64')); delete r.png; }
-  report.results = res.results; report.residentBytes = res.residentBytes; report.loadMs = res.loadMs; report.effectiveKernels = res.kernels; report.loadStats = res.loadStats;
+  report.results = [];
+  const stallMs = Number(opt('--stall-ms', String(5 * 60e3)));
+  for (const job of jobs) {
+    const res = await evaluateWatched(`window.kleinBatch(${JSON.stringify([job])}, ${JSON.stringify(batchOptions)})`, job.name, stallMs);
+    const r = res.results[0];
+    await fsp.writeFile(path.join(outDir, `${r.name}.png`), Buffer.from(r.png, 'base64')); delete r.png;
+    for (const p of r.previews ?? []) { await fsp.writeFile(path.join(outDir, `${r.name}-preview${p.step}.png`), Buffer.from(p.png, 'base64')); delete p.png; }
+    report.results.push(r);
+    // WebGPU validation errors and device loss do not throw; they fail the run here.
+    report.gpuErrors = [...(report.gpuErrors ?? []), ...(res.loadGpuErrors ?? []).map(m => `load: ${m}`), ...(r.gpuErrors ?? []).map(m => `${r.name}: ${m}`)];
+    Object.assign(report, { residentBytes: res.residentBytes, gpuBytesAfterLoad: res.gpuBytesAfterLoad, deviceLimits: res.deviceLimits, loadMs: res.loadMs, effectiveKernels: res.kernels, loadStats: res.loadStats });
+    await fsp.writeFile(path.join(outDir, 'report.json'), JSON.stringify(report, null, 2));
+  }
+  if (report.gpuErrors?.length) { report.phase = 'gpu-errors'; report.error = `${report.gpuErrors.length} WebGPU errors: ${report.gpuErrors[0]}`; await finish(1); }
   report.phase = 'done';
   await finish(0);
 } catch (e) {
   report.error = String(e?.stack || e);
   await finish(1);
+}
+
+async function evaluateWatched(expression, label, stallMs) {
+  let settled = false;
+  const result = browser.evaluate(expression).finally(() => { settled = true; });
+  let last = null, lastChange = Date.now();
+  while (!settled) {
+    await Promise.race([result.catch(() => {}), new Promise(r => setTimeout(r, 2000))]);
+    if (settled) break;
+    const status = await browser.evaluate(`document.getElementById('status').textContent`, false).catch(() => null);
+    if (status !== last) { last = status; lastChange = Date.now(); }
+    if (Date.now() - lastChange > stallMs) {
+      report.stall = { job: label, status, pageTimeMs: await browser.evaluate('Math.round(performance.now())', false).catch(() => null),
+        lastResources: await browser.evaluate(`performance.getEntriesByType('resource').slice(-5).map(e => [e.name, Math.round(e.startTime), Math.round(e.responseEnd)])`, false).catch(() => null) };
+      throw new Error(`${label}: no progress for ${Math.round(stallMs / 1000)} s; last status: ${status}`);
+    }
+  }
+  return result;
 }

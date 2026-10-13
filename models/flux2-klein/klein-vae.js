@@ -1,35 +1,43 @@
-// FLUX.2 VAE decoder on WebGPU (parity-first), channels-last f32 activations.
+// FLUX.2 VAE decoder on WebGPU, channels-last activations stored as f16 (actType 'f16', the
+// default, about half the working memory) or f32, with f32 arithmetic either way.
 // Mirrors diffusers: Flux2KleinPipeline latent un-packing, batch-norm
 // de-normalization and un-patchify, then AutoencoderKLFlux2 post_quant_conv
 // and Decoder (conv_in, mid block with single-head attention, four up blocks,
 // GroupNorm + SiLU, conv_out). Weights come from pack-vae.py.
-import { gemmShader, gemmShaderV2, softmaxShader } from './klein-kernels.js';
+import { SCORE_BYTES, gemmShader, gemmShaderV2, softmaxShader } from './klein-kernels.js';
 import { KleinDutyScheduler } from './klein-duties.js';
 
 const GN_EPS = 1e-6;
 const GROUPS = 32;
+// Query rows of decoder attention per chunk: as many as fit SCORE_BYTES of scores (at 1024 x 1024,
+// 1024 of 16384 rows: 64 MiB instead of 1.07 GB), in multiples of 64.
+const scoreRows = L => Math.min(L, Math.max(64, Math.floor(SCORE_BYTES / (L * 4) / 64) * 64));
 
 // Implicit-GEMM convolution: out[pix][cout] = bias[cout] + sum_k in(pix, k) * w[cout][k],
 // k = tap * Cin + ci with taps 9 (3x3, pad 1) or 1 (1x1). `up` reads a 2x nearest-upsampled input.
-function convShader(epilogue) {
-  const store = epilogue === 'bias' ? 'c[ci] = v;' : 'c[ci] = c[ci] + v;';
+// xType and cType are the input and output storage types (f32 or f16).
+function convStore(epilogue, cType) {
+  return epilogue === 'bias' ? `c[ci] = ${cType}(v);` : `c[ci] = ${cType}(f32(c[ci]) + v);`;
+}
+function convShader(epilogue, xType = 'f32', cType = 'f32') {
+  const store = convStore(epilogue, cType);
   return `enable f16;
 struct P { M: u32, N: u32, K: u32, Cin: u32, Hout: u32, Wout: u32, Hin: u32, Win: u32, taps: u32, w_off: u32, b_off: u32, up: u32 };
-@group(0) @binding(0) var<storage, read> x: array<f32>;
+@group(0) @binding(0) var<storage, read> x: array<${xType}>;
 @group(0) @binding(1) var<storage, read> w: array<f16>;
-@group(0) @binding(2) var<storage, read_write> c: array<f32>;
+@group(0) @binding(2) var<storage, read_write> c: array<${cType}>;
 @group(0) @binding(3) var<uniform> p: P;
 var<workgroup> ta: array<f32, 1024>;
 var<workgroup> tb: array<f32, 1024>;
 fn load_in(m: u32, k: u32) -> f32 {
   let oy = m / p.Wout; let ox = m % p.Wout;
   let tap = k / p.Cin; let ci = k % p.Cin;
-  if (p.taps == 1u) { return x[m * p.Cin + ci]; }
+  if (p.taps == 1u) { return f32(x[m * p.Cin + ci]); }
   let iy = i32(oy) + i32(tap / 3u) - 1; let ix = i32(ox) + i32(tap % 3u) - 1;
   if (iy < 0 || ix < 0 || iy >= i32(p.Hout) || ix >= i32(p.Wout)) { return 0.0; }
   var sy = u32(iy); var sx = u32(ix);
   if (p.up == 1u) { sy = sy / 2u; sx = sx / 2u; }
-  return x[(sy * p.Win + sx) * p.Cin + ci];
+  return f32(x[(sy * p.Win + sx) * p.Cin + ci]);
 }
 @compute @workgroup_size(16, 16)
 fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>) {
@@ -71,26 +79,26 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
 // input channels, which are contiguous in channels-last activations and never cross a tap
 // because Cin is a multiple of 4; K tile 32; selectable shared-tile type; m_base selects a
 // pixel-row range so a cooperative caller can split one convolution into duties.
-function convShaderV2(epilogue, sType) {
-  const store = epilogue === 'bias' ? 'c[ci] = v;' : 'c[ci] = c[ci] + v;';
+function convShaderV2(epilogue, sType, xType = 'f32', cType = 'f32') {
+  const store = convStore(epilogue, cType);
   return `enable f16;
 struct P { M: u32, N: u32, K: u32, Cin: u32, Hout: u32, Wout: u32, Hin: u32, Win: u32, taps: u32, w_off: u32, b_off: u32, up: u32,
   m_base: u32, z0: u32, z1: u32, z2: u32 };
-@group(0) @binding(0) var<storage, read> x: array<vec4<f32>>;
+@group(0) @binding(0) var<storage, read> x: array<vec4<${xType}>>;
 @group(0) @binding(1) var<storage, read> w: array<f16>;
-@group(0) @binding(2) var<storage, read_write> c: array<f32>;
+@group(0) @binding(2) var<storage, read_write> c: array<${cType}>;
 @group(0) @binding(3) var<uniform> p: P;
 var<workgroup> ta: array<${sType}, 2048>;
 var<workgroup> tb: array<${sType}, 2048>;
 fn load4(m: u32, k: u32) -> vec4<f32> {
   let tap = k / p.Cin; let ci = k % p.Cin;
-  if (p.taps == 1u) { return x[(m * p.Cin + ci) / 4u]; }
+  if (p.taps == 1u) { return vec4<f32>(x[(m * p.Cin + ci) / 4u]); }
   let oy = m / p.Wout; let ox = m % p.Wout;
   let iy = i32(oy) + i32(tap / 3u) - 1; let ix = i32(ox) + i32(tap % 3u) - 1;
   if (iy < 0 || ix < 0 || iy >= i32(p.Hout) || ix >= i32(p.Wout)) { return vec4<f32>(0.0); }
   var sy = u32(iy); var sx = u32(ix);
   if (p.up == 1u) { sy = sy / 2u; sx = sx / 2u; }
-  return x[((sy * p.Win + sx) * p.Cin + ci) / 4u];
+  return vec4<f32>(x[((sy * p.Win + sx) * p.Cin + ci) / 4u]);
 }
 @compute @workgroup_size(16, 16)
 fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>) {
@@ -132,8 +140,9 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
 
 // GroupNorm statistics over channels-last x [HW][C]: mode 0 sums values, mode 1 sums
 // squared deviations from the finalized mean. One workgroup per (group, chunk).
-const gnPartialShader = `struct P { HW: u32, C: u32, chunk: u32, chunks: u32, mode: u32, z0: u32, z1: u32, z2: u32 };
-@group(0) @binding(0) var<storage, read> x: array<f32>;
+const gnPartialShader = xType => `enable f16;
+struct P { HW: u32, C: u32, chunk: u32, chunks: u32, mode: u32, z0: u32, z1: u32, z2: u32 };
+@group(0) @binding(0) var<storage, read> x: array<${xType}>;
 @group(0) @binding(1) var<storage, read> stats: array<f32>;
 @group(0) @binding(2) var<storage, read_write> part: array<f32>;
 @group(0) @binding(3) var<uniform> p: P;
@@ -145,7 +154,7 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
   let mean = stats[g * 2u];
   var s = 0.0;
   for (var e = t; e < (p1 - p0) * cg; e += 256u) {
-    let v = x[(p0 + e / cg) * p.C + g * cg + e % cg];
+    let v = f32(x[(p0 + e / cg) * p.C + g * cg + e % cg]);
     if (p.mode == 0u) { s += v; } else { let d = v - mean; s += d * d; }
   }
   red[t] = s; workgroupBarrier();
@@ -171,20 +180,20 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
   }
 }`;
 
-const gnApplyShader = `enable f16;
+const gnApplyShader = actType => `enable f16;
 struct P { n: u32, C: u32, gamma_off: u32, beta_off: u32, silu: u32, z0: u32, z1: u32, z2: u32 };
-@group(0) @binding(0) var<storage, read> x: array<f32>;
+@group(0) @binding(0) var<storage, read> x: array<${actType}>;
 @group(0) @binding(1) var<storage, read> stats: array<f32>;
 @group(0) @binding(2) var<storage, read> w: array<f16>;
-@group(0) @binding(3) var<storage, read_write> y: array<f32>;
+@group(0) @binding(3) var<storage, read_write> y: array<${actType}>;
 @group(0) @binding(4) var<uniform> p: P;
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let i = gid.x + gid.y * 65535u * 256u; if (i >= p.n) { return; }
   let c = i % p.C; let g = c / (p.C / ${GROUPS}u);
-  var v = (x[i] - stats[g * 2u]) * stats[g * 2u + 1u] * f32(w[p.gamma_off + c]) + f32(w[p.beta_off + c]);
+  var v = (f32(x[i]) - stats[g * 2u]) * stats[g * 2u + 1u] * f32(w[p.gamma_off + c]) + f32(w[p.beta_off + c]);
   if (p.silu == 1u) { v = v / (1.0 + exp(-v)); }
-  y[i] = v;
+  y[i] = ${actType}(v);
 }`;
 
 // Packed transformer latents [h*w][128] -> de-normalized, un-patchified channels-last [2h*2w][32].
@@ -202,6 +211,23 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   y[i] = lat[tok * 128u + c] * sqrt(bn[128u + c] + p.eps) + bn[c];
 }`;
 
+// Live preview input: the clean-latent estimate x0 = x_t - sigma * velocity (rectified flow), from
+// packed transformer latents, de-normalized and un-patchified like latentPrepShader.
+const previewPrepShader = `struct P { h: u32, w: u32, eps: f32, sigma: f32 };
+@group(0) @binding(0) var<storage, read> lat: array<f32>;
+@group(0) @binding(1) var<storage, read> vel: array<f32>;
+@group(0) @binding(2) var<storage, read> bn: array<f32>;
+@group(0) @binding(3) var<storage, read_write> y: array<f32>;
+@group(0) @binding(4) var<uniform> p: P;
+@compute @workgroup_size(256)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let i = gid.x; let W2 = p.w * 2u; if (i >= p.h * 2u * W2 * 32u) { return; }
+  let c32 = i % 32u; let pix = i / 32u; let yy = pix / W2; let xx = pix % W2;
+  let c = c32 * 4u + (yy % 2u) * 2u + (xx % 2u);
+  let j = ((yy / 2u) * p.w + (xx / 2u)) * 128u + c;
+  y[i] = (lat[j] - p.sigma * vel[j]) * sqrt(bn[128u + c] + p.eps) + bn[c];
+}`;
+
 const transposeShader = `struct P { rows: u32, cols: u32, z0: u32, z1: u32 };
 @group(0) @binding(0) var<storage, read> x: array<f32>;
 @group(0) @binding(1) var<storage, read_write> y: array<f32>;
@@ -216,6 +242,7 @@ export class KleinVaeDecoder {
   constructor(device, manifest) {
     this.device = device; this.manifest = manifest; this.pipelines = {};
     this.sched = new KleinDutyScheduler(device, { label: 'klein.vae' });
+    this.actType = 'f16';
     this.tensors = Object.fromEntries(manifest.bundle.tensors.map(t => [t.name, t]));
   }
 
@@ -229,7 +256,9 @@ export class KleinVaeDecoder {
   }
 
   pipeline(key, code) {
+    if (!this.pipelines[key] && this.pipelineCollector) { this.pipelineCollector.set(`${this.constructor.name}:${key}`, { owner: this, key, code }); return null; }
     if (!this.pipelines[key]) {
+      this.syncCompiles = (this.syncCompiles ?? 0) + 1; (this.syncCompiledKeys ??= []).push(key);
       this.pipelines[key] = this.device.createComputePipeline({ layout: 'auto', compute: { module: this.device.createShaderModule({ code }), entryPoint: 'main' } });
     }
     return this.pipelines[key];
@@ -241,6 +270,7 @@ export class KleinVaeDecoder {
   }
   f32bits(x) { return new Uint32Array(new Float32Array([x]).buffer)[0]; }
   dispatch(enc, pipe, buffers, x, y = 1, z = 1) {
+    if (!pipe) return;
     const bind = this.device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: buffers.map((b, i) => ({ binding: i, resource: { buffer: b } })) });
     const e = enc?.encoder ? enc.encoder() : enc;
     const pass = e.beginComputePass(); pass.setPipeline(pipe); pass.setBindGroup(0, bind); pass.dispatchWorkgroups(x, y, z); pass.end();
@@ -249,13 +279,15 @@ export class KleinVaeDecoder {
 
   // Under a cooperative schedule a convolution above the duty budget runs as pixel-row
   // ranges (conv v2 only) with a split point between them.
-  async conv(enc, x, out, name, { Hin, Win, Cin, up = false, epilogue = 'bias' }) {
+  // xType/cType: storage types of x and out (default: the activation type).
+  async conv(enc, x, out, name, { Hin, Win, Cin, up = false, epilogue = 'bias', xType = this.actType, cType = this.actType }) {
     const wt = this.t(`${name}.weight`), bt = this.t(`${name}.bias`);
     const [Cout, K] = wt.shape; const taps = K / Cin;
     const Hout = up ? Hin * 2 : Hin, Wout = up ? Win * 2 : Win, M = Hout * Wout;
     const v2 = (this.convVersion ?? 2) === 2 && Cin % 4 === 0;
     const st = this.sharedType ?? 'f32';
-    const pipe = v2 ? this.pipeline(`conv2-${epilogue}-${st}`, convShaderV2(epilogue, st)) : this.pipeline(`conv-${epilogue}`, convShader(epilogue));
+    const pipe = v2 ? this.pipeline(`conv2-${epilogue}-${st}-${xType}-${cType}`, convShaderV2(epilogue, st, xType, cType))
+      : this.pipeline(`conv-${epilogue}-${xType}-${cType}`, convShader(epilogue, xType, cType));
     const issue = (mBase, mCount) => {
       this.dispatch(enc, pipe, [x, this.wbuf, out, this.uniform([M, Cout, K, Cin, Hout, Wout, Hin, Win, taps, wt.offset / 2, bt.offset / 2, up ? 1 : 0, mBase, 0, 0, 0])],
         Math.ceil(Cout / 64), Math.ceil(mCount / 64));
@@ -275,17 +307,19 @@ export class KleinVaeDecoder {
 
   groupNorm(enc, x, y, name, { HW, C, silu }) {
     const chunk = 1024, chunks = Math.ceil(HW / chunk);
-    const partial = this.pipeline('gn-partial', gnPartialShader), fin = this.pipeline('gn-finalize', gnFinalizeShader);
+    const at = this.actType;
+    const partial = this.pipeline(`gn-partial-${at}`, gnPartialShader(at)), fin = this.pipeline('gn-finalize', gnFinalizeShader);
     for (const mode of [0, 1]) {
       this.dispatch(enc, partial, [x, this.gnStats, this.gnPart, this.uniform([HW, C, chunk, chunks, mode, 0, 0, 0])], GROUPS, chunks);
       this.dispatch(enc, fin, [this.gnPart, this.gnStats, this.uniform([HW, C, chunks, mode, this.f32bits(GN_EPS), 0, 0, 0])], GROUPS);
     }
     const n = HW * C, groups = Math.ceil(n / 256);
-    this.dispatch(enc, this.pipeline('gn-apply', gnApplyShader), [x, this.gnStats, this.wbuf, y,
+    this.dispatch(enc, this.pipeline(`gn-apply-${at}`, gnApplyShader(at)), [x, this.gnStats, this.wbuf, y,
       this.uniform([n, C, this.t(`${name}.weight`).offset / 2, this.t(`${name}.bias`).offset / 2, silu ? 1 : 0, 0, 0, 0])],
       Math.min(groups, 65535), Math.ceil(groups / 65535));
   }
 
+  get actBytes() { return this.actType === 'f16' ? 2 : 4; }
   copy(enc, src, dst, bytes) { (enc?.encoder ? enc.encoder() : enc).copyBufferToBuffer(src, 0, dst, 0, bytes); }
 
   async resnet(enc, x, out, name, s, CoutNew) {
@@ -294,35 +328,38 @@ export class KleinVaeDecoder {
     await this.conv(enc, this.t1, this.t2, `${name}.conv1`, { Hin: H, Win: W, Cin: C });
     this.groupNorm(enc, this.t2, this.t1, `${name}.norm2`, { HW, C: Cout, silu: true });
     if (this.tensors[`${name}.conv_shortcut.weight`]) await this.conv(enc, x, out, `${name}.conv_shortcut`, { Hin: H, Win: W, Cin: C });
-    else this.copy(enc, x, out, HW * C * 4);
+    else this.copy(enc, x, out, HW * C * this.actBytes);
     await this.conv(enc, this.t1, out, `${name}.conv2`, { Hin: H, Win: W, Cin: Cout, epilogue: 'bias-add' });
     return { H, W, C: Cout };
   }
 
-  // Single-head attention over latent pixels; cooperative runs split it into query-row ranges.
+  // Single-head attention over latent pixels in query-row chunks that reuse one scores buffer of at most
+  // SCORE_BYTES (see scoreRows); cooperative runs also size the chunks to the duty budget.
   async attention(enc, x, out, name, s) {
     const { H, W, C } = s; const L = H * W;
     this.groupNorm(enc, x, this.t1, `${name}.group_norm`, { HW: L, C, silu: false });
-    await this.conv(enc, this.t1, this.q, `${name}.to_q`, { Hin: H, Win: W, Cin: C });
-    await this.conv(enc, this.t1, this.k, `${name}.to_k`, { Hin: H, Win: W, Cin: C });
-    await this.conv(enc, this.t1, this.t2, `${name}.to_v`, { Hin: H, Win: W, Cin: C });
-    this.dispatch(enc, this.pipeline('transpose', transposeShader), [this.t2, this.vt, this.uniform([L, C, 0, 0])], Math.ceil(C / 16), Math.ceil(L / 16));
+    // Attention runs at latent resolution in f32 (q, k, v, its output and the scores).
+    await this.conv(enc, this.t1, this.q, `${name}.to_q`, { Hin: H, Win: W, Cin: C, cType: 'f32' });
+    await this.conv(enc, this.t1, this.k, `${name}.to_k`, { Hin: H, Win: W, Cin: C, cType: 'f32' });
+    await this.conv(enc, this.t1, this.v, `${name}.to_v`, { Hin: H, Win: W, Cin: C, cType: 'f32' });
+    this.dispatch(enc, this.pipeline('transpose', transposeShader), [this.v, this.vt, this.uniform([L, C, 0, 0])], Math.ceil(C / 16), Math.ceil(L / 16));
     const st = this.sharedType ?? 'f32';
     const v2 = (this.convVersion ?? 2) === 2;
     const g = v2 ? this.pipeline(`gemm2-f32-store-${st}`, gemmShaderV2({ bType: 'f32', epilogue: 'store', sType: st }))
       : this.pipeline('gemm-f32-store', gemmShader({ bType: 'f32', epilogue: 'store' }));
     const budget = this.sched.budget();
-    const rows = !v2 || !Number.isFinite(budget) ? L : Math.min(L, Math.max(64, Math.floor(budget / (4 * L * C) / 64) * 64));
+    const rows = !v2 ? L : Math.min(scoreRows(L), !Number.isFinite(budget) ? L : Math.max(64, Math.floor(budget / (4 * L * C) / 64) * 64));
     for (let r0 = 0; r0 < L; r0 += rows) {
       const rn = Math.min(rows, L - r0);
-      this.dispatch(enc, g, [this.q, this.k, this.scores, this.uniform([L, L, C, this.f32bits(1 / Math.sqrt(C)), 0, C, 0, 0, C, 0, 0, L, 0, 0, 0, 0, 0, r0, 0, 0])], Math.ceil(L / 64), Math.ceil(rn / 64));
-      this.dispatch(enc, this.pipeline('softmax', softmaxShader()), [this.scores, this.uniform([rn, L, r0, 0])], rn);
-      this.dispatch(enc, g, [this.scores, this.vt, this.t1, this.uniform([L, C, L, this.f32bits(1), 0, L, 0, 0, L, 0, 0, C, 0, 0, 0, 0, 0, r0, 0, 0])], Math.ceil(C / 64), Math.ceil(rn / 64));
+      // Rows r0.. of q score into rows 0.. of the scores buffer; their outputs land at rows r0.. of v.
+      this.dispatch(enc, g, [this.q, this.k, this.scores, this.uniform([rn, L, C, this.f32bits(1 / Math.sqrt(C)), r0 * C, C, 0, 0, C, 0, 0, L, 0, 0, 0, 0, 0, 0, 0, 0])], Math.ceil(L / 64), Math.ceil(rn / 64));
+      this.dispatch(enc, this.pipeline('softmax', softmaxShader()), [this.scores, this.uniform([rn, L, 0, 0])], rn);
+      this.dispatch(enc, g, [this.scores, this.vt, this.v, this.uniform([rn, C, L, this.f32bits(1), 0, L, 0, 0, L, 0, r0 * C, C, 0, 0, 0, 0, 0, 0, 0, 0])], Math.ceil(C / 64), Math.ceil(rn / 64));
       this.sched.addFlops(4 * rn * L * C);
       if (rn < L) await this.sched.boundary(`${name}.rows[${r0}]`);
     }
-    this.copy(enc, x, out, L * C * 4);
-    await this.conv(enc, this.t1, out, `${name}.to_out.0`, { Hin: H, Win: W, Cin: C, epilogue: 'bias-add' });
+    this.copy(enc, x, out, L * C * this.actBytes);
+    await this.conv(enc, this.v, out, `${name}.to_out.0`, { Hin: H, Win: W, Cin: C, epilogue: 'bias-add', xType: 'f32' });
     return s;
   }
 
@@ -337,22 +374,32 @@ export class KleinVaeDecoder {
   allocate(latH, latW) {
     if (!this.prepped || this.latH !== latH || this.latW !== latW) this.allocateInput(latH, latW);
     this.releaseWork();
-    // Largest activation: 256 channels at full resolution (up block 2 output).
+    // Largest activation: 256 channels at full resolution (up block 2 output, upsampled). t2 holds
+    // only convolution outputs inside resnets, at most 128 channels at full resolution.
     const H = latH * 16, W = latW * 16;
-    const big = H * W * 256 * 4;
-    this.a = this.buffer(big); this.b = this.buffer(big); this.t1 = this.buffer(big); this.t2 = this.buffer(big);
+    const big = H * W * 256 * this.actBytes;
+    this.a = this.buffer(big); this.b = this.buffer(big); this.t1 = this.buffer(big); this.t2 = this.buffer(big / 2);
     const Lm = latH * 2 * latW * 2;
-    this.q = this.buffer(Lm * 512 * 4); this.k = this.buffer(Lm * 512 * 4); this.vt = this.buffer(Lm * 512 * 4);
-    this.scores = this.buffer(Lm * Lm * 4);
+    this.q = this.buffer(Lm * 512 * 4); this.k = this.buffer(Lm * 512 * 4); this.v = this.buffer(Lm * 512 * 4); this.vt = this.buffer(Lm * 512 * 4);
+    this.rgb = this.buffer(H * W * 3 * 4);
+    this.scores = this.buffer(scoreRows(Lm) * Lm * 4);
     this.gnPart = this.buffer(GROUPS * Math.ceil(H * W / 1024) * 4); this.gnStats = this.buffer(GROUPS * 2 * 4);
   }
 
   // Free the working activations (including this.out), or everything with release().
   releaseWork() {
-    for (const name of ['a', 'b', 't1', 't2', 'q', 'k', 'vt', 'scores', 'gnPart', 'gnStats']) { this[name]?.destroy(); this[name] = null; }
+    for (const name of ['a', 'b', 't1', 't2', 'q', 'k', 'v', 'vt', 'scores', 'rgb', 'gnPart', 'gnStats']) { this[name]?.destroy(); this[name] = null; }
     this.out = null;
   }
   release() { this.releaseWork(); this.prepped?.destroy(); this.prepped = null; }
+
+  // Live preview: x0 = latents - sigma * velocity for packed latents of latH x latW tokens, written
+  // as decoder-space channels-last [2h*2w][32] f32 into `out`.
+  prepPreview(enc, packed, velocity, sigma, latH, latW, out) {
+    const n = latH * 2 * latW * 2 * 32;
+    this.dispatch(enc, this.pipeline('preview-prep', previewPrepShader), [packed, velocity, this.bn, out,
+      this.uniform([latH, latW, this.f32bits(this.manifest.config.batch_norm_eps), this.f32bits(sigma)])], Math.ceil(n / 256));
+  }
 
   // Packed latents (GPU buffer [h*w][128]) -> decoder input [2h*2w][32] in this.prepped.
   prepLatents(enc, packed) {
@@ -368,7 +415,7 @@ export class KleinVaeDecoder {
     const enc = this.sched;
     const cut = label => this.sched.boundary(label, { force: !this.sched.cooperative });
     let s = { H: this.latH * 2, W: this.latW * 2, C: 32 };
-    await this.conv(enc, z, this.t2, 'post_quant_conv', { Hin: s.H, Win: s.W, Cin: 32 });
+    await this.conv(enc, z, this.t2, 'post_quant_conv', { Hin: s.H, Win: s.W, Cin: 32, xType: 'f32' });
     s = await this.conv(enc, this.t2, this.a, 'decoder.conv_in', { Hin: s.H, Win: s.W, Cin: 32 });
     let cur = this.a, other = this.b;
     const swap = label => { [cur, other] = [other, cur]; return cut(label); };
@@ -383,8 +430,8 @@ export class KleinVaeDecoder {
       if (u < 3) { s = await this.conv(enc, cur, other, `decoder.up_blocks.${u}.upsamplers.0.conv`, { Hin: s.H, Win: s.W, Cin: s.C, up: true }); await swap(`vae.up${u}.upsample`); }
     }
     this.groupNorm(enc, cur, this.t1, 'decoder.conv_norm_out', { HW: s.H * s.W, C: s.C, silu: true });
-    s = await this.conv(enc, this.t1, other, 'decoder.conv_out', { Hin: s.H, Win: s.W, Cin: s.C });
-    this.out = other;
+    s = await this.conv(enc, this.t1, this.rgb, 'decoder.conv_out', { Hin: s.H, Win: s.W, Cin: s.C, cType: 'f32' });
+    this.out = this.rgb;
     await this.sched.flush('vae.end');
     return s;
   }

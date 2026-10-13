@@ -9,13 +9,15 @@ for(const distributed of [true,false]) {
   let legacyCalls=0,sourceCalls=0;
   const uniforms=new Float32Array(400);uniforms[368]=2;
   const state={physicalColor:{}};
-  const context={uniforms,state,encoder:{},currentFluid:1,options:{},EMISSIVE_LIGHT_GRID:32,
+  const context={uniforms,state,encoder:{},currentFluid:1,options:{},EMISSIVE_LIGHT_GRID:32,gridSize:48,gridHeight:96,emissiveSeedProducer:null,
     distributedGroup:distributed?{}:null,distributedFrame:{generation:7,frame:12,volumeReceivers:8192,directions:96},
     sceneSourcePreparedEncoders:new Set(),encodeSharedSceneSource(){sourceCalls++;},
     emissiveLightField:{encode(){legacyCalls++;}}};
   vm.runInNewContext(source.slice(start,end),context);
   assert.equal(legacyCalls,distributed?0:1,'only the consumed smoke solver may dispatch');
   assert.equal(sourceCalls,1,'shared scene source preparation remains independent');
+  // Review GR-02: only the seed dispatch records the emissive seed producer.
+  assert.equal(JSON.stringify(context.emissiveSeedProducer),distributed?'null':JSON.stringify({grid:[48,96,48]}));
   assert.equal(state.physicalColor.incidentLight.model,distributed?'distributed-volume-direct-radiance-v0':'six-direction-single-scattering-v1');
 }
 console.log('exclusive smoke solver dispatch contracts passed');

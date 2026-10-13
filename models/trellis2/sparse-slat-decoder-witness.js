@@ -5,13 +5,16 @@ import { validateNativePrefixBackend, prefixAdapterName } from './sparse-prefix-
 import { preserveSamplerWitnessFailure, recordSamplerCompletion } from './sparse-sampler-witness-checks.js';
 import { createTrellisMeshAdapter, encodeTrellisGeometryGLB } from './trellis-mesh.js';
 const hash = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), v => v.toString(16).padStart(2, '0')).join('');
-export async function runSLatDecoderWitness(expectedSha, {meshOutput=false}={}) {
+export async function runSLatDecoderWitness(expectedSha, {meshOutput=false,activationStorage}={}) {
   const report = { status: 'failed', phase: 'fixture', requestedRoute: SLAT_DECODER_ROUTE }, errors = [], owned = [];
   let device, session, decoder, scope = false;
   try {
     const response = await fetch('/fixture/manifest.json', { cache: 'no-store' });if (!response.ok) throw Error('learned decoder fixture unavailable');
     const bytes = await response.arrayBuffer();if (await hash(bytes) !== expectedSha) throw Error('changed learned decoder manifest');
-    const m = JSON.parse(new TextDecoder().decode(bytes)), plan = validateSLatDecoderFixture(m), tensors = {};
+    const m = JSON.parse(new TextDecoder().decode(bytes));validateSLatDecoderFixture(m);
+    report.referenceConfig={...m.config};
+    if(activationStorage!==undefined)m.config.activationStorage=activationStorage;
+    const plan = validateSLatDecoderFixture(m), tensors = {};
     report.reference = { source: m.source, producer: m.producer, route: m.referenceRoute, effectiveBackend: m.effectiveBackend,
       fixtureKind: m.fixtureKind, checkpoint: m.checkpoint, input: m.input, inputHandoff: m.inputHandoff, manifestSha256: expectedSha };
     report.config = m.config;report.fixtureVerifiedTensorCount = 0;
@@ -29,13 +32,15 @@ export async function runSLatDecoderWitness(expectedSha, {meshOutput=false}={}) 
     // Admit the effective adapter's full binding capacity; each generated count
     // still specializes exact allocations. Do not hide a smaller source cap.
     report.requiredLimits = { maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize, maxBufferSize: adapter.limits.maxBufferSize };
-    device = await adapter.requestDevice({ requiredLimits: report.requiredLimits });report.deviceLimits = { ...report.requiredLimits,
+    report.requiredFeatures=plan.activationStorage==='f16'?['shader-f16']:[];
+    if(report.requiredFeatures.some(f=>!adapter.features.has(f)))throw Error('shader-f16 required for requested decoder storage');
+    device = await adapter.requestDevice({ requiredLimits: report.requiredLimits,requiredFeatures:report.requiredFeatures });report.deviceLimits = { ...report.requiredLimits,
       maxComputeWorkgroupsPerDimension: device.limits.maxComputeWorkgroupsPerDimension };
     device.pushErrorScope('validation');scope = true;device.addEventListener('uncapturederror', e => errors.push(e.error.message));
     session = await createWebGpuInferenceSession({ sessionId: 'learned-decoder-' + crypto.randomUUID(), adapter, device, adapterName: prefixAdapterName(adapter.info) });
     const requiredStages = ['decoder-half-roundtrip', ...plan.stages.filter(s => s !== 'decoder-child-scan-add')];
     const route = await session.registerRoute({ routeId: SLAT_DECODER_ROUTE, runtimeOptions: { requiredStages,
-      kernel: { profile: 'trellis2-sparse-FP16-semantics-F32-storage-v0' } } });
+      kernel: { profile: 'trellis2-sparse-FP16-semantics-'+plan.activationStorage+'-storage-v0' } } });
     report.effectiveRoute = route.routeId;if (report.effectiveRoute !== report.requestedRoute) throw Error('effective learned decoder route mismatch');
     const runtime = route.runtime, upload = (name, shape, data, dtype = 'f32') => {
       const t = runtime.createTensor({ name: 'learned-witness.' + name, shape, dtype, usage: U.storage | U.copySrc | U.copyDst });owned.push(t);runtime.uploadTensor(t, data);return t;
@@ -70,7 +75,7 @@ export async function runSLatDecoderWitness(expectedSha, {meshOutput=false}={}) 
       levels: result.levels, outputRows: result.features.shape[0], outputResolution: result.resolution,
       metadataReadbackBytes: result.metadataReadbackBytes, featureBytesToCPUDuringServing: result.featureBytesToCPUDuringServing,
       coordinateBytesToCPUDuringServing: result.coordinateBytesToCPUDuringServing, arithmetic: result.arithmetic,
-      storage: plan.storage, inputHandoff: 'offline exact-source codes/coordinates; actual GPU decoder borrowing, not live sampler composition' };
+      storage: plan.storage,decoderActivationStorage:{[plan.mode]:result.activationStorage}, inputHandoff: 'offline exact-source codes/coordinates; actual GPU decoder borrowing, not live sampler composition' };
     report.phase = 'observation-readback';report.outputs = {};
     // Retain completed decoder evidence before any downstream mesh exception.
     // Cache by the exact borrowed tensor, not by a filename or substitute input.

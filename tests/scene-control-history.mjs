@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createSceneEdits } from '../scene-edit-session.mjs';
 import { installSceneControlHistory } from '../scene-control-history.mjs';
+import { installRelativeNumberDrag } from '../scene-control-history.mjs';
 
 class Control extends EventTarget {
   constructor(){super();this.style={};}
@@ -12,6 +13,49 @@ class Control extends EventTarget {
     return event;
   }
 }
+
+function boundedNumber({min,max,step,value}) {
+  const f=fixture();globalThis.document=new Control();globalThis.window=new Control();
+  const input=f.control;input.type='number';input.min=String(min);input.max=String(max);input.value=String(value);
+  f.value.flow=value;input.setPointerCapture=()=>{};input.hasPointerCapture=()=>false;
+  input.addEventListener('input',()=>{f.value.flow=Number(input.value);});
+  installRelativeNumberDrag({input,step});
+  input.fire('pointerdown',{button:0,pointerId:1,clientX:100,clientY:50});
+  return{...f,get value(){return f.value;},input,move:x=>input.fire('pointermove',{pointerId:1,clientX:x,clientY:50}),close(){input.fire('pointercancel');delete globalThis.document;delete globalThis.window;}};
+}
+
+test('bounded scrub reverses immediately after either limit without repaying excess motion',()=>{
+  const f=boundedNumber({min:0,max:1,step:.01,value:.5});
+  try{
+    f.move(1100);assert.equal(Number(f.input.value),1);f.move(1097);assert.ok(Number(f.input.value)<1,'outward motion at max must not accumulate reversal debt');
+    f.move(-1000);assert.equal(Number(f.input.value),0);f.move(-997);assert.ok(Number(f.input.value)>0,'outward motion at min must not accumulate reversal debt');
+  }finally{f.close();}
+});
+
+test('bounded scrubs traverse the same fraction of their range despite different source steps',()=>{
+  for(const [min,max,step] of [[0,1,.001],[-20,80,1],[100,10100,100]]){
+    const f=boundedNumber({min,max,step,value:min});
+    try{f.move(175);assert.ok(Math.abs((Number(f.input.value)-min)/(max-min)-.25)<1e-10,'75px should traverse a quarter of the bounded range');}
+    finally{f.close();}
+  }
+});
+
+test('fine dragging scales range speed and still makes one reversible history gesture',()=>{
+  const f=boundedNumber({min:0,max:1,step:.01,value:.5});
+  try{
+    f.input.fire('pointermove',{pointerId:1,clientX:175,clientY:50,shiftKey:true});assert.ok(Math.abs(Number(f.input.value)-.525)<1e-10);
+    f.move(250);assert.ok(Math.abs(Number(f.input.value)-.775)<1e-10);f.input.fire('pointerup');assert.equal(f.edits.state().undoCount,1);
+    f.edits.undo();assert.equal(f.value.flow,.5);assert.equal(f.edits.state().active,null);f.edits.redo();assert.ok(Math.abs(f.value.flow-.775)<1e-10);assert.equal(f.edits.state().undoCount,1);
+  }finally{f.close();}
+});
+
+test('coarse drag hints still reach fractional limits exactly',()=>{
+  for(const [min,max] of [[.1,1.3],[-1.3,-.1]]) {
+    const f=boundedNumber({min,max,step:1,value:(min+max)/2});
+    try {f.move(1100);assert.equal(Number(f.input.value),max);f.move(-1000);assert.equal(Number(f.input.value),min);}
+    finally {f.close();}
+  }
+});
 
 function fixture(admit = () => {}, onError = () => {}) {
   let value = { recipe: { enabled: true, outerRadius: 0.8 }, radius: 0.24, flow: 0.8 };
@@ -167,6 +211,26 @@ test('locked scrub uses movement deltas when screen coordinates stop changing', 
  }finally{delete globalThis.document;delete globalThis.window;}
 });
 
+test('pointer capture released during lock acquisition does not cancel the numeric edit', () => {
+ const f=boundedNumber({min:0,max:1,step:.01,value:.5});
+ const doc=globalThis.document;
+ f.input.ownerDocument=doc;
+ f.input.requestPointerLock=()=>{
+   // Browser lock ownership changes before the queued pointerlockchange event.
+   doc.pointerLockElement=f.input;
+   f.input.fire('lostpointercapture',{pointerId:1});
+ };
+ doc.exitPointerLock=()=>{doc.pointerLockElement=null;doc.fire('pointerlockchange');};
+ try {
+   f.move(115);
+   assert.equal(f.value.flow,.55,'lock handover must retain the live preview');
+   assert.equal(f.edits.state().active.id,'@burner','handover must keep its transaction');
+   doc.fire('pointerlockchange');doc.fire('mouseup',{button:0});
+   assert.equal(f.edits.state().undoCount,1);assert.equal(f.value.flow,.55);
+   f.edits.undo();assert.equal(f.value.flow,.5);f.edits.redo();assert.equal(f.value.flow,.55);
+ } finally {f.close();}
+});
+
 test('compact numeric presentation retains useful scale without trailing noise',async()=>{
  const module=await import('../scene-control-history.mjs');
  assert.equal(typeof module.formatAuthoringNumber,'function');
@@ -214,4 +278,28 @@ test('one data control can select per-object targets without merging their histo
  installSceneControlHistory({controls:[input],edits,id:()=>current});
  input.fire('focusin');values.a=3;input.fire('change');current='b';input.fire('focusin');values.b=4;input.fire('pointercancel');
  assert.deepEqual(values,{a:3,b:2});assert.deepEqual(past,[{id:'a',before:1,after:3}]);assert.equal(active,null);
+});
+
+test('flame aperture refusal ends its scrub so further pointer motion cannot escape history',async()=>{
+  const {readFileSync}=await import('node:fs');const vm=await import('node:vm');
+  const index=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const start=index.indexOf("  for(const scope of ['#rim-controls','#burner-controls','#selected-flame-fields'");
+  const setup=index.slice(start,index.indexOf('  edits.subscribe(()=>{',start));
+  for(const [scale,initial,motions] of [[.8,.05,[-20,-25]],[2,.2,[35,40]]]){
+    const doc=new Control();globalThis.document=doc;globalThis.window=new Control();
+    const input=new Control();input.type='number';input.min='.02';input.max='.5';input.value=String(initial);input.dataset={authoringDragStep:'.01'};input.style={};input.setPointerCapture=()=>{};input.hasPointerCapture=()=>false;
+    const row={querySelector:selector=>selector==='label'?input:null};input.closest=()=>row;
+    doc.querySelectorAll=selector=>selector.startsWith('#selected-flame-fields')?[input]:[];
+    let value=initial,inputs=0;const edits=createSceneEdits({read:()=>null,write(){}});
+    edits.register('@flame-settings',{read:()=>({value}),write:next=>{value=next.value;input.value=String(value);},check:next=>{if(next.value*scale<.02||next.value*scale>.5)throw Error('invalid aperture');return next;}});
+    const history=installSceneControlHistory({controls:[input],edits,id:'@flame-settings'});
+    input.addEventListener('input',()=>{inputs++;const before=edits.state().active?.before;value=Number(input.value);if(before&&(value*scale<.02||value*scale>.5)){value=before.value;input.value=String(value);edits.cancel();}});
+    try {
+      vm.runInNewContext(setup,{document:doc,Number,installRelativeNumberDrag,authoringControlSessions:[history],edits});
+      input.fire('pointerdown',{button:0,pointerId:1,clientX:0,clientY:0});
+      for(const x of motions)input.fire('pointermove',{pointerId:1,clientX:x,clientY:0});
+      input.fire('pointerup',{pointerId:1});
+      assert.equal(value,initial,'continued motion retains the accepted source');assert.equal(Number(input.value),initial);assert.equal(inputs,1,'the refused scrub must stop emitting previews');assert.equal(edits.state().undoCount,0);assert.equal(edits.state().active,null);
+    } finally {delete globalThis.document;delete globalThis.window;}
+  }
 });

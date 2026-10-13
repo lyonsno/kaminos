@@ -1,9 +1,34 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
+import vm from 'node:vm';
 import {opticalSteppingConfig,validateOpticalPreviewArm} from '../volume-optical-native.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+test('main composition retains fresh burn and separates ray-noise binding from reactants', () => {
+  const sampling = readFileSync(new URL('../volume-raymarch-sampling.mjs', import.meta.url), 'utf8');
+  const noise = readFileSync(new URL('../volume-ray-start.mjs', import.meta.url), 'utf8');
+  assert.match(sampling, /result\.sample\.freshBurn = sampleWorldReactantBurn\(p\);/);
+  assert.match(noise, /@binding\(25\) var rayStartNoise/);
+  assert.match(core, /binding: 25, resource: rayStartNoiseTexture\.createView\(\)/);
+  assert.doesNotMatch(core, /constants:\s*\{GRID:/);
+});
+test('six authored ray steps survive the slider, gamut, route and GPU clamp', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const input = html.match(/<input[^>]*id="volume-steps"[^>]*>/)[0];
+  assert.equal(Number(input.match(/min="([^"]+)"/)[1]), 6, 'Ray Steps must admit six');
+  const snap = html.match(/function snapVolumeRaySteps\(value\) \{[\s\S]*?\n\}/)[0];
+  const context = vm.createContext({clampVolumeValue:(v,min,max)=>Math.max(min,Math.min(max,v))});
+  vm.runInContext(snap, context);
+  for (const value of [6,7,24,36,96,160]) assert.equal(context.snapVolumeRaySteps(value),value);
+  assert.equal(context.snapVolumeRaySteps(0),6);
+  assert.equal(context.snapVolumeRaySteps(200),160);
+  assert.match(html,/x: \(snapVolumeRaySteps\(steps\) - 6\) \/ \(160 - 6\)/);
+  assert.match(html,/snapVolumeRaySteps\(6 \+ clampVolumeValue\(x, 0, 1\) \* \(160 - 6\)\)/);
+  assert.match(html,/Math\.max\(6, Math\.min\(160, routeRaySteps\)\)/);
+  assert.match(core,/raySteps: clampFinite\(controls\.raySteps, 6, 160, 96\)/);
+  assert.match(core,/clamp\(u\.viewport_steps_density\.z, 6\.0, 192\.0\)/);
+});
 test('native numerical comparison is opt-in and does not inherit sample-budget tail truncation', () => {
   assert.match(core, /setDebugOpticalStepping\(/, 'native camera must expose an explicit comparison switch');
   assert.match(core, /!opticalStepping && \(expensiveSamples >= expensiveSampleBudget/);

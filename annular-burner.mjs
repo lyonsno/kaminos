@@ -141,8 +141,9 @@ export function createAnnularBurner(THREE, mergeGeometries, value) {
   let state = { effective: false, reason: 'ring-emitter-unavailable', recipe };
   return {
     group, recipe,
-    update(receipt, active, now, domainTranslation = [0, 0, 0], { authored = false } = {}) {
+    update(receipt, active, now, domainTranslation = [0, 0, 0], { authored = false, domainScale = 1 } = {}) {
       let source = burnerSource(receipt);
+      if(source)source={...source,origin:source.origin.map(value=>value*domainScale),radius:source.radius*domainScale,width:source.width*domainScale,axialHalfExtent:source.axialHalfExtent*domainScale};
       group.visible = authored ? recipe.enabled !== false : !!source;
       if (authored && source) {
         // Only heat concentric, aligned channels beneath this actual authored bed.

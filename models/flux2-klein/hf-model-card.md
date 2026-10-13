@@ -18,7 +18,7 @@ Quantized weights of [FLUX.2 [klein] 4B](https://huggingface.co/black-forest-lab
 
 **[Try it in your browser](https://lyonsno.github.io/kaminos/inference-kit/klein/)** · [Source](https://github.com/lyonsno/kaminos/tree/main/models/flux2-klein)
 
-In Chrome, a 512 × 512 image (4 steps) takes 6–7 seconds on an Apple M4 Max and about 20 seconds on a 16 GB Apple M2 Pro. The page also offers 768 and 1024, and frees each stage's working memory before the next, so a 16 GB Mac generates at 1024 × 1024 without swapping.
+In Chrome, a 512 × 512 image (4 steps) takes 6–7 seconds on an Apple M4 Max and about 14 seconds on a 16 GB Apple M2 Pro. The page also offers 768 and 1024, and frees each stage's working memory before the next, so a 16 GB Mac generates at 1024 × 1024 without swapping.
 
 ## Contents
 
@@ -29,6 +29,10 @@ In Chrome, a 512 × 512 image (4 steps) takes 6–7 seconds on an Apple M4 Max a
 | `te/tokenizer.json` | Qwen2 byte-level BPE tokenizer | JSON | 11 MB |
 | `dit/` | Rectified-flow transformer | block linears int4 (group 128, affine); embedders, modulation and output projections int4 (group 64, affine); norms f16 | 2.07 GB |
 | `vae/` | VAE decoder and latent batch-norm statistics | f16; statistics f32 | 0.1 GB |
+| `dit-q3/` | Transformer, "Weathered" level | block linears 3-bit (group 64, affine; per-group range chosen to minimize squared error); the rest as in `dit/` | 1.64 GB (gzip only) |
+| `dit-q2/` | Transformer, "Off the Rails" level | block linears 2-bit (group 64, as above); the rest as in `dit/` | 1.16 GB (gzip only) |
+
+The page's jank-level selector swaps between `dit/` (Mint), `dit-q3/` (Weathered: looks about the same) and `dit-q2/` (Off the Rails: blurry and melted, still recognizable); the text encoder, decoder and tokenizer are shared. 3-bit codes are packed 32 per three 32-bit words, 2-bit codes 16 per word.
 
 Each folder has a `manifest.json` listing every tensor's shape, format, byte offset, and the SHA-256 of each file. Every bundle and the tokenizer also have a gzip copy (`.gz`, listed in the manifest), which is what the page downloads; the embedding table stays uncompressed for range requests. Quantization is weight-only. Activations and the residual stream stay in floating point.
 

@@ -62,16 +62,17 @@ test('reaction, conversion and consumption increments carry dt; max() births sta
   assert.match(main, /smoke = smoke \+ tallPlumeReactionSmokeBirth \* timeStep;/, 'reaction smoke is a rate');
   assert.match(main, /heat = heat \+ \(tallPlumeFuelHeatReaction \* mix\(0\.0, 0\.16, tallPlumeScene\) \+ tallPlumePilotReaction \* 0\.030\) \* timeStep;/, 'reaction heat release is a rate');
   assert.match(main, /let fuelBurned = min\(fuel, fuelBurnRate \* timeStep\);\s*\n\s*fuel = fuel - fuelBurned;/, 'fuel consumption is a rate (the burned amount is rate x dt, capped by the fuel present; slice 4 stores it as the expansion source)');
-  assert.match(main, /heat = max\(heat, mix\(mix\(mix\(columnHeatBirth, tallPlumeHeatBirth, tallPlumeScene\), canonicalHeatBirth, canonicalPlumeScene\), bonfireHeatBirth, bonfireScene\)\);/, 'heat birth remains a floor');
-  assert.match(main, /fuel = max\(fuel, mix\(tallPlumeFuelInjection, bonfireInjectedFuel, bonfireScene\)\);/, 'fuel injection remains a floor');
+  // The reactant candidate gates these births off with select(..., 0.0, reactantOn); under the authored law they remain floors.
+  assert.match(main, /heat = max\(heat, (?:select\()?mix\(mix\(mix\(columnHeatBirth, tallPlumeHeatBirth, tallPlumeScene\), canonicalHeatBirth, canonicalPlumeScene\), bonfireHeatBirth, bonfireScene\)(?:, 0\.0, reactantOn\))?\);/, 'heat birth remains a floor');
+  assert.match(main, /fuel = max\(fuel, (?:select\()?mix\(tallPlumeFuelInjection, bonfireInjectedFuel, bonfireScene\)(?:, 0\.0, reactantOn\))?\);/, 'fuel injection remains a floor');
 });
 
 test('boundary sponges, height survival and quench attenuations are per-step survivals and follow stepRate', () => {
   const main = mainKernel();
   assert.match(main, /flame = flame \* stepRate\(tallPlumeFireSurvival\);\s*\n\s*ember = ember \* stepRate\(tallPlumeFireSurvival\);/, 'flame height survival');
-  assert.match(main, /smoke = smoke \* stepRate\(mix\(0\.42, 1\.0, wallFade\) \* mix\(0\.72, 1\.0, smokeTopFade\)\);/, 'smoke sponge');
-  assert.match(main, /heat = heat \* stepRate\(mix\(0\.30, 1\.0, wallFade\) \* mix\(0\.16, 1\.0, heatTopFade\)\);/, 'heat sponge');
-  assert.match(main, /fuel = fuel \* stepRate\(mix\(0\.20, 1\.0, wallFade\) \* mix\(0\.58, 1\.0, heatTopFade\)\);/, 'fuel sponge');
+  assert.match(main, /smoke = smoke \* stepRate\(mix\(0\.42, 1\.0, (?:material)?[wW]allFade\) \* mix\(0\.72, 1\.0, (?:materialSmokeTopFade|smokeTopFade)\)\);/, 'smoke sponge (the reactant candidate opens the top via material* fades; equal to the originals under the authored law)');
+  assert.match(main, /heat = heat \* stepRate\(mix\(0\.30, 1\.0, (?:material)?[wW]allFade\) \* mix\(0\.16, 1\.0, (?:materialHeatTopFade|heatTopFade)\)\);/, 'heat sponge');
+  assert.match(main, /fuel = fuel \* stepRate\(mix\(0\.20, 1\.0, (?:material)?[wW]allFade\) \* mix\(0\.58, 1\.0, (?:materialHeatTopFade|heatTopFade)\)\);/, 'fuel sponge');
   assert.match(main, /materialDetail = materialDetail \* stepRate\(mix\(0\.22, 1\.0, wallFade\)\);/, 'material detail sponge');
   assert.match(main, /flame = flame \* stepRate\(mix\(0\.12, 1\.0, wallFade\) \* mix\(0\.08, 1\.0, fireTopFade\)\);/, 'flame sponge');
   assert.match(main, /ember = ember \* stepRate\(mix\(0\.18, 1\.0, wallFade\) \* mix\(0\.16, 1\.0, smokeTopFade\)\);/, 'ember sponge');
@@ -152,7 +153,7 @@ test('review of 57b45f72: relaxation blends and the wall velocity sponge follow 
   assert.match(main, /let inflowFraction = clamp\(inflowInletSpeed\(cellI\) \* inflowApertureWeight\(cellI\) \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);/, 'the inflow fraction carries the step through dynamicsBacktraceScale');
   // The wall sponge on velocity is written after the increment law's line, so
   // it takes the rate law directly.
-  assert.match(main, /vel = vel \* stepRate\(mix\(0\.55, 1\.0, wallFade\)\);/, 'the wall velocity sponge is a per-step survival');
+  assert.match(main, /vel = vel \* stepRate\(mix\(0\.55, 1\.0, (?:material)?[wW]allFade\)\);/, 'the wall velocity sponge is a per-step survival (materialWallFade equals wallFade under the authored law)');
   assert.doesNotMatch(main, /vel = vel \* mix\(0\.55, 1\.0, wallFade\);/, 'no bare wall velocity sponge remains');
   // The remaining per-step operations are 0/1 selectors and floors.
   assert.match(main, /smoke = mix\(columnSmokeTransport, bonfireSmokeTransport, bonfireScene\);/, 'Bonfire scene selector stays a selector');

@@ -44,6 +44,7 @@ fn sampleRaymarchNeighborhood(p: vec3<f32>) -> RaymarchNeighborhood {
     mix(mix(${field}0, ${field}1, f.x), mix(${field}2, ${field}3, f.x), f.y),
     mix(mix(${field}4, ${field}5, f.x), mix(${field}6, ${field}7, f.x), f.y), f.z);`).join('\n  ')}
   result.sample.kernelTangentRadius = vec4<f32>(0.0);
+  result.sample.freshBurn = sampleWorldReactantBurn(p);
   return result;
 }
 

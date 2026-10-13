@@ -188,6 +188,9 @@ def main():
     ap.add_argument("--device", default="mps")
     ap.add_argument("--quant-device", default="cpu", help="where fake quantization runs (cpu matches the packers)")
     ap.add_argument("--only", default=None, help="comma-separated prompt names; seeds stay those of the full sorted set")
+    ap.add_argument("--text-lengths", default=None,
+                    help="comma-separated text sequence lengths (e.g. 512,256,128,fit16): rows at the first scheme's weights "
+                         "where prompts pad to that many tokens instead of 512; fitK pads to the prompt's own length plus K")
     ap.add_argument("--baseline-dir", default=None,
                     help="earlier run whose first-scheme images (same prompts and seeds) are reused instead of regenerated")
     args = ap.parse_args()
@@ -250,18 +253,16 @@ def main():
                                         "reused_from": str(base)}
             report["schemes"][first]["download_bytes"] = sum(report["schemes"][first]["bytes"].values())
             save_report()
-        for scheme in schemes:
-            if scheme in report["schemes"]:
-                continue
-            report["phase"] = f"quantize {scheme}"
-            t0 = time.time()
+        def apply_scheme(scheme):
+            """Put `scheme`'s fake-quantized weights in the model (components already in place are kept);
+            returns (bytes per component, weight relative error per component)."""
             spec = SCHEMES[scheme]
             nbytes, weight_err = dict(FIXED_BYTES), {}
             for comp, lst in mods.items():
                 kind, bits, group = spec[comp]
                 nbytes[comp] = params[comp] * bits_per_weight(kind, bits, group) / 8
                 if applied.get(comp) == spec[comp]:
-                    weight_err[comp] = report["schemes"][applied[comp + ":scheme"]]["weight_rel_l2"][comp]
+                    weight_err[comp] = applied[comp + ":err"]
                     continue
                 err2 = ref2 = 0.0
                 for (name, mod), w in zip(lst, originals[comp]):
@@ -273,12 +274,20 @@ def main():
                     with torch.no_grad():
                         mod.weight.copy_(d.to(mod.weight.device))
                 weight_err[comp] = math.sqrt(err2 / ref2)
-                applied[comp], applied[comp + ":scheme"] = spec[comp], scheme
+                applied[comp], applied[comp + ":err"] = spec[comp], weight_err[comp]
                 # Zeroing a weight is 1.0; far above that means the quantizer, not the format, failed.
                 if weight_err[comp] > 1.2:
                     raise RuntimeError(f"{scheme}: {comp} weight relative error {weight_err[comp]:.2f}")
             if args.device == "mps":
                 torch.mps.synchronize()
+            return nbytes, weight_err
+
+        for scheme in schemes:
+            if scheme in report["schemes"]:
+                continue
+            report["phase"] = f"quantize {scheme}"
+            t0 = time.time()
+            nbytes, weight_err = apply_scheme(scheme)
             report["schemes"][scheme] = {"bytes": nbytes, "download_bytes": sum(nbytes.values()),
                                          "weight_rel_l2": weight_err, "quantize_s": time.time() - t0}
             save_report()
@@ -300,8 +309,40 @@ def main():
                     row["psnr_vs_first"] = psnr(np.asarray(image), np.asarray(Image.open(out / schemes[0] / f"{name}.png")))
                 report["images"].append(row)
                 save_report()
+        rows = list(schemes)
+        if args.text_lengths:
+            # Same weights as the last scheme applied (pass a single scheme); only the text padding changes.
+            first = schemes[0]
+            report["phase"] = f"quantize {first} for text-length rows"
+            report["schemes"][first].setdefault("weight_rel_l2", apply_scheme(first)[1])
+            for spec in args.text_lengths.split(","):
+                row = f"text-{spec}"
+                report["phase"] = f"generate {row}"
+                (out / row).mkdir(exist_ok=True)
+                report["schemes"][row] = dict(report["schemes"][first], text_length=spec)
+                for name, prompt, seed in prompts:
+                    if spec.startswith("fit"):
+                        # Tokenized exactly as the pipeline does: chat template rendered to text, then tokenized.
+                        text = pipe.tokenizer.apply_chat_template([{"role": "user", "content": prompt}], tokenize=False,
+                                                                  add_generation_prompt=True, enable_thinking=False)
+                        length = len(pipe.tokenizer(text)["input_ids"]) + int(spec[3:] or 0)
+                    else:
+                        length = int(spec)
+                    t0 = time.time()
+                    generator = torch.Generator("cpu").manual_seed(seed)
+                    image = pipe(prompt=prompt, height=args.size, width=args.size, num_inference_steps=args.steps,
+                                 guidance_scale=1.0, generator=generator, max_sequence_length=length).images[0]
+                    image.save(out / row / f"{name}.png")
+                    first_times = [i["seconds"] for i in report["images"] if i["scheme"] == first]
+                    entry = {"scheme": row, "prompt": name, "seed": seed, "text_length": length, "seconds": time.time() - t0,
+                             "psnr_vs_first": psnr(np.asarray(image), np.asarray(Image.open(out / first / f"{name}.png")))}
+                    if first_times and entry["seconds"] < 0.25 * sorted(first_times)[len(first_times) // 2]:
+                        raise RuntimeError(f"{row}/{name} generated implausibly fast: the pipeline did not run")
+                    report["images"].append(entry)
+                    save_report()
+                rows.append(row)
         report["phase"] = "sheet"
-        contact_sheet(out, schemes, [n for n, _, _ in prompts], report)
+        contact_sheet(out, rows, [n for n, _, _ in prompts], report)
         report["phase"] = "done"
     except Exception:
         report["error"] = traceback.format_exc()
