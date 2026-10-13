@@ -81,8 +81,8 @@ async function attention(ops, w, prefix, xNorm, rows, channels, heads, { context
   const v = await linear(ops, source.tensor, source.rows, w(`${prefix}.to_v.weight`), null, { name: `${prefix}.v` });
   const keys = source.rows;
   let mixed;
-  if (ops.attentionMode === 'streaming' && dh === 64) {
-    mixed = await ops.flashAttention({ q, k, v, queries: rows, keys, heads, scale: 1 / Math.sqrt(dh), name: `${prefix}.mixed` });
+  if (ops.attentionMode === 'streaming' && ops.attentionHeadDimSupported(dh)) {
+    mixed = await ops.flashAttention({ q, k, v, queries: rows, keys, heads, headDim: dh, scale: 1 / Math.sqrt(dh), name: `${prefix}.mixed` });
     ops.release(q);
     ops.release(k);
     ops.release(v);
