@@ -28,7 +28,7 @@ export async function mountGivenPaletteMotion({THREE,runtime,motionUrl,motionSha
   state.phase='live-bone-join';const player=attachGivenPalettePlayback({THREE,runtime,adapter,source,document,mountRoot});
   state.status='mounted';state.phase='paused-source';state.effective=source;
   window.kaminosGivenMotion={read:player.read,snapshot:()=>({...structuredClone(state),playback:player.read(),skin:window.kaminosLiveTransport.snapshot()}),
-   play:player.play,pause:player.pause,replay:player.replay,seek:player.seek,dispose:player.dispose};
+   play:player.play,pause:player.pause,replay:player.replay,restore:player.restore,seek:player.seek,dispose:player.dispose};
   return player;
  }catch(error){state.status='failed';state.error=error.message;throw error;}
 }
