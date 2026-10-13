@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import {savedSceneLocation} from '../scene-authoring.mjs';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const section=(start,end)=>{const at=html.indexOf(start);assert.ok(at>=0,start);return html.slice(at,html.indexOf(end,at));};
@@ -18,7 +19,7 @@ function mount({fire=true,existing=false,refused=true}={}) {
   setInfo:m=>messages.push(m),compositionStatus:m=>messages.push(m),volumeCockpitLayoutReady:Promise.resolve(),
   buildVolumeSettingsPreset:()=>preset,activeVolumeSettingsPresetReceipt:null,burnerRecipe:null,
   isAuthoredKilnCollisionRoute:()=>true,fireLightFieldRouteParams:()=>new URLSearchParams('volume_light_field=1'),
-  location:{hash:'#authoring=1',origin:'http://localhost:61051'},COMPOSITION_SCHEMA:'kaminos.stationary-flame-composition.v1',
+  savedSceneLocation,history:{replaceState(_state,_title,url){c.location.href=url;}},location:{href:'http://localhost:61051/#authoring=1',hash:'#authoring=1',origin:'http://localhost:61051'},COMPOSITION_SCHEMA:'kaminos.stationary-flame-composition.v1',
   saveVolumeSettingsPreset:async({preset:p})=>{writes.push({kind:'basin',preset:p});return{effective:{presetId:'vsp-test',label:'Fresh fire'}};},
   buildSceneData:()=>({objects:[{id:'kiln',type:'glb'}],composition:c.activeSceneComposition}),
   fetch:async(url,{body})=>{writes.push({kind:'scene',body:JSON.parse(body)});return{ok:true,json:async()=>({saved:'fresh.kaminos.json'})};},
