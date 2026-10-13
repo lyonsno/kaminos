@@ -122,32 +122,38 @@ struct VitPrefixDims {
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(4) var<uniform> dims: VitPrefixDims;
 
+var<workgroup> partial_sums: array<f32, 64>;
+
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let token = gid.x;
+fn main(@builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) group: vec3<u32>, @builtin(num_workgroups) dispatch_grid: vec3<u32>) {
+  let token = group.x + group.y * dispatch_grid.x + group.z * dispatch_grid.x * dispatch_grid.y;
   if (token >= dims.batch * dims.patch_tokens) { return; }
   let base = token * dims.hidden_size;
-  var mean = 0.0;
-  var mean_correction = 0.0;
-  for (var c = 0u; c < dims.hidden_size; c = c + 1u) {
-    let adjusted = input_values[base + c] - mean_correction;
-    let next_mean = mean + adjusted;
-    mean_correction = (next_mean - mean) - adjusted;
-    mean = next_mean;
+  var local_sum = 0.0;
+  for (var c = lane; c < dims.hidden_size; c = c + 64u) {
+    local_sum = local_sum + input_values[base + c];
   }
-  mean = mean / f32(dims.hidden_size);
+  partial_sums[lane] = local_sum;
+  workgroupBarrier();
+  for (var stride = 32u; stride > 0u; stride = stride / 2u) {
+    if (lane < stride) { partial_sums[lane] = partial_sums[lane] + partial_sums[lane + stride]; }
+    workgroupBarrier();
+  }
+  let mean = partial_sums[0] / f32(dims.hidden_size);
+  workgroupBarrier();
   var variance = 0.0;
-  var variance_correction = 0.0;
-  for (var c = 0u; c < dims.hidden_size; c = c + 1u) {
+  for (var c = lane; c < dims.hidden_size; c = c + 64u) {
     let delta = input_values[base + c] - mean;
-    let adjusted = delta * delta - variance_correction;
-    let next_variance = variance + adjusted;
-    variance_correction = (next_variance - variance) - adjusted;
-    variance = next_variance;
+    variance = variance + delta * delta;
   }
-  variance = variance / f32(dims.hidden_size);
-  let inv_std = inverseSqrt(variance + dims.layer_norm_eps);
-  for (var c = 0u; c < dims.hidden_size; c = c + 1u) {
+  partial_sums[lane] = variance;
+  workgroupBarrier();
+  for (var stride = 32u; stride > 0u; stride = stride / 2u) {
+    if (lane < stride) { partial_sums[lane] = partial_sums[lane] + partial_sums[lane + stride]; }
+    workgroupBarrier();
+  }
+  let inv_std = inverseSqrt(partial_sums[0] / f32(dims.hidden_size) + dims.layer_norm_eps);
+  for (var c = lane; c < dims.hidden_size; c = c + 64u) {
     output_values[base + c] = (input_values[base + c] - mean) * inv_std * norm_weight[c] + norm_bias[c];
   }
 }
@@ -329,7 +335,7 @@ export function createSam3ImageVitPrefixDispatchPlan(input = {}) {
   return {
     tilePositionEmbeddings: entry(elementwiseValues),
     addPositionEmbeddings: entry(shape.batch * elementwiseValues),
-    vitPrefixLayernorm: entry(shape.batch * shape.patchTokens),
+    vitPrefixLayernorm: { logicalInvocations: shape.batch * shape.patchTokens, dispatch: createLinearDispatch(shape.batch * shape.patchTokens, { workgroupSize: 1, maxWorkgroupsPerDimension }) },
   };
 }
 

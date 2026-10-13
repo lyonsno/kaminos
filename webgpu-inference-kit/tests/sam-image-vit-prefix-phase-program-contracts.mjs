@@ -68,13 +68,14 @@ assert.equal(nativeDispatch.tilePositionEmbeddings.logicalInvocations, 5_308_416
 assert.equal(nativeDispatch.addPositionEmbeddings.logicalInvocations, 5_308_416, 'native position addition must preserve its complete logical output domain');
 assert.deepEqual(nativeDispatch.tilePositionEmbeddings.dispatch, [288, 288], 'native position tiling must tile 82,944 workgroups across legal WebGPU dimensions');
 assert.deepEqual(nativeDispatch.addPositionEmbeddings.dispatch, [288, 288], 'native position addition must tile 82,944 workgroups across legal WebGPU dimensions');
-assert.deepEqual(nativeDispatch.vitPrefixLayernorm.dispatch, [81], 'native prefix LayerNorm remains within one-dimensional dispatch capacity');
+assert.deepEqual(nativeDispatch.vitPrefixLayernorm.dispatch, [5184], 'native prefix LayerNorm gives every row its own parallel reduction workgroup');
 assert.ok(
   [nativeDispatch.tilePositionEmbeddings, nativeDispatch.addPositionEmbeddings, nativeDispatch.vitPrefixLayernorm]
     .every(entry => entry.dispatch.every(count => count <= 65_535)),
   'every native ViT-prefix dispatch dimension must respect the effective device limit',
 );
-assert.equal((routeSource.match(/@builtin\(num_workgroups\)\s+dispatch_grid/g) || []).length, 2, 'both elementwise ViT-prefix kernels must receive the multidimensional dispatch grid');
+assert.equal((routeSource.match(/@builtin\(num_workgroups\)\s+dispatch_grid/g) || []).length, 3, 'all prefix kernels must receive the multidimensional dispatch grid');
+assert.match(routeSource, /var<workgroup> partial_sums: array<f32, 64>/, 'prefix uses a bounded pairwise reduction per row');
 assert.equal((routeSource.match(/gid\.x\s*\+\s*gid\.y\s*\*\s*dispatch_grid\.x\s*\*\s*64u/g) || []).length, 2, 'both elementwise ViT-prefix kernels must reconstruct the uncapped linear invocation index');
 
 const oracle = createSam3ImageVitPrefixPhaseProgramCpuOracle({
@@ -107,9 +108,7 @@ assert.ok(Math.abs(metaPrefix.vitPrefixHiddenStates[1] - 0.30151134729385376) < 
 assert.equal(metaPrefix.shape.layerNormEps, 0.00001);
 assert.ok(Math.abs(sensitivePrefix().vitPrefixHiddenStates[1] - 0.7071067690849304) < 1e-7, 'legacy SAM3 prefix epsilon stays 1e-6');
 for (const epsilon of [0, -1, NaN, Infinity, '0.00001']) assert.throws(() => sensitivePrefix(epsilon), /layerNormEps/, 'invalid epsilon must fail before normalization');
-assert.match(routeSource, /variance \+ dims\.layer_norm_eps/, 'GPU prefix normalization must consume the same epsilon as the CPU oracle');
+assert.match(routeSource, /inverseSqrt\([^;]*dims\.layer_norm_eps\)/, 'GPU prefix normalization must consume the same epsilon as the CPU oracle');
 assert.match(routeSource, /name: 'layer_norm_eps', type: 'f32'/, 'epsilon must retain f32 uniform semantics');
-assert.match(routeSource, /mean_correction = \(next_mean - mean\) - adjusted/, 'prefix mean must compensate f32 accumulation error');
-assert.match(routeSource, /variance_correction = \(next_variance - variance\) - adjusted/, 'prefix variance must compensate f32 accumulation error');
 
 console.log('sam image ViT-prefix phase-program contracts passed');

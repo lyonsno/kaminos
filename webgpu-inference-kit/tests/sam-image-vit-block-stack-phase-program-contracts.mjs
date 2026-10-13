@@ -153,10 +153,8 @@ const dispatchShape = {
 const workspace224 = createSam3ImageVitBlockStackWorkspacePlan({ batch: 1, height: 16, width: 16, hiddenSize: 1024, windowSize: 24 });
 assert.doesNotThrow(() => createSam3ImageVitBlockStackDispatchPlan({ shape: { ...dispatchShape, layerNormEps: 0.00001 }, layerIndex: 0 }), 'SAM3.1 block stack must accept the pinned Meta epsilon');
 for (const layerNormEps of [0, -1, NaN, Infinity, '0.00001']) assert.throws(() => createSam3ImageVitBlockStackDispatchPlan({ shape: { ...dispatchShape, layerNormEps }, layerIndex: 0 }), /layerNormEps/);
-assert.match(routeSource, /variance \+ dims\.layer_norm_eps/, 'both GPU block layer norms must use caller epsilon');
+assert.match(routeSource, /inverseSqrt\([^;]*dims\.layer_norm_eps\)/, 'both GPU block layer norms must use caller epsilon');
 assert.match(routeSource, /name: 'layer_norm_eps', type: 'f32'/, 'block epsilon must be f32, not padding');
-assert.match(routeSource, /mean_correction = \(next_mean - mean\) - adjusted/, 'block mean must compensate f32 accumulation error');
-assert.match(routeSource, /variance_correction = \(next_variance - variance\) - adjusted/, 'both block layer norms must compensate variance accumulation');
 assert.deepEqual(workspace224, { localWindowTokensPerBatch: 576, globalWindowTokensPerBatch: 256, maxWindowTokensPerBatch: 576, maxWindowValues: 589_824 });
 const workspace448 = createSam3ImageVitBlockStackWorkspacePlan({ batch: 1, height: 32, width: 32, hiddenSize: 1024, windowSize: 24 });
 assert.deepEqual(workspace448, { localWindowTokensPerBatch: 2_304, globalWindowTokensPerBatch: 1_024, maxWindowTokensPerBatch: 2_304, maxWindowValues: 2_359_296 });
@@ -167,7 +165,8 @@ const dispatch448 = createSam3ImageVitBlockStackDispatchPlan({
   layerIndex: 0,
   maxWorkgroupsPerDimension: 65_535,
 });
-assert.deepEqual(dispatch448.layerNorm1, { logicalInvocations: 1_024, dispatch: [16] });
+assert.deepEqual(dispatch448.layerNorm1, { logicalInvocations: 1_024, dispatch: [1_024] }, 'each block row owns one parallel reduction workgroup');
+assert.match(routeSource, /var<workgroup> partial_sums: array<f32, 64>/, 'both block layer norms use pairwise reduction');
 assert.deepEqual(dispatch448.windowPartition, { logicalInvocations: 2_359_296, dispatch: [36_864] });
 // Dense projections: tiled GEMM grid [ceil(out/64), ceil(tokens/bm)]; 8x4 per-thread tiles (bm 128) only
 // when the grid stays >= 1024 workgroups.
