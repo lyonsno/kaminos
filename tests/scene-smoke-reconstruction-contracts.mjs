@@ -67,6 +67,8 @@ bindings.update(frame);bindings.update({...frame,generation:2});assert.equal(gro
 bindings.update({...frame,smokeReconstruction:{...r,masks:{}}});assert.equal(groups,2,'same texture with new visibility must rebind');
 bindings.update({...frame,smokeReconstruction:{...r,texture:{createView:()=>({})}}});assert.equal(groups,3);
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,staticPreparations:0}}),/reconstruction resources/);
+assert.doesNotThrow(()=>bindings.update({...frame,smokeReconstruction:{...r,staticPreparations:2,updates:2}}),'moving solids may refresh the same reconstruction resources');
+assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,staticPreparations:NaN}}),/reconstruction resources/);
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,updates:0}}),/reconstruction resources/);
 assert.throws(()=>bindings.update({texture}),/reconstruction resources/);
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,identity:'old'}}),/reconstruction resources/);
