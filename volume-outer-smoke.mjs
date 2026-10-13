@@ -1,12 +1,13 @@
 // One-way coarse atmosphere. All positions are in the detailed domain's local
 // metric; velocities are local distance per reference transport tick, not cells.
 import {PASSIVE_MATERIAL_LAW, PASSIVE_MATERIAL_WGSL} from './volume-passive-material.mjs';
-export function outerSmokeConfig({grid=32, extent=4, pressureIterations=24, nearHeightRatio=2}={}) {
+export function outerSmokeConfig({grid=32, extent=4, pressureIterations=24, nearHeightRatio=2, materialMode='optical-only'}={}) {
+  if(!['optical-only','authored-raw'].includes(materialMode))throw new Error('unsupported outer material mode');
   if (![1,2].includes(nearHeightRatio)) throw new Error('near height ratio must be 1 or 2');
   if (!Number.isInteger(grid) || grid<2) throw new Error('outer grid must be an integer >= 2');
   if (!Number.isFinite(extent) || extent<=1) throw new Error('outer extent must exceed the near domain');
   if (!Number.isInteger(pressureIterations) || pressureIterations<1) throw new Error('outer pressure iterations must be positive');
-  return {grid,extent,pressureIterations,nearHeightRatio,shape:[grid,2*grid,grid],min:[-extent,-extent,-extent],
+  return {grid,extent,pressureIterations,nearHeightRatio,materialMode,shape:[grid,2*grid,grid],min:[-extent,-extent,-extent],
     max:[extent,3*extent,extent],cellWidth:2*extent/grid};
 }
 export const outerCellCenter=(c,xyz)=>xyz.map((v,a)=>c.min[a]+(v+.5)*c.cellWidth);
@@ -74,6 +75,7 @@ export const outerSmokeOverlapWidth=c=>Math.min(1,Math.max(.25,2*c.cellWidth));
 
 export function outerSmokeShader(c,nearGrid) {
   const donor=outerDonorBounds(c);
+  const raw=c.materialMode==='authored-raw';
   return /* wgsl */`
 const N=vec3<i32>(${c.grid},${2*c.grid},${c.grid});
 const STORAGE=N+vec3<i32>(1);
@@ -153,7 +155,7 @@ fn nearMaterial(c:vec3<i32>)->vec4<f32>{
     let overlap=max(vec3<f32>(0.0),min(hi,cellLo+h)-max(lo,cellLo));
     let w=overlap.x*overlap.y*overlap.z;let base=nearIndex(q);
     let m=near[base+1u];let micro=near[base+3u];
-    sum+=vec4<f32>(m.x+micro.x*.5+m.w*.08,m.y,0.0,0.0)*w;weight+=w;
+    sum+=vec4<f32>(m.x+micro.x*.5+m.w*.08,m.y,${raw?'m.z,m.x':'0.0,0.0'})*w;weight+=w;
   }}}return sum/max(weight,1e-20);
 }
 fn sampleLinearChannel(p:vec3<f32>,channel:i32)->f32{
@@ -168,7 +170,11 @@ fn sampleLinearChannel(p:vec3<f32>,channel:i32)->f32{
       if(validFace(clamped,channel)&&!blocked(clamped,channel)){value+=w*src[index(clamped)].velocity[channel];weight+=w;}
     }else{
       if(!inside(cell)){weight+=w;continue;} // ambient inflow has no smoke/heat
-      if(!solid(cell)){value+=w*src[index(cell)].material[channel-3];weight+=w;}
+      if(!solid(cell)){
+        if(channel==7){value+=w*src[index(cell)].velocity.w;}
+        else{value+=w*src[index(cell)].material[channel-3];}
+        weight+=w;
+      }
     }
   }}}return value/max(weight,1e-12);
 }
@@ -191,7 +197,8 @@ fn sampleChannel(p:vec3<f32>,channel:i32)->f32{
         row[u32(x)]=src[index(c)].velocity[channel];
       }else{
         if(!inside(c)||solid(c)){return sampleLinearChannel(p,channel);}
-        row[u32(x)]=src[index(c)].material[channel-3];
+        if(channel==7){row[u32(x)]=src[index(c)].velocity.w;}
+        else{row[u32(x)]=src[index(c)].material[channel-3];}
       }
     }rows[u32(z*4+y)]=cubicChannel(row[0],row[1],row[2],row[3],f.x);
   }}
@@ -220,13 +227,20 @@ fn advect(@builtin(global_invocation_id) id:vec3<u32>){
     let p=point(c);let end=clipCharacteristic(p,p-velocity(p)*params.transportScale);
     // p is already in the fine kernel's normalised metric (-1 at its floor).
     // Cool the transported heat before conversion, as in the fine kernel.
-    // There is no outer fuel, source birth, reaction or fine wall sponge.
+    // Authored raw mode transports fuel passively, without burning it or
+    // feeding it into the heat-to-smoke term. No fine wall sponge is applied.
     let heat=sampleChannel(end,4)*pow(MATERIAL_HEAT_SURVIVAL,params.stepScale);
     let smoke=sampleChannel(end,3)*pow(MATERIAL_SMOKE_SURVIVAL,params.stepScale)
       +passiveHeatToSmokeRate(heat,p.y)*params.stepScale;
     result.material=vec4<f32>(smoke,heat,0.0,0.0);
+    ${raw?`result.velocity.w=sampleChannel(end,7)*pow(MATERIAL_SMOKE_SURVIVAL,params.stepScale)
+      +passiveHeatToSmokeRate(heat,p.y)*params.stepScale;
+    result.material.z=sampleChannel(end,5);`:''}
     // Donors carry this tick's already-evolved fine material; do not age twice.
-    if(nearPoint(p)){result.material=nearMaterial(c);}
+    if(nearPoint(p)){
+      result.material=nearMaterial(c);
+      ${raw?'result.velocity.w=result.material.w;result.material.w=0.0;':''}
+    }
   }
   for(var a=0;a<3;a++){
     if(!validFace(c,a)||blocked(c,a)){continue;}
@@ -313,13 +327,14 @@ fn project(@builtin(global_invocation_id) id:vec3<u32>){
 @compute @workgroup_size(4,4,4)
 fn publish(@builtin(global_invocation_id) id:vec3<u32>){
   let c=vec3<i32>(id);if(!inside(c)){return;}
-  textureStore(optical,c,src[index(c)].material);
+  textureStore(optical,c,vec4<f32>(src[index(c)].material.xy,0.0,0.0));
 }
 `;
 }
 
 export function createOuterSmoke(device, config, nearGrid, nearBuffers) {
   const c=outerSmokeConfig(config), count=(c.grid+1)*(2*c.grid+1)*(c.grid+1);
+  const materialMode=c.materialMode; // Shader capability is fixed at construction.
   validateOuterSmokeDevice(c,device.limits);
   const owned=[];
   const buffer=(label,size)=>{const b=device.createBuffer({label,size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});owned.push(b);return b;};
@@ -343,6 +358,35 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers) {
   const pipelines=Object.fromEntries(['advect','divergence','jacobi','pressureEven','pressureOdd','pressureErrorReset','pressureError','pressureErrorFinish','project','publish'].map(entryPoint=>[entryPoint,
     device.createComputePipeline({label:`outer ${entryPoint}`,layout:pipelineLayout,compute:{module:shader,entryPoint}})]));
   const groups=new Map();
+  // Match the landed fine hook's two padded rgba32float sampled textures.
+  // word3 is raw soot, not velocity; word6 is passive fuel. Oxidizer is absent.
+  // Default optical-only instances never advertise this material capability.
+  let ghostPipeline;
+  const encodeGhostSnapshot=(encoder,textures)=>{
+    assertUsable();
+    if(materialMode!=='authored-raw')throw new Error('ghost snapshot requires authored-raw material mode');
+    const {a,b}=textures??{};
+    if(!a||!b||a===b)throw new Error('two distinct ghost textures required');
+    const shape=c.shape.map(n=>n+1);
+    for(const t of [a,b]){
+      if(t.dimension!=='3d'||t.format!=='rgba32float'||!(t.usage&GPUTextureUsage.STORAGE_BINDING))throw new Error('ghost textures require 3d rgba32float storage');
+      if(t.width!==shape[0]||t.height!==shape[1]||t.depthOrArrayLayers!==shape[2])throw new Error('ghost texture shape must match padded exterior');
+    }
+    if(!ghostPipeline){
+      const code=`struct Cell {velocity:vec4<f32>,material:vec4<f32>}
+@group(0) @binding(0) var<storage,read> state:array<Cell>;
+@group(0) @binding(1) var a:texture_storage_3d<rgba32float,write>;
+@group(0) @binding(2) var b:texture_storage_3d<rgba32float,write>;
+@compute @workgroup_size(4,4,4) fn main(@builtin(global_invocation_id) p:vec3<u32>){
+ let size=vec3<u32>(${shape.map(n=>n+'u').join(',')});if(any(p>=size)){return;}
+ let cell=state[p.x+size.x*(p.y+size.y*p.z)];textureStore(a,vec3<i32>(p),cell.velocity);textureStore(b,vec3<i32>(p),cell.material);
+}`;
+      ghostPipeline=device.createComputePipeline({label:'outer authored raw ghost snapshot',layout:'auto',compute:{module:device.createShaderModule({code}),entryPoint:'main'}});
+    }
+    const group=device.createBindGroup({layout:ghostPipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:states[current]}},{binding:1,resource:a.createView()},{binding:2,resource:b.createView()}]});
+    const pass=encoder.beginComputePass({label:'outer authored raw ghost snapshot'});pass.setPipeline(ghostPipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(...shape.map(n=>Math.ceil(n/4)));pass.end();
+    return {encoded:true,layout:'lower-local-velocity-raw-soot/optical-heat-fuel-unavailable-v0',materialMode,oxidizer:'unavailable',shape,outerStep:steps};
+  };
   const group=(nearIndex,s,p)=>{
     const key=`${nearIndex}/${s}/${p}`;if(groups.has(key))return groups.get(key);
     const bindings=[params,nearBuffers[nearIndex],states[s],states[1-s],pressures[p],pressures[1-p]];
@@ -363,7 +407,7 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers) {
       {bytesPerRow,rowsPerImage:2*c.grid},c.shape);solidRevision=null;
   };
   return {
-    config:c,optical,solids,shader,clearSolids,
+    config:c,optical,solids,shader,clearSolids,encodeGhostSnapshot,
     setSolids(packed,revision){device.queue.writeTexture({texture:solids},packed.data,{bytesPerRow:packed.bytesPerRow,rowsPerImage:packed.rowsPerImage},c.shape);solidRevision=revision;},
     encode(encoder,nearIndex,{dtScale,backtraceScale},buoyancy=.002){
       assertUsable();projectionOwner='isolated';pressureCompletion=null;
@@ -397,6 +441,7 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers) {
       }catch(e){projectionFailed=true;throw e;}finally{projectionBusy=false;}
     },
     receipt(){return {requested:true,effective:projectionFailed?'external-projection-failed':projectionOwner==='external'?'external-projection-coarse-smoke-v0':'one-way-coarse-pressure-smoke-v0',shape:c.shape,bounds:{min:c.min,max:c.max},cellWidth:c.cellWidth,
+      materialMode,rawSoot:materialMode==='authored-raw',fuel:materialMode==='authored-raw'?'passive-no-reaction':'unavailable',oxidizer:'unavailable',
       passiveMaterial:{identity:PASSIVE_MATERIAL_LAW.identity,heatSurvivalPerStep:PASSIVE_MATERIAL_LAW.heatSurvivalPerStep,smokeSurvivalPerStep:PASSIVE_MATERIAL_LAW.smokeSurvivalPerStep,conversion:'cooled-heat-fuel-free',heightFrame:PASSIVE_MATERIAL_LAW.heightFrame,donorAging:'already-evolved-fine-overwrite'},
       pressureIterations:projectionOwner==='isolated'?c.pressureIterations:null,pressureBudget:projectionOwner==='isolated'?pressureBudget:null,pressureWarmStart:projectionOwner==='isolated',pressureScheme:projectionOwner==='isolated'?'red-black-sor':'external-unverified',pressureTarget:projectionOwner==='isolated'?.001:null,pressureCompletion,steps,solidRevision,stateAndPressureBytes:count*80+16,advection:'bounded-cubic-velocity-smoke-heat-v0',wallInterpolation:'masked-trilinear-near-solids-and-exterior',donorBounds:outerDonorBounds(c),innerFeedback:false,scalarTransfer:'interior-overlap-volume-average-dirichlet-not-conservative-flux',outerBoundary:projectionOwner==='isolated'?'ambient-zero-pressure':'caller-owned-unverified'};},
     async readState(){assertUsable();const measuredStep=steps,measuredOwner=projectionOwner,b=device.createBuffer({size:count*32+16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
