@@ -75,11 +75,14 @@ export function createOwnerSceneSession(hooks) {
     dispose() {
       if (!disposed) {
         disposed = true;
+        // Host cancellation can reenter close; publish its promise first.
+        let resolve, reject;
+        disposal = new Promise((done, fail) => {resolve = done; reject = fail;});
         controller.abort();
         for (const entry of [...frames]) {
           try {entry.cancel();} catch (error) {cleanupErrors.push(error);}
         }
-        disposal = (async () => {
+        (async () => {
           // Loads receive cancellation immediately. A host which completes anyway
           // is awaited so its newly registered object can be released honestly.
           await Promise.allSettled([...pending]);
@@ -88,7 +91,7 @@ export function createOwnerSceneSession(hooks) {
           }
           objects.clear();
           if (cleanupErrors.length) throw new AggregateError(cleanupErrors, 'Scene session cleanup failed');
-        })();
+        })().then(resolve, reject);
       }
       return disposal;
     },
