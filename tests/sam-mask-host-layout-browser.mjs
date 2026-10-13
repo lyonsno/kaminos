@@ -29,6 +29,20 @@ try {
   report.phase = 'fixture'; saveReport();
   const page = await browser.newPage();
   page.setDefaultTimeout(0);
+  report.phase = 'clipping-contract'; saveReport();
+  const checksModule = `data:text/javascript;base64,${fs.readFileSync(path.join(root, 'sam-image-witness-checks.js')).toString('base64')}`;
+  await page.setContent('<div style="position:fixed;top:42px;left:10px;width:120px;height:80px;overflow:hidden"><button id="clipped" style="position:absolute;top:-14px;width:100px;height:30px">Clipped</button></div><button id="covered" style="position:fixed;top:160px;left:10px;width:100px;height:30px">Covered</button><div style="position:fixed;top:160px;left:10px;width:100px;height:30px;z-index:10;background:black"></div><button id="visible" style="position:fixed;top:240px;left:10px;width:100px;height:30px">Visible</button>');
+  const visibility = await page.evaluate(async address => {
+    const { samControlIsFullyVisible } = await import(address);
+    return Object.fromEntries(['clipped', 'covered', 'visible'].map(id => {
+      const button = document.getElementById(id), rect = button.getBoundingClientRect();
+      return [id, { eligible: samControlIsFullyVisible(button), hit: button.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)) }];
+    }));
+  }, checksModule);
+  report.clippingContract = visibility;
+  assert.equal(visibility.clipped.eligible, false, 'ancestor-clipped controls are not fully visible');
+  assert.deepEqual(visibility.covered, { eligible: true, hit: false }, 'fully visible covered controls must still fail hit testing');
+  assert.deepEqual(visibility.visible, { eligible: true, hit: true });
   const markup = await page.evaluate(html => {
     const document = new DOMParser().parseFromString(html, 'text/html');
     return { baseline: document.querySelector('style').textContent, panel: document.getElementById('tab-masks').outerHTML };
@@ -41,6 +55,11 @@ try {
       const panel = document.getElementById('tab-masks'); panel.style.display = 'block';
       const context = document.getElementById('sam-image-canvas').getContext('2d');
       context.fillStyle = '#478789'; context.fillRect(0, 0, 1800, 1200);
+      for (const name of ['scene-top-menu', 'navigation-hint', 'scene-edit-hud']) {
+        const overlay = document.createElement('div');
+        if (name === 'scene-top-menu') overlay.className = name; else overlay.id = name;
+        overlay.textContent = name; document.getElementById('viewport').append(overlay);
+      }
     });
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const measurements = await page.evaluate(() => {
@@ -50,7 +69,8 @@ try {
         const box = button.getBoundingClientRect();
         return { text: button.textContent, hit: button.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)) };
       });
-      return { viewport, sidebar, canvas: rect('sam-image-canvas'), buttons, documentWidth: document.documentElement.scrollWidth, width: innerWidth };
+      const sceneOverlaysHidden = ['.scene-top-menu', '#navigation-hint', '#scene-edit-hud'].every(selector => getComputedStyle(document.querySelector(selector)).display === 'none');
+      return { viewport, sidebar, canvas: rect('sam-image-canvas'), buttons, sceneOverlaysHidden, documentWidth: document.documentElement.scrollWidth, width: innerWidth };
     });
     const screenshot = path.join(out, `layout-${width}.png`);
     await page.screenshot({ path: screenshot, fullPage: true });
@@ -59,6 +79,7 @@ try {
     assert.ok(measurements.viewport.width >= (width <= 700 ? width - 1 : width - 381), `mask viewport crushed at ${width}: ${measurements.viewport.width}px`);
     assert.ok(measurements.canvas.width > 200, 'mask image has no useful visible area');
     assert.ok(measurements.buttons.every(button => button.hit), 'mode buttons are occluded');
+    assert.ok(measurements.sceneOverlaysHidden, 'scene-only overlays must not cover the image mask surface');
     assert.ok(measurements.documentWidth <= width, 'mask layout overflows the viewport');
     if (width <= 700) assert.ok(measurements.viewport.top >= measurements.sidebar.bottom - 1, 'mask controls and image must stack on mobile');
     else assert.ok(measurements.viewport.left >= measurements.sidebar.right - 1, 'desktop must keep side-by-side layout');
