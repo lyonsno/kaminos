@@ -9,6 +9,12 @@ from pathlib import Path
 import numpy as np
 from hindquarter_binding import bind_geometry,partial_rotation,JOINT_CHANNELS
 
+def validate_source_frame(control,frame,baseline,control_sha):
+    if frame['source']['control']['sha256']!=control_sha:raise ValueError('control-frame source digest mismatch')
+    if baseline['candidatePaintedWeights'] is not False or baseline['sourceSha256']!=control['sourceSha256'] or frame['source']['sourceSceneSha256']!=control['sourceSha256']:
+        raise ValueError('source/candidate identity mismatch')
+    if baseline['sourceCast']!=control['cast']:raise ValueError('cast source identity mismatch')
+
 def extend_weights(points,edges,rear_weights,bones):
     epsilon=np.finfo(rear_weights.dtype).eps*16
     if not np.isfinite(rear_weights).all() or rear_weights.min() < -epsilon or not np.allclose(rear_weights.sum(axis=1),1,rtol=0,atol=epsilon):
@@ -92,11 +98,15 @@ def build(args):
     try:
         if digest(frame_path)!=args.expected_rig_frame_sha256 or digest(baseline/'manifest.json')!=args.expected_baseline_sha256:raise ValueError('given frame or baseline digest mismatch')
         control=json.loads(control_path.read_text());frame=json.loads(frame_path.read_text());old=json.loads((baseline/'manifest.json').read_text())
-        if old['candidatePaintedWeights'] is not False or old['sourceSha256']!=control['sourceSha256'] or frame['source']['sourceSceneSha256']!=control['sourceSha256']:raise ValueError('source/candidate identity mismatch')
+        validate_source_frame(control,frame,old,digest(control_path))
         if digest(control['geometry']['path'])!=control['geometry']['sha256']:raise ValueError('geometry digest mismatch')
         geom=np.load(control['geometry']['path'])
         if set(geom.files)!={'positions','triangles'}:raise ValueError('candidate includes painted fields')
         rest,triangles=geom['positions'],geom['triangles'];bones=frame['bones']
+        for name,array,dtype in [('rest.bin',rest.astype('<f4'),'<f4'),('triangles.bin',triangles.astype('<u4'),'<u4')]:
+            path=baseline/name;asset=old['assets'][name]
+            if digest(path)!=asset['sha256'] or not np.array_equal(np.fromfile(path,dtype=dtype).reshape(array.shape),array):
+                raise ValueError('whole-tree input changed accepted geometry: '+name)
         if len(bones)!=28:raise ValueError('given full tree is not the28-joint source')
         report['phase']='automatic-influences';start=time.monotonic()
         binding=bind_geometry(rest,triangles,{**control,'domainMethod':'surface','surfaceConnectivity':'coincident','articulated':True})

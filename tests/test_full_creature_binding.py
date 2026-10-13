@@ -13,6 +13,12 @@ def bone(name,x,parent=None):
     return {'name':name,'parent':parent,'restMatrix':matrix.tolist(),'tail':[x,.1,0]}
 
 class FullTreeContracts(unittest.TestCase):
+    def test_control_bytes_and_cast_cannot_impersonate_given_source(self):
+        control={'sourceSha256':'source','cast':'real'};frame={'source':{'control':{'sha256':'control'},'sourceSceneSha256':'source'}}
+        baseline={'sourceSha256':'source','sourceCast':'real','candidatePaintedWeights':False}
+        module.validate_source_frame(control,frame,baseline,'control')
+        with self.assertRaisesRegex(ValueError,'digest'):module.validate_source_frame(control,frame,baseline,'changed')
+        with self.assertRaisesRegex(ValueError,'cast source'):module.validate_source_frame({**control,'cast':'other'},frame,baseline,'control')
     def test_unpainted_head_receives_automatic_given_control(self):
         points=np.array([[0.,0,0],[1.,0,0],[2.,0,0]])
         prior=np.zeros((3,8));prior[:,0]=1
