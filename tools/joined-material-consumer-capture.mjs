@@ -39,7 +39,12 @@ try{
       catch(e){report.evidenceWriteError=String(e);save();res.statusCode=500;res.end('evidence write failed');}
     });
   });
-  await new Promise(r=>server.listen(0,'127.0.0.1',r));const url=`http://127.0.0.1:${server.address().port}/`;report.url=url;
+  report.phase='listener-start';save();
+  await new Promise((resolve,reject)=>{
+    server.once('error',reject);
+    server.listen(0,'127.0.0.1',()=>{server.removeListener('error',reject);resolve();});
+  });
+  const url=`http://127.0.0.1:${server.address().port}/`;report.url=url;
   const profile=mkdtempSync(join(out,'browser-profile-'));report.browser.profile=profile;
   report.phase='browser-launch';save();
   child=spawn(executable,['--headless=new','--password-store=basic','--enable-unsafe-webgpu','--disable-background-timer-throttling','--disable-renderer-backgrounding','--remote-debugging-port=0',`--user-data-dir=${profile}`,url],{stdio:['ignore','ignore','pipe']});report.browser.pid=child.pid;child.on('exit',(code,signal)=>{report.browser.exit={code,signal};save();});
