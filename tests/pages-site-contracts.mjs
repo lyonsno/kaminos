@@ -28,7 +28,7 @@ test("Pages site keeps the flame boutique at the root and adds only the Klein an
   }
   const extra = walk(site).filter(file => !fs.existsSync(path.join(atlas, file)));
   for (const file of extra) {
-    assert.match(file, /^(inference-kit\/klein\/[^/]+\.(html|js)|inference-kit\/klein\/assets\/[^/]+\.(jpg|png)|inference-kit\/unimate\/(index\.html|unimate-[\w-]+\.js|clips\/[\w-]+\.json)|inference-kit\/flux2-klein\/klein-duties\.js|webgpu-inference-kit\/src\/.+\.js)$/, `${file} is outside the published set`);
+    assert.match(file, /^(inference-kit\/klein\/[^/]+\.(html|js)|inference-kit\/klein\/assets\/[^/]+\.(jpg|png)|inference-kit\/unimate\/(index\.html|unimate-[\w-]+\.js|clips\/[\w-]+\.json)|webgpu-inference-kit\/src\/.+\.js)$/, `${file} is outside the published set`);
   }
   assert.ok(fs.existsSync(path.join(site, "inference-kit", "klein", "index.html")));
   assert.ok(fs.existsSync(path.join(site, "inference-kit", "unimate", "index.html")));
