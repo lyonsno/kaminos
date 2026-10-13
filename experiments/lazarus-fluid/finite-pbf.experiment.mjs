@@ -1,17 +1,17 @@
-import {lazarusFiniteSetup} from './contributions.mjs';
+import {lazarusFiniteSetup,lazarusFiniteReplayURL} from './contributions.mjs';
 import {targetStep} from '../../finger-fluid-box-clock.mjs';
 export default {
  id:'lazarus/finite-pbf',title:'PBF · drop, dam break and puddle',
  async create({host,inputs,record}){
-  let setup=lazarusFiniteSetup(inputs),water=await host.fluid.open(setup),node=null,timer=null;
-  const read=()=>({settings:{...setup.inputs},sampling:setup.sampling,water:water.read()});
+  let setup=lazarusFiniteSetup(inputs),water=await host.fluid.open(setup,{restoreReplay:false}),node=null,timer=null;
+  const read=()=>{const state=water.read(),v=state.controls?.effective;if(v){const keys=['particleRepulsionStrength','densityIterations','capillaryStrength','freeFlightViscosityBoost'];if(keys.some(k=>v[k]!==setup.inputs[k]))setup=lazarusFiniteSetup({...setup.inputs,...Object.fromEntries(keys.map(k=>[k,v[k]]))});}return {settings:{...setup.inputs},sampling:setup.sampling,water:state};};
   const recorded=async(name,input,action)=>{record({kind:'lazarus.'+name,phase:'requested',target:'fluid',requested:input});try{const result=await action();record({kind:'lazarus.'+name,phase:'applied',target:'fluid',requested:input,effective:read()});return result;}catch(e){record({kind:'lazarus.'+name,phase:'failed',target:'fluid',requested:input,error:e.message});throw e;}};
   const operations={
    playback:rate=>recorded('playback',rate,()=>{const next=lazarusFiniteSetup({...setup.inputs,rate});water.setPlaybackRate(rate);setup=next;return read();}),
    paused:value=>recorded('paused',value,()=>{water.setPaused(value);return read();}),
    material:patch=>recorded('material',patch,()=>{const next=lazarusFiniteSetup({...setup.inputs,...patch});const receipt=water.applyMaterial(patch);setup=next;return receipt;}),
    advance:seconds=>recorded('advance',seconds,()=>{water.setPaused(true);const n=targetStep(seconds,setup.dt,water.read().clock.step);if(n>water.read().clock.step)water.advanceTo(n);return read();}),
-   reset:patch=>recorded('reset',patch??{},async()=>{const next=lazarusFiniteSetup({...setup.inputs,...patch});if(JSON.stringify(next.inputs)===JSON.stringify(setup.inputs))await water.restart();else water=await host.fluid.open(next);setup=next;return read();}),
+   reset:patch=>recorded('reset',patch??{},async()=>{read();const next=lazarusFiniteSetup({...setup.inputs,...patch});if(JSON.stringify(next.inputs)===JSON.stringify(setup.inputs))await water.restart();else water=await host.fluid.open(next,{restoreReplay:false});setup=next;return read();}),
   };
   return {read,operations,
    mount({root,document,invoke}){
@@ -38,7 +38,7 @@ export default {
     node.querySelector('[data-action=reset]').onclick=()=>call('reset');
     node.querySelector('[data-action=advance]').onclick=()=>call('advance',Number($('time').value));
     const publishedSettings={...setup.inputs};
-    const update=()=>{try{for(const [key,value]of Object.entries(setup.inputs)){if(publishedSettings[key]!==value){const input=$(key);if(input&&document.activeElement!==input)input.value=value;publishedSettings[key]=value;}}const r=water.read();node.querySelector('[data-status]').textContent=`${r.clock.paused?'Paused':'Playing'} · ${r.clock.playbackRate}× playback\nStep ${r.clock.step} · ${r.clock.timeSeconds.toFixed(6)} simulated s\nPhysics dt ${r.clock.frameTimeStepSeconds} s\n${r.runtime.particleCount.toLocaleString()} particles · volume ${setup.sampling.worldVolume.toPrecision(5)}\nPBF support ${r.runtime.viscosityScaling.supportRadius.toPrecision(5)}`;node.querySelector('[data-action=pause]').textContent=r.clock.paused?'Play':'Pause';const u=new URL(location.href);u.searchParams.set('experiment','lazarus/finite-pbf');u.searchParams.set('experiment_inputs',JSON.stringify(setup.inputs));node.querySelector('[data-share]').href=u.href;}catch(e){error.textContent=e.message;}};
+    const update=()=>{try{const current=read();for(const [key,value]of Object.entries(setup.inputs)){if(publishedSettings[key]!==value){const input=$(key);if(input&&document.activeElement!==input)input.value=value;publishedSettings[key]=value;}}const r=current.water;node.querySelector('[data-status]').textContent=`${r.clock.paused?'Paused':'Playing'} · ${r.clock.playbackRate}× playback\nStep ${r.clock.step} · ${r.clock.timeSeconds.toFixed(6)} simulated s\nPhysics dt ${r.clock.frameTimeStepSeconds} s\n${r.runtime.particleCount.toLocaleString()} particles · volume ${setup.sampling.worldVolume.toPrecision(5)}\nPBF support ${r.runtime.viscosityScaling.supportRadius.toPrecision(5)}`;node.querySelector('[data-action=pause]').textContent=r.clock.paused?'Play':'Pause';node.querySelector('[data-share]').href=lazarusFiniteReplayURL(location.href,setup.inputs);}catch(e){error.textContent=e.message;}};
     update();timer=setInterval(update,250);
    },
    async dispose(){clearInterval(timer);node?.remove();await water.dispose();}

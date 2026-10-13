@@ -140,3 +140,10 @@ variant needs an explicit renewal receipt if its generation changes. The host
 reports both configured frame dt and effective substep dt, using the actual
 backend substep count; exact advances reject incomplete-frame targets before
 stepping. This preserves configuration, not an evolved-water checkpoint.
+
+A producer whose complete invocation inputs own reconstruction may call
+`host.fluid.open(setup, {restoreReplay:false})`. This preserves its current
+setup during in-instance changes and its canonical settings link. The default
+continues restoring the existing same-definition pressure settings URL.
+Explicit replay renews the playback clock before and after allocation, keeping
+the chosen rate and prior play/pause state while excluding initialization time.

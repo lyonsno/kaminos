@@ -1,0 +1,7 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';
+const source=process.argv[2]?fs.readFileSync(process.argv[2],'utf8'):fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const start=source.indexOf('function renderFingerFluidBenchCurrentStateForWitness('),body=source.indexOf(') {',start)+3,end=source.indexOf('  const options={',body),prefix=source.slice(body,end);
+const env={fingerFluidBenchSolver:{available:true},fingerFluidBenchViewport:{},fingerFluidBenchAnimationFrame:null,fingerFluidBenchRunning:false,fingerFluidBenchSimulationPaused:false,fingerFluidBenchConfig:{},renderer:{domElement:{}},cancelAnimationFrame(){},window:{_kaminosDirty(){}}};
+for(const name of ['rendererMode','opticalDebugMode','opticalLightingMode','opticalFootprintMode','transmissionFootprintMode','bodyTransportMode','interfaceFrequencyMode'])env[name]='test';
+for(const name of ['resolveFingerFluidRendererMode','resolveFingerFluidOpticalDebugMode','resolveFingerFluidOpticalLightingMode','resolveFingerFluidOpticalFootprintMode','resolveFingerFluidTransmissionFootprintMode','resolveFingerFluidBodyTransportMode','resolveFingerFluidInterfaceFrequencyMode'])env[name]=x=>x;
+new Function('env',`with(env){${prefix}}`)(env);assert.equal(env.fingerFluidBenchRunning,true,'Held shared water remains in host presentation dispatch');assert.equal(env.fingerFluidBenchSimulationPaused,true,'Presentation continuity must not advance held physics');console.log('Actual held render keeps shared presentation active and physics paused');

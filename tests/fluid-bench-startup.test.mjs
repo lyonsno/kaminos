@@ -18,7 +18,7 @@ test('authored-water conflict and scene initialization failures reach the visibl
 
 function resetHarness(){
  const pending=[],writes=[];let savedCamera=1;
- const env={investigationOperations:{active:false},fingerFluidCompositionCameraState:()=>savedCamera,window:{_kaminosDirty(){}},cancelAnimationFrame(){},syncFingerFluidCompositionCamera(){writes.push(env.readCamera());},fingerFluidPressureCockpit:{update(){}},pending};
+ const env={ownerFluidPlayback:null,fingerFluidBenchSimulationPaused:false,investigationOperations:{active:false},fingerFluidCompositionCameraState:()=>savedCamera,window:{_kaminosDirty(){}},cancelAnimationFrame(){},syncFingerFluidCompositionCamera(){writes.push(env.readCamera());},fingerFluidPressureCockpit:{update(){}},pending};
  const h=new Function('env',`with(env){let fingerFluidBenchStartGeneration=0,fingerFluidBenchRunning=false,fingerFluidBenchViewport=null,fingerFluidBenchScene=null,fingerFluidBenchAnimationFrame=null,fingerFluidBenchSolver=null,fingerFluidBenchSolverPromise=null,fingerFluidBenchConfig=null,fingerFluidBenchCamera=null;
  async function startFingerFluidBench(){const generation=++fingerFluidBenchStartGeneration;fingerFluidBenchRunning=true;await new Promise(resolve=>pending.push(resolve));if(generation!==fingerFluidBenchStartGeneration)return;fingerFluidBenchSolver={available:true};}
  ${fn('stopFingerFluidBench')};${fn('resetFingerFluidPressureCockpitWater')};

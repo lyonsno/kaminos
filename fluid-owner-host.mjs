@@ -56,3 +56,9 @@ export function ownerFluidRouteParams(setup,params) {
  if(solver.fixedVolumeReferenceParticleCount==null)next.delete('finger_fluid_fixed_volume_reference_count');
  next.set('finger_fluid_pressure_cockpit',solver.livePressureControls?'1':'0');return next;
 }
+
+/** Complete producer inputs can opt out; existing pressure replay remains default. */
+export function prepareOwnerFluidOpen(setup,params,{definition=null,restoreReplay=true}={}){
+ if(typeof restoreReplay!=='boolean')throw new TypeError('Replay restoration policy must be boolean');
+ return restoreReplay&&definition?restoreOwnerFluidReplay(setup,params,definition):setup;
+}

@@ -1,0 +1,7 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';
+const source=process.argv[2]?fs.readFileSync(process.argv[2],'utf8'):fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const helperStart=source.indexOf('function applyOwnerMaterialControls(');let helper='';if(helperStart>=0){let open=source.indexOf('{',helperStart),depth=1,end=open+1;for(;depth;end++){if(source[end]==='{')depth++;if(source[end]==='}')depth--;}helper=source.slice(helperStart,end);}
+const callback=Array.from(source.matchAll(/window\.kaminosFingerFluidPressureCockpitApply=(patch=>[^\n]+);/g)).at(-1)[1];
+let values={densityIterations:3,capillaryStrength:.48,particleRepulsionStrength:.62,freeFlightViscosityBoost:.3};
+const env={fingerFluidBenchSolver:{getMaterialControls:()=>({available:true}),setMaterialControls:patch=>({effective:values={...values,...patch}})},fingerFluidOwnerSetup:{solver:{...values}},fingerFluidBenchConfig:{requestedCapillaryStrength:.48},fingerFluidBenchState:{},window:{_kaminosDirty(){}}};
+const apply=new Function('env',`with(env){${helper};return (${callback});}`)(env);apply({capillaryStrength:.2,densityIterations:6});assert.equal(env.fingerFluidOwnerSetup.solver.capillaryStrength,.2,'Shared session edit must reach reset setup');assert.equal(env.fingerFluidOwnerSetup.solver.densityIterations,6);assert.equal(env.fingerFluidBenchConfig.requestedCapillaryStrength,.2);assert.equal(env.fingerFluidBenchState.config,env.fingerFluidBenchConfig);console.log('Actual shared callback and owner capability publish one material operation');
