@@ -1055,7 +1055,7 @@ assert.match(fieldSliceWitness, /writeRgbaPng\(fieldSliceOut/, 'volume witness w
 assert.match(fieldSliceWitness, /fieldSliceBackend:\s*'cpu-fluid-buffer-readback'/, 'field-slice report names CPU fluid-buffer readback as the evidence backend');
 assert.match(core, /directCellOpticalSupportFromSlots/, 'raymarch derives skip support from native simulation-cell records');
 assert.match(core, /directCellExitDistance/, 'raymarch crosses empty native cells at their geometric boundary');
-assert.match(core, /let expensiveSampleBudget = u32\(ceil\(steps\)\)/, 'ray setting defines a fixed expensive-sample budget');
+assert.match(core, /let expensiveSampleBudget = select\(u32\(ceil\(steps\)\), nonRidgeOpticalCaptureHeader.sampleCount, opticalTrace\)/, 'ordinary ray setting defines a fixed expensive-sample budget; trace uses its explicit capture count');
 assert.match(core, /let maxTraversalSteps = GRID_Y \* 3u \+ expensiveSampleBudget \+ 3u/, 'traversal safety derives from expanded vertical grid geometry plus the explicit sample budget');
 assert.match(core, /expensiveSamples = expensiveSamples \+ 1u/, 'occupied reconstruction spends exactly one expensive sample');
 assert.match(core, /let adaptiveScale = mix\(2\.65, 1\.0, fine\)/, 'adaptive march never shrinks below the baseline segment or increases expensive work');

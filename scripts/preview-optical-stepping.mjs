@@ -43,7 +43,13 @@ try {
   await page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().active||window.__kaminosVolumePrototype?.debugState().error);
   assert.equal(await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().error),null);
   await page.waitForFunction(()=>window.kaminosSceneAuthoring?.read().objects.length>=3||/load failed/i.test(document.getElementById('info-bar')?.textContent||''));
-  assert.equal(await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects.length),scene.objects.length);
+  report.loadedObjects=await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects.map(({id,type,source})=>({id,type,source})));
+  const {FIRE_DOMAIN_ID,FIRE_DOMAIN_TYPE,FIRE_DOMAIN_SOURCE}=await import(pathToFileURL(root+'/scene-fire-domain.mjs'));
+  const savedIds=new Set(scene.objects.map(o=>o.id));
+  const migratedDomain=report.loadedObjects.filter(o=>!savedIds.has(o.id));
+  if(migratedDomain.length) assert.deepEqual(migratedDomain,[{id:FIRE_DOMAIN_ID,type:FIRE_DOMAIN_TYPE,source:FIRE_DOMAIN_SOURCE}]);
+  assert.deepEqual(report.loadedObjects.filter(o=>savedIds.has(o.id)).sort((a,b)=>a.id.localeCompare(b.id)),
+    scene.objects.map(({id,type,source})=>({id,type,source})).sort((a,b)=>a.id.localeCompare(b.id)));
   await page.evaluate(()=>{
     const pose=window.kaminosCameraDebugState();
     window.kaminosSetCameraDebugPose({position:pose.position.map((x,i)=>pose.target[i]+(x-pose.target[i])*0.62),target:pose.target});
