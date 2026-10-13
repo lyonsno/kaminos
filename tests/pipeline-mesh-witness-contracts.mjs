@@ -27,3 +27,39 @@ test('a completed failed GUI run terminates the unbounded observer instead of wa
   await assert.rejects(c.waitFor({},'unused','GUI run',Infinity),/Greenroom rejected command/);
   assert.equal(queries,1);
 });
+function observePhase(change=()=>{}){
+  // Observed phase-only event from the actual TRELLIS GUI attempt, Oct13.
+  const observed=JSON.parse(fs.readFileSync(new URL('./fixtures/trellis-phase-progress-observed.json',import.meta.url)));
+  const start=source.indexOf('const nativeProgressObserved = await waitFor(cdp, `')+'const nativeProgressObserved = await waitFor(cdp, `'.length;
+  const end=source.indexOf("`, 'Native adapter progress reached route node'",start);
+  assert.ok(start>0&&end>start);
+  const record={id:'current-output',runTimeline:[observed.timelineProgress],progressEvent:observed.lastNativeProgress};
+  const context={pendingGeneratedOutput:{pendingRecord:{id:record.id}},routeNode:{routeNodeId:'current-route'},
+    mockSharpProgressEnv:'unused',expectsMeshArtifact:true,pipelineId:'trellis-image-to-mesh-webgpu-v0',JSON,
+    window:{kaminosPipelineDockDebugState:()=>({generatedOutputNodes:[record]}),kaminosPipelineLastNativeProgress:observed.lastNativeProgress},
+    document:{querySelector:()=>({dataset:{pipelineRouteProgress:'',pipelineRouteLivePhase:'image-preparation',pipelineRouteLiveStatus:'running'},innerText:observed.routeText})}};
+  vm.createContext(context);
+  change(context,record);
+  const expression=vm.runInContext('`'+source.slice(start,end)+'`',context);
+  return vm.runInContext(expression,context);
+}
+test('the actual TRELLIS progress predicate accepts observed phase events without fabricating a percentage',()=>{
+  const result=observePhase();
+  assert.equal(result.ok,true,'identified real phase progress is incorrectly conditional on a numeric percentage');
+  assert.equal(result.routeProgress,'');assert.equal(result.phaseProgress,true);
+});
+test('stale, missing or different native phase identity cannot supply current progress',()=>{
+  for(const change of [c=>{c.window.kaminosPipelineLastNativeProgress=null;},
+    (_c,r)=>{r.progressEvent={...r.progressEvent,jobId:'another-job'};},
+    c=>{c.window.kaminosPipelineLastNativeProgress={...c.window.kaminosPipelineLastNativeProgress,adapterRouteId:'another-route'};},
+    c=>{c.document.querySelector=()=>({dataset:{pipelineRouteProgress:'99',pipelineRouteLivePhase:'wrong-phase'}});}])
+    assert.equal(observePhase(change).ok,false);
+});
+test('TRELLIS has no implicit observer deadline while a caller-selected deadline is retained',()=>{
+  const start=source.indexOf('const graphExecuteTimeoutMs ='),end=source.indexOf('\nconst mockSharpProgressEnv',start);
+  for(const [requested,expected] of [[null,Infinity],['123456',123456]]){
+    const c={args:new Map(requested?[['graph-execute-timeout-ms',requested]]:[]),pipelineId:'trellis-image-to-mesh-webgpu-v0',Number};
+    vm.createContext(c);vm.runInContext(source.slice(start,end)+'\nglobalThis.observed=graphExecuteTimeoutMs;',c);
+    assert.equal(c.observed,expected);
+  }
+});

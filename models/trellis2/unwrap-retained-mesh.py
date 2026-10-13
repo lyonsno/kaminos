@@ -10,6 +10,7 @@ import sys
 import time
 import traceback
 import numpy as np
+from source_attestation import git_source_identity
 
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--source-root',type=Path,required=True)
@@ -25,11 +26,10 @@ def h(data):return hashlib.sha256(data).hexdigest()
 def persist():(out/'report.json').write_text(json.dumps(report,indent=2)+'\n')
 persist()
 try:
-    commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=source,text=True).strip()
-    dirty=subprocess.check_output(['git','status','--porcelain'],cwd=source,text=True)
+    source_identity=git_source_identity(source);commit=source_identity['commit'];dirty=source_identity['dirty']
     if commit!=a.expected_source_commit or dirty:raise ValueError('exact clean unwrap source required')
     script=source/'trellmlx/texture_bake.py';raw=script.read_bytes()
-    report['source']={'root':str(source),'commit':commit,'dirty':dirty,'moduleSha256':h(raw)}
+    report['source']={'root':str(source),**source_identity,'moduleSha256':h(raw)}
     tree=ast.parse(raw)
     fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='uv_unwrap')
     namespace={'np':np}

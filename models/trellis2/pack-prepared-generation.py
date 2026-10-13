@@ -11,6 +11,7 @@ import traceback
 import time
 import numpy as np
 from PIL import Image
+from source_attestation import git_source_identity
 
 p=argparse.ArgumentParser(description=__doc__)
 for name in ['repo-root','base','out']:p.add_argument('--'+name,type=Path,required=True)
@@ -58,13 +59,12 @@ try:
             report['previousManifest']=previous['previousManifest']
     block_current_attempt('running');persist()
     root=a.repo_root.resolve();base=a.base.resolve();foreground=a.foreground.resolve() if a.foreground else out/'foreground'
-    commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
-    dirty=subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True)
+    source_identity=git_source_identity(root);commit=source_identity['commit'];dirty=source_identity['dirty']
     if commit!=a.expected_commit or dirty:raise ValueError('exact clean package producer required')
     if Path(__file__).resolve()!=root/'models/trellis2/pack-prepared-generation.py':raise ValueError('effective packager root differs from requested source')
     if a.steps<1:raise ValueError('positive explicit sampler steps required')
     if a.seed is not None and not 0<=a.seed<=0xffffffff:raise ValueError('unsigned32 sampler seed required')
-    report['producer']={'root':str(root),'commit':commit,'dirty':dirty,'scriptSha256':file_sha(Path(__file__))}
+    report['producer']={'root':str(root),**source_identity,'scriptSha256':file_sha(Path(__file__))}
     base_bytes=(base/'manifest.json').read_bytes();original=json.loads(base_bytes)
     if original.get('schema')!='trellis2.generation-inputs.v0' or original.get('status')!='succeeded' or original.get('modelCalls')!=0:
         raise ValueError('complete model-free retained checkpoint base required')

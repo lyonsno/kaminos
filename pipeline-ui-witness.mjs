@@ -26,7 +26,8 @@ const expectedArtifactRole = args.get('artifact-role') || (pipelineId === 'sharp
 const expectsMeshArtifact = expectedArtifactRole.includes('mesh');
 const expectsLoadableArtifact = expectedArtifactRole.includes('splat') || expectsMeshArtifact;
 const expectsFixture = args.get('expect-fixture') === '1' || pipelineId.includes('fixture');
-const graphExecuteTimeoutMs = Number(args.get('graph-execute-timeout-ms') || (pipelineId === 'sharp-image-to-splat-live-v0' ? 240000 : 90000));
+const graphExecuteTimeoutMs = Number(args.get('graph-execute-timeout-ms') || (pipelineId === 'trellis-image-to-mesh-webgpu-v0'
+  ? Infinity : pipelineId === 'sharp-image-to-splat-live-v0' ? 240000 : 90000));
 const mockSharpProgressEnv = 'KAMINOS_MOCK_SHARP_PROGRESS';
 const beforePath = args.get('before') || '/tmp/kaminos-pipeline-ui-witness-before.png';
 const afterPath = args.get('after') || '/tmp/kaminos-pipeline-ui-witness-after.png';
@@ -505,15 +506,29 @@ try {
       const routeProgress = routeStatusNode?.dataset?.pipelineRouteProgress || '';
       const timelineProgress = record?.runTimeline?.find(event => event.progressSchema === 'kaminos.pipeline-progress.v0') || null;
       const lastNativeProgress = window.kaminosPipelineLastNativeProgress || null;
+      const phaseProgress = lastNativeProgress?.kind === 'adapter-progress'
+        && lastNativeProgress?.requestedPipelineId === ${JSON.stringify(pipelineId)}
+        && lastNativeProgress?.adapterRouteId === 'trellis2.image-generation.webgpu.v0'
+        && Boolean(lastNativeProgress?.jobId && lastNativeProgress?.runId && lastNativeProgress?.phase)
+        && record?.progressEvent?.jobId === lastNativeProgress.jobId
+        && record?.progressEvent?.runId === lastNativeProgress.runId
+        && record?.progressEvent?.phase === lastNativeProgress.phase
+        && routeStatusNode?.dataset?.pipelineRouteLivePhase === lastNativeProgress.phase;
+      const currentRun=state?.lastRun;
       return {
-        ok: Boolean(record && timelineProgress && routeProgress !== '' && lastNativeProgress?.schema === 'kaminos.pipeline-progress.v0'),
+        ok: Boolean(record && timelineProgress && lastNativeProgress?.schema === 'kaminos.pipeline-progress.v0'
+          && (${JSON.stringify(pipelineId === 'trellis-image-to-mesh-webgpu-v0')} ? phaseProgress : routeProgress !== '')),
+        terminalFailure: currentRun?.ok === false && currentRun?.runId === record?.runId,
+        error: currentRun?.report?.document?.error || null,
         mockSharpProgressEnv: ${JSON.stringify(mockSharpProgressEnv)},
+        phaseProgress,
         routeProgress,
         routeText: routeStatusNode?.innerText || '',
         timelineProgress,
         lastNativeProgress,
       };
-    })()`, 'Native adapter progress reached route node', Math.min(graphExecuteTimeoutMs, 45000));
+    })()`, 'Native adapter progress reached route node', pipelineId === 'trellis-image-to-mesh-webgpu-v0'
+      ? graphExecuteTimeoutMs : Math.min(graphExecuteTimeoutMs, 45000));
     const executed = await waitFor(cdp, `(() => {
       const state = window.kaminosPipelineDockDebugState?.();
       const run = state?.lastRun;
