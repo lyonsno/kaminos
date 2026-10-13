@@ -235,3 +235,31 @@ test('capture: a joined arm records an unmeasured residual instead of the freshn
   assert.match(capture, /joinedAdmitted: Boolean\(w\.__kaminosVolumePrototype\?\.joinedProducerState\?\.\(\)\?\.joined\?\.admitted\)/);
   assert.match(capture, /if \(end\.joinedAdmitted\) \{ entry\.residualSkipped = 'joined-boundary-no-fine-projection'; \} else if \(!\(end\.residual\?\.step > freshnessFloor\)\)/);
 });
+
+// Review of ea5ac0c96 (slice 2): JG-01..04.
+test('JG-01: a ghost allocation or geometry change invalidates the stamp and the synthetic provenance', () => {
+  const alloc = source.slice(source.indexOf("      joinedGhostTextures = ['A', 'B'].map(name => {"), source.indexOf("      joinedGhostTextures = ['A', 'B'].map(name => {") + 1400);
+  assert.match(alloc, /\n      \}\);\n      \/\/ Fresh ghost textures hold no exterior yet: the stamp and any synthetic\n      \/\/ provenance belong to the destroyed allocation \(review JG-01\)\.\n      joinedGhostSynthetic = null;\n      if \(state\.joinedGhosts\) state\.joinedGhosts = \{ \.\.\.state\.joinedGhosts, generation: -1 \};/);
+  const setter = source.slice(source.indexOf('    setJoinedGhosts(geometry = null) {'), source.indexOf('    setJoinedGhosts(geometry = null) {') + 1200);
+  assert.match(setter, /if \(state\.joinedGhosts\) state\.joinedGhosts = \{ \.\.\.state\.joinedGhosts, generation: -1 \};/);
+});
+
+test('JG-02: the synthetic arm fails unless the ghost route is admitted after resolution and at settlement', () => {
+  const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
+  assert.match(capture, /const route = await waitForJoinedGhostRoute\(\);/);
+  assert.match(capture, /if \(!route\?\.bound \|\| !route\?\.joined\) \{ report\.lastTrustworthyEvidence\.joinedGhosts = \{ \.\.\.sample, route \}; fail\(report\.failurePhase, `synthetic ghosts filled but not consumed \(\$\{route\?\.reason \?\? \(route\?\.joined \? 'ghosts not bound' : 'joined boundary not admitted'\)\}\)`\); \}/);
+  assert.match(capture, /joinedGhostsBound: Boolean\(w\.__kaminosVolumePrototype\?\.joinedProducerState\?\.\(\)\?\.ghosts\?\.bound\)/);
+  assert.match(capture, /if \(arm\.set\.some\(\(\[id\]\) => id === '@joinedGhostsSynthetic'\) && !end\.joinedGhostsBound\) fail\(report\.failurePhase, `arm \$\{arm\.name\} ended with the synthetic ghosts no longer bound`\);/);
+});
+
+test('JG-03: the front-topology field blends to the exterior appearance (0) beyond the box like the appearance slots', () => {
+  assert.match(shader, /fn sampleFrontFieldTransport\(p: vec3<f32>\) -> f32 \{\n  let fine = sampleFrontFieldMasked\(p\);\n  if \(!joinedGhosts\(\)\) \{ return fine; \}\n  return mix\(fine, 0\.0, clamp\(ghostOutsideAmount\(p\) \* 2\.0, 0\.0, 1\.0\)\);\n\}/);
+  assert.match(shader, /var combustionFrontTopology = sampleFrontFieldTransport\(backCell\) \* stepRate\(0\.936\);/);
+});
+
+test('JG-04: the band readback is labelled from the queued snapshot and refuses nonfinite results', () => {
+  const api = source.slice(source.indexOf('    async debugFluidBandStats() {'), source.indexOf('    async debugFluidBandStats() {') + 1800);
+  assert.match(api, /const snapshot = \{ dims: \[gridSize, gridHeight, gridSize\], simStepCount: state\.simStepCount, joined: Boolean\(state\.joinedBoundary\?\.admitted\), ghosts: \{ bound: Boolean\(state\.joinedGhosts\?\.bound\), generation: state\.joinedGhosts\?\.generation \?\? null, synthetic: joinedGhostSynthetic \} \};/);
+  assert.match(api, /if \(values\.length !== snapshot\.dims\[0\] \* snapshot\.dims\[1\] \* snapshot\.dims\[2\] \* 16\) return \{ status: 'invalid', reason: 'readback-size-mismatch', \.\.\.snapshot \};/);
+  assert.match(api, /if \(!\[stats\.bandHeatMean, stats\.interiorHeatMean\]\.every\(Number\.isFinite\)\) return \{ status: 'invalid', reason: 'nonfinite-band-stats', \.\.\.snapshot \};/);
+});

@@ -3885,6 +3885,14 @@ fn ghostSlotAt(p: vec3<f32>, slot: u32) -> vec4<f32> {
   return vec4<f32>(0.0);
 }
 
+// The front-topology field's transport sample: beyond the box it blends to
+// the exterior appearance value, 0, like the appearance slots (review JG-03).
+fn sampleFrontFieldTransport(p: vec3<f32>) -> f32 {
+  let fine = sampleFrontFieldMasked(p);
+  if (!joinedGhosts()) { return fine; }
+  return mix(fine, 0.0, clamp(ghostOutsideAmount(p) * 2.0, 0.0, 1.0));
+}
+
 // How far (in cells) a sample point lies beyond the last fine cell centre, the
 // region where the fine trilinear can only clamp.
 fn ghostOutsideAmount(p: vec3<f32>) -> f32 {
@@ -6630,7 +6638,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayer.x, microdetailRiseDirection);
     }
   }
-  var combustionFrontTopology = sampleFrontFieldMasked(backCell) * stepRate(0.936);
+  var combustionFrontTopology = sampleFrontFieldTransport(backCell) * stepRate(0.936);
   if (bonfireScene > 0.5) {
     let bonfireTurbulentDiffusionMix = bonfireScene * (1.0 - explicitWindAuthority) * clamp(0.044 + curl * 0.008 + microAmount * 0.006, 0.0, 0.115);
     let diffuseMaterial = (
@@ -13957,6 +13965,10 @@ export function createKaminosVolumePrototype({
         device.queue.writeTexture({ texture }, new Float32Array(ghostSize[0] * ghostSize[1] * ghostSize[2] * 4), { bytesPerRow: ghostSize[0] * 16, rowsPerImage: ghostSize[1] }, ghostSize);
         return texture;
       });
+      // Fresh ghost textures hold no exterior yet: the stamp and any synthetic
+      // provenance belong to the destroyed allocation (review JG-01).
+      joinedGhostSynthetic = null;
+      if (state.joinedGhosts) state.joinedGhosts = { ...state.joinedGhosts, generation: -1 };
     }
     burnRateTexture = device.createTexture({
       label: `kaminos fuel burn rate ${gridSize}x${gridHeight}x${gridSize}`,
@@ -27375,6 +27387,8 @@ export function createKaminosVolumePrototype({
       const reallocate = Boolean(next) !== Boolean(joinedGhostGeometry) || String(next?.dims) !== String(joinedGhostGeometry?.dims);
       joinedGhostGeometry = next;
       joinedGhostSynthetic = null;
+      // A new geometry reinterprets whatever the textures hold: a new stamp is needed.
+      if (state.joinedGhosts) state.joinedGhosts = { ...state.joinedGhosts, generation: -1 };
       if (reallocate && device) rebuildFluidState(gridSize, 'joined-ghosts-change');
       return { geometry: next };
     },
@@ -27398,6 +27412,7 @@ export function createKaminosVolumePrototype({
     // interior (the residual probe's profile is stale while joined).
     async debugFluidBandStats() {
       if (!device || !fluidBuffers) return { status: 'unsupported', reason: 'gpu-not-initialized' };
+      const snapshot = { dims: [gridSize, gridHeight, gridSize], simStepCount: state.simStepCount, joined: Boolean(state.joinedBoundary?.admitted), ghosts: { bound: Boolean(state.joinedGhosts?.bound), generation: state.joinedGhosts?.generation ?? null, synthetic: joinedGhostSynthetic } };
       const bytes = fluidBuffers[currentFluid].size;
       const staging = device.createBuffer({ label: 'kaminos fluid band stats readback', size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
       try {
@@ -27407,7 +27422,10 @@ export function createKaminosVolumePrototype({
         await staging.mapAsync(GPUMapMode.READ);
         const values = new Float32Array(staging.getMappedRange().slice(0));
         staging.unmap();
-        return { status: 'sampled', dims: [gridSize, gridHeight, gridSize], simStepCount: state.simStepCount, joined: Boolean(state.joinedBoundary?.admitted), ghosts: { bound: Boolean(state.joinedGhosts?.bound), synthetic: joinedGhostSynthetic }, ...fluidBandHeatStats(values, [gridSize, gridHeight, gridSize], 2), ...fluidLayerHeatMeans(values, [gridSize, gridHeight, gridSize]) };
+        if (values.length !== snapshot.dims[0] * snapshot.dims[1] * snapshot.dims[2] * 16) return { status: 'invalid', reason: 'readback-size-mismatch', ...snapshot };
+        const stats = { ...fluidBandHeatStats(values, snapshot.dims, 2), ...fluidLayerHeatMeans(values, snapshot.dims) };
+        if (![stats.bandHeatMean, stats.interiorHeatMean].every(Number.isFinite)) return { status: 'invalid', reason: 'nonfinite-band-stats', ...snapshot };
+        return { status: 'sampled', ...snapshot, ...stats };
       } finally { staging.destroy(); }
     },
     // The step the bound ghost snapshots were written for.
