@@ -4,11 +4,14 @@
 // de-normalization and un-patchify, then AutoencoderKLFlux2 post_quant_conv
 // and Decoder (conv_in, mid block with single-head attention, four up blocks,
 // GroupNorm + SiLU, conv_out). Weights come from pack-vae.py.
-import { gemmShader, gemmShaderV2, softmaxShader } from './klein-kernels.js';
+import { SCORE_BYTES, gemmShader, gemmShaderV2, softmaxShader } from './klein-kernels.js';
 import { KleinDutyScheduler } from './klein-duties.js';
 
 const GN_EPS = 1e-6;
 const GROUPS = 32;
+// Query rows of decoder attention per chunk: as many as fit SCORE_BYTES of scores (at 1024 x 1024,
+// 1024 of 16384 rows: 64 MiB instead of 1.07 GB), in multiples of 64.
+const scoreRows = L => Math.min(L, Math.max(64, Math.floor(SCORE_BYTES / (L * 4) / 64) * 64));
 
 // Implicit-GEMM convolution: out[pix][cout] = bias[cout] + sum_k in(pix, k) * w[cout][k],
 // k = tap * Cin + ci with taps 9 (3x3, pad 1) or 1 (1x1). `up` reads a 2x nearest-upsampled input.
@@ -330,7 +333,8 @@ export class KleinVaeDecoder {
     return { H, W, C: Cout };
   }
 
-  // Single-head attention over latent pixels; cooperative runs split it into query-row ranges.
+  // Single-head attention over latent pixels in query-row chunks that reuse one scores buffer of at most
+  // SCORE_BYTES (see scoreRows); cooperative runs also size the chunks to the duty budget.
   async attention(enc, x, out, name, s) {
     const { H, W, C } = s; const L = H * W;
     this.groupNorm(enc, x, this.t1, `${name}.group_norm`, { HW: L, C, silu: false });
@@ -344,12 +348,13 @@ export class KleinVaeDecoder {
     const g = v2 ? this.pipeline(`gemm2-f32-store-${st}`, gemmShaderV2({ bType: 'f32', epilogue: 'store', sType: st }))
       : this.pipeline('gemm-f32-store', gemmShader({ bType: 'f32', epilogue: 'store' }));
     const budget = this.sched.budget();
-    const rows = !v2 || !Number.isFinite(budget) ? L : Math.min(L, Math.max(64, Math.floor(budget / (4 * L * C) / 64) * 64));
+    const rows = !v2 ? L : Math.min(scoreRows(L), !Number.isFinite(budget) ? L : Math.max(64, Math.floor(budget / (4 * L * C) / 64) * 64));
     for (let r0 = 0; r0 < L; r0 += rows) {
       const rn = Math.min(rows, L - r0);
-      this.dispatch(enc, g, [this.q, this.k, this.scores, this.uniform([L, L, C, this.f32bits(1 / Math.sqrt(C)), 0, C, 0, 0, C, 0, 0, L, 0, 0, 0, 0, 0, r0, 0, 0])], Math.ceil(L / 64), Math.ceil(rn / 64));
-      this.dispatch(enc, this.pipeline('softmax', softmaxShader()), [this.scores, this.uniform([rn, L, r0, 0])], rn);
-      this.dispatch(enc, g, [this.scores, this.vt, this.v, this.uniform([L, C, L, this.f32bits(1), 0, L, 0, 0, L, 0, 0, C, 0, 0, 0, 0, 0, r0, 0, 0])], Math.ceil(C / 64), Math.ceil(rn / 64));
+      // Rows r0.. of q score into rows 0.. of the scores buffer; their outputs land at rows r0.. of v.
+      this.dispatch(enc, g, [this.q, this.k, this.scores, this.uniform([rn, L, C, this.f32bits(1 / Math.sqrt(C)), r0 * C, C, 0, 0, C, 0, 0, L, 0, 0, 0, 0, 0, 0, 0, 0])], Math.ceil(L / 64), Math.ceil(rn / 64));
+      this.dispatch(enc, this.pipeline('softmax', softmaxShader()), [this.scores, this.uniform([rn, L, 0, 0])], rn);
+      this.dispatch(enc, g, [this.scores, this.vt, this.v, this.uniform([rn, C, L, this.f32bits(1), 0, L, 0, 0, L, 0, r0 * C, C, 0, 0, 0, 0, 0, 0, 0, 0])], Math.ceil(C / 64), Math.ceil(rn / 64));
       this.sched.addFlops(4 * rn * L * C);
       if (rn < L) await this.sched.boundary(`${name}.rows[${r0}]`);
     }
@@ -377,7 +382,7 @@ export class KleinVaeDecoder {
     const Lm = latH * 2 * latW * 2;
     this.q = this.buffer(Lm * 512 * 4); this.k = this.buffer(Lm * 512 * 4); this.v = this.buffer(Lm * 512 * 4); this.vt = this.buffer(Lm * 512 * 4);
     this.rgb = this.buffer(H * W * 3 * 4);
-    this.scores = this.buffer(Lm * Lm * 4);
+    this.scores = this.buffer(scoreRows(Lm) * Lm * 4);
     this.gnPart = this.buffer(GROUPS * Math.ceil(H * W / 1024) * 4); this.gnStats = this.buffer(GROUPS * 2 * 4);
   }
 

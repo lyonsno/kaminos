@@ -42,7 +42,7 @@ Prompts are padded with filler tokens before the transformer reads them. The pag
 
 ## Memory
 
-The weights take 3.6 GB of GPU memory. Working memory grows with image size, so the transformer's buffers are released before the image decoder allocates its own, and the decoder's are released once the image is read back. The decoder stores its activations in 16 bits, and attention keeps scores for only a few heads at a time.
+The weights take 3.6 GB of GPU memory. Working memory grows with image size, so the transformer's buffers are released before the image decoder allocates its own, and the decoder's are released once the image is read back. The decoder stores its activations in 16 bits, and attention in both the transformer and the decoder keeps at most 64 MiB of scores at a time (a few heads, or a block of query rows).
 
 **Low-memory mode** (a checkbox on the page, ticked by default on phones and devices reporting less than 8 GB) never holds the text encoder and the transformer at the same time. A new prompt reloads the text encoder from the browser cache in place of the transformer, encodes, and swaps back; generating again with the same prompt swaps nothing. Images are identical in both modes.
 
@@ -51,7 +51,7 @@ Peak GPU memory measured by the page on the 16 GB M2 Pro:
 | Size | Normal | Low-memory mode |
 | --- | --- | --- |
 | 512 × 512 | 4.2 GB | 2.8 GB (a new prompt takes about 2 s longer) |
-| 1024 × 1024 | 6.8 GB | 5.3 GB |
+| 1024 × 1024 | 5.8 GB | 4.3 GB |
 
 With about 6 GB of memory left to the browser and macOS (the rest held by a test process), low-memory mode ran without the system swapping, while normal mode pushed it to swap about 3 GB. Neither figure comes from a real 8 GB Mac or a phone yet.
 

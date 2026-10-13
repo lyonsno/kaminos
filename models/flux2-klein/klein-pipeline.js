@@ -232,7 +232,8 @@ export class KleinPipeline {
     const { D, F } = this.transformer, imgTokens = (width / 16) * (height / 16);
     const maxTextTokens = Math.min(512, Math.floor(cap / ((3 * D + 2 * F) * 4)) - imgTokens);
     const vaeAct = this.kernels.vaeActType === 'f16' ? 2 : 4, latentPixels = (width / 8) * (height / 8);
-    const decoderFits = width * height * 256 * vaeAct <= cap && latentPixels * latentPixels * 4 <= cap;
+    // The decoder's attention scores are chunked by query rows (at least 64 at a time).
+    const decoderFits = width * height * 256 * vaeAct <= cap && 64 * latentPixels * 4 <= cap;
     return { maxTextTokens, fits: decoderFits && maxTextTokens >= 32, cap };
   }
 
