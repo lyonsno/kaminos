@@ -183,3 +183,14 @@ test('the producer is cleared on any frame that skips the seed; the capture requ
   assert.match(capture, /const mismatch = emissiveCoefficientsMismatch\(sample, \{ minProducerStep: lastConfigStep \}\);/);
   assert.match(capture, /if \(arm\.set\.some\(\(\[id\]\) => !id\.startsWith\('@'\)\)\) lastConfigStep = after\.simStepCount;/);
 });
+
+// GR-02 last residual (confirmation of 5f14b52b): a sample taken in the same
+// arm as a control change was compared with the previous arm's configuration
+// step. The capture refuses that arm shape outright: the coefficient sample
+// must be its own arm, after a configuration arm has settled.
+test('capture: @emissiveCoefficients is refused in an arm that also sets controls', () => {
+  const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
+  assert.match(capture, /if \(arm\.set\.some\(\(\[id\]\) => !id\.startsWith\('@'\)\)\) fail\(report\.failurePhase, '@emissiveCoefficients must be its own arm, after the configuration arm has settled'\);/);
+  const handler = capture.slice(capture.indexOf("if (cid === '@emissiveCoefficients') {"), capture.indexOf("if (cid === '@emissiveCoefficients') {") + 600);
+  assert.ok(handler.indexOf('must be its own arm') < handler.indexOf('sampleEmissiveSeedCoefficients'), 'refused before any sampling');
+});

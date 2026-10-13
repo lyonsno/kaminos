@@ -229,6 +229,7 @@ try {
         continue;
       }
       if (cid === '@emissiveCoefficients') {
+        if (arm.set.some(([id]) => !id.startsWith('@'))) fail(report.failurePhase, '@emissiveCoefficients must be its own arm, after the configuration arm has settled');
         // Emissive seed readback (review GR-01); the arm fails unless finite,
         // nonzero and spatially varying.
         const sample = await evaluate(op(`(async () => { const p = w.__kaminosVolumePrototype; if (!p?.sampleEmissiveSeedCoefficients) return { status: 'missing-api' }; return await p.sampleEmissiveSeedCoefficients(); })()`));
