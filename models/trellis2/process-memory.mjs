@@ -52,7 +52,7 @@ export async function startProcessMemory({python,script,rootPid=process.pid,rawP
     summary.lastObservation=row;
     for(const missing of row.unavailableProcesses??[]){
       const exit=missing.exitEvidence;
-      const retired=missing.pid!==rootPid&&missing.errno===3&&missing.exitedBeforeMeasurement===true&&
+      const retired=missing.pid!==rootPid&&[3,1].includes(missing.errno)&&missing.exitedBeforeMeasurement===true&&
         exit?.route==='ps-pid-status'&&!exit.stderr&&typeof exit.status==='string'&&
         ((exit.returnCode===1&&exit.status==='')||(exit.returnCode===0&&exit.status.startsWith('Z')));
       if(!missing.expectedProbeExit&&!retired){
