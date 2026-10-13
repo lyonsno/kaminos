@@ -16,3 +16,15 @@ test('a URL that asks for fire still gets it',()=>{
 test('fire=off wins over any fire intent',()=>{
  assert.deepEqual(fireAtBoot(q('?settings_preset=vsp-abc&fire=off')),{boot:false,reason:'fire=off'});
 });
+
+test('fire without a named recipe uses the semantic flame basin, Noah’s smokeyfuckinkilndemo',async()=>{
+ const {SEMANTIC_FLAME_BASIN}=await import('../fire-boot.mjs');
+ assert.deepEqual(fireAtBoot(q('?fire=on')),{boot:true,reason:'fire=on',basin:SEMANTIC_FLAME_BASIN.url});
+ assert.equal(fireAtBoot(q('?settings_preset=vsp-abc')).basin,undefined,'a named recipe keeps its own basin');
+ const {readFileSync}=await import('node:fs');
+ const artifact=JSON.parse(readFileSync(new URL('../'+SEMANTIC_FLAME_BASIN.url.replace(/^\.\//,''),import.meta.url)));
+ assert.equal(artifact.identity,'kaminos-volume-settings-preset-artifact-v2');
+ assert.equal(artifact.presetId,SEMANTIC_FLAME_BASIN.presetId);assert.equal(artifact.contentHash,`sha256:${artifact.presetId.slice(4)}`);
+ assert.equal(artifact.initialLabel,'smokeyfuckinkilndemo-basin');
+ assert.equal(artifact.preset.domControls['volume-resolution'].value,'64');
+});

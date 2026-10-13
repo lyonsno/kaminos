@@ -16677,8 +16677,8 @@ function applyVolumeScenePreset(scene, options = {}) {
 // Applies the committed default basin with its exact saved values (unlike the
 // in-code operator presets, which round numbers). Controls added to the page
 // after the export keep their page defaults, as a server schema projection does.
-async function applyDefaultVolumeSmokeBasin(routeParams) {
-  const response = await fetch(DEFAULT_VOLUME_SMOKE_BASIN_URL, { cache: 'no-store' });
+async function applyDefaultVolumeSmokeBasin(routeParams, url = DEFAULT_VOLUME_SMOKE_BASIN_URL) {
+  const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) throw new Error(`default volume basin unavailable: ${response.status}`);
   const artifact = await response.json();
   const preset = artifact?.preset;
@@ -16710,7 +16710,7 @@ async function applyDefaultVolumeSmokeBasin(routeParams) {
     }
   }
   activeCanonicalVolumeMacroPreset = '';
-  const receipt = { presetId: artifact.presetId, label: artifact.initialLabel || null, source: DEFAULT_VOLUME_SMOKE_BASIN_URL, applied, missing };
+  const receipt = { presetId: artifact.presetId, label: artifact.initialLabel || null, source: url, applied, missing };
   window.__kaminosDefaultVolumeSmokeBasin = receipt;
   return receipt;
 }
@@ -19349,6 +19349,8 @@ async function initKaminosVolumeRoute() {
     !params.get('volume_tall_preset') &&
     !params.get('volume_canonical_preset');
   if (shouldApplyDefaultVolumeSmokeTallPreset) await applyDefaultVolumeSmokeBasin(params);
+  // Fire asked for without a named recipe: the semantic flame basin (fire-boot.mjs).
+  else { const semantic = fireAtBoot(params).basin; if (semantic) await applyDefaultVolumeSmokeBasin(params, semantic); }
   await admitVolumeSettingsPresetRoute(params);
   routedBonfireAblationControls = normalizeBonfireAblationControls({
     bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
