@@ -350,10 +350,6 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .scene-object-remove { width: 20px; height: 20px; border: 1px solid #3a2a2a; border-radius: 4px; background: #221818; color: #b98585; cursor: pointer; font-size: 13px; line-height: 16px; }
 .scene-object-remove:hover { background: #321f1f; color: #f0b0b0; border-color: #674040; }
 .scene-object-empty { font-size: 11px; color: #555; }
-.scene-import-status { border: 1px solid #3d6f42; background: #132015; border-radius: 6px; padding: 8px 9px; margin: 0 0 8px; }
-.scene-import-status[hidden] { display: none; }
-.scene-import-status-kicker { color: #7ed184; font: 9px 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 4px; }
-.scene-import-status-text { color: #d4d4d4; font: 11px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; }
 .transform-inspector { display: flex; flex-direction: column; gap: 9px; }
 .transform-inspector-empty { font-size: 11px; color: #555; }
 .transform-inspector-fields { display: flex; flex-direction: column; gap: 9px; }
@@ -672,10 +668,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button type="button" class="btn" id="scene-select-rim">Rim Light</button>
         <button type="button" class="btn" id="scene-add-water-emitter">Add Water Emitter</button>
         <button type="button" class="btn" data-scene-group-create>Group loose objects</button>
-      </div>
-      <div id="scene-import-status" class="scene-import-status" role="status" aria-live="polite" hidden>
-        <div class="scene-import-status-kicker">Scene Import</div>
-        <div class="scene-import-status-text" id="scene-import-status-text"></div>
       </div>
       <div id="scene-object-empty" class="scene-object-empty">No authored objects loaded</div>
       <div id="scene-object-list" class="scene-object-list"></div>
@@ -4353,7 +4345,6 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
     host.setPaused(localLiquidPaused);
   },
 });
-let sceneImportStatus = null;
 let sceneGroups = [];
 let activeSceneObjectId = null;
 let activeSceneGroupId = null;
@@ -6874,19 +6865,6 @@ function renderSceneGroupRow(group) {
       </span>
     </div>
   `;
-}
-
-function setSceneImportStatus(message) {
-  sceneImportStatus = message ? { message, at: new Date().toISOString() } : null;
-  renderSceneImportStatus();
-}
-
-function renderSceneImportStatus() {
-  const status = document.getElementById('scene-import-status');
-  const text = document.getElementById('scene-import-status-text');
-  if (!status || !text) return;
-  status.hidden = !sceneImportStatus?.message;
-  text.textContent = sceneImportStatus?.message || '';
 }
 
 function renderSceneObjectList() {
@@ -22402,7 +22380,7 @@ document.getElementById('search-input').addEventListener('keydown', async e => {
       img.src = hit.previewURL;
       img.title = hit.tags;
       img.onclick = () => {
-        // Download full image and open in new tab for pipeline use
+        // Download the full image and open it in a new tab
         window.open(hit.largeImageURL, '_blank');
       };
       div.appendChild(img);

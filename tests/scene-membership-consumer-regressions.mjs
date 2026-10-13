@@ -66,7 +66,6 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
     applyMaterialStateToObject() {},
     renderSceneObjectList() {},
     updateTransformInspector() {},
-    renderPipelineDock() {},
     stopHybridSplatOverlay() {},
     exitSplatCorrectionMode() {},
     setInfo() {},

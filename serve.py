@@ -9,7 +9,6 @@ import hashlib
 import json
 import math
 import os
-import queue
 import re
 import socketserver
 import subprocess
@@ -2482,15 +2481,6 @@ def build_forge_host_registry_snapshot(
 
 def splat_asset_root_allows_pointer(root_name):
     return any(root.get("id") == root_name and root.get("kind") == "splat" for root in ASSET_ROOTS)
-
-
-def _sha256_file(path):
-    import hashlib
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def read_mesh_generation_origins(sha256):

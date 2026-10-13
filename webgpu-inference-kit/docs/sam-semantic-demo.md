@@ -37,7 +37,7 @@ The source checkout also embeds SAM directly in the main Kaminos workbench. It d
 KAMINOS_SAM3_PACKET_ROOT=/absolute/path/sam-model-1008 python3 serve.py 8095
 ```
 
-Open `http://127.0.0.1:8095/?sam=1`. The Masks tab accepts PNG, JPEG, and WebP files through Open Image, image drop, or clipboard paste. Use Selected Image takes an image already selected in Assets or Pipeline; an image graph node also exposes Create Masks. Source bytes and exported images are stored in the existing image inbox, under the configured `KAMINOS_ASSETS_DIR` (or an explicit `KAMINOS_IMAGE_INBOX_DIR`).
+Open `http://127.0.0.1:8095/?sam=1`. The Masks tab accepts PNG, JPEG, and WebP files through Open Image, image drop, or clipboard paste. Use Selected Image takes an image already selected in Assets. Source bytes and exported images are stored in the existing image inbox, under the configured `KAMINOS_ASSETS_DIR` (or an explicit `KAMINOS_IMAGE_INBOX_DIR`).
 
 Run a text prompt, then select all retained instances or one instance. Source, Overlay, and Mask views share the same zoom/pan viewport. Save Mask produces an opaque black/white PNG; Save Cutout preserves source RGB and alpha inside the selection and clears alpha outside it. Add Cutout to Scene imports the saved image as a registered image plane, with source/prompt/invocation provenance. Exports have the decoded source image dimensions. They bilinearly interpolate mask logits with `align_corners=False` before thresholding; they do not enlarge a thresholded low-resolution mask. The native logits and binary instance masks remain available unchanged from the runtime.
 

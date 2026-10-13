@@ -80,14 +80,6 @@ assert.match(index, /grFetchApi\('assets',[\s\S]*kind:\s*'splat'/, 'Splat Assets
 assert.match(index, /function showImagePlane\(/, 'Kaminos can import a reloadable image source as an authored scene image plane');
 assert.match(index, /schema:\s*'kaminos\.image-plane\.v0'/, 'Imported image planes carry explicit image-plane metadata');
 assert.match(index, /Texture load failed/, 'Image scene import must fail loud when the texture source cannot load');
-assert.doesNotMatch(index, /selectedGraphNodeId = 'output'/, 'Graph execution must not select a singleton output node after generation');
-assert.doesNotMatch(index, /graphNodePositions\.route\s*=/, 'Dropping a generator must not overwrite singleton route node position');
-assert.match(index, /status:\s*'pending'/, 'Generated output records must represent pending runs explicitly');
-assert.match(index, /status:\s*'failed'/, 'Generated output records must represent failed runs explicitly');
-assert.doesNotMatch(index, /Restore This Run/, 'Run history selection must not expose graph-mutating restore semantics before an explicit restore\/fork contract exists');
-assert.match(index, /running inference/, 'Graph execution must visibly distinguish backend inference from queued status');
-assert.match(index, /id="scene-import-status"/, 'Successful graph imports must leave a visible receipt on the destination Scene Objects surface');
-assert.match(index, /Scene Import/, 'Destination scene import receipt must have a visible label');
 assert.match(index, /entry\.stage === 'production'/, 'Splat Assets UI distinguishes production assets from experimental inbox assets');
 assert.match(index, /entry\.source[\s\S]*greenroomImportSplat[\s\S]*clear:\s*false/, 'Splat Assets imports preserve route identity and append to the authored scene');
 assert.match(index, /async function ingestDroppedSplatFile\(/, 'loose PLY/SPZ drops ingest into the experimental splat inbox before import');
