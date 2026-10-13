@@ -1,0 +1,1280 @@
+{
+  "schema": "kaminos.test-suite-manifest.v1",
+  "note": "Every top-level test file must be classified. node and python run under tools/test-runner.mjs; browser, helper and manual are counted with their reason and not run there.",
+  "tests": {
+    "tests/annular-burner-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/annular-burner-dom-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/apple-sharp-adapter-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/asset-arrival-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/asset-arrival-persistence-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/asset-arrival-projection-compiler-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/asset-resting-plane-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/authoring-workspace-pointer.mjs": {
+      "kind": "node"
+    },
+    "tests/authoring-workspace-slots.mjs": {
+      "kind": "node"
+    },
+    "tests/boundary-splat-attribute-compiler-cli-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/boundary-splat-attribute-model-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/boundary-splat-attribute-training-contracts.mjs": {
+      "kind": "manual",
+      "reason": "requires the private MLX venv at /private/tmp/kaminos-mlx-residual-venv"
+    },
+    "tests/boundary-splat-benchmark-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/boundary-splat-feature-capture-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/boundary-splat-full-support-instance-consumer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/boundary-splat-kernel-moment-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/boundary-splat-learned-attribute-live-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/boundary-splat-live-nonridge-union-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/boundary-splat-live-union-direct-route-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/boundary-splat-motion-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/boundary-splat-renderer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/boundary-splat-supervision-corpus-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/boundary-splat-support-covariance-composition-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/boundary-splat-world-covariance-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/burner-assembly.mjs": {
+      "kind": "node"
+    },
+    "tests/burner-creation.mjs": {
+      "kind": "node"
+    },
+    "tests/burner-grouping.mjs": {
+      "kind": "node"
+    },
+    "tests/default-volume-basin-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-adaptive-density-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-analytic-carrier-optics-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-analytic-carrier-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-analytic-impact-handoff-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-bench-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-changing-frame-optics-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-density-cell-rejection-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-energy-diagnostics-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-fixed-volume-population-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-gpu-timestamp-capture-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/finger-fluid-hydro-integration-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-interface-compaction-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-laminar-inlet-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-live-inlet-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-moving-hill-host-frame-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-moving-hill-presentation-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-moving-hill-support-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/finger-fluid-optics-composition-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-oracle-cockpit-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-particle-ownership-transition-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-portable-macro-optical-renderer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-portable-macro-optical-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-portable-support-geometry-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-pulse-drainage-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-representation-frame-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-sheet-release-diagnostics-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-uniform-volume-density-kernel-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-unsupported-sheet-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-waterfall-continuity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-fluid-waterfall-resolution-oracle-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-juice-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/finger-juice-host-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/fire-actor-live-parity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/fire-light-field-depth-mask-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/fire-light-field-shadow-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/fire-light-field-shadow-state.mjs": {
+      "kind": "node"
+    },
+    "tests/fire-light-field-tall-domain-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/fire-shadow-burner-frame-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/fire-shadow-diagnostic-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/flame-atlas-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/flame-authoring-routing.mjs": {
+      "kind": "node"
+    },
+    "tests/flame-authoring.mjs": {
+      "kind": "node"
+    },
+    "tests/flame-domain-relocation.mjs": {
+      "kind": "node"
+    },
+    "tests/forge-host-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/gate-zero-molten-4bcfd8c6-compatibility.mjs": {
+      "kind": "node"
+    },
+    "tests/generated-mesh-ingest-contracts.py": {
+      "kind": "python"
+    },
+    "tests/generated-mesh-library-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/generated-motion-track-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/generated-pose-behavior-state-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/generated-pose-features-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/generated-pose-output-map-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/generated-pose-output-map-runtime-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/generated-pose-temporal-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/generated-pose-temporal-registry-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/generated-pose-world-readout-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/greenroom-pipeline-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/greenroom-wrapper-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/hill-moving-support-consumer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/hill-moving-support-consumer-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/host-surface-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/host-surface-tools.mjs": {
+      "kind": "node"
+    },
+    "tests/kaminos-sam-consumer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/kiln-host-failure-reporting-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/kiln-moge-route-activity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/kiln-volume-fire-adapter-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/kiln-volume-fire-bridge-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/kiln-volume-fire-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/liquid-fire-contact-consumer-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/liquid-fire-contact-shared-device-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/local-liquid-host-admission.mjs": {
+      "kind": "node"
+    },
+    "tests/local-liquid-host-lifecycle-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/local-liquid-inlet-publication.mjs": {
+      "kind": "node"
+    },
+    "tests/local-liquid-performance.mjs": {
+      "kind": "node"
+    },
+    "tests/local-liquid-scene-object.mjs": {
+      "kind": "node"
+    },
+    "tests/local-liquid-selection-evidence.mjs": {
+      "kind": "node"
+    },
+    "tests/local-liquid-visible-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/motion-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/motion-panel-export-ui-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/motion-panel-live-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/motion-panel-temporal-bridge-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/motion-phrase-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/motion-phrase-controls-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/motion-phrase-controls-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/motion-phrase-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/motion-track-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/motion-track-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/motion-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/musculature-source-m0-cli-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/musculature-source-m0-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/neural-renderer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/pages-site-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/pipeline-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/pipeline-graph-artifact-ui-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/pipeline-graph-cleanup-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/pipeline-graph-ergonomics-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/pipeline-graph-scheduler-envelope-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/pipeline-graph-workspace-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/pipeline-native-progress-stream-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/pipeline-route-live-status-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/pipeline-ui-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/png-fixture.mjs": {
+      "kind": "helper",
+      "reason": "PNG fixture builder imported by other tests"
+    },
+    "tests/render-pair-corpus-cli-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/rendering-channel-controls.mjs": {
+      "kind": "node"
+    },
+    "tests/residual-boundary-sidecar-aux-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/residual-browser-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/residual-coordinate-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/residual-material-split-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/residual-playback-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/residual-preview-scope-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/residual-unet-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/residual-upscale-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/sam-image-http-contracts.py": {
+      "kind": "python"
+    },
+    "tests/sam-image-serving-contracts.py": {
+      "kind": "python"
+    },
+    "tests/sam-image-witness-report-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-add-menu-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-ao-depth-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-ao-normal-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-authoring-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-authoring-integration-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-authoring-polish-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-authoring-review-regressions.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-authoring-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-camera-pixel-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-composition-basin-identity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-composition-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-construction.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-control-history.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-default-light-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-distributed-lifecycle-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-document-results.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-edit-session.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-edit-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-emissive-camera-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-export-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-file-names-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-flame-emitter.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-flame-snapshot.py": {
+      "kind": "python"
+    },
+    "tests/scene-floor-receivers-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-gi-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-gi-controls.mjs": {
+      "kind": "manual",
+      "reason": "requires origin, output and expected-root arguments for a live served page"
+    },
+    "tests/scene-gi-estimator-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-gi-evidence-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-gi-final-evidence-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-gi-linear-evidence-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-gi-native.mjs": {
+      "kind": "manual",
+      "reason": "requires origin, output and expected-root arguments for a live served page"
+    },
+    "tests/scene-library-contracts.py": {
+      "kind": "python"
+    },
+    "tests/scene-library-import-contracts.py": {
+      "kind": "python"
+    },
+    "tests/scene-light-edit-interaction-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-light-geometry-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-light-inspection-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-light-low-direction-controls.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-light-preview.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-light-route-consumer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-light-timing-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-light-transfer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-light-visibility-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-lighting-authoring-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-lighting-dom-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/scene-load-picker-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-membership-consumer-regressions.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-membership-history.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-navigation-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/scene-object-publication-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-object-witness-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/scene-placement-controller.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-prepared-smoke-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-prepared-smoke-gpu.mjs": {
+      "kind": "manual",
+      "reason": "requires a live page URL and output path"
+    },
+    "tests/scene-prepared-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-radiance-material-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-receiving-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-rim-authoring.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-roundtrip.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-save-as-name-contracts.py": {
+      "kind": "python"
+    },
+    "tests/scene-save-contracts.py": {
+      "kind": "python"
+    },
+    "tests/scene-scattering-evidence-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-smoke-reconstruction-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-smoke-reconstruction-gpu.mjs": {
+      "kind": "manual",
+      "reason": "requires a runtime URL and persistent output directory"
+    },
+    "tests/scene-smoke-solver-selection-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-source-aware-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-source-frame-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-source-guide-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-source-guide-evidence-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-source-motion-evidence-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-source-softening-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-source-softening-gpu-evidence-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-source-softening-gpu-evidence.mjs": {
+      "kind": "helper",
+      "reason": "assertion helper imported by scene-source-softening-gpu.mjs"
+    },
+    "tests/scene-source-softening-gpu.mjs": {
+      "kind": "manual",
+      "reason": "requires a live page URL and output path"
+    },
+    "tests/scene-source-softening-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-surface-gpu-evidence-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-surface-receivers-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-surface-reconstruction-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-surface-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-volume-gather-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-volume-scattering-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-volume-source-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/scene-witness-browser-admission.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/scheduler-verification-receipt-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/serve-contracts.py": {
+      "kind": "python"
+    },
+    "tests/serve-static-cache-headers-contracts.py": {
+      "kind": "python"
+    },
+    "tests/sf3d-composition-bootstrap-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/sf3d-composition-source-hold-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/sf3d-current-main-inference-frame-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/sf3d-host-foreground-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/sf3d-host-injection-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/sf3d-host-memory-uptake-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/sf3d-ordinary-frame-service-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/sf3d-ordinary-memory-smoke-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/sf3d-real-producer-source-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/sf3d-shared-device-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/sf3d-smoke-verdict-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/sf3d-source-hold-contracts.py": {
+      "kind": "python"
+    },
+    "tests/sf3d-vendor-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/shared-device-acquisition-owner-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/shared-device-tall-domain-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/sharp-breathing-room-comparison-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/sharp-webgpu-adapter-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/spatial-asset-kiln-doc-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/splat-assets-doc-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/structural-projection-outcome-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/structural-source-assay-cli-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/structural-source-assay-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/test-runner-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/track-m-authored-source-m0-preflight-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/track-m-evidence-bundle-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/track-m-m0-bundle-compatibility-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/track-m-routing-fixture-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/track-m-source-projection-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/video-filmstrip-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/visual-work.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-appearance-decomposition-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-arm-capture-checks-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/volume-artistic-motion-controls-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-basin-drive-cockpit-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-basin-drive-session-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-basin-promotion-api-contracts.py": {
+      "kind": "python"
+    },
+    "tests/volume-basin-promotion-cockpit-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-basin-promotion-first-revision-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-basin-promotion-iteration-revision-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-basin-promotion-package-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-beauty-control-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-bonfire-macro-force-periodicity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-bonfire-source-periodicity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-boundary-fire-palette-equivalence.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-boundary-raster-transition-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-bounded-emitter-injection-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-canonical-motion-retirement-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-coarse-closure-oracle-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-coarse-closure-receiver-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-cockpit-authority-toggle-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-cockpit-layout-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-cockpit-layout-editor-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-cockpit-layout-witness-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/volume-cockpit-layout-witness-core-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-cockpit-layout-witness-early-failure-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-cockpit-layout-witness-network-collector-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-cockpit-layout-witness-outage-slice-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/volume-cockpit-layout-witness-success-evidence-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-cockpit-mode-controls.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-cockpit-polish-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-cockpit-product-regressions.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-cockpit-retired-controls-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-common-gas-transport.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-confinement-mode-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/volume-controlled-step-sequence-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-dead-render-clock-retirement-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-dense-cue-splat-bridge-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-detail-force-isolation.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-device-layout-capacity.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-diagnostic-periodicity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-disabled-splat-diagnostic-consumer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-disabled-splat-inert-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-dynamic-texture-proof-retirement-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-emissive-transport-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-emitter-basis.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-emitter-cockpit-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-emitter-core-source-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-emitter-recovery-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-emitter-runtime.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-entrainment-sway-periodicity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-exact-basin-full-grid-export-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/volume-exact-basin-support-probe-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-exact-load-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-external-emitter-flicker-periodicity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-fire-actor-control-rebake-adapter-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-fire-actor-mount-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-fire-lick-periodicity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-flame-settings-problems-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-flow-kernel-descriptor-socket-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-flow-reconstruction-kernel-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-four-arm-held-state-runtime-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-frame-only-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-frozen-composition-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-full-support-authored-fork-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-full-support-cockpit-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-heat-release-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-held-field-viewer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-immersed-source-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-inflow-aperture-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-inflow-boundary-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-initial-field-periodicity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-inlet-boundary-profile-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-inlet-cockpit-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-inlet-perturbation-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-intrinsic-presentation-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-intrinsic-presentation-witness-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/volume-kiln-composition-bridge.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-layer-coefficient-live-union-overlay-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-layer-coefficient-live-union-remap-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-layer-coefficient-live-union-runtime-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-layer-coefficient-live-union-witness-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/volume-live-field-viewer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-live-full-support-optics-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-main-integration-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-microdetail-transport-slip-retirement-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-nonridge-randomized-capture-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-nonridge-source-basis-capture-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-nonridge-source-basis-corpus-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-occupancy-ridge-preservation-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-operator-drive-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-optical-depth-order-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-ordinary-scene-depth-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-passive-material-law-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-periodic-authorship-inventory-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-periodic-excitation-controls-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-persistent-sparse-cohort-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-persistent-sparse-cohort-gpu-consumer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-phase-aligned-field-pair-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-physical-color-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-physical-color-label-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-physical-color-pixel-contracts.mjs": {
+      "kind": "manual",
+      "reason": "requires a capture path argument"
+    },
+    "tests/volume-physical-color-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-physical-highlight-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-positive-flame-partition-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-pressure-solver-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-pressure-tier-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-product-fire-adapter-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-production-raymarch-retirement-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-raymarch-periodicity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-raymarch-specialization-negative-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-raymarch-specialization-witness-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/volume-raymarch-trilinear-baseline-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-render-pair-cli-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-residual-lean-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-retired-control-migration-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-scalar-advection-periodicity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-scene-solid-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-selective-head-live-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/volume-selective-head-motion-producer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-selective-head-motion-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-settings-index-ui-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-settings-presentation-persistence-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-settings-preset-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-settings-preset-emitter-migration-contracts.py": {
+      "kind": "python"
+    },
+    "tests/volume-settings-preset-source-identity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-settings-preset-view-resolution-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-settings-projection-receipt-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-settings-renderer-controls-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-settings-renderer-controls-store-contracts.py": {
+      "kind": "python"
+    },
+    "tests/volume-settings-schema-evolution-contracts.py": {
+      "kind": "python"
+    },
+    "tests/volume-settings-store-contracts.py": {
+      "kind": "python"
+    },
+    "tests/volume-shallow-emitter-flux-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-shared-transmittance-optical-layer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-shared-transmittance-witness-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-slab-inlet-dynamics-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-source-birth-periodicity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-splat-optical-recurrence-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-splat-radiance-parity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-stage-b-cockpit-consumer-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-stage-b-optical-adjudication-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-tall-domain-pipeline-constants-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-time-step-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-time-step-scalar-contracts.mjs": {
+      "kind": "browser",
+      "reason": "launches or drives a browser"
+    },
+    "tests/volume-transport-scheme-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-transported-detail-force-periodicity-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-velocity-staggering-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/volume-vorticity-confinement.mjs": {
+      "kind": "node"
+    },
+    "tests/volume_basin_drive_session_http_contracts.py": {
+      "kind": "python"
+    },
+    "tests/volume_basin_drive_session_store_contracts.py": {
+      "kind": "python"
+    },
+    "tests/volume_cockpit_layout_http_contracts.py": {
+      "kind": "python"
+    },
+    "tests/volume_cockpit_layout_store_contracts.py": {
+      "kind": "python"
+    },
+    "tests/volume_settings_shared_store_contracts.py": {
+      "kind": "python"
+    },
+    "tests/volume_settings_shared_store_http_contracts.py": {
+      "kind": "python"
+    },
+    "tests/webgpu-kit-validator-contracts.mjs": {
+      "kind": "node"
+    },
+    "tests/world-chambers-contracts.mjs": {
+      "kind": "node"
+    }
+  }
+}

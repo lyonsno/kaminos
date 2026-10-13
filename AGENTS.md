@@ -13,6 +13,10 @@ checkpoint. Recheck before adding another dependent slice. This catches a
 branch that is becoming a second product line while its dependency remains
 unintegrated.
 
+## Tests
+
+Run `npm test` before handing off or landing. It must report no new failures. Classify every new test file in `tests/suite.json`, and prefer behavior tests over regular-expression assertions on `index.html` source. Details: `docs/testing.md`.
+
 ## Fire Basins In Cooperative Inference Smokes
 
 When using an exported fire basin with the WebGPU inference kit, read

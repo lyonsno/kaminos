@@ -1,0 +1,26 @@
+name: tests
+
+on:
+  push:
+    branches: [main, 'cc/operlocutor-*']
+  workflow_dispatch:
+
+jobs:
+  suite:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '25'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install numpy
+      - run: node tools/test-runner.mjs --report test-results/report.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
