@@ -1184,6 +1184,27 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button class="btn" id="settings-preset-inspect-fresh">Inspect Fresh</button>
       </div>
     </div>
+    <div class="panel" id="volume-joined-panel" aria-label="Joined exterior (provisional)">
+      <div class="panel-title">Joined exterior <span style="opacity:.6">(provisional smoke controls, not saved)</span></div>
+      <div class="slider-row">
+      <span class="slider-label">Joined boundary</span>
+      <select id="volume-joined-boundary"><option value="off">off</option><option value="on">on</option></select>
+      <span class="slider-val" id="volume-joined-boundary-val">off</span>
+    </div>
+      <span class="slider-help">Provisional smoke control, not saved with the basin. Joins the fine box to an exterior at the pressure level: the fine projection stops and the exterior's shared solve sets the boundary faces. Needs the immersed source and the converged solver; the field says why when refused.</span>
+      <div class="slider-row">
+      <span class="slider-label">Exterior extent</span>
+      <select id="volume-joined-exterior-extent"><option value="0">none</option><option value="16">16</option><option value="20">20</option><option value="24">24</option><option value="32">32</option><option value="40">40</option></select>
+      <span class="slider-val" id="volume-joined-exterior-extent-val">none</span>
+    </div>
+      <span class="slider-help">Provisional quiescent exterior: a coarse box this many cells across (cells four fine cells wide) with the fine box centred one cell above its floor, open at top and bottom. Pressure coupling only; the exterior has no transport of its own. Changing it rebuilds the exterior (a moment). The field reports the composite size and the last solve.</span>
+      <div class="slider-row">
+      <span class="slider-label">Exterior wall</span>
+      <select id="volume-joined-exterior-wall"><option value="none">none</option><option value="+x">+x</option><option value="-x">−x</option><option value="+z">+z</option><option value="-z">−z</option></select>
+      <span class="slider-val" id="volume-joined-exterior-wall-val">none</span>
+    </div>
+      <span class="slider-help">A synthetic solid slab in the exterior, two coarse cells thick, two cells off the named side of the fine box, spanning the exterior. For seeing whether the exterior redirects the plume; not a scene object.</span>
+    </div>
     <div id="volume-cockpit-layout-toolbar" class="volume-cockpit-layout-toolbar" data-editing="false" data-volume-basin-drive-ignore data-volume-cockpit-layout-ui aria-label="Cockpit layout">
       <div class="volume-cockpit-layout-toolbar-row">
         <select id="volume-cockpit-layout-select" data-volume-layout-control aria-label="Saved cockpit layout"></select>
@@ -2188,24 +2209,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-grid-height-ratio-val">2× (saved basins)</span>
     </div>
     <span class="slider-help">Grid height as a multiple of the width. 2 is what every saved basin was authored at. Any other value is clamped between 1 and 4 and snapped to the nearest height that keeps the light lattices aligned (steps of 4 cells at 32 and 64, 12 at 48 and 96); cells keep their size, the box grows rows, nothing is stretched. A height the GPU cannot hold is refused and the field is kept; the Grid field says so. Changing it rebuilds the fluid state like a resolution change, so while you edit it only the box outline follows; press Enter or leave the field to apply, Escape to cancel. Memory and time grow with the height.</span>
-    <div class="slider-row">
-      <span class="slider-label">Joined boundary</span>
-      <select id="volume-joined-boundary"><option value="off">off</option><option value="on">on</option></select>
-      <span class="slider-val" id="volume-joined-boundary-val">off</span>
-    </div>
-    <span class="slider-help">Provisional smoke control, not saved with the basin. Joins the fine box to an exterior at the pressure level: the fine projection stops and the exterior's shared solve sets the boundary faces. Needs the immersed source and the converged solver; the field says why when refused.</span>
-    <div class="slider-row">
-      <span class="slider-label">Exterior extent</span>
-      <select id="volume-joined-exterior-extent"><option value="0">none</option><option value="16">16</option><option value="20">20</option><option value="24">24</option><option value="32">32</option><option value="40">40</option></select>
-      <span class="slider-val" id="volume-joined-exterior-extent-val">none</span>
-    </div>
-    <span class="slider-help">Provisional quiescent exterior: a coarse box this many cells across (cells four fine cells wide) with the fine box centred one cell above its floor, open at top and bottom. Pressure coupling only; the exterior has no transport of its own. Changing it rebuilds the exterior (a moment). The field reports the composite size and the last solve.</span>
-    <div class="slider-row">
-      <span class="slider-label">Exterior wall</span>
-      <select id="volume-joined-exterior-wall"><option value="none">none</option><option value="+x">+x</option><option value="-x">−x</option><option value="+z">+z</option><option value="-z">−z</option></select>
-      <span class="slider-val" id="volume-joined-exterior-wall-val">none</span>
-    </div>
-    <span class="slider-help">A synthetic solid slab in the exterior, two coarse cells thick, two cells off the named side of the fine box, spanning the exterior. For seeing whether the exterior redirects the plume; not a scene object.</span>
     <div class="slider-row">
       <span class="slider-label">Grid Overlay</span>
       <input type="range" id="volume-grid-overlay" min="0" max="1" step="0.05" value="0">
