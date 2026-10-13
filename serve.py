@@ -2659,6 +2659,26 @@ def trellis_express_eligibility(queue_dir):
     return {"eligible": True, "reason": None, "basis": basis}
 
 
+def cancel_owned_gpu_job(job_id, *, queue_dir, greenroom_bin, runs_root):
+    """Stop a waiting generation this server submitted: Greenroom's own cancel, pending only."""
+    job_id = str(job_id or "")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{6,64}", job_id):
+        raise ValueError("Greenroom job id required")
+    pending = Path(queue_dir) / "pending" / job_id
+    try:
+        request = json.loads((pending / "request.json").read_text())
+    except (OSError, ValueError):
+        raise ValueError("That job is no longer waiting in the GPU queue")
+    output = Path(str(request.get("output_dir") or "")).resolve()
+    if request.get("agent_id") != "kaminos-generate" or not output.is_relative_to(Path(runs_root).resolve()):
+        raise PermissionError("That GPU queue job was not submitted by this Kaminos server")
+    completed = subprocess.run([str(greenroom_bin), "--queue-dir", str(queue_dir), "cancel", job_id],
+                               capture_output=True, text=True, timeout=30)
+    if completed.returncode != 0:
+        raise ValueError((completed.stderr or completed.stdout).strip()[-300:] or "Greenroom cancel failed")
+    return {"schema": "kaminos.gpu-job-cancel.v0", "jobId": job_id, "status": "cancelled"}
+
+
 def trellis_generation_availability():
     config_path = os.environ.get("KAMINOS_TRELLIS_CONFIG")
     if not config_path:
@@ -3648,6 +3668,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == '/api/prepare-image':
             self.handle_prepare_image(parse_qs(parsed.query))
+        elif parsed.path == "/api/gpu-queue-cancel":
+            self.handle_gpu_queue_cancel()
         elif parsed.path == "/api/mesh-generation-origin":
             self.handle_mesh_generation_origin()
         elif parsed.path == "/api/ingest-mesh":
@@ -4232,6 +4254,22 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         _atomic_write_json(scene_path, data)
         self.send_json({"saved": filename, "path": str(scene_path)})
+
+    def handle_gpu_queue_cancel(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            payload = json.loads(self.rfile.read(length)) if length > 0 else {}
+            config = json.loads(Path(os.environ["KAMINOS_TRELLIS_CONFIG"]).read_text())
+            self.send_json(cancel_owned_gpu_job(payload.get("job"), queue_dir=config["queueDir"],
+                                                greenroom_bin=config["greenroomBin"], runs_root=KAMINOS_PIPELINE_RUNS_DIR))
+        except KeyError:
+            self.send_json({"error": "No configured GPU queue on this server"}, 404)
+        except PermissionError as error:
+            self.send_json({"error": str(error)}, 403)
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 409)
+        except (OSError, subprocess.SubprocessError) as error:
+            self.send_json({"error": str(error)}, 503)
 
     def handle_mesh_generation_origin(self):
         try:

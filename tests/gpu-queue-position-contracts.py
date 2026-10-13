@@ -69,3 +69,37 @@ with TemporaryDirectory() as directory:
     (root / 'dispatch-policy.json').write_text(json.dumps({'mode': 'fifo', 'quick_routes': {route: 'evidence'}}))
     assert serve.trellis_express_eligibility(root)['eligible'] is False
 print('trellis express eligibility contracts passed')
+
+# Stop while queued: only a pending job this server submitted (owner and output folder) is cancelled.
+assert hasattr(serve, 'cancel_owned_gpu_job')
+with TemporaryDirectory() as directory:
+    queue = Path(directory) / 'queue'; runs = Path(directory) / 'runs'; other = Path(directory) / 'other'
+    runs.mkdir(); other.mkdir()
+    def submit(out, agent):
+        manifest = {'schema': 'gpu-greenroom.command.v2', 'service_class': 'normal', 'agent_id': agent,
+                    'repo_root': str(runs), 'cwd': str(runs), 'route_identity': 'trellis',
+                    'output_dir': str(out), 'argv': ['/bin/echo', 'x']}
+        path = Path(directory) / f'{agent}-{out.name}.json'; path.write_text(json.dumps(manifest))
+        out_ = subprocess.run([str(GREENROOM), '--queue-dir', str(queue), 'submit-command', '--manifest', str(path)], capture_output=True, text=True, check=True)
+        return json.loads(out_.stdout)['job_id']
+    mine = submit(runs / 'run-1' / 'trellis-queue' / 'a', 'kaminos-generate')
+    foreign_agent = submit(runs / 'run-2', 'someone-else')
+    foreign_dir = submit(other / 'run-3', 'kaminos-generate')
+    for job in (foreign_agent, foreign_dir):
+        try:
+            serve.cancel_owned_gpu_job(job, queue_dir=queue, greenroom_bin=GREENROOM, runs_root=runs)
+        except PermissionError:
+            pass
+        else:
+            raise AssertionError(f'cancelled a job this server does not own: {job}')
+        assert (queue / 'pending' / job).is_dir()
+    result = serve.cancel_owned_gpu_job(mine, queue_dir=queue, greenroom_bin=GREENROOM, runs_root=runs)
+    assert result['status'] == 'cancelled', result
+    assert (queue / 'cancelled' / mine).is_dir() and not (queue / 'pending' / mine).exists()
+    try:
+        serve.cancel_owned_gpu_job(mine, queue_dir=queue, greenroom_bin=GREENROOM, runs_root=runs)
+    except ValueError as error:
+        assert 'no longer waiting' in str(error)
+    else:
+        raise AssertionError('cancelled a job that is not pending')
+print('owned gpu job cancel contracts passed')

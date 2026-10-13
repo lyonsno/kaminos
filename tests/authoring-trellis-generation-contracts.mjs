@@ -7,9 +7,10 @@ const glb=new Uint8Array([0x67,0x6c,0x54,0x46,2,0,0,0,12,0,0,0]).buffer;
 const okResult={schema:'kaminos.pipeline-run-result.v0',ok:true,pipelineId:TRELLIS_PIPELINE_ID,runId:'run-7',report:{document:{artifacts:{mesh:{role:'textured-mesh',path:'/runs/run-7/artifacts/trellis-output.glb'}}}}};
 const input={source:'/api/read?root=image-inbox&path=lantern.png',name:'klein-lantern-s1.png',label:'klein-lantern-s1.png',preparation:{original:{sha256:'a'.repeat(64)}}};
 
-function harness({result=okResult,gate=null,availability={status:'available',message:'Queued WebGPU with local mesh finishing'},persistFails=0,express=false,positions=[]}={}){
- const calls=[],persisted=[],polled=[];let failures=persistFails;
+function harness({result=okResult,gate=null,availability={status:'available',message:'Queued WebGPU with local mesh finishing'},persistFails=0,express=false,positions=[],cancelResult={status:'cancelled'}}={}){
+ const calls=[],persisted=[],polled=[],cancelled=[];let failures=persistFails;
  const service=createTrellisAuthoringGeneration({
+  cancelJob:async job=>{cancelled.push(job);if(gate)gate.reject(Object.assign(Error('queued TRELLIS generation cancelled while waiting'),{cancelled:true}));return cancelResult;},
   express:()=>express,pollMs:1,
   queuePosition:async job=>{polled.push(job);return positions.shift()||positions.last||null;},
   availability:()=>availability,
@@ -19,7 +20,7 @@ function harness({result=okResult,gate=null,availability={status:'available',mes
   fetchBytes:async url=>{calls.push({fetched:url});return glb;},
   persist:async(bytes,generation,label)=>{if(failures-->0)throw Error('disk');persisted.push({bytes,generation,label});return{source:'/api/read?root=generated-meshes&path=x.glb',name:`${label} · TRELLIS.glb`,generation};},
  });
- return {service,calls,persisted,polled};
+ return {service,calls,persisted,polled,cancelled};
 }
 
 test('a selected image runs the queued TRELLIS route and its fresh GLB is saved for Add',async()=>{
@@ -87,4 +88,27 @@ test('while queued the drawer shows jobs ahead and waiting time from the queue r
  const state=h.service.read();assert.equal(h.polled[0],'job-123');
  assert.equal(state.queue.jobsAhead,3);assert.match(state.queueLine,/3 jobs ahead · waiting 1m 15s/);
  gate.resolve();await run;assert.equal(h.service.read().queue,null,'telemetry clears when the run ends');
+});
+
+test('KMA-03: Express is read when the run is requested, before the busy state disables the checkbox',async()=>{
+ const {withExpressSnapshot}=module;
+ let checked=true;const h=harness({availability:{status:'available',message:'ok',express:{eligible:true}},express:false});
+ const busy=run=>async input=>{checked=false;return run(input);}; // the busy redraw disables Express
+ const run=withExpressSnapshot(busy(h.service.run),()=>checked);
+ await run(input);assert.equal(h.calls[0].serviceClass,'quick');
+ checked=false;const h2=harness({availability:{status:'available',message:'ok',express:{eligible:true}},express:true});
+ await withExpressSnapshot(h2.service.run,()=>checked)(input);assert.equal(h2.calls[0].serviceClass,'normal');
+});
+
+test('WO-1: Stop cancels a TRELLIS job while it waits, and says so once it is running',async()=>{
+ const gate=deferred();const h=harness({gate,positions:[{status:'pending',jobsAhead:2,waitedSeconds:5}]});
+ const run=h.service.run(input);for(let i=0;i<50&&!h.service.read().queue;i++)await new Promise(r=>setTimeout(r,2));
+ assert.equal(h.service.read().canStop,true,'waiting jobs can be stopped');
+ assert.equal(h.service.stop(),true);assert.equal(h.service.read().status,'stopping');
+ assert.equal(await run.catch(e=>e),null);assert.deepEqual(h.cancelled,['job-123']);
+ assert.equal(h.service.read().status,'stopped');assert.equal(h.persisted.length,0);
+ const gate2=deferred();const r=harness({gate:gate2,positions:[{status:'running',runningSeconds:40,waitedSeconds:5}]});
+ const running=r.service.run(input);for(let i=0;i<50&&!r.service.read().queue;i++)await new Promise(res=>setTimeout(res,2));
+ assert.equal(r.service.read().canStop,false);assert.equal(r.service.stop(),false);assert.match(r.service.read().stopNote,/GPU queue console/);
+ gate2.resolve();await running;
 });

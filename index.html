@@ -3839,9 +3839,9 @@ import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, check
 import {checkedPose} from './scene-edit-session.mjs';
 import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.mjs';
 import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
-import {createTrellisAuthoringGeneration,installMeshModelChoice} from './authoring-trellis-generation.mjs';
+import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnapshot} from './authoring-trellis-generation.mjs';
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
-import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,kleinDeviceRequirements,composeDeviceRequirements,KLEIN_PUBLISHED_WEIGHTS} from './authoring-image-generation.mjs';
+import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,KLEIN_PUBLISHED_WEIGHTS} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
 import {checkedViewportDisplay,viewportShortcut} from './viewport-display-settings.mjs';
@@ -11205,9 +11205,7 @@ async function initScene() {
       // (all adapter features and limits) compose into the one acquisition.
       // Authoring text-to-image (FLUX.2 klein) needs shader-f16 and the adapter's
       // buffer/workgroup limits on that same device; requesting them allocates nothing.
-      hostRequirements: async adapter => composeDeviceRequirements(
-        samHostConfig?.mounted ? await samHostDeviceRequirements(adapter) : null,
-        kleinDeviceRequirements(adapter)),
+      hostRequirements: sharedDeviceHostRequirements({ sam: samHostConfig?.mounted ? samHostDeviceRequirements : null }),
     });
     sharedGpuFailureReason = null;
   } catch (error) {
@@ -26738,6 +26736,7 @@ function setupAuthoringAssets(){
       }).catch(error=>{trellisAvailability={status:'unavailable',message:`TRELLIS availability: ${error.message}`};redraw();});
       authoringTrellisGenerator=createTrellisAuthoringGeneration({availability:()=>trellisAvailability,changed:()=>redraw(),
         express:()=>authoringMeshModel?.express()===true,
+        cancelJob:async job=>{const response=await fetch('/api/gpu-queue-cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job})});const value=await response.json();if(!response.ok)throw Error(value.error||'cancel failed');return value;},
         queuePosition:async job=>{const response=await fetch('/api/gpu-queue-position?'+new URLSearchParams({job}),{cache:'no-store'});const value=await response.json();if(!response.ok)throw Error(value.error||'queue position unavailable');return value;},
         blocked:()=>authoringImageGenerator?.busy()?'An image is generating. Generate the mesh when it is saved.':meshBusy('sf3d')?'Stable Fast 3D is generating.':null,
         runPipeline:async(payload,{onProgress})=>readPipelineRunStream(await fetch('/api/run-pipeline',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},body:JSON.stringify(payload)}),onProgress),
@@ -26745,7 +26744,7 @@ function setupAuthoringAssets(){
         fetchBytes:async url=>{const response=await fetch(url);if(!response.ok)throw Error(`TRELLIS mesh HTTP ${response.status}`);return response.arrayBuffer();},
         persist:(glb,generation,label)=>persistGeneratedMesh(glb,generation,label,'TRELLIS'),
       });
-      authoringTrellisGenerator={...authoringTrellisGenerator,run:tracked('trellis',authoringTrellisGenerator.run)};
+      authoringTrellisGenerator={...authoringTrellisGenerator,run:withExpressSnapshot(tracked('trellis',authoringTrellisGenerator.run),()=>authoringMeshModel?.express()===true)};
     }
     return authoringTrellisGenerator;
   };
@@ -26754,13 +26753,14 @@ function setupAuthoringAssets(){
     if(!authoringGenerator){
       // SF3D installs its kiln foreground requester through a recording view so an
       // image run can borrow the kiln and hand it back before the next mesh run.
-      const sf3d=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:foregroundHandoff()?.recording('sf3d')||volumePrototype,host:compositionHost}),changed:()=>redraw(),blocked:()=>{
+      const sf3dBlocked=()=>{
         if(compositionModule)return 'This scene has another inference/performance host. Use its existing generation controls.';
         if(authoringImageGenerator?.busy())return 'An image is generating. Generate the mesh when it is saved.';
         if(meshBusy('trellis'))return 'TRELLIS is generating.';
         return null;
-      }});
-      authoringGenerator={...sf3d,run:tracked('sf3d',input=>runWithKilnHandoff({service:sf3d,input,handoff:foregroundHandoff(),owner:'sf3d'}))};
+      };
+      const sf3d=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:foregroundHandoff()?.recording('sf3d')||volumePrototype,host:compositionHost}),changed:()=>redraw(),blocked:sf3dBlocked});
+      authoringGenerator={...sf3d,run:tracked('sf3d',input=>runWithKilnHandoff({service:sf3d,input,handoff:foregroundHandoff(),owner:'sf3d',blocked:sf3dBlocked}))};
     }
     return authoringGenerator;
   };
@@ -26785,7 +26785,8 @@ function setupAuthoringAssets(){
     changed:()=>redraw(),
     blocked:()=>compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':null,
   });
-  authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets});
+  // TRELLIS runs in the GPU queue's own browser, so images can still be made meanwhile.
+  authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets,meshBusy:()=>meshBusy('sf3d')});
   authoringGenerateLayout=installGenerateLayout({document,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
   window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),images:authoringImageGenerator};
 }

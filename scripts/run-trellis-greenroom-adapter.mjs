@@ -76,6 +76,10 @@ export async function runTrellisAdapter(values){
           }finally{await file.close();}
         }catch(error){if(error.code!=='ENOENT')throw error;}
         if(['done','failed','cancelled'].includes(bucket)){
+          // A job cancelled before it started has no receipt; that is a stop, not lost evidence.
+          if(bucket==='cancelled'&&!(await fs.stat(path.join(dir,'receipt.json')).catch(()=>null))){
+            state.terminal={status:'cancelled',receiptPath:null,receipt:null};throw Error('queued TRELLIS generation cancelled while waiting');
+          }
           terminal=JSON.parse(await fs.readFile(path.join(dir,'receipt.json')));
           state.terminal={status:bucket,receiptPath:path.join(dir,'receipt.json'),receipt:terminal};break;
         }
