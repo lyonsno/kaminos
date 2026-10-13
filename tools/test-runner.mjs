@@ -19,7 +19,7 @@
 
 import { spawn, execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -34,6 +34,11 @@ export const QUARANTINE_CLASSES = new Set(['untriaged', 'regression', 'stale-pin
 export const BROWSER_OVERRIDES = ['KAMINOS_CHROME', 'CHROME_BIN', 'CHROME', 'KAMINOS_SHARP_WEBGPU_CHROME'];
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 const LATE_LAUNCH_SETTLE_MS = 1000;
+// node:test files run with the spec reporter on stdout for the log and this
+// module's reporter writing structured events beside it. Signatures for such
+// files come from the events, never from the human-readable output.
+export const EVENTS_REPORTER_PATH = fileURLToPath(new URL('./test-events-reporter.mjs', import.meta.url));
+export const DEFAULT_NODE_FLAGS = Object.freeze(['--test-reporter=spec', '--test-reporter-destination=stdout', `--test-reporter=${EVENTS_REPORTER_PATH}`]);
 const DEFAULT_TIMEOUT_MS = 600000;
 const DECLARATION = /^\s*(?:\/\/|#)\s*kaminos-test:\s*([a-z]+)\s*(?:[—–-]+\s*(.+?))?\s*$/;
 const SKIP_DIRS = new Set(['node_modules', '.git', 'artifacts', 'lib', 'scratch', 'scenes', 'fixtures']);
@@ -139,16 +144,7 @@ export function failureSignature(output, { root, kind, exitCode }) {
   let text = output;
   if (root) text = text.split(root).join('<root>');
   text = text.split(os.homedir()).join('~');
-  const raw = text.split('\n');
-  const lines = raw.map(l => l.trim()).filter(Boolean);
-  // node:test files keep running after a failure. Sign every failing subtest
-  // by its suite path and first error line, plus any error the runner caught
-  // outside a subtest, so a new failing subtest or a new reason for a known
-  // one changes the signature.
-  if (lines.some(l => /^ℹ fail [1-9]/.test(l))) {
-    const entries = nodeTestFailures(raw);
-    if (entries.length) return `node:test failing: ${entries.sort().join(' | ')}`;
-  }
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const isError = l => /^(?:[A-Za-z_.]*(?:Error|Exception))(?:\s*\[[A-Z_]+\])?:/.test(l) || /^FAIL\b/.test(l);
   const indexes = lines.map((l, i) => (isError(l) ? i : -1)).filter(i => i >= 0);
   if (!indexes.length) return lines.length ? lines.at(-1) : `exit ${exitCode}`;
@@ -164,58 +160,81 @@ export function failureSignature(output, { root, kind, exitCode }) {
   return [lines[at], ...detail].join(' | ');
 }
 
-export function nodeTestFailures(rawLines) {
-  const summaryAt = rawLines.findIndex(l => /^ℹ tests \d+/.test(l.trim()));
-  const body = summaryAt >= 0 ? rawLines.slice(0, summaryAt) : rawLines;
-  const tail = summaryAt >= 0 ? rawLines.slice(summaryAt) : [];
-  const stack = [];
-  const paths = [];
-  for (const line of body) {
-    const indent = line.length - line.trimStart().length;
-    const t = line.trim();
-    const open = t.match(/^▶ (.+)$/);
-    if (open) { stack.push({ indent, name: open[1] }); continue; }
-    const done = t.match(/^[✖✔﹣] (.+?) \(\d+(?:\.\d+)?ms\)$/);
-    if (!done) continue;
-    const top = stack.at(-1);
-    if (top && top.indent === indent && top.name === done[1]) { stack.pop(); continue; }
-    if (t.startsWith('✖')) paths.push([...stack.map(f => f.name), done[1]].join(' › '));
-  }
-  const errors = [];
-  const failingAt = tail.findIndex(l => l.trim() === '✖ failing tests:');
-  if (failingAt >= 0) {
-    const section = tail.slice(failingAt + 1);
-    for (let i = 0; i < section.length; i += 1) {
-      if (!/^✖ .+ \(\d+(?:\.\d+)?ms\)$/.test(section[i].trim())) continue;
-      const next = section.slice(i + 1).map(l => l.trim()).find(l => l && !/^at\s/.test(l));
-      errors.push(next || 'no error line');
-    }
-  }
-  const entries = paths.map((p, i) => `${p} :: ${errors[i] || 'no error line'}`);
-  for (const line of tail.concat(body)) {
-    const m = line.trim().match(/^ℹ (Error: .+)$/);
-    if (m) entries.push(`uncaught :: ${m[1]}`);
-  }
-  return entries;
+function normalizeText(text, root) {
+  let out = String(text);
+  if (root) out = out.split(root).join('<root>');
+  return out.split(os.homedir()).join('~');
 }
 
-function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv, track }) {
+// Build a node:test file's signature from the structured events its reporter
+// wrote. Each failing test contributes its suite path and the thrown error's
+// own name and first message line; a failed hook contributes the hook and its
+// error; errors the test runner caught outside any test contribute as
+// uncaught. Suites that only failed because their children did, and children
+// cancelled because a hook failed, add nothing of their own.
+export function nodeTestSignature(eventsText, { root } = {}) {
+  const entries = [];
+  for (const line of String(eventsText).split('\n')) {
+    if (!line.trim()) continue;
+    let event;
+    try { event = JSON.parse(line); } catch { continue; }
+    if (event.kind === 'uncaught') { entries.push(`uncaught :: ${firstLine(normalizeText(event.message, root))}`); continue; }
+    if (event.kind !== 'fail') continue;
+    if (event.failureType === 'subtestsFailed' || event.failureType === 'cancelledByParent') continue;
+    const error = event.error ? `${event.error.name || 'Error'}: ${firstLine(normalizeText(event.error.message, root))}` : 'no error';
+    if (event.failureType === 'hookFailed') {
+      const hook = String(event.wrapper || '').match(/failed running (\w+) hook/);
+      entries.push(`${event.path} :: ${hook ? hook[1] : 'unknown'} hook failed :: ${error}`);
+      continue;
+    }
+    entries.push(`${event.path} :: ${error}`);
+  }
+  return entries.length ? `node:test failing: ${entries.sort().join(' | ')}` : null;
+}
+
+function firstLine(text) {
+  return String(text).split('\n').map(l => l.trim()).find(Boolean) || '';
+}
+
+function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv, track, nodeFlags }) {
   const env = { ...baseEnv, KAMINOS_TEST_RUNNER_TEST: file };
+  const eventsPath = path.join(logsDir, `${file.replace(/[\/]/g, '__')}.events.jsonl`);
+  const flags = kind === 'node' ? [...nodeFlags] : [];
+  const withReporter = flags.some(f => f.startsWith('--test-reporter=') && f.includes('test-events-reporter'));
+  if (withReporter) flags.push(`--test-reporter-destination=${eventsPath}`);
   const started = Date.now();
   const logPath = path.join(logsDir, `${file.replace(/[\/]/g, '__')}.log`);
-  return new Promise(resolve => {
+  return new Promise(async resolve => {
+    // A stale events file from an earlier run must never stand in for this one.
+    await fs.rm(eventsPath, { force: true });
     const chunks = [];
     let spawnError = null;
     let timedOut = false;
     const finish = async fields => {
       await fs.writeFile(logPath, Buffer.concat(chunks));
       const output = Buffer.concat(chunks).toString('utf8');
-      const signature = fields.outcome === 'fail' ? failureSignature(output, { root, kind, exitCode: fields.exitCode }) : null;
-      resolve({ file, kind, executable, durationMs: Date.now() - started, log: logPath, signature, ...fields });
+      const ranNodeTest = /^ℹ tests \d+/m.test(output);
+      let events = null;
+      try { events = await fs.readFile(eventsPath, 'utf8'); } catch { events = null; }
+      let signature = null;
+      let outcome = fields.outcome;
+      if (outcome === 'fail') {
+        if (events !== null) {
+          signature = nodeTestSignature(events, { root });
+          if (!signature && ranNodeTest) outcome = 'harness-defect';
+          if (!signature && !ranNodeTest) signature = failureSignature(output, { root, kind, exitCode: fields.exitCode });
+        } else if (ranNodeTest) {
+          outcome = 'harness-defect';
+        } else {
+          signature = failureSignature(output, { root, kind, exitCode: fields.exitCode });
+        }
+      }
+      resolve({ file, kind, executable, durationMs: Date.now() - started, log: logPath, events: events !== null ? eventsPath : null, signature, ...fields, outcome,
+        ...(outcome === 'harness-defect' ? { harnessDefect: 'node:test ran but its structured events were not written; the signature cannot be trusted' } : {}) });
     };
     let child;
     try {
-      child = spawn(executable, [file], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], detached: true, env });
+      child = spawn(executable, [...flags, file], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], detached: true, env });
     } catch (error) {
       chunks.push(Buffer.from(String(error?.stack || error)));
       return finish({ outcome: 'spawn-error', exitCode: null, signal: null });
@@ -265,6 +284,7 @@ export async function runSuite({
   kinds = ['node', 'python'],
   only = null,
   executables = {},
+  nodeFlags = DEFAULT_NODE_FLAGS,
   abortSignal = null,
 } = {}) {
   root = path.resolve(root);
@@ -285,7 +305,7 @@ export async function runSuite({
     schema: REPORT_SCHEMA, ok: false, failurePhase: null, error: null,
     startedAt: new Date().toISOString(), finishedAt: null,
     effective: { root, manifestPath, quarantinePath, parallel, timeoutMs, kinds, only,
-      executables: resolvedExecutables, node: process.version, python: null,
+      executables: resolvedExecutables, nodeFlags: [...nodeFlags], node: process.version, python: null,
       platform: `${process.platform}-${process.arch}`, git: gitIdentity(root),
       browserStub: { path: browserStub, overrides: BROWSER_OVERRIDES, log: browserLog },
       manifestSha256: null, quarantineSha256: null, dependencies: null },
@@ -379,9 +399,11 @@ export async function runSuite({
     report.failurePhase = 'execute';
     await fs.mkdir(logsDir, { recursive: true });
     await fs.rm(browserLog, { force: true });
-    await fs.writeFile(browserStub, `#!/bin/sh\n# Stands in for a browser while tools/test-runner.mjs runs tests. Any test\n# that reaches a browser launch lands here: record it and fail.\nprintf '%s\\t%s\\t%s\\n' "\${KAMINOS_TEST_RUNNER_TEST:-unknown}" "$$" "$*" >> ${JSON.stringify(browserLog)}\necho "browser launch blocked by tools/test-runner.mjs" >&2\nexit 97\n`, { mode: 0o755 });
+    const quotedLog = `'${browserLog.replace(/'/g, `'\\''`)}'`;
+    await fs.writeFile(browserStub, `#!/bin/sh\n# Stands in for a browser while tools/test-runner.mjs runs tests. Any test\n# that reaches a browser launch lands here: record it and fail.\nprintf '%s\\t%s\\t%s\\n' "\${KAMINOS_TEST_RUNNER_TEST:-unknown}" "$$" "$*" >> ${quotedLog}\necho "browser launch blocked by tools/test-runner.mjs" >&2\nexit 97\n`);
+    await fs.chmod(browserStub, 0o755);
     report.results = await pool(planned, parallel,
-      item => runOne({ root, ...item, timeoutMs, logsDir, env: childEnv, track }), () => interrupted);
+      item => runOne({ root, ...item, timeoutMs, logsDir, env: childEnv, track, nodeFlags }), () => interrupted);
     if (interrupted) throw Object.assign(new Error('run interrupted'), { phase: 'interrupted' });
 
     report.counts.executed = report.results.length;
@@ -454,6 +476,7 @@ function summarize({ report, reportPath }) {
   if (report.failurePhase) lines.push(`failure phase: ${report.failurePhase}\n${report.error}`);
   const list = (label, items, hint) => { if (items.length) lines.push(`${label}${hint ? ` (${hint})` : ''}:\n  ${items.join('\n  ')}`); };
   list('new failures', report.newFailures, 'fix them, or quarantine with a class, reason, owner and signature');
+  list('harness defects', report.results.filter(r => r.outcome === 'harness-defect').map(r => `${r.file}: ${r.harnessDefect}`));
   list('changed failure signatures', report.signatureChanged.map(e => `${e.file}\n    expected: ${e.expected}\n    actual:   ${e.actual}`));
   list('quarantined tests that now pass', report.staleQuarantine, 'remove them from tests/quarantine.json');
   list('unclassified test files', report.unclassified, 'add a first-line "// kaminos-test: node" declaration, or a tests/suite.json entry');
@@ -477,7 +500,8 @@ async function writeArgumentFailure(argv, error) {
   await fs.writeFile(reportPath, `${JSON.stringify({ schema: REPORT_SCHEMA, ok: false, failurePhase: 'arguments', error: error.message, argv }, null, 2)}\n`);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+const invokedAsMain = (() => { try { return Boolean(process.argv[1]) && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(path.resolve(process.argv[1])); } catch { return false; } })();
+if (invokedAsMain) {
   const argv = process.argv.slice(2);
   let args;
   try { args = parseArgs(argv); } catch (error) {
