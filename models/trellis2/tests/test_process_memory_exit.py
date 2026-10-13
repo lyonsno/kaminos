@@ -33,8 +33,13 @@ def sample(error, state, code=0):
              ['/bin/ps', '-p', '101', '-o', 'stat='], code, stdout=state, stderr='')):
         return module.sample_owned_processes(100, 'exit-replay')
 
-for state, code in [('Z', 0), ('', 1)]:
-    result = sample(errno.ESRCH, state, code)
+for error, state, code in [(error, state, code) for error in [errno.ESRCH, errno.EPERM]
+                          for state, code in [('Z', 0), ('', 1)]]:
+    # Actual Authoring run998512e7 outer sample at1791874111270.01:
+    # nested observer64072's /bin/ps64171 returned EPERM. That old
+    # sample has no retirement proof; these mocked OS replies test the
+    # new conditional continuation, not retroactive closure of that run.
+    result = sample(error, state, code)
     missing = result['unavailableProcesses'][0]
     assert missing.get('exitedBeforeMeasurement') is True, \
         'confirmed exited descendant must not masquerade as live missing coverage'
@@ -42,8 +47,9 @@ for state, code in [('Z', 0), ('', 1)]:
     assert result['sampledAggregatePhysicalFootprintBytes'] == 4096
     assert [p['pid'] for p in result['processes']] == [100], 'do not fabricate zero-byte child rows'
 
-for error, state, code in [(errno.ESRCH, 'S', 0), (errno.EACCES, 'Z', 0), (errno.ESRCH, '', 2)]:
+for error, state, code in [(errno.ESRCH, 'S', 0), (errno.EPERM, 'S', 0),
+                         (errno.EPERM, '', 2), (errno.EACCES, 'Z', 0), (errno.ESRCH, '', 2)]:
     result = sample(error, state, code)
     assert not result['unavailableProcesses'][0].get('exitedBeforeMeasurement'), \
         'live, inaccessible or unverified descendants retain missing coverage'
-print('Confirmed ESRCH exits remain explicit; live/inaccessible/unverified descendants are not excused.')
+print('OS-confirmed ESRCH/EPERM exits remain explicit; live/inaccessible/unverified descendants are not excused.')
