@@ -11958,10 +11958,13 @@ async function initScene() {
     },
     redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame,
   });
-  window.kaminosWorkbenchSceneState=()=>({...workbenchSceneFrames.state(),
-    rendererBackend:renderer.backend.isWebGPUBackend===true?'webgpu':renderer.backend.isWebGLBackend===true?'webgl':'unknown',
-    adapter:renderer.backend.adapter?.info??null,
-  });
+  window.kaminosWorkbenchSceneState=()=>{
+    const info=renderer.backend.adapter?.info;
+    return {...workbenchSceneFrames.state(),
+      rendererBackend:renderer.backend.isWebGPUBackend===true?'webgpu':renderer.backend.isWebGLBackend===true?'webgl':'unknown',
+      adapter:info?Object.fromEntries(['vendor','architecture','device','description'].map(key=>[key,info[key]??null])):null,
+    };
+  };
   installFluidWorkbench();
   void installOwnerWorkbenchEntry().catch(error=>{window.kaminosWorkbenchExperimentError=error.message;setInfo("Experiments unavailable: "+error.message);});
 
@@ -14963,11 +14966,12 @@ async function installOwnerWorkbenchEntry() {
   if(id)await ownerExperimentEntry.open(id,JSON.parse(params.get('experiment_inputs')||'{}'));
 }
 
-window.kaminosMountInvestigationEntry=async options=>{
+window.kaminosMountInvestigationEntry=async (options={})=>{
   await fluidViewportReady;
+  const tool=options.tool||'finger-fluid-bench';
+  if(![...document.querySelectorAll('.tab[data-tab]')].some(node=>node.dataset.tab===tool))throw Error('Unknown Workbench tool: '+tool);
   if(!authoringWorkspace)throw Error('Shared Kaminos workspace unavailable');
   if(authoringWorkspace.state().mode!=='workbench' && !authoringWorkspace.setMode('workbench'))throw Error('Finish the current scene edit before opening the investigation');
-  const tool=options.tool||'finger-fluid-bench';
   const component=createInvestigationEntry({document,...options,subject:options.subject||(tool==='finger-fluid-bench'?'water':'experiment')});
   const entryOnly=!fingerFluidBenchSolver?.available;
   window.__kaminosInvestigationEntryOnly=entryOnly;
