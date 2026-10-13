@@ -455,7 +455,7 @@ assert.match(index, /if \(objectRecords\.length > 0\) \{[\s\S]*\} else \{\s*clea
 assert.match(index, /setVolumePrimitivesState\(restorePlan\.volumePrimitives\);[\s\S]*if \(hasVolumePrimitiveScene \|\| activeSceneComposition \|\|/, 'object-only scene loads clear stale volume primitive state even when a diagnostic smoke route is requested');
 assert.match(index, /const previousSceneFile = currentSceneFile/, 'scene load preserves previous save target until restore succeeds');
 assert.match(index, /const previousVolumePrimitiveState = getVolumePrimitiveState\(\)/, 'scene load snapshots previous volume state before restore mutations');
-assert.match(index, /claimLoadedSceneFile\(file\)/, 'scene load claims current scene file only after successful restore');
+assert.match(index, /claimLoadedSceneFile\(file, sceneFile\)/, 'scene load claims current scene file only after successful restore');
 assert.match(index, /function assertSceneObjectsReloadable\(/, 'scene load preflights object reloadability before mutating scene state');
 assert.match(index, /assertSceneObjectsReloadable\(objectRecords\);[\s\S]*setInfo\('Loading scene\.\.\.'\);[\s\S]*await sceneLoadRequests\.awaitStage\(loadRequestId, loadSceneObjects\(objectRecords,[\s\S]*setVolumePrimitivesState\(restorePlan\.volumePrimitives\);/, 'scene load defers volume mutation until its current object restore succeeds');
 assert.match(index, /catch \(e\) \{[\s\S]*setVolumePrimitivesState\(previousVolumePrimitiveState\);[\s\S]*sceneSaveBlockedByFailedRestore = true;[\s\S]*currentSceneFile = null;[\s\S]*Scene load failed/, 'failed actual object restore rolls volume back and breaks overwrite ownership');

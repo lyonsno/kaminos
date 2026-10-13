@@ -80,7 +80,7 @@ test('successful async mount reconciles emitter records edited while creation wa
 
 test('scene-load continuations recheck ownership before publishing loaded identity', () => {
   const loadFileStart = indexHtml.indexOf('async function loadSceneFile(');
-  const claimFile = indexHtml.indexOf('claimLoadedSceneFile(file);', loadFileStart);
+  const claimFile = indexHtml.indexOf('claimLoadedSceneFile(file, sceneFile);', loadFileStart);
   const loadSlice = indexHtml.slice(loadFileStart, claimFile);
   assert.match(loadSlice, /sceneLoadRequests\.begin\(\)/, 'each scene load must own a supersedable load request');
   assert.match(loadSlice, /sceneLoadRequests\.isCurrent\(loadRequestId\)/, 'async load continuations must test current request ownership');

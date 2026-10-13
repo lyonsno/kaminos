@@ -30333,11 +30333,16 @@ function applyMaterialState(state) {
   applyMaterialStateToObject(currentMesh, state);
 }
 
-function claimLoadedSceneFile(file) {
-  if (file.name && file.name.endsWith('.kaminos.json')) {
-    history.replaceState(history.state,'',savedSceneLocation(location.href,file.name));
-    currentSceneFile = file.name;
+function claimLoadedSceneFile(file, sceneFile = null) {
+  if (sceneFile) {
+    history.replaceState(history.state,'',savedSceneLocation(location.href,sceneFile));
+  } else {
+    // Disk bytes have no server-backed identity until the user saves a copy.
+    const url=new URL(location.href),hash=new URLSearchParams(url.hash.slice(1));
+    hash.delete('scene');url.hash=hash.toString();
+    history.replaceState(history.state,'',url.href);
   }
+  currentSceneFile=sceneFile;
 }
 
 async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
@@ -30611,7 +30616,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   }
 
   if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
-  claimLoadedSceneFile(file);
+  claimLoadedSceneFile(file, sceneFile);
   if (data.label) document.getElementById('composition-label').value = data.label;
   if (activeSceneComposition) {
     const gain = document.getElementById('fire-light-gain-stops');
@@ -30626,7 +30631,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   cameraAuthoring?.refresh();
   sceneSaveBlockedByFailedRestore = false;
   if (objectRecords.length > 0) {
-    setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}${localLiquidFailure ? `; water host unavailable: ${localLiquidFailure}` : ''}`);
+    setInfo(`Scene loaded: ${objectRecords.length} object${objectRecords.length === 1 ? '' : 's'}${sceneFile ? '' : ' · Imported file; Save to keep a local copy'}${localLiquidFailure ? `; water host unavailable: ${localLiquidFailure}` : ''}`);
   } else {
     setInfo(localLiquidFailure ? `Scene loaded; water host unavailable: ${localLiquidFailure}` : 'Volume scene loaded');
   }
