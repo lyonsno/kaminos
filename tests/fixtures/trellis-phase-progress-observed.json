@@ -1,0 +1,31 @@
+{
+  "ok": false,
+  "mockSharpProgressEnv": "KAMINOS_MOCK_SHARP_PROGRESS",
+  "routeProgress": "",
+  "routeText": "ROUTE\nTRELLIS 2 Image -> Textured Mesh\nQueued WebGPU: trellis-image-to-mesh-webgpu-v0\nimage-preparation\nExecute\nrun",
+  "timelineProgress": {
+    "phase": "loading-manifest",
+    "message": "Loading pipeline manifest",
+    "kind": "running",
+    "at": "2026-10-13T05:21:51.570Z",
+    "progress": 0,
+    "source": "stdout",
+    "progressSchema": "kaminos.pipeline-progress.v0"
+  },
+  "lastNativeProgress": {
+    "schema": "kaminos.pipeline-progress.v0",
+    "kind": "adapter-progress",
+    "requestedPipelineId": "trellis-image-to-mesh-webgpu-v0",
+    "effectivePipelineId": "trellis-image-to-mesh-webgpu-v0",
+    "phase": "image-preparation",
+    "at": "2026-10-13T05:21:54.875Z",
+    "message": "Removing background and preparing the selected image",
+    "status": "running",
+    "runId": "9f058137-22c7-4669-90e6-4c9ad0634bab",
+    "jobId": "c26f8f898744",
+    "source": "adapter-stdout",
+    "adapterRouteId": "trellis2.image-generation.webgpu.v0",
+    "adapterTool": "TRELLIS 2",
+    "stream": "stdout"
+  }
+}

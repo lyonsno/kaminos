@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
 import {startProcessMemory} from './process-memory.mjs';
 import {fluidBrowserLaunch} from '../../finger-fluid-browser-launch.mjs';
+import {gitSourceIdentity} from './source-attestation.mjs';
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 export function validateLocalGenerationConfig(c){
   if(c?.schema!=='trellis2.local-generation-config.v0')throw Error('identified TRELLIS local generation config required');
@@ -72,10 +73,9 @@ export async function generateImage(values){
     if(values['expected-config-sha256']&&sha(configRaw)!==values['expected-config-sha256'])throw Error('generation config changed while queued');
     const ownRoot=path.resolve(fileURLToPath(new URL('../../',import.meta.url)));
     if(c.repoRoot!==ownRoot)throw Error('effective generation repo root differs from config');
-    const commit=execFileSync('git',['rev-parse','HEAD'],{cwd:ownRoot,encoding:'utf8'}).trim(),
-      dirty=execFileSync('git',['status','--porcelain'],{cwd:ownRoot,encoding:'utf8'});
+    const sourceIdentity=gitSourceIdentity(ownRoot),{commit,dirty}=sourceIdentity;
     if(commit!==c.expectedCommit||dirty)throw Error('exact clean generation source required');
-    report.source={repoRoot:ownRoot,commit};report.config={...c,sha256:sha(configRaw)};
+    report.source={repoRoot:ownRoot,...sourceIdentity};report.config={...c,sha256:sha(configRaw)};
     if(!values['native-root'])report.browser=fluidBrowserLaunch({executable:c.chrome,debugPort:0,
       userDataDir:path.join(work,'browser-admission'),width:1,height:1});
     const runner=createGenerationCommandRunner({cwd:ownRoot,record:report,persist});

@@ -17,6 +17,7 @@ import {generationFields,validateGenerationResult,persistGenerationPhase,persist
 import {startProcessMemory} from './process-memory.mjs';
 import {memoryBudgetBytes,admitGenerationGpuBudget} from './generation-memory-policy.js';
 import {validateDecoderActivationStorage} from './slat-decoder-witness-checks.js';
+import {gitSourceIdentity} from './source-attestation.mjs';
 
 const { values } = parseArgs({ options: { ...Object.fromEntries(
   ['repo-root', 'fixture', 'chrome', 'report', 'expected-commit', 'receiver', 'witness', 'prefix-fixture', 'next-block-fixture', 'sampler-fixture', 'trajectory-fixture', 'memory-python', 'gpu-buffer-budget-mib', 'process-memory-budget-mib','decoder-activation-storage'].map(name => [name, { type: 'string' }])),
@@ -120,8 +121,8 @@ try {
     }
   }
   report.phase = 'source-identity';
-  report.commit = git(['rev-parse', 'HEAD']);
-  report.dirty = git(['status', '--porcelain']);
+  report.sourceAttestation=gitSourceIdentity(root);
+  report.commit=report.sourceAttestation.commit;report.dirty=report.sourceAttestation.dirty;
   if (report.commit !== report.expectedCommit || report.dirty) throw new Error('source revision must be the exact clean requested commit');
   if (witness === 'flow') { report.phase = 'flow-reference-admission'; report.schema = 'trellis2.sparse-flow-browser.v0'; }
   if (isSampler) { report.phase = 'sampler-reference-admission'; report.schema = witness === 'sampler-full' ? 'trellis2.sparse-sampler-trajectory-browser.v0' : 'trellis2.sparse-sampler-browser.v0'; }
