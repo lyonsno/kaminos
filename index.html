@@ -3705,6 +3705,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 import {mountMaterialCockpit} from './finger-fluid-material-cockpit.mjs';
 import {readMaterialControlsURL,materialControlsURL} from './finger-fluid-material-controls.mjs';
 
+import {createPairedFluidHost} from './paired-fluid-host.mjs';
 import {createFluidViewportHost,resolveFluidViewportRenderer,resolveFluidViewportMode} from './fluid-viewport-host.mjs';
 import {applyFluidOwnerSetup,createOwnerWaterCapability,restoreOwnerFluidReplay,ownerFluidRouteParams} from './fluid-owner-host.mjs';
 import {loadExperimentContributions,openExperiment} from './workbench-experiments.mjs';
@@ -12027,7 +12028,8 @@ async function initScene() {
     } else if(sceneEmissiveCamera) {
       applySceneEmissiveCamera(renderPipeline,rawSceneOutput,rawSceneOutput,false);
     }
-    if (fingerFluidBenchViewport && fingerFluidBenchRunning && !document.getElementById('finger-fluid-bench-operator-panel').hidden) {
+    if(fingerFluidOwnerPair){try{fingerFluidOwnerPair.render();}catch(error){setInfo('Paired water stopped: '+error.message);}}
+    else if (fingerFluidBenchViewport && fingerFluidBenchRunning && !document.getElementById('finger-fluid-bench-operator-panel').hidden) {
       try { drawFingerFluidBenchFrame(performance.now(),{fromHost:true}); }
       catch(error){
         console.error('Shared fluid bench frame failed',error);
@@ -14937,15 +14939,25 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
 
 // The shared investigation service supplies the loaded document and operations.
 // Merely entering its address must not create another simulation attempt.
+let fingerFluidOwnerPair=null;
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry||!fluidWorkbench)return;
   const root=document.getElementById('experiment-owner-slot');
-  const host={controls:{document,installNumberDrag:installRelativeNumberDrag},scene:{async open(){
+  const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountTransport:node=>{const slot=document.getElementById('experiment-run-controls');if(!slot)throw Error('Shared transport slot unavailable');const prior=[...slot.childNodes];slot.replaceChildren(node);return ()=>{if(node.parentNode===slot)slot.replaceChildren(...prior);};}},scene:{async open(){
     await fluidViewportReady;
     if(!workbenchSceneHost)throw Error('Shared scene host unavailable');
     setActiveTab('assets');return workbenchSceneHost.open();
   },refreshPresentation:refreshWorkbenchAssetPresentation},fluid:{rendererModes:['screen_space_refraction'],
+    async openPair(setups){
+      if(fingerFluidOwnerPair)await fingerFluidOwnerPair.dispose();
+      stopFingerFluidBench();fingerFluidBenchSolver?.destroy?.();fingerFluidBenchSolver=null;fingerFluidBenchSolverPromise=null;fingerFluidOwnerSetup=null;
+      window.__kaminosInvestigationEntryOnly=true;try{setActiveTab('finger-fluid-bench');}finally{window.__kaminosInvestigationEntryOnly=false;}
+      const pair=await createPairedFluidHost({setups,renderer,scene,camera,pipeline:renderPipeline,helperGround:groundPlane,getDisplayPolicy:()=>getFluidDisplayPolicy?.(),redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame});
+      fingerFluidOwnerPair=pair;window._kaminosDirty?.();
+      const dispose=pair.dispose.bind(pair);pair.dispose=async()=>{await dispose();if(fingerFluidOwnerPair===pair)fingerFluidOwnerPair=null;};return pair;
+    },
     async open(setup){
+      if(fingerFluidOwnerPair)await fingerFluidOwnerPair.dispose();
       if(fingerFluidOwnerDefinition)setup=restoreOwnerFluidReplay(setup,new URLSearchParams(location.search),fingerFluidOwnerDefinition);
       // Validate before replacing the active water; the producer owns numerical inputs.
       applyFluidOwnerSetup({},setup);

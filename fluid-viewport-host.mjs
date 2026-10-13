@@ -37,6 +37,12 @@ export function fluidViewportCameraFrame(camera, width, height, generation) {
     near:camera.near, far:camera.far, viewport:{width,height}};
 }
 
+export function fluidViewportExtent(extent,bufferSize){
+  const size=extent??bufferSize,width=size.width??size.x,height=size.height??size.y;
+  if(!Number.isSafeInteger(width)||width<1||!Number.isSafeInteger(height)||height<1)throw Error('Fluid viewport extent must be positive integers');
+  return {width,height};
+}
+
 /** Scene capture and final presentation are shared; the caller owns solver lifetime. */
 export function createFluidViewportHost({renderer,scene,camera,pipeline,device,solver,
   pipelineIdentity='kaminos/local-liquid-authoring-v0',framePrefix='local-liquid',group=null,helperGround=null,getDisplayPolicy=null}) {
@@ -87,7 +93,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
 
   function render(options) {return withLocalLiquidHelperGround(helperGround,()=>renderFrame(options));}
 
-  function renderFrame({advance=true,renderOptions={}}={}) {
+  function renderFrame({advance=true,renderOptions={},extent=null,present=true}={}) {
     if (disposed) throw Error('Local liquid host disposed');
     if (failure) throw Error(failure);
     const previousTarget=renderer.getRenderTarget(), previousOverride=scene.overrideMaterial, previousBackground=scene.background;
@@ -99,7 +105,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
       const cameraState=policy.cameraState??{effective:false};
       finalCamera.update(cameraState.effective,{...cameraState,effective:'emissive-transport-v2'});
       restoreDisplay=applyFluidViewportDisplayPolicy({pipeline,presentation,rawOutput:policy.rawOutput,composedOutput,matchedOutput:finalCamera.outputNode,effective:cameraState.effective});
-      const size=renderer.getDrawingBufferSize(new THREE.Vector2()), width=size.x, height=size.y;
+      const {width,height}=fluidViewportExtent(extent,extent?null:renderer.getDrawingBufferSize(new THREE.Vector2()));
       for (const target of [colorTarget,depthTarget,outputTarget]) target.setSize(width,height);
       renderer.initRenderTarget(outputTarget);
       if (advance && !paused) solver.step(1/60);
@@ -134,11 +140,11 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
         target:attachment('host-liquid-output',outputTarget,{format:'rgba16float',colorSpace:'linear_hdr'})};
       solver.render({...renderOptions,hostFrame,externalCamera:cameraSnapshot,opticalDebugMode});
       device.queue.submit([commandEncoder.finish()]);
-      renderer.setRenderTarget(previousTarget); presentation.render();
+      renderer.setRenderTarget(previousTarget); if(present)presentation.render();
       frameCount=generation;
       lastFrame={frameId,cameraIdentity:cameraSnapshot.identity,cameraGeneration:generation,width,height,
         environmentSource:environmentSource.uuid,environmentGeneration,
-        route:ROUTE,opticalDebugMode,submittedByHost:true,presentedByHost:true,captureColorSpace:'linear_hdr',displayTransform:cameraState.effective?cameraState.transform:'host-render-pipeline',exposure:renderer.toneMappingExposure,environmentIntensity:scene.environmentIntensity,
+        route:ROUTE,opticalDebugMode,submittedByHost:true,presentedByHost:present,captureColorSpace:'linear_hdr',displayTransform:cameraState.effective?cameraState.transform:'host-render-pipeline',exposure:renderer.toneMappingExposure,environmentIntensity:scene.environmentIntensity,
         simulationTimePolicy:advance?'one-fixed-1/60-step-per-rendered-frame':'caller-owned-step',simulationRewind:false,
         helperGroundPresentation:{policy:'retained-basin-suppresses-editor-helper',effectiveVisible:helperGround?.visible??null}};
     } catch(error) { failure=error.message || String(error); throw error; }
@@ -150,7 +156,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
     }
   }
 
-  return {render,
+  return {render,output:()=>({texture:outputTarget.texture,width:outputTarget.width,height:outputTarget.height,kind:'linear-fluid-host-output'}),
     setPaused(value){paused=Boolean(value);return paused;},
     get paused(){return paused;},
     state:()=>({frameCount,paused,failure,lastFrame}),

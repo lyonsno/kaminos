@@ -1,3 +1,4 @@
+import {createFluidRenderHistory} from './fluid-render-history.mjs';
 import {composeFingerFluidVelocityReads} from './finger-fluid-velocity-composition.mjs';
 import {RIVER_WGSL, riverSample, sampleRiverTerrain} from './finger-fluid-river-playground.mjs';
 import {readIPBFDampingRecordWords} from './finger-fluid-ipbf-damping-evidence.mjs';
@@ -15289,6 +15290,8 @@ export async function createWebGPUFingerFluidSolver({
     lastFrameCpuMs = performance.now() - startedAt;
   }
 
+  const renderHistory=createFluidRenderHistory({device,sources:{particles:{buffer:particleBuffer,bytes:particleData.byteLength},topology:{buffer:neighborTopologyBuffer,bytes:safeParticleCount*NEIGHBOR_TOPOLOGY_BYTES},tracers:{buffer:materialTracerBuffer,bytes:safeParticleCount*MATERIAL_TRACER_BYTES}},usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
+
   function render({
     width = null,
     height = null,
@@ -15309,9 +15312,11 @@ export async function createWebGPUFingerFluidSolver({
     hostFrame = null,
     particleVisibility = 'visible',
     diagnosticGlyphScale = 1,
+    retainedRenderFrame = null,
   } = {}) {
     if (runtimeLifecycle.stopped) return;
     if(!Number.isFinite(diagnosticGlyphScale)||diagnosticGlyphScale<=0||(!safeDiagnosticBox&&diagnosticGlyphScale!==1))throw new RangeError('Diagnostic glyph scale requires a reference box and a positive scale');
+    const retainedBuffers=retainedRenderFrame?renderHistory.buffers(retainedRenderFrame):null;
     const renderStartedAt = performance.now();
     lastHostFrameCompositionEvidence = null;
     analyticCarrierLastFrameDrawCount = 0;
@@ -15355,6 +15360,7 @@ export async function createWebGPUFingerFluidSolver({
     const extent = ensureExtent(renderWidth, renderHeight, renderPixelRatio);
     const requestedRendererMode = String(rendererMode || safeRendererMode);
     const effectiveRendererMode = resolveFingerFluidRendererMode(requestedRendererMode);
+    if(retainedBuffers&&!['screen_space_surface','screen_space_refraction'].includes(effectiveRendererMode))throw Error('Retained fluid frames require the screen-space renderer');
     const effectiveOpticalDebugMode = resolveFingerFluidOpticalDebugMode(opticalDebugMode);
     const requestedOpticalLightingMode = String(opticalLightingMode || safeOpticalLightingMode);
     const resolvedOpticalLightingMode = resolveFingerFluidOpticalLightingMode(requestedOpticalLightingMode);
@@ -15405,7 +15411,7 @@ export async function createWebGPUFingerFluidSolver({
     lastInterfaceFrequencyFallbackReason = null;
     lastRendererFallbackReason = null;
     if (!reflectionMeshWitnessOverride) {
-      const animatedPhase = (stepCount * 0.012) % (Math.PI * 2);
+      const animatedPhase = ((retainedRenderFrame?.step??stepCount) * 0.012) % (Math.PI * 2);
       if (animatedPhase !== reflectionMeshPhase) reflectionMeshTransformGeneration += 1;
       reflectionMeshPhase = animatedPhase;
     }
@@ -15705,7 +15711,11 @@ export async function createWebGPUFingerFluidSolver({
       });
       accumulationPass.setPipeline(screenSpaceSurfaceAccumulationPipeline);
       if (particleVisibility === 'visible' && canonicalParticleVisibility !== 'hidden') {
-        accumulationPass.setBindGroup(0, screenSpaceSurfaceAccumulationBindGroup);
+        const accumulationGroup=retainedBuffers?device.createBindGroup({label:'retained-fluid-accumulation',layout:screenSpaceAccumulationLayout,entries:[
+          {binding:0,resource:{buffer:retainedBuffers.particles}},{binding:1,resource:{buffer:renderParamsBuffer}},
+          {binding:2,resource:{buffer:retainedBuffers.topology}},{binding:3,resource:{buffer:retainedBuffers.tracers}},
+        ]}):screenSpaceSurfaceAccumulationBindGroup;
+        accumulationPass.setBindGroup(0, accumulationGroup);
         accumulationPass.draw(6, safeParticleCount);
         lastFrameParticleDrawCount += 1;
       }
@@ -17233,6 +17243,7 @@ export async function createWebGPUFingerFluidSolver({
 
   function destroy() {
     if (!runtimeLifecycle.beginTeardown()) return;
+    renderHistory.dispose();
     surfaceFieldBuffer?.destroy();
     ipbfDampingReadback?.destroy();
     ipbfStateBuffer?.destroy();
@@ -17315,6 +17326,8 @@ export async function createWebGPUFingerFluidSolver({
     setReflectionMeshPhaseForWitness,
     getParticleOwnershipDescriptor,
     getDebugState,
+    captureRenderFrame(){if(runtimeLifecycle.stopped)throw Error('Cannot retain stopped fluid');return renderHistory.capture({step:stepCount,dt:effectiveSimulationDt,particleCount:safeParticleCount,pressureSolver:safePressureSolver,settings:getDebugState().ipbfSettings});},
+    renderHistoryState:renderHistory.state,
     destroy,
   };
   return runtimeApi;
