@@ -2157,6 +2157,14 @@ export function fluidBandHeatStats(values, dims, band = 2) {
   }
   return { bandCells, interiorCells, bandHeatMean: bandCells ? bandSum / bandCells : 0, interiorHeatMean: interiorCells ? interiorSum / interiorCells : 0 };
 }
+// Mean heat of single boundary layers (bottom y = 0, side x = 0), for joined
+// witnesses that need to see where the exterior enters.
+export function fluidLayerHeatMeans(values, dims) {
+  let bottom = 0, side = 0;
+  for (let z = 0; z < dims[2]; z++) for (let x = 0; x < dims[0]; x++) bottom += values[16 * (x + dims[0] * (0 + dims[1] * z)) + 5];
+  for (let z = 0; z < dims[2]; z++) for (let y = 0; y < dims[1]; y++) side += values[16 * (0 + dims[0] * (y + dims[1] * z)) + 5];
+  return { bottomHeatMean: bottom / (dims[0] * dims[2]), sideHeatMean: side / (dims[1] * dims[2]) };
+}
 export function joinedGhostTextureSize(dims) {
   return dims.map(n => n + 1);
 }
@@ -27397,7 +27405,7 @@ export function createKaminosVolumePrototype({
         await staging.mapAsync(GPUMapMode.READ);
         const values = new Float32Array(staging.getMappedRange().slice(0));
         staging.unmap();
-        return { status: 'sampled', dims: [gridSize, gridHeight, gridSize], simStepCount: state.simStepCount, joined: Boolean(state.joinedBoundary?.admitted), ghosts: { bound: Boolean(state.joinedGhosts?.bound), synthetic: joinedGhostSynthetic }, ...fluidBandHeatStats(values, [gridSize, gridHeight, gridSize], 2) };
+        return { status: 'sampled', dims: [gridSize, gridHeight, gridSize], simStepCount: state.simStepCount, joined: Boolean(state.joinedBoundary?.admitted), ghosts: { bound: Boolean(state.joinedGhosts?.bound), synthetic: joinedGhostSynthetic }, ...fluidBandHeatStats(values, [gridSize, gridHeight, gridSize], 2), ...fluidLayerHeatMeans(values, [gridSize, gridHeight, gridSize]) };
       } finally { staging.destroy(); }
     },
     // The step the bound ghost snapshots were written for.
