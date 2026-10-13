@@ -6903,6 +6903,18 @@ function updateTransformInspector() {
   scenePlacementTools?.draw();
 }
 
+// Explicit owner restoration refresh; no edit, selection change or frame polling.
+function refreshWorkbenchAssetPresentation(handle) {
+  const row=sceneObjects.find(entry=>entry.id===handle?.id);
+  if(!row||row.object!==handle?.root)throw Error('Scene asset registration is no longer current');
+  row.object.updateMatrixWorld(true);
+  const selected=selectedPlacementEntry(),selectionMatched=selected?.id===row.id&&selected.object===row.object;
+  if(selectionMatched)updateTransformInspector();
+  window._kaminosDirty?.();
+  return {id:row.id,transform:sceneObjectTransformState(row.object),selectionMatched};
+}
+window.kaminosWorkbenchRefreshPresentation=refreshWorkbenchAssetPresentation;
+
 function applyTransformInspectorField(input) {
   const entry = selectedSceneObjectEntry();
   if (!entry || !input?.dataset?.transformField) {
@@ -14932,7 +14944,7 @@ async function installOwnerWorkbenchEntry() {
     await fluidViewportReady;
     if(!workbenchSceneHost)throw Error('Shared scene host unavailable');
     setActiveTab('assets');return workbenchSceneHost.open();
-  }},fluid:{rendererModes:['screen_space_refraction'],
+  },refreshPresentation:refreshWorkbenchAssetPresentation},fluid:{rendererModes:['screen_space_refraction'],
     async open(setup){
       if(fingerFluidOwnerDefinition)setup=restoreOwnerFluidReplay(setup,new URLSearchParams(location.search),fingerFluidOwnerDefinition);
       // Validate before replacing the active water; the producer owns numerical inputs.

@@ -80,3 +80,5 @@ and the existing investigation layer owns capture and persistence.
 objects with injected host services. These tests establish lifecycle behavior.
 Hotwet's real loader, registration, frame service and shared capture remain the
 browser conformance boundary for each consumer.
+
+After restoring the actual asset root, `host.scene.refreshPresentation(asset)` updates its world matrix and refreshes the existing inspector only when the same id/root is selected. It preserves selection, history and focused input and returns `{id,transform,selectionMatched}`. Call once after restoration; normal `session.redraw()` remains the playback path. The same diagnostic operation is `window.kaminosWorkbenchRefreshPresentation(asset)`. Stale id/root receipts reject before presentation changes.
