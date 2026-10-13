@@ -5,7 +5,7 @@
 // an output that depends on which sizes ran earlier (stale or undersized buffers) fails.
 // Usage: node run-page-smoke.mjs --chrome <exe> (--weights-url <base> | --weights-dir <dir>) --out <dir>
 //        [--sizes 512,768,1024 | --levels mint,weathered,off-the-rails [--size 512]] [--seed 7006] [--prompt "..."]
-//        [--origin <page origin> | --site-dir <dir>]
+//        [--origin <page origin> | --site-dir <dir>] [--memory lean|all]
 // --site-dir serves an assembled Pages site (scripts/assemble-pages-site.mjs) under /kaminos/, as
 // project Pages does, and opens the demo at /kaminos/inference-kit/klein/.
 // --weights-dir serves a staged repository folder from a second, CORS-enabled origin.
@@ -86,7 +86,8 @@ try {
   const desktop = { width: 1280, height: 900 };
   await browser.send('Emulation.setDeviceMetricsOverride', { ...desktop, deviceScaleFactor: 1, mobile: false });
   const firstLevel = opt('--levels')?.split(',')[0];
-  const pageUrl = `${report.origin}/index.html?weights=${encodeURIComponent(report.weightsUrl)}${firstLevel ? `&level=${firstLevel}` : ''}`;
+  const pageUrl = `${report.origin}/index.html?weights=${encodeURIComponent(report.weightsUrl)}${firstLevel ? `&level=${firstLevel}` : ''}`
+    + (opt('--memory') ? `&memory=${opt('--memory')}` : '');
   report.pageUrl = pageUrl;
 
   report.phase = 'prepare';
@@ -202,7 +203,7 @@ async function generateSizes(sizes, session) {
   for (const size of sizes) {
     await browser.evaluate(`(() => { window.kleinLast = null;
       document.getElementById('size').value = '${size}'; document.getElementById('seed').value = '${seed}';
-      ${opt('--prompt') ? `document.getElementById('prompt').value = ${JSON.stringify(opt('--prompt'))};` : ''}
+      ${opt('--prompt') ? `{ const el = document.getElementById('prompt'); el.value = ${JSON.stringify(opt('--prompt'))}; el.dispatchEvent(new Event('input')); }` : ''}
       document.getElementById('go').click(); })()`, false);
     const done = await waitFor(`(() => { const s = ${pageState}; const go = document.getElementById('go');
       return !go.disabled && (window.kleinLast || s.warn || /stopped/i.test(s.status)) ? { ...s, last: window.kleinLast } : null; })()`, `generate ${size}`);
@@ -210,6 +211,15 @@ async function generateSizes(sizes, session) {
     report.generations.push(row);
     if (!done.last) throw new Error(`generation at ${size} failed: ${done.status}`);
     row.pixelSha256 = await browser.evaluate(imageHash);
+    // Every pipeline should have been compiled asynchronously at load (KleinPipeline.precompile);
+    // one compiled synchronously during a generation stalls the page's rendering.
+    row.syncCompiles = await browser.evaluate(`(() => { const p = window.kleinDemo.pipeline;
+      return [p.textEncoder, p.transformer, p.vae].reduce((n, m) => n + (m?.syncCompiles ?? 0), 0); })()`);
+    if (row.syncCompiles) {
+      row.syncCompiledKeys = await browser.evaluate(`(() => { const p = window.kleinDemo.pipeline;
+        return [p.textEncoder, p.transformer, p.vae].flatMap(m => m?.syncCompiledKeys ?? []); })()`);
+      throw new Error(`${row.syncCompiles} pipelines were compiled synchronously during generation: ${row.syncCompiledKeys.join(', ')}`);
+    }
     const png = await browser.evaluate(`document.getElementById('out').toDataURL('image/png')`);
     await fsp.writeFile(path.join(outDir, `image-${size}-session${session}.png`), Buffer.from(png.split(',')[1], 'base64'));
     if (session === 1 && size === sizes[0]) await screenshot('after-generate-desktop', desktop);

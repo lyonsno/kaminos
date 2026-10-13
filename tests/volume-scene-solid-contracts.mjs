@@ -122,3 +122,25 @@ for (const falseReceipt of [
   {...effectiveCollision, sourceSupport: {fluidSupportCells: 0}},
 ]) assert.throws(() => assertEffectiveSceneCollision(falseReceipt, 'kiln'));
 console.log('volume scene solid contracts: PASS');
+
+// Grid height (report §34; Noah 2026-10-12 hit "scene solid field dimensions
+// mismatch" on a height change): every scene-solid helper takes the grid
+// height, default twice the width, and the core passes the seated height.
+{ // scene solid at a non-default height: index, voxelize, support count and texture packing follow the height
+  const g = 8, h = 24;
+  assert.equal(solidFieldIndex(g, 1, 2, 3, h), 1 + g * (2 + h * 3));
+  assert.equal(solidFieldIndex(g, 1, 2, 3), 1 + g * (2 + 2 * g * 3), 'default stays twice the width');
+  const field = voxelizeTriangleSolid(box, g, h);
+  assert.equal(field.cells.length, g * h * g);
+  assert.equal(field.cells[solidFieldIndex(g, 4, 3, 4, h)], 1, 'the box interior is solid at the tall shape');
+  const packed = packSolidTextureRows(field.cells, g, h);
+  assert.equal(packed.rowsPerImage, h);
+  assert.equal(packed.data.length, packed.bytesPerRow * h * g);
+  assert.throws(() => packSolidTextureRows(field.cells, g), /dimensions mismatch/, 'the default height still refuses a tall field');
+  const coreSource = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+  assert.match(coreSource, /const field = voxelizeTriangleSolid\(extraction\.triangles, gridSize, gridHeight\);/);
+  assert.match(coreSource, /analyticEmitterDescriptor, sourceBounds, field\.cells, gridSize, gridHeight\);/);
+  assert.match(coreSource, /const packed = packSolidTextureRows\(field\.cells, gridSize, gridHeight\);/);
+  assert.match(coreSource, /key = `\$\{gridSize\}x\$\{gridHeight\}:\$\{sourceId\}:/, 'the cache key carries the height');
+}
+console.log('scene solid non-default height contracts passed');

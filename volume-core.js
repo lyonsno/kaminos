@@ -11,6 +11,8 @@ import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid } from './volume-scene-solid.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
+import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
+export { GRID_HEIGHT_AUTO_RATIO, GRID_HEIGHT_MIN_RATIO, GRID_HEIGHT_MAX_RATIO, GRID_HEIGHT_DERIVED_LATTICE_WIDTHS, resolveGridHeight, gridHeightStep, gridHeightForShape, raymarchDomainBox, raymarchBoxHitModel } from './volume-grid-shape.mjs';
 import { SCENE_POINT_SMOKE_WGSL, createScenePointBindings } from './scene-point-light.mjs';
 import { DISTRIBUTED_SMOKE_WGSL } from './scene-volume-gather.mjs';
 import { createDistributedSmokeBindings } from './scene-smoke-reconstruction.mjs';
@@ -506,7 +508,7 @@ const FIRE_IRRADIANCE_ATLAS_IDENTITY = 'gpu-fire-irradiance-lattice-atlas-v0';
 const FIRE_IRRADIANCE_PROPAGATION_IDENTITY = 'irradiance-lattice-axis-diffusion-4-round-v0';
 const FIRE_LIGHT_FIELD_GPU_PROFILE_IDENTITY = 'fire-light-field-gpu-timestamp-profile-v0';
 const DEFAULT_FIRE_IRRADIANCE_GRID_SIZE = 32;
-const SUPPORTED_FIRE_IRRADIANCE_GRID_SIZES = [32, 48];
+export const SUPPORTED_FIRE_IRRADIANCE_GRID_SIZES = [32, 48];
 const FIRE_IRRADIANCE_ATLAS_TILES_X = 8;
 const FIRE_IRRADIANCE_PROPAGATION_ROUNDS = 4;
 const KAMINOS_SHARED_WEBGPU_DEVICE_IDENTITY = 'kaminos-three-volume-shared-webgpu-device-v0';
@@ -1335,6 +1337,25 @@ function gridCellCount(gridSize, gridHeight = gridSize, gridDepth = gridSize) {
   return gridSize * gridHeight * gridDepth;
 }
 
+// Admission of a fluid box shape against a device's limits (report §34,
+// review GH-04): the largest per-binding buffer is the fluid buffer
+// (FLUID_COMPONENTS floats per cell); the largest 3-D texture extents are the
+// height (burn-rate and force textures) and three widths (the force texture
+// stacks its three components along depth). Checked before an existing field
+// is destroyed, so a shape the device cannot hold is refused, not attempted.
+// Unknown limits do not refuse.
+export function gridShapeAdmission({ widthCells, heightCells }, limits = {}) {
+  const finiteLimit = value => (Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : Infinity);
+  const fluidBytes = widthCells * heightCells * widthCells * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
+  const storageLimit = Math.min(finiteLimit(limits?.maxStorageBufferBindingSize), finiteLimit(limits?.maxBufferSize));
+  const textureDimension = Math.max(heightCells, 3 * widthCells);
+  const textureLimit = finiteLimit(limits?.maxTextureDimension3D);
+  const receipt = { fluidBytes, storageLimit, textureDimension, textureLimit };
+  if (fluidBytes > storageLimit) return { admitted: false, reason: `grid-shape-exceeds-device-storage-binding:${fluidBytes}>${storageLimit}`, ...receipt };
+  if (textureDimension > textureLimit) return { admitted: false, reason: `grid-shape-exceeds-device-3d-texture-dimension:${textureDimension}>${textureLimit}`, ...receipt };
+  return { admitted: true, reason: null, ...receipt };
+}
+
 function nextPowerOfTwo(value) {
   const finiteValue = Math.max(1, Math.ceil(Number(value) || 1));
   return 2 ** Math.ceil(Math.log2(finiteValue));
@@ -1353,8 +1374,7 @@ function fluidBufferBytes(gridSize, gridHeight = gridSize, gridDepth = gridSize)
 // over the tall domain, or a per-cell flow-kernel / boundary-splat buffer.
 // The prototype's own device request and the shared host device both use it,
 // so an adopted shared device is never smaller than the one the prototype owns.
-function volumeStorageBufferRequestBytes(gridSize, cellCapacity = null) {
-  const gridHeight = gridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
+function volumeStorageBufferRequestBytes(gridSize, cellCapacity = null, gridHeight = gridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER) {
   const maxRequestedCellCapacity = cellCapacity ?? gridCellCount(gridSize, gridHeight, gridSize);
   const maxRequestedFluidBufferBytes = fluidBufferBytes(gridSize, gridHeight, gridSize);
   const maxRequestedFlowKernelDescriptorBytes = maxRequestedCellCapacity * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES;
@@ -1409,7 +1429,9 @@ export async function requestKaminosSharedWebGpuDevice({
 
   const supportedStorageBytes = Math.min(adapterLimit('maxBufferSize'), adapterLimit('maxStorageBufferBindingSize'));
   if (supportedStorageBytes > 0) {
-    const volumeStorageBytes = Math.min(supportedStorageBytes, volumeStorageBufferRequestBytes(Math.max(...SUPPORTED_GRID_SIZES)));
+    // The tallest admissible shape at the widest grid (report §34): the device
+    // is created once and the height can grow later without re-creating it.
+    const volumeStorageBytes = Math.min(supportedStorageBytes, volumeStorageBufferRequestBytes(Math.max(...SUPPORTED_GRID_SIZES), null, Math.max(...SUPPORTED_GRID_SIZES) * GRID_HEIGHT_MAX_RATIO));
     raise('maxBufferSize', volumeStorageBytes);
     raise('maxStorageBufferBindingSize', volumeStorageBytes);
   }
@@ -2485,6 +2507,26 @@ export function immersedCoverageMapForConfig(config, options = {}) {
   }
   return immersedCoverageCache.get(key);
 }
+// The plain (unpatterned, unmasked) slab weight sum depends on geometry only;
+// it is cached by that geometry (review SSA-01: recomputing it per resolve cost
+// 8 ms per frame for a wide 128 source) and reused between the pose and
+// supply resolves and across frames while the geometry holds.
+const plainWeightSumEntries = new Map();
+let plainWeightSumHits = 0, plainWeightSumMisses = 0;
+export const immersedPlainWeightSumCache = {
+  clear() { plainWeightSumEntries.clear(); plainWeightSumHits = 0; plainWeightSumMisses = 0; },
+  stats() { return { hits: plainWeightSumHits, misses: plainWeightSumMisses, size: plainWeightSumEntries.size }; },
+};
+export function immersedPlainWeightSum(effective, { grid, gridHeight }) {
+  const key = JSON.stringify([grid, gridHeight, effective.centreCells, effective.direction, effective.radiusCells, effective.thickness]);
+  const hit = plainWeightSumEntries.get(key);
+  if (hit !== undefined) { plainWeightSumHits += 1; return hit; }
+  plainWeightSumMisses += 1;
+  if (plainWeightSumEntries.size > 32) plainWeightSumEntries.clear();
+  const sum = immersedSourceWeights({ ...effective, pattern: { ...(effective.pattern ?? {}), kind: 'shape' } }, { grid, gridHeight }).sum;
+  plainWeightSumEntries.set(key, sum);
+  return sum;
+}
 export function immersedSourceWeights(effective, { grid, gridHeight }) {
   const c = effective.centreCells, n = effective.direction, r = effective.radiusCells, h = effective.thickness / 2;
   const reach = Math.ceil(Math.max(r, h) + 1.5);
@@ -2543,7 +2585,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const pressure = resolvePressureSolverConfig(controls).effective;
   const sourceLaw = String(controls.emitterSourceLaw ?? 'legacy-volume');
   const puffFactor = Number.isFinite(options.puffFactor) ? options.puffFactor : 1;
-  const centre = [clampFinite(controls.immersedCentreX, -1, 1, 0), clampFinite(controls.immersedCentreY, -1, 3, -0.5), clampFinite(controls.immersedCentreZ, -1, 1, 0)];
+  const centre = [clampFinite(controls.immersedCentreX, -1, 1, 0), clampFinite(controls.immersedCentreY, -1, -1 + 2 * gridHeight / grid, -0.5), clampFinite(controls.immersedCentreZ, -1, 1, 0)];
   const yaw = clampFinite(controls.immersedYaw, 0, 360, 0), pitch = clampFinite(controls.immersedPitch, -90, 90, 90);
   const radius = clampFinite(controls.immersedRadius, 0.02, 0.5, 0.2);
   const thickness = clampFinite(controls.immersedThickness, 1, 4, 1.5);
@@ -2561,7 +2603,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const pattern = { kind: patternNormalised.pattern, count: patternNormalised.count, ratio: patternNormalised.ratio, seed: patternNormalised.seed, lineWeight: patternNormalised.lineWeight, jetJitter: patternNormalised.jetJitter, patternFallback: patternNormalised.patternFallback };
   const inletDynamics = resolveInletDynamicsConfig(controls, options.inletSignals ?? {}).effective;
   const requested = { sourceLaw, pressureSolver: pressure.solver, centre, yaw, pitch, radius, thickness, speed, fuel, temperature, momentumGain, capFraction, puffFactor, backWall: backWallRequested, pattern: patternRequested, inletDynamics: { turbulence: inletDynamics.turbulence, turbulenceScaleCells: inletDynamics.turbulenceScaleCells, puff: inletDynamics.puff, puffPeriod: inletDynamics.puffPeriod } };
-  const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], basis: { e1: [1, 0, 0], e2: [0, 0, 1] }, radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, masked: { cells: 0, weight: 0, weightShare: 0 }, puffFactor, pattern, inletDynamics: { ...inletDynamics, turbulence: 0, turbulenceRms: 0, puff: 0, puffSignal: 0, puffFactor: 1, active: false } } });
+  const off = reason => ({ identity: IMMERSED_SOURCE_IDENTITY, requested, effective: { admitted: false, reason, grid, centreCells: [0, 0, 0], direction: [0, 1, 0], basis: { e1: [1, 0, 0], e2: [0, 0, 1] }, radiusCells: 0, thickness, speed: 0, fuel: 0, temperature: 0, momentumGain: 0, capPerCell: 0, normaliser: 1, coverageFraction: 0, fluxRequested: 0, fluxEffectivePredicted: 0, clipPredicted: { cells: 0, of: 0 }, masked: { cells: 0, weight: 0, weightShare: 0 }, puffFactor, pattern, inletDynamics: { ...inletDynamics, turbulence: 0, turbulenceRms: 0, puff: 0, puffSignal: 0, puffFactor: 1, active: false } } });
   if (sourceLaw !== IMMERSED_SOURCE_LAW) return off('source-law-is-not-immersed-source');
   if (pressure.solver !== PRESSURE_SOLVER_CONVERGED) return off('immersed-source-requires-converged-pressure-solver');
   // A positive supply needs a volume outlet: the closed box has none, so
@@ -2583,6 +2625,13 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   // π r² t is kept for reference (the antialiased skirt and the cell lattice
   // make the sum run a few percent over it). Masked cells are reported (IS-03).
   const weights = immersedSourceWeights(effective, { grid, gridHeight });
+  // Supply per covered area (2026-10-11): the authored speed is a per-area
+  // rate, as on the floor. The nominal supply v π r² puff belongs to the
+  // whole, unmasked disc; a pattern or a solid mask supplies only the fraction
+  // of the disc's weight it leaves, and the per-cell rate Q/Σw stays the plain
+  // disc's. (Before this, a pattern concentrated the whole disc's supply into
+  // its covered cells, several times the authored speed per cell.)
+  const plainWeightSum = Math.max(1e-6, pattern.kind === 'shape' ? weights.sum : immersedPlainWeightSum(effective, { grid, gridHeight }));
   const solidCells = options.solidCells ?? null;
   const fluid = []; let fluidSum = 0, maskedCells = 0, maskedWeight = 0;
   for (const cell of weights.cells) {
@@ -2591,6 +2640,8 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   }
   effective.normaliser = Math.max(1e-6, fluidSum);
   effective.analyticVolume = Math.PI * radiusCells * radiusCells * thickness;
+  effective.coverageFraction = Math.min(1, fluidSum / plainWeightSum);
+  effective.fluxRequested = fluxRequested * effective.coverageFraction;
   const normaliser = effective.normaliser;
   // The predicted supply follows the kernel's target law, this step's
   // lattice included (review SID-01): target = min(cap, w × (1 + a × lattice)
@@ -2609,11 +2660,11 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
       m = Math.max(0, 1 + amplitude * (field[immersedSlabLookup(d, basis, grid).index] ?? 0));
     }
     modulatedWeight += cell.w * m;
-    const target = fluxRequested * cell.w * m / normaliser;
+    const target = effective.fluxRequested * cell.w * m / normaliser;
     if (target > capPerCell) clipped += 1;
     fluxEffective += Math.min(capPerCell, target);
   }
-  effective.fluxNominal = fluxRequested;
+  effective.fluxNominal = effective.fluxRequested;
   effective.fluxEffectivePredicted = fluxEffective;
   effective.turbulenceSupplyFactor = fluidSum > 0 ? modulatedWeight / fluidSum : 1;
   effective.supplyPredictionAuthority = amplitude > 0 ? (field ? 'step-locked-lattice' : 'nominal-no-lattice-this-step') : 'exact-static';
@@ -7513,7 +7564,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let farWorld = farWorldRaw.xyz / farWorldRaw.w;
   let ro = u.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
-  let hit = boxHit(ro - vec3<f32>(0.0, 1.0, 0.0), rd, vec3<f32>(1.0, 2.0, 1.0));
+  // The box spans x/z [-1, 1] and y [-1, -1 + 2 GRID_Y/GRID] at equal pitch
+  // (grid height control, report §34; raymarchDomainBox is the CPU mirror).
+  let domainHalfY = f32(GRID_Y) / f32(GRID);
+  let hit = boxHit(ro - vec3<f32>(0.0, domainHalfY - 1.0, 0.0), rd, vec3<f32>(1.0, domainHalfY, 1.0));
   if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, 0.0)) {
     let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);
     return makeRaymarchResult(
@@ -7647,10 +7701,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
   let canonicalSmokeOnlyRender = minimalPlumeRenderScene * step(0.5, canonicalRenderMode);
   let startT = select(max(hit.x, 0.0), 0.0, fullGridCapture);
-  let endT = select(min(hit.y, sceneDepthEndT), 4.0, fullGridCapture);
+  let endT = select(min(hit.y, sceneDepthEndT), 2.0 * domainHalfY, fullGridCapture);
   // Keep ordinary sample positions stable; clipping removes hidden samples,
   // rather than resampling the visible fire at a different density.
-  let dtBase = (select(endT, select(hit.y, 4.0, fullGridCapture), preserveSamplePositions) - startT) / steps;
+  let dtBase = (select(endT, select(hit.y, 2.0 * domainHalfY, fullGridCapture), preserveSamplePositions) - startT) / steps;
   let jitter = dtBase * 0.5;
   var t = startT + jitter;
   var trans = 1.0;
@@ -10467,8 +10521,10 @@ export function createKaminosVolumePrototype({
   if (productFrameOwner === 'caller' && (!externalDevice || !externalColorFormat)) {
     throw new Error('caller-product-frame-requires-external-device-and-color-format');
   }
-  const VERTICAL_DOMAIN_EXTENT_MULTIPLIER = VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
-  const gridHeightForSize = size => size * VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
+  // The box shape (report §34) is seated from the controls once they exist
+  // (below); until then the helper reads the authored twice-the-width.
+  let gridShape = null;
+  const gridHeightForSize = size => gridHeightForShape(size, gridShape);
   const gridShapeLabel = size => `${size}x${gridHeightForSize(size)}x${size}`;
   function gridCellCount(size) {
     return size * gridHeightForSize(size) * size;
@@ -10532,6 +10588,7 @@ export function createKaminosVolumePrototype({
   let persistentSparseCohortGpuState = null;
   let fourArmHeldStateRuntimeState = null;
   let fourArmHeldStateResidualGrid = null;
+  gridShape = resolveGridHeight(controlsSnapshot, normalizeGridSize(controlsSnapshot.resolution));
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let gridHeight = gridHeightForSize(gridSize);
   let boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
@@ -10678,6 +10735,8 @@ export function createKaminosVolumePrototype({
     simGrid: gridSize,
     simGridLabel: `${gridSize}x${gridHeight}x${gridSize} velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`,
     simGridDimensions: [gridSize, gridHeight, gridSize],
+    // The requested box shape and whether this device admitted it (report §34).
+    gridHeight: { ...gridShape, admitted: true, admissionReason: null, admissionChecked: false },
     gridOverlay: 0,
     adaptiveRaymarch: 0.65,
     occupancySkip: 0.35,
@@ -11181,7 +11240,7 @@ export function createKaminosVolumePrototype({
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
     });
     if (field) {
-      const packed = packSolidTextureRows(field.cells, gridSize);
+      const packed = packSolidTextureRows(field.cells, gridSize, gridHeight);
       device.queue.writeTexture({texture}, packed.data,
         {bytesPerRow: packed.bytesPerRow, rowsPerImage: packed.rowsPerImage},
         {width: gridSize, height: gridHeight, depthOrArrayLayers: gridSize});
@@ -12289,11 +12348,11 @@ export function createKaminosVolumePrototype({
     try {
       const revision = sceneSolidRevision(source.object, productTransform);
       const emitterBoundsRevision = `${analyticEmitterDispatch.cellMin.join(',')}/${analyticEmitterDispatch.cellExtent.join(',')}`;
-      key = `${gridSize}:${sourceId}:${revision}:${solver.solver}:${solver.projection}:${transport.scheme}:${emitterBoundsRevision}:${analyticEmitterDescriptorSignature}:wall:${backWall.key}`;
+      key = `${gridSize}x${gridHeight}:${sourceId}:${revision}:${solver.solver}:${solver.projection}:${transport.scheme}:${emitterBoundsRevision}:${analyticEmitterDescriptorSignature}:wall:${backWall.key}`;
       if (key === sceneSolidRevisionKey) return;
       const started = performance.now();
       const extraction = trianglesFromSceneObject(source.object, productTransform);
-      const field = voxelizeTriangleSolid(extraction.triangles, gridSize);
+      const field = voxelizeTriangleSolid(extraction.triangles, gridSize, gridHeight);
       if (field.surfaceCellCount === 0) throw new Error('authored-solid-does-not-intersect-volume');
       const sourceBounds = analyticEmitterDispatch;
       let sourceBoundsSolidCells = 0;
@@ -12309,7 +12368,7 @@ export function createKaminosVolumePrototype({
       // Match the shader's signed-distance chemistry gate at cell centers;
       // open cells in the conservative dispatch box are not enough to fuel gas.
       const sourceSupport = countEmitterChemicalSupport(
-        analyticEmitterDescriptor, sourceBounds, field.cells, gridSize);
+        analyticEmitterDescriptor, sourceBounds, field.cells, gridSize, gridHeight);
       if (sourceBounds.active && sourceSupport.fluidSupportCells === 0) {
         throw new Error('authored-solid-occludes-emitter-source-support');
       }
@@ -13843,7 +13902,7 @@ export function createKaminosVolumePrototype({
     if (!adapter) throw new Error('WebGPU adapter unavailable');
     const maxRequestedStorageBufferBytes = productFrameOwner === 'caller'
       ? volumeStorageBufferRequestBytes(gridSize, boundarySplatCapacity)
-      : volumeStorageBufferRequestBytes(Math.max(...SUPPORTED_GRID_SIZES));
+      : volumeStorageBufferRequestBytes(Math.max(...SUPPORTED_GRID_SIZES), null, Math.max(...SUPPORTED_GRID_SIZES) * GRID_HEIGHT_MAX_RATIO);
     const requiredLimits = {};
     const maxSupportedStorageBufferBytes = Math.min(
       adapter.limits?.maxBufferSize ?? 0,
@@ -14348,6 +14407,17 @@ export function createKaminosVolumePrototype({
     });
     device.pushErrorScope('validation');
     state.gpuInitStage = 'fluid-rebuild';
+    // Admission of the requested box shape against this device (report §34,
+    // review GH-04): a shape the device cannot hold falls back to twice the
+    // width, receipted, before anything is allocated.
+    {
+      const initialAdmission = gridShapeAdmission(gridShape, device.limits);
+      state.gridHeight = { ...gridShape, admitted: initialAdmission.admitted, admissionReason: initialAdmission.reason, admissionChecked: true };
+      if (!initialAdmission.admitted) {
+        gridShape = resolveGridHeight({}, gridShape.widthCells);
+        state.gridHeight.fallback = { ...gridShape };
+      }
+    }
     rebuildFluidState(controlsSnapshot.resolution);
     if (gridSize === 160) {
       selectiveHeadLiveRuntime = await createSelectiveHeadLiveRuntime({
@@ -16653,7 +16723,7 @@ export function createKaminosVolumePrototype({
     const key = `${gridSize}x${gridHeight}:${irradianceGridSize}`;
     if (irradianceResourcesKey === key && irradianceSeedPipeline && irradianceAtlasTexture) return true;
     destroyFireIrradianceResources();
-    const irradianceGridHeight = irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER;
+    const irradianceGridHeight = gridHeightForSize(irradianceGridSize);
     const latticeBytes = irradianceLatticeBufferBytes(irradianceGridSize, irradianceGridHeight);
     irradianceLatticeBuffers = [0, 1].map(index => device.createBuffer({
       label: `kaminos ${FIRE_IRRADIANCE_LATTICE_IDENTITY} lattice ${index}`,
@@ -16749,7 +16819,7 @@ export function createKaminosVolumePrototype({
     }
     const readBindGroup = options.readBindGroup || boundarySidecarReadBindGroups[currentFluid];
     const latticeWorkgroups = Math.ceil(irradianceGridSize / 4);
-    const latticeWorkgroupsY = Math.ceil((irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER) / 4);
+    const latticeWorkgroupsY = Math.ceil((gridHeightForSize(irradianceGridSize)) / 4);
     const seedPass = encoder.beginComputePass({
       label: 'kaminos fire irradiance seed pass',
       ...(options.seedTimestampWrites ? { timestampWrites: options.seedTimestampWrites } : {}),
@@ -16783,7 +16853,7 @@ export function createKaminosVolumePrototype({
     const atlasTilesY = Math.ceil(irradianceGridSize / FIRE_IRRADIANCE_ATLAS_TILES_X);
     resolvePass.dispatchWorkgroups(
       Math.ceil((irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X) / 8),
-      Math.ceil((irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER * atlasTilesY) / 8),
+      Math.ceil((gridHeightForSize(irradianceGridSize) * atlasTilesY) / 8),
       1
     );
     resolvePass.end();
@@ -16807,6 +16877,8 @@ export function createKaminosVolumePrototype({
   function fireIrradianceLightField() {
     const requested = fireLightFieldRequested();
     const atlasTilesY = Math.ceil(irradianceGridSize / FIRE_IRRADIANCE_ATLAS_TILES_X);
+    // The bounds the camera actually samples (the raymarch box, report §34).
+    const domainBox = raymarchDomainBox(gridSize, gridHeight);
     const base = {
       identity: FIRE_IRRADIANCE_ATLAS_IDENTITY,
       latticeIdentity: FIRE_IRRADIANCE_LATTICE_IDENTITY,
@@ -16818,16 +16890,12 @@ export function createKaminosVolumePrototype({
       tilesX: FIRE_IRRADIANCE_ATLAS_TILES_X,
       tilesY: atlasTilesY,
       atlasWidth: irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X,
-      atlasHeight: irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER * atlasTilesY,
-      gridY: irradianceGridSize * VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER,
-      worldMin: productTransform.translate.map(value => value - 1),
-      worldMax: [productTransform.translate[0] + 1,
-        productTransform.translate[1] - 1 + 2 * gridHeight / gridSize,
-        productTransform.translate[2] + 1],
+      atlasHeight: gridHeightForSize(irradianceGridSize) * atlasTilesY,
+      gridY: gridHeightForSize(irradianceGridSize),
+      worldMin: domainBox.min.map((value, axis) => value + productTransform.translate[axis]),
+      worldMax: domainBox.max.map((value, axis) => value + productTransform.translate[axis]),
       worldBoundsAuthority: 'full-volume-domain-equal-cell-pitch-v1',
-      raymarchWorldMax: [productTransform.translate[0] + 1,
-        productTransform.translate[1] - 1 + 2 * gridHeight / gridSize,
-        productTransform.translate[2] + 1],
+      raymarchWorldMax: domainBox.max.map((value, axis) => value + productTransform.translate[axis]),
       generation: irradianceAtlasGeneration,
       builtFrame: state.fireLightFieldLastBuiltFrame ?? null,
       frameCount: state.fireLightFieldFrameCount || 0,
@@ -25963,12 +26031,28 @@ export function createKaminosVolumePrototype({
       }
       const nextCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       const requestedGrid = normalizeGridSize(controlsSnapshot.resolution);
+      const requestedShape = resolveGridHeight(controlsSnapshot, requestedGrid);
+      const shapeChanged = requestedGrid !== previousGrid || requestedShape.heightCells !== gridHeight;
+      // Admission before anything is replaced (review GH-04); without a device
+      // the shape is seated now and admitted when the device appears (GH-03).
+      const admission = device && shapeChanged ? gridShapeAdmission(requestedShape, device.limits) : { admitted: true, reason: null };
+      // The receipt changes only when the request changes or a check runs, so a
+      // shape the device admitted stays receipted as checked while it holds.
+      const receiptStale = !state.gridHeight || state.gridHeight.widthCells !== requestedShape.widthCells || state.gridHeight.requestedCells !== requestedShape.requestedCells || state.gridHeight.heightCells !== requestedShape.heightCells;
+      if (receiptStale || (device && shapeChanged)) state.gridHeight = { ...requestedShape, admitted: admission.admitted, admissionReason: admission.reason, admissionChecked: Boolean(device && shapeChanged) };
+      if (admission.admitted) gridShape = requestedShape;
+      const heightChanged = admission.admitted && requestedShape.heightCells !== gridHeight;
       const sourceStateResetNeeded = device
+        && admission.admitted
         && requestedGrid === previousGrid
+        && !heightChanged
         && normalizeVolumeScene(controlsSnapshot.volumeScene) === 'canonical_plume'
         && previousCanonicalSourceControlSignature !== nextCanonicalSourceControlSignature;
-      if (device && requestedGrid !== previousGrid) {
-        rebuildFluidState(requestedGrid);
+      if (!admission.admitted) {
+        // Refused: the field, its shape and its dimensions stay as they were.
+        // The receipt names the request and the limit it exceeds.
+      } else if (device && (requestedGrid !== previousGrid || heightChanged)) {
+        rebuildFluidState(requestedGrid, heightChanged ? 'grid-height-change' : 'grid-rebuilt');
       } else if (sourceStateResetNeeded) {
         rebuildFluidState(requestedGrid, 'canonical-source-control-change');
       } else {
@@ -26486,6 +26570,17 @@ export function createKaminosVolumePrototype({
       return { confinementEpsilonOverride, appliesOn: 'next-frame', previous: state.confinement };
     },
     emissiveCameraState() { return state.physicalColor ? {...state.physicalColor} : null; },
+    // The resolved grid shape and box bounds for a requested height, without
+    // touching the sim: the cockpit and the Kaminos authoring side preview the
+    // box while the height is edited and rebuild only on confirm.
+    previewGridShape(request = {}) {
+      const width = normalizeGridSize(request.resolution ?? controlsSnapshot.resolution);
+      const shape = resolveGridHeight({ gridHeightRatio: request.gridHeightRatio ?? controlsSnapshot.gridHeightRatio }, width);
+      const admission = device ? gridShapeAdmission(shape, device.limits) : { admitted: true, reason: null };
+      const box = raymarchDomainBox(shape.widthCells, shape.heightCells);
+      return { ...shape, admitted: admission.admitted, admissionReason: admission.reason,
+        dimensions: [shape.widthCells, shape.heightCells, shape.widthCells], localMin: box.min, localMax: box.max, applied: shape.widthCells === gridSize && shape.heightCells === gridHeight };
+    },
     debugState() {
       return {
         ...state,

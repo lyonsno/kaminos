@@ -63,23 +63,43 @@ fn local(c: vec2f, t: f32) -> vec2f {
   return vec4f(color, 1.0);
 }`;
 
-function frameStats(gaps) {
+function frameStats(gaps, marks = []) {
   if (!gaps.length) return null;
-  const sorted = [...gaps].sort((x, y) => x - y);
+  const sorted = gaps.map(g => g.ms).sort((x, y) => x - y);
   const q = p => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
   return { frames: gaps.length, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: sorted.at(-1),
-    over33ms: gaps.filter(g => g > 33.4).length, over100ms: gaps.filter(g => g > 100).length };
+    over33ms: sorted.filter(g => g > 33.4).length, over100ms: sorted.filter(g => g > 100).length,
+    // Gaps over 50 ms with when they ended (ms from the run's start) and the stage then running.
+    long: gaps.filter(g => g.ms > 50).map(g => ({ ms: g.ms, atMs: g.atMs, stage: marks.filter(m => m.atMs <= g.atMs).at(-1)?.stage ?? 'start' })) };
 }
 
 // load: false returns with the scene already drawing and no weights fetched; call demo.load()
 // to fetch them, so a page can animate through a long first download.
-export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = () => {}, load = true }) {
+// limits 'baseline' requests only WebGPU's default limits (128 MiB per storage binding, 256 MiB per
+// buffer, 16 KB of workgroup memory), which every WebGPU device supports, to test phone-class
+// devices on a desktop: anything beyond them becomes a validation error, collected in gpuErrors.
+export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = () => {}, load = true, limits = 'adapter' }) {
   const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter?.features.has('shader-f16')) throw new Error('WebGPU with shader-f16 is required');
   const features = ['shader-f16', ...(adapter.features.has('timestamp-query') ? ['timestamp-query'] : [])];
-  const device = await adapter.requestDevice({ requiredFeatures: features, requiredLimits: {
+  const device = await adapter.requestDevice({ requiredFeatures: features, requiredLimits: limits === 'baseline' ? {} : {
     maxBufferSize: adapter.limits.maxBufferSize, maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
-    maxStorageBuffersPerShaderStage: adapter.limits.maxStorageBuffersPerShaderStage } });
+    maxStorageBuffersPerShaderStage: adapter.limits.maxStorageBuffersPerShaderStage,
+    maxComputeWorkgroupStorageSize: adapter.limits.maxComputeWorkgroupStorageSize } });
+  const gpuErrors = [];
+  device.addEventListener('uncapturederror', e => { if (gpuErrors.length < 50) gpuErrors.push(e.error?.message ?? String(e.error)); });
+  device.lost.then(info => gpuErrors.push(`device lost: ${info.reason} ${info.message}`));
+  // Count the bytes of every live WebGPU buffer, with the peak since the last reset, so a page or
+  // smoke can report exactly how much GPU memory the model holds.
+  const gpuBytes = { live: 0, peak: 0 };
+  const createBuffer = device.createBuffer.bind(device);
+  device.createBuffer = descriptor => {
+    const buffer = createBuffer(descriptor), size = descriptor.size;
+    gpuBytes.live += size; gpuBytes.peak = Math.max(gpuBytes.peak, gpuBytes.live);
+    const destroy = buffer.destroy.bind(buffer); let alive = true;
+    buffer.destroy = () => { if (alive) { alive = false; gpuBytes.live -= size; } destroy(); };
+    return buffer;
+  };
   const session = await createWebGpuInferenceSession({ sessionId: `flux2-klein:${crypto.randomUUID()}`, device, adapterName: 'browser-primary-adapter' });
   const foreground = createWebGpuForegroundService({ routeId: KLEIN_ROUTE_ID, device });
   const pipeline = new KleinPipeline(device, { ...urls, ...kernels });
@@ -109,7 +129,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
       const now = performance.now();
       if (receipt.status === 'completed') {
         scene.frames++;
-        if (scene.gaps && scene.lastFrameAt !== null) scene.gaps.push(now - scene.lastFrameAt);
+        if (scene.gaps && scene.lastFrameAt !== null) scene.gaps.push({ ms: now - scene.lastFrameAt, atMs: now - scene.started });
         scene.lastFrameAt = now;
       }
       requestAnimationFrame(requestFrame);
@@ -118,13 +138,19 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
   requestAnimationFrame(requestFrame);
 
   let active = null;
-  async function generate({ prompt, seed, size, cooperative = true, targetDutyMs = 12, maxInFlight = 1, onStep, onPhase }) {
+  async function generate({ prompt, seed, size, textLength = 512, cooperative = true, targetDutyMs = 12, maxInFlight = 2, onStep, onPhase }) {
     if (active) throw new Error('a generation is already running');
     const runId = `flux2-klein:${crypto.randomUUID()}`;
     const abort = new AbortController();
     active = { abort, control: null, cooperative };
     scene.gaps = []; scene.lastFrameAt = null;
+    gpuBytes.peak = gpuBytes.live;
     const started = performance.now();
+    scene.started = started;
+    const marks = [];
+    const mark = stage => marks.push({ stage, atMs: performance.now() - started });
+    const phaseHook = phase => { mark(phase); onPhase?.(phase); };
+    const stepHook = (i, n) => { mark(`step${i}`); onStep?.(i, n); };
     let frameRun = null, route = null, result;
     try {
       if (cooperative) {
@@ -134,8 +160,9 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
         const control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground: frameRun.withForeground });
         active.control = control;
         const job = route.enqueue({ jobId: runId, execute: invocation => pipeline.generate({
-          prompt, seed, width: size, height: size, onStep, onPhase,
-          schedule: { runtime: route.runtime, invocation, control, signal: abort.signal, targetDutyMs, maxInFlight } }) });
+          prompt, seed, width: size, height: size, textLength, onStep: stepHook, onPhase: phaseHook,
+          schedule: { runtime: route.runtime, invocation, control, signal: abort.signal, targetDutyMs, maxInFlight,
+            withForeground: frameRun.withForeground } }) });
         const completion = await job.completion;
         if (completion.status !== 'succeeded') {
           const error = new Error(completion.failure?.message ?? completion.status);
@@ -144,11 +171,15 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
         }
         result = completion.output;
       } else {
-        result = await pipeline.generate({ prompt, seed, width: size, height: size, onStep, onPhase });
+        result = await pipeline.generate({ prompt, seed, width: size, height: size, textLength, onStep: stepHook, onPhase: phaseHook });
       }
       result.wallMs = performance.now() - started;
+      result.gpuBytes = { peak: gpuBytes.peak, live: gpuBytes.live };
+      result.gpuErrors = gpuErrors.splice(0);
+      result.startedAt = started;
       result.cooperative = cooperative;
-      result.frames = frameStats(scene.gaps);
+      mark('done');
+      result.frames = frameStats(scene.gaps, marks);
       result.dutyCount = result.duties.length;
       result.longestDutyMs = Math.max(0, ...result.duties.map(d => d.queueMs ?? 0));
       return result;
@@ -170,11 +201,15 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
   }
   function stop(reason = 'stopped by user') { active?.abort.abort(new Error(reason)); }
 
+  let gpuBytesAfterLoad = null;
   async function loadWeights(status = onStatus) {
+    gpuBytes.peak = gpuBytes.live;
     await pipeline.load((part, name, p) => status({ phase: 'load', part, detail: `${part} ${name}`, ...p }));
+    gpuBytesAfterLoad = { peak: gpuBytes.peak, live: gpuBytes.live };
   }
   if (load) await loadWeights();
 
-  return { device, pipeline, generate, togglePause, stop, scene, load: loadWeights, residentBytes: pipeline.residentBytes,
-    get loadMs() { return pipeline.timings.loadMs; }, kernels: pipeline.kernels };
+  return { device, pipeline, generate, togglePause, stop, scene, load: loadWeights, residentBytes: pipeline.residentBytes, gpuBytes, gpuErrors,
+    limits: Object.fromEntries(['maxBufferSize', 'maxStorageBufferBindingSize', 'maxStorageBuffersPerShaderStage', 'maxComputeWorkgroupStorageSize'].map(k => [k, device.limits[k]])),
+    get gpuBytesAfterLoad() { return gpuBytesAfterLoad; }, get loadMs() { return pipeline.timings.loadMs; }, kernels: pipeline.kernels };
 }

@@ -21,12 +21,21 @@ The repository spans four connected capabilities:
   state, and generated environments can be inspected, corrected, staged, and
   composed in one WebGPU workbench.
 
+## Turn A Photograph Into A Surface You Can Relight
+
+[![Four synchronized views of a metallic sculpture: the original photograph, recovered depth, the image under new lighting, and inferred materials with glow](demos/material-photo/comparison.png)](demos/material-photo/README.md)
+
+**Material Photograph** combines MoGe geometry with SuperMat material estimation in the browser. Rotate all four views together, move the light, and switch HDR environments to see what depth and materials each contribute. Inspect the recovered albedo, roughness and metalness, or tune the optional inferred glow and bloom.
+
+Both models and the interactive renderer share one WebGPU device through the inference kit. [Run the example locally](demos/material-photo/README.md#run-locally) or [explore its implementation](demos/material-photo/main.js).
+
 [![Golden flames illuminate the chamber of an open kiln in the Kaminos browser workbench](docs/flame-atlas/assets/kiln-authoring-hero.png)](https://lyonsno.github.io/kaminos/)
 
 ## Start Here
 
 | Surface | What it demonstrates | Entry point |
 | --- | --- | --- |
+| Material Photograph | One photograph becomes a relightable surface, with synchronized original, depth, image-as-albedo and inferred-material views | [Example and local setup](demos/material-photo/README.md) |
 | Browser combustion films | A stateful WebGPU fire material captured while being driven through ignition, contraction, chromatic change, extinction, and rebirth | [Watch the captured studies](https://lyonsno.github.io/kaminos/) |
 | WebGPU inference kit | Shared-device lifecycle, persistent model routes, queues, cooperative scheduling, resource residency, progress, and runtime telemetry | [Read the package guide](webgpu-inference-kit/README.md) or [open npm](https://www.npmjs.com/package/@kaminos/webgpu-inference-kit) |
 | Spatial model ports | MoGe depth and normals, SHARP Gaussian reconstruction, SF3D and TRELLIS 2 textured meshes, Kimodo motion diffusion, and SAM segmentation | [Inspect the port family](webgpu-inference-kit/README.md#one-runtime-different-models) |
@@ -71,6 +80,7 @@ The same runtime supports several kinds of model:
 | Port | Browser-native result | Runtime integration |
 | --- | --- | --- |
 | [MoGe](https://github.com/lyonsno/moge-webgpu) | Depth, normals, and point maps from one image | Embeddable feed-forward pipeline with reusable buffers and bounded submissions |
+| [SuperMat](demos/material-photo/README.md) | Albedo, roughness and metalness from one image | Shared-device material inference, reusable model resources and a relightable MoGe composition |
 | [SHARP](https://github.com/lyonsno/sharp-webgpu) | A Gaussian-splat scene from one image | Adaptive cooperative scheduling and shared-device foreground rendering |
 | [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | A textured, UV-unwrapped GLB from one image | Cooperative GPU work, reusable scratch memory, and worker offload |
 | [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Skeletal motion from a text prompt | Browser diffusion and motion decoding with rendering opportunities between transformer passes |

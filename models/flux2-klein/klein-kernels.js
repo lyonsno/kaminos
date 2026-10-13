@@ -471,3 +471,132 @@ fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid
   }
 }`;
 }
+
+// GEMM v3: the v2 contract (uniform layout, bindings, epilogues, quantized B formats) with a
+// dot-product inner loop. A and B tiles are both kept K-contiguous in shared memory as vec4s,
+// exactly as loaded from global memory (no transposed component writes), rows padded to 9 vec4s
+// so the 16 threads reading B rows hit distinct banks. Each thread owns TM x TN outputs, rows
+// lid.y + 16i and columns lid.x + 16j, and per 4-wide K slice does TM + TN vec4 shared reads for
+// 4 * TM * TN multiply-adds (v2: 8 scalar reads per 16). Tile = (16 TM) x (16 TN), BK = 32.
+export function gemmShaderV3({ bType = 'f16', epilogue = 'store', sType = 'f16', group = 64, tm = 4, tn = 4 } = {}) {
+  const quant = /^i\d$/.test(bType);
+  const BM = 16 * tm, BN = 16 * tn;
+  const bArray = quant ? 'array<u32>' : bType === 'f16' ? 'array<vec4<f16>>' : 'array<vec4<f32>>';
+  const gateBinding = epilogue === 'gated-residual' ? '@group(0) @binding(4) var<storage, read> gate: array<f32>;' : '';
+  const scaleBinding = quant ? '@group(0) @binding(5) var<storage, read> bs: array<f16>;' : '';
+  let store;
+  if (epilogue === 'store') store = 'c[ci] = v;';
+  else if (epilogue === 'add') store = 'c[ci] = c[ci] + v;';
+  else store = 'c[ci] = c[ci] + gate[p.gate_off + n] * v;';
+  let loadB;
+  if (!quant) {
+    loadB = `for (var q = 0u; q < ${BN * 8 / 256}u; q++) {
+      let idx = tid + q * 256u; let row = idx / 8u; let c4 = idx % 8u; let n = n0 + row; let k = k0 + c4 * 4u;
+      var v = vec4<f32>(0.0);
+      if (n < p.N && k < p.K) { v = vec4<f32>(b[(p.b_off + bbat * p.b_bs + n * p.b_rs + k) / 4u]); }
+      tb[row * 9u + c4] = vec4<${sType}>(v);
+    }`;
+  } else {
+    let codes;
+    if (bType === 'i4') {
+      codes = `let w = b[p.b_off + n * (p.K / 8u) + k / 8u];
+          let lq = vec4<u32>(w, w >> 4u, w >> 8u, w >> 12u) & vec4<u32>(15u);
+          let hq = vec4<u32>(w >> 16u, w >> 20u, w >> 24u, w >> 28u) & vec4<u32>(15u);`;
+    } else if (bType === 'i2') {
+      codes = `let w = b[p.b_off + n * (p.K / 16u) + k / 16u] >> (2u * (k % 16u));
+          let lq = vec4<u32>(w, w >> 2u, w >> 4u, w >> 6u) & vec4<u32>(3u);
+          let hq = vec4<u32>(w >> 8u, w >> 10u, w >> 12u, w >> 14u) & vec4<u32>(3u);`;
+    } else if (bType === 'i3') {
+      codes = `let base = p.b_off + n * (p.K / 32u * 3u) + (k / 32u) * 3u;
+          let bit = 3u * (k % 32u); let wi = base + bit / 32u; let sh = bit % 32u;
+          var w = b[wi] >> sh;
+          if (sh > 8u) { w = w | (b[wi + 1u] << (32u - sh)); }
+          let lq = vec4<u32>(w, w >> 3u, w >> 6u, w >> 9u) & vec4<u32>(7u);
+          let hq = vec4<u32>(w >> 12u, w >> 15u, w >> 18u, w >> 21u) & vec4<u32>(7u);`;
+    } else if (bType === 'i8') {
+      codes = null;
+    } else throw new Error(`gemmShaderV3: unsupported bType ${bType}`);
+    loadB = codes ? `for (var q = 0u; q < ${BN * 4 / 256}u; q++) {
+      let idx = tid + q * 256u; let row = idx / 4u; let c8 = idx % 4u; let n = n0 + row; let k = k0 + c8 * 8u;
+      var lo = vec4<f32>(0.0); var hi = vec4<f32>(0.0);
+      if (n < p.N && k < p.K) {
+        ${codes}
+        let sb = p.z1 + (n * (p.K / ${group}u) + k / ${group}u) * 2u;
+        let sc = f32(bs[sb]); let bi = f32(bs[sb + 1u]);
+        lo = vec4<f32>(lq) * sc + bi; hi = vec4<f32>(hq) * sc + bi;
+      }
+      tb[row * 9u + c8 * 2u] = vec4<${sType}>(lo); tb[row * 9u + c8 * 2u + 1u] = vec4<${sType}>(hi);
+    }` : `for (var q = 0u; q < ${BN * 8 / 256}u; q++) {
+      let idx = tid + q * 256u; let row = idx / 8u; let c4 = idx % 8u; let n = n0 + row; let k = k0 + c4 * 4u;
+      var v = vec4<f32>(0.0);
+      if (n < p.N && k < p.K) {
+        v = vec4<f32>(unpack4xI8(b[p.b_off + n * (p.K / 4u) + k / 4u])) * f32(bs[p.z1 + n * (p.K / ${group}u) + k / ${group}u]);
+      }
+      tb[row * 9u + c4] = vec4<${sType}>(v);
+    }`;
+  }
+  // Fully unrolled per-thread tile: one named variable per accumulator and operand, so nothing is
+  // dynamically indexed (indexed function-scope arrays reach Metal as memory and spill at 8x4).
+  const I = [...Array(tm).keys()], J = [...Array(tn).keys()];
+  const accDecl = I.flatMap(i => J.map(j => `var c${i}_${j} = 0.0;`)).join(' ');
+  const loadA = I.map(i => `let a${i} = vec4<f32>(ta[(lid.y + ${16 * i}u) * 9u + k4]);`).join(' ');
+  const loadBr = J.map(j => `let b${j} = vec4<f32>(tb[(lid.x + ${16 * j}u) * 9u + k4]);`).join(' ');
+  const fmas = I.flatMap(i => J.map(j => `c${i}_${j} += dot(a${i}, b${j});`)).join(' ');
+  const stores = I.map(i => `{
+    let m = m0 + lid.y + ${16 * i}u;
+    if (m < p.M) {
+${J.map(j => `      { let n = n0 + lid.x + ${16 * j}u; if (n < p.N) { let v = p.alpha * c${i}_${j}; let ci = p.c_off + bat * p.c_bs + m * p.c_rs + n; ${store} } }`).join('\n')}
+    }
+  }`).join('\n  ');
+  return `enable f16;
+struct P {
+  M: u32, N: u32, K: u32, alpha: f32,
+  a_off: u32, a_rs: u32, a_bs: u32, b_off: u32,
+  b_rs: u32, b_bs: u32, c_off: u32, c_rs: u32,
+  c_bs: u32, gate_off: u32, z0: u32, z1: u32,
+  n_base: u32, m_base: u32, z2: u32, z3: u32,
+};
+@group(0) @binding(0) var<storage, read> a: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> b: ${bArray};
+@group(0) @binding(2) var<storage, read_write> c: array<f32>;
+@group(0) @binding(3) var<uniform> p: P;
+${gateBinding}
+${scaleBinding}
+var<workgroup> ta: array<vec4<${sType}>, ${BM * 9}>;
+var<workgroup> tb: array<vec4<${sType}>, ${BN * 9}>;
+@compute @workgroup_size(16, 16)
+fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>) {
+  let tid = lid.y * 16u + lid.x;
+  let m0 = p.m_base + wid.y * ${BM}u; let n0 = p.n_base + wid.x * ${BN}u; let bat = wid.z; let bbat = bat / max(p.z0, 1u);
+  ${accDecl}
+  for (var k0 = 0u; k0 < p.K; k0 += 32u) {
+    for (var q = 0u; q < ${BM * 8 / 256}u; q++) {
+      let idx = tid + q * 256u; let row = idx / 8u; let c4 = idx % 8u; let m = m0 + row; let k = k0 + c4 * 4u;
+      var v = vec4<f32>(0.0);
+      if (m < p.M && k < p.K) { v = a[(p.a_off + bat * p.a_bs + m * p.a_rs + k) / 4u]; }
+      ta[row * 9u + c4] = vec4<${sType}>(v);
+    }
+    ${loadB}
+    workgroupBarrier();
+    for (var k4 = 0u; k4 < 8u; k4++) {
+      ${loadA}
+      ${loadBr}
+      ${fmas}
+    }
+    workgroupBarrier();
+  }
+  ${stores}
+}`;
+}
+
+// Which GEMM a call uses: v3 (128x128 tiles) only for quantized weights with f16 shared tiles (8x8
+// f32 tiles exceed 32 KB of workgroup storage) and K a multiple of the 32-wide K tile; v2 when K is
+// a multiple of 4; else the v1 parity kernel.
+export function gemmVersionFor(requested = 2, bType, sType, K) {
+  if (requested >= 3 && /^i\d$/.test(bType) && sType === 'f16' && K % 32 === 0) return 3;
+  return requested >= 2 && K % 4 === 0 ? 2 : 1;
+}
+
+// Largest scores buffer attention keeps (several heads' L x L f32 scores, at least one head).
+export const SCORE_BYTES = 64 * 1024 * 1024;
+export const scoreHeads = (L, multiple = 1) => Math.max(multiple, Math.floor(SCORE_BYTES / (L * L * 4) / multiple) * multiple);

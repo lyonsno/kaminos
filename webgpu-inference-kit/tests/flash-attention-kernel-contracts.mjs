@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 
 import {
   FLASH_ATTENTION_PARAMS_WORDS,
   createWebGpuFlashAttentionShader,
   flashAttentionDispatch,
   flashAttentionParams,
+  flashAttentionStridedParams,
 } from '../src/flash-attention-kernel.js';
 
 // Generated shader: compile-time head dim and tiles, unrolled registers, workgroup tiles within the
@@ -36,8 +38,56 @@ import {
   for (const headDim of [1, 2, 16, 24, 63, 64]) assert.equal(typeof createWebGpuFlashAttentionShader({ headDim }), 'string');
   assert.match(createWebGpuFlashAttentionShader({ headDim: 24 }), /var q5: vec4<f32>/);
 }
+// Packed shaders for head dims <= 64 are the accepted ones (SAM ViT, DETR, memory attention): byte-identical.
+{
+  const accepted = {
+    7: 'sha256:cc7dddaab8f79e97786fc1415049037012e0f3fdaba5d68643fd11195325b69a',
+    16: 'sha256:1ca69278a248a684d5145e148ccf2928cd75a5f6271dc60d9411c489d14a6267',
+    24: 'sha256:242025f1faa3116f974b0a339cc38f03ca7cfcf3019a2a2d19b3122de1333efe',
+    32: 'sha256:9b5f762f400e8343fa62c77a08285664b8cdf33d13e07a24009fcb59796fa517',
+    64: 'sha256:4adc5cc2744858d5fb72261eda42dfb1a2620f7259debdb4ab2f9372bc94d75b',
+  };
+  for (const [headDim, hash] of Object.entries(accepted)) {
+    assert.equal(`sha256:${createHash('sha256').update(createWebGpuFlashAttentionShader({ headDim: Number(headDim) })).digest('hex')}`, hash, `head dim ${headDim} shader changed`);
+  }
+}
+
+// Head dims above 64 split each query across P threads, each holding at most 64 dims of q and the
+// accumulator; partial scores meet in workgroup memory. Workgroup storage stays within 16 KiB.
+for (const [headDim, parts, perPart, keyTile] of [[96, 2, 12, 8], [128, 2, 16, 8], [160, 4, 10, 4], [256, 4, 16, 4]]) {
+  const code = createWebGpuFlashAttentionShader({ headDim });
+  assert.match(code, new RegExp(`@compute @workgroup_size\\(${64 * parts}\\)`), `head dim ${headDim}: 64 queries x ${parts} parts`);
+  assert.match(code, new RegExp(`var q${perPart - 1}: vec4<f32>`));
+  assert.doesNotMatch(code, new RegExp(`var q${perPart}:`));
+  assert.match(code, new RegExp(`var<workgroup> partial_scores: array<f32, ${parts * 64 * keyTile}>`));
+  assert.match(code, new RegExp(`var<workgroup> key_tile: array<vec4<f32>, ${keyTile * headDim / 4}>`));
+  assert.ok(2 * keyTile * headDim * 4 + parts * 64 * keyTile * 4 <= 16384);
+}
 // Invalid geometry fails loudly instead of compiling a kernel that reads past a head.
-for (const headDim of [0, 65, 128, 2.5]) assert.throws(() => createWebGpuFlashAttentionShader({ headDim }), /headDim must be an integer from 1 to 64/);
+for (const headDim of [0, 257, 2.5]) assert.throws(() => createWebGpuFlashAttentionShader({ headDim }), /headDim must be an integer from 1 to 256/);
+assert.throws(() => createWebGpuFlashAttentionShader({ headDim: 130 }), /head dims above 64 must be multiples of 4/);
+
+// Strided layout: per-tensor offsets and token/head/domain strides, e.g. TRELLIS fused QKV rows of 3c with
+// q, k, v at offsets 0, c, 2c and a separate c-wide output, or head-major [H][L][D] tensors.
+{
+  const code = createWebGpuFlashAttentionShader({ headDim: 128, layout: 'strided' });
+  for (const field of ['q_offset', 'q_token_stride', 'q_head_stride', 'q_domain_stride', 'k_offset', 'v_offset', 'o_token_stride']) assert.match(code, new RegExp(field));
+  const c = 1536;
+  const words = flashAttentionStridedParams({ queryTokens: 4096, keyTokens: 4096, heads: 12, headDim: 128,
+    q: { offset: 0, tokenStride: 3 * c }, k: { offset: c, tokenStride: 3 * c }, v: { offset: 2 * c, tokenStride: 3 * c }, out: { tokenStride: c } });
+  assert.equal(words.length, 24);
+  const u = [...words];
+  assert.deepEqual(u.slice(0, 6), [4096, 4096, 12, 12, 0, 4096]);
+  assert.equal(new Float32Array(words.buffer)[6], Math.fround(1 / Math.sqrt(128)));
+  assert.deepEqual(u.slice(8, 12), [0, 3 * c, 128, 4096 * 3 * c], 'q: offset, token, head, domain strides');
+  assert.deepEqual(u.slice(12, 16), [c, 3 * c, 128, 4096 * 3 * c]);
+  assert.deepEqual(u.slice(16, 20), [2 * c, 3 * c, 128, 4096 * 3 * c]);
+  assert.deepEqual(u.slice(20, 24), [0, c, 128, 4096 * c]);
+  const headMajor = [...flashAttentionStridedParams({ queryTokens: 10, keyTokens: 10, heads: 3, headDim: 128, q: { tokenStride: 128, headStride: 1280 } })];
+  assert.deepEqual(headMajor.slice(8, 12), [0, 128, 1280, 10 * 3 * 128], 'domain stride defaults to the whole domain');
+  assert.throws(() => flashAttentionStridedParams({ queryTokens: 1, keyTokens: 1, heads: 1, headDim: 64, k: { offset: 2 } }), /multiples of 4/);
+  assert.equal(flashAttentionStridedParams({ queryTokens: 1, keyTokens: 1, heads: 1, headDim: 7, k: { offset: 2 } }).length, 24, 'scalar head dims take any offset');
+}
 assert.throws(() => createWebGpuFlashAttentionShader({ headDim: 64, blockKeys: 64 }), /workgroup storage/);
 
 // Params: 12 words; counts, channel strides, grouped KV heads, query range and the softmax scale.

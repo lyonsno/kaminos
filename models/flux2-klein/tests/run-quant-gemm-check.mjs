@@ -20,10 +20,10 @@ try {
   await browser.navigate(`${report.origin}/tests/quant-gemm-check.html?fixture=/fixture`, 'window.quantGemmPageReady === true');
   const res = await browser.evaluate('window.quantGemmCheck');
   report.adapter = res.adapter; report.results = res.results;
-  const bad = res.results.filter(r => r.nonFinite > 0 || !(r.relL2 <= report.tolerance));
+  const bad = res.results.filter(r => r.validationError || r.nonFinite > 0 || !(r.relL2 <= (r.tolerance ?? report.tolerance)));
   report.pass = bad.length === 0;
   report.phase = report.pass ? 'done' : 'mismatch';
-  if (!report.pass) report.error = `decode mismatch: ${bad.map(r => `${r.case} v${r.version} relL2 ${r.relL2}`).join(', ')}`;
+  if (!report.pass) report.error = `decode mismatch: ${bad.map(r => `${r.case} v${r.version} relL2 ${r.relL2}${r.validationError ? ` (${r.validationError})` : ''}`).join(', ')}`;
 } catch (e) {
   report.error = String(e?.stack || e);
 }

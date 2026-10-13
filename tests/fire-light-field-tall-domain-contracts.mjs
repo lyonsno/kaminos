@@ -18,13 +18,18 @@ for (const expression of ['brickStart', 'brickEnd']) {
   assert.match(brick, /vec3<f32>\(f32\(IRRADIANCE_GRID\), f32\(IRRADIANCE_GRID_Y\), f32\(IRRADIANCE_GRID\)\)/,
     `WGSL ${expression} divisors convert unsigned light-grid constants to floats explicitly`);
 }
-const worldMaxExpression = field.match(/worldMax:\s*(\[[\s\S]*?\]),/)?.[1];
+// The bounds come from the raymarch domain box the camera samples (grid
+// height control, report §34), so they follow a taller box as well.
+assert.match(field, /const domainBox = raymarchDomainBox\(gridSize, gridHeight\);/, 'producer derives its bounds from the raymarch domain box');
+const worldMaxExpression = field.match(/worldMax:\s*([^\n]+),\n/)?.[1];
 assert.ok(worldMaxExpression, 'producer publishes explicit full-height bounds');
-const worldMax = new Function('productTransform', 'gridHeight', 'gridSize', `return ${worldMaxExpression}`);
-assert.deepEqual(worldMax({ translate: [0, 0, 0] }, 128, 64), [1, 3, 1]);
-assert.deepEqual(worldMax({ translate: [2.3, -0.5, 4] }, 128, 64), [3.3, 2.5, 5],
+const { raymarchDomainBox } = await import('../volume-grid-shape.mjs');
+const worldMax = new Function('productTransform', 'domainBox', `return ${worldMaxExpression}`);
+assert.deepEqual(worldMax({ translate: [0, 0, 0] }, raymarchDomainBox(64, 128)), [1, 3, 1]);
+assert.deepEqual(worldMax({ translate: [2.3, -0.5, 4] }, raymarchDomainBox(64, 128)), [3.3, 2.5, 5],
   'full-height lighting follows the relocated simulation domain');
-assert.match(field, /gridY:\s*irradianceGridSize\s*\*\s*VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER/);
+assert.deepEqual(worldMax({ translate: [0, 0, 0] }, raymarchDomainBox(64, 192)), [1, 5, 1], 'and a taller box');
+assert.match(field, /gridY:\s*gridHeightForSize\(irradianceGridSize\)/);
 assert.match(resources, /const atlasWidth = irradianceGridSize \* FIRE_IRRADIANCE_ATLAS_TILES_X;/);
 assert.match(resources, /const atlasHeight = irradianceGridHeight \* atlasTilesY;/);
 assert.match(resources, /size:\s*\{\s*width: atlasWidth,\s*height: atlasHeight,/,

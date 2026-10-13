@@ -22,15 +22,30 @@ Times are for one image with 4 steps in Chrome, sharing the GPU with a continuou
 
 | Size | 16 GB Apple M2 Pro | Apple M4 Max |
 | --- | --- | --- |
-| 512 × 512 | 19–22 s | 6–7 s |
+| 512 × 512 | about 13 s (about 5 s more with better lettering) | 6–7 s |
 | 768 × 768 | 40–46 s | about 12 s |
-| 1024 × 1024 | 67–69 s | about 23 s |
+| 1024 × 1024 | about 57 s | about 23 s |
 
 During generation the scene kept a median frame time of about 20 ms on the M2 Pro.
 
+Prompts are padded with filler tokens before the transformer reads them. The page pads to the prompt's own length plus a few tokens, which is about a quarter faster than the reference pipeline's 512, unless the prompt asks for lettering (quoted text, words in capitals, or words like sign, poster or title). Then it pads to 512, which spells words in the image noticeably better. A checkbox shows which mode will run and can be flipped. Generating again with the same prompt reuses its text encoding.
+
 ## Memory
 
-The weights take 3.9 GB of GPU memory. Working memory grows with image size, so the transformer's buffers are released before the image decoder allocates its own, and the decoder's are released once the image is read back. On the 16 GB M2 Pro a 1024 × 1024 image left 30% of memory free without any swapping.
+The weights take 3.6 GB of GPU memory. Working memory grows with image size, so the transformer's buffers are released before the image decoder allocates its own, and the decoder's are released once the image is read back. The decoder stores its activations in 16 bits, and attention keeps scores for only a few heads at a time.
+
+**Low-memory mode** (a checkbox on the page, ticked by default on phones and devices reporting less than 8 GB) never holds the text encoder and the transformer at the same time. A new prompt reloads the text encoder from the browser cache in place of the transformer, encodes, and swaps back; generating again with the same prompt swaps nothing. Images are identical in both modes.
+
+Peak GPU memory measured by the page on the 16 GB M2 Pro:
+
+| Size | Normal | Low-memory mode |
+| --- | --- | --- |
+| 512 × 512 | 4.2 GB | 2.8 GB (a new prompt takes about 2 s longer) |
+| 1024 × 1024 | 6.8 GB | 5.3 GB |
+
+With about 6 GB of memory left to the browser and macOS (the rest held by a test process), low-memory mode ran without the system swapping, while normal mode pushed it to swap about 3 GB. Neither figure comes from a real 8 GB Mac or a phone yet.
+
+**Phone-class GPUs.** Many phones allow at most 128 MiB per storage buffer binding, the WebGPU default. The page reads the device's limits: sizes whose buffers would not fit (768 and up at that limit) cannot be picked, and better lettering pads the prompt only as far as the limit allows (189 tokens at 512 × 512 instead of 512). Generation at 512 × 512 passes with Chrome holding the GPU to the default limits; add `?limits=baseline` to `generate.html` to try it.
 
 ## Running it
 

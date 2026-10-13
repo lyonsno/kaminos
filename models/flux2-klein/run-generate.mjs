@@ -48,8 +48,8 @@ try {
   const weightQuery = report.weightsUrl ? `weights=${encodeURIComponent(report.weightsUrl)}` : 'te=/te&dit=/dit&vae=/vae';
   browser = await launchChrome(opt('--chrome'), [], report);
   report.phase = 'load';
-  const kq = `&gemm=${opt('--gemm-version', '2')}&shared=${opt('--shared-type', 'f16')}`;
-  report.requestedKernels = { gemmVersion: Number(opt('--gemm-version', '2')), sharedType: opt('--shared-type', 'f16') };
+  const kq = `&gemm=${opt('--gemm-version', '2')}&shared=${opt('--shared-type', 'f16')}&vaeAct=${opt('--vae-act', 'f16')}&memory=${opt('--memory', 'all')}&limits=${opt('--limits', 'adapter')}`;
+  report.requestedKernels = { gemmVersion: Number(opt('--gemm-version', '2')), sharedType: opt('--shared-type', 'f16'), vaeActType: opt('--vae-act', 'f16'), residency: opt('--memory', 'all'), limits: opt('--limits', 'adapter') };
   // --loads N reloads the page N times in one browser profile (cache-hit evidence); the batch runs on the last load.
   report.loads = [];
   for (let n = 0; n < Number(opt('--loads', '1')); n++) {
@@ -58,7 +58,8 @@ try {
     report.loads.push(await browser.evaluate('({ loadMs: window.kleinLoadMs?.(), stats: window.kleinLoadStats?.() })'));
   }
   report.phase = 'generate';
-  const batchOptions = { cooperative: !args.includes('--blocking'), targetDutyMs: Number(opt('--target-duty-ms', '12')), maxInFlight: Number(opt('--max-in-flight', '1')) };
+  const batchOptions = { cooperative: !args.includes('--blocking'), targetDutyMs: Number(opt('--target-duty-ms', '12')), maxInFlight: Number(opt('--max-in-flight', '1')),
+    textLength: /^fit/.test(opt('--text-length', '512')) ? opt('--text-length') : Number(opt('--text-length', '512')), dutyLog: args.includes('--duty-log') };
   report.batchOptions = batchOptions;
   // One job per call, each PNG written as it arrives, and a wait that fails (with the page's status and
   // any unfinished fetches) when the status line stops changing, instead of hanging on a wedged batch.
@@ -70,9 +71,12 @@ try {
     const r = res.results[0];
     await fsp.writeFile(path.join(outDir, `${r.name}.png`), Buffer.from(r.png, 'base64')); delete r.png;
     report.results.push(r);
-    Object.assign(report, { residentBytes: res.residentBytes, loadMs: res.loadMs, effectiveKernels: res.kernels, loadStats: res.loadStats });
+    // WebGPU validation errors and device loss do not throw; they fail the run here.
+    report.gpuErrors = [...(report.gpuErrors ?? []), ...(res.loadGpuErrors ?? []).map(m => `load: ${m}`), ...(r.gpuErrors ?? []).map(m => `${r.name}: ${m}`)];
+    Object.assign(report, { residentBytes: res.residentBytes, gpuBytesAfterLoad: res.gpuBytesAfterLoad, deviceLimits: res.deviceLimits, loadMs: res.loadMs, effectiveKernels: res.kernels, loadStats: res.loadStats });
     await fsp.writeFile(path.join(outDir, 'report.json'), JSON.stringify(report, null, 2));
   }
+  if (report.gpuErrors?.length) { report.phase = 'gpu-errors'; report.error = `${report.gpuErrors.length} WebGPU errors: ${report.gpuErrors[0]}`; await finish(1); }
   report.phase = 'done';
   await finish(0);
 } catch (e) {
