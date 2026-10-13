@@ -3,6 +3,7 @@ export {
   FLASH_ATTENTION_BLOCK_QUERIES,
   FLASH_ATTENTION_PARAMS_WORDS,
   createWebGpuFlashAttentionShader,
+  createWebGpuTiledFlashAttentionShader,
   flashAttentionDispatch,
   flashAttentionParams,
   flashAttentionStridedParams,

@@ -7,6 +7,7 @@ import {
   flashAttentionDispatch,
   flashAttentionParams,
   flashAttentionStridedParams,
+  createWebGpuTiledFlashAttentionShader,
 } from '../src/flash-attention-kernel.js';
 
 // Generated shader: compile-time head dim and tiles, unrolled registers, workgroup tiles within the
@@ -106,5 +107,22 @@ assert.throws(() => createWebGpuFlashAttentionShader({ headDim: 64, blockKeys: 6
 assert.deepEqual(flashAttentionDispatch({ queryCount: 5184, heads: 16, domains: 1 }), [81, 16, 1]);
 assert.deepEqual(flashAttentionDispatch({ queryCount: 576, heads: 16, domains: 9 }), [9, 16, 9]);
 assert.deepEqual(flashAttentionDispatch({ queryCount: 65, heads: 2, domains: 4 }), [2, 2, 4]);
+
+// Register-tiled variant: 256 threads (16x16) per 64-query block; each thread holds a 4x2 score micro-tile
+// and a 4 x headDim/16 output slice; K/V stream in 32-key tiles through <= 16 KiB of workgroup memory.
+for (const headDim of [64, 128, 256]) {
+  for (const layout of ['packed', 'strided']) {
+    const code = createWebGpuTiledFlashAttentionShader({ headDim, layout });
+    assert.match(code, /@compute @workgroup_size\(256\)/);
+    assert.match(code, /var<workgroup> score_tile: array<f32, 2048>/);
+    assert.match(code, new RegExp(`var o3_${headDim / 16 - 1}: f32`), 'four rows of headDim/16 output registers');
+    assert.doesNotMatch(code, new RegExp(`var o3_${headDim / 16}:`));
+    assert.match(code, /var s3_1: f32/, '4x2 score micro-tile');
+    const shared = Number(code.match(/var<workgroup> stage: array<f32, (\d+)>/)[1]);
+    assert.ok((2048 + shared) * 4 <= 16384, `head dim ${headDim}: workgroup storage`);
+    if (layout === 'strided') assert.match(code, /q_token_stride/);
+  }
+}
+for (const headDim of [8, 72, 130, 272]) assert.throws(() => createWebGpuTiledFlashAttentionShader({ headDim }), /multiple of 16 from 16 to 256/);
 
 console.log('flash attention kernel contracts passed');
