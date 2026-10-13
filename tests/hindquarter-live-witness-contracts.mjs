@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import {validateLiveState} from '../hindquarter-live-witness.mjs';
 const expected={manifest:'a'.repeat(64),source:'b'.repeat(64)};

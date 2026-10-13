@@ -5983,7 +5983,10 @@ try {
     phase = 'scenario-hindquarter-live-transport';
     const { runLiveTransportWitness } = await import('./hindquarter-live-witness.mjs');
     lastEvidence.liveTransport = await runLiveTransportWitness({evaluate,capture:capturePngScreenshot,ws,out,delay,
-      expected:{manifest:args.get('--expected-case-sha256'),source:args.get('--expected-source-sha256')},
+      expected:{manifest:args.get('--expected-case-sha256'),source:args.get('--expected-source-sha256'),
+        ...(args.has('--expected-vertices')?{vertices:Number(args.get('--expected-vertices'))}:{}),
+        ...(args.has('--expected-triangles')?{triangles:Number(args.get('--expected-triangles'))}:{}),
+        ...(args.has('--expected-reference')?{referenceAvailable:args.get('--expected-reference')==='true'}:{})},
       click:dispatchMouseClick,drag:dispatchMouseDrag,
       key:async socket=>{await wsRequest(socket,'Input.dispatchKeyEvent',{type:'keyDown',key:'z',code:'KeyZ',modifiers:2});await wsRequest(socket,'Input.dispatchKeyEvent',{type:'keyUp',key:'z',code:'KeyZ',modifiers:0});},
       progress:state=>{lastEvidence.liveTransportProgress=state;}});

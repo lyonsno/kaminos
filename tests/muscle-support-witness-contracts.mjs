@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import {validateSupportSnapshot,validateCycle} from '../muscle-support-assay-witness.mjs';
 const modes=['transport-field','bone-blend','field-only'];

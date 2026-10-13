@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import {validateHindquarterState} from '../hindquarter-binding-witness.mjs';
 const expected={manifest:'a'.repeat(64),source:'b'.repeat(64)};

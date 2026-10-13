@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import {BufferGeometry,Float32BufferAttribute,Mesh,MeshBasicMaterial} from '../lib/three.core.js';
 import {prepareNavigationGeometry} from '../scene-navigation.mjs';

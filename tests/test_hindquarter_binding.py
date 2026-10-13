@@ -1,3 +1,4 @@
+# kaminos-test: python
 import unittest
 import sys
 from pathlib import Path

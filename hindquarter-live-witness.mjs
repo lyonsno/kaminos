@@ -9,8 +9,9 @@ export function validateLiveState(state,expected){
   assert.equal(state.effectiveSha256,expected.manifest,'wrong effective case');
   assert.equal(state.sourceSha256,expected.source,'wrong source scene');
   assert.equal(state.candidatePaintedWeights,false,'candidate consumed painted fields');
-  assert.equal(state.vertices,50501,'partial cast');assert.equal(state.triangles,86392,'partial topology');
-  assert.equal(state.registeredIds?.length,8,'scene objects not registered');
+  assert.equal(state.vertices,expected.vertices??50501,'partial cast');assert.equal(state.triangles,expected.triangles??86392,'partial topology');
+  if(expected.referenceAvailable!==undefined)assert.equal(state.referenceAvailable,expected.referenceAvailable,'wrong reference availability');
+  assert.equal(state.registeredIds?.length,expected.referenceAvailable===false?7:8,'scene objects not registered');
   assert.equal(state.controls?.length,6,'independent rear controls missing');
   assert.equal(new Set(state.controls.map(b=>b.uuid)).size,6,'duplicate bone objects');
   return state;
@@ -21,7 +22,7 @@ export async function runLiveTransportWitness({evaluate,capture,ws,out,delay,exp
   validateLiveState(state,expected);progress({stage:'loaded',state});
   const conformance=await evaluate(ws,'window.kaminosLiveTransport.conformance()', {timeoutMs:45000});
   assert.equal(conformance.length,10,'missing source pose conformance');
-  assert.ok(conformance.every(row=>row.automaticMaxError<2e-5&&row.paintedMaxError<2e-5),'live geometry differs from its recorded source solve');
+  assert.ok(conformance.every(row=>row.automaticMaxError<2e-5&&(expected.referenceAvailable===false?row.paintedMaxError===null:row.paintedMaxError<2e-5)),'live geometry differs from its recorded source solve or fabricates a painted reference');
   const neutral=await capture(ws,out.replace(/\.png$/,'-neutral.png')),peaks=[];
   for(const name of ['accepted-left-hip','left-stifle','left-hock','left-chain','right-hip','right-stifle','right-hock','right-chain','both-chains']){
     await evaluate(ws,`window.kaminosLiveTransport.preset(${JSON.stringify(name)}); true`);await delay(200);

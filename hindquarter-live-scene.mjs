@@ -11,19 +11,24 @@ export async function mountLiveTransport({casePath,expected,scene,camera,rendere
     async function bytes(name,digest,size){const response=await fetch(`./${casePath}/${name}`,{cache:'no-store'});if(!response.ok)throw Error(`${name}: HTTP ${response.status}`);const buffer=await response.arrayBuffer();if(size!==undefined&&buffer.byteLength!==size)throw Error(`${name}: incomplete bytes`);if(await sha(buffer)!==digest)throw Error(`${name}: digest mismatch`);return buffer;}
     const manifest=validateLiveManifest(JSON.parse(new TextDecoder().decode(await bytes('manifest.json',expected))));
     phase='asset-authentication';
-    const arrays={};for(const name of ['rest.bin','triangles.bin','automatic-weights.bin','painted-weights.bin','blender-reference.bin','automatic-presets.bin']){
+    const paired=manifest.schema==='kaminos.live-transport.v1';
+    const assetNames=['rest.bin','triangles.bin','automatic-weights.bin','automatic-presets.bin'];
+    if(paired)assetNames.push('painted-weights.bin','blender-reference.bin');
+    const arrays={};for(const name of assetNames){
       const asset=manifest.assets[name];if(!asset)throw Error('Missing live asset '+name);const buffer=await bytes(name,asset.sha256,asset.bytes);
       arrays[name]=name==='triangles.bin'?new Uint32Array(buffer):new Float32Array(buffer);
     }
     const rest=arrays['rest.bin'],triangles=arrays['triangles.bin'],automatic=arrays['automatic-weights.bin'],painted=arrays['painted-weights.bin'];
     for(const [name,array]of Object.entries(arrays))if(name!=='triangles.bin'&&array.some(v=>!Number.isFinite(v)))throw Error('Non-finite live asset '+name);
-    if(rest.length!==manifest.vertices*3||triangles.length!==manifest.triangles*3||automatic.length!==manifest.vertices*8||painted.length!==automatic.length||triangles.some(i=>i>=manifest.vertices))throw Error('Incomplete live geometry');
+    if(rest.length!==manifest.vertices*3||triangles.length!==manifest.triangles*3||automatic.length!==manifest.vertices*8||(paired&&painted.length!==automatic.length)||triangles.some(i=>i>=manifest.vertices))throw Error('Incomplete live geometry');
     phase='scene-mount';
     const group=new THREE.Group();group.name='Automatic transport creature';scene.add(group);
-    const referenceGroup=new THREE.Group();referenceGroup.name='Painted comparison';referenceGroup.position.x=2.2;scene.add(referenceGroup);
+    const referenceGroup=paired?new THREE.Group():null;
+    if(referenceGroup){referenceGroup.name='Painted comparison';referenceGroup.position.x=2.2;scene.add(referenceGroup);}
     function mesh(parent,color){const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(rest,3));geometry.setIndex(new THREE.BufferAttribute(triangles,1));geometry.computeVertexNormals();const object=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color,roughness:.72,side:THREE.DoubleSide}));parent.add(object);return object;}
-    const gold=mesh(group,0xd6b17c),gray=mesh(referenceGroup,0xbfc3ca);
-    gold.userData.kaminosDynamicGeometry=true;gray.userData.kaminosDynamicGeometry=true;
+    const gold=mesh(group,0xd6b17c),gray=paired?mesh(referenceGroup,0xbfc3ca):null;
+    const skins=[gold,...(gray?[gray]:[])];
+    for(const skin of skins)skin.userData.kaminosDynamicGeometry=true;
     const bones=new Map(),inverseRest=new Map(),saved=new Map(),helpers=[];
     for(const spec of manifest.bones){
       const bone=new THREE.Bone();bone.name=spec.name;bones.set(spec.name,bone);
@@ -42,7 +47,7 @@ export async function mountLiveTransport({casePath,expected,scene,camera,rendere
     group.updateMatrixWorld(true);
     const id='live-transport-creature',referenceId='live-transport-painted';
     register(group,{id,type:'mesh',fileName:'Automatic transport creature',source:null,label:'Gold · automatic transport · temporary live rig'});
-    register(referenceGroup,{id:referenceId,type:'mesh',fileName:'Painted reference',source:null,label:'Gray · original painted weights · same live pose'});
+    if(referenceGroup)register(referenceGroup,{id:referenceId,type:'mesh',fileName:'Painted reference',source:null,label:'Gray · original painted weights · same live pose'});
     const records=[];
     for(const [name,bone]of bones){if(name==='pelvis')continue;const boneId='live-bone:'+name;register(bone,{id:boneId,type:'rig-bone',source:null,fileName:name,label:name});records.push({id:boneId,name,uuid:bone.uuid});}
     let cached='',lastGood=new Map();
@@ -53,9 +58,10 @@ export async function mountLiveTransport({casePath,expected,scene,camera,rendere
       const key=matrices.flat().join(',');if(key===cached)return;
       const start=performance.now();
       try{
-        const goldResult=skinTransport(rest,automatic,matrices),grayResult=skinTransport(rest,painted,matrices);
-        gold.geometry.attributes.position.array.set(goldResult);gray.geometry.attributes.position.array.set(grayResult);
-        for(const object of [gold,gray]){object.geometry.attributes.position.needsUpdate=true;object.geometry.computeVertexNormals();object.geometry.computeBoundingSphere();object.geometry.computeBoundingBox();}
+        const goldResult=skinTransport(rest,automatic,matrices);
+        gold.geometry.attributes.position.array.set(goldResult);
+        if(gray)gray.geometry.attributes.position.array.set(skinTransport(rest,painted,matrices));
+        for(const object of skins){object.geometry.attributes.position.needsUpdate=true;object.geometry.computeVertexNormals();object.geometry.computeBoundingSphere();object.geometry.computeBoundingBox();}
         cached=key;lastGood=new Map([...bones].map(([name,b])=>[name,{position:b.position.clone(),quaternion:b.quaternion.clone(),scale:b.scale.clone()}]));
         state.pose=poseState();state.lastUpdateMs=performance.now()-start;state.updateCount=(state.updateCount??0)+1;
         state.events.push({type:'deformation',pose:state.pose,at:performance.now(),updateMs:state.lastUpdateMs});
@@ -80,23 +86,24 @@ export async function mountLiveTransport({casePath,expected,scene,camera,rendere
     state.status='loaded';state.effectiveSha256=expected;state.sourceSha256=manifest.sourceSha256;
     state.candidatePaintedWeights=false;state.vertices=manifest.vertices;state.triangles=manifest.triangles;
     state.effectiveRoute='index-scene-live-rear-transport';state.rendererBackend=renderer.backend.constructor.name;
-    state.registeredIds=[id,referenceId,...records.map(r=>r.id)];state.bindingRule=manifest.bindingRule;
+    state.registeredIds=[id,...(paired?[referenceId]:[]),...records.map(r=>r.id)];state.bindingRule=manifest.bindingRule;
+    state.referenceAvailable=paired;state.sourceCast=manifest.sourceCast;state.provenance=manifest.provenance??null;
     state.referenceConformance=manifest.referenceConformance;state.acceptedBaseline=manifest.acceptedBaseline;
     state.persistence='temporary registered scene objects; reload/persistent rig authoring not implemented';
     function conformance(){
       const result=[];
       for(let i=0;i<manifest.presets.length;i++){
-        preset(manifest.presets[i].name);const goldArray=gold.geometry.attributes.position.array,grayArray=gray.geometry.attributes.position.array;
-        let automaticError=0,paintedError=0;const offset=i*rest.length;
-        for(let k=0;k<rest.length;k++){automaticError=Math.max(automaticError,Math.abs(goldArray[k]-arrays['automatic-presets.bin'][offset+k]));paintedError=Math.max(paintedError,Math.abs(grayArray[k]-arrays['blender-reference.bin'][offset+k]));}
+        preset(manifest.presets[i].name);const goldArray=gold.geometry.attributes.position.array,grayArray=gray?.geometry.attributes.position.array;
+        let automaticError=0,paintedError=paired?0:null;const offset=i*rest.length;
+        for(let k=0;k<rest.length;k++){automaticError=Math.max(automaticError,Math.abs(goldArray[k]-arrays['automatic-presets.bin'][offset+k]));if(paired)paintedError=Math.max(paintedError,Math.abs(grayArray[k]-arrays['blender-reference.bin'][offset+k]));}
         result.push({name:manifest.presets[i].name,automaticMaxError:automaticError,paintedMaxError:paintedError});
       }
       restore();return result;
     }
-    const digests=async()=>({gold:await sha(gold.geometry.attributes.position.array.buffer),painted:await sha(gray.geometry.attributes.position.array.buffer)});
-    window.kaminosLiveTransport={snapshot,preset,restore,point,gizmoPoints,update,conformance,digests,positions:()=>({gold:Array.from(gold.geometry.attributes.position.array),painted:Array.from(gray.geometry.attributes.position.array)}),manifest};
-    camera.position.set(-3.0,1.4,6.5);controls.target.set(.9,-.6,-1.1);controls.update();
-    setInfo('Gold: automatic transport · Gray: painted reference · click cyan joint/bone, rotate with the scene gizmo. Temporary rig; source untouched.');
+    const digests=async()=>({gold:await sha(gold.geometry.attributes.position.array.buffer),painted:gray?await sha(gray.geometry.attributes.position.array.buffer):null});
+    window.kaminosLiveTransport={snapshot,preset,restore,point,gizmoPoints,update,conformance,digests,positions:()=>({gold:Array.from(gold.geometry.attributes.position.array),painted:gray?Array.from(gray.geometry.attributes.position.array):null}),manifest};
+    camera.position.set(-3.0,1.4,6.5);controls.target.set(paired?.9:.18,-.6,-1.1);controls.update();
+    setInfo(`Gold: automatic transport · ${paired?'Gray: painted reference':manifest.sourceCast+' · no painted reference'} · click cyan joint/bone, rotate with the scene gizmo. Temporary rig; source untouched.`);
     return {update,pick,group,bones,restore};
   }catch(error){state.status='failed';state.failurePhase=phase;state.error=error.message;throw error;}
 }

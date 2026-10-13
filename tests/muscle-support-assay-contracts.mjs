@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import {createFixture, createTracker, diagnostics, field, boneField} from '../muscle-support-assay-core.mjs';
 
