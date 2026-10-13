@@ -4612,6 +4612,7 @@ let sceneObjects = [];
 let sceneNavigation = null;
 const sceneMembershipEditTargets = new Set();
 const sceneMembershipRetainedObjects = new Map();
+const sceneMembershipDisposers = new WeakMap();
 let localLiquidSetup = null;
 let localLiquidHost = null;
 let localLiquidFailure = null;
@@ -10739,7 +10740,9 @@ function releaseUnreferencedSceneMembershipObjects() {
     if (scenePlacementTools?.edits?.hasHistoryEntry(editId)||scenePlacementTools?.edits?.hasHistoryEntry(compoundRetentionTargets.get(id))) continue;
     sceneMembershipRetainedObjects.delete(id);
     if (!sceneObjects.some(record => record.id === id && record.object === entry.object)) {
-      if(entry.type==='light')disposeSceneSpotLight(id);else disposeObjectTree(entry.object);
+      const disposeTree = sceneMembershipDisposers.get(entry.object) || disposeObjectTree;
+      sceneMembershipDisposers.delete(entry.object);
+      if(entry.type==='light')disposeSceneSpotLight(id);else disposeTree(entry.object);
     }
   }
 }
@@ -10913,7 +10916,10 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
     && (scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(id))||scenePlacementTools?.edits.hasHistoryEntry(compoundRetentionTargets.get(id)))
     && (preserveForMembershipHistory || scenePlacementTools.edits.state().replaying)
   ));
-  if (retainForMembershipHistory) sceneMembershipRetainedObjects.set(id, entry);
+  if (retainForMembershipHistory) {
+    sceneMembershipRetainedObjects.set(id, entry);
+    if (disposeTree !== disposeObjectTree) sceneMembershipDisposers.set(entry.object, disposeTree);
+  }
   else {if(entry.type===PROCEDURAL_MESH_TYPE){proceduralMeshes.get(id)?.dispose();proceduralMeshes.delete(id);}else if(entry.type==='light')disposeSceneSpotLight(id);else disposeTree(entry.object);}
   const fallback = wasActive ? (sceneObjects[index] || sceneObjects[index - 1] || null) : sceneObjects.find(obj => obj.id === activeSceneObjectId);
   if(sceneSelection.ids.length){setSceneSelection(sceneSelection.ids,sceneSelection.activeId);}
@@ -12107,7 +12113,9 @@ async function initScene() {
     removeObject:handle=>{
       const row=sceneObjects.find(row=>row.id===handle.id);
       if(!row||row.object!==handle.root)return false;
-      return removeSceneObjectInternal(handle.id,{recordHistory:false,preserveForMembershipHistory:true,
+      const hasMembershipHistory=Boolean(scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(handle.id))
+        || scenePlacementTools?.edits.hasHistoryEntry(compoundRetentionTargets.get(handle.id)));
+      return removeSceneObjectInternal(handle.id,{recordHistory:false,preserveForMembershipHistory:hasMembershipHistory,
         disposeTree:root=>disposeOwnedSceneTree(root,[scene,...[...sceneMembershipRetainedObjects.values()].map(row=>row.object)],[scene.environment,scene.background])});
     },
     redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame,
