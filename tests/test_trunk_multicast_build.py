@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -38,5 +39,22 @@ class TrunkBuildContracts(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 with self.assertRaisesRegex(ValueError,'alias'):module.build(args)
             self.assertEqual(Path(control['path']).read_bytes(),original)
+
+    def test_empty_cohort_report_cannot_overwrite_inputs_or_aliases(self):
+        for target in ['inputs.json','control.json','frame.json','poses.json','motion.json','symlink','hardlink']:
+            with self.subTest(target=target),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);args,control=fixture(root)
+                retained=root/target if target not in ['symlink','hardlink'] else Path(control['path'])
+                original=retained.read_bytes()
+                if target=='symlink':
+                    report=root/'report-alias.json';report.symlink_to(retained)
+                elif target=='hardlink':
+                    report=root/'report-alias.json';os.link(retained,report)
+                else:report=retained
+                args.report=str(report)
+                with contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(io.StringIO()):
+                    with self.assertRaises(ValueError):module.build(args)
+                self.assertEqual(retained.read_bytes(),original,'empty-cohort report replaced protected input')
+                self.assertFalse((Path(args.out)/'catalog.json').exists())
 
 if __name__=='__main__':unittest.main()

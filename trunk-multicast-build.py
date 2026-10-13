@@ -31,6 +31,7 @@ def build(args):
             if not c['slug'].replace('-','').isalnum():raise ValueError('invalid output slug')
             leaves.extend(out/(c['slug']+'-'+mode) for mode in ['point','distributed'])
         paths_known=True;report['phase']='output-protection'
+        full.protect_output_file(report_path,protected)
         if report_path.resolve()==out/'catalog.json':raise ValueError('report collides with catalog')
         full.protect_output_file(out/'catalog.json',protected)
         for leaf in leaves:
@@ -104,6 +105,7 @@ def build(args):
     finally:
         try:
             if not paths_known:raise ValueError('protected paths unresolved')
+            full.protect_output_file(report_path,protected)
             for leaf in leaves:full.protect_report_destination(report_path,leaf,protected,True)
             if report_path.resolve()==out/'catalog.json':raise ValueError('report collides with catalog')
         except ValueError as error:
