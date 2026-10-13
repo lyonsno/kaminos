@@ -119,14 +119,26 @@ test('AO is attached to material indirect lighting, not multiplied over lit outp
     clamp(a,b) { return this.max(a).min(b); }
   }
   const float = v => new Scalar(v), scenePass = float(10);
-  const c = vm.createContext({ scenePass, denoisePass:{r:float(0.2)}, aoIntensity:float(3), float,
-    mix:(a,b,t)=>float(a).mul(float(1).sub(t)).add(float(b).mul(t)), vec3:float, vec4:float,
-    builtinAOContext: ao => ({ ao }),
-    texture: () => ({ r: float(0.2) }), denoiseResolved: { value: {} }, screenUV: {},
-  });
-  const output = vm.runInContext(between('  const aoVisibility =', '  const sceneGI =') + '\nscenePass;',c);
-  assert.equal(Number(output),10,'direct/emissive scene output must not receive a post-lighting AO multiplier');
-  assert.ok(scenePass.contextNode?.ao,'material AO hook must remain active');
+  function outputFor(pageSource) {
+    const part=(a,b)=>pageSource.slice(pageSource.indexOf(a),pageSource.indexOf(b,pageSource.indexOf(a)));
+    const pass=float(10),pipeline={};
+    const c=vm.createContext({scenePass:pass,aoIntensity:float(3),float,
+      mix:(a,b,t)=>float(a).mul(float(1).sub(t)).add(float(b).mul(t)),
+      builtinAOContext:ao=>({ao}),texture:()=>({r:float(.2)}),denoiseResolved:{value:{}},screenUV:{},
+      sceneGISettings:{mode:'gtao',view:'scene'},sceneGI:{},document:{body:{dataset:{}}},prePassDepth:{},
+      giOutputGraphs:new Map(),renderPipeline:pipeline,isFireLightFieldRoute:()=>false,
+      fireLightFieldRouteParams:()=>new URLSearchParams(),selectionFeedback:{output:value=>value},refreshRenderingControls(){}});
+    vm.runInContext(part('  const aoVisibility =','  const sceneGI =')
+      +'\n'+part('  function rebuildSceneGIOutput() {','  updateSceneGI =')+'\nrebuildSceneGIOutput();',c);
+    assert.ok(pass.contextNode?.ao,'material AO hook must remain active');
+    return Number(pipeline.outputNode);
+  }
+  const preservesLitOutput=pageSource=>assert.equal(outputFor(pageSource),10,'direct/emissive scene output must not receive a post-lighting AO multiplier');
+  preservesLitOutput(source);
+  const normal='const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;';
+  const injected=source.replace(normal,normal.replace(': scenePass;',': scenePass.mul(aoOutput);'));
+  assert.notEqual(injected,source,'negative injection reaches the actual final output');
+  assert.throws(()=>preservesLitOutput(injected),/direct\/emissive scene output/,'the harness must fail when final lighting is incorrectly attenuated');
 });
 
 test('rim light has authorable controls and is saved independently of map recipes', () => {

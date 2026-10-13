@@ -3722,7 +3722,7 @@ import { resolveSceneGISettings } from './scene-gi-settings.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances} from './scene-collision-debug.mjs';
-import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID} from './scene-fire-domain.mjs';
+import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema} from './scene-fire-domain.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue } from './flame-authoring.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
@@ -30461,7 +30461,14 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   if(restorePlan.fireSettings) {
     // The basin is a boot/migration dependency. Authored records own the saved
     // coefficients; a changed page default or basin cannot replace them.
-    writeFlameSettingsState({...restorePlan.fireSettings,sourcePose:flameEmitterPose,source:activeVolumeSettingsPresetReceipt});
+    const schemaStage=await sceneLoadRequests.awaitStage(loadRequestId,(async()=>{
+      const response=await fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'});
+      if(!response.ok)throw Error('Fire settings schema lookup failed');
+      return response.json();
+    })());
+    if(!schemaStage.current)return;
+    const fireSettings=projectFireSettingsToSchema(restorePlan.fireSettings,schemaStage.value);
+    writeFlameSettingsState({...fireSettings,sourcePose:flameEmitterPose,source:activeVolumeSettingsPresetReceipt});
   }
 
   if (legacyBurner?.enabled !== false && legacyBurner && !objectRecords.some(record=>record.type===PROCEDURAL_MESH_TYPE)) migrateLegacyBurner(legacyBurner);

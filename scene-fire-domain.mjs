@@ -1,5 +1,6 @@
 // Authored fire records. The single-domain engine consumes these through an
 // adapter; its buffers, bricks and evolving gas are not document identity.
+import {validatePresetSchema} from './volume-settings-preset-contract.mjs';
 import {checkedPose} from './scene-edit-session.mjs';
 import {normalizeFlameDomainTranslation,normalizeFlameDomainScale} from './scene-flame-emitter.mjs';
 export const FIRE_DOMAIN_ID='flame-field';
@@ -69,4 +70,19 @@ export function readFireObjects(objects,renderSettings){
  const rendering=controls(renderSettings?.domControls??{},'scene rendering settings');
  for(const id of Object.keys(rendering))if(fireControlOwner(id)!=='scene')throw Error(`Fire control ${id} conflicts with scene rendering owner`);
  return {domain,frame:fireDomainFrame(domain),settings:{domControls:{...rendering,...clone(domain.simulation.settings),...clone(domain.volumeMaterial.settings),...clone(supply)},rendererControls:controls(renderSettings?.rendererControls,'renderer settings'),presentationControls:controls(renderSettings?.presentationControls,'presentation settings')}};
+}
+
+// A saved fire record owns every existing value. Schema growth may only add
+// declared defaults introduced after that record's complete control inventory.
+export function projectFireSettingsToSchema(settings,rawSchema){
+ const schema=validatePresetSchema(rawSchema),result=clone(settings);
+ const saved=controls(result.domControls,'settings'),count=Object.keys(saved).length;
+ const inventory=new Set(schema.controls.map(entry=>entry.key));
+ for(const id of Object.keys(saved))if(!inventory.has(id))throw Error(`Unsupported authored fire control ${id}`);
+ for(const entry of schema.controls){
+  if(Object.hasOwn(saved,entry.key))continue;
+  if(!Object.hasOwn(entry,'additiveDefault')||!Number.isSafeInteger(entry.additiveSinceControlCount)||entry.additiveSinceControlCount<=count)throw Error(`Missing authored fire control ${entry.key}`);
+  saved[entry.key]={id:entry.key,param:entry.param,tagName:entry.tagName,type:entry.type,value:clone(entry.additiveDefault)};
+ }
+ result.domControls=saved;return result;
 }
