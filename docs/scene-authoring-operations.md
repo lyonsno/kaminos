@@ -165,3 +165,39 @@ Viewport display is saved as `editorDisplay`: separate object outline, simulatio
 Load identifies scenes by their saved filename, with the internal scene/look label underneath. The default cross-server library includes lane/consumer/scenes stores. Importing a fire scene retains its verified immutable pinned basin from the sibling basin store as well as existing mesh dependencies; it never changes source-store files or aliases. Missing/invalid basin dependencies fail the import visibly.
 
 Fire & smoke's Quality section groups simulation grid, ray count, adaptive rays and screen resolution. Screen resolution is displayed as 10–100 percent of raymarch width/height; its saved `volume-render-scale` remains a fractional `.1..1` scene-rendering setting. The full-range source slider and authoring field share one value, with percent conversion only at the inspector boundary. Relative scrubbing, typing, Escape and chronological undo use the existing flame edit session. The collision section reports the matching voxel grid. Current fire collisions voxelize and upload at solver grid dimensions and use integer cell-coordinate texture loads; there is no independent voxel-resolution input in this route.
+
+
+## Fire obstacles and volume height
+
+A selected ordinary mesh has **Physics → Fire & smoke obstacle**. This writes
+`collision: {domainId: "flame-field", enabled: true}` on that same authored
+object; geometry, materials, source provenance and placement remain separate.
+The field's **Scene collisions** switch enables the chosen obstacles together.
+New primitives and imports start without collision participation. Older kiln
+scenes retain their existing kiln collision when reopened. Version 10 saves the
+explicit membership; versions before 9 reconstruct their domain from the saved
+flame composition before validating that membership.
+
+```js
+const id = window.kaminosSceneAuthoring.addMesh('box', {
+  width: 0.6, height: 0.08, depth: 0.6,
+});
+window.kaminosSetSceneObjectTransform(id, {position: [0, 0.3, 0]});
+window.kaminosSceneAuthoring.setCollision(id, true);
+await window.kaminosSceneEdits.undo(); // restores collision membership
+```
+
+Human and scripted membership changes share scene history and persistence.
+The engine fills each selected object's solid independently and unions the
+masks. A pose/geometry edit rebuilds that object's field; unchanged objects are
+reused. Ordinary primitive material edits preserve their collision geometry.
+The live `debugState().sceneCollision` receipt names members and refusal reasons;
+`readSceneCollisionMask()` exposes the installed occupancy, rather than a mesh
+bounding box. The existing supported solver/transport requirements still apply.
+
+**Fire & smoke → Quality → Height / width** projects the existing height control.
+Editing previews the resolved box; Enter, blur or completing a numeric drag
+applies it. Escape restores the prior setting. The same authored-parameter setter
+confirms scripted edits. Height adds/removes cubic-cell rows at fixed pitch;
+world scale changes the pitch. Independent Z depth is not yet supplied by the
+current solver; its mechanism is in the Flame Doctor's next grid slice.
