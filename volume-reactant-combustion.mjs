@@ -87,7 +87,10 @@ export const REACTANT_CONTROL_RANGES = Object.freeze({
   coolingTimeSteps: Object.freeze([5, 300]),
 });
 export const REACTANT_DIAGNOSTIC_CLASSES = Object.freeze(['ambient', 'no-contact', 'too-cold', 'burning', 'depleted']);
-export const REACTANT_DIAGNOSTIC_THRESHOLDS = Object.freeze({ fuel: 1e-3, available: 1e-4, burnRate: 1e-5 });
+// Burning means at least 1e-3 fuel per reference step (on the saved basin the cells
+// above it hold about 90% of all burning); 'no contact' and 'too cold' use the same
+// scale for fuel and for what oxidizer allows to burn.
+export const REACTANT_DIAGNOSTIC_THRESHOLDS = Object.freeze({ fuel: 1e-3, available: 1e-3, burnRate: 1e-3 });
 const MODEL_OVERRIDE_KEYS = Object.freeze(['oxidizerRequirement', 'heatOfCombustion', 'sootYield', 'sootRetirementSteps', 'exchangeDiffusivity', 'inletOxidizer', 'appearanceBurnReference', 'ignitionLow', 'ignitionHigh']);
 
 function clamp(value, lo, hi) { return Math.min(hi, Math.max(lo, value)); }
