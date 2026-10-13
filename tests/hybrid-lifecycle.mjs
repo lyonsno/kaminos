@@ -47,5 +47,9 @@ assert.throws(()=>consume(field),/injected preparation failure/);assert.equal(mo
 const failedProjectionCount=passes.filter(p=>p==='reproject world BVH without CPU rebuild').length;
 failPass=null;consume(field);
 assert.equal(passes.filter(p=>p==='reproject world BVH without CPU rebuild').length,failedProjectionCount+1,'retry must re-encode an abandoned transform');
+mesh.position.x=3;failPass='live distributed flame transport';assert.throws(()=>consume(field),/injected/);
+mesh.position.x=2;failPass=null;consume(field);const restoredCount=passes.filter(p=>p==='reproject world BVH without CPU rebuild').length;
+mesh.position.x=3;consume(field);
+assert.equal(passes.filter(p=>p==='reproject world BVH without CPU rebuild').length,restoredCount+1,'returning to a committed pose must discard a different pending transform');
 mesh.material.color.setHex(0xff0000);mount.dispose();assert.equal(mesh.material.color.getHex(),0xff0000);assert.equal(mesh.geometry,geometry);assert.equal(mount.canRender(),false);assert.equal(hostFrame,null);
 console.log('hybrid lifecycle and honest rebuild boundaries passed');
