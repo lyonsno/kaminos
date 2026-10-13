@@ -6,10 +6,10 @@ import test from "node:test";
 
 const repoRoot = process.env.KAMINOS_ROOT ?? path.resolve(import.meta.dirname, "..");
 
-async function assembled() {
+async function assembled(options) {
   const { assemblePagesSite } = await import(path.join(repoRoot, "scripts", "assemble-pages-site.mjs"));
   const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "kaminos-pages-")), "_site");
-  assemblePagesSite(out);
+  assemblePagesSite(out,options);
   return out;
 }
 
@@ -119,4 +119,20 @@ test("Material Photograph publishes real results and renderer assets without loc
   assert.equal(config.GENERATION_AVAILABLE,false,"public generation needs hosted weights");
   assert.ok(!fs.existsSync(path.join(site,"scratch")));
   assert.ok(!walk(site).some(file=>/\.py$|(?:^|\/)node_modules\/|(?:^|\/)weights\.bin$/.test(file)));
+});
+
+test("a pinned hosted package enables the public own-photo route without publishing local weights",async()=>{
+  const supermatWeightsUrl='https://huggingface.co/BasinShapers/supermat-webgpu-weights/resolve/'+ 'a'.repeat(40)+'/f16/';
+  const site=await assembled({supermatWeightsUrl});
+  const config=await import(path.join(site,'inference-kit','material-photo','deployment.js'));
+  assert.equal(config.GENERATION_AVAILABLE,true);
+  assert.equal(config.SUPERMAT_WEIGHTS_URL,supermatWeightsUrl);
+  assert.ok(!fs.existsSync(path.join(site,'scratch')));
+});
+
+test("public generation rejects mutable, local and credential-bearing package URLs",async()=>{
+  for(const supermatWeightsUrl of ['/scratch/weights/','https://huggingface.co/owner/model/resolve/main/f16/',
+    'https://user:secret@huggingface.co/owner/model/resolve/'+ 'a'.repeat(40)+'/f16/']){
+    await assert.rejects(assembled({supermatWeightsUrl}),/pinned.*Hugging Face/i);
+  }
 });
