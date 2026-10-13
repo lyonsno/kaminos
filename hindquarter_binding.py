@@ -1,6 +1,7 @@
 """Geometry-only binding against a provisional rig-relative support carrier."""
 import argparse
 import hashlib
+import heapq
 import json
 import time
 from pathlib import Path
@@ -86,7 +87,7 @@ def field(points,specs,matrix,partition=False,contributors=None):
     g=np.sum(weights[:,:,None]*np.asarray(gradients),axis=0)
     return (d,g,np.sum(weights*np.asarray(mobilities),axis=0),weights) if partition else (d,g)
 
-def regional_domain(positions,control):
+def spatial_domain(positions,control):
     j={name:np.asarray(point,dtype=float) for name,point in control['joints'].items()}
     h,k,a=(j['hindlimb-left-'+name] for name in ['hip','stifle','hock'])
     distal_end=a+np.array([0,float(control['bounds']['min'][1])-a[1]-.15,.10])
@@ -97,20 +98,67 @@ def regional_domain(positions,control):
     side=smooth(((positions-mid)@direction+.12)/.24)
     return radial*side
 
+def surface_domain(positions,edges,control):
+    joints={name:np.asarray(point,dtype=float) for name,point in control['joints'].items()}
+    targets=[]
+    for side,sign in [('left',-1),('right',1)]:
+        hip,knee,hock=(joints['hindlimb-'+side+'-'+name] for name in ['hip','stifle','hock'])
+        targets.append([hip+.55*(knee-hip)+[sign*.14,0,0],knee+.5*(hock-knee)+[sign*.10,0,0],
+                        np.array([hock[0]+sign*.06,control['bounds']['min'][1]+.08,hock[2]])])
+    left_seeds=[int(np.argmin(np.sum((positions-target)**2,axis=1))) for target in targets[0]]
+    right_seeds=[int(np.argmin(np.sum((positions-target)**2,axis=1))) for target in targets[1]]
+    h,k,a=(joints['hindlimb-left-'+name] for name in ['hip','stifle','hock'])
+    end=a+np.array([0,float(control['bounds']['min'][1])-a[1]-.15,.1])
+    distance=np.minimum.reduce([capsule(positions,h,k,0)[0],capsule(positions,k,a,0)[0],capsule(positions,a,end,0)[0]])
+    fixed_seeds=set(np.flatnonzero(distance>1.0).tolist())|set(right_seeds)
+    pelvis=joints['pelvis']
+    torso_targets=[pelvis+[0,.30,-.45],pelvis+[0,.20,.18]]
+    fixed_seeds.update(int(np.argmin(np.sum((positions-target)**2,axis=1))) for target in torso_targets)
+    if set(left_seeds)&fixed_seeds:raise ValueError('conflicting automatically derived surface seeds')
+    adjacency=[[] for _ in positions]
+    for (u,v),length in zip(edges,np.linalg.norm(positions[edges[:,1]]-positions[edges[:,0]],axis=1)):
+        adjacency[u].append((int(v),float(length)));adjacency[v].append((int(u),float(length)))
+    def distances(seeds):
+        result=np.full(len(positions),np.inf);queue=[]
+        for index in seeds:result[index]=0;heapq.heappush(queue,(0,index))
+        while queue:
+            value,index=heapq.heappop(queue)
+            if value!=result[index]:continue
+            for neighbor,length in adjacency[index]:
+                proposed=value+length
+                if proposed<result[neighbor]:result[neighbor]=proposed;heapq.heappush(queue,(proposed,neighbor))
+        return result
+    moving=distances(left_seeds);fixed=distances(fixed_seeds)
+    both=np.isfinite(moving)&np.isfinite(fixed);only_moving=np.isfinite(moving)&~np.isfinite(fixed)
+    fraction=np.zeros(len(positions));fraction[only_moving]=1
+    fraction[both]=fixed[both]/np.maximum(fixed[both]+moving[both],1e-12)
+    t=np.clip((fraction-.15)/.60,0,1);domain=t*t*(3-2*t)
+    unknown=~np.isfinite(moving)&~np.isfinite(fixed)
+    return domain,{'kind':'mesh-geodesic-rig-seeded','movingSeedVertices':left_seeds,'rightSeedVertices':right_seeds,
+                   'fixedSeedCount':len(fixed_seeds),'unseededVertices':np.flatnonzero(unknown).tolist(),
+                   'outsideDistanceFemurs':1.0,'fullMembershipAffinity':.75,'fixedAffinity':.15,
+                   'authority':'automatically derived provisional surface domain, not painted tissue labels'}
+
 def bind_geometry(positions,triangles,control):
     positions=np.asarray(positions,dtype=np.float64);triangles=np.asarray(triangles)
     if control.get('paintedWeightsIncluded') is not False:raise ValueError('painted weights must be excluded')
+    if control.get('domainMethod','spatial') not in ['spatial','surface']:raise ValueError('unknown domain method')
     if positions.ndim!=2 or positions.shape[1]!=3 or not np.isfinite(positions).all():raise ValueError('invalid geometry')
     if triangles.ndim!=2 or triangles.shape[1]!=3 or triangles.min()<0 or triangles.max()>=len(positions):raise ValueError('invalid topology')
     specs=support_specs(control);_,_,weights,contributors=field(positions,specs,np.eye(4),partition=True)
-    domain=regional_domain(positions,control);weights*=domain
-    rest_values,_=field(positions,specs,np.eye(4),contributors=contributors)
     edges=np.unique(np.sort(np.concatenate([triangles[:,[0,1]],triangles[:,[1,2]],triangles[:,[2,0]]]),axis=1),axis=0)
+    if control.get('domainMethod','spatial')=='surface':domain,domain_rule=surface_domain(positions,edges,control)
+    else:
+        domain=spatial_domain(positions,control)
+        domain_rule={'kind':'spatial-chord','innerRadiusFemurs':.30,'outerRadiusFemurs':.62,'bilateralHalfTransitionFemurs':.12,
+                     'distalCoverage':'cast minimum Y with .15 femur margin'}
+    weights*=domain
+    rest_values,_=field(positions,specs,np.eye(4),contributors=contributors)
     rest_edges=positions[edges[:,1]]-positions[edges[:,0]]
     degree=np.bincount(edges.ravel(),minlength=len(positions))
     return {'positions':positions.copy(),'triangles':triangles.copy(),'specs':specs,'weights':weights,
             'restValues':rest_values,'edges':edges,'restEdges':rest_edges,'degree':degree,
-            'contributors':contributors,'domain':domain}
+            'contributors':contributors,'domain':domain,'domainRule':domain_rule}
 
 def partial_rotation(points,matrix,weights):
     # One active joint at the normalized origin. Normalized quaternion blending
@@ -171,7 +219,7 @@ def build(args):
             'input':str(Path(args.input).resolve()),'output':str(out),'effectiveSolver':'numpy-cpu-rest-referenced-field-v1'}
     digest=lambda path:hashlib.sha256(Path(path).read_bytes()).hexdigest()
     try:
-        control=json.loads(Path(args.input).read_text())
+        control=json.loads(Path(args.input).read_text());control['domainMethod']=args.domain_method
         for key in ['geometry','reference']:
             if digest(control[key]['path'])!=control[key]['sha256']:raise ValueError(key+' digest mismatch')
         geom=np.load(control['geometry']['path'])
@@ -205,9 +253,7 @@ def build(args):
             'frames':control['frames'],'joints':control['joints'],'assets':assets,'supports':json_value(binding['specs']),
             'candidatePaintedWeights':False,'referenceRoute':control['referenceRoute'],
             'candidateRoute':'frozen rest support partition + smooth rig-defined regional domain + rotation + iso-value projection + tangential edge relaxation',
-            'domainRule':{'innerRadiusFemurs':.30,'outerRadiusFemurs':.62,'bilateralHalfTransitionFemurs':.12,
-                          'distalCoverage':'domain chord extends to original cast minimum Y with .15 femur margin; support primitive unchanged',
-                          'outside':'fixed rest positions','maskAuthority':'assay-local geometric domain, not painted or inferred anatomy'},
+            'domainRule':{**binding['domainRule'],'outside':'fixed rest positions','maskAuthority':'assay-local geometric domain, not painted or inferred anatomy'},
             'stateRule':'each pose solved from independently generated cast rest state; no temporal sliding memory',
             'bounds':control['bounds'],'metrics':report['metrics'],'sourceGeometrySha256':control['geometry']['sha256'],
             'claim':'provisional three-support hip experiment; no anatomical, packing, production or binding-quality admission'}
@@ -218,5 +264,5 @@ def build(args):
     (out/'build-report.json').write_text(json.dumps(report,indent=2))
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--input',required=True);parser.add_argument('--out',required=True)
+    parser=argparse.ArgumentParser();parser.add_argument('--input',required=True);parser.add_argument('--out',required=True);parser.add_argument('--domain-method',choices=['spatial','surface'],default='spatial')
     build(parser.parse_args())
