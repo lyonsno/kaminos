@@ -45,6 +45,8 @@ try{
    const next=await work.observe('follow-up');report.observations.push({view:name,name:'follow-up',reference:next});save();
    if(name==='desktop'){
     const contact=await page.evaluate(()=>window.__stoneShards.contacts()[0]);
+    const applied=await call('grip',{pieceId:contact.pieceId,faceIndex:contact.faceIndex,point:contact.point});
+    check('native agent grip has applied receipt',applied.gripping==='active');await call('release');
     await page.mouse.move(contact.screen.x,contact.screen.y);await page.mouse.down();
     await page.waitForFunction(()=>window.__stoneShards.experimentStatus().gripping==='active');
     await page.mouse.move(contact.screen.x+160,contact.screen.y-120,{steps:3});await call('step',8);await page.mouse.up();
