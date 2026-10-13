@@ -117,9 +117,12 @@ body[data-workspace="authoring"] #authoring-burner-slot { display:none; }
 
 .authoring-number-wrap { position:relative; display:inline-flex; flex:1; min-width:0; }
 .authoring-number-wrap > input { width:100%; min-width:0; box-sizing:border-box; }
+.authoring-number-fill { display:none; position:absolute; top:1px; bottom:1px; left:1px; width:calc((100% - 2px) * var(--authoring-range-fraction,0)); box-sizing:border-box; border-radius:3px 0 0 3px; background:#69758a80; pointer-events:none; }
+.authoring-number-wrap.has-range > input[readonly] ~ .authoring-number-fill { display:block; }
+.authoring-number-wrap > input.scrubbing ~ .authoring-number-fill { background:#bd985c80; }
 .authoring-number-display { display:none; position:absolute; inset:0; align-items:center; justify-content:flex-end; padding:4px 9px; color:#d6d7db; font:inherit; font-variant-numeric:tabular-nums; pointer-events:none; }
 .authoring-number-wrap > input[readonly] { color:transparent !important; }
-.authoring-number-wrap > input[readonly] + .authoring-number-display { display:flex; }
+.authoring-number-wrap > input[readonly] ~ .authoring-number-display { display:flex; }
 .continuous-drag-cursor { position:fixed; left:0; top:0; width:14px; height:14px; margin:-7px; border:1px solid #fff; border-radius:50%; box-shadow:0 0 0 1px #111; background:#2225; pointer-events:none; z-index:2147483647; }
 .scene-name-input[readonly] { cursor:default; pointer-events:none; }
 #authoring-viewport-settings { position:relative; font-size:11px; }
