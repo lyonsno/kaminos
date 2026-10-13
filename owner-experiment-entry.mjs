@@ -3,7 +3,7 @@ import {loadExperimentContributions,openExperiment} from './workbench-experiment
 /** Discovery is metadata only; opening is explicit and serialized with disposal. */
 export async function installOwnerExperimentEntry({document,root,host,discover,onOpen=()=>{},onChange=()=>{}}) {
  const section=document.createElement('section');section.className='owner-experiment-entry';
- section.innerHTML='<label>Experiment<select aria-label="Fluid experiment"><option value="">Choose an experiment…</option></select></label><button type="button">Refresh experiments</button><div class="owner-experiment-status" role="status"></div><div class="owner-experiment-content"></div>';
+ section.innerHTML='<label>Experiment<select aria-label="Workbench experiment"><option value="">Choose an experiment…</option></select></label><button type="button">Refresh experiments</button><div class="owner-experiment-status" role="status"></div><div class="owner-experiment-content"></div>';
  root.append(section);
  const select=section.querySelector('select'),refresh=section.querySelector('button'),status=section.querySelector('[role=status]'),content=section.querySelector('.owner-experiment-content');
  let definitions=[],current=null,pending=Promise.resolve(),selected=null;

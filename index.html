@@ -4045,12 +4045,18 @@ import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './sce
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
+import {createWorkbenchFrameService,createWorkbenchSceneHost,disposeOwnedSceneTree} from './workbench-scene-host.mjs';
 import { installExperimentWorkspace } from './experiment-workspace.mjs';
 import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, checkedSceneLightRecord, sceneLightRuntimeRecipe } from './scene-rim-light.mjs';
 
 let authoringWorkspace = null;
 let fluidWorkbench = null;
 let ownerExperimentEntry=null, fingerFluidOwnerSetup=null, fingerFluidOwnerIdentity=0,fingerFluidOwnerDefinition=null;
+let workbenchSceneHost=null;
+const workbenchSceneFrames=createWorkbenchFrameService({onError:error=>{
+  window.kaminosWorkbenchSceneFrameError=String(error?.message||error);
+  console.error('Workbench scene frame stopped',error);setInfo('Experiment frame stopped: '+String(error?.message||error));
+}});
 const fluidStepSeconds=()=>fingerFluidBenchConfig?.simulationStepSeconds??KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS;
 const fluidClockStepSeconds=()=>fluidStepSeconds()/(fingerFluidBenchSolver?.getDebugState?.().substeps??1);
 let restoringSceneLight=false;
@@ -10755,7 +10761,7 @@ async function recordSceneObjectInsertion(id) {
 
 window.kaminosRecordSceneObjectInsertion = recordSceneObjectInsertion;
 
-function removeSceneObjectInternal(id, { recordHistory = true, preserveForMembershipHistory = false } = {}) {
+function removeSceneObjectInternal(id, { recordHistory = true, preserveForMembershipHistory = false, disposeTree = disposeObjectTree } = {}) {
   if (id === FLAME_EMITTER_ID) return window.kaminosBurnerAuthoring.remove(id);
   if (recordHistory && scenePlacementTools?.edits.state().replaying) {
     setInfo('Wait for the current scene history action to finish');
@@ -10798,7 +10804,7 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
     && (preserveForMembershipHistory || scenePlacementTools.edits.state().replaying)
   ));
   if (retainForMembershipHistory) sceneMembershipRetainedObjects.set(id, entry);
-  else {if(entry.type===PROCEDURAL_MESH_TYPE){proceduralMeshes.get(id)?.dispose();proceduralMeshes.delete(id);}else if(entry.type!=='light')disposeObjectTree(entry.object);}
+  else {if(entry.type===PROCEDURAL_MESH_TYPE){proceduralMeshes.get(id)?.dispose();proceduralMeshes.delete(id);}else if(entry.type!=='light')disposeTree(entry.object);}
   const fallback = wasActive ? (sceneObjects[index] || sceneObjects[index - 1] || null) : sceneObjects.find(obj => obj.id === activeSceneObjectId);
   if (activeGroupSurvives) {
     setActiveSceneGroup(previousActiveGroupId);
@@ -11941,6 +11947,18 @@ async function initScene() {
     openWorkbenchTab: tab => setActiveTab(tab),
   });
   window.kaminosWorkspace = authoringWorkspace;
+  workbenchSceneHost=createWorkbenchSceneHost({scene,camera,controls,
+    loadAsset:(file,options)=>window.kaminosWorkbenchLoadAsset(file,options),
+    registerObject:registerSceneObject,findObject:root=>sceneObjects.find(row=>row.object===root),
+    removeObject:handle=>{
+      const row=sceneObjects.find(row=>row.id===handle.id);
+      if(!row||row.object!==handle.root)return false;
+      return removeSceneObjectInternal(handle.id,{recordHistory:false,preserveForMembershipHistory:true,
+        disposeTree:root=>disposeOwnedSceneTree(root,[scene,...[...sceneMembershipRetainedObjects.values()].map(row=>row.object)],[scene.environment,scene.background])});
+    },
+    redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame,
+  });
+  window.kaminosWorkbenchSceneState=workbenchSceneFrames.state;
   installFluidWorkbench();
   void installOwnerWorkbenchEntry().catch(error=>{window.kaminosWorkbenchExperimentError=error.message;setInfo("Experiments unavailable: "+error.message);});
 
@@ -12025,6 +12043,7 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
+    workbenchSceneFrames.tick(performance.now());
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
     const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute() || liquidFireCompositionActive;
     updateHybridSplatOverlayFrame();
@@ -14903,7 +14922,11 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry||!fluidWorkbench)return;
   const root=document.getElementById('experiment-owner-slot');
-  const host={controls:{document,installNumberDrag:installRelativeNumberDrag},fluid:{rendererModes:['screen_space_refraction'],
+  const host={controls:{document,installNumberDrag:installRelativeNumberDrag},scene:{async open(){
+    await fluidViewportReady;
+    if(!workbenchSceneHost)throw Error('Shared scene host unavailable');
+    setActiveTab('assets');return workbenchSceneHost.open();
+  }},fluid:{rendererModes:['screen_space_refraction'],
     async open(setup){
       if(fingerFluidOwnerDefinition)setup=restoreOwnerFluidReplay(setup,new URLSearchParams(location.search),fingerFluidOwnerDefinition);
       // Validate before replacing the active water; the producer owns numerical inputs.
