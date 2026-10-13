@@ -13,7 +13,7 @@ const {values:early}=parseArgs({options:{out:{type:'string'}},strict:false});
 const values={...early};
 if(!values.out)throw Error('--out is required');
 const out=path.resolve(values.out),sink=await createDirectorySequenceSink(out);
-let browser,phase='inputs',sequenceFinished=false;const abort=new AbortController();
+let browser,page,phase='inputs',sequenceFinished=false;const abort=new AbortController();
 const cancel=()=>abort.abort();process.on('SIGINT',cancel);process.on('SIGTERM',cancel);
 try{
  await sink.begin({argv:process.argv.slice(2)});
@@ -29,11 +29,13 @@ try{
  const launch=fluidBrowserLaunch({executable:inputs.browser,debugPort:0,userDataDir:out,width:viewport.width,height:viewport.height});
  const {chromium}=await import(pathToFileURL(path.resolve(inputs.playwright)));
  browser=await chromium.launch({executablePath:launch.executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
- const page=await browser.newPage({viewport});page.setDefaultTimeout(0);page.setDefaultNavigationTimeout(0);
+ page=await browser.newPage({viewport});page.setDefaultTimeout(0);page.setDefaultNavigationTimeout(0);
  const errors=[];page.on('pageerror',e=>errors.push(String(e)));
  await page.addInitScript(()=>{window.__kaminosSequenceStartupErrors=[];window.addEventListener('error',e=>window.__kaminosSequenceStartupErrors.push(e.message));window.addEventListener('unhandledrejection',e=>window.__kaminosSequenceStartupErrors.push(String(e.reason)));});
- await page.goto(inputs.url);
- await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id||window.__kaminosSequenceStartupErrors?.length||window.kaminosFingerFluidBenchDebugState?.().status==='error');
+ page.on('console',message=>{if(message.type()==='error')console.error('Browser:',message.text());});
+ phase='navigate';await page.goto(inputs.url);
+ await sink.begin({phase:'owner-startup',inputsFile:path.resolve(values.inputs),url:page.url(),source});
+ await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id||window.__kaminosSequenceStartupErrors?.length||window.kaminosFingerFluidBenchDebugState?.().status==='error'||(document.querySelector('.owner-experiment-status')?.textContent?.startsWith('Unknown experiment:')));
  if(errors.length)throw Error(errors.join('\n'));
  const selected=await page.evaluate(()=>window.kaminosWorkbenchExperiments?.state().id);
  if(selected!==experiment)throw Error('Requested experiment was not opened: '+selected);
@@ -46,6 +48,7 @@ try{
  console.log(JSON.stringify({out,manifest:path.join(out,'sequence.json'),cancelled:abort.signal.aborted}));
 }catch(error){
  // The runner retains its own precise phase. Startup has no primary frame yet.
+ if(page){try{await fs.writeFile(path.join(out,'failure.png'),await page.screenshot());await fs.writeFile(path.join(out,'failure-state.json'),JSON.stringify(await page.evaluate(()=>({url:location.href,owner:window.kaminosWorkbenchExperiments?.state(),clock:window.kaminosFingerFluidBenchSessionState?.(),errors:window.__kaminosSequenceStartupErrors,status:document.querySelector('.owner-experiment-status')?.textContent})),null,2));}catch(captureError){console.error('Failure capture:',String(captureError));}}
  if(phase!=='render-sequence'||sequenceFinished)await sink.finish({status:'failed',complete:false,failurePhase:phase,failure:String(error.stack||error)});
  process.exitCode=1;console.error(String(error.stack||error));
 }finally{
