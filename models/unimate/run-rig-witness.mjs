@@ -1,6 +1,6 @@
 // Import a rigged .glb in the demo page the way a visitor would, then generate on it.
 // Usage: node run-rig-witness.mjs --chrome <exe> --weights <dir> --t5 <dir> --bundle <dir> --rig <file.glb> --out <dir>
-//        [--labels <fixture.json>] [--prompt "An object walks forward."] [--seed 1] [--labeler <zip url>]
+//        [--rest x180] [--labels <fixture.json>] [--prompt "An object walks forward."] [--seed 1] [--labeler <zip url>]
 // Serves the page with the local weights, imports the rig through the page's own path (rule
 // labeller in Pyodide, conditioning, T5 label embeddings), optionally applies the labels and
 // facing pair of an upstream fixture (tests/export-rig-fixtures.py) through the review panel,
@@ -77,6 +77,13 @@ try {
   await browser.evaluate(`fetch('/rig/${encodeURIComponent(file)}').then(r => r.arrayBuffer()).then(b => window.__unimateImportRig(b, ${JSON.stringify(file)})), true`, false);
   report.importSeconds = await rigState('import', 600);
   report.autoLabels = await browser.evaluate('JSON.parse(JSON.stringify(window.__unimateDemo.rig))', false);
+  if (opt('--rest')) {
+    report.phase = 'rest-rotation';
+    await browser.evaluate('window.__unimateDemo.rig = null; true', false);
+    await browser.evaluate(`window.__unimateSetRigRest(${JSON.stringify(opt('--rest'))})`, true);
+    await rigState('rest rotation', 300);
+    report.turnedLabels = await browser.evaluate('JSON.parse(JSON.stringify(window.__unimateDemo.rig))', false);
+  }
   if (opt('--labels')) {
     report.phase = 'apply-labels';
     const fx = JSON.parse(await fsp.readFile(opt('--labels'), 'utf8'));

@@ -156,7 +156,7 @@ const isControlName = name => CONTROL_PREFIXES.some(p => name.startsWith(p)) || 
 
 function skinWeights(gltf, skin, nJoints) {
   const { json } = gltf;
-  const max = new Float64Array(nJoints);
+  const max = new Float64Array(nJoints), sum = new Float64Array(nJoints);
   const scaleOf = { 5121: 1 / 255, 5123: 1 / 65535, 5126: 1 };
   let meshes = 0;
   for (const node of json.nodes) {
@@ -166,12 +166,12 @@ function skinWeights(gltf, skin, nJoints) {
         const joints = readAccessor(gltf, prim.attributes[`JOINTS_${set}`]);
         const wAcc = prim.attributes[`WEIGHTS_${set}`];
         const weights = readAccessor(gltf, wAcc), ws = scaleOf[json.accessors[wAcc].componentType] ?? 1;
-        for (let i = 0; i < joints.length; i++) { const w = weights[i] * ws; if (w > max[joints[i]]) max[joints[i]] = w; }
+        for (let i = 0; i < joints.length; i++) { const w = weights[i] * ws; sum[joints[i]] += w; if (w > max[joints[i]]) max[joints[i]] = w; }
         meshes++;
       }
     }
   }
-  return { max, meshes };
+  return { max, sum, meshes };
 }
 
 export function importRig(gltf, { skinIndex = null, minJoints = 4 } = {}) {
@@ -195,7 +195,19 @@ export function importRig(gltf, { skinIndex = null, minJoints = 4 } = {}) {
   // Bones: joints and the nodes between them and the armature, in depth-first order from the root.
   const boneSet = new Set();
   for (const j of jointNodes) for (let p = j; p !== undefined && p !== armature; p = parentOf.get(p)) boneSet.add(p);
-  const roots = [...boneSet].filter(b => !boneSet.has(parentOf.get(b)));
+  // Several root bones: keep the one whose subtree carries the most skin weight (summed over
+  // vertices), as UniMate's export does (blender_export.prune_secondary_roots).
+  const { max: jointWeight, sum: jointWeightSum, meshes } = skinWeights(gltf, skin, jointNodes.length);
+  const jointSlot = new Map(jointNodes.map((n, j) => [n, j]));
+  let roots = [...boneSet].filter(b => !boneSet.has(parentOf.get(b)));
+  const secondary = [];
+  if (roots.length > 1) {
+    const subtree = r => { const out = []; for (const st = [r]; st.length;) { const b = st.pop(); out.push(b); st.push(...(json.nodes[b].children ?? []).filter(c => boneSet.has(c))); } return out; };
+    const weightOf = r => subtree(r).reduce((w, b) => w + (jointSlot.has(b) ? jointWeightSum[jointSlot.get(b)] : 0), 0);
+    const best = roots.reduce((a, b) => (weightOf(b) > weightOf(a) ? b : a));
+    for (const r of roots) if (r !== best) for (const b of subtree(r)) { boneSet.delete(b); secondary.push(json.nodes[b].name ?? `Node_${b}`); }
+    roots = [best];
+  }
   if (roots.length !== 1) throw new Error(`the rig has ${roots.length} root bones; UniMate needs one`);
   const order = [];
   for (const stack = [roots[0]]; stack.length;) {
@@ -218,8 +230,6 @@ export function importRig(gltf, { skinIndex = null, minJoints = 4 } = {}) {
     jointNodes.forEach((n, j) => ibm.set(n, Array.from(ibmData.subarray(j * 16, j * 16 + 16))));
   }
   const armatureWorld = armature === undefined ? identity() : ancestors(armature).reduce((m, n) => multiply(m, nodeMatrix(json.nodes[n])), identity());
-  const { max: jointWeight, meshes } = skinWeights(gltf, skin, jointNodes.length);
-  const jointSlot = new Map(jointNodes.map((n, j) => [n, j]));
   let bones = order.map(b => {
     const p = parentOf.get(b), pKey = boneSet.has(p) ? p : (armature ?? 'root');
     const local = ibmData && ibm.has(b) && ibm.has(pKey) ? multiply(ibm.get(pKey), invert(ibm.get(b))) : nodeMatrix(json.nodes[b]);
@@ -232,7 +242,7 @@ export function importRig(gltf, { skinIndex = null, minJoints = 4 } = {}) {
   bones[0].local = { r: rootWorld.r, t: [0, 1, 2].map(i => (multiply(armatureWorld, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, ...bones[0].local.t, 1])[12 + i]) / armScale) };
 
   // Pruning.
-  const pruned = [];
+  const pruned = [...secondary];
   const childrenOf = list => { const ch = list.map(() => []); list.forEach((b, j) => { if (b.parent >= 0) ch[b.parent].push(j); }); return ch; };
   const meanBone = list => { const l = list.slice(1).map(b => Math.hypot(...b.local.t)).filter(x => x > 1e-6); return l.length ? l.reduce((a, b) => a + b) / l.length : 1; };
   const prunable = (b, leaf, mbl) => {

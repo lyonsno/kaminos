@@ -69,6 +69,11 @@
   <details class="rig" id="rig-review" hidden>
     <summary>Joint labels and facing <span id="rig-summary"></span></summary>
     <div class="rig-face">
+      <span id="skin-label" hidden>Skin</span><select id="rig-skin" hidden></select>
+      <span>Rest pose</span><select id="rig-rest">
+        <option value="">as authored</option><option value="x180">upside down: turn x180</option>
+        <option value="x90">lying on its back: turn x90</option><option value="x-90">lying on its front: turn x-90</option>
+      </select>
       <span>Right side</span><select id="face-right"></select>
       <span>Left side</span><select id="face-left"></select>
       <span></span><label style="margin:0"><input type="checkbox" id="face-axis"> head / tail pair (body axis)</label>
@@ -107,7 +112,7 @@
 </div>
 <script type="module">
 import { createUniMateDemo, decodeClip } from './unimate-demo.js';
-import { readRig, buildSkeletonBundle } from './unimate-rig-import.js';
+import { readRig, buildSkeletonBundle, turnRest } from './unimate-rig-import.js';
 import { createLabeler } from './unimate-rig-labels.js';
 
 const $ = id => document.getElementById(id);
@@ -313,9 +318,16 @@ $('skeleton').addEventListener('change', async () => {
 // page, loaded on first use), build its conditioning and switch generation to it.
 let labelerPromise = null;
 const labelerZip = params.get('labeler') ?? `${hub}/labeler/unimate-labeler.zip`;
-const rigControls = ['generate', 'prompt', 'noise', 'seed', 'rest', 'skeleton', 'rig-apply'];
+const rigControls = ['generate', 'prompt', 'noise', 'seed', 'rest', 'skeleton', 'rig-apply', 'rig-skin', 'rig-rest'];
 function fillRigReview() {
   const { rig, labels } = ownRig;
+  const many = rig.skins.length > 1;
+  $('skin-label').hidden = $('rig-skin').hidden = !many;
+  if (many) {
+    $('rig-skin').replaceChildren(...rig.skins.map(k => new Option(`${k.name} · ${k.joints} joints`, String(k.index))));
+    $('rig-skin').value = String(rig.skinIndex);
+  }
+  $('rig-rest').value = rig.restRotation ?? '';
   $('rig-summary').textContent = `(${rig.names.length} joints${rig.pruned.length ? `, ${rig.pruned.length} helper bones dropped` : ''})`;
   $('rig-table').replaceChildren(...rig.names.flatMap((raw, j) => {
     const name = Object.assign(document.createElement('span'), { className: 'raw', textContent: raw, title: raw });
@@ -345,18 +357,16 @@ async function applyOwnRig() {
   for (const e of clips) e.chip.setAttribute('aria-pressed', 'false');
   const facing = labels.face ? `facing from ${rig.names[labels.face.right]} / ${rig.names[labels.face.left]}` : 'no facing pair found: as authored';
   setStatus(`Ready · ${ownRig.name} · ${facing}`);
-  state.rig = { name: ownRig.name, joints: rig.names.length, pruned: rig.pruned, labels: labels.clean, face: labels.face };
+  state.rig = { name: ownRig.name, joints: rig.names.length, pruned: rig.pruned, labels: labels.clean, face: labels.face,
+    skin: rig.skins?.[rig.skinIndex]?.name ?? null, restRotation: rig.restRotation ?? null };
 }
 async function importRigFile(file) {
   rigControls.forEach(id => { $(id).disabled = true; });
   try {
     setStatus(`Reading ${file.name}…`);
-    const rig = readRig(await file.arrayBuffer());
-    labelerPromise ??= createLabeler({ zipUrl: labelerZip, onStatus: s => setStatus(`Joint labeller: ${s}…`) });
-    const labeler = await labelerPromise.catch(e => { labelerPromise = null; throw e; });
-    setStatus('Labelling joints…');
-    const labels = labeler.label(rig, { name: 'rig' });
-    ownRig = { rig, labels, name: file.name.replace(/\.glb$/i, '') };
+    const bytes = await file.arrayBuffer();
+    const rig = readRig(bytes);
+    ownRig = { bytes, rig, labels: await labelRig(rig), name: file.name.replace(/\.glb$/i, '') };
     fillRigReview();
     await applyOwnRig();
   } catch (e) {
@@ -365,6 +375,29 @@ async function importRigFile(file) {
     setStatus(`Could not use that rig: ${e.message ?? e}`);
   } finally { rigControls.forEach(id => { $(id).disabled = false; }); }
 }
+// UniMate's rule labeller on a rig (labels and facing are computed on its rest pose as turned).
+async function labelRig(rig) {
+  labelerPromise ??= createLabeler({ zipUrl: labelerZip, onStatus: s => setStatus(`Joint labeller: ${s}…`) });
+  const labeler = await labelerPromise.catch(e => { labelerPromise = null; throw e; });
+  setStatus('Labelling joints…');
+  return labeler.label(rig, { name: 'rig' });
+}
+// Another skin or rest turn: re-read, re-label and apply, as a new import would.
+async function reimportOwnRig() {
+  rigControls.forEach(id => { $(id).disabled = true; });
+  try {
+    const skinIndex = $('rig-skin').hidden ? null : Number($('rig-skin').value);
+    const rig = turnRest(readRig(ownRig.bytes, { skinIndex }), $('rig-rest').value || null);
+    ownRig = { ...ownRig, rig, labels: await labelRig(rig) };
+    fillRigReview();
+    await applyOwnRig();
+  } catch (e) {
+    state.rigError = String(e?.message ?? e);
+    setStatus(`Could not use that rig: ${e.message ?? e}`);
+  } finally { rigControls.forEach(id => { $(id).disabled = false; }); }
+}
+$('rig-skin').addEventListener('change', reimportOwnRig);
+$('rig-rest').addEventListener('change', reimportOwnRig);
 $('rig-file').addEventListener('change', () => { const f = $('rig-file').files[0]; $('rig-file').value = ''; if (f && state.phase !== 'load') importRigFile(f); });
 $('rig-apply').addEventListener('click', async () => {
   if (!ownRig) return;
@@ -386,6 +419,8 @@ addEventListener('drop', e => {
 });
 window.__unimateImportRig = async (bytes, name = 'rig.glb') => importRigFile(new File([bytes], name));
 // Witness hook: apply given labels ({ clean: [...] in rig order, face: { right, left, bodyAxis } by raw name }).
+// Witness hook: turn the imported rig's rest pose ('' as authored, 'x180', 'x90', 'x-90').
+window.__unimateSetRigRest = async spec => { $('rig-rest').value = spec; await reimportOwnRig(); };
 window.__unimateApplyRigLabels = async ({ clean, face }) => {
   [...$('rig-table').querySelectorAll('input')].forEach((input, j) => { input.value = clean[j]; });
   const idx = n => String(ownRig.rig.names.indexOf(n));

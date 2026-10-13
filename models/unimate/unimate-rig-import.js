@@ -12,11 +12,45 @@
 import { importRig, parseGlb } from './unimate-rig-glb.js';
 import { bfsOrder, canonicalizeRest, skeletonConditioning, MAX_JOINTS } from './unimate-rig-features.js';
 
-export function readRig(bytes) {
-  const rig = importRig(parseGlb(bytes));
+// skinIndex: which skin to read when the file has several (default: the one with most joints).
+export function readRig(bytes, { skinIndex = null } = {}) {
+  const gltf = parseGlb(bytes);
+  const rig = importRig(gltf, { skinIndex });
+  rig.skins = gltf.json.skins.map((s, i) => ({ index: i, name: s.name ?? `skin ${i}`, joints: s.joints.length }));
+  rig.skinIndex = skinIndex ?? gltf.json.skins.reduce((best, s, i) => (s.joints.length > gltf.json.skins[best].joints.length ? i : best), 0);
   if (rig.names.length < 2) throw new Error('the rig needs at least 2 joints');
   if (rig.names.length > MAX_JOINTS) throw new Error(`UniMate animates up to ${MAX_JOINTS} joints; this rig has ${rig.names.length} after pruning`);
   return rig;
+}
+
+// A rest pose authored lying down or upside down, stood up the way rig_preprocess's
+// --rest_rotation does: spec is comma-separated axis turns applied in order ('x180', 'x90',
+// 'x-90', 'x90,y180'), in degrees about the export's Y-up axes; the whole rest pose turns
+// rigidly with the root's rest transform. Returns a new rig (labels must be redone on it).
+export function quatFromTurns(spec) {
+  let q = [1, 0, 0, 0];
+  for (const part of spec.split(',').map(x => x.trim().toLowerCase()).filter(Boolean)) {
+    const m = part.match(/^([xyz])\s*([+-]?\d+(?:\.\d+)?)$/);
+    if (!m) throw new Error(`rest rotation ${spec}: expected turns like 'x180' or 'x90,y180'`);
+    const half = (Number(m[2]) * Math.PI) / 360, axis = [0, 0, 0];
+    axis['xyz'.indexOf(m[1])] = 1;
+    const t = [Math.cos(half), ...axis.map(v => Math.sin(half) * v)];
+    q = qmul(t, q);
+  }
+  const n = Math.hypot(...q);
+  return q.map(v => v / n);
+}
+function qmul([w1, x1, y1, z1], [w2, x2, y2, z2]) {
+  return [w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2, w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+    w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2, w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2];
+}
+function qrot(q, v) { return qmul(qmul(q, [0, ...v]), [q[0], -q[1], -q[2], -q[3]]).slice(1); }
+export function turnRest(rig, spec) {
+  if (!spec) return rig;
+  const q = quatFromTurns(spec);
+  const restLocalPos = rig.restLocalPos.map((p, j) => (j === 0 ? qrot(q, p) : p));
+  const restLocalRot = rig.restLocalRot.map((r, j) => (j === 0 ? qmul(q, r) : r));
+  return { ...rig, positions: rig.positions.map(p => qrot(q, p)), restLocalPos, restLocalRot, restRotation: spec };
 }
 
 // labels: { clean: label per joint in rig order, face: { right, left, bodyAxis } (rig indices) or null }.

@@ -13,20 +13,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { importRig, parseGlb } from '../unimate-rig-glb.js';
 import { bfsOrder, canonicalizeRest, topology, spectralFeatures } from '../unimate-rig-features.js';
+import { turnRest } from '../unimate-rig-import.js';
 
 const fixtures = process.env.UNIMATE_RIG_FIXTURES, glbs = process.env.UNIMATE_RIG_GLBS;
 if (!fixtures || !glbs || !fs.existsSync(fixtures) || !fs.existsSync(glbs)) {
   console.log(`rig import contracts: SKIPPED (UNIMATE_RIG_FIXTURES=${fixtures ?? ''}, UNIMATE_RIG_GLBS=${glbs ?? ''})`);
   process.exit(3);
 }
-const glbFor = name => fs.readdirSync(glbs).find(f => f.toLowerCase() === `${name}.glb`);
+const glbFor = name => fs.readdirSync(glbs).find(f => f.toLowerCase().replace(/[- ]/g, '_') === `${name.replace(/-/g, '_')}.glb`);
 let checked = 0;
 for (const name of fs.readdirSync(fixtures).filter(d => fs.existsSync(path.join(fixtures, d, 'fixture.json'))).sort()) {
   const fx = JSON.parse(fs.readFileSync(path.join(fixtures, name, 'fixture.json'), 'utf8'));
   const file = glbFor(name);
   assert.ok(file, `${name}: no source GLB in ${glbs}`);
   const bytes = fs.readFileSync(path.join(glbs, file));
-  const rig = importRig(parseGlb(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)));
+  // A fixture made with rig_preprocess --rest_rotation stands the rest pose up the same way.
+  const rig = turnRest(importRig(parseGlb(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))), fx.rest_rotation ?? null);
 
   // Export stage.
   assert.deepEqual(rig.names, fx.export.names, `${name}: exported joints and their order`);
