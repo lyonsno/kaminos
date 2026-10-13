@@ -1,3 +1,5 @@
+import {boxBoundaryDensitySource} from './finger-fluid-box-fixtures.mjs';
+import {viscosityScale} from './finger-fluid-viscosity-scale.mjs';
 import {composeFingerFluidVelocityReads} from './finger-fluid-velocity-composition.mjs';
 import {RIVER_WGSL, riverSample, sampleRiverTerrain} from './finger-fluid-river-playground.mjs';
 import {readIPBFDampingRecordWords} from './finger-fluid-ipbf-damping-evidence.mjs';
@@ -7671,7 +7673,7 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.24,
   );
   if (neighborWeight > 0.0001) {
-    velocity = mix(velocity, neighborVelocity / neighborWeight, restViscosityBlend);
+    velocity = mix(velocity, neighborVelocity / neighborWeight, restViscosityBlend * bitcast<f32>(params.liveInletControl.w));
   }
   velocity = velocity * params.forces.y;
   restStates[index].z = supportRestWeight;
@@ -13353,6 +13355,7 @@ export async function createWebGPUFingerFluidSolver({
   diagnosticDynamics = 'assembled',
   diagnosticPopulation = null,
   diagnosticBox = null,
+  viscosityScaling = 'legacy',
   akinciSupportRadius = null,
   densityCellRejection = false,
   particleRepulsionStrength = 1,
@@ -13397,8 +13400,14 @@ export async function createWebGPUFingerFluidSolver({
   const safeDiagnosticDynamics=resolveFingerFluidDiagnosticDynamics(diagnosticDynamics);
   const reducedDynamics=safeDiagnosticDynamics==='pressure_surface';
   const safeDiagnosticBox=diagnosticBox===null?null:validateFingerFluidReferenceBox(diagnosticBox);
-  if(safeDiagnosticBox&&(!diagnosticPopulation||!reducedDynamics||ipbfBoundaryMode!=='tangent_plane'||(hostFrameComposition&&presentationMode!==KAMINOS_FINGER_FLUID_LOCAL_PRESENTATION_MODE)||supportContactRoute!==KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE))throw new RangeError('Reference box requires finite reduced IPBF water, explicit plane pressure and standalone or shared local presentation');
-  if((reducedDynamics||diagnosticPopulation||akinciSupportRadius!==null)&&(!useIPBF||!useAkinci||adaptiveDensity||truthScene!=='multi_regime_playground'))throw new RangeError('Diagnostic dynamics require fixed-volume IPBF/Akinci analytic playground');
+  const finitePBF=!!safeDiagnosticBox&&!useIPBF;
+  if(finitePBF&&(!diagnosticPopulation||reducedDynamics||adaptiveDensity||truthScene!=='multi_regime_playground'||supportContactRoute!==KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE))throw new RangeError('Finite PBF requires uniform assembled water and analytic box support');
+  if(!finitePBF){
+    if(safeDiagnosticBox&&(!diagnosticPopulation||!reducedDynamics||ipbfBoundaryMode!=='tangent_plane'||(hostFrameComposition&&presentationMode!==KAMINOS_FINGER_FLUID_LOCAL_PRESENTATION_MODE)||supportContactRoute!==KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE))throw new RangeError('Reference box requires finite reduced IPBF water, explicit plane pressure and standalone or shared local presentation');
+    if((reducedDynamics||diagnosticPopulation||akinciSupportRadius!==null)&&(!useIPBF||!useAkinci||adaptiveDensity||truthScene!=='multi_regime_playground'))throw new RangeError('Diagnostic dynamics require fixed-volume IPBF/Akinci analytic playground');
+  }
+  if(viscosityScaling!=='legacy'&&(useIPBF||adaptiveDensity))throw new RangeError('Nominal viscosity scaling requires uniform PBF');
+  viscosityScale(viscosityScaling,simulationStepSeconds,.185);
   if(akinciSupportRadius!==null&&(!Number.isFinite(akinciSupportRadius)||akinciSupportRadius<=0))throw new RangeError('Diagnostic surface support radius must be positive');
   if(reducedDynamics&&(chemistryDiffusion!==0||particleShiftStrength!==0||unsupportedSheetStrength!==0||liveInletPacket!==null))throw new RangeError('Reduced diagnostic core excludes shifting, chemistry, sheet correction and external inlets');
   if(useAkinci&&capillaryStrength===null)throw new RangeError('Akinci experiment requires an explicit surface coefficient');
@@ -13651,6 +13660,9 @@ export async function createWebGPUFingerFluidSolver({
       0.000001,
     ),
   );
+  const simulationGrid=finitePBF?GRID_DIMS.map((n,k)=>Math.max(1,Math.min(n,Math.floor((safeDiagnosticBox.bounds.max[k]-safeDiagnosticBox.bounds.min[k])/(safeKernelRadius*Math.max(1,safeUniformParticleRadiusScale)))))):GRID_DIMS;
+  const representedPopulationVolume=safeBaseParticleCount*safeUniformParticleVolumeScale;
+  let simulatedTimeSeconds=0,lastStepSeconds=null,lastViscosityScale=1;
   const baseParticleData = population?.particleData
     ?? createFingerFluidLiveInletParticles(safeBaseParticleCount, liveInletPacket);
   const particleData = new Float32Array(safeParticleCount * PARTICLE_FLOATS);
@@ -13888,6 +13900,7 @@ export async function createWebGPUFingerFluidSolver({
   }
   computeShader=composeFingerFluidVelocityReads(computeShader,safePressureSolver);
   computeShader=applyFingerFluidDiagnosticDynamics(computeShader,safeDiagnosticDynamics);
+  if(finitePBF)computeShader=computeShader.replace('let particleRadius = kernelRadius * 0.22;',`let particleRadius = ${safeDiagnosticBox.collisionRadius};`).replace(/fn analytic_boundary_density_support[\s\S]*?\n}\n/,boxBoundaryDensitySource(safeDiagnosticBox)+'\n');
   if(safeDiagnosticBox)computeShader=computeShader.replaceAll('params.fluid.x * 0.22',String(safeDiagnosticBox.collisionRadius));
   const effectiveAkinciRadius=akinciSupportRadius??2*Math.cbrt(ipbfParticleVolume);
   if(useAkinci)computeShader+=createAkinciSurfaceShader({volume:ipbfParticleVolume,supportRadius:effectiveAkinciRadius});
@@ -14871,9 +14884,9 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(4, safeParticleCount, true);
     view.setUint32(8, frameIndex, true);
     view.setUint32(12, GRID_CELL_COUNT, true);
-    view.setUint32(16, GRID_DIMS[0], true);
-    view.setUint32(20, GRID_DIMS[1], true);
-    view.setUint32(24, GRID_DIMS[2], true);
+    view.setUint32(16, simulationGrid[0], true);
+    view.setUint32(20, simulationGrid[1], true);
+    view.setUint32(24, simulationGrid[2], true);
     view.setUint32(28, GRID_CELL_COUNT, true);
     (safeDiagnosticBox?.bounds.min??BOUNDS_MIN).forEach((value, index) => view.setFloat32(32 + index * 4, value, true));
     (safeDiagnosticBox?.bounds.max??BOUNDS_MAX).forEach((value, index) => view.setFloat32(48 + index * 4, value, true));
@@ -14917,7 +14930,8 @@ export async function createWebGPUFingerFluidSolver({
     view.setUint32(196, liveInletReleaseEpochFrame, true);
     // Reserved ABI word .z carries the numerical coefficient, read via WGSL bitcast.
     view.setFloat32(200, PBF_REPULSION_COEFFICIENT * (live?.particleRepulsionStrength ?? 0), true);
-    view.setUint32(204, 0, true);
+    lastViscosityScale=viscosityScale(viscosityScaling,dt,safeKernelRadius*safeUniformParticleRadiusScale);
+    view.setFloat32(204,lastViscosityScale,true);
     view.setFloat32(208, safeUniformParticleVolumeScale, true);
     view.setFloat32(212, safeUniformParticleRadiusScale, true);
     view.setFloat32(216, safeUniformVolumeKernelNormalization, true);
@@ -15142,9 +15156,10 @@ export async function createWebGPUFingerFluidSolver({
       ...(pressureControlState?.read()??{}),particleCount:safeParticleCount,particleVolume:ipbfParticleVolume,damping:ipbfDamping,cohesionModel:safeCohesionModel,dt:effectiveSimulationDt};
   }
 
-  function step(dt = 1 / 60) {
+  function step(dt = simulationStepSeconds) {
     if (runtimeLifecycle.stopped) return;
     const startedAt = performance.now();
+    if((finitePBF||viscosityScaling!=='legacy')&&(!Number.isFinite(dt)||dt<1/240||dt>1/30))throw new RangeError('Explicit physics timestep outside solver contract');
     const frameDt = clamp(finite(dt, 1 / 60), 1 / 240, 1 / 30);
     const substepDt = frameDt / safeSubsteps;
     for (let substep = 0; substep < safeSubsteps; substep += 1) {
@@ -15283,7 +15298,7 @@ export async function createWebGPUFingerFluidSolver({
       pressureControlState?.submit(stepCount+1);
       if (timestampQueryIndex !== null) solverGpuTimestampCapture.writtenPairs += 1;
       if (stageQueryBase !== null) solverStageGpuTimestampCapture.writtenPairs += 1;
-      stepCount += 1;
+      stepCount += 1;simulatedTimeSeconds+=substepDt;lastStepSeconds=substepDt;
       frameIndex += 1;
     }
     lastFrameCpuMs = performance.now() - startedAt;
@@ -16047,7 +16062,7 @@ export async function createWebGPUFingerFluidSolver({
         chemistryMass: Number(chemistryMass.toFixed(6)),
         splitCount: interfaceCounters[3],
         mergeCount: interfaceCounters[4],
-        accountingValid: Math.abs(representedVolume - safeBaseParticleCount) <= Math.max(0.001, safeBaseParticleCount * 0.000001),
+        accountingValid: Math.abs(representedVolume - representedPopulationVolume) <= Math.max(0.001, representedPopulationVolume * 0.000001),
       };
       const diffusionMassDrift = chemistryMass - initialChemistryMass - sourceResetMassAdjustment;
       const chemistryMassTolerance = Math.max(0.02, safeParticleCount * 0.000002);
@@ -16424,6 +16439,8 @@ export async function createWebGPUFingerFluidSolver({
     return {
       available: true,
       diagnosticBox: safeDiagnosticBox,
+      simulatedTimeSeconds,lastStepSeconds,
+      viscosityScaling:{mode:viscosityScaling,factor:lastViscosityScale,supportRadius:safeKernelRadius*safeUniformParticleRadiusScale},
       diagnosticDynamics:{requested:diagnosticDynamics,effective:safeDiagnosticDynamics,neighborSmoothing:!reducedDynamics,vorticityConfinement:!reducedDynamics,speedClipping:!reducedDynamics,boundaryVelocityResponse:true,population:diagnosticPopulation?{schema:diagnosticPopulation.schema,fixture:diagnosticPopulation.fixture,refinement:diagnosticPopulation.refinement,source:diagnosticPopulation.source,particleCount:safeBaseParticleCount,particleVolume:ipbfParticleVolume,representedVolume:safeBaseParticleCount*ipbfParticleVolume}:null},
       liquidFireContactCoverage: effectiveLiquidFireContactCoverage,
       solver_backend: 'webgpu_compute',
@@ -16753,10 +16770,10 @@ export async function createWebGPUFingerFluidSolver({
       simulationCapacity: safeParticleCount,
       fixedVolumeReferenceParticleCount: safeFixedVolumeReferenceParticleCount,
       particleVolumeScale: population?.particleVolumeScale ?? 1,
-      representedPopulationVolume: population?.representedVolume ?? safeBaseParticleCount,
+      representedPopulationVolume,
       particleAllocationCapacity,
       particleAllocationPreflight,
-      gridDimensions: [...GRID_DIMS],
+      gridDimensions: [...simulationGrid],
       gridCellCount: GRID_CELL_COUNT,
       densityIterationsPerStep: effectivePressureControls?.densityIterations??safeDensityIterations,
       restDensity: 24.3,
