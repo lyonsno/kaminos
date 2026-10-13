@@ -26570,6 +26570,17 @@ export function createKaminosVolumePrototype({
       return { confinementEpsilonOverride, appliesOn: 'next-frame', previous: state.confinement };
     },
     emissiveCameraState() { return state.physicalColor ? {...state.physicalColor} : null; },
+    // The resolved grid shape and box bounds for a requested height, without
+    // touching the sim: the cockpit and the Kaminos authoring side preview the
+    // box while the height is edited and rebuild only on confirm.
+    previewGridShape(request = {}) {
+      const width = normalizeGridSize(request.resolution ?? controlsSnapshot.resolution);
+      const shape = resolveGridHeight({ gridHeightRatio: request.gridHeightRatio ?? controlsSnapshot.gridHeightRatio }, width);
+      const admission = device ? gridShapeAdmission(shape, device.limits) : { admitted: true, reason: null };
+      const box = raymarchDomainBox(shape.widthCells, shape.heightCells);
+      return { ...shape, admitted: admission.admitted, admissionReason: admission.reason,
+        dimensions: [shape.widthCells, shape.heightCells, shape.widthCells], localMin: box.min, localMax: box.max, applied: shape.widthCells === gridSize && shape.heightCells === gridHeight };
+    },
     debugState() {
       return {
         ...state,

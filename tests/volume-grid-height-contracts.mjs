@@ -93,7 +93,7 @@ test('GH-01: the camera samples the whole box: the raymarch box follows GRID_Y/G
   // The cockpit's flame-domain guide follows the effective top instead of y = 3.
   assert.ok(!index.includes('new THREE.Vector3(1, 3, 1).add(new THREE.Vector3(...flameDomainTranslation))'));
   assert.equal((index.match(/new THREE\.Vector3\(1, flameDomainTopY\(\), 1\)\.add\(new THREE\.Vector3\(\.\.\.flameDomainTranslation\)\)/g) || []).length, 2);
-  assert.match(index, /function flameDomainTopY\(\) \{\n\s+const dims = window\.__kaminosVolumeGridDimensions;\n\s+return Array\.isArray\(dims\) && dims\.length === 3 && dims\[0\] > 0 \? -1 \+ 2 \* dims\[1\] \/ dims\[0\] : 3;/);
+  assert.match(index, /function flameDomainTopY\(\) \{\n\s+const dims = window\.__kaminosVolumeGridPreview\?\.dimensions \?\? window\.__kaminosVolumeGridDimensions;\n\s+return Array\.isArray\(dims\) && dims\.length === 3 && dims\[0\] > 0 \? -1 \+ 2 \* dims\[1\] \/ dims\[0\] : 3;/);
   assert.match(index, /window\.__kaminosVolumeGridDimensions = \[\.\.\.s\.simGridDimensions\];\n\s+refreshFlameDomainGuideBox\(\);/, 'the status writer refreshes the guide when the dimensions change');
 });
 
@@ -178,7 +178,7 @@ test('GH-05: the capture gate compares a height arm with the resolver at the eff
 });
 
 test('cockpit: a width-multiplier height row with help, snapshot, debounced listener, route restore, receipt; schema 249', () => {
-  assert.match(index, /<input type="number" id="volume-grid-height-ratio" data-volume-settings-param="volume_grid_height_ratio" min="1" max="4" step="0\.125" value="2">/);
+  assert.match(index, /<input type="number" id="volume-grid-height-ratio" data-volume-settings-param="volume_grid_height_ratio" data-volume-commit="confirm" min="1" max="4" step="0\.125" value="2">/);
   assert.match(index, /slider-help">Grid height as a multiple of the width\. 2 is what every saved basin was authored at\./);
   assert.match(index, /snapped to the nearest height that keeps the light lattices aligned \(steps of 4 cells at 32 and 64, 12 at 48 and 96\)/);
   assert.match(index, /gridHeightRatio: parseFloat\(volumeRebuildControlValue\('volume-grid-height-ratio'\)\) \|\| 2,/);
@@ -196,14 +196,14 @@ test('cockpit: a width-multiplier height row with help, snapshot, debounced list
   assert.equal(schema.controlCount, 249); assert.equal(schema.controls.length, 249);
 });
 
-// Noah 2026-10-12: anything that rebuilds the sim must not rebuild on every
-// keystroke or spinner click. Review GH-R3-02: delaying only the edited
-// control's own listener was not enough, because every other control's
-// immediate sync read the pending value from the DOM. While an edit waits out
-// the debounce, every sync reads the value the sim already uses; the value
-// applies when the edit has been idle for VOLUME_REBUILD_DEBOUNCE_MS.
-test('cockpit: rebuild controls are held out of every sync until idle (fake clock, the page code)', () => {
-  const start = index.indexOf('// Controls that rebuild the fluid state (Noah 2026-10-12; review GH-R3-02)');
+// Noah 2026-10-12, contract: editing the height previews it (the box bounds
+// scale, the Kaminos authoring side scales its box) and the sim rebuilds only
+// on confirm (Enter or leaving the field); "it's still going through before I
+// hit enter" was the idle-timer debounce. While an edit is pending every sync
+// reads the value the sim already uses (review GH-R3-02); a complete restore
+// supersedes the pending edit (review GH-R4-01).
+test('cockpit: the height previews while edited and applies on confirm (the page code, fake DOM)', () => {
+  const start = index.indexOf('// Controls that rebuild the fluid state apply on confirm');
   const end = index.indexOf('\n}\n', index.indexOf('function supersedeVolumeRebuildHolds(')) + 3;
   assert.ok(start > 0 && end > start, 'the shared rebuild helpers exist');
   const helpers = index.slice(start, end);
@@ -211,60 +211,85 @@ test('cockpit: rebuild controls are held out of every sync until idle (fake cloc
   const wiringEnd = index.indexOf('\n  }\n', wiringStart) + 4;
   assert.ok(wiringStart > 0, 'the wiring exists');
   const wiring = index.slice(wiringStart, wiringEnd);
-  assert.match(helpers, /const VOLUME_REBUILD_DEBOUNCE_MS = 700;/);
-  assert.match(helpers, /const VOLUME_REBUILD_CONTROL_IDS = \['volume-grid-height-ratio', 'volume-resolution'\];/);
+  assert.match(helpers, /const VOLUME_REBUILD_CONTROL_IDS = \['volume-grid-height-ratio'\];/);
+  assert.ok(!helpers.includes('setTimeout'), 'no idle timer');
+  assert.match(index, /<input type="number" id="volume-grid-height-ratio" data-volume-settings-param="volume_grid_height_ratio" data-volume-commit="confirm" min="1" max="4" step="0\.125" value="2">/);
   assert.match(index, /gridHeightRatio: parseFloat\(volumeRebuildControlValue\('volume-grid-height-ratio'\)\) \|\| 2,/);
-  assert.match(index, /resolution: parseInt\(volumeRebuildControlValue\('volume-resolution'\), 10\),/);
-  const immediate = index.slice(index.indexOf("for (const id of ['volume-scene', 'emitter-assay-family',"), index.indexOf("for (const id of ['volume-scene', 'emitter-assay-family',") + 2000);
-  assert.ok(!immediate.split(']) {')[0].includes("'volume-resolution'"), 'resolution leaves the immediate list');
 
-  let now = 0; const timers = [];
   const elements = {};
-  const element = (id, value) => (elements[id] = { value, listeners: {}, addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); } });
-  element('volume-grid-height-ratio', '2'); element('volume-resolution', '48');
+  const element = (id, value) => (elements[id] = { id, value, listeners: {}, addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); } });
+  element('volume-grid-height-ratio', '2');
   const document = { getElementById: id => elements[id] };
-  const setTimeout = (fn, ms) => { const t = { at: now + ms, fn, live: true }; timers.push(t); return t; };
-  const clearTimeout = t => { if (t) t.live = false; };
+  const previews = [];
+  const window = { dispatchEvent: event => previews.push(event.detail) };
+  class CustomEvent { constructor(type, init) { this.type = type; this.detail = init?.detail ?? null; } }
+  const volumePrototype = { previewGridShape: request => ({ request: { ...request }, heightCells: Math.round(Number(request.gridHeightRatio) * 48) }) };
   const applied = [];
-  const run = new Function('document', 'setTimeout', 'clearTimeout', 'record', `
+  const run = new Function('document', 'window', 'CustomEvent', 'volumePrototypeRef', 'record', `
+    const volumePrototype = volumePrototypeRef;
     ${helpers}
-    const syncControls = () => record({ ratio: volumeRebuildControlValue('volume-grid-height-ratio'), resolution: volumeRebuildControlValue('volume-resolution') });
+    const syncControls = () => record(volumeRebuildControlValue('volume-grid-height-ratio'));
     const updateVolumeRebuildControlLabel = () => {};
+    const refreshFlameDomainGuideBox = () => {};
     ${wiring}
     return [syncControls, supersedeVolumeRebuildHolds];`);
-  const [syncControls, supersede] = run(document, setTimeout, clearTimeout, reading => applied.push({ t: now, ...reading }));
-  const advance = to => { for (;;) { const due = timers.filter(t => t.live && t.at <= to).sort((a, b) => a.at - b.at)[0]; if (!due) break; now = due.at; due.live = false; due.fn(); } now = to; };
-  const edit = (id, value) => { elements[id].value = value; for (const fn of elements[id].listeners.input || []) fn({ target: elements[id] }); };
-  syncControls(); // initial sync seats the applied values
-  advance(0); edit('volume-grid-height-ratio', '3');
-  advance(100); syncControls(); // an unrelated immediate control
-  advance(200); edit('volume-grid-height-ratio', '4');
-  advance(300); syncControls();
-  advance(899);
-  assert.deepEqual(applied.map(a => a.ratio), ['2', '2', '2'], 'nothing applies the pending height before it has been idle');
-  advance(900);
-  assert.deepEqual(applied.at(-1), { t: 900, ratio: '4', resolution: '48' }, 'the last edit applies once, 700 ms after it');
-  advance(1000); syncControls();
-  assert.equal(applied.at(-1).ratio, '4', 'later syncs read the applied value');
-  edit('volume-resolution', '64'); advance(1100); syncControls();
-  assert.equal(applied.at(-1).resolution, '48', 'resolution is held the same way');
-  advance(1700);
-  assert.equal(applied.at(-1).resolution, '64');
-  assert.deepEqual(applied.filter(a => a.t >= 200 && a.t <= 900).map(a => a.t), [300, 900], 'one held sync from the other control, one sync from the timer, none from the edits');
-  // Review GH-R4-01: a complete programmatic restore (basin apply, undo, scene
-  // preset) supersedes pending edits: their timers are cancelled, the holds
-  // cleared, and the restored snapshot reaches the runtime in one sync.
-  advance(2000); edit('volume-resolution', '96');
-  advance(2100);
-  supersede();
-  elements['volume-resolution'].value = '128'; elements['volume-grid-height-ratio'].value = '3';
+  const [syncControls, supersede] = run(document, window, CustomEvent, volumePrototype, value => applied.push(value));
+  const control = elements['volume-grid-height-ratio'];
+  const fire = (type, extra = {}) => { for (const fn of control.listeners[type] || []) fn({ target: control, ...extra }); };
+  const type = value => { control.value = value; fire('input'); };
   syncControls();
-  assert.deepEqual(applied.at(-1), { t: 2100, ratio: '3', resolution: '128' }, 'the restore applies its complete snapshot at once');
-  const count = applied.length;
-  advance(3000);
-  assert.equal(applied.length, count, 'the superseded edit timer never fires');
+  type('3'); fire('change'); // typing, then a spinner-style change event
+  syncControls(); // an unrelated immediate control
+  assert.deepEqual(applied, ['2', '2'], 'nothing applies before confirm, not even a change event');
+  assert.equal(previews.at(-1).heightCells, 144, 'the edit is previewed');
+  type('4');
+  fire('keydown', { key: 'Enter' });
+  assert.deepEqual(applied, ['2', '2', '4'], 'Enter applies the pending value once');
+  assert.equal(previews.at(-1), null, 'the preview ends on confirm');
+  type('1.5'); fire('blur');
+  assert.equal(applied.at(-1), '1.5', 'leaving the field confirms');
+  const n = applied.length;
+  fire('blur'); fire('keydown', { key: 'Enter' });
+  assert.equal(applied.length, n, 'a confirm with nothing pending does nothing');
+  type('3'); fire('keydown', { key: 'Escape' });
+  assert.equal(control.value, '1.5', 'Escape restores the applied value');
+  assert.equal(previews.at(-1), null);
+  syncControls(); assert.equal(applied.at(-1), '1.5');
+  type('2.5'); supersede(); control.value = '3.25'; syncControls();
+  assert.equal(applied.at(-1), '3.25', 'a complete restore supersedes the pending edit');
+  assert.equal(previews.at(-1), null);
+  fire('keydown', { key: 'Enter' });
+  assert.equal(applied.at(-1), '3.25', 'and leaves nothing to confirm');
   assert.match(index, /function writeFlameSettingsState\(state\) \{\n  supersedeVolumeRebuildHolds\(\);/);
   assert.match(index, /function applyVolumeScenePreset\(scene, options = \{\}\) \{\n  supersedeVolumeRebuildHolds\(\);/);
+  // The guide box follows the preview while one is pending.
+  assert.match(index, /const dims = window\.__kaminosVolumeGridPreview\?\.dimensions \?\? window\.__kaminosVolumeGridDimensions;/);
+  // The capture confirms controls that need it.
+  assert.match(capture, /if \(e\.dataset\?\.volumeCommit === 'confirm'\) e\.dispatchEvent\(new w\.KeyboardEvent\('keydown', \{ key: 'Enter', bubbles: true \}\)\);/);
+});
+
+// The Kaminos authoring side scales its box from the same law without a rebuild.
+test('previewGridShape: the resolved shape and box bounds without touching the sim', () => {
+  assert.match(closure, /    previewGridShape\(request = \{\}\) \{/);
+  const api = closure.slice(closure.indexOf('    previewGridShape(request = {}) {'), closure.indexOf('    previewGridShape(request = {}) {') + 1400);
+  assert.match(api, /const shape = resolveGridHeight\(\{ gridHeightRatio: request\.gridHeightRatio \?\? controlsSnapshot\.gridHeightRatio \}, width\);/);
+  assert.match(api, /const box = raymarchDomainBox\(shape\.widthCells, shape\.heightCells\);/);
+  assert.match(api, /dimensions: \[shape\.widthCells, shape\.heightCells, shape\.widthCells\], localMin: box\.min, localMax: box\.max, applied: shape\.widthCells === gridSize && shape\.heightCells === gridHeight/);
+  const stub = () => new Proxy(function () {}, {
+    get(target, prop) { if (prop === Symbol.toPrimitive) return () => 0; if (prop === 'then') return undefined; return target[prop] ?? (target[prop] = stub()); },
+    set(target, prop, value) { target[prop] = value; return true; },
+    apply() { return stub(); }, construct() { return stub(); },
+  });
+  globalThis.document = stub(); globalThis.window = globalThis.window || stub();
+  globalThis.requestAnimationFrame = () => 0; globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+  const prototype = core.createKaminosVolumePrototype({ THREE: stub(), viewport: stub(), camera: stub(), controls: stub(), getControls: () => ({ resolution: 48 }), onStatus: () => {} });
+  const preview = prototype.previewGridShape({ gridHeightRatio: 3 });
+  assert.deepEqual(preview.dimensions, [48, 144, 48]);
+  assert.deepEqual(preview.localMax, [1, 5, 1]);
+  assert.equal(preview.applied, false);
+  assert.equal(preview.mode, 'requested');
+  assert.deepEqual(prototype.debugState().simGridDimensions, [48, 96, 48], 'the sim is untouched');
+  assert.equal(prototype.previewGridShape({}).applied, true, 'the applied shape previews as applied');
 });
 
 test('the runtime derives every height from the seated shape: fluid grid, resample, irradiance lattice; the immersed centre range follows the top', () => {
