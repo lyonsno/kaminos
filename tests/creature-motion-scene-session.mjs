@@ -36,3 +36,48 @@ reopened.operations.resume();assert.equal(callbacks.size,1);const stale=[...call
 for(const callback of stale)callback({deltaSeconds:1});assert.equal(callbacks.size,0);assert.equal(roots[2].parent,null);
 assert.equal(unrelated.parent,scene);assert.ok(records.some(r=>r.kind==='creature.hold'&&r.phase==='applied'));
 console.log('Actual owner-session module + creature definition: shared frame/custody/hold/reopen composition passes; native viewport/capture not exercised');
+
+// Review fail-first controls use the actual helper, not a stand-in disposal.
+const failures=[];
+for(const kind of ['delayed-remove','failed-remove','redraw-throw','create-throw']){
+ let release,throwRedraw=false,removed=0;
+ const gate=new Promise(resolve=>{release=resolve;});
+ const root=new THREE.Group(),bone=new THREE.Object3D();bone.name='pelvis';root.add(bone);scene.add(root);
+ root.userData.native_motion=structuredClone(source);
+ const clip=new THREE.AnimationClip('cleanup fixture',1,[new THREE.VectorKeyframeTrack('pelvis.position',[0,1],[0,0,0,0,0,.6])]);
+ const session=createOwnerSceneSession({
+  loadAsset:async()=>({id:`cleanup-${kind}`,root,clips:[clip],owned:true}),attach:()=>{},
+  async remove(){if(kind==='delayed-remove'||kind==='failed-remove')await gate;scene.remove(root);removed++;if(kind==='failed-remove')throw Error('owned removal failed');},
+  redraw(){if(throwRedraw)throw Error('host redraw failed');},
+  readView:()=>view,setView(){throwRedraw=true;throw Error('view rejected');},
+  onFrame:callback=>(callbacks.add(callback),()=>callbacks.delete(callback)),
+ });
+ const fixtureHost={scene:{open:()=>session}};
+ try{
+  if(kind==='create-throw'){
+   let error;try{await definition.create({host:fixtureHost,inputs:{...inputs,view}});}catch(e){error=e;}
+   assert.ok(error,'failed creation is reported');
+   const errors=error instanceof AggregateError?error.errors:[error];
+   assert.ok(errors.some(e=>e.message==='view rejected'),'the original creation error survives cleanup failure');
+   assert.ok(errors.some(e=>e.message==='host redraw failed'),'cleanup notification error remains observable');
+   assert.equal(root.parent,null,'failed create still removes its owned registration');
+  }else{
+   const owner=await definition.create({host:fixtureHost,inputs});
+   if(kind==='redraw-throw')throwRedraw=true;
+   const first=owner.dispose(),second=owner.dispose();
+   let secondSettled=false;const outcome=second.then(()=>{secondSettled=true;return null;},error=>{secondSettled=true;return error;});
+   const firstOutcome=first.then(()=>null,error=>error);
+   if(kind!=='redraw-throw'){
+    await Promise.resolve();await Promise.resolve();
+    assert.equal(secondSettled,false,'repeated close must await the same pending owned removal');
+    assert.equal(root.parent,scene);release();
+   }
+   const [a,b]=await Promise.all([firstOutcome,outcome]);
+   if(kind==='delayed-remove'){assert.equal(a,null);assert.equal(b,null);}
+   else{assert.ok(a);assert.equal(b,a,'all callers receive the same cleanup rejection');}
+   assert.equal(root.parent,null,'host/controller errors must not skip owned session cleanup');assert.equal(removed,1);
+  }
+ }catch(error){failures.push(`${kind}: ${error.message}`);}
+ finally{release();try{await session.dispose();}catch{} }
+}
+assert.deepEqual(failures,[],'owner disposal and failed creation preserve completion, failures and owned cleanup');
