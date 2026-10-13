@@ -8,7 +8,7 @@ test('a group membership write preserves the selection without cancelling its ow
   sceneObjects:[{id:'a',object:{}},{id:'b',object:{}}],sceneGroups:[],sceneSelection:{ids:['a','b'],activeId:'b'},activeSceneObjectId:'b',activeSceneGroupId:null,activeSceneFieldId:null,
   burnerGraphWriting:false,splatCorrectionMode:null,currentMesh:null,transformControls:null,authoringWorkspace:null,groupProxies:new Map(),window:{_kaminosDirty(){}},
   selectedSceneObjectEntry:()=>context.sceneObjects.find(o=>o.id===context.activeSceneObjectId),selectedSceneGroupEntry:()=>null,groupProxy:()=>({}),selectionTransformProxy:()=>({}),
-  renderSceneObjectList(){},updateTransformInspector(){},renderPipelineDock(){},updateSelectionFeedback(){},clearActiveSceneObjectSelection(){context.sceneSelection={ids:[],activeId:null};},
+  renderSceneObjectList(){},updateTransformInspector(){},updateSelectionFeedback(){},clearActiveSceneObjectSelection(){context.sceneSelection={ids:[],activeId:null};},
   sceneSelectionMembers:()=>[...context.sceneSelection.ids],checkedSceneGroups:value=>structuredClone(value),setSceneGroupsFromRecords:value=>{context.sceneGroups=structuredClone(value);},
   scenePlacementTools:{selectionChanged(){selectionChanges++;},edits:null}});
  vm.runInContext(source('function setSceneSelection(','function updateSelectionFeedback(')+source('function setActiveSceneObject(','function sceneObjectRecordForDescendant(')+source('function writeSceneGroups(','function editSceneGroups('),context);

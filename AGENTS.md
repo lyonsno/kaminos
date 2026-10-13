@@ -21,7 +21,7 @@ Before a handoff, run the tests you touched with `npm test -- --only tests/a.mjs
 
 Do not build on these; put new work where the successor lives.
 
-- **The Pipeline tab and its graph** (dock, generator library, graph workbench, run shelf, `pipeline-ui-witness.mjs`) are removed. Generation UI belongs in the Generate tab. The server routes `/api/pipeline-manifest` and `/api/run-pipeline`, `pipelines/asset-pipelines.json`, `pipeline-witness.mjs` and the `pipeline-runs` browse root stay, so a route such as TRELLIS image-to-mesh remains callable from the Generate tab and headlessly.
+- **The Pipeline tab and its graph** (dock, generator library, graph workbench, run shelf, `pipeline-ui-witness.mjs`) are removed. Generation UI belongs in the Generate tab. The server routes `/api/pipeline-manifest` and `/api/run-pipeline`, `pipelines/asset-pipelines.json`, `pipeline-witness.mjs` and the `pipeline-runs` browse root stay so the Generate tab can host routes such as TRELLIS image-to-mesh; until it does, they are callable headlessly only.
 
 ## Fire Basins In Cooperative Inference Smokes
 
