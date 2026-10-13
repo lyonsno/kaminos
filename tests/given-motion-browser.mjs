@@ -39,6 +39,10 @@ try{
  report.phase='source-poses';for(const frame of [15,30,45,59]){await page.evaluate(frame=>window.kaminosGivenMotion.seek(frame),frame);await retain('pose-'+frame,frame);}
  assert.equal(new Set(report.samples.map(s=>s.goldSha256)).size>2,true,'skin stayed at the same pose');
  assert.deepEqual(report.errors,[],'positive motion route emitted a page error');
+ report.phase='restored-pose-identity';await page.getByRole('button',{name:'Restore starting pose',exact:true}).click();await page.getByRole('button',{name:'Pause source',exact:true}).click();
+ const restored=await retain('restored-after-pause');assert.equal(restored.motion.playback.status,'restored');assert.equal(restored.motion.playback.frame,null);assert.equal(restored.motion.playback.time,null);
+ assert.equal(await page.getByText('Restored starting pose · not a generated frame',{exact:true}).isVisible(),true);
+ const resumed=await page.evaluate(()=>{window.kaminosGivenMotion.play();return window.kaminosGivenMotion.read();});assert.equal(resumed.frame,0);assert.equal(resumed.status,'playing');await page.getByRole('button',{name:'Pause source',exact:true}).click();
  report.phase='negative-source';const wrong=new URL(url);wrong.searchParams.set('transport_motion_sha256','0'.repeat(64));await page.goto(wrong.href);await page.evaluate(async()=>{while(!['mounted','failed'].includes(window.kaminosGivenMotion?.snapshot().status))await new Promise(resolve=>requestAnimationFrame(resolve));});report.negative=await page.evaluate(()=>window.kaminosGivenMotion.snapshot());assert.equal(report.negative.status,'failed');assert.equal(report.negative.phase,'source-authentication');assert.match(report.negative.error,/digest mismatch/);
  report.negative.visibleError=await page.getByRole('alert').filter({hasText:'Motion did not mount'}).innerText();assert.match(report.negative.visibleError,/source-authentication.*digest mismatch/);
  await page.screenshot({path:out+'/03-visible-source-rejection.png'});report.images.push('03-visible-source-rejection.png');
