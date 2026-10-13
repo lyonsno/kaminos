@@ -12,7 +12,7 @@ try {
  const executablePath='/Users/noahlyons/.local/state/kaminos/browsers/chrome-for-testing-154.0.8037.92/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';report.browser=executablePath;
  browser=await chromium.launch({executablePath,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal']});
  const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1});page.setDefaultTimeout(0);page.on('pageerror',e=>report.errors.push(e.message));
- page.on('console',message=>{if(message.type()==='error')report.errors.push(message.text());});
+ report.consoleErrors=[];page.on('console',message=>{if(message.type()==='error'){report.consoleErrors.push({text:message.text(),location:message.location()});report.errors.push(message.text());}});
  // Exercise Three's handled-error channel: shader validation can log without
  // throwing a pageerror. Such a draw failure must make the witness fail.
  await page.evaluate(()=>console.error('hybrid witness deliberate renderer-error channel probe'));
