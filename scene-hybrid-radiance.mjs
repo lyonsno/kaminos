@@ -10,7 +10,7 @@ import {validateSourceSoftness} from './scene-source-softening.mjs';
 
 // Opt-in prototype. Smoke retains distributed transport. Surfaces consume a
 // live GPU reduction of that same source, with independent raster visibility.
-export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,pointCount=4,shadowResolution=256,getSourceGuide=null,onStatus=()=>{},createShadow=createFireLightFieldShadow}) {
+export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,smokeRefinement=4,pointCount=4,shadowResolution=256,getSourceGuide=null,onStatus=()=>{},createShadow=createFireLightFieldShadow}) {
   const {uniform,vec3,textureLoad,ivec2,positionWorld,normalWorld}=THREE.TSL;
   const points=createPointRegions(device,{count:pointCount});
   const external=new THREE.ExternalTexture(points.texture);
@@ -58,7 +58,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       status.localBvhBuilds=snapshot.localBuilds;status.visibilityMeshes=snapshot.meshCount;
       if(!gather||revision!==geometryRevision){
         status.status='building-smoke-world-visibility';onStatus({...status});
-        const next=createVolumeGather(device,{geometry:packed,receivers:[],volumeGrid,directions,angularPattern,angularRotation,worldGeometry:true});
+        const next=createVolumeGather(device,{geometry:packed,receivers:[],volumeGrid,smokeRefinement,directions,angularPattern,angularRotation,worldGeometry:true});
         prototype.setSceneDistributedLightFrame(null);gather?.destroy();gather=next;geometryRevision=revision;
         status.geometryBuilds++;status.visibilityBuilds++;status.lastGeometryBuildMs=performance.now()-started;status.staticTriangles=packed.triangleCount;
       }
