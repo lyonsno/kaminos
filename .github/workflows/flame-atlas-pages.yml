@@ -6,6 +6,14 @@ on:
       - main
     paths:
       - docs/flame-atlas/**
+      - docs/inference-kit/**
+      - demos/material-photo/**
+      - models/supermat/*.js
+      - assets/hdr/**
+      - lib/three*.js
+      - lib/addons/tsl/display/**
+      - scene-gi*.mjs
+      - finger-fluid-webgpu-core.js
       - models/flux2-klein/index.html
       - models/flux2-klein/klein-*.js
       - models/flux2-klein/qwen-tokenizer.js
@@ -42,7 +50,7 @@ jobs:
         with:
           enablement: true
 
-      - name: Assemble site (flame boutique at the root, demos at inference-kit/klein/ and inference-kit/unimate/)
+      - name: Assemble site (flame boutique and browser model experiences)
         run: node scripts/assemble-pages-site.mjs _site
 
       - name: Upload site
