@@ -75,14 +75,20 @@ function frameStats(gaps, marks = []) {
 
 // load: false returns with the scene already drawing and no weights fetched; call demo.load()
 // to fetch them, so a page can animate through a long first download.
-export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = () => {}, load = true }) {
+// limits 'baseline' requests only WebGPU's default limits (128 MiB per storage binding, 256 MiB per
+// buffer, 16 KB of workgroup memory), which every WebGPU device supports, to test phone-class
+// devices on a desktop: anything beyond them becomes a validation error, collected in gpuErrors.
+export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = () => {}, load = true, limits = 'adapter' }) {
   const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter?.features.has('shader-f16')) throw new Error('WebGPU with shader-f16 is required');
   const features = ['shader-f16', ...(adapter.features.has('timestamp-query') ? ['timestamp-query'] : [])];
-  const device = await adapter.requestDevice({ requiredFeatures: features, requiredLimits: {
+  const device = await adapter.requestDevice({ requiredFeatures: features, requiredLimits: limits === 'baseline' ? {} : {
     maxBufferSize: adapter.limits.maxBufferSize, maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
     maxStorageBuffersPerShaderStage: adapter.limits.maxStorageBuffersPerShaderStage,
     maxComputeWorkgroupStorageSize: adapter.limits.maxComputeWorkgroupStorageSize } });
+  const gpuErrors = [];
+  device.addEventListener('uncapturederror', e => { if (gpuErrors.length < 50) gpuErrors.push(e.error?.message ?? String(e.error)); });
+  device.lost.then(info => gpuErrors.push(`device lost: ${info.reason} ${info.message}`));
   // Count the bytes of every live WebGPU buffer, with the peak since the last reset, so a page or
   // smoke can report exactly how much GPU memory the model holds.
   const gpuBytes = { live: 0, peak: 0 };
@@ -169,6 +175,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
       }
       result.wallMs = performance.now() - started;
       result.gpuBytes = { peak: gpuBytes.peak, live: gpuBytes.live };
+      result.gpuErrors = gpuErrors.splice(0);
       result.startedAt = started;
       result.cooperative = cooperative;
       mark('done');
@@ -202,6 +209,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
   }
   if (load) await loadWeights();
 
-  return { device, pipeline, generate, togglePause, stop, scene, load: loadWeights, residentBytes: pipeline.residentBytes, gpuBytes,
+  return { device, pipeline, generate, togglePause, stop, scene, load: loadWeights, residentBytes: pipeline.residentBytes, gpuBytes, gpuErrors,
+    limits: Object.fromEntries(['maxBufferSize', 'maxStorageBufferBindingSize', 'maxStorageBuffersPerShaderStage', 'maxComputeWorkgroupStorageSize'].map(k => [k, device.limits[k]])),
     get gpuBytesAfterLoad() { return gpuBytesAfterLoad; }, get loadMs() { return pipeline.timings.loadMs; }, kernels: pipeline.kernels };
 }

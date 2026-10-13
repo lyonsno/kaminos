@@ -69,7 +69,7 @@
   <header class="lede">
     <h1>Thomas the Jank Engine</h1>
     <p><b>FLUX.2 [klein] 4B: a 4-billion-parameter image model crammed into a browser tab. It's a little janky. It runs anyway.</b> It all happens on your own GPU through WebGPU: the prompt, the model and the image stay on your machine, and no server does any of the work.</p>
-    <p class="muted">The first visit downloads <span id="download-size">3.2 GB</span> of model weights, which the browser keeps for later visits. Tested in Chrome on Apple-silicon Macs with 16 GB of memory or more: a 512 × 512 image takes about 7 seconds on an M4 Max and about 14 seconds on an M2 Pro (a few more with better lettering). Pick a jank level to trade quality for a smaller download. On an 8 GB Mac or a phone, tick Low-memory mode: it needs about 3 GB of GPU memory at 512 × 512 instead of 4.5 GB, and a new prompt takes about 3 seconds longer.</p>
+    <p class="muted">The first visit downloads <span id="download-size">3.2 GB</span> of model weights, which the browser keeps for later visits. Tested in Chrome on Apple-silicon Macs with 16 GB of memory or more: a 512 × 512 image takes about 7 seconds on an M4 Max and about 13 seconds on an M2 Pro (a few more with better lettering). Pick a jank level to trade quality for a smaller download. On an 8 GB Mac or a phone, tick Low-memory mode: it needs under 3 GB of GPU memory at 512 × 512 instead of about 4.2 GB, and a new prompt takes about 2 seconds longer.</p>
   </header>
 
   <div class="layout">
@@ -287,6 +287,11 @@ loadButton.onclick = async () => {
   loadedLevel = selected; window.kleinLevel = loadedLevel;
   const stats = demo.pipeline.loadStats;
   $('setup').classList.add('hidden'); progress.classList.add('hidden'); $('controls').classList.remove('hidden');
+  // Sizes whose buffers exceed this GPU's limits (768 and up on most phones) cannot be picked.
+  for (const option of $('size').options) {
+    if (demo.pipeline.sizeLimits(Number(option.value)).fits) continue;
+    option.disabled = true; option.textContent = `${option.value} × ${option.value} (too big for this GPU)`;
+  }
   say(`${LEVELS[loadedLevel].name} ready in ${seconds(demo.loadMs)}${stats.downloadedBytes ? `, ${gb(stats.downloadedBytes)} downloaded` : ' from the cache'}${stats.cacheErrors.length ? '. The browser could not cache every file, so the next visit may download again.' : '.'}`,
     stats.cacheErrors.length > 0);
   refreshLevels();
@@ -341,7 +346,8 @@ $('go').onclick = async () => {
     lastImage = { prompt, seed, size, level: loadedLevel };
     $('save').disabled = false;
     const frames = r.frames ? `; the animation kept drawing at a median ${Math.round(1000 / r.frames.p50)} frames per second` : '';
-    say(`${r.width} × ${r.height} at ${LEVELS[loadedLevel].name}${lettering ? ' with better lettering' : ''} in ${seconds(r.wallMs)}${frames}.`);
+    const capped = r.timings.textPaddingRequested ? ` (prompt padding limited to ${r.textTokens} tokens by this GPU)` : '';
+    say(`${r.width} × ${r.height} at ${LEVELS[loadedLevel].name}${lettering ? ' with better lettering' : ''}${capped} in ${seconds(r.wallMs)}${frames}.`);
     window.kleinLast = { wallMs: r.wallMs, timings: r.timings, frames: r.frames, width: r.width, height: r.height, level: loadedLevel,
       lettering, textTokens: r.textTokens, gpuBytes: r.gpuBytes, residency: demo.pipeline.residency };
   } catch (e) {
