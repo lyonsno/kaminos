@@ -62,3 +62,10 @@ test('an unconfigured server makes TRELLIS unavailable with its own setup messag
  assert.equal(h.service.read().status,'unavailable');assert.equal(h.service.read().error,'Local TRELLIS setup required');
  await assert.rejects(h.service.run(input),/Local TRELLIS setup required/);assert.equal(h.calls.length,0);
 });
+
+test('a failed run shows the adapter own reason, not a generic one',async()=>{
+ const adapterLine=JSON.stringify({ok:false,phase:'queue-submission',error:{message:'Greenroom submission failed: invalid dispatch policy schema or mode'}});
+ const h=harness({result:{schema:'kaminos.pipeline-run-result.v0',ok:false,exitCode:1,stdoutTail:`progress\n${adapterLine}\n`,report:{document:{ok:false,error:'live model adapter exited 1'}}}});
+ await assert.rejects(h.service.run(input),/queue-submission: Greenroom submission failed: invalid dispatch policy/);
+ assert.match(h.service.read().error,/live model adapter exited 1/);
+});
