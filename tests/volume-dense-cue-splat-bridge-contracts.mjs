@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { rmSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 
 const bridgeUrl = new URL('../volume-dense-cue-splat-bridge.mjs', import.meta.url);
 const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8');
@@ -39,11 +39,7 @@ assert.match(core, /boundarySplatRendererIdentity:\s*state\.boundarySplatRendere
 assert.match(core, /boundarySplatAttributeModelIdentity:\s*state\.boundarySplatAttributeModelIdentity/, 'frozen canvas receipt exposes the effective learned attribute model');
 
 const root = await mkdtemp(join(tmpdir(), 'kaminos-dense-cue-splat-bridge-contract-'));
-// The shared temp root has other producers, including a concurrent copy of
-// this contract: a decoy profile directory appearing there mid-run must not
-// fail this one, which only ever looks at its own private TMPDIR.
 const decoy = join(tmpdir(), `kaminos-dense-cue-splat-bridge-profile-decoy-${process.pid}`);
-spawn('sh', ['-c', 'sleep 3; mkdir -p "$1"', 'sh', decoy], { detached: true, stdio: 'ignore' }).unref();
 process.on('exit', code => {
   try { rmSync(decoy, { recursive: true, force: true }); } catch {}
   if (code === 0) { try { rmSync(root, { recursive: true, force: true }); } catch {} }
@@ -95,6 +91,10 @@ const bridgeEnv = (extra = {}) => ({ ...process.env, TMPDIR: privateTmp, ...extr
 const profilePrefix = 'kaminos-dense-cue-splat-bridge-profile-';
 const listProfiles = async () => (await readdir(privateTmp)).filter(name => name.startsWith(profilePrefix)).map(name => join(privateTmp, name));
 const profilesBefore = await listProfiles();
+// The shared temp root has other producers, including a concurrent copy of
+// this contract: a profile directory appearing there mid-run must not fail
+// this one, which only ever looks at its own private TMPDIR.
+mkdirSync(decoy, { recursive: true });
 
 // Validation never launches a browser, so it must not create a browser
 // profile directory either. The bridge used to create one at startup, under

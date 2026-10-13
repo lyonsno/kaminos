@@ -6,4 +6,4 @@ scenes/*
 !scenes/.gitkeep
 artifacts/volume-captures/
 test-results/
-.venv/
+.venv
