@@ -44,7 +44,7 @@ function snapshot(){return {schema:'kaminos.hindquarter-binding-browser.v1',stat
   casePath,expectedManifestSha256:expected,effectiveManifestSha256:expected,sourceSha256:manifest?.sourceSha256,sourceCast:manifest?.sourceCast,
   candidatePaintedWeights:manifest?.candidatePaintedWeights,vertices:manifest?.vertices,triangles:manifest?.triangles,frame,frames:manifest?.frames.length,
   modes:views.map(view=>({mode:view.mode,id:view.skin.uuid,vertices:view.geometry.attributes.position.count})),events:structuredClone(events),
-  camera:{position:orbit?.object.position.toArray(),target:orbit?.target.toArray()},stateRule:manifest?.stateRule,metrics:manifest?.metrics[frame]};}
+  camera:{position:orbit?.object.position.toArray(),target:orbit?.target.toArray()},stateRule:manifest?.stateRule,domainRule:manifest?.domainRule??null,metrics:manifest?.metrics[frame]};}
 try{
   if(!casePath||!/^scratch\/[a-z0-9_-]+$/.test(casePath)||!/^[0-9a-f]{64}$/.test(expected??''))throw Error('Explicit case path and SHA-256 are required');
   manifest=JSON.parse(new TextDecoder().decode(await bytes(`./${casePath}/manifest.json`,expected)));
@@ -53,6 +53,9 @@ try{
   const buffers=await Promise.all(names.map(name=>bytes(`./${casePath}/${name}`,manifest.assets[name].sha256,manifest.assets[name].bytes)));
   const rest=new Float32Array(buffers[0]),indices=new Uint32Array(buffers[1]),arrays=buffers.slice(2).map(buffer=>new Float32Array(buffer));
   if(rest.length!==manifest.vertices*3||indices.length!==manifest.triangles*3||indices.some(i=>i>=manifest.vertices)||arrays.some(array=>array.length!==manifest.vertices*3*manifest.frames.length||array.some(v=>!Number.isFinite(v))))throw Error('Incomplete or invalid geometry');
+  const domain=manifest.domainRule?new Float32Array(await bytes(`./${casePath}/domain.bin`,manifest.assets['domain.bin'].sha256,manifest.assets['domain.bin'].bytes)):null;
+  if(domain&&(domain.length!==manifest.vertices||domain.some(value=>!Number.isFinite(value)||value<0||value>1)))throw Error('Invalid regional binding domain');
+  if(!domain)document.querySelector('#domain').disabled=true;
   const camera=new THREE.PerspectiveCamera(38,1,.01,100);camera.position.set(-2.2,.5,3.3);
   renderer=new THREE.WebGPURenderer({antialias:true});await renderer.init();container.appendChild(renderer.domElement);
   orbit=new OrbitControls(camera,renderer.domElement);orbit.target.set(.1,-.65,-.25);orbit.update();
@@ -64,6 +67,7 @@ try{
     const scene=new THREE.Scene();scene.background=new THREE.Color('#101722');scene.add(new THREE.HemisphereLight(0xe5edff,0x243951,2));
     const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(-3,4,5);scene.add(light);
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(rest,3));geometry.setIndex(new THREE.BufferAttribute(indices,1));
+    if(domain){const colors=[];for(const value of domain){const color=new THREE.Color(0x546173).lerp(new THREE.Color(0xf2d05c),value);colors.push(color.r,color.g,color.b);}geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));}
     const material=new THREE.MeshStandardMaterial({color:colors[index],roughness:.72,side:THREE.DoubleSide});const skin=new THREE.Mesh(geometry,material);scene.add(skin);
     const markers=markerIndices.map(vertex=>{const mesh=new THREE.Mesh(markerGeometry,markerMaterial);scene.add(mesh);return {mesh,index:vertex};});
     views.push({scene,geometry,skin,material,frames:array,mode:modes[index],markers,supports:makeSupports(scene)});
@@ -76,6 +80,7 @@ try{
   document.querySelector('#frame').oninput=event=>{playback=null;seek(Number(event.target.value),'frame-input');};
   document.querySelector('#supports').onchange=event=>views.forEach(view=>{view.supports.group.visible=event.target.checked;view.material.transparent=event.target.checked;view.material.opacity=event.target.checked?.35:1;view.material.depthWrite=!event.target.checked;view.material.needsUpdate=true;});
   document.querySelector('#markers').onchange=event=>views.forEach(view=>view.markers.forEach(({mesh})=>mesh.visible=event.target.checked));
+  document.querySelector('#domain').onchange=event=>views.forEach((view,i)=>{view.material.vertexColors=event.target.checked;view.material.color.set(event.target.checked?0xffffff:colors[i]);view.material.needsUpdate=true;});
   document.querySelector('#whole').onclick=()=>{whole=!whole;camera.position.set(...(whole?[-4,2,6]:[-2.2,.5,3.3]));orbit.target.set(...(whole?[.15,-.65,-1.0]:[.1,-.65,-.25]));orbit.update();};
   phase='loaded';seek(0,'load');window.kaminosHindquarterAssay={snapshot,seek,play};
   renderer.setAnimationLoop(time=>{if(playback&&time>=playback.nextTime){seek(playback.index,'playback');if(playback.index===playback.end){events.push({type:'play-end',id:playback.id,start:playback.start,end:playback.end});playback=null;}else{playback.index++;playback.nextTime=time+140;}}

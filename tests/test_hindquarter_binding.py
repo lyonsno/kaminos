@@ -39,4 +39,13 @@ class IndependentBindingTests(unittest.TestCase):
         restored=solve_pose(binding,{'movingMatrix':np.eye(4).tolist()})
         np.testing.assert_allclose(restored['candidate'],self.positions,atol=1e-10)
 
+    def test_unrepresented_front_limb_remains_outside_regional_domain(self):
+        positions=np.vstack([self.positions,[0,-1.2,-2.7]])
+        triangles=np.vstack([self.triangles,[1,4,5]])
+        binding=bind_geometry(positions,triangles,self.control)
+        angle=.5;matrix=np.eye(4);matrix[1:3,1:3]=[[np.cos(angle),-np.sin(angle)],[np.sin(angle),np.cos(angle)]]
+        result=solve_pose(binding,{'movingMatrix':matrix.tolist()})
+        np.testing.assert_allclose(result['candidate'][-1],positions[-1],atol=1e-10)
+        self.assertEqual(binding['domain'][-1],0)
+
 if __name__=='__main__':unittest.main()

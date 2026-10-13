@@ -66,7 +66,7 @@ def primitives(specs,matrix):
             'origin':origin,'insertion':insertion,'mobile':'longitudinal'})
     return result
 
-def field(points,specs,matrix,partition=False):
+def field(points,specs,matrix,partition=False,contributors=None):
     values=[];gradients=[];mobilities=[]
     for p in primitives(specs,matrix):
         if p['kind']=='capsule':d,g=capsule(points,p['a'],p['b'],p['radius'])
@@ -80,20 +80,36 @@ def field(points,specs,matrix,partition=False):
     values=np.asarray(values);minimum=values.min(axis=0);blend=specs['blend']
     weights=np.exp(-(values-minimum)/blend);weights/=weights.sum(axis=0)
     d=minimum-blend*np.log(np.exp(-(values-minimum)/blend).sum(axis=0))
+    if contributors is not None:
+        weights=contributors
+        d=np.sum(weights*values,axis=0)
     g=np.sum(weights[:,:,None]*np.asarray(gradients),axis=0)
-    return (d,g,np.sum(weights*np.asarray(mobilities),axis=0)) if partition else (d,g)
+    return (d,g,np.sum(weights*np.asarray(mobilities),axis=0),weights) if partition else (d,g)
+
+def regional_domain(positions,control):
+    j={name:np.asarray(point,dtype=float) for name,point in control['joints'].items()}
+    h,k,a=(j['hindlimb-left-'+name] for name in ['hip','stifle','hock'])
+    distances=np.minimum.reduce([capsule(positions,h,k,0)[0],capsule(positions,k,a,0)[0],capsule(positions,a,a+[0,-.4,.1],0)[0]])
+    smooth=lambda t:np.clip(t,0,1)**2*(3-2*np.clip(t,0,1))
+    radial=1-smooth((distances-.30)/.32)
+    right=j['hindlimb-right-hip'];mid=(h+right)/2;direction=unit(h-right)
+    side=smooth(((positions-mid)@direction+.12)/.24)
+    return radial*side
 
 def bind_geometry(positions,triangles,control):
     positions=np.asarray(positions,dtype=np.float64);triangles=np.asarray(triangles)
     if control.get('paintedWeightsIncluded') is not False:raise ValueError('painted weights must be excluded')
     if positions.ndim!=2 or positions.shape[1]!=3 or not np.isfinite(positions).all():raise ValueError('invalid geometry')
     if triangles.ndim!=2 or triangles.shape[1]!=3 or triangles.min()<0 or triangles.max()>=len(positions):raise ValueError('invalid topology')
-    specs=support_specs(control);rest_values,_,weights=field(positions,specs,np.eye(4),partition=True)
+    specs=support_specs(control);_,_,weights,contributors=field(positions,specs,np.eye(4),partition=True)
+    domain=regional_domain(positions,control);weights*=domain
+    rest_values,_=field(positions,specs,np.eye(4),contributors=contributors)
     edges=np.unique(np.sort(np.concatenate([triangles[:,[0,1]],triangles[:,[1,2]],triangles[:,[2,0]]]),axis=1),axis=0)
     rest_edges=positions[edges[:,1]]-positions[edges[:,0]]
     degree=np.bincount(edges.ravel(),minlength=len(positions))
     return {'positions':positions.copy(),'triangles':triangles.copy(),'specs':specs,'weights':weights,
-            'restValues':rest_values,'edges':edges,'restEdges':rest_edges,'degree':degree}
+            'restValues':rest_values,'edges':edges,'restEdges':rest_edges,'degree':degree,
+            'contributors':contributors,'domain':domain}
 
 def partial_rotation(points,matrix,weights):
     # One active joint at the normalized origin. Normalized quaternion blending
@@ -110,13 +126,13 @@ def partial_rotation(points,matrix,weights):
 def project(points,binding,matrix,iterations=8):
     points=points.copy()
     for _ in range(iterations):
-        value,gradient=field(points,binding['specs'],matrix)
+        value,gradient=field(points,binding['specs'],matrix,contributors=binding['contributors'])
         error=value-binding['restValues']
         if np.max(np.abs(error))<1e-6:break
         displacement=gradient*(error/np.maximum(np.sum(gradient*gradient,axis=1),1e-10))[:,None]
         lengths=np.linalg.norm(displacement,axis=1)
         displacement*=np.minimum(1,.05/np.maximum(lengths,1e-12))[:,None]
-        points-=displacement
+        points-=displacement*binding['domain'][:,None]
     return points
 
 def solve_pose(binding,frame):
@@ -132,10 +148,10 @@ def solve_pose(binding,frame):
         edge_force=delta*(.35*(lengths-rest_lengths)/np.maximum(lengths,1e-12))[:,None]
         forces=np.zeros_like(candidate);np.add.at(forces,a,edge_force);np.add.at(forces,b,-edge_force)
         forces/=np.maximum(binding['degree'],1)[:,None]
-        _,gradient=field(candidate,binding['specs'],matrix)
+        _,gradient=field(candidate,binding['specs'],matrix,contributors=binding['contributors'])
         tangent=forces-gradient*(np.sum(forces*gradient,axis=1)/np.maximum(np.sum(gradient*gradient,axis=1),1e-10))[:,None]
-        candidate=project(candidate+tangent,binding,matrix,iterations=3)
-    values,_=field(candidate,binding['specs'],matrix)
+        candidate=project(candidate+tangent*binding['domain'][:,None],binding,matrix,iterations=3)
+    values,_=field(candidate,binding['specs'],matrix,contributors=binding['contributors'])
     ratios=np.linalg.norm(candidate[b]-candidate[a],axis=1)/np.maximum(rest_lengths,1e-12)
     return {'candidate':candidate,'automatic':auto,'metrics':{'fieldErrorMax':float(np.max(np.abs(values-binding['restValues']))),
             'fieldErrorMean':float(np.mean(np.abs(values-binding['restValues']))),
@@ -178,7 +194,8 @@ def build(args):
             print(json.dumps({'frame':index,'frames':len(control['frames']),'seconds':report['metrics'][-1]['solveSeconds'],'fieldQ95':result['metrics']['fieldErrorQ95']}),flush=True)
         arrays={'rest.bin':rest.astype('<f4'),'triangles.bin':triangles.astype('<u4'),
                 'candidate.bin':np.asarray(candidate,dtype='<f4'),'automatic.bin':np.asarray(automatic,dtype='<f4'),
-                'reference.bin':reference.astype('<f4'),'binding.bin':binding['weights'].astype('<f4')}
+                'reference.bin':reference.astype('<f4'),'binding.bin':binding['weights'].astype('<f4'),
+                'domain.bin':binding['domain'].astype('<f4'),'contributors.bin':binding['contributors'].astype('<f4')}
         assets={}
         for name,array in arrays.items():
             path=out/name;array.tofile(path);assets[name]={'sha256':digest(path),'bytes':path.stat().st_size,'shape':list(array.shape),'dtype':array.dtype.str}
@@ -186,7 +203,9 @@ def build(args):
             'sourceCast':control['cast'],'sourceArmature':control['armature'],'vertices':len(rest),'triangles':len(triangles),
             'frames':control['frames'],'joints':control['joints'],'assets':assets,'supports':json_value(binding['specs']),
             'candidatePaintedWeights':False,'referenceRoute':control['referenceRoute'],
-            'candidateRoute':'automatic support-partition rotation + iso-value projection + tangential edge relaxation',
+            'candidateRoute':'frozen rest support partition + smooth rig-defined regional domain + rotation + iso-value projection + tangential edge relaxation',
+            'domainRule':{'innerRadiusFemurs':.30,'outerRadiusFemurs':.62,'bilateralHalfTransitionFemurs':.12,
+                          'outside':'fixed rest positions','maskAuthority':'assay-local geometric domain, not painted or inferred anatomy'},
             'stateRule':'each pose solved from independently generated cast rest state; no temporal sliding memory',
             'bounds':control['bounds'],'metrics':report['metrics'],'sourceGeometrySha256':control['geometry']['sha256'],
             'claim':'provisional three-support hip experiment; no anatomical, packing, production or binding-quality admission'}
