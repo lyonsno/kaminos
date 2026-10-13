@@ -2539,11 +2539,100 @@ def pipeline_manifest_payload():
     for pipeline in document.get("pipelines", []):
         if pipeline.get("id") == "trellis-image-to-mesh-webgpu-v0":
             pipeline["availability"] = trellis_generation_availability()
+            if pipeline["availability"].get("status") == "available":
+                pipeline["availability"]["express"] = trellis_express_eligibility(
+                    json.loads(Path(os.environ["KAMINOS_TRELLIS_CONFIG"]).read_text())["queueDir"])
     return {
         **document,
         "manifestPath": str(PIPELINE_MANIFEST_PATH),
         "manifestSha256": _sha256_file(PIPELINE_MANIFEST_PATH),
     }
+
+
+# Where a queued generation stands, in Greenroom's own dispatch order (normal/quick
+# alternation included). Read-only: runs gpu_queue from the interpreter beside the
+# configured greenroom CLI, so the order cannot drift from what the worker does.
+_QUEUE_POSITION_SCRIPT = r"""
+import json, sys, time
+from pathlib import Path
+from gpu_queue import dispatch
+root, job = Path(sys.argv[1]), sys.argv[2]
+def state(path):
+    try: return json.loads((path / 'status.json').read_text())
+    except (OSError, ValueError): return None
+running = []
+for path in sorted((root / 'running').iterdir()) if (root / 'running').is_dir() else []:
+    row = state(path)
+    if row: running.append({'jobId': row['job_id'], 'startedAt': row.get('started_at')})
+config = dispatch.policy(root)
+order = [path.name for path in dispatch.pending_order(root, config)]
+classes = {}
+for name in order:
+    request, digest = dispatch.read_request(root / 'pending' / name / 'request.json')
+    classes[name] = dispatch.classify(request, config, request_digest=digest)[0]
+mine = None
+for bucket in ('pending', 'running', 'done', 'failed', 'cancelled'):
+    row = state(root / bucket / job)
+    if row: mine = {'bucket': bucket, **row}; break
+print(json.dumps({'order': order, 'classes': classes, 'running': running, 'mine': mine, 'now': time.time(), 'mode': config['mode']}))
+"""
+
+
+def gpu_queue_position(job_id, *, queue_dir, greenroom_bin):
+    job_id = str(job_id or "")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{6,64}", job_id):
+        raise ValueError("Greenroom job id required")
+    python = Path(greenroom_bin).resolve().parent / "python3"
+    completed = subprocess.run([str(python), "-c", _QUEUE_POSITION_SCRIPT, str(queue_dir), job_id],
+                               capture_output=True, text=True, timeout=30)
+    if completed.returncode != 0:
+        raise RuntimeError("Greenroom queue read failed: " + completed.stderr.strip()[-400:])
+    data = json.loads(completed.stdout)
+    mine, now = data["mine"], data["now"]
+    report = {"schema": "kaminos.gpu-queue-position.v0", "jobId": job_id, "orderAuthority": "gpu_queue.dispatch.pending_order",
+              "dispatchMode": data["mode"], "status": "unknown", "jobsAhead": None, "ahead": [], "serviceClass": None,
+              "waitedSeconds": None, "runningSeconds": None, "running": None}
+    others = [row for row in data["running"] if row["jobId"] != job_id]
+    if others:
+        row = others[0]
+        report["running"] = {"jobId": row["jobId"], "seconds": max(0.0, now - row["startedAt"]) if row.get("startedAt") else None}
+    if not mine:
+        return report
+    report["status"] = mine["bucket"]
+    submitted, started = mine.get("submitted_at"), mine.get("started_at")
+    if mine["bucket"] == "pending":
+        index = data["order"].index(job_id) if job_id in data["order"] else None
+        if index is not None:
+            report["jobsAhead"] = index
+            report["ahead"] = [{"jobId": name, "serviceClass": data["classes"].get(name)} for name in data["order"][:index]]
+            report["serviceClass"] = data["classes"].get(job_id)
+        if submitted:
+            report["waitedSeconds"] = max(0.0, now - submitted)
+    else:
+        report["jobsAhead"] = 0
+        if submitted and started:
+            report["waitedSeconds"] = max(0.0, started - submitted)
+        if mine["bucket"] == "running" and started:
+            report["runningSeconds"] = max(0.0, now - started)
+    return report
+
+
+# The route identity the TRELLIS adapter submits under (scripts/run-trellis-greenroom-adapter.mjs).
+TRELLIS_QUEUE_ROUTE_IDENTITY = "TRELLIS2 queued browser-WebGPU / CPU source finishing"
+
+
+def trellis_express_eligibility(queue_dir):
+    """Whether Greenroom would admit a quick-class TRELLIS submission (dispatch.classify's rule)."""
+    try:
+        policy = json.loads((Path(queue_dir) / "dispatch-policy.json").read_text())
+    except (OSError, ValueError):
+        return {"eligible": False, "reason": "The GPU queue has no dispatch policy", "basis": None}
+    if policy.get("mode") != "two-class":
+        return {"eligible": False, "reason": "The GPU queue is not running a quick lane", "basis": None}
+    basis = (policy.get("quick_routes") or {}).get(TRELLIS_QUEUE_ROUTE_IDENTITY)
+    if not basis:
+        return {"eligible": False, "reason": "TRELLIS is not on the GPU queue's quick list", "basis": None}
+    return {"eligible": True, "reason": None, "basis": basis}
 
 
 def trellis_generation_availability():
@@ -2730,6 +2819,17 @@ def _write_pipeline_stream_event(handler, event):
     handler.wfile.flush()
 
 
+def pipeline_child_env(pipeline_id, payload):
+    """Per-request settings a route's adapter reads; only TRELLIS's Greenroom class today."""
+    env = dict(os.environ)
+    service_class = payload.get("serviceClass")
+    if service_class is not None:
+        if pipeline_id != "trellis-image-to-mesh-webgpu-v0" or service_class not in ("normal", "quick"):
+            raise ValueError("serviceClass must be normal or quick for the TRELLIS route")
+        env["KAMINOS_TRELLIS_SERVICE_CLASS"] = service_class
+    return env
+
+
 def run_pipeline_witness_stream(handler, payload):
     pipeline_id = str(payload.get("pipelineId") or payload.get("pipeline_id") or "").strip()
     if not pipeline_id:
@@ -2759,7 +2859,7 @@ def run_pipeline_witness_stream(handler, payload):
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,
-        env={**os.environ, "KAMINOS_PIPELINE_PROGRESS_STREAM": "1"},
+        env={**pipeline_child_env(pipeline_id, payload), "KAMINOS_PIPELINE_PROGRESS_STREAM": "1"},
     )
     events = queue.Queue()
     stdout_chunks = []
@@ -3457,6 +3557,17 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json(report)
         elif parsed.path == "/api/runtime-config":
             self.handle_runtime_config()
+        elif parsed.path == "/api/gpu-queue-position":
+            try:
+                config = json.loads(Path(os.environ["KAMINOS_TRELLIS_CONFIG"]).read_text())
+                self.send_json(gpu_queue_position(parse_qs(parsed.query).get("job", [""])[0],
+                                                  queue_dir=config["queueDir"], greenroom_bin=config["greenroomBin"]))
+            except KeyError:
+                self.send_json({"error": "No configured GPU queue on this server"}, 404)
+            except ValueError as error:
+                self.send_json({"error": str(error)}, 400)
+            except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+                self.send_json({"error": str(error)}, 503)
         elif parsed.path == "/api/pipeline-manifest":
             self.handle_pipeline_manifest()
         elif parsed.path == "/api/browse":

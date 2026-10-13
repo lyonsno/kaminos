@@ -81,3 +81,17 @@ for(const mode of ['wrong-queue','failed','missing-report','stale-input','stale-
     assert.equal(JSON.parse(await fs.readFile(values.report)).ok,false,'failure must survive in the caller report');
   });
 }
+
+test('the queued command always declares its Greenroom class: normal unless Express asks for quick',async()=>{
+  for(const [requested,expected] of [[undefined,'normal'],['quick','quick'],['normal','normal']]){
+    const {values}=await setup('ok');
+    const state=await runTrellisAdapter({...values,...(requested?{serviceClass:requested}:{})});
+    assert.equal(state.ok,true,state.error?.message);
+    const manifest=JSON.parse(await fs.readFile(state.command.manifestPath));
+    assert.equal(manifest.schema,'gpu-greenroom.command.v2');assert.equal(manifest.service_class,expected);
+    assert.equal(state.command.serviceClass,expected);
+  }
+  const {values}=await setup('ok');
+  const state=await runTrellisAdapter({...values,serviceClass:'vip'});
+  assert.equal(state.ok,false);assert.match(state.error.message,/service class/);
+});

@@ -7,23 +7,25 @@ const glb=new Uint8Array([0x67,0x6c,0x54,0x46,2,0,0,0,12,0,0,0]).buffer;
 const okResult={schema:'kaminos.pipeline-run-result.v0',ok:true,pipelineId:TRELLIS_PIPELINE_ID,runId:'run-7',report:{document:{artifacts:{mesh:{role:'textured-mesh',path:'/runs/run-7/artifacts/trellis-output.glb'}}}}};
 const input={source:'/api/read?root=image-inbox&path=lantern.png',name:'klein-lantern-s1.png',label:'klein-lantern-s1.png',preparation:{original:{sha256:'a'.repeat(64)}}};
 
-function harness({result=okResult,gate=null,availability={status:'available',message:'Queued WebGPU with local mesh finishing'},persistFails=0}={}){
- const calls=[],persisted=[];let failures=persistFails;
+function harness({result=okResult,gate=null,availability={status:'available',message:'Queued WebGPU with local mesh finishing'},persistFails=0,express=false,positions=[]}={}){
+ const calls=[],persisted=[],polled=[];let failures=persistFails;
  const service=createTrellisAuthoringGeneration({
+  express:()=>express,pollMs:1,
+  queuePosition:async job=>{polled.push(job);return positions.shift()||positions.last||null;},
   availability:()=>availability,
-  runPipeline:async(payload,{onProgress})=>{calls.push(payload);onProgress({schema:'kaminos.pipeline-progress.v0',phase:'queued',message:'Waiting for the GPU Greenroom'});
+  runPipeline:async(payload,{onProgress})=>{calls.push(payload);onProgress({schema:'kaminos.pipeline-progress.v0',phase:'queued',message:'Waiting for the GPU Greenroom',jobId:'job-123'});
    onProgress({schema:'kaminos.pipeline-progress.v0',phase:'running',message:'Preparing and generating the selected image'});if(gate)await gate.promise;return result;},
   meshUrl:run=>run.report?.document?.artifacts?.mesh?.path?`/api/read?root=pipeline-runs&path=${run.runId}/artifacts/trellis-output.glb`:null,
   fetchBytes:async url=>{calls.push({fetched:url});return glb;},
   persist:async(bytes,generation,label)=>{if(failures-->0)throw Error('disk');persisted.push({bytes,generation,label});return{source:'/api/read?root=generated-meshes&path=x.glb',name:`${label} · TRELLIS.glb`,generation};},
  });
- return {service,calls,persisted};
+ return {service,calls,persisted,polled};
 }
 
 test('a selected image runs the queued TRELLIS route and its fresh GLB is saved for Add',async()=>{
  const h=harness();
  const saved=await h.service.run(input);
- assert.deepEqual(h.calls[0],{pipelineId:TRELLIS_PIPELINE_ID,source:input.source,streamProgress:true,clientRunId:h.calls[0].clientRunId});
+ assert.deepEqual(h.calls[0],{pipelineId:TRELLIS_PIPELINE_ID,source:input.source,streamProgress:true,clientRunId:h.calls[0].clientRunId,serviceClass:'normal'});
  assert.match(h.calls[0].clientRunId,/^authoring-trellis-/);
  assert.deepEqual(h.calls[1],{fetched:'/api/read?root=pipeline-runs&path=run-7/artifacts/trellis-output.glb'});
  assert.equal(h.persisted.length,1);assert.equal(h.persisted[0].bytes.byteLength,12);
@@ -68,4 +70,21 @@ test('a failed run shows the adapter own reason, not a generic one',async()=>{
  const h=harness({result:{schema:'kaminos.pipeline-run-result.v0',ok:false,exitCode:1,stdoutTail:`progress\n${adapterLine}\n`,report:{document:{ok:false,error:'live model adapter exited 1'}}}});
  await assert.rejects(h.service.run(input),/queue-submission: Greenroom submission failed: invalid dispatch policy/);
  assert.match(h.service.read().error,/live model adapter exited 1/);
+});
+
+test('Express asks for the quick lane only when the queue admits TRELLIS there',async()=>{
+ const on=harness({express:true,availability:{status:'available',message:'ok',express:{eligible:true}}});
+ await on.service.run(input);assert.equal(on.calls[0].serviceClass,'quick');
+ const blocked=harness({express:true,availability:{status:'available',message:'ok',express:{eligible:false,reason:'TRELLIS is not on the quick list'}}});
+ await assert.rejects(blocked.service.run(input),/Express.*TRELLIS is not on the quick list/);assert.equal(blocked.calls.length,0,'no silent fallback to the normal lane');
+ assert.equal(blocked.service.read().expressEligible,false);
+});
+
+test('while queued the drawer shows jobs ahead and waiting time from the queue report',async()=>{
+ const gate=deferred();
+ const h=harness({gate,positions:[{status:'pending',jobsAhead:3,waitedSeconds:75,serviceClass:'normal',running:{jobId:'x',seconds:200}}]});
+ const run=h.service.run(input);for(let i=0;i<50&&!h.service.read().queue;i++)await new Promise(r=>setTimeout(r,2));
+ const state=h.service.read();assert.equal(h.polled[0],'job-123');
+ assert.equal(state.queue.jobsAhead,3);assert.match(state.queueLine,/3 jobs ahead · waiting 1m 15s/);
+ gate.resolve();await run;assert.equal(h.service.read().queue,null,'telemetry clears when the run ends');
 });

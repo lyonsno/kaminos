@@ -30628,6 +30628,8 @@ function setupAuthoringAssets(){
         trellisAvailability=manifest.pipelines?.find(route=>route.id==='trellis-image-to-mesh-webgpu-v0')?.availability||{status:'unavailable',message:'This server has no TRELLIS route'};redraw();
       }).catch(error=>{trellisAvailability={status:'unavailable',message:`TRELLIS availability: ${error.message}`};redraw();});
       authoringTrellisGenerator=createTrellisAuthoringGeneration({availability:()=>trellisAvailability,changed:()=>redraw(),
+        express:()=>authoringMeshModel?.express()===true,
+        queuePosition:async job=>{const response=await fetch('/api/gpu-queue-position?'+new URLSearchParams({job}),{cache:'no-store'});const value=await response.json();if(!response.ok)throw Error(value.error||'queue position unavailable');return value;},
         blocked:()=>authoringImageGenerator?.busy()?'An image is generating. Generate the mesh when it is saved.':meshBusy('sf3d')?'Stable Fast 3D is generating.':null,
         runPipeline:async(payload,{onProgress})=>readPipelineRunStream(await fetch('/api/run-pipeline',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},body:JSON.stringify(payload)}),onProgress),
         meshUrl:result=>{const artifact=pipelineRunOutputArtifacts(result).find(pipelineArtifactIsLoadableMesh);return artifact?pipelineRunReadUrlForPath(result,artifact.path):null;},
@@ -30668,7 +30670,7 @@ function setupAuthoringAssets(){
       return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
     }});
   authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageUI?.render();authoringGenerateLayout?.render();};
-  authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis'),changed:()=>redraw()});
+  authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis'),changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});
   authoringImageGenerator=createKleinAuthoringImageGeneration({
     context:()=>({sharedGpu,prototype:volumePrototype,host:compositionHost,handoff:foregroundHandoff()}),
     // A locally mounted weight package (KAMINOS_KLEIN_WEIGHTS_ROOT) spares each port's
@@ -30679,7 +30681,7 @@ function setupAuthoringAssets(){
     blocked:()=>compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':null,
   });
   authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets});
-  authoringGenerateLayout=installGenerateLayout({document,trellisSettings:()=>trellisAvailability?.settings||null});redraw();
+  authoringGenerateLayout=installGenerateLayout({document,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
   window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),images:authoringImageGenerator};
 }
 

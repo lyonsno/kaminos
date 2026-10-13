@@ -62,7 +62,7 @@ class TrellisServerContracts(unittest.TestCase):
             'subprocess':SimpleNamespace(Popen=lambda *a,**k:proc,PIPE=-1,TimeoutExpired=subprocess.TimeoutExpired),
             'threading':SimpleNamespace(Thread=lambda **k:SimpleNamespace(start=lambda:None,join=lambda **k:None)),
             'time':SimpleNamespace(monotonic=lambda:next(clock)),'queue':queue,'json':json,
-            '_write_pipeline_stream_event':lambda *a:None,'_pipeline_progress_event_from_line':lambda *a:None}
+            '_write_pipeline_stream_event':lambda *a:None,'_pipeline_progress_event_from_line':lambda *a:None,'pipeline_child_env':lambda *a:dict(environ)}
         return function('run_pipeline_witness_stream',namespace),killed
 
     def test_gui_stream_survives_the_observed_ten_minute_trellis_duration(self):
@@ -77,5 +77,12 @@ class TrellisServerContracts(unittest.TestCase):
         with self.assertRaises(subprocess.TimeoutExpired) as raised:
             fn(None,{'pipelineId':'trellis-image-to-mesh-webgpu-v0'})
         self.assertEqual(raised.exception.timeout,500);self.assertEqual(killed,[True])
+
+    def test_express_reaches_the_adapter_only_as_a_valid_trellis_service_class(self):
+        fn=function('pipeline_child_env',{'os':SimpleNamespace(environ={'PATH':'/bin'})})
+        self.assertEqual(fn('trellis-image-to-mesh-webgpu-v0',{'serviceClass':'quick'})['KAMINOS_TRELLIS_SERVICE_CLASS'],'quick')
+        self.assertNotIn('KAMINOS_TRELLIS_SERVICE_CLASS',fn('trellis-image-to-mesh-webgpu-v0',{}))
+        for pipeline,value in [('trellis-image-to-mesh-webgpu-v0','vip'),('sharp-image-to-splat-live-v0','quick')]:
+            with self.assertRaises(ValueError):fn(pipeline,{'serviceClass':value})
 
 if __name__=='__main__':unittest.main()
