@@ -37,6 +37,7 @@ fn reproject(@builtin(global_invocation_id) gid:vec3<u32>){
   const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[worldNodes,worldTriangles,nodes,triangles,params,owners,matrices].map((buffer,binding)=>({binding,resource:{buffer}}))});
   let key=null,pending=null;
   return {encode(encoder,value,meshMatrices=geometry.matrices??identity){
+    pending=null; // A skipped/reverted retry must not commit an abandoned pose.
     if(meshMatrices.length!==(geometry.matrices??identity).length||!meshMatrices.every(Number.isFinite))throw Error('BVH matrix upload shape or values invalid');
     const t=validateSceneSourceTransform(value),next=JSON.stringify([t,Array.from(meshMatrices)]);if(next===key)return false;
     const groups=Math.ceil(Math.max(geometry.nodeCount,geometry.triangleCount)/64);
