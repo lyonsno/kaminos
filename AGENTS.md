@@ -15,7 +15,7 @@ unintegrated.
 
 ## Tests
 
-Run `npm test` before handing off or landing. It must report no new failures. Classify every new test file in `tests/suite.json`, and prefer behavior tests over regular-expression assertions on `index.html` source. Details: `docs/testing.md`.
+Before a handoff, run the tests you touched with `npm test -- --only tests/a.mjs,tests/b.mjs`. Before landing, run the full `npm test`; it must report no new failures. Declare the kind of each new test file on its first line, for example `// kaminos-test: node`, instead of editing the shared manifest. Prefer behavior tests over regular-expression assertions on `index.html` source. Details: `docs/testing.md`.
 
 ## Fire Basins In Cooperative Inference Smokes
 

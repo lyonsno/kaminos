@@ -1,13 +1,13 @@
 {
   "schema": "kaminos.test-suite-manifest.v1",
-  "note": "Every top-level test file must be classified. node and python run under tools/test-runner.mjs; browser, helper and manual are counted with their reason and not run there.",
+  "note": "Every top-level test file must be classified, by a first-line \"// kaminos-test: <kind>\" declaration in the file or by an entry here. node and python run under tools/test-runner.mjs; browser, helper and manual are counted with their reason and not run there. excludedRoots lists test locations outside tests/ that this runner does not cover, with the reason.",
   "tests": {
     "tests/annular-burner-contracts.mjs": {
       "kind": "node"
     },
     "tests/annular-burner-dom-contracts.mjs": {
       "kind": "browser",
-      "reason": "launches or drives a browser"
+      "reason": "drives Playwright; needs the Playwright module path argument"
     },
     "tests/apple-sharp-adapter-contracts.mjs": {
       "kind": "node"
@@ -116,8 +116,7 @@
       "kind": "node"
     },
     "tests/finger-fluid-gpu-timestamp-capture-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/finger-fluid-hydro-integration-contracts.mjs": {
       "kind": "node"
@@ -139,7 +138,7 @@
     },
     "tests/finger-fluid-moving-hill-support-contracts.mjs": {
       "kind": "browser",
-      "reason": "launches or drives a browser"
+      "reason": "spawns a witness against a live page URL"
     },
     "tests/finger-fluid-optics-composition-contracts.mjs": {
       "kind": "node"
@@ -229,8 +228,7 @@
       "kind": "python"
     },
     "tests/generated-mesh-library-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/generated-motion-track-contracts.mjs": {
       "kind": "node"
@@ -293,8 +291,7 @@
       "kind": "node"
     },
     "tests/liquid-fire-contact-consumer-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/liquid-fire-contact-shared-device-contracts.mjs": {
       "kind": "node"
@@ -403,8 +400,7 @@
       "kind": "node"
     },
     "tests/residual-boundary-sidecar-aux-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/residual-browser-contracts.mjs": {
       "kind": "node"
@@ -572,7 +568,7 @@
     },
     "tests/scene-lighting-dom-contracts.mjs": {
       "kind": "browser",
-      "reason": "launches or drives a browser"
+      "reason": "drives Playwright; needs the Playwright module path argument"
     },
     "tests/scene-load-picker-contracts.mjs": {
       "kind": "node"
@@ -584,15 +580,13 @@
       "kind": "node"
     },
     "tests/scene-navigation-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/scene-object-publication-contracts.mjs": {
       "kind": "node"
     },
     "tests/scene-object-witness-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/scene-placement-controller.mjs": {
       "kind": "node"
@@ -693,11 +687,10 @@
     },
     "tests/scene-witness-browser-admission.mjs": {
       "kind": "browser",
-      "reason": "launches or drives a browser"
+      "reason": "launches a browser executable"
     },
     "tests/scheduler-verification-receipt-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/serve-contracts.py": {
       "kind": "python"
@@ -728,7 +721,7 @@
     },
     "tests/sf3d-ordinary-memory-smoke-contracts.mjs": {
       "kind": "browser",
-      "reason": "launches or drives a browser"
+      "reason": "launches Chrome for Testing"
     },
     "tests/sf3d-real-producer-source-contracts.mjs": {
       "kind": "node"
@@ -773,8 +766,7 @@
       "kind": "node"
     },
     "tests/test-runner-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/track-m-authored-source-m0-preflight-contracts.mjs": {
       "kind": "node"
@@ -802,7 +794,7 @@
     },
     "tests/volume-arm-capture-checks-contracts.mjs": {
       "kind": "browser",
-      "reason": "launches or drives a browser"
+      "reason": "connects to a browser debugging socket"
     },
     "tests/volume-artistic-motion-controls-contracts.mjs": {
       "kind": "node"
@@ -865,8 +857,7 @@
       "kind": "node"
     },
     "tests/volume-cockpit-layout-witness-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/volume-cockpit-layout-witness-core-contracts.mjs": {
       "kind": "node"
@@ -878,8 +869,7 @@
       "kind": "node"
     },
     "tests/volume-cockpit-layout-witness-outage-slice-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/volume-cockpit-layout-witness-success-evidence-contracts.mjs": {
       "kind": "node"
@@ -903,8 +893,7 @@
       "kind": "node"
     },
     "tests/volume-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/volume-controlled-step-sequence-contracts.mjs": {
       "kind": "node"
@@ -956,7 +945,7 @@
     },
     "tests/volume-exact-basin-full-grid-export-contracts.mjs": {
       "kind": "browser",
-      "reason": "launches or drives a browser"
+      "reason": "spawns an exporter that can launch Chrome"
     },
     "tests/volume-exact-basin-support-probe-contracts.mjs": {
       "kind": "node"
@@ -1031,8 +1020,7 @@
       "kind": "node"
     },
     "tests/volume-intrinsic-presentation-witness-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/volume-kiln-composition-bridge.mjs": {
       "kind": "node"
@@ -1047,8 +1035,7 @@
       "kind": "node"
     },
     "tests/volume-layer-coefficient-live-union-witness-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/volume-live-field-viewer-contracts.mjs": {
       "kind": "node"
@@ -1139,8 +1126,7 @@
       "kind": "node"
     },
     "tests/volume-raymarch-specialization-witness-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/volume-raymarch-trilinear-baseline-contracts.mjs": {
       "kind": "node"
@@ -1161,8 +1147,7 @@
       "kind": "node"
     },
     "tests/volume-selective-head-live-contracts.mjs": {
-      "kind": "browser",
-      "reason": "launches or drives a browser"
+      "kind": "node"
     },
     "tests/volume-selective-head-motion-producer-contracts.mjs": {
       "kind": "node"
@@ -1238,7 +1223,7 @@
     },
     "tests/volume-time-step-scalar-contracts.mjs": {
       "kind": "browser",
-      "reason": "launches or drives a browser"
+      "reason": "launches a browser with a remote debugging port"
     },
     "tests/volume-transport-scheme-contracts.mjs": {
       "kind": "node"
@@ -1276,5 +1261,13 @@
     "tests/world-chambers-contracts.mjs": {
       "kind": "node"
     }
+  },
+  "excludedRoots": {
+    "webgpu-inference-kit/tests": "runs under the inference kit's own npm test in webgpu-inference-kit/; not yet delegated from this runner",
+    "models/trellis2/tests": "TRELLIS 2 port tests; not yet classified or delegated from this runner",
+    "models/flux2-klein/tests": "FLUX.2 Klein port tests; not yet classified or delegated from this runner",
+    "models/supermat/tests": "SuperMat port tests; not yet classified or delegated from this runner",
+    "models/unimate/tests": "UniMate port tests; not yet classified or delegated from this runner",
+    "demos/material-photo": "node --test suite of the material-photo demo; not yet delegated from this runner"
   }
 }

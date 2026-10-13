@@ -1,6 +1,6 @@
 {
   "schema": "kaminos.test-quarantine.v1",
-  "note": "Known failures. A listed test that fails does not fail the run; one that passes fails the run until its entry is removed. Classes: untriaged, regression, stale-pin, environment, harness-defect.",
+  "note": "Known failures. A listed test that fails with exactly its recorded signature does not fail the run. Any other failure, a timeout, a test that cannot start, or a listed test that now passes fails the run. Classes: untriaged, regression, stale-pin, environment, harness-defect. Every entry needs class, owner, reason and signature.",
   "baseline": {
     "mainCommit": "954f622e",
     "date": "2026-10-12"
@@ -10,252 +10,312 @@
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: witness readback uses the exact accepted instance count without a hidden row cap",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: witness readback uses the exact accepted instance count without a hidden row cap",
       "testLastChanged": "2026-07-12 c9817cd5"
     },
     "tests/boundary-splat-renderer-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: capacity growth is bounded by physical grid cells and otherwise rounds up to avoid repeated reallocations",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: capacity growth is bounded by physical grid cells and otherwise rounds up to avoid repeated reallocations",
       "testLastChanged": "2026-09-15 bef9d69f"
     },
     "tests/boundary-splat-support-covariance-composition-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: tuned heat, reaction, front, and interface support must remain upstream of baked sidecar structure",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: tuned heat, reaction, front, and interface support must remain upstream of baked sidecar structure",
       "testLastChanged": "2026-07-17 db060b42"
     },
     "tests/finger-fluid-analytic-carrier-optics-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: const error = new Error(message);",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "Error: support maximum spatial Lipschitz bound must be finite",
       "testLastChanged": "2026-07-25 79bc04fe"
     },
     "tests/finger-fluid-bench-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: refraction can capture the exact same-camera support presentation from the current canvas texture",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: refraction can capture the exact same-camera support presentation from the current canvas texture",
       "testLastChanged": "2026-09-23 58ea38c6"
     },
     "tests/finger-fluid-waterfall-continuity-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: particle allocation preflight must run before proportional CPU truth-scene arrays are created",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: particle allocation preflight must run before proportional CPU truth-scene arrays are created",
       "testLastChanged": "2026-07-20 2460360d"
     },
     "tests/finger-fluid-waterfall-resolution-oracle-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /COMPUTE_SHADER\\.replaceAll\\(\\s*KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN/. Input:",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /COMPUTE_SHADER\\.replaceAll\\(\\s*KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN/. Input: | \"export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';\\n\" + | \"export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';\\n\" + | \"export const KAMINOS_FINGER_FLUID_DENSITY_CONTRACT = 'wgsl-pbf-density-constraint-v0';\\n\" + | \"export const KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT = 'wgsl-analytic-boundary-density-support-v0';\\n\" +",
       "testLastChanged": "2026-07-25 79bc04fe"
     },
     "tests/fire-shadow-burner-frame-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: ReferenceError: exclusiveInspectionRender is not defined",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "ReferenceError: exclusiveInspectionRender is not defined",
       "testLastChanged": "2026-09-26 89aa0bec"
     },
     "tests/hill-moving-support-consumer-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: HILL_SUPPORT_PACKAGE_REPORT must name the exact LERMS package witness report",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: HILL_SUPPORT_PACKAGE_REPORT must name the exact LERMS package witness report",
       "testLastChanged": "2026-07-25 db11558f"
     },
     "tests/hill-moving-support-consumer-witness-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: HILL_SUPPORT_PACKAGE_REPORT must name the exact LERMS package witness report",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: HILL_SUPPORT_PACKAGE_REPORT must name the exact LERMS package witness report",
       "testLastChanged": "2026-07-25 d85795cf"
+    },
+    "tests/liquid-fire-contact-consumer-contracts.mjs": {
+      "class": "untriaged",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "failing on main 25ebacb0; previously misclassified as a browser test and not run",
+      "signature": "AssertionError [ERR_ASSERTION]: persistent wetness suppresses flame only in locally wetted cells",
+      "testLastChanged": "2026-09-27 0ae47036"
+    },
+    "tests/residual-boundary-sidecar-aux-contracts.mjs": {
+      "class": "untriaged",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "failing on main 25ebacb0; previously misclassified as a browser test and not run",
+      "signature": "AssertionError [ERR_ASSERTION]: instrumented runtime must carry the source-owned RGB-upscale replay preset before paired capture",
+      "testLastChanged": "2026-07-11 ebf04eba"
     },
     "tests/residual-upscale-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: residual trainer must expose explicit full-frame preview mode instead of relying on oversized crop accidents",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: residual trainer must expose explicit full-frame preview mode instead of relying on oversized crop accidents",
       "testLastChanged": "2026-07-10 1769320f"
     },
     "tests/scene-ao-depth-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: ReferenceError: document is not defined",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "ReferenceError: document is not defined",
       "testLastChanged": "2026-09-17 3512d1d0"
     },
     "tests/scene-authoring-integration-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /const entry = sceneObjects\\.find\\(item => item\\.id === activeSceneObjectId\\);\\s*const chan",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /const entry = sceneObjects\\.find\\(item => item\\.id === activeSceneObjectId\\);\\s*const changed = frameSceneObjectRecord\\(entry, camera, controls\\)/. Input: | '<!DOCTYPE html>\\n' + | '<html lang=\"en\">\\n' + | '<head>\\n' + | '<meta charset=\"UTF-8\">\\n' +",
       "testLastChanged": "2026-10-01 e372f2eb"
     },
     "tests/scene-authoring-polish-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: PASS environment backdrop brightness and contrast are independent from scene lighting",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "FAIL burner visibility preserves the authored recipe and its disabled scene roundtrip: selectedBedRecipe is not defined",
       "testLastChanged": "2026-09-18 9ec0b9a3"
     },
     "tests/scene-authoring-review-regressions.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: a changed basin must not be linked to pixels under the earlier immutable preset",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: a changed basin must not be linked to pixels under the earlier immutable preset",
       "testLastChanged": "2026-09-29 9a71cce7"
     },
     "tests/scene-composition-basin-identity-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: a preset is written only when the loaded basin changed",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: a preset is written only when the loaded basin changed",
       "testLastChanged": "2026-09-25 cc87e283"
     },
     "tests/scene-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: row keyboard selection must ignore events from child remove controls",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: row keyboard selection must ignore events from child remove controls",
       "testLastChanged": "2026-10-01 fd742f0e"
     },
     "tests/scene-flame-emitter.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: ReferenceError: groupProxies is not defined",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "ReferenceError: groupProxies is not defined",
       "testLastChanged": "2026-10-04 c08d9e30"
     },
     "tests/scene-floor-receivers-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: | + actual - expected | + 8421504 | - 1118481",
       "testLastChanged": "2026-10-01 ccc0808b"
     },
     "tests/scene-lighting-authoring-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: TypeError: Cannot set properties of undefined (setting 'authoringDragStep')",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "TypeError: Cannot set properties of undefined (setting 'authoringDragStep')",
       "testLastChanged": "2026-09-18 9ec0b9a3"
+    },
+    "tests/scene-navigation-contracts.mjs": {
+      "class": "untriaged",
+      "owner": "operlocutor",
+      "since": "2026-10-12",
+      "reason": "failing on main 25ebacb0; previously misclassified as a browser test and not run",
+      "signature": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value: | assert.ok(roots.includes('sceneObjects.filter(entry => entry.type !== \\'splat\\' && entry.id !== RIM_LIGHT_ID)'))",
+      "testLastChanged": "2026-10-01 e372f2eb"
     },
     "tests/scene-roundtrip.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: round-trip scene document saves authored object groups",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: round-trip scene document saves authored object groups",
       "testLastChanged": "2026-09-17 d1a5c7b2"
     },
     "tests/serve-contracts.py": {
-      "class": "untriaged",
+      "class": "environment",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: Traceback (most recent call last):",
+      "reason": "reads artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json, which git ignores, so it fails in any clean checkout",
+      "signature": "FileNotFoundError: [Errno 2] No such file or directory: '<root>/artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json'",
       "testLastChanged": "2026-07-15 e7f06af9"
     },
     "tests/volume-bonfire-macro-force-periodicity-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: transported vorticity confinement remains active",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: transported vorticity confinement remains active",
       "testLastChanged": "2026-09-24 c85749c5"
     },
     "tests/volume-cockpit-polish-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: the unused transform toolbar is suppressed in the Volume cockpit",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: the unused transform toolbar is suppressed in the Volume cockpit",
       "testLastChanged": "2026-09-24 db3b7f58"
     },
     "tests/volume-common-gas-transport.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: ReferenceError: sceneClipCharacteristic is not defined",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "ReferenceError: sceneClipCharacteristic is not defined",
       "testLastChanged": "2026-10-06 5b887704"
     },
     "tests/volume-confinement-mode-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: enstrophy is reported per cell",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: enstrophy is reported per cell",
       "testLastChanged": "2026-10-06 0740886f"
     },
     "tests/volume-dead-render-clock-retirement-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: explicit analytic-emitter temporal descriptors retain their isolated render-time input",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: explicit analytic-emitter temporal descriptors retain their isolated render-time input",
       "testLastChanged": "2026-09-01 c88608ef"
     },
     "tests/volume-device-layout-capacity.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: ReferenceError: state is not defined",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "ReferenceError: state is not defined",
       "testLastChanged": "2026-09-24 3c536cce"
     },
     "tests/volume-dynamic-texture-proof-retirement-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: live executable synthetic texture producer scene-volume-gather.mjs must not restore unclassified periodic authorship",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: live executable synthetic texture producer scene-volume-gather.mjs must not restore unclassified periodic authorship",
       "testLastChanged": "2026-09-24 299c20c9"
     },
     "tests/volume-frozen-composition-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: frozen render composites requested splats over any requested raymarch pass",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: frozen render composites requested splats over any requested raymarch pass",
       "testLastChanged": "2026-07-15 304a1c4e"
     },
     "tests/volume-periodic-excitation-controls-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: field-derived vorticity confinement remains independent",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: field-derived vorticity confinement remains independent",
       "testLastChanged": "2026-09-05 cd7484a4"
     },
     "tests/volume-scalar-advection-periodicity-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: thermal material advection must not hide analytic slip behind helper calls: sampleFluidSlotMasked",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: thermal material advection must not hide analytic slip behind helper calls: sampleFluidSlotMasked",
       "testLastChanged": "2026-09-05 cd7484a4"
     },
     "tests/volume-settings-preset-contracts.mjs": {
-      "class": "untriaged",
+      "class": "environment",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: Error: ENOENT: no such file or directory, open 'artifacts/volume-captures/20260715-082845-opera",
+      "reason": "reads artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json, which git ignores, so it fails in any clean checkout",
+      "signature": "Error: ENOENT: no such file or directory, open '<root>/artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json'",
       "testLastChanged": "2026-09-01 2e6832fb"
     },
     "tests/volume-settings-store-contracts.py": {
-      "class": "untriaged",
+      "class": "environment",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: Traceback (most recent call last):",
+      "reason": "reads artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json, which git ignores, so it fails in any clean checkout",
+      "signature": "FileNotFoundError: [Errno 2] No such file or directory: '<root>/artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json'",
       "testLastChanged": "2026-08-30 88a7dada"
     },
     "tests/volume-transport-scheme-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: predictor must not be added to the shared fluid bind group layout",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: predictor must not be added to the shared fluid bind group layout",
       "testLastChanged": "2026-10-06 5b887704"
     },
     "tests/volume-transported-detail-force-periodicity-contracts.mjs": {
       "class": "untriaged",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e at runner baseline; first error: AssertionError [ERR_ASSERTION]: missing source marker:   let confinement =",
+      "reason": "failing on main 954f622e when the runner was introduced",
+      "signature": "AssertionError [ERR_ASSERTION]: missing source marker:   let confinement =",
       "testLastChanged": "2026-09-05 cd7484a4"
     }
   }

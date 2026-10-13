@@ -11,6 +11,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '25'
@@ -18,9 +20,22 @@ jobs:
         with:
           python-version: '3.12'
       - run: python3 -m pip install numpy
+      - run: npm ci
+      - name: serve.py starts
+        run: |
+          python3 serve.py 18499 > serve-startup.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18499/api/runtime-config > /dev/null; then echo "serve.py up after $i polls"; break; fi
+            sleep 0.5
+          done
+          kill $pid || true
+          cat serve-startup.log
       - run: node tools/test-runner.mjs --report test-results/report.json
       - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: test-results/
+          path: |
+            test-results/
+            serve-startup.log
