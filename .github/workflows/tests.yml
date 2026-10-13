@@ -8,10 +8,6 @@ on:
 jobs:
   suite:
     runs-on: macos-latest
-    env:
-      # The macOS runner holds connections to new servers listening on all
-      # interfaces; loopback-only listeners are not intercepted.
-      KAMINOS_BIND_HOST: 127.0.0.1
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4

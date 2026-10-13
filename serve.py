@@ -11,6 +11,7 @@ import math
 import os
 import queue
 import re
+import socketserver
 import subprocess
 import sys
 import tempfile
@@ -4473,6 +4474,19 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         super().log_message(format, *args)
 
 
+class KaminosServer(http.server.ThreadingHTTPServer):
+    """ThreadingHTTPServer without the fully qualified hostname lookup that
+    http.server performs while binding. On macOS that lookup goes to multicast
+    DNS and can stall for tens of seconds per process. Nothing here reads
+    server_name, so the bound host stands in for it."""
+
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = host or "localhost"
+        self.server_port = port
+
+
 if __name__ == "__main__":
     try:
         if SHARED_BASIN_STORE_ERROR and "--no-shared-basin-store" not in sys.argv and "--shared-basin-store" not in sys.argv:
@@ -4498,7 +4512,7 @@ if __name__ == "__main__":
     # 127.0.0.1 on CI runners that intercept servers listening on all
     # interfaces. The default stays all interfaces for LAN access.
     bind_host = os.environ.get("KAMINOS_BIND_HOST", "")
-    server = http.server.ThreadingHTTPServer((bind_host, PORT), KaminosHandler)
+    server = KaminosServer((bind_host, PORT), KaminosHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
