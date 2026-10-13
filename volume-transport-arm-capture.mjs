@@ -184,6 +184,8 @@ try {
   writeReport();
 
   let expectedMode = admitted.confinement?.mode ?? null;
+  // Step at which the latest arm configuration took effect (emissive witness freshness, review GR-02).
+  let lastConfigStep = null;
   for (const arm of arms) {
     report.failurePhase = `arm-${arm.name}-switch`;
     const applied = [];
@@ -232,7 +234,7 @@ try {
         const sample = await evaluate(op(`(async () => { const p = w.__kaminosVolumePrototype; if (!p?.sampleEmissiveSeedCoefficients) return { status: 'missing-api' }; return await p.sampleEmissiveSeedCoefficients(); })()`));
         (arm.emissiveCoefficients ||= []).push(sample);
         applied.push([cid, value, sample?.status ?? null]);
-        const mismatch = emissiveCoefficientsMismatch(sample);
+        const mismatch = emissiveCoefficientsMismatch(sample, { minProducerStep: lastConfigStep });
         if (mismatch) { report.lastTrustworthyEvidence.applied = applied; report.lastTrustworthyEvidence.emissiveCoefficients = sample; fail(report.failurePhase, mismatch); }
         continue;
       }
@@ -245,6 +247,7 @@ try {
     await sleep(1500);
     const after = await evaluate(stateExpr);
     if (!after) fail(report.failurePhase, 'renderer state unavailable after switch');
+    if (arm.set.some(([id]) => !id.startsWith('@'))) lastConfigStep = after.simStepCount;
     report.failurePhase = `arm-${arm.name}-settle`;
     const t0 = Date.now(); const s0 = after.simStepCount;
     const samples = [];

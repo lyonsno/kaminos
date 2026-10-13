@@ -211,12 +211,13 @@ export function parseArms(armsArg) {
 
 // Emissive seed coefficient witness (review GR-01): an arm fails unless the
 // readback is a complete, finite, nonzero and spatially varying field.
-export function emissiveCoefficientsMismatch(sample) {
+export function emissiveCoefficientsMismatch(sample, { minProducerStep = null } = {}) {
   if (!sample || sample.status !== 'sampled') return `emissive coefficients ${sample?.status ?? 'missing'}${sample?.reason ? ` (${sample.reason})` : ''}`;
   const p = sample.producer;
   if (!p) return 'emissive coefficients have no producer (no seed dispatch recorded)';
   if (String(p.grid) !== String(sample.grid)) return `emissive coefficients produced at grid ${p.grid}, current ${sample.grid}`;
   if (!(p.frameLag <= 2)) return `emissive coefficients stale: produced ${p.frameLag} frames ago`;
+  if (minProducerStep !== null && !(p.simStepCount >= minProducerStep)) return `emissive coefficients produced at step ${p.simStepCount}, before the configuration took effect at step ${minProducerStep}`;
   if (sample.finiteCells !== sample.cells) return `emissive coefficients have non-finite cells (${sample.cells - sample.finiteCells})`;
   if (!(sample.nonzeroCells > 0)) return 'emissive coefficients have no nonzero cell';
   if (!(sample.extinctionStdDev > 0)) return 'emissive coefficients are spatially flat';

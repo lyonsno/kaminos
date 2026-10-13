@@ -167,3 +167,19 @@ test('emissive seed witness is bound to its producer: frame, step and grid of th
   assert.match(emissiveCoefficientsMismatch({ ...base, producer: { grid: [48, 96, 48], frameLag: 9 } }), /stale: produced 9 frames ago/);
   assert.match(emissiveCoefficientsMismatch({ status: 'unsupported', reason: 'emissive-seed-not-dispatched' }), /unsupported \(emissive-seed-not-dispatched\)/);
 });
+
+// GR-02 residuals (confirmation of 957e20b7): a frame that skips the seed
+// (distributed lighting or physical colour off) clears the producer at once,
+// and the capture requires the producer to be newer than the step at which the
+// arm's last configuration took effect.
+test('the producer is cleared on any frame that skips the seed; the capture requires a producer newer than the last configuration', async () => {
+  const { emissiveCoefficientsMismatch } = await import('../volume-arm-capture-checks.mjs');
+  assert.match(source, /      if\(distributedGroup\) \{\n\s+emissiveSeedProducer = null;/);
+  assert.match(source, /    if \(uniforms\[368\] <= 1\.5\) emissiveSeedProducer = null;/);
+  const base = { status: 'sampled', grid: [48, 96, 48], cells: 4, finiteCells: 4, nonzeroCells: 2, extinctionStdDev: 0.5, producer: { grid: [48, 96, 48], frameLag: 1, simStepCount: 120 } };
+  assert.equal(emissiveCoefficientsMismatch(base, { minProducerStep: 100 }), null);
+  assert.match(emissiveCoefficientsMismatch(base, { minProducerStep: 121 }), /produced at step 120, before the configuration took effect at step 121/);
+  const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
+  assert.match(capture, /const mismatch = emissiveCoefficientsMismatch\(sample, \{ minProducerStep: lastConfigStep \}\);/);
+  assert.match(capture, /if \(arm\.set\.some\(\(\[id\]\) => !id\.startsWith\('@'\)\)\) lastConfigStep = after\.simStepCount;/);
+});
