@@ -66,7 +66,6 @@ assert.deepEqual(
   [presetSchema.controls.length, presetSchema.rendererControls.length, presetSchema.presentationControls.length],
   'synthetic witness index exposes every current schema axis',
 );
-assert.match(witness, /\/api\/pipeline-manifest/, 'witness server supplies the pipeline manifest API instead of allowing a page-level 404');
 assert.match(witness, /browser-event-audit/, 'witness names browser event admission as an explicit failure phase');
 assert.match(witness, /Runtime\.exceptionThrown/, 'witness rejects unhandled browser runtime exceptions');
 assert.match(witness, /Log\.entryAdded[\s\S]*level[\s\S]*error/, 'witness rejects browser error log entries');

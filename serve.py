@@ -2313,9 +2313,6 @@ BROWSE_ROOTS = {
     "pixal3d": Path(os.path.expanduser("~/dev/pixal3d-mlx/outputs")),
     "trellis2mlx": Path(os.path.expanduser("~/dev/trellis2mlx/assets/outputs")),
 }
-PIPELINE_SOURCE_ROOT_EXCLUSIONS = {
-    "lerms-preview",
-}
 
 GREENROOM_STATUS_DIRS = ("done", "failed", "running", "pending", "cancelled")
 MESH_EXTENSIONS = {".glb", ".gltf", ".obj", ".ply", ".spz"}
@@ -2369,8 +2366,6 @@ for index, extra_root in enumerate(filter(None, os.environ.get("KAMINOS_SPLAT_AS
     })
 JOB_OUTPUT_EVENTS = []
 JOB_OUTPUT_EVENTS_LOCK = threading.Lock()
-PIPELINE_MANIFEST_PATH = ROOT / "pipelines" / "asset-pipelines.json"
-PIPELINE_WITNESS_PATH = ROOT / "pipeline-witness.mjs"
 
 
 def runtime_config():
@@ -2547,296 +2542,6 @@ def save_mesh_generation_origin(result):
             finally:
                 temporary.unlink(missing_ok=True)
     return {'schema': 'kaminos.mesh-generation-origin.v1', 'result': result}
-
-
-def pipeline_manifest_payload():
-    document = json.loads(PIPELINE_MANIFEST_PATH.read_text())
-    for pipeline in document.get("pipelines", []):
-        if pipeline.get("id") == "trellis-image-to-mesh-webgpu-v0":
-            pipeline["availability"] = trellis_generation_availability()
-    return {
-        **document,
-        "manifestPath": str(PIPELINE_MANIFEST_PATH),
-        "manifestSha256": _sha256_file(PIPELINE_MANIFEST_PATH),
-    }
-
-
-def trellis_generation_availability():
-    config_path = os.environ.get("KAMINOS_TRELLIS_CONFIG")
-    if not config_path:
-        return {"status": "unconfigured", "message": "Local TRELLIS setup required"}
-    try:
-        config = json.loads(Path(config_path).read_text())
-        if config.get("schema") != "trellis2.local-generation-config.v0":
-            raise ValueError("Choose a TRELLIS local generation configuration")
-        for key in ["repoRoot", "checkpointBase", "sourceRoot", "queueDir"]:
-            value = config.get(key)
-            if not isinstance(value, str) or not Path(value).is_absolute() or not Path(value).is_dir():
-                raise ValueError(f"TRELLIS setup needs {key}")
-        for key in ["python", "memoryPython", "chrome", "greenroomBin"]:
-            value = config.get(key)
-            if not isinstance(value, str) or not Path(value).is_absolute() or not Path(value).is_file():
-                raise ValueError(f"TRELLIS setup needs {key}")
-        if not (Path(config["checkpointBase"]) / "manifest.json").is_file():
-            raise ValueError("TRELLIS setup needs a prepared checkpoint package")
-        if not (Path(config["repoRoot"]) / "models/trellis2/generate-image.mjs").is_file():
-            raise ValueError("TRELLIS generation tools are missing from the configured checkout")
-        for key in ["steps", "targetFaces", "gpuBufferBudgetMiB", "processMemoryBudgetMiB"]:
-            if type(config.get(key)) is not int or config[key] < 1:
-                raise ValueError(f"TRELLIS setup needs an explicit {key}")
-        if config.get("pipelineType") not in ["512", "1024_cascade"] or config.get("decoderActivationStorage") not in ["f32", "f16"]:
-            raise ValueError("TRELLIS setup needs a supported profile and storage selection")
-        for key in ["expectedCommit", "expectedSourceCommit"]:
-            if not re.fullmatch(r"[a-f0-9]{40}", config.get(key, "")):
-                raise ValueError(f"TRELLIS setup needs {key}")
-        if type(config.get("seed")) is not int or not 0 <= config["seed"] <= 0xffffffff:
-            raise ValueError("TRELLIS setup needs an unsigned32 seed")
-        if config.get("textureSize", 1024) != 1024:
-            raise ValueError("This TRELLIS finishing route uses 1K textures")
-        return {"status": "available", "message": "Queued WebGPU with local mesh finishing"}
-    except (OSError, ValueError, TypeError) as error:
-        return {"status": "unavailable", "message": str(error)}
-
-
-def _declared_read_roots():
-    roots = [ROOT]
-    roots.extend(Path(path).expanduser() for path in BROWSE_ROOTS.values())
-    return [root.resolve() for root in roots if root.exists()]
-
-
-def _declared_pipeline_source_roots():
-    roots = [ROOT]
-    roots.extend(
-        Path(path).expanduser()
-        for root_id, path in BROWSE_ROOTS.items()
-        if root_id not in PIPELINE_SOURCE_ROOT_EXCLUSIONS
-    )
-    return [root.resolve() for root in roots if root.exists()]
-
-
-def _resolve_api_read_source(source):
-    parsed = urlparse(source)
-    if parsed.path != "/api/read":
-        raise ValueError("source route must use /api/read")
-    params = parse_qs(parsed.query)
-    root_name = params.get("root", [""])[0]
-    rel_path = params.get("path", [""])[0]
-    root = BROWSE_ROOTS.get(root_name)
-    if not root:
-        raise ValueError(f"Unknown root: {root_name}")
-    lexical_target = Path(root).expanduser() / rel_path
-    target = lexical_target.resolve()
-    if not target.is_relative_to(Path(root).expanduser().resolve()):
-        if splat_asset_root_allows_pointer(root_name) and lexical_target.suffix.lower() in SPLAT_EXTENSIONS:
-            target = lexical_target
-        else:
-            raise PermissionError("Path traversal")
-    if not target.is_file():
-        raise FileNotFoundError(str(target))
-    return target.resolve()
-
-
-def _api_read_source_root(source):
-    parsed = urlparse(source)
-    if parsed.path != "/api/read":
-        raise ValueError("source route must use /api/read")
-    params = parse_qs(parsed.query)
-    return params.get("root", [""])[0]
-
-
-def resolve_pipeline_source(payload):
-    source = str(payload.get("source") or "").strip()
-    source_path = str(payload.get("sourcePath") or "").strip()
-    if source.startswith("/api/read"):
-        if _api_read_source_root(source) in PIPELINE_SOURCE_ROOT_EXCLUSIONS:
-            raise PermissionError("pipeline source must live under declared Kaminos roots")
-        target = _resolve_api_read_source(source)
-        return {"source": source, "path": str(target)}
-    if source_path:
-        candidate = Path(source_path).expanduser()
-    elif source:
-        candidate = Path(source).expanduser()
-    else:
-        raise ValueError("source or sourcePath required")
-    if not candidate.is_absolute():
-        candidate = ROOT / candidate
-    target = candidate.resolve()
-    if not target.is_file():
-        raise FileNotFoundError(str(target))
-    if not any(target.is_relative_to(root) for root in _declared_pipeline_source_roots()):
-        raise PermissionError("pipeline source must live under declared Kaminos roots")
-    return {"source": source or source_path, "path": str(target)}
-
-
-def _default_pipeline_out_dir(pipeline_id):
-    safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", pipeline_id or "pipeline").strip("-") or "pipeline"
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    return (KAMINOS_PIPELINE_RUNS_DIR / f"{stamp}-{os.getpid()}-{safe}-{uuid.uuid4().hex}").resolve()
-
-
-def run_pipeline_witness(payload):
-    pipeline_id = str(payload.get("pipelineId") or payload.get("pipeline_id") or "").strip()
-    if not pipeline_id:
-        raise ValueError("pipelineId required")
-    source = resolve_pipeline_source(payload)
-    out_dir_raw = str(payload.get("outDir") or payload.get("out_dir") or "").strip()
-    out_dir = Path(out_dir_raw).expanduser() if out_dir_raw else _default_pipeline_out_dir(pipeline_id)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    report_path = out_dir / "pipeline-witness.json"
-    command = [
-        os.environ.get("KAMINOS_NODE", "node"),
-        str(PIPELINE_WITNESS_PATH),
-        "--manifest", str(PIPELINE_MANIFEST_PATH),
-        "--pipeline-id", pipeline_id,
-        "--input", source["path"],
-        "--out-dir", str(out_dir),
-        "--report", str(report_path),
-    ]
-    # TRELLIS has exercised ten-minute previews. Explicit operator timeouts
-    # still apply; the legacy six-minute default cannot silently stop this route.
-    timeout_value = os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT")
-    timeout = int(timeout_value) if timeout_value is not None else (
-        None if pipeline_id == "trellis-image-to-mesh-webgpu-v0" else 360)
-    proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
-    report = json.loads(report_path.read_text()) if report_path.exists() else None
-    bundle_path = Path(report["bundleIndex"]["path"]) if report and report.get("bundleIndex") else None
-    bundle = json.loads(bundle_path.read_text()) if bundle_path and bundle_path.exists() else None
-    return {
-        "schema": "kaminos.pipeline-run-result.v0",
-        "ok": proc.returncode == 0 and bool(report and report.get("ok")),
-        "pipelineId": pipeline_id,
-        "source": source,
-        "command": command,
-        "exitCode": proc.returncode,
-        "stdoutTail": proc.stdout[-4000:],
-        "stderrTail": proc.stderr[-4000:],
-        "report": {
-            "path": str(report_path),
-            "document": report,
-        },
-        "bundle": {
-            "path": str(bundle_path) if bundle_path else None,
-            "document": bundle,
-        },
-    }
-
-
-def _pipeline_progress_event_from_line(line, stream_name):
-    text = str(line or "").strip()
-    if not text:
-        return None
-    try:
-        event = json.loads(text)
-    except json.JSONDecodeError:
-        return None
-    if event.get("schema") != "kaminos.pipeline-progress.v0":
-        return None
-    return {
-        **event,
-        "schema": "kaminos.pipeline-progress.v0",
-        "kind": event.get("kind") or "pipeline-progress",
-        "stream": stream_name,
-    }
-
-
-def _write_pipeline_stream_event(handler, event):
-    body = (json.dumps(event, separators=(",", ":")) + "\n").encode()
-    handler.wfile.write(body)
-    handler.wfile.flush()
-
-
-def run_pipeline_witness_stream(handler, payload):
-    pipeline_id = str(payload.get("pipelineId") or payload.get("pipeline_id") or "").strip()
-    if not pipeline_id:
-        raise ValueError("pipelineId required")
-    source = resolve_pipeline_source(payload)
-    out_dir_raw = str(payload.get("outDir") or payload.get("out_dir") or "").strip()
-    out_dir = Path(out_dir_raw).expanduser() if out_dir_raw else _default_pipeline_out_dir(pipeline_id)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    report_path = out_dir / "pipeline-witness.json"
-    command = [
-        os.environ.get("KAMINOS_NODE", "node"),
-        str(PIPELINE_WITNESS_PATH),
-        "--manifest", str(PIPELINE_MANIFEST_PATH),
-        "--pipeline-id", pipeline_id,
-        "--input", source["path"],
-        "--out-dir", str(out_dir),
-        "--report", str(report_path),
-    ]
-    timeout_raw = os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT")
-    timeout = int(timeout_raw) if timeout_raw is not None else (
-        None if pipeline_id == "trellis-image-to-mesh-webgpu-v0" else 360
-    )
-    proc = subprocess.Popen(
-        command,
-        cwd=ROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1,
-        env={**os.environ, "KAMINOS_PIPELINE_PROGRESS_STREAM": "1"},
-    )
-    events = queue.Queue()
-    stdout_chunks = []
-    stderr_chunks = []
-
-    def reader(pipe, stream_name, chunks):
-        try:
-            for line in iter(pipe.readline, ""):
-                chunks.append(line)
-                event = _pipeline_progress_event_from_line(line, stream_name)
-                if event:
-                    events.put(event)
-        finally:
-            pipe.close()
-
-    threads = [
-        threading.Thread(target=reader, args=(proc.stdout, "stdout", stdout_chunks), daemon=True),
-        threading.Thread(target=reader, args=(proc.stderr, "stderr", stderr_chunks), daemon=True),
-    ]
-    for thread in threads:
-        thread.start()
-    started = time.monotonic()
-    while proc.poll() is None:
-        if timeout is not None and time.monotonic() - started > timeout:
-            proc.kill()
-            raise subprocess.TimeoutExpired(command, timeout)
-        try:
-            _write_pipeline_stream_event(handler, events.get(timeout=0.05))
-        except queue.Empty:
-            pass
-    for thread in threads:
-        thread.join(timeout=1)
-    while True:
-        try:
-            _write_pipeline_stream_event(handler, events.get_nowait())
-        except queue.Empty:
-            break
-
-    report = json.loads(report_path.read_text()) if report_path.exists() else None
-    bundle_path = Path(report["bundleIndex"]["path"]) if report and report.get("bundleIndex") else None
-    bundle = json.loads(bundle_path.read_text()) if bundle_path and bundle_path.exists() else None
-    result = {
-        "schema": "kaminos.pipeline-run-result.v0",
-        "kind": "pipeline-result",
-        "ok": proc.returncode == 0 and bool(report and report.get("ok")),
-        "pipelineId": pipeline_id,
-        "source": source,
-        "command": command,
-        "exitCode": proc.returncode,
-        "stdoutTail": "".join(stdout_chunks)[-4000:],
-        "stderrTail": "".join(stderr_chunks)[-4000:],
-        "report": {
-            "path": str(report_path),
-            "document": report,
-        },
-        "bundle": {
-            "path": str(bundle_path) if bundle_path else None,
-            "document": bundle,
-        },
-    }
-    _write_pipeline_stream_event(handler, result)
-    return result
 
 
 def _clean_label(value, fallback="Untitled"):
@@ -3415,8 +3120,6 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json(report)
         elif parsed.path == "/api/runtime-config":
             self.handle_runtime_config()
-        elif parsed.path == "/api/pipeline-manifest":
-            self.handle_pipeline_manifest()
         elif parsed.path == "/api/browse":
             self.handle_browse(parse_qs(parsed.query))
         elif parsed.path == "/api/authoring-assets":
@@ -3479,8 +3182,6 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_scene_library_import()
         elif parsed.path == "/api/save-scene":
             self.handle_save_scene()
-        elif parsed.path == "/api/run-pipeline":
-            self.handle_run_pipeline()
         elif parsed.path == "/api/ingest-splat":
             self.handle_ingest_splat(parse_qs(parsed.query))
         elif parsed.path == "/api/ingest-image":
@@ -3507,14 +3208,6 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_forge_host_registry(self):
         self.send_json(build_forge_host_registry_snapshot())
-
-    def handle_pipeline_manifest(self):
-        try:
-            self.send_json(pipeline_manifest_payload())
-        except FileNotFoundError as error:
-            self.send_json({"error": str(error)}, 404)
-        except Exception as error:
-            self.send_json({"error": str(error)}, 500)
 
     def volume_capture_slug(self, payload):
         requested = str(payload.get("name") or payload.get("captureId") or payload.get("kind") or "volume-capture")
@@ -3944,55 +3637,6 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "presetUrl": preset_url,
             "document": document,
         })
-
-    def handle_run_pipeline(self):
-        try:
-            length = int(self.headers.get("Content-Length", 0))
-        except ValueError:
-            self.send_json({"error": "Invalid Content-Length"}, 400)
-            return
-        try:
-            payload = json.loads(self.rfile.read(length) or b"{}")
-        except json.JSONDecodeError:
-            self.send_json({"error": "Invalid JSON"}, 400)
-            return
-        wants_stream = bool(payload.get("streamProgress")) or "application/x-ndjson" in self.headers.get("Accept", "")
-        if wants_stream:
-            self.send_response(200)
-            self.send_header("Content-Type", "application/x-ndjson")
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            try:
-                run_pipeline_witness_stream(self, payload)
-            except ValueError as error:
-                _write_pipeline_stream_event(self, {"schema": "kaminos.pipeline-run-result.v0", "kind": "pipeline-result", "ok": False, "error": str(error)})
-            except PermissionError as error:
-                _write_pipeline_stream_event(self, {"schema": "kaminos.pipeline-run-result.v0", "kind": "pipeline-result", "ok": False, "error": str(error)})
-            except FileNotFoundError as error:
-                _write_pipeline_stream_event(self, {"schema": "kaminos.pipeline-run-result.v0", "kind": "pipeline-result", "ok": False, "error": str(error)})
-            except subprocess.TimeoutExpired:
-                _write_pipeline_stream_event(self, {"schema": "kaminos.pipeline-run-result.v0", "kind": "pipeline-result", "ok": False, "error": "pipeline witness timed out"})
-            except Exception as error:
-                _write_pipeline_stream_event(self, {"schema": "kaminos.pipeline-run-result.v0", "kind": "pipeline-result", "ok": False, "error": str(error)})
-            return
-        try:
-            result = run_pipeline_witness(payload)
-        except ValueError as error:
-            self.send_json({"error": str(error)}, 400)
-            return
-        except PermissionError as error:
-            self.send_json({"error": str(error)}, 403)
-            return
-        except FileNotFoundError as error:
-            self.send_json({"error": str(error)}, 404)
-            return
-        except subprocess.TimeoutExpired:
-            self.send_json({"error": "pipeline witness timed out"}, 504)
-            return
-        except Exception as error:
-            self.send_json({"error": str(error)}, 500)
-            return
-        self.send_json(result, 200 if result.get("ok") else 500)
 
     def handle_save_scene(self):
         """Save a scene JSON to the scenes directory.

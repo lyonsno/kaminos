@@ -367,30 +367,6 @@
     "tests/pipeline-contracts.mjs": {
       "kind": "node"
     },
-    "tests/pipeline-graph-artifact-ui-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/pipeline-graph-cleanup-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/pipeline-graph-ergonomics-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/pipeline-graph-scheduler-envelope-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/pipeline-graph-workspace-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/pipeline-native-progress-stream-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/pipeline-route-live-status-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/pipeline-ui-witness-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/png-fixture.mjs": {
       "kind": "helper",
       "reason": "PNG fixture builder imported by other tests"
