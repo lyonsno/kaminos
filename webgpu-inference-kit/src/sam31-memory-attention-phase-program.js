@@ -700,8 +700,9 @@ function layerWeightArrays(layer) {
 }
 
 export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
-  // 'flash' (kit tiled flash attention, default) or 'online' (the original per-query kernel, A/B baseline).
-  const attentionKernel = input.attentionKernel ?? 'flash';
+  // 'online' (the original per-query kernel, default) or 'flash' (kit tiled flash attention, opt-in): the
+  // tracker keeps the original until a real bank/propagation exercise admits flash at intended geometry.
+  const attentionKernel = input.attentionKernel ?? 'online';
   if (attentionKernel !== 'flash' && attentionKernel !== 'online') throw new RangeError(`unsupported SAM 3.1 memory attention kernel ${attentionKernel}`);
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   const projection = validateInputs(input.tensors || {});

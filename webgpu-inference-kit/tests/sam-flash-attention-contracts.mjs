@@ -75,6 +75,8 @@ for (const file of ['sam-image-vit-block-stack-phase-program.js', 'sam-detr-enco
 }
 const memory = readFileSync(new URL('../src/sam31-memory-attention-phase-program.js', import.meta.url), 'utf8');
 assert.match(memory, /input\.attentionKernel/);
+// The tracker stays provisional (Sammy, 2026-10-12) until a real bank/propagation exercise: flash is opt-in there.
+assert.match(memory, /const attentionKernel = input\.attentionKernel \?\? 'online';/, 'SAM 3.1 memory attention defaults to the original kernel');
 assert.match(memory, /partitionSamFlashAttentionPhase\(/);
 assert.match(memory, /keyTokens: cross \? shape\.memoryTokens : shape\.queryTokens/, 'cross-attention reads the memory token count');
 const detr = readFileSync(new URL('../src/sam-detr-encoder-phase-program.js', import.meta.url), 'utf8');
