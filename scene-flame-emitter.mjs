@@ -56,9 +56,9 @@ export function flameDomainControlsFromSettings(settings) {
 // admission law; refused requests use the retained grid only for source bounds,
 // while the original requested controls and refusal receipt remain intact.
 export function effectiveFlameDomainControls(controls,prototype) {
-  if(prototype?.previewGridShape?.(controls)?.admitted!==false)return controls;
-  const runtime=prototype?.debugState?.(),dims=runtime?.simGridDimensions;
-  if(runtime?.active!==true||!Array.isArray(dims)||dims.length!==3||!dims.every(n=>Number.isInteger(n)&&n>0))throw Error('Refused grid has no effective source bounds');
+  const preview=prototype?.previewGridShape?.(controls);if(!preview)return controls;
+  const refused=preview.admitted===false,runtime=refused?prototype?.debugState?.():null,dims=refused?runtime?.simGridDimensions:preview.dimensions;
+  if((refused&&runtime?.active!==true)||typeof preview.admitted!=='boolean'||!Array.isArray(dims)||dims.length!==3||!dims.every(n=>Number.isInteger(n)&&n>0))throw Error('Grid has no effective source bounds');
   return {...controls,resolution:dims[0],gridHeightRatio:dims[1]/dims[0]};
 }
 
