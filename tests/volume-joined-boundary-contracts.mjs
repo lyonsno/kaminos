@@ -71,14 +71,44 @@ test('walls: the in-kernel sponges, top fades and floor clamp are off in joined 
   assert.match(face, /let upZ = select\(here\.z, forceDeltaLoad\(c \+ vec3<i32>\(0, 0, 1\), 2\), openZ && !topRowZ\);/);
 });
 
-test('admission: joined mode needs the immersed source and the converged solver; the inflow aperture is refused for now', () => {
-  const ok = core.resolveJoinedBoundary({ requested: true, sourceLaw: 'immersed-source', pressureSolver: 'converged' });
-  assert.deepEqual({ ...ok }, { requested: true, admitted: true, reason: null });
-  assert.deepEqual({ ...core.resolveJoinedBoundary({ requested: true, sourceLaw: 'inflow-boundary', pressureSolver: 'converged' }) },
-    { requested: true, admitted: false, reason: 'inflow-boundary-joined-pending-fixed-flux' });
-  assert.deepEqual({ ...core.resolveJoinedBoundary({ requested: true, sourceLaw: 'immersed-source', pressureSolver: 'legacy' }) },
-    { requested: true, admitted: false, reason: 'joined-boundary-needs-converged-solver' });
+test('admission: only an admitted immersed source under the converged solver; everything else is refused with a reason (JH-01, JH-03)', () => {
+  const base = { requested: true, sourceLaw: 'immersed-source', pressureSolver: 'converged', immersedAdmitted: true, immersedReason: null };
+  assert.deepEqual({ ...core.resolveJoinedBoundary(base) }, { requested: true, admitted: true, reason: null });
+  assert.deepEqual({ ...core.resolveJoinedBoundary({ ...base, sourceLaw: 'inflow-boundary' }) }, { requested: true, admitted: false, reason: 'inflow-boundary-joined-pending-fixed-flux' });
+  for (const sourceLaw of ['legacy-volume', 'shallow-primary', 'bogus', null]) {
+    assert.deepEqual({ ...core.resolveJoinedBoundary({ ...base, sourceLaw }) }, { requested: true, admitted: false, reason: 'joined-boundary-needs-immersed-source' }, `refuses ${sourceLaw}`);
+  }
+  assert.deepEqual({ ...core.resolveJoinedBoundary({ ...base, pressureSolver: 'legacy' }) }, { requested: true, admitted: false, reason: 'joined-boundary-needs-converged-solver' });
+  assert.deepEqual({ ...core.resolveJoinedBoundary({ ...base, immersedAdmitted: false, immersedReason: 'immersed-source-requires-open-top-pressure-solver' }) },
+    { requested: true, admitted: false, reason: 'joined-boundary-needs-admitted-immersed-source:immersed-source-requires-open-top-pressure-solver' });
   assert.deepEqual({ ...core.resolveJoinedBoundary({ requested: false }) }, { requested: false, admitted: false, reason: null });
+});
+
+// JH-02: admission follows the effective controls. The request is kept; every
+// control change recomputes admission before the next step is encoded.
+test('admission tracks control changes through the real API (JH-02)', () => {
+  const stub = () => new Proxy(function () {}, {
+    get(target, prop) { if (prop === Symbol.toPrimitive) return () => 0; if (prop === 'then') return undefined; return target[prop] ?? (target[prop] = stub()); },
+    set(target, prop, value) { target[prop] = value; return true; },
+    apply() { return stub(); }, construct() { return stub(); },
+  });
+  globalThis.document = stub(); globalThis.window = globalThis.window || stub();
+  globalThis.requestAnimationFrame = () => 0; globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+  const p = core.createKaminosVolumePrototype({ THREE: stub(), viewport: stub(), camera: stub(), controls: stub(),
+    getControls: () => ({ resolution: 48, emitterSourceLaw: 'immersed-source', pressureSolver: 'converged-open-top' }), onStatus: () => {} });
+  assert.equal(p.setJoinedBoundary({ enabled: true }).admitted, true);
+  p.setControls({ emitterSourceLaw: 'inflow-boundary' });
+  assert.deepEqual({ ...p.joinedProducerState().joined }, { requested: true, admitted: false, reason: 'inflow-boundary-joined-pending-fixed-flux' }, 'a source-law change revokes admission');
+  p.setControls({ emitterSourceLaw: 'immersed-source' });
+  assert.equal(p.joinedProducerState().joined.admitted, true, 'the kept request is admitted again');
+  p.setControls({ pressureSolver: 'legacy' });
+  assert.equal(p.joinedProducerState().joined.reason, 'joined-boundary-needs-converged-solver');
+  p.setControls({ pressureSolver: 'converged' });
+  assert.match(p.joinedProducerState().joined.reason, /^joined-boundary-needs-admitted-immersed-source:/, 'a closed top refuses the immersed source and so the join');
+  p.setControls({ pressureSolver: 'converged-open-top' });
+  assert.equal(p.setJoinedBoundary({ enabled: false }).admitted, false);
+  p.setControls({ emitterSourceLaw: 'immersed-source' });
+  assert.equal(p.joinedProducerState().joined.requested, false, 'a release stays released');
 });
 
 test('the fine step stops before its own projection in joined mode; the producer state is exposed', () => {

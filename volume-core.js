@@ -2140,12 +2140,15 @@ export function joinedLowerFaceTextureSize(dims) {
   const side = Math.max(...dims);
   return [side, side, 3];
 }
-// Admission: the first live composition is the immersed source under the
-// converged solver; the inflow aperture needs a fixed-flux treatment first.
-export function resolveJoinedBoundary({ requested = false, sourceLaw = null, pressureSolver = null } = {}) {
+// Admission: the first live composition is an admitted immersed source under
+// the converged solver (review JH-01/JH-03); the inflow aperture needs a
+// fixed-flux treatment first; every other source law is refused.
+export function resolveJoinedBoundary({ requested = false, sourceLaw = null, pressureSolver = null, immersedAdmitted = false, immersedReason = null } = {}) {
   if (!requested) return { requested: false, admitted: false, reason: null };
   if (sourceLaw === 'inflow-boundary') return { requested: true, admitted: false, reason: 'inflow-boundary-joined-pending-fixed-flux' };
+  if (sourceLaw !== IMMERSED_SOURCE_LAW) return { requested: true, admitted: false, reason: 'joined-boundary-needs-immersed-source' };
   if (pressureSolver !== PRESSURE_SOLVER_CONVERGED) return { requested: true, admitted: false, reason: 'joined-boundary-needs-converged-solver' };
+  if (!immersedAdmitted) return { requested: true, admitted: false, reason: `joined-boundary-needs-admitted-immersed-source:${immersedReason ?? 'unknown'}` };
   return { requested: true, admitted: true, reason: null };
 }
 export function gridShapeUniformValues({ grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight }) {
@@ -11875,6 +11878,23 @@ export function createKaminosVolumePrototype({
   // texture (three r32float layers, square of the largest grid dimension) and
   // the exterior writes it; a 1x1x3 zero placeholder while joined mode is off.
   let joinedLowerFaceTexture = null;
+  // Recompute joined admission from the kept request and the effective
+  // controls; an admission change rebuilds the fluid state so the lower-plane
+  // texture and every bind group follow it.
+  function refreshJoinedBoundary(requested = Boolean(state.joinedBoundary?.requested)) {
+    const immersed = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight });
+    const next = resolveJoinedBoundary({
+      requested,
+      sourceLaw: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume'),
+      pressureSolver: resolvePressureSolverConfig(controlsSnapshot).effective.solver,
+      immersedAdmitted: Boolean(immersed.effective?.admitted),
+      immersedReason: immersed.effective?.reason ?? null,
+    });
+    const changed = Boolean(state.joinedBoundary?.admitted) !== next.admitted;
+    state.joinedBoundary = next;
+    if (changed && device) rebuildFluidState(gridSize, 'joined-boundary-change');
+    return next;
+  }
   const joinedLowerFaceView = () => joinedLowerFaceTexture.createView({ dimension: '2d-array' });
   let forceDeltaTexture = null;
   const inletPuffProcess = new StochasticSignalSet(2, 1);
@@ -26703,6 +26723,8 @@ export function createKaminosVolumePrototype({
       state.simProfile = normalizeSimProfileFlag(controlsSnapshot.simProfile);
       state.scalarActivityReceiver = scalarActivityReceiverDebug();
       getPrimitiveSource();
+      // Joined admission follows the effective controls (review JH-02).
+      refreshJoinedBoundary();
       updateSimCostLedger();
       pumpLookLabFrozenFrame();
     },
@@ -27126,15 +27148,7 @@ export function createKaminosVolumePrototype({
     // needs the immersed source and the converged solver; a change rebuilds the
     // fluid state so the lower-plane texture has the grid's size.
     setJoinedBoundary(request = {}) {
-      const next = resolveJoinedBoundary({
-        requested: request.enabled === true,
-        sourceLaw: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume'),
-        pressureSolver: resolvePressureSolverConfig(controlsSnapshot).effective.solver,
-      });
-      const changed = Boolean(state.joinedBoundary?.admitted) !== next.admitted;
-      state.joinedBoundary = next;
-      if (changed && device) rebuildFluidState(gridSize, 'joined-boundary-change');
-      return { ...next };
+      return { ...refreshJoinedBoundary(request.enabled === true) };
     },
     // What the exterior's shared solve consumes after encodeSim stops before
     // the fine projection: the pre-projection fluid state (upper faces, fine
