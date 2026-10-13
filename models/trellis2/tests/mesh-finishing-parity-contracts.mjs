@@ -13,14 +13,16 @@ import {MESH_FINISHING_CASES} from './mesh-finishing-fixture.js';
 import {NodeTrellisUVWorker} from '../node-uv-worker.mjs';
 
 const fixture=JSON.parse(await fs.readFile(new URL('./fixtures/mesh-finishing-source.json',import.meta.url)));
+const fmaFixture=JSON.parse(await fs.readFile(new URL('./fixtures/mesh-simplify-fma-source.json',import.meta.url)));
 const sha=a=>createHash('sha256').update(new Uint8Array(a.buffer,a.byteOffset,a.byteLength)).digest('hex');
 
 // Single-rounding multiply-add, as the native simplifier's contracted sites compute it.
-for(const row of fixture.fma.cases){
+for(const row of fmaFixture.cases){
   const [a,b,c,want]=row.map(h=>new Float64Array(new Uint8Array(Buffer.from(h,'hex')).buffer)[0]);
   assert.ok(Object.is(fma(a,b,c),want),`fma(${a},${b},${c}) must round once like std::fma`);
 }
 
+assert.deepEqual(Object.keys(fixture.cases).sort(),Object.keys(MESH_FINISHING_CASES).sort(),'every generated case has a recorded source expectation');
 for(const [name,spec] of Object.entries(MESH_FINISHING_CASES)){
   const expected=fixture.cases[name],{vertices,triangles}=spec.build();
   assert.equal(sha(vertices),expected.input.verticesSha256,name+': generated input positions drifted from the recorded source input');

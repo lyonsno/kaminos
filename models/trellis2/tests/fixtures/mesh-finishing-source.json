@@ -36,7 +36,7 @@
    },
    "sourceEvents": [
     "Pre-simplify: 1,540V 3,000F (0.0s)",
-    "Cleanup: 1.0s"
+    "Cleanup: 0.6s"
    ]
   },
   "below-target": {
@@ -55,157 +55,28 @@
    },
    "sourceEvents": [
     "Cleanup pass 1: 0.0s",
+    "Cleanup final: 0.4s"
+   ]
+  },
+  "crosses-target-after-holes": {
+   "targetFaces": 4800,
+   "input": {
+    "vertices": 2475,
+    "faces": 4696,
+    "verticesSha256": "f2bbb41a4650a261f9d6344f7b25a40c6bcbc2181c646222b5e6ebffff46e97d",
+    "trianglesSha256": "e3df29f45d22d9a214effa65a20ba48c3ba96eacbcc7b54a8358df3f820518ec"
+   },
+   "output": {
+    "vertices": 2511,
+    "faces": 4809,
+    "verticesSha256": "15b3a34a455f44b684e592413f2e9e175d1881a303fea0fa4ee94814cbaaf402",
+    "trianglesSha256": "3e93ce8bf39243ce3530fc5c0f874934a7513fd309c66a6429e057a9b08b4860"
+   },
+   "sourceEvents": [
+    "Cleanup pass 1: 0.0s",
+    "Final simplify: 2,509V 4,799F (0.0s)",
     "Cleanup final: 0.5s"
    ]
   }
- },
- "fma": {
-  "source": "Apple clang 17.0.0 std::fma on arm64 (native fast_simplification build contracts these sites); cases where unfused a*b+c differs",
-  "cases": [
-   [
-    "922bbbcc9e3a6dc0",
-    "9cbf06d5fa0b4bbe",
-    "9547e13f67b4c8be",
-    "f0f5f8cd771b653b"
-   ],
-   [
-    "a0546748718f27c2",
-    "35e10d34f3c83fc2",
-    "0eff1252e96677c4",
-    "ca327d8951b494c2"
-   ],
-   [
-    "3850d1400bffd341",
-    "4cc549d2e7892a3e",
-    "29a058e9659510c0",
-    "c02e52be832bbcbc"
-   ],
-   [
-    "d7054dd01c9650c1",
-    "57dd0f9723fadcc1",
-    "350adcd3000a3ec3",
-    "7944b8455e3143c1"
-   ],
-   [
-    "080fdb52e88a06c1",
-    "f0dc4902ba76f5bd",
-    "da9569698eff01be",
-    "295b9a70853d0e3f"
-   ],
-   [
-    "66de4ad51ca92bc1",
-    "352b681ad1ca18c1",
-    "dd5252e5256e55c2",
-    "3c5a96e22452fc3e"
-   ],
-   [
-    "8c679a6116c48e3f",
-    "144df0ccdba7abc0",
-    "03af168ad5964a40",
-    "a41d095c913943be"
-   ],
-   [
-    "400b993da8dec541",
-    "40813fddb9fe40c0",
-    "40724ef9d43a1742",
-    "0000e19a989b95be"
-   ],
-   [
-    "282a8ee0142f5442",
-    "dc59620d1a02a3c0",
-    "b826a88a8ffa0743",
-    "482445fdb096bfc0"
-   ],
-   [
-    "82b6864224e8d6bd",
-    "80cdf213b649acbf",
-    "958183a3e33f94bd",
-    "00946abe22bd2cba"
-   ],
-   [
-    "44fa1a6359d9053e",
-    "00e5dfc249c61f40",
-    "18b12ecef1b135be",
-    "54353b755c704abc"
-   ],
-   [
-    "c4bc7dbd9a8a8e3d",
-    "245c89b4ce87acbe",
-    "3b53306be53a4b3c",
-    "e0082eabd0a6ef38"
-   ],
-   [
-    "90f1524a09b1d8bf",
-    "409add6494442740",
-    "7d82916129f41140",
-    "0dfd409dec9e2bbe"
-   ],
-   [
-    "b01d487cea1aed3e",
-    "b422a075a54be53e",
-    "d0bce774775ee3bd",
-    "00fe31a5a733633a"
-   ],
-   [
-    "e495ea88b3f2923f",
-    "e851b5da0063a3c1",
-    "139b65ec73f54641",
-    "0467e81723ab41bf"
-   ],
-   [
-    "a85c0a6ec969e0bf",
-    "a607a10a714aeabf",
-    "dfad738c44f8dabf",
-    "0062eae2b0624abc"
-   ],
-   [
-    "e6bab06f0de58abd",
-    "807188467008623d",
-    "ffc3fc5dde4ffe3a",
-    "248c4a803eda13b9"
-   ],
-   [
-    "80ddfafe610df9c0",
-    "30af0392438d8d3d",
-    "7df933adb822973e",
-    "00f017361ef13d3b"
-   ],
-   [
-    "387a4c5a22d21041",
-    "42fd12e6ea91e541",
-    "338a356134ad06c3",
-    "ee2086a5e7f121c1"
-   ],
-   [
-    "68b305ab30c67641",
-    "7e15d794a783a2c1",
-    "810956f75b5a2a43",
-    "80561179543dba3f"
-   ],
-   [
-    "9ca5ab75f5c30041",
-    "4030b5b46fd8633f",
-    "2b07fcf97dcb74c0",
-    "857d5311f567913e"
-   ],
-   [
-    "dec79be0e2ef2f3e",
-    "c293d3926cfa1abf",
-    "d4ad20cfd6ec5a3d",
-    "40fc40e3df90cd39"
-   ],
-   [
-    "0554b8b3589611be",
-    "80e4e40712fb1840",
-    "27d12a6f7f753b3e",
-    "0614a7133873503c"
-   ],
-   [
-    "46d4720ce3bec0bd",
-    "18fa79f610256f41",
-    "bd6e028b514c403f",
-    "c0f56663b40fdf3b"
-   ]
-  ]
  }
 }
