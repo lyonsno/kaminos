@@ -67,7 +67,8 @@ function kitDouble(log){
  };
 }
 
-function harness({features=['shader-f16'],gate=null}={}){
+function harness({features=['shader-f16'],gate=null,deliverFails=0}={}){
+ let deliverFailures=deliverFails;
  const log=[],delivered=[],prototype=prototypeDouble(),host={setForegroundServiceActive:value=>log.push(`active:${value}`),runForegroundFrame:run=>run()};
  const handoff=createForegroundHandoff({prototype,host,waitFrame:tick});
  const device={features:new Set(features),queue:{submit(){}}};
@@ -81,7 +82,7 @@ function harness({features=['shader-f16'],gate=null}={}){
     generate:async request=>{generations.push(request);log.push(`owner:${handoff.owner()}`);request.onPhase('text');request.onStep(2,4);if(gate)await gate.promise;
      if(request.schedule.signal.aborted)throw request.schedule.signal.reason;return{rgba:new Uint8ClampedArray(request.width*request.height*4),width:request.width,height:request.height,timings:{totalMs:5}};}};},
   encodePng:async(rgba,width,height)=>{assert.equal(rgba.length,width*height*4);return new Blob([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0))],{type:'image/png'});},
-  deliver:async(file,provenance)=>{delivered.push({file,provenance});return{source:`/api/read?root=image-inbox&path=${file.name}`,name:file.name};},
+  deliver:async(file,provenance)=>{if(deliverFailures-->0)throw Error('image inbox unavailable');delivered.push({file,provenance});return{source:`/api/read?root=image-inbox&path=${file.name}`,name:file.name};},
  });
  return {service,log,delivered,handoff,prototype,generations,loads:()=>loads};
 }
@@ -177,4 +178,38 @@ test('the saved PNG carries its own generation provenance in an iTXt chunk',asyn
  assert.equal(readPngProvenance(png),null);
  // A corrupted chunk is not read back as provenance (the reader checks the chunk CRC).
  const broken=out.slice();broken[broken.length-20]^=1;assert.equal(readPngProvenance(broken),null);
+});
+
+test('KMA-01: a refused mesh request after a finished SF3D run keeps the kiln with the running image',async()=>{
+ const {runWithKilnHandoff}=module;
+ const prototype=prototypeDouble(),host={setForegroundServiceActive(){},runForegroundFrame:run=>run()};
+ const handoff=createForegroundHandoff({prototype,host,waitFrame:tick});
+ const klein=()=>({completion:Promise.resolve()}),sf3d=()=>({completion:Promise.resolve()});
+ handoff.recording('sf3d').setForegroundOpportunityRequester(sf3d);handoff.install('klein',klein);await handoff.activate('klein');
+ for(const status of ['failed','complete','stopped']){
+  let ran=false;const service={read:()=>({status}),run:async()=>{ran=true;}};
+  await assert.rejects(runWithKilnHandoff({service,input:{source:'x'},handoff,owner:'sf3d',blocked:()=>'An image is generating. Generate the mesh when it is saved.'}),/image is generating/);
+  assert.equal(ran,false);assert.equal(handoff.owner(),'klein',`terminal ${status} must not bypass admission`);
+ }
+});
+
+test('KMA-02: with no optional host requirements the shared device is still acquired',async()=>{
+ const {sharedDeviceHostRequirements}=module;assert.equal(typeof sharedDeviceHostRequirements,'function');
+ const {requestKaminosSharedWebGpuDevice}=await import('../volume-core.js');
+ const limits={maxBufferSize:2**31,maxStorageBufferBindingSize:2**31,maxStorageBuffersPerShaderStage:16,maxStorageBuffersInFragmentStage:8,maxStorageBuffersInVertexStage:8,maxComputeWorkgroupStorageSize:32768};
+ const features=new Set(['timestamp-query']);let requests=0;
+ const adapter={features,limits,requestDevice:async d=>{requests++;return {features:new Set(d.requiredFeatures||[]),limits:{...limits},queue:{},destroy(){},lost:new Promise(()=>{})};}};
+ const shared=await requestKaminosSharedWebGpuDevice({adapter,hostRequirements:sharedDeviceHostRequirements({sam:null})});
+ assert.ok(shared.device,'ordinary authoring keeps its shared device');assert.equal(requests,1);
+ assert.equal(shared.device.features.has('shader-f16'),false,'klein then reports itself unavailable');
+});
+
+test('KMA-04: a finished image survives a failed save and retries without another generation',async()=>{
+ const h=harness({deliverFails:1});
+ await assert.rejects(h.service.run({prompt:'lantern',seed:3,size:512}),/image inbox unavailable/);
+ const failed=h.service.read();assert.equal(failed.status,'failed');assert.ok(failed.pending,'the image is retained');
+ await assert.rejects(h.service.run({prompt:'teapot',seed:4,size:512}),/Save the generated image/);
+ const saved=await h.service.retryPersistence();
+ assert.equal(h.generations.length,1,'no second inference');assert.equal(saved.name,'klein-lantern-s3.png');
+ assert.equal(h.delivered[0].provenance.seed,3);assert.equal(h.service.read().status,'complete');assert.equal(h.service.read().pending,null);
 });

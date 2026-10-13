@@ -17,6 +17,8 @@ const queue=process.argv[process.argv.indexOf('--queue-dir')+1],
   manifest=JSON.parse(fs.readFileSync(process.argv[process.argv.indexOf('--manifest')+1])),
   args=manifest.argv,get=k=>args[args.indexOf(k)+1],config=JSON.parse(fs.readFileSync(get('--config'))),
   mode=config.testMode,failing=mode==='failed'||mode==='halted',job='identified-job',dir=path.join(queue,failing?'failed':'done',job);
+if(mode==='cancelled'){const c=path.join(queue,'cancelled',job);fs.mkdirSync(c,{recursive:true});fs.writeFileSync(path.join(c,'status.json'),JSON.stringify({job_id:job,status:'cancelled'}));
+ console.log(JSON.stringify({schema:'gpu-greenroom.command-submission.v1',job_id:job,effective_queue_dir:queue}));process.exit(0);}
 // Replay the external rejection actually observed on worker ff8c4b06.
 if(manifest.output_class==='artifact'){
  console.error(JSON.stringify({schema:'gpu-greenroom.command-submission-failure.v1',status:'failed',
@@ -102,4 +104,11 @@ test('a failed queued generation names its own phase and reason',async()=>{
   const state=await runTrellisAdapter(values);
   assert.equal(state.ok,false);
   assert.match(state.error.message,/webgpu-generation: generation halted by memory guard/);
+});
+
+test('a job cancelled while waiting ends as cancelled, not as a missing receipt',async()=>{
+  const {values}=await setup('cancelled');
+  const state=await runTrellisAdapter(values);
+  assert.equal(state.ok,false);assert.equal(state.terminal?.status,'cancelled');
+  assert.match(state.error.message,/cancelled while waiting/);
 });

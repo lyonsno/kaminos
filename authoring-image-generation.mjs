@@ -29,6 +29,13 @@ export function composeDeviceRequirements(...requirements){
   return {requiredFeatures:[...features].sort(),requiredLimits:limits};
 }
 
+// The shared device's optional host requirements (SAM when mounted, klein when the
+// adapter has f16). Always an object: requestKaminosSharedWebGpuDevice refuses a
+// callback that yields null, which would cost ordinary authoring its shared device.
+export function sharedDeviceHostRequirements({sam=null}={}){
+  return async adapter=>composeDeviceRequirements(sam?await sam(adapter):null,kleinDeviceRequirements(adapter))??{};
+}
+
 export function kleinImageName(prompt,seed){
   const slug=String(prompt).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,80).replace(/-+$/,'');
   return `klein-${slug||'image'}-s${seed}.png`;
@@ -77,7 +84,10 @@ export function createForegroundHandoff({prototype,host,waitFrame=()=>new Promis
 
 // A mesh run takes the kiln's foreground requester only once its own admission would
 // pass, so a refused request cannot strand a running image without kiln frames.
-export async function runWithKilnHandoff({service,input,handoff,owner}){
+export async function runWithKilnHandoff({service,input,handoff,owner,blocked=()=>null}){
+  // The cross-model check comes first: a model's own read() reports refusals only
+  // while idle, and a finished, failed or stopped state would otherwise pass here.
+  const refusal=blocked();if(refusal)throw Error(refusal);
   const state=service.read();
   if(state.status==='unavailable')throw Error(state.error||'Generation is unavailable');
   if(['input','loading','running','stopping','saving'].includes(state.status))throw Error('Generation is already running');
@@ -133,7 +143,19 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   createPipeline=async(device,urls)=>{const {KleinPipeline}=await import('./models/flux2-klein/klein-pipeline.js');return new KleinPipeline(device,urls);},
   encodePng=encodeCanvasPng,changed=()=>{},blocked=()=>null}){
   let loaded=null,active=false,abort=null;
-  let state={status:'idle',progress:'Weights load the first time you generate an image.',stage:null,percent:null,canStop:false,error:null,results:[]};
+  let state={status:'idle',progress:'Weights load the first time you generate an image.',stage:null,percent:null,canStop:false,error:null,results:[],pending:null};
+  // A computed image is kept until it is saved; a failed save retries these exact pixels.
+  let pendingImage=null;
+  async function savePending(){
+    const {image,provenance,text,seed}=pendingImage;
+    set({status:'saving',canStop:false,stage:'Saving image',percent:null,progress:'Saving the image to Source images…'});
+    const blob=await withPngProvenance(await encodePng(image.rgba,image.width,image.height),provenance);
+    const file=new File([blob],kleinImageName(text,seed),{type:'image/png'});
+    const entry=await deliver(file,provenance);
+    pendingImage=null;state.pending=null;state.results.push({...entry,provenance});
+    set({status:'complete',error:null,stage:'Complete',percent:100,progress:'Image saved and selected. Generate a mesh from it below.'});
+    return entry;
+  }
   const publish=()=>changed(structuredClone(state));
   const set=(values)=>{Object.assign(state,values);publish();};
   function unavailable(){
@@ -163,12 +185,21 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       return structuredClone(state);
     },
     busy:()=>active,
+    async retryPersistence(){
+      if(active)throw Error('Image generation is already running');
+      if(!pendingImage)throw Error('No generated image needs saving');
+      active=true;
+      try{return await savePending();}
+      catch(error){set({status:'failed',error:`persistence: ${errorIdentity(error).message}`});throw error;}
+      finally{active=false;publish();}
+    },
     stop(){
       if(!active||!state.canStop||abort.signal.aborted)return false;
       abort.abort(new DOMException('Image generation stopped by operator','AbortError'));set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});return true;
     },
     async run({prompt,seed,size=512}){
       if(active)throw Error('Image generation is already running');
+      if(pendingImage)throw Error('Save the generated image before generating another');
       const text=String(prompt||'').trim();if(!text)throw Error('Describe the image to generate');
       if(!KLEIN_IMAGE_SIZES.includes(size))throw Error('Image size must be 512, 768 or 1024');
       const reason=unavailable();if(reason)throw Error(reason);
@@ -197,14 +228,10 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         if(completion.status!=='succeeded'){const error=Error(completion.failure?.message??completion.status);error.name=completion.failure?.name??'Error';throw error;}
         const image=completion.output;
         // Completed pixels win a stop race; they are saved like any other result.
-        phase='persistence';set({status:'saving',canStop:false,stage:'Saving image',percent:null,progress:'Saving the image to Source images…'});
+        phase='persistence';
         const provenance={schema:'kaminos.image-generation.v1',route:KLEIN_AUTHORING_ROUTE_ID,model:'FLUX.2 [klein] 4B',prompt:text,seed,width:image.width,height:image.height,weights:base,timings:image.timings};
-        const blob=await withPngProvenance(await encodePng(image.rgba,image.width,image.height),provenance);
-        const file=new File([blob],kleinImageName(text,seed),{type:'image/png'});
-        const entry=await deliver(file,provenance);
-        state.results.push({...entry,provenance});
-        set({status:'complete',error:null,stage:'Complete',percent:100,progress:'Image saved and selected. Generate a mesh from it below.'});
-        return entry;
+        pendingImage={image,provenance,text,seed};state.pending={name:kleinImageName(text,seed),provenance};
+        return await savePending();
       }catch(error){
         const identity=errorIdentity(error);
         if(phase!=='persistence'&&abort.signal.aborted&&identity.name==='AbortError'){set({status:'stopped',error:null,stage:null,percent:null,progress:'Image generation stopped. Your scene is unchanged.'});return null;}
@@ -220,20 +247,21 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
   };
 }
 
-export function installKleinImageGeneration({document,controller,assets}){
+export function installKleinImageGeneration({document,controller,assets,meshBusy:meshBusyOption=null}){
   const container=document.getElementById('asset-generate');if(!container)throw Error('Generate panel is missing');
   const section=document.createElement('section');section.id='asset-text-image';
   section.innerHTML=`<p>Text → image · FLUX.2 klein</p><textarea id="asset-prompt" rows="2" spellcheck="true" placeholder="One object, e.g. a weathered bronze lantern" aria-label="Image prompt"></textarea>
-    <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-stop" hidden>Stop</button></div>
+    <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-stop" hidden>Stop</button><button type="button" id="asset-text-retry" hidden>Retry saving image</button></div>
     <div id="asset-text-status" role="status"></div><progress id="asset-text-progress" max="100" aria-label="Image generation progress" hidden></progress>`;
   container.prepend(section);
   // Looked up in the document: the Generate layout may move these controls out of this section.
   const byId=id=>document.getElementById(id),seedInput=byId('asset-seed');
   const reseed=()=>{seedInput.value=String(Math.floor(Math.random()*1e9));};reseed();
-  const meshBusy=()=>['preparing','input','loading','running','stopping','saving'].includes(assets.generation()?.status);
+  const meshBusy=meshBusyOption||(()=>['preparing','input','loading','running','stopping','saving'].includes(assets.generation()?.status));
   function render(){
     const state=controller.read(),active=['loading','running','stopping','saving'].includes(state.status);
-    byId('asset-text-run').disabled=active||state.status==='unavailable'||meshBusy();
+    byId('asset-text-run').disabled=active||state.status==='unavailable'||meshBusy()||!!state.pending;
+    byId('asset-text-retry').hidden=!state.pending||active;
     byId('asset-text-stop').hidden=!state.canStop&&state.status!=='stopping';byId('asset-text-stop').disabled=!state.canStop;
     byId('asset-text-stop').textContent=state.status==='stopping'?'Stopping…':'Stop';
     byId('asset-text-status').textContent=state.error||(state.status==='idle'?'':`${state.progress}${Number.isFinite(state.percent)&&state.status!=='complete'?` · ${Math.round(state.percent)}%`:''}`);
@@ -241,6 +269,7 @@ export function installKleinImageGeneration({document,controller,assets}){
   }
   byId('asset-reseed').onclick=reseed;
   byId('asset-text-stop').onclick=()=>controller.stop();
+  byId('asset-text-retry').onclick=()=>controller.retryPersistence().catch(error=>{byId('asset-text-status').textContent=error.message;});
   const run=()=>{
     const seed=Math.max(0,Math.floor(Number(seedInput.value)||0));
     controller.run({prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value)}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
