@@ -10,7 +10,7 @@ await fs.mkdir(output,{recursive:true});
 const mode=process.env.LIVE_LOG_WITNESS_MODE||'full';
 const report={status:'starting',phase:'preflight',mode,scope:mode==='initial'?'cold-and-initial-heat-only':'heating-movement-cooling-reset',repoRoot:path.resolve(import.meta.dirname,'..'),requestedUrl:process.env.KAMINOS_URL,url:process.env.KAMINOS_URL,executable:process.env.CHROME_EXECUTABLE,errors:[],frames:[],claim:'runtime/route conformance only; image interpretation remains required'};
 const save=()=>fs.writeFile(path.join(output,'report.json'),JSON.stringify(report,null,2));
-let browser,page,server;
+let browser,page,server,primaryError=null;
 try {
   await save();if(!['full','initial'].includes(mode))throw Error('Unknown live-log witness mode: '+mode);
   assert.ok((report.url||process.env.LIVE_LOG_SELF_HOST==='1')&&report.executable&&process.env.PLAYWRIGHT_MODULE,'KAMINOS_URL, CHROME_EXECUTABLE and PLAYWRIGHT_MODULE required');
@@ -72,5 +72,13 @@ try {
   report.phase='cleanup';await page.evaluate(()=>window.kaminosLiveLog.dispose());
   assert.equal((await page.evaluate(()=>window.__kaminosVolumePrototype.debugState())).active,false);
   assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
-}catch(error){report.status='failed';report.error=String(error?.stack||error);throw error;}
-finally {try{await save();}finally{try{if(browser)await browser.close();}finally{if(server)await server.stop();}}}
+}catch(error){primaryError=error;report.status='failed';report.error=String(error?.stack||error);throw error;}
+finally {
+  const shutdownErrors=[];report.captureStatus=report.status;
+  try{if(browser)await browser.close();}catch(error){shutdownErrors.push(error);}
+  try{if(server)await server.stop();}catch(error){shutdownErrors.push(error);}
+  report.shutdownComplete=shutdownErrors.length===0;
+  if(shutdownErrors.length){report.status='failed';report.phase='shutdown';report.shutdownErrors=shutdownErrors.map(error=>String(error?.stack||error));if(!report.error)report.error=report.shutdownErrors.join('\n');}
+  try{await save();}catch(error){if(!primaryError)throw error;console.error('Terminal report write failed:',error);}
+  if(shutdownErrors.length&&!primaryError)throw new AggregateError(shutdownErrors,'Witness shutdown failed');
+}
