@@ -63,7 +63,8 @@ try {
     server = started.server;
     report.pageUrl = `${started.origin}/kaminos/inference-kit/unimate/index.html?weights=hub&skeleton=${skeletons[0]}`;
   }
-  browser = await launchChrome(chrome, ['--window-size=1280,800'], report, { profileDir: path.join(outDir, 'profile') });
+  // A temporary profile, removed at exit: it ends up holding a cached copy of the 740 MB of weights.
+  browser = await launchChrome(chrome, ['--window-size=1280,800'], report);
   await browser.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
   report.phase = 'first-load';
   await browser.navigate(report.pageUrl, 'Boolean(window.__unimateDemo)');
