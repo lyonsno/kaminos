@@ -5948,6 +5948,18 @@ try {
   if (!target?.webSocketDebuggerUrl) throw Error('Owned browser blank page is missing');
   ws = new WebSocket(target.webSocketDebuggerUrl);
   await waitForWebSocketOpen(ws);
+  if (scenario === 'hindquarter-live-transport') {
+    lastEvidence.browserEvents = [];
+    const resources = new Map();
+    ws.addEventListener('message', event => {
+      const message = JSON.parse(String(event.data));
+      if (message.method === 'Network.requestWillBeSent') resources.set(message.params.requestId, message.params.request.url);
+      if (['Runtime.consoleAPICalled', 'Runtime.exceptionThrown', 'Network.loadingFailed'].includes(message.method)) {
+        lastEvidence.browserEvents.push({ ...message, resourceUrl: resources.get(message.params?.requestId) ?? null });
+      }
+    });
+    await wsRequest(ws, 'Network.enable');
+  }
   await wsRequest(ws, 'Runtime.enable');
   await wsRequest(ws, 'Page.enable');
   await wsRequest(ws, 'Page.bringToFront');
@@ -5967,7 +5979,13 @@ try {
   effectiveServerRoots = await fetchServerRoots(effectiveHref);
   assertExpectedServerRoot(effectiveServerRoots);
 
-  if (scenario === 'hindquarter-binding-assay') {
+  if (scenario === 'hindquarter-live-transport') {
+    phase = 'scenario-hindquarter-live-transport';
+    const { runLiveTransportWitness } = await import('./hindquarter-live-witness.mjs');
+    lastEvidence.liveTransport = await runLiveTransportWitness({evaluate,capture:capturePngScreenshot,ws,out,delay,
+      expected:{manifest:args.get('--expected-case-sha256'),source:args.get('--expected-source-sha256')},
+      click:dispatchMouseClick,drag:dispatchMouseDrag,progress:state=>{lastEvidence.liveTransportProgress=state;}});
+  } else if (scenario === 'hindquarter-binding-assay') {
     phase = 'scenario-hindquarter-binding-assay';
     const { runHindquarterWitness } = await import('./hindquarter-binding-witness.mjs');
     lastEvidence.hindquarter = await runHindquarterWitness({evaluate,capture:capturePngScreenshot,ws,out,delay,
