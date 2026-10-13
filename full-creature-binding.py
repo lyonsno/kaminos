@@ -46,7 +46,7 @@ def validate_source_frame(control,frame,baseline,control_sha):
         raise ValueError('source/candidate identity mismatch')
     if baseline['sourceCast']!=control['cast']:raise ValueError('cast source identity mismatch')
 
-def extend_weights(points,edges,rear_weights,bones):
+def extend_weights(points,edges,rear_weights,bones,seed_overrides=None):
     epsilon=np.finfo(rear_weights.dtype).eps*16
     if not np.isfinite(rear_weights).all() or rear_weights.min() < -epsilon or not np.allclose(rear_weights.sum(axis=1),1,rtol=0,atol=epsilon):
         raise ValueError('invalid automatic rear partition')
@@ -71,7 +71,13 @@ def extend_weights(points,edges,rear_weights,bones):
             if other in heads:
                 lateral=heads[name]-heads[other];lateral/=max(np.linalg.norm(lateral),1e-12);target+=.10*lateral
         seed=int(np.argmin(np.sum((points-target)**2,axis=1)));seeds[name]=seed
-        distance=np.full(len(points),np.inf);distance[seed]=0;queue=[(0.,seed)]
+        sources={seed}
+        if seed_overrides and name in seed_overrides:
+            extra=seed_overrides[name]
+            if not extra or any(not isinstance(i,(int,np.integer)) or i<0 or i>=len(points) for i in extra):raise ValueError('invalid additional trunk seed')
+            sources.update(int(i) for i in extra)
+        distance=np.full(len(points),np.inf);queue=[]
+        for source in sorted(sources):distance[source]=0;heapq.heappush(queue,(0.,source))
         while queue:
             value,index=heapq.heappop(queue)
             if value!=distance[index]:continue
@@ -109,6 +115,26 @@ def extend_weights(points,edges,rear_weights,bones):
             'bodyUnreachedVertices':np.flatnonzero(~known).tolist(),
             'rule':'given-rig surface-geodesic body assignment plus retained automatic rear mobility; hock-toe refinement; no paint',
             'blendFemurs':.18,'unknownPolicy':'explicit unseeded components carried by pelvis, not declared anatomically attached'}
+
+def distributed_trunk_weights(points,triangles,edges,rear_weights,bones):
+    from trunk_anchors import derive_trunk_anchors
+    seeds,receipt=derive_trunk_anchors(points,triangles,bones)
+    result=extend_weights(points,edges,rear_weights,bones,seed_overrides=seeds)
+    result['trunkAnchors']=receipt
+    return result
+
+def preserve_nontrunk_channels(proposed,baseline,channels):
+    proposed=np.asarray(proposed);baseline=np.asarray(baseline)
+    if proposed.shape!=baseline.shape or baseline.ndim!=2 or baseline.shape[1]!=len(channels):raise ValueError('comparison influence shape mismatch')
+    if not np.isfinite(proposed).all() or not np.isfinite(baseline).all() or (proposed<0).any() or (baseline<0).any():raise ValueError('invalid comparison influences')
+    target=[i for i,n in enumerate(channels) if n in ['pelvis','spine-lumbar','spine-chest'] or n.startswith('forelimb-')]
+    untouched=[i for i in range(len(channels)) if i not in target]
+    share=baseline[:,target].astype(float).sum(axis=1)
+    affinity=proposed[:,target].astype(float);total=affinity.sum(axis=1)
+    result=baseline.copy();known=total>0
+    result[np.ix_(known,target)]=(affinity[known]*share[known,None]/total[known,None]).astype(baseline.dtype)
+    if not np.array_equal(result[:,untouched],baseline[:,untouched]) or not np.allclose(result.sum(axis=1),baseline.sum(axis=1),atol=1e-6):raise ValueError('nontrunk preservation failed')
+    return result
 
 def palette(bones,pose):
     rest={b['name']:np.asarray(b['restMatrix']) for b in bones};world={};result=[np.eye(4)]
