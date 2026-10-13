@@ -22,7 +22,7 @@ test('GPU source identity rejects fallback device, absent generation and invalid
   assert.throws(()=>checkLiveLogFrame({...frame,dt:0},device),/duration/);
   assert.throws(()=>checkLiveLogFrame({...frame,transform:{translate:[0,0,NaN],scale:1}},device),/transform/);
 });
-async function fixture(){
+async function fixture({fire}={}){
   const device={},model=new THREE.Group(),mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial());model.add(mesh);
   let registry=[{id:'log-1',object:model}],consumer,active=false,paused=false,steps=0,burner=true,reset=0,disposed=0;
   const events=[],fields=[],canvas={style:{opacity:'.85'}};
@@ -35,7 +35,7 @@ async function fixture(){
   vm.createContext(context);
   const source=fs.readFileSync(new URL('../live-log-experiment.mjs',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace('export async function','async function');
   vm.runInContext(source+'\nglobalThis.create=createLiveLogExperiment;',context);
-  const experiment=await context.create({record:e=>events.push(e),host:{scene:{ready:Promise.resolve(),renderer:()=>({backend:{device}}),load:async()=>model,objects:()=>registry,dirty(){},enterWorkbench(){},frame(){},select(){}},volume:{ready:Promise.resolve(),get:()=>runtime,burner(value){burner=value;}}}});
+  const experiment=await context.create({record:e=>events.push(e),host:{fire,scene:{ready:Promise.resolve(),renderer:()=>({backend:{device}}),load:async()=>model,objects:()=>registry,dirty(){},enterWorkbench(){},frame(){},select(){}},volume:{ready:Promise.resolve(),get:()=>runtime,burner(value){burner=value;}}}});
   return {experiment,events,canvas,read:()=>({active,paused,burner,reset,disposed,consumer}),remove:()=>{registry=[];},step(){steps++;consumer?.encode({}, {dt:1/60});}};
 }
 test('cold start, shared operation reset and removal do not advance or leave GPU work running',async()=>{
@@ -50,6 +50,13 @@ test('cold start, shared operation reset and removal do not advance or leave GPU
   f.experiment.operations.burnerOff();assert.equal(f.read().burner,false);assert.equal(f.experiment.read().burner,false);
   assert.throws(()=>f.experiment.operations.run(),/removed/);f.experiment.dispose();f.experiment.dispose();assert.equal(f.read().disposed,1);assert.equal(f.read().active,false);
   assert.ok(f.events.some(e=>e.kind==='sinter.live-log.burner-off'&&e.phase==='applied'));
+});
+test('removing or replacing fire cannot abort log resource cleanup',async()=>{
+  let reject=false,disposals=0;
+  const fire={read:()=>({status:reject?'unavailable':'mounted',enabled:!reject,visible:true}),setEnabled(){if(reject)throw Error('Fire source registration changed');},dispose(){disposals++;}};
+  const f=await fixture({fire});reject=true;
+  await f.experiment.dispose();await f.experiment.dispose();
+  assert.equal(f.read().active,false);assert.equal(f.read().disposed,1);assert.equal(disposals,1);
 });
 test('flame visibility changes only the presentation layer and restores its prior value on disposal',async()=>{
   const f=await fixture();assert.equal(f.canvas.style.opacity,'0');

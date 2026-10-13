@@ -25947,6 +25947,7 @@ let activeBasinFireFixture=null;
 async function createWorkbenchBasinFireFixture(presetId,record,options={}) {
   if(!volumePrototype||!window.kaminosFlameAuthoring)throw Error('The authored fire host is not initialized');
   if(activeBasinFireFixture?.read().status==='mounted')throw Error('This fire domain already has its fixture; select it or apply another basin');
+  activeBasinFireFixture?.dispose();
   let fixture;
   const syncComposition=()=>{
     const state=window.kaminosFlameAuthoring.read();
@@ -25969,7 +25970,7 @@ async function createWorkbenchBasinFireFixture(presetId,record,options={}) {
     presentation:{read:()=>volumePrototype.canvasElement().style.opacity!=='0',set:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
   },{presetId,...options});
   const controls=mountBasinFireInspector(fixture,{document,container:document.getElementById('selected-flame-properties')});
-  const unsubscribe=scenePlacementTools.edits.subscribe(()=>controls.sync());
+  const unsubscribe=scenePlacementTools.edits.subscribe(()=>fixture.refresh());
   const dispose=fixture.dispose;fixture.dispose=()=>{unsubscribe();controls.dispose();dispose();if(activeBasinFireFixture===fixture)activeBasinFireFixture=null;};
   activeBasinFireFixture=fixture;
   return fixture;

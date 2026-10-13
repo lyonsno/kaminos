@@ -41,7 +41,11 @@ test('a named basin cannot be substituted and a replaced scene source is not own
   assert.equal(state.source.presetId,'before');assert.equal(registered,false);
   host.basins.applyBasin=async id=>{state={...state,source:{presetId:id}};};
   const f=await createBasinFireFixture(host,{presetId:'wanted'});
-  registrationId='replacement-root';f.dispose();assert.equal(removed,0,'a replacement source belongs to its new author');
+  registrationId='replacement-root';assert.equal(f.read().status,'unavailable');assert.equal(f.read().enabled,null);
+  assert.throws(()=>f.setEnabled(false),/registration changed/);
+  source.ensure=()=>{registered=true;return 'fire';};source.setEnabled=()=>{};
+  f.reacquire();assert.equal(f.read().status,'mounted');assert.equal(f.read().sourceRegistrationId,'replacement-root');
+  f.dispose();assert.equal(removed,0,'explicitly borrowing a replacement does not acquire deletion ownership');
 });
 
 test('a refused basin load preserves a newer authoring edit',async()=>{

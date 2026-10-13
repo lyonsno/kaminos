@@ -5,7 +5,7 @@ export const BASIN_FIRE_FIXTURE_IDENTITY='kaminos.basin-fire-fixture.v1';
 export async function createBasinFireFixture({basins,source,runtime,presentation,record=()=>{}},{presetId,allowedGrids=null,pauseOnCreate=false,enabled=null}) {
   if(!presetId)throw Error('A basin identity is required');
   const previous=basins.read(),wasRegistered=source.read().registered,wasVisible=presentation.read();
-  let id=null,registration=null,disposed=false,flow=null,ownedSettings=null,ownedVisibility=null;
+  let id=null,registration=null,disposed=false,flow=null,ownedSettings=null,ownedVisibility=null,ownsRegistration=!wasRegistered;
   const setting=state=>state.domControls['volume-flow-rate'];
   const value=state=>Number(setting(state)?.rawValue??setting(state)?.value);
   const live=()=>{if(disposed)throw Error('Fire fixture disposed');};
@@ -21,10 +21,10 @@ export async function createBasinFireFixture({basins,source,runtime,presentation
     return expected;
   }
   function read(){
-    const state=basins.read(),currentFlow=value(state);
-    return {identity:BASIN_FIRE_FIXTURE_IDENTITY,status:disposed?'disposed':'mounted',objectId:id,
+    const state=basins.read(),currentFlow=value(state),current=source.read(),available=current.registered&&current.registrationId===registration;
+    return {identity:BASIN_FIRE_FIXTURE_IDENTITY,status:disposed?'disposed':available?'mounted':'unavailable',objectId:id,sourceRegistrationId:registration,
       basin:{presetId:state.source?.presetId,label:state.source?.label,modified:basins.modified?.()??null},
-      enabled:source.read().emissionEnabled!==false,flow:currentFlow,visible:presentation.read(),source:source.read(),
+      enabled:available?current.emissionEnabled!==false:null,flow:currentFlow,visible:presentation.read(),source:current,
       runtime:runtime.debugState(),simulationOwnership:'existing-singleton-domain'};
   }
   const emit=(kind,requested)=>record({kind:'fire-fixture.'+kind,target:id,phase:'applied',requested,effective:read()});
@@ -45,6 +45,10 @@ export async function createBasinFireFixture({basins,source,runtime,presentation
     if(!registration)throw Error('Registered fire source identity is missing');
     presentation.set(true);ownedVisibility=true;if(enabled!==null)setEnabled(enabled);
     return {read,setEnabled,
+      refresh(){live();changed();return read();},
+      reacquire(){live();const current=source.read();if(current.registered&&current.registrationId===registration)return read();
+        const nextId=source.ensure(),next=source.read();if(!nextId||!next.registered||!next.registrationId)throw Error('Fire source could not be registered');
+        id=nextId;registration=next.registrationId;ownsRegistration=!current.registered;emit('reacquire',{registrationId:registration});changed();return read();},
       async applyBasin(id){live();const expected=await admit(id);live();const wasEnabled=read().enabled,previous=basins.read();
         await basins.applyBasin(id);ownedSettings=JSON.stringify(basins.read());
         try{const state=basins.read();if(state.source?.presetId!==expected)throw Error('Applied basin identity does not match the requested basin');flow=value(state);if(!Number.isFinite(flow)||flow<0)throw Error('Basin has no finite source flow');if(!wasEnabled)setEnabled(false);emit('basin',{presetId:id});changed();return read();}
@@ -60,7 +64,7 @@ export async function createBasinFireFixture({basins,source,runtime,presentation
       select(){live();source.select(id);return read();},
       showLibrary(){live();basins.openLibrary();},
       setVisible(visible){live();if(typeof visible!=='boolean')throw Error('Fire visibility must be boolean');presentation.set(visible);emit('visibility',{visible});changed();return read();},
-      dispose(){if(disposed)return;disposed=true;listeners.clear();presentation.set(wasVisible);if(!wasRegistered&&id&&source.read().registrationId===registration)source.remove(id);},
+      dispose(){if(disposed)return;disposed=true;listeners.clear();if(source.read().registrationId===registration){presentation.set(wasVisible);if(ownsRegistration&&id)source.remove(id);}},
     };
   }catch(error){
     if(ownedVisibility!==null&&presentation.read()===ownedVisibility)presentation.set(wasVisible);
@@ -72,13 +76,15 @@ export async function createBasinFireFixture({basins,source,runtime,presentation
 
 export function mountBasinFireInspector(fixture,{document,container}) {
   const root=document.createElement('div');root.className='basin-fire-controls';
-  root.innerHTML='<p data-basin-label></p><label><input type="checkbox" data-source-enabled> Source enabled</label><label><input type="checkbox" data-visible> Fire visible</label><button type="button" class="btn" data-library>Basin library</button><p role="status"></p>';
+  root.innerHTML='<p data-basin-label></p><label><input type="checkbox" data-source-enabled> Source enabled</label><label><input type="checkbox" data-visible> Fire visible</label><button type="button" class="btn" data-library>Basin library</button><button type="button" class="btn" data-reacquire hidden>Reconnect fire</button><p role="status"></p>';
   container.prepend(root);
   const on=root.querySelector('[data-source-enabled]'),visible=root.querySelector('[data-visible]'),status=root.querySelector('[role=status]');
-  const sync=()=>{const state=fixture.read();root.querySelector('[data-basin-label]').textContent=state.basin.label||state.basin.presetId;on.checked=state.enabled;visible.checked=state.visible;};
+  const reconnect=root.querySelector('[data-reacquire]');
+  const sync=()=>{const state=fixture.read(),available=state.status==='mounted';root.querySelector('[data-basin-label]').textContent=state.basin.label||state.basin.presetId;on.checked=state.enabled===true;on.disabled=!available;visible.checked=state.visible;visible.disabled=!available;reconnect.hidden=available||state.status==='disposed';if(!available)status.textContent='Fire source removed or replaced';};
   const action=fn=>{try{fn();status.textContent='';sync();}catch(error){status.textContent=error.message;sync();}};
   on.onchange=()=>action(()=>fixture.setEnabled(on.checked));visible.onchange=()=>action(()=>fixture.setVisible(visible.checked));
   root.querySelector('[data-library]').onclick=()=>fixture.showLibrary();
+  reconnect.onclick=()=>action(()=>fixture.reacquire());
   const unsubscribe=fixture.subscribe(sync);sync();
   return {sync,dispose(){unsubscribe();root.remove();}};
 }
