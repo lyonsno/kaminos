@@ -46,7 +46,7 @@ const reactionRGB = xyzToRGB.map(row => Math.max(0, row.reduce((sum, v, i) => su
 export const REACTION_RGB = reactionRGB.map(v => v / linearLuminance(reactionRGB));
 export const EMISSIVE_LIGHT_GRID = 32;
 
-export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers) {
+export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures) {
   const cells = EMISSIVE_LIGHT_GRID ** 3;
   const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE });
   const coefficients = allocate('emissive material coefficients', cells);
@@ -58,7 +58,24 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
     layout: pipe.getBindGroupLayout(index),
     entries: buffers.map(([binding, buffer]) => ({ binding, resource: { buffer } })),
   });
-  const seedInputs = fluidBuffers.map((buffer, i) => group(seed,0,[[0,uniformBuffer],[1,buffer],[7,frontBuffers[i]]]));
+  // The seed reaches emissiveMaterial, which reads the reactant sidecar (fresh
+  // burn); the sidecar is reallocated when the reaction law changes, so the
+  // inputs are rebuilt whenever the textures handed out are not the bound ones.
+  let boundTextures = null;
+  const buildSeedInputs = () => {
+    const textures = getReactantTextures();
+    boundTextures = textures;
+    return fluidBuffers.map((buffer, i) => device.createBindGroup({
+      layout: seed.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: uniformBuffer } },
+        { binding: 1, resource: { buffer } },
+        { binding: 7, resource: { buffer: frontBuffers[i] } },
+        { binding: 23, resource: textures[i].createView({ dimension: '3d' }) },
+      ],
+    }));
+  };
+  let seedInputs = buildSeedInputs();
   const seedOutput = group(seed,3,[[1,coefficients]]);
   const sweepInput = group(sweep,0,[[0,uniformBuffer],[13,coefficients]]);
   const sweepOutput = group(sweep,3,[[2,directions]]);
@@ -67,6 +84,7 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
   return {
     incident,
     encode(encoder, sourceIndex, timestampWrites) {
+      if (getReactantTextures() !== boundTextures) seedInputs = buildSeedInputs();
       const pass = encoder.beginComputePass({ label: 'same-state emissive single-scattering field', ...(timestampWrites ? { timestampWrites } : {}) });
       pass.setPipeline(seed); pass.setBindGroup(0,seedInputs[sourceIndex]); pass.setBindGroup(3,seedOutput);
       pass.dispatchWorkgroups(EMISSIVE_LIGHT_GRID/4,EMISSIVE_LIGHT_GRID/4,EMISSIVE_LIGHT_GRID/4);
@@ -103,6 +121,11 @@ fn emissiveSootPopulation(coverage: f32, sootYield: f32, strength: f32, smokeAmo
   if (!transported) { return max(0.0, coverage) * sootYield * strength * (0.35+smokeAmount*0.65); }
   return max(0.0, coverage) * sootYield * strength * smokeAmount;
 }
+// Reaction light from the fresh burn rate: 1 - 1/e at one appearance burn
+// reference (the reactant model's normalisation, not chemistry).
+fn reactionLightFromBurn(freshBurn: f32, reference: f32) -> f32 {
+  return 1.0-exp(-max(freshBurn,0.0)/max(reference,1e-6));
+}
 fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f32) -> EmissiveMaterial {
   let m = max(r.material, vec4<f32>(0.0));
   let f = max(r.fireLayer, vec4<f32>(0.0));
@@ -112,6 +135,9 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
   // Summing them reheated cold detail and flattened temperature distinctions.
   // Kelvin remains a renderer calibration of this dimensionless heat field.
   let transported = u.emissive_material.w > 0.5;
+  // Reactant law: raw soot and burn-rate reaction light; the thermal glow is
+  // the same temperature mapping of transported heat under both laws.
+  let reactant = u.reactant_combustion_a.x > 0.5;
   let energy = emissiveHeatSource(m, f, d, transported);
   let activity = 1.0-exp(-energy*1.6);
   // Mode 2's temperature is the hot ceiling, and spread is cooling below it.
@@ -121,7 +147,9 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
   let sootYield = max(0.0, u.boundary_fire_color.y);
   // Mode 2 has one named smoke coefficient scale; the old Smoke slider was
   // a multiplier for a separately painted radiance/alpha path, not this material.
-  let smokeAmount = (m.x+d.x*0.50+m.w*0.08) * max(0.0, u.viewport_steps_density.w);
+  // Under the reactant law the soot drawn is the raw smoke channel, the same
+  // quantity that crosses to the exterior; the authored fold keeps its look.
+  let smokeAmount = select(m.x+d.x*0.50+m.w*0.08, m.x, reactant) * max(0.0, u.viewport_steps_density.w);
   // Boundary coverage locates the material; it is not itself a supply of soot.
   // Use the transported soot proxy without a positive density floor. The
   // clean reaction spectrum can still emit where this thermal population is zero.
@@ -133,7 +161,11 @@ fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f3
   // suppresses it locally; there is no normalized blue term over the warm body.
   let front = smoothstep(0.001,0.12,r.frontTopology+f.w*0.5+d.z*0.08);
   let freshFuel = smoothstep(0.008,0.20,m.z);
-  let clean = max(0.0,coverage)*front*freshFuel*exp(-sootYield*smokeAmount*4.0-hotSoot*2.0);
+  // Reactant law: fresh reaction light disappears when fresh reaction does; fuel
+  // that has not met air, or has used its air up, emits none.
+  let burnLight = reactionLightFromBurn(r.freshBurn, u.reactant_combustion_d.x);
+  let reactionDrive = select(front*freshFuel, burnLight, reactant);
+  let clean = max(0.0,coverage)*reactionDrive*exp(-sootYield*smokeAmount*4.0-hotSoot*2.0);
   let gas = vec3<f32>(${REACTION_RGB.join(',')}) * clean * u.physical_display.x;
   let emission = hotSoot*thermalRadiance(kelvin) + gas;
   return EmissiveMaterial(emission, absorption, scattering);

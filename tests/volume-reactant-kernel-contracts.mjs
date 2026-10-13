@@ -50,7 +50,7 @@ test('the sidecar is full size only while the law is admitted, starts as ambient
   assert.match(source, /const size = admitted \? \[gridSize, gridHeight, gridSize\] : \[1, 1, 1\];/);
   assert.match(source, /format: 'rg32float',/);
   assert.match(source, /for \(let i = 0; i < texels\.length; i \+= 2\) texels\[i\] = REACTANT_MODEL\.ambientOxidizer;/);
-  assert.match(source, /if \(ensureReactantSidecar\(reactantCombustionConfig\.effective\.admitted\)\) \{\s*\n\s*rebuildFluidBindGroups\(\);\s*\n\s*rebuildSelectiveHeadLiveBindGroups\(\);/);
+  assert.match(source, /if \(ensureReactantSidecar\(reactantCombustionConfig\.effective\.admitted\)\) \{\s*\n\s*rebuildFluidBindGroups\(\);\s*\n\s*rebuildSceneSolidBindingViews\(\);\s*\n\s*rebuildSelectiveHeadLiveBindGroups\(\);/, 'a reallocated sidecar rebuilds every bind group that carries it');
   assert.match(source, /for \(const texture of reactantTextures\) texture\.destroy\(\);\n\s*reactantTextures = \[\];\n\s*reactantSidecarFull = false;/);
   assert.equal(source.match(/resetReactantSidecarToAmbient\(\);/g)?.length, 2, 'both fluid uploads (replay anchor, debug import) reset the oxidizer');
 });

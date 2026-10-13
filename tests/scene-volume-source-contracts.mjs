@@ -32,7 +32,8 @@ const device = {
   createBindGroup(spec) {return spec;},
 };
 const encoder = {beginComputePass() {return {setPipeline() {}, setBindGroup() {}, dispatchWorkgroups(...n) {dispatches.push(n);}, end() {}};}};
-const field = createSceneVolumeSource({device, module: {}, uniformBuffer: {}, fluidBuffers: [{}, {}], frontBuffers: [{}, {}], grid: 32, gridY: 64});
+const reactant = [{createView: () => ({})}, {createView: () => ({})}];
+const field = createSceneVolumeSource({device, module: {}, uniformBuffer: {}, fluidBuffers: [{}, {}], frontBuffers: [{}, {}], getReactantTextures: () => reactant, grid: 32, gridY: 64});
 assert.equal(typeof field.encodeOpticalDepth, 'function', 'live source must support per-source medium integration');
 assert.equal(field.describe().status, 'unbuilt');
 assert.equal(field.describe().texture, null, 'allocated does not imply current evidence');

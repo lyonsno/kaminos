@@ -37,7 +37,7 @@ assert.match(
 );
 assert.match(
   rawSampler,
-  /^fn sampleWorldFlowReconstructionRaw\(p: vec3<f32>\) -> FlowReconstructionSample \{\s*var sample: FlowReconstructionSample;\s*sample\.velocityDensity = sampleWorldVelocity\(p\);\s*sample\.material = sampleWorldMaterial\(p\);\s*sample\.fireLayer = sampleWorldFireLayer\(p\);\s*sample\.microLayer = sampleWorldMicrodetail\(p\);\s*sample\.kernelTangentRadius = vec4<f32>\(0\.0\);\s*sample\.frontTopology = sampleWorldFrontField\(p\);\s*return sample;\s*\}$/,
+  /^fn sampleWorldFlowReconstructionRaw\(p: vec3<f32>\) -> FlowReconstructionSample \{\s*var sample: FlowReconstructionSample;\s*sample\.velocityDensity = sampleWorldVelocity\(p\);\s*sample\.material = sampleWorldMaterial\(p\);\s*sample\.fireLayer = sampleWorldFireLayer\(p\);\s*sample\.microLayer = sampleWorldMicrodetail\(p\);\s*sample\.kernelTangentRadius = vec4<f32>\(0\.0\);\s*sample\.frontTopology = sampleWorldFrontField\(p\);\s*sample\.freshBurn = sampleWorldReactantBurn\(p\);\s*return sample;\s*\}$/,
   'raw sampler must preserve direct trilinear fields without hidden filtering',
 );
 const preTraversal = raymarch.slice(0, raymarch.indexOf('  loop {'));

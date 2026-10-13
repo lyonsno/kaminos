@@ -4322,6 +4322,9 @@ struct FlowReconstructionSample {
   microLayer: vec4<f32>,
   kernelTangentRadius: vec4<f32>,
   frontTopology: f32,
+  // Reactant law: fuel burned per reference step at this point (0 under the
+  // authored law). Drives reaction light; never read back by the simulation.
+  freshBurn: f32,
 };
 
 fn sampleWorldFlowReconstructionRaw(p: vec3<f32>) -> FlowReconstructionSample {
@@ -4332,6 +4335,7 @@ fn sampleWorldFlowReconstructionRaw(p: vec3<f32>) -> FlowReconstructionSample {
   sample.microLayer = sampleWorldMicrodetail(p);
   sample.kernelTangentRadius = vec4<f32>(0.0);
   sample.frontTopology = sampleWorldFrontField(p);
+  sample.freshBurn = sampleWorldReactantBurn(p);
   return sample;
 }
 
@@ -4367,6 +4371,7 @@ fn mixFlowReconstructionSample(
   filtered.microLayer = center.microLayer * centerWeight + (forward.microLayer + backward.microLayer) * neighborWeight;
   filtered.kernelTangentRadius = vec4<f32>(0.0);
   filtered.frontTopology = center.frontTopology * centerWeight + (forward.frontTopology + backward.frontTopology) * neighborWeight;
+  filtered.freshBurn = center.freshBurn * centerWeight + (forward.freshBurn + backward.freshBurn) * neighborWeight;
   var result: FlowReconstructionSample;
   result.velocityDensity = mix(center.velocityDensity, filtered.velocityDensity, strength);
   result.material = max(vec4<f32>(0.0), mix(center.material, filtered.material, strength));
@@ -4374,6 +4379,7 @@ fn mixFlowReconstructionSample(
   result.microLayer = max(vec4<f32>(0.0), mix(center.microLayer, filtered.microLayer, strength));
   result.kernelTangentRadius = vec4<f32>(0.0);
   result.frontTopology = max(0.0, mix(center.frontTopology, filtered.frontTopology, strength));
+  result.freshBurn = max(0.0, mix(center.freshBurn, filtered.freshBurn, strength));
   return result;
 }
 
@@ -5637,6 +5643,37 @@ fn sampleReactantOxidizer(cellCenter: vec3<f32>) -> f32 {
     }
   }
   return select(u.reactant_combustion_c.z, weighted / max(weightSum, 1e-12), weightSum > 0.0);
+}
+
+// The fresh burn (sidecar .y) at a cell-centred point: plain trilinear over the
+// eight cells around it. No solid mask: solid cells hold zero burn by
+// construction (the step and projection kernels write zero there), and a mask
+// would pull the scene-solid texture into every auto-layout kernel that
+// reaches the renderer.
+fn sampleReactantBurn(cellCenter: vec3<f32>) -> f32 {
+  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(pc));
+  let f = fract(pc);
+  var weighted = 0.0;
+  for (var dz = 0; dz < 2; dz = dz + 1) {
+    for (var dy = 0; dy < 2; dy = dy + 1) {
+      for (var dx = 0; dx < 2; dx = dx + 1) {
+        let sampleCell = i0 + vec3<i32>(dx, dy, dz);
+        let weight = select(1.0 - f.x, f.x, dx == 1)
+          * select(1.0 - f.y, f.y, dy == 1)
+          * select(1.0 - f.z, f.z, dz == 1);
+        weighted = weighted + textureLoad(reactantSrc, vec3<i32>(clampCell(sampleCell)), 0).y * weight;
+      }
+    }
+  }
+  return weighted;
+}
+
+// The renderer's view of the burn, in world coordinates. Under the authored
+// law the sidecar is a 1x1x1 placeholder and is never read.
+fn sampleWorldReactantBurn(p: vec3<f32>) -> f32 {
+  if (!reactantLawOn()) { return 0.0; }
+  return sampleReactantBurn(worldToCell(p));
 }
 
 // The MacCormack predictor evaluated in place (the oxidizer has no predictor
@@ -11702,6 +11739,12 @@ export function createKaminosVolumePrototype({
     reactantSidecarFull = admitted;
     return true;
   }
+  // The sidecar view for a bind group; a scene-solid rebuild can run before the
+  // grid allocation, in which case the placeholders are allocated here.
+  function reactantTextureView(index) {
+    if (reactantTextures.length !== 2) ensureReactantSidecar(Boolean(state.reactantCombustion?.effective?.admitted));
+    return reactantTextures[index].createView({ dimension: '3d' });
+  }
   // Any upload that replaces the fluid state starts the oxidizer from ambient air.
   function resetReactantSidecarToAmbient() {
     if (!device || !reactantSidecarFull) return;
@@ -12531,6 +12574,7 @@ export function createKaminosVolumePrototype({
         {binding: 1, resource: {buffer}},
         {binding: 7, resource: {buffer: frontBuffers[index]}},
         {binding: 16, resource: sceneSolidTextureView},
+        {binding: 23, resource: reactantTextureView(index)},
       ],
     }));
     rebuildSelectiveHeadLiveBindGroups();
@@ -12717,6 +12761,9 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluid } },
           { binding: 7, resource: { buffer: front } },
           { binding: 16, resource: sceneSolidTextureView },
+          // The selective-head-live roles read derived fluid buffers that have no
+          // derived sidecar: they see the source grid's current sidecar.
+          { binding: 23, resource: reactantTextureView(0) },
         ],
       }),
       splat: device.createBindGroup({
@@ -13976,7 +14023,7 @@ export function createKaminosVolumePrototype({
     }
     ensureNonRidgeOpticalCaptureBuffers();
     installSceneSolidTexture();
-    emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers);
+    emissiveLightField = createEmissiveLightField(device, shader, uniformBuffer, fluidBuffers, frontBuffers, () => reactantTextures);
     rebuildFluidBindGroups();
     analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
       label: `kaminos bounded analytic emitter injection ${gridShapeLabel(gridSize)} ${index}`,
@@ -14018,6 +14065,7 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluidBuffers[0] } },
           { binding: 7, resource: { buffer: frontBuffers[0] } },
           { binding: 16, resource: sceneSolidTextureView },
+          { binding: 23, resource: reactantTextureView(0) },
         ],
       }),
       device.createBindGroup({
@@ -14028,6 +14076,7 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
           { binding: 7, resource: { buffer: frontBuffers[1] } },
           { binding: 16, resource: sceneSolidTextureView },
+          { binding: 23, resource: reactantTextureView(1) },
         ],
       }),
     ];
@@ -14393,7 +14442,9 @@ export function createKaminosVolumePrototype({
         { binding: 22, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
         // Reactant sidecar: read as a sampled texture, written as a storage
         // texture (the compute stage is at its storage-buffer limit); compute only.
-        { binding: 23, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        // The raymarch fragment reads the fresh burn for reaction light, so the
+        // sampled side is fragment-visible; the write side stays compute-only.
+        { binding: 23, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
         { binding: 24, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rg32float', viewDimension: '3d' } },
       ],
     });
@@ -14449,6 +14500,10 @@ export function createKaminosVolumePrototype({
           buffer: { type: 'read-only-storage' },
         },
         { binding: 16, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
+        // The irradiance seed reaches emissiveMaterial under this layout, so the
+        // reactant sidecar (fresh burn) is bound here too; the sidecar build kernel
+        // simply does not read it.
+        { binding: 23, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
       ],
     });
     fluidFrontReadBindGroupLayout = device.createBindGroupLayout({
@@ -15869,6 +15924,7 @@ export function createKaminosVolumePrototype({
     state.reactantCombustion = reactantCombustionConfig;
     if (ensureReactantSidecar(reactantCombustionConfig.effective.admitted)) {
       rebuildFluidBindGroups();
+      rebuildSceneSolidBindingViews();
       rebuildSelectiveHeadLiveBindGroups();
     }
     if (inflowBoundaryConfig.effective.admitted && inflowCoverageTexture) {
@@ -19685,7 +19741,7 @@ export function createKaminosVolumePrototype({
       if (sceneSourceFrameConsumer) throw new Error('shared-scene-source-requires-emissive-material-route');
       return null;
     }
-    sceneVolumeSource ||= createSceneVolumeSource({device, module: shader, uniformBuffer, fluidBuffers, frontBuffers,
+    sceneVolumeSource ||= createSceneVolumeSource({device, module: shader, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures: () => reactantTextures,
       grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
     sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);
     if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
