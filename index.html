@@ -3819,7 +3819,7 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
-import { appendArrivalPivot, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
+import { appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
 import { pickSavedScene } from './scene-load-picker.mjs';
@@ -12310,16 +12310,12 @@ function applyAssetArrival(object, mode) {
 // Floor footprints an appended asset must not land inside: scene objects other than
 // cameras and lights, and the fire's simulation box.
 function appendArrivalObstacles() {
-  const boxes = [];
-  for (const entry of sceneObjects) {
-    if (!entry.object || ['camera', 'light'].includes(entry.type) || entry.object.visible === false) continue;
-    const box = new THREE.Box3().setFromObject(entry.object, true);
-    if (!box.isEmpty()) boxes.push({ min: box.min.toArray(), max: box.max.toArray() });
-  }
-  if (flameDomainGuide?.visible !== false && flameDomainGuide?.box && !flameDomainGuide.box.isEmpty()) {
-    boxes.push({ min: flameDomainGuide.box.min.toArray(), max: flameDomainGuide.box.max.toArray() });
-  }
-  return boxes;
+  const box3 = object => { const box = new THREE.Box3().setFromObject(object, true); return box.isEmpty() ? null : { min: box.min.toArray(), max: box.max.toArray() }; };
+  const domainBox = flameDomainGuide?.box && !flameDomainGuide.box.isEmpty() ? { min: flameDomainGuide.box.min.toArray(), max: flameDomainGuide.box.max.toArray() } : null;
+  return arrivalObstacleBoxes({
+    objects: sceneObjects.filter(entry => entry.object).map(entry => ({ type: entry.type, visible: entry.object.visible, box: box3(entry.object) })),
+    domain: { active: !!activeSceneComposition, box: domainBox },
+  });
 }
 
 // Arrivals that are clearly a few degrees off their base (Snap Ground's rule)

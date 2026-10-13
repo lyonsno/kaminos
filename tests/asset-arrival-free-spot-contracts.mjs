@@ -37,3 +37,15 @@ test('appends anchor on the scene content, not an orbit pivot parked near the ca
  assert.equal(spot.reason,'nearest-clear');assert.equal(overlaps(kiln,spot.anchor,[0.9,1],0.15),false);
  assert.ok(Math.hypot(spot.anchor[0]-0.3,spot.anchor[1]-0.1)<4,'right next to the kiln');
 });
+
+test('KMA-C03: the fire box counts as an obstacle whether or not its outline is shown',()=>{
+ const {arrivalObstacleBoxes}=arrival;assert.equal(typeof arrivalObstacleBoxes,'function');
+ const domain=box(-1,-1,1,1);
+ for(const helperVisible of [true,false]){
+  const obstacles=arrivalObstacleBoxes({objects:[],domain:{active:true,box:domain,helperVisible}});
+  const spot=chooseAppendAnchor({footprint:[0.5,0.5],pivot:[0,0],obstacles,viewDirection:[0,0,1]});
+  assert.equal(spot.reason,'nearest-clear',`helper visible ${helperVisible}`);
+ }
+ assert.deepEqual(arrivalObstacleBoxes({objects:[],domain:{active:false,box:domain}}),[],'no simulation, no fire box');
+ assert.deepEqual(arrivalObstacleBoxes({objects:[{type:'camera',box:domain},{type:'glb',box:domain,visible:false},{type:'glb',box:domain}],domain:null}),[domain]);
+});

@@ -39,7 +39,7 @@ export function withExpressSnapshot(run,express){
 }
 
 export function createTrellisAuthoringGeneration({availability,runPipeline,meshUrl,fetchBytes,persist,express=()=>false,queuePosition=null,cancelJob=null,pollMs=3000,changed=()=>{},blocked=()=>null}){
-  let active=false,poll=null,jobId=null,stopRequested=false;
+  let active=false,poll=null,jobId=null,stopRequested=false,runToken=0;
   let state={status:'idle',progress:'TRELLIS runs in the GPU queue; it can take several minutes.',stage:null,percent:null,canStop:false,error:null,terminal:null,results:[],pending:null};
   const publish=()=>changed(structuredClone(state));
   const set=values=>{Object.assign(state,values);publish();};
@@ -70,8 +70,12 @@ export function createTrellisAuthoringGeneration({availability,runPipeline,meshU
     stop(){
       if(!active||!jobId||!cancelJob)return false;
       if(state.queue?.status!=='pending'){set({stopNote:'TRELLIS is already running; stop it from the GPU queue console.'});return false;}
-      stopRequested=true;set({status:'stopping',canStop:false,progress:'Stopping… cancelling the queued job.'});
-      cancelJob(jobId).catch(error=>{stopRequested=false;set({status:'running',stopNote:`Stop failed: ${error.message}`});});
+      stopRequested=true;const token=runToken;set({status:'stopping',canStop:false,progress:'Stopping… cancelling the queued job.'});
+      // Bound to this run: a reply that arrives after the run ended changes nothing.
+      cancelJob(jobId).then(value=>{if(value?.status!=='cancelled')throw Error(value?.error||'cancel was not confirmed');}).catch(error=>{
+        if(token!==runToken||!active)return;
+        stopRequested=false;set({status:'running',progress:`Stop failed: ${error.message}`});
+      });
       return true;
     },
     async retryPersistence(){
@@ -89,7 +93,7 @@ export function createTrellisAuthoringGeneration({availability,runPipeline,meshU
       const reason=unavailable();if(reason)throw Error(reason);
       const quick=(input.express??express())===true;
       if(quick&&availability()?.express?.eligible!==true)throw Error(`Express is unavailable: ${availability()?.express?.reason||'the GPU queue does not admit TRELLIS to its quick lane'}`);
-      active=true;jobId=null;stopRequested=false;let phase='inference';
+      active=true;jobId=null;stopRequested=false;runToken++;let phase='inference';
       set({status:'running',error:null,terminal:null,stage:'Submitting',percent:null,canStop:false,progress:'Submitting to the GPU queue…'});
       try{
         const clientRunId=`authoring-trellis-${crypto.randomUUID()}`;
@@ -116,7 +120,9 @@ export function createTrellisAuthoringGeneration({availability,runPipeline,meshU
         state.pending={glb,generation,label:(input.label||input.name||'Generated').replace(/\.[^.]+$/,'')};phase='persistence';
         return await storePending();
       }catch(error){
-        if(stopRequested&&phase!=='persistence'){set({status:'stopped',error:null,stage:null,percent:null,progress:'TRELLIS stopped while waiting. Your scene is unchanged.'});return null;}
+        // A clean stop needs the adapter's identified result for this job: the queue
+        // recorded it cancelled. Any other failure is reported as itself.
+        if(stopRequested&&phase!=='persistence'&&/cancelled while waiting/.test(error?.message||'')){set({status:'stopped',error:null,stage:null,percent:null,progress:'TRELLIS stopped while waiting. Your scene is unchanged.'});return null;}
         state.terminal={phase,error:{name:error?.name||'Error',message:error?.message||String(error)}};
         set({status:'failed',error:`${phase}: ${error?.message||error}`,stage:null,percent:null});throw error;
       }finally{clearTimeout(poll);poll=null;jobId=null;stopRequested=false;state.queue=null;state.queueLine='';state.stopNote=null;state.canStop=false;active=false;publish();}

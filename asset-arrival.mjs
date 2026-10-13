@@ -147,3 +147,12 @@ export function appendArrivalPivot(obstacles, pivot) {
   for (const o of obstacles) { min[0] = Math.min(min[0], o.min[0]); min[1] = Math.min(min[1], o.min[2]); max[0] = Math.max(max[0], o.max[0]); max[1] = Math.max(max[1], o.max[2]); }
   return [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2];
 }
+
+// Floor obstacles for an append: scene objects other than cameras and lights (hidden
+// objects excluded), plus the fire's simulation box whenever a simulation is active.
+// The box's outline is an editor helper; hiding it does not remove the fire.
+export function arrivalObstacleBoxes({ objects = [], domain = null }) {
+  const boxes = objects.filter(o => o.box && !['camera', 'light'].includes(o.type) && o.visible !== false).map(o => o.box);
+  if (domain?.active && domain.box) boxes.push(domain.box);
+  return boxes;
+}
