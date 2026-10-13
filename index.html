@@ -6873,7 +6873,6 @@ function renderSceneObjectList() {
   const list = document.getElementById('scene-object-list');
   const empty = document.getElementById('scene-object-empty');
   if (!list || !empty) return;
-  renderSceneImportStatus();
   pruneSceneGroups();
   empty.style.display = sceneObjects.length ? 'none' : '';
   const groupedIds = new Set(sceneGroups.flatMap(group => group.objectIds));
