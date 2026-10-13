@@ -9,8 +9,8 @@ const rest=[[0,1,0],[1,1,0],[0,2,0],[0,1,1]],bonds=[[0,1],[0,2],[0,3],[1,2],[1,3
 device.createBindGroupLayout=()=>({});device.createPipelineLayout=()=>({});let damageEpoch=0;
 const contact=await createFinitePlaneContact({device,stateBuffer:()=>({}),bondBuffer:()=>({}),diagnosticsBuffer:()=>({}),submittedState:()=>({damageEpoch})},shell.binding,{ownershipBuffer:borrowed});
 const plane={normal:[0,1,0],offset:0,friction:.65,restitution:.08};contact.apply(plane);contact.apply(plane);
-assert.equal(calls.filter(c=>c[0]==='submit').length,2);assert.equal(calls.filter(c=>c[0]==='dispatch').length,3,'Unchanged finite envelope is not rebuilt on the next ordinary frame');assert.equal(calls.filter(c=>c[0]==='write').length,2,'Static incidence and unchanged plane each uploaded once');
+assert.equal(calls.filter(c=>c[0]==='submit').length,2);assert.equal(calls.filter(c=>c[0]==='dispatch').length,3,'Unchanged finite envelope is not rebuilt on the next ordinary frame');assert.equal(calls.filter(c=>c[0]==='write').length,3,'Static incidence, uncached-mode flag and unchanged plane each uploaded once');
 damageEpoch++;contact.apply(plane);assert.equal(calls.filter(c=>c[0]==='dispatch').length,5,'Damage change refreshes the bound before contact');
 contact.apply({...plane,offset:.1});assert.equal(calls.filter(c=>c[0]==='dispatch').length,7,'Plane change refreshes the bound before contact');
-assert.throws(()=>contact.apply({...plane,normal:[0,0,0]}),/unit/);contact.dispose();assert.equal(calls.filter(c=>c[0]==='destroy').length,2);
+assert.throws(()=>contact.apply({...plane,normal:[0,0,0]}),/unit/);contact.dispose();assert.equal(calls.filter(c=>c[0]==='destroy').length,3);
 console.log('Actual contact submit path performs no GPU wait/readback, reuses plane upload and preserves borrowed resources');

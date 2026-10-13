@@ -20,6 +20,8 @@ import {createBoundedElasticSupport,ELASTIC_SUPPORT_ROUTE} from './structural-ma
 import {validateStoneViewportHost} from './structural-material-viewport-host.mjs';
 import {createFinitePlaneContact} from './structural-material-finite-plane-gpu.js';
 import {FINITE_PLANE_ROUTE} from './structural-material-finite-plane.mjs';
+import {buildStoneGrains,packStoneGrainStrengths} from './structural-material-stone-grains.mjs';
+import {createGpuExposedFaces} from './structural-material-exposed-gpu.js';
 
 export async function createStoneRuntime({host=null,ui=document,parameters=new URLSearchParams(location.search),onInput}={}){
 if(host)validateStoneViewportHost(host);
@@ -27,6 +29,8 @@ const interiorSplit=parameters.get('interior')==='split';
 const bounded=parameters.get('fracture')==='bounded';
 const connectivity=parameters.get('connectivity')??'literal-edge';
 const elasticSupport=connectivity==='elastic-support';
+const coherentGrains=bounded&&parameters.get('fragments')==='grains';
+const exposedFaces=coherentGrains&&parameters.get('exposure')!=='off';
 const energyKernel=parameters.get('energyKernel')??'auto';
 const $=id=>ui.getElementById(id),route=bounded?'kaminos.picked-stone.bounded-shards.webgpu.v0':interiorSplit?'kaminos.picked-stone.interior-shards.webgpu.v0':'kaminos.picked-stone.stress-shards.webgpu.v0',inputs=[],events=[],timings=[];
 for(const id of ['reset','pause','release','threshold','thresholdValue','route','stats','timing','failure',...(!host?['viewport']:[])])if(!$(id))throw Error(`Stone control ${id} is unavailable`);
@@ -37,7 +41,7 @@ if(!Number.isFinite(floorHeight))throw Error('Finite shared-scene floor height r
 if(fallAndLand){configuration.gravity=9.81;configuration.floor=-1e20;}
 const affineComparison=parameters.get('surface')==='affine';
 let device,resident,surface,body,manifest,arrays,observed,components,volumes,pieces=[],gesture=null,paused=false,busy=false,pendingPick=false,finishing=false,pickTask=null,gestureGeneration=0,failure=null,lastPick=null,latestSelection=null,frames=0;
-let initialBody,interiorState,materialRegime,surfaceObservation=null,lastPresentation=null,residentGrip=null,residentSupport=null,residentContact=null,pointerContact=null,interactionObservation=null,ownerExperiment=null,assets=[],closing=false,frameRequest=null,unsubscribeFrames=null,disposal=null;
+let initialBody,interiorState,materialRegime,grainProfile=null,surfaceObservation=null,lastPresentation=null,residentGrip=null,residentSupport=null,residentContact=null,pointerContact=null,interactionObservation=null,ownerExperiment=null,assets=[],closing=false,frameRequest=null,unsubscribeFrames=null,disposal=null;
 let createPlaneFractureSurface;
 const lifetime=new AbortController(),container=host?.scene??new THREE.Scene(),scene=new THREE.Group();scene.name='Stone fracture';container.add(scene);if(!host)container.background=new THREE.Color('#111718');
 if(host?.position)scene.position.fromArray(host.position);
@@ -79,10 +83,12 @@ function makeMeshes(sourcePieces=surface.witness().pieces,surfaceResident=reside
  for(const p of pieces){scene.remove(p.mesh);p.gpu?.dispose();p.mesh.geometry.dispose();}pieces=staged;pieces[0]?.gpu?.captureState();for(const p of pieces)scene.add(p.mesh);
 }
 async function makeBoundedMesh(){
- const piece=buildFixedCellShell({...body,bonds:observed.bonds}),geometry=createShardGeometry(piece.geometry),mesh=new THREE.Mesh(geometry,[skinMaterial,capMaterial]),candidate={...piece,mesh};mesh.userData.pieceId=0;mesh.frustumCulled=false;
- try{deformPiece(candidate,positions(observed));candidate.gpu=await createGpuBoundedSurface(renderer,resident,piece.binding,piece.geometry.indices,[skinMaterial,capMaterial],residentSupport?{connectionBuffer:residentSupport.buffer}:{});mesh.material=candidate.gpu.materials;candidate.gpu.captureState();}catch(e){candidate.gpu?.dispose();geometry.dispose();throw e;}
- for(const p of pieces){scene.remove(p.mesh);p.gpu?.dispose();p.mesh.geometry.dispose();}pieces=[candidate];scene.add(mesh);
- if(fallAndLand){residentContact=await createFinitePlaneContact(resident,piece.binding,{ownershipBuffer:candidate.gpu.ownershipBuffer,connectionBuffer:residentSupport?.buffer??resident.bondBuffer()});applyFloorContact();await resident.enableFiniteFloor(true);}
+ const piece=buildFixedCellShell({...body,bonds:observed.bonds}),geometry=createShardGeometry(piece.geometry,{indexed:exposedFaces}),mesh=new THREE.Mesh(geometry,[skinMaterial,capMaterial]),candidate={...piece,mesh};mesh.userData.pieceId=0;mesh.frustumCulled=false;
+ try{deformPiece(candidate,positions(observed));candidate.gpu=await createGpuBoundedSurface(renderer,resident,piece.binding,piece.geometry.indices,[skinMaterial,capMaterial],{connectionBuffer:residentSupport?.buffer??resident.bondBuffer(),indexed:exposedFaces,changeBuffer:coherentGrains?residentGrip.changeBuffer:null});mesh.material=candidate.gpu.materials;candidate.gpu.captureState();
+  if(exposedFaces){candidate.exposure=await createGpuExposedFaces(renderer,piece,geometry,{ownershipBuffer:candidate.gpu.ownershipBuffer,connectionBuffer:residentSupport?.buffer??resident.bondBuffer(),changeBuffer:residentGrip.changeBuffer});mesh.onBeforeRender=(_renderer,_scene,_camera,g,_material,group)=>{g.indirectOffset=(group?.materialIndex??0)*20;};candidate.exposure.update();}
+ }catch(e){candidate.exposure?.dispose();candidate.gpu?.dispose();geometry.dispose();throw e;}
+ for(const p of pieces){scene.remove(p.mesh);p.exposure?.dispose();p.gpu?.dispose();p.mesh.geometry.dispose();}pieces=[candidate];scene.add(mesh);
+ if(fallAndLand){residentContact=await createFinitePlaneContact(resident,piece.binding,{ownershipBuffer:candidate.gpu.ownershipBuffer,connectionBuffer:residentSupport?.buffer??resident.bondBuffer(),changeBuffer:coherentGrains?residentGrip.changeBuffer:null});applyFloorContact();await resident.enableFiniteFloor(true);}
 }
 function applyFloorContact(){
  if(!residentContact)return;scene.updateWorldMatrix(true,false);
@@ -91,7 +97,7 @@ function applyFloorContact(){
  residentContact.apply({normal:localPlane.normal.toArray(),offset:-localPlane.constant,...contactResponse});
 }
 function acquiredConnections(){return elasticSupport?elasticSupportBonds(body.tetrahedra,observed.bonds,observed.stresses):observed.bonds;}
-function deformPiece(p,current){const apply=p.binding.route===BOUNDED_FRAGMENT_ROUTE?applyBoundedFragmentBinding:p.binding.route===COMPONENT_TRANSPORT_ROUTE?applyComponentTransport:applyComponentAffineField,deformed=p.binding.fixedCellShell?applyFixedCellShell(p.binding,current,acquiredConnections()):apply(p.binding,current,{components});const a=p.mesh.geometry.attributes.position;for(let i=0;i<p.geometry.indices.length;i++)a.setXYZ(i,...deformed[p.geometry.indices[i]]);a.needsUpdate=true;p.mesh.geometry.computeVertexNormals();p.mesh.geometry.computeBoundingSphere();p.mesh.geometry.computeBoundingBox();}
+function deformPiece(p,current){const apply=p.binding.route===BOUNDED_FRAGMENT_ROUTE?applyBoundedFragmentBinding:p.binding.route===COMPONENT_TRANSPORT_ROUTE?applyComponentTransport:applyComponentAffineField,deformed=p.binding.fixedCellShell?applyFixedCellShell(p.binding,current,acquiredConnections()):apply(p.binding,current,{components});const a=p.mesh.geometry.attributes.position;for(let i=0;i<a.count;i++)a.setXYZ(i,...deformed[p.mesh.geometry.index?i:p.geometry.indices[i]]);a.needsUpdate=true;p.mesh.geometry.computeVertexNormals();p.mesh.geometry.computeBoundingSphere();p.mesh.geometry.computeBoundingBox();}
 function synchronizePicking(){if(!observed)return;const current=positions(observed);for(const p of pieces)deformPiece(p,current);}
 async function observeInteraction(){
  if(!residentGrip)return;interactionObservation={...await residentGrip.read(),runId:observed.runId,steps:observed.steps,source:'explicit-native-grip-readback'};
@@ -107,10 +113,11 @@ async function reset(){pendingPick=true;pointerContact=null;gestureGeneration++;
  gesture=null;controls.enabled=true;residentContact?.dispose();residentContact=null;residentGrip?.dispose();residentGrip=null;residentSupport?.dispose();residentSupport=null;resident?.dispose();surface?.dispose();let initialArrays=arrays,initialModel=manifest.model;
  if(interiorSplit){body=initialBody;const configured=configureStoneRegime(manifest,arrays,new URLSearchParams(location.search).get('material')??'stiff-brittle-v1');materialRegime=configured.profile;configuration.volumeBarrier=materialRegime.volumeBarrier;initialArrays=configured.arrays;initialModel=configured.model;}
  if(bounded){const model=prepareSolidTopology({status:'passed',route:'ftetwild-cpu-wildmeshing-0.4.1',positions:body.positions,tetrahedra:body.tetrahedra,volume:manifest.model.volume},{...manifest.material,kind:'graph',young:100000,damageLaw:'event-frozen-isotropic-degradation-v1'});initialArrays=packSolidTopology(model);initialModel={kind:'graph',constitutiveLayout:model.constitutiveLayout,bufferLayout:model.bufferLayout,points:model.positions.length,elements:model.elements.length,bonds:model.bonds.length,colorCount:model.colorCount};materialRegime={name:'bounded-stiff-brittle-v1',material:model.material,threshold:180,volumeBarrier:0,claim:'Provisional homogeneous brittle stone, not calibrated material'};}
+ if(coherentGrains){const scale=Number(parameters.get('grainScale')??'.28');grainProfile=buildStoneGrains({positions:body.positions,bonds:Array.from({length:initialArrays.bonds.length/4},(_,i)=>Array.from(initialArrays.bonds.slice(i*4,i*4+2))),scale});packStoneGrainStrengths(initialArrays,grainProfile);materialRegime={...materialRegime,grains:{route:grainProfile.route,scale,count:grainProfile.groups.length,interiorStrength:grainProfile.interiorStrength,claim:grainProfile.claim}};}
  resident=await createSolidResident(device,initialModel,initialArrays,{energyKernel});const min=Math.min(...body.positions.map(p=>p[0]));await resident.pin(body.positions.flatMap((p,i)=>p[0]<min+.035?[i]:[]));observed=await resident.read();
  if(elasticSupport){residentSupport=await createBoundedElasticSupport(resident);residentSupport.update();materialRegime={...materialRegime,name:'bounded-stiff-brittle-elastic-support-v1',connectivity:ELASTIC_SUPPORT_ROUTE};}
- surface=bounded?{dispose(){}}:await createPlaneFractureSurface(body.geometry,{sourceSha256:manifest.sourceSha256});components=materialComponents(observed.model.points,acquiredConnections());volumes=body.positions.map((_,i)=>observed.state[i*16+3]/manifest.material.density);if(interiorSplit)interiorState={route:INTERIOR_CUT_ROUTE,law:'stvk-log-volume-barrier-v0',epoch:0,mesh:{positions:body.positions,tetrahedra:body.tetrahedra,domains:body.tetrahedra.map(()=>0)},nodeDomains:body.positions.map(()=>0),transfers:[],materialRuns:[observed.runId]};events.length=0;latestSelection=null;marker.visible=false;arrow.visible=false;if(bounded)await makeBoundedMesh();else makeMeshes();present();failure=null;$('failure').textContent='';stamp('reset',{});
  if(bounded)residentGrip=await createBoundedResidentGrip(resident,observed.bonds,residentSupport?{connectionBuffer:residentSupport.buffer,supportAware:true}:{});
+ surface=bounded?{dispose(){}}:await createPlaneFractureSurface(body.geometry,{sourceSha256:manifest.sourceSha256});components=materialComponents(observed.model.points,acquiredConnections());volumes=body.positions.map((_,i)=>observed.state[i*16+3]/manifest.material.density);if(interiorSplit)interiorState={route:INTERIOR_CUT_ROUTE,law:'stvk-log-volume-barrier-v0',epoch:0,mesh:{positions:body.positions,tetrahedra:body.tetrahedra,domains:body.tetrahedra.map(()=>0)},nodeDomains:body.positions.map(()=>0),transfers:[],materialRuns:[observed.runId]};events.length=0;latestSelection=null;marker.visible=false;arrow.visible=false;if(bounded)await makeBoundedMesh();else makeMeshes();present();failure=null;$('failure').textContent='';stamp('reset',{});
  }finally{busy=false;pendingPick=false;}}
 async function beginPick(pieceId,point,faceIndex){
  if(failure)throw new Error('Material is unavailable for a new grip');const original=pieces.find(p=>p.id===pieceId);if(!original)throw new Error('Picked piece no longer exists');
@@ -165,7 +172,8 @@ async function advanceBounded({fracture,evidence}){
  if(!evidence||typeof residentGrip!=='undefined'&&residentGrip){
   const active=gesture?.phase==='active'?gesture:null,applied=active&&[...active.displacement],start=performance.now();
   if(active)await resident.movePatch(applied);
-  const timing=await resident.step(configuration,{wait:false});if(active&&fracture){const threshold=Number($('threshold').value);await resident.fractureStress(threshold);residentSupport?.update();residentGrip.update(applied,threshold);}
+  const timing=await resident.step(configuration,{wait:false});residentGrip.clearChanges?.();if(active&&fracture){const threshold=Number($('threshold').value);await resident.fractureStress(threshold);residentSupport?.update();residentGrip.update(applied,threshold);}
+  pieces[0]?.exposure?.update();
   applyFloorContact();
   observed={...observed,...resident.submittedState(),observation:{kind:'submitted',stressCurrent:false,readbackBytes:0}};surfaceObservation=null;present();
   if(evidence){observed=await resident.read();components=materialComponents(observed.model.points,acquiredConnections());present();await observeSurface();}
@@ -221,6 +229,8 @@ try{
   pick:beginPick,
   move(displacement){if(!gesture)throw new Error('No active picked patch');if(gesture.inputClosed)throw new Error('Picked patch input is closed');gesture.displacement=[...displacement];stamp('move',{displacement,generation:gesture.generation});},
   threshold(value){if(!(Number.isFinite(value)&&value>0))throw new Error('Positive tension threshold required');const input=$('threshold');input.min=String(Math.min(Number(input.min),value));input.max=String(Math.max(Number(input.max),value));input.step='any';input.value=String(value);$('thresholdValue').value=String(value);stamp('threshold',value);},
+  grainProfile(){return grainProfile&&structuredClone(grainProfile);},
+  async exposedFaceCounts(){if(!pieces[0]?.exposure)throw Error('Exposed-face route unavailable');await settle(true);return pieces[0].exposure.readCounts();},
   contacts(){synchronizePicking();container.updateMatrixWorld(true);return pieces.map(p=>{const box=p.mesh.geometry.boundingBox??(p.mesh.geometry.computeBoundingBox(),p.mesh.geometry.boundingBox);let point=box.getCenter(new THREE.Vector3()),faceIndex;point.z=box.max.z;p.mesh.localToWorld(point);if(bounded){raycaster.set(camera.position,point.clone().sub(camera.position).normalize());const hit=raycaster.intersectObject(p.mesh,false)[0];if(!hit)throw new Error('No visible bounded material contact');point=hit.point;faceIndex=hit.faceIndex;}const screen=point.clone().project(camera),bounds=renderer.domElement.getBoundingClientRect();return{pieceId:p.id,faceIndex,point:scene.worldToLocal(point.clone()).toArray(),screen:{x:bounds.left+(screen.x+1)*bounds.width/2,y:bounds.top+(1-screen.y)*bounds.height/2}};});},
   camera(request){if(request){camera.position.fromArray(request.position);controls.target.fromArray(request.target);camera.lookAt(controls.target);}return cameraState();},
   presentation(){return structuredClone(lastPresentation);},
@@ -250,7 +260,7 @@ try{
    const errors=[],attempt=async(phase,action)=>{try{await action();}catch(error){errors.push(error);status.errors.push({phase,message:error.message});}};
    await attempt('pending-pick',()=>pickTask);await attempt('settle',()=>settle());await attempt('release',()=>resident?.release());await attempt('completion',()=>device?.queue.onSubmittedWorkDone());
    const drainErrors=errors.length,cleanup=[];
-   for(const p of pieces)cleanup.push(()=>p.gpu?.dispose(),()=>p.mesh.geometry.dispose());
+   for(const p of pieces)cleanup.push(()=>p.exposure?.dispose(),()=>p.gpu?.dispose(),()=>p.mesh.geometry.dispose());
    cleanup.push(()=>residentContact?.dispose(),()=>residentGrip?.dispose(),()=>residentSupport?.dispose(),()=>resident?.dispose(),()=>surface?.dispose());
    for(const object of [support,marker,arrow,...(ground?[ground]:[])])cleanup.push(()=>object.geometry.dispose(),()=>object.material.dispose());
    if(ground)cleanup.push(()=>container.remove(ground));
@@ -263,7 +273,7 @@ try{
  }return disposal;};
  if(host){unsubscribeFrames=host.subscribeFrame({before:frame,after:presented});if(typeof unsubscribeFrames!=='function')throw Error('Host frame subscription must return an unsubscribe function');}else draw();
  return api;
-}catch(e){closing=true;lifetime.abort();unsubscribeFrames?.();fail(e);container.remove(scene);if(ground)container.remove(ground);residentContact?.dispose();for(const p of pieces){p.gpu?.dispose();p.mesh.geometry.dispose();}residentGrip?.dispose();residentSupport?.dispose();resident?.dispose();surface?.dispose();for(const object of [support,marker,arrow,...(ground?[ground]:[])]){object.geometry.dispose();object.material.dispose();}capMaterial.dispose();disposeStoneAssets(assets);controls.enabled=previousControlsEnabled;if(!host){controls.dispose();renderer.dispose();device?.destroy();}throw e;}
+}catch(e){closing=true;lifetime.abort();unsubscribeFrames?.();fail(e);container.remove(scene);if(ground)container.remove(ground);residentContact?.dispose();for(const p of pieces){p.exposure?.dispose();p.gpu?.dispose();p.mesh.geometry.dispose();}residentGrip?.dispose();residentSupport?.dispose();resident?.dispose();surface?.dispose();for(const object of [support,marker,arrow,...(ground?[ground]:[])]){object.geometry.dispose();object.material.dispose();}capMaterial.dispose();disposeStoneAssets(assets);controls.enabled=previousControlsEnabled;if(!host){controls.dispose();renderer.dispose();device?.destroy();}throw e;}
 }
 
 if(typeof location!=='undefined'&&location.pathname.endsWith('/structural-material-shard.html'))createStoneRuntime().catch(()=>{});

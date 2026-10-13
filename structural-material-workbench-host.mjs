@@ -23,6 +23,7 @@ export function createStoneWorkbenchCapability(viewport,{createRuntime=async opt
   try{
   panel=stoneControls(viewport.document);
   const parameters=new URLSearchParams({fracture:'bounded',connectivity:'elastic-support',inputs:'./scratch/bounded-fine-inputs'});
+  const query=new URLSearchParams(globalThis.location?.search??''),fragments=query.get('stoneFragments')??'fine';if(!['fine','grains'].includes(fragments))throw Error('Stone fragments must be fine or grains');parameters.set('fragments',fragments);if(query.has('stoneGrainScale'))parameters.set('grainScale',query.get('stoneGrainScale'));
   api=await createRuntime({host:viewport,ui:panel,parameters,onInput:({kind,data,effective})=>record?.({kind:`stone.input.${kind}`,target:'stone',phase:'applied',requested:data,effective,actor:'producer-input'})});
   api.object.userData.kaminosExperiment={id:'stone/fracture',source:api.experimentStatus().sourceSha256};
   const owner=createStoneOwnerHost(api),handle=await owner.stone.open(inputs);

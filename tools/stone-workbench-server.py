@@ -12,10 +12,12 @@ parser.add_argument('--host-root',required=True)
 parser.add_argument('--stone-root',required=True)
 parser.add_argument('--index',required=True)
 parser.add_argument('--port',type=int,required=True)
+parser.add_argument('--dependency-root')
 args=parser.parse_args()
 host_root=Path(args.host_root).resolve(strict=True)
 stone_root=Path(args.stone_root).resolve(strict=True)
 index=Path(args.index).resolve(strict=True)
+dependency_root=Path(args.dependency_root).resolve(strict=True) if args.dependency_root else None
 sys.path.insert(0,str(host_root))
 sys.argv=[str(host_root/'serve.py'),str(args.port)]
 spec=importlib.util.spec_from_file_location('stone_composition_host',host_root/'serve.py')
@@ -31,6 +33,11 @@ class Handler(host.KaminosHandler):
         elif requested=='/api/workbench-experiments':
             modules=discover_experiments(host_root,'experiments')+['/__stone'+name for name in discover_experiments(stone_root,'experiments')]
             self.send_json({'modules':modules,'mount':'derived-host-composition'});return True
+        elif dependency_root and requested.startswith('/node_modules/'):
+            target=(dependency_root/requested.removeprefix('/node_modules/')).resolve()
+            if not target.is_relative_to(dependency_root):
+                self.send_error(403);return True
+            if not target.is_file():return False
         elif requested.startswith('/__stone/'):
             target=(stone_root/requested.removeprefix('/__stone/')).resolve()
             if not target.is_relative_to(stone_root) or any(part.startswith('.') for part in target.relative_to(stone_root).parts):
@@ -54,5 +61,5 @@ class Handler(host.KaminosHandler):
         if not self.route(head=True):super().do_HEAD()
 
 os.chdir(host_root)
-print(json.dumps({'hostRoot':str(host_root),'stoneRoot':str(stone_root),'derivedIndex':str(index),'port':args.port,'claim':'provisional-shared-host-composition'}),flush=True)
+print(json.dumps({'hostRoot':str(host_root),'stoneRoot':str(stone_root),'derivedIndex':str(index),'dependencyRoot':str(dependency_root) if dependency_root else None,'port':args.port,'claim':'provisional-shared-host-composition'}),flush=True)
 host.http.server.ThreadingHTTPServer(('127.0.0.1',args.port),Handler).serve_forever()

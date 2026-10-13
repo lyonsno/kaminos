@@ -79,6 +79,36 @@ export function boundedCellAnchor(binding,indices,faceIndex){
  return anchors[0];
 }
 
+export function packFixedCellFaces(shell){
+ if(!shell.binding?.fixedCellShell)throw Error('Fixed cell shell required for exposure');
+ const {entries}=shell.binding,{indices,exterior}=shell.geometry,partners=new Map(),descriptors=exterior.map((outside,i)=>({indices:indices.slice(i*3,i*3+3),outside,partner:0xffffffff}));
+ for(let i=0;i<descriptors.length;i++){
+  const face=descriptors[i];if(face.outside)continue;
+  const signature=face.indices.map(j=>entries[j].rest.join(',')).sort().join('/');
+  if(partners.has(signature)){const other=partners.get(signature);if(descriptors[other].partner!==0xffffffff)throw Error('Nonmanifold fixed cell face');face.partner=other;descriptors[other].partner=i;}else partners.set(signature,i);
+ }
+ const faces=new Uint32Array(descriptors.length*8);
+ descriptors.forEach((face,i)=>{
+  const owner=entries[face.indices[0]].anchor,other=face.partner===0xffffffff?owner:entries[descriptors[face.partner].indices[0]].anchor;
+  const local=face.indices.map(j=>entries[j].subset.indexOf(other));
+  if(!face.outside&&(face.partner===0xffffffff||local.some(j=>j<0)||owner===other))throw Error('Complete opposed cell face ownership required');
+  faces.set([...face.indices,Number(face.outside),...local.map(j=>face.outside?0xffffffff:j),0],i*8);
+ });
+ return{faces,exteriorTriangles:exterior.filter(Boolean).length,descriptors};
+}
+
+export function visibleFixedCellFaces(shell,bonds){
+ const {faces}=packFixedCellFaces(shell),entries=shell.binding.entries,result=[];
+ for(let i=0;i<faces.length;i+=8){
+  if(faces[i+3]===1){result.push(i/8);continue;}
+  const hidden=[0,1,2].every(j=>{const e=entries[faces[i+j]],reached=new Set([e.anchor]);let changed=true;
+   while(changed){changed=false;for(let k=0;k<6;k++){const edge=e.edgeIds[k];if(edge===0xffffffff||bonds[edge*4+2]!==1)continue;const [a,b]=pairs[k].map(j=>e.subset[j]);if((reached.has(a)||reached.has(b))&&(!reached.has(a)||!reached.has(b))){reached.add(a);reached.add(b);changed=true;}}}
+   return reached.has(e.subset[faces[i+4+j]]);});
+  if(!hidden)result.push(i/8);
+ }
+ return result;
+}
+
 export function applyFixedCellShell(binding,current,bonds){
  if(!binding?.fixedCellShell||current.length!==binding.points||!current.every(p=>p.length===3&&p.every(Number.isFinite))||!Array.isArray(bonds)||bonds.length%4)throw new Error('Complete fixed shell material pose and bonds required');
  return binding.entries.map(e=>{const reached=new Set([e.anchor]);let changed=true;while(changed){changed=false;for(let k=0;k<6;k++){const [a,b]=pairs[k],edge=e.edgeIds[k];if(edge===0xffffffff)continue;const x=e.subset[a],y=e.subset[b];if(bonds[edge*4+2]===1&&(reached.has(x)||reached.has(y))&&(!reached.has(x)||!reached.has(y))){reached.add(x);reached.add(y);changed=true;}}}const ids=[...reached];return e.rest.map((v,k)=>v+ids.reduce((sum,i)=>sum+current[i][k]-binding.rest[i][k],0)/ids.length);});

@@ -9,9 +9,10 @@ struct Plane{normalOffset:vec4f,response:vec4f};
 @group(0) @binding(3) var<storage,read> incidence:array<u32>;
 @group(0) @binding(4) var<uniform> plane:Plane;
 @group(0) @binding(5) var<storage,read_write> diagnostics:array<vec4f>;
+@group(0) @binding(6) var<storage,read> changes:array<u32>;
 ${finiteCellWgsl}
 @compute @workgroup_size(64) fn bounds(@builtin(global_invocation_id) id:vec3u){
- let node=id.x;let count=arrayLength(&points);if(node>=count){return;}let p=points[node];
+ let node=id.x;let count=arrayLength(&points);if(node>=count||(plane.response.z==0.0&&changes[0]==0u)){return;}let p=points[node];
  let n=plane.normalOffset.xyz;var bound=-3.402823e38;
  for(var k=incidence[node];k<incidence[node+1u];k++){
   let v=vertices[incidence[count+1u+k]];let reached=reachedCell(v);
@@ -26,17 +27,18 @@ ${finiteCellWgsl}
  var velocity=p.velocity.xyz;let vn=dot(n,velocity);if(vn<0.0){let bounce=select(0.0,plane.response.y,vn<-.1);let tangent=velocity-n*vn;let speed=length(tangent);var scale=0.0;if(speed>0.0){scale=max(0.0,1.0-plane.response.x*(1.0+bounce)*-vn/speed);}velocity=tangent*scale-n*bounce*vn;}
  points[node].position=vec4f(x,p.position.w);points[node].velocity=vec4f(velocity,p.velocity.w);
 }`;
-export async function createFinitePlaneContact(resident,binding,{ownershipBuffer,connectionBuffer=resident.bondBuffer()}={}){
+export async function createFinitePlaneContact(resident,binding,{ownershipBuffer,connectionBuffer=resident.bondBuffer(),changeBuffer=null}={}){
  const device=resident.device,packed=packFiniteCellOwnership(binding),owned=[];
  const allocate=(label,size,usage)=>{if(size>device.limits.maxStorageBufferBindingSize)throw Error(`${label} exceeds effective device capacity`);const buffer=device.createBuffer({label,size,usage});owned.push(buffer);return buffer;};
  try{
   const vertices=ownershipBuffer??allocate('finite-plane cell ownership',packed.vertices.byteLength,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST);if(!ownershipBuffer)device.queue.writeBuffer(vertices,0,packed.vertices);
   const incidence=allocate('finite-plane incidence',packed.incidence.byteLength,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST),uniform=allocate('finite-plane response',32,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);device.queue.writeBuffer(incidence,0,packed.incidence);
   const module=device.createShaderModule({code:finitePlaneWgsl}),info=await module.getCompilationInfo();if(info.messages.some(m=>m.type==='error'))throw Error(JSON.stringify(info.messages));
-  const layout=device.createBindGroupLayout({entries:Array.from({length:6},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===4?'uniform':[0,5].includes(binding)?'storage':'read-only-storage'}}))}),pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]}),pipelines={};
+  const cached=Boolean(changeBuffer);if(!changeBuffer){changeBuffer=allocate('Always refresh finite bounds',4,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST);device.queue.writeBuffer(changeBuffer,0,new Uint32Array([1]));}
+  const layout=device.createBindGroupLayout({entries:Array.from({length:7},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===4?'uniform':[0,5].includes(binding)?'storage':'read-only-storage'}}))}),pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]}),pipelines={};
   for(const entryPoint of ['bounds','contact'])pipelines[entryPoint]=await device.createComputePipelineAsync({layout:pipelineLayout,compute:{module,entryPoint}});
-  const group=device.createBindGroup({layout,entries:[resident.stateBuffer(),connectionBuffer,vertices,incidence,uniform,resident.diagnosticsBuffer()].map((buffer,binding)=>({binding,resource:{buffer}}))});
+  const group=device.createBindGroup({layout,entries:[resident.stateBuffer(),connectionBuffer,vertices,incidence,uniform,resident.diagnosticsBuffer(),changeBuffer].map((buffer,binding)=>({binding,resource:{buffer}}))});
   let last=null,boundEpoch=null;
-  return{route:FINITE_PLANE_ROUTE,apply(plane){validateFinitePlane(plane);const epoch=resident.submittedState().damageEpoch;if(!Number.isSafeInteger(epoch)||epoch<0)throw Error('Explicit resident damage revision required');const values=[...plane.normal,plane.offset,plane.friction,plane.restitution,0,0],changed=!last||values.some((v,i)=>v!==last[i]),rebuild=changed||epoch!==boundEpoch;if(changed){device.queue.writeBuffer(uniform,0,new Float32Array(values));last=values;}const encoder=device.createCommandEncoder();for(const name of rebuild?['bounds','contact']:['contact']){const pass=encoder.beginComputePass();pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(binding.points/64));pass.end();}device.queue.submit([encoder.finish()]);boundEpoch=epoch;},dispose(){disposeAll(owned.map(buffer=>()=>buffer.destroy()),'Finite plane cleanup failed');}};
+  return{route:FINITE_PLANE_ROUTE,apply(plane){validateFinitePlane(plane);const epoch=resident.submittedState().damageEpoch;if(!Number.isSafeInteger(epoch)||epoch<0)throw Error('Explicit resident damage revision required');const values=[...plane.normal,plane.offset,plane.friction,plane.restitution],changed=!last||values.some((v,i)=>v!==last[i]),rebuild=changed||epoch!==boundEpoch;if(changed||cached)device.queue.writeBuffer(uniform,0,new Float32Array([...values,Number(changed),0]));last=values;const encoder=device.createCommandEncoder();for(const name of rebuild||cached?['bounds','contact']:['contact']){const pass=encoder.beginComputePass();pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(binding.points/64));pass.end();}device.queue.submit([encoder.finish()]);boundEpoch=epoch;},dispose(){disposeAll(owned.map(buffer=>()=>buffer.destroy()),'Finite plane cleanup failed');}};
  }catch(error){disposeAll(owned.map(buffer=>()=>buffer.destroy()),'Finite plane initialization failed',error);}
 }

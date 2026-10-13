@@ -59,13 +59,20 @@ fn evaluate(node:u32,trial:vec3f,needHessian:bool)->Local{
  if(settings.grip.x==-2.0||settings.grip.x==-3.0){let baseline=diagnostics[node*6u+5u];var offset=vec3f(0);if(settings.grip.x==-3.0){offset=diagnostics[arrayLength(&diagnostics)-1u].xyz;}let d=trial-baseline.xyz-settings.destination.xyz+offset;let k=settings.grip.y*baseline.w;result.gradient+=k*d;result.energy+=0.5*k*dot(d,d);result.hessian+=eye()*k;}
  return result;
 }
+fn freeFlight(node:u32)->bool{
+ if(!scalarDegradation||settings.counts.z!=0u||points[node].velocity.w==1.0){return false;}
+ if(settings.grip.x>=0.0&&u32(settings.grip.x)==node){return false;}
+ if(settings.grip.x==-2.0||settings.grip.x==-3.0){let baseline=diagnostics[node*6u+5u];if(baseline.w>0.0){return false;}}
+ for(var j=incidence[node];j<incidence[node+1u];j++){let element=incidence[settings.counts.x+1u+j*2u];if(parameters[element*16u+11u]>0.0){return false;}}
+ return true;
+}
 @compute @workgroup_size(64) fn predict(@builtin(global_invocation_id) id:vec3u){
  let i=id.x;if(i>=settings.counts.x){return;}let p=points[i];var y=p.position.xyz+settings.time.x*p.velocity.xyz*settings.time.z+vec3f(0,-settings.time.y,0)*settings.time.x*settings.time.x;
- if(p.velocity.w==1.0){y=p.rest.xyz;points[i].position=vec4f(y,p.position.w);}points[i].predicted=vec4f(y,0);
+ let ballistic=freeFlight(i);if(p.velocity.w==1.0){y=p.rest.xyz;points[i].position=vec4f(y,p.position.w);}else if(ballistic){var x=y;if(settings.grip.z==1.0){x.y=max(x.y,diagnostics[i*6u+4u].w);}points[i].position=vec4f(x,p.position.w);}points[i].predicted=vec4f(y,select(0.0,1.0,ballistic));
 }
 @compute @workgroup_size(64) fn solve(@builtin(global_invocation_id) id:vec3u){
  let colors=settings.counts.x+1u+incidence[settings.counts.x]*2u;let start=incidence[colors+settings.counts.y];let end=incidence[colors+settings.counts.y+1u];if(id.x>=end-start){return;}
- let i=incidence[colors+settings.topology.x+1u+start+id.x];let p=points[i];if(p.velocity.w==1.0){return;}
+ let i=incidence[colors+settings.topology.x+1u+start+id.x];let p=points[i];if(p.velocity.w==1.0||p.predicted.w==1.0){return;}
  let before=evaluate(i,p.position.xyz,true);if(before.invalid!=0u){return;}
  let H=before.hessian;let determinant=dot(H[0],cross(H[1],H[2]));if(!(determinant>0.0)){return;}
  let inverse=transpose(mat3x3f(cross(H[1],H[2]),cross(H[2],H[0]),cross(H[0],H[1])))*(1.0/determinant);
@@ -114,7 +121,8 @@ fn edgePair(k:u32)->vec2u{let pairs=array<vec2u,6>(vec2u(0,1),vec2u(0,2),vec2u(0
  let i=id.x;if(i>=arrayLength(&bonds)||!scalarDegradation){return;}let b=bonds[i];if(b.z==0u){return;}
  let delta=points[b.y].position.xyz-points[b.x].position.xyz;if(length(delta)==0.0){return;}let direction=normalize(delta);var stressSum=0.0;var volumeSum=0.0;let start=settings.counts.x+1u;
  for(var j=incidence[b.x];j<incidence[b.x+1u];j++){let t=incidence[start+j*2u];let ids=elements[t];if(all(ids!=vec4u(b.y))){continue;}let base=settings.counts.x*6u+t*7u;let flags=diagnostics[base+6u];if(flags.z!=1.0||flags.w!=0.0){continue;}let sigma=mat3x3f(diagnostics[base].xyz,diagnostics[base+1u].xyz,diagnostics[base+2u].xyz);stressSum+=flags.x*dot(direction,sigma*direction);volumeSum+=flags.x;}
- if(volumeSum>0.0&&stressSum/volumeSum>settings.plane.w){bonds[i].z=0u;}
+ let strength=select(1.0,bitcast<f32>(b.w),b.w!=0u);
+ if(volumeSum>0.0&&stressSum/volumeSum>settings.plane.w*strength){bonds[i].z=0u;}
 }
 @compute @workgroup_size(64) fn degrade(@builtin(global_invocation_id) id:vec3u){
  let i=id.x;if(i>=arrayLength(&elements)||!scalarDegradation){return;}var mask=0u;
