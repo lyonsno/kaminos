@@ -139,7 +139,13 @@ try:
         rgb=image.convert('RGB');source_size=list(rgb.size)
         resized=rgb.resize((512,512),Image.Resampling.LANCZOS)
         pixels=np.asarray(resized,dtype=np.float32)/np.float32(255)
-    mean=np.asarray(original['image']['mean'],dtype=np.float32);std=np.asarray(original['image']['std'],dtype=np.float32)
+    # The actual MLX DINO extractor scales pixels in F32, uses NumPy's
+    # decimal F64 ImageNet statistics, and only then emits its F32 tensor.
+    # Promoting already rounded legacy metadata cannot recover those values.
+    mean=np.asarray([0.485,0.456,0.406],dtype=np.float64);std=np.asarray([0.229,0.224,0.225],dtype=np.float64)
+    if not (np.array_equal(np.asarray(original['image']['mean'],dtype=np.float32),mean.astype(np.float32)) and
+            np.array_equal(np.asarray(original['image']['std'],dtype=np.float32),std.astype(np.float32))):
+        raise ValueError('checkpoint base normalization differs from the observed MLX DINO ImageNet statistics')
     values=np.ascontiguousarray(((pixels-mean)/std)[None],dtype='<f4')
     if values.shape!=(1,512,512,3) or not np.isfinite(values).all():raise ValueError('complete finite normalized prepared pixels required')
     # Content-addressed pixels keep an explicit previous package replayable.
@@ -150,6 +156,7 @@ try:
     m['image']={'sourcePath':str(image_path),'sourceFileSha256':image_row['sha256'],'sourceByteLength':image_row['byteLength'],
         'sourceRgbSize':source_size,'resize':{'size':[512,512],'filter':'PIL.Image.LANCZOS','operationApplied':True},
         'scale':'float32(pixel)/255.0','mean':mean.tolist(),'std':std.tolist(),'layout':'NHWC','dtype':'float32',
+        'normalization':'source F32 pixel scaling / decimal F64 statistics / final F32 tensor',
         'pixelValuesShape':list(values.shape),'pixelValuesSha256':m['tensors'][image_tensor]['sha256'],'pixelValuesByteLength':values.nbytes,
         'pixelTensor':image_tensor,'preparation':{'reportPath':str(foreground/'report.json'),'reportSha256':sha(prep_bytes),
             'route':prep['effectiveRoute'],'modelCalls':prep['modelCalls'],'provenance':prep['preparation']},
