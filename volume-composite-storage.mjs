@@ -49,8 +49,8 @@ export function scatterCompositeFlux(layout,flux,{fine,coarse}){
   for(let i=0;i<outer.length;i+=8)outer.fill(0,i,i+3);
   layout.faces.forEach((m,i)=>{
     const q=flux[i]*m.sign;
-    if(m.fineOffset!==null)near[m.fineOffset]=q/(m.area*layout.fineWidth);
-    if(m.lowerOffset!==null)lower[m.lowerOffset]=q/(m.area*layout.fineWidth);
+    if(m.fineOffset!==null)near[m.fineOffset]+=q/(layout.fineWidth**3);
+    if(m.lowerOffset!==null)lower[m.lowerOffset]+=q/(layout.fineWidth**3);
     if(m.coarseOffset!==null)outer[m.coarseOffset]+=q/(layout.coarseWidth**2);
   });
   return {fine:near,coarse:outer,lower};

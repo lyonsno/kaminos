@@ -23,6 +23,10 @@ try{
   report.route={backend:'metal',vendor:adapter.info.vendor,architecture:adapter.info.architecture,dawnPath:resolve(dawnPath),liveFlame:false};
   device=await adapter.requestDevice();const errors=[];device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
   const cases=[{name:'noncube-solid',grid:createCompositeGrid({shape:[4,5,4],cellWidth:1,fine:{min:[1,1,1],max:[3,4,3],ratio:2},solid:p=>p[0]<1&&p[1]<1})}];
+  cases.push({name:'nonmatching-eight-thirds',grid:createCompositeGrid({shape:[5,6,5],min:[-.7,1.2,-2.1],cellWidth:.5,
+    fine:{min:[-.2,1.7,-1.6],max:[1.3,3.2,-.1],ratio:8/3}})});
+  cases.push({name:'nonmatching-partial-wall',grid:createCompositeGrid({shape:[5,6,5],cellWidth:1,
+    fine:{min:[1,1,1],max:[4,4,4],ratio:4/3},solid:p=>p[0]<1&&p[1]>2&&p[1]<3})});
   if(recorded){
     const src=JSON.parse(readFileSync(resolve(recorded,'report.json'))),arm=src.arms.find(a=>a.label==='on-146');
     assert.equal(src.phase,'complete');assert.equal(arm.state.effectiveRoute,'native-3d-compute-fluid-raymarch-v0');
