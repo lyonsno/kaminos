@@ -223,3 +223,12 @@ export function emissiveCoefficientsMismatch(sample, { minProducerStep = null } 
   if (!(sample.extinctionStdDev > 0)) return 'emissive coefficients are spatially flat';
   return null;
 }
+
+// Capture controls that read or frame without changing the simulation; every
+// other control, including any other debug control, is configuration
+// (post-landing review of 2eef9ccdd: @confinementEpsilon slipped through a
+// guard that exempted every debug control).
+export const NON_CONFIGURING_CAPTURE_CONTROLS = new Set(['@emissiveCoefficients', '@cameraFrame', '@savePreset', '@simGpuProfile']);
+export function armSetsConfiguration(set) {
+  return set.some(([id]) => !NON_CONFIGURING_CAPTURE_CONTROLS.has(id));
+}
