@@ -64,7 +64,9 @@ try {
   const flame=document.objects.find(o=>o.id==='flame-emitter'),position=[...flame.transform.position];position[0]+=.04;
   await page.evaluate(({id,position})=>window.kaminosSetSceneObjectTransform(id,{position}),{id:flame.id,position});
   await page.waitForFunction(generation=>window.__kaminosSceneRadiance?.debugState().frame?.generation>generation+5,before.lighting.frame.generation,{timeout:0});await settle();
-  const moved=await observe();assert.equal(moved.lighting.geometryBuilds,before.lighting.geometryBuilds,'moving flame must not rebuild CPU BVH');assert.notDeepEqual(moved.lighting.sourceTransform,before.lighting.sourceTransform);
+  const moved=await observe();assert.equal(moved.lighting.geometryBuilds,before.lighting.geometryBuilds,'moving emitter must not rebuild CPU BVH');
+  assert.deepEqual(moved.objects.find(o=>o.id===flame.id).transform.position,position,'actual authored emitter must move');
+  assert.equal(moved.lighting.frame.pointRegions.generation,moved.lighting.frame.generation,'surface source must remain current after movement');
   await retain({name:'hybrid-moved',observe});
   await page.evaluate(({id,position})=>window.kaminosSetSceneObjectTransform(id,{position}),{id:flame.id,position:flame.transform.position});await settle();
   const handoff=route(shot.url);await page.goto('about:blank');await page.goto(handoff);await settle();
