@@ -58,6 +58,17 @@ test('removing or replacing fire cannot abort log resource cleanup',async()=>{
   await f.experiment.dispose();await f.experiment.dispose();
   assert.equal(f.read().active,false);assert.equal(f.read().disposed,1);assert.equal(disposals,1);
 });
+
+test('steady thermal steps use registration-only availability and still stop on source loss',async()=>{
+  let status='mounted',inspectionReads=0;
+  const fire={availability:()=>({status}),read(){inspectionReads++;return {status,enabled:true,visible:true};},setEnabled(){},dispose(){}};
+  const f=await fixture({fire});f.experiment.operations.run();inspectionReads=0;
+  f.step();f.step();assert.equal(inspectionReads,0,'a live thermal step must not read the complete basin fixture');
+  assert.equal(f.read().paused,false);assert.equal(f.experiment.read().fields[0].steps,2);
+  status='unavailable';f.step();assert.equal(f.read().paused,true);
+  assert.equal(f.experiment.read().status,'unavailable');assert.equal(f.experiment.read().fields[0].steps,2);
+  await f.experiment.dispose();
+});
 test('flame visibility changes only the presentation layer and restores its prior value on disposal',async()=>{
   const f=await fixture();assert.equal(f.canvas.style.opacity,'0');
   f.experiment.operations.run();f.step();const before=f.experiment.read();

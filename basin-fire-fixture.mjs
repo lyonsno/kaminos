@@ -20,11 +20,17 @@ export async function createBasinFireFixture({basins,source,runtime,presentation
     }else if(allowedGrids)throw Error('Basin inspection is required for this experiment');
     return expected;
   }
+  function sourceStatus(current){
+    const available=current.registered&&current.registrationId===registration;
+    return {status:disposed?'disposed':available?'mounted':'unavailable',objectId:id,sourceRegistrationId:registration,
+      enabled:available?current.emissionEnabled!==false:null};
+  }
+  const availability=()=>sourceStatus(source.read());
   function read(){
-    const state=basins.read(),currentFlow=value(state),current=source.read(),available=current.registered&&current.registrationId===registration;
-    return {identity:BASIN_FIRE_FIXTURE_IDENTITY,status:disposed?'disposed':available?'mounted':'unavailable',objectId:id,sourceRegistrationId:registration,
+    const state=basins.read(),currentFlow=value(state),current=source.read();
+    return {identity:BASIN_FIRE_FIXTURE_IDENTITY,...sourceStatus(current),
       basin:{presetId:state.source?.presetId,label:state.source?.label,modified:basins.modified?.()??null},
-      enabled:available?current.emissionEnabled!==false:null,flow:currentFlow,visible:presentation.read(),source:current,
+      flow:currentFlow,visible:presentation.read(),source:current,
       runtime:runtime.debugState(),simulationOwnership:'existing-singleton-domain'};
   }
   const emit=(kind,requested)=>record({kind:'fire-fixture.'+kind,target:id,phase:'applied',requested,effective:read()});
@@ -44,7 +50,7 @@ export async function createBasinFireFixture({basins,source,runtime,presentation
     registration=source.read().registrationId;
     if(!registration)throw Error('Registered fire source identity is missing');
     presentation.set(true);ownedVisibility=true;if(enabled!==null)setEnabled(enabled);
-    return {read,setEnabled,
+    return {read,availability,setEnabled,
       refresh(){live();changed();return read();},
       reacquire(){live();const current=source.read();if(current.registered&&current.registrationId===registration)return read();
         const nextId=source.ensure(),next=source.read();if(!nextId||!next.registered||!next.registrationId)throw Error('Fire source could not be registered');

@@ -19,7 +19,7 @@ export async function createLiveLogExperiment({host,inputs={},record}) {
   if(canvas&&!fire)canvas.style.opacity='0';
   const fields=[],bindings=[],restores=[];let elapsed=0,attempt=crypto.randomUUID();
   const membership=()=>object&&scene.objects().some(entry=>entry.object===object);
-  const fireAvailable=()=>!fire||fire.read().status==='mounted';
+  const fireAvailable=()=>!fire||(fire.availability?fire.availability():fire.read()).status==='mounted';
   function assertActive(){if(disposed)throw Error('Live log experiment disposed');if(!membership())throw Error('Live log removed from scene');if(!fireAvailable())throw Error('Fire source removed or replaced; reconnect fire');}
   const read=()=>({identity:LIVE_LOG_HEAT_IDENTITY,status:disposed?'disposed':!membership()||!fireAvailable()?'unavailable':phase,
     unavailableReason:!membership()?'log':!fireAvailable()?'fire':null,

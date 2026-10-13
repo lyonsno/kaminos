@@ -57,3 +57,23 @@ test('a refused basin load preserves a newer authoring edit',async()=>{
   await assert.rejects(createBasinFireFixture(host,{presetId:'requested'}),/scene changed/);
   assert.equal(state.source.presetId,'newer-edit');assert.equal(state.domControls['volume-flow-rate'].value,7);
 });
+
+test('source availability stays live without reading basin or renderer inspection state',async()=>{
+  let state={domControls:{'volume-flow-rate':{value:2.5}},source:{presetId:'saved48'}};
+  let registered=true,registrationId='root-1',emissionEnabled=true,inspectionReads=0;
+  const inspect=()=>{inspectionReads++;};
+  const fixture=await createBasinFireFixture({
+    basins:{read(){inspect();return structuredClone(state);},modified(){inspect();return false;},async applyBasin(id){state.source.presetId=id;}},
+    source:{read:()=>({registered,registrationId,emissionEnabled}),ensure:()=> 'fire-1',select(){},setEnabled(value){emissionEnabled=value;}},
+    runtime:{async setActive(){},debugState(){inspect();return {active:true};}},
+    presentation:{read(){inspect();return true;},set(){}},
+  },{presetId:'saved48'});
+  inspectionReads=0;
+  assert.deepEqual(fixture.availability(),{status:'mounted',objectId:'fire-1',sourceRegistrationId:'root-1',enabled:true});
+  emissionEnabled=false;assert.equal(fixture.availability().enabled,false);
+  registered=false;assert.equal(fixture.availability().status,'unavailable');assert.equal(fixture.availability().enabled,null);
+  registered=true;registrationId='replacement';assert.equal(fixture.availability().status,'unavailable');
+  registrationId='root-1';assert.equal(fixture.availability().status,'mounted');
+  assert.equal(inspectionReads,0,'registration checks must not construct settings, export URLs or runtime diagnostics');
+  fixture.dispose();assert.equal(fixture.availability().status,'disposed');
+});
