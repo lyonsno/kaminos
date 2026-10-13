@@ -22,4 +22,6 @@ assert.throws(()=>entry.operations.mode({mode:'invented'}),/mode/);
 const before=entry.read().mode;await assert.rejects(()=>module.createWalkingCreature({host:{controls:{document},scene:{open:async()=>session}},inputs:{}},{loadSources:async()=>{throw Error('wrong source digest');}}),/wrong source digest/);
 assert.equal(entry.read().mode,before);
 await entry.dispose();assert.equal(closed,1);assert.equal(scene.children.length,0);assert.equal(frameCallback,null);
+const moving=await module.createWalkingCreature({host:{controls:{document},scene:{open:async()=>session}},inputs:{blend_frames:0,radius:4,mode:'path',play:true}},{loadSources:async()=>data});
+assert.equal(moving.read().mode,'path');assert.equal(moving.read().playback.status,'playing');assert.equal(typeof frameCallback,'function');await moving.dispose();assert.equal(closed,2);assert.equal(frameCallback,null);
 console.log('Full-body walking consumes one actual shared scene attachment/clock and releases its own instance');

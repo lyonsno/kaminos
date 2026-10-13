@@ -12,7 +12,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const adapter=createGivenPaletteMotion({THREE,motion:data.motion,rigFrame:data.frame});
  const walking=createWalkingPoseAdapter({THREE,adapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
  const source={...data.source,presentation:{mode:'source',...walking.identity}};
- let session,runtime,asset,floor,floorAsset,player,stop=null,clock=0,cycle=0,mode='source',disposed=false,disposal,restoreGround=()=>{},refresh=()=>{};
+ let session,runtime,asset,floor,floorAsset,player,stop=null,clock=0,cycle=0,mode='source',disposed=false,disposal,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
  const instruments=document.createElement('div');
  const unsubscribe=()=>{const previous=stop;stop=null;previous?.();};
  function read(){return {mode,cycle,source:structuredClone(source),host:{id:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
@@ -34,7 +34,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  async function dispose(){
   if(disposal)return disposal;disposed=true;
   disposal=Promise.resolve().then(async()=>{
-   unsubscribe();refresh=()=>{};player?.dispose();instruments.remove();restoreGround();
+   unsubscribe();refresh=()=>{};player?.dispose();instruments.remove();restoreGround();restoreGizmos();
    if(session)await session.dispose();if(runtime&&!asset)runtime.dispose();if(floor&&!floorAsset){floor.geometry.dispose();floor.material.dispose();}
    if(globalThis.window?.kaminosWalkingCreature===inspect)delete globalThis.window.kaminosWalkingCreature;
   });return disposal;
@@ -58,6 +58,13 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    restoreGround=()=>{if(height.value===value&&!visible.checked){height.value=previous.height;height.dispatchEvent(new Event('change'));visible.checked=previous.visible;visible.dispatchEvent(new Event('change'));}};
   }
   if(inputs.view)session.setView(inputs.view);
+  if(inputs.gizmos!==undefined){
+   if(typeof inputs.gizmos!=='boolean')throw Error('Gizmo visibility must be boolean');
+   const toggle=document.getElementById('viewport-show-gizmos');if(!toggle)throw Error('Shared viewport gizmo control is unavailable');
+   const previous=toggle.checked;toggle.checked=inputs.gizmos;toggle.dispatchEvent(new Event('change'));
+   restoreGizmos=()=>{if(toggle.checked===inputs.gizmos){toggle.checked=previous;toggle.dispatchEvent(new Event('change'));}};
+  }
+  globalThis.window?.selectSceneObject?.(asset.id);
   const active=()=>{if(disposed)throw Error('Walking creature experiment is disposed');};
   const operation=(name,action)=>input=>{active();record({kind:`walking.${name}`,phase:'requested',requested:input??null});try{const result=action(input);refresh();record({kind:`walking.${name}`,phase:'applied',mode,cycle,frame:player.read().frame});return result;}catch(error){record({kind:`walking.${name}`,phase:'failed',error:error.message});throw error;}};
   const operations={
@@ -68,6 +75,9 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    mode:operation('mode',input=>{if(!['source','cycle','path'].includes(input?.mode))throw Error('Unknown walking mode');unsubscribe();player.pause();mode=input.mode;cycle=0;source.presentation.mode=mode;source.presentation.cycle=0;player.seek(0);host.scene.refreshPresentation?.(asset);return read();}),
    floor:operation('floor',input=>{if(!floor)throw Error('No walking reference floor is mounted');if(typeof input?.visible!=='boolean')throw Error('Reference floor visibility must be boolean');floor.visible=input.visible;session.redraw();return read();}),
   };
+  if(inputs.mode!==undefined)operations.mode({mode:inputs.mode});
+  if(inputs.play!==undefined&&typeof inputs.play!=='boolean')throw Error('Initial playback must be boolean');
+  if(inputs.play===true)operations.play();
   if(globalThis.window)window.kaminosWalkingCreature=inspect;
   return {read,operations,dispose,mount({root,invoke}){
    const panel=document.createElement('section');panel.className='walking-creature-instruments';
