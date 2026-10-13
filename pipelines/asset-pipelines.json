@@ -4,6 +4,34 @@
   "description": "Kaminos asset generation pipeline manifest. Routes here are runnable composition contracts; stage receipts must say when work is real, fixture-backed, cached, skipped, or failed.",
   "pipelines": [
     {
+      "id": "trellis-image-to-mesh-webgpu-v0",
+      "label": "TRELLIS 2 Image To Textured Mesh",
+      "routeId": "trellis2.image-generation.webgpu.v0",
+      "description": "Prepare an image, generate geometry and materials with queued WebGPU inference, and finish a textured GLB with local CPU tools. Requires a configured local weight package and GPU Greenroom worker.",
+      "artifacts": {
+        "input": {"role": "source-image", "required": true},
+        "mesh": {"role": "textured-mesh", "pathTemplate": "artifacts/trellis-output.glb"}
+      },
+      "stages": [
+        {
+          "id": "run-trellis-image-to-mesh",
+          "label": "Generate TRELLIS Mesh",
+          "statusMode": "model-adapter",
+          "route": {
+            "id": "trellis2.image-generation.webgpu.v0",
+            "tool": "TRELLIS 2",
+            "commandDefault": "scripts/run-trellis-greenroom-adapter.mjs",
+            "modelFamily": "TRELLIS 2",
+            "realModel": true,
+            "executesModel": true,
+            "effectiveBackend": "browser-webgpu"
+          },
+          "inputArtifact": "input",
+          "outputArtifact": "mesh"
+        }
+      ]
+    },
+    {
       "id": "evil-orb-sharp-fixture-pbr-v0",
       "label": "Evil Orb SHARP Fixture: Image To Visible Splat",
       "routeId": "fixture.sharp-splat-pbr-sidecar.v0",
