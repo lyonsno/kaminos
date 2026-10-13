@@ -50,9 +50,22 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
 // does not assign simulator-wide coefficients to independent scene emitters.
 export function flameControlDisplayValue(id,value) {return id==='volume-render-scale'?Number(value)*100:value;}
 export function flameControlSourceValue(id,value) {return id==='volume-render-scale'?Number(value)/100:value;}
+const reflectedRangeBounds=new WeakMap();
+export function syncFlameRangeBounds(source,bounds) {
+  const requested={min:String(bounds.min),max:String(bounds.max)},previous=reflectedRangeBounds.get(source);
+  if(previous && previous.requested.min===requested.min && previous.requested.max===requested.max && source.min===previous.min && source.max===previous.max)return;
+  // A browser range input can serialize a derived endpoint with fewer digits.
+  // Use that same native representation for the limits: a legal endpoint must
+  // not be rejected as out of range after the alias passes it to the source.
+  const probe=source.cloneNode();probe.step='any';probe.min=requested.min;probe.max=requested.max;
+  probe.value=requested.min;const min=probe.value;
+  probe.value=requested.max;const max=probe.value;
+  source.min=min;source.max=max;
+  reflectedRangeBounds.set(source,{requested,min,max});
+}
 export const FLAME_PROPERTY_GROUPS = [
   { name:'Quality', open:true, scope:'Grid changes restart the fluid. Raymarch controls tune the viewport.', fields:[
-    ['volume-resolution','Simulation resolution'], ['volume-steps','Ray count'],
+    ['volume-resolution','Simulation resolution'], ['volume-pressure-solver-iterations','Solver sweeps'], ['volume-steps','Ray count'],
     ['volume-adaptive-rays','Adaptive rays'], ['volume-render-scale','Screen resolution (%)'],
   ] },
   { name:'Appearance', open:true, scope:'Shared flame and smoke appearance', fields:[
@@ -81,7 +94,7 @@ export const FLAME_PROPERTY_GROUPS = [
   ] },
   { name:'Simulation', scope:'Shared domain · resolution changes restart the fluid', fields:[
     ['volume-pressure-solver','Pressure solver'],
-    ['volume-pressure-solver-iterations','Iterations'], ['volume-advection-scheme','Advection'],
+    ['volume-advection-scheme','Advection'],
     ['volume-confinement','Confinement'], ['volume-time-step','Time stepping'],
     ['volume-common-gas-transport','Common gas transport'],
   ] },
@@ -148,8 +161,8 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       if(id==='volume-render-scale')field.title='Raymarch width and height as a percentage of the viewport';
       function syncField(force=false) {
         const bounds=readControlBounds(id);
+        if(bounds)syncFlameRangeBounds(source,bounds);
         for(const key of ['min','max']) {
-          if(bounds) source[key]=String(bounds[key]);
           if(source[key])field[key]=String(flameControlDisplayValue(id,source[key]));
         }
         if(force!==true&&document.activeElement===field)return;

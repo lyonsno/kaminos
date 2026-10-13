@@ -11,7 +11,7 @@ class Element extends EventTarget {
  setPointerCapture(id){this.captures.add(id);} hasPointerCapture(id){return this.captures.has(id);} releasePointerCapture(id){this.captures.delete(id);}
 }
 function emit(target,type,values={}){const event=new Event(type,{cancelable:true});for(const [key,value] of Object.entries(values))Object.defineProperty(event,key,{configurable:true,value});target.dispatchEvent(event);return event;}
-function fixture({selected=()=> 'kiln',localOrientation=()=>[0,0,0],transformSettings=()=>({orientation:"world",explicit:true})}={}){
+function fixture({overlaysVisible=()=>true,selected=()=> 'kiln',localOrientation=()=>[0,0,0],transformSettings=()=>({orientation:"world",explicit:true})}={}){
  const document=new Element(),window=new Element(),viewport=new Element(),input=new Element(),grip=new Element(),status=new Element(),historyControl=new Element(),numberControl=new Element(),historyScope=new Element();
  historyControl.tagName='INPUT';historyControl.type='range';numberControl.tagName='INPUT';numberControl.type='number';numberControl.closest=()=>numberControl;historyScope.contains=target=>target===historyControl||target===numberControl;
  document.body=new Element();document.activeElement=new Element();
@@ -25,7 +25,7 @@ function fixture({selected=()=> 'kiln',localOrientation=()=>[0,0,0],transformSet
  let pose={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},allowed=true,busy=false;
  const sceneObject={userData:{kaminosSceneObject:{label:'kiln'}},updateWorldMatrix(){}};
  let frames=0;
- const tools=installScenePlacementTools({viewport,camera,controls,gizmo,selected,read:()=>structuredClone(pose),write:(_,p)=>pose=structuredClone(p),object:()=>sceneObject,refresh(){},localOrientation,transformSettings,allowed:()=>allowed,busy:()=>busy,frameSelected:()=>frames++,historyScopes:[historyScope]});
+ const tools=installScenePlacementTools({viewport,camera,controls,gizmo,selected,overlaysVisible,read:()=>structuredClone(pose),write:(_,p)=>pose=structuredClone(p),object:()=>sceneObject,refresh(){},localOrientation,transformSettings,allowed:()=>allowed,busy:()=>busy,frameSelected:()=>frames++,historyScopes:[historyScope]});
  return {tools,input,grip,document,window,viewport,status,controls,gizmo,helper,historyControl,numberControl,historyScope,get frames(){return frames;},get pose(){return pose;},set allowed(v){allowed=v;},set busy(v){busy=v;},
    set position(value){pose.position=[...value];tools.draw();},
    get hud(){return viewport.children.find(child=>child.id==='scene-edit-hud');},get overlay(){return viewport.children.find(child=>child.id==='scene-edit-overlay');},
@@ -190,4 +190,14 @@ test('rejected numeric domain rotation cancels the gesture and restores navigati
  f.tools.start('rotate');emit(f.document,'keydown',{key:'3'});
  assert.equal(f.tools.state().active,null);assert.equal(f.tools.state().modal,null);
  assert.equal(f.controls.enabled,true);assert.match(f.hud.textContent,/world axes/);
+});
+
+test('overlay master clears the pivot diamond and axis guide without altering selection or the edit',()=>{
+ let visible=true;const f=fixture({overlaysVisible:()=>visible});
+ assert.match(f.overlay.innerHTML,/line/);
+ visible=false;f.tools.draw();assert.equal(f.overlay.innerHTML,'');
+ assert.equal(f.tools.state().active,null);
+ f.tools.start('translate');emit(f.document,'keydown',{key:'x'});f.tools.draw();
+ assert.equal(f.overlay.innerHTML,'','modal axis guide obeys the same overlay master');
+ assert.ok(f.tools.state().active);visible=true;f.tools.draw();assert.match(f.overlay.innerHTML,/stroke-dasharray/);f.tools.finish(false);
 });

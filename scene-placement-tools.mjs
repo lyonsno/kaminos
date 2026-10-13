@@ -23,7 +23,7 @@ export function getPivotViewState(camera, point, width, height) {
 export function installScenePlacementTools({
   viewport, historyScope = null, camera, controls, gizmo, selected, read, write, object, refresh,
   allowed = () => true, busy = () => false, frameSelected = () => {},
-  viewReference = () => null,
+  viewReference = () => null, overlaysVisible = () => true,
   settled = () => {}, captureContext = () => null, historyScopes = [], prepare=()=>{}, transformSettings=()=>({orientation:'world'}),localOrientation=()=>read(selected())?.rotation||[0,0,0],
 }) {
   const hud = document.createElement('div');
@@ -223,7 +223,7 @@ export function installScenePlacementTools({
     const line = (a, b, color, opacity = 1, dash = '') => {
       if ([a.x, a.y, b.x, b.y].every(Number.isFinite)) lines += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${color}" opacity="${opacity}" stroke-width="1.3" ${dash ? `stroke-dasharray="${dash}"` : ''}/>`;
     };
-    if (target && (pivotState?.state === 'visible'||reference)) {
+    if (overlaysVisible() && target && (pivotState?.state === 'visible'||reference)) {
       target.updateWorldMatrix(true, true);
       const origin = new Vector2(pivotState.x, pivotState.y);
       if(!reference)for (const [a, b] of [[[0, -5], [5, 0]], [[5, 0], [0, 5]], [[0, 5], [-5, 0]], [[-5, 0], [0, -5]]]) line(origin.clone().add(new Vector2(...a)), origin.clone().add(new Vector2(...b)), '#efa544');
