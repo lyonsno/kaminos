@@ -761,3 +761,51 @@ test('a compared string holding a machine-local path is displayed normalized, no
   assert.match(s, /actual='<root>\/tests\/fixtures\/deep\/er\/still\/deeper\/file\.json'/);
   assert.doesNotMatch(s, /\/private\/|\/var\/folders|\/tmp\/|\/Users\//);
 });
+
+// Python dependencies: requirements.txt at the root is checked in the
+// runner's python3 before any test runs, but only when a Python test is
+// selected, so a Node-only run never needs a Python environment.
+
+const PY_PASS = 'import sys\nsys.exit(0)\n';
+const ABSENT = 'kaminos-no-such-distribution-xyz';
+
+test('a requirements.txt distribution missing from python3 fails before any test runs, naming the phase, the distribution and the executable', async t => {
+  const f = await fixture(t, { files: { 'p.py': PY_PASS, 'a.mjs': PASS },
+    manifest: manifestOf({ 'tests/p.py': { kind: 'python' }, 'tests/a.mjs': { kind: 'node' } }) });
+  await fs.writeFile(path.join(f.root, 'requirements.txt'), `# what the suite needs\n${ABSENT}\n`);
+  assert.equal((await run(f)).ok, false);
+  const report = await readReport(f);
+  assert.equal(report.failurePhase, 'python-dependencies');
+  assert.deepEqual(report.effective.pythonDependencies.missing, [ABSENT]);
+  assert.match(report.error, new RegExp(ABSENT));
+  assert.match(report.error, /python3/);
+  assert.equal(report.counts.executed, 0);
+  assert.deepEqual(report.results, []);
+});
+
+test('the python dependency check is skipped when no python test is selected, and the node test runs', async t => {
+  const f = await fixture(t, { files: { 'p.py': PY_PASS, 'a.mjs': PASS },
+    manifest: manifestOf({ 'tests/p.py': { kind: 'python' }, 'tests/a.mjs': { kind: 'node' } }) });
+  await fs.writeFile(path.join(f.root, 'requirements.txt'), `${ABSENT}\n`);
+  for (const extra of [{ kinds: ['node'] }, { only: ['tests/a.mjs'] }]) {
+    assert.equal((await run(f, extra)).ok, true, JSON.stringify(extra));
+    const report = await readReport(f);
+    assert.equal(report.counts.executed, 1);
+    assert.equal(report.results[0].file, 'tests/a.mjs');
+    assert.equal(report.effective.pythonDependencies.checked, false, JSON.stringify(extra));
+  }
+});
+
+test('a requirements.txt whose distributions are installed lets the python test run, with the python version recorded', async t => {
+  const f = await fixture(t, { files: { 'p.py': PY_PASS }, manifest: manifestOf({ 'tests/p.py': { kind: 'python' } }) });
+  await fs.writeFile(path.join(f.root, 'requirements.txt'), 'numpy\n');
+  assert.equal((await run(f)).ok, true);
+  const report = await readReport(f);
+  assert.equal(report.counts.executed, 1);
+  assert.equal(report.results[0].outcome, 'pass');
+  const deps = report.effective.pythonDependencies;
+  assert.equal(deps.checked, true);
+  assert.deepEqual(deps.missing, []);
+  assert.match(deps.installed.numpy, /^\d+\./);
+  assert.match(deps.python, /^\d+\.\d+/);
+});

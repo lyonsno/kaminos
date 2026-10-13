@@ -13,7 +13,7 @@
 // its recorded signature. Everything else fails the run: new failures, changed
 // signatures, timeouts, tests that cannot start, unclassified files, invalid or
 // orphaned entries, quarantined tests that now pass, selectors that match
-// nothing, missing declared dependencies, and test roots elsewhere in the
+// nothing, missing declared dependencies (npm or Python), and test roots elsewhere in the
 // repository that are neither covered nor excluded with a reason. A report is
 // written for every invocation, including interrupted ones.
 
@@ -137,6 +137,44 @@ async function checkDependencies(root) {
   }
   return { declared, missing: missing.sort(), mismatched, installed, checked, integrityVerified: Boolean(hidden),
     lockfileSha256: existsSync(lockPath) ? sha256(await fs.readFile(lockPath)) : null };
+}
+
+// Python distributions the suite needs, from requirements.txt at the root:
+// one distribution name per line, comments after #. They are checked in the
+// runner's python3 with one importlib.metadata call, by distribution name
+// (pillow, not PIL), and only when a Python test is about to run, so a
+// Node-only run never needs a Python environment.
+function requirementNames(text) {
+  return text.split('\n')
+    .map(line => line.replace(/#.*$/, '').trim())
+    .filter(Boolean)
+    .map(line => line.split(/[\s\[<>=!~;@]/)[0])
+    .filter(Boolean);
+}
+
+const PYTHON_DEPENDENCY_PROBE = [
+  'import importlib.metadata as m, json, sys',
+  'out = {"python": sys.version.split()[0], "executable": sys.executable, "installed": {}, "missing": []}',
+  'for name in sys.argv[1:]:',
+  '    try: out["installed"][name] = m.version(name)',
+  '    except m.PackageNotFoundError: out["missing"].append(name)',
+  'print(json.dumps(out))',
+].join('\n');
+
+async function checkPythonDependencies(root, executable, needed) {
+  const result = { checked: false, skipped: null, requirementsPath: null, requirementsSha256: null, executable, resolvedExecutable: null, python: null, declared: [], installed: {}, missing: [] };
+  const requirementsPath = path.join(root, 'requirements.txt');
+  if (!existsSync(requirementsPath)) { result.skipped = 'no requirements.txt'; return result; }
+  const text = await fs.readFile(requirementsPath, 'utf8');
+  Object.assign(result, { requirementsPath, requirementsSha256: sha256(text), declared: requirementNames(text) });
+  if (!needed) { result.skipped = 'no python test selected'; return result; }
+  let probe;
+  try {
+    probe = JSON.parse(execFileSync(executable, ['-c', PYTHON_DEPENDENCY_PROBE, ...result.declared], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+  } catch (error) {
+    throw Object.assign(new Error(`could not check requirements.txt with ${executable}: ${error.message}`), { phase: 'python-dependencies' });
+  }
+  return Object.assign(result, { checked: true, resolvedExecutable: probe.executable, python: probe.python, installed: probe.installed, missing: probe.missing });
 }
 
 // The failure signature: the first error-shaped line for Node, the last for
@@ -364,7 +402,7 @@ export async function runSuite({
       executables: resolvedExecutables, nodeFlags: [...nodeFlags], node: process.version, python: null,
       platform: `${process.platform}-${process.arch}`, git: gitIdentity(root),
       browserStub: { path: browserStub, overrides: BROWSER_OVERRIDES, log: browserLog },
-      manifestSha256: null, quarantineSha256: null, dependencies: null },
+      manifestSha256: null, quarantineSha256: null, dependencies: null, pythonDependencies: null },
     counts: { discovered: 0, executed: 0, passed: 0, knownFailures: 0, newFailures: 0, notRun: 0 },
     newFailures: [], knownFailures: [], signatureChanged: [], staleQuarantine: [],
     unclassified: [], invalid: [], invalidQuarantine: [], unmatchedSelectors: [],
@@ -451,6 +489,13 @@ export async function runSuite({
     }
     report.counts.notRun = report.notRun.length;
     if (!planned.length && !report.unmatchedSelectors.length) report.unmatchedSelectors.push('empty-plan');
+
+    report.failurePhase = 'python-dependencies';
+    report.effective.pythonDependencies = await checkPythonDependencies(root, resolvedExecutables.python, planned.some(item => item.kind === 'python'));
+    const { missing: missingPython, resolvedExecutable } = report.effective.pythonDependencies;
+    if (missingPython.length) {
+      throw Object.assign(new Error(`python distributions listed in requirements.txt are not installed in ${resolvedExecutables.python}${resolvedExecutable ? ` (${resolvedExecutable})` : ''}: ${missingPython.join(', ')}. Run ${resolvedExecutables.python} -m pip install -r requirements.txt.`), { phase: 'python-dependencies' });
+    }
 
     report.failurePhase = 'execute';
     await fs.mkdir(logsDir, { recursive: true });
