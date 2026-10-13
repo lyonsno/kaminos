@@ -21978,12 +21978,13 @@ async function openFirstFlameFieldDialog() {
   const prompt=document.createElement('option');prompt.value='';prompt.textContent='Choose an immersed-source basin…';select.append(prompt);
   for(const entry of index.entries){const option=document.createElement('option');option.value=entry.presetId;option.textContent=entry.label||entry.presetId;select.append(option);}
   dialog.querySelector('[type="button"]').disabled=!select.value;
-  select.onchange=()=>{dialog.querySelector('[type="button"]').disabled=!select.value;};
+  select.onchange=()=>{dialog.querySelector('[type="button"]').disabled=pendingAdd||!select.value;};
   dialog.querySelector('[type="button"]').onclick=async event=>{
-    event.target.disabled=true;pendingAdd=true;
+    if(pendingAdd||request.signal.aborted)return;
+    event.target.disabled=true;select.disabled=true;pendingAdd=true;
     try{await addFirstFlameField(select.value,{signal:request.signal});if(!request.signal.aborted)dialog.close();}
     catch(error){if(!request.signal.aborted)dialog.querySelector('[role="status"]').textContent=error.message;}
-    finally{pendingAdd=false;if(!request.signal.aborted)event.target.disabled=!select.value;}
+    finally{pendingAdd=false;if(!request.signal.aborted){select.disabled=false;event.target.disabled=!select.value;}}
   };
   const cancelRequest=()=>{request.abort();if(pendingAdd&&scenePlacementTools.edits.state().active?.id==='@first-flame-field')scenePlacementTools.edits.cancel();};
   dialog.querySelector('[value="cancel"]').onclick=cancelRequest;

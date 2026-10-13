@@ -9,13 +9,19 @@ const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const start = source.indexOf('async function addFirstFlameField(');
 const end = source.indexOf('function installAuthoringParameterEditing()', start);
 
-function fixture() {
+function fixture({ holdActivation = false } = {}) {
   let field = { composition: null, settings: {}, sourcePresent: false, route: {} };
-  let mountCount = 0, pending;
+  let mountCount = 0, pending, releaseActivation;
   const edits = createSceneEdits({ read: () => null, write: () => {} });
   edits.register('@first-flame-field', {
     read: () => field, check: value => value,
-    write: async value => { field = value; if (value.sourcePresent) mountCount++; },
+    write: async value => {
+      field = value;
+      if (value.sourcePresent) {
+        mountCount++;
+        if (holdActivation) await new Promise(resolve => { releaseActivation = resolve; });
+      }
+    },
   });
   const select = { value: '', append() {} }, button = {}, status = { textContent: '' };
   const handlers = new Map();
@@ -39,18 +45,47 @@ function fixture() {
     structuredClone, AbortController,
     document: { createElement: type => type === 'dialog' ? dialog : {}, body: { append() {} } },
     fetch: async () => ({ ok: true, json: async () => ({ entries: [{ presetId: 'saved-immersed-basin' }] }) }),
-    validateVolumeSettingsPresetIndex() {}, assertSceneConstructionAvailable() {},
-    activeSceneComposition: null, authoringBusy: false,
+    validateVolumeSettingsPresetIndex() {},
+    activeSceneComposition: null, authoringBusy: false, sceneSaveBlockedByFailedRestore: false,
     scenePlacementTools: { edits }, firstFlameFieldState: () => field,
     loadAuthoredFlameBasin: () => new Promise((resolve, reject) => { pending = { resolve: () => resolve(settings), reject }; }),
     COMPOSITION_SCHEMA: 'scene-composition', FLAME_EMITTER_ID: 'flame-emitter',
     setActiveSceneObject() {}, setInfo() {},
   };
   edits.subscribe(() => { context.activeSceneComposition = field.composition; });
-  runInNewContext(source.slice(start, end) + '\nglobalThis.openDialog = openFirstFlameFieldDialog;', context);
+  const guardStart = source.indexOf('function assertSceneConstructionAvailable()');
+  const guardEnd = source.indexOf('function checkedObjectData(', guardStart);
+  runInNewContext(source.slice(guardStart, guardEnd) + source.slice(start, end) + '\nglobalThis.openDialog = openFirstFlameFieldDialog;', context);
   return { context, dialog, button, select, status, edits, settings,
-    read: () => field, mounts: () => mountCount, pending: () => pending };
+    read: () => field, mounts: () => mountCount, pending: () => pending,
+    releaseActivation: () => releaseActivation() };
 }
+
+test('selection change and a second Add cannot steal cancellation from pending activation', async () => {
+  const f = fixture({ holdActivation: true });
+  await f.context.openDialog(); f.select.value = 'saved-immersed-basin';
+  const first = f.button.onclick({ target: f.button }); f.pending().resolve();
+  await new Promise(setImmediate);
+  assert.equal(f.edits.state().active.id, '@first-flame-field');
+  assert.equal(f.mounts(), 1);
+  f.select.value = 'another-saved-immersed-basin'; f.select.onchange();
+  // Direct invocation also tests re-entry if a caller bypasses disabled controls.
+  await f.button.onclick({ target: f.button });
+  f.dialog.close(); f.releaseActivation(); await first;
+  assert.equal(f.read().sourcePresent, false, 'dismissal must cancel the original pending activation');
+  assert.equal(f.read().composition, null);
+  assert.equal(f.edits.state().active, null);
+  assert.equal(f.edits.state().undoCount, 0, 'abandoned creation must not commit');
+  assert.equal(f.mounts(), 1, 'a second handler must not begin another activation');
+  await f.context.openDialog(); f.select.value = 'saved-immersed-basin';
+  const retry = f.button.onclick({ target: f.button }); f.pending().resolve();
+  await new Promise(setImmediate);
+  assert.equal(f.select.disabled, true);
+  assert.equal(f.button.disabled, true);
+  f.releaseActivation(); await retry;
+  assert.equal(f.read().sourcePresent, true);
+  assert.equal(f.edits.state().undoCount, 1);
+});
 
 for (const lateResult of ['resolve', 'reject']) {
   test(`dismissed Add Flame ignores late basin ${lateResult}, then deliberate retry succeeds`, async () => {
