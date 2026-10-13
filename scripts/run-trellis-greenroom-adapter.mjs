@@ -80,6 +80,9 @@ export async function runTrellisAdapter(values){
     }
     if(terminal.job_id!==job.job_id||terminal.exit_code!==0||state.terminal.status!=='done')
       throw Error('queued TRELLIS generation '+state.terminal.status+': '+(terminal.error_message??terminal.failure_phase??terminal.exit_code));
+    if(terminal.status!=='done'||terminal.effective_cwd!==command.cwd||terminal.output_dir!==command.output_dir||
+      terminal.effective_timeout!==null||JSON.stringify(terminal.effective_argv)!==JSON.stringify(argv))
+      throw Error('Greenroom executed a different command, directory or timeout; requested generation was not exercised');
     state.phase='completed-output-admission';await persist();
     const child=JSON.parse(await fs.readFile(childReport)),data=await fs.readFile(output);
     if(!child.ok||child.status!=='succeeded'||child.mode!=='image-generation'||child.runId!==runId||
