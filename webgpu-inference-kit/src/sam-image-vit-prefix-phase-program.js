@@ -46,7 +46,7 @@ struct VitPrefixDims {
   pretrain_grid_size: u32,
   patch_tokens: u32,
   total_values: u32,
-  _pad0: u32,
+  layer_norm_eps: f32,
 };
 
 @group(0) @binding(0) var<storage, read> position_embeddings: array<f32>;
@@ -82,7 +82,7 @@ struct VitPrefixDims {
   pretrain_grid_size: u32,
   patch_tokens: u32,
   total_values: u32,
-  _pad0: u32,
+  layer_norm_eps: f32,
 };
 
 @group(0) @binding(0) var<storage, read> patch_embeddings: array<f32>;
@@ -113,7 +113,7 @@ struct VitPrefixDims {
   pretrain_grid_size: u32,
   patch_tokens: u32,
   total_values: u32,
-  _pad0: u32,
+  layer_norm_eps: f32,
 };
 
 @group(0) @binding(0) var<storage, read> input_values: array<f32>;
@@ -138,7 +138,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     variance = variance + delta * delta;
   }
   variance = variance / f32(dims.hidden_size);
-  let inv_std = inverseSqrt(variance + 0.000001);
+  let inv_std = inverseSqrt(variance + dims.layer_norm_eps);
   for (var c = 0u; c < dims.hidden_size; c = c + 1u) {
     output_values[base + c] = (input_values[base + c] - mean) * inv_std * norm_weight[c] + norm_bias[c];
   }
@@ -187,11 +187,13 @@ function normalizeShape(shape = {}) {
     patchWidth: shape.patchWidth ?? shape.width,
     hiddenSize: shape.hiddenSize ?? shape.channels,
     pretrainGridSize: shape.pretrainGridSize,
+    layerNormEps: shape.layerNormEps ?? 0.000001,
   };
   out.patchTokens = out.patchHeight * out.patchWidth;
   for (const key of ['batch', 'patchHeight', 'patchWidth', 'hiddenSize', 'pretrainGridSize']) {
     if (!Number.isInteger(out[key]) || out[key] <= 0) throw new Error(`shape.${key} must be a positive integer`);
   }
+  if (!Number.isFinite(out.layerNormEps) || !Number.isFinite(Math.fround(out.layerNormEps)) || Math.fround(out.layerNormEps) <= 0) throw new Error('shape.layerNormEps must be positive finite f32');
   return out;
 }
 
@@ -239,7 +241,7 @@ export function createSam3ImageVitPrefixPhaseProgramCpuOracle(input) {
       variance += delta * delta;
     }
     variance /= shape.hiddenSize;
-    const invStd = 1 / Math.sqrt(variance + 0.000001);
+    const invStd = 1 / Math.sqrt(variance + shape.layerNormEps);
     for (let c = 0; c < shape.hiddenSize; c += 1) {
       vitPrefixHiddenStates[base + c] = (patchPlusPosition[base + c] - mean) * invStd * layerNormWeight[c] + layerNormBias[c];
     }
@@ -378,9 +380,9 @@ export async function runSam3ImageVitPrefixPhaseProgramRoute(input = {}) {
             { name: 'pretrain_grid_size', type: 'u32' },
             { name: 'patch_tokens', type: 'u32' },
             { name: 'total_values', type: 'u32' },
-            { name: '_pad0', type: 'u32' },
+            { name: 'layer_norm_eps', type: 'f32' },
           ],
-          values: { batch: shape.batch, patch_height: shape.patchHeight, patch_width: shape.patchWidth, hidden_size: shape.hiddenSize, pretrain_grid_size: shape.pretrainGridSize, patch_tokens: shape.patchTokens, total_values: totalValues, _pad0: 0 },
+          values: { batch: shape.batch, patch_height: shape.patchHeight, patch_width: shape.patchWidth, hidden_size: shape.hiddenSize, pretrain_grid_size: shape.pretrainGridSize, patch_tokens: shape.patchTokens, total_values: totalValues, layer_norm_eps: shape.layerNormEps },
         }),
       };
       stage.uploadTensor(tensors.patchEmbeddings, patchEmbeddings);
