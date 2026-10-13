@@ -17270,6 +17270,7 @@ export function createKaminosVolumePrototype({
   function encodeSim(encoder, options = {}) {
     // Transport ghosts must be this step's snapshots (Sexy stamps the
     // generation with the step they were written for).
+    if (joinedExterior?.paused) return false;
     if (state.joinedBoundary?.admitted && state.joinedGhosts?.bound && !joinedGhostSynthetic && state.joinedGhosts.generation !== state.simStepCount) {
       state.joinedGhosts.reason = 'stale-ghost-generation';
       // A rebuild invalidated the stamp: the exterior re-prepares outside encoding.

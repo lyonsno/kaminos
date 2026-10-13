@@ -60,7 +60,7 @@ export function joinedExteriorSolids(shape, wall) {
 
 export function createJoinedExterior(device, { extent, ratio = 4, wall = null, budget = 32, tolerance = 1e-3 } = {}) {
   if (!Number.isInteger(budget) || budget < 1) throw new Error('positive integer budget required');
-  let built = null, destroyed = false, lastStep = null;
+  let built = null, destroyed = false, lastStep = null, paused = false;
   const destroyBuilt = () => { if (!built) return; for (const r of built.owned) r.destroy?.(); built = null; };
   const key = producer => JSON.stringify({ dims: producer.dims, pitch: producer.pitch, solid: producer.solidMask?.revision ?? 'disabled', allocation: producer.allocation ?? null, buffers: producer.fluidBuffers?.map(b => b.label ?? '?'), lower: producer.lowerFaceTexture?.label ?? null, extent, ratio, wall });
 
@@ -156,7 +156,19 @@ const SITES: u32 = ${sites}u; const SX: u32 = ${g.shape[0] + 1}u; const SY: u32 
     get ghosts() { return built?.ghosts ?? null; },
     receipt() { return { route: JOINED_EXTERIOR_ROUTE, extent, ratio, wall, budget, tolerance, prepared: Boolean(built?.solver), ...(built?.summary ?? {}), lastStep, steps: built?.steps ?? 0 }; },
     // Solve receipt from the last encoded step (maps a buffer; not for the frame loop).
-    async probe() { if (!built?.solver) return { status: 'unprepared' }; const r = await built.solver.readback(); return { status: 'sampled', converged: r.converged, iterations: r.receipt.iterations, maxDivergenceError: r.receipt.maxDivergenceError, cells: r.receipt.cells, faces: r.receipt.faces, warm: r.receipt.warmStartRequested }; },
+    get paused() { return paused; },
+    // Pauses the joined step (the core skips the whole sim step while paused)
+    // so the readback sees one encoded solve, then resumes.
+    async probe() {
+      if (!built?.solver) return { status: 'unprepared' };
+      if (!built.steps) return { status: 'no-step-yet' };
+      paused = true;
+      try {
+        await device.queue.onSubmittedWorkDone();
+        const r = await built.solver.readback();
+        return { status: 'sampled', converged: r.converged, iterations: r.receipt.iterations, budget, maxDivergenceError: r.receipt.maxDivergenceError, cells: r.receipt.cells, faces: r.receipt.faces, warm: r.receipt.warmStartRequested, steps: built.steps };
+      } finally { paused = false; }
+    },
     destroy() { if (!destroyed) { destroyBuilt(); destroyed = true; } },
   };
 }
