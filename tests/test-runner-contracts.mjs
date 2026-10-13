@@ -23,8 +23,10 @@ async function fixture(t, { files, manifest, quarantine }) {
 }
 
 const manifestOf = tests => ({ schema: 'kaminos.test-suite-manifest.v1', tests });
+// browser: null keeps these contracts independent of a KAMINOS_BROWSER set
+// in the environment that runs them.
 const run = (f, extra = {}) => runSuite({ root: f.root, manifestPath: f.manifestPath, quarantinePath: f.quarantinePath,
-  reportPath: f.reportPath, logsDir: path.join(f.root, 'out', 'logs'), parallel: 2, timeoutMs: 20000, ...extra });
+  reportPath: f.reportPath, logsDir: path.join(f.root, 'out', 'logs'), parallel: 2, timeoutMs: 20000, browser: null, ...extra });
 const readReport = async f => JSON.parse(await fs.readFile(f.reportPath, 'utf8'));
 
 test('an unquarantined failure fails the suite and is named as new', async t => {
@@ -760,4 +762,76 @@ test('a compared string holding a machine-local path is displayed normalized, no
   const s = (await readReport(f)).results[0].signature;
   assert.match(s, /actual='<root>\/tests\/fixtures\/deep\/er\/still\/deeper\/file\.json'/);
   assert.doesNotMatch(s, /\/private\/|\/var\/folders|\/tmp\/|\/Users\//);
+});
+
+// Browser-kind tests: run only when KAMINOS_BROWSER names an executable.
+
+async function browserStub(t, body = '#!/bin/sh\nenv\n', mode = 0o755) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kaminos-browser-stub-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'chrome-for-testing');
+  await fs.writeFile(file, body, { mode });
+  await fs.chmod(file, mode);
+  return file;
+}
+
+const BROWSER_TEST = `// kaminos-test: browser — launches the browser the runner hands it
+import { spawnSync } from 'node:child_process';
+const res = spawnSync(process.env.KAMINOS_CHROME, [], { encoding: 'utf8' });
+const env = res.stdout || '';
+const ok = res.status === 0 && env.includes('KAMINOS_TEST_RUNNER_TEST=tests/b.mjs')
+  && process.env.CHROME_BIN.endsWith('browser-launch-stub.sh') && !('KAMINOS_BROWSER' in process.env);
+console.log(env);
+process.exit(ok ? 0 : 1);
+`;
+const NODE_SEES_STUB = "// kaminos-test: node\nprocess.exit(process.env.KAMINOS_CHROME.endsWith('browser-launch-stub.sh') ? 0 : 1);\n";
+
+test('with KAMINOS_BROWSER set, browser-kind tests run and receive it as KAMINOS_CHROME; node tests keep the stub', async t => {
+  const stub = await browserStub(t);
+  const f = await fixture(t, { files: { 'b.mjs': BROWSER_TEST, 'n.mjs': NODE_SEES_STUB }, manifest: manifestOf({}) });
+  const result = await run(f, { browser: stub });
+  const report = await readReport(f);
+  assert.equal(result.ok, true, JSON.stringify(report.results.map(r => [r.file, r.outcome])));
+  assert.deepEqual(report.results.map(r => [r.file, r.kind, r.outcome]).sort(), [['tests/b.mjs', 'browser', 'pass'], ['tests/n.mjs', 'node', 'pass']]);
+  assert.deepEqual(report.notRun, []);
+  assert.equal(report.effective.browser.executable, stub);
+  assert.deepEqual(report.browserLaunchAttempts, []);
+  assert.match(await fs.readFile(report.results.find(r => r.file === 'tests/b.mjs').log, 'utf8'), /KAMINOS_CHROME=.*chrome-for-testing/);
+});
+
+test('without KAMINOS_BROWSER, browser-kind tests are not run and the report records no browser', async t => {
+  const f = await fixture(t, { files: { 'b.mjs': BROWSER_TEST, 'n.mjs': NODE_SEES_STUB }, manifest: manifestOf({}) });
+  assert.equal((await run(f)).ok, true);
+  const report = await readReport(f);
+  assert.deepEqual(report.notRun.map(r => [r.file, r.kind, r.reason]), [['tests/b.mjs', 'browser', 'launches the browser the runner hands it']]);
+  assert.equal(report.counts.executed, 1);
+  assert.equal(report.effective.browser, null);
+});
+
+test('the command line reads KAMINOS_BROWSER from the environment', async t => {
+  const stub = await browserStub(t);
+  const f = await fixture(t, { files: { 'b.mjs': BROWSER_TEST }, manifest: manifestOf({}) });
+  const { spawnSync } = await import('node:child_process');
+  const cli = new URL('../tools/test-runner.mjs', import.meta.url).pathname;
+  const env = { ...process.env, KAMINOS_BROWSER: stub };
+  delete env.NODE_TEST_CONTEXT;
+  const res = spawnSync(process.execPath, [cli, '--root', f.root, '--report', f.reportPath], { encoding: 'utf8', env });
+  assert.equal(res.status, 0, res.stdout + res.stderr);
+  const report = await readReport(f);
+  assert.equal(report.counts.executed, 1);
+  assert.equal(report.effective.browser.executable, stub);
+});
+
+test('a KAMINOS_BROWSER that is not an executable file is an environment error before any test runs, with the report written', async t => {
+  const notExecutable = await browserStub(t, '#!/bin/sh\nexit 0\n', 0o644);
+  const f = await fixture(t, { files: { 'b.mjs': BROWSER_TEST, 'n.mjs': NODE_SEES_STUB }, manifest: manifestOf({}) });
+  for (const browser of [notExecutable, path.join(f.root, 'no-such-browser'), path.dirname(notExecutable)]) {
+    assert.equal((await run(f, { browser })).ok, false, browser);
+    const report = await readReport(f);
+    assert.equal(report.failurePhase, 'browser', browser);
+    assert.match(report.error, /KAMINOS_BROWSER/);
+    assert.equal(report.counts.executed, 0);
+    assert.deepEqual(report.results, []);
+    assert.equal(report.effective.browser.executable, browser);
+  }
 });

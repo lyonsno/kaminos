@@ -33,6 +33,22 @@ jobs:
           kill $pid || true
           cat serve-startup.log
           test "$up" = 1
+      # Browser-kind tests run against Chrome for Testing, never an installed
+      # Chrome. The cache key changes weekly so stable is refreshed.
+      - id: cft-week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/chrome
+          key: chrome-for-testing-stable-${{ runner.os }}-${{ runner.arch }}-${{ steps.cft-week.outputs.week }}
+      - name: Install Chrome for Testing
+        run: |
+          line=$(npx --yes @puppeteer/browsers install chrome@stable --path "$RUNNER_TEMP/chrome" | tail -n 1)
+          echo "$line"
+          exe="${line#* }"
+          test -x "$exe"
+          "$exe" --version
+          echo "KAMINOS_BROWSER=$exe" >> "$GITHUB_ENV"
       - run: node tools/test-runner.mjs --report test-results/report.json
       - if: always()
         uses: actions/upload-artifact@v4

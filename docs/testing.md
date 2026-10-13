@@ -11,7 +11,7 @@ npm test -- --only tests/a.mjs,tests/b.mjs
 
 Landing a branch on `main` goes through `tools/land.mjs`, which requires a green run of this suite in CI for the exact commit being landed and dispatches one when none exists; see `docs/landing.md`.
 
-Python tests run with the `python3` on your path and need `numpy` and `pillow` installed there; CI installs both. The runner checks that every package in `package-lock.json` is installed at the locked version before running anything, and records whether integrity could be verified. It hands child tests a stub executable through `KAMINOS_CHROME`, `CHROME_BIN`, `CHROME` and `KAMINOS_SHARP_WEBGPU_CHROME`. A witness that reaches a browser launch hits the stub, which records the attempt and fails; the run then fails and names the test. Witnesses that read other variables or hardcode a browser path are not covered.
+Python tests run with the `python3` on your path and need `numpy` and `pillow` installed there; CI installs both. The runner checks that every package in `package-lock.json` is installed at the locked version before running anything, and records whether integrity could be verified. It hands child tests a stub executable through `KAMINOS_CHROME`, `CHROME_BIN`, `CHROME` and `KAMINOS_SHARP_WEBGPU_CHROME`. A witness that reaches a browser launch hits the stub, which records the attempt and fails; the run then fails and names the test. Witnesses at the repository root take their browser from `KAMINOS_CHROME` first and fail when no browser is given; none falls back to the installed Google Chrome.
 
 ## Classifying a test
 
@@ -30,13 +30,28 @@ Declare the kind on the first line of a new test file:
 | --- | --- |
 | `node` | A self-contained Node script that exits 0 on success. |
 | `python` | A self-contained Python script that exits 0 on success. |
-| `browser` | Launches or drives a browser. Needs a reason. Not run by `npm test`. |
+| `browser` | Launches or drives a browser. Needs a reason. Run by `npm test` only when `KAMINOS_BROWSER` is set; see below. |
 | `manual` | Needs arguments, a live page, or a private environment. Needs a reason. |
 | `helper` | Imported or executed by other tests, never run on its own. Needs a reason. |
 
 Files that existed when the runner was introduced are classified in `tests/suite.json`. A declaration that disagrees with that manifest is an error. An unclassified file fails the run, so a test can't silently go unexecuted.
 
 Prefer behavior tests that import a module and exercise it. Avoid new assertions that match the text of `index.html` with regular expressions: they break when code moves and hide whether the behavior still works.
+
+## Browser tests
+
+Browser-kind tests run when `KAMINOS_BROWSER` names an executable file:
+
+```sh
+KAMINOS_BROWSER="<path to Google Chrome for Testing>" npm test
+KAMINOS_BROWSER="<path>" npm test -- --only tests/gui-smoke.mjs
+```
+
+The runner checks the path before any test runs; a path that is missing, not a file, not executable, or inside the installed `Google Chrome.app` fails the run in the `browser` phase, with the report written. Browser-kind tests receive the executable as `KAMINOS_CHROME`; `CHROME_BIN`, `CHROME` and `KAMINOS_SHARP_WEBGPU_CHROME` keep the stub, so a browser test that launches through one of those is recorded as a blocked launch. Node and Python tests keep the stub for all four. Without `KAMINOS_BROWSER`, browser-kind tests are listed as not run with their reason. The report's `effective.browser` records the executable, its real path and its `--version`, or null.
+
+Use Chrome for Testing, never the installed Google Chrome: a headless run of the installed app can take over the operator's browser. Locally, Playwright's Chromium (`~/Library/Caches/ms-playwright/chromium-*/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`) is one, or install one without adding a dependency: `npx --yes @puppeteer/browsers install chrome@stable --path <dir>`, which prints the executable's path. CI installs Chrome for Testing stable that way, cached per week, and sets `KAMINOS_BROWSER`.
+
+`tests/gui-smoke.mjs` serves the repository with `serve.py` on a free port, loads `/index.html` headless, adds two meshes through `window.kaminosSceneAuthoring`, selects the first Scene Objects row and opens every sidebar tab. It fails on any uncaught exception, console error, failed request logged as an error, or dialog, except entries in its `ALLOWED` list, each with a reason; an allowlist entry that matched nothing is printed so it can be removed. It writes a receipt, `kaminos-gui-smoke-<time>-<pid>.json` under the OS temp directory, on every outcome and prints its path: the executable and browser version, the URL, each step and tab with its timing, every error with whether it was allowed, and the failure phase. `tests/index-html-unresolved-names-contracts.mjs` is the static half: it runs `tools/index-html-unresolved-names.mjs` over every inline script and handler attribute in `index.html` and fails on any name used but never declared.
 
 ## Known failures
 
