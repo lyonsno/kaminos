@@ -9,6 +9,7 @@ Generate skeletal animation from a text prompt with [UniMate](https://github.com
 - **The whole sampler in the browser.** The 10-layer spatio-temporal transformer (74M parameters) runs in FP32 as WGSL compute shaders. Classifier-free guidance and a Dormand–Prince (dopri5) adaptive solver integrate the flow from noise to motion.
 - **Room for the application to keep rendering.** Each network evaluation is submitted as inference-kit command duties sized to measured GPU throughput. A scene on the same device keeps its frame rate during generation, and generation can be paused, resumed and stopped between duties.
 - **A complete animation.** Output includes world joint positions, local joint rotations in the skeleton's own hierarchy, the root trajectory and facing, plus the model's raw motion features.
+- **Something to watch while it downloads.** The model is about 740 MB (UniMate plus the text encoder). While it downloads, the page plays a gallery of clips that this port generated in the browser: a dog, a cat, the Go2 robot dog, a parrot, a horse, an eagle, a spider and a T-rex. Drag to orbit, scroll or pinch to zoom, and scrub through any clip.
 
 ## Accuracy
 
@@ -48,6 +49,8 @@ node serve-unimate.mjs --weights weights/unimate --bundle bundles/cat --t5 weigh
 
 Then open the printed `index.html` address. Type a prompt and press Generate. The skeleton plays the motion in a loop while the scene keeps drawing. The bundle's own prompts can also replay the noise of the captured reference run, for comparison with it.
 
+The gallery clips in `clips/` were made with `generate-clips.mjs`, which drives this page in a headless Chrome for Testing and saves each generation as a clip file. Given a list of skeleton bundles, prompts and seeds, it writes one clip per run plus a report; `clips/index.json` lists the clips the page shows, in order.
+
 ## Using it in an application
 
 - [`CooperativeUniMateDenoiser`](unimate-cooperative.js) is the network. `configure({ B, J })` allocates it for a batch and skeleton size. `writeConditioning(...)` and `encodePrepare(...)` set up a skeleton and caption once. Each evaluation is then encoded as command duties through a duty scheduler.
@@ -70,7 +73,8 @@ The browser witnesses compare against reference captures from the PyTorch implem
 - `run-solver-witness.mjs`: the solver along the reference trajectory, a replay of its steps, and a free run.
 - `run-t5-witness.mjs`: the text encoder.
 - `run-demo-witness.mjs`: the demo page, driven the way a person uses it.
+- `run-gallery-witness.mjs`: the clip gallery, captured while the model downloads and at chosen frames of every clip.
 
 ## Credits and licenses
 
-UniMate is by Linzhan Mou, Jiahui Lei, Zhiyang Dou, Chenyue Cai, Chaoyue Song, Adam Finkelstein and Szymon Rusinkiewicz ([paper](https://arxiv.org/abs/2609.05415), [code](https://github.com/Friedrich-M/UniMate)). Its code is MIT-licensed and its released weights are CC BY-NC 4.0. The text encoder is Google's [Flan-T5-base](https://huggingface.co/google/flan-t5-base) (Apache 2.0).
+UniMate is by Linzhan Mou, Jiahui Lei, Zhiyang Dou, Chenyue Cai, Chaoyue Song, Adam Finkelstein and Szymon Rusinkiewicz ([paper](https://arxiv.org/abs/2609.05415), [code](https://github.com/Friedrich-M/UniMate)). Its code is MIT-licensed and its released weights are CC BY-NC 4.0. The gallery clips are outputs of those weights; use them non-commercially. The text encoder is Google's [Flan-T5-base](https://huggingface.co/google/flan-t5-base) (Apache 2.0).

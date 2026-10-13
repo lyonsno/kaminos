@@ -1,0 +1,82 @@
+{
+ "schema": "kaminos.unimate.clip-gallery.v0",
+ "clips": [
+  {
+   "id": "dog-a-dog-runs-forward-s2",
+   "file": "dog-a-dog-runs-forward-s2.json",
+   "animal": "Dog",
+   "prompt": "A dog runs forward.",
+   "seed": 2
+  },
+  {
+   "id": "cat-a-cat-walks-forward-s3",
+   "file": "cat-a-cat-walks-forward-s3.json",
+   "animal": "Cat",
+   "prompt": "A cat walks forward.",
+   "seed": 3
+  },
+  {
+   "id": "go2-an-object-trots-forward-s2",
+   "file": "go2-an-object-trots-forward-s2.json",
+   "animal": "Go2",
+   "prompt": "An object trots forward.",
+   "seed": 2
+  },
+  {
+   "id": "cat-a-cat-jumps-forward-s2",
+   "file": "cat-a-cat-jumps-forward-s2.json",
+   "animal": "Cat",
+   "prompt": "A cat jumps forward.",
+   "seed": 2
+  },
+  {
+   "id": "go2-an-object-rears-up-on-its-hind-legs-s1",
+   "file": "go2-an-object-rears-up-on-its-hind-legs-s1.json",
+   "animal": "Go2",
+   "prompt": "An object rears up on its hind legs.",
+   "seed": 1
+  },
+  {
+   "id": "parrot-a-parrot-flaps-its-wings-s2",
+   "file": "parrot-a-parrot-flaps-its-wings-s2.json",
+   "animal": "Parrot",
+   "prompt": "A parrot flaps its wings.",
+   "seed": 2
+  },
+  {
+   "id": "horse-a-horse-rears-up-on-its-hind-legs-s3",
+   "file": "horse-a-horse-rears-up-on-its-hind-legs-s3.json",
+   "animal": "Horse",
+   "prompt": "A horse rears up on its hind legs.",
+   "seed": 3
+  },
+  {
+   "id": "go2-an-object-jumps-forward-s2",
+   "file": "go2-an-object-jumps-forward-s2.json",
+   "animal": "Go2",
+   "prompt": "An object jumps forward.",
+   "seed": 2
+  },
+  {
+   "id": "eagle-an-eagle-flaps-its-wings-s2",
+   "file": "eagle-an-eagle-flaps-its-wings-s2.json",
+   "animal": "Eagle",
+   "prompt": "An eagle flaps its wings.",
+   "seed": 2
+  },
+  {
+   "id": "spider-a-spider-crawls-forward-s3",
+   "file": "spider-a-spider-crawls-forward-s3.json",
+   "animal": "Spider",
+   "prompt": "A spider crawls forward.",
+   "seed": 3
+  },
+  {
+   "id": "trex-a-tyrannosaurus-roars-s3",
+   "file": "trex-a-tyrannosaurus-roars-s3.json",
+   "animal": "Trex",
+   "prompt": "A tyrannosaurus roars.",
+   "seed": 3
+  }
+ ]
+}
