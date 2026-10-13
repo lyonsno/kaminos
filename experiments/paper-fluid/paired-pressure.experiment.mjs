@@ -22,7 +22,7 @@ export default{id:'paper/paired-pressure',title:'Paired water · pressure compli
    seek:step=>player.seek(step),step:()=>player.seek(player.read().step+1),pause:()=>player.pause(),
    play({seconds=2,rate=1}={}){const s=player.read();if(!Number.isFinite(seconds)||seconds<=s.timeSeconds)throw Error('End time must follow current time');return player.play({endStep:Math.round(seconds/s.dt),rate});},
    reset:({compliance:value=compliance}={})=>reset(value),
-   frame(){sceneSession.setView({position:[-2.7,2.4,4.5],target:[-1.4,.75,.4],up:[0,1,0]});return read();},
+   frame(){sceneSession.setView({position:[-3.5,3.6,7],target:[-.7,1.5,.4],up:[0,1,0]});return read();},
   },async mount({root,document,invoke}){
    const style=document.createElement('link');style.rel='stylesheet';style.href='/experiments/paper-fluid/paired-pressure.css';document.head.append(style);document.body.classList.add('paired-fluid-comparison');
    const panel=document.createElement('section');panel.className='pair-settings';panel.innerHTML='<h3>Pressure comparison</h3><p>Left: hard pressure · compliance 0<br>Right: finite pressure · candidate below</p><label>Candidate compliance<input type="number" min="0" step="any" aria-label="Candidate compliance"></label><button type="button" class="btn" data-action="reset">Apply & reset both</button><p>Same 1,209 particles, water amount, radius 0.125, four passes and timestep 1/60. Surface force and artificial damping off.</p><p>Scrub recorded frames and orbit either view. Play extends the recording to the selected end time.</p><p class="pair-history-note">History lives in this experiment. Reset starts a new run. It is render history, not a solver checkpoint.</p>';
