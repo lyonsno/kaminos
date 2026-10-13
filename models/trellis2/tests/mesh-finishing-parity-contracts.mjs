@@ -10,6 +10,7 @@ import {cleanupAndSimplifyPreservingSurface,createBrowserMeshPostprocess,MESH_PO
 import {fma,simplifyMesh} from '../mesh-simplify.js';
 import {finishTrellisMesh} from '../trellis-material.js';
 import {MESH_FINISHING_CASES} from './mesh-finishing-fixture.js';
+import {NodeTrellisUVWorker} from '../node-uv-worker.mjs';
 
 const fixture=JSON.parse(await fs.readFile(new URL('./fixtures/mesh-finishing-source.json',import.meta.url)));
 const sha=a=>createHash('sha256').update(new Uint8Array(a.buffer,a.byteOffset,a.byteLength)).digest('hex');
@@ -60,3 +61,13 @@ assert.ok(unwrapInput,'finishing must hand the browser-cleaned surface to UV: '+
 assert.equal(sha(unwrapInput.triangles),fixture.cases['simplify-route'].output.trianglesSha256,'UV receives the cleaned triangles, not raw geometry');
 assert.equal(unwrapInput.metadata.postprocess.effectiveRoute,MESH_POSTPROCESS_ROUTE);
 assert.throws(()=>createBrowserMeshPostprocess({}),/targetFaces/);
+
+// Off-thread execution returns the same bytes and leaves the caller's arrays attached.
+const workerProvider=createBrowserMeshPostprocess({targetFaces:target,WorkerClass:NodeTrellisUVWorker});
+const fromWorker=await workerProvider({vertices,triangles,metadata:{}});
+assert.equal(fromWorker.metadata.postprocess.execution,'module-worker');
+assert.equal(sha(fromWorker.vertices),fixture.cases['simplify-route'].output.verticesSha256,'worker positions must equal the source finisher bytes');
+assert.equal(sha(fromWorker.triangles),fixture.cases['simplify-route'].output.trianglesSha256,'worker triangles must equal the source finisher bytes');
+assert.equal(vertices.length,MESH_FINISHING_CASES['simplify-route'].build().vertices.length,'caller vertices stay attached');
+const failing=createBrowserMeshPostprocess({targetFaces:target,WorkerClass:NodeTrellisUVWorker});
+await assert.rejects(failing({vertices:new Float32Array(9),triangles:new Uint32Array([0,1,7]),metadata:{}}),/mesh finisher worker failed/);
