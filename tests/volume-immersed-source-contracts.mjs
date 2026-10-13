@@ -179,7 +179,8 @@ test('IS-01: the momentum relaxation carries the time step once, after the fold'
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
   const foldAt = main.indexOf('let forceIncrement = (vel - velTransported) * timeStep;');
   const relaxAt = main.indexOf('vel = mix(vel, u.immersed_source_c.y * immersedDirection(), stepBlend(min(1.0, immersedWeight * u.immersed_source_d.x)));');
-  const spongeAt = main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));');
+  // The reactant candidate opens the top through materialWallFade (equal to wallFade under the authored law).
+  const spongeAt = Math.max(main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));'), main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));'));
   assert.ok(foldAt > 0 && relaxAt > 0 && spongeAt > 0);
   assert.ok(relaxAt > foldAt && relaxAt < spongeAt, 'the relaxation follows the fold (its stepBlend is the only time dependence) and precedes the sponge');
 });

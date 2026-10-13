@@ -102,7 +102,8 @@ test('the shader reads coefficients at the dynamics speed and scales transport, 
   assert.match(main, /vel = velTransported \+ forceIncrement;/, 'and is folded back once (or handed to the face-force pass under the staggered reading)');
   const foldAt = main.indexOf('let forceIncrement = (vel - velTransported) * timeStep;');
   const lastAdditiveAt = main.indexOf('vel = vel - projectionCorrection');
-  const spongeAt = main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));');
+  // The reactant candidate opens the top through materialWallFade (equal to wallFade under the authored law).
+  const spongeAt = Math.max(main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));'), main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));'));
   assert.ok(foldAt >= 0 && lastAdditiveAt >= 0 && spongeAt >= 0, 'fold, last additive increment and wall sponge all present');
   assert.ok(foldAt > lastAdditiveAt, 'the scaling follows the last additive increment');
   assert.ok(foldAt < spongeAt, 'the scaling precedes the wall damping');
