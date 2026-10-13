@@ -65,7 +65,7 @@ export default {
    player.seek(inputs.frame??0);
    if(inputs.transform!==undefined){
     asset.root.position.fromArray(inputs.transform.position);asset.root.quaternion.fromArray(inputs.transform.quaternion);asset.root.scale.fromArray(inputs.transform.scale);
-    asset.root.updateMatrixWorld(true);session.redraw();
+    asset.root.updateMatrixWorld(true);host.scene.refreshPresentation?.(asset);session.redraw();
    }
    if(inputs.view!==undefined)await session.setView(inputs.view);
    const read=()=>({...player.read(),asset:{requested:inputs.asset,effective:asset.source,id:asset.id,bodySha256:body.bodySha256},
