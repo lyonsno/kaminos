@@ -62,7 +62,7 @@ export function createJoinedExterior(device, { extent, ratio = 4, wall = null, b
   if (!Number.isInteger(budget) || budget < 1) throw new Error('positive integer budget required');
   let built = null, destroyed = false, lastStep = null;
   const destroyBuilt = () => { if (!built) return; for (const r of built.owned) r.destroy?.(); built = null; };
-  const key = producer => JSON.stringify({ dims: producer.dims, pitch: producer.pitch, solid: producer.solidMask?.revision ?? 'disabled', buffers: producer.fluidBuffers?.map(b => b.label ?? '?'), lower: producer.lowerFaceTexture?.label ?? null, extent, ratio, wall });
+  const key = producer => JSON.stringify({ dims: producer.dims, pitch: producer.pitch, solid: producer.solidMask?.revision ?? 'disabled', allocation: producer.allocation ?? null, buffers: producer.fluidBuffers?.map(b => b.label ?? '?'), lower: producer.lowerFaceTexture?.label ?? null, extent, ratio, wall });
 
   // Builds the composite around the producer's current grid. Runs outside
   // encoding (it allocates and uploads); the caller binds the ghost geometry
