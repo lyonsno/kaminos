@@ -7,9 +7,10 @@ import {visualWork,assertMountedScene} from '../visual-work.mjs';
 const [out,store,origin='http://127.0.0.1:18588']=process.argv.slice(2);
 if(!out||!store)throw Error('explicit output and copied store required');
 await fs.mkdir(out,{recursive:true});
-const report={status:'running',phase:'prepare',repoRoot:process.cwd(),source:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),origin,store,errors:[],consoleErrors:[],claim:'kiln hybrid authoring preview; no performance or adjustable-domain acceptance'};
+const report={status:'running',phase:'source-identity',repoRoot:process.cwd(),source:null,origin,store,errors:[],consoleErrors:[],claim:'kiln hybrid authoring preview; no performance or adjustable-domain acceptance'};
 const write=()=>fs.writeFile(out+'/kiln.json',JSON.stringify(report,null,2));await write();let browser;
 try{
+ report.source=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.phase='prepare';await write();
  const bytes=await fs.readFile(store+'/scenes/dj-with-a-kiln-pretty.kaminos.json');
  const doc=JSON.parse(bytes);report.input={file:'dj-with-a-kiln-pretty.kaminos.json',sha256:createHash('sha256').update(bytes).digest('hex'),preset:doc.composition.flame.presetId};
  Object.assign(doc.composition.route,{volume_light_field_shared_source:'1',volume_light_field_distributed:'1',volume_light_field_hybrid:'1',volume_light_field_hybrid_points:'1',volume_light_field_hybrid_smoke_refinement:'1'});
