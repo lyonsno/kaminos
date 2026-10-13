@@ -40,10 +40,10 @@ Prefer behavior tests that import a module and exercise it. Avoid new assertions
 
 `tests/quarantine.json` lists failures that existed when the runner was introduced. Each entry has a class, an owner, a reason and a signature.
 
-- **Signature:** what the runner extracts from the test's output. For a plain script it is the first error line, with generic assertion messages carrying their detail lines. For a `node:test` file it is every failing subtest, as its suite path and first error line, plus any error caught outside a subtest. A listed test is a known failure only while it fails with exactly that signature.
+- **Signature:** what identifies the failure. For a plain script it is the first error line of its output, with generic assertion messages carrying their detail lines. For a `node:test` file the runner adds a reporter that writes structured events beside the log, and the signature lists every failing test by its suite path and the thrown error's name and first message line, every failed hook, and every error caught outside a test. A listed test is a known failure only while it fails with exactly that signature.
 - **Changed signature:** a different failure, a timeout, or a test that cannot start is a new failure.
 - **Passing again:** a listed test that passes fails the run until its entry is removed, so the list only shrinks.
-- **Known limit:** for a `node:test` file, the signature is built from the human-readable reporter output. A subtest that already fails and starts failing for a different reason at the same line is not detected when the test prints a code-frame location before its error, and a failing suite hook can misalign names and errors. Seven quarantined files use `node:test`; two are signed by a code location today. Replacing the scraper with Node's structured test events is the next runner slice.
+- **Harness defect:** a `node:test` file that ran but left no events is reported as a harness defect and counts as a new failure, never as known.
 
 ## Test roots outside tests/
 

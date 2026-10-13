@@ -1,6 +1,6 @@
 {
   "schema": "kaminos.test-quarantine.v1",
-  "note": "Known failures. A listed test that fails with exactly its recorded signature does not fail the run. Any other failure, a timeout, a test that cannot start, or a listed test that now passes fails the run. Classes: untriaged, regression, stale-pin, environment, harness-defect. Every entry needs class, owner, reason and signature. Known limit: entries whose signature begins with 'node:test failing:' are built from reporter text and may not change when a known subtest fails for a new reason at the same line; see docs/testing.md.",
+  "note": "Known failures. A listed test that fails with exactly its recorded signature does not fail the run. Any other failure, a timeout, a test that cannot start, or a listed test that now passes fails the run. Classes: untriaged, regression, stale-pin, environment, harness-defect. Every entry needs class, owner, reason and signature.",
   "baseline": {
     "mainCommit": "954f622e",
     "date": "2026-10-12"
@@ -107,7 +107,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "passed at its last change and first fails at 2026-10-02 e85891a7 Build an authoring workspace over the shared scene controls; the failure has changed since then; the owner decides whether the source or the test is wrong",
-      "signature": "node:test failing: Burner control commits share scene undo and restore through the live flame setters :: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /historyScopes: \\[document\\.getElementById\\('tab-assets'\\), document\\.getElementById\\('tab-volume'\\)/. Input: | F frames the selected authored object through generic geometry bounds :: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /const entry = sceneObjects\\.find\\(item => item\\.id === activeSceneObjectId\\);\\s*const changed = frameSceneObjectRecord\\(entry, camera, controls\\)/. Input: | clearing resets scene history while typed water objects join chronological membership history :: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /if \\(id !== activeSceneObjectId\\) scenePlacementTools\\?\\.selectionChanged\\(\\);/. Input: | selection feedback hides untrustworthy offscreen pivots and names the recovery cue :: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /const baseSceneOutput = scenePass;[\\s\\S]*?renderPipeline\\.outputNode = baseSceneOutput;/. Input:",
+      "signature": "node:test failing: Burner control commits share scene undo and restore through the live flame setters :: AssertionError: The input did not match the regular expression /historyScopes: \\[document\\.getElementById\\('tab-assets'\\), document\\.getElementById\\('tab-volume'\\)/. Input: | F frames the selected authored object through generic geometry bounds :: AssertionError: The input did not match the regular expression /const entry = sceneObjects\\.find\\(item => item\\.id === activeSceneObjectId\\);\\s*const changed = frameSceneObjectRecord\\(entry, camera, controls\\)/. Input: | clearing resets scene history while typed water objects join chronological membership history :: AssertionError: The input did not match the regular expression /if \\(id !== activeSceneObjectId\\) scenePlacementTools\\?\\.selectionChanged\\(\\);/. Input: | selection feedback hides untrustworthy offscreen pivots and names the recovery cue :: AssertionError: The input did not match the regular expression /const baseSceneOutput = scenePass;[\\s\\S]*?renderPipeline\\.outputNode = baseSceneOutput;/. Input:",
       "testLastChanged": "2026-10-01 e372f2eb"
     },
     "tests/scene-authoring-polish-contracts.mjs": {
@@ -155,7 +155,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "passed at its last change and first fails at 2026-10-06 d472ee51 Author ordinary scene geometry, groups, lights and retained imports; same failure then as now; the owner decides whether the source or the test is wrong",
-      "signature": "node:test failing: ground is visible but cannot set authored-mesh navigation depth :: AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:",
+      "signature": "node:test failing: ground is visible but cannot set authored-mesh navigation depth :: AssertionError: The expression evaluated to a falsy value:",
       "testLastChanged": "2026-10-01 e372f2eb"
     },
     "tests/scene-roundtrip.mjs": {
@@ -203,7 +203,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "already failing at the commit that last changed it (2026-10-06 0740886f residual probe reports per-slab heat and smoke centroids); its assertions never matched main",
-      "signature": "node:test failing: the residual probe also reduces enstrophy so confinement can be calibrated against a measurement :: AssertionError [ERR_ASSERTION]: enstrophy is reported per cell",
+      "signature": "node:test failing: the residual probe also reduces enstrophy so confinement can be calibrated against a measurement :: AssertionError: enstrophy is reported per cell",
       "testLastChanged": "2026-10-06 0740886f"
     },
     "tests/volume-dead-render-clock-retirement-contracts.mjs": {
@@ -275,7 +275,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "already failing at the commit that last changed it (2026-10-06 5b887704 Inflow aperture: only the transport sampler reaches the coverage texture); its assertions never matched main",
-      "signature": "node:test failing: WGSL carries the predictor buffer, the MacCormack corrector with an extremum limiter, and one velocity bound helper :: AssertionError [ERR_ASSERTION]: predictor must not be added to the shared fluid bind group layout",
+      "signature": "node:test failing: WGSL carries the predictor buffer, the MacCormack corrector with an extremum limiter, and one velocity bound helper :: AssertionError: predictor must not be added to the shared fluid bind group layout",
       "testLastChanged": "2026-10-06 5b887704"
     },
     "tests/volume-transported-detail-force-periodicity-contracts.mjs": {
