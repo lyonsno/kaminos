@@ -3720,6 +3720,7 @@ import { resolveSceneGISettings } from './scene-gi-settings.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createFlameAuthoring, createFlameInspector } from './flame-authoring.mjs';
+import { createBasinFireFixture, mountBasinFireInspector, openBasinFireLibrary } from './basin-fire-fixture.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterAuthoring } from './local-liquid-authoring.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
@@ -3856,6 +3857,9 @@ function fireLightFieldRouteParams() {
   const merged = new URLSearchParams(window.location.search);
   for (const [key, value] of new URLSearchParams(window.location.hash.replace(/^#/, ''))) {
     if (key.startsWith('volume_light_field')) merged.set(key, value);
+  }
+  if(isLiveLogHeatRoute())for(const [key,value] of Object.entries({volume_light_field:'1',volume_light_field_scene_depth:'1',volume_light_field_test_scene:'0'})){
+    if(!merged.has(key))merged.set(key,value);
   }
   return merged;
 }
@@ -5853,6 +5857,11 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
     flameDomainGuide.renderOrder = 1000;
     scene.add(flameDomainGuide);
   }
+  if(entry && Object.hasOwn(metadata,'emissionEnabled')) {
+    if(typeof metadata.emissionEnabled!=='boolean')throw Error('Flame source enabled must be boolean');
+    entry.emissionEnabled=metadata.emissionEnabled;
+    entry.object.userData.kaminosSceneObject.emissionEnabled=metadata.emissionEnabled;
+  }
   if (flameDomainGuide) flameDomainGuide.box.set(
     new THREE.Vector3(-1, -1, -1).add(new THREE.Vector3(...flameDomainTranslation)),
     new THREE.Vector3(1, 3, 1).add(new THREE.Vector3(...flameDomainTranslation)));
@@ -5933,6 +5942,7 @@ function writeAuthoredFlameEmitterPose(value) {
 window.kaminosFlameEmitterState = () => ({
   registered: sceneObjects.some(record => record.id === FLAME_EMITTER_ID),
   authoredPresent: authoredFlamePresent,
+  emissionEnabled:sceneObjects.find(record=>record.id===FLAME_EMITTER_ID)?.emissionEnabled!==false,
   pose: structuredClone(flameEmitterPose),
   domain: 'translated-world-aligned-volume',
   domainTranslation: [...flameDomainTranslation],
@@ -7506,6 +7516,7 @@ function registerSceneObject(object, metadata = {}) {
     groupId: metadata.groupId ?? null,
     createdAt: metadata.createdAt ?? new Date().toISOString(),
     splat: metadata.splat ?? null,
+    ...(metadata.type===FLAME_EMITTER_TYPE?{emissionEnabled:metadata.emissionEnabled??true}:{}),
     image: metadata.image ?? null,
     renderRoute: metadata.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? null,
@@ -7528,6 +7539,7 @@ function registerSceneObject(object, metadata = {}) {
     renderHandoffSchema: record.renderHandoffSchema,
     sceneTransform: record.sceneTransform,
     localLiquidEmitter: record.localLiquidEmitter,
+    ...(record.type===FLAME_EMITTER_TYPE?{emissionEnabled:record.emissionEnabled}:{}),
   };
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
@@ -24235,7 +24247,7 @@ async function initKaminosVolumeRoute() {
       frameId,
       externalRequest,
       ...(family !== 'cluster' ? { emitterPose: flamePoseToDomain(pose, flameDomainTranslation) } : {}),
-      ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && sourceEnabled } : {}),
+      ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && sceneObjects.find(record=>record.id===FLAME_EMITTER_ID)?.emissionEnabled!==false && sourceEnabled } : {}),
     });
     window.__kaminosVolumeEmitterReceipt = receipt;
     if (family !== 'cluster') {
@@ -25922,19 +25934,53 @@ function writeFlameSettingsState(state) {
   window.__kaminosVolumeSettingsPresetReceipt=state.source;
   syncBurnerControls();refreshVolumeReadout();flameInspector?.sync(true);
 }
+async function loadFlameBasinState(id) {
+  const [artifactResponse,schemaResponse]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'})]);
+  const [artifact,schema]=await Promise.all([artifactResponse.json(),schemaResponse.json()]);
+  if(!artifactResponse.ok||!schemaResponse.ok)throw Error(artifact.error||'Basin lookup failed');
+  const receipt=validateVolumeSettingsPresetDocument(artifact,id,schema);
+  if(receipt.preset.domControls['emitter-assay-family'].value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
+  return flameSettingsState(receipt.preset,receipt);
+}
+
+async function createWorkbenchBasinFireFixture(presetId,record,options={}) {
+  if(!volumePrototype||!window.kaminosFlameAuthoring)throw Error('The authored fire host is not initialized');
+  if(window.kaminosBasinFireFixture?.read().status==='mounted')throw Error('This fire domain already has its fixture; select it or apply another basin');
+  let fixture;
+  const syncComposition=()=>{
+    const state=window.kaminosFlameAuthoring.read();
+    if(!state.source){activeSceneComposition=null;renderSceneObjectList();return;}
+    activeSceneComposition={schema:COMPOSITION_SCHEMA,flame:{presetId:state.source.presetId,label:state.source.label,stationary:true},
+      route:{volume_light_field:'1',volume_light_field_scene_depth:'1',volume_light_field_test_scene:'0'},lightGainStops:Number(document.getElementById('fire-light-gain-stops').value)};
+    renderSceneObjectList();
+  };
+  fixture=await createBasinFireFixture({record,runtime:volumePrototype,
+    basins:{read:()=>window.kaminosFlameAuthoring.read(),inspect:loadFlameBasinState,
+      modified:()=>!volumeSettingsPresetControlValuesEqual(buildVolumeSettingsPreset(),activeVolumeSettingsPresetReceipt?.preset),
+      apply:(state,label)=>{const result=window.kaminosFlameAuthoring.apply(state,label);syncComposition();return result;},
+      applyBasin:async id=>{const result=await window.kaminosFlameAuthoring.applyBasin(id);syncComposition();return result;},
+      list:async()=>{await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
+      openLibrary:()=>openBasinFireLibrary(fixture,{document})},
+    source:{read:()=>({...window.kaminosFlameEmitterState(),registrationId:sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.object.uuid??null}),
+      ensure:()=>window.kaminosBurnerAuthoring.add('flame-source'),select:setActiveSceneObject,
+      setEnabled:value=>window.kaminosSetFlameSourceEnabled(value),
+      remove:id=>window.kaminosBurnerAuthoring.remove(id)},
+    presentation:{read:()=>volumePrototype.canvasElement().style.opacity!=='0',set:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
+  },{presetId,...options});
+  const controls=mountBasinFireInspector(fixture,{document,container:document.getElementById('selected-flame-properties')});
+  const unsubscribe=scenePlacementTools.edits.subscribe(()=>controls.sync());
+  const dispose=fixture.dispose;fixture.dispose=()=>{unsubscribe();controls.dispose();dispose();if(window.kaminosBasinFireFixture===fixture)window.kaminosBasinFireFixture=null;};
+  window.kaminosBasinFireFixture=fixture;
+  return fixture;
+}
+window.kaminosCreateBasinFireFixture=createWorkbenchBasinFireFixture;
+
 function installFlameAuthoring() {
   window.kaminosFlameAuthoring=createFlameAuthoring({edits:scenePlacementTools.edits,
     read:()=>flameSettingsState(),write:writeFlameSettingsState,check:checkFlameSettingsState,
     canApply:()=>{if(!volumePrototype?.debugState?.().active || !applyFlameEmitterPose)throw Error('Flame runtime is not active');},
     changed:()=>flameInspector?.sync(),
-    load:async id=>{
-      const [artifactResponse,schemaResponse]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'})]);
-      const [artifact,schema]=await Promise.all([artifactResponse.json(),schemaResponse.json()]);
-      if(!artifactResponse.ok||!schemaResponse.ok)throw Error(artifact.error||'Basin lookup failed');
-      const receipt=validateVolumeSettingsPresetDocument(artifact,id,schema);
-      if(receipt.preset.domControls['emitter-assay-family'].value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
-      return flameSettingsState(receipt.preset,receipt);
-    }});
+    load:loadFlameBasinState});
 }
 
 function installAuthoringParameterEditing() {
@@ -25945,6 +25991,16 @@ function installAuthoringParameterEditing() {
     if(event.target.closest?.('input,select,label,button,summary'))authoringControlSessions.forEach(session=>session.commit());
   },true);
   installFlameAuthoring();
+  edits.register('@flame-source-enabled',{
+    read:()=>({enabled:sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.emissionEnabled!==false}),
+    check:state=>{if(typeof state.enabled!=='boolean')throw Error('Flame source enabled must be boolean');return {enabled:state.enabled};},
+    write:({enabled:value})=>{
+      const entry=sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID);if(!entry)throw Error('Flame source is not registered');
+      entry.emissionEnabled=value;entry.object.userData.kaminosSceneObject.emissionEnabled=value;
+      writeAuthoredFlameEmitterPose(flameEmitterPose);window._kaminosDirty?.();
+    },
+  });
+  window.kaminosSetFlameSourceEnabled=value=>edits.apply('@flame-source-enabled',{enabled:value},value?'Enable fire source':'Disable fire source');
   installWaterAuthoring();
   const bind=(id,definition)=>{
     edits.register(id,definition);
@@ -28812,6 +28868,7 @@ function serializeSceneObject(entry) {
     label: metadata.label ?? entry.label,
     groupId: metadata.groupId ?? entry.groupId ?? null,
     createdAt: metadata.createdAt ?? entry.createdAt,
+    ...(entry.type===FLAME_EMITTER_TYPE?{emissionEnabled:entry.emissionEnabled!==false}:{}),
     transform: entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(object),
     sceneTransform: entry.type === 'splat' ? splatSceneTransformState(entry) : null,
     materials: getMaterialStateForObject(object),
@@ -28841,6 +28898,7 @@ async function addSceneObjectFromSource(record, loadRequestId = null) {
     authoredFlamePresent=true;
     const object = ensureAuthoredFlameEmitter(record);
     if (!object) throw new Error('The saved analytic flame source is not mounted');
+    writeAuthoredFlameEmitterPose(record.transform);
     return object;
   }
   if (record.type === LOCAL_LIQUID_EMITTER_TYPE && record.source === LOCAL_LIQUID_EMITTER_SOURCE) {
@@ -29535,7 +29593,11 @@ function checkBurnerGraph(value) {
   for(const record of result.objects){
     if(ids.has(record.id))throw Error('Duplicate burner object');ids.add(record.id);
     if(record.type===PROCEDURAL_MESH_TYPE)Object.assign(record,checkedProceduralMesh(record));
-    else if(record.type===FLAME_EMITTER_TYPE && record.id===FLAME_EMITTER_ID && record.source===FLAME_EMITTER_SOURCE)record.transform=normalizeFlameEmitterPose(record.transform);
+    else if(record.type===FLAME_EMITTER_TYPE && record.id===FLAME_EMITTER_ID && record.source===FLAME_EMITTER_SOURCE){
+      record.transform=normalizeFlameEmitterPose(record.transform);
+      if(record.emissionEnabled!==undefined&&typeof record.emissionEnabled!=='boolean')throw Error('Flame source enabled must be boolean');
+      record.emissionEnabled??=true;
+    }
     else throw Error('Unsupported burner object');
   }
   const sceneIds=new Set([...ids,...sceneObjects.filter(entry=>![PROCEDURAL_MESH_TYPE,FLAME_EMITTER_TYPE].includes(entry.type)).map(entry=>entry.id)]);
@@ -30370,6 +30432,7 @@ sceneInitialization.then(() => {
     enterWorkbench:()=>{authoringWorkspace.setMode('workbench');installFluidWorkbench({entryOnly:true});setActiveTab('assets',{reveal:false});},
   });
   window.kaminosBurnTable=burnTable;
+  if(isLiveLogHeatRoute())document.getElementById('burn-table').hidden=true;
   if(new URLSearchParams(location.search).get('experiment')==='burn-table')fluidViewportReady.then(()=>burnTable.open()).catch(error=>console.error('Burn Table failed:',error));
   const volumeLoaded = initKaminosVolumeRoute();
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
@@ -30378,16 +30441,16 @@ sceneInitialization.then(() => {
     Promise.all([fluidViewportReady,volumeLoaded]).then(async()=>{
       const {loadExperimentContributions,openExperiment}=await import('./workbench-experiments.mjs');
       const [definition]=await loadExperimentContributions([window.kaminosLiveLogEntry.module]);
-      const flow=Number(document.getElementById('volume-flow-rate').value);
+      const presetId=new URLSearchParams(location.search).get('live_log_basin')||'vsp-3a7101af93e643b79e9f255c8bc21386afbf66ae857464254284d45f5f75cf70';
+      const fire=await createWorkbenchBasinFireFixture(presetId,operation=>investigationOperations.emit(operation),{allowedGrids:[32,48],pauseOnCreate:true,enabled:false});
       const current=await openExperiment(definition,{host:{
         scene:{ready:fluidViewportReady,renderer:()=>renderer,load:showGLB,objects:()=>sceneObjects,
           select:setActiveSceneObject,dirty:()=>window._kaminosDirty?.(),
           frame:objects=>{frameObjects(objects,camera,controls);window._kaminosDirty?.();},
+          setTransform:window.kaminosSetSceneObjectTransform,
           enterWorkbench:()=>{authoringWorkspace.setMode('workbench');installFluidWorkbench({entryOnly:true});setActiveTab('assets',{reveal:false});}},
-        volume:{ready:volumeLoaded,get:()=>volumePrototype,burner:on=>{
-          setVolumeControlValue('volume-flow-rate',on?flow:0);updateVolumeControlLabels();
-          applyFlameEmitterPose(flameEmitterPose,{sourceEnabled:document.getElementById('emitter-assay-family').value==='cluster'?true:on});
-          volumePrototype.setControls(readVolumeControls());return volumePrototype.debugState();}},
+        fire,
+        volume:{ready:volumeLoaded,get:()=>volumePrototype,burner:on=>fire.setEnabled(on)},
       }});
       await current.mount({document,container:document.getElementById('tab-assets')});
       window.kaminosLiveLog=current;window.kaminosLiveLogEntry.status='mounted';

@@ -45,7 +45,7 @@ export async function runOperator(output,env=process.env) {
     report.entry=await page.evaluate(()=>window.kaminosLiveLogEntry);
     assert.equal(report.entry.status,'mounted',report.entry.error);
     report.effectiveUrl=page.url();report.browserVersion=browser.version();
-    for(const name of ['index.html','volume-core.js','burn-table-material.mjs','live-log-heat-core.mjs',
+    for(const name of ['index.html','volume-core.js','burn-table-material.mjs','burn-table.css','basin-fire-fixture.mjs','flame-authoring.mjs','scene-persistence-core.js','live-log-heat-core.mjs',
       'live-log-heat-gpu.mjs','live-log-experiment.mjs','experiments/sinter/live-log-heat.experiment.mjs',
       'workbench-experiments.mjs','investigation-recording.mjs']){
       const response=await page.request.get(new URL(name,server.url).href,{timeout:0});assert.equal(response.status(),200);
