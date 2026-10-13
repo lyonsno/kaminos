@@ -26,7 +26,21 @@ export function validateLocalGenerationConfig(c){
   if(c.textureSize!==undefined&&c.textureSize!==1024)throw Error('this finishing route supports 1024 textures; requested size cannot be ignored');
   if(c.preparedPackageRoot!==undefined&&(typeof c.preparedPackageRoot!=='string'||!path.isAbsolute(c.preparedPackageRoot)))
     throw Error('explicit absolute preparedPackageRoot required');
+  resolveGenerationFinishing(c);
   return c;
+}
+
+// Keep image-preparation authority fixed when comparing finishing recipes.
+// Omitted selection preserves the already exercised legacy configuration.
+export function resolveGenerationFinishing(c){
+  const cleanupMode=c.cleanupMode??'reference-cleanup';
+  if(!['reference-cleanup','mlx-surface-preserving'].includes(cleanupMode))throw Error('supported cleanup mode required');
+  const separate=c.finishingSourceRoot!==undefined||c.expectedFinishingSourceCommit!==undefined;
+  if(separate&&(typeof c.finishingSourceRoot!=='string'||!path.isAbsolute(c.finishingSourceRoot)||
+    !/^[a-f0-9]{40}$/.test(c.expectedFinishingSourceCommit??'')))
+    throw Error('paired exact finishing source root and commit required');
+  return {sourceRoot:separate?c.finishingSourceRoot:c.sourceRoot,
+    expectedSourceCommit:separate?c.expectedFinishingSourceCommit:c.expectedSourceCommit,cleanupMode};
 }
 
 // The observer's safety callback uses this same runner. Signal before report
@@ -110,9 +124,11 @@ export async function generateImage(values){
     }
     await phase('mesh-finishing','Cleaning the mesh, unwrapping UVs and baking textures');
     const finished=path.join(work,'finished'),glb=path.join(finished,'asset.glb');
+    const finishing=resolveGenerationFinishing(c);report.requestedFinishing=finishing;
     await runner.run([process.execPath,path.join(ownRoot,'models/trellis2/finalize-retained-generation.mjs'),
       '--repo-root',ownRoot,'--expected-commit',c.expectedCommit,'--input-root',native,'--expected-native-commit',nativeCommit,
-      '--python',c.python,'--source-root',c.sourceRoot,'--expected-source-commit',c.expectedSourceCommit,
+      '--python',c.python,'--source-root',finishing.sourceRoot,'--expected-source-commit',finishing.expectedSourceCommit,
+      '--cleanup-mode',finishing.cleanupMode,
       '--target-faces',String(c.targetFaces),'--uv-backend','source-xatlas','--receiver','kaminos-generate','--output',glb],
       'mesh finishing');
     const f=JSON.parse(await fs.readFile(path.join(finished,'report.json'))),data=await fs.readFile(glb);
@@ -126,7 +142,8 @@ export async function generateImage(values){
     report.artifact={path:output,sha256:sha(data),byteLength:data.length,role:'textured-mesh'};
     report.native={root:native,commit:nativeCommit,reportPath:path.join(native,'report.json'),sessionId:f.nativeSessionId,
       inputManifestSha256:f.fixtureSha256,backend:f.native?.backend,reportSha256:f.native?.reportSha256};
-    report.finishing={reportPath:path.join(finished,'report.json'),uv:f.uv,route:'CPU source cleanup / source-xatlas / learned PBR'};
+    report.finishing={reportPath:path.join(finished,'report.json'),uv:f.uv,
+      cleanupMode:f.cleanupMode,route:f.meshPostprocess?.effectiveRoute};
     report.ok=true;report.status='succeeded';report.phase=null;
   }catch(error){report.status='failed';report.error={message:error.message,stack:error.stack};}
   finally{
