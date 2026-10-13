@@ -1,5 +1,6 @@
 import { createSam3BrowserImageRuntime, createSam3SourceMask } from './webgpu-inference-kit/src/sam.js';
 import { createSamWorkbenchForeground } from './webgpu-inference-kit/smokes/sam-workbench-foreground.js';
+import { withPngProvenance } from './authoring-image-generation.mjs';
 
 const COLORS = [[50, 203, 222], [233, 184, 78], [208, 115, 185], [129, 217, 137]];
 
@@ -62,12 +63,13 @@ export function createSamImageTools({ inferenceSession, rendererDevice, foregrou
     }
     foreground?.setImage(display, { resetView: false });
   }
-  async function ingest(blob, name) {
+  async function ingest(blob, name, maskProvenance = null) {
     const response = await fetch(`/api/ingest-image?${new URLSearchParams({ name })}`, { method: 'POST', body: blob });
     const result = await response.json();
     if (!response.ok || !result.entry) throw new Error(result.error || `Image save failed: ${response.status}`);
-    onAsset?.(result.entry);
-    return result.entry;
+    const entry = maskProvenance ? { ...result.entry, maskProvenance } : result.entry;
+    onAsset?.(entry);
+    return entry;
   }
   async function open(input, metadata = {}) {
     if (busy) throw new Error('An image operation is in progress');
@@ -177,8 +179,17 @@ export function createSamImageTools({ inferenceSession, rendererDevice, foregrou
       const stem = (source.name || 'image').replace(/\.[^.]+$/, '');
       const prompt = output.promptText.replace(/[^A-Za-z0-9_-]+/g, '-');
       const name = `${stem}-${prompt}-${picker.value}-${kind}.png`;
-      const entry = await ingest(blob, name);
-      if (addToScene) await onScene?.(entry, { sourceImage: source.source, promptText: output.promptText, invocationId: output.invocationId, indices });
+      const provenance = {
+        schema: 'kaminos.sam3-mask-export.v1', kind,
+        sourceImage: source.source, sourceImageSha256: source.sha256,
+        sourceArtifactId: source.artifactId, sourceResolution: [width, height],
+        promptText: output.promptText, promptSha256: output.promptSha256,
+        invocationId: output.invocationId, indices,
+        maskResolution: [output.width, output.height], effectiveRouteId: output.effectiveRouteId,
+        outputAuthority: output.outputAuthority, verificationState: output.verificationState,
+      };
+      const entry = await ingest(await withPngProvenance(blob, provenance), name, provenance);
+      if (addToScene) await onScene?.(entry, provenance);
       else {
         const link = document.createElement('a'); link.href = entry.source; link.download = name; link.click();
       }
