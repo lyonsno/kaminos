@@ -3,9 +3,10 @@
 const expect=(condition,message)=>{if(!condition)throw Error(message);};
 const viewKeys=['position','target','up','fov','zoom','near','far'];
 const viewIdentity=view=>JSON.stringify(viewKeys.map(key=>view?.[key]));
-function sameBody(a,b){return a.rootUuid===b.rootUuid&&a.asset?.id===b.asset?.id
- &&a.source?.source_sha256===b.source?.source_sha256&&a.clipName===b.clipName;}
-function sameHeld(a,b){return sameBody(a,b)&&a.frame===b.frame&&a.status===b.status&&viewIdentity(a.view)===viewIdentity(b.view)&&JSON.stringify(a.transform)===JSON.stringify(b.transform);}
+export function sameCreatureBody(a,b){return !!a&&!!b&&a.rootUuid===b.rootUuid&&a.asset?.id===b.asset?.id
+ &&a.asset?.bodySha256===b.asset?.bodySha256&&a.source?.source_sha256===b.source?.source_sha256&&a.clipName===b.clipName;}
+export function sameHeldCreatureFrame(a,b){return sameCreatureBody(a,b)&&a.frame===b.frame&&a.status===b.status&&viewIdentity(a.view)===viewIdentity(b.view)&&JSON.stringify(a.transform)===JSON.stringify(b.transform);}
+const sameBody=sameCreatureBody,sameHeld=sameHeldCreatureFrame;
 
 export async function withHeldCreatureFrame({entry,frame,present,capture}) {
  expect(typeof entry?.read==='function'&&typeof entry?.invoke==='function'&&typeof entry?.state==='function','Creature observation requires the actual experiment entry');
@@ -17,7 +18,7 @@ export async function withHeldCreatureFrame({entry,frame,present,capture}) {
  expect(frame===undefined||(Number.isInteger(frame)&&frame>=0&&frame<before.source.frames),'Creature capture frame is outside the source');
  let held,retained,failure,restore={status:'not-needed'};
  try {
-  held=await entry.invoke('hold',frame===undefined?undefined:{frame});
+  held=await entry.invoke('hold',{expected:before,...(frame===undefined?{}:{frame})});
   expect(sameBody(before,held.state),'Creature body changed before hold');
   expect(held.inputs?.frame===held.state.frame&&held.inputs?.source_sha256===before.source.source_sha256,'Creature held recipe differs from the observed source');
   if(frame!==undefined)expect(held.state.frame===frame,'Creature held frame differs from the chosen source frame');
@@ -34,12 +35,9 @@ export async function withHeldCreatureFrame({entry,frame,present,capture}) {
     if((await entry.state()).id===id){try{current=await entry.read();}catch{}}
     if(!sameBody(before,held.state)||!current||!sameHeld(held.state,current))restore={status:'skipped-changed'};
     else {
-     await entry.invoke('resume');
-     const effective=await entry.read();
-     if((await entry.state()).id!==id||!sameBody(before,effective))restore={status:'skipped-changed',effective};
-     else if(effective.status==='playing')restore={status:'resumed',effective};
-     else if(effective.status==='held'&&effective.frame===effective.source.frames-1)restore={status:'endpoint-held',effective};
-     else restore={status:'failed',effective,error:`Resume left playback ${effective.status}`};
+     // Identity validation and mutation happen together inside the actual
+     // queued creature operation; another passive read cannot close this race.
+     restore=await entry.invoke('restore',{expected:held.state});
     }
    }catch(error){restore={status:'failed',error:String(error?.message||error)};}
   }

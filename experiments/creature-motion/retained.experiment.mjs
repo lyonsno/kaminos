@@ -1,6 +1,7 @@
 import {createCreatureMotionPlayback} from './playback.mjs';
 import * as THREE from '../../lib/three.core.js';
 import {acquireCreatureBody,validateCreatureTransform} from './body-source.mjs';
+import {sameCreatureBody,sameHeldCreatureFrame} from './held-capture.mjs';
 export {withHeldCreatureFrame} from './held-capture.mjs';
 export {installCreatureInvestigation} from './investigation-browser.mjs';
 
@@ -80,12 +81,21 @@ export default {
     replay:operation('replay',()=>player.replay()),pause:operation('pause',()=>player.pause()),
     resume:operation('resume',()=>player.resume()),seek:operation('seek',input=>player.seek(input?.frame)),
     hold:operation('hold',input=>{
+     if(input?.expected!==undefined&&!sameCreatureBody(input.expected,read()))throw Error('Creature body changed before hold');
      const priorStatus=player.read().status;
      // Hold an exact native source sample for shared Capture and reconstruction.
      player.seek(input?.frame??player.read().frame);
      const state=read();
      return {priorStatus,state,inputs:{asset:inputs.asset,body_sha256:body.bodySha256,source_sha256:inputs.source_sha256,
       clip:clip.name,frame:state.frame,transform:structuredClone(state.transform),view:structuredClone(state.view)}};
+    }),
+    restore:operation('restore',input=>{
+     if(!input?.expected)throw Error('Creature restoration requires expected held state');
+     if(!sameHeldCreatureFrame(input.expected,read()))return {status:'skipped-changed',effective:read()};
+     player.resume();const effective=read();
+     if(effective.status==='playing')return {status:'resumed',effective};
+     if(effective.status==='held'&&effective.frame===effective.source.frames-1)return {status:'endpoint-held',effective};
+     return {status:'failed',effective,error:`Resume left playback ${effective.status}`};
     }),
    };
    const dispose=()=>{
