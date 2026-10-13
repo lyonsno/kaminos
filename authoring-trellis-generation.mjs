@@ -8,6 +8,17 @@ export const TRELLIS_PIPELINE_ID='trellis-image-to-mesh-webgpu-v0';
 export const TRELLIS_ROUTE_ID='trellis2.image-generation.webgpu.v0';
 const PHASES={queued:'Waiting for the GPU queue',running:'Generating',complete:'Finishing'};
 
+// The server's run result says only that the adapter exited; the adapter's last stdout
+// line carries its phase and reason.
+export function failureReason(result){
+  const parts=[];const direct=result?.error?.message||result?.error||result?.report?.document?.error;
+  if(direct)parts.push(String(direct));
+  const lines=String(result?.stdoutTail||'').trim().split(/\r?\n/).reverse();
+  for(const line of lines){let row;try{row=JSON.parse(line);}catch{continue;}
+    if(row&&row.ok===false&&row.error){parts.push(`${row.phase?row.phase+': ':''}${row.error.message||row.error}`);break;}}
+  return parts.join(' · ')||'no result';
+}
+
 export function createTrellisAuthoringGeneration({availability,runPipeline,meshUrl,fetchBytes,persist,changed=()=>{},blocked=()=>null}){
   let active=false;
   let state={status:'idle',progress:'TRELLIS runs in the GPU queue; it can take several minutes.',stage:null,percent:null,canStop:false,error:null,terminal:null,results:[],pending:null};
@@ -58,7 +69,7 @@ export function createTrellisAuthoringGeneration({availability,runPipeline,meshU
           if(event?.schema!=='kaminos.pipeline-progress.v0')return;
           set({stage:PHASES[event.phase]||state.stage||'Generating',progress:event.message||state.progress});
         }});
-        if(!result?.ok)throw Error(`TRELLIS generation failed: ${result?.error?.message||result?.error||'no result'}`);
+        if(!result?.ok)throw Error(`TRELLIS generation failed: ${failureReason(result)}`);
         const url=meshUrl(result);if(!url)throw Error('TRELLIS run returned no mesh');
         const glb=await fetchBytes(url);
         if(!(glb?.byteLength>=12)||new DataView(glb).getUint32(0,true)!==0x46546c67)throw Error('TRELLIS mesh bytes are missing or not a GLB');
