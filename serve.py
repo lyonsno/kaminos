@@ -1210,6 +1210,28 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
     }
 
 
+_volume_settings_read_projections = {}
+_volume_settings_read_projection_lock = threading.Lock()
+
+
+def _verified_volume_settings_read_projection(raw_payload, schema):
+    # The preset ID covers control values, not route/metadata or schema values.
+    # Cache only fully validated projections of the complete inputs; callers
+    # still read and authenticate the current artifact before reaching here.
+    encoded = json.dumps([raw_payload, schema], sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    key = hashlib.sha256(encoded).digest()
+    with _volume_settings_read_projection_lock:
+        result = _volume_settings_read_projections.get(key)
+        if result is None:
+            normalized, projection = normalize_volume_settings_preset_payload(
+                raw_payload, schema, tolerate_foreign_controls=True
+            )
+            validate_volume_settings_preset_payload(normalized, schema)
+            result = (normalized, projection)
+            _volume_settings_read_projections[key] = result
+        return copy.deepcopy(result)
+
+
 def read_volume_settings_preset(store_path, preset_ref, schema=None):
     schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
     store = _volume_settings_store_path(store_path)
@@ -1258,10 +1280,7 @@ def read_volume_settings_preset(store_path, preset_ref, schema=None):
         raise ValueError("volume settings preset artifact content hash mismatch")
     if alias_document and alias_document.get("contentHash") != document.get("contentHash"):
         raise ValueError("volume settings preset alias content hash mismatch")
-    normalized_payload, schema_projection = normalize_volume_settings_preset_payload(
-        raw_payload, schema, tolerate_foreign_controls=True
-    )
-    validate_volume_settings_preset_payload(normalized_payload, schema)
+    normalized_payload, schema_projection = _verified_volume_settings_read_projection(raw_payload, schema)
     return {
         **document,
         "sourceControlCount": raw_payload.get("controlCount"),

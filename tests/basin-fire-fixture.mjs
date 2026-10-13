@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {createBasinFireFixture} from '../basin-fire-fixture.mjs';
+import * as fireFixture from '../basin-fire-fixture.mjs';
 
 test('a fire fixture applies the whole basin and reuses its real scene source',async()=>{
   const calls=[],events=[];let registered=false,visible=false,emissionEnabled=true;
@@ -76,4 +77,14 @@ test('source availability stays live without reading basin or renderer inspectio
   registrationId='root-1';assert.equal(fixture.availability().status,'mounted');
   assert.equal(inspectionReads,0,'registration checks must not construct settings, export URLs or runtime diagnostics');
   fixture.dispose();assert.equal(fixture.availability().status,'disposed');
+});
+
+test('the fire library reads the full index without refreshing another chooser',async()=>{
+  const index={entries:[{presetId:'current'}],earlierVersions:[{presetId:'earlier'}],futureField:{retained:true}};
+  const calls=[];
+  const actual=await fireFixture.readBasinFireIndex({fetch:async(...args)=>{calls.push(args);return {ok:true,json:async()=>index};},validate:received=>assert.equal(received,index)});
+  assert.equal(actual,index);assert.equal(actual.earlierVersions.length,1);assert.equal(actual.futureField.retained,true);
+  assert.deepEqual(calls,[['/api/volume-settings-presets',{cache:'no-store'}]]);
+  await assert.rejects(fireFixture.readBasinFireIndex({fetch:async()=>({ok:false,status:502,json:async()=>index}),validate(){throw Error('must reject HTTP failure first');}}),/502/);
+  await assert.rejects(fireFixture.readBasinFireIndex({fetch:async()=>({ok:true,json:async()=>index}),validate(){throw Error('wrong schema');}}),/wrong schema/);
 });

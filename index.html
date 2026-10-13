@@ -3720,7 +3720,7 @@ import { resolveSceneGISettings } from './scene-gi-settings.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createFlameAuthoring, createFlameInspector } from './flame-authoring.mjs';
-import { createBasinFireFixture, mountBasinFireInspector, openBasinFireLibrary } from './basin-fire-fixture.mjs';
+import { createBasinFireFixture, mountBasinFireInspector, openBasinFireLibrary, readBasinFireIndex } from './basin-fire-fixture.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterAuthoring } from './local-liquid-authoring.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
@@ -25961,7 +25961,7 @@ async function createWorkbenchBasinFireFixture(presetId,record,options={}) {
       modified:()=>!volumeSettingsPresetControlValuesEqual(buildVolumeSettingsPreset(),activeVolumeSettingsPresetReceipt?.preset),
       apply:(state,label)=>{const result=window.kaminosFlameAuthoring.apply(state,label);syncComposition();return result;},
       applyBasin:async id=>{const result=await window.kaminosFlameAuthoring.applyBasin(id);syncComposition();return result;},
-      list:async()=>{await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
+      list:()=>readBasinFireIndex({fetch,validate:validateVolumeSettingsPresetIndex}),
       openLibrary:()=>openBasinFireLibrary(fixture,{document})},
     source:{read:()=>({...window.kaminosFlameEmitterState(),registrationId:sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.object.uuid??null}),
       ensure:()=>window.kaminosBurnerAuthoring.add('flame-source'),select:setActiveSceneObject,

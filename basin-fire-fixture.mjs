@@ -1,5 +1,12 @@
 export const BASIN_FIRE_FIXTURE_IDENTITY='kaminos.basin-fire-fixture.v1';
 
+export async function readBasinFireIndex({fetch,validate}) {
+  const response=await fetch('/api/volume-settings-presets',{cache:'no-store'});
+  const index=await response.json();
+  if(!response.ok)throw Error(index.error||`Basin index failed: ${response.status}`);
+  validate(index);return index;
+}
+
 // A consumer handle for the existing authored flame and singleton domain.
 // Basin application, source registration, transforms and Undo remain host-owned.
 export async function createBasinFireFixture({basins,source,runtime,presentation,record=()=>{}},{presetId,allowedGrids=null,pauseOnCreate=false,enabled=null}) {
