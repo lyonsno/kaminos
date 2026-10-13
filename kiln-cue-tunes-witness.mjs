@@ -28,6 +28,8 @@ const snapshot=()=>page.evaluate(async()=>({route:window.__kaminosCompositionSet
   cinematic:window.kaminosCinematic.state(),cues:window.kaminosCinematic.read(),
   tune:window.kaminosFlameAuthoring.read(),history:window.kaminosSceneEdits.state(),
   editor:window.kaminosCinematic.cueEditor?.state(),status:document.getElementById('cue-status')?.textContent,
+  grid:window.__kaminosVolumePrototype.debugState().simGridDimensions,
+  camera:window.kaminosCameraDebugState(),cameras:window.kaminosSceneCameras.read(),viewport:window.kaminosSceneCameras.viewportState(),guides:window.kaminosViewportSettings.read(),
   frame:window.__kaminosVolumePrototype.debugState().frameCount,objects:window.kaminosSceneObjectDebugState()}));
 const keyTune=(recipe,phase,index)=>sampleKilnPhase(recipe,phase,recipe[phase][index].time).tune;
 try {
@@ -54,7 +56,9 @@ try {
     assert.equal(hash(local),hash(served));report.sourceHashes[name]=hash(served);
   }
   await page.click('#kiln-edit');await page.click(`[data-cue-phase="${cuePhase}"]`);
+  await page.evaluate(()=>window.kaminosViewportSettings.set({overlays:true,helpers:true,domains:true,emitters:true}));
   report.phase='keyframe-edit';report.before=await snapshot();await screenshot('cue-workspace.png');
+  assert.equal(report.before.objects.find(row=>row.id==='flame-emitter').objectVisible,true);
   await page.locator('#cue-key-list button').nth(1).click();
   const exposure=page.getByLabel('Cue Exposure',{exact:true}).first();
   const current=await exposure.inputValue();const value=Number(current)+.4;
@@ -73,10 +77,14 @@ try {
   assert.deepEqual(report.cancelled.ranges,report.before.ranges);
   report.phase='relative-drag';
   const box=await exposure.boundingBox(),startValue=Number(await exposure.inputValue());
+  const dragRange=await exposure.evaluate(input=>({min:Number(input.min),max:Number(input.max)}));
+  const expectedDrag=20*(dragRange.max-dragRange.min)/300;
   await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
   await page.mouse.move(box.x+box.width/2+20,box.y+box.height/2,{steps:5});await page.mouse.up();
   report.dragged=await snapshot();
-  assert.ok(Math.abs(Number(report.dragged.editor.tune.domControls['volume-physical-exposure'].value)-startValue-.2)<1e-9);
+  assert.doesNotMatch(report.dragged.status,/substituted/,'relative drag cannot hide native decimal rejection');
+  report.dragContract={startValue,dragRange,pixels:20,expectedDelta:expectedDrag};
+  assert.ok(Math.abs(Number(report.dragged.editor.tune.domControls['volume-physical-exposure'].value)-startValue-expectedDrag)<1e-9);
   await page.click('#cue-cancel');
   report.phase='basin-draft';
   await page.locator('#cue-basin-browser summary').click();
@@ -186,14 +194,34 @@ try {
   }
   await page.waitForFunction(()=>['work','failed'].includes(window.kaminosCinematic.state().phase));
   report.work=await snapshot();assert.equal(report.work.cinematic.failure,null);
+  assert.equal(report.work.objects.find(row=>row.id==='flame-emitter').objectVisible,false);
+  assert.deepEqual(report.work.guides,report.before.guides);
   assert.ok(Math.abs(Number(report.work.tune.domControls['volume-physical-exposure'].value)-Number(report.work.cinematic.effective.tune.domControls['volume-physical-exposure'].value))<1e-12);
   await screenshot('tuned-performance.png');
   await page.waitForFunction(()=>['complete','failed'].includes(window.kaminosCinematic.state().phase));
   report.complete=await snapshot();assert.equal(report.complete.cinematic.phase,'complete');assert.equal(report.complete.cinematic.effective.sourceEnabled,false);
+  assert.equal(report.complete.objects.find(row=>row.id==='flame-emitter').objectVisible,false);
   assert.equal(report.complete.cinematic.effective.outputVisible,true);assert.ok(report.complete.frame>report.work.frame);
   await screenshot('reveal.png');await page.click('#kiln-edit');report.restored=await snapshot();assert.deepEqual(report.restored.tune,report.before.tune);
   assert.deepEqual(report.restored.ranges,report.before.ranges);
+  assert.deepEqual(report.restored.guides,report.before.guides);
+  assert.equal(report.restored.objects.find(row=>row.id==='flame-emitter').objectVisible,true);
   report.performancePixels=await pixels();assert.ok(report.performancePixels.nonblack>0);
+  report.phase='authored-camera-playback';
+  await page.evaluate(()=>{window.kaminosSceneCameras.createFromView('Kiln performance camera');window.kaminosSceneCameras.enter();});
+  report.cameraBaseline=await snapshot();await page.click('#cue-preview');
+  await page.waitForFunction(()=>window.kaminosCinematic.state().phase==='work'&&window.kaminosCinematic.state().effective.push>0);
+  report.cameraWork=await snapshot();
+  assert.notDeepEqual(report.cameraWork.camera.position,report.cameraBaseline.camera.position,'authored camera view must permit temporary push');
+  assert.deepEqual(report.cameraWork.cameras,report.cameraBaseline.cameras,'performance cannot rewrite the camera records');
+  assert.deepEqual(report.cameraWork.grid,report.cameraBaseline.grid);
+  assert.equal(report.cameraWork.objects.find(row=>row.id==='flame-emitter').objectVisible,false);
+  await screenshot('camera-performance.png');
+  await page.waitForFunction(()=>['complete','failed'].includes(window.kaminosCinematic.state().phase));
+  assert.equal((await snapshot()).cinematic.phase,'complete');await page.click('#kiln-edit');
+  report.cameraRestored=await snapshot();assert.deepEqual(report.cameraRestored.cameras,report.cameraBaseline.cameras);
+  assert.deepEqual(report.cameraRestored.camera.position,report.cameraBaseline.camera.position);
+  await page.evaluate(()=>window.kaminosSceneCameras.leave());
   await page.setViewportSize({width:390,height:844});await screenshot('mobile-cues.png');
   if(boundaries) {
     await page.setViewportSize({width:1500,height:1050});
@@ -203,9 +231,17 @@ try {
       assert.equal(await page.evaluate(()=>window.kaminosCinematic.cueEditor.active()),true);
       const history=await page.evaluate(()=>window.kaminosSceneEdits.state());
       await page.click(`#authoring-header ${selector}`);
-      const departed=await snapshot();assert.equal(departed.workspace.mode,'workbench');assert.equal(departed.editor,null);
-      assert.deepEqual(departed.tune,report.before.tune);assert.equal(departed.history.undoCount,history.undoCount);
-      assert.deepEqual(departed.ranges,report.before.ranges);assert.equal(departed.ordinaryFlowMaximum,report.before.ordinaryFlowMaximum);
+      const departed=await snapshot();
+      if(selector==='[data-workspace-mode="workbench"]') {
+        assert.equal(departed.workspace.mode,'workbench');assert.equal(departed.editor,null);
+        assert.deepEqual(departed.tune,report.before.tune);
+        assert.deepEqual(departed.ranges,report.before.ranges);assert.equal(departed.ordinaryFlowMaximum,report.before.ordinaryFlowMaximum);
+      } else {
+        assert.equal(departed.workspace.mode,'authoring');assert.ok(departed.editor,'in-page assets retain the visible cue context');
+        await page.evaluate(()=>window.kaminosAssets.close());await page.click('#cue-cancel');
+        assert.deepEqual((await snapshot()).tune,report.before.tune);
+      }
+      assert.equal(departed.history.undoCount,history.undoCount);
       report.departures.push({selector,state:departed});
       await page.click('#authoring-header [data-workspace-mode="authoring"]');
       await page.waitForFunction(()=>window.__kaminosVolumePrototype.debugState().active);

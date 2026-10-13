@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import { createKilnPerformance, defaultKilnCues, sampleKilnKeys } from '../kiln-cinematic-cues.mjs';
 const cues = defaultKilnCues();

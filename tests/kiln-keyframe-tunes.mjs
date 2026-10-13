@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {defaultKilnCues, normalizeKilnCues, createKilnPerformance} from '../kiln-cinematic-cues.mjs';
@@ -23,6 +24,8 @@ test('cue roundtrip retains a complete tune including hidden values and source p
 test('native decimal roundtrip permits representation noise but refuses actual parameter substitution',()=>{
   assert.equal(typeof tunes.cueTuneValuesEqual,'function','cue application needs a decimal conformance check');
   assert.equal(tunes.cueTuneValuesEqual(tune(.45499999999999996),tune(.455)),true);
+  assert.equal(tunes.cueTuneValuesEqual(tune(1.0338275996921875),tune(1.03382759969219)),true,'observed native exposure serialization');
+  assert.equal(tunes.cueTuneValuesEqual(tune(1.0338275996921875),tune(1.0338275996923)),false,'larger changes remain substitutions');
   assert.equal(tunes.cueTuneValuesEqual(tune(.45499999999999996),tune(.46)),false);
   const missing=tune(.455);delete missing.domControls['hidden-detail'];
   assert.equal(tunes.cueTuneValuesEqual(tune(.455),missing),false);

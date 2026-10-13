@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as cues from '../kiln-cinematic-cues.mjs';
@@ -21,7 +22,7 @@ function layered() {
 test('actual host basin snapshot stays immutable through adoption, audition and scene roundtrip',async()=>{
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const start=html.indexOf('function flameSettingsState('),end=html.indexOf('// Every reason the flame settings edit',start);
-  const factory=new Function(html.slice(start,end)+';return flameSettingsState;')();
+  const factory=new Function('flameEmitterPose',html.slice(start,end)+';return flameSettingsState;')({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]});
   const preset=tune(-1,'alternate'),receipt={presetId:'alternate',label:'Blue',preset};
   preset.domControls['volume-resolution'].value=160;
   const incoming=factory(preset,receipt),original=structuredClone(preset);
@@ -74,6 +75,22 @@ test('opening cues refreshes through context entry exactly once',()=>{
   const api=new Function('workspace','render','panel',body)(workspace,render,panel);
   api.open();assert.equal(refreshes,1,'context entry already refreshes the cue inspector');
   assert.equal(panel.scrollTop,0);
+});
+
+test('basin height retains scene geometry and simulation-owned Quality fields cannot become cues',async()=>{
+  let recipe=layered(),current=tune();current.domControls['volume-grid-height-ratio']={value:2};
+  recipe=cues.layerKilnCues(cues.defaultKilnCues(),current);
+  const incoming=tune(-1,'tall');incoming.domControls['volume-grid-height-ratio']={value:3};
+  const editor=createCueTuneEditor({readCues:()=>recipe,writeCues:value=>{recipe=value;},readTune:()=>current,
+    applyTune:value=>{current=value;},validateTune:normalizeCueTune,loadTune:async()=>incoming});
+  editor.begin('work',1);await editor.useBasin('tall');
+  assert.equal(current.domControls['volume-grid-height-ratio'].value,2);
+  assert.ok(editor.state().tune.source.cueSimulation.retainedFields.includes('volume-grid-height-ratio'));
+  assert.throws(()=>editor.set('volume-grid-height-ratio',3),/scene simulation/);
+  const {CUE_TUNE_GROUPS}=await import('../kiln-cue-tunes.mjs');
+  const editable=CUE_TUNE_GROUPS.flatMap(group=>group.fields.map(([id])=>id));
+  for(const id of ['volume-resolution','volume-grid-height-ratio','volume-pressure-solver-iterations'])assert.ok(!editable.includes(id));
+  assert.ok(editable.includes('volume-steps'),'raymarch quality is still a look control');
 });
 
 test('accept refreshes cues once after commit and history replay waits for settlement',async()=>{

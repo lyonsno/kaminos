@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
@@ -17,10 +18,22 @@ test('leaving Authoring cancels the actual cue draft before hiding its context',
   const switcher=new Function('contexts','document','slots','header',`
     let mode='authoring',currentContext='cues',workbenchRenderingHidden=false;const beforeSwitch=()=>true,renderingPanel=null;
     ${code};return setMode;
-  `)(new Map([['cues',{leave:()=>editor.cancel()}]]),{activeElement:{blur(){}},body:{dataset:{}}},
+  `)(new Map([['cues',{leave:()=>editor.cancel()}]]),{activeElement:{blur(){}},body:{dataset:{}},dispatchEvent(){},defaultView:{CustomEvent:class {}}},
     {showAuthoring(){},showWorkbench(){}},{querySelectorAll:()=>[]});
   assert.equal(switcher('workbench'),true);assert.equal(editor.active(),false,'hidden workspace must not retain a draft');
   assert.deepEqual(tune,baseline);
+});
+
+test('cinematic emitter consumes the authored domain scale and effective shape',()=>{
+  const start=html.indexOf('  applyKilnPerformanceEmitter = '),end=html.indexOf("  if (params.get('promoted_fire_parity')",start);
+  const body=html.slice(start,end);
+  let argumentsRead;
+  const emitter=new Function('volumePrototype','document','emitterCompilerControls','flamePoseToDomain','flameEmitterPose','flameDomainTranslation','flameDomainScale','effectiveFlameDomainControls','applyVolumeEmitterFamilyRuntime',
+    'let applyKilnPerformanceEmitter;'+body+';return applyKilnPerformanceEmitter;')(
+      {},{getElementById:()=>({value:'ring'})},value=>value,(...values)=>{argumentsRead=values;return {position:[0,0,0]};},
+      {position:[1,2,3]},[.2,.3,.4],2,value=>value,value=>value);
+  emitter({inputRadius:.4},true);
+  assert.equal(argumentsRead[2],2,'performance must use the same authored scale as ordinary source placement');
 });
 
 test('actual flame validation admits legacy cue flow3 and4 without loosening other ranges',()=>{

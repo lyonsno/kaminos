@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import {mountComposition} from '../kiln-cinematic.mjs';
 import {defaultKilnCues} from '../kiln-cinematic-cues.mjs';

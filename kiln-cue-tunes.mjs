@@ -1,6 +1,9 @@
 import {FLAME_PROPERTY_GROUPS} from './flame-authoring.mjs';
 
-export const CUE_TUNE_GROUPS = FLAME_PROPERTY_GROUPS.filter(group=>group.name!=='Simulation');
+export const CUE_DOMAIN_FIELDS = ['volume-resolution','volume-grid-height-ratio','volume-pressure-solver','volume-pressure-solver-iterations',
+  'volume-advection-scheme','volume-confinement','volume-time-step','volume-common-gas-transport'];
+export const CUE_TUNE_GROUPS = FLAME_PROPERTY_GROUPS.filter(group=>group.name!=='Simulation')
+  .map(group=>({...group,fields:group.fields.filter(([id])=>!CUE_DOMAIN_FIELDS.includes(id))}));
 const blendable = new Set(CUE_TUNE_GROUPS.flatMap(group=>group.fields.map(([id])=>id)));
 export const CUE_CONTINUOUS_FIELDS = blendable;
 export const KILN_FLOW_RANGE = Object.freeze({min:0,max:4});
@@ -19,8 +22,6 @@ export function restoreCueControlRanges(document,ranges) {
     if(control)for(const key of ['min','max','step'])control[key]=range[key];
   }
 }
-export const CUE_DOMAIN_FIELDS = ['volume-resolution','volume-pressure-solver','volume-pressure-solver-iterations',
-  'volume-advection-scheme','volume-confinement','volume-time-step','volume-common-gas-transport'];
 
 export function cueTuneValuesEqual(left,right) {
   for(const axis of ['domControls','rendererControls','presentationControls']) {
@@ -32,7 +33,8 @@ export function cueTuneValuesEqual(left,right) {
       if(x===y)continue;
       const numeric=value=>(typeof value==='number'||(typeof value==='string'&&value.trim()!==''))&&Number.isFinite(Number(value));
       if(!numeric(x)||!numeric(y))return false;
-      if(Math.abs(Number(x)-Number(y))>Number.EPSILON*8*Math.max(1,Math.abs(Number(x)),Math.abs(Number(y))))return false;
+      // Native range readback retains 15 significant decimal digits on the observed route.
+      if(Number(x).toPrecision(15)!==Number(y).toPrecision(15))return false;
     }
   }
   return true;

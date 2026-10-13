@@ -11641,7 +11641,7 @@ async function initScene() {
   renderer.domElement.addEventListener('pointerdown', markDirty);
   renderer.domElement.addEventListener('wheel', markDirty);
   let cameraSyncing=false;
-  window._kaminosDirty = ()=>{if(sceneCameras&&sceneCameras.state().mode==='camera'&&!sceneCameras.state().writing&&!cameraSyncing){cameraSyncing=true;try{sceneCameras.sync();}finally{cameraSyncing=false;}}markDirty();};
+  window._kaminosDirty = ()=>{if(!kilnPerformanceSnapshot&&sceneCameras&&sceneCameras.state().mode==='camera'&&!sceneCameras.state().writing&&!cameraSyncing){cameraSyncing=true;try{sceneCameras.sync();}finally{cameraSyncing=false;}}markDirty();};
   const navigationInput = document.getElementById('navigation-input-mode');
   let savedNavigationInput;
   try { savedNavigationInput = localStorage.getItem('kaminos.navigationInput'); } catch {}
@@ -11932,14 +11932,16 @@ async function initScene() {
         const baseline = kilnPerformanceSnapshot;
         if (!baseline) throw new Error('No active kiln performance');
         transformControls?.detach();
-        for (const helper of [transformControls?.getHelper(), flameDomainGuide,
-          sceneObjects.find(row=>row.id===FLAME_EMITTER_ID)?.object, sceneObjects.find(row=>row.id===RIM_LIGHT_ID)?.object]) {
+        const helpers = [transformControls?.getHelper(), flameDomainGuide,
+          sceneObjects.find(row=>row.id===FLAME_EMITTER_ID)?.object, sceneObjects.find(row=>row.id===RIM_LIGHT_ID)?.object];
+        for (const helper of helpers) {
           if (!helper) continue;
           if (!baseline.visibility.has(helper)) baseline.visibility.set(helper, helper.visible);
           helper.visible = false;
         }
         if(sample.tune)writeFlameSettingsState(sample.tune,{refresh:false,cue:true,sourceEnabled:sample.sourceEnabled});
         applyKilnPerformanceEmitter({ ...(sample.tune?readVolumeControls():baseline.controls), inputRadius: sample.radius, flowRate: sample.flow }, sample.sourceEnabled);
+        for (const helper of helpers) if (helper) helper.visible = false;
         scene.environmentIntensity = baseline.intensity * sample.light;
         const target = new THREE.Vector3().fromArray(baseline.target);
         camera.position.fromArray(baseline.position).sub(target).multiplyScalar((1 - sample.push) * Math.max(1, 1 / camera.aspect)).add(target);
@@ -20266,7 +20268,7 @@ async function initKaminosVolumeRoute() {
   applyFlameEmitterPose = (pose, options) => applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls(), pose, options);
   applyKilnPerformanceEmitter = (snapshot, sourceEnabled) => applyVolumeEmitterFamilyRuntime({
     prototype: volumePrototype, family: document.getElementById('emitter-assay-family').value,
-    controls: emitterCompilerControls(snapshot), emitterPose: flamePoseToDomain(flameEmitterPose, flameDomainTranslation),
+    controls: emitterCompilerControls(effectiveFlameDomainControls(snapshot,volumePrototype)), emitterPose: flamePoseToDomain(flameEmitterPose, flameDomainTranslation,flameDomainScale),
     sourceEnabled, timestampMs: performance.now(), frameId: 'kiln-cinematic',
   });
   if (params.get('promoted_fire_parity') === '1') {

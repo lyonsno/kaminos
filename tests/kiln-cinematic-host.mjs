@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as THREE from '../lib/three.core.js';
@@ -18,6 +19,27 @@ assert.equal(object.visible,true);
 assert.equal(scene.environmentIntensity,2);
 assert.deepEqual(camera.position.value,[1,2,3]);
 console.log('Cinematic host releases authored state after device failure');
+const domainHelper={visible:true},emitterHelper={visible:false};
+const helperSnapshot={...snapshot,tune:{},visibility:new Map(),transforms:new Map()};
+const helperCamera=new THREE.PerspectiveCamera();
+const helperControls={target:new THREE.Vector3(),enabled:false,update(){}};
+const refreshHelpers=()=>{domainHelper.visible=true;emitterHelper.visible=true;};
+const helperHost=new Function('kilnPerformanceSnapshot','applyKilnPerformanceEmitter','writeFlameSettingsState','readVolumeControls',
+  'scene','camera','controls','window','sceneObjects','THREE','transformControls','flameDomainGuide','FLAME_EMITTER_ID','RIM_LIGHT_ID',
+  `return ${code};`)(helperSnapshot,refreshHelpers,refreshHelpers,()=>({}),scene,helperCamera,helperControls,{},
+    [{id:'source',object:emitterHelper}],THREE,null,domainHelper,'source','rim');
+helperHost.sample({tune:{},radius:0.5,flow:1,sourceEnabled:true,light:1,push:0.1});
+assert.equal(domainHelper.visible,false,'tune refresh cannot reveal a cinematic domain guide');
+assert.equal(emitterHelper.visible,false,'emitter refresh cannot reveal a cinematic source helper');
+helperHost.end();
+assert.equal(domainHelper.visible,true,'exit restores the visible domain guide');
+assert.equal(emitterHelper.visible,false,'exit restores the hidden source helper');
+const dirtyLine=source.split('\n').find(line=>line.includes('window._kaminosDirty = '));
+let syncs=0,dirtyMarks=0;const dirtyWindow={};
+const dirtyHost=new Function('window','sceneCameras','markDirty',`let cameraSyncing=false,kilnPerformanceSnapshot={};${dirtyLine};return {end(){kilnPerformanceSnapshot=null;}};`)(
+  dirtyWindow,{state:()=>({mode:'camera',writing:false}),sync:()=>syncs++},()=>dirtyMarks++);
+dirtyWindow._kaminosDirty();assert.equal(syncs,0,'authored-camera sync must not overwrite temporary playback view');
+dirtyHost.end();dirtyWindow._kaminosDirty();assert.equal(syncs,1);assert.equal(dirtyMarks,2);
 const mesh=new THREE.Mesh(new THREE.BoxGeometry(1,2,1));
 mesh.position.set(3,4,5);mesh.scale.setScalar(2);
 let edits=0;

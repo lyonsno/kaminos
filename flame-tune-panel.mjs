@@ -1,6 +1,6 @@
 import {FLAME_PROPERTY_GROUPS,authoredFlameShapeOptions} from './flame-authoring.mjs';
 import {installRelativeNumberDrag} from './scene-control-history.mjs';
-import {KILN_FLOW_RANGE} from './kiln-cue-tunes.mjs';
+import {KILN_FLOW_RANGE,CUE_TUNE_GROUPS} from './kiln-cue-tunes.mjs';
 
 const hero=['volume-input-radius','volume-flow-rate','volume-speed','volume-physical-temperature',
   'volume-physical-thermal','volume-physical-exposure','volume-physical-smoke-extinction'];
@@ -9,7 +9,7 @@ export function createFlameTunePanel({document,host,read,set,onError,only=null,e
   const fields=[];
   const named=new Map(FLAME_PROPERTY_GROUPS.flatMap(group=>group.fields));
   const groups=[{name:'Flame tune',open:true,fields:hero.map(id=>[id,named.get(id)])},
-    ...FLAME_PROPERTY_GROUPS.filter(group=>group.name!=='Simulation').map(group=>({...group,open:false,fields:group.fields.filter(([id])=>!hero.includes(id))}))];
+    ...CUE_TUNE_GROUPS.map(group=>({...group,open:false,fields:group.fields.filter(([id])=>!hero.includes(id))}))];
   for(const original of groups) {
     const group={...original,fields:original.fields.filter(([id])=>(!only||only.includes(id))&&!exclude.includes(id))};
     if(!group.fields.length)continue;
