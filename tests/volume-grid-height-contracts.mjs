@@ -89,10 +89,10 @@ test('GH-01: the camera samples the whole box: the raymarch box follows GRID_Y/G
   assert.ok(!source.includes('boxHit(ro - vec3<f32>(0.0, 1.0, 0.0), rd, vec3<f32>(1.0, 2.0, 1.0))'));
   // The published raymarch bounds come from the same helper.
   assert.match(closure, /const domainBox = raymarchDomainBox\(gridSize, gridHeight\);/);
-  assert.match(closure, /raymarchWorldMax: domainBox\.max\.map\(\(value, axis\) => value \+ productTransform\.translate\[axis\]\),/);
+  assert.match(closure, /raymarchWorldMax: domainBox\.max\.map\(\(value, axis\) => value \* productTransform\.scale \+ productTransform\.translate\[axis\]\),/);
   // The cockpit's flame-domain guide follows the effective top instead of y = 3.
   assert.ok(!index.includes('new THREE.Vector3(1, 3, 1).add(new THREE.Vector3(...flameDomainTranslation))'));
-  assert.equal((index.match(/new THREE\.Vector3\(1, flameDomainTopY\(\), 1\)\.add\(new THREE\.Vector3\(\.\.\.flameDomainTranslation\)\)/g) || []).length, 2);
+  assert.ok(index.includes('new THREE.Vector3(scale,flameDomainTopY()*scale,scale)')); 
   assert.match(index, /function flameDomainTopY\(\) \{\n\s+const dims = window\.__kaminosVolumeGridPreview\?\.dimensions \?\? window\.__kaminosVolumeGridDimensions;\n\s+return Array\.isArray\(dims\) && dims\.length === 3 && dims\[0\] > 0 \? -1 \+ 2 \* dims\[1\] \/ dims\[0\] : 3;/);
   assert.match(index, /window\.__kaminosVolumeGridDimensions = \[\.\.\.s\.simGridDimensions\];\n\s+refreshFlameDomainGuideBox\(\);/, 'the status writer refreshes the guide when the dimensions change');
 });

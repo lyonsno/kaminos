@@ -24,6 +24,19 @@ await window.saveSceneAs();
 
 Selecting a flame emitter presents its Emission controls. Selecting **Fire & smoke** in the scene hierarchy presents the field's preset, Appearance, Motion, Simulation and Legacy appearance controls. The runtime retains its existing singleton analytic source and whole-settings preset backing; selecting an emitter does not imply that it owns field-wide appearance. Selecting Water simulation opens the existing local-liquid field controls. Field selection does not pretend to be a mesh transform and survives save/reopen. Workbench retains the original controls on the same working state.
 
+Selecting **Fire & smoke** also exposes the simulation box's world centre and uniform world scale. G moves the box; S changes its world size about its centre. Its axes remain world-aligned and its aspect is fixed at 2 × 4 × 2 in local coordinates. The bounds preview while dragging; Escape cancels without restarting the field. Acceptance restarts the field once. Existing cell counts stay fixed, so larger world bounds mean larger world cells and can change the dynamics. The emitter retains its world pose and aperture. Moving it outside an explicitly placed box pauses injection instead of moving the box. Older scenes retain automatic source-follow until the box is explicitly authored.
+
+`window.kaminosFlameDomain.read()` returns `{translation, scale, followSource}`; `translation` is the engine frame origin, one scaled local unit below the box centre. `set(posePatch)` accepts a **world centre** `position` triple and a positive uniform `scale` triple, through the shared `@flame-domain` edit target. Rotation and nonuniform scale are refused. For example:
+
+```js
+window.kaminosFlameDomain.set({position: [0, 1, 0], scale: [1.5, 1.5, 1.5]});
+await window.kaminosSceneEdits.undo();
+const saved = await window.saveSceneAs({result: true, name: 'Kiln domain study'});
+// Reopen saved.url: it names both the saved scene and its exact immutable basin.
+```
+
+Save/reopen retains the domain even if its source was removed. Domain undo restores its authored transform and source-follow policy; it does not restore evolved gas. Existing kiln collision, light bounds and field-to-bed/contact mappings consume the same accepted world transform. This operation does not create another independent simulation domain or change grid resolution.
+
 Drag numeric field bodies or labels relatively, or click to type an exact value. Shift makes subsequent movement finer, and Escape cancels. Transform and data controls use the same field gesture and chronological ledger. Undo restores authored settings, not earlier fluid fields.
 
 `window.kaminosFlameAuthoring.read()` returns a copy of the complete working settings and source recipe receipt. `apply(snapshot, label)` applies a complete validated snapshot as one history entry. `await applyBasin(presetId)` loads an existing immutable recipe and applies it through the same operation as the inspector. It rejects an overlapping load or an intervening scene edit; retry explicitly after resolving that edit. Finish or cancel an active gesture first.
@@ -71,3 +84,127 @@ Scene hierarchy rows select on one click. Double-click a name (or use F2 on a fo
 Viewport → Transform gizmos is a view preference across selections, independent of saved object poses. Navigation hints are another viewport preference. Move/Rotate/Scale toolbar buttons explicitly enable their gizmo. These preferences are session-local, not authored scene history. Grid and global wireframe controls are not implemented by this menu.
 
 Numeric scrub fields display three significant figures while idle; the input retains its precise value and shows it for text editing. Relative numeric drags (including transform axis labels) and G/R/S request browser Pointer Lock, use unbounded logical movement and draw a wrapping software cursor. The browser restores its system cursor to the entry point on release. Escape or unexpected lock loss cancels the edit. When Pointer Lock is unavailable, ordinary bounded dragging remains usable. This does not change native Three.js gizmo-handle dragging or trackpad camera navigation.
+
+## Selection sets, pivots and editor symbols
+
+Shift-click extends or toggles viewport/hierarchy selection; the last added item is active. A selects all scene objects and group frames; Alt-A clears. B enters projected-bounds box selection: left drag adds, middle drag subtracts, Escape/right click cancels. Box selection is through projected object bounds, not fragment-visibility picking. A selected group suppresses selected children as transform roots, so a child never receives the delta twice.
+
+The toolbar exposes World/Local axes and Median/Active/Individual origins. Modal G/R/S, native gizmo and transform-number fields use the existing scene ledger. Operation switching restarts every chosen root from the gesture-start snapshot. A selection transform is one undo entry; a provider rejection cannot leave a sibling changed. Finite world-TRS/provider restrictions remain: unrepresentable shear is rejected, water aperture uses positive uniform scale, and flame sources cannot be independently duplicated.
+
+Selection transform fields edit the shared frame; geometry/material/emission/light fields below edit the active item. The inspector states the active item and which pose values are mixed. Selection feedback uses orange/yellow world bounding boxes, not a new postprocessing silhouette pass. Viewport → Emitter symbols & helpers hides source/light symbols and field guides without removing scene objects, disabling emission or hiding authored mesh geometry. View preferences remain session-local.
+
+`window.kaminosSelection.read()` returns `ids`, `activeId`, expanded `memberIds` and transform preferences. Groups use `@group:<groupId>` keys. `set(ids, activeId)`, `all()`, `clear()`, `settings({orientation, pivot})`, `transform(patch)`, `duplicate({interactive})`, `remove()`, `group(label)`, and `ungroup()` use the same objects and ledger as the UI. Await membership undo/redo. `transform(patch)` edits the frame returned by the current selection; its scale starts at one, so a frame scale is a selection multiplier. Bulk insertion/removal retains actual GLB/procedural/light instances for reversal; simulation source restoration recreates its editor handle through the existing source adapter and preserves settings. Undo does not rewind fluid particles.
+
+Scene version7 adds `selectionIds` beside the existing active object/group fields. Save/reopen preserves the chosen set and active item; older documents keep their single-item behavior. Temporary asset inspection restores the original selection. Glyph visibility can be observed as `objectVisible` in `kaminosSceneObjectDebugState()`; actual light binding visibility remains in `kaminosSceneLightState()`.
+
+## Assets and image-to-mesh generation
+
+In Authoring, **Assets** and **Generate** open an in-context drawer. Browse the existing mounted locations, enter folders, filter the current folder, and choose a GLB or source image. **Open file…** accepts GLB, PNG, JPEG or WebP. A mesh is copied into the existing content-addressed store and appended through the ordinary scene membership operation; the current composition remains intact. Undo removes that instance and redo restores it without re-reading its original external folder. Source images use the existing image inbox and preserve their display name and content identity.
+
+The first generation route is Stable Fast 3D image-to-textured-mesh, using the existing shared-device producer and ordinary flame foreground host. Choose a source image, then explicitly **Generate mesh**. Weights load on the first run. An unsupported host/device or a scene already owned by another composition module is shown as unavailable. Generation does not insert automatically: the retained result gets an **Add** action. Its source image, digest, route, run ID, producer identity/receipt and GLB digest travel with the scene instance through undo/redo and save/reopen. A failed storage step retains the computed bytes and offers **Retry saving result**, rather than rerunning inference. This route needs the deployed SF3D weights/tet assets; generation failure is reported in its actual phase. Browsing existing Trellis outputs does not establish a callable Trellis generation route.
+
+`window.kaminosAssets` exposes `read()`, `refresh()`, `browse(root, path)`, `select(entry)`, `upload(file)`, `add(entry)`, `generate()`, `recover()`, `generation()`, `open(mode)` and `close()`. The UI uses this same controller. For example:
+
+```js
+const assets = window.kaminosAssets;
+await assets.browse('image-inbox', 'a-source-folder');
+assets.select(assets.read().entries.find(entry => entry.kind === 'image'));
+const output = await assets.generate();
+const objectId = await assets.add({...output, kind: 'mesh'});
+window.kaminosSetSceneObjectTransform(objectId, {position: [1, 0, 0]});
+```
+
+Ordinary static meshes now have selected/active silhouette feedback. **Viewport → Object bounds** enables bounding boxes separately. Source/light editor symbols retain the existing helper control. Skinned, instanced and Splat outlines are not provided by this static mask; clean scene capture suspends selection contours and bounds. The mask has its own scene/materials and does not alter authored materials, geometry, lighting inputs or saved records.
+
+Assets/Generate occupies a page region below the authoring viewport. Closing it
+restores the viewport area; it does not cancel generation or mutate the scene.
+The thin generation bar reflects the producer's current-stage percentage. Phases
+without a denominator remain indeterminate; stage resets are not overall run
+estimates. Stop aborts source fetches, prevents inference after a stopped weight
+load, and throws AbortError at SF3D's existing cooperative progress boundaries.
+The producer's finish path settles admitted work before another run is admitted.
+Loading weights currently settles before stopping; the shared scene device is
+never destroyed. A completed mesh wins a Stop race and is saved or retained for
+storage retry. Persistence has no Stop button because it preserves completed
+bytes. A device/foreground drain failure stays a failure, not a clean stop.
+
+The authoring browser reads `/api/authoring-assets?collection=…` for saved meshes,
+source images, Trellis/Pixal outputs and completed generator results. Greenroom
+collections project generator receipts and recorded output directories, using
+output-file metadata when present. Queue administration and unrelated command
+screenshots are excluded. Missing historical outputs are counted separately;
+malformed records and escaping paths produce diagnostics. Entries preserve their
+canonical read/job-output URL. Import retains GLB bytes in the scene store and
+saves `assetOrigin` with the original URL, producer/job information and actual
+mesh digest. This is provenance, not a new producer-validation claim.
+
+Mesh cards use an independent, lazy WebGL2 preview context over the existing
+Three bundle. A failed preview is explicit; it never substitutes another asset.
+Source images retain their ingestion names. Drag the asset area's upper separator
+vertically to change its height; Up/Down arrows also resize it. Its extent survives
+closing/reopening the pane during the current page, while scene poses, camera
+pose and authored undo history remain unchanged.
+
+The authoring asset pane leaves the Workbench layout while preserving its open
+state and current generation. Active generation remains visible and stoppable in
+the workspace header; its status button returns to the Authoring generation pane.
+Workspace switching changes presentation without starting, stopping or restarting
+inference. Catalog loading shows a small spinner beside the loading text and sets
+`aria-busy`; reduced-motion preferences retain the indicator without animation.
+
+### Fire ownership and collision inspection
+
+Version 9 fire scenes store one `simulation-domain` object (`flame-field`): its transform and `simulation.settings` own the box and evolution; `volumeMaterial.settings` owns optical interpretation. The existing flame source owns `emission.settings` and references that domain through `emission.domainId`. Scene `fireRendering` owns renderer/presentation settings. A source-free domain retains a source template for re-add. The pinned basin remains a mount/bootstrap dependency; v9 scene records replace its coefficients on restore. Older documents retain their existing migration behavior. This does not add multiple sources, independent domains, or evolved-fluid checkpoints.
+
+`kaminosSceneAuthoring.read().objects` exposes these records. `setFireSettings(objectId, 'emission' | 'simulation' | 'volumeMaterial', {controlId: value})` validates ownership and uses the shared reversible flame edit. Domain placement remains available through `kaminosFlameDomain`; collision uses `kaminosSceneCollision.set(boolean)`. The runtime still adapts this single authored domain to its existing control backing and allocation.
+
+Collision and simulation resolution share the same grid. The inspector exposes the runtime's existing choices; changing one restarts the fluid. `kaminosSceneCollision.showVoxels(boolean)` is a viewport diagnostic, excluded from captures and authored scene records. `readMask()` returns the actual installed CPU mask uploaded to the solver, with its revision, dimensions, domain transform and effective collision receipt. Cyan boundary cells include the enabled source backing wall; unavailable geometry is reported rather than substituted with a second voxelization.
+
+Viewport display is saved as `editorDisplay`: separate object outline, simulation boundary and emitter symbol widths/opacities/visibility, plus the overlay master and existing gizmo/bounds/helper/hint controls. `kaminosViewportSettings.read/set` uses the same display state; these choices do not alter physics or authored membership. Shift+Alt+Z toggles overlays and Ctrl+tilde (also Cmd+tilde on Mac) toggles gizmos while the pointer is over the viewport. Text fields/dialogs retain their shortcuts. Visible emitters pick through covering geometry, matching their overlay drawing; hidden emitters remain selectable from the scene tree.
+
+Load identifies scenes by their saved filename, with the internal scene/look label underneath. The default cross-server library includes lane/consumer/scenes stores. Importing a fire scene retains its verified immutable pinned basin from the sibling basin store as well as existing mesh dependencies; it never changes source-store files or aliases. Missing/invalid basin dependencies fail the import visibly.
+
+Fire & smoke's Quality section groups simulation grid, ray count, adaptive rays and screen resolution. Screen resolution is displayed as 10–100 percent of raymarch width/height; its saved `volume-render-scale` remains a fractional `.1..1` scene-rendering setting. The full-range source slider and authoring field share one value, with percent conversion only at the inspector boundary. Relative scrubbing, typing, Escape and chronological undo use the existing flame edit session. The collision section reports the matching voxel grid. Current fire collisions voxelize and upload at solver grid dimensions and use integer cell-coordinate texture loads; there is no independent voxel-resolution input in this route.
+
+
+## Fire obstacles and volume height
+
+A selected ordinary mesh has **Physics → Fire & smoke obstacle**. This writes
+`collision: {domainId: "flame-field", enabled: true}` on that same authored
+object; geometry, materials, source provenance and placement remain separate.
+The field's **Scene collisions** switch enables the chosen obstacles together.
+New primitives and imports start without collision participation. Older kiln
+scenes retain their existing kiln collision when reopened. Version 10 saves the
+explicit membership; versions before 9 reconstruct their domain from the saved
+flame composition before validating that membership.
+
+```js
+const id = window.kaminosSceneAuthoring.addMesh('box', {
+  width: 0.6, height: 0.08, depth: 0.6,
+});
+window.kaminosSetSceneObjectTransform(id, {position: [0, 0.3, 0]});
+window.kaminosSceneAuthoring.setCollision(id, true);
+await window.kaminosSceneEdits.undo(); // restores collision membership
+```
+
+Human and scripted membership changes share scene history and persistence.
+The engine fills each selected object's solid independently and unions the
+masks. A pose/geometry edit rebuilds that object's field; unchanged objects are
+reused. Ordinary primitive material edits preserve their collision geometry.
+The live `debugState().sceneCollision` receipt names members and refusal reasons;
+`readSceneCollisionMask()` exposes the installed occupancy, rather than a mesh
+bounding box. The existing supported solver/transport requirements still apply.
+
+**Fire & smoke → Quality → Height / width** projects the existing height control.
+Editing previews the resolved box; Enter, blur or completing a numeric drag
+applies it. Escape restores the prior setting. The same authored-parameter setter
+confirms scripted edits. Height adds/removes cubic-cell rows at fixed pitch;
+world scale changes the pitch. Independent Z depth is not yet supplied by the
+current solver; its mechanism is in the Flame Doctor's next grid slice.
+
+
+If the device refuses a requested grid shape, source admission continues to use
+the retained, active grid. The original request and refusal reason remain in
+the runtime receipt. Saving that unapplied request is blocked: Undo or choose
+supported dimensions first, so the accepted scene file is not replaced by a
+configuration the live field did not admit. Other mesh scenes remain saveable.
