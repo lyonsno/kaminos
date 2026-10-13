@@ -70,9 +70,9 @@ test('reaction, conversion and consumption increments carry dt; max() births sta
 test('boundary sponges, height survival and quench attenuations are per-step survivals and follow stepRate', () => {
   const main = mainKernel();
   assert.match(main, /flame = flame \* stepRate\(tallPlumeFireSurvival\);\s*\n\s*ember = ember \* stepRate\(tallPlumeFireSurvival\);/, 'flame height survival');
-  assert.match(main, /smoke = smoke \* stepRate\(mix\(0\.42, 1\.0, wallFade\) \* mix\(0\.72, 1\.0, smokeTopFade\)\);/, 'smoke sponge');
-  assert.match(main, /heat = heat \* stepRate\(mix\(0\.30, 1\.0, wallFade\) \* mix\(0\.16, 1\.0, heatTopFade\)\);/, 'heat sponge');
-  assert.match(main, /fuel = fuel \* stepRate\(mix\(0\.20, 1\.0, wallFade\) \* mix\(0\.58, 1\.0, heatTopFade\)\);/, 'fuel sponge');
+  assert.match(main, /smoke = smoke \* stepRate\(mix\(0\.42, 1\.0, (?:material)?[wW]allFade\) \* mix\(0\.72, 1\.0, (?:materialSmokeTopFade|smokeTopFade)\)\);/, 'smoke sponge (the reactant candidate opens the top via material* fades; equal to the originals under the authored law)');
+  assert.match(main, /heat = heat \* stepRate\(mix\(0\.30, 1\.0, (?:material)?[wW]allFade\) \* mix\(0\.16, 1\.0, (?:materialHeatTopFade|heatTopFade)\)\);/, 'heat sponge');
+  assert.match(main, /fuel = fuel \* stepRate\(mix\(0\.20, 1\.0, (?:material)?[wW]allFade\) \* mix\(0\.58, 1\.0, (?:materialHeatTopFade|heatTopFade)\)\);/, 'fuel sponge');
   assert.match(main, /materialDetail = materialDetail \* stepRate\(mix\(0\.22, 1\.0, wallFade\)\);/, 'material detail sponge');
   assert.match(main, /flame = flame \* stepRate\(mix\(0\.12, 1\.0, wallFade\) \* mix\(0\.08, 1\.0, fireTopFade\)\);/, 'flame sponge');
   assert.match(main, /ember = ember \* stepRate\(mix\(0\.18, 1\.0, wallFade\) \* mix\(0\.16, 1\.0, smokeTopFade\)\);/, 'ember sponge');

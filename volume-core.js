@@ -7580,12 +7580,21 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let tallPlumeFireTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.72, 0.90, plumeHeight01)), expandedTopY - 0.005, p.y);
   let heatTopFade = mix(legacyHeatTopFade, tallPlumeHeatTopFade, tallPlumeScene);
   let fireTopFade = mix(legacyHeatTopFade, tallPlumeFireTopFade, tallPlumeScene);
-  smoke = smoke * stepRate(mix(0.42, 1.0, wallFade) * mix(0.72, 1.0, smokeTopFade));
-  heat = heat * stepRate(mix(0.30, 1.0, wallFade) * mix(0.16, 1.0, heatTopFade));
-  fuel = fuel * stepRate(mix(0.20, 1.0, wallFade) * mix(0.58, 1.0, heatTopFade));
-  // Reactant law: the sponge region is ambient air, so the oxidizer relaxes
-  // toward ambient at the fuel's sponge rate.
-  oxidizer = u.reactant_combustion_c.z - (u.reactant_combustion_c.z - oxidizer) * stepRate(mix(0.20, 1.0, wallFade) * mix(0.58, 1.0, heatTopFade));
+  // Reactant law: the fine-box top is a passive outflow for the material
+  // (smoke, heat, fuel, oxidizer leave on the flow, to the exterior where one
+  // exists): no top sponge, no top fade, no oxygen source at the top. The side
+  // and floor sponges are unchanged. Appearance channels keep their own fades.
+  let materialVerticalWall = select(verticalWall, mix(-p.y, -1.0, floorExempt), reactantOn);
+  let materialWall = max(max(abs(p.x), materialVerticalWall), abs(p.z));
+  let materialWallFade = max(1.0 - smoothstep(0.86, 1.0, materialWall), clamp(immersedSlabWeight, 0.0, 1.0));
+  let materialHeatTopFade = select(heatTopFade, 1.0, reactantOn);
+  let materialSmokeTopFade = select(smokeTopFade, 1.0, reactantOn);
+  smoke = smoke * stepRate(mix(0.42, 1.0, materialWallFade) * mix(0.72, 1.0, materialSmokeTopFade));
+  heat = heat * stepRate(mix(0.30, 1.0, materialWallFade) * mix(0.16, 1.0, materialHeatTopFade));
+  fuel = fuel * stepRate(mix(0.20, 1.0, materialWallFade) * mix(0.58, 1.0, materialHeatTopFade));
+  // Reactant law: the side and floor sponge regions are ambient air, so the
+  // oxidizer relaxes toward ambient at the fuel's sponge rate there.
+  oxidizer = u.reactant_combustion_c.z - (u.reactant_combustion_c.z - oxidizer) * stepRate(mix(0.20, 1.0, materialWallFade) * mix(0.58, 1.0, materialHeatTopFade));
   materialDetail = materialDetail * stepRate(mix(0.22, 1.0, wallFade));
   flame = flame * stepRate(mix(0.12, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
   ember = ember * stepRate(mix(0.18, 1.0, wallFade) * mix(0.16, 1.0, smokeTopFade));

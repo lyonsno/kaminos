@@ -84,7 +84,7 @@ test('under the reactant law the authored reaction terms yield to the single bur
   assert.match(mainKernel, /let tallPlumeNormalizedFlameHeight = select\(clamp\(\(p\.y \+ 0\.84\) \/ 1\.58, 0\.0, 1\.0\), 0\.0, reactantOn\);/, 'no box-height survival demand under the candidate');
   assert.match(mainKernel, /oxidizer = mix\(oxidizer, u\.reactant_combustion_c\.w, inflowFraction\);/, 'the inflow brings the stream oxidizer');
   assert.match(mainKernel, /oxidizer = mix\(oxidizer, u\.reactant_combustion_c\.w, immersedEntry\);/);
-  assert.match(mainKernel, /oxidizer = u\.reactant_combustion_c\.z - \(u\.reactant_combustion_c\.z - oxidizer\) \* stepRate\(mix\(0\.20, 1\.0, wallFade\) \* mix\(0\.58, 1\.0, heatTopFade\)\);/, 'sponges relax oxidizer toward ambient air');
+  assert.match(mainKernel, /oxidizer = u\.reactant_combustion_c\.z - \(u\.reactant_combustion_c\.z - oxidizer\) \* stepRate\(mix\(0\.20, 1\.0, materialWallFade\) \* mix\(0\.58, 1\.0, materialHeatTopFade\)\);/, 'sponges relax oxidizer toward ambient air');
   assert.match(mainKernel, /if \(reactantOn\) \{\n\s*textureStore\(reactantDst, cellI, vec4<f32>\(clamp\(oxidizer, 0\.0, 2\.0\), reactantFreshBurnRate, 0\.0, 0\.0\)\);\n\s*\}/);
 });
 
@@ -95,6 +95,17 @@ test('under the reactant law the volumetric emitter births no heat or fuel: supp
   for (const [field, channel, gain] of [['smoke', 'x', '0\\.76'], ['heat', 'y', '0\\.92'], ['fuel', 'z', '0\\.72']]) {
     assert.match(mainKernel, new RegExp(`${field} = max\\(${field}, select\\(externalInjection\\.material\\.${channel} \\* ${gain}, 0\\.0, reactantOn\\)\\);`), `external emitters inject no ${field} under the candidate (no oxidizer accounting)`);
   }
+});
+
+test('under the reactant law the fine-box top is a passive outflow for the material: no sponge, no oxygen source at the top', () => {
+  assert.match(mainKernel, /let materialVerticalWall = select\(verticalWall, mix\(-p\.y, -1\.0, floorExempt\), reactantOn\);/, 'the top drops out of the material wall sponge');
+  assert.match(mainKernel, /let materialHeatTopFade = select\(heatTopFade, 1\.0, reactantOn\);/);
+  assert.match(mainKernel, /let materialSmokeTopFade = select\(smokeTopFade, 1\.0, reactantOn\);/);
+  assert.match(mainKernel, /smoke = smoke \* stepRate\(mix\(0\.42, 1\.0, materialWallFade\) \* mix\(0\.72, 1\.0, materialSmokeTopFade\)\);/);
+  assert.match(mainKernel, /heat = heat \* stepRate\(mix\(0\.30, 1\.0, materialWallFade\) \* mix\(0\.16, 1\.0, materialHeatTopFade\)\);/);
+  assert.match(mainKernel, /fuel = fuel \* stepRate\(mix\(0\.20, 1\.0, materialWallFade\) \* mix\(0\.58, 1\.0, materialHeatTopFade\)\);/);
+  assert.match(mainKernel, /oxidizer = u\.reactant_combustion_c\.z - \(u\.reactant_combustion_c\.z - oxidizer\) \* stepRate\(mix\(0\.20, 1\.0, materialWallFade\) \* mix\(0\.58, 1\.0, materialHeatTopFade\)\);/);
+  assert.match(mainKernel, /flame = flame \* stepRate\(mix\(0\.12, 1\.0, wallFade\) \* mix\(0\.08, 1\.0, fireTopFade\)\);/, 'appearance keeps its own fades');
 });
 
 test('the authored law is untouched when the candidate is not admitted', () => {
