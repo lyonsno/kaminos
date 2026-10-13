@@ -26649,7 +26649,10 @@ sceneInitialization.then(() => {
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
-  const volumeLoaded = initKaminosVolumeRoute();
+  // fire=off boots an ordinary scene with no fluid simulation: the app is then the
+  // frame owner models borrow (app-frame-source.mjs). Default behavior is unchanged.
+  const volumeLoaded = new URLSearchParams(location.search).get('fire') === 'off'
+    ? Promise.resolve(null) : initKaminosVolumeRoute();
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
   Promise.all([environmentLoaded, volumeLoaded]).then(async () => {
     const hash = new URLSearchParams(location.hash.slice(1));
