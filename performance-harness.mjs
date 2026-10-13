@@ -5,7 +5,7 @@ export function createPerformanceHarness({read, apply, requestFrame}) {
   const require = (ok, message) => { if (!ok) throw Error(message); };
   const identity = state => JSON.stringify({generation:state.clock.generation,
     step:state.clock.step, camera:state.camera, extent:state.extent,
-    controls:state.controls, device:state.device});
+    controls:state.controls, workload:state.workload, device:state.device});
   function fail(error) {
     if (!pending) return;
     const run = pending; pending = null;

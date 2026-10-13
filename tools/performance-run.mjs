@@ -22,6 +22,36 @@ const stats=values=>{const sorted=[...values].sort((a,b)=>a-b);assert.ok(sorted.
   assert.ok(sorted.every(v=>Number.isFinite(v)&&v>=0));
   return {count:sorted.length,mean:sorted.reduce((a,b)=>a+b,0)/sorted.length,
     ...Object.fromEntries([50,95,99].map(p=>[`p${p}`,sorted[Math.ceil(sorted.length*p/100)-1]]))};};
+// These fields are admitted by the existing Fluid route-config API. Adding a
+// saved route input requires an observed effective counterpart, not just URL forwarding.
+const routeFields={
+  finger_fluid_pressure_solver:['effectivePressureSolver','pressureSolver'],
+  finger_fluid_particle_count:['effectiveParticleCount','particleCount',Number],
+  finger_fluid_density_iterations:['effectivePressureIterations','densityIterationsPerStep',Number],
+  finger_fluid_renderer:['effectiveRendererMode','effectiveRendererMode'],
+  finger_fluid_optical_debug:['effectiveOpticalDebugMode','opticalDebugMode'],
+  finger_fluid_truth_scene:['effectiveTruthScene'],
+  finger_fluid_optical_lighting:['effectiveOpticalLightingMode','effectiveOpticalLightingMode'],
+  finger_fluid_optical_footprint:['effectiveOpticalFootprintMode','effectiveOpticalFootprintMode'],
+  finger_fluid_transmission_footprint:['effectiveTransmissionFootprintMode','effectiveTransmissionFootprintMode'],
+  finger_fluid_body_transport:['effectiveBodyTransportMode','effectiveBodyTransportMode'],
+  finger_fluid_interface_frequency:['effectiveInterfaceFrequencyMode','effectiveInterfaceFrequencyMode'],
+  finger_fluid_witness_target_step:['effectiveWitnessTargetStep',null,Number],
+  finger_fluid_witness_start_step:['effectiveWitnessStartStep',null,Number],
+};
+const entryFields={workspace:'workbench',kaminos_finger_fluid_bench:'1',finger_fluid_pressure_cockpit:'1'};
+function admitRoute(route,held){
+  for(const [key,value] of Object.entries(route)){
+    if(key in entryFields){assert.equal(String(value),entryFields[key],`Unsupported entry ${key}`);continue;}
+    const [field,runtimeField,convert=String]=routeFields[key];const requested=convert(value);
+    assert.equal(held.bench.config[field],requested,`Route input ${key} did not reach effective ${field}`);
+    if(runtimeField)assert.equal(held.bench.runtime[runtimeField],requested,`Runtime did not execute ${key}`);
+  }
+  assert.equal(held.bench.runtime.solver_backend,'webgpu_compute');
+  assert.equal(held.bench.runtime.render_backend,'webgpu_direct_render');
+  for(const [key,value] of Object.entries(held.bench.runtime))if(key==='fallbackReason'||key.endsWith('FallbackReason'))assert.equal(value,null,`Fallback route: ${key}`);
+  return {requested:route,config:held.bench.config,runtime:Object.fromEntries(Object.entries(held.bench.runtime).filter(([key])=>/Route$|backend$|FallbackReason$|^fallbackReason$|^pressureSolver$|^particleCount$|^densityIterationsPerStep$|^effective.*Mode$|^opticalDebugMode$/.test(key)))};
+}
 let browser,page,server,serverLog,signalFailure;
 const onSignal=signal=>{signalFailure=Error(`Caller interrupted: ${signal}`);browser?.close();server?.kill('SIGTERM');};
 for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>onSignal(signal));
@@ -33,6 +63,7 @@ try {
   const repo=await fs.realpath(a.repo),configBytes=await fs.readFile(a.config);
   const config=JSON.parse(configBytes);report.config=config;report.configSha256=hash(configBytes);
   assert.equal(config.schema,'kaminos.performance.v1');assert.equal(config.mode,'held-render');
+  for(const key of Object.keys(config.route))assert.ok(key in routeFields||key in entryFields,`Unsupported or unconsumed route input: ${key}`);
   for(const [key,min] of [['frames',2],['rounds',1],['warmupFrames',0],['heldStep',1]])assert.ok(Number.isSafeInteger(config[key])&&config[key]>=min,`Invalid ${key}`);
   assert.ok(config.cases.length&&new Set(config.cases.map(c=>c.name)).size===config.cases.length,'Case names must be unique');
   for(const c of config.cases){assert.match(c.name,/^[a-zA-Z0-9_-]+$/);assert.equal(typeof c.waterEnabled,'boolean');assert.equal(typeof c.sceneAOEnabled,'boolean');
@@ -88,13 +119,15 @@ try {
   assert.deepEqual(await page.evaluate(()=>window.__performanceErrors),[]);
   const fluid=await bindFluidWorkingSession(page);
   await page.evaluate(step=>{window.kaminosFingerFluidBenchSetSimulationPausedForWitness(true);const clock=window.kaminosFingerFluidBenchSessionState();if(clock.step>step)throw Error('Requested held state already passed');if(clock.step<step)window.kaminosFingerFluidBenchAdvanceToStepForWitness(step);},config.heldStep);
-  await fluid.hold();await fluid.view(config.camera);
+  report.phase='route-admission';await save();
+  report.routeAdmission=admitRoute(config.route,await fluid.hold());await fluid.view(config.camera);
   await page.evaluate(()=>{window.kaminosFingerFluidBenchResumeAfterWitness();document.querySelector('[data-reflection-control=count-rays]').checked=false;});
   let baselineHash,baselineScene,baselineSolids;
   for(let round=0;round<config.rounds;round++)for(const caseConfig of round%2?[...config.cases].reverse():config.cases){
     const ordinal=a['inspect-only']?(report.inspections?.length??0):report.cases.length,stem=`case-${ordinal}-${caseConfig.name}`;
     report.phase=stem;report.activeCase={round,name:caseConfig.name,requested:caseConfig};await save();
     const held=await fluid.hold();
+    const routeAdmission=admitRoute(config.route,held);
     await fs.writeFile(path.join(out,`${stem}-start.v8`),serialize(held));
     const particleHash=hash(Buffer.from(new Uint32Array(held.bench.runtime.diagnostics.particleSnapshot.words).buffer));
     baselineHash??=particleHash;assert.equal(particleHash,baselineHash,'Held particle state changed between cases');
@@ -122,7 +155,7 @@ try {
     const endHeld=await fluid.hold();await fs.writeFile(path.join(out,`${stem}-end.v8`),serialize(endHeld));
     const endHash=hash(Buffer.from(new Uint32Array(endHeld.bench.runtime.diagnostics.particleSnapshot.words).buffer));assert.equal(endHash,baselineHash,'Water changed during measurement');
     const callbackMs=stats(measured.frames.map(f=>f.callbackMs)),intervalMs=stats(measured.frames.slice(1).map((f,i)=>f.startedAt-measured.frames[i].startedAt));
-    const row={round,name:caseConfig.name,requested,effective:after,particleHash,endHash,solidHash,solidScene,
+    const row={round,name:caseConfig.name,requested,effective:after,routeAdmission,particleHash,endHash,solidHash,solidScene,
       callbackMs,intervalMs,fps:1000/intervalMs.mean,workDelta,image:`${stem}.png`,rawFrames:`${stem}.json`};
     await fs.writeFile(path.join(out,row.rawFrames),JSON.stringify(measured,null,2));report.cases.push(row);await save();
   }

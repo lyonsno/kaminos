@@ -14941,6 +14941,14 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
       const performanceRead=()=>{
         const budget=read(),size=renderer.getDrawingBufferSize(new THREE.Vector2());
         return {clock:budget.clock,device:budget.sceneAO.device,aoWork:budget.sceneAO.work,
+          workload:{config:{...fingerFluidBenchConfig},runtime:Object.fromEntries([
+            'solver_backend','render_backend','solverRoute','pressureSolver','pressureSolverRoute',
+            'particleCount','densityIterationsPerStep','renderRoute','effectiveRendererMode','opticalDebugMode',
+            'effectiveOpticalLightingMode','effectiveOpticalLightingRoute','effectiveOpticalFootprintMode','effectiveOpticalFootprintRoute',
+            'effectiveTransmissionFootprintMode','effectiveTransmissionFootprintRoute','effectiveBodyTransportMode','effectiveBodyTransportRoute',
+            'effectiveInterfaceFrequencyMode','effectiveInterfaceFrequencyRoute','fallbackReason',
+            'opticalLightingFallbackReason','opticalFootprintFallbackReason','transmissionFootprintFallbackReason',
+            'bodyTransportFallbackReason','interfaceFrequencyFallbackReason'].map(key=>[key,fingerFluidBenchState.runtime?.[key]]))},
           controls:{waterEnabled:performanceWaterEnabled,sceneAOEnabled:budget.sceneAO.dedicatedAOEnabled,
             sceneGIMode:budget.sceneAO.mode,aoIntensity:budget.sceneAO.intensity,renderScale:budget.viewport.renderScale,
             reflection:budget.reflection.effective,energy:budget.solver.energy.mode,timingEnabled:fluidBudgetPreferences.timingEnabled},
