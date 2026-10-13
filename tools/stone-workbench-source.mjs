@@ -11,7 +11,7 @@ entryOnly=entryOnly||new URLSearchParams(location.search).get('experiment')==='s
 if(definition.id==='stone/fracture'){stopFingerFluidBench();fingerFluidBenchSimulationPaused=true;document.getElementById('finger-fluid-bench-operator-panel').hidden=true;fluidWorkbench.setTool(definition.id);fingerFluidOwnerDefinition=null;}
 else{fluidWorkbench.setTool('finger-fluid-bench');fingerFluidOwnerDefinition={id:definition.id,inputs};}},`);
  replace('onChange:({id,inputs})=>{const url=new URL(location.href);',`onChange:({id,inputs})=>{
-if(id==='stone/fracture'){fluidWorkbench.setTool(id);document.querySelector('#experiment-instruments .experiment-panel-heading p').textContent='';frameObjects([window.__stoneSharedHost.runtime().object],camera,controls);window._kaminosDirty?.();}
+if(id==='stone/fracture'){fluidWorkbench.setTool(id);document.getElementById('experiment-tool-slot').hidden=true;document.querySelector('#experiment-instruments .experiment-panel-heading p').textContent='';setInfo('Stone fracture');frameObjects([window.__stoneSharedHost.runtime().object],camera,controls);window._kaminosDirty?.();}
 else if(!id)fluidWorkbench.setTool(window.__kaminosActiveTab());
 const url=new URL(location.href);`);
  replace('window.kaminosWorkbenchExperiments=ownerExperimentEntry;',`window.kaminosWorkbenchExperiments=ownerExperimentEntry;
