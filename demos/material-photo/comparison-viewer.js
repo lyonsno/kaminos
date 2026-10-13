@@ -53,7 +53,10 @@ export class MaterialPhotoViewer {
     const preset=this.primary.exportPreset();
     this.primary.setImage(image,depth,null,cutout);
     const shared=depth?{surface:this.surface,geometry:this.primary.mesh.geometry}:null;
-    for(const mode of modes.slice(0,3))this.views[mode].setImage(image,depth,shared,cutout);
+    this.views.relit.setImage(image,depth,shared,cutout);
+    this.views.photo.setImage(image,depth,cutout?null:shared,null);
+    const photograph=depth?{surface:this.views.photo.surface,geometry:this.views.photo.mesh.geometry}:null;
+    this.views.original.setImage(image,depth,photograph,null);
     for(const [mode,view]of Object.entries(this.views)){view.applyPreset(preset);view.glow=mode==='materials'&&preset.glow;}
     this.primary.available=true;this.setMaterialStatus('Materials not generated');
     const {x,y}=this.primary.getLightHandle();this.setLightHandle(x,y);
