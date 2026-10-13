@@ -30,11 +30,12 @@ export function normalizeSceneCapture(value) {
   return clone(value);
 }
 
-export function compositionRestoreUrl(composition, sceneFile, origin) {
+export function compositionRestoreUrl(composition, sceneFile, origin, workspace = null) {
   const state = normalizeComposition(composition);
   if (!sceneFile || /[/\\]/.test(sceneFile)) throw new Error('Saved scene filename is required');
   const target = new URL(state ? '/volume-settings-preset.html' : '/', origin);
   if (state) target.searchParams.set('preset', state.flame.presetId);
+  if (workspace !== null) target.searchParams.set('workspace', workspace);
   const hash = new URLSearchParams(state?.route || {});
   hash.set('authoring', '1');
   hash.set('scene', sceneFile);
@@ -42,9 +43,11 @@ export function compositionRestoreUrl(composition, sceneFile, origin) {
   return target.href;
 }
 
-export function forwardCompositionHash(target, sourceHash) {
+export function forwardCompositionHash(target, sourceHash, sourceSearch = '') {
   const url = new URL(target);
   const hash = new URLSearchParams(sourceHash.replace(/^#/, ''));
+  const workspace = new URLSearchParams(sourceSearch).get('workspace');
+  if (workspace !== null) url.searchParams.set('workspace',workspace);
   const forwarded = new URLSearchParams();
   for (const [key, value] of hash) {
     if (['authoring', 'scene', 'composition_module_url', 'volume_collision', 'rendering_source_xyz', 'rendering_source_gain', 'rendering_surface_gain', 'rendering_surface_scattering', 'rendering_receiver_spacing', 'rendering_angular_pattern', 'rendering_directions', 'rendering_match_camera'].includes(key)

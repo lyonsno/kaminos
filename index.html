@@ -30335,6 +30335,7 @@ function applyMaterialState(state) {
 
 function claimLoadedSceneFile(file) {
   if (file.name && file.name.endsWith('.kaminos.json')) {
+    history.replaceState(history.state,'',savedSceneLocation(location.href,file.name));
     currentSceneFile = file.name;
   }
 }
@@ -30773,7 +30774,7 @@ sceneInitialization.then(() => {
       const preset = new URLSearchParams(location.search).get('settings_preset');
       if(preset!==plan.composition.flame.presetId){
         setInfo('Opening the saved flame recipe…');
-        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin));
+        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,new URLSearchParams(location.search).get('workspace')));
         return;
       }
     }

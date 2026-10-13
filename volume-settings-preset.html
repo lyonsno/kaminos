@@ -51,12 +51,12 @@
       if (!view) {
         const target = buildVolumeSettingsPresetTarget(receipt, location.origin);
         status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | entering live cockpit`;
-        location.replace(forwardCompositionHash(target, location.hash));
+        location.replace(forwardCompositionHash(target, location.hash, location.search));
         return;
       }
       const target = buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view, { assayToolbar: assayToolbarRequested });
       status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.preset.controlCount} basin + ${receipt.rendererControlCount} renderer + ${receipt.presentationControlCount} presentation controls | effective ${view} view`;
-      location.replace(forwardCompositionHash(target, location.hash));
+      location.replace(forwardCompositionHash(target, location.hash, location.search));
     }
 
     loadPreset().catch(error => {

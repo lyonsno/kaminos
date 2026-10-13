@@ -10,3 +10,33 @@ test('saved document address preserves renderer and unknown view parameters',asy
  assert.equal(after.origin,before.origin);assert.equal(after.pathname,before.pathname);assert.equal(after.search,before.search);const hash=new URLSearchParams(after.hash.slice(1));assert.equal(hash.get('scene'),'new.kaminos.json');assert.equal(hash.get('workspace'),'workbench');assert.equal(hash.get('extra'),'kept');assert.equal(hash.has('authoring'),false,'Save does not change workspace selection');
  for(const filename of ['../escape.kaminos.json','wrong.json',null])assert.throws(()=>savedSceneLocation(before.href,filename),/Saved scene filename/);
 });
+
+test('successful current in-place Load adopts the document address; superseded load cannot',async()=>{
+ const {savedSceneLocation}=await import('../scene-authoring.mjs');
+ const begin=html.indexOf('function claimLoadedSceneFile('),end=html.indexOf('async function loadSceneFile(',begin),claim=html.slice(begin,end);
+ const call=html.indexOf('  claimLoadedSceneFile(file);',end);
+ const gate=html.lastIndexOf('  if (!sceneLoadRequests.isCurrent(loadRequestId)) return;',call);
+ assert.ok(gate> end&&call>gate);
+ for(const current of [true,false]){
+  const c=vm.createContext({currentSceneFile:'A.kaminos.json',file:{name:'B.kaminos.json'},loadRequestId:2,
+   sceneLoadRequests:{isCurrent:()=>current},savedSceneLocation,URL,URLSearchParams,
+   location:{href:'http://localhost/index.html?workspace=workbench#scene=A.kaminos.json&extra=kept'},
+   history:{replaceState(_state,_title,url){c.location.href=url;}}});
+  vm.runInContext(claim,c);vm.runInContext('(function(){'+html.slice(gate,call+'  claimLoadedSceneFile(file);'.length)+'})()',c);
+  assert.equal(c.currentSceneFile,current?'B.kaminos.json':'A.kaminos.json');
+  assert.equal(new URLSearchParams(new URL(c.location.href).hash.slice(1)).get('scene'),current?'B.kaminos.json':'A.kaminos.json');
+ }
+});
+
+test('canonical stale-recipe recovery carries explicit Workbench through the actual preset forwarder',async()=>{
+ const {forwardCompositionHash}=await import('../scene-authoring.mjs');
+ let recovery;const search='?workspace=workbench&settings_preset=vsp-'+ 'b'.repeat(64);
+ vm.runInNewContext('(function(){'+code+'})()',{plan:{composition:comp},sceneFile:'tuned.kaminos.json',compositionRestoreUrl,URLSearchParams,setInfo(){},location:{origin:'http://localhost',search,replace:url=>recovery=url}});
+ assert.equal(new URL(recovery).searchParams.get('workspace'),'workbench');
+ const wrapper=readFileSync(new URL('../volume-settings-preset.html',import.meta.url),'utf8');
+ const match=wrapper.match(/location.replace\((forwardCompositionHash\(target, location.hash[^;]+)\);/);assert.ok(match);
+ const destination=new URL(recovery);
+ const forwarded=vm.runInNewContext(match[1],{forwardCompositionHash,target:'http://localhost/index.html?settings_preset='+comp.flame.presetId,location:{hash:destination.hash,search:destination.search}});
+ assert.equal(new URL(forwarded).searchParams.get('workspace'),'workbench');
+ assert.equal(new URLSearchParams(new URL(forwarded).hash.slice(1)).get('scene'),'tuned.kaminos.json');
+});
