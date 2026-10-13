@@ -27,7 +27,9 @@ async function dispose(){if(!active)return;await active.device.queue.onSubmitted
 async function rebuild(){
   if(rebuilding)return;rebuilding=true;$('apply').disabled=true;
   try{
-    await inFlight;await dispose();generation++;paused=false;$('pause').textContent='Pause';$('error').textContent='';
+    // loop already records the failed step; restart must await settlement,
+    // not replay its rejection before it can dispose the failed generation.
+    await inFlight.catch(()=>{});await dispose();generation++;paused=false;$('pause').textContent='Pause';$('error').textContent='';
     const F=Number($('fine').value),N=Number($('coarse').value),E=2,H=2*E/N,roof=$('roof').checked;
     Object.assign(evidence,{phase:'initializing',generation,steps:0,fine:[F,F,F],coarse:[N,2*N,N],roof,gpuErrors:[],error:null,pressure:null});status();
     const c={resolution:F,gridHeightRatio:1,domainShape:'cube',emitterSourceLaw:'immersed-source',pressureSolver:'converged-open-top',projection:1,pressureSolverIterations:32,

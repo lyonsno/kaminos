@@ -15,25 +15,27 @@ const save=()=>writeFileSync(join(out,'report.json'),JSON.stringify(report,null,
 let server,child,ws,serial=0;const pending=new Map();
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const hash=p=>createHash('sha256').update(readFileSync(p)).digest('hex');
-const call=(method,params={})=>new Promise((resolve,reject)=>{const id=++serial;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));});
+const call=(method,params={})=>new Promise((resolve,reject)=>{if(ws?.readyState!==WebSocket.OPEN){reject(Error('owned CDP is not open'));return;}const id=++serial;pending.set(id,{resolve,reject});try{ws.send(JSON.stringify({id,method,params}));}catch(error){pending.delete(id);reject(error);}});
 async function evaluate(expression){const r=await call('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value;}
 try{
   assert(['material','pressure','pressure-sequence','preview','preview-smoke'].includes(witness),'unknown witness');
   const preview=witness.startsWith('preview'),interactive=witness==='preview';
   const pressureWitness=witness.startsWith('pressure');
   assert(Number.isInteger(Number(warmBudget))&&Number(warmBudget)>0,'invalid warm iteration budget');
-  assert((witness==='pressure-sequence'?['','stale-generation']:pressureWitness?['','no-scatter']:['','stale-generation','missing-control']).includes(fault),'unknown fault');
+  assert((preview?['','missing-import']:witness==='pressure-sequence'?['','stale-generation']:pressureWitness?['','no-scatter']:['','stale-generation','missing-control']).includes(fault),'unknown fault');
   const entry=`tools/joined-${pressureWitness?'pressure':'material'}-consumer-browser.mjs`;
   report.sources=Object.fromEntries([['fine',fine],['outer',outer]].map(([k,p])=>[k,{root:p,commit:execFileSync('git',['rev-parse','HEAD'],{cwd:p,encoding:'utf8'}).trim(),dirty:execFileSync('git',['status','--porcelain'],{cwd:p,encoding:'utf8'}),hashes:Object.fromEntries((preview?[]:k==='fine'?['volume-core.js','volume-reactant-combustion.mjs','tools/joined-material-consumer-browser.mjs','tools/joined-material-consumer-capture.mjs']:['volume-outer-smoke.mjs','volume-passive-material.mjs']).map(f=>[f,hash(join(p,f))]))}]));
   report.sources.fine.hashes[entry]=hash(join(fine,entry));
+  if(preview)for(const file of ['tools/joined-material-consumer-capture.mjs','tools/joined-preview-contract.mjs','tools/joined-flame-preview.html'])report.sources.fine.hashes[file]=hash(join(fine,file));
   if(pressureWitness)for(const f of ['volume-composite-grid.mjs','volume-composite-storage.mjs','volume-composite-storage-gpu.mjs','volume-composite-producer.mjs','volume-composite-producer-gpu.mjs','volume-composite-pcg-gpu.mjs'])report.sources.outer.hashes[f]=hash(join(outer,f));
   const executable=interactive?null:realpathSync(browserArg);if(!interactive)assert(/Google Chrome for Testing|chromium|headless.shell/i.test(executable),'independent headless browser required');report.browser.executable=executable;
   server=createServer((req,res)=>{try{const path=decodeURIComponent(new URL(req.url,'http://localhost').pathname);res.setHeader('Cache-Control','no-store');if(path==='/checkpoint'){let b='';req.on('data',c=>b+=c);req.on('end',()=>{try{report.lastCheckpoint=JSON.parse(b);save();res.end('ok');}catch{res.statusCode=400;res.end('bad checkpoint');}});return;}if(path==='/'){res.setHeader('Content-Type','text/html');res.end('<div id="viewport" style="width:256px;height:256px"></div><script>window.loadErrors=[];window.addEventListener("error",e=>loadErrors.push(e.message));window.addEventListener("unhandledrejection",e=>loadErrors.push(String(e.reason)));</script><script type="module" src="/fine/tools/joined-material-consumer-browser.mjs"></script>');return;}const base=path.startsWith('/fine/')?fine:path.startsWith('/outer/')?outer:null;assert(base,'unknown route');const file=resolve(base,path.slice(path.indexOf('/',1)+1));assert(file.startsWith(base+'/'),'outside source');res.setHeader('Content-Type',({'.js':'text/javascript','.mjs':'text/javascript','.png':'image/png','.json':'application/json'})[extname(file)]||'application/octet-stream');res.end(readFileSync(file));}catch(e){res.statusCode=404;res.end(String(e));}});
   const serveSource=server.listeners('request')[0];server.removeAllListeners('request');
   server.on('request',(req,res)=>{
     const path=new URL(req.url,'http://localhost').pathname;
+    if(preview&&fault==='missing-import'&&path==='/fine/volume-core.js'){res.statusCode=404;res.end('intentional missing dependency');return;}
     if(preview&&path==='/'){res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type','text/html');res.end(readFileSync(join(fine,'tools/joined-flame-preview.html')));return;}
-    if(preview&&(path.startsWith('/fine/')||path.startsWith('/outer/'))){const key=path.startsWith('/fine/')?'fine':'outer',relative=path.slice(key.length+2),file=resolve(report.sources[key].root,relative);if(file.startsWith(report.sources[key].root+'/')&&existsSync(file)){report.sources[key].hashes[relative]=hash(file);save();}}
+    if(preview&&(path.startsWith('/fine/')||path.startsWith('/outer/'))){const key=path.startsWith('/fine/')?'fine':'outer',relative=path.slice(key.length+2),file=resolve(report.sources[key].root,relative);if(file.startsWith(report.sources[key].root+'/')&&existsSync(file)){report.sources[key].hashes[relative]??=hash(file);save();}}
     if(path==='/'&&pressureWitness){res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type','text/html');res.end(`<div id="viewport" style="width:256px;height:256px"></div><script>window.loadErrors=[];window.addEventListener('error',e=>loadErrors.push(e.message));window.addEventListener('unhandledrejection',e=>loadErrors.push(String(e.reason)));</script><script type="module" src="/fine/${entry}"></script>`);return;}
     if(!path.startsWith('/raw/'))return serveSource(req,res);
     const name=path.slice(5);

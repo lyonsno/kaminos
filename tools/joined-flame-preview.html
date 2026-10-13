@@ -12,4 +12,16 @@
 <label>Smoke extinction <input id="extinction" type="range" min="0" max="10" step=".01" value=".5"></label>
 <label>Exposure EV <input id="exposure" type="range" min="-4" max="4" step=".05" value="-1"></label>
 <pre id="status">Loading actual GPU route…</pre><pre id="error"></pre></aside><div id="viewport"></div></main>
+<script>
+// Static dependency failures happen before the module body can install listeners.
+function previewBootstrapFailure(event) {
+  if (window.joinedPreview) return;
+  const error=String(event.message || event.reason || event.target?.src || 'module dependency failed');
+  window.joinedPreview={phase:'failed',failurePhase:'module-load',error};
+  document.getElementById('error').textContent=error;
+  fetch('/checkpoint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(window.joinedPreview)}).catch(()=>{});
+}
+window.addEventListener('error',previewBootstrapFailure,true);
+window.addEventListener('unhandledrejection',previewBootstrapFailure);
+</script>
 <script type="module" src="/fine/tools/joined-flame-preview-browser.mjs"></script>
