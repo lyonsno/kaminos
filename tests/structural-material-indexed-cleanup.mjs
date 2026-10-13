@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const source=fs.readFileSync(new URL('../structural-material-shard-view.js',import.meta.url),'utf8'),calls=[],backend=new Map([['index',{destroy(){calls.push('index buffer');}}]]),cleanup=[];
+const piece={mesh:{geometry:{dispose(){assert.ok(backend.has('index'),'Rendered geometry must release its registered index before backend ownership is removed');backend.get('index').destroy();calls.push('geometry');}}},exposure:{dispose(){backend.delete('index');calls.push('exposure');}},gpu:{dispose(){calls.push('surface');}}};
+const disposal=source.slice(source.indexOf('api.dispose=()=>'),source.indexOf(' if(host){unsubscribeFrames=')),schedule=disposal.match(/for\(const p of pieces\)cleanup\.push\([^;]+;/)[0];
+vm.runInNewContext(schedule,{pieces:[piece],cleanup});
+for(const action of cleanup)action();
+assert.deepEqual(calls,['index buffer','geometry','exposure','surface']);
+console.log('Indexed geometry releases registered attributes before their backend mappings disappear');

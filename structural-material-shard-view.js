@@ -87,7 +87,7 @@ async function makeBoundedMesh(){
  try{deformPiece(candidate,positions(observed));candidate.gpu=await createGpuBoundedSurface(renderer,resident,piece.binding,piece.geometry.indices,[skinMaterial,capMaterial],{connectionBuffer:residentSupport?.buffer??resident.bondBuffer(),indexed:exposedFaces,faceGeometry:piece.geometry,changeBuffer:coherentGrains?residentGrip.changeBuffer:null});mesh.material=candidate.gpu.materials;candidate.gpu.captureState();
   if(exposedFaces){candidate.exposure=await createGpuExposedFaces(renderer,piece,geometry,{ownershipBuffer:candidate.gpu.ownershipBuffer,faceBuffer:candidate.gpu.faceBuffer,connectionBuffer:residentSupport?.buffer??resident.bondBuffer(),changeBuffer:residentGrip.changeBuffer});mesh.onBeforeRender=(_renderer,_scene,_camera,g,_material,group)=>{g.indirectOffset=(group?.materialIndex??0)*20;};candidate.exposure.update();}
  }catch(e){candidate.exposure?.dispose();candidate.gpu?.dispose();geometry.dispose();throw e;}
- for(const p of pieces){scene.remove(p.mesh);p.exposure?.dispose();p.gpu?.dispose();p.mesh.geometry.dispose();}pieces=[candidate];scene.add(mesh);
+ for(const p of pieces){scene.remove(p.mesh);p.mesh.geometry.dispose();p.exposure?.dispose();p.gpu?.dispose();}pieces=[candidate];scene.add(mesh);
  if(fallAndLand){residentContact=await createFinitePlaneContact(resident,piece.binding,{ownershipBuffer:candidate.gpu.ownershipBuffer,connectionBuffer:residentSupport?.buffer??resident.bondBuffer(),changeBuffer:coherentGrains?residentGrip.changeBuffer:null});applyFloorContact();await resident.enableFiniteFloor(true);}
 }
 function applyFloorContact(){
@@ -260,7 +260,7 @@ try{
    const errors=[],attempt=async(phase,action)=>{try{await action();}catch(error){errors.push(error);status.errors.push({phase,message:error.message});}};
    await attempt('pending-pick',()=>pickTask);await attempt('settle',()=>settle());await attempt('release',()=>resident?.release());await attempt('completion',()=>device?.queue.onSubmittedWorkDone());
    const drainErrors=errors.length,cleanup=[];
-   for(const p of pieces)cleanup.push(()=>p.exposure?.dispose(),()=>p.gpu?.dispose(),()=>p.mesh.geometry.dispose());
+   for(const p of pieces)cleanup.push(()=>p.mesh.geometry.dispose(),()=>p.exposure?.dispose(),()=>p.gpu?.dispose());
    cleanup.push(()=>residentContact?.dispose(),()=>residentGrip?.dispose(),()=>residentSupport?.dispose(),()=>resident?.dispose(),()=>surface?.dispose());
    for(const object of [support,marker,arrow,...(ground?[ground]:[])])cleanup.push(()=>object.geometry.dispose(),()=>object.material.dispose());
    if(ground)cleanup.push(()=>container.remove(ground));
@@ -273,7 +273,7 @@ try{
  }return disposal;};
  if(host){unsubscribeFrames=host.subscribeFrame({before:frame,after:presented});if(typeof unsubscribeFrames!=='function')throw Error('Host frame subscription must return an unsubscribe function');}else draw();
  return api;
-}catch(e){closing=true;lifetime.abort();unsubscribeFrames?.();fail(e);container.remove(scene);if(ground)container.remove(ground);residentContact?.dispose();for(const p of pieces){p.exposure?.dispose();p.gpu?.dispose();p.mesh.geometry.dispose();}residentGrip?.dispose();residentSupport?.dispose();resident?.dispose();surface?.dispose();for(const object of [support,marker,arrow,...(ground?[ground]:[])]){object.geometry.dispose();object.material.dispose();}capMaterial.dispose();disposeStoneAssets(assets);controls.enabled=previousControlsEnabled;if(!host){controls.dispose();renderer.dispose();device?.destroy();}throw e;}
+}catch(e){closing=true;lifetime.abort();unsubscribeFrames?.();fail(e);container.remove(scene);if(ground)container.remove(ground);residentContact?.dispose();for(const p of pieces){p.mesh.geometry.dispose();p.exposure?.dispose();p.gpu?.dispose();}residentGrip?.dispose();residentSupport?.dispose();resident?.dispose();surface?.dispose();for(const object of [support,marker,arrow,...(ground?[ground]:[])]){object.geometry.dispose();object.material.dispose();}capMaterial.dispose();disposeStoneAssets(assets);controls.enabled=previousControlsEnabled;if(!host){controls.dispose();renderer.dispose();device?.destroy();}throw e;}
 }
 
 if(typeof location!=='undefined'&&location.pathname.endsWith('/structural-material-shard.html'))createStoneRuntime().catch(()=>{});
