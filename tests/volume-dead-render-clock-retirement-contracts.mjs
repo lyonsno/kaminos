@@ -22,8 +22,8 @@ function assertDeadRenderClockRetired(source) {
   );
   assert.match(
     updateUniforms,
-    /uniforms\[47\]\s*=\s*0\s*;/,
-    'the reserved render-control component must upload explicit zero authority',
+    /uniforms\[47\]\s*=\s*controlsSnapshot\.rayStartNoise === false \? 0 : 1\s*;/,
+    'the reused render-control component must carry only the authored spatial-noise flag',
   );
   assert.doesNotMatch(
     updateUniforms,
@@ -63,12 +63,12 @@ assert.throws(
 );
 
 const restoredFrameSawtooth = core.replace(
-  'uniforms[47] = 0;',
+  'uniforms[47] = controlsSnapshot.rayStartNoise === false ? 0 : 1;',
   'uniforms[47] = renderPhaseFrame % 4096;',
 );
 assert.throws(
   () => assertDeadRenderClockRetired(restoredFrameSawtooth),
-  /must upload explicit zero authority|must not retain an unused repeating frame sawtooth/,
+  /must carry only the authored spatial-noise flag|must not retain an unused repeating frame sawtooth/,
   'the retirement barrier rejects restoration of the unused repeating frame sawtooth',
 );
 

@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { displayEmissiveRGB, EMISSIVE_TRANSPORT_WGSL } from '../volume-emissive-transport.mjs';
