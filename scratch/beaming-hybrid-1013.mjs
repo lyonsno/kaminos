@@ -88,7 +88,7 @@ try {
   const error=await device.popErrorScope();if(error)throw Error(error.message);device.destroy();
   return {adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,device:adapter.info.device,description:adapter.info.description},actual,expected,triangle,transformedForest,validationErrors:0};
  });await write();
- const route=url=>{const u=new URL(url),h=new URLSearchParams(u.hash.slice(1));for(const[k,v]of Object.entries({volume_light_field_hybrid:'1',hybrid_smoke_refinement:String(smokeRefinement),rendering_angular_pattern:'guided',rendering_directions:'8',rendering_match_camera:'1'}))h.set(k,v);u.hash=h.toString();return u.href;};
+ const route=url=>{const u=new URL(url),h=new URLSearchParams(u.hash.slice(1));for(const[k,v]of Object.entries({volume_light_field_hybrid:'1',volume_light_field_hybrid_smoke_refinement:String(smokeRefinement),rendering_angular_pattern:'guided',rendering_directions:'8',rendering_match_camera:'1'}))h.set(k,v);u.hash=h.toString();return u.href;};
  report.phase='scene-consumer';await write();
  const result=await visualWork({page,origin,repoRoot:process.cwd(),sceneFile:'input.kaminos.json',out,exercise:async({document,retain})=>{
   const url=route(compositionRestoreUrl(document.composition,'input.kaminos.json',origin));await page.goto('about:blank');await page.goto(url);
