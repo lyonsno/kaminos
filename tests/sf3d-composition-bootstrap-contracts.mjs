@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {sharedDeviceHostRequirements} from '../authoring-image-generation.mjs';
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const start = source.indexOf('async function initScene()');
 const setupEnd = source.indexOf('  if (samHostConfig?.mounted) {\n    const { createWebGpuDeviceRequest', start);
 assert.ok(start >= 0 && setupEnd > start, 'host bootstrap through shared-device acquisition is present');
 const setup = source.slice(start, setupEnd);
 const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
-const execute = new AsyncFunction('window', 'requestKaminosSharedWebGpuDevice', 'importCompositionModule', 'console', 'fetch', 'samHostDeviceRequirements', `
+const run = new AsyncFunction('window', 'requestKaminosSharedWebGpuDevice', 'importCompositionModule', 'console', 'fetch', 'samHostDeviceRequirements', 'sharedDeviceHostRequirements', `
   const location=window.location;
   let sharedGpu, sharedGpuFailureReason, compositionModule, compositionSetupError, scene, camera, cameraProjectionBase, sceneCameras = null, samHostConfig = null;
   const initializeHybridSplatOverlayModuleUrl = async () => {};
@@ -17,6 +18,11 @@ const execute = new AsyncFunction('window', 'requestKaminosSharedWebGpuDevice', 
   }
   return initScene();
 `);
+const execute = (window, acquire, load, console, fetch, sam) => run(window, acquire, load, console, fetch, sam, sharedDeviceHostRequirements);
+// Optional hosts (SAM when mounted, klein when the adapter has f16) compose into one
+// callback that always yields an object; checked by calling it with an adapter.
+const noF16 = {features: new Set(), limits: {}};
+const composed = async options => typeof options.hostRequirements === 'function' ? options.hostRequirements(noF16) : options.hostRequirements;
 const requirements = {maxBufferSize: 905969664, maxStorageBufferBindingSize: 905969664};
 const module = {sharedGpuBufferRequirements: requirements, mountComposition() {}};
 let events = [];
@@ -47,15 +53,15 @@ const ordinary = await execute({location: {hash: ''}}, acquire, load, {warn() {}
 assert.equal(events.length, 1);
 assert.equal(events[0][0], 'acquire');
 assert.deepEqual(events[0][1].bufferRequirements, {});
-assert.equal(events[0][1].hostRequirements, null);
+assert.deepEqual(await composed(events[0][1]), {}, 'no optional host contributes: an empty object, so the shared device is still acquired');
 // A mounted SAM host composes its kit requirements into the same acquisition
 // instead of creating a second device for the renderer.
 events = [];
-const samRequirements = async () => ({requiredFeatures: [], requiredLimits: {}});
+const samRequirements = async () => ({requiredFeatures: ['timestamp-query'], requiredLimits: {maxBufferSize: 1}});
 const samFetch = async () => ({ok: true, json: async () => ({sam3: {mounted: true}})});
 await execute({location: {hash: ''}}, acquire, load, {warn() {}}, samFetch, samRequirements);
 assert.equal(events.length, 1);
-assert.equal(events[0][1].hostRequirements, samRequirements, 'SAM requirements join the shared acquisition');
+assert.deepEqual(await composed(events[0][1]), {requiredFeatures: ['timestamp-query'], requiredLimits: {maxBufferSize: 1}}, 'SAM requirements join the shared acquisition');
 assert.equal(ordinary.sharedGpu, sharedGpu);
 const fallback = await execute({location: {hash: ''}}, async () => {throw new Error('no shared device');}, load, {warn() {}});
 assert.equal(fallback.sharedGpu, null, 'ordinary host keeps its existing fallback');
