@@ -3,15 +3,15 @@ import {viewportShortcut} from './viewport-display-settings.mjs';
 // One live set of controls, projected into two workspaces. Slots retain node,
 // listener, and value identity; no second scene model or simulation lifecycle.
 export function createControlSlots(document, entries) {
-  const slots = entries.map(({ node, destination }) => {
+  const slots = entries.map(({ node, destination, workbenchDestination = null }) => {
     if (!node || !destination) throw new Error('Workspace control or destination is missing');
     const marker = document.createComment(`workspace:${node.id || node.tagName}`);
     node.before(marker);
-    return { node, destination, marker };
+    return { node, destination, workbenchDestination, marker };
   });
   return {
     showAuthoring() { for (const { node, destination } of slots) destination.append(node); },
-    showWorkbench() { for (const { node, marker } of slots) marker.after(node); },
+    showWorkbench() { for (const { node, marker, workbenchDestination } of slots) { if (workbenchDestination) workbenchDestination.append(node); else marker.after(node); } },
   };
 }
 
@@ -67,7 +67,8 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   byId('scene-fire-data').onclick=()=>document.defaultView.selectSceneField('flame-field');
   byId('scene-water-data').onclick=()=>document.defaultView.selectSceneField('water-field');
   const entries = [];
-  const move = (node, destination) => entries.push({ node, destination: byId(destination) });
+  const move = (node, destination) => entries.push({ node, destination: byId(destination),
+    workbenchDestination: destination === 'authoring-document-actions' ? byId(destination) : null });
   move(byId('scene-object-list').closest('.panel'), 'authoring-tree');
   move(byId('transform-inspector'), 'authoring-transform-slot');
   move(byId('selected-light-properties'), 'authoring-type-slot');
