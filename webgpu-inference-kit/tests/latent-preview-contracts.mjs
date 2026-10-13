@@ -22,9 +22,23 @@ assert.equal(typeof projectLatentPreview, 'function', 'the kit must expose the C
   ]);
 }
 
+// A 3 x 3 map reads each pixel's neighbourhood (rows [ky][kx][channel][rgb], edges clamped). Here only
+// the right-hand neighbour (ky 1, kx 2) feeds red, so red shows the image shifted one pixel left.
+{
+  const channels = 1, width = 3, height = 1;
+  const weights = new Array(9 * channels * 3).fill(0);
+  weights[(1 * 3 + 2) * channels * 3 + 0] = 1;
+  const latent = new Float32Array([-1, 0, 1]);
+  const rgba = projectLatentPreview({ latent, channels, weights, bias: [0, 0, 0], pixels: 3, kernel: 3, width, height });
+  assert.deepEqual([0, 4, 8].map(i => rgba[i]), [128, 255, 255], 'red = right neighbour, clamped at the right edge');
+  assert.throws(() => projectLatentPreview({ latent, channels, weights: [1, 0, 0], bias: [0, 0, 0], pixels: 3, kernel: 3, width, height }),
+    /weights must hold kernel \* kernel \* channels \* 3/);
+  assert.match(latentPreviewShader(), /p\.kernel/);
+}
+
 // Shape validation fails loud instead of producing a wrong map.
 await assert.rejects(() => createWebGpuLatentPreview({ device: fakeDevice().device, channels: 2, weights: [1, 2, 3], bias: [0, 0, 0], maxPixels: 4 }),
-  /weights must hold channels \* 3/);
+  /weights must hold kernel \* kernel \* channels \* 3/);
 await assert.rejects(() => createWebGpuLatentPreview({ device: fakeDevice().device, channels: 2, weights: [1, 0, 0, 0, 1, 0], bias: [0, 0], maxPixels: 4 }),
   /bias must hold 3/);
 await assert.rejects(() => createWebGpuLatentPreview({ device: fakeDevice().device, channels: 0, weights: [], bias: [0, 0, 0], maxPixels: 4 }),

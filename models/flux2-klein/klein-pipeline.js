@@ -11,7 +11,7 @@ import { QwenTokenizer } from './qwen-tokenizer.js';
 import { kleinSchedule, transformerTime } from './klein-schedule.js';
 import { KleinDutyScheduler } from './klein-duties.js';
 import { createWebGpuLatentPreview } from '../../webgpu-inference-kit/src/core.js';
-import { LATENT_PREVIEW_WEIGHTS, LATENT_PREVIEW_BIAS } from './klein-latent-preview.js';
+import { LATENT_PREVIEW_FIT, LATENT_PREVIEW_WEIGHTS, LATENT_PREVIEW_BIAS } from './klein-latent-preview.js';
 
 async function getJson(url) { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); }
 
@@ -191,7 +191,7 @@ export class KleinPipeline {
     await this.vae.load(vb); this.residentBytes.vae = vb.byteLength;
     // Live previews: decoder-space latents to RGB, up to 1024 x 1024 (128 x 128 latent pixels).
     this.preview = await createWebGpuLatentPreview({ device: this.device, channels: 32, weights: LATENT_PREVIEW_WEIGHTS,
-      bias: LATENT_PREVIEW_BIAS, maxPixels: 128 * 128 });
+      bias: LATENT_PREVIEW_BIAS, kernel: LATENT_PREVIEW_FIT.kernel ?? 1, maxPixels: 128 * 128 });
     await this.precompile();
     // Lean: the first generation needs the text encoder, so it takes the transformer's place now
     // (downloading it on a first visit).

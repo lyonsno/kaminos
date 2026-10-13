@@ -1287,7 +1287,7 @@ queue.submit([encoder.finish()]);
 take?.().then(({ width, height, rgba }) => paint(width, height, rgba));
 ```
 
-`take()` must be called after the encoder holding the preview is submitted; it resolves with RGBA bytes and frees its readback slot. When every slot is still being read, `encode()` returns `null` and that step's preview is skipped, so a slow page costs previews, never model time. `weights` (channels × 3, row-major) and `bias` (3) map a latent pixel to RGB in −1 to 1; fit them once per decoder by encoding real images and regressing them against the images averaged down to latent resolution, as `models/flux2-klein/fit-latent-preview.py` does for FLUX.2. `projectLatentPreview` is the CPU reference for parity checks.
+`take()` must be called after the encoder holding the preview is submitted; it resolves with RGBA bytes and frees its readback slot. When every slot is still being read, `encode()` returns `null` and that step's preview is skipped, so a slow page costs previews, never model time. `weights` (channels × 3, row-major) and `bias` (3) map a latent pixel to RGB in −1 to 1; fit them once per decoder by encoding real images and regressing them against the images averaged down to latent resolution, as `models/flux2-klein/fit-latent-preview.py` does for FLUX.2. Pass `kernel: 3` with weights fitted over each pixel's 3 × 3 latent neighbourhood (row-major `[ky][kx][channel][rgb]`, edges clamped) to let the map cancel the detail channels a per-pixel map turns into speckle. `projectLatentPreview` is the CPU reference for parity checks.
 
 ## Background Inference Queue
 

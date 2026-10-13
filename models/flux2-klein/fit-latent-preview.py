@@ -17,8 +17,9 @@ from diffusers import AutoencoderKLFlux2
 ap = argparse.ArgumentParser()
 ap.add_argument('--model-dir', required=True)
 ap.add_argument('--images', nargs='+', required=True, help='glob patterns')
-ap.add_argument('--exclude', nargs='*', default=['q1', 'desktop', 'mobile', 'screenshot', 'contact', 'sheet', 'grid', '-vs-'],
-                help='skip paths containing any of these (1-bit flat colour, page screenshots, composites)')
+ap.add_argument('--exclude', nargs='*', default=['q1', 'desktop', 'mobile', 'screenshot', 'contact', 'sheet', 'grid', 'strip', '-vs-', 'preview'],
+                help='skip paths containing any of these (1-bit flat colour, page screenshots, composites, live previews)')
+ap.add_argument('--min-size', type=int, default=256, help='skip images smaller than this on either side')
 ap.add_argument('--ridge', type=float, default=1e-3)
 ap.add_argument('--max-images', type=int, default=80, help='evenly spaced sample of the distinct images')
 ap.add_argument('--kernel', type=int, default=1, choices=[1, 3], help='latent neighbourhood each RGB pixel reads (edges clamp)')
@@ -29,6 +30,8 @@ paths, seen = [], set()
 for pattern in args.images:
     for p in sorted(glob.glob(pattern, recursive=True)):
         if any(x in p for x in args.exclude): continue
+        with Image.open(p) as probe:
+            if min(probe.size) < args.min_size: continue
         digest = hashlib.sha256(open(p, 'rb').read()).hexdigest()
         if digest in seen: continue
         seen.add(digest); paths.append(p)

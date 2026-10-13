@@ -7,10 +7,12 @@
 // resolves with { width, height, rgba }. When every readback slot is still being read, encode()
 // skips the preview and returns null, so a slow consumer costs previews, never model time.
 // The weights are fitted per decoder (rgb = z . W + b with rgb in -1..1); for FLUX.2 see
-// models/flux2-klein/fit-latent-preview.py.
+// models/flux2-klein/fit-latent-preview.py. kernel 3 reads each pixel's 3 x 3 neighbourhood (edges
+// clamped), which lets the map cancel detail channels a per-pixel map turns into speckle; its
+// weights are row-major [ky][kx][channel][rgb].
 
 export function latentPreviewShader() {
-  return `struct P { pixels: u32, channels: u32, z0: u32, z1: u32 };
+  return `struct P { pixels: u32, channels: u32, kernel: u32, width: u32, height: u32, z0: u32, z1: u32, z2: u32 };
 @group(0) @binding(0) var<storage, read> z: array<f32>;
 @group(0) @binding(1) var<storage, read> m: array<f32>;
 @group(0) @binding(2) var<storage, read_write> out: array<u32>;
@@ -18,31 +20,45 @@ export function latentPreviewShader() {
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let i = gid.x; if (i >= p.pixels) { return; }
-  let C = p.channels;
-  var rgb = vec3<f32>(m[C * 3u], m[C * 3u + 1u], m[C * 3u + 2u]);
-  for (var c = 0u; c < C; c++) {
-    let v = z[i * C + c];
-    rgb += v * vec3<f32>(m[c * 3u], m[c * 3u + 1u], m[c * 3u + 2u]);
+  let C = p.channels; let K = p.kernel; let taps = K * K;
+  var rgb = vec3<f32>(m[taps * C * 3u], m[taps * C * 3u + 1u], m[taps * C * 3u + 2u]);
+  let x = i32(i % p.width); let y = i32(i / p.width); let r = i32(K / 2u);
+  for (var t = 0u; t < taps; t++) {
+    let sx = u32(clamp(x + i32(t % K) - r, 0, i32(p.width) - 1));
+    let sy = u32(clamp(y + i32(t / K) - r, 0, i32(p.height) - 1));
+    let src = (sy * p.width + sx) * C;
+    for (var c = 0u; c < C; c++) {
+      let w = (t * C + c) * 3u;
+      rgb += z[src + c] * vec3<f32>(m[w], m[w + 1u], m[w + 2u]);
+    }
   }
   out[i] = pack4x8unorm(vec4<f32>(clamp(rgb * 0.5 + 0.5, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0));
 }`;
 }
 
-function validate({ channels, weights, bias }) {
+function validate({ channels, weights, bias, kernel = 1 }) {
   if (!Number.isInteger(channels) || channels < 1) throw new Error('latent preview channels must be a positive integer');
-  if (weights?.length !== channels * 3) throw new Error(`latent preview weights must hold channels * 3 = ${channels * 3} values`);
+  if (kernel !== 1 && kernel !== 3) throw new Error('latent preview kernel must be 1 or 3');
+  if (weights?.length !== kernel * kernel * channels * 3) {
+    throw new Error(`latent preview weights must hold kernel * kernel * channels * 3 = ${kernel * kernel * channels * 3} values`);
+  }
   if (bias?.length !== 3) throw new Error('latent preview bias must hold 3 values');
 }
 
 // CPU reference of the shader, for parity checks and tests.
-export function projectLatentPreview({ latent, channels, weights, bias, pixels }) {
-  validate({ channels, weights, bias });
+export function projectLatentPreview({ latent, channels, weights, bias, pixels, kernel = 1, width = pixels, height = 1 }) {
+  validate({ channels, weights, bias, kernel });
   const rgba = new Uint8ClampedArray(pixels * 4);
   const unorm = v => Math.floor(0.5 + 255 * Math.min(1, Math.max(0, v * 0.5 + 0.5)));
+  const r = Math.floor(kernel / 2), clamp = (v, hi) => Math.min(hi, Math.max(0, v));
   for (let i = 0; i < pixels; i++) {
+    const x = i % width, y = Math.floor(i / width);
     for (let k = 0; k < 3; k++) {
       let v = bias[k];
-      for (let c = 0; c < channels; c++) v += latent[i * channels + c] * weights[c * 3 + k];
+      for (let t = 0; t < kernel * kernel; t++) {
+        const src = (clamp(y + Math.floor(t / kernel) - r, height - 1) * width + clamp(x + (t % kernel) - r, width - 1)) * channels;
+        for (let c = 0; c < channels; c++) v += latent[src + c] * weights[(t * channels + c) * 3 + k];
+      }
       rgba[i * 4 + k] = unorm(Math.fround(v));
     }
     rgba[i * 4 + 3] = 255;
@@ -50,16 +66,16 @@ export function projectLatentPreview({ latent, channels, weights, bias, pixels }
   return rgba;
 }
 
-export async function createWebGpuLatentPreview({ device, channels, weights, bias, maxPixels, slots = 2 }) {
-  validate({ channels, weights, bias });
+export async function createWebGpuLatentPreview({ device, channels, weights, bias, maxPixels, kernel = 1, slots = 2 }) {
+  validate({ channels, weights, bias, kernel });
   if (!Number.isInteger(maxPixels) || maxPixels < 1) throw new Error('latent preview maxPixels must be a positive integer');
   const usage = globalThis.GPUBufferUsage ?? { STORAGE: 0x80, UNIFORM: 0x40, COPY_SRC: 0x4, COPY_DST: 0x8, MAP_READ: 0x1 };
   const mapRead = globalThis.GPUMapMode?.READ ?? 1;
   const pipeline = await device.createComputePipelineAsync({ layout: 'auto',
     compute: { module: device.createShaderModule({ code: latentPreviewShader() }), entryPoint: 'main' } });
-  const matrix = device.createBuffer({ size: (channels * 3 + 3) * 4, usage: usage.STORAGE | usage.COPY_DST });
+  const matrix = device.createBuffer({ size: (weights.length + 3) * 4, usage: usage.STORAGE | usage.COPY_DST });
   device.queue.writeBuffer(matrix, 0, new Float32Array([...weights, ...bias]));
-  const uniform = device.createBuffer({ size: 16, usage: usage.UNIFORM | usage.COPY_DST });
+  const uniform = device.createBuffer({ size: 32, usage: usage.UNIFORM | usage.COPY_DST });
   const out = device.createBuffer({ size: maxPixels * 4, usage: usage.STORAGE | usage.COPY_SRC });
   const pool = Array.from({ length: slots }, () => ({ buffer: device.createBuffer({ size: maxPixels * 4, usage: usage.MAP_READ | usage.COPY_DST }), busy: false }));
 
@@ -69,7 +85,7 @@ export async function createWebGpuLatentPreview({ device, channels, weights, bia
     const slot = pool.find(s => !s.busy);
     if (!slot) return null;
     slot.busy = true;
-    device.queue.writeBuffer(uniform, 0, new Uint32Array([pixels, channels, 0, 0]));
+    device.queue.writeBuffer(uniform, 0, new Uint32Array([pixels, channels, kernel, width, height, 0, 0, 0]));
     const bind = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [
       { binding: 0, resource: { buffer: latent } }, { binding: 1, resource: { buffer: matrix } },
       { binding: 2, resource: { buffer: out } }, { binding: 3, resource: { buffer: uniform } }] });
@@ -89,5 +105,5 @@ export async function createWebGpuLatentPreview({ device, channels, weights, bia
   }
 
   function destroy() { for (const b of [matrix, uniform, out, ...pool.map(s => s.buffer)]) b.destroy(); }
-  return { encode, destroy, channels, maxPixels };
+  return { encode, destroy, channels, kernel, maxPixels };
 }
