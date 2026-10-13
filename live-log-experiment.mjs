@@ -38,7 +38,7 @@ export async function createLiveLogExperiment({host,inputs={},record}) {
       restores.push({mesh,original});mesh.material=Array.isArray(original)?converted:converted[0];
     }
     const consumer={device:context.device,encode(encoder,frame){
-      if(disposed||!membership()){running=false;runtime.setSimulationPaused(true);phase='unavailable';updateUI();return;}
+      if(disposed||!membership()){running=false;paused=true;runtime.setSimulationPaused(true);phase='unavailable';updateUI();return;}
       for(const field of fields)field.encode(encoder,frame);elapsed+=frame.dt;for(const binding of bindings)binding.update(elapsed);
       scene.dirty();
     },read:()=>({identity:LIVE_LOG_HEAT_IDENTITY,attempt,fields:fields.map(field=>field.read())})};
@@ -48,7 +48,7 @@ export async function createLiveLogExperiment({host,inputs={},record}) {
     const entry=scene.objects().find(entry=>entry.object===object);if(entry)scene.select(entry.id);scene.dirty();
     const operations={
       run(){assertActive();volume.burner(true);burner=true;running=true;paused=false;runtime.setSimulationPaused(false);phase='heating';emit('run',read());updateUI();return read();},
-      burnerOff(){assertActive();volume.burner(false);burner=false;phase=running?'cooling':'cold';emit('burner-off',read());updateUI();return read();},
+      burnerOff(){if(disposed)throw Error('Live log experiment disposed');volume.burner(false);burner=false;phase=running?'cooling':'cold';emit('burner-off',read());updateUI();return read();},
       pause(){assertActive();paused=!paused;runtime.setSimulationPaused(paused);emit('pause',read());updateUI();return read();},
       reset(){assertActive();runtime.setSimulationPaused(true);volume.burner(false);for(const field of fields)field.reset();
         const fluid=runtime.resetThermalExperimentFluid();elapsed=0;for(const binding of bindings)binding.update(0);burner=false;running=false;paused=true;phase='cold';attempt=crypto.randomUUID();emit('reset',{...read(),reset:fluid});updateUI();scene.dirty();return read();},

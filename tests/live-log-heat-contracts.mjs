@@ -46,6 +46,8 @@ test('cold start, shared operation reset and removal do not advance or leave GPU
   f.experiment.operations.move({position:[1,0,0]});assert.equal(f.experiment.read().fields[0].steps,1);
   f.experiment.operations.reset();assert.equal(f.experiment.read().status,'cold');assert.equal(f.experiment.read().fields[0].steps,0);assert.notEqual(f.experiment.read().attempt,attempt);
   f.experiment.operations.run();f.remove();f.step();assert.equal(f.read().paused,true);assert.equal(f.experiment.read().status,'unavailable');
+  assert.equal(f.experiment.read().paused,f.read().paused,'reported pause must match the missing-log runtime pause');
+  f.experiment.operations.burnerOff();assert.equal(f.read().burner,false);assert.equal(f.experiment.read().burner,false);
   assert.throws(()=>f.experiment.operations.run(),/removed/);f.experiment.dispose();f.experiment.dispose();assert.equal(f.read().disposed,1);assert.equal(f.read().active,false);
   assert.ok(f.events.some(e=>e.kind==='sinter.live-log.burner-off'&&e.phase==='applied'));
 });
