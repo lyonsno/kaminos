@@ -56,7 +56,7 @@ async function controller({examples=false,exampleFailure=false,generationAvailab
       if(value.schema!=='kaminos.material-photo-preset.v1'||!Number.isFinite(value.settings?.gain)||value.settings.gain<0)throw Error('Invalid preset gain');
       this.setTuning(value.settings);this.lightHandle=value.light;this.useGI=value.gi;this.glow=value.glow;
     }
-    setImage() { this.clear(); this.reset(); this.surface = { position: new Float32Array(12), indices: new Uint32Array(6) }; }
+    setImage(input,depth,cutout) { this.clear(); this.reset();this.cutout=cutout; this.surface = { position: new Float32Array(12), indices: new Uint32Array(6) }; }
     setMaterials() { this.maps = {}; }
     setMaterialStatus(value) { this.materialStatus=value; }
     async dispose() {}
@@ -80,6 +80,7 @@ async function controller({examples=false,exampleFailure=false,generationAvailab
   });
   const source = new vm.SourceTextModule(await readFile(new URL('./main.js',import.meta.url),'utf8'), { context });
   await source.link(async specifier => {
+    if(specifier==='./sample-cutouts.js')return new vm.SyntheticModule(['createSampleCutout'],function(){this.setExport('createSampleCutout',(sample,width,height)=>['orb','bag'].includes(sample)?{sample,width,height,source:'hand-authored-example-cutout'}:null);},{context});
     if(specifier==='./deployment.js')return new vm.SyntheticModule(['GENERATION_AVAILABLE'],function(){this.setExport('GENERATION_AVAILABLE',generationAvailable);},{context});
     if(specifier==='./included-examples.js')return new vm.SyntheticModule(['loadIncludedExample'],function(){
       this.setExport('loadIncludedExample',async(key,inputKey,size)=>{
@@ -117,6 +118,13 @@ test('arrival opens an included orb with no model loading or inference',async()=
   assert.equal(c.behavior.geometryRuns,0);assert.equal(c.behavior.materialRuns,0);
   assert.equal(c.behavior.profile,undefined);assert.ok(c.behavior.viewer.maps);
   assert.match(c.elements.provenance.textContent,/Included example/);
+});
+test('example cutouts follow image selection without entering model input or leaking to another sample',async()=>{
+  const c=await controller({examples:true,search:''});
+  assert.equal(c.behavior.viewer.cutout.sample,'orb');
+  await c.actions.sample('bag');assert.equal(c.behavior.viewer.cutout.sample,'bag');
+  await c.actions.infer();assert.equal(c.behavior.inputPixel,2);assert.equal(c.behavior.viewer.cutout.sample,'bag');
+  await c.actions.sample('celebration');assert.equal(c.behavior.viewer.cutout,null);
 });
 
 test('public explorer keeps saved results playable without offering unavailable inference',async()=>{
