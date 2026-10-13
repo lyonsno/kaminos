@@ -1,5 +1,14 @@
 import {createStoneOwnerHost} from './structural-material-owner-host.mjs';
 
+export function stoneMaterialParameters(search){
+ const query=new URLSearchParams(search),mesh=query.get('stoneMesh')??'fine',fragments=query.get('stoneFragments')??'fine';
+ if(!['fine','coarse'].includes(mesh))throw Error('Stone granularity must be fine or coarse');
+ if(!['fine','grains'].includes(fragments))throw Error('Stone fragments must be fine or grains');
+ const parameters=new URLSearchParams({fracture:'bounded',connectivity:'elastic-support',inputs:mesh==='fine'?'./scratch/bounded-fine-inputs':'./scratch/shard-live-inputs',fragments});
+ if(query.has('stoneGrainScale'))parameters.set('grainScale',query.get('stoneGrainScale'));
+ return parameters;
+}
+
 function stoneControls(document){
  const node=document.createElement('section'),nodes=new Map();node.className='stone-experiment-controls';node.style.cssText='display:grid;gap:10px;min-width:0';
  const make=(tag,id)=>{const item=document.createElement(tag);nodes.set(id,item);return item;};
@@ -22,8 +31,7 @@ export function createStoneWorkbenchCapability(viewport,{createRuntime=async opt
   opening=true;let api;
   try{
   panel=stoneControls(viewport.document);
-  const parameters=new URLSearchParams({fracture:'bounded',connectivity:'elastic-support',inputs:'./scratch/bounded-fine-inputs'});
-  const query=new URLSearchParams(globalThis.location?.search??''),fragments=query.get('stoneFragments')??'fine';if(!['fine','grains'].includes(fragments))throw Error('Stone fragments must be fine or grains');parameters.set('fragments',fragments);if(query.has('stoneGrainScale'))parameters.set('grainScale',query.get('stoneGrainScale'));
+  const parameters=stoneMaterialParameters(globalThis.location?.search??'');
   api=await createRuntime({host:viewport,ui:panel,parameters,onInput:({kind,data,effective})=>record?.({kind:`stone.input.${kind}`,target:'stone',phase:'applied',requested:data,effective,actor:'producer-input'})});
   api.object.userData.kaminosExperiment={id:'stone/fracture',source:api.experimentStatus().sourceSha256};
   const owner=createStoneOwnerHost(api),handle=await owner.stone.open(inputs);
