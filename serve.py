@@ -1109,8 +1109,17 @@ def list_volume_cockpit_layouts(store_path, schema=None):
         active_layout_id = active.get("layoutId")
         active_content_hash = active.get("contentHash")
     entries = []
+    skipped = []
     for layout_path in layouts_dir.glob("*.json"):
-        artifact = read_volume_cockpit_layout(store, layout_path.stem, schema)
+        # One stale or corrupt record (for example a layout saved before one of
+        # its controls was removed) is skipped and named, not allowed to fail
+        # the whole index.
+        try:
+            artifact = read_volume_cockpit_layout(store, layout_path.stem, schema)
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            skipped.append({"layoutId": layout_path.stem, "layoutPath": str(layout_path), "error": str(error)})
+            print(f"volume cockpit layout index: skipped {layout_path}: {error}", file=sys.stderr)
+            continue
         entries.append({
             "layoutId": artifact["layoutId"],
             "label": artifact["layout"]["label"],
@@ -1120,18 +1129,28 @@ def list_volume_cockpit_layouts(store_path, schema=None):
             "retiredControlsStripped": (artifact.get("schemaProjection") or {}).get("retiredControlsStripped") or [],
         })
     entries.sort(key=lambda entry: (entry.get("writtenAt") or "", entry["layoutId"]), reverse=True)
+    skipped.sort(key=lambda entry: entry["layoutId"])
+    active_layout_skipped = next((entry for entry in skipped if entry["layoutId"] == active_layout_id), None)
+    if active_layout_skipped:
+        active_layout_id = None
     if active_layout_id and active_layout_id not in {entry["layoutId"] for entry in entries}:
         raise ValueError("volume cockpit layout active pointer names a missing layout")
     if active_layout_id:
         active_entry = next(entry for entry in entries if entry["layoutId"] == active_layout_id)
         if active_entry["contentHash"] != active_content_hash:
             raise ValueError("volume cockpit layout active pointer content hash mismatch")
-    return {
+    index = {
         "identity": "kaminos.volume.cockpit-layout-index.v1",
         "storePath": str(store),
         "activeLayoutId": active_layout_id,
         "entries": entries,
     }
+    # Present only when a record was skipped, so a clean store's index is unchanged.
+    if skipped:
+        index["skipped"] = skipped
+    if active_layout_skipped:
+        index["activeLayoutSkipped"] = active_layout_skipped
+    return index
 
 
 def _volume_settings_alias_for_label(store, label):

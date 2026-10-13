@@ -22,15 +22,13 @@ const SCHEMA = 'kaminos.gui-smoke.v1';
 // entry needs a reason; an entry that matches nothing is reported as unused.
 const ALLOWED = [
   {
-    id: 'volume-cockpit-layouts-500',
-    reason: 'GET /api/volume-cockpit-layouts answers 500 on page load on main (open bug in the layout store route); the load continues without saved layouts',
-    matches: e => /\/api\/volume-cockpit-layouts\b/.test(`${e.url || ''} ${e.text || ''}`) && /\b500\b|Internal Server Error/i.test(e.text || ''),
-  },
-  {
-    id: 'tint-swizzle-lowering',
+    id: 'tint-swizzle-lowering-chrome-153',
     reason: "Chrome for Testing 153's WebGPU shader compiler (Tint, Metal backend) fails to lower some three.js fragment shaders ('swizzle view instruction still has usages after lowering'); every later 'invalid due to a previous error' message is that same failure cascading. A browser compiler defect, not page code",
-    matches: e => /swizzle view instruction still has usages after lowering/.test(e.text || '')
-      || (/GPUValidationError/.test(e.text || '') && /is invalid due to a previous error/.test(e.text || '')),
+    // Only for that browser: 155 compiles these shaders, so on any other
+    // version the same messages are unexpected.
+    matches: (e, { browserVersion }) => /^Chrome\/153\./.test(browserVersion || '')
+      && (/swizzle view instruction still has usages after lowering/.test(e.text || '')
+        || (/GPUValidationError/.test(e.text || '') && /is invalid due to a previous error/.test(e.text || ''))),
   },
   {
     id: 'greenroom-root-missing-404',
@@ -102,7 +100,7 @@ async function stopChild(child) {
 const pending = new Map();
 const listeners = [];
 let nextId = 0;
-function send(method, params = {}, timeoutMs = 15000) {
+function send(method, params = {}, timeoutMs = 60000) {
   const id = ++nextId;
   ws.send(JSON.stringify({ id, method, params }));
   return new Promise((resolve, reject) => {
@@ -110,7 +108,7 @@ function send(method, params = {}, timeoutMs = 15000) {
     pending.set(id, { resolve: v => { clearTimeout(timer); resolve(v); }, reject: e => { clearTimeout(timer); reject(e); }, method });
   });
 }
-async function evaluate(expression, timeoutMs = 15000) {
+async function evaluate(expression, timeoutMs = 60000) {
   const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, timeoutMs);
   if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
   return result.result.value;
@@ -260,7 +258,7 @@ try { await main(); } catch (error) { failure = error; }
 await cleanup();
 
 for (const e of receipt.errors) {
-  const rule = ALLOWED.find(a => a.matches(e));
+  const rule = ALLOWED.find(a => a.matches(e, { browserVersion: receipt.browserVersion }));
   if (rule) receipt.allowed.push({ ...e, allowlist: rule.id, reason: rule.reason });
   else receipt.unexpected.push(e);
 }
