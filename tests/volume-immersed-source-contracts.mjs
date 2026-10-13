@@ -350,7 +350,8 @@ test('IS-04-C: the residual measurement names the capped per-cell law and keeps 
 test('the wall sponge leaves the immersed slab alone, like the inflow aperture', () => {
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
   const weightAt = main.indexOf('let immersedWeight = ');
-  const fadeAt = main.indexOf('let wallFade = max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSlabWeight, 0.0, 1.0));');
+  // The joined boundary (Sexy's exterior) turns the fade off; standalone it is unchanged.
+  const fadeAt = main.indexOf('let wallFade = select(max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSlabWeight, 0.0, 1.0)), 1.0, joinedBoundary());');
   assert.ok(weightAt > 0 && fadeAt > weightAt, 'the fade is exempt wherever the slab has weight, after the weight is known');
   assert.ok(!main.includes('let wallFade = 1.0 - smoothstep(0.86, 1.0, wall);'), 'the unexempted fade is gone');
 });

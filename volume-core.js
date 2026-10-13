@@ -2120,7 +2120,34 @@ export const GRID_SHAPE_UNIFORM_FLOATS = 8;
 // admits the candidate.
 export const REACTANT_COMBUSTION_UNIFORM_OFFSET = GRID_SHAPE_UNIFORM_OFFSET + GRID_SHAPE_UNIFORM_FLOATS;
 export { REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, resolveReactantCombustionConfig, reactantCombustionUniformValues };
-export const VOLUME_UNIFORM_FLOATS = REACTANT_COMBUSTION_UNIFORM_OFFSET + REACTANT_COMBUSTION_UNIFORM_FLOATS;
+// Joined boundary (Sexy's stationary two-way fine/coarse candidate; Noah
+// 2026-10-13): opt-in, off by default. x = admitted.
+export const JOINED_BOUNDARY_UNIFORM_OFFSET = REACTANT_COMBUSTION_UNIFORM_OFFSET + REACTANT_COMBUSTION_UNIFORM_FLOATS;
+export const JOINED_BOUNDARY_UNIFORM_FLOATS = 4;
+export const VOLUME_UNIFORM_FLOATS = JOINED_BOUNDARY_UNIFORM_OFFSET + JOINED_BOUNDARY_UNIFORM_FLOATS;
+export function joinedBoundaryUniformValues(joined) {
+  return [joined?.admitted ? 1 : 0, 0, 0, 0];
+}
+// Sexy's fine lower planes: plane a holds the lowest a-faces indexed
+// q[b] + n_b * q[d], b = (a+1)%3, d = (a+2)%3. The fine side reads them from a
+// three-layer r32float texture, layer a, texel (q[b], q[d]).
+export function joinedLowerFaceTexel(axis, cell, dims) {
+  const b = (axis + 1) % 3, d = (axis + 2) % 3;
+  if (!(cell[b] >= 0 && cell[b] < dims[b] && cell[d] >= 0 && cell[d] < dims[d])) throw new Error('lower face outside the plane');
+  return { layer: axis, x: cell[b], y: cell[d] };
+}
+export function joinedLowerFaceTextureSize(dims) {
+  const side = Math.max(...dims);
+  return [side, side, 3];
+}
+// Admission: the first live composition is the immersed source under the
+// converged solver; the inflow aperture needs a fixed-flux treatment first.
+export function resolveJoinedBoundary({ requested = false, sourceLaw = null, pressureSolver = null } = {}) {
+  if (!requested) return { requested: false, admitted: false, reason: null };
+  if (sourceLaw === 'inflow-boundary') return { requested: true, admitted: false, reason: 'inflow-boundary-joined-pending-fixed-flux' };
+  if (pressureSolver !== PRESSURE_SOLVER_CONVERGED) return { requested: true, admitted: false, reason: 'joined-boundary-needs-converged-solver' };
+  return { requested: true, admitted: true, reason: null };
+}
 export function gridShapeUniformValues({ grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight }) {
   return [grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight, 0, 0];
 }
@@ -3644,6 +3671,7 @@ struct Uniforms {
   reactant_combustion_b: vec4<f32>,
   reactant_combustion_c: vec4<f32>,
   reactant_combustion_d: vec4<f32>,
+  joined_boundary: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -3714,6 +3742,18 @@ struct NonRidgeOpticalCaptureRow {
 // while the authored law runs.
 @group(0) @binding(23) var reactantSrc: texture_3d<f32>;
 @group(0) @binding(24) var reactantDst: texture_storage_3d<rg32float, write>;
+// Joined boundary: Sexy's corrected fine lower planes (layer = axis).
+@group(0) @binding(25) var joinedLowerFaces: texture_2d_array<f32>;
+
+fn joinedBoundary() -> bool {
+  return u.joined_boundary.x > 0.5;
+}
+
+fn joinedLowerFace(c: vec3<i32>, axis: u32) -> f32 {
+  let b = (axis + 1u) % 3u;
+  let d = (axis + 2u) % 3u;
+  return textureLoad(joinedLowerFaces, vec2<i32>(c[b], c[d]), i32(axis), 0).x;
+}
 
 fn forceDeltaStore(c: vec3<i32>, f: vec3<f32>) {
   textureStore(forceDelta, c, vec4<f32>(f.x, 0.0, 0.0, 0.0));
@@ -4605,13 +4645,14 @@ fn pressureSolverOpenTop() -> bool {
 fn compactFaceVelocity(c: vec3<i32>, axis: u32) -> f32 {
   if (sceneSolidAt(c) || !sceneFaceOpen(c, axis)) { return 0.0; }
   if (c[axis] < 0) {
+    if (joinedBoundary()) { return joinedLowerFace(c, axis); }
     if (axis == 1u) {
       return inflowFaceVelocity(c);
     }
     return 0.0;
   }
   if (c[axis] >= gridExtent(axis) - 1) {
-    if (axis == 1u && pressureSolverOpenTop()) {
+    if (joinedBoundary() || (axis == 1u && pressureSolverOpenTop())) {
       return readSlot(c, 0u)[axis];
     }
     return 0.0;
@@ -4670,12 +4711,14 @@ fn csFaceForces(@builtin(global_invocation_id) gid: vec3<u32>) {
   let topRowX = gid.x + 1u >= GRID;
   let topRowZ = gid.z + 1u >= GRID;
   let topRow = gid.y + 1u >= GRID_Y;
-  let openX = sceneFaceOpen(c, 0u) && gid.x + 1u < GRID;
-  let openZ = sceneFaceOpen(c, 2u) && gid.z + 1u < GRID;
-  let openY = select(sceneFaceOpen(c, 1u), pressureSolverOpenTop(), topRow);
-  let upX = select(0.0, forceDeltaLoad(c + vec3<i32>(1, 0, 0), 0), openX && !topRowX);
+  // Joined boundary: the last row's x and z upper faces open like the top and
+  // take this cell's own value.
+  let openX = sceneFaceOpen(c, 0u) && (gid.x + 1u < GRID || joinedBoundary());
+  let openZ = sceneFaceOpen(c, 2u) && (gid.z + 1u < GRID || joinedBoundary());
+  let openY = select(sceneFaceOpen(c, 1u), pressureSolverOpenTop() || joinedBoundary(), topRow);
+  let upX = select(here.x, forceDeltaLoad(c + vec3<i32>(1, 0, 0), 0), openX && !topRowX);
   let upY = select(here.y, forceDeltaLoad(c + vec3<i32>(0, 1, 0), 1), openY && !topRow);
-  let upZ = select(0.0, forceDeltaLoad(c + vec3<i32>(0, 0, 1), 2), openZ && !topRowZ);
+  let upZ = select(here.z, forceDeltaLoad(c + vec3<i32>(0, 0, 1), 2), openZ && !topRowZ);
   let faceForce = vec3<f32>(
     select(0.0, 0.5 * (here.x + upX), openX),
     select(0.0, 0.5 * (here.y + upY), openY),
@@ -7703,20 +7746,26 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let wall = max(max(abs(p.x), verticalWall), abs(p.z));
   // The immersed slab is a source wherever it sits (floor, side, or in the
   // open): the sponge leaves it alone, as it leaves the inflow aperture.
-  let wallFade = max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSlabWeight, 0.0, 1.0));
-  let smokeTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.66, 0.84, plumeHeight01)), expandedTopY - 0.005, p.y);
+  let wallFade = select(max(1.0 - smoothstep(0.86, 1.0, wall), clamp(immersedSlabWeight, 0.0, 1.0)), 1.0, joinedBoundary());
+  let smokeTopFadeStandalone = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.66, 0.84, plumeHeight01)), expandedTopY - 0.005, p.y);
   let legacyHeatTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.42, 0.62, plumeHeight01)), expandedTopY - 0.040, p.y);
   let tallPlumeHeatTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.62, 0.84, plumeHeight01)), expandedTopY - 0.010, p.y);
   let tallPlumeFireTopFade = 1.0 - smoothstep(expandedTopY - (1.0 - mix(0.72, 0.90, plumeHeight01)), expandedTopY - 0.005, p.y);
-  let heatTopFade = mix(legacyHeatTopFade, tallPlumeHeatTopFade, tallPlumeScene);
-  let fireTopFade = mix(legacyHeatTopFade, tallPlumeFireTopFade, tallPlumeScene);
+  let heatTopFadeStandalone = mix(legacyHeatTopFade, tallPlumeHeatTopFade, tallPlumeScene);
+  let fireTopFadeStandalone = mix(legacyHeatTopFade, tallPlumeFireTopFade, tallPlumeScene);
+  // Joined boundary: the exterior owns the top, so the in-kernel fades are off.
+  let smokeTopFade = select(smokeTopFadeStandalone, 1.0, joinedBoundary());
+  let heatTopFade = select(heatTopFadeStandalone, 1.0, joinedBoundary());
+  let fireTopFade = select(fireTopFadeStandalone, 1.0, joinedBoundary());
   // Reactant law: the fine-box top is a passive outflow for the material
   // (smoke, heat, fuel, oxidizer leave on the flow, to the exterior where one
   // exists): no top sponge, no top fade, no oxygen source at the top. The side
   // and floor sponges are unchanged. Appearance channels keep their own fades.
   let materialVerticalWall = select(verticalWall, mix(-p.y, -1.0, floorExempt), reactantOn);
   let materialWall = max(max(abs(p.x), materialVerticalWall), abs(p.z));
-  let materialWallFade = max(1.0 - smoothstep(0.86, 1.0, materialWall), clamp(immersedSlabWeight, 0.0, 1.0));
+  // Joined boundary: the exterior owns every boundary, so the material sponge
+  // (and the oxidizer's relaxation toward ambient) is off too.
+  let materialWallFade = select(max(1.0 - smoothstep(0.86, 1.0, materialWall), clamp(immersedSlabWeight, 0.0, 1.0)), 1.0, joinedBoundary());
   let materialHeatTopFade = select(heatTopFade, 1.0, reactantOn);
   let materialSmokeTopFade = select(smokeTopFade, 1.0, reactantOn);
   smoke = smoke * stepRate(mix(0.42, 1.0, materialWallFade) * mix(0.72, 1.0, materialSmokeTopFade));
@@ -7806,7 +7855,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Reactant law: the open top passes the flow as well as the material, or the
   // material decelerates and piles up under a braked ceiling.
   vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));
-  vel.y = mix(max(vel.y, -0.015), vel.y, bonfireScene);
+  vel.y = mix(max(vel.y, -0.015), vel.y, max(bonfireScene, select(0.0, 1.0, joinedBoundary())));
   fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), density);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
   fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
@@ -11822,6 +11871,11 @@ export function createKaminosVolumePrototype({
   let inletPerturbationField = null;
   // Fuel burn rate per cell (heat-release expansion source), rebuilt with the grid.
   let burnRateTexture = null;
+  // Joined boundary: Sexy's corrected fine lower planes. Kaminos owns the
+  // texture (three r32float layers, square of the largest grid dimension) and
+  // the exterior writes it; a 1x1x3 zero placeholder while joined mode is off.
+  let joinedLowerFaceTexture = null;
+  const joinedLowerFaceView = () => joinedLowerFaceTexture.createView({ dimension: '2d-array' });
   let forceDeltaTexture = null;
   const inletPuffProcess = new StochasticSignalSet(2, 1);
   const windGustProcess = new WindGustProcess(1);
@@ -12455,6 +12509,8 @@ export function createKaminosVolumePrototype({
     inletPerturbationField = null;
     burnRateTexture?.destroy();
     burnRateTexture = null;
+    joinedLowerFaceTexture?.destroy();
+    joinedLowerFaceTexture = null;
     forceDeltaTexture?.destroy();
     forceDeltaTexture = null;
     for (const buffer of pressureBuffers) buffer.destroy();
@@ -12592,6 +12648,7 @@ export function createKaminosVolumePrototype({
         { binding: 14, resource: { buffer: quenchWrite } },
         { binding: 15, resource: { buffer: emissiveLightField.incident } },
         { binding: 16, resource: sceneSolidTextureView },
+          { binding: 25, resource: joinedLowerFaceView() },
         { binding: 17, resource: inflowCoverageTexture.createView() },
         { binding: 18, resource: inflowPerturbationTexture.createView() },
         { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
@@ -12693,6 +12750,7 @@ export function createKaminosVolumePrototype({
         {binding: 1, resource: {buffer}},
         {binding: 7, resource: {buffer: frontBuffers[index]}},
         {binding: 16, resource: sceneSolidTextureView},
+        {binding: 25, resource: joinedLowerFaceView()},
         {binding: 19, resource: burnRateTexture.createView({ dimension: '3d' })},
       ],
     }));
@@ -12705,6 +12763,7 @@ export function createKaminosVolumePrototype({
         {binding: 7, resource: {buffer: frontBuffers[index]}},
         {binding: 16, resource: sceneSolidTextureView},
         {binding: 23, resource: reactantTextureView(index)},
+        {binding: 25, resource: joinedLowerFaceView()},
       ],
     }));
     rebuildSelectiveHeadLiveBindGroups();
@@ -12881,6 +12940,7 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluid } },
           { binding: 7, resource: { buffer: front } },
           { binding: 16, resource: sceneSolidTextureView },
+          { binding: 25, resource: joinedLowerFaceView() },
           { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
@@ -12895,6 +12955,7 @@ export function createKaminosVolumePrototype({
           // Only the sidecar build kernel runs under this group and it does not
           // read the reactant sidecar; the binding satisfies the shared layout.
           { binding: 23, resource: reactantTextureView(0) },
+          { binding: 25, resource: joinedLowerFaceView() },
         ],
       }),
       splat: device.createBindGroup({
@@ -13678,6 +13739,19 @@ export function createKaminosVolumePrototype({
     });
     device.queue.writeTexture({ texture: inflowPerturbationTexture }, new Float32Array(gridSize * gridSize), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT }, [gridSize, gridSize, 1]);
     inletPerturbationField = new InletPerturbationField({ grid: gridSize, seed: 1 });
+    {
+      const size = state.joinedBoundary?.admitted ? joinedLowerFaceTextureSize([gridSize, gridHeight, gridSize]) : [1, 1, 3];
+      joinedLowerFaceTexture = device.createTexture({
+        label: `kaminos joined lower planes ${size.join('x')}`,
+        size,
+        dimension: '2d',
+        format: 'r32float',
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
+      });
+      for (let layer = 0; layer < 3; layer++) {
+        device.queue.writeTexture({ texture: joinedLowerFaceTexture, origin: [0, 0, layer] }, new Float32Array(size[0] * size[1]), { bytesPerRow: size[0] * Float32Array.BYTES_PER_ELEMENT }, [size[0], size[1], 1]);
+      }
+    }
     burnRateTexture = device.createTexture({
       label: `kaminos fuel burn rate ${gridSize}x${gridHeight}x${gridSize}`,
       size: [gridSize, gridHeight, gridSize],
@@ -14174,6 +14248,7 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluidBuffers[0] } },
           { binding: 7, resource: { buffer: frontBuffers[0] } },
           { binding: 16, resource: sceneSolidTextureView },
+          { binding: 25, resource: joinedLowerFaceView() },
           { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
@@ -14185,6 +14260,7 @@ export function createKaminosVolumePrototype({
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
           { binding: 7, resource: { buffer: frontBuffers[1] } },
           { binding: 16, resource: sceneSolidTextureView },
+          { binding: 25, resource: joinedLowerFaceView() },
           { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
@@ -14199,6 +14275,7 @@ export function createKaminosVolumePrototype({
           { binding: 7, resource: { buffer: frontBuffers[0] } },
           { binding: 16, resource: sceneSolidTextureView },
           { binding: 23, resource: reactantTextureView(0) },
+          { binding: 25, resource: joinedLowerFaceView() },
         ],
       }),
       device.createBindGroup({
@@ -14210,6 +14287,7 @@ export function createKaminosVolumePrototype({
           { binding: 7, resource: { buffer: frontBuffers[1] } },
           { binding: 16, resource: sceneSolidTextureView },
           { binding: 23, resource: reactantTextureView(1) },
+          { binding: 25, resource: joinedLowerFaceView() },
         ],
       }),
     ];
@@ -14572,6 +14650,7 @@ export function createKaminosVolumePrototype({
         { binding: 18, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
         // The raymarch fragment entry point reaches divergenceAtCell through the shared module, so the binding must be fragment-visible too (slice-2 lesson at 1e8996ab).
         { binding: 19, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
+        { binding: 25, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d-array' } },
         { binding: 22, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
         // Reactant sidecar: read as a sampled texture, written as a storage
         // texture (the compute stage is at its storage-buffer limit); compute only.
@@ -14637,6 +14716,7 @@ export function createKaminosVolumePrototype({
         // reactant sidecar (fresh burn) is bound here too; the sidecar build kernel
         // simply does not read it.
         { binding: 23, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        { binding: 25, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d-array' } },
       ],
     });
     fluidFrontReadBindGroupLayout = device.createBindGroupLayout({
@@ -14655,6 +14735,7 @@ export function createKaminosVolumePrototype({
           buffer: { type: 'read-only-storage' },
         },
         { binding: 16, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
+        { binding: 25, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d-array' } },
         // The pressure kernels read the heat-release expansion target here.
         { binding: 19, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
       ],
@@ -16061,6 +16142,7 @@ export function createKaminosVolumePrototype({
     refreshSceneCollision();
     const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu });
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
+    uniforms.set(joinedBoundaryUniformValues(state.joinedBoundary), JOINED_BOUNDARY_UNIFORM_OFFSET);
     uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
     const reactantCombustionConfig = resolveReactantCombustionConfig(controlsSnapshot, {
@@ -16764,6 +16846,11 @@ export function createKaminosVolumePrototype({
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = false;
     encodeAnalyticEmitterInjection(encoder);
+    if (state.joinedBoundary?.admitted) {
+      state.simStepCount += 1;
+      updateSimCostLedger();
+      return false;
+    }
     const finalTimestampWritten = encodePressureProjection(encoder, {
       timestampWrites: options.finalTimestampWrites,
     });
@@ -27034,6 +27121,42 @@ export function createKaminosVolumePrototype({
       const producer = { ...emissiveSeedProducer, frameLag: state.frameCount - emissiveSeedProducer.frameCount };
       const values = await emissiveLightField.readCoefficients();
       return { status: 'sampled', grid: [gridSize, gridHeight, gridSize], producer, ...emissiveCoefficientStats(values) };
+    },
+    // Joined boundary (Sexy's stationary two-way candidate): opt-in. Admission
+    // needs the immersed source and the converged solver; a change rebuilds the
+    // fluid state so the lower-plane texture has the grid's size.
+    setJoinedBoundary(request = {}) {
+      const next = resolveJoinedBoundary({
+        requested: request.enabled === true,
+        sourceLaw: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume'),
+        pressureSolver: resolvePressureSolverConfig(controlsSnapshot).effective.solver,
+      });
+      const changed = Boolean(state.joinedBoundary?.admitted) !== next.admitted;
+      state.joinedBoundary = next;
+      if (changed && device) rebuildFluidState(gridSize, 'joined-boundary-change');
+      return { ...next };
+    },
+    // What the exterior's shared solve consumes after encodeSim stops before
+    // the fine projection: the pre-projection fluid state (upper faces, fine
+    // cells per reference tick), the divergence target, the effective solids
+    // and the lower-plane texture it writes.
+    joinedProducerState() {
+      const timeStep = resolveTimeStepConfig(controlsSnapshot).effective;
+      return {
+        joined: { ...(state.joinedBoundary ?? resolveJoinedBoundary()) },
+        dims: [gridSize, gridHeight, gridSize],
+        pitch: 2 / gridSize,
+        timeStep: { mode: timeStep.mode, dtScale: timeStep.dtScale, referenceSpeed: timeStep.referenceSpeed, backtraceScale: timeStep.backtraceScale },
+        transportScheme: resolveTransportConfig(controlsSnapshot).effective.scheme,
+        fluidBuffer: fluidBuffers?.[currentFluid] ?? null,
+        fluidReadIndex: currentFluid,
+        frontBuffer: frontBuffers?.[currentFront] ?? null,
+        burnRateTexture,
+        solidMask: sceneSolidCellsCpu ? { cells: sceneSolidCellsCpu, revision: sceneSolidRevisionKey, dims: [gridSize, gridHeight, gridSize] } : null,
+        lowerFaceTexture: joinedLowerFaceTexture,
+        prescribedInlet: null,
+        simStepCount: state.simStepCount,
+      };
     },
     previewGridShape(request = {}) {
       const width = normalizeGridSize(request.resolution ?? controlsSnapshot.resolution);

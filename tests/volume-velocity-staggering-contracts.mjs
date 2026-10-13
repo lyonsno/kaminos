@@ -113,7 +113,7 @@ test('staggered: the main kernel separates the force increment and the face-forc
   assert.match(main, /var centredForce = vec3<f32>\(0\.0\);/);
   const pass = source.slice(source.indexOf('fn csFaceForces('), source.indexOf('\n}\n', source.indexOf('fn csFaceForces(')));
   assert.match(pass, /let here = vec3<f32>\(forceDeltaLoad\(c, 0\), forceDeltaLoad\(c, 1\), forceDeltaLoad\(c, 2\)\);/);
-  assert.match(pass, /let upX = select\(0\.0, forceDeltaLoad\(c \+ vec3<i32>\(1, 0, 0\), 0\), openX && !topRowX\)/);
+  assert.match(pass, /let upX = select\(here\.x, forceDeltaLoad\(c \+ vec3<i32>\(1, 0, 0\), 0\), openX && !topRowX\)/);
   assert.match(pass, /fluidDst\[base\] = vec4<f32>\(boundVelocity\(stored\.xyz \+ faceForce\), stored\.w\);/, 'the bound applies once, after the face force');
   // The pass runs after the sim pass, before the buffers flip, only when admitted.
   const step = source.slice(source.indexOf("label: 'kaminos fluid sim pass'"), source.indexOf('encodeAnalyticEmitterInjection(encoder);', source.indexOf("label: 'kaminos fluid sim pass'")));
@@ -169,9 +169,9 @@ test('face-force fold model: bound once, centred forces averaged, velocity effec
   assert.match(main, /fluidDst\[base\] = vec4<f32>\(select\(boundVelocity\(vel\), vel, faceForcesOn\(\)\), density\);/, 'the bound waits for the face pass under the staggered reading');
   assert.match(main, /if \(sceneSolidAt\(cellI\)\) \{\s*forceDeltaStore\(cellI, vec3<f32>\(0\.0\)\);/, 'solids write a zero increment');
   const pass = source.slice(source.indexOf('fn csFaceForces('), source.indexOf('\n}\n', source.indexOf('fn csFaceForces(')));
-  assert.match(pass, /let openX = sceneFaceOpen\(c, 0u\) && gid\.x \+ 1u < GRID;/);
-  assert.match(pass, /let openZ = sceneFaceOpen\(c, 2u\) && gid\.z \+ 1u < GRID;/);
+  assert.match(pass, /let openX = sceneFaceOpen\(c, 0u\) && \(gid\.x \+ 1u < GRID \|\| joinedBoundary\(\)\);/);
+  assert.match(pass, /let openZ = sceneFaceOpen\(c, 2u\) && \(gid\.z \+ 1u < GRID \|\| joinedBoundary\(\)\);/);
   assert.match(pass, /let topRow = gid\.y \+ 1u >= GRID_Y;/);
-  assert.match(pass, /let openY = select\(sceneFaceOpen\(c, 1u\), pressureSolverOpenTop\(\), topRow\);/, 'the open top is the exception');
+  assert.match(pass, /let openY = select\(sceneFaceOpen\(c, 1u\), pressureSolverOpenTop\(\) \|\| joinedBoundary\(\), topRow\);/, 'the open top is the exception');
   assert.match(pass, /select\(0\.0, 0\.5 \* \(here\.x \+ upX\), openX\)/, 'a closed face carries no force');
 });

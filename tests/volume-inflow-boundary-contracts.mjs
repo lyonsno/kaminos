@@ -177,13 +177,13 @@ test('the inflow resolver admits only a converged open-top solve and packs the a
   assert.equal(closedTop.effective.projection, null);
   const physicalColor = await import('../volume-physical-color.mjs');
   assert.equal(core.INFLOW_UNIFORM_OFFSET, physicalColor.PHYSICAL_COLOR_UNIFORM_FLOATS, 'the inflow slots follow the physical colour block (thermal LUT and emissive floats), the last occupied slots');
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.INFLOW_UNIFORM_OFFSET + 12 + 4 + 4 + 24 + 8 + 16, 'the inflow block, then heat release, velocity staggering, the immersed source, the grid shape and the reactant combustion block');
+  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.INFLOW_UNIFORM_OFFSET + 12 + 4 + 4 + 24 + 8 + 16 + 4, 'the inflow block, then heat release, velocity staggering, the immersed source, the grid shape, the reactant combustion block and the joined boundary');
   assert.equal(core.VOLUME_UNIFORM_FLOATS % 4, 0, 'vec4 aligned');
 });
 
 test('the shader carries the inflow as a face flux at the floor, a ghost state below it, and no sponge on the aperture', () => {
   const face = wgslFunction('compactFaceVelocity');
-  assert.match(face, /if \(c\[axis\] < 0\) \{\s*if \(axis == 1u\) \{\s*return inflowFaceVelocity\(c\);\s*\}\s*return 0\.0;/, 'the ghost face below the floor carries the prescribed inflow, other lower faces none');
+  assert.match(face, /if \(c\[axis\] < 0\) \{\s*if \(joinedBoundary\(\)\) \{ return joinedLowerFace\(c, axis\); \}\s*if \(axis == 1u\) \{\s*return inflowFaceVelocity\(c\);\s*\}\s*return 0\.0;/, 'the ghost face below the floor carries the prescribed inflow, other lower faces none');
   // Slice 2: the aperture shape left the shader. The cell weight is read from
   // the CPU-built coverage map (volume-inflow-aperture.mjs: the family shape or
   // a pattern, averaged over a 4 x 4 footprint); mode 0 still turns it off.
