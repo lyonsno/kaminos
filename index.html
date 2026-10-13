@@ -12034,7 +12034,7 @@ async function initScene() {
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
   await volumeCockpitLayoutReady;
-  const workspaceParam = initialViewerParams.get('workspace');
+  const workspaceParam = initialViewerParams.get('workspace') ?? new URLSearchParams(location.hash.slice(1)).get('workspace');
   const authoredRoute = new URLSearchParams(location.hash.slice(1)).get('authoring') === '1';
   authoringWorkspace = installAuthoringWorkspace({
     document, edits: scenePlacementTools.edits,
@@ -30774,7 +30774,7 @@ sceneInitialization.then(() => {
       const preset = new URLSearchParams(location.search).get('settings_preset');
       if(preset!==plan.composition.flame.presetId){
         setInfo('Opening the saved flame recipe…');
-        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,new URLSearchParams(location.search).get('workspace')));
+        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,new URLSearchParams(location.search).get('workspace') ?? hash.get('workspace')));
         return;
       }
     }
