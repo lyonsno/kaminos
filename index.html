@@ -21942,7 +21942,8 @@ function writeFirstFlameFieldStateUnchecked(value) {
     return mounting;
   }
 }
-async function addFirstFlameField(presetId) {
+async function addFirstFlameField(presetId,{signal}={}) {
+  signal?.throwIfAborted();
   assertSceneConstructionAvailable();
   if(activeSceneComposition)return addBurnerObject('flame-source');
   if(!presetId)throw Error('Choose a saved immersed-source basin for the first flame');
@@ -21950,6 +21951,7 @@ async function addFirstFlameField(presetId) {
   authoringBusy=true;
   let settings;
   try{settings=await loadAuthoredFlameBasin(presetId);}finally{authoringBusy=false;}
+  signal?.throwIfAborted();
   if(JSON.stringify(firstFlameFieldState())!==before||JSON.stringify(scenePlacementTools.edits.state())!==ledger)throw Error('Scene changed while loading the flame basin; add it again');
   if(settings.domControls['volume-emitter-source-law'].value!=='immersed-source')throw Error('Choose an immersed-source basin for a placeable scene emitter');
   if(settings.domControls['volume-pressure-solver'].value!=='converged-open-top')throw Error('Scene flame requires a converged open-top basin');
@@ -21969,6 +21971,7 @@ async function openFirstFlameFieldDialog() {
   if(!response.ok)throw Error(index.error||'Basin library unavailable');
   validateVolumeSettingsPresetIndex(index);
   const dialog=document.createElement('dialog');
+  const request=new AbortController();let pendingAdd=false;
   dialog.id='scene-first-flame-dialog';
   dialog.innerHTML='<form method="dialog"><h2>Add Flame</h2><p>Choose a saved immersed-source basin. Its settings initialize the fire; the current scene and camera stay in place.</p><label>Fire basin <select id="scene-first-flame-basin"></select></label><p role="status"></p><button type="button" class="btn">Add Flame</button><button value="cancel" class="btn">Cancel</button></form>';
   const select=dialog.querySelector('select');
@@ -21977,12 +21980,15 @@ async function openFirstFlameFieldDialog() {
   dialog.querySelector('[type="button"]').disabled=!select.value;
   select.onchange=()=>{dialog.querySelector('[type="button"]').disabled=!select.value;};
   dialog.querySelector('[type="button"]').onclick=async event=>{
-    event.target.disabled=true;
-    try{await addFirstFlameField(select.value);dialog.close();}
-    catch(error){dialog.querySelector('[role="status"]').textContent=error.message;}
-    finally{event.target.disabled=!select.value;}
+    event.target.disabled=true;pendingAdd=true;
+    try{await addFirstFlameField(select.value,{signal:request.signal});if(!request.signal.aborted)dialog.close();}
+    catch(error){if(!request.signal.aborted)dialog.querySelector('[role="status"]').textContent=error.message;}
+    finally{pendingAdd=false;if(!request.signal.aborted)event.target.disabled=!select.value;}
   };
-  dialog.addEventListener('close',()=>{if(scenePlacementTools.edits.state().active?.id==='@first-flame-field')scenePlacementTools.edits.cancel();dialog.remove();},{once:true});document.body.append(dialog);dialog.showModal();
+  const cancelRequest=()=>{request.abort();if(pendingAdd&&scenePlacementTools.edits.state().active?.id==='@first-flame-field')scenePlacementTools.edits.cancel();};
+  dialog.querySelector('[value="cancel"]').onclick=cancelRequest;
+  dialog.addEventListener('cancel',cancelRequest);
+  dialog.addEventListener('close',()=>{cancelRequest();dialog.remove();},{once:true});document.body.append(dialog);dialog.showModal();
 }
 
 function installAuthoringParameterEditing() {
