@@ -8,7 +8,7 @@ export async function mountGivenPaletteMotion({THREE,runtime,motionUrl,motionSha
  async function load(url,expected){
   if(typeof url!=='string'||!url.trim()||!/^[a-f0-9]{64}$/i.test(expected??''))throw Error('Explicit retained motion/frame URL and digest required');
   const response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error(`Given source HTTP ${response.status}`);
-  const bytes=await response.arrayBuffer(),actual=await sha(bytes);if(actual!==expected.toLowerCase())throw Error('Given source content digest mismatch');
+  const bytes=await response.arrayBuffer(),actual=await sha(bytes);if(actual!==expected.toLowerCase()){state.sourceFailure={url,expected,actual,contentType:response.headers.get('content-type')};throw Error(`Given source content digest mismatch: ${url}`);}
   return {value:JSON.parse(new TextDecoder().decode(bytes)),sha256:actual};
  }
  try{
