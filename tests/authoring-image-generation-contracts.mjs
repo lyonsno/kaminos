@@ -134,3 +134,12 @@ test('an empty prompt and a concurrent run are refused before any GPU work',asyn
  await assert.rejects(h.service.run({prompt:'teapot',seed:2,size:512}),/already running/);
  gate.resolve();await run;
 });
+
+test('image size is one of the tested klein sizes and reaches the pipeline',async()=>{
+ const h=harness();
+ await h.service.run({prompt:'lantern',seed:1,size:768});
+ assert.equal(h.generations[0].width,768);assert.equal(h.generations[0].height,768);
+ assert.equal(h.delivered[0].provenance.width,768);
+ await assert.rejects(h.service.run({prompt:'lantern',seed:1,size:640}),/512, 768 or 1024/);
+ assert.equal(h.generations.length,1,'an unsupported size is refused before GPU work');
+});
