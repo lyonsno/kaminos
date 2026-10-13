@@ -14573,9 +14573,10 @@ function drawFingerFluidBenchFrame(now = performance.now(),{fromHost=false}={}) 
 }
 
 function completeFingerFluidPlaybackInitialization(){
+ ownerFluidPlayback?.reset();
  const policy=fingerFluidResetPolicy;
  if(!policy)return;
- ownerFluidPlayback?.reset();fingerFluidBenchSimulationPaused=policy.paused;
+ fingerFluidBenchSimulationPaused=policy.paused;
  if(fingerFluidResetPolicy===policy)fingerFluidResetPolicy=null;
 }
 
