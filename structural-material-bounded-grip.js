@@ -61,7 +61,8 @@ export async function createBoundedResidentGrip(resident,initialBonds,{connectio
    async begin(node,point,patchRadius,stiffness){if(!Number.isInteger(node)||node<0||node>=n||!Array.isArray(point)||point.length!==3||!point.every(Number.isFinite)||!(Number.isFinite(patchRadius)&&patchRadius>0))throw new Error('Finite resident contact required');anchor=node;center=[...point];radius=patchRadius;await resident.captureResidentPatch(anchor,stiffness);submit(1,[0,0,0]);},
    update(travel,threshold=0){submit(0,travel,threshold);},
    async read(){submit(2,[0,0,0]);const read=device.createBuffer({size:n*4+8+b*8,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});try{const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(parents,0,read,0,n*4);encoder.copyBufferToBuffer(control,0,read,n*4,4);encoder.copyBufferToBuffer(transitions,0,read,n*4+8,b*8);device.queue.submit([encoder.finish()]);await read.mapAsync(GPUMapMode.READ);const bytes=read.getMappedRange(),values=new Uint32Array(bytes),history=new Uint32Array(bytes,n*4+8,b*2),floats=new Float32Array(bytes,n*4+8,b*2);return {route:this.route,anchor,components:Array.from(values.slice(0,n)),changedEdges:values[n],fractureHistory:Array.from({length:b},(_,i)=>({edge:i,step:history[i*2]?history[i*2]-1:null,threshold:floats[i*2+1]}))};}finally{read.destroy();}},
-   dispose(){for(const buffer of owned)buffer.destroy();},
+   dispose(){disposeAll(owned.map(buffer=>()=>buffer.destroy()),'Bounded grip cleanup failed');},
   };
- }catch(e){for(const buffer of owned)buffer.destroy();throw e;}
+ }catch(e){disposeAll(owned.map(buffer=>()=>buffer.destroy()),'Bounded grip initialization failed',e);}
 }
+import {disposeAll} from './structural-material-disposal.mjs';

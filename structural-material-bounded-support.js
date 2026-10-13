@@ -24,7 +24,8 @@ export async function createBoundedElasticSupport(resident){
   const pipeline=await device.createComputePipelineAsync({layout:'auto',compute:{module:shader,entryPoint:'update'}}),group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[resident.bondBuffer(),buffers.elements,buffers.parameters,buffers.incidence,output,counts].map((buffer,binding)=>({binding,resource:{buffer}}))});
   return{route:ELASTIC_SUPPORT_ROUTE,buffer:output,
    update(){const encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(model.bonds/64));pass.end();device.queue.submit([encoder.finish()]);},
-   dispose(){for(const b of owned)b.destroy();}
+   dispose(){disposeAll(owned.map(b=>()=>b.destroy()),'Elastic support cleanup failed');}
   };
- }catch(error){for(const b of owned)b.destroy();throw error;}
+ }catch(error){disposeAll(owned.map(b=>()=>b.destroy()),'Elastic support initialization failed',error);}
 }
+import {disposeAll} from './structural-material-disposal.mjs';

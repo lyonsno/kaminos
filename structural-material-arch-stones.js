@@ -108,5 +108,6 @@ export function disposeStoneAssets(assets) {
       }
     });
   }
-  for (const value of [...geometries, ...materials, ...textures]) value.dispose();
+  disposeAll([...geometries, ...materials, ...textures].map(value=>()=>value.dispose()),'Stone asset cleanup failed');
 }
+import {disposeAll} from './structural-material-disposal.mjs';

@@ -2,6 +2,7 @@ import {StorageBufferAttribute,MeshStandardNodeMaterial,Vector4} from 'three/web
 import {Fn,Loop,storage,uniform,uint,vec3,vec4,vertexIndex,instanceIndex,cross} from 'three/tsl';
 import {COMPONENT_TRANSPORT_ROUTE} from './structural-material-component-transport.mjs';
 import {BOUNDED_FRAGMENT_ROUTE} from './structural-material-bounded-fragments.mjs';
+import {disposeAll} from './structural-material-disposal.mjs';
 
 export function packGpuTransport(binding,indices){
  if(![COMPONENT_TRANSPORT_ROUTE,BOUNDED_FRAGMENT_ROUTE].includes(binding?.route)||!Array.isArray(indices)||!indices.length||!indices.every(i=>Number.isInteger(i)&&binding.entries[i]))throw new Error('Complete transport vertex correspondence required');
@@ -15,7 +16,7 @@ export function packGpuTransport(binding,indices){
 const surfaceStates=new WeakMap();
 function acquireSurfaceState(resident){
  let shared=surfaceStates.get(resident);if(!shared){const source=resident.stateBuffer(),device=resident.device,buffer=device.createBuffer({label:'published material surface pose',size:source.size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});shared={buffer,references:0,capture(){const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(resident.stateBuffer(),0,buffer,0,source.size);device.queue.submit([encoder.finish()]);}};surfaceStates.set(resident,shared);}shared.references++;
- return{buffer:shared.buffer,capture:()=>shared.capture(),release(){if(--shared.references===0){shared.buffer.destroy();surfaceStates.delete(resident);}}};
+ return{buffer:shared.buffer,capture:()=>shared.capture(),release(){if(--shared.references===0){try{shared.buffer.destroy();}finally{surfaceStates.delete(resident);}}}};
 }
 
 export function createGpuTransport(renderer,resident,binding,indices,materials){
@@ -31,5 +32,5 @@ export function createGpuTransport(renderer,resident,binding,indices,materials){
   const t=cross(quaternion.xyz,offset).mul(2);return center.add(offset).add(t.mul(quaternion.w)).add(cross(quaternion.xyz,t));
  }),position=transported(vertexIndex);
  const owned=materials.map(source=>{const material=new MeshStandardNodeMaterial();for(const key of ['color','map','normalMap','normalScale','normalMapType','roughness','roughnessMap','metalness','metalnessMap','aoMap','aoMapIntensity','emissive','emissiveMap','emissiveIntensity','side'])if(source[key]!==undefined)material[key]=source[key]?.clone&&!source[key].isTexture?source[key].clone():source[key];material.flatShading=true;material.positionNode=position;return material;});
- return{route:'kaminos.deformable-surface.resident-vertex-transport.webgpu.v0',materials:owned,captureState:published.capture,setQuaternion(q){quaternion.value.set(q.x,q.y,q.z,q.w);},async readPositions(){const attribute=new StorageBufferAttribute(new Float32Array(indices.length*4),4),output=storage(attribute,'vec4',indices.length),compute=Fn(()=>{output.element(instanceIndex).assign(vec4(transported(instanceIndex),1));})().compute(indices.length);try{await renderer.computeAsync(compute);const values=new Float32Array(await renderer.getArrayBufferAsync(attribute));return Array.from({length:indices.length},(_,i)=>Array.from(values.slice(i*4,i*4+3)));}finally{compute.dispose();if(renderer.backend.get(attribute).buffer)renderer.backend.destroyAttribute(attribute);}},dispose(){for(const material of owned)material.dispose();for(const attribute of attributes)if(renderer.backend.get(attribute).buffer)renderer.backend.destroyAttribute(attribute);renderer.backend.delete(points);published.release();},stateAttribute:points};
+ return{route:'kaminos.deformable-surface.resident-vertex-transport.webgpu.v0',materials:owned,captureState:published.capture,setQuaternion(q){quaternion.value.set(q.x,q.y,q.z,q.w);},async readPositions(){const attribute=new StorageBufferAttribute(new Float32Array(indices.length*4),4),output=storage(attribute,'vec4',indices.length),compute=Fn(()=>{output.element(instanceIndex).assign(vec4(transported(instanceIndex),1));})().compute(indices.length);try{await renderer.computeAsync(compute);const values=new Float32Array(await renderer.getArrayBufferAsync(attribute));return Array.from({length:indices.length},(_,i)=>Array.from(values.slice(i*4,i*4+3)));}finally{disposeAll([()=>compute.dispose(),()=>{if(renderer.backend.get(attribute).buffer)renderer.backend.destroyAttribute(attribute);}], 'Transport observation cleanup failed');}},dispose(){disposeAll([...owned.map(material=>()=>material.dispose()),...attributes.map(attribute=>()=>{if(renderer.backend.get(attribute).buffer)renderer.backend.destroyAttribute(attribute);}),()=>renderer.backend.delete(points),()=>published.release()],'Transport cleanup failed');},stateAttribute:points};
 }

@@ -48,7 +48,7 @@ const icon=(id,shape)=>{$(id).replaceChildren(createElement(shape));};icon('rese
 const stamp=(kind,data)=>{inputs.push({kind,data,at:performance.now(),steps:observed?.steps,epoch:observed?.damageEpoch});ownerExperiment?.recordInput(kind,data,experimentStatus());onInput?.({kind,data,effective:experimentStatus()});};
 const positions=state=>Array.from({length:state.model.points},(_,i)=>state.state.slice(i*16+4,i*16+7));
 const cameraState=()=>{camera.updateMatrixWorld(true);return{position:camera.position.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),near:camera.near,far:camera.far,fov:camera.fov};};
-const fail=e=>{failure={message:e.message,stack:e.stack};$('failure').textContent=e.message;gesture=null;controls.enabled=true;};
+const fail=e=>{failure={message:e.message,stack:e.stack};$('failure').textContent=e.message;gesture=null;controls.enabled=closing?previousControlsEnabled:true;};
 const settle=async(includeInput=false)=>{while(busy||includeInput&&(pendingPick||finishing)){if(failure)throw new Error(failure.message);await new Promise(r=>setTimeout(r,5));}};
 function invalidateMaterialObservation(reason){if(!bounded||!observed)return;observed={...observed,observation:{kind:'submitted',stressCurrent:false,readbackBytes:0,reason}};surfaceObservation=null;interactionObservation=null;}
 function experimentStatus(){

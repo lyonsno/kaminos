@@ -232,7 +232,8 @@ try{onProgress('readback-await');await Promise.all(readbacks.map(b=>b.mapAsync(G
    damagePlane(normal,offset,nodes){return serial(async()=>{valid(!compact,'Compact material requires stress release with degradation');valid(!separated,'Separated material requires an interior cut, not edge removal');valid(Array.isArray(normal)&&normal.length===3&&normal.every(Number.isFinite)&&Math.abs(Math.hypot(...normal)-1)<=1e-6&&Number.isFinite(Math.fround(offset)),'Explicit unit damage plane required');if(nodes!==undefined){valid(Array.isArray(nodes)&&nodes.length&&new Set(nodes).size===nodes.length&&nodes.every(i=>Number.isInteger(i)&&i>=0&&i<n),'Explicit material component nodes required');for(let i=0;i<n;i++)device.queue.writeBuffer(buffers.diagnostics,(i*24+18)*4,new Float32Array([0]));for(const i of nodes)device.queue.writeBuffer(buffers.diagnostics,(i*24+18)*4,new Float32Array([1]));}configure([...normal,offset],nodes!==undefined);const encoder=device.createCommandEncoder();dispatch(encoder,'damage',0,bondCount);device.queue.submit([encoder.finish()]);await device.queue.onSubmittedWorkDone();damageEpoch++;});},
    read(){return serial(async()=>({...await readNow(),energyKernel,volumeBarrier:barrier,constitutiveLayout:descriptor.constitutiveLayout??'directional-edge-release-64-v0'}));},
    readFrame({stress=false}={}){return serial(async()=>{valid(typeof stress==='boolean','Explicit boolean frame stress policy required');return{...await readNow({full:false,stress}),energyKernel,volumeBarrier:barrier,constitutiveLayout:descriptor.constitutiveLayout??'directional-edge-release-64-v0'};});},
-   dispose(){for(const b of owned)b.destroy();failure='Resident material disposed';}
+   dispose(){failure='Resident material disposed';disposeAll(owned.map(b=>()=>b.destroy()),'Resident material cleanup failed');}
   };
- }catch(error){for(const b of owned)b.destroy();throw error;}
+ }catch(error){disposeAll(owned.map(b=>()=>b.destroy()),'Resident material initialization failed',error);}
 }
+import {disposeAll} from './structural-material-disposal.mjs';
