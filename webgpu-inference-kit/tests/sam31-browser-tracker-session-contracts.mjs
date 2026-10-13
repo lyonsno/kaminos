@@ -513,3 +513,4 @@ assert.match(
 assert.doesNotMatch(driverSource, /const attentionShape = \{ batch: 1, queryHeight: 2/, 'memory attention must consume authenticated query and bank geometry');
 
 console.log('sam3.1 browser tracker session contracts passed');
+await import('./sam31-browser-tracker-perframe-contracts.mjs');
