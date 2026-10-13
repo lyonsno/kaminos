@@ -5967,7 +5967,13 @@ try {
   effectiveServerRoots = await fetchServerRoots(effectiveHref);
   assertExpectedServerRoot(effectiveServerRoots);
 
-  if (scenario === 'muscle-support-assay') {
+  if (scenario === 'hindquarter-binding-assay') {
+    phase = 'scenario-hindquarter-binding-assay';
+    const { runHindquarterWitness } = await import('./hindquarter-binding-witness.mjs');
+    lastEvidence.hindquarter = await runHindquarterWitness({evaluate,capture:capturePngScreenshot,ws,out,delay,
+      expected:{manifest:args.get('--expected-case-sha256'),source:args.get('--expected-source-sha256')},
+      progress:state=>{lastEvidence.hindquarterProgress=state;}});
+  } else if (scenario === 'muscle-support-assay') {
     phase = 'scenario-muscle-support-assay';
     const { runSupportAssayWitness } = await import('./muscle-support-assay-witness.mjs');
     lastEvidence.supportAssay = await runSupportAssayWitness({evaluate,capture:capturePngScreenshot,ws,out,delay,
