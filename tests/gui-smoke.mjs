@@ -33,6 +33,11 @@ const ALLOWED = [
       || (/GPUValidationError/.test(e.text || '') && /is invalid due to a previous error/.test(e.text || '')),
   },
   {
+    id: 'greenroom-root-missing-404',
+    reason: "on load the Greenroom panel lists <greenroom root>/done through /api/browse; on a machine without a GPU Greenroom state directory (a CI runner) that answers 404, and the panel shows an empty list",
+    matches: e => e.source === 'log.network' && /\b404\b/.test(e.text || '') && /\/api\/browse\?root=greenroom&path=/.test(e.url || ''),
+  },
+  {
     id: 'juice-frame-lerms-preview-404',
     reason: 'the Juice tab frame requests machine-local LERMS preview packets through /api/read?root=lerms-preview; they do not exist on a clean checkout or a CI runner, and the frame continues without them',
     matches: e => e.source === 'log.network' && /\b404\b/.test(e.text || '') && /\/api\/read\?root=lerms-preview&/.test(e.url || ''),
