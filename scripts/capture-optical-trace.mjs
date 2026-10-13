@@ -161,7 +161,12 @@ try {
       }
       const incident=effective.incidentLight;
       assert.ok(incident&&typeof incident==='object','missing capture incident lighting');
-      for(const [key,value] of Object.entries({model:'distributed-volume-direct-radiance-v0',
+      if(report.state.physicalColor.incidentLight.model==='six-direction-single-scattering-v1') {
+        assert.deepEqual(incident,report.state.physicalColor.incidentLight,'capture native incident lighting differs from baseline');
+        assert.equal(incident.legacyDispatched,true);
+        assert.ok(Number.isSafeInteger(incident.grid)&&incident.grid>0,'invalid native incident grid');
+      } else {
+        for(const [key,value] of Object.entries({model:'distributed-volume-direct-radiance-v0',
         source:'same-generation-raw-emission-extinction',support:'full-height-geometry-visible-receivers',
         frame:report.state.simStepCount,receivers:report.state.physicalColor.incidentLight.receivers,
         directions:report.state.physicalColor.incidentLight.directions,legacyDispatched:false})) {
@@ -169,6 +174,7 @@ try {
       }
       for(const key of ['receivers','directions','generation']) {
         assert.ok(Number.isSafeInteger(incident[key])&&incident[key]>0,`invalid incident ${key}`);
+      }
       }
       if(reference) {
         assert.deepEqual(chunk.plan,reference.chunk.plan,'trace plan changed');

@@ -11231,6 +11231,7 @@ export function createKaminosVolumePrototype({
   let context = null;
   let pipeline = null;
   let readbackPipeline = null;
+  let opticalTraceReadbackPipeline = null;
   let leanStockPipeline = null;
   let leanStockReadbackPipeline = null;
   let productRaymarchPipeline = null;
@@ -13381,6 +13382,7 @@ export function createKaminosVolumePrototype({
     }
     const renderPipelineConstants = { GRID: gridSize, GRID_Y: gridHeight, TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0, LEAN_STOCK_RAYMARCH: false };
     ordinaryDepthPipelines.clear();
+    opticalTraceReadbackPipeline = null;
     scenePointPipelines.clear();
     const leanStockRenderPipelineConstants = { ...renderPipelineConstants, LEAN_STOCK_RAYMARCH: true };
     const computePipelineConstants = { GRID: gridSize, GRID_Y: gridHeight };
@@ -19520,6 +19522,16 @@ export function createKaminosVolumePrototype({
           resource:(ordinarySceneDepthTexture || ordinarySceneDepthFallback).createView()}]});
     }
     let drawPipeline = selectRaymarchPipeline(targetPipeline);
+    if (options.opticalTrace && !distributedGroup && !scenePointBindGroup) {
+      opticalTraceReadbackPipeline ||= device.createRenderPipeline({
+        label:'native incident-light optical trace',layout:productRaymarchPipelineLayout,
+        vertex:{module:shader,entryPoint:'vs'},fragment:{module:shader,entryPoint:'fs',
+          constants:{GRID:gridSize,GRID_Y:gridHeight,TRANSPARENT_CANVAS:transparentCanvas?1:0,
+            LEAN_STOCK_RAYMARCH:false,OPTICAL_TRACE_CAPTURE:true},targets:[{format:'rgba8unorm'}]},
+        primitive:{topology:'triangle-list'},
+      });
+      drawPipeline = opticalTraceReadbackPipeline;
+    }
     if (multisampled) {
       const basePipeline = drawPipeline;
       if (!ordinaryDepthPipelines.has(basePipeline)) {
@@ -19538,7 +19550,8 @@ export function createKaminosVolumePrototype({
           vertex:{module:ordinaryMultisampleShader,entryPoint:'vs'},
           fragment:{module:ordinaryMultisampleShader,entryPoint:'fs',
             constants:{GRID:gridSize,GRID_Y:gridHeight,TRANSPARENT_CANVAS:transparentCanvas ? 1 : 0,
-              LEAN_STOCK_RAYMARCH:basePipeline === leanStockPipeline || basePipeline === leanStockReadbackPipeline},
+              LEAN_STOCK_RAYMARCH:basePipeline === leanStockPipeline || basePipeline === leanStockReadbackPipeline,
+              OPTICAL_TRACE_CAPTURE:Boolean(options.opticalTrace)},
             targets:[{format:targetPipeline === readbackPipeline ? 'rgba8unorm' : format}]},
           primitive:{topology:'triangle-list'},
         }));
@@ -19663,7 +19676,7 @@ export function createKaminosVolumePrototype({
       device.pushErrorScope('validation'); scopeOpen=true;
       let encoder=device.createCommandEncoder({label:OPTICAL_TRACE_IDENTITY});
       encoder=prepareSharedSceneConsumers(encoder);
-      if (!distributedGroup) throw new Error('optical trace currently requires distributed incident lighting');
+      if (!distributedGroup && scenePointBindGroup) throw new Error('optical trace does not support added scene-point incident lighting');
       encodeBoundarySidecar(encoder);
       encodeDraw(encoder,frameTexture.createView(),OPTICAL_TRACE_IDENTITY,readbackPipeline,{opticalTrace:true});
       effective={route:state.effectiveRoute,backend:state.backend,simStepCount:step,
