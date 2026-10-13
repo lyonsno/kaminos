@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import './creature-body-fixture.mjs';
 import * as THREE from '../lib/three.core.js';

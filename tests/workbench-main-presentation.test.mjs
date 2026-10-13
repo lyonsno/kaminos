@@ -14,7 +14,8 @@ function fixture(){
  const document={activeElement:null,getElementById:id=>nodes.get(id),querySelector:q=>fields.get(q.match(/data-transform-field="(.+)"/)?.[1])};
  let selected=rows[0],refreshes=0,redraws=0;
  const c={document,sceneObjects:rows,flameDomainGuide:null,activeSceneObjectId:'body',activeSceneGroupId:null,activeSceneFieldId:null,FLAME_EMITTER_ID:'flame',FLAME_EMITTER_TYPE:'flame-emitter',flameEmitterInjectionSuspended:false,
-  syncLevelingButton(){},setTransformInspectorFieldsDisabled(){},updateSplatCorrectionPanel(){},selectedPlacementEntry:()=>selected,
+  sceneSelection:{ids:['body'],activeId:'body'},selectionProxy:null,
+  syncLevelingButton(){},setTransformInspectorFieldsDisabled(){},updateSplatCorrectionPanel(){},syncEditorHelperVisibility(){},syncSelectionInspector(){},selectedPlacementEntry:()=>selected,
   scenePlacementTools:{draw(){refreshes++;},edits:{state:()=>({undoCount:3,redoCount:1,active:null})}},window:{_kaminosDirty(){redraws++;}}};
  vm.createContext(c);vm.runInContext(['sceneObjectTransformState','degreesFromRadians','updateTransformInspector','refreshWorkbenchAssetPresentation'].map(actual).join('\n'),c);
  return {root,other,rows,fields,nodes,document,c,refresh:()=>c.refreshWorkbenchAssetPresentation({id:'body',root}),selectOther(){selected=rows[1];c.activeSceneObjectId='other';},counts:()=>({refreshes,redraws})};

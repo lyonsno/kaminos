@@ -31,10 +31,14 @@ export function createCreatureMotionPlayback({THREE,root,clip,source,onDirty=()=
     const tick=now=>{
       if(disposed||token!==generation)return;
       handle=null;
-      if(!root.parent){pause();status='removed';return;}
+      if(!root.parent){cancel();action.paused=true;status='removed';onDirty();return;}
       const dt=last===null?0:Math.max(0,(now-last)/1000);last=now;
-      mixer.update(dt);onDirty();
-      if(action.time>=clip.duration){status='held';last=null;return;}
+      mixer.update(dt);
+      if(action.time>=clip.duration){status='held';last=null;}
+      onDirty();
+      // Host notification can synchronously dispose or replace this clock.
+      // The old tick must neither overwrite that state nor enqueue more work.
+      if(disposed||token!==generation||status!=='playing')return;
       handle=requestFrame(tick);
     };
     handle=requestFrame(tick);onDirty();return read();
