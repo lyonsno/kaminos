@@ -4,23 +4,36 @@ import {createPairedFluidPlayback} from '../../paired-fluid-playback.mjs';
 export default{id:'paper/paired-pressure',title:'Paired water · pressure compliance',
  async create({host,inputs={},record}){
   if(!inputs||typeof inputs!=='object'||Array.isArray(inputs)||Object.keys(inputs).some(k=>k!=='compliance'))throw Error('Paired pressure accepts only candidate compliance');
-  let compliance=inputs.compliance??DERIVED_MAIN_COMPLIANCE,backend,player,sceneSession,unsubscribe,mounted=null,closed=false;
+  let compliance=inputs.compliance??DERIVED_MAIN_COMPLIANCE,backend,player,sceneSession,unsubscribe,mounted=null,closed=false,transition=null,pendingReset=null;
   const doc=host.controls.document,win=doc.defaultView;
   async function start(value){
    const setups=[pressureLaunchSetup({compliance:0}),pressureLaunchSetup({compliance:value})];
    backend=await host.fluid.openPair(setups);
-   player=await createPairedFluidPlayback({backend,record,changed:state=>mounted?.update(state)});
+   player=await createPairedFluidPlayback({backend,record,changed:state=>mounted?.update(transition?read():state)});
    unsubscribe=backend.onFrame(({timestampMs})=>{player.tick(timestampMs).catch(error=>mounted?.error(error));});
   }
   try{sceneSession=await host.scene.open();await start(compliance);}
   catch(error){await backend?.dispose();await sceneSession?.dispose();throw error;}
-  const read=()=>({...player.read(),candidateCompliance:compliance,host:backend.state(),view:sceneSession.readView(),question:'Does finite pressure compliance improve the drop through impact?',purpose:'Same water, radius, timestep and four passes. Surface force and artificial damping off. Diagnostic comparison; no accepted water preset.'});
-  async function reset(value=compliance){
-   pressureLaunchSetup({compliance:value});unsubscribe?.();await player.dispose();compliance=value;await start(compliance);mounted?.update(player.read());return read();
+  const read=()=>transition?{...transition.previous,status:transition.phase,readAuthority:'retained-before-reset',busy:transition.phase==='resetting',playing:false,failure:transition.failure??null,requestedCompliance:transition.requested}:({...player.read(),status:'live',readAuthority:'live-pair',candidateCompliance:compliance,host:backend.state(),view:sceneSession.readView(),question:'Does finite pressure compliance improve the drop through impact?',purpose:'Same water, radius, timestep and four passes. Surface force and artificial damping off. Diagnostic comparison; no accepted water preset.'});
+  const live=()=>{if(closed||transition||!player)throw Error('Water comparison unavailable: '+(transition?.phase??'disposed'));return player;};
+  function reset(value=compliance){
+   if(closed)throw Error('Water comparison disposed');if(pendingReset)throw Error('Water reset already in progress');
+   pressureLaunchSetup({compliance:value});transition={phase:'resetting',previous:read(),requested:value};mounted?.update(read());
+   pendingReset=(async()=>{
+    unsubscribe?.();unsubscribe=null;
+    try{
+     await player?.dispose();player=null;backend=null;compliance=value;await start(compliance);
+     if(closed)throw Error('Water comparison disposed during reset');
+     transition=null;mounted?.update(player.read());return read();
+    }catch(error){
+     unsubscribe?.();unsubscribe=null;await player?.dispose();player=null;await backend?.dispose();backend=null;
+     transition={...transition,phase:'failed-reset',failure:error.message};mounted?.update(read());throw error;
+    }finally{pendingReset=null;}
+   })();return pendingReset;
   }
   return{read,operations:{
-   seek:step=>player.seek(step),step:()=>player.seek(player.read().step+1),pause:()=>player.pause(),
-   play({seconds=2,rate=1}={}){const s=player.read();if(!Number.isFinite(seconds)||seconds<=s.timeSeconds)throw Error('End time must follow current time');return player.play({endStep:Math.round(seconds/s.dt),rate});},
+   seek:step=>live().seek(step),step:()=>live().seek(player.read().step+1),pause:()=>{player?.pause();return read();},
+   play({seconds=2,rate=1}={}){const s=live().read();if(!Number.isFinite(seconds)||seconds<=s.timeSeconds)throw Error('End time must follow current time');return player.play({endStep:Math.round(seconds/s.dt),rate});},
    reset:({compliance:value=compliance}={})=>reset(value),
    frame(){sceneSession.setView({position:[-3.5,3.6,7],target:[-.7,1.5,.4],up:[0,1,0]});return read();},
   },async mount({root,document,invoke}){
@@ -40,8 +53,8 @@ export default{id:'paper/paired-pressure',title:'Paired water · pressure compli
     const input=action==='play'?{seconds:Number(end.value),rate:Number(speed.value)}:action==='reset'?{compliance:Number(coefficient.value)}:undefined;act(action,input);
    });
    listen(slider,'input',()=>act('seek',Number(slider.value)));
-   const inactive=()=>{player.pause();};listen(win,'blur',inactive);listen(document,'visibilitychange',()=>{if(document.hidden)inactive();});
-   mounted={update(s){slider.max=String(s.recordedEndStep);slider.value=String(s.step);time.textContent=s.timeSeconds.toFixed(3)+' s';labels.lastChild.textContent='Finite compliance · '+compliance.toPrecision(5);output.textContent=s.failure?'Stopped: '+s.failure:s.busy?'Advancing both…':`${s.playing?'Playing':'Paused'} · ${s.retainedFrames} frames · ${(s.historyBytes/1048576).toFixed(1)} MB`;},error(error){player.pause();output.textContent=error.message;},dispose(){releaseTransport();for(const remove of listeners)remove();panel.remove();labels.remove();style.remove();document.body.classList.remove('paired-fluid-comparison','pair-show-inspector');}};
+   const inactive=()=>{if(!transition)player?.pause();};listen(win,'blur',inactive);listen(document,'visibilitychange',()=>{if(document.hidden)inactive();});
+   mounted={update(s){slider.max=String(s.recordedEndStep);slider.value=String(s.step);time.textContent=s.timeSeconds.toFixed(3)+' s';labels.lastChild.textContent='Finite compliance · '+compliance.toPrecision(5);output.textContent=s.failure?'Stopped: '+s.failure:s.status==='resetting'?'Resetting both water runs…':s.busy?'Advancing both…':`${s.playing?'Playing':'Paused'} · ${s.retainedFrames} frames · ${(s.historyBytes/1048576).toFixed(1)} MB`;},error(error){if(!transition)player?.pause();output.textContent=error.message;},dispose(){releaseTransport();for(const remove of listeners)remove();panel.remove();labels.remove();style.remove();document.body.classList.remove('paired-fluid-comparison','pair-show-inspector');}};
    mounted.update(player.read());await invoke('frame');return mounted;
-  },async dispose(){if(closed)return;closed=true;unsubscribe?.();mounted?.dispose();await player.dispose();await sceneSession.dispose();}};
+  },async dispose(){if(closed)return;closed=true;mounted?.dispose();mounted=null;await pendingReset?.catch(()=>{});unsubscribe?.();await player?.dispose();await sceneSession.dispose();}};
  }};
