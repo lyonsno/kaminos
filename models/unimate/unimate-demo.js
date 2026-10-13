@@ -13,6 +13,7 @@
 // (export-demo-bundle.py); prompts are encoded in the browser by Flan-T5.
 import { CooperativeUniMateDenoiser, UniMateDutyScheduler, createCooperativeCfgDrift } from './unimate-cooperative.js';
 import { dopri5Solve } from './unimate-dopri5.js';
+import {replacementSolve,alignOverlap,tailConstraint,seedConstraint} from './unimate-replacement.js';
 import { decodeUniMateMotion, groundedOffsets } from './unimate-decode.js';
 import { requestUniMateDevice } from './unimate-denoiser.js';
 import { T5Encoder } from './unimate-t5.js';
@@ -422,22 +423,41 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
     };
 
     let active = null;
-    async function solve({ caption, noise, schedule, onEvaluation, onStep }) {
+    async function solve({ caption, noise, schedule, onEvaluation, onStep, cfgScale=3, continuation=null }) {
       scheduler.setSchedule(schedule);
       den.writeConditioning(conditioningFor(caption));
       den.encodePrepare(scheduler.encoder());
       await scheduler.flush('unimate.prepare');
-      const drift = createCooperativeCfgDrift(device, den, scheduler, { prompts: 1, onEvaluation });
+      const drift = createCooperativeCfgDrift(device, den, scheduler, { prompts: 1, onEvaluation, cfgScale });
       try {
-        const res = await dopri5Solve({ y0: noise, drift, outputTimes: bundle.outputTimes, rtol: 1e-3, atol: 1e-6, onStep });
-        const final = res.solution.at(-1);
+        let final,res,sampling='dopri5-valid-joints',alignment=null;
+        if(continuation){
+          const N=continuation.frames,overlap=continuation.overlap??10,prefix=continuation.features;
+          if(continuation.assetCondSha256!==bundle.assetCondSha256||continuation.joints!==J||!Number.isInteger(N)||N<T||prefix?.length!==N*J*Fe||!prefix.every(Number.isFinite))throw new Error('continuation source identity/shape mismatch');
+          const normalized=new Float32Array(J*Fe*T);
+          for(let t=0;t<T;t++)for(let j=0;j<J;j++)for(let d=0;d<Fe;d++)normalized[(j*Fe+d)*T+t]=Math.fround(Math.fround(prefix[((N-T+t)*J+j)*Fe+d]-arrays.mean[j*Fe+d])/arrays.std[j*Fe+d]);
+          const tail=tailConstraint(normalized,J,T,overlap);
+          alignment=alignOverlap({state:tail,parents,mean:arrays.mean,std:arrays.std,frames:overlap});
+          const constraint=seedConstraint(alignment.state,J,T,overlap),steps=[];
+          final=await replacementSolve({noise,...constraint,drift,steps:50,onStep:s=>{steps.push(s);onStep?.(s);}});
+          final=alignOverlap({state:final,parents,mean:arrays.mean,std:arrays.std,frames:T,inverse:true,facing:alignment.facing}).state;
+          res={steps};sampling='replacement-euler-50';
+        }else{
+          res=await dopri5Solve({ y0: noise, drift, outputTimes: bundle.outputTimes, rtol: 1e-3, atol: 1e-6, onStep });
+          final=res.solution.at(-1);
+        }
         // Denormalize (motion * std + mean, float32) into [T, J, 12] features, then decode.
         const features = new Float32Array(T * J * Fe);
         for (let t = 0; t < T; t++) for (let j = 0; j < J; j++) for (let d = 0; d < Fe; d++) {
           features[(t * J + j) * Fe + d] = Math.fround(Math.fround(final[(j * Fe + d) * T + t] * arrays.std[j * Fe + d]) + arrays.mean[j * Fe + d]);
         }
-        const motion = decodeUniMateMotion({ features, frames: T, parents, offsets });
-        return { motion, features, steps: res.steps, evaluations: drift.evaluations, duties: scheduler.stats.history.slice() };
+        let returnedFeatures=features,frames=T;
+        if(continuation){
+          const overlap=continuation.overlap??10;frames=continuation.frames+T-overlap;
+          returnedFeatures=new Float32Array(frames*J*Fe);returnedFeatures.set(continuation.features);returnedFeatures.set(features.subarray(overlap*J*Fe),continuation.features.length);
+        }
+        const motion = decodeUniMateMotion({ features:returnedFeatures, frames, parents, offsets });
+        return { motion, features:returnedFeatures, segmentFeatures:features, sampling,cfgScale,steps: res.steps, evaluations: drift.evaluations, duties: scheduler.stats.history.slice() };
       } finally {
         drift.dispose();
         await scheduler.discard();
@@ -447,7 +467,8 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
     // text: any prompt (browser T5), or promptIndex: a captured bundle prompt. seed null replays
     // the accepted run's noise, which exists only for captured prompts.
     async function generate({ text = null, promptIndex = null, seed = null, cooperative = true, targetDutyMs = 12, maxInFlight = 1,
-      onEvaluation, onStep } = {}) {
+      onEvaluation, onStep, cfgScale=3, continuation=null } = {}) {
+      if(!Number.isFinite(cfgScale)||cfgScale<=1)throw new RangeError('guided generation requires cfgScale > 1');
       if (text === null) text = bundle.prompts[promptIndex ?? 0].text;
       const match = bundle.prompts.findIndex(p => p.text === text);
       if (seed === null && match < 0) throw new Error('the accepted run\'s noise exists only for captured prompts; choose a browser seed');
@@ -471,7 +492,7 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
           route = await session.registerRoute({ routeId: UNIMATE_ROUTE_ID, runtimeOptions: { runtimeLabel: 'unimate', foregroundOpportunities: frameRun.foregroundOpportunities } });
           const control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground: frameRun.withForeground });
           active.control = control;
-          const job = route.enqueue({ jobId: runId, execute: invocation => solve({ caption, noise, onEvaluation, onStep,
+          const job = route.enqueue({ jobId: runId, execute: invocation => solve({ caption, noise, onEvaluation, onStep,cfgScale,continuation,
             schedule: { runtime: route.runtime, invocation, control, signal: abort.signal, targetDutyMs, maxInFlight } }) });
           const completion = await job.completion;
           if (completion.status !== 'succeeded') {
@@ -481,7 +502,7 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
           }
           result = completion.output;
         } else {
-          result = await solve({ caption, noise, schedule: null, onEvaluation, onStep });
+          result = await solve({ caption, noise, schedule: null, onEvaluation, onStep,cfgScale,continuation });
         }
         result.prompt = text;
         result.seed = seed;
