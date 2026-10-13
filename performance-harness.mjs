@@ -1,0 +1,68 @@
+// Opt-in measurements at the ordinary host animation boundary. The host owns
+// the scene, renderer and clock; this adapter neither replaces nor replays them.
+export function createPerformanceHarness({read, apply, requestFrame}) {
+  let pending = null, lastRun = null;
+  const require = (ok, message) => { if (!ok) throw Error(message); };
+  const identity = state => JSON.stringify({generation:state.clock.generation,
+    step:state.clock.step, camera:state.camera, extent:state.extent,
+    controls:state.controls, device:state.device});
+  function fail(error) {
+    if (!pending) return;
+    const run = pending; pending = null;
+    lastRun={status:'failed',failure:error.message,frames:run.frames};
+    error.partialFrames = run.frames;
+    run.reject(error);
+  }
+  function sample({frames, warmupFrames = 0} = {}) {
+    require(!pending, 'Performance sampling already active');
+    require(Number.isSafeInteger(frames) && frames >= 2, 'At least two actual frames required');
+    require(Number.isSafeInteger(warmupFrames) && warmupFrames >= 0, 'Invalid warmup frame count');
+    const state = read();
+    require(state.clock.available && state.clock.paused && state.clock.running,
+      'Performance rendering comparison requires held water and an active host');
+    require(state.device.backend === 'webgpu' && state.device.shared && state.device.fallback === false,
+      'Performance comparison requires native shared WebGPU without fallback');
+    require(state.controls.sceneGIMode === 'gtao', 'AO comparison requires the standalone GTAO route');
+    require(document.visibilityState === 'visible', 'Performance page must be visible');
+    return new Promise((resolve, reject) => {
+      pending = {frames:[], remainingWarmup:warmupFrames, count:frames, workStart:state.aoWork,
+        identity:identity(state), resolve, reject};
+      requestFrame();
+    });
+  }
+  function record({startedAt, endedAt, rendered}) {
+    if (!pending) return;
+    try {
+      const state = read();
+      require(document.visibilityState === 'visible', 'Performance page became hidden');
+      require(state.clock.paused && state.clock.running && state.clock.available,
+        'Held water or host playback changed during performance sampling');
+      require(identity(state) === pending.identity, 'Performance source, camera, extent or controls changed');
+      require(!state.failure, `Host render failed: ${state.failure}`);
+      if (rendered) {
+        require(state.render.waterEnabled === state.controls.waterEnabled,
+          'Requested water rendering was not exercised');
+        require(Number.isFinite(endedAt-startedAt) && endedAt > startedAt, 'Invalid callback timing');
+        if (pending.remainingWarmup) {pending.remainingWarmup--;pending.workStart=state.aoWork;}
+        else pending.frames.push({frameId:state.render.frameId, route:state.render.route,
+          waterEnabled:state.render.waterEnabled, startedAt, endedAt,
+          callbackMs:endedAt-startedAt, aoWork:{...state.aoWork}});
+        if (pending.frames.length === pending.count) {
+          const run = pending; pending = null;
+          lastRun={status:'complete',state,frames:run.frames,workStart:run.workStart};
+          run.resolve(lastRun);
+          return;
+        }
+      }
+      requestFrame();
+    } catch (error) { fail(error); }
+  }
+  return {read, sample, record, fail, progress:()=>pending?{status:'sampling',remainingWarmup:pending.remainingWarmup,frames:pending.frames}:lastRun, apply(patch) {
+    require(!pending, 'Cannot edit a performance case during sampling');
+    require(patch && typeof patch === 'object' && !Array.isArray(patch), 'Performance case must be an object');
+    for (const key of Object.keys(patch)) require(['waterEnabled','sceneAOEnabled','renderScale','energyDiagnosticsMode','timingEnabled','fresnelCutoff'].includes(key), `Unsupported performance control: ${key}`);
+    if ('waterEnabled' in patch) require(typeof patch.waterEnabled === 'boolean', 'waterEnabled must be boolean');
+    if ('fresnelCutoff' in patch) require(Number.isFinite(patch.fresnelCutoff) && patch.fresnelCutoff >= 0 && patch.fresnelCutoff <= 1, 'Invalid Fresnel cutoff');
+    apply(patch); requestFrame(); return read();
+  }};
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "kaminos.performance.v1",
+  "description": "Separate ordinary scene AO expense from interaction with water rendering",
+  "mode": "held-render",
+  "route": {
+    "workspace": "workbench",
+    "kaminos_finger_fluid_bench": "1",
+    "finger_fluid_pressure_cockpit": "1",
+    "finger_fluid_pressure_solver": "ipbf",
+    "finger_fluid_particle_count": "12288",
+    "finger_fluid_density_iterations": "3",
+    "finger_fluid_renderer": "screen_space_refraction",
+    "finger_fluid_optical_debug": "shaded",
+    "finger_fluid_witness_target_step": "256"
+  },
+  "viewport": {"width":1440,"height":936,"deviceScaleFactor":2},
+  "camera": {"distance":5,"yaw":-0.7,"pitch":0.95,"target":[0,-0.48,0.2]},
+  "heldStep": 64,
+  "warmupFrames": 16,
+  "frames": 192,
+  "rounds": 2,
+  "controls": {"renderScale":0.5,"fresnelCutoff":0.15,"energyDiagnosticsMode":"disabled","timingEnabled":false},
+  "cases": [
+    {"name":"scene-ao-off","waterEnabled":false,"sceneAOEnabled":false},
+    {"name":"scene-ao-on","waterEnabled":false,"sceneAOEnabled":true},
+    {"name":"water-ao-off","waterEnabled":true,"sceneAOEnabled":false},
+    {"name":"water-ao-on","waterEnabled":true,"sceneAOEnabled":true}
+  ]
+}

@@ -4022,6 +4022,7 @@ import {
 import {createIPBFPressureCockpit} from './finger-fluid-pressure-cockpit.mjs';
 import {investigationOperations} from './investigation-recording.mjs';
 import {createFluidAppFrameTiming} from './fluid-app-frame-timing.mjs';
+import {createPerformanceHarness} from './performance-harness.mjs';
 import {createInvestigationEntry} from './investigation-entry.mjs';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -4052,6 +4053,7 @@ let authoringWorkspace = null;
 let fluidWorkbench = null;
 let fluidReflectionCockpit = null;
 let fluidBudgetCockpit = null;
+let performanceHarness=null, performanceWaterEnabled=true, performanceLastRender=null;
 const fluidBudgetPreferences={renderScale:1,timingEnabled:false,energyDiagnosticsMode:null};
 let updateSceneAO=null;
 let fluidAppFrameScope='main animation callback';
@@ -12018,7 +12020,12 @@ async function initScene() {
       applySceneEmissiveCamera(renderPipeline,rawSceneOutput,rawSceneOutput,false);
     }
     if (fingerFluidBenchViewport && fingerFluidBenchRunning && !document.getElementById('finger-fluid-bench-operator-panel').hidden) {
-      try { drawFingerFluidBenchFrame(performance.now(),{fromHost:true}); }
+      try {
+        if(performanceHarness && !performanceWaterEnabled)fingerFluidBenchViewport.renderSceneOnly();
+        else drawFingerFluidBenchFrame(performance.now(),{fromHost:true});
+        if(performanceHarness)performanceLastRender={frameId:sceneFrameCount+1,waterEnabled:performanceWaterEnabled,
+          route:performanceWaterEnabled?'shared_scene_and_water':'ordinary_scene_without_water'};
+      }
       catch(error){
         console.error('Shared fluid bench frame failed',error);
         fingerFluidBenchState.status='error';fingerFluidBenchState.runtime={available:false,reason:String(error?.message||error)};
@@ -12082,9 +12089,10 @@ async function initScene() {
       if(!foregroundServiceActive){
         fluidAppFrameScope='main animation callback';
         const source=fluidAppFrameSource();
-        if(!source||document.visibilityState!=='visible')fluidAppFrameTiming.reset();
+        if(!source||!performanceWaterEnabled||document.visibilityState!=='visible')fluidAppFrameTiming.reset();
         else if(sceneFrameCount>beforeFrame&&source.frameId!==beforeFluidFrame)fluidAppFrameTiming.record({startedAt:callbackStart,endedAt:performance.now(),source,device:renderer.backend.device});
       }
+      performanceHarness?.record({startedAt:callbackStart,endedAt:performance.now(),rendered:sceneFrameCount>beforeFrame});
     }
   }
   compositionHost = {
@@ -14929,6 +14937,29 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
     };
     fluidBudgetCockpit=mountFluidBudgetCockpit(root,{read,apply,requestFrame:()=>window._kaminosDirty?.()});
     window.kaminosFluidFrameBudget={read,apply};
+    if(new URLSearchParams(location.search).get('kaminos_performance')==='1'){
+      const performanceRead=()=>{
+        const budget=read(),size=renderer.getDrawingBufferSize(new THREE.Vector2());
+        return {clock:budget.clock,device:budget.sceneAO.device,aoWork:budget.sceneAO.work,
+          controls:{waterEnabled:performanceWaterEnabled,sceneAOEnabled:budget.sceneAO.dedicatedAOEnabled,
+            sceneGIMode:budget.sceneAO.mode,aoIntensity:budget.sceneAO.intensity,renderScale:budget.viewport.renderScale,
+            reflection:budget.reflection.effective,energy:budget.solver.energy.mode,timingEnabled:fluidBudgetPreferences.timingEnabled},
+          extent:{width:size.x,height:size.y},camera:{world:camera.matrixWorld.toArray(),projection:camera.projectionMatrix.toArray()},
+          render:performanceLastRender,failure:budget.viewport.failure};
+      };
+      performanceHarness=createPerformanceHarness({read:performanceRead,requestFrame:()=>window._kaminosDirty?.(),
+        apply:patch=>{
+          const {waterEnabled,fresnelCutoff,...budget}=patch;
+          if(Object.keys(budget).length)apply(budget);
+          if(fresnelCutoff!==undefined){window.kaminosFluidReflectionComparison.configureB({mode:'adaptive',fresnelCutoff});window.kaminosFluidReflectionComparison.select('B');}
+          if(waterEnabled!==undefined)performanceWaterEnabled=waterEnabled;
+        }});
+      window.kaminosPerformance=performanceHarness;
+      performanceHarness.sceneSnapshot=()=>fingerFluidBenchViewport.sceneSnapshot();
+      document.addEventListener('visibilitychange',()=>performanceHarness.fail(Error('Performance visibility changed')));
+      window.addEventListener('error',event=>performanceHarness.fail(Error(event.message)));
+      window.addEventListener('unhandledrejection',event=>performanceHarness.fail(Error(String(event.reason))));
+    }
   }
   const setup=promote?byId('fluid-workbench-setup'):document.createElement('section');setup.id='fluid-workbench-setup';
   if(!promote){

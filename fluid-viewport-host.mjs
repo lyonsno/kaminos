@@ -184,6 +184,21 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
   }
 
   return {render,
+    // Keep the fixture and its helper-ground policy while exercising the
+    // ordinary scene graph alone. No water depth/capture/resolve is submitted.
+    renderSceneOnly(){
+      if(disposed||failure)throw Error(failure||'Fluid viewport disposed');
+      return withLocalLiquidHelperGround(helperGround,()=>pipeline.render());
+    },
+    sceneSnapshot(){return withLocalLiquidHelperGround(helperGround,()=>{
+      const objects=[];scene.updateMatrixWorld();
+      scene.traverse(object=>objects.push({id:object.uuid,parent:object.parent?.uuid??null,
+        visible:object.visible,type:object.type,world:object.matrixWorld.toArray(),
+        geometry:object.geometry?{id:object.geometry.uuid,index:object.geometry.index?.count??null,
+          attributes:Object.fromEntries(Object.entries(object.geometry.attributes).map(([key,a])=>[key,{count:a.count,version:a.version}]))}:null,
+        material:Array.isArray(object.material)?object.material.map(m=>m.uuid):object.material?.uuid??null}));
+      return objects;
+    });},
     frameIdentity:()=>failure?null:lastFrame&&({frameId:lastFrame.frameId,route:lastFrame.route,waterResolution:{...lastFrame.waterResolution},camera:lastFrame.camera,opticalDebugMode:lastFrame.opticalDebugMode,environmentSource:lastFrame.environmentSource,environmentGeneration:lastFrame.environmentGeneration,exposure:lastFrame.exposure}),
     beginFrameTiming:timing.begin,
     stepSimulation:dt=>timing.scope('simulation',()=>solver.step(dt)),
