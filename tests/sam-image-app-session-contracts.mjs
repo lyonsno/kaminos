@@ -18,7 +18,7 @@ const foreground = { setImage() {}, evidence: () => ({ mode: 'contract-fixture' 
 const device = {};
 const session = { device, close() { assert.fail('image tools must not close the application session'); } };
 const applicationForeground = { device, queue: {}, beginRun() {} };
-let options, runtimeCreations = 0, calls = 0, closed = false;
+let options, runtimeCreations = 0, calls = 0, closed = false, closeFailure = null;
 const source = readFileSync(new URL('../sam-image-tools.js', import.meta.url), 'utf8');
 const createTools = vm.runInNewContext(`${source.replace(/^import[^\n]*\n/gm, '').replace('export function createSamImageTools', 'function createSamImageTools')}\ncreateSamImageTools;`, {
   document: { getElementById: element, querySelectorAll: () => [], createElement: () => ({ getContext: () => context2d }) },
@@ -41,7 +41,10 @@ const createTools = vm.runInNewContext(`${source.replace(/^import[^\n]*\n/gm, ''
       assert.equal(request.sourceImage.url, '/api/read?root=image-inbox&path=selected.png');
       return { ...request, outputAuthority: 'actual-webgpu-readback', verificationState: 'not-attached',
         instances: [], imageCache: { status: calls === 1 ? 'miss' : 'hit' } };
-    }, evidence: () => ({ status: 'fixture' }), async close() { closed = true; } };
+    }, evidence: () => ({ status: 'fixture' }), async close() {
+      if (closeFailure) throw closeFailure;
+      closed = true;
+    } };
   },
 });
 const tools = createTools({ inferenceSession: session, rendererDevice: device,
@@ -55,6 +58,16 @@ await options.yield({ reason: 'fixture-boundary' });
 await tools.run();
 assert.equal(runtimeCreations, 1, 'warm prompt runs must retain their model runtime');
 assert.equal(calls, 2);
+closeFailure = new Error('unsettled model queue');
+try { await element('sam-image-unload').onclick(); } catch { /* Pre-fix callback rejection is not settlement. */ }
+assert.ok(tools.evidence().runtime, 'a failed unload must retain the runtime handle and its resources');
+assert.equal(element('sam-image-status').dataset.failed, 'true', 'failed unload must be visible');
+assert.equal(tools.progress().busy, false);
+closeFailure = null;
+await element('sam-image-unload').onclick();
+assert.equal(tools.evidence().runtime, null, 'only a successful unload retires the runtime');
+assert.equal(closed, true);
+assert.notEqual(foreground.closed, true, 'model unload must leave the image viewport alive');
 await tools.close();
 assert.equal(closed, true);
 assert.equal(foreground.closed, true);

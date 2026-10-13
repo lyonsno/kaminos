@@ -198,7 +198,16 @@ export function createSamImageTools({ inferenceSession, rendererDevice, foregrou
   };
   for (const kind of ['mask', 'cutout']) el(`save-${kind}`).onclick = () => void save(kind).catch(() => {});
   el('add-cutout').onclick = () => void save('cutout', true).catch(() => {});
-  el('unload').onclick = async () => { const previous = runtime; runtime = null; controls(); await previous?.close(); status('Model unloaded'); };
+  el('unload').onclick = async () => {
+    if (busy || !runtime) return;
+    busy = true; controls();
+    try {
+      await runtime.close();
+      runtime = null;
+      status('Model unloaded');
+    } catch (error) { fail(error); }
+    finally { busy = false; controls(); }
+  };
   const drop = event => {
     if (!active) return;
     event.preventDefault(); event.stopPropagation();
