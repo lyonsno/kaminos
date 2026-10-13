@@ -3841,6 +3841,7 @@ import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.m
 import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnapshot} from './authoring-trellis-generation.mjs';
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
+import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,KLEIN_PUBLISHED_WEIGHTS} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
@@ -3897,7 +3898,7 @@ function escapeHtml(s) {
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let viewportGizmosVisible=true;
 let viewportDisplay=checkedViewportDisplay();
-let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null,authoringImageGenerator=null,authoringImageUI=null,authoringForegroundHandoff=null,authoringTrellisGenerator=null,authoringMeshModel=null,authoringGenerateLayout=null;
+let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null,authoringImageGenerator=null,authoringImageUI=null,authoringForegroundHandoff=null,authoringTrellisGenerator=null,authoringMeshModel=null,authoringGenerateLayout=null,authoringBrowseLayout=null;
 function attachViewportGizmo(target) {
   if(selectionTransforms&&sceneSelection.ids.length&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat')target=selectionTransformProxy();
   transformControls.attach(target);
@@ -26760,7 +26761,7 @@ function setupAuthoringAssets(){
     }
     return authoringGenerator;
   };
-  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>sceneObjects.find(entry=>entry.source===source)?.label,changed:state=>{authoringAssetsUI?.render(state);authoringImageUI?.render();},
+  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>sceneObjects.find(entry=>entry.source===source)?.label,changed:state=>{authoringAssetsUI?.render(state);authoringImageUI?.render();authoringBrowseLayout?.render();},
     uploadImage:async file=>{
       const response=await fetch('/api/ingest-image?'+new URLSearchParams({name:file.name}),{method:'POST',body:await file.arrayBuffer()});const value=await response.json();
       if(!response.ok||value.schema!=='kaminos.asset-ingest.v0'||value.kind!=='image'||!value.entry?.source)throw Error(value.error||'Image storage failed');return value.entry;
@@ -26770,7 +26771,7 @@ function setupAuthoringAssets(){
       const response=await fetch(entry.source);if(!response.ok)throw Error(`Mesh source HTTP ${response.status}`);
       return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
     }});
-  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageUI?.render();authoringGenerateLayout?.render();};
+  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();};
   authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis'),changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});
   authoringImageGenerator=createKleinAuthoringImageGeneration({
     context:()=>({sharedGpu,prototype:volumePrototype,host:compositionHost,handoff:foregroundHandoff()}),
@@ -26783,6 +26784,7 @@ function setupAuthoringAssets(){
   });
   // TRELLIS runs in the GPU queue's own browser, so images can still be made meanwhile.
   authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets,meshBusy:()=>meshBusy('sf3d')});
+  authoringBrowseLayout=installBrowseLayout({document,controller:authoringAssets,inScene:()=>new Set(sceneObjects.map(entry=>entry.source).filter(Boolean)),open:mode=>authoringAssetsUI.open(mode)});
   authoringGenerateLayout=installGenerateLayout({document,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
   window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),images:authoringImageGenerator};
 }
