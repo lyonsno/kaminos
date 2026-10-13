@@ -2,7 +2,7 @@ name: tests
 
 on:
   push:
-    branches: [main, 'cc/operlocutor-*']
+    branches: [main, 'cc/operlocutor-*', 'land/**']
   workflow_dispatch:
 
 jobs:
