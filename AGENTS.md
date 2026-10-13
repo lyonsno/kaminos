@@ -17,6 +17,8 @@ unintegrated.
 
 Before a handoff, run the tests you touched with `npm test -- --only tests/a.mjs,tests/b.mjs`. Before landing, run the full `npm test`; it must report no new failures. Declare the kind of each new test file on its first line, for example `// kaminos-test: node`, instead of editing the shared manifest. Prefer behavior tests over regular-expression assertions on `index.html` source. Details: `docs/testing.md`.
 
+When landing is authorized, land with `node tools/land.mjs`: it refuses unless the branch is rebased on current main and the exact commit has a green `tests` run, and dispatches that run when none exists. Details: `docs/landing.md`.
+
 ## Retiring Surfaces
 
 Do not build on these; put new work where the successor lives.

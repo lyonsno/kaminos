@@ -11,7 +11,8 @@ Generate skeletal animation from a text prompt with [UniMate](https://github.com
 - **The whole sampler in the browser.** The 10-layer spatio-temporal transformer (74M parameters) runs in FP32 as WGSL compute shaders. Classifier-free guidance and a Dormand–Prince (dopri5) adaptive solver integrate the flow from noise to motion.
 - **Room for the application to keep rendering.** Each network evaluation is submitted as inference-kit command duties sized to measured GPU throughput. A scene on the same device keeps its frame rate during generation, and generation can be paused, resumed and stopped between duties.
 - **A complete animation.** Output includes world joint positions, local joint rotations in the skeleton's own hierarchy, the root trajectory and facing, plus the model's raw motion features.
-- **Your own rig.** Choose "Your own rig (.glb)…" or drop a rigged .glb on the page. The page prepares the skeleton the way UniMate's own preprocessing does and generates for it. You can review the joint labels and the facing pair and apply changes.
+- **Your own rig, skin and all.** Choose "Your own rig (.glb)…" or drop a rigged .glb on the page. The page prepares the skeleton the way UniMate's own preprocessing does and generates for it. It plays your skinned mesh, with its textures, driven by the generated motion. You can review the joint labels and the facing pair and apply changes.
+- **Downloads.** Every animation generated in the page downloads as an animated .glb. For your own rig, the file holds your mesh bound to the skeleton, ready for Blender or any glTF tool.
 - **Eight bodies to animate.** The published page offers the Go2 robot dog and seven Truebones animals: cat, dog, horse, T-rex, spider, eagle and parrot. Switching body takes a moment; the model stays loaded.
 - **Something to watch while it downloads.** The model is about 370 MB (UniMate plus the text encoder), downloaded once and then kept in the browser's cache. While it downloads, the page plays a gallery of clips that this port generated in the browser: a dog, a cat, the Go2 robot dog, a parrot, a horse, an eagle, a spider and a T-rex. Drag to orbit, scroll or pinch to zoom, and scrub through any clip.
 
@@ -94,6 +95,25 @@ One known difference: where the graph Laplacian has a repeated eigenvalue, the b
 
 Only the rest pose is used. An animated .glb is treated like an unanimated one, so UniMate's motion-based pruning of animated assets is not applied.
 
+### Your mesh and downloads
+
+[`unimate-rig-mesh.js`](unimate-rig-mesh.js) binds the rig's skinned mesh to the skeleton UniMate animates. It works the way `rig_preprocess` bakes an asset into the model's canonical frame (facing +Z, centred, scale, grounded):
+
+- Each vertex is placed through its own skin joints at the imported rest pose.
+- A pruned joint's weight moves to the joint that absorbed it.
+- Each vertex keeps its eight strongest influences.
+
+The page then skins the mesh on the GPU, with linear blend skinning from the generated joint transforms.
+
+[`unimate-export-glb.js`](unimate-export-glb.js) writes the download. It holds the joint hierarchy at the canonical rest pose and animation tracks for every joint's rotation and the root's travel at 30 fps. For your own rig it also holds the bound mesh, its skin, and its materials and textures. Gallery clips store only joint positions, so they download as JSON.
+
+The checks:
+
+- `tests/export-glb-contracts.mjs` reads a written file back and replays its animation against the motion.
+- The Khronos glTF validator reports no errors on files from the Fox, CesiumMan and a Kaminos cat asset.
+- Blender plays them back with every joint within 10⁻⁶ of where the page put it.
+- Rendered at rest in Blender, the bound cat mesh looks the same as UniMate's own canonical bake of the asset.
+
 ## Using it in an application
 
 - [`CooperativeUniMateDenoiser`](unimate-cooperative.js) is the network. `configure({ B, J })` allocates it for a batch and skeleton size. `writeConditioning(...)` and `encodePrepare(...)` set up a skeleton and caption once. Each evaluation is then encoded as command duties through a duty scheduler.
@@ -117,7 +137,7 @@ The browser witnesses compare against reference captures from the PyTorch implem
 - `run-t5-witness.mjs`: the text encoder.
 - `run-demo-witness.mjs`: the demo page, driven the way a person uses it.
 - `run-gallery-witness.mjs`: the clip gallery, captured while the model downloads and at chosen frames of every clip.
-- `run-rig-witness.mjs`: imports a rigged .glb through the page, optionally applies reviewed labels, writes the conditioning the page built, then generates on the rig.
+- `run-rig-witness.mjs`: imports a rigged .glb through the page and can apply reviewed labels or a rest turn. It writes the conditioning the page built, generates on the rig, and saves the download with the joint positions it should play.
 - `run-site-witness.mjs`: the published page as assembled for GitHub Pages, with weights from Hugging Face: first load, generation on two skeletons, and a reload from the browser cache.
 
 ## Credits and licenses

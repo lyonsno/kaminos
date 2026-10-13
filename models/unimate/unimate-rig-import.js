@@ -10,12 +10,14 @@
 //                                      shape demo.useSkeletonData() takes (export-demo-bundle.py's
 //                                      arrays and skeleton index).
 import { importRig, parseGlb } from './unimate-rig-glb.js';
-import { bfsOrder, canonicalizeRest, skeletonConditioning, MAX_JOINTS } from './unimate-rig-features.js';
+import { bfsOrder, canonicalizeRest, canonicalTransform, skeletonConditioning, MAX_JOINTS } from './unimate-rig-features.js';
+import { extractSkinnedMesh } from './unimate-rig-mesh.js';
 
 // skinIndex: which skin to read when the file has several (default: the one with most joints).
 export function readRig(bytes, { skinIndex = null } = {}) {
   const gltf = parseGlb(bytes);
   const rig = importRig(gltf, { skinIndex });
+  Object.defineProperty(rig, 'gltf', { value: gltf, enumerable: false });
   rig.skins = gltf.json.skins.map((s, i) => ({ index: i, name: s.name ?? `skin ${i}`, joints: s.joints.length }));
   rig.skinIndex = skinIndex ?? gltf.json.skins.reduce((best, s, i) => (s.joints.length > gltf.json.skins[best].joints.length ? i : best), 0);
   if (rig.names.length < 2) throw new Error('the rig needs at least 2 joints');
@@ -50,7 +52,12 @@ export function turnRest(rig, spec) {
   const q = quatFromTurns(spec);
   const restLocalPos = rig.restLocalPos.map((p, j) => (j === 0 ? qrot(q, p) : p));
   const restLocalRot = rig.restLocalRot.map((r, j) => (j === 0 ? qmul(q, r) : r));
-  return { ...rig, positions: rig.positions.map(p => qrot(q, p)), restLocalPos, restLocalRot, restRotation: spec };
+  // The mesh's bind turns with the skeleton.
+  const rotOf = r => [qrot(q, r[0]), qrot(q, r[1]), qrot(q, r[2])];
+  const skinBind = rig.skinBind?.map(b => (b.restWorld ? { ...b, restWorld: { r: rotOf(b.restWorld.r), t: qrot(q, b.restWorld.t) } } : b));
+  const turned = { ...rig, positions: rig.positions.map(p => qrot(q, p)), restLocalPos, restLocalRot, restRotation: spec, skinBind };
+  Object.defineProperty(turned, 'gltf', { value: rig.gltf, enumerable: false });
+  return turned;
 }
 
 // labels: { clean: label per joint in rig order, face: { right, left, bodyAxis } (rig indices) or null }.
@@ -62,6 +69,8 @@ export async function buildSkeletonBundle(rig, labels, { embed, motion, name = '
   const rest = order.map(i => rig.positions[i]);
   const face = labels.face ? { right: at.get(labels.face.right), left: at.get(labels.face.left), bodyAxis: labels.face.bodyAxis } : null;
   const canonical = canonicalizeRest(rest, parents, face);
+  // The rig's skinned mesh, bound to this canonical skeleton (null when the file has none).
+  const mesh = rig.gltf ? extractSkinnedMesh(rig.gltf, rig, { order }, canonicalTransform(rest, parents, face)) : null;
   const c = skeletonConditioning({ rest: canonical, parents });
   const clean = order.map(i => labels.clean[i]);
   const cache = new Map();
@@ -80,5 +89,5 @@ export async function buildSkeletonBundle(rig, labels, { embed, motion, name = '
   };
   const a = { tpos: c.tpos, tposParents: c.tposParents, depths: c.depths, jointNamesEmb, spectral: c.spectral, graphDist: c.graphDist,
     jointRelations: c.jointRelations, mean: c.mean, std: c.std, restPositions: c.restPositions };
-  return { b, a };
+  return { b, a, mesh };
 }

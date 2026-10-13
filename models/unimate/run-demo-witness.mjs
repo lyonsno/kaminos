@@ -2,7 +2,7 @@
 // Usage: node run-demo-witness.mjs --chrome <exe> --weights <dir> --bundle <dir> --out <dir>
 //        [--prompt 0] [--seed <n>] [--timeout-s 900] [--stall-s 180]
 // Loads the page, waits for ready, presses Generate (prompt, reference noise unless --seed),
-// captures the canvas before, during and after generation, and writes report.json plus
+// captures the canvas before, during and after generation, exports the result as .glb, and writes report.json plus
 // PNGs to --out. The report names the effective browser, page URL, source revision and the
 // last phase reached, on success and failure.
 import fsp from 'node:fs/promises';
@@ -78,6 +78,15 @@ try {
   report.result = page.result;
   if (page.phase === 'done') {
     for (const [i, delay] of [[3, 300], [4, 650], [5, 650]]) { await new Promise(r => setTimeout(r, delay)); await capture(`0${i}-playing`); }
+    // The download: the animated .glb of this generation (read back in slices) and the joint positions it should play.
+    report.phase = 'export';
+    const size = await browser.evaluate('window.__unimateExportCurrent()', false);
+    const parts = [];
+    for (let at = 0; at < size; at += 1 << 20) parts.push(Buffer.from(await browser.evaluate(`window.__unimateExportSlice(${at}, ${at + (1 << 20)})`, false), 'base64'));
+    await fsp.writeFile(path.join(outDir, 'export.glb'), Buffer.concat(parts));
+    report.exportBytes = size;
+    await fsp.writeFile(path.join(outDir, 'played-positions.json'), JSON.stringify(await browser.evaluate(`(() => { const d = window.__unimateDemoInstance, sk = d.bundle.skeleton;
+      return { jointNames: sk.jointNames, parents: sk.parents, frames: d.view.motion.frames, positions: Array.from(d.view.motion.positions) }; })()`, false)));
   }
   report.phase = 'finished';
   report.verdict ??= page.phase === 'done' ? 'COMPLETED' : 'ERROR';

@@ -9,6 +9,8 @@ npm test -- --only tests/a.mjs,tests/b.mjs
 
 `tools/test-runner.mjs` runs every top-level `.mjs` and `.py` file in `tests/` whose kind is `node` or `python`. It writes a report and one complete log per test. Pass `--report <path>` to choose where. Other flags are `--parallel <n>`, `--timeout-ms <ms>`, `--kinds node,python` and `--only <files>`.
 
+Landing a branch on `main` goes through `tools/land.mjs`, which requires a green run of this suite in CI for the exact commit being landed and dispatches one when none exists; see `docs/landing.md`.
+
 Python tests run with the `python3` on your path and need `numpy` and `pillow` installed there; CI installs both. The runner checks that every package in `package-lock.json` is installed at the locked version before running anything, and records whether integrity could be verified. It hands child tests a stub executable through `KAMINOS_CHROME`, `CHROME_BIN`, `CHROME` and `KAMINOS_SHARP_WEBGPU_CHROME`. A witness that reaches a browser launch hits the stub, which records the attempt and fails; the run then fails and names the test. Witnesses that read other variables or hardcode a browser path are not covered.
 
 ## Classifying a test
@@ -30,7 +32,7 @@ Declare the kind on the first line of a new test file:
 | `python` | A self-contained Python script that exits 0 on success. |
 | `browser` | Launches or drives a browser. Needs a reason. Not run by `npm test`. |
 | `manual` | Needs arguments, a live page, or a private environment. Needs a reason. |
-| `helper` | Imported by other tests. Needs a reason. |
+| `helper` | Imported or executed by other tests, never run on its own. Needs a reason. |
 
 Files that existed when the runner was introduced are classified in `tests/suite.json`. A declaration that disagrees with that manifest is an error. An unclassified file fails the run, so a test can't silently go unexecuted.
 
