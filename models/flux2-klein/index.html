@@ -331,15 +331,39 @@ function setRunning(running, { swapping = false } = {}) {
   $('pause').textContent = 'Pause';
 }
 
+// Live preview: each step's rough image (an eighth of the output size) is scaled up into the output
+// canvas until the decoded image replaces it.
+const previewScratch = document.createElement('canvas');
+function paintPreview({ width, height, rgba }, size) {
+  previewScratch.width = width; previewScratch.height = height;
+  previewScratch.getContext('2d').putImageData(new ImageData(rgba, width, height), 0, 0);
+  const out = $('out');
+  if (out.width !== size || out.height !== size) { out.width = size; out.height = size; }
+  $('examples').classList.add('hidden'); out.classList.remove('hidden');
+  $('save').disabled = true; // the canvas now holds a preview, not a finished image
+  const ctx = out.getContext('2d');
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(previewScratch, 0, 0, size, size);
+}
+
 $('go').onclick = async () => {
   setRunning(true);
+  let running = true;
+  const previews = { painted: 0, firstAtMs: null }, startedAt = performance.now();
+  window.kleinPreviewsPainted = 0;
   const prompt = $('prompt').value.trim(), seed = Math.max(0, Math.floor(Number($('seed').value) || 0)), size = Number($('size').value);
   try {
     const lettering = $('lettering').checked;
     const r = await demo.generate({ prompt, seed, size, textLength: lettering ? 512 : 'fit16', cooperative: $('cooperative').checked,
       onPhase: phase => say(phase === 'weights' ? 'Swapping models in from the browser cache…' : phase === 'text' ? 'Reading the prompt…'
         : phase === 'decode' ? 'Decoding the image…' : 'Denoising…'),
-      onStep: (i, n) => say(`Denoising, step ${i} of ${n}…`) });
+      onStep: (i, n) => say(`Denoising, step ${i} of ${n}…`),
+      onPreview: image => {
+        if (!running) return;
+        paintPreview(image, size);
+        previews.firstAtMs ??= performance.now() - startedAt; window.kleinPreviewsPainted = ++previews.painted;
+      } });
+    running = false;
     const out = $('out'); out.width = r.width; out.height = r.height;
     $('examples').classList.add('hidden'); out.classList.remove('hidden');
     out.getContext('2d').putImageData(new ImageData(r.rgba, r.width, r.height), 0, 0);
@@ -349,8 +373,9 @@ $('go').onclick = async () => {
     const capped = r.timings.textPaddingRequested ? ` (prompt padding limited to ${r.textTokens} tokens by this GPU)` : '';
     say(`${r.width} × ${r.height} at ${LEVELS[loadedLevel].name}${lettering ? ' with better lettering' : ''}${capped} in ${seconds(r.wallMs)}${frames}.`);
     window.kleinLast = { wallMs: r.wallMs, timings: r.timings, frames: r.frames, width: r.width, height: r.height, level: loadedLevel,
-      lettering, textTokens: r.textTokens, gpuBytes: r.gpuBytes, residency: demo.pipeline.residency };
+      lettering, textTokens: r.textTokens, gpuBytes: r.gpuBytes, residency: demo.pipeline.residency, previews };
   } catch (e) {
+    running = false;
     say(e?.name === 'AbortError' ? 'Stopped.' : `Generation failed: ${e.message ?? e}`, e?.name !== 'AbortError');
   }
   setRunning(false);

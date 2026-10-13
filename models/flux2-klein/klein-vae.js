@@ -208,6 +208,23 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   y[i] = lat[tok * 128u + c] * sqrt(bn[128u + c] + p.eps) + bn[c];
 }`;
 
+// Live preview input: the clean-latent estimate x0 = x_t - sigma * velocity (rectified flow), from
+// packed transformer latents, de-normalized and un-patchified like latentPrepShader.
+const previewPrepShader = `struct P { h: u32, w: u32, eps: f32, sigma: f32 };
+@group(0) @binding(0) var<storage, read> lat: array<f32>;
+@group(0) @binding(1) var<storage, read> vel: array<f32>;
+@group(0) @binding(2) var<storage, read> bn: array<f32>;
+@group(0) @binding(3) var<storage, read_write> y: array<f32>;
+@group(0) @binding(4) var<uniform> p: P;
+@compute @workgroup_size(256)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let i = gid.x; let W2 = p.w * 2u; if (i >= p.h * 2u * W2 * 32u) { return; }
+  let c32 = i % 32u; let pix = i / 32u; let yy = pix / W2; let xx = pix % W2;
+  let c = c32 * 4u + (yy % 2u) * 2u + (xx % 2u);
+  let j = ((yy / 2u) * p.w + (xx / 2u)) * 128u + c;
+  y[i] = (lat[j] - p.sigma * vel[j]) * sqrt(bn[128u + c] + p.eps) + bn[c];
+}`;
+
 const transposeShader = `struct P { rows: u32, cols: u32, z0: u32, z1: u32 };
 @group(0) @binding(0) var<storage, read> x: array<f32>;
 @group(0) @binding(1) var<storage, read_write> y: array<f32>;
@@ -370,6 +387,14 @@ export class KleinVaeDecoder {
     this.out = null;
   }
   release() { this.releaseWork(); this.prepped?.destroy(); this.prepped = null; }
+
+  // Live preview: x0 = latents - sigma * velocity for packed latents of latH x latW tokens, written
+  // as decoder-space channels-last [2h*2w][32] f32 into `out`.
+  prepPreview(enc, packed, velocity, sigma, latH, latW, out) {
+    const n = latH * 2 * latW * 2 * 32;
+    this.dispatch(enc, this.pipeline('preview-prep', previewPrepShader), [packed, velocity, this.bn, out,
+      this.uniform([latH, latW, this.f32bits(this.manifest.config.batch_norm_eps), this.f32bits(sigma)])], Math.ceil(n / 256));
+  }
 
   // Packed latents (GPU buffer [h*w][128]) -> decoder input [2h*2w][32] in this.prepped.
   prepLatents(enc, packed) {

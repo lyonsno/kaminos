@@ -8,6 +8,7 @@ export {
   flashAttentionParams,
   flashAttentionStridedParams,
 } from './flash-attention-kernel.js';
+export { createWebGpuLatentPreview, latentPreviewShader, projectLatentPreview } from './latent-preview.js';
 export { createWebGpuInferenceControl } from './inference-control.js';
 
 export {

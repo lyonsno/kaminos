@@ -59,7 +59,7 @@ try {
   }
   report.phase = 'generate';
   const batchOptions = { cooperative: !args.includes('--blocking'), targetDutyMs: Number(opt('--target-duty-ms', '12')), maxInFlight: Number(opt('--max-in-flight', '1')),
-    textLength: /^fit/.test(opt('--text-length', '512')) ? opt('--text-length') : Number(opt('--text-length', '512')), dutyLog: args.includes('--duty-log') };
+    textLength: /^fit/.test(opt('--text-length', '512')) ? opt('--text-length') : Number(opt('--text-length', '512')), dutyLog: args.includes('--duty-log'), previews: args.includes('--previews') };
   report.batchOptions = batchOptions;
   // One job per call, each PNG written as it arrives, and a wait that fails (with the page's status and
   // any unfinished fetches) when the status line stops changing, instead of hanging on a wedged batch.
@@ -70,6 +70,7 @@ try {
     const res = await evaluateWatched(`window.kleinBatch(${JSON.stringify([job])}, ${JSON.stringify(batchOptions)})`, job.name, stallMs);
     const r = res.results[0];
     await fsp.writeFile(path.join(outDir, `${r.name}.png`), Buffer.from(r.png, 'base64')); delete r.png;
+    for (const p of r.previews ?? []) { await fsp.writeFile(path.join(outDir, `${r.name}-preview${p.step}.png`), Buffer.from(p.png, 'base64')); delete p.png; }
     report.results.push(r);
     // WebGPU validation errors and device loss do not throw; they fail the run here.
     report.gpuErrors = [...(report.gpuErrors ?? []), ...(res.loadGpuErrors ?? []).map(m => `load: ${m}`), ...(r.gpuErrors ?? []).map(m => `${r.name}: ${m}`)];

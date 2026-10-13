@@ -205,11 +205,17 @@ async function generateSizes(sizes, session) {
       document.getElementById('size').value = '${size}'; document.getElementById('seed').value = '${seed}';
       ${opt('--prompt') ? `{ const el = document.getElementById('prompt'); el.value = ${JSON.stringify(opt('--prompt'))}; el.dispatchEvent(new Event('input')); }` : ''}
       document.getElementById('go').click(); })()`, false);
+    // The first generation's canvas is captured as soon as a live preview has been painted.
+    if (session === 1 && size === sizes[0]) {
+      await waitFor(`window.kleinPreviewsPainted > 0 || !document.getElementById('go').disabled`, `first preview ${size}`);
+      await screenshot(`preview-${size}-desktop`, desktop);
+    }
     const done = await waitFor(`(() => { const s = ${pageState}; const go = document.getElementById('go');
       return !go.disabled && (window.kleinLast || s.warn || /stopped/i.test(s.status)) ? { ...s, last: window.kleinLast } : null; })()`, `generate ${size}`);
     const row = { session, size, status: done.status, warn: done.warn, ...(done.last ?? {}) };
     report.generations.push(row);
     if (!done.last) throw new Error(`generation at ${size} failed: ${done.status}`);
+    if (!(done.last.previews?.painted > 0)) throw new Error(`generation at ${size} painted no live preview`);
     row.pixelSha256 = await browser.evaluate(imageHash);
     // Every pipeline should have been compiled asynchronously at load (KleinPipeline.precompile);
     // one compiled synchronously during a generation stalls the page's rendering.

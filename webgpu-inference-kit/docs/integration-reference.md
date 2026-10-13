@@ -1273,6 +1273,22 @@ try {
 
 The lower-level `runtime.requestForegroundOpportunity()` API serves adapters that own a run-local runtime directly. Its submission lease records each `queue.submit()` call and preserves callback, serialization, cancellation, and submission failures. Raw adapters using synchronous `runtime.prepareCommandDuty()` fail loudly while foreground pressure exists; await `runtime.prepareCommandDutyAtBoundary()` at the pre-encode boundary. Receipts prove callback execution and queue submission return only, not GPU completion, presentation, or frame cadence. Already submitted inference duties remain non-preemptible, so the port must still expose work boundaries frequent enough for its foreground budget.
 
+### Show A Live Preview While A Latent Model Iterates
+
+A diffusion or flow-matching port can show the image forming instead of a blank canvas until the decoder finishes. After each step the port writes its estimate of the clean latent (for rectified flow, `latents - sigma * velocity`) as channels-last f32 in the space its decoder reads, and `createWebGpuLatentPreview` maps every latent pixel to RGB with a small linear fit of that decoder. The image is an eighth of the output size and costs one tiny dispatch and a few kilobytes of readback per step:
+
+```js
+import { createWebGpuLatentPreview } from "@kaminos/webgpu-inference-kit/core";
+
+const preview = await createWebGpuLatentPreview({ device, channels: 32, weights, bias, maxPixels: 128 * 128 });
+// After each step, in the port's own command encoder:
+const take = preview.encode(encoder, cleanLatentEstimate, { width: latentWidth, height: latentHeight });
+queue.submit([encoder.finish()]);
+take?.().then(({ width, height, rgba }) => paint(width, height, rgba));
+```
+
+`take()` must be called after the encoder holding the preview is submitted; it resolves with RGBA bytes and frees its readback slot. When every slot is still being read, `encode()` returns `null` and that step's preview is skipped, so a slow page costs previews, never model time. `weights` (channels × 3, row-major) and `bias` (3) map a latent pixel to RGB in −1 to 1; fit them once per decoder by encoding real images and regressing them against the images averaged down to latent resolution, as `models/flux2-klein/fit-latent-preview.py` does for FLUX.2. `projectLatentPreview` is the CPU reference for parity checks.
+
 ## Background Inference Queue
 
 Long routes such as SHARP and SF3D are often better product citizens as a continuous background queue than as a modal wait. A runtime-bound queue serializes full invocations while allowing the product to submit many jobs immediately:
