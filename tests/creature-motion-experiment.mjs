@@ -1,5 +1,6 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
+import './creature-body-fixture.mjs';
 import * as THREE from '../lib/three.core.js';
 const definition=(await import('../experiments/creature-motion/retained.experiment.mjs').catch(()=>({}))).default;
 assert.equal(typeof definition?.create,'function','the creature requires an owner-authored experiment definition');
@@ -9,7 +10,7 @@ root.userData.native_motion=source;
 const clip=new THREE.AnimationClip('retained creature',1,[new THREE.VectorKeyframeTrack('pelvis.position',[0,.5,1],[0,0,0,0,0,.3,0,0,.6])]);
 let opens=0,closed=0,redraws=0;const subscribers=new Set(),records=[];
 let view={position:[1,2,3],target:[0,0,0]};
-const session={loadAsset:async asset=>({root,clips:[clip],source:asset,id:'fixture-body'}),
+const session={loadAsset:async asset=>({root,clips:[clip],source:asset.metadata.source,id:'fixture-body'}),
  onFrame:callback=>(subscribers.add(callback),()=>subscribers.delete(callback)),redraw:()=>redraws++,
  readView:()=>structuredClone(view),setView:value=>{view=structuredClone(value);},dispose:()=>{closed++;}};
 const host={scene:{open:async()=>{opens++;return session;}}};

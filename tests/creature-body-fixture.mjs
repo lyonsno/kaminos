@@ -1,3 +1,4 @@
+// kaminos-test: helper — imported local GLB byte fixture; not a standalone test
 // Local byte-admission fixture, not GLTF-loader or browser evidence. Existing
 // actual-Three tests deliberately supply their own registered root/clip.
 const json=new TextEncoder().encode('{"asset":{"version":"2.0"}}  ');
