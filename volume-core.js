@@ -85,6 +85,7 @@ const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
+const SIM_GPU_PROFILE_IDENTITY = 'kaminos.volume.sim-gpu-profile.v0';
 const FULL_FIELD_IMPORT_IDENTITY = 'kaminos.volume.full-field-import.v0';
 const NONRIDGE_OPTICAL_CAPTURE_IDENTITY = 'kaminos.volume.positive-nonridge-optical-capture.v0';
 const NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY = 'kaminos.volume.nonridge-source-basis-full-grid-capture.v0';
@@ -17544,6 +17545,60 @@ export function createKaminosVolumePrototype({
     }
   }
 
+  // The step's own GPU cost: timestamp queries around the sim pass and the
+  // pressure projection over N real steps from the current state (uniforms packed
+  // per step as in a normal frame; the state advances). Per-step means in
+  // microseconds; the receipt names what was in force.
+  async function sampleSimGpuProfile(options = {}) {
+    const profile = { identity: SIM_GPU_PROFILE_IDENTITY, status: 'unsupported', reason: null };
+    if (!gpuInitialized || !device) { profile.reason = 'gpu-not-initialized'; return profile; }
+    if (!device.features?.has?.('timestamp-query')) { profile.reason = 'timestamp-query-not-supported'; return profile; }
+    const steps = Math.max(1, Math.min(4096, Math.floor(Number(options.steps) || 64)));
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    const querySet = device.createQuerySet({ type: 'timestamp', count: steps * 4 });
+    const resolveBuffer = device.createBuffer({ label: 'kaminos sim gpu profile resolve', size: steps * 4 * 8, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+    const readbackBuffer = device.createBuffer({ label: 'kaminos sim gpu profile readback', size: steps * 4 * 8, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    try {
+      const startNow = performance.now();
+      const stepMs = 1000 / 60;
+      const encoder = device.createCommandEncoder({ label: 'kaminos sim gpu profile' });
+      for (let step = 0; step < steps; step += 1) {
+        updateUniforms(startNow + step * stepMs);
+        encodeSim(encoder, {
+          timestampWrites: { querySet, beginningOfPassWriteIndex: step * 4, endOfPassWriteIndex: step * 4 + 1 },
+          finalTimestampWrites: { querySet, beginningOfPassWriteIndex: step * 4 + 2, endOfPassWriteIndex: step * 4 + 3 },
+        });
+        state.frameCount += 1;
+      }
+      encoder.resolveQuerySet(querySet, 0, steps * 4, resolveBuffer, 0);
+      encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, steps * 4 * 8);
+      device.queue.submit([encoder.finish()]);
+      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      const t = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
+      readbackBuffer.unmap();
+      let sim = 0, proj = 0, validSim = 0, validProj = 0;
+      for (let step = 0; step < steps; step += 1) {
+        const a = t[step * 4], b = t[step * 4 + 1], c = t[step * 4 + 2], d = t[step * 4 + 3];
+        if (a !== 0n && b !== 0n && b >= a) { sim += Number(b - a); validSim += 1; }
+        if (c !== 0n && d !== 0n && d >= c) { proj += Number(d - c); validProj += 1; }
+      }
+      profile.status = validSim === steps ? 'sampled' : 'partial';
+      profile.steps = steps;
+      profile.validSimSteps = validSim;
+      profile.validProjectionSteps = validProj;
+      profile.simPassMicrosecondsPerStep = validSim ? sim / validSim / 1000 : null;
+      profile.projectionMicrosecondsPerStep = validProj ? proj / validProj / 1000 : null;
+      profile.grid = [gridSize, gridHeight, gridSize];
+      profile.inForce = { reactionLaw: state.reactantCombustion?.effective?.law ?? null, appearanceModel: state.appearanceModel?.effective ?? null, transport: state.transport?.effective?.scheme ?? null, pressureSolver: controlsSnapshot.pressureSolver ?? null };
+      return profile;
+    } finally {
+      resolveBuffer.destroy();
+      readbackBuffer.destroy();
+      querySet.destroy?.();
+    }
+  }
+
   function encodeBoundarySidecar(encoder, options = {}) {
     const sourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
     const sidecarViewName = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
@@ -27440,6 +27495,7 @@ export function createKaminosVolumePrototype({
     sampleBoundarySplatFootprintAudit,
     sampleBoundarySplatInstanceResidency,
     sampleDeterministicReplayFrame,
+    sampleSimGpuProfile,
     beginDebugFullFieldImport,
     writeDebugFullFieldImportChunk,
     finishDebugFullFieldImport,
