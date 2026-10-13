@@ -4343,6 +4343,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         # For images, serve directly
         ext = target.suffix.lower()
         if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz"):
+            body = target.read_bytes()
             self.send_response(200)
             content_types = {
                 ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
@@ -4351,9 +4352,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 ".exr": "application/octet-stream", ".ply": "application/octet-stream", ".spz": "application/octet-stream",
             }
             self.send_header("Content-Type", content_types.get(ext, "application/octet-stream"))
+            self.send_header("Content-Length", str(len(body)))
 
             self.end_headers()
-            self.wfile.write(target.read_bytes())
+            self.wfile.write(body)
             return
 
         # For text/json, return as JSON-wrapped text
