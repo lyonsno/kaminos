@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
-import {validateLocalGenerationConfig,createGenerationCommandRunner} from '../generate-image.mjs';
+import {validateLocalGenerationConfig,createGenerationCommandRunner,resolveGenerationFinishing} from '../generate-image.mjs';
 const config={schema:'trellis2.local-generation-config.v0',repoRoot:'/source',checkpointBase:'/weights',python:'/python',
   memoryPython:'/memory-python',sourceRoot:'/cleanup',chrome:'/independent-chrome',greenroomBin:'/greenroom',queueDir:'/queue',
   expectedCommit:'a'.repeat(40),expectedSourceCommit:'b'.repeat(40),pipelineType:'512',decoderActivationStorage:'f16',
@@ -26,6 +26,20 @@ test('owned child receives a stop before report persistence can fail',async()=>{
   await assert.rejects(pending,/disk failed/);
   assert.deepEqual(events[0],['stop',12345]);
   await assert.rejects(runner.run(['/next/child'],'next stage'),/halted by memory guard/);
+});
+test('finishing source is explicit and independent of image preparation',()=>{
+  const selected={...config,cleanupMode:'mlx-surface-preserving',finishingSourceRoot:'/accepted-cleanup',
+    expectedFinishingSourceCommit:'c'.repeat(40)};
+  assert.equal(validateLocalGenerationConfig(selected).sourceRoot,config.sourceRoot);
+  assert.equal(validateLocalGenerationConfig(selected).finishingSourceRoot,'/accepted-cleanup');
+  assert.deepEqual(resolveGenerationFinishing(selected),{sourceRoot:'/accepted-cleanup',
+    expectedSourceCommit:'c'.repeat(40),cleanupMode:'mlx-surface-preserving'});
+  assert.deepEqual(resolveGenerationFinishing(config),{sourceRoot:config.sourceRoot,
+    expectedSourceCommit:config.expectedSourceCommit,cleanupMode:'reference-cleanup'});
+  for(const changed of [{cleanupMode:'silent-fallback'},{finishingSourceRoot:'relative'},
+    {expectedFinishingSourceCommit:'main'},{expectedFinishingSourceCommit:undefined},
+    {finishingSourceRoot:undefined}])
+    assert.throws(()=>validateLocalGenerationConfig({...selected,...changed}),/finishing|cleanup/);
 });
 test('unsafe state during pre-spawn persistence prevents the next stage from launching',async()=>{
   const record={commands:[]};let launches=0;
