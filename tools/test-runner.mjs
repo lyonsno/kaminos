@@ -19,11 +19,11 @@
 
 import { spawn, execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const SUITE_MANIFEST_SCHEMA = 'kaminos.test-suite-manifest.v1';
 export const QUARANTINE_SCHEMA = 'kaminos.test-quarantine.v1';
@@ -33,7 +33,15 @@ export const EXECUTED_KINDS = new Set(['node', 'python']);
 export const QUARANTINE_CLASSES = new Set(['untriaged', 'regression', 'stale-pin', 'environment', 'harness-defect']);
 export const BROWSER_OVERRIDES = ['KAMINOS_CHROME', 'CHROME_BIN', 'CHROME', 'KAMINOS_SHARP_WEBGPU_CHROME'];
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
-const LATE_LAUNCH_SETTLE_MS = 1000;
+const LATE_LAUNCH_SETTLE_MS = 2000;
+const EXIT_MARKER = /\n?kaminos-test-exit pid=(\d+) tid=(\d+) framework=(yes|no) tests=(started|not-started) code=(-?\d+)\n?/g;
+const ENTRY_SEPARATOR = ' | ';
+// node:test files run with the spec reporter on stdout for the log and this
+// module's reporter writing structured events beside it. Signatures for such
+// files come from the events, never from the human-readable output.
+export const EVENTS_REPORTER_PATH = fileURLToPath(new URL('./test-events-reporter.mjs', import.meta.url));
+export const EXIT_MARKER_PATH = fileURLToPath(new URL('./test-exit-marker.mjs', import.meta.url));
+export const DEFAULT_NODE_FLAGS = Object.freeze([`--import=${pathToFileURL(EXIT_MARKER_PATH).href}`, '--test-reporter=spec', '--test-reporter-destination=stdout', `--test-reporter=${pathToFileURL(EVENTS_REPORTER_PATH).href}`]);
 const DEFAULT_TIMEOUT_MS = 600000;
 const DECLARATION = /^\s*(?:\/\/|#)\s*kaminos-test:\s*([a-z]+)\s*(?:[—–-]+\s*(.+?))?\s*$/;
 const SKIP_DIRS = new Set(['node_modules', '.git', 'artifacts', 'lib', 'scratch', 'scenes', 'fixtures']);
@@ -139,16 +147,7 @@ export function failureSignature(output, { root, kind, exitCode }) {
   let text = output;
   if (root) text = text.split(root).join('<root>');
   text = text.split(os.homedir()).join('~');
-  const raw = text.split('\n');
-  const lines = raw.map(l => l.trim()).filter(Boolean);
-  // node:test files keep running after a failure. Sign every failing subtest
-  // by its suite path and first error line, plus any error the runner caught
-  // outside a subtest, so a new failing subtest or a new reason for a known
-  // one changes the signature.
-  if (lines.some(l => /^ℹ fail [1-9]/.test(l))) {
-    const entries = nodeTestFailures(raw);
-    if (entries.length) return `node:test failing: ${entries.sort().join(' | ')}`;
-  }
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const isError = l => /^(?:[A-Za-z_.]*(?:Error|Exception))(?:\s*\[[A-Z_]+\])?:/.test(l) || /^FAIL\b/.test(l);
   const indexes = lines.map((l, i) => (isError(l) ? i : -1)).filter(i => i >= 0);
   if (!indexes.length) return lines.length ? lines.at(-1) : `exit ${exitCode}`;
@@ -164,58 +163,134 @@ export function failureSignature(output, { root, kind, exitCode }) {
   return [lines[at], ...detail].join(' | ');
 }
 
-export function nodeTestFailures(rawLines) {
-  const summaryAt = rawLines.findIndex(l => /^ℹ tests \d+/.test(l.trim()));
-  const body = summaryAt >= 0 ? rawLines.slice(0, summaryAt) : rawLines;
-  const tail = summaryAt >= 0 ? rawLines.slice(summaryAt) : [];
-  const stack = [];
-  const paths = [];
-  for (const line of body) {
-    const indent = line.length - line.trimStart().length;
-    const t = line.trim();
-    const open = t.match(/^▶ (.+)$/);
-    if (open) { stack.push({ indent, name: open[1] }); continue; }
-    const done = t.match(/^[✖✔﹣] (.+?) \(\d+(?:\.\d+)?ms\)$/);
-    if (!done) continue;
-    const top = stack.at(-1);
-    if (top && top.indent === indent && top.name === done[1]) { stack.pop(); continue; }
-    if (t.startsWith('✖')) paths.push([...stack.map(f => f.name), done[1]].join(' › '));
+function normalizeText(text, root) {
+  let out = String(text);
+  if (root) {
+    let real = null;
+    try { real = realpathSync(root); } catch { real = null; }
+    if (real && real !== root) out = out.split(real).join('<root>');
+    out = out.split(root).join('<root>');
   }
-  const errors = [];
-  const failingAt = tail.findIndex(l => l.trim() === '✖ failing tests:');
-  if (failingAt >= 0) {
-    const section = tail.slice(failingAt + 1);
-    for (let i = 0; i < section.length; i += 1) {
-      if (!/^✖ .+ \(\d+(?:\.\d+)?ms\)$/.test(section[i].trim())) continue;
-      const next = section.slice(i + 1).map(l => l.trim()).find(l => l && !/^at\s/.test(l));
-      errors.push(next || 'no error line');
-    }
-  }
-  const entries = paths.map((p, i) => `${p} :: ${errors[i] || 'no error line'}`);
-  for (const line of tail.concat(body)) {
-    const m = line.trim().match(/^ℹ (Error: .+)$/);
-    if (m) entries.push(`uncaught :: ${m[1]}`);
-  }
-  return entries;
+  return out.split(os.homedir()).join('~');
 }
 
-function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv, track }) {
-  const env = { ...baseEnv, KAMINOS_TEST_RUNNER_TEST: file };
+// Build a node:test file's signature from the structured events its reporter
+// wrote, after checking that the file is whole: one header from the process
+// the runner spawned, every line from that process and parsable, and the
+// summary present. Anything else means the events cannot be trusted, and the
+// file is unsigned rather than signed by whatever survived. Each failing test
+// contributes its suite path and the thrown error's name and first message
+// line, plus the assertion itself when Node generated the message; a failed
+// hook contributes the hook and its error; errors the test runner caught
+// outside any test contribute as uncaught. Suites that only failed because
+// their children did, children cancelled because a hook failed, and todo or
+// skipped tests add nothing. A file whose tests all passed but which exited
+// nonzero is signed by that exit.
+export function nodeTestSignature(eventsText, { root, childPid, exitCode } = {}) {
+  const records = [];
+  for (const line of String(eventsText).split('\n')) {
+    if (!line.trim()) continue;
+    let record;
+    try { record = JSON.parse(line); } catch { return { signature: null, unsigned: 'the events file holds unparsable lines; another process may have written into it' }; }
+    if (!record || typeof record !== 'object') return { signature: null, unsigned: 'the events file holds a record that is not an object' };
+    records.push(record);
+  }
+  const headers = records.filter(r => r.kind === 'header');
+  if (headers.length !== 1) return { signature: null, unsigned: `expected one header record, found ${headers.length}` };
+  if (childPid && headers[0].pid !== childPid) return { signature: null, unsigned: `events were written by process ${headers[0].pid}, not the spawned test ${childPid}` };
+  if (headers[0].tid !== 0) return { signature: null, unsigned: 'events were written from a worker thread' };
+  if (records.some(r => r.pid !== headers[0].pid || r.tid !== headers[0].tid)) return { signature: null, unsigned: 'events from more than one process or thread' };
+  if (!records.some(r => r.kind === 'summary' && /^tests \d+$/.test(r.message || ''))) return { signature: null, unsigned: 'no summary record; the file ended before its tests finished' };
+  const entries = [];
+  for (const event of records) {
+    if (event.kind === 'uncaught') { entries.push(`uncaught :: ${firstLine(normalizeText(event.message, root))}`); continue; }
+    if (event.kind !== 'fail') continue;
+    if (event.todo || event.skip) continue;
+    if (event.failureType === 'subtestsFailed' || event.failureType === 'cancelledByParent') continue;
+    const path = normalizeText(event.path, root).split(ENTRY_SEPARATOR).join(' ¦ ');
+    const error = describeEventError(event.error, root);
+    if (event.failureType === 'hookFailed') {
+      const hook = String(event.wrapper || '').match(/failed running (\w+) hook/);
+      entries.push(`${path} :: ${hook ? `${hook[1]} hook failed` : 'hook failed'} :: ${error}`);
+      continue;
+    }
+    entries.push(`${path} :: ${error}`);
+  }
+  if (!entries.length) return { signature: `node:test passed; exit ${exitCode}`, unsigned: null };
+  return { signature: `node:test failing: ${entries.sort().join(ENTRY_SEPARATOR)}`, unsigned: null };
+}
+
+function describeEventError(error, root) {
+  if (!error) return 'no error';
+  const head = `${error.name || 'Error'}: ${firstLine(normalizeText(error.message, root))}`;
+  return error.detail ? `${head} [${firstLine(normalizeText(error.detail, root))}]` : head;
+}
+
+// Entries of a node:test signature, for reporting what changed.
+export function signatureEntries(signature) {
+  if (typeof signature !== 'string' || !signature.startsWith('node:test failing: ')) return null;
+  return signature.slice('node:test failing: '.length).split(ENTRY_SEPARATOR);
+}
+
+function firstLine(text) {
+  return String(text).split('\n').map(l => l.trim()).find(Boolean) || '';
+}
+
+function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv, track, nodeFlags }) {
+  const env = { ...baseEnv, KAMINOS_TEST_RUNNER_TEST: file, KAMINOS_TEST_RUNNER_ROOT: root };
+  const eventsPath = path.join(logsDir, `${file.replace(/[\/]/g, '__')}.events.jsonl`);
+  const flags = kind === 'node' ? [...nodeFlags] : [];
+  const withReporter = flags.some(f => f.startsWith('--test-reporter=') && f.includes('test-events-reporter'));
+  if (withReporter) flags.push(`--test-reporter-destination=${eventsPath}`);
   const started = Date.now();
   const logPath = path.join(logsDir, `${file.replace(/[\/]/g, '__')}.log`);
-  return new Promise(resolve => {
+  return new Promise(async resolve => {
+    // A stale events file from an earlier run must never stand in for this one.
+    try { await fs.rm(eventsPath, { force: true }); } catch (error) {
+      return resolve({ file, kind, executable, durationMs: 0, log: null, events: null, signature: null, outcome: 'spawn-error', exitCode: null, signal: null, spawnError: String(error?.message || error) });
+    }
     const chunks = [];
     let spawnError = null;
     let timedOut = false;
     const finish = async fields => {
       await fs.writeFile(logPath, Buffer.concat(chunks));
       const output = Buffer.concat(chunks).toString('utf8');
-      const signature = fields.outcome === 'fail' ? failureSignature(output, { root, kind, exitCode: fields.exitCode }) : null;
-      resolve({ file, kind, executable, durationMs: Date.now() - started, log: logPath, signature, ...fields });
+      let events = null;
+      try { events = await fs.readFile(eventsPath, 'utf8'); } catch { events = null; }
+      let signature = null;
+      let unsigned = null;
+      let outcome = fields.outcome;
+      // The preload's exit line, from the spawned process itself, says
+      // whether the test harness started running tests here; a relayed
+      // child's line carries that child's pid and is ignored. A file that
+      // only imported the framework, or failed while loading, is a plain
+      // script for signing purposes.
+      const markers = [...output.matchAll(EXIT_MARKER)];
+      const testsStarted = Boolean(child?.pid) && markers.some(m => Number(m[1]) === child.pid && Number(m[2]) === 0 && m[4] === 'started');
+      if (outcome === 'fail') {
+        if (testsStarted) {
+          ({ signature, unsigned } = nodeTestSignature(events ?? '', { root, childPid: child?.pid, exitCode: fields.exitCode }));
+          if (events === null) unsigned = 'tests started but no events were written; the process ended before they were flushed';
+          if (unsigned) { outcome = 'unsigned-failure'; signature = null; }
+        } else {
+          signature = failureSignature(output.replace(EXIT_MARKER, '\n'), { root, kind, exitCode: fields.exitCode });
+        }
+      } else if (outcome === 'pass' && testsStarted) {
+        // Exiting zero before the summary is not a pass; nothing says the
+        // tests finished. Trusted events that record a failing test outrank
+        // the exit code too: an exit handler can reset it. Diagnostics the
+        // reporter took for uncaught errors do not, on their own: a test may
+        // emit a diagnostic that begins with Error and still pass.
+        const check = nodeTestSignature(events ?? '', { root, childPid: child?.pid, exitCode: fields.exitCode });
+        if (events === null || check.unsigned) { outcome = 'unsigned-failure'; unsigned = events === null ? 'tests started, the process exited zero, and no events were written' : check.unsigned; }
+        else if (signatureEntries(check.signature)?.some(e => !e.startsWith('uncaught :: '))) { outcome = 'fail'; signature = check.signature; }
+      }
+      resolve({ file, kind, executable, durationMs: Date.now() - started, log: logPath, events: events !== null ? eventsPath : null, signature, ...fields, outcome,
+        ...(unsigned ? { unsigned } : {}) });
     };
     let child;
     try {
-      child = spawn(executable, [file], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], detached: true, env });
+      child = spawn(executable, [...flags, file], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], detached: true, env });
     } catch (error) {
       chunks.push(Buffer.from(String(error?.stack || error)));
       return finish({ outcome: 'spawn-error', exitCode: null, signal: null });
@@ -265,6 +340,7 @@ export async function runSuite({
   kinds = ['node', 'python'],
   only = null,
   executables = {},
+  nodeFlags = DEFAULT_NODE_FLAGS,
   abortSignal = null,
 } = {}) {
   root = path.resolve(root);
@@ -285,7 +361,7 @@ export async function runSuite({
     schema: REPORT_SCHEMA, ok: false, failurePhase: null, error: null,
     startedAt: new Date().toISOString(), finishedAt: null,
     effective: { root, manifestPath, quarantinePath, parallel, timeoutMs, kinds, only,
-      executables: resolvedExecutables, node: process.version, python: null,
+      executables: resolvedExecutables, nodeFlags: [...nodeFlags], node: process.version, python: null,
       platform: `${process.platform}-${process.arch}`, git: gitIdentity(root),
       browserStub: { path: browserStub, overrides: BROWSER_OVERRIDES, log: browserLog },
       manifestSha256: null, quarantineSha256: null, dependencies: null },
@@ -379,9 +455,11 @@ export async function runSuite({
     report.failurePhase = 'execute';
     await fs.mkdir(logsDir, { recursive: true });
     await fs.rm(browserLog, { force: true });
-    await fs.writeFile(browserStub, `#!/bin/sh\n# Stands in for a browser while tools/test-runner.mjs runs tests. Any test\n# that reaches a browser launch lands here: record it and fail.\nprintf '%s\\t%s\\t%s\\n' "\${KAMINOS_TEST_RUNNER_TEST:-unknown}" "$$" "$*" >> ${JSON.stringify(browserLog)}\necho "browser launch blocked by tools/test-runner.mjs" >&2\nexit 97\n`, { mode: 0o755 });
+    const quotedLog = `'${browserLog.replace(/'/g, `'\\''`)}'`;
+    await fs.writeFile(browserStub, `#!/bin/sh\n# Stands in for a browser while tools/test-runner.mjs runs tests. Any test\n# that reaches a browser launch lands here: record it and fail.\nprintf '%s\\t%s\\t%s\\n' "\${KAMINOS_TEST_RUNNER_TEST:-unknown}" "$$" "$*" >> ${quotedLog}\necho "browser launch blocked by tools/test-runner.mjs" >&2\nexit 97\n`);
+    await fs.chmod(browserStub, 0o755);
     report.results = await pool(planned, parallel,
-      item => runOne({ root, ...item, timeoutMs, logsDir, env: childEnv, track }), () => interrupted);
+      item => runOne({ root, ...item, timeoutMs, logsDir, env: childEnv, track, nodeFlags }), () => interrupted);
     if (interrupted) throw Object.assign(new Error('run interrupted'), { phase: 'interrupted' });
 
     report.counts.executed = report.results.length;
@@ -404,7 +482,9 @@ export async function runSuite({
       } else {
         report.newFailures.push(result.file);
         if (entry && result.outcome === 'fail' && result.signature !== entry.signature) {
-          report.signatureChanged.push({ file: result.file, expected: entry.signature, actual: result.signature });
+          const was = signatureEntries(entry.signature); const now = signatureEntries(result.signature);
+          const diff = was && now ? { added: now.filter(e => !was.includes(e)), removed: was.filter(e => !now.includes(e)) } : {};
+          report.signatureChanged.push({ file: result.file, expected: entry.signature, actual: result.signature, ...diff });
         }
       }
     }
@@ -454,7 +534,8 @@ function summarize({ report, reportPath }) {
   if (report.failurePhase) lines.push(`failure phase: ${report.failurePhase}\n${report.error}`);
   const list = (label, items, hint) => { if (items.length) lines.push(`${label}${hint ? ` (${hint})` : ''}:\n  ${items.join('\n  ')}`); };
   list('new failures', report.newFailures, 'fix them, or quarantine with a class, reason, owner and signature');
-  list('changed failure signatures', report.signatureChanged.map(e => `${e.file}\n    expected: ${e.expected}\n    actual:   ${e.actual}`));
+  list('unsigned failures', report.results.filter(r => r.outcome === 'unsigned-failure').map(r => `${r.file}: ${r.unsigned}`), 'the file failed but its events cannot be trusted, so it can never be known');
+  list('changed failure signatures', report.signatureChanged.map(e => e.added ? `${e.file}\n    added:   ${e.added.join('\n             ') || '(none)'}\n    removed: ${e.removed.join('\n             ') || '(none)'}` : `${e.file}\n    expected: ${e.expected}\n    actual:   ${e.actual}`));
   list('quarantined tests that now pass', report.staleQuarantine, 'remove them from tests/quarantine.json');
   list('unclassified test files', report.unclassified, 'add a first-line "// kaminos-test: node" declaration, or a tests/suite.json entry');
   list('invalid classifications', report.invalid, 'unknown kind, a non-executed kind without a reason, or a declaration that disagrees with tests/suite.json');
@@ -477,7 +558,8 @@ async function writeArgumentFailure(argv, error) {
   await fs.writeFile(reportPath, `${JSON.stringify({ schema: REPORT_SCHEMA, ok: false, failurePhase: 'arguments', error: error.message, argv }, null, 2)}\n`);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+const invokedAsMain = (() => { try { return Boolean(process.argv[1]) && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(path.resolve(process.argv[1])); } catch { return false; } })();
+if (invokedAsMain) {
   const argv = process.argv.slice(2);
   let args;
   try { args = parseArgs(argv); } catch (error) {

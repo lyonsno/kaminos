@@ -28,3 +28,11 @@ test('a superseded scene cannot apply a late schema response',async()=>{
  const c=vm.createContext({sceneLoadRequests,loadRequestId,restorePlan:{fireSettings:oldSettings()},flameEmitterPose:{position:[0,0,0]},activeVolumeSettingsPresetReceipt:null,projectFireSettingsToSchema:fire.projectFireSettingsToSchema,fetch:()=>response,writeFlameSettingsState:()=>writes++});
  const pending=vm.runInContext('(async()=>{'+html.slice(start,end)+'})()',c);sceneLoadRequests.invalidate();release({ok:true,json:async()=>schema});await pending;assert.equal(writes,0,'obsolete load must not publish fire settings');
 });
+
+test('older rendering inventories gain only declared auxiliary defaults',()=>{
+ const saved=oldSettings();saved.rendererControls=Object.fromEntries(schema.rendererControls.filter(e=>!Object.hasOwn(e,'additiveDefault')).map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:e.key.endsWith('strength')?.123456789:1}]));saved.presentationControls=Object.fromEntries(schema.presentationControls.map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:'on'}]));const before=structuredClone(saved),projected=fire.projectFireSettingsToSchema(saved,schema);
+ for(const e of schema.rendererControls.filter(e=>Object.hasOwn(e,'additiveDefault')))assert.equal(projected.rendererControls[e.key]?.value,e.additiveDefault,e.key+' gains its declared schema default');
+ assert.equal(projected.rendererControls['volume-flow-kernel-strength'].value,.123456789);assert.deepEqual(saved,before);
+ const hole=structuredClone(saved);delete hole.rendererControls['volume-flow-kernel-strength'];assert.throws(()=>fire.projectFireSettingsToSchema(hole,schema),/Missing authored fire control volume-flow-kernel-strength/);
+ const unknown=structuredClone(saved);unknown.rendererControls.unrecognized={value:1};assert.throws(()=>fire.projectFireSettingsToSchema(unknown,schema),/Unsupported authored fire control unrecognized/);
+});

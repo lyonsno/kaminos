@@ -84,5 +84,15 @@ export function projectFireSettingsToSchema(settings,rawSchema){
   if(!Object.hasOwn(entry,'additiveDefault')||!Number.isSafeInteger(entry.additiveSinceControlCount)||entry.additiveSinceControlCount<=count)throw Error(`Missing authored fire control ${entry.key}`);
   saved[entry.key]={id:entry.key,param:entry.param,tagName:entry.tagName,type:entry.type,value:clone(entry.additiveDefault)};
  }
- result.domControls=saved;return result;
+ result.domControls=saved;
+ for(const [axis,entries]of [['rendererControls',schema.rendererControls||[]],['presentationControls',schema.presentationControls||[]]]){
+  const values=controls(result[axis],axis),known=new Set(entries.map(entry=>entry.key));
+  for(const id of Object.keys(values))if(!known.has(id))throw Error(`Unsupported authored fire control ${id}`);
+  for(const entry of entries)if(!Object.hasOwn(values,entry.key)){
+   if(!Object.hasOwn(entry,'additiveDefault'))throw Error(`Missing authored fire control ${entry.key}`);
+   values[entry.key]={id:entry.key,param:entry.param,tagName:entry.tagName,type:entry.type,value:clone(entry.additiveDefault)};
+  }
+  result[axis]=values;
+ }
+ return result;
 }

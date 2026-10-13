@@ -105,15 +105,19 @@ test('the fluid-front read layout and its bind groups carry the fluid uniforms a
 test('interpolated modules: every entry point seats first except the lattice-only emissive passes', async () => {
   const exempt = new Set(['sweepEmissiveLight', 'resolveEmissiveLight']);
   const interpolated = [...moduleText('WGSL').matchAll(/\$\{([A-Z_]+_WGSL)\}/g)].map(m => m[1]);
-  assert.deepEqual(interpolated, ['PASSIVE_MATERIAL_WGSL', 'REACTANT_COMBUSTION_WGSL', 'PHYSICAL_COLOR_WGSL', 'EMISSIVE_TRANSPORT_WGSL', 'SCENE_VOLUME_SOURCE_WGSL']);
   const texts = {
     PASSIVE_MATERIAL_WGSL: core.PASSIVE_MATERIAL_WGSL,
-    // Helper functions only (no entry points); listed so the interpolation order stays pinned.
+    // Include helper-only modules so new entry points cannot evade this check.
+    RAYMARCH_NEIGHBORHOOD_WGSL: (await import('../volume-raymarch-sampling.mjs')).RAYMARCH_NEIGHBORHOOD_WGSL,
+    AGX_WGSL: (await import('../volume-agx.mjs')).AGX_WGSL,
+    RAY_START_WGSL: (await import('../volume-ray-start.mjs')).RAY_START_WGSL,
+    OPTICAL_STEPPING_WGSL: (await import('../volume-optical-native.mjs')).OPTICAL_STEPPING_WGSL,
     REACTANT_COMBUSTION_WGSL: (await import('../volume-reactant-combustion.mjs')).REACTANT_COMBUSTION_WGSL,
     PHYSICAL_COLOR_WGSL: (await import('../volume-physical-color.mjs')).PHYSICAL_COLOR_WGSL,
     EMISSIVE_TRANSPORT_WGSL: (await import('../volume-emissive-transport.mjs')).EMISSIVE_TRANSPORT_WGSL,
     SCENE_VOLUME_SOURCE_WGSL: (await import('../scene-volume-source.mjs')).SCENE_VOLUME_SOURCE_WGSL,
   };
+  assert.deepEqual([...interpolated].sort(), Object.keys(texts).sort());
   const seen = [];
   for (const [name, text] of Object.entries(texts)) {
     for (const e of entryPoints(text)) {

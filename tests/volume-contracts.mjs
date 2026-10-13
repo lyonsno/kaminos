@@ -648,7 +648,8 @@ assert.doesNotMatch(index, /volume_(?:majorant|temporal)|volume_history_clamp/, 
 assert.match(core, /stripRetiredRaymarchControls/, 'historical controls cross one explicit retirement boundary');
 assert.match(core, /retiredRaymarchControls/, 'runtime state receipts every stripped historical control');
 assert.match(core, /uniforms\[19\]\s*=\s*0\s*;/, 'ordinary product shaders receive explicit zero render-time authority');
-assert.match(core, /uniforms\[47\]\s*=\s*0\s*;/, 'reserved render controls receive explicit zero frame-cycle authority');
+assert.match(core, /uniforms\[47\]\s*=\s*controlsSnapshot\.rayStartNoise === false \? 0 : 1;/, 'reused frame-cycle slot carries only the static ray-start toggle');
+assert.doesNotMatch(core, /uniforms\[47\]\s*=.*(?:frameCount|now|renderPhase)/, 'ray starts do not restore retired frame-cycle authority');
 assert.match(core, /writeAnalyticEmitterInjectionUniform\([\s\S]*?renderPhaseTimeMs\s*\*\s*0\.001/, 'look freeze pins time only for explicit analytic-emitter temporal descriptors');
 assert.match(core, /if \(advanceSim && !sampleLookFreeze && !simulationPaused\) \{[\s\S]*encodeSim\(encoder\)/, 'sampleFrame does not advance simulation while look freeze is active');
 assert.match(index, /id="volume-fire-scale"/, 'Volume tab exposes emitter scale control');
@@ -1054,7 +1055,7 @@ assert.match(fieldSliceWitness, /writeRgbaPng\(fieldSliceOut/, 'volume witness w
 assert.match(fieldSliceWitness, /fieldSliceBackend:\s*'cpu-fluid-buffer-readback'/, 'field-slice report names CPU fluid-buffer readback as the evidence backend');
 assert.match(core, /directCellOpticalSupportFromSlots/, 'raymarch derives skip support from native simulation-cell records');
 assert.match(core, /directCellExitDistance/, 'raymarch crosses empty native cells at their geometric boundary');
-assert.match(core, /let expensiveSampleBudget = u32\(ceil\(steps\)\)/, 'ray setting defines a fixed expensive-sample budget');
+assert.match(core, /let expensiveSampleBudget = select\(u32\(ceil\(steps\)\), nonRidgeOpticalCaptureHeader.sampleCount, opticalTrace\)/, 'ordinary ray setting defines a fixed expensive-sample budget; trace uses its explicit capture count');
 assert.match(core, /let maxTraversalSteps = GRID_Y \* 3u \+ expensiveSampleBudget \+ 3u/, 'traversal safety derives from expanded vertical grid geometry plus the explicit sample budget');
 assert.match(core, /expensiveSamples = expensiveSamples \+ 1u/, 'occupied reconstruction spends exactly one expensive sample');
 assert.match(core, /let adaptiveScale = mix\(2\.65, 1\.0, fine\)/, 'adaptive march never shrinks below the baseline segment or increases expensive work');
@@ -1217,7 +1218,7 @@ assert.match(core, /lookFreezeRenderTimeMs/, 'Look-lab freeze pins explicit emit
 assert.match(core, /lookFreezeRenderFrame/, 'Look-lab freeze pins render-phase evidence as well as sim stepping');
 assert.match(core, /typeof state\.lookFreezeRenderTimeMs !== 'number'/, 'Look-lab freeze render-time pin treats null as unpinned rather than finite zero');
 assert.match(core, /uniforms\[19\]\s*=\s*0\s*;/, 'retired renderer-time ABI component remains explicit zero authority');
-assert.match(core, /uniforms\[47\]\s*=\s*0\s*;/, 'retired temporal-frame ABI component remains explicit zero authority');
+assert.match(core, /uniforms\[47\]\s*=\s*controlsSnapshot\.rayStartNoise === false \? 0 : 1;/, 'retired temporal-frame component is reused only for a stable spatial sampling choice');
 assert.match(core, /const renderPhaseAuthority\s*=\s*lookFreeze\s*\?\s*'look-freeze-pinned-render-phase'/, 'Debug state reports whether render phase is live or look-freeze pinned');
 assert.match(core, /setControls\(next\)[\s\S]*const controlsLookFreeze[\s\S]*if \(!controlsLookFreeze\) updatePyroDynamicDetailState\(\{ inputKind: 'control-proxy' \}\)/, 'Look-lab freeze prevents control scrubbing from advancing Pyro material-memory state');
 assert.match(core, /uniforms\[85\]\s*=\s*pyroMaterialEnergy/, 'CPU preserves a nonspatial live-field energy gate after retiring the synthetic atlas');

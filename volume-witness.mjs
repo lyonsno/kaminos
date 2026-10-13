@@ -1559,7 +1559,7 @@ const rayBudgetPreset = routeParams.get('volume_ray_budget_preset') || '';
 const presetBudget = RAY_BUDGET_PRESETS[rayBudgetPreset] || null;
 const requestedRaySteps = Number(routeParams.get('volume_steps'));
 let expectedRaySteps = routeParams.has('volume_steps') && Number.isFinite(requestedRaySteps)
-  ? Math.max(24, Math.min(160, requestedRaySteps))
+  ? Math.max(6, Math.min(160, requestedRaySteps))
   : presetBudget?.raySteps ?? canonicalMacroPreset.raySteps ?? scenePreset.raySteps ?? 96;
 const requestedAdaptiveRays = Number(routeParams.get('volume_adaptive_rays'));
 let expectedAdaptiveRays = routeParams.has('volume_adaptive_rays') && Number.isFinite(requestedAdaptiveRays)

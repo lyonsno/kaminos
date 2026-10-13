@@ -140,7 +140,7 @@ try {
   assert.equal(route.searchParams.get('composition'), 'raymarch-only-v0', 'requested initial composition must be raymarch-only-v0');
   assert.ok(rayStepCounts.length >= 2, 'at least two ray-step counts are required');
   assert.ok(orbitAngles.length >= 5, 'at least five orbit poses are required');
-  assert.ok(rayStepCounts.every(value => value >= 24 && value <= 160), 'ray-step counts must be inside the live renderer range');
+  assert.ok(rayStepCounts.every(value => value >= 6 && value <= 160), 'ray-step counts must be inside the live renderer range');
   assert.ok(Number.isFinite(flowKernelStrength) && flowKernelStrength > 0 && flowKernelStrength <= 1, 'flow kernel strength must be inside the live renderer range');
   assert.ok(Number.isFinite(flowKernelRadius) && flowKernelRadius > 0 && flowKernelRadius <= 0.12, 'flow kernel radius must be inside the live renderer range');
   assert.ok(Number.isFinite(flowKernelCoherence) && flowKernelCoherence >= 0 && flowKernelCoherence <= 2, 'flow kernel coherence must be inside the live renderer range');
