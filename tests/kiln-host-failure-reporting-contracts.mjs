@@ -28,7 +28,7 @@ assert.equal(state.sharedDeviceFailureReason, 'WebGPU adapter unavailable');
 
 // Scene route restore: ordinary routes must not be blocked or blamed on a
 // composition restore that never ran.
-const restore = slice('  Promise.all([environmentLoaded, volumeLoaded]).then(', '  initKaminosMotionAgencyRoute();');
+const restore = slice('  const startupSceneHash = ', '  // An owner enters the effective authored starting scene,');
 async function runRestore(hash, environmentLoaded) {
   const calls = { info: [], composition: [], console: [] };
   const context = vm.createContext({
