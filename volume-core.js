@@ -11213,6 +11213,8 @@ export function createKaminosVolumePrototype({
   const distributedPipelines = new Map();
   const scenePointPipelines = new Map();
   let sceneSourceFrameConsumer = null;
+  let gpuThermalConsumer = null;
+  let thermalFluidGeneration = 0;
   const sceneSourcePreparedEncoders = new WeakSet();
   let sceneMediumSource = null;
   let emissiveWhiteKelvin = null;
@@ -13116,6 +13118,7 @@ export function createKaminosVolumePrototype({
   }
 
   function rebuildFluidState(nextGridSize = gridSize, reason = 'grid-rebuilt') {
+    state.thermalFluidAllocationId='thermal-fluid-'+(++thermalFluidGeneration);
     gridSize = normalizeGridSize(nextGridSize);
     gridHeight = gridHeightForSize(gridSize);
     updateAnalyticEmitterDebug();
@@ -16239,6 +16242,12 @@ export function createKaminosVolumePrototype({
       timestampWrites: options.finalTimestampWrites,
     });
     state.simStepCount += 1;
+    if(gpuThermalConsumer){
+      gpuThermalConsumer.encode(encoder,{device,fluid:fluidBuffers[currentFluid],dimensions:[gridSize,gridHeight,gridSize],
+        simStepCount:state.simStepCount,allocationId:state.thermalFluidAllocationId,
+        dt:resolveTimeStepConfig(controlsSnapshot).effective.dtScale/60,
+        transform:{translate:[...productTransform.translate],scale:productTransform.scale}});
+    }
     updateSimCostLedger();
     return finalTimestampWritten;
   }
@@ -26307,6 +26316,22 @@ export function createKaminosVolumePrototype({
         simStepCount: state.simStepCount,
         authority: 'witness-owned-compute-pause-render-live-v0',
       };
+    },
+    async borrowThermalGpuContext(){
+      await ensureGpu();return {device,dimensions:[gridSize,gridHeight,gridSize],ownership:'borrowed-device-no-destruction-authority'};
+    },
+    bindGpuThermalConsumer(consumer){
+      if(consumer&&(!device||consumer.device!==device||typeof consumer.encode!=='function'||typeof consumer.read!=='function'))throw Error('Thermal consumer requires active same-device encode/read');
+      if(gpuThermalConsumer&&consumer&&gpuThermalConsumer!==consumer)throw Error('A thermal consumer is already bound');
+      gpuThermalConsumer=consumer;
+      return ()=>{if(gpuThermalConsumer===consumer)gpuThermalConsumer=null;};
+    },
+    thermalConsumerState:()=>gpuThermalConsumer?.read()||null,
+    resetThermalExperimentFluid(){
+      if(!device||!simulationPaused)throw Error('Thermal reset requires an initialized paused simulator');
+      rebuildFluidState(gridSize,'live-log-cold-reset');
+      for(const buffer of fluidBuffers)device.queue.writeBuffer(buffer,0,new Float32Array(gridCellCount(gridSize)*FLUID_COMPONENTS));
+      return {allocationId:state.thermalFluidAllocationId,simStepCount:state.simStepCount,dimensions:[gridSize,gridHeight,gridSize],initialization:'cold-zero-fluid'};
     },
     enableLiveCompleteFlameOpticalCoefficients,
     sampleLiveCompleteFlameOpticalCoefficientStats,

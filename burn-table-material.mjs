@@ -55,10 +55,18 @@ const hashNode=THREE.TSL.wgslFn(HASH_WGSL);
 const cellsNode=THREE.TSL.wgslFn(CELLS_WGSL,[hashNode]);
 const facetsNode=THREE.TSL.wgslFn(FACETS_WGSL,[cellsNode]);
 const surfaceNode=THREE.TSL.wgslFn(BURN_SURFACE_WGSL);
+const liveSurfaceNode=THREE.TSL.wgslFn(`fn burnLiveSurface(state: vec4<f32>, facets: vec4<f32>, clock: f32) -> vec4<f32> {
+  let heat=clamp(state.x,0.0,1.0);let damage=clamp(state.y,0.0,1.0);
+  let reaction=clamp(state.z,0.0,1.0);
+  let hot=max(0.0,(heat-0.55)/0.45);
+  let pulse=0.5+0.5*sin(clock*2.1+facets.w);
+  let activity=mix(0.62,mix(0.12,1.25,smoothstep(0.25,0.8,pulse)),reaction);
+  return vec4<f32>(heat,damage,hot*hot*facets.x*damage*activity,reaction);
+}`);
 const rotateNode=THREE.TSL.wgslFn(ROTATE_WGSL);
 const facetNormalNode=THREE.TSL.wgslFn(NORMAL_WGSL,[rotateNode]);
 
-export function createBurnMaterial({renderer,original,bounds,settings}) {
+export function createBurnMaterial({renderer,original,bounds,settings,stateNode=null,stateIdentity=null}) {
   const {uniform,vec3,positionLocal,normalLocal,materialNormal,materialColor,materialRoughness,materialMetalness,mix,transformNormalToView,smoothstep}=THREE.TSL;
   const config=checkedBurnControls(settings);
   const controls=uniform(new THREE.Vector3(config.heat,config.char,config.reaction));
@@ -67,7 +75,8 @@ export function createBurnMaterial({renderer,original,bounds,settings}) {
   if(Math.min(size.x,size.y,size.z)<=0)throw new Error('Burn material requires volumetric local bounds');
   const p=positionLocal.sub(vec3(...bounds.min.toArray())).div(vec3(...size.toArray()));
   const facets=facetsNode({p,n:normalLocal}).toVar('burnFacetData');
-  const sample=surfaceNode({p,facets,controls,metalProfile:profile,clock}).toVar('burnSurfaceData');
+  if(stateNode&&!stateIdentity)throw Error('GPU material state requires source identity');
+  const sample=(stateNode?liveSurfaceNode({state:stateNode,facets,clock}):surfaceNode({p,facets,controls,metalProfile:profile,clock})).toVar('burnSurfaceData');
   const material=cloneSceneRadianceMaterial(renderer.library,original);
   // Char alters reflection and local shading normals; it never moves geometry.
   const darkening=sample.y.oneMinus().pow(3).mul(.985).add(.015);
@@ -81,9 +90,10 @@ export function createBurnMaterial({renderer,original,bounds,settings}) {
   const redToOrange=mix(vec3(.7,.008,.001),vec3(1,.12,.008),smoothstep(.55,.88,sample.x));
   const hotColor=mix(redToOrange,vec3(1,.42,.055),smoothstep(.88,1,sample.x));
   material.emissiveNode=hotColor.mul(sample.z.mul(5));
-  return {material,update(seconds){clock.value=seconds;},set(next){const c=checkedBurnControls(next);controls.value.set(c.heat,c.char,c.reaction);profile.value=c.profile==='metal'?1:0;},
+  return {material,update(seconds){clock.value=seconds;},set(next){if(stateNode)throw Error('Live thermal state is GPU-owned');const c=checkedBurnControls(next);controls.value.set(c.heat,c.char,c.reaction);profile.value=c.profile==='metal'?1:0;},
     read:()=>({appearanceModel:'char-facet-crust-v1',sourceMaterial:original.uuid,
-      controls:{heat:controls.value.x,char:controls.value.y,reaction:controls.value.z,profile:profile.value===1?'metal':'wood'},
+      stateAuthority:stateIdentity||'synthetic-held-exposure-v1',
+      controls:stateNode?null:{heat:controls.value.x,char:controls.value.y,reaction:controls.value.z,profile:profile.value===1?'metal':'wood'},
       appearanceSeconds:clock.value,facetRotationPerAxisRadians:.04,
       maps:{baseColor:original.map?.uuid||null,normal:original.normalMap?.uuid||null,metalness:original.metalnessMap?.uuid||null,roughness:original.roughnessMap?.uuid||null}}),dispose:()=>material.dispose()};
 }

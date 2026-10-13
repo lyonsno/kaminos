@@ -7,6 +7,10 @@
 #burn-table .burn-table-actions { display:flex; flex-wrap:wrap; gap:8px; }
 #burn-table button { background:#30363a; color:#e0e4e6; border:1px solid #4d565d; border-radius:4px; padding:8px; cursor:pointer; }
 #burn-table-status,#burn-table-source { font-size:11px; color:#b0bec5; line-height:1.5; overflow-wrap:anywhere; }
+#live-log-heat .burn-table-actions { display:flex;flex-wrap:wrap;gap:8px; }
+#live-log-heat button { padding:7px; background:#30363a; color:#e0e4e6; border:1px solid #4d565d; border-radius:4px; }
+#live-log-heat input { width:100%; }
+#live-log-heat pre { max-height:240px;overflow:auto;font-size:10px; }
 #burn-table-labels { position:absolute; inset:0; pointer-events:none; z-index:10; }
 #burn-table-labels[hidden] { display:none; }
 #burn-table-labels span { position:absolute; transform:translate(-50%,0); padding:4px 7px; color:#e5e7e8; background:#181b1fda; font-size:11px; white-space:nowrap; border-left:2px solid #dba459; }

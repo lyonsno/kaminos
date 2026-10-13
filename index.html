@@ -3867,6 +3867,7 @@ function isFireLightFieldRoute(params = fireLightFieldRouteParams()) {
 function isAuthoredKilnCollisionRoute(params = new URLSearchParams(window.location.hash.replace(/^#/, ''))) {
   return params.get('volume_collision') === 'kiln';
 }
+function isLiveLogHeatRoute(){return new URLSearchParams(location.search).get('experiment')==='live-log-heat';}
 
 function isFireLightFieldIsolateRoute(params = fireLightFieldRouteParams()) {
   return params.get('volume_light_field_isolate') === '1';
@@ -11940,7 +11941,7 @@ async function initScene() {
   installFluidWorkbench();
 
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1'
-    || isAuthoredKilnCollisionRoute();
+    || isAuthoredKilnCollisionRoute() || isLiveLogHeatRoute();
 
   let sceneRenderedForVolume = false;
   let foregroundServiceActive = false;
@@ -23457,10 +23458,11 @@ async function initKaminosVolumeRoute() {
   if (compositionSetupError) throw compositionSetupError;
   window.__kaminosVolumeControlStepsMadeContinuous = [];
   const params = new URLSearchParams(window.location.search);
+  if(isLiveLogHeatRoute()&&!params.has('volume_resolution'))params.set('volume_resolution','48');
   // Bare smoke routes boot into the committed default basin. Settings-preset
   // routes carry their own complete basin and must not inherit this one.
   const shouldApplyDefaultVolumeSmokeTallPreset =
-    params.get('kaminos_volume_smoke') === '1' &&
+    (params.get('kaminos_volume_smoke') === '1'||isLiveLogHeatRoute()) &&
     !params.has('settings_preset') &&
     (!params.get('volume_scene') || params.get('volume_scene') === 'tall_plume') &&
     !params.get('volume_tall_preset') &&
@@ -24132,11 +24134,11 @@ async function initKaminosVolumeRoute() {
       document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },
-    transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute() || isAuthoredKilnCollisionRoute(),
+    transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute() || isAuthoredKilnCollisionRoute() || isLiveLogHeatRoute(),
     // The finger-fluid liquid-contact route adopts the fluid solver's device
     // through its descriptor; seating the host device here would refuse it.
     sharedGpuContext: fingerFluidPyroCompositionRequested() ? null : sharedGpu,
-    getSceneDepth: (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute())
+    getSceneDepth: (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute() || isLiveLogHeatRoute())
       ? () => ordinarySceneDepthProvider?.() ?? null
       : null,
     // The kiln is an explicit authored-solid experiment. Its exact registered
@@ -24148,7 +24150,7 @@ async function initKaminosVolumeRoute() {
       return { requested: true, id: 'kiln', object: entry?.object ?? null };
     },
   });
-  if (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute()) {
+  if (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute() || isLiveLogHeatRoute()) {
     // Composition routes need the live Three scene visible under the flame:
     // alpha-composite the native volume canvas and depth-clip volume behind
     // authored surfaces instead of painting an opaque near-black overlay.
@@ -30370,6 +30372,26 @@ sceneInitialization.then(() => {
   if(new URLSearchParams(location.search).get('experiment')==='burn-table')fluidViewportReady.then(()=>burnTable.open()).catch(error=>console.error('Burn Table failed:',error));
   const volumeLoaded = initKaminosVolumeRoute();
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
+  if(isLiveLogHeatRoute()){
+    window.kaminosLiveLogEntry={status:'loading',module:'./experiments/sinter/live-log-heat.experiment.mjs'};
+    Promise.all([fluidViewportReady,volumeLoaded]).then(async()=>{
+      const {loadExperimentContributions,openExperiment}=await import('./workbench-experiments.mjs');
+      const [definition]=await loadExperimentContributions([window.kaminosLiveLogEntry.module]);
+      const flow=Number(document.getElementById('volume-flow-rate').value);
+      const current=await openExperiment(definition,{host:{
+        scene:{ready:fluidViewportReady,renderer:()=>renderer,load:showGLB,objects:()=>sceneObjects,
+          select:setActiveSceneObject,dirty:()=>window._kaminosDirty?.(),
+          frame:objects=>{frameObjects(objects,camera,controls);window._kaminosDirty?.();},
+          enterWorkbench:()=>{authoringWorkspace.setMode('workbench');installFluidWorkbench({entryOnly:true});setActiveTab('assets',{reveal:false});}},
+        volume:{ready:volumeLoaded,get:()=>volumePrototype,burner:on=>{
+          setVolumeControlValue('volume-flow-rate',on?flow:0);updateVolumeControlLabels();
+          applyFlameEmitterPose(flameEmitterPose,{sourceEnabled:document.getElementById('emitter-assay-family').value==='cluster'?true:on});
+          volumePrototype.setControls(readVolumeControls());return volumePrototype.debugState();}},
+      }});
+      await current.mount({document,container:document.getElementById('tab-assets')});
+      window.kaminosLiveLog=current;window.kaminosLiveLogEntry.status='mounted';
+    }).catch(error=>{window.kaminosLiveLogEntry.status='failed';window.kaminosLiveLogEntry.error=error.message;console.error('Live log experiment:',error);});
+  }
   Promise.all([environmentLoaded, volumeLoaded]).then(async () => {
     const hash = new URLSearchParams(location.hash.slice(1));
     if (hash.get('authoring') !== '1') return;
