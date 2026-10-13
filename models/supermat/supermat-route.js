@@ -79,7 +79,7 @@ export async function createSuperMatAdapter(options = {}) {
     // Diagnostic: per-dispatch GPU timings on blocking runs (returned as run.profile).
     profile = false,
     // Streaming attention implementation (see createSuperMatOps).
-    attentionKernel = 'scalar' } = options;
+    attentionKernel = 'kit-tiled' } = options;
   if (!(targetDutyMs > 0)) throw new Error(`targetDutyMs must be a positive number of milliseconds, got ${targetDutyMs}`);
   if (!['auto', 'chunks', 'bundle'].includes(weightLoading)) throw new Error(`unknown weight loading mode ${weightLoading}`);
   if (!route?.runtime?.device || typeof route.loadModelResourcesFromSource !== 'function') {

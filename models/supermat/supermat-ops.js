@@ -43,8 +43,9 @@ function dispatch1D(total, workgroupSize = 256, limit = 65535) {
 
 // attention: 'streaming' (online softmax, no score matrix) or 'materialized'.
 // gemmTile: { tm, tn, bk } per-thread outputs and K step (16x16 threads per workgroup).
-// attentionKernel: 'scalar' or 'vec4' model-owned streaming implementation (head dim 64), or 'kit-tiled'
-// (the inference kit's register-tiled flash attention; head dims a multiple of 16 up to 256).
+// attentionKernel: 'kit-tiled' (default; the inference kit's register-tiled flash attention, head dims a
+// multiple of 16 up to 256; 1.9x the scalar kernel on the 4096-token UNet layer, 2026-10-13 bench) or the
+// model-owned 'scalar' / 'vec4' streaming kernels (head dim 64), kept as baselines.
 // gemmKernel: 'tiled' (default), 'subgroup-matrix' (experimental Apple
 // simdgroup matrices; correct but ~2x slower than tiled in the 2026-10-09
 // bench with one subgroup per workgroup), or 'auto' (subgroup matrices when
@@ -76,7 +77,7 @@ export function createSuperMatOps(device, options = {}) {
   const unknown = Object.keys(options).filter(key => !SUPERMAT_OPS_OPTIONS.includes(key));
   if (unknown.length) throw new Error(`unknown SuperMat ops option: ${unknown.join(', ')}`);
   const { label = 'supermat', attention = 'streaming', gemmTile = { tm: 4, tn: 4, bk: 16 }, fuseNorm = false,
-    attentionKernel = 'scalar', gemmKernel = 'tiled', gemmPrecision = 'f32', activations = 'f32',
+    attentionKernel = 'kit-tiled', gemmKernel = 'tiled', gemmPrecision = 'f32', activations = 'f32',
     // profile: per-dispatch GPU timestamps (own pass per dispatch) for unscheduled runs; diagnostic only.
     profile = false,
     // Per-GEMM tile policy: GEMMs that still yield >= minWorkgroups workgroups

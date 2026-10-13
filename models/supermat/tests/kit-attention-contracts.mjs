@@ -55,11 +55,13 @@ for (const activations of ['f32', 'f16']) {
   assert.ok(ops.attentionHeadDimSupported(128) && !ops.attentionHeadDimSupported(512));
 }
 
-// The scalar route keeps head dim 64 only; unknown kernels fail loudly.
+// The kit kernel is the default; the model-owned scalar kernel (head dim 64 only) stays selectable as a
+// baseline; unknown kernels fail loudly.
 {
   const { device } = recordingDevice();
-  assert.ok(!createSuperMatOps(device).attentionHeadDimSupported(128));
-  assert.ok(createSuperMatOps(device).attentionHeadDimSupported(64));
+  assert.equal(createSuperMatOps(device).attentionKernel, 'kit-tiled');
+  assert.ok(!createSuperMatOps(device, { attentionKernel: 'scalar' }).attentionHeadDimSupported(128));
+  assert.ok(createSuperMatOps(device, { attentionKernel: 'scalar' }).attentionHeadDimSupported(64));
   assert.throws(() => createSuperMatOps(device, { attentionKernel: 'tiled' }), /unknown attention kernel tiled/);
 }
 console.log('kit attention contracts: passed');
