@@ -53,7 +53,7 @@ export function createSourceSoftening(device,{nodes,triangles,nodeCount,dimensio
       if(!prepared){const p=encoder.beginComputePass({label:'cache source solid boundaries'});p.setPipeline(prepare);p.setBindGroup(0,prepGroup);p.dispatchWorkgroups(...dispatch);p.end();prepared=true;metadata.staticPreparations++;}
       for(let i=0;i<passes;i++){const p=encoder.beginComputePass({label:'soften lighting emission'});p.setPipeline(filter);p.setBindGroup(0,bindings[i===0?0:i%2===1?1:2]);p.dispatchWorkgroups(...dispatch);p.end();}
       metadata.updates++;return textures[(passes-1)%2];
-    },destroy(){for(const r of owned)r.destroy();}};
+    },invalidateGeometry(){prepared=false;},destroy(){for(const r of owned)r.destroy();}};
   }catch(error){for(const r of owned)r.destroy();throw error;}
 }
 

@@ -43,7 +43,7 @@ export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coa
     return {texture,metadata,encode(encoder){
       if(!prepared){const pass=encoder.beginComputePass({label:'prepare static smoke interpolation'});pass.setPipeline(prepare);pass.setBindGroup(0,prepareGroup);pass.dispatchWorkgroups(...dispatch(Math.max(plan.sampleCount,plan.binCount)));pass.end();prepared=true;metadata.staticPreparations++;}
       const pass=encoder.beginComputePass({label:'reconstruct live smoke illumination once per volume'});pass.setPipeline(update);pass.setBindGroup(0,updateGroup);pass.dispatchWorkgroups(...dispatch(plan.sampleCount));pass.end();metadata.updates=++updates;
-    },destroy(){for(const r of owned)r.destroy();}};
+    },invalidateGeometry(){prepared=false;},destroy(){for(const r of owned)r.destroy();}};
   } catch(error){for(const r of owned)r.destroy();throw error;}
 }
 
