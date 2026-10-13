@@ -26,3 +26,9 @@ test('legacy kiln collision becomes object membership, while a current explicit 
  assert.equal(planSceneRestore(current).objects[0].collision,null);
  assert.throws(()=>planSceneRestore({...current,version:current.version+1}),/newer authoring client/);
 });
+
+test('the observed version-8 kiln recipe restores its implicit fire domain before adopting collision membership',()=>{
+ const object={...wall(),id:'kiln'};delete object.collision;
+ const legacy={version:8,objects:[object],composition,flameDomainTranslation:[.036190740727542636,-.08796791229906509,1.2975528287866451],flameDomainScale:1.1315854291256993,flameDomainFollowSource:false};
+ const restored=planSceneRestore(legacy);assert.deepEqual(restored.objects[0].collision,{domainId:'flame-field',enabled:true});assert.equal(restored.composition.flame.presetId,composition.flame.presetId);
+});

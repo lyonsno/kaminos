@@ -8,8 +8,9 @@ export function checkedObjectCollision(record,value=record?.collision) {
   if(value.domainId!==FIRE_DOMAIN_ID || typeof value.enabled!=='boolean')throw Error('Invalid object collision membership');
   return {...structuredClone(value),domainId:FIRE_DOMAIN_ID,enabled:value.enabled};
 }
-export function checkSceneCollisionReferences(records) {
+export function checkSceneCollisionReferences(records,{implicitFireDomain=false}={}) {
   const domains=new Set(records.filter(record=>record.type===FIRE_DOMAIN_TYPE).map(record=>record.id));
+  if(implicitFireDomain)domains.add(FIRE_DOMAIN_ID);
   for(const record of records)if(record.collision && !domains.has(checkedObjectCollision(record).domainId))throw Error('Object collision references a missing fire domain');
 }
 
