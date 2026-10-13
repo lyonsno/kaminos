@@ -4,6 +4,7 @@
 // isolated charts for collapsed atlas faces, and the source's post-UV normal
 // law (trimesh vertex_normals on the export frame, mapped back to model frame).
 import xatlasFactory from './vendor/xatlas/xatlas-0.0.11.mjs';
+import {fma} from './mesh-simplify.js';
 
 export const WASM_XATLAS_ROUTE='xatlas 0.0.11 Wasm + explicit isolated charts for collapsed atlas faces';
 
@@ -29,9 +30,13 @@ export async function unwrapWithXatlas(vertices,triangles){
 
 // trimesh 5.1.1 Trimesh(export_verts, faces).vertex_normals: angle-weighted unit
 // face normals summed per vertex, then unitized (reciprocal-multiply as trimesh).
+// Calibrated on the bear against trimesh/numpy/scipy (arm64): row norms sum as
+// (x*x + y*y) + z*z, and the sparse per-vertex sums fuse each multiply-add in
+// face order (scipy's compiled mat-vec). Angles use the engine's acos, which can
+// differ from the platform libm in the last bit; agreement is measured, not exact.
 const TOL_ZERO=1e-13,TOL_MERGE=1e-8; // trimesh util.TOL_ZERO, constants.tol.merge
 function unitize3(x,y,z,threshold=TOL_ZERO){
-  const norm=Math.sqrt(x*x+y*y+z*z);if(!(norm>threshold))return [x*norm,y*norm,z*norm,false];
+  const norm=Math.sqrt((x*x+y*y)+z*z);if(!(norm>threshold))return [x*norm,y*norm,z*norm,false];
   const r=norm**-1;return [x*r,y*r,z*r,true];
 }
 export function trimeshVertexNormals(positions,faces){
@@ -43,9 +48,10 @@ export function trimeshVertexNormals(positions,faces){
     if(!valid||!(nx*nx+ny*ny+nz*nz>.5))continue;
     const u=unitize3(b[0]-a[0],b[1]-a[1],b[2]-a[2]),v=unitize3(c[0]-a[0],c[1]-a[1],c[2]-a[2]),w=unitize3(c[0]-b[0],c[1]-b[1],c[2]-b[2]);
     const clip=x=>Math.min(1,Math.max(-1,x));
-    let a0=Math.acos(clip(u[0]*v[0]+u[1]*v[1]+u[2]*v[2])),a1=Math.acos(clip(-u[0]*w[0]-u[1]*w[1]-u[2]*w[2])),a2=Math.PI-a0-a1;
+    let a0=Math.acos(clip((u[0]*v[0]+u[1]*v[1])+u[2]*v[2])),a1=Math.acos(clip((-u[0]*w[0]+-u[1]*w[1])+-u[2]*w[2])),a2=Math.PI-a0-a1;
     if(a0<TOL_MERGE||a1<TOL_MERGE||a2<TOL_MERGE)a0=a1=a2=0;
-    for(const [vi,angle] of [[ia,a0],[ib,a1],[ic,a2]]){summed[vi*3]+=angle*nx;summed[vi*3+1]+=angle*ny;summed[vi*3+2]+=angle*nz;}
+    for(const [vi,angle] of [[ia,a0],[ib,a1],[ic,a2]]){
+      summed[vi*3]=fma(angle,nx,summed[vi*3]);summed[vi*3+1]=fma(angle,ny,summed[vi*3+1]);summed[vi*3+2]=fma(angle,nz,summed[vi*3+2]);}
   }
   const out=new Float64Array(nv*3);
   for(let i=0;i<nv;i++){const [x,y,z]=unitize3(summed[i*3],summed[i*3+1],summed[i*3+2]);out[i*3]=x;out[i*3+1]=y;out[i*3+2]=z;}
