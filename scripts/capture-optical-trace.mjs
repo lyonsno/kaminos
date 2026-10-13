@@ -83,6 +83,8 @@ try {
   assert.equal(report.hold.effectiveSimStepCount,heldStep);
   await guard(page.waitForFunction(()=>/scene loaded:|load failed/i.test(document.getElementById('info-bar')?.textContent||'')));
   report.effectiveCamera=await page.evaluate(()=>window.kaminosNavigationState());
+  assert.ok(Number.isFinite(report.requestedCamera.fov)&&Number.isFinite(report.effectiveCamera.fov)
+    &&Math.abs(report.requestedCamera.fov-report.effectiveCamera.fov)<1e-5,'camera fov differs from request');
   for(const key of ['position','target','up']) {
     assert.ok(report.requestedCamera[key].every((v,i)=>Math.abs(v-report.effectiveCamera[key][i])<1e-5),`camera ${key} differs from request`);
   }
@@ -114,6 +116,8 @@ try {
   assert.deepEqual(report.state.ordinaryDomainTranslation,scene.flameDomainTranslation);
   assert.equal(report.state.ordinaryDomainScale,scene.flameDomainScale);
   const {width,height,rgba}=baseline.image;
+  assert.equal(width,report.state.width,'baseline viewport width differs');
+  assert.equal(height,report.state.height,'baseline viewport height differs');
   await fs.writeFile(out+'/baseline.rgba',Buffer.from(rgba));
   await page.screenshot({path:out+'/baseline-scene.png'});
   assert.ok(rgba.some((v,i)=>i%4!==3&&v>0),'blank baseline');
@@ -141,6 +145,12 @@ try {
       report.chunks.push({...chunk,readbackBase64:undefined,path:bytes ? path : null,sha256});await save();
       assert.equal(chunk.ok,true,`optical capture failed at ${chunk.phase}: ${chunk.reason}`);
       assert.ok(bytes,'missing optical readback');
+      for(const [key,value] of Object.entries({width,height,firstRay:Math.floor(height*fraction)*width,
+        rayCount:width,sampleOffset:0,sampleCount:subdivisions+1,subdivisions,
+        rowCount:width*(subdivisions+1),byteLength:width*(subdivisions+1)*32*4})) {
+        assert.equal(chunk.plan[key],value,`scanline ${key} differs from baseline geometry`);
+      }
+      assert.equal(bytes.length,chunk.plan.byteLength,'scanline byte length differs');
       validateTraceSpecialization(specialization,chunk.effective.specialization);
       // Pair equality alone admits two equally wrong captures. Bind each one
       // to the held native baseline before comparing its optical values.

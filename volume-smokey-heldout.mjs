@@ -21,7 +21,12 @@ export function smokeyVariants(preset) {
     controls.forEach((key,i)=>{
       const control=result.domControls[`volume-immersed-${key}`];
       assert.ok(Number.isFinite(control?.value),`missing numeric ${key}`);
+      if(factors[i]===1)return;
       control.value*=factors[i];
+      if(Object.hasOwn(control,'rawValue'))control.rawValue=String(control.value);
+      const route=new URL(result.route);
+      route.searchParams.set(control.param,String(control.value));
+      result.route=route.href;
     });
     return {name,factors,preset:result};
   });

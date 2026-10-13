@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {spawn,execFileSync} from 'node:child_process';
 import {once} from 'node:events';
 
@@ -24,11 +25,14 @@ try {
     report.cases.push(entry);report.phase=path.basename(target);await save();
     const child=spawn(process.execPath,[path.join(root,'scripts/capture-optical-trace.mjs'),root,variant.path,target,port,'576',String(step),String(yaw)],{cwd:root,stdio:'inherit'});
     const [code,signal]=await once(child,'exit');entry.exitCode=code;entry.signal=signal;
-    const capture=JSON.parse(await fs.readFile(path.join(target,'report.json'),'utf8'));
+    const captureBytes=await fs.readFile(path.join(target,'report.json'));
+    const capture=JSON.parse(captureBytes);
+    entry.status=code===0?'validating':'failed';
     assert.equal(code,0,`capture failed: ${target}`);assert.equal(capture.status,'observed');
     assert.equal(capture.source,report.source);assert.equal(capture.diff,'');
     assert.deepEqual(capture.requested,{heldStep:step,yaw,subdivisions:576});
     assert.equal(capture.chunks.length,9);entry.emitting=capture.emitting;
+    entry.reportSha256=createHash('sha256').update(captureBytes).digest('hex');
     entry.status='observed';await save();
   }
   report.phase='complete';report.status='observed';

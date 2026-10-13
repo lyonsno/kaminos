@@ -25,7 +25,7 @@ try {
     artifact.preset=variant.preset;
     // Use the serving implementation's canonical hash, including Python numeric serialization.
     const hash=execFileSync('python3',['-c',
-      'import json,sys,serve; p=json.load(sys.stdin); s=json.load(open("volume-settings-preset-schema-v2.json")); print(serve._volume_settings_content_hash(p,s))'],
+      'import json,sys,serve; p=json.load(sys.stdin); s=json.load(open("volume-settings-preset-schema-v2.json")); serve.validate_volume_settings_preset_payload(p,s); print(serve._volume_settings_content_hash(p,s))'],
       {input:JSON.stringify(artifact.preset),encoding:'utf8'}).trim();
     assert.match(hash,/^[a-f0-9]{64}$/);
     artifact.presetId=`vsp-${hash}`;artifact.contentHash=`sha256:${hash}`;
