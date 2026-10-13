@@ -137,3 +137,13 @@ export function chooseAppendAnchor({ footprint, pivot, obstacles = [], viewDirec
   }
   return { anchor: [...pivot], reason: 'no-clear-spot' };
 }
+
+// The floor point appends start from: the centre of what is already in the scene, so a
+// new object lands beside it even when the orbit pivot has been moved away (for example
+// toward the camera). An empty scene keeps the pivot.
+export function appendArrivalPivot(obstacles, pivot) {
+  if (!obstacles.length) return [...pivot];
+  const min = [Infinity, Infinity], max = [-Infinity, -Infinity];
+  for (const o of obstacles) { min[0] = Math.min(min[0], o.min[0]); min[1] = Math.min(min[1], o.min[2]); max[0] = Math.max(max[0], o.max[0]); max[1] = Math.max(max[1], o.max[2]); }
+  return [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2];
+}

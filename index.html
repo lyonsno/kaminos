@@ -3819,7 +3819,7 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
-import { assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
+import { appendArrivalPivot, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
 import { pickSavedScene } from './scene-load-picker.mjs';
@@ -12297,7 +12297,8 @@ function applyAssetArrival(object, mode) {
   if (mode === 'append') {
     // Land beside what is already there, not inside it.
     const footprint = [placement.bounds.max[0] - placement.bounds.min[0], placement.bounds.max[2] - placement.bounds.min[2]];
-    spot = chooseAppendAnchor({ footprint, pivot: anchor, obstacles: appendArrivalObstacles(),
+    const obstacles = appendArrivalObstacles();
+    spot = chooseAppendAnchor({ footprint, pivot: appendArrivalPivot(obstacles, anchor), obstacles,
       viewDirection: camera && controls ? camera.position.clone().sub(controls.target).toArray() : [0, 0, 1] });
     if (spot.anchor[0] !== anchor[0] || spot.anchor[1] !== anchor[1]) { anchor = spot.anchor; placement = place(anchor); }
   }
