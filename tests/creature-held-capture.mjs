@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import './creature-body-fixture.mjs';
 import * as contribution from '../experiments/creature-motion/retained.experiment.mjs';
 import * as THREE from '../lib/three.core.js';
+import {sameCreatureBody,sameHeldCreatureFrame} from '../experiments/creature-motion/held-capture.mjs';
 assert.equal(typeof contribution.withHeldCreatureFrame,'function','Creature contribution lacks the explicit hold/present/capture/restore operation');
 const {withHeldCreatureFrame}=contribution;
 function fixture(){
@@ -11,8 +12,8 @@ function fixture(){
   asset:{id:'one',requested:'/body.glb'},view:{position:[1,2,3],target:[0,0,0],up:[0,1,0],fov:45,zoom:1,near:.01,far:100}};
  const calls=[];
  const entry={state:()=>({id:'marionette/retained-creature'}),read:async()=>structuredClone(state),
-  async invoke(name,input){calls.push(name);if(name==='hold'){const priorStatus=state.status;state={...state,status:'paused',frame:input.frame??state.frame};return {priorStatus,state:structuredClone(state),inputs:{asset:'/body.glb',source_sha256:state.source.source_sha256,clip:'trot',frame:state.frame,view:structuredClone(state.view)}};}
-   if(name==='resume'){state.status='playing';return structuredClone(state);}throw Error('unknown operation');}};
+  async invoke(name,input){calls.push(name);if(name==='hold'){if(input?.expected&&!sameCreatureBody(input.expected,state))throw Error('Creature body changed before hold');const priorStatus=state.status;state={...state,status:'paused',frame:input.frame??state.frame};return {priorStatus,state:structuredClone(state),inputs:{asset:'/body.glb',source_sha256:state.source.source_sha256,clip:'trot',frame:state.frame,view:structuredClone(state.view)}};}
+   if(name==='restore'){if(!sameHeldCreatureFrame(input.expected,state))return {status:'skipped-changed',effective:structuredClone(state)};state.status='playing';return {status:'resumed',effective:structuredClone(state)};}throw Error('unknown operation');}};
  return {entry,calls,state:()=>state,change:patch=>state={...state,...patch}};
 }
 {
@@ -25,7 +26,7 @@ function fixture(){
  const result=await withHeldCreatureFrame({entry:f.entry,frame:30,present:async()=>{presented=true;},
   capture:async held=>{assert.equal(presented,true);assert.equal(f.state().frame,30);assert.equal(f.state().status,'paused');assert.equal(held.inputs.frame,30);return {report:'/retained/report.json'};}});
  assert.equal(result.restore.status,'resumed');assert.equal(f.state().status,'playing');
- assert.equal(result.retained.report,'/retained/report.json');assert.deepEqual(f.calls,['hold','resume']);
+ assert.equal(result.retained.report,'/retained/report.json');assert.deepEqual(f.calls,['hold','restore']);
 }
 {
  const f=fixture(),failure=Error('PNG retention failed');
@@ -44,7 +45,7 @@ function fixture(){
  assert.equal(result.restore.status,'not-needed');assert.equal(f.state().status,'paused');
 }
 {
- const f=fixture(),resume=f.entry.invoke;f.entry.invoke=async(name,input)=>{if(name==='resume')throw Error('resume failed');return resume(name,input);};
+ const f=fixture(),resume=f.entry.invoke;f.entry.invoke=async(name,input)=>{if(name==='restore')throw Error('resume failed');return resume(name,input);};
  const result=await withHeldCreatureFrame({entry:f.entry,frame:30,present:async()=>{},capture:async()=>({report:'retained-despite-restore'})});
  assert.equal(result.retained.report,'retained-despite-restore');assert.equal(result.restore.status,'failed');assert.match(result.restore.error,/resume failed/);
 }
