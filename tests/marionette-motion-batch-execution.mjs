@@ -1,3 +1,4 @@
+// kaminos-test: node
 // Explicit mocked harness controls, not GPU, image or gait evidence.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
