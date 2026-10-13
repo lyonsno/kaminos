@@ -94,3 +94,58 @@ test('the fluid-front read layout and its bind groups carry the fluid uniforms a
   assert.equal(groups.length, 4, 'four bind groups use the layout');
   for (const entries of groups) assert.match(entries, /\{ ?binding: 0, resource: \{ ?buffer: uniformBuffer ?\} ?\},/);
 });
+
+// Review GR-01 (2026-10-13): the emissive-light seed, interpolated into the
+// main shader, sampled the fluid with unseated (zero) GRID / GRID_Y. Every
+// entry point of every module interpolated into the main shader seats first,
+// except the two lattice-only emissive passes, which never reach the fluid
+// samplers (and whose resolve layout has no fluid uniform binding).
+test('interpolated modules: every entry point seats first except the lattice-only emissive passes', async () => {
+  const exempt = new Set(['sweepEmissiveLight', 'resolveEmissiveLight']);
+  const interpolated = [...moduleText('WGSL').matchAll(/\$\{([A-Z_]+_WGSL)\}/g)].map(m => m[1]);
+  assert.deepEqual(interpolated, ['PASSIVE_MATERIAL_WGSL', 'PHYSICAL_COLOR_WGSL', 'EMISSIVE_TRANSPORT_WGSL', 'SCENE_VOLUME_SOURCE_WGSL']);
+  const texts = {
+    PASSIVE_MATERIAL_WGSL: core.PASSIVE_MATERIAL_WGSL,
+    PHYSICAL_COLOR_WGSL: (await import('../volume-physical-color.mjs')).PHYSICAL_COLOR_WGSL,
+    EMISSIVE_TRANSPORT_WGSL: (await import('../volume-emissive-transport.mjs')).EMISSIVE_TRANSPORT_WGSL,
+    SCENE_VOLUME_SOURCE_WGSL: (await import('../scene-volume-source.mjs')).SCENE_VOLUME_SOURCE_WGSL,
+  };
+  const seen = [];
+  for (const [name, text] of Object.entries(texts)) {
+    for (const e of entryPoints(text)) {
+      seen.push(e.name);
+      if (exempt.has(e.name)) {
+        const body = text.slice(text.indexOf(`fn ${e.name}(`), text.indexOf('\n}\n', text.indexOf(`fn ${e.name}(`)));
+        assert.ok(!/\bGRID(_Y)?\b/.test(body), `${name}:${e.name} is exempt only while it never reads the fluid grid`);
+      } else {
+        assert.equal(e.firstLine, 'seatGridShape();', `${name}:${e.name} seats the grid shape`);
+      }
+    }
+  }
+  assert.ok(seen.includes('seedEmissiveLight') && seen.includes('seedSceneVolumeSource'));
+});
+
+// Witness for GR-01: read back the emissive seed coefficients and summarise
+// them; the capture fails an arm whose coefficients are missing, non-finite or
+// spatially flat.
+test('emissive seed readback: stats helper, field readback, capture check', async () => {
+  const emissive = await import('../volume-emissive-transport.mjs');
+  const { emissiveCoefficientsMismatch } = await import('../volume-arm-capture-checks.mjs');
+  const values = new Float32Array([0, 0, 0, 0, 1, 2, 3, 0.5, 2, 2, 2, 1.5, 0, 0, 0, 0]);
+  const stats = emissive.emissiveCoefficientStats(values);
+  assert.deepEqual({ ...stats }, { cells: 4, finiteCells: 4, nonzeroCells: 2, extinctionMax: 1.5, extinctionMean: 0.5, emissionMax: 3, extinctionStdDev: Math.sqrt((0.25 + 0 + 1 + 0.25) / 4) });
+  assert.equal(emissive.emissiveCoefficientStats(new Float32Array([NaN, 0, 0, 0])).finiteCells, 0);
+  const field = readFileSync(new URL('../volume-emissive-transport.mjs', import.meta.url), 'utf8');
+  assert.match(field, /const coefficients = device\.createBuffer\(\{ label: 'emissive material coefficients', size: cells\*16, usage: GPUBufferUsage\.STORAGE \| GPUBufferUsage\.COPY_SRC \}\);/);
+  assert.match(field, /    async readCoefficients\(\) \{/);
+  assert.match(source, /    async sampleEmissiveSeedCoefficients\(\) \{/);
+  assert.equal(emissiveCoefficientsMismatch({ status: 'sampled', ...stats }), null);
+  assert.match(emissiveCoefficientsMismatch(null), /missing/);
+  assert.match(emissiveCoefficientsMismatch({ status: 'unsupported', reason: 'emissive-light-field-inactive' }), /unsupported \(emissive-light-field-inactive\)/);
+  assert.match(emissiveCoefficientsMismatch({ status: 'sampled', ...stats, finiteCells: 3 }), /non-finite/);
+  assert.match(emissiveCoefficientsMismatch({ status: 'sampled', ...stats, nonzeroCells: 0 }), /no nonzero/);
+  assert.match(emissiveCoefficientsMismatch({ status: 'sampled', ...stats, extinctionStdDev: 0 }), /spatially flat/);
+  const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
+  assert.match(capture, /if \(cid === '@emissiveCoefficients'\) \{/);
+  assert.match(capture, /emissiveCoefficients: arm\.emissiveCoefficients \|\| \[\]/);
+});

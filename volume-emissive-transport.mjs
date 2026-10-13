@@ -210,6 +210,7 @@ fn incidentAt(p: vec3<f32>) -> vec3<f32> {
 // support is a cell-volume sample, not a substitute for the camera's ridge.
 @compute @workgroup_size(4,4,4)
 fn seedEmissiveLight(@builtin(global_invocation_id) c: vec3<u32>) {
+  seatGridShape();
   if (any(c>=vec3<u32>(LIGHT_GRID))) { return; }
   var coefficients = vec4<f32>(0.0);
   for(var k=0u;k<8u;k++) {
