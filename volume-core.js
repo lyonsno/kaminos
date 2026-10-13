@@ -15726,7 +15726,7 @@ export function createKaminosVolumePrototype({
       ], 44);
       splatCamera.set([camera.position.x, camera.position.y, camera.position.z, 0], 48);
       splatCamera.set([...productTransform.translate, productTransform.scale], 52);
-      splatCamera.set([gridSize, gridHeight, appearanceModelUniformValue(controlsSnapshot.appearanceModel), 0], 56);
+      splatCamera.set([gridSize, gridHeight, appearanceModelUniformValue(state.appearanceModel?.effective), 0], 56);
       state.fullSupportDepositionReceipt = {
         identity: 'full-support-deposition-runtime-receipt-v0',
         requested: state.fullSupportDepositionRequested,
@@ -16157,8 +16157,13 @@ export function createKaminosVolumePrototype({
     // Borrowed lane (reactant_combustion_d.z, otherwise unused): the quench field
     // spreads only while a liquid is bound with transfer enabled.
     uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 14] = liquidFireContactDescriptor && liquidFireContactTransferEnabled ? 1 : 0;
-    uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 15] = appearanceModelUniformValue(controlsSnapshot.appearanceModel);
-    state.appearanceModel = { requested: String(controlsSnapshot.appearanceModel ?? 'authored'), effective: APPEARANCE_MODELS.includes(controlsSnapshot.appearanceModel) ? controlsSnapshot.appearanceModel : 'authored', storedCarriers: controlsSnapshot.appearanceModel === 'compact-3' ? ['flame', 'interfaceShred', 'combustionFront'] : null };
+    // compact-3 is fitted on, and only meaningful under, the reactant law: under
+    // the authored law the dropped carriers feed the reaction itself, so
+    // rebuilding them changes the dynamics (measured: 2.6x brighter at step 320).
+    const appearanceRequested = String(controlsSnapshot.appearanceModel ?? 'authored');
+    const appearanceEffective = appearanceRequested === 'compact-3' && reactantCombustionConfig.effective.admitted ? 'compact-3' : 'authored';
+    uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 15] = appearanceModelUniformValue(appearanceEffective);
+    state.appearanceModel = { requested: appearanceRequested, effective: appearanceEffective, reason: appearanceRequested === 'compact-3' && appearanceEffective !== 'compact-3' ? 'compact-3-requires-the-reactant-law' : null, storedCarriers: appearanceEffective === 'compact-3' ? ['flame', 'interfaceShred', 'combustionFront'] : null };
     state.reactantCombustion = reactantCombustionConfig;
     if (ensureReactantSidecar(reactantCombustionConfig.effective.admitted)) {
       rebuildFluidBindGroups();

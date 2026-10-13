@@ -80,7 +80,7 @@ test('the uniforms carry the shape: fluid block, emitter words, splat camera', (
   assert.match(moduleText('BOUNDARY_SPLAT_WGSL'), /  productTransform: vec4<f32>,\n  gridShape: vec4<f32>,\n\}/);
   assert.match(source, /const splatCamera = new Float32Array\(60\);/);
   assert.match(source, /\{ incrementScale: timeStepConfig\.effective\.incrementScale, gridHeight \},/, 'the core passes the height to the emitter packer');
-  assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, appearanceModelUniformValue\(controlsSnapshot\.appearanceModel\), 0\], 56\);/, 'x, y the grid shape; z the appearance-model flag (compact-3) for the splat module');
+  assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, appearanceModelUniformValue\(state\.appearanceModel\?\.effective\), 0\], 56\);/, 'x, y the grid shape; z the effective appearance-model flag (compact-3) for the splat module');
   assert.match(source, /label: `kaminos \$\{BOUNDARY_SPLAT_RENDERER_IDENTITY\} camera`,\n\s+size: 240,/);
 });
 

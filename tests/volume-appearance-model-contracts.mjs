@@ -33,7 +33,7 @@ test('the compact expansion is one law with the pooled coefficients, applied to 
   assert.match(fnBody('boundarySplatSampleSlot'), /boundarySplatReadSlot\(/);
   for (const name of ['csProjectPressure', 'csProjectPressureTiered']) assert.match(fnBody(name), /let fireLayer = readSlot\(c, 2u\);\n\s*let microLayer = readSlot\(c, 3u\);/, `${name} reads the carriers through the seam`);
   assert.equal([...source.matchAll(/fluidSrc\[base \+ [23]u\]/g)].length, 2, 'the only raw carrier-slot reads left are the converged projection pass-through copies');
-  assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, appearanceModelUniformValue\(controlsSnapshot\.appearanceModel\), 0\], 56\);/, 'the splat camera carries the flag in gridShape.z');
+  assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, appearanceModelUniformValue\(state\.appearanceModel\?\.effective\), 0\], 56\);/, 'the splat camera carries the flag in gridShape.z');
   const copies = [...source.matchAll(/fn expandCompactCarriers\([^]*?\n\}\n/g)].map(m => m[0]);
   assert.equal(copies.length, 2, 'the main module and the splat module (a separate shader) each carry a copy');
   assert.equal(copies[0], copies[1], 'byte-identical');
@@ -54,9 +54,11 @@ test('the cockpit carries the Appearance model select; saved basins load on auth
   const control = schema.controls.find(c => c.key === 'volume-appearance-model');
   assert.deepEqual(control, { key: 'volume-appearance-model', param: 'volume_appearance_model', tagName: 'SELECT', type: 'select-one', additiveDefault: 'authored', allowedValues: ['authored', 'compact-3'], additiveSinceControlCount: 253 });
   assert.equal(schema.controlCount, 253);
-  assert.match(source, /uniforms\[REACTANT_COMBUSTION_UNIFORM_OFFSET \+ 15\] = appearanceModelUniformValue\(controlsSnapshot\.appearanceModel\);/, 'packed in the last borrowed reactant lane (d.w)');
+  assert.match(source, /const appearanceEffective = appearanceRequested === 'compact-3' && reactantCombustionConfig\.effective\.admitted \? 'compact-3' : 'authored';\n\s*uniforms\[REACTANT_COMBUSTION_UNIFORM_OFFSET \+ 15\] = appearanceModelUniformValue\(appearanceEffective\);/, 'packed in the last borrowed reactant lane (d.w); compact-3 is effective only under the admitted reactant law (under the authored law the dropped carriers feed the reaction)');
+  assert.match(source, /reason: appearanceRequested === 'compact-3' && appearanceEffective !== 'compact-3' \? 'compact-3-requires-the-reactant-law' : null/, 'the receipt names the refusal');
+  assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, appearanceModelUniformValue\(state\.appearanceModel\?\.effective\), 0\], 56\);/, 'the splat lane follows the effective model');
   assert.equal(core.appearanceModelUniformValue('compact-3'), 1);
   assert.equal(core.appearanceModelUniformValue('authored'), 0);
   assert.equal(core.appearanceModelUniformValue(undefined), 0);
-  assert.match(source, /state\.appearanceModel = \{ requested: [^}]*, effective: [^}]*\};/);
+  assert.match(source, /state\.appearanceModel = \{ requested: appearanceRequested, effective: appearanceEffective, reason: [^\n]*storedCarriers: [^\n]*\};/);
 });
