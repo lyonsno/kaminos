@@ -35,6 +35,14 @@ export function createFluidSequenceAdapter({page,source}){
    if(after.clock.step!==before.clock.step||!after.clock.paused)throw Error('Fluid changed during export render');
    return {step:after.clock.step};
   },
-  capture:()=>page.locator('#kaminos-host-renderer-canvas').screenshot({type:'png'}),
+  async capture(){
+   const data=await page.evaluate(()=>new Promise((resolve,reject)=>{
+    const canvas=document.getElementById('kaminos-host-renderer-canvas');
+    if(!canvas){reject(Error('Shared renderer canvas missing'));return;}
+    canvas.toBlob(blob=>{if(!blob){reject(Error('Canvas PNG capture failed'));return;}const reader=new FileReader();reader.onerror=()=>reject(reader.error);reader.onload=()=>resolve(reader.result);reader.readAsDataURL(blob);},'image/png');
+   }));
+   if(typeof data!=='string'||!data.startsWith('data:image/png;base64,'))throw Error('Canvas capture is not PNG');
+   return Buffer.from(data.slice('data:image/png;base64,'.length),'base64');
+  },
  };
 }

@@ -37,7 +37,7 @@ its actual shared canvas, and closes only that owned browser. Its input is:
 ```
 
 Viewport specifies the app window, not the export image extent. Each PNG contains
-only the actual shared renderer canvas; its effective dimensions are retained.
+the shared renderer canvas bitmap without DOM overlays; its effective dimensions are retained.
 A separate host-owned output-size/capture seam is needed for arbitrary export
 resolution without changing the inspected viewport. This command creates its
 own fresh run; it never attaches to or replaces the operator's existing water.
