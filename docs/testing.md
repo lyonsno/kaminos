@@ -9,7 +9,7 @@ npm test -- --only tests/a.mjs,tests/b.mjs
 
 `tools/test-runner.mjs` runs every top-level `.mjs` and `.py` file in `tests/` whose kind is `node` or `python`. It writes a report and one complete log per test. Pass `--report <path>` to choose where. Other flags are `--parallel <n>`, `--timeout-ms <ms>`, `--kinds node,python` and `--only <files>`.
 
-The runner checks that the dependencies declared in `package.json` are installed before running anything. It gives child tests `KAMINOS_CHROME` and `CHROME_BIN` values that point nowhere, so a witness that reaches a browser launch fails instead of opening the installed Chrome.
+The runner checks that every package in `package-lock.json` is installed at the locked version before running anything, and records whether integrity could be verified. It hands child tests a stub executable through `KAMINOS_CHROME`, `CHROME_BIN`, `CHROME` and `KAMINOS_SHARP_WEBGPU_CHROME`. A witness that reaches a browser launch hits the stub, which records the attempt and fails; the run then fails and names the test. Witnesses that read other variables or hardcode a browser path are not covered.
 
 ## Classifying a test
 
@@ -40,7 +40,7 @@ Prefer behavior tests that import a module and exercise it. Avoid new assertions
 
 `tests/quarantine.json` lists failures that existed when the runner was introduced. Each entry has a class, an owner, a reason and a signature.
 
-- **Signature:** the failing line the runner extracts from the test's output. A listed test is a known failure only while it fails with exactly that signature.
+- **Signature:** what the runner extracts from the test's output. For a plain script it is the first error line, with generic assertion messages carrying their detail lines. For a `node:test` file it is every failing subtest, as its suite path and first error line, plus any error caught outside a subtest. A listed test is a known failure only while it fails with exactly that signature.
 - **Changed signature:** a different failure, a timeout, or a test that cannot start is a new failure.
 - **Passing again:** a listed test that passes fails the run until its entry is removed, so the list only shrinks.
 

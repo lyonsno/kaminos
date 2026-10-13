@@ -66,7 +66,7 @@
       "class": "regression",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-09-27 060a7631 Hold shared-source host draws while producer resources are unavailable; the failure has changed since then; the owner decides whether the source or the test is wrong",
+      "reason": "passed at 8dd3c04a on the first-parent side of its last change and first fails at the merge fa19156b, which joined 060a7631 Hold shared-source host draws while producer resources are unavailable; the owner decides whether the source or the test is wrong",
       "signature": "ReferenceError: exclusiveInspectionRender is not defined",
       "testLastChanged": "2026-09-26 89aa0bec"
     },
@@ -107,7 +107,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "passed at its last change and first fails at 2026-10-02 e85891a7 Build an authoring workspace over the shared scene controls; the failure has changed since then; the owner decides whether the source or the test is wrong",
-      "signature": "node:test failing: Burner control commits share scene undo and restore through the live flame setters | F frames the selected authored object through generic geometry bounds | clearing resets scene history while typed water objects join chronological membership history | selection feedback hides untrustworthy offscreen pivots and names the recovery cue",
+      "signature": "node:test failing: Burner control commits share scene undo and restore through the live flame setters :: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /historyScopes: \\[document\\.getElementById\\('tab-assets'\\), document\\.getElementById\\('tab-volume'\\)/. Input: | F frames the selected authored object through generic geometry bounds :: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /const entry = sceneObjects\\.find\\(item => item\\.id === activeSceneObjectId\\);\\s*const changed = frameSceneObjectRecord\\(entry, camera, controls\\)/. Input: | clearing resets scene history while typed water objects join chronological membership history :: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /if \\(id !== activeSceneObjectId\\) scenePlacementTools\\?\\.selectionChanged\\(\\);/. Input: | selection feedback hides untrustworthy offscreen pivots and names the recovery cue :: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /const baseSceneOutput = scenePass;[\\s\\S]*?renderPipeline\\.outputNode = baseSceneOutput;/. Input:",
       "testLastChanged": "2026-10-01 e372f2eb"
     },
     "tests/scene-authoring-polish-contracts.mjs": {
@@ -122,7 +122,7 @@
       "class": "regression",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-09-26 644fc398 Integrate authored water emitters with scene history and persistence; the failure has changed since then; the owner decides whether the source or the test is wrong",
+      "reason": "passed at 358759bf on the main side of its last change and first fails at the merge 3480c13f Compose retained water Add action with current authoring history, which joined the water branch at 644fc398 Integrate authored water emitters with scene history and persistence; the owner decides whether the source or the test is wrong",
       "signature": "AssertionError [ERR_ASSERTION]: a changed basin must not be linked to pixels under the earlier immutable preset",
       "testLastChanged": "2026-09-29 9a71cce7"
     },
@@ -147,7 +147,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "passed at its last change and first fails at 2026-10-06 d472ee51 Author ordinary scene geometry, groups, lights and retained imports; same failure then as now; the owner decides whether the source or the test is wrong",
-      "signature": "node:test failing: clearing a scene removes its old flame member before the next scene saves",
+      "signature": "node:test failing: clearing a scene removes its old flame member before the next scene saves :: evalmachine.<anonymous>:6",
       "testLastChanged": "2026-10-04 c08d9e30"
     },
     "tests/scene-floor-receivers-contracts.mjs": {
@@ -163,7 +163,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "passed at its last change and first fails at 2026-10-01 1cf9e811 Validate light edits before admission and preserve partial numeric typing; the failure has changed since then; the owner decides whether the source or the test is wrong",
-      "signature": "node:test failing: AO is attached to material indirect lighting, not multiplied over lit output | rim off/on preserves its aim and fine-valued recipe | two startups without edits retain stored map recipes, selection, and rim settings",
+      "signature": "node:test failing: AO is attached to material indirect lighting, not multiplied over lit output :: evalmachine.<anonymous>:289 | rim off/on preserves its aim and fine-valued recipe :: evalmachine.<anonymous>:52 | two startups without edits retain stored map recipes, selection, and rim settings :: evalmachine.<anonymous>:52",
       "testLastChanged": "2026-09-18 9ec0b9a3"
     },
     "tests/scene-navigation-contracts.mjs": {
@@ -171,7 +171,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "passed at its last change and first fails at 2026-10-06 d472ee51 Author ordinary scene geometry, groups, lights and retained imports; same failure then as now; the owner decides whether the source or the test is wrong",
-      "signature": "node:test failing: ground is visible but cannot set authored-mesh navigation depth",
+      "signature": "node:test failing: ground is visible but cannot set authored-mesh navigation depth :: AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:",
       "testLastChanged": "2026-10-01 e372f2eb"
     },
     "tests/scene-roundtrip.mjs": {
@@ -211,7 +211,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "already failing at the commit that last changed it (2026-10-06 5b887704 Inflow aperture: only the transport sampler reaches the coverage texture); its assertions never matched main",
-      "signature": "node:test failing: common transport samples all gas state and front at the velocity backtrace | hot stationary gas has no per-layer kinematic rise in common mode | legacy mode preserves the original distinct backtraces and lift",
+      "signature": "node:test failing: common transport samples all gas state and front at the velocity backtrace :: ReferenceError: sceneClipCharacteristic is not defined | hot stationary gas has no per-layer kinematic rise in common mode :: ReferenceError: sceneClipCharacteristic is not defined | legacy mode preserves the original distinct backtraces and lift :: ReferenceError: sceneClipCharacteristic is not defined",
       "testLastChanged": "2026-10-06 5b887704"
     },
     "tests/volume-confinement-mode-contracts.mjs": {
@@ -219,7 +219,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "already failing at the commit that last changed it (2026-10-06 0740886f residual probe reports per-slab heat and smoke centroids); its assertions never matched main",
-      "signature": "node:test failing: the residual probe also reduces enstrophy so confinement can be calibrated against a measurement",
+      "signature": "node:test failing: the residual probe also reduces enstrophy so confinement can be calibrated against a measurement :: AssertionError [ERR_ASSERTION]: enstrophy is reported per cell",
       "testLastChanged": "2026-10-06 0740886f"
     },
     "tests/volume-dead-render-clock-retirement-contracts.mjs": {
@@ -291,7 +291,7 @@
       "owner": "operlocutor",
       "since": "2026-10-12",
       "reason": "already failing at the commit that last changed it (2026-10-06 5b887704 Inflow aperture: only the transport sampler reaches the coverage texture); its assertions never matched main",
-      "signature": "node:test failing: WGSL carries the predictor buffer, the MacCormack corrector with an extremum limiter, and one velocity bound helper",
+      "signature": "node:test failing: WGSL carries the predictor buffer, the MacCormack corrector with an extremum limiter, and one velocity bound helper :: AssertionError [ERR_ASSERTION]: predictor must not be added to the shared fluid bind group layout",
       "testLastChanged": "2026-10-06 5b887704"
     },
     "tests/volume-transported-detail-force-periodicity-contracts.mjs": {

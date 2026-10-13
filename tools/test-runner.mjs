@@ -31,7 +31,9 @@ export const REPORT_SCHEMA = 'kaminos.test-run-report.v1';
 export const KNOWN_KINDS = new Set(['node', 'python', 'browser', 'helper', 'manual']);
 export const EXECUTED_KINDS = new Set(['node', 'python']);
 export const QUARANTINE_CLASSES = new Set(['untriaged', 'regression', 'stale-pin', 'environment', 'harness-defect']);
-export const BROWSER_STUB_PATH = fileURLToPath(new URL('./browser-launch-stub.sh', import.meta.url));
+export const BROWSER_OVERRIDES = ['KAMINOS_CHROME', 'CHROME_BIN', 'CHROME', 'KAMINOS_SHARP_WEBGPU_CHROME'];
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+const LATE_LAUNCH_SETTLE_MS = 1000;
 const DEFAULT_TIMEOUT_MS = 600000;
 const DECLARATION = /^\s*(?:\/\/|#)\s*kaminos-test:\s*([a-z]+)\s*(?:[—–-]+\s*(.+?))?\s*$/;
 const SKIP_DIRS = new Set(['node_modules', '.git', 'artifacts', 'lib', 'scratch', 'scenes', 'fixtures']);
@@ -100,7 +102,7 @@ function executableVersion(executable, args) {
 
 async function checkDependencies(root) {
   const manifestPath = path.join(root, 'package.json');
-  if (!existsSync(manifestPath)) return { declared: [], missing: [], mismatched: [], installed: {}, lockfileSha256: null };
+  if (!existsSync(manifestPath)) return { declared: [], missing: [], mismatched: [], installed: {}, checked: 0, integrityVerified: false, lockfileSha256: null };
   const pkg = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
   const declared = Object.keys({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) }).sort();
   const missing = declared.filter(name => !existsSync(path.join(root, 'node_modules', name, 'package.json')));
@@ -110,17 +112,23 @@ async function checkDependencies(root) {
   const hidden = existsSync(hiddenPath) ? JSON.parse(await fs.readFile(hiddenPath, 'utf8')) : null;
   const installed = {};
   const mismatched = [];
-  for (const name of declared.filter(n => !missing.includes(n))) {
-    const version = JSON.parse(await fs.readFile(path.join(root, 'node_modules', name, 'package.json'), 'utf8')).version;
+  let checked = 0;
+  const entries = Object.entries(lock?.packages || {}).filter(([key]) => key.startsWith('node_modules/'));
+  for (const [key, locked] of entries) {
+    const name = key.replace(/^node_modules\//, '');
+    const manifest = path.join(root, key, 'package.json');
+    if (!existsSync(manifest)) { if (!missing.includes(name) && !locked.optional && !locked.dev) missing.push(name); continue; }
+    checked += 1;
+    const version = JSON.parse(await fs.readFile(manifest, 'utf8')).version;
     installed[name] = version;
-    const locked = lock?.packages?.[`node_modules/${name}`];
     if (locked?.version && locked.version !== version) { mismatched.push({ name, locked: locked.version, installed: version }); continue; }
-    const placed = hidden?.packages?.[`node_modules/${name}`];
+    const placed = hidden?.packages?.[key];
     for (const field of ['resolved', 'integrity']) {
       if (locked?.[field] && placed?.[field] && locked[field] !== placed[field]) mismatched.push({ name, field, locked: locked[field], installed: placed[field] });
     }
   }
-  return { declared, missing, mismatched, installed, lockfileSha256: existsSync(lockPath) ? sha256(await fs.readFile(lockPath)) : null };
+  return { declared, missing: missing.sort(), mismatched, installed, checked, integrityVerified: Boolean(hidden),
+    lockfileSha256: existsSync(lockPath) ? sha256(await fs.readFile(lockPath)) : null };
 }
 
 // The failure signature: the first error-shaped line for Node, the last for
@@ -131,16 +139,15 @@ export function failureSignature(output, { root, kind, exitCode }) {
   let text = output;
   if (root) text = text.split(root).join('<root>');
   text = text.split(os.homedir()).join('~');
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  // node:test files keep running after a failure; sign the set of failing
-  // subtests so a new failing subtest changes the signature.
+  const raw = text.split('\n');
+  const lines = raw.map(l => l.trim()).filter(Boolean);
+  // node:test files keep running after a failure. Sign every failing subtest
+  // by its suite path and first error line, plus any error the runner caught
+  // outside a subtest, so a new failing subtest or a new reason for a known
+  // one changes the signature.
   if (lines.some(l => /^ℹ fail [1-9]/.test(l))) {
-    const names = new Set();
-    for (const l of lines) {
-      const m = l.match(/^✖ (.+?) \(\d+(?:\.\d+)?ms\)$/);
-      if (m) names.add(m[1]);
-    }
-    if (names.size) return `node:test failing: ${[...names].sort().join(' | ')}`;
+    const entries = nodeTestFailures(raw);
+    if (entries.length) return `node:test failing: ${entries.sort().join(' | ')}`;
   }
   const isError = l => /^(?:[A-Za-z_.]*(?:Error|Exception))(?:\s*\[[A-Z_]+\])?:/.test(l) || /^FAIL\b/.test(l);
   const indexes = lines.map((l, i) => (isError(l) ? i : -1)).filter(i => i >= 0);
@@ -155,6 +162,41 @@ export function failureSignature(output, { root, kind, exitCode }) {
     detail.push(lines[i]);
   }
   return [lines[at], ...detail].join(' | ');
+}
+
+export function nodeTestFailures(rawLines) {
+  const summaryAt = rawLines.findIndex(l => /^ℹ tests \d+/.test(l.trim()));
+  const body = summaryAt >= 0 ? rawLines.slice(0, summaryAt) : rawLines;
+  const tail = summaryAt >= 0 ? rawLines.slice(summaryAt) : [];
+  const stack = [];
+  const paths = [];
+  for (const line of body) {
+    const indent = line.length - line.trimStart().length;
+    const t = line.trim();
+    const open = t.match(/^▶ (.+)$/);
+    if (open) { stack.push({ indent, name: open[1] }); continue; }
+    const done = t.match(/^[✖✔﹣] (.+?) \(\d+(?:\.\d+)?ms\)$/);
+    if (!done) continue;
+    const top = stack.at(-1);
+    if (top && top.indent === indent && top.name === done[1]) { stack.pop(); continue; }
+    if (t.startsWith('✖')) paths.push([...stack.map(f => f.name), done[1]].join(' › '));
+  }
+  const errors = [];
+  const failingAt = tail.findIndex(l => l.trim() === '✖ failing tests:');
+  if (failingAt >= 0) {
+    const section = tail.slice(failingAt + 1);
+    for (let i = 0; i < section.length; i += 1) {
+      if (!/^✖ .+ \(\d+(?:\.\d+)?ms\)$/.test(section[i].trim())) continue;
+      const next = section.slice(i + 1).map(l => l.trim()).find(l => l && !/^at\s/.test(l));
+      errors.push(next || 'no error line');
+    }
+  }
+  const entries = paths.map((p, i) => `${p} :: ${errors[i] || 'no error line'}`);
+  for (const line of tail.concat(body)) {
+    const m = line.trim().match(/^ℹ (Error: .+)$/);
+    if (m) entries.push(`uncaught :: ${m[1]}`);
+  }
+  return entries;
 }
 
 function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv, track }) {
@@ -235,14 +277,17 @@ export async function runSuite({
   // NODE_TEST_CONTEXT would switch child node:test files to the binary
   // protocol used between a parent `node --test` and its children.
   const { NODE_TEST_CONTEXT: _parentTestContext, ...inheritedEnv } = process.env;
-  const childEnv = { ...inheritedEnv, KAMINOS_CHROME: BROWSER_STUB_PATH, CHROME_BIN: BROWSER_STUB_PATH, KAMINOS_TEST_RUNNER_BROWSER_LOG: browserLog };
+  // A per-run stub with the log path baked in, so a child that scrubs its
+  // environment still records the attempt when it reaches the stub.
+  const browserStub = path.join(logsDir, 'browser-launch-stub.sh');
+  const childEnv = { ...inheritedEnv, ...Object.fromEntries(BROWSER_OVERRIDES.map(k => [k, browserStub])), KAMINOS_TEST_RUNNER_BROWSER_LOG: browserLog };
   const report = {
     schema: REPORT_SCHEMA, ok: false, failurePhase: null, error: null,
     startedAt: new Date().toISOString(), finishedAt: null,
     effective: { root, manifestPath, quarantinePath, parallel, timeoutMs, kinds, only,
       executables: resolvedExecutables, node: process.version, python: null,
       platform: `${process.platform}-${process.arch}`, git: gitIdentity(root),
-      browserStub: { path: BROWSER_STUB_PATH, overrides: ['KAMINOS_CHROME', 'CHROME_BIN'], log: browserLog },
+      browserStub: { path: browserStub, overrides: BROWSER_OVERRIDES, log: browserLog },
       manifestSha256: null, quarantineSha256: null, dependencies: null },
     counts: { discovered: 0, executed: 0, passed: 0, knownFailures: 0, newFailures: 0, notRun: 0 },
     newFailures: [], knownFailures: [], signatureChanged: [], staleQuarantine: [],
@@ -265,7 +310,7 @@ export async function runSuite({
   try {
     report.failurePhase = 'arguments';
     if (!Number.isInteger(parallel) || parallel < 1) throw Object.assign(new Error(`parallel must be a positive integer, got ${parallel}`), { phase: 'arguments' });
-    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw Object.assign(new Error(`timeoutMs must be positive, got ${timeoutMs}`), { phase: 'arguments' });
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_TIMEOUT_MS) throw Object.assign(new Error(`timeoutMs must be between 1 and ${MAX_TIMEOUT_MS}, got ${timeoutMs}`), { phase: 'arguments' });
     report.failurePhase = 'load-manifest';
     const manifest = await readJson(manifestPath, SUITE_MANIFEST_SCHEMA, 'load-manifest');
     report.effective.manifestSha256 = manifest.sha256;
@@ -334,12 +379,16 @@ export async function runSuite({
     report.failurePhase = 'execute';
     await fs.mkdir(logsDir, { recursive: true });
     await fs.rm(browserLog, { force: true });
+    await fs.writeFile(browserStub, `#!/bin/sh\n# Stands in for a browser while tools/test-runner.mjs runs tests. Any test\n# that reaches a browser launch lands here: record it and fail.\nprintf '%s\\t%s\\t%s\\n' "\${KAMINOS_TEST_RUNNER_TEST:-unknown}" "$$" "$*" >> ${JSON.stringify(browserLog)}\necho "browser launch blocked by tools/test-runner.mjs" >&2\nexit 97\n`, { mode: 0o755 });
     report.results = await pool(planned, parallel,
       item => runOne({ root, ...item, timeoutMs, logsDir, env: childEnv, track }), () => interrupted);
     if (interrupted) throw Object.assign(new Error('run interrupted'), { phase: 'interrupted' });
 
     report.counts.executed = report.results.length;
     if (report.results.length !== planned.length) throw Object.assign(new Error(`planned ${planned.length} tests but ran ${report.results.length}`), { phase: 'execute' });
+    // A test can hand off a browser launch to a detached process that fires
+    // after the test exits; give such launches a moment to reach the stub.
+    await new Promise(r => setTimeout(r, LATE_LAUNCH_SETTLE_MS));
     if (existsSync(browserLog)) {
       report.browserLaunchAttempts = (await fs.readFile(browserLog, 'utf8')).trim().split('\n').filter(Boolean)
         .map(line => { const [file, pid, args] = line.split('\t'); return { file, pid: Number(pid), args }; });

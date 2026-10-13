@@ -304,12 +304,12 @@ ${name ? `test(${JSON.stringify(name)}, () => { throw new TypeError('new'); });`
   const f = await fixture(t, { files: { 'm.mjs': body(null) }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
   await run(f);
   const signature = (await readReport(f)).results[0].signature;
-  assert.equal(signature, 'node:test failing: known broken');
+  assert.equal(signature, 'node:test failing: known broken :: Error: known');
   await fs.writeFile(f.quarantinePath, JSON.stringify({ schema: 'kaminos.test-quarantine.v1', entries: { 'tests/m.mjs': quarantined(signature) } }));
   assert.equal((await run(f)).ok, true);
   await fs.writeFile(path.join(f.root, 'tests', 'm.mjs'), body('injected regression'));
   assert.equal((await run(f)).ok, false);
-  assert.deepEqual((await readReport(f)).signatureChanged.map(e => e.actual), ['node:test failing: injected regression | known broken']);
+  assert.deepEqual((await readReport(f)).signatureChanged.map(e => e.actual), ['node:test failing: injected regression :: TypeError: new | known broken :: Error: known']);
 });
 
 test('installed dependency versions must match the lockfile', async t => {
@@ -325,4 +325,77 @@ test('installed dependency versions must match the lockfile', async t => {
   assert.deepEqual(report.effective.dependencies.mismatched, [{ name: 'foo', locked: '1.0.0', installed: '9.9.9' }]);
   await fs.writeFile(path.join(f.root, 'node_modules', 'foo', 'package.json'), JSON.stringify({ name: 'foo', version: '1.0.0' }));
   assert.equal((await run(f)).ok, true);
+});
+
+// Revision 3: findings from the second confirmation review.
+
+test('node:test signatures carry each failing subtest with its error, so a new reason in a known subtest is a new failure', async t => {
+  const body = reason => `import test, { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+describe('group a', () => { it('rejects invalid input', () => { ${reason}; }); });
+describe('group b', () => { it('rejects invalid input', () => {}); });
+test('still fine', () => {});
+`;
+  const f = await fixture(t, { files: { 'm.mjs': body("assert.equal(1, 2, 'known mismatch')") }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  await run(f);
+  const signature = (await readReport(f)).results[0].signature;
+  assert.equal(signature, 'node:test failing: group a › rejects invalid input :: AssertionError [ERR_ASSERTION]: known mismatch');
+  await fs.writeFile(f.quarantinePath, JSON.stringify({ schema: 'kaminos.test-quarantine.v1', entries: { 'tests/m.mjs': quarantined(signature) } }));
+  assert.equal((await run(f)).ok, true);
+  await fs.writeFile(path.join(f.root, 'tests', 'm.mjs'), body("throw new TypeError('new reason')"));
+  assert.equal((await run(f)).ok, false);
+  assert.match((await readReport(f)).signatureChanged[0].actual, /group a › rejects invalid input :: TypeError: new reason/);
+});
+
+test('an error outside any subtest in a node:test file joins the signature', async t => {
+  const body = `import test from 'node:test';
+test('known broken', () => { throw new Error('known'); });
+await new Promise(r => setTimeout(r, 20));
+throw new Error('top-level after tests started');
+`;
+  const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  await run(f);
+  assert.match((await readReport(f)).results[0].signature, /top-level after tests started/);
+});
+
+test('every browser override reaches the stub, and launches recorded after a test exits still fail the run', async t => {
+  const probe = "const v=['KAMINOS_CHROME','CHROME_BIN','CHROME','KAMINOS_SHARP_WEBGPU_CHROME'].map(k=>process.env[k]);process.exit(v.every(x=>x&&x.endsWith('browser-launch-stub.sh'))?0:1);\n";
+  const late = `import { spawn } from 'node:child_process';
+const child = spawn('sh', ['-c', 'sleep 0.5; "$KAMINOS_CHROME" --headless'], { detached: true, stdio: 'ignore' });
+child.unref();
+process.exit(0);
+`;
+  const f = await fixture(t, { files: { 'e.mjs': probe, 'late.mjs': late },
+    manifest: manifestOf({ 'tests/e.mjs': { kind: 'node' }, 'tests/late.mjs': { kind: 'node' } }) });
+  const result = await run(f);
+  assert.equal(result.ok, false);
+  const report = await readReport(f);
+  assert.equal(report.results.find(r => r.file === 'tests/e.mjs').outcome, 'pass');
+  assert.deepEqual(report.browserLaunchAttempts.map(a => a.file), ['tests/late.mjs']);
+});
+
+test('the dependency check covers the whole lockfile and says when integrity went unverified', async t => {
+  const f = await fixture(t, { files: { 'a.mjs': PASS }, manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' } }) });
+  await fs.writeFile(path.join(f.root, 'package.json'), JSON.stringify({ dependencies: { foo: '1.0.0' } }));
+  await fs.writeFile(path.join(f.root, 'package-lock.json'), JSON.stringify({ lockfileVersion: 3, packages: { '': {},
+    'node_modules/foo': { version: '1.0.0', integrity: 'sha512-a' }, 'node_modules/bar': { version: '2.0.0', integrity: 'sha512-b' } } }));
+  for (const [name, version] of [['foo', '1.0.0'], ['bar', '3.0.0']]) {
+    await fs.mkdir(path.join(f.root, 'node_modules', name), { recursive: true });
+    await fs.writeFile(path.join(f.root, 'node_modules', name, 'package.json'), JSON.stringify({ name, version }));
+  }
+  assert.equal((await run(f)).ok, false);
+  let report = await readReport(f);
+  assert.deepEqual(report.effective.dependencies.mismatched, [{ name: 'bar', locked: '2.0.0', installed: '3.0.0' }]);
+  assert.equal(report.effective.dependencies.integrityVerified, false);
+  await fs.writeFile(path.join(f.root, 'node_modules', 'bar', 'package.json'), JSON.stringify({ name: 'bar', version: '2.0.0' }));
+  assert.equal((await run(f)).ok, true);
+  report = await readReport(f);
+  assert.equal(report.effective.dependencies.integrityVerified, false);
+  assert.deepEqual(report.effective.dependencies.checked, 2);
+});
+
+test('a timeout beyond what a timer can hold is an argument error', async t => {
+  const f = await fixture(t, { files: { 'a.mjs': PASS }, manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' } }) });
+  assert.equal((await run(f, { timeoutMs: 3000000000 })).ok, false);
+  assert.equal((await readReport(f)).failurePhase, 'arguments');
 });
