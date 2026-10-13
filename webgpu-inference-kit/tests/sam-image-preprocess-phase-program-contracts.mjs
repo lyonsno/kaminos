@@ -71,6 +71,15 @@ const oracle = createSam3ImagePreprocessPhaseProgramCpuOracle({
   ]),
   shape: { batch: 1, height: 1, width: 2, channels: 3 },
 });
-assert.deepEqual(Array.from(oracle.pixelValues), [-1, -0.003921568859368563, 1, 1, -0.003921568859368563, -1]);
+assert.deepEqual(Array.from(oracle.pixelValues), [-1, -0.003921568393707275, 1, 1, -0.003921568393707275, -1], 'normalization rounds division and subtraction separately in f32');
+const byteRgba = Uint8Array.from({ length: 1024 }, (_, index) => index % 4 === 3 ? 255 : Math.floor(index / 4));
+const exhaustive = createSam3ImagePreprocessPhaseProgramCpuOracle({ rgba: byteRgba, shape: { batch: 1, height: 1, width: 256, channels: 3 } }).pixelValues;
+for (let byte = 0; byte < 256; byte++) {
+  const expected = Math.fround(Math.fround(byte / 127.5) - 1);
+  for (let channel = 0; channel < 3; channel++) assert.equal(exhaustive[byte * 3 + channel], expected);
+}
+// Observed NumPy f32 outputs from both existing reference exporters' operations.
+for (const [byte, expected] of [[1, -0.9921568632125854], [7, -0.9450980424880981], [63, -0.5058823823928833], [128, 0.003921627998352051], [191, 0.49803924560546875], [254, 0.9921568632125854]]) assert.equal(exhaustive[byte * 3], expected);
+assert.match(routeSource, /pixel_values\[index\] = normalized_u8\[rgba\[rgba_index\]\]/, 'GPU conversion uses the same exhaustive f32 byte mapping without contraction or reciprocal approximation');
 
 console.log('sam image preprocess phase-program contracts passed');

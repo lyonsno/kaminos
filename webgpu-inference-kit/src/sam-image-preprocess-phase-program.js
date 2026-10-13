@@ -35,7 +35,10 @@ const OUTPUT_ROLES = [
   { key: 'pixelValues', role: 'pixel-values', required: true },
 ];
 
+// Match the two f32 operations in the SAM reference, including their rounding.
+const NORMALIZED_U8 = Float32Array.from({ length: 256 }, (_, value) => Math.fround(Math.fround(value / 127.5) - 1));
 const PREPROCESS_WGSL = `
+const normalized_u8 = array<f32, 256>(${Array.from(NORMALIZED_U8, value => value.toPrecision(17)).join(', ')});
 struct ImagePreprocessDims {
   batch: u32,
   height: u32,
@@ -58,7 +61,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let channel = index % dims.channels;
   let pixel = index / dims.channels;
   let rgba_index = pixel * 4u + channel;
-  pixel_values[index] = f32(rgba[rgba_index]) / 127.5 - 1.0;
+  pixel_values[index] = normalized_u8[rgba[rgba_index]];
 }
 `;
 
@@ -125,7 +128,7 @@ export function createSam3ImagePreprocessPhaseProgramCpuOracle(input) {
   for (let index = 0; index < pixelValues.length; index += 1) {
     const channel = index % shape.channels;
     const pixel = Math.floor(index / shape.channels);
-    pixelValues[index] = rgba[pixel * 4 + channel] / 127.5 - 1;
+    pixelValues[index] = NORMALIZED_U8[rgba[pixel * 4 + channel]];
   }
   return { shape, pixelValues };
 }
