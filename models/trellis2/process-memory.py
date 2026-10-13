@@ -33,9 +33,9 @@ def sample_owned_processes(root_pid,run_id):
                     'expectedProbeExit':rows[pid]['parentPid']==os.getpid() and rows[pid]['executable']=='/bin/ps'}
                 # The tree snapshot and libproc reads are not atomic. A short
                 # source-attestation git child can exit between them. Only an
-                # ESRCH plus a fresh OS absence/zombie check proves retirement;
+                # ESRCH/EPERM plus a fresh OS absence/zombie check proves retirement;
                 # a live or inaccessible process remains missing coverage.
-                if pid!=root_pid and missing['errno']==errno.ESRCH:
+                if pid!=root_pid and missing['errno'] in (errno.ESRCH,errno.EPERM):
                     try:
                         check=subprocess.run(['/bin/ps','-p',str(pid),'-o','stat='],capture_output=True,text=True)
                         state=check.stdout.strip()
