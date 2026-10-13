@@ -45,7 +45,7 @@ test('moving flame beyond analytic support keeps the authored pose and suspends 
   let pose={position:[0,-.76,0],rotation:[0,0,0],scale:[1,1,1]};
   let suspended=false;
   const calls=[];
-  const context={authoredFlamePresent:true,normalizeFlameEmitterPose:value=>structuredClone(value), flamePoseInDomain,
+  const context={authoredFlamePresent:true,normalizeFlameEmitterPose:value=>structuredClone(value), flamePoseInDomain, readVolumeControls:()=>({resolution:64,gridHeightRatio:2}),
     flameDomainTranslation:[0,0,0],flameDomainScale:1,
     applyFlameEmitterPose:(next,{sourceEnabled=true}={})=>{
       calls.push({x:next.position[0],sourceEnabled});

@@ -7,7 +7,7 @@ import {GROUP_TYPE,identityGroupPose,checkedGroupPose} from './scene-group.mjs';
 import {BURNER_BED_TYPE,BURNER_BED_SOURCE,BURNER_ASSEMBLY_TYPE,checkedBurnerBed,checkedAssemblyPose} from './burner-assembly.mjs';
 import { normalizeComposition, normalizeSceneCapture } from './scene-authoring.mjs';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE, normalizeFlameEmitterPose,
-  flameDomainTranslationForPose, normalizeFlameDomainTranslation, normalizeFlameDomainScale, flamePoseInDomain } from './scene-flame-emitter.mjs';
+  flameDomainTranslationForPose, normalizeFlameDomainTranslation, normalizeFlameDomainScale, flamePoseInDomain,flameDomainControlsFromSettings } from './scene-flame-emitter.mjs';
 import { LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, normalizeLocalLiquidSetup } from './local-liquid-setup.mjs';
 import {normalizeCameraViews} from './scene-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,normalizeSceneCamera,normalizeCameraViewport} from './scene-camera.mjs';
@@ -171,13 +171,13 @@ export function planSceneRestore(data) {
   if (flameSources.length && !normalizeComposition(data.composition)) throw new Error('Flame source requires its saved flame composition');
   const flameDomainTranslation = (flameSources.length || normalizeComposition(data.composition))
     ? (data.flameDomainTranslation === undefined
-      ? (flameSources.length ? flameDomainTranslationForPose(flameSources[0].transform) : [0,0,0])
+      ? (flameSources.length ? flameDomainTranslationForPose(flameSources[0].transform,flameDomainControlsFromSettings(fire?.settings)) : [0,0,0])
       : normalizeFlameDomainTranslation(data.flameDomainTranslation))
     : null;
   const flameDomainScale = normalizeFlameDomainScale(data.flameDomainScale);
   const flameDomainFollowSource = data.flameDomainFollowSource ?? true;
   if (typeof flameDomainFollowSource !== 'boolean') throw new Error('Flame domain follow-source must be Boolean');
-  if (flameSources.length && flameDomainFollowSource && !flamePoseInDomain(flameSources[0].transform, flameDomainTranslation, flameDomainScale)) {
+  if (flameSources.length && flameDomainFollowSource && !flamePoseInDomain(flameSources[0].transform, flameDomainTranslation, flameDomainScale,flameDomainControlsFromSettings(fire?.settings))) {
     throw new Error('Saved flame source lies outside its authored simulation domain');
   }
   const localLiquid = normalizeLocalLiquidSetup(data.localLiquid);
@@ -247,12 +247,12 @@ export function buildSceneDocument({
   const flameSource = sceneObjects.find(object => object.type === FLAME_EMITTER_TYPE);
   const authoredFlameDomain = (flameSource || normalizeComposition(composition))
     ? (flameDomainTranslation === undefined
-      ? (flameSource ? flameDomainTranslationForPose(flameSource.transform) : [0,0,0])
+      ? (flameSource ? flameDomainTranslationForPose(flameSource.transform,flameDomainControlsFromSettings(fireSettings)) : [0,0,0])
       : normalizeFlameDomainTranslation(flameDomainTranslation))
     : null;
   flameDomainScale = normalizeFlameDomainScale(flameDomainScale);
   if (typeof flameDomainFollowSource !== 'boolean') throw new Error('Flame domain follow-source must be Boolean');
-  if (flameSource && flameDomainFollowSource && !flamePoseInDomain(flameSource.transform, authoredFlameDomain, flameDomainScale)) {
+  if (flameSource && flameDomainFollowSource && !flamePoseInDomain(flameSource.transform, authoredFlameDomain, flameDomainScale,flameDomainControlsFromSettings(fireSettings))) {
     throw new Error('Flame source lies outside its authored simulation domain');
   }
   const document = {

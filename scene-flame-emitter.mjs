@@ -1,5 +1,6 @@
 import { Euler, Quaternion, Vector3 } from './lib/three.core.js';
 import { checkedPose } from './scene-edit-session.mjs';
+import {resolveGridHeight} from './volume-grid-shape.mjs';
 
 export const FLAME_EMITTER_ID = 'flame-emitter';
 export const FLAME_EMITTER_TYPE = 'flame-emitter';
@@ -18,31 +19,37 @@ export function normalizeFlameEmitterPose(value = defaultFlameEmitterPose()) {
   return pose;
 }
 
-export function flameDomainTranslationForPose(value) {
+export function flameDomainTranslationForPose(value, controls = {}) {
   const pose = normalizeFlameEmitterPose(value);
   const [x, y, z] = pose.position;
-  if (Math.abs(x) <= 1 && y >= -1 && y <= 3 && Math.abs(z) <= 1) return [0, 0, 0];
+  if (flamePoseInDomain(pose,[0,0,0],1,controls)) return [0, 0, 0];
   return [x, y - defaultFlameEmitterPose().position[1], z];
 }
 
-export function flameDomainTranslationForAcceptedPose(value, currentTranslation, { injectionSuspended = false } = {}) {
+export function flameDomainTranslationForAcceptedPose(value, currentTranslation, { injectionSuspended = false, scale = 1, shape = {} } = {}) {
   if (injectionSuspended) {
     const pose = normalizeFlameEmitterPose(value);
-    return [pose.position[0], pose.position[1] - defaultFlameEmitterPose().position[1], pose.position[2]];
+    return [pose.position[0], pose.position[1] - defaultFlameEmitterPose().position[1]*scale, pose.position[2]];
   }
-  return flamePoseInDomain(value, currentTranslation)
+  return flamePoseInDomain(value, currentTranslation, scale, shape)
     ? [...currentTranslation]
-    : flameDomainTranslationForPose(value);
+    : scale===1?flameDomainTranslationForPose(value,shape):[value.position[0],value.position[1]+.76*scale,value.position[2]];
 }
 
-export function flamePoseInDomain(value, translation, scale = 1) {
+export function flamePoseInDomain(value, translation, scale = 1, controls = {}) {
   scale = normalizeFlameDomainScale(scale);
   const pose = normalizeFlameEmitterPose(value);
   if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
     throw new Error('Flame domain translation requires three finite coordinates');
   }
   const [x, y, z] = pose.position.map((component, index) => (component - translation[index]) / scale);
-  return Math.abs(x) <= 1 && y >= -1 && y <= 3 && Math.abs(z) <= 1;
+  const width=Number(controls.resolution??64),height=resolveGridHeight(controls,width).heightCells;
+  return Math.abs(x) <= 1 && y >= -1 && y <= -1+2*height/width && Math.abs(z) <= 1;
+}
+
+export function flameDomainControlsFromSettings(settings) {
+  return {resolution:Number(settings?.domControls?.['volume-resolution']?.value??64),
+    gridHeightRatio:Number(settings?.domControls?.['volume-grid-height-ratio']?.value??2)};
 }
 
 export function normalizeFlameDomainTranslation(translation) {
@@ -88,7 +95,7 @@ export function immersedRadiusBounds(value) {
 // even though the circular supply does not depend on it.
 export function immersedControlsForFlamePose(controls, value, sourceEnabled = true) {
   const frame = flameEmitterFrame(value);
-  if (sourceEnabled && !flamePoseInDomain(frame.pose, [0, 0, 0])) {
+  if (sourceEnabled && !flamePoseInDomain(frame.pose, [0, 0, 0],1,controls)) {
     throw new Error('Immersed source centre is outside the current domain');
   }
   const radius = Number(controls.immersedRadius ?? 0.2) * frame.scale;

@@ -3892,7 +3892,7 @@ function syncKilnCollisionControl(collision=volumePrototype?.debugState?.().scen
     : `Unavailable · ${collision.reason||'waiting for obstacle geometry'}`;
   if(status.textContent!==text)status.textContent=text;
   const voxelResolution=document.getElementById('kiln-voxel-resolution');
-  if(voxelResolution){const grid=Number(document.getElementById('volume-resolution').value);voxelResolution.textContent=`${grid}×${grid*2}×${grid} · tied to simulation`;}
+  if(voxelResolution){const dims=volumePrototype?.debugState?.().simGridDimensions;voxelResolution.textContent=Array.isArray(dims)&&dims.length===3&&dims.every(n=>Number.isInteger(n)&&n>0)?`${dims.join('×')} · tied to simulation`:'Awaiting simulation grid';}
   syncCollisionVoxelView();
 }
 
@@ -5943,8 +5943,8 @@ function settleAuthoredFlameDomain(event) {
 
 function settleFlameDomainForPose(pose, targetDomain = null) {
   if(!targetDomain&&!flameDomainFollowSource)return false;
-  const next = targetDomain || (flameDomainScale===1 ? flameDomainTranslationForAcceptedPose(pose, flameDomainTranslation,
-    { injectionSuspended: flameEmitterInjectionSuspended }) : flamePoseInDomain(pose,flameDomainTranslation,flameDomainScale)&&!flameEmitterInjectionSuspended ? [...flameDomainTranslation] : [pose.position[0],pose.position[1]+.76*flameDomainScale,pose.position[2]]);
+  const next = targetDomain || flameDomainTranslationForAcceptedPose(pose, flameDomainTranslation,
+    { injectionSuspended: flameEmitterInjectionSuspended,scale:flameDomainScale,shape:readVolumeControls() });
   const previous = [...flameDomainTranslation];
   if (!setFlameDomainTranslation(next)) {
     setInfo(flameEmitterInjectionSuspended
@@ -5971,7 +5971,7 @@ function writeAuthoredFlameEmitterPose(value) {
   if (window.__kaminosVolumeEmitterReceipt?.effective?.family === 'cluster') {
     throw new Error('Choose an analytic flame emitter before placing its source');
   }
-  const originInsideGrid = authoredFlamePresent && flamePoseInDomain(next, flameDomainTranslation, flameDomainScale);
+  const originInsideGrid = authoredFlamePresent && flamePoseInDomain(next, flameDomainTranslation, flameDomainScale,readVolumeControls());
   if (originInsideGrid) {
     try {
       applyFlameEmitterPose(next, { sourceEnabled: true });
@@ -24113,7 +24113,7 @@ async function initKaminosVolumeRoute() {
     }
   }
   let volumeEmitterRuntimeFrame = 0;
-  function applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot, pose = flameEmitterPose, { sourceEnabled = !flameEmitterInjectionSuspended } = {}) {
+  function applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot, pose = flameEmitterPose, { sourceEnabled = controlsSnapshot.emitterSourceLaw==='immersed-source'?flamePoseInDomain(pose,flameDomainTranslation,flameDomainScale,controlsSnapshot):!flameEmitterInjectionSuspended } = {}) {
     const family = document.getElementById('emitter-assay-family').value;
     if (routeExternalEmitters && family !== 'cluster') {
       throw new Error(`volume emitter source conflict: volume_external_emitters=${routeExternalEmitters} cannot compose with volume_emitter_family=${family}`);
@@ -24141,6 +24141,7 @@ async function initKaminosVolumeRoute() {
     });
     window.__kaminosVolumeEmitterReceipt = receipt;
     if (family !== 'cluster') {
+      if(controlsSnapshot.emitterSourceLaw==='immersed-source')flameEmitterInjectionSuspended=authoredFlamePresent&&!sourceEnabled;
       receipt.requested.worldEmitterPose = structuredClone(pose);
       receipt.effective.worldEmitterPose = structuredClone(pose);
       receipt.effective.domainTranslation = [...flameDomainTranslation];
