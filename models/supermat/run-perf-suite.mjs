@@ -127,12 +127,13 @@ try {
         ...image, '--options', JSON.stringify(options), '--run-options', JSON.stringify({ runs: 6 })]);
     }
   } else if (plan === 'kit-attention') {
-    // Model-owned scalar attention vs the kit's tiled kernel on the whole route: F32 reference parity and
-    // the product profile, at 512 and 1024, kernels alternating so machine-load drift favors neither.
+    // Model-owned scalar attention vs the kit's tiled kernel on the whole route: the reference-faithful
+    // profile (F32 activations) and the product profile on F16 weights, at 512 and 1024, kernels
+    // alternating so machine-load drift favors neither.
     summary.phase = 'kit-attention';
     const product = { activations: 'f16', fuseNorm: true, gemmPrecision: 'f16-tiles' };
     for (const [name, weights, options, size] of [
-      ['parity-f32-512', 'f32', {}, 512], ['product-512', 'f16', product, 512], ['product-1024', 'f16', product, 1024]]) {
+      ['faithful-512', 'f16', {}, 512], ['product-512', 'f16', product, 512], ['product-1024', 'f16', product, 1024]]) {
       for (const attentionKernel of ['scalar', 'kit-tiled']) {
         run(`${name}-${attentionKernel}`, witness, [...common, '--stage', 'route', '--fixture', `${state}/reference/ring-0000-${size}`,
           '--weights', `${state}/weights/${weights}`, ...image, '--options', JSON.stringify({ ...options, attentionKernel }),
