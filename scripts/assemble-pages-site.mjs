@@ -45,7 +45,7 @@ export function assemblePagesSite(out) {
 
   const photograph=path.join(out,"inference-kit","material-photo");
   fs.mkdirSync(photograph,{recursive:true});
-  for(const file of ["index.html","style.css","main.js","demo-defaults.js","comparison.png","comparison-viewer.js","viewer.js","environment.js","emission.js","material-contrast.js","effects.js","layout.js","photo-contracts.js","photo-surface.js","inference-cache.js","included-examples.js","moge-producer.js"]){
+  for(const file of ["index.html","style.css","main.js","demo-defaults.js","comparison.png","comparison-viewer.js","viewer.js","environment.js","emission.js","material-contrast.js","effects.js","layout.js","photo-contracts.js","photo-surface.js","inference-cache.js","included-examples.js","sample-cutouts.js","moge-producer.js"]){
     fs.copyFileSync(path.join(repoRoot,"demos","material-photo",file),path.join(photograph,file));
   }
   for(const dir of ["images","examples","icons"])fs.cpSync(path.join(repoRoot,"demos","material-photo",dir),path.join(photograph,dir),{recursive:true});
