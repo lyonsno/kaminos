@@ -49,8 +49,36 @@ try:
     v,f,uv,mapping=namespace['uv_unwrap'](vertices,faces,fix_winding=False)
     if not np.array_equal(v[f],vertices[faces]):raise ValueError('xatlas changed ordered triangle positions')
     if not np.isfinite(uv).all() or uv.min()<0 or uv.max()>1:raise ValueError('finite bounded source UV required')
+    report['phase']='source-post-uv-normals';persist()
+    import trimesh
+    generate=source/'generate.py';generate_bytes=generate.read_bytes();generate_tree=ast.parse(generate_bytes)
+    def assigns(node,name):
+        return isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id==name for t in node.targets)
+    # Reuse the source-capture contract: the earliest export block is resume,
+    # and its actual statements run only through authored-normal construction.
+    blocks=[n for n in ast.walk(generate_tree) if isinstance(n,ast.If)
+        and any(assigns(s,'export_verts') for s in n.body)
+        and any(assigns(s,'textured_mesh') for s in n.body)]
+    if not blocks:raise ValueError('actual source resume export block required')
+    block=min(blocks,key=lambda n:n.lineno)
+    end=next(i for i,n in enumerate(block.body) if assigns(n,'normals'))
+    prefix=block.body[:end+1]
+    scope={'np':np,'trimesh':trimesh,'uv_verts':v,'uv_faces':f,'uvs':uv}
+    exec(compile(ast.Module(body=prefix,type_ignores=[]),str(generate),'exec'),scope)
+    expected_export=v.copy();expected_export[:,1],expected_export[:,2]=v[:,2],-v[:,1]
+    if not np.array_equal(scope['export_verts'],expected_export):
+        raise ValueError('source export frame changed; normal transfer requires review')
+    world_normals=np.asarray(scope['normals'])
+    if world_normals.shape!=v.shape or not np.isfinite(world_normals).all():
+        raise ValueError('complete finite source post-UV normals required')
+    normals=world_normals.copy();normals[:,1],normals[:,2]=-world_normals[:,2],world_normals[:,1]
+    report['source']['generateSha256']=h(generate_bytes)
+    report['normalBasis']={'rule':'source-resume-export/Trimesh-post-UV','frame':'model-local',
+        'sourceFirstLine':prefix[0].lineno,'sourceLastLine':prefix[-1].end_lineno,
+        'trimeshVersion':importlib.metadata.version('trimesh'),
+        'zeroNormals':int(np.count_nonzero(np.linalg.norm(normals,axis=1)==0))}
     arrays={}
-    for name,values,dtype in [('vertices',v,'<f4'),('triangles',f,'<u4'),('uvs',uv,'<f4')]:
+    for name,values,dtype in [('vertices',v,'<f4'),('triangles',f,'<u4'),('uvs',uv,'<f4'),('normals',normals,'<f4')]:
         values=np.ascontiguousarray(values,dtype=dtype);data=values.tobytes();file=name+'.bin'
         (out/file).write_bytes(data)
         arrays[name]={'file':file,'shape':list(values.shape),'byteLength':len(data),'sha256':h(data)}

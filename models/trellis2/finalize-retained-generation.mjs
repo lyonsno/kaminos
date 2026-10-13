@@ -44,6 +44,12 @@ try{
   if(report.commit!==args.get('--expected-commit')||report.dirty)throw Error('exact clean finishing source required');
   const targetFaces=Number(args.get('--target-faces'));
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw Error('positive caller-selected face target required');
+  const cleanupMode=args.get('--cleanup-mode')??'reference-cleanup';
+  const cleanupRoutes={'reference-cleanup':'Trellis2MLX/reference-cleanup/CPU-fast-simplification',
+    'mlx-surface-preserving':'Trellis2MLX/surface-preserving/CPU-fast-simplify-first'};
+  if(!Object.hasOwn(cleanupRoutes,cleanupMode))throw Error('supported explicit cleanup mode required');
+  report.cleanupMode=cleanupMode;
+  report.route='retained native WebGPU fields / '+cleanupRoutes[cleanupMode]+' / unchanged UV and learned PBR';
   const uvBackend=args.get('--uv-backend')??'sf3d';
   if(!['sf3d','source-xatlas'].includes(uvBackend))throw Error('explicit supported UV backend required');
   report.requestedUVBackend=uvBackend;
@@ -110,7 +116,8 @@ try{
   const postprocessMesh=async input=>{
     const command=[path.join(root,'models/trellis2/postprocess-retained-mesh.py'),
       '--source-root',path.resolve(args.get('--source-root')),'--expected-source-commit',args.get('--expected-source-commit'),
-      '--input',path.join(inputDir,'manifest.json'),'--output',cleanupDir,'--target-faces',String(targetFaces)];
+      '--input',path.join(inputDir,'manifest.json'),'--output',cleanupDir,'--target-faces',String(targetFaces),
+      '--cleanup-mode',cleanupMode];
     if(args.get('--keep-largest')==='true')command.push('--keep-largest');
     report.postprocessCommand={python:path.resolve(args.get('--python')),argv:command};await persist();
     const stdout=await fs.open(path.join(cleanupDir,'stdout.log'),'w'),stderr=await fs.open(path.join(cleanupDir,'stderr.log'),'w');
@@ -121,7 +128,7 @@ try{
         report.postprocessExit={code,signal,pid:child.pid};resolve(code);});});
       const raw=await fs.readFile(path.join(cleanupDir,'report.json')),r=JSON.parse(raw);
       report.postprocessReport={path:path.join(cleanupDir,'report.json'),sha256:hash(raw),status:r.status,phase:r.phase};
-      if(code!==0||r.status!=='succeeded'||r.modelCalls!==0||r.effectiveRoute!=='Trellis2MLX/reference-cleanup/CPU-fast-simplification'||
+      if(code!==0||r.status!=='succeeded'||r.modelCalls!==0||r.requestedMode!==cleanupMode||r.effectiveRoute!==cleanupRoutes[cleanupMode]||
         r.source?.commit!==args.get('--expected-source-commit')||r.source.dirty||r.inputManifestSha256!==hash(inputBytes)||r.targetFaces!==targetFaces)
         throw Error('requested source finishing failed: '+(r.error?.message??r.status));
       const vertices=await readTyped(path.join(cleanupDir,r.arrays.vertices.file),r.arrays.vertices,Float32Array,'float32');
