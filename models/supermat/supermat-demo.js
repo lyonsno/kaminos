@@ -302,7 +302,8 @@ function showRun(record) {
   for (const pause of record.pauses) lines.push(`paused ${ms(pause.heldMs)} after ${ms(pause.pauseSettledMs)} to settle;`
     + ` scene drew ${pause.framesDuringPause} frames while paused`);
   if (adapter) lines.push(`route ${adapter.identity.routeId} · backend ${adapter.identity.backend} · weights ${adapter.identity.weightDtype}`
-    + ` · activations ${adapter.identity.activations} · fused norm ${adapter.identity.fuseNorm ? 'on' : 'off'} · GEMM ${adapter.identity.gemmPrecision}`);
+    + ` · activations ${adapter.identity.activations} · fused norm ${adapter.identity.fuseNorm ? 'on' : 'off'} · GEMM ${adapter.identity.gemmPrecision}`
+    + ` · attention ${adapter.identity.attentionKernel}`);
   $('timings').textContent = lines.join('\n');
 }
 
@@ -360,11 +361,13 @@ try {
   // Product profile where the device has shader-f16: F16 activation storage,
   // fused GroupNorm+SiLU and F16 GEMM operand tiles with F32 accumulation
   // (albedo relL2 ~2-4e-4 vs the F32 reference); F32 otherwise.
-  // ?activations=f32&fuseNorm=0&precision=f32 selects the reference-faithful path.
+  // ?activations=f32&fuseNorm=0&precision=f32 selects the reference-faithful path;
+  // ?attentionKernel=scalar selects the model-owned attention kernel (default: the kit's tiled kernel).
   const f16Capable = device.features.has('shader-f16');
   adapter = await createSuperMatAdapter({ route: weightsRoute, weightsUrl, attention,
     weightLoading: params.get('weightLoading') ?? 'auto', gemmPrecision: params.get('precision') ?? (f16Capable ? 'f16-tiles' : 'f32'),
-    activations: params.get('activations') ?? (f16Capable ? 'f16' : 'f32'), fuseNorm: params.get('fuseNorm') !== '0', onProgress(event) {
+    activations: params.get('activations') ?? (f16Capable ? 'f16' : 'f32'), fuseNorm: params.get('fuseNorm') !== '0',
+    ...(params.has('attentionKernel') ? { attentionKernel: params.get('attentionKernel') } : {}), onProgress(event) {
     if (event.phase === 'weights') {
       const mb = value => (value / 1e6).toFixed(0);
       setStatus(`Loading weights ${event.resourceIndex + 1}/${event.resourceCount} (${event.resourceId}`
