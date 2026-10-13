@@ -15,10 +15,20 @@ function check(state,setup,frames){
  assert.equal(state.vertices.length,50501*3);assert.ok(state.vertices.every(Number.isFinite));let min=Infinity,max=-Infinity;for(const v of state.vertices){min=Math.min(min,v);max=Math.max(max,v);}assert.ok(max-min>1e-3,'blank geometry cannot be motion evidence');
  assert.equal(state.playback.editedSinceSourcePose,false);
 }
+function checkPresentation(presentation,registered,id){
+ const row=registered.find(r=>r.id===id);assert.ok(row?.selected,'actual body must be selected');assert.equal(presentation.id,id);
+ for(const group of ['position','rotation'])for(const [i,axis] of ['x','y','z'].entries()){
+  const field=group+'.'+axis;assert.ok(Object.hasOwn(presentation.values,field),'missing inspector field '+field);
+  const actual=Number(presentation.values[field]),expected=row.transform[group][i]*(group==='rotation'?180/Math.PI:1);
+  assert.ok(Number.isFinite(actual)&&Math.abs(actual-expected)<1e-9,'stale selected inspector '+field);
+ }
+}
 if(process.argv.includes('--self-test')){
  const setup={motion_sha256:'a',case_sha256:'b',frame_sha256:'c'},good={host:{route:'shared-owner-scene',id:'body',scene:{rendererBackend:'webgpu'}},source:{motionSha256:'a',caseSha256:'b',frameSha256:'c'},skin:{route:'shared-owner-scene-full-body-dq',vertices:50501,bones:28},playback:{frames:260,fps:30,editedSinceSourcePose:false},boneWorld:Array(28).fill({}),vertices:Array(50501*3).fill(1)};good.vertices[0]=0;check(good,setup,260);
  for(const change of [s=>s.host.route='legacy-viewer',s=>s.host.scene.rendererBackend='webgl',s=>s.source.motionSha256='stale',s=>s.skin.bones=7,s=>s.vertices=[],s=>s.vertices.fill(0),s=>s.playback.frames=60,s=>s.playback.editedSinceSourcePose=true]){const bad=structuredClone(good);change(bad);assert.throws(()=>check(bad,setup,260));}
- console.log('Walking witness rejects old/fallback host, stale/partial/blank output and edited motion');process.exit(0);
+ const row={id:'body',selected:true,transform:{position:[1,2,3],rotation:[0,0,0]}},presentation={id:'body',values:{'position.x':'1','position.y':'2','position.z':'3','rotation.x':'0','rotation.y':'0','rotation.z':'0'}};
+ checkPresentation(presentation,[row],'body');assert.throws(()=>checkPresentation({...presentation,values:{...presentation.values,'position.x':'0'}},[row],'body'),/stale/);assert.throws(()=>checkPresentation({...presentation,id:'floor'},[row],'body'));assert.throws(()=>checkPresentation({...presentation,values:{}},[row],'body'),/missing/);
+ console.log('Walking witness rejects old/fallback host, stale/partial/blank output, edited motion and stale/other selected presentation');process.exit(0);
 }
 const args=Object.fromEntries(process.argv.slice(2).reduce((all,arg,i,list)=>i%2?all:[...all,[arg,list[i+1]]],[])),root=args['--repo-root'],out=args['--out'],port=args['--port'],frames=Number(args['--frames']);
 if(!root||!out||!port||!args['--setup']||!args['--chrome']||!args['--playwright']||!Number.isInteger(frames)||frames<2)throw Error('Explicit native source/setup/browser/output/frames required');
@@ -36,7 +46,7 @@ try{
  await page.goto(url.href,{timeout:0});
  async function mounted(){await page.evaluate(async()=>{for(;;){if(window.kaminosWorkbenchExperimentError)throw Error(window.kaminosWorkbenchExperimentError);if(window.kaminosWorkbenchExperiments?.state().id==='marionette/walking-creature'&&window.kaminosWalkingCreature)return;await new Promise(r=>requestAnimationFrame(r));}});}
  await mounted();report.phase='source-poses';
- async function retain(label,expected){await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));const state=await page.evaluate(()=>window.kaminosWalkingCreature());check(state,setup,frames);if(expected!==undefined)assert.equal(state.playback.frame,expected);const registered=await page.evaluate(()=>window.kaminosSceneObjectDebugState());assert.ok(registered.some(row=>row.id===state.host.id),'owner root is not registered in the actual application');await fs.writeFile(out+'/'+label+'.state.v8',v8.serialize({state,registered}));await page.screenshot({path:out+'/'+label+'.png'});report.images.push(label+'.png');report.samples.push({label,mode:state.mode,cycle:state.cycle,frame:state.playback.frame,root:state.rootMatrix,geometrySha256:createHash('sha256').update(Buffer.from(new Float32Array(state.vertices).buffer)).digest('hex'),raw:label+'.state.v8'});await save();return state;}
+ async function retain(label,expected){await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));const state=await page.evaluate(()=>window.kaminosWalkingCreature());check(state,setup,frames);if(expected!==undefined)assert.equal(state.playback.frame,expected);const registered=await page.evaluate(()=>window.kaminosSceneObjectDebugState());assert.ok(registered.some(row=>row.id===state.host.id),'owner root is not registered in the actual application');const presentation=await page.evaluate(()=>({id:document.getElementById('transform-inspector').dataset.selectedObjectId,values:Object.fromEntries([...document.querySelectorAll('[data-transform-field]')].map(n=>[n.dataset.transformField,n.value]))}));checkPresentation(presentation,registered,state.host.id);await fs.writeFile(out+'/'+label+'.state.v8',v8.serialize({state,registered,presentation}));await page.screenshot({path:out+'/'+label+'.png'});report.images.push(label+'.png');report.samples.push({label,mode:state.mode,cycle:state.cycle,frame:state.playback.frame,root:state.rootMatrix,presentation,geometrySha256:createHash('sha256').update(Buffer.from(new Float32Array(state.vertices).buffer)).digest('hex'),raw:label+'.state.v8'});await save();return state;}
  await retain('source-0',0);
  const indices=new Set([Math.floor(frames*.25),Math.floor(frames*.5),Math.floor(frames*.75),frames-1]);const first=await page.evaluate(()=>window.kaminosWalkingCreature().source);
  if(first.prefixFrames){const stride=(frames-first.prefixFrames)/first.addedSegments;for(let i=0;i<first.addedSegments;i++){indices.add(first.prefixFrames+i*stride-1);indices.add(first.prefixFrames+i*stride);}}
