@@ -36,8 +36,7 @@ try{
  report.visual=await visualWork({page,origin,repoRoot:process.cwd(),sceneStore:store+'/scenes',basinStore:store+'/basins',sceneFile:'kiln-hybrid-preview.kaminos.json',out,exercise:async({document,retain,open})=>{
    await settle();report.phase='settings';report.loaded=await observe();await write();
    await page.evaluate(()=>{
-     window.__kaminosSceneRadiance.setDirections(8);window.__kaminosSceneRadiance.setAngularPattern('guided',0);
-     window.__kaminosSceneRadiance.setSurfaceScattering(true);
+     for(const [id,value] of [['rendering-angular-samples','8'],['rendering-angular-pattern','guided']]){const input=document.getElementById(id);input.value=value;input.dispatchEvent(new Event('change'));}
      window.setGizmoMode(null);
    });
    await page.waitForFunction(()=>window.__kaminosSceneRadiance.debugState().frame?.directions===8);
@@ -45,8 +44,14 @@ try{
    assertMountedScene(document,state.objects);report.effective=state;
    report.phase='capture';await write();
    await page.screenshot({path:out+'/authoring.png'});
-   const saved=await retain({name:'kiln-hybrid',observe});report.saved={filename:saved.filename,url:saved.url};await write();
-   report.phase='reopen';await write();await open(saved.filename);await settle();report.reopened=await observe();
+   const saved=await retain({name:'kiln-hybrid',observe});
+   const url=new URL(saved.url),hash=new URLSearchParams(url.hash.slice(1));hash.set('rendering_directions','8');hash.set('rendering_angular_pattern','guided');url.hash=hash.toString();
+   report.saved={filename:saved.filename,url:url.href,documentUrl:saved.url};await write();
+   report.phase='reopen';await write();await page.goto('about:blank');await page.goto(url.href);await settle();report.reopened=await observe();
+   // The legacy debug mesh registry intentionally excludes Modal's simulation
+   // domain. The authoring document is the full typed-object consumer contract.
+   assertMountedScene(saved.document,await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects));
+   assert.equal(report.reopened.lighting.frame.directions,8);assert.equal(report.reopened.lighting.frame.angularPattern,'guided');
    assert.equal(report.reopened.lighting.pointCount,1);assert.equal(report.reopened.lighting.frame.smokeReconstruction.refinement,1);
    await page.screenshot({path:out+'/reopened.png'});
    return {saved:report.saved,lighting:report.reopened.lighting};
