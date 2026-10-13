@@ -3839,6 +3839,7 @@ import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, check
 import {checkedPose} from './scene-edit-session.mjs';
 import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.mjs';
 import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
+import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,kleinDeviceRequirements,composeDeviceRequirements,KLEIN_PUBLISHED_WEIGHTS} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
 import {checkedViewportDisplay,viewportShortcut} from './viewport-display-settings.mjs';
@@ -3894,7 +3895,7 @@ function escapeHtml(s) {
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let viewportGizmosVisible=true;
 let viewportDisplay=checkedViewportDisplay();
-let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null;
+let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null,authoringImageGenerator=null,authoringImageUI=null,authoringForegroundHandoff=null;
 function attachViewportGizmo(target) {
   if(selectionTransforms&&sceneSelection.ids.length&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat')target=selectionTransformProxy();
   transformControls.attach(target);
@@ -11200,7 +11201,11 @@ async function initScene() {
       ...(hasCompositionDeviceAcquisition ? {acquireDevice: compositionModule.acquireSharedGpuDevice} : {}),
       // A mounted SAM host borrows the same device, so its kit requirements
       // (all adapter features and limits) compose into the one acquisition.
-      hostRequirements: samHostConfig?.mounted ? samHostDeviceRequirements : null,
+      // Authoring text-to-image (FLUX.2 klein) needs shader-f16 and the adapter's
+      // buffer/workgroup limits on that same device; requesting them allocates nothing.
+      hostRequirements: async adapter => composeDeviceRequirements(
+        samHostConfig?.mounted ? await samHostDeviceRequirements(adapter) : null,
+        kleinDeviceRequirements(adapter)),
     });
     sharedGpuFailureReason = null;
   } catch (error) {
@@ -26679,15 +26684,30 @@ sceneInitialization.then(() => {
 
 function setupAuthoringAssets(){
   let redraw=()=>{};
+  const foregroundHandoff=()=>{
+    if(!volumePrototype||!compositionHost)return null;
+    if(authoringForegroundHandoff?.prototype!==volumePrototype)authoringForegroundHandoff={prototype:volumePrototype,handoff:createForegroundHandoff({prototype:volumePrototype,host:compositionHost})};
+    return authoringForegroundHandoff.handoff;
+  };
   const request=async url=>{const response=await fetch(url,{cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error||`Assets HTTP ${response.status}`);return data;};
   const generation=()=>{
-    if(!authoringGenerator)authoringGenerator=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:volumePrototype,host:compositionHost}),changed:()=>redraw(),blocked:()=>{
-      if(compositionModule)return 'This scene has another inference/performance host. Use its existing generation controls.';
-      return null;
-    }});
+    if(!authoringGenerator){
+      // SF3D installs its kiln foreground requester through a recording view so an
+      // image run can borrow the kiln and hand it back before the next mesh run.
+      const sf3d=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:foregroundHandoff()?.recording('sf3d')||volumePrototype,host:compositionHost}),changed:()=>redraw(),blocked:()=>{
+        if(compositionModule)return 'This scene has another inference/performance host. Use its existing generation controls.';
+        if(authoringImageGenerator?.busy())return 'An image is generating. Generate the mesh when it is saved.';
+        return null;
+      }});
+      authoringGenerator={...sf3d,async run(input){
+        const handoff=foregroundHandoff();
+        if(handoff?.has('sf3d'))await handoff.activate('sf3d');else await handoff?.release();
+        return sf3d.run(input);
+      }};
+    }
     return authoringGenerator;
   };
-  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>sceneObjects.find(entry=>entry.source===source)?.label,changed:state=>authoringAssetsUI?.render(state),
+  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>sceneObjects.find(entry=>entry.source===source)?.label,changed:state=>{authoringAssetsUI?.render(state);authoringImageUI?.render();},
     uploadImage:async file=>{
       const response=await fetch('/api/ingest-image?'+new URLSearchParams({name:file.name}),{method:'POST',body:await file.arrayBuffer()});const value=await response.json();
       if(!response.ok||value.schema!=='kaminos.asset-ingest.v0'||value.kind!=='image'||!value.entry?.source)throw Error(value.error||'Image storage failed');return value.entry;
@@ -26697,8 +26717,18 @@ function setupAuthoringAssets(){
       const response=await fetch(entry.source);if(!response.ok)throw Error(`Mesh source HTTP ${response.status}`);
       return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
     }});
-  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>authoringAssetsUI.render(authoringAssets.read());
-  window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state()};
+  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringAssetsUI.render(authoringAssets.read());authoringImageUI?.render();};
+  authoringImageGenerator=createKleinAuthoringImageGeneration({
+    context:()=>({sharedGpu,prototype:volumePrototype,host:compositionHost,handoff:foregroundHandoff()}),
+    // A locally mounted weight package (KAMINOS_KLEIN_WEIGHTS_ROOT) spares each port's
+    // browser cache a 3 GB download; otherwise the published package is used.
+    weights:async()=>{const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};return config.klein?.mounted?config.klein.weightsUrl:KLEIN_PUBLISHED_WEIGHTS;},
+    deliver:async file=>{const entry=await authoringAssets.upload(file);authoringAssets.prepare().catch(error=>console.warn('Generated image preparation failed',error));return entry;},
+    changed:()=>redraw(),
+    blocked:()=>compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':null,
+  });
+  authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets});
+  window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),images:authoringImageGenerator};
 }
 
 </script>
