@@ -3,7 +3,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
-import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
+import { pipelineUiBrowserLaunch, pipelineViewportErrors } from './pipeline-ui-browser-launch.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -34,6 +34,7 @@ const afterPath = args.get('after') || '/tmp/kaminos-pipeline-ui-witness-after.p
 const historyPath = args.get('history') || '/tmp/kaminos-pipeline-ui-witness-history.png';
 const userDataDir = await mkdtemp(join(tmpdir(), 'kaminos-pipeline-ui-witness-'));
 let stderr = '';
+const runtimeConsoleEvents = [];
 
 function meshWitnessSource(outputRoot,artifactPath) {
   if (!outputRoot || !artifactPath?.startsWith(outputRoot+'/')) return null;
@@ -42,7 +43,10 @@ function meshWitnessSource(outputRoot,artifactPath) {
 }
 
 async function publishWitness(record,failed=false) {
-  const result={...record,browser,requestedBrowser:chrome||null,pipelineId,expectedArtifactRole};
+  const viewportErrors=pipelineViewportErrors(runtimeConsoleEvents);
+  const result={...record,browser,requestedBrowser:chrome||null,pipelineId,expectedArtifactRole,
+    runtimeConsoleEvents,viewportErrors};
+  if(viewportErrors.length){result.ok=false;result.renderFailure='native viewport pipeline failed';process.exitCode=1;failed=true;}
   if(args.has('report')) {
     try {await writeFile(args.get('report'),JSON.stringify(result,null,2)+'\n');}
     catch(error) {result.ok=false;result.reportWriteError=error.message;process.exitCode=1;}
@@ -77,6 +81,7 @@ function connect(wsUrl) {
   const pending = new Map();
   ws.addEventListener('message', event => {
     const message = JSON.parse(event.data);
+    if(message.method==='Runtime.consoleAPICalled')runtimeConsoleEvents.push(message);
     if (!message.id || !pending.has(message.id)) return;
     const { resolve, reject } = pending.get(message.id);
     pending.delete(message.id);
@@ -290,8 +295,8 @@ let chromeProcess = null;
 let browser = null;
 let cdp = null;
 try {
-  browser = fluidBrowserLaunch({executable:chrome,debugPort:port,userDataDir,width:2048,height:1180});
-  chromeProcess = spawn(browser.executable, [...browser.args.slice(0,-1),'--headless=new','--disable-gpu-sandbox','about:blank'],
+  browser = pipelineUiBrowserLaunch({executable:chrome,debugPort:port,userDataDir,width:2048,height:1180});
+  chromeProcess = spawn(browser.executable, browser.args,
     {stdio:['ignore','ignore','pipe']});
   chromeProcess.stderr.on('data', chunk => { stderr += chunk.toString(); });
   chromeProcess.on('error', error => { stderr += error.message; });
