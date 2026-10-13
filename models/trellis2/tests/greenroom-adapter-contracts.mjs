@@ -16,7 +16,7 @@ const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const queue=process.argv[process.argv.indexOf('--queue-dir')+1],
   manifest=JSON.parse(fs.readFileSync(process.argv[process.argv.indexOf('--manifest')+1])),
   args=manifest.argv,get=k=>args[args.indexOf(k)+1],config=JSON.parse(fs.readFileSync(get('--config'))),
-  mode=config.testMode,job='identified-job',dir=path.join(queue,mode==='failed'?'failed':'done',job);
+  mode=config.testMode,failing=mode==='failed'||mode==='halted',job='identified-job',dir=path.join(queue,failing?'failed':'done',job);
 // Replay the external rejection actually observed on worker ff8c4b06.
 if(manifest.output_class==='artifact'){
  console.error(JSON.stringify({schema:'gpu-greenroom.command-submission-failure.v1',status:'failed',
@@ -35,10 +35,11 @@ if(mode==='stale-source')report.source.commit='c'.repeat(40);
 if(mode==='retained')report.mode='retained-finishing';
 if(mode==='fallback')report.native.backend.isFallbackAdapter=true;
 if(mode==='missing-session')delete report.native.sessionId;
-if(mode!=='missing-report')fs.writeFileSync(get('--report'),JSON.stringify(report));
+if(mode==='halted')fs.writeFileSync(get('--report'),JSON.stringify({ok:false,phase:'webgpu-generation',error:{message:'generation halted by memory guard'}}));
+else if(mode!=='missing-report')fs.writeFileSync(get('--report'),JSON.stringify(report));
 fs.writeFileSync(path.join(dir,'stdout.log'),JSON.stringify({schema:'kaminos.pipeline-progress.v0',phase:'mesh-finishing'})+'\n');
-fs.writeFileSync(path.join(dir,'status.json'),JSON.stringify({job_id:job,status:mode==='failed'?'failed':'done'}));
-const receipt={job_id:job,status:mode==='failed'?'failed':'done',exit_code:mode==='failed'?1:0,
+fs.writeFileSync(path.join(dir,'status.json'),JSON.stringify({job_id:job,status:failing?'failed':'done'}));
+const receipt={job_id:job,status:failing?'failed':'done',exit_code:failing?1:0,
  effective_argv:manifest.argv,effective_cwd:manifest.cwd,output_dir:manifest.output_dir,effective_timeout:null};
 if(mode==='wrong-dispatch')receipt.effective_argv=['/wrong/model'];
 if(mode==='hidden-timeout')receipt.effective_timeout=360;
@@ -94,4 +95,11 @@ test('the queued command always declares its Greenroom class: normal unless Expr
   const {values}=await setup('ok');
   const state=await runTrellisAdapter({...values,serviceClass:'vip'});
   assert.equal(state.ok,false);assert.match(state.error.message,/service class/);
+});
+
+test('a failed queued generation names its own phase and reason',async()=>{
+  const {values}=await setup('halted');
+  const state=await runTrellisAdapter(values);
+  assert.equal(state.ok,false);
+  assert.match(state.error.message,/webgpu-generation: generation halted by memory guard/);
 });
