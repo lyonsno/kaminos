@@ -14,8 +14,9 @@ runInNewContext(`${wrapperSource}\nglobalThis.islandInput = runSam3MaskDecoderIs
 assert.equal(wrapperContext.islandInput.yield, foregroundYield, 'browser island caller must inject the foreground hook');
 const appYield = async () => {};
 wrapperContext.applicationForeground = { yield: appYield };
-runInNewContext(`${wrapperSource}\nglobalThis.islandInput = runSam3MaskDecoderIslandRoute({});`, wrapperContext);
-assert.equal(wrapperContext.islandInput.yield, appYield, 'native application foreground must replace the phase hook');
+const appWrapperContext = { ...wrapperContext, applicationForeground: { yield: appYield } };
+runInNewContext(`${wrapperSource}\nglobalThis.islandInput = runSam3MaskDecoderIslandRoute({});`, appWrapperContext);
+assert.equal(appWrapperContext.islandInput.yield, appYield, 'native application foreground must replace the phase hook');
 
 for (const id of [
   'sample-picker',
