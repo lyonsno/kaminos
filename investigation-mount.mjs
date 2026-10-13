@@ -25,7 +25,7 @@ export async function mountInvestigation({page, out, source, install,
     return writing;
   };
   await save();
-  let adapter, resolveFinished, rejectFinished, busy = false, frozen = null, lost = null, completed = false;
+  let adapter, browser, resolveFinished, rejectFinished, busy = false, frozen = null, lost = null, completed = false;
   const finished = new Promise((resolve, reject) => {resolveFinished = resolve; rejectFinished = reject;});
   // Startup callers may not yet have received the handle when setup fails.
   finished.catch(() => {});
@@ -105,14 +105,26 @@ export async function mountInvestigation({page, out, source, install,
   const disconnected = () => terminate('Owned page lost before recording was retained');
   const navigated = frame => {
     if (frame !== page.mainFrame()) return;
+    if (!adapter) {terminate('Owned main frame changed during investigation installation'); return;}
     Promise.resolve().then(() => adapter.isPresent())
       .then(present => {if (!present) terminate('Owned main-frame investigation was replaced');})
       .catch(() => terminate('Owned main-frame investigation was lost during navigation'));
+  };
+  const detach = () => {
+    page.off('close', disconnected); page.off('crash', disconnected); page.off('framenavigated', navigated);
+    browser?.off('disconnected', disconnected);
   };
   try {
     assert.equal(typeof install, 'function', 'Investigation installer required');
     assert.ok(typeof captureKind === 'string' && captureKind, 'Capture kind required');
     assert.equal(typeof aroundCapture, 'function', 'Capture transaction required');
+    browser = page.context().browser();
+    page.on('close', disconnected);
+    page.on('crash', disconnected);
+    page.on('framenavigated', navigated);
+    browser?.on('disconnected', disconnected);
+    finished.finally(detach).catch(() => {});
+    assert.equal(page.isClosed(), false, 'Owned page lost before investigation installation');
     await page.exposeBinding(binding, async ({page: caller, frame}, request) => {
       assert.equal(caller, page, 'Capture caller page differs');
       assert.equal(frame, page.mainFrame(), 'Capture requires the mounted main frame');
@@ -120,23 +132,19 @@ export async function mountInvestigation({page, out, source, install,
       if (request.action === 'finish') return finish(request.note);
       throw Error('Unknown investigation action');
     });
+    if (lost) throw lost;
     adapter = await install({id, binding, source});
+    if (lost) throw lost;
     for (const name of ['read', 'finish', 'disconnect', 'saveFailed', 'isPresent'])
       assert.equal(typeof adapter?.[name], 'function', `Investigation adapter requires ${name}`);
     assert.equal(page.isClosed(), false, 'Owned page lost during investigation installation');
     assert.equal(await adapter.isPresent(), true, 'Installed investigation is missing');
+    if (lost) throw lost;
     report.status = 'recording'; report.phase = 'recording'; await save();
-    page.on('close', disconnected);
-    page.on('crash', disconnected);
-    page.on('framenavigated', navigated);
-    const browser = page.context().browser();
-    browser?.on('disconnected', disconnected);
-    finished.finally(() => {
-      page.off('close', disconnected); page.off('crash', disconnected); page.off('framenavigated', navigated);
-      browser?.off('disconnected', disconnected);
-    }).catch(() => {});
+    if (lost) throw lost;
     return {id, capture, finish, finished, reportPath};
   } catch (error) {
+    detach();
     report.status = 'failed'; report.failure = String(error);
     try {await adapter?.disconnect?.('Investigation setup failed');}
     catch (cleanup) {report.cleanupFailure = String(cleanup);}

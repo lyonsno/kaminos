@@ -24,6 +24,7 @@ async function fixture(t, overrides = {}) {
   page.isClosed = () => false;
   page.screenshot = async () => png;
   page.exposeBinding = async (name, callback) => {page.binding = callback;};
+  overrides.onPage?.(page, browser);
   const state = {frame: 17, view: {position: [1, 2, 3]}};
   let recorder, present = true;
   const install = async ({id}) => {
@@ -86,6 +87,7 @@ test('installation failure writes durable failure phase and rejects mount', asyn
   const out = await fs.mkdtemp(path.join(os.tmpdir(), 'owner-mount-fail-'));
   t.after(() => fs.rm(out, {recursive: true, force: true}));
   const page = new EventEmitter(); page.exposeBinding = async () => {};
+  page.context = () => ({browser: () => null}); page.isClosed = () => false;
   await assert.rejects(mountInvestigation({page, out, source, install: async () => {throw Error('owner unavailable');}}), /owner unavailable/);
   const report = JSON.parse(await fs.readFile(path.join(out, 'investigation.json')));
   assert.equal(report.status, 'failed');
@@ -108,4 +110,25 @@ test('capture binding accepts only its owned main frame', async t => {
   await assert.rejects(f.page.binding({page: {}, frame: f.page.mainFrame()}, {action: 'capture'}), /page differs/);
   assert.equal((await f.report()).captures.length, 0);
   await f.handle.finish();
+});
+
+test('page close during startup persistence rejects mount and removes listeners', async t => {
+  const original = fs.writeFile;
+  let page, browser;
+  t.after(() => {fs.writeFile = original;});
+  fs.writeFile = async (file, data, ...args) => {
+    if (String(file).endsWith('investigation.json.next') && JSON.parse(data).status === 'recording')
+      page.emit('close');
+    return original(file, data, ...args);
+  };
+  let leaked;
+  try {
+    await assert.rejects(fixture(t, {install: async () => {
+      return {read: async () => ({}), finish: async () => ({}),
+        disconnect: async () => {}, saveFailed: async () => {}, isPresent: async () => true};
+    }, onPage: (p, b) => {page = p; browser = b;}}).then(value => {leaked = value;}), /Owned page lost/);
+  } finally {leaked?.page.emit('close'); await leaked?.handle.finished.catch(() => {});}
+  assert.equal(page.listenerCount('close'), 0);
+  assert.equal(page.listenerCount('framenavigated'), 0);
+  assert.equal(browser.listenerCount('disconnected'), 0);
 });
