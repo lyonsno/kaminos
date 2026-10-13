@@ -8,7 +8,7 @@ root.userData.native_motion=source;
 const clip=new THREE.AnimationClip('retained creature',1,[new THREE.VectorKeyframeTrack('pelvis.position',[0,.5,1],[0,0,0,0,0,.3,0,0,.6])]);
 let opens=0,closed=0,redraws=0;const subscribers=new Set(),records=[];
 let view={position:[1,2,3],target:[0,0,0]};
-const session={THREE,loadAsset:async asset=>({root,clips:[clip],source:asset,id:'fixture-body'}),
+const session={loadAsset:async asset=>({root,clips:[clip],source:asset,id:'fixture-body'}),
  onFrame:callback=>(subscribers.add(callback),()=>subscribers.delete(callback)),redraw:()=>redraws++,
  readView:()=>structuredClone(view),setView:value=>{view=structuredClone(value);},dispose:()=>{closed++;}};
 const host={scene:{open:async()=>{opens++;return session;}}};
@@ -17,7 +17,7 @@ await assert.rejects(()=>definition.create({host,inputs:{},record:()=>{}}),/asse
 const experiment=await definition.create({host,inputs,record:r=>records.push(r)});
 assert.equal(experiment.read().frame,15);assert.ok(Math.abs(bone.position.z-.3)<1e-6);assert.equal(subscribers.size,0);
 experiment.operations.resume();assert.equal(subscribers.size,1);
-for(const time of [0,250])for(const callback of [...subscribers])callback(time);
+for(const deltaSeconds of [0,.25])for(const callback of [...subscribers])callback({deltaSeconds});
 assert.ok(Math.abs(bone.position.z-.45)<1e-6);
 const held=experiment.operations.hold();assert.equal(held.priorStatus,'playing');assert.equal(held.inputs.frame,22);
 assert.equal(subscribers.size,0);assert.equal(held.inputs.asset,inputs.asset);assert.equal(held.inputs.source_sha256,inputs.source_sha256);

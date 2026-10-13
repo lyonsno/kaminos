@@ -1,4 +1,5 @@
 import {createCreatureMotionPlayback} from './playback.mjs';
+import * as THREE from '../../lib/three.core.js';
 
 // Owner contribution. Scene-session spelling follows the current shared join
 // proposal; native host conformance must be exercised after that join lands.
@@ -10,18 +11,20 @@ export default {
   if(typeof host?.scene?.open!=='function')throw Error('Shared Workbench scene session is unavailable');
   const session=await host.scene.open();let player,unsubscribe=null,mounted=null,disposed=false;
   let refresh=()=>{};
-  const callbacks=new Map();let nextCallback=0;
+  const callbacks=new Map();let nextCallback=0,clockMs=0;
   const cancelFrame=id=>{
    callbacks.delete(id);
    if(!callbacks.size&&unsubscribe){const stop=unsubscribe;unsubscribe=null;stop();}
   };
   const requestFrame=callback=>{
    const id=++nextCallback;callbacks.set(id,callback);
-   if(!unsubscribe)unsubscribe=session.onFrame(now=>{
+   if(!unsubscribe)unsubscribe=session.onFrame(({deltaSeconds})=>{
+    if(!Number.isFinite(deltaSeconds)||deltaSeconds<0)throw Error('Shared scene frame requires finite nonnegative deltaSeconds');
+    clockMs+=deltaSeconds*1000;
     // Adapt the host's shared frame subscription to the controller's one-shot
     // clock. No renderer, independent RAF pump or per-frame recording is added.
     const due=[...callbacks.values()];callbacks.clear();
-    for(const tick of due)tick(now);
+    for(const tick of due)tick(clockMs);
     if(!callbacks.size&&unsubscribe){const stop=unsubscribe;unsubscribe=null;stop();}
    });
    return id;
@@ -36,7 +39,7 @@ export default {
    const clips=asset.clips??[];
    const clip=inputs.clip?clips.find(candidate=>candidate.name===inputs.clip):clips.length===1?clips[0]:null;
    if(!clip)throw Error('Select one actual retained creature animation clip');
-   player=createCreatureMotionPlayback({THREE:session.THREE,root:asset.root,clip,source:identities[0],
+   player=createCreatureMotionPlayback({THREE,root:asset.root,clip,source:identities[0],
     requestFrame,cancelFrame,onDirty:()=>{session.redraw();refresh();}});
    player.seek(inputs.frame??0);
    if(inputs.view!==undefined)await session.setView(inputs.view);
