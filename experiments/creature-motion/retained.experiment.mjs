@@ -9,7 +9,7 @@ export default {
   if(typeof inputs.asset!=='string'||!inputs.asset.trim())throw Error('Retained creature requires an asset URL');
   if(!/^[a-f0-9]{64}$/i.test(inputs.source_sha256??''))throw Error('Retained creature requires its expected motion source identity');
   if(typeof host?.scene?.open!=='function')throw Error('Shared Workbench scene session is unavailable');
-  const session=await host.scene.open();let player,unsubscribe=null,mounted=null,disposed=false;
+  const session=await host.scene.open();let player,unsubscribe=null,mounted=null,disposed=false,disposal;
   let refresh=()=>{};
   const callbacks=new Map();let nextCallback=0,clockMs=0;
   const cancelFrame=id=>{
@@ -19,6 +19,7 @@ export default {
   const requestFrame=callback=>{
    const id=++nextCallback;callbacks.set(id,callback);
    if(!unsubscribe)unsubscribe=session.onFrame(({deltaSeconds})=>{
+    if(disposed)return;
     if(!Number.isFinite(deltaSeconds)||deltaSeconds<0)throw Error('Shared scene frame requires finite nonnegative deltaSeconds');
     clockMs+=deltaSeconds*1000;
     // Adapt the host's shared frame subscription to the controller's one-shot
@@ -29,6 +30,17 @@ export default {
    });
    return id;
   };
+  async function releaseResources(){
+   const errors=[];
+   const attempt=fn=>{try{fn();}catch(error){errors.push(error);}};
+   refresh=()=>{};const panel=mounted;mounted=null;
+   attempt(()=>panel?.remove());
+   attempt(()=>player?.dispose());
+   callbacks.clear();const stop=unsubscribe;unsubscribe=null;attempt(()=>stop?.());
+   // A controller/notification failure must not prevent owned scene release.
+   try{await session?.dispose?.();}catch(error){errors.push(error);}
+   return errors;
+  }
   try {
    for(const name of ['loadAsset','onFrame','redraw','readView','setView','dispose'])
     if(typeof session?.[name]!=='function')throw Error(`Shared scene session lacks ${name}`);
@@ -62,10 +74,16 @@ export default {
       clip:clip.name,frame:state.frame,view:structuredClone(state.view)}};
     }),
    };
-   const dispose=async()=>{
-    if(disposed)return;disposed=true;refresh=()=>{};mounted?.remove();mounted=null;
-    player.dispose();callbacks.clear();if(unsubscribe){unsubscribe();unsubscribe=null;}
-    await session.dispose();
+   const dispose=()=>{
+    if(disposal)return disposal;disposed=true;
+    // Publish completion before cleanup: a synchronous host callback can close
+    // again, and every caller must await the same pending or failed removal.
+    let resolve,reject;disposal=new Promise((yes,no)=>{resolve=yes;reject=no;});
+    releaseResources().then(errors=>{
+     if(errors.length===1)throw errors[0];
+     if(errors.length)throw new AggregateError(errors,'Creature cleanup failed');
+    }).then(resolve,reject);
+    return disposal;
    };
    return {read,operations,dispose,mount({root,document=host.controls?.document,invoke}){
     active();if(!document)throw Error('Creature controls require the shared document');
@@ -85,8 +103,9 @@ export default {
     root.append(panel);refresh();return {dispose(){if(mounted===panel){refresh=()=>{};mounted=null;}panel.remove();}};
    }};
   }catch(error){
-   refresh=()=>{};player?.dispose();callbacks.clear();unsubscribe?.();unsubscribe=null;
-   await session?.dispose?.();throw error;
+   disposed=true;const errors=await releaseResources();
+   if(errors.length)throw new AggregateError([error,...errors],'Creature creation failed and cleanup reported errors',{cause:error});
+   throw error;
   }
  },
 };
