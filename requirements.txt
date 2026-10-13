@@ -1,0 +1,3 @@
+# Python distributions the test suite needs in the python3 on PATH: tools/test-runner.mjs checks them before running Python tests, and CI installs them from this file.
+numpy
+pillow
