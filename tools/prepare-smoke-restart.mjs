@@ -1,4 +1,5 @@
-import { Console } from 'node:console';
+import builtinConsole, { Console } from 'node:console';
+import { syncBuiltinESMExports } from 'node:module';
 import { isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -8,7 +9,12 @@ let phase = 'read-input';
 let actionId;
 
 // The process owns stdout as its wire channel, including during producer import.
-globalThis.console = new Console({ stdout: process.stderr, stderr: process.stderr });
+const diagnostics = new Console({ stdout: process.stderr, stderr: process.stderr });
+for (const key of Object.keys(diagnostics)) {
+  if (typeof diagnostics[key] === 'function') builtinConsole[key] = diagnostics[key];
+}
+globalThis.console = builtinConsole;
+syncBuiltinESMExports();
 try {
   const args = process.argv.slice(2);
   if (args.length !== 2 || args[0] !== '--producer' || !isAbsolute(args[1])) {
@@ -40,13 +46,22 @@ try {
   }
   phase = 'serialize-result';
   const result = JSON.stringify({ schema: 'gpu-greenroom.smoke-restart-result.v1',
-    action_id: actionId, request }, (_key, value) => {
+    action_id: actionId, request }, function (key, value) {
+    // JSON calls toJSON before the replacer; inspect its original holder too.
+    const original = this[key];
+    if (original && typeof original.toJSON === 'function') {
+      throw new Error('Producer result must contain JSON values without custom serialization');
+    }
     if (value === undefined || typeof value === 'function' || typeof value === 'symbol' ||
         (typeof value === 'number' && !Number.isFinite(value))) {
       throw new Error('Producer result must contain JSON values without silent field loss');
     }
     return value;
   });
+  const emitted = JSON.parse(result).request;
+  if (!object(emitted) || emitted.id !== requestId) {
+    throw new Error('Serialized request must preserve the supplied requestId as id');
+  }
   phase = 'write-result';
   await new Promise((resolve, reject) => process.stdout.write(`${result}\n`, error => error ? reject(error) : resolve()));
 } catch (error) {

@@ -66,6 +66,34 @@ test('invalid input refuses before importing producer, preserving prior files', 
   assert.equal(await readFile(prior, 'utf8'), 'old observation');
 });
 
+test('built-in console imports keep diagnostics off the result channel', async () => {
+  const r = await run(envelope(tmpdir()), `import builtin, {log, info} from 'node:console';
+    log('import diagnostic');
+    export function prepareAttempt({requestId}) {
+      info('prepare diagnostic'); builtin.log('default import diagnostic');
+      return {id:requestId};
+    }`);
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(JSON.parse(r.stdout).request.id, envelope(tmpdir()).requestId);
+  assert.match(r.stderr, /import diagnostic/);
+  assert.match(r.stderr, /prepare diagnostic/);
+  assert.match(r.stderr, /default import diagnostic/);
+});
+
+test('custom serialization and changing identity cannot replace the accepted request', async () => {
+  for (const body of [
+    `return {id:requestId, toJSON(){return {id:'other'}}};`,
+    `return {id:requestId, nested:{toJSON(){return 'hidden function'}}};`,
+    `return Object.assign(Object.create({toJSON(){return {id:'other'}}}), {id:requestId});`,
+    `let reads=0; return {get id(){return ++reads===1 ? requestId : 'other'}};`,
+  ]) {
+    const r = await run(envelope(tmpdir()), `export function prepareAttempt({requestId}) {${body}}`);
+    assert.notEqual(r.code, 0, r.stdout);
+    assert.equal(r.stdout, '');
+    assert.equal(JSON.parse(r.stderr).phase, 'serialize-result');
+  }
+});
+
 test('producer absence, exceptions, partial results and stale identity fail visibly', async () => {
   for (const [body, phase] of [
     ['export const irrelevant = 1;', 'load-producer'],
