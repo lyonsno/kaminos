@@ -247,7 +247,9 @@ export function createWebGpuTiledFlashAttentionShader({ headDim, layout = 'packe
   const dimsPerThread = headDim / 16;
   const qChunk = TILED_QUERIES * TILED_DIM_CHUNK, kChunk = TILED_KEYS * TILED_DIM_CHUNK;
   const stageFloats = qChunk + kChunk;
-  const valueKeys = Math.min(8, Math.floor(stageFloats / headDim));
+  // Largest power of two up to 8 whose V chunk fits the stage and divides the 32-key score row.
+  let valueKeys = 8;
+  while (valueKeys > 1 && valueKeys * headDim > stageFloats) valueKeys /= 2;
   const range = count => Array.from({ length: count }, (_, i) => i);
   const R = range(rowsPerThread), J = range(keysPerThread), E = range(dimsPerThread);
   const row = (tensor, token, headExpr) => layout === 'strided'
