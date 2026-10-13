@@ -125,16 +125,18 @@ export function installMeshModelChoice({document,initial='sf3d',busy=()=>false,c
   express.innerHTML='<input type="checkbox" id="asset-express"> Express <small>quick lane in the GPU queue</small>';
   label.after(express);const box=express.querySelector('input');
   let stored=null;try{stored=storage?.getItem('kaminos.trellis.express');}catch{}
-  box.checked=stored!=='off';
-  box.onchange=()=>{try{storage?.setItem('kaminos.trellis.express',box.checked?'on':'off');}catch{}changed(select.value);};
+  let wanted=stored!=='off';box.checked=wanted;
+  box.onchange=()=>{wanted=box.checked;try{storage?.setItem('kaminos.trellis.express',wanted?'on':'off');}catch{}changed(select.value);};
   function render(){
     select.disabled=busy();const p=heading();if(p)p.textContent=MESH_MODELS[select.value].detail;
     const t=trellisState();express.hidden=select.value!=='trellis';
     const eligible=t?.expressEligible===true;box.disabled=busy()||!eligible;
+    // Shown as off while the queue will not take it; the saved choice returns when it will.
+    box.checked=eligible&&wanted;
     express.title=eligible?'Submit to the GPU queue quick lane':(t?.expressReason||'Express availability is loading');
     express.querySelector('small').textContent=eligible?'quick lane in the GPU queue':`unavailable: ${t?.expressReason||'loading'}`;
   }
   select.onchange=()=>{render();changed(select.value);};
   render();
-  return {value:()=>select.value,express:()=>box.checked&&!box.disabled,render};
+  return {value:()=>select.value,express:()=>wanted&&!box.disabled&&box.checked,render};
 }
