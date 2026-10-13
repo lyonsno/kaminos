@@ -7,26 +7,26 @@
   },
   "entries": {
     "tests/boundary-splat-feature-capture-contracts.mjs": {
-      "class": "untriaged",
+      "class": "regression",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e when the runner was introduced",
+      "reason": "passed at its last change and first fails at 2026-07-18 a8f53c6f Add full-support sparse instance consumer; the owner decides whether the source or the test is wrong",
       "signature": "AssertionError [ERR_ASSERTION]: witness readback uses the exact accepted instance count without a hidden row cap",
       "testLastChanged": "2026-07-12 c9817cd5"
     },
     "tests/boundary-splat-renderer-contracts.mjs": {
-      "class": "untriaged",
+      "class": "regression",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e when the runner was introduced",
+      "reason": "passed at its last change and first fails at 2026-09-23 dfc13f7a Expand smoke volume upward; the owner decides whether the source or the test is wrong",
       "signature": "AssertionError [ERR_ASSERTION]: capacity growth is bounded by physical grid cells and otherwise rounds up to avoid repeated reallocations",
       "testLastChanged": "2026-09-15 bef9d69f"
     },
     "tests/boundary-splat-support-covariance-composition-contracts.mjs": {
-      "class": "untriaged",
+      "class": "regression",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e when the runner was introduced",
+      "reason": "passed at its last change and first fails at 2026-07-18 62ea1154 Adjudicate Stage B optical recurrence; the owner decides whether the source or the test is wrong",
       "signature": "AssertionError [ERR_ASSERTION]: tuned heat, reaction, front, and interface support must remain upstream of baked sidecar structure",
       "testLastChanged": "2026-07-17 db060b42"
     },
@@ -39,26 +39,26 @@
       "testLastChanged": "2026-07-25 79bc04fe"
     },
     "tests/finger-fluid-bench-contracts.mjs": {
-      "class": "untriaged",
+      "class": "stale-pin",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e when the runner was introduced",
+      "reason": "already failing at the commit that last changed it (2026-09-23 58ea38c6 compare fluid populations at fixed volume); its assertions never matched main",
       "signature": "AssertionError [ERR_ASSERTION]: refraction can capture the exact same-camera support presentation from the current canvas texture",
       "testLastChanged": "2026-09-23 58ea38c6"
     },
     "tests/finger-fluid-waterfall-continuity-contracts.mjs": {
-      "class": "untriaged",
+      "class": "regression",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e when the runner was introduced",
+      "reason": "passed at its last change and first fails at 2026-09-23 58ea38c6 compare fluid populations at fixed volume; the owner decides whether the source or the test is wrong",
       "signature": "AssertionError [ERR_ASSERTION]: particle allocation preflight must run before proportional CPU truth-scene arrays are created",
       "testLastChanged": "2026-07-20 2460360d"
     },
     "tests/finger-fluid-waterfall-resolution-oracle-contracts.mjs": {
-      "class": "untriaged",
+      "class": "regression",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e when the runner was introduced",
+      "reason": "passed at its last change and first fails at 2026-07-27 5941fe7d finger fluid: compose canonical moving Hill support; the owner decides whether the source or the test is wrong",
       "signature": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /COMPUTE_SHADER\\.replaceAll\\(\\s*KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN/. Input: | \"export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';\\n\" + | \"export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';\\n\" + | \"export const KAMINOS_FINGER_FLUID_DENSITY_CONTRACT = 'wgsl-pbf-density-constraint-v0';\\n\" + | \"export const KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT = 'wgsl-analytic-boundary-density-support-v0';\\n\" +",
       "testLastChanged": "2026-07-25 79bc04fe"
     },
@@ -69,22 +69,6 @@
       "reason": "failing on main 954f622e when the runner was introduced",
       "signature": "ReferenceError: exclusiveInspectionRender is not defined",
       "testLastChanged": "2026-09-26 89aa0bec"
-    },
-    "tests/hill-moving-support-consumer-contracts.mjs": {
-      "class": "untriaged",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "failing on main 954f622e when the runner was introduced",
-      "signature": "AssertionError [ERR_ASSERTION]: HILL_SUPPORT_PACKAGE_REPORT must name the exact LERMS package witness report",
-      "testLastChanged": "2026-07-25 db11558f"
-    },
-    "tests/hill-moving-support-consumer-witness-contracts.mjs": {
-      "class": "untriaged",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "failing on main 954f622e when the runner was introduced",
-      "signature": "AssertionError [ERR_ASSERTION]: HILL_SUPPORT_PACKAGE_REPORT must name the exact LERMS package witness report",
-      "testLastChanged": "2026-07-25 d85795cf"
     },
     "tests/liquid-fire-contact-consumer-contracts.mjs": {
       "class": "untriaged",
@@ -223,18 +207,18 @@
       "testLastChanged": "2026-09-24 db3b7f58"
     },
     "tests/volume-common-gas-transport.mjs": {
-      "class": "untriaged",
+      "class": "stale-pin",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e when the runner was introduced",
+      "reason": "already failing at the commit that last changed it (2026-10-06 5b887704 Inflow aperture: only the transport sampler reaches the coverage texture); its assertions never matched main",
       "signature": "node:test failing: common transport samples all gas state and front at the velocity backtrace | hot stationary gas has no per-layer kinematic rise in common mode | legacy mode preserves the original distinct backtraces and lift",
       "testLastChanged": "2026-10-06 5b887704"
     },
     "tests/volume-confinement-mode-contracts.mjs": {
-      "class": "untriaged",
+      "class": "stale-pin",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e when the runner was introduced",
+      "reason": "already failing at the commit that last changed it (2026-10-06 0740886f residual probe reports per-slab heat and smoke centroids); its assertions never matched main",
       "signature": "node:test failing: the residual probe also reduces enstrophy so confinement can be calibrated against a measurement",
       "testLastChanged": "2026-10-06 0740886f"
     },
@@ -303,10 +287,10 @@
       "testLastChanged": "2026-08-30 88a7dada"
     },
     "tests/volume-transport-scheme-contracts.mjs": {
-      "class": "untriaged",
+      "class": "stale-pin",
       "owner": "operlocutor",
       "since": "2026-10-12",
-      "reason": "failing on main 954f622e when the runner was introduced",
+      "reason": "already failing at the commit that last changed it (2026-10-06 5b887704 Inflow aperture: only the transport sampler reaches the coverage texture); its assertions never matched main",
       "signature": "node:test failing: WGSL carries the predictor buffer, the MacCormack corrector with an extremum limiter, and one velocity bound helper",
       "testLastChanged": "2026-10-06 5b887704"
     },

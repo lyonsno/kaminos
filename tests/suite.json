@@ -261,10 +261,12 @@
       "kind": "node"
     },
     "tests/hill-moving-support-consumer-contracts.mjs": {
-      "kind": "node"
+      "kind": "manual",
+      "reason": "needs HILL_SUPPORT_PACKAGE_REPORT pointing at a LERMS package witness report"
     },
     "tests/hill-moving-support-consumer-witness-contracts.mjs": {
-      "kind": "node"
+      "kind": "manual",
+      "reason": "needs HILL_SUPPORT_PACKAGE_REPORT pointing at a LERMS package witness report"
     },
     "tests/host-surface-contracts.mjs": {
       "kind": "node"
