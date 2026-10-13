@@ -8,8 +8,10 @@ const nonnegativeFour=v=>Array.isArray(v)&&v.length===4&&[0,1,2,3].every(i=>Numb
 // accumulation: requires comparison with MLX, not claimed bit-identical to it.
 export function frozenOpticalPredictor(artifact) {
   const model=structuredClone(artifact),n=model.probeCount,width=9*n+8;
+  const conditioned=model.identity==='optical-error-mlp-v1'&&model.conditioning==='source-max-abs-v1';
+  const raw=model.identity==='optical-error-mlp-v0'&&model.conditioning===undefined;
   const finiteVector=(v,size)=>Array.isArray(v)&&v.length===size&&Array.from(v).every(Number.isFinite);
-  if(model.identity!=='optical-error-mlp-v0'||![3,5].includes(n)||
+  if((!raw&&!conditioned)||![3,5].includes(n)||
     JSON.stringify(model.architecture)!==JSON.stringify([width,32,32,4])||
     JSON.stringify(model.activations)!==JSON.stringify(['relu','relu','softplus'])||
     !finiteVector(model.mean,width)||!finiteVector(model.scale,width)||!model.scale.every(v=>v>0)||
@@ -23,7 +25,16 @@ export function frozenOpticalPredictor(artifact) {
   });
   return features=>{
     if(!finiteVector(features,width))throw new Error('invalid optical features');
-    let x=features.map((v,i)=>Math.fround(Math.fround(Math.fround(v)-model.mean[i])/model.scale[i]));
+    let x=features.map(Math.fround),sourceScale=1;
+    if(!x.every(Number.isFinite))throw new Error('nonfinite float32 optical features');
+    if(conditioned) {
+      let amplitude=0;
+      for(let j=0;j<n;j++)for(let k=1;k<=6;k++)amplitude=Math.max(amplitude,Math.abs(x[9*j+k]));
+      // No observed emission does not prove that the interval is source-free.
+      sourceScale=amplitude===0?1:amplitude;
+      for(let j=0;j<n;j++)for(let k=1;k<=6;k++)x[9*j+k]=Math.fround(x[9*j+k]/sourceScale);
+    }
+    x=x.map((v,i)=>Math.fround(Math.fround(v-model.mean[i])/model.scale[i]));
     model.layers.forEach((layer,i)=>{
       x=layer.weights.map((weights,j)=>{
         let sum=0;for(let k=0;k<weights.length;k++)sum+=weights[k]*x[k];
@@ -31,7 +42,7 @@ export function frozenOpticalPredictor(artifact) {
         return i<2?Math.max(0,z):Math.fround(Math.max(z,0)+Math.log1p(Math.exp(-Math.abs(z))));
       });
     });
-    const result=x.map((v,i)=>Math.fround(v*model.targetScale[i]));
+    const result=x.map((v,i)=>Math.fround(Math.fround(v*model.targetScale[i])*(i<3?sourceScale:1)));
     if(!nonnegativeFour(result))throw new Error('nonfinite frozen optical prediction');
     return result;
   };

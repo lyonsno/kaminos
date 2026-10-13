@@ -8,13 +8,28 @@ from pathlib import Path
 import numpy as np
 
 
-def prepare_arrays(rows, probe_count):
+def prepare_arrays(rows, probe_count, conditioning='raw-v0'):
+    if conditioning not in ['raw-v0', 'source-max-abs-v1']:
+        raise ValueError('unknown optical conditioning')
     x = np.asarray([r['features'] for r in rows], dtype=np.float32)
     y = np.asarray([r['label'] for r in rows], dtype=np.float32)
     if x.shape != (len(rows), 9*probe_count+8) or y.shape != (len(rows), 4):
         raise ValueError('invalid feature/label shape')
     if not np.isfinite(x).all() or not np.isfinite(y).all() or (y < 0).any():
         raise ValueError('finite features and nonnegative finite labels required')
+    training_y = y.copy()
+    source_scale = np.ones(len(rows), dtype=np.float32)
+    zero_source = np.zeros(len(rows), dtype=bool)
+    if conditioning == 'source-max-abs-v1':
+        source = [9*j+k for j in range(probe_count) for k in range(1, 7)]
+        amplitude = np.max(np.abs(x[:, source]), axis=1)
+        zero_source = amplitude == 0
+        # Zero observed source can hide emission between probes; keep those labels.
+        source_scale = np.where(zero_source, np.float32(1), amplitude)
+        x[:, source] /= source_scale[:, None]
+        training_y[:, :3] /= source_scale[:, None]
+        if not np.isfinite(x).all() or not np.isfinite(training_y).all():
+            raise ValueError('nonfinite source-conditioned features or labels')
     splits = ['train', 'validation', 'test', 'view-test']
     if any(r['split'] not in splits or type(r['resolved']) is not bool for r in rows):
         raise ValueError('invalid split or reference status')
@@ -25,8 +40,9 @@ def prepare_arrays(rows, probe_count):
     mean = x[train].mean(axis=0, dtype=np.float64).astype(np.float32)
     scale = x[train].std(axis=0, dtype=np.float64).astype(np.float32)
     scale = np.where(scale > 0, scale, 1)
-    target_scale = np.maximum(y[train].mean(axis=0, dtype=np.float64), 1e-8).astype(np.float32)
-    return dict(x=x, y=y, mean=mean, scale=scale, target_scale=target_scale, indices=indices)
+    target_scale = np.maximum(training_y[train].mean(axis=0, dtype=np.float64), 1e-8).astype(np.float32)
+    return dict(x=x, y=y, training_y=training_y, source_scale=source_scale, zero_source=zero_source,
+                mean=mean, scale=scale, target_scale=target_scale, indices=indices)
 
 
 def main():
@@ -37,6 +53,7 @@ def main():
     parser.add_argument('--patience', type=int, default=30)
     parser.add_argument('--relative-improvement', type=float, default=0.001)
     parser.add_argument('--learning-rate', type=float, default=0.001)
+    parser.add_argument('--conditioning', choices=['raw-v0', 'source-max-abs-v1'], default='raw-v0')
     args = parser.parse_args()
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -86,9 +103,9 @@ def main():
             if hashlib.sha256(raw).hexdigest() != source['sha256']:
                 raise ValueError('dataset bytes changed')
             rows = [json.loads(line) for line in raw.splitlines()]
-            data = prepare_arrays(rows, n)
+            data = prepare_arrays(rows, n, args.conditioning)
             normalized = (data['x']-data['mean'])/data['scale']
-            targets = data['y']/data['target_scale']
+            targets = data['training_y']/data['target_scale']
             train, validation = data['indices']['train'], data['indices']['validation']
             tx, ty = mx.array(normalized[train]), mx.array(targets[train])
             vx, vy = mx.array(normalized[validation]), mx.array(targets[validation])
@@ -100,6 +117,11 @@ def main():
                          quantile=0.95, batch='all resolved training rows each epoch', dataset=source,
                          counts={s: len(indices) for s, indices in data['indices'].items()},
                          excludedUnresolved=sum(not r['resolved'] for r in rows), history=[])
+            entry['conditioning'] = dict(mode=args.conditioning,
+                zeroObservedSourceRows=int(data['zero_source'].sum()),
+                hiddenSourceErrorRows=int(np.sum(data['zero_source'] & np.any(data['y'][:, :3] > 0, axis=1))),
+                sourceScaleRange=[float(data['source_scale'].min()), float(data['source_scale'].max())],
+                conditionedLabelMax=data['training_y'].max(axis=0).tolist())
             report['models'].append(entry)
             checkpoint = out/f'probes{n}.npz'
             best = None
@@ -130,6 +152,7 @@ def main():
                 save()
             model.load_weights(str(checkpoint))
             prediction = np.asarray(model(mx.array(normalized)))*data['target_scale']
+            prediction[:, :3] *= data['source_scale'][:, None]
             if not np.isfinite(prediction).all() or (prediction < 0).any():
                 raise ValueError('invalid error prediction')
             prediction_path = out/f'predictions{n}.f32'
@@ -163,6 +186,8 @@ def main():
             artifact = dict(identity='optical-error-mlp-v0', probeCount=n, architecture=entry['architecture'],
                             activations=['relu', 'relu', 'softplus'], mean=data['mean'].tolist(), scale=data['scale'].tolist(),
                             targetScale=data['target_scale'].tolist(), layers=layers, dataset=source)
+            if args.conditioning != 'raw-v0':
+                artifact.update(identity='optical-error-mlp-v1', conditioning=args.conditioning)
             artifact_path = out/f'model{n}.json'
             artifact_path.write_text(json.dumps(artifact, indent=2, allow_nan=False)+'\n')
             entry['artifact'] = dict(path=str(artifact_path), sha256=hashlib.sha256(artifact_path.read_bytes()).hexdigest())
