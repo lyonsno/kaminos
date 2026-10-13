@@ -38,7 +38,7 @@ function seek(index,origin='api'){
   events.push({type:'frame',frame,origin,at:performance.now()});
   const pose=manifest.frames[frame],metric=manifest.metrics[frame];
   status.textContent=`WebGPU replay · ${pose.kind} · flex ${pose.flexDegrees.toFixed(1)}° / twist ${pose.twistDegrees.toFixed(1)}°`;
-  document.querySelector('#stats').textContent=`${manifest.vertices.toLocaleString()} original vertices per view · frame ${frame+1}/${manifest.frames.length} · ${manifest.sourceCast}\nCandidate field error: mean ${metric.fieldErrorMean.toExponential(2)}, 95th percentile ${metric.fieldErrorQ95.toExponential(2)} · edge ratio ${metric.edgeRatioMin.toFixed(2)}–${metric.edgeRatioMax.toFixed(2)}\nFrozen automatic binding; source folds and topology retained. Provisional support geometry has not been anatomically accepted.`;
+    document.querySelector('#stats').textContent=`${manifest.vertices.toLocaleString()} original vertices per view · frame ${frame+1}/${manifest.frames.length} · ${manifest.sourceCast}\nCandidate field error: mean ${metric.fieldErrorMean.toExponential(2)}, 95th percentile ${metric.fieldErrorQ95.toExponential(2)} · edge ratio ${metric.edgeRatioMin.toFixed(2)}–${metric.edgeRatioMax.toFixed(2)}\nUnseeded surface vertices: ${manifest.domainRule?.unseededVertices?.length??0}; fixed as unknown. Magenta in the domain overlay.\nFrozen automatic binding; source folds and topology retained. Provisional support geometry has not been anatomically accepted.`;
 }
 function snapshot(){return {schema:'kaminos.hindquarter-binding-browser.v1',status:phase==='loaded'?'loaded':'loading',phase,requestedUrl:location.href,effectiveRoute:'dedicated-kaminos-independent-cast-replay',rendererBackend:renderer?.backend?.constructor?.name,
   casePath,expectedManifestSha256:expected,effectiveManifestSha256:expected,sourceSha256:manifest?.sourceSha256,sourceCast:manifest?.sourceCast,
@@ -67,7 +67,7 @@ try{
     const scene=new THREE.Scene();scene.background=new THREE.Color('#101722');scene.add(new THREE.HemisphereLight(0xe5edff,0x243951,2));
     const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(-3,4,5);scene.add(light);
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(rest,3));geometry.setIndex(new THREE.BufferAttribute(indices,1));
-    if(domain){const colors=[];for(const value of domain){const color=new THREE.Color(0x546173).lerp(new THREE.Color(0xf2d05c),value);colors.push(color.r,color.g,color.b);}geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));}
+    if(domain){const colors=[],unknown=new Set(manifest.domainRule?.unseededVertices??[]);for(let i=0;i<domain.length;i++){const color=unknown.has(i)?new THREE.Color(0xe057bf):new THREE.Color(0x546173).lerp(new THREE.Color(0xf2d05c),domain[i]);colors.push(color.r,color.g,color.b);}geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));}
     const material=new THREE.MeshStandardMaterial({color:colors[index],roughness:.72,side:THREE.DoubleSide});const skin=new THREE.Mesh(geometry,material);scene.add(skin);
     const markers=markerIndices.map(vertex=>{const mesh=new THREE.Mesh(markerGeometry,markerMaterial);scene.add(mesh);return {mesh,index:vertex};});
     views.push({scene,geometry,skin,material,frames:array,mode:modes[index],markers,supports:makeSupports(scene)});
