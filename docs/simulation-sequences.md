@@ -76,3 +76,19 @@ failure does not invalidate or delete the original sequence.
 Current implementation is the reusable export core and scripted Fluid consumer.
 The bottom transport UI, browser folder writer, job-progress controls, rewind,
 checkpoint restoration and flame adapter are subsequent owner compositions.
+
+## Cancellation and verified reopening
+
+The command observes SIGINT/SIGTERM during source reads, browser startup,
+settling and frame export. It closes only its owned browser, settles the active
+operation, and writes a cancelled/incomplete manifest retaining completed frames.
+A launch already in progress must settle so its late-created browser can also
+be closed; no artificial startup deadline is added. This command never borrows
+the author's browser. The generic runner's ordinary frame-boundary cancellation
+leaves the supplied producer paused; a host adapter owns any stronger
+interruption/drain semantics.
+
+Verified reopening checks contiguous ordered frame indices, the recorded run,
+and the requested/actual time and step at every cadence sample. Repeated
+images and repeated quantized solver steps are allowed. Duplicate/reordered
+rows, conflicting timing or run identity, missing frames and corrupt bytes fail.

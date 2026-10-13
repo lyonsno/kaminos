@@ -12,22 +12,22 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const sources = ['index.html', 'fluid-working-session.mjs', 'finger-fluid-webgpu-core.js',
   'fluid-viewport-host.mjs', 'finger-fluid-pressure-controls.mjs', 'finger-fluid-pressure-cockpit.mjs'];
-async function json(url) {
-  const response = await fetch(url);
+async function json(url, signal) {
+  const response = await fetch(url, {signal});
   assert.ok(response.ok, `HTTP ${response.status}: ${url}`);
   return response.json();
 }
 
-export async function fluidSourceIdentity(url, repo, {additionalFiles = []} = {}) {
+export async function fluidSourceIdentity(url, repo, {additionalFiles = [], signal} = {}) {
   const origin = new URL(url).origin;
-  const config = await json(`${origin}/api/runtime-config`);
+  const config = await json(`${origin}/api/runtime-config`, signal);
   assert.equal(await fs.realpath(config.source.repoRoot), await fs.realpath(repo), 'Fluid server checkout mismatch');
   const bodies = {};
   for (const file of new Set([...sources, ...additionalFiles])) {
-    const response = await fetch(`${origin}/${file}`);
+    const response = await fetch(`${origin}/${file}`, {signal});
     assert.ok(response.ok, `Missing fluid source: ${file}`);
     const hash = sha(Buffer.from(await response.arrayBuffer()));
-    assert.equal(hash, sha(await fs.readFile(path.join(repo, file))), `Fluid served source mismatch: ${file}`);
+    assert.equal(hash, sha(await fs.readFile(path.join(repo, file), {signal})), `Fluid served source mismatch: ${file}`);
     bodies[file] = hash;
   }
   return {repo: await fs.realpath(repo), source: config.source, bodies,

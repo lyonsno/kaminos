@@ -65,4 +65,20 @@ for(const [name,opts,error]of [['drift',{drift:true},/changed/],['blank',{missin
  await assert.rejects(readSequence(out('corrupt')),/checksum|size/);
  await assert.rejects(createDirectorySequenceSink(out('corrupt')),/exist/);
 }
+{
+ const f=fixture(),directory=out('repeated-ticks'),sink=await createDirectorySequenceSink(directory);
+ await renderSequence({adapter:f.adapter,sink,request:{startSeconds:0,endSeconds:.005,fps:1000}});
+ const r=await readSequence(directory);assert.deepEqual(r.frames.map(x=>x.step),[0,0,0,1,1,1]);assert.equal(r.completedFrames,6);
+}
+for(const mutation of ['duplicate','reorder','time','run']){
+ const f=fixture(),directory=out('ledger-'+mutation),sink=await createDirectorySequenceSink(directory);
+ await renderSequence({adapter:f.adapter,sink,request:{startSeconds:0,endSeconds:.1,fps:20}});
+ const file=path.join(directory,'frames.jsonl'),rows=(await fs.readFile(file,'utf8')).trim().split('\n').map(JSON.parse);
+ if(mutation==='duplicate'){rows[1]={...rows[0]};await fs.rename(path.join(directory,'frame-00000001.png'),path.join(directory,'middle-retained.png'));}
+ if(mutation==='reorder')[rows[0],rows[1]]=[rows[1],rows[0]];
+ if(mutation==='time')rows[1].timeSeconds=.1;
+ if(mutation==='run')rows[1].runId='other';
+ await fs.writeFile(file,rows.map(JSON.stringify).join('\n')+'\n');
+ await assert.rejects(readSequence(directory),/index|schedule|time|run/i,'Reader must reject '+mutation+' ledger');
+}
 console.log('Fixed-step cadence, streaming, drift/blank/failure/cancel retention and corrupt-output rejection pass:',base);
