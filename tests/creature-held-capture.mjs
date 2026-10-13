@@ -14,6 +14,11 @@ function fixture(){
  return {entry,calls,state:()=>state,change:patch=>state={...state,...patch}};
 }
 {
+ const f=fixture(),state=f.entry.state;f.entry.state=async()=>state();
+ const result=await withHeldCreatureFrame({entry:f.entry,frame:30,present:async()=>{},capture:async()=>({report:'node-page-bridge'})});
+ assert.equal(result.restore.status,'resumed');
+}
+{
  const f=fixture();let presented=false;
  const result=await withHeldCreatureFrame({entry:f.entry,frame:30,present:async()=>{presented=true;},
   capture:async held=>{assert.equal(presented,true);assert.equal(f.state().frame,30);assert.equal(f.state().status,'paused');assert.equal(held.inputs.frame,30);return {report:'/retained/report.json'};}});
