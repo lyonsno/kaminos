@@ -530,7 +530,7 @@ export function createSuperMatOps(device, options = {}) {
       if (kitAttention) {
         const storage = Object.fromEntries([['q', q], ['k', k], ['v', v], ['out', out]].map(([key, t]) => [key, storageKind(t)]));
         if (Object.values(storage).some(type => type !== 'f32' && type !== 'f16')) throw new Error(`${name}: kit attention needs f32 or f16 activations`);
-        if (Math.abs(scale - 1 / Math.sqrt(headDim)) > 1e-7 * scale) throw new Error(`${name}: kit attention scale is 1/sqrt(headDim)`);
+        if (!(Math.abs(scale - 1 / Math.sqrt(headDim)) <= 1e-7 / Math.sqrt(headDim))) throw new Error(`${name}: kit attention scale is 1/sqrt(headDim)`);
         const half = Object.fromEntries(Object.entries(storage).filter(([, type]) => type === 'f16'));
         dispatch(createWebGpuTiledFlashAttentionShader({ headDim, storage: half }),
           [bindingView(q), bindingView(k), bindingView(v), bindingView(out),

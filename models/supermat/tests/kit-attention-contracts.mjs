@@ -23,7 +23,8 @@ function recordingDevice() {
     createComputePipeline: () => ({ getBindGroupLayout: () => ({}) }),
     createBindGroup: ({ entries }) => { lastEntries = entries; return {}; },
     createBuffer: buffer,
-    createCommandEncoder: () => ({ beginComputePass: () => pass }),
+    createCommandEncoder: () => ({ beginComputePass: () => pass, finish: () => ({}) }),
+    queue: { submit() {}, onSubmittedWorkDone: async () => {} },
   };
   return { device, log };
 }
@@ -63,5 +64,41 @@ for (const activations of ['f32', 'f16']) {
   assert.ok(!createSuperMatOps(device, { attentionKernel: 'scalar' }).attentionHeadDimSupported(128));
   assert.ok(createSuperMatOps(device, { attentionKernel: 'scalar' }).attentionHeadDimSupported(64));
   assert.throws(() => createSuperMatOps(device, { attentionKernel: 'tiled' }), /unknown attention kernel tiled/);
+}
+// Under a cooperative schedule long layers split into 64-aligned query ranges: each dispatch covers its
+// range only (query_offset / query_count), the ranges are disjoint and cover every query, and the grid
+// matches the range.
+{
+  const { device, log } = recordingDevice();
+  const ops = createSuperMatOps(device, { activations: 'f16' });
+  const [queries, keys, heads, headDim] = [1000, 77, 10, 64];
+  ops.setSchedule({ runtime: { prepareCommandDutyAtBoundary: async () => ({}), settleCommandDuty() {} },
+    invocation: { invocationId: 'split' }, control: null, dutyFlops: 4 * 256 * keys * headDim * heads });
+  const q = ops.alloc([queries, heads * headDim]), k = ops.alloc([keys, heads * headDim]);
+  await ops.flashAttention({ q, k, v: k, queries, keys, heads, headDim, scale: 1 / Math.sqrt(headDim) });
+  assert.ok(log.dispatches.length > 1, 'split into several duties');
+  let next = 0;
+  for (const call of log.dispatches) {
+    const words = new Uint32Array(call.entries[4].resource.buffer.bytes, 0, 12);
+    const [offset, count] = [words[6], words[7]];
+    assert.equal(offset, next);
+    assert.equal(offset % 64, 0);
+    assert.deepEqual(call.groups, flashAttentionDispatch({ queryCount: count, heads }));
+    assert.deepEqual([...words], [...flashAttentionParams({ queryTokens: queries, keyTokens: keys, heads, headDim, queryOffset: offset, queryCount: count })]);
+    next += count;
+  }
+  assert.equal(next, queries);
+}
+
+// The kit kernel bakes in 1/sqrt(headDim); any other or missing scale fails loudly. Packed f16 weight
+// views are not activations.
+{
+  const { device } = recordingDevice();
+  const ops = createSuperMatOps(device);
+  const t = ops.alloc([64, 64]);
+  await assert.rejects(ops.flashAttention({ q: t, k: t, v: t, queries: 64, keys: 64, heads: 1, headDim: 64 }), /scale/);
+  await assert.rejects(ops.flashAttention({ q: t, k: t, v: t, queries: 64, keys: 64, heads: 1, headDim: 64, scale: 0.2 }), /scale/);
+  const packed = { buffer: t.buffer, byteLength: t.byteLength, dtype: 'f16' };
+  await assert.rejects(ops.flashAttention({ q: t, k: packed, v: t, queries: 64, keys: 64, heads: 1, headDim: 64, scale: 0.125 }), /f32 or f16/);
 }
 console.log('kit attention contracts: passed');
