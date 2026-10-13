@@ -108,6 +108,9 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       renderer.initRenderTarget(outputTarget);
       if (advance && !paused) solver.step(1/60);
       renderEnvironment();
+      // The host color attachment is linear HDR even if another consumer
+      // replaced the scene graph since the preceding water frame.
+      if(pipeline.outputColorTransform){pipeline.outputColorTransform=false;pipeline.needsUpdate=true;}
       renderer.setRenderTarget(colorTarget); pipeline.render();
       // The retained liquid pass overlays/discards; every destination pixel
       // must begin with this frame's host image, including no-water pixels.
@@ -151,6 +154,13 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   }
 
   return {group,render,
+    async readSceneColor({x,y,width,height}) {
+      if(!frameCount||failure)throw Error(failure||'Water has no current scene-color frame');
+      const frameId=lastFrame.frameId;
+      const pixels=await renderer.readRenderTargetPixelsAsync(colorTarget,x,y,width,height);
+      return {frameId,encoding:'linear_hdr',format:'rgba16float',width,height,
+        nativeType:pixels.constructor.name,values:Array.from(pixels,value=>pixels instanceof Uint16Array?THREE.DataUtils.fromHalfFloat(value):value)};
+    },
     setEmitters(records) {
       const packet=localLiquidInletPacket(authored,records,sourceGeneration+1);
       const key=JSON.stringify(packet.emitters);
@@ -179,7 +189,8 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     setPaused(value){paused=Boolean(value);return paused;},
     get paused(){return paused;},
     state:()=>({requestedRoute:ROUTE,effectiveRoute:frameCount && !failure ? ROUTE : null,registered:true,mounted:true,
-      frameCount,paused,failure,setup:structuredClone(authored),supportGeometryVisible:group.visible,sourceGeneration,lastFrame,solver:solver.getDebugState()}),
+      frameCount,paused,failure,setup:structuredClone(authored),supportGeometryVisible:group.visible,sourceGeneration,
+      linearSceneColorInput:pipeline.outputColorTransform===false,lastFrame,solver:solver.getDebugState()}),
     dispose() {
       disposed=true;device.removeEventListener('uncapturederror',onGpuError); solver.destroy(); scene.remove(group);
       const materials=new Set(); group.traverse(child=>{child.geometry?.dispose();if(child.material)materials.add(child.material);});

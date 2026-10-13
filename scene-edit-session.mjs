@@ -19,6 +19,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   let past = [];
   let future = [];
   let replaying = false;
+  let settling = null;
   const targets = new Map();
   const listeners = new Set();
   const check = (id, value) => {
@@ -43,6 +44,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   };
   const assertAvailable = () => {
     if (replaying) throw new Error('Wait for the current scene history action to finish');
+    if (settling && active !== settling) throw new Error('Wait for the cancelled scene operation to settle');
   };
   const get = (id, replayValue = null) => {
     const target=targets.get(id);
@@ -77,6 +79,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
 
   function commit() {
     if (!active) return false;
+    if (active === settling) throw new Error('Wait for the scene operation to settle');
     admit();
     assertAvailable();
     const after = get(active.id);
@@ -114,9 +117,33 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     return clone(pose);
   }
 
+  // Async construction commits only after its live consumer has settled.
+  // Undo may cancel it; the cancelled operation retains no completed entry.
+  async function applySettled(id, patch, label = 'Change') {
+    admit();assertAvailable();
+    if(active)throw new Error('Finish the active scene edit first');
+    const pose=check(id,{...get(id),...patch});
+    begin(id,label);
+    const operation=active;settling=operation;
+    try {
+      const pending=put(id,pose);notify();await pending;
+      if(active!==operation)throw new Error('Scene operation was cancelled during settlement');
+      settling=null;commit();return clone(pose);
+    } catch(error) {
+      if(active===operation) {
+        await put(id,clone(operation.before));active=null;
+      }
+      throw error;
+    } finally {
+      if(settling===operation)settling=null;
+      notify();
+    }
+  }
+
   function replay(from, to, key) {
     admit();
     assertAvailable();
+    if(active===settling && active && key==='before')return cancel();
     if (active) throw new Error('Finish the active scene edit first');
     const entry = from.at(-1);
     if (!entry) return false;
@@ -200,7 +227,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   }
 
   return {
-    begin, preview, commit, cancel, apply, state, waitForReplay, hasHistoryEntry, subscribe,
+    begin, preview, commit, cancel, apply, applySettled, state, isSettling:()=>Boolean(settling), waitForReplay, hasHistoryEntry, subscribe,
     register(id, target) {
       if (!id.startsWith('@') || targets.has(id)) throw new Error('Duplicate or invalid edit target');
       if (!target || typeof target.read !== 'function' || typeof target.write !== 'function') {
