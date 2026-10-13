@@ -69,7 +69,7 @@ export async function runOperator(output,env=process.env) {
     await page.evaluate(async ({id,source})=>{
       const {createInvestigationRecording}=await import('./investigation-recording.mjs');
       window.__logOperatorRecording=createInvestigationRecording({id,source,
-        initial:window.kaminosLiveLog.read(),startingConditions:{kind:'cold-local-heat-log'}});
+        initial:await window.kaminosLiveLog.read(),startingConditions:{kind:'cold-local-heat-log'}});
       const button=document.createElement('button');button.type='button';button.className='btn';
       button.textContent='Finish session';button.id='live-log-finish-session';
       button.onclick=async()=>{button.disabled=true;try{await window.__finishLogSession();}catch(error){button.disabled=false;console.error(error);}};
