@@ -175,7 +175,7 @@ test('ghost reads: one exterior sample per transport call, blended beyond the la
   for (const [binding, name] of [[29, 'ghostA'], [30, 'ghostB']]) {
     assert.match(shader, new RegExp(`@group\\(0\\) @binding\\(${binding}\\) var ${name}: texture_3d<f32>;`));
   }
-  assert.ok(!/ghostPred|ghostOld|binding\(28\)|binding\(29\)/.test(shader), 'no predicted snapshot');
+  assert.ok(!/ghostPred|ghostOld|var ghostC|var ghostD/.test(shader), 'no predicted snapshot');
   assert.match(shader, /fn joinedGhosts\(\) -> bool \{\n  return joinedBoundary\(\) && u\.joined_boundary\.y > 0\.5;\n\}/);
   // Every transport path funnels through sampleFluidSlotMasked (main kernel,
   // advection helpers, and the predictor through sampleFluidSlotInflow).
