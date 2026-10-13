@@ -2473,11 +2473,51 @@ def _sha256_file(path):
 
 def pipeline_manifest_payload():
     document = json.loads(PIPELINE_MANIFEST_PATH.read_text())
+    for pipeline in document.get("pipelines", []):
+        if pipeline.get("id") == "trellis-image-to-mesh-webgpu-v0":
+            pipeline["availability"] = trellis_generation_availability()
     return {
         **document,
         "manifestPath": str(PIPELINE_MANIFEST_PATH),
         "manifestSha256": _sha256_file(PIPELINE_MANIFEST_PATH),
     }
+
+
+def trellis_generation_availability():
+    config_path = os.environ.get("KAMINOS_TRELLIS_CONFIG")
+    if not config_path:
+        return {"status": "unconfigured", "message": "Local TRELLIS setup required"}
+    try:
+        config = json.loads(Path(config_path).read_text())
+        if config.get("schema") != "trellis2.local-generation-config.v0":
+            raise ValueError("Choose a TRELLIS local generation configuration")
+        for key in ["repoRoot", "checkpointBase", "sourceRoot", "queueDir"]:
+            value = config.get(key)
+            if not isinstance(value, str) or not Path(value).is_absolute() or not Path(value).is_dir():
+                raise ValueError(f"TRELLIS setup needs {key}")
+        for key in ["python", "memoryPython", "chrome", "greenroomBin"]:
+            value = config.get(key)
+            if not isinstance(value, str) or not Path(value).is_absolute() or not Path(value).is_file():
+                raise ValueError(f"TRELLIS setup needs {key}")
+        if not (Path(config["checkpointBase"]) / "manifest.json").is_file():
+            raise ValueError("TRELLIS setup needs a prepared checkpoint package")
+        if not (Path(config["repoRoot"]) / "models/trellis2/generate-image.mjs").is_file():
+            raise ValueError("TRELLIS generation tools are missing from the configured checkout")
+        for key in ["steps", "targetFaces", "gpuBufferBudgetMiB", "processMemoryBudgetMiB"]:
+            if type(config.get(key)) is not int or config[key] < 1:
+                raise ValueError(f"TRELLIS setup needs an explicit {key}")
+        if config.get("pipelineType") not in ["512", "1024_cascade"] or config.get("decoderActivationStorage") not in ["f32", "f16"]:
+            raise ValueError("TRELLIS setup needs a supported profile and storage selection")
+        for key in ["expectedCommit", "expectedSourceCommit"]:
+            if not re.fullmatch(r"[a-f0-9]{40}", config.get(key, "")):
+                raise ValueError(f"TRELLIS setup needs {key}")
+        if type(config.get("seed")) is not int or not 0 <= config["seed"] <= 0xffffffff:
+            raise ValueError("TRELLIS setup needs an unsigned32 seed")
+        if config.get("textureSize", 1024) != 1024:
+            raise ValueError("This TRELLIS finishing route uses 1K textures")
+        return {"status": "available", "message": "Queued WebGPU with local mesh finishing"}
+    except (OSError, ValueError, TypeError) as error:
+        return {"status": "unavailable", "message": str(error)}
 
 
 def _declared_read_roots():
@@ -2553,7 +2593,7 @@ def resolve_pipeline_source(payload):
 def _default_pipeline_out_dir(pipeline_id):
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", pipeline_id or "pipeline").strip("-") or "pipeline"
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    return (KAMINOS_PIPELINE_RUNS_DIR / f"{stamp}-{os.getpid()}-{safe}").resolve()
+    return (KAMINOS_PIPELINE_RUNS_DIR / f"{stamp}-{os.getpid()}-{safe}-{uuid.uuid4().hex}").resolve()
 
 
 def run_pipeline_witness(payload):
@@ -2574,7 +2614,11 @@ def run_pipeline_witness(payload):
         "--out-dir", str(out_dir),
         "--report", str(report_path),
     ]
-    timeout = int(os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT", "360"))
+    # TRELLIS has exercised ten-minute previews. Explicit operator timeouts
+    # still apply; the legacy six-minute default cannot silently stop this route.
+    timeout_value = os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT")
+    timeout = int(timeout_value) if timeout_value is not None else (
+        None if pipeline_id == "trellis-image-to-mesh-webgpu-v0" else 360)
     proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
     report = json.loads(report_path.read_text()) if report_path.exists() else None
     bundle_path = Path(report["bundleIndex"]["path"]) if report and report.get("bundleIndex") else None
