@@ -2,6 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
 import {createSceneColliderCollection} from '../scene-collider.mjs';
 import {trianglesFromSceneObject,sceneSolidRevision} from '../volume-scene-solid.mjs';
+import {createProceduralMesh} from '../scene-geometry.mjs';
 const record=(id,object,enabled=true)=>({id,type:'procedural-mesh',object,collision:{domainId:'flame-field',enabled}});
 const mesh=()=>new THREE.Mesh(new THREE.BoxGeometry(.5,.5,.5),new THREE.MeshBasicMaterial());
 test('chosen obstacles supply actual world triangles without reparenting or changing source geometry',()=>{
@@ -19,4 +20,10 @@ test('multiple marked objects remain distinct meshes and hidden or editor helper
  assert.deepEqual(both.memberIds,['a','b']);assert.equal(both.object.children.length,2);assert.equal(trianglesFromSceneObject(both.object).triangles.length,24);
  b.visible=false;assert.deepEqual(collection.update([record('a',a),record('b',b)]).memberIds,['a']);
  assert.equal(collection.update([record('a',a,false)]),null);assert.equal(collection.state().meshCount,0);assert.equal(a.geometry.getAttribute('position').count,24);
+});
+test('editing a primitive material preserves the exact collision geometry',()=>{
+ const shape=createProceduralMesh(THREE,null,{kind:'box',parameters:{width:1,height:1,depth:1}}),before=sceneSolidRevision(shape.group);
+ shape.updateSurface({color:'#112233',roughness:.2,metalness:.7});
+ assert.equal(shape.group.material.color.getHexString(),'112233');assert.equal(shape.group.material.roughness,.2);assert.equal(sceneSolidRevision(shape.group),before);
+ shape.dispose();
 });

@@ -29783,9 +29783,11 @@ function writeGroupPose(id,value) {
 }
 function mountProceduralMesh(raw) {
   const record=checkedProceduralMesh(raw),previous=sceneObjects.find(entry=>entry.id===record.id);
-  const bed=createProceduralMesh(THREE,mergeGeometries,record.geometry,record.surface);
+  const existing=proceduralMeshes.get(record.id),reuse=existing?.updateSurface&&JSON.stringify(previous.geometry)===JSON.stringify(record.geometry);
+  const bed=reuse?existing:createProceduralMesh(THREE,mergeGeometries,record.geometry,record.surface);
+  if(reuse)bed.updateSurface(record.surface);
   applySceneObjectTransformState(bed.group,record.transform);
-  proceduralMeshes.get(record.id)?.dispose();
+  if(!reuse)existing?.dispose();
   proceduralMeshes.set(record.id,bed);
   const entry={...record,object:bed.group};
   bed.group.userData.kaminosSceneObject={...record};
