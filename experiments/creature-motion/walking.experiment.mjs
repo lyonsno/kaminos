@@ -9,14 +9,30 @@ import {createWalkingPoseAdapter} from './walking-pose.mjs';
 export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources}={}) {
  if(typeof host?.scene?.open!=='function'||!host.controls?.document)throw Error('Walking creature requires the actual shared Workbench host');
  const data=await loadSources(inputs),document=host.controls.document;
- const adapter=createGivenPaletteMotion({THREE,motion:data.motion,rigFrame:data.frame});
- const walking=createWalkingPoseAdapter({THREE,adapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
- const source={...data.source,presentation:{mode:'source',...walking.identity}};
+ let adapter=createGivenPaletteMotion({THREE,motion:data.motion,rigFrame:data.frame});
+ let walking=createWalkingPoseAdapter({THREE,adapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
+ const source={...data.source,prompt:data.motion.prompt??null,seed:data.motion.seed??null,presentation:{mode:'source',...walking.identity}};
+ const choices=inputs.motions??[];
+ if(!Array.isArray(choices))throw Error('Motion choices must be an array');
+ const ids=new Set();for(const choice of choices){
+  if(typeof choice?.id!=='string'||!choice.id.trim()||typeof choice.label!=='string'||!choice.label.trim()||typeof choice.motion!=='string'||!choice.motion.trim()||!/^[a-f0-9]{64}$/i.test(choice.motion_sha256??''))throw Error('Motion choice requires id, label, source URL and digest');
+  if(ids.has(choice.id))throw Error('Duplicate motion choice id');ids.add(choice.id);
+ }
+ let chosen=choices.find(c=>c.motion===inputs.motion&&c.motion_sha256===data.source.motionSha256)??null,chosenInputs={...inputs};
+ const placement=new THREE.Group();placement.name='Creature · authored placement';
+ if(inputs.transform!==undefined){
+  const t=inputs.transform;
+  if(t?.position?.length!==3||t?.quaternion?.length!==4||t?.scale?.length!==3||![...t.position,...t.quaternion,...t.scale].every(Number.isFinite)||t.scale.some(v=>v<=0)||Math.abs(Math.hypot(...t.quaternion)-1)>1e-5)throw Error('Invalid authored creature transform or scale');
+  placement.position.fromArray(t.position);placement.quaternion.fromArray(t.quaternion);placement.scale.fromArray(t.scale);
+ }
  let session,runtime,asset,floor,floorAsset,player,stop=null,clock=0,cycle=0,mode='source',disposed=false,disposal,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
  const instruments=document.createElement('div');
  const unsubscribe=()=>{const previous=stop;stop=null;previous?.();};
  function read(){return {mode,cycle,source:structuredClone(source),host:{id:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
-  skin:runtime.read(),playback:player.read(),view:session.readView(),referenceFloor:floor?{id:floorAsset.id,visible:floor.visible,size:floor.geometry.parameters.width,height:floor.position.y,contactSolver:false}:null};}
+  skin:runtime.read(),playback:player.read(),view:session.readView(),motion:chosen?structuredClone(chosen):null,motions:structuredClone(choices),
+  transform:{position:placement.position.toArray(),quaternion:placement.quaternion.toArray(),scale:placement.scale.toArray()},
+  recipe:{...structuredClone(chosenInputs),motions:structuredClone(choices),transform:{position:placement.position.toArray(),quaternion:placement.quaternion.toArray(),scale:placement.scale.toArray()},mode,cycle,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView()},
+  referenceFloor:floor?{id:floorAsset.id,visible:floor.visible,size:floor.geometry.parameters.width,height:floor.position.y,contactSolver:false}:null};}
  function startClock(){
   if(stop)return;
   stop=session.onFrame(({deltaSeconds})=>{
@@ -41,12 +57,17 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    if(errors.length)throw new AggregateError(errors,'Walking creature cleanup failed');
   });return disposal;
  }
- function inspect(){runtime.group.updateMatrixWorld(true);return {...read(),rootMatrix:runtime.group.matrixWorld.toArray(),vertices:Array.from(runtime.mesh.geometry.attributes.position.array),boneWorld:[...runtime.bones].map(([name,bone])=>({name,matrix:bone.matrixWorld.toArray()}))};}
+ function inspect(){placement.updateMatrixWorld(true);return {...read(),placementMatrix:placement.matrixWorld.toArray(),rootMatrix:runtime.group.matrixWorld.toArray(),vertices:Array.from(runtime.mesh.geometry.attributes.position.array),boneWorld:[...runtime.bones].map(([name,bone])=>({name,matrix:bone.matrixWorld.toArray()}))};}
+ function makePlayer(){
+  runtime.group.position.set(0,0,0);runtime.group.quaternion.identity();runtime.group.scale.set(1,1,1);
+  const derivedAdapter={...adapter,frame:index=>walking.frame(index,{mode,cycle})};
+  return attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,now:()=>clock,dirty:()=>session.redraw()});
+ }
  try{
   session=await host.scene.open();runtime=createFullBodyRuntime({THREE,...data});
-  asset=await session.attach(runtime.group,{owned:true,metadata:{fileName:'Walking creature',source:inputs.case,label:'Generated full-body motion · unchanged automatic skin'}});
-  const derivedAdapter={...adapter,frame:index=>walking.frame(index,{mode,cycle})};
-  player=attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,now:()=>clock,dirty:()=>session.redraw()});
+  placement.add(runtime.group);
+  asset=await session.attach(placement,{owned:true,metadata:{fileName:'Walking creature',source:inputs.case,label:'Generated full-body motion · unchanged automatic skin'}});
+  player=makePlayer();
   if(inputs.ground==='source-start'){
    const height=document.getElementById('composition-ground-height'),visible=document.getElementById('composition-ground-visible');
    if(!height||!visible)throw Error('Shared Workbench ground controls are unavailable');
@@ -68,16 +89,43 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   }
   globalThis.window?.selectSceneObject?.(asset.id);
   const active=()=>{if(disposed)throw Error('Walking creature experiment is disposed');};
-  const operation=(name,action)=>input=>{active();record({kind:`walking.${name}`,phase:'requested',requested:input??null});try{const result=action(input);refresh();record({kind:`walking.${name}`,phase:'applied',mode,cycle,frame:player.read().frame});return result;}catch(error){record({kind:`walking.${name}`,phase:'failed',error:error.message});throw error;}};
+  const operation=(name,action)=>input=>{
+   active();record({kind:`walking.${name}`,phase:'requested',requested:input??null});
+   const applied=result=>{refresh();record({kind:`walking.${name}`,phase:'applied',mode,cycle,frame:player.read().frame,motionSha256:source.motionSha256});return result;};
+   const failed=error=>{record({kind:`walking.${name}`,phase:'failed',error:error.message,motionSha256:source.motionSha256});throw error;};
+   try{const result=action(input);return result?.then?result.then(applied,failed):applied(result);}catch(error){return failed(error);}
+  };
   const operations={
    play:operation('play',()=>{player.play();if(player.read().status==='playing')startClock();return read();}),
    pause:operation('pause',()=>{unsubscribe();player.pause();host.scene.refreshPresentation?.(asset);return read();}),
    replay:operation('replay',()=>{unsubscribe();cycle=0;source.presentation.cycle=0;player.replay();host.scene.refreshPresentation?.(asset);startClock();return read();}),
    seek:operation('seek',input=>{unsubscribe();player.seek(input?.frame);host.scene.refreshPresentation?.(asset);return read();}),
    mode:operation('mode',input=>{if(!['source','cycle','path'].includes(input?.mode))throw Error('Unknown walking mode');unsubscribe();player.pause();mode=input.mode;cycle=0;source.presentation.mode=mode;source.presentation.cycle=0;player.seek(0);host.scene.refreshPresentation?.(asset);return read();}),
+   motion:operation('motion',async input=>{
+    const next=choices.find(c=>c.id===input?.id);if(!next)throw Error('Unknown retained motion');
+    const request={...inputs,motion:next.motion,motion_sha256:next.motion_sha256,prefix:next.prefix,prefix_sha256:next.prefix_sha256};
+    const loaded=await loadSources(request);active();
+    if(loaded.source.motionSha256!==next.motion_sha256||loaded.source.caseSha256!==data.source.caseSha256||loaded.source.frameSha256!==data.source.frameSha256||loaded.motion.assetCondSha256!==data.motion.assetCondSha256)throw Error('Motion choice changed the source, body, bind frame or rig conditioning');
+    if(next.prompt!==undefined&&next.prompt!==loaded.motion.prompt||next.seed!==undefined&&next.seed!==loaded.motion.seed)throw Error('Motion choice prompt or seed differs from retained source');
+    const nextAdapter=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:data.frame}),nextWalking=createWalkingPoseAdapter({THREE,adapter:nextAdapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
+    const prior={adapter,walking,source:structuredClone(source),chosen,chosenInputs,cycle,frame:player.read().frame,status:player.read().status};
+    const replaceSource=value=>{for(const key of Object.keys(source))delete source[key];Object.assign(source,value);};
+    try{
+     unsubscribe();player.dispose();adapter=nextAdapter;walking=nextWalking;cycle=0;
+     replaceSource({...loaded.source,prompt:loaded.motion.prompt??null,seed:loaded.motion.seed??null,groundReference:prior.source.groundReference,presentation:{mode,cycle,...walking.identity}});
+     player=makePlayer();chosen=next;chosenInputs=request;if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
+    }
+    catch(error){
+     try{player?.dispose();adapter=prior.adapter;walking=prior.walking;chosen=prior.chosen;chosenInputs=prior.chosenInputs;cycle=prior.cycle;replaceSource(prior.source);player=makePlayer();if(prior.frame!==null)player.seek(prior.frame);if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);}
+     catch(rollback){throw new AggregateError([error,rollback],'Motion switch and prior-state restoration failed');}
+     throw error;
+    }
+   }),
    floor:operation('floor',input=>{if(!floor)throw Error('No walking reference floor is mounted');if(typeof input?.visible!=='boolean')throw Error('Reference floor visibility must be boolean');floor.visible=input.visible;session.redraw();return read();}),
   };
   if(inputs.mode!==undefined)operations.mode({mode:inputs.mode});
+  if(inputs.cycle!==undefined){if(!Number.isSafeInteger(inputs.cycle)||inputs.cycle<0)throw Error('Invalid authored repeat cycle');cycle=inputs.cycle;source.presentation.cycle=cycle;player.seek(0);}
+  if(inputs.sample!==undefined)operations.seek({frame:inputs.sample});
   if(inputs.play!==undefined&&typeof inputs.play!=='boolean')throw Error('Initial playback must be boolean');
   if(inputs.play===true)operations.play();
   if(globalThis.window)window.kaminosWalkingCreature=inspect;
@@ -86,16 +134,23 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const title=document.createElement('h3');title.textContent='Creature · walking around';panel.append(title);
    const note=document.createElement('p');note.textContent=`Same automatic full skin · source ${(adapter.frames/adapter.fps).toFixed(2)} s · repeat seam ${walking.identity.seam.frames} blended frames · curve radius ${walking.identity.radius}. No foot/contact correction.`;panel.append(note);
    const status=document.createElement('output'),error=document.createElement('output');error.setAttribute('role','alert');panel.append(status,error);
-   const call=async(name,input)=>{try{error.textContent='';await invoke(name,input);}catch(e){error.textContent=e.message;}};
+   const call=async(name,input)=>{try{error.textContent='';await invoke(name,input);}catch(e){error.textContent=e.message;refresh();}};
+   let select=null;
+   if(choices.length){const label=document.createElement('label');label.textContent='Motion ';select=document.createElement('select');select.setAttribute('aria-label','Creature motion');
+    for(const c of choices){const option=document.createElement('option');option.value=c.id;option.textContent=c.label;select.append(option);}select.value=chosen?.id??'';
+    select.onchange=()=>call('motion',{id:select.value});label.append(select);panel.append(label);
+   }
+   const identity=document.createElement('p');panel.append(identity);
+   const save=document.createElement('button');save.type='button';save.textContent='Save creature setup';save.onclick=()=>{const blob=new Blob([JSON.stringify(read().recipe,null,2)+'\n'],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='creature.setup.json';link.click();URL.revokeObjectURL(url);};panel.append(save);
    for(const [label,next] of [['Raw source','source'],['Straight cycle','cycle'],['Walk the curve','path']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call('mode',{mode:next});panel.append(button);}
    for(const [label,name] of [['Play motion','play'],['Pause motion','pause'],['Restart motion','replay']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call(name);panel.append(button);}
    if(floor){const label=document.createElement('label');label.textContent='Walking reference floor ';const input=document.createElement('input');input.type='checkbox';input.checked=floor.visible;input.onchange=()=>call('floor',{visible:input.checked});label.append(input);panel.append(label);}
-   for(const [label,index] of [['First motion sample',0],['Middle motion sample',Math.floor((adapter.frames-1)/2)],['Last motion sample',adapter.frames-1]]){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call('seek',{frame:index});panel.append(button);}
+   for(const [label,index] of [['First motion sample',()=>0],['Middle motion sample',()=>Math.floor((adapter.frames-1)/2)],['Last motion sample',()=>adapter.frames-1]]){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call('seek',{frame:index()});panel.append(button);}
    if(source.prefixFrames){for(const [label,index] of [['Before continuation join',source.prefixFrames-1],['After continuation join',source.prefixFrames]]){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call('seek',{frame:index});panel.append(button);}}
    const range=document.createElement('input');range.type='range';range.min='0';range.max=String(adapter.frames-1);range.step='1';range.setAttribute('aria-label','Walking source sample');range.oninput=()=>call('seek',{frame:Number(range.value)});panel.append(range);
    // The reused player's private controls stay detached. All visible controls
    // invoke the serialized owner entry and its shared clock.
-   refresh=()=>{const p=player.read();status.textContent=`${mode==='source'?'Raw source':'Derived '+mode} · repeat ${cycle} · ${p.status} · sample ${p.frame==null?'rest':p.frame+1}/${adapter.frames}`;range.value=String(p.frame??0);};root.append(panel);refresh();return {dispose(){panel.remove();}};
+   refresh=()=>{const p=player.read();note.textContent=`Same automatic full skin · source ${(adapter.frames/adapter.fps).toFixed(2)} s · repeat seam ${walking.identity.seam.frames} blended frames · curve radius ${walking.identity.radius}. No foot/contact correction.`;identity.textContent=`${source.prompt??'Retained motion'}${source.seed===null?'':' · seed '+source.seed} · ${source.motionSha256}`;if(select)select.value=chosen?.id??'';range.max=String(adapter.frames-1);status.textContent=`${mode==='source'?'Raw source':'Derived '+mode} · repeat ${cycle} · ${p.status} · sample ${p.frame==null?'rest':p.frame+1}/${adapter.frames}`;range.value=String(p.frame??0);};root.append(panel);refresh();return {dispose(){panel.remove();}};
   }};
  }catch(error){await dispose();throw error;}
 }
