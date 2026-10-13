@@ -74,8 +74,14 @@ export function validateComparison(views) {
     if(view?.mode!==mode||view.map!=='surface'||view.glow!==false||view.physicalbaseline?.exposure!==1)throw Error('Four comparable views with fixed exposure and glow off required');
     if(!close(view.camera,reference.camera)||!close(view.light,reference.light)||view.gi?.enabled!==reference.gi?.enabled||
         !close(view.gi?.settings,reference.gi?.settings)||!close(view.gi?.debugState?.estimator,reference.gi?.debugState?.estimator))throw Error('Comparison changed camera, light or GI');
-    if(view.physicalbaseline.geometryId!==reference.physicalbaseline.geometryId||view.normalsMatchSurface!==true||
+    const unlit=mode==='original'||mode==='photo';
+    const geometry=reference.cutout&&unlit?views.photo?.physicalbaseline?.geometryId:reference.physicalbaseline.geometryId;
+    if(!geometry||view.physicalbaseline.geometryId!==geometry||view.normalsMatchSurface!==true||
         view.physicalbaseline.environmentIntensity!==reference.physicalbaseline.environmentIntensity)throw Error('Comparison changed geometry, normals or environment');
+    if(reference.cutout){
+      if(unlit?view.cutout!=null:!['sample','source','width','height'].every(key=>Object.hasOwn(reference.cutout,key)&&view.cutout?.[key]===reference.cutout[key]))
+        throw Error('Comparison changed subject cutout or masked the photograph baseline');
+    }
     if(reference.environment)for(const key of ['environment','source','rotation','intensity','direct']){
       if(!Object.hasOwn(reference.environment,key)||view.environment?.[key]!==reference.environment[key])throw Error('Comparison changed HDR source or lighting');
     }

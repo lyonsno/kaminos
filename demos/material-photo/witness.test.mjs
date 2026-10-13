@@ -125,4 +125,13 @@ test('comparison witness rejects changed camera, lighting and unfair baseline',a
   ]) {
     const bad=structuredClone(views);mutate(bad);assert.throws(()=>checks.validateComparison(bad));
   }
+  const isolated=structuredClone(views),cutout={sample:'orb',source:'hand-authored-example-cutout',width:20,height:20};
+  for(const mode of ['original','photo']){isolated[mode].cutout=null;isolated[mode].physicalbaseline.geometryId='complete-photograph';}
+  for(const mode of ['relit','materials'])isolated[mode].cutout=structuredClone(cutout);
+  assert.doesNotThrow(()=>checks.validateComparison(isolated),'the unlit baselines must retain their background geometry');
+  for(const mutate of [v=>{v.original.cutout=structuredClone(cutout);},v=>{v.materials.cutout=null;},
+    v=>{v.materials.cutout.width=10;},v=>{v.original.physicalbaseline.geometryId='different-background';},
+    v=>{v.materials.physicalbaseline.geometryId='different-subject';}]){
+    const bad=structuredClone(isolated);mutate(bad);assert.throws(()=>checks.validateComparison(bad));
+  }
 });
