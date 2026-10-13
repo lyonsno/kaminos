@@ -69,6 +69,7 @@ import {
 } from './sam.js';
 import { requestBrowserWebGpuDevice, createRouteInvocationRequest } from './core.js';
 import { sam3Readback, sam3TypedView } from './sam-readback.js';
+import { createSam3ApplicationForeground } from './sam3-application-foreground.js';
 
 function cacheSam3ImageStageResult(result) {
   const { debugReadback, ...cached } = result;
@@ -88,7 +89,7 @@ let activeReadbackFormat = 'array';
 const readbackValues = values => sam3Readback({ readbackFormat: activeReadbackFormat }, values);
 const residentPhaseInput = input => ({
   ...input,
-  yield: options.yield,
+  yield: applicationForeground?.yield || options.yield,
   readbackFormat: activeReadbackFormat,
   ...(activeResidentTensorResolver ? { residentTensorResolver: activeResidentTensorResolver } : {}),
 });
@@ -199,6 +200,9 @@ if (vitFinitePhaseLayerIndex != null && (!Number.isInteger(vitFinitePhaseLayerIn
   throw new Error(`invalid vitFinitePhaseLayer ${vitFinitePhaseLayerParam}`);
 }
 const applicationSession = options.inferenceSession || null;
+const applicationForeground = options.foregroundService == null ? null : createSam3ApplicationForeground({
+  inferenceSession: applicationSession, foregroundService: options.foregroundService, yieldToBrowser: options.yield,
+});
 const servingResources = createSam3BrowserServingResources({
   deviceOwnership: applicationSession ? 'borrowed' : 'owned',
   async acquireExecutionContext() {
@@ -3629,6 +3633,9 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
       throw new Error(`unsupported SAM3 verification mode: ${verificationMode}`);
     }
     const verificationAttached = verificationMode === 'reference-parity';
+    if (applicationForeground && verificationAttached) {
+      throw new Error('SAM application foreground requires execution-only mode; run reference verification on the offline route');
+    }
     activeReadbackFormat = verificationAttached || diagnosticReadbackEnabled ? 'array' : 'typed-array';
     const hasDynamicInput = Object.hasOwn(invocationOptions, 'promptText') || Object.hasOwn(invocationOptions, 'sourceImage');
     if (verificationAttached && hasDynamicInput) {
@@ -4010,7 +4017,9 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
     if (modelSession) {
       const job = modelSession.enqueue({
         jobId: invocationId,
-        execute: () => payload.run({ device, adapter, route, request, sourceImage }),
+        execute: () => applicationForeground
+          ? applicationForeground.execute(invocationId, () => payload.run({ device, adapter, route, request, sourceImage }))
+          : payload.run({ device, adapter, route, request, sourceImage }),
       });
       const completion = await job.completion;
       const { output, ...completionReceipt } = completion;
@@ -4020,6 +4029,7 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
         throw new Error(completion.failure?.message || `SAM3 invocation ${completion.status}`);
       }
       result = output;
+      state.applicationForegroundEvidence = applicationForeground?.evidence() || null;
     } else {
       result = await payload.run({ device, adapter, route, request, sourceImage });
     }
@@ -4587,6 +4597,7 @@ async function main(manifestUrl = initialManifestUrl, invocationOptions = {}) {
   } catch (error) {
     state.status = 'failed';
     state.error = String(error?.stack || error?.message || error);
+    state.applicationForegroundEvidence = applicationForeground?.evidence() || null;
     state.staticArtifactCacheEvidence = staticArtifactCache.evidence();
     state.servingResourcesEvidence = servingResources.evidence();
     setStatus('failed', state.error);
@@ -4620,6 +4631,7 @@ return {
   async close() {
     closed = true;
     try { await invocationPromise; } catch { /* Preserve failure in evidence. */ }
+    applicationForeground?.assertSettled();
     await servingResources.close();
   },
 };

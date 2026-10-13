@@ -3,7 +3,7 @@ import { createSamWorkbenchForeground } from './webgpu-inference-kit/smokes/sam-
 
 const COLORS = [[50, 203, 222], [233, 184, 78], [208, 115, 185], [129, 217, 137]];
 
-export function createSamImageTools({ inferenceSession, rendererDevice, config, onAsset, onScene }) {
+export function createSamImageTools({ inferenceSession, rendererDevice, foregroundService, config, onAsset, onScene }) {
   const el = id => document.getElementById(`sam-image-${id}`);
   const canvas = el('canvas');
   const picker = el('instances');
@@ -114,7 +114,7 @@ export function createSamImageTools({ inferenceSession, rendererDevice, config, 
   }
   function createRuntime() {
     return createSam3BrowserImageRuntime({
-      baseUrl: window.location.href, inferenceSession,
+      baseUrl: window.location.href, inferenceSession, foregroundService,
       commit: new URL(window.location.href).searchParams.get('commit') || null,
       onExecutionContext({ device }) { executionDevice = device; },
       yield: metadata => foreground.yield(metadata),

@@ -5,6 +5,19 @@ import vm from 'node:vm';
 const runtimeUrl = new URL('../src/sam3-browser-image-runtime.js', import.meta.url);
 assert.ok(existsSync(runtimeUrl), 'the SAM image runtime must be usable by a host without creating a smoke iframe');
 const { createSam3BrowserImageRuntime } = await import(runtimeUrl);
+const applicationDevice = { queue: { submit() {}, async onSubmittedWorkDone() {} } };
+const applicationSession = { device: applicationDevice, queue: applicationDevice.queue };
+assert.throws(() => createSam3BrowserImageRuntime({
+  baseUrl: 'http://localhost/', foregroundService: { device: applicationDevice },
+}), /borrowed inference session/, 'an application foreground cannot silently acquire another device');
+assert.throws(() => createSam3BrowserImageRuntime({
+  baseUrl: 'http://localhost/', inferenceSession: applicationSession,
+  foregroundService: { device: {}, queue: applicationDevice.queue, beginRun() {} },
+}), /exact borrowed device and queue/, 'SAM must reject another application device before model acquisition');
+assert.throws(() => createSam3BrowserImageRuntime({
+  baseUrl: 'http://localhost/', inferenceSession: applicationSession,
+  foregroundService: { device: applicationDevice, queue: {}, beginRun() {} },
+}), /exact borrowed device and queue/, 'SAM must reject another application queue before model acquisition');
 const first = createSam3BrowserImageRuntime({ baseUrl: 'http://localhost/' });
 const second = createSam3BrowserImageRuntime({ baseUrl: 'http://localhost/' });
 assert.equal(first.output(), null);
