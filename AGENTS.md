@@ -13,6 +13,10 @@ checkpoint. Recheck before adding another dependent slice. This catches a
 branch that is becoming a second product line while its dependency remains
 unintegrated.
 
+## Tests
+
+Before a handoff, run the tests you touched with `npm test -- --only tests/a.mjs,tests/b.mjs`. Before landing, run the full `npm test`; it must report no new failures. Declare the kind of each new test file on its first line, for example `// kaminos-test: node`, instead of editing the shared manifest. Prefer behavior tests over regular-expression assertions on `index.html` source. Details: `docs/testing.md`.
+
 ## Fire Basins In Cooperative Inference Smokes
 
 When using an exported fire basin with the WebGPU inference kit, read

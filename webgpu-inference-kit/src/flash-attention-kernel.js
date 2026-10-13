@@ -228,6 +228,136 @@ ${range(n).map(d => `    out_values[o_base + ${d}u] = a${d} * inverse;`).join('\
 `;
 }
 
+// Register-tiled flash attention for wider heads (head dim a multiple of 16, up to 256). A workgroup of
+// 16x16 threads takes 64 queries of one head; per 32-key tile each thread computes a 4x2 micro-tile of
+// scores as a small GEMM over 16-dim chunks of Q and K staged in workgroup memory, the score tile is shared
+// so every thread reads its rows' maxima, and each thread accumulates a 4 x headDim/16 slice of the output
+// from the probability tile and 8-key V chunks. Row sums stay per-thread partials until the end.
+const TILED_QUERIES = 64;
+const TILED_KEYS = 32;
+const TILED_DIM_CHUNK = 16;
+
+export function createWebGpuTiledFlashAttentionShader({ headDim, layout = 'packed' } = {}) {
+  if (!Number.isInteger(headDim) || headDim < 16 || headDim > MAX_SPLIT_HEAD_DIM || headDim % 16 !== 0) {
+    throw new Error('tiled flash attention needs a head dim that is a multiple of 16 from 16 to 256');
+  }
+  if (layout !== 'packed' && layout !== 'strided') throw new Error(`unsupported flash attention layout ${layout}`);
+  const rowsPerThread = TILED_QUERIES / 16;
+  const keysPerThread = TILED_KEYS / 16;
+  const dimsPerThread = headDim / 16;
+  const qChunk = TILED_QUERIES * TILED_DIM_CHUNK, kChunk = TILED_KEYS * TILED_DIM_CHUNK;
+  const stageFloats = qChunk + kChunk;
+  // Largest power of two up to 8 whose V chunk fits the stage and divides the 32-key score row.
+  let valueKeys = 8;
+  while (valueKeys > 1 && valueKeys * headDim > stageFloats) valueKeys /= 2;
+  const range = count => Array.from({ length: count }, (_, i) => i);
+  const R = range(rowsPerThread), J = range(keysPerThread), E = range(dimsPerThread);
+  const row = (tensor, token, headExpr) => layout === 'strided'
+    ? `params.${tensor}_offset + domain * params.${tensor}_domain_stride + ${token} * params.${tensor}_token_stride + ${headExpr} * params.${tensor}_head_stride`
+    : tensor === 'q' || tensor === 'o'
+      ? `(domain * params.query_tokens + ${token}) * params.q_channels + ${headExpr} * ${headDim}u`
+      : `(domain * params.key_tokens + ${token}) * params.kv_channels + ${headExpr} * ${headDim}u`;
+  const params = layout === 'strided'
+    ? `struct Params {
+  query_tokens: u32, key_tokens: u32, heads: u32, kv_heads: u32,
+  query_offset: u32, query_count: u32, scale: f32, _pad0: u32,
+${STRIDED_TENSORS.map(t => `  ${t}_offset: u32, ${t}_token_stride: u32, ${t}_head_stride: u32, ${t}_domain_stride: u32,`).join('\n')}
+};`
+    : `struct Params {
+  query_tokens: u32, key_tokens: u32, q_channels: u32, kv_channels: u32,
+  heads: u32, kv_heads: u32, query_offset: u32, query_count: u32,
+  scale: f32, _pad0: u32, _pad1: u32, _pad2: u32,
+};`;
+  const queryOf = local => `params.query_offset + min(group.x * ${TILED_QUERIES}u + ${local}, params.query_count - 1u)`;
+  return `${params}
+@group(0) @binding(0) var<storage, read> q_values: array<f32>;
+@group(0) @binding(1) var<storage, read> k_values: array<f32>;
+@group(0) @binding(2) var<storage, read> v_values: array<f32>;
+@group(0) @binding(3) var<storage, read_write> out_values: array<f32>;
+@group(0) @binding(4) var<uniform> params: Params;
+
+var<workgroup> score_tile: array<f32, ${TILED_QUERIES * TILED_KEYS}>;
+var<workgroup> stage: array<f32, ${stageFloats}>;
+
+@compute @workgroup_size(256)
+fn main(@builtin(local_invocation_index) lane: u32, @builtin(workgroup_id) group: vec3<u32>) {
+  let head = group.y;
+  let domain = group.z;
+  let kv_head = head / (params.heads / params.kv_heads);
+  let ty = lane / 16u;
+  let tx = lane % 16u;
+${R.map(r => `  var m${r}: f32 = -3.402823e38;\n  var l${r}: f32 = 0.0;`).join('\n')}
+${R.map(r => E.map(e => `  var o${r}_${e}: f32 = 0.0;`).join('\n')).join('\n')}
+  for (var tile_start = 0u; tile_start < params.key_tokens; tile_start = tile_start + ${TILED_KEYS}u) {
+${R.map(r => J.map(j => `    var s${r}_${j}: f32 = 0.0;`).join('\n')).join('\n')}
+    for (var chunk = 0u; chunk < ${headDim}u; chunk = chunk + ${TILED_DIM_CHUNK}u) {
+      for (var i = lane; i < ${qChunk}u; i = i + 256u) {
+        let local_row = i / ${TILED_DIM_CHUNK}u;
+        stage[i] = q_values[${row('q', queryOf('local_row'), 'head')} + chunk + i % ${TILED_DIM_CHUNK}u];
+      }
+      for (var i = lane; i < ${kChunk}u; i = i + 256u) {
+        let token = tile_start + i / ${TILED_DIM_CHUNK}u;
+        var value = 0.0;
+        if (token < params.key_tokens) { value = k_values[${row('k', 'token', 'kv_head')} + chunk + i % ${TILED_DIM_CHUNK}u]; }
+        stage[${qChunk}u + i] = value;
+      }
+      workgroupBarrier();
+${range(TILED_DIM_CHUNK).map(kk => `      {
+${R.map(r => `        let a${r} = stage[(ty * ${rowsPerThread}u + ${r}u) * ${TILED_DIM_CHUNK}u + ${kk}u];`).join('\n')}
+${J.map(j => `        let b${j} = stage[${qChunk}u + (tx * ${keysPerThread}u + ${j}u) * ${TILED_DIM_CHUNK}u + ${kk}u];`).join('\n')}
+${R.map(r => J.map(j => `        s${r}_${j} = s${r}_${j} + a${r} * b${j};`).join('\n')).join('\n')}
+      }`).join('\n')}
+      workgroupBarrier();
+    }
+    let tile_keys = min(${TILED_KEYS}u, params.key_tokens - tile_start);
+${R.map(r => J.map(j => `    if (tx * ${keysPerThread}u + ${j}u < tile_keys) { s${r}_${j} = s${r}_${j} * params.scale; } else { s${r}_${j} = -3.402823e38; }
+    score_tile[(ty * ${rowsPerThread}u + ${r}u) * ${TILED_KEYS}u + tx * ${keysPerThread}u + ${j}u] = s${r}_${j};`).join('\n')).join('\n')}
+    workgroupBarrier();
+${R.map(r => `    var tile_max${r} = m${r};
+    for (var c = 0u; c < ${TILED_KEYS}u; c = c + 1u) { tile_max${r} = max(tile_max${r}, score_tile[(ty * ${rowsPerThread}u + ${r}u) * ${TILED_KEYS}u + c]); }`).join('\n')}
+    workgroupBarrier();
+${R.map(r => `    {
+      let correction = exp(m${r} - tile_max${r});
+      l${r} = l${r} * correction;
+${E.map(e => `      o${r}_${e} = o${r}_${e} * correction;`).join('\n')}
+${J.map(j => `      let p${j} = exp(s${r}_${j} - tile_max${r});
+      l${r} = l${r} + p${j};
+      score_tile[(ty * ${rowsPerThread}u + ${r}u) * ${TILED_KEYS}u + tx * ${keysPerThread}u + ${j}u] = p${j};`).join('\n')}
+      m${r} = tile_max${r};
+    }`).join('\n')}
+    workgroupBarrier();
+    for (var key_chunk = 0u; key_chunk < ${TILED_KEYS}u; key_chunk = key_chunk + ${valueKeys}u) {
+      for (var i = lane; i < ${valueKeys * headDim}u; i = i + 256u) {
+        let token = tile_start + key_chunk + i / ${headDim}u;
+        var value = 0.0;
+        if (token < params.key_tokens) { value = v_values[${row('v', 'token', 'kv_head')} + i % ${headDim}u]; }
+        stage[i] = value;
+      }
+      workgroupBarrier();
+${range(valueKeys).map(j => `      {
+${R.map(r => `        let p${r} = score_tile[(ty * ${rowsPerThread}u + ${r}u) * ${TILED_KEYS}u + key_chunk + ${j}u];`).join('\n')}
+${E.map(e => `        let v${e} = stage[${j * headDim}u + tx * ${dimsPerThread}u + ${e}u];`).join('\n')}
+${R.map(r => E.map(e => `        o${r}_${e} = o${r}_${e} + p${r} * v${e};`).join('\n')).join('\n')}
+      }`).join('\n')}
+      workgroupBarrier();
+    }
+  }
+${R.map(r => `  score_tile[(ty * ${rowsPerThread}u + ${r}u) * 16u + tx] = l${r};`).join('\n')}
+  workgroupBarrier();
+${R.map(r => `  {
+    let local_query = group.x * ${TILED_QUERIES}u + ty * ${rowsPerThread}u + ${r}u;
+    var total = 0.0;
+    for (var c = 0u; c < 16u; c = c + 1u) { total = total + score_tile[(ty * ${rowsPerThread}u + ${r}u) * 16u + c]; }
+    if (local_query < params.query_count) {
+      let base = ${row('o', 'params.query_offset + local_query', 'head')} + tx * ${dimsPerThread}u;
+      let inverse = 1.0 / total;
+${E.map(e => `      out_values[base + ${e}u] = o${r}_${e} * inverse;`).join('\n')}
+    }
+  }`).join('\n')}
+}
+`;
+}
+
 // Strided params (24 words): counts, query range and scale, then offset/token/head/domain strides for q, k,
 // v and out, in elements. Defaults describe packed token-major tensors; a domain stride defaults to the
 // whole tensor domain. Vec4 head dims (multiples of 4) need every offset and stride to be a multiple of 4.

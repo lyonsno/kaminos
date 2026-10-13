@@ -75,8 +75,32 @@ function packageIdentity(input) {
   return `${encodeURIComponent(input.packageId)}:${encodeURIComponent(input.modelId)}@${encodeURIComponent(input.revision)}#resources:${resources}`;
 }
 
-function sourceMemoryBound(modelPackage) {
+// Acquisition policy for package loading: sequential (default, one resource's source in flight) or bounded
+// concurrent (up to `concurrency` resources whose declared bytes fit `byteBudget`; one may exceed it alone).
+function normalizeAcquisition(acquisition, modelPackage) {
+  if (acquisition == null) return { concurrency: 1, byteBudget: null };
+  if (typeof acquisition !== 'object') throw new Error('acquisition must be an object');
+  const concurrency = acquisition.concurrency ?? 1;
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1) throw new Error('acquisition.concurrency must be a positive integer');
+  if (concurrency === 1) return { concurrency: 1, byteBudget: null };
+  const byteBudget = acquisition.byteBudget ?? concurrency * (modelPackage.largestSourceByteLength ?? modelPackage.largestResourceByteLength);
+  if (!Number.isSafeInteger(byteBudget) || byteBudget < 1) throw new Error('acquisition.byteBudget must be a positive integer of declared bytes');
+  return { concurrency, byteBudget };
+}
+
+function sourceMemoryBound(modelPackage, acquisition = { concurrency: 1 }) {
   const hasChunkResource = modelPackage.resources.some(resource => resource.chunkPlan);
+  if (acquisition.concurrency > 1) {
+    return deepFreeze({
+      authority: 'bounded-concurrent-resource-acquisition-declared-byte-length',
+      concurrency: acquisition.concurrency,
+      declaredByteBudget: acquisition.byteBudget,
+      largestResourceByteLength: modelPackage.largestResourceByteLength,
+      largestSourceByteLength: modelPackage.largestSourceByteLength ?? modelPackage.largestResourceByteLength,
+      totalPackageByteLength: modelPackage.totalByteLength,
+      residual: 'each in-flight resource or chunk source acquisition may retain multiple host representations; one resource larger than the budget runs alone',
+    });
+  }
   return deepFreeze({
     authority: hasChunkResource
       ? 'sequential-package-child-acquisition-declared-source-unit'
@@ -444,76 +468,128 @@ export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
     if (typeof input.onProgress === 'function') input.onProgress(packageEvent);
   }
 
-  try {
-    for (let index = 0; index < modelPackage.resources.length; index += 1) {
-      throwIfAborted(input.signal);
-      const resource = modelPackage.resources[index];
-      let lease;
-      try {
-        const common = {
-          cache: input.cache,
-          fetch: input.fetch,
-          fetchOptions: fetchOptionsSnapshot == null
-            ? undefined
-            : materializeWebGpuModelFetchOptions(fetchOptionsSnapshot),
-          signal: input.signal,
-          subtle: input.subtle,
-          now: input.now,
-          onProgress: event => recordProgress(resource, index, event),
-        };
-        lease = resource.chunkPlan
-          ? await input.route.loadModelResourceChunksFromSources({
-            ...common,
-            plan: resource.chunkPlan,
-            sources: sources[resource.resourceId],
-          })
-          : await input.route.loadModelResourcesFromSource({
-            ...common,
-            manifest: resource.manifest,
-            source: sources[resource.resourceId],
-            ownership: input.ownership,
-          });
-      } catch (error) {
-        const cleanup = releaseChildLeases(childLeases);
-        const report = deepFreeze({
-          schema: WEBGPU_MODEL_RESOURCE_PACKAGE_REPORT_SCHEMA,
-          status: error?.name === 'AbortError' ? 'canceled' : 'failed',
-          packageIdentity: modelPackage.identity,
-          routeId: input.route.routeId,
-          startedAtMs,
-          settledAtMs: now(),
-          failedResourceId: resource.resourceId,
-          failure: {
-            name: error?.name || 'Error',
-            message: String(error?.message || error),
-            acquisitionReport: error?.acquisitionReport || null,
-            chunkReport: error?.chunkReport || null,
-            authorityReport: error?.chunkReport || error?.acquisitionReport || null,
-          },
-          resources: resources.map(item => ({
-            resourceId: item.resourceId,
-            loadKind: item.loadKind,
-            acquisitionReport: item.acquisitionReport,
-            chunkReport: item.chunkReport,
-            authorityReport: item.authorityReport,
-          })),
-          progress,
-          sourceMemoryBound: sourceMemoryBound(modelPackage),
-          cleanup,
-        });
-        throw errorWithPackageReport(error, report);
-      }
-      childLeases.push({ resourceId: resource.resourceId, lease });
-      resources.push(deepFreeze({
-        resourceId: resource.resourceId,
-        loadKind: resource.loadKind,
+  const acquisition = normalizeAcquisition(input.acquisition, modelPackage);
+  const memoryBound = () => sourceMemoryBound(modelPackage, acquisition);
+
+  async function loadResource(resource, index) {
+    const common = {
+      cache: input.cache,
+      fetch: input.fetch,
+      fetchOptions: fetchOptionsSnapshot == null
+        ? undefined
+        : materializeWebGpuModelFetchOptions(fetchOptionsSnapshot),
+      signal: input.signal,
+      subtle: input.subtle,
+      now: input.now,
+      onProgress: event => recordProgress(resource, index, event),
+    };
+    return resource.chunkPlan
+      ? input.route.loadModelResourceChunksFromSources({
+        ...common,
+        plan: resource.chunkPlan,
+        sources: sources[resource.resourceId],
+      })
+      : input.route.loadModelResourcesFromSource({
+        ...common,
         manifest: resource.manifest,
-        acquisitionReport: lease.acquisitionReport ?? null,
-        chunkReport: lease.chunkReport ?? null,
-        authorityReport: lease.chunkReport ?? lease.acquisitionReport,
-        allocations: lease.allocations,
-        tensors: lease.tensors,
-      }));
+        source: sources[resource.resourceId],
+        ownership: input.ownership,
+      });
+  }
+
+  function recordLoaded(resource, lease) {
+    childLeases.push({ resourceId: resource.resourceId, lease });
+    resources.push(deepFreeze({
+      resourceId: resource.resourceId,
+      loadKind: resource.loadKind,
+      manifest: resource.manifest,
+      acquisitionReport: lease.acquisitionReport ?? null,
+      chunkReport: lease.chunkReport ?? null,
+      authorityReport: lease.chunkReport ?? lease.acquisitionReport,
+      allocations: lease.allocations,
+      tensors: lease.tensors,
+    }));
+  }
+
+  function failResource(error, failedResourceId) {
+    const cleanup = releaseChildLeases(childLeases);
+    const report = deepFreeze({
+      schema: WEBGPU_MODEL_RESOURCE_PACKAGE_REPORT_SCHEMA,
+      status: error?.name === 'AbortError' ? 'canceled' : 'failed',
+      packageIdentity: modelPackage.identity,
+      routeId: input.route.routeId,
+      startedAtMs,
+      settledAtMs: now(),
+      failedResourceId,
+      failure: {
+        name: error?.name || 'Error',
+        message: String(error?.message || error),
+        acquisitionReport: error?.acquisitionReport || null,
+        chunkReport: error?.chunkReport || null,
+        authorityReport: error?.chunkReport || error?.acquisitionReport || null,
+      },
+      resources: resources.map(item => ({
+        resourceId: item.resourceId,
+        loadKind: item.loadKind,
+        acquisitionReport: item.acquisitionReport,
+        chunkReport: item.chunkReport,
+        authorityReport: item.authorityReport,
+      })),
+      progress,
+      sourceMemoryBound: memoryBound(),
+      cleanup,
+    });
+    throw errorWithPackageReport(error, report);
+  }
+
+  // Bounded concurrent acquisition: resources start in package order while fewer than `concurrency` are in
+  // flight and their declared bytes fit the budget (one resource may always run alone). Results are recorded
+  // in package order; on failure every in-flight load settles before all acquired leases are released.
+  async function loadConcurrently() {
+    const count = modelPackage.resources.length;
+    const outcomes = new Array(count);
+    let next = 0, inFlight = 0, inFlightBytes = 0, failure = null;
+    await new Promise(resolveAll => {
+      const launch = () => {
+        while (!failure && next < count && inFlight < acquisition.concurrency) {
+          const size = modelPackage.resources[next].manifest.bundle.byteLength;
+          if (inFlight > 0 && inFlightBytes + size > acquisition.byteBudget) break;
+          if (input.signal?.aborted) { failure = { index: next, error: input.signal.reason ?? new DOMException('aborted', 'AbortError') }; break; }
+          const index = next++;
+          inFlight += 1; inFlightBytes += size;
+          Promise.resolve()
+            .then(() => loadResource(modelPackage.resources[index], index))
+            .then(lease => { outcomes[index] = lease; }, error => { if (!failure || index < failure.index) failure = { index, error }; })
+            .finally(() => {
+              inFlight -= 1; inFlightBytes -= size;
+              if (inFlight === 0 && (failure || next >= count)) resolveAll(); else launch();
+            });
+        }
+        if (inFlight === 0 && (failure || next >= count)) resolveAll();
+      };
+      launch();
+    });
+    for (let index = 0; index < count; index += 1) {
+      if (outcomes[index]) recordLoaded(modelPackage.resources[index], outcomes[index]);
+    }
+    if (failure) failResource(failure.error, modelPackage.resources[failure.index].resourceId);
+  }
+
+  try {
+    if (acquisition.concurrency > 1) {
+      await loadConcurrently();
+    } else {
+      for (let index = 0; index < modelPackage.resources.length; index += 1) {
+        throwIfAborted(input.signal);
+        const resource = modelPackage.resources[index];
+        let lease;
+        try {
+          lease = await loadResource(resource, index);
+        } catch (error) {
+          failResource(error, resource.resourceId);
+        }
+        recordLoaded(resource, lease);
+      }
     }
   } catch (error) {
     if (error?.packageReport) throw error;
@@ -535,7 +611,7 @@ export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
         authorityReport: item.authorityReport,
       })),
       progress,
-      sourceMemoryBound: sourceMemoryBound(modelPackage),
+      sourceMemoryBound: memoryBound(),
       cleanup,
     });
     throw errorWithPackageReport(error, report);
@@ -568,7 +644,7 @@ export async function loadWebGpuModelResourcePackageFromSources(input = {}) {
       authorityReport: resource.authorityReport,
     })),
     progress,
-    sourceMemoryBound: sourceMemoryBound(modelPackage),
+    sourceMemoryBound: memoryBound(),
     cleanup: null,
   });
 
