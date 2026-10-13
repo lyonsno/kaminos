@@ -19,7 +19,8 @@ function harness(){
    beta:s.solver.ipbfDampingBeta,densityIterations:s.solver.densityIterations,capillaryStrength:s.solver.capillaryStrength,
    alternativeCompliance:s.solver.ipbfAlternativeCompliance});
   const state=()=>({available:true,generation,step,paused});
-  return createOwnerWaterCapability({state,debug:()=>({pressureSolver:'ipbf',solver_backend:'fixture',dt:s.dt}),
+  // The actual host distinguishes stable experiment ownership from solver reset generation.
+  return createOwnerWaterCapability({state,identity:()=>1,debug:()=>({pressureSolver:'ipbf',solver_backend:'fixture',dt:s.dt}),
    pressure:()=>({available:true,...model.read(),particleVolume:s.sampling.particleVolume,dt:Math.fround(s.dt)}),
    apply:patch=>model.request(patch),pause:value=>{paused=value;return {paused};},
    advance:target=>{step=target;model.submit(step);return {endStep:target,dt:s.dt};},
