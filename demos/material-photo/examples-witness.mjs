@@ -3,7 +3,7 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {parseArgs} from 'node:util';
 import {createHash} from 'node:crypto';
-import {validateLayoutFrame} from './layout-checks.js';
+import {validateLayoutFrame,validateBrowserSources} from './layout-checks.js';
 import {validateEpisode} from './witness-checks.js';
 
 const {values}=parseArgs({options:{...Object.fromEntries(['repo-root','expected-commit','chrome','playwright-module','url','output','site-root','image','hosted-weights','manifest-sha256'].map(key=>[key,{type:'string'}])),generate:{type:'boolean',default:false}}});
@@ -34,9 +34,15 @@ try{
   if(await page.evaluate(()=>window.__materialPhoto.status)!=='included')throw Error('No included result on arrival');
   report.arrivalMs=performance.now()-start;
   await Promise.all(sourceReads);
+  report.phase='source-binding';
   const servedDemo=values['site-root']?path.join(await fs.realpath(values['site-root']),'inference-kit','material-photo'):path.join(root,'demos','material-photo');
-  for(const n of names)if(observed[n]!==createHash('sha256').update(await fs.readFile(path.join(servedDemo,n))).digest('hex'))throw Error(`Wrong served ${n}`);
   report.browserSources=observed;
+  report.sourceBinding={mountedRoot:servedDemo,mounted:{},source:{}};
+  for(const n of names){
+    report.sourceBinding.mounted[n]=createHash('sha256').update(await fs.readFile(path.join(servedDemo,n))).digest('hex');
+    report.sourceBinding.source[n]=createHash('sha256').update(execFileSync('git',['show',`${report.source.commit}:demos/material-photo/${n}`],{cwd:root})).digest('hex');
+  }
+  validateBrowserSources(observed,report.sourceBinding.mounted,report.sourceBinding.source);
   const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
   for(const key of ['orb','celebration','bag']){
     await page.locator(`[data-sample=${key}]`).click();
