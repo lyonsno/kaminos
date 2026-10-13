@@ -12,6 +12,7 @@ export async function mountLiveTransport({casePath,expected,scene,camera,rendere
     const manifest=validateLiveManifest(JSON.parse(new TextDecoder().decode(await bytes('manifest.json',expected))));
     phase='asset-authentication';
     const paired=manifest.schema==='kaminos.live-transport.v1';
+    const whole=manifest.schema==='kaminos.live-transport.v3';
     const assetNames=['rest.bin','triangles.bin','automatic-weights.bin','automatic-presets.bin'];
     if(paired)assetNames.push('painted-weights.bin','blender-reference.bin');
     const arrays={};for(const name of assetNames){
@@ -20,7 +21,7 @@ export async function mountLiveTransport({casePath,expected,scene,camera,rendere
     }
     const rest=arrays['rest.bin'],triangles=arrays['triangles.bin'],automatic=arrays['automatic-weights.bin'],painted=arrays['painted-weights.bin'];
     for(const [name,array]of Object.entries(arrays))if(name!=='triangles.bin'&&array.some(v=>!Number.isFinite(v)))throw Error('Non-finite live asset '+name);
-    if(rest.length!==manifest.vertices*3||triangles.length!==manifest.triangles*3||automatic.length!==manifest.vertices*8||(paired&&painted.length!==automatic.length)||triangles.some(i=>i>=manifest.vertices))throw Error('Incomplete live geometry');
+    if(rest.length!==manifest.vertices*3||triangles.length!==manifest.triangles*3||automatic.length!==manifest.vertices*manifest.channels.length||(paired&&painted.length!==automatic.length)||triangles.some(i=>i>=manifest.vertices))throw Error('Incomplete live geometry');
     phase='scene-mount';
     const group=new THREE.Group();group.name='Automatic transport creature';scene.add(group);
     const referenceGroup=paired?new THREE.Group():null;
@@ -39,7 +40,7 @@ export async function mountLiveTransport({casePath,expected,scene,camera,rendere
       if(spec.parent){matrix.premultiply(inverseRest.get(spec.parent));bones.get(spec.parent).add(bone);}else group.add(bone);
       matrix.decompose(bone.position,bone.quaternion,bone.scale);
       saved.set(spec.name,{position:bone.position.clone(),quaternion:bone.quaternion.clone(),scale:bone.scale.clone()});
-      if(spec.name==='pelvis')continue;
+      if(spec.name==='pelvis'&&!whole)continue;
       const head=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),new THREE.MeshBasicMaterial({color:0x37d7eb,depthTest:false}));head.renderOrder=100;head.userData.transportBone=bone;bone.add(head);
       const localTail=new THREE.Vector3(...spec.tail).applyMatrix4(inverseRest.get(spec.name));
       const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),localTail]),new THREE.LineBasicMaterial({color:0x37d7eb,depthTest:false}));line.renderOrder=100;line.userData.transportBone=bone;bone.add(line);helpers.push(head,line);
@@ -49,7 +50,7 @@ export async function mountLiveTransport({casePath,expected,scene,camera,rendere
     register(group,{id,type:'mesh',fileName:'Automatic transport creature',source:null,label:'Gold · automatic transport · temporary live rig'});
     if(referenceGroup)register(referenceGroup,{id:referenceId,type:'mesh',fileName:'Painted reference',source:null,label:'Gray · original painted weights · same live pose'});
     const records=[];
-    for(const [name,bone]of bones){if(name==='pelvis')continue;const boneId='live-bone:'+name;register(bone,{id:boneId,type:'rig-bone',source:null,fileName:name,label:name});records.push({id:boneId,name,uuid:bone.uuid});}
+    for(const [name,bone]of bones){if(name==='pelvis'&&!whole)continue;const boneId='live-bone:'+name;register(bone,{id:boneId,type:'rig-bone',source:null,fileName:name,label:name});records.push({id:boneId,name,uuid:bone.uuid});}
     let cached='',lastGood=new Map();
     function poseState(){return [...bones].map(([name,b])=>({name,position:b.position.toArray(),quaternion:b.quaternion.toArray(),scale:b.scale.toArray()}));}
     function update(){
@@ -85,7 +86,7 @@ export async function mountLiveTransport({casePath,expected,scene,camera,rendere
     update();
     state.status='loaded';state.effectiveSha256=expected;state.sourceSha256=manifest.sourceSha256;
     state.candidatePaintedWeights=false;state.vertices=manifest.vertices;state.triangles=manifest.triangles;
-    state.effectiveRoute='index-scene-live-rear-transport';state.rendererBackend=renderer.backend.constructor.name;
+    state.effectiveRoute=whole?'index-scene-live-full-tree-transport':'index-scene-live-rear-transport';state.rendererBackend=renderer.backend.constructor.name;
     state.registeredIds=[id,...(paired?[referenceId]:[]),...records.map(r=>r.id)];state.bindingRule=manifest.bindingRule;
     state.referenceAvailable=paired;state.sourceCast=manifest.sourceCast;state.provenance=manifest.provenance??null;
     state.referenceConformance=manifest.referenceConformance;state.acceptedBaseline=manifest.acceptedBaseline;
@@ -103,7 +104,7 @@ export async function mountLiveTransport({casePath,expected,scene,camera,rendere
     const digests=async()=>({gold:await sha(gold.geometry.attributes.position.array.buffer),painted:gray?await sha(gray.geometry.attributes.position.array.buffer):null});
     window.kaminosLiveTransport={snapshot,preset,restore,point,gizmoPoints,update,conformance,digests,positions:()=>({gold:Array.from(gold.geometry.attributes.position.array),painted:gray?Array.from(gray.geometry.attributes.position.array):null}),manifest};
     camera.position.set(-3.0,1.4,6.5);controls.target.set(paired?.9:.18,-.6,-1.1);controls.update();
-    setInfo(`Gold: automatic transport · ${paired?'Gray: painted reference':manifest.sourceCast+' · no painted reference'} · click cyan joint/bone, rotate with the scene gizmo. Temporary rig; source untouched.`);
+    setInfo(`Gold: automatic transport · ${whole?'Given28-joint full-body prototype · no full-body painted reference':paired?'Gray: painted reference':manifest.sourceCast+' · no painted reference'} · click cyan joint/bone, rotate with the scene gizmo. Temporary rig; source untouched.`);
     return {update,pick,group,bones,restore};
   }catch(error){state.status='failed';state.failurePhase=phase;state.error=error.message;throw error;}
 }

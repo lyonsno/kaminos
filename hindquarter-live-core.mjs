@@ -48,20 +48,23 @@ export function skinTransport(rest,weights,matrices){
 }
 
 export function validateLiveManifest(m){
-  if(!['kaminos.live-transport.v1','kaminos.live-transport.v2'].includes(m?.schema)||m.status!=='completed'||m.candidatePaintedWeights!==false)throw Error('Invalid or incomplete live transport case');
+  if(!['kaminos.live-transport.v1','kaminos.live-transport.v2','kaminos.live-transport.v3'].includes(m?.schema)||m.status!=='completed'||m.candidatePaintedWeights!==false)throw Error('Invalid or incomplete live transport case');
   const paired=m.schema==='kaminos.live-transport.v1';
+  const whole=m.schema==='kaminos.live-transport.v3';
   if(!/^[a-f0-9]{64}$/.test(m.sourceSha256)||!Number.isSafeInteger(m.vertices)||m.vertices<=0||!Number.isSafeInteger(m.triangles)||m.triangles<=0||!m.sourceCast||
      (paired&&(m.vertices!==50501||m.triangles!==86392||m.sourceCast!=='CAT_CAST_MANNEQUIN_80413_STRONG')))throw Error('Wrong or partial source cast');
   if(!paired){
     if(m.reference?.kind!=='none'||!m.reference.reason||m.assets?.['painted-weights.bin']||m.assets?.['blender-reference.bin'])throw Error('Unsupported or fabricated painted reference');
     if(['packageSha256','rigSourceSha256','frameChainSha256'].some(name=>!/^[a-f0-9]{64}$/.test(m.provenance?.[name])))throw Error('Missing frame/source provenance');
   }
-  const expected=['fixed','pelvis',...['left','right'].flatMap(side=>['hip','stifle','hock'].map(joint=>`hindlimb-${side}-${joint}`))];
-  if(JSON.stringify(m.channels)!==JSON.stringify(expected)||m.bones?.length!==7||new Set(m.bones.map(b=>b.name)).size!==7)throw Error('Wrong rear control inventory');
-  if(m.bones.some(b=>!expected.includes(b.name)||b.parent&&!expected.includes(b.parent)))throw Error('Unresolved bone hierarchy');
+  const expected=whole?['fixed',...(m.bones??[]).map(b=>b.name)]:['fixed','pelvis',...['left','right'].flatMap(side=>['hip','stifle','hock'].map(joint=>`hindlimb-${side}-${joint}`))];
+  if(JSON.stringify(m.channels)!==JSON.stringify(expected)||!m.bones?.length||(!whole&&m.bones.length!==7)||new Set(m.bones.map(b=>b.name)).size!==m.bones.length)throw Error('Wrong given control inventory');
+  const boneNames=new Set(m.bones.map(b=>b.name));
+  if(m.bones.some(b=>!expected.includes(b.name)||b.parent&&!boneNames.has(b.parent)))throw Error('Unresolved bone hierarchy');
+  for(const b of m.bones){const seen=new Set();let n=b.name;while(n){if(seen.has(n))throw Error('Cyclic bone hierarchy');seen.add(n);n=m.bones.find(x=>x.name===n)?.parent;}}
   if(!Array.isArray(m.presets)||!m.presets.length)throw Error('Missing source poses');
   const required=[['rest.bin',[m.vertices,3],'<f4'],['triangles.bin',[m.triangles,3],'<u4'],
-    ['automatic-weights.bin',[m.vertices,8],'<f4'],['automatic-presets.bin',[m.presets.length,m.vertices,3],'<f4']];
+    ['automatic-weights.bin',[m.vertices,expected.length],'<f4'],['automatic-presets.bin',[m.presets.length,m.vertices,3],'<f4']];
   if(paired)required.push(['painted-weights.bin',[m.vertices,8],'<f4'],['blender-reference.bin',[m.presets.length,m.vertices,3],'<f4']);
   for(const [name,shape,dtype]of required){
     const asset=m.assets?.[name];
