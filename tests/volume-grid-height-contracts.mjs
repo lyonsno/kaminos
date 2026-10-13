@@ -264,6 +264,11 @@ test('cockpit: the height previews while edited and applies on confirm (the page
   assert.match(index, /function applyVolumeScenePreset\(scene, options = \{\}\) \{\n  supersedeVolumeRebuildHolds\(\);/);
   // The guide box follows the preview while one is pending.
   assert.match(index, /const dims = window\.__kaminosVolumeGridPreview\?\.dimensions \?\? window\.__kaminosVolumeGridDimensions;/);
+  // Review GH-R5-01: the authored-parameter writer (kaminosAuthoringParameters.set,
+  // parameter history replay) writes an authoritative value, so it confirms too.
+  const writer = index.slice(index.indexOf('    const write=state=>{\n      setVolumeControlValue(control.id,state.value);'), index.indexOf('    const check=state=>{', index.indexOf('    const write=state=>{\n      setVolumeControlValue(control.id,state.value);')));
+  assert.ok(writer.length > 0, 'the parameter writer exists');
+  assert.match(writer, /control\.dispatchEvent\(new Event\('change',\{bubbles:true\}\)\);\n      if\(control\.dataset\.volumeCommit==='confirm'\)control\.dispatchEvent\(new KeyboardEvent\('keydown',\{key:'Enter',bubbles:true\}\)\);/);
   // The capture confirms controls that need it.
   assert.match(capture, /if \(e\.dataset\?\.volumeCommit === 'confirm'\) e\.dispatchEvent\(new w\.KeyboardEvent\('keydown', \{ key: 'Enter', bubbles: true \}\)\);/);
 });

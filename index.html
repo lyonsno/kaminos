@@ -25664,6 +25664,7 @@ function installAuthoringParameterEditing() {
       setVolumeControlValue(control.id,state.value);
       control.dispatchEvent(new Event('input',{bubbles:true}));
       control.dispatchEvent(new Event('change',{bubbles:true}));
+      if(control.dataset.volumeCommit==='confirm')control.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
       document.querySelectorAll(`[data-authoring-alias="${control.id}"]`).forEach(alias=>{if(alias.type==='checkbox')alias.checked=control.checked;else alias.value=control.value;});
     };
     const check=state=>{
