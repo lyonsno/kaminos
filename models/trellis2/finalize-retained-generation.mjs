@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {extractTrellisDualGridMesh} from './trellis-mesh.js';
 import {finishTrellisMesh,encodeTrellisTexturePNG} from './trellis-material.js';
 import {NodeTrellisUVWorker} from './node-uv-worker.mjs';
+import {createSourceAtlasUnwrapper} from './source-atlas.mjs';
 import {persistGenerationAsset,admitRetainedGenerationCompletion,generationFields,GENERATION_ROUTE} from './sparse-generation-witness-checks.js';
 
 const args=new Map();
@@ -42,6 +43,9 @@ try{
   if(report.commit!==args.get('--expected-commit')||report.dirty)throw Error('exact clean finishing source required');
   const targetFaces=Number(args.get('--target-faces'));
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw Error('positive caller-selected face target required');
+  const uvBackend=args.get('--uv-backend')??'sf3d';
+  if(!['sf3d','source-xatlas'].includes(uvBackend))throw Error('explicit supported UV backend required');
+  report.requestedUVBackend=uvBackend;
   await enter('native-field-admission');
   const rawReport=await fs.readFile(path.join(native,'report.json')),n=JSON.parse(rawReport);
   const fixture=await fs.readFile(path.join(n.fixtureRoot,'manifest.json'));
@@ -125,7 +129,10 @@ try{
       return {...input,vertices,triangles,metadata:{...input.metadata,postprocess:r}};
     }finally{await stdout.close();await stderr.close();}
   };
-  const finished=await finishTrellisMesh(mesh,{postprocessMesh,WorkerClass:NodeTrellisUVWorker,textureSize:1024,
+  const unwrapMesh=uvBackend==='source-xatlas'?createSourceAtlasUnwrapper({python:path.resolve(args.get('--python')),
+    sourceRoot:path.resolve(args.get('--source-root')),expectedSourceCommit:args.get('--expected-source-commit'),
+    cleanRoot:cleanupDir,out:path.join(out,'source-atlas')}):undefined;
+  const finished=await finishTrellisMesh(mesh,{postprocessMesh,WorkerClass:NodeTrellisUVWorker,unwrapMesh,textureSize:1024,
     materialFields:{features:fields['material.features'],coordinates:fields['material.coordinates'],resolution:n.result.composition.materialResolution},
     provenance:{nativeCommit:n.commit,sessionId:n.nativeSessionId,nativeReportSha256:report.native.reportSha256,
       inputManifestSha256:n.fixtureSha256,postprocessCommit:report.commit,comparison:n.result.comparison,
