@@ -39,4 +39,14 @@ for(const postprocessMesh of [async()=>{throw Error('backend failed');},async me
   assert.equal(failed.output,undefined,'failed postprocessing cannot fall back to raw export');failed.dispose();
 }
 assert.throws(()=>createTrellisAssetAdapter({...base,postprocessMesh:true}),/postprocess/);
+// A page selects its UV route through the adapter (e.g. the browser xatlas provider).
+let unwrapped=0;
+const withUV=createTrellisAssetAdapter({...base,WorkerClass:undefined,unwrapMesh:async mesh=>{unwrapped++;
+  const n=mesh.vertices.length/3,uvs=new Float32Array(n*2);for(let i=0;i<n;i++){uvs[i*2]=(i%3)/3;uvs[i*2+1]=Math.floor(i/3)/3+(i%2)*.2;}
+  return {...mesh,uvs,normals:new Float32Array(n*3).fill(1/Math.sqrt(3)),uvMetadata:{route:'adapter-selected-uv'}};}});
+const uvResult=await withUV.run();
+assert.equal(unwrapped,1,'adapter must hand the surface to the caller-selected UV provider');
+assert.equal(uvResult.mesh.uvMetadata.route,'adapter-selected-uv');
+withUV.dispose();
+assert.throws(()=>createTrellisAssetAdapter({...base,unwrapMesh:true}),/UV provider/);
 console.log('Requested finishing executes before UV/export; processed geometry and provenance compose, and failure cannot silently export raw geometry.');
