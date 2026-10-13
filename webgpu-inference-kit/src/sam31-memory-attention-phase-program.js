@@ -28,7 +28,13 @@ const INPUT_ROLES = [
 ];
 const OUTPUT_ROLES = [{ key: 'memory', role: 'sam31-memory-conditioned-features', required: true }];
 
-function requiredStages(layerCount = 4) {
+function readbackPolicy(input) {
+  const capture = input.captureIntermediateReadbacks === undefined ? true : input.captureIntermediateReadbacks;
+  if (typeof capture !== 'boolean') throw new TypeError('captureIntermediateReadbacks must be a boolean');
+  return capture;
+}
+
+function requiredStages(layerCount = 4, captureIntermediateReadbacks = true) {
   const stages = ['memory-attention-load-tensors', 'memory-attention-initial-position-add'];
   for (let layer = 0; layer < layerCount; layer += 1) {
     stages.push(
@@ -56,11 +62,11 @@ function requiredStages(layerCount = 4) {
     );
   }
   stages.push('memory-attention-final-layernorm', 'memory-attention-readback');
-  return stages;
+  return captureIntermediateReadbacks ? stages : stages.filter(stage => !stage.endsWith('readback') || stage === 'memory-attention-readback');
 }
 
-function createDefaultScheduler(layerCount = 4) {
-  const stages = requiredStages(layerCount);
+function createDefaultScheduler(layerCount = 4, captureIntermediateReadbacks = true) {
+  const stages = requiredStages(layerCount, captureIntermediateReadbacks);
   const chunks = Object.fromEntries(stages.map(stage => [stage, 1]));
   return createWebGpuRouteSchedulerProfile({
     requestedScheduler: { mode: 'cooperative', yieldMs: 0, waitForSubmittedWorkDone: true, phaseChunkSize: chunks },
@@ -363,9 +369,10 @@ export function createSam31MemoryAttentionPhaseProgramCpuOracle(input = {}) {
 
 export function createSam31MemoryAttentionPhaseProgramRouteDefinition(input = {}) {
   const layerCount = input.shape?.layerCount || input.layerCount || 4;
+  const captureIntermediateReadbacks = readbackPolicy(input);
   const routeMetadata = createRouteKernelProfileMetadata(input, {
     defaultProfile: DEFAULT_KERNEL_PROFILE,
-    requiredStages: requiredStages(layerCount),
+    requiredStages: requiredStages(layerCount, captureIntermediateReadbacks),
     timingSource: 'queue-submit-wait',
   });
   return defineWebGpuRoute({
@@ -378,7 +385,7 @@ export function createSam31MemoryAttentionPhaseProgramRouteDefinition(input = {}
     requiredFeatures: input.requiredFeatures || [],
     requiredStages: routeMetadata.requiredStages,
     timingSource: routeMetadata.timingSource,
-    scheduler: input.scheduler || createDefaultScheduler(layerCount),
+    scheduler: input.scheduler || createDefaultScheduler(layerCount, captureIntermediateReadbacks),
     backpressure: input.backpressure || createDefaultBackpressure(),
     worker: input.worker || { exportName: 'runSam31MemoryAttentionPhaseProgramRoute', upstreamBoundary: 'sam31-multiplex-memory-bank-to-conditioned-features' },
   });
@@ -700,6 +707,7 @@ function layerWeightArrays(layer) {
 }
 
 export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
+  const captureIntermediateReadbacks = readbackPolicy(input);
   // 'online' (the original per-query kernel, default) or 'flash' (kit tiled flash attention, opt-in): the
   // tracker keeps the original until a real bank/propagation exercise admits flash at intended geometry.
   const attentionKernel = input.attentionKernel ?? 'online';
@@ -710,7 +718,7 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
   if (shape.channels !== 256 || shape.heads !== 8 || shape.headDim !== 32 || shape.mlpHidden !== 2048 || shape.layerCount !== 4) {
     throw new Error('authoritative SAM3.1 memory attention requires C=256, H=8, D=32, FFN=2048, and four layers');
   }
-  const route = input.route || createSam31MemoryAttentionPhaseProgramRouteDefinition({ kernel: input.kernel, shape });
+  const route = input.route || createSam31MemoryAttentionPhaseProgramRouteDefinition({ kernel: input.kernel, shape, captureIntermediateReadbacks });
   const sourceImage = roleArtifact(input.request.inputs, 'source-image');
   const currentTensors = roleArtifact(input.request.inputs, 'sam31-memory-attention-current-tensors');
   const bankTensors = roleArtifact(input.request.inputs, 'sam31-memory-attention-bank-tensors');
@@ -725,7 +733,7 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
     browser: input.browser,
     backendIdentity: input.backendIdentity,
     kernel: input.kernel || route.kernel,
-    requiredStages: requiredStages(shape.layerCount),
+    requiredStages: requiredStages(shape.layerCount, captureIntermediateReadbacks),
     timingSource: 'queue-submit-wait',
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
@@ -915,7 +923,8 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
   );
   // Flash attention takes ~27 ms per self or cross attention at 5184 queries (8 heads x 32), so each stays one
   // phase like the original kernel (~340 ms) did.
-  const flashPhases = attentionKernel === 'online' ? phases : phases.flatMap(phase => {
+  const executionPhases = captureIntermediateReadbacks ? phases : phases.filter(phase => !phase.readbacks || phase.name === 'memory-attention-readback');
+  const flashPhases = attentionKernel === 'online' ? executionPhases : executionPhases.flatMap(phase => {
     const cross = /CrossAttention$/.test(phase.kernel ?? '');
     if (!cross && !/SelfAttention$/.test(phase.kernel ?? '')) return [phase];
     return partitionSamFlashAttentionPhase(phase, {
@@ -932,6 +941,7 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
     metadata: {
       routeId: SAM31_MEMORY_ATTENTION_PHASE_PROGRAM_ROUTE_ID,
       attentionKernel,
+      captureIntermediateReadbacks,
       sourceBoundary: 'Meta TransformerEncoderDecoupledCrossAttention',
       numObjPtrTokens: shape.numObjPtrTokens,
       attentionMemory: 'online-softmax-without-logits-tensor',
@@ -964,8 +974,9 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
     authoritative.debugReadback = {
       mode: 'explicit-debug-evidence',
       memory: Array.from(new Float32Array(memory)),
-      layerOutputs: Array.from({ length: shape.layerCount }, (_, index) => Array.from(new Float32Array(run.outputs[`layer${index}Memory`]))),
-      stageOutputs: Array.from({ length: shape.layerCount }, (_, index) => ({
+      ...(captureIntermediateReadbacks ? {
+        layerOutputs: Array.from({ length: shape.layerCount }, (_, index) => Array.from(new Float32Array(run.outputs[`layer${index}Memory`]))),
+        stageOutputs: Array.from({ length: shape.layerCount }, (_, index) => ({
         selfAttentionResidual: Array.from(new Float32Array(run.outputs[`layer${index}SelfAttentionResidual`])),
         crossQueryRope: Array.from(new Float32Array(run.outputs[`layer${index}CrossQueryRope`])),
         crossKeyRope: Array.from(new Float32Array(run.outputs[`layer${index}CrossKeyRope`])),
@@ -973,7 +984,8 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
         crossAttention: Array.from(new Float32Array(run.outputs[`layer${index}CrossAttention`])),
         crossAttentionResidual: Array.from(new Float32Array(run.outputs[`layer${index}CrossAttentionResidual`])),
         mlpResidual: Array.from(new Float32Array(run.outputs[`layer${index}Memory`])),
-      })),
+        })),
+      } : {}),
     };
   }
   authoritative.resourceDisposal = runtime.dispose();

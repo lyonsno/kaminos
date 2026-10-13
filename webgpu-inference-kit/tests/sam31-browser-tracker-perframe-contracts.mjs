@@ -221,6 +221,8 @@ if (!vm.SourceTextModule) {
 
   function checkResult(result, mode, capture) {
     assert.equal(attentionCalls.at(-1).attentionKernel, mode, 'selector must reach the actual memory route call');
+    assert.equal(attentionCalls.at(-1).captureIntermediateReadbacks, false, 'verification-free tracking must not request layer diagnostic readbacks');
+    assert.equal(attentionCalls.at(-1).includeReadback, true, 'the decoder still consumes the final conditioned features');
     assert.equal(result.memoryAttentionKernel, mode);
     assert.equal(result.outputs != null, capture);
     assert.equal(result.evidence.passed, true);
