@@ -141,7 +141,7 @@ console.log('volume scene solid contracts: PASS');
   const coreSource = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
   const cache=createSceneSolidGeometryCache();const cached=cache.update([{id:'box',object}],{translate:[0,0,0],scale:1},{grid:g,gridHeight:h});assert.equal(cached.field.cells.length,g*h*g);assert.equal(cached.builds,1);
   assert.equal(cache.update([{id:'box',object}],{translate:[0,0,0],scale:1},{grid:g,gridHeight:h}).builds,0);
-  assert.match(coreSource, /analyticEmitterDescriptor, sourceBounds, field\.cells, gridSize, gridHeight\);/);
+  assert.ok(coreSource.includes('countEmitterChemicalSupport(analyticEmitterDescriptor, sourceBounds, field.cells, gridSize, gridHeight)'),'support counting receives the seated height');
   assert.match(coreSource, /const packed = packSolidTextureRows\(field\.cells, gridSize, gridHeight\);/);
   assert.match(coreSource, /sceneSolidGeometryCache\.update\([^\n]*\{grid:gridSize,gridHeight\}/, 'the cache receives the seated height');
 }
