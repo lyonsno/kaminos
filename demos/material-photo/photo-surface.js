@@ -36,7 +36,7 @@ export function buildPhotoSurface({ depth, normals, width, height }, aspect = wi
       shade[i] = good ? Math.max(0, Math.min(1, (depth[i] - low) / (high - low || 1))) : 0;
     }
   }
-  const indices = [];
+  let indices = [];
   const triangle = (a, b, c) => {
     if (!valid[a] || !valid[b] || !valid[c]) return;
     const lo = Math.min(depth[a], depth[b], depth[c]);
@@ -51,6 +51,16 @@ export function buildPhotoSurface({ depth, normals, width, height }, aspect = wi
       triangle(a, c, b);
       triangle(b, c, d);
     }
+  }
+  if(cutout?.subjectPoint){
+    const point=cutout.subjectPoint;
+    if(!Array.isArray(point)||point.length!==2||!point.every(value=>Number.isFinite(value)&&value>=0&&value<=1))throw Error('Invalid foreground point');
+    // The authored point selects a known object's surface, not a size threshold.
+    const parent=Int32Array.from({length:count},(_,i)=>i);
+    const root=i=>{while(parent[i]!==i){parent[i]=parent[parent[i]];i=parent[i];}return i;};
+    for(let i=0;i<indices.length;i+=3){const a=root(indices[i]);parent[root(indices[i+1])]=a;parent[root(indices[i+2])]=a;}
+    const subject=root(Math.round(point[1]*(height-1))*width+Math.round(point[0]*(width-1)));
+    indices=indices.filter((_,i)=>root(indices[i-i%3])===subject);
   }
   if (!indices.length) throw new Error('The model returned no connected depth surface');
   return { position, flat, normal, uv, shade, indices: new Uint32Array(indices), median, far: Math.max(10, finite.at(-1) / median * 2) };
