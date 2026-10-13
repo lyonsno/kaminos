@@ -112,3 +112,51 @@ test('WO-1: Stop cancels a TRELLIS job while it waits, and says so once it is ru
  assert.equal(r.service.read().canStop,false);assert.equal(r.service.stop(),false);assert.match(r.service.read().stopNote,/GPU queue console/);
  gate2.resolve();await running;
 });
+
+function stopHarness({cancel}){
+ const pipeline=deferred();let polled=0;
+ const service=createTrellisAuthoringGeneration({availability:()=>({status:'available',message:'ok'}),pollMs:1,
+  queuePosition:async()=>{polled++;return {status:'pending',jobsAhead:1,waitedSeconds:1};},cancelJob:()=>cancel.promise,
+  runPipeline:async(_,{onProgress})=>{onProgress({schema:'kaminos.pipeline-progress.v0',phase:'queued',message:'q',jobId:'job-9'});return pipeline.promise;},
+  meshUrl:()=>'/m.glb',fetchBytes:async()=>glb,persist:async()=>({name:'saved.glb',source:'/s'})});
+ return {service,pipeline};
+}
+const waitFor=async test=>{for(let i=0;i<200&&!test();i++)await new Promise(r=>setTimeout(r,2));};
+
+test('KMA-C01: an unrelated failure while Stop is unconfirmed stays a failure',async()=>{
+ const cancel=deferred(),h=stopHarness({cancel});
+ const run=h.service.run(input);await waitFor(()=>h.service.read().canStop);
+ assert.equal(h.service.stop(),true);
+ h.pipeline.reject(Error('pipeline stream disconnected'));
+ await assert.rejects(run,/pipeline stream disconnected/);
+ assert.equal(h.service.read().status,'failed');assert.match(h.service.read().error,/pipeline stream disconnected/);
+ cancel.reject(Error('409: job no longer waiting'));await new Promise(r=>setTimeout(r,5));
+ assert.equal(h.service.read().status,'failed');
+});
+
+test('KMA-C01: a confirmed cancellation is a clean stop',async()=>{
+ const cancel=deferred(),h=stopHarness({cancel});
+ const run=h.service.run(input);await waitFor(()=>h.service.read().canStop);
+ h.service.stop();cancel.resolve({status:'cancelled',jobId:'job-9'});
+ h.pipeline.resolve({ok:false,error:'live model adapter exited 1: queued TRELLIS generation cancelled while waiting'});
+ assert.equal(await run,null);assert.equal(h.service.read().status,'stopped');
+});
+
+test('KMA-C02: a cancellation that loses the race leaves the finished run complete',async()=>{
+ const cancel=deferred(),h=stopHarness({cancel});
+ const run=h.service.run(input);await waitFor(()=>h.service.read().canStop);
+ h.service.stop();
+ h.pipeline.resolve({ok:true,runId:'r',report:{document:{}}});
+ await run;assert.equal(h.service.read().status,'complete');
+ cancel.reject(Error('409: job no longer waiting'));await new Promise(r=>setTimeout(r,5));
+ const state=h.service.read();assert.equal(state.status,'complete','a late rejection must not reopen the run');
+ assert.ok(!['input','loading','running','stopping','saving'].includes(state.status));
+});
+
+test('KMA-C02: a failed cancellation during a live run is shown in the status text',async()=>{
+ const cancel=deferred(),h=stopHarness({cancel});
+ const run=h.service.run(input);await waitFor(()=>h.service.read().canStop);
+ h.service.stop();cancel.reject(Error('409: job no longer waiting'));await new Promise(r=>setTimeout(r,5));
+ assert.equal(h.service.read().status,'running');assert.match(h.service.read().progress,/Stop failed: 409/);
+ h.pipeline.resolve({ok:true,runId:'r',report:{document:{}}});await run;
+});
