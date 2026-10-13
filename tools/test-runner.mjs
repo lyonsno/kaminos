@@ -140,18 +140,13 @@ async function checkDependencies(root) {
 }
 
 // Python distributions the suite needs, from requirements.txt at the root:
-// one distribution name per line, comments after #. They are checked in the
-// runner's python3 with one importlib.metadata call, by distribution name
-// (pillow, not PIL), and only when a Python test is about to run, so a
-// Node-only run never needs a Python environment.
-function requirementNames(text) {
-  return text.split('\n')
-    .map(line => line.replace(/#.*$/, '').trim())
-    .filter(Boolean)
-    .map(line => line.split(/[\s\[<>=!~;@]/)[0])
-    .filter(Boolean);
-}
-
+// one bare distribution name per line, comments after #, nothing else.
+// Whenever the file exists they are checked before anything runs, whatever
+// tests are selected, in the runner's python3 with one importlib.metadata
+// call by distribution name (pillow, not PIL): Node tests spawn python3 too,
+// so a narrowed run must refuse as well. Installed means the package
+// metadata is recorded, not that the package imports.
+const DISTRIBUTION_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
 const PYTHON_DEPENDENCY_PROBE = [
   'import importlib.metadata as m, json, sys',
   'out = {"python": sys.version.split()[0], "executable": sys.executable, "installed": {}, "missing": []}',
@@ -160,21 +155,35 @@ const PYTHON_DEPENDENCY_PROBE = [
   '    except m.PackageNotFoundError: out["missing"].append(name)',
   'print(json.dumps(out))',
 ].join('\n');
+const PYTHON_PROBE_TIMEOUT_MS = 60000;
 
-async function checkPythonDependencies(root, executable, needed) {
-  const result = { checked: false, skipped: null, requirementsPath: null, requirementsSha256: null, executable, resolvedExecutable: null, python: null, declared: [], installed: {}, missing: [] };
+async function readRequirements(root, executable) {
+  const result = { checked: false, skipped: null, requirementsPath: null, requirementsSha256: null, executable, resolvedExecutable: null, python: null, declared: [], invalidLines: [], installed: {}, missing: [] };
   const requirementsPath = path.join(root, 'requirements.txt');
   if (!existsSync(requirementsPath)) { result.skipped = 'no requirements.txt'; return result; }
   const text = await fs.readFile(requirementsPath, 'utf8');
-  Object.assign(result, { requirementsPath, requirementsSha256: sha256(text), declared: requirementNames(text) });
-  if (!needed) { result.skipped = 'no python test selected'; return result; }
+  Object.assign(result, { requirementsPath, requirementsSha256: sha256(text) });
+  text.split(/\r?\n/).forEach((raw, index) => {
+    const line = raw.replace(/#.*$/, '').trim();
+    if (!line) return;
+    if (DISTRIBUTION_NAME.test(line)) result.declared.push(line);
+    else result.invalidLines.push({ line: index + 1, text: raw.trim() });
+  });
+  return result;
+}
+
+// Fills in the probe's answer, or throws in the python-dependencies phase
+// when the executable cannot run it; the requirements identity read above
+// is already in the report either way.
+function probePythonDependencies(result) {
   let probe;
   try {
-    probe = JSON.parse(execFileSync(executable, ['-c', PYTHON_DEPENDENCY_PROBE, ...result.declared], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+    probe = JSON.parse(execFileSync(result.executable, ['-c', PYTHON_DEPENDENCY_PROBE, ...result.declared], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: PYTHON_PROBE_TIMEOUT_MS }));
   } catch (error) {
-    throw Object.assign(new Error(`could not check requirements.txt with ${executable}: ${error.message}`), { phase: 'python-dependencies' });
+    const detail = [error?.code, firstLine(error?.stderr || '') || firstLine(error?.message || error)].filter(Boolean).join(': ');
+    throw Object.assign(new Error(`could not check requirements.txt with ${result.executable} (${detail})`), { phase: 'python-dependencies' });
   }
-  return Object.assign(result, { checked: true, resolvedExecutable: probe.executable, python: probe.python, installed: probe.installed, missing: probe.missing });
+  Object.assign(result, { checked: true, resolvedExecutable: probe.executable, python: probe.python, installed: probe.installed, missing: probe.missing });
 }
 
 // The failure signature: the first error-shaped line for Node, the last for
@@ -439,6 +448,20 @@ export async function runSuite({
       throw Object.assign(new Error(`installed dependencies do not match package-lock.json (missing: ${missing.join(', ') || 'none'}; mismatched: ${mismatched.map(m => m.name).join(', ') || 'none'}). Run npm ci.`), { phase: 'dependencies' });
     }
 
+    report.failurePhase = 'python-dependencies';
+    const pythonDependencies = await readRequirements(root, resolvedExecutables.python);
+    report.effective.pythonDependencies = pythonDependencies;
+    if (pythonDependencies.requirementsPath) {
+      if (pythonDependencies.invalidLines.length) {
+        const lines = pythonDependencies.invalidLines.map(l => `line ${l.line}: ${l.text}`).join('; ');
+        throw Object.assign(new Error(`requirements.txt must hold bare distribution names, one per line, and nothing else; not ${lines}`), { phase: 'python-dependencies' });
+      }
+      probePythonDependencies(pythonDependencies);
+      if (pythonDependencies.missing.length) {
+        throw Object.assign(new Error(`python distributions listed in requirements.txt are not installed in ${resolvedExecutables.python}${pythonDependencies.resolvedExecutable ? ` (${pythonDependencies.resolvedExecutable})` : ''}: ${pythonDependencies.missing.join(', ')}. Run ${resolvedExecutables.python} -m pip install -r requirements.txt.`), { phase: 'python-dependencies' });
+      }
+    }
+
     report.failurePhase = 'discover';
     if (kinds.includes('python')) report.effective.python = executableVersion(resolvedExecutables.python, ['--version']);
     const files = await discover(root);
@@ -489,13 +512,6 @@ export async function runSuite({
     }
     report.counts.notRun = report.notRun.length;
     if (!planned.length && !report.unmatchedSelectors.length) report.unmatchedSelectors.push('empty-plan');
-
-    report.failurePhase = 'python-dependencies';
-    report.effective.pythonDependencies = await checkPythonDependencies(root, resolvedExecutables.python, planned.some(item => item.kind === 'python'));
-    const { missing: missingPython, resolvedExecutable } = report.effective.pythonDependencies;
-    if (missingPython.length) {
-      throw Object.assign(new Error(`python distributions listed in requirements.txt are not installed in ${resolvedExecutables.python}${resolvedExecutable ? ` (${resolvedExecutable})` : ''}: ${missingPython.join(', ')}. Run ${resolvedExecutables.python} -m pip install -r requirements.txt.`), { phase: 'python-dependencies' });
-    }
 
     report.failurePhase = 'execute';
     await fs.mkdir(logsDir, { recursive: true });
@@ -576,7 +592,7 @@ function summarize({ report, reportPath }) {
   const lines = [
     `${report.ok ? 'OK' : 'FAILED'}  executed ${report.counts.executed}, passed ${report.counts.passed}, known failures ${report.counts.knownFailures}, new failures ${report.counts.newFailures}, not run ${report.counts.notRun}`,
   ];
-  if (report.failurePhase) lines.push(`failure phase: ${report.failurePhase}\n${report.error}`);
+  if (report.failurePhase) lines.push(`failure phase: ${report.failurePhase}\n${String(report.error).split('\n').filter(line => !/^\s+at\s/.test(line)).join('\n')}`);
   const list = (label, items, hint) => { if (items.length) lines.push(`${label}${hint ? ` (${hint})` : ''}:\n  ${items.join('\n  ')}`); };
   list('new failures', report.newFailures, 'fix them, or quarantine with a class, reason, owner and signature');
   list('unsigned failures', report.results.filter(r => r.outcome === 'unsigned-failure').map(r => `${r.file}: ${r.unsigned}`), 'the file failed but its events cannot be trusted, so it can never be known');

@@ -48,8 +48,10 @@ const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 // The Chrome profile is created only when a browser is launched, under the
 // temp root, and removed once the browser has exited unless --user-data-dir
-// named it or KAMINOS_KEEP_BROWSER_PROFILE is set.
+// named it or KAMINOS_KEEP_BROWSER_PROFILE is set to anything but empty, 0
+// or false.
 const KEEP_PROFILE_ENV = 'KAMINOS_KEEP_BROWSER_PROFILE';
+const keepProfile = !['', '0', 'false'].includes(String(process.env[KEEP_PROFILE_ENV] ?? '').trim().toLowerCase());
 const requestedUserDataDir = args.get('--user-data-dir') ? String(args.get('--user-data-dir')) : null;
 
 function utcNow() {
@@ -237,7 +239,7 @@ function routeWithBridgeControls(route, grid) {
 }
 
 function launchBrowser(route, userDataDir) {
-  return spawn(chrome, [
+  const browser = spawn(chrome, [
     `--remote-debugging-port=${debugPort}`,
     `--user-data-dir=${userDataDir}`,
     '--no-first-run',
@@ -246,6 +248,12 @@ function launchBrowser(route, userDataDir) {
     '--window-size=1200,1200',
     route,
   ], { stdio: 'ignore' });
+  // A browser that cannot start is a browser-capture failure with a report,
+  // not an unhandled error event.
+  return new Promise((resolveLaunch, rejectLaunch) => {
+    browser.once('spawn', () => resolveLaunch(browser));
+    browser.once('error', error => rejectLaunch(new Error(`browser launch failed (${chrome}): ${error.message}`)));
+  });
 }
 
 async function closeBrowser(browser) {
@@ -410,7 +418,7 @@ async function runCapture(input, validated) {
   let ws = null;
   const captures = [];
   try {
-    browser = launchBrowser(route, userDataDir);
+    browser = await launchBrowser(route, userDataDir);
     await waitForCdp();
     ws = await connectPage(route);
     const initialState = await waitForVolume(ws);
@@ -494,8 +502,13 @@ async function runCapture(input, validated) {
     ws?.close();
     if (browser) await closeBrowser(browser);
     if (!requestedUserDataDir) {
-      if (process.env[KEEP_PROFILE_ENV]) console.error(`keeping browser profile ${userDataDir} because ${KEEP_PROFILE_ENV} is set`);
-      else rmSync(userDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+      if (keepProfile) console.error(`keeping browser profile ${userDataDir} because ${KEEP_PROFILE_ENV} is set`);
+      else {
+        // A profile that cannot be removed is reported, never a failure of the
+        // capture or a replacement for the error that ended it.
+        try { rmSync(userDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
+        catch (error) { console.error(`could not remove browser profile ${userDataDir}: ${error.message}`); }
+      }
     }
   }
 }

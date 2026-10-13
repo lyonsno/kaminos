@@ -763,8 +763,9 @@ test('a compared string holding a machine-local path is displayed normalized, no
 });
 
 // Python dependencies: requirements.txt at the root is checked in the
-// runner's python3 before any test runs, but only when a Python test is
-// selected, so a Node-only run never needs a Python environment.
+// runner's python3 before any test runs, whatever tests are selected, because
+// Node tests spawn python3 too and a narrowed run must not hide a missing
+// distribution behind what looks like a code regression.
 
 const PY_PASS = 'import sys\nsys.exit(0)\n';
 const ABSENT = 'kaminos-no-such-distribution-xyz';
@@ -783,17 +784,58 @@ test('a requirements.txt distribution missing from python3 fails before any test
   assert.deepEqual(report.results, []);
 });
 
-test('the python dependency check is skipped when no python test is selected, and the node test runs', async t => {
+test('the python dependency check runs even when no python test is selected, so a narrowed run cannot hide a missing distribution', async t => {
   const f = await fixture(t, { files: { 'p.py': PY_PASS, 'a.mjs': PASS },
     manifest: manifestOf({ 'tests/p.py': { kind: 'python' }, 'tests/a.mjs': { kind: 'node' } }) });
   await fs.writeFile(path.join(f.root, 'requirements.txt'), `${ABSENT}\n`);
   for (const extra of [{ kinds: ['node'] }, { only: ['tests/a.mjs'] }]) {
-    assert.equal((await run(f, extra)).ok, true, JSON.stringify(extra));
+    assert.equal((await run(f, extra)).ok, false, JSON.stringify(extra));
     const report = await readReport(f);
-    assert.equal(report.counts.executed, 1);
-    assert.equal(report.results[0].file, 'tests/a.mjs');
-    assert.equal(report.effective.pythonDependencies.checked, false, JSON.stringify(extra));
+    assert.equal(report.failurePhase, 'python-dependencies', JSON.stringify(extra));
+    assert.equal(report.counts.executed, 0);
+    assert.deepEqual(report.results, []);
+    assert.equal(report.effective.pythonDependencies.checked, true);
+    assert.deepEqual(report.effective.pythonDependencies.missing, [ABSENT]);
   }
+});
+
+test('a node test that spawns python3 against a distribution requirements.txt names is refused before it runs, even with --kinds node', async t => {
+  const spawner = "import { spawnSync } from 'node:child_process';\nprocess.exit(spawnSync('python3', ['-c', 'import kaminos_no_such_distribution_xyz'], { stdio: 'ignore' }).status === 0 ? 0 : 1);\n";
+  const f = await fixture(t, { files: { 's.mjs': spawner }, manifest: manifestOf({ 'tests/s.mjs': { kind: 'node' } }) });
+  await fs.writeFile(path.join(f.root, 'requirements.txt'), `${ABSENT}\n`);
+  assert.equal((await run(f, { kinds: ['node'] })).ok, false);
+  const report = await readReport(f);
+  assert.equal(report.failurePhase, 'python-dependencies');
+  assert.equal(report.counts.executed, 0);
+  assert.deepEqual(report.results, []);
+  assert.deepEqual(report.newFailures, []);
+});
+
+test('a requirements.txt line that is not a bare distribution name refuses the run, naming the line', async t => {
+  const f = await fixture(t, { files: { 'a.mjs': PASS }, manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' } }) });
+  await fs.writeFile(path.join(f.root, 'requirements.txt'), 'numpy>=99\n');
+  assert.equal((await run(f)).ok, false);
+  const report = await readReport(f);
+  assert.equal(report.failurePhase, 'python-dependencies');
+  assert.match(report.error, /line 1/);
+  assert.match(report.error, /numpy>=99/);
+  assert.equal(report.counts.executed, 0);
+  assert.deepEqual(report.effective.pythonDependencies.invalidLines, [{ line: 1, text: 'numpy>=99' }]);
+});
+
+test('a python3 that cannot run refuses the run in the python-dependencies phase and keeps the requirements identity in the report', async t => {
+  const f = await fixture(t, { files: { 'p.py': PY_PASS }, manifest: manifestOf({ 'tests/p.py': { kind: 'python' } }) });
+  await fs.writeFile(path.join(f.root, 'requirements.txt'), 'numpy\n');
+  assert.equal((await run(f, { executables: { python: '/nonexistent/python3' } })).ok, false);
+  const report = await readReport(f);
+  assert.equal(report.failurePhase, 'python-dependencies');
+  assert.match(report.error, /ENOENT/);
+  assert.match(report.error, /\/nonexistent\/python3/);
+  assert.equal(report.counts.executed, 0);
+  const deps = report.effective.pythonDependencies;
+  assert.equal(deps.checked, false);
+  assert.match(deps.requirementsSha256, /^[0-9a-f]{64}$/);
+  assert.deepEqual(deps.declared, ['numpy']);
 });
 
 test('a requirements.txt whose distributions are installed lets the python test run, with the python version recorded', async t => {

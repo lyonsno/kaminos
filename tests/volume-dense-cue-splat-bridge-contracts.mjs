@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
+import { rmSync } from 'node:fs';
+import { chmod, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -38,6 +39,7 @@ assert.match(core, /boundarySplatRendererIdentity:\s*state\.boundarySplatRendere
 assert.match(core, /boundarySplatAttributeModelIdentity:\s*state\.boundarySplatAttributeModelIdentity/, 'frozen canvas receipt exposes the effective learned attribute model');
 
 const root = await mkdtemp(join(tmpdir(), 'kaminos-dense-cue-splat-bridge-contract-'));
+process.on('exit', () => { try { rmSync(root, { recursive: true, force: true }); } catch {} });
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const roleNames = ['truthHigh', 'low160to144', 'learned160to144', 'low160to112', 'learned160to112'];
 const roles = {};
@@ -92,6 +94,42 @@ assert.deepEqual(report.roleOrder, roleNames);
 assert.deepEqual(report.rendererOrder, ['analytic', 'learned']);
 assert.equal(report.roles.learned160to144.boundarySidecarSha256, roles.learned160to144.boundarySidecar.sha256);
 assert.equal(report.falseClosureChecks.sourceSubstitution, false);
+
+// A browser that cannot be launched is a failure at the browser-capture phase
+// with a written report, not an unhandled error event, and leaves no profile.
+const missingOut = join(root, 'missing-browser-report.json');
+const missing = spawnSync(process.execPath, [bridgeUrl.pathname, '--input', inputPath, '--out', missingOut],
+  { encoding: 'utf8', env: { ...process.env, KAMINOS_CHROME: join(root, 'no-such-browser') } });
+assert.equal(missing.status, 2, missing.stderr || missing.stdout);
+const missingReport = JSON.parse(await readFile(missingOut, 'utf8'));
+assert.equal(missingReport.failurePhase, 'browser-capture');
+assert.match(missingReport.error, /browser launch failed/);
+assert.match(missingReport.error, /no-such-browser/);
+assert.deepEqual((await listProfiles()).filter(dir => !profilesBefore.includes(dir)), [], 'a failed launch leaves no profile directory');
+
+// Removing the profile must never replace the bridge's own error: a stub
+// browser leaves an unremovable subdirectory in the profile and never opens
+// a DevTools port, and the report must still carry the DevTools failure.
+const stubRecord = join(root, 'stub-user-data-dir.txt');
+const stubBrowser = join(root, 'stub-browser.sh');
+await writeFile(stubBrowser, `#!/bin/sh
+for arg in "$@"; do case "$arg" in --user-data-dir=*) dir="\${arg#--user-data-dir=}";; esac; done
+printf '%s' "$dir" > "$KAMINOS_BRIDGE_STUB_RECORD"
+mkdir -p "$dir/locked" && : > "$dir/locked/file" && chmod 000 "$dir/locked"
+exit 0
+`, { mode: 0o755 });
+const launchOut = join(root, 'launch-failure-report.json');
+const launch = spawnSync(process.execPath, [bridgeUrl.pathname, '--input', inputPath, '--out', launchOut],
+  { encoding: 'utf8', env: { ...process.env, KAMINOS_CHROME: stubBrowser, KAMINOS_BRIDGE_STUB_RECORD: stubRecord } });
+const stubProfile = await readFile(stubRecord, 'utf8');
+await chmod(join(stubProfile, 'locked'), 0o700);
+await rm(stubProfile, { recursive: true, force: true });
+assert.equal(launch.status, 2, launch.stderr || launch.stdout);
+const launchReport = JSON.parse(await readFile(launchOut, 'utf8'));
+assert.equal(launchReport.failurePhase, 'browser-capture');
+assert.match(launchReport.error, /Chrome DevTools endpoint did not open/, 'the bridge error survives a failed profile removal');
+assert.ok(stubProfile.startsWith(tmpdir()), `the profile is created under the temp root, got ${stubProfile}`);
+assert.match(launch.stderr, /could not remove browser profile/, 'a failed removal is reported with its path');
 
 await writeFile(roles.learned160to112.boundarySidecar.path, Buffer.alloc(16, 0xff));
 const failedOutputPath = join(root, 'failed-report.json');
