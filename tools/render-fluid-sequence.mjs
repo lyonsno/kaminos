@@ -33,6 +33,9 @@ try{
  const errors=[];page.on('pageerror',e=>errors.push(String(e)));
  await page.addInitScript(()=>{window.__kaminosSequenceStartupErrors=[];window.addEventListener('error',e=>window.__kaminosSequenceStartupErrors.push(e.message));window.addEventListener('unhandledrejection',e=>window.__kaminosSequenceStartupErrors.push(String(e.reason)));});
  page.on('console',message=>{if(message.type()==='error')console.error('Browser:',message.text());});
+ const resourceFailure=message=>{errors.push(message);console.error(message);void page.evaluate(message=>window.__kaminosSequenceStartupErrors?.push(message),message).catch(()=>{});};
+ page.on('response',response=>{if(response.request().resourceType()==='script'&&response.status()>=400)resourceFailure('Required script HTTP '+response.status()+': '+response.url());});
+ page.on('requestfailed',request=>{if(['script','document'].includes(request.resourceType()))resourceFailure('Required resource failed: '+request.url()+' '+request.failure()?.errorText);});
  phase='navigate';await page.goto(inputs.url);
  await sink.begin({phase:'owner-startup',inputsFile:path.resolve(values.inputs),url:page.url(),source});
  await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id||window.__kaminosSequenceStartupErrors?.length||window.kaminosFingerFluidBenchDebugState?.().status==='error'||(document.querySelector('.owner-experiment-status')?.textContent?.startsWith('Unknown experiment:')));
