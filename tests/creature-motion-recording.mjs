@@ -36,5 +36,13 @@ try {
  const before=owner.read(),held=owner.operations.hold();
  assert.equal(held.priorStatus,'playing');assert.equal(held.inputs.frame,before.frame);
  assert.equal(owner.read().status,'paused');assert.equal(callbacks.size,0);
+ class Element {constructor(){this.children=[];}append(...nodes){this.children.push(...nodes);}setAttribute(){}remove(){} }
+ const ui=new Element(),document={createElement:()=>new Element()};
+ owner.mount({root:ui,document,invoke:(name,input)=>owner.operations[name](input)});
+ const controls=[];const walk=node=>{if(node.textContent?.endsWith('source pose'))controls.push(node);for(const child of node.children??[])walk(child);};walk(ui);
+ assert.equal(typeof controls.find(node=>node.textContent==='Last source pose')?.onclick,'function','owner-file follow-up must expose the endpoint through the same source seek operation');
+ await controls.find(node=>node.textContent==='Last source pose').onclick();assert.equal(owner.read().frame,30);assert.equal(owner.read().status,'held');
+ await controls.find(node=>node.textContent==='Midpoint source pose').onclick();assert.equal(owner.read().frame,15);
+ await controls.find(node=>node.textContent==='First source pose').onclick();assert.equal(owner.read().frame,0);
 } finally {recording.finish();await owner.dispose();}
 console.log('Actual creature producer retains requested/applied/failed phases and current-frame hold through shared recorder');
