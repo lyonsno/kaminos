@@ -2123,10 +2123,39 @@ export { REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, resol
 // Joined boundary (Sexy's stationary two-way fine/coarse candidate; Noah
 // 2026-10-13): opt-in, off by default. x = admitted.
 export const JOINED_BOUNDARY_UNIFORM_OFFSET = REACTANT_COMBUSTION_UNIFORM_OFFSET + REACTANT_COMBUSTION_UNIFORM_FLOATS;
-export const JOINED_BOUNDARY_UNIFORM_FLOATS = 4;
+// a = (admitted, ghosts bound, ghost generation, ghost margin in fine cells);
+// b = (exterior origin in fine cells xyz, exterior cell width in fine cells);
+// c = (exterior cell dims xyz, fine pitch in exterior local units).
+export const JOINED_BOUNDARY_UNIFORM_FLOATS = 12;
 export const VOLUME_UNIFORM_FLOATS = JOINED_BOUNDARY_UNIFORM_OFFSET + JOINED_BOUNDARY_UNIFORM_FLOATS;
-export function joinedBoundaryUniformValues(joined) {
-  return [joined?.admitted ? 1 : 0, 0, 0, 0];
+// The widest a transport sample reaches outside the box: the 8-cell backtrace
+// bound plus the trilinear stencil and a margin.
+export const JOINED_GHOST_MARGIN_CELLS = 10;
+export function joinedBoundaryUniformValues(joined, ghosts = null) {
+  const g = ghosts?.bound ? ghosts : null;
+  return [joined?.admitted ? 1 : 0, g ? 1 : 0, g ? g.generation : 0, JOINED_GHOST_MARGIN_CELLS,
+    ...(g ? g.originFine : [0, 0, 0]), g ? g.cellWidthFine : 0,
+    ...(g ? g.dims : [0, 0, 0]), g ? g.finePitchLocal : 0];
+}
+// Exterior geometry for the transport ghosts. Fine cell centre -> exterior cell
+// coordinates (exterior cell i spans [i, i+1)); Sexy's padded sites, x fastest.
+export function joinedGhostCoarsePoint(fineCell, geometry) {
+  return fineCell.map((v, a) => (v + 0.5 - geometry.originFine[a]) / geometry.cellWidthFine);
+}
+export function joinedGhostSiteIndex(site, dims) {
+  return site[0] + (dims[0] + 1) * (site[1] + (dims[1] + 1) * site[2]);
+}
+export function joinedGhostTextureSize(dims) {
+  return dims.map(n => n + 1);
+}
+export function resolveJoinedGhosts({ geometry = null, reactantOn = false } = {}) {
+  if (!geometry) return { bound: false, reason: null };
+  const finite = v => Number.isFinite(v);
+  if (!(geometry.cellWidthFine > 0) || !(geometry.finePitchLocal > 0) || !geometry.dims?.every(n => Number.isInteger(n) && n > 0) || !geometry.originFine?.every(finite)) {
+    throw new Error('joined ghost geometry needs positive cell width, pitch and dims and a finite origin');
+  }
+  if (reactantOn) return { bound: false, reason: 'joined-ghosts-reactant-oxidizer-pending' };
+  return { bound: true, reason: null };
 }
 // Sexy's fine lower planes: plane a holds the lowest a-faces indexed
 // q[b] + n_b * q[d], b = (a+1)%3, d = (a+2)%3. The fine side reads them from a
@@ -3675,6 +3704,8 @@ struct Uniforms {
   reactant_combustion_c: vec4<f32>,
   reactant_combustion_d: vec4<f32>,
   joined_boundary: vec4<f32>,
+  joined_ghost_geometry: vec4<f32>,
+  joined_ghost_dims: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -3756,6 +3787,121 @@ fn joinedLowerFace(c: vec3<i32>, axis: u32) -> f32 {
   let b = (axis + 1u) % 3u;
   let d = (axis + 2u) % 3u;
   return textureLoad(joinedLowerFaces, vec2<i32>(c[b], c[d]), i32(axis), 0).x;
+}
+
+// Transport ghosts: the exterior's OLD and PREDICTED (transport-only) snapshots
+// at site resolution. A = lower-face velocities (exterior local distance per
+// reference tick) + raw soot; B = optical smoke, heat, fuel, oxidizer.
+@group(0) @binding(26) var ghostOldA: texture_3d<f32>;
+@group(0) @binding(27) var ghostOldB: texture_3d<f32>;
+@group(0) @binding(28) var ghostPredA: texture_3d<f32>;
+@group(0) @binding(29) var ghostPredB: texture_3d<f32>;
+
+fn joinedGhosts() -> bool {
+  return joinedBoundary() && u.joined_boundary.y > 0.5;
+}
+
+fn ghostLoad(snapshot: u32, half: u32, site: vec3<i32>) -> vec4<f32> {
+  if (snapshot == 0u) {
+    if (half == 0u) { return textureLoad(ghostOldA, site, 0); }
+    return textureLoad(ghostOldB, site, 0);
+  }
+  if (half == 0u) { return textureLoad(ghostPredA, site, 0); }
+  return textureLoad(ghostPredB, site, 0);
+}
+
+// Exterior cell coordinates of a fine-cell-space point.
+fn ghostCoarsePoint(p: vec3<f32>) -> vec3<f32> {
+  return (p - u.joined_ghost_geometry.xyz) / u.joined_ghost_geometry.w;
+}
+
+// Cell-centred exterior scalars at a fine cell: (raw soot, heat, fuel, oxidizer).
+fn ghostScalars(c: vec3<i32>, snapshot: u32) -> vec4<f32> {
+  let n = vec3<f32>(u.joined_ghost_dims.xyz);
+  let q = clamp(ghostCoarsePoint(vec3<f32>(c) + vec3<f32>(0.5)) - vec3<f32>(0.5), vec3<f32>(0.0), n - vec3<f32>(1.001));
+  let i0 = vec3<i32>(floor(q));
+  let f = fract(q);
+  var acc = vec4<f32>(0.0);
+  for (var dz = 0; dz < 2; dz = dz + 1) {
+    for (var dy = 0; dy < 2; dy = dy + 1) {
+      for (var dx = 0; dx < 2; dx = dx + 1) {
+        let site = i0 + vec3<i32>(dx, dy, dz);
+        let w = select(1.0 - f.x, f.x, dx == 1) * select(1.0 - f.y, f.y, dy == 1) * select(1.0 - f.z, f.z, dz == 1);
+        let a = ghostLoad(snapshot, 0u, site);
+        let b = ghostLoad(snapshot, 1u, site);
+        acc = acc + vec4<f32>(a.w, b.y, b.z, b.w) * w;
+      }
+    }
+  }
+  return acc;
+}
+
+// Exterior face velocity (component axis) at a fine-cell-space point, in
+// fine cells per reference tick: faces of axis a sit at integer exterior
+// coordinates along a and at cell centres across.
+fn ghostFaceVelocityIn(p: vec3<f32>, axis: u32, snapshot: u32) -> f32 {
+  let n = vec3<f32>(u.joined_ghost_dims.xyz);
+  var q = ghostCoarsePoint(p) - vec3<f32>(0.5);
+  q[axis] = q[axis] + 0.5;
+  var hi = n - vec3<f32>(1.001);
+  hi[axis] = n[axis] - 0.001;
+  q = clamp(q, vec3<f32>(0.0), hi);
+  let i0 = vec3<i32>(floor(q));
+  let f = fract(q);
+  var acc = 0.0;
+  for (var dz = 0; dz < 2; dz = dz + 1) {
+    for (var dy = 0; dy < 2; dy = dy + 1) {
+      for (var dx = 0; dx < 2; dx = dx + 1) {
+        let w = select(1.0 - f.x, f.x, dx == 1) * select(1.0 - f.y, f.y, dy == 1) * select(1.0 - f.z, f.z, dz == 1);
+        acc = acc + ghostLoad(snapshot, 0u, i0 + vec3<i32>(dx, dy, dz))[axis] * w;
+      }
+    }
+  }
+  return acc / u.joined_ghost_dims.w;
+}
+
+// The exterior's value of a fine slot at a fine cell outside the box. Slot 0:
+// velocity (upper faces when staggered, centre otherwise) and density; slot 1:
+// raw soot, heat, fuel, no detail; appearance slots read 0 outside the box.
+fn ghostSlot(c: vec3<i32>, slot: u32, snapshot: u32) -> vec4<f32> {
+  if (slot >= 2u) { return vec4<f32>(0.0); }
+  let s = ghostScalars(c, snapshot);
+  if (slot == 0u) {
+    let base = vec3<f32>(c) + vec3<f32>(0.5);
+    let half = select(0.0, 0.5, velocityStaggered());
+    let v = vec3<f32>(
+      ghostFaceVelocityIn(base + vec3<f32>(half, 0.0, 0.0), 0u, snapshot),
+      ghostFaceVelocityIn(base + vec3<f32>(0.0, half, 0.0), 1u, snapshot),
+      ghostFaceVelocityIn(base + vec3<f32>(0.0, 0.0, half), 2u, snapshot));
+    let density = clamp(max(s.x * 1.08, s.y * 0.42 + s.z * 0.10), 0.0, 2.2);
+    return vec4<f32>(v, density);
+  }
+  if (slot == 1u) { return vec4<f32>(s.x, s.y, s.z, 0.0); }
+  return vec4<f32>(0.0);
+}
+
+// Transport-only readers: inside the box the fine state; outside it, in joined
+// mode with ghosts bound, the exterior (OLD for the predictor, backtrace and
+// limiter; PREDICTED for the MacCormack reverse).
+fn readSlotTransport(c: vec3<i32>, slot: u32) -> vec4<f32> {
+  if (joinedGhosts() && !insideGrid(c)) { return ghostSlot(c, slot, 0u); }
+  return readSlot(c, slot);
+}
+
+fn readPredictSlotTransport(c: vec3<i32>, slot: u32) -> vec4<f32> {
+  if (joinedGhosts() && !insideGrid(c)) { return ghostSlot(c, slot, 1u); }
+  return readPredictSlot(c, slot);
+}
+
+// The sample point of the transport samplers: clamped to the box, or with
+// ghosts bound, to the box widened by the ghost margin.
+fn transportSamplePoint(cellCenter: vec3<f32>) -> vec3<f32> {
+  let hi = vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001);
+  if (joinedGhosts()) {
+    let margin = vec3<f32>(u.joined_boundary.w);
+    return clamp(cellCenter - vec3<f32>(0.5), -margin, hi + margin);
+  }
+  return clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), hi);
 }
 
 fn forceDeltaStore(c: vec3<i32>, f: vec3<f32>) {
@@ -4037,17 +4183,17 @@ fn sampleFrontFieldMasked(cellCenter: vec3<f32>) -> f32 {
 }
 
 fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
-  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
+  let pc = transportSamplePoint(cellCenter);
   let i0 = vec3<i32>(floor(pc));
   let f = fract(pc);
-  let c000 = readSlot(i0 + vec3<i32>(0, 0, 0), slot);
-  let c100 = readSlot(i0 + vec3<i32>(1, 0, 0), slot);
-  let c010 = readSlot(i0 + vec3<i32>(0, 1, 0), slot);
-  let c110 = readSlot(i0 + vec3<i32>(1, 1, 0), slot);
-  let c001 = readSlot(i0 + vec3<i32>(0, 0, 1), slot);
-  let c101 = readSlot(i0 + vec3<i32>(1, 0, 1), slot);
-  let c011 = readSlot(i0 + vec3<i32>(0, 1, 1), slot);
-  let c111 = readSlot(i0 + vec3<i32>(1, 1, 1), slot);
+  let c000 = readSlotTransport(i0 + vec3<i32>(0, 0, 0), slot);
+  let c100 = readSlotTransport(i0 + vec3<i32>(1, 0, 0), slot);
+  let c010 = readSlotTransport(i0 + vec3<i32>(0, 1, 0), slot);
+  let c110 = readSlotTransport(i0 + vec3<i32>(1, 1, 0), slot);
+  let c001 = readSlotTransport(i0 + vec3<i32>(0, 0, 1), slot);
+  let c101 = readSlotTransport(i0 + vec3<i32>(1, 0, 1), slot);
+  let c011 = readSlotTransport(i0 + vec3<i32>(0, 1, 1), slot);
+  let c111 = readSlotTransport(i0 + vec3<i32>(1, 1, 1), slot);
   let x00 = mix(c000, c100, f.x);
   let x10 = mix(c010, c110, f.x);
   let x01 = mix(c001, c101, f.x);
@@ -4098,7 +4244,7 @@ fn readPredictSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
 }
 
 fn samplePredictSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
-  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
+  let pc = transportSamplePoint(cellCenter);
   let i0 = vec3<i32>(floor(pc));
   let f = fract(pc);
   if (sceneSolidEnabled()) {
@@ -4112,21 +4258,21 @@ fn samplePredictSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
           let weight = select(1.0 - f.x, f.x, dx == 1)
             * select(1.0 - f.y, f.y, dy == 1)
             * select(1.0 - f.z, f.z, dz == 1);
-          weighted = weighted + readPredictSlot(sampleCell, slot) * weight;
+          weighted = weighted + readPredictSlotTransport(sampleCell, slot) * weight;
           weightSum = weightSum + weight;
         }
       }
     }
     return weighted / max(weightSum, 1e-12);
   }
-  let c000 = readPredictSlot(i0 + vec3<i32>(0, 0, 0), slot);
-  let c100 = readPredictSlot(i0 + vec3<i32>(1, 0, 0), slot);
-  let c010 = readPredictSlot(i0 + vec3<i32>(0, 1, 0), slot);
-  let c110 = readPredictSlot(i0 + vec3<i32>(1, 1, 0), slot);
-  let c001 = readPredictSlot(i0 + vec3<i32>(0, 0, 1), slot);
-  let c101 = readPredictSlot(i0 + vec3<i32>(1, 0, 1), slot);
-  let c011 = readPredictSlot(i0 + vec3<i32>(0, 1, 1), slot);
-  let c111 = readPredictSlot(i0 + vec3<i32>(1, 1, 1), slot);
+  let c000 = readPredictSlotTransport(i0 + vec3<i32>(0, 0, 0), slot);
+  let c100 = readPredictSlotTransport(i0 + vec3<i32>(1, 0, 0), slot);
+  let c010 = readPredictSlotTransport(i0 + vec3<i32>(0, 1, 0), slot);
+  let c110 = readPredictSlotTransport(i0 + vec3<i32>(1, 1, 0), slot);
+  let c001 = readPredictSlotTransport(i0 + vec3<i32>(0, 0, 1), slot);
+  let c101 = readPredictSlotTransport(i0 + vec3<i32>(1, 0, 1), slot);
+  let c011 = readPredictSlotTransport(i0 + vec3<i32>(0, 1, 1), slot);
+  let c111 = readPredictSlotTransport(i0 + vec3<i32>(1, 1, 1), slot);
   let x00 = mix(c000, c100, f.x);
   let x10 = mix(c010, c110, f.x);
   let x01 = mix(c001, c101, f.x);
@@ -4146,7 +4292,7 @@ struct SlotExtrema {
 // Min and max of the source field over the eight cells the trilinear sample at
 // cellCenter reads: the monotone envelope the MacCormack correction may not leave.
 fn slotExtrema(cellCenter: vec3<f32>, slot: u32) -> SlotExtrema {
-  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
+  let pc = transportSamplePoint(cellCenter);
   let i0 = vec3<i32>(floor(pc));
   if (sceneSolidEnabled()) {
     var found = false;
@@ -4157,7 +4303,7 @@ fn slotExtrema(cellCenter: vec3<f32>, slot: u32) -> SlotExtrema {
         for (var dx = 0; dx < 2; dx = dx + 1) {
           let sampleCell = i0 + vec3<i32>(dx, dy, dz);
           if (sceneSolidAt(sampleCell)) { continue; }
-          let value = readSlot(sampleCell, slot);
+          let value = readSlotTransport(sampleCell, slot);
           if (!found) { lo = value; hi = value; found = true; }
           else { lo = min(lo, value); hi = max(hi, value); }
         }
@@ -4165,12 +4311,12 @@ fn slotExtrema(cellCenter: vec3<f32>, slot: u32) -> SlotExtrema {
     }
     return SlotExtrema(lo, hi);
   }
-  var lo = readSlot(i0, slot);
+  var lo = readSlotTransport(i0, slot);
   var hi = lo;
   for (var dz = 0; dz < 2; dz = dz + 1) {
     for (var dy = 0; dy < 2; dy = dy + 1) {
       for (var dx = 0; dx < 2; dx = dx + 1) {
-        let v = readSlot(i0 + vec3<i32>(dx, dy, dz), slot);
+        let v = readSlotTransport(i0 + vec3<i32>(dx, dy, dz), slot);
         lo = min(lo, v);
         hi = max(hi, v);
       }
@@ -11896,6 +12042,12 @@ export function createKaminosVolumePrototype({
     return next;
   }
   const joinedLowerFaceView = () => joinedLowerFaceTexture.createView({ dimension: '2d-array' });
+  // Transport ghosts: the exterior geometry Sexy supplies, and four Kaminos-owned
+  // rgba32float 3-D textures at site resolution (OLD A/B, PREDICTED A/B) that
+  // the exterior writes each step; 1x1x1 placeholders without a geometry.
+  let joinedGhostGeometry = null;
+  let joinedGhostTextures = null;
+  const joinedGhostView = index => joinedGhostTextures[index].createView({ dimension: '3d' });
   let forceDeltaTexture = null;
   const inletPuffProcess = new StochasticSignalSet(2, 1);
   const windGustProcess = new WindGustProcess(1);
@@ -12531,6 +12683,8 @@ export function createKaminosVolumePrototype({
     burnRateTexture = null;
     joinedLowerFaceTexture?.destroy();
     joinedLowerFaceTexture = null;
+    joinedGhostTextures?.forEach(texture => texture.destroy());
+    joinedGhostTextures = null;
     forceDeltaTexture?.destroy();
     forceDeltaTexture = null;
     for (const buffer of pressureBuffers) buffer.destroy();
@@ -12669,6 +12823,10 @@ export function createKaminosVolumePrototype({
         { binding: 15, resource: { buffer: emissiveLightField.incident } },
         { binding: 16, resource: sceneSolidTextureView },
           { binding: 25, resource: joinedLowerFaceView() },
+          { binding: 26, resource: joinedGhostView(0) },
+          { binding: 27, resource: joinedGhostView(1) },
+          { binding: 28, resource: joinedGhostView(2) },
+          { binding: 29, resource: joinedGhostView(3) },
         { binding: 17, resource: inflowCoverageTexture.createView() },
         { binding: 18, resource: inflowPerturbationTexture.createView() },
         { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
@@ -12771,6 +12929,10 @@ export function createKaminosVolumePrototype({
         {binding: 7, resource: {buffer: frontBuffers[index]}},
         {binding: 16, resource: sceneSolidTextureView},
         {binding: 25, resource: joinedLowerFaceView()},
+        {binding: 26, resource: joinedGhostView(0)},
+        {binding: 27, resource: joinedGhostView(1)},
+        {binding: 28, resource: joinedGhostView(2)},
+        {binding: 29, resource: joinedGhostView(3)},
         {binding: 19, resource: burnRateTexture.createView({ dimension: '3d' })},
       ],
     }));
@@ -12784,6 +12946,10 @@ export function createKaminosVolumePrototype({
         {binding: 16, resource: sceneSolidTextureView},
         {binding: 23, resource: reactantTextureView(index)},
         {binding: 25, resource: joinedLowerFaceView()},
+        {binding: 26, resource: joinedGhostView(0)},
+        {binding: 27, resource: joinedGhostView(1)},
+        {binding: 28, resource: joinedGhostView(2)},
+        {binding: 29, resource: joinedGhostView(3)},
       ],
     }));
     rebuildSelectiveHeadLiveBindGroups();
@@ -12961,6 +13127,10 @@ export function createKaminosVolumePrototype({
           { binding: 7, resource: { buffer: front } },
           { binding: 16, resource: sceneSolidTextureView },
           { binding: 25, resource: joinedLowerFaceView() },
+          { binding: 26, resource: joinedGhostView(0) },
+          { binding: 27, resource: joinedGhostView(1) },
+          { binding: 28, resource: joinedGhostView(2) },
+          { binding: 29, resource: joinedGhostView(3) },
           { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
@@ -12976,6 +13146,10 @@ export function createKaminosVolumePrototype({
           // read the reactant sidecar; the binding satisfies the shared layout.
           { binding: 23, resource: reactantTextureView(0) },
           { binding: 25, resource: joinedLowerFaceView() },
+          { binding: 26, resource: joinedGhostView(0) },
+          { binding: 27, resource: joinedGhostView(1) },
+          { binding: 28, resource: joinedGhostView(2) },
+          { binding: 29, resource: joinedGhostView(3) },
         ],
       }),
       splat: device.createBindGroup({
@@ -13771,6 +13945,18 @@ export function createKaminosVolumePrototype({
       for (let layer = 0; layer < 3; layer++) {
         device.queue.writeTexture({ texture: joinedLowerFaceTexture, origin: [0, 0, layer] }, new Float32Array(size[0] * size[1]), { bytesPerRow: size[0] * Float32Array.BYTES_PER_ELEMENT }, [size[0], size[1], 1]);
       }
+      const ghostSize = joinedGhostGeometry ? joinedGhostTextureSize(joinedGhostGeometry.dims) : [1, 1, 1];
+      joinedGhostTextures = ['old A', 'old B', 'predicted A', 'predicted B'].map(name => {
+        const texture = device.createTexture({
+          label: `kaminos joined ghost ${name} ${ghostSize.join('x')}`,
+          size: ghostSize,
+          dimension: '3d',
+          format: 'rgba32float',
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
+        });
+        device.queue.writeTexture({ texture }, new Float32Array(ghostSize[0] * ghostSize[1] * ghostSize[2] * 4), { bytesPerRow: ghostSize[0] * 16, rowsPerImage: ghostSize[1] }, ghostSize);
+        return texture;
+      });
     }
     burnRateTexture = device.createTexture({
       label: `kaminos fuel burn rate ${gridSize}x${gridHeight}x${gridSize}`,
@@ -14269,6 +14455,10 @@ export function createKaminosVolumePrototype({
           { binding: 7, resource: { buffer: frontBuffers[0] } },
           { binding: 16, resource: sceneSolidTextureView },
           { binding: 25, resource: joinedLowerFaceView() },
+          { binding: 26, resource: joinedGhostView(0) },
+          { binding: 27, resource: joinedGhostView(1) },
+          { binding: 28, resource: joinedGhostView(2) },
+          { binding: 29, resource: joinedGhostView(3) },
           { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
@@ -14281,6 +14471,10 @@ export function createKaminosVolumePrototype({
           { binding: 7, resource: { buffer: frontBuffers[1] } },
           { binding: 16, resource: sceneSolidTextureView },
           { binding: 25, resource: joinedLowerFaceView() },
+          { binding: 26, resource: joinedGhostView(0) },
+          { binding: 27, resource: joinedGhostView(1) },
+          { binding: 28, resource: joinedGhostView(2) },
+          { binding: 29, resource: joinedGhostView(3) },
           { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         ],
       }),
@@ -14296,6 +14490,10 @@ export function createKaminosVolumePrototype({
           { binding: 16, resource: sceneSolidTextureView },
           { binding: 23, resource: reactantTextureView(0) },
           { binding: 25, resource: joinedLowerFaceView() },
+          { binding: 26, resource: joinedGhostView(0) },
+          { binding: 27, resource: joinedGhostView(1) },
+          { binding: 28, resource: joinedGhostView(2) },
+          { binding: 29, resource: joinedGhostView(3) },
         ],
       }),
       device.createBindGroup({
@@ -14308,6 +14506,10 @@ export function createKaminosVolumePrototype({
           { binding: 16, resource: sceneSolidTextureView },
           { binding: 23, resource: reactantTextureView(1) },
           { binding: 25, resource: joinedLowerFaceView() },
+          { binding: 26, resource: joinedGhostView(0) },
+          { binding: 27, resource: joinedGhostView(1) },
+          { binding: 28, resource: joinedGhostView(2) },
+          { binding: 29, resource: joinedGhostView(3) },
         ],
       }),
     ];
@@ -14671,6 +14873,10 @@ export function createKaminosVolumePrototype({
         // The raymarch fragment entry point reaches divergenceAtCell through the shared module, so the binding must be fragment-visible too (slice-2 lesson at 1e8996ab).
         { binding: 19, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
         { binding: 25, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d-array' } },
+        { binding: 26, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        { binding: 27, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        { binding: 28, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        { binding: 29, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
         { binding: 22, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
         // Reactant sidecar: read as a sampled texture, written as a storage
         // texture (the compute stage is at its storage-buffer limit); compute only.
@@ -14737,6 +14943,10 @@ export function createKaminosVolumePrototype({
         // simply does not read it.
         { binding: 23, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
         { binding: 25, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d-array' } },
+        { binding: 26, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        { binding: 27, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        { binding: 28, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        { binding: 29, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
       ],
     });
     fluidFrontReadBindGroupLayout = device.createBindGroupLayout({
@@ -14756,6 +14966,10 @@ export function createKaminosVolumePrototype({
         },
         { binding: 16, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'uint', viewDimension: '3d' } },
         { binding: 25, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d-array' } },
+        { binding: 26, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        { binding: 27, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        { binding: 28, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        { binding: 29, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
         // The pressure kernels read the heat-release expansion target here.
         { binding: 19, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
       ],
@@ -16162,7 +16376,6 @@ export function createKaminosVolumePrototype({
     refreshSceneCollision();
     const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu });
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
-    uniforms.set(joinedBoundaryUniformValues(state.joinedBoundary), JOINED_BOUNDARY_UNIFORM_OFFSET);
     uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
     const reactantCombustionConfig = resolveReactantCombustionConfig(controlsSnapshot, {
@@ -16173,6 +16386,13 @@ export function createKaminosVolumePrototype({
     });
     uniforms.set(reactantCombustionUniformValues(reactantCombustionConfig), REACTANT_COMBUSTION_UNIFORM_OFFSET);
     state.reactantCombustion = reactantCombustionConfig;
+    // Joined boundary and transport ghosts (the ghosts wait for the reactant
+    // law's oxidizer ghost).
+    state.joinedGhosts = {
+      ...resolveJoinedGhosts({ geometry: joinedGhostGeometry, reactantOn: reactantCombustionConfig.effective.admitted === true }),
+      generation: state.joinedGhosts?.generation ?? -1,
+    };
+    uniforms.set(joinedBoundaryUniformValues(state.joinedBoundary, state.joinedGhosts.bound ? { bound: true, ...joinedGhostGeometry, generation: state.joinedGhosts.generation } : null), JOINED_BOUNDARY_UNIFORM_OFFSET);
     if (ensureReactantSidecar(reactantCombustionConfig.effective.admitted)) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();
@@ -16823,6 +17043,12 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeSim(encoder, options = {}) {
+    // Transport ghosts must be this step's snapshots (Sexy stamps the
+    // generation with the step they were written for).
+    if (state.joinedBoundary?.admitted && state.joinedGhosts?.bound && state.joinedGhosts.generation !== state.simStepCount) {
+      state.joinedGhosts.reason = 'stale-ghost-generation';
+      return false;
+    }
     refreshSceneCollision();
     const transportConfig = resolveTransportConfig(controlsSnapshot);
     ensureTransportPredictorBuffer(transportConfig.effective.predictorPass);
@@ -27154,6 +27380,22 @@ export function createKaminosVolumePrototype({
     // the fine projection: the pre-projection fluid state (upper faces, fine
     // cells per reference tick), the divergence target, the effective solids
     // and the lower-plane texture it writes.
+    // Transport ghosts: the exterior geometry (origin and cell width in fine
+    // cells, exterior cell dims, fine pitch in exterior local units). A change
+    // of presence or dims rebuilds so the four ghost textures follow.
+    setJoinedGhosts(geometry = null) {
+      if (geometry) resolveJoinedGhosts({ geometry, reactantOn: false });
+      const next = geometry ? { originFine: [...geometry.originFine], cellWidthFine: geometry.cellWidthFine, dims: [...geometry.dims], finePitchLocal: geometry.finePitchLocal } : null;
+      const reallocate = Boolean(next) !== Boolean(joinedGhostGeometry) || String(next?.dims) !== String(joinedGhostGeometry?.dims);
+      joinedGhostGeometry = next;
+      if (reallocate && device) rebuildFluidState(gridSize, 'joined-ghosts-change');
+      return { geometry: next };
+    },
+    // The step the bound ghost snapshots were written for.
+    bindJoinedGhostGeneration(generation) {
+      state.joinedGhosts = { ...(state.joinedGhosts ?? { bound: false, reason: null }), generation };
+      return { ...state.joinedGhosts };
+    },
     joinedProducerState() {
       const timeStep = resolveTimeStepConfig(controlsSnapshot).effective;
       return {
@@ -27169,6 +27411,8 @@ export function createKaminosVolumePrototype({
         solidMask: sceneSolidCellsCpu ? { cells: sceneSolidCellsCpu, revision: sceneSolidRevisionKey, dims: [gridSize, gridHeight, gridSize] } : null,
         lowerFaceTexture: joinedLowerFaceTexture,
         prescribedInlet: null,
+        ghosts: { ...(state.joinedGhosts ?? { bound: false, reason: null }), geometry: joinedGhostGeometry,
+          textures: joinedGhostTextures ? { oldA: joinedGhostTextures[0], oldB: joinedGhostTextures[1], predictedA: joinedGhostTextures[2], predictedB: joinedGhostTextures[3] } : null },
         simStepCount: state.simStepCount,
       };
     },

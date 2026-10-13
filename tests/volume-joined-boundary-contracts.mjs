@@ -19,13 +19,14 @@ const shader = source.slice(source.indexOf('`', shaderStart) + 1, source.indexOf
 
 test('uniform block: joined boundary after the reactant block, off by default', () => {
   assert.equal(core.JOINED_BOUNDARY_UNIFORM_OFFSET, core.REACTANT_COMBUSTION_UNIFORM_OFFSET + core.REACTANT_COMBUSTION_UNIFORM_FLOATS, 'after the reactant combustion block');
-  assert.equal(core.JOINED_BOUNDARY_UNIFORM_FLOATS, 4);
+  assert.equal(core.JOINED_BOUNDARY_UNIFORM_FLOATS, 12);
   assert.equal(core.VOLUME_UNIFORM_FLOATS, core.JOINED_BOUNDARY_UNIFORM_OFFSET + core.JOINED_BOUNDARY_UNIFORM_FLOATS);
-  assert.match(shader, /  reactant_combustion_d: vec4<f32>,\n  joined_boundary: vec4<f32>,\n\}/);
+  assert.match(shader, /  reactant_combustion_d: vec4<f32>,\n  joined_boundary: vec4<f32>,\n  joined_ghost_geometry: vec4<f32>,\n  joined_ghost_dims: vec4<f32>,\n\}/);
   assert.match(shader, /fn joinedBoundary\(\) -> bool \{\n  return u\.joined_boundary\.x > 0\.5;\n\}/);
-  assert.deepEqual(core.joinedBoundaryUniformValues(null), [0, 0, 0, 0]);
-  assert.deepEqual(core.joinedBoundaryUniformValues({ admitted: true }), [1, 0, 0, 0]);
-  assert.deepEqual(core.joinedBoundaryUniformValues({ admitted: false }), [0, 0, 0, 0]);
+  const m = core.JOINED_GHOST_MARGIN_CELLS;
+  assert.deepEqual(core.joinedBoundaryUniformValues(null), [0, 0, 0, m, 0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(core.joinedBoundaryUniformValues({ admitted: true }), [1, 0, 0, m, 0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(core.joinedBoundaryUniformValues({ admitted: false }), [0, 0, 0, m, 0, 0, 0, 0, 0, 0, 0, 0]);
 });
 
 // Sexy's lower planes (volume-composite-storage.mjs): plane `a` holds the
@@ -137,4 +138,59 @@ test('capture: @joinedBoundary sets the mode, records the receipt and fails an u
   assert.match(joinedBoundaryMismatch('1', { ...good, producer: { ...good.producer, lowerFaceTextureSize: [1, 1, 3] } }), /lower-plane texture 1,1,3, expected 96,96,3/);
   assert.equal(joinedBoundaryMismatch('0', { receipt: { requested: false, admitted: false, reason: null }, producer: { dims: [48, 96, 48], lowerFaceTextureSize: [1, 1, 3] } }), null);
   assert.match(joinedBoundaryMismatch('1', null), /missing/);
+});
+
+// Slice 2 — transport ghosts (agreed with Sexy, 2026-10-13). Outside the fine
+// box every active transport sampler reads the exterior: the predictor,
+// backtrace and limiter extrema read the OLD snapshot, the MacCormack reverse
+// reads the PREDICTED (transport-only) snapshot. Each snapshot arrives as two
+// Kaminos-owned rgba32float 3-D textures at site resolution (N+1 per axis,
+// Sexy's padded x-fast sites): A = lower-face velocities (local distance per
+// reference tick) + raw soot, B = legacy optical smoke, heat, passive fuel,
+// passive oxidizer; scalars are cell-centred.
+test('ghost geometry: the joined block carries geometry and generation; fine points map into coarse coordinates', () => {
+  assert.equal(core.JOINED_BOUNDARY_UNIFORM_FLOATS, 12);
+  const geometry = { originFine: [-16, 0, -16], cellWidthFine: 4, dims: [32, 64, 32], finePitchLocal: 0.0625, generation: 7 };
+  assert.deepEqual(core.joinedBoundaryUniformValues({ admitted: true }, { bound: true, ...geometry }), [1, 1, 7, core.JOINED_GHOST_MARGIN_CELLS, -16, 0, -16, 4, 32, 64, 32, 0.0625]);
+  assert.deepEqual(core.joinedBoundaryUniformValues({ admitted: true }, null).slice(0, 4), [1, 0, 0, core.JOINED_GHOST_MARGIN_CELLS]);
+  assert.ok(core.JOINED_GHOST_MARGIN_CELLS >= 10, 'covers the 8-cell backtrace bound plus the trilinear stencil');
+  // A fine cell centre maps to coarse cell coordinates (cells span [i, i+1)).
+  assert.deepEqual(core.joinedGhostCoarsePoint([-1, 5, 2], geometry), [(-0.5 + 16) / 4, (5.5 - 0) / 4, (2.5 + 16) / 4]);
+  // Sexy's padded site index, x fastest, N+1 sites per axis.
+  assert.equal(core.joinedGhostSiteIndex([2, 3, 4], [32, 64, 32]), 2 + 33 * (3 + 65 * 4));
+  assert.deepEqual(core.joinedGhostTextureSize([32, 64, 32]), [33, 65, 33]);
+});
+
+test('ghost admission: refused for the reactant law until the oxidizer ghost exists; a stale generation stops the step', () => {
+  assert.equal(core.resolveJoinedGhosts({ geometry: null, reactantOn: false }).bound, false);
+  const g = { originFine: [-16, 0, -16], cellWidthFine: 4, dims: [32, 64, 32], finePitchLocal: 0.0625 };
+  assert.deepEqual({ ...core.resolveJoinedGhosts({ geometry: g, reactantOn: false }) }, { bound: true, reason: null });
+  assert.deepEqual({ ...core.resolveJoinedGhosts({ geometry: g, reactantOn: true }) }, { bound: false, reason: 'joined-ghosts-reactant-oxidizer-pending' });
+  assert.throws(() => core.resolveJoinedGhosts({ geometry: { ...g, cellWidthFine: 0 }, reactantOn: false }), /positive/);
+  const sim = source.slice(source.indexOf('  function encodeSim(encoder, options = {}) {'), source.indexOf('\n  }\n', source.indexOf('  function encodeSim(encoder, options = {}) {')));
+  assert.match(sim, /if \(state\.joinedBoundary\?\.admitted && state\.joinedGhosts\?\.bound && state\.joinedGhosts\.generation !== state\.simStepCount\) \{\n\s+state\.joinedGhosts\.reason = 'stale-ghost-generation';\n\s+return false;\n\s+\}/);
+});
+
+test('ghost reads: bindings 26-29, transport-only readers, OLD for predictor/backtrace/extrema, PREDICTED for the reverse', () => {
+  for (const [binding, name] of [[26, 'ghostOldA'], [27, 'ghostOldB'], [28, 'ghostPredA'], [29, 'ghostPredB']]) {
+    assert.match(shader, new RegExp(`@group\\(0\\) @binding\\(${binding}\\) var ${name}: texture_3d<f32>;`));
+  }
+  assert.match(shader, /fn joinedGhosts\(\) -> bool \{\n  return joinedBoundary\(\) && u\.joined_boundary\.y > 0\.5;\n\}/);
+  assert.match(shader, /fn readSlotTransport\(c: vec3<i32>, slot: u32\) -> vec4<f32> \{\n  if \(joinedGhosts\(\) && !insideGrid\(c\)\) \{ return ghostSlot\(c, slot, 0u\); \}\n  return readSlot\(c, slot\);\n\}/);
+  assert.match(shader, /fn readPredictSlotTransport\(c: vec3<i32>, slot: u32\) -> vec4<f32> \{\n  if \(joinedGhosts\(\) && !insideGrid\(c\)\) \{ return ghostSlot\(c, slot, 1u\); \}\n  return readPredictSlot\(c, slot\);\n\}/);
+  for (const fn of ['sampleFluidSlot', 'slotExtrema']) {
+    const body = shader.slice(shader.indexOf(`fn ${fn}(`), shader.indexOf('\n}\n', shader.indexOf(`fn ${fn}(`)));
+    assert.ok(!/\breadSlot\(/.test(body), `${fn} reads only through the transport reader`);
+    assert.match(body, /readSlotTransport\(/);
+    assert.match(body, /let pc = transportSamplePoint\(cellCenter\);/);
+  }
+  const reverse = shader.slice(shader.indexOf('fn samplePredictSlot('), shader.indexOf('\n}\n', shader.indexOf('fn samplePredictSlot(')));
+  assert.ok(!/\breadPredictSlot\(/.test(reverse));
+  assert.match(reverse, /readPredictSlotTransport\(/);
+  assert.match(reverse, /let pc = transportSamplePoint\(cellCenter\);/);
+  // Channel mapping: slot 0 = exterior velocity (fine cells per tick) + density;
+  // slot 1 = raw soot, heat, fuel, 0; appearance slots read 0 outside the box.
+  const ghost = shader.slice(shader.indexOf('fn ghostSlot('), shader.indexOf('\n}\n', shader.indexOf('fn ghostSlot(')));
+  assert.match(ghost, /if \(slot == 1u\) \{ return vec4<f32>\(s\.x, s\.y, s\.z, 0\.0\); \}/);
+  assert.match(ghost, /return vec4<f32>\(0\.0\);/);
 });
