@@ -158,8 +158,13 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       if(!frameCount||failure)throw Error(failure||'Water has no current scene-color frame');
       const frameId=lastFrame.frameId;
       const pixels=await renderer.readRenderTargetPixelsAsync(colorTarget,x,y,width,height);
+      const nativeBytesPerRow=Math.ceil(width*8/256)*256;
+      const expectedBytes=(height-1)*nativeBytesPerRow+width*8;
+      if(!(pixels instanceof Uint16Array)||pixels.byteLength!==expectedBytes)throw Error('Scene-color native RGBA16 layout changed');
+      const nativeValues=Array.from(pixels,THREE.DataUtils.fromHalfFloat),values=[];
+      for(let row=0;row<height;row++)for(let channel=0;channel<width*4;channel++)values.push(nativeValues[row*nativeBytesPerRow/2+channel]);
       return {frameId,encoding:'linear_hdr',format:'rgba16float',width,height,
-        nativeType:pixels.constructor.name,values:Array.from(pixels,value=>pixels instanceof Uint16Array?THREE.DataUtils.fromHalfFloat(value):value)};
+        nativeType:pixels.constructor.name,nativeBytesPerRow,nativeValues,values};
     },
     setEmitters(records) {
       const packet=localLiquidInletPacket(authored,records,sourceGeneration+1);
