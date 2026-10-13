@@ -263,3 +263,4 @@ body[data-workspace=workbench] #authoring-assets{display:none!important;}
 #asset-prompt{width:100%;box-sizing:border-box;resize:vertical;min-height:2.6em;background:#111;color:#e6eaeb;border:1px solid #3a4144;border-radius:4px;padding:5px 7px;font:inherit;}
 .asset-text-image-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}.asset-text-image-actions label{color:#aeb6b9;display:flex;align-items:center;gap:4px;}#asset-image-size{background:#111;color:#e6eaeb;border:1px solid #3a4144;border-radius:4px;padding:2px 4px;}#asset-seed{width:7.5em;background:#111;color:#e6eaeb;border:1px solid #3a4144;border-radius:4px;padding:2px 4px;}
 #asset-text-status{color:#aeb6b9;line-height:1.5;min-height:1.5em;}#asset-text-progress{width:100%;}
+#asset-mesh-model-row{display:flex;align-items:center;gap:6px;color:#aeb6b9;margin:6px 0;}#asset-mesh-model{background:#111;color:#e6eaeb;border:1px solid #3a4144;border-radius:4px;padding:2px 4px;}
