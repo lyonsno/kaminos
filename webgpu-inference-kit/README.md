@@ -10,11 +10,17 @@ npm install @kaminos/webgpu-inference-kit
 
 ## Turn A Photograph Into A Surface You Can Relight
 
-[![Four synchronized views compare the original photograph, recovered depth, image-based relighting and inferred materials with glow](https://raw.githubusercontent.com/lyonsno/kaminos/main/demos/material-photo/comparison.png)](https://github.com/lyonsno/kaminos/tree/main/demos/material-photo)
+[![Four synchronized views compare the original photograph, recovered depth, image-based relighting and inferred materials with glow](https://raw.githubusercontent.com/lyonsno/kaminos/main/demos/material-photo/comparison.png)](https://lyonsno.github.io/kaminos/inference-kit/material-photo/)
 
 **Material Photograph** brings two model ports and an interactive renderer together on one WebGPU device. MoGe recovers depth and normals; SuperMat estimates albedo, roughness and metalness. Rotate the four views together, move the light, and change the HDR environment to see what each model adds.
 
-The example keeps model resources resident, queues material inference through the kit, and restores completed outputs when you return to an image and resolution. Optional glow extraction and bloom complete the relighting experiment. [Run it locally and explore the composition](https://github.com/lyonsno/kaminos/tree/main/demos/material-photo).
+**[Explore the photograph in your browser](https://lyonsno.github.io/kaminos/inference-kit/material-photo/)** with three included model results and no weight download. The local generation example keeps model resources resident, queues material inference through the kit, and restores completed outputs when you return to an image and resolution. Optional glow extraction and bloom complete the relighting experiment. [Use your photograph locally and explore the composition](https://github.com/lyonsno/kaminos/tree/main/demos/material-photo).
+
+**[Try the browser models](https://lyonsno.github.io/kaminos/inference-kit/)**:
+[relight a photograph](https://lyonsno.github.io/kaminos/inference-kit/material-photo/),
+[generate an image with FLUX](https://lyonsno.github.io/kaminos/inference-kit/klein/),
+or [explore a photograph's depth with MoGe](https://lyonsno.github.io/moge-webgpu/).
+The generation demos run inference locally on your GPU.
 
 ## Generate Images In Your Browser
 
