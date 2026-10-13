@@ -110,25 +110,33 @@ export async function startBenchmarkServer({ mounts, browserPlan, inputs, snapsh
 async function sourceSnapshot() {
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: KIT_ROOT, encoding: 'utf8' }).trim();
   const gitStatus = execFileSync('git', ['status', '--porcelain'], { cwd: KIT_ROOT, encoding: 'utf8' });
+  const prefix = execFileSync('git', ['rev-parse', '--show-prefix'], { cwd: KIT_ROOT, encoding: 'utf8' }).trim();
   const files = {};
   const snapshots = {};
+  async function capture(relative) {
+    const bytes = await readFile(resolve(KIT_ROOT, relative));
+    let committed;
+    try { committed = execFileSync('git', ['show', `${commit}:${prefix}${relative}`], { cwd: KIT_ROOT }); }
+    catch (error) { throw new Error(`source bytes for ${relative} are absent from requested commit ${commit}`, { cause: error }); }
+    if (!bytes.equals(committed)) throw new Error(`source bytes for ${relative} differ from requested commit ${commit}: ${hash(bytes)} != ${hash(committed)}`);
+    files[relative] = hash(bytes);
+    return bytes;
+  }
   async function walk(relative) {
     for (const entry of await readdir(resolve(KIT_ROOT, relative), { withFileTypes: true })) {
       const path = `${relative}/${entry.name}`;
       if (entry.isDirectory()) await walk(path);
       else if (entry.name.endsWith('.js')) {
-        const bytes = await readFile(resolve(KIT_ROOT, path));
-        snapshots[`/${path}`] = bytes; files[path] = hash(bytes);
+        snapshots[`/${path}`] = await capture(path);
       }
     }
   }
   await walk('src');
   for (const relative of ['smokes/sam31-tracker-memory-benchmark.html', 'tools/sam31-tracker-memory-benchmark.mjs', 'tools/sam31-tracker-memory-benchmark-evidence.mjs']) {
-    const bytes = await readFile(resolve(KIT_ROOT, relative));
-    files[relative] = hash(bytes);
+    const bytes = await capture(relative);
     if (relative.endsWith('.html')) snapshots[`/${relative}`] = bytes;
   }
-  return { source: { kitRoot: KIT_ROOT, commit, gitStatus, files, serving: 'snapshotted-source-modules' }, snapshots };
+  return { source: { kitRoot: KIT_ROOT, commit, gitStatus, files, serving: 'git-blob-verified-source-snapshots' }, snapshots };
 }
 
 async function prepareInputs(plan, runDir) {
