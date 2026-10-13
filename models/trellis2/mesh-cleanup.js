@@ -305,13 +305,17 @@ export function cleanupMesh(vertices,faces,{maxHolePerimeter=3e-2,keepLargest=fa
 
 // _cleanup_and_simplify_mesh(simplify_first=True, reference_cleanup=False,
 // qem_simplify=False): up to three fast-simplification passes, then one cleanup.
-export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,keepLargest=false,onPass=()=>{}}={}){
-  if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw RangeError('positive targetFaces required');
-  // Same admission as postprocess-retained-mesh.py: finite, complete, indexed.
+// Same admission as postprocess-retained-mesh.py: finite, complete, indexed.
+function admitSurface(vertices,faces){
   if(!(vertices instanceof Float32Array)||!vertices.length||vertices.length%3||!vertices.every(Number.isFinite))
     throw TypeError('finite F32 xyz vertices required');
   if(!(faces instanceof Uint32Array)||!faces.length||faces.length%3)throw TypeError('U32 triangle indices required');
   for(let i=0,n=vertices.length/3;i<faces.length;i++)if(faces[i]>=n)throw RangeError('triangle index outside vertices');
+}
+
+export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,keepLargest=false,onPass=()=>{}}={}){
+  if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw RangeError('positive targetFaces required');
+  admitSurface(vertices,faces);
   let v=vertices,f=faces;const trace=[];
   if(f.length/3<=targetFaces){
     // Source falls through to its general path: cleanup without winding
@@ -360,6 +364,7 @@ export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,Work
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw RangeError('positive caller-selected targetFaces required');
   if(WorkerClass!==undefined&&typeof WorkerClass!=='function')throw TypeError('WorkerClass must be a Worker constructor');
   const run=WorkerClass?mesh=>new Promise((resolve,reject)=>{
+    admitSurface(mesh.vertices,mesh.triangles); // before copying, so nothing is coerced
     const worker=new WorkerClass(new URL('./mesh-cleanup-worker.js',import.meta.url),{type:'module'}),id=Math.random().toString(36).slice(2);
     const vertices=Float32Array.from(mesh.vertices),triangles=Uint32Array.from(mesh.triangles);
     const done=f=>(...a)=>{worker.terminate();f(...a);};

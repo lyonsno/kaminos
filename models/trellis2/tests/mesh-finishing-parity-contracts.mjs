@@ -72,4 +72,6 @@ assert.equal(sha(fromWorker.vertices),fixture.cases['simplify-route'].output.ver
 assert.equal(sha(fromWorker.triangles),fixture.cases['simplify-route'].output.trianglesSha256,'worker triangles must equal the source finisher bytes');
 assert.equal(vertices.length,MESH_FINISHING_CASES['simplify-route'].build().vertices.length,'caller vertices stay attached');
 const failing=createBrowserMeshPostprocess({targetFaces:target,WorkerClass:NodeTrellisUVWorker});
-await assert.rejects(failing({vertices:new Float32Array(9),triangles:new Uint32Array([0,1,7]),metadata:{}}),/mesh finisher worker failed/);
+await assert.rejects(failing({vertices:new Float32Array(9),triangles:new Uint32Array([0,1,7]),metadata:{}}),/triangle index outside vertices/);
+// Wrongly typed indices are refused, not truncated on the way into the worker.
+await assert.rejects(failing({vertices:new Float32Array(9),triangles:new Float64Array([0.5,1,2]),metadata:{}}),/U32 triangle indices required/);
