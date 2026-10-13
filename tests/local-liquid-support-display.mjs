@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, localLiquidInletPacket } from '../local-liquid-setup.mjs';
+import { createSceneEdits } from '../scene-edit-session.mjs';
 
 test('new water fields hide demonstration support; saved legacy fields retain it', () => {
   assert.equal(defaultLocalLiquidSetup().showSupportGeometry, false);
@@ -36,4 +37,20 @@ test('support visibility changes no inlet publication or source epoch', () => {
   setSetup({ ...authored, showSupportGeometry: false });
   assert.equal(group.visible, false);
   assert.equal(publications, 0);
+});
+
+test('the actual frontend support control shares reversible scene history', () => {
+  const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const a=source.indexOf("  scenePlacementTools.edits.register('@local-liquid-support-display',{");
+  const b=source.indexOf('  scenePlacementTools.addHistoryScope',a);
+  const c=source.indexOf('window.kaminosSetLocalLiquidSupportVisible =');
+  const d=source.indexOf("document.getElementById('local-liquid-support-visible').addEventListener",c);
+  let localLiquidSetup=defaultLocalLiquidSetup();
+  const localLiquidHost={setSetup(){}},refreshLocalLiquidPerformance=()=>{},assertSceneConstructionAvailable=()=>{};
+  const window={_kaminosDirty:()=>{}},scenePlacementTools={edits:createSceneEdits({read:()=>null,write:()=>{}})};
+  eval(source.slice(a,b)+source.slice(c,d));
+  window.kaminosSetLocalLiquidSupportVisible(true);
+  assert.equal(localLiquidSetup.showSupportGeometry,true);
+  scenePlacementTools.edits.undo();assert.equal(localLiquidSetup.showSupportGeometry,false);
+  scenePlacementTools.edits.redo();assert.equal(localLiquidSetup.showSupportGeometry,true);
 });

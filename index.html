@@ -101,7 +101,7 @@ body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !import
 .scene-load-picker-meta { color:#8a9a9e; font-size:10px; }
 #scene-add-menu-popup button { display:flex; width:100%; justify-content:space-between; gap:20px; padding:9px 10px; text-align:left; white-space:nowrap; }
 #scene-add-menu-popup small { color:#8fa1a6; font:10px 'SF Mono',monospace; }
-#scene-first-flame-dialog { color:#d4e0e2; background:#192023; border:1px solid #435159; border-radius:8px; max-width:440px; }
+#scene-first-flame-dialog { color:#d4e0e2; background:#192023; border:1px solid #435159; border-radius:8px; max-width:440px; margin:auto; padding:20px; }
 #scene-first-flame-dialog select { width:100%; margin:10px 0; }
 #scene-first-flame-dialog::backdrop { background:#0008; }
 #local-liquid-performance .hint { margin:8px 0 0; color:#96a3a8; font:11px/1.5 'SF Mono',monospace; }
@@ -7450,7 +7450,7 @@ window.kaminosSetLocalLiquidPerformance = applyLocalLiquidPerformance;
 window.kaminosSetLocalLiquidSupportVisible = value => {
   assertSceneConstructionAvailable();
   if(!localLiquidSetup)throw Error('Add a Water Emitter first');
-  return scenePlacementTools.edits.apply('@local-liquid-support-display',value,'Show water support');
+  return scenePlacementTools.edits.apply('@local-liquid-support-display',{visible:value},'Show water support');
 };
 document.getElementById('local-liquid-support-visible').addEventListener('change',event=>{
   try{window.kaminosSetLocalLiquidSupportVisible(event.target.checked);}
@@ -12038,11 +12038,11 @@ async function initScene() {
   });
   setupSelectionTransforms();
   scenePlacementTools.edits.register('@local-liquid-support-display',{
-    read:()=>localLiquidSetup?.showSupportGeometry??false,
-    check:value=>{if(typeof value!=='boolean')throw Error('Water support visibility must be Boolean');return value;},
+    read:()=>({visible:localLiquidSetup?.showSupportGeometry??false}),
+    check:value=>{if(typeof value?.visible!=='boolean')throw Error('Water support visibility must be Boolean');return {visible:value.visible};},
     write:value=>{
       if(!localLiquidSetup)throw Error('Water field is absent');
-      localLiquidSetup=normalizeLocalLiquidSetup({...localLiquidSetup,showSupportGeometry:value});
+      localLiquidSetup=normalizeLocalLiquidSetup({...localLiquidSetup,showSupportGeometry:value.visible});
       localLiquidHost?.setSetup(localLiquidSetup);
       refreshLocalLiquidPerformance();window._kaminosDirty?.();
     },
@@ -26034,6 +26034,13 @@ function checkFirstFlameFieldState(value) {
   return structuredClone(value);
 }
 function writeFirstFlameFieldState(value) {
+  const before=firstFlameFieldState(),wasWriting=burnerGraphWriting;
+  burnerGraphWriting=true;
+  try{writeFirstFlameFieldStateUnchecked(value);}
+  catch(error){writeFirstFlameFieldStateUnchecked(before);throw error;}
+  finally{burnerGraphWriting=wasWriting;}
+}
+function writeFirstFlameFieldStateUnchecked(value) {
   volumePrototype.setActive(false);
   const url=new URL(location.href),hash=new URLSearchParams(url.hash.slice(1));
   for(const key of [...hash.keys()])if(key.startsWith('volume_light_field')||key==='volume_collision')hash.delete(key);
@@ -26049,9 +26056,8 @@ function writeFirstFlameFieldState(value) {
   if(!value.composition&&activeSceneFieldId==='flame-field')activeSceneFieldId=null;
   renderSceneObjectList();refreshRenderingControls();flameInspector?.sync(true);window._kaminosDirty?.();
   if(value.composition) {
-    const wanted=JSON.stringify(value.composition);
     const mounting=volumePrototype.setActive(true).then(()=>{
-      if(JSON.stringify(activeSceneComposition)!==wanted)volumePrototype.setActive(false);
+      if(!activeSceneComposition)volumePrototype.setActive(false);
     });
     window.__kaminosFirstFlameMount=mounting;
     mounting.catch(error=>setInfo(`Flame field unavailable: ${error.message}`));
@@ -26071,8 +26077,10 @@ async function addFirstFlameField(presetId) {
   if(settings.domControls['volume-advection-scheme'].value!=='maccormack'||settings.domControls['volume-time-step'].value!=='uniform')throw Error('Scene flame requires a MacCormack basin with uniform time stepping');
   const route={volume_light_field:'1',volume_light_field_scene_depth:'1',volume_light_field_test_scene:'0',volume_light_field_shadows:'1',volume_collision:'off'};
   const composition={schema:COMPOSITION_SCHEMA,flame:{presetId:settings.source.presetId,label:settings.source.label||presetId,stationary:true},route,lightGainStops:0};
-  scenePlacementTools.edits.apply('@first-flame-field',{composition,settings,sourcePresent:true,route},'Add flame field and source');
+  try{scenePlacementTools.edits.apply('@first-flame-field',{composition,settings,sourcePresent:true,route},'Add flame field and source');}
+  catch(error){if(scenePlacementTools.edits.state().active)scenePlacementTools.edits.cancel();throw error;}
   await window.__kaminosFirstFlameMount;
+  if(!activeSceneComposition)throw Error('Flame creation was undone during mount');
   setActiveSceneObject(FLAME_EMITTER_ID);
   setInfo('Added flame from the saved basin. Move its source; Undo removes the field.');
   return FLAME_EMITTER_ID;
