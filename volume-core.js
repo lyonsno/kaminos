@@ -10005,8 +10005,14 @@ fn boundarySplatFlowReconstruction(world: vec3<f32>) -> BoundarySplatReconstruct
   return boundarySplatFlowReconstructionWithFrame(world, boundarySplatFlowFrame(world), centerWeight, neighborWeight);
 }
 
+// Same law as the main module's derivedDensityFromSlots (this is a separate
+// shader module); the channel-cleanup contract pins the two copies identical.
+fn derivedDensityFromSlots(material: vec4<f32>, microLayer: vec4<f32>) -> f32 {
+  return clamp(max(material.x * 1.08 + microLayer.x * 0.08, material.y * 0.42 + material.w * 0.18 + microLayer.y * 0.20 + microLayer.z * 0.05 + material.z * 0.10), 0.0, 2.2);
+}
+
 fn boundarySplatOpticalSupport(reconstructed: BoundarySplatReconstructionSample) -> vec4<f32> {
-  let density = max(derivedDensityFromSlots(reconstructed.material, reconstructed.microLayer), reconstructed.material.x);
+  let density = max(derivedDensityFromSlots(reconstructed.material, reconstructed.micro), reconstructed.material.x);
   let fire = reconstructed.fire.x * 1.25
     + reconstructed.fire.z * 0.52
     + reconstructed.fire.w * 0.86

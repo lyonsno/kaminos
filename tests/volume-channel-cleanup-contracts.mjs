@@ -28,7 +28,12 @@ test('every reader of the old lane derives density instead; the converged projec
     assert.match(body, /let density = derivedDensityFromSlots\(material, microLayer\);/, `${name} derives the density it weights the projection with`);
     assert.doesNotMatch(body, /let density = velocityDensity\.w;/);
   }
-  assert.match(fnBody('boundarySplatOpticalSupport'), /let density = max\(derivedDensityFromSlots\(reconstructed\.material, reconstructed\.microLayer\), reconstructed\.material\.x\);/);
+  assert.match(fnBody('boundarySplatOpticalSupport'), /let density = max\(derivedDensityFromSlots\(reconstructed\.material, reconstructed\.micro\), reconstructed\.material\.x\);/, 'the splat module (a separate shader) names the slot micro');
+  const copies = [...source.matchAll(/fn derivedDensityFromSlots\([^]*?\n\}\n/g)].map(m => m[0]);
+  assert.equal(copies.length, 2, 'one copy per shader module: the main WGSL and the boundary splat WGSL');
+  assert.equal(copies[0], copies[1], 'the two copies are byte-identical');
+  const splat = source.slice(source.indexOf('const BOUNDARY_SPLAT_WGSL'), source.indexOf('const BOUNDARY_SPLAT_WGSL') + 400000);
+  assert.ok(splat.includes('fn derivedDensityFromSlots('), 'the splat module carries its own copy');
   const reads = [...source.matchAll(/velocityDensity\.w/g)].length;
   assert.equal(reads, 1, 'the only remaining read of the lane is the converged projection passing it through');
   assert.match(fnBody('csProjectPressureConverged'), /fluidDst\[base\] = vec4<f32>\(boundVelocity\(correctedVelocity\), velocityDensity\.w\);/);
