@@ -45,6 +45,7 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
     scenePlacementTools: { finish() {}, edits: null },
     sceneMembershipEditTargets: new Set(),
     sceneMembershipRetainedObjects: new Map(),
+    sceneMembershipDisposers: new WeakMap(),
     activeSceneObjectId: null,
     activeSceneGroupId: null,
     currentMesh: null,
