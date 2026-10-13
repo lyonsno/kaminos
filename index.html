@@ -11958,7 +11958,10 @@ async function initScene() {
     },
     redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame,
   });
-  window.kaminosWorkbenchSceneState=workbenchSceneFrames.state;
+  window.kaminosWorkbenchSceneState=()=>({...workbenchSceneFrames.state(),
+    rendererBackend:renderer.backend.isWebGPUBackend===true?'webgpu':renderer.backend.isWebGLBackend===true?'webgl':'unknown',
+    adapter:renderer.backend.adapter?.info??null,
+  });
   installFluidWorkbench();
   void installOwnerWorkbenchEntry().catch(error=>{window.kaminosWorkbenchExperimentError=error.message;setInfo("Experiments unavailable: "+error.message);});
 
@@ -14964,13 +14967,14 @@ window.kaminosMountInvestigationEntry=async options=>{
   await fluidViewportReady;
   if(!authoringWorkspace)throw Error('Shared Kaminos workspace unavailable');
   if(authoringWorkspace.state().mode!=='workbench' && !authoringWorkspace.setMode('workbench'))throw Error('Finish the current scene edit before opening the investigation');
-  const component=createInvestigationEntry({document,...options});
+  const tool=options.tool||'finger-fluid-bench';
+  const component=createInvestigationEntry({document,...options,subject:options.subject||(tool==='finger-fluid-bench'?'water':'experiment')});
   const entryOnly=!fingerFluidBenchSolver?.available;
   window.__kaminosInvestigationEntryOnly=entryOnly;
   installFluidWorkbench({entryOnly,investigation:component.node});
   if(!fluidWorkbench)throw Error('Shared Fluid workspace unavailable');
-  fluidWorkbench.setInvestigation(component.node);
-  setActiveTab('finger-fluid-bench');
+  fluidWorkbench.setInvestigation(component.node,{tool});
+  setActiveTab(tool);
   if(entryOnly)fluidWorkbench.update({source:'Investigation',status:'retained',clock:''});
   return component;
 };

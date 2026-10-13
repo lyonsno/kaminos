@@ -1,6 +1,6 @@
 // Presentation of an addressable investigation. Persistence, live-attempt
 // discovery and recording are supplied by the shared investigation owner.
-export function createInvestigationEntry({document,investigation,url,actions={}}) {
+export function createInvestigationEntry({document,investigation,url,actions={},subject='water'}) {
   if(!investigation?.id || !url)throw Error('Investigation identity and return link are required');
   const make=(tag,text)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;return node;};
   const node=make('section');node.className='investigation-guide investigation-entry';
@@ -13,7 +13,7 @@ export function createInvestigationEntry({document,investigation,url,actions={}}
     const details=make('details');details.append(make('summary',label),make('p',text));node.append(details);
   }
   const status=make('output');status.setAttribute('aria-live','polite');
-  const start=make('button','Start new water'),returnToLive=make('button','Return to live water');
+  const start=make('button',`Start new ${subject}`),returnToLive=make('button',`Return to live ${subject}`);
   const note=make('textarea');note.setAttribute('aria-label','Your observation');note.placeholder='Your observation';note.value=investigation.note||'';
   const saveNote=make('button','Save note'),capture=make('button','Capture'),finish=make('button','Finish');
   for(const button of [start,returnToLive,saveNote,capture,finish])button.type='button';
@@ -39,9 +39,9 @@ export function createInvestigationEntry({document,investigation,url,actions={}}
   function setAttempt(value){
     if(value&&!['live','lost','finished'].includes(value.state))throw Error('Unknown investigation attempt state');
     attempt=value;finished=value?.state==='finished';
-    status.textContent=value?.state==='live'?(value.owned?'Recording this live water':'Live water is open in another page'):
-      value?.state==='lost'?'The previous water runtime has ended. Retained observations remain available.':
-      value?.state==='finished'?'Investigation recording retained':'Open the retained investigation, or start a new water attempt.';
+    status.textContent=value?.state==='live'?(value.owned?`Recording this live ${subject}`:`Live ${subject} is open in another page`):
+      value?.state==='lost'?`The previous ${subject} runtime has ended. Retained observations remain available.`:
+      value?.state==='finished'?'Investigation recording retained':`Open the retained investigation, or start a new ${subject} attempt.`;
     controls();
   }
   start.onclick=()=>!start.disabled&&run(()=>actions.start());
