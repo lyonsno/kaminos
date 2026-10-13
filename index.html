@@ -3843,6 +3843,7 @@ import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnaps
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
+import {fireAtBoot} from './fire-boot.mjs';
 import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,KLEIN_PUBLISHED_WEIGHTS} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
@@ -26649,10 +26650,11 @@ sceneInitialization.then(() => {
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
-  // fire=off boots an ordinary scene with no fluid simulation: the app is then the
-  // frame owner models borrow (app-frame-source.mjs). Default behavior is unchanged.
-  const volumeLoaded = new URLSearchParams(location.search).get('fire') === 'off'
-    ? Promise.resolve(null) : initKaminosVolumeRoute();
+  // Only a page that asks for fire boots the fluid simulation (fire-boot.mjs). An
+  // ordinary scene starts without it; the app is then the frame owner models borrow.
+  const fireBoot = fireAtBoot(new URLSearchParams(location.search));
+  window.__kaminosFireBoot = fireBoot;
+  const volumeLoaded = fireBoot.boot ? initKaminosVolumeRoute() : Promise.resolve(null);
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
   Promise.all([environmentLoaded, volumeLoaded]).then(async () => {
     const hash = new URLSearchParams(location.hash.slice(1));
@@ -26700,7 +26702,7 @@ sceneInitialization.then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
-  initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
+  if (fireAtBoot(new URLSearchParams(location.search)).boot) initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
   initWorldChambersRoute();
   initKaminosFingerFluidBenchRoute();
   initKaminosFingerJuiceHostRoute();
