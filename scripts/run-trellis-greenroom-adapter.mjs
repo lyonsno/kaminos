@@ -34,7 +34,7 @@ export async function runTrellisAdapter(values){
         '--input',input,'--expected-input-sha256',state.inputSha256,'--output',output,'--report',childReport,'--run-id',runId],
       command={schema:'gpu-greenroom.command.v1',agent_id:'kaminos-generate',repo_root:c.repoRoot,cwd:c.repoRoot,
         env:{PYTHONDONTWRITEBYTECODE:'1'},output_dir:work,route_identity:'TRELLIS2 queued browser-WebGPU / CPU source finishing',
-        timeout:null,output_class:'artifact',argv};
+        timeout:null,output_class:'final',argv};
     await fs.writeFile(manifestPath,JSON.stringify(command,null,2)+'\n');
     state.command={manifestPath,argv,queueDir:c.queueDir,greenroomBin:c.greenroomBin,childReport};
     state.phase='queue-submission';await persist();

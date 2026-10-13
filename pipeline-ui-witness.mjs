@@ -276,6 +276,10 @@ async function waitFor(cdp, expression, label, timeoutMs = 90000) {
     } catch (error) {
       last = { error: error.message };
     }
+    if (last?.terminalFailure === true) {
+      const error=new Error(`${label} failed: ${last.error || JSON.stringify(last)}`);
+      error.detail={lastTrustworthyEvidence:last};throw error;
+    }
     await wait(500);
   }
   throw new Error(`${label} timed out: ${JSON.stringify(last)}`);
@@ -567,6 +571,8 @@ try {
           : Boolean(primaryArtifact?.path && primaryArtifact?.status));
       return {
         ok: Boolean(run?.ok && run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.graphExecution?.nodeId === ${JSON.stringify(routeNode.routeNodeId)} && run?.graphExecution?.sourceGraphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && run?.source?.graphNodeId === ${JSON.stringify(imageHook.graphImageNodeId)} && state?.selectedGraphNodeId === outputRecord?.id && primaryArtifact?.path && outputNode && outputNode.innerText.includes(expectedTruth) && outputActionButton && outputContainer && outputStatus === 'complete' && outputRecord?.status === 'complete' && outputRecord?.artifactRole === expectedRole && outputRecord?.runTimeline?.length >= 3 && outputRecord?.routeSnapshot?.schema === 'kaminos.pipeline-route-snapshot.v0' && outputRecord?.graphSnapshot?.schema === 'kaminos.pipeline-graph-run-snapshot.v0' && schedulerContractOk && routeLiveStatus === 'complete' && routeLivePhase === 'complete' && artifactTruthOk),
+        terminalFailure: run?.pipelineId === ${JSON.stringify(pipelineId)} && run?.ok === false,
+        error: run?.report?.document?.error || run?.stderrTail || null,
         selectedGraphNodeId: state?.selectedGraphNodeId || null,
         runId: run?.runId || null,
         pipelineId: run?.pipelineId || null,
