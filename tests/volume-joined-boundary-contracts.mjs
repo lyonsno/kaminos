@@ -210,3 +210,14 @@ test('synthetic ghosts: a constant exterior for witnesses, receipted as syntheti
   assert.deepEqual(parseSyntheticGhosts('0.5:0.02'), { heat: 0.5, velocityY: 0.02 });
   assert.equal(parseSyntheticGhosts('x:1'), null);
 });
+
+// Live finding (synthetic ghost witness, 2026-10-13): the four ghost textures
+// pushed the fragment stage past the default 16 sampled textures per stage
+// (the raymarch reaches the transport samplers), so the renderer never
+// started. Both device paths request 24 and refuse an adapter below it.
+test('device: both request paths ask for 24 sampled textures per stage', () => {
+  assert.equal(core.KAMINOS_SAMPLED_TEXTURES_PER_STAGE, 24);
+  assert.match(source, /if \(adapterLimit\('maxSampledTexturesPerShaderStage'\) < KAMINOS_SAMPLED_TEXTURES_PER_STAGE\) \{/);
+  assert.match(source, /raise\('maxSampledTexturesPerShaderStage', KAMINOS_SAMPLED_TEXTURES_PER_STAGE\);/);
+  assert.match(source, /requiredLimits\.maxSampledTexturesPerShaderStage = KAMINOS_SAMPLED_TEXTURES_PER_STAGE;/);
+});

@@ -1448,6 +1448,10 @@ export async function requestKaminosSharedWebGpuDevice({
     );
   }
   raise('maxStorageBuffersPerShaderStage', storageBuffersPerStage);
+  if (adapterLimit('maxSampledTexturesPerShaderStage') < KAMINOS_SAMPLED_TEXTURES_PER_STAGE) {
+    throw new Error(`WebGPU adapter maxSampledTexturesPerShaderStage ${adapterLimit('maxSampledTexturesPerShaderStage')} is below Kaminos requirement ${KAMINOS_SAMPLED_TEXTURES_PER_STAGE}`);
+  }
+  raise('maxSampledTexturesPerShaderStage', KAMINOS_SAMPLED_TEXTURES_PER_STAGE);
   for (const [name, required] of Object.entries({
     maxStorageBuffersInFragmentStage: 5,
     maxStorageBuffersInVertexStage: 4,
@@ -2131,6 +2135,11 @@ export const VOLUME_UNIFORM_FLOATS = JOINED_BOUNDARY_UNIFORM_OFFSET + JOINED_BOU
 // The widest a transport sample reaches outside the box: the 8-cell backtrace
 // bound plus the trilinear stencil and a margin.
 export const JOINED_GHOST_MARGIN_CELLS = 10;
+// Sampled textures per shader stage the volume needs: the raymarch reaches the
+// transport samplers, so the fragment stage sees the joined lower planes and
+// the four ghost textures on top of the fluid group's own; the WebGPU default
+// of 16 is too few.
+export const KAMINOS_SAMPLED_TEXTURES_PER_STAGE = 24;
 export function joinedBoundaryUniformValues(joined, ghosts = null) {
   const g = ghosts?.bound ? ghosts : null;
   return [joined?.admitted ? 1 : 0, g ? 1 : 0, g ? g.generation : 0, JOINED_GHOST_MARGIN_CELLS,
@@ -14646,6 +14655,10 @@ export function createKaminosVolumePrototype({
       );
     }
     requiredLimits.maxStorageBuffersPerShaderStage = BOUNDARY_SPLAT_COMPUTE_STORAGE_BUFFER_BINDING_COUNT;
+    if ((adapter.limits?.maxSampledTexturesPerShaderStage ?? 0) < KAMINOS_SAMPLED_TEXTURES_PER_STAGE) {
+      throw new Error(`sampled-texture-limit:required=${KAMINOS_SAMPLED_TEXTURES_PER_STAGE}:supported=${adapter.limits?.maxSampledTexturesPerShaderStage ?? 0}`);
+    }
+    requiredLimits.maxSampledTexturesPerShaderStage = KAMINOS_SAMPLED_TEXTURES_PER_STAGE;
     if (suppliedDevice) {
       device = suppliedDevice;
       const supportedStorageBufferBytes = Math.min(
