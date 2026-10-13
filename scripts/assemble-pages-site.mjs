@@ -5,10 +5,20 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-export function assemblePagesSite(out) {
+export function assemblePagesSite(out, { supermatWeightsUrl = null } = {}) {
+  if (supermatWeightsUrl) {
+    let url;
+    try { url = new URL(supermatWeightsUrl); } catch {}
+    if (!url || url.protocol !== 'https:' || url.hostname !== 'huggingface.co' || url.port || url.username || url.password || url.search || url.hash ||
+        !/^\/[^/]+\/[^/]+\/resolve\/[a-f0-9]{40}\/(?:[^/]+\/)*$/.test(url.pathname)) {
+      throw new Error('Public SuperMat weights must use a pinned, anonymous Hugging Face package URL');
+    }
+    supermatWeightsUrl = url.href;
+  }
   if (fs.existsSync(out)) throw new Error(`${out} already exists`);
   fs.cpSync(path.join(repoRoot, "docs", "flame-atlas"), out, { recursive: true });
   fs.mkdirSync(path.join(out, "inference-kit"), { recursive: true });
@@ -49,7 +59,7 @@ export function assemblePagesSite(out) {
     fs.copyFileSync(path.join(repoRoot,"demos","material-photo",file),path.join(photograph,file));
   }
   for(const dir of ["images","examples","icons"])fs.cpSync(path.join(repoRoot,"demos","material-photo",dir),path.join(photograph,dir),{recursive:true});
-  fs.writeFileSync(path.join(photograph,"deployment.js"),"export const GENERATION_AVAILABLE=false;\n");
+  fs.writeFileSync(path.join(photograph,"deployment.js"),`export const GENERATION_AVAILABLE=${!!supermatWeightsUrl};\nexport const SUPERMAT_WEIGHTS_URL=${JSON.stringify(supermatWeightsUrl)};\n`);
   for(const file of ["finger-fluid-webgpu-core.js","scene-gi.mjs","scene-gi-settings.mjs",
     "lib/three.webgpu.js","lib/three.core.js","lib/three.tsl.js",
     "lib/addons/tsl/display/BloomNode.js","lib/addons/tsl/display/BloomNode.LICENSE",
@@ -62,6 +72,7 @@ export function assemblePagesSite(out) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  if (!process.argv[2]) throw new Error("usage: node scripts/assemble-pages-site.mjs <out-dir>");
-  assemblePagesSite(path.resolve(process.argv[2]));
+  const {values,positionals}=parseArgs({args:process.argv.slice(2),allowPositionals:true,options:{'supermat-weights':{type:'string'}}});
+  if (positionals.length!==1) throw new Error("usage: node scripts/assemble-pages-site.mjs <out-dir> [--supermat-weights <pinned-url>]");
+  assemblePagesSite(path.resolve(positionals[0]),{supermatWeightsUrl:values['supermat-weights']||null});
 }
