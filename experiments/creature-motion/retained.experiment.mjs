@@ -1,6 +1,7 @@
 import {createCreatureMotionPlayback} from './playback.mjs';
 import * as THREE from '../../lib/three.core.js';
 export {withHeldCreatureFrame} from './held-capture.mjs';
+export {installCreatureInvestigation} from './investigation-browser.mjs';
 
 // Owner contribution. Scene-session spelling follows the current shared join
 // proposal; native host conformance must be exercised after that join lands.
@@ -89,7 +90,7 @@ export default {
    };
    return {read,operations,dispose,mount({root,document=host.controls?.document,invoke}){
     active();if(!document)throw Error('Creature controls require the shared document');
-    mounted?.remove();const panel=document.createElement('section');mounted=panel;
+    mounted?.remove();const panel=document.createElement('section');panel.className='creature-motion-instruments';mounted=panel;
     const title=document.createElement('h3');title.textContent=clip.name;panel.append(title);
     const details=document.createElement('p');details.textContent=identities[0].front_surface??'Retained source-native motion';panel.append(details);
     const status=document.createElement('output');status.setAttribute('aria-live','off');panel.append(status);
