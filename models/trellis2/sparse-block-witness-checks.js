@@ -8,6 +8,15 @@ export const BLOCK_OBSERVATIONS = Object.freeze(['norm1', 'modulated_self_input'
   'q_post_rope', 'k_post_rope', 'self.attention', 'self_attn', 'after_self', 'norm2', 'cross.attention',
   'after_cross', 'mlp_input', 'mlp_fc1', 'mlp_gelu', 'mlp_fc2', 'after_mlp']);
 const REFERENCE_ROUTE = 'pinned-MLX-GPU-single-block/fast-SDPA/two-pass-LN/mlx-sum-QK/real-RoPE/source-BF16-GELU';
+export function validateBlockAttentionPlan(actual, config) {
+  const expected = buildSparseBlockPlan(config);
+  if (!actual || actual.attentionKernel !== expected.attentionKernel ||
+      actual.scoresBytes !== expected.scoresBytes || JSON.stringify(actual.stages) !== JSON.stringify(expected.stages)) {
+    throw new Error('missing or substituted effective block attention plan');
+  }
+  return { requestedKernel: expected.attentionKernel, effectiveKernel: actual.attentionKernel,
+    scoresBytes: actual.scoresBytes, stages: [...actual.stages] };
+}
 export function compareBlockTensor(actual, expected) {
   if (!actual.length || !expected.length) throw new Error('empty tensor');
   if (actual.length !== expected.length) throw new Error('tensor length mismatch');

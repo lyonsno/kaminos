@@ -2,7 +2,7 @@ import { createWebGpuInferenceSession, WEBGPU_BUFFER_USAGE as U } from '../../we
 import { createTrellisSparsePrefixAdapter } from './sparse-prefix.js';
 import { createTrellisSparseBlockAdapter, createTrellisSparseBlockWorkspace, SPARSE_BLOCK_ROUTE } from './sparse-block.js';
 import { validatePrefixFixture, validateNativePrefixBackend, prefixAdapterName, comparePrefixTensor } from './sparse-prefix-witness-checks.js';
-import { validateBlockFixture, validateBlockChainFixture, compareBlockTensor, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
+import { validateBlockFixture, validateBlockChainFixture, validateBlockAttentionPlan, compareBlockTensor, BLOCK_OBSERVATIONS } from './sparse-block-witness-checks.js';
 
 const hash = async data => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)), b => b.toString(16).padStart(2, '0')).join('');
 
@@ -86,8 +86,10 @@ export async function runSparseBlockWitness(blockSha, prefixSha, nextBlockSha) {
       conditioning: blockTensors.conditioning, phases: blockTensors.phases });
     blockAdapter = createTrellisSparseBlockAdapter({ route, config: blockManifest.config, weights: blockTensors,
       inputs: prefixAdapter.outputs, workspace });
+    report.attention = validateBlockAttentionPlan(blockAdapter.plan, blockManifest.config);
     if (nextManifest) nextAdapter = createTrellisSparseBlockAdapter({ route, config: nextManifest.config, weights: nextTensors,
       inputs: { projected: blockAdapter.outputs.hidden, modulation: prefixAdapter.outputs.modulation }, workspace });
+    if (nextAdapter) report.nextAttention = validateBlockAttentionPlan(nextAdapter.plan, nextManifest.config);
     if (nextAdapter) inputCapture = createSparseBlockInputCapture(route.runtime, blockAdapter.outputs.hidden);
     report.phase = 'prefix-block-composition';
     const started = performance.now();

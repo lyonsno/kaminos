@@ -298,7 +298,7 @@ export function createTrellisSparseBlockAdapter({ route, config = {}, weights, i
           bindings: [q, k, v, out].map((resource, i) => ({ name: `b${i}`, resource,
             access: i === 3 ? 'storage' : 'read-only-storage' })).concat([{ name: 'params', resource: params, type: 'uniform' }]) }) });
         // The previous value GEMM rounds before the output projection. Retain that
-        // boundary; only the F32 score/softmax reduction order changes here.
+        // boundary; the F32 attention reduction order changes here.
         add(`${prefix}-attention-bf16`, elementShader(r * c, decl(['values']),
           'values[i] = round_bf16(values[i]);'), [out], grid(r * c));
         return out;
