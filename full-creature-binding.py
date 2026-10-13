@@ -5,9 +5,24 @@ import heapq
 import json
 import math
 import time
+import sys
 from pathlib import Path
 import numpy as np
 from hindquarter_binding import bind_geometry,partial_rotation,JOINT_CHANNELS
+
+OUTPUT_NAMES=('rest.bin','triangles.bin','automatic-weights.bin','automatic-presets.bin','manifest.json','build-report.json')
+
+def protect_output_file(path,inputs):
+    path=Path(path)
+    if path.is_symlink():raise ValueError('output file alias (symlink): '+str(path))
+    if path.exists() and path.stat().st_nlink>1:raise ValueError('output file alias (hardlink): '+str(path))
+    for source in inputs:
+        source=Path(source)
+        if path.resolve()==source.resolve() or (path.exists() and source.exists() and path.samefile(source)):
+            raise ValueError('output overlaps retained input: '+str(path))
+
+def protect_outputs(out,inputs):
+    for name in OUTPUT_NAMES:protect_output_file(Path(out)/name,inputs)
 
 def validate_source_frame(control,frame,baseline,control_sha):
     if frame['source']['control']['sha256']!=control_sha:raise ValueError('control-frame source digest mismatch')
@@ -92,12 +107,20 @@ def palette(bones,pose):
 
 def build(args):
     out=Path(args.out).resolve();control_path=Path(args.control).resolve();frame_path=Path(args.rig_frame).resolve();baseline=Path(args.baseline).resolve()
-    if out==baseline or baseline in out.parents or out in [control_path.parent,frame_path.parent]:raise ValueError('output overlaps retained inputs')
-    out.mkdir(parents=True,exist_ok=True);digest=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
-    report={'status':'running','phase':'authentication','requestedInputs':vars(args),'output':str(out),'effectiveSolver':'numpy-given-tree-geodesic-dual-quaternion'}
+    inputs=[control_path,frame_path,baseline/'manifest.json']+[baseline/name for name in OUTPUT_NAMES]
+    report_path=Path(getattr(args,'report',None) or out/'build-report.json').absolute()
+    digest=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
+    report={'status':'running','phase':'output-protection','requestedInputs':vars(args),'output':str(out),'effectiveSolver':'numpy-given-tree-geodesic-dual-quaternion'}
     try:
+        if out==baseline or baseline in out.parents or out in [control_path.parent,frame_path.parent]:raise ValueError('output overlaps retained inputs')
+        protect_outputs(out,inputs);protect_output_file(report_path,inputs)
+        out.mkdir(parents=True,exist_ok=True);report['phase']='authentication'
         if digest(frame_path)!=args.expected_rig_frame_sha256 or digest(baseline/'manifest.json')!=args.expected_baseline_sha256:raise ValueError('given frame or baseline digest mismatch')
         control=json.loads(control_path.read_text());frame=json.loads(frame_path.read_text());old=json.loads((baseline/'manifest.json').read_text())
+        inputs.extend(Path(v['path']) for v in control.values() if isinstance(v,dict) and 'path' in v)
+        inputs.extend(Path(v['path']) for v in frame['source'].values() if isinstance(v,dict) and 'path' in v)
+        inputs.extend(baseline/name for name in old['assets'])
+        protect_outputs(out,inputs);protect_output_file(report_path,inputs)
         validate_source_frame(control,frame,old,digest(control_path))
         if digest(control['geometry']['path'])!=control['geometry']['sha256']:raise ValueError('geometry digest mismatch')
         geom=np.load(control['geometry']['path'])
@@ -147,10 +170,20 @@ def build(args):
         report.update(status='completed',phase='completed',manifestSha256=digest(out/'manifest.json'),bones=len(bones),presets=len(presets),
             unknownVertices=len(extended['unknownVertices']),acceptedRearBaselineComparison=baseline_errors)
     except Exception as error:report.update(status='failed',error=str(error));raise
-    finally:(out/'build-report.json').write_text(json.dumps(report,indent=2))
+    finally:
+        # An unsafe report path must not turn a refusal into an input overwrite.
+        # Callers can choose an independent --report path for durable refusal.
+        try:protect_output_file(report_path,inputs)
+        except ValueError as error:
+            report['reportWriteRefused']=str(error)
+            print(json.dumps(report),file=sys.stderr)
+        else:
+            report_path.parent.mkdir(parents=True,exist_ok=True)
+            report_path.write_text(json.dumps(report,indent=2))
     print(json.dumps(report))
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     for name in ['control','rig-frame','expected-rig-frame-sha256','baseline','expected-baseline-sha256','out']:parser.add_argument('--'+name,required=True)
+    parser.add_argument('--report',help='Independent report destination; use outside output directory to retain alias-refusal evidence')
     build(parser.parse_args())

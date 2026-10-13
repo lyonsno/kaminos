@@ -1,6 +1,10 @@
 # kaminos-test: python
 import importlib.util
 import sys
+import subprocess
+import tempfile
+import hashlib
+import os
 import unittest
 from pathlib import Path
 import numpy as np
@@ -13,6 +17,32 @@ def bone(name,x,parent=None):
     return {'name':name,'parent':parent,'restMatrix':matrix.tolist(),'tail':[x,.1,0]}
 
 class FullTreeContracts(unittest.TestCase):
+    def test_production_report_alias_rejection_preserves_retained_input(self):
+        for kind in ['symlink','hardlink']:
+            with self.subTest(kind=kind),tempfile.TemporaryDirectory() as folder:
+                root=Path(folder);source=root/'inputs';source.mkdir();out=root/'outputs';out.mkdir()
+                frame=source/'rig.json';frame.write_text('{"retained":true}')
+                control=source/'control.json';control.write_text('{}');baseline=source/'baseline';baseline.mkdir();(baseline/'manifest.json').write_text('{}')
+                alias=out/'build-report.json'
+                if kind=='symlink':alias.symlink_to(frame)
+                else:os.link(frame,alias)
+                before=hashlib.sha256(frame.read_bytes()).hexdigest()
+                result=subprocess.run([sys.executable,str(Path(__file__).resolve().parents[1]/'full-creature-binding.py'),
+                    '--control',str(control),'--rig-frame',str(frame),'--expected-rig-frame-sha256','0'*64,
+                    '--baseline',str(baseline),'--expected-baseline-sha256','0'*64,'--out',str(out)],capture_output=True,text=True)
+                self.assertNotEqual(result.returncode,0)
+                self.assertEqual(hashlib.sha256(frame.read_bytes()).hexdigest(),before,'authentication refusal overwrote linked retained input')
+
+    def test_each_prospective_binary_manifest_and_report_rejects_aliases(self):
+        for name in module.OUTPUT_NAMES:
+            for kind in ['symlink','hardlink']:
+                with self.subTest(name=name,kind=kind),tempfile.TemporaryDirectory() as folder:
+                    root=Path(folder);source=root/'input';source.write_bytes(b'input preserved');out=root/'out';out.mkdir()
+                    if kind=='symlink':(out/name).symlink_to(source)
+                    else:os.link(source,out/name)
+                    with self.assertRaisesRegex(ValueError,'alias'):module.protect_outputs(out,[source])
+                    self.assertEqual(source.read_bytes(),b'input preserved')
+
     def test_control_bytes_and_cast_cannot_impersonate_given_source(self):
         control={'sourceSha256':'source','cast':'real'};frame={'source':{'control':{'sha256':'control'},'sourceSceneSha256':'source'}}
         baseline={'sourceSha256':'source','sourceCast':'real','candidatePaintedWeights':False}
