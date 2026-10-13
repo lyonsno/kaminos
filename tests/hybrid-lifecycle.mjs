@@ -4,13 +4,14 @@ import * as THREE from '../lib/three.webgpu.js';
 import {mountDistributedSceneRadiance} from '../scene-hybrid-radiance.mjs';
 globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,UNIFORM:4,COPY_SRC:8};
 globalThis.GPUTextureUsage={STORAGE_BINDING:1,TEXTURE_BINDING:2,COPY_SRC:4};
-const passes=[],uploads=[];
+const passes=[],uploads=[],pipelines=[];
+let failPass=null;
 const pipeline={getBindGroupLayout(){return {};}};
 const device={limits:{maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024,maxTextureDimension3D:256,maxComputeWorkgroupsPerDimension:65535},
  queue:{writeBuffer(buffer,offset,data){uploads.push([buffer.label,new Float32Array(data)]);},submit(){}},
  createBuffer({label}){return {label,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
- createShaderModule(){return {};},createComputePipeline(){return pipeline;},createBindGroup(){return {};},
- createCommandEncoder(){return {beginComputePass({label}={}){passes.push(label);return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
+ createShaderModule(){return {};},createComputePipeline(descriptor){pipelines.push(descriptor.label);return pipeline;},createBindGroup(){return {};},
+ createCommandEncoder(){return {beginComputePass({label}={}){passes.push(label);if(label===failPass)throw Error('injected preparation failure');return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
 let consume,hostFrame;
 const field={source:{status:'encoded',texture:{createView(){return {};}},dimensions:[4,8,4],localMax:[1,3,1],generation:1,frame:1}};
 const prototype={setSceneMediumSource(){},setSceneSourceFrameConsumer(fn){consume=fn;},setSceneDistributedLightFrame(frame){hostFrame=frame;},sceneVolumeSourceField:()=>field.source};
@@ -29,6 +30,22 @@ assert.equal(passes.filter(p=>p==='prepare static smoke interpolation').length,2
 assert.equal(passes.filter(p=>p==='static kiln visibility preparation').length,2,'source movement must invalidate smoke ray visibility');
 assert.equal(uploads.filter(([label])=>label==='surface and smoke receivers').length,1);
 field.source.generation++;assert.equal(mount.canRender(),false,'new generation must not render stale point fields');consume(field);
-mesh.position.x=.25;consume(field);assert.equal(mount.debugState().geometryBuilds,2,'actual solid movement still rebuilds world visibility');
+const pipelineCount=pipelines.length,preparations=passes.filter(p=>p==='static kiln visibility preparation').length;
+mount.setEditing(true);
+for(let i=1;i<=3;i++){
+ mesh.position.x=i*.25;mesh.rotation.y=i*.2;mesh.scale.set(1+i*.1,1,1-i*.1);field.source.generation++;consume(field);
+ assert.equal(mount.debugState().geometryBuilds,1,'solid transforms must reuse mesh-local BVHs');
+ assert.equal(mount.canRender(),true,'transformed smoke and surface lighting must share the current frame');
+}
+mount.setEditing(false);
+assert.equal(pipelines.length,pipelineCount,'solid transforms must not recreate compute pipelines');
+assert.equal(passes.filter(p=>p==='static kiln visibility preparation').length,preparations+3,'every changed pose must refresh smoke visibility');
+geometry.attributes.position.needsUpdate=true;consume(field);
+assert.equal(mount.debugState().geometryBuilds,2,'actual vertex edits must rebuild local visibility');
+mesh.position.x=2;failPass='live distributed flame transport';
+assert.throws(()=>consume(field),/injected preparation failure/);assert.equal(mount.canRender(),false);
+const failedProjectionCount=passes.filter(p=>p==='reproject world BVH without CPU rebuild').length;
+failPass=null;consume(field);
+assert.equal(passes.filter(p=>p==='reproject world BVH without CPU rebuild').length,failedProjectionCount+1,'retry must re-encode an abandoned transform');
 mesh.material.color.setHex(0xff0000);mount.dispose();assert.equal(mesh.material.color.getHex(),0xff0000);assert.equal(mesh.geometry,geometry);assert.equal(mount.canRender(),false);assert.equal(hostFrame,null);
 console.log('hybrid lifecycle and honest rebuild boundaries passed');
