@@ -1,8 +1,7 @@
 import * as THREE from './lib/three.webgpu.js';
 import {cloneSceneRadianceMaterial} from './scene-radiance.mjs';
 import {createFireLightFieldShadow} from './fire-light-field-shadow.mjs';
-import {collectStaticSceneGeometry,staticSceneGeometryRevision} from './scene-light-geometry.mjs';
-import {buildTriangleVisibility} from './scene-light-visibility.mjs';
+import {createLocalSceneVisibility} from './scene-local-visibility.mjs';
 import {createVolumeGather,lightingDirections} from './scene-volume-gather.mjs';
 import {createPointRegions} from './scene-point-regions.mjs';
 import {validateSceneSourceTransform} from './scene-volume-source.mjs';
@@ -29,12 +28,12 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     return {shadow,irradiance:energy.div(distance2.add(region.w)).mul(normalWorld.dot(direction).max(0)).mul(shadow.visibility)};
   });
   let irradiance=vec3(0);for(const light of lights)irradiance=irradiance.add(light.irradiance);irradiance=irradiance.mul(surfaceGain);
-  const originals=new Map();let gather=null,geometryRevision=null,frame=null,disposed=false,valid=false;
+  const originals=new Map(),localVisibility=createLocalSceneVisibility();let gather=null,geometryRevision=null,frame=null,disposed=false,valid=false;
   let gain=1,sourceSoftness=0,surfaceScattering=false,smokeMode='distributed',angularPattern='fixed',angularRotation=0,retainComparisons=false;
   let sourceTransform=validateSceneSourceTransform();
   const status={identity:'hybrid-distributed-smoke-point-surfaces-v0',status:'awaiting-source',surfaceTransport:'gpu-point-regions',surfaceReceivers:0,pointCount,shadowResolution,volumeGrid,directions,
     geometryBuilds:0,visibilityBuilds:0,previewStale:false,receiverSpacingRequested:0,surfaceReconstructionRequested:0,
-    limitations:['point-region-surface-approximation','point-surfaces-omit-medium-extinction','hard-point-shadows','smoke-visibility-refresh-on-source-transform','CPU-world-BVH-rebuild-on-object-edit','no-surface-bounce']};
+    limitations:['point-region-surface-approximation','point-surfaces-omit-medium-extinction','hard-point-shadows','GPU-smoke-visibility-refresh-on-transform','CPU-local-BVH-rebuild-on-vertex-or-topology-edit','no-surface-bounce']};
   function installMaterials(){
     scene.traverseVisible(mesh=>{
       if(!mesh.isMesh)return;
@@ -55,14 +54,15 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       sourceTransform=validateSceneSourceTransform(field.source.worldTransform);
       translation.value.set(...sourceTransform.translate);scale.value=sourceTransform.scale;
       installMaterials();
-      const revision=staticSceneGeometryRevision(scene);
+      const started=performance.now(),snapshot=localVisibility.snapshot(scene),{revision,geometry:packed}=snapshot;
+      status.localBvhBuilds=snapshot.localBuilds;status.visibilityMeshes=snapshot.meshCount;
       if(!gather||revision!==geometryRevision){
         status.status='building-smoke-world-visibility';onStatus({...status});
-        const started=performance.now(),geometry=collectStaticSceneGeometry(scene),packed=buildTriangleVisibility(geometry.triangles).packGpu();
         const next=createVolumeGather(device,{geometry:packed,receivers:[],volumeGrid,directions,angularPattern,angularRotation,worldGeometry:true});
         prototype.setSceneDistributedLightFrame(null);gather?.destroy();gather=next;geometryRevision=revision;
         status.geometryBuilds++;status.visibilityBuilds++;status.lastGeometryBuildMs=performance.now()-started;status.staticTriangles=packed.triangleCount;
       }
+      gather.setGeometryTransforms(packed.matrices);
       gather.setDirections(directions);gather.setAngularPattern(angularPattern,angularRotation);gather.setRetainComparisons(retainComparisons);
       if(angularPattern==='guided'){
         if(!getSourceGuide)throw new Error('hybrid guided smoke requires authored source guide');

@@ -12,10 +12,18 @@ try {
  const executablePath='/Users/noahlyons/.local/state/kaminos/browsers/chrome-for-testing-154.0.8037.92/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';report.browser=executablePath;
  browser=await chromium.launch({executablePath,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal']});
  const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1});page.setDefaultTimeout(0);page.on('pageerror',e=>report.errors.push(e.message));
+ page.on('console',message=>{if(message.type()==='error')report.errors.push(message.text());});
+ // Exercise Three's handled-error channel: shader validation can log without
+ // throwing a pageerror. Such a draw failure must make the witness fail.
+ await page.evaluate(()=>console.error('hybrid witness deliberate renderer-error channel probe'));
+ await page.waitForFunction(()=>true);
+ assert.deepEqual(report.errors,['hybrid witness deliberate renderer-error channel probe']);
+ report.rendererErrorProbe={caught:report.errors.splice(0),claim:'console error channel injection, not a deliberately broken GPU pipeline'};
  await page.goto(origin+'/tests/');
  report.phase='native-gpu-conformance';await write();
  report.gpu=await page.evaluate(async()=>{
   const adapter=await navigator.gpu.requestAdapter();if(!adapter)throw Error('native WebGPU adapter unavailable');
+  if(adapter.info.isFallbackAdapter||/swiftshader|software/i.test(adapter.info.description))throw Error('software fallback is not native GPU evidence');
   const device=await adapter.requestDevice();device.pushErrorScope('validation');
   const {createPointRegions,reducePointRegionsReference}=await import('/scene-point-regions.mjs');
   const dims=[2,4,2],values=new Float32Array(64);values.set([2,1,0,100],0);values.set([0,0,3,0],4*(1+2*(3+4)));
@@ -43,9 +51,34 @@ try {
   if(JSON.stringify(triangle.slice(0,3))!==JSON.stringify([-1,1,-2])||triangle[4]!==1||triangle[9]!==1)throw Error('GPU BVH reprojection failed: '+JSON.stringify(triangle));
   const words=new Uint32Array(mapped),originalWords=new Uint32Array(geometry.nodes.buffer);
   for(let i=8;i<12;i++)if(words[i]!==originalWords[i])throw Error('GPU BVH topology changed');
-  const error=await device.popErrorScope();if(error)throw Error(error.message);
-  copied.destroy();nodes.destroy();triangles.destroy();project.destroy();device.destroy();
-  return {adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,device:adapter.info.device,description:adapter.info.description},actual,expected,triangle,validationErrors:0};
+  copied.destroy();nodes.destroy();triangles.destroy();project.destroy();
+  const THREE=await import('/lib/three.webgpu.js'),{createLocalSceneVisibility}=await import('/scene-local-visibility.mjs');
+  const scene=new THREE.Scene(),mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial());mesh.castShadow=true;scene.add(mesh);
+  const second=mesh.clone();scene.add(second);second.position.set(-2,1,3);
+  const local=createLocalSceneVisibility(),initial=local.snapshot(scene),forest=initial.geometry;
+  const fn=make(forest.nodes),ft=make(forest.triangles),fp=createBvhReproject(device,{geometry:forest,nodes:fn,triangles:ft});
+  const checkPose=async()=>{
+    const snapshot=local.snapshot(scene);if(snapshot.geometry!==forest||snapshot.localBuilds!==1)throw Error('transform rebuilt local geometry');
+    const enc=device.createCommandEncoder();fp.encode(enc,{translate:[2,-2,4],scale:2},snapshot.geometry.matrices);
+    const rb=device.createBuffer({size:forest.nodes.byteLength+forest.triangles.byteLength,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+    enc.copyBufferToBuffer(fn,0,rb,0,forest.nodes.byteLength);enc.copyBufferToBuffer(ft,0,rb,forest.nodes.byteLength,forest.triangles.byteLength);device.queue.submit([enc.finish()]);fp.commit();await rb.mapAsync(GPUMapMode.READ);
+    const raw=rb.getMappedRange(),floats=new Float32Array(raw),uints=new Uint32Array(raw),localWords=new Uint32Array(forest.nodes.buffer),meshes=[mesh,second];
+    const near=(a,b)=>{if(!Number.isFinite(a)||Math.abs(a-b)>2e-5*Math.max(1,Math.abs(b)))throw Error('transformed forest value mismatch '+JSON.stringify({a,b}));};
+    for(let n=0;n<forest.nodeCount;n++){
+      for(let j=8;j<12;j++)if(uints[n*12+j]!==localWords[n*12+j])throw Error('forest topology corrupted');
+      const box=new THREE.Box3(new THREE.Vector3(...forest.nodes.slice(n*12,n*12+3)),new THREE.Vector3(...forest.nodes.slice(n*12+4,n*12+7))).applyMatrix4(meshes[forest.owners[n]].matrixWorld);
+      [box.min,box.max].forEach((p,k)=>p.sub(new THREE.Vector3(2,-2,4)).divideScalar(2).toArray().forEach((v,j)=>near(floats[n*12+k*4+j],v)));
+    }
+    for(let t=0;t<forest.triangleCount;t++)for(let v=0;v<3;v++){
+      const xyz=new THREE.Vector4(...forest.triangles.slice(t*12+v*4,t*12+v*4+3),v===0?1:0).applyMatrix4(meshes[forest.owners[forest.nodeCount+t]].matrixWorld);
+      [xyz.x,xyz.y,xyz.z].map((x,j)=>(x-(v===0?[2,-2,4][j]:0))/2).forEach((x,j)=>near(floats[forest.nodes.length+t*12+v*4+j],x));
+    }
+    rb.destroy();return {nodes:forest.nodeCount,triangles:forest.triangleCount,localBuilds:snapshot.localBuilds};
+  };
+  await checkPose();mesh.position.set(1,2,-1);mesh.rotation.set(.4,.6,-.2);mesh.scale.set(-2,.5,1.5);second.rotation.set(.3,0,.8);second.scale.set(1,2,.75);
+  const transformedForest=await checkPose();fn.destroy();ft.destroy();fp.destroy();
+  const error=await device.popErrorScope();if(error)throw Error(error.message);device.destroy();
+  return {adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture,device:adapter.info.device,description:adapter.info.description},actual,expected,triangle,transformedForest,validationErrors:0};
  });await write();
  const route=url=>{const u=new URL(url),h=new URLSearchParams(u.hash.slice(1));for(const[k,v]of Object.entries({volume_light_field_hybrid:'1',rendering_angular_pattern:'guided',rendering_directions:'8',rendering_match_camera:'1'}))h.set(k,v);u.hash=h.toString();return u.href;};
  report.phase='scene-consumer';await write();
@@ -68,11 +101,27 @@ try {
   assert.deepEqual(moved.objects.find(o=>o.id===flame.id).transform.position,position,'actual authored emitter must move');
   assert.equal(moved.lighting.frame.pointRegions.generation,moved.lighting.frame.generation,'surface source must remain current after movement');
   await retain({name:'hybrid-moved',observe});
+  report.phase='solid-movement';await write();
+  const solid=document.objects.find(o=>o.id.startsWith('glb-'));assert.ok(solid,'registered mesh required');
+  const solidMoves=[];
+  await page.evaluate(()=>window.__kaminosSceneRadiance.setEditing('gizmo',true));
+  for(let i=1;i<=3;i++){
+    const transform={position:solid.transform.position.map((v,j)=>v+(j===0?i*.08:0)),rotation:solid.transform.rotation.map((v,j)=>v+(j===1?i*.12:0)),scale:solid.transform.scale.map((v,j)=>v*(j===0?1+i*.04:1))};
+    const begin=performance.now();const update=await page.evaluate(({id,transform})=>{const t=performance.now();window.kaminosSetSceneObjectTransform(id,transform);return {setterMs:performance.now()-t,generation:window.__kaminosSceneRadiance.debugState().frame.generation};},{id:solid.id,transform});
+    await page.waitForFunction(g=>window.__kaminosSceneRadiance?.debugState().frame?.generation>g,update.generation,{timeout:0});await settle();
+    const observed=await observe();assert.equal(observed.lighting.geometryBuilds,before.lighting.geometryBuilds,'solid movement rebuilt CPU visibility');
+    assert.deepEqual(observed.objects.find(o=>o.id===solid.id).transform.position,transform.position);
+    assert.ok(observed.lighting.frame.angularCache.visibilityPreparations>before.lighting.frame.angularCache.visibilityPreparations,'solid movement left visibility stale');
+    solidMoves.push({transform,update,elapsedMs:performance.now()-begin,lighting:observed.lighting});
+  }
+  await page.evaluate(()=>window.__kaminosSceneRadiance.setEditing('gizmo',false));
+  await retain({name:'hybrid-solid-moved',observe});
+  await page.evaluate(({id,transform})=>window.kaminosSetSceneObjectTransform(id,transform),{id:solid.id,transform:solid.transform});await settle();
   await page.evaluate(({id,position})=>window.kaminosSetSceneObjectTransform(id,{position}),{id:flame.id,position:flame.transform.position});await settle();
   const handoff=route(shot.url);await page.goto('about:blank');await page.goto(handoff);await settle();
   assertMountedScene(shot.document,await page.evaluate(()=>window.kaminosSceneObjectDebugState()));
   const reopened=await observe();assert.equal(reopened.lighting.surfaceReceivers,0);
-  return {url:handoff,filename:shot.filename,before,moved,reopened};
+  return {url:handoff,filename:shot.filename,before,moved,solidMoves,reopened};
  }});
  assert.deepEqual(report.errors,[]);report.result=result.result;report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
