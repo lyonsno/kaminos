@@ -4021,6 +4021,7 @@ import {
 } from './finger-fluid-webgpu-core.js';
 import {createIPBFPressureCockpit} from './finger-fluid-pressure-cockpit.mjs';
 import {investigationOperations} from './investigation-recording.mjs';
+import {createFluidAppFrameTiming} from './fluid-app-frame-timing.mjs';
 import {createInvestigationEntry} from './investigation-entry.mjs';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -4052,6 +4053,20 @@ let fluidWorkbench = null;
 let fluidReflectionCockpit = null;
 let fluidBudgetCockpit = null;
 const fluidBudgetPreferences={renderScale:1,timingEnabled:false,energyDiagnosticsMode:null};
+let fluidAppFrameScope='main animation callback';
+const fluidAppFrameTiming=createFluidAppFrameTiming({onWindow:sample=>{
+  if(investigationOperations.active)investigationOperations.emit({kind:'fluid.frame-time',phase:'measured',target:'fluid',effective:sample});
+}});
+function fluidAppFrameSource(scope=fluidAppFrameScope){
+  const clock=window.kaminosFingerFluidBenchSessionState?.();
+  const frame=fingerFluidBenchViewport?.frameIdentity();
+  if(!clock?.available||!clock.running||!frame)return null;
+  const budget=fingerFluidBenchSolver.getFrameBudgetState();
+  return {...frame,scope,generation:clock.generation,step:clock.step,paused:clock.paused,
+    reflection:fingerFluidBenchSolver.getReflectionBudgetControls().effective,
+    energy:budget.energy.mode,particleCount:budget.particleCount,densityIterationsPerStep:fingerFluidBenchState.runtime?.densityIterationsPerStep,
+    diagnostics:{gpuStageTimings:fluidBudgetPreferences.timingEnabled,rayCounts:document.querySelector('[data-reflection-control=count-rays]')?.checked??false}};
+}
 let restoringSceneLight=false;
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -12019,6 +12034,8 @@ async function initScene() {
   }
 
   function animate() {
+    const callbackStart=performance.now(),beforeFrame=sceneFrameCount;
+    try {
     requestAnimationFrame(animate);
     controls.update();
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
@@ -12046,6 +12063,13 @@ async function initScene() {
       if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !forgeHostActive && !volumeBridgeActive && !fireLightFieldActive) idleFrames++;
       needsRender = false;
     }
+    } finally {
+      if(!foregroundServiceActive){
+        fluidAppFrameScope='main animation callback';
+        const source=fluidAppFrameSource();
+        if(sceneFrameCount>beforeFrame||!source||document.visibilityState!=='visible')fluidAppFrameTiming.record({startedAt:callbackStart,endedAt:performance.now(),source,device:renderer.backend.device,visible:document.visibilityState==='visible'});
+      }
+    }
   }
   compositionHost = {
     device: renderer.backend.device,
@@ -12053,6 +12077,7 @@ async function initScene() {
     runForegroundFrame(run) {
       if (!foregroundServiceActive || insideForegroundFrame) throw new Error('invalid foreground scene frame state');
       insideForegroundFrame = true;
+      const callbackStart=performance.now(),beforeFrame=sceneFrameCount;
       sceneRenderedForVolume = false;
       try {
         // The ordinary depth provider runs after the volume updates controls
@@ -12065,7 +12090,11 @@ async function initScene() {
           renderSceneFrame();
         }
         return {...result, sceneFrameCount, sceneAuthority:'three-render-returned-inside-service-not-presentation'};
-      } finally { insideForegroundFrame = false; }
+      } finally {
+        insideForegroundFrame = false;
+        fluidAppFrameScope='foreground service callback';
+        fluidAppFrameTiming.record({startedAt:callbackStart,endedAt:performance.now(),source:sceneFrameCount>beforeFrame?fluidAppFrameSource():null,device:renderer.backend.device,visible:document.visibilityState==='visible'});
+      }
     },
     async presentGlb(glb, {runId, sha256}) {
       const response = await fetch('/api/ingest-mesh', {method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});
@@ -14862,7 +14891,7 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
       effective:read};
   }
   if(!entryOnly && !fluidBudgetCockpit){
-    const read=()=>({clock:window.kaminosFingerFluidBenchSessionState(),solver:fingerFluidBenchSolver?.getFrameBudgetState(),viewport:fingerFluidBenchViewport?.state(),reflection:fingerFluidBenchSolver?.getReflectionBudgetControls()});
+    const read=()=>({clock:window.kaminosFingerFluidBenchSessionState(),solver:fingerFluidBenchSolver?.getFrameBudgetState(),viewport:fingerFluidBenchViewport?.state(),reflection:fingerFluidBenchSolver?.getReflectionBudgetControls(),appFrame:fluidAppFrameTiming.read({source:fluidAppFrameSource(),visible:document.visibilityState==='visible'})});
     const apply=patch=>{
       const before=window.kaminosFingerFluidBenchSessionState();if(!before.available||!fingerFluidBenchViewport)throw Error('Shared fluid viewport unavailable');
       if(!patch||typeof patch!=='object'||Array.isArray(patch))throw Error('Budget edit must be an object');

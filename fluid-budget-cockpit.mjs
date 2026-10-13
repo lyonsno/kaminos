@@ -12,6 +12,7 @@ export function mountFluidBudgetCockpit(root,{read,apply,requestFrame}) {
  const energy=check('energy','Energy diagnostics');const energyText=document.createElement('div');energyText.className='hint';panel.append(energyText);
  const timing=check('timing','GPU stage timings (1 frame/sec)');const gpuText=document.createElement('div');gpuText.style.cssText='white-space:pre-line;font:11px/1.5 ui-monospace,monospace';gpuText.dataset.fluidBudget='gpu-readout';panel.append(gpuText);
  const errorText=document.createElement('div');errorText.className='error';panel.append(errorText);let error=null,start=1;
+ const appText=document.createElement('div');appText.style.cssText='white-space:pre-line;font:11px/1.5 ui-monospace,monospace;border-top:1px solid #3c636c;margin-top:10px;padding-top:8px';appText.dataset.fluidBudget='frame-readout';panel.insertBefore(appText,energy.parentElement);
  function update(){
   const current=read();for(const input of [slider,number,energy,timing])input.disabled=!current.clock.available;
   const scale=current.viewport?.renderScale??1;
@@ -21,6 +22,12 @@ export function mountFluidBudgetCockpit(root,{read,apply,requestFrame}) {
   const effective=current.viewport?.lastFrame?.waterResolution;
   scaleText.textContent=effective?`${effective.width} × ${effective.height} water · ${effective.fullWidth} × ${effective.fullHeight} scene · ${(effective.pixelFraction*100).toFixed(1)}% of water pixels`: 'Awaiting rendered extent';
   energyText.textContent=energy.checked?`Four energy-recording passes per simulation step · last measured step ${current.solver.energy.measuredStep??'none yet'}`:'Energy recording off · physics settings unchanged';
+  const app=current.appFrame,frame=app?.sample,queue=app?.queueSample;
+  const age=t=>Math.max(0,(performance.now()-t)/1000).toFixed(1);
+  if(frame&&['measured','idle'].includes(app.status)){
+    const line=(name,d)=>d?`${name}\nP50 ${d.p50.toFixed(1)} · P95 ${d.p95.toFixed(1)} · P99 ${d.p99.toFixed(1)} ms`:`${name}: awaiting consecutive draws`;
+    appText.textContent=`${frame.source.paused?'Paused · demand redraws':`Draw cadence ${frame.fps?.toFixed(1)??'—'} fps`}\n${line('Frame interval',frame.cadence)}\n${line('Whole callback CPU',frame.cpu)}\n${queue?`CPU start → GPU queue done ${queue.elapsedMs.toFixed(1)} ms · ${age(queue.completedAt)}s ago`:app.queueFailure?`GPU queue completion failed: ${app.queueFailure.message}`:'Awaiting GPU queue completion'}\n${frame.frames.length} draws · ${(frame.windowEnd-frame.windowStart).toFixed(0)} ms window · ${age(frame.measuredAt)}s ago${app.status==='idle'?' · idle, last window':''}\n${frame.source.scope}\nDraw intervals include scheduling. Queue completion includes backlog; display presentation is not observed. Diagnostics enabled here are included.`;
+  }else appText.textContent=app?.status==='hidden'?'Frame timings suspended · tab hidden':app?.status==='unavailable'?'Whole frame timings require the running shared water presenter':'Collecting actual drawn frames for these settings…';
   const t=current.viewport?.timing,sample=t?.sample,reflection=current.reflection?.effective;
   const cameraKey=c=>c?JSON.stringify([c.identity,c.projectionType,c.viewport,Array.from(c.viewProjection,v=>Math.fround(v))]):null;
   const matching=sample && sample.paused===current.clock.paused && cameraKey(sample.camera)===cameraKey(current.viewport.lastFrame?.camera) && effective && sample.waterResolution.requestedScale===scale && sample.energy===current.solver.energy.mode && sample.reflection?.mode===reflection?.mode && sample.reflection?.fresnelCutoff===reflection?.fresnelCutoff;

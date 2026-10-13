@@ -184,6 +184,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
   }
 
   return {render,
+    frameIdentity:()=>failure?null:lastFrame&&({frameId:lastFrame.frameId,route:lastFrame.route,waterResolution:{...lastFrame.waterResolution},camera:lastFrame.camera,opticalDebugMode:lastFrame.opticalDebugMode,environmentSource:lastFrame.environmentSource,environmentGeneration:lastFrame.environmentGeneration,exposure:lastFrame.exposure}),
     beginFrameTiming:timing.begin,
     stepSimulation:dt=>timing.scope('simulation',()=>solver.step(dt)),
     abortFrameTiming:timing.abort,
