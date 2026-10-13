@@ -27,3 +27,13 @@ test('with nowhere clear in range it says so and keeps the pivot',()=>{
  const result=chooseAppendAnchor({footprint:[1,1],pivot:[0,0],obstacles:[box(-100,-100,100,100)],viewDirection:[0,0,1]});
  assert.deepEqual(result,{anchor:[0,0],reason:'no-clear-spot'});
 });
+
+test('appends anchor on the scene content, not an orbit pivot parked near the camera',()=>{
+ const {appendArrivalPivot}=arrival;
+ const kiln=box(-1.7,-2.6,2.3,2.8),burner=box(-0.9,-0.9,0.9,0.9);
+ const centre=appendArrivalPivot([kiln,burner],[2.6,10.3]);assert.ok(Math.abs(centre[0]-0.3)<1e-9&&Math.abs(centre[1]-0.1)<1e-9,String(centre));
+ assert.deepEqual(appendArrivalPivot([],[2.6,10.3]),[2.6,10.3],'an empty scene keeps the pivot');
+ const spot=chooseAppendAnchor({footprint:[0.9,1],pivot:appendArrivalPivot([kiln,burner],[2.6,10.3]),obstacles:[kiln,burner],viewDirection:[0.3,0.1,1]});
+ assert.equal(spot.reason,'nearest-clear');assert.equal(overlaps(kiln,spot.anchor,[0.9,1],0.15),false);
+ assert.ok(Math.hypot(spot.anchor[0]-0.3,spot.anchor[1]-0.1)<4,'right next to the kiln');
+});
