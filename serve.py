@@ -2292,6 +2292,10 @@ KAMINOS_IMAGE_INBOX_DIR = Path(os.environ.get(
 KAMINOS_IMAGE_PREPARATION_DIR = Path(os.environ.get('KAMINOS_IMAGE_PREPARATION_DIR',
     str(KAMINOS_ASSETS_DIR / 'images' / 'prepared'))).expanduser().resolve()
 SAM3_PACKET_ROOT = Path(os.environ['KAMINOS_SAM3_PACKET_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_SAM3_PACKET_ROOT') else None
+# A local FLUX.2 klein weight package (te/, dit/, vae/ with manifests), served at /klein-weights/.
+# The browser caches weights per origin, so serving the staged package locally spares each
+# Kaminos port a 3 GB download from the published repository.
+KLEIN_WEIGHTS_ROOT = Path(os.environ['KAMINOS_KLEIN_WEIGHTS_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_KLEIN_WEIGHTS_ROOT') else None
 
 BROWSE_ROOTS = {
     "generated-meshes": Path(os.environ.get("KAMINOS_GENERATED_MESH_DIR", str(KAMINOS_ASSETS_DIR / "generated-meshes"))).expanduser(),
@@ -2388,6 +2392,11 @@ def runtime_config():
             "modelRoot": str(SAM3_PACKET_ROOT),
             "mounted": (SAM3_PACKET_ROOT / "tensor-manifest.json").is_file(),
         } if SAM3_PACKET_ROOT else None,
+        "klein": {
+            "weightsUrl": "/klein-weights",
+            "modelRoot": str(KLEIN_WEIGHTS_ROOT),
+            "mounted": all((KLEIN_WEIGHTS_ROOT / part / "manifest.json").is_file() for part in ("te", "dit", "vae")),
+        } if KLEIN_WEIGHTS_ROOT else None,
         "volumeBasinSessionStore": str(VOLUME_BASIN_SESSION_STORE),
         "volumeCockpitLayoutStore": str(VOLUME_COCKPIT_LAYOUT_STORE),
         "volumeSettingsStore": str(VOLUME_SETTINGS_STORE),
@@ -2554,11 +2563,120 @@ def pipeline_manifest_payload():
     for pipeline in document.get("pipelines", []):
         if pipeline.get("id") == "trellis-image-to-mesh-webgpu-v0":
             pipeline["availability"] = trellis_generation_availability()
+            if pipeline["availability"].get("status") == "available":
+                pipeline["availability"]["express"] = trellis_express_eligibility(
+                    json.loads(Path(os.environ["KAMINOS_TRELLIS_CONFIG"]).read_text())["queueDir"])
     return {
         **document,
         "manifestPath": str(PIPELINE_MANIFEST_PATH),
         "manifestSha256": _sha256_file(PIPELINE_MANIFEST_PATH),
     }
+
+
+# Where a queued generation stands, in Greenroom's own dispatch order (normal/quick
+# alternation included). Read-only: runs gpu_queue from the interpreter beside the
+# configured greenroom CLI, so the order cannot drift from what the worker does.
+_QUEUE_POSITION_SCRIPT = r"""
+import json, sys, time
+from pathlib import Path
+from gpu_queue import dispatch
+root, job = Path(sys.argv[1]), sys.argv[2]
+def state(path):
+    try: return json.loads((path / 'status.json').read_text())
+    except (OSError, ValueError): return None
+running = []
+for path in sorted((root / 'running').iterdir()) if (root / 'running').is_dir() else []:
+    row = state(path)
+    if row: running.append({'jobId': row['job_id'], 'startedAt': row.get('started_at')})
+config = dispatch.policy(root)
+order = [path.name for path in dispatch.pending_order(root, config)]
+classes = {}
+for name in order:
+    request, digest = dispatch.read_request(root / 'pending' / name / 'request.json')
+    classes[name] = dispatch.classify(request, config, request_digest=digest)[0]
+mine = None
+for bucket in ('pending', 'running', 'done', 'failed', 'cancelled'):
+    row = state(root / bucket / job)
+    if row: mine = {'bucket': bucket, **row}; break
+print(json.dumps({'order': order, 'classes': classes, 'running': running, 'mine': mine, 'now': time.time(), 'mode': config['mode']}))
+"""
+
+
+def gpu_queue_position(job_id, *, queue_dir, greenroom_bin):
+    job_id = str(job_id or "")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{6,64}", job_id):
+        raise ValueError("Greenroom job id required")
+    python = Path(greenroom_bin).resolve().parent / "python3"
+    completed = subprocess.run([str(python), "-c", _QUEUE_POSITION_SCRIPT, str(queue_dir), job_id],
+                               capture_output=True, text=True, timeout=30)
+    if completed.returncode != 0:
+        raise RuntimeError("Greenroom queue read failed: " + completed.stderr.strip()[-400:])
+    data = json.loads(completed.stdout)
+    mine, now = data["mine"], data["now"]
+    report = {"schema": "kaminos.gpu-queue-position.v0", "jobId": job_id, "orderAuthority": "gpu_queue.dispatch.pending_order",
+              "dispatchMode": data["mode"], "status": "unknown", "jobsAhead": None, "ahead": [], "serviceClass": None,
+              "waitedSeconds": None, "runningSeconds": None, "running": None}
+    others = [row for row in data["running"] if row["jobId"] != job_id]
+    if others:
+        row = others[0]
+        report["running"] = {"jobId": row["jobId"], "seconds": max(0.0, now - row["startedAt"]) if row.get("startedAt") else None}
+    if not mine:
+        return report
+    report["status"] = mine["bucket"]
+    submitted, started = mine.get("submitted_at"), mine.get("started_at")
+    if mine["bucket"] == "pending":
+        index = data["order"].index(job_id) if job_id in data["order"] else None
+        if index is not None:
+            report["jobsAhead"] = index
+            report["ahead"] = [{"jobId": name, "serviceClass": data["classes"].get(name)} for name in data["order"][:index]]
+            report["serviceClass"] = data["classes"].get(job_id)
+        if submitted:
+            report["waitedSeconds"] = max(0.0, now - submitted)
+    else:
+        report["jobsAhead"] = 0
+        if submitted and started:
+            report["waitedSeconds"] = max(0.0, started - submitted)
+        if mine["bucket"] == "running" and started:
+            report["runningSeconds"] = max(0.0, now - started)
+    return report
+
+
+# The route identity the TRELLIS adapter submits under (scripts/run-trellis-greenroom-adapter.mjs).
+TRELLIS_QUEUE_ROUTE_IDENTITY = "TRELLIS2 queued browser-WebGPU / CPU source finishing"
+
+
+def trellis_express_eligibility(queue_dir):
+    """Whether Greenroom would admit a quick-class TRELLIS submission (dispatch.classify's rule)."""
+    try:
+        policy = json.loads((Path(queue_dir) / "dispatch-policy.json").read_text())
+    except (OSError, ValueError):
+        return {"eligible": False, "reason": "The GPU queue has no dispatch policy", "basis": None}
+    if policy.get("mode") != "two-class":
+        return {"eligible": False, "reason": "The GPU queue is not running a quick lane", "basis": None}
+    basis = (policy.get("quick_routes") or {}).get(TRELLIS_QUEUE_ROUTE_IDENTITY)
+    if not basis:
+        return {"eligible": False, "reason": "TRELLIS is not on the GPU queue's quick list", "basis": None}
+    return {"eligible": True, "reason": None, "basis": basis}
+
+
+def cancel_owned_gpu_job(job_id, *, queue_dir, greenroom_bin, runs_root):
+    """Stop a waiting generation this server submitted: Greenroom's own cancel, pending only."""
+    job_id = str(job_id or "")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{6,64}", job_id):
+        raise ValueError("Greenroom job id required")
+    pending = Path(queue_dir) / "pending" / job_id
+    try:
+        request = json.loads((pending / "request.json").read_text())
+    except (OSError, ValueError):
+        raise ValueError("That job is no longer waiting in the GPU queue")
+    output = Path(str(request.get("output_dir") or "")).resolve()
+    if request.get("agent_id") != "kaminos-generate" or not output.is_relative_to(Path(runs_root).resolve()):
+        raise PermissionError("That GPU queue job was not submitted by this Kaminos server")
+    completed = subprocess.run([str(greenroom_bin), "--queue-dir", str(queue_dir), "cancel", job_id],
+                               capture_output=True, text=True, timeout=30)
+    if completed.returncode != 0:
+        raise ValueError((completed.stderr or completed.stdout).strip()[-300:] or "Greenroom cancel failed")
+    return {"schema": "kaminos.gpu-job-cancel.v0", "jobId": job_id, "status": "cancelled"}
 
 
 def trellis_generation_availability():
@@ -2745,6 +2863,17 @@ def _write_pipeline_stream_event(handler, event):
     handler.wfile.flush()
 
 
+def pipeline_child_env(pipeline_id, payload):
+    """Per-request settings a route's adapter reads; only TRELLIS's Greenroom class today."""
+    env = dict(os.environ)
+    service_class = payload.get("serviceClass")
+    if service_class is not None:
+        if pipeline_id != "trellis-image-to-mesh-webgpu-v0" or service_class not in ("normal", "quick"):
+            raise ValueError("serviceClass must be normal or quick for the TRELLIS route")
+        env["KAMINOS_TRELLIS_SERVICE_CLASS"] = service_class
+    return env
+
+
 def run_pipeline_witness_stream(handler, payload):
     pipeline_id = str(payload.get("pipelineId") or payload.get("pipeline_id") or "").strip()
     if not pipeline_id:
@@ -2774,7 +2903,7 @@ def run_pipeline_witness_stream(handler, payload):
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,
-        env={**os.environ, "KAMINOS_PIPELINE_PROGRESS_STREAM": "1"},
+        env={**pipeline_child_env(pipeline_id, payload), "KAMINOS_PIPELINE_PROGRESS_STREAM": "1"},
     )
     events = queue.Queue()
     stdout_chunks = []
@@ -3407,14 +3536,82 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
+    def send_klein_weight(self, path):
+        # One byte range or the whole file; klein refuses an embedding row that is not a 206.
+        from urllib.parse import unquote
+        target = None
+        if KLEIN_WEIGHTS_ROOT:
+            candidate = (KLEIN_WEIGHTS_ROOT / unquote(path[len('/klein-weights/'):])).resolve()
+            if candidate.is_relative_to(KLEIN_WEIGHTS_ROOT) and candidate.is_file():
+                target = candidate
+        if target is None:
+            self.send_error(404, "klein weight not found")
+            return
+        size = target.stat().st_size
+        start, end, status = 0, size - 1, 200
+        header = self.headers.get("Range")
+        if header:
+            match = re.fullmatch(r"bytes=(\d*)-(\d*)", header.strip())
+            if not match or (match.group(1) == "" and match.group(2) == ""):
+                self.send_error(416, "unsupported range")
+                return
+            if match.group(1) == "":
+                start, end = max(0, size - int(match.group(2))), size - 1
+            else:
+                start = int(match.group(1))
+                end = min(size - 1, int(match.group(2))) if match.group(2) else size - 1
+            if start >= size or start > end:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            status = 206
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json" if target.suffix == ".json" else "application/octet-stream")
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(end - start + 1))
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.end_headers()
+        if self.command == "HEAD":
+            return
+        with target.open("rb") as source:
+            source.seek(start)
+            remaining = end - start + 1
+            while remaining > 0:
+                chunk = source.read(min(remaining, 1 << 20))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
+
+    def do_HEAD(self):
+        if urlparse(self.path).path.startswith('/klein-weights/'):
+            return self.send_klein_weight(urlparse(self.path).path)
+        return super().do_HEAD()
+
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path.startswith('/klein-weights/'):
+            return self.send_klein_weight(parsed.path)
         if parsed.path == "/api/sf3d-source-admission":
             report = sf3d_source_admission()
             report["requestId"] = parse_qs(parsed.query).get("requestId", [None])[0]
             self.send_json(report)
         elif parsed.path == "/api/runtime-config":
             self.handle_runtime_config()
+        elif parsed.path == "/api/gpu-queue-position":
+            try:
+                config = json.loads(Path(os.environ["KAMINOS_TRELLIS_CONFIG"]).read_text())
+                self.send_json(gpu_queue_position(parse_qs(parsed.query).get("job", [""])[0],
+                                                  queue_dir=config["queueDir"], greenroom_bin=config["greenroomBin"]))
+            except KeyError:
+                self.send_json({"error": "No configured GPU queue on this server"}, 404)
+            except ValueError as error:
+                self.send_json({"error": str(error)}, 400)
+            except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+                self.send_json({"error": str(error)}, 503)
         elif parsed.path == "/api/pipeline-manifest":
             self.handle_pipeline_manifest()
         elif parsed.path == "/api/browse":
@@ -3471,6 +3668,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == '/api/prepare-image':
             self.handle_prepare_image(parse_qs(parsed.query))
+        elif parsed.path == "/api/gpu-queue-cancel":
+            self.handle_gpu_queue_cancel()
         elif parsed.path == "/api/mesh-generation-origin":
             self.handle_mesh_generation_origin()
         elif parsed.path == "/api/ingest-mesh":
@@ -4055,6 +4254,22 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         _atomic_write_json(scene_path, data)
         self.send_json({"saved": filename, "path": str(scene_path)})
+
+    def handle_gpu_queue_cancel(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            payload = json.loads(self.rfile.read(length)) if length > 0 else {}
+            config = json.loads(Path(os.environ["KAMINOS_TRELLIS_CONFIG"]).read_text())
+            self.send_json(cancel_owned_gpu_job(payload.get("job"), queue_dir=config["queueDir"],
+                                                greenroom_bin=config["greenroomBin"], runs_root=KAMINOS_PIPELINE_RUNS_DIR))
+        except KeyError:
+            self.send_json({"error": "No configured GPU queue on this server"}, 404)
+        except PermissionError as error:
+            self.send_json({"error": str(error)}, 403)
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 409)
+        except (OSError, subprocess.SubprocessError) as error:
+            self.send_json({"error": str(error)}, 503)
 
     def handle_mesh_generation_origin(self):
         try:

@@ -3819,7 +3819,7 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
-import { assetArrivalFramingWindow, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
+import { appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
 import { pickSavedScene } from './scene-load-picker.mjs';
@@ -3839,6 +3839,13 @@ import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, check
 import {checkedPose} from './scene-edit-session.mjs';
 import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.mjs';
 import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
+import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnapshot} from './authoring-trellis-generation.mjs';
+import {installGenerateLayout} from './authoring-generate-layout.mjs';
+import {installBrowseLayout} from './authoring-browse-layout.mjs';
+import {createAppFrameSource} from './app-frame-source.mjs';
+import {createAppGpuHost} from './app-gpu-host.mjs';
+import {fireAtBoot} from './fire-boot.mjs';
+import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,KLEIN_PUBLISHED_WEIGHTS} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
 import {checkedViewportDisplay,viewportShortcut} from './viewport-display-settings.mjs';
@@ -3894,7 +3901,7 @@ function escapeHtml(s) {
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let viewportGizmosVisible=true;
 let viewportDisplay=checkedViewportDisplay();
-let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null;
+let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null,authoringImageGenerator=null,authoringImageUI=null,authoringForegroundHandoff=null,authoringTrellisGenerator=null,authoringMeshModel=null,authoringGenerateLayout=null,authoringBrowseLayout=null;
 function attachViewportGizmo(target) {
   if(selectionTransforms&&sceneSelection.ids.length&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat')target=selectionTransformProxy();
   transformControls.attach(target);
@@ -11200,7 +11207,9 @@ async function initScene() {
       ...(hasCompositionDeviceAcquisition ? {acquireDevice: compositionModule.acquireSharedGpuDevice} : {}),
       // A mounted SAM host borrows the same device, so its kit requirements
       // (all adapter features and limits) compose into the one acquisition.
-      hostRequirements: samHostConfig?.mounted ? samHostDeviceRequirements : null,
+      // Authoring text-to-image (FLUX.2 klein) needs shader-f16 and the adapter's
+      // buffer/workgroup limits on that same device; requesting them allocates nothing.
+      hostRequirements: sharedDeviceHostRequirements({ sam: samHostConfig?.mounted ? samHostDeviceRequirements : null }),
     });
     sharedGpuFailureReason = null;
   } catch (error) {
@@ -12279,18 +12288,38 @@ function applyAssetArrival(object, mode) {
   object.updateWorldMatrix(true, true);
   const box = new THREE.Box3().setFromObject(object, true);
   if (box.isEmpty()) return null;
-  const placement = computeAssetArrivalPlacement({
+  const groundY = groundPlane ? groundPlane.position.y : 0;
+  const place = anchor => computeAssetArrivalPlacement({
     bounds: { min: box.min.toArray(), max: box.max.toArray() },
-    rootPosition: object.position.toArray(),
-    groundY: groundPlane ? groundPlane.position.y : 0,
-    anchor: mode === 'append' && controls ? [controls.target.x, controls.target.z] : [0, 0],
+    rootPosition: object.position.toArray(), groundY, anchor,
   });
+  let anchor = mode === 'append' && controls ? [controls.target.x, controls.target.z] : [0, 0];
+  let placement = place(anchor), spot = null;
   if (!placement) return null;
+  if (mode === 'append') {
+    // Land beside what is already there, not inside it.
+    const footprint = [placement.bounds.max[0] - placement.bounds.min[0], placement.bounds.max[2] - placement.bounds.min[2]];
+    const obstacles = appendArrivalObstacles();
+    spot = chooseAppendAnchor({ footprint, pivot: appendArrivalPivot(obstacles, anchor), obstacles,
+      viewDirection: camera && controls ? camera.position.clone().sub(controls.target).toArray() : [0, 0, 1] });
+    if (spot.anchor[0] !== anchor[0] || spot.anchor[1] !== anchor[1]) { anchor = spot.anchor; placement = place(anchor); }
+  }
   object.scale.multiplyScalar(placement.scale);
   object.position.fromArray(placement.position);
-  const leveling = levelObjectOnArrival(object, mode === 'append' && controls ? [controls.target.x, controls.target.z] : [0, 0]);
-  object.userData.kaminosAssetArrival = { mode, scale: placement.scale, sourceDiagonal: placement.sourceDiagonal, leveledDeg: leveling?.tiltDeg ?? 0 };
+  const leveling = levelObjectOnArrival(object, anchor);
+  object.userData.kaminosAssetArrival = { mode, scale: placement.scale, sourceDiagonal: placement.sourceDiagonal, leveledDeg: leveling?.tiltDeg ?? 0, ...(spot ? { spot: spot.reason, anchor } : {}) };
   return placement;
+}
+
+// Floor footprints an appended asset must not land inside: scene objects other than
+// cameras and lights, and the fire's simulation box.
+function appendArrivalObstacles() {
+  const box3 = object => { const box = new THREE.Box3().setFromObject(object, true); return box.isEmpty() ? null : { min: box.min.toArray(), max: box.max.toArray() }; };
+  const domainBox = flameDomainGuide?.box && !flameDomainGuide.box.isEmpty() ? { min: flameDomainGuide.box.min.toArray(), max: flameDomainGuide.box.max.toArray() } : null;
+  return arrivalObstacleBoxes({
+    objects: sceneObjects.filter(entry => entry.object).map(entry => ({ type: entry.type, visible: entry.object.visible, box: box3(entry.object) })),
+    domain: { active: !!activeSceneComposition, box: domainBox },
+  });
 }
 
 // Arrivals that are clearly a few degrees off their base (Snap Ground's rule)
@@ -16649,8 +16678,8 @@ function applyVolumeScenePreset(scene, options = {}) {
 // Applies the committed default basin with its exact saved values (unlike the
 // in-code operator presets, which round numbers). Controls added to the page
 // after the export keep their page defaults, as a server schema projection does.
-async function applyDefaultVolumeSmokeBasin(routeParams) {
-  const response = await fetch(DEFAULT_VOLUME_SMOKE_BASIN_URL, { cache: 'no-store' });
+async function applyDefaultVolumeSmokeBasin(routeParams, url = DEFAULT_VOLUME_SMOKE_BASIN_URL) {
+  const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) throw new Error(`default volume basin unavailable: ${response.status}`);
   const artifact = await response.json();
   const preset = artifact?.preset;
@@ -16682,7 +16711,7 @@ async function applyDefaultVolumeSmokeBasin(routeParams) {
     }
   }
   activeCanonicalVolumeMacroPreset = '';
-  const receipt = { presetId: artifact.presetId, label: artifact.initialLabel || null, source: DEFAULT_VOLUME_SMOKE_BASIN_URL, applied, missing };
+  const receipt = { presetId: artifact.presetId, label: artifact.initialLabel || null, source: url, applied, missing };
   window.__kaminosDefaultVolumeSmokeBasin = receipt;
   return receipt;
 }
@@ -19321,6 +19350,8 @@ async function initKaminosVolumeRoute() {
     !params.get('volume_tall_preset') &&
     !params.get('volume_canonical_preset');
   if (shouldApplyDefaultVolumeSmokeTallPreset) await applyDefaultVolumeSmokeBasin(params);
+  // Fire asked for without a named recipe: the semantic flame basin (fire-boot.mjs).
+  else { const semantic = fireAtBoot(params).basin; if (semantic) await applyDefaultVolumeSmokeBasin(params, semantic); }
   await admitVolumeSettingsPresetRoute(params);
   routedBonfireAblationControls = normalizeBonfireAblationControls({
     bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
@@ -26622,7 +26653,11 @@ sceneInitialization.then(() => {
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
-  const volumeLoaded = initKaminosVolumeRoute();
+  // Only a page that asks for fire boots the fluid simulation (fire-boot.mjs). An
+  // ordinary scene starts without it; the app is then the frame owner models borrow.
+  const fireBoot = fireAtBoot(new URLSearchParams(location.search));
+  window.__kaminosFireBoot = fireBoot;
+  const volumeLoaded = fireBoot.boot ? initKaminosVolumeRoute() : Promise.resolve(null);
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
   Promise.all([environmentLoaded, volumeLoaded]).then(async () => {
     const hash = new URLSearchParams(location.hash.slice(1));
@@ -26670,7 +26705,7 @@ sceneInitialization.then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
-  initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
+  if (fireAtBoot(new URLSearchParams(location.search)).boot) initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
   initWorldChambersRoute();
   initKaminosFingerFluidBenchRoute();
   initKaminosFingerJuiceHostRoute();
@@ -26679,15 +26714,90 @@ sceneInitialization.then(() => {
 
 function setupAuthoringAssets(){
   let redraw=()=>{};
+  // The frame owner models borrow frames from: the fire scene's volume prototype when
+  // one is loaded, otherwise the ordinary scene itself, so Generate needs no fire scene.
+  let appFrameSource=null;
+  const frameOwner=()=>{
+    if(volumePrototype?.foregroundGpuContext){
+      // A fire scene took over: the app owner stops requesting frames.
+      if(appFrameSource?.debugState().active&&!appFrameSource.debugState().pending)appFrameSource.setForegroundOpportunityRequester(null);
+      return volumePrototype;
+    }
+    const device=sharedGpu?.device;
+    if(!device||!compositionHost||compositionHost.device!==device)return null;
+    return appFrameSource||=createAppFrameSource({device,queue:device.queue});
+  };
+  window.kaminosAppFrameSource=()=>appFrameSource?.debugState()||null;
+  const foregroundHandoff=()=>{
+    const owner=frameOwner();
+    if(!owner||!compositionHost)return null;
+    if(authoringForegroundHandoff?.prototype!==owner)authoringForegroundHandoff={prototype:owner,handoff:createForegroundHandoff({prototype:owner,host:compositionHost})};
+    return authoringForegroundHandoff.handoff;
+  };
+  // One GPU host for the page (app-gpu-host.mjs): models borrow its session and run
+  // through its foreground service. SAM, UniMate and SuperMat consumers take it too.
+  let appGpu=null;
+  const appGpuHost=async()=>{
+    if(appGpu)return appGpu;
+    if(!sharedGpu?.device||!compositionHost)return null;
+    const kit=await import('./webgpu-inference-kit/src/core.js');
+    appGpu=createAppGpuHost({sharedGpu,host:compositionHost,kit,frameOwner,
+      install:async requester=>{const handoff=foregroundHandoff();if(!handoff)throw Error('no frame owner');if(!handoff.has('app'))handoff.install('app',requester);await handoff.activate('app');}});
+    return appGpu;
+  };
+  window.kaminosAppGpu=appGpuHost;
   const request=async url=>{const response=await fetch(url,{cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error||`Assets HTTP ${response.status}`);return data;};
+  // Which mesh model is running, kept here: the services' own read() consults these
+  // blocked() checks, so asking each other for status would recurse.
+  let trellisAvailability=null;const meshRunning={sf3d:false,trellis:false};
+  const meshBusy=model=>meshRunning[model];
+  const tracked=(model,run)=>async input=>{meshRunning[model]=true;redraw();try{return await run(input);}finally{meshRunning[model]=false;redraw();}};
+  // Stored GLB plus its generation origin, as the SF3D service persists its meshes.
+  const persistGeneratedMesh=async(glb,generation,label,suffix)=>{
+    const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',glb)),b=>b.toString(16).padStart(2,'0')).join('');
+    const response=await fetch('/api/ingest-mesh',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});const saved=await response.json();
+    if(!response.ok||saved.sha256!==sha256||saved.bytes!==glb.byteLength)throw Error(saved.error||'Generated mesh storage returned a different artifact');
+    const result={source:saved.source,sha256,name:`${label} · ${suffix}.glb`,generation:{...generation,sha256,bytes:glb.byteLength}};
+    const originResponse=await fetch('/api/mesh-generation-origin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(result)});const origin=await originResponse.json();
+    if(!originResponse.ok||origin.result?.sha256!==sha256||origin.result?.generation?.runId!==generation.runId)throw Error(origin.error||'Generation origin storage returned a different result');
+    return result;
+  };
+  const trellis=()=>{
+    if(!authoringTrellisGenerator){
+      fetch('/api/pipeline-manifest',{cache:'no-store'}).then(r=>r.json()).then(manifest=>{
+        trellisAvailability=manifest.pipelines?.find(route=>route.id==='trellis-image-to-mesh-webgpu-v0')?.availability||{status:'unavailable',message:'This server has no TRELLIS route'};redraw();
+      }).catch(error=>{trellisAvailability={status:'unavailable',message:`TRELLIS availability: ${error.message}`};redraw();});
+      authoringTrellisGenerator=createTrellisAuthoringGeneration({availability:()=>trellisAvailability,changed:()=>redraw(),
+        express:()=>authoringMeshModel?.express()===true,
+        cancelJob:async job=>{const response=await fetch('/api/gpu-queue-cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job})});const value=await response.json();if(!response.ok)throw Error(value.error||'cancel failed');return value;},
+        queuePosition:async job=>{const response=await fetch('/api/gpu-queue-position?'+new URLSearchParams({job}),{cache:'no-store'});const value=await response.json();if(!response.ok)throw Error(value.error||'queue position unavailable');return value;},
+        blocked:()=>authoringImageGenerator?.busy()?'An image is generating. Generate the mesh when it is saved.':meshBusy('sf3d')?'Stable Fast 3D is generating.':null,
+        runPipeline:async(payload,{onProgress})=>readPipelineRunStream(await fetch('/api/run-pipeline',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},body:JSON.stringify(payload)}),onProgress),
+        meshUrl:result=>{const artifact=pipelineRunOutputArtifacts(result).find(pipelineArtifactIsLoadableMesh);return artifact?pipelineRunReadUrlForPath(result,artifact.path):null;},
+        fetchBytes:async url=>{const response=await fetch(url);if(!response.ok)throw Error(`TRELLIS mesh HTTP ${response.status}`);return response.arrayBuffer();},
+        persist:(glb,generation,label)=>persistGeneratedMesh(glb,generation,label,'TRELLIS'),
+      });
+      authoringTrellisGenerator={...authoringTrellisGenerator,run:withExpressSnapshot(tracked('trellis',authoringTrellisGenerator.run),()=>authoringMeshModel?.express()===true)};
+    }
+    return authoringTrellisGenerator;
+  };
   const generation=()=>{
-    if(!authoringGenerator)authoringGenerator=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:volumePrototype,host:compositionHost}),changed:()=>redraw(),blocked:()=>{
-      if(compositionModule)return 'This scene has another inference/performance host. Use its existing generation controls.';
-      return null;
-    }});
+    if(authoringMeshModel?.value()==='trellis')return trellis();
+    if(!authoringGenerator){
+      // SF3D installs its kiln foreground requester through a recording view so an
+      // image run can borrow the kiln and hand it back before the next mesh run.
+      const sf3dBlocked=()=>{
+        if(compositionModule)return 'This scene has another inference/performance host. Use its existing generation controls.';
+        if(authoringImageGenerator?.busy())return 'An image is generating. Generate the mesh when it is saved.';
+        if(meshBusy('trellis'))return 'TRELLIS is generating.';
+        return null;
+      };
+      const sf3d=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:foregroundHandoff()?.recording('sf3d')||frameOwner(),host:compositionHost}),changed:()=>redraw(),blocked:sf3dBlocked});
+      authoringGenerator={...sf3d,run:tracked('sf3d',input=>runWithKilnHandoff({service:sf3d,input,handoff:foregroundHandoff(),owner:'sf3d',blocked:sf3dBlocked}))};
+    }
     return authoringGenerator;
   };
-  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>sceneObjects.find(entry=>entry.source===source)?.label,changed:state=>authoringAssetsUI?.render(state),
+  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>sceneObjects.find(entry=>entry.source===source)?.label,changed:state=>{authoringAssetsUI?.render(state);authoringImageUI?.render();authoringBrowseLayout?.render();},
     uploadImage:async file=>{
       const response=await fetch('/api/ingest-image?'+new URLSearchParams({name:file.name}),{method:'POST',body:await file.arrayBuffer()});const value=await response.json();
       if(!response.ok||value.schema!=='kaminos.asset-ingest.v0'||value.kind!=='image'||!value.entry?.source)throw Error(value.error||'Image storage failed');return value.entry;
@@ -26697,8 +26807,23 @@ function setupAuthoringAssets(){
       const response=await fetch(entry.source);if(!response.ok)throw Error(`Mesh source HTTP ${response.status}`);
       return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
     }});
-  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>authoringAssetsUI.render(authoringAssets.read());
-  window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state()};
+  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();};
+  authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis'),changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});
+  authoringImageGenerator=createKleinAuthoringImageGeneration({
+    context:()=>({sharedGpu,prototype:frameOwner(),host:compositionHost,handoff:foregroundHandoff()}),
+    appHost:appGpuHost,
+    // A locally mounted weight package (KAMINOS_KLEIN_WEIGHTS_ROOT) spares each port's
+    // browser cache a 3 GB download; otherwise the published package is used.
+    weights:async()=>{const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};return config.klein?.mounted?config.klein.weightsUrl:KLEIN_PUBLISHED_WEIGHTS;},
+    deliver:async file=>{const entry=await authoringAssets.upload(file);authoringAssets.prepare().catch(error=>console.warn('Generated image preparation failed',error));return entry;},
+    changed:()=>redraw(),
+    blocked:()=>compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':null,
+  });
+  // TRELLIS runs in the GPU queue's own browser, so images can still be made meanwhile.
+  authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets,meshBusy:()=>meshBusy('sf3d')});
+  authoringBrowseLayout=installBrowseLayout({document,controller:authoringAssets,inScene:()=>new Set(sceneObjects.map(entry=>entry.source).filter(Boolean)),open:mode=>authoringAssetsUI.open(mode)});
+  authoringGenerateLayout=installGenerateLayout({document,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
+  window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),images:authoringImageGenerator};
 }
 
 </script>
