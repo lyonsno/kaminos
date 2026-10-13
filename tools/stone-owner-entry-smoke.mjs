@@ -43,6 +43,15 @@ try{
    await page.waitForFunction(()=>window.__stoneShards.experimentStatus().threshold===220);
    await call('step',2);const after=await page.evaluate(()=>window.__stoneExperiment.read());check(`${name} same operation changes native step`,after.submittedSteps===2);
    const next=await work.observe('follow-up');report.observations.push({view:name,name:'follow-up',reference:next});save();
+   if(name==='desktop'){
+    const contact=await page.evaluate(()=>window.__stoneShards.contacts()[0]);
+    await page.mouse.move(contact.screen.x,contact.screen.y);await page.mouse.down();
+    await page.waitForFunction(()=>window.__stoneShards.experimentStatus().gripping==='active');
+    await page.mouse.move(contact.screen.x+160,contact.screen.y-120,{steps:3});await call('step',8);await page.mouse.up();
+    const injured=await work.observe('recorded-grip');report.observations.push({view:name,name:'recorded-grip',reference:injured});save();
+    const inputs=await page.evaluate(()=>window.__stoneExperiment.recording());
+    check('ordinary native grip and movement retained',inputs.operations.some(v=>v.kind==='stone.input.pick')&&inputs.operations.some(v=>v.kind==='stone.input.move')&&inputs.operations.some(v=>v.kind==='stone.input.release'));
+   }
    const recording=await page.evaluate(()=>window.__stoneExperiment.recording());check(`${name} real UI recorded`,recording.complete&&recording.operations.some(v=>v.kind==='stone.tension'&&v.effective.threshold===220));
    const pixels=await page.evaluate(()=>window.__stoneShards.pixels());check(`${name} actual canvas nonblank`,pixels.fraction>0,pixels);
    const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);check(`${name} no horizontal overflow`,!overflow);
