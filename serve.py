@@ -2268,6 +2268,10 @@ KAMINOS_IMAGE_INBOX_DIR = Path(os.environ.get(
 KAMINOS_IMAGE_PREPARATION_DIR = Path(os.environ.get('KAMINOS_IMAGE_PREPARATION_DIR',
     str(KAMINOS_ASSETS_DIR / 'images' / 'prepared'))).expanduser().resolve()
 SAM3_PACKET_ROOT = Path(os.environ['KAMINOS_SAM3_PACKET_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_SAM3_PACKET_ROOT') else None
+# A local FLUX.2 klein weight package (te/, dit/, vae/ with manifests), served at /klein-weights/.
+# The browser caches weights per origin, so serving the staged package locally spares each
+# Kaminos port a 3 GB download from the published repository.
+KLEIN_WEIGHTS_ROOT = Path(os.environ['KAMINOS_KLEIN_WEIGHTS_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_KLEIN_WEIGHTS_ROOT') else None
 
 BROWSE_ROOTS = {
     "generated-meshes": Path(os.environ.get("KAMINOS_GENERATED_MESH_DIR", str(KAMINOS_ASSETS_DIR / "generated-meshes"))).expanduser(),
@@ -2364,6 +2368,11 @@ def runtime_config():
             "modelRoot": str(SAM3_PACKET_ROOT),
             "mounted": (SAM3_PACKET_ROOT / "tensor-manifest.json").is_file(),
         } if SAM3_PACKET_ROOT else None,
+        "klein": {
+            "weightsUrl": "/klein-weights",
+            "modelRoot": str(KLEIN_WEIGHTS_ROOT),
+            "mounted": all((KLEIN_WEIGHTS_ROOT / part / "manifest.json").is_file() for part in ("te", "dit", "vae")),
+        } if KLEIN_WEIGHTS_ROOT else None,
         "volumeBasinSessionStore": str(VOLUME_BASIN_SESSION_STORE),
         "volumeCockpitLayoutStore": str(VOLUME_COCKPIT_LAYOUT_STORE),
         "volumeSettingsStore": str(VOLUME_SETTINGS_STORE),
@@ -3336,8 +3345,65 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
+    def send_klein_weight(self, path):
+        # One byte range or the whole file; klein refuses an embedding row that is not a 206.
+        from urllib.parse import unquote
+        target = None
+        if KLEIN_WEIGHTS_ROOT:
+            candidate = (KLEIN_WEIGHTS_ROOT / unquote(path[len('/klein-weights/'):])).resolve()
+            if candidate.is_relative_to(KLEIN_WEIGHTS_ROOT) and candidate.is_file():
+                target = candidate
+        if target is None:
+            self.send_error(404, "klein weight not found")
+            return
+        size = target.stat().st_size
+        start, end, status = 0, size - 1, 200
+        header = self.headers.get("Range")
+        if header:
+            match = re.fullmatch(r"bytes=(\d*)-(\d*)", header.strip())
+            if not match or (match.group(1) == "" and match.group(2) == ""):
+                self.send_error(416, "unsupported range")
+                return
+            if match.group(1) == "":
+                start, end = max(0, size - int(match.group(2))), size - 1
+            else:
+                start = int(match.group(1))
+                end = min(size - 1, int(match.group(2))) if match.group(2) else size - 1
+            if start >= size or start > end:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            status = 206
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json" if target.suffix == ".json" else "application/octet-stream")
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(end - start + 1))
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.end_headers()
+        if self.command == "HEAD":
+            return
+        with target.open("rb") as source:
+            source.seek(start)
+            remaining = end - start + 1
+            while remaining > 0:
+                chunk = source.read(min(remaining, 1 << 20))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
+
+    def do_HEAD(self):
+        if urlparse(self.path).path.startswith('/klein-weights/'):
+            return self.send_klein_weight(urlparse(self.path).path)
+        return super().do_HEAD()
+
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path.startswith('/klein-weights/'):
+            return self.send_klein_weight(parsed.path)
         if parsed.path == "/api/sf3d-source-admission":
             report = sf3d_source_admission()
             report["requestId"] = parse_qs(parsed.query).get("requestId", [None])[0]
