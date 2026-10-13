@@ -48,8 +48,8 @@ test('the actual cockpit and core admission prefix keep a source suspended after
  assert.equal(page.window.__kaminosVolumeEmitterReceipt.requested.sourceEnabled,false);assert.equal(page.flameEmitterInjectionSuspended,true);assert.equal(resolveImmersedSourceConfig(backend.controlsSnapshot,{grid:96,gridHeight:192}).effective.fluxEffectivePredicted,0);assert.deepEqual(page.flameEmitterPose.position,[0,4,0]);
 });
 test('a refused grid request cannot be saved as the accepted scene configuration',()=>{
- let message='';const runtime={gridHeight:{admitted:false}},context={activeSceneComposition:{},scenePlacementTools:null,volumePrototype:{debugState:()=>runtime},greenroomPreviewIsActive:()=>false,sceneSaveBlockedByFailedRestore:false,setInfo:value=>message=value};
- vm.createContext(context);vm.runInContext(grab('sceneSaveIsBlocked'),context);assert.equal(context.sceneSaveIsBlocked(),true);assert.match(message,/grid|dimensions/i);context.activeSceneComposition=null;assert.equal(context.sceneSaveIsBlocked(),false,'unrelated mesh scenes remain saveable');context.activeSceneComposition={};runtime.gridHeight.admitted=true;assert.equal(context.sceneSaveIsBlocked(),false);
+ let message='',fireRoute=true;const runtime={active:true,gridHeight:{admitted:false}},context={activeSceneComposition:{},isFireLightFieldRoute:()=>fireRoute,scenePlacementTools:null,volumePrototype:{debugState:()=>runtime},greenroomPreviewIsActive:()=>false,sceneSaveBlockedByFailedRestore:false,setInfo:value=>message=value};
+ vm.createContext(context);vm.runInContext(grab('sceneSaveIsBlocked'),context);assert.equal(context.sceneSaveIsBlocked(),true);assert.match(message,/Undo.*supported dimensions/i);context.activeSceneComposition=null;assert.equal(context.sceneSaveIsBlocked(),true,'a fresh fire route is persisted even before its first composition record');fireRoute=false;assert.equal(context.sceneSaveIsBlocked(),false,'unrelated mesh scenes remain saveable');fireRoute=true;runtime.gridHeight.admitted=true;assert.equal(context.sceneSaveIsBlocked(),false);
 });
 
 test('a refused request uses retained bounds for subsequent placement and refuses missing effective identity',()=>{

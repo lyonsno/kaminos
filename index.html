@@ -30150,7 +30150,7 @@ function sceneSaveIsBlocked() {
     setInfo('Wait for the current scene history action to finish');
     return true;
   }
-  if(activeSceneComposition&&volumePrototype?.debugState?.().gridHeight?.admitted===false){setInfo('Requested simulation grid was refused; Undo or choose supported dimensions before saving');return true;}
+  if((activeSceneComposition||isFireLightFieldRoute())&&volumePrototype?.debugState?.().gridHeight?.admitted===false){setInfo('Requested simulation grid was refused; Undo or choose supported dimensions before saving');return true;}
   if (greenroomPreviewIsActive()) {
     setInfo('Greenroom preview is temporary; import or go back before saving');
     return true;
