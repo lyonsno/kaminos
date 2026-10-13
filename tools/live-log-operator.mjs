@@ -6,6 +6,7 @@ import {spawn} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {BURN_TABLE_ASSET} from '../burn-table-core.mjs';
 import {startWitnessServer} from './witness-server.mjs';
+import {createOwnedBrowserReveal,greenroomProcessStarts,greenroomRevealBinding} from './owned-browser-reveal.mjs';
 
 export function operatorColdState(state,assetSha) {
   assert.equal(state.status,'cold');assert.equal(state.paused,true);assert.equal(state.burner,false);
@@ -21,7 +22,7 @@ export async function runOperator(output,env=process.env) {
     requestId:env.KAMINOS_SMOKE_ID,queueDir:env.GPU_GREENROOM_DIR,errors:[],sources:[],
     claim:'Operator exploration; startup conformance is not heating, cooling or performance acceptance.'};
   const save=()=>fs.writeFile(path.join(output,'report.json'),JSON.stringify(report,null,2));
-  let browser,page,server,timer,primaryError,resolveEnd,finished=false;
+  let browser,browserServer,page,reveal,server,timer,primaryError,resolveEnd,finished=false;
   let recordingWrites=Promise.resolve(),recordingReads=Promise.resolve();
   const ended=new Promise(resolve=>{resolveEnd=resolve;});
   const terminate=()=>resolveEnd('signal');
@@ -33,8 +34,9 @@ export async function runOperator(output,env=process.env) {
     server=await startWitnessServer({repoRoot,output,python:env.PYTHON_EXECUTABLE||'python3'});
     report.server=server.evidence;report.url=server.url;
     const {chromium}=await import(pathToFileURL(path.resolve(env.PLAYWRIGHT_MODULE)));
-    browser=await chromium.launch({executablePath:env.CHROME_EXECUTABLE,headless:false,
+    browserServer=await chromium.launchServer({executablePath:env.CHROME_EXECUTABLE,headless:false,
       args:['--enable-unsafe-webgpu','--use-angle=metal','--window-size=1440,1000']});
+    browser=await chromium.connect(browserServer.wsEndpoint());report.browserPid=browserServer.process().pid;
     browser.on('disconnected',()=>resolveEnd('browser-closed'));
     page=await browser.newPage({viewport:null});page.setDefaultTimeout(0);page.setDefaultNavigationTimeout(0);
     page.on('pageerror',error=>{report.errors.push(String(error));});
@@ -83,9 +85,14 @@ export async function runOperator(output,env=process.env) {
     });},500);
     process.once('SIGTERM',terminate);process.once('SIGINT',terminate);
     report.phase='publication';await save();
+    const binding=await greenroomRevealBinding(env.GREENROOM_PYTHON,report.queueDir,report.requestId,report.effectiveUrl);
+    reveal=await createOwnedBrowserReveal({page,browser,browserPid:report.browserPid,binding,
+      socketPath:env.KAMINOS_REVEAL_SOCKET||null,readStarts:pids=>greenroomProcessStarts(env.GREENROOM_PYTHON,pids),
+      record:receipt=>fs.appendFile(path.join(output,'reveal-receipts.jsonl'),JSON.stringify(receipt)+'\n')});
+    report.browserReveal=reveal.identity;
     const publication=spawn(env.GREENROOM_PYTHON,['-c',
-      'import sys,json; from gpu_queue.smoke_session import publish; print(json.dumps(publish(sys.argv[1],queue_dir=sys.argv[2],browser_url=sys.argv[3],label="Cold log accepting input")))',
-      report.requestId,report.queueDir,report.effectiveUrl],{stdio:['ignore','pipe','pipe']});
+      'import sys,json; from gpu_queue.smoke_session import publish; print(json.dumps(publish(sys.argv[1],queue_dir=sys.argv[2],browser_url=sys.argv[3],browser_reveal=json.loads(sys.argv[4]),label="Cold log accepting input")))',
+      report.requestId,report.queueDir,report.effectiveUrl,JSON.stringify(reveal.identity)],{stdio:['ignore','pipe','pipe']});
     let stdout='',stderr='';publication.stdout.on('data',chunk=>stdout+=chunk);publication.stderr.on('data',chunk=>stderr+=chunk);
     const exit=await new Promise((resolve,reject)=>{publication.once('error',reject);publication.once('close',resolve);});
     report.publication={exit,stdout,stderr};assert.equal(exit,0,'Greenroom usable publication failed: '+stderr);
@@ -98,9 +105,11 @@ export async function runOperator(output,env=process.env) {
   finally {
     clearInterval(timer);process.removeListener('SIGTERM',terminate);process.removeListener('SIGINT',terminate);
     const shutdownErrors=[];
+    try{if(reveal)await reveal.dispose();}catch(error){shutdownErrors.push(String(error));}
     try{await recordingReads;}catch(error){shutdownErrors.push(String(error));}
     try{if(page&&!page.isClosed())await page.evaluate(()=>window.kaminosLiveLog?.dispose());}catch(error){shutdownErrors.push(String(error));}
     try{if(browser)await browser.close();}catch(error){shutdownErrors.push(String(error));}
+    try{if(browserServer)await browserServer.close();}catch(error){shutdownErrors.push(String(error));}
     try{if(server)await server.stop();}catch(error){shutdownErrors.push(String(error));}
     try{await recordingWrites;}catch(error){shutdownErrors.push(String(error));}
     report.shutdownComplete=!shutdownErrors.length;report.shutdownErrors=shutdownErrors;

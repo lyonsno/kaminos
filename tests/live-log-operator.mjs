@@ -21,6 +21,11 @@ test('preflight failure leaves a durable failed report without GPU launch',async
   assert.equal(report.status,'failed');assert.equal(report.phase,'preflight');
   assert.deepEqual(report.sources,[]);assert.equal(report.shutdownComplete,true);assert.equal(report.server,undefined);
 });
+test('operator publication is bound to its retained browser rather than only a URL',async()=>{
+  const source=await fs.readFile(new URL('../tools/live-log-operator.mjs',import.meta.url),'utf8');
+  assert.match(source,/createOwnedBrowserReveal/,'the operator needs a reveal service for its exact existing page');
+  assert.match(source,/browser_reveal=/,'publication must include the current owner identity');
+});
 test('actual browser initialization awaits the shared async owner read before cloning',async()=>{
   const source=await fs.readFile(new URL('../tools/live-log-operator.mjs',import.meta.url),'utf8');
   const start=source.indexOf('await page.evaluate(async ({id,source})=>{');
