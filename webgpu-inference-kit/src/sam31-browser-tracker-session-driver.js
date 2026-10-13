@@ -13,7 +13,7 @@ import { createSam31NumericalVerificationEvidence, evaluateSam31TrackerDownstrea
 
 const TRACKER_PACKET_NAMES = Object.freeze(['ingress', 'decoder', 'memory', 'temporal', 'episode', 'pointer']);
 
-export function validateSam31BrowserTrackerRunOptions({ memoryAttentionKernel = 'online', captureOutputs = false } = {}) {
+export function validateSam31BrowserTrackerRunOptions({ memoryAttentionKernel = 'flash', captureOutputs = false } = {}) {
   if (memoryAttentionKernel !== 'flash' && memoryAttentionKernel !== 'online') throw new RangeError('memoryAttentionKernel must be flash or online');
   if (typeof captureOutputs !== 'boolean') throw new TypeError('captureOutputs must be a boolean');
   return { memoryAttentionKernel, captureOutputs };
@@ -316,7 +316,7 @@ async function interactivePointerInvocation({ inputs, expected, manifest, weight
 
 export async function runSam31BrowserTrackerPackageInvocation({
   packageRuntime, adapter, device, errors, adapterInfo, userAgent, commit, onProgress = () => {},
-  memoryAttentionKernel = 'online', captureOutputs = false,
+  memoryAttentionKernel = 'flash', captureOutputs = false,
 }) {
   validateSam31BrowserTrackerRunOptions({ memoryAttentionKernel, captureOutputs });
   const episodeStarted = performance.now();

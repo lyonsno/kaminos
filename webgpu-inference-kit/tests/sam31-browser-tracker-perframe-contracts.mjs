@@ -17,8 +17,13 @@ if (!vm.SourceTextModule) {
   let acquired = 0;
   let invocationIndex = 0;
   const attentionCalls = [];
+  const stackCalls = [];
+  const neckCalls = [];
+  const checkpointReturns = [];
+  const referenceLoads = [];
   const observed = {};
   let brokenOutput = null;
+  let brokenBackbone = null;
   function readback(name, data) {
     if (brokenOutput?.name !== name) return Array.from(data);
     if (brokenOutput.kind === 'missing') return undefined;
@@ -123,8 +128,25 @@ if (!vm.SourceTextModule) {
     'sam-image-preprocess-phase-program.js': { runSam3ImagePreprocessPhaseProgramRoute: async input => outputs(input, { pixelValues: values(28 * 42 * 3) }) },
     'sam-image-patch-embed-phase-program.js': { runSam3ImagePatchEmbedPhaseProgramRoute: async input => outputs(input, { patchEmbeddings: values(queryTokens * 1024) }) },
     'sam-image-vit-prefix-phase-program.js': { runSam3ImageVitPrefixPhaseProgramRoute: async input => outputs(input, { vitPrefixHiddenStates: values(queryTokens * 1024) }) },
-    'sam-image-vit-block-stack-phase-program.js': { runSam3ImageVitBlockStackPhaseProgramRoute: async input => outputs(input, { vitBlockStackHiddenStates: values(queryTokens * 1024) }) },
-    'sam-image-fpn-neck-phase-program.js': Object.fromEntries(['interactive', 'propagation'].map(branch => [`runSam31${branch === 'interactive' ? 'Interactive' : 'ImagePropagation'}NeckPhaseProgramRoute`, async input => outputs(input, Object.fromEntries([...fpnLevels.map((level, index) => [`${branch}Feature${index}`, values(level.height * level.width * channels)]), [`${branch}Position2`, feature()]]))])),
+    'sam-image-vit-block-stack-phase-program.js': { runSam3ImageVitBlockStackPhaseProgramRoute: async input => {
+      stackCalls.push(input);
+      const hiddenStates = values(queryTokens * 1024);
+      if (brokenBackbone && input.request.requestId.includes(`stack-${brokenBackbone.frameIndex}-`)) hiddenStates[17] = brokenBackbone.value;
+      const result = await outputs(input, { vitBlockStackHiddenStates: hiddenStates });
+      const { summarizeSam3LayerParityCheckpoint, summarizeSam3FiniteValues } = await import('../src/sam-image-vit-block-stack-phase-program.js');
+      result.finiteCheckpoints = input.validateFiniteCheckpoints === true
+        ? Array.from({ length: 32 }, (_, layerIndex) => {
+            const expected = input.expectedLayerCheckpoints?.find(checkpoint => checkpoint.layerIndex === layerIndex);
+            return { layerIndex, ...summarizeSam3FiniteValues(hiddenStates), ...(expected ? summarizeSam3LayerParityCheckpoint(layerIndex, [7, 15, 23, 31].includes(layerIndex), expected.hiddenStates, hiddenStates) : {}) };
+          })
+        : [];
+      checkpointReturns.push(result.finiteCheckpoints);
+      return result;
+    } },
+    'sam-image-fpn-neck-phase-program.js': Object.fromEntries(['interactive', 'propagation'].map(branch => [`runSam31${branch === 'interactive' ? 'Interactive' : 'ImagePropagation'}NeckPhaseProgramRoute`, async input => {
+      neckCalls.push(input);
+      return outputs(input, Object.fromEntries([...fpnLevels.map((level, index) => [`${branch}Feature${index}`, values(level.height * level.width * channels)]), [`${branch}Position2`, feature()]]));
+    }])),
     'sam31-decoder-high-resolution-projection-phase-program.js': { runSam31DecoderHighResolutionProjectionPhaseProgramRoute: async input => outputs(input, { highResolutionS0: values(32 * 8 * 12), highResolutionS1: values(64 * 4 * 6) }) },
     'sam31-mask-conditioning-phase-program.js': { runSam31MaskConditioningPhaseProgramRoute: async input => outputs(input, { maskLogits: values(multiplexCount * 32 * 48), objectScores: values(multiplexCount) }) },
     'sam31-interactive-pointer-phase-program.js': { runSam31InteractivePointerPhaseProgramRoute: async input => outputs(input, { objectPointers: values(multiplexCount * channels) }) },
@@ -238,9 +260,107 @@ if (!vm.SourceTextModule) {
       }
     }
   }
+  // Collect independent regressions so the pre-fix run exposes each cause.
+  const servingFailures = [];
+  async function servingContract(name, run) {
+    try { await run(); }
+    catch (error) { servingFailures.push(error); console.error(`serving contract failed: ${name}: ${error.message}`); }
+  }
+  await servingContract('public package factory defaults to flash', async () => {
+    const session = await createSam31BrowserTrackerSession(options);
+    checkResult(await session.run(), 'flash', false);
+  });
+  await servingContract('public caller factory defaults to flash', async () => {
+    const session = await createSam31BrowserTrackerSession({ modelPackageRoot: '/simulated-model', cache: {}, gpu, sourceImages: ['a', 'b'], initialMask: {}, session: {} });
+    checkResult(await session.run(), 'flash', false);
+  });
+  await servingContract('public resident factory defaults to flash', async () => {
+    const session = await createSam31BrowserTrackerResidentSession({ modelPackageRoot: '/simulated-model', cache: {}, gpu });
+    checkResult(await session.run(), 'flash', false);
+  });
+  await servingContract('direct driver defaults to flash', async () => {
+    const result = await driver({ packageRuntime: runtime, adapter, device, errors: [], adapterInfo: { description: 'simulated-cpu', isFallbackAdapter: false }, userAgent: 'cpu-contract-fixture' });
+    assert.equal(attentionCalls.at(-1).attentionKernel, 'flash');
+    assert.equal(result.memoryAttentionKernel, 'flash');
+  });
+  const backbone = modules.get(new URL('../src/sam31-two-image-backbone.js', import.meta.url).href).namespace.runSam31TwoImageBackbone;
+  const runBackbone = packageRuntime => backbone({ packageRuntime, adapter, device, errors: [] });
+  await servingContract('detached backbone skips layer proof but retains final readback', async () => {
+    const result = await runBackbone(runtime);
+    assert.equal(result.parityState, 'not-attached');
+    for (const call of stackCalls.slice(-2)) {
+      assert.equal(call.validateFiniteCheckpoints, false);
+      assert.equal(call.expectedLayerCheckpoints, null);
+      assert.equal(call.includeReadback, true);
+      assert.equal(call.tensors.shape.layerNormEps, 0.00001);
+      assert.equal(call.tensors.shape.fullBackbone, true);
+    }
+    assert.deepEqual(neckCalls.at(-1).tensors.backboneHiddenStates, values(queryTokens * 1024));
+  });
+  for (const frameIndex of [0, 1]) for (const value of [NaN, Infinity, -Infinity]) {
+    await servingContract(`detached backbone rejects frame ${frameIndex} ${value}`, async () => {
+      const before = neckCalls.length;
+      brokenBackbone = { frameIndex, value };
+      try { await assert.rejects(() => runBackbone(runtime), /frame-\d.*backbone.*non-finite.*17/); }
+      finally { brokenBackbone = null; }
+      assert.equal(neckCalls.length, before, 'invalid final ViT output must fail before downstream consumption');
+    });
+  }
+  // These references test local wiring only, not Meta or GPU numerical parity.
+  const expectedTensors = new Map();
+  for (const frameIndex of [0, 1]) {
+    const prefix = `frame-${frameIndex}`;
+    for (const [suffix, length] of [
+      ['pixel-values', 28 * 42 * 3], ['patch-embeddings', queryTokens * 1024],
+      ['vit-prefix-hidden-states', queryTokens * 1024], ['vit-backbone-hidden-states', queryTokens * 1024],
+      ...[0, 7, 31].map(layer => [`vit-layer-${layer}-hidden-states`, queryTokens * 1024]),
+      ...['interactive', 'propagation'].flatMap(branch => [
+        ...fpnLevels.map(level => [`${branch}-feature-${level.level}`, level.height * level.width * channels]),
+        [`${branch}-position-2`, queryTokens * channels],
+      ]),
+      [`${frameIndex === 0 ? 'interactive-' : ''}high-resolution-s0`, 32 * 8 * 12],
+      [`${frameIndex === 0 ? 'interactive-' : ''}high-resolution-s1`, 64 * 4 * 6],
+    ]) expectedTensors.set(`${prefix}-${suffix}`, values(length));
+  }
+  const attachedRuntime = {
+    ...runtime, verificationAttached: true,
+    manifests: { ...manifests, ingress: {
+      ...manifests.ingress, diagnosticVitLayers: [0, 7, 31],
+      tensors: [...manifests.ingress.tensors, ...Array.from(expectedTensors.keys(), role => entry(role))],
+      tolerances: Object.fromEntries([
+        'pixelValuesMaxAbsDiff', 'patchEmbeddingsMaxAbsDiff', 'positionMaxAbsDiff', 'neckMaxAbsDiff', 'highResolutionMaxAbsDiff',
+        ...['vitPrefix', 'vitBackbone'].flatMap(prefix => ['MaxAbsDiff', 'MeanAbsDiff', 'RootMeanSquareDiff', 'RelativeDiffAtMaxAbsDiff'].map(suffix => `${prefix}${suffix}`)),
+      ].map(name => [name, 0])),
+    } },
+    async loadFloat32(tensor) {
+      if (expectedTensors.has(tensor?.role)) { referenceLoads.push(tensor.role); return expectedTensors.get(tensor.role); }
+      return runtime.loadFloat32(tensor);
+    },
+  };
+  await servingContract('attached backbone retains full layer diagnostics', async () => {
+    const result = await runBackbone(attachedRuntime);
+    assert.equal(result.parityPassed, true);
+    assert.equal(result.compoundParity.passed, true);
+    for (const [index, frame] of ['frame0', 'frame1'].entries()) {
+      const call = stackCalls.slice(-2)[index];
+      assert.equal(call.validateFiniteCheckpoints, true);
+      assert.equal(call.includeReadback, true);
+      assert.deepEqual(Array.from(call.expectedLayerCheckpoints, checkpoint => checkpoint.layerIndex), [0, 7, 31]);
+      for (const checkpoint of call.expectedLayerCheckpoints) assert.equal(checkpoint.hiddenStates, expectedTensors.get(`frame-${index}-vit-layer-${checkpoint.layerIndex}-hidden-states`));
+      const diagnostics = result.parityDiagnostics[frame];
+      assert.equal(diagnostics.vitPrefix.maxAbsDiff, 0);
+      assert.equal(diagnostics.vitBackbone.maxAbsDiff, 0);
+      assert.equal(checkpointReturns.slice(-2)[index].length, 32);
+      assert.deepEqual(Array.from(diagnostics.layerDiagnostics), checkpointReturns.slice(-2)[index].filter(checkpoint => checkpoint.maxAbsDiff != null));
+      assert.equal(diagnostics.layerDiagnostics.length, 3);
+    }
+    assert.equal(referenceLoads.length, expectedTensors.size - 4, 'every applicable attached reference must load; frame-1 interactive neck references are unused');
+  });
+  if (servingFailures.length) throw new AggregateError(servingFailures, 'tracker serving regressions');
+
   const defaultSession = await createSam31BrowserTrackerSession(options);
   const defaultResult = await defaultSession.run();
-  checkResult(defaultResult, 'online', false);
+  checkResult(defaultResult, 'flash', false);
   assert.equal(defaultResult.timing.sessionSetupMs, 120);
   assert.equal(defaultResult.timing.callerInvocationMs, 0);
   const onlineSession = await createSam31BrowserTrackerSession({ ...options, memoryAttentionKernel: 'online', captureOutputs: true });
@@ -252,11 +372,12 @@ if (!vm.SourceTextModule) {
   const resident = await createSam31BrowserTrackerResidentSession({ modelPackageRoot: '/simulated-model', cache: {}, gpu, captureOutputs: true });
   const deviceCount = acquired;
   const residentResult = await resident.run();
-  checkResult(residentResult, 'online', true);
+  checkResult(residentResult, 'flash', true);
   assert.equal(residentResult.timing.sessionSetupMs, 170);
   assert.equal(residentResult.timing.callerInvocationMs, 25);
   checkResult(await resident.run({ memoryAttentionKernel: 'online' }), 'online', true);
-  checkResult(await resident.run({ captureOutputs: false }), 'online', false);
+  checkResult(await resident.run({ memoryAttentionKernel: 'flash' }), 'flash', true);
+  checkResult(await resident.run({ captureOutputs: false }), 'flash', false);
   assert.equal(acquired, deviceCount, 'per-run A/B must reuse the same device');
   assert.equal(attentionCalls.at(-1).device, attentionCalls.at(-2).device);
   const attempts = resident.attemptCount;
@@ -273,7 +394,7 @@ if (!vm.SourceTextModule) {
     }
   }
   brokenOutput = null;
-  checkResult(await resident.run(), 'online', true);
+  checkResult(await resident.run(), 'flash', true);
   const configuredResident = await createSam31BrowserTrackerResidentSession({ modelPackageRoot: '/simulated-model', cache: {}, gpu, memoryAttentionKernel: 'online' });
   checkResult(await configuredResident.run(), 'online', false);
   checkResult(await configuredResident.run({ memoryAttentionKernel: 'flash', captureOutputs: true }), 'flash', true);

@@ -12,6 +12,7 @@ import {
   passesSam3LayerParityCheckpoint,
   runSam3ImageVitBlockStackPhaseProgramRoute,
   summarizeSam3LayerParityCheckpoint,
+  summarizeSam3FiniteValues,
   summarizeSam3TensorParityCheckpoint,
 } from './sam-image-vit-block-stack-phase-program.js';
 import {
@@ -282,11 +283,13 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
       'sam3-image-vit-block-stack-weights': { artifactId: 'sam31-two-image:block-stack-weights', sha256: blockWeightsHash },
     }, { 'vit-block-stack-hidden-states': { artifactId: scopedArtifactId(`sam31-two-image:frame-${frameIndex}:vit-backbone`, invocationTag), shape: [1, manifest.shape.patchHeight, manifest.shape.patchWidth, manifest.shape.visionHiddenSize] } }, {}, requestIds),
     route: stackRoute, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
-    model: { ...model, weightsHash: blockWeightsHash }, kernel: stackRoute.kernel, tensors: { hiddenStates: prefixHiddenStates, weights: blockWeights, shape: blockShape }, residentTensorResolver, expectedLayerCheckpoints, includeReadback: true, validateFiniteCheckpoints: true,
+    model: { ...model, weightsHash: blockWeightsHash }, kernel: stackRoute.kernel, tensors: { hiddenStates: prefixHiddenStates, weights: blockWeights, shape: blockShape }, residentTensorResolver, expectedLayerCheckpoints, includeReadback: true, validateFiniteCheckpoints: verificationAttached,
   });
   timing.vitBlockStackMs = performance.now() - stackStarted;
   timing.totalMs = timing.preprocessMs + timing.patchEmbedMs + timing.vitPrefixMs + timing.vitBlockStackMs;
   const backboneHiddenStates = new Float32Array(stackResult.debugReadback.vitBlockStackHiddenStates);
+  const finiteOutput = summarizeSam3FiniteValues(backboneHiddenStates);
+  if (finiteOutput.nonFiniteCount > 0) throw new Error(`frame-${frameIndex} ViT backbone produced non-finite output: ${JSON.stringify(finiteOutput)}`);
   parity.vitBackboneDiagnostics = verificationAttached
     ? summarizeSam3LayerParityCheckpoint(31, true, await loadFloat32(tensorsByRole.get(`frame-${frameIndex}-vit-backbone-hidden-states`)), backboneHiddenStates)
     : null;
