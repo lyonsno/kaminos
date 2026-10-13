@@ -12,11 +12,11 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const adapter=createGivenPaletteMotion({THREE,motion:data.motion,rigFrame:data.frame});
  const walking=createWalkingPoseAdapter({THREE,adapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
  const source={...data.source,presentation:{mode:'source',...walking.identity}};
- let session,runtime,asset,player,stop=null,clock=0,cycle=0,mode='source',disposed=false,disposal,restoreGround=()=>{},refresh=()=>{};
+ let session,runtime,asset,floor,floorAsset,player,stop=null,clock=0,cycle=0,mode='source',disposed=false,disposal,restoreGround=()=>{},refresh=()=>{};
  const instruments=document.createElement('div');
  const unsubscribe=()=>{const previous=stop;stop=null;previous?.();};
  function read(){return {mode,cycle,source:structuredClone(source),host:{id:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
-  skin:runtime.read(),playback:player.read(),view:session.readView()};}
+  skin:runtime.read(),playback:player.read(),view:session.readView(),referenceFloor:floor?{id:floorAsset.id,visible:floor.visible,size:floor.geometry.parameters.width,height:floor.position.y,contactSolver:false}:null};}
  function startClock(){
   if(stop)return;
   stop=session.onFrame(({deltaSeconds})=>{
@@ -35,7 +35,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(disposal)return disposal;disposed=true;
   disposal=Promise.resolve().then(async()=>{
    unsubscribe();refresh=()=>{};player?.dispose();instruments.remove();restoreGround();
-   if(session)await session.dispose();if(runtime&&!asset)runtime.dispose();
+   if(session)await session.dispose();if(runtime&&!asset)runtime.dispose();if(floor&&!floorAsset){floor.geometry.dispose();floor.material.dispose();}
    if(globalThis.window?.kaminosWalkingCreature===inspect)delete globalThis.window.kaminosWalkingCreature;
   });return disposal;
  }
@@ -51,8 +51,11 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const previous={height:height.value,visible:visible.checked};runtime.group.updateMatrixWorld(true);
    const value=String(givenSourceSoleHeight(runtime.mesh.geometry.attributes.position.array,runtime.mesh.matrixWorld.elements));
    source.groundReference={kind:'source-start-surface-minimum',height:Number(value),animated:false,contactSolver:false};
-   height.value=value;height.dispatchEvent(new Event('change'));visible.checked=true;visible.dispatchEvent(new Event('change'));
-   restoreGround=()=>{if(height.value===value&&visible.checked){height.value=previous.height;height.dispatchEvent(new Event('change'));visible.checked=previous.visible;visible.dispatchEvent(new Event('change'));}};
+   const size=inputs.floor_size??5*walking.identity.radius;if(!Number.isFinite(size)||size<=0)throw Error('Reference floor size must be positive');
+   floor=new THREE.Mesh(new THREE.PlaneGeometry(size,size),new THREE.MeshStandardMaterial({color:0x808080,roughness:.65}));floor.name='Walking reference floor · not contact';floor.rotation.x=-Math.PI/2;floor.position.y=Number(value);floor.receiveShadow=true;
+   floorAsset=await session.attach(floor,{owned:true,metadata:{fileName:floor.name,source:null,label:floor.name}});
+   height.value=value;height.dispatchEvent(new Event('change'));visible.checked=false;visible.dispatchEvent(new Event('change'));
+   restoreGround=()=>{if(height.value===value&&!visible.checked){height.value=previous.height;height.dispatchEvent(new Event('change'));visible.checked=previous.visible;visible.dispatchEvent(new Event('change'));}};
   }
   if(inputs.view)session.setView(inputs.view);
   const active=()=>{if(disposed)throw Error('Walking creature experiment is disposed');};
@@ -63,6 +66,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    replay:operation('replay',()=>{unsubscribe();cycle=0;source.presentation.cycle=0;player.replay();startClock();return read();}),
    seek:operation('seek',input=>{unsubscribe();player.seek(input?.frame);return read();}),
    mode:operation('mode',input=>{if(!['source','cycle','path'].includes(input?.mode))throw Error('Unknown walking mode');unsubscribe();player.pause();mode=input.mode;cycle=0;source.presentation.mode=mode;source.presentation.cycle=0;player.seek(0);host.scene.refreshPresentation?.(asset);return read();}),
+   floor:operation('floor',input=>{if(!floor)throw Error('No walking reference floor is mounted');if(typeof input?.visible!=='boolean')throw Error('Reference floor visibility must be boolean');floor.visible=input.visible;session.redraw();return read();}),
   };
   if(globalThis.window)window.kaminosWalkingCreature=inspect;
   return {read,operations,dispose,mount({root,invoke}){
@@ -73,6 +77,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const call=async(name,input)=>{try{error.textContent='';await invoke(name,input);}catch(e){error.textContent=e.message;}};
    for(const [label,next] of [['Raw source','source'],['Straight cycle','cycle'],['Walk the curve','path']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call('mode',{mode:next});panel.append(button);}
    for(const [label,name] of [['Play motion','play'],['Pause motion','pause'],['Restart motion','replay']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call(name);panel.append(button);}
+   if(floor){const label=document.createElement('label');label.textContent='Walking reference floor ';const input=document.createElement('input');input.type='checkbox';input.checked=floor.visible;input.onchange=()=>call('floor',{visible:input.checked});label.append(input);panel.append(label);}
    for(const [label,index] of [['First motion sample',0],['Middle motion sample',Math.floor((adapter.frames-1)/2)],['Last motion sample',adapter.frames-1]]){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call('seek',{frame:index});panel.append(button);}
    if(source.prefixFrames){for(const [label,index] of [['Before continuation join',source.prefixFrames-1],['After continuation join',source.prefixFrames]]){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call('seek',{frame:index});panel.append(button);}}
    const range=document.createElement('input');range.type='range';range.min='0';range.max=String(adapter.frames-1);range.step='1';range.setAttribute('aria-label','Walking source sample');range.oninput=()=>call('seek',{frame:Number(range.value)});panel.append(range);
