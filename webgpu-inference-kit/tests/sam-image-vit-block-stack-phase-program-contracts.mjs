@@ -151,6 +151,10 @@ const dispatchShape = {
   globalAttnIndexes: [7, 15, 23, 31],
 };
 const workspace224 = createSam3ImageVitBlockStackWorkspacePlan({ batch: 1, height: 16, width: 16, hiddenSize: 1024, windowSize: 24 });
+assert.doesNotThrow(() => createSam3ImageVitBlockStackDispatchPlan({ shape: { ...dispatchShape, layerNormEps: 0.00001 }, layerIndex: 0 }), 'SAM3.1 block stack must accept the pinned Meta epsilon');
+for (const layerNormEps of [0, -1, NaN, Infinity, '0.00001']) assert.throws(() => createSam3ImageVitBlockStackDispatchPlan({ shape: { ...dispatchShape, layerNormEps }, layerIndex: 0 }), /layerNormEps/);
+assert.match(routeSource, /variance \+ dims\.layer_norm_eps/, 'both GPU block layer norms must use caller epsilon');
+assert.match(routeSource, /name: 'layer_norm_eps', type: 'f32'/, 'block epsilon must be f32, not padding');
 assert.deepEqual(workspace224, { localWindowTokensPerBatch: 576, globalWindowTokensPerBatch: 256, maxWindowTokensPerBatch: 576, maxWindowValues: 589_824 });
 const workspace448 = createSam3ImageVitBlockStackWorkspacePlan({ batch: 1, height: 32, width: 32, hiddenSize: 1024, windowSize: 24 });
 assert.deepEqual(workspace448, { localWindowTokensPerBatch: 2_304, globalWindowTokensPerBatch: 1_024, maxWindowTokensPerBatch: 2_304, maxWindowValues: 2_359_296 });
@@ -414,8 +418,8 @@ assert.deepEqual(fullBackboneOracle.layerModes, ['window', 'global', 'window', '
 assert.deepEqual(fullBackboneOracle.layerCheckpoints.map(checkpoint => checkpoint.layerIndex), [0, 1, 2, 3]);
 assert.deepEqual(Array.from(fullBackboneOracle.vitBlockStackHiddenStates), Array.from(hiddenStates), 'full-backbone zero-update oracle should preserve residual identity across multiple global boundaries');
 
-assert.throws(() => createSam3ImageVitBlockStackPhaseProgramCpuOracle({
-  hiddenStates,
+const metaEpsilonOracle = createSam3ImageVitBlockStackPhaseProgramCpuOracle({
+  hiddenStates: Float32Array.from({ length: 32 }, (_, index) => index % 2 ? 0.002 : 0),
   weights: { layers: [makeZeroBlock(0), makeZeroBlock(1)] },
   shape: {
     batch: 1,
@@ -432,7 +436,9 @@ assert.throws(() => createSam3ImageVitBlockStackPhaseProgramCpuOracle({
     globalAttnIndexes: [1],
     firstGlobalLayerIndex: 1,
   },
-}), /shape\.layerNormEps/);
+});
+assert.ok(Math.abs(metaEpsilonOracle.layerNorm1[1] - 0.30151134729385376) < 1e-7, 'both block layer norms use Meta epsilon');
+assert.deepEqual(metaEpsilonOracle.layerNorm1, metaEpsilonOracle.layerNorm2, 'zero residual updates preserve the same epsilon in LN1 and LN2');
 
 assert.throws(() => createSam3ImageVitBlockStackPhaseProgramCpuOracle({
   hiddenStates,

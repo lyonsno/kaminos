@@ -34,6 +34,8 @@ assert.match(backboneSource, /parity\.vitLayers = Object\.fromEntries/, 'browser
 assert.match(backboneSource, /parity\.vitLayerDiagnostics = Object\.fromEntries/, 'browser evidence must preserve selected-layer error distributions beside the numeric tolerance map');
 assert.match(backboneSource, /diagnostics: layerDiagnostics/, 'failed browser evidence must durably expose selected-layer error distributions');
 for (const source of [backboneSource, promotedBackboneSource]) {
+  assert.match(source, /const prefixShape = \{[^\n]*layerNormEps: 0\.00001/, 'SAM3.1 prefix must request Meta LayerNorm epsilon');
+  assert.match(source, /const blockShape = \{[^\n]*layerNormEps: 0\.00001/, 'SAM3.1 all 32 ViT blocks must request Meta LayerNorm epsilon');
   assert.match(source, /summarizeSam3LayerParityCheckpoint/, 'two-image backbone must measure final ViT error distribution against the official tensor');
   assert.match(source, /passesSam3LayerParityCheckpoint/, 'two-image backbone must apply the compound FP32 parity contract');
   assert.match(source, /passesVitPrefixParity/, 'two-image backbone must apply the measured compound prefix contract');

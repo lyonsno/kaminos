@@ -209,8 +209,9 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
   const model = modelFor(manifest);
   const preprocessShape = { batch: 1, height: manifest.shape.imageHeight, width: manifest.shape.imageWidth, channels: manifest.shape.imageChannels };
   const patchShape = { batch: 1, imageHeight: manifest.shape.imageHeight, imageWidth: manifest.shape.imageWidth, imageChannels: manifest.shape.imageChannels, patchSize: manifest.shape.patchSize, patchHeight: manifest.shape.patchHeight, patchWidth: manifest.shape.patchWidth, hiddenSize: manifest.shape.visionHiddenSize };
-  const prefixShape = { batch: 1, patchHeight: manifest.shape.patchHeight, patchWidth: manifest.shape.patchWidth, hiddenSize: manifest.shape.visionHiddenSize, pretrainGridSize: prefixWeights.pretrainGridSize };
-  const blockShape = { batch: 1, height: manifest.shape.patchHeight, width: manifest.shape.patchWidth, hiddenSize: manifest.shape.visionHiddenSize, numHeads: manifest.shape.visionHeads, windowSize: manifest.shape.visionWindowSize, intermediateSize: manifest.shape.visionMlpHidden, layerNormEps: 0.000001, ropeTheta: 10000, ropePretrainGridSize: prefixWeights.pretrainGridSize, interpolateRope: true, startLayerIndex: 0, endLayerIndex: 31, firstGlobalLayerIndex: 7, finalLayerIndex: 31, fullBackbone: true, globalAttnIndexes: [7, 15, 23, 31] };
+  // Meta SAM3.1 ViT's string LayerNorm factory uses eps=1e-5.
+  const prefixShape = { batch: 1, patchHeight: manifest.shape.patchHeight, patchWidth: manifest.shape.patchWidth, hiddenSize: manifest.shape.visionHiddenSize, pretrainGridSize: prefixWeights.pretrainGridSize, layerNormEps: 0.00001 };
+  const blockShape = { batch: 1, height: manifest.shape.patchHeight, width: manifest.shape.patchWidth, hiddenSize: manifest.shape.visionHiddenSize, numHeads: manifest.shape.visionHeads, windowSize: manifest.shape.visionWindowSize, intermediateSize: manifest.shape.visionMlpHidden, layerNormEps: 0.00001, ropeTheta: 10000, ropePretrainGridSize: prefixWeights.pretrainGridSize, interpolateRope: true, startLayerIndex: 0, endLayerIndex: 31, firstGlobalLayerIndex: 7, finalLayerIndex: 31, fullBackbone: true, globalAttnIndexes: [7, 15, 23, 31] };
   const receipts = [];
   const routes = [];
   const parity = {};
