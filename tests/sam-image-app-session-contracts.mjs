@@ -63,6 +63,8 @@ try { await element('sam-image-unload').onclick(); } catch { /* Pre-fix callback
 assert.ok(tools.evidence().runtime, 'a failed unload must retain the runtime handle and its resources');
 assert.equal(element('sam-image-status').dataset.failed, 'true', 'failed unload must be visible');
 assert.equal(tools.progress().busy, false);
+await tools.run();
+assert.equal(runtimeCreations, 1, 'Run after a failed unload must not replace the retained runtime');
 closeFailure = null;
 await element('sam-image-unload').onclick();
 assert.equal(tools.evidence().runtime, null, 'only a successful unload retires the runtime');
