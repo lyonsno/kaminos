@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 252,
+  "controlCount": 253,
   "controls": [
     {
       "key": "volume-physical-material-law",
@@ -1662,6 +1662,18 @@
       "type": "range",
       "additiveDefault": 55.06,
       "additiveSinceControlCount": 252
+    },
+    {
+      "key": "volume-appearance-model",
+      "param": "volume_appearance_model",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "authored",
+      "allowedValues": [
+        "authored",
+        "compact-3"
+      ],
+      "additiveSinceControlCount": 253
     }
   ],
   "retiredControls": [

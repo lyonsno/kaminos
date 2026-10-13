@@ -2121,6 +2121,19 @@ export const GRID_SHAPE_UNIFORM_FLOATS = 8;
 export const REACTANT_COMBUSTION_UNIFORM_OFFSET = GRID_SHAPE_UNIFORM_OFFSET + GRID_SHAPE_UNIFORM_FLOATS;
 export { REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, resolveReactantCombustionConfig, reactantCombustionUniformValues };
 export const VOLUME_UNIFORM_FLOATS = REACTANT_COMBUSTION_UNIFORM_OFFSET + REACTANT_COMBUSTION_UNIFORM_FLOATS;
+// Appearance model (compression study, 2026-10-13). `compact-3` stores three
+// appearance carriers and rebuilds the other six at the slot samplers by these
+// pooled ratios ([flame, shred, front] weights; negatives from the fit dropped).
+// The flag rides the last borrowed reactant lane (d.w). `authored` is the
+// existing model, bit for bit.
+export const APPEARANCE_MODELS = Object.freeze(['authored', 'compact-3']);
+export const COMPACT_CARRIER_RATIOS = Object.freeze({
+  ember: [0.575, 0.016, 0.229], flameDetail: [0.866, 0, 0.110], fireLick: [1.258, 0.068, 0.214],
+  emberFleck: [0.111, 0.050, 2.744], materialDetail: [0.004, 0.617, 0], microSmoke: [0, 0, 0],
+});
+export function appearanceModelUniformValue(model) {
+  return model === 'compact-3' ? 1 : 0;
+}
 export function gridShapeUniformValues({ grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight }) {
   return [grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight, 0, 0];
 }
@@ -3847,12 +3860,43 @@ fn slotIndex(c: vec3<i32>, slot: u32) -> u32 {
   return index3(clampCell(c)) * SLOTS_PER_CELL + slot;
 }
 
+// The front-topology field under compact-3 reads as the stored front times this
+// ratio (fitted 0.33 on the floor inlet, 0.71 on a raised emitter: one approximate
+// value, a known limit of the A/B).
+const COMPACT_FRONT_TOPOLOGY_RATIO: f32 = 0.4;
+
+fn compactAppearanceOn() -> bool {
+  return u.reactant_combustion_d.w > 0.5;
+}
+
+// Appearance model compact-3 (compression study, 2026-10-13): the kernel stores
+// flame (slot 2.x), interface shred (slot 3.y) and combustion front (slot 2.w);
+// the six other appearance channels are rebuilt here from those three by fixed
+// pooled ratios ([flame, shred, front] weights fitted over seven arms), so every
+// downstream formula is unchanged. Under authored the stored value is returned.
+fn expandCompactCarriers(slot: u32, value: vec4<f32>, flame: f32, shred: f32, front: f32) -> vec4<f32> {
+  if (!compactAppearanceOn()) { return value; }
+  if (slot == 2u) {
+    // flame, ember, flameDetail, combustionFront
+    return vec4<f32>(flame, 0.575 * flame + 0.016 * shred + 0.229 * front, 0.866 * flame + 0.110 * front, front);
+  }
+  if (slot == 3u) {
+    // microSmoke, interfaceShred, fireLick, emberFleck
+    return vec4<f32>(0.0, shred, 1.258 * flame + 0.068 * shred + 0.214 * front, 0.111 * flame + 0.050 * shred + 2.744 * front);
+  }
+  return value;
+}
+
 fn readSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
-  return fluidSrc[slotIndex(c, slot)];
+  let value = fluidSrc[slotIndex(c, slot)];
+  if (slot < 2u || !compactAppearanceOn()) { return value; }
+  let fire = fluidSrc[slotIndex(c, 2u)];
+  let micro = fluidSrc[slotIndex(c, 3u)];
+  return expandCompactCarriers(slot, value, fire.x, micro.y, fire.w);
 }
 
 fn readFrontField(c: vec3<i32>) -> f32 {
-  return frontSrc[index3(clampCell(c))];
+  return select(frontSrc[index3(clampCell(c))], readSlot(c, 2u).w * COMPACT_FRONT_TOPOLOGY_RATIO, compactAppearanceOn());
 }
 
 // The optical density the renderer and the legacy projection weight by: a pure
@@ -4953,8 +4997,8 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
   ) * 0.5;
   let velocityDensity = fluidSrc[base];
   let material = fluidSrc[base + 1u];
-  let fireLayer = fluidSrc[base + 2u];
-  let microLayer = fluidSrc[base + 3u];
+  let fireLayer = readSlot(c, 2u);
+  let microLayer = readSlot(c, 3u);
   let density = derivedDensityFromSlots(material, microLayer);
   frontDst[idx] = frontSrc[idx];
   if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
@@ -4988,8 +5032,8 @@ fn csProjectPressureTiered(@builtin(global_invocation_id) gid: vec3<u32>) {
   ) * 0.5;
   let velocityDensity = fluidSrc[base];
   let material = fluidSrc[base + 1u];
-  let fireLayer = fluidSrc[base + 2u];
-  let microLayer = fluidSrc[base + 3u];
+  let fireLayer = readSlot(c, 2u);
+  let microLayer = readSlot(c, 3u);
   let density = derivedDensityFromSlots(material, microLayer);
   frontDst[idx] = frontSrc[idx];
   if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
@@ -7823,9 +7867,12 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Slot 0's fourth lane is reserved (the old stored density; now derivedDensityFromSlots where read).
   fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), 0.0);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
-  fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
-  fluidDst[base + 3u] = vec4<f32>(clamp(microSmoke, 0.0, 1.8), clamp(interfaceShred, 0.0, 1.8), clamp(fireLick, 0.0, 1.8), clamp(emberFleck, 0.0, 1.4));
-  frontDst[idx] = clamp(combustionFrontTopology, 0.0, 2.0);
+  let compact = compactAppearanceOn();
+  // compact-3 stores flame, interface shred and combustion front only; the rest
+  // is rebuilt at the slot samplers (expandCompactCarriers).
+  fluidDst[base + 2u] = select(vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8)), vec4<f32>(clamp(flame, 0.0, 2.4), 0.0, 0.0, clamp(combustionFront, 0.0, 1.8)), compact);
+  fluidDst[base + 3u] = select(vec4<f32>(clamp(microSmoke, 0.0, 1.8), clamp(interfaceShred, 0.0, 1.8), clamp(fireLick, 0.0, 1.8), clamp(emberFleck, 0.0, 1.4)), vec4<f32>(0.0, clamp(interfaceShred, 0.0, 1.8), 0.0, 0.0), compact);
+  frontDst[idx] = select(clamp(combustionFrontTopology, 0.0, 2.0), 0.0, compact);
   if (reactantOn) {
     textureStore(reactantDst, cellI, vec4<f32>(clamp(oxidizer, 0.0, 2.0), reactantFreshBurnRate, 0.0, 0.0));
   }
@@ -9857,8 +9904,33 @@ fn boundarySplatClampCell(cell: vec3<i32>) -> vec3<u32> {
   return vec3<u32>(clamp(cell, vec3<i32>(0), vec3<i32>(i32(GRID) - 1, i32(GRID_Y) - 1, i32(GRID) - 1)));
 }
 
+// Appearance model flag for this module (the splat camera's gridShape.z lane).
+fn compactAppearanceOn() -> bool {
+  return boundarySplatCamera.gridShape.z > 0.5;
+}
+
+// Same law as the main module's expandCompactCarriers (separate shader module);
+// the appearance-model contract pins the two copies identical.
+fn expandCompactCarriers(slot: u32, value: vec4<f32>, flame: f32, shred: f32, front: f32) -> vec4<f32> {
+  if (!compactAppearanceOn()) { return value; }
+  if (slot == 2u) {
+    // flame, ember, flameDetail, combustionFront
+    return vec4<f32>(flame, 0.575 * flame + 0.016 * shred + 0.229 * front, 0.866 * flame + 0.110 * front, front);
+  }
+  if (slot == 3u) {
+    // microSmoke, interfaceShred, fireLick, emberFleck
+    return vec4<f32>(0.0, shred, 1.258 * flame + 0.068 * shred + 0.214 * front, 0.111 * flame + 0.050 * shred + 2.744 * front);
+  }
+  return value;
+}
+
 fn boundarySplatReadSlot(cell: vec3<i32>, slot: u32) -> vec4<f32> {
-  return fluid[boundarySplatCellIndex(boundarySplatClampCell(cell)) * SLOTS_PER_CELL + slot];
+  let base = boundarySplatCellIndex(boundarySplatClampCell(cell)) * SLOTS_PER_CELL;
+  let value = fluid[base + slot];
+  if (slot < 2u || !compactAppearanceOn()) { return value; }
+  let fire = fluid[base + 2u];
+  let micro = fluid[base + 3u];
+  return expandCompactCarriers(slot, value, fire.x, micro.y, fire.w);
 }
 
 fn boundarySplatReadSidecar(cell: vec3<i32>) -> vec4<f32> {
@@ -15654,7 +15726,7 @@ export function createKaminosVolumePrototype({
       ], 44);
       splatCamera.set([camera.position.x, camera.position.y, camera.position.z, 0], 48);
       splatCamera.set([...productTransform.translate, productTransform.scale], 52);
-      splatCamera.set([gridSize, gridHeight, 0, 0], 56);
+      splatCamera.set([gridSize, gridHeight, appearanceModelUniformValue(controlsSnapshot.appearanceModel), 0], 56);
       state.fullSupportDepositionReceipt = {
         identity: 'full-support-deposition-runtime-receipt-v0',
         requested: state.fullSupportDepositionRequested,
@@ -16085,6 +16157,8 @@ export function createKaminosVolumePrototype({
     // Borrowed lane (reactant_combustion_d.z, otherwise unused): the quench field
     // spreads only while a liquid is bound with transfer enabled.
     uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 14] = liquidFireContactDescriptor && liquidFireContactTransferEnabled ? 1 : 0;
+    uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 15] = appearanceModelUniformValue(controlsSnapshot.appearanceModel);
+    state.appearanceModel = { requested: String(controlsSnapshot.appearanceModel ?? 'authored'), effective: APPEARANCE_MODELS.includes(controlsSnapshot.appearanceModel) ? controlsSnapshot.appearanceModel : 'authored', storedCarriers: controlsSnapshot.appearanceModel === 'compact-3' ? ['flame', 'interfaceShred', 'combustionFront'] : null };
     state.reactantCombustion = reactantCombustionConfig;
     if (ensureReactantSidecar(reactantCombustionConfig.effective.admitted)) {
       rebuildFluidBindGroups();

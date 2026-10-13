@@ -32,7 +32,7 @@ test('the reactant uniform block follows the immersed source and is packed and r
   assert.equal(core.VOLUME_UNIFORM_FLOATS, core.REACTANT_COMBUSTION_UNIFORM_OFFSET + 16);
   assert.equal(core.VOLUME_UNIFORM_FLOATS % 4, 0);
   assert.match(source, /grid_shape_b: vec4<f32>,\n(?:\s*\/\/.*\n)*\s*reactant_combustion_a: vec4<f32>,\n\s*reactant_combustion_b: vec4<f32>,\n\s*reactant_combustion_c: vec4<f32>,\n\s*reactant_combustion_d: vec4<f32>,\n\};/, 'the struct carries the block right after the grid shape');
-  assert.match(source, /uniforms\.set\(reactantCombustionUniformValues\(reactantCombustionConfig\), REACTANT_COMBUSTION_UNIFORM_OFFSET\);\n(?:\s*\/\/.*\n)*\s*uniforms\[REACTANT_COMBUSTION_UNIFORM_OFFSET \+ 14\] = [^\n]*;\n\s*state\.reactantCombustion = reactantCombustionConfig;/, 'the borrowed quench-spread lane is packed between the block and its receipt');
+  assert.match(source, /uniforms\.set\(reactantCombustionUniformValues\(reactantCombustionConfig\), REACTANT_COMBUSTION_UNIFORM_OFFSET\);\n(?:\s*\/\/.*\n|\s*uniforms\[REACTANT_COMBUSTION_UNIFORM_OFFSET \+ 1[45]\] = [^\n]*;\n|\s*state\.appearanceModel = [^\n]*;\n)*\s*state\.reactantCombustion = reactantCombustionConfig;/, 'the borrowed lanes (quench spread, appearance model) are packed between the block and its receipt');
   assert.match(source, /resolveReactantCombustionConfig\(controlsSnapshot, \{\s*grid: gridSize,\s*transportCommonCharacteristic: resolveTransportConfig\(controlsSnapshot\)\.effective\.commonCharacteristic,/, 'admission sees the effective transport');
 });
 
