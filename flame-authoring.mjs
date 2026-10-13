@@ -65,7 +65,7 @@ export function syncFlameRangeBounds(source,bounds) {
 }
 export const FLAME_PROPERTY_GROUPS = [
   { name:'Quality', open:true, scope:'Grid changes restart the fluid. Raymarch controls tune the viewport.', fields:[
-    ['volume-resolution','Simulation resolution'], ['volume-pressure-solver-iterations','Solver sweeps'], ['volume-steps','Ray count'],
+    ['volume-resolution','Simulation resolution'], ['volume-grid-height-ratio','Height / width'], ['volume-pressure-solver-iterations','Solver sweeps'], ['volume-steps','Ray count'],
     ['volume-adaptive-rays','Adaptive rays'], ['volume-render-scale','Screen resolution (%)'],
   ] },
   { name:'Appearance', open:true, scope:'Shared flame and smoke appearance', fields:[
@@ -156,6 +156,13 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       if(source.tagName==='SELECT')for(const option of id==='emitter-assay-family'?authoredFlameShapeOptions(source.options):source.options)field.append(option.cloneNode(true));
       else {field.type=source.type==='range'?'number':source.type;field.step='any';}
       field.className='transform-input';field.dataset.authoringAlias=id;field.id=`selected-${id}`;grip.htmlFor=field.id;
+      if(source.dataset.volumeCommit==='confirm') {
+        field.dataset.volumeCommit='confirm';
+        const confirm=key=>source.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true}));
+        field.addEventListener('change',()=>confirm('Enter'));
+        field.addEventListener('blur',()=>confirm('Enter'));
+        field.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key==='Escape')confirm(event.key);});
+      }
       field.setAttribute('aria-label',`Flame ${label}`);
       field.dataset.authoringDragStep=source.step==='any'?'.01':source.step||'.01';
       if(id==='volume-render-scale')field.title='Raymarch width and height as a percentage of the viewport';

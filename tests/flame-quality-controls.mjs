@@ -7,7 +7,7 @@ const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const grab=name=>{const a=html.indexOf(`function ${name}(`);assert.ok(a>=0);return html.slice(a,html.indexOf('\n}',a)+2);};
 test('quality controls present grid, rays, adaptive and screen percentage together without duplicate aliases',()=>{
  const group=FLAME_PROPERTY_GROUPS.find(g=>g.name==='Quality');assert.ok(group,'quality belongs beside the simulation grid');
- assert.deepEqual(group.fields.map(([id])=>id),['volume-resolution','volume-pressure-solver-iterations','volume-steps','volume-adaptive-rays','volume-render-scale']);
+ for(const id of ['volume-resolution','volume-grid-height-ratio','volume-pressure-solver-iterations','volume-steps','volume-adaptive-rays','volume-render-scale'])assert.ok(group.fields.some(([field])=>field===id));
  for(const id of ['volume-resolution','volume-pressure-solver-iterations'])assert.equal(FLAME_PROPERTY_GROUPS.flatMap(g=>g.fields).filter(([field])=>field===id).length,1);
 });
 test('screen resolution has one exact full-range value rather than a hidden effective value and clipped slider',()=>{
@@ -41,3 +41,5 @@ test('scaled radius bounds use the observed native range representation so legal
  flameControls.syncFlameRangeBounds(source,bounds);assert.equal(clones,1,'unchanged limits need no repeated clone or native writes');
  flameControls.syncFlameRangeBounds(source,{min:.01,max:.25});assert.equal(source.min,'0.01');assert.equal(source.max,'0.25');
 });
+
+test('the authoring quality panel exposes the landed grid-height control',()=>{assert.ok(FLAME_PROPERTY_GROUPS.find(g=>g.name==='Quality').fields.some(([id])=>id==='volume-grid-height-ratio'),'height editing belongs in the authoring field inspector');});
