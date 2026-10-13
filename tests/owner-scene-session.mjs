@@ -133,3 +133,28 @@ test('two in-flight attachments of one object invoke the host only once', async 
   assert.equal(count, 1, 'same root must be reserved before asynchronous host attachment');
   assert.equal(settled[1].status, 'rejected'); assert.match(settled[1].reason.message, /already/);
 });
+
+for (const reentry of ['abort', 'unsubscribe']) {
+  test(`dispose reentry through ${reentry} waits on the same owned cleanup`, async () => {
+    let nested, release, started;
+    const removing = new Promise(resolve => {started = resolve;});
+    const f = fixture({
+      loadAsset: (_input, {signal}) => {
+        if (reentry === 'abort') signal.addEventListener('abort', () => {nested = f.session.dispose();});
+        const root = new THREE.Group(); f.scene.add(root); return f.receipt(root);
+      },
+      onFrame: () => () => {nested = f.session.dispose();},
+      remove: () => new Promise(resolve => {release = resolve; started();}),
+    });
+    await f.session.loadAsset({});
+    if (reentry === 'unsubscribe') f.session.onFrame(() => {});
+    const outer = f.session.dispose();
+    let nestedFinished = false;
+    const observed = Promise.resolve(nested).then(() => {nestedFinished = true;});
+    await removing; await Promise.resolve();
+    const prematurelyFinished = nestedFinished;
+    release(); await outer; await observed;
+    assert.equal(nested, outer, 'reentrant disposal must return the same cleanup promise');
+    assert.equal(prematurelyFinished, false, 'reentrant disposal must wait for removal');
+  });
+}
