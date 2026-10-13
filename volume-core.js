@@ -1,4 +1,5 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
+import { REACTANT_COMBUSTION_WGSL, REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, REACTANT_MODEL, resolveReactantCombustionConfig, reactantCombustionUniformValues } from './volume-reactant-combustion.mjs';
 import { buildInflowCoverageMap, normalizeInflowApertureSpec, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
 import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
 import {
@@ -2087,7 +2088,12 @@ export const VELOCITY_STAGGERING_UNIFORM_OFFSET = HEAT_RELEASE_UNIFORM_OFFSET + 
 export const VELOCITY_STAGGERING_UNIFORM_FLOATS = 4;
 export const IMMERSED_SOURCE_UNIFORM_OFFSET = VELOCITY_STAGGERING_UNIFORM_OFFSET + VELOCITY_STAGGERING_UNIFORM_FLOATS;
 export const IMMERSED_SOURCE_UNIFORM_FLOATS = 24;
-export const VOLUME_UNIFORM_FLOATS = IMMERSED_SOURCE_UNIFORM_OFFSET + IMMERSED_SOURCE_UNIFORM_FLOATS;
+// Reactant combustion (volume-reactant-combustion.mjs): four vec4s after the
+// immersed source, all zero (the authored law) unless the Reaction Law select
+// admits the candidate.
+export const REACTANT_COMBUSTION_UNIFORM_OFFSET = IMMERSED_SOURCE_UNIFORM_OFFSET + IMMERSED_SOURCE_UNIFORM_FLOATS;
+export { REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, resolveReactantCombustionConfig, reactantCombustionUniformValues };
+export const VOLUME_UNIFORM_FLOATS = REACTANT_COMBUSTION_UNIFORM_OFFSET + REACTANT_COMBUSTION_UNIFORM_FLOATS;
 
 // The aperture pattern (slice 2): which coverage pattern the floor map is built
 // from, its count / ratio / seed, and the swirl (tangential fraction of the
@@ -3555,6 +3561,15 @@ struct Uniforms {
   // (the coverage map holds the slab's pattern), unused ×3.
   immersed_source_e: vec4<f32>,
   immersed_source_f: vec4<f32>,
+  // Reactant combustion (volume-reactant-combustion.mjs): a = enabled, mixing
+  // time, cooling time, exchange weight per reference step (D / h^2); b = s,
+  // Q, soot yield, soot retirement steps; c = ignition low, ignition high,
+  // ambient oxidizer, inlet oxidizer; d = appearance burn reference, stable
+  // exchange weight, unused x2.
+  reactant_combustion_a: vec4<f32>,
+  reactant_combustion_b: vec4<f32>,
+  reactant_combustion_c: vec4<f32>,
+  reactant_combustion_d: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -3618,6 +3633,13 @@ struct NonRidgeOpticalCaptureRow {
 // (z + component x GRID): compute is at its storage-buffer limit.
 // Binding 22: 20/21 are reserved for the joined outer grid's optical and solid textures (Sexy Fireman).
 @group(0) @binding(22) var forceDelta: texture_storage_3d<r32float, read_write>;
+// Reactant sidecar (volume-reactant-combustion.mjs): per cell (oxidizer, fresh
+// burn per unit time), ping-ponged as two rg32float 3-D textures, read as a
+// sampled texture and written as a storage texture (the compute stage is at
+// its storage-buffer limit). Compute only; 1x1x1 placeholders and untouched
+// while the authored law runs.
+@group(0) @binding(23) var reactantSrc: texture_3d<f32>;
+@group(0) @binding(24) var reactantDst: texture_storage_3d<rg32float, write>;
 
 fn forceDeltaStore(c: vec3<i32>, f: vec3<f32>) {
   textureStore(forceDelta, c, vec4<f32>(f.x, 0.0, 0.0, 0.0));
@@ -4842,6 +4864,7 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fireLayer = fluidSrc[base + 2u];
   let microLayer = fluidSrc[base + 3u];
   frontDst[idx] = frontSrc[idx];
+  if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
   let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
   let projectionGain = projection * mix(0.62, 0.94, bonfireScene) * (0.42 + activeMaterial * 0.58);
   let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
@@ -4875,6 +4898,7 @@ fn csProjectPressureTiered(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fireLayer = fluidSrc[base + 2u];
   let microLayer = fluidSrc[base + 3u];
   frontDst[idx] = frontSrc[idx];
+  if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
   let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
   let projectionGain = projection * mix(0.62, 0.94, bonfireScene) * (0.42 + activeMaterial * 0.58);
   let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
@@ -4998,6 +5022,7 @@ fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
   let c = vec3<i32>(gid);
   if (sceneSolidAt(c)) {
     frontDst[idx] = 0.0;
+    if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), vec4<f32>(0.0)); }
     for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) { fluidDst[base + slot] = vec4<f32>(0.0); }
     return;
   }
@@ -5010,6 +5035,7 @@ fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
   );
   let velocityDensity = fluidSrc[base];
   frontDst[idx] = frontSrc[idx];
+  if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
   let projectionGain = clamp(u.pressure_solver_controls.w, 0.0, 1.0);
   var correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
   if (!sceneFaceOpen(c, 0u)) { correctedVelocity.x = 0.0; }
@@ -5583,6 +5609,129 @@ fn thermalExpansionForce(c: vec3<i32>, heat: f32, amount: f32) -> vec3<f32> {
 
 ${PASSIVE_MATERIAL_WGSL}
 
+${REACTANT_COMBUSTION_WGSL}
+
+fn readReactantOxidizer(c: vec3<i32>) -> f32 {
+  return textureLoad(reactantSrc, vec3<i32>(clampCell(c)), 0).x;
+}
+
+// Trilinear over the eight cells around cellCenter, solid cells excluded (the
+// fluid slots' masked sample); ambient if every corner is solid.
+fn sampleReactantOxidizer(cellCenter: vec3<f32>) -> f32 {
+  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(pc));
+  let f = fract(pc);
+  var weighted = 0.0;
+  var weightSum = 0.0;
+  for (var dz = 0; dz < 2; dz = dz + 1) {
+    for (var dy = 0; dy < 2; dy = dy + 1) {
+      for (var dx = 0; dx < 2; dx = dx + 1) {
+        let sampleCell = i0 + vec3<i32>(dx, dy, dz);
+        if (sceneSolidAt(sampleCell)) { continue; }
+        let weight = select(1.0 - f.x, f.x, dx == 1)
+          * select(1.0 - f.y, f.y, dy == 1)
+          * select(1.0 - f.z, f.z, dz == 1);
+        weighted = weighted + readReactantOxidizer(sampleCell) * weight;
+        weightSum = weightSum + weight;
+      }
+    }
+  }
+  return select(u.reactant_combustion_c.z, weighted / max(weightSum, 1e-12), weightSum > 0.0);
+}
+
+// The MacCormack predictor evaluated in place (the oxidizer has no predictor
+// buffer): cell c's forward semi-Lagrangian estimate, by the same characteristic
+// csTransportPredict uses for the fluid slots (tall plume: no lateral damping).
+fn reactantPredictedOxidizer(c: vec3<i32>) -> f32 {
+  if (sceneSolidAt(c)) { return 0.0; }
+  let cc = vec3<i32>(clampCell(c));
+  let centre = vec3<f32>(cc) + vec3<f32>(0.5);
+  let back = sceneClipCharacteristic(centre, centre - centreVelocityAt(cc) * dynamicsBacktraceScale());
+  return sampleReactantOxidizer(back);
+}
+
+fn sampleReactantPredicted(cellCenter: vec3<f32>) -> f32 {
+  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(pc));
+  let f = fract(pc);
+  var weighted = 0.0;
+  var weightSum = 0.0;
+  for (var dz = 0; dz < 2; dz = dz + 1) {
+    for (var dy = 0; dy < 2; dy = dy + 1) {
+      for (var dx = 0; dx < 2; dx = dx + 1) {
+        let sampleCell = i0 + vec3<i32>(dx, dy, dz);
+        if (sceneSolidAt(sampleCell)) { continue; }
+        let weight = select(1.0 - f.x, f.x, dx == 1)
+          * select(1.0 - f.y, f.y, dy == 1)
+          * select(1.0 - f.z, f.z, dz == 1);
+        weighted = weighted + reactantPredictedOxidizer(sampleCell) * weight;
+        weightSum = weightSum + weight;
+      }
+    }
+  }
+  return select(u.reactant_combustion_c.z, weighted / max(weightSum, 1e-12), weightSum > 0.0);
+}
+
+// Min and max of the source oxidizer over the eight cells the backtrace sample reads.
+fn reactantOxidizerExtrema(cellCenter: vec3<f32>) -> vec2<f32> {
+  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
+  let i0 = vec3<i32>(floor(pc));
+  var found = false;
+  var lo = 0.0;
+  var hi = 0.0;
+  for (var dz = 0; dz < 2; dz = dz + 1) {
+    for (var dy = 0; dy < 2; dy = dy + 1) {
+      for (var dx = 0; dx < 2; dx = dx + 1) {
+        let sampleCell = i0 + vec3<i32>(dx, dy, dz);
+        if (sceneSolidAt(sampleCell)) { continue; }
+        let value = readReactantOxidizer(sampleCell);
+        if (!found) { lo = value; hi = value; found = true; }
+        else { lo = min(lo, value); hi = max(hi, value); }
+      }
+    }
+  }
+  return select(vec2<f32>(u.reactant_combustion_c.z), vec2<f32>(lo, hi), found);
+}
+
+// Oxidizer transport on the fuel's characteristic and scheme: the limited
+// MacCormack correction when the scalar slots use it (macCormackSlot's rules:
+// first order where the backtrace touches the inflow ghost, revert to first
+// order outside the source extrema), first-order semi-Lagrangian otherwise.
+fn transportReactantOxidizer(cellI: vec3<i32>, backCell: vec3<f32>, forwardCell: vec3<f32>, macCormackScalars: bool) -> f32 {
+  let predicted = sampleReactantOxidizer(backCell);
+  if (!macCormackScalars || inflowGhostBlend(backCell) > 0.0) {
+    return predicted;
+  }
+  let reversed = sampleReactantPredicted(forwardCell);
+  let current = readReactantOxidizer(cellI);
+  let corrected = predicted + (current - reversed) * 0.5;
+  let extrema = reactantOxidizerExtrema(backCell);
+  return select(corrected, predicted, corrected < extrema.x || corrected > extrema.y);
+}
+
+fn reactantExchangeDelta(n: vec3<i32>, selfMaterial: vec4<f32>, selfOxidizer: f32) -> vec3<f32> {
+  if (!insideGrid(n) || sceneSolidAt(n)) {
+    return vec3<f32>(0.0);
+  }
+  let m = readSlot(n, 1u);
+  return vec3<f32>(m.z - selfMaterial.z, m.y - selfMaterial.y, readReactantOxidizer(n) - selfOxidizer);
+}
+
+// The named exchange: the six-neighbour Laplacian (in cells) of fuel, heat and
+// oxidizer on the source fields, zero flux through the grid edge and solids.
+// Weighted by reactantExchangeWeightFor(dt) = D dt / h^2 (capped) it is the
+// eddy diffusivity D of the reactant law, unity Lewis number.
+fn reactantExchangeLaplacian(c: vec3<i32>) -> vec3<f32> {
+  let selfMaterial = readSlot(c, 1u);
+  let selfOxidizer = readReactantOxidizer(c);
+  return reactantExchangeDelta(c + vec3<i32>(1, 0, 0), selfMaterial, selfOxidizer)
+    + reactantExchangeDelta(c + vec3<i32>(-1, 0, 0), selfMaterial, selfOxidizer)
+    + reactantExchangeDelta(c + vec3<i32>(0, 1, 0), selfMaterial, selfOxidizer)
+    + reactantExchangeDelta(c + vec3<i32>(0, -1, 0), selfMaterial, selfOxidizer)
+    + reactantExchangeDelta(c + vec3<i32>(0, 0, 1), selfMaterial, selfOxidizer)
+    + reactantExchangeDelta(c + vec3<i32>(0, 0, -1), selfMaterial, selfOxidizer);
+}
+
 fn fireLayerAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, fireLayerRiseDirection: f32) -> vec4<f32> {
   let fastLift = vec3<f32>(0.0, clamp(heat, 0.0, 1.9) * (0.40 + speed * 0.13) * fireLayerRiseDirection, 0.0);
   let backCell = cell - (velocity + fastLift) * (1.82 + speed * 0.34);
@@ -6013,6 +6162,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     forceDeltaStore(cellI, vec3<f32>(0.0));
     quenchDst[idx] = 0u;
     frontDst[idx] = 0.0;
+    if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), vec4<f32>(0.0)); }
     for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) { fluidDst[base + slot] = vec4<f32>(0.0); }
     return;
   }
@@ -6179,6 +6329,20 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     microLayer = mix(microLayer, symmetricMicroLayer, stepBlend(bonfireScalarSymmetryBlend * 0.82));
     combustionFrontTopology = mix(combustionFrontTopology, symmetricFrontTopology, stepBlend(bonfireScalarSymmetryBlend * 0.38));
   }
+  // Reactant law (volume-reactant-combustion.mjs): the oxidizer rides the
+  // fuel's characteristic and scheme, then one named exchange (an eddy
+  // diffusivity, unity Lewis number) acts alike on fuel, oxidizer and heat.
+  // Nothing in these blocks runs under the authored law.
+  let reactantOn = reactantLawOn();
+  var oxidizer = u.reactant_combustion_c.z;
+  if (reactantOn) {
+    let reactantForwardCell = sceneClipCharacteristic(cell, cell + advectVelocity * backtraceScale);
+    oxidizer = transportReactantOxidizer(cellI, backCell, reactantForwardCell, macCormackScalars);
+    let exchangeWeight = reactantExchangeWeightFor(timeStep);
+    let exchange = reactantExchangeLaplacian(cellI);
+    material = vec4<f32>(material.x, max(0.0, material.y + exchangeWeight * exchange.y), max(0.0, material.z + exchangeWeight * exchange.x), material.w);
+    oxidizer = max(0.0, oxidizer + exchangeWeight * exchange.z);
+  }
   let velTransported = advected.xyz * transportVelocityDamping();
   var vel = velTransported;
   // Centred additive forces (functions of scalars, position and controls):
@@ -6199,6 +6363,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var interfaceShred = microLayer.y * stepRate(0.948);
   var fireLick = microLayer.z * stepRate(0.902);
   var emberFleck = microLayer.w * stepRate(0.934);
+  if (reactantOn) {
+    // The thermal state cools with the Cooling Time, soot retires with its
+    // documented e-folding, and fuel leaves only by burning, transport and
+    // boundaries (no authored 1%/step fuel decay).
+    smoke = material.x * reactantSootSurvival(timeStep);
+    heat = material.y * reactantCoolingSurvival(timeStep);
+    fuel = material.z;
+  }
   // Inflow boundary: the prescribed flux through the floor face brings a
   // fraction v_in x coverage x backtraceScale x dt of the floor cell volume in
   // as pure inflow each step (fuel at the fuel fraction, heat at the inlet
@@ -6210,6 +6382,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     smoke = mix(smoke, 0.0, inflowFraction);
     heat = mix(heat, u.inflow_state.w, inflowFraction);
     fuel = mix(fuel, u.inflow_state.z, inflowFraction);
+    oxidizer = mix(oxidizer, u.reactant_combustion_c.w, inflowFraction);
     materialDetail = mix(materialDetail, 0.0, inflowFraction);
     flame = mix(flame, 0.0, inflowFraction);
     ember = mix(ember, 0.0, inflowFraction);
@@ -6228,6 +6401,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     smoke = mix(smoke, 0.0, immersedEntry);
     heat = mix(heat, u.immersed_source_c.w, immersedEntry);
     fuel = mix(fuel, u.immersed_source_c.z, immersedEntry);
+    oxidizer = mix(oxidizer, u.reactant_combustion_c.w, immersedEntry);
     materialDetail = mix(materialDetail, 0.0, immersedEntry);
     flame = mix(flame, 0.0, immersedEntry);
     ember = mix(ember, 0.0, immersedEntry);
@@ -6948,7 +7122,19 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (immersedWeight > 0.0) {
     vel = mix(vel, u.immersed_source_c.y * immersedDirection(), stepBlend(min(1.0, immersedWeight * u.immersed_source_d.x)));
   }
-  let smokeFromHeat = heatToSmokeConversion(heat, fuel, p.y);
+  // Reactant law: the single local burn. Fuel, oxidizer and heat change here;
+  // under the candidate smokeFromHeat is the soot made this step per unit time
+  // (no smoke from heat), and the expansion source below takes the same amount.
+  var reactantBurned = 0.0;
+  if (reactantOn) {
+    let burn = reactantBurn(fuel, oxidizer, heat, timeStep);
+    fuel = burn.x;
+    oxidizer = burn.y;
+    heat = burn.z;
+    reactantBurned = burn.w;
+  }
+  let reactantFreshBurnRate = reactantBurned / max(timeStep, 1e-6);
+  let smokeFromHeat = select(heatToSmokeConversion(heat, fuel, p.y), u.reactant_combustion_b.z * reactantFreshBurnRate, reactantOn);
   let columnSmokeBirth = source * 0.46 + emberRing * 0.13;
   let tallPlumeDirectSmokeBirthGain = mix(1.0, 0.18, tallPlumeScene);
   let tallPlumeSourceCarrierFloor = source * 0.060 * tallPlumeScene;
@@ -7026,31 +7212,44 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let tallPlumeLiveReaction = tallPlumeFuelContact
     * tallPlumeHeatContact
     * tallPlumeLiveReactionCarrier;
-  let tallPlumePilotReaction = tallPlumeScene
+  let authoredTallPlumePilotReaction = tallPlumeScene
     * tallPlumeReactionMemory
     * smoothstep(0.004, 0.055, fuel)
     * smoothstep(0.025, 0.42, heat)
     * (0.055 + inputFlow * 0.025 + fireLickAmount * 0.002);
-  let tallPlumeFuelHeatReaction = tallPlumeScene * max(tallPlumeLiveReaction, tallPlumePilotReaction);
-  let fuelConsumption = tallPlumeFuelHeatReaction * (0.012 + inputFlow * 0.010 + fireLickAmount * 0.002) + tallPlumePilotReaction * 0.006;
-  let tallPlumeReactionSmokeBirth = tallPlumeScene * (fuelConsumption * 0.74 + smokeFromHeat * 0.10 + tallPlumePilotReaction * 0.045);
+  // Under the reactant law there is no memory pilot, the appearance births'
+  // reaction signal is the fresh burn (normalised by the appearance burn
+  // reference), consumption is the burned amount per unit time, and the
+  // soot already entered through smokeFromHeat.
+  let tallPlumePilotReaction = select(authoredTallPlumePilotReaction, 0.0, reactantOn);
+  let tallPlumeFuelHeatReaction = select(tallPlumeScene * max(tallPlumeLiveReaction, tallPlumePilotReaction), tallPlumeScene * (1.0 - exp(-reactantFreshBurnRate / max(u.reactant_combustion_d.x, 1e-6))), reactantOn);
+  let fuelConsumption = select(tallPlumeFuelHeatReaction * (0.012 + inputFlow * 0.010 + fireLickAmount * 0.002) + tallPlumePilotReaction * 0.006, reactantFreshBurnRate, reactantOn);
+  let tallPlumeReactionSmokeBirth = select(tallPlumeScene * (fuelConsumption * 0.74 + smokeFromHeat * 0.10 + tallPlumePilotReaction * 0.045), 0.0, reactantOn);
   // Reaction increments are rates: they carry the time step (1.0 under legacy).
   smoke = smoke + tallPlumeReactionSmokeBirth * timeStep;
-  heat = heat + (tallPlumeFuelHeatReaction * mix(0.0, 0.16, tallPlumeScene) + tallPlumePilotReaction * 0.030) * timeStep;
+  if (!reactantOn) {
+    heat = heat + (tallPlumeFuelHeatReaction * mix(0.0, 0.16, tallPlumeScene) + tallPlumePilotReaction * 0.030) * timeStep;
+  }
   // The fuel consumption rate is also the heat-release expansion source the
   // pressure solve targets this step (gain in u.heat_release.x; stored for
   // every cell, burning or not, so a cell that stops burning stops expanding).
-  let fuelBurnRate = heat * 0.018 + fuelConsumption;
-  // The fuel actually consumed this step, per unit time: the decrement is
-  // capped by the fuel present, so a hot cell with no fuel burns nothing and
-  // expands nothing (the first look stored the uncapped rate and the whole hot
-  // plume expanded: heat mass x3.6 at gain 1).
-  let fuelBurned = min(fuel, fuelBurnRate * timeStep);
-  fuel = fuel - fuelBurned;
-  // Stored as the expansion target itself (gain x the burned fuel per unit
-  // time; zero when the gain is zero or refused), so the pressure kernels,
-  // which bind no uniform, read it directly.
-  textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * fuelBurned / max(timeStep, 1e-6) + immersedTarget, 0.0, 0.0, 0.0));
+  if (reactantOn) {
+    // The candidate's burned amount, already taken from fuel and oxidizer at
+    // the burn site, is the expansion source (same gain, same units).
+    textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * reactantFreshBurnRate + immersedTarget, 0.0, 0.0, 0.0));
+  } else {
+    let fuelBurnRate = heat * 0.018 + fuelConsumption;
+    // The fuel actually consumed this step, per unit time: the decrement is
+    // capped by the fuel present, so a hot cell with no fuel burns nothing and
+    // expands nothing (the first look stored the uncapped rate and the whole hot
+    // plume expanded: heat mass x3.6 at gain 1).
+    let fuelBurned = min(fuel, fuelBurnRate * timeStep);
+    fuel = fuel - fuelBurned;
+    // Stored as the expansion target itself (gain x the burned fuel per unit
+    // time; zero when the gain is zero or refused), so the pressure kernels,
+    // which bind no uniform, read it directly.
+    textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * fuelBurned / max(timeStep, 1e-6) + immersedTarget, 0.0, 0.0, 0.0));
+  }
   let bonfireDetailBirthCarrier = bonfireAdvectedSmokeBirth * 0.48 + bonfireSootBirth * 0.30 + bonfireBroadSupportSmokeSource * 0.046 * bonfireLayeredSmokeBreakup + smokeFromHeat * bonfireInterfaceSmokeBand * 0.13 + bonfireInterfaceBirth * 0.18 + bonfireCombustion.z * 0.036 + smoke * 0.070;
   let bonfireSmokeDetailCurlFold = clamp(
     0.50
@@ -7212,7 +7411,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     + fuelConsumption * 1.6
     + fuel * heat * 0.14
     + fuel * 0.035;
-  let tallPlumeNormalizedFlameHeight = clamp((p.y + 0.84) / 1.58, 0.0, 1.0);
+  // Under the reactant law the flame's extent is not a rule of the fine box:
+  // the height-based survival demand sits at its base everywhere.
+  let tallPlumeNormalizedFlameHeight = select(clamp((p.y + 0.84) / 1.58, 0.0, 1.0), 0.0, reactantOn);
   let tallPlumeHeightCurve = tallPlumeNormalizedFlameHeight * tallPlumeNormalizedFlameHeight * (0.65 + tallPlumeNormalizedFlameHeight * 0.55);
   let tallPlumeFlowHeightDemand = 1.0 + smoothstep(0.28, 0.62, inputFlow) * tallPlumeNormalizedFlameHeight * 1.35;
   let tallPlumeFlameHeightDemand = mix(0.012, 0.315, tallPlumeHeightCurve) * tallPlumeFlowHeightDemand;
@@ -7350,6 +7551,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   smoke = smoke * stepRate(mix(0.42, 1.0, wallFade) * mix(0.72, 1.0, smokeTopFade));
   heat = heat * stepRate(mix(0.30, 1.0, wallFade) * mix(0.16, 1.0, heatTopFade));
   fuel = fuel * stepRate(mix(0.20, 1.0, wallFade) * mix(0.58, 1.0, heatTopFade));
+  // Reactant law: the sponge region is ambient air, so the oxidizer relaxes
+  // toward ambient at the fuel's sponge rate.
+  oxidizer = u.reactant_combustion_c.z - (u.reactant_combustion_c.z - oxidizer) * stepRate(mix(0.20, 1.0, wallFade) * mix(0.58, 1.0, heatTopFade));
   materialDetail = materialDetail * stepRate(mix(0.22, 1.0, wallFade));
   flame = flame * stepRate(mix(0.12, 1.0, wallFade) * mix(0.08, 1.0, fireTopFade));
   ember = ember * stepRate(mix(0.18, 1.0, wallFade) * mix(0.16, 1.0, smokeTopFade));
@@ -7435,6 +7639,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
   fluidDst[base + 3u] = vec4<f32>(clamp(microSmoke, 0.0, 1.8), clamp(interfaceShred, 0.0, 1.8), clamp(fireLick, 0.0, 1.8), clamp(emberFleck, 0.0, 1.4));
   frontDst[idx] = clamp(combustionFrontTopology, 0.0, 2.0);
+  if (reactantOn) {
+    textureStore(reactantDst, cellI, vec4<f32>(clamp(oxidizer, 0.0, 2.0), reactantFreshBurnRate, 0.0, 0.0));
+  }
 }
 
 struct RaymarchResult {
@@ -11421,6 +11628,42 @@ export function createKaminosVolumePrototype({
   // never persisted, always named in the receipt.
   let confinementEpsilonOverride = null;
   let frontBuffers = [];
+  // Reactant sidecar (volume-reactant-combustion.mjs): two rg32float 3-D
+  // textures (oxidizer, fresh burn per unit time) ping-ponged with the fluid,
+  // full size only while the reactant law is admitted; 1x1x1 placeholders
+  // otherwise, so the authored law allocates and touches nothing.
+  let reactantTextures = [];
+  let reactantSidecarFull = false;
+  function writeReactantAmbient(texture) {
+    const texels = new Float32Array(gridCellCount(gridSize) * 2);
+    for (let i = 0; i < texels.length; i += 2) texels[i] = REACTANT_MODEL.ambientOxidizer;
+    device.queue.writeTexture({ texture }, texels, { bytesPerRow: gridSize * 8, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize]);
+  }
+  // Returns true when the textures were (re)created, so the caller rebuilds the bind groups.
+  function ensureReactantSidecar(admitted) {
+    if (!device) return false;
+    if (reactantTextures.length === 2 && reactantSidecarFull === admitted) return false;
+    for (const texture of reactantTextures) texture.destroy();
+    const size = admitted ? [gridSize, gridHeight, gridSize] : [1, 1, 1];
+    reactantTextures = [0, 1].map(i => {
+      const texture = device.createTexture({
+        label: `kaminos ${REACTANT_COMBUSTION_IDENTITY} sidecar ${admitted ? gridShapeLabel(gridSize) : 'placeholder'} ${i}`,
+        size,
+        dimension: '3d',
+        format: 'rg32float',
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC,
+      });
+      if (admitted) writeReactantAmbient(texture);
+      return texture;
+    });
+    reactantSidecarFull = admitted;
+    return true;
+  }
+  // Any upload that replaces the fluid state starts the oxidizer from ambient air.
+  function resetReactantSidecarToAmbient() {
+    if (!device || !reactantSidecarFull) return;
+    for (const texture of reactantTextures) writeReactantAmbient(texture);
+  }
   let quenchBuffers = [];
   let pressureBuffers = [];
   let currentFluid = 0;
@@ -11989,6 +12232,9 @@ export function createKaminosVolumePrototype({
     for (const buffer of fluidBuffers) buffer.destroy();
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of quenchBuffers) buffer.destroy();
+    for (const texture of reactantTextures) texture.destroy();
+    reactantTextures = [];
+    reactantSidecarFull = false;
     inflowCoverageTexture?.destroy();
     inflowCoverageTexture = null;
     inflowCoverageSignature = '';
@@ -12110,6 +12356,8 @@ export function createKaminosVolumePrototype({
     uniformsBuffer = uniformBuffer,
     quenchRead = quenchBuffers[0],
     quenchWrite = quenchBuffers[1],
+    reactantRead = reactantTextures[0],
+    reactantWrite = reactantTextures[1],
   }) {
     return device.createBindGroup({
       label,
@@ -12133,6 +12381,8 @@ export function createKaminosVolumePrototype({
         { binding: 18, resource: inflowPerturbationTexture.createView() },
         { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
         { binding: 22, resource: forceDeltaTexture.createView({ dimension: '3d' }) },
+        { binding: 23, resource: reactantRead.createView({ dimension: '3d' }) },
+        { binding: 24, resource: reactantWrite.createView({ dimension: '3d' }) },
       ],
     });
   }
@@ -12173,6 +12423,8 @@ export function createKaminosVolumePrototype({
           fluidWrite: fluidBuffers[1 - fluidIndex],
           frontRead: frontBuffers[fluidIndex],
           frontWrite: frontBuffers[1 - fluidIndex],
+          reactantRead: reactantTextures[fluidIndex],
+          reactantWrite: reactantTextures[1 - fluidIndex],
           quenchRead: quenchBuffers[quenchIndex],
           quenchWrite: quenchBuffers[1 - quenchIndex],
           captureRows: nonRidgeOpticalCaptureRowBuffer,
@@ -12197,6 +12449,8 @@ export function createKaminosVolumePrototype({
             fluidWrite: fluidBuffers[0],
             frontRead: frontBuffers[1],
             frontWrite: frontBuffers[0],
+            reactantRead: reactantTextures[1],
+            reactantWrite: reactantTextures[0],
             captureRows: boundarySplatLiveCompleteFlameCoefficientBuffer,
             uniformsBuffer: liveCompleteFlameCoefficientUniformBuffer,
           }),
@@ -12545,6 +12799,7 @@ export function createKaminosVolumePrototype({
     };
     for (const buffer of fluidBuffers) uploadInChunks(buffer, fluidBytes);
     for (const buffer of frontBuffers) uploadInChunks(buffer, frontBytes);
+    resetReactantSidecarToAmbient();
     state.frameCount = completedSteps;
     state.simStepCount = completedSteps;
     selectiveHeadLiveRuntime = await createSelectiveHeadLiveRuntime({
@@ -13184,6 +13439,7 @@ export function createKaminosVolumePrototype({
       device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize)));
       return buffer;
     });
+    ensureReactantSidecar(Boolean(state.reactantCombustion?.effective?.admitted));
     inflowCoverageTexture = device.createTexture({
       label: `kaminos inflow aperture coverage map ${gridSize}x${gridSize}`,
       size: [gridSize, gridSize, 1],
@@ -14092,6 +14348,10 @@ export function createKaminosVolumePrototype({
         // The raymarch fragment entry point reaches divergenceAtCell through the shared module, so the binding must be fragment-visible too (slice-2 lesson at 1e8996ab).
         { binding: 19, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
         { binding: 22, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
+        // Reactant sidecar: read as a sampled texture, written as a storage
+        // texture (the compute stage is at its storage-buffer limit); compute only.
+        { binding: 23, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        { binding: 24, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rg32float', viewDimension: '3d' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -15557,6 +15817,16 @@ export function createKaminosVolumePrototype({
     const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu });
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
+    const reactantCombustionConfig = resolveReactantCombustionConfig(controlsSnapshot, {
+      grid: gridSize,
+      transportCommonCharacteristic: resolveTransportConfig(controlsSnapshot).effective.commonCharacteristic,
+    });
+    uniforms.set(reactantCombustionUniformValues(reactantCombustionConfig), REACTANT_COMBUSTION_UNIFORM_OFFSET);
+    state.reactantCombustion = reactantCombustionConfig;
+    if (ensureReactantSidecar(reactantCombustionConfig.effective.admitted)) {
+      rebuildFluidBindGroups();
+      rebuildSelectiveHeadLiveBindGroups();
+    }
     if (inflowBoundaryConfig.effective.admitted && inflowCoverageTexture) {
       const coverageSignature = inflowCoverageSignatureFor(inflowBoundaryConfig);
       if (coverageSignature !== inflowCoverageSignature) {
@@ -20380,6 +20650,7 @@ export function createKaminosVolumePrototype({
     device.queue.writeBuffer(fluidBuffers[1], 0, upload.fluid.bytes);
     device.queue.writeBuffer(frontBuffers[0], 0, upload.front.bytes);
     device.queue.writeBuffer(frontBuffers[1], 0, upload.front.bytes);
+    resetReactantSidecarToAmbient();
     const zeroPressure = new Float32Array(gridCellCount(gridSize) * 4);
     device.queue.writeBuffer(pressureBuffers[0], 0, zeroPressure);
     device.queue.writeBuffer(pressureBuffers[1], 0, zeroPressure);
@@ -26501,6 +26772,51 @@ export function createKaminosVolumePrototype({
     },
     canvasElement() {
       return canvas;
+    },
+    async sampleReactantFields() {
+      const receipt = state.reactantCombustion ? JSON.parse(JSON.stringify(state.reactantCombustion)) : null;
+      if (!gpuInitialized || !device) return { ok: false, reason: 'gpu-not-initialized', receipt };
+      const fluidBytes = fluidBufferBytes(gridSize);
+      const rowBytes = gridSize * 8;
+      const paddedRow = Math.ceil(rowBytes / 256) * 256;
+      const fluidStaging = device.createBuffer({ label: 'kaminos reactant fields fluid staging', size: fluidBytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      const reactantStaging = device.createBuffer({ label: 'kaminos reactant fields sidecar staging', size: paddedRow * gridHeight * gridSize, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      try {
+        const encoder = device.createCommandEncoder({ label: 'kaminos reactant fields copy' });
+        encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, fluidStaging, 0, fluidBytes);
+        if (reactantSidecarFull) encoder.copyTextureToBuffer({ texture: reactantTextures[currentFluid] }, { buffer: reactantStaging, bytesPerRow: paddedRow, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize]);
+        device.queue.submit([encoder.finish()]);
+        await Promise.all([fluidStaging.mapAsync(GPUMapMode.READ), reactantStaging.mapAsync(GPUMapMode.READ)]);
+        const fluid = new Uint8Array(fluidStaging.getMappedRange()).slice();
+        const padded = new Float32Array(reactantStaging.getMappedRange());
+        const reactant = new Float32Array(gridCellCount(gridSize) * 2);
+        const rowFloats = paddedRow / 4;
+        for (let z = 0; z < gridSize; z += 1) {
+          for (let y = 0; y < gridHeight; y += 1) {
+            const row = z * gridHeight + y;
+            reactant.set(padded.subarray(row * rowFloats, row * rowFloats + gridSize * 2), row * gridSize * 2);
+          }
+        }
+        fluidStaging.unmap();
+        reactantStaging.unmap();
+        const toBase64 = bytes => { let text = ''; for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(text); };
+        return {
+          ok: true,
+          identity: REACTANT_COMBUSTION_IDENTITY,
+          grid: [gridSize, gridHeight, gridSize],
+          index: 'x + y * GRID + z * GRID * GRID_Y',
+          fluidLayout: 'per cell 16 f32: velocity xyz, density; smoke, heat, fuel, detail; flame, ember, flameDetail, front; microSmoke, shred, lick, fleck',
+          reactantLayout: 'per cell 2 f32: oxidizer, fresh burn per unit time',
+          frame: state.frameCount,
+          receipt,
+          fluidBase64: toBase64(fluid),
+          // The authored law keeps 1x1x1 placeholders: no sidecar field to read.
+          reactantBase64: reactantSidecarFull ? toBase64(new Uint8Array(reactant.buffer)) : null,
+        };
+      } finally {
+        fluidStaging.destroy();
+        reactantStaging.destroy();
+      }
     },
     async sampleFluidFieldNaNCensus() {
       if (!gpuInitialized || !device) return { ok: false, reason: 'gpu-not-initialized' };

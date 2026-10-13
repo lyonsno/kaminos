@@ -83,8 +83,8 @@ export const REACTANT_CONTROL_DEFAULTS = Object.freeze({
   coolingTimeSteps: -1 / Math.log(0.982),
 });
 export const REACTANT_CONTROL_RANGES = Object.freeze({
-  mixingTimeSteps: Object.freeze([0.25, 60]),
-  coolingTimeSteps: Object.freeze([5, 400]),
+  mixingTimeSteps: Object.freeze([0.25, 30]),
+  coolingTimeSteps: Object.freeze([5, 300]),
 });
 export const REACTANT_DIAGNOSTIC_CLASSES = Object.freeze(['ambient', 'no-contact', 'too-cold', 'burning', 'depleted']);
 export const REACTANT_DIAGNOSTIC_THRESHOLDS = Object.freeze({ fuel: 1e-3, available: 1e-4, burnRate: 1e-5 });
@@ -176,14 +176,19 @@ export function reactantExchangeStep(field, { dims, weight, solid = null }) {
 // contact); or nothing to burn (ambient). "Burning but rendering poorly" is a
 // render-side judgement made against these classes, not a material class.
 export function reactantDiagnostic(state, controls, dt) {
-  const model = modelOf(controls);
-  const t = REACTANT_DIAGNOSTIC_THRESHOLDS;
   const burn = reactantBurnStep({ fuel: state.fuel, oxidizer: state.oxidizer, heat: state.heat, smoke: 0 }, controls, dt);
-  if (burn.freshBurnRate > t.burnRate) return 'burning';
-  const available = Math.max(0, Math.min(state.fuel, state.oxidizer / model.oxidizerRequirement));
+  return reactantDiagnosticFromField({ fuel: state.fuel, oxidizer: state.oxidizer, heat: state.heat, freshBurnRate: burn.freshBurnRate }, modelOf(controls));
+}
+
+// The same classes for a stored cell, using its recorded fresh burn rate (the
+// sidecar's second component) instead of recomputing a burn.
+export function reactantDiagnosticFromField({ fuel, oxidizer, heat, freshBurnRate }, model = REACTANT_MODEL) {
+  const t = REACTANT_DIAGNOSTIC_THRESHOLDS;
+  if (freshBurnRate > t.burnRate) return 'burning';
+  const available = Math.max(0, Math.min(fuel, oxidizer / model.oxidizerRequirement));
   if (available > t.available) return 'too-cold';
-  if (state.heat >= model.ignitionBand[0]) return 'depleted';
-  if (state.fuel > t.fuel) return 'no-contact';
+  if (heat >= model.ignitionBand[0]) return 'depleted';
+  if (fuel > t.fuel) return 'no-contact';
   return 'ambient';
 }
 
@@ -227,6 +232,10 @@ export function resolveReactantCombustionConfig(controls = {}, options = {}) {
   if (lawRequested !== REACTION_LAW_REACTANT) return off('reaction-law-is-authored');
   if (requested.volumeScene !== 'tall_plume') return off('reactant-law-requires-tall-plume-scene');
   if (!['inflow-boundary', 'immersed-source'].includes(requested.emitterSourceLaw)) return off('reactant-law-requires-inflow-or-immersed-source');
+  // The oxidizer rides the fuel's characteristic, which exists only under the
+  // common-gas (or MacCormack) transport; legacy per-layer lifts would carry
+  // fuel and oxidizer apart and manufacture or destroy contact.
+  if (options.transportCommonCharacteristic === false) return off('reactant-law-requires-common-gas-transport');
   const exchange = reactantExchangeWeight({ diffusivity: model.exchangeDiffusivity, grid, dt: 1 });
   return {
     identity: REACTANT_COMBUSTION_IDENTITY,

@@ -37,7 +37,7 @@ test('the immersed source resolves from the controls and is admitted only under 
 test('the uniform block follows velocity staggering and packs the compiled source only when admitted', () => {
   assert.equal(core.IMMERSED_SOURCE_UNIFORM_OFFSET, core.VELOCITY_STAGGERING_UNIFORM_OFFSET + 4);
   assert.equal(core.IMMERSED_SOURCE_UNIFORM_FLOATS, 24);
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.IMMERSED_SOURCE_UNIFORM_OFFSET + 24);
+  assert.equal(core.REACTANT_COMBUSTION_UNIFORM_OFFSET, core.IMMERSED_SOURCE_UNIFORM_OFFSET + 24, 'the reactant combustion block follows the immersed source');
   const on = core.resolveImmersedSourceConfig(base, { grid: 64 });
   const u = core.immersedSourceUniformValues(on);
   assert.equal(u.length, 24);
@@ -114,8 +114,8 @@ test('cockpit: the source law option, eleven bench rows with help, snapshot, lis
     assert.equal(control.additiveSinceControlCount, e.additiveSinceControlCount);
     assert.ok('additiveDefault' in control);
   }
-  assert.equal(schema.controlCount, 248);
-  assert.equal(schema.controls.length, 248);
+  assert.equal(schema.controlCount, 251); // + the reaction law select and the two reactant controls
+  assert.equal(schema.controls.length, 251);
 });
 
 // Bounded A (report section 31, after the cold bench): a solid back disc one to
@@ -165,7 +165,7 @@ test('the back wall: resolved as a toggle, its cells lie strictly behind the sou
   assert.match(index, /immersedBackWall: parseFloat\(document\.getElementById\('volume-immersed-back-wall'\)\.value\)/);
   const control = schema.controls.find(c => c.key === 'volume-immersed-back-wall');
   assert.deepEqual(control, { key: 'volume-immersed-back-wall', param: 'volume_immersed_back_wall', tagName: 'INPUT', type: 'range', additiveDefault: 0, additiveSinceControlCount: 248 });
-  assert.equal(schema.controlCount, 248);
+  assert.equal(schema.controlCount, 251); // + the reaction law select and the two reactant controls
 });
 
 // Fresh review at 25431599 (IS-01..06).

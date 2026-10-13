@@ -157,6 +157,8 @@ test('the diagnostic separates burning, too cold, no contact, depleted and ambie
   assert.equal(d({ fuel: 0, oxidizer: 0.4, heat: hi * 2 }), 'depleted', 'hot products whose fuel is used up');
   assert.equal(d({ fuel: 0, oxidizer: 1, heat: 0 }), 'ambient');
   assert.deepEqual(rc.REACTANT_DIAGNOSTIC_CLASSES, ['ambient', 'no-contact', 'too-cold', 'burning', 'depleted']);
+  assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.3, oxidizer: 0.8, heat: lo * 0.5, freshBurnRate: 0.01 }), 'burning', 'a stored cell that burned this step is burning whatever its post-burn state');
+  assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.3, oxidizer: 0.8, heat: lo * 0.5, freshBurnRate: 0 }), 'too-cold');
 });
 
 test('the reactant law is admitted only for the tall plume with an inflow or immersed source', () => {
@@ -173,6 +175,8 @@ test('the reactant law is admitted only for the tall plume with an inflow or imm
   assert.equal(rc.resolveReactantCombustionConfig({ ...base, emitterSourceLaw: 'immersed-source' }, { grid: 32 }).effective.admitted, true);
   assert.equal(rc.resolveReactantCombustionConfig({ ...base, volumeScene: 'bonfire' }, { grid: 32 }).effective.reason, 'reactant-law-requires-tall-plume-scene');
   assert.equal(rc.resolveReactantCombustionConfig({ ...base, emitterSourceLaw: 'legacy-volume' }, { grid: 32 }).effective.reason, 'reactant-law-requires-inflow-or-immersed-source');
+  assert.equal(rc.resolveReactantCombustionConfig(base, { grid: 32, transportCommonCharacteristic: false }).effective.reason, 'reactant-law-requires-common-gas-transport', 'the oxidizer must ride the fuel characteristic');
+  assert.equal(rc.resolveReactantCombustionConfig(base, { grid: 32, transportCommonCharacteristic: true }).effective.admitted, true);
   const tuned = rc.resolveReactantCombustionConfig({ ...base, reactantMixingTime: 9, reactantCoolingTime: 120 }, { grid: 32 });
   assert.equal(tuned.effective.mixingTimeSteps, 9);
   assert.equal(tuned.effective.coolingTimeSteps, 120);

@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 248,
+  "controlCount": 251,
   "controls": [
     {
       "key": "volume-physical-material-law",
@@ -1626,6 +1626,34 @@
       "param": "volume_canonical_body_balance",
       "tagName": "INPUT",
       "type": "range"
+    },
+    {
+      "key": "volume-reaction-law",
+      "param": "volume_reaction_law",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "authored-tall-plume",
+      "allowedValues": [
+        "authored-tall-plume",
+        "reactant-v0"
+      ],
+      "additiveSinceControlCount": 249
+    },
+    {
+      "key": "volume-reactant-mixing-time",
+      "param": "volume_reactant_mixing_time",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 4,
+      "additiveSinceControlCount": 250
+    },
+    {
+      "key": "volume-reactant-cooling-time",
+      "param": "volume_reactant_cooling_time",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 55.06,
+      "additiveSinceControlCount": 251
     }
   ],
   "retiredControls": [

@@ -1413,6 +1413,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="field"><span class="field-key">Emitter fallback</span><span class="field-val" id="volume-emitter-fallback">no</span></div>
       <div class="field"><span class="field-key">Inflow boundary</span><span class="field-val" id="volume-inflow-boundary-state">off</span></div>
       <div class="field"><span class="field-key">Heat release</span><span class="field-val" id="volume-heat-release-state">off</span></div>
+      <div class="field"><span class="field-key">Reaction law</span><span class="field-val" id="volume-reaction-law-state">authored</span></div>
       <div class="field"><span class="field-key">Velocity reading</span><span class="field-val" id="volume-velocity-staggering-state">collocated</span></div>
       <div class="field"><span class="field-key">Immersed source</span><span class="field-val" id="volume-immersed-source-state">off</span></div>
       <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state" role="status" aria-live="polite">connecting...</span></div>
@@ -2926,6 +2927,27 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-heat-release-expansion-val">0.00</span>
     </div>
     <span class="slider-help">Expansion where fuel burns: the converged solve is given a positive divergence target, this gain times the fuel consumption rate, so the surrounding gas moves outward to make room for the hot products and the plume billows instead of only rising. 0 is off. Needs the converged open-top solver (the open top absorbs the net volume); otherwise the receipt says NOT ADMITTED. The pressure residual readout then measures divergence minus that target, not divergence alone. Heat and smoke are carried undiluted through the expansion, so their field totals grow with the gain and are not conservation evidence. Saved basins are unchanged at 0.</span>
+    <div class="slider-row">
+      <span class="slider-label">Reaction law</span>
+      <select id="volume-reaction-law" class="select-input" data-volume-settings-param="volume_reaction_law">
+        <option value="authored-tall-plume">Authored (tall plume)</option>
+        <option value="reactant-v0">Reactant candidate</option>
+      </select>
+      <span class="slider-val" id="volume-reaction-law-val">authored-tall-plume</span>
+    </div>
+    <span class="slider-help">Authored keeps the existing tall-plume reaction. Reactant candidate replaces it with one local burn: fuel and oxidizer (ambient air carries oxidizer; the inlet stream brings fuel at Fuel Fraction and no oxidizer) burn where they share a cell and the heat is in or above the ignition band, and that one burned amount sets the fuel and oxidizer loss, the heat release, the soot (smoke) made and the Heat release expansion. Contact comes from the flow plus one named neighbour exchange; nothing depends on height in the box, and Fire Licks / Interface Shred shape only the look. Tall plume scene with the inflow or immersed source only; otherwise the receipt says NOT ADMITTED. Saved basins load on Authored.</span>
+    <div class="slider-row">
+      <span class="slider-label">Mixing time</span>
+      <input type="range" id="volume-reactant-mixing-time" data-volume-settings-param="volume_reactant_mixing_time" min="0.25" max="30" step="any" value="4">
+      <span class="slider-val" id="volume-reactant-mixing-time-val">4.0</span>
+    </div>
+    <span class="slider-help">Reactant candidate: how quickly fuel and air that already share a cell and are hot enough burn, in reference steps (each step burns 1 − e^(−dt/time) of what can burn). Shorter makes a thinner, brighter flame front; longer lets fuel travel further before it burns. It does not bring fuel and air together: the flow and the neighbour exchange do.</span>
+    <div class="slider-row">
+      <span class="slider-label">Cooling time</span>
+      <input type="range" id="volume-reactant-cooling-time" data-volume-settings-param="volume_reactant_cooling_time" min="5" max="300" step="any" value="55.06">
+      <span class="slider-val" id="volume-reactant-cooling-time-val">55</span>
+    </div>
+    <span class="slider-help">Reactant candidate: how quickly heat fades, in reference steps (heat keeps e^(−dt/time) per step). 55 matches the authored cooling. Longer keeps burned gas hot and glowing further up and keeps neighbouring fuel above ignition; shorter lets the flame starve itself of heat.</span>
     <div class="slider-row">
       <span class="slider-label">Solver Sweeps</span>
       <input type="range" id="volume-pressure-solver-iterations" min="4" max="240" step="4" value="60" data-volume-settings-param="volume_pressure_solver_iterations">
@@ -22427,6 +22449,9 @@ function readVolumeControls() {
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureSolver: document.getElementById('volume-pressure-solver').value,
     heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
+    reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
+    reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
+    reactantCoolingTime: parseFloat(document.getElementById('volume-reactant-cooling-time').value),
     velocityStaggering: document.getElementById('volume-velocity-staggering').value || 'collocated',
     immersedCentreX: parseFloat(document.getElementById('volume-immersed-centre-x').value),
     immersedCentreY: parseFloat(document.getElementById('volume-immersed-centre-y').value),
@@ -22549,6 +22574,9 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-aperture-seed-val').textContent = String(Math.round(c.emitterApertureSeed));
   document.getElementById('volume-emitter-swirl-val').textContent = c.emitterSwirl.toFixed(2);
   document.getElementById('volume-heat-release-expansion-val').textContent = c.heatReleaseExpansion.toFixed(2);
+  document.getElementById('volume-reaction-law-val').textContent = c.reactionLaw;
+  document.getElementById('volume-reactant-mixing-time-val').textContent = c.reactantMixingTime.toFixed(1);
+  document.getElementById('volume-reactant-cooling-time-val').textContent = c.reactantCoolingTime.toFixed(0);
   document.getElementById('volume-velocity-staggering-val').textContent = c.velocityStaggering;
   document.getElementById('volume-immersed-centre-x-val').textContent = Number(c.immersedCentreX).toFixed(2);
   document.getElementById('volume-immersed-centre-y-val').textContent = Number(c.immersedCentreY).toFixed(2);
@@ -22903,6 +22931,12 @@ function refreshVolumeReadout() {
     : (heatRelease.effective.admitted
       ? `admitted · gain ${heatRelease.effective.expansion.toFixed(2)} · residual measures D(v) − S`
       : `heat-release — NOT ADMITTED (${heatRelease.effective.reason}); set Pressure solver to converged open top and Projection above 0`);
+  const reactant = s.reactantCombustion;
+  document.getElementById('volume-reaction-law-state').textContent = !reactant || reactant.requested.law !== 'reactant-v0'
+    ? 'authored'
+    : (reactant.effective.admitted
+      ? `reactant candidate · mixing ${reactant.effective.mixingTimeSteps.toFixed(1)} · cooling ${reactant.effective.coolingTimeSteps.toFixed(0)} · exchange ${reactant.effective.exchange.effective.toFixed(3)}/step${reactant.effective.exchange.capped ? ' (CAPPED)' : ''}`
+      : `reactant candidate — NOT ADMITTED (${reactant.effective.reason}); the authored law runs`);
   const staggering = s.velocityStaggering;
   document.getElementById('volume-velocity-staggering-state').textContent = !staggering || staggering.requested.mode !== 'staggered'
     ? 'collocated'
@@ -23252,7 +23286,7 @@ async function initKaminosVolumeRoute() {
   // select shows the family shape the map falls back to, and the request is
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
-  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
     if (!param || !params.has(param)) continue;
@@ -24135,6 +24169,9 @@ async function initKaminosVolumeRoute() {
     'volume-emitter-puff',
     'volume-emitter-puff-period',
     'volume-heat-release-expansion',
+    'volume-reaction-law',
+    'volume-reactant-mixing-time',
+    'volume-reactant-cooling-time',
     'volume-velocity-staggering',
     'volume-immersed-centre-x',
     'volume-immersed-centre-y',

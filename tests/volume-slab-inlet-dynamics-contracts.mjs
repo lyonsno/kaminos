@@ -118,7 +118,7 @@ test('with the step\'s lattice the predicted supply is the modulated, capped tot
 
 test('uniforms: the slab basis, turbulence and the pattern flag ride a fifth and sixth vec4', () => {
   assert.equal(core.IMMERSED_SOURCE_UNIFORM_FLOATS, 24);
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.IMMERSED_SOURCE_UNIFORM_OFFSET + 24);
+  assert.equal(core.REACTANT_COMBUSTION_UNIFORM_OFFSET, core.IMMERSED_SOURCE_UNIFORM_OFFSET + 24, 'the reactant combustion block follows the immersed source');
   assert.equal(core.VOLUME_UNIFORM_FLOATS % 4, 0);
   const on = core.resolveImmersedSourceConfig({ ...base, emitterAperturePattern: 'jets', emitterInletTurbulence: 0.6 }, shape);
   const u = core.immersedSourceUniformValues(on);
@@ -127,7 +127,7 @@ test('uniforms: the slab basis, turbulence and the pattern flag ride a fifth and
   assert.deepEqual(u.slice(20, 24), [1, 0, 0, 0], 'pattern on');
   assert.deepEqual(core.immersedSourceUniformValues(core.resolveImmersedSourceConfig(base, shape)).slice(20, 24), [0, 0, 0, 0], 'the plain shape samples no coverage');
   assert.equal(core.immersedSourceUniformValues(core.resolveImmersedSourceConfig({ ...base, pressureSolver: 'legacy' }, shape)).length, 24);
-  assert.match(kernel, /immersed_source_e: vec4<f32>,\n  immersed_source_f: vec4<f32>,\n\};/);
+  assert.match(kernel, /immersed_source_e: vec4<f32>,\n  immersed_source_f: vec4<f32>,\n(?:\s*\/\/.*\n)*\s*reactant_combustion_a: vec4<f32>,/, 'the reactant combustion block follows the slab vec4s');
 });
 
 test('the kernel samples the coverage map and the lattice at the slab-local cell, and keeps the plain slab for the sponge exemption', () => {
