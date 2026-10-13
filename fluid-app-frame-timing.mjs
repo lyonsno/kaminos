@@ -42,9 +42,9 @@ export function createFluidAppFrameTiming({now=()=>performance.now(),onWindow=()
           queueSample={key:capturedKey,source:captured,startedAt,submittedAt,completedAt,
             elapsedMs:completedAt-startedAt,scope:'cpu_callback_start_to_shared_queue_completion_including_prior_work_and_callback_delivery',presentation:'not_observed'};
           queueFailure=null;
-        }).catch(error=>{if(capturedEpoch===epoch)queueFailure={key:capturedKey,message:String(error),measuredAt:now()};})
+        }).catch(error=>{if(capturedEpoch===epoch){queueSample=null;queueFailure={key:capturedKey,message:String(error),measuredAt:now()};}})
           .finally(()=>{queuePending=false;});
-      }catch(error){queuePending=false;queueFailure={key:capturedKey,message:String(error),measuredAt:now()};}
+      }catch(error){queuePending=false;queueSample=null;queueFailure={key:capturedKey,message:String(error),measuredAt:now()};}
     }
   }
   function read({source,visible=true}) {

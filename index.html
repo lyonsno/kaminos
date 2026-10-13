@@ -4057,10 +4057,11 @@ let fluidAppFrameScope='main animation callback';
 const fluidAppFrameTiming=createFluidAppFrameTiming({onWindow:sample=>{
   if(investigationOperations.active)investigationOperations.emit({kind:'fluid.frame-time',phase:'measured',target:'fluid',effective:sample});
 }});
+document.addEventListener('visibilitychange',()=>fluidAppFrameTiming.reset());
 function fluidAppFrameSource(scope=fluidAppFrameScope){
   const clock=window.kaminosFingerFluidBenchSessionState?.();
   const frame=fingerFluidBenchViewport?.frameIdentity();
-  if(!clock?.available||!clock.running||!frame)return null;
+  if(!clock?.available||!clock.running||!frame||document.getElementById('finger-fluid-bench-operator-panel')?.hidden)return null;
   const budget=fingerFluidBenchSolver.getFrameBudgetState();
   return {...frame,scope,generation:clock.generation,step:clock.step,paused:clock.paused,
     reflection:fingerFluidBenchSolver.getReflectionBudgetControls().effective,
@@ -12034,7 +12035,7 @@ async function initScene() {
   }
 
   function animate() {
-    const callbackStart=performance.now(),beforeFrame=sceneFrameCount;
+    const callbackStart=performance.now(),beforeFrame=sceneFrameCount,beforeFluidFrame=fingerFluidBenchViewport?.frameIdentity()?.frameId;
     try {
     requestAnimationFrame(animate);
     controls.update();
@@ -12067,7 +12068,8 @@ async function initScene() {
       if(!foregroundServiceActive){
         fluidAppFrameScope='main animation callback';
         const source=fluidAppFrameSource();
-        if(sceneFrameCount>beforeFrame||!source||document.visibilityState!=='visible')fluidAppFrameTiming.record({startedAt:callbackStart,endedAt:performance.now(),source,device:renderer.backend.device,visible:document.visibilityState==='visible'});
+        if(!source||document.visibilityState!=='visible')fluidAppFrameTiming.reset();
+        else if(sceneFrameCount>beforeFrame&&source.frameId!==beforeFluidFrame)fluidAppFrameTiming.record({startedAt:callbackStart,endedAt:performance.now(),source,device:renderer.backend.device});
       }
     }
   }
@@ -12077,7 +12079,7 @@ async function initScene() {
     runForegroundFrame(run) {
       if (!foregroundServiceActive || insideForegroundFrame) throw new Error('invalid foreground scene frame state');
       insideForegroundFrame = true;
-      const callbackStart=performance.now(),beforeFrame=sceneFrameCount;
+      const callbackStart=performance.now(),beforeFrame=sceneFrameCount,beforeFluidFrame=fingerFluidBenchViewport?.frameIdentity()?.frameId;
       sceneRenderedForVolume = false;
       try {
         // The ordinary depth provider runs after the volume updates controls
@@ -12093,7 +12095,9 @@ async function initScene() {
       } finally {
         insideForegroundFrame = false;
         fluidAppFrameScope='foreground service callback';
-        fluidAppFrameTiming.record({startedAt:callbackStart,endedAt:performance.now(),source:sceneFrameCount>beforeFrame?fluidAppFrameSource():null,device:renderer.backend.device,visible:document.visibilityState==='visible'});
+        const source=fluidAppFrameSource();
+        if(!source||document.visibilityState!=='visible')fluidAppFrameTiming.reset();
+        else if(sceneFrameCount>beforeFrame&&source.frameId!==beforeFluidFrame)fluidAppFrameTiming.record({startedAt:callbackStart,endedAt:performance.now(),source,device:renderer.backend.device});
       }
     },
     async presentGlb(glb, {runId, sha256}) {
