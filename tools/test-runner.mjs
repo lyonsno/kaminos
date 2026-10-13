@@ -19,7 +19,7 @@
 
 import { spawn, execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
+import { accessSync, constants as fsConstants, existsSync, lstatSync, realpathSync, statSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -142,18 +142,47 @@ async function checkDependencies(root) {
 // Which python the runner uses, in order: an explicit executables.python
 // from a programmatic caller, KAMINOS_PYTHON, <root>/.venv/bin/python3 (the
 // declared packages live in a repo-local venv), then the python3 on PATH.
-// With the venv, its bin goes first on the PATH of every child test, so Node
-// tests that spawn a bare python3 get the interpreter the probe checked.
-function resolvePython(root, explicit, env) {
+// With the venv, its bin goes first on the PATH of every child test; with
+// KAMINOS_PYTHON, a run-private directory under the logs holding a python3
+// link to it does; so Node tests that spawn a bare python3 get the
+// interpreter the probe checked. A .venv/bin/python3 that is present but
+// does not resolve to an executable file is reported, never skipped.
+function resolvePython(root, explicit, env, logsDir) {
   if (explicit) return { requested: explicit, resolved: explicit, source: 'executables', pathPrefixed: false, pathPrefix: null };
-  if (env.KAMINOS_PYTHON) return { requested: 'KAMINOS_PYTHON', resolved: env.KAMINOS_PYTHON, source: 'KAMINOS_PYTHON', pathPrefixed: false, pathPrefix: null };
+  if (env.KAMINOS_PYTHON) return { requested: 'KAMINOS_PYTHON', resolved: env.KAMINOS_PYTHON, source: 'KAMINOS_PYTHON', pathPrefixed: true, pathPrefix: path.join(logsDir, 'python-bin') };
   const venvBin = path.join(root, '.venv', 'bin');
   const venvPython = path.join(venvBin, 'python3');
-  if (existsSync(venvPython)) return { requested: 'python3', resolved: venvPython, source: 'venv', pathPrefixed: true, pathPrefix: venvBin };
+  let present = false;
+  try { lstatSync(venvPython); present = true; } catch {}
+  if (present) {
+    let unusable = null;
+    try {
+      if (!statSync(venvPython).isFile()) unusable = 'does not resolve to a file';
+      else accessSync(venvPython, fsConstants.X_OK);
+    } catch (error) { unusable ||= error?.code === 'ENOENT' ? 'is a link to nothing' : `is not executable (${error?.code || error})`; }
+    if (unusable) return { requested: 'python3', resolved: venvPython, source: 'venv', pathPrefixed: false, pathPrefix: null, unusable };
+    return { requested: 'python3', resolved: venvPython, source: 'venv', pathPrefixed: true, pathPrefix: venvBin };
+  }
   return { requested: 'python3', resolved: 'python3', source: 'path', pathPrefixed: false, pathPrefix: null };
 }
 
-const PYTHON_REMEDY = 'uv venv .venv && uv pip install -r requirements.txt (or python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt); the runner prefers <root>/.venv when present';
+// KAMINOS_PYTHON may be a bare command name; the PATH link needs a path.
+function locateExecutable(name, envPath) {
+  if (name.includes(path.sep)) return path.resolve(name);
+  for (const dir of String(envPath || '').split(path.delimiter).filter(Boolean)) {
+    const candidate = path.join(dir, name);
+    try { accessSync(candidate, fsConstants.X_OK); return candidate; } catch {}
+  }
+  return name;
+}
+
+// The remedy is written out for this root, and works whether or not a venv
+// (complete, partial or broken) is already there.
+const shellWord = word => (/^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replace(/'/g, `'\\''`)}'`);
+function pythonRemedy(root) {
+  const venv = path.join(root, '.venv');
+  return `uv venv --allow-existing ${shellWord(venv)} && uv pip install --python ${shellWord(path.join(venv, 'bin', 'python3'))} -r ${shellWord(path.join(root, 'requirements.txt'))}`;
+}
 
 // Python distributions the suite needs, from requirements.txt at the root:
 // one bare distribution name per line, comments and blank lines allowed,
@@ -191,17 +220,19 @@ async function readRequirements(root, python) {
 // Fills in the probe's answer, or throws in the python-dependencies phase
 // when the executable cannot run it; the requirements identity read above
 // is already in the report either way.
-function probePythonDependencies(result) {
+function probePythonDependencies(result, root) {
   let probe;
   try {
     probe = JSON.parse(execFileSync(result.executable, ['-c', PYTHON_DEPENDENCY_PROBE, ...result.declared], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: PYTHON_PROBE_TIMEOUT_MS }));
   } catch (error) {
-    // The last stderr line is the raised exception; the first is only
-    // "Traceback (most recent call last):".
+    // The raised exception is the last error-shaped stderr line: after a
+    // traceback it is the last line, but an interpreter that dies while
+    // starting ends with "<no Python frame>" after its error.
     const stderrLines = String(error?.stderr || '').split('\n').map(line => line.trimEnd()).filter(line => line.trim());
     result.stderrTail = stderrLines.length ? stderrLines.slice(-20).join('\n') : null;
-    const detail = [error?.code, stderrLines.at(-1) || firstLine(error?.message || error)].filter(Boolean).join(': ');
-    throw Object.assign(new Error(`could not check requirements.txt with ${result.executable} (${detail})`), { phase: 'python-dependencies' });
+    const errorLine = stderrLines.findLast(line => /Error|Exception|Fatal Python error/.test(line)) || stderrLines.at(-1);
+    const detail = [error?.code, errorLine?.trim() || firstLine(error?.message || error)].filter(Boolean).join(': ');
+    throw Object.assign(new Error(`could not check requirements.txt with ${result.executable} (${detail}). If it is the repo-local venv, recreate it: ${pythonRemedy(root)}`), { phase: 'python-dependencies' });
   }
   Object.assign(result, { checked: true, resolvedExecutable: probe.executable, python: probe.python, installed: probe.installed, missing: probe.missing });
 }
@@ -418,7 +449,7 @@ export async function runSuite({
   // NODE_TEST_CONTEXT would switch child node:test files to the binary
   // protocol used between a parent `node --test` and its children.
   const { NODE_TEST_CONTEXT: _parentTestContext, ...inheritedEnv } = process.env;
-  const pythonExecutable = resolvePython(root, executables.python, inheritedEnv);
+  const pythonExecutable = resolvePython(root, executables.python, inheritedEnv, logsDir);
   const resolvedExecutables = { node: process.execPath, ...executables, python: pythonExecutable.resolved };
   const browserLog = path.join(logsDir, 'browser-launch-attempts.tsv');
   // A per-run stub with the log path baked in, so a child that scrubs its
@@ -431,7 +462,7 @@ export async function runSuite({
     startedAt: new Date().toISOString(), finishedAt: null,
     effective: { root, manifestPath, quarantinePath, parallel, timeoutMs, kinds, only,
       executables: resolvedExecutables, nodeFlags: [...nodeFlags], node: process.version, python: null,
-      pythonExecutable: { requested: pythonExecutable.requested, resolved: pythonExecutable.resolved, source: pythonExecutable.source, pathPrefixed: pythonExecutable.pathPrefixed, pathPrefix: pythonExecutable.pathPrefix },
+      pythonExecutable: { requested: pythonExecutable.requested, resolved: pythonExecutable.resolved, source: pythonExecutable.source, pathPrefixed: pythonExecutable.pathPrefixed, pathPrefix: pythonExecutable.pathPrefix, unusable: pythonExecutable.unusable || null },
       platform: `${process.platform}-${process.arch}`, git: gitIdentity(root),
       browserStub: { path: browserStub, overrides: BROWSER_OVERRIDES, log: browserLog },
       manifestSha256: null, quarantineSha256: null, dependencies: null, pythonDependencies: null },
@@ -474,6 +505,9 @@ export async function runSuite({
     report.failurePhase = 'python-dependencies';
     const pythonDependencies = await readRequirements(root, pythonExecutable);
     report.effective.pythonDependencies = pythonDependencies;
+    if (pythonExecutable.unusable) {
+      throw Object.assign(new Error(`the repo-local venv interpreter ${pythonExecutable.resolved} ${pythonExecutable.unusable}; recreate it: ${pythonRemedy(root)}`), { phase: 'python-dependencies' });
+    }
     if (pythonDependencies.requirementsPath) {
       if (pythonDependencies.invalidLines.length) {
         const lines = pythonDependencies.invalidLines.map(l => `line ${l.line}: ${l.text}`).join('; ');
@@ -481,9 +515,9 @@ export async function runSuite({
       }
       if (!pythonDependencies.declared.length) pythonDependencies.skipped = 'requirements.txt declares nothing';
       else {
-        probePythonDependencies(pythonDependencies);
+        probePythonDependencies(pythonDependencies, root);
         if (pythonDependencies.missing.length) {
-          throw Object.assign(new Error(`python distributions listed in requirements.txt are not installed in ${resolvedExecutables.python}${pythonDependencies.resolvedExecutable && pythonDependencies.resolvedExecutable !== resolvedExecutables.python ? ` (${pythonDependencies.resolvedExecutable})` : ''}: ${pythonDependencies.missing.join(', ')}. Install them in a repo-local venv: ${PYTHON_REMEDY}.`), { phase: 'python-dependencies' });
+          throw Object.assign(new Error(`python distributions listed in requirements.txt are not installed in ${resolvedExecutables.python}${pythonDependencies.resolvedExecutable && pythonDependencies.resolvedExecutable !== resolvedExecutables.python ? ` (${pythonDependencies.resolvedExecutable})` : ''}: ${pythonDependencies.missing.join(', ')}. Install them in the repo-local venv, which the runner uses when present: ${pythonRemedy(root)}`), { phase: 'python-dependencies' });
         }
       }
     }
@@ -545,6 +579,12 @@ export async function runSuite({
     const quotedLog = `'${browserLog.replace(/'/g, `'\\''`)}'`;
     await fs.writeFile(browserStub, `#!/bin/sh\n# Stands in for a browser while tools/test-runner.mjs runs tests. Any test\n# that reaches a browser launch lands here: record it and fail.\nprintf '%s\\t%s\\t%s\\n' "\${KAMINOS_TEST_RUNNER_TEST:-unknown}" "$$" "$*" >> ${quotedLog}\necho "browser launch blocked by tools/test-runner.mjs" >&2\nexit 97\n`);
     await fs.chmod(browserStub, 0o755);
+    if (pythonExecutable.source === 'KAMINOS_PYTHON') {
+      const link = path.join(pythonExecutable.pathPrefix, 'python3');
+      await fs.mkdir(pythonExecutable.pathPrefix, { recursive: true });
+      await fs.rm(link, { force: true });
+      await fs.symlink(locateExecutable(pythonExecutable.resolved, inheritedEnv.PATH), link);
+    }
     report.results = await pool(planned, parallel,
       item => runOne({ root, ...item, timeoutMs, logsDir, env: childEnv, track, nodeFlags }), () => interrupted);
     if (interrupted) throw Object.assign(new Error('run interrupted'), { phase: 'interrupted' });

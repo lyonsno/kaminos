@@ -26,6 +26,13 @@ const manifestOf = tests => ({ schema: 'kaminos.test-suite-manifest.v1', tests }
 const run = (f, extra = {}) => runSuite({ root: f.root, manifestPath: f.manifestPath, quarantinePath: f.quarantinePath,
   reportPath: f.reportPath, logsDir: path.join(f.root, 'out', 'logs'), parallel: 2, timeoutMs: 20000, ...extra });
 const readReport = async f => JSON.parse(await fs.readFile(f.reportPath, 'utf8'));
+// Sets (or, with undefined, clears) an environment variable for one test and
+// restores whatever the caller exported, so the contracts hold under any env.
+const scopedEnv = (t, name, value) => {
+  const had = Object.hasOwn(process.env, name), saved = process.env[name];
+  if (value === undefined) delete process.env[name]; else process.env[name] = value;
+  t.after(() => { if (had) process.env[name] = saved; else delete process.env[name]; });
+};
 
 test('an unquarantined failure fails the suite and is named as new', async t => {
   const f = await fixture(t, { files: { 'a.mjs': PASS, 'b.mjs': FAIL },
@@ -839,6 +846,7 @@ test('a python3 that cannot run refuses the run in the python-dependencies phase
 });
 
 test('a requirements.txt whose distributions are installed lets the python test run, with the python version recorded', async t => {
+  scopedEnv(t, 'KAMINOS_PYTHON', undefined);
   const f = await fixture(t, { files: { 'p.py': PY_PASS }, manifest: manifestOf({ 'tests/p.py': { kind: 'python' } }) });
   await fs.writeFile(path.join(f.root, 'requirements.txt'), 'numpy\n');
   assert.equal((await run(f)).ok, true);
@@ -861,9 +869,9 @@ test('a requirements.txt whose distributions are installed lets the python test 
 // KAMINOS_PYTHON names an interpreter that wins over the venv.
 
 const FAKE_DIST = 'kaminos-fake-dist';
-const stubPython = async (file, { executable = file, installed = { [FAKE_DIST]: '1.0' } } = {}) => {
+const stubPython = async (file, { executable = file, installed = { [FAKE_DIST]: '1.0' }, missing = [] } = {}) => {
   await fs.mkdir(path.dirname(file), { recursive: true });
-  const probeAnswer = JSON.stringify({ python: '9.9.9', executable, installed, missing: [] });
+  const probeAnswer = JSON.stringify({ python: '9.9.9', executable, installed, missing });
   await fs.writeFile(file, `#!/bin/sh\ncase "$2" in *print\\(sys.executable\\)*) echo ${JSON.stringify(executable)};; *) printf '%s\\n' ${JSON.stringify(probeAnswer)};; esac\n`, { mode: 0o755 });
   return file;
 };
@@ -875,6 +883,7 @@ if (out.stdout.trim() !== expected) { console.error(\`python3 resolved to \${JSO
 `;
 
 test('a repo-local .venv is used for the probe and reaches node tests that spawn python3', async t => {
+  scopedEnv(t, 'KAMINOS_PYTHON', undefined);
   const f = await fixture(t, { files: { 's.mjs': PRINTS_EXECUTABLE }, manifest: manifestOf({ 'tests/s.mjs': { kind: 'node' } }) });
   const venvPython = await stubPython(path.join(f.root, '.venv', 'bin', 'python3'));
   await fs.writeFile(path.join(f.root, 'requirements.txt'), `${FAKE_DIST}\n`);
@@ -899,14 +908,80 @@ test('KAMINOS_PYTHON wins over the repo-local .venv and is recorded', async t =>
   await stubPython(path.join(f.root, '.venv', 'bin', 'python3'));
   const other = await stubPython(path.join(f.root, 'other', 'python3'));
   await fs.writeFile(path.join(f.root, 'requirements.txt'), `${FAKE_DIST}\n`);
-  process.env.KAMINOS_PYTHON = other;
-  t.after(() => { delete process.env.KAMINOS_PYTHON; });
+  scopedEnv(t, 'KAMINOS_PYTHON', other);
   assert.equal((await run(f)).ok, true);
   const deps = (await readReport(f)).effective.pythonDependencies;
   assert.equal(deps.executable, other);
   assert.equal(deps.resolvedExecutable, other);
   assert.equal(deps.source, 'KAMINOS_PYTHON');
-  assert.equal(deps.pathPrefixed, false);
+  assert.equal(deps.pathPrefixed, true);
+});
+
+test('under KAMINOS_PYTHON, node tests that spawn a bare python3 get that interpreter through a run-private PATH entry', async t => {
+  const spawner = `import { spawnSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
+const out = spawnSync('python3', ['-c', 'import sys; print(sys.executable)'], { encoding: 'utf8' });
+const got = out.stdout.trim(), want = process.env.KAMINOS_EXPECTED_PYTHON;
+if (!got || realpathSync(got) !== realpathSync(want)) { console.error(\`python3 resolved to \${JSON.stringify(got)} not \${want}\`); process.exit(1); }
+`;
+  const f = await fixture(t, { files: { 's.mjs': spawner }, manifest: manifestOf({ 'tests/s.mjs': { kind: 'node' } }) });
+  const chosen = await stubPython(path.join(f.root, 'chosen', 'python-of-choice'));
+  await fs.writeFile(path.join(f.root, 'requirements.txt'), `${FAKE_DIST}\n`);
+  scopedEnv(t, 'KAMINOS_PYTHON', chosen);
+  scopedEnv(t, 'KAMINOS_EXPECTED_PYTHON', chosen);
+  const result = await run(f);
+  const report = await readReport(f);
+  assert.equal(result.ok, true, report.error || JSON.stringify(report.newFailures));
+  assert.equal(report.results[0].outcome, 'pass');
+  const chosenPython = report.effective.pythonExecutable;
+  assert.equal(chosenPython.source, 'KAMINOS_PYTHON');
+  assert.equal(chosenPython.pathPrefixed, true);
+  assert.ok(chosenPython.pathPrefix.startsWith(path.join(f.root, 'out', 'logs')), chosenPython.pathPrefix);
+  assert.equal(await fs.realpath(path.join(chosenPython.pathPrefix, 'python3')), await fs.realpath(chosen));
+});
+
+test('a missing distribution in the repo-local .venv is refused with a remedy that works over an existing venv, naming the real root', async t => {
+  scopedEnv(t, 'KAMINOS_PYTHON', undefined);
+  const f = await fixture(t, { files: { 'a.mjs': PASS }, manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' } }) });
+  await stubPython(path.join(f.root, '.venv', 'bin', 'python3'), { installed: {}, missing: [FAKE_DIST] });
+  await fs.writeFile(path.join(f.root, 'requirements.txt'), `${FAKE_DIST}\n`);
+  assert.equal((await run(f)).ok, false);
+  const report = await readReport(f);
+  assert.equal(report.failurePhase, 'python-dependencies');
+  assert.match(report.error, new RegExp(FAKE_DIST));
+  assert.ok(report.error.includes(`uv venv --allow-existing ${path.join(f.root, '.venv')}`), report.error);
+  assert.ok(report.error.includes(`--python ${path.join(f.root, '.venv', 'bin', 'python3')}`), report.error);
+  assert.ok(report.error.includes(`-r ${path.join(f.root, 'requirements.txt')}`), report.error);
+  assert.doesNotMatch(report.error, /<root>/);
+});
+
+test('a dangling .venv/bin/python3 refuses the run naming the venv, instead of falling back to the python3 on the path', async t => {
+  scopedEnv(t, 'KAMINOS_PYTHON', undefined);
+  const f = await fixture(t, { files: { 'a.mjs': PASS }, manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' } }) });
+  const venvPython = path.join(f.root, '.venv', 'bin', 'python3');
+  await fs.mkdir(path.dirname(venvPython), { recursive: true });
+  await fs.symlink(path.join(f.root, 'gone', 'python3.12'), venvPython);
+  await fs.writeFile(path.join(f.root, 'requirements.txt'), 'numpy\n');
+  assert.equal((await run(f)).ok, false);
+  const report = await readReport(f);
+  assert.equal(report.failurePhase, 'python-dependencies');
+  assert.ok(report.error.includes(venvPython), report.error);
+  assert.match(report.error, /--allow-existing/);
+  assert.equal(report.counts.executed, 0);
+  assert.equal(report.effective.pythonExecutable.pathPrefixed, false);
+});
+
+test('an interpreter that dies while starting is reported by its error line, not the trailing frame marker, with the remedy', async t => {
+  const f = await fixture(t, { files: { 'a.mjs': PASS }, manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' } }) });
+  const fatal = path.join(f.root, 'fatal-python3');
+  await fs.writeFile(fatal, "#!/bin/sh\nprintf 'Fatal Python error: init_fs_encoding: failed to get the Python codec of the filesystem encoding\\nPython runtime state: core initialized\\nModuleNotFoundError: No module named encodings\\n\\nCurrent thread 0x00000001 (most recent call first):\\n  <no Python frame>\\n' >&2\nexit 1\n", { mode: 0o755 });
+  await fs.writeFile(path.join(f.root, 'requirements.txt'), 'numpy\n');
+  assert.equal((await run(f, { executables: { python: fatal } })).ok, false);
+  const report = await readReport(f);
+  assert.equal(report.failurePhase, 'python-dependencies');
+  assert.match(report.error, /ModuleNotFoundError: No module named encodings/);
+  assert.doesNotMatch(report.error, /<no Python frame>/);
+  assert.match(report.error, /--allow-existing/);
 });
 
 test('a probe that raises is reported by its exception line, with the stderr tail kept', async t => {
