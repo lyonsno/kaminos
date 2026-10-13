@@ -12593,6 +12593,8 @@ async function showGLB(file, options = {}) {
   const loadToken = sceneMutationToken;
   const isBlob = typeof file !== 'string';
   const url = isBlob ? URL.createObjectURL(file) : file;
+  const assetSource = isBlob ? file.name : file;
+  const assetFileName = file?.name || options.metadata?.fileName || String(file).split('/').pop();
   if (file && file.name) glbFileName = file.name;
   modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
@@ -12621,6 +12623,7 @@ async function showGLB(file, options = {}) {
         }
       });
       scene.add(model);
+      let registeredAsset = null;
       if (options.register === false) {
         const metadata = options.metadata || {};
         model.userData.kaminosSceneObject = {
@@ -12636,7 +12639,7 @@ async function showGLB(file, options = {}) {
           transformControls.visible = true;
         }
       } else {
-        registerSceneObject(model, {
+        registeredAsset = registerSceneObject(model, {
           ...(options.metadata || {}),
           source: options.metadata?.source ?? modelSourceUrl,
           type: options.metadata?.type ?? 'glb',
@@ -12646,7 +12649,14 @@ async function showGLB(file, options = {}) {
       document.getElementById('transform-bar').classList.add('visible');
       if (arrival === 'fresh' && arrivalPlacement) frameAssetArrival(model);
       setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
-      resolve(model);
+      resolve(options.returnAsset ? {
+        id: registeredAsset?.id ?? null,
+        root: model,
+        clips: gltf.animations || [],
+        source: options.metadata?.source ?? assetSource,
+        fileName: assetFileName,
+        arrival,
+      } : model);
     }, undefined, (err) => {
       if (isBlob) URL.revokeObjectURL(url);
       setInfo('Failed to load GLB: ' + (err.message || 'unknown error'));
@@ -12654,6 +12664,14 @@ async function showGLB(file, options = {}) {
     });
   });
 }
+
+// Scene-session owners borrow this loader; membership, placement and stale-load
+// admission remain the ordinary application's operations. Existing imports keep
+// their root-only result. The caller supplies its own lifetime via isCurrent.
+window.kaminosWorkbenchLoadAsset = async (file, options = {}) => {
+  await fluidViewportReady;
+  return showGLB(file, {...options, clear: false, register: true, returnAsset: true});
+};
 
 // --- OBJ Inspector ---
 async function showOBJ(objFile, mtlFile, options = {}) {
