@@ -115,6 +115,7 @@ export function createSamImageTools({ inferenceSession, rendererDevice, config, 
   function createRuntime() {
     return createSam3BrowserImageRuntime({
       baseUrl: window.location.href, inferenceSession,
+      commit: new URL(window.location.href).searchParams.get('commit') || null,
       onExecutionContext({ device }) { executionDevice = device; },
       yield: metadata => foreground.yield(metadata),
       foregroundEvidence: () => foreground.evidence(),
