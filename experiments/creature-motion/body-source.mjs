@@ -31,6 +31,9 @@ export async function acquireCreatureBody(inputs) {
  if(inputs._bodyToken!==undefined){
   const body=prepared.get(inputs._bodyToken);prepared.delete(inputs._bodyToken);
   if(!body||body.asset!==inputs.asset||body.bodySha256!==inputs.body_sha256)throw Error('Creature prepared body identity is invalid');
+  // The existing shared entry writes these same inputs into its return URL.
+  // Consume the transient transport field before that callback can persist it.
+  delete inputs._bodyToken;
   return body;
  }
  return prepare(inputs.asset,inputs.body_sha256);
