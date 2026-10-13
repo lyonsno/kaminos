@@ -99,6 +99,9 @@ export default {
     for(const [name,label] of [['replay','Replay'],['pause','Pause'],['resume','Resume'],['hold','Hold frame for Capture']]){
      const button=document.createElement('button');button.textContent=label;button.type='button';button.onclick=()=>call(name);panel.append(button);
     }
+    for(const [label,sourceFrame] of [['First source pose',0],['Midpoint source pose',Math.floor((identities[0].frames-1)/2)],['Last source pose',identities[0].frames-1]]){
+     const button=document.createElement('button');button.textContent=label;button.type='button';button.onclick=()=>call('seek',{frame:sourceFrame});panel.append(button);
+    }
     const label=document.createElement('label');label.textContent='Source frame ';
     const frame=document.createElement('input');frame.type='range';frame.min='0';frame.max=String(identities[0].frames-1);frame.step='1';
     frame.setAttribute('aria-label','Creature source frame');frame.oninput=()=>call('seek',{frame:Number(frame.value)});label.append(frame);panel.append(label,error);
