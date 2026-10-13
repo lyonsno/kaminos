@@ -11,6 +11,13 @@ import { writeSync } from 'node:fs';
 import { threadId } from 'node:worker_threads';
 
 process.on('exit', code => {
-  const framework = process.moduleLoadList.includes('NativeModule internal/test_runner/harness');
-  try { writeSync(1, `kaminos-test-exit pid=${process.pid} tid=${threadId} framework=${framework ? 'yes' : 'no'} code=${code}\n`); } catch {}
+  // The harness module loads as soon as node:test is imported, even by a
+  // file that then fails to load or only uses mocks. The reporter utilities
+  // load only when the harness starts running tests, which is what decides
+  // whether structured events were ever due.
+  const imported = process.moduleLoadList.includes('NativeModule internal/test_runner/harness');
+  const started = process.moduleLoadList.includes('NativeModule internal/test_runner/reporter/utils');
+  // The leading newline keeps the marker on its own line even after
+  // unterminated output such as a progress line.
+  try { writeSync(1, `\nkaminos-test-exit pid=${process.pid} tid=${threadId} framework=${imported ? 'yes' : 'no'} tests=${started ? 'started' : 'not-started'} code=${code}\n`); } catch {}
 });

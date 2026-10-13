@@ -14,10 +14,16 @@
 // The suite path comes from test:start events, which arrive parent first;
 // completion events arrive child first, so nesting alone is not enough.
 
+import { createHash } from 'node:crypto';
+import { realpathSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { inspect } from 'node:util';
 import { threadId } from 'node:worker_threads';
 
 const stamp = { pid: process.pid, tid: threadId };
+const ROOT = process.env.KAMINOS_TEST_RUNNER_ROOT || process.cwd();
+const ROOT_REAL = (() => { try { return realpathSync(ROOT); } catch { return ROOT; } })();
+const TEST_FILE = process.env.KAMINOS_TEST_RUNNER_TEST || null;
 
 export default async function* reporter(source) {
   yield `${JSON.stringify({ kind: 'header', ...stamp, file: process.env.KAMINOS_TEST_RUNNER_TEST || null, argv1: process.argv[1] || null })}\n`;
@@ -74,22 +80,61 @@ function describeError(cause) {
 }
 
 // For an assertion whose message Node generated, the first line is generic
-// and the distinguishing fact is the assertion: its operator and, bounded,
-// the values it compared, or the asserted expression for assert.ok.
+// and the distinguishing fact is the assertion: its operator; the values it
+// compared, shown bounded and followed by a hash of the whole values so two
+// that differ past the bound still differ; or, for assert.ok, the asserted
+// expression, with the assertion's location when the expression spans lines
+// and Node keeps only its opening. Error values render as name and message,
+// never as stacks, and machine-local paths are normalized before anything is
+// cut, so the detail reads the same on every machine.
 function assertionDetail(cause) {
   if (cause.code !== 'ERR_ASSERTION' || !cause.generatedMessage) return null;
   const operator = String(cause.operator || 'assert');
-  if (operator === '==' || operator === 'ok') {
-    const expression = String(cause.message || '').split('\n').map(l => l.trim()).filter(Boolean)[1];
-    return expression ? `${operator} ${expression}` : operator;
+  const message = String(cause.message || '');
+  if (/^The expression evaluated to a falsy value/.test(message)) {
+    const expression = message.split('\n').map(l => l.trim()).filter(Boolean)[1] || '';
+    const location = /\($/.test(expression) || !expression ? ` at ${assertionLocation(cause)}` : '';
+    return `${operator} ${expression}${location}`.trim();
   }
-  if (operator === 'match' || operator === 'doesNotMatch') return `${operator} expected=${short(cause.expected)}`;
-  return `${operator} actual=${short(cause.actual)} expected=${short(cause.expected)}`;
+  if (operator === 'match' || operator === 'doesNotMatch') return `${operator} expected=${short(cause.expected)} #${digest(cause.expected)}`;
+  return `${operator} actual=${short(cause.actual)} expected=${short(cause.expected)} #${digest(cause.actual, cause.expected)}`;
+}
+
+// The first stack frame inside the test file, relative to the root.
+function assertionLocation(cause) {
+  const frames = String(cause.stack || '').split('\n').map(l => l.trim()).filter(l => l.startsWith('at '));
+  const own = frames.map(f => normalizePaths(f)).find(f => TEST_FILE ? f.includes(TEST_FILE) : f.includes('<root>'));
+  const m = own && own.match(/(<root>\/[^:)\s]+:\d+:\d+)/);
+  return m ? m[1] : 'unknown location';
 }
 
 function short(value) {
-  const text = safeInspect(value, { depth: 1, breakLength: Infinity, compact: true, maxStringLength: 60, maxArrayLength: 4, sorted: true });
+  const text = normalizePaths(safeInspect(plain(value), { depth: 1, breakLength: Infinity, compact: true, maxStringLength: 60, maxArrayLength: 4, sorted: true }));
   return text.length > 100 ? `${text.slice(0, 97)}...` : text;
+}
+
+function digest(...values) {
+  const text = values.map(v => normalizePaths(safeInspect(plain(v), { depth: 6, breakLength: Infinity, compact: true, maxStringLength: 20000, maxArrayLength: 10000, sorted: true }))).join('\u0000');
+  return createHash('sha1').update(text).digest('hex').slice(0, 8);
+}
+
+// Replace Error instances, which inspect with their stacks, by their name
+// and message, at any depth up to a bound.
+function plain(value, depth = 0) {
+  if (value instanceof Error) return `[${value.name}: ${safeString(value.message)}]`;
+  if (depth > 6 || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(v => plain(v, depth + 1));
+  if (value instanceof Date || value instanceof RegExp || value instanceof Map || value instanceof Set || ArrayBuffer.isView(value)) return value;
+  const out = {};
+  for (const key of Object.keys(value)) out[key] = plain(value[key], depth + 1);
+  return out;
+}
+
+function normalizePaths(text) {
+  let out = String(text).split('\n').join(' ');
+  if (ROOT_REAL !== ROOT) out = out.split(ROOT_REAL).join('<root>');
+  out = out.split(ROOT).join('<root>');
+  return out.split(homedir()).join('~');
 }
 
 function safeString(value) {

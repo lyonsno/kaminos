@@ -510,9 +510,9 @@ test('matches', () => { assert.match('a'.repeat(5000), /never-there/); });
   const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
   await run(f);
   const base = (await readReport(f)).results[0].signature;
-  assert.match(base, /counts frames :: AssertionError: Expected values to be strictly equal: \[strictEqual actual=2 expected=3\]/);
+  assert.match(base, /counts frames :: AssertionError: Expected values to be strictly equal: \[strictEqual actual=2 expected=3 #[0-9a-f]{8}\]/);
   assert.match(base, /checks source :: AssertionError: The expression evaluated to a falsy value: \[== assert\.ok\(\[\]\.length\)\]/);
-  assert.match(base, /matches :: AssertionError: The input did not match the regular expression \/never-there\/\. Input: \[match expected=\/never-there\/\]/);
+  assert.match(base, /matches :: AssertionError: The input did not match the regular expression \/never-there\/\. Input: \[match expected=\/never-there\/ #[0-9a-f]{8}\]/);
   assert.ok(base.length < 600, 'match assertions must not embed their input');
   await fs.writeFile(f.quarantinePath, JSON.stringify({ schema: 'kaminos.test-quarantine.v1', entries: { 'tests/m.mjs': quarantined(base) } }));
   assert.equal((await run(f)).ok, true);
@@ -601,4 +601,95 @@ test('wip', { todo: true }, () => { throw new Error('todo failure'); });
   await run(f);
   const s = (await readReport(f)).results[0].signature;
   assert.equal(s, 'node:test failing: <root>/tests/m.mjs :: hook failed :: Error: root after broke | known broken :: Error: known');
+});
+
+// Structured events, revision 2: findings from the first confirmation pass.
+
+test('a node:test file that fails while loading is signed from its output and can be quarantined', async t => {
+  const f = await fixture(t, { files: {
+      'lib.mjs': 'export const present = 1;\n',
+      'm.mjs': "import test from 'node:test';\nimport { renamedAway } from './lib.mjs';\ntest('x', () => {});\n",
+      'mock-only.mjs': "import { mock } from 'node:test';\nconsole.error('Error: expected one call'); process.exit(1);\n" },
+    manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' }, 'tests/mock-only.mjs': { kind: 'node' }, 'tests/lib.mjs': { kind: 'helper', reason: 'imported' } }) });
+  await run(f);
+  const report = await readReport(f);
+  const m = report.results.find(r => r.file === 'tests/m.mjs');
+  assert.equal(m.outcome, 'fail');
+  assert.match(m.signature, /^SyntaxError: The requested module .* does not provide an export named 'renamedAway'/);
+  const mock = report.results.find(r => r.file === 'tests/mock-only.mjs');
+  assert.equal(mock.outcome, 'fail');
+  assert.equal(mock.signature, 'Error: expected one call');
+});
+
+test('the exit marker is recognized after an unterminated output line, and never leaks into a plain signature', async t => {
+  const framework = `import test from 'node:test';
+test('first', () => { console.log('Error: cache miss logged by code under test'); throw new Error('first'); });
+test('second', () => { if (process.env.NEW_BREAK) throw new Error('NEW BREAKAGE'); });
+test('third', () => { process.stdout.write('\\rconverting 3/4'); process.exit(1); });
+`;
+  const plain = "process.stdout.write('FAILED: frame count mismatch'); process.exitCode = 1;\n";
+  const f = await fixture(t, { files: { 'm.mjs': framework, 'p.mjs': plain },
+    manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' }, 'tests/p.mjs': { kind: 'node' } }) });
+  await run(f);
+  const report = await readReport(f);
+  assert.equal(report.results.find(r => r.file === 'tests/m.mjs').outcome, 'unsigned-failure');
+  assert.equal(report.results.find(r => r.file === 'tests/p.mjs').signature, 'FAILED: frame count mismatch');
+});
+
+test('a node:test file that exits zero before its summary is not a pass', async t => {
+  const body = "import test from 'node:test';\ntest('fails', () => { throw new Error('x'); });\ntest('exits', () => { process.exit(0); });\n";
+  const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  assert.equal((await run(f)).ok, false);
+  assert.equal((await readReport(f)).results[0].outcome, 'unsigned-failure');
+});
+
+test('assertion details distinguish multi-line assert.ok calls and values that differ past the display bound', async t => {
+  const body = `import test from 'node:test';
+import assert from 'node:assert/strict';
+test('ok', () => {
+  if (process.env.SECOND) assert.ok(
+    [].length,
+  ); else assert.ok(
+    ''.length,
+  );
+});
+test('deep', () => { assert.deepEqual([1, 2, 3, 4, 5, process.env.SECOND ? 7 : 6], [1, 2, 3, 4, 5, 0]); });
+test('long', () => { assert.equal('x'.repeat(70) + (process.env.SECOND ? 'b' : 'a'), 'y'); });
+`;
+  const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  await run(f);
+  const first = (await readReport(f)).results[0].signature;
+  process.env.SECOND = '1'; t.after(() => { delete process.env.SECOND; });
+  await run(f);
+  const second = (await readReport(f)).results[0].signature;
+  const entries = s => s.replace('node:test failing: ', '').split(' | ');
+  for (const name of ['ok', 'deep', 'long']) {
+    assert.notEqual(entries(first).find(e => e.startsWith(`${name} ::`)), entries(second).find(e => e.startsWith(`${name} ::`)), `${name} must sign differently`);
+  }
+});
+
+test('assertion details never carry absolute paths, stacks or newlines', async t => {
+  const body = `import test from 'node:test';
+import assert from 'node:assert/strict';
+test('throws', () => { assert.throws(() => { throw new Error('a'); }, /b/); });
+test('error value', () => { assert.deepEqual({ e: new Error('inner') }, { e: null }); });
+`;
+  const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  await run(f);
+  const s = (await readReport(f)).results[0].signature;
+  assert.doesNotMatch(s, /\n/);
+  assert.doesNotMatch(s, /file:\/\/|\/private\/|\/Users\/|\/tmp\//);
+  assert.match(s, /throws :: AssertionError: .*\[throws /);
+});
+
+test('an events file holding a bare null record is unsigned, and a test name containing the entry separator keeps one entry', async t => {
+  const body = "import test from 'node:test';\ntest('x | y', () => { throw new Error('p'); });\n";
+  const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  await run(f);
+  const r = (await readReport(f)).results[0];
+  assert.equal(r.outcome, 'fail');
+  const { signatureEntries } = await import('../tools/test-runner.mjs');
+  assert.deepEqual(signatureEntries(r.signature), ['x ¦ y :: Error: p']);
+  const { nodeTestSignature } = await import('../tools/test-runner.mjs');
+  assert.ok(nodeTestSignature('null\n', { childPid: 1, exitCode: 1 }).unsigned);
 });

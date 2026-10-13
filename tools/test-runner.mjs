@@ -34,7 +34,8 @@ export const QUARANTINE_CLASSES = new Set(['untriaged', 'regression', 'stale-pin
 export const BROWSER_OVERRIDES = ['KAMINOS_CHROME', 'CHROME_BIN', 'CHROME', 'KAMINOS_SHARP_WEBGPU_CHROME'];
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 const LATE_LAUNCH_SETTLE_MS = 2000;
-const EXIT_MARKER = /^kaminos-test-exit pid=(\d+) tid=(\d+) framework=(yes|no) code=(-?\d+)$/gm;
+const EXIT_MARKER = /\n?kaminos-test-exit pid=(\d+) tid=(\d+) framework=(yes|no) tests=(started|not-started) code=(-?\d+)\n?/g;
+const ENTRY_SEPARATOR = ' | ';
 // node:test files run with the spec reporter on stdout for the log and this
 // module's reporter writing structured events beside it. Signatures for such
 // files come from the events, never from the human-readable output.
@@ -189,7 +190,10 @@ export function nodeTestSignature(eventsText, { root, childPid, exitCode } = {})
   const records = [];
   for (const line of String(eventsText).split('\n')) {
     if (!line.trim()) continue;
-    try { records.push(JSON.parse(line)); } catch { return { signature: null, unsigned: 'the events file holds unparsable lines; another process may have written into it' }; }
+    let record;
+    try { record = JSON.parse(line); } catch { return { signature: null, unsigned: 'the events file holds unparsable lines; another process may have written into it' }; }
+    if (!record || typeof record !== 'object') return { signature: null, unsigned: 'the events file holds a record that is not an object' };
+    records.push(record);
   }
   const headers = records.filter(r => r.kind === 'header');
   if (headers.length !== 1) return { signature: null, unsigned: `expected one header record, found ${headers.length}` };
@@ -203,7 +207,7 @@ export function nodeTestSignature(eventsText, { root, childPid, exitCode } = {})
     if (event.kind !== 'fail') continue;
     if (event.todo || event.skip) continue;
     if (event.failureType === 'subtestsFailed' || event.failureType === 'cancelledByParent') continue;
-    const path = normalizeText(event.path, root);
+    const path = normalizeText(event.path, root).split(ENTRY_SEPARATOR).join(' ¦ ');
     const error = describeEventError(event.error, root);
     if (event.failureType === 'hookFailed') {
       const hook = String(event.wrapper || '').match(/failed running (\w+) hook/);
@@ -213,19 +217,19 @@ export function nodeTestSignature(eventsText, { root, childPid, exitCode } = {})
     entries.push(`${path} :: ${error}`);
   }
   if (!entries.length) return { signature: `node:test passed; exit ${exitCode}`, unsigned: null };
-  return { signature: `node:test failing: ${entries.sort().join(' | ')}`, unsigned: null };
+  return { signature: `node:test failing: ${entries.sort().join(ENTRY_SEPARATOR)}`, unsigned: null };
 }
 
 function describeEventError(error, root) {
   if (!error) return 'no error';
   const head = `${error.name || 'Error'}: ${firstLine(normalizeText(error.message, root))}`;
-  return error.detail ? `${head} [${normalizeText(error.detail, root)}]` : head;
+  return error.detail ? `${head} [${firstLine(normalizeText(error.detail, root))}]` : head;
 }
 
 // Entries of a node:test signature, for reporting what changed.
 export function signatureEntries(signature) {
   if (typeof signature !== 'string' || !signature.startsWith('node:test failing: ')) return null;
-  return signature.slice('node:test failing: '.length).split(' | ');
+  return signature.slice('node:test failing: '.length).split(ENTRY_SEPARATOR);
 }
 
 function firstLine(text) {
@@ -233,7 +237,7 @@ function firstLine(text) {
 }
 
 function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv, track, nodeFlags }) {
-  const env = { ...baseEnv, KAMINOS_TEST_RUNNER_TEST: file };
+  const env = { ...baseEnv, KAMINOS_TEST_RUNNER_TEST: file, KAMINOS_TEST_RUNNER_ROOT: root };
   const eventsPath = path.join(logsDir, `${file.replace(/[\/]/g, '__')}.events.jsonl`);
   const flags = kind === 'node' ? [...nodeFlags] : [];
   const withReporter = flags.some(f => f.startsWith('--test-reporter=') && f.includes('test-events-reporter'));
@@ -256,19 +260,26 @@ function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv
       let signature = null;
       let unsigned = null;
       let outcome = fields.outcome;
+      // The preload's exit line, from the spawned process itself, says
+      // whether the test harness started running tests here; a relayed
+      // child's line carries that child's pid and is ignored. A file that
+      // only imported the framework, or failed while loading, is a plain
+      // script for signing purposes.
+      const markers = [...output.matchAll(EXIT_MARKER)];
+      const testsStarted = Boolean(child?.pid) && markers.some(m => Number(m[1]) === child.pid && Number(m[2]) === 0 && m[4] === 'started');
       if (outcome === 'fail') {
-        // The preload's exit line, from the spawned process itself, says
-        // whether the test framework ran here; a relayed child's line
-        // carries that child's pid and is ignored.
-        const markers = [...output.matchAll(EXIT_MARKER)];
-        const ranHere = Boolean(child?.pid) && markers.some(m => Number(m[1]) === child.pid && Number(m[2]) === 0 && m[3] === 'yes');
-        if (ranHere) {
+        if (testsStarted) {
           ({ signature, unsigned } = nodeTestSignature(events ?? '', { root, childPid: child?.pid, exitCode: fields.exitCode }));
-          if (events === null) unsigned = 'the framework ran but wrote no events; the process ended before they were flushed';
+          if (events === null) unsigned = 'tests started but no events were written; the process ended before they were flushed';
           if (unsigned) { outcome = 'unsigned-failure'; signature = null; }
         } else {
-          signature = failureSignature(output.replace(EXIT_MARKER, ''), { root, kind, exitCode: fields.exitCode });
+          signature = failureSignature(output.replace(EXIT_MARKER, '\n'), { root, kind, exitCode: fields.exitCode });
         }
+      } else if (outcome === 'pass' && testsStarted) {
+        // Exiting zero before the summary is not a pass; nothing says the
+        // tests finished.
+        const check = nodeTestSignature(events ?? '', { root, childPid: child?.pid, exitCode: fields.exitCode });
+        if (events === null || check.unsigned) { outcome = 'unsigned-failure'; unsigned = events === null ? 'tests started, the process exited zero, and no events were written' : check.unsigned; }
       }
       resolve({ file, kind, executable, durationMs: Date.now() - started, log: logPath, events: events !== null ? eventsPath : null, signature, ...fields, outcome,
         ...(unsigned ? { unsigned } : {}) });
