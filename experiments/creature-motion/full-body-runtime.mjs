@@ -5,6 +5,7 @@ import {skinTransport} from '../../hindquarter-live-core.mjs';
 export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights}) {
  const rig=manifest.bones.map(b=>({name:b.name,parent:b.parent,restMatrix:b.restMatrix.flat()})),channels=[...manifest.channels];
  let skin={manifest,rest,triangles,weights},disposed=false,skinRevision=0;
+ const cleanupFailures=[];
  function validate(candidate){
   const m=candidate?.manifest;
   if(!m||!Number.isInteger(m.vertices)||m.vertices<1||!Number.isInteger(m.triangles)||m.triangles<1||candidate.rest?.length!==m.vertices*3||candidate.triangles?.length!==m.triangles*3||candidate.weights?.length!==m.vertices*channels.length)throw Error('Incomplete full-body arrays');
@@ -54,8 +55,9 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights}) {
   // Commit only skin state. Actual Bone/mesh/group handles, material, placement
   // and the attached player's update function stay intact at their current pose.
   const previous=geometry;geometry=next;mesh.geometry=next;skin=candidate;cached=matrices.flat().join(',');skinRevision++;updates++;lastUpdateMs=performance.now()-begin;
-  previous.dispose();return runtime.read();
+  try{previous.dispose();}catch(error){cleanupFailures.push({geometry:previous.uuid,message:error.message});}
+  return runtime.read();
  }
- const runtime={group,bones,mesh,update,replaceSkin,read:()=>({route:'shared-owner-scene-full-body-dq',vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs}),dispose(){if(disposed)return;disposed=true;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
+ const runtime={group,bones,mesh,update,replaceSkin,read:()=>({route:'shared-owner-scene-full-body-dq',vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
  update();return runtime;
 }

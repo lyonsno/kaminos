@@ -36,6 +36,9 @@ let resolveSlow;nextLoad=input=>input.case_sha256==='c'.repeat(64)?new Promise(r
 const slow=selection.select({cast:'lean',attachment:'distributed'});await selection.select({cast:'strong',attachment:'point'});resolveSlow();
 assert.equal((await slow).status,'superseded');assert.equal(selection.read().current.cast,'strong');assert.equal(selection.read().current.attachment,'point');
 nextLoad=async input=>fixture(input.case_sha256);
+const releaseFailure=runtime.mesh.geometry;releaseFailure.addEventListener('dispose',()=>{throw Error('old geometry release failed');});
+assert.equal((await selection.select({cast:'strong',attachment:'distributed'})).status,'applied','a post-commit release failure must not leave the current source identity stale');
+assert.equal(selection.read().current.case_sha256,'b'.repeat(64));assert.match(runtime.read().cleanupFailure.message,/release failed/);
 
 class Element{constructor(tag){this.tag=tag;this.children=[];this.value='';this.disabled=false;this.listeners={};}append(...nodes){this.children.push(...nodes);}replaceChildren(...nodes){this.children=[...nodes];}setAttribute(key,value){this[key]=value;}remove(){this.removed=true;}}
 const document={createElement:tag=>new Element(tag)},root=new Element('root'),calls=[];

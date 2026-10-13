@@ -3,7 +3,7 @@ import {loadFullBodySkin} from './full-body-source.mjs';
 // Skin-owned control seam for the existing shared creature. It owns neither
 // scene attachment nor a frame clock, and never seeks/rebuilds the live rig.
 export function createSkinCaseSelection({runtime,choices,currentCaseSha256,loadCase=loadFullBodySkin,onApplied=()=>{}}) {
- if(typeof runtime?.replaceSkin!=='function')throw Error('Skin selection requires the existing exchangeable body runtime');
+ if(typeof runtime?.replaceSkin!=='function'||typeof runtime?.read!=='function')throw Error('Skin selection requires the existing exchangeable body runtime');
  if(!Array.isArray(choices)||!choices.length)throw Error('Explicit skin choices required');
  const entries=structuredClone(choices),keys=new Set();
  for(const choice of entries){
@@ -50,7 +50,7 @@ export function createSkinCaseSelection({runtime,choices,currentCaseSha256,loadC
    attachment.replaceChildren(...variants.map(c=>{const option=document.createElement('option');option.value=c.attachment;option.textContent=c.attachmentLabel??c.attachment;return option;}));
    attachment.value=current.attachment;
    status.textContent=pending?`Loading ${pending.label} · ${pending.attachmentLabel??pending.attachment}`:`${current.label} · ${current.attachmentLabel??current.attachment}`;
-   failure.textContent=error??'';
+   failure.textContent=error??runtime.read().cleanupFailure?.message??'';
   }
   const call=async input=>{try{failure.textContent='';await invoke(operation,input);}catch(e){failure.textContent=e.message;refresh();if(!error)failure.textContent=e.message;}};
   cast.onchange=()=>{const candidates=entries.filter(c=>c.cast===cast.value),choice=candidates.find(c=>c.attachment===current.attachment)??candidates[0];return call({cast:cast.value,attachment:choice?.attachment});};
