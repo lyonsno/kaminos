@@ -81,3 +81,16 @@ test('the uniforms carry the shape: fluid block, emitter words, splat camera', (
   assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, 0, 0\], 56\);/);
   assert.match(source, /label: `kaminos \$\{BOUNDARY_SPLAT_RENDERER_IDENTITY\} camera`,\n\s+size: 240,/);
 });
+
+// Live witness of 87f3765b: the pressure passes bind group 0 through the
+// fluid-front read layout, which had no uniform block, so they could not seat
+// the grid shape ("Binding doesn't exist ... @group(0) @binding(0)"). Every
+// group-0 layout of the main shader carries the fluid uniforms at binding 0,
+// and every bind group made from the fluid-front read layout binds them.
+test('the fluid-front read layout and its bind groups carry the fluid uniforms at binding 0', () => {
+  const layout = source.slice(source.indexOf('fluidFrontReadBindGroupLayout = device.createBindGroupLayout({'), source.indexOf('boundarySidecarWriteBindGroupLayout = device.createBindGroupLayout({'));
+  assert.match(layout, /\{ binding: 0, visibility: GPUShaderStage\.COMPUTE, buffer: \{ type: 'uniform' \} \},/);
+  const groups = [...source.matchAll(/layout: fluidFrontReadBindGroupLayout,\n\s+entries: \[\n([\s\S]*?)\n\s+\],/g)].map(m => m[1]);
+  assert.equal(groups.length, 4, 'four bind groups use the layout');
+  for (const entries of groups) assert.match(entries, /\{ ?binding: 0, resource: \{ ?buffer: uniformBuffer ?\} ?\},/);
+});

@@ -12343,6 +12343,7 @@ export function createKaminosVolumePrototype({
       label: `kaminos scene-solid fluid-front read ${gridShapeLabel(gridSize)} ${index}`,
       layout: fluidFrontReadBindGroupLayout,
       entries: [
+        {binding: 0, resource: {buffer: uniformBuffer}},
         {binding: 1, resource: {buffer}},
         {binding: 7, resource: {buffer: frontBuffers[index]}},
         {binding: 16, resource: sceneSolidTextureView},
@@ -12529,6 +12530,7 @@ export function createKaminosVolumePrototype({
         label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} fluid/front read`,
         layout: fluidFrontReadBindGroupLayout,
         entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
           { binding: 1, resource: { buffer: fluid } },
           { binding: 7, resource: { buffer: front } },
           { binding: 16, resource: sceneSolidTextureView },
@@ -13815,6 +13817,7 @@ export function createKaminosVolumePrototype({
         label: `kaminos fluid-front read bind group ${gridShapeLabel(gridSize)} A`,
         layout: fluidFrontReadBindGroupLayout,
         entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
           { binding: 1, resource: { buffer: fluidBuffers[0] } },
           { binding: 7, resource: { buffer: frontBuffers[0] } },
           { binding: 16, resource: sceneSolidTextureView },
@@ -13825,6 +13828,7 @@ export function createKaminosVolumePrototype({
         label: `kaminos fluid-front read bind group ${gridShapeLabel(gridSize)} B`,
         layout: fluidFrontReadBindGroupLayout,
         entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
           { binding: 7, resource: { buffer: frontBuffers[1] } },
           { binding: 16, resource: sceneSolidTextureView },
@@ -14273,6 +14277,8 @@ export function createKaminosVolumePrototype({
     fluidFrontReadBindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos fluid-front read bind group layout',
       entries: [
+        // The fluid uniforms carry the grid shape every entry point seats.
+        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
         {
           binding: 1,
           visibility: GPUShaderStage.COMPUTE,
