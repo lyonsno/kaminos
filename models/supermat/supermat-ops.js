@@ -6,6 +6,7 @@ import {
   groupNormCombineShader, groupNormApplyShader, groupNormChannelAffineShader, layerNormShader, softmaxShader, gegluShader,
   affineShader, gemmSubgroupMatrixShader, SUBGROUP_MATRIX_TILE, flashAttentionShader, flashAttentionVec4Shader, FLASH_HEAD_DIM, FLASH_QUERY_TILE,
 } from './supermat-kernels.js';
+import { chooseTiledGemmTile } from '../../webgpu-inference-kit/src/tiled-gemm-kernel.js';
 
 const STORAGE = 0x0080, COPY_SRC = 0x0004, COPY_DST = 0x0008, UNIFORM = 0x0040;
 const ACTIVATION_USAGE = STORAGE | COPY_SRC | COPY_DST;
@@ -412,7 +413,8 @@ export function createSuperMatOps(device, options = {}) {
     }
     const c = spec.c ?? alloc(spec.outShape ?? [batch, M, N], spec.name ?? 'gemm', { dtype: spec.dtype ?? activations });
     const nCountForTile = spec.nCount ?? N - (spec.nBase ?? 0);
-    const useLarge = largeTile && Math.ceil(nCountForTile / largeTile.bn) * Math.ceil(M / largeTile.bm) * batch >= largeTileMinWorkgroups;
+    const useLarge = largeTile && chooseTiledGemmTile({ M, N: nCountForTile, batch },
+      { base: gemmTile, large: largeGemmTile, minWorkgroups: largeTileMinWorkgroups }) === largeGemmTile;
     const tile = useLarge ? largeTile : tileShape;
     const layout = {
       aKContiguous: spec.aSK === 1, bNContiguous: spec.bSN === 1,

@@ -40,7 +40,9 @@ for (const [name, file, shaderSymbols] of consumers) {
   }
   if (file === 'sam-image-vit-block-stack-phase-program.js') {
     assert.match(source, /const linear = \(tokens, inputChannels, outputChannels\)/, 'ViT stack dispatch planning must carry the reduction width');
-    assert.match(source, /vectorLinearDispatch\(tokens, inputChannels, outputChannels, \{ maxWorkgroupsPerDimension \}\)/, 'ViT stack dispatch must honor its explicit device limit');
+    // ViT dense projections run through the kit tiled GEMM (operator decision 2026-10-11).
+    assert.match(source, /chooseTiledGemmTile\(\{ M: tokens, N: outputChannels \}, SAM_TILED_LINEAR_TILE_POLICY\)/, 'ViT stack dispatch must plan tiled GEMM tiles');
+    assert.match(source, /dispatch\.some\(value => value > maxWorkgroupsPerDimension\)/, 'ViT stack dispatch must honor its explicit device limit');
     continue;
   }
   assert.match(
