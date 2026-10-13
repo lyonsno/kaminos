@@ -1,6 +1,6 @@
 // A depth-image surface, with an illustrative pinhole camera (not calibrated intrinsics).
 // Its projection is the original photograph at the home camera position.
-export function buildPhotoSurface({ depth, normals, width, height }, aspect = width / height) {
+export function buildPhotoSurface({ depth, normals, width, height }, aspect = width / height, cutout = null) {
   const count = width * height;
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 2 || height < 2 ||
       depth?.length !== count || normals?.length !== count * 3 || !(aspect > 0) || !Number.isFinite(aspect)) {
@@ -8,6 +8,7 @@ export function buildPhotoSurface({ depth, normals, width, height }, aspect = wi
   }
   const finite = Array.from(depth).filter(d => Number.isFinite(d) && d > 0).sort((a, b) => a - b);
   if (!finite.length) throw new Error('The model returned no valid depth');
+  if(cutout&&(!Number.isInteger(cutout.width)||!Number.isInteger(cutout.height)||cutout.width<1||cutout.height<1||cutout.data?.length!==cutout.width*cutout.height*4))throw Error('Invalid display cutout');
   const median = finite[Math.floor(finite.length / 2)];
   const low = finite[Math.floor(finite.length * 0.02)];
   const high = finite[Math.floor(finite.length * 0.98)];
@@ -23,7 +24,8 @@ export function buildPhotoSurface({ depth, normals, width, height }, aspect = wi
       const u = x / (width - 1), v = y / (height - 1);
       const good = Number.isFinite(depth[i]) && depth[i] > 0;
       const d = good ? depth[i] / median : 1;
-      valid[i] = good ? 1 : 0;
+      const foreground=!cutout||cutout.data[(Math.round(v*(cutout.height-1))*cutout.width+Math.round(u*(cutout.width-1)))*4+1]>=128;
+      valid[i] = good&&foreground ? 1 : 0;
       flat.set([(u - 0.5) * aspect, 0.5 - v, 0], i * 3);
       position.set([(u - 0.5) * aspect * d, (0.5 - v) * d, 1 - d], i * 3);
       uv.set([u, 1 - v], i * 2);

@@ -128,7 +128,7 @@ export class MaterialPhotoViewer {
     this.original = new THREE.Mesh(new THREE.PlaneGeometry(this.aspect, 1), new THREE.MeshBasicNodeMaterial({ map: texture, toneMapped: false, side: THREE.DoubleSide }));
     this.scene.add(this.original);
     if (result) {
-      const surface = shared?.surface??buildPhotoSurface(result, this.aspect);
+      const surface = shared?.surface??buildPhotoSurface(result, this.aspect, cutout);
       this.surface = surface;
       const geometry = shared?.geometry??new THREE.BufferGeometry();
       this.borrowedGeometry=!!shared;
