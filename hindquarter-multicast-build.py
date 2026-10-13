@@ -63,7 +63,8 @@ def build(args):
         frame['inputs']={name:{'path':str(Path(getattr(args,name)).resolve()),'sha256':digest(getattr(args,name))} for name in inputs}
         frame_bytes=json.dumps(frame,indent=2).encode();(out/'frame-chain.json').write_bytes(frame_bytes)
         automatic_control=copy.deepcopy(control)
-        automatic_control.update(bounds={'min':rest.min(axis=0).tolist(),'max':rest.max(axis=0).tolist()},domainMethod='surface',articulated=True)
+        automatic_control.update(bounds={'min':rest.min(axis=0).tolist(),'max':rest.max(axis=0).tolist()},domainMethod='surface',articulated=True,
+                                 surfaceConnectivity=args.connectivity)
         report['phase']='automatic-binding';start=time.monotonic()
         binding=bind_geometry(rest,triangles,automatic_control);report['bindingSeconds']=time.monotonic()-start
         poses=np.asarray([partial_rotation(rest,np.asarray(p['palette']),binding['jointWeights']) for p in rig['presets']],dtype='<f4')
@@ -93,4 +94,5 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser()
     for key in ['package','expected-package-sha256','frame-link','hierarchy','plan','control','rig','name','out']:
         parser.add_argument('--'+key,required=True)
+    parser.add_argument('--connectivity',choices=['indexed','coincident'],default='indexed')
     build(parser.parse_args())

@@ -143,15 +143,27 @@ def bind_geometry(positions,triangles,control):
     positions=np.asarray(positions,dtype=np.float64);triangles=np.asarray(triangles)
     if control.get('paintedWeightsIncluded') is not False:raise ValueError('painted weights must be excluded')
     if control.get('domainMethod','spatial') not in ['spatial','surface']:raise ValueError('unknown domain method')
+    connectivity=control.get('surfaceConnectivity','indexed')
+    if connectivity not in ['indexed','coincident']:raise ValueError('unknown surface connectivity')
     if positions.ndim!=2 or positions.shape[1]!=3 or not np.isfinite(positions).all():raise ValueError('invalid geometry')
     if triangles.ndim!=2 or triangles.shape[1]!=3 or triangles.min()<0 or triangles.max()>=len(positions):raise ValueError('invalid topology')
     specs=support_specs(control);_,_,weights,contributors=field(positions,specs,np.eye(4),partition=True)
     edges=np.unique(np.sort(np.concatenate([triangles[:,[0,1]],triangles[:,[1,2]],triangles[:,[2,0]]]),axis=1),axis=0)
+    seam_count=0
+    if connectivity=='coincident':
+        # Virtual zero-length graph links only. No cast index, vertex, normal,
+        # triangle or source mesh is merged. Near-coincidence does not qualify.
+        _,first,inverse=np.unique(positions,axis=0,return_index=True,return_inverse=True)
+        representative=first[inverse];copies=np.flatnonzero(representative!=np.arange(len(positions)))
+        seam_count=len(copies)
+        if seam_count:edges=np.concatenate([edges,np.column_stack([copies,representative[copies]])])
     if control.get('domainMethod','spatial')=='surface':domain,domain_rule=surface_domain(positions,edges,control)
     else:
         domain=spatial_domain(positions,control)
         domain_rule={'kind':'spatial-chord','innerRadiusFemurs':.30,'outerRadiusFemurs':.62,'bilateralHalfTransitionFemurs':.12,
                      'distalCoverage':'cast minimum Y with .15 femur margin'}
+    domain_rule['surfaceConnectivity']={'kind':connectivity,'virtualCoincidentLinks':seam_count,
+                                       'tolerance':0,'topologyModified':False}
     weights*=domain
     rest_values,_=field(positions,specs,np.eye(4),contributors=contributors)
     rest_edges=positions[edges[:,1]]-positions[edges[:,0]]
@@ -213,6 +225,7 @@ def articulated_weights(binding,control):
     if not np.allclose(weights.sum(axis=1),1,atol=1e-10):raise ValueError('incomplete joint partition')
     return {'jointWeights':weights,'jointChannels':JOINT_CHANNELS,
             'articulatedRule':{'kind':'rest-geodesic-chain-partition','blendFemurs':.18,
+                'surfaceConnectivity':binding['domainRule']['surfaceConnectivity'],
                 'leftSeeds':left_seeds,'rightSeeds':right_seeds,'unknownVertices':unknown,
                 'unreachedChainVertices':unreached.tolist(),
                 'rightCompetitionVertices':np.flatnonzero(raw_right>1-left+1e-10).tolist(),

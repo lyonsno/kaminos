@@ -82,6 +82,24 @@ class IndependentBindingTests(unittest.TestCase):
         np.testing.assert_allclose(weights[:,2:5].sum(axis=1),original['weights'],atol=1e-12)
         self.assertTrue(np.all(weights>=0))
 
+    def test_coincident_render_seam_copies_share_transport_without_mesh_welding(self):
+        positions=np.array([[-.14,-2.31,-.14],[-.2,-1.2,-.3],[-.24,-.45,-.3],
+                            [.51,-2.31,-.14],[.63,-1.2,-.3],[.67,-.45,-.3],
+                            [.3,-1.5,-2.8],[.1,-1.2,-2.9],[.4,-1.,-3.],
+                            [.18,.58,-.7],[.3,.6,-.6],[.4,.5,-.5]])
+        positions=np.vstack([positions,positions[:3]])
+        triangles=np.array([[0,1,2],[3,4,5],[6,7,8],[9,10,11],[12,13,14]])
+        control={**self.control,'domainMethod':'surface','articulated':True,'surfaceConnectivity':'coincident'}
+        binding=bind_geometry(positions,triangles,control)
+        np.testing.assert_allclose(binding['jointWeights'][12:],binding['jointWeights'][:3],atol=1e-12,
+                                   err_msg='coincident copies tear because their transport differs')
+        np.testing.assert_array_equal(binding['positions'],positions)
+        np.testing.assert_array_equal(binding['triangles'],triangles)
+        # No spatial tolerance may silently connect nearby but distinct sheets.
+        positions[12:,0]+=1e-6
+        nearby=bind_geometry(positions,triangles,control)
+        self.assertEqual(nearby['domainRule']['surfaceConnectivity']['virtualCoincidentLinks'],0)
+
     def test_palette_rotation_moves_about_the_actual_joint_pivot(self):
         # Identity plus a 90-degree rigid rotation about (1, 0, 0).
         matrix=np.eye(4);matrix[:2,:2]=[[0,-1],[1,0]];matrix[:3,3]=[1,-1,0]
