@@ -47,7 +47,7 @@ export async function mountLiveTransport({casePath,expected,scene,camera,rendere
     }
     group.updateMatrixWorld(true);
     const id='live-transport-creature',referenceId='live-transport-painted';
-    register(group,{id,type:'mesh',fileName:'Automatic transport creature',source:null,label:'Gold · automatic transport · temporary live rig'});
+    register(group,{id,type:'mesh',fileName:'Automatic transport creature',source:null,label:'Gold · '+(manifest.comparisonLabel??(whole&&manifest.bindingRule?.kind?manifest.sourceCast+' · '+manifest.bindingRule.kind:'automatic transport'))+' · temporary live rig'});
     if(referenceGroup)register(referenceGroup,{id:referenceId,type:'mesh',fileName:'Painted reference',source:null,label:'Gray · original painted weights · same live pose'});
     const records=[];
     for(const [name,bone]of bones){if(name==='pelvis'&&!whole)continue;const boneId='live-bone:'+name;register(bone,{id:boneId,type:'rig-bone',source:null,fileName:name,label:name});records.push({id:boneId,name,uuid:bone.uuid});}
