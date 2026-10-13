@@ -13,6 +13,21 @@ import { createSam31NumericalVerificationEvidence, evaluateSam31TrackerDownstrea
 
 const TRACKER_PACKET_NAMES = Object.freeze(['ingress', 'decoder', 'memory', 'temporal', 'episode', 'pointer']);
 
+export function validateSam31BrowserTrackerRunOptions({ memoryAttentionKernel = 'online', captureOutputs = false } = {}) {
+  if (memoryAttentionKernel !== 'flash' && memoryAttentionKernel !== 'online') throw new RangeError('memoryAttentionKernel must be flash or online');
+  if (typeof captureOutputs !== 'boolean') throw new TypeError('captureOutputs must be a boolean');
+  return { memoryAttentionKernel, captureOutputs };
+}
+
+function capturedFloat32(values, shape, name) {
+  if (!Array.isArray(values) && !(values instanceof Float32Array)) throw new Error(`${name} readback is missing or unsupported`);
+  const length = shape.reduce((product, dimension) => product * dimension, 1);
+  if (values.length !== length) throw new Error(`${name} readback length ${values.length} != ${length}`);
+  const result = new Float32Array(values);
+  for (const value of result) if (!Number.isFinite(value)) throw new Error(`${name} readback contains non-finite values`);
+  return result;
+}
+
 function resolvedArtifactPassed(artifact, schema) {
   return artifact?.schema === schema
     && typeof artifact.sha256 === 'string'
@@ -215,7 +230,9 @@ async function decoderInvocation({ frame, inputs, expected, manifest, weights, w
       'sam31-multiplex-object-pointers': { artifactId: scopedOutputId(`sam31-two-frame-object-pointers:${frame}`), shape: [manifest.shape.multiplexCount, manifest.shape.channels] },
     },
   });
+  const started = performance.now();
   const result = await runSam31MultiplexMaskDecoderPhaseProgramRoute({ request, route, adapter, device, queue: device.queue, adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: userAgent, model: { revision: manifest.reference.model.revision, weightsHash }, kernel: route.kernel, tensors: { shape: manifest.shape, tensors: inputs, weights }, residentTensorResolver, includeReadback: true });
+  const durationMs = performance.now() - started;
   const diagnostics = expected ? {
     selectedMasks: parityDiagnostics(result.debugReadback.selectedMasks, expected.selectedMasks),
     objectScores: parityDiagnostics(result.debugReadback.objectScores, expected.objectScores),
@@ -223,7 +240,7 @@ async function decoderInvocation({ frame, inputs, expected, manifest, weights, w
   } : null;
   const parity = diagnostics ? Object.fromEntries(Object.entries(diagnostics).map(([name, summary]) => [name, summary.maxAbsDiff])) : null;
   if (errors.length) throw new Error(`decoder ${frame} uncaptured WebGPU errors: ${errors.join('; ')}`);
-  return { result, route, requestId: request.requestId, parity, diagnostics, maximum: parity ? Math.max(...Object.values(parity)) : null };
+  return { result, route, requestId: request.requestId, parity, diagnostics, maximum: parity ? Math.max(...Object.values(parity)) : null, durationMs };
 }
 
 async function maskConditioningInvocation({ inputs, expected, manifest, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag }) {
@@ -242,6 +259,7 @@ async function maskConditioningInvocation({ inputs, expected, manifest, adapter,
       'sam31-mask-conditioning-object-scores': { artifactId: scopedOutputId('sam31-frame-0-mask-conditioning-object-scores'), shape: [manifest.shape.multiplexCount, 1] },
     },
   });
+  const started = performance.now();
   const result = await runSam31MaskConditioningPhaseProgramRoute({
     request,
     route,
@@ -255,12 +273,13 @@ async function maskConditioningInvocation({ inputs, expected, manifest, adapter,
     tensors: { binaryMasks: inputs.binaryMasks, shape: { multiplexCount: manifest.shape.multiplexCount, maskHeight: manifest.shape.sourceMaskHeight, maskWidth: manifest.shape.sourceMaskWidth } },
     includeReadback: true,
   });
+  const durationMs = performance.now() - started;
   const parity = expected ? {
     maskLogits: maxAbs(result.debugReadback.maskLogits, expected.memoryInputMasks),
     objectScores: maxAbs(result.debugReadback.objectScores, expected.objectScores),
   } : null;
   if (errors.length) throw new Error(`mask conditioning uncaptured WebGPU errors: ${errors.join('; ')}`);
-  return { result, route, requestId: request.requestId, parity, maximum: parity ? Math.max(...Object.values(parity)) : null };
+  return { result, route, requestId: request.requestId, parity, maximum: parity ? Math.max(...Object.values(parity)) : null, durationMs };
 }
 
 async function interactivePointerInvocation({ inputs, expected, manifest, weights, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag, residentTensorResolver }) {
@@ -279,6 +298,7 @@ async function interactivePointerInvocation({ inputs, expected, manifest, weight
     },
     outputs: { 'sam31-interactive-object-pointers': { artifactId: scopedOutputId('sam31-frame-0-interactive-object-pointers'), shape: [manifest.shape.batch, manifest.shape.channels] } },
   });
+  const started = performance.now();
   const result = await runSam31InteractivePointerPhaseProgramRoute({
     request, route, adapter, device, queue: device.queue,
     adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: userAgent,
@@ -287,15 +307,19 @@ async function interactivePointerInvocation({ inputs, expected, manifest, weight
     residentTensorResolver,
     includeReadback: true,
   });
+  const durationMs = performance.now() - started;
   const parity = expected ? { objectPointers: maxAbs(result.debugReadback.objectPointers, expected.objectPointers) } : null;
   if (errors.length) throw new Error(`interactive pointer uncaptured WebGPU errors: ${errors.join('; ')}`);
-  return { result, route, requestId: request.requestId, parity, maximum: parity?.objectPointers ?? null };
+  return { result, route, requestId: request.requestId, parity, maximum: parity?.objectPointers ?? null, durationMs };
 }
 
 
 export async function runSam31BrowserTrackerPackageInvocation({
   packageRuntime, adapter, device, errors, adapterInfo, userAgent, commit, onProgress = () => {},
+  memoryAttentionKernel = 'online', captureOutputs = false,
 }) {
+  validateSam31BrowserTrackerRunOptions({ memoryAttentionKernel, captureOutputs });
+  const episodeStarted = performance.now();
   if (!packageRuntime || typeof packageRuntime.loadFloat32 !== 'function' || typeof packageRuntime.loadUint8 !== 'function') throw new Error('SAM 3.1 tracker invocation requires an authenticated package runtime');
   if (!adapter || !device || !Array.isArray(errors) || !adapterInfo) throw new Error('SAM 3.1 tracker invocation requires a complete WebGPU execution context');
   const progress = (phase, detail = {}) => onProgress(phase, detail);
@@ -324,7 +348,9 @@ export async function runSam31BrowserTrackerPackageInvocation({
   const { pointerPacketInputDigestPassed, pointerPacketOutputDigestPassed } = packetAuthority;
   progress('execution-context-bound', { packetAuthority, adapterInfo });
   if (verificationAttached && packetAuthority.packets.episode?.ingressBindingsPassed !== true) throw new Error('two-image episode does not bind the complete authenticated ingress packet');
+  const initialSetupMs = performance.now() - episodeStarted;
   const imageBackbone = await runSam31TwoImageBackbone({ packageRuntime, adapter, device, errors, commit, userAgent, update: phase => progress(phase, { adapterInfo, packetAuthority }) });
+  const weightsStarted = performance.now();
   const decoderWeights = await loadDecoderWeights(decoderManifest, packageRuntime.loadFloat32);
   const memoryWeights = await loadMemoryWeights(memoryManifest, packageRuntime.loadFloat32);
   const attentionWeights = await loadAttentionWeights(temporalManifest, packageRuntime.loadFloat32);
@@ -332,6 +358,8 @@ export async function runSam31BrowserTrackerPackageInvocation({
   const decoderWeightsHash = await sha256Text(decoderManifest.weights.map(entry => `${entry.officialKey}:${entry.sha256}`).join('\n'));
   const memoryWeightsHash = await sha256Text(memoryManifest.weights.filter(entry => entry.role.startsWith('memory-')).map(entry => `${entry.role}:${entry.sha256}`).join('\n'));
   const attentionWeightsHash = await sha256Text(temporalManifest.attentionWeights.map(entry => `${entry.role}:${entry.sha256}`).join('\n'));
+  const setupMs = initialSetupMs + imageBackbone.timing.setupMs + performance.now() - weightsStarted;
+  const conditioningStarted = performance.now();
 
   const frame0Inputs = {
     imageEmbedding: imageBackbone.frame0.interactiveEmbedding,
@@ -392,7 +420,9 @@ export async function runSam31BrowserTrackerPackageInvocation({
     outputs: { 'sam31-mask-memory-features': { artifactId: scopedOutputId('sam31-frame-0-memory-features'), shape: [episode.shape.batch, executionGeometry.queryHeight, executionGeometry.queryWidth, episode.shape.channels] }, 'sam31-mask-memory-position-encoding': { artifactId: scopedOutputId('sam31-frame-0-memory-position'), shape: [episode.shape.batch, executionGeometry.queryHeight, executionGeometry.queryWidth, episode.shape.channels] } },
   });
   progress( 'frame-0-memory', { frame0ProducerReceipt: frame0Producer.receipt });
+  const memoryStarted = performance.now();
   const frame0MemoryResult = await runSam31MemoryEncoderPhaseProgramRoute({ request: memoryRequest, route: memoryRoute, adapter, device, queue: device.queue, adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: userAgent, model: { revision: episode.reference.model.revision, weightsHash: memoryWeightsHash }, kernel: memoryRoute.kernel, tensors: { propagationFeature: frame0PropagationEmbedding, maskLogits: frame0Producer.memoryInputMasks, objectScores: frame0Producer.objectScores, shape: { batch: episode.shape.batch, featureHeight: executionGeometry.queryHeight, featureWidth: executionGeometry.queryWidth, featureChannels: episode.shape.channels, maskHeight: memoryShape.maskHeight, maskWidth: memoryShape.maskWidth, multiplexCount: episode.shape.multiplexCount, conditionChannels: memoryShape.conditionChannels, conditioning, resampledMaskHeight: memoryShape.resampledMaskHeight, resampledMaskWidth: memoryShape.resampledMaskWidth }, config: memoryManifest.config, weights: memoryWeights }, residentTensorResolver, includeReadback: true });
+  const memoryEncoderMs = performance.now() - memoryStarted;
   const memoryDiagnostics = verificationAttached ? {
     features: parityDiagnostics(frame0MemoryResult.debugReadback.memoryFeatures, await expectedEpisodeTensor('frame-0-memory-features')),
     position: parityDiagnostics(frame0MemoryResult.debugReadback.memoryPositionEncoding, await expectedEpisodeTensor('frame-0-memory-position')),
@@ -428,6 +458,8 @@ export async function runSam31BrowserTrackerPackageInvocation({
   const preparedTrackerState = prepareSam31TrackerTemporalInputs(trackerState, { frameIndex: 1, trackInReverse: false });
   const { plan, spatialFrames, pointerFrames } = preparedTrackerState;
   const trackerStateSnapshot = getSam31TrackerStateSnapshot(trackerState);
+  const conditioningWallMs = performance.now() - conditioningStarted;
+  const propagationStarted = performance.now();
   const temporalEmbeddings = await temporalTensor('maskmem-temporal-embeddings');
   const pointerPositionProjection = { weight: await temporalTensor('pointer-position-projection-weight'), bias: await temporalTensor('pointer-position-projection-bias') };
   const temporalRoute = createSam31TemporalMemoryBankPhaseProgramRouteDefinition({ model: { revision: episode.reference.model.revision }, kernel: { profile: 'sam31-temporal-memory-bank-phase-program-v0', commit: commit } });
@@ -438,7 +470,9 @@ export async function runSam31BrowserTrackerPackageInvocation({
   if (!pointerSourceSha256) throw new Error('frame-zero object pointer output identity is missing');
   const temporalRequest = createRouteInvocationRequest(temporalRoute, { requestId: scopedArtifactId(`sam31-two-frame-bank-${Date.now()}`, invocationTag), inputs: { 'source-video-episode': { artifactId: 'sam31-two-frame-episode', sha256: episodeHash, shape: [episode.plan.numFrames] }, 'sam31-temporal-spatial-memory-frames': { artifactId: 'sam31-frame-0-spatial-state', sha256: frame0MemoryResult.receipt.outputs[0].sha256, shape: [episode.shape.batch, spatialFrames.length, executionGeometry.queryTokens, episode.shape.channels] }, 'sam31-temporal-object-pointer-frames': { artifactId: 'sam31-frame-0-pointer-state', sha256: pointerSourceSha256, shape: [episode.shape.batch, pointerFrames.length, episode.shape.multiplexCount, episode.shape.channels] }, 'sam31-temporal-memory-position-weights': { artifactId: 'sam31-temporal-weights:official', sha256: temporalHash, mappedTensorCount: 3 } }, outputs: { 'sam31-temporal-memory-attention-bank': { artifactId: scopedOutputId('sam31-frame-1-memory-bank'), shape: [episode.shape.batch, executionGeometry.memoryTokens, episode.shape.channels] } } });
   progress( 'frame-1-temporal-bank', { frame0MemoryReceipt: frame0MemoryResult.receipt });
+  const temporalStarted = performance.now();
   const temporalResult = await runSam31TemporalMemoryBankPhaseProgramRoute({ request: temporalRequest, route: temporalRoute, adapter, device, queue: device.queue, adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: userAgent, model: { revision: episode.reference.model.revision, weightsHash: temporalHash }, kernel: temporalRoute.kernel, plan, spatialFrames, pointerFrames, temporalEmbeddings, pointerPositionProjection, channels: episode.shape.channels, batch: episode.shape.batch, multiplexCount: episode.shape.multiplexCount, residentTensorResolver, includeReadback: true });
+  const temporalBankMs = performance.now() - temporalStarted;
   const bank = { memoryImage: new Float32Array(temporalResult.debugReadback.memoryImage), memory: new Float32Array(temporalResult.debugReadback.memory), memoryImagePos: new Float32Array(temporalResult.debugReadback.memoryImagePosition), memoryPos: new Float32Array(temporalResult.debugReadback.memoryPosition) };
   const bankDiagnostics = verificationAttached ? {
     memoryImage: parityDiagnostics(bank.memoryImage, await expectedEpisodeTensor('frame-1-assembled-memory-image')),
@@ -456,7 +490,9 @@ export async function runSam31BrowserTrackerPackageInvocation({
   const currentHash = await sha256Bytes(frame1Image);
   const attentionRequest = createRouteInvocationRequest(attentionRoute, { requestId: scopedArtifactId(`sam31-two-frame-attention-${Date.now()}`, invocationTag), inputs: { 'source-image': { artifactId: 'sam31-two-frame:1', sha256: currentHash, shape: [1] }, 'sam31-memory-attention-current-tensors': { artifactId: 'sam31-frame-1-current', sha256: currentHash, shape: [attentionShape.batch, attentionShape.queryTokens, attentionShape.channels] }, 'sam31-memory-attention-bank-tensors': { artifactId: temporalOutput.artifactId, sha256: temporalOutput.sha256, shape: [attentionShape.batch, attentionShape.memoryTokens, attentionShape.channels] }, 'sam31-memory-attention-weights': { artifactId: 'sam31-attention-weights:official', sha256: attentionWeightsHash, mappedTensorCount: temporalManifest.attentionWeights.length } }, outputs: { 'sam31-memory-conditioned-features': { artifactId: scopedOutputId('sam31-frame-1-conditioned-features'), shape: [attentionShape.batch, attentionShape.queryTokens, attentionShape.channels] } }, routeConfig: { numObjPtrTokens: attentionShape.numObjPtrTokens, upstreamTemporalReceipt: temporalResult.receipt.receiptId } });
   progress( 'frame-1-memory-attention', { temporalReceipt: temporalResult.receipt });
-  const frame1AttentionResult = await runSam31MemoryAttentionPhaseProgramRoute({ request: attentionRequest, route: attentionRoute, adapter, device, queue: device.queue, adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: userAgent, model: { revision: episode.reference.model.revision, weightsHash: attentionWeightsHash }, kernel: attentionRoute.kernel, tensors: { shape: attentionShape, current: { image: frame1Image, src: frame1Image, srcPos: frame1Position }, bank, layers: attentionWeights.layers, finalNorm: attentionWeights.finalNorm }, residentTensorResolver, includeReadback: true });
+  const attentionStarted = performance.now();
+  const frame1AttentionResult = await runSam31MemoryAttentionPhaseProgramRoute({ request: attentionRequest, route: attentionRoute, adapter, device, queue: device.queue, adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: userAgent, model: { revision: episode.reference.model.revision, weightsHash: attentionWeightsHash }, kernel: attentionRoute.kernel, tensors: { shape: attentionShape, current: { image: frame1Image, src: frame1Image, srcPos: frame1Position }, bank, layers: attentionWeights.layers, finalNorm: attentionWeights.finalNorm }, residentTensorResolver, attentionKernel: memoryAttentionKernel, includeReadback: true });
+  const memoryAttentionMs = performance.now() - attentionStarted;
   const attentionDiagnostics = verificationAttached
     ? parityDiagnostics(frame1AttentionResult.debugReadback.memory, await expectedEpisodeTensor('frame-1-memory-conditioned-features'))
     : null;
@@ -467,6 +503,7 @@ export async function runSam31BrowserTrackerPackageInvocation({
   progress( 'frame-1-decoder', { frame1AttentionReceipt: frame1AttentionResult.receipt });
   const frame1Decoder = await decoderInvocation({ frame: 1, inputs: frame1Inputs, expected: frame1Expected, manifest: decoderExecutionManifest, weights: decoderWeights, weightsHash: decoderWeightsHash, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag, residentTensorResolver });
   const frame1DecoderResult = frame1Decoder.result;
+  const propagationWallMs = performance.now() - propagationStarted;
 
   const frame0Receipts = [frame0MaskConditioningResult.receipt, frame0InteractivePointerResult.receipt];
   const frame0Routes = [frame0MaskConditioning.route, frame0InteractivePointer.route];
@@ -559,6 +596,37 @@ export async function runSam31BrowserTrackerPackageInvocation({
   };
   const final = { invocationIndex, episodeMode: 'two-image', verificationAttached, deviceLoss: null, packageRuntime: { rootUrl: packageRuntime.rootUrl, packageId: packageRuntime.packageId, invocationId: packageRuntime.invocationId, verificationId: packageRuntime.verificationId, sourceImageSha256: packageRuntime.sourceImageSha256, encodedSourceImageSha256: packageRuntime.encodedSourceImageSha256, rgbaSourceImageSha256: packageRuntime.rgbaSourceImageSha256, initialMaskSha256: packageRuntime.initialMaskSha256, session: packageRuntime.session, packageResolution: packageRuntime.packageResolution, inputEvidence: packageRuntime.inputEvidence || null, cacheEvidence: packageRuntime.cacheEvidence() }, packetAuthority, trackerState: trackerStateSnapshot, adapterInfo, requestIds, requestedRouteIds, effectiveRouteIds, receipts, parity: verificationAttached ? { imageBackbone: imageBackbone?.parity ?? null, imageBackboneDiagnostics: imageBackbone?.parityDiagnostics ?? null, imageBackboneCompoundParity, maximums, downstreamParityDiagnostics, downstreamCompoundParity, frame0Decoder: null, frame0MaskConditioning: frame0MaskConditioning?.parity ?? null, frame0InteractivePointer: frame0InteractivePointer?.parity ?? null, frame0MaskSuppression: { maxAbsDiff: suppressionParity, suppressedAbsentMaskCount: suppression.suppressedAbsentMaskCount, semanticsPassed: suppression.semanticsPassed, memoryInputMaskSha256: memoryInputMaskHash }, frame0Memory: memoryParity, temporalBank: bankParity, frame1Attention: conditionedParity, frame1Decoder: frame1Decoder.parity } : null, imageBackbone: imageBackbone ? { routeChainPassed: imageBackbone.routeChainPassed, parityPassed: imageBackbone.parityPassed, parityMaximum: imageBackbone.parityMaximum, parityDiagnostics: imageBackbone.parityDiagnostics, compoundParity: imageBackboneCompoundParity, sourceImageSha256: imageBackbone.sourceImageSha256 } : null, stateTransition: effectiveStateTransition, referenceStateTransition, effectiveStateTransition, pointerDigestPassed, pointerPacketInputDigestPassed, pointerPacketOutputDigestPassed, evidence, uncapturedErrors: errors, manifest: { reference: episode.reference, shape: episode.shape, executionGeometry, plan: episode.plan } };
   final.numericalVerification = numericalVerification;
+  final.memoryAttentionKernel = memoryAttentionKernel;
+  // Route intervals include compilation, upload, execution and existing readback,
+  // not timestamp-query GPU time. Both backbones precede conditioning in this route.
+  const attributedTotalMs = imageBackbone.timing.frame1.totalMs + temporalBankMs + memoryAttentionMs + frame1Decoder.durationMs;
+  final.timing = {
+    kind: 'host-wall',
+    componentScope: 'route-call-including-compile-upload-execution-readback',
+    backbonePrecomputesBothFrames: true,
+    setupMs,
+    backbone: imageBackbone.timing,
+    frame0: { backboneMs: imageBackbone.timing.frame0.totalMs, conditioningWallMs, maskConditioningMs: frame0MaskConditioning.durationMs, interactivePointerMs: frame0InteractivePointer.durationMs, memoryEncoderMs },
+    frame1: { backboneMs: imageBackbone.timing.frame1.totalMs, temporalBankMs, memoryAttentionMs, decoderMs: frame1Decoder.durationMs, propagationWallMs, attributedTotalMs, memoryAttentionShare: finiteRatio(memoryAttentionMs, attributedTotalMs) },
+  };
+  if (captureOutputs) {
+    const shapes = {
+      conditionedFeatures: [attentionShape.batch, attentionShape.queryTokens, attentionShape.channels],
+      selectedMasks: [decoderExecutionManifest.shape.multiplexCount, 1, decoderExecutionManifest.shape.maskHeight, decoderExecutionManifest.shape.maskWidth],
+      objectScores: [decoderExecutionManifest.shape.multiplexCount, 1],
+      objectPointers: [decoderExecutionManifest.shape.multiplexCount, decoderExecutionManifest.shape.channels],
+    };
+    final.outputs = {
+      frame1: {
+        conditionedFeatures: capturedFloat32(frame1AttentionResult.debugReadback?.memory, shapes.conditionedFeatures, 'conditionedFeatures'),
+        selectedMasks: capturedFloat32(frame1DecoderResult.debugReadback?.selectedMasks, shapes.selectedMasks, 'selectedMasks'),
+        objectScores: capturedFloat32(frame1DecoderResult.debugReadback?.objectScores, shapes.objectScores, 'objectScores'),
+        objectPointers: capturedFloat32(frame1DecoderResult.debugReadback?.objectPointers, shapes.objectPointers, 'objectPointers'),
+      },
+      shapes: { frame1: shapes },
+    };
+  }
+  final.timing.episodeWallMs = performance.now() - episodeStarted;
   if (final.imageBackbone) {
     final.imageBackbone.parityState = imageBackbone.parityState;
     final.imageBackbone.parityGatePassed = imageBackbone.parityGatePassed;
