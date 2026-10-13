@@ -84,21 +84,25 @@ try {
   // visible (meetsTolerance false), and the gated empty tail is measured by
   // the same-input rows (zero iterations, all dispatches encoded).
   const mark = s => Object.assign(s, { multiPass: true });
+  // Step-like use: a cold solve, then successive inputs that differ from the
+  // previous one by a multiplicative perturbation of the given amplitude (a
+  // new pattern each step), at budgets near the warm iteration count. Rows
+  // whose budget ended the solve show meetsTolerance false.
+  const AMPLITUDES = [0.01, 0.1, 0.5];
+  const perturb = (base, amplitude, seed) => Float32Array.from(base, (v, i) => v * (1 + amplitude * Math.sin(i * .013 + seed * 1.7)));
   for (const tolerance of TOLERANCES) {
     const solvers = {
-      pcg: { make: () => createCompositePCGGPU(device, grid, { tolerance }), budgets: [32, 256] },
-      'fast-diagonal': { make: () => mark(createCompositeFastPCGGPU(device, grid, { tolerance, method: 'pcg', preconditioner: 'diagonal' })), budgets: [32, 256] },
-      'fast-mgpcg': { make: () => mark(createCompositeFastPCGGPU(device, grid, { tolerance, method: 'pcg', preconditioner: 'multigrid' })), budgets: [8, 32] },
-      'fast-mgpcg-s2': { make: () => mark(createCompositeFastPCGGPU(device, grid, { tolerance, method: 'pcg', preconditioner: 'multigrid', smoothing: 2 })), budgets: [8, 32] },
+      pcg: { make: () => createCompositePCGGPU(device, grid, { tolerance }), budgets: [16, 32, 64] },
+      'fast-diagonal': { make: () => mark(createCompositeFastPCGGPU(device, grid, { tolerance, preconditioner: 'diagonal' })), budgets: [16, 32, 64] },
+      'fast-mgpcg-s2': { make: () => mark(createCompositeFastPCGGPU(device, grid, { tolerance, preconditioner: 'multigrid', smoothing: 2 })), budgets: [4, 8, 16] },
     };
     for (const [name, { make, budgets }] of Object.entries(solvers)) {
       const solver = make();
       try {
         await measure(solver, name, tolerance, 0, q, true, 'first-use-zero-budget');
-        for (const budget of budgets) for (let repetition = 0; repetition < repetitions; repetition++) {
-          await measure(solver, name, tolerance, budget, q, true, `cold-${repetition}`);
-          await measure(solver, name, tolerance, budget, perturbed, false, `changed-input-warm-${repetition}`);
-          await measure(solver, name, tolerance, budget, perturbed, false, `same-input-warm-${repetition}`);
+        for (const budget of budgets) for (const amplitude of AMPLITUDES) {
+          await measure(solver, name, tolerance, 256, q, true, `cold-a${amplitude}-b${budget}`);
+          for (let step = 0; step < repetitions; step++) await measure(solver, name, tolerance, budget, perturb(q, amplitude, step + 1), false, `step-a${amplitude}-b${budget}-${step}`);
         }
       } finally { solver.destroy(); }
     }
