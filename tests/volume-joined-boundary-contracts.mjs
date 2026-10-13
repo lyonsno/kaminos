@@ -171,28 +171,29 @@ test('ghost admission: refused for the reactant law until the oxidizer ghost exi
   assert.match(sim, /if \(state\.joinedBoundary\?\.admitted && state\.joinedGhosts\?\.bound && !joinedGhostSynthetic && state\.joinedGhosts\.generation !== state\.simStepCount\) \{\n\s+state\.joinedGhosts\.reason = 'stale-ghost-generation';\n\s+return false;\n\s+\}/);
 });
 
-test('ghost reads: bindings 26-29, transport-only readers, OLD for predictor/backtrace/extrema, PREDICTED for the reverse', () => {
-  for (const [binding, name] of [[26, 'ghostOldA'], [27, 'ghostOldB'], [28, 'ghostPredA'], [29, 'ghostPredB']]) {
+test('ghost reads: one exterior sample per transport call, blended beyond the last fine cell centre; MacCormack stays first order where the backtrace leaves the box', () => {
+  for (const [binding, name] of [[26, 'ghostA'], [27, 'ghostB']]) {
     assert.match(shader, new RegExp(`@group\\(0\\) @binding\\(${binding}\\) var ${name}: texture_3d<f32>;`));
   }
+  assert.ok(!/ghostPred|ghostOld|binding\(28\)|binding\(29\)/.test(shader), 'no predicted snapshot');
   assert.match(shader, /fn joinedGhosts\(\) -> bool \{\n  return joinedBoundary\(\) && u\.joined_boundary\.y > 0\.5;\n\}/);
-  assert.match(shader, /fn readSlotTransport\(c: vec3<i32>, slot: u32\) -> vec4<f32> \{\n  if \(joinedGhosts\(\) && !insideGrid\(c\)\) \{ return ghostSlot\(c, slot, 0u\); \}\n  return readSlot\(c, slot\);\n\}/);
-  assert.match(shader, /fn readPredictSlotTransport\(c: vec3<i32>, slot: u32\) -> vec4<f32> \{\n  if \(joinedGhosts\(\) && !insideGrid\(c\)\) \{ return ghostSlot\(c, slot, 1u\); \}\n  return readPredictSlot\(c, slot\);\n\}/);
-  for (const fn of ['sampleFluidSlot', 'slotExtrema']) {
+  // Every transport path funnels through sampleFluidSlotMasked (main kernel,
+  // advection helpers, and the predictor through sampleFluidSlotInflow).
+  const masked = shader.slice(shader.indexOf('fn sampleFluidSlotMasked('), shader.indexOf('\n}\n', shader.indexOf('fn sampleFluidSlotMasked(')));
+  assert.match(masked, /let fine = sampleFluidSlotMaskedFine\(cellCenter, slot\);\n  if \(!joinedGhosts\(\)\) \{ return fine; \}\n  let outside = ghostOutsideAmount\(cellCenter\);\n  if \(outside <= 0\.0\) \{ return fine; \}\n  return mix\(fine, ghostSlotAt\(cellCenter, slot\), clamp\(outside \* 2\.0, 0\.0, 1\.0\)\);/);
+  // The general samplers are untouched (the raymarch uses them; no ghost
+  // texture reaches a fragment stage).
+  for (const fn of ['sampleFluidSlot', 'slotExtrema', 'samplePredictSlot']) {
     const body = shader.slice(shader.indexOf(`fn ${fn}(`), shader.indexOf('\n}\n', shader.indexOf(`fn ${fn}(`)));
-    assert.ok(!/\breadSlot\(/.test(body), `${fn} reads only through the transport reader`);
-    assert.match(body, /readSlotTransport\(/);
-    assert.match(body, /let pc = transportSamplePoint\(cellCenter\);/);
+    assert.ok(!/joinedGhosts|ghostSlotAt|ghostA|ghostB/.test(body), `${fn} has no joined ghost path`);
   }
-  const reverse = shader.slice(shader.indexOf('fn samplePredictSlot('), shader.indexOf('\n}\n', shader.indexOf('fn samplePredictSlot(')));
-  assert.ok(!/\breadPredictSlot\(/.test(reverse));
-  assert.match(reverse, /readPredictSlotTransport\(/);
-  assert.match(reverse, /let pc = transportSamplePoint\(cellCenter\);/);
-  // Channel mapping: slot 0 = exterior velocity (fine cells per tick) + density;
-  // slot 1 = raw soot, heat, fuel, 0; appearance slots read 0 outside the box.
-  const ghost = shader.slice(shader.indexOf('fn ghostSlot('), shader.indexOf('\n}\n', shader.indexOf('fn ghostSlot(')));
+  const mc = shader.slice(shader.indexOf('fn macCormackSlot('), shader.indexOf('\n}\n', shader.indexOf('fn macCormackSlot(')));
+  assert.match(mc, /if \(joinedGhosts\(\) && ghostOutsideAmount\(backCell\) > 0\.0\) \{\n    return predicted;\n  \}/);
+  const ghost = shader.slice(shader.indexOf('fn ghostSlotAt('), shader.indexOf('\n}\n', shader.indexOf('fn ghostSlotAt(')));
   assert.match(ghost, /if \(slot == 1u\) \{ return vec4<f32>\(s\.x, s\.y, s\.z, 0\.0\); \}/);
-  assert.match(ghost, /return vec4<f32>\(0\.0\);/);
+  assert.match(ghost, /if \(slot >= 2u\) \{ return vec4<f32>\(0\.0\); \}/);
+  // Compute-only bindings in every group-0 layout.
+  for (const b of [26, 27]) assert.ok(!new RegExp(`binding: ${b}, visibility: GPUShaderStage\\.FRAGMENT`).test(source), `binding ${b} is compute-only`);
 });
 
 // Synthetic exterior for witnesses (before Sexy's export is wired): fill the
@@ -211,13 +212,3 @@ test('synthetic ghosts: a constant exterior for witnesses, receipted as syntheti
   assert.equal(parseSyntheticGhosts('x:1'), null);
 });
 
-// Live finding (synthetic ghost witness, 2026-10-13): the four ghost textures
-// pushed the fragment stage past the default 16 sampled textures per stage
-// (the raymarch reaches the transport samplers), so the renderer never
-// started. Both device paths request 24 and refuse an adapter below it.
-test('device: both request paths ask for 24 sampled textures per stage', () => {
-  assert.equal(core.KAMINOS_SAMPLED_TEXTURES_PER_STAGE, 24);
-  assert.match(source, /if \(adapterLimit\('maxSampledTexturesPerShaderStage'\) < KAMINOS_SAMPLED_TEXTURES_PER_STAGE\) \{/);
-  assert.match(source, /raise\('maxSampledTexturesPerShaderStage', KAMINOS_SAMPLED_TEXTURES_PER_STAGE\);/);
-  assert.match(source, /requiredLimits\.maxSampledTexturesPerShaderStage = KAMINOS_SAMPLED_TEXTURES_PER_STAGE;/);
-});

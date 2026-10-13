@@ -270,7 +270,7 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
     assert.match(body, /return mix\([a-zA-Z0-9_(), .]+, inflowGhostState\(slot, [a-zA-Z0-9_]+, cellCenter\), ghost\);/, `${sampler} returns the blended sample`);
   }
   const macCormack = wgslFunction('macCormackSlot');
-  assert.match(macCormack, /let predicted = fluidPredict\[idx \* SLOTS_PER_CELL \+ slot\];[\s\S]{0,600}if \(inflowGhostBlend\(backCell\) > 0\.0\) \{\s*return predicted;\s*\}\s*let reversed = samplePredictSlot\(forwardCell, slot\);/, 'a floor cell fed by the ghost keeps the first-order prediction: the reverse trace cannot measure an error against a reservoir outside the domain (confirmation 1 of 22e2c61e: the corrector removed ~27 % of the entering fuel)');
+  assert.match(macCormack, /let predicted = fluidPredict\[idx \* SLOTS_PER_CELL \+ slot\];[\s\S]{0,600}if \(inflowGhostBlend\(backCell\) > 0\.0\) \{\s*return predicted;\s*\}[\s\S]{0,400}if \(joinedGhosts\(\) && ghostOutsideAmount\(backCell\) > 0\.0\) \{\s*return predicted;\s*\}\s*let reversed = samplePredictSlot\(forwardCell, slot\);/, 'a floor cell fed by the ghost keeps the first-order prediction: the reverse trace cannot measure an error against a reservoir outside the domain (confirmation 1 of 22e2c61e: the corrector removed ~27 % of the entering fuel)');
   const extrema = wgslFunction('slotExtrema');
   assert.match(extrema, /inflowGhostState\(slot, lo, cellCenter\)/, 'the MacCormack limiter range admits the ghost state so the inflow is not reverted at the floor');
   const main = mainKernel();

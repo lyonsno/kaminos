@@ -54,7 +54,7 @@ for (let q = 0; q < 2; q++) {
   assert.equal(entry('nonRidgeOpticalCaptureHeader'), resources.nonRidgeOpticalCaptureHeaderBuffer);
   assert.equal(group.entries.find(e => e.binding === 16)?.resource, resources.sceneSolidTextureView);
   assert.equal(group.entries.find(e => e.binding === 25)?.resource.label, 'joined lower planes view');
-  for (let g = 0; g < 4; g++) assert.equal(group.entries.find(e => e.binding === 26 + g)?.resource.label, `joined ghost view ${g}`);
+  for (let g = 0; g < 2; g++) assert.equal(group.entries.find(e => e.binding === 26 + g)?.resource.label, `joined ghost view ${g}`);
 }
 assert.match(core, /function fluidBindGroup\([\s\S]*?return bindGroups\[fluidIndex \* 2 \+ quenchIndex\]/,
   'simulation consumes both independent ping-pong indices');

@@ -65,7 +65,7 @@ export function emissiveCoefficientStats(values) {
   return { cells, finiteCells, nonzeroCells, extinctionMax, extinctionMean, emissionMax, extinctionStdDev };
 }
 
-export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures, getJoinedGhostTextures = () => null) {
+export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures) {
   const cells = EMISSIVE_LIGHT_GRID ** 3;
   const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE });
   const coefficients = device.createBuffer({ label: 'emissive material coefficients', size: cells*16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
@@ -80,14 +80,10 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
   // The seed reaches emissiveMaterial, which reads the reactant sidecar (fresh
   // burn); the sidecar is reallocated when the reaction law changes, so the
   // inputs are rebuilt whenever the textures handed out are not the bound ones.
-  // It also reaches the transport samplers, which read the joined boundary's
-  // ghost textures (bindings 26-29), reallocated with the exterior geometry.
-  let boundTextures = null, boundGhosts = null;
+  let boundTextures = null;
   const buildSeedInputs = () => {
     const textures = getReactantTextures();
     boundTextures = textures;
-    const ghosts = getJoinedGhostTextures();
-    boundGhosts = ghosts;
     return fluidBuffers.map((buffer, i) => device.createBindGroup({
       layout: seed.getBindGroupLayout(0),
       entries: [
@@ -95,7 +91,6 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
         { binding: 1, resource: { buffer } },
         { binding: 7, resource: { buffer: frontBuffers[i] } },
         { binding: 23, resource: textures[i].createView({ dimension: '3d' }) },
-        ...(ghosts ? ghosts.map((texture, g) => ({ binding: 26 + g, resource: texture.createView({ dimension: '3d' }) })) : []),
       ],
     }));
   };
@@ -108,7 +103,7 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
   return {
     incident,
     encode(encoder, sourceIndex, timestampWrites) {
-      if (getReactantTextures() !== boundTextures || getJoinedGhostTextures() !== boundGhosts) seedInputs = buildSeedInputs();
+      if (getReactantTextures() !== boundTextures) seedInputs = buildSeedInputs();
       const pass = encoder.beginComputePass({ label: 'same-state emissive single-scattering field', ...(timestampWrites ? { timestampWrites } : {}) });
       pass.setPipeline(seed); pass.setBindGroup(0,seedInputs[sourceIndex]); pass.setBindGroup(3,seedOutput);
       pass.dispatchWorkgroups(EMISSIVE_LIGHT_GRID/4,EMISSIVE_LIGHT_GRID/4,EMISSIVE_LIGHT_GRID/4);

@@ -72,7 +72,9 @@ function shaderFunction(name) {
   assert.ok(start >= 0, `${name} must exist`);
   return shader.slice(start, shader.indexOf('\n}', start) + 2);
 }
-for (const name of ['sampleFrontFieldMasked', 'sampleFluidSlotMasked', 'samplePredictSlot']) {
+// sampleFluidSlotMasked wraps sampleFluidSlotMaskedFine with the joined-boundary
+// exterior blend; the solid-corner exclusion lives in the fine sampler.
+for (const name of ['sampleFrontFieldMasked', 'sampleFluidSlotMaskedFine', 'samplePredictSlot']) {
   const body = shaderFunction(name);
   assert.match(body, /sceneSolidAt\(sampleCell\)/, `${name} must exclude solid interpolation corners`);
   assert.match(body, /weightSum/, `${name} must renormalize fluid-side sample weights`);

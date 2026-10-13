@@ -50,7 +50,7 @@ export function integrateSceneMediumSegment(field, source, receiver, stepLength)
   return tau;
 }
 
-export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures, getJoinedGhostTextures = () => null, grid, gridY, fluidGrid = grid, fluidGridY = gridY}) {
+export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures, grid, gridY, fluidGrid = grid, fluidGridY = gridY}) {
   for (const n of [grid, gridY, fluidGrid, fluidGridY]) {
     if (!Number.isInteger(n) || n <= 0) throw new Error('positive integer source dimensions required');
   }
@@ -64,17 +64,13 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
     compute: {module, entryPoint: 'seedSceneVolumeSource'}});
   // The seed reaches sceneEmissiveMaterialAt, which reads the reactant sidecar
   // (fresh burn); the sidecar is reallocated when the reaction law changes.
-  // It also reaches the transport samplers (joined ghost textures, 26-29).
-  let boundTextures = null, boundGhosts = null;
+  let boundTextures = null;
   const buildInputs = () => {
     const textures = getReactantTextures();
     boundTextures = textures;
-    const ghosts = getJoinedGhostTextures();
-    boundGhosts = ghosts;
     return fluidBuffers.map((buffer, i) => device.createBindGroup({layout: pipeline.getBindGroupLayout(0),
       entries: [...[[0, uniformBuffer], [1, buffer], [7, frontBuffers[i]]].map(([binding, buffer]) => ({binding, resource: {buffer}})),
-        {binding: 23, resource: textures[i].createView({dimension: '3d'})},
-        ...(ghosts ? ghosts.map((texture, g) => ({binding: 26 + g, resource: texture.createView({dimension: '3d'})})) : [])]}));
+        {binding: 23, resource: textures[i].createView({dimension: '3d'})}]}));
   };
   let inputs = buildInputs();
   const output = device.createBindGroup({layout: pipeline.getBindGroupLayout(3), entries: [{binding: 4, resource: texture.createView()},{binding:5,resource:scatteringTexture.createView()}]});
@@ -85,7 +81,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
   return {
     encode(encoder, index, currentFrame,transform) {
       if (status === 'destroyed') throw new Error('scene source destroyed');
-      if (getReactantTextures() !== boundTextures || getJoinedGhostTextures() !== boundGhosts) inputs = buildInputs();
+      if (getReactantTextures() !== boundTextures) inputs = buildInputs();
       if (!Number.isInteger(index) || !inputs[index]) throw new Error('invalid scene source index');
       worldTransform=validateSceneSourceTransform(transform);
       status = 'unbuilt'; reason = 'encoding';
