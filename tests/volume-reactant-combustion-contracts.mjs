@@ -192,7 +192,12 @@ test('the diagnostic separates burning, too cold, no contact, depleted and ambie
   close(rc.reactantMixtureFraction({ fuel: 0, oxidizer: 1 }), 0, 1e-12, 'ambient air is Z = 0');
   close(rc.reactantMixtureFraction({ fuel: 0.5, oxidizer: 0 }, M, { streamFuel: 0.5 }), 1, 1e-12, 'a Fuel Fraction 0.5 stream is Z = 1 for its own stream');
   assert.ok(s > 0);
-  assert.deepEqual(rc.REACTANT_DIAGNOSTIC_CLASSES, ['ambient', 'no-contact', 'air-starved', 'too-cold', 'burning', 'depleted']);
+  assert.deepEqual(rc.REACTANT_DIAGNOSTIC_CLASSES, ['ambient', 'no-contact', 'air-starved', 'too-cold', 'mixing-limited', 'burning', 'depleted', 'products']);
+  // Too cold means the thermal state is below full ignition, not merely "burning slower than the threshold".
+  assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.003, oxidizer: 0.5, heat: 1.0, freshBurnRate: 0.0008 }), 'mixing-limited', 'hot colocated reactants burning slowly are mixing-limited, not too cold');
+  assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.003, oxidizer: 0.5, heat: 0.05, freshBurnRate: 0 }), 'too-cold');
+  // Burned out and still hot is depleted; burned out and cooled is products.
+  assert.equal(rc.reactantDiagnosticFromField({ fuel: 0, oxidizer: 0.4, heat: 0.02, freshBurnRate: 0 }), 'products', 'cooled products are not a depleted flame');
   assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.3, oxidizer: 0.8, heat: lo * 0.5, freshBurnRate: 0.01 }), 'burning', 'a stored cell that burned this step is burning whatever its post-burn state');
   assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.3, oxidizer: 0.8, heat: lo * 0.5, freshBurnRate: 0 }), 'too-cold');
 });

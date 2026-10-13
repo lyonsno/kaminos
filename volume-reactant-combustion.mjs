@@ -92,7 +92,7 @@ export const REACTANT_CONTROL_RANGES = Object.freeze({
   mixingTimeSteps: Object.freeze([0.25, 30]),
   coolingTimeSteps: Object.freeze([5, 300]),
 });
-export const REACTANT_DIAGNOSTIC_CLASSES = Object.freeze(['ambient', 'no-contact', 'air-starved', 'too-cold', 'burning', 'depleted']);
+export const REACTANT_DIAGNOSTIC_CLASSES = Object.freeze(['ambient', 'no-contact', 'air-starved', 'too-cold', 'mixing-limited', 'burning', 'depleted', 'products']);
 // Burning means at least 1e-3 fuel per reference step (on the saved basin the cells
 // above it hold about 90% of all burning); 'no contact' and 'too cold' use the same
 // scale for fuel and for what oxidizer allows to burn.
@@ -211,7 +211,8 @@ export function reactantExchangeThenAdvect(field, { dims, weight, shift, solid =
 // equally, and transport and the exchange act alike on both, so
 // beta = fuel - oxidizer/s is untouched by burning; Z is beta normalised between
 // air (beta = -ambient/s) and the stream (beta = streamFuel - inletOxidizer/s).
-// Sponges relax oxidizer and fuel at different rates, so Z is approximate there.
+// Sponges relax the oxidizer deficit at the fuel's rate, so Z is diluted exactly
+// there; a quench sink removes fuel without oxidizer and lowers Z without burning.
 export function reactantMixtureFraction({ fuel, oxidizer }, model = REACTANT_MODEL, { streamFuel = 1 } = {}) {
   const s = model.oxidizerRequirement;
   const air = -model.ambientOxidizer / s;
@@ -222,9 +223,10 @@ export function reactantMixtureFraction({ fuel, oxidizer }, model = REACTANT_MOD
 // A cell holding at least this share of inlet stream has not met air.
 export const REACTANT_NO_CONTACT_STREAM_SHARE = 0.9;
 
-// Why a cell is or is not burning: burning; colocated but too cold; burned
-// here, air used up, fuel left (air-starved: contact-limited); burned out
-// (depleted); inlet stream that has not met
+// Why a cell is or is not burning: burning; colocated but below full ignition
+// (too cold); colocated, hot, burning slower than the threshold (mixing-limited);
+// burned here, air used up, fuel left (air-starved: contact-limited); burned
+// out and hot (depleted) or cooled (products); inlet stream that has not met
 // air (no contact, however hot: a hot inlet does not make contact); or nothing
 // to burn (ambient). "Burning but rendering poorly" is a render-side judgement
 // made against these classes, not a material class.
@@ -241,12 +243,19 @@ export function reactantDiagnosticFromField({ fuel, oxidizer, heat, freshBurnRat
   const z = reactantMixtureFraction({ fuel, oxidizer }, model, { streamFuel });
   if (fuel > t.fuel && z >= REACTANT_NO_CONTACT_STREAM_SHARE) return 'no-contact';
   const available = Math.max(0, Math.min(fuel, oxidizer / model.oxidizerRequirement));
-  if (available > t.available) return 'too-cold';
+  // Colocated but not burning at the threshold rate: too cold only while the
+  // thermal state is below full ignition; fully ignited, the mixing time is
+  // what limits it.
+  if (available > t.available) return heat < model.ignitionBand[1] ? 'too-cold' : 'mixing-limited';
   // Fuel the stream would have brought at this Z, less what is left: burned here.
   const burnedHere = Math.max(0, z) * streamFuel - fuel;
   // Burned here and fuel is left: it met air and used it all (rich side,
-  // contact-limited: more mixing would burn more). Otherwise burned out.
-  if (burnedHere > t.fuel) return fuel > t.fuel ? 'air-starved' : 'depleted';
+  // contact-limited: more mixing would burn more). Burned out and still above
+  // the ignition floor: depleted; cooled below it: products.
+  if (burnedHere > t.fuel) {
+    if (fuel > t.fuel) return 'air-starved';
+    return heat >= model.ignitionBand[0] ? 'depleted' : 'products';
+  }
   if (fuel > t.fuel) return 'no-contact';
   return 'ambient';
 }

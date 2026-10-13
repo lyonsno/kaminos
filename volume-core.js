@@ -7209,7 +7209,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let columnSmokeTransport = mix(max(smoke + smokeFromHeat * timeStep, columnSmokeBirthForScene), canonicalSmokeTransport, canonicalPlumeScene);
   let bonfireSmokeTransport = min(1.65, smoke + bonfireAdvectedSmokeBirth * timeStep);
   smoke = mix(columnSmokeTransport, bonfireSmokeTransport, bonfireScene);
-  smoke = max(smoke, externalInjection.material.x * 0.76);
+  smoke = max(smoke, select(externalInjection.material.x * 0.76, 0.0, reactantOn));
   let columnHeatBirth = source * 0.74 + emberRing * 0.18;
   let tallPlumeHeatBirth = tallPlumeCombustionSource * 0.74 + tallPlumeEmitterFireBirth * 0.10 + emberRing * 0.12;
   let canonicalHeatBirth = source * 1.16 * canonicalBuoyancyLift + canonicalMinimalFireHeat;
@@ -7217,13 +7217,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Reactant law: supply enters only through the inflow and immersed entries,
   // which carry the oxidizer accounting; the volumetric emitter's births are off.
   heat = max(heat, select(mix(mix(mix(columnHeatBirth, tallPlumeHeatBirth, tallPlumeScene), canonicalHeatBirth, canonicalPlumeScene), bonfireHeatBirth, bonfireScene), 0.0, reactantOn));
-  heat = max(heat, externalInjection.material.y * 0.92);
+  heat = max(heat, select(externalInjection.material.y * 0.92, 0.0, reactantOn));
   let bonfireFuelMask = smoothstep(bonfireSourceY - 0.34, bonfireSourceY - 0.04, p.y);
   let sourceFuelMask = mix(1.0 - smoothstep(-0.74, -0.18, p.y), bonfireFuelMask, bonfireScene);
   let columnFuelInjection = source * 0.88 * sourceFuelMask;
   let tallPlumeFuelInjection = mix(columnFuelInjection, tallPlumeCombustionSource * 0.88 * reactionFuelScale, tallPlumeScene);
   fuel = max(fuel, select(mix(tallPlumeFuelInjection, bonfireInjectedFuel, bonfireScene), 0.0, reactantOn));
-  fuel = max(fuel, externalInjection.material.z * 0.72);
+  fuel = max(fuel, select(externalInjection.material.z * 0.72, 0.0, reactantOn));
   let tallPlumeReactionMemory = tallPlumeScene * clamp(
     flame * 0.34
       + ember * 0.22

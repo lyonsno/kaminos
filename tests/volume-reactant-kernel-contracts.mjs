@@ -92,6 +92,9 @@ test('under the reactant law the volumetric emitter births no heat or fuel: supp
   assert.match(mainKernel, /heat = max\(heat, select\(mix\(mix\(mix\(columnHeatBirth, tallPlumeHeatBirth, tallPlumeScene\), canonicalHeatBirth, canonicalPlumeScene\), bonfireHeatBirth, bonfireScene\), 0\.0, reactantOn\)\);/, 'no height-masked, oxidizer-free heat birth');
   assert.match(mainKernel, /fuel = max\(fuel, select\(mix\(tallPlumeFuelInjection, bonfireInjectedFuel, bonfireScene\), 0\.0, reactantOn\)\);/, 'no height-masked fuel injection without oxidizer accounting');
   assert.match(mainKernel, /let columnSmokeBirthForScene = select\(mix\(columnSmokeBirth, tallPlumeSmokeBirth, tallPlumeScene\), 0\.0, reactantOn\);/, 'soot only from the burned amount');
+  for (const [field, channel, gain] of [['smoke', 'x', '0\\.76'], ['heat', 'y', '0\\.92'], ['fuel', 'z', '0\\.72']]) {
+    assert.match(mainKernel, new RegExp(`${field} = max\\(${field}, select\\(externalInjection\\.material\\.${channel} \\* ${gain}, 0\\.0, reactantOn\\)\\);`), `external emitters inject no ${field} under the candidate (no oxidizer accounting)`);
+  }
 });
 
 test('the authored law is untouched when the candidate is not admitted', () => {
