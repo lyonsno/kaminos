@@ -153,7 +153,7 @@ test('review of 57b45f72: relaxation blends and the wall velocity sponge follow 
   assert.match(main, /let inflowFraction = clamp\(inflowInletSpeed\(cellI\) \* inflowApertureWeight\(cellI\) \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);/, 'the inflow fraction carries the step through dynamicsBacktraceScale');
   // The wall sponge on velocity is written after the increment law's line, so
   // it takes the rate law directly.
-  assert.match(main, /vel = vel \* stepRate\(mix\(0\.55, 1\.0, wallFade\)\);/, 'the wall velocity sponge is a per-step survival');
+  assert.match(main, /vel = vel \* stepRate\(mix\(0\.55, 1\.0, (?:material)?[wW]allFade\)\);/, 'the wall velocity sponge is a per-step survival (materialWallFade equals wallFade under the authored law)');
   assert.doesNotMatch(main, /vel = vel \* mix\(0\.55, 1\.0, wallFade\);/, 'no bare wall velocity sponge remains');
   // The remaining per-step operations are 0/1 selectors and floors.
   assert.match(main, /smoke = mix\(columnSmokeTransport, bonfireSmokeTransport, bonfireScene\);/, 'Bonfire scene selector stays a selector');

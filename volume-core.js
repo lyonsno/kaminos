@@ -7673,7 +7673,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let density = clamp(max(smoke * 1.08 + microSmoke * 0.08, heat * 0.42 + materialDetail * 0.18 + interfaceShred * 0.20 + fireLick * 0.05 + fuel * 0.10), 0.0, 2.2);
   // The wall sponge on velocity is a per-step survival written after the
   // increment law's line, so it takes the rate law directly.
-  vel = vel * stepRate(mix(0.55, 1.0, wallFade));
+  // Reactant law: the open top passes the flow as well as the material, or the
+  // material decelerates and piles up under a braked ceiling.
+  vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));
   vel.y = mix(max(vel.y, -0.015), vel.y, bonfireScene);
   fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), density);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));

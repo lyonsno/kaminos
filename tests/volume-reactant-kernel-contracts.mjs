@@ -106,6 +106,7 @@ test('under the reactant law the fine-box top is a passive outflow for the mater
   assert.match(mainKernel, /fuel = fuel \* stepRate\(mix\(0\.20, 1\.0, materialWallFade\) \* mix\(0\.58, 1\.0, materialHeatTopFade\)\);/);
   assert.match(mainKernel, /oxidizer = u\.reactant_combustion_c\.z - \(u\.reactant_combustion_c\.z - oxidizer\) \* stepRate\(mix\(0\.20, 1\.0, materialWallFade\) \* mix\(0\.58, 1\.0, materialHeatTopFade\)\);/);
   assert.match(mainKernel, /flame = flame \* stepRate\(mix\(0\.12, 1\.0, wallFade\) \* mix\(0\.08, 1\.0, fireTopFade\)\);/, 'appearance keeps its own fades');
+  assert.match(mainKernel, /vel = vel \* stepRate\(mix\(0\.55, 1\.0, materialWallFade\)\);/, 'the flow is not braked under the open top either, or material piles under it');
 });
 
 test('the authored law is untouched when the candidate is not admitted', () => {
