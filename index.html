@@ -11893,6 +11893,10 @@ async function initScene() {
 
   function renderSceneFrame() {
     if(exclusiveInspectionRender&&!manualInspectionRender)return false;
+    if (liveTransportRuntime) {
+      try { liveTransportRuntime.update(); }
+      catch (error) { setInfo(`Rig pose rejected: ${error.message}`); }
+    }
     // Shared-source reset may span an await while this host's RAF keeps
     // running. Keep the previous presented frame until both consumers have
     // current inputs; do not submit retired medium resources or unlit fill.
@@ -30033,6 +30037,9 @@ sceneInitialization.then(() => {
         scene, camera, renderer, controls, gizmo: transformControls,
         register: registerSceneObject, setInfo,
       });
+      const groundToggle = document.getElementById('composition-ground-visible');
+      groundToggle.checked = false;
+      groundToggle.dispatchEvent(new Event('change'));
       window.selectSceneObject('live-bone:hindlimb-left-hip');
     }
     const loadSplat = params.get('load');

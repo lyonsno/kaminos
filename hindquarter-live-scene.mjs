@@ -23,6 +23,7 @@ export async function mountLiveTransport({casePath,expected,scene,camera,rendere
     const referenceGroup=new THREE.Group();referenceGroup.name='Painted comparison';referenceGroup.position.x=2.2;scene.add(referenceGroup);
     function mesh(parent,color){const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(rest,3));geometry.setIndex(new THREE.BufferAttribute(triangles,1));geometry.computeVertexNormals();const object=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color,roughness:.72,side:THREE.DoubleSide}));parent.add(object);return object;}
     const gold=mesh(group,0xd6b17c),gray=mesh(referenceGroup,0xbfc3ca);
+    gold.userData.kaminosDynamicGeometry=true;gray.userData.kaminosDynamicGeometry=true;
     const bones=new Map(),inverseRest=new Map(),saved=new Map(),helpers=[];
     for(const spec of manifest.bones){
       const bone=new THREE.Bone();bone.name=spec.name;bones.set(spec.name,bone);
@@ -92,7 +93,8 @@ export async function mountLiveTransport({casePath,expected,scene,camera,rendere
       }
       restore();return result;
     }
-    window.kaminosLiveTransport={snapshot,preset,restore,point,gizmoPoints,update,conformance,positions:()=>({gold:Array.from(gold.geometry.attributes.position.array),painted:Array.from(gray.geometry.attributes.position.array)}),manifest};
+    const digests=async()=>({gold:await sha(gold.geometry.attributes.position.array.buffer),painted:await sha(gray.geometry.attributes.position.array.buffer)});
+    window.kaminosLiveTransport={snapshot,preset,restore,point,gizmoPoints,update,conformance,digests,positions:()=>({gold:Array.from(gold.geometry.attributes.position.array),painted:Array.from(gray.geometry.attributes.position.array)}),manifest};
     camera.position.set(-3.0,1.4,6.5);controls.target.set(.9,-.6,-1.1);controls.update();
     setInfo('Gold: automatic transport · Gray: painted reference · click cyan joint/bone, rotate with the scene gizmo. Temporary rig; source untouched.');
     return {update,pick,group,bones,restore};
