@@ -91,7 +91,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   const active=()=>{if(disposed)throw Error('Walking creature experiment is disposed');if(!placement.parent)throw Error('Walking creature has been removed');};
   const operation=(name,action)=>input=>{
    active();record({kind:`walking.${name}`,phase:'requested',requested:input??null});
-   const applied=result=>{refresh();record({kind:`walking.${name}`,phase:'applied',mode,cycle,frame:player.read().frame,motionSha256:source.motionSha256});return result;};
+   const applied=result=>{refresh();record({kind:`walking.${name}`,phase:result?.status==='superseded'?'superseded':'applied',mode,cycle,frame:player.read().frame,motionSha256:source.motionSha256});return result;};
    const failed=error=>{record({kind:`walking.${name}`,phase:'failed',error:error.message,motionSha256:source.motionSha256});throw error;};
    try{const result=action(input);return result?.then?result.then(applied,failed):applied(result);}catch(error){return failed(error);}
   };
@@ -151,8 +151,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const joinButtons=[];
    for(const [label,offset] of [['Before continuation join',-1],['After continuation join',0]]){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call('seek',{frame:source.prefixFrames+offset});joinButtons.push(button);panel.append(button);}
    const range=document.createElement('input');range.type='range';range.min='0';range.max=String(adapter.frames-1);range.step='1';range.setAttribute('aria-label','Walking source sample');range.oninput=()=>call('seek',{frame:Number(range.value)});panel.append(range);
-   // The reused player's private controls stay detached. All visible controls
-   // invoke the serialized owner entry and its shared clock.
+   // Private player controls stay detached. Visible controls use the owner
+   // operation API/shared clock; async motion commits follow latest-request wins.
    refresh=()=>{const p=player.read();note.textContent=`Same automatic full skin · source ${(adapter.frames/adapter.fps).toFixed(2)} s · repeat seam ${walking.identity.seam.frames} blended frames · curve radius ${walking.identity.radius}. No foot/contact correction.`;identity.textContent=`${source.prompt??'Retained motion'}${source.seed===null?'':' · seed '+source.seed} · ${source.motionSha256}`;if(select)select.value=chosen?.id??'';for(const button of joinButtons)button.hidden=!source.prefixFrames;range.max=String(adapter.frames-1);status.textContent=`${mode==='source'?'Raw source':'Derived '+mode} · repeat ${cycle} · ${p.status} · sample ${p.frame==null?'rest':p.frame+1}/${adapter.frames}`;range.value=String(p.frame??0);};root.append(panel);refresh();return {dispose(){panel.remove();}};
   }};
  }catch(error){await dispose();throw error;}
