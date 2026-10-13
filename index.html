@@ -29460,7 +29460,7 @@ function ensureObjectCollisionTarget(id) {
   if(!canCollideWithFire(entry))throw Error('Choose a mesh object for collision');
   const target=`@object-collision:${id}`;
   if(!colliderEditTargets.has(target)) {
-    scenePlacementTools.edits.register(target,{read:()=>checkedObjectCollision(sceneObjects.find(record=>record.id===id)||sceneMembershipRetainedObjects.get(id)),
+    scenePlacementTools.edits.register(target,{allowMissing:true,read:()=>checkedObjectCollision(sceneObjects.find(record=>record.id===id)||sceneMembershipRetainedObjects.get(id)),
       check:value=>checkedObjectCollision(entry,value),write:value=>writeObjectCollision(id,value)});
     colliderEditTargets.add(target);
   }
