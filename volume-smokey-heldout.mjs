@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 
 export const SMOKEY_SCANLINES=[.1,.2,.3,.4,.5,.6,.7,.8,.9];
+export function observeHttpFailures(page,report) {
+  report.httpFailures=[];
+  page.on('response',response=>{
+    if(response.status()>=400)report.httpFailures.push({url:response.url(),status:response.status(),
+      statusText:response.statusText(),headers:response.headers()});
+  });
+}
+
 export function smokeyVariants(preset) {
   const controls=['radius','fuel','temperature'];
   const specs=[['baseline',[1,1,1]]];

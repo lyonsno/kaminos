@@ -9,7 +9,7 @@ import {compositionRestoreUrl} from '../scene-authoring.mjs';
 import {validateTraceSpecialization,compareOpticalTraces} from '../volume-optical-trace.mjs';
 import {VOLUME_UNIFORM_FLOATS} from '../volume-core.js';
 import {Vector3} from 'three';
-import {SMOKEY_SCANLINES,validateSmokeyControls} from '../volume-smokey-heldout.mjs';
+import {SMOKEY_SCANLINES,validateSmokeyControls,observeHttpFailures} from '../volume-smokey-heldout.mjs';
 
 const [root,input,out,portText,subdivisionText,stepText='151',yawText='0']=process.argv.slice(2);
 await fs.mkdir(out,{recursive:true});
@@ -66,9 +66,10 @@ try {
   assert.equal(report.runtime.source.repoRoot,root,'wrong served checkout');
   browser=await chromium.launch({headless:true,executablePath:report.executable,args:['--enable-unsafe-webgpu','--use-angle=metal','--disable-background-timer-throttling','--disable-renderer-backgrounding']});
   page=await browser.newPage({viewport:{width:1300,height:950}});page.setDefaultTimeout(0);
+  observeHttpFailures(page,report);
   const recordError=e=>{report.errors.push(String(e));abort(new Error(String(e)));};
   page.on('pageerror',recordError);
-  page.on('console',m=>{if(m.type()==='error')recordError(m.text());});
+  page.on('console',m=>{if(m.type()==='error')recordError(`${m.text()} ${JSON.stringify(m.location())}`);});
   report.url=compositionRestoreUrl(scene.composition,'optical-trace.kaminos.json',base);
   report.phase='load';await save();await guard(page.goto(report.url));
   await guard(page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().active||window.__kaminosVolumePrototype?.debugState().error));
