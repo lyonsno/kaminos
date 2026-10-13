@@ -5,7 +5,7 @@ const viewKeys=['position','target','up','fov','zoom','near','far'];
 const viewIdentity=view=>JSON.stringify(viewKeys.map(key=>view?.[key]));
 function sameBody(a,b){return a.rootUuid===b.rootUuid&&a.asset?.id===b.asset?.id
  &&a.source?.source_sha256===b.source?.source_sha256&&a.clipName===b.clipName;}
-function sameHeld(a,b){return sameBody(a,b)&&a.frame===b.frame&&a.status===b.status&&viewIdentity(a.view)===viewIdentity(b.view);}
+function sameHeld(a,b){return sameBody(a,b)&&a.frame===b.frame&&a.status===b.status&&viewIdentity(a.view)===viewIdentity(b.view)&&JSON.stringify(a.transform)===JSON.stringify(b.transform);}
 
 export async function withHeldCreatureFrame({entry,frame,present,capture}) {
  expect(typeof entry?.read==='function'&&typeof entry?.invoke==='function'&&typeof entry?.state==='function','Creature observation requires the actual experiment entry');
@@ -33,7 +33,14 @@ export async function withHeldCreatureFrame({entry,frame,present,capture}) {
     let current;
     if((await entry.state()).id===id){try{current=await entry.read();}catch{}}
     if(!sameBody(before,held.state)||!current||!sameHeld(held.state,current))restore={status:'skipped-changed'};
-    else {await entry.invoke('resume');restore={status:'resumed'};}
+    else {
+     await entry.invoke('resume');
+     const effective=await entry.read();
+     if((await entry.state()).id!==id||!sameBody(before,effective))restore={status:'skipped-changed',effective};
+     else if(effective.status==='playing')restore={status:'resumed',effective};
+     else if(effective.status==='held'&&effective.frame===effective.source.frames-1)restore={status:'endpoint-held',effective};
+     else restore={status:'failed',effective,error:`Resume left playback ${effective.status}`};
+    }
    }catch(error){restore={status:'failed',error:String(error?.message||error)};}
   }
  }
