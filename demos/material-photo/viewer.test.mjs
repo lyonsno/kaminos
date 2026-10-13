@@ -108,7 +108,7 @@ test('original remains DoubleSide and uses the same orbit as the depth surface',
 test('display cutouts clip every material without changing source pixels or model maps',async()=>{
   const {viewer,THREE}=await viewerFixture();
   const image=viewer.image,copy=image.data.slice(),depth={width:2,height:2,depth:new Float32Array(4).fill(1),normals:new Float32Array(12).fill(1)};
-  const mask={width:2,height:2,data:new Uint8Array([0,0,0,0,255,255,255,255,255,255,255,255,0,0,0,0]),sample:'orb'};
+  const mask={width:2,height:2,data:new Uint8Array([255,255,255,255,255,255,255,255,255,255,255,255,0,0,0,0]),sample:'orb'};
   viewer.setImage(image,depth,null,mask);
   const alpha=viewer.original.material.alphaMap;
   assert.ok(alpha,'the cutout must reach the flat photograph too');
