@@ -17,6 +17,12 @@ unintegrated.
 
 Before a handoff, run the tests you touched with `npm test -- --only tests/a.mjs,tests/b.mjs`. Before landing, run the full `npm test`; it must report no new failures. Declare the kind of each new test file on its first line, for example `// kaminos-test: node`, instead of editing the shared manifest. Prefer behavior tests over regular-expression assertions on `index.html` source. Details: `docs/testing.md`.
 
+## Retiring Surfaces
+
+Do not build on these; put new work where the successor lives.
+
+- **The Pipeline tab and its graph** (dock, generator library, graph workbench, run shelf, `pipeline-ui-witness.mjs`) are removed. Generation UI belongs in the Generate tab. The server routes `/api/pipeline-manifest` and `/api/run-pipeline`, `pipelines/asset-pipelines.json`, `pipeline-witness.mjs` and the `pipeline-runs` browse root stay, so a route such as TRELLIS image-to-mesh remains callable from the Generate tab and headlessly.
+
 ## Fire Basins In Cooperative Inference Smokes
 
 When using an exported fire basin with the WebGPU inference kit, read
