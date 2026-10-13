@@ -307,6 +307,11 @@ export function cleanupMesh(vertices,faces,{maxHolePerimeter=3e-2,keepLargest=fa
 // qem_simplify=False): up to three fast-simplification passes, then one cleanup.
 export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,keepLargest=false,onPass=()=>{}}={}){
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw RangeError('positive targetFaces required');
+  // Same admission as postprocess-retained-mesh.py: finite, complete, indexed.
+  if(!(vertices instanceof Float32Array)||!vertices.length||vertices.length%3||!vertices.every(Number.isFinite))
+    throw TypeError('finite F32 xyz vertices required');
+  if(!(faces instanceof Uint32Array)||!faces.length||faces.length%3)throw TypeError('U32 triangle indices required');
+  for(let i=0,n=vertices.length/3;i<faces.length;i++)if(faces[i]>=n)throw RangeError('triangle index outside vertices');
   let v=vertices,f=faces;const trace=[];
   if(f.length/3<=targetFaces){
     // Source falls through: one cleanup pass without winding repair, then the
@@ -330,14 +335,30 @@ export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,
 
 // finishTrellisMesh postprocessMesh provider: the accepted surface-preserving
 // finisher in the page, with the same receipt shape the server finisher emits.
-export function createBrowserMeshPostprocess({targetFaces,keepLargest=false}={}){
+// With WorkerClass it runs in mesh-cleanup-worker.js; without, on the caller's
+// thread. Either way the input arrays are copied, never detached from the caller.
+export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,WorkerClass}={}){
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw RangeError('positive caller-selected targetFaces required');
+  if(WorkerClass!==undefined&&typeof WorkerClass!=='function')throw TypeError('WorkerClass must be a Worker constructor');
+  const run=WorkerClass?mesh=>new Promise((resolve,reject)=>{
+    const worker=new WorkerClass(new URL('./mesh-cleanup-worker.js',import.meta.url),{type:'module'}),id=Math.random().toString(36).slice(2);
+    const vertices=Float32Array.from(mesh.vertices),triangles=Uint32Array.from(mesh.triangles);
+    const done=f=>(...a)=>{worker.terminate();f(...a);};
+    worker.onmessage=done(({data})=>{
+      if(data?.id!==id)return reject(Error('mesh finisher worker response identity mismatch'));
+      if(data.ok!==true)return reject(Error('mesh finisher worker failed: '+data.error));
+      resolve({vertices:new Float32Array(data.vertices),faces:new Uint32Array(data.triangles),trace:data.trace});
+    });
+    worker.onerror=done(e=>reject(Error('mesh finisher worker error: '+(e?.message??e))));
+    worker.postMessage({id,vertices:vertices.buffer,triangles:triangles.buffer,targetFaces,keepLargest},[vertices.buffer,triangles.buffer]);
+  }):async mesh=>cleanupAndSimplifyPreservingSurface(mesh.vertices,mesh.triangles,{targetFaces,keepLargest});
   return async mesh=>{
     const started=performance.now(),inputVertices=mesh.vertices.length/3,inputFaces=mesh.triangles.length/3;
-    const result=cleanupAndSimplifyPreservingSurface(mesh.vertices,mesh.triangles,{targetFaces,keepLargest});
+    const result=await run(mesh);
     return {...mesh,vertices:result.vertices,triangles:result.faces,metadata:{...mesh.metadata,postprocess:{
       schema:'trellis2.mesh-postprocess.v0',status:'succeeded',requestedMode:'mlx-surface-preserving',
-      effectiveRoute:MESH_POSTPROCESS_ROUTE,parityReference:'TRELLIS2MLX 1201553 postprocess-retained-mesh.py mlx-surface-preserving',
+      effectiveRoute:MESH_POSTPROCESS_ROUTE,execution:WorkerClass?'module-worker':'caller-thread',
+      parityReference:'TRELLIS2MLX 1201553 postprocess-retained-mesh.py mlx-surface-preserving',
       modelCalls:0,targetFaces,keepLargest,inputVertices,inputFaces,outputVertices:result.vertices.length/3,
       outputFaces:result.faces.length/3,operationTrace:result.trace,elapsedSeconds:(performance.now()-started)/1000}}};
   };
