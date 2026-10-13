@@ -2,6 +2,8 @@
 
 Generate skeletal animation from a text prompt with [UniMate](https://github.com/Friedrich-M/UniMate) running entirely in the browser. Give it a rigged skeleton (a robot dog, a cat, a parrot, your own creature) and a prompt such as "A cat walks forward.", and it returns a two-second, 30 fps animation for that skeleton. The text encoder, the motion transformer, the adaptive ODE sampler and the decode to joint rotations all run on the visitor's GPU through WebGPU, using the [Kaminos inference kit](../../webgpu-inference-kit/README.md).
 
+**[Try it in your browser](https://lyonsno.github.io/kaminos/inference-kit/unimate/)** · Weights: [BasinShapers/unimate-webgpu](https://huggingface.co/BasinShapers/unimate-webgpu)
+
 ## What it does
 
 - **Motion for the skeleton you give it.** UniMate conditions on a skeleton's rest pose, hierarchy, joint names and graph structure. The motion is generated directly for that body, so no retargeting step is needed. Any skeleton up to UniMate's limit of 71 joints works.
@@ -9,7 +11,8 @@ Generate skeletal animation from a text prompt with [UniMate](https://github.com
 - **The whole sampler in the browser.** The 10-layer spatio-temporal transformer (74M parameters) runs in FP32 as WGSL compute shaders. Classifier-free guidance and a Dormand–Prince (dopri5) adaptive solver integrate the flow from noise to motion.
 - **Room for the application to keep rendering.** Each network evaluation is submitted as inference-kit command duties sized to measured GPU throughput. A scene on the same device keeps its frame rate during generation, and generation can be paused, resumed and stopped between duties.
 - **A complete animation.** Output includes world joint positions, local joint rotations in the skeleton's own hierarchy, the root trajectory and facing, plus the model's raw motion features.
-- **Something to watch while it downloads.** The model is about 740 MB (UniMate plus the text encoder). While it downloads, the page plays a gallery of clips that this port generated in the browser: a dog, a cat, the Go2 robot dog, a parrot, a horse, an eagle, a spider and a T-rex. Drag to orbit, scroll or pinch to zoom, and scrub through any clip.
+- **Eight bodies to animate.** The published page offers the Go2 robot dog and seven Truebones animals: cat, dog, horse, T-rex, spider, eagle and parrot. Switching body takes a moment; the model stays loaded.
+- **Something to watch while it downloads.** The model is about 740 MB (UniMate plus the text encoder), downloaded once and then kept in the browser's cache. While it downloads, the page plays a gallery of clips that this port generated in the browser: a dog, a cat, the Go2 robot dog, a parrot, a horse, an eagle, a spider and a T-rex. Drag to orbit, scroll or pinch to zoom, and scrub through any clip.
 
 ## Accuracy
 
@@ -24,11 +27,13 @@ The browser's step-size controller measures error over the skeleton's real joint
 
 ## Speed
 
-A two-second clip takes about 10 seconds on an Apple M4 Max, sharing the GPU with a continuously rendering scene that stays near 60 frames per second. A typical generation needs about 90–105 network evaluations. On a busy machine generation slows down rather than the scene: the duty scheduler gives frames priority.
+On an Apple M4 Max a two-second clip takes about 10 seconds for the 18-joint Go2 and about 30 seconds for the 51-joint dog, sharing the GPU with a continuously rendering scene that stays near 60 frames per second. Time grows with the number of joints; a typical generation needs about 90–130 network evaluations. On a busy machine generation slows down rather than the scene: the duty scheduler gives frames priority.
 
 ## Running it
 
-UniMate's released weights are licensed for non-commercial research use (CC BY-NC 4.0) and are not distributed here. To run the demo page, pack them locally from the [official checkpoints](https://huggingface.co/Linzhan/UniMate) with a UniMate checkout on `PYTHONPATH`:
+The [published page](https://lyonsno.github.io/kaminos/inference-kit/unimate/) loads the packed weights and skeletons from [BasinShapers/unimate-webgpu](https://huggingface.co/BasinShapers/unimate-webgpu) on Hugging Face. UniMate's weights are licensed for non-commercial use (CC BY-NC 4.0), so they live there with their license rather than in this repository.
+
+To run the page from your own copy, pack the weights from the [official checkpoints](https://huggingface.co/Linzhan/UniMate) with a UniMate checkout on `PYTHONPATH`:
 
 ```sh
 python pack-weights.py --unimate-root <UniMate> --exp-dir <experiment dir> \
@@ -47,7 +52,7 @@ python export-demo-bundle.py --capture capture/cat --asset-cond <cond.npy> [--as
 node serve-unimate.mjs --weights weights/unimate --bundle bundles/cat --t5 weights/t5
 ```
 
-Then open the printed `index.html` address. Type a prompt and press Generate. The skeleton plays the motion in a loop while the scene keeps drawing. The bundle's own prompts can also replay the noise of the captured reference run, for comparison with it.
+Then open the printed `index.html` address. A page on `localhost` or `127.0.0.1` loads from the local server; add `?weights=hub` to load the published copies instead. Type a prompt and press Generate. The skeleton plays the motion in a loop while the scene keeps drawing. The bundle's own prompts can also replay the noise of the captured reference run, for comparison with it.
 
 The gallery clips in `clips/` were made with `generate-clips.mjs`, which drives this page in a headless Chrome for Testing and saves each generation as a clip file. Given a list of skeleton bundles, prompts and seeds, it writes one clip per run plus a report; `clips/index.json` lists the clips the page shows, in order.
 
@@ -74,6 +79,7 @@ The browser witnesses compare against reference captures from the PyTorch implem
 - `run-t5-witness.mjs`: the text encoder.
 - `run-demo-witness.mjs`: the demo page, driven the way a person uses it.
 - `run-gallery-witness.mjs`: the clip gallery, captured while the model downloads and at chosen frames of every clip.
+- `run-site-witness.mjs`: the published page as assembled for GitHub Pages, with weights from Hugging Face: first load, generation on two skeletons, and a reload from the browser cache.
 
 ## Credits and licenses
 

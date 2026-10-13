@@ -248,8 +248,27 @@ function bundleArrays(index, bytes) {
   return out;
 }
 
-// Fetch with byte progress (content-length when the server sends it).
-async function fetchBytes(url, onBytes) {
+// Fetch with byte progress (content-length when the server sends it). With expectBytes, the
+// response is kept in the Cache API so a return visit skips the download; a cached copy of the
+// wrong length is discarded and fetched again.
+const WEIGHT_CACHE = 'kaminos-unimate-weights-v1';
+async function fetchBytes(url, onBytes, { expectBytes = null } = {}) {
+  let cache = null;
+  if (expectBytes) {
+    try { cache = await caches.open(WEIGHT_CACHE); } catch { cache = null; }
+    const hit = await cache?.match(url).catch(() => null);
+    if (hit) {
+      const bytes = await hit.arrayBuffer();
+      if (bytes.byteLength === expectBytes) { onBytes?.(bytes.byteLength, bytes.byteLength); return bytes; }
+      await cache.delete(url).catch(() => {});
+    }
+  }
+  const buffer = await download(url, onBytes);
+  if (expectBytes && buffer.byteLength !== expectBytes) throw new Error(`${url}: ${buffer.byteLength} bytes, expected ${expectBytes}`);
+  if (cache) await cache.put(url, new Response(buffer.slice(0))).catch(e => console.warn('could not cache', url, e));
+  return buffer;
+}
+async function download(url, onBytes) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
   const total = Number(res.headers.get('content-length')) || null;
@@ -498,15 +517,23 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
   }
 
   async function loadModel({ onStatus = () => {}, onBytes = () => {} } = {}) {
+    // The generation skeleton (conditioning bundle). useSkeleton() swaps it between runs.
+    let bundle, arrays, J, parents, jointNames, fps, T, rest, offsets;
+    const Fe = 12;
+    const fetchSkeleton = async base => {
+      const b = await (await fetch(`${base}demo.json`)).json();
+      return { b, a: bundleArrays(b, await fetchBytes(`${base}demo.bin`)) };
+    };
+    const applySkeleton = ({ b, a }) => {
+      bundle = b; arrays = a;
+      ({ joints: J, parents, jointNames, fps, frames: T } = b.skeleton);
+      rest = Array.from({ length: J }, (_, j) => Array.from(arrays.restPositions.subarray(j * 3, j * 3 + 3)));
+      offsets = groundedOffsets(rest, parents);
+      generationSkeleton = { parents, jointNames, rest };
+      Object.assign(demo, { bundle, skeletonName: b.skeleton.name, fps });
+    };
     onStatus({ phase: 'load', detail: 'skeleton and prompts' });
-    const bundle = await (await fetch(`${bundleBase}demo.json`)).json();
-    const arrays = bundleArrays(bundle, await fetchBytes(`${bundleBase}demo.bin`));
-    const { joints: J, parents, jointNames, fps } = bundle.skeleton;
-    const T = bundle.skeleton.frames, Fe = 12;
-    const rest = Array.from({ length: J }, (_, j) => Array.from(arrays.restPositions.subarray(j * 3, j * 3 + 3)));
-    const offsets = groundedOffsets(rest, parents);
-    generationSkeleton = { parents, jointNames, rest };
-    demo.bundle = bundle;
+    applySkeleton(await fetchSkeleton(bundleBase));
 
     // Downloads: weights and text encoder, reported together.
     const manifest = await (await fetch(`${weightsBase}manifest.json`)).json();
@@ -520,8 +547,8 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
     };
     onStatus({ phase: 'load', detail: 'model weights' });
     const [weightBytes, t5Bytes] = await Promise.all([
-      fetchBytes(`${weightsBase}${manifest.file}`, (l, t) => { progress.weights = [l, t]; report(); }),
-      t5Manifest ? fetchBytes(`${t5Base}${t5Manifest.file}`, (l, t) => { progress.t5 = [l, t]; report(); }).catch(e => { console.warn('text encoder download failed', e); return null; }) : null,
+      fetchBytes(`${weightsBase}${manifest.file}`, (l, t) => { progress.weights = [l, t]; report(); }, { expectBytes: manifest.byteLength }),
+      t5Manifest ? fetchBytes(`${t5Base}${t5Manifest.file}`, (l, t) => { progress.t5 = [l, t]; report(); }, { expectBytes: t5Manifest.byteLength }).catch(e => { console.warn('text encoder download failed', e); return null; }) : null,
     ]);
     onStatus({ phase: 'load', detail: 'GPU pipelines' });
     const den = await CooperativeUniMateDenoiser.create(device, manifest, weightBytes);
@@ -642,8 +669,17 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
     }
     function stop(reason = 'stopped by user') { active?.abort.abort(new Error(reason)); }
 
-    Object.assign(demo, { generate, togglePause, stop, hasTextEncoder: () => Boolean(t5), forwardFlops: den.forwardFlops, parameterCount: manifest.parameterCount,
-      skeletonName: bundle.skeleton.name, fps });
+    // Switch the generation skeleton (a bundle directory) between runs.
+    async function useSkeleton(base) {
+      if (active) throw new Error('a generation is running');
+      applySkeleton(await fetchSkeleton(base));
+      den.configure({ B: 2, J });
+      generationSkeletonShown = false;
+      return bundle;
+    }
+
+    Object.assign(demo, { generate, togglePause, stop, useSkeleton, hasTextEncoder: () => Boolean(t5), forwardFlops: den.forwardFlops,
+      parameterCount: manifest.parameterCount });
     onStatus({ phase: 'ready', detail: `${manifest.parameterCount.toLocaleString()} parameters${t5 ? ' · type any prompt' : ''}` });
     return demo;
   }

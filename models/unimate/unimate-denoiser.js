@@ -145,6 +145,7 @@ export class UniMateDenoiser {
   // ---- configure: allocate buffers and build both programs ---------------
 
   configure({ B, J, F1 = 61 }) {
+    if (this.io) this.release();
     const D = this.D, Fe = this.Fe, T = F1 - 1, R = B * F1 * J;
     Object.assign(this, { B, J, F1, T, R });
     const b = (n, l) => this.buf(n, l);
@@ -180,6 +181,14 @@ export class UniMateDenoiser {
     this.prepProgram = this.buildPrepare();
     this.forwardProgram = this.buildForward();
     return this;
+  }
+
+  // Free the buffers of the current configuration (before configuring another skeleton size).
+  release() {
+    const free = v => (Array.isArray(v) ? v.forEach(free) : v?.destroy?.());
+    for (const group of [this.io, this.st, this.f]) Object.values(group ?? {}).forEach(free);
+    free(this.tmp);
+    this.io = this.st = this.f = this.tmp = null;
   }
 
   buildPrepare() {

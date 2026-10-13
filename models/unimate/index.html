@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>UniMate Motion</title>
+<meta name="unimate-weights" content="https://huggingface.co/BasinShapers/unimate-webgpu/resolve/main">
 <style>
   :root { color-scheme: dark; --panel: rgba(18, 20, 24, 0.86); --text: #e6e8eb; --muted: #9aa3ad; --accent: #4fd1e8; --line: rgba(255, 255, 255, 0.08); }
   html, body { margin: 0; height: 100%; background: #111316; color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
@@ -51,6 +52,10 @@
 <div class="panel">
   <h1>UniMate motion</h1>
   <div class="sub">Text-to-motion for a given skeleton, generated on this GPU while the scene keeps drawing. Drag to orbit, scroll to zoom.</div>
+  <div id="skeleton-row" hidden>
+    <label for="skeleton">Skeleton</label>
+    <select id="skeleton" disabled></select>
+  </div>
   <label for="prompt">Prompt for the <span id="skeleton-name">skeleton</span></label>
   <input id="prompt" type="text" list="prompt-suggestions" placeholder="e.g. A cat walks forward." disabled>
   <datalist id="prompt-suggestions"></datalist>
@@ -137,8 +142,38 @@ $('play').addEventListener('click', () => {
 $('scrub').addEventListener('input', () => { demo.seek(Number($('scrub').value)); $('play').textContent = '▶'; });
 setInterval(() => { if (demo?.view.playing && demo.view.motion && document.activeElement !== $('scrub')) $('scrub').value = String(Math.max(0, demo.scene.frameIndex)); }, 100);
 
+// Weights: the local server's /weights/, /t5/ and /demo/ (serve-unimate.mjs), or the published
+// copies on Hugging Face with a choice of skeletons. ?weights=hub or ?weights=local overrides.
+const params = new URLSearchParams(location.search);
+const hub = document.querySelector('meta[name="unimate-weights"]').content;
+const useHub = params.get('weights') === 'hub' || (params.get('weights') !== 'local' && !['127.0.0.1', 'localhost'].includes(location.hostname));
+let skeletons = null, skeletonKey = null;
+const skeletonBase = key => `${hub}/skeletons/${key}/`;
+const source = { weightsBase: '/weights/', t5Base: '/t5/', bundleBase: '/demo/' };
+if (useHub) {
+  Object.assign(source, { weightsBase: `${hub}/unimate/`, t5Base: `${hub}/t5/` });
+  try {
+    skeletons = (await (await fetch(`${hub}/skeletons/index.json`)).json()).skeletons;
+    skeletonKey = skeletons.some(k => k.key === params.get('skeleton')) ? params.get('skeleton') : (skeletons.find(k => k.key === 'dog') ?? skeletons[0]).key;
+    source.bundleBase = skeletonBase(skeletonKey);
+  } catch (e) { console.warn('skeleton list unavailable', e); }
+}
+const skeletonLabel = () => skeletons?.find(k => k.key === skeletonKey)?.label ?? (displayName(demo.skeletonName) === 'Go2' ? 'Go2 robot dog' : displayName(demo.skeletonName));
+
+// Prompt suggestions and noise choices for the current generation skeleton. Replaying a captured
+// run's noise is offered only where that run has an accepted reference clip.
+function showSkeletonPrompts() {
+  $('skeleton-name').textContent = skeletonLabel();
+  const listed = skeletons?.find(k => k.key === skeletonKey)?.suggestions ?? demo.bundle.prompts.map(p => p.text);
+  $('prompt-suggestions').replaceChildren(...listed.map(t => new Option(t)));
+  $('prompt').value = listed[0] ?? '';
+  const replay = demo.bundle.prompts.some(p => p.referencePositions);
+  $('noise').querySelector('option[value=reference]').hidden = !replay;
+  if (!replay) { $('noise').value = 'seed'; $('seed').hidden = false; }
+}
+
 try {
-  demo = await createUniMateDemo({ canvas });
+  demo = await createUniMateDemo({ canvas, ...source });
   window.__unimateDemoInstance = demo;
 } catch (e) {
   state.error = String(e?.stack ?? e); state.phase = 'failed'; setStatus(`Could not start: ${e.message ?? e}`);
@@ -162,10 +197,13 @@ try {
     },
   });
   setBar(null);
-  $('skeleton-name').textContent = displayName(demo.skeletonName) === 'Go2' ? 'Go2 robot dog' : displayName(demo.skeletonName);
-  demo.bundle.prompts.forEach(p => $('prompt-suggestions').append(new Option(p.text)));
-  $('prompt').value = demo.bundle.prompts[0]?.text ?? '';
-  for (const id of ['prompt', 'generate', 'rest']) $(id).disabled = false;
+  if (skeletons) {
+    $('skeleton').replaceChildren(...skeletons.map(k => new Option(`${k.label} · ${k.joints} joints`, k.key)));
+    $('skeleton').value = skeletonKey;
+    $('skeleton-row').hidden = false;
+  }
+  showSkeletonPrompts();
+  for (const id of ['prompt', 'generate', 'rest', 'skeleton']) $(id).disabled = false;
   state.phase = 'ready';
   setStatus(`Ready · ${demo.parameterCount.toLocaleString()} parameters${demo.hasTextEncoder() ? ' · type any prompt' : ''}`);
 } catch (e) {
@@ -175,7 +213,7 @@ try {
 
 let own = 0;
 async function generate() {
-  for (const id of ['generate', 'prompt', 'noise', 'seed', 'rest']) $(id).disabled = true;
+  for (const id of ['generate', 'prompt', 'noise', 'seed', 'rest', 'skeleton']) $(id).disabled = true;
   for (const id of ['pause', 'stop']) $(id).disabled = false;
   $('pause').textContent = 'Pause';
   $('stats').textContent = '';
@@ -205,10 +243,10 @@ async function generate() {
     ].filter(Boolean).join('\n');
     // Keep it in the gallery, beside the pre-generated clips.
     const sk = demo.bundle.skeleton;
-    const clip = { id: `own-${++own}`, animal: displayName(sk.name), prompt: text, seed: seed ?? 'reference', fps: sk.fps, frames: result.motion.frames,
+    const clip = { id: `own-${++own}`, animal: skeletonLabel(), prompt: text, seed: seed ?? 'reference', fps: sk.fps, frames: result.motion.frames,
       skeleton: { name: sk.name, parents: sk.parents, jointNames: sk.jointNames }, positions: result.motion.positions,
       generated: { wallMs: result.wallMs, own: true } };
-    const entry = addChip({ animal: `${displayName(sk.name)} (yours)`, prompt: text }, clip, { prepend: true });
+    const entry = addChip({ animal: `${skeletonLabel()} (yours)`, prompt: text }, clip, { prepend: true });
     current = entry;
     for (const e of clips) e.chip.setAttribute('aria-pressed', String(e === entry));
     $('now').hidden = false; $('now-text').innerHTML = describe(clip); $('scrub').max = String(clip.frames - 1); $('play').textContent = '❚❚';
@@ -217,11 +255,29 @@ async function generate() {
     state.error = String(e?.message ?? e); state.phase = e?.name === 'AbortError' ? 'stopped' : 'failed';
     setStatus(state.phase === 'stopped' ? 'Stopped' : `Failed: ${state.error}`);
   } finally {
-    for (const id of ['generate', 'prompt', 'noise', 'seed', 'rest']) $(id).disabled = false;
+    for (const id of ['generate', 'prompt', 'noise', 'seed', 'rest', 'skeleton']) $(id).disabled = false;
     for (const id of ['pause', 'stop']) $(id).disabled = true;
   }
 }
 $('generate').addEventListener('click', generate);
+$('skeleton').addEventListener('change', async () => {
+  const key = $('skeleton').value, controls = ['generate', 'prompt', 'noise', 'seed', 'rest', 'skeleton'];
+  controls.forEach(id => { $(id).disabled = true; });
+  setStatus(`Loading the ${skeletons.find(k => k.key === key).label} skeleton…`);
+  try {
+    await demo.useSkeleton(skeletonBase(key));
+    skeletonKey = key;
+    showSkeletonPrompts();
+    demo.showGenerationSkeleton();
+    $('now').hidden = true;
+    for (const e of clips) e.chip.setAttribute('aria-pressed', 'false');
+    setStatus(`Ready · ${skeletonLabel()} · type any prompt`);
+  } catch (e) {
+    $('skeleton').value = skeletonKey;
+    setStatus(`Could not load that skeleton: ${e.message ?? e}`);
+  } finally { controls.forEach(id => { $(id).disabled = false; }); }
+});
+window.__unimateUseSkeleton = key => { $('skeleton').value = key; $('skeleton').dispatchEvent(new Event('change')); };
 $('pause').addEventListener('click', async () => { const s = await demo.togglePause(); if (s) $('pause').textContent = s === 'paused' ? 'Resume' : 'Pause'; });
 $('stop').addEventListener('click', () => demo.stop());
 $('rest').addEventListener('click', () => { demo.showGenerationSkeleton(); demo.showRest(); $('now').hidden = true; for (const e of clips) e.chip.setAttribute('aria-pressed', 'false'); });
