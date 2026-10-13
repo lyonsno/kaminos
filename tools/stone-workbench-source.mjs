@@ -11,6 +11,7 @@ body.stone-workbench[data-workspace=workbench] #scene-edit-hud,body.stone-workbe
 @media(max-width:540px){body.has-authoring-workspace.experiment-workspace.stone-workbench[data-workspace=workbench]{grid-template-columns:minmax(0,1fr);grid-template-rows:42px minmax(240px,42vh) minmax(0,1fr)}body.experiment-workspace.stone-workbench #authoring-inspector{display:none!important}body.stone-workbench #experiment-browser{display:none}body.stone-workbench .experiment-panel-heading{padding:12px 16px}body.stone-workbench .experiment-panel-heading p:empty{display:none}}
 </style></head>`);
  replace('fluidWorkbench?.setTool(window.__kaminosActiveTab());',`reconcileStoneWorkbenchTool(fluidWorkbench,ownerExperimentEntry,window.__kaminosActiveTab(),document);`);
+ replace("fluidWorkbench?.setActive(mode === 'workbench');",`fluidWorkbench?.setActive(mode === 'workbench');if(mode==='workbench')reconcileStoneWorkbenchTool(fluidWorkbench,ownerExperimentEntry,window.__kaminosActiveTab(),document);`);
  replace('let ownerExperimentEntry=null,',`${reconcileStoneWorkbenchTool.toString()}
 const stoneFrameSubscribers=new Set();let stoneHostAdapter=null;
 let ownerExperimentEntry=null,`);
