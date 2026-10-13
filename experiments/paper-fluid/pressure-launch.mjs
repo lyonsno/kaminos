@@ -12,6 +12,27 @@ export function pressureLaunchSetup({compliance=0}={}){
    whyThisMatters:'This is the exact coarse drop used in the first-frame diagnosis. Surface force and artificial damping are disabled in both arms. Motion beyond the first frame is a provisional observation, not an accepted water preset.'}};
 }
 
+// Read the actual host configuration before advertising this fixed isolation.
+// Adjustable contributions still own their ordinary URL replay semantics.
+export function assertPressureLaunchState(setup,state){
+ const actual=state?.runtime,ipbf=actual?.ipbfSettings;
+ const fields=[['pressure solver',actual?.pressureSolver,setup.solver.pressureSolver],
+  ['particle count',actual?.particleCount,setup.solver.particleCount],
+  ['pressure passes',actual?.densityIterationsPerStep,setup.solver.densityIterations],
+  ['surface force',actual?.capillaryStrength,setup.solver.capillaryStrength],
+  ['substeps',actual?.substeps,setup.solver.substeps],
+  ['main compliance',ipbf?.compliance,setup.solver.ipbfCompliance],
+  ['artificial damping',ipbf?.damping,setup.solver.ipbfDamping],
+  ['pressure radius',ipbf?.radius,setup.sampling.pressureRadius],
+  ['particle volume',ipbf?.particleVolume,setup.sampling.particleVolume],
+  ['timestep',state?.clock?.fixedTimeStepSeconds,setup.dt]];
+ for(const [name,value,expected]of fields){
+  if(value!==expected&&!(typeof expected==='number'&&value===Math.fround(expected)))
+   throw Error(`Fixed pressure preview configuration mismatch: ${name} is ${String(value)}, expected ${String(expected)}. Open the clean experiment link without conflicting numerical replay settings.`);
+ }
+ return state;
+}
+
 /** Monitors the host clock; it never advances physics or owns a render loop. */
 export function createObservedRunWindow({read,pause,record=()=>{},onState=()=>{},requestFrame,cancelFrame,setTimer,clearTimer}){
  let active=null,frame=null,timer=null,closed=false,last=null;
@@ -47,15 +68,16 @@ export const pressureLaunchExperiment={id:'paper/pressure-launch',title:'IPBF pr
   if(!inputs||typeof inputs!=='object'||Array.isArray(inputs)||Object.keys(inputs).some(k=>k!=='compliance'))throw new TypeError('Pressure preview accepts only main compliance');
   const setup=pressureLaunchSetup(inputs),water=await host.fluid.open(setup);
   try{
+  assertPressureLaunchState(setup,water.read());
   const win=host.controls?.document?.defaultView;
   if(!win||typeof win.requestAnimationFrame!=='function')throw Error('Shared browser lifecycle unavailable');
   let mounted=null;
   const run=createObservedRunWindow({read:water.read,pause:water.setPaused,record,onState:value=>mounted?.update(value),
    requestFrame:fn=>win.requestAnimationFrame(fn),cancelFrame:id=>win.cancelAnimationFrame(id),setTimer:(fn,ms)=>win.setTimeout(fn,ms),clearTimer:id=>win.clearTimeout(id)});
-  const read=()=>({...water.read(),setup,runWindow:run.state()});
+  const read=()=>({...assertPressureLaunchState(setup,water.read()),setup,runWindow:run.state()});
   const frame=()=>{const operation=win.kaminosFingerFluidBenchSetCameraForWitness;if(typeof operation!=='function')throw Error('Shared camera operation unavailable');return operation({yaw:-.55,pitch:.3,distance:5.5,target:[-1.4,.8,.45]});};
   return {read,operations:{
-   run({seconds=2,maxWallSeconds=30}={}){if(!Number.isFinite(seconds)||seconds<=0)throw Error('Positive simulated interval required');win.kaminosFingerFluidBenchResumeAfterWitness();return run.run({steps:Math.ceil(seconds/setup.dt),maxWallSeconds});},
+   run({seconds=2,maxWallSeconds=30}={}){if(!Number.isFinite(seconds)||seconds<=0)throw Error('Positive simulated interval required');assertPressureLaunchState(setup,water.read());win.kaminosFingerFluidBenchResumeAfterWitness();return run.run({steps:Math.ceil(seconds/setup.dt),maxWallSeconds});},
    pause(){return run.stop('manual-pause');},
    advance(steps=1){run.stop('manual-step');const clock=water.read().clock;if(!Number.isSafeInteger(steps)||steps<=0)throw Error('Positive frame count required');const result=water.advanceTo(clock.step+steps);win.kaminosFingerFluidBenchResumeAfterWitness();record({kind:'paper.pressure-preview.advance',phase:'applied',target:'water',requested:steps,effective:result,clock:water.read().clock});return result;},
    async restart(){run.stop('reset');const result=await water.restart();record({kind:'paper.pressure-preview.restart',phase:'applied',target:'water',effective:result});return result;},frame,
