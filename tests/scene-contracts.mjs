@@ -35,7 +35,7 @@ assert.doesNotMatch(index, /loadEnvironment\('studio'\)[\s\S]{0,240}loadDemo\(DE
 assert.match(index, /function shouldIgnoreSceneObjectDeleteShortcut\(/, 'selected-object deletion has a focused shortcut guard');
 assert.match(index, /function removeActiveSceneObjectWithConfirmation\(/, 'selected-object deletion uses an explicit confirmation helper');
 assert.match(index, /e\.key === 'Delete' \|\| e\.key === 'Backspace'/, 'selected-object deletion listens for Delete and Backspace');
-assert.match(index, /window\.confirm\(/, 'selected-object deletion asks before removing the active object');
+assert.match(index, /function removeActiveSceneObjectWithConfirmation\(\)\s*\{[\s\S]*?removeSelectedSceneObjects\(\);/, 'selected-object deletion delegates to reversible selection membership instead of a dialog');
 assert.match(index, /id="scene-object-list"/, 'Assets tab exposes a scene object list');
 assert.match(index, /data-tab="forge"/, 'Kaminos exposes a Forge Host tab for embodied station smoke offers');
 assert.match(index, /id="forge-host-station-list"/, 'Forge Host tab exposes station list rows');

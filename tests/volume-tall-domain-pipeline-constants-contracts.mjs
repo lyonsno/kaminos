@@ -39,7 +39,7 @@ const lightField = source.slice(source.indexOf('function fireIrradianceLightFiel
 // Since the grid height control (report §34) the bounds come from the raymarch
 // domain box the camera samples, which spans y [-1, -1 + 2 gridHeight/gridSize].
 assert.match(lightField, /const domainBox = raymarchDomainBox\(gridSize, gridHeight\);/, 'light-field bounds derive from the raymarch domain box');
-assert.match(lightField, /worldMax: domainBox\.max\.map\(\(value, axis\) => value \+ productTransform\.translate\[axis\]\),\s*worldBoundsAuthority: 'full-volume-domain-equal-cell-pitch-v1'/,
+assert.match(lightField, /worldMax: domainBox\.max\.map\(\(value, axis\) => value \* productTransform\.scale \+ productTransform\.translate\[axis\]\),\s*worldBoundsAuthority: 'full-volume-domain-equal-cell-pitch-v1'/,
   'light-field bounds cover the full tall volume');
 const { raymarchDomainBox } = await import('../volume-grid-shape.mjs');
 assert.deepEqual(raymarchDomainBox(64, 128).max, [1, 3, 1], 'the auto box reaches y = 3');

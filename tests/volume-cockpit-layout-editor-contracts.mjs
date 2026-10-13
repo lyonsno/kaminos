@@ -426,7 +426,7 @@ assert.equal(selectionStore.layouts.get('layout-b').label, 'Layout B edited');
 
 assert.match(
   index,
-  /async function initKaminosVolumeRoute\(\)[\s\S]*await volumeCockpitLayoutReady;[\s\S]*volume-render-scale-full[\s\S]*volume-toggle'\)\.addEventListener\('click'/,
+  /async function initKaminosVolumeRoute\(\)[\s\S]*await volumeCockpitLayoutReady;[\s\S]*volume-toggle'\)\.addEventListener\('click'/,
   'the ordinary Volume listeners and activation toggle remain downstream of the resolving layout promise',
 );
 

@@ -142,14 +142,6 @@
       "signature": "AssertionError [ERR_ASSERTION]: row keyboard selection must ignore events from child remove controls",
       "testLastChanged": "2026-10-01 fd742f0e"
     },
-    "tests/scene-flame-emitter.mjs": {
-      "class": "regression",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-10-06 d472ee51 Author ordinary scene geometry, groups, lights and retained imports; same failure then as now; the owner decides whether the source or the test is wrong",
-      "signature": "node:test failing: clearing a scene removes its old flame member before the next scene saves :: evalmachine.<anonymous>:6",
-      "testLastChanged": "2026-10-04 c08d9e30"
-    },
     "tests/scene-floor-receivers-contracts.mjs": {
       "class": "regression",
       "owner": "operlocutor",
@@ -157,14 +149,6 @@
       "reason": "passed at its last change and first fails at 2026-10-06 2f6b0751 Default bounce gain to ten and expose mid-gray floor appearance; same failure then as now; the owner decides whether the source or the test is wrong",
       "signature": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: | + actual - expected | + 8421504 | - 1118481",
       "testLastChanged": "2026-10-01 ccc0808b"
-    },
-    "tests/scene-lighting-authoring-contracts.mjs": {
-      "class": "regression",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-10-01 1cf9e811 Validate light edits before admission and preserve partial numeric typing; the failure has changed since then; the owner decides whether the source or the test is wrong",
-      "signature": "node:test failing: AO is attached to material indirect lighting, not multiplied over lit output :: evalmachine.<anonymous>:289 | rim off/on preserves its aim and fine-valued recipe :: evalmachine.<anonymous>:52 | two startups without edits retain stored map recipes, selection, and rim settings :: evalmachine.<anonymous>:52",
-      "testLastChanged": "2026-09-18 9ec0b9a3"
     },
     "tests/scene-navigation-contracts.mjs": {
       "class": "regression",

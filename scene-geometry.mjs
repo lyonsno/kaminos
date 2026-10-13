@@ -33,5 +33,5 @@ export function createProceduralMesh(THREE,mergeGeometries,geometry,surface={}) 
  if(kind==='cylinder')shape=new THREE.CylinderGeometry(p.radius,p.radius,p.height,32);
  const material=new THREE.MeshStandardMaterial({color:surface.color||'#92979c',roughness:surface.roughness??.55,metalness:surface.metalness??.05,side:kind==='plane'?THREE.DoubleSide:THREE.FrontSide});
  const mesh=new THREE.Mesh(shape,material);mesh.castShadow=true;mesh.receiveShadow=true;
- return {group:mesh,update(){},dispose(){mesh.removeFromParent();shape.dispose();material.dispose();}};
+ return {group:mesh,update(){},updateSurface(next){material.color.set(next.color);material.roughness=next.roughness;material.metalness=next.metalness;},dispose(){mesh.removeFromParent();shape.dispose();material.dispose();}};
 }

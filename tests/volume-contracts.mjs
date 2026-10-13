@@ -672,8 +672,8 @@ assert.match(index, /windStrength/, 'Volume controls carry explicit wind strengt
 assert.match(index, /windAngle/, 'Volume controls carry explicit wind direction into the renderer');
 assert.match(index, /windHeight/, 'Volume controls carry explicit wind height/ramp into the renderer');
 assert.match(index, /id="volume-render-scale"/, 'Volume tab exposes internal render-scale control');
-assert.match(index, /id="volume-render-scale" min="0\.1" max="0\.3" step="0\.001"/, 'Volume tab gives the operator one-decimal-percentage control over the useful 10–30% raymarch band');
-assert.match(index, /id="volume-render-scale-full"/, 'Volume tab keeps full-resolution raymarch as an explicit endpoint');
+assert.match(index, /id="volume-render-scale" min="0\.1" max="1" step="any"/, 'Volume tab gives the operator exact numeric control over the requested 10–100% raymarch range');
+assert.match(index, /renderScale: readVolumeRenderScaleControlValue\(\)/, 'runtime uses the exact full-range render resolution');
 assert.match(index, /volume_render_scale/, 'URL route can override internal render scale');
 assert.match(index, /renderScale/, 'Volume controls carry internal render scale into the renderer');
 assert.match(index, /data-volume-control-section="visual-tuning"[\s\S]*id="volume-fire-licks"[\s\S]*id="volume-projection"[\s\S]*id="volume-input-radius"[\s\S]*id="volume-flow-rate"[\s\S]*data-volume-control-section="render-budget"/, 'Volume tab groups visual tuning knobs with hidden cost consequences before the obvious render budget controls');
@@ -712,8 +712,8 @@ assert.match(index, /pressureTierHeroMin/, 'Volume controls expose pressure3 her
 assert.match(index, /pressureTierHeroMax/, 'Volume controls expose pressure3 hero-band max threshold to the renderer');
 assert.match(index, /volume_sim_profile/, 'URL route can request sim-cost profiling without changing the render contract');
 assert.match(index, /simProfile/, 'Volume controls carry sim profile request identity into the renderer');
-assert.match(index, /<option value="128">128×256×128<\/option>/, 'Volume grid selector exposes the vertically expanded 128-cell grid');
-assert.match(index, /<option value="160">160×320×160<\/option>/, 'Volume grid selector exposes the vertically expanded 160-cell grid');
+assert.match(index, /<option value="128">128<\/option>/, 'Volume grid selector exposes the 128-cell width independently of height');
+assert.match(index, /<option value="160">160<\/option>/, 'Volume grid selector exposes the 160-cell width independently of height');
 assert.match(index, /id="volume-ray-budget-gamut"/, 'Volume tab exposes the coupled ray-budget gamut control');
 assert.match(index, /id="volume-ray-budget-handle"/, 'ray-budget gamut exposes a draggable handle');
 assert.match(index, /id="volume-ray-budget-readout"/, 'ray-budget gamut exposes a compact effective budget readout');
@@ -726,7 +726,7 @@ assert.match(index, /applyRayBudgetGamutPoint/, 'ray-budget gamut maps pointer p
 assert.match(index, /syncRayBudgetGamutFromControls/, 'ray-budget gamut stays coupled when individual sliders move');
 assert.match(index, /applyRayBudgetPreset/, 'ray-budget preset buttons jump to stable budget positions');
 assert.match(index, /volume_ray_budget_preset/, 'URL route can select a named ray-budget preset');
-assert.match(index, /<option value="96" selected>96×192×96<\/option>/, 'smoke route defaults to the vertically expanded 96-cell grid');
+assert.match(index, /<option value="96" selected>96<\/option>/, 'smoke route defaults to the 96-cell width independently of height');
 assert.match(index, /id="volume-input-radius"/, 'Volume tab exposes an input radius control');
 assert.match(index, /id="volume-flow-rate"/, 'Volume tab exposes an input flow-rate control');
 assert.match(index, /id="volume-scene"/, 'Volume tab exposes an explicit volume scene selector');
