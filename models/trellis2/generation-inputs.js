@@ -3,6 +3,19 @@ import {buildSparseDecoderPlan,sparseDecoderWeightShapes} from './sparse-decoder
 import {buildSLatDecoderPlan,slatDecoderWeightShapes} from './slat-decoder.js';
 import {generationTensorStorage} from './generation-storage.js';
 
+// Only normalize already-prepared RGB. Foreground masking, crop and source-
+// equivalent resizing happen before this boundary; ImageData RGBA is not RGB.
+// Source DINO scales pixels in F32, uses decimal F64 ImageNet statistics, then
+// converts the normalized tensor to F32. Preserve both rounding boundaries.
+export function normalizePreparedTrellisRgb({pixels,width,height}={}){
+  if(width!==512||height!==512||
+    !(pixels instanceof Uint8Array||pixels instanceof Uint8ClampedArray)||pixels.length!==512*512*3)
+    throw TypeError('complete prepared 512x512 RGB bytes and explicit dimensions required');
+  const mean=[.485,.456,.406],std=[.229,.224,.225],values=new Float32Array(pixels.length);
+  for(let i=0;i<pixels.length;i++)values[i]=(Math.fround(pixels[i]/255)-mean[i%3])/std[i%3];
+  return values;
+}
+
 export const GENERATION_ROLES=Object.freeze(['sparseFlow','occupancyDecoder','lowResolutionShape','highResolutionShape','shapeDecoder','textureFlow','textureDecoder']);
 export function generationPipelineType(m){
   const type=m.pipelineType??'1024_cascade';
