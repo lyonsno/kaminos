@@ -3,6 +3,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { compositionRestoreUrl } from '../scene-authoring.mjs';
+import {checkedCameraView,cameraViewsMatch} from '../scene-camera-views.mjs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const section = (start, end) => html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start)));
@@ -19,7 +20,9 @@ function mounted() {
       objects: [{ id: 'actual-object', transform: { position: [1, 2, 3] } }], capture: capture || null }),
     fetch: async () => ({ ok: true, json: async () => ({ saved: 'accepted.kaminos.json' }) }),
     selectionCaptureSuspended:false,selectionFeedback:null,selectionBoxes:new Map(),updateSelectionFeedback(){},
-    sceneObjects: [], volumePrototype: null, activeSceneComposition: null,
+    sceneObjects: [], volumePrototype: null, activeSceneComposition: null,sceneCameras:null,
+    scene:{traverse(){}},controls:{enabled:true},FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',
+    checkedCameraView,cameraViewsMatch,readAuthoredCameraView:()=>({position:[0,0,3],target:[0,0,0],up:[0,1,0],fov:40,near:.01,far:100}),
     transformControls: null, renderer: { domElement: {} }, FLAME_EMITTER_ID: 'flame',
     requestAnimationFrame: callback => callback(),
     captureComposedCanvases: () => ({ image: 'data:image/png;base64,YQ==', width: 1, height: 1 }),

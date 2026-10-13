@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 import { createSceneEdits } from '../scene-edit-session.mjs';
+import {canCollideWithFire,checkedObjectCollision} from '../scene-collider.mjs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const membershipStart = html.indexOf('function membershipEditTargetId(');
@@ -30,7 +31,8 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
     remove(object) { if (object.parent === this) object.parent = null; },
   };
   const context = vm.createContext({
-    structuredClone,
+    structuredClone,canCollideWithFire,
+    writeObjectCollision(id,value){const entry=sceneObjects.find(e=>e.id===id);entry.collision=checkedObjectCollision(entry,value);},
     FLAME_EMITTER_ID: '@flame-emitter',CAMERA_TYPE:'camera',sceneCameras:null,
     PROCEDURAL_MESH_TYPE:'procedural-mesh',compoundRetentionTargets:new Map(),RIM_LIGHT_ID: '@rim-light',
     LOCAL_LIQUID_EMITTER_TYPE: 'local-liquid-emitter',

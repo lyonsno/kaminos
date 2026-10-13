@@ -11453,8 +11453,14 @@ async function initScene() {
     generationAdapter=await navigator.gpu?.requestAdapter({powerPreference:'high-performance'});
     if(generationAdapter && Object.entries(assetGenerationBufferRequirements).every(([name,value])=>generationAdapter.limits[name]>=value))generationRequirements=assetGenerationBufferRequirements;
   }
-  const combinedRequirements={...generationRequirements};
-  for(const [name,value] of Object.entries(compositionModule?.sharedGpuBufferRequirements||{}))combinedRequirements[name]=Math.max(value,combinedRequirements[name]||0);
+  const compositionRequirements=compositionModule?.sharedGpuBufferRequirements;
+  const requirementsAreRecord=compositionRequirements!==null&&typeof compositionRequirements==='object'&&!Array.isArray(compositionRequirements);
+  const combinedRequirements=compositionRequirements===undefined||requirementsAreRecord?{...generationRequirements}:compositionRequirements;
+  if(requirementsAreRecord)for(const [name,value] of Object.entries(compositionRequirements)){
+    // Preserve malformed declarations for the canonical acquisition validator;
+    // merging must not turn absence, strings, or invalid numbers into authority.
+    combinedRequirements[name]=Number.isSafeInteger(value)&&value>0?Math.max(value,combinedRequirements[name]||0):value;
+  }
   window.__kaminosCompositionSetup.phase = 'shared-device-acquisition';
   try {
     sharedGpu = await requestKaminosSharedWebGpuDevice({

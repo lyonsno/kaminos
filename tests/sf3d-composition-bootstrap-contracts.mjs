@@ -7,10 +7,11 @@ assert.ok(start >= 0 && setupEnd > start, 'host bootstrap through shared-device 
 const setup = source.slice(start, setupEnd);
 const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
 const execute = new AsyncFunction('window', 'requestKaminosSharedWebGpuDevice', 'importCompositionModule', 'console', 'fetch', 'samHostDeviceRequirements', `
-  let sharedGpu, sharedGpuFailureReason, compositionModule, compositionSetupError, scene, camera, samHostConfig = null;
+  const location=window.location;
+  let sharedGpu, sharedGpuFailureReason, compositionModule, compositionSetupError, scene, camera, cameraProjectionBase, sceneCameras = null, samHostConfig = null;
   const initializeHybridSplatOverlayModuleUrl = async () => {};
   const document = {getElementById: () => ({clientWidth: 100, clientHeight: 100})};
-  const THREE = {Scene: class {}, PerspectiveCamera: class {position = {set(){}}}};
+  const THREE = {Scene: class {}, PerspectiveCamera: class {position = {set(){}};updateProjectionMatrix(){}}};
   ${setup}
   return {sharedGpu, compositionModule};
   }
@@ -25,7 +26,7 @@ const load = async url => {events.push(['import', url]); return module;};
 const window = {location: {hash: '#composition_module_url=./sf3d-live-flame-inject.mjs'}};
 await execute(window, acquire, load, {warn() {}});
 assert.equal(events[0][0], 'import', 'composition requirements must load before host device acquisition');
-assert.equal(events[1][1].bufferRequirements, requirements);
+assert.deepEqual(events[1][1].bufferRequirements, requirements);
 const instrumentedAcquisition = async () => {throw new Error('unused test hook');};
 events = [];
 await execute(window, acquire, async () => ({...module, acquireSharedGpuDevice: instrumentedAcquisition}), {warn() {}});
@@ -44,7 +45,9 @@ await assert.rejects(execute(window, acquire, async () => ({}), {warn() {}}), /m
 events = [];
 const ordinary = await execute({location: {hash: ''}}, acquire, load, {warn() {}});
 assert.equal(events.length, 1);
-assert.deepEqual(events[0], ['acquire', {bufferRequirements: {}, hostRequirements: null}]);
+assert.equal(events[0][0], 'acquire');
+assert.deepEqual(events[0][1].bufferRequirements, {});
+assert.equal(events[0][1].hostRequirements, null);
 // A mounted SAM host composes its kit requirements into the same acquisition
 // instead of creating a second device for the renderer.
 events = [];
@@ -59,7 +62,12 @@ assert.equal(fallback.sharedGpu, null, 'ordinary host keeps its existing fallbac
 const legacy = await execute(window, async () => {throw new Error('no shared device');}, async () => ({mountComposition() {}}), {warn() {}});
 assert.equal(legacy.sharedGpu, null, 'legacy composition without requirements keeps existing fallback');
 // A malformed declared requirement is not absence and cannot enable fallback.
-await assert.rejects(execute(window, async options => {assert.equal(options.bufferRequirements, null); throw new Error('invalid requirements');}, async () => ({mountComposition() {}, sharedGpuBufferRequirements: null}), {warn() {}}), /invalid requirements/);
+for (const invalid of [null, [], {maxBufferSize:'1024'}, {maxBufferSize:-1}, {maxBufferSize:NaN}]) {
+  await assert.rejects(execute(window, async options => {
+    assert.deepEqual(options.bufferRequirements, invalid, 'malformed declared authority reaches the canonical validator unchanged');
+    throw new Error('invalid requirements');
+  }, async () => ({mountComposition() {}, sharedGpuBufferRequirements:invalid}), {warn() {}}), /invalid requirements/);
+}
 assert.match(source, /if \(compositionSetupError\) throw compositionSetupError;/, 'outer scene recovery cannot launch a separate volume device after strict setup failure');
 assert.match(source, /mountComposition\(\{[^}]*sharedGpu[\s\S]*?\}\)/, 'mount forwards the acquired host context');
 console.log('SF3D composition bootstrap and fallback contracts passed');
