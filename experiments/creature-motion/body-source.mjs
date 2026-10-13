@@ -35,11 +35,17 @@ export async function acquireCreatureBody(inputs) {
  }
  return prepare(inputs.asset,inputs.body_sha256);
 }
-export async function reopenVerifiedCreature(entry,recipe) {
+export async function prepareCreatureReopen(recipe) {
  validateCreatureTransform(recipe.inputs.transform);
  if(!/^[a-f0-9]{64}$/i.test(recipe.inputs.body_sha256??''))throw Error('Retained creature body identity is unverified');
  // Reject changed content before entry.open disposes the current experiment.
- const body=await prepare(recipe.inputs.asset,recipe.inputs.body_sha256),token=crypto.randomUUID();prepared.set(token,body);
+ const body=await prepare(recipe.inputs.asset,recipe.inputs.body_sha256),token=crypto.randomUUID();prepared.set(token,body);return token;
+}
+export function releaseCreatureReopen(token){const body=prepared.get(token);prepared.delete(token);body?.release();}
+export async function reopenPreparedCreature(entry,recipe,token) {
+ const body=prepared.get(token);
+ if(!body||body.asset!==recipe.inputs.asset||body.bodySha256!==recipe.inputs.body_sha256)throw Error('Creature prepared body identity is invalid');
  try{return await entry.open(recipe.id,{...recipe.inputs,_bodyToken:token});}
  finally{prepared.delete(token);body.release();}
 }
+export async function reopenVerifiedCreature(entry,recipe) {return reopenPreparedCreature(entry,recipe,await prepareCreatureReopen(recipe));}

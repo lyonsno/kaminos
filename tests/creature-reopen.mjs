@@ -10,8 +10,11 @@ import {createRgbPng} from './png-fixture.mjs';
 const base=await fs.mkdtemp(path.join(os.tmpdir(),'creature-reopen-'));
 const source={route:'synthetic-policy/current-shared-retention',rawMotionSha256:'a'.repeat(64),bodySha256:'b'.repeat(64)};
 let opens=0;
-const page={evaluate:async(fn,recipe)=>{opens++;return {frame:recipe.inputs.frame};}};
-const mountInvestigation=async()=>({reportPath:path.join(base,'investigation.json'),finish:async()=>{}});
+const order=[];
+const page={evaluate:async(fn,{operation,recipe})=>{order.push(operation);if(operation==='prepare')return 'prepared-body';if(operation==='release')return;
+ opens++;return {frame:recipe.inputs.frame};}};
+let rejectPrepare=false,rejectFinish=false;
+const mountInvestigation=async()=>({reportPath:path.join(base,'investigation.json'),finish:async()=>{order.push('finish');if(rejectFinish)throw Error('finish failed');}});
 try {
  await fs.writeFile(path.join(base,'investigation.json'),JSON.stringify({status:'finished'}));
  await assert.rejects(mountCreatureInvestigation({page,out:base,source:{route:'unidentified'},mountInvestigation}),/source identity/);
@@ -38,8 +41,15 @@ try {
   }catch(error){if(scenario!=='incomplete')throw error;}
   finally{recording.finish();}
   const prior=opens;
-  if(scenario==='valid'){const result=await handle.reopen(reportPath);assert.equal(result.state.frame,30);assert.equal(opens,prior+1);}
+  if(scenario==='valid'){const result=await handle.reopen(reportPath);assert.equal(result.state.frame,30);assert.equal(opens,prior+1);assert.deepEqual(order,['prepare','reopen','release']);}
   else {await assert.rejects(handle.reopen(reportPath));assert.equal(opens,prior,'invalid recipe must fail before replacing the current body');}
  }
+ await fs.writeFile(path.join(base,'investigation.json'),JSON.stringify({status:'recording'}));order.length=0;
+ await handle.reopen(path.join(base,'valid','report.json'));assert.deepEqual(order,['prepare','finish','reopen','release'],'finish must occur after byte admission but before replacement');
+ const evaluate=page.evaluate;page.evaluate=async(fn,input)=>{if(input.operation==='prepare'&&rejectPrepare)throw Error('body content digest differs');return evaluate(fn,input);};
+ rejectPrepare=true;order.length=0;const prior=opens;
+ await assert.rejects(handle.reopen(path.join(base,'valid','report.json')),/body content digest/);assert.deepEqual(order,[]);assert.equal(opens,prior,'content rejection preserves active recording and creature');
+ rejectPrepare=false;rejectFinish=true;order.length=0;
+ await assert.rejects(handle.reopen(path.join(base,'valid','report.json')),/finish failed/);assert.deepEqual(order,['prepare','finish','release']);assert.equal(opens,prior,'failed Finish must not replace the body');
 } finally {await fs.rm(base,{recursive:true,force:true});}
 console.log('Captured frame/view/asset/clip/source and complete-prefix checks fail before reopen mutation; additive context stays compatible');

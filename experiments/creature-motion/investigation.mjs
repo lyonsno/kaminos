@@ -68,11 +68,19 @@ export async function mountCreatureInvestigation({page,out,source,guide={},frame
   assert.ok(Math.abs(domain.time-domain.frame/domain.source.fps)<1e-5,'Captured time is not a native source sample');
   const current=JSON.parse(await fs.readFile(handle.reportPath,'utf8'));
   // The retained prefix remains history; applying it again would double edits.
-  const state=await page.evaluate(async recipe=>{
-   const {reopenVerifiedCreature}=await import('./experiments/creature-motion/body-source.mjs');
-   return reopenVerifiedCreature(window.kaminosWorkbenchExperiments,recipe);
-  },recipe);
-  if(current.status!=='finished')await handle.finish('Continue from the retained creature pose');
+  const bodyCall=(operation,token)=>page.evaluate(async({operation,recipe,token})=>{
+   const body=await import('./experiments/creature-motion/body-source.mjs');
+   if(operation==='prepare')return body.prepareCreatureReopen(recipe);
+   if(operation==='release')return body.releaseCreatureReopen(token);
+   return body.reopenPreparedCreature(window.kaminosWorkbenchExperiments,recipe,token);
+  },{operation,recipe,token});
+  const token=await bodyCall('prepare');let state;
+  try{
+   // Finish while the retained owner is still present. Byte rejection above
+   // leaves both the current creature and its recording untouched.
+   if(current.status!=='finished')await handle.finish('Continue from the retained creature pose');
+   state=await bodyCall('reopen',token);
+  }finally{await bodyCall('release',token);}
   return {recipe,state,history:reportPath,recording:handle.reportPath};
  }};
 }
