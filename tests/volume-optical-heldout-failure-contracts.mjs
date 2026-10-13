@@ -23,20 +23,20 @@ for(let row=1;row<=9;row++) {
   const data=new Float32Array(577*32);
   for(let i=0;i<577;i++){const at=i*32;data[at]=row;data[at+1]=i;data[at+2]=data[at+3]=1;data[at+4]=i/576;data[at+6]=1;data[at+12]=1;data[at+15]=.1;}
   const name=`trace-${row/10}-force-full.f32`,bytes=Buffer.from(data.buffer);await fs.writeFile(path.join(root,name),bytes);
-  chunks.push({path:name,sha256:sha(bytes),ok:true,plan:{firstRay:row,rayCount:1,sampleOffset:0,sampleCount:577,subdivisions:576,width:1,height:10,rowCount:577},
+  chunks.push({path:name,sha256:sha(bytes),ok:true,plan:{firstRay:row,rayCount:1,sampleOffset:0,sampleCount:577,subdivisions:576,width:1,height:10,rowCount:577,byteLength:bytes.length},
     effective:{route:'native-3d-compute-fluid-raymarch-v0',backend:'WebGPU:apple',simStepCount:197,specialization:{effective:'full-authored-raymarch-v0'}}});
 }
 for(const variant of variants)for(const step of [197,229])for(const yaw of [0,-15]) {
   const dir=path.join(root,`${variant}-${step}-${yaw}`);await fs.mkdir(dir);
-  const camera={position:[0,0,1],target:[0,0,0],up:[0,1,0]};
+  const camera={position:[0,0,1],target:[0,0,0],up:[0,1,0],fov:50};
   const capture={identity:'ordered-optical-capture-conformance-v0',status:'observed',phase:'complete',source:'synthetic',diff:'',
     requested:{heldStep:step,yaw,subdivisions:576},requestedCamera:camera,effectiveCamera:camera,
-    state:{simStepCount:step,backend:'WebGPU:apple',effectiveRoute:'native-3d-compute-fluid-raymarch-v0',immersedSource:{effective:{admitted:true}}},
+    state:{width:1,height:10,simStepCount:step,backend:'WebGPU:apple',effectiveRoute:'native-3d-compute-fluid-raymarch-v0',immersedSource:{effective:{admitted:true}}},
     chunks:chunks.map(c=>({...c,effective:{...c.effective,simStepCount:step}})),emitting:false};
   await fs.writeFile(path.join(dir,'report.json'),JSON.stringify(capture));
   await fs.writeFile(path.join(dir,'source-basin.json'),JSON.stringify({presetId:variant}));
   for(const c of chunks)await fs.symlink(path.join(root,c.path),path.join(dir,c.path));
-  manifest.cases.push({variant,step,yaw,status:'observed',path:dir,presetId:variant});
+  manifest.cases.push({variant,step,yaw,status:'observed',path:dir,presetId:variant,reportSha256:sha(JSON.stringify(capture))});
 }
 const source=await save('manifest.json',manifest);
 const good=await replayHeldout(source.path,training.path,path.join(root,'good'));
@@ -46,7 +46,15 @@ assert.equal(good.summaries['synthetic-amplitude:5:predicted:0.001'].rays,72);
 assert.equal(good.summaries['physical:5:predicted:0.001'].rgb.max,0);
 const first=manifest.cases[0],capturePath=path.join(first.path,'report.json');
 const original=JSON.parse(await fs.readFile(capturePath));
+const failures=[];
 for(const [name,edit,pattern] of [
+  ['changed-lens',c=>c.effectiveCamera.fov=65,/camera fov/],
+  ['short-scanline',c=>{c.state.width=2;for(const chunk of c.chunks)chunk.plan.width=2;},/scanline ray count/],
+  ['wrong-row',c=>c.chunks[0].plan.firstRay=2,/scanline first ray/],
+  ['wrong-width',c=>c.chunks[0].plan.width=2,/scanline width/],
+  ['wrong-height',c=>c.chunks[0].plan.height=11,/scanline height/],
+  ['wrong-row-count',c=>c.chunks[0].plan.rowCount=576,/scanline row count/],
+  ['wrong-byte-count',c=>c.chunks[0].plan.byteLength=4,/scanline byte count/],
   ['fallback',c=>c.state.backend='WebGPU:swiftshader',/WebGPU:apple/],
   ['partial',c=>c.chunks.pop(),/nine scanlines/],
   ['dirty',c=>c.diff='changed',/changed/],
@@ -54,8 +62,16 @@ for(const [name,edit,pattern] of [
   ['wrong-trace',c=>c.chunks[0].sha256='wrong',/trace hash/],
 ]) {
   const c=structuredClone(original);edit(c);await fs.writeFile(capturePath,JSON.stringify(c));
+  first.reportSha256=sha(JSON.stringify(c));await save('manifest.json',manifest);
   const result=await replayHeldout(source.path,training.path,path.join(root,name));
-  assert.equal(result.status,'failed');assert.match(result.error,pattern);
-  assert.equal(JSON.parse(await fs.readFile(path.join(root,name,'report.json'))).status,'failed');
+  try {
+    assert.equal(result.status,'failed');assert.match(result.error,pattern);
+    assert.equal(JSON.parse(await fs.readFile(path.join(root,name,'report.json'))).status,'failed');
+  } catch(error) { failures.push(`${name}: ${error.message}`); }
 }
+await fs.writeFile(capturePath,JSON.stringify(original));
+first.reportSha256='changed';await save('manifest.json',manifest);
+const changed=await replayHeldout(source.path,training.path,path.join(root,'changed-report'));
+try {assert.equal(changed.status,'failed');assert.match(changed.error,/capture report hash/);}catch(error){failures.push(`changed-report: ${error.message}`);}
+assert.deepEqual(failures,[]);
 console.log('held-out synthetic plumbing retains inactive cases and rejects fallback, partial, stale and mismatched output');

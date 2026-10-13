@@ -93,6 +93,7 @@ export async function replayHeldout(manifestPath,trainingPath,out) {
     for(const entry of manifest.cases) {
       const key=`${entry.variant}:${entry.step}:${entry.yaw}`;report.phase=key;await save();
       const capturePath=path.join(entry.path,'report.json'),raw=await fs.readFile(capturePath),capture=JSON.parse(raw);
+      assert.equal(sha(raw),entry.reportSha256,'capture report hash differs from producer admission');
       assert.ok(capture.identity==='ordered-optical-capture-conformance-v0'&&capture.status==='observed'&&capture.phase==='complete','complete native capture required');
       assert.equal(capture.source,manifest.source);assert.equal(capture.diff,'');
       const basinBytes=await fs.readFile(path.join(entry.path,'source-basin.json')),basin=JSON.parse(basinBytes);
@@ -102,8 +103,12 @@ export async function replayHeldout(manifestPath,trainingPath,out) {
       assert.equal(capture.state.simStepCount,entry.step);assert.equal(capture.state.backend,'WebGPU:apple');
       assert.equal(capture.state.effectiveRoute,'native-3d-compute-fluid-raymarch-v0');
       assert.equal(capture.state.immersedSource?.effective.admitted,true,'immersed source not admitted');
+      assert.ok(Number.isFinite(capture.requestedCamera.fov)&&Number.isFinite(capture.effectiveCamera.fov)
+        &&Math.abs(capture.requestedCamera.fov-capture.effectiveCamera.fov)<1e-5,'camera fov mismatch');
       for(const field of ['position','target','up'])assert.ok(capture.requestedCamera[field].every((v,i)=>Math.abs(v-capture.effectiveCamera[field][i])<1e-5),'camera mismatch');
       assert.equal(capture.chunks.length,9,'nine scanlines required');
+      const {width,height}=capture.state;
+      assert.ok(Number.isSafeInteger(width)&&width>0&&Number.isSafeInteger(height)&&height>0,'effective viewport dimensions required');
       const expected=new Set([.1,.2,.3,.4,.5,.6,.7,.8,.9].map(y=>`trace-${y}-force-full.f32`));
       const source={case:key,path:capturePath,sha256:sha(raw),basinSha256:sha(basinBytes),presetId:entry.presetId,rays:0,misses:0,zeroLength:0,emitting:capture.emitting};report.sources.push(source);
       for(const chunk of capture.chunks) {
@@ -111,7 +116,15 @@ export async function replayHeldout(manifestPath,trainingPath,out) {
         assert.equal(chunk.effective.route,capture.state.effectiveRoute);assert.equal(chunk.effective.backend,capture.state.backend);
         assert.equal(chunk.effective.simStepCount,entry.step);assert.equal(chunk.effective.specialization.effective,'full-authored-raymarch-v0');
         assert.equal(chunk.plan.sampleCount,577);assert.equal(chunk.plan.sampleOffset,0);assert.equal(chunk.plan.subdivisions,576);
+        const fraction=Number(chunk.path.slice('trace-'.length,-'-force-full.f32'.length));
+        assert.equal(chunk.plan.width,width,'scanline width differs from captured viewport');
+        assert.equal(chunk.plan.height,height,'scanline height differs from captured viewport');
+        assert.equal(chunk.plan.rayCount,width,'scanline ray count must cover full width');
+        assert.equal(chunk.plan.firstRay,Math.floor(height*fraction)*width,'scanline first ray differs from declared row');
+        assert.equal(chunk.plan.rowCount,width*577,'scanline row count differs');
+        assert.equal(chunk.plan.byteLength,width*577*32*4,'scanline byte count differs');
         const bytes=await fs.readFile(path.join(entry.path,chunk.path));assert.equal(sha(bytes),chunk.sha256,'trace hash mismatch');
+        assert.equal(bytes.length,chunk.plan.byteLength,'scanline byte length differs');
         const values=new Float32Array(bytes.buffer,bytes.byteOffset,bytes.byteLength/4);validateTraceRows(values,chunk.plan);
         for(let ray=0;ray<chunk.plan.rayCount;ray++) {
           const base=ray*577*32;if(!values[base+2]){source.misses++;continue;}
