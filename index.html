@@ -30857,11 +30857,13 @@ sceneInitialization.then(() => {
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
-  environmentLoaded.then(()=>{resolveWorkbenchViewerReady();void installOwnerWorkbenchEntry().catch(error=>{window.kaminosWorkbenchExperimentError=error.message;setInfo('Experiments unavailable: '+error.message);});},rejectWorkbenchViewerReady);
+
   const volumeLoaded = initKaminosVolumeRoute();
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
-  Promise.all([environmentLoaded, volumeLoaded]).then(async () => {
-    const hash = new URLSearchParams(location.hash.slice(1));
+  const startupSceneHash = new URLSearchParams(location.hash.slice(1));
+  const startupRestoreRequested = !!startupSceneHash.get('scene');
+  const startupSceneRestore = Promise.all([environmentLoaded, volumeLoaded]).then(async () => {
+    const hash = startupSceneHash;
     if (hash.get('authoring') !== '1' && !hash.has('scene')) return;
     if(hash.get('authoring')==='1'){
       document.body.classList.add('composition-authoring');
@@ -30883,7 +30885,8 @@ sceneInitialization.then(() => {
       }
     }
     await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
-  }).catch(error => {
+  });
+  startupSceneRestore.catch(error => {
     // Only an authored composition restore blocks saving; ordinary routes keep
     // their own failure reporting (the volume route reports separately).
     const failedRoute=new URLSearchParams(location.hash.slice(1));
@@ -30894,6 +30897,18 @@ sceneInitialization.then(() => {
     sceneSaveBlockedByFailedRestore = true;
     compositionStatus(`Restore failed: ${error.message || error}`, true);
     setInfo(`Composition restore failed: ${error.message || error}`);
+  });
+  // An owner enters the effective authored starting scene, never one that a
+  // pending restore will clear. Ordinary routes keep environment-only startup.
+  const ownerSceneReady = startupRestoreRequested ? startupSceneRestore : environmentLoaded;
+  ownerSceneReady.then(() => {
+    resolveWorkbenchViewerReady();
+    void installOwnerWorkbenchEntry().catch(error => {
+      window.kaminosWorkbenchExperimentError=error.message;setInfo('Experiments unavailable: '+error.message);
+    });
+  }, error => {
+    rejectWorkbenchViewerReady(error);
+    window.kaminosWorkbenchExperimentError=error.message;setInfo('Experiments unavailable: '+error.message);
   });
   initKaminosMotionAgencyRoute();
   initWorldChambersRoute();
