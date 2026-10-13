@@ -9,6 +9,7 @@ import {finishTrellisMesh,encodeTrellisTexturePNG} from './trellis-material.js';
 import {NodeTrellisUVWorker} from './node-uv-worker.mjs';
 import {createSourceAtlasUnwrapper} from './source-atlas.mjs';
 import {createBrowserMeshPostprocess,MESH_POSTPROCESS_ROUTE} from './mesh-cleanup.js';
+import {createWasmXatlasUnwrapper} from './wasm-xatlas.js';
 import {gitSourceIdentity} from './source-attestation.mjs';
 import {persistGenerationAsset,admitRetainedGenerationCompletion,generationFields,GENERATION_ROUTE} from './sparse-generation-witness-checks.js';
 
@@ -56,7 +57,7 @@ try{
   if(!Object.hasOwn(cleanupRoutes,cleanupMode))throw Error('supported explicit cleanup mode required');
   report.cleanupMode=cleanupMode;
   report.route='retained native WebGPU fields / '+cleanupRoutes[cleanupMode]+' / unchanged UV and learned PBR';
-  if(!['sf3d','source-xatlas'].includes(uvBackend))throw Error('explicit supported UV backend required');
+  if(!['sf3d','source-xatlas','browser-xatlas'].includes(uvBackend))throw Error('explicit supported UV backend required');
   report.requestedUVBackend=uvBackend;
   await enter('native-field-admission');
   const rawReport=await fs.readFile(path.join(native,'report.json')),n=JSON.parse(rawReport);
@@ -157,7 +158,7 @@ try{
       return {...input,vertices,triangles,metadata:{...input.metadata,postprocess:r}};
     }finally{await stdout.close();await stderr.close();}
   };
-  const unwrapMesh=uvBackend==='source-xatlas'?createSourceAtlasUnwrapper({python:path.resolve(args.get('--python')),
+  const unwrapMesh=uvBackend==='browser-xatlas'?createWasmXatlasUnwrapper():uvBackend==='source-xatlas'?createSourceAtlasUnwrapper({python:path.resolve(args.get('--python')),
     sourceRoot:path.resolve(args.get('--source-root')),expectedSourceCommit:args.get('--expected-source-commit'),
     cleanRoot:cleanupDir,out:path.join(out,'source-atlas')}):undefined;
   const finished=await finishTrellisMesh(mesh,{postprocessMesh,WorkerClass:NodeTrellisUVWorker,unwrapMesh,textureSize:1024,
