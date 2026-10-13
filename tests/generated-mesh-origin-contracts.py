@@ -1,3 +1,4 @@
+# kaminos-test: python
 import hashlib,http.client,json,struct,sys,tempfile,threading
 from pathlib import Path
 from http.server import ThreadingHTTPServer

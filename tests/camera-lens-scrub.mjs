@@ -1,3 +1,4 @@
+// kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
 import {installRelativeNumberDrag,installSceneControlHistory} from '../scene-control-history.mjs';import {createSceneEdits} from '../scene-edit-session.mjs';import {createSceneCameras,checkedCameraRecord,cameraLensValue,cameraLensPatch} from '../scene-camera.mjs';
 const source=fs.readFileSync(new URL('../authoring-cameras.mjs',import.meta.url),'utf8');

@@ -1,3 +1,4 @@
+// kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyVolumeEmitterFamilyRuntime, resolveVolumeCoreEmitterSource } from '../volume-emitter-runtime.mjs';

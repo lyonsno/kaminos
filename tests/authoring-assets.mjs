@@ -1,3 +1,4 @@
+// kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';
 import {createAuthoringAssets,assetSource} from '../authoring-assets.mjs';
 import {createAuthoringGeneration} from '../authoring-generation.mjs';

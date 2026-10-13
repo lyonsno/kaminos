@@ -1,3 +1,4 @@
+// kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync} from 'node:fs';
 const html=readFileSync(process.env.KAMINOS_GIZMO_SOURCE||new URL('../index.html',import.meta.url),'utf8');
 test('a gizmo property change before mouseDown cannot write authored roots',()=>{

@@ -1,3 +1,4 @@
+# kaminos-test: python
 import http.client,json,sys,tempfile,threading,unittest
 from pathlib import Path
 from http.server import ThreadingHTTPServer

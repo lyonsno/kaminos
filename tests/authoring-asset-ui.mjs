@@ -1,3 +1,4 @@
+// kaminos-test: node
 import test from'node:test';import assert from'node:assert/strict';import{readFileSync}from'node:fs';
 class Element{
  constructor(tag,doc){this.tagName=tag;this.doc=doc;this.children=[];this.dataset={};this.attributes={};this.value='';this.title='';this.hidden=false;this.connected=true;this.style={};}

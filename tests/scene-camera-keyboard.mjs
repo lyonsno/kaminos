@@ -1,3 +1,4 @@
+// kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';import * as THREE from '../lib/three.core.js';import {installSceneNavigation} from '../scene-navigation.mjs';import {createSceneCameras} from '../scene-camera.mjs';import {createSceneEdits} from '../scene-edit-session.mjs';
 class Element extends EventTarget{constructor(){super();this.clientWidth=800;this.clientHeight=600;}getBoundingClientRect(){return{left:0,top:0,width:800,height:600};}contains(node){return node===this;}closest(){return null;}}
 function emit(node,type,props){const event=new Event(type,{cancelable:true});Object.assign(event,props);node.dispatchEvent(event);}

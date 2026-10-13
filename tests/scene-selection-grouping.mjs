@@ -1,3 +1,4 @@
+// kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync} from 'node:fs';
 import {checkedSelection,changeSelection} from '../scene-selection.mjs';import {createSceneEdits} from '../scene-edit-session.mjs';
 const html=readFileSync(process.env.KAMINOS_SELECTION_GROUP_SOURCE||new URL('../index.html',import.meta.url),'utf8');

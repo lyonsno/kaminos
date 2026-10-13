@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import { flamePoseToDomain, flamePoseInDomain, flamePoseFromImmersedControls,
   immersedControlsForFlamePose, defaultFlameEmitterPose } from '../scene-flame-emitter.mjs';

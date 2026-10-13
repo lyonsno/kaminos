@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';

@@ -1,3 +1,4 @@
+// kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import{readFileSync}from'node:fs';
 import{flamePoseToDomain,defaultFlameEmitterPose}from'../scene-flame-emitter.mjs';
 import{applyVolumeEmitterFamilyRuntime,resolveVolumeCoreEmitterSource}from'../volume-emitter-runtime.mjs';

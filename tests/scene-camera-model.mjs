@@ -1,3 +1,4 @@
+// kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';
 import {buildSceneDocument,planSceneRestore,isReloadableSceneObjectRecord} from '../scene-persistence-core.js';
 const camera={id:'camera-hero',type:'camera',source:'kaminos:camera',label:'Kiln hero',transform:{position:[2,3,5],rotation:[0,.3,0],scale:[1,1,1]},camera:{projection:'perspective',lens:50,sensorWidth:36,sensorHeight:24,sensorFit:'auto',near:.01,far:1000}};

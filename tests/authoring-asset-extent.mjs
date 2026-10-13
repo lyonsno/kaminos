@@ -1,3 +1,4 @@
+// kaminos-test: node
 import test from'node:test';import assert from'node:assert/strict';import*as assets from'../authoring-assets.mjs';
 test('asset extent uses upward drag and preserves space for the viewport and narrow hierarchy',()=>{
  assert.equal(typeof assets.assetPaneHeight,'function','asset pane requires an adjustable extent');
