@@ -991,6 +991,9 @@
     "tests/volume-full-support-cockpit-contracts.mjs": {
       "kind": "node"
     },
+    "tests/volume-grid-height-contracts.mjs": {
+      "kind": "node"
+    },
     "tests/volume-heat-release-contracts.mjs": {
       "kind": "node"
     },
