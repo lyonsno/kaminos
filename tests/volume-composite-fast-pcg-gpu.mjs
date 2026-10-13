@@ -38,32 +38,33 @@ try {
     const ref = projectComposite(grid, q, { target, tolerance: 1e-9, maxIterations: 20000 }); assert.ok(ref.converged, 'CPU reference converged');
     const candidate = createCompositePCGGPU(device, grid, { tolerance: fixture.tolerance });
     const runCandidate = async iterations => { candidate.setInput(q, target); const e = device.createCommandEncoder(); candidate.encode(e, { iterations, reset: true }); device.queue.submit([e.finish()]); return candidate.readback(); };
-    const theirs = await runCandidate(2048);
+    const theirs = await runCandidate(1024);
     const row = { fixture: fixture.name, tolerance: fixture.tolerance, cells: grid.cells.length, faces: grid.faces.length, candidate: { converged: theirs.converged, iterations: theirs.receipt.iterations, error: theirs.flux.reduce((s, v, i) => Math.max(s, Math.abs(v - ref.flux[i])), 0) }, modes: {} };
     candidate.destroy();
-    for (const preconditioner of ['diagonal', 'multigrid']) {
+    for (const [mode, options, budget] of [['diagonal', { method: 'pcg', preconditioner: 'diagonal' }, 1024], ['multigrid', { method: 'pcg', preconditioner: 'multigrid' }, 64]]) {
+      const preconditioner = mode;
       report.phase = `${fixture.name}-${preconditioner}`;
-      const solver = createCompositeFastPCGGPU(device, grid, { tolerance: fixture.tolerance, preconditioner });
+      const solver = createCompositeFastPCGGPU(device, grid, { tolerance: fixture.tolerance, ...options });
       const run = async (iterations, reset = false) => { solver.setInput(q, target); const e = device.createCommandEncoder(); solver.encode(e, { iterations, reset }); device.queue.submit([e.finish()]); return solver.readback(); };
       try {
         for (const shader of solver.shaders) { const messages = [...(await shader.getCompilationInfo()).messages].filter(m => m.type === 'error'); assert.deepEqual(messages, [], `${shader.label}: ${JSON.stringify(messages)}`); }
         const incomplete = await run(0, true); assert.equal(incomplete.converged, false, 'zero budget may not hide unsolved divergence');
-        const cold = await run(2048, true); assert.ok(cold.converged, JSON.stringify(cold.receipt)); assert.ok(cold.receipt.iterations > 0 && cold.receipt.iterations < 2048);
+        const cold = await run(budget, true); assert.ok(cold.converged, JSON.stringify(cold.receipt)); assert.ok(cold.receipt.iterations > 0 && cold.receipt.iterations < budget);
         const error = cold.flux.reduce((s, v, i) => Math.max(s, Math.abs(v - ref.flux[i])), 0); assert.ok(error < fixture.fluxBound, `CPU flux discrepancy ${error}`);
-        const warm = await run(128); assert.ok(warm.converged, JSON.stringify(warm.receipt)); assert.equal(warm.receipt.iterations, 0, 'same input must reuse converged pressure');
+        const warm = await run(budget); assert.ok(warm.converged, JSON.stringify(warm.receipt)); assert.equal(warm.receipt.iterations, 0, 'same input must reuse converged pressure');
         const reset = await run(0, true); assert.equal(reset.converged, false, 'reset must discard previous pressure');
         const targetBuffer = device.createBuffer({ size: target.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
         let joined, invalid;
         try {
           device.queue.writeBuffer(solver.fluxBuffer, 0, q); device.queue.writeBuffer(targetBuffer, 0, target);
-          let e = device.createCommandEncoder(); solver.encodeGPU(e, { targetBuffer, iterations: 2048 }); device.queue.submit([e.finish()]);
+          let e = device.createCommandEncoder(); solver.encodeGPU(e, { targetBuffer, iterations: budget }); device.queue.submit([e.finish()]);
           joined = await solver.readback(); assert.ok(joined.converged, JSON.stringify(joined.receipt)); assert.deepEqual(joined.target, target); assert.equal(joined.receipt.inputRoute, 'gpu-buffers');
           device.queue.writeBuffer(targetBuffer, 0, new Float32Array(target.length).fill(.5)); assert.deepEqual((await solver.readback()).target, target, 'upstream mutation cannot rewrite solve identity');
           assert.throws(() => solver.encodeGPU(device.createCommandEncoder(), { targetBuffer: solver.fluxBuffer, iterations: 1 }), /target/);
           device.queue.writeBuffer(targetBuffer, 0, new Float32Array(target.length).fill(NaN)); device.queue.writeBuffer(solver.fluxBuffer, 0, q);
           e = device.createCommandEncoder(); solver.encodeGPU(e, { targetBuffer, iterations: 4 }); device.queue.submit([e.finish()]);
           invalid = await solver.readback(); assert.equal(invalid.converged, false); assert.equal(invalid.receipt.targetFinite, false);
-          assert.ok((await run(2048)).converged, 'bad input must not permanently poison warm state');
+          assert.ok((await run(budget)).converged, 'bad input must not permanently poison warm state');
         } finally { targetBuffer.destroy(); }
         row.modes[preconditioner] = { error, cold: cold.receipt, warm: warm.receipt, joined: joined.receipt, invalid: invalid.receipt, dispatchesPerSolve: cold.receipt.dispatches };
         for (const [name, raw] of Object.entries({ flux: cold.flux, pressure: cold.pressure })) writeFileSync(resolve(out, `${fixture.name}-${preconditioner}-${name}.f32`), new Uint8Array(raw.buffer));
