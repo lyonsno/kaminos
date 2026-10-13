@@ -80,7 +80,7 @@ function harness({features=['shader-f16'],gate=null}={}){
    return{load:async progress=>{loads++;progress('transformer','dit/double00.bin',{loadedBytes:30,totalBytes:120});},
     generate:async request=>{generations.push(request);log.push(`owner:${handoff.owner()}`);request.onPhase('text');request.onStep(2,4);if(gate)await gate.promise;
      if(request.schedule.signal.aborted)throw request.schedule.signal.reason;return{rgba:new Uint8ClampedArray(request.width*request.height*4),width:request.width,height:request.height,timings:{totalMs:5}};}};},
-  encodePng:async(rgba,width,height)=>{assert.equal(rgba.length,width*height*4);return new Blob([new Uint8Array([137,80,78,71])],{type:'image/png'});},
+  encodePng:async(rgba,width,height)=>{assert.equal(rgba.length,width*height*4);return new Blob([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0))],{type:'image/png'});},
   deliver:async(file,provenance)=>{delivered.push({file,provenance});return{source:`/api/read?root=image-inbox&path=${file.name}`,name:file.name};},
  });
  return {service,log,delivered,handoff,prototype,generations,loads:()=>loads};
@@ -92,6 +92,7 @@ test('a prompt becomes a saved image on the shared device while the kiln stays o
  const first=await h.service.run({prompt:'A bronze lantern',seed:42,size:512,onState:s=>states.push(s)});
  assert.equal(first.name,'klein-a-bronze-lantern-s42.png');
  assert.equal(h.delivered.length,1);assert.equal(h.delivered[0].file.type,'image/png');
+ assert.deepEqual(module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer())),h.delivered[0].provenance,'the stored file itself carries the provenance');
  assert.deepEqual(h.delivered[0].provenance,{schema:'kaminos.image-generation.v1',route:'flux2-klein.text-to-image.authoring-shared-device.v0',model:'FLUX.2 [klein] 4B',prompt:'A bronze lantern',seed:42,width:512,height:512,weights:'/klein-weights',timings:{totalMs:5}});
  assert.ok(h.log.includes('owner:klein'),'denoising runs while klein owns the kiln foreground');
  assert.equal(h.handoff.owner(),'sf3d','after the image the kiln returns to SF3D so mesh generation keeps interleaving frames');
@@ -163,4 +164,17 @@ test('a mesh request the model would refuse does not take the kiln from a runnin
  }
  let ran=false;await runWithKilnHandoff({service:{read:()=>({status:'idle'}),run:async()=>{ran=true;}},input:{source:'x'},handoff,owner:'sf3d'});
  assert.equal(ran,true);assert.equal(handoff.owner(),'sf3d');
+});
+
+test('the saved PNG carries its own generation provenance in an iTXt chunk',async()=>{
+ const {withPngProvenance,readPngProvenance}=module;
+ // 1x1 PNG
+ const png=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0));
+ const provenance={schema:'kaminos.image-generation.v1',prompt:'A lantern — “brass”',seed:7};
+ const out=new Uint8Array(await (await withPngProvenance(new Blob([png],{type:'image/png'}),provenance)).arrayBuffer());
+ assert.deepEqual(readPngProvenance(out),provenance);
+ assert.deepEqual([...out.slice(-12,-8)],[0,0,0,0],'IEND stays last');assert.equal(new TextDecoder().decode(out.slice(-8,-4)),'IEND');
+ assert.equal(readPngProvenance(png),null);
+ // A corrupted chunk is not read back as provenance (the reader checks the chunk CRC).
+ const broken=out.slice();broken[broken.length-20]^=1;assert.equal(readPngProvenance(broken),null);
 });
