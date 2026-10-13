@@ -4022,6 +4022,7 @@ import {
 import {createIPBFPressureCockpit} from './finger-fluid-pressure-cockpit.mjs';
 import {investigationOperations} from './investigation-recording.mjs';
 import {createFluidAppFrameTiming} from './fluid-app-frame-timing.mjs';
+import {sceneDepthCameraKey} from './scene-water-depth-reuse.mjs';
 import {createInvestigationEntry} from './investigation-entry.mjs';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -4052,7 +4053,8 @@ let authoringWorkspace = null;
 let fluidWorkbench = null;
 let fluidReflectionCockpit = null;
 let fluidBudgetCockpit = null;
-const fluidBudgetPreferences={renderScale:1,timingEnabled:false,energyDiagnosticsMode:null};
+const fluidBudgetPreferences={renderScale:1,timingEnabled:false,energyDiagnosticsMode:null,sceneDepthMode:'separate'};
+let updateSceneAO=null;
 let fluidAppFrameScope='main animation callback';
 const fluidAppFrameTiming=createFluidAppFrameTiming({onWindow:sample=>{
   if(investigationOperations.active)investigationOperations.emit({kind:'fluid.frame-time',phase:'measured',target:'fluid',effective:sample});
@@ -4066,6 +4068,7 @@ function fluidAppFrameSource(scope=fluidAppFrameScope){
   return {...frame,scope,generation:clock.generation,step:clock.step,paused:clock.paused,
     reflection:fingerFluidBenchSolver.getReflectionBudgetControls().effective,
     energy:budget.energy.mode,particleCount:budget.particleCount,densityIterationsPerStep:fingerFluidBenchState.runtime?.densityIterationsPerStep,
+    sceneAO:(()=>{const a=window.kaminosSceneAOPerformanceState?.();return a&&{mode:a.mode,requested:a.requested,intensity:a.intensity,dedicatedAOEnabled:a.dedicatedAOEnabled,sharedGIField:a.sharedGIField};})(),
     diagnostics:{gpuStageTimings:fluidBudgetPreferences.timingEnabled,rayCounts:document.querySelector('[data-reflection-control=count-rays]')?.checked??false}};
 }
 let restoringSceneLight=false;
@@ -11593,6 +11596,12 @@ async function initScene() {
   normalTexture.type = THREE.UnsignedByteType;
 
   scenePass = pass(scene, camera);
+  const plainScenePass=pass(scene,camera);
+  plainScenePass.name='Scene without standalone GTAO';
+  plainScenePass.contextNode=builtinAOContext(float(1));
+  const sceneDepthCaptures=new WeakMap(),sceneAOWork={aoUpdates:0,denoiseUpdates:0,normalUpdates:0};
+  const trackNode=(node,key)=>{const original=node.updateBefore;node.updateBefore=function(frame){const result=original.call(this,frame);if(key)sceneAOWork[key]++;sceneDepthCaptures.set(this,{count:(sceneDepthCaptures.get(this)?.count??0)+1,cameraKey:sceneDepthCameraKey(camera)});return result;};};
+  trackNode(scenePass);trackNode(plainScenePass);trackNode(prePass,'normalUpdates');
 
   const aoResScale = 0.5;
   const drawSize = renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -11619,6 +11628,7 @@ async function initScene() {
 
   const aoResolved = convertToTexture(aoPass.getTextureNode());
   const denoisePass = denoise(aoResolved, prePassDepth, prePassNormal, camera);
+  trackNode(aoPass,'aoUpdates');trackNode(denoisePass,'denoiseUpdates');
   const denoiseResolved = convertToTexture(denoisePass);
   // Resolve screen-space visibility before the lit pass, not once per material.
   const setupScenePass = scenePass.setup;
@@ -11634,16 +11644,20 @@ async function initScene() {
     float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(aoVisibility))));
   scenePass.contextNode = builtinAOContext(aoOutput);
   const sceneGI = createSceneGI(scene,camera,aoIntensity);
+  trackNode(sceneGI.beauty);
   let activeSceneDepth = prePassDepth;
   let rawSceneOutput, sceneEmissiveCamera = null;
   const giOutputGraphs = new Map();
+  const standaloneAOEnabled=()=>document.getElementById('ao-toggle').checked&&aoIntensity.value>0;
+  let activeBeautyPass=scenePass;
   function rebuildSceneGIOutput() {
     const combined = sceneGISettings.mode === 'combined';
     const diagnostic = combined && sceneGISettings.view !== 'scene';
     document.body.dataset.sceneGiDiagnostic = String(diagnostic);
-    const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;
-    activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
-    const graphKey = sceneGISettings.mode;
+    activeBeautyPass=combined?sceneGI.beauty:standaloneAOEnabled()?scenePass:plainScenePass;
+    const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : activeBeautyPass;
+    activeSceneDepth = combined ? sceneGI.depth : standaloneAOEnabled()?prePassDepth:plainScenePass.getTextureNode('depth');
+    const graphKey = `${sceneGISettings.mode}:${combined?'joint-field':standaloneAOEnabled()?'ao':'plain'}`;
     const cached = giOutputGraphs.get(graphKey);
     if (cached) {
       ({rawSceneOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
@@ -11685,6 +11699,8 @@ async function initScene() {
   };
   sceneGI.setSettings(sceneGISettings);
   rebuildSceneGIOutput();
+  updateSceneAO=()=>{rebuildSceneGIOutput();window._kaminosDirty?.();};
+  window.kaminosSceneAOPerformanceState=()=>({mode:sceneGISettings.mode,requested:document.getElementById('ao-toggle').checked,intensity:aoIntensity.value,dedicatedAOEnabled:sceneGISettings.mode==='gtao'&&standaloneAOEnabled(),sharedGIField:sceneGISettings.mode==='combined',work:{...sceneAOWork}});
   window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),sceneFrames:sceneFrameCount,effectiveMode:sceneGISettings.mode,view:sceneGISettings.mode==='gtao'?'scene':sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
   window.kaminosSceneGIReadback = kind => sceneGI.readback(renderer,kind);
   window.kaminosGroundDebugState = () => ({visible:groundPlane.visible,height:groundPlane.position.y,
@@ -11698,7 +11714,7 @@ async function initScene() {
     return hit?{isGround:hit.object===groundPlane,uuid:hit.object.uuid,point:hit.point.toArray(),linearColor:hit.object.material?.color?.toArray()}:null;
   };
   window.kaminosSceneEmissiveCameraDebugState=()=>sceneEmissiveCamera?.debugState()??{requested:false,effective:false,reason:'distributed-route-not-mounted'};
-  getFluidDisplayPolicy=()=>({rawOutput:rawSceneOutput,cameraState:sceneEmissiveCamera && (sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')?sceneEmissiveCamera.debugState():{effective:false}});
+  getFluidDisplayPolicy=()=>({rawOutput:rawSceneOutput,cameraState:sceneEmissiveCamera && (sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')?sceneEmissiveCamera.debugState():{effective:false},sceneDepthSource:()=>({scene,camera,target:activeBeautyPass.renderTarget,texture:activeBeautyPass.getTexture('depth'),capture:sceneDepthCaptures.get(activeBeautyPass)})});
   let sceneCameraStatusText='';
   window.kaminosFireLightFieldDebugState = () => (fireLightFieldPass
     ? fireLightFieldPass.debugState()
@@ -14805,6 +14821,7 @@ async function startFingerFluidBench() {
     fingerFluidBenchViewport=createFluidViewportHost({renderer,scene,camera,pipeline:renderPipeline,device:renderer.backend.device,solver:fingerFluidBenchSolver,group:fingerFluidBenchScene.group,helperGround:groundPlane,getDisplayPolicy:()=>getFluidDisplayPolicy?.(),pipelineIdentity:FINGER_FLUID_BENCH_VIEWPORT_PIPELINE,framePrefix:'fluid-bench'});
     fingerFluidBenchViewport.setRenderScale(fluidBudgetPreferences.renderScale);
     fingerFluidBenchViewport.setTimingEnabled(fluidBudgetPreferences.timingEnabled);
+    fingerFluidBenchViewport.setSceneDepthMode(fluidBudgetPreferences.sceneDepthMode);
     syncFingerFluidCompositionCamera({initial:true});
   }
   if(typeof installFingerFluidPressureCockpit==='function')installFingerFluidPressureCockpit();
@@ -14895,24 +14912,28 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
       effective:read};
   }
   if(!entryOnly && !fluidBudgetCockpit){
-    const read=()=>({clock:window.kaminosFingerFluidBenchSessionState(),solver:fingerFluidBenchSolver?.getFrameBudgetState(),viewport:fingerFluidBenchViewport?.state(),reflection:fingerFluidBenchSolver?.getReflectionBudgetControls(),appFrame:fluidAppFrameTiming.read({source:fluidAppFrameSource(),visible:document.visibilityState==='visible'})});
+    const read=()=>({clock:window.kaminosFingerFluidBenchSessionState(),solver:fingerFluidBenchSolver?.getFrameBudgetState(),viewport:fingerFluidBenchViewport?.state(),reflection:fingerFluidBenchSolver?.getReflectionBudgetControls(),sceneAO:window.kaminosSceneAOPerformanceState?.(),appFrame:fluidAppFrameTiming.read({source:fluidAppFrameSource(),visible:document.visibilityState==='visible'})});
     const apply=patch=>{
       const before=window.kaminosFingerFluidBenchSessionState();if(!before.available||!fingerFluidBenchViewport)throw Error('Shared fluid viewport unavailable');
       if(!patch||typeof patch!=='object'||Array.isArray(patch))throw Error('Budget edit must be an object');
       if('renderScale' in patch && (!Number.isFinite(patch.renderScale)||patch.renderScale<=0||patch.renderScale>1))throw Error('Water render scale must be above zero and at most 100%');
       if('energyDiagnosticsMode' in patch)resolveFingerFluidEnergyDiagnosticsMode(patch.energyDiagnosticsMode);
       if('timingEnabled' in patch && typeof patch.timingEnabled!=='boolean')throw Error('Timing enabled must be boolean');
+      if('sceneAOEnabled' in patch && typeof patch.sceneAOEnabled!=='boolean')throw Error('Scene AO enabled must be boolean');
+      if('sceneDepthMode' in patch && !['auto','separate'].includes(patch.sceneDepthMode))throw Error('Scene depth mode must be auto or separate');
       if('renderScale' in patch)fingerFluidBenchViewport.setRenderScale(patch.renderScale);
       if('energyDiagnosticsMode' in patch)fingerFluidBenchSolver.setEnergyDiagnosticsMode(patch.energyDiagnosticsMode);
       if('timingEnabled' in patch)fingerFluidBenchViewport.setTimingEnabled(patch.timingEnabled);
+      if('sceneAOEnabled' in patch){const toggle=document.getElementById('ao-toggle');toggle.checked=patch.sceneAOEnabled;toggle.dispatchEvent(new Event('change'));}
+      if('sceneDepthMode' in patch)fingerFluidBenchViewport.setSceneDepthMode(patch.sceneDepthMode);
       try {renderFingerFluidBenchCurrentStateForWitness(fingerFluidBenchConfig.effectiveRendererMode,fingerFluidBenchConfig.effectiveOpticalDebugMode);}
       finally {if(before.running)resumeFingerFluidBenchAfterWitness();}
       const after=window.kaminosFingerFluidBenchSessionState();if(['generation','step','paused','running'].some(key=>before[key]!==after[key]))throw Error('Water playback changed during budget edit');
-      for(const key of ['renderScale','energyDiagnosticsMode','timingEnabled'])if(key in patch)fluidBudgetPreferences[key]=patch[key];
+      for(const key of ['renderScale','energyDiagnosticsMode','timingEnabled','sceneDepthMode'])if(key in patch)fluidBudgetPreferences[key]=patch[key];
       const result=read();if(investigationOperations.active)investigationOperations.emit({kind:'fluid.frame-budget',phase:'applied',target:'fluid',requested:patch,effective:result,clock:after});return result;
     };
     fluidBudgetCockpit=mountFluidBudgetCockpit(root,{read,apply,requestFrame:()=>window._kaminosDirty?.()});
-    window.kaminosFluidFrameBudget={read,apply};
+    window.kaminosFluidFrameBudget={read,apply,readSceneDepth:()=>fingerFluidBenchViewport.readSceneDepthForWitness()};
   }
   const setup=promote?byId('fluid-workbench-setup'):document.createElement('section');setup.id='fluid-workbench-setup';
   if(!promote){
@@ -26190,6 +26211,7 @@ document.getElementById('ao-toggle').addEventListener('change', e => {
   if (aoIntensity) {
     aoIntensity.value = e.target.checked ? parseFloat(document.getElementById('ao-intensity').value) : 0;
   }
+  updateSceneAO?.();
   window._kaminosDirty?.();
 });
 
@@ -26204,6 +26226,7 @@ document.getElementById('ao-intensity').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-intensity-val').textContent = v.toFixed(1);
   if (aoIntensity) aoIntensity.value = document.getElementById('ao-toggle').checked ? v : 0;
+  updateSceneAO?.();
   window._kaminosDirty?.();
 });
 

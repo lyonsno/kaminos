@@ -10,15 +10,18 @@ export function mountFluidBudgetCockpit(root,{read,apply,requestFrame}) {
  const tradeoff=document.createElement('div');tradeoff.className='hint';tradeoff.textContent='Scene stays full resolution. Lower water resolution softens detail and thin edges; particle count and physics settings stay the same.';panel.append(tradeoff);
  const check=(key,text)=>{const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.dataset.fluidBudget=key;input.style.cssText='width:auto;margin:0 5px 0 0';label.append(input,document.createTextNode(text));panel.append(label);return input;};
  const energy=check('energy','Energy diagnostics');const energyText=document.createElement('div');energyText.className='hint';panel.append(energyText);
+ const sceneAO=check('scene-ao','Scene ambient occlusion');const aoText=document.createElement('div');aoText.className='hint';panel.append(aoText);
  const timing=check('timing','GPU stage timings (1 frame/sec)');const gpuText=document.createElement('div');gpuText.style.cssText='white-space:pre-line;font:11px/1.5 ui-monospace,monospace';gpuText.dataset.fluidBudget='gpu-readout';panel.append(gpuText);
  const errorText=document.createElement('div');errorText.className='error';panel.append(errorText);let error=null,start=1;
  const appText=document.createElement('div');appText.style.cssText='white-space:pre-line;font:11px/1.5 ui-monospace,monospace;border-top:1px solid #3c636c;margin-top:10px;padding-top:8px';appText.dataset.fluidBudget='frame-readout';panel.insertBefore(appText,energy.parentElement);
  function update(){
-  const current=read();for(const input of [slider,number,energy,timing])input.disabled=!current.clock.available;
+  const current=read();for(const input of [slider,number,energy,timing,sceneAO])input.disabled=!current.clock.available;
   const scale=current.viewport?.renderScale??1;
   if(document.activeElement!==number||number.readOnly)number.value=String(scale*100);
   if(document.activeElement!==slider)slider.value=String(scale*100);
   energy.checked=current.solver?.energy.enabled??false;timing.checked=current.viewport?.timing.enabled??false;
+  sceneAO.checked=current.sceneAO?.requested??false;
+  aoText.textContent=current.sceneAO?.sharedGIField?'Combined GI retains its shared field. AO toggle controls its shading contribution.':current.sceneAO?.dedicatedAOEnabled?'AO contact shading on.':'AO work bypassed · scene contact shading changes.';
   const effective=current.viewport?.lastFrame?.waterResolution;
   scaleText.textContent=effective?`${effective.width} × ${effective.height} water · ${effective.fullWidth} × ${effective.fullHeight} scene · ${(effective.pixelFraction*100).toFixed(1)}% of water pixels`: 'Awaiting rendered extent';
   energyText.textContent=energy.checked?`Four energy-recording passes per simulation step · last measured step ${current.solver.energy.measuredStep??'none yet'}`:'Energy recording off · physics settings unchanged';
@@ -47,6 +50,7 @@ export function mountFluidBudgetCockpit(root,{read,apply,requestFrame}) {
  const scrub=installRelativeNumberDrag({input:number,step:1,onStart:()=>{start=read().viewport.renderScale;}});
  if(number.parentElement?.classList.contains('authoring-number-wrap')){number.parentElement.style.cssText='position:relative;display:inline-flex;flex:0 0 68px;width:68px';number.style.width='100%';}
  energy.addEventListener('change',()=>act({energyDiagnosticsMode:energy.checked?'every_step':'disabled'}));timing.addEventListener('change',()=>act({timingEnabled:timing.checked}));
+ sceneAO.addEventListener('change',()=>act({sceneAOEnabled:sceneAO.checked}));
  let live=true;
  const timer=setInterval(()=>{update();if(read().viewport?.timing.enabled){requestFrame();if(read().clock.paused)requestAnimationFrame(()=>requestAnimationFrame(()=>{if(live&&read().clock.paused&&read().viewport?.timing.enabled)requestFrame();}));}},1000);
  root.prepend(panel);update();return {update,read,apply:act,destroy(){live=false;clearInterval(timer);scrub.stop();panel.remove();}};

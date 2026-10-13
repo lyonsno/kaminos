@@ -5,7 +5,7 @@ export function fluidAppFrameKey(source) {
   return JSON.stringify([source.scope,source.generation,source.paused,source.route,
     source.waterResolution,source.reflection,source.energy,source.diagnostics,
     source.particleCount,source.densityIterationsPerStep,source.opticalDebugMode,
-    source.environmentSource,source.environmentGeneration,source.exposure]);
+    source.environmentSource,source.environmentGeneration,source.exposure,source.sceneAO,source.sceneDepth]);
 }
 const distribution=values=>{
   if(!values.length)return null;
