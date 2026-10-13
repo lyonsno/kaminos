@@ -1,3 +1,4 @@
+// kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';
 import * as arrival from '../asset-arrival.mjs';
 const {chooseAppendAnchor}=arrival;

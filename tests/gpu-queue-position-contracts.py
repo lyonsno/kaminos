@@ -1,3 +1,4 @@
+# kaminos-test: manual — uses the locally installed GPU Greenroom CLI against a temporary queue
 """Queue position for a TRELLIS job comes from Greenroom's own dispatch order.
 
 The report runs against a temporary Greenroom queue with the real gpu_queue package

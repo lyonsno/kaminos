@@ -1,3 +1,4 @@
+# kaminos-test: python
 """The Kaminos server mounts a local FLUX.2 klein weight package for the authoring page.
 
 Klein reads token-embedding rows with HTTP range requests and refuses anything but 206,
