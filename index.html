@@ -4052,6 +4052,7 @@ function escapeHtml(s) {
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let liveTransportRuntime = null;
+let givenPaletteMotionPlayer = null;
 let viewportGizmosVisible=true;
 function attachViewportGizmo(target) {
   transformControls.attach(target);
@@ -11939,6 +11940,7 @@ async function initScene() {
 
   function animate() {
     requestAnimationFrame(animate);
+    const givenPaletteMotionActive = givenPaletteMotionPlayer?.tick(performance.now()) ?? false;
     controls.update();
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
     const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute() || liquidFireCompositionActive;
@@ -11955,10 +11957,10 @@ async function initScene() {
     // not upload that canvas back into the scene rendered by its depth provider.
     const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && !isAuthoredKilnCollisionRoute() && volumeBridge ? volumeBridge.update() === true : false;
     const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
-    const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
+    const mainRendererNeeded = givenPaletteMotionActive || !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
     const localWaterActive = localLiquidHost && !localLiquidHost.paused;
 
-    if (!foregroundServiceActive && mainRendererNeeded && (needsRender || localWaterActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive || idleFrames < IDLE_THRESHOLD)) {
+    if (!foregroundServiceActive && mainRendererNeeded && (givenPaletteMotionActive || needsRender || localWaterActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive || idleFrames < IDLE_THRESHOLD)) {
       if (!sceneRenderedForVolume) renderSceneFrame();
       sceneRenderedForVolume = false;
 
@@ -30041,6 +30043,13 @@ sceneInitialization.then(() => {
       groundToggle.checked = false;
       groundToggle.dispatchEvent(new Event('change'));
       window.selectSceneObject('live-bone:hindlimb-left-hip');
+      if (params.has('transport_motion')) {
+        const {mountGivenPaletteMotion}=await import('./experiments/creature-motion/given-palette-browser.mjs');
+        givenPaletteMotionPlayer=await mountGivenPaletteMotion({THREE,runtime:liveTransportRuntime,
+          motionUrl:params.get('transport_motion'),motionSha256:params.get('transport_motion_sha256'),
+          frameUrl:params.get('transport_frame'),frameSha256:params.get('transport_frame_sha256'),
+          caseSha256:params.get('transport_sha256'),mountRoot:document.getElementById('tab-assets'),document});
+      }
     }
     const loadSplat = params.get('load');
     if (loadSplat) {
