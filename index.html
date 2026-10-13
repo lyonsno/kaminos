@@ -30872,6 +30872,9 @@ sceneInitialization.then(() => {
       if (preset !== plan.composition.flame.presetId) throw new Error('Mounted basin does not match the saved scene');
     }
     await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
+    // The ordinary loader reports some refusals in the UI and returns without
+    // throwing. Its effective completion flag still governs owner admission.
+    if (sceneSaveBlockedByFailedRestore) throw new Error('Starting scene restoration did not complete');
   });
   startupSceneRestore.catch(error => {
     // Only an authored composition restore blocks saving; ordinary routes keep
