@@ -119,7 +119,8 @@ export class MaterialPhotoViewer {
     return texture;
   }
 
-  setImage(image, result = null, shared = null) {
+  setImage(image, result = null, shared = null, cutout = null) {
+    if(cutout&&(cutout.width!==image.width||cutout.height!==image.height))throw Error('Display cutout does not match photograph');
     this.clear();
     this.image = image;
     this.aspect = image.width / image.height;
@@ -153,6 +154,13 @@ export class MaterialPhotoViewer {
       }
       this.normalMap = this.texture({ width:result.width,height:result.height,data:normalPixels }, 'normals');
       this.mapMaterial = new THREE.MeshBasicNodeMaterial({ map: this.normalMap, side: THREE.DoubleSide, toneMapped:false });
+    }
+    this.cutout=cutout;
+    if(cutout){
+      this.cutoutMap=this.texture(cutout,'mask');
+      for(const material of [this.original.material,this.photoMaterial,this.relitMaterial,this.physicalMaterial,this.mapMaterial].filter(Boolean)){
+        material.alphaMap=this.cutoutMap;material.alphaTest=.5;material.alphaToCoverage=true;
+      }
     }
     this.reset(); this.resize();
   }
@@ -296,7 +304,7 @@ export class MaterialPhotoViewer {
       mapUUID:material.map?.uuid??null,roughnessMapUUID:material.roughnessMap?.uuid??null,metalnessMapUUID:material.metalnessMap?.uuid??null,
       emissiveMapUUID:material.emissiveMap?.uuid??null,emissiveIntensity:material.emissiveIntensity}:null;
     const lightDirection=this.key.position.clone().sub(this.key.target.position).normalize();
-    return {mode:this.mode,map:this.map,camera:{position:this.camera.position.toArray(),quaternion:this.camera.quaternion.toArray(),orbit:this.orbit.toArray(),zoom:this.camera.zoom},
+    return {mode:this.mode,map:this.map,cutout:this.cutout?{sample:this.cutout.sample,source:this.cutout.source,width:this.cutout.width,height:this.cutout.height}:null,camera:{position:this.camera.position.toArray(),quaternion:this.camera.quaternion.toArray(),orbit:this.orbit.toArray(),zoom:this.camera.zoom},
       light:{...this.getLightHandle(),position:this.key.position.toArray(),target:this.key.target.position.toArray(),direction:lightDirection.toArray(),intensity:this.key.intensity,color:this.key.color.getHex()},
       geometryUUID:this.mesh?.geometry.uuid??null,normalsMatchSurface:this.mesh?.geometry.attributes.normal.array===this.surface?.normal,
       emissiveIntensity:this.mesh?.material.emissiveIntensity??0,emissionStats:this.emissionStats??null,
@@ -386,6 +394,7 @@ export class MaterialPhotoViewer {
     this.rawMaterialMaps=this.rawTextures=this.contrastAnalysis=this.contrastGains=null;this.derivedTextures=[];
     this.reflectionWeight=this.emissionNode=null;
     this.photoMaterial=this.relitMaterial=this.physicalMaterial=this.mapMaterial=null;
+    this.cutout=this.cutoutMap=null;
   }
   async dispose() {
     this.renderer?.setAnimationLoop(null);this.resizeObserver?.disconnect();

@@ -8,10 +8,12 @@ import { createInferenceCache,photoCacheKey,retainedGeometry } from './inference
 import { loadIncludedExample } from './included-examples.js';
 import { buildPhotoSurface } from './photo-surface.js';
 import { GENERATION_AVAILABLE } from './deployment.js';
+import { createSampleCutout } from './sample-cutouts.js';
 
 const $=id=>document.getElementById(id), params=new URLSearchParams(location.search);
 const photos={celebration:['Celebration','./images/celebration.png'],bag:['Backpack','./images/bag.webp'],orb:['Metal & glow','./images/evil-orb.png']};
 const results=createPhotoRunState();
+const displayCutouts=new WeakMap();
 const state=window.__materialPhoto={status:'loading-image',error:null,source:null,runs:[],identity:null,generationAvailable:GENERATION_AVAILABLE};
 const cache=createInferenceCache({onError:error=>{(state.cacheErrors??=[]).push(String(error));}});
 // Bump these when producer/preparation semantics change. Custom weight URLs are
@@ -121,6 +123,7 @@ async function load(blob,label,key=null,ticket=++imageTicket){
   context.drawImage(bitmap,0,0);bitmap.close();
   const input=context.getImageData(0,0,canvas.width,canvas.height),keyHash=await photoCacheKey(input);
   if(ticket!==imageTicket)return;
+  displayCutouts.set(input,createSampleCutout(key,input.width,input.height));
   image=input;imageKey=keyHash;sampleKey=key;imageBlob=blob;selection=results.select(label);state.source=label;state.status='loaded';state.error=null;state.result=null;state.cache=null;state.example=null;
   provenance('Original photograph');
   const old=$('preview').dataset.blob;
@@ -173,7 +176,7 @@ async function setup(){
   return setupPromise;
 }
 function presentDepth(input,depth){
-  disableMaterials();viewer.setImage(input,depth);viewer.map='surface';$('map').value='surface';
+  disableMaterials();viewer.setImage(input,depth,displayCutouts.get(input)??null);viewer.map='surface';$('map').value='surface';
   $('preview').hidden=true;$('scene').hidden=false;
   document.querySelector('[data-view=photo]').disabled=false;document.querySelector('[data-view=relit]').disabled=false;compare();
 }

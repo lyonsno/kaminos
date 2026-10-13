@@ -55,9 +55,10 @@ test("published model directory routes visitors to existing demos and builder gu
   assert.doesNotMatch(html, /Development branch/);
 });
 
-for (const demo of ["klein", "unimate"]) test(`every relative module import in the ${demo} demo resolves inside the site`, async () => {
+for(const [label,entry] of [["Klein","inference-kit/klein/index.html"],["UniMate","inference-kit/unimate/index.html"],["Material Photograph","inference-kit/material-photo/main.js"]]){
+test(`every relative module import in the ${label} demo resolves inside the site`, async () => {
   const site = await assembled();
-  const pending = [path.join(site, "inference-kit", demo, "index.html")];
+  const pending = [path.join(site, entry)];
   const seen = new Set();
   while (pending.length) {
     const file = pending.pop();
@@ -73,6 +74,7 @@ for (const demo of ["klein", "unimate"]) test(`every relative module import in t
   }
   assert.ok([...seen].some(file => file.endsWith(path.join("webgpu-inference-kit", "src", "core.js"))));
 });
+}
 
 test("Pages workflow uploads the assembled site", () => {
   const workflow = fs.readFileSync(path.join(repoRoot, ".github", "workflows", "flame-atlas-pages.yml"), "utf8");

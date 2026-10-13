@@ -1,7 +1,7 @@
 // Model maps are top-down RGBA; photo-surface UVs have their origin at the bottom.
 // Reverse rows explicitly rather than depending on backend-specific texture flipY.
 export function texturePixels(map, role) {
-  if (!['albedo', 'orm', 'roughness', 'metallic', 'normals', 'depth'].includes(role)) throw new Error('Unknown map role');
+  if (!['albedo', 'orm', 'roughness', 'metallic', 'normals', 'depth', 'mask'].includes(role)) throw new Error('Unknown map role');
   const { width, height, data } = map ?? {};
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 ||
       !(data instanceof Uint8Array || data instanceof Uint8ClampedArray) || data.length !== width * height * 4) {
