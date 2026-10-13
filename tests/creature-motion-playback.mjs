@@ -28,3 +28,23 @@ const untrustedRead=player.read();untrustedRead.source.frames=999;
 assert.equal(player.read().source.frames,31,'caller edits of a read cannot mutate retained source identity');
 assert.throws(()=>module.createCreatureMotionPlayback({THREE,root,clip,source:{...source,frames:60},requestFrame:()=>1,cancelFrame:()=>{}}),/duration/,'wrong source duration cannot masquerade as the retained motion');
 console.log(`Creature replay/pause/seek/hold/disposal on actual Three ${THREE.REVISION}: pass`);
+
+// Actual-library, deterministic host-callback reentry and terminal-publication controls.
+const callbackFailures=[];
+for(const kind of ['dispose','supersede','held','removed']) {
+ const parent=new THREE.Scene(),r=new THREE.Group();r.add(bone.clone());parent.add(r);
+ let id=0,armed=false,p,notify=[];const pending=new Map();
+ const dirty=()=>{if(!p)return;notify.push(p.read().status);if(armed){armed=false;if(kind==='dispose')p.dispose();if(kind==='supersede'){p.pause();p.resume();}}};
+ p=module.createCreatureMotionPlayback({THREE,root:r,clip,source,onDirty:dirty,requestFrame:cb=>(pending.set(++id,cb),id),cancelFrame:n=>pending.delete(n)});
+ p.resume();armed=true;
+ const fire=now=>{const [key,cb]=pending.entries().next().value;pending.delete(key);cb(now);};
+ if(kind==='removed')parent.remove(r);
+ fire(0);if(kind==='held')fire(1000);
+ try {
+  if(kind==='dispose'){assert.equal(p.read().status,'disposed');assert.equal(pending.size,0,'disposal from host notification must leave no scheduled callback');}
+  if(kind==='supersede'){assert.equal(pending.size,1,'host pause/resume must leave only the current generation');p.pause();assert.equal(pending.size,0);}
+  if(kind==='held'||kind==='removed'){assert.equal(p.read().status,kind);assert.equal(notify.at(-1),kind,'the notification must publish the terminal state');}
+ }catch(error){callbackFailures.push(`${kind}: ${error.message}`);}
+ p.dispose();
+}
+assert.deepEqual(callbackFailures,[]);

@@ -22,20 +22,21 @@ if(process.env.SOURCE_REF){
  run=(await import(`data:text/javascript;base64,${Buffer.from(src).toString('base64')}`)).run;
 }
 const failures=[];
-for(const kind of ['cfg','rejected','missing-input']){
+for(const kind of ['cfg','rejected','missing-input','different-seed','missing-seed']){
  const root=path.join(base,kind),bundle=path.join(root,'bundle'),out=path.join(root,'output');await fs.mkdir(bundle,{recursive:true});
  if(kind!=='missing-input')await fs.writeFile(path.join(bundle,'demo.json'),JSON.stringify({skeleton:{joints:2},assetCondSha256:'a'.repeat(64)}));
  const cases=[{text:'An object walks forward.',seed:1,cfgScale:4},...(kind==='rejected'?[{text:'An object trots forward.',seed:2}]:[])];
  const casePath=path.join(root,'cases.json');await fs.writeFile(casePath,JSON.stringify(cases));
  const context=vm.createContext({window:{__unimateDemo:{phase:'ready'}},Array,Float32Array,Promise});
- context.window.__unimateDemoInstance={hasTextEncoder:()=>true,generate:async options=>({motion:{frames:60,joints:2,positions:new Float32Array(360).fill(1),localRotations:new Float32Array(480).fill(1),rootTranslation:new Float32Array(180).fill(1),rootFacing:new Float32Array(240).fill(1),offsets:new Float32Array(6).fill(1)},features:new Float32Array(kind==='rejected'&&options.seed===1?1:1440).fill(1),prompt:options.text,textEncoder:'browser T5',cooperative:true,cfgScale:options.cfgScale??3,sampling:'dopri5-valid-joints',wallMs:1,evaluations:1,steps:[],frameStats:{frames:1}})};
+ context.window.__unimateDemoInstance={hasTextEncoder:()=>true,generate:async options=>({motion:{frames:60,joints:2,positions:new Float32Array(360).fill(1),localRotations:new Float32Array(480).fill(1),rootTranslation:new Float32Array(180).fill(1),rootFacing:new Float32Array(240).fill(1),offsets:new Float32Array(6).fill(1)},features:new Float32Array(kind==='rejected'&&options.seed===1?1:1440).fill(1),prompt:options.text,...(kind==='missing-seed'?{}:{seed:kind==='different-seed'?999:options.seed}),textEncoder:'browser T5',cooperative:true,cfgScale:options.cfgScale??3,sampling:'dopri5-valid-joints',wallMs:1,evaluations:1,steps:[],frameStats:{frames:1}})};
  let error;
  try{await run({argv:['--out',out,'--bundle',bundle,'--weights',bundle,'--t5',bundle,'--cases',casePath,'--chrome','fake'],serve:async()=>({origin:'http://fake',server:{close(){}}}),launch:async()=>({navigate:async()=>{},send:async()=>({result:{data:Buffer.from('fake—not PNG evidence').toString('base64')}}),evaluate:async expression=>vm.runInContext(expression,context),close:async()=>{}}),pause:async()=>{}});}catch(e){error=e;}
  try{
   const report=JSON.parse(await fs.readFile(path.join(out,'report.json'),'utf8'));
   if(kind==='cfg'){assert.ifError(error);const raw=JSON.parse(await fs.readFile(path.join(out,'00/motion.json'),'utf8'));assert.equal(raw.cfgScale,4);assert.equal(raw.sampling,'dopri5-valid-joints');}
   else if(kind==='rejected'){assert.ok(error);assert.equal(report.status,'failed');const raw=JSON.parse(await fs.readFile(path.join(out,'00/motion.raw.json'),'utf8'));assert.equal(raw.features.length,1);assert.equal(report.cases[0].validation,'rejected');assert.equal(report.cases[1].validation,'accepted-schema');}
-  else{assert.ok(error);assert.equal(report.status,'failed');assert.equal(report.phase,'inputs');assert.match(report.error,/ENOENT/);}
+  else if(kind==='missing-input'){assert.ok(error);assert.equal(report.status,'failed');assert.equal(report.phase,'inputs');assert.match(report.error,/ENOENT/);}
+  else{assert.ok(error,'unobserved/wrong effective seed must be rejected');assert.equal(report.status,'failed');const raw=JSON.parse(await fs.readFile(path.join(out,'00/motion.raw.json'),'utf8'));assert.equal(raw.seed,kind==='different-seed'?999:undefined);assert.equal(report.cases[0].validation,'rejected');assert.equal(report.cases[0].task.seed,1);await assert.rejects(fs.access(path.join(out,'00/motion.json')));}
   console.log(`${kind}: pass`);
  }catch(e){failures.push(`${kind}: ${e.message}`);}
 }
