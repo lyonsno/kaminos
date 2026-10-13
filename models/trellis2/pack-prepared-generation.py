@@ -23,6 +23,7 @@ p.add_argument('--expected-preprocess-source-commit')
 p.add_argument('--expected-commit',required=True)
 p.add_argument('--pipeline-type',choices=['512','1024_cascade'],required=True)
 p.add_argument('--steps',type=int,required=True)
+p.add_argument('--seed',type=int,help='explicit unsigned32 sampler seed; omitted preserves the checkpoint base seed')
 a=p.parse_args();out=a.out.resolve();out.mkdir(parents=True,exist_ok=True)
 report={'schema':'trellis2.prepared-generation-package.v0','status':'running','phase':'source-admission','modelCalls':0,'command':sys.argv}
 def sha(data):return hashlib.sha256(data).hexdigest()
@@ -62,6 +63,7 @@ try:
     if commit!=a.expected_commit or dirty:raise ValueError('exact clean package producer required')
     if Path(__file__).resolve()!=root/'models/trellis2/pack-prepared-generation.py':raise ValueError('effective packager root differs from requested source')
     if a.steps<1:raise ValueError('positive explicit sampler steps required')
+    if a.seed is not None and not 0<=a.seed<=0xffffffff:raise ValueError('unsigned32 sampler seed required')
     report['producer']={'root':str(root),'commit':commit,'dirty':dirty,'scriptSha256':file_sha(Path(__file__))}
     base_bytes=(base/'manifest.json').read_bytes();original=json.loads(base_bytes)
     if original.get('schema')!='trellis2.generation-inputs.v0' or original.get('status')!='succeeded' or original.get('modelCalls')!=0:
@@ -98,6 +100,7 @@ try:
     if not image_path.is_relative_to(foreground) or file_sha(image_path)!=image_row['sha256'] or image_path.stat().st_size!=image_row['byteLength']:
         raise ValueError('complete unchanged prepared image required')
     m=copy.deepcopy(original);m['pipelineType']=a.pipeline_type;m['meshResolution']=512 if a.pipeline_type=='512' else 1024;m['samplingSteps']=a.steps
+    if a.seed is not None:m['seed']=a.seed
     m['producer']=report['producer'];m['basePackage']={'path':str(base/'manifest.json'),'sha256':sha(base_bytes),'producer':original['producer']}
     if a.pipeline_type=='512':
         m['models'].pop('highResolutionShape',None)

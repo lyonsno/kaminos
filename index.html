@@ -18656,6 +18656,7 @@ function pipelineArtifactTitle(artifact) {
   const role = pipelineArtifactRoleLabel(artifact);
   if (role === 'normal-map') return 'Normal map output';
   if (role === 'pbr-material-bundle') return 'PBR material bundle';
+  if (pipelineArtifactIsLoadableMesh(artifact)) return role === 'textured-mesh' ? 'textured mesh' : 'mesh output';
   if (pipelineArtifactIsLoadableSplat(artifact)) return 'splat output';
   return `${role || 'artifact'} output`;
 }
@@ -18669,10 +18670,18 @@ function pipelineArtifactIsLoadableSplat(artifact) {
   return id === 'splat' || role.includes('splat') || path.endsWith('.ply') || path.endsWith('.spz');
 }
 
+function pipelineArtifactIsLoadableMesh(artifact) {
+  return typeof artifact?.path === 'string' && artifact.path.toLowerCase().endsWith('.glb');
+}
+
+function pipelineArtifactIsLoadable(artifact) {
+  return pipelineArtifactIsLoadableMesh(artifact) || pipelineArtifactIsLoadableSplat(artifact);
+}
+
 function pipelinePrimaryRunArtifact(result) {
   const outputs = pipelineRunOutputArtifacts(result);
   if (!outputs.length) return null;
-  const preferredIds = ['splat', 'normalMap', 'materialBundle'];
+  const preferredIds = ['splat', 'mesh', 'normalMap', 'materialBundle'];
   for (const id of preferredIds) {
     const artifact = outputs.find(candidate => candidate.id === id);
     if (artifact) return artifact;
@@ -19062,7 +19071,7 @@ function normalizePipelineGeneratedOutputNode(value) {
     artifact,
     artifacts,
     artifactRole,
-    loadable: value.loadable === true || pipelineArtifactIsLoadableSplat(artifact),
+    loadable: value.loadable === true || pipelineArtifactIsLoadable(artifact),
     sidecar: value.sidecar && typeof value.sidecar === 'object' ? value.sidecar : null,
     outputRoot: value.outputRoot || null,
     reportPath: value.reportPath || null,
@@ -19470,6 +19479,9 @@ function pipelineRunPreviewTruthLabel(result, artifact = null) {
   const role = pipelineArtifactRoleLabel(artifact);
   if (role === 'normal-map') return pipelineRunUsesFixture(result) ? 'fixture / normal-map artifact' : 'real normal-map artifact';
   if (role === 'pbr-material-bundle') return pipelineRunUsesFixture(result) ? 'fixture / PBR material bundle' : 'real PBR material bundle';
+  if (pipelineArtifactIsLoadableMesh(artifact)) {
+    return `${pipelineRunUsesFixture(result) ? 'fixture' : 'generated'} / ${role === 'textured-mesh' ? 'textured mesh' : 'mesh'} output`;
+  }
   if (pipelineRunUsesAdapterFixture(result)) return 'adapter fixture / point-cloud preview';
   if (pipelineRunUsesFixture(result)) return 'fixture / point-cloud preview';
   if ((result?.generatorId || result?.generatorLabel || result?.pipelineId || '').toString().toLowerCase().includes('sharp')) {
@@ -19691,7 +19703,7 @@ function pipelineGeneratedOutputGraphNode(record) {
   const artifacts = pipelineRunOutputArtifacts(run);
   const artifact = pipelinePrimaryRunArtifact(run) || record.artifact;
   const sidecar = pipelineRunArtifact(run, 'sidecar') || record.sidecar || null;
-  const loadable = pipelineArtifactIsLoadableSplat(artifact);
+  const loadable = pipelineArtifactIsLoadable(artifact);
   const loadedArtifact = loadable ? pipelineArtifactLoadedRecord(artifact) : null;
   const fixtureBacked = pipelineRunUsesFixture(run) || Boolean(record.fixtureBacked);
   const computedPreviewTruth = pipelineRunPreviewTruthLabel(run, artifact);
@@ -20228,7 +20240,7 @@ function renderPipelineGraphInspector(node, selectedRun) {
   const bodyText = node?.kind === 'image'
     ? 'Select another image card below to replace this node, or import this image into the scene.'
     : node?.kind === 'generated-output'
-      ? (node.loadable ? 'Generated splat artifact node. Load appends this run-local output to the scene; renderer quality depends on the current preview/baking route.' : 'Generated artifact node. This output is not a loadable splat; open the artifact or bundle evidence and route it into a later preview/baking node.')
+      ? (node.loadable ? 'Generated asset. Load appends this output to the scene.' : 'This artifact has no scene importer. Open it or connect it to another processing step.')
     : node?.kind === 'route' && pipelineRouteUsesFixture(node)
       ? 'Execute uses the graph-connected input record. This fixture backend records input provenance only; output fixed fixture until live SHARP is configured.'
       : node?.kind === 'route'
@@ -20276,7 +20288,7 @@ function renderPipelineGraphInspector(node, selectedRun) {
   }
   const nodeRun = node?.kind === 'generated-output' ? (node.runRecord || pipelineGeneratedOutputRunRecord(node)) : selectedRun;
   if ((node?.kind === 'output' || node?.kind === 'generated-output') && nodeRun && node.artifact?.path) {
-    if (pipelineArtifactIsLoadableSplat(node.artifact)) {
+    if (pipelineArtifactIsLoadable(node.artifact)) {
       actions.push({ label: 'Load Output', action: () => pipelineLoadRunSplatArtifact(nodeRun, node.artifact) });
     } else {
       const artifactUrl = pipelineRunReadUrlForPath(nodeRun, node.artifact.path);
@@ -20660,7 +20672,7 @@ function pipelineCompleteGeneratedOutputNode(outputNodeId, run, routeNode) {
   const artifacts = pipelineRunOutputArtifacts(run);
   const sidecar = pipelineRunArtifact(run, 'sidecar');
   const artifactRole = pipelineArtifactRoleLabel(artifact);
-  const loadable = pipelineArtifactIsLoadableSplat(artifact);
+  const loadable = pipelineArtifactIsLoadable(artifact);
   const schedulerEvidence = pipelineRunSchedulerEvidence(run);
   const now = new Date().toISOString();
   let completed = null;
@@ -20995,7 +21007,7 @@ function pipelineGraphNodeActionsMarkup(node) {
     const loaded = Boolean(node.loaded);
     const status = node.status || 'complete';
     const artifactRole = node.artifactRole || pipelineArtifactRoleLabel(node.artifact);
-    const loadable = pipelineArtifactIsLoadableSplat(node.artifact);
+    const loadable = pipelineArtifactIsLoadable(node.artifact);
     const schedulerState = pipelineGraphSchedulerEvidenceState(node.schedulerEvidence);
     const breathabilityState = pipelineGraphSchedulerBreathabilityState(node.schedulerEvidence);
     return `
@@ -21055,7 +21067,7 @@ function pipelineGraphNodeActionItem(node, action) {
       runningMessage: 'Loading generated output into the scene...',
       successMessage: record => `Loaded generated output${record?.id ? ` as ${record.id}` : ''}`,
       action: () => pipelineLoadRunSplatArtifact(run, node.artifact),
-      disabled: !run || !node.artifact?.path || node.loaded || !pipelineArtifactIsLoadableSplat(node.artifact),
+      disabled: !run || !node.artifact?.path || node.loaded || !pipelineArtifactIsLoadable(node.artifact),
     };
   }
   if (action === 'open-artifact' && node?.kind === 'generated-output') {
@@ -21066,7 +21078,7 @@ function pipelineGraphNodeActionItem(node, action) {
       runningMessage: 'Opening generated artifact evidence...',
       successMessage: () => 'Generated artifact opened below',
       action: () => pipelineOpenRunArtifact('Open Artifact', artifactUrl, run, node.artifact),
-      disabled: !run || !artifactUrl || pipelineArtifactIsLoadableSplat(node.artifact),
+      disabled: !run || !artifactUrl || pipelineArtifactIsLoadable(node.artifact),
     };
   }
   return null;
@@ -21274,7 +21286,7 @@ function pipelineRunResultRows(result) {
   const sidecar = pipelineRunArtifact(result, 'sidecar');
   const primaryArtifact = pipelinePrimaryRunArtifact(result);
   const artifactRole = pipelineArtifactRoleLabel(primaryArtifact);
-  const loadable = pipelineArtifactIsLoadableSplat(primaryArtifact);
+  const loadable = pipelineArtifactIsLoadable(primaryArtifact);
   const fixtureBacked = pipelineRunUsesFixture(result);
   const adapterFixture = pipelineRunUsesAdapterFixture(result);
   const schedulerEvidence = pipelineRunSchedulerEvidence(result);
@@ -21365,19 +21377,28 @@ async function pipelineOpenRunArtifact(label, url, result = null, artifact = nul
 }
 
 async function pipelineLoadRunSplatArtifact(result, artifact) {
-  if (!pipelineArtifactIsLoadableSplat(artifact)) {
-    pipelineSetActionStatus('Generated artifact is not a loadable splat; open the artifact evidence instead');
+  if (!pipelineArtifactIsLoadable(artifact)) {
+    pipelineSetActionStatus('This artifact has no scene importer; open it instead');
     return null;
   }
   const url = pipelineRunReadUrlForPath(result, artifact?.path);
   if (!url) {
-    pipelineSetActionStatus('No generated splat output is available for this run');
+    pipelineSetActionStatus('No generated output is available for this run');
     return null;
   }
-  pipelineSetActionStatus('Loading generated splat output...');
+  pipelineSetActionStatus('Loading generated output...');
   try {
-    const fileName = artifact.path.split('/').pop() || 'pipeline-output.ply';
-    const record = await greenroomImportSplat(url, fileName, {
+    const isMesh = pipelineArtifactIsLoadableMesh(artifact);
+    const fileName = artifact.path.split('/').pop() || (isMesh ? 'pipeline-output.glb' : 'pipeline-output.ply');
+    let record;
+    if (isMesh) {
+      const model = await showGLB(url, { clear: false, metadata: {
+        source: url, type: 'glb', fileName, label: result?.source?.label ? `${result.source.label} · mesh` : fileName, pipelineArtifact: artifact,
+      } });
+      record = model?.userData?.kaminosSceneObject;
+      if (!record?.id) throw new Error('Generated mesh loaded without scene registration');
+    } else {
+    record = await greenroomImportSplat(url, fileName, {
       title: 'Pipeline Output',
       subtitle: artifact.role || 'Generated pipeline artifact',
       raw_name: artifact.path,
@@ -21396,11 +21417,12 @@ async function pipelineLoadRunSplatArtifact(result, artifact) {
         },
       },
     });
+    }
     pipelineDockState.loadedPipelineArtifactPaths ||= {};
     pipelineDockState.loadedPipelineArtifactPaths[artifact.path] = {
       sceneObjectId: record?.id || null,
       at: new Date().toISOString(),
-      previewRoute: 'point-cloud-preview',
+      previewRoute: isMesh ? 'glb-pbr' : 'point-cloud-preview',
     };
     renderPipelineGraphWorkbench();
     setActiveTab('assets');
@@ -21579,7 +21601,7 @@ function renderPipelineRunResultPanel() {
   const sidecar = pipelineRunArtifact(result, 'sidecar');
   const primaryArtifact = pipelinePrimaryRunArtifact(result);
   const artifactRole = pipelineArtifactRoleLabel(primaryArtifact);
-  const loadable = pipelineArtifactIsLoadableSplat(primaryArtifact);
+  const loadable = pipelineArtifactIsLoadable(primaryArtifact);
   const title = document.getElementById('pipeline-run-result-title');
   const body = document.getElementById('pipeline-run-result-body');
   const grid = document.getElementById('pipeline-run-result-grid');
@@ -21589,7 +21611,7 @@ function renderPipelineRunResultPanel() {
     const fixtureBacked = pipelineRunUsesFixture(result);
     const adapterFixture = pipelineRunUsesAdapterFixture(result);
     body.textContent = result.ok
-      ? (adapterFixture ? 'This route used a mock adapter fixture. The command ran and produced visible test evidence, but this is not real model inference.' : fixtureBacked ? 'This fixture route recorded the graph input as provenance only; output fixed fixture until live compute is configured.' : primaryArtifact?.path ? `This route wrote a ${artifactRole || 'generated'} artifact.${loadable ? ' Use Load Output to append that output to the scene.' : ' It is not a loadable splat yet; open the artifact or route it into a later preview/baking node.'}` : 'This route wrote evidence without a primary output artifact; inspect the report/bundle for failure or metadata.')
+      ? (adapterFixture ? 'This route used a mock adapter fixture. The command ran and produced visible test evidence, but this is not real model inference.' : fixtureBacked ? 'This fixture route recorded the graph input as provenance only; output fixed fixture until live compute is configured.' : primaryArtifact?.path ? `This route wrote a ${artifactRole || 'generated'} artifact.${loadable ? ' Use Load Output to append that output to the scene.' : ' Open it or connect it to another processing step.'}` : 'This route wrote evidence without a primary output artifact; inspect the report/bundle for failure or metadata.')
       : (result.pipelineDescription || 'This run failed before producing trustworthy output.');
   }
   if (grid) {
@@ -21765,14 +21787,14 @@ const pipelineGeneratorDefinitions = [
   },
   {
     id: 'trellis',
-    title: 'Trellis',
+    title: 'TRELLIS 2',
     kicker: '3D Generator',
-    operationTitle: 'Trellis 3D Generator',
-    detail: 'Awaiting manifest route',
-    defaultPipelineId: null,
-    backendLabel: 'No route yet',
-    chips: ['future', 'mesh'],
-    available: false,
+    operationTitle: 'TRELLIS 2 Image -> Textured Mesh',
+    detail: 'Image -> textured 3D mesh',
+    defaultPipelineId: 'trellis-image-to-mesh-webgpu-v0',
+    backendLabel: 'Queued WebGPU',
+    chips: ['WebGPU', 'mesh'],
+    available: true,
   },
   {
     id: 'kimodo-motion',
@@ -21820,12 +21842,12 @@ function pipelineGeneratorCardRecord(generator) {
     title: generator.title,
     operationTitle: generator.operationTitle || generator.title,
     kicker: generator.kicker,
-    detail: generator.detail,
+    detail: pipeline?.availability && pipeline.availability.status !== 'available' ? pipeline.availability.message : generator.detail,
     backendPipelineId: generator.defaultPipelineId || null,
     backendLabel: generator.backendLabel || pipeline?.routeId || 'No backend route',
     description: pipeline?.description || (generator.available ? 'Generator route is not present in the loaded manifest.' : 'Awaiting manifest route.'),
     chips: generator.chips || [],
-    available: Boolean(generator.available && pipeline),
+    available: Boolean(generator.available && pipeline && (!pipeline.availability || pipeline.availability.status === 'available')),
     real,
     fixture,
     pipeline,
