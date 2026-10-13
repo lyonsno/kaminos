@@ -79,7 +79,11 @@ function cloneJson(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
-export async function createSam31ResidentModelResources({ packageRuntime, route } = {}) {
+export async function createSam31ResidentModelResources({
+  packageRuntime,
+  route,
+  acquisition = { concurrency: 4, byteBudget: 512 * 1024 * 1024 },
+} = {}) {
   requireObject(packageRuntime, 'packageRuntime');
   requireObject(route, 'route');
   if (typeof packageRuntime.loadUint8 !== 'function') throw new Error('packageRuntime.loadUint8 must be a function');
@@ -110,7 +114,7 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
   const resources = loaded.map((item, index) => {
     const { artifact } = item;
     const resourceId = `sam31-static-${index}-${artifactHex(artifact.sha256).slice(0, 16)}`;
-    // Zero prefetch: the shared loader pulls one artifact, verifies it, then uploads it.
+    // Streams do not prefetch; the kit's declared-byte acquisition policy starts each source.
     sources[resourceId] = new Response(new ReadableStream({
       async pull(controller) {
         try {
@@ -163,7 +167,7 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
   });
   const packageIdentityDigest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(resourcePackage.identity)));
   const resourcePackageIdentitySha256 = `sha256:${Array.from(packageIdentityDigest, byte => byte.toString(16).padStart(2, '0')).join('')}`;
-  const modelLease = await route.loadModelResourcePackageFromSources({ package: resourcePackage, sources });
+  const modelLease = await route.loadModelResourcePackageFromSources({ package: resourcePackage, sources, acquisition });
   const allocationBySha = new Map();
   const authenticatedByBuffer = new Map();
   for (let index = 0; index < loaded.length; index += 1) {
