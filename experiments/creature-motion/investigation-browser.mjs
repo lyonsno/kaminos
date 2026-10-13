@@ -1,5 +1,6 @@
 import {createInvestigationRecording} from '../../investigation-recording.mjs';
 import {createInvestigationGuide} from '../../investigation-guide.mjs';
+import {validateCreatureTransform} from './body-source.mjs';
 
 export async function installCreatureInvestigation({id,source,request,
  entry=globalThis.window?.kaminosWorkbenchExperiments,document=globalThis.document,
@@ -11,11 +12,13 @@ export async function installCreatureInvestigation({id,source,request,
  for(const existing of registry.values())if((existing.isRecording?.()??(await existing.read()).recording.status==='recording'))throw Error('This page already has an active investigation');
  const initialDomain=await entry.read(),rootUuid=initialDomain.rootUuid;
  if(initialDomain.source?.source_sha256!==source.rawMotionSha256)throw Error('Creature investigation source differs from its actual motion');
+ if(!/^[a-f0-9]{64}$/i.test(initialDomain.asset?.bodySha256??'')||initialDomain.asset.bodySha256!==source.bodySha256)throw Error('Creature investigation body content identity is unverified or differs');
  let lastObserved,frozen;
  const context=async()=>{
   const state=await entry.state(),domain=await entry.read();
   if(state.id!=='marionette/retained-creature'||domain.rootUuid!==rootUuid||mountRoot.isConnected===false)throw Error('Creature investigation instance changed');
-  const inputs={asset:domain.asset.requested,source_sha256:domain.source.source_sha256,clip:domain.clipName,frame:domain.frame,view:structuredClone(domain.view)};
+  if(domain.asset.bodySha256!==source.bodySha256)throw Error('Creature body content identity changed');
+  const inputs={asset:domain.asset.requested,body_sha256:domain.asset.bodySha256,source_sha256:domain.source.source_sha256,clip:domain.clipName,frame:domain.frame,transform:validateCreatureTransform(domain.transform),view:structuredClone(domain.view)};
   const scene=await readScene();
   if(!scene?.objects?.some(object=>object.id===domain.asset.id&&object.source===(domain.asset.effective??domain.asset.requested)))throw Error('Creature body is no longer registered in the shared scene');
   const value={entry:state,domain,recipe:{id:state.id,inputs},scene,viewport:viewport()};

@@ -1,5 +1,6 @@
 import {createCreatureMotionPlayback} from './playback.mjs';
 import * as THREE from '../../lib/three.core.js';
+import {acquireCreatureBody,validateCreatureTransform} from './body-source.mjs';
 export {withHeldCreatureFrame} from './held-capture.mjs';
 export {installCreatureInvestigation} from './investigation-browser.mjs';
 
@@ -11,6 +12,7 @@ export default {
   if(typeof inputs.asset!=='string'||!inputs.asset.trim())throw Error('Retained creature requires an asset URL');
   if(!/^[a-f0-9]{64}$/i.test(inputs.source_sha256??''))throw Error('Retained creature requires its expected motion source identity');
   if(typeof host?.scene?.open!=='function')throw Error('Shared Workbench scene session is unavailable');
+  if(inputs.transform!==undefined)validateCreatureTransform(inputs.transform);
   const session=await host.scene.open();let player,unsubscribe=null,mounted=null,disposed=false,disposal;
   let refresh=()=>{};
   const callbacks=new Map();let nextCallback=0,clockMs=0;
@@ -46,7 +48,9 @@ export default {
   try {
    for(const name of ['loadAsset','onFrame','redraw','readView','setView','dispose'])
     if(typeof session?.[name]!=='function')throw Error(`Shared scene session lacks ${name}`);
-   const asset=await session.loadAsset(inputs.asset);
+   const body=await acquireCreatureBody(inputs);let asset;
+   try{asset=await session.loadAsset({url:body.url,metadata:{source:inputs.asset}});}
+   finally{body.release();}
    const identities=[];asset.root?.traverse(object=>{if(object.userData?.native_motion)identities.push(object.userData.native_motion);});
    if(identities.length!==1||identities[0].source_sha256?.toLowerCase()!==inputs.source_sha256.toLowerCase())
     throw Error('Loaded creature motion source identity differs from the requested retained source');
@@ -56,8 +60,13 @@ export default {
    player=createCreatureMotionPlayback({THREE,root:asset.root,clip,source:identities[0],
     requestFrame,cancelFrame,onDirty:()=>{session.redraw();refresh();}});
    player.seek(inputs.frame??0);
+   if(inputs.transform!==undefined){
+    asset.root.position.fromArray(inputs.transform.position);asset.root.quaternion.fromArray(inputs.transform.quaternion);asset.root.scale.fromArray(inputs.transform.scale);
+    asset.root.updateMatrixWorld(true);session.redraw();
+   }
    if(inputs.view!==undefined)await session.setView(inputs.view);
-   const read=()=>({...player.read(),asset:{requested:inputs.asset,effective:asset.source,id:asset.id},view:session.readView()});
+   const read=()=>({...player.read(),asset:{requested:inputs.asset,effective:asset.source,id:asset.id,bodySha256:body.bodySha256},
+    transform:{position:asset.root.position.toArray(),quaternion:asset.root.quaternion.toArray(),scale:asset.root.scale.toArray()},view:session.readView()});
    const active=()=>{if(disposed)throw Error('Creature experiment is disposed');};
    const observed=()=>{try{return {effective:read()};}catch(error){return {effective:null,effectiveError:error.message};}};
    const operation=(name,apply)=>input=>{
@@ -73,8 +82,8 @@ export default {
      // Hold an exact native source sample for shared Capture and reconstruction.
      player.seek(input?.frame??player.read().frame);
      const state=read();
-     return {priorStatus,state,inputs:{asset:inputs.asset,source_sha256:inputs.source_sha256,
-      clip:clip.name,frame:state.frame,view:structuredClone(state.view)}};
+     return {priorStatus,state,inputs:{asset:inputs.asset,body_sha256:body.bodySha256,source_sha256:inputs.source_sha256,
+      clip:clip.name,frame:state.frame,transform:structuredClone(state.transform),view:structuredClone(state.view)}};
     }),
    };
    const dispose=()=>{

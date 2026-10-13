@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {readObservationSession} from '../../observation-session.mjs';
 import {withHeldCreatureFrame} from './held-capture.mjs';
+import {validateCreatureTransform} from './body-source.mjs';
 
 // The common mount is injected from the actual shared-tooling revision. This
 // adapter owns creature context/hold/reopen, not another retention framework.
@@ -33,7 +34,7 @@ export async function mountCreatureInvestigation({page,out,source,guide={},frame
      const image=retained.observations?.[0]?.image;assert.equal(typeof image,'string','Shared retained image path missing');
      return {report:path.join(path.dirname(image),'report.json')};
     }});
-   if(!['resumed','not-needed'].includes(transaction.restore.status)){
+   if(!['resumed','endpoint-held','not-needed'].includes(transaction.restore.status)){
     const error=Error(`Creature image retained, but playback restoration ${transaction.restore.status}: ${transaction.restore.error??'instance changed'}`);
     error.retained=transaction.retained;error.restore=transaction.restore;throw error;
    }
@@ -50,6 +51,10 @@ export async function mountCreatureInvestigation({page,out,source,guide={},frame
   assert.equal(recipe.inputs.source_sha256,source.rawMotionSha256,'Captured motion source differs');
   assert.equal(domain.source.source_sha256,source.rawMotionSha256,'Captured observed motion source differs');
   assert.equal(retained.source.bodySha256,source.bodySha256,'Captured body source differs');
+  assert.equal(domain.asset.bodySha256,source.bodySha256,'Captured observed body content differs or is unverified');
+  assert.equal(recipe.inputs.body_sha256,domain.asset.bodySha256,'Captured recipe/body content mismatch');
+  validateCreatureTransform(recipe.inputs.transform);
+  assert.deepEqual(recipe.inputs.transform,domain.transform,'Captured recipe/transform mismatch');
   assert.equal(recipe.inputs.asset,domain.asset.requested,'Captured recipe/asset mismatch');
   assert.equal(recipe.inputs.clip,domain.clipName,'Captured recipe/clip mismatch');
   assert.equal(recipe.inputs.frame,domain.frame,'Captured recipe/frame mismatch');
@@ -62,9 +67,12 @@ export async function mountCreatureInvestigation({page,out,source,guide={},frame
   assert.ok(Number.isFinite(view.fov)&&view.fov>0&&view.fov<180&&Number.isFinite(view.zoom)&&view.zoom>0&&Number.isFinite(view.near)&&view.near>0&&Number.isFinite(view.far)&&view.far>view.near,'Captured view projection missing or invalid');
   assert.ok(Math.abs(domain.time-domain.frame/domain.source.fps)<1e-5,'Captured time is not a native source sample');
   const current=JSON.parse(await fs.readFile(handle.reportPath,'utf8'));
-  if(current.status!=='finished')await handle.finish('Continue from the retained creature pose');
   // The retained prefix remains history; applying it again would double edits.
-  const state=await page.evaluate(({id,inputs})=>window.kaminosWorkbenchExperiments.open(id,inputs),recipe);
+  const state=await page.evaluate(async recipe=>{
+   const {reopenVerifiedCreature}=await import('./experiments/creature-motion/body-source.mjs');
+   return reopenVerifiedCreature(window.kaminosWorkbenchExperiments,recipe);
+  },recipe);
+  if(current.status!=='finished')await handle.finish('Continue from the retained creature pose');
   return {recipe,state,history:reportPath,recording:handle.reportPath};
  }};
 }

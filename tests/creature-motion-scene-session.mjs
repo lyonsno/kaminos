@@ -2,6 +2,7 @@
 // Cross-owner module composition over deterministic Three objects. The caller
 // names the actual shared session module; this does not replace native host use.
 import assert from 'node:assert/strict';
+import './creature-body-fixture.mjs';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import * as THREE from '../lib/three.core.js';
@@ -17,7 +18,7 @@ const host={scene:{open:async()=>createOwnerSceneSession({
   const root=new THREE.Group(),bone=new THREE.Object3D();bone.name='pelvis';root.add(bone);scene.add(root);roots.push(root);
   root.userData.native_motion=structuredClone(source);
   const clip=new THREE.AnimationClip('source clip',1,[new THREE.VectorKeyframeTrack('pelvis.position',[0,.5,1],[0,0,0,0,0,.3,0,0,.6])]);
-  return {id:`body-${++counter}`,root,clips:[clip],source:asset,owned:true};
+  return {id:`body-${++counter}`,root,clips:[clip],source:asset.metadata.source,owned:true};
  },attach:()=>{throw Error('This consumer loads its owned asset');},remove:({root})=>scene.remove(root),
  readView:()=>view,setView:next=>(view=next),redraw:()=>{},
  onFrame:callback=>(callbacks.add(callback),()=>callbacks.delete(callback)),
