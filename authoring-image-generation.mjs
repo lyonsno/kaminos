@@ -203,7 +203,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       const text=String(prompt||'').trim();if(!text)throw Error('Describe the image to generate');
       if(!KLEIN_IMAGE_SIZES.includes(size))throw Error('Image size must be 512, 768 or 1024');
       const reason=unavailable();if(reason)throw Error(reason);
-      const scene=context();if(!scene.prototype?.foregroundGpuContext||!scene.host||!scene.handoff)throw Error('Load a Fire & smoke scene to generate images beside the kiln.');
+      const scene=context();if(!scene.prototype?.foregroundGpuContext||!scene.host||!scene.handoff)throw Error('Image generation needs the Kaminos shared GPU device and its frame owner.');
       active=true;abort=new AbortController();let phase='weights',previous=null,handoff=null,frameRun=null,route=null,control=null,session=null;
       set({status:'loading',error:null,canStop:true,stage:null,percent:null,progress:loaded?'Starting…':'Loading FLUX.2 klein…'});
       try{
@@ -212,7 +212,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         ({session}=loaded);const {core,foreground,pipeline,base}=loaded;
         // The kiln of the scene loaded now; a reloaded scene has a new prototype and handoff.
         const current=context();handoff=current.handoff;const host=current.host;
-        if(!current.prototype?.foregroundGpuContext||!host||!handoff)throw Error('Load a Fire & smoke scene to generate images beside the kiln.');
+        if(!current.prototype?.foregroundGpuContext||!host||!handoff)throw Error('Image generation needs the Kaminos shared GPU device and its frame owner.');
         if(!handoff.has('klein'))handoff.install('klein',request=>foreground.request({...request,run:service=>host.runForegroundFrame(()=>request.run(service))}));
         previous=handoff.owner();await handoff.activate('klein');
         phase='inference';set({status:'running',stage:'Reading prompt',percent:null,progress:'Reading the prompt…'});

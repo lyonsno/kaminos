@@ -3842,6 +3842,7 @@ import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnapshot} from './authoring-trellis-generation.mjs';
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
+import {createAppFrameSource} from './app-frame-source.mjs';
 import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,KLEIN_PUBLISHED_WEIGHTS} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
@@ -26705,9 +26706,24 @@ sceneInitialization.then(() => {
 
 function setupAuthoringAssets(){
   let redraw=()=>{};
+  // The frame owner models borrow frames from: the fire scene's volume prototype when
+  // one is loaded, otherwise the ordinary scene itself, so Generate needs no fire scene.
+  let appFrameSource=null;
+  const frameOwner=()=>{
+    if(volumePrototype?.foregroundGpuContext){
+      // A fire scene took over: the app owner stops requesting frames.
+      if(appFrameSource?.debugState().active&&!appFrameSource.debugState().pending)appFrameSource.setForegroundOpportunityRequester(null);
+      return volumePrototype;
+    }
+    const device=sharedGpu?.device;
+    if(!device||!compositionHost||compositionHost.device!==device)return null;
+    return appFrameSource||=createAppFrameSource({device,queue:device.queue});
+  };
+  window.kaminosAppFrameSource=()=>appFrameSource?.debugState()||null;
   const foregroundHandoff=()=>{
-    if(!volumePrototype||!compositionHost)return null;
-    if(authoringForegroundHandoff?.prototype!==volumePrototype)authoringForegroundHandoff={prototype:volumePrototype,handoff:createForegroundHandoff({prototype:volumePrototype,host:compositionHost})};
+    const owner=frameOwner();
+    if(!owner||!compositionHost)return null;
+    if(authoringForegroundHandoff?.prototype!==owner)authoringForegroundHandoff={prototype:owner,handoff:createForegroundHandoff({prototype:owner,host:compositionHost})};
     return authoringForegroundHandoff.handoff;
   };
   const request=async url=>{const response=await fetch(url,{cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error||`Assets HTTP ${response.status}`);return data;};
@@ -26756,7 +26772,7 @@ function setupAuthoringAssets(){
         if(meshBusy('trellis'))return 'TRELLIS is generating.';
         return null;
       };
-      const sf3d=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:foregroundHandoff()?.recording('sf3d')||volumePrototype,host:compositionHost}),changed:()=>redraw(),blocked:sf3dBlocked});
+      const sf3d=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:foregroundHandoff()?.recording('sf3d')||frameOwner(),host:compositionHost}),changed:()=>redraw(),blocked:sf3dBlocked});
       authoringGenerator={...sf3d,run:tracked('sf3d',input=>runWithKilnHandoff({service:sf3d,input,handoff:foregroundHandoff(),owner:'sf3d',blocked:sf3dBlocked}))};
     }
     return authoringGenerator;
@@ -26774,7 +26790,7 @@ function setupAuthoringAssets(){
   authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();};
   authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis'),changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});
   authoringImageGenerator=createKleinAuthoringImageGeneration({
-    context:()=>({sharedGpu,prototype:volumePrototype,host:compositionHost,handoff:foregroundHandoff()}),
+    context:()=>({sharedGpu,prototype:frameOwner(),host:compositionHost,handoff:foregroundHandoff()}),
     // A locally mounted weight package (KAMINOS_KLEIN_WEIGHTS_ROOT) spares each port's
     // browser cache a 3 GB download; otherwise the published package is used.
     weights:async()=>{const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};return config.klein?.mounted?config.klein.weightsUrl:KLEIN_PUBLISHED_WEIGHTS;},
