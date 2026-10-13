@@ -24,6 +24,22 @@ def protect_output_file(path,inputs):
 def protect_outputs(out,inputs):
     for name in OUTPUT_NAMES:protect_output_file(Path(out)/name,inputs)
 
+def referenced_paths(value):
+    result=[]
+    if isinstance(value,dict):
+        if isinstance(value.get('path'),str):result.append(Path(value['path']))
+        for child in value.values():result.extend(referenced_paths(child))
+    elif isinstance(value,list):
+        for child in value:result.extend(referenced_paths(child))
+    return result
+
+def protect_report_destination(report_path,out,inputs,paths_known):
+    if not paths_known:raise ValueError('retained input paths unresolved; refusal report goes to stderr')
+    protect_output_file(report_path,inputs)
+    for name in OUTPUT_NAMES:
+        if name!='build-report.json' and report_path.resolve()==(out/name).resolve():
+            raise ValueError('report collides with generated package asset: '+name)
+
 def validate_source_frame(control,frame,baseline,control_sha):
     if frame['source']['control']['sha256']!=control_sha:raise ValueError('control-frame source digest mismatch')
     if baseline['candidatePaintedWeights'] is not False or baseline['sourceSha256']!=control['sourceSha256'] or frame['source']['sourceSceneSha256']!=control['sourceSha256']:
@@ -110,17 +126,19 @@ def build(args):
     inputs=[control_path,frame_path,baseline/'manifest.json']+[baseline/name for name in OUTPUT_NAMES]
     report_path=Path(getattr(args,'report',None) or out/'build-report.json').absolute()
     digest=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
-    report={'status':'running','phase':'output-protection','requestedInputs':vars(args),'output':str(out),'effectiveSolver':'numpy-given-tree-geodesic-dual-quaternion'}
+    paths_known=False
+    report={'status':'running','phase':'source-path-discovery','requestedInputs':vars(args),'output':str(out),'effectiveSolver':'numpy-given-tree-geodesic-dual-quaternion'}
     try:
+        # Parse only to discover protected paths. This grants no input authority.
+        # Complete this before any refusal can write a report destination.
+        control=json.loads(control_path.read_text());frame=json.loads(frame_path.read_text());old=json.loads((baseline/'manifest.json').read_text())
+        inputs.extend(referenced_paths(control));inputs.extend(referenced_paths(frame))
+        inputs.extend(baseline/name for name in old.get('assets',{}))
+        paths_known=True;report['phase']='output-protection'
         if out==baseline or baseline in out.parents or out in [control_path.parent,frame_path.parent]:raise ValueError('output overlaps retained inputs')
-        protect_outputs(out,inputs);protect_output_file(report_path,inputs)
+        protect_outputs(out,inputs);protect_report_destination(report_path,out,inputs,paths_known)
         out.mkdir(parents=True,exist_ok=True);report['phase']='authentication'
         if digest(frame_path)!=args.expected_rig_frame_sha256 or digest(baseline/'manifest.json')!=args.expected_baseline_sha256:raise ValueError('given frame or baseline digest mismatch')
-        control=json.loads(control_path.read_text());frame=json.loads(frame_path.read_text());old=json.loads((baseline/'manifest.json').read_text())
-        inputs.extend(Path(v['path']) for v in control.values() if isinstance(v,dict) and 'path' in v)
-        inputs.extend(Path(v['path']) for v in frame['source'].values() if isinstance(v,dict) and 'path' in v)
-        inputs.extend(baseline/name for name in old['assets'])
-        protect_outputs(out,inputs);protect_output_file(report_path,inputs)
         validate_source_frame(control,frame,old,digest(control_path))
         if digest(control['geometry']['path'])!=control['geometry']['sha256']:raise ValueError('geometry digest mismatch')
         geom=np.load(control['geometry']['path'])
@@ -173,7 +191,7 @@ def build(args):
     finally:
         # An unsafe report path must not turn a refusal into an input overwrite.
         # Callers can choose an independent --report path for durable refusal.
-        try:protect_output_file(report_path,inputs)
+        try:protect_report_destination(report_path,out,inputs,paths_known)
         except ValueError as error:
             report['reportWriteRefused']=str(error)
             print(json.dumps(report),file=sys.stderr)

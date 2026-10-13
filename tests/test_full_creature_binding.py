@@ -17,6 +17,33 @@ def bone(name,x,parent=None):
     return {'name':name,'parent':parent,'restMatrix':matrix.tolist(),'tail':[x,.1,0]}
 
 class FullTreeContracts(unittest.TestCase):
+    def test_early_refusal_report_cannot_overwrite_referenced_geometry(self):
+        import json
+        for mode in ['authentication','output-protection']:
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as folder:
+                root=Path(folder);inputs=root/'inputs';inputs.mkdir();out=root/'out';out.mkdir()
+                geometry=inputs/'geometry.npz';geometry.write_bytes(b'retained geometry bytes')
+                control=inputs/'control.json';control.write_text(json.dumps({'geometry':{'path':str(geometry)}}))
+                frame=inputs/'frame.json';frame.write_text('{}');baseline=inputs/'baseline';baseline.mkdir();(baseline/'manifest.json').write_text('{}')
+                if mode=='output-protection':(out/'rest.bin').symlink_to(frame)
+                r=subprocess.run([sys.executable,str(Path(__file__).resolve().parents[1]/'full-creature-binding.py'),
+                    '--control',str(control),'--rig-frame',str(frame),'--expected-rig-frame-sha256','0'*64,
+                    '--baseline',str(baseline),'--expected-baseline-sha256','0'*64,'--out',str(out),'--report',str(geometry)],capture_output=True,text=True)
+                self.assertNotEqual(r.returncode,0)
+                self.assertEqual(geometry.read_bytes(),b'retained geometry bytes','early refusal report overwrote undiscovered geometry')
+
+    def test_report_cannot_take_a_prospective_manifest_or_binary_path(self):
+        for name in ['manifest.json','rest.bin','triangles.bin','automatic-weights.bin','automatic-presets.bin']:
+            with self.subTest(name=name),tempfile.TemporaryDirectory() as folder:
+                root=Path(folder);inputs=root/'inputs';inputs.mkdir();out=root/'out';out.mkdir()
+                control=inputs/'control.json';control.write_text('{}');frame=inputs/'frame.json';frame.write_text('{}')
+                baseline=inputs/'baseline';baseline.mkdir();(baseline/'manifest.json').write_text('{}')
+                r=subprocess.run([sys.executable,str(Path(__file__).resolve().parents[1]/'full-creature-binding.py'),
+                    '--control',str(control),'--rig-frame',str(frame),'--expected-rig-frame-sha256','0'*64,
+                    '--baseline',str(baseline),'--expected-baseline-sha256','0'*64,'--out',str(out),'--report',str(out/name)],capture_output=True,text=True)
+                self.assertNotEqual(r.returncode,0)
+                self.assertFalse((out/name).exists(),'refusal wrote a report over a prospective asset')
+
     def test_production_report_alias_rejection_preserves_retained_input(self):
         for kind in ['symlink','hardlink']:
             with self.subTest(kind=kind),tempfile.TemporaryDirectory() as folder:
