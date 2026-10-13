@@ -1,6 +1,6 @@
 import fs from 'node:fs';import path from 'node:path';import {pathToFileURL} from 'node:url';import {createHash} from 'node:crypto';
 import {finiteLandingSummary} from './stone-fall-land.mjs';
-import {validateStoneObservationStamp} from '../structural-material-observation-economics.mjs';
+import {validateStoneObservationStamp,assertStableStoneObservationStamps} from '../structural-material-observation-economics.mjs';
 const [url,out,playwrightPath,executable,kitRoot,compositionPath]=process.argv.slice(2);if(!out)throw Error('Output directory required');fs.mkdirSync(out,{recursive:true});
 const report={status:'running',phase:'setup',url,checks:[],errors:[],inputs:[],observations:[]},save=()=>fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));
 const check=(name,passed,detail)=>{report.checks.push({name,passed,detail});save();if(!passed)throw Error(name);};let browser,page;save();
@@ -39,7 +39,7 @@ try{
    const readPhysical=async()=>JSON.parse(await page.evaluate(()=>JSON.stringify(window.__stoneSharedHost.runtime().witness({resources:false}))));
    const acquire=async()=>{await page.evaluate(()=>window.__stoneSharedHost.runtime().settle());return readPhysical();};
    const injury=await acquire();fs.writeFileSync(path.join(out,'injury-material.json'),JSON.stringify(injury));
-   const physicalRuntime={...runtime,settle:async()=>{await runtime.settle();await page.evaluate(()=>window.__stoneSharedHost.runtime().settle());},read:readPhysical,validate(state){if(state.phase!=='interactive'||state.failure||!state.paused||!state.surfaceObservation)throw Error('Held acquired native physical state required');},stability:{read:()=>page.evaluate(()=>window.__stoneSharedHost.runtime().observationStamp()),validate:validateStoneObservationStamp,assertStable(a,b){if(JSON.stringify(a)!==JSON.stringify(b))throw Error('Physical material changed during capture');}}};
+   const physicalRuntime={...runtime,settle:async()=>{await runtime.settle();await page.evaluate(()=>window.__stoneSharedHost.runtime().settle());},read:readPhysical,validate(state){if(state.phase!=='interactive'||state.failure||!state.paused||!state.surfaceObservation)throw Error('Held acquired native physical state required');},stability:{read:()=>page.evaluate(()=>window.__stoneSharedHost.runtime().observationStamp()),validate:validateStoneObservationStamp,assertStable:assertStableStoneObservationStamps}};
    const physics=experiment({runtime:physicalRuntime,retain});
    const world=await page.evaluate(()=>{const api=window.__stoneSharedHost.runtime();api.object.updateWorldMatrix(true,false);return{worldY:api.object.matrixWorld.elements[13],floor:api.experimentStatus().contact?.worldPlane.offset,contact:api.experimentStatus().contact};});
    check('effective finite cell contact and gravity',world.contact?.route==='kaminos.stone.finite-cell-plane.webgpu.v1'&&injury.configuration.gravity>0,world);

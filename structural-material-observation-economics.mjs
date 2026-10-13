@@ -1,9 +1,24 @@
 export async function stoneObservationStamp(data){
- const bytes=new TextEncoder().encode(JSON.stringify(data));
- const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
+ const hash=async value=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(value)))),v=>v.toString(16).padStart(2,'0')).join('');
+ const [digest,physicalDigest]=await Promise.all([hash(data),hash({...data,camera:undefined})]);
  return {schema:'stone-observation-stamp-v2',current:data.state?.observation?.kind!=='submitted',grip:data.state?.grip?structuredClone(data.state.grip):null,route:data.route,runId:data.state?.runId,steps:data.state?.steps,
   paused:data.paused,busy:data.busy,pendingPick:data.pendingPick,finishing:data.finishing,failure:data.failure,
-  resourceVersion:data.resourceVersion,digest};
+  resourceVersion:data.resourceVersion,digest,physicalDigest,camera:structuredClone(data.camera)};
+}
+
+export const STONE_CAMERA_STABILITY_TOLERANCE=1e-9;
+export function assertStableStoneObservationStamps(before,after){
+ for(const stamp of [before,after]){
+  validateStoneObservationStamp(stamp);
+  if(!/^[a-f0-9]{64}$/.test(stamp.physicalDigest??''))throw Error('Complete exact physical stamp required');
+  if(!stamp.camera||!['position','target','up'].every(key=>Array.isArray(stamp.camera[key])&&stamp.camera[key].length===3&&stamp.camera[key].every(Number.isFinite))||!['near','far','fov'].every(key=>Number.isFinite(stamp.camera[key])))throw Error('Complete finite camera state required');
+ }
+ if(before.physicalDigest!==after.physicalDigest)throw Error('Stone physical state changed during capture');
+ for(const key of new Set([...Object.keys(before.camera),...Object.keys(after.camera)])){
+  const a=before.camera[key],b=after.camera[key];
+  if(['position','target','up'].includes(key)){if(a.some((v,i)=>Math.abs(v-b[i])>STONE_CAMERA_STABILITY_TOLERANCE))throw Error('Stone camera changed during capture');}
+  else if(JSON.stringify(a)!==JSON.stringify(b))throw Error('Stone camera lens or metadata changed during capture');
+ }
 }
 
 export function validateStoneObservationStamp(s){
