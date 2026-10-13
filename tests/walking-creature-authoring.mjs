@@ -58,4 +58,9 @@ for(const mode of ['source','cycle','path']){
  assert.equal(removed.read().playback.status,'removed','registered placement removal must stop the nested animated actor');assert.equal(tick,null,'removed creature releases the shared clock');assert.equal(removed.read().skin.updates,beforeRemoval.skin.updates);assert.equal(removed.read().cycle,beforeRemoval.cycle);
  assert.throws(()=>removed.operations.play(),/removed|mounted/i);assert.throws(()=>removed.operations.seek({frame:0}),/removed|mounted/i);await removed.dispose();
 }
-console.log('Authored placement, live selection/refusal/removal and recipe recovery preserve the actual creature');
+const importer=await createWalkingCreature({host,inputs},{loadSources});const importRoot=new Element();let imported=null;
+importer.mount({root:importRoot,invoke:(name,input)=>importer.operations[name](input),reopen:async recipe=>{imported=recipe;}});
+const fileInput=nodes(importRoot).find(n=>n.type==='file');assert.ok(fileInput,'saved setups must reopen through an actual file control, not a custom URL');
+fileInput.files=[{text:async()=>JSON.stringify(recipe)}];await fileInput.onchange();assert.deepEqual(imported,recipe);
+imported=null;fileInput.files=[{text:async()=>'{not json'}];await fileInput.onchange();assert.equal(imported,null,'invalid JSON must not replace the live creature');assert.equal(importer.read().motion.id,'walk');await importer.dispose();
+console.log('Authored placement, live selection/refusal/removal and saved setup controls preserve the actual creature');

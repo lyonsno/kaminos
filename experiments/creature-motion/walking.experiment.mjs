@@ -6,6 +6,10 @@ import {attachGivenPalettePlayback} from './given-palette-playback.mjs';
 import {givenSourceSoleHeight} from './given-motion-source.mjs';
 import {createWalkingPoseAdapter} from './walking-pose.mjs';
 
+function checkAuthoredTransform(t){
+ if(t!==undefined&&(t?.position?.length!==3||t?.quaternion?.length!==4||t?.scale?.length!==3||![...t.position,...t.quaternion,...t.scale].every(Number.isFinite)||t.scale.some(v=>v<=0)||Math.abs(Math.hypot(...t.quaternion)-1)>1e-5))throw Error('Invalid authored creature transform or scale');
+}
+
 export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources}={}) {
  if(typeof host?.scene?.open!=='function'||!host.controls?.document)throw Error('Walking creature requires the actual shared Workbench host');
  const data=await loadSources(inputs),document=host.controls.document;
@@ -22,7 +26,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const placement=new THREE.Group();placement.name='Creature · authored placement';
  if(inputs.transform!==undefined){
   const t=inputs.transform;
-  if(t?.position?.length!==3||t?.quaternion?.length!==4||t?.scale?.length!==3||![...t.position,...t.quaternion,...t.scale].every(Number.isFinite)||t.scale.some(v=>v<=0)||Math.abs(Math.hypot(...t.quaternion)-1)>1e-5)throw Error('Invalid authored creature transform or scale');
+  checkAuthoredTransform(t);
   placement.position.fromArray(t.position);placement.quaternion.fromArray(t.quaternion);placement.scale.fromArray(t.scale);
  }
  let session,runtime,asset,floor,floorAsset,player,stop=null,clock=0,cycle=0,mode='source',disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
@@ -131,7 +135,9 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(inputs.play!==undefined&&typeof inputs.play!=='boolean')throw Error('Initial playback must be boolean');
   if(inputs.play===true)operations.play();
   if(globalThis.window)window.kaminosWalkingCreature=inspect;
-  return {read,operations,dispose,mount({root,invoke}){
+  return {read,operations,dispose,mount({root,invoke,reopen=recipe=>{
+   const entry=globalThis.window?.kaminosWorkbenchExperiments;if(typeof entry?.open!=='function')throw Error('Shared creature setup entry is unavailable');return entry.open('marionette/walking-creature',recipe);
+  }}){
    const panel=document.createElement('section');panel.className='walking-creature-instruments';
    const title=document.createElement('h3');title.textContent='Creature · walking around';panel.append(title);
    const note=document.createElement('p');note.textContent=`Same automatic full skin · source ${(adapter.frames/adapter.fps).toFixed(2)} s · repeat seam ${walking.identity.seam.frames} blended frames · curve radius ${walking.identity.radius}. No foot/contact correction.`;panel.append(note);
@@ -144,6 +150,14 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    }
    const identity=document.createElement('p');identity.style.overflowWrap='anywhere';panel.append(identity);
    const save=document.createElement('button');save.type='button';save.textContent='Save creature setup';save.onclick=()=>{const blob=new Blob([JSON.stringify(read().recipe,null,2)+'\n'],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='creature.setup.json';link.click();URL.revokeObjectURL(url);};panel.append(save);
+   const fileLabel=document.createElement('label');fileLabel.textContent='Open creature setup ';const fileInput=document.createElement('input');fileInput.type='file';fileInput.accept='.json,application/json';fileInput.setAttribute('aria-label','Open creature setup');
+   fileInput.onchange=async()=>{const file=fileInput.files?.[0];if(!file)return;
+    try{error.textContent='';const recipe=JSON.parse(await file.text());checkAuthoredTransform(recipe.transform);
+     // Verify the saved motion/body before the existing entry replaces this instance.
+     const loaded=await loadSources(recipe),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6});if(recipe.sample!==undefined)check.frame(recipe.sample);
+     active();await reopen(recipe);
+    }catch(e){error.textContent=e.message;}finally{fileInput.value='';}
+   };fileLabel.append(fileInput);panel.append(fileLabel);
    for(const [label,next] of [['Raw source','source'],['Straight cycle','cycle'],['Walk the curve','path']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call('mode',{mode:next});panel.append(button);}
    for(const [label,name] of [['Play motion','play'],['Pause motion','pause'],['Restart motion','replay']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call(name);panel.append(button);}
    if(floor){const label=document.createElement('label');label.textContent='Walking reference floor ';const input=document.createElement('input');input.type='checkbox';input.checked=floor.visible;input.onchange=()=>call('floor',{visible:input.checked});label.append(input);panel.append(label);}
