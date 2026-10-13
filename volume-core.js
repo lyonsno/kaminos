@@ -2163,7 +2163,9 @@ export function fluidLayerHeatMeans(values, dims) {
   let bottom = 0, side = 0;
   for (let z = 0; z < dims[2]; z++) for (let x = 0; x < dims[0]; x++) bottom += values[16 * (x + dims[0] * (0 + dims[1] * z)) + 5];
   for (let z = 0; z < dims[2]; z++) for (let y = 0; y < dims[1]; y++) side += values[16 * (0 + dims[0] * (y + dims[1] * z)) + 5];
-  return { bottomHeatMean: bottom / (dims[0] * dims[2]), sideHeatMean: side / (dims[1] * dims[2]) };
+  const byY = Array.from({ length: Math.min(6, dims[1]) }, (_, y) => { let t = 0; for (let z = 0; z < dims[2]; z++) for (let x = 0; x < dims[0]; x++) t += values[16 * (x + dims[0] * (y + dims[1] * z)) + 5]; return t / (dims[0] * dims[2]); });
+  const byX = Array.from({ length: Math.min(6, dims[0]) }, (_, x) => { let t = 0; for (let z = 0; z < dims[2]; z++) for (let y = 0; y < dims[1]; y++) t += values[16 * (x + dims[0] * (y + dims[1] * z)) + 5]; return t / (dims[1] * dims[2]); });
+  return { bottomHeatMean: bottom / (dims[0] * dims[2]), sideHeatMean: side / (dims[1] * dims[2]), heatByBottomLayer: byY, heatBySideLayer: byX };
 }
 export function joinedGhostTextureSize(dims) {
   return dims.map(n => n + 1);
