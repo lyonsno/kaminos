@@ -155,6 +155,8 @@ assert.doesNotThrow(() => createSam3ImageVitBlockStackDispatchPlan({ shape: { ..
 for (const layerNormEps of [0, -1, NaN, Infinity, '0.00001']) assert.throws(() => createSam3ImageVitBlockStackDispatchPlan({ shape: { ...dispatchShape, layerNormEps }, layerIndex: 0 }), /layerNormEps/);
 assert.match(routeSource, /variance \+ dims\.layer_norm_eps/, 'both GPU block layer norms must use caller epsilon');
 assert.match(routeSource, /name: 'layer_norm_eps', type: 'f32'/, 'block epsilon must be f32, not padding');
+assert.match(routeSource, /mean_correction = \(next_mean - mean\) - adjusted/, 'block mean must compensate f32 accumulation error');
+assert.match(routeSource, /variance_correction = \(next_variance - variance\) - adjusted/, 'both block layer norms must compensate variance accumulation');
 assert.deepEqual(workspace224, { localWindowTokensPerBatch: 576, globalWindowTokensPerBatch: 256, maxWindowTokensPerBatch: 576, maxWindowValues: 589_824 });
 const workspace448 = createSam3ImageVitBlockStackWorkspacePlan({ batch: 1, height: 32, width: 32, hiddenSize: 1024, windowSize: 24 });
 assert.deepEqual(workspace448, { localWindowTokensPerBatch: 2_304, globalWindowTokensPerBatch: 1_024, maxWindowTokensPerBatch: 2_304, maxWindowValues: 2_359_296 });

@@ -109,5 +109,7 @@ assert.ok(Math.abs(sensitivePrefix().vitPrefixHiddenStates[1] - 0.70710676908493
 for (const epsilon of [0, -1, NaN, Infinity, '0.00001']) assert.throws(() => sensitivePrefix(epsilon), /layerNormEps/, 'invalid epsilon must fail before normalization');
 assert.match(routeSource, /variance \+ dims\.layer_norm_eps/, 'GPU prefix normalization must consume the same epsilon as the CPU oracle');
 assert.match(routeSource, /name: 'layer_norm_eps', type: 'f32'/, 'epsilon must retain f32 uniform semantics');
+assert.match(routeSource, /mean_correction = \(next_mean - mean\) - adjusted/, 'prefix mean must compensate f32 accumulation error');
+assert.match(routeSource, /variance_correction = \(next_variance - variance\) - adjusted/, 'prefix variance must compensate f32 accumulation error');
 
 console.log('sam image ViT-prefix phase-program contracts passed');

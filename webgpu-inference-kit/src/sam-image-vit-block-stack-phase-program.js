@@ -86,14 +86,22 @@ fn main(
   if (token >= dims.token_count) { return; }
   let base = token * dims.channels;
   var mean = 0.0;
+  var mean_correction = 0.0;
   for (var c = 0u; c < dims.channels; c = c + 1u) {
-    mean = mean + input_values[base + c];
+    let adjusted = input_values[base + c] - mean_correction;
+    let next_mean = mean + adjusted;
+    mean_correction = (next_mean - mean) - adjusted;
+    mean = next_mean;
   }
   mean = mean / f32(dims.channels);
   var variance = 0.0;
+  var variance_correction = 0.0;
   for (var c = 0u; c < dims.channels; c = c + 1u) {
     let delta = input_values[base + c] - mean;
-    variance = variance + delta * delta;
+    let adjusted = delta * delta - variance_correction;
+    let next_variance = variance + adjusted;
+    variance_correction = (next_variance - variance) - adjusted;
+    variance = next_variance;
   }
   variance = variance / f32(dims.channels);
   let inv_std = inverseSqrt(variance + dims.layer_norm_eps);
