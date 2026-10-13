@@ -279,3 +279,6 @@ body[data-workspace=workbench] #authoring-assets{display:none!important;}
 #asset-step-results #asset-results{margin:0;}
 body.has-assets-panel #authoring-assets:has(#asset-generate:not([hidden])) #asset-detail{display:none;}
 @container asset-pane (max-width:640px){#asset-generate:not([hidden]){grid-template-columns:1fr;overflow:auto;}.asset-step{overflow:visible;}}
+.asset-step-actions{display:flex;gap:6px;flex-wrap:wrap;}
+#asset-step-source{flex:1 1 40px;min-height:36px;}
+body.has-assets-panel #authoring-assets:has(#asset-generate:not([hidden])) #asset-use-image{display:none;}

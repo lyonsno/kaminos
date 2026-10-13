@@ -14,7 +14,10 @@ export function installGenerateLayout({document,trellisSettings=()=>null}){
   const preview=document.createElement('img');preview.id='asset-step-source';preview.alt='Image the mesh will be made from';preview.hidden=true;
   const sourceName=document.createElement('div');sourceName.id='asset-step-source-name';
   const settings=document.createElement('div');settings.id='asset-mesh-settings';
-  mesh.append(preview,sourceName,...[byId('asset-mesh-model-row'),settings,byId('asset-preparation-status'),byId('asset-prepare'),byId('asset-run'),byId('asset-recover')].filter(Boolean));
+  // Action first: the model and its button stay in view; the preview takes what is left.
+  const actions=document.createElement('div');actions.className='asset-step-actions';
+  actions.append(...[byId('asset-prepare'),byId('asset-run'),byId('asset-recover')].filter(Boolean));
+  mesh.append(...[byId('asset-mesh-model-row'),settings,actions,preview,sourceName,byId('asset-preparation-status')].filter(Boolean));
   heading?.remove();help?.remove();
   const resultList=byId('asset-results');const empty=document.createElement('p');empty.className='asset-help';empty.id='asset-results-empty';empty.textContent='Generated meshes appear here. Add puts one in the scene.';
   results.append(empty,resultList);
