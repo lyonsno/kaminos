@@ -2686,7 +2686,10 @@ def run_pipeline_witness_stream(handler, payload):
         "--out-dir", str(out_dir),
         "--report", str(report_path),
     ]
-    timeout = int(os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT", "360"))
+    timeout_raw = os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT")
+    timeout = int(timeout_raw) if timeout_raw is not None else (
+        None if pipeline_id == "trellis-image-to-mesh-webgpu-v0" else 360
+    )
     proc = subprocess.Popen(
         command,
         cwd=ROOT,
@@ -2718,7 +2721,7 @@ def run_pipeline_witness_stream(handler, payload):
         thread.start()
     started = time.monotonic()
     while proc.poll() is None:
-        if time.monotonic() - started > timeout:
+        if timeout is not None and time.monotonic() - started > timeout:
             proc.kill()
             raise subprocess.TimeoutExpired(command, timeout)
         try:
