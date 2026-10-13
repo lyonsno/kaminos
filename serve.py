@@ -3254,7 +3254,14 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/sf3d-source-admission":
+        if parsed.path == "/api/workbench-experiments":
+            from workbench_experiments import discover_experiments
+            try:
+                modules = discover_experiments(ROOT, os.environ.get("KAMINOS_EXPERIMENTS_DIR", "experiments"))
+                self.send_json({"modules": modules, "source": volume_settings_server_source()})
+            except (OSError, ValueError) as error:
+                self.send_error(500, str(error))
+        elif parsed.path == "/api/sf3d-source-admission":
             report = sf3d_source_admission()
             report["requestId"] = parse_qs(parsed.query).get("requestId", [None])[0]
             self.send_json(report)
