@@ -61,9 +61,15 @@ try {
   assert.equal((await fetch(`${server.url}/package/escape`)).status, 403);
   assert.equal((await fetch(`${server.url}/package/%2e%2e%2fframe0.jpg`)).status, 403);
   assert.deepEqual(await (await fetch(`${server.url}/api/benchmark-plan`)).json(), { fixture: true });
-  const refused = await fetch(`${server.url}/api/output/0/selectedMasks`, { method: 'POST', body: Buffer.alloc(1024 * 1024) });
-  assert.equal(refused.status, 500);
-  assert.match(await refused.text(), /refused before reading/);
+  try {
+    const refused = await fetch(`${server.url}/api/output/0/selectedMasks`, { method: 'POST', body: Buffer.alloc(1024 * 1024) });
+    assert.equal(refused.status, 500);
+    assert.match(await refused.text(), /refused before reading/);
+  } catch (error) {
+    // The observed Node transport can close during this rejected upload.
+    assert.equal(error.cause?.code, 'EPIPE', 'only the observed early-refusal transport error is accepted');
+  }
+  assert.ok(rejectedUpload, 'the server must have actually refused this upload');
   assert.ok(rejectedUpload.readableFlowing || rejectedUpload.readableEnded || rejectedUpload.destroyed, 'a refused upload must be drained or destroyed');
 } finally { await server.close(); }
 await assert.rejects(() => fetch(`${server.url}/api/benchmark-plan`), /fetch failed/);
