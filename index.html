@@ -14572,6 +14572,13 @@ function drawFingerFluidBenchFrame(now = performance.now(),{fromHost=false}={}) 
   if(!fingerFluidUsesSharedViewport())fingerFluidBenchAnimationFrame = requestAnimationFrame(drawFingerFluidBenchFrame);
 }
 
+function completeFingerFluidPlaybackInitialization(){
+ const policy=fingerFluidResetPolicy;
+ if(!policy)return;
+ ownerFluidPlayback?.reset();fingerFluidBenchSimulationPaused=policy.paused;
+ if(fingerFluidResetPolicy===policy)fingerFluidResetPolicy=null;
+}
+
 async function startFingerFluidBench() {
   const startGeneration=++fingerFluidBenchStartGeneration;
   const isCurrent=()=>startGeneration===fingerFluidBenchStartGeneration;
@@ -14792,6 +14799,7 @@ async function startFingerFluidBench() {
   if(typeof installFluidWorkbench==='function')installFluidWorkbench();
   await activateFingerFluidPyroComposition();
   if(!isCurrent())return;
+  completeFingerFluidPlaybackInitialization();
   if(sharedViewport){window._kaminosDirty?.();return;}
   if (!fingerFluidBenchAnimationFrame && fingerFluidBenchRunning) {
     fingerFluidBenchFrameStartedAt = performance.now();
@@ -14837,8 +14845,6 @@ async function resetFingerFluidPressureCockpitWater() {
   if(outcome==='failed'){recordReset('failed');return;}
   if(resetGeneration!==fingerFluidBenchStartGeneration){recordReset('superseded');return;}
   if(!fingerFluidBenchRunning||!fingerFluidBenchSolver?.available){recordReset('failed');return;}
-  ownerFluidPlayback?.reset();fingerFluidBenchSimulationPaused=pausePolicy.paused;
-  if(fingerFluidResetPolicy===pausePolicy)fingerFluidResetPolicy=null;
   fingerFluidBenchCamera=camera;syncFingerFluidCompositionCamera({initial:true});window._kaminosDirty?.();
   fingerFluidPressureCockpit?.update();
   recordReset('applied');
