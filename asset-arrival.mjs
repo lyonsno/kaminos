@@ -112,3 +112,28 @@ export const ASSET_ARRIVAL_SCREEN_MARGIN = 0.62;
 export function assetArrivalFramingWindow({ overlayTopNdc = 1, margin = ASSET_ARRIVAL_SCREEN_MARGIN, overlayGap = 0.05 } = {}) {
   return { left: -margin, right: margin, bottom: -margin, top: Math.min(margin, overlayTopNdc - overlayGap) };
 }
+
+// Where an appended asset lands on the floor: the orbit pivot when nothing is there,
+// otherwise the nearest spot clear of the scene's objects. Rings widen from the pivot;
+// on each ring, spots beside the view come first, then in front, then behind, so the
+// new object is seen next to what you are looking at rather than inside or behind it.
+// footprint: placed [width, depth]; obstacles: world boxes; viewDirection: scene to camera.
+export function chooseAppendAnchor({ footprint, pivot, obstacles = [], viewDirection = [0, 0, 1], margin = 0.15, maxRadius = 30 }) {
+  const [w, d] = footprint;
+  const clear = ([x, z]) => obstacles.every(o =>
+    x + w / 2 + margin <= o.min[0] || x - w / 2 - margin >= o.max[0] || z + d / 2 + margin <= o.min[2] || z - d / 2 - margin >= o.max[2]);
+  if (clear(pivot)) return { anchor: [...pivot], reason: 'pivot-clear' };
+  let vx = viewDirection[0], vz = viewDirection[2];
+  const length = Math.hypot(vx, vz) || 1; vx /= length; vz /= length;
+  const step = Math.max(0.1, Math.min(w, d) / 2);
+  const angles = Array.from({ length: 24 }, (_, i) => i * Math.PI / 12)
+    .map(a => ({ a, toward: Math.cos(a) * vx + Math.sin(a) * vz }))
+    .sort((p, q) => (Math.abs(p.toward) - Math.abs(q.toward)) || (q.toward - p.toward));
+  for (let r = step; r <= maxRadius; r += step) {
+    for (const { a } of angles) {
+      const spot = [pivot[0] + r * Math.cos(a), pivot[1] + r * Math.sin(a)];
+      if (clear(spot)) return { anchor: spot, reason: 'nearest-clear' };
+    }
+  }
+  return { anchor: [...pivot], reason: 'no-clear-spot' };
+}
