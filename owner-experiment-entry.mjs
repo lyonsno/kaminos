@@ -16,7 +16,7 @@ export async function installOwnerExperimentEntry({document,root,host,discover,o
   refresh(){return serial(async()=>{const urls=await discover();definitions=await loadExperimentContributions(urls);select.replaceChildren(new Option('Choose an experiment…',''),...definitions.map(d=>new Option(d.title,d.id)));select.value=current?.id??'';status.textContent=definitions.length?'':'No owner experiments found';return api.list();});},
   open(id,inputs={}){return serial(async()=>{
    const definition=definitions.find(d=>d.id===id);if(!definition)throw Error('Unknown experiment: '+id);
-   await close();status.textContent='Opening '+definition.title+'…';await onOpen(definition);
+   await close();status.textContent='Opening '+definition.title+'…';await onOpen(definition,inputs);
    try{current=await openExperiment(definition,{host,inputs});selected=id;await current.mount({root:content,document});select.value=id;status.textContent=definition.title;onChange({id,inputs,moduleUrl:definition.moduleUrl});return current.read();}
    catch(error){await close();fail(error);throw error;}
   });},
