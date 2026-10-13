@@ -78,7 +78,7 @@ finally {
   try{if(browser)await browser.close();}catch(error){shutdownErrors.push(error);}
   try{if(server)await server.stop();}catch(error){shutdownErrors.push(error);}
   report.shutdownComplete=shutdownErrors.length===0;
-  if(shutdownErrors.length){report.status='failed';report.phase='shutdown';report.shutdownErrors=shutdownErrors.map(error=>String(error?.stack||error));if(!report.error)report.error=report.shutdownErrors.join('\n');}
+  if(shutdownErrors.length){report.status='failed';if(!primaryError)report.phase='shutdown';report.shutdownErrors=shutdownErrors.map(error=>String(error?.stack||error));if(!report.error)report.error=report.shutdownErrors.join('\n');}
   try{await save();}catch(error){if(!primaryError)throw error;console.error('Terminal report write failed:',error);}
   if(shutdownErrors.length&&!primaryError)throw new AggregateError(shutdownErrors,'Witness shutdown failed');
 }

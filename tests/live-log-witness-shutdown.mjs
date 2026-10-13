@@ -21,6 +21,6 @@ test('failed browser/server shutdown cannot leave a passed terminal report',asyn
 });
 test('cleanup preserves the primary failure and successful cleanup saves afterward',async()=>{
   const primary=Error('page load failed');const failed=await finalize({primaryError:primary,browserError:true,serverError:true});
-  assert.equal(failed.error,primary);assert.equal(failed.report.error,'page load failed');assert.equal(failed.report.shutdownErrors.length,2);
+  assert.equal(failed.error,primary);assert.equal(failed.report.error,'page load failed');assert.equal(failed.report.phase,'load');assert.equal(failed.report.shutdownErrors.length,2);
   const ok=await finalize();assert.equal(ok.report.status,'passed');assert.equal(ok.error,undefined);assert.deepEqual(ok.order,['browser','server','save']);
 });
