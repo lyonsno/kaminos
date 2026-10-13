@@ -27,7 +27,7 @@ try {
   await page.waitForFunction(()=>['mounted','failed'].includes(window.kaminosLiveLogEntry?.status));
   report.entry=await page.evaluate(()=>window.kaminosLiveLogEntry);assert.equal(report.entry.status,'mounted',report.entry.error);
   report.effectiveUrl=page.url();report.sources=[];
-  for(const name of ['index.html','volume-core.js','burn-table-material.mjs','live-log-heat-core.mjs','live-log-heat-gpu.mjs','live-log-experiment.mjs','experiments/sinter/live-log-heat.experiment.mjs','workbench-experiments.mjs','serve.py','tools/live-log-heat-witness.mjs','tools/witness-server.mjs']){
+  for(const name of ['index.html','volume-core.js','burn-table-material.mjs','burn-table.css','basin-fire-fixture.mjs','flame-authoring.mjs','scene-persistence-core.js','live-log-heat-core.mjs','live-log-heat-gpu.mjs','live-log-experiment.mjs','experiments/sinter/live-log-heat.experiment.mjs','workbench-experiments.mjs','serve.py','tools/live-log-heat-witness.mjs','tools/witness-server.mjs']){
     const response=await page.request.get(new URL(name,report.url).href);assert.equal(response.status(),200);
     const actual=createHash('sha256').update(await response.body()).digest('hex');const expected=createHash('sha256').update(await fs.readFile(path.join(report.repoRoot,name))).digest('hex');
     assert.equal(actual,expected,'Served source mismatch '+name);report.sources.push({name,sha256:actual});
@@ -44,6 +44,18 @@ try {
     await page.screenshot({path:path.join(output,name+'.png')});report.frames.push({name,state});await save();
   };
   await shot('cold');
+  if(cold.fire){
+    report.phase='fire-inspector';await page.locator('#live-log-heat [data-action=selectFire]').click();await shot('fire-inspector');
+    await page.locator('#selected-flame-properties [data-library]').click();
+    await page.locator('.basin-fire-library-row').first().waitFor();
+    await page.locator('.basin-fire-library-row').filter({hasText:'cheap-blast-furnace-beaming-lightweight-smoke'}).first().click();
+    await page.waitForFunction(()=>document.querySelector('.basin-fire-library [data-selection]')?.textContent.includes('Grid 48'));
+    await page.screenshot({path:path.join(output,'basin-library.png')});
+    await page.locator('.basin-fire-library [data-close]').click();
+    await page.evaluate(()=>window.kaminosLiveLog.invoke('move',{position:[.5,-.35,0]}));
+    report.placed=await page.evaluate(()=>window.kaminosLiveLog.read());
+    assert.deepEqual(report.placed.position,[.5,-.35,0]);assert.equal(report.placed.fire.basin.presetId,cold.fire.basin.presetId);
+  }
   report.phase='cold-hold';await page.waitForTimeout(800);
   assert.equal((await page.evaluate(()=>window.kaminosLiveLog.read())).fields[0].steps,0);
   const advance=async count=>page.evaluate(async count=>{
@@ -64,7 +76,7 @@ try {
   const moved=await page.evaluate(()=>window.kaminosLiveLog.read());assert.deepEqual(moved.fields.map(f=>f.generation),before);
   report.movePause=await advance(300);await shot('moved');
   assert.notDeepEqual(report.frames.at(-1).state.fields[0].lastSource.localToVolume,heated.fields[0].lastSource.localToVolume);
-  report.phase='cooling';await page.locator('#live-log-heat [data-action=burnerOff]').click();
+  report.phase='cooling';await page.evaluate(()=>window.kaminosLiveLog.invoke('burnerOff'));
   report.coolPause=await advance(1800);await shot('cooled');assert.equal(report.frames.at(-1).state.burner,false);
   report.phase='reset';await page.locator('#live-log-heat [data-action=reset]').click();await shot('reset');
   const reset=report.frames.at(-1).state;assert.equal(reset.status,'cold');assert.equal(reset.paused,true);assert.equal(reset.fields[0].steps,0);assert.notEqual(reset.attempt,cold.attempt);
