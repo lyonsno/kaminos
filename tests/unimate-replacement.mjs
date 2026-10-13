@@ -18,6 +18,9 @@ if(process.argv.includes('--fixture')) {
  }});
  const difference=(a,b)=>Math.max(...a.map((v,i)=>Math.abs(v-b[i])));
  assert.equal(measured.length,s.seen.length);
+ const defaultTimes=[];
+ await replacementSolve({noise:Float32Array.from(s.noise),known:Float32Array.from(s.known),mask:Uint8Array.from(s.mask),drift:async(t,x)=>{defaultTimes.push(t);return new Float32Array(x.length);}});
+ assert.deepEqual(defaultTimes,s.times.slice(0,-1),'default time grid must match upstream torch.linspace');
  assert.ok(difference([...result],s.result)<2e-6,'upstream Euler result');
  for(let i=0;i<s.seen.length;i++){assert.equal(measured[i][0],s.seen[i][0]);assert.ok(difference(measured[i][1],s.seen[i][1])<2e-6);}
  const aligned=alignOverlap({...r,state:Float32Array.from(r.state)}),back=alignOverlap({...r,state:aligned.state,inverse:true,facing:aligned.facing});
