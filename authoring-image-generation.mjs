@@ -182,7 +182,8 @@ export function installKleinImageGeneration({document,controller,assets}){
     <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-stop" hidden>Stop</button></div>
     <div id="asset-text-status" role="status"></div><progress id="asset-text-progress" max="100" aria-label="Image generation progress" hidden></progress>`;
   container.prepend(section);
-  const byId=id=>section.querySelector('#'+id),seedInput=byId('asset-seed');
+  // Looked up in the document: the Generate layout may move these controls out of this section.
+  const byId=id=>document.getElementById(id),seedInput=byId('asset-seed');
   const reseed=()=>{seedInput.value=String(Math.floor(Math.random()*1e9));};reseed();
   const meshBusy=()=>['preparing','input','loading','running','stopping','saving'].includes(assets.generation()?.status);
   function render(){
