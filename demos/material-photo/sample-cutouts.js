@@ -12,5 +12,5 @@ export function createSampleCutout(sample,width,height){
   const canvas=new OffscreenCanvas(width,height),context=canvas.getContext('2d');
   context.scale(width/silhouette.width,height/silhouette.height);
   context.fillStyle='#ffffff';context.fill(new Path2D(silhouette.path),'evenodd');
-  return {width,height,data:context.getImageData(0,0,width,height).data,sample,source:'hand-authored-example-cutout'};
+  return {width,height,data:context.getImageData(0,0,width,height).data,sample,source:'hand-authored-example-cutout',subjectPoint:sample==='orb'?[.5,.5]:null};
 }
