@@ -14,7 +14,7 @@ export function bindSceneHierarchyRows(list,{selectObject,selectGroup,renameObje
     row.addEventListener('click',event=>{
       if(event.target.closest('button') || editing)return;
       if(event.detail===2){edit();return;}
-      if(row.getAttribute('aria-pressed')!=='true')(group?selectGroup:selectObject)(id);
+      (group?selectGroup:selectObject)(id,{extend:!!event.shiftKey});
     });
     row.addEventListener('dblclick',event=>{if(!event.target.closest('button'))edit();});
     row.addEventListener('keydown',event=>{

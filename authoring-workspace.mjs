@@ -1,15 +1,17 @@
+import {installRelativeNumberDrag} from './scene-control-history.mjs';
+import {viewportShortcut} from './viewport-display-settings.mjs';
 // One live set of controls, projected into two workspaces. Slots retain node,
 // listener, and value identity; no second scene model or simulation lifecycle.
 export function createControlSlots(document, entries) {
-  const slots = entries.map(({ node, destination }) => {
+  const slots = entries.map(({ node, destination, workbenchDestination = null }) => {
     if (!node || !destination) throw new Error('Workspace control or destination is missing');
     const marker = document.createComment(`workspace:${node.id || node.tagName}`);
     node.before(marker);
-    return { node, destination, marker };
+    return { node, destination, workbenchDestination, marker };
   });
   return {
     showAuthoring() { for (const { node, destination } of slots) destination.append(node); },
-    showWorkbench() { for (const { node, marker } of slots) marker.after(node); },
+    showWorkbench() { for (const { node, marker, workbenchDestination } of slots) { if (workbenchDestination) workbenchDestination.append(node); else marker.after(node); } },
   };
 }
 
@@ -29,24 +31,44 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   const inspector = document.createElement('aside');
   inspector.id = 'authoring-inspector'; inspector.setAttribute('aria-label', 'Properties');
   inspector.innerHTML = `<nav class="inspector-switch" aria-label="Properties context"><button type="button" data-inspector-context="object" aria-pressed="true">Selection</button><button type="button" data-inspector-context="scene" aria-pressed="false">Scene</button></nav>
+    <div id="authoring-camera-properties" class="authoring-inspector-body" hidden></div>
     <div id="authoring-object-properties" class="authoring-inspector-body"><div id="authoring-transform-slot"></div><div id="authoring-type-slot"></div><details id="authoring-object-tools"><summary>Object tools</summary></details></div>
     <div id="authoring-scene-properties" class="authoring-inspector-body" hidden><h2>Composition</h2><div class="scene-data-choices"><button type="button" id="scene-fire-data">Fire & smoke data</button><button type="button" id="scene-water-data">Water simulation data</button></div><div id="authoring-composition-slot"></div><details open id="authoring-world-slot"><summary>Environment</summary></details><div id="authoring-water-slot"></div><details id="authoring-render-slot"><summary>Rendering</summary></details></div>`;
   const toolbar = document.createElement('div'); toolbar.id = 'authoring-viewport-tools';
-  toolbar.innerHTML = `<div id="authoring-add-slot"></div><details id="authoring-presets"><summary>Presets</summary><div><button type="button" id="apply-burner-preset">Burner setup</button><p>Apply to the current fire field</p></div></details><div id="authoring-gizmo-slot" aria-label="Transform gizmo"></div><details id="authoring-viewport-settings"><summary>Viewport</summary><div><label><input id="viewport-show-gizmos" type="checkbox" checked> Transform gizmos</label><label><input id="viewport-show-hints" type="checkbox" checked> Navigation hints</label></div></details><div class="authoring-header-spacer"></div><button type="button" id="authoring-frame" title="Frame selected (F)">Frame</button><button type="button" id="authoring-undo" title="Undo (Cmd/Ctrl Z)">Undo</button><button type="button" id="authoring-redo" title="Redo (Cmd/Ctrl Shift Z)">Redo</button><div id="authoring-navigation-slot"></div>`;
+  toolbar.innerHTML = `<div id="authoring-add-slot"></div><details id="authoring-presets"><summary>Presets</summary><div><button type="button" id="apply-burner-preset">Burner setup</button><p>Apply to the current fire field</p></div></details><label class="selection-setting">Axes <select id="selection-orientation"><option value="world">World</option><option value="local">Local</option></select></label><label class="selection-setting">Pivot <select id="selection-pivot"><option value="median">Median</option><option value="active">Active</option><option value="individual">Individual origins</option></select></label><div id="authoring-gizmo-slot" aria-label="Transform gizmo"></div><details id="authoring-viewport-settings"><summary>Viewport</summary><div><label title="Shift+Alt+Z"><input id="viewport-show-overlays" type="checkbox" checked> Overlays <small>Shift Alt Z</small></label><label title="Ctrl+tilde"><input id="viewport-show-gizmos" type="checkbox" checked> Transform gizmos <small>Ctrl ~</small></label><fieldset class="viewport-display-group"><legend><label><input id="viewport-show-outlines" type="checkbox" checked> Object outlines</label></legend><label>Width <input id="viewport-outlineWidth" class="transform-input" type="number" min=".5" max="8" step=".25" value="1.5"></label><label>Opacity <input id="viewport-outlineOpacity" class="transform-input" type="number" min="0" max="1" step=".05" value="1"></label><label><input id="viewport-show-bounds" type="checkbox"> Bounding boxes</label></fieldset><fieldset class="viewport-display-group"><legend><label><input id="viewport-show-domains" type="checkbox" checked> Simulation boundaries</label></legend><label>Width <input id="viewport-domainWidth" class="transform-input" type="number" min=".5" max="8" step=".25" value="1"></label><label>Opacity <input id="viewport-domainOpacity" class="transform-input" type="number" min="0" max="1" step=".05" value=".82"></label></fieldset><fieldset class="viewport-display-group"><legend><label><input id="viewport-show-emitters" type="checkbox" checked> Emitter symbols</label></legend><label>Width <input id="viewport-emitterWidth" class="transform-input" type="number" min=".5" max="8" step=".25" value="1"></label><label>Opacity <input id="viewport-emitterOpacity" class="transform-input" type="number" min="0" max="1" step=".05" value=".55"></label></fieldset><label><input id="viewport-show-helpers" type="checkbox" checked> Show helpers</label><label><input id="viewport-show-hints" type="checkbox" checked> Navigation hints</label></div></details><div class="authoring-header-spacer"></div><button type="button" id="authoring-box">Box · B</button><button type="button" id="authoring-duplicate">Duplicate</button><button type="button" id="authoring-delete">Delete</button><button type="button" id="authoring-frame" title="Frame selected (F)">Frame</button><button type="button" id="authoring-undo" title="Undo (Cmd/Ctrl Z)">Undo</button><button type="button" id="authoring-redo" title="Redo (Cmd/Ctrl Shift Z)">Redo</button><div id="authoring-navigation-slot"></div>`;
   document.body.prepend(header);
   document.body.append(hierarchy, inspector);
   byId('viewport').prepend(toolbar);
+  const shot=document.createElement('details');shot.id='scene-camera-settings';shot.open=true;shot.innerHTML='<summary>Camera &amp; output</summary>';shot.append(byId('authoring-camera-properties'));byId('authoring-composition-slot').after(shot);
+  const cameraButton=document.createElement('button');cameraButton.type='button';cameraButton.id='authoring-camera';cameraButton.textContent='Camera';cameraButton.onclick=()=>{setContext('scene');shot.open=true;shot.scrollIntoView({block:'nearest'});};byId('authoring-frame').before(cameraButton);
   const viewportSettings=byId('authoring-viewport-settings');
   document.addEventListener('pointerdown',event=>{
     if(!viewportSettings.contains(event.target))viewportSettings.open=false;
     if(!byId('authoring-presets').contains(event.target))byId('authoring-presets').open=false;
   },true);
-  for(const [id,key] of [['viewport-show-gizmos','gizmos'],['viewport-show-hints','hints']])byId(id).addEventListener('change',event=>document.defaultView.kaminosViewportSettings.set({[key]:event.target.checked}));
+  for(const key of ['overlays','gizmos','outlines','bounds','helpers','domains','emitters','hints'])byId('viewport-show-'+key).addEventListener('change',event=>document.defaultView.kaminosViewportSettings.set({[key]:event.target.checked}));
+  for(const key of ['outlineWidth','outlineOpacity','domainWidth','domainOpacity','emitterWidth','emitterOpacity']){
+    const input=byId('viewport-'+key),api=document.defaultView.kaminosViewportSettings;let before;
+    const start=()=>{before=api.read()[key];};input.addEventListener('focusin',start);
+    input.addEventListener('input',()=>{if(!Number.isFinite(input.valueAsNumber))return;try{api.set({[key]:input.valueAsNumber});}catch{}});
+    input.addEventListener('change',()=>{input.value=String(api.read()[key]);});
+    input.addEventListener('pointercancel',()=>{if(before!==undefined){api.set({[key]:before});input.value=String(before);}});
+    installRelativeNumberDrag({input,grip:input,step:Number(input.step),onStart:start});
+  }
+  let viewportPointerInside=false;
+  byId('viewport').addEventListener('pointerenter',()=>viewportPointerInside=true);
+  byId('viewport').addEventListener('pointerleave',()=>viewportPointerInside=false);
+  document.addEventListener('keydown',event=>{const key=viewportShortcut(event);if(!key||!viewportPointerInside||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||document.querySelector('.file-name-prompt'))return;event.preventDefault();event.stopImmediatePropagation();const api=document.defaultView.kaminosViewportSettings;api.set({[key]:!api.read()[key]});},true);
+
+  for(const [id,key] of [['selection-orientation','orientation'],['selection-pivot','pivot']])byId(id).onchange=event=>{document.defaultView.kaminosSelection.settings({[key]:event.target.value});event.target.blur();};
+  for(const [id,action] of [['authoring-box','box'],['authoring-duplicate','duplicate'],['authoring-delete','remove']])byId(id).onclick=()=>{try{document.defaultView.kaminosSelection[action]();}catch(error){byId('info-bar').textContent=error.message;}byId(id).blur();};
+  document.querySelector('[data-scene-group-create]').textContent='Group selection';
   byId('apply-burner-preset').onclick=()=>{try{document.defaultView.kaminosApplyBurnerPreset();byId('authoring-presets').open=false;}catch(error){byId('info-bar').textContent=error.message;}};
   byId('scene-fire-data').onclick=()=>document.defaultView.selectSceneField('flame-field');
   byId('scene-water-data').onclick=()=>document.defaultView.selectSceneField('water-field');
   const entries = [];
-  const move = (node, destination) => entries.push({ node, destination: byId(destination) });
+  const move = (node, destination) => entries.push({ node, destination: byId(destination),
+    workbenchDestination: destination === 'authoring-document-actions' ? byId(destination) : null });
   move(byId('scene-object-list').closest('.panel'), 'authoring-tree');
   move(byId('transform-inspector'), 'authoring-transform-slot');
   move(byId('selected-light-properties'), 'authoring-type-slot');
@@ -55,6 +77,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('shared-flame-domain-properties'), 'authoring-type-slot');
   move(byId('selected-mesh-properties'), 'authoring-type-slot');
   move(byId('selected-spot-properties'), 'authoring-type-slot');
+  move(byId('selected-collision-properties'), 'authoring-type-slot');
   move(byId('selected-object-relations'), 'authoring-type-slot');
   move(byId('selected-group-properties'), 'authoring-type-slot');
   move(byId('selected-assembly-properties'), 'authoring-type-slot');
@@ -82,12 +105,17 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('composition-capture'), 'authoring-document-actions');
   move(byId('transform-bar'), 'authoring-object-tools');
   const slots = createControlSlots(document, entries);
-  let mode = null;
+  let mode = null, inspectorContext='object';
   function setContext(context) {
+    if(context==='camera')context='scene'; // Existing camera-panel callers open scene-owned shot settings.
+    if(!['object','scene','camera'].includes(context))throw Error('Unknown properties context');
+    inspectorContext=context;
     const object = context === 'object';
     byId('authoring-object-properties').hidden = !object;
-    byId('authoring-scene-properties').hidden = object;
+    byId('authoring-scene-properties').hidden = context!=='scene';
+    byId('authoring-camera-properties').hidden = context!=='scene';
     inspector.querySelectorAll('[data-inspector-context]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.inspectorContext === context)));
+    document.dispatchEvent(new document.defaultView.CustomEvent('kaminos-inspector-context-change',{detail:{context}}));
   }
   function setMode(next) {
     if (!['authoring', 'workbench'].includes(next)) throw new Error('Unknown workspace');
@@ -103,11 +131,12 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     }
     mode = next;
     document.body.dataset.workspace = mode;
+    document.dispatchEvent(new document.defaultView.CustomEvent('kaminos-workspace-change',{detail:{mode}}));
     header.querySelectorAll('[data-workspace-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.workspaceMode === mode)));
     return true;
   }
   header.querySelectorAll('[data-workspace-mode]').forEach(button => button.addEventListener('click', () => setMode(button.dataset.workspaceMode)));
-  header.querySelectorAll('[data-workbench-tab]').forEach(button => button.addEventListener('click', () => { if (setMode('workbench')) openWorkbenchTab(button.dataset.workbenchTab); }));
+  header.querySelectorAll('[data-workbench-tab]').forEach(button => button.addEventListener('click', () => { if(mode==='authoring'&&document.defaultView.kaminosAssets)document.defaultView.kaminosAssets.open(button.dataset.workbenchTab==='generate'?'generate':'browse');else if(setMode('workbench'))openWorkbenchTab(button.dataset.workbenchTab); }));
   inspector.querySelectorAll('[data-inspector-context]').forEach(button => button.addEventListener('click', () => setContext(button.dataset.inspectorContext)));
   byId('authoring-frame').onclick = () => { document.defaultView.kaminosFrameSelected?.(); byId('authoring-frame').blur(); };
   for (const action of ['undo', 'redo']) byId(`authoring-${action}`).onclick = () => {
@@ -129,7 +158,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     const key = `${source.dataset.selectedObjectId}/${source.dataset.selectedGroupId}/${source.dataset.selectedFieldId}`;
     if (key === selectionKey) return;
     selectionKey = key;
-    byId('authoring-object-tools').hidden=!!source.dataset.selectedFieldId;
+    byId('authoring-object-tools').hidden=!!source.dataset.selectedFieldId||Number(source.dataset.selectionCount)>1||!!source.dataset.selectedGroupId;
     setContext('object');
 
   });
@@ -157,5 +186,5 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   }
   document.body.classList.add('has-authoring-workspace');
   setMode(initialMode);
-  return { setMode, setContext, state: () => ({ mode, context: byId('authoring-object-properties').hidden ? 'scene' : 'object' }) };
+  return { setMode, setContext, state: () => ({ mode, context: inspectorContext }) };
 }

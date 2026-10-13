@@ -13,6 +13,7 @@
 // joint outputs do not depend on padded joints (checked against the PyTorch
 // reference by probe-conditioning.py).
 
+import { tensorFloat32Bytes } from './unimate-weights.js';
 import * as K from './unimate-kernels.js';
 
 const SU = GPUBufferUsage;
@@ -46,11 +47,12 @@ export class UniMateDenoiser {
   static async create(device, manifest, bytes) {
     const weights = new Map();
     for (const t of manifest.tensors) {
-      const size = Math.max(256, Math.ceil(t.byteLength / 256) * 256);
+      const data = tensorFloat32Bytes(bytes, t);
+      const size = Math.max(256, Math.ceil(data.byteLength / 256) * 256);
       const buffer = device.createBuffer({ size, usage: STORAGE, mappedAtCreation: true });
-      new Uint8Array(buffer.getMappedRange()).set(new Uint8Array(bytes, t.offset, t.byteLength));
+      new Uint8Array(buffer.getMappedRange()).set(data);
       buffer.unmap();
-      weights.set(t.name, { buffer, shape: t.shape, byteLength: t.byteLength });
+      weights.set(t.name, { buffer, shape: t.shape, byteLength: data.byteLength });
     }
     return new UniMateDenoiser(device, manifest, weights);
   }

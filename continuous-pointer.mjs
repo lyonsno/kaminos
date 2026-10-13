@@ -35,7 +35,9 @@ export function beginContinuousPointer(target, point, {move, lost=()=>{}, unavai
   doc.addEventListener('pointerlockchange',change);
   doc.addEventListener('mousemove',motion);
   return {
-    get locked(){return locked;},
+    // Capture can be released before the queued pointerlockchange notification.
+    // Read browser ownership now so that handover cannot cancel a live edit.
+    get locked(){return active && doc.pointerLockElement===target;},
     request(next=point) {
       if(!active || requested)return;
       requested=true;x=next.x;y=next.y;

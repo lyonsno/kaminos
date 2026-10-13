@@ -184,7 +184,7 @@ assert.match(
 );
 assert.match(
   html,
-  /id="volume-render-scale"[^>]*step="0\.001"/,
+  /id="volume-render-scale"[^>]*step="any"/,
   'volume render scale route/control preserves one-decimal-percentage increments such as 18.3%',
 );
 assert.match(

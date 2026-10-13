@@ -530,7 +530,7 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
       rest = Array.from({ length: J }, (_, j) => Array.from(arrays.restPositions.subarray(j * 3, j * 3 + 3)));
       offsets = groundedOffsets(rest, parents);
       generationSkeleton = { parents, jointNames, rest };
-      Object.assign(demo, { bundle, skeletonName: b.skeleton.name, fps });
+      Object.assign(demo, { bundle, arrays, skeletonName: b.skeleton.name, fps });
     };
     onStatus({ phase: 'load', detail: 'skeleton and prompts' });
     applySkeleton(await fetchSkeleton(bundleBase));
@@ -678,7 +678,21 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
       return bundle;
     }
 
-    Object.assign(demo, { generate, togglePause, stop, useSkeleton, hasTextEncoder: () => Boolean(t5), forwardFlops: den.forwardFlops,
+    // Switch to an in-memory skeleton bundle ({ b, a }: index and arrays, e.g. from the rig importer).
+    async function useSkeletonData(data) {
+      if (active) throw new Error('a generation is running');
+      applySkeleton(data);
+      den.configure({ B: 2, J });
+      generationSkeletonShown = false;
+      return bundle;
+    }
+    // The pooled Flan-T5 encoding of a text (a prompt, or a joint label for an imported rig).
+    async function encodeText(text) {
+      if (!t5) throw new Error('the text encoder is not loaded');
+      return (await t5.encode(text)).pooled;
+    }
+
+    Object.assign(demo, { generate, togglePause, stop, useSkeleton, useSkeletonData, encodeText, hasTextEncoder: () => Boolean(t5), forwardFlops: den.forwardFlops,
       parameterCount: manifest.parameterCount });
     onStatus({ phase: 'ready', detail: `${manifest.parameterCount.toLocaleString()} parameters${t5 ? ' · type any prompt' : ''}` });
     return demo;

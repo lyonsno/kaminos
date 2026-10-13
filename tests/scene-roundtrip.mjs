@@ -140,7 +140,8 @@ const saved = JSON.parse(JSON.stringify(document));
 const restorePlan = planSceneRestore(saved);
 
 assert.equal(saved.schema, SCENE_SCHEMA, 'round-trip scene document uses the v1 multi-object schema');
-assert.equal(saved.version, SCENE_VERSION, 'round-trip scene document keeps the current scene version');
+assert.equal(saved.version, 8, 'ordinary objects without explicit fire data retain their compatible scene version');
+assert.ok(saved.version <= SCENE_VERSION, 'the writer never exceeds the reader-supported scene version');
 assert.equal(saved.objects.length, 3, 'round-trip scene document saves all authored objects');
 assert.equal(saved.objects[2].type, 'image', 'round-trip scene document preserves image scene object type');
 assert.deepEqual(saved.objects[2].image, imageObject.image, 'round-trip scene document preserves image import provenance');

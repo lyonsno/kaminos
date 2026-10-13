@@ -1736,6 +1736,21 @@
   ],
   "rendererControls": [
     {
+      "key": "volume-ray-start-noise",
+      "param": "volume_ray_start_noise",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": true
+    },
+    {
+      "key": "volume-tone-mapping",
+      "param": "volume_tone_mapping",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "allowedValues": ["agx", "custom"],
+      "additiveDefault": "agx"
+    },
+    {
       "key": "volume-flow-kernel-strength",
       "param": "volume_flow_kernel_strength",
       "tagName": "INPUT",

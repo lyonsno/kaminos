@@ -48,7 +48,7 @@ test('lower planes: a three-layer texture in Sexy\'s plane ordering', () => {
   }
   assert.equal(seen.size, 6 * 4 + 4 * 4 + 4 * 6, 'every lower face once');
   assert.deepEqual(core.joinedLowerFaceTextureSize([48, 144, 48]), [144, 144, 3], 'square layers of the largest dimension');
-  assert.match(shader, /@group\(0\) @binding\(25\) var joinedLowerFaces: texture_2d_array<f32>;/);
+  assert.match(shader, /@group\(0\) @binding\(28\) var joinedLowerFaces: texture_2d_array<f32>;/);
   assert.match(shader, /fn joinedLowerFace\(c: vec3<i32>, axis: u32\) -> f32 \{\n  let b = \(axis \+ 1u\) % 3u;\n  let d = \(axis \+ 2u\) % 3u;\n  return textureLoad\(joinedLowerFaces, vec2<i32>\(c\[b\], c\[d\]\), i32\(axis\), 0\)\.x;\n\}/);
 });
 
@@ -172,7 +172,7 @@ test('ghost admission: refused for the reactant law until the oxidizer ghost exi
 });
 
 test('ghost reads: one exterior sample per transport call, blended beyond the last fine cell centre; MacCormack stays first order where the backtrace leaves the box', () => {
-  for (const [binding, name] of [[26, 'ghostA'], [27, 'ghostB']]) {
+  for (const [binding, name] of [[29, 'ghostA'], [30, 'ghostB']]) {
     assert.match(shader, new RegExp(`@group\\(0\\) @binding\\(${binding}\\) var ${name}: texture_3d<f32>;`));
   }
   assert.ok(!/ghostPred|ghostOld|binding\(28\)|binding\(29\)/.test(shader), 'no predicted snapshot');
@@ -193,7 +193,7 @@ test('ghost reads: one exterior sample per transport call, blended beyond the la
   assert.match(ghost, /if \(slot == 1u\) \{ return vec4<f32>\(s\.x, s\.y, s\.z, 0\.0\); \}/);
   assert.match(ghost, /if \(slot >= 2u\) \{ return vec4<f32>\(0\.0\); \}/);
   // Compute-only bindings in every group-0 layout.
-  for (const b of [26, 27]) assert.ok(!new RegExp(`binding: ${b}, visibility: GPUShaderStage\\.FRAGMENT`).test(source), `binding ${b} is compute-only`);
+  for (const b of [29, 30]) assert.ok(!new RegExp(`binding: ${b}, visibility: GPUShaderStage\\.FRAGMENT`).test(source), `binding ${b} is compute-only`);
 });
 
 // Synthetic exterior for witnesses (before Sexy's export is wired): fill the

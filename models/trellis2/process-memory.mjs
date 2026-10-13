@@ -52,9 +52,13 @@ export async function startProcessMemory({python,script,rootPid=process.pid,rawP
     summary.lastObservation=row;
     for(const missing of row.unavailableProcesses??[]){
       const exit=missing.exitEvidence;
-      const retired=missing.pid!==rootPid&&missing.errno===3&&missing.exitedBeforeMeasurement===true&&
-        exit?.route==='ps-pid-status'&&!exit.stderr&&typeof exit.status==='string'&&
+      const legacyExit=exit?.route==='ps-pid-status'&&!exit.stderr&&typeof exit.status==='string'&&
         ((exit.returnCode===1&&exit.status==='')||(exit.returnCode===0&&exit.status.startsWith('Z')));
+      const kernelExit=exit?.route==='libproc-pid-status'&&exit.pid===missing.pid&&exit.expectedBytes===64&&
+        ((exit.bytesReturned===0&&exit.errno===3)||
+        (exit.bytesReturned===64&&exit.observedPid===missing.pid&&exit.statusCode===5));
+      const retired=missing.pid!==rootPid&&[3,1].includes(missing.errno)&&missing.exitedBeforeMeasurement===true&&
+        (legacyExit||kernelExit);
       if(!missing.expectedProbeExit&&!retired){
       summary.unavailableProcessObservations.push({atUnixMs:row.atUnixMs,...missing});summary.coverage='partial-process-coverage';
       }

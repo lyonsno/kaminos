@@ -243,12 +243,20 @@ const TILED_DIM_CHUNK = 16;
 //   scaled score, matching SAM's masked online kernels (an all-masked row averages V like theirs).
 // - causal: key k is visible to query q only when k <= q + causal_offset (params word, 0 for self-attention).
 // - bias: score_bias [domain, head, query, key] at binding 6, added to the scaled score before masking.
-export function createWebGpuTiledFlashAttentionShader({ headDim, layout = 'packed', keyMask = null, causal = false, bias = false } = {}) {
+// storage: per-tensor { q, k, v, out } element type, 'f32' (default) or 'f16' (needs shader-f16; widened on
+// load and rounded on store, staging and math stay F32).
+export function createWebGpuTiledFlashAttentionShader({ headDim, layout = 'packed', keyMask = null, causal = false, bias = false, storage = {} } = {}) {
   if (!Number.isInteger(headDim) || headDim < 16 || headDim > MAX_SPLIT_HEAD_DIM || headDim % 16 !== 0) {
     throw new Error('tiled flash attention needs a head dim that is a multiple of 16 from 16 to 256');
   }
   if (layout !== 'packed' && layout !== 'strided') throw new Error(`unsupported flash attention layout ${layout}`);
   if (keyMask !== null && keyMask !== 'exclude' && keyMask !== 'penalty') throw new Error("keyMask must be null, 'exclude' or 'penalty'");
+  const unknownStorage = Object.keys(storage).filter(name => !['q', 'k', 'v', 'out'].includes(name));
+  if (unknownStorage.length) throw new Error(`unknown flash attention storage tensor ${unknownStorage.join(', ')}`);
+  const types = { q: 'f32', k: 'f32', v: 'f32', out: 'f32', ...storage };
+  if (Object.values(types).some(type => type !== 'f32' && type !== 'f16')) throw new Error("flash attention storage must be 'f32' or 'f16'");
+  const half = Object.values(types).includes('f16');
+  const widen = (name, index) => types[name] === 'f16' ? `f32(${name}_values[${index}])` : `${name}_values[${index}]`;
   const excludes = keyMask === 'exclude' || causal === true;
   const masked = keyMask !== null || causal === true || bias === true;
   const rowsPerThread = TILED_QUERIES / 16;
@@ -278,11 +286,11 @@ ${STRIDED_TENSORS.map(t => `  ${t}_offset: u32, ${t}_token_stride: u32, ${t}_hea
   scale: f32, ${causal ? 'causal_offset' : '_pad0'}: u32, _pad1: u32, _pad2: u32,
 };`;
   const queryOf = local => `params.query_offset + min(group.x * ${TILED_QUERIES}u + ${local}, params.query_count - 1u)`;
-  return `${params}
-@group(0) @binding(0) var<storage, read> q_values: array<f32>;
-@group(0) @binding(1) var<storage, read> k_values: array<f32>;
-@group(0) @binding(2) var<storage, read> v_values: array<f32>;
-@group(0) @binding(3) var<storage, read_write> out_values: array<f32>;
+  return `${half ? 'enable f16;\n' : ''}${params}
+@group(0) @binding(0) var<storage, read> q_values: array<${types.q}>;
+@group(0) @binding(1) var<storage, read> k_values: array<${types.k}>;
+@group(0) @binding(2) var<storage, read> v_values: array<${types.v}>;
+@group(0) @binding(3) var<storage, read_write> out_values: array<${types.out}>;
 @group(0) @binding(4) var<uniform> params: Params;
 ${keyMask ? '@group(0) @binding(5) var<storage, read> key_mask: array<f32>;\n' : ''}${bias ? '@group(0) @binding(6) var<storage, read> score_bias: array<f32>;\n' : ''}
 var<workgroup> score_tile: array<f32, ${TILED_QUERIES * TILED_KEYS}>;
@@ -302,12 +310,12 @@ ${R.map(r => J.map(j => `    var s${r}_${j}: f32 = 0.0;`).join('\n')).join('\n')
     for (var chunk = 0u; chunk < ${headDim}u; chunk = chunk + ${TILED_DIM_CHUNK}u) {
       for (var i = lane; i < ${qChunk}u; i = i + 256u) {
         let local_row = i / ${TILED_DIM_CHUNK}u;
-        stage[i] = q_values[${row('q', queryOf('local_row'), 'head')} + chunk + i % ${TILED_DIM_CHUNK}u];
+        stage[i] = ${widen('q', `${row('q', queryOf('local_row'), 'head')} + chunk + i % ${TILED_DIM_CHUNK}u`)};
       }
       for (var i = lane; i < ${kChunk}u; i = i + 256u) {
         let token = tile_start + i / ${TILED_DIM_CHUNK}u;
         var value = 0.0;
-        if (token < params.key_tokens) { value = k_values[${row('k', 'token', 'kv_head')} + chunk + i % ${TILED_DIM_CHUNK}u]; }
+        if (token < params.key_tokens) { value = ${widen('k', `${row('k', 'token', 'kv_head')} + chunk + i % ${TILED_DIM_CHUNK}u`)}; }
         stage[${qChunk}u + i] = value;
       }
       workgroupBarrier();
@@ -348,7 +356,7 @@ ${J.map(j => `      let p${j} = ${excludes ? `select(exp(s${r}_${j} - tile_max${
       for (var i = lane; i < ${valueKeys * headDim}u; i = i + 256u) {
         let token = tile_start + key_chunk + i / ${headDim}u;
         var value = 0.0;
-        if (token < params.key_tokens) { value = v_values[${row('v', 'token', 'kv_head')} + i % ${headDim}u]; }
+        if (token < params.key_tokens) { value = ${widen('v', `${row('v', 'token', 'kv_head')} + i % ${headDim}u`)}; }
         stage[i] = value;
       }
       workgroupBarrier();
@@ -369,7 +377,7 @@ ${R.map(r => `  {
     if (local_query < params.query_count) {
       let base = ${row('o', 'params.query_offset + local_query', 'head')} + tx * ${dimsPerThread}u;
       let inverse = ${excludes ? 'select(0.0, 1.0 / total, total > 0.0)' : '1.0 / total'};
-${E.map(e => `      out_values[base + ${e}u] = o${r}_${e} * inverse;`).join('\n')}
+${E.map(e => `      out_values[base + ${e}u] = ${types.out === 'f16' ? `f16(o${r}_${e} * inverse)` : `o${r}_${e} * inverse`};`).join('\n')}
     }
   }`).join('\n')}
 }

@@ -367,30 +367,6 @@
     "tests/pipeline-contracts.mjs": {
       "kind": "node"
     },
-    "tests/pipeline-graph-artifact-ui-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/pipeline-graph-cleanup-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/pipeline-graph-ergonomics-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/pipeline-graph-scheduler-envelope-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/pipeline-graph-workspace-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/pipeline-native-progress-stream-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/pipeline-route-live-status-contracts.mjs": {
-      "kind": "node"
-    },
-    "tests/pipeline-ui-witness-contracts.mjs": {
-      "kind": "node"
-    },
     "tests/png-fixture.mjs": {
       "kind": "helper",
       "reason": "PNG fixture builder imported by other tests"
@@ -1271,7 +1247,7 @@
     "webgpu-inference-kit/tests": "runs under the inference kit's own npm test in webgpu-inference-kit/; not yet delegated from this runner",
     "models/trellis2/tests": "TRELLIS 2 port tests; not yet classified or delegated from this runner",
     "models/flux2-klein/tests": "FLUX.2 Klein port tests; not yet classified or delegated from this runner",
-    "models/supermat/tests": "SuperMat port tests; not yet classified or delegated from this runner",
+    "models/supermat/tests": "SuperMat port tests; run by tests/supermat-port-contracts.mjs, one process per file",
     "models/unimate/tests": "UniMate port tests; not yet classified or delegated from this runner",
     "demos/material-photo": "node --test suite of the material-photo demo; not yet delegated from this runner"
   }

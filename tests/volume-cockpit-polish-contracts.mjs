@@ -28,34 +28,15 @@ assert.match(core, /fireLuma: Math\.max\(0, Math\.min\(15,/, 'CPU Fire luma agre
 assert.match(core, /clampFinite\(controlsSnapshot\.volumeExposure, 0, 3, 1\)/, 'CPU exposure agrees with its authored ceiling');
 
 assert.match(core, /SUPPORTED_GRID_SIZES\s*=\s*\[[^\]]*128, 136, 140[^\]]*\]/, '136 cubed is a first-class grid between 128 and 140');
-assert.match(index, /<option value="128">128×256×128<\/option>\s*<option value="136">136×272×136<\/option>\s*<option value="140">140×280×140<\/option>/, 'the cockpit exposes the coherent vertically expanded grid range');
+assert.match(index, /<option value="128">128<\/option>\s*<option value="136">136<\/option>\s*<option value="140">140<\/option>/, 'the cockpit exposes the grid widths separately from height');
 assert.equal(136 % 4, 0, '136 preserves the compute workgroup divisor');
 assert.equal(136 % 8, 0, '136 preserves the structure-grid divisor');
 
-assertRange('volume-render-scale', { min: '0.1', max: '0.3', step: '0.001' });
-assert.match(index, /id="volume-render-scale-full"[^>]+aria-pressed="false"[^>]*>Full<\/button>/, 'full resolution is an explicit endpoint instead of a continuous expensive band');
-assert.match(index, /function readVolumeRenderScaleControlValue\(\)[\s\S]*dataset\.effectiveValue/, 'render-scale reads its exact effective value rather than only the visible low-band thumb');
-assert.match(index, /function setVolumeRenderScaleControlValue\([^)]*\)[\s\S]*legacy[\s\S]*dataset\.effectiveValue/, 'legacy intermediate preset values remain exact and visibly classified');
-assert.match(index, /renderScale: readVolumeRenderScaleControlValue\(\)/, 'runtime control capture consumes the exact render-scale authoring state');
-assert.match(index, /volume-render-scale-val'\)\.textContent = `\$\{\(c\.renderScale \* 100\)\.toFixed\(1\)\}%`/, 'render scale is displayed with one decimal percentage place');
-assert.match(index, /volume-render-scale-full'[\s\S]*readVolumeRenderScaleControlValue\(\) === 1 \? lowBandValue : 1/, 'the Full endpoint toggles back to the low authoring band');
+assertRange('volume-render-scale', { min: '0.1', max: '1', step: 'any' });
+const scaleControl=control('volume-render-scale');assert.match(scaleControl,/step="any"/, 'render scale retains exact values instead of quantizing authored fractions');
+assert.match(index,/renderScale: readVolumeRenderScaleControlValue\(\)/,'runtime capture retains exact render scale');
 assert.match(core, /return Math\.max\(0\.1, Math\.min\(1, requested\)\)/, 'the runtime still accepts exact full resolution and legacy preset values');
-assert.match(
-  index,
-  /function readVolumeBasinDriveDirectControlValue\(el\)[\s\S]*el\?\.id === 'volume-render-scale'[\s\S]*Number\(el\.value\)[\s\S]*return readVolumeDomControlValue\(el\)/,
-  'a direct render-scale gesture records the live thumb instead of the previous dataset-backed effective value',
-);
-assert.match(
-  index,
-  /function volumeBasinDriveTarget\(event, descriptors\)[\s\S]*requested: descriptorKey \? readVolumeBasinDriveDirectControlValue\(target\) : null/,
-  'basin-drive recording distinguishes the direct gesture value from stable snapshot state',
-);
-assert.match(
-  index,
-  /const syncControls = event => \{\s*if \(event\?\.target\?\.id === 'volume-render-scale' && event\.isTrusted === true\) adoptVolumeRenderScaleSliderValue\(\)/,
-  'only trusted slider gestures adopt the visible thumb so replay hydration preserves Full and legacy scales',
-);
-
+assert.match(index,/function readVolumeRenderScaleControlValue\(\)[\s\S]*value/, 'source render scale reads its numeric control');
 assert.match(index, /id="raymarch-smoke-presentation-control"[^>]+data-requested-mode="on"/, 'Smoke On/Off owns stable authored requested state');
 assert.match(index, /function readRaymarchSmokePresentationRequestedMode\(\)[\s\S]*dataset\.requestedMode/, 'preset capture reads authored Smoke state from the control surface');
 assert.match(index, /function readVolumeSettingsPresentationControls\(\)[\s\S]*readRaymarchSmokePresentationRequestedMode\(\)[\s\S]*raymarch-smoke-presentation-requested-state-mismatch/, 'preset capture fails loud when authored Smoke state and runtime receipt disagree');

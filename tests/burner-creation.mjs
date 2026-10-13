@@ -7,15 +7,15 @@ import {readFileSync} from 'node:fs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {checkedBurnerBed,checkedAssemblyPose,BURNER_ASSEMBLY_TYPE,BURNER_BED_TYPE,BURNER_BED_SOURCE} from '../burner-assembly.mjs';
 import {normalizeBurner,BURNER_DEFAULTS} from '../annular-burner.mjs';
-import {normalizeFlameEmitterPose,normalizeFlameDomainTranslation,FLAME_EMITTER_ID,FLAME_EMITTER_TYPE,FLAME_EMITTER_SOURCE} from '../scene-flame-emitter.mjs';
+import {normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,FLAME_EMITTER_ID,FLAME_EMITTER_TYPE,FLAME_EMITTER_SOURCE} from '../scene-flame-emitter.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const extract=(from,to)=>html.slice(html.indexOf(from),html.indexOf(to,html.indexOf(from)));
 const pose={position:[0,-.76,0],rotation:[0,0,0],scale:[1,1,1]};
 const source={id:FLAME_EMITTER_ID,type:FLAME_EMITTER_TYPE,source:FLAME_EMITTER_SOURCE,transform:pose};
 function harness({family='ring',objects=[source],groups=[]}={}){
- let state={objects:structuredClone(objects),groups:structuredClone(groups),domain:[0,0,0]},serial=0,failure=null;
+ let state={objects:structuredClone(objects),groups:structuredClone(groups),domain:[0,0,0],domainScale:1},serial=0,failure=null;
  const edits=createSceneEdits({read:()=>null,write:()=>{throw Error('wrong target');}});
- const context={structuredClone,normalizeBurner,BURNER_DEFAULTS,checkedBurnerBed,checkedAssemblyPose,normalizeFlameEmitterPose,normalizeFlameDomainTranslation,BURNER_ASSEMBLY_TYPE,BURNER_BED_TYPE,BURNER_BED_SOURCE,FLAME_EMITTER_ID,FLAME_EMITTER_TYPE,FLAME_EMITTER_SOURCE,
+ const context={structuredClone,normalizeBurner,BURNER_DEFAULTS,checkedBurnerBed,checkedAssemblyPose,normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,BURNER_ASSEMBLY_TYPE,BURNER_BED_TYPE,BURNER_BED_SOURCE,FLAME_EMITTER_ID,FLAME_EMITTER_TYPE,FLAME_EMITTER_SOURCE,
   PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,GROUP_TYPE,checkedGroupPose,groupPivotPose:()=>structuredClone(pose),RIM_LIGHT_ID:'@rim-light',authoringBusy:false,scenePlacementTools:{edits},flameEmitterPose:pose,isFireLightFieldRoute:()=>true,applyFlameEmitterPose(){},setActiveSceneGroup(){},setActiveSceneObject(){},setInfo(){},sceneGroupDisplayLabel:g=>g.label,bedPoseBelowSource:()=>structuredClone(pose),makeSceneObjectId:prefix=>`${prefix}-${++serial}`,
   get authoredFlamePresent(){return state.objects.some(o=>o.id===FLAME_EMITTER_ID);},get sceneGroups(){return state.groups;},get sceneObjects(){return [...state.objects,{id:'kiln',type:'glb'}];},
   editSceneGroups(change){const groups=structuredClone(state.groups);change(groups);edits.apply('@scene-groups',{groups},'Group objects');},readBurnerGraph:()=>structuredClone(state),window:{__kaminosVolumeEmitterReceipt:{effective:{family}}}};

@@ -624,13 +624,6 @@ async function startServer() {
           [],
         ));
       }
-      if (pathname === '/api/pipeline-manifest') {
-        return sendJson(response, 200, {
-          identity: 'kaminos-pipeline-manifest-v0',
-          manifestSha256: 'witness-read-only-empty-pipeline-manifest',
-          pipelines: [],
-        });
-      }
       const mount = mounts.find(candidate => pathname.startsWith(candidate.prefix));
       if (!mount) return send(response, 404, 'mount not found');
       let suffix = pathname.slice(mount.prefix.length);

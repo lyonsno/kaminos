@@ -8,6 +8,7 @@
 // comes from the packed table (HF's own _relative_position_bucket).
 
 import * as K from './unimate-kernels.js';
+import { tensorFloat32Bytes } from './unimate-weights.js';
 import { createT5Tokenizer } from './unimate-t5-tokenizer.js';
 
 const SU = GPUBufferUsage;
@@ -17,14 +18,15 @@ export class T5Encoder {
   static async create(device, manifest, bytes, tokenizerSpec) {
     const w = new Map();
     for (const t of manifest.tensors) {
-      const buffer = device.createBuffer({ size: Math.max(256, Math.ceil(t.byteLength / 256) * 256), usage: STORAGE, mappedAtCreation: true });
-      new Uint8Array(buffer.getMappedRange()).set(new Uint8Array(bytes, t.offset, t.byteLength));
+      const data = tensorFloat32Bytes(bytes, t);
+      const buffer = device.createBuffer({ size: Math.max(256, Math.ceil(data.byteLength / 256) * 256), usage: STORAGE, mappedAtCreation: true });
+      new Uint8Array(buffer.getMappedRange()).set(data);
       buffer.unmap();
       w.set(t.name, { buffer, shape: t.shape });
     }
     // The bias table is also needed on the host to build per-length bias matrices.
     const relEntry = manifest.tensors.find(t => t.name === 'relative_attention_bias');
-    const rel = new Float32Array(bytes.slice(relEntry.offset, relEntry.offset + relEntry.byteLength));
+    const rel = new Float32Array(tensorFloat32Bytes(bytes, relEntry).slice().buffer);
     return new T5Encoder(device, manifest, w, rel, createT5Tokenizer(tokenizerSpec));
   }
 

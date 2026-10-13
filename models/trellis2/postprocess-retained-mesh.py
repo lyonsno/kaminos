@@ -3,6 +3,7 @@ import argparse
 import ast
 import hashlib
 import importlib
+import inspect
 from importlib import metadata
 import json
 from pathlib import Path
@@ -12,8 +13,11 @@ import time
 import traceback
 
 import numpy as np
+from source_attestation import git_source_identity
 
 ROUTE = 'Trellis2MLX/reference-cleanup/CPU-fast-simplification'
+ROUTES = {'reference-cleanup': ROUTE,
+          'mlx-surface-preserving': 'Trellis2MLX/surface-preserving/CPU-fast-simplify-first'}
 
 
 def digest(data):
@@ -21,8 +25,7 @@ def digest(data):
 
 
 def identity(root):
-    return {'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip(),
-            'dirty': subprocess.check_output(['git', 'status', '--porcelain'], cwd=root, text=True)}
+    return git_source_identity(root)
 
 
 def load_source(root, expected):
@@ -47,6 +50,8 @@ def load_source(root, expected):
         **observed, 'root': str(root), 'generateSha256': digest(source_bytes),
         'cleanupSha256': digest((root / 'trellmlx/mesh_cleanup.py').read_bytes()),
         'function': '_cleanup_and_simplify_mesh',
+        'surfacePreservationDefault': inspect.signature(cleanup_module.cleanup_mesh).parameters.get(
+            'preserve_surface_parts', inspect.Parameter('missing', inspect.Parameter.KEYWORD_ONLY)).default is True,
         'packages': {k: metadata.version(k) for k in ['numpy', 'scipy', 'trimesh', 'fast-simplification']},
     }
 
@@ -77,12 +82,14 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--target-faces', type=int, required=True)
     parser.add_argument('--keep-largest', action='store_true')
+    parser.add_argument('--cleanup-mode', default='reference-cleanup')
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     report = {'schema': 'trellis2.mesh-postprocess.v0', 'status': 'running', 'phase': 'source-admission',
               'requestedSource': {'root': str(args.source_root.resolve()), 'commit': args.expected_source_commit},
-              'requestedRoute': ROUTE, 'effectiveRoute': None, 'modelCalls': 0,
+              'requestedMode': args.cleanup_mode, 'requestedRoute': ROUTES.get(args.cleanup_mode),
+              'effectiveRoute': None, 'modelCalls': 0,
               'targetFaces': args.target_faces, 'keepLargest': args.keep_largest,
               'command': sys.argv, 'events': [], 'operationTrace': []}
 
@@ -97,7 +104,14 @@ def main():
     started = time.perf_counter()
     persist()
     try:
+        if args.cleanup_mode not in ROUTES:
+            raise ValueError('supported explicit cleanup mode required')
         cleanup, report['source'] = load_source(args.source_root.resolve(), args.expected_source_commit)
+        preserving = args.cleanup_mode == 'mlx-surface-preserving'
+        if preserving and not report['source']['surfacePreservationDefault']:
+            raise ValueError('selected MLX cleanup source lacks default surface preservation')
+        report['settings'] = {'referenceCleanup': not preserving, 'simplifyFirst': preserving,
+                              'qemSimplify': False, 'holeFill': True, 'preserveSurfaceParts': preserving}
         if args.target_faces < 1:
             raise ValueError('positive caller-selected simplification target required')
         report['phase'] = 'mesh-input-admission'
@@ -113,11 +127,11 @@ def main():
             raise ValueError('finite complete indexed input surface required')
         report.update(inputManifestSha256=digest(raw_manifest), inputVertices=len(vertices), inputFaces=len(faces),
                       input={'vertices': manifest['vertices'], 'triangles': manifest['triangles']},
-                      effectiveRoute=ROUTE, phase='reference-order-cleanup')
+                      effectiveRoute=ROUTES[args.cleanup_mode], phase='source-mesh-cleanup')
         persist()
         vertices, faces = cleanup(vertices, faces, target_faces=args.target_faces, no_cleanup=False,
-            keep_largest=args.keep_largest, reference_cleanup=True, qem_simplify=False,
-            simplify_first=False, operation_trace=report['operationTrace'], log=log)
+            keep_largest=args.keep_largest, reference_cleanup=not preserving, qem_simplify=False,
+            simplify_first=preserving, operation_trace=report['operationTrace'], log=log)
         report['precision'] = {'inputVertices': 'float32', 'sourceReturnedVertices': str(vertices.dtype),
                                'sourceReturnedFaces': str(faces.dtype), 'emittedVertices': 'float32',
                                'emittedFaces': 'uint32', 'normalization': 'explicit GLTF F32 positions/U32 indices'}
@@ -128,7 +142,7 @@ def main():
         if not np.isfinite(vertices).all():
             raise ValueError('source positions cannot be emitted as finite F32')
         report['sourceAfter'] = identity(args.source_root.resolve())
-        if report['sourceAfter'] != {k: report['source'][k] for k in ['commit', 'dirty']}:
+        if any(report['sourceAfter'][k] != report['source'][k] for k in ['commit', 'dirty']):
             raise ValueError('postprocess source changed during execution')
         report['phase'] = 'processed-mesh-write'
         persist()

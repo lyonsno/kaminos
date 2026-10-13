@@ -11,10 +11,11 @@ export function normalizeComposition(value) {
   if (!value.route || typeof value.route !== 'object' || Array.isArray(value.route)) throw new Error('Composition route is required');
   if (value.route.volume_light_field !== '1') throw new Error('Stationary composition requires the ordinary light-field route');
   for (const [key, item] of Object.entries(value.route)) {
-    if (!(key.startsWith('volume_light_field') || key === 'composition_module_url') || typeof item !== 'string') {
+    if (!(key.startsWith('volume_light_field') || key === 'composition_module_url' || key === 'volume_collision') || typeof item !== 'string') {
       throw new Error(`Unsupported composition route field: ${key}`);
     }
   }
+  if (value.route.volume_collision !== undefined && !['kiln', 'off'].includes(value.route.volume_collision)) throw new Error('Unsupported kiln collision setting');
   const result = clone(value);
   if (value.burner != null) result.burner = normalizeBurner(value.burner);
   return result;
@@ -29,24 +30,27 @@ export function normalizeSceneCapture(value) {
   return clone(value);
 }
 
-export function compositionRestoreUrl(composition, sceneFile, origin) {
+export function compositionRestoreUrl(composition, sceneFile, origin, workspace = null) {
   const state = normalizeComposition(composition);
   if (!sceneFile || /[/\\]/.test(sceneFile)) throw new Error('Saved scene filename is required');
   const target = new URL(state ? '/volume-settings-preset.html' : '/', origin);
   if (state) target.searchParams.set('preset', state.flame.presetId);
   const hash = new URLSearchParams(state?.route || {});
+  if (workspace !== null) hash.set('workspace', workspace);
   hash.set('authoring', '1');
   hash.set('scene', sceneFile);
   target.hash = hash.toString();
   return target.href;
 }
 
-export function forwardCompositionHash(target, sourceHash) {
+export function forwardCompositionHash(target, sourceHash, sourceSearch = '') {
   const url = new URL(target);
   const hash = new URLSearchParams(sourceHash.replace(/^#/, ''));
+  const workspace = new URLSearchParams(sourceSearch).get('workspace');
+  if (workspace !== null) hash.set('workspace',workspace);
   const forwarded = new URLSearchParams();
   for (const [key, value] of hash) {
-    if (['authoring', 'scene', 'composition_module_url', 'volume_collision', 'rendering_source_xyz', 'rendering_source_gain', 'rendering_surface_gain', 'rendering_surface_scattering', 'rendering_receiver_spacing', 'rendering_angular_pattern', 'rendering_directions', 'rendering_match_camera'].includes(key)
+    if (['workspace', 'authoring', 'scene', 'composition_module_url', 'volume_collision', 'rendering_source_xyz', 'rendering_source_gain', 'rendering_surface_gain', 'rendering_surface_scattering', 'rendering_receiver_spacing', 'rendering_angular_pattern', 'rendering_directions', 'rendering_match_camera'].includes(key)
       || key.startsWith('volume_light_field')) forwarded.set(key, value);
   }
   url.hash = forwarded.toString();
@@ -55,7 +59,7 @@ export function forwardCompositionHash(target, sourceHash) {
 
 // Both canvases are sampled synchronously in one animation callback. This is a
 // picture of the visible composition, not a checkpoint of the fluid solver.
-export function captureComposedCanvases({ host, volume, document, label, simulation, capturedAt = new Date().toISOString() }) {
+export function captureComposedCanvases({ host, volume, document, label, simulation, crop=null, capturedAt = new Date().toISOString() }) {
   if (!host || !host.width || !host.height) throw new Error('Host canvas is unavailable');
   const bounds = host.getBoundingClientRect();
   if (!(bounds.width > 0 && bounds.height > 0)) throw new Error('Host canvas has no visible area');
@@ -74,7 +78,16 @@ export function captureComposedCanvases({ host, volume, document, label, simulat
       rect.width * canvas.width / bounds.width,
       rect.height * canvas.height / bounds.height);
   }
-  return normalizeSceneCapture({ label, capturedAt, width: canvas.width, height: canvas.height,
-    image: canvas.toDataURL('image/png'), simulation: simulation || null,
+  let output=canvas;
+  if(crop){const {x,y,width,height}=crop;if(![x,y,width,height].every(Number.isInteger)||x<0||y<0||width<=0||height<=0||x+width>canvas.width||y+height>canvas.height)throw Error('Camera frame is clipped or invalid');output=document.createElement('canvas');output.width=width;output.height=height;output.getContext('2d').drawImage(canvas,x,y,width,height,0,0,width,height);}
+  return normalizeSceneCapture({ label, capturedAt, width: output.width, height: output.height,
+    image: output.toDataURL('image/png'), simulation: simulation || null,
     layers: volume ? ['mesh', 'ordinary-emissive-volume'] : ['mesh'] });
+}
+
+// The live address keeps its renderer route; only the accepted document changes.
+export function savedSceneLocation(href,sceneFile){
+ if(typeof sceneFile!=='string'||!sceneFile.endsWith('.kaminos.json')||/[/\\]/.test(sceneFile))throw Error('Saved scene filename is required');
+ const target=new URL(href),hash=new URLSearchParams(target.hash.slice(1));
+ hash.set('scene',sceneFile);target.hash=hash.toString();return target.href;
 }

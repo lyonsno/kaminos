@@ -155,7 +155,7 @@ assert.match(settingsLoadBlock, /window\.open\(target, '_blank'\)[\s\S]*location
 assert.match(index, /function selectedVolumeSettingsPresetInspectionUrl\(\)[\s\S]*?volume-settings-preset\.html/, 'Explicit renderer inspection retains the separate visual wrapper');
 assert.match(settingsPresetContract, /VOLUME_SETTINGS_PRESET_VIEW_BY_COMPOSITION/, 'Shared preset inspection maps effective composition to an explicit loader view');
 assert.match(settingsPresetPage, /buildVolumeSettingsPresetTarget/, 'The viewless exact-preset loader builds the canonical ordinary cockpit target');
-assert.match(settingsPresetPage, /if \(!view\)[\s\S]*buildVolumeSettingsPresetTarget[\s\S]*location\.replace\((?:target|forwardCompositionHash\(target, location\.hash\))\)/, 'The viewless loader validates then redirects into the ordinary steerable cockpit, carrying any authored composition hash');
+assert.match(settingsPresetPage, /if \(!view\)[\s\S]*buildVolumeSettingsPresetTarget[\s\S]*location\.replace\((?:target|forwardCompositionHash\(target, location\.hash, location\.search\))\)/, 'The viewless loader validates then redirects into the ordinary steerable cockpit, carrying any authored composition hash');
 assert.match(index, /validateVolumeSettingsPresetDocument[\s\S]*validateVolumeSettingsPresetTarget/, 'The ordinary live target imports exact preset admission');
 assert.match(index, /async function admitVolumeSettingsPresetRoute[\s\S]*validateVolumeSettingsPresetTarget\(receipt, params\)/, 'The ordinary live target re-reads and validates preset authority instead of trusting route text');
 assert.match(index, /async function initKaminosVolumeRoute\(\) \{[\s\S]*?await admitVolumeSettingsPresetRoute\(params\);[\s\S]*?routedBonfireAblationControls/, 'Preset admission completes before any route settings are applied');
@@ -648,7 +648,8 @@ assert.doesNotMatch(index, /volume_(?:majorant|temporal)|volume_history_clamp/, 
 assert.match(core, /stripRetiredRaymarchControls/, 'historical controls cross one explicit retirement boundary');
 assert.match(core, /retiredRaymarchControls/, 'runtime state receipts every stripped historical control');
 assert.match(core, /uniforms\[19\]\s*=\s*0\s*;/, 'ordinary product shaders receive explicit zero render-time authority');
-assert.match(core, /uniforms\[47\]\s*=\s*0\s*;/, 'reserved render controls receive explicit zero frame-cycle authority');
+assert.match(core, /uniforms\[47\]\s*=\s*controlsSnapshot\.rayStartNoise === false \? 0 : 1;/, 'reused frame-cycle slot carries only the static ray-start toggle');
+assert.doesNotMatch(core, /uniforms\[47\]\s*=.*(?:frameCount|now|renderPhase)/, 'ray starts do not restore retired frame-cycle authority');
 assert.match(core, /writeAnalyticEmitterInjectionUniform\([\s\S]*?renderPhaseTimeMs\s*\*\s*0\.001/, 'look freeze pins time only for explicit analytic-emitter temporal descriptors');
 assert.match(core, /if \(advanceSim && !sampleLookFreeze && !simulationPaused\) \{[\s\S]*encodeSim\(encoder\)/, 'sampleFrame does not advance simulation while look freeze is active');
 assert.match(index, /id="volume-fire-scale"/, 'Volume tab exposes emitter scale control');
@@ -672,8 +673,8 @@ assert.match(index, /windStrength/, 'Volume controls carry explicit wind strengt
 assert.match(index, /windAngle/, 'Volume controls carry explicit wind direction into the renderer');
 assert.match(index, /windHeight/, 'Volume controls carry explicit wind height/ramp into the renderer');
 assert.match(index, /id="volume-render-scale"/, 'Volume tab exposes internal render-scale control');
-assert.match(index, /id="volume-render-scale" min="0\.1" max="0\.3" step="0\.001"/, 'Volume tab gives the operator one-decimal-percentage control over the useful 10–30% raymarch band');
-assert.match(index, /id="volume-render-scale-full"/, 'Volume tab keeps full-resolution raymarch as an explicit endpoint');
+assert.match(index, /id="volume-render-scale" min="0\.1" max="1" step="any"/, 'Volume tab gives the operator exact numeric control over the requested 10–100% raymarch range');
+assert.match(index, /renderScale: readVolumeRenderScaleControlValue\(\)/, 'runtime uses the exact full-range render resolution');
 assert.match(index, /volume_render_scale/, 'URL route can override internal render scale');
 assert.match(index, /renderScale/, 'Volume controls carry internal render scale into the renderer');
 assert.match(index, /data-volume-control-section="visual-tuning"[\s\S]*id="volume-fire-licks"[\s\S]*id="volume-projection"[\s\S]*id="volume-input-radius"[\s\S]*id="volume-flow-rate"[\s\S]*data-volume-control-section="render-budget"/, 'Volume tab groups visual tuning knobs with hidden cost consequences before the obvious render budget controls');
@@ -712,8 +713,8 @@ assert.match(index, /pressureTierHeroMin/, 'Volume controls expose pressure3 her
 assert.match(index, /pressureTierHeroMax/, 'Volume controls expose pressure3 hero-band max threshold to the renderer');
 assert.match(index, /volume_sim_profile/, 'URL route can request sim-cost profiling without changing the render contract');
 assert.match(index, /simProfile/, 'Volume controls carry sim profile request identity into the renderer');
-assert.match(index, /<option value="128">128×256×128<\/option>/, 'Volume grid selector exposes the vertically expanded 128-cell grid');
-assert.match(index, /<option value="160">160×320×160<\/option>/, 'Volume grid selector exposes the vertically expanded 160-cell grid');
+assert.match(index, /<option value="128">128<\/option>/, 'Volume grid selector exposes the 128-cell width independently of height');
+assert.match(index, /<option value="160">160<\/option>/, 'Volume grid selector exposes the 160-cell width independently of height');
 assert.match(index, /id="volume-ray-budget-gamut"/, 'Volume tab exposes the coupled ray-budget gamut control');
 assert.match(index, /id="volume-ray-budget-handle"/, 'ray-budget gamut exposes a draggable handle');
 assert.match(index, /id="volume-ray-budget-readout"/, 'ray-budget gamut exposes a compact effective budget readout');
@@ -726,7 +727,7 @@ assert.match(index, /applyRayBudgetGamutPoint/, 'ray-budget gamut maps pointer p
 assert.match(index, /syncRayBudgetGamutFromControls/, 'ray-budget gamut stays coupled when individual sliders move');
 assert.match(index, /applyRayBudgetPreset/, 'ray-budget preset buttons jump to stable budget positions');
 assert.match(index, /volume_ray_budget_preset/, 'URL route can select a named ray-budget preset');
-assert.match(index, /<option value="96" selected>96×192×96<\/option>/, 'smoke route defaults to the vertically expanded 96-cell grid');
+assert.match(index, /<option value="96" selected>96<\/option>/, 'smoke route defaults to the 96-cell width independently of height');
 assert.match(index, /id="volume-input-radius"/, 'Volume tab exposes an input radius control');
 assert.match(index, /id="volume-flow-rate"/, 'Volume tab exposes an input flow-rate control');
 assert.match(index, /id="volume-scene"/, 'Volume tab exposes an explicit volume scene selector');
@@ -1054,7 +1055,7 @@ assert.match(fieldSliceWitness, /writeRgbaPng\(fieldSliceOut/, 'volume witness w
 assert.match(fieldSliceWitness, /fieldSliceBackend:\s*'cpu-fluid-buffer-readback'/, 'field-slice report names CPU fluid-buffer readback as the evidence backend');
 assert.match(core, /directCellOpticalSupportFromSlots/, 'raymarch derives skip support from native simulation-cell records');
 assert.match(core, /directCellExitDistance/, 'raymarch crosses empty native cells at their geometric boundary');
-assert.match(core, /let expensiveSampleBudget = u32\(ceil\(steps\)\)/, 'ray setting defines a fixed expensive-sample budget');
+assert.match(core, /let expensiveSampleBudget = select\(u32\(ceil\(steps\)\), nonRidgeOpticalCaptureHeader.sampleCount, opticalTrace\)/, 'ordinary ray setting defines a fixed expensive-sample budget; trace uses its explicit capture count');
 assert.match(core, /let maxTraversalSteps = GRID_Y \* 3u \+ expensiveSampleBudget \+ 3u/, 'traversal safety derives from expanded vertical grid geometry plus the explicit sample budget');
 assert.match(core, /expensiveSamples = expensiveSamples \+ 1u/, 'occupied reconstruction spends exactly one expensive sample');
 assert.match(core, /let adaptiveScale = mix\(2\.65, 1\.0, fine\)/, 'adaptive march never shrinks below the baseline segment or increases expensive work');
@@ -1217,7 +1218,7 @@ assert.match(core, /lookFreezeRenderTimeMs/, 'Look-lab freeze pins explicit emit
 assert.match(core, /lookFreezeRenderFrame/, 'Look-lab freeze pins render-phase evidence as well as sim stepping');
 assert.match(core, /typeof state\.lookFreezeRenderTimeMs !== 'number'/, 'Look-lab freeze render-time pin treats null as unpinned rather than finite zero');
 assert.match(core, /uniforms\[19\]\s*=\s*0\s*;/, 'retired renderer-time ABI component remains explicit zero authority');
-assert.match(core, /uniforms\[47\]\s*=\s*0\s*;/, 'retired temporal-frame ABI component remains explicit zero authority');
+assert.match(core, /uniforms\[47\]\s*=\s*controlsSnapshot\.rayStartNoise === false \? 0 : 1;/, 'retired temporal-frame component is reused only for a stable spatial sampling choice');
 assert.match(core, /const renderPhaseAuthority\s*=\s*lookFreeze\s*\?\s*'look-freeze-pinned-render-phase'/, 'Debug state reports whether render phase is live or look-freeze pinned');
 assert.match(core, /setControls\(next\)[\s\S]*const controlsLookFreeze[\s\S]*if \(!controlsLookFreeze\) updatePyroDynamicDetailState\(\{ inputKind: 'control-proxy' \}\)/, 'Look-lab freeze prevents control scrubbing from advancing Pyro material-memory state');
 assert.match(core, /uniforms\[85\]\s*=\s*pyroMaterialEnergy/, 'CPU preserves a nonspatial live-field energy gate after retiring the synthetic atlas');

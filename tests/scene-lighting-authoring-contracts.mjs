@@ -2,20 +2,21 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { test } from 'node:test';
+import {checkedRimRecipe} from '../scene-rim-light.mjs';
 
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const between = (a, b) => source.slice(source.indexOf(a), source.indexOf(b, source.indexOf(a)));
 function environmentContext({ storage = new Map(), startup = false } = {}) {
   const elements = new Map(), listeners = {};
   const document = { querySelectorAll: () => [], getElementById(id) {
-    if (!elements.has(id)) elements.set(id, { value: '0', checked: false, style: {}, textContent: '',
+    if (!elements.has(id)) elements.set(id, { value: '0', checked: false, style: {}, dataset:{}, textContent: '',
       addEventListener(type, fn) { if (id === 'sidebar') listeners[type] = fn; },
       dispatchEvent(event) { listeners[event.type]?.(event); },
     });
     return elements.get(id);
   } };
   const scene = { environmentRotation: { y: 0 }, environmentIntensity: 1 };
-  const context = vm.createContext({ document, scene, sceneObjects: [], currentEnvName: null,
+  const context = vm.createContext({ checkedRimRecipe,document, scene, sceneObjects: [], currentEnvName: null,
     envCache: { studio: { name: 'studio' }, warehouse: { name: 'warehouse' } },
     HDR_ENVS: { studio: { exposure: 1.5, intensity: 1 }, warehouse: { exposure: 0.7, intensity: 0.5 } },
     environmentRecipes: {}, environmentLoadToken: 0, currentEnvMap: null, showEnvBg: false,
@@ -93,8 +94,8 @@ test('recipe validation preserves fine values and rejects invalid authored light
 
 test('rim off/on preserves its aim and fine-valued recipe', () => {
   const elements = new Map();
-  const document = { getElementById(id) { if (!elements.has(id)) elements.set(id,{ value:'',min:'0',max:'1',checked:false,addEventListener(){} }); return elements.get(id); } };
-  const c=vm.createContext({document,rimLight:null,window:{},controls:{},saveSettings(){}});
+  const document = { getElementById(id) { if (!elements.has(id)) elements.set(id,{ value:'',min:'0',max:'1',dataset:{},checked:false,addEventListener(){} }); return elements.get(id); } };
+  const c=vm.createContext({checkedRimRecipe,document,rimLight:null,window:{},controls:{},saveSettings(){}});
   vm.runInContext(between('// --- Authored Rim Light ---','// --- Exposure / Intensity Controls ---'),c);
   const recipe={enabled:true,color:'#d6e5ff',intensity:123.45,azimuth:-237.89,elevation:34.56,distance:5.4321,angle:45.67,penumbra:0.1234,target:[1.234,2.345,-3.456]};
   c.setRimLight(recipe);document.getElementById('rim-enabled').checked=false;c.updateRimLight();
@@ -118,14 +119,26 @@ test('AO is attached to material indirect lighting, not multiplied over lit outp
     clamp(a,b) { return this.max(a).min(b); }
   }
   const float = v => new Scalar(v), scenePass = float(10);
-  const c = vm.createContext({ scenePass, denoisePass:{r:float(0.2)}, aoIntensity:float(3), float,
-    mix:(a,b,t)=>float(a).mul(float(1).sub(t)).add(float(b).mul(t)), vec3:float, vec4:float,
-    builtinAOContext: ao => ({ ao }),
-    texture: () => ({ r: float(0.2) }), denoiseResolved: { value: {} }, screenUV: {},
-  });
-  const output = vm.runInContext(between('  const aoVisibility =', '  fireLightFieldPass?.dispose?.();') + '\nbaseSceneOutput;',c);
-  assert.equal(Number(output),10,'direct/emissive scene output must not receive a post-lighting AO multiplier');
-  assert.ok(scenePass.contextNode?.ao,'material AO hook must remain active');
+  function outputFor(pageSource) {
+    const part=(a,b)=>pageSource.slice(pageSource.indexOf(a),pageSource.indexOf(b,pageSource.indexOf(a)));
+    const pass=float(10),pipeline={};
+    const c=vm.createContext({scenePass:pass,aoIntensity:float(3),float,
+      mix:(a,b,t)=>float(a).mul(float(1).sub(t)).add(float(b).mul(t)),
+      builtinAOContext:ao=>({ao}),texture:()=>({r:float(.2)}),denoiseResolved:{value:{}},screenUV:{},
+      sceneGISettings:{mode:'gtao',view:'scene'},sceneGI:{},document:{body:{dataset:{}}},prePassDepth:{},
+      giOutputGraphs:new Map(),renderPipeline:pipeline,isFireLightFieldRoute:()=>false,
+      fireLightFieldRouteParams:()=>new URLSearchParams(),selectionFeedback:{output:value=>value},refreshRenderingControls(){}});
+    vm.runInContext(part('  const aoVisibility =','  const sceneGI =')
+      +'\n'+part('  function rebuildSceneGIOutput() {','  updateSceneGI =')+'\nrebuildSceneGIOutput();',c);
+    assert.ok(pass.contextNode?.ao,'material AO hook must remain active');
+    return Number(pipeline.outputNode);
+  }
+  const preservesLitOutput=pageSource=>assert.equal(outputFor(pageSource),10,'direct/emissive scene output must not receive a post-lighting AO multiplier');
+  preservesLitOutput(source);
+  const normal='const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;';
+  const injected=source.replace(normal,normal.replace(': scenePass;',': scenePass.mul(aoOutput);'));
+  assert.notEqual(injected,source,'negative injection reaches the actual final output');
+  assert.throws(()=>preservesLitOutput(injected),/direct\/emissive scene output/,'the harness must fail when final lighting is incorrectly attenuated');
 });
 
 test('rim light has authorable controls and is saved independently of map recipes', () => {

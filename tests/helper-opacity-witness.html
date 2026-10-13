@@ -1,0 +1,10 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0}</style><script type="importmap">{"imports":{"three":"../lib/three.core.js","three/webgpu":"../lib/three.webgpu.js"}}</script></head><body><script type="module">
+import * as THREE from '../lib/three.webgpu.js';
+import {styleHelperLines} from '../scene-helper-lines.mjs';
+const renderer=new THREE.WebGPURenderer({antialias:false});renderer.setPixelRatio(1);renderer.setSize(128,128);renderer.outputColorSpace=THREE.LinearSRGBColorSpace;renderer.toneMapping=THREE.NoToneMapping;document.body.append(renderer.domElement);await renderer.init();
+const scene=new THREE.Scene();scene.background=new THREE.Color().setRGB(.2,.2,.2);
+const camera=new THREE.OrthographicCamera(-2,2,2,-2,.1,10);camera.position.z=3;
+function line(points,color,order){const root=new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(points,3)),new THREE.LineBasicMaterial({color:new THREE.Color().setRGB(...color)}));scene.add(root);styleHelperLines(root,{width:16,opacity:.5});root.userData.kaminosWideLine.renderOrder=order;return root;}
+line([-1.8,0,0,1.8,0,0],[.8,.2,.2],1001);line([0,-1.8,0,0,1.8,0],[.2,.8,.2],1002);
+await renderer.renderAsync(scene,camera);window.opacityWitness={complete:true,outputColorSpace:renderer.outputColorSpace,pixelRatio:renderer.getPixelRatio(),expected:{red:[.5,.2,.2],cross:[.35,.5,.2],green:[.2,.5,.2]}};
+</script></body></html>

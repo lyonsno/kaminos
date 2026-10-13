@@ -89,7 +89,7 @@ export async function runSuperMatWitness({ stage, fixtureSha256, weightsSha256, 
     device.pushErrorScope('out-of-memory');
     ops = createSuperMatOps(device, { ...opsOptions, label: `supermat.${stage}` });
     result.effectiveOps = { activations: ops.activations, fuseNorm: ops.fuseNorm, gemmPrecision: ops.gemmPrecision,
-      gemmKernel: ops.gemmKernel, attention: ops.attentionMode };
+      gemmKernel: ops.gemmKernel, attention: ops.attentionMode, attentionKernel: ops.attentionKernel };
     // Captures compare in F32; reduced-precision storage is widened exactly first.
     const capture = (name, tensor) => {
       const count = tensor.byteLength / (storageKind(tensor) === 'f32' ? 4 : 2);

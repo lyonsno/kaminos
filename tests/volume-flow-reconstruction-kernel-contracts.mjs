@@ -57,7 +57,7 @@ const raymarchLoopStart = core.indexOf('let expensiveSampleBudget');
 const raymarchLoopEnd = core.indexOf('let exposed =', raymarchLoopStart);
 const raymarchLoop = core.slice(raymarchLoopStart, raymarchLoopEnd);
 assert.match(raymarchLoop, /if \(flowKernelReconstructionActive\) \{[\s\S]*reconstructed = sampleWorldFlowReconstruction\(p\)/, 'raymarch consumes the reconstructed semantic bundle only on the explicit reconstruction path');
-assert.match(raymarchLoop, /let directSupport = directCellOpticalSupport\(p\);[\s\S]*if \(flowKernelReconstructionActive\)[\s\S]*else \{[\s\S]*reconstructed = sampleWorldFlowReconstructionRaw\(p\)/, 'kernel-off raymarch preserves direct admission before its one trilinear semantic sample');
+assert.match(raymarchLoop, /directSupport = directCellOpticalSupport\(p\);[\s\S]*if \(flowKernelReconstructionActive\)[\s\S]*else \{[\s\S]*reconstructed = sampleWorldFlowReconstructionRaw\(p\)/, 'kernel-off raymarch preserves direct admission before its one trilinear semantic sample');
 assert.match(raymarchLoop, /reconstructed\.velocityDensity[\s\S]*reconstructed\.material[\s\S]*reconstructed\.fireLayer[\s\S]*reconstructed\.microLayer[\s\S]*reconstructed\.frontTopology/, 'raymarch consumes every reconstructed field lane together');
 
 assert.match(core, /struct BoundarySplatCamera[\s\S]*reconstructionControls:\s*vec4<f32>/, 'splat compaction receives the same effective reconstruction controls');
@@ -75,7 +75,7 @@ assert.match(core, /flowKernelEffective:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S
 assert.match(core, /flowKernelCandidateAdmissionAuthority:\s*'structural-splat-candidates-v0'/, 'runtime state makes the unchanged post-structural-gate admission authority explicit');
 assert.doesNotMatch(core, /select\(directCellOpticalSupport\(p\), 1\.0, flowKernelReconstructionActive\)/, 'wider authored reconstruction cannot globally disable empty-cell traversal');
 assert.doesNotMatch(core, /fn flowReconstructionOpticalSupport\b/, 'optional filtering does not acquire independent material-support authority');
-assert.match(raymarchLoop, /let directSupport = directCellOpticalSupport\(p\);[\s\S]*directCellExitDistance\(p, rd\)[\s\S]*if \(flowKernelReconstructionActive\)/, 'native transported support crosses empty cells before optional reconstruction work');
+assert.match(raymarchLoop, /directSupport = directCellOpticalSupport\(p\);[\s\S]*directCellExitDistance\(p, rd\)[\s\S]*if \(flowKernelReconstructionActive\)/, 'native transported support crosses empty cells before optional reconstruction work');
 assert.match(witness, /expectedFlowKernelStrength/, 'visual witness derives expected kernel strength from the requested route');
 assert.match(witness, /function quantizeFlowKernelControl/, 'visual witness models the declared HTML range steps instead of expecting impossible values');
 assert.match(witness, /state\.flowKernelIdentity[\s\S]*FLOW_RECONSTRUCTION_KERNEL_IDENTITY/, 'visual witness verifies effective kernel identity');

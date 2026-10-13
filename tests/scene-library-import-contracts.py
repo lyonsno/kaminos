@@ -89,3 +89,26 @@ with TemporaryDirectory() as directory:
     assert dep["status"] == "missing", dep
     assert victim.read_text() == "keep me", "the import never writes through a symlink"
 print("scene library import contracts passed")
+
+# A copied scene also needs its exact pinned fire basin; listing alone cannot reopen it.
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    own = root / 'own' / 'consumer'
+    other = root / 'other' / 'consumer'
+    for folder in (own / 'scenes', other / 'scenes'): folder.mkdir(parents=True)
+    serve.SCENES_DIR = own / 'scenes'
+    serve.VOLUME_SETTINGS_STORE = own / 'basins'
+    serve.SHARED_BASIN_STORE = None
+    observed = Path(__file__).resolve().parents[1] / 'artifacts/basin-mounts/settings-store/presets/vsp-6209fc3bc3c625da302e6f01c23a8687c40c0c4575f774df1f28b036e173586b.json'
+    artifact = json.loads(observed.read_text())
+    preset_id = artifact['presetId']
+    (other / 'basins' / 'presets').mkdir(parents=True)
+    (other / 'basins' / 'presets' / observed.name).write_bytes(observed.read_bytes())
+    document = {'composition': {'flame': {'presetId': preset_id}}, 'objects': []}
+    (other / 'scenes' / 'tuned.kaminos.json').write_text(json.dumps(document))
+    os.environ['KAMINOS_SCENE_LIBRARY_GLOBS'] = str(root / '*' / 'consumer' / 'scenes')
+    store_id = next(iter(serve.scene_library_stores()))
+    reply, status = post({'store': store_id, 'name': 'tuned.kaminos.json'})
+    assert status == 200, (reply, status)
+    assert (own / 'basins' / 'presets' / f'{preset_id}.json').exists(), 'import must retain the referenced basin to make the copied scene reopenable'
+    assert serve.read_volume_settings_preset(own / 'basins', preset_id)['presetId'] == preset_id

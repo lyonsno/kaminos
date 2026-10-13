@@ -33,11 +33,12 @@ const resources = {
   // The inflow aperture coverage map (binding 17) is a texture in the same closure.
   inflowCoverageTexture: { createView: () => ({ label: 'inflow coverage view' }) },
   inflowPerturbationTexture: { createView: () => ({ label: 'inflow perturbation view' }) },
+  rayStartNoiseTexture: { createView: () => ({ label: 'stable spatial ray-start noise view' }) },
   burnRateTexture: { createView: () => ({ label: 'burn rate view' }) },
   forceDeltaTexture: { createView: () => ({ label: 'force increment view' }) },
   // The reactant sidecar textures (bindings 23/24) live in the same closure.
   reactantTextures: [{ createView: () => ({ label: 'reactant A view' }) }, { createView: () => ({ label: 'reactant B view' }) }],
-  // The joined boundary's lower-plane texture (binding 25), same closure.
+  // The joined boundary's lower-plane texture (binding 28), same closure.
   joinedLowerFaceView: () => ({ label: 'joined lower planes view' }),
   joinedGhostView: index => ({ label: `joined ghost view ${index}` }),
 };
@@ -53,8 +54,10 @@ for (let q = 0; q < 2; q++) {
   assert.equal(entry('nonRidgeOpticalCaptureRows'), captureRows);
   assert.equal(entry('nonRidgeOpticalCaptureHeader'), resources.nonRidgeOpticalCaptureHeaderBuffer);
   assert.equal(group.entries.find(e => e.binding === 16)?.resource, resources.sceneSolidTextureView);
-  assert.equal(group.entries.find(e => e.binding === 25)?.resource.label, 'joined lower planes view');
-  for (let g = 0; g < 2; g++) assert.equal(group.entries.find(e => e.binding === 26 + g)?.resource.label, `joined ghost view ${g}`);
+  assert.deepEqual(group.entries.find(e => e.binding === 25)?.resource,
+    resources.rayStartNoiseTexture.createView(), 'the production group binds the spatial ray-start texture');
+  assert.equal(group.entries.find(e => e.binding === 28)?.resource.label, 'joined lower planes view');
+  for (let g = 0; g < 2; g++) assert.equal(group.entries.find(e => e.binding === 29 + g)?.resource.label, `joined ghost view ${g}`);
 }
 assert.match(core, /function fluidBindGroup\([\s\S]*?return bindGroups\[fluidIndex \* 2 \+ quenchIndex\]/,
   'simulation consumes both independent ping-pong indices');

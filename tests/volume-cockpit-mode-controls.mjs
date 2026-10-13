@@ -85,7 +85,7 @@ for (const inactiveReason of ['intrinsic-presentation', 'caller-owned-presentati
   for (const effective of ['emissive-transport-v2', 'legacy', 'emissive-transport-v2']) {
     vm.runInNewContext(`(function(){${hook}})()`, {
       volumePrototype: { debugState: () => ({ physicalColor: { requested: 'emissive-transport-v2', effective, inactiveReason } }) },
-      readVolumeControls: () => emissive, document: doc,
+      flameInspector:null,syncKilnCollisionControl(){},readVolumeControls: () => emissive, document: doc,
       syncVolumeCockpitModeAvailability: layout.syncVolumeCockpitModeAvailability,
     });
     assert.equal(rows[0].dataset.volumeModeHidden, String(effective !== 'legacy'));

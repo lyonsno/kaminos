@@ -1,0 +1,104 @@
+{
+  "provenance": {
+    "source": "4020a764ba956b878fa933b85651f058011623d3",
+    "browser": "Chrome/154.0.8037.92",
+    "presetId": "vsp-15d67a3a57208d138341b0a4a2bfe3c7dde126df0c1521069d7a485915584fca",
+    "observation": "Actual Fire & smoke Apply exception callframe before rollback; full raw report in Modal basin-discovery evidence."
+  },
+  "sourcePose": {
+    "position": [
+      0.169610507246377,
+      -0.537343251859724,
+      0.320652173913043
+    ],
+    "rotation": [
+      -2.1628796869669085,
+      -0.04951229762981876,
+      0.026372219390148152
+    ],
+    "scale": [
+      1,
+      1,
+      1
+    ]
+  },
+  "expected": {
+    "volume-immersed-centre-x": {
+      "id": "volume-immersed-centre-x",
+      "param": "volume_immersed_centre_x",
+      "tagName": "INPUT",
+      "type": "range",
+      "value": 0.169610507246377,
+      "rawValue": "0.169610507246377"
+    },
+    "volume-immersed-centre-y": {
+      "id": "volume-immersed-centre-y",
+      "param": "volume_immersed_centre_y",
+      "tagName": "INPUT",
+      "type": "range",
+      "value": -0.537343251859724,
+      "rawValue": "-0.537343251859724"
+    },
+    "volume-immersed-centre-z": {
+      "id": "volume-immersed-centre-z",
+      "param": "volume_immersed_centre_z",
+      "tagName": "INPUT",
+      "type": "range",
+      "value": 0.320652173913043,
+      "rawValue": "0.320652173913043"
+    },
+    "volume-immersed-yaw": {
+      "id": "volume-immersed-yaw",
+      "param": "volume_immersed_yaw",
+      "tagName": "INPUT",
+      "type": "range",
+      "value": 268.179838207841,
+      "rawValue": "268.179838207841"
+    },
+    "volume-immersed-pitch": {
+      "id": "volume-immersed-pitch",
+      "param": "volume_immersed_pitch",
+      "tagName": "INPUT",
+      "type": "range",
+      "value": -33.98527453591291,
+      "rawValue": "-33.98527453591291"
+    }
+  },
+  "observed": {
+    "volume-immersed-centre-x": {
+      "id": "volume-immersed-centre-x",
+      "param": "volume_immersed_centre_x",
+      "tagName": "INPUT",
+      "type": "range",
+      "value": 0.169610507246377
+    },
+    "volume-immersed-centre-y": {
+      "id": "volume-immersed-centre-y",
+      "param": "volume_immersed_centre_y",
+      "tagName": "INPUT",
+      "type": "range",
+      "value": -0.537343251859724
+    },
+    "volume-immersed-centre-z": {
+      "id": "volume-immersed-centre-z",
+      "param": "volume_immersed_centre_z",
+      "tagName": "INPUT",
+      "type": "range",
+      "value": 0.320652173913043
+    },
+    "volume-immersed-yaw": {
+      "id": "volume-immersed-yaw",
+      "param": "volume_immersed_yaw",
+      "tagName": "INPUT",
+      "type": "range",
+      "value": 268.179838207841
+    },
+    "volume-immersed-pitch": {
+      "id": "volume-immersed-pitch",
+      "param": "volume_immersed_pitch",
+      "tagName": "INPUT",
+      "type": "range",
+      "value": -33.9852745359129
+    }
+  }
+}

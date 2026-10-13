@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createSceneSolidGeometryCache} from '../volume-scene-solid.mjs';
 import { readFileSync } from 'node:fs';
 import { voxelizeTriangleSolid, solidFieldIndex, trianglesFromSceneObject, sceneSolidRevision, packSolidTextureRows, countEmitterChemicalSupport, assertEffectiveSceneCollision } from '../volume-scene-solid.mjs';
 
@@ -140,9 +141,10 @@ console.log('volume scene solid contracts: PASS');
   assert.equal(packed.data.length, packed.bytesPerRow * h * g);
   assert.throws(() => packSolidTextureRows(field.cells, g), /dimensions mismatch/, 'the default height still refuses a tall field');
   const coreSource = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
-  assert.match(coreSource, /const field = voxelizeTriangleSolid\(extraction\.triangles, gridSize, gridHeight\);/);
-  assert.match(coreSource, /analyticEmitterDescriptor, sourceBounds, field\.cells, gridSize, gridHeight\);/);
+  const cache=createSceneSolidGeometryCache();const cached=cache.update([{id:'box',object}],{translate:[0,0,0],scale:1},{grid:g,gridHeight:h});assert.equal(cached.field.cells.length,g*h*g);assert.equal(cached.builds,1);
+  assert.equal(cache.update([{id:'box',object}],{translate:[0,0,0],scale:1},{grid:g,gridHeight:h}).builds,0);
+  assert.ok(coreSource.includes('countEmitterChemicalSupport(analyticEmitterDescriptor, sourceBounds, field.cells, gridSize, gridHeight)'),'support counting receives the seated height');
   assert.match(coreSource, /const packed = packSolidTextureRows\(field\.cells, gridSize, gridHeight\);/);
-  assert.match(coreSource, /key = `\$\{gridSize\}x\$\{gridHeight\}:\$\{sourceId\}:/, 'the cache key carries the height');
+  assert.match(coreSource, /sceneSolidGeometryCache\.update\([^\n]*\{grid:gridSize,gridHeight\}/, 'the cache receives the seated height');
 }
 console.log('scene solid non-default height contracts passed');

@@ -25,10 +25,11 @@ const worldMaxExpression = field.match(/worldMax:\s*([^\n]+),\n/)?.[1];
 assert.ok(worldMaxExpression, 'producer publishes explicit full-height bounds');
 const { raymarchDomainBox } = await import('../volume-grid-shape.mjs');
 const worldMax = new Function('productTransform', 'domainBox', `return ${worldMaxExpression}`);
-assert.deepEqual(worldMax({ translate: [0, 0, 0] }, raymarchDomainBox(64, 128)), [1, 3, 1]);
-assert.deepEqual(worldMax({ translate: [2.3, -0.5, 4] }, raymarchDomainBox(64, 128)), [3.3, 2.5, 5],
+assert.deepEqual(worldMax({ translate: [0, 0, 0], scale: 1 }, raymarchDomainBox(64, 128)), [1, 3, 1]);
+assert.deepEqual(worldMax({ translate: [2.3, -0.5, 4], scale: 1 }, raymarchDomainBox(64, 128)), [3.3, 2.5, 5],
   'full-height lighting follows the relocated simulation domain');
-assert.deepEqual(worldMax({ translate: [0, 0, 0] }, raymarchDomainBox(64, 192)), [1, 5, 1], 'and a taller box');
+assert.deepEqual(worldMax({ translate: [0, 0, 0], scale: 1 }, raymarchDomainBox(64, 192)), [1, 5, 1], 'and a taller box');
+assert.deepEqual(worldMax({translate:[2,-.5,4],scale:2},raymarchDomainBox(64,192)),[4,9.5,6], 'full-height lighting retains the authored world scale');
 assert.match(field, /gridY:\s*gridHeightForSize\(irradianceGridSize\)/);
 assert.match(resources, /const atlasWidth = irradianceGridSize \* FIRE_IRRADIANCE_ATLAS_TILES_X;/);
 assert.match(resources, /const atlasHeight = irradianceGridHeight \* atlasTilesY;/);

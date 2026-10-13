@@ -43,3 +43,23 @@ test('nested document commands return to their original toolbar when both move',
   slots.showWorkbench(); assert.equal(save.parent, toolbar); assert.equal(toolbar.parent, viewport);
   assert.deepEqual(ids(toolbar), ['save', 'gizmo']);
 });
+
+test('document commands remain in the shared header while object tools return to Workbench', () => {
+  const viewport=new Node('viewport'),inspector=new Node('inspector'),header=new Node('header');
+  const toolbar=new Node('toolbar'),save=new Node('save'),load=new Node('load');
+  toolbar.append(save);toolbar.append(load);viewport.append(toolbar);
+  let saves=0;save.addEventListener('click',()=>saves++);
+  const slots=createControlSlots(document,[
+    {node:save,destination:header,workbenchDestination:header},
+    {node:load,destination:header,workbenchDestination:header},
+    {node:toolbar,destination:inspector}]);
+  for(let round=0;round<2;round++){
+    slots.showAuthoring();slots.showWorkbench();
+    assert.equal(toolbar.parent,viewport);
+    assert.equal(save.parent,header,'Save is accessible without the hidden object toolbar');
+    assert.equal(load.parent,header,'Load is accessible without the hidden object toolbar');
+    assert.deepEqual(ids(header),['save','load']);
+    save.dispatchEvent(new Event('click'));
+  }
+  assert.equal(saves,2,'one bound Save command survives both workspace transitions');
+});

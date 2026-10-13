@@ -290,8 +290,9 @@ export async function unwrapTrellisMesh(mesh,{WorkerClass=globalThis.Worker}={})
 // provider owns copied CPU mesh arrays; a failed provider never becomes a raw
 // geometry fallback. Its receipt stays attached to the emitted GLB geometry.
 export async function finishTrellisMesh(mesh,{postprocessMesh,materialFields,textureSize=1024,
-  WorkerClass,provenance={},onPhase=()=>{}}={}){
+  WorkerClass,unwrapMesh,provenance={},onPhase=()=>{}}={}){
   validateSurface(mesh,false);
+  if(unwrapMesh!==undefined&&typeof unwrapMesh!=='function')throw TypeError('explicit UV provider must be a function');
   if(postprocessMesh!==undefined&&typeof postprocessMesh!=='function')throw TypeError('mesh postprocess provider must be a function');
   if(postprocessMesh){
     await onPhase({phase:'post-model-mesh-postprocess'});
@@ -306,7 +307,17 @@ export async function finishTrellisMesh(mesh,{postprocessMesh,materialFields,tex
     mesh=processed;
   }
   await onPhase({phase:'post-model-uv-unwrap'});
-  const unwrapped=await unwrapTrellisMesh(mesh,{WorkerClass});
+  const unwrapped=unwrapMesh?await unwrapMesh({...mesh,vertices:mesh.vertices.slice(),triangles:mesh.triangles.slice()}):
+    await unwrapTrellisMesh(mesh,{WorkerClass});
+  if(unwrapMesh&&(typeof unwrapped?.uvMetadata?.route!=='string'||!unwrapped.uvMetadata.route))
+    throw Error('explicit UV provider route receipt required');
+  validateSurface(unwrapped);validateUVArea(unwrapped);
+  if(!(unwrapped.normals instanceof Float32Array)||unwrapped.normals.length!==unwrapped.vertices.length||
+    !unwrapped.normals.every(Number.isFinite))throw Error('complete finite unwrapped normals required');
+  if(unwrapped.triangles.length!==mesh.triangles.length)throw Error('UV provider changed triangle geometry count');
+  for(let i=0;i<mesh.triangles.length;i++)for(let axis=0;axis<3;axis++)
+    if(unwrapped.vertices[unwrapped.triangles[i]*3+axis]!==mesh.vertices[mesh.triangles[i]*3+axis])
+      throw Error('UV provider changed ordered triangle geometry');
   await onPhase({phase:'post-model-texture-bake'});
   const textures=bakeTrellisMaterialTextures({...unwrapped,...materialFields,textureSize});
   await onPhase({phase:'post-model-pbr-glb'});
