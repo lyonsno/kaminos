@@ -13,4 +13,16 @@ for(const mutate of [m=>m.controllerNorm='valid-joints',m=>m.sampling='dopri5-va
  const bad=structuredClone(motion);mutate(bad);assert.throws(()=>module.validateGivenMotionSource({...args,motion:bad}));
 }
 assert.throws(()=>module.validateGivenMotionSource({motion}),/prefix/);
+assert.equal(typeof module.prepareGivenContinuation,'function','continued native output lacks a truthful body-consumer export');
+const source={rev:'c'.repeat(40),dirtyFiles:[]},raw={...structuredClone(motion),source};delete raw.route;delete raw.continuation;delete raw.controllerNorm;
+raw.segmentFeatures=Array(36).fill(0);
+const run={status:'completed',phase:'complete',source,segments:[{frames:4,evaluations:50}]};
+const exported=module.prepareGivenContinuation({raw,run,prefix,prefixSha256:'b'.repeat(64)});
+assert.equal(exported.controllerNorm,null);assert.equal(exported.continuation.segmentFrames,3);assert.equal(exported.generationSource.rev,source.rev);
+assert.deepEqual(exported.positions,raw.positions,'export must not repair the generated trajectory');
+assert.throws(()=>module.prepareGivenContinuation({raw,run:{...run,status:'failed'},prefix,prefixSha256:'b'.repeat(64)}),/generation/);
+assert.throws(()=>module.prepareGivenContinuation({raw:{...raw,source:{...source,rev:'d'.repeat(40)}},run,prefix,prefixSha256:'b'.repeat(64)}),/source/);
+assert.equal(typeof module.givenCanonicalGroundHeight,'function','given frame lacks a fixed canonical-y0 ground reference');
+assert.equal(module.givenCanonicalGroundHeight({canonicalWorldToSourceNormalized:[[2,0,0,3],[0,2,0,-4],[0,0,2,1],[0,0,0,1]]}),-4);
+assert.throws(()=>module.givenCanonicalGroundHeight({canonicalWorldToSourceNormalized:[[2,0,0,3],[.1,2,0,-4],[0,0,2,1],[0,0,0,1]]}),/horizontal/);
 console.log('Continued source admits fixed sampler honestly and rejects changed prefix, route, topology and segment accounting');

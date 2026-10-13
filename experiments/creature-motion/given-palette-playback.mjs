@@ -2,12 +2,13 @@ export function attachGivenPalettePlayback({THREE,runtime,adapter,source,documen
  now=()=>performance.now(),dirty=()=>globalThis.window?._kaminosDirty?.()}) {
  if(!runtime?.group?.isObject3D||!(runtime.bones instanceof Map)||typeof runtime.update!=='function'||!mountRoot||!document)throw Error('Given motion requires the actual live Bone/deformer runtime and controls mount');
  for(const name of ['motionSha256','frameSha256','caseSha256'])if(!/^[a-f0-9]{64}$/i.test(source?.[name]??''))throw Error('Given motion source identity is incomplete');
+ if(source.prefixFrames!=null&&(!Number.isInteger(source.prefixFrames)||source.prefixFrames<1||source.prefixFrames>=adapter.frames))throw Error('Invalid continuation prefix frame marker');
  if(adapter.jointNames.length!==runtime.bones.size||adapter.jointNames.some(name=>!runtime.bones.get(name)?.isBone))throw Error('Live Bone inventory differs from given motion');
  const original=runtime.update,group=runtime.group;group.updateMatrix();const base=group.matrix.clone();
  let frame=0,status='paused',startedAt=null,startedFrame=0,expected=null,error=null,disposed=false;
  const panel=document.createElement('section');panel.className='given-motion-instruments';
- const title=document.createElement('h3');title.textContent='Generated trot · whole-body transport';
- const note=document.createElement('p');note.textContent=`${adapter.jointNames.length} given Bones · retained source · no new inference or paint`;
+ const title=document.createElement('h3');title.textContent=source.prefixFrames?'Generated trot · continued whole-body motion':'Generated trot · whole-body transport';
+ const note=document.createElement('p');note.textContent=source.prefixFrames?`${adapter.jointNames.length} given Bones · ${source.prefixFrames}-frame prefix preserved · ${source.sampling} · ${(adapter.frames/adapter.fps).toFixed(2)} s`:`${adapter.jointNames.length} given Bones · retained source · no new inference or paint`;
  const output=document.createElement('output'),failure=document.createElement('output');failure.setAttribute('role','alert');
  const range=document.createElement('input');range.type='range';range.min='0';range.max=String(adapter.frames-1);range.step='1';range.setAttribute('aria-label','Whole-body source frame');
  panel.append(title,note,output);
@@ -53,6 +54,11 @@ export function attachGivenPalettePlayback({THREE,runtime,adapter,source,documen
   const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call(action);panel.append(button);
  }
  range.oninput=()=>call(()=>seek(Number(range.value)));panel.append(range,failure);mountRoot.prepend?mountRoot.prepend(panel):mountRoot.append(panel);
+ if(source.prefixFrames){
+  for(const [label,index] of [['Before continuation join',source.prefixFrames-1],['After continuation join',source.prefixFrames]]){
+   const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call(()=>seek(index));panel.append(button);
+  }
+ }
  try{apply(0);}catch(failure){panel.remove();throw failure;}
  return Object.freeze({read,seek,play,pause,replay,restore,tick,dispose(){if(disposed)return;let restored=false;try{if(group.parent&&!edited()){restore();restored=true;}}finally{disposed=true;status='disposed';startedAt=null;panel.remove();}return {restored};}});
 }

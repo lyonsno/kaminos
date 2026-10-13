@@ -17,3 +17,23 @@ export function validateGivenMotionSource({motion:m,prefix,prefixSha256}) {
  }
  return {sampling:m.sampling,controllerNorm:null,prefixFrames:c.prefixFrames,parentMotionSha256:prefixSha256,addedSegments:c.addedSegments,overlap:c.overlap};
 }
+
+export function prepareGivenContinuation({raw,run,prefix,prefixSha256}) {
+ if(run?.status!=='completed'||run.phase!=='complete'||!run.segments?.length)throw Error('Incomplete continuation generation');
+ if(!/^[a-f0-9]{40}$/i.test(run.source?.rev??'')||run.source.dirtyFiles?.length!==0||raw.source?.rev!==run.source.rev||raw.source?.dirtyFiles?.length!==0)throw Error('Continuation execution source differs or is dirty');
+ const segmentFrames=raw.segmentFeatures?.length/(raw.joints*12),addedSegments=run.segments.length;
+ if(!Number.isInteger(segmentFrames)||!Number.isInteger(raw.frames)||raw.frames<=prefix.frames)throw Error('Incomplete continuation segment');
+ const stride=(raw.frames-prefix.frames)/addedSegments,overlap=segmentFrames-stride;
+ if(!Number.isInteger(stride)||run.segments.some((s,i)=>s.frames!==prefix.frames+(i+1)*stride||s.evaluations!==50))throw Error('Continuation generation segment accounting differs');
+ const motion={...raw,route:prefix.route,controllerNorm:null,
+  continuation:{schema:'kaminos.creature.continuation.v1',parentMotionSha256:prefixSha256,prefixFrames:prefix.frames,segmentFrames,overlap,addedSegments},
+  generationSource:structuredClone(run.source)};
+ validateGivenMotionSource({motion,prefix,prefixSha256});
+ return motion;
+}
+
+export function givenCanonicalGroundHeight(frame) {
+ const a=frame?.canonicalWorldToSourceNormalized;
+ if(a?.length!==4||a.some(row=>row?.length!==4||!row.every(Number.isFinite))||Math.abs(a[1][0])>1e-5||Math.abs(a[1][2])>1e-5||a[1][1]<=0)throw Error('Canonical ground is not a horizontal reference in this given frame');
+ return a[1][3]; // One fixed reference, never an animated lowest-foot correction.
+}

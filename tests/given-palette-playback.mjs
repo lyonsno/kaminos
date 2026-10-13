@@ -22,4 +22,10 @@ assert.match(mountRoot.children[0].children[2].textContent,/not a generated fram
 player.play();assert.equal(player.read().frame,0);assert.equal(bone.position.y,0,'Play after restored Pause must apply actual source frame zero');player.restore();
 assert.throws(()=>player.seek(3),/frame/);assert.equal(player.read().frame,null);assert.equal(player.read().status,'restored');
 player.dispose();assert.equal(runtime.update,original);assert.equal(group.parent,scene,'motion disposal must preserve skin owner root');assert.equal(mountRoot.children[0].removed,true);assert.ok(updates>0);
+const extended=module.attachGivenPalettePlayback({THREE,runtime,adapter:{...adapter,frames:110},source:{...source,prefixFrames:60,sampling:'replacement-euler-50'},document,mountRoot,now:()=>clock,dirty:()=>{}});
+const instruments=mountRoot.children.at(-1),buttons=instruments.children.filter(node=>node.textContent);
+const before=buttons.find(button=>button.textContent==='Before continuation join'),after=buttons.find(button=>button.textContent==='After continuation join');
+assert.ok(before&&after,'continued full-body playback needs exact join controls');
+before.onclick();assert.equal(extended.read().frame,59);after.onclick();assert.equal(extended.read().frame,60);
+assert.match(instruments.children[1].textContent,/60-frame prefix/);extended.seek(109);assert.equal(extended.read().status,'held');extended.dispose();
 console.log('Existing host update drives source playback once; pause/hold/edit identity/dispose remain explicit');

@@ -30049,7 +30049,13 @@ sceneInitialization.then(() => {
           motionUrl:params.get('transport_motion'),motionSha256:params.get('transport_motion_sha256'),
           frameUrl:params.get('transport_frame'),frameSha256:params.get('transport_frame_sha256'),
           prefixUrl:params.get('transport_prefix'),prefixSha256:params.get('transport_prefix_sha256'),
+          canonicalGround:params.get('transport_ground')==='canonical',
           caseSha256:params.get('transport_sha256'),mountRoot:document.getElementById('tab-assets'),document});
+        const reference=givenPaletteMotionPlayer.read().source.groundReference;
+        if(reference){
+          const height=document.getElementById('composition-ground-height');height.value=String(reference.height);height.dispatchEvent(new Event('change'));
+          groundToggle.checked=true;groundToggle.dispatchEvent(new Event('change'));
+        }
       }
     }
     const loadSplat = params.get('load');
