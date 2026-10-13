@@ -70,6 +70,11 @@ import {
 import { requestBrowserWebGpuDevice, createRouteInvocationRequest } from './core.js';
 import { sam3Readback, sam3TypedView } from './sam-readback.js';
 
+function cacheSam3ImageStageResult(result) {
+  const { debugReadback, ...cached } = result;
+  return cached;
+}
+
 // The model and invocation state belong to the caller, not a diagnostic page.
 export function createSam3BrowserImageRuntime(options = {}) {
 const baseUrl = options.baseUrl || globalThis.location?.href || 'http://localhost/';
@@ -2336,11 +2341,11 @@ async function loadDetrStackPayload(manifest, { verificationAttached, servingRes
         if (!fpnNeckFeature0Output?.sha256 || !fpnNeckFeature1Output?.sha256 || !fpnNeckFeature2Output?.sha256 || !fpnNeckFeature3Output?.sha256) throw new Error('SAM3 image FPN-neck output identity missing');
         if (imageCacheKey) {
           servingResources.setImageFeatures(imageCacheKey, {
-            imagePreprocessResult,
-            imagePatchEmbedResult,
-            imageVitPrefixResult,
-            imageVitBlockStackResult,
-            imageFpnNeckResult,
+            imagePreprocessResult: cacheSam3ImageStageResult(imagePreprocessResult),
+            imagePatchEmbedResult: cacheSam3ImageStageResult(imagePatchEmbedResult),
+            imageVitPrefixResult: cacheSam3ImageStageResult(imageVitPrefixResult),
+            imageVitBlockStackResult: cacheSam3ImageStageResult(imageVitBlockStackResult),
+            imageFpnNeckResult: cacheSam3ImageStageResult(imageFpnNeckResult),
             gpuFpnNeckFeature0,
             gpuFpnNeckFeature1,
             gpuFpnNeckFeature2,
