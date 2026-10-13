@@ -94,7 +94,7 @@ test('clearing a scene removes its old flame member before the next scene saves'
   assert.ok(start>0 && end>start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   const removed=[];
-  const context={sceneCameras:null,groupProxies:new Map(),meshDataTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),compoundInsertionTargets:new Set(),compoundRetentionTargets:new Set(),sceneSpotLights:new Map(),rimLight:null,
+  const context={sceneCameras:null,colliderEditTargets:new Set(),sceneColliderCollection:{clear(){}},groupProxies:new Map(),meshDataTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),compoundInsertionTargets:new Set(),compoundRetentionTargets:new Set(),sceneSpotLights:new Map(),rimLight:null,
     authoringControlSessions:[],sceneControlHistory:null,assemblyProxies:new Map(),assemblyEditTargets:new Set(),authoredBurnerBeds:new Map(),FLAME_EMITTER_TYPE:'flame-emitter',scenePlacementTools:null,sceneMutationToken:0,sceneObjects:[flame],flameDomainGuide:null,
     sceneLoadRequests:{invalidate:()=>{}},sceneMembershipEditTargets:new Set(),localLiquidGeneration:0,localLiquidHost:null,
     scene:{remove:object=>removed.push(object)},disposeObjectTree:()=>{},
@@ -133,7 +133,7 @@ test('a source-free analytic family retains the flame handle for editing and sav
   const context={refreshFlameDomainPreview:()=>{},authoredFlamePresent:true,scene:{remove:()=>removed++},isFireLightFieldRoute:()=>true,
     applyFlameEmitterPose:()=>{},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring',sourceMode:'off'}}},
     sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:'flame-emitter',flameDomainGuide:{visible:false,box:{set:()=>{}}},
-    flameDomainTranslation:[0,0,0],flameDomainScale:1,viewportHelpersVisible:true,selectionCaptureSuspended:false,sceneSelectionMembers:()=>['flame-emitter'],activeSceneFieldId:null,
+    flameDomainTranslation:[0,0,0],flameDomainScale:1,viewportDisplay:{domains:true,domainOpacity:.82,emitters:true,emitterWidth:1,emitterOpacity:.82},styleHelperLines(){},viewportHelpersVisible:true,selectionCaptureSuspended:false,sceneSelectionMembers:()=>['flame-emitter'],activeSceneFieldId:null,
     flameEmitterPose:{position:[2,0,0],rotation:[0,0,0],scale:[1,1,1]},
     applySceneObjectTransformState:()=>updated++,updateFlameEmitterSupportOutline:()=>{},
     THREE:{Vector3:class {add(){return this;}}}};

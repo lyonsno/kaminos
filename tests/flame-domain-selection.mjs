@@ -19,8 +19,8 @@ test('domain outline remains visible after unrelated selection, but respects hel
  const ctx={THREE,scene:{},activeSceneComposition:{},flameDomainGuide:{box:new THREE.Box3()},selectionCaptureSuspended:false,viewportHelpersVisible:true,
  viewportDisplay:{domains:true,domainOpacity:.82},styleHelperLines(){},sceneSelectionMembers:()=>[],FLAME_EMITTER_ID:'flame-emitter',activeSceneFieldId:null,flameDomainDraft:null,flameDomainProxy:null,
  acceptedFlameDomainPose:()=>({position:[0,1,0],scale:[1,1,1]}),domainTransformForPose:()=>({translation:[0,0,0],scale:1}),document:{getElementById:()=>null},window:{}};
- vm.createContext(ctx);vm.runInContext(grab('refreshFlameDomainPreview'),ctx);ctx.refreshFlameDomainPreview();
- assert.equal(ctx.flameDomainGuide.visible,true);
+ vm.createContext(ctx);vm.runInContext(grab('flameDomainTopY')+grab('refreshFlameDomainPreview'),ctx);ctx.refreshFlameDomainPreview();
+ assert.equal(ctx.flameDomainGuide.visible,true);ctx.window.__kaminosVolumeGridDimensions=[32,96,32];ctx.refreshFlameDomainPreview();assert.deepEqual(ctx.flameDomainGuide.box.max.toArray(),[1,5,1],'outline follows actual tall grid bounds');
  ctx.viewportHelpersVisible=false;ctx.refreshFlameDomainPreview();assert.equal(ctx.flameDomainGuide.visible,false);
  ctx.viewportHelpersVisible=true;ctx.selectionCaptureSuspended=true;ctx.refreshFlameDomainPreview();assert.equal(ctx.flameDomainGuide.visible,false);
 });

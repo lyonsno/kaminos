@@ -7,10 +7,10 @@ const grab=name=>{const start=html.indexOf(`function ${name}(`);assert.ok(start>
 const engine={translate:[0,0,0],scale:1};let rebuilds=0,sourceWrites=0,reject=false;
 const ctx={THREE,structuredClone,normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,
  flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:true,flameDomainDraft:null,flameDomainProxy:null,flameDomainGuide:{box:new THREE.Box3()},
- selectionCaptureSuspended:false,viewportHelpersVisible:true,sceneSelectionMembers:()=>[],FLAME_EMITTER_ID:'flame-emitter',activeSceneFieldId:'flame-field',transformControls:null,document:{getElementById:()=>null},window:{},setInfo(){},volumePrimitivesInFlameDomain:()=>[],applyFlameEmitterPose(){},
+ selectionCaptureSuspended:false,viewportHelpersVisible:true,viewportDisplay:{domains:true,domainOpacity:.82,domainWidth:1,emitters:true,emitterWidth:1,emitterOpacity:.82},styleHelperLines(){},sceneSelectionMembers:()=>[],FLAME_EMITTER_ID:'flame-emitter',activeSceneFieldId:'flame-field',transformControls:null,document:{getElementById:()=>null},window:{},setInfo(){},volumePrimitivesInFlameDomain:()=>[],applyFlameEmitterPose(){},
  authoredFlamePresent:true,flameEmitterPose:{position:[.2,-.76,0],rotation:[0,0,0],scale:[1,1,1]},flameEmitterInjectionSuspended:false,
  writeAuthoredFlameEmitterPose(){sourceWrites++;},volumePrototype:{relocateOrdinaryDomain(t,p,s){if(reject)throw Error('admission failed');engine.translate=[...t];engine.scale=s;rebuilds++;}}};
-vm.createContext(ctx);vm.runInContext(['acceptedFlameDomainPose','checkedFlameDomainPose','domainTransformForPose','refreshFlameDomainPreview','writeFlameDomainPreview','setFlameDomainTranslation','settleAuthoredFlameDomain'].map(grab).join('\n'),ctx);
+vm.createContext(ctx);vm.runInContext(['flameDomainTopY','acceptedFlameDomainPose','checkedFlameDomainPose','domainTransformForPose','refreshFlameDomainPreview','writeFlameDomainPreview','setFlameDomainTranslation','settleAuthoredFlameDomain'].map(grab).join('\n'),ctx);
 const edits=createSceneEdits({read(){},write(){},captureContext:()=>ctx.flameDomainFollowSource,settled:ctx.settleAuthoredFlameDomain});
 edits.register('@flame-domain',{read:()=>ctx.flameDomainDraft||ctx.acceptedFlameDomainPose(),write:ctx.writeFlameDomainPreview,check:ctx.checkedFlameDomainPose});
 edits.subscribe(state=>{if(!state.active)ctx.flameDomainDraft=null;});

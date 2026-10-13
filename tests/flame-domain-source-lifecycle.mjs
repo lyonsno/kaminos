@@ -9,12 +9,12 @@ const grab=name=>{const start=html.indexOf(`function ${name}(`);assert.ok(start>
 function fixture(family='ring'){
  const c={THREE,structuredClone,normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,
  scene:new THREE.Scene(),sceneObjects:[],sceneGroups:[],sceneCameras:null,scenePlacementTools:null,
- activeSceneComposition:{},activeSceneFieldId:'flame-field',activeSceneObjectId:null,viewportHelpersVisible:true,selectionCaptureSuspended:false,
+ activeSceneComposition:{},activeSceneFieldId:'flame-field',activeSceneObjectId:null,viewportHelpersVisible:true,viewportDisplay:{domains:true,domainOpacity:.82,domainWidth:1,emitters:true,emitterWidth:1,emitterOpacity:.82},styleHelperLines(){},selectionCaptureSuspended:false,
  FLAME_EMITTER_ID:'flame-emitter',flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:true,flameDomainDraft:null,flameDomainProxy:null,flameDomainGuide:null,
  transformControls:null,document:{getElementById:()=>null},window:{__kaminosVolumeEmitterReceipt:{effective:{family}}},setInfo(){},volumePrimitivesInFlameDomain:()=>[],applyFlameEmitterPose(){throw Error('analytic source must not be invoked');},
  authoredFlamePresent:true,flameEmitterPose:{position:[0,-.76,0],rotation:[0,0,0],scale:[1,1,1]},flameEmitterInjectionSuspended:false,
  volumePrototype:{relocateOrdinaryDomain(){}},isFireLightFieldRoute:()=>true,disposeObjectTree(){},sceneSelectionMembers:()=>[],pruneSceneGroups(){},pruneSceneSelection(){},renderSceneObjectList(){},updateTransformInspector(){},setSceneSelection(){},ensureGroupTarget(){},applySceneObjectTransformState(o,p){o.position.fromArray(p.position);o.scale.fromArray(p.scale);}};
- vm.createContext(c);vm.runInContext(['acceptedFlameDomainPose','checkedFlameDomainPose','domainTransformForPose','refreshFlameDomainPreview','writeFlameDomainPreview','setFlameDomainTranslation','settleAuthoredFlameDomain','writeAuthoredFlameEmitterPose','ensureAuthoredFlameEmitter','writeSelectionMembershipUnchecked'].map(grab).join('\n'),c);return c;
+ vm.createContext(c);vm.runInContext(['flameDomainTopY','acceptedFlameDomainPose','checkedFlameDomainPose','domainTransformForPose','refreshFlameDomainPreview','writeFlameDomainPreview','setFlameDomainTranslation','settleAuthoredFlameDomain','writeAuthoredFlameEmitterPose','ensureAuthoredFlameEmitter','writeSelectionMembershipUnchecked'].map(grab).join('\n'),c);return c;
 }
 test('cluster membership replay and domain resize never invoke analytic placement',async()=>{
  const c=fixture('cluster');await c.writeSelectionMembershipUnchecked({objects:[],groups:[],selection:{ids:[],activeId:null},domain:[0,0,0]});
