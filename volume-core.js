@@ -15,6 +15,7 @@ import {
 } from './volume-detail-force-isolation.mjs';
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid, createSceneSolidGeometryCache } from './volume-scene-solid.mjs';
+import { createJoinedExterior } from './volume-joined-exterior.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
@@ -12214,6 +12215,11 @@ export function createKaminosVolumePrototype({
   // A constant synthetic exterior written by debugFillJoinedGhosts (witnesses
   // only; the generation then follows the step).
   let joinedGhostSynthetic = null;
+  // Provisional exterior (quiescent coarse box, pressure-only coupling) that
+  // steps inside encodeSim while the joined boundary is admitted.
+  let joinedExterior = null;
+  let preparingJoinedExterior = false;
+  let fluidAllocationGeneration = 0;
   const joinedGhostView = index => joinedGhostTextures[index].createView({ dimension: '3d' });
   let forceDeltaTexture = null;
   const inletPuffProcess = new StochasticSignalSet(2, 1);
@@ -14010,9 +14016,69 @@ export function createKaminosVolumePrototype({
     return true;
   }
 
+  function joinedProducerSnapshot() {
+      const timeStep = resolveTimeStepConfig(controlsSnapshot).effective;
+      return {
+        joined: { ...(state.joinedBoundary ?? resolveJoinedBoundary()) },
+        dims: [gridSize, gridHeight, gridSize],
+        pitch: 2 / gridSize,
+        timeStep: { mode: timeStep.mode, dtScale: timeStep.dtScale, referenceSpeed: timeStep.referenceSpeed, backtraceScale: timeStep.backtraceScale },
+        transportScheme: resolveTransportConfig(controlsSnapshot).effective.scheme,
+        fluidBuffer: fluidBuffers?.[currentFluid] ?? null,
+        fluidBuffers: fluidBuffers ? [...fluidBuffers] : null,
+        allocation: fluidAllocationGeneration,
+        fluidReadIndex: currentFluid,
+        frontBuffer: frontBuffers?.[currentFront] ?? null,
+        burnRateTexture,
+        solidMask: sceneSolidCellsCpu ? { cells: sceneSolidCellsCpu, revision: sceneSolidRevisionKey, dims: [gridSize, gridHeight, gridSize] } : null,
+        lowerFaceTexture: joinedLowerFaceTexture,
+        prescribedInlet: null,
+        ghosts: { ...(state.joinedGhosts ?? { bound: false, reason: null }), geometry: joinedGhostGeometry, synthetic: joinedGhostSynthetic,
+          textures: joinedGhostTextures ? { a: joinedGhostTextures[0], b: joinedGhostTextures[1] } : null },
+        simStepCount: state.simStepCount,
+      };
+    }
+
+  // Builds (or rebuilds) the provisional exterior around the current producer,
+  // binds its ghost geometry, seeds the ghosts and stamps the generation so
+  // the next fine step runs. Reallocation inside setJoinedGhosts re-keys the
+  // producer, so prepare runs until the key is stable.
+  function applyJoinedGhostGeometry(geometry = null) {
+      if (geometry) resolveJoinedGhosts({ geometry, reactantOn: false });
+      const next = geometry ? { originFine: [...geometry.originFine], cellWidthFine: geometry.cellWidthFine, dims: [...geometry.dims], finePitchLocal: geometry.finePitchLocal } : null;
+      const reallocate = Boolean(next) !== Boolean(joinedGhostGeometry) || String(next?.dims) !== String(joinedGhostGeometry?.dims);
+      joinedGhostGeometry = next;
+      joinedGhostSynthetic = null;
+      // A new geometry reinterprets whatever the textures hold: a new stamp is needed.
+      if (state.joinedGhosts) state.joinedGhosts = { ...state.joinedGhosts, generation: -1 };
+      if (reallocate && device) rebuildFluidState(gridSize, 'joined-ghosts-change');
+      return { geometry: next };
+    }
+
+  function prepareJoinedExterior() {
+    if (!joinedExterior || preparingJoinedExterior) return null;
+    preparingJoinedExterior = true;
+    try {
+      let result = null;
+      for (let round = 0; round < 3; round++) {
+        const snapshot = joinedProducerSnapshot();
+        result = joinedExterior.prepare(snapshot);
+        if (!result.admitted) break;
+        const g = joinedExterior.ghosts;
+        const same = joinedGhostGeometry && String(joinedGhostGeometry.dims) === String(g.dims) && String(joinedGhostGeometry.originFine) === String(g.originFine) && joinedGhostGeometry.cellWidthFine === g.cellWidthFine && joinedGhostGeometry.finePitchLocal === g.finePitchLocal;
+        if (!same) { applyJoinedGhostGeometry(g); continue; }
+        if (joinedExterior.seedGhosts(joinedProducerSnapshot())) { joinedGhostSynthetic = null; state.joinedGhosts = { ...(state.joinedGhosts ?? { bound: false, reason: null }), generation: state.simStepCount }; }
+        break;
+      }
+      state.joinedExterior = joinedExterior.receipt();
+      return result;
+    } finally { preparingJoinedExterior = false; }
+  }
+
   function rebuildFluidState(nextGridSize = gridSize, reason = 'grid-rebuilt') {
     gridSize = normalizeGridSize(nextGridSize);
     gridHeight = gridHeightForSize(gridSize);
+    fluidAllocationGeneration += 1;
     updateAnalyticEmitterDebug();
     if (boundarySplatLiveUnionOverlay) {
       state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
@@ -17206,6 +17272,8 @@ export function createKaminosVolumePrototype({
     // generation with the step they were written for).
     if (state.joinedBoundary?.admitted && state.joinedGhosts?.bound && !joinedGhostSynthetic && state.joinedGhosts.generation !== state.simStepCount) {
       state.joinedGhosts.reason = 'stale-ghost-generation';
+      // A rebuild invalidated the stamp: the exterior re-prepares outside encoding.
+      if (joinedExterior && !preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
       return false;
     }
     refreshSceneCollision();
@@ -17252,6 +17320,13 @@ export function createKaminosVolumePrototype({
     state.frontFieldProjectionPassthrough = false;
     encodeAnalyticEmitterInjection(encoder);
     if (state.joinedBoundary?.admitted) {
+      if (joinedExterior) {
+        const result = joinedExterior.step(encoder, joinedProducerSnapshot());
+        state.joinedExterior = joinedExterior.receipt();
+        // The exterior wrote the ghosts for the next step.
+        if (result.stepped && state.joinedGhosts) state.joinedGhosts = { ...state.joinedGhosts, generation: state.simStepCount + 1 };
+        else if (result.reason === 'exterior-not-prepared-for-current-producer' && !preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
+      }
       state.simStepCount += 1;
       updateSimCostLedger();
       return false;
@@ -27745,6 +27820,17 @@ export function createKaminosVolumePrototype({
     // Joined boundary (Sexy's stationary two-way candidate): opt-in. Admission
     // needs the immersed source and the converged solver; a change rebuilds the
     // fluid state so the lower-plane texture has the grid's size.
+    // Provisional exterior: { enabled, extent, ratio, wall: { axis, at, thickness } | null, budget, tolerance }.
+    setJoinedExterior(config = null) {
+      joinedExterior?.destroy();
+      joinedExterior = null;
+      state.joinedExterior = null;
+      if (!config || config.enabled === false) return { enabled: false };
+      joinedExterior = createJoinedExterior(device, { extent: config.extent, ratio: config.ratio ?? 4, wall: config.wall ?? null, budget: config.budget ?? 32, tolerance: config.tolerance ?? 1e-3 });
+      const prepared = prepareJoinedExterior();
+      return { enabled: true, prepared, receipt: joinedExterior.receipt(), ghosts: state.joinedGhosts ?? null };
+    },
+    async probeJoinedExterior() { return joinedExterior ? joinedExterior.probe() : { status: 'disabled' }; },
     setJoinedBoundary(request = {}) {
       return { ...refreshJoinedBoundary(request.enabled === true) };
     },
@@ -27755,17 +27841,7 @@ export function createKaminosVolumePrototype({
     // Transport ghosts: the exterior geometry (origin and cell width in fine
     // cells, exterior cell dims, fine pitch in exterior local units). A change
     // of presence or dims rebuilds so the four ghost textures follow.
-    setJoinedGhosts(geometry = null) {
-      if (geometry) resolveJoinedGhosts({ geometry, reactantOn: false });
-      const next = geometry ? { originFine: [...geometry.originFine], cellWidthFine: geometry.cellWidthFine, dims: [...geometry.dims], finePitchLocal: geometry.finePitchLocal } : null;
-      const reallocate = Boolean(next) !== Boolean(joinedGhostGeometry) || String(next?.dims) !== String(joinedGhostGeometry?.dims);
-      joinedGhostGeometry = next;
-      joinedGhostSynthetic = null;
-      // A new geometry reinterprets whatever the textures hold: a new stamp is needed.
-      if (state.joinedGhosts) state.joinedGhosts = { ...state.joinedGhosts, generation: -1 };
-      if (reallocate && device) rebuildFluidState(gridSize, 'joined-ghosts-change');
-      return { geometry: next };
-    },
+    setJoinedGhosts(geometry = null) { return applyJoinedGhostGeometry(geometry); },
     // Witness-only: fill all four ghost textures with a constant exterior
     // (A = velocity in exterior local units + raw soot, B = 0, heat, fuel, 0)
     // and let the generation follow the step. Receipted as synthetic.
@@ -27807,26 +27883,7 @@ export function createKaminosVolumePrototype({
       state.joinedGhosts = { ...(state.joinedGhosts ?? { bound: false, reason: null }), generation };
       return { ...state.joinedGhosts };
     },
-    joinedProducerState() {
-      const timeStep = resolveTimeStepConfig(controlsSnapshot).effective;
-      return {
-        joined: { ...(state.joinedBoundary ?? resolveJoinedBoundary()) },
-        dims: [gridSize, gridHeight, gridSize],
-        pitch: 2 / gridSize,
-        timeStep: { mode: timeStep.mode, dtScale: timeStep.dtScale, referenceSpeed: timeStep.referenceSpeed, backtraceScale: timeStep.backtraceScale },
-        transportScheme: resolveTransportConfig(controlsSnapshot).effective.scheme,
-        fluidBuffer: fluidBuffers?.[currentFluid] ?? null,
-        fluidReadIndex: currentFluid,
-        frontBuffer: frontBuffers?.[currentFront] ?? null,
-        burnRateTexture,
-        solidMask: sceneSolidCellsCpu ? { cells: sceneSolidCellsCpu, revision: sceneSolidRevisionKey, dims: [gridSize, gridHeight, gridSize] } : null,
-        lowerFaceTexture: joinedLowerFaceTexture,
-        prescribedInlet: null,
-        ghosts: { ...(state.joinedGhosts ?? { bound: false, reason: null }), geometry: joinedGhostGeometry, synthetic: joinedGhostSynthetic,
-          textures: joinedGhostTextures ? { a: joinedGhostTextures[0], b: joinedGhostTextures[1] } : null },
-        simStepCount: state.simStepCount,
-      };
-    },
+    joinedProducerState() { return joinedProducerSnapshot(); },
     previewGridShape(request = {}) {
       const width = normalizeGridSize(request.resolution ?? controlsSnapshot.resolution);
       const shape = resolveGridHeight({ gridHeightRatio: request.gridHeightRatio ?? controlsSnapshot.gridHeightRatio }, width);
