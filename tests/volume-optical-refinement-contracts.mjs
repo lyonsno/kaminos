@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
 

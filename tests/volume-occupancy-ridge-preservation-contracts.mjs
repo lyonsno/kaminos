@@ -1,19 +1,37 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { balancedWgslBlock } from './helpers/wgsl-guard-ownership.mjs';
 
 const root = join(import.meta.dirname, '..');
 const core = readFileSync(join(root, 'volume-core.js'), 'utf8');
 
 function assertOccupancyRidgeContract(source) {
-  const raymarchStart = source.indexOf('let expensiveSampleBudget = u32(ceil(steps));');
-  const raymarchEnd = source.indexOf('t = t + localDt;', raymarchStart);
-  assert.ok(raymarchStart >= 0 && raymarchEnd > raymarchStart, 'production raymarch loop is discoverable');
-  const raymarch = source.slice(raymarchStart, raymarchEnd + 't = t + localDt;'.length);
+  const raymarchStart = source.indexOf('let expensiveSampleBudget =');
+  assert.ok(raymarchStart >= 0, 'production raymarch budget is discoverable');
+  const allRaymarch = balancedWgslBlock(source.slice(raymarchStart), 'loop {', { label: 'production raymarch loop' });
+  // These two arms consume supported samples through their own transfer/trace
+  // law. Remove only the complete, verified arms from the ordinary occupancy
+  // analysis; an extra discard in any arm still fails its continuation count.
+  const opticalStepArm = balancedWgslBlock(allRaymarch,
+    'if (opticalStepping) {\n        opticalStepObserve', { label: 'optical transfer arm' });
+  assert.match(opticalStepArm,
+    /opticalStepObserve\(&opticalStep, vec4<f32>\(emission, sigma\)\);[\s\S]*color = opticalStep.transfer.xyz;[\s\S]*trans = opticalStep.transfer.w;[\s\S]*continue;/,
+    'optical stepping composes the supported material before continuing');
+  const opticalTraceArm = balancedWgslBlock(allRaymarch,
+    'if (opticalTrace) {\n        let row =', { label: 'optical trace arm' });
+  assert.match(opticalTraceArm,
+    /nonRidgeOpticalCaptureRows\[base\+16u\] = select\(0.0, sigma, supported\);[\s\S]*atomicAdd\(&nonRidgeOpticalCaptureHeader.rowCount, 1u\);[\s\S]*continue;/,
+    'the trace arm publishes its supported-material row before continuing');
+  for (const arm of [opticalStepArm, opticalTraceArm]) {
+    assert.equal((arm.match(/\bcontinue\s*;/g) || []).length, 1,
+      'each optical arm has one continuation after consumption');
+  }
+  const raymarch = allRaymarch.replace(opticalStepArm, '').replace(opticalTraceArm, '');
   const reconstructionStart = raymarch.indexOf('var reconstructed: FlowReconstructionSample;');
   assert.ok(reconstructionStart >= 0, 'supported-sample reconstruction boundary is discoverable');
   const emptyCellBranch = raymarch.match(
-    /if \(!fullGridCapture && directSupport <= 0\.0001\) \{([^{}]*)\}/,
+    /if \(!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\) \{([^{}]*)\}/,
   );
   assert.ok(emptyCellBranch, 'conservative empty-cell branch has a stable non-nested boundary');
   const branchStart = emptyCellBranch.index;
@@ -22,7 +40,7 @@ function assertOccupancyRidgeContract(source) {
 
   assert.match(
     raymarch,
-    /let occupancySkipStrength = clamp\(u\.occupancy_controls\.x,[\s\S]*let directSupport = directCellOpticalSupport\(p\);/,
+    /let occupancySkipStrength = clamp\(u\.occupancy_controls\.x,[\s\S]*directSupport = raymarchNeighborhoodSupport\(neighborhood\);[\s\S]*directSupport = directCellOpticalSupport\(p\);/,
     'occupancy strength is available at the conservative empty-cell decision',
   );
   assert.match(

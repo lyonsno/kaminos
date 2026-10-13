@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import {buildOpticalHierarchy,refineOpticalHierarchy} from '../volume-optical-refinement.mjs';
 import {regionalTransferError} from '../volume-optical-region.mjs';

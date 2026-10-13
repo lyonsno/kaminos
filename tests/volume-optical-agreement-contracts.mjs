@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import * as optical from '../volume-optical-trace.mjs';
 assert.equal(typeof optical.compareOpticalTraces,'function');
