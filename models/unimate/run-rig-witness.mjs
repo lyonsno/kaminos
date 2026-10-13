@@ -113,6 +113,18 @@ try {
     if (Date.now() - t0 > 900000) throw new Error('generation timed out');
     await wait(500);
   }
+  // The download: the animated .glb of this generation, and the joint positions it should play.
+  report.phase = 'export';
+  const size = await browser.evaluate('window.__unimateExportCurrent()', false);
+  if (!size) throw new Error('nothing to export');
+  const parts = [];
+  for (let at = 0; at < size; at += 1 << 20) parts.push(Buffer.from(await browser.evaluate(`window.__unimateExportSlice(${at}, ${at + (1 << 20)})`, false), 'base64'));
+  const glb = Buffer.concat(parts);
+  await fsp.writeFile(path.join(outDir, 'export.glb'), glb);
+  const played = await browser.evaluate(`(() => { const d = window.__unimateDemoInstance, sk = d.bundle.skeleton;
+    return { jointNames: sk.jointNames, parents: sk.parents, frames: d.view.motion.frames, positions: Array.from(d.view.motion.positions) }; })()`, false);
+  await fsp.writeFile(path.join(outDir, 'played-positions.json'), JSON.stringify(played));
+  report.exportBytes = glb.length;
   for (const [i, f] of [[2, 10], [3, 30], [4, 50]]) {
     await browser.evaluate(`window.__unimateDemoInstance.seek(${f})`, false);
     await wait(300);
