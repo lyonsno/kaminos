@@ -37,7 +37,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { armSetsConfiguration, cameraFrameMismatch, effectiveMismatches, emissiveCoefficientsMismatch, joinedBoundaryMismatch, parseArms, parseCameraFrame, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
+import { armSetsConfiguration, cameraFrameMismatch, effectiveMismatches, emissiveCoefficientsMismatch, joinedBoundaryMismatch, parseSyntheticGhosts, parseArms, parseCameraFrame, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
 
 const CAPTURE_IDENTITY = 'kaminos.volume.transport-arm-capture.v1';
 const positional = [];
@@ -228,6 +228,17 @@ try {
         if (mismatch) { report.lastTrustworthyEvidence.applied = applied; fail(report.failurePhase, mismatch); }
         continue;
       }
+      if (cid === '@joinedGhostsSynthetic') {
+        // Witness only: bind an exterior geometry around the box and fill it with
+        // a constant synthetic exterior; fails unless the ghosts are bound.
+        const synthetic = parseSyntheticGhosts(value);
+        if (!synthetic) fail(report.failurePhase, `@joinedGhostsSynthetic needs heat:velocityY, got ${value}`);
+        const sample = await evaluate(op(`(() => { const p = w.__kaminosVolumePrototype; if (!p?.setJoinedGhosts) return null; const s0 = p.joinedProducerState(); const [gx, gy] = s0.dims; p.setJoinedGhosts({ originFine: [-gx / 2, -gy / 4, -gx / 2], cellWidthFine: 2, dims: [gx, gy, gx], finePitchLocal: 1 }); const fill = p.debugFillJoinedGhosts({ heat: ${synthetic.heat}, velocityLocal: [0, ${synthetic.velocityY}, 0] }); return { fill, ghosts: (({ bound, reason, geometry, synthetic }) => ({ bound, reason, geometry, synthetic }))(p.joinedProducerState().ghosts) }; })()`));
+        (arm.joinedGhosts ||= []).push(sample);
+        applied.push([cid, value, sample?.fill?.status ?? null]);
+        if (sample?.fill?.status !== 'filled') { report.lastTrustworthyEvidence.joinedGhosts = sample; fail(report.failurePhase, `synthetic ghosts not filled (${sample?.fill?.reason ?? 'missing'})`); }
+        continue;
+      }
       if (cid === '@joinedBoundary') {
         // Joined boundary (Sexy's stationary candidate): set through the API;
         // the arm fails unless the request took effect with its producer state.
@@ -274,7 +285,7 @@ try {
     let end = await evaluate(stateExpr);
     if (!end) fail(report.failurePhase, 'renderer state unavailable after settle');
     if (fault === 'arm-error' && report.arms.length === 0) end = { ...end, error: 'synthetic-fault:arm-error' };
-    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], emissiveCoefficients: arm.emissiveCoefficients || [], joinedBoundary: arm.joinedBoundary || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
+    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], emissiveCoefficients: arm.emissiveCoefficients || [], joinedBoundary: arm.joinedBoundary || [], joinedGhosts: arm.joinedGhosts || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
     report.arms.push(entry);
     report.lastTrustworthyEvidence.lastArm = arm.name;
     writeReport();

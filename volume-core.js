@@ -12047,6 +12047,9 @@ export function createKaminosVolumePrototype({
   // the exterior writes each step; 1x1x1 placeholders without a geometry.
   let joinedGhostGeometry = null;
   let joinedGhostTextures = null;
+  // A constant synthetic exterior written by debugFillJoinedGhosts (witnesses
+  // only; the generation then follows the step).
+  let joinedGhostSynthetic = null;
   const joinedGhostView = index => joinedGhostTextures[index].createView({ dimension: '3d' });
   let forceDeltaTexture = null;
   const inletPuffProcess = new StochasticSignalSet(2, 1);
@@ -17045,7 +17048,7 @@ export function createKaminosVolumePrototype({
   function encodeSim(encoder, options = {}) {
     // Transport ghosts must be this step's snapshots (Sexy stamps the
     // generation with the step they were written for).
-    if (state.joinedBoundary?.admitted && state.joinedGhosts?.bound && state.joinedGhosts.generation !== state.simStepCount) {
+    if (state.joinedBoundary?.admitted && state.joinedGhosts?.bound && !joinedGhostSynthetic && state.joinedGhosts.generation !== state.simStepCount) {
       state.joinedGhosts.reason = 'stale-ghost-generation';
       return false;
     }
@@ -27388,8 +27391,25 @@ export function createKaminosVolumePrototype({
       const next = geometry ? { originFine: [...geometry.originFine], cellWidthFine: geometry.cellWidthFine, dims: [...geometry.dims], finePitchLocal: geometry.finePitchLocal } : null;
       const reallocate = Boolean(next) !== Boolean(joinedGhostGeometry) || String(next?.dims) !== String(joinedGhostGeometry?.dims);
       joinedGhostGeometry = next;
+      joinedGhostSynthetic = null;
       if (reallocate && device) rebuildFluidState(gridSize, 'joined-ghosts-change');
       return { geometry: next };
+    },
+    // Witness-only: fill all four ghost textures with a constant exterior
+    // (A = velocity in exterior local units + raw soot, B = 0, heat, fuel, 0)
+    // and let the generation follow the step. Receipted as synthetic.
+    debugFillJoinedGhosts({ heat = 0, soot = 0, fuel = 0, velocityLocal = [0, 0, 0] } = {}) {
+      if (!device || !joinedGhostGeometry || !joinedGhostTextures) return { status: 'refused', reason: 'joined-ghost-geometry-not-set' };
+      const size = joinedGhostTextureSize(joinedGhostGeometry.dims);
+      const sites = size[0] * size[1] * size[2];
+      const a = new Float32Array(sites * 4), b = new Float32Array(sites * 4);
+      for (let i = 0; i < sites; i++) {
+        a.set([velocityLocal[0], velocityLocal[1], velocityLocal[2], soot], i * 4);
+        b.set([0, heat, fuel, 0], i * 4);
+      }
+      joinedGhostTextures.forEach((texture, index) => device.queue.writeTexture({ texture }, index % 2 === 0 ? a : b, { bytesPerRow: size[0] * 16, rowsPerImage: size[1] }, size));
+      joinedGhostSynthetic = { heat, soot, fuel, velocityLocal: [...velocityLocal] };
+      return { status: 'filled', synthetic: { ...joinedGhostSynthetic } };
     },
     // The step the bound ghost snapshots were written for.
     bindJoinedGhostGeneration(generation) {
@@ -27411,7 +27431,7 @@ export function createKaminosVolumePrototype({
         solidMask: sceneSolidCellsCpu ? { cells: sceneSolidCellsCpu, revision: sceneSolidRevisionKey, dims: [gridSize, gridHeight, gridSize] } : null,
         lowerFaceTexture: joinedLowerFaceTexture,
         prescribedInlet: null,
-        ghosts: { ...(state.joinedGhosts ?? { bound: false, reason: null }), geometry: joinedGhostGeometry,
+        ghosts: { ...(state.joinedGhosts ?? { bound: false, reason: null }), geometry: joinedGhostGeometry, synthetic: joinedGhostSynthetic,
           textures: joinedGhostTextures ? { oldA: joinedGhostTextures[0], oldB: joinedGhostTextures[1], predictedA: joinedGhostTextures[2], predictedB: joinedGhostTextures[3] } : null },
         simStepCount: state.simStepCount,
       };

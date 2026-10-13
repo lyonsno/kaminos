@@ -248,3 +248,10 @@ export function joinedBoundaryMismatch(value, sample) {
   if (want && !(producer.fluidBuffer && producer.burnRateTexture)) return 'joined boundary producer handles missing';
   return null;
 }
+
+// '@joinedGhostsSynthetic=<heat>:<upward exterior velocity>' (witness only).
+export function parseSyntheticGhosts(value) {
+  const parts = String(value ?? '').split(':').map(Number);
+  if (parts.length !== 2 || !parts.every(Number.isFinite)) return null;
+  return { heat: parts[0], velocityY: parts[1] };
+}

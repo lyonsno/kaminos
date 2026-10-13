@@ -168,7 +168,7 @@ test('ghost admission: refused for the reactant law until the oxidizer ghost exi
   assert.deepEqual({ ...core.resolveJoinedGhosts({ geometry: g, reactantOn: true }) }, { bound: false, reason: 'joined-ghosts-reactant-oxidizer-pending' });
   assert.throws(() => core.resolveJoinedGhosts({ geometry: { ...g, cellWidthFine: 0 }, reactantOn: false }), /positive/);
   const sim = source.slice(source.indexOf('  function encodeSim(encoder, options = {}) {'), source.indexOf('\n  }\n', source.indexOf('  function encodeSim(encoder, options = {}) {')));
-  assert.match(sim, /if \(state\.joinedBoundary\?\.admitted && state\.joinedGhosts\?\.bound && state\.joinedGhosts\.generation !== state\.simStepCount\) \{\n\s+state\.joinedGhosts\.reason = 'stale-ghost-generation';\n\s+return false;\n\s+\}/);
+  assert.match(sim, /if \(state\.joinedBoundary\?\.admitted && state\.joinedGhosts\?\.bound && !joinedGhostSynthetic && state\.joinedGhosts\.generation !== state\.simStepCount\) \{\n\s+state\.joinedGhosts\.reason = 'stale-ghost-generation';\n\s+return false;\n\s+\}/);
 });
 
 test('ghost reads: bindings 26-29, transport-only readers, OLD for predictor/backtrace/extrema, PREDICTED for the reverse', () => {
@@ -193,4 +193,20 @@ test('ghost reads: bindings 26-29, transport-only readers, OLD for predictor/bac
   const ghost = shader.slice(shader.indexOf('fn ghostSlot('), shader.indexOf('\n}\n', shader.indexOf('fn ghostSlot(')));
   assert.match(ghost, /if \(slot == 1u\) \{ return vec4<f32>\(s\.x, s\.y, s\.z, 0\.0\); \}/);
   assert.match(ghost, /return vec4<f32>\(0\.0\);/);
+});
+
+// Synthetic exterior for witnesses (before Sexy's export is wired): fill the
+// four ghost textures with a constant exterior and let the generation follow
+// the step; the receipt names it synthetic so it can never pass for her data.
+test('synthetic ghosts: a constant exterior for witnesses, receipted as synthetic', async () => {
+  assert.match(source, /    debugFillJoinedGhosts\(\{ heat = 0, soot = 0, fuel = 0, velocityLocal = \[0, 0, 0\] \} = \{\}\) \{/);
+  const sim = source.slice(source.indexOf('  function encodeSim(encoder, options = {}) {'), source.indexOf('\n  }\n', source.indexOf('  function encodeSim(encoder, options = {}) {')));
+  assert.match(sim, /state\.joinedGhosts\?\.bound && !joinedGhostSynthetic && state\.joinedGhosts\.generation !== state\.simStepCount/);
+  const api = source.slice(source.indexOf('    joinedProducerState() {'), source.indexOf('    joinedProducerState() {') + 3000);
+  assert.match(api, /synthetic: joinedGhostSynthetic/);
+  const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
+  assert.match(capture, /if \(cid === '@joinedGhostsSynthetic'\) \{/);
+  const { parseSyntheticGhosts } = await import('../volume-arm-capture-checks.mjs');
+  assert.deepEqual(parseSyntheticGhosts('0.5:0.02'), { heat: 0.5, velocityY: 0.02 });
+  assert.equal(parseSyntheticGhosts('x:1'), null);
 });
