@@ -2,6 +2,8 @@
 
 Turn a photograph into a surface you can relight.
 
+**[Explore Material Photograph in your browser](https://lyonsno.github.io/kaminos/inference-kit/material-photo/)**. Three included model results are available for orbiting, relighting and comparison without downloading model weights. To generate a result from your own photograph, use the local setup below.
+
 ![Original photograph, photograph with depth, image as albedo, and inferred materials in the same HDR environment](comparison.png)
 
 MoGe-2 recovers depth and normals. SuperMat estimates albedo, roughness and metalness. The four synchronized views separate what each contributes: an unchanged photograph on a flat plane, the photograph on recovered geometry, that geometry lit with the photograph as albedo, and the surface lit with inferred materials.
