@@ -26,7 +26,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    try{
     player.tick(clock);
     if(player.read().status==='held'&&mode!=='source'){cycle++;source.presentation.cycle=cycle;player.replay();}
-    else if(player.read().status!=='playing')unsubscribe();
+    else if(player.read().status!=='playing'){unsubscribe();host.scene.refreshPresentation?.(asset);}
     refresh();
    }catch(error){unsubscribe();try{player.pause();}catch{}record({kind:'walking.frame',phase:'failed',error:error.message});throw error;}
   });
@@ -71,9 +71,9 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   const operation=(name,action)=>input=>{active();record({kind:`walking.${name}`,phase:'requested',requested:input??null});try{const result=action(input);refresh();record({kind:`walking.${name}`,phase:'applied',mode,cycle,frame:player.read().frame});return result;}catch(error){record({kind:`walking.${name}`,phase:'failed',error:error.message});throw error;}};
   const operations={
    play:operation('play',()=>{player.play();if(player.read().status==='playing')startClock();return read();}),
-   pause:operation('pause',()=>{unsubscribe();player.pause();return read();}),
-   replay:operation('replay',()=>{unsubscribe();cycle=0;source.presentation.cycle=0;player.replay();startClock();return read();}),
-   seek:operation('seek',input=>{unsubscribe();player.seek(input?.frame);return read();}),
+   pause:operation('pause',()=>{unsubscribe();player.pause();host.scene.refreshPresentation?.(asset);return read();}),
+   replay:operation('replay',()=>{unsubscribe();cycle=0;source.presentation.cycle=0;player.replay();host.scene.refreshPresentation?.(asset);startClock();return read();}),
+   seek:operation('seek',input=>{unsubscribe();player.seek(input?.frame);host.scene.refreshPresentation?.(asset);return read();}),
    mode:operation('mode',input=>{if(!['source','cycle','path'].includes(input?.mode))throw Error('Unknown walking mode');unsubscribe();player.pause();mode=input.mode;cycle=0;source.presentation.mode=mode;source.presentation.cycle=0;player.seek(0);host.scene.refreshPresentation?.(asset);return read();}),
    floor:operation('floor',input=>{if(!floor)throw Error('No walking reference floor is mounted');if(typeof input?.visible!=='boolean')throw Error('Reference floor visibility must be boolean');floor.visible=input.visible;session.redraw();return read();}),
   };

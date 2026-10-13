@@ -26,4 +26,13 @@ const moving=await module.createWalkingCreature({host:{controls:{document},scene
 assert.equal(moving.read().mode,'path');assert.equal(moving.read().playback.status,'playing');assert.equal(typeof frameCallback,'function');await moving.dispose();assert.equal(closed,2);assert.equal(frameCallback,null);
 const failing=await module.createWalkingCreature({host:{controls:{document},scene:{open:async()=>session}},inputs:{blend_frames:0,radius:4}},{loadSources:async()=>data});redrawFailure=true;
 await assert.rejects(failing.dispose(),/redraw|cleanup/);assert.equal(closed,3,'a presentation failure must not strand the owned scene attachment');assert.equal(scene.children.length,0);assert.equal(frameCallback,null);
+redrawFailure=false;
+let presented=null,refreshes=0;
+const held=await module.createWalkingCreature({host:{controls:{document},scene:{open:async()=>session,refreshPresentation(asset){refreshes++;presented={position:asset.root.position.toArray(),rotation:asset.root.quaternion.toArray()};}}},inputs:{blend_frames:0,radius:4}},{loadSources:async()=>data});
+const matchesHeld=label=>{const root=scene.children[0];assert.deepEqual(presented,{position:root.position.toArray(),rotation:root.quaternion.toArray()},label);};
+held.operations.mode({mode:'path'});held.operations.seek({frame:2});matchesHeld('seek must present the actual selected held transform');
+let count=refreshes;held.operations.replay();assert.ok(refreshes>count,'restart refreshes the reset pose');matchesHeld('restart pose');
+frameCallback({deltaSeconds:1/30});count=refreshes;held.operations.pause();assert.ok(refreshes>count,'pause refreshes the held pose');matchesHeld('pause pose');
+held.operations.mode({mode:'source'});held.operations.play();frameCallback({deltaSeconds:1/30});count=refreshes;frameCallback({deltaSeconds:1/30});assert.ok(refreshes>count,'source endpoint refreshes the final held pose');matchesHeld('source endpoint pose');
+await held.dispose();
 console.log('Full-body walking consumes one actual shared scene attachment/clock and releases its own instance');
