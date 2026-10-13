@@ -52,6 +52,16 @@ export function flameDomainControlsFromSettings(settings) {
     gridHeightRatio:Number(settings?.domControls?.['volume-grid-height-ratio']?.value??2)};
 }
 
+// A confirmed request may still exceed device limits. Preview is the core's
+// admission law; refused requests use the retained grid only for source bounds,
+// while the original requested controls and refusal receipt remain intact.
+export function effectiveFlameDomainControls(controls,prototype) {
+  if(prototype?.previewGridShape?.(controls)?.admitted!==false)return controls;
+  const runtime=prototype?.debugState?.(),dims=runtime?.simGridDimensions;
+  if(runtime?.active!==true||!Array.isArray(dims)||dims.length!==3||!dims.every(n=>Number.isInteger(n)&&n>0))throw Error('Refused grid has no effective source bounds');
+  return {...controls,resolution:dims[0],gridHeightRatio:dims[1]/dims[0]};
+}
+
 export function normalizeFlameDomainTranslation(translation) {
   if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
     throw new Error('Flame domain translation requires three finite coordinates');
@@ -93,9 +103,9 @@ export function immersedRadiusBounds(value) {
 // Doctor's engine uses a disc centre and yaw/pitch in domain coordinates.
 // The authored object's local +Y is its nozzle axis; roll remains authored
 // even though the circular supply does not depend on it.
-export function immersedControlsForFlamePose(controls, value, sourceEnabled = true) {
+export function immersedControlsForFlamePose(controls, value, sourceEnabled = true,domainControls=controls) {
   const frame = flameEmitterFrame(value);
-  if (sourceEnabled && !flamePoseInDomain(frame.pose, [0, 0, 0],1,controls)) {
+  if (sourceEnabled && !flamePoseInDomain(frame.pose, [0, 0, 0],1,domainControls)) {
     throw new Error('Immersed source centre is outside the current domain');
   }
   const radius = Number(controls.immersedRadius ?? 0.2) * frame.scale;

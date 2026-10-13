@@ -2,7 +2,7 @@ import {
   VOLUME_EMITTER_FAMILIES,
   compileVolumeEmitterFamily,
 } from './volume-emitter-basis.mjs';
-import { flameEmitterFrame, immersedControlsForFlamePose } from './scene-flame-emitter.mjs';
+import { flameEmitterFrame, immersedControlsForFlamePose,effectiveFlameDomainControls } from './scene-flame-emitter.mjs';
 
 export const VOLUME_EMITTER_RUNTIME_SCHEMA = 'kaminos.volume-emitter-runtime.v1';
 
@@ -167,7 +167,7 @@ export function applyVolumeEmitterFamilyRuntime({
       throw new Error('Immersed source requires the placeable source route without external emitters');
     }
     const placement = flameEmitterFrame(emitterPose);
-    const mapped = immersedControlsForFlamePose(controls, placement.pose, sourceEnabled);
+    const mapped = immersedControlsForFlamePose(controls, placement.pose, sourceEnabled,effectiveFlameDomainControls(controls,prototype));
     // Validate first, then clear the earlier analytic injector and suppress the
     // floor source. The core admits the immersed supply independently per step.
     prototype.setControls(mapped);

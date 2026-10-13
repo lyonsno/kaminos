@@ -3713,7 +3713,7 @@ import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
   defaultFlameEmitterPose, normalizeFlameEmitterPose, createFlameEmitterHandle,
   updateFlameEmitterSupportOutline, flameDomainTranslationForAcceptedPose,
   flamePoseInDomain, flamePoseToDomain, normalizeFlameDomainTranslation, normalizeFlameDomainScale,
-  flamePoseFromImmersedControls, immersedControlsForFlamePose, immersedRadiusBounds } from './scene-flame-emitter.mjs';
+  flamePoseFromImmersedControls, immersedControlsForFlamePose, immersedRadiusBounds,effectiveFlameDomainControls } from './scene-flame-emitter.mjs';
 let flameEmitterPose = defaultFlameEmitterPose(), applyFlameEmitterPose = null;
 let flameEmitterInjectionSuspended = false;
 let authoredFlamePresent = true;
@@ -5944,7 +5944,7 @@ function settleAuthoredFlameDomain(event) {
 function settleFlameDomainForPose(pose, targetDomain = null) {
   if(!targetDomain&&!flameDomainFollowSource)return false;
   const next = targetDomain || flameDomainTranslationForAcceptedPose(pose, flameDomainTranslation,
-    { injectionSuspended: flameEmitterInjectionSuspended,scale:flameDomainScale,shape:readVolumeControls() });
+    { injectionSuspended: flameEmitterInjectionSuspended,scale:flameDomainScale,shape:effectiveFlameDomainControls(readVolumeControls(),volumePrototype) });
   const previous = [...flameDomainTranslation];
   if (!setFlameDomainTranslation(next)) {
     setInfo(flameEmitterInjectionSuspended
@@ -5971,7 +5971,7 @@ function writeAuthoredFlameEmitterPose(value) {
   if (window.__kaminosVolumeEmitterReceipt?.effective?.family === 'cluster') {
     throw new Error('Choose an analytic flame emitter before placing its source');
   }
-  const originInsideGrid = authoredFlamePresent && flamePoseInDomain(next, flameDomainTranslation, flameDomainScale,readVolumeControls());
+  const originInsideGrid = authoredFlamePresent && flamePoseInDomain(next, flameDomainTranslation, flameDomainScale,effectiveFlameDomainControls(readVolumeControls(),volumePrototype));
   if (originInsideGrid) {
     try {
       applyFlameEmitterPose(next, { sourceEnabled: true });
@@ -24113,7 +24113,8 @@ async function initKaminosVolumeRoute() {
     }
   }
   let volumeEmitterRuntimeFrame = 0;
-  function applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot, pose = flameEmitterPose, { sourceEnabled = controlsSnapshot.emitterSourceLaw==='immersed-source'?flamePoseInDomain(pose,flameDomainTranslation,flameDomainScale,controlsSnapshot):!flameEmitterInjectionSuspended } = {}) {
+  function applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot, pose = flameEmitterPose, { sourceEnabled = controlsSnapshot.emitterSourceLaw==='immersed-source'?flamePoseInDomain(pose,flameDomainTranslation,flameDomainScale,effectiveFlameDomainControls(controlsSnapshot,volumePrototype)):!flameEmitterInjectionSuspended } = {}) {
+    if(controlsSnapshot.emitterSourceLaw==='immersed-source')sourceEnabled=sourceEnabled&&flamePoseInDomain(pose,flameDomainTranslation,flameDomainScale,effectiveFlameDomainControls(controlsSnapshot,volumePrototype));
     const family = document.getElementById('emitter-assay-family').value;
     if (routeExternalEmitters && family !== 'cluster') {
       throw new Error(`volume emitter source conflict: volume_external_emitters=${routeExternalEmitters} cannot compose with volume_emitter_family=${family}`);
@@ -30149,6 +30150,7 @@ function sceneSaveIsBlocked() {
     setInfo('Wait for the current scene history action to finish');
     return true;
   }
+  if(activeSceneComposition&&volumePrototype?.debugState?.().gridHeight?.admitted===false){setInfo('Requested simulation grid was refused; Undo or choose supported dimensions before saving');return true;}
   if (greenroomPreviewIsActive()) {
     setInfo('Greenroom preview is temporary; import or go back before saving');
     return true;

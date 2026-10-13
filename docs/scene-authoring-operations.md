@@ -201,3 +201,10 @@ applies it. Escape restores the prior setting. The same authored-parameter sette
 confirms scripted edits. Height adds/removes cubic-cell rows at fixed pitch;
 world scale changes the pitch. Independent Z depth is not yet supplied by the
 current solver; its mechanism is in the Flame Doctor's next grid slice.
+
+
+If the device refuses a requested grid shape, source admission continues to use
+the retained, active grid. The original request and refusal reason remain in
+the runtime receipt. Saving that unapplied request is blocked: Undo or choose
+supported dimensions first, so the accepted scene file is not replaced by a
+configuration the live field did not admit. Other mesh scenes remain saveable.

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildSceneDocument, planSceneRestore, isReloadableSceneObjectRecord } from '../scene-persistence-core.js';
 import { createSceneEdits } from '../scene-edit-session.mjs';
-import { flamePoseInDomain } from '../scene-flame-emitter.mjs';
+import { flamePoseInDomain,effectiveFlameDomainControls } from '../scene-flame-emitter.mjs';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
@@ -45,7 +45,7 @@ test('moving flame beyond analytic support keeps the authored pose and suspends 
   let pose={position:[0,-.76,0],rotation:[0,0,0],scale:[1,1,1]};
   let suspended=false;
   const calls=[];
-  const context={authoredFlamePresent:true,normalizeFlameEmitterPose:value=>structuredClone(value), flamePoseInDomain, readVolumeControls:()=>({resolution:64,gridHeightRatio:2}),
+  const context={authoredFlamePresent:true,normalizeFlameEmitterPose:value=>structuredClone(value), flamePoseInDomain,effectiveFlameDomainControls,volumePrototype:null, readVolumeControls:()=>({resolution:64,gridHeightRatio:2}),
     flameDomainTranslation:[0,0,0],flameDomainScale:1,
     applyFlameEmitterPose:(next,{sourceEnabled=true}={})=>{
       calls.push({x:next.position[0],sourceEnabled});
