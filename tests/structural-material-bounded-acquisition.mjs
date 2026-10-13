@@ -7,9 +7,10 @@ import {stoneObservationStamp,validateStoneObservationStamp} from '../structural
 const source=fs.readFileSync(new URL('../structural-material-shard-view.js',import.meta.url),'utf8');
 const begin=source.slice(source.indexOf('async function beginPick('),source.indexOf('async function finishGesture(')),release=source.slice(source.indexOf('async function release('),source.indexOf('async function cutInterior('));
 const pairs=[[0,1],[0,2],[0,3],[1,2],[1,3],[2,3]],state={runId:'run',steps:1,model:{points:4,elements:1,bonds:6},state:Array(64).fill(0),bonds:pairs.flatMap(p=>[...p,0,0]),grip:null,observation:{kind:'full-diagnostic'}};
-const settleCode=source.slice(source.indexOf(' window.__stoneShards.settle='),source.indexOf(" if(new URLSearchParams",source.indexOf(' window.__stoneShards.settle=')));
+const settleCode=source.slice(source.indexOf(' api.settle='),source.indexOf(" if(parameters.get('smoke')",source.indexOf(' api.settle=')));
 test('actual explicit settle publishes acquired topology',async()=>{
 const acquired={window:{__stoneShards:{}},observed:{...state,bonds:pairs.flatMap(p=>[...p,1,0])},components:[0,0,0,0],busy:false,settle:async()=>{},resident:{read:async()=>state},materialComponents,observeSurface:async()=>{},observeInteraction:async()=>{},shown:[],present(){acquired.shown.push([...acquired.components]);}};
+acquired.api=acquired.window.__stoneShards;
 acquired.elasticSupport=false;vm.runInNewContext(source.slice(source.indexOf('function acquiredConnections('),source.indexOf('\nfunction deformPiece(')),acquired);
 vm.runInNewContext(settleCode+';task=window.__stoneShards.settle({surface:false});',acquired);await acquired.task;
 assert.deepEqual(acquired.shown[0],[0,1,2,3],'Acquired display must publish acquired, not cached, topology');

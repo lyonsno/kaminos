@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
-import {Ray,Vector3,Plane} from 'three';
+import {Ray,Vector3,Plane,Matrix4,Group} from 'three';
 const source=fs.readFileSync(new URL('../structural-material-shard-view.js',import.meta.url),'utf8'),start=source.indexOf('function replayCameraPointer(')>0?source.indexOf('function replayCameraPointer('):source.indexOf('function beginResidentPointer('),code=source.slice(start,source.indexOf("renderer.domElement.addEventListener('pointerdown'",start));
 let finish;const query=new Promise(r=>finish=r),replayed=[];
 const canvas={setPointerCapture(){throw new Error('Cannot capture an already released pointer');},releasePointerCapture(){throw new Error('Cannot release an inactive pointer');},dispatchEvent(e){replayed.push(e.type);if(e.type==='pointerdown')this.setPointerCapture(e.pointerId);if(e.type==='pointerup')this.releasePointerCapture(e.pointerId);}};
 const ctx={ray:()=>new Ray(new Vector3(0,0,1),new Vector3(0,0,-1)),THREE:{Vector3},gestureGeneration:0,invalidateMaterialObservation(){},pointerRecord:e=>({...e}),camera:{getWorldDirection:v=>v.set(0,0,-1)},resident:{release:async()=>{},submittedState:()=>({runId:'run'})},pieces:[{id:0,gpu:{pick:()=>query}}],controls:{enabled:true},plane:new Plane(),stamp(){},movePointer(){},queueMicrotask,fail(){},renderer:{domElement:canvas},PointerEvent:class{constructor(type,data){this.type=type;Object.assign(this,data);}}};
+ctx.scene=new Group();ctx.THREE.Matrix4=Matrix4;
 vm.runInNewContext(code+';beginResidentPointer({type:"pointerdown",pointerId:1});',ctx);ctx.pointerContact.closed=true;ctx.pointerContact.events.push({type:'pointermove',pointerId:1},{type:'pointerup',pointerId:1});finish(null);
 await assert.doesNotReject(ctx.pickTask,'Closed background stroke must reach camera without invalid pointer capture');
 assert.deepEqual(replayed,['pointerdown','pointermove','pointerup']);assert.equal(ctx.controls.enabled,true);

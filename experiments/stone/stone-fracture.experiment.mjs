@@ -10,7 +10,7 @@ export default {
  title:'Stone fracture',
  async create({host,inputs,record}){
   if(typeof host?.stone?.open!=='function')throw Error('Stone experiment requires host.stone.open');
-  const stone=await host.stone.open(inputs);
+  const stone=await host.stone.open(inputs,{record});
   try{requireNativeStone(await stone.read());}catch(error){await stone.dispose();throw error;}
   const read=async()=>requireNativeStone(await stone.read());
   const pending=new Set();let closing=false;

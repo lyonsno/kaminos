@@ -76,7 +76,7 @@ export async function loadStoneAssets(detail = '500-normal') {
   const loader = new GLTFLoader(), assets = [];
   try {
     for (const entry of stoneAssetsForDetail(detail)) {
-      const response = await fetch(entry.url);
+      const response = await fetch(new URL(entry.url, import.meta.url));
       if (!response.ok) throw new Error(`Stone ${entry.id}: HTTP ${response.status}`);
       const bytes = await response.arrayBuffer();
       const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join('');

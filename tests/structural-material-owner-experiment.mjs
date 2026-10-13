@@ -41,7 +41,7 @@ test('actual producer experiment status and hold avoid physical readback',async(
  const start=source.indexOf('function experimentStatus('),end=source.indexOf('function inside(',start);
  assert.ok(start>=0&&end>start,'Producer has no cheap experiment status/hold operations');
  const calls=[],ctx={bounded:true,connectivity:'elastic-support',route:'kaminos.picked-stone.bounded-shards.webgpu.v0',resident:{submittedState:()=>({runId:'native-fixture',steps:6}),read(){throw Error('Dense read forbidden');}},observed:{model:{points:4,elements:1,bonds:6}},configuration:{timeStep:1/60},materialRegime:{name:'fixture'},manifest:{sourceSha256:'fixture',preparationSha256:'prepared'},paused:true,busy:false,pendingPick:false,finishing:false,gesture:null,failure:null,cameraState:()=>({position:[0,1,3],target:[0,0,0]}),$:()=>({value:'180'}),settle:async()=>calls.push('host-settle'),device:{queue:{onSubmittedWorkDone:async()=>calls.push('queue-settle')}},structuredClone};
- vm.runInNewContext(source.slice(start,end),ctx);
+ ctx.closing=false;vm.runInNewContext(source.slice(start,end),ctx);
  const status=ctx.experimentStatus();assert.equal(status.submittedSteps,6);assert.equal(status.observation,'submission-metadata-not-physical-observation');assert.equal(status.backend,'webgpu');
  await ctx.waitSubmitted({gpu:false});assert.deepEqual(calls,['host-settle']);await ctx.waitSubmitted();assert.deepEqual(calls,['host-settle','host-settle','queue-settle']);
 });
