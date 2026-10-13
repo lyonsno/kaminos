@@ -223,8 +223,9 @@ export function reactantMixtureFraction({ fuel, oxidizer }, model = REACTANT_MOD
 // A cell holding at least this share of inlet stream has not met air.
 export const REACTANT_NO_CONTACT_STREAM_SHARE = 0.9;
 
-// Why a cell is or is not burning: burning; colocated but below full ignition
-// (too cold); colocated, hot, burning slower than the threshold (mixing-limited);
+// Why a cell is or is not burning: burning; colocated, would burn at the
+// threshold rate if fully ignited but is not (too cold); colocated but limited by
+// the mixing time and the amount available (mixing-limited);
 // burned here, air used up, fuel left (air-starved: contact-limited); burned
 // out and hot (depleted) or cooled (products); inlet stream that has not met
 // air (no contact, however hot: a hot inlet does not make contact); or nothing
@@ -232,21 +233,24 @@ export const REACTANT_NO_CONTACT_STREAM_SHARE = 0.9;
 // made against these classes, not a material class.
 export function reactantDiagnostic(state, controls, dt) {
   const burn = reactantBurnStep({ fuel: state.fuel, oxidizer: state.oxidizer, heat: state.heat, smoke: 0 }, controls, dt);
-  return reactantDiagnosticFromField({ fuel: state.fuel, oxidizer: state.oxidizer, heat: state.heat, freshBurnRate: burn.freshBurnRate }, modelOf(controls), { streamFuel: controls?.streamFuel ?? 1 });
+  return reactantDiagnosticFromField({ fuel: state.fuel, oxidizer: state.oxidizer, heat: state.heat, freshBurnRate: burn.freshBurnRate }, modelOf(controls), { streamFuel: controls?.streamFuel ?? 1, mixingTimeSteps: controls?.mixingTimeSteps, dt });
 }
 
 // The same classes for a stored cell, using its recorded fresh burn rate (the
 // sidecar's second component) instead of recomputing a burn.
-export function reactantDiagnosticFromField({ fuel, oxidizer, heat, freshBurnRate }, model = REACTANT_MODEL, { streamFuel = 1 } = {}) {
+export function reactantDiagnosticFromField({ fuel, oxidizer, heat, freshBurnRate }, model = REACTANT_MODEL, { streamFuel = 1, mixingTimeSteps = REACTANT_CONTROL_DEFAULTS.mixingTimeSteps, dt = 1 } = {}) {
   const t = REACTANT_DIAGNOSTIC_THRESHOLDS;
   if (freshBurnRate > t.burnRate) return 'burning';
   const z = reactantMixtureFraction({ fuel, oxidizer }, model, { streamFuel });
   if (fuel > t.fuel && z >= REACTANT_NO_CONTACT_STREAM_SHARE) return 'no-contact';
   const available = Math.max(0, Math.min(fuel, oxidizer / model.oxidizerRequirement));
-  // Colocated but not burning at the threshold rate: too cold only while the
-  // thermal state is below full ignition; fully ignited, the mixing time is
-  // what limits it.
-  if (available > t.available) return heat < model.ignitionBand[1] ? 'too-cold' : 'mixing-limited';
+  // Colocated but not burning at the threshold rate. Too cold only if full
+  // ignition would make it burn at that rate (the thermal state is what holds
+  // it back); otherwise the mixing time and the amount available limit it.
+  if (available > t.available) {
+    const fullIgnitionRate = available * (1 - Math.exp(-dt / Math.max(1e-9, mixingTimeSteps))) / dt;
+    return fullIgnitionRate > t.burnRate && heat < model.ignitionBand[1] ? 'too-cold' : 'mixing-limited';
+  }
   // Fuel the stream would have brought at this Z, less what is left: burned here.
   const burnedHere = Math.max(0, z) * streamFuel - fuel;
   // Burned here and fuel is left: it met air and used it all (rich side,

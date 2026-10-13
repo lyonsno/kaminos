@@ -195,7 +195,11 @@ test('the diagnostic separates burning, too cold, no contact, depleted and ambie
   assert.deepEqual(rc.REACTANT_DIAGNOSTIC_CLASSES, ['ambient', 'no-contact', 'air-starved', 'too-cold', 'mixing-limited', 'burning', 'depleted', 'products']);
   // Too cold means the thermal state is below full ignition, not merely "burning slower than the threshold".
   assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.003, oxidizer: 0.5, heat: 1.0, freshBurnRate: 0.0008 }), 'mixing-limited', 'hot colocated reactants burning slowly are mixing-limited, not too cold');
-  assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.003, oxidizer: 0.5, heat: 0.05, freshBurnRate: 0 }), 'too-cold');
+  assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.05, oxidizer: 0.5, heat: 0.05, freshBurnRate: 0 }), 'too-cold', 'would burn at full ignition, does not because it is cold');
+  // Counterfactual: too cold only if full ignition would make it burn at the threshold rate.
+  assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.003, oxidizer: 0.5, heat: 0.29, freshBurnRate: 0 }, M, { mixingTimeSteps: 3, dt: 1 }), 'mixing-limited', 'nearly ignited but too little to burn at the threshold rate is not too cold');
+  assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.003, oxidizer: 0.5, heat: 0.05, freshBurnRate: 0 }, M, { mixingTimeSteps: 3, dt: 1 }), 'mixing-limited', 'even when cold: heating it would not make it burn at the threshold rate');
+  assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.05, oxidizer: 0.5, heat: 0.29, freshBurnRate: 0 }, M, { mixingTimeSteps: 3, dt: 1 }), 'too-cold', 'enough to burn, held back by the last of the ignition band');
   // Burned out and still hot is depleted; burned out and cooled is products.
   assert.equal(rc.reactantDiagnosticFromField({ fuel: 0, oxidizer: 0.4, heat: 0.02, freshBurnRate: 0 }), 'products', 'cooled products are not a depleted flame');
   assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.3, oxidizer: 0.8, heat: lo * 0.5, freshBurnRate: 0.01 }), 'burning', 'a stored cell that burned this step is burning whatever its post-burn state');
