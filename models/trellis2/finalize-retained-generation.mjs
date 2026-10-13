@@ -8,6 +8,7 @@ import {extractTrellisDualGridMesh} from './trellis-mesh.js';
 import {finishTrellisMesh,encodeTrellisTexturePNG} from './trellis-material.js';
 import {NodeTrellisUVWorker} from './node-uv-worker.mjs';
 import {createSourceAtlasUnwrapper} from './source-atlas.mjs';
+import {createBrowserMeshPostprocess,MESH_POSTPROCESS_ROUTE} from './mesh-cleanup.js';
 import {gitSourceIdentity} from './source-attestation.mjs';
 import {persistGenerationAsset,admitRetainedGenerationCompletion,generationFields,GENERATION_ROUTE} from './sparse-generation-witness-checks.js';
 
@@ -32,8 +33,13 @@ const readTyped=async(file,row,Type,dtype)=>{
 };
 await persist();
 try{
-  for(const key of ['--repo-root','--expected-commit','--input-root','--expected-native-commit',
-    '--python','--source-root','--expected-source-commit','--target-faces','--receiver'])
+  const cleanupMode=args.get('--cleanup-mode')??'reference-cleanup';
+  const uvBackend=args.get('--uv-backend')??'sf3d';
+  // The browser finisher runs in-process; Python source coordinates are needed
+  // only when a Python stage (source cleanup or source xatlas) is selected.
+  const needsPython=cleanupMode!=='browser-mlx-surface-preserving'||uvBackend==='source-xatlas';
+  for(const key of ['--repo-root','--expected-commit','--input-root','--expected-native-commit','--target-faces','--receiver',
+    ...(needsPython?['--python','--source-root','--expected-source-commit']:[])])
     if(!args.get(key))throw Error('explicit '+key+' required');
   const root=path.resolve(args.get('--repo-root')),native=path.resolve(args.get('--input-root'));
   const script=fileURLToPath(import.meta.url);
@@ -44,13 +50,12 @@ try{
   if(report.commit!==args.get('--expected-commit')||report.dirty)throw Error('exact clean finishing source required');
   const targetFaces=Number(args.get('--target-faces'));
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw Error('positive caller-selected face target required');
-  const cleanupMode=args.get('--cleanup-mode')??'reference-cleanup';
   const cleanupRoutes={'reference-cleanup':'Trellis2MLX/reference-cleanup/CPU-fast-simplification',
-    'mlx-surface-preserving':'Trellis2MLX/surface-preserving/CPU-fast-simplify-first'};
+    'mlx-surface-preserving':'Trellis2MLX/surface-preserving/CPU-fast-simplify-first',
+    'browser-mlx-surface-preserving':MESH_POSTPROCESS_ROUTE};
   if(!Object.hasOwn(cleanupRoutes,cleanupMode))throw Error('supported explicit cleanup mode required');
   report.cleanupMode=cleanupMode;
   report.route='retained native WebGPU fields / '+cleanupRoutes[cleanupMode]+' / unchanged UV and learned PBR';
-  const uvBackend=args.get('--uv-backend')??'sf3d';
   if(!['sf3d','source-xatlas'].includes(uvBackend))throw Error('explicit supported UV backend required');
   report.requestedUVBackend=uvBackend;
   await enter('native-field-admission');
@@ -113,7 +118,22 @@ try{
   await fs.writeFile(path.join(inputDir,'manifest.json'),inputBytes);
   report.rawMesh.inputManifestSha256=hash(inputBytes);
   const cleanupDir=path.join(out,'mesh-postprocess');await fs.mkdir(cleanupDir,{recursive:true});
-  const postprocessMesh=async input=>{
+  const browserPostprocess=cleanupMode==='browser-mlx-surface-preserving'?
+    createBrowserMeshPostprocess({targetFaces,keepLargest:args.get('--keep-largest')==='true'}):null;
+  const postprocessMesh=browserPostprocess?async input=>{
+    const processed=await browserPostprocess(input),r=processed.metadata.postprocess;
+    if(r.effectiveRoute!==cleanupRoutes[cleanupMode]||r.inputManifestSha256!==undefined)throw Error('unexpected browser finisher receipt');
+    const row=async(name,values,dtype)=>{
+      const data=new Uint8Array(values.buffer,values.byteOffset,values.byteLength);
+      await fs.writeFile(path.join(cleanupDir,name),data);
+      return {file:name,dtype,shape:[values.length/3,3],byteLength:data.length,sha256:hash(data)};
+    };
+    report.meshPostprocess={...r,inputManifestSha256:hash(inputBytes),
+      arrays:{vertices:await row('vertices.f32',processed.vertices,'float32'),triangles:await row('triangles.u32',processed.triangles,'uint32')}};
+    await fs.writeFile(path.join(cleanupDir,'report.json'),JSON.stringify(report.meshPostprocess,null,2)+'\n');
+    await persist();
+    return processed;
+  }:async input=>{
     const command=[path.join(root,'models/trellis2/postprocess-retained-mesh.py'),
       '--source-root',path.resolve(args.get('--source-root')),'--expected-source-commit',args.get('--expected-source-commit'),
       '--input',path.join(inputDir,'manifest.json'),'--output',cleanupDir,'--target-faces',String(targetFaces),
