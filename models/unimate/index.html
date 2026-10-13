@@ -8,6 +8,7 @@
 <style>
   :root { color-scheme: dark; --panel: rgba(18, 20, 24, 0.86); --text: #e6e8eb; --muted: #9aa3ad; --accent: #4fd1e8; --line: rgba(255, 255, 255, 0.08); }
   html, body { margin: 0; height: 100%; background: #111316; color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  [hidden] { display: none !important; }
   canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
   canvas:active { cursor: grabbing; }
   .panel { position: fixed; top: 16px; left: 16px; width: min(340px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line);
@@ -40,6 +41,14 @@
   .legend { color: var(--muted); font-size: 12px; }
   .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 4px 0 10px; }
   .dot:first-child { margin-left: 0; }
+  details.rig { margin-top: 10px; font-size: 12px; }
+  details.rig summary { cursor: pointer; color: var(--muted); }
+  .rig-table { max-height: 34vh; overflow-y: auto; margin-top: 6px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 4px 6px; align-items: center; }
+  .rig-table .raw { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rig-table input { padding: 3px 6px; font-size: 12px; }
+  .rig-face { display: grid; grid-template-columns: auto 1fr; gap: 4px 6px; align-items: center; margin-top: 8px; }
+  .rig-face select { padding: 3px 6px; font-size: 12px; }
+  .drop { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(17, 19, 22, 0.7); border: 2px dashed var(--accent); font-size: 18px; pointer-events: none; }
   @media (max-width: 640px) {
     .panel { top: 8px; left: 8px; width: calc(100vw - 16px); padding: 10px 12px; }
     .sub, .legend { display: none; }
@@ -55,7 +64,18 @@
   <div id="skeleton-row" hidden>
     <label for="skeleton">Skeleton</label>
     <select id="skeleton" disabled></select>
+    <input id="rig-file" type="file" accept=".glb,model/gltf-binary" hidden>
   </div>
+  <details class="rig" id="rig-review" hidden>
+    <summary>Joint labels and facing <span id="rig-summary"></span></summary>
+    <div class="rig-face">
+      <span>Right side</span><select id="face-right"></select>
+      <span>Left side</span><select id="face-left"></select>
+      <span></span><label style="margin:0"><input type="checkbox" id="face-axis"> head / tail pair (body axis)</label>
+    </div>
+    <div class="rig-table" id="rig-table"></div>
+    <div class="row"><button id="rig-apply">Apply labels</button></div>
+  </details>
   <label for="prompt">Prompt for the <span id="skeleton-name">skeleton</span></label>
   <input id="prompt" type="text" list="prompt-suggestions" placeholder="e.g. A cat walks forward." disabled>
   <datalist id="prompt-suggestions"></datalist>
@@ -75,6 +95,7 @@
   <div class="bar" id="bar" hidden><div></div></div>
   <div class="stats" id="stats"></div>
 </div>
+<div class="drop" id="drop" hidden>Drop a rigged .glb to animate it</div>
 <div class="dock">
   <div class="now" id="now" hidden>
     <button id="play" aria-label="Pause playback">❚❚</button>
@@ -86,6 +107,8 @@
 </div>
 <script type="module">
 import { createUniMateDemo, decodeClip } from './unimate-demo.js';
+import { readRig, buildSkeletonBundle } from './unimate-rig-import.js';
+import { createLabeler } from './unimate-rig-labels.js';
 
 const $ = id => document.getElementById(id);
 const state = { phase: 'load', progress: null, result: null, error: null, clip: null };
@@ -148,7 +171,7 @@ const params = new URLSearchParams(location.search);
 const hub = document.querySelector('meta[name="unimate-weights"]').content;
 const useHub = params.get('weights') === 'hub' || (params.get('weights') !== 'local' && !['127.0.0.1', 'localhost'].includes(location.hostname));
 let skeletons = null, skeletonKey = null;
-const skeletonBase = key => `${hub}/skeletons/${key}/`;
+const skeletonBase = key => (key === '__local' ? '/demo/' : `${hub}/skeletons/${key}/`);
 const source = { weightsBase: '/weights/', t5Base: '/t5/', bundleBase: '/demo/' };
 if (useHub) {
   Object.assign(source, { weightsBase: `${hub}/unimate/`, t5Base: `${hub}/t5/` });
@@ -158,13 +181,15 @@ if (useHub) {
     source.bundleBase = skeletonBase(skeletonKey);
   } catch (e) { console.warn('skeleton list unavailable', e); }
 }
-const skeletonLabel = () => skeletons?.find(k => k.key === skeletonKey)?.label ?? (displayName(demo.skeletonName) === 'Go2' ? 'Go2 robot dog' : displayName(demo.skeletonName));
+let ownRig = null;     // { rig, labels, name } of an imported .glb
+const skeletonLabel = () => ownRig?.name ?? skeletons?.find(k => k.key === skeletonKey)?.label ?? (displayName(demo.skeletonName) === 'Go2' ? 'Go2 robot dog' : displayName(demo.skeletonName));
 
 // Prompt suggestions and noise choices for the current generation skeleton. Replaying a captured
 // run's noise is offered only where that run has an accepted reference clip.
 function showSkeletonPrompts() {
   $('skeleton-name').textContent = skeletonLabel();
-  const listed = skeletons?.find(k => k.key === skeletonKey)?.suggestions ?? demo.bundle.prompts.map(p => p.text);
+  const listed = ownRig ? ['An object walks forward.', 'An object runs forward.', 'An object jumps forward.', 'An object turns around.']
+    : skeletons?.find(k => k.key === skeletonKey)?.suggestions ?? demo.bundle.prompts.map(p => p.text);
   $('prompt-suggestions').replaceChildren(...listed.map(t => new Option(t)));
   $('prompt').value = listed[0] ?? '';
   const replay = demo.bundle.prompts.some(p => p.referencePositions);
@@ -197,11 +222,13 @@ try {
     },
   });
   setBar(null);
-  if (skeletons) {
-    $('skeleton').replaceChildren(...skeletons.map(k => new Option(`${k.label} · ${k.joints} joints`, k.key)));
-    $('skeleton').value = skeletonKey;
-    $('skeleton-row').hidden = false;
-  }
+  // The built-in skeletons (published), or the local server's one, then "your own rig".
+  const builtIn = skeletons ? skeletons.map(k => new Option(`${k.label} · ${k.joints} joints`, k.key))
+    : [new Option(`${skeletonLabel()} · ${demo.bundle.skeleton.joints} joints`, '__local')];
+  skeletonKey ??= '__local';
+  $('skeleton').replaceChildren(...builtIn, new Option('Your own rig (.glb)…', '__import'));
+  $('skeleton').value = skeletonKey;
+  $('skeleton-row').hidden = false;
   showSkeletonPrompts();
   for (const id of ['prompt', 'generate', 'rest', 'skeleton']) $(id).disabled = false;
   state.phase = 'ready';
@@ -261,12 +288,15 @@ async function generate() {
 }
 $('generate').addEventListener('click', generate);
 $('skeleton').addEventListener('change', async () => {
+  if ($('skeleton').value === '__import') { $('skeleton').value = skeletonKey ?? ''; $('rig-file').click(); return; }
+  if ($('skeleton').value === '__rig') return;
   const key = $('skeleton').value, controls = ['generate', 'prompt', 'noise', 'seed', 'rest', 'skeleton'];
   controls.forEach(id => { $(id).disabled = true; });
-  setStatus(`Loading the ${skeletons.find(k => k.key === key).label} skeleton…`);
+  setStatus(`Loading the ${skeletons?.find(k => k.key === key)?.label ?? "built-in"} skeleton…`);
   try {
     await demo.useSkeleton(skeletonBase(key));
-    skeletonKey = key;
+    skeletonKey = key; ownRig = null; $('rig-review').hidden = true;
+    $('skeleton').querySelector('option[value=__rig]')?.remove();
     showSkeletonPrompts();
     demo.showGenerationSkeleton();
     $('now').hidden = true;
@@ -277,6 +307,90 @@ $('skeleton').addEventListener('change', async () => {
     setStatus(`Could not load that skeleton: ${e.message ?? e}`);
   } finally { controls.forEach(id => { $(id).disabled = false; }); }
 });
+// Bring your own rig: read the .glb, label its joints with UniMate's rule labeller (Python in the
+// page, loaded on first use), build its conditioning and switch generation to it.
+let labelerPromise = null;
+const labelerZip = params.get('labeler') ?? `${hub}/labeler/unimate-labeler.zip`;
+const rigControls = ['generate', 'prompt', 'noise', 'seed', 'rest', 'skeleton', 'rig-apply'];
+function fillRigReview() {
+  const { rig, labels } = ownRig;
+  $('rig-summary').textContent = `(${rig.names.length} joints${rig.pruned.length ? `, ${rig.pruned.length} helper bones dropped` : ''})`;
+  $('rig-table').replaceChildren(...rig.names.flatMap((raw, j) => {
+    const name = Object.assign(document.createElement('span'), { className: 'raw', textContent: raw, title: raw });
+    const input = Object.assign(document.createElement('input'), { type: 'text', value: labels.clean[j] });
+    input.dataset.joint = String(j);
+    return [name, input];
+  }));
+  const opts = () => [new Option('none', '-1'), ...rig.names.map((n, j) => new Option(n, String(j)))];
+  $('face-right').replaceChildren(...opts()); $('face-left').replaceChildren(...opts());
+  $('face-right').value = String(labels.face?.right ?? -1); $('face-left').value = String(labels.face?.left ?? -1);
+  $('face-axis').checked = Boolean(labels.face?.bodyAxis);
+  $('rig-review').hidden = false;
+}
+async function applyOwnRig() {
+  const { rig, labels } = ownRig;
+  setStatus('Encoding joint labels…');
+  const data = await buildSkeletonBundle(rig, labels, { name: ownRig.name, embed: text => demo.encodeText(text),
+    motion: { frames: demo.bundle.skeleton.frames, outputTimes: demo.bundle.outputTimes } });
+  await demo.useSkeletonData(data);
+  skeletonKey = null;
+  if (!$('skeleton').querySelector('option[value=__rig]')) $('skeleton').insertBefore(new Option('', '__rig'), $('skeleton').querySelector('option[value=__import]'));
+  $('skeleton').querySelector('option[value=__rig]').textContent = `${ownRig.name} · ${rig.names.length} joints`;
+  $('skeleton').value = '__rig';
+  showSkeletonPrompts();
+  demo.showGenerationSkeleton();
+  $('now').hidden = true;
+  for (const e of clips) e.chip.setAttribute('aria-pressed', 'false');
+  const facing = labels.face ? `facing from ${rig.names[labels.face.right]} / ${rig.names[labels.face.left]}` : 'no facing pair found: as authored';
+  setStatus(`Ready · ${ownRig.name} · ${facing}`);
+  state.rig = { name: ownRig.name, joints: rig.names.length, pruned: rig.pruned, labels: labels.clean, face: labels.face };
+}
+async function importRigFile(file) {
+  rigControls.forEach(id => { $(id).disabled = true; });
+  try {
+    setStatus(`Reading ${file.name}…`);
+    const rig = readRig(await file.arrayBuffer());
+    labelerPromise ??= createLabeler({ zipUrl: labelerZip, onStatus: s => setStatus(`Joint labeller: ${s}…`) });
+    const labeler = await labelerPromise.catch(e => { labelerPromise = null; throw e; });
+    setStatus('Labelling joints…');
+    const labels = labeler.label(rig, { name: 'rig' });
+    ownRig = { rig, labels, name: file.name.replace(/\.glb$/i, '') };
+    fillRigReview();
+    await applyOwnRig();
+  } catch (e) {
+    console.error(e);
+    state.rigError = String(e?.message ?? e);
+    setStatus(`Could not use that rig: ${e.message ?? e}`);
+  } finally { rigControls.forEach(id => { $(id).disabled = false; }); }
+}
+$('rig-file').addEventListener('change', () => { const f = $('rig-file').files[0]; $('rig-file').value = ''; if (f && state.phase !== 'load') importRigFile(f); });
+$('rig-apply').addEventListener('click', async () => {
+  if (!ownRig) return;
+  const r = Number($('face-right').value), l = Number($('face-left').value);
+  ownRig.labels = { ...ownRig.labels, clean: [...$('rig-table').querySelectorAll('input')].map(i => i.value.trim() || 'Bone'),
+    face: r >= 0 && l >= 0 && r !== l ? { right: r, left: l, bodyAxis: $('face-axis').checked } : null };
+  rigControls.forEach(id => { $(id).disabled = true; });
+  try { await applyOwnRig(); } catch (e) { setStatus(`Could not apply: ${e.message ?? e}`); }
+  finally { rigControls.forEach(id => { $(id).disabled = false; }); }
+});
+let dragDepth = 0;
+addEventListener('dragenter', e => { if (e.dataTransfer?.types.includes('Files')) { dragDepth++; $('drop').hidden = false; } });
+addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('drop').hidden = true; } });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => {
+  e.preventDefault(); dragDepth = 0; $('drop').hidden = true;
+  const f = [...(e.dataTransfer?.files ?? [])].find(x => /\.glb$/i.test(x.name));
+  if (f && state.phase !== 'load' && !$('generate').disabled) importRigFile(f);
+});
+window.__unimateImportRig = async (bytes, name = 'rig.glb') => importRigFile(new File([bytes], name));
+// Witness hook: apply given labels ({ clean: [...] in rig order, face: { right, left, bodyAxis } by raw name }).
+window.__unimateApplyRigLabels = async ({ clean, face }) => {
+  [...$('rig-table').querySelectorAll('input')].forEach((input, j) => { input.value = clean[j]; });
+  const idx = n => String(ownRig.rig.names.indexOf(n));
+  $('face-right').value = face ? idx(face.right) : '-1'; $('face-left').value = face ? idx(face.left) : '-1';
+  $('face-axis').checked = Boolean(face?.bodyAxis);
+  $('rig-apply').click();
+};
 window.__unimateUseSkeleton = key => { $('skeleton').value = key; $('skeleton').dispatchEvent(new Event('change')); };
 $('pause').addEventListener('click', async () => { const s = await demo.togglePause(); if (s) $('pause').textContent = s === 'paused' ? 'Resume' : 'Pause'; });
 $('stop').addEventListener('click', () => demo.stop());
