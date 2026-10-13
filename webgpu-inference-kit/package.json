@@ -30,6 +30,8 @@
     "./examples/sam-image": "./examples/sam-image.mjs"
   },
   "scripts": {
+    "pretest": "npm run test:sam31-per-frame",
+    "test:sam31-per-frame": "node tests/sam31-browser-tracker-perframe-contracts.mjs && node tests/sam31-tracker-memory-benchmark-contracts.mjs && node tests/sam31-tracker-memory-benchmark-runner-contracts.mjs",
     "test:entrypoints": "node --experimental-vm-modules tests/package-entrypoints-contracts.mjs && node tests/weight-representation-contracts.mjs",
     "test:parity-browser": "node tests/parity-primitives-browser-smoke.mjs",
     "test:render-browser": "node tests/render-plus-inference-browser.mjs",
