@@ -10,7 +10,7 @@ const source=fs.readFileSync(process.env.KAMINOS_STARTUP_TEST_INDEX||new URL('..
 const a=source.indexOf('sceneInitialization.then(() => {'),b=source.indexOf('</script>',a);assert.ok(a>=0&&b>a);
 const tail=source.slice(a,b);
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
-function fixture({saved=true,restoreFailure=false}={}){
+function fixture({saved=true,restoreFailure=false,silentFailure=false}={}){
  let releaseVolume,releaseRestore,resolveReady,rejectReady,ownerCount=0,session;
  const volume=new Promise(resolve=>releaseVolume=resolve),restore=new Promise(resolve=>releaseRestore=resolve),ready=new Promise((resolve,reject)=>{resolveReady=resolve;rejectReady=reject;});ready.catch(()=>{});
  const scene=new THREE.Scene(),rows=[],frames=createWorkbenchFrameService(),events=[];
@@ -18,7 +18,7 @@ function fixture({saved=true,restoreFailure=false}={}){
  const c={URLSearchParams,Promise,sceneInitialization:Promise.resolve(),document:{body:{classList:{add(){}}}},window:{location:{search:'?experiment=fixture'}},location:{hash:saved?'#authoring=1&scene=saved.json':'',search:'?experiment=fixture'},console:{error(){}},File:class{},sceneSaveBlockedByFailedRestore:false,
   initEnvButtons(){},loadDemoButtons(){},restoreSettings(){return 'studio';},loadEnvironment:()=>Promise.resolve(),kaminosMeshAssetRouteFromSearch:()=>null,kaminosSplatAssetRouteFromSearch:()=>null,kaminosImageAssetRouteFromSearch:()=>null,
   initKaminosVolumeRoute:()=>volume,reportKaminosVolumeRouteInitFailure(){},initKaminosMotionAgencyRoute(){},initWorldChambersRoute(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},initKaminosFingerJuiceTabRoute(){},setActiveTab(){},compositionStatus(){},setInfo(){},planSceneRestore:()=>({}),fetch:async()=>({ok:true,json:async()=>({})}),
-  async loadSceneFile(){events.push('restore started');await restore;if(restoreFailure)throw Error('saved restoration rejected');for(const row of rows){scene.remove(row.object);row.object.geometry?.dispose();}rows.length=0;c.sceneSaveBlockedByFailedRestore=false;events.push('restore completed');},
+  async loadSceneFile(){events.push('restore started');await restore;if(restoreFailure)throw Error('saved restoration rejected');if(silentFailure){events.push('restore refused');return;}for(const row of rows){scene.remove(row.object);row.object.geometry?.dispose();}rows.length=0;c.sceneSaveBlockedByFailedRestore=false;events.push('restore completed');},
   resolveWorkbenchViewerReady(){events.push('viewer ready');resolveReady();},rejectWorkbenchViewerReady(error){events.push('viewer failed');rejectReady(error);},
   async installOwnerWorkbenchEntry(){await ready;ownerCount++;session=host.open();const root=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());await session.attach(root,{owned:true});session.onFrame(()=>{});events.push('owner attached');},
  };
@@ -34,3 +34,5 @@ test('failed saved restoration rejects dependent scene availability without owne
 test('ordinary route retains finite environment startup without waiting for volume',async t=>{
  const f=fixture({saved:false});t.after(f.dispose);await f.ready;await flush();assert.equal(f.ownerCount(),1);assert.deepEqual(f.events,['viewer ready','owner attached']);f.releaseVolume();f.releaseRestore();
 });
+
+test('handled scene-loader failure cannot masquerade as a completed starting scene',async t=>{const f=fixture({silentFailure:true});t.after(f.dispose);f.releaseVolume();await flush();f.releaseRestore();await assert.rejects(f.ready,/restoration did not complete/);await flush();assert.equal(f.ownerCount(),0);assert.equal(f.rows.length,0);});
