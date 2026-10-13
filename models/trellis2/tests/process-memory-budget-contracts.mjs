@@ -30,7 +30,16 @@ try{
     maxFootprintBytes:150,onUnsafe:async()=>{throw Error('confirmed exit must not stop a run');},
     probe:async()=>({...row(100),unavailableProcesses:[exited]})});
   assert.equal((await retired.stop()).status,'observed','OS-confirmed exited descendants do not make live coverage partial');
+  const retiredEperm=await startProcessMemory({rootPid:42,runId:'budget',rawPath:path.join(out,'exited-eperm.jsonl'),
+    maxFootprintBytes:150,onUnsafe:async()=>{throw Error('OS-confirmed EPERM exit must not stop a run');},
+    probe:async()=>({...row(100),unavailableProcesses:[{...exited,errno:1,
+      exitEvidence:{route:'ps-pid-status',returnCode:1,status:'',stderr:''}}]})});
+  assert.equal((await retiredEperm.stop()).status,'observed');
   for(const missing of [{...exited,exitEvidence:{...exited.exitEvidence,status:'S'}},
+    {...exited,errno:1,exitEvidence:{...exited.exitEvidence,status:'S'}},
+    {...exited,errno:1,exitEvidence:undefined},
+    {...exited,errno:1,pid:42},
+    {...exited,errno:1,exitEvidence:{...exited.exitEvidence,stderr:'permission denied'}},
     {...exited,errno:13},{...exited,exitEvidence:undefined}]){
     const stopped=[];
     await assert.rejects(startProcessMemory({rootPid:42,runId:'budget',rawPath:path.join(out,'live-missing.jsonl'),
