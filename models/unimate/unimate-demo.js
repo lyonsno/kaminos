@@ -500,7 +500,7 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
           for (let i = 0; i < T * J; i++) maxDev = Math.max(maxDev, Math.hypot(p[i * 3] - ref[i * 3], p[i * 3 + 1] - ref[i * 3 + 1], p[i * 3 + 2] - ref[i * 3 + 2]));
           result.referenceMaxJointDeviation = maxDev;
         }
-        scene.setSkeleton({ ...generationSkeleton, size: motionSize(result.motion.positions, T, J) });
+        scene.setSkeleton({ ...generationSkeleton, size: motionSize(result.motion.positions, result.motion.frames, J) });
         generationSkeletonShown = true;
         scene.showMotion(result.motion, fps);
         return result;
