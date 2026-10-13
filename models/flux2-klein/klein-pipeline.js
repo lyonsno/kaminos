@@ -218,6 +218,19 @@ export class KleinPipeline {
     return stats;
   }
 
+  // What this device's buffer limits allow at a size: the most prompt tokens the transformer can
+  // pad to (its largest buffer, the fused projection, grows with image plus prompt tokens), and
+  // whether the decoder fits. Phones commonly allow 128 MiB per storage binding, which at 512 × 512
+  // leaves about 189 prompt tokens and rules out 768 and above.
+  sizeLimits(width, height = width) {
+    const cap = Math.min(this.device.limits.maxStorageBufferBindingSize, this.device.limits.maxBufferSize);
+    const { D, F } = this.transformer, imgTokens = (width / 16) * (height / 16);
+    const maxTextTokens = Math.min(512, Math.floor(cap / ((3 * D + 2 * F) * 4)) - imgTokens);
+    const vaeAct = this.kernels.vaeActType === 'f16' ? 2 : 4, latentPixels = (width / 8) * (height / 8);
+    const decoderFits = width * height * 256 * vaeAct <= cap && latentPixels * latentPixels * 4 <= cap;
+    return { maxTextTokens, fits: decoderFits && maxTextTokens >= 32, cap };
+  }
+
   // Lean residency: make `which` ('textEncoder' or 'transformer') the resident model, freeing the
   // other's weights first. Encoded work is submitted before anything is freed. Weights come from
   // the browser cache (or the network if the cache was cleared). Returns milliseconds spent.
@@ -312,7 +325,13 @@ export class KleinPipeline {
     const dev = this.device, t = {};
     const latH = height / 16, latW = width / 16, imgTokens = latH * latW;
     const fit = /^fit\d*$/.test(String(textLength));
-    const maxLength = fit ? Math.min(512, this.tokenizer.kleinPromptIds(prompt).length + Number(String(textLength).slice(3) || 0)) : Number(textLength);
+    const requestedLength = fit ? Math.min(512, this.tokenizer.kleinPromptIds(prompt).length + Number(String(textLength).slice(3) || 0)) : Number(textLength);
+    // Padding is capped where the device's buffer limits require it (better lettering on phones).
+    const limits = this.sizeLimits(width, height);
+    if (!limits.fits) throw new Error(`${width} × ${height} needs larger GPU buffers than this device allows (${Math.round(limits.cap / 2 ** 20)} MiB per buffer)`);
+    const maxLength = Math.min(requestedLength, limits.maxTextTokens);
+    if (this.tokenizer.kleinPromptIds(prompt).length > maxLength) throw new Error(`the prompt is too long for this device's GPU buffers at ${width} × ${height}; shorten it or pick a smaller size`);
+    if (maxLength < requestedLength) t.textPaddingRequested = requestedLength;
     const framed = this.tokenizer.kleinPromptIds(prompt, maxLength);
     const txtTokens = framed.inputIds.length;
     // Sequential residency: transformer activations exist from here until the decoder's input is
