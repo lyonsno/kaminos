@@ -133,6 +133,31 @@ try {
   const reopened=await observe();assert.equal(reopened.lighting.surfaceReceivers,0);
   return {url:handoff,filename:shot.filename,before,moved,solidMoves,reopened};
  }});
- report.result=result.result;assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
+ report.result=result.result;assert.deepEqual(report.errors,[]);
+ report.phase='deliberate-renderer-failure';await write();
+ await page.goto(origin+'/tests/');
+ report.rendererFailure=await page.evaluate(async()=>{
+   const THREE=await import('/lib/three.webgpu.js');
+   const adapter=await navigator.gpu.requestAdapter(),device=await adapter.requestDevice();
+   const renderer=new THREE.WebGPURenderer({device});renderer.setSize(32,32);await renderer.init();
+   const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(60,1,.1,10);camera.position.z=3;
+   const mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial({color:0xff0000}));scene.add(mesh);
+   const original=device.createRenderPipeline.bind(device),pop=device.popErrorScope.bind(device),scopes=[];let injected=0;
+   device.popErrorScope=()=>{const p=pop();scopes.push(p);return p;};
+   device.createRenderPipeline=descriptor=>{
+     if(!injected++&&descriptor.fragment)descriptor={...descriptor,fragment:{...descriptor.fragment,entryPoint:'hybrid_deliberately_missing_fragment'}};
+     return original(descriptor);
+   };
+   renderer.render(scene,camera);
+   const validation=await Promise.all(scopes);
+   await new Promise(resolve=>requestAnimationFrame(resolve));
+   renderer.dispose();mesh.geometry.dispose();mesh.material.dispose();device.destroy();
+   return {injected,validation:validation.filter(Boolean).map(e=>e.message),adapter:{vendor:adapter.info.vendor,architecture:adapter.info.architecture},claim:'actual bundled Three renderer, deliberately invalid fragment entry point, handled validation callback'};
+ });
+ await page.waitForFunction(()=>true);
+ assert.ok(report.rendererFailure.injected>0,'negative witness must actually create a render pipeline');
+ assert.ok(report.rendererFailure.validation.some(e=>e.includes('hybrid_deliberately_missing_fragment')),'native device must reject the injected fragment');
+ assert.ok(report.errors.some(e=>e.includes('Render pipeline creation failed')),'handled Three pipeline error must reach the fatal witness channel');
+ report.rendererFailure.caughtErrors=report.errors.splice(0);report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
 finally{await browser?.close();report.finishedAt=new Date().toISOString();await write();console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,url:report.result?.url}));}
