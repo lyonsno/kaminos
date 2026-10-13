@@ -21,16 +21,22 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install numpy
       - run: npm ci
-      - name: serve.py starts
+      - name: Allow local server connections
+        # The runner's application firewall holds the first connection to a
+        # newly listening Python server for about 75 s, past the HTTP tests' wait.
+        run: sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate off
+      - name: serve.py answers within 10 s
         run: |
           python3 serve.py 18499 > serve-startup.log 2>&1 &
           pid=$!
-          for i in $(seq 1 40); do
-            if curl -fsS http://127.0.0.1:18499/api/runtime-config > /dev/null; then echo "serve.py up after $i polls"; break; fi
+          up=0
+          for i in $(seq 1 20); do
+            if curl -fsS --max-time 2 http://127.0.0.1:18499/api/runtime-config > /dev/null; then up=1; echo "serve.py up after $i polls"; break; fi
             sleep 0.5
           done
           kill $pid || true
           cat serve-startup.log
+          test "$up" = 1
       - run: node tools/test-runner.mjs --report test-results/report.json
       - if: always()
         uses: actions/upload-artifact@v4
