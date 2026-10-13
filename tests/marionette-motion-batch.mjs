@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import {validateMotion} from '../tools/marionette-motion-batch.mjs';
 const raw={status:'completed',frames:60,joints:2,cooperative:true,controllerNorm:'valid-joints',

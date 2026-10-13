@@ -1,3 +1,4 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
 const definition=(await import('../experiments/creature-motion/retained.experiment.mjs').catch(()=>({}))).default;

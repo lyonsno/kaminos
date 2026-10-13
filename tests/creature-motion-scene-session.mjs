@@ -1,3 +1,4 @@
+// kaminos-test: manual — needs the actual shared scene module path from the integration owner's checkout
 // Cross-owner module composition over deterministic Three objects. The caller
 // names the actual shared session module; this does not replace native host use.
 import assert from 'node:assert/strict';
