@@ -53,7 +53,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     return null;
   }
   if (!solver.available) throw Error(solver.reason || 'Local liquid solver unavailable');
-  const group = supportMesh(); scene.add(group);
+  const group = supportMesh(); group.visible=authored.showSupportGeometry; scene.add(group);
   const targetOptions = {type:THREE.HalfFloatType, depthBuffer:false, minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter};
   const colorTarget = new THREE.RenderTarget(1,1,targetOptions);
   const outputTarget = new THREE.RenderTarget(1,1,targetOptions);
@@ -108,6 +108,9 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       renderer.initRenderTarget(outputTarget);
       if (advance && !paused) solver.step(1/60);
       renderEnvironment();
+      // The host color attachment is linear HDR even if another consumer
+      // replaced the scene graph since the preceding water frame.
+      if(pipeline.outputColorTransform){pipeline.outputColorTransform=false;pipeline.needsUpdate=true;}
       renderer.setRenderTarget(colorTarget); pipeline.render();
       // The retained liquid pass overlays/discards; every destination pixel
       // must begin with this frame's host image, including no-water pixels.
@@ -151,6 +154,18 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   }
 
   return {group,render,
+    async readSceneColor({x,y,width,height}) {
+      if(!frameCount||failure)throw Error(failure||'Water has no current scene-color frame');
+      const frameId=lastFrame.frameId;
+      const pixels=await renderer.readRenderTargetPixelsAsync(colorTarget,x,y,width,height);
+      const nativeBytesPerRow=Math.ceil(width*8/256)*256;
+      const expectedBytes=(height-1)*nativeBytesPerRow+width*8;
+      if(!(pixels instanceof Uint16Array)||pixels.byteLength!==expectedBytes)throw Error('Scene-color native RGBA16 layout changed');
+      const nativeValues=Array.from(pixels,THREE.DataUtils.fromHalfFloat),values=[];
+      for(let row=0;row<height;row++)for(let channel=0;channel<width*4;channel++)values.push(nativeValues[row*nativeBytesPerRow/2+channel]);
+      return {frameId,encoding:'linear_hdr',format:'rgba16float',width,height,
+        nativeType:pixels.constructor.name,nativeBytesPerRow,nativeValues,values};
+    },
     setEmitters(records) {
       const packet=localLiquidInletPacket(authored,records,sourceGeneration+1);
       const key=JSON.stringify(packet.emitters);
@@ -166,14 +181,21 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     setSetup(nextSetup) {
       const next=normalizeLocalLiquidSetup(nextSetup);
       if (!next) throw Error('Local liquid setup cannot be cleared while its host is mounted');
-      solver.setLiveInletPacket(localLiquidInletPacket(next,authoredEmitters,sourceGeneration+1));
-      sourceGeneration++;
+      const packet=localLiquidInletPacket(next,authoredEmitters,sourceGeneration+1);
+      const key=JSON.stringify(packet.emitters);
+      if(key!==publishedEmitterKey) {
+        solver.setLiveInletPacket(packet);
+        publishedEmitterKey=key;
+        sourceGeneration++;
+      }
+      group.visible=next.showSupportGeometry;
       authored=next;
     },
     setPaused(value){paused=Boolean(value);return paused;},
     get paused(){return paused;},
     state:()=>({requestedRoute:ROUTE,effectiveRoute:frameCount && !failure ? ROUTE : null,registered:true,mounted:true,
-      frameCount,paused,failure,setup:structuredClone(authored),lastFrame,solver:solver.getDebugState()}),
+      frameCount,paused,failure,setup:structuredClone(authored),supportGeometryVisible:group.visible,sourceGeneration,
+      linearSceneColorInput:pipeline.outputColorTransform===false,lastFrame,solver:solver.getDebugState()}),
     dispose() {
       disposed=true;device.removeEventListener('uncapturederror',onGpuError); solver.destroy(); scene.remove(group);
       const materials=new Set(); group.traverse(child=>{child.geometry?.dispose();if(child.material)materials.add(child.material);});
