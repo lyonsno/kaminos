@@ -3,16 +3,30 @@ import {createBrowserSequenceSink} from './browser-sequence-directory.mjs';
 
 // Current page, current allocation. It never opens or replaces the author's water.
 export function createLiveFluidSequenceAdapter({window,source,hold,advance}){
- let renderedStep=null;
+ let renderedStep=null,heldOptics=null;
+ const optics=()=>{const r=window.kaminosFingerFluidBenchDebugState()?.runtime;return Object.fromEntries(['effectiveRendererMode','opticalDebugMode','effectiveOpticalLightingMode','effectiveOpticalFootprintMode','effectiveTransmissionFootprintMode','effectiveBodyTransportMode','effectiveInterfaceFrequencyMode'].map(k=>[k,r?.[k]]));};
+ const renderHeldLook=async()=>{
+  if(!heldOptics||Object.values(heldOptics).some(v=>typeof v!=='string'||!v||v==='not_executed'))throw Error('Current effective optical look cannot be preserved by this render route');
+  await window.kaminosFingerFluidBenchRenderCurrentStateForWitness(...Object.values(heldOptics));
+  if(JSON.stringify(optics())!==JSON.stringify(heldOptics))throw Error('Renderer changed the effective optical look');
+ };
  const read=async()=>{
   const entry=window.kaminosWorkbenchExperiments,owner=entry.state(),state=await entry.read();
   const s=window.kaminosFingerFluidBenchSessionState(),r=window.kaminosFingerFluidBenchDebugState()?.runtime,v=window.kaminosFingerFluidBenchViewportState();
   if(owner.id!=='lazarus/finite-pbf'||!s?.available||!r?.available||r.solver_backend!=='webgpu_compute'||v?.effective!=='shared'||v.failure||!v.lastFrame?.presentedByHost||r.effectiveRendererMode!=='screen_space_refraction')throw Error('Effective shared WebGPU water unavailable');
-  return {clock:{runId:owner.id+':'+s.generation,step:s.step,dt:s.fixedTimeStepSeconds,paused:s.paused,backend:r.solver_backend,renderer:r.effectiveRendererMode},source,conditions:{owner,settings:state.settings,sampling:state.sampling},view:{camera:window.kaminosCameraDebugState(),presentation:Object.fromEntries(['width','height','route','opticalDebugMode','captureColorSpace','displayTransform','exposure','environmentIntensity','environmentSource','environmentGeneration'].map(k=>[k,v.lastFrame[k]]))}};
+  return {clock:{runId:owner.id+':'+s.generation,step:s.step,dt:s.fixedTimeStepSeconds,paused:s.paused,backend:r.solver_backend,renderer:r.effectiveRendererMode},source,conditions:{owner,settings:state.settings,sampling:state.sampling},view:{optics:optics(),camera:window.kaminosCameraDebugState(),presentation:Object.fromEntries(['width','height','route','opticalDebugMode','captureColorSpace','displayTransform','exposure','environmentIntensity','environmentSource','environmentGeneration'].map(k=>[k,v.lastFrame[k]]))}};
  };
- return {read,hold,
-  async advanceToStep(step){await advance(step);renderedStep=step;},
-  async render(){const before=await read();if(renderedStep!==before.clock.step){const c=window.kaminosFingerFluidBenchDebugState().config;await window.kaminosFingerFluidBenchRenderCurrentStateForWitness(c.effectiveRendererMode,c.effectiveOpticalDebugMode,c.requestedOpticalLightingMode,c.requestedOpticalFootprintMode,c.requestedTransmissionFootprintMode,c.requestedBodyTransportMode,c.requestedInterfaceFrequencyMode);renderedStep=before.clock.step;}const after=await read();if(after.clock.step!==before.clock.step||!after.clock.paused)throw Error('Water changed during render');return {step:after.clock.step};},
+ return {read,
+  async hold(){await hold();heldOptics=optics();},
+  async advanceToStep(step){
+   if(JSON.stringify(optics())!==JSON.stringify(heldOptics))throw Error('Sequence optical look changed');
+   await advance(step);
+   // The existing exact-step helper redraws configured optics. Restore the held
+   // effective look only when that known redraw differs; default path adds no draw.
+   if(JSON.stringify(optics())!==JSON.stringify(heldOptics))await renderHeldLook();
+   renderedStep=step;
+  },
+  async render(){const before=await read();if(renderedStep!==before.clock.step){await renderHeldLook();renderedStep=before.clock.step;}const after=await read();if(after.clock.step!==before.clock.step||!after.clock.paused)throw Error('Water changed during render');return {step:after.clock.step};},
   async capture(){const canvas=window.document.getElementById('kaminos-host-renderer-canvas');if(!canvas)throw Error('Shared canvas missing');const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('Canvas PNG capture failed')),'image/png'));return new Uint8Array(await blob.arrayBuffer());},
  };
 }
