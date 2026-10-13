@@ -3855,6 +3855,13 @@ fn readFrontField(c: vec3<i32>) -> f32 {
   return frontSrc[index3(clampCell(c))];
 }
 
+// The optical density the renderer and the legacy projection weight by: a pure
+// function of the material and micro slots. It used to be stored in slot 0's
+// fourth lane every step; that lane is now written as zero and reserved.
+fn derivedDensityFromSlots(material: vec4<f32>, microLayer: vec4<f32>) -> f32 {
+  return clamp(max(material.x * 1.08 + microLayer.x * 0.08, material.y * 0.42 + material.w * 0.18 + microLayer.y * 0.20 + microLayer.z * 0.05 + material.z * 0.10), 0.0, 2.2);
+}
+
 fn readQuenchField(c: vec3<i32>) -> f32 {
   return f32(quenchSrc[index3(clampCell(c))]) / 65536.0;
 }
@@ -4500,7 +4507,7 @@ fn directCellOpticalSupportFromSlots(velocityDensity: vec4<f32>, material: vec4<
   let velMag = length(velocityDensity.xyz);
   let smoke = material.x + microLayer.x * 0.52 + microLayer.y * 0.34;
   let fire = fireLayer.x * 1.25 + fireLayer.y * 0.42 + fireLayer.z * 0.55 + fireLayer.w * 0.72 + combustionFrontTopology * 0.35 + microLayer.z * 0.70 + material.y * 0.28;
-  let density = max(velocityDensity.w, smoke * 0.82 + material.y * 0.22 + material.w * 0.18);
+  let density = max(derivedDensityFromSlots(material, microLayer), smoke * 0.82 + material.y * 0.22 + material.w * 0.18);
   let extinction = smoke * 0.62 + microLayer.y * 0.36 + material.w * 0.16;
   return clamp(density * 0.50 + extinction * 0.40 + fire * 0.44 + combustionFrontTopology * 0.12 + velMag * 0.36, 0.0, 3.0);
 }
@@ -4945,10 +4952,10 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
     pressureRead(c + vec3<i32>(0, 0, 1)).y - pressureRead(c + vec3<i32>(0, 0, -1)).y
   ) * 0.5;
   let velocityDensity = fluidSrc[base];
-  let density = velocityDensity.w;
   let material = fluidSrc[base + 1u];
   let fireLayer = fluidSrc[base + 2u];
   let microLayer = fluidSrc[base + 3u];
+  let density = derivedDensityFromSlots(material, microLayer);
   frontDst[idx] = frontSrc[idx];
   if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
   let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
@@ -4980,10 +4987,10 @@ fn csProjectPressureTiered(@builtin(global_invocation_id) gid: vec3<u32>) {
     pressureReadComposite(c + vec3<i32>(0, 0, 1)).y - pressureReadComposite(c + vec3<i32>(0, 0, -1)).y
   ) * 0.5;
   let velocityDensity = fluidSrc[base];
-  let density = velocityDensity.w;
   let material = fluidSrc[base + 1u];
   let fireLayer = fluidSrc[base + 2u];
   let microLayer = fluidSrc[base + 3u];
+  let density = derivedDensityFromSlots(material, microLayer);
   frontDst[idx] = frontSrc[idx];
   if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
   let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
@@ -7188,7 +7195,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var canonicalEntrainmentVelocity = vec3<f32>(0.0);
   if (canonicalPlumeScene > 0.5 && canonicalEntrainmentBand > 0.0005) {
     let canonicalTransportDelta = prev.xyz - advected.xyz;
-    let canonicalDensityDelta = prev.w - advected.w;
+    let canonicalDensityDelta = derivedDensityFromSlots(readSlot(cellI, 1u), readSlot(cellI, 3u)) - derivedDensityFromSlots(material, microLayer);
     let canonicalTangentTransport = clamp(dot(canonicalTransportDelta, canonicalTangent), -0.05, 0.05);
     let canonicalInwardTransport = clamp(dot(canonicalTransportDelta, canonicalInward) + canonicalDensityDelta * 0.035, -0.035, 0.035);
     let canonicalVerticalTransport = clamp(canonicalTransportDelta.y + canonicalDensityDelta * 0.020, -0.025, 0.025);
@@ -7750,13 +7757,20 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   interfaceShred = interfaceShred * canonicalProofCarrierMask;
   fireLick = fireLick * canonicalProofCarrierMask;
   emberFleck = emberFleck * canonicalProofCarrierMask;
-  let quenchNeighborMax = max(
-    max(readQuenchField(cellI + vec3<i32>(-1, 0, 0)), readQuenchField(cellI + vec3<i32>(1, 0, 0))),
-    max(
-      max(readQuenchField(cellI + vec3<i32>(0, -1, 0)), readQuenchField(cellI + vec3<i32>(0, 1, 0))),
-      max(readQuenchField(cellI + vec3<i32>(0, 0, -1)), readQuenchField(cellI + vec3<i32>(0, 0, 1)))
-    )
-  );
+  // The quench field spreads to neighbours only while a liquid is bound with
+  // transfer enabled (the host packs the flag); otherwise the six reads are
+  // skipped and a wetted cell only decays.
+  let quenchSpreadActive = u.reactant_combustion_d.z > 0.5;
+  var quenchNeighborMax = 0.0;
+  if (quenchSpreadActive) {
+    quenchNeighborMax = max(
+      max(readQuenchField(cellI + vec3<i32>(-1, 0, 0)), readQuenchField(cellI + vec3<i32>(1, 0, 0))),
+      max(
+        max(readQuenchField(cellI + vec3<i32>(0, -1, 0)), readQuenchField(cellI + vec3<i32>(0, 1, 0))),
+        max(readQuenchField(cellI + vec3<i32>(0, 0, -1)), readQuenchField(cellI + vec3<i32>(0, 0, 1)))
+      )
+    );
+  }
   let transportedQuench = max(clamp(f32(quenchSrc[idx]) / 65536.0, 0.0, 1.0) * 0.996, quenchNeighborMax * 0.92);
   let persistentQuench = max(0.0, transportedQuench - 0.0003);
   quenchDst[idx] = u32(clamp(persistentQuench, 0.0, 1.0) * 65536.0 + 0.5);
@@ -7800,14 +7814,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   combustionFrontTopology = combustionFrontTopology * stepRate(1.0 - localQuenchSuppression * 0.028);
   fireLick = fireLick * stepRate(1.0 - localQuenchSuppression * 0.035);
   emberFleck = emberFleck * stepRate(1.0 - localQuenchSuppression * 0.020);
-  let density = clamp(max(smoke * 1.08 + microSmoke * 0.08, heat * 0.42 + materialDetail * 0.18 + interfaceShred * 0.20 + fireLick * 0.05 + fuel * 0.10), 0.0, 2.2);
   // The wall sponge on velocity is a per-step survival written after the
   // increment law's line, so it takes the rate law directly.
   // Reactant law: the open top passes the flow as well as the material, or the
   // material decelerates and piles up under a braked ceiling.
   vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));
   vel.y = mix(max(vel.y, -0.015), vel.y, bonfireScene);
-  fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), density);
+  // Slot 0's fourth lane is reserved (the old stored density; now derivedDensityFromSlots where read).
+  fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), 0.0);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
   fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
   fluidDst[base + 3u] = vec4<f32>(clamp(microSmoke, 0.0, 1.8), clamp(interfaceShred, 0.0, 1.8), clamp(fireLick, 0.0, 1.8), clamp(emberFleck, 0.0, 1.4));
@@ -9443,16 +9457,8 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   material = clamp(material, vec4<f32>(0.0), vec4<f32>(2.2, 2.4, 1.8, 1.8));
   fireLayer = clamp(fireLayer, vec4<f32>(0.0), vec4<f32>(2.4, 2.0, 1.8, 1.8));
   microLayer = clamp(microLayer, vec4<f32>(0.0), vec4<f32>(1.8, 1.8, 1.8, 1.4));
-  let legacyInjectedDensity = clamp(max(
-    material.x * 1.08 + microLayer.x * 0.08,
-    material.y * 0.42
-      + material.w * 0.18
-      + microLayer.y * 0.20
-      + microLayer.z * 0.05
-      + material.z * 0.10
-  ), 0.0, 2.2);
-  let injectedDensity = select(previousVelocityDensity.w, legacyInjectedDensity, sourceLaw < 0.5);
-  let candidateVelocityDensity = vec4<f32>(injectedVelocity, injectedDensity);
+  // Slot 0's fourth lane is reserved (density is derived where it is read).
+  let candidateVelocityDensity = vec4<f32>(injectedVelocity, 0.0);
   let candidateMaterial = material;
   let candidateFireLayer = fireLayer;
   let candidateMicroLayer = microLayer;
@@ -10000,7 +10006,7 @@ fn boundarySplatFlowReconstruction(world: vec3<f32>) -> BoundarySplatReconstruct
 }
 
 fn boundarySplatOpticalSupport(reconstructed: BoundarySplatReconstructionSample) -> vec4<f32> {
-  let density = max(reconstructed.velocityDensity.w, reconstructed.material.x);
+  let density = max(derivedDensityFromSlots(reconstructed.material, reconstructed.microLayer), reconstructed.material.x);
   let fire = reconstructed.fire.x * 1.25
     + reconstructed.fire.z * 0.52
     + reconstructed.fire.w * 0.86
@@ -16070,6 +16076,9 @@ export function createKaminosVolumePrototype({
       sourceAdmitted: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume') === 'immersed-source' ? immersedSourceConfig.effective.admitted === true : inflowBoundaryConfig.effective.admitted === true,
     });
     uniforms.set(reactantCombustionUniformValues(reactantCombustionConfig), REACTANT_COMBUSTION_UNIFORM_OFFSET);
+    // Borrowed lane (reactant_combustion_d.z, otherwise unused): the quench field
+    // spreads only while a liquid is bound with transfer enabled.
+    uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 14] = liquidFireContactDescriptor && liquidFireContactTransferEnabled ? 1 : 0;
     state.reactantCombustion = reactantCombustionConfig;
     if (ensureReactantSidecar(reactantCombustionConfig.effective.admitted)) {
       rebuildFluidBindGroups();

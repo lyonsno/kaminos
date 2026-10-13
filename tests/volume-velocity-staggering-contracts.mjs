@@ -166,7 +166,7 @@ test('face-force fold model: bound once, centred forces averaged, velocity effec
   assert.match(main, /centredForce = centredForce \+ windDirection \* windStrength/, 'wind is centred');
   for (const term of ['confinement', 'shredForce', 'canonicalEntrainmentVelocity']) assert.doesNotMatch(main, new RegExp(`centredForce = centredForce [+] ${term};`), `${term} stays local`);
   assert.match(main, /let centredIncrement = centredForce \* timeStep;\s*forceDeltaStore\(cellI, centredIncrement\);\s*vel = velTransported \+ forceIncrement - centredIncrement;/);
-  assert.match(main, /fluidDst\[base\] = vec4<f32>\(select\(boundVelocity\(vel\), vel, faceForcesOn\(\)\), density\);/, 'the bound waits for the face pass under the staggered reading');
+  assert.match(main, /fluidDst\[base\] = vec4<f32>\(select\(boundVelocity\(vel\), vel, faceForcesOn\(\)\), 0\.0\);/, 'the bound waits for the face pass under the staggered reading');
   assert.match(main, /if \(sceneSolidAt\(cellI\)\) \{\s*forceDeltaStore\(cellI, vec3<f32>\(0\.0\)\);/, 'solids write a zero increment');
   const pass = source.slice(source.indexOf('fn csFaceForces('), source.indexOf('\n}\n', source.indexOf('fn csFaceForces(')));
   assert.match(pass, /let openX = sceneFaceOpen\(c, 0u\) && gid\.x \+ 1u < GRID;/);
