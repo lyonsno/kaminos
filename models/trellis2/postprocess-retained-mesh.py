@@ -12,6 +12,7 @@ import time
 import traceback
 
 import numpy as np
+from source_attestation import git_source_identity
 
 ROUTE = 'Trellis2MLX/reference-cleanup/CPU-fast-simplification'
 
@@ -21,8 +22,7 @@ def digest(data):
 
 
 def identity(root):
-    return {'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip(),
-            'dirty': subprocess.check_output(['git', 'status', '--porcelain'], cwd=root, text=True)}
+    return git_source_identity(root)
 
 
 def load_source(root, expected):
@@ -128,7 +128,7 @@ def main():
         if not np.isfinite(vertices).all():
             raise ValueError('source positions cannot be emitted as finite F32')
         report['sourceAfter'] = identity(args.source_root.resolve())
-        if report['sourceAfter'] != {k: report['source'][k] for k in ['commit', 'dirty']}:
+        if any(report['sourceAfter'][k] != report['source'][k] for k in ['commit', 'dirty']):
             raise ValueError('postprocess source changed during execution')
         report['phase'] = 'processed-mesh-write'
         persist()

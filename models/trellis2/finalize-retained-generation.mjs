@@ -8,6 +8,7 @@ import {extractTrellisDualGridMesh} from './trellis-mesh.js';
 import {finishTrellisMesh,encodeTrellisTexturePNG} from './trellis-material.js';
 import {NodeTrellisUVWorker} from './node-uv-worker.mjs';
 import {createSourceAtlasUnwrapper} from './source-atlas.mjs';
+import {gitSourceIdentity} from './source-attestation.mjs';
 import {persistGenerationAsset,admitRetainedGenerationCompletion,generationFields,GENERATION_ROUTE} from './sparse-generation-witness-checks.js';
 
 const args=new Map();
@@ -38,8 +39,8 @@ try{
   const script=fileURLToPath(import.meta.url);
   if(script!==path.join(root,'models/trellis2/finalize-retained-generation.mjs'))throw Error('effective runner root differs from requested repo root');
   report.repoRoot=root;report.inputRoot=native;
-  report.commit=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
-  report.dirty=execFileSync('git',['status','--porcelain'],{cwd:root,encoding:'utf8'});
+  report.sourceAttestation=gitSourceIdentity(root);
+  report.commit=report.sourceAttestation.commit;report.dirty=report.sourceAttestation.dirty;
   if(report.commit!==args.get('--expected-commit')||report.dirty)throw Error('exact clean finishing source required');
   const targetFaces=Number(args.get('--target-faces'));
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw Error('positive caller-selected face target required');
