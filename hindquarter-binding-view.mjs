@@ -56,7 +56,7 @@ try{
   const domain=manifest.domainRule?new Float32Array(await bytes(`./${casePath}/domain.bin`,manifest.assets['domain.bin'].sha256,manifest.assets['domain.bin'].bytes)):null;
   if(domain&&(domain.length!==manifest.vertices||domain.some(value=>!Number.isFinite(value)||value<0||value>1)))throw Error('Invalid regional binding domain');
   if(!domain)document.querySelector('#domain').disabled=true;
-  const camera=new THREE.PerspectiveCamera(38,1,.01,100);camera.position.set(-2.2,.5,3.3);
+  const camera=new THREE.PerspectiveCamera(38,1,.01,100);camera.position.set(-2.7,.65,4.1);
   renderer=new THREE.WebGPURenderer({antialias:true});await renderer.init();container.appendChild(renderer.domElement);
   orbit=new OrbitControls(camera,renderer.domElement);orbit.target.set(.1,-.65,-.25);orbit.update();
   const markerIndices=[];const cells=new Set();
@@ -81,7 +81,7 @@ try{
   document.querySelector('#supports').onchange=event=>views.forEach(view=>{view.supports.group.visible=event.target.checked;view.material.transparent=event.target.checked;view.material.opacity=event.target.checked?.35:1;view.material.depthWrite=!event.target.checked;view.material.needsUpdate=true;});
   document.querySelector('#markers').onchange=event=>views.forEach(view=>view.markers.forEach(({mesh})=>mesh.visible=event.target.checked));
   document.querySelector('#domain').onchange=event=>views.forEach((view,i)=>{view.material.vertexColors=event.target.checked;view.material.color.set(event.target.checked?0xffffff:colors[i]);view.material.needsUpdate=true;});
-  document.querySelector('#whole').onclick=()=>{whole=!whole;camera.position.set(...(whole?[-4,2,6]:[-2.2,.5,3.3]));orbit.target.set(...(whole?[.15,-.65,-1.0]:[.1,-.65,-.25]));orbit.update();};
+  document.querySelector('#whole').onclick=()=>{whole=!whole;camera.position.set(...(whole?[-4,2,6]:[-2.7,.65,4.1]));orbit.target.set(...(whole?[.15,-.65,-1.0]:[.1,-.65,-.25]));orbit.update();};
   phase='loaded';seek(0,'load');window.kaminosHindquarterAssay={snapshot,seek,play};
   renderer.setAnimationLoop(time=>{if(playback&&time>=playback.nextTime){seek(playback.index,'playback');if(playback.index===playback.end){events.push({type:'play-end',id:playback.id,start:playback.start,end:playback.end});playback=null;}else{playback.index++;playback.nextTime=time+140;}}
     const width=container.clientWidth,height=container.clientHeight;renderer.setScissorTest(true);views.forEach((view,index)=>{renderer.setViewport(index*width/3,0,width/3,height);renderer.setScissor(index*width/3,0,width/3,height);renderer.render(view.scene,camera);});});
