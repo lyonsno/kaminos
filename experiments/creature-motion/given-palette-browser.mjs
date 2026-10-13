@@ -1,10 +1,11 @@
 import {createGivenPaletteMotion} from './given-palette-motion.mjs';
 import {attachGivenPalettePlayback} from './given-palette-playback.mjs';
-import {validateGivenMotionSource,givenCanonicalGroundHeight} from './given-motion-source.mjs';
+import {validateGivenMotionSource,givenCanonicalGroundHeight,givenSourceSoleHeight} from './given-motion-source.mjs';
 
-export async function mountGivenPaletteMotion({THREE,runtime,motionUrl,motionSha256,frameUrl,frameSha256,caseSha256,prefixUrl,prefixSha256,canonicalGround=false,mountRoot,document}) {
+export async function mountGivenPaletteMotion({THREE,runtime,motionUrl,motionSha256,frameUrl,frameSha256,caseSha256,prefixUrl,prefixSha256,canonicalGround=false,sourceStartGround=false,mountRoot,document}) {
  const state={status:'loading',phase:'source-authentication',requested:{motionUrl,motionSha256,frameUrl,frameSha256,caseSha256}};
  window.kaminosGivenMotion={snapshot:()=>structuredClone(state)};
+ state.requested.groundMode=sourceStartGround?'source-start':canonicalGround?'canonical':null;
  const sha=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
  async function load(url,expected){
   if(typeof url!=='string'||!url.trim()||!/^[a-f0-9]{64}$/i.test(expected??''))throw Error('Explicit retained motion/frame URL and digest required');
@@ -29,6 +30,14 @@ export async function mountGivenPaletteMotion({THREE,runtime,motionUrl,motionSha
   const source={motionSha256:motion.sha256,frameSha256:frame.sha256,caseSha256,canonicalAssetSha256:frame.value.source.canonicalAssetSha256,
    motionRoute:motion.value.route,...profile,textEncoder:motion.value.textEncoder,groundReference};
   state.phase='live-bone-join';const player=attachGivenPalettePlayback({THREE,runtime,adapter,source,document,mountRoot});
+  if(sourceStartGround){
+   try{
+    runtime.group.updateMatrixWorld(true);const meshes=[];
+    runtime.group.traverse(object=>{if(object.isMesh&&object.geometry.getAttribute('position')?.count===skin.vertices)meshes.push(object);});
+    if(meshes.length!==1)throw Error('Source-start ground requires one verified creature surface');
+    source.groundReference={kind:'source-start-surface-minimum',height:givenSourceSoleHeight(meshes[0].geometry.getAttribute('position').array,meshes[0].matrixWorld.elements),canonicalHeight:givenCanonicalGroundHeight(frame.value),sourceFrame:0,animated:false,contactSolver:false};
+   }catch(error){player.dispose();throw error;}
+  }
   state.status='mounted';state.phase='paused-source';state.effective=source;
   window.kaminosGivenMotion={read:player.read,snapshot:()=>({...structuredClone(state),playback:player.read(),skin:window.kaminosLiveTransport.snapshot()}),
    play:player.play,pause:player.pause,replay:player.replay,restore:player.restore,seek:player.seek,dispose:player.dispose};

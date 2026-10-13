@@ -20,9 +20,17 @@ const run={status:'completed',phase:'complete',source,segments:[{frames:4,evalua
 const exported=module.prepareGivenContinuation({raw,run,prefix,prefixSha256:'b'.repeat(64)});
 assert.equal(exported.controllerNorm,null);assert.equal(exported.continuation.segmentFrames,3);assert.equal(exported.generationSource.rev,source.rev);
 assert.deepEqual(exported.positions,raw.positions,'export must not repair the generated trajectory');
+assert.throws(()=>module.prepareGivenContinuation({raw:{...raw,route:'unexpected.fallback'},run,prefix,prefixSha256:'b'.repeat(64)}),/route/);
+assert.throws(()=>module.prepareGivenContinuation({raw:{...raw,controllerNorm:'valid-joints'},run,prefix,prefixSha256:'b'.repeat(64)}),/controller/);
+assert.throws(()=>module.validateGivenMotionSource({motion:{...prefix,sampling:'replacement-euler-50'}}),/sampler/);
 assert.throws(()=>module.prepareGivenContinuation({raw,run:{...run,status:'failed'},prefix,prefixSha256:'b'.repeat(64)}),/generation/);
 assert.throws(()=>module.prepareGivenContinuation({raw:{...raw,source:{...source,rev:'d'.repeat(40)}},run,prefix,prefixSha256:'b'.repeat(64)}),/source/);
 assert.equal(typeof module.givenCanonicalGroundHeight,'function','given frame lacks a fixed canonical-y0 ground reference');
 assert.equal(module.givenCanonicalGroundHeight({canonicalWorldToSourceNormalized:[[2,0,0,3],[0,2,0,-4],[0,0,2,1],[0,0,0,1]]}),-4);
 assert.throws(()=>module.givenCanonicalGroundHeight({canonicalWorldToSourceNormalized:[[2,0,0,3],[.1,2,0,-4],[0,0,2,1],[0,0,0,1]]}),/horizontal/);
+assert.equal(typeof module.givenSourceSoleHeight,'function','source-start viewing ground must use actual drawn vertices');
+const vertices=[0,-2,0,1,-3,1],world=[1,0,0,0,0,1,0,0,0,0,1,0,0,4,0,1];
+assert.equal(module.givenSourceSoleHeight(vertices,world),1);
+assert.equal(module.givenSourceSoleHeight(vertices,[0,1,0,0,-1,0,0,0,0,0,1,0,0,4,0,1]),4,'calibration follows world placement, not the local box minimum');
+assert.throws(()=>module.givenSourceSoleHeight([0,NaN,0],world),/vertices/);
 console.log('Continued source admits fixed sampler honestly and rejects changed prefix, route, topology and segment accounting');

@@ -30050,6 +30050,7 @@ sceneInitialization.then(() => {
           frameUrl:params.get('transport_frame'),frameSha256:params.get('transport_frame_sha256'),
           prefixUrl:params.get('transport_prefix'),prefixSha256:params.get('transport_prefix_sha256'),
           canonicalGround:params.get('transport_ground')==='canonical',
+          sourceStartGround:params.get('transport_ground')==='source-start',
           caseSha256:params.get('transport_sha256'),mountRoot:document.getElementById('tab-assets'),document});
         const reference=givenPaletteMotionPlayer.read().source.groundReference;
         if(reference){

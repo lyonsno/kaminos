@@ -2,7 +2,7 @@
 export function validateGivenMotionSource({motion:m,prefix,prefixSha256}) {
  const fail=message=>{throw Error(message);};
  if(m?.status!=='completed'||m.route!=='unimate.text-to-motion.webgpu-local.v0'||m.textEncoder!=='browser T5'||m.cooperative!==true)fail('Retained motion route is missing or fallback');
- if(!m.continuation){if(m.controllerNorm!=='valid-joints')fail('Retained source controller differs');return {sampling:'dopri5-valid-joints',controllerNorm:m.controllerNorm,prefixFrames:null};}
+ if(!m.continuation){if(m.controllerNorm!=='valid-joints')fail('Retained source controller differs');if(Object.hasOwn(m,'sampling')&&m.sampling!=='dopri5-valid-joints')fail('Retained source sampler differs');return {sampling:'dopri5-valid-joints',controllerNorm:m.controllerNorm,prefixFrames:null};}
  const c=m.continuation;
  if(!prefix||!/^[a-f0-9]{64}$/i.test(prefixSha256??''))fail('Verified continuation prefix required');
  validateGivenMotionSource({motion:prefix});
@@ -19,6 +19,8 @@ export function validateGivenMotionSource({motion:m,prefix,prefixSha256}) {
 }
 
 export function prepareGivenContinuation({raw,run,prefix,prefixSha256}) {
+ if(Object.hasOwn(raw,'route')&&raw.route!==prefix.route)throw Error('Raw continuation route differs');
+ if(Object.hasOwn(raw,'controllerNorm')&&raw.controllerNorm!==null)throw Error('Raw continuation controller differs');
  if(run?.status!=='completed'||run.phase!=='complete'||!run.segments?.length)throw Error('Incomplete continuation generation');
  if(!/^[a-f0-9]{40}$/i.test(run.source?.rev??'')||run.source.dirtyFiles?.length!==0||raw.source?.rev!==run.source.rev||raw.source?.dirtyFiles?.length!==0)throw Error('Continuation execution source differs or is dirty');
  const segmentFrames=raw.segmentFeatures?.length/(raw.joints*12),addedSegments=run.segments.length;
@@ -36,4 +38,11 @@ export function givenCanonicalGroundHeight(frame) {
  const a=frame?.canonicalWorldToSourceNormalized;
  if(a?.length!==4||a.some(row=>row?.length!==4||!row.every(Number.isFinite))||Math.abs(a[1][0])>1e-5||Math.abs(a[1][2])>1e-5||a[1][1]<=0)throw Error('Canonical ground is not a horizontal reference in this given frame');
  return a[1][3]; // One fixed reference, never an animated lowest-foot correction.
+}
+
+export function givenSourceSoleHeight(vertices,matrix) {
+ if(!vertices?.length||vertices.length%3||!Array.from(vertices).every(Number.isFinite))throw Error('Incomplete source vertices for ground calibration');
+ if(matrix?.length!==16||!Array.from(matrix).every(Number.isFinite))throw Error('Incomplete source world matrix for ground calibration');
+ let height=Infinity;for(let i=0;i<vertices.length;i+=3)height=Math.min(height,matrix[1]*vertices[i]+matrix[5]*vertices[i+1]+matrix[9]*vertices[i+2]+matrix[13]);
+ return height;
 }
