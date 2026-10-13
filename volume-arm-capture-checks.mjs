@@ -5,6 +5,7 @@
 import { accessSync, constants, existsSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { resolveGridHeight } from './volume-grid-shape.mjs';
 
 const solverExpectation = { legacy: { solver: 'legacy' }, converged: { solver: 'converged', openTop: false }, 'converged-open-top': { solver: 'converged', openTop: true } };
 // `expectedMode` is the last requested confinement mode (or the admitted one), so
@@ -78,6 +79,24 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
       } else {
         const effective = immersedField.length === 2 ? receipt.requested?.[immersedField[0]]?.[immersedField[1]] : receipt.requested?.[immersedField[0]];
         if (!Number.isFinite(effective) || Math.abs(effective - Number(value)) > 1e-6) mismatches.push(`${cid} requested ${value}, receipt ${effective}`);
+      }
+    }
+    if (cid === 'volume-grid-height-ratio') {
+      // The resolver at the effective width is the expectation (review GH-05):
+      // a clamped or snapped request passes at its resolved height and mode; a
+      // receipt missing an authority-bearing field, for another width, or
+      // refused by the device fails the arm.
+      const dims = end.gridDimensions; const height = end.gridHeight;
+      const width = Array.isArray(dims) && dims.length === 3 ? dims[0] : null;
+      let expected = null;
+      try { expected = Number.isInteger(width) ? resolveGridHeight({ gridHeightRatio: Number(value) || 2 }, width) : null; } catch { expected = null; }
+      const modes = ['auto-twice-width', 'requested', 'requested-snapped', 'requested-clamped'];
+      if (!expected || !height) mismatches.push(`grid height requested ${value}, no valid grid receipt (dimensions ${JSON.stringify(dims ?? null)})`);
+      else if (height.admitted !== true) mismatches.push(height.admitted === false
+        ? `grid height requested ${value} was refused by the device (${height.admissionReason ?? 'no reason'})`
+        : `grid height requested ${value}: the receipt carries no affirmative admission (admitted ${JSON.stringify(height.admitted ?? null)})`);
+      else if (!modes.includes(height.mode) || height.widthCells !== width || height.heightCells !== expected.heightCells || height.mode !== expected.mode || dims[1] !== expected.heightCells) {
+        mismatches.push(`grid height requested ${value}: expected ${expected.heightCells} (${expected.mode}) at width ${width}, receipt ${height.heightCells} (${height.mode ?? 'no mode'}, width ${height.widthCells ?? 'none'}), effective ${dims[1]}`);
       }
     }
     if (cid === 'volume-time-step' && end.timeStep?.mode !== value) mismatches.push(`time step requested ${value}, effective ${end.timeStep?.mode}${end.timeStep?.reason ? ` (${end.timeStep.reason})` : ''}`);
@@ -156,6 +175,26 @@ export function resolveHeadlessBrowser({ env = process.env, playwrightRoot = joi
 // Arm grammar: `name[,controlId=value,...]` joined by `;`. Fails loud on a name
 // that carries controls (a ':' or '=' in the name) or a control without '=', so
 // a mistyped arm cannot run the saved basin under a misleading label.
+// `@cameraFrame=x:y:z:tx:ty:tz` frames the scene camera for an arm: the
+// basins' saved cameras are zoomed and a grid-height witness has to see the
+// top of the box. Strict: six finite numbers or nothing.
+export function parseCameraFrame(value) {
+  const parts = String(value ?? '').split(':');
+  if (parts.length !== 6 || parts.some(part => part.trim() === '')) return null;
+  const numbers = parts.map(Number);
+  if (numbers.some(v => !Number.isFinite(v))) return null;
+  return { position: numbers.slice(0, 3), target: numbers.slice(3) };
+}
+
+// The effective camera frame must be the requested one; anything missing or
+// off by more than the tolerance is a mismatch (the arm fails).
+export function cameraFrameMismatch(requested, effective, tolerance = 1e-4) {
+  if (!effective || !Array.isArray(effective.position) || !Array.isArray(effective.target)
+    || effective.position.length !== 3 || effective.target.length !== 3) return 'no effective camera frame';
+  const offsets = [...requested.position.map((v, i) => Math.abs(v - effective.position[i])), ...requested.target.map((v, i) => Math.abs(v - effective.target[i]))];
+  return offsets.some(offset => !(offset <= tolerance)) ? `camera frame requested ${JSON.stringify(requested)}, effective ${JSON.stringify(effective)}` : null;
+}
+
 export function parseArms(armsArg) {
   return String(armsArg ?? '').split(';').map(a => {
     const [name, ...pairs] = a.split(',');

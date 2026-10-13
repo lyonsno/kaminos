@@ -28,10 +28,11 @@ const multiplier = Number(source.match(/const VOLUME_VERTICAL_DOMAIN_EXTENT_MULT
 assert.equal(multiplier, 2, 'tall domain is 1x2x1');
 const raymarch = source.slice(source.indexOf('fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)'));
 for (const [expression, meaning] of [
-  ['let hit = boxHit(ro - vec3<f32>(0.0, 1.0, 0.0), rd, vec3<f32>(1.0, 2.0, 1.0));', 'raymarch box spans world y [-1, 3]'],
+  ['let domainHalfY = f32(GRID_Y) / f32(GRID);', 'the raymarch box half-height follows the grid shape (grid height control)'],
+  ['let hit = boxHit(ro - vec3<f32>(0.0, domainHalfY - 1.0, 0.0), rd, vec3<f32>(1.0, domainHalfY, 1.0));', 'raymarch box spans world y [-1, -1 + 2 GRID_Y/GRID] (y [-1, 3] at the auto height)'],
   ['if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, 0.0)) {', 'scene depth in front of the box is a miss'],
-  ['let endT = select(min(hit.y, sceneDepthEndT), 4.0, fullGridCapture);', 'full-grid capture spans the tall box'],
-  ['let dtBase = (select(endT, select(hit.y, 4.0, fullGridCapture), preserveSamplePositions) - startT) / steps;',
+  ['let endT = select(min(hit.y, sceneDepthEndT), 2.0 * domainHalfY, fullGridCapture);', 'full-grid capture spans the tall box (4.0 at the auto height)'],
+  ['let dtBase = (select(endT, select(hit.y, 2.0 * domainHalfY, fullGridCapture), preserveSamplePositions) - startT) / steps;',
     'depth clipping keeps ordinary sample positions stable'],
 ]) {
   assert.ok(raymarch.includes(expression), `raymarch resolution lost: ${meaning}`);
@@ -39,6 +40,11 @@ for (const [expression, meaning] of [
 
 // The fire light field publishes the coverage it actually has inside the tall box.
 const lightField = source.slice(source.indexOf('function fireIrradianceLightField()'));
-assert.match(lightField, /worldMax: \[productTransform\.translate\[0\] \+ 1,\s*productTransform\.translate\[1\] - 1 \+ 2 \* gridHeight \/ gridSize,\s*productTransform\.translate\[2\] \+ 1\],\s*worldBoundsAuthority: 'full-volume-domain-equal-cell-pitch-v1'/,
+// Since the grid height control (report §34) the bounds come from the raymarch
+// domain box the camera samples, which spans y [-1, -1 + 2 gridHeight/gridSize].
+assert.match(lightField, /const domainBox = raymarchDomainBox\(gridSize, gridHeight\);/, 'light-field bounds derive from the raymarch domain box');
+assert.match(lightField, /worldMax: domainBox\.max\.map\(\(value, axis\) => value \+ productTransform\.translate\[axis\]\),\s*worldBoundsAuthority: 'full-volume-domain-equal-cell-pitch-v1'/,
   'light-field bounds cover the full tall volume');
+const { raymarchDomainBox } = await import('../volume-grid-shape.mjs');
+assert.deepEqual(raymarchDomainBox(64, 128).max, [1, 3, 1], 'the auto box reaches y = 3');
 console.log('volume tall-domain pipeline constants contracts passed');

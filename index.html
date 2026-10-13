@@ -2378,6 +2378,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-resolution-val">96×192×96</span>
     </div>
     <div class="slider-row">
+      <span class="slider-label">Grid height (× width)</span>
+      <input type="number" id="volume-grid-height-ratio" data-volume-settings-param="volume_grid_height_ratio" data-volume-commit="confirm" min="1" max="4" step="0.125" value="2">
+      <span class="slider-val" id="volume-grid-height-ratio-val">2× (saved basins)</span>
+    </div>
+    <span class="slider-help">Grid height as a multiple of the width. 2 is what every saved basin was authored at. Any other value is clamped between 1 and 4 and snapped to the nearest height that keeps the light lattices aligned (steps of 4 cells at 32 and 64, 12 at 48 and 96); cells keep their size, the box grows rows, nothing is stretched. A height the GPU cannot hold is refused and the field is kept; the Grid field says so. Changing it rebuilds the fluid state like a resolution change, so while you edit it only the box outline follows; press Enter or leave the field to apply, Escape to cancel. Memory and time grow with the height.</span>
+    <div class="slider-row">
       <span class="slider-label">Grid Overlay</span>
       <input type="range" id="volume-grid-overlay" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-grid-overlay-val">0.00</span>
@@ -5892,16 +5898,22 @@ function refreshFlameDomainPreview() {
   }
   if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   const pose=flameDomainDraft||acceptedFlameDomainPose(),{translation,scale}=domainTransformForPose(pose);
-  if(flameDomainGuide)flameDomainGuide.box.set(new THREE.Vector3(-scale,-scale,-scale).add(new THREE.Vector3(...translation)),new THREE.Vector3(scale,3*scale,scale).add(new THREE.Vector3(...translation)));
+  if(flameDomainGuide)flameDomainGuide.box.set(new THREE.Vector3(-scale,-scale,-scale).add(new THREE.Vector3(...translation)),new THREE.Vector3(scale,flameDomainTopY()*scale,scale).add(new THREE.Vector3(...translation)));
   if(flameDomainGuide)styleHelperLines(flameDomainGuide,{width:viewportDisplay.domainWidth,opacity:viewportDisplay.domainOpacity});
   if(flameDomainProxy&&!transformControls?.dragging)applySceneObjectTransformState(flameDomainProxy,pose);
   for(const [key,value] of [['x',pose.position[0]],['y',pose.position[1]],['z',pose.position[2]],['scale',pose.scale[0]]]){const input=document.getElementById('flame-domain-'+key);if(input&&document.activeElement!==input)input.value=String(value);}
-  const size=document.getElementById('flame-domain-size');if(size)size.textContent=`World size ${[2,4,2].map(n=>Number((n*pose.scale[0]).toPrecision(3))).join(' × ')} · cell count unchanged`;
+  const size=document.getElementById('flame-domain-size');if(size)size.textContent=`World size ${[2,flameDomainTopY()+1,2].map(n=>Number((n*pose.scale[0]).toPrecision(3))).join(' × ')} · cell count unchanged`;
   window._kaminosDirty?.();
 }
 function writeFlameDomainPreview(value) {
   flameDomainDraft=checkedFlameDomainPose(value);refreshFlameDomainPreview();
 }
+function flameDomainTopY() {
+  const dims = window.__kaminosVolumeGridPreview?.dimensions ?? window.__kaminosVolumeGridDimensions;
+  return Array.isArray(dims) && dims.length === 3 && dims[0] > 0 ? -1 + 2 * dims[1] / dims[0] : 3;
+}
+function refreshFlameDomainGuideBox(){refreshFlameDomainPreview();}
+
 function setFlameDomainTranslation(next, scale = flameDomainScale) {
   next=normalizeFlameDomainTranslation(next);scale=normalizeFlameDomainScale(scale);
   if (scale===flameDomainScale && next.every((value, index) => value === flameDomainTranslation[index])) return false;
@@ -16883,6 +16895,7 @@ function volumeSceneControlId(key) {
 }
 
 function applyVolumeScenePreset(scene, options = {}) {
+  supersedeVolumeRebuildHolds();
   const normalizedScene = Object.hasOwn(VOLUME_SCENE_PRESETS, scene) ? scene : DEFAULT_VOLUME_SCENE;
   const preset = VOLUME_SCENE_PRESETS[normalizedScene];
   setVolumeControlValue('volume-scene', normalizedScene);
@@ -22513,6 +22526,7 @@ function readVolumeControls() {
     shellSoftClip: parseFloat(document.getElementById('volume-shell-soft-clip').value),
     shellSmoke: parseFloat(document.getElementById('volume-shell-smoke').value),
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
+    gridHeightRatio: parseFloat(volumeRebuildControlValue('volume-grid-height-ratio')) || 2,
     volumeResidualMode: document.getElementById('volume-residual-mode').value || 'off',
     volumeResidualModelUrl: document.getElementById('volume-residual-model-url').value || '',
     volumeResidualStrength: parseFloat(document.getElementById('volume-residual-strength').value),
@@ -22673,6 +22687,40 @@ function formatVolumeWindDirection(value) {
   return `${degrees > 0 ? '+' : ''}${degrees}°`;
 }
 
+function volumeGridHeightRatioLabel(ratio) {
+  return ratio === 2 ? '2× (saved basins)' : `${ratio}× width`;
+}
+// Controls that rebuild the fluid state apply on confirm (Noah 2026-10-12):
+// while edited they only preview (the box bounds follow, and the Kaminos
+// authoring side scales its box from the `kaminos-volume-grid-preview` event),
+// and every sync reads the value the sim already uses (review GH-R3-02). Enter
+// or leaving the field applies; Escape restores the applied value; a complete
+// restore supersedes the pending edit (review GH-R4-01).
+const VOLUME_REBUILD_CONTROL_IDS = ['volume-grid-height-ratio'];
+const volumeRebuildApplied = new Map();
+const volumeRebuildPending = new Map();
+function volumeRebuildControlValue(id) {
+  if (volumeRebuildPending.has(id)) return volumeRebuildPending.get(id);
+  const value = document.getElementById(id).value;
+  volumeRebuildApplied.set(id, value);
+  return value;
+}
+function holdVolumeRebuildControl(id) {
+  if (!volumeRebuildPending.has(id)) volumeRebuildPending.set(id, volumeRebuildApplied.has(id) ? volumeRebuildApplied.get(id) : document.getElementById(id).value);
+}
+function releaseVolumeRebuildControl(id) {
+  volumeRebuildPending.delete(id);
+}
+function publishVolumeGridPreview(preview) {
+  window.__kaminosVolumeGridPreview = preview;
+  window.dispatchEvent(new CustomEvent('kaminos-volume-grid-preview', { detail: preview }));
+}
+function supersedeVolumeRebuildHolds() {
+  const hadPending = volumeRebuildPending.size > 0;
+  volumeRebuildPending.clear();
+  if (hadPending) publishVolumeGridPreview(null);
+}
+
 function updateVolumeControlLabels() {
   const c = readVolumeControls();
   document.getElementById('volume-scene-val').textContent = (VOLUME_SCENE_PRESETS[c.volumeScene] || VOLUME_SCENE_PRESETS.compact_plume).label;
@@ -22738,6 +22786,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-aperture-seed-val').textContent = String(Math.round(c.emitterApertureSeed));
   document.getElementById('volume-emitter-swirl-val').textContent = c.emitterSwirl.toFixed(2);
   document.getElementById('volume-heat-release-expansion-val').textContent = c.heatReleaseExpansion.toFixed(2);
+  document.getElementById('volume-grid-height-ratio-val').textContent = volumeGridHeightRatioLabel(c.gridHeightRatio);
   document.getElementById('volume-velocity-staggering-val').textContent = c.velocityStaggering;
   document.getElementById('volume-immersed-centre-x-val').textContent = Number(c.immersedCentreX).toFixed(2);
   document.getElementById('volume-immersed-centre-y-val').textContent = Number(c.immersedCentreY).toFixed(2);
@@ -23111,7 +23160,7 @@ function refreshVolumeReadout() {
   document.getElementById('volume-immersed-source-state').textContent = !immersed || immersed.requested.sourceLaw !== 'immersed-source'
     ? 'off'
     : (immersed.effective.admitted
-      ? `requested ${immersed.effective.fluxRequested.toFixed(2)} · effective ${immersed.effective.fluxEffectivePredicted.toFixed(2)} cells³/step · ${immersed.effective.footprint.cells} cells${immersed.effective.clipPredicted.cells ? ` · CAP CLIPPING ${immersed.effective.clipPredicted.cells}` : ''}${immersed.effective.masked?.cells ? ` · masked ${(immersed.effective.masked.weightShare * 100).toFixed(0)}% (${immersed.effective.masked.cells} solid cells)` : ''}${immersed.effective.pattern.kind !== 'shape' ? ` · pattern ${immersed.effective.pattern.kind}${immersed.effective.coverage?.coveredCells != null ? ` (${immersed.effective.coverage.coveredCells} map cells)` : ''}` : ''}${immersed.effective.inletDynamics.turbulence > 0 ? ` · turbulence ${immersed.effective.inletDynamics.turbulence.toFixed(2)} (field rms ${immersed.effective.inletDynamics.turbulenceRms.toFixed(2)}, supply ×${immersed.effective.turbulenceSupplyFactor.toFixed(3)}${immersed.effective.supplyPredictionAuthority === 'nominal-no-lattice-this-step' ? ', NOMINAL' : ''})` : ''}${immersed.effective.inletDynamics.puff > 0 ? ` · puff ×${immersed.effective.inletDynamics.puffFactor.toFixed(2)}` : ''} · aim ${immersed.requested.yaw.toFixed(0)}°/${immersed.requested.pitch.toFixed(0)}° · wall ${immersed.effective.backWall.requested ? `${s.sceneCollision?.emitterBackWallCells ?? 0} cells` : 'off'}`
+      ? `requested ${immersed.effective.fluxRequested.toFixed(2)} · effective ${immersed.effective.fluxEffectivePredicted.toFixed(2)} cells³/step · ${immersed.effective.footprint.cells} cells${immersed.effective.clipPredicted.cells ? ` · CAP CLIPPING ${immersed.effective.clipPredicted.cells}` : ''}${immersed.effective.masked?.cells ? ` · masked ${(immersed.effective.masked.weightShare * 100).toFixed(0)}% (${immersed.effective.masked.cells} solid cells)` : ''}${immersed.effective.pattern.kind !== 'shape' ? ` · pattern ${immersed.effective.pattern.kind}${immersed.effective.coverage?.coveredCells != null ? ` (${immersed.effective.coverage.coveredCells} map cells)` : ''}` : ''}${immersed.effective.coverageFraction < 0.999 ? ` · coverage ${(immersed.effective.coverageFraction * 100).toFixed(0)}%` : ''}${immersed.effective.inletDynamics.turbulence > 0 ? ` · turbulence ${immersed.effective.inletDynamics.turbulence.toFixed(2)} (field rms ${immersed.effective.inletDynamics.turbulenceRms.toFixed(2)}, supply ×${immersed.effective.turbulenceSupplyFactor.toFixed(3)}${immersed.effective.supplyPredictionAuthority === 'nominal-no-lattice-this-step' ? ', NOMINAL' : ''})` : ''}${immersed.effective.inletDynamics.puff > 0 ? ` · puff ×${immersed.effective.inletDynamics.puffFactor.toFixed(2)}` : ''} · aim ${immersed.requested.yaw.toFixed(0)}°/${immersed.requested.pitch.toFixed(0)}° · wall ${immersed.effective.backWall.requested ? `${s.sceneCollision?.emitterBackWallCells ?? 0} cells` : 'off'}`
       : `immersed — NOT ADMITTED (${immersed.effective.reason}); set Pressure solver to converged open top and Projection above 0`);
   document.getElementById('volume-inflow-boundary-state').textContent = !inflow
     ? 'off'
@@ -23152,7 +23201,14 @@ function refreshVolumeReadout() {
   const simGridDimensions = Array.isArray(s.simGridDimensions) && s.simGridDimensions.length === 3
     ? s.simGridDimensions.join('×')
     : (s.simGrid ? `${s.simGrid} x/z resolution (dimensions unreported)` : 'unknown');
-  document.getElementById('volume-grid').textContent = simGridDimensions;
+  if (Array.isArray(s.simGridDimensions) && s.simGridDimensions.length === 3 && String(s.simGridDimensions) !== String(window.__kaminosVolumeGridDimensions)) {
+    window.__kaminosVolumeGridDimensions = [...s.simGridDimensions];
+    refreshFlameDomainGuideBox();
+  }
+  const gh = s.gridHeight;
+  const gridHeightNote = !gh ? '' : (gh.admitted === false ? ` · height ${gh.heightCells} REFUSED (${gh.admissionReason})${gh.fallback ? `, using ${gh.fallback.heightCells}` : ''}`
+    : (gh.mode === 'auto-twice-width' ? '' : ` · height ${gh.heightCells} (${gh.ratio.toFixed(2)}× width, ${gh.mode})`));
+  document.getElementById('volume-grid').textContent = `${simGridDimensions}${gridHeightNote}`;
   document.getElementById('volume-route-id').textContent = s.routeIdentity || 'native-3d-compute-fluid-raymarch-v0';
   document.getElementById('volume-canvas-state').textContent = s.active ? `${s.displayWidth || s.width}x${s.displayHeight || s.height} -> ${s.renderWidth || s.width}x${s.renderHeight || s.height}` : 'hidden';
   document.getElementById('volume-raf-fps').textContent = Number.isFinite(timing.rafFps) ? `${timing.rafFps.toFixed(0)} route RAF` : '-- route RAF';
@@ -23450,7 +23506,7 @@ async function initKaminosVolumeRoute() {
   // select shows the family shape the map falls back to, and the request is
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
-  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
     if (!param || !params.has(param)) continue;
@@ -24378,7 +24434,46 @@ async function initKaminosVolumeRoute() {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
   }
-  for (const id of ['volume-scene', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-procedural-detail-forces', 'volume-force-micro-carrier', 'volume-force-interface-shred', 'volume-force-fine-breakup', 'volume-fine-breakup-localization', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-fire-render-mode', 'volume-shell-inspect-mode', 'volume-shell-amount', 'volume-shell-width', 'volume-shell-thermal', 'volume-shell-reaction', 'volume-shell-front', 'volume-shell-edge', 'volume-shell-core-suppress', 'volume-shell-bite', 'volume-shell-curl', 'volume-shell-heat', 'volume-shell-divergence', 'volume-shell-luma', 'volume-shell-exposure', 'volume-shell-soft-clip', 'volume-shell-smoke', 'volume-resolution', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  // Rebuild controls (see VOLUME_REBUILD_CONTROL_IDS): previewed while
+  // edited, applied on confirm.
+  function updateVolumeRebuildControlLabel(id) {
+    if (id !== 'volume-grid-height-ratio') return;
+    const label = volumeGridHeightRatioLabel(parseFloat(document.getElementById(id).value) || 2);
+    const preview = window.__kaminosVolumeGridPreview;
+    document.getElementById('volume-grid-height-ratio-val').textContent = volumeRebuildPending.has(id) && preview
+      ? `${label} → ${preview.heightCells} cells · Enter to apply`
+      : label;
+  }
+  for (const id of VOLUME_REBUILD_CONTROL_IDS) {
+    const control = document.getElementById(id);
+    const preview = () => {
+      holdVolumeRebuildControl(id);
+      publishVolumeGridPreview(volumePrototype?.previewGridShape?.({ gridHeightRatio: parseFloat(control.value) || 2 }) ?? null);
+      updateVolumeRebuildControlLabel(id);
+      refreshFlameDomainGuideBox();
+    };
+    const confirm = () => {
+      if (!volumeRebuildPending.has(id)) return;
+      releaseVolumeRebuildControl(id);
+      publishVolumeGridPreview(null);
+      syncControls();
+      refreshFlameDomainGuideBox();
+    };
+    const revert = () => {
+      if (!volumeRebuildPending.has(id)) return;
+      control.value = volumeRebuildPending.get(id);
+      releaseVolumeRebuildControl(id);
+      publishVolumeGridPreview(null);
+      updateVolumeRebuildControlLabel(id);
+      refreshFlameDomainGuideBox();
+    };
+    control.addEventListener('input', preview);
+    control.addEventListener('change', preview);
+    control.addEventListener('keydown', event => { if (event.key === 'Enter') confirm(); else if (event.key === 'Escape') revert(); });
+    control.addEventListener('blur', confirm);
+  }
+
+  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-procedural-detail-forces', 'volume-force-micro-carrier', 'volume-force-interface-shred', 'volume-force-fine-breakup', 'volume-fine-breakup-localization', 'volume-density', 'volume-fire', 'volume-radiance', 'volume-absorption', 'volume-glow', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-fire-render-mode', 'volume-shell-inspect-mode', 'volume-shell-amount', 'volume-shell-width', 'volume-shell-thermal', 'volume-shell-reaction', 'volume-shell-front', 'volume-shell-edge', 'volume-shell-core-suppress', 'volume-shell-bite', 'volume-shell-curl', 'volume-shell-heat', 'volume-shell-divergence', 'volume-shell-luma', 'volume-shell-exposure', 'volume-shell-soft-clip', 'volume-shell-smoke', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-compare', 'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite', 'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height', 'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim', 'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode', 'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color', 'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma', 'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border', 'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma', 'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate', 'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma', 'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source', 'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise', 'volume-pyro-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth', 'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance', 'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint', 'volume-pyro-carrier-view', 'volume-pyro-overdrive', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id)?.addEventListener('input', syncControls);
     document.getElementById(id)?.addEventListener('change', syncControls);
   }
@@ -25765,6 +25860,7 @@ function checkFlameSettingsState(state) {
   return state;
 }
 function writeFlameSettingsState(state) {
+  supersedeVolumeRebuildHolds();
   for(const axis of ['domControls','rendererControls'])for(const [id,descriptor] of Object.entries(state[axis])) {
     const control=document.getElementById(id);
     if(control?.type==='range')applyVolumeRangeSavedValue(control,Number(descriptor.rawValue??descriptor.value));
@@ -25823,6 +25919,7 @@ function installAuthoringParameterEditing() {
       setVolumeControlValue(control.id,state.value);
       control.dispatchEvent(new Event('input',{bubbles:true}));
       control.dispatchEvent(new Event('change',{bubbles:true}));
+      if(control.dataset.volumeCommit==='confirm')control.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
       document.querySelectorAll(`[data-authoring-alias="${control.id}"]`).forEach(alias=>{if(alias.type==='checkbox')alias.checked=control.checked;else alias.value=String(flameControlDisplayValue(control.id,control.value));});
     };
     const check=state=>{

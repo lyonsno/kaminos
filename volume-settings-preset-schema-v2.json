@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 248,
+  "controlCount": 249,
   "controls": [
     {
       "key": "volume-physical-material-law",
@@ -1626,9 +1626,24 @@
       "param": "volume_canonical_body_balance",
       "tagName": "INPUT",
       "type": "range"
+    },
+    {
+      "key": "volume-grid-height-ratio",
+      "param": "volume_grid_height_ratio",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 2,
+      "additiveSinceControlCount": 249
     }
   ],
   "retiredControls": [
+    {
+      "axis": "domControls",
+      "key": "volume-grid-height-cells",
+      "param": "volume_grid_height_cells",
+      "tagName": "INPUT",
+      "type": "number"
+    },
     {
       "axis": "domControls",
       "key": "volume-procedural-transport-slip",

@@ -1,4 +1,12 @@
 export { createWebGpuLinearShader } from './linear-kernel.js';
+export {
+  FLASH_ATTENTION_BLOCK_QUERIES,
+  FLASH_ATTENTION_PARAMS_WORDS,
+  createWebGpuFlashAttentionShader,
+  flashAttentionDispatch,
+  flashAttentionParams,
+  flashAttentionStridedParams,
+} from './flash-attention-kernel.js';
 export { createWebGpuInferenceControl } from './inference-control.js';
 
 export {

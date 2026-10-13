@@ -13,7 +13,9 @@
 // calls setConfinementEpsilonOverride so a calibration sweep can vary the
 // calibrated epsilon without a persisted knob; the receipt names the override;
 // `@savePreset=<label>` saves the arm's controls as a basin through the
-// cockpit's Save button and records the preset id the cockpit reports.
+// cockpit's Save button and records the preset id the cockpit reports;
+// `@cameraFrame=x:y:z:tx:ty:tz` frames the scene camera and fails the arm
+// unless the effective frame matches.
 // During each settle the capture samples the renderer receipt every 2 s
 // (steps, enstrophy, divergence) so a trend is visible, not just an endpoint.
 // Frames are admission and attribution evidence for the implementer; the
@@ -35,7 +37,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { effectiveMismatches, parseArms, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
+import { cameraFrameMismatch, effectiveMismatches, parseArms, parseCameraFrame, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
 
 const CAPTURE_IDENTITY = 'kaminos.volume.transport-arm-capture.v1';
 const positional = [];
@@ -168,8 +170,8 @@ try {
   const call = (method, params = {}) => new Promise((res, rej) => { const myId = ++id; pending.set(myId, res); setTimeout(() => { pending.delete(myId); rej(callTimeout(callTimeoutMs, 'timeout ' + method)); }, callTimeoutMs); ws.send(JSON.stringify({ id: myId, method, params })); });
   const evaluate = async expr => { const r = await call('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description || 'evaluate failed'); return r.result?.result?.value; };
   const op = body => `(() => { const f = document.querySelector('#basin'); const w = f?.contentWindow || window; const d = w.document; return (${body}); })()`;
-  const stateExpr = op(`(() => { const s = w.__kaminosVolumePrototype?.debugState?.(); if (!s) return null; return { backend: s.backend, error: s.error, simStepCount: s.simStepCount, frameCount: s.frameCount, transport: s.transport?.effective ?? null, transportUniform: s.transport?.uniform ?? null, predictorPasses: s.transportPredictorPasses, predictorBufferBytes: s.transport?.predictorBufferBytes ?? null, predictorAllocated: s.transport?.predictorAllocated ?? null, confinement: s.confinement?.effective ?? null, confinementUniform: s.confinement?.uniform ?? null, timeStep: s.timeStep?.effective ?? null, timeStepEmitter: s.timeStep?.emitterPacked ?? null, inflowBoundary: s.inflowBoundary ?? null, heatRelease: s.heatRelease ?? null, velocityStaggering: s.velocityStaggering ?? null, immersedSource: s.immersedSource ?? null, sceneCollision: s.sceneCollision ?? null, coreEmitterSource: s.coreEmitterSourceReceipt ?? null, coreEmitterSourceMode: s.coreEmitterSourceMode ?? null, analyticEmitterSourceLaw: s.analyticEmitterSourceLaw ?? null, emitterSourceLaw: s.analyticEmitterSourceLaw ?? null, wind: s.wind ?? null, confinementOverride: s.confinement?.confinementEpsilonOverride ?? null, vorticity: s.pressureSolver?.residual?.vorticity ?? null, heightProfile: s.pressureSolver?.residual?.profile ?? null, breakdownTotal: s.fullGridPassBreakdown?.total, residual: s.pressureSolver?.residual ? { step: s.pressureSolver.residual.step, compactBefore: s.pressureSolver.residual.compact.before, compactAfter: s.pressureSolver.residual.compact.after, residualMeasurement: s.pressureSolver.residual.measurement ?? null, heatCentroidCells: s.pressureSolver.residual.profile?.heatCentroidCells ?? null, smokeCentroidCells: s.pressureSolver.residual.profile?.smokeCentroidCells ?? null, heatMean: s.pressureSolver.residual.profile?.heatMean ?? null } : null, solver: s.pressureSolver?.effective ?? null, forces: { fine: d.getElementById('volume-force-fine-breakup')?.checked, shred: d.getElementById('volume-force-interface-shred')?.checked, micro: d.getElementById('volume-force-micro-carrier')?.checked }, schemeDom: d.getElementById('volume-advection-scheme')?.value, schemeLabel: d.getElementById('volume-advection-scheme-val')?.textContent, commonLabel: d.getElementById('volume-common-gas-transport-val')?.textContent, projection: d.getElementById('volume-projection')?.value }; })()`);
-  const setControl = (cid, value) => evaluate(op(`(() => { const e = d.getElementById(${JSON.stringify(cid)}); if (!e) throw new Error('missing ' + ${JSON.stringify(cid)}); if (e.type === 'checkbox') { e.checked = ${JSON.stringify(value)} === 'true'; } else { e.value = ${JSON.stringify(value)}; } e.dispatchEvent(new w.Event('input', { bubbles: true })); e.dispatchEvent(new w.Event('change', { bubbles: true })); return e.type === 'checkbox' ? String(e.checked) : e.value; })()`));
+  const stateExpr = op(`(() => { const s = w.__kaminosVolumePrototype?.debugState?.(); if (!s) return null; return { backend: s.backend, error: s.error, simStepCount: s.simStepCount, frameCount: s.frameCount, transport: s.transport?.effective ?? null, transportUniform: s.transport?.uniform ?? null, predictorPasses: s.transportPredictorPasses, predictorBufferBytes: s.transport?.predictorBufferBytes ?? null, predictorAllocated: s.transport?.predictorAllocated ?? null, confinement: s.confinement?.effective ?? null, confinementUniform: s.confinement?.uniform ?? null, timeStep: s.timeStep?.effective ?? null, timeStepEmitter: s.timeStep?.emitterPacked ?? null, inflowBoundary: s.inflowBoundary ?? null, heatRelease: s.heatRelease ?? null, velocityStaggering: s.velocityStaggering ?? null, immersedSource: s.immersedSource ?? null, gridDimensions: s.simGridDimensions ?? null, gridHeight: s.gridHeight ?? null, sceneCollision: s.sceneCollision ?? null, coreEmitterSource: s.coreEmitterSourceReceipt ?? null, coreEmitterSourceMode: s.coreEmitterSourceMode ?? null, analyticEmitterSourceLaw: s.analyticEmitterSourceLaw ?? null, emitterSourceLaw: s.analyticEmitterSourceLaw ?? null, wind: s.wind ?? null, confinementOverride: s.confinement?.confinementEpsilonOverride ?? null, vorticity: s.pressureSolver?.residual?.vorticity ?? null, heightProfile: s.pressureSolver?.residual?.profile ?? null, breakdownTotal: s.fullGridPassBreakdown?.total, residual: s.pressureSolver?.residual ? { step: s.pressureSolver.residual.step, compactBefore: s.pressureSolver.residual.compact.before, compactAfter: s.pressureSolver.residual.compact.after, residualMeasurement: s.pressureSolver.residual.measurement ?? null, heatCentroidCells: s.pressureSolver.residual.profile?.heatCentroidCells ?? null, smokeCentroidCells: s.pressureSolver.residual.profile?.smokeCentroidCells ?? null, heatMean: s.pressureSolver.residual.profile?.heatMean ?? null } : null, solver: s.pressureSolver?.effective ?? null, forces: { fine: d.getElementById('volume-force-fine-breakup')?.checked, shred: d.getElementById('volume-force-interface-shred')?.checked, micro: d.getElementById('volume-force-micro-carrier')?.checked }, schemeDom: d.getElementById('volume-advection-scheme')?.value, schemeLabel: d.getElementById('volume-advection-scheme-val')?.textContent, commonLabel: d.getElementById('volume-common-gas-transport-val')?.textContent, projection: d.getElementById('volume-projection')?.value }; })()`);
+  const setControl = (cid, value) => evaluate(op(`(() => { const e = d.getElementById(${JSON.stringify(cid)}); if (!e) throw new Error('missing ' + ${JSON.stringify(cid)}); if (e.type === 'checkbox') { e.checked = ${JSON.stringify(value)} === 'true'; } else { e.value = ${JSON.stringify(value)}; } e.dispatchEvent(new w.Event('input', { bubbles: true })); e.dispatchEvent(new w.Event('change', { bubbles: true })); if (e.dataset?.volumeCommit === 'confirm') e.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return e.type === 'checkbox' ? String(e.checked) : e.value; })()`));
   await call('Page.enable'); await call('Runtime.enable'); await call('Log.enable'); await call('Page.navigate', { url });
 
   report.failurePhase = 'renderer-admission';
@@ -213,6 +215,15 @@ try {
         if (!presetId) fail(report.failurePhase, `@savePreset ${value} did not produce a saved preset id (status: ${JSON.stringify(status)})`);
         (arm.presetSaves ||= []).push({ label, presetId, status });
         applied.push([cid, value, presetId]);
+        continue;
+      }
+      if (cid === '@cameraFrame') {
+        const frame = parseCameraFrame(value);
+        if (!frame) fail(report.failurePhase, `@cameraFrame needs x:y:z:tx:ty:tz, got ${value}`);
+        const effective = await evaluate(op(`(() => { const f = w.__kaminosSetSceneCameraFrame; return typeof f === 'function' ? f(${JSON.stringify(frame.position)}, ${JSON.stringify(frame.target)}) : null; })()`));
+        const mismatch = cameraFrameMismatch(frame, effective);
+        applied.push([cid, value, effective]);
+        if (mismatch) { report.lastTrustworthyEvidence.applied = applied; fail(report.failurePhase, mismatch); }
         continue;
       }
       if (cid.startsWith('@')) fail(report.failurePhase, `unknown debug-API control ${cid}`);
