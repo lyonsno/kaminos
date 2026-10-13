@@ -17,6 +17,11 @@ const queue=process.argv[process.argv.indexOf('--queue-dir')+1],
   manifest=JSON.parse(fs.readFileSync(process.argv[process.argv.indexOf('--manifest')+1])),
   args=manifest.argv,get=k=>args[args.indexOf(k)+1],config=JSON.parse(fs.readFileSync(get('--config'))),
   mode=config.testMode,job='identified-job',dir=path.join(queue,mode==='failed'?'failed':'done',job);
+// Replay the external rejection actually observed on worker ff8c4b06.
+if(manifest.output_class==='artifact'){
+ console.error(JSON.stringify({schema:'gpu-greenroom.command-submission-failure.v1',status:'failed',
+  failure_phase:'submission-validation',error_message:'invalid command output_class'}));process.exit(1);
+}
 fs.mkdirSync(dir,{recursive:true});
 const data=fs.readFileSync(config.testGlb);
 fs.writeFileSync(get('--output'),mode==='partial'?data.subarray(0,data.length-4):data);
