@@ -100,7 +100,7 @@ try:
     m=copy.deepcopy(original);m['pipelineType']=a.pipeline_type;m['meshResolution']=512 if a.pipeline_type=='512' else 1024;m['samplingSteps']=a.steps
     m['producer']=report['producer'];m['basePackage']={'path':str(base/'manifest.json'),'sha256':sha(base_bytes),'producer':original['producer']}
     if a.pipeline_type=='512':
-        del m['models']['highResolutionShape']
+        m['models'].pop('highResolutionShape',None)
         for role in ['shapeDecoder','textureDecoder']:m['models'][role]['config']['resolution']=32
     for role in ['sparseFlow','lowResolutionShape','highResolutionShape','textureFlow']:
         if role in m['models']:m['models'][role]['config']['steps']=a.steps
@@ -116,12 +116,21 @@ try:
     linked=0;linked_bytes=0
     for key,row in m['tensors'].items():
         if key==image_tensor:continue
-        if Path(row['file']).name!=row['file']:raise ValueError('safe retained tensor name required')
-        source=base/row['file'];target=out/row['file']
-        if source.stat().st_size!=row['byteLength']:raise ValueError('partial retained checkpoint '+key)
+        storage=row.get('storage') if 'storage' in row else row
+        if not isinstance(storage,dict):raise ValueError('identified retained checkpoint storage required')
+        if 'storage' in row and (storage.get('encoding') not in ['bf16-le','f16-le'] or
+                storage.get('byteLength')!=row['byteLength']//2 or row['byteLength']%2 or
+                not isinstance(storage.get('sha256'),str) or len(storage['sha256'])!=64 or
+                any(c not in '0123456789abcdef' for c in storage['sha256'])):
+            raise ValueError('identified complete compact checkpoint storage required')
+        file=storage.get('file')
+        if not isinstance(file,str) or not file or file in ['.','..'] or Path(file).name!=file:
+            raise ValueError('safe retained tensor name required')
+        source=base/file;target=out/file
+        if source.stat().st_size!=storage['byteLength']:raise ValueError('partial retained checkpoint '+key)
         if not target.exists():os.link(source,target)
         if not os.path.samefile(source,target):raise ValueError('checkpoint file is not the exact retained inode '+key)
-        linked+=1;linked_bytes+=row['byteLength']
+        linked+=1;linked_bytes+=storage['byteLength']
     report['phase']='prepared-DINO-pixels';persist()
     with Image.open(image_path) as image:
         rgb=image.convert('RGB');source_size=list(rgb.size)
