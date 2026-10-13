@@ -231,3 +231,18 @@ test('camera-frame arm: parsed strictly, and the effective frame must match the 
   assert.match(capture, /const mismatch = cameraFrameMismatch\(frame, effective\);/);
   assert.match(capture, /if \(mismatch\) \{ report\.lastTrustworthyEvidence\.applied = applied; fail\(report\.failurePhase, mismatch\); \}/);
 });
+
+// The immersed source clears the analytic injector (main 5511fea6b), so the
+// analytic receipt reads 'inactive' under that law; the immersed receipt's own
+// requested law and admission are the effective route.
+test('immersed-source arm: the immersed receipt is the effective source law, not the retired analytic receipt', () => {
+  const arm = { set: [['volume-emitter-source-law', 'immersed-source']] };
+  const admitted = { emitterSourceLaw: 'inactive', immersedSource: { requested: { sourceLaw: 'immersed-source' }, effective: { admitted: true } } };
+  assert.deepEqual(effectiveMismatches(arm, admitted, null), []);
+  const refused = { emitterSourceLaw: 'inactive', immersedSource: { requested: { sourceLaw: 'immersed-source' }, effective: { admitted: false, reason: 'source-law-is-not-immersed-source' } } };
+  assert.ok(effectiveMismatches(arm, refused, null).some(m => /not admitted/.test(m)));
+  const wrongLaw = { emitterSourceLaw: 'inflow-boundary', immersedSource: { requested: { sourceLaw: 'inflow-boundary' }, effective: { admitted: false } }, inflowBoundary: { effective: { admitted: true } } };
+  assert.ok(effectiveMismatches(arm, wrongLaw, null).some(m => /source law requested immersed-source, effective inflow-boundary/.test(m)));
+  const legacy = { set: [['volume-emitter-source-law', 'legacy-volume']] };
+  assert.deepEqual(effectiveMismatches(legacy, { emitterSourceLaw: 'legacy-volume' }, null), []);
+});

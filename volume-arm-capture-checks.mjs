@@ -12,6 +12,15 @@ const solverExpectation = { legacy: { solver: 'legacy' }, converged: { solver: '
 // an arm that only changes the override cannot complete in a different mode.
 // `fault` is the capture's injected fault name (or ''), which perturbs the
 // observation for the epsilon and null-mode-drift faults.
+// The immersed source clears the analytic injector (main 5511fea6b), so the
+// analytic receipt reads 'inactive' under that law; the immersed receipt's own
+// requested law and admission are the effective route.
+export function effectiveEmitterSourceLaw(end) {
+  const immersed = end?.immersedSource;
+  if (immersed?.requested?.sourceLaw === 'immersed-source' && immersed?.effective?.admitted === true) return 'immersed-source';
+  return end?.emitterSourceLaw;
+}
+
 export function effectiveMismatches(arm, end, expectedMode, fault = '') {
   const mismatches = [];
   for (const [cid, value] of arm.set) {
@@ -62,7 +71,8 @@ export function effectiveMismatches(arm, end, expectedMode, fault = '') {
       else if (!Number.isFinite(effective) || Math.abs(effective - Number(value)) > 1e-6) mismatches.push(`${cid} requested ${value}, effective ${effective}`);
     }
     if (cid === 'volume-emitter-source-law') {
-      if (end.emitterSourceLaw !== value) mismatches.push(`emitter source law requested ${value}, effective ${end.emitterSourceLaw}`);
+      const effectiveLaw = effectiveEmitterSourceLaw(end);
+      if (effectiveLaw !== value) mismatches.push(`emitter source law requested ${value}, effective ${effectiveLaw}`);
       if (value === 'inflow-boundary' && end.inflowBoundary?.effective?.admitted !== true) mismatches.push(`inflow-boundary requested but not admitted${end.inflowBoundary?.effective?.reason ? ` (${end.inflowBoundary.effective.reason})` : ''}`);
       if (value === 'immersed-source' && end.immersedSource?.effective?.admitted !== true) mismatches.push(`immersed-source requested but not admitted${end.immersedSource?.effective?.reason ? ` (${end.immersedSource.effective.reason})` : ''}`);
     }
