@@ -1,10 +1,18 @@
+export function reconcileStoneWorkbenchTool(workspace,entry,activeTab,document){
+ if(!workspace)return;
+ const stone=entry?.state().id==='stone/fracture';workspace.setTool(stone?'stone/fracture':activeTab);
+ if(stone)document.getElementById('experiment-tool-slot').hidden=true;
+}
+
 export function composeStoneWorkbenchSource(source){
  const replace=(anchor,value)=>{if(source.split(anchor).length!==2)throw Error(`Shared host source anchor missing or duplicated: ${anchor}`);source=source.replace(anchor,value);};
  replace('</head>',`<style>
 body.stone-workbench[data-workspace=workbench] #scene-edit-hud,body.stone-workbench[data-workspace=workbench] #navigation-hint{display:none}
 @media(max-width:540px){body.has-authoring-workspace.experiment-workspace.stone-workbench[data-workspace=workbench]{grid-template-columns:minmax(0,1fr);grid-template-rows:42px minmax(240px,42vh) minmax(0,1fr)}body.experiment-workspace.stone-workbench #authoring-inspector{display:none!important}body.stone-workbench #experiment-browser{display:none}body.stone-workbench .experiment-panel-heading{padding:12px 16px}body.stone-workbench .experiment-panel-heading p:empty{display:none}}
 </style></head>`);
- replace('let ownerExperimentEntry=null,',`const stoneFrameSubscribers=new Set();let stoneHostAdapter=null;
+ replace('fluidWorkbench?.setTool(window.__kaminosActiveTab());',`reconcileStoneWorkbenchTool(fluidWorkbench,ownerExperimentEntry,window.__kaminosActiveTab(),document);`);
+ replace('let ownerExperimentEntry=null,',`${reconcileStoneWorkbenchTool.toString()}
+const stoneFrameSubscribers=new Set();let stoneHostAdapter=null;
 let ownerExperimentEntry=null,`);
  replace('function installFluidWorkbench({entryOnly=false,investigation=null}={}) {',`function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
 entryOnly=entryOnly||new URLSearchParams(location.search).get('experiment')==='stone/fracture';`);

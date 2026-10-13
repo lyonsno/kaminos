@@ -227,7 +227,23 @@ try{
  }
  api.object=scene;
  api.viewport={ownership:host?'borrowed-native':'producer-native',threeRevision:THREE.REVISION,canvas:renderer.domElement.id||null,scene:container.uuid,object:scene.uuid,deviceMatches:!host||host.device===device};
- api.dispose=()=>{if(!disposal){closing=true;paused=true;lifetime.abort();unsubscribeFrames?.();if(frameRequest!==null)cancelAnimationFrame(frameRequest);gestureGeneration++;pointerContact=null;pendingPick=false;gesture=null;disposal=(async()=>{await pickTask?.catch(()=>{});await settle();await resident?.release();await device?.queue.onSubmittedWorkDone();for(const p of pieces){p.gpu?.dispose();p.mesh.geometry.dispose();}residentGrip?.dispose();residentSupport?.dispose();resident?.dispose();surface?.dispose();for(const object of [support,marker,arrow]){object.geometry.dispose();object.material.dispose();}capMaterial.dispose();disposeStoneAssets(assets);container.remove(scene);controls.enabled=previousControlsEnabled;if(!host){controls.dispose();renderer.dispose();device?.destroy();}})();}return disposal;};
+ api.dispose=()=>{if(!disposal){
+  const status={complete:false,errors:[]};api.disposalStatus=()=>({...status,errors:status.errors.map(({phase,message})=>({phase,message}))});
+  closing=true;paused=true;lifetime.abort();unsubscribeFrames?.();if(frameRequest!==null)cancelAnimationFrame(frameRequest);gestureGeneration++;pointerContact=null;pendingPick=false;gesture=null;
+  disposal=(async()=>{
+   const errors=[],attempt=async(phase,action)=>{try{await action();}catch(error){errors.push(error);status.errors.push({phase,message:error.message});}};
+   await attempt('pending-pick',()=>pickTask);await attempt('settle',()=>settle());await attempt('release',()=>resident?.release());await attempt('completion',()=>device?.queue.onSubmittedWorkDone());
+   const drainErrors=errors.length,cleanup=[];
+   for(const p of pieces)cleanup.push(()=>p.gpu?.dispose(),()=>p.mesh.geometry.dispose());
+   cleanup.push(()=>residentGrip?.dispose(),()=>residentSupport?.dispose(),()=>resident?.dispose(),()=>surface?.dispose());
+   for(const object of [support,marker,arrow])cleanup.push(()=>object.geometry.dispose(),()=>object.material.dispose());
+   cleanup.push(()=>capMaterial.dispose(),()=>disposeStoneAssets(assets),()=>container.remove(scene),()=>{controls.enabled=previousControlsEnabled;});
+   if(!host)cleanup.push(()=>controls.dispose(),()=>renderer.dispose(),()=>device?.destroy());
+   for(const action of cleanup)await attempt('cleanup',action);
+   status.complete=errors.length===drainErrors;
+   if(errors.length)throw new AggregateError(errors,`Stone disposal: ${errors[0].message}`,{cause:errors[0]});
+  })();
+ }return disposal;};
  if(host){unsubscribeFrames=host.subscribeFrame({before:frame,after:presented});if(typeof unsubscribeFrames!=='function')throw Error('Host frame subscription must return an unsubscribe function');}else draw();
  return api;
 }catch(e){closing=true;lifetime.abort();unsubscribeFrames?.();fail(e);container.remove(scene);for(const p of pieces){p.gpu?.dispose();p.mesh.geometry.dispose();}residentGrip?.dispose();residentSupport?.dispose();resident?.dispose();surface?.dispose();for(const object of [support,marker,arrow]){object.geometry.dispose();object.material.dispose();}capMaterial.dispose();disposeStoneAssets(assets);controls.enabled=previousControlsEnabled;if(!host){controls.dispose();renderer.dispose();device?.destroy();}throw e;}

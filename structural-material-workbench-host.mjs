@@ -27,7 +27,7 @@ export function createStoneWorkbenchCapability(viewport,{createRuntime=async opt
   api.object.userData.kaminosExperiment={id:'stone/fracture',source:api.experimentStatus().sourceSha256};
   const owner=createStoneOwnerHost(api),handle=await owner.stone.open(inputs);
   current=api;
-  return {...handle,read:()=>({...handle.read(),viewport:api.viewport}),async dispose(){try{await handle.dispose();}finally{try{await api.dispose();}finally{panel?.node.remove();current=null;panel=null;}}},api};
+  return {...handle,read:()=>({...handle.read(),viewport:api.viewport}),async dispose(){try{await handle.dispose();}finally{try{await api.dispose();}finally{if(api.disposalStatus()?.complete){panel?.node.remove();current=null;panel=null;}else api.reportFailure(new Error('Stone cleanup incomplete; runtime retained'));}}},api};
   }catch(error){await api?.dispose();panel?.node.remove();current=null;panel=null;throw error;}finally{opening=false;}
  }},controls:{mountStone({root,invoke}){
   if(!panel)throw Error('Stone controls require an opened material');const mounted=panel;root.append(mounted.node);
