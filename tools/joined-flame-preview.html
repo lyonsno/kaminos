@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>Joined immersed flame — diagnostic preview</title>
+<style>body{margin:0;background:#080b0d;color:#d7e1e4;font:15px system-ui}header{padding:16px;background:#182126}main{display:flex;height:calc(100vh - 105px)}aside{width:280px;padding:20px;overflow:auto}label{display:block;margin:15px 0}input,select,button{font:inherit}input[type=range]{width:100%}button{padding:8px;margin:6px}#viewport{flex:1;position:relative;background:#000;min-width:200px}canvas{width:100%;height:100%}pre{white-space:pre-wrap;font:12px monospace}small{color:#a9bbc3}#error{color:#ff918c}</style>
+<header><b>Joined immersed flame</b> · Diagnostic scheduling / not a frame-cost measurement<br><small>Fine flame rendered; exterior grid participates in flow and material transport but is not yet drawn. Changes to grid or roof restart the simulation.</small></header>
+<main><aside>
+<label>Fine cells <select id="fine"><option>32</option><option>48</option><option>64</option></select></label>
+<label>Coarse width (height = 2×) <select id="coarse"><option>16</option><option selected>32</option><option>48</option><option>64</option></select></label>
+<label><input id="roof" type="checkbox"> Exterior roof at y = 1.5</label>
+<button id="apply">Apply grids / restart</button><button id="pause">Pause</button>
+<label>Inlet speed <input id="inlet" type="range" min="0" max="1" step=".005" value=".10"></label>
+<label>Fuel <input id="fuel" type="range" min="0" max="1" step=".01" value=".56"></label>
+<label>Inlet heat <input id="heat" type="range" min="0" max="2" step=".01" value="1.2"></label>
+<label>Smoke extinction <input id="extinction" type="range" min="0" max="10" step=".01" value=".5"></label>
+<label>Exposure EV <input id="exposure" type="range" min="-4" max="4" step=".05" value="-1"></label>
+<pre id="status">Loading actual GPU route…</pre><pre id="error"></pre></aside><div id="viewport"></div></main>
+<script type="module" src="/fine/tools/joined-flame-preview-browser.mjs"></script>
