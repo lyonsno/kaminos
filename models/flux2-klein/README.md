@@ -22,9 +22,9 @@ Times are for one image with 4 steps in Chrome, sharing the GPU with a continuou
 
 | Size | 16 GB Apple M2 Pro | Apple M4 Max |
 | --- | --- | --- |
-| 512 × 512 | 17–18 s (22–23 s with better lettering) | 6–7 s |
+| 512 × 512 | 14–15 s (about 5 s more with better lettering) | 6–7 s |
 | 768 × 768 | 40–46 s | about 12 s |
-| 1024 × 1024 | 67–69 s | about 23 s |
+| 1024 × 1024 | about 58 s | about 23 s |
 
 During generation the scene kept a median frame time of about 20 ms on the M2 Pro.
 
@@ -32,7 +32,18 @@ Prompts are padded with filler tokens before the transformer reads them. The pag
 
 ## Memory
 
-The weights take 3.9 GB of GPU memory. Working memory grows with image size, so the transformer's buffers are released before the image decoder allocates its own, and the decoder's are released once the image is read back. On the 16 GB M2 Pro a 1024 × 1024 image left 30% of memory free without any swapping.
+The weights take 3.6 GB of GPU memory. Working memory grows with image size, so the transformer's buffers are released before the image decoder allocates its own, and the decoder's are released once the image is read back. The decoder stores its activations in 16 bits, and attention keeps scores for only a few heads at a time.
+
+**Low-memory mode** (a checkbox on the page, ticked by default on phones and devices reporting less than 8 GB) never holds the text encoder and the transformer at the same time. A new prompt reloads the text encoder from the browser cache in place of the transformer, encodes, and swaps back; generating again with the same prompt swaps nothing. Images are identical in both modes.
+
+Peak GPU memory measured by the page on the 16 GB M2 Pro:
+
+| Size | Normal | Low-memory mode |
+| --- | --- | --- |
+| 512 × 512 | 4.5 GB | 3.0 GB (a new prompt takes about 3 s longer) |
+| 1024 × 1024 | 7.0 GB | 5.5 GB |
+
+The low-memory figures are aimed at 8 GB Macs and phones but have not yet been measured on one.
 
 ## Running it
 

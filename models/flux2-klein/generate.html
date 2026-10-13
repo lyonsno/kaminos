@@ -41,7 +41,7 @@ const q = new URLSearchParams(location.search);
 // else the serving origin); ?te= / ?dit= / ?vae= override a single component.
 const base = (q.get('weights') ?? document.querySelector('meta[name="klein-weights"]')?.content ?? '').replace(/\/$/, '');
 const urls = { textEncoderUrl: q.get('te') ?? `${base}/te`, transformerUrl: q.get('dit') ?? `${base}/dit`, vaeUrl: q.get('vae') ?? `${base}/vae` };
-const kernels = { gemmVersion: Number(q.get('gemm') ?? 2), sharedType: q.get('shared') ?? 'f16' };
+const kernels = { gemmVersion: Number(q.get('gemm') ?? 2), sharedType: q.get('shared') ?? 'f16', vaeActType: q.get('vaeAct') ?? 'f16', residency: q.get('memory') ?? 'all' };
 const $ = id => document.getElementById(id);
 const status = $('status'), go = $('go');
 let demo;
@@ -88,7 +88,7 @@ $('pause').onclick = async () => { const s = await demo.togglePause(); if (s) $(
 $('stop').onclick = () => demo.stop();
 
 // Headless batch entry point: PNG base64 plus timings, duties and scene frame stats per job.
-window.kleinBatch = async (jobs, { cooperative = true, targetDutyMs = 12, maxInFlight = 1, textLength = 512 } = {}) => {
+window.kleinBatch = async (jobs, { cooperative = true, targetDutyMs = 12, maxInFlight = 1, textLength = 512, dutyLog = false } = {}) => {
   await window.kleinReady;
   const results = [];
   for (const job of jobs) {
@@ -100,9 +100,12 @@ window.kleinBatch = async (jobs, { cooperative = true, targetDutyMs = 12, maxInF
     const longest = [...r.duties].sort((a, b) => (b.queueMs ?? 0) - (a.queueMs ?? 0)).slice(0, 5)
       .map(({ label, queueMs, estimatedFlops }) => ({ label, queueMs, gflops: estimatedFlops / 1e9 }));
     results.push({ name: job.name, seed: job.seed, size: job.size, cooperative: r.cooperative, wallMs: r.wallMs, timings: r.timings,
-      promptTokens: r.promptTokens, frames: r.frames, dutyCount: r.dutyCount, longestDutyMs: r.longestDutyMs, longestDuties: longest, png: btoa(bin) });
+      promptTokens: r.promptTokens, gpuBytes: r.gpuBytes, frames: r.frames, dutyCount: r.dutyCount, longestDutyMs: r.longestDutyMs, longestDuties: longest, png: btoa(bin),
+      // Every duty in submit order, timed from the run's start, when asked for.
+      duties: dutyLog ? r.duties.map(({ label, estimatedFlops, dutyFlopsBudget, inFlightAtSubmit, gateWaitMs, queueMs, submittedAt }) =>
+        ({ label, gflops: estimatedFlops / 1e9, budgetGflops: dutyFlopsBudget / 1e9, inFlightAtSubmit, gateWaitMs, queueMs, atMs: submittedAt - r.startedAt })) : undefined });
   }
-  return { results, residentBytes: demo.residentBytes, loadMs: demo.loadMs, kernels: demo.kernels, loadStats: demo.pipeline.loadStats };
+  return { results, residentBytes: demo.residentBytes, gpuBytesAfterLoad: demo.gpuBytesAfterLoad, loadMs: demo.loadMs, kernels: demo.kernels, loadStats: demo.pipeline.loadStats };
 };
 window.kleinLoadStats = () => demo?.pipeline.loadStats;
 window.kleinLoadMs = () => demo?.loadMs;

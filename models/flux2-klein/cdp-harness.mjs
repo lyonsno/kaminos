@@ -53,12 +53,15 @@ export async function launchChrome(chrome, extraFlags = [], report = {}, { profi
   const child = spawn(chrome, [...flags, `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   report.chromeFlags = flags; report.ownedBrowserPid = child.pid;
   child.once('exit', (c, s) => { report.browserExit = { code: c, signal: s }; });
+  // A cold browser on a busy machine can take well over 20 s to open its debugging port.
+  const launchStarted = Date.now();
   const wsUrl = await new Promise((resolve, reject) => {
     let stderr = '';
     child.stderr.on('data', b => { stderr += b; const m = stderr.match(/DevTools listening on (ws:\/\/\S+)/); if (m) resolve(m[1]); });
     child.once('exit', (c, s) => reject(new Error(`browser exited before CDP: ${c}/${s}`)));
-    setTimeout(() => reject(new Error('CDP timeout')), 20000);
+    setTimeout(() => reject(new Error(`CDP timeout: no debugging port after 120 s; stderr: ${stderr.slice(-500)}`)), 120000);
   });
+  report.browserLaunchMs = Date.now() - launchStarted;
   const base = wsUrl.replace('ws://', 'http://').replace(/\/devtools\/browser\/.*/, '');
   report.effectiveBrowser = (await (await fetch(`${base}/json/version`)).json()).Browser;
   let page;

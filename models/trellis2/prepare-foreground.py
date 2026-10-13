@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 import traceback
+from source_attestation import git_source_identity
 
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--source-root',type=Path,required=True)
@@ -22,8 +23,7 @@ report={'schema':'trellis2.foreground-preparation.v0','status':'running','phase'
 started=time.perf_counter()
 def h(data):return hashlib.sha256(data).hexdigest()
 def persist():(out/'report.json').write_text(json.dumps(report,indent=2)+'\n')
-def ident(root):return {'root':str(root),'commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),
-                       'dirty':subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True)}
+def ident(root):return {'root':str(root),**git_source_identity(root)}
 persist()
 try:
     source=args.source_root.resolve();report['source']=ident(source)
@@ -61,7 +61,7 @@ try:
         data=(out/name).read_bytes();files[name]={'path':str(out/name),'byteLength':len(data),'sha256':h(data)}
     report['files']=files;report['effectiveRoute']=result.provenance['route']+'/reference-crop-premultiply/CPU'
     report['sourceAfter']=ident(source)
-    if report['sourceAfter']!={k:report['source'][k] for k in ['root','commit','dirty']}:raise ValueError('source changed during preprocessing')
+    if any(report['sourceAfter'][k]!=report['source'][k] for k in ['root','commit','dirty']):raise ValueError('source changed during preprocessing')
     report['packages']={k:metadata.version(k) for k in ['rembg','onnxruntime','pillow','numpy']}
     report['status']='succeeded';report['phase']=None
 except Exception as e:

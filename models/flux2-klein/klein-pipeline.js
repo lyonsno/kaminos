@@ -137,9 +137,14 @@ export function gaussianNoise(n, seed) {
 export class KleinPipeline {
   // Product kernels default to GEMM v2 with f16 shared tiles (about 1.7x faster than the
   // parity kernel; final-velocity drift about 5e-3, small next to int4 weight drift).
-  constructor(device, { textEncoderUrl, transformerUrl, vaeUrl, gemmVersion = 2, sharedType = 'f16' }) {
+  // residency 'all' keeps every model's weights on the GPU. 'lean' (for 8 GB machines and phones)
+  // never holds the text encoder and the transformer together: a new prompt loads the text encoder
+  // from the browser cache in place of the transformer, encodes, and swaps back, so peak memory is
+  // about 2.6 GB at 512 instead of 4 GB, at the cost of those reloads. A re-roll swaps nothing.
+  constructor(device, { textEncoderUrl, transformerUrl, vaeUrl, gemmVersion = 2, sharedType = 'f16', vaeActType = 'f16', residency = 'all' }) {
     this.device = device; this.urls = { textEncoderUrl, transformerUrl, vaeUrl };
-    this.kernels = { gemmVersion, sharedType };
+    this.kernels = { gemmVersion, sharedType, vaeActType };
+    this.residency = residency;
     this.timings = {}; this.residentBytes = {};
     // One duty scheduler for all three components so a cooperative run has a single
     // fence chain and FLOP budget from the first text-encoder layer to the last VAE stage.
@@ -167,19 +172,25 @@ export class KleinPipeline {
     this.tokenizer = new QwenTokenizer(JSON.parse(new TextDecoder().decode(tokenizerBytes)));
     this.textEncoder = new KleinTextEncoder(this.device, this.teManifest);
     Object.assign(this.textEncoder, this.kernels); this.textEncoder.sched = this.sched;
+    const lean = this.residency === 'lean';
     let bytes = 0;
-    await this.textEncoder.loadBundles(fetchBundle(te, 'text-encoder'), (n, b) => { bytes += b; });
-    this.residentBytes.textEncoder = bytes;
+    if (!lean) {
+      await this.textEncoder.loadBundles(fetchBundle(te, 'text-encoder'), (n, b) => { bytes += b; });
+      this.residentBytes.textEncoder = bytes;
+    }
     this.transformer = new KleinTransformer(this.device, this.ditManifest);
     Object.assign(this.transformer, this.kernels); this.transformer.sched = this.sched;
     bytes = 0;
     await this.transformer.loadBundles(fetchBundle(dit, 'transformer'), (n, b) => { bytes += b; });
     this.residentBytes.transformer = bytes;
     this.vae = new KleinVaeDecoder(this.device, this.vaeManifest);
-    this.vae.sharedType = this.kernels.sharedType; this.vae.sched = this.sched;
+    this.vae.sharedType = this.kernels.sharedType; this.vae.actType = this.kernels.vaeActType; this.vae.sched = this.sched;
     const vb = await fetchBundle(vae, 'vae')(this.vaeManifest.bundle.file, this.vaeManifest.bundle);
     await this.vae.load(vb); this.residentBytes.vae = vb.byteLength;
     await this.precompile();
+    // Lean: the first generation needs the text encoder, so it takes the transformer's place now
+    // (downloading it on a first visit).
+    if (lean) await this.useWeights('textEncoder', fetchBundle(te, 'text-encoder'));
     this.timings.loadMs = performance.now() - t0;
   }
 
@@ -192,6 +203,8 @@ export class KleinPipeline {
     const totalBytes = Object.values(manifest.bundles).reduce((sum, b) => sum + transferBytes(b), 0);
     const stats = { totalBytes, cachedBytes: 0, downloadedBytes: 0, cacheErrors: [] };
     this.transformer?.destroy(); this.transformer = null; this.residentBytes.transformer = 0;
+    // Lean residency never holds the text encoder and a transformer together.
+    if (this.residency === 'lean' && this.textEncoder?.weightsResident) { this.textEncoder.unloadWeights(); this.residentBytes.textEncoder = 0; }
     const next = new KleinTransformer(this.device, manifest);
     Object.assign(next, this.kernels); next.sched = this.sched;
     let loadedBytes = 0, bytes = 0;
@@ -205,6 +218,28 @@ export class KleinPipeline {
     return stats;
   }
 
+  // Lean residency: make `which` ('textEncoder' or 'transformer') the resident model, freeing the
+  // other's weights first. Encoded work is submitted before anything is freed. Weights come from
+  // the browser cache (or the network if the cache was cleared). Returns milliseconds spent.
+  async useWeights(which, fetchBundle = null) {
+    const model = this[which], other = which === 'textEncoder' ? this.transformer : this.textEncoder;
+    if (model.weightsResident) return 0;
+    const t0 = performance.now();
+    await this.sched.flush(`swap.${which}`);
+    if (other?.weightsResident) { other.unloadWeights(); this.residentBytes[which === 'textEncoder' ? 'transformer' : 'textEncoder'] = 0; }
+    const root = which === 'textEncoder' ? this.urls.textEncoderUrl : this.urls.transformerUrl;
+    const stats = { cachedBytes: 0, downloadedBytes: 0, cacheErrors: [] };
+    const fetchFrom = fetchBundle ?? ((file, bundle) => getWeightBytes(`${root}/${file}`, { sha256: bundle.sha256, bytes: bundle.bytes, gzip: bundle.gzip }, stats));
+    let bytes = 0;
+    const upload = () => model.loadBundles(fetchFrom, (n, b) => { bytes += b; });
+    // In a cooperative run the reload is not a duty, so it runs as a foreground window: the
+    // renderer keeps getting frames while the weights stream in from the cache.
+    const withForeground = this.sched.schedule?.withForeground;
+    if (withForeground) await withForeground('klein-weight-swap', upload); else await upload();
+    this.residentBytes[which] = bytes;
+    return performance.now() - t0;
+  }
+
   // Compile every GPU pipeline a generation uses before the first one runs. A tiny dry generation
   // (64x64, one step, zero embeddings, nothing dispatched) records each pipeline the code would
   // create; they are then compiled with createComputePipelineAsync, off the GPU process's main
@@ -214,10 +249,15 @@ export class KleinPipeline {
     const t0 = performance.now();
     const collected = new Map(), models = [this.textEncoder, this.transformer, this.vae];
     for (const m of models) m.pipelineCollector = collected;
+    const stubbed = [this.textEncoder, this.transformer].filter(m => !m.weightsResident);
+    for (const m of stubbed) m.stubWeights();
+    this.collecting = true;
     try {
       await this.generateScheduled({ prompt: 'x', seed: 0, width: 64, height: 64, steps: 1, textLength: 'fit0', dry: true });
     } finally {
       for (const m of models) m.pipelineCollector = null;
+      for (const m of stubbed) m.weights = {};
+      this.collecting = false;
       // The dry run tracked uniforms without encoding any dispatch; drop them so the next
       // generation starts with a clean scheduler.
       await this.sched.discard();
@@ -228,6 +268,13 @@ export class KleinPipeline {
       const p = await this.device.createComputePipelineAsync({ layout: 'auto', compute: { module: this.device.createShaderModule({ code }), entryPoint: 'main' } });
       p.label = key; owner.pipelines[key] = p;
     }));
+    // Run the same tiny generation once on the GPU, so each pipeline's first dispatch happens
+    // here rather than as a long stall at the start of the visitor's first image.
+    const t1 = performance.now();
+    await this.generateScheduled({ prompt: 'x', seed: 0, width: 64, height: 64, steps: 1, textLength: 'fit0', dry: true });
+    await this.sched.flush('warm');
+    this.sched.stats.history.length = 0;
+    this.timings.warmMs = performance.now() - t1;
     this.timings.precompileMs = performance.now() - t0; this.timings.precompiledPipelines = collected.size;
     return collected.size;
   }
@@ -283,10 +330,15 @@ export class KleinPipeline {
     let t0 = performance.now();
     const promptKey = `${maxLength}\u0000${prompt}`;
     const embedBytes = txtTokens * this.transformer.cfg.joint_attention_dim * 4;
+    const lean = this.residency === 'lean';
+    const cachedPrompt = !dry && this.promptCache?.key === promptKey;
+    if (lean && !dry && !cachedPrompt) { onPhase?.('weights'); t.swapMs = (t.swapMs ?? 0) + await this.useWeights('textEncoder'); }
     onPhase?.('text');
     if (dry) {
-      await this.textEncoder.encode(new Float32Array(txtTokens * this.teManifest.config.hidden_size), framed.attentionMask, this.transformer.act.promptEmbeds);
-    } else if (this.promptCache?.key === promptKey) {
+      // Lean residency warms up with the transformer resident (the prompt input stays zero), but
+      // the recording pass still walks the text encoder over its stub weights.
+      if (this.collecting || this.textEncoder.weightsResident) await this.textEncoder.encode(new Float32Array(txtTokens * this.teManifest.config.hidden_size), framed.attentionMask, this.transformer.act.promptEmbeds);
+    } else if (cachedPrompt) {
       this.sched.encoder().copyBufferToBuffer(this.promptCache.buffer, 0, this.transformer.act.promptEmbeds, 0, embedBytes);
       t.embeddingFetchMs = 0; t.textEncodeMs = 0; t.textCached = true;
     } else {
@@ -305,6 +357,7 @@ export class KleinPipeline {
       this.sched.encoder().copyBufferToBuffer(this.transformer.act.promptEmbeds, 0, this.promptCache.buffer, 0, embedBytes);
     }
 
+    if (lean && !this.transformer.weightsResident) { onPhase?.('weights'); t.swapMs = (t.swapMs ?? 0) + await this.useWeights('transformer'); }
     const sched = kleinSchedule(imgTokens, steps);
     onPhase?.('denoise');
     t.stepMs = [];
@@ -337,7 +390,7 @@ export class KleinPipeline {
       for (let c = 0; c < 3; c++) rgba[i * 4 + c] = Math.round(Math.min(1, Math.max(0, rgb[i * 3 + c] / 2 + 0.5)) * 255);
       rgba[i * 4 + 3] = 255;
     }
-    t.totalMs = t.embeddingFetchMs + t.textEncodeMs + t.stepMs.reduce((a, b) => a + b, 0) + t.vaeDecodeMs;
+    t.totalMs = t.embeddingFetchMs + t.textEncodeMs + (t.swapMs ?? 0) + t.stepMs.reduce((a, b) => a + b, 0) + t.vaeDecodeMs;
     const duties = this.sched.stats.history.splice(0);
     this.promptCache.key = promptKey;
     return { rgba, width, height, timings: t, promptTokens: framed.length, textTokens: txtTokens, duties };

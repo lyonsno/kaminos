@@ -96,7 +96,7 @@ export class KleinDutyScheduler {
     };
     if (control) await control.runDuty(work); else await work();
     this.stats.duties++; this.stats.submits++;
-    const row = { label, estimatedFlops: flops, gateWaitMs: submitted - gateStart, dutyFlopsBudget: this.budget() };
+    const row = { label, estimatedFlops: flops, gateWaitMs: submitted - gateStart, dutyFlopsBudget: this.budget(), submittedAt: submitted };
     this.stats.history.push(row);
     row.inFlightAtSubmit = this.inFlight.length;
     this.lastFence = this.device.queue.onSubmittedWorkDone().then(() => {

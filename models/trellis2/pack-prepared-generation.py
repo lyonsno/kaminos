@@ -11,6 +11,7 @@ import traceback
 import time
 import numpy as np
 from PIL import Image
+from source_attestation import git_source_identity
 
 p=argparse.ArgumentParser(description=__doc__)
 for name in ['repo-root','base','out']:p.add_argument('--'+name,type=Path,required=True)
@@ -23,6 +24,7 @@ p.add_argument('--expected-preprocess-source-commit')
 p.add_argument('--expected-commit',required=True)
 p.add_argument('--pipeline-type',choices=['512','1024_cascade'],required=True)
 p.add_argument('--steps',type=int,required=True)
+p.add_argument('--seed',type=int,help='explicit unsigned32 sampler seed; omitted preserves the checkpoint base seed')
 a=p.parse_args();out=a.out.resolve();out.mkdir(parents=True,exist_ok=True)
 report={'schema':'trellis2.prepared-generation-package.v0','status':'running','phase':'source-admission','modelCalls':0,'command':sys.argv}
 def sha(data):return hashlib.sha256(data).hexdigest()
@@ -57,12 +59,12 @@ try:
             report['previousManifest']=previous['previousManifest']
     block_current_attempt('running');persist()
     root=a.repo_root.resolve();base=a.base.resolve();foreground=a.foreground.resolve() if a.foreground else out/'foreground'
-    commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
-    dirty=subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True)
+    source_identity=git_source_identity(root);commit=source_identity['commit'];dirty=source_identity['dirty']
     if commit!=a.expected_commit or dirty:raise ValueError('exact clean package producer required')
     if Path(__file__).resolve()!=root/'models/trellis2/pack-prepared-generation.py':raise ValueError('effective packager root differs from requested source')
     if a.steps<1:raise ValueError('positive explicit sampler steps required')
-    report['producer']={'root':str(root),'commit':commit,'dirty':dirty,'scriptSha256':file_sha(Path(__file__))}
+    if a.seed is not None and not 0<=a.seed<=0xffffffff:raise ValueError('unsigned32 sampler seed required')
+    report['producer']={'root':str(root),**source_identity,'scriptSha256':file_sha(Path(__file__))}
     base_bytes=(base/'manifest.json').read_bytes();original=json.loads(base_bytes)
     if original.get('schema')!='trellis2.generation-inputs.v0' or original.get('status')!='succeeded' or original.get('modelCalls')!=0:
         raise ValueError('complete model-free retained checkpoint base required')
@@ -98,9 +100,10 @@ try:
     if not image_path.is_relative_to(foreground) or file_sha(image_path)!=image_row['sha256'] or image_path.stat().st_size!=image_row['byteLength']:
         raise ValueError('complete unchanged prepared image required')
     m=copy.deepcopy(original);m['pipelineType']=a.pipeline_type;m['meshResolution']=512 if a.pipeline_type=='512' else 1024;m['samplingSteps']=a.steps
+    if a.seed is not None:m['seed']=a.seed
     m['producer']=report['producer'];m['basePackage']={'path':str(base/'manifest.json'),'sha256':sha(base_bytes),'producer':original['producer']}
     if a.pipeline_type=='512':
-        del m['models']['highResolutionShape']
+        m['models'].pop('highResolutionShape',None)
         for role in ['shapeDecoder','textureDecoder']:m['models'][role]['config']['resolution']=32
     for role in ['sparseFlow','lowResolutionShape','highResolutionShape','textureFlow']:
         if role in m['models']:m['models'][role]['config']['steps']=a.steps
@@ -116,12 +119,21 @@ try:
     linked=0;linked_bytes=0
     for key,row in m['tensors'].items():
         if key==image_tensor:continue
-        if Path(row['file']).name!=row['file']:raise ValueError('safe retained tensor name required')
-        source=base/row['file'];target=out/row['file']
-        if source.stat().st_size!=row['byteLength']:raise ValueError('partial retained checkpoint '+key)
+        storage=row.get('storage') if 'storage' in row else row
+        if not isinstance(storage,dict):raise ValueError('identified retained checkpoint storage required')
+        if 'storage' in row and (storage.get('encoding') not in ['bf16-le','f16-le'] or
+                storage.get('byteLength')!=row['byteLength']//2 or row['byteLength']%2 or
+                not isinstance(storage.get('sha256'),str) or len(storage['sha256'])!=64 or
+                any(c not in '0123456789abcdef' for c in storage['sha256'])):
+            raise ValueError('identified complete compact checkpoint storage required')
+        file=storage.get('file')
+        if not isinstance(file,str) or not file or file in ['.','..'] or Path(file).name!=file:
+            raise ValueError('safe retained tensor name required')
+        source=base/file;target=out/file
+        if source.stat().st_size!=storage['byteLength']:raise ValueError('partial retained checkpoint '+key)
         if not target.exists():os.link(source,target)
         if not os.path.samefile(source,target):raise ValueError('checkpoint file is not the exact retained inode '+key)
-        linked+=1;linked_bytes+=row['byteLength']
+        linked+=1;linked_bytes+=storage['byteLength']
     report['phase']='prepared-DINO-pixels';persist()
     with Image.open(image_path) as image:
         rgb=image.convert('RGB');source_size=list(rgb.size)

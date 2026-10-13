@@ -69,7 +69,7 @@
   <header class="lede">
     <h1>Thomas the Jank Engine</h1>
     <p><b>FLUX.2 [klein] 4B: a 4-billion-parameter image model crammed into a browser tab. It's a little janky. It runs anyway.</b> It all happens on your own GPU through WebGPU: the prompt, the model and the image stay on your machine, and no server does any of the work.</p>
-    <p class="muted">The first visit downloads <span id="download-size">3.2 GB</span> of model weights, which the browser keeps for later visits. Tested in Chrome on Apple-silicon Macs with 16 GB of memory or more: a 512 × 512 image takes about 7 seconds on an M4 Max and about 17 seconds on an M2 Pro (a few more with better lettering). Pick a jank level to trade quality for a smaller download.</p>
+    <p class="muted">The first visit downloads <span id="download-size">3.2 GB</span> of model weights, which the browser keeps for later visits. Tested in Chrome on Apple-silicon Macs with 16 GB of memory or more: a 512 × 512 image takes about 7 seconds on an M4 Max and about 14 seconds on an M2 Pro (a few more with better lettering). Pick a jank level to trade quality for a smaller download. On an 8 GB Mac or a phone, tick Low-memory mode: it needs about 3 GB of GPU memory at 512 × 512 instead of 4.5 GB, and a new prompt takes about 3 seconds longer.</p>
   </header>
 
   <div class="layout">
@@ -82,6 +82,7 @@
       </fieldset>
       <div id="setup" class="row">
         <button id="load" class="primary" disabled>Checking WebGPU…</button>
+        <label class="check"><input id="lean" type="checkbox"> Low-memory mode <small class="muted">for 8 GB Macs and phones; a new prompt takes longer</small></label>
       </div>
       <progress id="progress" class="hidden" max="1" value="0"></progress>
       <div id="controls" class="hidden" style="display:grid;gap:14px">
@@ -146,6 +147,11 @@ let selected = LEVELS[q.get('level')] ? q.get('level') : LEVELS[remembered] ? re
 let loadedLevel = null;
 const levelStatus = {};
 const $ = id => document.getElementById(id);
+// Low-memory mode keeps only one of the text encoder and the transformer on the GPU at a time.
+// Browsers report at most 8 GB of device memory, so an 8 GB Mac looks like a 16 GB one; the box is
+// ticked for phones and smaller devices and can be ticked by hand (?memory=lean|all also sets it).
+const leanDefault = q.get('memory') ? q.get('memory') === 'lean'
+  : Boolean(navigator.userAgentData?.mobile || /Android|iPhone|iPad/.test(navigator.userAgent) || (navigator.deviceMemory ?? 8) < 8);
 const status = $('status'), loadButton = $('load'), progress = $('progress');
 const gb = bytes => `${(bytes / 1e9).toFixed(1)} GB`;
 const seconds = ms => `${(ms / 1000).toFixed(1)} s`;
@@ -270,10 +276,12 @@ loadButton.onclick = async () => {
   loadButton.disabled = true; loadButton.textContent = 'Downloading…';
   navigator.storage?.persist?.().catch(() => {});
   demo.pipeline.urls.transformerUrl = levelUrls(selected).transformerUrl;
+  demo.pipeline.residency = $('lean').checked ? 'lean' : 'all';
+  $('lean').disabled = true;
   try {
     await demo.load(showProgress(''));
   } catch (e) {
-    progress.classList.add('hidden'); loadButton.disabled = false; loadButton.textContent = 'Try again';
+    progress.classList.add('hidden'); loadButton.disabled = false; loadButton.textContent = 'Try again'; $('lean').disabled = false;
     say(`Loading failed: ${e.message ?? e}`, true); return;
   }
   loadedLevel = selected; window.kleinLevel = loadedLevel;
@@ -324,7 +332,8 @@ $('go').onclick = async () => {
   try {
     const lettering = $('lettering').checked;
     const r = await demo.generate({ prompt, seed, size, textLength: lettering ? 512 : 'fit16', cooperative: $('cooperative').checked,
-      onPhase: phase => say(phase === 'text' ? 'Reading the prompt…' : phase === 'decode' ? 'Decoding the image…' : 'Denoising…'),
+      onPhase: phase => say(phase === 'weights' ? 'Swapping models in from the browser cache…' : phase === 'text' ? 'Reading the prompt…'
+        : phase === 'decode' ? 'Decoding the image…' : 'Denoising…'),
       onStep: (i, n) => say(`Denoising, step ${i} of ${n}…`) });
     const out = $('out'); out.width = r.width; out.height = r.height;
     $('examples').classList.add('hidden'); out.classList.remove('hidden');
@@ -334,7 +343,7 @@ $('go').onclick = async () => {
     const frames = r.frames ? `; the animation kept drawing at a median ${Math.round(1000 / r.frames.p50)} frames per second` : '';
     say(`${r.width} × ${r.height} at ${LEVELS[loadedLevel].name}${lettering ? ' with better lettering' : ''} in ${seconds(r.wallMs)}${frames}.`);
     window.kleinLast = { wallMs: r.wallMs, timings: r.timings, frames: r.frames, width: r.width, height: r.height, level: loadedLevel,
-      lettering, textTokens: r.textTokens };
+      lettering, textTokens: r.textTokens, gpuBytes: r.gpuBytes, residency: demo.pipeline.residency };
   } catch (e) {
     say(e?.name === 'AbortError' ? 'Stopped.' : `Generation failed: ${e.message ?? e}`, e?.name !== 'AbortError');
   }
@@ -360,6 +369,7 @@ $('save').onclick = () => $('out').toBlob(blob => {
 }, 'image/png');
 $('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !$('go').disabled) $('go').click(); });
 
+$('lean').checked = leanDefault;
 window.kleinPrepared = prepare();
 </script>
 </html>
