@@ -18,3 +18,12 @@ test('mesh source witness matches the actual run-root URL mapping, not an absolu
   assert.equal(c.meshWitnessSource(root,artifact),c.pipelineRunReadUrlForPath({bundle:{document:{outputRoot:root}}},artifact));
   assert.equal(c.meshWitnessSource(root,'/unrelated/cached.glb'),null);
 });
+test('a completed failed GUI run terminates the unbounded observer instead of waiting for success',async()=>{
+  const start=source.indexOf('async function waitFor(cdp,'),end=source.indexOf('\n}',start)+2;
+  let queries=0;
+  const c={Date:{now:()=>0},evalJson:async()=>{if(++queries>1)throw Error('observer retried a terminal failure');
+      return {terminalFailure:true,error:'Greenroom rejected command'};},wait:async()=>{throw Error('observer waited after terminal failure');}};
+  vm.createContext(c);vm.runInContext(source.slice(start,end),c);
+  await assert.rejects(c.waitFor({},'unused','GUI run',Infinity),/Greenroom rejected command/);
+  assert.equal(queries,1);
+});
