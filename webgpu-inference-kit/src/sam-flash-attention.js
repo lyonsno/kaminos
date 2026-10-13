@@ -1,15 +1,16 @@
-// SAM self-attention (image ViT, DETR encoder) through the kit tiled flash attention kernel. Same math as the online kernel in
+// SAM attention (image ViT, DETR encoder, memory) through the kit flash attention generators. Same math as the online kernel in
 // sam-online-attention-wgsl.js (scaled dot product, softmax over the window's or the global grid's keys)
 // with a different reduction order: per-tile online softmax over 32-key tiles instead of per-key. On SAM
-// 1008 shapes it matches the online kernel to ~1e-6 and an f64 oracle to ~2e-6, like the online kernel.
+// 1008 shapes the original packed builder matched the online kernel to ~1e-6 and an f64 oracle to ~2e-6.
+// Compatible head dims use the register-tiled builder; those numerical results do not qualify it.
 //
 // Layout (ViT windows): q, k, v and output [windows, windowTokens, heads * headDim], one domain per
 // window (or one global domain). Bindings: q, k, v, output, params.
-import { createWebGpuFlashAttentionShader, flashAttentionDispatch } from './flash-attention-kernel.js';
+import { createWebGpuFlashAttentionShader, createWebGpuTiledFlashAttentionShader, flashAttentionDispatch } from './flash-attention-kernel.js';
 import { WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
 
-// Flash global attention on SAM 1008 takes ~236 ms of GPU for 5184 queries, so 256-query ranges stay
-// near a 12 ms duty; windows (576 queries) split into three.
+// The original packed builder took ~236 ms for 5184 SAM 1008 queries, motivating 256-query ranges.
+// Keep that partition (576-query windows split into three); it does not measure register-tiled duty.
 export const SAM_FLASH_ATTENTION_QUERIES_PER_PHASE = 256;
 
 const PARAM_SCHEMA = Object.freeze([
@@ -21,7 +22,11 @@ const PARAM_SCHEMA = Object.freeze([
 
 const shaders = new Map();
 export function samFlashAttentionShader(headDim = 64) {
-  if (!shaders.has(headDim)) shaders.set(headDim, createWebGpuFlashAttentionShader({ headDim }));
+  if (!shaders.has(headDim)) {
+    const createShader = headDim >= 16 && headDim <= 64 && headDim % 16 === 0
+      ? createWebGpuTiledFlashAttentionShader : createWebGpuFlashAttentionShader;
+    shaders.set(headDim, createShader({ headDim }));
+  }
   return shaders.get(headDim);
 }
 

@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { createWebGpuFlashAttentionShader } from '../src/flash-attention-kernel.js';
+import { createWebGpuFlashAttentionShader, createWebGpuTiledFlashAttentionShader } from '../src/flash-attention-kernel.js';
 import { SAM_FLASH_ATTENTION_QUERIES_PER_PHASE, partitionSamFlashAttentionPhase, samFlashAttentionShader } from '../src/sam-flash-attention.js';
 
-assert.equal(samFlashAttentionShader(), createWebGpuFlashAttentionShader({ headDim: 64 }), 'SAM ViT uses the kit kernel at head dim 64');
+assert.ok(samFlashAttentionShader() === createWebGpuTiledFlashAttentionShader({ headDim: 64 }), 'SAM ViT uses the register-tiled kit generator at head dim 64');
+assert.equal(SAM_FLASH_ATTENTION_QUERIES_PER_PHASE, 256, 'default partition remains 256 queries');
 assert.equal(SAM_FLASH_ATTENTION_QUERIES_PER_PHASE % 64, 0, 'ranges align to 64-query workgroups');
 
 // Ranges cover every query of every window and head exactly once, tails included; each range keeps the
@@ -38,10 +39,31 @@ for (const [queries, domains] of [[1, 1], [65, 4], [256, 9], [576, 9], [5184, 1]
 }
 assert.throws(() => partitionSamFlashAttentionPhase({ kernel: 'attention', dispatch: [10, 2, 1] }, { headDim: 128 }, { createUniformBuffer: spec => spec }, { attention: template }), /headDim/);
 // Flash keeps every head dim the online kernels accepted (1..64), including SAM 3.1's 16 and odd sizes.
-for (const headDim of [1, 2, 7, 16, 24, 32, 64]) {
+for (let headDim = 1; headDim <= 64; headDim += 1) {
+  const tiled = headDim % 16 === 0;
+  const expected = (tiled ? createWebGpuTiledFlashAttentionShader : createWebGpuFlashAttentionShader)({ headDim });
+  assert.ok(samFlashAttentionShader(headDim) === expected, `head dim ${headDim}: ${tiled ? 'register-tiled' : 'original'} generator source`);
   const kernels = { attention: template };
-  const [phase] = partitionSamFlashAttentionPhase({ kernel: 'attention', dispatch: [1, 1, 1] }, { headDim }, { createUniformBuffer: spec => spec }, kernels);
-  assert.equal(kernels[phase.kernel].code, samFlashAttentionShader(headDim));
+  const metadata = { layerIndex: 3, isGlobal: false };
+  const yieldAfter = headDim % 2 === 0;
+  const phases = partitionSamFlashAttentionPhase({ name: 'attention', kernel: 'attention', dispatch: [321, 2, 3], yieldAfter, metadata },
+    { headDim }, { createUniformBuffer: spec => spec }, kernels);
+  assert.deepEqual(phases.map(phase => phase.dispatch), [[4, 2, 3], [2, 2, 3]]);
+  for (const [index, phase] of phases.entries()) {
+    const kernel = kernels[phase.kernel];
+    assert.ok(kernel.code === expected, `head dim ${headDim}: actual phase uses selected generator`);
+    assert.deepEqual(kernel.bindings.slice(0, 4), template.bindings.slice(0, 4));
+    assert.equal(kernel.bindings.length, 5);
+    assert.deepEqual(kernel.bindings[4].resource.values, {
+      query_tokens: 321, key_tokens: 321, q_channels: 2 * headDim, kv_channels: 2 * headDim,
+      heads: 2, kv_heads: 2, query_offset: index * 256, query_count: index === 0 ? 256 : 65,
+      scale: 1 / Math.sqrt(headDim), _pad0: 0, _pad1: 0, _pad2: 0,
+    });
+    assert.equal(phase.yieldAfter, yieldAfter);
+    assert.equal(phase.metadata, metadata, 'caller phase metadata is preserved');
+  }
+  assert.equal(kernels.attention, template, 'original template stays available');
+  assert.ok(samFlashAttentionShader(headDim) === expected, 'repeated selection preserves cached shader source');
 }
 // Programs construct the flash shader only when flash is selected, so explicit 'online' never depends on it.
 for (const file of ['sam-image-vit-block-stack-phase-program.js', 'sam-detr-encoder-phase-program.js']) {
@@ -51,7 +73,7 @@ for (const file of ['sam-image-vit-block-stack-phase-program.js', 'sam-detr-enco
 
 // DETR encoder self-attention: head dim 32, 8 heads, one 5184-token domain; ranges sized by the caller.
 {
-  assert.equal(samFlashAttentionShader(32), createWebGpuFlashAttentionShader({ headDim: 32 }));
+  assert.ok(samFlashAttentionShader(32) === createWebGpuTiledFlashAttentionShader({ headDim: 32 }));
   const kernels = { attention: template };
   const phases = partitionSamFlashAttentionPhase({ name: 'detr-self', kernel: 'attention', dispatch: [5184, 8, 1], yieldAfter: true },
     { headDim: 32, queriesPerPhase: 2048 }, { createUniformBuffer: spec => spec }, kernels);
@@ -69,9 +91,25 @@ for (const file of ['sam-image-vit-block-stack-phase-program.js', 'sam-detr-enco
   const phases = partitionSamFlashAttentionPhase({ name: 'memory-cross', kernel: 'attention', dispatch: [5184, 8, 1], yieldAfter: true },
     { headDim: 32, keyTokens: 5200, queriesPerPhase: 5184 + 64 - (5184 % 64 || 64) }, { createUniformBuffer: spec => spec }, kernels);
   assert.equal(phases.length, 1);
+  assert.ok(kernels[phases[0].kernel].code === createWebGpuTiledFlashAttentionShader({ headDim: 32 }), 'memory cross-attention uses register-tiled source');
   const { values } = kernels[phases[0].kernel].bindings[4].resource;
   assert.deepEqual([values.query_tokens, values.key_tokens, values.query_offset, values.query_count], [5184, 5200, 0, 5184]);
   assert.deepEqual(phases[0].dispatch, [81, 8, 1]);
+}
+// Default memory partitions keep the full cross-key count for every range, including the tail.
+{
+  const kernels = { attention: template };
+  const phases = partitionSamFlashAttentionPhase({ name: 'memory-cross', kernel: 'attention', dispatch: [576, 8, 2], yieldAfter: true },
+    { headDim: 16, keyTokens: 593 }, { createUniformBuffer: spec => spec }, kernels);
+  assert.deepEqual(phases.map(phase => phase.dispatch), [[4, 8, 2], [4, 8, 2], [1, 8, 2]]);
+  for (const [index, phase] of phases.entries()) {
+    const kernel = kernels[phase.kernel];
+    assert.ok(kernel.code === createWebGpuTiledFlashAttentionShader({ headDim: 16 }));
+    assert.deepEqual(kernel.bindings.slice(0, 4), template.bindings.slice(0, 4));
+    const { values } = kernel.bindings[4].resource;
+    assert.deepEqual([values.query_tokens, values.key_tokens, values.query_offset, values.query_count], [576, 593, index * 256, index === 2 ? 64 : 256]);
+    assert.equal(phase.yieldAfter, true);
+  }
 }
 const memory = readFileSync(new URL('../src/sam31-memory-attention-phase-program.js', import.meta.url), 'utf8');
 assert.match(memory, /input\.attentionKernel/);
