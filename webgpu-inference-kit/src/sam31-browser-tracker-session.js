@@ -424,7 +424,7 @@ export function createSam31BrowserTrackerSessionForTest({
   userAgent = 'test-browser',
   commit = null,
   onProgress = () => {},
-  memoryAttentionKernel = 'online',
+  memoryAttentionKernel = 'flash',
   captureOutputs = false,
 } = {}) {
   if (!packageRuntime) throw new Error('test tracker session requires a package runtime');
@@ -443,7 +443,7 @@ export function createSam31BrowserTrackerResidentSessionForTest({
   userAgent = 'test-browser',
   commit = null,
   onProgress = () => {},
-  memoryAttentionKernel = 'online',
+  memoryAttentionKernel = 'flash',
   captureOutputs = false,
 } = {}) {
   return createResidentSession({

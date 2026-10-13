@@ -391,6 +391,8 @@ const session = createSam31BrowserTrackerSessionForTest({
     invocationRuns += 1;
     assert.equal(input.packageRuntime, packageRuntime);
     assert.equal(input.device, device);
+    assert.equal(input.memoryAttentionKernel, 'flash', 'the lifecycle seam must share the public serving default');
+    assert.equal(input.captureOutputs, false);
     return completeInvocationResult();
   },
 });
