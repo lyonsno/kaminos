@@ -142,7 +142,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     for(const c of choices){const option=document.createElement('option');option.value=c.id;option.textContent=c.label;select.append(option);}select.value=chosen?.id??'';
     select.onchange=()=>call('motion',{id:select.value});label.append(select);panel.append(label);
    }
-   const identity=document.createElement('p');panel.append(identity);
+   const identity=document.createElement('p');identity.style.overflowWrap='anywhere';panel.append(identity);
    const save=document.createElement('button');save.type='button';save.textContent='Save creature setup';save.onclick=()=>{const blob=new Blob([JSON.stringify(read().recipe,null,2)+'\n'],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='creature.setup.json';link.click();URL.revokeObjectURL(url);};panel.append(save);
    for(const [label,next] of [['Raw source','source'],['Straight cycle','cycle'],['Walk the curve','path']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call('mode',{mode:next});panel.append(button);}
    for(const [label,name] of [['Play motion','play'],['Pause motion','pause'],['Restart motion','replay']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>call(name);panel.append(button);}
