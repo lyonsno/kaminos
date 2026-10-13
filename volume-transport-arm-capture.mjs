@@ -37,7 +37,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { cameraFrameMismatch, effectiveMismatches, parseArms, parseCameraFrame, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
+import { cameraFrameMismatch, effectiveMismatches, emissiveCoefficientsMismatch, parseArms, parseCameraFrame, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
 
 const CAPTURE_IDENTITY = 'kaminos.volume.transport-arm-capture.v1';
 const positional = [];
@@ -226,6 +226,16 @@ try {
         if (mismatch) { report.lastTrustworthyEvidence.applied = applied; fail(report.failurePhase, mismatch); }
         continue;
       }
+      if (cid === '@emissiveCoefficients') {
+        // Emissive seed readback (review GR-01); the arm fails unless finite,
+        // nonzero and spatially varying.
+        const sample = await evaluate(op(`(async () => { const p = w.__kaminosVolumePrototype; if (!p?.sampleEmissiveSeedCoefficients) return { status: 'missing-api' }; return await p.sampleEmissiveSeedCoefficients(); })()`));
+        (arm.emissiveCoefficients ||= []).push(sample);
+        applied.push([cid, value, sample?.status ?? null]);
+        const mismatch = emissiveCoefficientsMismatch(sample);
+        if (mismatch) { report.lastTrustworthyEvidence.applied = applied; report.lastTrustworthyEvidence.emissiveCoefficients = sample; fail(report.failurePhase, mismatch); }
+        continue;
+      }
       if (cid.startsWith('@')) fail(report.failurePhase, `unknown debug-API control ${cid}`);
       if (cid === 'volume-confinement') expectedMode = value;
       const domValue = await setControl(cid, value);
@@ -250,7 +260,7 @@ try {
     let end = await evaluate(stateExpr);
     if (!end) fail(report.failurePhase, 'renderer state unavailable after settle');
     if (fault === 'arm-error' && report.arms.length === 0) end = { ...end, error: 'synthetic-fault:arm-error' };
-    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
+    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], emissiveCoefficients: arm.emissiveCoefficients || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
     report.arms.push(entry);
     report.lastTrustworthyEvidence.lastArm = arm.name;
     writeReport();

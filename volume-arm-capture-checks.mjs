@@ -208,3 +208,13 @@ export function parseArms(armsArg) {
     return { name, set };
   });
 }
+
+// Emissive seed coefficient witness (review GR-01): an arm fails unless the
+// readback is a complete, finite, nonzero and spatially varying field.
+export function emissiveCoefficientsMismatch(sample) {
+  if (!sample || sample.status !== 'sampled') return `emissive coefficients ${sample?.status ?? 'missing'}${sample?.reason ? ` (${sample.reason})` : ''}`;
+  if (sample.finiteCells !== sample.cells) return `emissive coefficients have non-finite cells (${sample.cells - sample.finiteCells})`;
+  if (!(sample.nonzeroCells > 0)) return 'emissive coefficients have no nonzero cell';
+  if (!(sample.extinctionStdDev > 0)) return 'emissive coefficients are spatially flat';
+  return null;
+}

@@ -9,7 +9,7 @@ import {
 } from './volume-detail-force-isolation.mjs';
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid } from './volume-scene-solid.mjs';
-import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField } from './volume-emissive-transport.mjs';
+import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
 export { GRID_HEIGHT_AUTO_RATIO, GRID_HEIGHT_MIN_RATIO, GRID_HEIGHT_MAX_RATIO, GRID_HEIGHT_DERIVED_LATTICE_WIDTHS, resolveGridHeight, gridHeightStep, gridHeightForShape, raymarchDomainBox, raymarchBoxHitModel } from './volume-grid-shape.mjs';
@@ -26644,6 +26644,13 @@ export function createKaminosVolumePrototype({
     // The resolved grid shape and box bounds for a requested height, without
     // touching the sim: the cockpit and the Kaminos authoring side preview the
     // box while the height is edited and rebuild only on confirm.
+    // Witness for review GR-01: the emissive seed's coefficients after the
+    // latest frame, summarised with the grid shape that produced them.
+    async sampleEmissiveSeedCoefficients() {
+      if (!emissiveLightField?.readCoefficients) return { status: 'unsupported', reason: 'emissive-light-field-inactive', grid: [gridSize, gridHeight, gridSize] };
+      const values = await emissiveLightField.readCoefficients();
+      return { status: 'sampled', grid: [gridSize, gridHeight, gridSize], simStepCount: state.simStepCount, ...emissiveCoefficientStats(values) };
+    },
     previewGridShape(request = {}) {
       const width = normalizeGridSize(request.resolution ?? controlsSnapshot.resolution);
       const shape = resolveGridHeight({ gridHeightRatio: request.gridHeightRatio ?? controlsSnapshot.gridHeightRatio }, width);

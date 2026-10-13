@@ -46,10 +46,29 @@ const reactionRGB = xyzToRGB.map(row => Math.max(0, row.reduce((sum, v, i) => su
 export const REACTION_RGB = reactionRGB.map(v => v / linearLuminance(reactionRGB));
 export const EMISSIVE_LIGHT_GRID = 32;
 
+// Summary of emissive seed coefficients (vec4 per cell: emission rgb,
+// extinction): finite and nonzero cells, extinction mean / max / spread, peak
+// emission channel.
+export function emissiveCoefficientStats(values) {
+  const cells = Math.floor(values.length / 4);
+  let finiteCells = 0, nonzeroCells = 0, extinctionMax = 0, extinctionSum = 0, extinctionSq = 0, emissionMax = 0;
+  for (let i = 0; i < cells; i++) {
+    const r = values[4 * i], g = values[4 * i + 1], b = values[4 * i + 2], x = values[4 * i + 3];
+    if (![r, g, b, x].every(Number.isFinite)) continue;
+    finiteCells++;
+    if (r || g || b || x) nonzeroCells++;
+    extinctionMax = Math.max(extinctionMax, x); extinctionSum += x; extinctionSq += x * x;
+    emissionMax = Math.max(emissionMax, r, g, b);
+  }
+  const extinctionMean = finiteCells ? extinctionSum / finiteCells : 0;
+  const extinctionStdDev = finiteCells ? Math.sqrt(Math.max(0, extinctionSq / finiteCells - extinctionMean * extinctionMean)) : 0;
+  return { cells, finiteCells, nonzeroCells, extinctionMax, extinctionMean, emissionMax, extinctionStdDev };
+}
+
 export function createEmissiveLightField(device, module, uniformBuffer, fluidBuffers, frontBuffers) {
   const cells = EMISSIVE_LIGHT_GRID ** 3;
   const allocate = (label, count) => device.createBuffer({ label, size: count*16, usage: GPUBufferUsage.STORAGE });
-  const coefficients = allocate('emissive material coefficients', cells);
+  const coefficients = device.createBuffer({ label: 'emissive material coefficients', size: cells*16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
   const directions = allocate('six-direction incident radiance', cells*6);
   const incident = allocate('single-scattering mean incident radiance', cells);
   const pipeline = name => device.createComputePipeline({ label: name, layout: 'auto', compute: { module, entryPoint: name } });
@@ -75,6 +94,20 @@ export function createEmissiveLightField(device, module, uniformBuffer, fluidBuf
       pass.setPipeline(resolve); pass.setBindGroup(0,resolveInput); pass.setBindGroup(3,resolveOutput);
       pass.dispatchWorkgroups(Math.ceil(cells/64));
       pass.end();
+    },
+    // Diagnostic readback of the seed's material coefficients (emission rgb,
+    // extinction) for witnesses (review GR-01).
+    async readCoefficients() {
+      const staging = device.createBuffer({ label: 'emissive coefficients readback', size: cells*16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      try {
+        const encoder = device.createCommandEncoder({ label: 'emissive coefficients readback' });
+        encoder.copyBufferToBuffer(coefficients, 0, staging, 0, cells*16);
+        device.queue.submit([encoder.finish()]);
+        await staging.mapAsync(GPUMapMode.READ);
+        const values = new Float32Array(staging.getMappedRange().slice(0));
+        staging.unmap();
+        return values;
+      } finally { staging.destroy(); }
     },
     destroy() { coefficients.destroy(); directions.destroy(); incident.destroy(); },
   };
