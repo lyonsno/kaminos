@@ -21,6 +21,7 @@ const GH_STUB = fileURLToPath(new URL('./land-gh-stub.mjs', import.meta.url));
 const REPO = 'example/fixture';
 const WORKFLOW_FILE = 'tests.yml';
 const POLL_MS = 30000;
+const LAND_WORKFLOW = "name: tests\non:\n  push:\n    branches: [main, 'land/**']\njobs:\n  suite:\n    runs-on: macos-latest\n";
 const GITCONFIG = '[user]\n\tname = Fixture\n\temail = fixture@example.invalid\n[commit]\n\tgpgsign = false\n';
 const quote = s => `'${String(s).replace(/'/g, `'\\''`)}'`;
 
@@ -86,6 +87,8 @@ async function fixture(t, { onMain = false } = {}) {
   await fs.writeFile(path.join(origin, 'hooks', 'update'), `#!/bin/sh\ncase "$1" in refs/heads/land/*)\n  if [ -e ${quote(denyFile)} ]; then echo "land refs denied" >&2; exit 1; fi\n  echo "$1 $2 $3" >> ${quote(updatesLog)};;\nesac\nexit 0\n`);
   await fs.chmod(path.join(origin, 'hooks', 'update'), 0o755);
   git(dir, 'init', '--quiet', '--initial-branch=main', seed);
+  // Main carries a tests workflow that runs on pushes to land/**, as the real one does.
+  await commit(seed, `.github/workflows/${WORKFLOW_FILE}`, LAND_WORKFLOW);
   const base = await commit(seed, 'base.txt');
   git(seed, 'remote', 'add', 'origin', origin);
   git(seed, 'push', '--quiet', 'origin', 'main');
@@ -148,8 +151,8 @@ async function fixture(t, { onMain = false } = {}) {
       (error, stdout, stderr) => resolve({ code: error ? error.code : 0, stdout, stderr }))),
     // The CLI as a live child: onStderr sees each line as it arrives, so a
     // contract can act on a state change, such as sending a signal.
-    cliSpawn: (args, onStderr) => {
-      const child = spawn(process.execPath, [LAND_CLI, ...args], { cwd: clone, env });
+    cliSpawn: (args, onStderr, { detached = false } = {}) => {
+      const child = spawn(process.execPath, [LAND_CLI, ...args], { cwd: clone, env, detached });
       let stdout = '', stderr = '';
       child.stdout.on('data', d => { stdout += d; });
       child.stderr.on('data', d => { stderr += d; for (const line of String(d).split('\n').filter(Boolean)) onStderr?.(line, child); });
@@ -232,6 +235,12 @@ test('with --no-dispatch, no run of the tests workflow for the exact commit refu
   for (const field of ['databaseId', 'status', 'conclusion', 'headSha', 'event', 'headBranch', 'url', 'attempt']) assert.ok(lists[0].includes(field), `--json carries ${field}`);
   assert.deepEqual(await f.gh.dispatches(), []);
   assert.deepEqual(receipt.ci.runs, []);
+
+  // Under --ci-only --no-dispatch the hint is to drop --no-dispatch, not to run --ci-only again.
+  ({ receipt } = await f.land({ ciOnly: true, noDispatch: true }));
+  assert.equal(receipt.reason, 'ci-no-run');
+  assert.ok(receipt.message.includes('drop --no-dispatch'), receipt.message);
+  assert.doesNotMatch(receipt.message, /node tools\/land\.mjs --ci-only/);
 
   // --no-trigger is the same refuse-only mode, and pushes nothing either.
   await f.gh.pushTrigger(f.run({ databaseId: 31 }));
@@ -573,7 +582,7 @@ test('with no run for the commit, pushing a land/<sha> ref is the trigger: the p
   assert.deepEqual([receipt.ci.run.id, receipt.ci.run.event, receipt.ci.run.headBranch, receipt.ci.run.counted], [9001, 'push', ref, true]);
   assert.ok(receipt.ci.wait.polls >= 4, `polled ${receipt.ci.wait.polls} times`);
   assert.ok(f.clock.slept.every(ms => ms === POLL_MS), `sleeps of ${POLL_MS} ms: ${f.clock.slept}`);
-  assert.equal(receipt.ci.wait.bounds.timeoutMinutes, 360, 'no workflow file in the fixture: GitHub\'s default job timeout');
+  assert.deepEqual([receipt.ci.wait.bounds.timeoutMinutes, receipt.ci.wait.bounds.timeoutSource], [360, `.github/workflows/${WORKFLOW_FILE}`], 'the fixture\'s job sets no timeout-minutes: GitHub\'s default');
   const states = f.lines.map(l => l.replace(/^landing: /, ''));
   for (const pattern of [/pushed/, /queued/, /in progress/, /concluded success/]) assert.ok(states.some(s => pattern.test(s)), `${pattern} in ${JSON.stringify(states)}`);
   assert.ok(!states.some(s => /dispatch/.test(s)), JSON.stringify(states));
@@ -832,9 +841,11 @@ test('the wait is bounded per state by the workflow\'s own lifecycle and ends as
   assert.deepEqual([...await f.gh.dispatches(), ...await g.gh.dispatches()], [], 'gh workflow run is never called');
 
   assert.equal(L.jobTimeoutMinutes(workflow), 60);
-  assert.equal(L.jobTimeoutMinutes('jobs:\n  a:\n    steps:\n      - run: x\n        timeout-minutes: 5\n'), null);
-  assert.equal(L.jobTimeoutMinutes('name: x\n'), null);
+  assert.equal(L.jobTimeoutMinutes('jobs:\n  a:\n    steps:\n      - run: x\n        timeout-minutes: 5\n'), 360, 'a job without the key runs to GitHub\'s default');
+  assert.equal(L.jobTimeoutMinutes('name: x\n'), null, 'no jobs at all');
   assert.equal(L.jobTimeoutMinutes('jobs:\n  a:\n    timeout-minutes: 15\n  b:\n    timeout-minutes: 45\n'), 45);
+  assert.equal(L.jobTimeoutMinutes('jobs:\n  a:\n    timeout-minutes: 15\n  b:\n    runs-on: x\n'), 360, 'a job without the key beside one with 15 bounds the run at 360');
+  assert.equal(L.jobTimeoutMinutes('jobs:\n  a:\n    timeout-minutes: 15\n'), 15);
 });
 
 test('an interrupted wait writes a partial receipt naming the awaited run and deletes the land ref', async t => {
@@ -863,6 +874,8 @@ test('an interrupted wait writes a partial receipt naming the awaited run and de
   const early = await h.land({ ciOnly: true, signal: stop.signal, sleep: async ms => { h.clock.slept.push(ms); h.clock.now += ms; stop.abort(); } });
   assert.equal(early.receipt.outcome, 'interrupted');
   assert.match(early.receipt.message, /before gh listed its push run/);
+  assert.match(early.receipt.message, /re-run within 10 minutes looks for it among recent push runs before pushing again/);
+  assert.doesNotMatch(early.receipt.message, /running the tool again awaits it/);
   assert.doesNotMatch(early.receipt.message, /dispatch/);
 
   // Through the CLI: SIGINT during the wait does the same and exits 130.
@@ -877,6 +890,113 @@ test('an interrupted wait writes a partial receipt naming the awaited run and de
   assert.equal(g.originRef(`refs/heads/${g.landRef(g.sha)}`), null);
   assert.equal(g.originMain(), g.base);
   assert.deepEqual(await g.gh.dispatches(), []);
+});
+
+test('a signal to the whole process group while gh is mid-call is an interruption, not an error; the child\'s death is kept in the receipt', async t => {
+  const f = await fixture(t);
+  const marker = path.join(f.dir, 'gh-mid-call');
+  await f.gh.runs([f.run({ databaseId: 9070, status: 'queued', conclusion: '', _timeline: ['queued'] })]);
+  await f.gh.set({ listSleep: { afterCalls: 1, ms: 8000, marker } });
+  const { child, done } = f.cliSpawn(['--ci-only', '--receipt', f.receiptPath, '--gh', f.ghPath, '--repo', REPO], null, { detached: true });
+  // Wait until gh is inside its second listing, then signal the whole group.
+  for (let i = 0; i < 1200; i += 1) {
+    try { await fs.access(marker); break; } catch { await new Promise(r => setTimeout(r, 50)); }
+  }
+  await new Promise(r => setTimeout(r, 300));
+  try { process.kill(-child.pid, 'SIGINT'); } catch { /* already gone */ }
+  const result = await done;
+  assert.equal(result.code, 130, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /^interrupted\b.*9070/);
+  const receipt = JSON.parse(await fs.readFile(f.receiptPath, 'utf8'));
+  assert.deepEqual([receipt.outcome, receipt.reason, receipt.ci.run.id], ['interrupted', 'interrupted', 9070]);
+  assert.match(receipt.error, /killed by SIGINT/, 'the child\'s death is recorded');
+  assert.doesNotMatch(receipt.error, /without starting/);
+  assert.equal(f.originMain(), f.base);
+});
+
+test('before pushing the land ref, a push run for the commit created in the last ten minutes that --commit has not listed yet is awaited instead; a dispatched run never is', async t => {
+  const f = await fixture(t);
+  const ref = f.landRef(f.sha);
+  const createdAt = new Date(f.clock.now - 2 * 60 * 1000).toISOString();
+  await f.gh.runs([
+    f.run({ databaseId: 9080, headBranch: ref, status: 'queued', conclusion: '', createdAt, _hiddenFromCommitFilter: 5, _timeline: ['queued', 'completed:success'] }),
+  ]);
+  await f.gh.pushTrigger(f.run({ databaseId: 9089 }));
+  const { ok, receipt } = await f.land({ ciOnly: true });
+  assert.equal(ok, true, receipt.message);
+  assert.equal(await f.gh.pushesSeen(), 0, 'the land ref was not pushed again');
+  assert.equal(receipt.ci.trigger, null);
+  assert.deepEqual([receipt.ci.recentRun.id, receipt.ci.run.id], [9080, 9080]);
+  assert.ok((await f.gh.lists()).some(c => c.includes('--event push') && !c.includes('--commit')), 'a listing without --commit looked for recent push runs');
+  assert.ok(f.lines.some(l => /not yet listed by --commit/.test(l)), f.lines.join('\n'));
+
+  // A recent dispatched run, an older push run, or a push run for another commit is not recent: the ref is pushed.
+  const g = await fixture(t);
+  const stale = new Date(g.clock.now - 30 * 60 * 1000).toISOString();
+  await g.gh.runs([
+    g.run({ databaseId: 9081, event: 'workflow_dispatch', headBranch: g.landRef(g.sha), status: 'queued', conclusion: '', createdAt, _hiddenFromCommitFilter: 100 }),
+    g.run({ databaseId: 9082, status: 'queued', conclusion: '', createdAt: stale, _hiddenFromCommitFilter: 100 }),
+  ]);
+  await g.gh.runs([g.run({ databaseId: 9083, headSha: g.base, status: 'queued', conclusion: '', createdAt, _hiddenFromCommitFilter: 100 })], g.base);
+  // gh is made to ignore --event, so the tool's own push-only filter must drop the dispatched run.
+  await g.gh.set({ ignoreEvent: true });
+  await g.gh.pushTrigger(g.run({ databaseId: 9084, _timeline: ['queued', 'completed:success'] }));
+  const second = await g.land({ ciOnly: true });
+  assert.equal(second.ok, true, second.receipt.message);
+  assert.equal(second.receipt.ci.recentRun, null);
+  assert.equal(await g.gh.pushesSeen(), 1, 'pushed, since nothing recent matched');
+  assert.equal(second.receipt.ci.run.id, 9084);
+  assert.deepEqual(await g.gh.dispatches(), []);
+});
+
+test('a commit whose tests.yml does not run on land/** refuses ci-no-trigger before pushing the land ref', async t => {
+  const f = await fixture(t);
+  const sha = await f.commit(f.clone, `.github/workflows/${WORKFLOW_FILE}`, "name: tests\non:\n  push:\n    branches: [main]\n  workflow_dispatch:\njobs:\n  suite:\n    runs-on: macos-latest\n");
+  await f.gh.pushTrigger(f.run({ databaseId: 9200, headSha: sha }), sha);
+  let { ok, receipt } = await f.land({ ciOnly: true });
+  assert.equal(ok, false);
+  assert.deepEqual([receipt.outcome, receipt.reason], ['refused', 'ci-no-trigger']);
+  assert.match(receipt.message, /tests\.yml does not run on land\/\*\*; rebase onto main/);
+  assert.equal(f.calls.filter(c => c[0] === 'git' && c[1] === 'push').length, 0, 'no land ref was pushed');
+  assert.equal(await f.gh.pushesSeen(), 0);
+  assert.equal(f.originRef(`refs/heads/${f.landRef(sha)}`), null);
+
+  // A commit with no tests.yml at all refuses the same way.
+  f.git(f.clone, 'rm', '--quiet', `.github/workflows/${WORKFLOW_FILE}`);
+  f.git(f.clone, 'commit', '--quiet', '-m', 'drop workflow');
+  ({ receipt } = await f.land({ ciOnly: true }));
+  assert.equal(receipt.reason, 'ci-no-trigger');
+  assert.match(receipt.message, /no \.github\/workflows\/tests\.yml/);
+  assert.equal(f.calls.filter(c => c[0] === 'git' && c[1] === 'push').length, 0);
+
+  assert.equal(L.workflowRunsOnPush(LAND_WORKFLOW, 'land/abc'), true);
+  assert.equal(L.workflowRunsOnPush("on:\n  push:\n    branches:\n      - main\n      - 'land/**'\n", 'land/abc'), true, 'a block list');
+  assert.equal(L.workflowRunsOnPush("on:\n  push:\n    branches: [main, 'cc/x-*']\n  workflow_dispatch:\n", 'land/abc'), false);
+  assert.equal(L.workflowRunsOnPush("on:\n  push:\n  workflow_dispatch:\n", 'land/abc'), true, 'push without a filter runs on every branch');
+  assert.equal(L.workflowRunsOnPush('on: [push, pull_request]\n', 'land/abc'), true);
+  assert.equal(L.workflowRunsOnPush("on:\n  push:\n    tags: ['v*']\n", 'land/abc'), false, 'tags only');
+  assert.equal(L.workflowRunsOnPush("on:\n  push:\n    branches-ignore: ['land/**']\n", 'land/abc'), false);
+  assert.equal(L.workflowRunsOnPush("on:\n  workflow_dispatch:\n", 'land/abc'), false);
+  assert.equal(L.workflowRunsOnPush("on:\n  push:\n    branches: ['land/*']\n", 'land/abc'), true, 'one * matches a segment');
+});
+
+test('an interruption during the push to main says so and names where main is now', async t => {
+  const f = await fixture(t);
+  await f.gh.runs([f.run()]);
+  const controller = new AbortController();
+  const run = async (executable, args, options) => {
+    if (args[0] === 'push' && String(args.at(-1)).endsWith(':refs/heads/main')) {
+      controller.abort();
+      return { code: null, signal: 'SIGINT', stdout: '', stderr: '', error: 'Command failed: git push (killed by SIGINT)' };
+    }
+    return f.runner(executable, args, options);
+  };
+  const { ok, receipt } = await f.land({ run, signal: controller.signal });
+  assert.equal(ok, false);
+  assert.equal(receipt.outcome, 'interrupted');
+  assert.match(receipt.message, new RegExp(`interrupted during the push to main; main is now ${f.base.slice(0, 9)}`));
+  assert.doesNotMatch(receipt.message, /awaiting run/);
+  assert.equal(receipt.main.after, f.base);
 });
 
 test('a listing that fills the --limit is signalled', async t => {

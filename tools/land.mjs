@@ -22,7 +22,11 @@
 //               branch, never main), and that push is the trigger: the
 //               workflow runs on pushes to land/**. A land/<sha> ref already
 //               at the commit is deleted and pushed again, since an unchanged
-//               ref fires no push. The push run for the commit is awaited and
+//               ref fires no push. Before pushing, a push run for the commit
+//               created in the last ten minutes that --commit has not listed
+//               yet is awaited instead, and a commit whose own tests.yml does
+//               not run on land/** is refused (ci-no-trigger), since the push
+//               would run nothing. The push run for the commit is awaited and
 //               the ref is deleted once the attempt concludes. A push run
 //               already pending is awaited instead; a failed run is refused
 //               and the ref is never pushed again for it. The tool never
@@ -72,9 +76,9 @@ const NON_FAST_FORWARD = /\[rejected\]|non-fast-forward|fetch first/;
 export function execFileRunner({ env = process.env } = {}) {
   return (executable, args, { cwd } = {}) => new Promise(resolve => {
     execFile(executable, args, { cwd, env, encoding: 'utf8', maxBuffer: Infinity }, (error, stdout, stderr) => {
-      if (!error) return resolve({ code: 0, stdout, stderr, error: null });
-      if (typeof error.code === 'number') return resolve({ code: error.code, stdout, stderr, error: null });
-      resolve({ code: null, stdout: stdout || '', stderr: stderr || '', error: error.message });
+      if (!error) return resolve({ code: 0, signal: null, stdout, stderr, error: null });
+      if (typeof error.code === 'number') return resolve({ code: error.code, signal: null, stdout, stderr, error: null });
+      resolve({ code: null, signal: error.signal || null, stdout: stdout || '', stderr: stderr || '', error: error.message });
     });
   });
 }
@@ -85,16 +89,20 @@ export function repoFromRemoteUrl(url) {
   return match ? `${match[1]}/${match[2]}` : null;
 }
 
-// The largest job-level timeout-minutes under jobs: in a workflow file, read
-// by indentation so a step's timeout-minutes is never taken for the job's.
-// null when no job sets one.
+// The time the longest job under jobs: in a workflow file may run: each job's
+// job-level timeout-minutes, read by indentation so a step's timeout-minutes
+// is never taken for the job's, or GitHub's default for a job that sets none.
+// null when the file has no jobs.
 export function jobTimeoutMinutes(text) {
   const lines = String(text).split('\n');
   let i = lines.findIndex(line => /^jobs:\s*(#.*)?$/.test(line));
   if (i < 0) return null;
   let jobIndent = null;
   let fieldIndent = null;
-  let best = null;
+  let inJob = false;
+  let current = null;
+  const jobs = [];
+  const close = () => { if (inJob) jobs.push(current ?? GITHUB_DEFAULT_TIMEOUT_MINUTES); inJob = false; current = null; fieldIndent = null; };
   for (i += 1; i < lines.length; i += 1) {
     const line = lines[i];
     if (!line.trim() || /^\s*#/.test(line)) continue;
@@ -102,13 +110,67 @@ export function jobTimeoutMinutes(text) {
     if (indent === 0) break;
     if (jobIndent === null) jobIndent = indent;
     if (indent < jobIndent) break;
-    if (indent === jobIndent) { fieldIndent = null; continue; }
+    if (indent === jobIndent) { close(); inJob = true; continue; }
     if (fieldIndent === null) fieldIndent = indent;
     if (indent !== fieldIndent) continue;
     const match = line.match(/^\s*timeout-minutes:\s*(\d+)/);
-    if (match) best = Math.max(best ?? 0, Number(match[1]));
+    if (match) current = Number(match[1]);
   }
-  return best;
+  close();
+  return jobs.length ? Math.max(...jobs) : null;
+}
+
+// Whether a workflow file runs on a push to branch: its on: names push with
+// no branch filter, or with branches (or branches-ignore) patterns that let
+// the branch through. GitHub's patterns: * matches within one path segment,
+// ** across segments, and a leading ! negates. Read by indentation, like
+// jobTimeoutMinutes; a push filtered to tags only does not run on branches.
+const globToRegExp = pattern => new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^/]*').replace(/\u0000/g, '.*')}$`);
+const branchMatches = (patterns, branch) => {
+  let matched = false;
+  for (const pattern of patterns) {
+    if (pattern.startsWith('!')) { if (globToRegExp(pattern.slice(1)).test(branch)) matched = false; } else if (globToRegExp(pattern).test(branch)) matched = true;
+  }
+  return matched;
+};
+const unquote = text => text.trim().replace(/^['"]|['"]$/g, '');
+export function workflowRunsOnPush(text, branch) {
+  const lines = String(text).split('\n');
+  const onIndex = lines.findIndex(line => /^(on|'on'|"on"):/.test(line));
+  if (onIndex < 0) return false;
+  const inline = lines[onIndex].replace(/^[^:]*:/, '').replace(/#.*$/, '').trim();
+  if (inline) return /(^|[\s,[])push([\s,\]]|$)/.test(inline);
+  const block = [];
+  for (let i = onIndex + 1; i < lines.length; i += 1) {
+    if (!lines[i].trim() || /^\s*#/.test(lines[i])) continue;
+    if (!/^\s/.test(lines[i])) break;
+    block.push(lines[i]);
+  }
+  const indentOf = line => line.match(/^\s*/)[0].length;
+  const eventIndent = block.length ? indentOf(block[0]) : 0;
+  const pushAt = block.findIndex(line => indentOf(line) === eventIndent && /^\s*push:/.test(line));
+  if (pushAt < 0) return false;
+  const pushInline = block[pushAt].replace(/^\s*push:/, '').replace(/#.*$/, '').trim();
+  if (pushInline && pushInline !== '{}' && pushInline !== 'null' && pushInline !== '~') return true;
+  const filters = {};
+  let key = null;
+  for (let i = pushAt + 1; i < block.length && indentOf(block[i]) > eventIndent; i += 1) {
+    const line = block[i].replace(/\s#.*$/, '');
+    const field = line.match(/^\s*([\w-]+):\s*(.*)$/);
+    if (field && !/^\s*-/.test(line)) {
+      key = field[1];
+      filters[key] = [];
+      const value = field[2].trim();
+      if (value.startsWith('[')) filters[key].push(...value.replace(/^\[|\]$/g, '').split(',').map(unquote).filter(Boolean));
+      else if (value) filters[key].push(unquote(value));
+    } else if (key && /^\s*-/.test(line)) {
+      filters[key].push(unquote(line.replace(/^\s*-\s*/, '')));
+    }
+  }
+  if (filters.branches) return branchMatches(filters.branches, branch);
+  if (filters['branches-ignore']) return !branchMatches(filters['branches-ignore'], branch);
+  if (filters.tags || filters['tags-ignore']) return false;
+  return true;
 }
 
 // A refusal is the landing not qualifying; an error is this run failing to
@@ -169,7 +231,7 @@ export async function land({
     root, branch: null, sha: null,
     remote: { name: remote, url: null, repo: repo || null, repoSource: repo ? 'argument' : null },
     main: { before: null, after: null, afterContainsSha: null, afterError: null },
-    ci: { workflowFile: WORKFLOW_FILE, query: null, listings: 0, limit: RUN_LIST_LIMIT, limitReached: false, runs: [], run: null, main: null, trigger: null, wait: null },
+    ci: { workflowFile: WORKFLOW_FILE, query: null, listings: 0, limit: RUN_LIST_LIMIT, limitReached: false, runs: [], run: null, main: null, recentRun: null, trigger: null, wait: null },
     checks: CHECKS.map(name => ({ name, result: 'skipped', detail: null })),
     push: null,
     effective: { git, gh, pollMs, node: process.version, platform: `${process.platform}-${process.arch}` },
@@ -186,7 +248,7 @@ export async function land({
   };
   const g = (...args) => run(git, args, { cwd: root });
   const describe = result => (result.stderr || result.error || result.stdout || '').trim();
-  const exitOf = result => (result.code === null ? 'without starting' : `exit ${result.code}`);
+  const exitOf = result => (result.signal ? `killed by ${result.signal}` : result.code === null ? 'without starting' : `exit ${result.code}`);
   // Plumbing that must work for a check to mean anything; its failure is an
   // error of this run, not a refusal of the landing.
   const must = async (promise, what) => {
@@ -248,7 +310,7 @@ export async function land({
   // Poll until no counted run is pending and one has completed; the latest
   // completed run is the decision. One line is logged per state change, and
   // the bound is the workflow's own lifecycle, measured per state.
-  const awaitDecision = async ({ initialRuns }) => {
+  const awaitDecision = async ({ initialRuns, poll = () => listRuns(receipt.sha) }) => {
     const bounds = await waitBounds();
     const wait = { pollMs, polls: 0, startedAt: new Date().toISOString(), endedAt: null, elapsedMs: 0, bounds, states: [] };
     receipt.ci.wait = wait;
@@ -286,7 +348,7 @@ export async function land({
       }
       await sleep(pollMs, signal);
       checkSignal();
-      runs = await listRuns(receipt.sha);
+      runs = await poll();
     }
   };
 
@@ -297,6 +359,12 @@ export async function land({
   // the forced push. The ref is deleted by cleanup once the attempt concludes.
   const trigger = async () => {
     const ref = `${LAND_REF_PREFIX}${receipt.sha}`;
+    // The ref push only runs the workflow when this commit's own tests.yml
+    // runs on land/**; a branch older than that change would push for nothing.
+    const workflowPath = `.github/workflows/${WORKFLOW_FILE}`;
+    const shown = await g('show', `${receipt.sha}:${workflowPath}`);
+    if (shown.code !== 0) refuse('ci', 'ci-no-trigger', `${short(receipt.sha)} has no ${workflowPath}, so pushing ${ref} would run nothing; rebase onto main`);
+    if (!workflowRunsOnPush(shown.stdout, ref)) refuse('ci', 'ci-no-trigger', `this commit's ${WORKFLOW_FILE} does not run on ${LAND_REF_PREFIX}**; rebase onto main (its push trigger must include '${LAND_REF_PREFIX}**') so that pushing ${ref} runs the tests`);
     const info = { ref, refExisted: false, previousSha: null, refRepushed: false, refPushed: false, pushedAt: null, refDeleted: null, refDeleteError: null };
     receipt.ci.trigger = info;
     const tip = await lsRemote(`refs/heads/${ref}`);
@@ -322,6 +390,22 @@ export async function land({
     const result = await g('push', '--quiet', remote, `:refs/heads/${info.ref}`);
     info.refDeleted = result.code === 0;
     info.refDeleteError = result.code === 0 ? null : `git push ${remote} :refs/heads/${info.ref} failed (${exitOf(result)}): ${describe(result)}`;
+  };
+
+  // Before pushing the land ref: push runs of the tests workflow created in the
+  // last few minutes, listed without the --commit filter (which can lag), so
+  // an attempt interrupted before its push run was listed is not pushed
+  // twice. Only push runs for this commit qualify; a dispatched run never does.
+  const recentPushRuns = async () => {
+    const query = ['run', 'list', '-R', receipt.remote.repo, '--workflow', WORKFLOW_FILE, '--event', COUNTED_EVENT, '--limit', '50', '--json', RUN_FIELDS];
+    receipt.ci.listings += 1;
+    const result = await run(gh, query, { cwd: root });
+    if (result.code !== 0) fail('ci', 'ci-query-failed', `gh run list (recent push runs) ${exitOf(result)}: ${describe(result)}`);
+    let parsed;
+    try { parsed = JSON.parse(result.stdout); } catch (error) { fail('ci', 'ci-query-failed', `gh run list (recent push runs) output is not JSON (${error.message}): ${result.stdout.trim().slice(0, 200)}`); }
+    if (!Array.isArray(parsed)) fail('ci', 'ci-query-failed', `gh run list (recent push runs) output is not a JSON array: ${result.stdout.trim().slice(0, 200)}`);
+    const cutoff = now() - PUSHED_LIMIT_MINUTES * 60 * 1000;
+    return parsed.map(r => normalizeRun(r, receipt.sha)).filter(r => r.counted && Date.parse(r.createdAt || 0) >= cutoff).sort(byNewest);
   };
 
   // On a failed run, report main's own latest run too, so a lane can compare
@@ -411,8 +495,22 @@ export async function land({
         refuse('ci', 'ci-no-run', `${none}; ${hint}; then land again`);
       }
       if (ignored.length) log(`landing: ${ignored.length} run(s) for ${short(receipt.sha)} are not push runs and do not count (${NOT_PUSH})`);
-      await trigger();
-      decider = await awaitDecision({ initialRuns: [] });
+      const recent = (await recentPushRuns())[0] || null;
+      if (recent) {
+        receipt.ci.recentRun = recent;
+        receipt.ci.run = recent;
+        log(`landing: push run ${recent.id} for ${short(receipt.sha)} was created ${Math.max(0, Math.round((now() - Date.parse(recent.createdAt)) / 60000))} minute(s) ago but is not yet listed by --commit; awaiting it instead of pushing ${LAND_REF_PREFIX}${receipt.sha}${recent.url ? ` (${recent.url})` : ''}`);
+        // Until --commit lists it, the run is read from the recent push runs too.
+        const poll = async () => {
+          const listed = await listRuns(receipt.sha);
+          if (listed.some(r => r.id === recent.id)) return listed;
+          return [...listed, ...(await recentPushRuns()).filter(r => !listed.some(l => l.id === r.id))];
+        };
+        decider = await awaitDecision({ initialRuns: [recent], poll });
+      } else {
+        await trigger();
+        decider = await awaitDecision({ initialRuns: [] });
+      }
     }
     receipt.ci.run = decider;
     if (decider.conclusion === 'success') {
@@ -481,15 +579,29 @@ export async function land({
       receipt.reason = error.reason;
       receipt.message = error.message;
       receipt.failurePhase = null;
-    } else if (error instanceof Interrupted) {
+    } else if (error instanceof Interrupted || signal?.aborted) {
+      // A signal that also reached a child mid-call surfaces as that child's
+      // failure; the interruption is what happened, and the child's death is
+      // kept in the receipt's error.
       receipt.outcome = 'interrupted';
       receipt.reason = 'interrupted';
+      if (!(error instanceof Interrupted)) receipt.error = `${error?.message || error} [phase ${receipt.failurePhase}]`;
       const awaited = receipt.ci.run;
       const pushed = receipt.ci.trigger?.refPushed ? receipt.ci.trigger : null;
-      if (awaited) {
+      if (receipt.failurePhase === 'push' && receipt.push?.attempted) {
+        if (!receipt.main.after) {
+          const after = await lsRemote('refs/heads/main');
+          receipt.main.after = after.sha;
+          receipt.main.afterError = after.error;
+        }
+        const where = receipt.main.after ? `${short(receipt.main.after)}${receipt.main.after === receipt.sha ? ', the commit: it landed' : receipt.main.after === receipt.main.before ? ', where it was: nothing landed' : ''}` : `unreadable (${receipt.main.afterError})`;
+        receipt.message = `interrupted during the push to main; main is now ${where}`;
+      } else if (receipt.failurePhase === 'push') {
+        receipt.message = `interrupted after every check passed for ${receipt.sha}, before main was pushed; main was not pushed`;
+      } else if (awaited) {
         receipt.message = `interrupted while awaiting run ${awaited.id} (${awaited.status}${awaited.url ? `, ${awaited.url}` : ''}) for ${receipt.sha}; the run continues on GitHub, and running the tool again awaits it rather than pushing the land ref again`;
       } else if (pushed) {
-        receipt.message = `interrupted after pushing ${pushed.ref} for ${receipt.sha}, before gh listed its push run; that run continues on GitHub. A re-run awaits it once gh lists it; a re-run before then pushes the ref again and starts a second run, so check gh run list -R ${receipt.remote.repo} --workflow ${WORKFLOW_FILE} --commit ${receipt.sha} first`;
+        receipt.message = `interrupted after pushing ${pushed.ref} for ${receipt.sha}, before gh listed its push run; that run continues on GitHub. A re-run within ${PUSHED_LIMIT_MINUTES} minutes looks for it among recent push runs before pushing again; after that, check gh run list -R ${receipt.remote.repo} --workflow ${WORKFLOW_FILE} --commit ${receipt.sha} first`;
       } else {
         receipt.message = `interrupted during ${receipt.failurePhase} for ${receipt.sha || '(commit not yet read)'}; no land ref was pushed`;
       }

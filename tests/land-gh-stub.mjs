@@ -5,11 +5,18 @@
 //   calls           every invocation's arguments, one string each
 //   dispatches      the `workflow run` invocations
 //   runsByCommit    { <sha>: [run, ...] } answered to `run list --commit <sha>`
-//                   and searched by `run view <id>`; a run's _file is matched
-//                   against --workflow; a run with a _timeline
-//                   (['queued', 'in_progress', 'completed:success']) shows one
-//                   entry per answer and stays on the last; a run with
-//                   _hiddenFor > 0 is left out of that many answers first
+//                   (every commit's runs when --commit is absent) and searched
+//                   by `run view <id>`; a run's _file is matched against
+//                   --workflow and its event against --event; a run with a
+//                   _timeline (['queued', 'in_progress', 'completed:success'])
+//                   shows one entry per answer and stays on the last; a run
+//                   with _hiddenFor > 0 is left out of that many answers first,
+//                   one with _hiddenFromCommitFilter > 0 out of that many
+//                   `--commit` listings only, the way a lagging filter would
+//   ignoreEvent     answer `run list` as if --event were absent
+//   listSleep       { afterCalls, ms, marker } — every `run list` after the
+//                   first afterCalls blocks ms milliseconds, having first
+//                   created the marker file, so a contract can signal gh mid-call
 //   pushTrigger     { headSha, run, originDir, updatesLog, logOffset } — the
 //                   tests workflow's push trigger on land/**: before `run list`
 //                   or `run view` answers, every push of refs/heads/land/<headSha>
@@ -93,13 +100,22 @@ if (state.fail && state.fail.command === command) {
 
 if (command === 'run list') {
   if (state.raw != null) { save(); process.stdout.write(state.raw); process.exit(0); }
+  const sleep = state.listSleep;
+  if (sleep && state.calls.filter(c => c.startsWith('run list')).length > (sleep.afterCalls || 0)) {
+    save();
+    if (sleep.marker) fs.writeFileSync(sleep.marker, `${process.pid}\n`);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, sleep.ms);
+  }
   const commit = flag('--commit');
   const workflow = flag('--workflow');
+  const event = flag('--event');
   const limit = Number(flag('--limit') || 20);
-  const candidates = state.ignoreCommit ? allRuns() : (state.runsByCommit[commit] || []);
+  const candidates = (state.ignoreCommit || !commit) ? allRuns() : (state.runsByCommit[commit] || []);
   const listed = [];
   for (const run of candidates) {
     if (workflow && run._file !== workflow) continue;
+    if (event && !state.ignoreEvent && run.event !== event) continue;
+    if (commit && run._hiddenFromCommitFilter > 0) { run._hiddenFromCommitFilter -= 1; continue; }
     const shown = answer(run);
     if (shown) listed.push(shown);
   }
