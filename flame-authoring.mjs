@@ -65,7 +65,7 @@ export function syncFlameRangeBounds(source,bounds) {
 }
 export const FLAME_PROPERTY_GROUPS = [
   { name:'Quality', open:true, scope:'Grid changes restart the fluid. Raymarch controls tune the viewport.', fields:[
-    ['volume-resolution','Simulation resolution'], ['volume-grid-height-ratio','Height / width'], ['volume-pressure-solver-iterations','Solver sweeps'], ['volume-steps','Ray count'],
+    ['volume-resolution','Grid width (cells)'], ['volume-grid-height-ratio','Height / width'], ['volume-pressure-solver-iterations','Solver sweeps'], ['volume-steps','Ray count'],
     ['volume-adaptive-rays','Adaptive rays'], ['volume-render-scale','Screen resolution (%)'],
   ] },
   { name:'Appearance', open:true, scope:'Shared flame and smoke appearance', fields:[
