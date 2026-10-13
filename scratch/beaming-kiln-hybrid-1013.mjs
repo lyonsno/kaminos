@@ -48,13 +48,26 @@ try{
    const saved=await retain({name:'kiln-hybrid',observe});
    const url=new URL(saved.url),hash=new URLSearchParams(url.hash.slice(1));hash.set('rendering_directions','8');hash.set('rendering_angular_pattern','guided');url.hash=hash.toString();
    report.saved={filename:saved.filename,url:url.href,documentUrl:saved.url};await write();
-   report.phase='reopen';await write();await page.goto('about:blank');await page.goto(url.href);await settle();report.reopened=await observe();
+   report.phase='reopen';await write();await page.goto('about:blank');await page.goto(url.href);
+   await page.waitForFunction(()=>{
+     const failure=document.querySelector('#status.failed'),status=document.getElementById('info-bar')?.textContent||'';
+     if(failure||/Scene load failed|Invalid scene|water host unavailable/i.test(status))throw Error(failure?.textContent||status);
+     return /^(Scene loaded|Volume scene loaded)/.test(status);
+   });
+   await settle();report.reopened=await observe();
    // The legacy debug mesh registry intentionally excludes Modal's simulation
    // domain. The authoring document is the full typed-object consumer contract.
    assertMountedScene(saved.document,await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects));
    assert.equal(report.reopened.lighting.frame.directions,8);assert.equal(report.reopened.lighting.frame.angularPattern,'guided');
    assert.equal(report.reopened.lighting.pointCount,1);assert.equal(report.reopened.lighting.frame.smokeReconstruction.refinement,1);
    await page.screenshot({path:out+'/reopened.png'});
+   report.camera=await page.evaluate(()=>window.kaminosCameraDebugState());
+   report.obliqueCamera=await page.evaluate(()=>{
+     const {position:p,target:t}=window.kaminosCameraDebugState(),x=p[0]-t[0],z=p[2]-t[2],a=0.8;
+     return window.kaminosSetCameraDebugPose({position:[t[0]+x*Math.cos(a)+z*Math.sin(a),t[1]+Math.hypot(x,z)*0.8,t[2]+z*Math.cos(a)-x*Math.sin(a)],target:t});
+   });
+   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+   await page.screenshot({path:out+'/oblique.png'});
    return {saved:report.saved,lighting:report.reopened.lighting};
  }});
  assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
