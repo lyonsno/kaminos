@@ -40,6 +40,9 @@ test('visual witness rejects wrong route, stale tolerance, changed state and abs
     raymarchShaderSpecialization:{effective:'lean-emissive-raymarch-v0'},physicalColor:{effective:'emissive-transport-v2'}};
   const sample={ok:true,image:{width:1,height:1,rgba:[20,10,5,255]}};
   validateOpticalPreviewArm(sample,state,requested);
+  assert.throws(()=>validateOpticalPreviewArm(sample,{...state,controls:{raySteps:24}},
+    {...requested,raySteps:6}),/wrong effective/);
+  validateOpticalPreviewArm(sample,{...state,controls:{raySteps:6}},{...requested,raySteps:6});
   for (const patch of [{backend:'fallback'},{simStepCount:151},{opticalStepping:{effective:'fixed',tolerance:0.001}},
     {opticalStepping:{effective:'numerical',tolerance:0.01}},{raymarchShaderSpecialization:{effective:'full'}},{physicalColor:{effective:'other'}}]) {
     assert.throws(()=>validateOpticalPreviewArm(sample,{...state,...patch},requested),/wrong effective/);

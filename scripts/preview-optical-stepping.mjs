@@ -5,13 +5,16 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {checkOpticalStepGpu} from './check-optical-step-gpu.mjs';
 
-const [root, base, input, out] = process.argv.slice(2);
+const [root, base, input, out, rayStepsText] = process.argv.slice(2);
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'source',root,base,input,arms:[],errors:[],claim:'native visual comparison; not isolated timing or continuous-field accuracy'};
 const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
 await save();
 let browser,page;
 try {
+  const raySteps = rayStepsText === undefined ? undefined : Number(rayStepsText);
+  if (raySteps !== undefined) assert.ok(Number.isInteger(raySteps) && raySteps >= 6 && raySteps <= 160, 'invalid requested ray steps');
+  report.requestedRaySteps = raySteps;
   report.source={head:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim()};
   const files=['volume-core.js','volume-optical-native.mjs','index.html','scripts/preview-optical-stepping.mjs','scripts/check-optical-step-gpu.mjs'];
   report.source.files=[];
@@ -49,6 +52,16 @@ try {
   report.phase='settling';await save();
   await page.waitForFunction(()=>window.__kaminosVolumePrototype.debugState().simStepCount>150);
   report.frozen=await page.evaluate(()=>{const r=window.__kaminosVolumePrototype;r.setSimulationPaused(true);r.setControls({lookFreeze:1});return r.debugState();});
+  if (raySteps !== undefined) {
+    report.rayControl = await page.evaluate(value=>{
+      const el=document.getElementById('volume-steps');
+      el.value=String(value);el.dispatchEvent(new Event('input',{bubbles:true}));
+      el.dispatchEvent(new Event('change',{bubbles:true}));
+      return {value:Number(el.value),min:Number(el.min)};
+    },raySteps);
+    assert.equal(report.rayControl.value,raySteps);
+    assert.equal(report.rayControl.min,6);
+  }
   assert.equal(report.frozen.backend,'WebGPU:apple');
   assert.equal(report.frozen.controls.toneMapping,'agx');
   assert.equal(report.frozen.physicalColor.effective,'emissive-transport-v2');
@@ -56,7 +69,7 @@ try {
   report.frozenCamera=await page.evaluate(()=>window.kaminosCameraDebugState());
   for(const [label,value,orbit=0] of [['current','current'],['fixed','fixed'],['numerical','numerical:0.001'],['numerical-loose','numerical:0.01'],['fixed-dense','fixed-dense'],['orbit-fixed','fixed',0.15],['orbit-numerical','numerical:0.001',0.15],['current-repeat','current']]) {
     report.phase=label;await save();
-    const arm=await page.evaluate(async({value,step,camera,orbit})=>{
+    const arm=await page.evaluate(async({value,step,camera,orbit,raySteps})=>{
       const r=window.__kaminosVolumePrototype;
       const d=camera.position.map((x,i)=>x-camera.target[i]);
       const position=[camera.target[0]+d[0]*Math.cos(orbit)+d[2]*Math.sin(orbit),camera.position[1],camera.target[2]+d[2]*Math.cos(orbit)-d[0]*Math.sin(orbit)];
@@ -68,11 +81,11 @@ try {
       const sample=await r.sampleFrame({advanceSim:false,includeRgba:true,now:4000});
       const state=r.debugState(),frame=sample.image;
       const {validateOpticalPreviewArm}=await import('/volume-optical-native.mjs');
-      validateOpticalPreviewArm(sample,state,{mode:value.split(':')[0],tolerance:Number(value.split(':')[1]||0.001),step});
+      validateOpticalPreviewArm(sample,state,{mode:value.split(':')[0],tolerance:Number(value.split(':')[1]||0.001),step,raySteps});
       const canvas=document.createElement('canvas');canvas.width=frame.width;canvas.height=frame.height;
       canvas.getContext('2d').putImageData(new ImageData(Uint8ClampedArray.from(frame.rgba),frame.width,frame.height),0,0);
       return {state,width:frame.width,height:frame.height,rgba:frame.rgba,png:canvas.toDataURL('image/png')};
-    },{value,step:report.frozen.simStepCount,camera:report.frozenCamera,orbit});
+    },{value,step:report.frozen.simStepCount,camera:report.frozenCamera,orbit,raySteps});
     const bytes=Buffer.from(arm.rgba);
     await fs.writeFile(out+'/'+label+'.rgba',bytes);
     await fs.writeFile(out+'/'+label+'.png',Buffer.from(arm.png.split(',')[1],'base64'));

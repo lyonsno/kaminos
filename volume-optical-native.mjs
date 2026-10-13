@@ -8,11 +8,12 @@ export function opticalSteppingConfig({mode = 'current', tolerance = 0.001} = {}
     jitter: 'off in both comparison arms; current renderer unchanged'};
 }
 
-export function validateOpticalPreviewArm(sample, state, {mode, tolerance, step}) {
+export function validateOpticalPreviewArm(sample, state, {mode, tolerance, step, raySteps}) {
   if (!sample?.ok || state?.simStepCount !== step || state?.backend !== 'WebGPU:apple'
     || state?.opticalStepping?.effective !== mode || state?.opticalStepping?.tolerance !== tolerance
     || state?.raymarchShaderSpecialization?.effective !== 'lean-emissive-raymarch-v0'
-    || state?.physicalColor?.effective !== 'emissive-transport-v2') throw new Error('wrong effective native arm');
+    || state?.physicalColor?.effective !== 'emissive-transport-v2'
+    || (raySteps !== undefined && state?.controls?.raySteps !== raySteps)) throw new Error('wrong effective native arm');
   const frame = sample.image;
   if (!frame || !Number.isInteger(frame.width) || !Number.isInteger(frame.height) || frame.width <= 0 || frame.height <= 0
     || frame.rgba?.length !== frame.width * frame.height * 4 || !frame.rgba.some((x,i) => i%4 !== 3 && x > 0)) {
