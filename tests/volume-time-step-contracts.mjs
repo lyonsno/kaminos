@@ -133,7 +133,7 @@ test('the emitter is an additive per-step source: its increments carry dt at pac
   const injection = source.slice(source.indexOf('struct AnalyticEmitterInjectionUniforms'), source.indexOf('material.x = max(material.x, chemistry.x * chemistryWeight * 0.76);'));
   assert.doesNotMatch(injection, /time_step_controls/, 'the emitter kernel has no time-step member');
   assert.match(injection, /let injectedVelocity = clamp\(\s*previousVelocityDensity\.xyz \+ axialVelocity \+ entrainmentVelocity,\s*vec3<f32>\(-0\.34\),\s*vec3<f32>\(0\.52\)\s*\);/, 'the additive update and the authored clamp are untouched, so Speed 1 is identical in both modes');
-  assert.match(source, /writeAnalyticEmitterInjectionUniform\([^;]*\{ incrementScale: timeStepConfig\.effective\.incrementScale \}/, 'the frame packer passes the dt factor to the emitter increments');
+  assert.match(source, /writeAnalyticEmitterInjectionUniform\([^;]*\{ incrementScale: timeStepConfig\.effective\.incrementScale, gridHeight \}/, 'the frame packer passes the dt factor to the emitter increments');
   assert.match(source, /state\.timeStep = \{\s*\.\.\.timeStepConfig,\s*uniform: \{ mode: uniforms\[354\], referenceSpeed: uniforms\[355\] \},[^]*?emitterPacked: analyticEmitterDispatch\?\.active\s*\?\s*\{\s*inletIncrement: analyticEmitterInjectionUniformFloats\[26\],\s*edgeEntrainment: analyticEmitterInjectionUniformFloats\[23\],/, 'runtime receipt records what the emitter kernel received');
   assert.equal((source.match(/^\s*timeStep: state\.timeStep,$/gm) || []).length, 2, 'debugState exports the receipt on both routes');
 });

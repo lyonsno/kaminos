@@ -2088,7 +2088,7 @@ export function writeAnalyticEmitterInjectionUniform(floats, words, descriptor, 
   floats[26] = descriptor.effectiveInletVelocity * incrementScale;
   floats[27] = descriptor.shearWidthCells;
   words.set([...dispatch.cellMin, dispatch.grid], 28);
-  words.set([...dispatch.cellExtent, 0], 32);
+  words.set([...dispatch.cellExtent, options.gridHeight ?? dispatch.grid * 2], 32);
 }
 
 // Inflow boundary (emitter source law inflow-boundary). The emitter's footprint
@@ -2109,7 +2109,15 @@ export const VELOCITY_STAGGERING_UNIFORM_OFFSET = HEAT_RELEASE_UNIFORM_OFFSET + 
 export const VELOCITY_STAGGERING_UNIFORM_FLOATS = 4;
 export const IMMERSED_SOURCE_UNIFORM_OFFSET = VELOCITY_STAGGERING_UNIFORM_OFFSET + VELOCITY_STAGGERING_UNIFORM_FLOATS;
 export const IMMERSED_SOURCE_UNIFORM_FLOATS = 24;
-export const VOLUME_UNIFORM_FLOATS = IMMERSED_SOURCE_UNIFORM_OFFSET + IMMERSED_SOURCE_UNIFORM_FLOATS;
+// Grid dimensions as runtime values (Noah 2026-10-12): the shaders seat their
+// private GRID / GRID_Y and derived lattice sizes from these slots, so a shape
+// change recompiles no pipeline.
+export const GRID_SHAPE_UNIFORM_OFFSET = IMMERSED_SOURCE_UNIFORM_OFFSET + IMMERSED_SOURCE_UNIFORM_FLOATS;
+export const GRID_SHAPE_UNIFORM_FLOATS = 8;
+export const VOLUME_UNIFORM_FLOATS = GRID_SHAPE_UNIFORM_OFFSET + GRID_SHAPE_UNIFORM_FLOATS;
+export function gridShapeUniformValues({ grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight }) {
+  return [grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight, 0, 0];
+}
 
 // The aperture pattern (slice 2): which coverage pattern the floor map is built
 // from, its count / ratio / seed, and the swirl (tangential fraction of the
@@ -3499,10 +3507,23 @@ fn passiveHeatToSmokeRate(heat: f32, yFine: f32) -> f32 {
 })();
 
 const WGSL = /* wgsl */`
-override GRID: u32 = 64u;
-override GRID_Y: u32 = 128u;
+var<private> GRID: u32;
+var<private> GRID_Y: u32;
+var<private> IRRADIANCE_GRID: u32;
+var<private> IRRADIANCE_GRID_Y: u32;
+var<private> SCENE_SOURCE_GRID: u32;
+var<private> SCENE_SOURCE_GRID_Y: u32;
+// Every compute and fragment entry point calls this first (grid dimensions as
+// runtime values; the vertex stage does not read the fluid uniforms).
+fn seatGridShape() {
+  GRID = u32(u.grid_shape.x);
+  GRID_Y = u32(u.grid_shape.y);
+  IRRADIANCE_GRID = u32(u.grid_shape.z);
+  IRRADIANCE_GRID_Y = u32(u.grid_shape.w);
+  SCENE_SOURCE_GRID = u32(u.grid_shape_b.x);
+  SCENE_SOURCE_GRID_Y = u32(u.grid_shape_b.y);
+}
 override TRANSPARENT_CANVAS: f32 = 0.0;
-override IRRADIANCE_GRID: u32 = 32u;
 override LEAN_STOCK_RAYMARCH: bool = false;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
@@ -3606,6 +3627,8 @@ struct Uniforms {
   // (the coverage map holds the slab's pattern), unused ×3.
   immersed_source_e: vec4<f32>,
   immersed_source_f: vec4<f32>,
+  grid_shape: vec4<f32>,
+  grid_shape_b: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -4602,6 +4625,7 @@ fn faceForcesOn() -> bool {
 // its upper face is a wall or the open top). The velocity bound applies after.
 @compute @workgroup_size(4, 4, 4)
 fn csFaceForces(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
@@ -4812,6 +4836,7 @@ fn pressureReadComposite(c: vec3<i32>) -> vec4<f32> {
 
 @compute @workgroup_size(4, 4, 4)
 fn csDivergencePressure(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
@@ -4822,6 +4847,7 @@ fn csDivergencePressure(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @compute @workgroup_size(4, 4, 4)
 fn csPressureJacobi(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
@@ -4861,16 +4887,19 @@ fn pressureJacobiTiered(gid: vec3<u32>, minY: f32, maxY: f32) {
 
 @compute @workgroup_size(4, 4, 4)
 fn csPressureJacobiTieredLower(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   pressureJacobiTiered(gid, 0.0, pressureTierLowerMax());
 }
 
 @compute @workgroup_size(4, 4, 4)
 fn csPressureJacobiTieredHero(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   pressureJacobiTiered(gid, pressureTierHeroMin(), pressureTierHeroMax());
 }
 
 @compute @workgroup_size(4, 4, 4)
 fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
@@ -4904,6 +4933,7 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @compute @workgroup_size(4, 4, 4)
 fn csProjectPressureTiered(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
@@ -5017,6 +5047,7 @@ fn pressureRedBlackSweep(gid: vec3<u32>, parity: u32) {
 
 @compute @workgroup_size(4, 4, 4)
 fn csDivergencePressureWarm(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
@@ -5031,16 +5062,19 @@ fn csDivergencePressureWarm(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @compute @workgroup_size(4, 4, 4)
 fn csPressureRedBlackEven(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   pressureRedBlackSweep(gid, 0u);
 }
 
 @compute @workgroup_size(4, 4, 4)
 fn csPressureRedBlackOdd(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   pressureRedBlackSweep(gid, 1u);
 }
 
 @compute @workgroup_size(4, 4, 4)
 fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
@@ -5214,6 +5248,7 @@ fn csPressureResidualBefore(
   @builtin(workgroup_id) workgroupId: vec3<u32>,
   @builtin(num_workgroups) workgroupCount: vec3<u32>
 ) {
+  seatGridShape();
   pressureResidualReduce(gid, localIndex, workgroupId, workgroupCount, false);
 }
 
@@ -5224,6 +5259,7 @@ fn csPressureResidualAfter(
   @builtin(workgroup_id) workgroupId: vec3<u32>,
   @builtin(num_workgroups) workgroupCount: vec3<u32>
 ) {
+  seatGridShape();
   pressureResidualReduce(gid, localIndex, workgroupId, workgroupCount, true);
 }
 
@@ -5789,6 +5825,7 @@ fn boundarySupportAtCell(c: vec3<i32>, supportWeights: vec4<f32>) -> f32 {
 
 @compute @workgroup_size(4, 4, 4)
 fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
@@ -5844,7 +5881,6 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
 // flame. Identity: fire-irradiance-lattice-32-same-state-rgb-v0. The lattice
 // spans the full tall raymarch domain with equal world-space cell pitch.
 const IRRADIANCE_TILES_X: u32 = 8u;
-override IRRADIANCE_GRID_Y: u32 = 64u;
 
 fn irradianceIndex(cell: vec3<u32>) -> u32 {
   return cell.x + cell.y * IRRADIANCE_GRID + cell.z * IRRADIANCE_GRID * IRRADIANCE_GRID_Y;
@@ -5852,6 +5888,7 @@ fn irradianceIndex(cell: vec3<u32>) -> u32 {
 
 @compute @workgroup_size(4, 4, 4)
 fn csIrradianceSeed(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   if (gid.x >= IRRADIANCE_GRID || gid.y >= IRRADIANCE_GRID_Y || gid.z >= IRRADIANCE_GRID) {
     return;
   }
@@ -5913,6 +5950,7 @@ fn csIrradianceSeed(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @compute @workgroup_size(4, 4, 4)
 fn csIrradiancePropagate(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   if (gid.x >= IRRADIANCE_GRID || gid.y >= IRRADIANCE_GRID_Y || gid.z >= IRRADIANCE_GRID) {
     return;
   }
@@ -5935,6 +5973,7 @@ fn csIrradiancePropagate(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @compute @workgroup_size(8, 8, 1)
 fn csIrradianceResolve(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   let tilesY = (IRRADIANCE_GRID + IRRADIANCE_TILES_X - 1u) / IRRADIANCE_TILES_X;
   let atlasWidth = IRRADIANCE_GRID * IRRADIANCE_TILES_X;
   let atlasHeight = IRRADIANCE_GRID_Y * tilesY;
@@ -5964,6 +6003,7 @@ var<workgroup> irradianceReduceColor: array<vec3<f32>, 64>;
 
 @compute @workgroup_size(64)
 fn csIrradianceAnalytic(@builtin(local_invocation_index) tid: u32) {
+  seatGridShape();
   let cellCount = IRRADIANCE_GRID * IRRADIANCE_GRID_Y * IRRADIANCE_GRID;
   var lumSum = 0.0;
   var posSum = vec3<f32>(0.0);
@@ -6014,6 +6054,7 @@ fn csIrradianceAnalytic(@builtin(local_invocation_index) tid: u32) {
 
 @compute @workgroup_size(4, 4, 4)
 fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
@@ -6043,6 +6084,7 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @compute @workgroup_size(4, 4, 4)
 fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
     return;
   }
@@ -8873,12 +8915,14 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
 
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4<f32> {
+  seatGridShape();
   let result = raymarchVolume(in, ordinarySceneDepthEndT(in), true);
   return result.color;
 }
 
 @fragment
 fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
+  seatGridShape();
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearWorldRaw = u.invViewProj * vec4<f32>(ndc, -1.0, 1.0);
   let farWorldRaw = u.invViewProj * vec4<f32>(ndc, 1.0, 1.0);
@@ -8892,6 +8936,7 @@ fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
 
 @fragment
 fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
+  seatGridShape();
   let result = raymarchVolume(in, 1.0e6, false);
   var out: ResidualSourceOutput;
   out.color = result.color;
@@ -8901,6 +8946,7 @@ fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
 
 @fragment
 fn fsOpticalTransportContributions(in: VSOut) -> OpticalTransportContributionOutput {
+  seatGridShape();
   let result = raymarchVolume(in, 1.0e6, false);
   var out: OpticalTransportContributionOutput;
   out.sharedRidge = result.sharedRidgeContribution;
@@ -8911,8 +8957,12 @@ fn fsOpticalTransportContributions(in: VSOut) -> OpticalTransportContributionOut
 `;
 
 const ANALYTIC_EMITTER_INJECTION_WGSL = /* wgsl */`
-override GRID: u32 = 64u;
-override GRID_Y: u32 = 128u;
+var<private> GRID: u32;
+var<private> GRID_Y: u32;
+fn seatGridShape() {
+  GRID = emitter.cell_min_grid.w;
+  GRID_Y = emitter.cell_extent.w;
+}
 const SLOTS_PER_CELL: u32 = 4u;
 
 struct AnalyticEmitterInjectionUniforms {
@@ -9002,6 +9052,7 @@ fn apertureSignedDistance(
 
 @compute @workgroup_size(4, 4, 4)
 fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
+  seatGridShape();
   if (any(localId >= emitter.cell_extent.xyz)) { return; }
   let cell = emitter.cell_min_grid.xyz + localId;
   if (any(cell >= vec3<u32>(GRID, GRID_Y, GRID))) { return; }
@@ -9242,8 +9293,12 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 `;
 
 const BOUNDARY_SPLAT_WGSL = `
-override GRID: u32 = 64u;
-override GRID_Y: u32 = 128u;
+var<private> GRID: u32;
+var<private> GRID_Y: u32;
+fn seatGridShape() {
+  GRID = u32(boundarySplatCamera.gridShape.x);
+  GRID_Y = u32(boundarySplatCamera.gridShape.y);
+}
 const SLOTS_PER_CELL: u32 = 4u;
 
 struct BoundarySplat {
@@ -9297,6 +9352,7 @@ struct BoundarySplatCamera {
   instanceInfo: vec4<f32>,
   cameraPosition: vec4<f32>,
   productTransform: vec4<f32>,
+  gridShape: vec4<f32>,
 };
 
 struct BoundarySplatInstanceDescriptor {
@@ -9771,6 +9827,7 @@ fn boundarySplatEnergyCompensation(footprintRadius: f32, sharpness: f32) -> f32 
 
 @compute @workgroup_size(4, 4, 4)
 fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
   if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) { return; }
   let cellIndex = boundarySplatCellIndex(gid);
   let admissionSidecar = boundarySidecar[cellIndex];
@@ -9914,6 +9971,7 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 @compute @workgroup_size(1)
 fn finalizeBoundarySplats() {
+  seatGridShape();
   let candidateCount = min(atomicLoad(&boundarySplatDraw.candidateCount), boundarySplatDraw.capacity);
   boundarySplatDraw.sourceCandidateCount = candidateCount;
   boundarySplatDraw.compactionCount = 1u;
@@ -9975,6 +10033,7 @@ fn boundarySplatCameraLinearDepthBin(worldPosition: vec3<f32>) -> u32 {
 
 @vertex
 fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) instanceIndex: u32) -> BoundarySplatVertexOut {
+  seatGridShape();
   let corner = boundarySplatQuadCorner(vertexIndex);
   var sourceCandidateIndex = instanceIndex;
   var descriptorIndex = 0u;
@@ -10116,6 +10175,7 @@ fn boundarySplatBilinearVs(
   @builtin(vertex_index) vertexIndex: u32,
   @builtin(instance_index) depositionInstanceIndex: u32,
 ) -> BoundarySplatVertexOut {
+  seatGridShape();
   let persistentCohort = boundarySplatCamera.instanceInfo.w > 0.5;
   let depositsPerCandidate = select(20u, 15u, persistentCohort);
   let neighborsPerTap = select(4u, 3u, persistentCohort);
@@ -10224,6 +10284,7 @@ fn boundarySplatBilinearVs(
 
 @fragment
 fn boundarySplatFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
+  seatGridShape();
   let radius2 = dot(in.local, in.local);
   if (radius2 > 1.0) { discard; }
   let footprintRadius = clamp(boundarySplatCamera.controls.x, 0.35, 1.5);
@@ -10245,6 +10306,7 @@ fn boundarySplatFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
 
 @fragment
 fn boundarySplatBilinearFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
+  seatGridShape();
   let sharedTotalExtinctionCoefficient = in.ridgeOptical.w + in.nonRidgeOptical.w;
   let sharedEmissionCoefficient = in.ridgeOptical.rgb + in.nonRidgeOptical.rgb;
   let weightedExtinction = sharedTotalExtinctionCoefficient * in.depositionWeight;
@@ -10257,6 +10319,7 @@ override OPTICAL_BIN: u32 = 0u;
 
 @fragment
 fn boundarySplatOpticalFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
+  seatGridShape();
   if (in.depthBin != OPTICAL_BIN) { discard; }
   let radius2 = dot(in.local, in.local);
   if (radius2 > 1.0) { discard; }
@@ -10278,6 +10341,7 @@ fn boundarySplatOpticalFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> 
 
 @fragment
 fn boundarySplatBilinearOpticalFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
+  seatGridShape();
   if (in.depthBin != OPTICAL_BIN) { discard; }
   let sharedEmissionCoefficient = in.ridgeOptical.rgb + in.nonRidgeOptical.rgb;
   let sharedTotalExtinctionCoefficient = in.ridgeOptical.w + in.nonRidgeOptical.w;
@@ -12897,7 +12961,7 @@ export function createKaminosVolumePrototype({
     });
     boundarySplatCameraBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
-      size: 224,
+      size: 240,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     boundarySplatInstanceDescriptorBuffer = device.createBuffer({
@@ -13331,11 +13395,11 @@ export function createKaminosVolumePrototype({
         receiverGrid: gridSize,
       };
     }
-    const renderPipelineConstants = { GRID: gridSize, GRID_Y: gridHeight, TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0, LEAN_STOCK_RAYMARCH: false };
+    const renderPipelineConstants = { TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0, LEAN_STOCK_RAYMARCH: false };
     ordinaryDepthPipelines.clear();
     scenePointPipelines.clear();
     const leanStockRenderPipelineConstants = { ...renderPipelineConstants, LEAN_STOCK_RAYMARCH: true };
-    const computePipelineConstants = { GRID: gridSize, GRID_Y: gridHeight };
+    const computePipelineConstants = {};
     const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => device.createRenderPipeline({
       label,
       layout: productRaymarchPipelineLayout,
@@ -13439,7 +13503,6 @@ export function createKaminosVolumePrototype({
       compute: {
         module: analyticEmitterInjectionShader,
         entryPoint: 'injectAnalyticEmitter',
-        constants: { GRID: gridSize, GRID_Y: gridHeight },
       },
     });
     pressureDivergencePipeline = device.createComputePipeline({
@@ -15145,7 +15208,7 @@ export function createKaminosVolumePrototype({
     const boundarySplatInstanceAllocation = writeBoundarySplatInstanceConsumerState();
     if (boundarySplatCameraBuffer) {
       const cameraMatrix = camera.matrixWorld.elements;
-      const splatCamera = new Float32Array(56);
+      const splatCamera = new Float32Array(60);
       splatCamera.set(viewProj.elements, 0);
       const boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
       const covarianceMode = boundarySplatMode === 'kernel_moment_covariance' || boundarySplatMode === 'kernel_moment_full_flame_union'
@@ -15208,6 +15271,7 @@ export function createKaminosVolumePrototype({
       ], 44);
       splatCamera.set([camera.position.x, camera.position.y, camera.position.z, 0], 48);
       splatCamera.set([...productTransform.translate, productTransform.scale], 52);
+      splatCamera.set([gridSize, gridHeight, 0, 0], 56);
       state.fullSupportDepositionReceipt = {
         identity: 'full-support-deposition-runtime-receipt-v0',
         requested: state.fullSupportDepositionRequested,
@@ -15626,6 +15690,7 @@ export function createKaminosVolumePrototype({
     refreshSceneCollision();
     const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu });
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
+    uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
     if (inflowBoundaryConfig.effective.admitted && inflowCoverageTexture) {
       const coverageSignature = inflowCoverageSignatureFor(inflowBoundaryConfig);
@@ -15655,7 +15720,7 @@ export function createKaminosVolumePrototype({
       analyticEmitterDescriptor,
       analyticEmitterDispatch,
       renderPhaseTimeMs * 0.001,
-      { incrementScale: timeStepConfig.effective.incrementScale },
+      { incrementScale: timeStepConfig.effective.incrementScale, gridHeight },
     );
     device.queue.writeBuffer(
       analyticEmitterInjectionUniformBuffer,
@@ -16774,7 +16839,7 @@ export function createKaminosVolumePrototype({
         { binding: 4, resource: metaView },
       ],
     }));
-    const irradiancePipelineConstants = { GRID: gridSize, GRID_Y: gridHeight, IRRADIANCE_GRID: irradianceGridSize, IRRADIANCE_GRID_Y: irradianceGridHeight };
+    const irradiancePipelineConstants = {};
     irradianceSeedPipeline = device.createComputePipeline({
       label: `kaminos fire irradiance seed ${gridSize}x${gridHeight}x${gridSize} to ${irradianceGridSize}x${irradianceGridHeight}x${irradianceGridSize}`,
       layout: irradiancePipelineLayout,
@@ -19497,7 +19562,7 @@ export function createKaminosVolumePrototype({
           label:'ordinary emissive raymarch with MSAA scene-depth clipping',layout:ordinaryMultisamplePipelineLayout,
           vertex:{module:ordinaryMultisampleShader,entryPoint:'vs'},
           fragment:{module:ordinaryMultisampleShader,entryPoint:'fs',
-            constants:{GRID:gridSize,GRID_Y:gridHeight,TRANSPARENT_CANVAS:transparentCanvas ? 1 : 0,
+            constants:{TRANSPARENT_CANVAS:transparentCanvas ? 1 : 0,
               LEAN_STOCK_RAYMARCH:basePipeline === leanStockPipeline || basePipeline === leanStockReadbackPipeline},
             targets:[{format:targetPipeline === readbackPipeline ? 'rgba8unorm' : format}]},
           primitive:{topology:'triangle-list'},
@@ -19522,7 +19587,7 @@ export function createKaminosVolumePrototype({
           multisampled ? ordinaryMultisampleDepthLayout : productRaymarchDepthBindGroupLayout,scenePointBindings.layout]});
         scenePointPipelines.set(key,device.createRenderPipeline({label:'shared point light smoke consumer',layout,
           vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',
-            constants:{GRID:gridSize,GRID_Y:gridHeight,TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false},
+            constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false},
             targets:[{format:targetPipeline === readbackPipeline?'rgba8unorm':format}]},primitive:{topology:'triangle-list'}}));
       }
       drawPipeline = scenePointPipelines.get(key);
@@ -19540,7 +19605,7 @@ export function createKaminosVolumePrototype({
         const module=device.createShaderModule({label:'distributed flame smoke consumer',code});
         const layout=device.createPipelineLayout({bindGroupLayouts:[bindGroupLayout,multisampled?ordinaryMultisampleDepthLayout:productRaymarchDepthBindGroupLayout,distributedLayout]});
         distributedPipelines.set(key,device.createRenderPipeline({label:'distributed flame scene smoke',layout,
-          vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',constants:{GRID:gridSize,GRID_Y:gridHeight,TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false},
+          vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',constants:{TRANSPARENT_CANVAS:transparentCanvas?1:0,LEAN_STOCK_RAYMARCH:false},
           targets:[{format:targetPipeline===readbackPipeline?'rgba8unorm':format}]},primitive:{topology:'triangle-list'}}));
       }
       drawPipeline=distributedPipelines.get(key);
