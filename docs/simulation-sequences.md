@@ -73,9 +73,30 @@ sequence. The caller selects a new destination. All frames remain retained;
 video encoding or contact sheets can consume them separately. A video encoding
 failure does not invalidate or delete the original sequence.
 
-Current implementation is the reusable export core and scripted Fluid consumer.
-The bottom transport UI, browser folder writer, job-progress controls, rewind,
-checkpoint restoration and flame adapter are subsequent owner compositions.
+The finite PBF contribution mounts `simulation-transport.mjs` in the existing
+bottom run-controls slot. It supports play/pause, fixed-tick stepping, replay,
+rates and numeric time seek. Backward stepping/seeking explicitly restarts and
+recomputes using current material settings; it does not reproduce prior
+interventions or retain particle checkpoints. The slot adapter is provisional
+pending the shared application owner's general mount interface.
+
+Render sequence exports the current allocation/view into a newly named child
+folder selected by the author. `live-fluid-sequence.mjs` uses the same scheduler;
+`browser-sequence-directory.mjs` writes the same format through native directory
+handles. Source metadata records observed server configuration and owner identity;
+it explicitly does not attest the bytes of modules already loaded in the page.
+The scripted consumer supplies independently verified served-source hashes.
+Folder-picker specification: https://wicg.github.io/file-system-access/#api-showdirectorypicker.
+Writable-stream specification: https://fs.spec.whatwg.org/#api-filesystemfilehandle-createwritable.
+Unavailable folder support is reported rather than accumulating the whole export.
+
+Capture/validation/write are sequential; no simulation history or second frame
+pump is introduced. Compact metadata is committed per frame. The browser may
+copy the small ledger when reopening its writable stream; long-export storage
+throughput is not measured. Cancellation stops after the current frame and leaves
+water paused. Partial manifests and PNGs remain in the chosen directory.
+Arbitrary export resolution, video encoding, checkpoint rewind and actual flame
+conformance remain separate compositions.
 
 ## Cancellation and verified reopening
 

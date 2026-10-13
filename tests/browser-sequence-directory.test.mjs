@@ -1,0 +1,11 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';import fs from 'node:fs';
+assert.ok(fs.existsSync(new URL('../browser-sequence-directory.mjs',import.meta.url)), 'Browser sequence writer is absent');
+const {createBrowserSequenceSink}=await import('../browser-sequence-directory.mjs');
+const bytes=v=>typeof v==='string'?new TextEncoder().encode(v):new Uint8Array(v);
+function folder(){const files=new Map();return {files,async *entries(){yield*files.entries();},async getFileHandle(name,{create=false}={}){if(!files.has(name)){if(!create)throw Error('missing');files.set(name,new Uint8Array());}return {async getFile(){const b=files.get(name);return {size:b.length,arrayBuffer:async()=>b.buffer};},async createWritable({keepExistingData=false}={}){let b=keepExistingData?files.get(name):new Uint8Array(),pos=0;return {seek:async n=>pos=n,write:async data=>{const v=bytes(data),a=new Uint8Array(Math.max(b.length,pos+v.length));a.set(b);a.set(v,pos);b=a;pos+=v.length;},close:async()=>files.set(name,b),abort:async()=>{}};}};}};}
+const d=folder(),sink=await createBrowserSequenceSink(d,{inspect:async()=>({width:2,height:1})});await sink.begin({request:{startSeconds:0,endSeconds:0,fps:30}});await sink.initial({initial:{clock:{runId:'a'}},schedule:{count:1}});await sink.frame({index:0,step:0,targetSeconds:0,timeSeconds:0,runId:'a',image:new Uint8Array([1,2])});await sink.finish({status:'complete',complete:true,completedFrames:1,lastTrustworthyFrame:0});
+const json=name=>JSON.parse(new TextDecoder().decode(d.files.get(name)));assert.equal(json('sequence.json').status,'complete');assert.equal(json('frames.jsonl').status,'verified');assert.equal(json('frames.jsonl').sha256.length,64);
+await assert.rejects(createBrowserSequenceSink(d),/empty/);
+const bad=folder(),b=await createBrowserSequenceSink(bad,{inspect:async()=>{throw Error('blank');}});await b.begin({});await assert.rejects(b.frame({index:0,image:new Uint8Array([1])}),/blank/);await b.finish({status:'failed',complete:false});assert.ok(bad.files.has('frame-00000000.png'));assert.equal(JSON.parse(new TextDecoder().decode(bad.files.get('frames.jsonl'))).status,'unverified');
+console.log('Browser streamed manifests, checksums, no overwrite and unverified raw retention pass');
