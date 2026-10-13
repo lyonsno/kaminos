@@ -33,7 +33,7 @@ test('clearing resets scene history while typed water objects join chronological
   assert.match(html, /record\.type === LOCAL_LIQUID_EMITTER_TYPE && record\.source === LOCAL_LIQUID_EMITTER_SOURCE/);
   assert.match(html, /mergeAndValidateLocalLiquidEmitterPose\(entry\.localLiquidEmitter, sceneObjectTransformState\(entry\.object\), transform\)/,
     'partial scene transform patches are checked against the full accepted emitter pose');
-  assert.match(html, /function removeSceneObjectInternal\(id, \{ recordHistory = true, preserveForMembershipHistory = false \} = \{\}\)[\s\S]*if \(recordHistory && !editId\) scenePlacementTools\?\.edits\.discard\(entry => entry\.id === id\)/);
+  assert.match(html, /function removeSceneObjectInternal\(id, \{ recordHistory = true, preserveForMembershipHistory = false(?:, disposeTree = disposeObjectTree)? \} = \{\}\)[\s\S]*if \(recordHistory && !editId\) scenePlacementTools\?\.edits\.discard\(entry => entry\.id === id\)/);
   assert.match(html, /recordApplied\(editId, before, null, `Remove/);
   const removeStart = html.indexOf('function removeSceneObjectInternal(');
   const removeEnd = html.indexOf('window.removeSceneObject = function', removeStart);
