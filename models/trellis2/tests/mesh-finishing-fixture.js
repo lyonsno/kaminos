@@ -38,6 +38,12 @@ function assemble(parts,rand,{removeFraction,flipFraction,duplicates,fins}){
   return {vertices:Float32Array.from(positions),triangles:Uint32Array.from(faces.flat())};
 }
 
+function belowTargetMesh(){
+  const rand=random(7),parts=[];
+  for(let i=0;i<14;i++)parts.push(octasphere(2+Math.floor(rand()*2),rand,{radius:.002+.04*rand(),center:[0,1,2].map(()=>rand()*.5-.25),noise:.15}));
+  return assemble(parts,rand,{removeFraction:.04,flipFraction:.4,duplicates:20,fins:15});
+}
+
 export const MESH_FINISHING_CASES={
   // Large enough to need fast-simplification passes before cleanup.
   'simplify-route':{targetFaces:3000,build(){
@@ -46,9 +52,8 @@ export const MESH_FINISHING_CASES={
     return assemble(parts,rand,{removeFraction:.01,flipFraction:.25,duplicates:12,fins:9});
   }},
   // Already below its target: the source cleans once, then runs final cleanup.
-  'below-target':{targetFaces:20000,build(){
-    const rand=random(7),parts=[];
-    for(let i=0;i<14;i++)parts.push(octasphere(2+Math.floor(rand()*2),rand,{radius:.002+.04*rand(),center:[0,1,2].map(()=>rand()*.5-.25),noise:.15}));
-    return assemble(parts,rand,{removeFraction:.04,flipFraction:.4,duplicates:20,fins:15});
-  }},
+  'below-target':{targetFaces:20000,build:belowTargetMesh},
+  // Starts below target (4,696 faces) but hole filling lifts it to 5,120, so the
+  // source continues into simplification before its final cleanup.
+  'crosses-target-after-holes':{targetFaces:4800,build:belowTargetMesh},
 };

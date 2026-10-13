@@ -314,13 +314,32 @@ export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,
   for(let i=0,n=vertices.length/3;i<faces.length;i++)if(faces[i]>=n)throw RangeError('triangle index outside vertices');
   let v=vertices,f=faces;const trace=[];
   if(f.length/3<=targetFaces){
-    // Source falls through: one cleanup pass without winding repair, then the
-    // final cleanup, which no longer reclassifies the already-filtered parts.
-    const first=cleanupMesh(v,f,{keepLargest,fixNormals:false});
-    const clean=cleanupMesh(first.vertices,first.faces,{keepLargest:false,minComponentArea:0});
-    trace.push({operation:'cleanup',inputFaces:f.length/3,outputFaces:first.faces.length/3},
-      {operation:'cleanup_final',inputFaces:first.faces.length/3,outputFaces:clean.faces.length/3});
-    return {vertices:Float32Array.from(clean.vertices),faces:Uint32Array.from(clean.faces),trace};
+    // Source falls through to its general path: cleanup without winding
+    // repair, then decisions on the resulting count (hole filling can lift it
+    // over the target). Every later cleanup keeps the already-filtered parts.
+    const count=m=>m.faces.length/3,later={keepLargest:false,minComponentArea:0};
+    const step=(operation,input,m)=>{trace.push({operation,inputFaces:input,outputFaces:count(m)});onPass(trace.at(-1));return m;};
+    const simplify=(m,reduction,operation)=>{const r=simplifyMesh(m.vertices,m.faces,{targetReduction:reduction});
+      return step(operation,count(m),{vertices:r.points,faces:r.triangles});};
+    let m=step('cleanup',f.length/3,cleanupMesh(v,f,{keepLargest,fixNormals:false}));
+    const finish=m=>{const clean=step('cleanup_final',count(m),cleanupMesh(m.vertices,m.faces,later));
+      return {vertices:Float32Array.from(clean.vertices),faces:Uint32Array.from(clean.faces),trace};};
+    if(count(m)<=targetFaces)return finish(m);
+    const coarse=targetFaces*3;
+    if(count(m)>coarse){
+      m=simplify(m,1.0-coarse/count(m),'simplify_coarse');
+      m=step('cleanup',count(m),cleanupMesh(m.vertices,m.faces,{...later,fixNormals:false}));
+    }
+    if(count(m)<=targetFaces)return finish(m);
+    let simplified=false;
+    for(let attempt=0;attempt<3;attempt++){
+      if(count(m)<=targetFaces)break;
+      const reduction=1.0-targetFaces/count(m);if(reduction<=0)break;
+      m=simplify(m,reduction,'simplify_final');simplified=true;
+      if(count(m)<=targetFaces*1.1)break;
+    }
+    if(simplified)return finish(m);
+    return {vertices:Float32Array.from(m.vertices),faces:Uint32Array.from(m.faces),trace};
   }
   for(let pass=0;pass<3;pass++){
     const ratio=targetFaces/(f.length/3);if(ratio>=1)break;
