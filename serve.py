@@ -3160,7 +3160,20 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/runtime-config":
+        if parsed.path == "/api/workbench-experiments":
+            from workbench_experiments import discover_experiments
+            try:
+                directory = os.environ.get("KAMINOS_EXPERIMENTS_DIR", "experiments")
+                modules = discover_experiments(ROOT, directory)
+                body = json.dumps({"modules": modules, "source": volume_settings_server_source()}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+            except (OSError, ValueError) as error:
+                self.send_error(500, str(error))
+        elif parsed.path == "/api/runtime-config":
             self.handle_runtime_config()
         elif parsed.path == "/api/pipeline-manifest":
             self.handle_pipeline_manifest()

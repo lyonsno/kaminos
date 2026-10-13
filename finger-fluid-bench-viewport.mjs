@@ -5,7 +5,11 @@ import {createDynamicReflectionMeshData,dynamicReflectionMeshMatrices} from './f
 export const FINGER_FLUID_BENCH_VIEWPORT_PIPELINE='kaminos/finger-fluid-bench-viewport-v1';
 
 /** Render the existing numerical fixtures with the ordinary scene materials. */
-export function createFluidBenchScene({scene,truthScene}) {
+export function createFluidBenchScene({scene,truthScene,support}) {
+  if(support?.kind==='invisible_box'){
+    const group=new THREE.Group();group.name='Finite water invisible box';scene.add(group);
+    return {group,update(){},dispose(){scene.remove(group);}};
+  }
   const gold=new THREE.MeshStandardMaterial({color:0xb58b37,metalness:1,roughness:.12});
   const group=createFluidAnalyticalSupport({obstacleMaterial:gold,truthScene});group.name='Fluid bench analytical fixtures';
   const data=createDynamicReflectionMeshData();

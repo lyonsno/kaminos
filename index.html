@@ -3706,6 +3706,9 @@ import {mountMaterialCockpit} from './finger-fluid-material-cockpit.mjs';
 import {readMaterialControlsURL,materialControlsURL} from './finger-fluid-material-controls.mjs';
 
 import {createFluidViewportHost,resolveFluidViewportRenderer,resolveFluidViewportMode} from './fluid-viewport-host.mjs';
+import {applyFluidOwnerSetup,createOwnerWaterCapability} from './fluid-owner-host.mjs';
+import {loadExperimentContributions,openExperiment} from './workbench-experiments.mjs';
+import {installOwnerExperimentEntry} from './owner-experiment-entry.mjs';
 import {createFluidBenchScene,FINGER_FLUID_BENCH_VIEWPORT_PIPELINE} from './finger-fluid-bench-viewport.mjs';
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
@@ -4047,6 +4050,8 @@ import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, check
 
 let authoringWorkspace = null;
 let fluidWorkbench = null;
+let ownerExperimentEntry=null, fingerFluidOwnerSetup=null, fingerFluidOwnerIdentity=0;
+const fluidStepSeconds=()=>fingerFluidBenchConfig?.simulationStepSeconds??KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS;
 let restoringSceneLight=false;
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -4518,7 +4523,7 @@ function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.loc
     requestedInletCutoffStep,
     effectiveInletCutoffStep: resolveFingerFluidInletCutoffStep(requestedInletCutoffStep),
     timeIntegrationContract: KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT,
-    fixedTimeStepSeconds: KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+    fixedTimeStepSeconds: fluidStepSeconds(),
   };
 }
 let fingerFluidBenchState = createFingerFluidBenchState({
@@ -11936,6 +11941,7 @@ async function initScene() {
   });
   window.kaminosWorkspace = authoringWorkspace;
   installFluidWorkbench();
+  void installOwnerWorkbenchEntry().catch(error=>{window.kaminosWorkbenchExperimentError=error.message;setInfo("Experiments unavailable: "+error.message);});
 
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1'
     || isAuthoredKilnCollisionRoute();
@@ -13391,7 +13397,7 @@ function updateFingerFluidBenchReadout() {
   fluidWorkbench?.update({source:'Synthetic fluid',status:state.status === 'running' ? (fingerFluidBenchSimulationPaused ? 'paused' : 'live') : state.status || 'loading',clock:`Step ${state.runtime?.stepCount ?? 0}`});
   const fixtureLabel=document.getElementById('fluid-workbench-fixture');
   if(fixtureLabel) {
-    const text=state.status==='error' ? 'Fixture unavailable' : state.config?.effectiveTruthScene?.replaceAll('_',' ') || 'Resolving fixture…';
+    const text=state.status==='error' ? 'Fixture unavailable' : (fingerFluidOwnerSetup?.support.kind==='invisible_box'?'Finite water · invisible collision box':state.config?.effectiveTruthScene?.replaceAll('_',' ')) || 'Resolving fixture…';
     if(fixtureLabel.textContent!==text)fixtureLabel.textContent=text;
   }
   const sourceEl = document.getElementById('finger-fluid-bench-source-schema');
@@ -14291,7 +14297,7 @@ function advanceFingerFluidBenchToStepForWitness(targetStep) {
   }
   let endStep = startStep;
   while (endStep < targetStep) {
-    fingerFluidBenchSolver.step(KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS);
+    fingerFluidBenchSolver.step(fluidStepSeconds());
     endStep = fingerFluidBenchSolver.getDebugState().stepCount;
   }
   if (endStep !== targetStep) {
@@ -14332,7 +14338,7 @@ function advanceFingerFluidBenchToStepForWitness(targetStep) {
     endStep,
     targetStep,
     exact: endStep === targetStep,
-    fixedTimeStepSeconds: KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+    fixedTimeStepSeconds: fluidStepSeconds(),
   };
 }
 
@@ -14353,7 +14359,7 @@ function drawFingerFluidBenchFrame(now = performance.now(),{fromHost=false}={}) 
     return;
   }
   if (!fingerFluidBenchSimulationPaused) {
-    fingerFluidBenchSolver.step(KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS);
+    fingerFluidBenchSolver.step(fluidStepSeconds());
     const submittedState = fingerFluidBenchSolver.getDebugState();
     const autoPauseStep = fingerFluidBenchConfig.effectiveWitnessStartStep
       ?? fingerFluidBenchConfig.effectiveWitnessTargetStep;
@@ -14448,12 +14454,12 @@ function drawFingerFluidBenchFrame(now = performance.now(),{fromHost=false}={}) 
     gpuState.requestedOracleCockpitConfig = fingerFluidBenchConfig.oracleCockpitRequested;
   }
   gpuState.timeIntegrationContract = KAMINOS_FINGER_FLUID_BENCH_TIME_INTEGRATION_CONTRACT;
-  gpuState.fixedTimeStepSeconds = KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS;
+  gpuState.fixedTimeStepSeconds = fluidStepSeconds();
   fingerFluidBenchLastFrameMs = performance.now() - frameStart;
   fingerFluidBenchState = createFingerFluidBenchState({
     status: 'running',
     viewport: { width, height },
-    timeSeconds: gpuState.stepCount * KAMINOS_FINGER_FLUID_FIXED_STEP_SECONDS,
+    timeSeconds: gpuState.stepCount * fluidStepSeconds(),
     basinFillRatio: 0.44,
     activeRatio: 0.34,
     frameTimeMsEstimate: fingerFluidBenchLastFrameMs,
@@ -14573,6 +14579,7 @@ async function startFingerFluidBench() {
     const canvas = document.getElementById('finger-fluid-bench-canvas');
     try {
       fingerFluidBenchConfig = fingerFluidBenchConfigFromRoute();
+      if(fingerFluidOwnerSetup)fingerFluidBenchConfig=applyFluidOwnerSetup(fingerFluidBenchConfig,fingerFluidOwnerSetup);
       if (fingerFluidBenchConfig.effectiveTruthScene === 'laminar_inlets') {
         fingerFluidBenchCamera = { yaw: -0.46, pitch: 0.38, distance: 5.35, target: [0, -0.28, -0.72] };
       }
@@ -14703,6 +14710,8 @@ async function startFingerFluidBench() {
       liveInletPacket: fingerFluidBenchConfig.effectiveAnalyticCarrierMode !== 'not_requested'
         ? FINGER_FLUID_ANALYTIC_CARRIER_SMOKE_PACKET
         : null,
+      ...(fingerFluidOwnerSetup?.solver??{}),
+      simulationStepSeconds:fluidStepSeconds(),
       transparentBackground: fingerFluidPyroCompositionRequested(),
     });
     const pendingSolver=fingerFluidBenchSolverPromise;
@@ -14767,7 +14776,7 @@ async function startFingerFluidBench() {
   }
   if(!isCurrent())return;
   if(sharedViewport&&!fingerFluidBenchViewport){
-    fingerFluidBenchScene=createFluidBenchScene({scene,truthScene:fingerFluidBenchConfig.effectiveTruthScene});
+    fingerFluidBenchScene=createFluidBenchScene({scene,truthScene:fingerFluidBenchConfig.effectiveTruthScene,support:fingerFluidOwnerSetup?.support});
     fingerFluidBenchViewport=createFluidViewportHost({renderer,scene,camera,pipeline:renderPipeline,device:renderer.backend.device,solver:fingerFluidBenchSolver,group:fingerFluidBenchScene.group,helperGround:groundPlane,getDisplayPolicy:()=>getFluidDisplayPolicy?.(),pipelineIdentity:FINGER_FLUID_BENCH_VIEWPORT_PIPELINE,framePrefix:'fluid-bench'});
     syncFingerFluidCompositionCamera({initial:true});
   }
@@ -14869,6 +14878,41 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
 
 // The shared investigation service supplies the loaded document and operations.
 // Merely entering its address must not create another simulation attempt.
+async function installOwnerWorkbenchEntry() {
+  if(ownerExperimentEntry||!fluidWorkbench)return;
+  const root=document.getElementById('experiment-owner-slot');
+  const host={controls:{document,installNumberDrag:installRelativeNumberDrag},fluid:{rendererModes:['screen_space_refraction'],
+    async open(setup){
+      // Validate before replacing the active water; the producer owns numerical inputs.
+      applyFluidOwnerSetup({},setup);
+      stopFingerFluidBench();fingerFluidBenchSolver?.destroy?.();
+      fingerFluidBenchSolver=null;fingerFluidBenchSolverPromise=null;fingerFluidBenchConfig=null;
+      fingerFluidOwnerSetup=setup;++fingerFluidOwnerIdentity;fingerFluidBenchSimulationPaused=true;
+      window.__kaminosInvestigationEntryOnly=true;
+      setActiveTab('finger-fluid-bench');window.__kaminosInvestigationEntryOnly=false;
+      const outcome=await startFingerFluidBench();
+      if(outcome==='failed'||!fingerFluidBenchSolver?.available)throw Error(fingerFluidBenchState.runtime?.reason||'Owner fluid startup failed');
+      window._kaminosDirty?.();
+      if(setup.support.kind==='invisible_box'){
+        fingerFluidBenchCamera={yaw:-.45,pitch:.38,distance:5.3,target:[0,.25,0]};syncFingerFluidCompositionCamera({initial:true});
+      }
+      return createOwnerWaterCapability({state:window.kaminosFingerFluidBenchSessionState,identity:()=>fingerFluidOwnerIdentity,
+        debug:()=>fingerFluidBenchSolver.getDebugState(),pressure:()=>fingerFluidBenchSolver.getPressureControls(),
+        apply:patch=>fingerFluidPressureCockpit.apply(patch),
+        pause:value=>window.kaminosFingerFluidBenchSetSimulationPausedForWitness(value),
+        advance:step=>window.kaminosFingerFluidBenchAdvanceToStepForWitness(step),
+        restart:resetFingerFluidPressureCockpitWater,
+        dispose:()=>{stopFingerFluidBench();fingerFluidBenchSolver?.destroy?.();fingerFluidBenchSolver=null;fingerFluidBenchSolverPromise=null;fingerFluidBenchConfig=null;fingerFluidOwnerSetup=null;++fingerFluidOwnerIdentity;fingerFluidBenchState=createFingerFluidBenchState({status:'pending'});updateFingerFluidBenchReadout();}});
+    }
+  }};
+  ownerExperimentEntry=await installOwnerExperimentEntry({document,root,host,
+    discover:async()=>{const response=await fetch('/api/workbench-experiments',{cache:'no-store'});if(!response.ok)throw Error('Experiment discovery HTTP '+response.status);return (await response.json()).modules;},
+    onChange:({id,inputs})=>{const url=new URL(location.href);if(id){url.searchParams.set('experiment',id);url.searchParams.set('experiment_inputs',JSON.stringify(inputs));}else{url.searchParams.delete('experiment');url.searchParams.delete('experiment_inputs');}history.replaceState(history.state,'',url);}});
+  window.kaminosWorkbenchExperiments=ownerExperimentEntry;
+  const params=new URLSearchParams(location.search),id=params.get('experiment');
+  if(id)await ownerExperimentEntry.open(id,JSON.parse(params.get('experiment_inputs')||'{}'));
+}
+
 window.kaminosMountInvestigationEntry=async options=>{
   await fluidViewportReady;
   if(!authoringWorkspace)throw Error('Shared Kaminos workspace unavailable');
@@ -14886,7 +14930,7 @@ window.kaminosMountInvestigationEntry=async options=>{
 
 function installFingerFluidPressureCockpit() {
   const root=document.getElementById('ipbf-pressure-cockpit');
-  if(!root||fingerFluidPressureCockpit||new URLSearchParams(location.search).get('finger_fluid_pressure_cockpit')!=='1')return;
+  if(!root||fingerFluidPressureCockpit||!fingerFluidBenchConfig?.pressureCockpitRequested)return;
   fingerFluidPressureCockpit=createIPBFPressureCockpit({
     installNumberDrag:installRelativeNumberDrag,
     root,getSolver:()=>fingerFluidBenchSolver,getStatus:()=>fingerFluidBenchState,
@@ -14897,7 +14941,14 @@ function installFingerFluidPressureCockpit() {
         effective:{paused:fingerFluidBenchSimulationPaused},clock:window.kaminosFingerFluidBenchSessionState?.()});
     },
     restart:resetFingerFluidPressureCockpitWater,
+    particleCountEditable:()=>!fingerFluidOwnerSetup?.solver.diagnosticPopulation,
     restartParticles:async count=>{
+      if(fingerFluidOwnerSetup?.solver.diagnosticPopulation)throw Error('Finite particle population comes from the experiment setup; change its resolution and reopen.');
+      if(fingerFluidOwnerSetup){
+        const old=fingerFluidOwnerSetup.solver;
+        const ratio=Math.cbrt(old.particleCount/count);
+        fingerFluidOwnerSetup={...fingerFluidOwnerSetup,solver:{...old,particleCount:count,ipbfPressureRadiusScale:old.ipbfPressureRadiusScale/ratio}};
+      }
       const url=new URL(location.href);
       const reference=url.searchParams.get('finger_fluid_fixed_volume_reference_count');
       if(reference!==null&&count>Number(reference))throw new RangeError('Particle count exceeds the fixed-volume reference population');
@@ -14910,6 +14961,7 @@ function installFingerFluidPressureCockpit() {
       window._kaminosDirty?.();
       if(fingerFluidBenchConfig){
         const r=receipt.requested;
+        if(fingerFluidOwnerSetup)fingerFluidOwnerSetup={...fingerFluidOwnerSetup,solver:{...fingerFluidOwnerSetup.solver,densityIterations:r.densityIterations,capillaryStrength:r.capillaryStrength,ipbfPressureRadiusScale:r.pressureRadiusScale,ipbfAlternativeCompliance:r.alternativeCompliance,ipbfDampingBeta:r.beta}};
         fingerFluidBenchConfig={...fingerFluidBenchConfig,requestedPressureIterations:r.densityIterations,
           requestedCapillaryStrength:r.capillaryStrength,ipbfPressureRadiusScale:r.pressureRadiusScale,ipbfDampingBeta:r.beta,
           ipbfAlternativeCompliance:r.alternativeCompliance};
@@ -14936,6 +14988,8 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.kaminosFingerFluidBenchSessionState = () => ({
     generation: fingerFluidBenchStartGeneration,
+    fixedTimeStepSeconds:fluidStepSeconds(),
+    timeSeconds:(fingerFluidBenchSolver?.getDebugState?.().stepCount??0)*fluidStepSeconds(),
     paused: fingerFluidBenchSimulationPaused,
     running: fingerFluidBenchRunning,
     available: fingerFluidBenchSolver?.available === true,
@@ -15043,7 +15097,7 @@ function initKaminosFingerFluidBenchRoute() {
     setActiveTab('finger-fluid-bench');
     setInfo(isFingerFluidOracleCockpitRoute(params)
       ? 'Finger Fluid waterfall oracle cockpit route active'
-      : 'Finger Fluid bench route active: native WebGPU 3D PBF simulation');
+      : 'Finger Fluid bench route active: native WebGPU 3D '+(fingerFluidBenchConfig?.effectivePressureSolver||'pbf').toUpperCase()+' simulation');
   }
 }
 

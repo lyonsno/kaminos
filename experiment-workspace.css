@@ -92,3 +92,10 @@ body.experiment-workspace #tab-assets > h2 { display:none; }
 /* Rendering lives in the shared Scene inspector; Volume retains its own mix. */
 body.experiment-workspace #volume-authored-mix-panel .right-render-tabs { display:none; }
 body.experiment-workspace #authored-mix-panel-content { display:block; }
+
+.owner-experiment-entry { border-bottom:1px solid #34363b; padding:12px 0 16px; margin-bottom:16px; }
+.owner-experiment-entry label { display:block; font-size:11px; }
+.owner-experiment-entry select { width:100%; margin-top:6px; background:#292b30; color:#ddd; border:1px solid #43464e; padding:7px; }
+.owner-experiment-entry button { background:#292b30; color:#ddd; border:1px solid #43464e; border-radius:4px; padding:6px; margin-top:8px; }
+.owner-experiment-status { font-size:10px; color:#a9cdd0; margin-top:8px; overflow-wrap:anywhere; }
+.owner-experiment-content { margin-top:12px; }

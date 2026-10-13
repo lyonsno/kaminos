@@ -2,14 +2,14 @@ import {deriveIPBFSoftnessReference} from './finger-fluid-ipbf-calibration.mjs';
 import {ipbfBetaForRadius,ipbfPressureReplayURL} from './finger-fluid-pressure-controls.mjs';
 
 /** A small bench consumer; the solver owns parameter application and water. */
-export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,setPaused,restart,restartParticles,installNumberDrag=null,onRequest=()=>{}}) {
+export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,setPaused,restart,restartParticles,particleCountEditable=()=>true,installNumberDrag=null,onRequest=()=>{}}) {
   root.hidden=false;
   root.innerHTML=`
     <h3>Fluid envelope</h3>
     <div class="ipbf-control"><label for="ipbf-particles">Particles</label>
       <input id="ipbf-particles" type="number" min="1024" step="1" aria-label="Particle count">
       <button type="button" class="btn" id="ipbf-particles-apply">Apply and reset water</button></div>
-    <p class="ipbf-help">Changing particle count starts new water. Camera and tuning settings are retained.</p>
+    <p id="ipbf-particles-help" class="ipbf-help">Changing particle count starts new water. Camera and tuning settings are retained.</p>
     <div class="ipbf-control"><label for="ipbf-radius">Pressure radius</label><div>
       <input id="ipbf-radius" type="range" min=".06" max=".25" step=".001" aria-label="Pressure radius">
       <input id="ipbf-radius-number" type="number" min="0" step=".001" aria-label="Pressure radius value"></div></div>
@@ -57,8 +57,8 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
     const current=source();
     for(const el of [...root.querySelectorAll('input,button'),find('ipbf-pause'),find('ipbf-reset')])el.disabled=!current||resetting;
     // Population correction remains usable if replacement allocation failed.
-    find('ipbf-particles').disabled=resetting||!restartParticles;
-    find('ipbf-particles-apply').disabled=resetting||!restartParticles;
+    find('ipbf-particles').disabled=resetting||!restartParticles||!particleCountEditable();
+    find('ipbf-particles-apply').disabled=resetting||!restartParticles||!particleCountEditable();
     find('ipbf-control-error').textContent=error;
     if(!current){
       const status=getStatus?.();
@@ -67,9 +67,10 @@ export function createIPBFPressureCockpit({root,getSolver,getStatus,isPaused,set
         :getSolver()?.available?'Live controls unavailable on this route':'Loading fluid…';
       return;
     }
+    find('ipbf-particles-help').textContent=particleCountEditable()?'Changing particle count starts new water. Camera and tuning settings are retained.':'Particle count comes from this finite fixture. Change its resolution in the experiment setup.';
     const {runtime,state}=current,values=state.requested;
     if(lastParticleCount!==runtime.particleCount){find('ipbf-particles').value=String(runtime.particleCount);lastParticleCount=runtime.particleCount;}
-    find('ipbf-particles-apply').disabled=resetting||!restartParticles;
+    find('ipbf-particles-apply').disabled=resetting||!restartParticles||!particleCountEditable();
     baseRadius=values.radius/values.pressureRadiusScale;
     for(const [name,value] of [['radius',values.radius],['cohesion',values.capillaryStrength],['passes',values.densityIterations]]) {
       for(const suffix of ['','-number']){

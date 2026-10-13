@@ -18,7 +18,7 @@ function harness(){
   window:{__kaminosActiveTab:()=> 'finger-fluid-bench'},fluidViewportReady:Promise.resolve(),
   fingerFluidPressureCockpit:null,fingerFluidBenchSolver:null,fluidWorkbench:null,
   authoringWorkspace:{state:()=>({mode:'workbench'})},
-  installExperimentWorkspace(options){installed.push(options);mounted=options.investigation;return {state:()=>({active:true}),setActive(){},setInvestigation(node){mounted=node;},update(){},setControls(options){promotions.push(options);}};},
+  installExperimentWorkspace(options){installed.push(options);mounted=options.investigation;return {hasControls:()=>promotions.length>0,state:()=>({active:true}),setTool(){},setActive(){},setInvestigation(node){mounted=node;},update(){},setControls(options){promotions.push(options);}};},
   createInvestigationEntry:()=>({node:{draft:'retained thought'}}),setActiveTab(){},updateFingerFluidBenchReadout(){},
  });
  const begin=source.indexOf('function installFluidWorkbench('),end=source.indexOf('\nfunction installFingerFluidPressureCockpit()',begin);

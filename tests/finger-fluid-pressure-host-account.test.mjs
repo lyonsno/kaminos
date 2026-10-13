@@ -11,7 +11,7 @@ test('actual pressure cockpit request updates the shared host account without in
  const config={ipbfAlternativeCompliance:.001,requestedPressureIterations:3};
  const state=createFingerFluidBenchState({status:'running'});state.config=config;state.runtime={controlEffectiveGeneration:0};
  const receipt={requested:{alternativeCompliance:125,densityIterations:3,capillaryStrength:.19,pressureRadiusScale:1,beta:60},generation:1,effectiveGeneration:0};
- const run=new Function('receipt','initialConfig','fingerFluidBenchState','window','investigationOperations',`let fingerFluidBenchConfig=initialConfig;${callback};return fingerFluidBenchConfig;`);
+ const run=new Function('receipt','initialConfig','fingerFluidBenchState','window','investigationOperations',`let fingerFluidBenchConfig=initialConfig,fingerFluidOwnerSetup=null;${callback};return fingerFluidBenchConfig;`);
  const internal=run(receipt,config,state,{}, {active:false});
  assert.equal(internal.ipbfAlternativeCompliance,125);
  assert.equal(state.config.ipbfAlternativeCompliance,125,'shared session must publish the requested control configuration');

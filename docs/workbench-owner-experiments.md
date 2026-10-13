@@ -91,3 +91,43 @@ consumer exercises establish host compatibility. Common fixture tests only
 establish discovery, invocation and recording behavior. The useful next proof
 is an owner's initial contribution and follow-up using the same host without
 another central application edit.
+
+
+## Application host composition on the current feature
+
+`serve.py` exposes `/api/workbench-experiments` using the served checkout root.
+It scans `experiments/` by default; `KAMINOS_EXPERIMENTS_DIR` selects another
+contribution directory inside that checkout. The Workbench's Experiment
+selector discovers the owner definitions. Refresh finds additional files;
+a page reload executes edits to an already imported file. Opening a definition
+is explicit, and switching definitions disposes the prior instance.
+The ordinary URL preserves `experiment=<id>` and JSON `experiment_inputs`.
+These inputs reconstruct a setup after reload, not evolved GPU water.
+
+The initial actual Fluid host capability is `host.fluid.open(setup)` with
+`setup={solver,dt,support,sampling,guide}` from the numerical owner. Supported
+support kinds are `analytical` and `invisible_box`; finite setup supplies its
+real diagnostic population and box. The shared host currently supports
+`screen_space_refraction` rendering; `host.fluid.rendererModes` exposes that
+boundary, and another requested renderer fails explicitly. An owner wrapper
+can select that mode for shared use while preserving its standalone debug
+viewer. The present solver step contract accepts frame dt from 1/240 through
+1/30 seconds. The same timestep governs initial controls, exact advance and
+host clock; no second device, camera or frame pump is created.
+
+The returned water capability supplies `read`, `getSolver` (pressure/debug
+read facade), `applyPressure`, `setPaused`, `advanceTo`, `restart` and
+`dispose`. It is bound to that owner's water allocation; stale disposal
+cannot destroy replacement water. Explicit shared reset remains within that
+owner's instance and changes the reported runtime generation. Pressure edits
+use existing requested/effective receipts and recording. A finite fixture's
+particle count derives from its setup rather than the general count control.
+
+`mount({root,document,invoke,read})` receives a left instrument root.
+`host.controls` supplies the document and shared `installNumberDrag` helper.
+Owner-specific UI can invoke its named operations directly; agents use
+`window.kaminosWorkbenchExperiments.invoke(name,input)` on the same instance.
+The application API also exposes `list`, `refresh`, `open`, `read`, `state`
+and `close`. Import/open errors appear in the selector status; startup errors
+retain the last host error. The current generic entry does not itself implement
+persistent investigation documents or live cross-page return.

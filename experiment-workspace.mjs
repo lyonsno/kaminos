@@ -8,7 +8,7 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
   const make=(tag,id,html)=>{const node=document.createElement(tag);node.id=id;node.innerHTML=html;return node;};
   const left=make('aside','experiment-instruments',`<div class="experiment-panel-heading"><h2></h2><p></p></div>
     <div class="experiment-instruments-body"><details id="experiment-browser"><summary>Tools</summary><div><input type="search" aria-label="Find a workbench" placeholder="Find a tool…"><div class="experiment-browser-list"></div></div></details>
-    <div id="experiment-tool-slot"></div><section id="experiment-setup-slot"></section><section id="experiment-investigation-slot" aria-label="Investigation" hidden></section><h3 id="experiment-tuning-title"></h3><p id="experiment-tuning-help"></p><div id="experiment-instrument-slot"></div>
+    <div id="experiment-owner-slot"></div><div id="experiment-tool-slot"></div><section id="experiment-setup-slot"></section><section id="experiment-investigation-slot" aria-label="Investigation" hidden></section><h3 id="experiment-tuning-title"></h3><p id="experiment-tuning-help"></p><div id="experiment-instrument-slot"></div>
     <details id="experiment-details"><summary>Runtime details</summary><div id="experiment-detail-slot"></div></details></div>`);
   left.querySelector('h2').textContent=title;left.querySelector('p').textContent=subtitle;
   const toolbar=make('nav','experiment-toolbar',`<strong></strong><div id="experiment-add-slot"></div><span class="experiment-toolbar-spacer"></span>

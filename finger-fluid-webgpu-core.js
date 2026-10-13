@@ -13359,6 +13359,7 @@ export async function createWebGPUFingerFluidSolver({
   uniformVolumeDensityKernel = false,
   energyDiagnosticsMode = 'every_step',
   substeps = 1,
+  simulationStepSeconds = 1/60,
   truthScene = 'multi_regime_playground',
   colorMode = 'phase',
   rendererMode = 'screen_space_surface',
@@ -13388,6 +13389,7 @@ export async function createWebGPUFingerFluidSolver({
   movingHillSupportContactProviderFactory = null,
   composedRevision = null,
 } = {}) {
+  if(!Number.isFinite(simulationStepSeconds)||simulationStepSeconds<1/240||simulationStepSeconds>1/30)throw new RangeError('Initial simulation timestep must match the solver step contract');
   const safePressureSolver = resolveFingerFluidPressureSolver(pressureSolver);
   const useIPBF = safePressureSolver === 'ipbf';
   const safeCohesionModel=resolveFingerFluidCohesionModel({pressureSolver:safePressureSolver,cohesionModel});
@@ -13395,7 +13397,7 @@ export async function createWebGPUFingerFluidSolver({
   const safeDiagnosticDynamics=resolveFingerFluidDiagnosticDynamics(diagnosticDynamics);
   const reducedDynamics=safeDiagnosticDynamics==='pressure_surface';
   const safeDiagnosticBox=diagnosticBox===null?null:validateFingerFluidReferenceBox(diagnosticBox);
-  if(safeDiagnosticBox&&(!diagnosticPopulation||!reducedDynamics||ipbfBoundaryMode!=='tangent_plane'||hostFrameComposition||supportContactRoute!==KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE))throw new RangeError('Reference box requires finite reduced IPBF water, explicit plane pressure and standalone presentation');
+  if(safeDiagnosticBox&&(!diagnosticPopulation||!reducedDynamics||ipbfBoundaryMode!=='tangent_plane'||(hostFrameComposition&&presentationMode!==KAMINOS_FINGER_FLUID_LOCAL_PRESENTATION_MODE)||supportContactRoute!==KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE))throw new RangeError('Reference box requires finite reduced IPBF water, explicit plane pressure and standalone or shared local presentation');
   if((reducedDynamics||diagnosticPopulation||akinciSupportRadius!==null)&&(!useIPBF||!useAkinci||adaptiveDensity||truthScene!=='multi_regime_playground'))throw new RangeError('Diagnostic dynamics require fixed-volume IPBF/Akinci analytic playground');
   if(akinciSupportRadius!==null&&(!Number.isFinite(akinciSupportRadius)||akinciSupportRadius<=0))throw new RangeError('Diagnostic surface support radius must be positive');
   if(reducedDynamics&&(chemistryDiffusion!==0||particleShiftStrength!==0||unsupportedSheetStrength!==0||liveInletPacket!==null))throw new RangeError('Reduced diagnostic core excludes shifting, chemistry, sheet correction and external inlets');
@@ -15113,7 +15115,7 @@ export async function createWebGPUFingerFluidSolver({
     if(runtimeLifecycle.stopped)throw new Error('Cannot tune a stopped fluid solver');
     if([solverGpuTimestampCapture,solverStageGpuTimestampCapture,rendererGpuTimestampCapture].some(c=>c&&c.writtenPairs<c.pairCount))throw new Error('Finish the active timing capture before tuning fluid');
     materialControlState.request(patch);
-    writeSimulationParams(1/60/safeSubsteps);
+    writeSimulationParams(effectiveSimulationDt??simulationStepSeconds/safeSubsteps);
     return getMaterialControls();
   }
   async function readMaterialInputs() {
@@ -17280,7 +17282,7 @@ export async function createWebGPUFingerFluidSolver({
     if(ownsDevice)device.destroy();
   }
 
-  writeSimulationParams(1/60/safeSubsteps);
+  writeSimulationParams(simulationStepSeconds/safeSubsteps);
 
   runtimeApi = {
     available: true,
