@@ -92,9 +92,10 @@ export function installMeshModelChoice({document,initial='sf3d',busy=()=>false,c
   const run=document.getElementById('asset-run');if(!run)throw Error('Generate mesh button is missing');
   const label=document.createElement('label');label.id='asset-mesh-model-row';
   label.innerHTML=`Mesh model <select id="asset-mesh-model" aria-label="Mesh model">${Object.entries(MESH_MODELS).map(([id,m])=>`<option value="${id}">${m.label}</option>`).join('')}</select>`;
-  run.before(label);
-  const select=label.querySelector('select');select.value=initial;
   const heading=()=>[...document.getElementById('asset-generate').querySelectorAll(':scope > p')].find(p=>p.textContent.startsWith('Image → textured mesh'));
+  // Directly under the mesh heading: the Generate mesh button sits below the drawer's fold.
+  (heading()||run).after(label);if(!heading())run.before(label);
+  const select=label.querySelector('select');select.value=initial;
   function render(){select.disabled=busy();const p=heading();if(p)p.textContent=MESH_MODELS[select.value].detail;}
   select.onchange=()=>{render();changed(select.value);};
   render();
