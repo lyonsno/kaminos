@@ -23348,6 +23348,7 @@ function frameVolumeCamera() {
 }
 
 function createVolumeMainRendererBridge() {
+  if(isLiveLogHeatRoute())return null;
   const sourceTexture = new THREE.CanvasTexture(volumePrototype.canvasElement());
   sourceTexture.colorSpace = THREE.SRGBColorSpace;
   sourceTexture.generateMipmaps = false;
