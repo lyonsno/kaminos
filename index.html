@@ -12593,8 +12593,9 @@ async function showGLB(file, options = {}) {
   const loadToken = sceneMutationToken;
   const isBlob = typeof file !== 'string';
   const url = isBlob ? URL.createObjectURL(file) : file;
-  const assetSource = isBlob ? file.name : file;
-  const assetFileName = file?.name || options.metadata?.fileName || String(file).split('/').pop();
+  const assetMetadata = {...(options.metadata || {})};
+  const assetSource = assetMetadata.source ?? (isBlob ? file.name : file);
+  const assetFileName = assetMetadata.fileName ?? file?.name ?? (isBlob ? 'object.glb' : String(file).split('/').pop());
   if (file && file.name) glbFileName = file.name;
   modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
@@ -12625,12 +12626,12 @@ async function showGLB(file, options = {}) {
       scene.add(model);
       let registeredAsset = null;
       if (options.register === false) {
-        const metadata = options.metadata || {};
+        const metadata = assetMetadata;
         model.userData.kaminosSceneObject = {
-          source: metadata.source ?? modelSourceUrl,
+          source: assetSource,
           type: metadata.type ?? 'glb',
-          fileName: metadata.fileName ?? glbFileName,
-          label: metadata.label ?? metadata.fileName ?? glbFileName,
+          fileName: assetFileName,
+          label: metadata.label ?? assetFileName,
         };
         currentMesh = model;
         sceneNavigation?.prepare(model);
@@ -12640,10 +12641,10 @@ async function showGLB(file, options = {}) {
         }
       } else {
         registeredAsset = registerSceneObject(model, {
-          ...(options.metadata || {}),
-          source: options.metadata?.source ?? modelSourceUrl,
-          type: options.metadata?.type ?? 'glb',
-          fileName: options.metadata?.fileName ?? glbFileName,
+          ...assetMetadata,
+          source: assetSource,
+          type: assetMetadata.type ?? 'glb',
+          fileName: assetFileName,
         });
       }
       document.getElementById('transform-bar').classList.add('visible');
@@ -12653,7 +12654,7 @@ async function showGLB(file, options = {}) {
         id: registeredAsset?.id ?? null,
         root: model,
         clips: gltf.animations || [],
-        source: options.metadata?.source ?? assetSource,
+        source: assetSource,
         fileName: assetFileName,
         arrival,
       } : model);

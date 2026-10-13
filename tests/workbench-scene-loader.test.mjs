@@ -18,7 +18,7 @@ function loader(){
   GLTFLoader:class{load(url,success,_progress,error){loads.push({url,success,error});announceLoad();}},
   greenroomPreviewIsActive:()=>false,disposeObjectTree:object=>disposed.push(object),
   scene:{add:object=>added.push(object)},sceneNavigation:null,transformControls:null,
-  registerSceneObject(object,metadata){const row={...metadata,id:'registered-asset',object};registered.push(row);return row;},
+  registerSceneObject(object,metadata){const row={...metadata,id:'registered-asset'+(registered.length?'-'+registered.length:''),object};object.userData.kaminosSceneObject={...metadata,id:row.id};registered.push(row);return row;},
   document:{getElementById:()=>({value:'1',classList:{add(){}}})},setInfo(){},frameAssetArrival(){},window:{},
  };
  vm.createContext(context);vm.runInContext(body,context);
@@ -63,4 +63,26 @@ test('shared load hook waits for viewer and preserves membership despite clear o
  initialize();await f.loadStarted;
  f.loads[0].success({scene:f.root,animations:f.clips});
  assert.equal((await pending).id,'registered-asset');assert.equal(f.registered.length,1);
+});
+
+test('out-of-order appends couple each receipt to its registered and retained source',async()=>{
+ const f=loader(),second={userData:{},traverse: f.root.traverse};
+ const a=f.context.showGLB('/retained/A.glb',{clear:false,returnAsset:true});
+ const b=f.context.showGLB('/retained/B.glb',{clear:false,returnAsset:true});
+ f.loads[1].success({scene:second,animations:[]});
+ f.loads[0].success({scene:f.root,animations:f.clips});
+ for(const [asset,source,fileName]of [[await a,'/retained/A.glb','A.glb'],[await b,'/retained/B.glb','B.glb']]){
+  const row=f.registered.find(row=>row.object===asset.root);
+  assert.equal(row.source,source,'saved scene must reopen the loaded asset');
+  assert.equal(row.fileName,fileName);assert.equal(asset.source,row.source);assert.equal(asset.fileName,row.fileName);
+  assert.equal(asset.root.userData.kaminosSceneObject.source,source);
+  assert.equal(asset.root.userData.kaminosSceneObject.fileName,fileName);
+ }
+});
+
+test('metadata overrides stay consistent between receipt and scene registration',async()=>{
+ const f=loader(),pending=f.context.showGLB('/retained/body.glb',{clear:false,returnAsset:true,metadata:{source:'canonical-body',fileName:'Chosen body'}});
+ f.loads[0].success({scene:f.root,animations:f.clips});
+ const asset=await pending;assert.equal(asset.source,'canonical-body');assert.equal(asset.fileName,'Chosen body');
+ assert.equal(asset.source,f.registered[0].source);assert.equal(asset.fileName,f.registered[0].fileName);
 });
