@@ -18,14 +18,17 @@ body.burn-table-active #info-bar { display:none; }
 body.burn-table-active #scene-edit-hud:not([data-active="true"]):not([data-alert="true"]) { display:none; }
 .basin-fire-controls { display: grid; gap: 8px; margin-bottom: 12px; }
 .basin-fire-controls p { margin: 0; overflow-wrap: anywhere; }
+.basin-fire-controls [hidden], #live-log-heat [hidden] { display: none !important; }
 .basin-fire-controls label { display: flex; align-items: center; gap: 6px; }
-.basin-fire-library { width: min(600px, calc(100vw - 32px)); max-height: calc(100vh - 64px); box-sizing: border-box; border: 1px solid #555; border-radius: 4px; background: #242424; color: #eee; padding: 16px; }
+.basin-fire-library { position: fixed; inset: 0; margin: auto; width: min(600px, calc(100vw - 32px)); height: min(720px, calc(100vh - 64px)); max-height: calc(100vh - 64px); box-sizing: border-box; border: 1px solid #555; border-radius: 4px; background: #242424; color: #eee; padding: 16px; }
+.basin-fire-library[open] { display: flex; flex-direction: column; gap: 8px; }
+.basin-fire-library header, .basin-fire-library footer, .basin-fire-library input { flex-shrink: 0; }
 .basin-fire-library::backdrop { background: rgb(0 0 0 / 55%); }
 .basin-fire-library header { display: flex; justify-content: space-between; align-items: center; gap: 12px; position: sticky; top: -16px; background: #242424; padding-top: 8px; }
 .basin-fire-library footer { position: sticky; bottom: -16px; background: #242424; padding: 8px 0; border-top: 1px solid #555; }
 .basin-fire-library [data-selection] { overflow-wrap: anywhere; }
 .basin-fire-library h2 { font-size: 18px; margin: 0 0 12px; }
 .basin-fire-library input[type=search] { width: 100%; box-sizing: border-box; }
-.basin-fire-library [data-basins] { display: grid; gap: 1px; }
+.basin-fire-library [data-basins] { display: grid; gap: 1px; flex: 1; min-height: 0; overflow: auto; }
 .basin-fire-library-row { width: 100%; min-width: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; border: 0; border-bottom: 1px solid #444; border-radius: 0; background: #2d2d2d; color: #eee; padding: 10px; cursor: pointer; }
 .basin-fire-library-row:hover { background: #3d3d3d; }
