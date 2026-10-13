@@ -54,7 +54,13 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   const direction=delta.div(distance.max(.00001));
   // Bias follows the radial texel footprint, not viewer depth or light gain.
   const bias=distance.mul(2/resolution).max(.001);
-  const shadowDistance=cubeTexture(target.texture,direction).r;
+  const shadowSample=cubeTexture(target.texture,direction);
+  // This cube stores world-space radial distances, not environment radiance.
+  // Keep CubeCamera's backend convention but exclude CubeTextureNode's
+  // materialEnvRotation (otherwise rotating the HDR rotates solid shadows).
+  shadowSample.setupUV=(builder,uvNode)=>builder.renderer.coordinateSystem===THREE.WebGPUCoordinateSystem
+    ?vec3(uvNode.x.negate(),uvNode.yz):uvNode;
+  const shadowDistance=shadowSample.r;
   const visibility=mix(float(1),step(distance.sub(bias),shadowDistance),enabled.mul(effective));
   const bounds=new THREE.Box3(),objectBounds=new THREE.Box3();
   const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0};
