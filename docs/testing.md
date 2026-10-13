@@ -43,6 +43,7 @@ Prefer behavior tests that import a module and exercise it. Avoid new assertions
 - **Signature:** what the runner extracts from the test's output. For a plain script it is the first error line, with generic assertion messages carrying their detail lines. For a `node:test` file it is every failing subtest, as its suite path and first error line, plus any error caught outside a subtest. A listed test is a known failure only while it fails with exactly that signature.
 - **Changed signature:** a different failure, a timeout, or a test that cannot start is a new failure.
 - **Passing again:** a listed test that passes fails the run until its entry is removed, so the list only shrinks.
+- **Known limit:** for a `node:test` file, the signature is built from the human-readable reporter output. A subtest that already fails and starts failing for a different reason at the same line is not detected when the test prints a code-frame location before its error, and a failing suite hook can misalign names and errors. Seven quarantined files use `node:test`; two are signed by a code location today. Replacing the scraper with Node's structured test events is the next runner slice.
 
 ## Test roots outside tests/
 

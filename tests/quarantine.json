@@ -1,6 +1,6 @@
 {
   "schema": "kaminos.test-quarantine.v1",
-  "note": "Known failures. A listed test that fails with exactly its recorded signature does not fail the run. Any other failure, a timeout, a test that cannot start, or a listed test that now passes fails the run. Classes: untriaged, regression, stale-pin, environment, harness-defect. Every entry needs class, owner, reason and signature.",
+  "note": "Known failures. A listed test that fails with exactly its recorded signature does not fail the run. Any other failure, a timeout, a test that cannot start, or a listed test that now passes fails the run. Classes: untriaged, regression, stale-pin, environment, harness-defect. Every entry needs class, owner, reason and signature. Known limit: entries whose signature begins with 'node:test failing:' are built from reporter text and may not change when a known subtest fails for a new reason at the same line; see docs/testing.md.",
   "baseline": {
     "mainCommit": "954f622e",
     "date": "2026-10-12"
