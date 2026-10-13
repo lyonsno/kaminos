@@ -49,7 +49,9 @@ export default {
    for(const name of ['loadAsset','onFrame','redraw','readView','setView','dispose'])
     if(typeof session?.[name]!=='function')throw Error(`Shared scene session lacks ${name}`);
    const body=await acquireCreatureBody(inputs);let asset;
-   try{asset=await session.loadAsset({url:body.url,metadata:{source:inputs.asset}});}
+   const sourceUrl=new URL(inputs.asset,globalThis.location?.href??'http://localhost');
+   const fileName=(sourceUrl.searchParams.get('path')??sourceUrl.pathname).split('/').pop()||'creature.glb';
+   try{asset=await session.loadAsset({url:body.url,metadata:{source:inputs.asset,fileName}});}
    finally{body.release();}
    const identities=[];asset.root?.traverse(object=>{if(object.userData?.native_motion)identities.push(object.userData.native_motion);});
    if(identities.length!==1||identities[0].source_sha256?.toLowerCase()!==inputs.source_sha256.toLowerCase())
