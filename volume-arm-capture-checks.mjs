@@ -232,3 +232,19 @@ export const NON_CONFIGURING_CAPTURE_CONTROLS = new Set(['@emissiveCoefficients'
 export function armSetsConfiguration(set) {
   return set.some(([id]) => !NON_CONFIGURING_CAPTURE_CONTROLS.has(id));
 }
+
+// Joined boundary arm (Sexy's stationary candidate): a requested join must be
+// admitted with a lower-plane texture of the grid's size and the producer
+// handles present; a release must leave the 1x1x3 placeholder.
+export function joinedBoundaryMismatch(value, sample) {
+  if (!sample?.receipt || !sample?.producer) return 'joined boundary sample missing';
+  const want = value === '1';
+  const { receipt, producer } = sample;
+  if (want && !receipt.admitted) return `joined boundary not admitted (${receipt.reason ?? 'no reason'})`;
+  if (!want && receipt.admitted) return 'joined boundary still admitted after release';
+  const side = Math.max(...producer.dims);
+  const expected = want ? [side, side, 3] : [1, 1, 3];
+  if (String(producer.lowerFaceTextureSize) !== String(expected)) return `joined boundary lower-plane texture ${producer.lowerFaceTextureSize}, expected ${expected}`;
+  if (want && !(producer.fluidBuffer && producer.burnRateTexture)) return 'joined boundary producer handles missing';
+  return null;
+}

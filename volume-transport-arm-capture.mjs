@@ -37,7 +37,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { armSetsConfiguration, cameraFrameMismatch, effectiveMismatches, emissiveCoefficientsMismatch, parseArms, parseCameraFrame, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
+import { armSetsConfiguration, cameraFrameMismatch, effectiveMismatches, emissiveCoefficientsMismatch, joinedBoundaryMismatch, parseArms, parseCameraFrame, resolveHeadlessBrowser } from './volume-arm-capture-checks.mjs';
 
 const CAPTURE_IDENTITY = 'kaminos.volume.transport-arm-capture.v1';
 const positional = [];
@@ -228,6 +228,16 @@ try {
         if (mismatch) { report.lastTrustworthyEvidence.applied = applied; fail(report.failurePhase, mismatch); }
         continue;
       }
+      if (cid === '@joinedBoundary') {
+        // Joined boundary (Sexy's stationary candidate): set through the API;
+        // the arm fails unless the request took effect with its producer state.
+        const sample = await evaluate(op(`(() => { const p = w.__kaminosVolumePrototype; if (!p?.setJoinedBoundary) return null; const receipt = p.setJoinedBoundary({ enabled: ${JSON.stringify(value)} === '1' }); const s = p.joinedProducerState(); return { receipt, producer: { dims: s.dims, pitch: s.pitch, timeStep: s.timeStep, transportScheme: s.transportScheme, fluidBuffer: Boolean(s.fluidBuffer), burnRateTexture: Boolean(s.burnRateTexture), solidMask: s.solidMask ? { revision: s.solidMask.revision, cells: s.solidMask.cells.length } : null, lowerFaceTextureSize: s.lowerFaceTexture ? [s.lowerFaceTexture.width, s.lowerFaceTexture.height, s.lowerFaceTexture.depthOrArrayLayers] : null, simStepCount: s.simStepCount } }; })()`));
+        (arm.joinedBoundary ||= []).push(sample);
+        applied.push([cid, value, sample?.receipt?.admitted ?? null]);
+        const mismatch = joinedBoundaryMismatch(value, sample);
+        if (mismatch) { report.lastTrustworthyEvidence.applied = applied; report.lastTrustworthyEvidence.joinedBoundary = sample; fail(report.failurePhase, mismatch); }
+        continue;
+      }
       if (cid === '@emissiveCoefficients') {
         if (armSetsConfiguration(arm.set)) fail(report.failurePhase, '@emissiveCoefficients must be its own arm, after the configuration arm has settled');
         // Emissive seed readback (review GR-01); the arm fails unless finite,
@@ -264,7 +274,7 @@ try {
     let end = await evaluate(stateExpr);
     if (!end) fail(report.failurePhase, 'renderer state unavailable after settle');
     if (fault === 'arm-error' && report.arms.length === 0) end = { ...end, error: 'synthetic-fault:arm-error' };
-    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], emissiveCoefficients: arm.emissiveCoefficients || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
+    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], emissiveCoefficients: arm.emissiveCoefficients || [], joinedBoundary: arm.joinedBoundary || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
     report.arms.push(entry);
     report.lastTrustworthyEvidence.lastArm = arm.name;
     writeReport();

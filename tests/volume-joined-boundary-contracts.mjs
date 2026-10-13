@@ -91,3 +91,20 @@ test('the fine step stops before its own projection in joined mode; the producer
     assert.ok(new RegExp(`\\b${field}(:|,)`).test(api), `producer state exposes ${field}`);
   }
 });
+
+// Capture: @joinedBoundary=1|0 sets the joined boundary through the API, keeps
+// the receipt and a producer-state summary, and fails a requested join that is
+// not admitted. It changes the simulation, so it counts as configuration.
+test('capture: @joinedBoundary sets the mode, records the receipt and fails an unadmitted request', async () => {
+  const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
+  const { joinedBoundaryMismatch, armSetsConfiguration } = await import('../volume-arm-capture-checks.mjs');
+  assert.match(capture, /if \(cid === '@joinedBoundary'\) \{/);
+  assert.match(capture, /joinedBoundary: arm\.joinedBoundary \|\| \[\]/);
+  assert.equal(armSetsConfiguration([['@joinedBoundary', '1']]), true);
+  const good = { receipt: { requested: true, admitted: true, reason: null }, producer: { dims: [48, 96, 48], lowerFaceTextureSize: [96, 96, 3], fluidBuffer: true, burnRateTexture: true } };
+  assert.equal(joinedBoundaryMismatch('1', good), null);
+  assert.match(joinedBoundaryMismatch('1', { ...good, receipt: { requested: true, admitted: false, reason: 'inflow-boundary-joined-pending-fixed-flux' } }), /not admitted \(inflow-boundary-joined-pending-fixed-flux\)/);
+  assert.match(joinedBoundaryMismatch('1', { ...good, producer: { ...good.producer, lowerFaceTextureSize: [1, 1, 3] } }), /lower-plane texture 1,1,3, expected 96,96,3/);
+  assert.equal(joinedBoundaryMismatch('0', { receipt: { requested: false, admitted: false, reason: null }, producer: { dims: [48, 96, 48], lowerFaceTextureSize: [1, 1, 3] } }), null);
+  assert.match(joinedBoundaryMismatch('1', null), /missing/);
+});
