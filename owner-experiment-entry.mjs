@@ -1,5 +1,20 @@
 import {loadExperimentContributions,openExperiment} from './workbench-experiments.mjs';
 
+// Owner setup is frontend state. Recovery carries it in the hash so the
+// immutable recipe wrapper keeps its own strict query parameters.
+export function readOwnerExperimentAddress({search='',hash=''}={}) {
+ const query=new URLSearchParams(search),fragment=new URLSearchParams(hash.replace(/^#/,''));
+ const params=query.has('experiment')?query:fragment;
+ return {id:params.get('experiment'),inputsText:params.get('experiment_inputs')??'{}'};
+}
+
+export function writeOwnerExperimentAddress(href,{id,inputs}) {
+ const url=new URL(href),hash=new URLSearchParams(url.hash.slice(1));
+ for(const key of ['experiment','experiment_inputs']){url.searchParams.delete(key);hash.delete(key);}
+ if(id){url.searchParams.set('experiment',id);url.searchParams.set('experiment_inputs',JSON.stringify(inputs));}
+ url.hash=hash.toString();return url.href;
+}
+
 /** Discovery is metadata only; opening is explicit and serialized with disposal. */
 export async function installOwnerExperimentEntry({document,root,host,discover,onOpen=()=>{},onChange=()=>{}}) {
  const section=document.createElement('section');section.className='owner-experiment-entry';
