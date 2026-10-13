@@ -3,7 +3,7 @@ import test from 'node:test';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { runSuite } from '../tools/test-runner.mjs';
+import { runSuite, DEFAULT_NODE_FLAGS } from '../tools/test-runner.mjs';
 
 const PASS = 'process.exit(0);\n';
 const FAIL = "console.error('boom'); process.exit(1);\n";
@@ -692,4 +692,56 @@ test('an events file holding a bare null record is unsigned, and a test name con
   assert.deepEqual(signatureEntries(r.signature), ['x ¦ y :: Error: p']);
   const { nodeTestSignature } = await import('../tools/test-runner.mjs');
   assert.ok(nodeTestSignature('null\n', { childPid: 1, exitCode: 1 }).unsigned);
+});
+
+test('compared values keep their identity whatever realm or shape they come from, and Errors inside collections carry no stacks', async t => {
+  const body = `import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+const v = process.env.SECOND ? 'zzz' : 'aaa';
+test('vm map', () => { assert.deepEqual(vm.runInNewContext(\`new Map([['k', '\${v}']])\`), new Map()); });
+test('vm date', () => { assert.deepEqual(vm.runInNewContext(process.env.SECOND ? 'new Date(0)' : 'new Date(86400000)'), null); });
+test('vm error', () => { assert.deepEqual({ e: vm.runInNewContext(\`new Error('\${v}')\`) }, { e: null }); });
+test('url', () => { assert.deepEqual(new URL('https://example.test/' + v), null); });
+test('error in map', () => { assert.deepEqual(new Map([['k', new Error(v)]]), new Map()); });
+test('getter', () => { assert.deepEqual({ get boom() { throw new Error('getter ' + v); }, v }, null); });
+`;
+  const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  await run(f);
+  const first = (await readReport(f)).results[0].signature;
+  process.env.SECOND = '1'; t.after(() => { delete process.env.SECOND; });
+  await run(f);
+  const second = (await readReport(f)).results[0].signature;
+  const entries = s => s.replace('node:test failing: ', '').split(' | ');
+  for (const name of ['vm map', 'vm date', 'vm error', 'url', 'error in map', 'getter']) {
+    const a = entries(first).find(e => e.startsWith(`${name} ::`));
+    const b = entries(second).find(e => e.startsWith(`${name} ::`));
+    assert.ok(a && b, `${name} must be signed in both runs`);
+    assert.notEqual(a, b, `${name} must sign differently`);
+    assert.doesNotMatch(a, /actual=\{\}/, `${name} must not erase the actual value`);
+    assert.doesNotMatch(a, /reporter-error/, `${name} must keep the assertion`);
+  }
+  assert.doesNotMatch(first, /\bat (?:\S+ \(|file:|node:|evalmachine|<anonymous>)|node:internal|\.mjs:\d+:\d+/, 'no stack frames anywhere in the signature');
+  assert.match(entries(first).find(e => e.startsWith('error in map ::')), /Error: aaa/);
+});
+
+test('the started signal does not depend on the chosen reporter, and a script that only imports node:test reporters is a plain script', async t => {
+  const script = "import { spec } from 'node:test/reporters';\nconsole.log('uses', typeof spec);\n";
+  const framework = "import test from 'node:test';\ntest('fails', () => { throw new Error('x'); });\ntest('exits', () => { process.exit(0); });\n";
+  const f = await fixture(t, { files: { 'script.mjs': script, 'm.mjs': framework },
+    manifest: manifestOf({ 'tests/script.mjs': { kind: 'node' }, 'tests/m.mjs': { kind: 'node' } }) });
+  const tapFlags = DEFAULT_NODE_FLAGS.map(flag => (flag === '--test-reporter=spec' ? '--test-reporter=tap' : flag));
+  await run(f, { nodeFlags: tapFlags });
+  const results = Object.fromEntries((await readReport(f)).results.map(r => [r.file, r]));
+  assert.equal(results['tests/script.mjs'].outcome, 'pass');
+  assert.equal(results['tests/m.mjs'].outcome, 'unsigned-failure');
+});
+
+test('trusted events that record a failing test outrank a zero exit code', async t => {
+  const body = "import test from 'node:test';\nprocess.on('exit', () => { process.exitCode = 0; });\ntest('fails', () => { throw new Error('hidden'); });\n";
+  const f = await fixture(t, { files: { 'm.mjs': body }, manifest: manifestOf({ 'tests/m.mjs': { kind: 'node' } }) });
+  assert.equal((await run(f)).ok, false);
+  const r = (await readReport(f)).results[0];
+  assert.equal(r.outcome, 'fail');
+  assert.match(r.signature, /^node:test failing: fails :: Error: hidden$/);
 });

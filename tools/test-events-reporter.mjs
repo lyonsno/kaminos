@@ -20,6 +20,12 @@ import { homedir } from 'node:os';
 import { inspect } from 'node:util';
 import { threadId } from 'node:worker_threads';
 
+// Loading this module is the sign that the harness started running tests
+// in this process: Node imports reporters when the first test is registered,
+// and only then. The preloaded exit hook reads this mark, so the signal does
+// not depend on which other reporters run alongside.
+globalThis[Symbol.for('kaminos.test-events-reporter')] = true;
+
 const stamp = { pid: process.pid, tid: threadId };
 const ROOT = process.env.KAMINOS_TEST_RUNNER_ROOT || process.cwd();
 const ROOT_REAL = (() => { try { return realpathSync(ROOT); } catch { return ROOT; } })();
@@ -81,12 +87,14 @@ function describeError(cause) {
 
 // For an assertion whose message Node generated, the first line is generic
 // and the distinguishing fact is the assertion: its operator; the values it
-// compared, shown bounded and followed by a hash of the whole values so two
-// that differ past the bound still differ; or, for assert.ok, the asserted
-// expression, with the assertion's location when the expression spans lines
-// and Node keeps only its opening. Error values render as name and message,
-// never as stacks, and machine-local paths are normalized before anything is
-// cut, so the detail reads the same on every machine.
+// compared, shown bounded and followed by a hash of the values rendered to a
+// much larger bound, so two that differ past the display still differ; or,
+// for assert.ok, the asserted expression, with the assertion's location when
+// the expression spans lines and Node keeps only its opening. Values are
+// rendered by util.inspect as they are, whatever realm or class they come
+// from; stack frames are removed from the rendering, so Error values read as
+// name and message wherever they sit, and machine-local paths are normalized
+// before anything is cut, so the detail reads the same on every machine.
 function assertionDetail(cause) {
   if (cause.code !== 'ERR_ASSERTION' || !cause.generatedMessage) return null;
   const operator = String(cause.operator || 'assert');
@@ -109,29 +117,27 @@ function assertionLocation(cause) {
 }
 
 function short(value) {
-  const text = normalizePaths(safeInspect(plain(value), { depth: 1, breakLength: Infinity, compact: true, maxStringLength: 60, maxArrayLength: 4, sorted: true }));
+  const text = render(value, { depth: 1, breakLength: Infinity, compact: true, maxStringLength: 60, maxArrayLength: 4, sorted: true });
   return text.length > 100 ? `${text.slice(0, 97)}...` : text;
 }
 
 function digest(...values) {
-  const text = values.map(v => normalizePaths(safeInspect(plain(v), { depth: 6, breakLength: Infinity, compact: true, maxStringLength: 20000, maxArrayLength: 10000, sorted: true }))).join('\u0000');
+  const text = values.map(v => render(v, { depth: 6, breakLength: Infinity, compact: true, maxStringLength: 20000, maxArrayLength: 10000, sorted: true })).join('\u0000');
   return createHash('sha1').update(text).digest('hex').slice(0, 8);
 }
 
-// Replace Error instances, which inspect with their stacks, by their name
-// and message, at any depth up to a bound.
-function plain(value, depth = 0) {
-  if (value instanceof Error) return `[${value.name}: ${safeString(value.message)}]`;
-  if (depth > 6 || value === null || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map(v => plain(v, depth + 1));
-  if (value instanceof Date || value instanceof RegExp || value instanceof Map || value instanceof Set || ArrayBuffer.isView(value)) return value;
-  const out = {};
-  for (const key of Object.keys(value)) out[key] = plain(value[key], depth + 1);
-  return out;
+// A stack frame as util.inspect prints it inside an Error's stack: on its own
+// line, `at ` and either a name with a parenthesized location or a bare one.
+// The match stops at the location so that whatever inspect printed after the
+// last frame, such as the closing bracket of an enclosing object, survives.
+const STACK_FRAME = /\n\s+at (?:[^\n(]*?\((?:[^()\n]|\([^()\n]*\))*\)|[^\s,)\]}]+)/g;
+
+function render(value, options) {
+  return normalizePaths(safeInspect(value, options).replace(STACK_FRAME, ''));
 }
 
 function normalizePaths(text) {
-  let out = String(text).split('\n').join(' ');
+  let out = String(text).split(/\s*\n\s*/).join(' ');
   if (ROOT_REAL !== ROOT) out = out.split(ROOT_REAL).join('<root>');
   out = out.split(ROOT).join('<root>');
   return out.split(homedir()).join('~');
