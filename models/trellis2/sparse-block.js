@@ -1,10 +1,11 @@
-import { WEBGPU_BUFFER_USAGE as U } from '../../webgpu-inference-kit/src/core.js';
+import { WEBGPU_BUFFER_USAGE as U, createWebGpuTiledFlashAttentionShader,
+  flashAttentionStridedParams, flashAttentionDispatch } from '../../webgpu-inference-kit/src/core.js';
 import { BF16_WGSL, roundBfloat16 } from './sparse-prefix.js';
 
 export const SPARSE_BLOCK_ROUTE = 'trellis2.sparse-flow-block.webgpu.v0';
 
 export function buildSparseBlockPlan({ resolution = 16, channels = 1536, heads = 12,
-  contextChannels = 1024, contextRows = 1029, hidden = 8192, tokenRows } = {}) {
+  contextChannels = 1024, contextRows = 1029, hidden = 8192, tokenRows, attentionKernel = 'gemm' } = {}) {
   for (const [name, value] of Object.entries({ resolution, channels, heads, contextChannels, contextRows, hidden })) {
     if (!Number.isSafeInteger(value) || value < 1) throw new RangeError(`${name} must be a positive integer`);
   }
@@ -12,18 +13,26 @@ export function buildSparseBlockPlan({ resolution = 16, channels = 1536, heads =
   if (tokenRows !== undefined && (!Number.isSafeInteger(tokenRows) || tokenRows < 1)) throw new RangeError('tokenRows must be a positive integer');
   const headDim = channels / heads, rows = tokenRows ?? resolution ** 3;
   if (headDim % 2) throw new RangeError('RoPE requires an even head dimension');
+  if (!['gemm', 'tiled'].includes(attentionKernel)) throw new RangeError('attentionKernel must be gemm or tiled');
+  if (attentionKernel === 'tiled' && (headDim % 16 || headDim > 256)) {
+    throw new RangeError('tiled attention head dimension must be a multiple of 16 up to 256');
+  }
   const stages = ['block-modulation', 'self-layernorm', 'self-adaln', 'self-qkv', 'self-q-norm', 'self-k-norm', 'self-q-rope', 'self-k-rope'];
-  for (let h = 0; h < heads; h++) stages.push(`self-score-${h}`, `self-softmax-${h}`, `self-value-${h}`);
+  const attentionStages = prefix => attentionKernel === 'tiled'
+    ? [`${prefix}-tiled-attention`, `${prefix}-attention-bf16`]
+    : Array.from({ length: heads }, (_, h) => [`${prefix}-score-${h}`, `${prefix}-softmax-${h}`, `${prefix}-value-${h}`]).flat();
+  stages.push(...attentionStages('self'));
   stages.push('self-output', 'self-residual', 'cross-layernorm', 'cross-query', 'cross-kv', 'cross-q-norm', 'cross-k-norm');
-  for (let h = 0; h < heads; h++) stages.push(`cross-score-${h}`, `cross-softmax-${h}`, `cross-value-${h}`);
+  stages.push(...attentionStages('cross'));
   stages.push('cross-output', 'cross-residual', 'mlp-layernorm', 'mlp-adaln', 'mlp-input-linear', 'mlp-gelu', 'mlp-output-linear', 'mlp-residual');
-  const scoresBytes = rows * Math.max(rows, contextRows) * 4, hiddenBytes = rows * hidden * 4;
+  const scoresBytes = attentionKernel === 'tiled' ? 0 : rows * Math.max(rows, contextRows) * 4, hiddenBytes = rows * hidden * 4;
   if (![scoresBytes, hiddenBytes, rows * 3 * channels * 4].every(n => Number.isSafeInteger(n) && n < 2 ** 32)) {
     throw new RangeError('tensor exceeds WebGPU u32 byte addressing');
   }
   return Object.freeze({ resolution, channels, heads, headDim, contextChannels, contextRows, hidden, rows,
     outputShape: [rows, channels], scoresBytes, hiddenBytes, stages,
-    arithmetic: 'bf16-values-in-f32-storage/f32-score-softmax', attention: 'complete-per-head-score-buffer' });
+    arithmetic: 'bf16-values-in-f32-storage/f32-score-softmax', attentionKernel,
+    attention: attentionKernel === 'tiled' ? 'strided-tiled-online-softmax/bf16-output' : 'complete-per-head-score-buffer' });
 }
 
 export function sparseBlockWeightShapes(p) {
@@ -270,9 +279,30 @@ export function createTrellisSparseBlockAdapter({ route, config = {}, weights, i
       `let token = i / ${c / 2}u; let pair = i % ${d / 2}u; let p = token * ${d}u + pair * 2u;
        let a = input[i * 2u]; let b = input[i * 2u + 1u]; let cs = phases[p]; let sn = phases[p + 1u];
        output[i * 2u] = round_bf16(a * cs - b * sn); output[i * 2u + 1u] = round_bf16(a * sn + b * cs);`), [input, rope, out], grid(r * c / 2)); return out; };
-    const scores = activation('attention-scores-scratch', [r, Math.max(r, s)]);
+    const scores = plan.attentionKernel === 'gemm' ? activation('attention-scores-scratch', [r, Math.max(r, s)]) : null;
     const attend = (prefix, q, k, v, keyRows, vComponents, vComponent) => {
       const out = allocate(`${prefix}.attention`);
+      if (plan.attentionKernel === 'tiled') {
+        const words = flashAttentionStridedParams({ queryTokens: r, keyTokens: keyRows, heads, headDim: d,
+          q: { tokenStride: c }, k: { tokenStride: c },
+          v: { offset: vComponent * c, tokenStride: vComponents * c }, out: { tokenStride: c } });
+        const params = runtime.createTensor({ name: `trellis.block.${prefix}.attention-params`,
+          shape: [words.length], dtype: 'u32', usage: U.uniform | U.copyDst });
+        resources.push(params); runtime.uploadTensor(params, words);
+        const dispatch = flashAttentionDispatch({ queryCount: r, heads });
+        const limit = runtime.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65535;
+        if (dispatch.some(n => n > limit)) throw new RangeError('tiled attention exceeds device dispatch capacity');
+        kernels.push({ name: `${prefix}-tiled-attention`, dispatch, kernel: runtime.defineComputeKernel({
+          name: `trellis.block.${prefix}-tiled-attention`,
+          code: createWebGpuTiledFlashAttentionShader({ headDim: d, layout: 'strided' }),
+          bindings: [q, k, v, out].map((resource, i) => ({ name: `b${i}`, resource,
+            access: i === 3 ? 'storage' : 'read-only-storage' })).concat([{ name: 'params', resource: params, type: 'uniform' }]) }) });
+        // The previous value GEMM rounds before the output projection. Retain that
+        // boundary; only the F32 score/softmax reduction order changes here.
+        add(`${prefix}-attention-bf16`, elementShader(r * c, decl(['values']),
+          'values[i] = round_bf16(values[i]);'), [out], grid(r * c));
+        return out;
+      }
       for (let head = 0; head < heads; head++) {
         add(`${prefix}-score-${head}`, matrixShader({ rows: r, columns: keyRows, reduction: d, aStride: c,
           aOffset: head * d, bStride: c, bOffset: head * d, scale: 1 / Math.sqrt(d), rounded: false }), [q, k, scores], [Math.ceil(keyRows / 16), Math.ceil(r / 16), 1]);
